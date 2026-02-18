@@ -1,6 +1,6 @@
 // Package meta_test: unit tests for the package
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package meta_test
 
@@ -23,8 +23,8 @@ var _ = Describe("BMD", func() {
 				"bucket-1024",
 			),
 			Entry(
-				"with dots",
-				".bucket.name",
+				"with dot in the middle",
+				"bucket.name",
 			),
 			Entry(
 				"with '_' and '-'",
@@ -40,6 +40,10 @@ var _ = Describe("BMD", func() {
 			Entry(
 				"empty bucket",
 				"",
+			),
+			Entry(
+				"with a leading dot",
+				".bucket.name",
 			),
 			Entry(
 				"contains '$'",

@@ -309,8 +309,11 @@ func (b *Bck) ValidateName() error {
 	if b.Name == "" {
 		return errors.New("bucket name is missing")
 	}
-	if b.Name == "." {
-		return fmt.Errorf(fmtErrBckName, b.Name)
+	if b.Name[0] == '.' {
+		if b.IsSystem() {
+			return nil
+		}
+		return fmt.Errorf("reserved bucket name %q (unknown system bucket)", b.Name)
 	}
 	return cos.CheckAlphaPlus(b.Name, "bucket name")
 }
@@ -647,4 +650,17 @@ func NewHTTPObjPath(rawURL string) (*HTTPBckObj, error) {
 		return nil, err
 	}
 	return NewHTTPObj(urlObj), nil
+}
+
+//
+// system buckets -----------------------------------------------
+//
+
+const (
+	sysPrefix        = ".sys-" // currently unused; must be enforced when we add more system buckets
+	sysInventoryName = ".sys-inventory"
+)
+
+func (b *Bck) IsSystem() bool {
+	return b.Name == sysInventoryName
 }

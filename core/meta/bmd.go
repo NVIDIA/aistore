@@ -155,22 +155,28 @@ func (m *BMD) Range(providerQuery *string, nsQuery *cmn.Ns, callback func(*Bck) 
 	}
 }
 
-func (m *BMD) Select(qbck *cmn.QueryBcks) cmn.Bcks {
+func (m *BMD) Select(qbck *cmn.QueryBcks, includeSystem bool) cmn.Bcks {
 	var (
 		cp   *string
-		bcks = cmn.Bcks{} // (json representation: nil slice != empty slice)
+		bcks = cmn.Bcks{} // nil slice != empty slice
 	)
 	if qbck.Provider != "" {
 		cp = &qbck.Provider
 	}
 	m.Range(cp, nil, func(bck *Bck) bool {
 		b := bck.Bucket()
-		if qbck.Equal(b) || qbck.Contains(b) {
-			if len(bcks) == 0 {
-				bcks = make(cmn.Bcks, 0, 8)
-			}
-			bcks = append(bcks, bck.Clone())
+		if !qbck.Equal(b) && !qbck.Contains(b) {
+			return false
 		}
+
+		if !includeSystem && b.IsSystem() {
+			return false
+		}
+
+		if len(bcks) == 0 {
+			bcks = make(cmn.Bcks, 0, 16)
+		}
+		bcks = append(bcks, bck.Clone())
 		return false
 	})
 	sort.Sort(bcks)

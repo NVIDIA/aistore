@@ -241,6 +241,9 @@ const (
 	// GetBatch
 	QparamTID   = "tid"   // designated target
 	QparamColoc = "coloc" // colocation hint: enum { 0=ColocNone, 1=ColocOne, 2=ColocTwo }
+
+	// System
+	QparamSystem = "sys"
 )
 
 // QparamWhat enum.

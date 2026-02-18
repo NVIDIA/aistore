@@ -70,7 +70,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		// (see api.ListBuckets and the line below)
 		if !qbck.IsBucket() {
 			qbck.Name = msg.Name
-			t.listBuckets(w, r, qbck)
+			t.listBuckets(w, r, qbck, dpq)
 			return
 		}
 		bck := meta.CloneBck((*cmn.Bck)(qbck))
@@ -169,7 +169,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 // there's a difference between looking for all (any) provider vs a specific one -
 // in the former case the fact that (the corresponding backend is not configured)
 // is not an error
-func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks) {
+func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, dpq *dpq) {
 	var (
 		bcks   cmn.Bcks
 		config = cmn.GCO.Get()
@@ -179,7 +179,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 	)
 	if qbck.Provider != "" {
 		if qbck.IsAIS() || qbck.IsHT() { // built-in providers
-			bcks = bmd.Select(qbck)
+			bcks = bmd.Select(qbck, dpq.system)
 		} else {
 			bcks, code, err = t.blist(qbck, config)
 			if err != nil {
@@ -195,7 +195,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 			var buckets cmn.Bcks
 			qbck.Provider = provider
 			if qbck.IsAIS() || qbck.IsHT() {
-				buckets = bmd.Select(qbck)
+				buckets = bmd.Select(qbck, dpq.system)
 			} else {
 				buckets, code, err = t.blist(qbck, config)
 				if err != nil {

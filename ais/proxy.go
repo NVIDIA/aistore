@@ -663,7 +663,12 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		if qbck.IsRemoteAIS() {
 			qbck.Ns.UUID = p.a2u(qbck.Ns.UUID)
 		}
-		if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err == nil {
+
+		ace := apc.AceListBuckets
+		if dpq.system {
+			ace |= apc.AceAdmin
+		}
+		if err := p.checkAccess(w, r, nil, ace); err == nil {
 			p.listBuckets(w, r, qbck, msg, dpq)
 		}
 		return
@@ -2257,7 +2262,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		present bool
 	)
 	if qbck.IsAIS() || qbck.IsHT() {
-		bcks := bmd.Select(qbck)
+		bcks := bmd.Select(qbck, dpq.system)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}
@@ -2269,7 +2274,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		}
 	}
 	if present {
-		bcks := bmd.Select(qbck)
+		bcks := bmd.Select(qbck, dpq.system)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}

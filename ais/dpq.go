@@ -82,6 +82,7 @@ type (
 		silent        bool // QparamSilent
 		latestVer     bool // QparamLatestVer
 		sync          bool // QparamSync
+		system        bool // QparamSystem (allow system buckets)
 
 		// Special use (internal context)
 		isS3 bool // frontend S3 API
@@ -185,6 +186,8 @@ func (dpq *dpq) parse(rawQuery string) error {
 			dpq.latestVer = cos.IsParseBool(value)
 		case apc.QparamSync:
 			dpq.sync = cos.IsParseBool(value)
+		case apc.QparamSystem:
+			dpq.system = cos.IsParseBool(value)
 
 		case apc.QparamColoc:
 			var coloc uint64

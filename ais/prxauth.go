@@ -413,6 +413,13 @@ func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace 
 		return err
 	}
 
+	// System buckets: require admin
+	// - note that majority of control flows that operate on bucket(s) validate perm-s via bckArgs.initAndTry() => p.access()
+	// - the rest that pass `bck == nil` MUST explicitly add apc.AceAdmin
+	if bck != nil && bck.Bucket().IsSystem() {
+		ace |= apc.AceAdmin
+	}
+
 	// Validate token and parse claims ONCE
 	claims, err := p.validateToken(ctx, hdr)
 	if err != nil {

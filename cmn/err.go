@@ -32,7 +32,6 @@ import (
 const (
 	stackTracePrefix = "stack: ["
 
-	fmtErrBckName   = "bucket name %q is invalid: " + cos.OnlyPlus
 	fmtErrNamespace = "bucket namespace (uuid: %q, name: %q) " + cos.OnlyNice
 
 	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/main/docs/troubleshooting.md]"
