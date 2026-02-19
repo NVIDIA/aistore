@@ -11,7 +11,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -173,20 +172,6 @@ func TestCreateHMACTokenStr(t *testing.T) {
 	tassert.Errorf(t, err == nil, "Failed to create hmac-signed token string: %v", err)
 	_, err = hmacParser.ValidateToken(t.Context(), tk)
 	tassert.Errorf(t, err == nil, "Failed to validate hmac-siagned token: %v", err)
-}
-
-func TestCreateRSATokenStr(t *testing.T) {
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	tassert.Errorf(t, err == nil, "Failed to create rsa signing key: %v", err)
-	derBytes, err := x509.MarshalPKIXPublicKey(&rsaKey.PublicKey)
-	tassert.Errorf(t, err == nil, "Failed to marshal rsa public key: %v", err)
-	s := base64.StdEncoding.EncodeToString(derBytes)
-	sigConf := &cmn.AuthSignatureConf{Key: cmn.Censored(s), Method: cmn.SigMethodRSA}
-	tkParser := tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil)
-	tk, err := tok.CreateRSATokenStr(basicAdminClaims, rsaKey)
-	tassert.Errorf(t, err == nil, "Failed to create RSA-signed token string: %v", err)
-	_, err = tkParser.ValidateToken(t.Context(), tk)
-	tassert.Errorf(t, err == nil, "Failed to validate RSA-signed token: %v", err)
 }
 
 func TestAdminClaims(t *testing.T) {

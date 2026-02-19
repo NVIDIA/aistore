@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
+	"github.com/NVIDIA/aistore/cmd/authn/signing"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -149,7 +150,19 @@ func createEmptyCM(t *testing.T) *config.ConfManager {
 	return createCM(t, conf)
 }
 
-func createManagerWithAdmin(cm *config.ConfManager, driver kvdb.Driver) (*mgr, error) {
+func createRSAManager(t *testing.T) *signing.RSAKeyManager {
+	tmp := t.TempDir()
+	conf := &config.RSAKeyConfig{
+		Size:     2048,
+		Filepath: filepath.Join(tmp, fname.AuthNRSAKey),
+	}
+	rm := signing.NewRSAKeyManager(conf, "valid-length-passphrase")
+	err := rm.Init()
+	tassert.CheckFatal(t, err)
+	return rm
+}
+
+func createManagerWithAdmin(cm *config.ConfManager, rm *signing.RSAKeyManager, driver kvdb.Driver) (*mgr, error) {
 	oldPass, wasSet := os.LookupEnv(env.AisAuthAdminPassword)
 	os.Setenv(env.AisAuthAdminPassword, "admin-pass-for-test")
 	// Reset after test
@@ -160,15 +173,16 @@ func createManagerWithAdmin(cm *config.ConfManager, driver kvdb.Driver) (*mgr, e
 			os.Unsetenv(env.AisAuthAdminPassword)
 		}
 	}()
-	m, _, err := newMgr(cm, driver)
+	m, _, err := newMgr(cm, rm, driver)
 	return m, err
 }
 
 func TestManager(t *testing.T) {
 	driver := mock.NewDBDriver()
 	cm := createEmptyCM(t)
+	rm := createRSAManager(t)
 	// NOTE: new manager initializes users DB and adds a default user as a Guest
-	mgr, err := createManagerWithAdmin(cm, driver)
+	mgr, err := createManagerWithAdmin(cm, rm, driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
@@ -179,8 +193,9 @@ func TestManager(t *testing.T) {
 func TestManagerNoAdminPass(t *testing.T) {
 	driver := mock.NewDBDriver()
 	cm := createEmptyCM(t)
+	rm := createRSAManager(t)
 	// If no admin password exists in env, initializing manager must fail
-	_, _, err := newMgr(cm, driver)
+	_, _, err := newMgr(cm, rm, driver)
 	if err == nil {
 		t.Fatal("expected error initializing manager without admin password Env, got nil")
 	}
@@ -196,7 +211,8 @@ func TestToken(t *testing.T) {
 	)
 	driver := mock.NewDBDriver()
 	cm := createEmptyCM(t)
-	mgr, err := createManagerWithAdmin(cm, driver)
+	rm := createRSAManager(t)
+	mgr, err := createManagerWithAdmin(cm, rm, driver)
 	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)
@@ -691,11 +707,82 @@ func TestGetJWKSMaxAge(t *testing.T) {
 	for _, tt := range tests {
 		conf := &authn.Config{Server: authn.ServerConf{Secret: "secret", Expire: cos.Duration(tt.expire)}}
 		cm := createCM(t, conf)
-		mgr, err := createManagerWithAdmin(cm, driver)
+		rm := createRSAManager(t)
+		mgr, err := createManagerWithAdmin(cm, rm, driver)
 		tassert.CheckFatal(t, err)
 		h := newServer(mgr)
 
 		got := h.getJWKSMaxAge()
 		tassert.Errorf(t, got == tt.want, "getJWKSMaxAge() = %d, want %d", got, tt.want)
+	}
+}
+
+func TestValidatePassphrase(t *testing.T) {
+	tests := []struct {
+		name      string
+		envValue  string
+		envSet    bool
+		wantPass  string
+		wantError bool
+	}{
+		{
+			name:      "env not set",
+			envSet:    false,
+			wantPass:  "",
+			wantError: false,
+		},
+		{
+			name:      "env set empty",
+			envSet:    true,
+			wantPass:  "",
+			wantError: true,
+		},
+		{
+			name:      "minimum length",
+			envValue:  "word123!",
+			envSet:    true,
+			wantError: false,
+		},
+		{
+			name:      "low entropy",
+			envValue:  "aaa bbb ccc",
+			envSet:    true,
+			wantError: true,
+		},
+		{
+			name:      "with space",
+			envValue:  "my pass phrase",
+			envSet:    true,
+			wantError: false,
+		},
+		{
+			name:      "with tab",
+			envValue:  "valid\tpass",
+			envSet:    true,
+			wantError: true,
+		},
+		{
+			name:      "with newline",
+			envValue:  "valid\npass",
+			envSet:    true,
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envSet {
+				t.Setenv("AIS_AUTHN_PRIVATE_KEY_PASS", tt.envValue)
+			}
+
+			gotPass, err := validatePassphrase()
+
+			if tt.wantError {
+				tassert.Errorf(t, err != nil, "expected error for passphrase %q", tt.envValue)
+			} else {
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, string(gotPass) == tt.envValue, "got passphrase %q, expected %q", gotPass, tt.envValue)
+			}
+		})
 	}
 }

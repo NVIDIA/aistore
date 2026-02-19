@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 type hserv struct {
@@ -636,14 +635,17 @@ func (h *hserv) pubKeyHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet)
 		return
 	}
-	var set jwk.Set
-	if h.mgr.cm.GetPublicKeyString() == nil {
-		set = jwk.NewSet()
-	} else {
-		set = h.mgr.cm.GetKeySet()
+	if !h.mgr.rsaConfigured() {
+		cmn.WriteErr(w, r, errors.New("not configured with RSA"), http.StatusBadRequest)
+		return
 	}
 	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d, public", h.getJWKSMaxAge()))
-	writeJSON(w, set, "get public JWKS")
+	jwks, err := h.mgr.rm.GetJWKS()
+	if err != nil {
+		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, jwks, "get public JWKS")
 }
 
 func (h *hserv) getJWKSMaxAge() int {

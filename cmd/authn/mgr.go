@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
+	"github.com/NVIDIA/aistore/cmd/authn/signing"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -33,7 +34,8 @@ type mgr struct {
 	clientTLS *http.Client
 	db        kvdb.Driver
 	cm        *config.ConfManager
-	tkParser  *tok.TokenParser
+	rm        *signing.RSAKeyManager
+	tkParser  tok.Parser
 }
 
 var (
@@ -51,23 +53,41 @@ var (
 )
 
 // If user DB exists, loads the data from the file and decrypts passwords
-func newMgr(cm *config.ConfManager, driver kvdb.Driver) (m *mgr, code int, err error) {
+func newMgr(cm *config.ConfManager, rm *signing.RSAKeyManager, driver kvdb.Driver) (m *mgr, code int, err error) {
 	m = &mgr{
 		db: driver,
 		cm: cm,
+		rm: rm,
 	}
 	m.clientH, m.clientTLS = cmn.NewDefaultClients(cm.GetDefaultTimeout())
 	code, err = initializeDB(driver)
 	if err != nil {
 		return
 	}
-	sigConf, err := cm.GetSigConf()
+	// Currently only set on startup
+	parser, err := m.createTokenParser()
 	if err != nil {
+		nlog.Errorf("Failed to create token parser: %v", err)
 		return
 	}
-	// Create a limited token parser with no issuer lookup
-	m.tkParser = tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil)
+	m.tkParser = parser
 	return
+}
+
+func (m *mgr) createTokenParser() (tok.Parser, error) {
+	var sigConf *cmn.AuthSignatureConf
+	switch {
+	case m.cm.HasHMACSecret():
+		sigConf = m.cm.GetSigConf()
+	case m.rsaConfigured():
+		sigConf = m.rm.GetSigConf()
+	default:
+		msg := "no HMAC or RSA configured for token validation"
+		debug.Assert(false, msg)
+		return nil, fmt.Errorf("invalid config for %s service: %s", config.ServiceName, msg)
+	}
+	// Create a limited token parser with no issuer lookup
+	return tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil), nil
 }
 
 func (*mgr) String() string { return config.ServiceName }
@@ -438,8 +458,8 @@ func (m *mgr) createTokenWithClaims(c *tok.AISClaims) (string, error) {
 	if m.cm.HasHMACSecret() {
 		return tok.CreateHMACTokenStr(c, m.cm.GetSecret())
 	}
-	if pKey := m.cm.GetPrivateKey(); pKey != nil {
-		return tok.CreateRSATokenStr(c, pKey)
+	if m.rsaConfigured() {
+		return m.rm.SignToken(c)
 	}
 	return "", errors.New("no valid signing key configured")
 }
@@ -500,6 +520,10 @@ func (m *mgr) generateRevokedTokenList(ctx context.Context) ([]string, int, erro
 		revokeList = append(revokeList, token)
 	}
 	return revokeList, http.StatusOK, nil
+}
+
+func (m *mgr) rsaConfigured() bool {
+	return m.rm != nil
 }
 
 //

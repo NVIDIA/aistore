@@ -38,9 +38,9 @@ func (m *mgr) validateCluster(clu *authn.CluACL) (err error) {
 	case m.cm.HasHMACSecret():
 		tag = "validate-secret"
 		body = cos.MustMarshal(&authn.ServerConf{Secret: m.cm.GetSecretChecksum()})
-	case m.cm.GetPublicKeyString() != nil:
+	case m.rsaConfigured():
 		tag = "validate-key"
-		body = cos.MustMarshal(&authn.ServerConf{PubKey: m.cm.GetPublicKeyString()})
+		body = cos.MustMarshal(&authn.ServerConf{PubKey: apc.Ptr(m.rm.GetPublicKeyPEM())})
 	default:
 		return errors.New("invalid cluster configuration, no signing key configured")
 	}

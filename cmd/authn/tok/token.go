@@ -88,11 +88,6 @@ func CreateHMACTokenStr(c jwt.Claims, secret cmn.Censored) (string, error) {
 	return t.SignedString([]byte(secret))
 }
 
-func CreateRSATokenStr(c jwt.Claims, rsaKey *rsa.PrivateKey) (string, error) {
-	t := jwt.NewWithClaims(jwt.SigningMethodRS256, c)
-	return t.SignedString(rsaKey)
-}
-
 func StandardClaims(expires time.Time, userID, aud string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL) *AISClaims {
 	return &AISClaims{
 		RegisteredClaims: jwt.RegisteredClaims{

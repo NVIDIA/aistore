@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmd/authn/kvdb"
+	"github.com/NVIDIA/aistore/cmd/authn/signing"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -49,7 +51,8 @@ func main() {
 	cm := config.NewConfManager()
 	cm.Init(*cfgPath)
 	driver := kvdb.CreateDriver(cm)
-	mgr, code, err := newMgr(cm, driver)
+	rm := initRSA(cm)
+	mgr, code, err := newMgr(cm, rm, driver)
 	if err != nil {
 		cos.ExitLogf("Failed to init manager: %v(%d)", err, code)
 	}
@@ -135,4 +138,39 @@ func printHelp() {
 
 func printVer() {
 	fmt.Printf("version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
+}
+
+func initRSA(cm *config.ConfManager) *signing.RSAKeyManager {
+	// Skip initializing if using HMAC
+	if cm.HasHMACSecret() {
+		return nil
+	}
+	nlog.Infof("No HMAC secret provided via config or %q, initializing with RSA", env.AisAuthSecretKey)
+	passphrase, err := validatePassphrase()
+	if err != nil {
+		cos.ExitLogf("Failed RSA key passphrase validation for %s: %v", env.AisAuthPrivateKeyPass, err)
+	}
+	rsaMgr := signing.NewRSAKeyManager(cm.GetRSAConfig(), passphrase)
+	if err = rsaMgr.Init(); err != nil {
+		cos.ExitLogf("Failed to initialize RSA key: %v", err)
+	}
+	return rsaMgr
+}
+
+func validatePassphrase() (cmn.Censored, error) {
+	passphrase, found := os.LookupEnv(env.AisAuthPrivateKeyPass)
+	if !found {
+		return "", nil
+	}
+	if len(passphrase) < signing.MinPassphraseLength {
+		return "", fmt.Errorf("too short (must be at least %d characters)", signing.MinPassphraseLength)
+	}
+	if cos.Entropy(passphrase) < signing.MinPassphraseEntropy {
+		return "", errors.New("passphrase strength too low. Try increasing length or complexity")
+	}
+	disallowed := "\t\n\r"
+	if strings.ContainsAny(passphrase, disallowed) {
+		return "", fmt.Errorf("cannot contain whitespace escape sequences: %q", disallowed)
+	}
+	return cmn.Censored(passphrase), nil
 }

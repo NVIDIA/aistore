@@ -5,9 +5,6 @@
 package config_test
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -149,8 +146,6 @@ func TestInitEnv(t *testing.T) {
 	cm := config.NewConfManager()
 	cm.Init(path)
 	compareSecret(t, cm, envSecret)
-	tassert.Error(t, cm.GetPrivateKey() == nil, "RSA private key not set")
-	tassert.Error(t, cm.GetPublicKeyString() == nil, "RSA public key not set")
 }
 
 func TestInitFromDisk(t *testing.T) {
@@ -322,34 +317,24 @@ func TestIsVerbose(t *testing.T) {
 	tassert.Errorf(t, !cm.IsVerbose(), "expected IsVerbose false for level 1")
 }
 
-func TestGetSigConf_HMAC(t *testing.T) {
+func TestGetSigConf(t *testing.T) {
 	// HMAC path -- default base config here has a secret set
 	base := newBaseConfig()
 	cm := newConfManagerWithConf(t, base)
-	sig, err := cm.GetSigConf()
-	tassert.Fatalf(t, err == nil, "GetSigConf failed: %v", err)
+	sig := cm.GetSigConf()
 	tassert.Fatalf(t, sig.Method == cmn.SigMethodHMAC, "expected HMAC method, got %v", sig.Method)
 	expectedSec := base.Server.Secret
 	tassert.Fatalf(t, string(sig.Key) == expectedSec, "expected key %q, got %q", expectedSec, sig.Key)
 }
 
-func TestGetSigConf_RSA(t *testing.T) {
-	base := newBaseConfig()
-	// RSA path: no secret
-	base.Server.Secret = ""
-	cm := newConfManagerWithConf(t, base)
-	sig, err := cm.GetSigConf()
-	tassert.Fatalf(t, err == nil, "GetSigConf failed for RSA: %v", err)
-	tassert.Fatalf(t, sig.Method == cmn.SigMethodRSA, "expected RSA method, got %v", sig.Method)
-	// We don't know pubKey at deploy time, so just make sure it's set and valid
-	tassert.Fatal(t, string(sig.Key) != "", "expected non-nil public key")
-	block, _ := pem.Decode([]byte(sig.Key))
-	tassert.Fatal(t, block != nil, "expected PEM block in public key")
-	var pub any
-	pub, err = x509.ParsePKIXPublicKey(block.Bytes)
-	tassert.Fatalf(t, err == nil, "expected no error parsing RSA public key, got %v", err)
-	_, ok := pub.(*rsa.PublicKey)
-	tassert.Fatal(t, ok, "expected public key string to be valid RSA public key")
+func TestGetSigConfEmpty(t *testing.T) {
+	// If no HMAC secret is configured, return nil signature config
+	c := newConf()
+	c.Server.Secret = ""
+	c.Init()
+	cm := newConfManagerWithConf(t, c)
+	sig := cm.GetSigConf()
+	tassert.Fatalf(t, sig == nil, "expected nil signature conf, got %v", sig)
 }
 
 func TestGetExpiryAndDefaultTimeout(t *testing.T) {
@@ -394,20 +379,6 @@ func TestGetSecretChecksum(t *testing.T) {
 	cm = newConfManagerWithConf(t, base)
 	cs2 := cm.GetSecretChecksum()
 	tassert.Fatal(t, cs1 != cs2, "expected checksum to change when secret changes")
-}
-
-func TestGetPublicKeyString(t *testing.T) {
-	base := newBaseConfig()
-	if cm := newConfManagerWithConf(t, base); cm.GetPublicKeyString() != nil {
-		t.Fatal("expected nil PubKey when not set")
-	}
-
-	pub := "public-key"
-	base.Server.PubKey = &pub
-	cm := newConfManagerWithConf(t, base)
-	if got := cm.GetPublicKeyString(); got == nil || *got != pub {
-		t.Fatalf("expected PubKey %q, got %#v", pub, got)
-	}
 }
 
 // TestAuth prefix ensures we run as part of the auth tests with TEST_RACE true to run with go test -race

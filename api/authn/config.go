@@ -68,7 +68,8 @@ type (
 		// Determines when the secret or key expires
 		// Also used to determine max-age for client caches of JWKS
 		Expire cos.Duration `json:"expiration_time"`
-		PubKey *string      `json:"public_key"`
+		// Only used for validating RSA public key against AIS clusters
+		PubKey *string `json:"public_key"`
 		// Size of RSA private key to generate
 		RSAKeyBits int          `json:"rsa_key_bits"`
 		DBConf     DatabaseConf `json:"db"`
