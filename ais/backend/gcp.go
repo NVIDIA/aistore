@@ -78,6 +78,11 @@ func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 	// register metrics
 	bp.base.init(t.Snode(), tstats, startingUp)
 
+	// reset appSess (<= gcpCreateSess)
+	if !startingUp {
+		appSess.Clear()
+	}
+
 	return bp, nil
 }
 
@@ -92,7 +97,7 @@ func (gsbp *gsbp) initDfltSess() {
 	credPath := os.Getenv(credPathEnvVar)
 	if credPath != "" {
 		var err error
-		if credProjectID, err = readCredFile(credPath); err != nil {
+		if credProjectID, err = gcpLoadCreds(credPath); err != nil {
 			gsbp.dfltErr = fmt.Errorf("%s '%s=%s': %v", fmtErrLoadCreds, credPathEnvVar, credPath, err)
 			return
 		}
@@ -291,7 +296,7 @@ func (gsbp *gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 	}
 	attrs, err := client.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
 	if err != nil {
-		ecode, errV := handleObjectError(ctx, client, err, cloudBck)
+		ecode, errV := gcpObjErr(ctx, client, err, cloudBck)
 		return nil, ecode, errV
 	}
 
@@ -407,7 +412,7 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		}
 	}
 
-	expCksum := setCustomGs(lom, attrs)
+	expCksum := gcpSetCustom(lom, attrs)
 	if res.ExpCksum == nil {
 		res.ExpCksum = expCksum
 	}
@@ -418,7 +423,7 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	return res
 }
 
-func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum) {
+func gcpSetCustom(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum) {
 	h := cmn.BackendHelpers.Google
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		lom.SetVersion(v)
@@ -479,10 +484,10 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 
 	attrs, errV := o.Attrs(ctx)
 	if errV != nil {
-		return handleObjectError(ctx, client, errV, cloudBck)
+		return gcpObjErr(ctx, client, errV, cloudBck)
 	}
 
-	_ = setCustomGs(lom, attrs)
+	_ = gcpSetCustom(lom, attrs)
 	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infof("[put_object] %s, size %d", lom, written)
 	}
@@ -501,7 +506,7 @@ func (gsbp *gsbp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 	}
 	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
 	if err := o.Delete(ctx); err != nil {
-		return handleObjectError(ctx, client, err, cloudBck)
+		return gcpObjErr(ctx, client, err, cloudBck)
 	}
 	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infof("[delete_object] %s", lom)
@@ -510,10 +515,10 @@ func (gsbp *gsbp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 }
 
 //
-// static helpers
+// session management & static helpers
 //
 
-func readCredFile(path string) (string, error) {
+func gcpLoadCreds(path string) (string, error) {
 	fh, e := os.Open(path)
 	if e != nil {
 		return "", e
@@ -533,10 +538,10 @@ func readCredFile(path string) (string, error) {
 }
 
 // once (on demand), via bprops "extra.gcp.application_creds"
-func createSess(ctx context.Context, credPath string, bck *cmn.Bck) (*gcpSess, error) {
+func gcpCreateSess(ctx context.Context, credPath string, bck *cmn.Bck) (*gcpSess, error) {
 	debug.Assert(credPath != "")
 
-	projectID, err := readCredFile(credPath)
+	projectID, err := gcpLoadCreds(credPath)
 	if projectID == "" {
 		var s string
 		if bck != nil {
@@ -597,7 +602,7 @@ func (gsbp *gsbp) getSess(ctx context.Context, bck *cmn.Bck) (*gcpSess, error) {
 	}
 
 	// slow path - once per unique creds
-	sess, err := createSess(ctx, credPath, bck)
+	sess, err := gcpCreateSess(ctx, credPath, bck)
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +651,7 @@ func _gcpErr(gcpError error) error {
 	return errors.New(gcpErrPrefix + "[" + gcpError.Error() + "]")
 }
 
-func handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {
+func gcpObjErr(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {
 	// TODO: consider additionally checking for `*googleapi.Error{Code:404}`
 	if !errors.Is(objErr, storage.ErrObjectNotExist) {
 		return http.StatusBadRequest, _gcpErr(objErr)

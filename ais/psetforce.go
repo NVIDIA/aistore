@@ -639,19 +639,29 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		msg   = p.newAmsgStr(apc.ActNewPrimary, bmd)
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
-	nlog.Infof("%s: distributing (%s, %s, %s) with newly elected or selected primary (self)", p, clone, bmd, rmd)
+	nlog.Infoln(p.String(), "distributing [", clone.String(), bmd.String(), rmd.String(), "]")
 	config, err := p.ensureConfigURLs()
 	if err != nil {
 		nlog.Errorln(err)
 	}
 	if config != nil {
 		pairs = append(pairs, revsPair{config, msg})
-		nlog.Infof("%s: plus %s", p, config)
+		nlog.Infoln("\t+", config.String())
+
+		if config.Auth.CSKEnabled() {
+			k := p.owner.csk.load()
+			if k.ver == 0 {
+				k = p.owner.csk.gen(clone.Version)
+				nlog.Infoln("\tgenerate:", k.String())
+			}
+			pairs = append(pairs, revsPair{k, msg})
+			nlog.Infoln("\t+", k.String())
+		}
 	}
 	etl := p.owner.etl.get()
 	if etl != nil && etl.version() > 0 {
 		pairs = append(pairs, revsPair{etl, msg})
-		nlog.Infof("%s: plus %s", p, etl)
+		nlog.Infoln("\t+", etl.String())
 	}
 	// metasync
 	debug.Assert(clone._sgl != nil)

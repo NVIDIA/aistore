@@ -47,12 +47,11 @@ import (
 //   signer.verify() reconstructs the HMAC payload (using pid, smapVer, nonce, and URL fields)
 //   and compares it against the provided signature. Any mismatch results in a 401.
 
-// TODO: sign.verify()
-// - check that csk is always initialized across (enable/disable; lifecycle events)
-//   (see related sign.warn())
+// TODO:
+// - check that csk is always initialized across: enable/disabl cyclese; lifecycle (join/reelect) events
 // - anti-replay logic (sliding time window, per-sender nonce tracking, etc.)
-// - validate pid: a) != "" (weak) or b) in Smap (strong)
-// - optionally, extend HMAC payload to cover assorted query parameters
+// - validate primary ID (pidi): a) != "" (weak) or b) in Smap (strong)
+// - extend HMAC payload to cover (assorted) query parameters
 
 const (
 	cskTag = "csk"

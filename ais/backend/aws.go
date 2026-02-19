@@ -845,7 +845,7 @@ func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	}
 
 	// slow path
-	cfg, err := loadConfig(endpoint, profile)
+	cfg, err := awsLoadConfig(endpoint, profile)
 	if err != nil {
 		// normalize s3 error
 		_, errV := awsErrorToAISError(err, sessConf.bck, "")
@@ -908,8 +908,8 @@ func _cid(profile, region, endpoint string) string {
 	return sb.String()
 }
 
-// loadConfig create config using default creds from ~/.aws/credentials and environment variables.
-func loadConfig(endpoint, profile string) (aws.Config, error) {
+// awsLoadConfig create config using default creds from ~/.aws/credentials and environment variables.
+func awsLoadConfig(endpoint, profile string) (aws.Config, error) {
 	// Disable SDK rate limiting to rely on configured backend.rate_limit
 	retryConfig := retry.NewStandard(func(o *retry.StandardOptions) {
 		o.RateLimiter = ratelimit.None
