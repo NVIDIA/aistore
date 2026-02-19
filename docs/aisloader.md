@@ -33,6 +33,7 @@ To integrate aisloader with Prometheus-based observability stacks, run the offic
 - [Assorted Command Line](#assorted-command-line)
 - [Environment variables](#environment-variables)
 - [Archive Workload](#archive-workload)
+- [Multipart Download Stream](#multipart-download-stream)
 - [Get-Batch Support](#get-batch-support)
 - [Random Access Across Very Large Collections](#random-access-across-very-large-collections)
 - [Examples](#examples)
@@ -109,9 +110,12 @@ For the most recently updated command-line options and examples, please run `ais
 | -maxputs | `int` | Maximum number of objects to PUT | `0` |
 | -maxsize | `string` | Maximal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1GiB` |
 | -minsize | `string` | Minimal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1MiB` |
+| -mpdstream-chunk-size | `int` | Chunk size for multipart download stream, may contain [multiplicative suffix](#bytes-multiplicative-suffix) (0 = API default: 8MiB) | `0` |
+| -mpdstream-workers | `int` | Number of concurrent workers for multipart download stream (0 = API default: 16) | `0` |
 | -multipart-chunks | `int` | Number of chunks for multipart upload (0 = disabled, >0 = use multipart with specified chunks) | `0` |
 | -num-subdirs | `int` | Spread generated objects over this many virtual subdirectories (< 100k) | `0` |
 | -numworkers | `int` | Number of goroutine workers operating on AIS in parallel | `10` |
+| -pctmpdstream | `int` | Percentage of GET operations that use multipart download stream (0-100) | `0` |
 | -pctmultipart | `int` | Percentage of PUT operations that use multipart upload (0-100, only applies when multipart-chunks > 0) | `0` |
 | -pctput | `int` | Percentage of PUTs in the aisloader-generated workload (see also: `-arch.pct`) | `0` |
 | -pctupdate | `int` | Percentage of GET requests that are followed by a PUT "update" (i.e., creation of a new version of the object) | `0` |
@@ -236,6 +240,14 @@ For the most recently updated command-line options and examples, please run `ais
 | --- | --- | --- | --- |
 | -multipart-chunks | `int` | Number of chunks for multipart upload (0 = disabled, >0 = use multipart with specified chunks) | `0` |
 | -pctmultipart | `int` | Percentage of PUT operations that use multipart upload (0-100, only applies when multipart-chunks > 0) | `0` |
+
+#### Multipart Download Stream Settings (`mpdStreamParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -mpdstream-chunk-size | `int64` | Chunk size for multipart download stream, can contain [multiplicative suffix](#bytes-multiplicative-suffix) (0 = API default: 8MiB) | `0` |
+| -mpdstream-workers | `int` | Number of concurrent workers for multipart download stream (0 = API default: 16) | `0` |
+| -pctmpdstream | `int` | Percentage of GET operations that use multipart download stream (0-100) | `0` |
 
 #### ETL Configuration (`etlParams`)
 
@@ -523,6 +535,45 @@ Example typical comparison:
 
 For more information about AIStore’s archive/shard support, see
 * [AIStore Archive Documentation](/docs/archive.md).
+
+---
+
+## Multipart Download Stream
+
+`aisloader` can benchmark the `MultipartDownloadStream` API, which downloads a single object using multiple concurrent HTTP range requests. This improves single-object GET throughput for [chunked](https://github.com/NVIDIA/aistore/releases/tag/v1.4.0#chunked-objects) objects by engaging multiple disks on the server side.
+
+### Configuration
+
+| Flag | Description |
+|------|-------------|
+| `-pctmpdstream` | Percentage of GETs that use multipart download stream (0-100) |
+| `-mpdstream-workers` | Number of concurrent download workers per object (0 = API default: 16) |
+| `-mpdstream-chunk-size` | Size of each range request (0 = API default: 8MiB) |
+
+When `-pctmpdstream` is non-zero, the specified fraction of GET operations will use `MultipartDownloadStream` instead of regular single-stream GET. The remaining GETs use the standard path. Statistics for MPD stream operations are tracked separately (labeled `GET-MPDSTREAM` in the output).
+
+### Usage Example
+
+100% read using multipart download stream with 32 workers:
+
+```console
+$ aisloader -bucket=ais://my_bucket -pctput=0 -duration=10m -numworkers=4 \
+            -pctmpdstream=100 -mpdstream-workers=32 -mpdstream-chunk-size=64MiB \
+            -cleanup=false
+```
+
+Mixed workload — 50% regular GET, 50% MPD stream:
+
+```console
+$ aisloader -bucket=ais://my_bucket -pctput=0 -duration=10m -numworkers=8 \
+            -pctmpdstream=50 -mpdstream-workers=16 -cleanup=false
+```
+
+### Restrictions
+
+* Cannot be combined with `-s3endpoint` (direct S3 access)
+* Cannot be combined with `-get-batchsize`
+* Cannot be combined with `-readoff` / `-readlen` (range reads)
 
 ---
 
