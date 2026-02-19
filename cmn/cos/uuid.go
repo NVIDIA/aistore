@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -25,7 +25,9 @@ const (
 )
 
 const (
-	LenShortID    = 9 // UUID length, as per https://github.com/teris-io/shortid#id-length
+	LenShortID = 9  // UUID length, as per https://github.com/teris-io/shortid#id-length
+	LenBEID    = 10 // BEID
+
 	lenDaemonID   = 8 // min length, via cryptographic rand
 	lenK8sProxyID = 13
 
@@ -36,6 +38,12 @@ const (
 // bucket name, remais alias
 const (
 	tooLongName = 64
+)
+
+// (bit spread)
+const (
+	GoldenRatio = 0x9e3779b97f4a7c15
+	Mix64Mul    = 0xbf58476d1ce4e5b9
 )
 
 const (
@@ -90,16 +98,19 @@ func looksLikeReb(id string) bool {
 	return true
 }
 
-// "best-effort ID" - to independently and locally generate globally unique ID
-// called by xreg.GenBEID
+// "best-effort ID" encoder: turn 64-bit value into a short printable ID
+// (called by xreg.GenBEID)
 func GenBEID(val uint64, l int) string {
+	if l <= 0 || l > tooLongID {
+		l = LenBEID
+	}
 	b := make([]byte, l)
 	for i := range l {
-		if idx := int(val & letterIdxMask); idx < LenRunes {
-			b[i] = LetterRunes[idx]
-		} else {
-			b[i] = LetterRunes[idx-LenRunes]
+		idx := int(val & letterIdxMask)
+		if idx >= LenRunes {
+			idx -= LenRunes
 		}
+		b[i] = LetterRunes[idx]
 		val >>= letterIdxBits
 	}
 	return UnsafeS(b)
@@ -251,7 +262,7 @@ func isHexN(s string, n int) bool {
 // - cmn/xoshiro256
 func GenTie() string {
 	tie := rtie.Add(1)
-	tie *= 0x9e3779b97f4a7c15 // golden ratio multiplier (bit spread)
+	tie *= GoldenRatio
 
 	b := [3]byte{
 		uuidABC[tie&0x3f],

@@ -1,6 +1,6 @@
-// Package cos provides common low-level types and utilities for all aistore projects
+// Package cos_test: unit tests
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cos_test
 

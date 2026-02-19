@@ -90,7 +90,8 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 		div = uint64(xact.IdleDefault)
 		tag = p._tag(fromBck, toBck)
 	)
-	beid, prev, err := xreg.GenBEID(div, tag)
+	smap := core.T.Sowner().Get()
+	beid, prev, err := xreg.GenBEID(div, smap.Version, tag)
 	if beid != "" {
 		debug.Assert(err == nil && prev == nil)
 		return beid, nil

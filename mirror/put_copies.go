@@ -91,7 +91,8 @@ func (p *putFactory) Start() error {
 	// target-local generation of a global UUID
 	//
 	div := uint64(xact.IdleDefault)
-	beid, _, _ := xreg.GenBEID(div, p._tag(bck))
+	smap := core.T.Sowner().Get()
+	beid, _, _ := xreg.GenBEID(div, smap.Version, p._tag(bck))
 	if beid == "" {
 		// is Ok (compare with x-archive, x-tco)
 		beid = cos.GenUUID()

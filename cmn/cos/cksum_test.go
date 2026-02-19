@@ -1,4 +1,4 @@
-// Package cos_test provides tests for the cos package
+// Package cos_test: unit tests
 /*
  * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
  */

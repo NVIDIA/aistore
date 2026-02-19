@@ -1,45 +1,65 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
  */
+
 package xreg
 
 import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/xoshiro256"
 	"github.com/NVIDIA/aistore/core"
 
 	onexxh "github.com/OneOfOne/xxhash"
 )
 
-// "best-effort ID" - to independently and locally generate globally unique xaction ID
-// see related: cmn/cos/uuid.go
-func GenBEID(div uint64, tag []byte) (beid string, xctn core.Xact, err error) {
-	// primary's "now"
+// retry attempts when collision is detected in registry
+const beidMaxRetry = 2
+
+func GenBEID(div uint64, smapVer int64, tag []byte) (beid string, prev core.Xact, err error) {
+	debug.Assert(div > 0)
+	div = max(1, div)
+
 	now := uint64(time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load())
+	bucket := now / div
+	th := onexxh.Checksum64(tag)
+	sv := uint64(smapVer)
 
-	// compute
-	val := now / div
-	org := val
-	val ^= onexxh.Checksum64S(tag, val)
-	beid = cos.GenBEID(val, cos.LenShortID)
+	// likely cause for retries:
+	// - starting the same xaction type (same tag)
+	// - twice within the same minute (div)
+	// - under same Smap version
 
-	// check vs registry
-	xctn, err = GetXact(beid)
-	if err != nil {
-		beid = ""
-		return // unlikely
-	}
-	if xctn == nil {
-		return
+	for attempt := uint64(0); attempt <= beidMaxRetry; attempt++ {
+		seed := beidSeed(bucket, sv, th, attempt)
+		val := xoshiro256.Hash(seed)
+		beid = cos.GenBEID(val, cos.LenBEID)
+
+		prev, err = GetXact(beid)
+		if err != nil {
+			return "", nil, err
+		}
+		if prev == nil {
+			return beid, nil, nil
+		}
 	}
 
-	// "idling" away, so try again but only once
-	val ^= org
-	beid = cos.GenBEID(val, cos.LenShortID)
-	if xctn, err = GetXact(beid); err != nil || xctn != nil {
-		beid = ""
+	// giving up (extremely unlikely)
+	return "", prev, nil
+}
+
+// xoshiro256.Hash diffusion
+func beidSeed(bucket, smapv, tagh, attempt uint64) uint64 {
+	const (
+		g = cos.GoldenRatio
+		c = cos.Mix64Mul
+	)
+	seed := bucket*g ^ (smapv + c) ^ (tagh + g)
+	if attempt != 0 {
+		seed ^= attempt * c
 	}
-	return
+	return seed
 }
