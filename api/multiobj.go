@@ -1,12 +1,11 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
 import (
 	"net/http"
-	"net/url"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -15,8 +14,9 @@ import (
 )
 
 //
-// In this file: APIs to start multi-object xactions
-// See also: xaction.go (generic part)
+// APIs to execute multi-object xactions (jobs)
+// Background: all multi-object xactions have `apc.ListRange` in their respective control messages
+// See also: api/xaction.go that includes common APIs to start and stop any xaction.
 //
 
 // Archive multiple objects from the specified source bucket.
@@ -29,65 +29,55 @@ func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.ArchiveBckMsg) (st
 	bp.Method = http.MethodPut
 	q := qalloc()
 	bckFrom.SetQuery(q)
-	return dolr(bp, bckFrom, apc.ActArchive, msg, q)
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActArchive, Value: msg})
+	return doBckAct(bp, bckFrom, jbody, q)
 }
 
 // `fltPresence` applies exclusively to remote `bckFrom` (is ignored if the source is ais://)
 // and is one of: { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
 
-func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ...int) (xid string, err error) {
+func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ...int) (string, error) {
 	bp.Method = http.MethodPost
 	q := qalloc()
 	bckFrom.SetQuery(q)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
-	return dolr(bp, bckFrom, apc.ActCopyObjects, msg, q)
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActCopyObjects, Value: msg})
+	return doBckAct(bp, bckFrom, jbody, q)
 }
 
-func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ...int) (xid string, err error) {
+func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ...int) (string, error) {
 	bp.Method = http.MethodPost
 	q := qalloc()
 	bckFrom.SetQuery(q)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
-	return dolr(bp, bckFrom, apc.ActETLObjects, msg, q)
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActETLObjects, Value: msg})
+	return doBckAct(bp, bckFrom, jbody, q)
 }
 
 func DeleteMultiObj(bp BaseParams, bck cmn.Bck, msg *apc.EvdMsg) (string, error) {
 	bp.Method = http.MethodDelete
 	q := qalloc()
 	bck.SetQuery(q)
-	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActDeleteObjects, Value: msg})
+	return doBckAct(bp, bck, jbody, q)
 }
 
 func EvictMultiObj(bp BaseParams, bck cmn.Bck, msg *apc.EvdMsg) (string, error) {
 	bp.Method = http.MethodDelete
 	q := qalloc()
 	bck.SetQuery(q)
-	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActEvictObjects, Value: msg})
+	return doBckAct(bp, bck, jbody, q)
 }
 
 func Prefetch(bp BaseParams, bck cmn.Bck, msg *apc.PrefetchMsg) (string, error) {
 	bp.Method = http.MethodPost
 	q := qalloc()
 	bck.SetQuery(q)
-	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
-}
-
-// multi-object list-range (delete, prefetch, evict, archive, copy, and etl)
-func dolr(bp BaseParams, bck cmn.Bck, action string, msg any, q url.Values) (xid string, err error) {
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: action, Value: msg})
-		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = q
-	}
-	_, err = reqParams.doReqStr(&xid)
-	FreeRp(reqParams)
-	qfree(q)
-	return xid, err
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActPrefetchObjects, Value: msg})
+	return doBckAct(bp, bck, jbody, q)
 }

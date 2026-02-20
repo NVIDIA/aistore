@@ -1,6 +1,6 @@
 // Package apc: API constant and control messages
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -90,7 +90,7 @@ const (
 	ActEnableBackend  = "enable-bend"
 	ActDisableBackend = "disable-bend"
 
-	// Node maintenance & cluster membership (see also ActRmNodeUnsafe below)
+	// node maintenance & cluster membership (see also ActRmNodeUnsafe below)
 	ActStartMaintenance = "start-maintenance" // put into maintenance state
 	ActStopMaintenance  = "stop-maintenance"  // cancel maintenance state
 	ActShutdownNode     = "shutdown-node"     // shutdown node
@@ -112,8 +112,11 @@ const (
 	// advanced usage
 	ActCheckLock = "check-lock"
 
-	// Moss
+	// api/ml.go; x-moss
 	ActGetBatch = "get-batch"
+
+	// bucket inventory
+	ActCreateInventory = "create-inventory"
 )
 
 // internal use

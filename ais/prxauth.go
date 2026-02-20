@@ -401,7 +401,7 @@ func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace 
 
 	// If auth is NOT enabled, only check bucket properties
 	if !cmn.Rom.AuthEnabled() {
-		if bck == nil {
+		if bck == nil || bck.Props == nil {
 			return nil
 		}
 		// With Auth disabled, always allow read-only access, PATCH, and ACL

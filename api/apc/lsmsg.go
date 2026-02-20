@@ -162,19 +162,26 @@ var (
 		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation}
 )
 
-// swagger:model
-type LsoMsg struct {
-	Header            http.Header `json:"hdr,omitempty"`         // (for pointers, see `ListArgs` in api/ls.go)
-	UUID              string      `json:"uuid"`                  // ID to identify a single multi-page request
-	Props             string      `json:"props"`                 // comma-delimited, e.g. "checksum,size,custom" (see GetProps* enum)
-	TimeFormat        string      `json:"time_format,omitempty"` // RFC822 is the default
-	Prefix            string      `json:"prefix"`                // return obj names starting with prefix (TODO: e.g. "A.tar/tutorials/")
-	StartAfter        string      `json:"start_after,omitempty"` // start listing after (AIS buckets only)
-	ContinuationToken string      `json:"continuation_token"`    // => LsoResult.ContinuationToken => LsoMsg.ContinuationToken
-	SID               string      `json:"target"`                // selected target to solely execute backend.list-objects
-	Flags             uint64      `json:"flags,string"`          // enum {LsCached, ...} - "LsoMsg flags" above
-	PageSize          int64       `json:"pagesize"`              // max entries returned by list objects call
-}
+type (
+	// swagger:model
+	LsoMsg struct {
+		Header            http.Header `json:"hdr,omitempty"`         // (for pointers, see `ListArgs` in api/ls.go)
+		UUID              string      `json:"uuid"`                  // ID to identify a single multi-page request
+		Props             string      `json:"props"`                 // comma-delimited, e.g. "checksum,size,custom" (see GetProps* enum)
+		TimeFormat        string      `json:"time_format,omitempty"` // RFC822 is the default
+		Prefix            string      `json:"prefix"`                // return names starting with prefix (including arch. files (e.g. "A.tar/tutorials/"))
+		StartAfter        string      `json:"start_after,omitempty"` // start listing after (AIS buckets only)
+		ContinuationToken string      `json:"continuation_token"`    // => LsoResult.ContinuationToken => LsoMsg.ContinuationToken
+		SID               string      `json:"target"`                // selected target to solely execute backend.list-objects
+		Flags             uint64      `json:"flags,string"`          // enum {LsCached, ...} - "LsoMsg flags" above
+		PageSize          int64       `json:"pagesize"`              // max entries returned by list objects call
+	}
+
+	CreateInvMsg struct {
+		Name string `json:"name,omitempty"` // inventory name (optional; must be unique for a given bucket)
+		LsoMsg
+	}
+)
 
 ////////////
 // LsoMsg //

@@ -1614,6 +1614,18 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
+	case apc.ActCreateInventory:
+		if err := p._sysInvBck(w, r, msg); err != nil {
+			return
+		}
+		cimsg := &apc.CreateInvMsg{}
+		if err := cos.MorphMarshal(msg.Value, cimsg); err != nil {
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+			return
+		}
+		nlog.Errorf("%s: %+v", p, cimsg) // DEBUG
+		p.writeErr(w, r, cmn.NewErrNotImpl("create", "bucket inventory"), http.StatusNotImplemented)
+		return
 	default:
 		p.writeErrAct(w, r, msg.Action)
 		return
@@ -1621,6 +1633,20 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 
 	debug.Assertf(xact.IsValidUUID(xid) || strings.IndexByte(xid, ',') > 0, "%q: %q", msg.Action, xid)
 	writeXid(w, xid)
+}
+
+func (p *proxy) _sysInvBck(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) error {
+	sys := &meta.Bck{Provider: apc.AIS, Name: cmn.SysInventoryName}
+
+	bctx := allocBctx()
+	bctx.p, bctx.w, bctx.r = p, w, r
+	bctx.bck = sys
+	bctx.msg = msg
+	bctx.createAIS = true
+	bctx.perms = apc.AceAdmin // (readability; will check admin access for reserved name)
+	_, err := bctx.initAndTry()
+	freeBctx(bctx)
+	return err
 }
 
 // init existing or create remote
