@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -39,19 +39,8 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 
 	// default props & flags => user-provided message
-	switch lsmsg.Props {
-	case "":
-		if lsmsg.IsFlagSet(apc.LsCached) {
-			lsmsg.AddProps(apc.GetPropsDefaultAIS...)
-		} else {
-			lsmsg.AddProps(apc.GetPropsMinimal...)
-			lsmsg.SetFlag(apc.LsNameSize)
-		}
-	case apc.GetPropsName:
-		lsmsg.SetFlag(apc.LsNameOnly)
-	case apc.GetPropsNameSize:
-		lsmsg.SetFlag(apc.LsNameSize)
-	}
+	lsmsg.NormalizeNameSizeDflt()
+
 	if bck.IsHT() || lsmsg.IsFlagSet(apc.LsArchDir) {
 		lsmsg.SetFlag(apc.LsCached)
 	}

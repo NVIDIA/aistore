@@ -35,9 +35,9 @@ const (
 	tooLongID = 32
 )
 
-// bucket name, remais alias
+// bucket name, remais alias, inventory name
 const (
-	tooLongName = 64
+	MaxNameLength = 64
 )
 
 // (bit spread)
@@ -219,8 +219,8 @@ func IsAlphaNice(s string) bool {
 // period (.) is allowed except for '..' (OnlyPlus const)
 func CheckAlphaPlus(s, tag string) error {
 	l := len(s)
-	if l > tooLongName {
-		return fmt.Errorf("%s is too long: %d > %d(max length)", tag, l, tooLongName)
+	if l > MaxNameLength {
+		return fmt.Errorf("%s is too long: %d > %d(max length)", tag, l, MaxNameLength)
 	}
 	for i := range l {
 		c := s[i]

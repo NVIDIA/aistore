@@ -514,6 +514,12 @@ var (
 			indent4 + "\t'--prefix a/b/c' - sum up sizes of the virtual directory a/b/c and objects from the virtual directory\n" +
 			indent4 + "\ta/b that have names (relative to this directory) starting with the letter c",
 	}
+	invPrefixFlag = cli.StringFlag{
+		Name: listObjPrefixFlag.Name,
+		Usage: "Create inventory for objects with names starting with the specified prefix, e.g.:\n" +
+			indent4 + "\t'--prefix a/b/c' - inventory virtual directory a/b/c and/or objects from the virtual directory\n" +
+			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter 'c'",
+	}
 
 	//
 	// multipart upload flags
@@ -737,23 +743,6 @@ var (
 			indent4 + "\tsee related:\n" +
 			indent4 + "\t     (*) options: --cached; --latest\n" +
 			indent4 + "\t     commands:    'ais get --latest'; 'ais cp --sync'; 'ais prefetch --latest'",
-	}
-
-	useInventoryFlag = cli.BoolFlag{
-		Name: "inventory",
-		Usage: "List objects using _bucket inventory_ (docs/s3compat.md); requires s3:// backend; will provide significant performance\n" +
-			indent4 + "\tboost when used with very large s3 buckets; e.g. usage:\n" +
-			indent4 + "\t  1) 'ais ls s3://abc --inventory'\n" +
-			indent4 + "\t  2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'\n" +
-			indent4 + "\t(see also: docs/s3compat.md)",
-	}
-	invNameFlag = cli.StringFlag{
-		Name:  "inv-name", // compare w/ HdrInvName
-		Usage: "Bucket inventory name (optional; system default name is '.inventory')",
-	}
-	invIDFlag = cli.StringFlag{
-		Name:  "inv-id", // cpmpare w/ HdrInvID
-		Usage: "Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
 	}
 
 	keepMDFlag = cli.BoolFlag{Name: "keep-md,k", Usage: "Keep bucket metadata"}
@@ -1405,5 +1394,37 @@ var (
 	outputTemplateForGenShards = cli.StringFlag{
 		Name:  outputTemplateFlag.Name,
 		Usage: "template for file names inside each shard (e.g. 'audio-{01..10}.wav')",
+	}
+)
+
+//
+// bucket inventory
+//
+
+const cmdCreateInventory = apc.ActCreateInventory
+
+// DEPRECATED: Feb 2026 - planned removal by March–May 2026.
+// S3-specific bucket inventory support will be replaced by the native API and CLI
+// supporting all remote buckets and all backends
+// TODO:
+// - update descriptions and reuse: useInventoryFlag, invNameFlag
+// - remove invIDFlag
+
+var (
+	useInventoryFlag = cli.BoolFlag{
+		Name: "inventory",
+		Usage: "List objects using _bucket inventory_ (docs/s3compat.md); requires s3:// backend; will provide significant performance\n" +
+			indent4 + "\tboost when used with very large s3 buckets; e.g. usage:\n" +
+			indent4 + "\t  1) 'ais ls s3://abc --inventory'\n" +
+			indent4 + "\t  2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'\n" +
+			indent4 + "\t(see also: docs/s3compat.md)",
+	}
+	invNameFlag = cli.StringFlag{
+		Name:  "inv-name", // compare w/ HdrInvName
+		Usage: "Bucket inventory name (optional; system default name is '.inventory')",
+	}
+	invIDFlag = cli.StringFlag{
+		Name:  "inv-id", // compare w/ HdrInvID
+		Usage: "Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
 	}
 )

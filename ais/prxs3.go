@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -301,7 +301,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if _, err := p.bcastMultiobj(http.MethodDelete, bucket, &msg2, query); err != nil {
+	if _, err := p.bcastBckAction(http.MethodDelete, bucket, &msg2, query); err != nil {
 		s3.WriteErr(w, r, err, 0)
 	}
 	// TODO: The client wants the response containing two lists:

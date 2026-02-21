@@ -136,6 +136,10 @@ type (
 		totalN int
 		fshare bool
 	}
+	txnCreateInventory struct {
+		msg *apc.CreateInvMsg
+		txnBckBase
+	}
 	txnETLInit struct {
 		msg etl.InitMsg
 		txnBase
@@ -651,6 +655,17 @@ func newTxnPromote(c *txnSrv, msg *apc.PromoteArgs, fqns []string, dirFQN string
 func (txn *txnPromote) String() (s string) {
 	txn.xctn = txn.xprm
 	return fmt.Sprintf("%s-src(%s)-N(%d)-fshare(%t)", txn.txnBckBase.String(), txn.dirFQN, txn.totalN, txn.fshare)
+}
+
+////////////////////////
+// txnCreateInventory //
+////////////////////////
+
+func newTxnCreateInventory(c *txnSrv, msg *apc.CreateInvMsg) (txn *txnCreateInventory) {
+	txn = &txnCreateInventory{msg: msg}
+	txn.init(c.bck)
+	txn.fillFromCtx(c)
+	return
 }
 
 ////////////////

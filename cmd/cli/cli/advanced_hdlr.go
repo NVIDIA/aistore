@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file provides advanced commands that are useful for testing or development but not everyday use.
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 
@@ -84,6 +85,22 @@ var (
 				Flags:        []cli.Flag{verbObjPrefixFlag, maxPagesFlag, objLimitFlag, pageSizeFlag, encodeObjnameFlag},
 				Action:       checkObjectLockHandler,
 				BashComplete: bucketCompletions(bcmplop{separator: true}),
+			},
+			// experimental/early-stage
+			// TODO: move under `ais bucket`
+			{
+				Name: cmdCreateInventory,
+				Usage: "Create bucket inventory for subsequent distributed listing,\n" +
+					indent1 + "e.g.:\n" +
+					indent1 + "\t* create-inventory s3://abc\t- create inventory with default (name, size) properties;\n" +
+					indent1 + "\t* create-inventory s3://abc --inv-name my-first-inventory\t- same, with a custom inventory name;\n" +
+					indent1 + "\t* create-inventory s3://abc --prefix images/\t- inventory only objects under 'images/';\n" +
+					indent1 + "\t* create-inventory s3://abc --all\t- inventory with all object properties;\n" +
+					indent1 + "\t* create-inventory s3://abc --name-only\t- lightweight: object names only.",
+				ArgsUsage:    bucketArgument,
+				Flags:        []cli.Flag{invNameFlag, invPrefixFlag, nameOnlyFlag, allPropsFlag},
+				Action:       createInventoryHandler,
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 		},
 	}
@@ -349,4 +366,55 @@ func _checkLockOne(bck cmn.Bck, objName string) (string, error) {
 	default:
 		return "", fmt.Errorf("unexpected return from 'api.CheckObjectLock': %d", lockState)
 	}
+}
+
+func createInventoryHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "", c.Args()[1:])
+	}
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
+	if err != nil {
+		return err
+	}
+
+	// lsmsg
+	msg := &apc.LsoMsg{}
+	msg.SetFlag(apc.LsNoDirs)
+
+	if flagIsSet(c, invPrefixFlag) {
+		msg.Prefix = parseStrFlag(c, invPrefixFlag)
+	}
+
+	// props: default is name+size
+	switch {
+	case flagIsSet(c, nameOnlyFlag):
+		msg.SetFlag(apc.LsNameOnly)
+		msg.Props = apc.GetPropsName
+	case flagIsSet(c, allPropsFlag):
+		msg.AddProps(apc.GetPropsAll...)
+	default:
+		msg.SetFlag(apc.LsNameSize)
+		msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
+	}
+
+	// inv name
+	var opts []string
+	if flagIsSet(c, invNameFlag) {
+		name := parseStrFlag(c, invNameFlag)
+		if err := cos.CheckAlphaPlus(name, "inventory name"); err != nil {
+			return err
+		}
+		opts = append(opts, name)
+	}
+
+	xid, err := api.CreateBucketInventory(apiBP, bck, msg, opts...)
+	if err != nil {
+		return V(err)
+	}
+
+	actionDone(c, fmt.Sprintf("Creating inventory %s. %s", bck.Cname(""), toMonitorMsg(c, xid, "")))
+	return nil
 }

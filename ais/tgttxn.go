@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -161,6 +161,8 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActPromote:
 		hdr := w.Header()
 		xid, err = t.promote(c, hdr)
+	case apc.ActCreateInventory:
+		xid, err = t.createInventory(c)
 	case apc.ActETLInline:
 		hdr := w.Header()
 		xid, err = t.initETL(c, hdr)
@@ -943,6 +945,10 @@ func (t *target) destroyBucket(c *txnSrv) error {
 	return nil
 }
 
+//
+// promote: files to objects
+//
+
 func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 	switch c.phase {
 	case apc.Begin2PC:
@@ -1110,8 +1116,70 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 	return nil
 }
 
+//
+// create bucket inventory
+//
+
+func (t *target) createInventory(c *txnSrv) (string, error) {
+	switch c.phase {
+	case apc.Begin2PC:
+		// TODO -- FIXME:
+		// - check for a running x-inventory(apc.ActCreateInventory) on the same bucket
+
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
+			return "", err
+		}
+
+		cimsg := &apc.CreateInvMsg{}
+		if err := cos.MorphMarshal(c.msg.Value, cimsg); err != nil {
+			return "", fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
+		}
+		if cimsg.Name != "" {
+			if err := cos.CheckAlphaPlus(cimsg.Name, "inventory name"); err != nil {
+				return "", err
+			}
+		} else {
+			cimsg.Name = xs.PrefixInvID + c.uuid
+		}
+
+		cimsg.LsoMsg.NormalizeNameSizeDflt()
+
+		nlp := newBckNLP(c.bck)
+		if !nlp.TryRLock(c.timeout.netw / 2) {
+			return "", cmn.NewErrBusy("bucket", c.bck.Cname(""))
+		}
+
+		// TODO -- FIXME: rns := xreg.RenewBucketInventory(bck) ...
+
+		txn := newTxnCreateInventory(c, cimsg)
+		if err := t.txns.begin(txn, nlp); err != nil {
+			return "", err
+		}
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
+		txn, err := t.txns.find(c.uuid)
+		if err != nil {
+			return "", err
+		}
+		txnInv, ok := txn.(*txnCreateInventory)
+		debug.Assert(ok)
+
+		if cmn.Rom.V(4, cos.ModAIS) {
+			nlog.Infof("%s: create-inventory %s name=%q prefix=%q props=%q", t, c.bck.Cname(""), txnInv.msg.Name, txnInv.msg.Prefix, txnInv.msg.Props)
+		}
+
+		return c.uuid, nil
+	}
+	return "", nil
+}
+
 /////////
-// ETL //
+// ETL
 /////////
 
 func (t *target) initETL(c *txnSrv, hdr http.Header) (string, error) {

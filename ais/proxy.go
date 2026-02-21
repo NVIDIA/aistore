@@ -1041,7 +1041,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 				return
 			}
 		}
-		xid, err := p.bcastMultiobj(r.Method, bck.Name, msg, apireq.query)
+		xid, err := p.bcastBckAction(r.Method, bck.Name, msg, apireq.query)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1588,13 +1588,13 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			ns := query.Get(apc.QparamNamespace)
 			debug.Assertf(!strings.Contains(ns, "remais"), "query has alias: bck=%s, ns=%s", bck, ns)
 		})
-		if xid, err = p.bcastMultiobj(r.Method, bucket, msg, query); err != nil {
+		if xid, err = p.bcastBckAction(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
 	case apc.ActRechunk:
 		// re-chunk bucket objects according to provided args
-		if xid, err = p.bcastMultiobj(r.Method, bucket, msg, query); err != nil {
+		if xid, err = p.bcastBckAction(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1615,17 +1615,13 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 	case apc.ActCreateInventory:
-		if err := p._sysInvBck(w, r, msg); err != nil {
+		if err := p.initTrySysInv(w, r, msg); err != nil {
 			return
 		}
-		cimsg := &apc.CreateInvMsg{}
-		if err := cos.MorphMarshal(msg.Value, cimsg); err != nil {
-			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+		if xid, err = p.createBucketInventory(msg, bck); err != nil {
+			p.writeErr(w, r, err)
 			return
 		}
-		nlog.Errorf("%s: %+v", p, cimsg) // DEBUG
-		p.writeErr(w, r, cmn.NewErrNotImpl("create", "bucket inventory"), http.StatusNotImplemented)
-		return
 	default:
 		p.writeErrAct(w, r, msg.Action)
 		return
@@ -1635,15 +1631,15 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 	writeXid(w, xid)
 }
 
-func (p *proxy) _sysInvBck(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) error {
-	sys := &meta.Bck{Provider: apc.AIS, Name: cmn.SysInventoryName}
-
+// currently, creating inventories requires admin access
+// (see p.access() for IsSystem)
+func (p *proxy) initTrySysInv(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg /*orig*/) error {
 	bctx := allocBctx()
 	bctx.p, bctx.w, bctx.r = p, w, r
-	bctx.bck = sys
+	bctx.bck = meta.SysBckInv()
 	bctx.msg = msg
 	bctx.createAIS = true
-	bctx.perms = apc.AceAdmin // (readability; will check admin access for reserved name)
+	bctx.perms = apc.AceAdmin
 	_, err := bctx.initAndTry()
 	freeBctx(bctx)
 	return err
@@ -2342,7 +2338,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	}
 }
 
-func (p *proxy) bcastMultiobj(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {
+func (p *proxy) bcastBckAction(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {
 	var (
 		smap      = p.owner.smap.get()
 		actMsgExt = p.newAmsg(msg, nil, cos.GenUUID())

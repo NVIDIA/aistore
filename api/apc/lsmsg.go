@@ -226,6 +226,23 @@ func (lsmsg *LsoMsg) AddProps(propNames ...string) {
 	}
 }
 
+// default props & flags => user-provided message
+func (lsmsg *LsoMsg) NormalizeNameSizeDflt() {
+	switch lsmsg.Props {
+	case "":
+		if lsmsg.IsFlagSet(LsCached) {
+			lsmsg.AddProps(GetPropsDefaultAIS...)
+		} else {
+			lsmsg.AddProps(GetPropsMinimal...)
+			lsmsg.SetFlag(LsNameSize)
+		}
+	case GetPropsName:
+		lsmsg.SetFlag(LsNameOnly)
+	case GetPropsNameSize:
+		lsmsg.SetFlag(LsNameSize)
+	}
+}
+
 func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
 	props := strings.Split(lsmsg.Props, LsPropsSepa)
 	s = make(cos.StrSet, len(props))

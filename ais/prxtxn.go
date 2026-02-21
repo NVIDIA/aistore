@@ -1302,6 +1302,19 @@ func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) 
 	return podMap, nil
 }
 
+//////////
+// Create Bucket Inventory
+//////////
+
+func (p *proxy) createBucketInventory(msg *apc.ActMsg, bck *meta.Bck) (xid string, err error) {
+	c := p.newTxnC(msg, bck, false /*waitmsync*/)
+	if err := c.begin(bck); err != nil {
+		return "", err
+	}
+	xid, _, err = c.commit(bck, c.cmtTout(false))
+	return xid, err
+}
+
 //
 // common (prx|tgt)txn
 //

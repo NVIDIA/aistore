@@ -390,3 +390,9 @@ func BckFromUBP(uname, bucket, provider string) (*Bck, error) {
 	np, err := cmn.NormalizeProvider(provider)
 	return &Bck{Name: bucket, Provider: np}, err
 }
+
+//
+// system buckets
+//
+
+func SysBckInv() *Bck { return &Bck{Provider: apc.AIS, Name: cmn.SysInventoryName} }

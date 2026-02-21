@@ -22,7 +22,7 @@ const (
 	// given that Linux PATH_MAX = 4096 (see /usr/include/limits.h)
 	// this number also takes into account:
 	// - maxLenMountpath = 255 (see cmn/config)
-	// - max bucket name = 64  (see cos.CheckAlphaPlus)
+	// - max bucket name = 64  (cos.MaxNameLength)
 	maxLenPath = 3072
 )
 
