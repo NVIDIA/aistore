@@ -42,7 +42,7 @@ func TestLocalPageIterator(t *testing.T) {
 	for _, ln := range lines {
 		i := strings.Index(ln, lpiTestPrefix)
 		if i >= 0 {
-			s := ln[i+len(lpiTestPrefix):]
+			s := strings.TrimSpace(ln[i+len(lpiTestPrefix):])
 			num, err = strconv.ParseInt(s, 10, 64)
 			tassert.CheckFatal(t, err)
 		}
@@ -56,7 +56,7 @@ func TestLocalPageIterator(t *testing.T) {
 		size  = rand.IntN(lpiTestPageSize<<1) + lpiTestPageSize>>1
 		sz    = strconv.Itoa(size)
 	)
-	t.Run("page-size/"+sz, func(t *testing.T) { eops = lpiPageSize(t, root, eops, lpiTestPageSize, total) })
+	t.Run("page-size/"+sz, func(t *testing.T) { eops = lpiPageSize(t, root, eops, size, total) })
 	t.Run("end-of-page/"+sz, func(t *testing.T) { lpiEndOfPage(t, root, eops, total) })
 }
 
