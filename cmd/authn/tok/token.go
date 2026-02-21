@@ -69,6 +69,12 @@ type (
 		// IsPublicKeyValid checks if a provided public key matches the parser's key.
 		IsPublicKeyValid(pubKeyStr string) (bool, error)
 	}
+
+	Signer interface {
+		SignToken(c jwt.Claims) (string, error)
+		GetSigConf() *cmn.AuthSignatureConf
+		ValidationConf() *authn.ServerConf
+	}
 )
 
 var (
@@ -80,13 +86,6 @@ var (
 	ErrTokenRevoked         = errors.New("token revoked")
 	supportedSigningMethods = []string{jwt.SigningMethodRS256.Name, jwt.SigningMethodRS384.Name, jwt.SigningMethodRS512.Name, jwt.SigningMethodHS256.Name}
 )
-
-// TODO: cos.Unsafe* and other micro-optimization and refactoring
-
-func CreateHMACTokenStr(c jwt.Claims, secret cmn.Censored) (string, error) {
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
-	return t.SignedString([]byte(secret))
-}
 
 func StandardClaims(expires time.Time, userID, aud string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL) *AISClaims {
 	return &AISClaims{

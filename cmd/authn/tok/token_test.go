@@ -23,6 +23,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/cmd/authn/signing"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -49,6 +50,7 @@ var (
 		Method: cmn.SigMethodHMAC,
 	}
 	hmacParser       = tok.NewTokenParser(&cmn.AuthConf{RequiredClaims: reqClaims, Signature: hmacSigConfig}, nil)
+	hmacSigner       = signing.NewHMACSigner(testHMACSigningSecret)
 	basicAdminClaims = tok.AdminClaims(futureTime, testUser, testAudience)
 	cacheConfNoRetry = &tok.CacheConfig{
 		DiscoveryConf: &tok.DiscoveryConf{
@@ -165,13 +167,6 @@ func createTokenWithKeyID(t *testing.T, claims jwt.Claims, rsaKey *rsa.PrivateKe
 	res, err := token.SignedString(rsaKey)
 	tassert.CheckFatal(t, err)
 	return res
-}
-
-func TestCreateHMACTokenStr(t *testing.T) {
-	tk, err := tok.CreateHMACTokenStr(basicAdminClaims, testHMACSigningSecret)
-	tassert.Errorf(t, err == nil, "Failed to create hmac-signed token string: %v", err)
-	_, err = hmacParser.ValidateToken(t.Context(), tk)
-	tassert.Errorf(t, err == nil, "Failed to validate hmac-siagned token: %v", err)
 }
 
 func TestAdminClaims(t *testing.T) {
@@ -312,7 +307,7 @@ func TestClaims_BackwardsCompat(t *testing.T) {
 
 // Test validating a token successfully
 func TestValidateToken_Success(t *testing.T) {
-	tokenStr, err := tok.CreateHMACTokenStr(basicAdminClaims, testHMACSigningSecret)
+	tokenStr, err := hmacSigner.SignToken(basicAdminClaims)
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
 	claims, err := hmacParser.ValidateToken(t.Context(), tokenStr)
 	tassert.Errorf(t, err == nil, "Expected successful validation but got %v", err)
@@ -321,7 +316,7 @@ func TestValidateToken_Success(t *testing.T) {
 
 // Test validating token with invalid claims
 func TestValidateToken_InvalidKey(t *testing.T) {
-	tokenStr, err := tok.CreateHMACTokenStr(basicAdminClaims, testHMACSigningSecret)
+	tokenStr, err := hmacSigner.SignToken(basicAdminClaims)
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
 	invalidSig := &cmn.AuthSignatureConf{Key: "invalid-secret", Method: cmn.SigMethodHMAC}
 	invalidParser := tok.NewTokenParser(&cmn.AuthConf{Signature: invalidSig}, nil)
@@ -343,7 +338,7 @@ func TestValidateToken_Unsupported(t *testing.T) {
 // Test that validating an expired token raises the appropriate exception
 func TestValidateToken_Expired(t *testing.T) {
 	c := tok.AdminClaims(previousTime, testUser, testAudience)
-	tokenStr, err := tok.CreateHMACTokenStr(c, testHMACSigningSecret)
+	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
 	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, tok.ErrTokenExpired), "Expected an error when token is expired")
@@ -358,7 +353,7 @@ func TestValidateToken_AudienceMismatch(t *testing.T) {
 			Subject:   "subject1",
 		},
 	}
-	tokenStr, err := tok.CreateHMACTokenStr(c, testHMACSigningSecret)
+	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "Token generation failed: %v", err)
 	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, jwt.ErrTokenInvalidClaims), "Error raised from JWT parse from invalid claims")
@@ -371,7 +366,7 @@ func TestValidateToken_NoAudience(t *testing.T) {
 			ExpiresAt: jwt.NewNumericDate(futureTime),
 		},
 	}
-	tokenStr, err := tok.CreateHMACTokenStr(c, testHMACSigningSecret)
+	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "Token generation failed: %v", err)
 	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, jwt.ErrTokenInvalidClaims), "Error raised from JWT parse from invalid claims")
@@ -385,7 +380,7 @@ func TestValidateToken_NoSubject(t *testing.T) {
 			Audience:  reqAud,
 		},
 	}
-	tokenStr, err := tok.CreateHMACTokenStr(c, testHMACSigningSecret)
+	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "Token generation failed: %v", err)
 	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with missing subject and username to fail")

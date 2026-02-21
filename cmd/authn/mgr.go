@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -26,17 +27,24 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type mgr struct {
-	clientH   *http.Client
-	clientTLS *http.Client
-	db        kvdb.Driver
-	cm        *config.ConfManager
-	rm        *signing.RSAKeyManager
-	tkParser  tok.Parser
-}
+type (
+	mgr struct {
+		clientH   *http.Client
+		clientTLS *http.Client
+		db        kvdb.Driver
+		cm        *config.ConfManager
+		sb        atomic.Pointer[signerBundle]
+	}
+
+	signerBundle struct {
+		signer tok.Signer
+		parser tok.Parser
+	}
+)
 
 var (
 	errInvalidCredentials = errors.New("invalid credentials")
@@ -53,44 +61,58 @@ var (
 )
 
 // If user DB exists, loads the data from the file and decrypts passwords
-func newMgr(cm *config.ConfManager, rm *signing.RSAKeyManager, driver kvdb.Driver) (m *mgr, code int, err error) {
+func newMgr(cm *config.ConfManager, signer tok.Signer, driver kvdb.Driver) (m *mgr, code int, err error) {
 	m = &mgr{
 		db: driver,
 		cm: cm,
-		rm: rm,
 	}
+	m.updateSignerBundle(signer)
 	m.clientH, m.clientTLS = cmn.NewDefaultClients(cm.GetDefaultTimeout())
 	code, err = initializeDB(driver)
 	if err != nil {
 		return
 	}
-	// Currently only set on startup
-	parser, err := m.createTokenParser()
-	if err != nil {
-		nlog.Errorf("Failed to create token parser: %v", err)
-		return
-	}
-	m.tkParser = parser
 	return
 }
 
-func (m *mgr) createTokenParser() (tok.Parser, error) {
-	var sigConf *cmn.AuthSignatureConf
-	switch {
-	case m.cm.HasHMACSecret():
-		sigConf = m.cm.GetSigConf()
-	case m.rsaConfigured():
-		sigConf = m.rm.GetSigConf()
-	default:
-		msg := "no HMAC or RSA configured for token validation"
-		debug.Assert(false, msg)
-		return nil, fmt.Errorf("invalid config for %s service: %s", config.ServiceName, msg)
-	}
-	// Create a limited token parser with no issuer lookup
-	return tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil), nil
-}
+func (m *mgr) getSigner() tok.Signer { return m.sb.Load().signer }
+func (m *mgr) getParser() tok.Parser { return m.sb.Load().parser }
 
 func (*mgr) String() string { return config.ServiceName }
+
+func (m *mgr) updateSignerBundle(signer tok.Signer) {
+	// Create a limited token parser with no issuer lookup
+	parser := tok.NewTokenParser(&cmn.AuthConf{Signature: signer.GetSigConf()}, nil)
+	m.sb.Store(&signerBundle{signer: signer, parser: parser})
+}
+
+func (m *mgr) validateToken(ctx context.Context, token string) (*tok.AISClaims, error) {
+	return m.getParser().ValidateToken(ctx, token)
+}
+
+func (m *mgr) getJWKS() (jwk.Set, error) {
+	provider, ok := m.getSigner().(signing.JWKSProvider)
+	if !ok {
+		return nil, errors.New("JWKS not available for current signing method")
+	}
+	return provider.GetJWKS()
+}
+
+func (m *mgr) getJWKSMaxAge() int {
+	const (
+		cacheMinRefresh = 5 * time.Minute
+		cacheMaxRefresh = 720 * time.Hour
+		cacheWindow     = 10 * time.Minute
+	)
+	exp := m.cm.GetExpiry()
+	if exp == 0 {
+		return int(cacheMaxRefresh.Seconds())
+	}
+	// Client should refresh "cacheWindow" before the key expiry, bounded by the reasonable age constants
+	ttr := m.cm.GetExpiry() - cacheWindow
+	maxAge := max(cacheMinRefresh, min(ttr, cacheMaxRefresh))
+	return int(maxAge.Seconds())
+}
 
 //
 // users ============================================================
@@ -448,20 +470,23 @@ func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.Cl
 	// TODO: parse from ACLs and/or LoginMsg
 	aud := ""
 	if uInfo.IsAdmin() {
-		return m.createTokenWithClaims(tok.AdminClaims(expires, uid, aud))
+		return m.getSigner().SignToken(tok.AdminClaims(expires, uid, aud))
 	}
 	m.fixClusterIDs(cluACLs)
-	return m.createTokenWithClaims(tok.StandardClaims(expires, uid, aud, bckACLs, cluACLs))
+	return m.getSigner().SignToken(tok.StandardClaims(expires, uid, aud, bckACLs, cluACLs))
 }
 
-func (m *mgr) createTokenWithClaims(c *tok.AISClaims) (string, error) {
-	if m.cm.HasHMACSecret() {
-		return tok.CreateHMACTokenStr(c, m.cm.GetSecret())
+func (m *mgr) updateConf(cu *authn.ConfigToUpdate) error {
+	oldSecret := m.cm.GetSecret()
+	if err := m.cm.UpdateConf(cu); err != nil {
+		return err
 	}
-	if m.rsaConfigured() {
-		return m.rm.SignToken(c)
+	newSecret := m.cm.GetSecret()
+	if oldSecret != newSecret {
+		signer := signing.NewHMACSigner(newSecret)
+		m.updateSignerBundle(signer)
 	}
-	return "", errors.New("no valid signing key configured")
+	return nil
 }
 
 // Before putting a list of cluster permissions to a token, cluster aliases
@@ -508,7 +533,7 @@ func (m *mgr) generateRevokedTokenList(ctx context.Context) ([]string, int, erro
 
 	revokeList := make([]string, 0, len(tokens))
 	for _, token := range tokens {
-		_, err = m.tkParser.ValidateToken(ctx, token)
+		_, err = m.getParser().ValidateToken(ctx, token)
 		if err != nil {
 			nlog.Infof("removing invalid token %q due to validation error %v", token, err)
 			_, err = m.db.Delete(revokedCollection, token)
@@ -520,10 +545,6 @@ func (m *mgr) generateRevokedTokenList(ctx context.Context) ([]string, int, erro
 		revokeList = append(revokeList, token)
 	}
 	return revokeList, http.StatusOK, nil
-}
-
-func (m *mgr) rsaConfigured() bool {
-	return m.rm != nil
 }
 
 //

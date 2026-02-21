@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmd/authn/kvdb"
 	"github.com/NVIDIA/aistore/cmd/authn/signing"
+	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -51,8 +52,9 @@ func main() {
 	cm := config.NewConfManager()
 	cm.Init(*cfgPath)
 	driver := kvdb.CreateDriver(cm)
-	rm := initRSA(cm)
-	mgr, code, err := newMgr(cm, rm, driver)
+	// Initialize the interface used to sign tokens and validate key signatures
+	signer := initSigner(cm)
+	mgr, code, err := newMgr(cm, signer, driver)
 	if err != nil {
 		cos.ExitLogf("Failed to init manager: %v(%d)", err, code)
 	}
@@ -140,12 +142,15 @@ func printVer() {
 	fmt.Printf("version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
 }
 
-func initRSA(cm *config.ConfManager) *signing.RSAKeyManager {
-	// Skip initializing if using HMAC
-	if cm.HasHMACSecret() {
-		return nil
+func initSigner(cm *config.ConfManager) tok.Signer {
+	if hmac := cm.GetSecret(); hmac != "" {
+		return signing.NewHMACSigner(hmac)
 	}
 	nlog.Infof("No HMAC secret provided via config or %q, initializing with RSA", env.AisAuthSecretKey)
+	return initRSA(cm)
+}
+
+func initRSA(cm *config.ConfManager) *signing.RSAKeyManager {
 	passphrase, err := validatePassphrase()
 	if err != nil {
 		cos.ExitLogf("Failed RSA key passphrase validation for %s: %v", env.AisAuthPrivateKeyPass, err)

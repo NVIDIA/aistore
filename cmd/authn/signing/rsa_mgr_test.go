@@ -53,8 +53,25 @@ func newTempKeyFile(t *testing.T) string {
 	return filepath.Join(t.TempDir(), tmpKeyFilename)
 }
 
+func getAndAssertPubKey(t *testing.T, mgr *signing.RSAKeyManager) string {
+	validationConf := mgr.ValidationConf()
+	tassert.Fatal(t, validationConf != nil, "expected non-nil validation conf")
+	tassert.Fatal(t, validationConf.PubKey != nil, "expected public key to be non-nil in validation conf")
+	assertValidPublicKey(t, *validationConf.PubKey)
+	return *validationConf.PubKey
+}
+
+func assertValidPublicKey(t *testing.T, pubKeyPEM string) {
+	block, _ := pem.Decode([]byte(pubKeyPEM))
+	tassert.Fatal(t, block != nil, "expected valid PEM block in public key")
+	pub, parseErr := x509.ParsePKIXPublicKey(block.Bytes)
+	tassert.Fatalf(t, parseErr == nil, "expected parseable public key, got %v", parseErr)
+	_, ok := pub.(*rsa.PublicKey)
+	tassert.Fatal(t, ok, "expected RSA public key type")
+}
+
 func assertKeyBundleValid(t *testing.T, mgr *signing.RSAKeyManager) {
-	tassert.Fatal(t, mgr.GetPublicKeyPEM() != "", "expected public key PEM to be set")
+	getAndAssertPubKey(t, mgr)
 
 	jwks, err := mgr.GetJWKS()
 	tassert.CheckFatal(t, err)
@@ -74,7 +91,9 @@ func assertKeyBundleValid(t *testing.T, mgr *signing.RSAKeyManager) {
 }
 
 func compareMgrKeyBundle(t *testing.T, expectedMgr, actualMgr *signing.RSAKeyManager) {
-	tassert.Fatal(t, actualMgr.GetPublicKeyPEM() == expectedMgr.GetPublicKeyPEM(), "manager public key does not equal expected")
+	actualPub := getAndAssertPubKey(t, actualMgr)
+	expectedPub := getAndAssertPubKey(t, expectedMgr)
+	tassert.Fatal(t, actualPub == expectedPub, "manager public key does not equal expected")
 
 	expectedJWKS, err := expectedMgr.GetJWKS()
 	tassert.CheckFatal(t, err)
@@ -108,19 +127,12 @@ func TestGetSigConf_RSA(t *testing.T) {
 	sig := mgr.GetSigConf()
 	tassert.Fatalf(t, sig.Method == cmn.SigMethodRSA, "expected RSA method, got %v", sig.Method)
 	// We don't know pubKey at deploy time, so just make sure it's set and valid
-	tassert.Fatal(t, string(sig.Key) != "", "expected non-nil public key")
-	block, _ := pem.Decode([]byte(sig.Key))
-	tassert.Fatal(t, block != nil, "expected PEM block in public key")
-	var pub any
-	pub, err = x509.ParsePKIXPublicKey(block.Bytes)
-	tassert.Fatalf(t, err == nil, "expected no error parsing RSA public key, got %v", err)
-	_, ok := pub.(*rsa.PublicKey)
-	tassert.Fatal(t, ok, "expected public key string to be valid RSA public key")
+	assertValidPublicKey(t, string(sig.Key))
 }
 
 func TestIsInitializedFalse(t *testing.T) {
 	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t))
-	tassert.Fatal(t, mgr.GetPublicKeyPEM() == "", "expected public key PEM to be empty")
+	tassert.Fatal(t, mgr.ValidationConf() == nil, "expected validation conf to be nil")
 	jwks, err := mgr.GetJWKS()
 	tassert.CheckFatal(t, err)
 	tassert.Fatal(t, jwks.Len() == 0, "expected returned JWKS to be initialized but empty")
@@ -224,4 +236,25 @@ func TestRSAKeyManagerUnencryptedWithPassphrase(t *testing.T) {
 	reader := signing.NewRSAKeyManager(conf, genRandomPassphrase(t))
 	err = reader.Init()
 	tassert.Fatal(t, err != nil, "expected Init to fail when loading unencrypted key with passphrase configured")
+}
+
+func TestValidationConf_RSA(t *testing.T) {
+	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t))
+	err := mgr.Init()
+	tassert.CheckFatal(t, err)
+
+	conf := mgr.ValidationConf()
+
+	// ValidationConf must populate PubKey, not Secret
+	tassert.Fatal(t, conf.PubKey != nil, "expected non-nil PubKey pointer")
+	tassert.Fatal(t, *conf.PubKey != "", "expected non-empty public key PEM")
+	tassert.Fatal(t, conf.Secret == "", "expected empty Secret field for RSA signer")
+
+	// Public key must be a valid PEM-encoded RSA public key
+	assertValidPublicKey(t, *conf.PubKey)
+
+	// Must be consistent with GetSigConf
+	sigConf := mgr.GetSigConf()
+	tassert.Fatalf(t, string(sigConf.Key) == *conf.PubKey,
+		"expected ValidationConf PubKey to match GetSigConf Key")
 }

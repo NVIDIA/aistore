@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -30,20 +29,9 @@ const (
 
 // Send request to the defined cluster to validate that the cluster will allow tokens issued by this AuthN service
 func (m *mgr) validateCluster(clu *authn.CluACL) (err error) {
-	var (
-		tag  string
-		body []byte
-	)
-	switch {
-	case m.cm.HasHMACSecret():
-		tag = "validate-secret"
-		body = cos.MustMarshal(&authn.ServerConf{Secret: m.cm.GetSecretChecksum()})
-	case m.rsaConfigured():
-		tag = "validate-key"
-		body = cos.MustMarshal(&authn.ServerConf{PubKey: apc.Ptr(m.rm.GetPublicKeyPEM())})
-	default:
-		return errors.New("invalid cluster configuration, no signing key configured")
-	}
+	conf := m.getSigner().ValidationConf()
+	body := cos.MustMarshal(conf)
+	tag := "validate-signer"
 
 	for _, u := range clu.URLs {
 		if err = m.call(http.MethodPost, u, apc.Tokens, body, tag); err == nil {

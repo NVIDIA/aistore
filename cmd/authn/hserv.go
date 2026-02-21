@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
@@ -190,7 +189,7 @@ func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "empty token")
 		return
 	}
-	if _, err := h.mgr.tkParser.ValidateToken(r.Context(), msg.Token); err != nil {
+	if _, err := h.mgr.validateToken(r.Context(), msg.Token); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -323,7 +322,7 @@ func (h *hserv) getToken(r *http.Request) (*tok.AISClaims, error) {
 	if err != nil {
 		return nil, err
 	}
-	claims, err := h.mgr.tkParser.ValidateToken(r.Context(), tokenHdr.Token)
+	claims, err := h.mgr.validateToken(r.Context(), tokenHdr.Token)
 	if err != nil {
 		if errors.Is(err, tok.ErrInvalidToken) {
 			return nil, fmt.Errorf("not authorized (token expired): %q", tokenHdr.Token)
@@ -602,7 +601,7 @@ func (h *hserv) httpConfigPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.mgr.cm.UpdateConf(updateCfg)
+	err := h.mgr.updateConf(updateCfg)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
@@ -635,31 +634,11 @@ func (h *hserv) pubKeyHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet)
 		return
 	}
-	if !h.mgr.rsaConfigured() {
-		cmn.WriteErr(w, r, errors.New("not configured with RSA"), http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d, public", h.getJWKSMaxAge()))
-	jwks, err := h.mgr.rm.GetJWKS()
+	jwks, err := h.mgr.getJWKS()
 	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+		cmn.WriteErr(w, r, err, http.StatusBadRequest)
 		return
 	}
+	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d, public", h.mgr.getJWKSMaxAge()))
 	writeJSON(w, jwks, "get public JWKS")
-}
-
-func (h *hserv) getJWKSMaxAge() int {
-	const (
-		cacheMinRefresh = 5 * time.Minute
-		cacheMaxRefresh = 720 * time.Hour
-		cacheWindow     = 10 * time.Minute
-	)
-	exp := h.mgr.cm.GetExpiry()
-	if exp == 0 {
-		return int(cacheMaxRefresh.Seconds())
-	}
-	// Client should refresh "cacheWindow" before the key expiry, bounded by the reasonable age constants
-	ttr := h.mgr.cm.GetExpiry() - cacheWindow
-	maxAge := max(cacheMinRefresh, min(ttr, cacheMaxRefresh))
-	return int(maxAge.Seconds())
 }

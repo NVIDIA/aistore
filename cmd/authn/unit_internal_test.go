@@ -234,7 +234,7 @@ func TestToken(t *testing.T) {
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
-	info, err := mgr.tkParser.ValidateToken(t.Context(), token)
+	info, err := mgr.getParser().ValidateToken(t.Context(), token)
 	if err != nil {
 		t.Fatalf("Failed to decrypt token %v: %v", token, err)
 	}
@@ -253,7 +253,7 @@ func TestToken(t *testing.T) {
 
 	// expired token test
 	time.Sleep(shortExpiration)
-	_, err = mgr.tkParser.ValidateToken(t.Context(), token)
+	_, err = mgr.getParser().ValidateToken(t.Context(), token)
 	tassert.Fatalf(t, errors.Is(err, tok.ErrTokenExpired), "Token must be expired: %s", token)
 }
 
@@ -710,9 +710,7 @@ func TestGetJWKSMaxAge(t *testing.T) {
 		rm := createRSAManager(t)
 		mgr, err := createManagerWithAdmin(cm, rm, driver)
 		tassert.CheckFatal(t, err)
-		h := newServer(mgr)
-
-		got := h.getJWKSMaxAge()
+		got := mgr.getJWKSMaxAge()
 		tassert.Errorf(t, got == tt.want, "getJWKSMaxAge() = %d, want %d", got, tt.want)
 	}
 }

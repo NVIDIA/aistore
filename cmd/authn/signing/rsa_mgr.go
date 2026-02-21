@@ -21,7 +21,9 @@ import (
 
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
+	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -46,6 +48,8 @@ const (
 	MinPassphraseEntropy = 3
 )
 
+const msgUninitialized = "init failed (fatal) or never called"
+
 var (
 	errEncryptedDataTooShort = errors.New("encrypted data is too short")
 )
@@ -53,6 +57,10 @@ var (
 // RSAKeyManager is responsible for the lifecycle of RSA key pairs
 // TODO: currently, only written at init time; key rotation will require sync
 type (
+	JWKSProvider interface {
+		GetJWKS() (jwk.Set, error)
+	}
+
 	RSAKeyManager struct {
 		conf       *config.RSAKeyConfig
 		passphrase cmn.Censored
@@ -68,6 +76,10 @@ type (
 		jwks         jwk.Set
 	}
 )
+
+// interface guard
+var _ tok.Signer = (*RSAKeyManager)(nil)
+var _ JWKSProvider = (*RSAKeyManager)(nil)
 
 func NewRSAKeyManager(conf *config.RSAKeyConfig, passphrase cmn.Censored) *RSAKeyManager {
 	// All fields are value types, copy to avoid external mutation
@@ -355,17 +367,19 @@ func deriveKeyWithID(key *rsa.PrivateKey) (jwk.Key, error) {
 	return jwkKey, nil
 }
 
-func (r *RSAKeyManager) GetPublicKeyPEM() string {
+func (r *RSAKeyManager) ValidationConf() *authn.ServerConf {
 	if c := r.bundle.Load(); c != nil {
-		return c.publicKeyPEM
+		return &authn.ServerConf{PubKey: &c.publicKeyPEM}
 	}
-	return ""
+	debug.Assert(false, msgUninitialized)
+	return nil
 }
 
 func (r *RSAKeyManager) GetJWKS() (jwk.Set, error) {
 	if c := r.bundle.Load(); c != nil {
 		return c.jwks.Clone()
 	}
+	debug.Assert(false, msgUninitialized)
 	return jwk.NewSet(), nil
 }
 
@@ -374,6 +388,7 @@ func (r *RSAKeyManager) GetSigConf() *cmn.AuthSignatureConf {
 		// Public key is not sensitive, but must be a censored type in conf
 		return &cmn.AuthSignatureConf{Key: cmn.Censored(c.publicKeyPEM), Method: cmn.SigMethodRSA}
 	}
+	debug.Assert(false, msgUninitialized)
 	return nil
 }
 

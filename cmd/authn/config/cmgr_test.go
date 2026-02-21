@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -317,26 +316,6 @@ func TestIsVerbose(t *testing.T) {
 	tassert.Errorf(t, !cm.IsVerbose(), "expected IsVerbose false for level 1")
 }
 
-func TestGetSigConf(t *testing.T) {
-	// HMAC path -- default base config here has a secret set
-	base := newBaseConfig()
-	cm := newConfManagerWithConf(t, base)
-	sig := cm.GetSigConf()
-	tassert.Fatalf(t, sig.Method == cmn.SigMethodHMAC, "expected HMAC method, got %v", sig.Method)
-	expectedSec := base.Server.Secret
-	tassert.Fatalf(t, string(sig.Key) == expectedSec, "expected key %q, got %q", expectedSec, sig.Key)
-}
-
-func TestGetSigConfEmpty(t *testing.T) {
-	// If no HMAC secret is configured, return nil signature config
-	c := newConf()
-	c.Server.Secret = ""
-	c.Init()
-	cm := newConfManagerWithConf(t, c)
-	sig := cm.GetSigConf()
-	tassert.Fatalf(t, sig == nil, "expected nil signature conf, got %v", sig)
-}
-
 func TestGetExpiryAndDefaultTimeout(t *testing.T) {
 	base := newBaseConfig()
 	base.Server.Expire = cos.Duration(3 * time.Hour)
@@ -359,26 +338,10 @@ func TestHMACSecret(t *testing.T) {
 	base := newBaseConfig()
 	base.Server.Secret = "some-secret"
 	cm := newConfManagerWithConf(t, base)
-	tassert.Fatal(t, cm.HasHMACSecret(), "expected HasHMACSecret true")
-	tassert.Fatal(t, cm.GetSecret() != "", "expected non-empty secret")
+	tassert.Fatal(t, cm.GetSecret() == "some-secret", "expected non-empty secret")
 	base.Server.Secret = ""
 	cm = newConfManagerWithConf(t, base)
-	tassert.Fatal(t, !cm.HasHMACSecret(), "expected HasHMACSecret false")
 	tassert.Fatal(t, cm.GetSecret() == "", "expected empty secret")
-}
-
-func TestGetSecretChecksum(t *testing.T) {
-	base := newBaseConfig()
-	base.Server.Secret = "some-secret"
-	cm := newConfManagerWithConf(t, base)
-
-	cs1 := cm.GetSecretChecksum()
-	tassert.Fatal(t, cs1 != "", "expected non-empty checksum")
-
-	base.Server.Secret = "other-secret"
-	cm = newConfManagerWithConf(t, base)
-	cs2 := cm.GetSecretChecksum()
-	tassert.Fatal(t, cs1 != cs2, "expected checksum to change when secret changes")
 }
 
 // TestAuth prefix ensures we run as part of the auth tests with TEST_RACE true to run with go test -race
@@ -399,7 +362,6 @@ func TestAuthConfManagerConcurrency(t *testing.T) {
 
 		for range 1000 {
 			cm.GetConf()
-			cm.HasHMACSecret()
 			cm.GetExpiry()
 			ops.Add(1)
 		}

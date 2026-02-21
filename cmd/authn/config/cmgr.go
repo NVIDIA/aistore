@@ -215,14 +215,6 @@ func (cm *ConfManager) IsVerbose() bool {
 	return cm.conf.Load().Verbose()
 }
 
-func (cm *ConfManager) GetSigConf() *cmn.AuthSignatureConf {
-	conf := cm.conf.Load()
-	if secret := conf.Secret(); secret != "" {
-		return &cmn.AuthSignatureConf{Key: secret, Method: cmn.SigMethodHMAC}
-	}
-	return nil
-}
-
 func (cm *ConfManager) GetExpiry() time.Duration {
 	return cm.conf.Load().Expire()
 }
@@ -247,15 +239,8 @@ func (cm *ConfManager) GetDBPath() string {
 // HMAC //
 //////////
 
-func (cm *ConfManager) HasHMACSecret() bool { return cm.conf.Load().Secret() != "" }
-
 func (cm *ConfManager) GetSecret() cmn.Censored {
 	return cm.conf.Load().Secret()
-}
-
-func (cm *ConfManager) GetSecretChecksum() string {
-	secret := string(cm.conf.Load().Secret())
-	return cos.ChecksumB2S(cos.UnsafeB(secret), cos.ChecksumSHA256)
 }
 
 /////////
