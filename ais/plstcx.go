@@ -77,15 +77,18 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 }
 
 func _checkVerChanged(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
-	const a = "cannot perform remote versions check"
+	const a = "cannot perform remote versions check (or diff vs remote bucket)"
 	if !bck.HasVersioningMD() {
-		return errors.New(a + ": bucket " + bck.Cname("") + " does not provide (remote) versioning info")
+		return errors.New(a + ": bucket " + bck.Cname("") + " does not provide remote versioning info")
 	}
-	if lsmsg.IsFlagSet(apc.LsNameOnly) || lsmsg.IsFlagSet(apc.LsNameSize) {
-		return errors.New(a + ": flag 'LsVerChanged' is incompatible with 'LsNameOnly', 'LsNameSize'")
-	}
-	if !lsmsg.WantProp(apc.GetPropsCustom) {
+	if lsmsg.IsFlagSet(apc.LsNameOnly) || lsmsg.IsFlagSet(apc.LsNameSize) || !lsmsg.WantProp(apc.GetPropsCustom) {
 		return fmt.Errorf(a+" without listing %q (object property)", apc.GetPropsCustom)
+	}
+	if lsmsg.IsFlagSet(apc.LsNotCached) {
+		return errors.New(a + " when apc.LsNotCached (CLI '--not-cached') is set")
+	}
+	if lsmsg.IsFlagSet(apc.LsCached) {
+		return errors.New(a + " when apc.LsCached (CLI '--cached') is set")
 	}
 	return nil
 }

@@ -133,7 +133,7 @@ func (p *lsoFactory) Start() error {
 	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Timeout.MaxHostBusy.D())
 
 	// is set by the first message, never changes
-	r.walk.wor = r.msg.WantOnlyRemoteProps()
+	r.walk.wor = r.msg.WantOnlyRemoteProps() // looked at iff lsoIsRemote
 	r.walk.this = r.msg.SID == core.T.SID()
 
 	// true iff the bucket was not added - not initialized
@@ -410,7 +410,7 @@ func (r *LsoXact) doPage() *LsoRsp {
 		}
 		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.page, ContinuationToken: r.nextToken}
 
-		if r.msg.IsFlagSet(apc.LsDiff) {
+		if r.msg.IsFlagSet(apc.LsDiff) && r.lpis.Enabled() {
 			r.lpis.Do(r.page, page, r.Name(), r.walk.last)
 		}
 

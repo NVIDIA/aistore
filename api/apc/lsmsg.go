@@ -65,12 +65,13 @@ const (
 	// strict opposite of the `LsCached`
 	LsNotCached
 
+	// NOTE: optimization-only and not used yet -------------------------------------------------
 	// for remote buckets - list only remote props (aka `wantOnlyRemote`). When false,
 	// the default that's being used is: `WantOnlyRemoteProps` - see below.
 	// When true, the request gets executed in a pass-through fashion whereby a single ais target
 	// simply forwards it to the associated remote backend and delivers the results as is to the
-	// requesting proxy and, subsequently, to client.
-	LsWantOnlyRemoteProps
+	// requesting proxy and, subsequently, to client. -------------------------------------------
+	lsWantOnlyRemoteProps
 
 	// list objects without recursion (POSIX-wise).
 	// see related feature flag: feat.DontOptimizeVirtualDir
@@ -188,8 +189,10 @@ type (
 ////////////
 
 func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
-	// set by user
-	if lsmsg.IsFlagSet(LsWantOnlyRemoteProps) {
+	if lsmsg.IsFlagSet(LsDiff) || lsmsg.IsFlagSet(LsNotCached) || lsmsg.IsFlagSet(LsCached) {
+		return false
+	}
+	if lsmsg.IsFlagSet(lsWantOnlyRemoteProps) {
 		return true
 	}
 	// set by user or proxy
@@ -297,7 +300,7 @@ func (lsmsg *LsoMsg) appendFlags(sb *cos.SB) {
 	if lsmsg.IsFlagSet(LsNotCached) {
 		flags = append(flags, "not-cached")
 	}
-	if lsmsg.IsFlagSet(LsWantOnlyRemoteProps) {
+	if lsmsg.IsFlagSet(lsWantOnlyRemoteProps) {
 		flags = append(flags, "only-remote-props")
 	}
 	if lsmsg.IsFlagSet(LsNoRecursion) {
