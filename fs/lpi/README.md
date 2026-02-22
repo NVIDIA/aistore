@@ -124,12 +124,17 @@ See `fs/lpi_test.go` for an example of generating markers via `Pos()` and replay
 
 ## Testing
 
-`fs/lpi_test.go` generates a nested directory tree, then validates that:
+`fs/lpi_test.go` uses `genTree` to create controlled directory structures, then validates:
 
-* iterating by page-size eventually covers all generated files
-* iterating by end-of-page markers also covers all generated files
-
-The test uses `smap == nil` mode (no HRW filtering) to exercise pure filesystem traversal.
+| Test name | Description |
+|---|---|
+| page-by-size | Multiple page sizes (1, 2, exact-fit, larger-than-total) eventually cover all generated files with no duplicates. |
+| page-by-EOP | Replaying resume markers from a page-by-size run produces the same complete set. |
+| prefix filtering | Iteration with a prefix returns only matching entries (including nested prefixes); a non-existent prefix returns zero. |
+| edge cases | Handles empty root (immediate exhaustion), single file, and deep nesting (7 levels). |
+| determinism | Two independent iterations over the same tree produce identical names and page boundaries. |
+| completeness | LPI results match a `filepath.WalkDir` ground-truth traversal (bidirectional check). |
+| file sizes | Returned sizes match actual on-disk sizes. |
 
 ---
 
