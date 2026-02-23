@@ -60,7 +60,7 @@ func TestHMACSecretUpdate(t *testing.T) {
 	token1, _, err := testMgr.issueToken(adminUserID, adminPass, loginMsg)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, token1 != "", "expected non-empty token")
-	_, err = testMgr.getParser().ValidateToken(t.Context(), token1)
+	_, err = testMgr.validateToken(t.Context(), token1)
 	tassert.CheckFatal(t, err)
 
 	// Update the HMAC secret via updateConf

@@ -266,8 +266,7 @@ func (m *mgr) roleList() ([]*authn.Role, int, error) {
 	return roles, http.StatusOK, nil
 }
 
-// Creates predefined roles for just added clusters. Errors are logged and
-// are not returned to a caller as it is not crucial.
+// Creates predefined roles for newly-added clusters
 func (m *mgr) createRolesForCluster(clu *authn.CluACL) (int, error) {
 	for _, pr := range predefinedRoles {
 		suffix := cos.Left(clu.Alias, clu.ID)
@@ -345,7 +344,7 @@ func (m *mgr) getCluster(cluID string) (*authn.CluACL, int, error) {
 }
 
 // Registers a new cluster
-func (m *mgr) addCluster(ctx context.Context, clu *authn.CluACL) (int, error) {
+func (m *mgr) registerCluster(ctx context.Context, clu *authn.CluACL) (int, error) {
 	if clu.ID == "" {
 		return http.StatusBadRequest, errors.New("cluster UUID is undefined")
 	}
@@ -358,21 +357,31 @@ func (m *mgr) addCluster(ctx context.Context, clu *authn.CluACL) (int, error) {
 		return http.StatusConflict, fmt.Errorf("cluster %s[%s] already registered", clu.ID, cid)
 	}
 
-	// secret handshake
-	if err := m.validateCluster(clu); err != nil {
-		return http.StatusInternalServerError, err
+	// Before registering a cluster:
+	// 1. Ensure it will accept JWTs issued by this authN
+	if code, err := m.validateCluster(ctx, clu); err != nil {
+		return code, err
 	}
+	// 2. Ensure it knows all revoked tokens
+	if code, err := m.syncRevokedTokens(ctx, clu); err != nil {
+		return code, err
+	}
+	return m.addClusterWithRoles(clu)
+}
 
+func (m *mgr) addClusterWithRoles(clu *authn.CluACL) (int, error) {
 	if code, err := m.db.Set(clustersCollection, clu.ID, clu); err != nil {
 		return code, err
 	}
-	m.createRolesForCluster(clu)
-
-	go m.syncTokenList(ctx, clu)
-	return http.StatusOK, nil
+	code, err := m.createRolesForCluster(clu)
+	// Role creation is best-effort, log error if failure but keep created cluster
+	if err != nil {
+		nlog.Errorf("failed to create roles for cluster %s: %v", clu.ID, err)
+	}
+	return code, nil
 }
 
-func (m *mgr) updateCluster(cluID string, info *authn.CluACL) (int, error) {
+func (m *mgr) updateCluster(ctx context.Context, cluID string, info *authn.CluACL) (int, error) {
 	if info.ID == "" {
 		return http.StatusBadRequest, errors.New("cluster ID is undefined")
 	}
@@ -396,8 +405,8 @@ func (m *mgr) updateCluster(cluID string, info *authn.CluACL) (int, error) {
 	}
 
 	// secret handshake
-	if err := m.validateCluster(clu); err != nil {
-		return http.StatusInternalServerError, err
+	if code, err := m.validateCluster(ctx, clu); err != nil {
+		return code, err
 	}
 
 	return m.db.Set(clustersCollection, cluID, clu)
@@ -508,17 +517,16 @@ func (m *mgr) fixClusterIDs(lst []*authn.CluACL) {
 	}
 }
 
-// Delete existing token, a.k.a log out
-// If the token was removed successfully then it sends the proxy a new valid token list
+// Add the given token to the revoked list within AuthN
+// In the background, attempt to delete the token from all clusters
 func (m *mgr) revokeToken(token string) (int, error) {
 	code, err := m.db.Set(revokedCollection, token, "!")
 	if err != nil {
 		return code, err
 	}
 
-	// send the token in all case to allow an admin to revoke
-	// an existing token even after cluster restart
-	go m.broadcastRevoked(token)
+	// best-effort request to all registered clusters to remove the token
+	go m.broadcastRevoked(context.Background(), token)
 	return http.StatusOK, nil
 }
 
@@ -533,7 +541,7 @@ func (m *mgr) generateRevokedTokenList(ctx context.Context) ([]string, int, erro
 
 	revokeList := make([]string, 0, len(tokens))
 	for _, token := range tokens {
-		_, err = m.getParser().ValidateToken(ctx, token)
+		_, err = m.validateToken(ctx, token)
 		if err != nil {
 			nlog.Infof("removing invalid token %q due to validation error %v", token, err)
 			_, err = m.db.Delete(revokedCollection, token)

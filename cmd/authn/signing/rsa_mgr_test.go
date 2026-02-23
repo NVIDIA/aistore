@@ -130,20 +130,6 @@ func TestGetSigConf_RSA(t *testing.T) {
 	assertValidPublicKey(t, string(sig.Key))
 }
 
-func TestIsInitializedFalse(t *testing.T) {
-	t.Skipf("skipping %s - not ready yet", t.Name()) // TODO -- FIXME: fix and enable
-	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t))
-	tassert.Fatal(t, mgr.ValidationConf() == nil, "expected validation conf to be nil")
-	jwks, err := mgr.GetJWKS()
-	tassert.CheckFatal(t, err)
-	tassert.Fatal(t, jwks.Len() == 0, "expected returned JWKS to be initialized but empty")
-	sig := mgr.GetSigConf()
-	tassert.Fatal(t, sig == nil, "expected nil sig config if not initialized")
-	signed, err := mgr.SignToken(tok.AdminClaims(time.Now().Add(time.Minute), "uninitialized", ""))
-	tassert.Fatal(t, err != nil, "expected error signing token if not initialized")
-	tassert.Fatal(t, signed == "", "expected empty signed token string if not initialized")
-}
-
 func TestRSAKeyManagerLoad(t *testing.T) {
 	// Write out private key with a previous manager
 	conf := defaultTestRSAConfig(t)

@@ -25,30 +25,30 @@ const (
 )
 
 // Send request to the defined cluster to validate that the cluster will allow tokens issued by this AuthN service
-func (m *mgr) validateCluster(clu *authn.CluACL) (err error) {
+func (m *mgr) validateCluster(ctx context.Context, clu *authn.CluACL) (code int, err error) {
 	conf := m.getSigner().ValidationConf()
 	body := cos.MustMarshal(conf)
 	tag := "validate-signer"
 
 	for _, u := range clu.URLs {
-		if err = m.call(http.MethodPost, u, apc.Tokens, body, tag); err == nil {
+		if code, err = m.call(ctx, http.MethodPost, u, apc.Tokens, body, tag); err == nil {
 			return
 		}
 		err = fmt.Errorf("failed to %s with %s: %v", tag, clu, err)
 	}
-	return err
+	return
 }
 
-// update list of revoked token on all clusters
-func (m *mgr) broadcastRevoked(token string) {
+// update list of revoked tokens on all clusters
+func (m *mgr) broadcastRevoked(ctx context.Context, token string) {
 	tokenList := authn.TokenList{Tokens: []string{token}}
 	body := cos.MustMarshal(tokenList)
-	m.broadcast(http.MethodDelete, apc.Tokens, body, "broadcast-revoked")
+	m.broadcast(ctx, http.MethodDelete, apc.Tokens, body, "broadcast-revoked")
 }
 
 // broadcast the request to all clusters. If a cluster has a few URLS,
 // it sends to the first working one. Clusters are processed in parallel.
-func (m *mgr) broadcast(method, path string, body []byte, tag string) {
+func (m *mgr) broadcast(ctx context.Context, method, path string, body []byte, tag string) {
 	clus, code, err := m.clus()
 	if err != nil {
 		nlog.Errorf("Failed to read cluster list: %v (%d)", err, code)
@@ -60,7 +60,7 @@ func (m *mgr) broadcast(method, path string, body []byte, tag string) {
 		go func(clu *authn.CluACL) {
 			var err error
 			for _, u := range clu.URLs {
-				if err = m.call(method, u, path, body, tag); err == nil {
+				if _, err = m.call(ctx, method, u, path, body, tag); err == nil {
 					break
 				}
 			}
@@ -74,29 +74,28 @@ func (m *mgr) broadcast(method, path string, body []byte, tag string) {
 }
 
 // Send valid and non-expired revoked token list to a cluster.
-func (m *mgr) syncTokenList(ctx context.Context, clu *authn.CluACL) {
+func (m *mgr) syncRevokedTokens(ctx context.Context, clu *authn.CluACL) (int, error) {
 	const tag = "sync-tokens"
 	tokenList, code, err := m.generateRevokedTokenList(ctx)
 	if err != nil {
-		nlog.Errorf("failed to sync token list with %q(%q): %v (%d)", clu.ID, clu.Alias, err, code)
-		return
+		return code, fmt.Errorf("failed to sync token list with %q(%q): %v (%d)", clu.ID, clu.Alias, err, code)
 	}
 	if len(tokenList) == 0 {
-		return
+		return code, nil
 	}
 	body := cos.MustMarshal(authn.TokenList{Tokens: tokenList})
 	for _, u := range clu.URLs {
-		if err = m.call(http.MethodDelete, u, apc.Tokens, body, tag); err == nil {
-			break
+		code, err = m.call(ctx, http.MethodDelete, u, apc.Tokens, body, tag)
+		if err == nil {
+			return code, nil
 		}
 		err = fmt.Errorf("failed to %s with %s: %v", tag, clu, err)
-	}
-	if err != nil {
 		nlog.Errorln(err)
 	}
+	return code, err
 }
 
-func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) error {
+func (m *mgr) call(ctx context.Context, method, proxyURL, path string, injson []byte, tag string) (int, error) {
 	client := m.clientH
 	if cos.IsHTTPS(proxyURL) {
 		client = m.clientTLS
@@ -115,7 +114,7 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 	}
 	args := cmn.RetryArgs{
 		Call: func() (int, error) {
-			req, err := http.NewRequestWithContext(context.Background(), method, urlPath, bytes.NewReader(injson))
+			req, err := http.NewRequestWithContext(ctx, method, urlPath, bytes.NewReader(injson))
 			if err != nil {
 				return 0, err
 			}
@@ -139,11 +138,11 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 		Verbosity: cmn.RetryLogVerbose,
 		Action:    tag,
 	}
-	_, err := args.Do()
+	code, err := args.Do()
 	if err == nil && resp != nil {
 		err = cmn.CheckResp(resp, method, versionedPath)
 	}
 	cleanupResp()
 
-	return err
+	return code, err
 }

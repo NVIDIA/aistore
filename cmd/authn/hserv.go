@@ -176,7 +176,7 @@ func (h *hserv) configHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Deletes existing token, h.k.h log out
+// Deletes existing token, a.k.a. log out
 func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 	if _, err := parseURL(w, r, 0, apc.URLPathTokens.L); err != nil {
 		return
@@ -421,7 +421,7 @@ func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		return
 	}
-	if code, err := h.mgr.addCluster(r.Context(), cluConf); err != nil {
+	if code, err := h.mgr.registerCluster(r.Context(), cluConf); err != nil {
 		h.failAction(w, r, "add cluster", cluConf.ID, err, code)
 	}
 }
@@ -439,7 +439,7 @@ func (h *hserv) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cluID := apiItems[0]
-	if code, err := h.mgr.updateCluster(cluID, cluConf); err != nil {
+	if code, err := h.mgr.updateCluster(r.Context(), cluID, cluConf); err != nil {
 		h.failAction(w, r, "update cluster", cluID, err, code)
 	}
 }
@@ -452,12 +452,12 @@ func (h *hserv) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	if err = h.validateAdminPerms(w, r); err != nil {
 		return
 	}
-	cluID := apiItems[0]
 	if len(apiItems) == 0 {
 		err = errors.New("cluster name or ID not defined")
-		h.failAction(w, r, "delete cluster", cluID, err, http.StatusBadRequest)
+		h.failAction(w, r, "delete cluster", "undefined", err, http.StatusBadRequest)
 		return
 	}
+	cluID := apiItems[0]
 	if code, err := h.mgr.delCluster(cluID); err != nil {
 		h.failAction(w, r, "delete cluster", cluID, err, code)
 	}
