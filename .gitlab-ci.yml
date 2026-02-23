@@ -90,8 +90,9 @@ stages:
 .gather_logs_template: &gather_logs_def
   after_script:
     - make kill # To make sure that nodes flushed the logs.
-    - mkdir $CI_PROJECT_DIR/logs
-    - find /tmp/ais -type f -name "*\.INFO\.*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+    - mkdir -p $CI_PROJECT_DIR/logs $CI_PROJECT_DIR/logs/remote
+    - find /tmp/ais -type f -name "*\.INFO\.*" -exec cp {} $CI_PROJECT_DIR/logs/ \; 2>/dev/null || true
+    - find /tmp/ais_next -type f -name "*\.INFO\.*" -exec cp {} $CI_PROJECT_DIR/logs/remote/ \; 2>/dev/null || true
   artifacts:
     when: on_failure
     paths: [ logs/ ]
