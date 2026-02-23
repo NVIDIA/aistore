@@ -118,9 +118,14 @@ type (
 		io.Writer
 		io.WriterAt
 	}
+
 	WriteSizer interface {
 		io.Writer
 		Size() int64
+	}
+	writerSizer struct {
+		w    io.Writer
+		size int64
 	}
 
 	nopWriteCloser struct {
@@ -365,6 +370,20 @@ func (f *FileSectionHandle) Open() (ReadOpenCloser, error) {
 
 func (f *FileSectionHandle) Read(buf []byte) (int, error) { return f.sec.Read(buf) }
 func (f *FileSectionHandle) Close() error                 { return f.fh.Close() }
+
+////////////////
+// WriteSizer //
+////////////////
+
+func NewWriteSizer(w io.Writer) WriteSizer { return &writerSizer{w: w} }
+
+func (ws *writerSizer) Write(b []byte) (n int, err error) {
+	n, err = ws.w.Write(b)
+	ws.size += int64(n)
+	return
+}
+
+func (ws *writerSizer) Size() int64 { return ws.size }
 
 /////////////////
 // WriterMulti //

@@ -56,7 +56,7 @@ const (
 
 type (
 	Renewable interface {
-		New(args Args, bck *meta.Bck) Renewable // new xaction stub that can be `Start`-ed.
+		New(args Args, bck *meta.Bck) Renewable // new xaction stub that can be `Start`-ed; TODO ref: New(args, bck, kind)
 		Start() error                           // starts an xaction, will be called when entry is stored into registry
 		Kind() string
 		Get() core.Xact

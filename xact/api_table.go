@@ -24,7 +24,7 @@ const (
 type (
 	Descriptor struct {
 		DisplayName string          // as implied
-		Access      apc.AccessAttrs // access permissions (see: apc.Access*)
+		Access      apc.AccessAttrs // default access permissions; ais/proxy does most of the checking wo/ relying on these defaults
 		Scope       int             // ScopeG (global), etc. - the enum above
 		Startable   bool            // true if user can start this xaction (e.g., via `api.StartXaction`)
 		Metasync    bool            // true if this xaction changes (and metasyncs) cluster metadata
@@ -212,6 +212,8 @@ var Table = map[string]Descriptor{
 	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true, QuietBrief: true},
 
 	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: true}, // apc.Moss
+
+	apc.ActCreateInventory: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: false},
 
 	// cache management, internal usage
 	apc.ActLoadLomCache: {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},

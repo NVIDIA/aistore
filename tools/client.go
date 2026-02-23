@@ -51,10 +51,11 @@ const (
 	CopyBucketTimeout     = 3 * time.Minute
 	MultiProxyTestTimeout = 3 * time.Minute
 
-	DsortFinishTimeout   = 6 * time.Minute
-	RebalanceTimeout     = 3 * time.Minute
-	EvictPrefetchTimeout = 2 * time.Minute
-	BucketCleanupTimeout = time.Minute
+	DsortFinishTimeout      = 6 * time.Minute
+	RebalanceTimeout        = 3 * time.Minute
+	EvictPrefetchTimeout    = 2 * time.Minute
+	BucketCleanupTimeout    = time.Minute
+	ListRemoteBucketTimeout = time.Minute
 
 	xactPollSleep     = time.Second
 	controlPlaneSleep = 2 * time.Second

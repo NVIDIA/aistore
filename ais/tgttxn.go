@@ -1125,6 +1125,7 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 	case apc.Begin2PC:
 		// TODO -- FIXME:
 		// - check for a running x-inventory(apc.ActCreateInventory) on the same bucket
+		// - apc.CreateInvMsg.Validate()
 
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
@@ -1153,13 +1154,19 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 			return "", cmn.NewErrBusy("bucket", c.bck.Cname(""))
 		}
 
-		// TODO -- FIXME: rns := xreg.RenewBucketInventory(bck) ...
+		rns := xreg.RenewInventory(c.bck, c.uuid, cimsg)
+		if rns.Err != nil {
+			nlog.Errorf("%s: create %s inventory %q: %v", t, c.bck.Cname(""), cimsg.Name, rns.Err)
+			return "", rns.Err
+		}
+		xinv := rns.Entry.Get().(*xs.XactInventory)
 
-		txn := newTxnCreateInventory(c, cimsg)
+		txn := newTxnCreateInventory(c, cimsg, xinv)
 		if err := t.txns.begin(txn, nlp); err != nil {
 			return "", err
 		}
 	case apc.Abort2PC:
+		// TODO -- FIXME: TxnAbort => cleanup
 		t.txns.term(c.uuid, apc.Abort2PC)
 	case apc.Commit2PC:
 		txn, err := t.txns.find(c.uuid)
@@ -1173,6 +1180,8 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 			nlog.Infof("%s: create-inventory %s name=%q prefix=%q props=%q", t, c.bck.Cname(""), txnInv.msg.Name, txnInv.msg.Prefix, txnInv.msg.Props)
 		}
 
+		c.addNotif(txnInv.xinv) // notify upon completion
+		xact.GoRunW(txnInv.xinv)
 		return c.uuid, nil
 	}
 	return "", nil

@@ -5,6 +5,7 @@
 package apc
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -181,6 +182,14 @@ type (
 	CreateInvMsg struct {
 		Name string `json:"name,omitempty"` // inventory name (optional; must be unique for a given bucket)
 		LsoMsg
+
+		// PagesPerChunk overrides the default number of pages to pack into a single inventory chunk.
+		// If zero, the default is used.
+		PagesPerChunk int64 `json:"pages_per_chunk,omitempty"`
+
+		// MaxEntriesPerChunk puts a hard cap on the number of entries in a single inventory chunk.
+		// If zero, the cap is disabled.
+		MaxEntriesPerChunk int64 `json:"max_entries_per_chunk,omitempty"`
 	}
 )
 
@@ -330,4 +339,30 @@ func (lsmsg *LsoMsg) Clone() *LsoMsg {
 	c := &LsoMsg{}
 	cos.CopyStruct(c, lsmsg)
 	return c
+}
+
+//////////////////
+// CreateInvMsg //
+//////////////////
+
+const (
+	DefaultInvPagesPerChunk = 50
+	MaxInvPagesPerChunk     = 256
+)
+
+// TODO -- FIXME: a) validate props and flags, and b) use from CLI and ais/proxy to unify
+func (m *CreateInvMsg) Validate() error {
+	switch {
+	case m.PagesPerChunk == 0:
+		m.PagesPerChunk = DefaultInvPagesPerChunk
+	case m.PagesPerChunk < 0:
+		return fmt.Errorf("pages_per_chunk: %d", m.PagesPerChunk)
+	case m.PagesPerChunk > MaxInvPagesPerChunk:
+		return fmt.Errorf("pages_per_chunk too large: %d", m.PagesPerChunk)
+	}
+
+	if m.MaxEntriesPerChunk < 0 { // 0 means disabled
+		return fmt.Errorf("max_entries_per_chunk: %d", m.MaxEntriesPerChunk)
+	}
+	return nil
 }

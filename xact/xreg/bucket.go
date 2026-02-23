@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -124,4 +124,12 @@ func RenewLso(bck *meta.Bck, uuid string, msg *apc.LsoMsg, hdr http.Header) Rene
 	}
 	e := dreg.bckXacts[apc.ActList].New(Args{UUID: uuid, Custom: custom}, bck)
 	return dreg.renewByID(e, bck)
+}
+
+func RenewInventory(bck *meta.Bck, uuid string, msg *apc.CreateInvMsg) RenewRes {
+	return RenewBucketXact(
+		apc.ActCreateInventory,
+		bck,
+		Args{Custom: msg, UUID: uuid},
+	)
 }

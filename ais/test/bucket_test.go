@@ -1042,6 +1042,36 @@ func TestBucketReadOnly(t *testing.T) {
 	tassert.Fatalf(t, m.numPutErrs == 0, "num failed PUTs %d, expecting 0 (zero)", m.numPutErrs)
 }
 
+func TestCreateInventorySimple(t *testing.T) {
+	t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: enable
+	var (
+		m = &ioContext{
+			t:      t,
+			num:    20, // given PageSize (below)
+			bck:    cliBck,
+			prefix: t.Name(),
+		}
+		bp = tools.BaseAPIParams()
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, CloudBck: true, Bck: m.bck})
+
+	m.init(true /*cleanup*/)
+	m.remotePuts(true /*evict*/)
+
+	lsmsg := &apc.LsoMsg{
+		Prefix:   m.prefix,
+		Props:    apc.GetPropsName,
+		PageSize: 3, // forces multiple pages
+	}
+
+	xid, err := api.CreateBucketInventory(bp, m.bck, lsmsg /*invName optional*/)
+	tassert.CheckFatal(t, err)
+
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateInventory, Timeout: tools.ListRemoteBucketTimeout}
+	_, err = api.WaitForXactionIC(bp, &args)
+	tassert.CheckFatal(t, err)
+}
+
 func TestRenameBucketEmpty(t *testing.T) {
 	var (
 		m = ioContext{

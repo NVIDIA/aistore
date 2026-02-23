@@ -53,6 +53,8 @@ func Tinit(coi COI) {
 
 	xreg.RegBckXact(&archFactory{streamingF: streamingF{kind: apc.ActArchive}})
 	xreg.RegBckXact(&lsoFactory{streamingF: streamingF{kind: apc.ActList}})
+	xreg.RegBckXact(&invFactory{})
+
 	xreg.RegBckXact(&blobFactory{})
 
 	xreg.RegBckXact(&rechunkFactory{kind: apc.ActRechunk})

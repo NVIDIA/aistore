@@ -137,7 +137,8 @@ type (
 		fshare bool
 	}
 	txnCreateInventory struct {
-		msg *apc.CreateInvMsg
+		msg  *apc.CreateInvMsg
+		xinv *xs.XactInventory
 		txnBckBase
 	}
 	txnETLInit struct {
@@ -661,8 +662,8 @@ func (txn *txnPromote) String() (s string) {
 // txnCreateInventory //
 ////////////////////////
 
-func newTxnCreateInventory(c *txnSrv, msg *apc.CreateInvMsg) (txn *txnCreateInventory) {
-	txn = &txnCreateInventory{msg: msg}
+func newTxnCreateInventory(c *txnSrv, msg *apc.CreateInvMsg, xinv *xs.XactInventory) (txn *txnCreateInventory) {
+	txn = &txnCreateInventory{msg: msg, xinv: xinv}
 	txn.init(c.bck)
 	txn.fillFromCtx(c)
 	return
