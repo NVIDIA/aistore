@@ -356,7 +356,21 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 		err = e
 	}
 	if err != nil {
-		return nil, ecode, err
+		// e.g. sequence: (create ais://@remais/foo; ais put bar ais://@remais/foo) back to back
+		if cmn.IsErrRemoteBckNotFound(err) && bck.IsRemoteAIS() && cos.IsValidUUID(bck.Ns.UUID) {
+			// retry 3 times with backoff (total time < 1s)
+			debug.Assert(!bctx.isPresent)
+			for _, sleep := range []time.Duration{cos.PollSleepShort, cos.PollSleepMedium, cos.PollSleepLong} {
+				time.Sleep(sleep)
+				remoteHdr, ecode, err = bctx.lookup(bck)
+				if err == nil {
+					break
+				}
+			}
+		}
+		if err != nil {
+			return nil, ecode, err
+		}
 	}
 
 	// orig-url for the ht:// bucket
