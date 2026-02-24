@@ -30,6 +30,8 @@ BUILD_MODE      ?=
 BUILD_TAGS      ?=
 # Commit SHA to add to the image for labeling.
 COMMIT_SHA      ?=
+# Optional volume mount for cached go mod
+GOMODCACHE ?= $(shell go env GOMODCACHE)
 
 # Path to source root
 BUILD_CONTEXT = "../../../../."
@@ -71,3 +73,15 @@ docker-buildx-multiarch:
 		-t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) \
 		$(BUILD_ARGS) \
 		$(BUILD_CONTEXT)
+
+.PHONY: ci
+ci:
+	buildah build \
+		--volume $(GOMODCACHE):/go/pkg/mod:ro \
+		-f Dockerfile \
+		-t $(CI_REGISTRY_IMAGE)/aisnode:$(CI_COMMIT_SHORT_SHA) \
+		--build-arg mode="debug" \
+		--build-arg providers="gcp aws oci" \
+		--build-arg tags="ci" \
+		$(BUILD_CONTEXT)
+	buildah push $(CI_REGISTRY_IMAGE)/aisnode:$(CI_COMMIT_SHORT_SHA)

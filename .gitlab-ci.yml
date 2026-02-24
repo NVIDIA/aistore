@@ -198,31 +198,15 @@ build:k8s:
   stage: build
   tags:
     - $RUNNER_TAG
-  image: quay.io/buildah/stable
   variables:
-    # Use vfs with buildah. Docker offers overlayfs as a default, but Buildah
-    # cannot stack overlayfs on top of another overlayfs filesystem.
+    # Assuming runners are using overlayfs, we must use vfs to avoid layered overlayfs
     STORAGE_DRIVER: vfs
-    # Write all image metadata in the docker format, not the standard OCI format.
-    BUILDAH_FORMAT: docker
-    FQ_AISNODE_IMAGE_NAME: "$CI_REGISTRY_IMAGE/aisnode:$CI_COMMIT_SHORT_SHA"
-    FQ_AISINIT_IMAGE_NAME: "$CI_REGISTRY_IMAGE/ais-init:$CI_COMMIT_SHORT_SHA"
   before_script:
     - buildah login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $CI_REGISTRY
     - buildah login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN docker.io
   script:
-    - buildah info
-    - buildah images
-    - buildah build -t $FQ_AISNODE_IMAGE_NAME
-      -f deploy/prod/k8s/aisnode_container/Dockerfile
-      --build-arg mode="debug"
-      --build-arg providers="gcp aws oci"
-      --build-arg BUILDER_IMAGE="docker.io/library/golang:1.25"
-      --build-arg tags="ci"
-    - buildah push $FQ_AISNODE_IMAGE_NAME
-    - buildah build -t $FQ_AISINIT_IMAGE_NAME
-      -f deploy/prod/k8s/aisinit_container/Dockerfile
-    - buildah push $FQ_AISINIT_IMAGE_NAME
+    - make -C deploy/prod/k8s/aisnode_container ci
+    - make -C deploy/prod/k8s/aisinit_container ci
   rules:
     - !reference [.test_k8s_short_template, rules]
     - *python_req_changes_rule

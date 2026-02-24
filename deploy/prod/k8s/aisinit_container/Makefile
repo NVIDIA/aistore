@@ -19,6 +19,8 @@ BUILDER_IMAGE   ?=
 BASE_IMAGE      ?=
 # Commit SHA to add to the image for labeling.
 COMMIT_SHA      ?=
+# Optional volume mount for cached go mod
+GOMODCACHE ?= $(shell go env GOMODCACHE)
 
 # Build arguments
 BUILD_CONTEXT = "../../../../."
@@ -33,6 +35,11 @@ endif
 # Add commit SHA label if provided
 ifneq ("$(COMMIT_SHA)","")
 	BUILD_ARGS += --label "org.opencontainers.image.revision=$(COMMIT_SHA)"
+endif
+
+VOLUME_ARGS =
+ifneq ("$(GOMODCACHE)","")
+	VOLUME_ARGS = --volume $(GOMODCACHE):/go/pkg/mod:ro
 endif
 
 .PHONY: all
@@ -60,3 +67,12 @@ docker-buildx-multiarch:
 		-t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) \
 		$(BUILD_ARGS) \
 		$(BUILD_CONTEXT)
+
+.PHONY: ci
+ci:
+	buildah build \
+		--volume $(GOMODCACHE):/go/pkg/mod:ro \
+		-f Dockerfile \
+		-t $(CI_REGISTRY_IMAGE)/ais-init:$(CI_COMMIT_SHORT_SHA) \
+		$(BUILD_CONTEXT)
+	buildah push $(CI_REGISTRY_IMAGE)/ais-init:$(CI_COMMIT_SHORT_SHA)
