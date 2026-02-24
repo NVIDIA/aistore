@@ -17,9 +17,9 @@ if [[ -z "$GO_VERSION" || "$GO_VERSION" == "null" ]]; then
 fi
 
 echo "Building internal cached ${INTERNAL_IMAGE} image"
-"${DOCKER}" build --build-arg GO_VERSION="${GO_VERSION}" -t ${INTERNAL_IMAGE} -f "${INTERNAL_DOCKERFILE}" .
+"${DOCKER}" build --build-arg GO_VERSION="${GO_VERSION}" --no-cache -t ${INTERNAL_IMAGE} -f "${INTERNAL_DOCKERFILE}" .
 echo "Exporting ${INTERNAL_IMAGE} image"
-"${DOCKER}" save ${INTERNAL_IMAGE} > ${INTERNAL_IMAGE}.tar
+"${DOCKER}" save ${INTERNAL_IMAGE} | gzip > ${INTERNAL_IMAGE}.tar.gz
 echo "Building CI image"
-"${DOCKER}" build --network host --build-arg GO_VERSION="${GO_VERSION}" --no-cache -t "${IMAGE_URL}" -f "${DOCKERFILE}" .
-rm -f ${INTERNAL_IMAGE}.tar
+"${DOCKER}" build --build-arg GO_VERSION="${GO_VERSION}" --no-cache -t "${IMAGE_URL}" -f "${DOCKERFILE}" .
+rm -f ${INTERNAL_IMAGE}.tar.gz

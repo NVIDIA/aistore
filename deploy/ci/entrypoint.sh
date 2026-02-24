@@ -7,4 +7,7 @@ sysctl -w net.ipv6.conf.default.disable_ipv6=0
 # For AIStore memory management and pressure detection (see docs/performance.md)
 sysctl -w vm.swappiness=10
 
+# Create a directory for K8s logs
+mkdir -p /ais/log
+
 exec "$@"
