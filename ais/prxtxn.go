@@ -1308,7 +1308,7 @@ func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) 
 // Create Bucket Inventory
 //////////
 
-func (p *proxy) createInventory(msg *apc.ActMsg, bck *meta.Bck) (xid string, err error) {
+func (p *proxy) createInventory(msg *apc.ActMsg, bck *meta.Bck) (string, error) {
 	var (
 		uuid = xact.PrefixInvID + cos.GenUUID()
 		c    = &txnCln{p: p}
@@ -1326,7 +1326,7 @@ func (p *proxy) createInventory(msg *apc.ActMsg, bck *meta.Bck) (xid string, err
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// commit
-	xid, _, err = c.commit(bck, c.cmtTout(false))
+	xid, _, err := c.commit(bck, c.cmtTout(false))
 	debug.Assert(xid == c.uuid, xid, " vs ", c.uuid)
 	return xid, err
 }
