@@ -33,6 +33,57 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// Target-side 2PC ("/v1/txn") overview
+//
+// This source implements the target half of AIS 2-phase commit used for bucket-
+// and cluster-wide control-plane operations (create/destroy bucket, set props,
+// rename, copy/transform, EC encode, inventory, etc.).
+//
+// 1) Lifecycle
+//   Begin2PC:
+//     - Validate request and acquire any required bucket NLP lock(s)
+//       (exclusive Lock or shared RLock; sometimes multiple buckets).
+//     - Create a txn object and call t.txns.begin(txn, nlps...).
+//       IMPORTANT: after txns.begin succeeds, txns owns the locks and is solely
+//       responsible for unlocking them via txns.term()/txns.wait()/GC abort.
+//       Pre-begin failures (e.g., xreg.Renew* error) must unlock locally.
+//   Commit2PC:
+//     - Locate txn via t.txns.find(TxnUUID).
+//     - Either:
+//       (a) wait for metasync convergence: t.txns.wait(txn, netwTO, hostTO)
+//           which blocks until commitAfter rendezvous marks txn as done;
+//           wait() calls txns.term(..., Commit|Abort) internally,
+//           releasing NLP locks; OR
+//       (b) do not wait: explicitly call t.txns.term(TxnUUID, Commit2PC)
+//           (release locks immediately at commit time).
+//     - Start the long-running xaction (if any) after the transaction is closed.
+//       NLP locks are intended to protect 2PC coordination / metadata convergence,
+//       not to be held for the entire duration of the xaction.
+//   Abort2PC:
+//     - Always call t.txns.term(TxnUUID, Abort2PC). This unlocks NLP locks and,
+//       for some txn types, additionally signals the associated xaction via TxnAbort.
+//
+// 2) Locking model
+//   - Bucket NLP locks protect the 2PC coordination window only:
+//       * metadata validation
+//       * metasync convergence
+//       * commit decision
+//   - NLP locks are NOT held for the duration of the resulting xaction.
+//     Long-running work (copy, EC encode, inventory, etc.) is protected by
+//     xaction-level coexistence rules (xreg.LimitedCoexistence), not by NLP.
+//
+// 3) Cleanup
+//   - the main `txnHandler` performs "cleanup on error" (actTxnCleanup)
+//     only when the current request handler returns an error.
+//     On success, txnHandler returns immediately, so successful actions MUST
+//     close their transaction explicitly (term) or via wait().
+//   - If Begin2PC passed NLP locks into txns.begin, and Commit2PC neither calls
+//     txns.wait() nor txns.term(), the txn stays in txns.m and bucket NLP lock(s)
+//     remain held until GC aborts the orphan. This can block subsequent operations
+//     (e.g., eviction/destroy that needs an exclusive lock) and cause timeouts.
+//   - Housekeeper GC may eventually abort and unlock orphaned txns, but relying on
+//     it is incorrect: it is a safety net, not the normal completion path.
+
 const actTxnCleanup = "cleanup" // in addition to (apc.Begin2PC, ...)
 
 // context structure to gather all (or most) of the relevant state in one place
@@ -173,7 +224,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if xid != "" {
 			w.Header().Set(apc.HdrXactionID, xid)
 		}
-		return
+		return // ---------------------->
 	}
 
 	// cleanup on error
@@ -233,7 +284,7 @@ func (t *target) _commitCreateDestroy(c *txnSrv) (err error) {
 	// (compare with httpbckdelete/ActEvictRemoteBck)
 	if c.msg.Action == apc.ActEvictRemoteBck {
 		xid := c.uuid
-		debug.Assert(strings.HasPrefix(xid, prefixEvictRmmdXid), xid)
+		debug.Assert(strings.HasPrefix(xid, xact.PrefixEvictRemoveID), xid)
 		_ = xreg.RenewEvictDelete(xid, apc.ActEvictRemoteBck, c.bck, nil)
 	}
 
@@ -1144,7 +1195,7 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 				return "", err
 			}
 		} else {
-			cimsg.Name = xs.PrefixInvID + c.uuid
+			cimsg.Name = c.uuid
 		}
 
 		cimsg.LsoMsg.NormalizeNameSizeDflt()
@@ -1179,6 +1230,8 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 		if cmn.Rom.V(4, cos.ModAIS) {
 			nlog.Infof("%s: create-inventory %s name=%q prefix=%q props=%q", t, c.bck.Cname(""), txnInv.msg.Name, txnInv.msg.Prefix, txnInv.msg.Props)
 		}
+
+		t.txns.term(c.uuid, apc.Commit2PC)
 
 		c.addNotif(txnInv.xinv) // notify upon completion
 		xact.GoRunW(txnInv.xinv)

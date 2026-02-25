@@ -25,8 +25,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
-const PrefixXactID = "etl-"
-
 const (
 	// init message types
 	SpecType    = "spec"

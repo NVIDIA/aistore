@@ -23,10 +23,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+// inventory chunk header meta-version
 const (
-	PrefixInvID = "inv-"
-
-	// inventory chunk header meta-version
 	invChunkHdrVer uint8 = 1
 )
 
@@ -90,11 +88,9 @@ func (p *invFactory) Start() error {
 	r := &XactInventory{msg: msg}
 	r.InitBase(p.UUID(), p.Kind(), bck)
 
-	// the name for a given bucket
+	// the name for a given bucket (intended for very large buckets)
 	invName := r.msg.Name
-	if invName == "" {
-		invName = PrefixInvID + r.ID()
-	}
+	debug.Assert(invName != "")
 
 	// inventory LOM is always chunked
 	oname := string(r.Bck().MakeUname(invName))
@@ -131,7 +127,7 @@ func (r *XactInventory) init() error {
 	if err != nil {
 		return err
 	}
-	uploadID := PrefixInvID + cos.GenUUID()
+	uploadID := xact.PrefixInvID + cos.GenUUID()
 	r.ufest, err = core.NewUfest(uploadID, r.lom, false /*must-exist*/)
 	if err != nil {
 		return err

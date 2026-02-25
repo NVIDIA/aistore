@@ -397,7 +397,7 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {
-	debug.Assert(strings.HasPrefix(id, dload.PrefixJobID), id)
+	debug.Assert(strings.HasPrefix(id, xact.PrefixDnlID), id)
 
 	// with progress bar
 	if flagIsSet(c, progressFlag) {

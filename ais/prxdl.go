@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 
 //go:generate go run ../tools/gendocs/
@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/xact"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -90,7 +91,7 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobID := dload.PrefixJobID + cos.GenUUID() // prefix to visually differentiate vs. xaction IDs
+	jobID := xact.PrefixDnlID + cos.GenUUID() // prefix to visually differentiate vs. xaction IDs
 
 	body, err := cos.ReadAllN(r.Body, r.ContentLength)
 	if err != nil {

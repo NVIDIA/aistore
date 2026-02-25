@@ -1573,7 +1573,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			}
 		}
 
-		xid, err = p.tcobjs(bck, bckTo, cmn.GCO.Get(), msg, tcomsg)
+		xid, err = p.tcobjs(bck, bckTo, msg, tcomsg)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1618,7 +1618,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		if err := p.initTrySysInv(w, r, msg); err != nil {
 			return
 		}
-		if xid, err = p.createBucketInventory(msg, bck); err != nil {
+		if xid, err = p.createInventory(msg, bck); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

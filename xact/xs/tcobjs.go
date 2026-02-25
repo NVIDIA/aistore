@@ -35,8 +35,6 @@ import (
 // The flow: `BeginMsg`, `ContMsg`, and `doMsg`.
 // Single xaction to execute multiple list-range-prefix API calls for a given pair of (source, destination) buckets.
 
-const PrefixTcoID = "tco-"
-
 type (
 	tcoFactory struct {
 		args *xreg.TCOArgs
@@ -100,7 +98,7 @@ func (p *tcoFactory) Start() error {
 	if err != nil {
 		return err
 	}
-	p.Args.UUID = PrefixTcoID + uuid
+	p.Args.UUID = xact.PrefixTcoID + uuid
 
 	// new x-tco
 	var (

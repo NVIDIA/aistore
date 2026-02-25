@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 // one page => msgpack rsp
@@ -481,7 +480,7 @@ func (a *lstca) del(c *lstcx) {
 func (a *lstca) abort(xargs *xact.ArgsMsg) {
 	switch {
 	case xargs.ID != "":
-		if !strings.HasPrefix(xargs.ID, xs.PrefixTcoID) {
+		if !strings.HasPrefix(xargs.ID, xact.PrefixTcoID) {
 			return
 		}
 		a.mu.Lock()
@@ -560,7 +559,7 @@ func (c *lstcx) do() (string, error) {
 		c.altmsg.Action = apc.ActETLObjects
 	}
 
-	if c.xid, err = c.p.tcobjs(c.bckFrom, c.bckTo, c.config, &c.altmsg, &c.tcomsg); err != nil {
+	if c.xid, err = c.p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg, &c.tcomsg); err != nil {
 		return "", err
 	}
 

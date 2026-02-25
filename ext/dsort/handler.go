@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 
 	jsoniter "github.com/json-iterator/go"
@@ -70,7 +71,7 @@ func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
 	}
 
 	var (
-		managerUUID = PrefixJobID + cos.GenUUID() // compare w/ p.httpdlpost
+		managerUUID = xact.PrefixSrtID + cos.GenUUID() // compare w/ p.httpdlpost
 		smap        = psi.Sowner().Get()
 	)
 

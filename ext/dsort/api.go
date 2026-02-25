@@ -13,9 +13,6 @@ import (
 const (
 	// default shard extension/format/MIME when spec's input_extension is empty
 	DefaultExt = archive.ExtTar
-
-	// a hint for CLI, to recognize dsort jobs
-	PrefixJobID = "srt-"
 )
 
 const (

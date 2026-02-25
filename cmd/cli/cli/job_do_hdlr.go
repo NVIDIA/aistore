@@ -22,8 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dload"
-	"github.com/NVIDIA/aistore/ext/dsort"
-	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/xact"
 
 	jsoniter "github.com/json-iterator/go"
@@ -1813,15 +1811,15 @@ func xid2Name(xid string) (name, otherID string, multimatch bool) {
 	}
 
 	switch {
-	case strings.HasPrefix(xid, dload.PrefixJobID):
+	case strings.HasPrefix(xid, xact.PrefixDnlID):
 		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
 			name = cmdDownload
 		}
-	case strings.HasPrefix(xid, dsort.PrefixJobID):
+	case strings.HasPrefix(xid, xact.PrefixSrtID):
 		if _, err := api.MetricsDsort(apiBP, xid); err == nil {
 			name = cmdDsort
 		}
-	case strings.HasPrefix(xid, etl.PrefixXactID):
+	case strings.HasPrefix(xid, xact.PrefixEtlID):
 		if l := findETL("", xid); l != nil {
 			name = commandETL
 			otherID = l.Name

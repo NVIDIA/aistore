@@ -29,8 +29,6 @@ const (
 	TypeBackend Type = "backend"
 )
 
-const PrefixJobID = "dnl-"
-
 const DownloadProgressInterval = 10 * time.Second
 
 type (

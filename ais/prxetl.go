@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 
 //go:generate go run ../tools/gendocs/
@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // [METHOD] /v1/etl
@@ -238,7 +239,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 
 	// 2. start 2PC - initialize across all targets
 	var (
-		xid    = etl.PrefixXactID + cos.GenUUID()
+		xid    = xact.PrefixEtlID + cos.GenUUID()
 		secret = cos.CryptoRandS(10)
 	)
 	rxid, podMap, err := p.etlInitTxn(msg, xid, secret)

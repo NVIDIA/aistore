@@ -1043,7 +1043,6 @@ func TestBucketReadOnly(t *testing.T) {
 }
 
 func TestCreateInventorySimple(t *testing.T) {
-	t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: enable
 	var (
 		m = &ioContext{
 			t:      t,
