@@ -1174,21 +1174,29 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 func (t *target) createInventory(c *txnSrv) (string, error) {
 	switch c.phase {
 	case apc.Begin2PC:
-		// TODO -- FIXME:
-		// - check for a running x-inventory(apc.ActCreateInventory) on the same bucket
-		// - apc.CreateInvMsg.Validate()
-
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
+
+		// only one (create-inventory, bucket) at a time
+		flt := xreg.Flt{Kind: apc.ActCreateInventory, Bck: c.bck}
+		entry := xreg.GetRunning(&flt)
+		if entry != nil {
+			return "", cmn.NewErrLimitedCoexistence(t.String(), entry.Get().String(), apc.ActCreateInventory, c.bck.Cname(""))
+		}
+
 		cs := fs.Cap()
 		if err := cs.Err(); err != nil {
 			return "", err
 		}
 
+		// control msg
 		cimsg := &apc.CreateInvMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, cimsg); err != nil {
 			return "", fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
+		}
+		if err := cimsg.SetValidate(); err != nil {
+			return "", err
 		}
 		if cimsg.Name != "" {
 			if err := cos.CheckAlphaPlus(cimsg.Name, "inventory name"); err != nil {
@@ -1197,14 +1205,15 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 		} else {
 			cimsg.Name = c.uuid
 		}
-
 		cimsg.LsoMsg.NormalizeNameSizeDflt()
 
+		// rlock the bucket for 2pc duration
 		nlp := newBckNLP(c.bck)
 		if !nlp.TryRLock(c.timeout.netw / 2) {
 			return "", cmn.NewErrBusy("bucket", c.bck.Cname(""))
 		}
 
+		// xaction early (DM)
 		rns := xreg.RenewInventory(c.bck, c.uuid, cimsg)
 		if rns.Err != nil {
 			nlog.Errorf("%s: create %s inventory %q: %v", t, c.bck.Cname(""), cimsg.Name, rns.Err)
@@ -1214,11 +1223,18 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 
 		txn := newTxnCreateInventory(c, cimsg, xinv)
 		if err := t.txns.begin(txn, nlp); err != nil {
+			xinv.Abort(err)
 			return "", err
 		}
 	case apc.Abort2PC:
-		// TODO -- FIXME: TxnAbort => cleanup
-		t.txns.term(c.uuid, apc.Abort2PC)
+		txn, err := t.txns.find(c.uuid)
+		if err == nil {
+			txnInv := txn.(*txnCreateInventory)
+			if xinv := txnInv.xinv; xinv != nil && xinv.ID() == c.uuid {
+				xinv.Abort(nil)
+			}
+			t.txns.term(c.uuid, apc.Abort2PC)
+		}
 	case apc.Commit2PC:
 		txn, err := t.txns.find(c.uuid)
 		if err != nil {

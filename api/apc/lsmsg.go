@@ -5,6 +5,7 @@
 package apc
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -221,7 +222,6 @@ func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
 	return true
 }
 
-// WantProp returns true if msg request requires to return propName property.
 func (lsmsg *LsoMsg) WantProp(propName string) bool {
 	return strings.Contains(lsmsg.Props, propName)
 }
@@ -350,19 +350,65 @@ const (
 	MaxInvPagesPerChunk     = 256
 )
 
-// TODO -- FIXME: a) validate props and flags, and b) use from CLI and ais/proxy to unify
-func (m *CreateInvMsg) Validate() error {
+// validate; set defaults
+func (m *CreateInvMsg) SetValidate() error {
+	const etag = "invalid control message for " + ActCreateInventory
+
+	// 1) disallow
+	if m.ContinuationToken != "" {
+		return errors.New(etag + ": continuation_token must be empty")
+	}
+	if m.StartAfter != "" {
+		return errors.New(etag + ": start_after is not supported")
+	}
+	// flags that don't make sense for inventory generation
+	const badFlags = LsCached | LsNotCached | LsMissing | LsDeleted | LsArchDir |
+		LsBckPresent | LsDontHeadRemote | LsDontAddRemote |
+		lsWantOnlyRemoteProps | LsNoRecursion | LsDiff | LsIsS3
+	if m.Flags&badFlags != 0 {
+		var sb cos.SB
+		sb.Grow(64)
+		sb.WriteString("flags:")
+		m.appendFlags(&sb)
+		return fmt.Errorf("%s: %s", etag, sb.String())
+	}
+
+	// 2) advanced tunables
 	switch {
 	case m.PagesPerChunk == 0:
 		m.PagesPerChunk = DefaultInvPagesPerChunk
 	case m.PagesPerChunk < 0:
-		return fmt.Errorf("pages_per_chunk: %d", m.PagesPerChunk)
+		return fmt.Errorf("%s: pages_per_chunk=%d", etag, m.PagesPerChunk)
 	case m.PagesPerChunk > MaxInvPagesPerChunk:
-		return fmt.Errorf("pages_per_chunk too large: %d", m.PagesPerChunk)
+		return fmt.Errorf("%s: pages_per_chunk too large: %d", etag, m.PagesPerChunk)
+	}
+	if m.MaxEntriesPerChunk < 0 {
+		return fmt.Errorf("%s: max_entries_per_chunk=%d", etag, m.MaxEntriesPerChunk)
 	}
 
-	if m.MaxEntriesPerChunk < 0 { // 0 means disabled
-		return fmt.Errorf("max_entries_per_chunk: %d", m.MaxEntriesPerChunk)
+	// 3) set or add flags and props
+	m.SetFlag(LsNoDirs)
+
+	// absolute minimum
+	if m.IsFlagSet(LsNameOnly) {
+		m.Props = GetPropsName
+		return nil
 	}
+	if m.IsFlagSet(LsNameSize) {
+		if m.Props == "" {
+			m.Props = GetPropsNameSize
+		} else {
+			m.AddProps(GetPropsName, GetPropsSize)
+		}
+		return nil
+	}
+
+	// default props
+	if m.Props == "" {
+		m.AddProps(GetPropsName, GetPropsSize, GetPropsCached)
+	} else {
+		m.AddProps(GetPropsCached)
+	}
+
 	return nil
 }

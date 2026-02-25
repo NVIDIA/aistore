@@ -311,16 +311,10 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int, checkAndRecove
 }
 
 // Create bucket inventory
-func CreateBucketInventory(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, invName ...string) (string, error) {
-	msg := apc.CreateInvMsg{
-		LsoMsg: *lsmsg,
-	}
-	if len(invName) > 0 {
-		msg.Name = invName[0]
-	}
+func CreateBucketInventory(bp BaseParams, bck cmn.Bck, cinvMsg *apc.CreateInvMsg) (string, error) {
 	q := qalloc()
 	bck.SetQuery(q)
 	bp.Method = http.MethodPost
-	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActCreateInventory, Value: &msg})
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActCreateInventory, Value: cinvMsg})
 	return doBckAct(bp, bck, jbody, q)
 }

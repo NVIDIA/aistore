@@ -283,6 +283,14 @@ var (
 			waitFlag,
 			waitJobXactFinishedFlag,
 		},
+		cmdCreateInventory: {
+			invNameFlag,
+			invPrefixFlag,
+			nameOnlyFlag,
+			allPropsFlag,
+			invPagesPerChunkFlag,
+			invMaxEntriesPerChunkFlag,
+		},
 	}
 )
 
@@ -338,6 +346,20 @@ var (
 		BashComplete: bucketCompletions(
 			bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 		),
+	}
+	bucketCmdCreateInventory = cli.Command{
+		Name: cmdCreateInventory,
+		Usage: "Create bucket inventory for subsequent distributed listing,\n" +
+			indent1 + "e.g.:\n" +
+			indent1 + "\t* create-inventory s3://abc\t- create inventory with default (name, size) properties;\n" +
+			indent1 + "\t* create-inventory s3://abc --inv-name my-first-inventory\t- same, with a custom inventory name;\n" +
+			indent1 + "\t* create-inventory s3://abc --prefix images/\t- inventory only objects under 'images/';\n" +
+			indent1 + "\t* create-inventory s3://abc --all\t- inventory with all object properties;\n" +
+			indent1 + "\t* create-inventory s3://abc --name-only\t- lightweight: object names only.",
+		ArgsUsage:    bucketArgument,
+		Flags:        sortFlags(bucketCmdsFlags[cmdCreateInventory]),
+		Action:       createInventoryHandler,
+		BashComplete: bucketCompletions(bcmplop{}),
 	}
 
 	bucketCmd = cli.Command{
@@ -406,9 +428,14 @@ var (
 					makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
 				},
 			},
+			bucketCmdCreateInventory,
 		},
 	}
 )
+
+//
+// createBucketHandler
+//
 
 func createBucketHandler(c *cli.Context) error {
 	var props *cmn.BpropsToSet
@@ -433,6 +460,10 @@ func createBucketHandler(c *cli.Context) error {
 	return nil
 }
 
+//
+// mvBucketHandler
+//
+
 func mvBucketHandler(c *cli.Context) error {
 	bckFrom, bckTo, _, _, err := parseFromToURIs(c, bucketArgument, bucketNewArgument, 0 /*shift*/, false, false /*optional src, dst oname*/)
 	if err != nil {
@@ -444,119 +475,15 @@ func mvBucketHandler(c *cli.Context) error {
 	return mvBucket(c, bckFrom, bckTo)
 }
 
+//
+// removeBucketHandler
+//
+
 func removeBucketHandler(c *cli.Context) error {
 	if flagIsSet(c, rmAllBucketsFlag) {
 		return removeAllBuckets(c)
 	}
 	return removeSpecificBuckets(c)
-}
-
-func parseRechunkConfig(c *cli.Context, bck cmn.Bck) (chunkSize, objSizeLimit int64, err error) {
-	// Parse chunk_size flag if provided
-	if flagIsSet(c, chunkSizeFlag) {
-		chunkSize, err = parseSizeFlag(c, chunkSizeFlag)
-		if err != nil {
-			return 0, 0, err
-		}
-		if chunkSize <= 0 {
-			return 0, 0, incorrectUsageMsg(c, "chunk size must be positive, got %s", cos.ToSizeIEC(chunkSize, 0))
-		}
-	}
-
-	// Parse objsize_limit flag if provided
-	if flagIsSet(c, objSizeLimitFlag) {
-		objSizeLimit, err = parseSizeFlag(c, objSizeLimitFlag)
-		if err != nil {
-			return 0, 0, err
-		}
-		if objSizeLimit < 0 {
-			return 0, 0, incorrectUsageMsg(c, "object size limit cannot be negative, got %s", cos.ToSizeIEC(objSizeLimit, 0))
-		}
-	}
-
-	// If either flag is missing, get from bucket and prompt for confirmation
-	if !flagIsSet(c, chunkSizeFlag) || !flagIsSet(c, objSizeLimitFlag) {
-		bckProps, err := api.HeadBucket(apiBP, bck, true /*don't add*/)
-		if err != nil {
-			return 0, 0, V(err)
-		}
-
-		// Fill in missing values from bucket
-		if !flagIsSet(c, chunkSizeFlag) {
-			chunkSize = int64(bckProps.Chunks.ChunkSize)
-		}
-		if !flagIsSet(c, objSizeLimitFlag) {
-			objSizeLimit = int64(bckProps.Chunks.ObjSizeLimit)
-		}
-
-		// Prompt user for confirmation (unless --yes is set)
-		if !flagIsSet(c, yesFlag) {
-			fmt.Fprint(c.App.Writer, "Rechunk configuration:\n")
-			fmt.Fprintf(c.App.Writer, "\tchunk_size:\t%s\n", cos.ToSizeIEC(chunkSize, 0))
-			fmt.Fprintf(c.App.Writer, "\tobjsize_limit:\t%s%s\n", cos.ToSizeIEC(objSizeLimit, 0), cos.Ternary(objSizeLimit == 0, " (chunking disabled)", ""))
-			if !confirm(c, "Proceed with these values?") {
-				return 0, 0, errors.New("operation canceled")
-			}
-		}
-	}
-
-	return chunkSize, objSizeLimit, nil
-}
-
-func rechunkBucketHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket name")
-	}
-
-	bck, objName, err := parseBckObjURI(c, c.Args().Get(0), true /*optObjName*/)
-	if err != nil {
-		return err
-	}
-
-	// Parse/determine chunk configuration (may prompt user)
-	chunkSize, objSizeLimit, err := parseRechunkConfig(c, bck)
-	if err != nil {
-		return err
-	}
-
-	prefix := parseStrFlag(c, verbObjPrefixFlag)
-	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
-		return fmt.Errorf("cannot handle embedded prefix ('%s') and --prefix flag ('%s') simultaneously - prefix flag must start with embedded prefix",
-			objName, prefix)
-	}
-	if prefix == "" {
-		prefix = objName
-	}
-
-	// Start rechunk
-	syncRemote := flagIsSet(c, syncRemoteFlag)
-	if syncRemote && !bck.IsRemote() {
-		return fmt.Errorf("--sync-remote flag only applies to buckets with remote backend (have %s)", bck.Cname(""))
-	}
-	msg := &apc.RechunkMsg{
-		ObjSizeLimit: objSizeLimit,
-		ChunkSize:    chunkSize,
-		Prefix:       prefix,
-		SyncRemote:   syncRemote,
-	}
-	xid, err := api.RechunkBucket(apiBP, bck, msg)
-	if err != nil {
-		return V(err)
-	}
-
-	// Prepare message
-	_, xname := xact.GetKindName(apc.ActRechunk)
-	text := fmt.Sprintf("%s: %s", xact.Cname(xname, xid), bck.Cname(""))
-	if prefix != "" {
-		text += fmt.Sprintf(" (prefix: %q)", prefix)
-	}
-
-	// Check wait flags
-	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
-		return nil
-	}
-	return waitJob(c, xname, xid, bck)
 }
 
 func removeAllBuckets(c *cli.Context) error {
@@ -648,6 +575,122 @@ func _destroyAllBuckets(c *cli.Context, buckets []cmn.Bck) error {
 	return nil
 }
 
+//
+// rechunkBucketHandler
+//
+
+func rechunkBucketHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket name")
+	}
+
+	bck, objName, err := parseBckObjURI(c, c.Args().Get(0), true /*optObjName*/)
+	if err != nil {
+		return err
+	}
+
+	// Parse/determine chunk configuration (may prompt user)
+	chunkSize, objSizeLimit, err := parseRechunkConfig(c, bck)
+	if err != nil {
+		return err
+	}
+
+	prefix := parseStrFlag(c, verbObjPrefixFlag)
+	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
+		return fmt.Errorf("cannot handle embedded prefix ('%s') and --prefix flag ('%s') simultaneously - prefix flag must start with embedded prefix",
+			objName, prefix)
+	}
+	if prefix == "" {
+		prefix = objName
+	}
+
+	// Start rechunk
+	syncRemote := flagIsSet(c, syncRemoteFlag)
+	if syncRemote && !bck.IsRemote() {
+		return fmt.Errorf("--sync-remote flag only applies to buckets with remote backend (have %s)", bck.Cname(""))
+	}
+	msg := &apc.RechunkMsg{
+		ObjSizeLimit: objSizeLimit,
+		ChunkSize:    chunkSize,
+		Prefix:       prefix,
+		SyncRemote:   syncRemote,
+	}
+	xid, err := api.RechunkBucket(apiBP, bck, msg)
+	if err != nil {
+		return V(err)
+	}
+
+	// Prepare message
+	_, xname := xact.GetKindName(apc.ActRechunk)
+	text := fmt.Sprintf("%s: %s", xact.Cname(xname, xid), bck.Cname(""))
+	if prefix != "" {
+		text += fmt.Sprintf(" (prefix: %q)", prefix)
+	}
+
+	// Check wait flags
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
+		return nil
+	}
+	return waitJob(c, xname, xid, bck)
+}
+
+func parseRechunkConfig(c *cli.Context, bck cmn.Bck) (chunkSize, objSizeLimit int64, err error) {
+	// Parse chunk_size flag if provided
+	if flagIsSet(c, chunkSizeFlag) {
+		chunkSize, err = parseSizeFlag(c, chunkSizeFlag)
+		if err != nil {
+			return 0, 0, err
+		}
+		if chunkSize <= 0 {
+			return 0, 0, incorrectUsageMsg(c, "chunk size must be positive, got %s", cos.ToSizeIEC(chunkSize, 0))
+		}
+	}
+
+	// Parse objsize_limit flag if provided
+	if flagIsSet(c, objSizeLimitFlag) {
+		objSizeLimit, err = parseSizeFlag(c, objSizeLimitFlag)
+		if err != nil {
+			return 0, 0, err
+		}
+		if objSizeLimit < 0 {
+			return 0, 0, incorrectUsageMsg(c, "object size limit cannot be negative, got %s", cos.ToSizeIEC(objSizeLimit, 0))
+		}
+	}
+
+	// If either flag is missing, get from bucket and prompt for confirmation
+	if !flagIsSet(c, chunkSizeFlag) || !flagIsSet(c, objSizeLimitFlag) {
+		bckProps, err := api.HeadBucket(apiBP, bck, true /*don't add*/)
+		if err != nil {
+			return 0, 0, V(err)
+		}
+
+		// Fill in missing values from bucket
+		if !flagIsSet(c, chunkSizeFlag) {
+			chunkSize = int64(bckProps.Chunks.ChunkSize)
+		}
+		if !flagIsSet(c, objSizeLimitFlag) {
+			objSizeLimit = int64(bckProps.Chunks.ObjSizeLimit)
+		}
+
+		// Prompt user for confirmation (unless --yes is set)
+		if !flagIsSet(c, yesFlag) {
+			fmt.Fprint(c.App.Writer, "Rechunk configuration:\n")
+			fmt.Fprintf(c.App.Writer, "\tchunk_size:\t%s\n", cos.ToSizeIEC(chunkSize, 0))
+			fmt.Fprintf(c.App.Writer, "\tobjsize_limit:\t%s%s\n", cos.ToSizeIEC(objSizeLimit, 0), cos.Ternary(objSizeLimit == 0, " (chunking disabled)", ""))
+			if !confirm(c, "Proceed with these values?") {
+				return 0, 0, errors.New("operation canceled")
+			}
+		}
+	}
+
+	return chunkSize, objSizeLimit, nil
+}
+
+//
+// resetPropsHandler
+//
+
 func resetPropsHandler(c *cli.Context) error {
 	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
@@ -659,6 +702,10 @@ func resetPropsHandler(c *cli.Context) error {
 	actionDone(c, "Bucket props successfully reset to cluster defaults")
 	return nil
 }
+
+//
+// lruBucketHandler
+//
 
 func lruBucketHandler(c *cli.Context) error {
 	bck, err := parseBckURI(c, c.Args().Get(0), false)
@@ -698,6 +745,10 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.Bprops, toggle bool) (err err
 	}
 	return updateBckProps(c, bck, p, toggledProps)
 }
+
+//
+// setPropsHandler
+//
 
 func setPropsHandler(c *cli.Context) error {
 	var (
@@ -864,6 +915,10 @@ func _clearFmt(v string) string {
 	return strings.ReplaceAll(nv, "\t", "")
 }
 
+//
+// listAnyHandler (buckets and objects)
+//
+
 func listAnyHandler(c *cli.Context) error {
 	var (
 		opts = cmn.ParseURIOpts{IsQuery: true}
@@ -967,6 +1022,68 @@ proceed:
 		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested
 		return listObjects(c, bck, prefix, listArch, true /*print empty*/)
 	}
+}
+
+//
+// createInventoryHandler
+//
+
+func createInventoryHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "", c.Args()[1:])
+	}
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
+	if err != nil {
+		return err
+	}
+
+	// msg
+	msg := &apc.CreateInvMsg{}
+	msg.SetFlag(apc.LsNoDirs)
+
+	if flagIsSet(c, invPrefixFlag) {
+		msg.Prefix = parseStrFlag(c, invPrefixFlag)
+	}
+
+	switch {
+	case flagIsSet(c, nameOnlyFlag):
+		msg.SetFlag(apc.LsNameOnly)
+		msg.Props = apc.GetPropsName // abs. minimum
+	case flagIsSet(c, allPropsFlag):
+		msg.AddProps(apc.GetPropsAll...) // all supported props
+	default:
+		msg.AddProps(apc.GetPropsName, apc.GetPropsSize, apc.GetPropsCached) // NOTE default
+	}
+
+	// inv name
+	if flagIsSet(c, invNameFlag) {
+		msg.Name = parseStrFlag(c, invNameFlag)
+		if err := cos.CheckAlphaPlus(msg.Name, "inventory name"); err != nil {
+			return err
+		}
+	}
+
+	// advanced
+	if flagIsSet(c, invPagesPerChunkFlag) {
+		a := parseIntFlag(c, invPagesPerChunkFlag)
+		msg.PagesPerChunk = int64(a)
+	}
+	if flagIsSet(c, invMaxEntriesPerChunkFlag) {
+		a := parseIntFlag(c, invMaxEntriesPerChunkFlag)
+		msg.MaxEntriesPerChunk = int64(a)
+	}
+
+	// do
+	xid, err := api.CreateBucketInventory(apiBP, bck, msg)
+	if err != nil {
+		return V(err)
+	}
+
+	actionDone(c, fmt.Sprintf("Creating inventory %s. %s", bck.Cname(""), toMonitorMsg(c, xid, "")))
+	return nil
 }
 
 ////////////

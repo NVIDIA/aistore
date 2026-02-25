@@ -1427,4 +1427,14 @@ var (
 		Name:  "inv-id", // compare w/ HdrInvID
 		Usage: "Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
 	}
+
+	// advanced options
+	invPagesPerChunkFlag = cli.IntFlag{
+		Name:  "inv-pages",
+		Usage: "Number of list-object pages to pack in a single inventory chunk (advanced usage)",
+	}
+	invMaxEntriesPerChunkFlag = cli.IntFlag{
+		Name:  "inv-max-entries",
+		Usage: "Maximum number of entries per inventory chunk (advanced usage)",
+	}
 )

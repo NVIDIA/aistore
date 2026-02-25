@@ -1057,13 +1057,15 @@ func TestCreateInventorySimple(t *testing.T) {
 	m.init(true /*cleanup*/)
 	m.remotePuts(true /*evict*/)
 
-	lsmsg := &apc.LsoMsg{
-		Prefix:   m.prefix,
-		Props:    apc.GetPropsName,
-		PageSize: 3, // forces multiple pages
+	msg := &apc.CreateInvMsg{
+		LsoMsg: apc.LsoMsg{
+			Prefix:   m.prefix,
+			Props:    apc.GetPropsName,
+			PageSize: 3, // forces multiple pages
+		},
 	}
 
-	xid, err := api.CreateBucketInventory(bp, m.bck, lsmsg /*invName optional*/)
+	xid, err := api.CreateBucketInventory(bp, m.bck, msg)
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateInventory, Timeout: tools.ListRemoteBucketTimeout}

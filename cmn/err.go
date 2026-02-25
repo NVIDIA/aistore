@@ -910,6 +910,11 @@ func (e *ErrLimitedCoexistence) Error() string {
 		e.node, e.xaction, e.action, e.detail)
 }
 
+func isErrLimitedCoexistence(err error) bool {
+	_, ok := err.(*ErrLimitedCoexistence)
+	return ok
+}
+
 // ErrXactUsePrev
 
 func NewErrXactUsePrev(xaction string) *ErrXactUsePrev {
@@ -1292,7 +1297,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 			status = http.StatusRequestedRangeNotSatisfiable
 		case isErrUnsupp(err), isErrNotImpl(err):
 			status = http.StatusNotImplemented
-		case IsErrBusy(err):
+		case IsErrBusy(err) || isErrLimitedCoexistence(err):
 			status = http.StatusConflict
 		case IsErrTooManyRequests(err):
 			status = http.StatusTooManyRequests

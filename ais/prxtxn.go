@@ -1243,12 +1243,12 @@ func (r *_tcbfin) cb(nl nl.Listener) {
 	_ = r.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, r.bck)
 }
 
-//////////
-// ETL Init Transaction
-//////////
-
-// etlInitTxn is an atomic transaction that initializes ETL pods on the nodes and connect them with of all participant targets
+//
+// ETL
+// initialize ETL pods on the nodes and connect them with of all participant targets
 // etlMD and stages won't be updated in this call (caller's responsibility)
+//
+
 func (p *proxy) etlInitTxn(initMsg etl.InitMsg, xid, secret string) (string, etl.PodMap, error) {
 	// 1. initialize transaction client
 	c := &txnCln{p: p}
@@ -1304,9 +1304,9 @@ func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) 
 	return podMap, nil
 }
 
-//////////
-// Create Bucket Inventory
-//////////
+//
+// create bucket inventory
+//
 
 func (p *proxy) createInventory(msg *apc.ActMsg, bck *meta.Bck) (string, error) {
 	var (

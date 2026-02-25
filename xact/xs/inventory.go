@@ -72,19 +72,15 @@ func (*invFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *invFactory) Start() error {
 	bck := p.Bucket()
 
-	// TODO -- FIXME: remove the following two checks
-	if !bck.IsCloud() {
-		return cmn.NewErrNotImpl("create inventory for", bck.Provider+" bucket")
-	}
+	debug.Assert(bck.IsRemote()) // guarded by proxy (case apc.ActCreateInventory)
+
+	// TODO -- FIXME: in progress
 	smap := core.T.Sowner().Get()
 	if smap.CountActiveTs() > 1 {
 		return cmn.NewErrNotImpl("create bucket inventory for", "multi-target cluster")
 	}
 
 	msg := p.Args.Custom.(*apc.CreateInvMsg)
-	if err := msg.Validate(); err != nil { // TODO -- FIXME: unify validation
-		return err
-	}
 	r := &XactInventory{msg: msg}
 	r.InitBase(p.UUID(), p.Kind(), bck)
 
