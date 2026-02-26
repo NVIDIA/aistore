@@ -855,10 +855,15 @@ test:short:python-etl:
       - stuck_or_timeout_failure
       - runner_system_failure
       - job_execution_timeout
+  variables:
+    PIP: "uv pip"
   script:
     - cd python
+    - uv venv --python 3.13 .venv
+    - source .venv/bin/activate
     - make python_etl_tests
-
+    - deactivate || true
+    - rm -rf .venv
 
 #  e.g. RE: "ETLBucket|ETLFQN" (or any other regex to select tests)
 test:short:assorted:k8s:

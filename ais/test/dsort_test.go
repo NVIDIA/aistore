@@ -2053,7 +2053,7 @@ func TestDsortEKMFile(t *testing.T) {
 			)
 			for _, shard := range shardRecords {
 				for idx, recordName := range shard.recordNames {
-					buffer.WriteString(fmt.Sprintf("%s\t%s\n", recordName, shardFmts[idx%len(shardFmts)]))
+					fmt.Fprintf(&buffer, "%s\t%s\n", recordName, shardFmts[idx%len(shardFmts)])
 					ekm.Add(recordName, shardFmts[idx%len(shardFmts)])
 				}
 			}
