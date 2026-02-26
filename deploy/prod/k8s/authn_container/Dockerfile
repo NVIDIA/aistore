@@ -2,8 +2,8 @@
 # Dockerfile to build an authn Docker image
 #
 
-ARG BUILDER_IMAGE=golang:1.25
-ARG BASE_IMAGE=gcr.io/distroless/base-debian12
+ARG BUILDER_IMAGE=docker.io/library/golang:1.25
+ARG BASE_IMAGE=gcr.io/distroless/base-debian12:nonroot
 
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILDER_IMAGE} AS builder
 
@@ -11,9 +11,12 @@ WORKDIR /go/src/authn
 
 COPY . .
 
-RUN make authn
+ARG TARGETOS
+ARG TARGETARCH
 
-FROM --platform=${TARGETPLATFORM:-linux/amd64} ${BASE_IMAGE} as base
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} make authn
+
+FROM ${BASE_IMAGE}
 
 COPY --from=builder /go/bin/authn /usr/bin/authn
 

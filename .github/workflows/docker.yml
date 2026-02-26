@@ -101,6 +101,7 @@ jobs:
       image_name: aistorage/authn
       image_tag: ${{ inputs.image_tag }}
       context_dir: deploy/prod/k8s/authn_container
+      multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -112,6 +113,7 @@ jobs:
       image_name: aistorage/ais-util
       image_tag: ${{ inputs.image_tag }}
       context_dir: deploy/prod/k8s/aisutil_container
+      multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -123,6 +125,7 @@ jobs:
       image_name: aistorage/cluster-minimal
       image_tag: ${{ inputs.image_tag }}
       context_dir: deploy/prod/docker/single
+      multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -134,6 +137,7 @@ jobs:
       image_name: aistorage/gitlab-ci
       image_tag: ${{ inputs.image_tag }}
       context_dir: deploy/ci
+      multiarch: false
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

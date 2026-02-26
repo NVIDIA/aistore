@@ -1,12 +1,13 @@
 # Dockerfile to build an AIS Util Docker image
 
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.25 AS builder
+ARG BUILDER_IMAGE=docker.io/library/golang:1.25
+ARG BASE_IMAGE=docker.io/library/debian:trixie-slim
+
+FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILDER_IMAGE} AS builder
 
 WORKDIR /go/src/aistore
 
-RUN git clone --depth 1 https://github.com/NVIDIA/aistore.git
-
-WORKDIR /go/src/aistore/aistore
+COPY . .
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -15,10 +16,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} make cli xmeta aisloader
 
 RUN mv cmd/cli/autocomplete /tmp/autocomplete
 
-FROM ubuntu:24.04 AS base
+FROM ${BASE_IMAGE}
 
 RUN apt-get update -yq && \
-    apt-get install -y python3 python3-pip python3.12-venv && \
+    apt-get install -y python3 python3-pip python3-venv && \
     apt-get install -y wget sysstat curl git iputils-ping make coreutils net-tools iproute2 tcptrack vim \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 

@@ -13,78 +13,31 @@
 #        make docker-buildx-multiarch
 #
 
-DOCKER       ?= docker
-REGISTRY_URL ?= docker.io
-IMAGE_REPO   ?= aistorage/aisnode
-IMAGE_TAG    ?= .must_set_in_environment
-PLATFORMS    ?= linux/amd64,linux/arm64
+IMAGE_REPO    ?= aistorage/aisnode
+BUILD_MODE    ?=
+BUILD_TAGS    ?=
+BUILD_CONTEXT  = "../../../../."
 
-# Image that is used to build `aisnode` binary.
-BUILDER_IMAGE   ?=
-# Image that is used in final stage.
-BASE_IMAGE      ?=
-# By default we build image in "production" mode. It can be set to `debug`
-# to enable extra checks.
-BUILD_MODE      ?=
-# Build tags to build `aisnode` binary.
-BUILD_TAGS      ?=
-# Commit SHA to add to the image for labeling.
-COMMIT_SHA      ?=
-# Optional volume mount for cached go mod
+BUILD_ARGS = --build-arg "mode=$(BUILD_MODE)" \
+             --build-arg "providers=$(AIS_BACKEND_PROVIDERS)" \
+             --build-arg "tags=$(BUILD_TAGS)"
+
+include ../../docker.mk
+
 GOMODCACHE ?= $(shell go env GOMODCACHE)
-
-# Path to source root
-BUILD_CONTEXT = "../../../../."
-BUILD_ARGS = --build-arg "mode=$(BUILD_MODE)" --build-arg "providers=$(AIS_BACKEND_PROVIDERS)" --build-arg "tags=$(BUILD_TAGS)"
-ifneq ("$(BUILDER_IMAGE)","")
-	BUILD_ARGS += --build-arg "BUILDER_IMAGE=$(BUILDER_IMAGE)"
-endif
-ifneq ("$(BASE_IMAGE)","")
-	BUILD_ARGS += --build-arg "BASE_IMAGE=$(BASE_IMAGE)"
-endif
-# Add commit SHA label if provided
-ifneq ("$(COMMIT_SHA)","")
-	BUILD_ARGS += --label "org.opencontainers.image.revision=$(COMMIT_SHA)"
+VOLUME_ARGS =
+ifneq ("$(GOMODCACHE)","")
+	VOLUME_ARGS = --volume $(GOMODCACHE):/go/pkg/mod:rw
 endif
 
-
-.PHONY: all
-all: build push
-
-.PHONY: build
-build:
-	$(DOCKER) build \
-		-f Dockerfile \
-		-t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) \
-		$(BUILD_ARGS) \
-		$(BUILD_CONTEXT)
-
-.PHONY: push
-push:
-	$(DOCKER) push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
-
-# Build and push for all target platforms
-.PHONY: docker-buildx-multiarch
-docker-buildx-multiarch:
-	$(DOCKER) buildx build \
-		--platform $(PLATFORMS) \
-		--push \
-		-f Dockerfile \
-		-t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) \
-		$(BUILD_ARGS) \
-		$(BUILD_CONTEXT)
-
-# Used by CI builds to create an image based on the current commit for re-use in various jobs
-# Note go mod cache is mounted to allow use of existing packages pre-cached in the CI image
-# This mount is R/W to allow go builds to write to the CI image cache if packages do not exist in the current CI image
 .PHONY: ci
 ci:
 	buildah build \
-		--volume $(GOMODCACHE):/go/pkg/mod:rw \
-		-f Dockerfile \
-		-t $(CI_REGISTRY_IMAGE)/aisnode:$(CI_COMMIT_SHORT_SHA) \
-		--build-arg mode="debug" \
-		--build-arg providers="gcp aws oci" \
-		--build-arg tags="ci" \
-		$(BUILD_CONTEXT)
+        $(VOLUME_ARGS) \
+        -f Dockerfile \
+        -t $(CI_REGISTRY_IMAGE)/aisnode:$(CI_COMMIT_SHORT_SHA) \
+        --build-arg mode="debug" \
+        --build-arg providers="gcp aws oci" \
+        --build-arg tags="ci" \
+        $(BUILD_CONTEXT)
 	buildah push $(CI_REGISTRY_IMAGE)/aisnode:$(CI_COMMIT_SHORT_SHA)

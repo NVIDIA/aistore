@@ -4,21 +4,10 @@
 #  $ IMAGE_REPO=aistorage/cluster-minimal IMAGE_TAG=4.0 make -e all
 #
 
-REGISTRY_URL ?= docker.io
-IMAGE_REPO=aistorage/cluster-minimal
-IMAGE_TAG=.must_set_in_environment
-AISTORE_PATH=$(shell git rev-parse --show-toplevel)
+IMAGE_REPO    ?= aistorage/cluster-minimal
+BUILD_CONTEXT  = "../../../../."
 
-all: build push
+BUILD_ARGS = --build-arg "mode=$(BUILD_MODE)" \
+			 --build-arg "providers=$(AIS_BACKEND_PROVIDERS)"
 
-build:
-	cp ${AISTORE_PATH}/deploy/dev/utils.sh .
-	cp ${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh .
-	cp ${AISTORE_PATH}/deploy/conf/limits.conf .
-
-	docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile . || rm -f utils.sh aisnode_config.sh limits.conf
-
-	rm -f utils.sh aisnode_config.sh limits.conf
-
-push:
-	docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
+include ../../docker.mk
