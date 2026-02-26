@@ -30,6 +30,11 @@ on:
         type: string
         default: ''
         description: 'Additional env vars for make (space-separated KEY=VALUE pairs)'
+      multiarch:
+        required: false
+        type: boolean
+        default: false
+        description: 'Build for multiple platforms (e.g. linux/amd64, linux/arm64)'
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -60,4 +65,4 @@ jobs:
           COMMIT_SHA="${{ inputs.commit_sha }}" \
           BUILD_TAGS="${{ inputs.build_tags }}" \
           ${{ inputs.extra_env }} \
-          make -e all
+          make -e ${{ inputs.multiarch && 'docker-buildx-multiarch' || 'all' }}

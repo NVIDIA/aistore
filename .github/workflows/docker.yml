@@ -5,6 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      multiarch:
+        description: 'Build multi-arch images (amd64 + arm64)'
+        required: false
+        type: boolean
+        default: true
+
       build_aisnode_image:
         description: 'Build aisnode image (aistorage/aisnode)'
         required: true
@@ -56,6 +62,7 @@ jobs:
       image_tag: ${{ inputs.image_tag || 'dev' }}
       context_dir: deploy/prod/k8s/aisnode_container
       commit_sha: ${{ github.sha }}
+      multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -69,6 +76,7 @@ jobs:
       context_dir: deploy/prod/k8s/aisnode_container
       build_tags: oteltracing
       commit_sha: ${{ github.sha }}
+      multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -81,6 +89,7 @@ jobs:
       image_tag: ${{ inputs.image_tag || 'dev' }}
       context_dir: deploy/prod/k8s/aisinit_container
       commit_sha: ${{ github.sha }}
+      multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

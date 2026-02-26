@@ -39,6 +39,7 @@ jobs:
       image_tag: ${{ matrix.image_tag }}
       context_dir: ${{ matrix.context_dir }}
       build_tags: ${{ matrix.build_tags }}
+      multiarch: true
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

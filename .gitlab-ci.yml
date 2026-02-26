@@ -217,7 +217,6 @@ build:k8s:
       -f deploy/prod/k8s/aisnode_container/Dockerfile
       --build-arg mode="debug"
       --build-arg providers="gcp aws oci"
-      --build-arg INSTALLER_IMAGE="docker.io/library/debian:bookworm"
       --build-arg BUILDER_IMAGE="docker.io/library/golang:1.25"
       --build-arg tags="ci"
     - buildah push $FQ_AISNODE_IMAGE_NAME
