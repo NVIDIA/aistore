@@ -28,19 +28,19 @@ import (
 
 type (
 	nsummFactory struct {
-		xreg.RenewBase
 		xctn *XactNsumm
 		msg  *apc.BsummCtrlMsg
+		xreg.RenewBase
 	}
 	XactNsumm struct {
 		p       *nsummFactory
 		mapRes  map[uint64]*cmn.BsummResult
 		_nam    string
 		_str    string
+		ctlmsg  string
 		buckets []*meta.Bck
+		oneRes  cmn.BsummResult
 		xact.BckJog
-		oneRes     cmn.BsummResult
-		ctlmsg     string
 		volSize    uint64
 		single     bool
 		listRemote bool

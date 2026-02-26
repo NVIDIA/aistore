@@ -28,9 +28,9 @@ type (
 	evictDelete struct {
 		config *cmn.Config
 		msg    *apc.EvdMsg
+		ctlmsg string
 		lrit
 		xact.Base
-		ctlmsg string
 	}
 )
 

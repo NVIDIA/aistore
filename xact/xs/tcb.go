@@ -45,16 +45,15 @@ type (
 		r *XactTCB
 	}
 	XactTCB struct {
-		// function: copy/transform
-		copier
-		// function: etl
-		transform etl.Session // used for aborting websocket connections
-		// args
-		args *xreg.TCBArgs
-		dm   *bundle.DM
-		nam  string
-		// function: sync
-		prune prune
+		copier                  // function: copy/transform
+		transform etl.Session   // etl: used for aborting websocket connections
+		args      *xreg.TCBArgs // args
+		dm        *bundle.DM
+		nam       string
+		ctlmsg    string
+		prune     prune    // function: sync
+		sntl      sentinel // function: coordinate finish, abort, progress
+
 		// copying parallelism
 		nwp struct {
 			workCh   chan core.LIF
@@ -63,13 +62,9 @@ type (
 			wg       sync.WaitGroup
 			chanFull cos.ChanFull
 		}
-		// function: coordinate finish, abort, progress
-		sntl sentinel
-		// mountpath joggers
-		xact.BckJog
-		// details
-		owt    cmn.OWT
-		ctlmsg string
+
+		xact.BckJog // mountpath joggers
+		owt         cmn.OWT
 	}
 )
 

@@ -47,27 +47,25 @@ const (
 
 type (
 	XactBlobDl struct {
-		bp      core.Backend
-		workCh  chan *chunkTask
-		doneCh  chan *chunkTask
-		args    *core.BlobParams
-		vlabs   map[string]string
-		xlabs   map[string]string
-		workers []*worker
-		config  *cmn.Config
-		pending map[int64]*chunkTask // map of pending tasks indexed by roff
+		bp       core.Backend
+		pending  map[int64]*chunkTask // map of pending tasks indexed by roff
+		args     *core.BlobParams
+		vlabs    map[string]string
+		xlabs    map[string]string
+		config   *cmn.Config
+		workCh   chan *chunkTask
+		doneCh   chan *chunkTask
+		manifest *core.Ufest
+		uploadID string
+		workers  []*worker
+		adv      load.Advice
 		xact.Base
-		wg       sync.WaitGroup
-		nextRoff int64
-		woff     int64
-		// not necessarily user-provided apc.BlobMsg values
-		// in particular, chunk size and num workers might be adjusted based on resources
-		chunkSize  int64
-		fullSize   int64
+		wg         sync.WaitGroup
+		nextRoff   int64
 		numWorkers int
-		uploadID   string
-		manifest   *core.Ufest
-		adv        load.Advice // load advisory
+		fullSize   int64
+		chunkSize  int64 // not necessarily user-provided values (chunk size & num workers might be adjusted based on resources)
+		woff       int64
 	}
 )
 
@@ -79,11 +77,11 @@ type (
 		nchunks int64 // per-worker sequential counter for ShouldCheck
 	}
 	chunkTask struct {
+		err     error
+		sgl     *memsys.SGL
 		name    string // for logging and debug assertions
 		roff    int64
-		sgl     *memsys.SGL
 		written int64
-		err     error
 		code    int
 	}
 	blobFactory struct {

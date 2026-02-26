@@ -45,23 +45,21 @@ type (
 		streamingF
 	}
 	LsoXact struct {
-		lpis      lpi.Lpis
+		ctx       *core.LsoInvCtx  // DEPRECATED: S3 bucket inventory
 		msg       *apc.LsoMsg      // first message
 		msgCh     chan *apc.LsoMsg // next messages
 		respCh    chan *LsoRsp     // responses - next pages
 		remtCh    chan *LsoRsp     // remote paging by the responsible target
-		ctx       *core.LsoInvCtx  // bucket inventory
 		nextToken string           // next continuation token -> next pages
 		token     string           // continuation token -> last responded page
 		stopCh    cos.StopCh       // to stop xaction
-		page      cmn.LsoEntries   // current page (contents)
 		walk      struct {
+			bp           core.Backend     // t.Backend(bck)
 			pageCh       chan *cmn.LsoEnt // channel to accumulate listed object entries
 			stopCh       *cos.StopCh      // to abort bucket walk
 			wi           *walkInfo        // walking context and state
-			bp           core.Backend     // t.Backend(bck)
-			wg           sync.WaitGroup   // wait until this walk finishes
 			lastDir      string           // last seen directory name (for dedup - heap output is sorted, so duplicates are adjacent)
+			wg           sync.WaitGroup   // wait until this walk finishes
 			done         bool             // done walking (indication)
 			wor          bool             // wantOnlyRemote
 			dontPopulate bool             // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
@@ -69,10 +67,13 @@ type (
 			last         bool             // last remote page
 			remote       bool             // list remote
 		}
+		lpis lpi.Lpis
+		page cmn.LsoEntries // current page (contents)
+		adv  load.Advice
 		streamingX
-		adv    load.Advice
 		npages int64
 		lensgl int64 // channel to accumulate listed object entries
+		// list remote
 	}
 	LsoRsp struct {
 		Err    error

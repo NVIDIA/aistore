@@ -55,10 +55,10 @@ type (
 		msg    *apc.PrefetchMsg
 		vlabs  map[string]string
 		brl    *cos.BurstRateLim
+		ctlmsg string
 		pebl   pebl
 		lrit
 		xact.Base
-		ctlmsg    string
 		latestVer bool
 	}
 )

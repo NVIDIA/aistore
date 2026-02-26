@@ -34,8 +34,8 @@ type (
 		kind string
 	}
 	xactRechunk struct {
-		xact.BckJog
 		args *apc.RechunkMsg
+		xact.BckJog
 	}
 )
 

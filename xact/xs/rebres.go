@@ -29,12 +29,12 @@ const fmtpend = "%s: rebalance[%s] is "
 
 type (
 	rebFactory struct {
-		xreg.RenewBase
 		xctn *Rebalance
+		xreg.RenewBase
 	}
 	resFactory struct {
-		xreg.RenewBase
 		xctn *Resilver
+		xreg.RenewBase
 	}
 
 	Rebalance struct {
@@ -42,13 +42,11 @@ type (
 		xact.Base
 	}
 	Resilver struct {
-		Args *xreg.ResArgs
-		// runtime
-		Nbusy   atomic.Int64
-		nvisits atomic.Int64 // last val
-		jgroup  ratomic.Pointer[mpather.Jgroup]
-		// base
+		Args   *xreg.ResArgs
+		jgroup ratomic.Pointer[mpather.Jgroup]
 		xact.Base
+		Nbusy   atomic.Int64
+		nvisits atomic.Int64
 	}
 )
 

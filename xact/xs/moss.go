@@ -137,25 +137,26 @@ type (
 		ngfn int   // total num GFN requests by this wi
 		errn int   // GFN failures; converted to missing-entry when ContinueOnErr=true
 	}
+
+	// work item
 	basewi struct {
-		// Tx/Rx shared state
-		recv struct {
+		aw     archive.Writer
+		resp   *apc.MossResp
+		sgl    *memsys.SGL // multipart (buffered) only
+		timer  *time.Timer
+		r      *XactMoss
+		config *cmn.Config
+		smap   *meta.Smap
+		req    *apc.MossReq
+		wid    string   // work item ID
+		sid    string   // current sender ID
+		recv   struct { // Tx/Rx shared state
 			ch   chan int
 			m    []rxentry
 			next int
 			mtx  sync.Mutex
 		}
-		timer   *time.Timer
 		stats   moss
-		aw      archive.Writer
-		r       *XactMoss
-		config  *cmn.Config
-		smap    *meta.Smap
-		req     *apc.MossReq
-		resp    *apc.MossResp
-		sgl     *memsys.SGL // multipart (buffered) only
-		wid     string      // work item ID
-		sid     string      // current sender ID
 		started int64       // (mono)
 		soft    int         // number of soft errors must be <= maxSoftErrs; see definition above
 		clean   atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
