@@ -1052,7 +1052,7 @@ func TestCreateInventorySimple(t *testing.T) {
 		}
 		bp = tools.BaseAPIParams()
 	)
-	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, CloudBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, RemoteBck: true, Bck: m.bck})
 
 	m.init(true /*cleanup*/)
 	m.remotePuts(true /*evict*/)
