@@ -5,6 +5,7 @@ ARG GO_VERSION=1.25
 RUN dnf -y --setopt=install_weak_deps=False install \
   attr \
   awk \
+  buildah \
   bc \
   coreutils \
   curl \
