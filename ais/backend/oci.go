@@ -450,7 +450,7 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (i
 	// Initialize internal continuationToken to msg.ContinuationToken but adjusted during loop below
 	continuationToken = msg.ContinuationToken
 
-	lst.Entries = make(cmn.LsoEntries, 0, limitAsInt)
+	lst.Entries = lst.Entries[:0]
 
 	// Loop until end of list and/or limitAsInt has decremented to zero (based on len(lst.Entries))
 

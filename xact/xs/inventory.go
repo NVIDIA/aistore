@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -56,8 +57,12 @@ type (
 		buf    []byte
 		slab   *memsys.Slab
 		ctlmsg string
+		clean  atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
 	}
 )
+
+// TODO -- FIXME:
+// - multi-target (remove smap.CountActiveTs = 1)
 
 // interface guard
 var (
@@ -74,7 +79,6 @@ func (p *invFactory) Start() error {
 
 	debug.Assert(bck.IsRemote()) // guarded by proxy (case apc.ActCreateInventory)
 
-	// TODO -- FIXME: in progress
 	smap := core.T.Sowner().Get()
 	if smap.CountActiveTs() > 1 {
 		return cmn.NewErrNotImpl("create bucket inventory for", "multi-target cluster")
@@ -133,7 +137,6 @@ func (r *XactInventory) init() error {
 	return nil
 }
 
-// TODO -- FIXME: cleanup vs. 1) TxnAbort, b) user abort
 func (r *XactInventory) Abort(err error) bool {
 	if !r.Base.Abort(err) {
 		return false
@@ -143,97 +146,96 @@ func (r *XactInventory) Abort(err error) bool {
 }
 
 func (r *XactInventory) cleanup() {
+	if !r.clean.CAS(false, true) {
+		return
+	}
 	defer core.FreeLOM(r.lom)
 	r.slab.Free(r.buf)
 
-	if !r.IsAborted() {
-		return
+	if r.IsAborted() {
+		// cleanup partial
+		r.ufest.Abort(r.lom)
 	}
-	r.ufest.Abort(r.lom)
 }
 
-// TODO: single return at the bottom vs r.cleanup() :TODO
 func (r *XactInventory) Run(wg *sync.WaitGroup) {
 	wg.Done()
 
 	nlog.Infoln(core.T.String(), "run:", r.Name(), "ctl:", r.ctlmsg)
 
 	bck := r.Bck()
-	lsmsg := r.msg.LsoMsg
+	lsmsg := &r.msg.LsoMsg
 	if pgsize := bck.MaxPageSize(); lsmsg.PageSize <= 0 || lsmsg.PageSize > pgsize {
 		lsmsg.PageSize = pgsize
 	}
+	// adjust to min
+	if n := r.msg.MaxEntriesPerChunk; n > 0 {
+		r.msg.PagesPerChunk = min(cos.DivRoundI64(n, lsmsg.PageSize), r.msg.PagesPerChunk)
+	}
 	lsmsg.ContinuationToken = ""
 
-	bp := core.T.Backend(bck)
-outer:
-	for num := 1; !r.IsAborted(); num++ {
-		// accumulate up to pagesPerChunk pages into one slice
+	var (
+		bp        = core.T.Backend(bck)
+		lastToken = "__dummy__"
+		all       = make(cmn.LsoEntries, lsmsg.PageSize*r.msg.PagesPerChunk) // prealloc and reuse
+	)
+	for num := 1; !r.IsAborted() && lastToken != ""; num++ {
 		var (
-			all       cmn.LsoEntries
-			npages    int64
-			lastToken string
+			idx    int
+			npages int64
 		)
-		all = make(cmn.LsoEntries, 0, lsmsg.PageSize*r.msg.PagesPerChunk)
+		all = all[:cap(all)]
+		for ; lastToken != "" && npages < r.msg.PagesPerChunk; npages++ {
+			lst := &cmn.LsoRes{}
+			lst.Entries = all[idx:]
 
-		for npages < r.msg.PagesPerChunk {
-			lst := &cmn.LsoRes{} // TODO -- FIXME: reuse entries slice pool
-			_, err := bp.ListObjects(bck, &lsmsg, lst)
-			if err != nil {
+			if _, err := bp.ListObjects(bck, lsmsg, lst); err != nil {
 				r.Abort(err)
-				break outer
+				return
 			}
 
-			all = append(all, lst.Entries...)
-			npages++
+			// invariant: backend must reuse the passed-in slice ([:0] + append)
+			debug.Assert(len(lst.Entries) == 0 || &lst.Entries[0] == &all[idx])
 
+			idx += len(lst.Entries)
 			lastToken = lst.ContinuationToken
-			if lastToken == "" {
-				break // end of listing
-			}
 			lsmsg.ContinuationToken = lastToken
 		}
-
-		if len(all) == 0 {
+		if idx == 0 {
 			break
 		}
 
+		// next chunk
+		all = all[:idx]
+		if err := r.writeChunk(num, all); err != nil {
+			r.Abort(err)
+			return
+		}
 		if cmn.Rom.V(5, cos.ModXs) {
-			nlog.Infoln("inventory", r.ID(), "listed entries:", len(all), "npages:", npages, "token:", lastToken)
-		}
-
-		if _, err := r.writeChunk(num, all); err != nil {
-			r.Abort(err)
-			break
-		}
-
-		if lastToken == "" {
-			break
+			nlog.Infoln(r.Name(), "listed entries:", idx, "npages:", npages, "token:", lastToken)
 		}
 	}
-
-	if !r.IsAborted() {
-		if err := r.lom.CompleteUfest(r.ufest, false /*locked*/); err != nil {
-			r.Abort(err)
-		} else {
-			r.Finish()
-			r.cleanup()
-		}
+	if err := r.lom.CompleteUfest(r.ufest, false /*locked*/); err != nil {
+		r.Abort(err)
+		return
 	}
+
+	r.Finish()
+	r.cleanup()
 }
 
 // writeChunk writes one chunk part file:
 // [u32 headerLen][bytepack header][msgp-encoded LsoEntries]
-func (r *XactInventory) writeChunk(num int, entries cmn.LsoEntries) (written int64, err error) {
+func (r *XactInventory) writeChunk(num int, entries cmn.LsoEntries) error {
 	chunk, err := r.ufest.NewChunk(num, r.lom)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	chunkPath := chunk.Path()
 
 	fh, err := r.lom.CreatePart(chunkPath)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	ws := cos.NewWriteSizer(fh)
@@ -251,32 +253,32 @@ func (r *XactInventory) writeChunk(num int, entries cmn.LsoEntries) (written int
 	// write headerLen prefix
 	var lenbuf [invHdrLenSize]byte
 	binary.BigEndian.PutUint32(lenbuf[:], uint32(len(hdrBytes)))
-	if _, err = ws.Write(lenbuf[:]); err != nil {
-		return 0, err
+	if _, err := ws.Write(lenbuf[:]); err != nil {
+		return err
 	}
 	// write header bytes
-	if _, err = ws.Write(hdrBytes); err != nil {
-		return 0, err
+	if _, err := ws.Write(hdrBytes); err != nil {
+		return err
 	}
 
 	// 2) payload: msgp-encoded entries
 	mw := msgp.NewWriterBuf(ws, r.buf)
-	if err = entries.EncodeMsg(mw); err == nil {
-		err = mw.Flush()
+	if err := entries.EncodeMsg(mw); err != nil {
+		return err
 	}
-	if err != nil {
-		return 0, err
+	if err := mw.Flush(); err != nil {
+		return err
 	}
 
-	written = ws.Size()
+	written := ws.Size()
 	if err := r.ufest.Add(chunk, written, int64(num)); err != nil {
 		if nerr := cos.RemoveFile(chunkPath); nerr != nil && !cos.IsNotExist(nerr) {
 			nlog.Errorln("nested error removing chunk:", nerr)
 		}
-		return 0, err
+		return err
 	}
 
-	return written, nil
+	return nil
 }
 
 func makeInvChunkHdr(entries cmn.LsoEntries) (h invChunkHdr) {

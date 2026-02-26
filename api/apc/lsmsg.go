@@ -386,10 +386,10 @@ func (m *CreateInvMsg) SetValidate() error {
 		return fmt.Errorf("%s: max_entries_per_chunk=%d", etag, m.MaxEntriesPerChunk)
 	}
 
-	// 3) set or add flags and props
+	// 3) NOTE: othwerwise, backend _may_ append extra (virt-dir) entries (in re: pre-allocation+reuse)
 	m.SetFlag(LsNoDirs)
 
-	// absolute minimum
+	// 4) absolute minimum
 	if m.IsFlagSet(LsNameOnly) {
 		m.Props = GetPropsName
 		return nil
@@ -403,7 +403,7 @@ func (m *CreateInvMsg) SetValidate() error {
 		return nil
 	}
 
-	// default props
+	// 5) default props
 	if m.Props == "" {
 		m.AddProps(GetPropsName, GetPropsSize, GetPropsCached)
 	} else {
