@@ -81,6 +81,8 @@ type (
 	}
 )
 
+const assertContProgress = "continuation token must make forward progress"
+
 const (
 	pageChSize     = 128
 	remtPageChSize = 16
@@ -407,6 +409,8 @@ func (r *LsoXact) doPage() *LsoRsp {
 			if err := r.nextPageR(); err != nil {
 				return &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 			}
+			// must make forward progress
+			debug.Assert(r.nextToken == "" || r.nextToken != r.token, assertContProgress)
 		}
 		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.page, ContinuationToken: r.nextToken}
 

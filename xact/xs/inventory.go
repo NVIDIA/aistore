@@ -24,6 +24,10 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+// TODO -- FIXME:
+// - multi-target (remove smap.CountActiveTs = 1)
+// - stats: internal (-> CtlMsg) and Prometheus
+
 // inventory chunk header meta-version
 const (
 	invChunkHdrVer uint8 = 1
@@ -36,33 +40,30 @@ const (
 
 type (
 	invChunkHdr struct {
-		ver        uint8
-		entryCount uint32
 		first      string
 		last       string
+		entryCount uint32
+		ver        uint8
 	}
 )
 
 // x-inventory
 type (
 	invFactory struct {
-		xreg.RenewBase
 		xctn *XactInventory
+		xreg.RenewBase
 	}
 	XactInventory struct {
-		xact.Base
 		msg    *apc.CreateInvMsg
 		lom    *core.LOM
 		ufest  *core.Ufest
-		buf    []byte
 		slab   *memsys.Slab
 		ctlmsg string
-		clean  atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
+		buf    []byte
+		xact.Base
+		clean atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
 	}
 )
-
-// TODO -- FIXME:
-// - multi-target (remove smap.CountActiveTs = 1)
 
 // interface guard
 var (
@@ -158,6 +159,22 @@ func (r *XactInventory) cleanup() {
 	}
 }
 
+func (r *XactInventory) CtlMsg() string {
+	if r.ctlmsg != "" {
+		return r.ctlmsg
+	}
+	sb := &cos.SB{}
+	sb.Init(80)
+	r.msg.Str(r.Bck().Cname(""), sb)
+	r.ctlmsg = sb.String()
+	return r.ctlmsg
+}
+
+func (r *XactInventory) Snap() (snap *core.Snap) {
+	return r.Base.NewSnap(r)
+}
+
+// main method
 func (r *XactInventory) Run(wg *sync.WaitGroup) {
 	wg.Done()
 
@@ -177,17 +194,21 @@ func (r *XactInventory) Run(wg *sync.WaitGroup) {
 	var (
 		bp        = core.T.Backend(bck)
 		lastToken = "__dummy__"
-		all       = make(cmn.LsoEntries, lsmsg.PageSize*r.msg.PagesPerChunk) // prealloc and reuse
+		all       = make(cmn.LsoEntries, 0, lsmsg.PageSize*r.msg.PagesPerChunk) // prealloc and reuse
+		fast      = true
 	)
+	const warn = "backend returned non-reused entries slice; falling back to append path"
 	for num := 1; !r.IsAborted() && lastToken != ""; num++ {
 		var (
 			idx    int
 			npages int64
 		)
-		all = all[:cap(all)]
+		all = all[:0]
+
 		for ; lastToken != "" && npages < r.msg.PagesPerChunk; npages++ {
 			lst := &cmn.LsoRes{}
-			lst.Entries = all[idx:]
+			dst := all[idx:idx:cap(all)] // safe for append
+			lst.Entries = dst
 
 			if _, err := bp.ListObjects(bck, lsmsg, lst); err != nil {
 				r.Abort(err)
@@ -195,9 +216,29 @@ func (r *XactInventory) Run(wg *sync.WaitGroup) {
 			}
 
 			// invariant: backend must reuse the passed-in slice ([:0] + append)
-			debug.Assert(len(lst.Entries) == 0 || &lst.Entries[0] == &all[idx])
+			reused := _sameBacking(dst, lst.Entries)
 
-			idx += len(lst.Entries)
+			switch {
+			case fast && !reused: // switch fast => slow
+				fast = false
+				debug.Assert(reused, warn)
+				nlog.Warningln(r.Name(), warn)
+				tmp := make(cmn.LsoEntries, 0, lsmsg.PageSize*r.msg.PagesPerChunk)
+				tmp = append(tmp, all[:idx]...)
+				tmp = append(tmp, lst.Entries...)
+				all = tmp
+				idx = len(all)
+			case fast: // fast path
+				idx += len(lst.Entries)
+				all = all[:idx]
+			default: // slow path
+				all = append(all, lst.Entries...)
+				idx = len(all)
+			}
+
+			// must make forward progress
+			debug.Assert(lst.ContinuationToken == "" || lst.ContinuationToken != lsmsg.ContinuationToken, assertContProgress)
+
 			lastToken = lst.ContinuationToken
 			lsmsg.ContinuationToken = lastToken
 		}
@@ -212,7 +253,7 @@ func (r *XactInventory) Run(wg *sync.WaitGroup) {
 			return
 		}
 		if cmn.Rom.V(5, cos.ModXs) {
-			nlog.Infoln(r.Name(), "listed entries:", idx, "npages:", npages, "token:", lastToken)
+			nlog.Infoln(r.Name(), "listed entries:", idx, "npages:", npages, "token:", cos.SHead(lastToken) /*16*/)
 		}
 	}
 	if err := r.lom.CompleteUfest(r.ufest, false /*locked*/); err != nil {
@@ -281,6 +322,22 @@ func (r *XactInventory) writeChunk(num int, entries cmn.LsoEntries) error {
 	return nil
 }
 
+// true if backend appended into dst's backing array (dst must have cap>0)
+func _sameBacking(dst, got cmn.LsoEntries) bool {
+	if len(got) == 0 {
+		return true
+	}
+	if cap(dst) == 0 {
+		return false
+	}
+	// dst is len=0, cap>0
+	return &got[0] == &dst[:1][0]
+}
+
+/////////////////
+// invChunkHdr //
+/////////////////
+
 func makeInvChunkHdr(entries cmn.LsoEntries) (h invChunkHdr) {
 	h.ver = invChunkHdrVer
 	h.entryCount = uint32(len(entries))
@@ -288,7 +345,7 @@ func makeInvChunkHdr(entries cmn.LsoEntries) (h invChunkHdr) {
 		h.first = entries[0].Name
 		h.last = entries[len(entries)-1].Name
 	}
-	return
+	return h
 }
 
 func packInvChunkHdr(h *invChunkHdr) []byte {
@@ -307,19 +364,4 @@ func (h *invChunkHdr) Pack(p *cos.BytePack) {
 	p.WriteUint32(h.entryCount)
 	p.WriteString(h.first)
 	p.WriteString(h.last)
-}
-
-func (r *XactInventory) CtlMsg() string {
-	if r.ctlmsg != "" {
-		return r.ctlmsg
-	}
-	sb := &cos.SB{}
-	sb.Init(80)
-	r.msg.Str(r.Bck().Cname(""), sb)
-	r.ctlmsg = sb.String()
-	return r.ctlmsg
-}
-
-func (r *XactInventory) Snap() (snap *core.Snap) {
-	return r.Base.NewSnap(r)
 }
