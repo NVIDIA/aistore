@@ -76,6 +76,7 @@ RUN git clone --depth=1 https://github.com/NVIDIA/aistore.git && \
 # Cache all dependencies from `ais-k8s/operator` for make targets run directly in CI container
 # Note these directories must match what the ais-k8s repo uses for gitlab-ci
 ENV LOCAL_BIN=/ci-tools/bin
+ENV PATH="${LOCAL_BIN}:${PATH}"
 ENV LOCAL_MANIFESTS=/ci-tools/manifests
 RUN git clone --depth=1 https://github.com/NVIDIA/ais-k8s.git && \
   cd ais-k8s/operator && \
