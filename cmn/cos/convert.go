@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -40,6 +40,19 @@ func ParseBool(s string) (bool, error) {
 	}
 	// gen. case
 	return strconv.ParseBool(s)
+}
+
+// Unhex returns the numeric value of a hex digit (0-15).
+func Unhex(c byte) (int, bool) {
+	switch {
+	case '0' <= c && c <= '9':
+		return int(c - '0'), true
+	case 'a' <= c && c <= 'f':
+		return int(c - 'a' + 10), true
+	case 'A' <= c && c <= 'F':
+		return int(c - 'A' + 10), true
+	}
+	return 0, false
 }
 
 func ConvertToString(value any) (valstr string, err error) {

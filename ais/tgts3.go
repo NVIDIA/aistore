@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -72,6 +72,11 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 		s3.WriteErr(w, r, err, ecode)
 		return
 	}
+	// handle AWS chunked content encoding (sigv4-streaming)
+	if s3.IsAwsChunked(r) {
+		s3.HandleAwsChunked(r)
+	}
+
 	q := r.URL.Query()
 	switch {
 	case q.Has(s3.QparamMptPartNo) && q.Has(s3.QparamMptUploadID):
