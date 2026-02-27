@@ -441,13 +441,22 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 	msg.PageSize = pageSize
 
-	// finally, setup lsargs
+	if flagIsSet(c, nbiFlag) {
+		msg.SetFlag(apc.LsNBI)
+	}
+
+	// lsargs
 	lsargs := api.ListArgs{Limit: limit}
-	if flagIsSet(c, useInventoryFlag) {
+
+	// Deprecated
+	if flagIsSet(c, useS3InventoryFlag) {
+		if flagIsSet(c, nameOnlyFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(nbiFlag), qflprn(useS3InventoryFlag))
+		}
 		lsargs.Header = http.Header{
 			apc.HdrInventory: []string{"true"},
-			apc.HdrInvName:   []string{parseStrFlag(c, invNameFlag)},
-			apc.HdrInvID:     []string{parseStrFlag(c, invIDFlag)},
+			apc.HdrInvName:   []string{parseStrFlag(c, nbiNameFlag)},
+			apc.HdrS3InvID:   []string{parseStrFlag(c, s3InvIDFlag)},
 		}
 	}
 

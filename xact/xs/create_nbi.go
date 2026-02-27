@@ -24,22 +24,20 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+// XactNBI: create native bucket inventory (NBI)
+
 // TODO -- FIXME:
 // - multi-target (remove smap.CountActiveTs = 1)
 // - stats: internal (-> CtlMsg) and Prometheus
 
-// inventory chunk header meta-version
+// on-disk formatting
 const (
-	invChunkHdrVer uint8 = 1
-)
-
-// formatting - framing: per-chunk header
-const (
-	invHdrLenSize = cos.SizeofI32
+	nbiChunkHdrVer uint8 = 1             // chunk header meta-version
+	nbiHdrLenSize        = cos.SizeofI32 // framing: chunk header
 )
 
 type (
-	invChunkHdr struct {
+	nbiChunkHdr struct {
 		first      string
 		last       string
 		entryCount uint32
@@ -47,13 +45,13 @@ type (
 	}
 )
 
-// x-inventory
+// x-nbi
 type (
-	invFactory struct {
-		xctn *XactInventory
+	nbiFactory struct {
+		xctn *XactNBI
 		xreg.RenewBase
 	}
-	XactInventory struct {
+	XactNBI struct {
 		msg    *apc.CreateInvMsg
 		lom    *core.LOM
 		ufest  *core.Ufest
@@ -67,18 +65,18 @@ type (
 
 // interface guard
 var (
-	_ core.Xact      = (*XactInventory)(nil)
-	_ xreg.Renewable = (*invFactory)(nil)
+	_ core.Xact      = (*XactNBI)(nil)
+	_ xreg.Renewable = (*nbiFactory)(nil)
 )
 
-func (*invFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	return &invFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}}
+func (*nbiFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
+	return &nbiFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}}
 }
 
-func (p *invFactory) Start() error {
+func (p *nbiFactory) Start() error {
 	bck := p.Bucket()
 
-	debug.Assert(bck.IsRemote()) // guarded by proxy (case apc.ActCreateInventory)
+	debug.Assert(bck.IsRemote()) // guarded by proxy (case apc.ActCreateNBI)
 
 	smap := core.T.Sowner().Get()
 	if smap.CountActiveTs() > 1 {
@@ -86,15 +84,15 @@ func (p *invFactory) Start() error {
 	}
 
 	msg := p.Args.Custom.(*apc.CreateInvMsg)
-	r := &XactInventory{msg: msg}
+	r := &XactNBI{msg: msg}
 	r.InitBase(p.UUID(), p.Kind(), bck)
 
 	// the name for a given bucket (intended for very large buckets)
-	invName := r.msg.Name
-	debug.Assert(invName != "")
+	nbiName := r.msg.Name
+	debug.Assert(nbiName != "")
 
-	// inventory LOM is always chunked
-	oname := string(r.Bck().MakeUname(invName))
+	// nbi LOM is always chunked
+	oname := string(r.Bck().MakeUname(nbiName))
 	r.lom = core.AllocLOM(oname)
 
 	if err := r.init(); err != nil {
@@ -107,10 +105,10 @@ func (p *invFactory) Start() error {
 	return nil
 }
 
-func (*invFactory) Kind() string     { return apc.ActCreateInventory }
-func (p *invFactory) Get() core.Xact { return p.xctn }
+func (*nbiFactory) Kind() string     { return apc.ActCreateNBI }
+func (p *nbiFactory) Get() core.Xact { return p.xctn }
 
-func (p *invFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+func (p *nbiFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	if p.UUID() != prevEntry.UUID() {
 		return wpr, cmn.NewErrXactUsePrev(prevEntry.Get().String())
 	}
@@ -119,11 +117,11 @@ func (p *invFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	return xreg.WprUse, nil
 }
 
-///////////////////
-// XactInventory //
-///////////////////
+/////////////
+// XactNBI //
+/////////////
 
-func (r *XactInventory) init() error {
+func (r *XactNBI) init() error {
 	err := r.lom.InitBck(meta.SysBckInv())
 	if err != nil {
 		return err
@@ -138,7 +136,7 @@ func (r *XactInventory) init() error {
 	return nil
 }
 
-func (r *XactInventory) Abort(err error) bool {
+func (r *XactNBI) Abort(err error) bool {
 	if !r.Base.Abort(err) {
 		return false
 	}
@@ -146,7 +144,7 @@ func (r *XactInventory) Abort(err error) bool {
 	return true
 }
 
-func (r *XactInventory) cleanup() {
+func (r *XactNBI) cleanup() {
 	if !r.clean.CAS(false, true) {
 		return
 	}
@@ -159,7 +157,7 @@ func (r *XactInventory) cleanup() {
 	}
 }
 
-func (r *XactInventory) CtlMsg() string {
+func (r *XactNBI) CtlMsg() string {
 	if r.ctlmsg != "" {
 		return r.ctlmsg
 	}
@@ -170,12 +168,12 @@ func (r *XactInventory) CtlMsg() string {
 	return r.ctlmsg
 }
 
-func (r *XactInventory) Snap() (snap *core.Snap) {
+func (r *XactNBI) Snap() (snap *core.Snap) {
 	return r.Base.NewSnap(r)
 }
 
 // main method
-func (r *XactInventory) Run(wg *sync.WaitGroup) {
+func (r *XactNBI) Run(wg *sync.WaitGroup) {
 	wg.Done()
 
 	nlog.Infoln(core.T.String(), "run:", r.Name(), "ctl:", r.ctlmsg)
@@ -215,7 +213,7 @@ func (r *XactInventory) Run(wg *sync.WaitGroup) {
 				return
 			}
 
-			// invariant: backend must reuse the passed-in slice ([:0] + append)
+			// nbiariant: backend must reuse the passed-in slice ([:0] + append)
 			reused := _sameBacking(dst, lst.Entries)
 
 			switch {
@@ -267,7 +265,7 @@ func (r *XactInventory) Run(wg *sync.WaitGroup) {
 
 // writeChunk writes one chunk part file:
 // [u32 headerLen][bytepack header][msgp-encoded LsoEntries]
-func (r *XactInventory) writeChunk(num int, entries cmn.LsoEntries) error {
+func (r *XactNBI) writeChunk(num int, entries cmn.LsoEntries) error {
 	chunk, err := r.ufest.NewChunk(num, r.lom)
 	if err != nil {
 		return err
@@ -292,7 +290,7 @@ func (r *XactInventory) writeChunk(num int, entries cmn.LsoEntries) error {
 	hdrBytes := packInvChunkHdr(&hdr)
 
 	// write headerLen prefix
-	var lenbuf [invHdrLenSize]byte
+	var lenbuf [nbiHdrLenSize]byte
 	binary.BigEndian.PutUint32(lenbuf[:], uint32(len(hdrBytes)))
 	if _, err := ws.Write(lenbuf[:]); err != nil {
 		return err
@@ -335,11 +333,11 @@ func _sameBacking(dst, got cmn.LsoEntries) bool {
 }
 
 /////////////////
-// invChunkHdr //
+// nbiChunkHdr //
 /////////////////
 
-func makeInvChunkHdr(entries cmn.LsoEntries) (h invChunkHdr) {
-	h.ver = invChunkHdrVer
+func makeInvChunkHdr(entries cmn.LsoEntries) (h nbiChunkHdr) {
+	h.ver = nbiChunkHdrVer
 	h.entryCount = uint32(len(entries))
 	if len(entries) > 0 {
 		h.first = entries[0].Name
@@ -348,18 +346,18 @@ func makeInvChunkHdr(entries cmn.LsoEntries) (h invChunkHdr) {
 	return h
 }
 
-func packInvChunkHdr(h *invChunkHdr) []byte {
+func packInvChunkHdr(h *nbiChunkHdr) []byte {
 	p := cos.NewPacker(nil, h.PackedSize())
 	h.Pack(p)
 	return p.Bytes()
 }
 
-func (h *invChunkHdr) PackedSize() int {
+func (h *nbiChunkHdr) PackedSize() int {
 	// ver(uint8) + entryCount(uint32) + first + last
 	return 1 + cos.SizeofI32 + cos.PackedStrLen(h.first) + cos.PackedStrLen(h.last)
 }
 
-func (h *invChunkHdr) Pack(p *cos.BytePack) {
+func (h *nbiChunkHdr) Pack(p *cos.BytePack) {
 	p.WriteUint8(h.ver)
 	p.WriteUint32(h.entryCount)
 	p.WriteString(h.first)

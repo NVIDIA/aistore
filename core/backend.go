@@ -24,7 +24,9 @@ type (
 		Size     int64
 		ErrCode  int
 	}
-	LsoInvCtx struct {
+
+	// Deprecated: remove by April-May 2026
+	LsoS3InvCtx struct {
 		Lmfh   cos.LomReader
 		Lom    *LOM
 		SGL    *memsys.SGL
@@ -44,7 +46,7 @@ type (
 
 		// list-objects
 		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
-		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoInvCtx) error
+		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoS3InvCtx) error
 
 		PutObj(ctx context.Context, r io.ReadCloser, lom *LOM, origReq *http.Request) (ecode int, err error)
 		DeleteObj(ctx context.Context, lom *LOM) (ecode int, err error)
@@ -59,7 +61,7 @@ type (
 		GetObjReader(ctx context.Context, lom *LOM, offset, length int64) GetReaderResult
 
 		// bucket inventory
-		GetBucketInv(bck *meta.Bck, ctx *LsoInvCtx) (ecode int, err error)
+		GetBucketInv(bck *meta.Bck, ctx *LsoS3InvCtx) (ecode int, err error)
 
 		// multipart upload
 		StartMpt(lom *LOM, r *http.Request) (uploadID string, ecode int, err error)

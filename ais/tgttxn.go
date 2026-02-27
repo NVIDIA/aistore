@@ -212,8 +212,8 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActPromote:
 		hdr := w.Header()
 		xid, err = t.promote(c, hdr)
-	case apc.ActCreateInventory:
-		xid, err = t.createInventory(c)
+	case apc.ActCreateNBI:
+		xid, err = t.createNBI(c)
 	case apc.ActETLInline:
 		hdr := w.Header()
 		xid, err = t.initETL(c, hdr)
@@ -1171,7 +1171,7 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 // create bucket inventory
 //
 
-func (t *target) createInventory(c *txnSrv) (string, error) {
+func (t *target) createNBI(c *txnSrv) (string, error) {
 	switch c.phase {
 	case apc.Begin2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -1179,10 +1179,10 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 		}
 
 		// only one (create-inventory, bucket) at a time
-		flt := xreg.Flt{Kind: apc.ActCreateInventory, Bck: c.bck}
+		flt := xreg.Flt{Kind: apc.ActCreateNBI, Bck: c.bck}
 		entry := xreg.GetRunning(&flt)
 		if entry != nil {
-			return "", cmn.NewErrLimitedCoexistence(t.String(), entry.Get().String(), apc.ActCreateInventory, c.bck.Cname(""))
+			return "", cmn.NewErrLimitedCoexistence(t.String(), entry.Get().String(), apc.ActCreateNBI, c.bck.Cname(""))
 		}
 
 		cs := fs.Cap()
@@ -1214,14 +1214,14 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 		}
 
 		// xaction early (DM)
-		rns := xreg.RenewInventory(c.bck, c.uuid, cimsg)
+		rns := xreg.RenewNBI(c.bck, c.uuid, cimsg)
 		if rns.Err != nil {
 			nlog.Errorf("%s: create %s inventory %q: %v", t, c.bck.Cname(""), cimsg.Name, rns.Err)
 			return "", rns.Err
 		}
-		xinv := rns.Entry.Get().(*xs.XactInventory)
+		xinv := rns.Entry.Get().(*xs.XactNBI)
 
-		txn := newTxnCreateInventory(c, cimsg, xinv)
+		txn := newTxnCreateNBI(c, cimsg, xinv)
 		if err := t.txns.begin(txn, nlp); err != nil {
 			xinv.Abort(err)
 			return "", err
@@ -1229,7 +1229,7 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 	case apc.Abort2PC:
 		txn, err := t.txns.find(c.uuid)
 		if err == nil {
-			txnInv := txn.(*txnCreateInventory)
+			txnInv := txn.(*txnCreateNBI)
 			if xinv := txnInv.xinv; xinv != nil && xinv.ID() == c.uuid {
 				xinv.Abort(nil)
 			}
@@ -1240,7 +1240,7 @@ func (t *target) createInventory(c *txnSrv) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		txnInv, ok := txn.(*txnCreateInventory)
+		txnInv, ok := txn.(*txnCreateNBI)
 		debug.Assert(ok)
 
 		if cmn.Rom.V(4, cos.ModAIS) {

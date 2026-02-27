@@ -209,17 +209,13 @@ linters:
         linters:
           - unused
 
-      # Exclude some `staticcheck` messages.
+      # Exclude certain staticcheck warnings, e.g.: "remove embedded field DemandBase", "Deprecated" - TODO remove
       - linters:
           - staticcheck
         text: "QF1008:"
-      # linters:
-      #   - staticcheck
-      # text: "ST1005:"
       - linters:
-          - revive
-        text: "avoid meaningless package names"
-        source: "package api"
+          - staticcheck
+        text: "SA1019:"
 
 formatters:
   enable:

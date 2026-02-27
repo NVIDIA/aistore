@@ -26,7 +26,7 @@ const (
 	// bucket inventory - an alternative way to list (very large) buckets
 	HdrInventory = aisPrefix + "Bucket-Inventory" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
 	HdrInvName   = aisPrefix + "Inv-Name"         // optional; name of the inventory (to override the system default)
-	HdrInvID     = aisPrefix + "Inv-Id"           // optional; inventory ID (ditto)
+	HdrS3InvID   = aisPrefix + "Inv-Id"           // Deprecated: inventory ID
 
 	// GET via x-blob-download
 	HdrBlobDownload = aisPrefix + "Blob-Download" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)

@@ -1614,7 +1614,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
-	case apc.ActCreateInventory:
+	case apc.ActCreateNBI:
 		if !bck.IsRemote() {
 			err := fmt.Errorf("invalid action %q: not supported for in-cluster buckets (%s)", msg.Action, bck.Cname(""))
 			p.writeErr(w, r, err, http.StatusNotImplemented)
@@ -1623,7 +1623,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		if err := p.initTrySysInv(w, r, msg); err != nil {
 			return
 		}
-		if xid, err = p.createInventory(msg, bck); err != nil {
+		if xid, err = p.createNBI(msg, bck); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

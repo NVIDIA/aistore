@@ -209,9 +209,10 @@ var (
 		diffFlag,
 		countAndTimeFlag,
 		// bucket inventory
-		useInventoryFlag,
-		invNameFlag,
-		invIDFlag,
+		useS3InventoryFlag, // Deprecated
+		s3InvIDFlag,        // Deprecated
+		nbiFlag,
+		nbiNameFlag,
 		// 4.0
 		chunkedColumnFlag,
 	}
@@ -283,13 +284,13 @@ var (
 			waitFlag,
 			waitJobXactFinishedFlag,
 		},
-		cmdCreateInventory: {
-			invNameFlag,
+		cmdCreateNBI: {
+			nbiNameFlag,
 			invPrefixFlag,
 			nameOnlyFlag,
 			allPropsFlag,
-			invPagesPerChunkFlag,
-			invMaxEntriesPerChunkFlag,
+			nbiPagesPerChunkFlag,
+			nbiMaxEntriesPerChunkFlag,
 		},
 	}
 )
@@ -347,8 +348,8 @@ var (
 			bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 		),
 	}
-	bucketCmdCreateInventory = cli.Command{
-		Name: cmdCreateInventory,
+	bucketCmdCreateNBI = cli.Command{
+		Name: cmdCreateNBI,
 		Usage: "Create bucket inventory for subsequent distributed listing,\n" +
 			indent1 + "e.g.:\n" +
 			indent1 + "\t* create-inventory s3://abc\t- create inventory with default (name, size) properties;\n" +
@@ -357,7 +358,7 @@ var (
 			indent1 + "\t* create-inventory s3://abc --all\t- inventory with all object properties;\n" +
 			indent1 + "\t* create-inventory s3://abc --name-only\t- lightweight: object names only.",
 		ArgsUsage:    bucketArgument,
-		Flags:        sortFlags(bucketCmdsFlags[cmdCreateInventory]),
+		Flags:        sortFlags(bucketCmdsFlags[cmdCreateNBI]),
 		Action:       createInventoryHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
@@ -428,7 +429,7 @@ var (
 					makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
 				},
 			},
-			bucketCmdCreateInventory,
+			bucketCmdCreateNBI,
 		},
 	}
 )
@@ -1059,20 +1060,20 @@ func createInventoryHandler(c *cli.Context) error {
 	}
 
 	// inv name
-	if flagIsSet(c, invNameFlag) {
-		msg.Name = parseStrFlag(c, invNameFlag)
+	if flagIsSet(c, nbiNameFlag) {
+		msg.Name = parseStrFlag(c, nbiNameFlag)
 		if err := cos.CheckAlphaPlus(msg.Name, "inventory name"); err != nil {
 			return err
 		}
 	}
 
 	// advanced
-	if flagIsSet(c, invPagesPerChunkFlag) {
-		a := parseIntFlag(c, invPagesPerChunkFlag)
+	if flagIsSet(c, nbiPagesPerChunkFlag) {
+		a := parseIntFlag(c, nbiPagesPerChunkFlag)
 		msg.PagesPerChunk = int64(a)
 	}
-	if flagIsSet(c, invMaxEntriesPerChunkFlag) {
-		a := parseIntFlag(c, invMaxEntriesPerChunkFlag)
+	if flagIsSet(c, nbiMaxEntriesPerChunkFlag) {
+		a := parseIntFlag(c, nbiMaxEntriesPerChunkFlag)
 		msg.MaxEntriesPerChunk = int64(a)
 	}
 

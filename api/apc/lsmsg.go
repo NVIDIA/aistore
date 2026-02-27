@@ -92,6 +92,9 @@ const (
 
 	// the caller is s3 compatibility API
 	LsIsS3
+
+	// instead of (remote) bucket: list native bucket inventory (NBI) snapshot
+	LsNBI
 )
 
 // max page sizes
@@ -352,7 +355,7 @@ const (
 
 // validate; set defaults
 func (m *CreateInvMsg) SetValidate() error {
-	const etag = "invalid control message for " + ActCreateInventory
+	const etag = "invalid control message for " + ActCreateNBI
 
 	// 1) disallow
 	if m.ContinuationToken != "" {

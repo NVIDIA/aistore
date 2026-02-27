@@ -171,9 +171,11 @@ func _versioning(svc *s3.Client, bck *cmn.Bck) (enabled bool, errV error) {
 // LIST OBJECTS via INVENTORY
 //
 
+// Deprecated: Feb 2026 - planned removal by April–May 2026.
+//
 // when successful, returns w/ rlock held and inventory's (lom, lmfh) in the context;
 // otherwise, always unlocks and frees
-func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) {
+func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoS3InvCtx) (int, error) {
 	debug.Assert(ctx != nil && ctx.Lom == nil)
 	var (
 		cloudBck = bck.RemoteBck()
@@ -285,8 +287,9 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 	return 0, nil // ok
 }
 
+// Deprecated: Feb 2026 - planned removal by April–May 2026.
 // using local(ized) .csv
-func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) (err error) {
+func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoS3InvCtx) (err error) {
 	debug.Assert(ctx.Lom != nil && ctx.Lmfh != nil, ctx.Lom, " ", ctx.Lmfh)
 
 	cloudBck := bck.RemoteBck()

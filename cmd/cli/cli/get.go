@@ -223,11 +223,11 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 
 	// setup lsargs
 	lsargs := api.ListArgs{Limit: limit}
-	if flagIsSet(c, useInventoryFlag) {
+	if flagIsSet(c, useS3InventoryFlag) { // Deprecated; TODO -- FIXME: wire via NBI
 		lsargs.Header = http.Header{
 			apc.HdrInventory: []string{"true"},
-			apc.HdrInvName:   []string{parseStrFlag(c, invNameFlag)},
-			apc.HdrInvID:     []string{parseStrFlag(c, invIDFlag)},
+			apc.HdrInvName:   []string{parseStrFlag(c, nbiNameFlag)},
+			apc.HdrS3InvID:   []string{parseStrFlag(c, s3InvIDFlag)},
 		}
 	}
 

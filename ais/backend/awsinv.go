@@ -33,13 +33,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-// NOTE currently implemented main assumption/requirement:
-// - one bucket, one inventory (for this same bucket), and one statically defined .csv
-
-// TODO:
-// - LsoMsg.StartAfter (a.k.a. ListObjectsV2Input.StartAfter); see also "expecting to resume" below
-
-// constants (see also: ais/s3/inventory)
+// Deprecated: Feb 2026 - planned removal by April–May 2026.
 
 const invTag = "bucket-inventory"
 
@@ -78,7 +72,7 @@ type invT struct {
 }
 
 // list inventories, read and parse manifest, return schema and unique oname
-func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx, prefix string) (*s3.ListObjectsV2Output,
+func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoS3InvCtx, prefix string) (*s3.ListObjectsV2Output,
 	invT, invT, int, error) {
 	var (
 		csv      invT
@@ -163,7 +157,7 @@ func cleanupOldInventory(cloudBck *cmn.Bck, svc *s3.Client, lsV2resp *s3.ListObj
 	}
 }
 
-func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
+func checkInvLom(latest time.Time, ctx *core.LsoS3InvCtx) (time.Time, bool) {
 	size, _, mtime, err := ctx.Lom.Fstat(false /*get-atime*/)
 	if err != nil {
 		debug.Assert(cos.IsNotExist(err), err)
@@ -191,7 +185,7 @@ func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 }
 
 // get+unzip and write lom
-func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT) error {
+func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoS3InvCtx, csv invT) error {
 	lom := &core.LOM{ObjName: csv.oname}
 	if err := lom.InitCmnBck(cloudBck); err != nil {
 		return err
@@ -255,7 +249,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	return _errInv("get-inv-fail", err)
 }
 
-func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) (err error) {
+func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoS3InvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) (err error) {
 	var (
 		custom cos.StrKVs
 		i      int64

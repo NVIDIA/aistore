@@ -209,11 +209,11 @@ func newErrInventory(provider string) error {
 	return cmn.NewErrUnsupp("list "+provider+" backend objects via", "bucket inventory")
 }
 
-func (b *base) GetBucketInv(*meta.Bck, *core.LsoInvCtx) (int, error) {
+func (b *base) GetBucketInv(*meta.Bck, *core.LsoS3InvCtx) (int, error) {
 	return 0, newErrInventory(b.provider)
 }
 
-func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) error {
+func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoS3InvCtx) error {
 	return newErrInventory(b.provider)
 }
 

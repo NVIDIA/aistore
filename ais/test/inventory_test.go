@@ -42,9 +42,9 @@ func TestCreateInventorySimple(t *testing.T) {
 	xid, err := api.CreateBucketInventory(bp, m.bck, msg)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logfln("%s[%s] started", apc.ActCreateInventory, xid)
+	tlog.Logfln("%s[%s] started", apc.ActCreateNBI, xid)
 
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateInventory, Timeout: tools.ListRemoteBucketTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
 	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 }
@@ -99,9 +99,9 @@ func TestCreateInventoryPermitateOnDisk(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			tlog.Logfln("%s[%s] started (%s: num=%d pageSize=%d ppc=%d)",
-				apc.ActCreateInventory, xid, tc.name, tc.num, tc.pageSize, tc.pagesPerChunk)
+				apc.ActCreateNBI, xid, tc.name, tc.num, tc.pageSize, tc.pagesPerChunk)
 
-			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateInventory, Timeout: tools.ListRemoteBucketTimeout}
+			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
 			_, err = api.WaitForXactionIC(bp, &args)
 			tassert.CheckFatal(t, err)
 

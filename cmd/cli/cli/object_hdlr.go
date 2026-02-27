@@ -145,9 +145,9 @@ var (
 			// archive, client side
 			extractFlag,
 			// bucket inventory
-			useInventoryFlag,
-			invNameFlag,
-			invIDFlag,
+			useS3InventoryFlag, // Deprecated
+			s3InvIDFlag,        // Deprecated
+			nbiNameFlag,
 			// multi-object options (note: passed to list-objects)
 			getObjPrefixFlag,
 			getObjCachedFlag,

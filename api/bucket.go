@@ -315,6 +315,6 @@ func CreateBucketInventory(bp BaseParams, bck cmn.Bck, cinvMsg *apc.CreateInvMsg
 	q := qalloc()
 	bck.SetQuery(q)
 	bp.Method = http.MethodPost
-	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActCreateInventory, Value: cinvMsg})
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActCreateNBI, Value: cinvMsg})
 	return doBckAct(bp, bck, jbody, q)
 }

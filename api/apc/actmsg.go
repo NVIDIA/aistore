@@ -116,7 +116,7 @@ const (
 	ActGetBatch = "get-batch"
 
 	// bucket inventory (for control message, see CreateInvMsg in apc/lsmsg)
-	ActCreateInventory = "create-inventory"
+	ActCreateNBI = "create-inventory"
 )
 
 // internal use

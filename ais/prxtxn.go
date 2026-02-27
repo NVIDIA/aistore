@@ -1308,7 +1308,7 @@ func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) 
 // create bucket inventory
 //
 
-func (p *proxy) createInventory(msg *apc.ActMsg, bck *meta.Bck) (string, error) {
+func (p *proxy) createNBI(msg *apc.ActMsg, bck *meta.Bck) (string, error) {
 	var (
 		uuid = xact.PrefixInvID + cos.GenUUID()
 		c    = &txnCln{p: p}

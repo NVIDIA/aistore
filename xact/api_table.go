@@ -213,7 +213,7 @@ var Table = map[string]Descriptor{
 
 	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: true}, // apc.Moss
 
-	apc.ActCreateInventory: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: false},
+	apc.ActCreateNBI: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: false},
 
 	// cache management, internal usage
 	apc.ActLoadLomCache: {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},

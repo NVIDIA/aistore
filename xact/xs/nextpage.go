@@ -18,15 +18,15 @@ import (
 )
 
 type npgCtx struct {
-	bp   core.Backend
-	bck  *meta.Bck
-	ctx  *core.LsoInvCtx
-	wi   walkInfo
-	page cmn.LsoRes
-	idx  int
+	bp    core.Backend
+	bck   *meta.Bck
+	s3ctx *core.LsoS3InvCtx // Deprecated; remove by April-May 2026
+	wi    walkInfo
+	page  cmn.LsoRes
+	idx   int
 }
 
-func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInvCtx, bp core.Backend) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, s3ctx *core.LsoS3InvCtx, bp core.Backend) (npg *npgCtx) {
 	npg = &npgCtx{
 		bp:  bp,
 		bck: bck,
@@ -36,7 +36,7 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInv
 			wanted:       wanted(msg),
 			smap:         core.T.Sowner().Get(),
 		},
-		ctx: ctx,
+		s3ctx: s3ctx,
 	}
 	if msg.IsFlagSet(apc.LsDiff) {
 		npg.wi.custom = make(cos.StrKVs) // TODO: move to parent x-lso; clear and reuse here
@@ -102,12 +102,12 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (lst *cmn.LsoRes, err error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsCached))
 	lst = &cmn.LsoRes{Entries: nentries}
-	if npg.ctx != nil {
-		if npg.ctx.Lom == nil {
-			_, err = npg.bp.GetBucketInv(npg.bck, npg.ctx)
+	if npg.s3ctx != nil {
+		if npg.s3ctx.Lom == nil {
+			_, err = npg.bp.GetBucketInv(npg.bck, npg.s3ctx)
 		}
 		if err == nil {
-			err = npg.bp.ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.ctx)
+			err = npg.bp.ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.s3ctx)
 		}
 	} else {
 		_, err = npg.bp.ListObjects(npg.bck, npg.wi.msg, lst)
