@@ -125,20 +125,17 @@ type (
 		flags uint16     // bit flags (compression; future use)
 	}
 	Ufest struct {
-		created time.Time // creation time
-		lom     *LOM      // parent lom (runtime)
-		id      string    // upload/manifest ID
-		chunks  []Uchunk  // all chunks
-
-		size      int64       // total
-		mu        sync.Mutex  // protect
-		completed atomic.Bool // in-sync with lmflChunk
-		count     uint16      // number of chunks (so far)
-		flags     uint16      // bit flags { completed, ...}
-
-		// in-memory state for streaming checksum (for local buckets with in-order part arrival)
+		created         time.Time      // creation time
+		lom             *LOM           // parent lom (runtime)
 		streamCksum     *cos.CksumHash // bucket-configured checksum (nil = abandoned or not configured)
+		id              string         // upload ID/manifest ID
+		chunks          []Uchunk       // all chunks
+		size            int64          // total
+		mu              sync.Mutex     // to protect state
+		completed       atomic.Bool    // in memory: true when completed, otherwise partial
 		streamInUse     atomic.Bool    // true if a part is currently writing to streamCksum
+		count           uint16         // = len(chunks)
+		flags           uint16         // persistent; currently enum { flCompleted }
 		expectedPartNum uint16         // next expected part number (starts at 1)
 	}
 )

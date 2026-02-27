@@ -40,15 +40,15 @@ type (
 	MultipartDownloadArgs struct {
 		// Writer to write the downloaded content (required)
 		Writer io.WriterAt
+		// optional progress callback
+		Callback MpdCB
 		// Number of concurrent download workers (default: 16)
 		NumWorkers int
 		// Size of each chunk/range to download (default: 8 MiB)
 		ChunkSize int64
 		// ObjectSize can be set to skip the HEAD request (optional, 0 means auto-detect)
 		ObjectSize int64
-		// optional progress callback
-		Callback  MpdCB
-		CallAfter time.Duration
+		CallAfter  time.Duration
 	}
 
 	MpdCounter struct {
@@ -71,14 +71,14 @@ type (
 	// Internal: worker context for multipart download
 	mpdWorker struct {
 		ctx     context.Context
-		cancel  context.CancelFunc
-		bp      BaseParams
-		bck     cmn.Bck
-		objName string
 		writer  io.WriterAt
+		cancel  context.CancelFunc
 		chunkCh <-chan mptDownloadChunk
 		errCh   chan<- error
 		counter *MpdCounter
+		bp      BaseParams
+		bck     cmn.Bck
+		objName string
 	}
 
 	// MpdStreamArgs configures concurrent range-based download returning a reader.
@@ -104,30 +104,23 @@ type (
 	//     ...   chunkCh                 ring buf
 	//                                  [s0|s1|..]
 	mpdReader struct {
-		bp      BaseParams
-		bck     cmn.Bck
-		objName string
-		client  *http.Client // dedicated client for concurrent chunk downloads
-
+		chunkCh    chan mptDownloadChunk
+		client     *http.Client          // dedicated client for concurrent chunk downloads
+		err        atomic.Pointer[error] // stop err
+		stop       *cos.StopCh           // stop chan
+		bck        cmn.Bck
+		bp         BaseParams
+		objName    string
+		slotReady  []chan struct{}
+		slotFree   []chan struct{}
 		buf        []byte
-		chunkSize  int64
-		objectSize int64
-		numSlots   int
 		numChunks  int
 		numWorkers int
-
-		// Channels
-		chunkCh   chan mptDownloadChunk
-		slotFree  []chan struct{}
-		slotReady []chan struct{}
-
-		// Cancellation
-		stop *cos.StopCh
-		err  atomic.Pointer[error]
-
-		// Reader state (single consumer — no lock needed)
-		nextChunk int   // next chunk index to read
-		readOff   int64 // bytes already read from current chunk
+		numSlots   int
+		objectSize int64
+		chunkSize  int64
+		nextChunk  int   // reader: next chunk index to read
+		readOff    int64 // reader: bytes already read from current chunk
 	}
 )
 
