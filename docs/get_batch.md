@@ -1,5 +1,7 @@
 # GetBatch: Distributed Multi-Object Retrieval
 
+> **Paper:** [GetBatch: Distributed Multi-Object Retrieval for ML Data Loading](https://arxiv.org/abs/2602.22434) - implementation, benchmarks, and discussion.
+
 GetBatch is AIStore's high-performance API for retrieving multiple objects and/or archived files in a single request. Behind the scenes, GetBatch assembles the requested data from across the cluster and delivers the result as a continuous serialized stream.
 
 Regardless of retrieval source (in-cluster objects, remote objects, or shard extractions), GetBatch always preserves the exact ordering of request entries in both streaming and buffered modes.

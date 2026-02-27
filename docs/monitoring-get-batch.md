@@ -2,6 +2,8 @@
 
 GetBatch (a.k.a `get-batch` or `x-moss`) is the high-performance multi-object retrieval subsystem.
 
+> **Paper:** [GetBatch: Distributed Multi-Object Retrieval for ML Data Loading](https://arxiv.org/abs/2602.22434) - implementation, benchmarks, and discussion.
+
 It streams objects and archived files in strict user-specified order, assembling them on the designated target (DT) and serving them as a TAR archive (buffered or streaming).
 
 > TAR is the default output format; compressed serialized options include TAR.GZ, ZIP, and TAR.LZ4 and are also fully supported.
