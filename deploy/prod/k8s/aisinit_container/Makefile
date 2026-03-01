@@ -68,10 +68,11 @@ docker-buildx-multiarch:
 		$(BUILD_ARGS) \
 		$(BUILD_CONTEXT)
 
+# See comment on aisnode image ci target
 .PHONY: ci
 ci:
 	buildah build \
-		--volume $(GOMODCACHE):/go/pkg/mod:ro \
+		--volume $(GOMODCACHE):/go/pkg/mod:rw \
 		-f Dockerfile \
 		-t $(CI_REGISTRY_IMAGE)/ais-init:$(CI_COMMIT_SHORT_SHA) \
 		$(BUILD_CONTEXT)

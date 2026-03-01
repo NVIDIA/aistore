@@ -74,10 +74,13 @@ docker-buildx-multiarch:
 		$(BUILD_ARGS) \
 		$(BUILD_CONTEXT)
 
+# Used by CI builds to create an image based on the current commit for re-use in various jobs
+# Note go mod cache is mounted to allow use of existing packages pre-cached in the CI image
+# This mount is R/W to allow go builds to write to the CI image cache if packages do not exist in the current CI image
 .PHONY: ci
 ci:
 	buildah build \
-		--volume $(GOMODCACHE):/go/pkg/mod:ro \
+		--volume $(GOMODCACHE):/go/pkg/mod:rw \
 		-f Dockerfile \
 		-t $(CI_REGISTRY_IMAGE)/aisnode:$(CI_COMMIT_SHORT_SHA) \
 		--build-arg mode="debug" \
