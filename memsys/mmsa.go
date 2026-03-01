@@ -253,6 +253,8 @@ func (r *MMSA) GetSlab(bufSize int64) (s *Slab, err error) {
 }
 
 // uses SelectMemAndSlab to select both MMSA (page or small) and its Slab
+// return:
+// - fixed-size buffer from the slab (>= requested buffer size)
 func (r *MMSA) AllocSize(size int64) (buf []byte, slab *Slab) {
 	_, slab = r.SelectMemAndSlab(size)
 	buf = slab.Alloc()

@@ -268,8 +268,8 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 
 func newMoss(p *mossFactory) *XactMoss {
 	r := &XactMoss{
-		gmm: memsys.PageMM(),
-		smm: memsys.ByteMM(),
+		gmm: core.T.PageMM(),
+		smm: core.T.ByteMM(),
 	}
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, mossIdleTime, r.fini)
 

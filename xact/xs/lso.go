@@ -45,7 +45,8 @@ type (
 		streamingF
 	}
 	LsoXact struct {
-		s3ctx *core.LsoS3InvCtx // Deprecated: S3 bucket inventory
+		s3ctx *core.LsoS3InvCtx // Deprecated: remove by April-May 2026 (use NBI instead)
+		nbi   *nbiCtx           // native bucket inventory
 
 		msg       *apc.LsoMsg      // first message
 		msgCh     chan *apc.LsoMsg // next messages
@@ -136,15 +137,17 @@ func (p *lsoFactory) Start() error {
 	// see also: resetIdle()
 	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Timeout.MaxHostBusy.D())
 
+	bck := r.Bck()
+
 	// is set by the first message, never changes
 	r.walk.wor = r.msg.WantOnlyRemoteProps() // looked at iff lsoIsRemote
 	r.walk.this = r.msg.SID == core.T.SID()
 
 	// true iff the bucket was not added - not initialized
-	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
+	r.walk.dontPopulate = r.walk.wor && bck.Props == nil
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
-	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
+	if lsoIsRemote(bck, r.msg.IsFlagSet(apc.LsCached)) {
 		// begin streams
 		if !r.walk.wor {
 			nt := core.T.Sowner().Get().CountActiveTs()
@@ -155,17 +158,28 @@ func (p *lsoFactory) Start() error {
 				}
 			}
 		}
-		// alternative flow _this_ target will execute:
-		// - nextpage =>
-		// -     backend.GetBucketInv() =>
-		// -        while { backend.ListObjectsInv }
+		// Deprecated: remove (use NBI instead)
 		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) && r.walk.this {
 			r.s3ctx = &core.LsoS3InvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrS3InvID)}
 		}
 
+		if r.msg.IsFlagSet(apc.LsNBI) {
+			invName := p.hdr.Get(apc.HdrInvName)
+
+			// TODO -- FIXME: support not specified name via LPI + (best-fit lsmsg; latest) selection
+			if invName == "" {
+				return cmn.NewErrUnsuppErr(errors.New("missing inventory name (best-fit selection not implemented yet)"))
+			}
+
+			r.nbi = &nbiCtx{bck: bck}
+			if err := r.nbi.init(invName); err != nil {
+				return err // TODO -- FIXME: how do we undo p.beginStreams() ?
+			}
+		}
+
 		// engage local page iterator (lpi)
 		if r.msg.IsFlagSet(apc.LsDiff) {
-			r.lpis.Init(r.Bck().Bucket(), r.msg.Prefix, core.T.Sowner().Get())
+			r.lpis.Init(bck.Bucket(), r.msg.Prefix, core.T.Sowner().Get())
 		}
 	}
 
@@ -218,6 +232,7 @@ func (r *LsoXact) CtlMsg() string {
 	if r.msg == nil {
 		return ""
 	}
+
 	var sb cos.SB
 	sb.Init(160)
 	r.msg.Str(r.p.Bck.Cname(r.msg.Prefix), &sb)
@@ -271,6 +286,7 @@ loop:
 		}
 	}
 
+	// TODO confirm: once started (lsoFactory.Start), always runs and executes stop (to properly cleanup)
 	r.stop()
 }
 
@@ -313,10 +329,12 @@ func (r *LsoXact) stop() {
 		freeLsoEntries(r.page)
 		r.page = nil
 	}
+
+	// Deprecated: remove by April-May 2026; use NBI instead
 	if r.s3ctx != nil {
 		if r.s3ctx.Lom != nil {
 			cos.Close(r.s3ctx.Lmfh)
-			r.s3ctx.Lom.Unlock(false) // NOTE: see GetBucketInv() "returns" comment in aws.go
+			r.s3ctx.Lom.Unlock(false)
 			core.FreeLOM(r.s3ctx.Lom)
 			r.s3ctx.Lom = nil
 		}
@@ -328,6 +346,11 @@ func (r *LsoXact) stop() {
 			r.s3ctx.SGL = nil
 		}
 		r.s3ctx = nil
+	}
+
+	if r.nbi != nil {
+		r.nbi.cleanup()
+		r.nbi = nil
 	}
 }
 
@@ -412,7 +435,8 @@ func (r *LsoXact) doPage() *LsoRsp {
 				return &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 			}
 			// must make forward progress
-			debug.Assert(r.nextToken == "" || r.nextToken != r.token, assertContProgress)
+			debug.Assertf(r.nextToken == "" || r.nextToken != r.token, "%s: next=%q, prev=%q",
+				assertContProgress, r.nextToken, r.token)
 		}
 		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.page, ContinuationToken: r.nextToken}
 
@@ -464,7 +488,7 @@ func (r *LsoXact) havePage(token string, cnt int64) bool {
 func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoRes
-		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.s3ctx, r.walk.bp)
+		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.s3ctx, r.nbi, r.walk.bp)
 		smap = core.T.Sowner().Get()
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)

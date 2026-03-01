@@ -27,13 +27,20 @@ import (
 // XactNBI: create native bucket inventory (NBI)
 
 // TODO -- FIXME:
-// - multi-target (remove smap.CountActiveTs = 1)
-// - stats: internal (-> CtlMsg) and Prometheus
+// 1. inventory manifest { meta-version = nbiMetaVer; started/finished; schema (lsmsg); prefix[; optimizing meta] }
+//    (not to confuse with underlying chunk manifest)
+// 2. related to the above" `ais show bucket-inventory`, etc.
+// 3. when invName empty: LPI-list existing inventories and select (latest or (****) best-fit for requested lsmsg)
+//    (note: LPI might be an overkill)
+// 4. integration tests and stress tests
+// ----
+// 5. multi-target (***** remove smap.CountActiveTs = 1)
+// 6. stats: internal (-> CtlMsg) and Prometheus
 
 // on-disk formatting
 const (
-	nbiChunkHdrVer uint8 = 1             // chunk header meta-version
-	nbiHdrLenSize        = cos.SizeofI32 // framing: chunk header
+	nbiMetaVer    uint8 = 1
+	nbiHdrLenSize       = cos.SizeofI32 // framing: length(chunk header)
 )
 
 type (
@@ -41,7 +48,6 @@ type (
 		first      string
 		last       string
 		entryCount uint32
-		ver        uint8
 	}
 )
 
@@ -87,13 +93,12 @@ func (p *nbiFactory) Start() error {
 	r := &XactNBI{msg: msg}
 	r.InitBase(p.UUID(), p.Kind(), bck)
 
-	// the name for a given bucket (intended for very large buckets)
-	nbiName := r.msg.Name
-	debug.Assert(nbiName != "")
+	// inv. name for a given bucket
+	invName := r.msg.Name
+	debug.Assert(invName != "")
 
 	// nbi LOM is always chunked
-	oname := string(r.Bck().MakeUname(nbiName))
-	r.lom = core.AllocLOM(oname)
+	r.lom = core.AllocLOM(nbiObjName(r.Bck(), invName))
 
 	if err := r.init(); err != nil {
 		core.FreeLOM(r.lom)
@@ -103,6 +108,11 @@ func (p *nbiFactory) Start() error {
 	_ = r.CtlMsg()
 	p.xctn = r
 	return nil
+}
+
+func nbiObjName(bck *meta.Bck, invName string) string {
+	debug.Assert(invName != "")
+	return string(bck.MakeUname(invName))
 }
 
 func (*nbiFactory) Kind() string     { return apc.ActCreateNBI }
@@ -228,7 +238,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 				idx = len(all)
 			case fast: // fast path
 				idx += len(lst.Entries)
-				all = all[:idx]
+				all = all[:idx:cap(all)]
 			default: // slow path
 				all = append(all, lst.Entries...)
 				idx = len(all)
@@ -264,7 +274,8 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 }
 
 // writeChunk writes one chunk part file:
-// [u32 headerLen][bytepack header][msgp-encoded LsoEntries]
+//
+// [u32 headerLen] [bytepack header: entryCount|first|last] [msgp-encoded LsoEntries]
 func (r *XactNBI) writeChunk(num int, entries cmn.LsoEntries) error {
 	chunk, err := r.ufest.NewChunk(num, r.lom)
 	if err != nil {
@@ -337,29 +348,38 @@ func _sameBacking(dst, got cmn.LsoEntries) bool {
 /////////////////
 
 func makeInvChunkHdr(entries cmn.LsoEntries) (h nbiChunkHdr) {
-	h.ver = nbiChunkHdrVer
 	h.entryCount = uint32(len(entries))
-	if len(entries) > 0 {
+	if l := len(entries); l > 0 {
 		h.first = entries[0].Name
-		h.last = entries[len(entries)-1].Name
+		h.last = entries[l-1].Name
 	}
 	return h
 }
 
 func packInvChunkHdr(h *nbiChunkHdr) []byte {
-	p := cos.NewPacker(nil, h.PackedSize())
+	p := cos.NewPacker(nil, h.PackedSize()) // TODO -- FIXME: optimize malloc
 	h.Pack(p)
 	return p.Bytes()
 }
 
 func (h *nbiChunkHdr) PackedSize() int {
-	// ver(uint8) + entryCount(uint32) + first + last
-	return 1 + cos.SizeofI32 + cos.PackedStrLen(h.first) + cos.PackedStrLen(h.last)
+	// entryCount(uint32) + first + last
+	return cos.SizeofI32 + cos.PackedStrLen(h.first) + cos.PackedStrLen(h.last)
 }
 
 func (h *nbiChunkHdr) Pack(p *cos.BytePack) {
-	p.WriteUint8(h.ver)
 	p.WriteUint32(h.entryCount)
 	p.WriteString(h.first)
 	p.WriteString(h.last)
+}
+
+func (h *nbiChunkHdr) Unpack(unpacker *cos.ByteUnpack) (err error) {
+	if h.entryCount, err = unpacker.ReadUint32(); err != nil {
+		return err
+	}
+	if h.first, err = unpacker.ReadString(); err != nil {
+		return err
+	}
+	h.last, err = unpacker.ReadString()
+	return err
 }

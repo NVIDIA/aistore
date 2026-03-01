@@ -209,17 +209,19 @@ func _chunksHeadV2(lom *core.LOM, hdr http.Header) {
 		nlog.Errorln(err, "[", lom.Cname(), "]") // (unlikely)
 		return
 	}
-	if err = ufest.LoadCompleted(lom); err != nil {
+	if err := ufest.LoadCompleted(lom); err != nil {
 		if cmn.Rom.V(4, cos.ModAIS) {
 			nlog.Warningln(err, "[", lom.Cname(), "]")
 		}
 		return
 	}
 
-	var maxChunkSize int64
-	count := ufest.Count()
-	for i := 1; i <= count; i++ {
-		if chunk, errChunk := ufest.GetChunk(i); errChunk == nil && chunk != nil {
+	var (
+		maxChunkSize int64
+		count        = ufest.Count()
+	)
+	for num := 1; num <= count; num++ {
+		if chunk, errChunk := ufest.GetChunk(num); errChunk == nil && chunk != nil {
 			if chunkSize := chunk.Size(); chunkSize > maxChunkSize {
 				maxChunkSize = chunkSize
 			}

@@ -351,11 +351,12 @@ func (lsmsg *LsoMsg) Clone() *LsoMsg {
 const (
 	DefaultInvPagesPerChunk = 50
 	MaxInvPagesPerChunk     = 256
+	MaxInvEntriesPerChunk   = MaxInvPagesPerChunk * MaxPageSizeAIS
 )
 
 // validate; set defaults
 func (m *CreateInvMsg) SetValidate() error {
-	const etag = "invalid control message for " + ActCreateNBI
+	const etag = "invalid '" + ActCreateNBI + "'"
 
 	// 1) disallow
 	if m.ContinuationToken != "" {
@@ -370,7 +371,7 @@ func (m *CreateInvMsg) SetValidate() error {
 		lsWantOnlyRemoteProps | LsNoRecursion | LsDiff | LsIsS3
 	if m.Flags&badFlags != 0 {
 		var sb cos.SB
-		sb.Grow(64)
+		sb.Grow(96)
 		sb.WriteString("flags:")
 		m.appendFlags(&sb)
 		return fmt.Errorf("%s: %s", etag, sb.String())
@@ -386,7 +387,10 @@ func (m *CreateInvMsg) SetValidate() error {
 		return fmt.Errorf("%s: pages_per_chunk too large: %d", etag, m.PagesPerChunk)
 	}
 	if m.MaxEntriesPerChunk < 0 {
-		return fmt.Errorf("%s: max_entries_per_chunk=%d", etag, m.MaxEntriesPerChunk)
+		return fmt.Errorf("%s: negative max_entries_per_chunk=%d", etag, m.MaxEntriesPerChunk)
+	}
+	if m.MaxEntriesPerChunk > MaxInvEntriesPerChunk {
+		return fmt.Errorf("%s: too large max_entries_per_chunk=%d", etag, m.MaxEntriesPerChunk)
 	}
 
 	// 3) NOTE: othwerwise, backend _may_ append extra (virt-dir) entries (in re: pre-allocation+reuse)

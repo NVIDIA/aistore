@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -441,13 +441,17 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 	msg.PageSize = pageSize
 
-	if flagIsSet(c, nbiFlag) {
-		msg.SetFlag(apc.LsNBI)
-	}
-
 	// lsargs
 	lsargs := api.ListArgs{Limit: limit}
 
+	// inventories
+
+	if flagIsSet(c, nbiFlag) {
+		msg.SetFlag(apc.LsNBI)
+		lsargs.Header = http.Header{
+			apc.HdrInvName: []string{parseStrFlag(c, nbiNameFlag)},
+		}
+	}
 	// Deprecated
 	if flagIsSet(c, useS3InventoryFlag) {
 		if flagIsSet(c, nameOnlyFlag) {
