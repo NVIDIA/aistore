@@ -309,10 +309,13 @@ func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
+	if err := lom.Load(true, true); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
 	// load chunk manifest and find out the part num's offset & size
-	err = manifest.LoadCompleted(lom)
-	if err != nil {
-		s3.WriteErr(w, r, err, http.StatusNotFound)
+	if err := manifest.LoadCompleted(lom); err != nil {
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 

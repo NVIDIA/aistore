@@ -521,7 +521,12 @@ func (u *Ufest) LoadCompleted(lom *LOM) error {
 		return err
 	}
 
-	if size := lom.Lsize(true); size != u.size {
+	// size must match
+	size := lom.Lsize()
+	if size != u.size {
+		if size == 0 && u.size != 0 {
+			return fmt.Errorf("%s %s: %s is not loaded (size unknown)", u._itag(lom.Cname()), tagCompleted, lom.Cname())
+		}
 		return fmt.Errorf("%s load size mismatch: %s manifest-recorded size %d vs object size %d",
 			u._itag(lom.Cname()), tagCompleted, u.size, size)
 	}

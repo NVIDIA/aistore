@@ -1,6 +1,6 @@
 // Package backend contains core/backend interface implementations for supported backend providers.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -439,16 +439,15 @@ func (m *AISbp) HeadBucket(_ context.Context, remoteBck *meta.Bck) (bckProps cos
 	return
 }
 
-func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
-	var remAis *remAis
-	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
-		return
+func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+	remAis, errN := m.getRemAis(remoteBck.Ns.UUID)
+	if errN != nil {
+		return 0, errN
 	}
 	remoteMsg := msg.Clone()
 	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, remoteBck.MaxPageSize())
 	remoteMsg.ClearFlag(apc.LsDiff | apc.LsCached)
 
-	// TODO:
 	// Currently, not encoding xaction (aka request) `UUID` from the remote cluster
 	// in the `ContinuationToken` (note below).
 	remoteMsg.UUID = ""
@@ -459,16 +458,20 @@ func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRe
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
 
-	var lstRes *cmn.LsoRes
-	if lstRes, err = api.ListObjectsPage(remAis.bpL, bck, remoteMsg, api.ListArgs{}); err != nil {
-		ecode, err = extractErrCode(err, remAis.uuid)
-		return
+	lstRes, err := api.ListObjectsPage(remAis.bpL, bck, remoteMsg, api.ListArgs{})
+	if err != nil {
+		return extractErrCode(err, remAis.uuid)
 	}
-	*lst = *lstRes // NOTE: not clearing remote `apc.EntryIsCached` - done later by x-lso
+
+	// [convention] reuse caller-provided entries slice
+	origEntries := lst.Entries[:0]
+	*lst = *lstRes
+	lst.Entries = origEntries
+	lst.Entries = append(lst.Entries, lstRes.Entries...) // not clearing remote `apc.EntryIsCached` - done later by x-lso
 
 	// Restore the original request UUID (UUID of the remote cluster is already inside `ContinuationToken`).
 	lst.UUID = msg.UUID
-	return
+	return 0, nil
 }
 
 func (m *AISbp) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
