@@ -37,6 +37,10 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+const (
+	iniPageCap = 1000
+)
+
 // `on-demand` per list-objects request
 type (
 	lsoFactory struct {
@@ -130,7 +134,6 @@ func (p *lsoFactory) Start() error {
 		respCh:     make(chan *LsoRsp),     // ditto: one caller-requested page at a time
 	}
 
-	r.page = allocLsoEntries()
 	r.stopCh.Init()
 
 	// idle timeout vs delayed next-page request
@@ -158,6 +161,10 @@ func (p *lsoFactory) Start() error {
 				}
 			}
 		}
+		if r.walk.this {
+			r.page = make(cmn.LsoEntries, 0, iniPageCap) // reuse across all remote pages (may grow in cap)
+		}
+
 		// Deprecated: remove (use NBI instead)
 		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) && r.walk.this {
 			r.s3ctx = &core.LsoS3InvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrS3InvID)}
@@ -181,6 +188,8 @@ func (p *lsoFactory) Start() error {
 		if r.msg.IsFlagSet(apc.LsDiff) {
 			r.lpis.Init(bck.Bucket(), r.msg.Prefix, core.T.Sowner().Get())
 		}
+	} else {
+		r.page = make(cmn.LsoEntries, 0, iniPageCap) // reuse across all pages (may grow in cap)
 	}
 
 	r.adv.Init(
@@ -325,10 +334,8 @@ func (r *LsoXact) stop() {
 		r.Finish()
 	}
 
-	if r.page != nil {
-		freeLsoEntries(r.page)
-		r.page = nil
-	}
+	clear(r.page)
+	r.page = nil
 
 	// Deprecated: remove by April-May 2026; use NBI instead
 	if r.s3ctx != nil {
@@ -443,7 +450,6 @@ func (r *LsoXact) doPage() *LsoRsp {
 		if r.msg.IsFlagSet(apc.LsDiff) && r.lpis.Enabled() {
 			r.lpis.Do(r.page, page, r.Name(), r.walk.last)
 		}
-
 		return &LsoRsp{Lst: page, Status: http.StatusOK}
 	}
 
@@ -530,7 +536,6 @@ ex:
 		r.walk.done = true
 		r.resetIdle()
 	}
-	freeLsoEntries(r.page)
 	r.page = page.Entries
 	r.nextToken = page.ContinuationToken
 
@@ -539,10 +544,10 @@ ex:
 
 func (r *LsoXact) thisPageR(npg *npgCtx) (page *cmn.LsoRes, err error) {
 	var (
-		aborted  bool
-		nentries = allocLsoEntries()
+		aborted bool
+		entries = r.page[:0] // reusing the same (backing) slice between remote pages
 	)
-	page, err = npg.nextPageR(nentries)
+	page, err = npg.nextPageR(entries)
 	if err != nil {
 		goto rerr
 	}

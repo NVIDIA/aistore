@@ -56,10 +56,9 @@ func (npg *npgCtx) nextPageA() error {
 	}
 	opts.WalkOpts.Bck.Copy(npg.bck.Bucket())
 	err := fs.WalkBck(opts)
-	if err != nil {
-		freeLsoEntries(npg.page.Entries)
-	} else {
+	if err == nil {
 		npg.page.Entries = npg.page.Entries[:npg.idx]
+		return nil
 	}
 	return err
 }
@@ -101,9 +100,9 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 }
 
 // Returns the next page from the remote bucket's "list-objects" result set.
-func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (lst *cmn.LsoRes, err error) {
+func (npg *npgCtx) nextPageR(entries cmn.LsoEntries) (lst *cmn.LsoRes, err error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsCached))
-	lst = &cmn.LsoRes{Entries: nentries}
+	lst = &cmn.LsoRes{Entries: entries}
 
 	switch {
 	case npg.s3ctx != nil:
@@ -120,7 +119,6 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (lst *cmn.LsoRes, err erro
 	}
 
 	if err != nil {
-		freeLsoEntries(nentries)
 		return nil, err
 	}
 

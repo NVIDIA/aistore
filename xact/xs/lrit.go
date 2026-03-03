@@ -273,25 +273,28 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 		smap = nil // no need
 	}
 
+	page := make(cmn.LsoEntries, 0, iniPageCap)
 	for !r.done() {
 		var (
 			err   error
 			ecode int
 		)
+		page = page[:0]
 		if bremote {
-			lst = &cmn.LsoRes{Entries: allocLsoEntries()}
+			lst = &cmn.LsoRes{Entries: page}
 			// TODO: this is the last remaining place where we list remote bucket by each and every target
 			ecode, err = npg.bp.ListObjects(r.bck, lsmsg, lst)
 		} else {
-			npg.page.Entries = allocLsoEntries()
+			npg.page.Entries = page
 			err = npg.nextPageA()
 			lst = &npg.page
 		}
 		if err != nil {
 			nlog.Errorln(core.T.String(), "[", err, "ecode", ecode, "]")
-			freeLsoEntries(lst.Entries)
 			return err
 		}
+
+		page = lst.Entries
 		for _, be := range lst.Entries {
 			if !be.IsStatusOK() {
 				continue
@@ -300,21 +303,18 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 				continue
 			}
 			if r.done() {
-				freeLsoEntries(lst.Entries)
 				return nil
 			}
 			lom := core.AllocLOM(be.Name)
 			done, err := r.do(lom, wi, smap)
 			if err != nil {
 				core.FreeLOM(lom)
-				freeLsoEntries(lst.Entries)
 				return err
 			}
 			if done {
 				core.FreeLOM(lom)
 			}
 		}
-		freeLsoEntries(lst.Entries)
 		// last page listed
 		if lst.ContinuationToken == "" {
 			break

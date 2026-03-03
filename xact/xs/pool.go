@@ -8,48 +8,8 @@ package xs
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
-
-//
-// Lso
-//
-
-const maxEntries = apc.MaxPageSizeAIS
-
-var (
-	lstPool = sync.Pool{
-		New: func() any {
-			return new(cmn.LsoEntries)
-		},
-	}
-	entry0 cmn.LsoEnt
-)
-
-func allocLsoEntries() cmn.LsoEntries {
-	p := lstPool.Get().(*cmn.LsoEntries)
-	entries := *p
-	return entries
-}
-
-func freeLsoEntries(entries cmn.LsoEntries) {
-	// gc
-	l := min(len(entries), maxEntries)
-	entries = entries[:cap(entries)]
-	for i := l; i < cap(entries); i++ {
-		entries[i] = nil
-	}
-	// truncate
-	entries = entries[:l]
-	// cleanup
-	for _, e := range entries {
-		*e = entry0
-	}
-	// recycle
-	lstPool.Put(&entries)
-}
 
 //
 // COI

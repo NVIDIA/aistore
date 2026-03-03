@@ -364,19 +364,21 @@ func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: r.p.msg.Prefix}
 	lsmsg.SetFlag(apc.LsNameSize | apc.LsNoDirs)
 	bp := core.T.Backend(bck)
+	page := make(cmn.LsoEntries, 0, iniPageCap)
+
 	for !r.IsAborted() {
 		npg := newNpgCtx(bck, lsmsg, noopCb, nil, nil, bp) // TODO -- FIXME: support NBI
-		nentries := allocLsoEntries()
-		lst, err := npg.nextPageR(nentries)
+		page = page[:0]
+		lst, err := npg.nextPageR(page)
 		if err != nil {
 			r.AddErr(err)
 			return
 		}
+		page = lst.Entries
 		ratomic.AddUint64(&res.ObjCount.Remote, uint64(len(lst.Entries)))
 		for _, v := range lst.Entries {
 			ratomic.AddUint64(&res.TotalSize.RemoteObjs, uint64(v.Size))
 		}
-		freeLsoEntries(lst.Entries)
 		if lsmsg.ContinuationToken = lst.ContinuationToken; lsmsg.ContinuationToken == "" {
 			return
 		}
