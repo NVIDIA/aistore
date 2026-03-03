@@ -56,6 +56,7 @@ type (
 	}
 )
 
+var ErrRetriableSoft = errors.New("retriable soft error")
 var errBufferUnderrun = errors.New("buffer underrun")
 
 // ErrNotFound and IsNotExist ==========================================================
@@ -125,6 +126,12 @@ func ClientNotExist(err error, what string) error {
 		return NewErrNotFound(nil, what)
 	}
 	return err
+}
+
+// ErrRetriableSoft
+
+func NewRetriableSoftFromStatus(status int) error {
+	return fmt.Errorf("%d %s: %w", status, http.StatusText(status), ErrRetriableSoft)
 }
 
 // ErrAlreadyExists

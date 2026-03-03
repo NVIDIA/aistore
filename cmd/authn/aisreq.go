@@ -17,14 +17,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
-	retryCount = 4
-	retrySleep = 3 * time.Second
-	retry503   = time.Minute
+	retrySleep     = 3 * time.Second
+	softErrTimeout = time.Minute
 )
 
 // Send request to the defined cluster to validate that the cluster will allow tokens issued by this AuthN service
@@ -99,66 +96,54 @@ func (m *mgr) syncTokenList(ctx context.Context, clu *authn.CluACL) {
 	}
 }
 
-// TODO: reuse api/client.go reqParams.do()
 func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) error {
-	var (
-		rerr    error
-		msg     []byte
-		retries = retryCount
-		sleep   = retrySleep
-		url     = proxyURL + cos.JoinW0(apc.Version, path)
-		client  = m.clientH
-	)
+	client := m.clientH
 	if cos.IsHTTPS(proxyURL) {
 		client = m.clientTLS
 	}
+	versionedPath := cos.JoinW0(apc.Version, path)
+	urlPath := proxyURL + versionedPath
 
-	// while cos.IsErrRetriableConn()
-	for i := 1; i <= retries; i++ {
-		req, nerr := http.NewRequestWithContext(context.Background(), method, url, bytes.NewBuffer(injson))
-		if nerr != nil {
-			return nerr
-		}
-		req.Header.Set(cos.HdrContentType, cos.ContentJSON)
-		resp, err := client.Do(req)
+	var resp *http.Response // (used in closure)
+
+	cleanupResp := func() {
 		if resp != nil && resp.Body != nil {
-			var e error
-			msg, e = cos.ReadAllN(resp.Body, resp.ContentLength)
+			cos.DrainReader(resp.Body)
 			resp.Body.Close()
-			if err == nil {
-				err = e
-			}
 		}
-		if err == nil {
-			if resp.StatusCode < http.StatusBadRequest {
-				return nil
-			}
-		} else {
-			if cos.IsErrRetriableConn(err) {
-				continue
-			}
-			if resp == nil {
-				return err
-			}
-		}
-		if resp.StatusCode == http.StatusServiceUnavailable {
-			if retries == retryCount {
-				retries = int(retry503 / retrySleep)
-			}
-		} else {
-			var herr *cmn.ErrHTTP
-			if jsonErr := jsoniter.Unmarshal(msg, &herr); jsonErr == nil {
-				return herr
-			}
-		}
-		if i < retries {
-			nlog.Warningf("failed to %q %s: %v - retrying...", tag, url, err)
-			time.Sleep(sleep)
-			if i > retries/2+1 && sleep == retrySleep {
-				sleep *= 2
-			}
-		}
-		rerr = err
+		resp = nil
 	}
-	return rerr
+	args := cmn.RetryArgs{
+		Call: func() (int, error) {
+			req, err := http.NewRequestWithContext(context.Background(), method, urlPath, bytes.NewReader(injson))
+			if err != nil {
+				return 0, err
+			}
+			cleanupResp() // (cleanup prev. response)
+
+			req.Header.Set(cos.HdrContentType, cos.ContentJSON)
+			resp, err = client.Do(req) //nolint:bodyclose // closed after args.Do() returns
+
+			if resp == nil {
+				return 0, err
+			}
+			if err == nil && resp.StatusCode == http.StatusServiceUnavailable {
+				return resp.StatusCode, cos.NewRetriableSoftFromStatus(resp.StatusCode)
+			}
+			return resp.StatusCode, err
+		},
+		SoftErr:   int(softErrTimeout / retrySleep),
+		Sleep:     retrySleep,
+		BackOff:   true,
+		IsClient:  true,
+		Verbosity: cmn.RetryLogVerbose,
+		Action:    tag,
+	}
+	_, err := args.Do()
+	if err == nil && resp != nil {
+		err = cmn.CheckResp(resp, method, versionedPath)
+	}
+	cleanupResp()
+
+	return err
 }

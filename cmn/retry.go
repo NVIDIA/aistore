@@ -6,6 +6,7 @@
 package cmn
 
 import (
+	"errors"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -77,7 +78,8 @@ func (args *RetryArgs) Do() (ecode int, err error) {
 		if args.Verbosity == RetryLogVerbose {
 			nlog.Errorf("%s failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, ecode)
 		}
-		if cos.IsErrRetriableConn(err) {
+		// Retry on connection errors or errors wrapped as retriable by the caller
+		if cos.IsErrRetriableConn(err) || errors.Is(err, cos.ErrRetriableSoft) {
 			softErrCnt++
 		} else {
 			hardErrCnt++

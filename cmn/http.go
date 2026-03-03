@@ -189,3 +189,48 @@ func ParseReadHeaderTimeout() (_ time.Duration, isSet bool) {
 	}
 	return timeout, true
 }
+
+func CheckResp(resp *http.Response, method, path string) error {
+	if resp.StatusCode < http.StatusBadRequest {
+		return nil
+	}
+	if method == http.MethodHead {
+		// "A response to a HEAD method should not have a body."
+		if msg := resp.Header.Get(apc.HdrError); msg != "" {
+			return &ErrHTTP{
+				TypeCode: TypeCodeHTTPErr(msg),
+				Message:  msg,
+				Status:   resp.StatusCode,
+				Method:   method,
+				URLPath:  path,
+			}
+		}
+	}
+
+	b, _ := cos.ReadAllN(resp.Body, resp.ContentLength)
+	if len(b) == 0 {
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			msg := fmt.Sprintf("[%s]: starting up, please try again later...", http.StatusText(http.StatusServiceUnavailable))
+			return &ErrHTTP{Message: msg, Status: resp.StatusCode}
+		}
+		return &ErrHTTP{
+			Message: "failed to execute " + method + " request",
+			Status:  resp.StatusCode,
+			Method:  method,
+			URLPath: path,
+		}
+	}
+
+	herr := &ErrHTTP{}
+	if err := jsoniter.Unmarshal(b, herr); err == nil {
+		return herr
+	}
+	msg := string(b)
+	return &ErrHTTP{
+		TypeCode: TypeCodeHTTPErr(msg),
+		Message:  msg,
+		Status:   resp.StatusCode,
+		Method:   method,
+		URLPath:  path,
+	}
+}

@@ -246,7 +246,8 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 		return nil, herr
 	}
-	if uerr, ok := err.(*url.Error); ok {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
 		err = uerr.Unwrap()
 		herr := cmn.NewErrHTTP(req, err, 0)
 		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
@@ -364,49 +365,7 @@ func (reqParams *ReqParams) readValidate(resp *http.Response, w io.Writer) (*wra
 }
 
 func (reqParams *ReqParams) checkResp(resp *http.Response) error {
-	if resp.StatusCode < http.StatusBadRequest {
-		return nil
-	}
-	if reqParams.BaseParams.Method == http.MethodHead {
-		// "A response to a HEAD method should not have a body."
-		if msg := resp.Header.Get(apc.HdrError); msg != "" {
-			return &cmn.ErrHTTP{
-				TypeCode: cmn.TypeCodeHTTPErr(msg),
-				Message:  msg,
-				Status:   resp.StatusCode,
-				Method:   reqParams.BaseParams.Method,
-				URLPath:  reqParams.Path,
-			}
-		}
-	}
-
-	b, _ := cos.ReadAllN(resp.Body, resp.ContentLength)
-	if len(b) == 0 {
-		if resp.StatusCode == http.StatusServiceUnavailable {
-			msg := fmt.Sprintf("[%s]: starting up, please try again later...", http.StatusText(http.StatusServiceUnavailable))
-			return &cmn.ErrHTTP{Message: msg, Status: resp.StatusCode}
-		}
-		return &cmn.ErrHTTP{
-			Message: "failed to execute " + reqParams.BaseParams.Method + " request",
-			Status:  resp.StatusCode,
-			Method:  reqParams.BaseParams.Method,
-			URLPath: reqParams.Path,
-		}
-	}
-
-	herr := &cmn.ErrHTTP{}
-	if err := jsoniter.Unmarshal(b, herr); err == nil {
-		return herr
-	}
-	// otherwise, recreate
-	msg := string(b)
-	return &cmn.ErrHTTP{
-		TypeCode: cmn.TypeCodeHTTPErr(msg),
-		Message:  msg,
-		Status:   resp.StatusCode,
-		Method:   reqParams.BaseParams.Method,
-		URLPath:  reqParams.Path,
-	}
+	return cmn.CheckResp(resp, reqParams.BaseParams.Method, reqParams.Path)
 }
 
 // read multipart content, as per:
