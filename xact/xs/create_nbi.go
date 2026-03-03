@@ -39,8 +39,9 @@ import (
 
 // on-disk formatting
 const (
-	nbiMetaVer    uint8 = 1
-	nbiHdrLenSize       = cos.SizeofI32 // framing: length(chunk header)
+	nbiMetaVer   uint8 = 1
+	nbiFrameSize       = 2 * cos.SizeofI32 // framing: [length(header) | CRC32c(header) | header ]
+	nbiMaxHdrLen       = 4 * cos.KiB       // (unlikely to ever exceed)
 )
 
 type (
@@ -62,6 +63,7 @@ type (
 		lom    *core.LOM
 		ufest  *core.Ufest
 		slab   *memsys.Slab
+		cksum  *cos.CksumHash
 		ctlmsg string
 		buf    []byte
 		xact.Base
@@ -142,6 +144,9 @@ func (r *XactNBI) init() error {
 		return err
 	}
 	r.buf, r.slab = core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
+
+	r.cksum = cos.NewCksumHash(cos.ChecksumCRC32C)
+	debug.Assert(r.cksum.H.Size() == cos.SizeofI32)
 
 	return nil
 }
@@ -298,20 +303,34 @@ func (r *XactNBI) writeChunk(num int, entries cmn.LsoEntries) error {
 
 	// 1) header (bytepack) with a u32 length prefix
 	hdr := makeInvChunkHdr(entries)
-	hdrBytes := packInvChunkHdr(&hdr)
 
-	// write headerLen prefix
-	var lenbuf [nbiHdrLenSize]byte
-	binary.BigEndian.PutUint32(lenbuf[:], uint32(len(hdrBytes)))
-	if _, err := ws.Write(lenbuf[:]); err != nil {
+	ps := hdr.PackedSize()
+	debug.Assert(ps < nbiMaxHdrLen, ps, " vs max ", nbiMaxHdrLen)
+	debug.Assert(ps < len(r.buf), ps, " vs buf ", len(r.buf))
+
+	hdrBuf := hdr.pack(r.buf)
+
+	// write framing bytes
+	var frame [nbiFrameSize]byte
+	binary.BigEndian.PutUint32(frame[:], uint32(len(hdrBuf)))
+
+	// checksum
+	debug.Assert(r.cksum != nil && r.cksum.Ty() == cos.ChecksumCRC32C, "must have CRC32c")
+	r.cksum.H.Reset()
+	r.cksum.H.Write(hdrBuf)
+	crc := r.cksum.SumTo()
+	copy(frame[cos.SizeofI32:], crc)
+
+	if _, err := ws.Write(frame[:]); err != nil {
 		return err
 	}
+
 	// write header bytes
-	if _, err := ws.Write(hdrBytes); err != nil {
+	if _, err := ws.Write(hdrBuf); err != nil {
 		return err
 	}
 
-	// 2) payload: msgp-encoded entries
+	// 2) payload: msgp-encoded entries (note: using the same buffer for hdr and msgp payload)
 	mw := msgp.NewWriterBuf(ws, r.buf)
 	if err := entries.EncodeMsg(mw); err != nil {
 		return err
@@ -356,8 +375,8 @@ func makeInvChunkHdr(entries cmn.LsoEntries) (h nbiChunkHdr) {
 	return h
 }
 
-func packInvChunkHdr(h *nbiChunkHdr) []byte {
-	p := cos.NewPacker(nil, h.PackedSize()) // TODO -- FIXME: optimize malloc
+func (h *nbiChunkHdr) pack(buf []byte) []byte {
+	p := cos.NewPacker(buf, h.PackedSize())
 	h.Pack(p)
 	return p.Bytes()
 }

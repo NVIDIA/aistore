@@ -356,7 +356,8 @@ var (
 			indent1 + "\t* create-inventory s3://abc --inv-name my-first-inventory\t- same, with a custom inventory name;\n" +
 			indent1 + "\t* create-inventory s3://abc --prefix images/\t- inventory only objects under 'images/';\n" +
 			indent1 + "\t* create-inventory s3://abc --all\t- inventory with all object properties;\n" +
-			indent1 + "\t* create-inventory s3://abc --name-only\t- lightweight: object names only.",
+			indent1 + "\t* create-inventory s3://abc --name-only\t- lightweight: object names only;\n" +
+			indent1 + "\t* create-inventory ais://@remais/xyz --inv-pages 2\t- remote AIS, with 2 pages per chunk.",
 		ArgsUsage:    bucketArgument,
 		Flags:        sortFlags(bucketCmdsFlags[cmdCreateNBI]),
 		Action:       createInventoryHandler,

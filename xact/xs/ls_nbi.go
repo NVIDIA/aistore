@@ -38,9 +38,9 @@ type nbiCtx struct {
 	entries  cmn.LsoEntries // decoded from current chunk
 	hdr      nbiChunkHdr    // current chunk header=[first, last, cnt]
 
-	buf  []byte
-	slab *memsys.Slab
-	smm  *memsys.MMSA
+	buf   []byte
+	slab  *memsys.Slab
+	cksum *cos.CksumHash
 }
 
 func (nbi *nbiCtx) init(invName string) error {
@@ -57,7 +57,9 @@ func (nbi *nbiCtx) init(invName string) error {
 		return err
 	}
 
-	nbi.smm = core.T.ByteMM()
+	nbi.cksum = cos.NewCksumHash(cos.ChecksumCRC32C)
+	debug.Assert(nbi.cksum.H.Size() == cos.SizeofI32)
+
 	nbi.buf, nbi.slab = core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
 	nbi.nidx = 0
 	nbi.chunkNum = 1
@@ -112,29 +114,41 @@ func (nbi *nbiCtx) readChunk() error {
 	}
 	defer cos.Close(fh)
 
-	// read chunk header, length first
-	var lenbuf [nbiHdrLenSize]byte
-	if _, err := io.ReadFull(fh, lenbuf[:]); err != nil {
+	// 1. read chunk header length
+	var frame [nbiFrameSize]byte
+	if _, err := io.ReadFull(fh, frame[:]); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
 		return nbi.emit(err)
 	}
 
-	hdrLen := binary.BigEndian.Uint32(lenbuf[:])
-	if hdrLen == 0 || hdrLen > memsys.MaxSmallSlabSize /*4K - see `smm` below*/ {
+	// 2. read chunk header
+	hdrLen := binary.BigEndian.Uint32(frame[:])
+	if hdrLen == 0 || hdrLen > nbiMaxHdrLen {
 		return nbi.emit(fmt.Errorf("invalid chunk header length %d", hdrLen))
 	}
-	hdrBuf, slab := nbi.smm.AllocSize(int64(hdrLen))
-	defer slab.Free(hdrBuf)
 
-	hdrBuf = hdrBuf[:hdrLen]
+	hdrBuf := nbi.buf[:hdrLen] // note: using the same buffer for hdr and msgp payload
 	if _, err := io.ReadFull(fh, hdrBuf); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
 		return nbi.emit(err)
 	}
+
+	// 2.1. checksum
+	debug.Assert(nbi.cksum != nil && nbi.cksum.Ty() == cos.ChecksumCRC32C, "must have CRC32c")
+	nbi.cksum.H.Reset()
+	nbi.cksum.H.Write(hdrBuf)
+	crc := nbi.cksum.SumTo()
+	exp := binary.BigEndian.Uint32(frame[cos.SizeofI32:])
+	got := binary.BigEndian.Uint32(crc)
+	if got != exp {
+		return nbi.emit(fmt.Errorf("invalid chunk [%d, %q] header hash: expected %08x, got %08x",
+			nbi.chunkNum, chunk.Path(), exp, got))
+	}
+
 	unpacker := cos.NewUnpacker(hdrBuf)
 	if err := nbi.hdr.Unpack(unpacker); err != nil {
 		return nbi.emit(err)
@@ -142,9 +156,14 @@ func (nbi *nbiCtx) readChunk() error {
 
 	nbi.nidx = 0
 
-	// read chunk payload: msgp entries
+	// 3. read chunk payload: msgp entries (note: hdrBuf consumed before msgp reuses the buffer)
 	mr := msgp.NewReaderBuf(fh, nbi.buf)
-	nbi.entries = make(cmn.LsoEntries, 0, nbi.hdr.entryCount) // TODO -- FIXME: micro-optimize malloc
+
+	if cnt := int(nbi.hdr.entryCount); cap(nbi.entries) < cnt {
+		nbi.entries = make(cmn.LsoEntries, 0, cnt)
+	} else {
+		nbi.entries = nbi.entries[:0]
+	}
 	return nbi.entries.DecodeMsg(mr)
 }
 

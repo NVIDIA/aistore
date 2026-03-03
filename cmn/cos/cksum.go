@@ -153,8 +153,14 @@ func (ck *CksumHash) Equal(to *Cksum) bool { return ck.Cksum.Equal(to) }
 func (ck *CksumHash) Sum() []byte { return ck.sum }
 
 func (ck *CksumHash) Finalize() {
-	ck.sum = ck.H.Sum(nil)
+	ck.SumTo()
 	ck.value = hex.EncodeToString(ck.sum)
+}
+
+// reuse ck.sum buffer as scratch to avoid allocations
+func (ck *CksumHash) SumTo() []byte {
+	ck.sum = ck.H.Sum(ck.sum[:0])
+	return ck.sum
 }
 
 ///////////////////

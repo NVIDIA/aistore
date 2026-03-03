@@ -49,7 +49,7 @@ func TestCreateInventorySimple(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
-func TestCreateInventoryPermitateOnDisk(t *testing.T) {
+func TestCreateInventoryPermuteOnDisk(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, RemoteBck: true, Bck: cliBck})
 
 	type testCase struct {
