@@ -361,14 +361,21 @@ func (r *XactNsumm) visitObj(lom *core.LOM, _ []byte) error {
 //
 
 func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
-	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: r.p.msg.Prefix}
+	var (
+		lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: r.p.msg.Prefix}
+		bp    = core.T.Backend(bck)
+		page  = make(cmn.LsoEntries, 0, iniPageCap)
+	)
 	lsmsg.SetFlag(apc.LsNameSize | apc.LsNoDirs)
-	bp := core.T.Backend(bck)
-	page := make(cmn.LsoEntries, 0, iniPageCap)
 
 	for !r.IsAborted() {
 		npg := newNpgCtx(bck, lsmsg, noopCb, nil, nil, bp) // TODO -- FIXME: support NBI
+
+		if cap(page) > maxPageCap {
+			page = make(cmn.LsoEntries, 0, apc.MaxPageSizeGlobal)
+		}
 		page = page[:0]
+
 		lst, err := npg.nextPageR(page)
 		if err != nil {
 			r.AddErr(err)

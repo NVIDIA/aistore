@@ -105,6 +105,8 @@ const (
 	MaxPageSizeGCP   = 1000
 	MaxPageSizeAzure = 5000
 	MaxPageSizeOCI   = 1000
+
+	MaxPageSizeGlobal = MaxPageSizeAIS // NOTE: maximum across all providers
 )
 
 // cmn/objlist_utils
@@ -351,7 +353,7 @@ func (lsmsg *LsoMsg) Clone() *LsoMsg {
 const (
 	DefaultInvPagesPerChunk = 50
 	MaxInvPagesPerChunk     = 256
-	MaxInvEntriesPerChunk   = MaxInvPagesPerChunk * MaxPageSizeAIS
+	MaxInvEntriesPerChunk   = MaxInvPagesPerChunk * MaxPageSizeGlobal
 )
 
 // validate; set defaults

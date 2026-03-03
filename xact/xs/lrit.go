@@ -279,7 +279,11 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 			err   error
 			ecode int
 		)
+		if cap(page) > maxPageCap { // prevent unbounded growth
+			page = make(cmn.LsoEntries, 0, apc.MaxPageSizeGlobal)
+		}
 		page = page[:0]
+
 		if bremote {
 			lst = &cmn.LsoRes{Entries: page}
 			// TODO: this is the last remaining place where we list remote bucket by each and every target

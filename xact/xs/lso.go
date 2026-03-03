@@ -38,7 +38,8 @@ import (
 )
 
 const (
-	iniPageCap = 1000
+	iniPageCap = min(1024, apc.MaxPageSizeGlobal)
+	maxPageCap = 4 * apc.MaxPageSizeGlobal
 )
 
 // `on-demand` per list-objects request
@@ -543,6 +544,10 @@ ex:
 }
 
 func (r *LsoXact) thisPageR(npg *npgCtx) (page *cmn.LsoRes, err error) {
+	if cap(r.page) > maxPageCap {
+		r.page = make(cmn.LsoEntries, 0, apc.MaxPageSizeGlobal)
+	}
+
 	var (
 		aborted bool
 		entries = r.page[:0] // reusing the same (backing) slice between remote pages
