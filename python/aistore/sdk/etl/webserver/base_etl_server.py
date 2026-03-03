@@ -5,6 +5,7 @@
 import os
 import sys
 import logging
+import resource
 from abc import ABC, abstractmethod
 from typing import Tuple
 import requests
@@ -36,6 +37,12 @@ class ETLServer(ABC):
             If you override `__init__` in a subclass, make sure to call
             `super().__init__()` to ensure proper base class initialization.
         """
+        # Raise the open file descriptor soft limit to match the hard limit.
+        # CRI-O defaults the soft limit to 1024 which is too low for
+        # high-concurrency ETL workloads.
+        _soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+
         self.host_target = os.getenv("AIS_TARGET_URL")
         if not self.host_target:
             raise EnvironmentError("Environment variable 'AIS_TARGET_URL' must be set.")

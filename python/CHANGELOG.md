@@ -11,6 +11,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Parallel download switch from `ThreadPoolExecutor` to `ProcessPoolExecutor` with shared memory ring buffer for parallel chunk fetching
 - Parallel download auto-enables direct mode (bypasses proxy) to avoid redundant redirect overhead
 
+### Fixed
+
+- ETLServer: Raise file descriptor soft limit to match hard limit on init, fixing `[Errno 24] No file descriptors available` under high-concurrency workloads.
+
 ## [1.20.0] - 2026-02-10
 
 ### Added
