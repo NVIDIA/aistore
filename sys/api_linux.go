@@ -36,4 +36,17 @@ const (
 	contCPULimit = contCPUPath + "cpu.cfs_quota_us"
 	// length of a period (quota/period ~= max number of CPU available for cgroup)
 	contCPUPeriod = contCPUPath + "cpu.cfs_period_us"
+
+	// cgroup v1: cumulative CPU usage in nanoseconds
+	contCPUAcctUsage = "/sys/fs/cgroup/cpuacct/cpuacct.usage"
+
+	// cgroup v2 (unified hierarchy)
+	contCgroupV2    = "/sys/fs/cgroup/"
+	contCPUV2Stat   = contCgroupV2 + "cpu.stat"     // usage_usec, throttled_usec, etc.
+	contCPUV2Max    = contCgroupV2 + "cpu.max"      // "$MAX $PERIOD" or "max $PERIOD"
+	contCPUPressure = contCgroupV2 + "cpu.pressure" // PSI (TODO)
+
+	// host
+	hostProcStat        = proc + "stat"
+	hostCPUPressurePath = proc + "pressure/cpu" // PSI bare metal (TODO)
 )

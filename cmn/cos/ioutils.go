@@ -249,8 +249,7 @@ func ReadOneUint64(filename string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	val, err := strconv.ParseUint(line, 10, 64)
-	return val, err
+	return strconv.ParseUint(line, 10, 64)
 }
 
 // Read only the first line of a file and return it as int64
@@ -261,8 +260,7 @@ func ReadOneInt64(filename string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	val, err := strconv.ParseInt(line, 10, 64)
-	return val, err
+	return strconv.ParseInt(line, 10, 64)
 }
 
 // Read a file line by line and call a callback for each line until the file
