@@ -2,8 +2,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-import os
-from urllib.parse import unquote, quote
+from urllib.parse import quote
 from typing import Tuple
 
 import requests
@@ -109,30 +108,32 @@ class FlaskServer(ETLServer):
     def _handle_get(self, path):
         etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
         fqn = request.args.get(QPARAM_ETL_FQN, "").strip()
-        if fqn:
-            content = self._get_fqn_content(fqn)
+        if fqn and self.direct_fqn:
+            source = self.sanitize_fqn(fqn)
+        elif fqn:
+            source = self._get_fqn_content(fqn)
         else:
             obj_path = quote(path, safe="@")
             target_url = f"{self.host_target}/{obj_path}"
             self.logger.debug("Forwarding GET to: %s", target_url)
             resp = requests.get(target_url, timeout=None)
             resp.raise_for_status()
-            content = resp.content
-        return self.transform(content, path, etl_args)
+            source = resp.content
+        return self.transform(source, path, etl_args)
 
     def _handle_put(self, path):
         etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
         fqn = request.args.get(QPARAM_ETL_FQN, "").strip()
-        if fqn:
-            content = self._get_fqn_content(fqn)
+        if fqn and self.direct_fqn:
+            source = self.sanitize_fqn(fqn)
+        elif fqn:
+            source = self._get_fqn_content(fqn)
         else:
-            content = request.get_data()
-
-        return self.transform(content, path, etl_args)
+            source = request.get_data()
+        return self.transform(source, path, etl_args)
 
     def _get_fqn_content(self, path: str) -> bytes:
-        decoded_path = unquote(path)
-        safe_path = os.path.normpath(os.path.join("/", decoded_path.lstrip("/")))
+        safe_path = self.sanitize_fqn(path)
         self.logger.debug("Reading local file: %s", safe_path)
         with open(safe_path, "rb") as f:
             return f.read()

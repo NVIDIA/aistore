@@ -6,6 +6,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Added
+
+- ETL Webserver: `ETL_DIRECT_FQN` environment variable opt-in for direct file access. When set to `true`, `transform()` receives the object's local filesystem path as `str` instead of loading the file into the Python process's heap
+  - Falls back to `bytes` automatically when no FQN is available (e.g., pipeline intermediate stages).
+  — Useful for tools like `ffmpeg` that read directly from a file path.
+
 ### Changed
 
 - Parallel download switch from `ThreadPoolExecutor` to `ProcessPoolExecutor` with shared memory ring buffer for parallel chunk fetching

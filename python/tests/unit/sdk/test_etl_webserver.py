@@ -709,3 +709,164 @@ class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, transformed_content)
+
+
+# ---------------------------------------------------------------------------
+# ETL_DIRECT_FQN tests — verify that transform() receives str (path) when the
+# env var is set and FQN is provided, and bytes otherwise.
+# ---------------------------------------------------------------------------
+
+
+class _CapturingServer:  # pylint: disable=too-few-public-methods
+    """Mixin that records the type and value of the last `data` arg to transform()."""
+
+    last_data = None
+
+    def transform(self, data, _path, _etl_args):
+        type(self).last_data = data
+        # Return bytes for any input so the response pipeline stays happy.
+        return data.encode() if isinstance(data, str) else data
+
+
+class CapturingFastAPIServer(_CapturingServer, FastAPIServer):
+    pass
+
+
+class CapturingFlaskServer(_CapturingServer, FlaskServer):
+    pass
+
+
+class CapturingHTTPServer(_CapturingServer, HTTPMultiThreadedServer):
+    pass
+
+
+class TestFastAPIDirectFQN(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["ETL_DIRECT_FQN"] = "true"
+        self.etl_server = CapturingFastAPIServer()
+        self.client = TestClient(self.etl_server.app)
+
+    def tearDown(self):
+        os.environ.pop("ETL_DIRECT_FQN", None)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_put_with_fqn_receives_path_string(self):
+        """ETL_DIRECT_FQN=true: transform() receives the sanitized file path as str."""
+        fqn = "/local/data/object.bin"
+        self.client.put("/test/object", content=b"", params={QPARAM_ETL_FQN: fqn})
+        self.assertIsInstance(CapturingFastAPIServer.last_data, str)
+        self.assertEqual(CapturingFastAPIServer.last_data, os.path.normpath(fqn))
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_put_without_fqn_receives_bytes(self):
+        """ETL_DIRECT_FQN=true but no FQN (pipeline stage): transform() receives bytes."""
+        input_data = b"pipeline bytes"
+        self.client.put("/test/object", content=input_data)
+        self.assertIsInstance(CapturingFastAPIServer.last_data, bytes)
+        self.assertEqual(CapturingFastAPIServer.last_data, input_data)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_websocket_with_fqn_receives_path_string(self):
+        """ETL_DIRECT_FQN=true via WebSocket: transform() receives the file path as str."""
+        fqn = "/local/data/object.bin"
+        with self.client.websocket_connect("/ws") as ws:
+            ws.send_json(data={ETL_WS_FQN: fqn}, mode="binary")
+            ws.receive_bytes()
+        self.assertIsInstance(CapturingFastAPIServer.last_data, str)
+        self.assertEqual(CapturingFastAPIServer.last_data, os.path.normpath(fqn))
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_websocket_without_fqn_receives_bytes(self):
+        """ETL_DIRECT_FQN=true via WebSocket but no FQN: transform() receives bytes."""
+        input_data = b"ws bytes"
+        with self.client.websocket_connect("/ws") as ws:
+            ws.send_json(data={}, mode="binary")
+            ws.send_bytes(input_data)
+            ws.receive_bytes()
+        self.assertIsInstance(CapturingFastAPIServer.last_data, bytes)
+        self.assertEqual(CapturingFastAPIServer.last_data, input_data)
+
+
+class TestFlaskDirectFQN(unittest.TestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["ETL_DIRECT_FQN"] = "true"
+        self.etl_server = CapturingFlaskServer()
+        self.client = self.etl_server.app.test_client()
+
+    def tearDown(self):
+        os.environ.pop("ETL_DIRECT_FQN", None)
+
+    def test_put_with_fqn_receives_path_string(self):
+        """ETL_DIRECT_FQN=true: Flask transform() receives the file path as str."""
+        fqn = "/local/data/object.bin"
+        self.client.put("/test/object", data=b"", query_string={QPARAM_ETL_FQN: fqn})
+        self.assertIsInstance(CapturingFlaskServer.last_data, str)
+        self.assertEqual(CapturingFlaskServer.last_data, os.path.normpath(fqn))
+
+    def test_put_without_fqn_receives_bytes(self):
+        """ETL_DIRECT_FQN=true but no FQN: Flask transform() receives bytes."""
+        input_data = b"pipeline bytes"
+        self.client.put("/test/object", data=input_data)
+        self.assertIsInstance(CapturingFlaskServer.last_data, bytes)
+        self.assertEqual(CapturingFlaskServer.last_data, input_data)
+
+    def test_get_with_fqn_receives_path_string(self):
+        """ETL_DIRECT_FQN=true GET: Flask transform() receives the file path as str."""
+        fqn = "/local/data/object.bin"
+        self.client.get("/test/object", query_string={QPARAM_ETL_FQN: fqn})
+        self.assertIsInstance(CapturingFlaskServer.last_data, str)
+        self.assertEqual(CapturingFlaskServer.last_data, os.path.normpath(fqn))
+
+
+class TestHTTPDirectFQN(unittest.TestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["ETL_DIRECT_FQN"] = "true"
+
+    def tearDown(self):
+        os.environ.pop("ETL_DIRECT_FQN", None)
+
+    def _make_handler(self):
+        handler = DummyRequestHandler()
+        handler.server.etl_server.direct_fqn = True
+        handler.server.etl_server.sanitize_fqn.side_effect = (
+            lambda fqn: os.path.normpath(os.path.join("/", fqn.lstrip("/")))
+        )
+        return handler
+
+    def test_put_with_fqn_receives_path_string(self):
+        """ETL_DIRECT_FQN=true: HTTP transform() receives the file path as str."""
+        fqn = "/local/data/object.bin"
+        handler = self._make_handler()
+        handler.path = f"/test/object?{QPARAM_ETL_FQN}={fqn}"
+        handler.headers = {"Content-Length": "0"}
+        handler.rfile = io.BytesIO(b"")
+        handler.do_PUT()
+        handler.server.etl_server.transform.assert_called_with(
+            os.path.normpath(fqn), "/test/object", ""
+        )
+
+    def test_put_without_fqn_receives_bytes(self):
+        """ETL_DIRECT_FQN=true but no FQN: HTTP transform() receives bytes."""
+        input_data = b"pipeline bytes"
+        handler = self._make_handler()
+        handler.path = "/test/object"
+        handler.headers = {"Content-Length": str(len(input_data))}
+        handler.rfile = io.BytesIO(input_data)
+        handler.do_PUT()
+        handler.server.etl_server.transform.assert_called_with(
+            input_data, "/test/object", ""
+        )
+
+    @patch("requests.get")
+    def test_get_with_fqn_receives_path_string(self, _mock_get):
+        """ETL_DIRECT_FQN=true GET: HTTP transform() receives the file path as str."""
+        fqn = "/local/data/object.bin"
+        handler = self._make_handler()
+        handler.path = f"/test/object?{QPARAM_ETL_FQN}={fqn}"
+        handler.do_GET()
+        handler.server.etl_server.transform.assert_called_with(
+            os.path.normpath(fqn), "/test/object", ""
+        )

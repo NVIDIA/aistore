@@ -7,7 +7,8 @@ import sys
 import logging
 import resource
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Union
+from urllib.parse import unquote
 import requests
 from aistore.sdk.const import STATUS_NO_CONTENT, STATUS_OK, HEADER_DIRECT_PUT_LENGTH
 
@@ -47,6 +48,7 @@ class ETLServer(ABC):
         if not self.host_target:
             raise EnvironmentError("Environment variable 'AIS_TARGET_URL' must be set.")
         self.direct_put = os.getenv("DIRECT_PUT", "false").lower() == "true"
+        self.direct_fqn = os.getenv("ETL_DIRECT_FQN", "false").lower() == "true"
 
         # Configure logging
         logging.basicConfig(
@@ -58,19 +60,26 @@ class ETLServer(ABC):
         self.logger.setLevel(logging.INFO)
 
     @abstractmethod
-    def transform(self, data: bytes, path: str, etl_args: str) -> bytes:
+    def transform(self, data: Union[bytes, str], path: str, etl_args: str) -> bytes:
         """
         Transform the data received from a request.
 
         Args:
-            data (bytes): The original content fetched from AIS.
-            path (str): The request path. This is usually the path
-                to the object.
-            etl_args (str): The arguments passed for the transformation.
+            data (Union[bytes, str]): Object bytes by default. When
+                `ETL_DIRECT_FQN=true`, the first pipeline stage receives a `str`
+                filepath instead; intermediate stages always receive `bytes`.
+                See `Etl.init_class(direct_file_access=...)` for full details.
+
+            path (str): The object path (e.g. `"bucket/object-name"`).
+            etl_args (str): Optional per-request arguments.
 
         Returns:
             bytes: Transformed data to return to the caller.
         """
+
+    def sanitize_fqn(self, fqn: str) -> str:
+        """Normalize an FQN to a safe absolute path."""
+        return os.path.normpath(os.path.join("/", unquote(fqn).lstrip("/")))
 
     @abstractmethod
     def start(self):

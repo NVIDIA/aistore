@@ -4,7 +4,7 @@
 
 import os
 import asyncio
-from urllib.parse import unquote, quote
+from urllib.parse import quote
 from typing import Optional, List, Tuple
 
 from fastapi import (
@@ -121,15 +121,17 @@ class FastAPIServer(ETLServer):
         self.logger.debug("etl_args = %r, fqn = %r", etl_args, fqn)
 
         try:
-            if fqn:
-                content = await self._get_fqn_content(fqn)
+            if fqn and self.direct_fqn:
+                source = self.sanitize_fqn(fqn)
+            elif fqn:
+                source = await self._get_fqn_content(fqn)
             elif is_get:
-                content = await self._get_network_content(path)
+                source = await self._get_network_content(path)
             else:
-                content = await request.body()
+                source = await request.body()
 
-            # Transform the content
-            transformed = self.transform(content, path, etl_args)
+            # Transform the source (bytes or str)
+            transformed = self.transform(source, path, etl_args)
 
             # Handle pipeline if present
             pipeline_header = request.headers.get(HEADER_NODE_URL)
@@ -199,8 +201,7 @@ class FastAPIServer(ETLServer):
 
     async def _get_fqn_content(self, path: str) -> bytes:
         """Safely read local file content with path normalization."""
-        decoded_path = unquote(path)
-        safe_path = os.path.normpath(os.path.join("/", decoded_path.lstrip("/")))
+        safe_path = self.sanitize_fqn(path)
         self.logger.debug("Reading local file: %s", safe_path)
 
         async with aiofiles.open(safe_path, "rb") as f:
@@ -266,14 +267,18 @@ class FastAPIServer(ETLServer):
 
         fqn = ctrl_msg.get(ETL_WS_FQN)
         path = ctrl_msg.get(ETL_WS_PATH)
-        content = (
-            await self._get_fqn_content(fqn) if fqn else await websocket.receive_bytes()
-        )
         etl_args = ctrl_msg.get(QPARAM_ETL_ARGS)
+
+        if fqn and self.direct_fqn:
+            source = self.sanitize_fqn(fqn)
+        elif fqn:
+            source = await self._get_fqn_content(fqn)
+        else:
+            source = await websocket.receive_bytes()
 
         try:
             transformed = await asyncio.to_thread(
-                self.transform, content, path, etl_args
+                self.transform, source, path, etl_args
             )
 
             pipeline_header = ctrl_msg.get(ETL_WS_PIPELINE)

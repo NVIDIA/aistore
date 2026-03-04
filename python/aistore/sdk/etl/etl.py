@@ -163,6 +163,7 @@ class Etl:
         init_timeout: str = DEFAULT_ETL_TIMEOUT,
         obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
         direct_put: bool = False,
+        direct_file_access: bool = False,
         **kwargs,
     ) -> str:
         """
@@ -175,6 +176,8 @@ class Etl:
             init_timeout (str, optional): ETL job timeout (e.g., "5m").
             obj_timeout (str, optional): Per-object transform timeout (e.g., "45s").
             direct_put (bool, optional): Enable direct-put optimization.
+            direct_file_access (bool, optional): Pass the local file path to transform()
+                as str instead of loading bytes. Requires hpush and a co-located pod.
             **kwargs: Additional key-value pairs → env vars in the ETL container.
 
         Returns:
@@ -188,7 +191,10 @@ class Etl:
             command = command.split()
 
         # 3. Build env var list (None if no extras)
-        env_vars = [EnvVar(name=k, value=v) for k, v in kwargs.items()] or None
+        env_vars = [EnvVar(name=k, value=v) for k, v in kwargs.items()]
+        if direct_file_access:
+            env_vars.append(EnvVar(name="ETL_DIRECT_FQN", value="true"))
+        env_vars = env_vars or None
 
         # 4. Create the runtime spec (command/env omitted if None)
         runtime = ETLRuntimeSpec(
@@ -226,6 +232,7 @@ class Etl:
         init_timeout: str = DEFAULT_ETL_TIMEOUT,
         obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
         direct_put: bool = True,
+        direct_file_access: bool = False,
         **kwargs,
     ):
         """
@@ -259,6 +266,25 @@ class Etl:
             direct_put (bool, optional):
                 When doing a bucket-to-bucket transform, set to `True` to enable “direct put”
                 optimization. Defaults to `True`.
+            direct_file_access (bool, optional):
+                When True, sets `ETL_DIRECT_FQN=true` in the pod so that
+                `transform()` receives the object's local filesystem path as
+                `str` instead of loading the file into memory. Defaults to False.
+
+                **Pipeline caveat:** FQN is only available for the first
+                pipeline stage. Intermediate stages always receive `bytes`
+                (the previous stage's output) — there is no on-disk file for
+                half-transformed data. If the ETL may run in both positions,
+                `transform()` must handle both types::
+
+                    def transform(self, data, path, etl_args):
+                        if isinstance(data, str):
+                            # first stage: filepath
+                            ...
+                        else:
+                            # intermediate stage: bytes
+                            ...
+                        return ...
             **kwargs:
                 Any other keyword arguments become environment-variables inside the ETL pod.
                 To configure concurrency, set env-var `NUM_WORKERS` to specify the number of worker
@@ -295,6 +321,7 @@ class Etl:
                 init_timeout=init_timeout,
                 obj_timeout=obj_timeout,
                 direct_put=direct_put,
+                direct_file_access=direct_file_access,
                 **env_kwargs,
             )
             return cls

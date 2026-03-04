@@ -2,13 +2,12 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from typing import Type, Tuple
 import signal
 import threading
-from urllib.parse import unquote, urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs
 
 import requests
 
@@ -123,11 +122,10 @@ class HTTPMultiThreadedServer(ETLServer):
             """
             Parses and safely reads a file when using FQN (fully qualified name) input.
             """
-            decoded_path = unquote(path)
-            safe_path = os.path.normpath(os.path.join("/", decoded_path.lstrip("/")))
-
+            safe_path = self.server.etl_server.sanitize_fqn(
+                path
+            )  # pylint: disable=protected-access
             self.server.etl_server.logger.debug("Reading local file: %s", safe_path)
-
             with open(safe_path, "rb") as f:
                 return f.read()
 
@@ -193,8 +191,12 @@ class HTTPMultiThreadedServer(ETLServer):
                 return
 
             try:
-                if fqn:
-                    content = self._get_fqn_content(fqn)
+                if fqn and self.server.etl_server.direct_fqn:
+                    source = self.server.etl_server.sanitize_fqn(
+                        fqn
+                    )  # pylint: disable=protected-access
+                elif fqn:
+                    source = self._get_fqn_content(fqn)
                 else:
                     target_url = f"{self.server.etl_server.host_target}{raw_path}"
                     logger.debug("Forwarding GET to AIS target: %s", target_url)
@@ -212,10 +214,10 @@ class HTTPMultiThreadedServer(ETLServer):
                         )
                         return
 
-                    content = resp.content
+                    source = resp.content
 
                 transformed = self.server.etl_server.transform(
-                    content, raw_path, etl_args
+                    source, raw_path, etl_args
                 )
 
                 self._send_with_pipeline(transformed, raw_path)
@@ -265,13 +267,17 @@ class HTTPMultiThreadedServer(ETLServer):
             )
 
             try:
-                if fqn:
-                    content = self._get_fqn_content(fqn)
+                if fqn and self.server.etl_server.direct_fqn:
+                    source = self.server.etl_server.sanitize_fqn(
+                        fqn
+                    )  # pylint: disable=protected-access
+                elif fqn:
+                    source = self._get_fqn_content(fqn)
                 else:
                     content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
-                    content = self.rfile.read(content_length)
+                    source = self.rfile.read(content_length)
                 transformed = self.server.etl_server.transform(
-                    content, raw_path, etl_args
+                    source, raw_path, etl_args
                 )
 
                 self._send_with_pipeline(transformed, raw_path)

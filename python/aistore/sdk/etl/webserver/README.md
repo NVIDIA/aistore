@@ -24,6 +24,8 @@ pip install aistore[etl]
   Pick from multi-threaded HTTP, Flask, or FastAPI (with async & WebSocket support).
 * **Direct-put optimization**
   For bucket-to-bucket jobs, send transformed objects straight to the target node (3 - 5× speedup).
+* **Direct FQN mode**
+  Set `ETL_DIRECT_FQN=true` to receive the local file path instead of bytes — zero memory allocation for large objects or tools like `ffmpeg` that read directly from disk.
 
 ---
 
@@ -47,7 +49,9 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
 ## Quickstart
 
 1. **Extend a server**
-   Pick your favorite base and override `transform(data: bytes, path: str, etl_args: str) -> bytes`.
+   Override `transform(data: Union[bytes, str], path: str, etl_args: str) -> bytes`.
+   - `data` is `bytes` by default (full object content).
+   - Set `ETL_DIRECT_FQN=true` in your container to receive the local file path as `str` instead, enabling direct file access without loading the file into the Python process's memory.
 
     ```python
     # echo_server.py

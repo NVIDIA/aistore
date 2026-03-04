@@ -1,8 +1,11 @@
+import os
 import sys
 import base64
 import unittest
 from unittest.mock import Mock
 from unittest.mock import patch
+
+from starlette.testclient import TestClient
 
 import aistore
 from aistore.sdk.const import (
@@ -13,21 +16,22 @@ from aistore.sdk.const import (
     URL_PATH_ETL,
     UTF_ENCODING,
     QPARAM_UUID,
+    QPARAM_ETL_FQN,
 )
+from aistore.sdk.errors import AISError
+from aistore.sdk.etl.etl import Etl, _get_runtime
+from aistore.sdk.etl.etl_config import ETLConfig
 from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPUSH,
     ETL_COMM_HPULL,
     DEFAULT_ETL_TIMEOUT,
     DEFAULT_ETL_OBJ_TIMEOUT,
 )
-
+from aistore.sdk.etl.webserver import serialize_class
+from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
+from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.types import ETLDetails
 from aistore.sdk.utils import convert_to_seconds
-from aistore.sdk.etl.etl import Etl, _get_runtime
-from aistore.sdk.etl.etl_config import ETLConfig
-from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
-from aistore.sdk.etl.webserver import serialize_class
-from aistore.sdk.errors import AISError
 
 from tests.const import ETL_NAME
 
@@ -196,6 +200,22 @@ class TestEtl(
 
         expected_payload = serialize_class(AnotherETL)
         self.assertEqual(init_kwargs["ETL_CLASS_PAYLOAD"], expected_payload)
+
+    @unittest.skipIf(
+        sys.version_info < (3, 9) or sys.version_info >= (3, 14),
+        "requires Python 3.9 to 3.13 inclusive",
+    )
+    def test_init_class_direct_file_access(self):
+        class DFAServer(HTTPMultiThreadedServer):
+            def transform(self, data, *_args) -> bytes:
+                return data if isinstance(data, bytes) else open(data, "rb").read()
+
+        self.etl.init = Mock(return_value="job-dfa")
+        decorator = self.etl.init_class(direct_file_access=True)
+        decorator(DFAServer)
+
+        _, init_kwargs = self.etl.init.call_args
+        self.assertTrue(init_kwargs["direct_file_access"])
 
     def test_decorator_non_subclass_raises(self):
         decorator = self.etl.init_class()
@@ -373,6 +393,29 @@ class TestEtl(
             json=expected_action,
         )
 
+    def test_init_direct_file_access(self):
+        image = "img-dfa"
+        mock_resp = Mock()
+        mock_resp.text = "job-dfa"
+        self.mock_client.request.return_value = mock_resp
+
+        self.etl.init(image, direct_file_access=True)
+
+        _, call_kwargs = self.mock_client.request.call_args
+        env = call_kwargs["json"]["runtime"]["env"]
+        self.assertIn({"name": "ETL_DIRECT_FQN", "value": "true"}, env)
+
+    def test_init_direct_file_access_false_by_default(self):
+        image = "img-no-dfa"
+        mock_resp = Mock()
+        mock_resp.text = "job-no-dfa"
+        self.mock_client.request.return_value = mock_resp
+
+        self.etl.init(image)
+
+        _, call_kwargs = self.mock_client.request.call_args
+        self.assertIsNone(call_kwargs["json"]["runtime"].get("env"))
+
     def test_init_invalid_comm(self):
         with self.assertRaises(ValueError):
             self.etl.init("img", ["cmd"], comm_type="not-a-valid-type")
@@ -402,6 +445,113 @@ class TestEtl(
 
         self.etl.stop.assert_called_once()
         self.etl.delete.assert_called_once()
+
+
+class TestDirectFileAccessEndToEnd(unittest.TestCase):
+    """
+    Verify that direct_file_access=True in Etl.init() actually causes transform()
+    to receive a str filepath rather than bytes when the server handles a request
+    with an FQN.
+
+    This chains the full path:
+      Etl.init(direct_file_access=True)
+        → ETL_DIRECT_FQN=true injected into container env vars
+          → ETLServer reads os.getenv("ETL_DIRECT_FQN")
+            → request with FQN query param
+              → transform() receives str (filepath), not bytes
+    """
+
+    def setUp(self):
+        self.mock_client = Mock()
+        self.mock_client.request.return_value = Mock(text="job-e2e")
+        self.etl = Etl(self.mock_client, ETL_NAME)
+
+    def tearDown(self):
+        os.environ.pop("ETL_DIRECT_FQN", None)
+        os.environ.pop("AIS_TARGET_URL", None)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_direct_file_access_arg_causes_transform_to_receive_str(self):
+        """
+        Calling init(direct_file_access=True) injects ETL_DIRECT_FQN=true into the
+        container env. Simulate the container booting with that env and verify that
+        a request carrying an FQN results in transform() receiving a str path.
+        """
+        # 1. Call init() and capture what env vars would be injected into the pod.
+        self.etl.init("some-image", direct_file_access=True)
+        _, call_kwargs = self.mock_client.request.call_args
+        env_list = call_kwargs["json"]["runtime"]["env"]
+        injected = {e["name"]: e["value"] for e in env_list}
+        self.assertIn("ETL_DIRECT_FQN", injected, "ETL_DIRECT_FQN must be injected")
+        self.assertEqual(injected["ETL_DIRECT_FQN"], "true")
+
+        # 2. Simulate the container environment receiving those injected env vars.
+        for name, value in injected.items():
+            os.environ[name] = value
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+
+        # 3. Boot a server as the container would — it reads ETL_DIRECT_FQN from env.
+        received = []
+
+        class ProbeServer(FastAPIServer):
+            def transform(self, data, _path, _etl_args):
+                received.append(data)
+                return data.encode() if isinstance(data, str) else data
+
+        server = ProbeServer()
+        client = TestClient(server.app)
+
+        # 4. Send a request with an FQN (as AIS target would in hpush mode).
+        fqn = "/mnt/ais/local/bucket/object.bin"
+        client.put("/bucket/object.bin", content=b"", params={QPARAM_ETL_FQN: fqn})
+
+        # 5. transform() must have received the file path as str, not bytes.
+        self.assertEqual(len(received), 1)
+        self.assertIsInstance(
+            received[0],
+            str,
+            "transform() should receive str filepath when direct_file_access=True",
+        )
+        self.assertEqual(received[0], os.path.normpath(fqn))
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_without_direct_file_access_transform_receives_bytes(self):
+        """
+        Without direct_file_access, ETL_DIRECT_FQN is never set, so transform()
+        must always receive bytes even when an FQN query param is present.
+        """
+        # init() without direct_file_access — no ETL_DIRECT_FQN in the payload.
+        self.etl.init("some-image")
+        _, call_kwargs = self.mock_client.request.call_args
+        runtime = call_kwargs["json"]["runtime"]
+        env_list = runtime.get("env") or []
+        injected_names = {e["name"] for e in env_list}
+        self.assertNotIn("ETL_DIRECT_FQN", injected_names)
+
+        # Boot the server without ETL_DIRECT_FQN set.
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+
+        received = []
+
+        class ProbeServer(FastAPIServer):
+            def transform(self, data, _path, _etl_args):
+                received.append(data)
+                return data if isinstance(data, bytes) else data.encode()
+
+        server = ProbeServer()
+        client = TestClient(server.app)
+
+        # No FQN — plain hpush with body bytes (e.g. pipeline intermediate stage).
+        body = b"some object bytes"
+        client.put("/bucket/object.bin", content=body)
+
+        self.assertEqual(len(received), 1)
+        self.assertIsInstance(
+            received[0],
+            bytes,
+            "transform() should receive bytes when direct_file_access is not set",
+        )
+        self.assertEqual(received[0], body)
 
 
 class TestETLConfig(unittest.TestCase):
