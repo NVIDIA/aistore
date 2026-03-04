@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -30,6 +30,7 @@ const (
 	errNilCksumType = "checksum is empty (checksum type %q) - cannot validate"
 )
 
+// request
 type (
 	BaseParams struct {
 		Client *http.Client
@@ -60,15 +61,17 @@ type (
 	}
 )
 
+// response
 type (
 	reqResp struct {
 		client *http.Client
 		req    *http.Request
 		resp   *http.Response
+		iter   int // 0-based
 	}
 	wrappedResp struct {
 		*http.Response
-		n int64 // number bytes read from `resp.Body`
+		n int64 // num bytes read from `resp.Body`
 	}
 )
 
@@ -196,20 +199,26 @@ func (reqParams *ReqParams) doReader() (io.ReadCloser, int64, error) {
 	return resp.Body, resp.ContentLength, nil
 }
 
-// makes HTTP request, retries on connection-refused and reset errors, and returns the response
+// common/generic: used by all do*() methods above
 func (reqParams *ReqParams) do() (resp *http.Response, err error) {
-	var reqBody io.Reader
+	// request body
+	var body io.Reader
 	if reqParams.Body != nil {
-		reqBody = bytes.NewBuffer(reqParams.Body)
+		body = bytes.NewReader(reqParams.Body)
 	}
-	urlPath := reqParams.BaseParams.URL + reqParams.Path
-	req, errR := http.NewRequestWithContext(context.Background(), reqParams.BaseParams.Method, urlPath, reqBody)
+
+	// http request
+	var (
+		urlPath   = reqParams.BaseParams.URL + reqParams.Path
+		req, errR = http.NewRequestWithContext(context.Background(), reqParams.BaseParams.Method, urlPath, body)
+	)
 	if errR != nil {
 		return nil, fmt.Errorf("failed to create http request: %w", errR)
 	}
 	reqParams.setRequestOptParams(req)
 	SetAuxHeaders(req, &reqParams.BaseParams)
 
+	// do w/ retry
 	var (
 		rr   = reqResp{client: reqParams.BaseParams.Client, req: req}
 		args = &cmn.RetryArgs{
@@ -224,10 +233,15 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 	_, err = args.Do()
 	resp = rr.resp
 
+	// handle response
 	if err == nil {
 		return resp, nil
 	}
 	if resp != nil {
+		if rr.resp.Body != nil {
+			cos.DrainReader(rr.resp.Body)
+			rr.resp.Body.Close()
+		}
 		herr := cmn.NewErrHTTP(req, err, resp.StatusCode)
 		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 		return nil, herr
@@ -461,7 +475,29 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 /////////////
 
 func (rr *reqResp) call() (status int, err error) {
+	if rr.resp != nil && rr.resp.Body != nil {
+		cos.DrainReader(rr.resp.Body)
+		rr.resp.Body.Close()
+		rr.resp.Body = nil
+	}
+
+	// ref: stdlib http.NewRequestWithContext
+	// (quote):
+	//	   "If body is of type [*bytes.Buffer], [*bytes.Reader], or
+	//	   [*strings.Reader], the returned request's ContentLength is set to its
+	//	   exact value (instead of -1), GetBody is populated (so 307 and 308
+	//	   redirects can replay the body), and Body is set to [NoBody] if the
+	//	   ContentLength is 0."
+	if rr.req.GetBody != nil && rr.iter > 0 {
+		rc, err := rr.req.GetBody()
+		if err != nil {
+			return 0, err
+		}
+		rr.req.Body = rc
+	}
+
 	rr.resp, err = rr.client.Do(rr.req) //nolint:bodyclose // closed by a caller
+	rr.iter++
 	if rr.resp != nil {
 		status = rr.resp.StatusCode
 	}

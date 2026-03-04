@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -45,7 +45,6 @@ func (args *RetryArgs) Do() (ecode int, err error) {
 		hardErrCnt, softErrCnt, iter int
 		lastErr                      error
 		callerStr                    string
-		sleep                        = args.Sleep
 	)
 	if args.Sleep == 0 {
 		if args.IsClient {
@@ -54,6 +53,7 @@ func (args *RetryArgs) Do() (ecode int, err error) {
 			args.Sleep = Rom.CplaneOperation() / 4
 		}
 	}
+	sleep := args.Sleep
 	if args.Caller != "" {
 		callerStr = args.Caller + ": "
 	}
