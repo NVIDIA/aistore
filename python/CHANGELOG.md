@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.21.0] - 2026-03-04
+
 ### Added
 
 - ETL Webserver: `ETL_DIRECT_FQN` environment variable opt-in for direct file access. When set to `true`, `transform()` receives the object's local filesystem path as `str` instead of loading the file into the Python process's heap
