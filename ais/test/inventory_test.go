@@ -278,10 +278,7 @@ func TestListInventory(t *testing.T) {
 			// 4. validate sorted order and no duplicates
 			for i := 1; i < len(allEntries); i++ {
 				prev, curr := allEntries[i-1].Name, allEntries[i].Name
-				if prev > curr {
-					tlog.Logfln("entries not sorted or duplicate at [%d]: %q >= %q", i, prev, curr)
-					break
-				}
+				tassert.Fatalf(t, prev < curr, "entries not sorted or duplicate at [%d]: %q >= %q", i, prev, curr)
 			}
 
 			// 5. validate names match what was PUT

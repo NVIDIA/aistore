@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -202,21 +203,28 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 			if err := nbi.readChunk(); err != nil {
 				return err
 			}
-			// prefix - to skip this chunk
+			// skip this chunk (#1)
 			if msg.Prefix != "" && nbi.hdr.last < msg.Prefix {
+				nbi.nidx = len(nbi.entries)
 				continue
 			}
 		}
 
 		out := nbi.entries[nbi.nidx]
-
 		// prefix
 		if msg.Prefix != "" {
-			if out.Name < msg.Prefix {
-				// skip until
-				nbi.nidx++
-				continue
+			if nbi.nidx == 0 {
+				i := sort.Search(len(nbi.entries), func(i int) bool {
+					return nbi.entries[i].Name >= msg.Prefix
+				})
+				// skip this chunk (#2)
+				if i >= len(nbi.entries) {
+					nbi.nidx = len(nbi.entries)
+					continue
+				}
+				nbi.nidx = i
 			}
+			out = nbi.entries[nbi.nidx]
 			if !strings.HasPrefix(out.Name, msg.Prefix) {
 				// done
 				return nil
