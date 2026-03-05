@@ -27,15 +27,20 @@ import (
 // XactNBI: create native bucket inventory (NBI)
 
 // TODO -- FIXME:
-// 1. inventory manifest { meta-version = nbiMetaVer; started/finished; schema (lsmsg); prefix[; optimizing meta] }
-//    (not to confuse with underlying chunk manifest)
-// 2. related to the above" `ais show bucket-inventory`, etc.
-// 3. when invName empty: LPI-list existing inventories and select (latest or (****) best-fit for requested lsmsg)
-//    (note: LPI might be an overkill)
-// 4. integration tests and stress tests
+// - destroy-bucket and evict-bucket => remove inventory
+// - integration tests
 // ----
-// 5. multi-target (***** remove smap.CountActiveTs = 1)
-// 6. stats: internal (-> CtlMsg) and Prometheus
+// - .sys-inventory/BUCKET-UNAME/.sys-redirect => HRW(inventory LOM)
+// ----
+// - multi-target (***** remove smap.CountActiveTs = 1)
+// - stats: internal (-> CtlMsg) and Prometheus
+//
+// ================ v4.4 ==================================
+//
+// - inventory manifest { meta-version = nbiMetaVer; started/finished; schema (lsmsg); prefix[; optimizing meta] }
+// - multi-choice logic: best-fitting inventory when multiple present
+// - cleanup/GC
+// - `ais show bucket-inventory` and `ais rm bucket-inventory`
 
 // on-disk formatting
 const (
@@ -228,7 +233,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 				return
 			}
 
-			// nbiariant: backend must reuse the passed-in slice ([:0] + append)
+			// backend must reuse the passed-in slice ([:0] + append)
 			reused := _sameBacking(dst, lst.Entries)
 
 			switch {

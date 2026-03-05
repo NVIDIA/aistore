@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -174,15 +175,10 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	pageSize := cos.NonZero(msg.PageSize, apc.MaxPageSizeAIS) // (not taking bucket's - native backend override)
 
 	if msg.ContinuationToken != "" {
-		saveNum, saveIdx := nbi.chunkNum, nbi.nidx
+		saveNum := nbi.chunkNum
 		if err := nbi.parseContToken(msg.ContinuationToken); err != nil {
 			return err
 		}
-
-		// TODO -- FIXME: remove when tested enough
-		debug.Assertf(saveNum == nbi.chunkNum && saveIdx == nbi.nidx,
-			"not expecting when testing basic functionality: (%d vs %d), (%d vs %d)", saveNum, nbi.chunkNum, saveIdx, nbi.nidx)
-
 		if saveNum != nbi.chunkNum {
 			if err := nbi.readChunk(); err != nil {
 				return err
@@ -191,7 +187,13 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	}
 
 	for len(lst.Entries) < int(pageSize) {
+		// next chunk
 		if nbi.nidx >= len(nbi.entries) {
+			// TODO: rather than crossing chunk boundary, currently returning a partially filled page
+			if len(lst.Entries) > 0 {
+				break
+			}
+
 			nbi.chunkNum++
 			if nbi.chunkNum > nbi.ufest.Count() {
 				// no more chunks - we are done
@@ -200,11 +202,27 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 			if err := nbi.readChunk(); err != nil {
 				return err
 			}
+			// prefix - to skip this chunk
+			if msg.Prefix != "" && nbi.hdr.last < msg.Prefix {
+				continue
+			}
 		}
 
-		// TODO -- FIXME: prefix filtering
-
 		out := nbi.entries[nbi.nidx]
+
+		// prefix
+		if msg.Prefix != "" {
+			if out.Name < msg.Prefix {
+				// skip until
+				nbi.nidx++
+				continue
+			}
+			if !strings.HasPrefix(out.Name, msg.Prefix) {
+				// done
+				return nil
+			}
+		}
+
 		nbi.nidx++
 		lst.Entries = append(lst.Entries, out)
 	}
