@@ -3,6 +3,7 @@ Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 import os
+import warnings
 from typing import Optional, Tuple, Union
 from multiprocessing import current_process
 
@@ -11,7 +12,50 @@ from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 import urllib3
 
-from aistore.sdk.const import AIS_CLIENT_CA, AIS_CLIENT_KEY, AIS_CLIENT_CRT, HTTPS, HTTP
+from aistore.sdk.const import (
+    AIS_CLIENT_CA,
+    AIS_CLIENT_KEY,
+    AIS_CLIENT_CRT,
+    AIS_SKIP_VERIFY,
+    HTTPS,
+    HTTP,
+)
+
+
+def resolve_ssl_config(
+    skip_verify: bool = False,
+    ca_cert: Optional[str] = None,
+    client_cert: Optional[Union[str, Tuple[str, str]]] = None,
+) -> tuple:
+    """
+    Set session verify value for validating the server's SSL certificate
+    The requests library allows this to be a boolean or a string path to the cert
+    If we do not skip verification, the order is:
+      1. Provided cert path
+      2. Cert path from env var.
+      3. True (verify with system's approved CA list)
+
+    Returns:
+        (verify, cert) where:
+          - verify: False to skip verification, a CA cert path string, or True for default system CA
+          - cert: None if no client cert, a path string, or a (cert_path, key_path) tuple for mTLS
+    """
+    if not skip_verify:
+        skip_verify = os.environ.get(AIS_SKIP_VERIFY, "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+    if not client_cert:
+        cert = os.getenv(AIS_CLIENT_CRT)
+        key = os.getenv(AIS_CLIENT_KEY)
+        client_cert = (cert, key) if cert and key else None
+    if skip_verify:
+        return False, client_cert
+    if ca_cert:
+        return ca_cert, client_cert
+    env_crt = os.getenv(AIS_CLIENT_CA)
+    return env_crt if env_crt else True, client_cert
 
 
 class SessionManager:
@@ -41,7 +85,19 @@ class SessionManager:
     ):
         self._retry = retry
         self._ca_cert = ca_cert
+        if not skip_verify:
+            skip_verify = os.environ.get(AIS_SKIP_VERIFY, "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
         self._skip_verify = skip_verify
+        if self._skip_verify:
+            warnings.warn(
+                "Skipping SSL certificate verification is insecure. "
+                "Use a valid SSL certificate instead.",
+                UserWarning,
+            )
         if not client_cert:
             cert = os.getenv(AIS_CLIENT_CRT)
             key = os.getenv(AIS_CLIENT_KEY)
@@ -85,24 +141,6 @@ class SessionManager:
 
         return self._session_pool[pid]
 
-    def _set_session_verification(self, request_session: Session):
-        """
-        Set session verify value for validating the server's SSL certificate
-        The requests library allows this to be a boolean or a string path to the cert
-        If we do not skip verification, the order is:
-          1. Provided cert path
-          2. Cert path from env var.
-          3. True (verify with system's approved CA list)
-        """
-        if self._skip_verify:
-            request_session.verify = False
-            return
-        if self._ca_cert:
-            request_session.verify = self._ca_cert
-            return
-        env_crt = os.getenv(AIS_CLIENT_CA)
-        request_session.verify = env_crt if env_crt else True
-
     def _create_session(self) -> Session:
         """
         Creates a new `requests` session for HTTP requests.
@@ -111,8 +149,9 @@ class SessionManager:
             New HTTP request Session
         """
         request_session = Session()
-        request_session.cert = self._client_cert
-        self._set_session_verification(request_session)
+        request_session.verify, request_session.cert = resolve_ssl_config(
+            self._skip_verify, self._ca_cert, self._client_cert
+        )
 
         adapter = HTTPAdapter(
             max_retries=self._retry,

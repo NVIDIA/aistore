@@ -19,6 +19,7 @@ import aiofiles
 import uvicorn
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.session_manager import resolve_ssl_config
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
@@ -35,6 +36,7 @@ from aistore.sdk.const import (
     QPARAM_ETL_ARGS,
     QPARAM_ETL_FQN,
     STATUS_INTERNAL_SERVER_ERROR,
+    HEADER_AUTHORIZATION,
 )
 
 HTTP_LIMITS = httpx.Limits(
@@ -102,7 +104,12 @@ class FastAPIServer(ETLServer):
 
     async def startup_event(self):
         """Initialize resources on server startup."""
-        self.client = httpx.AsyncClient(timeout=None, limits=HTTP_LIMITS)
+        verify, cert = resolve_ssl_config()
+        headers = {HEADER_AUTHORIZATION: f"Bearer {self.token}"} if self.token else {}
+
+        self.client = httpx.AsyncClient(
+            timeout=None, limits=HTTP_LIMITS, verify=verify, cert=cert, headers=headers
+        )
         self.logger.info("Server starting up")
 
     async def shutdown_event(self):

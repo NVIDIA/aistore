@@ -107,18 +107,17 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         handler.send_header.assert_called_once_with("Content-Type", "application/test")
         handler.end_headers.assert_called_once()
 
-    @patch("requests.get")
-    def test_transform_get(self, mock_get):
+    def test_transform_get(self):
         handler = DummyRequestHandler()
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.content = b"original"
-        mock_get.return_value = mock_resp
+        handler.server.etl_server.session.get.return_value = mock_resp
 
         handler.do_GET()
 
-        mock_get.assert_called_once()
+        handler.server.etl_server.session.get.assert_called_once()
         handler.server.etl_server.transform.assert_called_with(
             b"original", "/test/object", ""
         )
@@ -136,8 +135,7 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         )
         self.assertIn(b"transformed", handler.wfile.getvalue())
 
-    @patch("requests.get")
-    def test_transform_get_with_direct_put(self, mock_get):
+    def test_transform_get_with_direct_put(self):
         direct_put_url = "http://some-target/put/object"
         handler = DummyRequestHandler()
         handler.headers = {HEADER_NODE_URL: direct_put_url}
@@ -145,7 +143,7 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         mock_get_resp = MagicMock()
         mock_get_resp.status_code = 200
         mock_get_resp.content = b"original"
-        mock_get.return_value = mock_get_resp
+        handler.server.etl_server.session.get.return_value = mock_get_resp
 
         # Simulate direct put success (200)
         mock_put_resp = MagicMock()
@@ -560,7 +558,7 @@ class TestFlaskServer(unittest.TestCase):
     def test_transform_get(self):
         input_data = b"flask get data"
         path = "/some/key?etl_args=arg"
-        with patch("aistore.sdk.etl.webserver.flask_server.requests.get") as mock_get:
+        with patch("requests.Session.get") as mock_get:
             mock_get.return_value = MagicMock(
                 content=input_data, raise_for_status=MagicMock()
             )
@@ -577,9 +575,7 @@ class TestFlaskServer(unittest.TestCase):
         transformed_content = self.etl_server.transform(input_content, path, "")
         headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
 
-        with patch(
-            "aistore.sdk.etl.webserver.base_etl_server.requests.put"
-        ) as mock_put:
+        with patch("requests.Session.put") as mock_put:
             # Mock the direct delivery response (simulate 200 OK)
             mock_put.return_value = MagicMock(status_code=200, content=b"")
             response = self.client.put(f"/{path}", data=input_content, headers=headers)
@@ -591,9 +587,7 @@ class TestFlaskServer(unittest.TestCase):
             )
             self.assertEqual(response.data, b"")  # No content returned
 
-        with patch(
-            "aistore.sdk.etl.webserver.base_etl_server.requests.put"
-        ) as mock_put:
+        with patch("requests.Session.put") as mock_put:
             # Mock the direct delivery response (simulate 500 FAIL)
             mock_put.return_value = MagicMock(status_code=500, content=b"error message")
             response = self.client.put(f"/{path}", data=input_content, headers=headers)

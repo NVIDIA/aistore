@@ -100,6 +100,7 @@ The AIS Python SDK supports several environment variables that allow you to conf
 | Environment Variable | Description | Default Value |
 |---------------------|-------------|---------------|
 | `AIS_AUTHN_TOKEN` | Authentication token for accessing the AIS cluster | None |
+| `AIS_SKIP_VERIFY` | Skip SSL certificate verification when set to `true`, `1`, or `yes` | `false` |
 | `AIS_CLIENT_CA` | Path to CA certificate file for SSL verification | None |
 | `AIS_CRT` | Path to client certificate file for mTLS authentication | None |
 | `AIS_CRT_KEY` | Path to client certificate key file for mTLS authentication | None |

@@ -116,7 +116,7 @@ class FlaskServer(ETLServer):
             obj_path = quote(path, safe="@")
             target_url = f"{self.host_target}/{obj_path}"
             self.logger.debug("Forwarding GET to: %s", target_url)
-            resp = requests.get(target_url, timeout=None)
+            resp = self.session.get(target_url, timeout=None)
             resp.raise_for_status()
             source = resp.content
         return self.transform(source, path, etl_args)

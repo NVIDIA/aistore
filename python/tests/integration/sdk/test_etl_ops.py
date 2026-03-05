@@ -599,6 +599,38 @@ class TestETLOps(unittest.TestCase):
             ).read_all()
 
     @pytest.mark.etl
+    def test_init_etl_class_direct_file_access(self):
+        """
+        Verify that direct_file_access=True causes transform() to receive the
+        object's local filesystem path as str (not bytes). The transform reads
+        the file directly and returns its content; the caller asserts the result
+        matches the original object bytes.
+        """
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class(direct_file_access=True)
+        class DirectFileAccessServer(FastAPIServer):
+            def transform(self, data, _path, _etl_args) -> bytes:
+                if not isinstance(data, str):
+                    raise TypeError(f"Expected str filepath, got {type(data).__name__}")
+                self.logger.info("direct_file_access filepath: %s", data)
+                basename = os.path.basename(data)
+                if basename != os.path.basename(_path):
+                    raise ValueError(
+                        f"Filepath basename {basename!r} does not match "
+                        f"object name {os.path.basename(_path)!r}"
+                    )
+                with open(data, "rb") as f:
+                    return f.read()
+
+        result = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=self.etl_name))
+            .read_all()
+        )
+        self.assertEqual(result, bytes(self.content))
+
+    @pytest.mark.etl
     def test_etl_pod_runtime_failure(self):
         etl = self.client.etl(self.etl_name)
 

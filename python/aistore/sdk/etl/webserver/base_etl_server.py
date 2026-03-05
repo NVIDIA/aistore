@@ -10,7 +10,14 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Union
 from urllib.parse import unquote
 import requests
-from aistore.sdk.const import STATUS_NO_CONTENT, STATUS_OK, HEADER_DIRECT_PUT_LENGTH
+from aistore.sdk.const import (
+    STATUS_NO_CONTENT,
+    STATUS_OK,
+    HEADER_AUTHORIZATION,
+    HEADER_DIRECT_PUT_LENGTH,
+    AIS_AUTHN_TOKEN,
+)
+from aistore.sdk.session_manager import SessionManager
 
 
 class ETLServer(ABC):
@@ -29,6 +36,16 @@ class ETLServer(ABC):
         Sets up:
         - `host_target`: AIS target URL from the `AIS_TARGET_URL` environment variable.
         - `logger`: A class-specific logger configured to output to stdout.
+        - `session`: A `requests.Session` pre-configured with SSL/auth settings derived
+          from environment variables (see below).
+
+        SSL / auth environment variables:
+        - `AIS_SKIP_VERIFY`: Set to `"true"`, `"1"`, or `"yes"` to disable SSL
+          certificate verification when the server contacts AIS targets.
+        - `AIS_CLIENT_CA`: Path to a CA certificate bundle used for SSL verification.
+        - `AIS_CRT`: Path to a client certificate PEM file (used for mTLS).
+        - `AIS_CRT_KEY`: Path to the client certificate private key (used for mTLS).
+        - `AIS_AUTHN_TOKEN`: Bearer token sent in every outbound request header.
 
         Subclasses can extend this method to initialize any transformation-specific
         resources (e.g., preloaded models, hash functions, lookup tables) required
@@ -50,6 +67,9 @@ class ETLServer(ABC):
         self.direct_put = os.getenv("DIRECT_PUT", "false").lower() == "true"
         self.direct_fqn = os.getenv("ETL_DIRECT_FQN", "false").lower() == "true"
 
+        self.token = os.environ.get(AIS_AUTHN_TOKEN)
+        self.session = self._build_session()
+
         # Configure logging
         logging.basicConfig(
             level=logging.INFO,
@@ -58,6 +78,13 @@ class ETLServer(ABC):
         )
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
+
+    def _build_session(self) -> requests.Session:
+        """Build a requests.Session by delegating SSL/cert config to SessionManager."""
+        session = SessionManager().session
+        if self.token:
+            session.headers.update({HEADER_AUTHORIZATION: f"Bearer {self.token}"})
+        return session
 
     @abstractmethod
     def transform(self, data: Union[bytes, str], path: str, etl_args: str) -> bytes:
@@ -100,8 +127,8 @@ class ETLServer(ABC):
     def client_put(
         self, url: str, data: bytes, headers: dict, timeout: int = None
     ) -> requests.Response:
-        """Simple wrapper for requests.put()."""
-        return requests.put(url, data, timeout=timeout, headers=headers)
+        """Send a PUT request using the pre-configured session."""
+        return self.session.put(url, data=data, timeout=timeout, headers=headers)
 
     def handle_direct_put_response(
         self, resp: requests.Response, data: bytes

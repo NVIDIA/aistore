@@ -201,7 +201,7 @@ class HTTPMultiThreadedServer(ETLServer):
                     target_url = f"{self.server.etl_server.host_target}{raw_path}"
                     logger.debug("Forwarding GET to AIS target: %s", target_url)
 
-                    resp = requests.get(target_url, timeout=None)
+                    resp = self.server.etl_server.session.get(target_url, timeout=None)
 
                     if resp.status_code != STATUS_OK:
                         logger.warning(

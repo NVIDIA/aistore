@@ -36,7 +36,8 @@ class Client:
 
     Args:
         endpoint (str): AIStore endpoint.
-        skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
+        skip_verify (bool, optional): If True, skip SSL certificate verification. If False (default),
+            the 'AIS_SKIP_VERIFY' environment variable is also checked.
         ca_cert (str, optional): Path to a CA certificate file for SSL verification. If not provided,
             the 'AIS_CLIENT_CA' environment variable will be used. Defaults to None.
         client_cert (Union[str, Tuple[str, str], None], optional): Path to a client certificate PEM file
@@ -209,13 +210,6 @@ class Client:
             self.retry_config.http_retry = retry
         else:
             self.retry_config = RetryConfig.default()
-
-        if skip_verify:
-            warnings.warn(
-                "Skipping SSL certificate verification is insecure. "
-                "Use a valid SSL certificate instead.",
-                UserWarning,
-            )
 
         # Resolve configuration values: params > env_vars > defaults
         timeout = self._resolve_timeout(timeout)
