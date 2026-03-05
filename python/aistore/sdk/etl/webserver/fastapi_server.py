@@ -26,6 +26,8 @@ from aistore.sdk.etl.webserver.utils import (
 )
 from aistore.sdk.errors import InvalidPipelineError
 from aistore.sdk.const import (
+    MIB,
+    AIS_DIRECT_PUT_CHUNK_SIZE,
     HEADER_NODE_URL,
     HEADER_CONTENT_LENGTH,
     STATUS_OK,
@@ -58,6 +60,7 @@ class FastAPIServer(ETLServer):
         self.app = FastAPI()
         self.client: Optional[httpx.AsyncClient] = None
         self.active_connections: List[WebSocket] = []
+        self.chunk_size: int = int(os.getenv(AIS_DIRECT_PUT_CHUNK_SIZE, str(MIB)))
         self._setup_app()
 
     def _setup_app(self):
@@ -224,6 +227,17 @@ class FastAPIServer(ETLServer):
         response.raise_for_status()
         return response.content
 
+    @staticmethod
+    async def _iter_chunks(data: bytes, chunk_size: int = MIB):
+        """
+        Yield `data` in `chunk_size` pieces as an async bytes generator.
+
+        Recommended approach for large PUT bodies with `httpx.AsyncClient`.
+        See https://www.python-httpx.org/async/#streaming-requests.
+        """
+        for i in range(0, len(data), chunk_size):
+            yield data[i : i + chunk_size]
+
     async def _direct_put(
         self,
         direct_put_url: str,
@@ -246,18 +260,25 @@ class FastAPIServer(ETLServer):
         """
         try:
             url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
-            headers = {}
+            headers = {HEADER_CONTENT_LENGTH: str(len(data))}
             if remaining_pipeline:
                 headers[HEADER_NODE_URL] = remaining_pipeline
             # TODO: add etl_args to qparams if present
 
-            resp = await self.client.put(url, content=data, headers=headers)
+            resp = await self.client.put(
+                url, content=self._iter_chunks(data, self.chunk_size), headers=headers
+            )
             return self.handle_direct_put_response(resp, data)
 
         except Exception as exc:
-            error = str(exc).encode()
-            self.logger.error("Direct put exception to %s: %s", direct_put_url, exc)
-            return STATUS_INTERNAL_SERVER_ERROR, error, 0
+            self.logger.error(
+                "direct_put to %s failed (data_len=%d): %s",
+                url,
+                len(data),
+                exc,
+                exc_info=True,
+            )
+            return STATUS_INTERNAL_SERVER_ERROR, str(exc).encode(), 0
 
     def _build_response(self, content: bytes, mime_type: str) -> Response:
         """Construct standardized response with appropriate headers."""

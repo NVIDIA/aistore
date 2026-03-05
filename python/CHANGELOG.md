@@ -10,6 +10,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - `AIS_SKIP_VERIFY` environment variable support: when set to `true`, `1`, or `yes`, SSL certificate verification is skipped automatically. Handled centrally in `SessionManager` alongside the existing `AIS_CLIENT_CA`, `AIS_CRT`, and `AIS_CRT_KEY` env vars.
 - ETL webservers (`FastAPIServer`, `FlaskServer`, `HTTPMultiThreadedServer`) now read SSL/auth environment variables (`AIS_SKIP_VERIFY`, `AIS_CLIENT_CA`, `AIS_CRT`, `AIS_CRT_KEY`, `AIS_AUTHN_TOKEN`) on startup to configure outbound connections to AIS targets.
+- `FastAPIServer`: stream large PUT bodies via async generator (`_iter_chunks`) to avoid single-write SSL failures on multi-gigabyte payloads. Chunk size defaults to 1 MiB and is configurable via `AIS_DIRECT_PUT_CHUNK_SIZE`.
 
 ## [1.21.0] - 2026-03-04
 

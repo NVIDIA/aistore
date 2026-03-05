@@ -107,6 +107,7 @@ The AIS Python SDK supports several environment variables that allow you to conf
 | `AIS_CONNECT_TIMEOUT` | Connection timeout in seconds (set to `0` to disable) | `3` |
 | `AIS_READ_TIMEOUT` | Read timeout in seconds (set to `0` to disable) | `20` |
 | `AIS_MAX_CONN_POOL` | Maximum number of connections per host in the connection pool | `10` |
+| `AIS_DIRECT_PUT_CHUNK_SIZE` | Chunk size in bytes for streaming direct-put bodies in `FastAPIServer` | `1048576` (1 MiB) |
 
 ### Configuration Precedence
 

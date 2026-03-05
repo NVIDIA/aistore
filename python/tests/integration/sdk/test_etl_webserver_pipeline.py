@@ -5,7 +5,7 @@ import time
 import threading
 import concurrent.futures
 from http.server import HTTPServer
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch, ANY
 from fastapi.testclient import TestClient
 
 import requests
@@ -516,7 +516,9 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         )
 
         server2.client.put.assert_awaited_once_with(
-            "http://localhost:19043/target", content=result, headers={}
+            "http://localhost:19043/target",
+            content=ANY,
+            headers={HEADER_CONTENT_LENGTH: str(len(result))},
         )
 
     @pytest.mark.etl
@@ -796,7 +798,9 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
 
                 # Verify direct put was called
                 mock_client.put.assert_awaited_once_with(
-                    "http://localhost:14032/target", content=expected_data, headers={}
+                    "http://localhost:14032/target",
+                    content=ANY,
+                    headers={HEADER_CONTENT_LENGTH: str(len(expected_data))},
                 )
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")

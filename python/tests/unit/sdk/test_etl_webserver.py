@@ -2,6 +2,7 @@ import os
 import sys
 import io
 import unittest
+from unittest import mock
 from unittest.mock import MagicMock, patch, AsyncMock
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from flask.testing import FlaskClient
 
 from aistore.sdk.const import (
     HEADER_NODE_URL,
+    HEADER_CONTENT_LENGTH,
     ETL_WS_FQN,
     ETL_WS_PIPELINE,
     HEADER_DIRECT_PUT_LENGTH,
@@ -405,7 +407,9 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
 
             mock_client.put.assert_awaited_once()
             mock_client.put.assert_called_once_with(
-                direct_put_url, content=input_data[::-1], headers={}
+                direct_put_url,
+                content=mock.ANY,
+                headers={HEADER_CONTENT_LENGTH: str(len(input_data[::-1]))},
             )
 
         # Mock the direct put response (simulate 500 FAIL) => return transformed data
@@ -430,7 +434,9 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
 
             mock_client.put.assert_awaited_once()
             mock_client.put.assert_called_once_with(
-                direct_put_url, content=input_data[::-1], headers={}
+                direct_put_url,
+                content=mock.ANY,
+                headers={HEADER_CONTENT_LENGTH: str(len(input_data[::-1]))},
             )
 
         # Mock the empty direct put url (don't need direct put on this object) => return transformed data
@@ -477,7 +483,9 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
 
             mock_client.put.assert_awaited_once()
             mock_client.put.assert_called_once_with(
-                direct_put_url, content=transformed_content, headers={}
+                direct_put_url,
+                content=mock.ANY,
+                headers={HEADER_CONTENT_LENGTH: str(len(transformed_content))},
             )
 
         # Mock the direct put response (simulate 500 FAIL) => return transformed data
@@ -509,7 +517,9 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
 
             mock_client.put.assert_awaited_once()
             mock_client.put.assert_called_once_with(
-                direct_put_url, content=transformed_content, headers={}
+                direct_put_url,
+                content=mock.ANY,
+                headers={HEADER_CONTENT_LENGTH: str(len(transformed_content))},
             )
 
         # Mock the empty direct put url (don't need direct put on this object) => return transformed object
