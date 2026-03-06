@@ -606,11 +606,27 @@ func setupBucket(runParams *params, created *bool) error {
 	}
 	exists, err := api.QueryBuckets(runParams.bp, cmn.QueryBcks(runParams.bck), apc.FltPresent)
 	if err != nil {
-		return fmt.Errorf("%s not found: %v", runParams.bck.String(), err)
+		if herr := cmn.AsErrHTTP(err); herr != nil {
+			return herr
+		}
+		return fmt.Errorf("%v (bucket %s)", err, runParams.bck.String())
 	}
 	if !exists {
 		if err := api.CreateBucket(runParams.bp, runParams.bck, nil); err != nil {
-			return fmt.Errorf("failed to create %s: %v", runParams.bck.String(), err)
+			// e.g. sequence:
+			// - attach remais
+			// - ais create ais://@remais/BUCKET
+			// - api.QueryBuckets(apc.FltPresent) won't see it in the local BMD
+			// - api.CreateBucket will fail then with:
+			if runParams.bck.IsRemoteAIS() {
+				herr := cmn.AsErrHTTP(err)
+				if herr != nil && herr.TypeCode == "ErrBucketAlreadyExists" {
+					err = nil
+				}
+			}
+			if err != nil {
+				return fmt.Errorf("failed to create %s: %v", runParams.bck.String(), err)
+			}
 		}
 		*created = true
 	}
