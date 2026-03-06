@@ -165,6 +165,15 @@ func NewClient(cargs TransportArgs) *http.Client {
 	return &http.Client{Transport: NewTransport(cargs), Timeout: cargs.Timeout}
 }
 
+// CloneClient returns a new *http.Client with an independent transport cloned from base
+// (same TLS config, proxy settings, dial options, pool sizes) but with a different Timeout.
+// TODO: tune connection pool settings for ETL access pattern (few hosts, long requests)
+func CloneClient(base *http.Client, timeout time.Duration) *http.Client {
+	bt := base.Transport.(*http.Transport)
+	t := bt.Clone() // deep-copies TLS config, dial funcs, proxy — independent pool
+	return &http.Client{Transport: t, Timeout: timeout}
+}
+
 func NewIntraClientTLS(cargs TransportArgs, config *Config) *http.Client {
 	return NewClientTLS(cargs, config.Net.HTTP.ToTLS(), true /*intra-cluster*/)
 }

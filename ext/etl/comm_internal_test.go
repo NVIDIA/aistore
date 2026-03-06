@@ -9,11 +9,13 @@ import (
 	cryptorand "crypto/rand"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -151,10 +153,12 @@ var _ = Describe("CommunicatorTest", func() {
 				case Hpush, HpushStdin:
 					pc := &pushComm{}
 					pc.msg, pc.podURI, pc.xctn = msg, transformerServer.URL, xetl
+					pc.client = &http.Client{}
 					comm = pc
 				case Hpull:
 					rc := &redirectComm{}
 					rc.msg, rc.podURI, rc.xctn = msg, transformerServer.URL, xetl
+					rc.client = &http.Client{}
 					comm = rc
 				}
 
@@ -227,6 +231,7 @@ var _ = Describe("CommunicatorTest", func() {
 		pc := &pushComm{}
 		pc.msg = msg
 		pc.podURI = etlServer.URL
+		pc.client = &http.Client{}
 
 		// Test ProcessDownloadJob
 		ctx := &ETLObjDownloadCtx{
@@ -256,6 +261,90 @@ var _ = Describe("CommunicatorTest", func() {
 
 		Expect(bytes.Equal(etlData, directData)).To(BeTrue())
 	})
+
+	// ---------------------------------------------------------------------------
+	// doWithTimeout: timeout is fatal — no retry
+	// ---------------------------------------------------------------------------
+	It("doWithTimeout does not retry on timeout", func() {
+		const objTimeout = 200 * time.Millisecond
+
+		// Slow server: sleeps much longer than objTimeout, counts requests.
+		var reqCount atomic.Int32
+		slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reqCount.Add(1)
+			time.Sleep(10 * objTimeout)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer slow.Close()
+
+		bc := &baseComm{client: &http.Client{Timeout: objTimeout}}
+		reqArgs := &cmn.HreqArgs{Method: http.MethodPut, Base: slow.URL, Path: "/"}
+
+		_, _, err := bc.doWithTimeout(reqArgs, nil)
+
+		Expect(err).To(HaveOccurred())
+		Expect(cos.IsErrClientTimeout(err)).To(BeTrue(), "expected timeout error, got: %v", err)
+		// reqCount is the authoritative proof: exactly one attempt means no retry.
+		Expect(reqCount.Load()).To(Equal(int32(1)), "server received %d requests; expected exactly 1 (no retry on timeout)", reqCount.Load())
+	})
+
+	// ---------------------------------------------------------------------------
+	// retryer: connection reset is a soft error — retry up to SoftErr limit,
+	// fail when exhausted. Tests bypass doWithTimeout's hardcoded Sleep so they
+	// run instantly regardless of the retry count.
+	// ---------------------------------------------------------------------------
+	for _, tc := range []struct {
+		failFirst int
+		softErr   int
+		wantErr   bool
+	}{
+		{failFirst: 1, softErr: retryConnSoftErr, wantErr: false},                   // succeeds after 1 reset
+		{failFirst: 2, softErr: retryConnSoftErr, wantErr: false},                   // succeeds after 2 resets
+		{failFirst: 3, softErr: retryConnSoftErr, wantErr: false},                   // beyond old limit of 3
+		{failFirst: 4, softErr: retryConnSoftErr, wantErr: false},                   // beyond old limit of 3
+		{failFirst: 3, softErr: 2, wantErr: true},                                   // exhausted: 3 resets > SoftErr=2
+		{failFirst: retryConnSoftErr + 1, softErr: retryConnSoftErr, wantErr: true}, // exhausted: SoftErr+1 resets > SoftErr
+	} {
+		desc := fmt.Sprintf("failFirst=%d softErr=%d wantErr=%v", tc.failFirst, tc.softErr, tc.wantErr)
+		It("retryer on connection reset: "+desc, func() {
+			var reqCount atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				n := reqCount.Add(1)
+				if int(n) <= tc.failFirst {
+					hj, ok := w.(http.Hijacker)
+					Expect(ok).To(BeTrue())
+					conn, _, _ := hj.Hijack()
+					conn.(*net.TCPConn).SetLinger(0) // RST instead of FIN
+					conn.Close()
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			rtyr := &retryer{
+				client:  &http.Client{},
+				reqArgs: &cmn.HreqArgs{Method: http.MethodPut, Base: srv.URL, Path: "/"},
+			}
+			args := &cmn.RetryArgs{
+				Call:    rtyr.call,
+				IsFatal: cos.IsErrClientTimeout,
+				SoftErr: tc.softErr,
+				Sleep:   0, // no sleep — tests run instantly
+			}
+			_, err := args.Do()
+
+			if tc.wantErr {
+				Expect(err).To(HaveOccurred(), "expected exhaustion error for failFirst=%d", tc.failFirst)
+				Expect(reqCount.Load()).To(Equal(int32(tc.softErr+1)),
+					"expected exactly SoftErr+1=%d attempts before giving up", tc.softErr+1)
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(reqCount.Load()).To(Equal(int32(tc.failFirst+1)),
+					"expected %d total requests (first %d reset, last succeeded)", tc.failFirst+1, tc.failFirst)
+			}
+		})
+	}
 })
 
 // Creates a file with random content.

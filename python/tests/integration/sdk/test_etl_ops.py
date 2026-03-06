@@ -6,6 +6,7 @@ import os
 import subprocess
 import signal
 import hashlib
+import time
 import unittest
 import pytest
 import xxhash
@@ -656,3 +657,61 @@ class TestETLOps(unittest.TestCase):
             self.assertEqual(ls[0].id, self.etl_name, "ETL name does not match")
 
         assert_with_retries(assertion_fn)
+
+    @pytest.mark.etl
+    def test_etl_obj_timeout(self):
+        """
+        Verify obj_timeout behavior with a slow transformer (5-second artificial delay).
+
+        Case 1 — obj_timeout shorter than delay (2s < 5s):
+            The target gives up after one attempt; the error message must contain "timeout".
+
+        Case 2 — obj_timeout longer than delay (30s > 5s):
+            The transform completes successfully and returns the expected data.
+        """
+        delay_secs = 5
+
+        class SlowServer(FastAPIServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                time.sleep(delay_secs)
+                return data
+
+        # --- Case 1: obj_timeout fires before transform finishes ---
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class(obj_timeout="2s")
+        class SlowServerTimeout(SlowServer):
+            pass
+
+        with self.assertRaises((AISError, Exception)) as ctx:
+            self.bucket.object(self.obj_name).get_reader(
+                etl=ETLConfig(name=etl.name)
+            ).read_all()
+
+        self.assertIn(
+            "timeout",
+            str(ctx.exception).lower(),
+            f"Expected a timeout error, got: {ctx.exception}",
+        )
+
+        self.client.etl(self.etl_name).stop()
+        self.client.etl(self.etl_name).delete()
+
+        # --- Case 2: obj_timeout is generous enough — transform completes ---
+        etl_name_ok = "etl-" + random_string(5)
+        etl_ok = self.client.etl(etl_name_ok)
+
+        @etl_ok.init_class(obj_timeout="30s")
+        class SlowServerOK(SlowServer):
+            pass
+
+        try:
+            result = (
+                self.bucket.object(self.obj_name)
+                .get_reader(etl=ETLConfig(name=etl_ok.name))
+                .read_all()
+            )
+            self.assertEqual(result, bytes(self.content))
+        finally:
+            etl_ok.stop()
+            etl_ok.delete()

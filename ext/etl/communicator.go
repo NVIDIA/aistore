@@ -88,6 +88,7 @@ type (
 		secret  string
 		podAddr string
 		podURI  string
+		client  *http.Client // ETL-specific client; cloned once from data client with obj_timeout
 		stopped atomic.Bool
 	}
 	pushComm struct {
@@ -105,10 +106,15 @@ type (
 	retryer     struct {
 		client  *http.Client
 		reqArgs *cmn.HreqArgs
-		ctx     context.Context
 		resp    *http.Response
 		getBody getBodyFunc
 	}
+)
+
+const (
+	// retryConnSoftErr is the maximum number of retriable (soft) network errors
+	// (e.g. connection resets) that doWithTimeout will tolerate before giving up.
+	retryConnSoftErr = 10
 )
 
 // interface guard
@@ -173,6 +179,12 @@ func (c *baseComm) setupConnection(schema, podAddr string) (ecode int, err error
 	}
 
 	c.podURI = schema + c.podAddr
+
+	// Pre-construct an ETL-specific HTTP client: reuses the data client's Transport
+	// (connection pool, TLS) but sets Timeout = obj_timeout instead of client_long_timeout.
+	_, objTimeout := c.msg.Timeouts()
+	c.client = cmn.CloneClient(core.T.DataClient(), objTimeout.D())
+
 	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infof("%s: setup connection to %s", c.msg.Cname(), c.podURI)
 	}
@@ -245,8 +257,7 @@ func (pc *pushComm) ProcessDownloadJob(ctx *ETLObjDownloadCtx) (cos.ReadCloseSiz
 		reqArgs.Query = query
 	}
 
-	_, objTimeout := pc.msg.Timeouts()
-	resp, ecode, err := doWithTimeout(reqArgs, nil, objTimeout.D())
+	resp, ecode, err := pc.doWithTimeout(reqArgs, nil)
 
 	if err != nil {
 		return nil, ecode, fmt.Errorf("failed to send object to ETL pod: %v", err)
@@ -285,40 +296,37 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 			debug.Assert(r != nil)
 			// error from ETL, retrieve the error message from the response body
 			e, err := cos.ReadAll(r)
+			cos.Close(r)
 			if err != nil {
 				err = fmt.Errorf("failed to read error message from ETL response: %v", err)
 			} else {
 				err = fmt.Errorf("ETL error: %s", e)
 			}
-			return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: ecode}
+			return core.ReadResp{OAH: oah, Err: err, Ecode: ecode}
 		}
 	}
 	return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: ecode}
 }
 
-func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
-	if timeout == 0 {
-		timeout = DefaultObjTimeout
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-
-	rtyr := &retryer{client: core.T.DataClient(), reqArgs: reqArgs, ctx: ctx, getBody: getBody}
+// doWithTimeout sends the ETL request using the pre-built ETL client (see setupConnection).
+// The client carries Timeout = obj_timeout, so every attempt gets the full configured budget of timeout.
+func (c *baseComm) doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc) (r cos.ReadCloseSizer, ecode int, err error) {
+	rtyr := &retryer{client: c.client, reqArgs: reqArgs, getBody: getBody}
 	args := &cmn.RetryArgs{
 		Call:      rtyr.call,
-		SoftErr:   10,
+		IsFatal:   cos.IsErrClientTimeout, // a timeout means obj_timeout was exceeded; caller's responsibility
+		SoftErr:   retryConnSoftErr,
 		Verbosity: cmn.RetryLogVerbose,
-		Sleep:     max(cmn.Rom.MaxKeepalive(), time.Second*5),
+		Sleep:     time.Second,
+		BackOff:   true,
 	}
-	ecode, err = args.Do()
-	if err != nil {
-		cancel()
+	if ecode, err = args.Do(); err != nil {
 		return nil, ecode, err
 	}
-
+	// Status-code handling (including >= 400) is the caller's responsibility.
 	return &cos.ReaderWithArgs{
-		R:       rtyr.resp.Body,
-		Rsize:   rtyr.resp.ContentLength,
-		DeferCb: cancel,
+		R:     rtyr.resp.Body,
+		Rsize: rtyr.resp.ContentLength,
 	}, rtyr.resp.StatusCode, nil
 }
 
@@ -375,8 +383,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 	}
 
 	// note: `Content-Length` header is set during `retryer.call()` below
-	_, objTimeout := pc.msg.Timeouts()
-	r, ecode, err := doWithTimeout(reqArgs, getBody, objTimeout.D())
+	r, ecode, err := pc.doWithTimeout(reqArgs, getBody)
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
@@ -386,7 +393,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 	}
 
 	oah.Size = r.Size()
-	return core.ReadResp{R: cos.NopOpener(r), OAH: oah, Err: err, Ecode: ecode}
+	return handleRespEcode(ecode, oah, cos.NopOpener(r), err)
 }
 
 func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, args *InlineTransArgs) (size int64, ecode int, err error) {
@@ -487,8 +494,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, args 
 		reqArgs.Header.Add(apc.HdrNodeURL, args.Pipeline.Pack())
 	}
 
-	_, objTimeout := rc.msg.Timeouts()
-	r, ecode, err := doWithTimeout(reqArgs, nil, objTimeout.D())
+	r, ecode, err := rc.doWithTimeout(reqArgs, nil)
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
@@ -538,7 +544,7 @@ func (rtyr *retryer) call() (status int, err error) {
 		size = src.OAH.Lsize()
 	}
 
-	req, err := http.NewRequestWithContext(rtyr.ctx, rtyr.reqArgs.Method, rtyr.reqArgs.URL(), body)
+	req, err := http.NewRequestWithContext(context.Background(), rtyr.reqArgs.Method, rtyr.reqArgs.URL(), body)
 	if err != nil {
 		return 0, err
 	}
