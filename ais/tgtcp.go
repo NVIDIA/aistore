@@ -896,6 +896,9 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 		errV := fmt.Errorf("[post-bmd] %s %s: remove bucket%s", tag, newBMD, cos.Plural(len(rmbcks)))
 		xreg.AbortAllBuckets(errV, rmbcks...)
 
+		// remove bucket inventories
+		_gcNBI(tag, rmbcks)
+
 		defer wg.Wait()
 	}
 	// EC
@@ -908,6 +911,15 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 	cs := fs.Cap()
 	if cs.Err() != nil {
 		_ = t.oos(cmn.GCO.Get())
+	}
+}
+
+// TODO: remove is-remote filter when (and if) supporting NBI for in-cluster buckets
+func _gcNBI(tag string, rmbcks []*meta.Bck) {
+	for _, bck := range rmbcks {
+		if bck.IsRemote() {
+			fs.DestroyNBI("post-bmd-"+tag, bck.Bucket())
+		}
 	}
 }
 

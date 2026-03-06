@@ -395,4 +395,4 @@ func BckFromUBP(uname, bucket, provider string) (*Bck, error) {
 // system buckets
 //
 
-func SysBckInv() *Bck { return &Bck{Provider: apc.AIS, Name: cmn.SysInventoryName} }
+func SysBckNBI() *Bck { return &Bck{Provider: apc.AIS, Name: cmn.SysNBI} }

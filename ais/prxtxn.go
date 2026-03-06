@@ -910,7 +910,7 @@ func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
 	return err
 }
 
-// delete in-cluster bucket data, keep bucket metadata
+// delete in-cluster bucket data, keep bucket metadata AND bucket inventory (if present)
 func (p *proxy) evictRemoteKeepMD(msg *apc.ActMsg, bck *meta.Bck) error {
 	query := bck.AddToQuery(url.Values{
 		apc.QparamKeepRemote: []string{"true"},

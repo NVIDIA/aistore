@@ -139,7 +139,7 @@ func (p *nbiFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 /////////////
 
 func (r *XactNBI) init() error {
-	err := r.lom.InitBck(meta.SysBckInv())
+	err := r.lom.InitBck(meta.SysBckNBI())
 	if err != nil {
 		return err
 	}

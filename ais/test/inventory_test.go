@@ -81,7 +81,7 @@ func TestCreateInventoryPermuteOnDisk(t *testing.T) {
 		{num: 30, pageSize: 5, pagesPerChunk: 3, name: "medium-pages-medium-chunks"},
 	}
 
-	sysBck := meta.SysBckInv().Clone()
+	sysBck := meta.SysBckNBI().Clone()
 
 	proxyURL := tools.GetPrimaryURL()
 	initMountpaths(t, proxyURL)

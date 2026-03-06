@@ -47,7 +47,7 @@ type nbiCtx struct {
 
 func (nbi *nbiCtx) init(invName string) error {
 	lom := core.AllocLOM(nbiObjName(nbi.bck, invName))
-	if err := lom.InitBck(meta.SysBckInv()); err != nil {
+	if err := lom.InitBck(meta.SysBckNBI()); err != nil {
 		core.FreeLOM(lom)
 		return err
 	}

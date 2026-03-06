@@ -1641,7 +1641,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 func (p *proxy) initTrySysInv(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg /*orig*/) error {
 	bctx := allocBctx()
 	bctx.p, bctx.w, bctx.r = p, w, r
-	bctx.bck = meta.SysBckInv()
+	bctx.bck = meta.SysBckNBI()
 	bctx.msg = msg
 	bctx.createAIS = true
 	bctx.perms = apc.AceAdmin

@@ -657,10 +657,10 @@ func NewHTTPObjPath(rawURL string) (*HTTPBckObj, error) {
 //
 
 const (
-	sysPrefix        = ".sys-" // currently unused; must be enforced when we add more system buckets
-	SysInventoryName = ".sys-inventory"
+	sysPrefix = ".sys-" // currently unused; must be enforced when we add more system buckets
+	SysNBI    = ".sys-inventory"
 )
 
 func (b *Bck) IsSystem() bool {
-	return b.Name == SysInventoryName
+	return b.Name == SysNBI
 }

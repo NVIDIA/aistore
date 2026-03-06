@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ios"
 
 	onexxh "github.com/OneOfOne/xxhash"
@@ -1120,6 +1121,44 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) error {
 		return fmt.Errorf("%s %q: failed to destroy %d out of %d dirs", op, bck.String(), count-n, count)
 	}
 	return nil
+}
+
+// remove all local native-bucket-inventory artifacts for a given source bucket:
+// - unlike DestroyBucket, there is no undelete semantics - we remove all matching subtrees
+// - failures are best-effort but reported to FSHC
+func DestroyNBI(op string, bck *cmn.Bck) {
+	var (
+		n      int
+		avail  = GetAvail()
+		sysBck = meta.SysBckNBI().Bucket()
+		buname = string(bck.MakeUname(""))
+		prefct = string(prefCT)
+	)
+	for _, mi := range avail {
+		root := mi.MakePathBck(sysBck)
+		nerr := 0
+		// subset of content types used for NBI
+		for _, contentType := range []string{ObjCT, WorkCT, ChunkCT, ChunkMetaCT} {
+			cpref := prefct + contentType
+			rmdir := filepath.Join(root, cpref, buname)
+			if err := os.RemoveAll(rmdir); err != nil {
+				if cmn.Rom.V(4, cos.ModFS) {
+					nlog.Warningf("%s %q: failed to rm NBI dir %q: %v", op, bck.String(), rmdir, err)
+				}
+				if nerr == 0 {
+					mfs.hc.FSHC(err, mi, "")
+				}
+				nerr++
+			}
+		}
+		if nerr == 0 {
+			n++
+		}
+	}
+	if count := len(avail); n < count {
+		err := fmt.Errorf("%s %q: failed to destroy NBI dirs on %d out of %d mountpaths", op, bck.String(), count-n, count)
+		nlog.Errorln(err)
+	}
 }
 
 func RenameBucketDirs(bckFrom, bckTo *cmn.Bck) (err error) {
