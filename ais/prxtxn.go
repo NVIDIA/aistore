@@ -181,7 +181,15 @@ func (c *txnCln) bcast(phase string, timeout time.Duration) (results sliceResult
 }
 
 func (c *txnCln) bcastAbort(what fmt.Stringer, err error) {
-	nlog.Errorf("Abort %q %s: %v %s", c.msg.Action, what, err, c.msg)
+	var (
+		e *cmn.ErrBucketAlreadyExists
+		s = fmt.Sprintf("Abort %q %s: %v %s", c.msg.Action, what, err, c.msg)
+	)
+	if cmn.IsErrBucketAlreadyExists(err) || errors.As(err, &e) {
+		nlog.Warningln(s)
+	} else {
+		nlog.Errorln(s)
+	}
 	results := c.bcast(apc.Abort2PC, 0)
 	freeBcastRes(results)
 }

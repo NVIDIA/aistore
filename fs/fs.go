@@ -317,6 +317,15 @@ func (mi *Mountpath) MakePathCT(bck *cmn.Bck, contentType string) string {
 	return cos.UnsafeS(buf)
 }
 
+func (mi *Mountpath) makePathCTPrefix(bck *cmn.Bck, contentType, prefix string) string {
+	debug.Assert(contentType != "")
+	debug.Assert(prefix != "")
+	buf := mi.makePathBuf(bck, contentType, 1+len(prefix))
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, prefix...)
+	return cos.UnsafeS(buf)
+}
+
 func (mi *Mountpath) MakePathFQN(bck *cmn.Bck, contentType, objName string) string {
 	debug.Assert(contentType != "")
 	debug.Assert(objName != "")
@@ -1127,20 +1136,21 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) error {
 // - unlike DestroyBucket, there is no undelete semantics - we remove all matching subtrees
 // - failures are best-effort but reported to FSHC
 func DestroyNBI(op string, bck *cmn.Bck) {
+	// DEBUG
+	found, err := findNBI(bck)
+	nlog.Errorf(">>>>>> %+v, %v", found, err)
+
 	var (
 		n      int
 		avail  = GetAvail()
 		sysBck = meta.SysBckNBI().Bucket()
 		buname = string(bck.MakeUname(""))
-		prefct = string(prefCT)
 	)
 	for _, mi := range avail {
-		root := mi.MakePathBck(sysBck)
 		nerr := 0
 		// subset of content types used for NBI
 		for _, contentType := range []string{ObjCT, WorkCT, ChunkCT, ChunkMetaCT} {
-			cpref := prefct + contentType
-			rmdir := filepath.Join(root, cpref, buname)
+			rmdir := mi.makePathCTPrefix(sysBck, contentType, buname)
 			if err := os.RemoveAll(rmdir); err != nil {
 				if cmn.Rom.V(4, cos.ModFS) {
 					nlog.Warningf("%s %q: failed to rm NBI dir %q: %v", op, bck.String(), rmdir, err)
