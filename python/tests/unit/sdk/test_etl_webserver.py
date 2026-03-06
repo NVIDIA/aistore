@@ -5,6 +5,7 @@ import unittest
 from unittest import mock
 from unittest.mock import MagicMock, patch, AsyncMock
 
+import httpx
 from fastapi.testclient import TestClient
 from flask.testing import FlaskClient
 
@@ -15,6 +16,7 @@ from aistore.sdk.const import (
     ETL_WS_PIPELINE,
     HEADER_DIRECT_PUT_LENGTH,
     QPARAM_ETL_FQN,
+    AIS_DIRECT_PUT_RETRIES,
 )
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
@@ -272,6 +274,63 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
             websocket.send_bytes(original_data)
             result = websocket.receive_bytes()
             self.assertEqual(result, original_data[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_startup_event_default_retries(self):
+        """startup_event() defaults to 3 retries when AIS_DIRECT_PUT_RETRIES is not set."""
+        os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
+        with patch(
+            "aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncHTTPTransport"
+        ) as mock_transport_cls:
+            with patch("aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncClient"):
+                mock_transport_cls.return_value = MagicMock()
+                await self.etl_server.startup_event()
+                self.assertEqual(mock_transport_cls.call_args.kwargs["retries"], 3)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_startup_event_custom_retries(self):
+        """startup_event() passes AIS_DIRECT_PUT_RETRIES value to AsyncHTTPTransport."""
+        os.environ[AIS_DIRECT_PUT_RETRIES] = "7"
+        try:
+            with patch(
+                "aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncHTTPTransport"
+            ) as mock_transport_cls:
+                with patch(
+                    "aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncClient"
+                ):
+                    mock_transport_cls.return_value = MagicMock()
+                    await self.etl_server.startup_event()
+                    self.assertEqual(mock_transport_cls.call_args.kwargs["retries"], 7)
+        finally:
+            os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_direct_put_returns_500_when_all_retries_exhausted(self):
+        """_direct_put() returns 500 when ConnectError propagates after all transport retries.
+
+        Retries are handled inside httpx.AsyncHTTPTransport — our code calls client.put()
+        once. If the transport exhausts its retries and surfaces ConnectError, _direct_put
+        must catch it gracefully and return a 500 rather than crash.
+        """
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["DIRECT_PUT"] = "true"
+        server = DummyFastAPIServer()
+        mock_client = AsyncMock()
+        mock_client.put.side_effect = httpx.ConnectError(
+            "DNS resolution failed: EAI_AGAIN"
+        )
+        server.client = mock_client
+
+        status, body, length = (
+            await server._direct_put(  # pylint: disable=protected-access
+                "http://localhost:8080/ais/@/dst/obj", b"hello"
+            )
+        )
+
+        mock_client.put.assert_awaited_once()  # transport retries internally; we call once
+        self.assertEqual(status, 500)
+        self.assertIn(b"DNS resolution failed", body)
+        self.assertEqual(length, 0)
 
 
 class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):

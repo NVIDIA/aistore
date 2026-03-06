@@ -95,7 +95,7 @@ Please note that certain operations do **not** support external cloud storage bu
 
 The AIS Python SDK supports several environment variables that allow you to configure client behavior without explicitly passing parameters to the `Client` constructor. This is particularly useful for containerized environments or when you want to centralize configuration.
 
-### Available Environment Variables
+### SDK Client Environment Variables
 
 | Environment Variable | Description | Default Value |
 |---------------------|-------------|---------------|
@@ -107,7 +107,18 @@ The AIS Python SDK supports several environment variables that allow you to conf
 | `AIS_CONNECT_TIMEOUT` | Connection timeout in seconds (set to `0` to disable) | `3` |
 | `AIS_READ_TIMEOUT` | Read timeout in seconds (set to `0` to disable) | `20` |
 | `AIS_MAX_CONN_POOL` | Maximum number of connections per host in the connection pool | `10` |
-| `AIS_DIRECT_PUT_CHUNK_SIZE` | Chunk size in bytes for streaming direct-put bodies in `FastAPIServer` | `1048576` (1 MiB) |
+
+### ETL Webserver Environment Variables
+
+ETL webservers support all SDK client environment variables above (same semantics). In addition, the following are specific to ETL webservers:
+
+| Environment Variable | Description | Default Value |
+|---------------------|-------------|---------------|
+| `AIS_DIRECT_PUT_CHUNK_SIZE` | Chunk size in bytes for streaming direct-put bodies (`FastAPIServer` only) | `1048576` (1 MiB) |
+| `AIS_DIRECT_PUT_RETRIES` | Retries on connection errors during direct-put (`FastAPIServer` only) | `3` |
+| `MAX_CONN` | Maximum total outbound connections in the httpx pool (`FastAPIServer` only) | `256` |
+| `MAX_KEEPALIVE_CONN` | Maximum keepalive connections in the httpx pool (`FastAPIServer` only) | `128` |
+| `KEEPALIVE_EXPIRY` | Keepalive connection expiry in seconds (`FastAPIServer` only) | `30` |
 
 ### Configuration Precedence
 

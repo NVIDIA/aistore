@@ -28,6 +28,7 @@ from aistore.sdk.errors import InvalidPipelineError
 from aistore.sdk.const import (
     MIB,
     AIS_DIRECT_PUT_CHUNK_SIZE,
+    AIS_DIRECT_PUT_RETRIES,
     HEADER_NODE_URL,
     HEADER_CONTENT_LENGTH,
     STATUS_OK,
@@ -110,8 +111,13 @@ class FastAPIServer(ETLServer):
         verify, cert = resolve_ssl_config()
         headers = {HEADER_AUTHORIZATION: f"Bearer {self.token}"} if self.token else {}
 
+        transport = httpx.AsyncHTTPTransport(
+            retries=int(os.getenv(AIS_DIRECT_PUT_RETRIES, "3")),
+            verify=verify,
+            cert=cert,
+        )
         self.client = httpx.AsyncClient(
-            timeout=None, limits=HTTP_LIMITS, verify=verify, cert=cert, headers=headers
+            timeout=None, limits=HTTP_LIMITS, transport=transport, headers=headers
         )
         self.logger.info("Server starting up")
 
