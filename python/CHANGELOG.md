@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.21.1] - 2026-03-05
+
 ### Added
 
 - `AIS_SKIP_VERIFY` environment variable support: when set to `true`, `1`, or `yes`, SSL certificate verification is skipped automatically. Handled centrally in `SessionManager` alongside the existing `AIS_CLIENT_CA`, `AIS_CRT`, and `AIS_CRT_KEY` env vars.
