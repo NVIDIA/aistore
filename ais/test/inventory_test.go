@@ -325,10 +325,9 @@ func TestListInventoryPrefix(t *testing.T) {
 		bp = tools.BaseAPIParams()
 	)
 	m1.init(true /*cleanup*/)
-	m1.remotePuts(true /*evict*/)
+	m1.puts()
 
-	m2.init(true /*cleanup*/)
-	m2.remotePuts(true /*evict*/)
+	m2.puts()
 
 	// create inventory covering both sub-prefixes
 	createMsg := &apc.CreateInvMsg{
@@ -394,5 +393,159 @@ func TestListInventoryPrefix(t *testing.T) {
 
 		tlog.Logfln("prefix %q: listed %d out of %d in %d page(s) - OK",
 			tc.prefix, len(allEntries), m1.num+m2.num, numPages)
+	}
+}
+
+func TestListInventoryPrefixPermute(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, RemoteBck: true, Bck: cliBck})
+
+	type test struct {
+		name             string
+		numA, numM, numZ int
+		pageSize         int64 // CreateInvMsg.PageSize
+		pagesPerChunk    int64
+		maxEntriesPerChk int64
+		listPageSize     int64 // listing PageSize
+		invName          string
+	}
+	tests := []test{
+		{
+			name: "small-chunks-small-pages",
+			numA: 40, numM: 30, numZ: 50,
+			pageSize: 3, pagesPerChunk: 2, listPageSize: 4,
+			invName: "inv-pfxp-sc-sp-" + cos.GenTie(),
+		},
+		{
+			name: "large-chunks-small-pages",
+			numA: 70, numM: 60, numZ: 80,
+			pageSize: 6, pagesPerChunk: 10, listPageSize: 3,
+			invName: "inv-pfxp-lc-sp-" + cos.GenTie(),
+		},
+		{
+			name: "max-entries-per-chunk",
+			numA: 30, numM: 25, numZ: 35,
+			pageSize: 10, pagesPerChunk: 50, maxEntriesPerChk: 8, listPageSize: 5,
+			invName: "inv-pfxp-maxent-" + cos.GenTie(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				parent = "pfxp-" + cos.GenTie() + "/"
+				bp     = tools.BaseAPIParams()
+			)
+
+			// One init/cleanup only
+			m0 := &ioContext{t: t, bck: cliBck, prefix: parent}
+			m0.init(true /*cleanup*/)
+
+			// Three disjoint subtrees under parent: a/, m/, z/
+			// Ensures: a/ < m/ < z/ in lexicographic order.
+			ma := &ioContext{t: t, bck: cliBck, prefix: parent + "a/"}
+			mm := &ioContext{t: t, bck: cliBck, prefix: parent + "m/"}
+			mz := &ioContext{t: t, bck: cliBck, prefix: parent + "z/"}
+
+			ma.num = tc.numA
+			mm.num = tc.numM
+			mz.num = tc.numZ
+
+			// Per your note: pass-through writes, no remotePuts/evicting.
+			ma.puts()
+			mm.puts()
+			mz.puts()
+
+			// Create inventory covering the entire parent prefix
+			createMsg := &apc.CreateInvMsg{
+				Name: tc.invName,
+				LsoMsg: apc.LsoMsg{
+					Prefix:   parent,
+					Props:    apc.GetPropsName,
+					PageSize: tc.pageSize,
+				},
+				PagesPerChunk:      tc.pagesPerChunk,
+				MaxEntriesPerChunk: tc.maxEntriesPerChk,
+			}
+
+			xid, err := api.CreateBucketInventory(bp, cliBck, createMsg)
+			tassert.CheckFatal(t, err)
+
+			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
+			_, err = api.WaitForXactionIC(bp, &wargs)
+			tassert.CheckFatal(t, err)
+
+			// Helper: list NBI with token-loop guard, strict order, and prefix check.
+			list := func(prefix string) (entries []*cmn.LsoEnt) {
+				var (
+					token   string
+					seenTok = make(cos.StrSet, 16)
+				)
+				for {
+					lsmsg := &apc.LsoMsg{
+						Prefix:            prefix,
+						Props:             apc.GetPropsName,
+						PageSize:          tc.listPageSize,
+						Flags:             apc.LsNBI,
+						ContinuationToken: token,
+					}
+					args := api.ListArgs{
+						Header: http.Header{apc.HdrInvName: []string{createMsg.Name}},
+					}
+					lst, err := api.ListObjects(bp, cliBck, lsmsg, args)
+					tassert.CheckFatal(t, err)
+
+					// page size sanity
+					if lst.ContinuationToken != "" {
+						tassert.Fatalf(t, len(lst.Entries) <= int(tc.listPageSize),
+							"page too large: got %d, max %d", len(lst.Entries), tc.listPageSize)
+					}
+
+					entries = append(entries, lst.Entries...)
+
+					if lst.ContinuationToken == "" {
+						break
+					}
+					tassert.Fatalf(t, !seenTok.Contains(lst.ContinuationToken),
+						"repeated continuation token %q", lst.ContinuationToken)
+					seenTok.Set(lst.ContinuationToken)
+					token = lst.ContinuationToken
+				}
+
+				// strict order + prefix match
+				for i := range entries {
+					tassert.Fatalf(t, strings.HasPrefix(entries[i].Name, prefix),
+						"entry %q doesn't match prefix %q", entries[i].Name, prefix)
+					if i > 0 {
+						prev, curr := entries[i-1].Name, entries[i].Name
+						tassert.Fatalf(t, prev < curr,
+							"entries not sorted/unique at [%d]: %q >= %q", i, prev, curr)
+					}
+				}
+				return entries
+			}
+
+			// 1) list sub-prefix in the middle => exercises: skip a/ chunks + Search in-chunk + stop before z/
+			gotM := list(mm.prefix)
+			tassert.Fatalf(t, len(gotM) == mm.num, "prefix %q: expected %d, got %d", mm.prefix, mm.num, len(gotM))
+
+			// validate set equality with PUT names
+			gotSet := make(cos.StrSet, len(gotM))
+			for _, e := range gotM {
+				gotSet.Set(e.Name)
+			}
+			for _, name := range mm.objNames {
+				tassert.Fatalf(t, gotSet.Contains(name), "missing %q for prefix %q", name, mm.prefix)
+			}
+
+			// 2) list parent => must include all
+			gotParent := list(parent)
+			expTotal := ma.num + mm.num + mz.num
+			tassert.Fatalf(t, len(gotParent) == expTotal, "prefix %q: expected %d, got %d", parent, expTotal, len(gotParent))
+
+			// 3) list missing prefix => must be empty (and must not loop tokens)
+			missing := parent + "zzzz/"
+			gotMissing := list(missing)
+			tassert.Fatalf(t, len(gotMissing) == 0, "prefix %q: expected 0, got %d", missing, len(gotMissing))
+		})
 	}
 }

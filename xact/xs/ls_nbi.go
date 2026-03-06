@@ -169,6 +169,8 @@ func (nbi *nbiCtx) readChunk() error {
 	return nbi.entries.DecodeMsg(mr)
 }
 
+func (nbi *nbiCtx) skip() { nbi.nidx = len(nbi.entries) } // in re: prefix
+
 func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	lst.Entries = lst.Entries[:0]
 	lst.ContinuationToken = ""
@@ -198,40 +200,43 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 			nbi.chunkNum++
 			if nbi.chunkNum > nbi.ufest.Count() {
 				// no more chunks - we are done
-				break
+				return nil
 			}
 			if err := nbi.readChunk(); err != nil {
 				return err
 			}
 			// skip this chunk (#1)
 			if msg.Prefix != "" && nbi.hdr.last < msg.Prefix {
-				nbi.nidx = len(nbi.entries)
+				nbi.skip()
 				continue
 			}
 		}
 
-		out := nbi.entries[nbi.nidx]
 		// prefix
 		if msg.Prefix != "" {
-			if nbi.nidx == 0 {
+			if nbi.nidx == 0 && nbi.entries[0].Name < msg.Prefix {
 				i := sort.Search(len(nbi.entries), func(i int) bool {
 					return nbi.entries[i].Name >= msg.Prefix
 				})
 				// skip this chunk (#2)
 				if i >= len(nbi.entries) {
-					nbi.nidx = len(nbi.entries)
+					nbi.skip()
 					continue
 				}
 				nbi.nidx = i
 			}
-			out = nbi.entries[nbi.nidx]
+			out := nbi.entries[nbi.nidx]
 			if !strings.HasPrefix(out.Name, msg.Prefix) {
 				// done
 				return nil
 			}
+			nbi.nidx++ // next
+			lst.Entries = append(lst.Entries, out)
+			continue
 		}
 
-		nbi.nidx++
+		out := nbi.entries[nbi.nidx]
+		nbi.nidx++ // next
 		lst.Entries = append(lst.Entries, out)
 	}
 
