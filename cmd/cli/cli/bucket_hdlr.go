@@ -213,6 +213,8 @@ var (
 		s3InvIDFlag,        // Deprecated
 		nbiFlag,
 		nbiNameFlag,
+		// alias for 'ais object show'
+		encodeObjnameFlag,
 		// 4.0
 		chunkedColumnFlag,
 	}
