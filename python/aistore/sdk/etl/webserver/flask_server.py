@@ -2,13 +2,15 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
+# pylint: disable=duplicate-code
+
 from urllib.parse import quote
-from typing import Tuple
+from typing import Iterator, Tuple
 
 import requests
 from flask import Flask, request, Response, jsonify
 
-from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.etl.webserver.base_etl_server import ETLServer, CountingIterator
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
@@ -48,36 +50,9 @@ class FlaskServer(ETLServer):
 
     def _handle_request(self, path):
         try:
-            transformed = None
-            if request.method == "GET":
-                transformed = self._handle_get(path)
-            else:
-                transformed = self._handle_put(path)
-
-            pipeline_header = request.headers.get(HEADER_NODE_URL)
-            self.logger.debug("pipeline_header: %r", pipeline_header)
-            if pipeline_header:
-                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
-                if first_url:
-                    status_code, transformed, direct_put_length = self._direct_put(
-                        first_url, transformed, remaining_pipeline, path
-                    )
-                    return Response(
-                        response=transformed,
-                        status=status_code,
-                        headers=(
-                            {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
-                            if direct_put_length != 0
-                            else {}
-                        ),
-                    )
-
-            return Response(
-                response=transformed,
-                status=STATUS_OK,
-                content_type=self.get_mime_type(),
-            )
-
+            if self.use_streaming:
+                return self._handle_request_streaming(path)
+            return self._handle_request_buffered(path)
         except InvalidPipelineError as e:
             self.logger.error("Invalid pipeline header: %s", str(e))
             return Response(f"Invalid pipeline header: {str(e)}", status=400)
@@ -104,6 +79,116 @@ class FlaskServer(ETLServer):
         except Exception as e:
             self.logger.exception("Unhandled error")
             return jsonify({"error": str(e)}), 500
+
+    def _handle_request_buffered(self, path):
+        transformed = None
+        if request.method == "GET":
+            transformed = self._handle_get(path)
+        else:
+            transformed = self._handle_put(path)
+
+        pipeline_header = request.headers.get(HEADER_NODE_URL)
+        self.logger.debug("pipeline_header: %r", pipeline_header)
+        if pipeline_header:
+            first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+            if first_url:
+                status_code, transformed, direct_put_length = self._direct_put(
+                    first_url, transformed, remaining_pipeline, path
+                )
+                return Response(
+                    response=transformed,
+                    status=status_code,
+                    headers=(
+                        {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
+                        if direct_put_length != 0
+                        else {}
+                    ),
+                )
+
+        return Response(
+            response=transformed,
+            status=STATUS_OK,
+            content_type=self.get_mime_type(),
+        )
+
+    def _handle_request_streaming(self, path):
+        reader = self._get_stream_reader(path)
+        etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
+        output_iter = self.transform_stream(reader, path, etl_args)
+
+        pipeline_header = request.headers.get(HEADER_NODE_URL)
+        self.logger.debug("pipeline_header: %r", pipeline_header)
+        if pipeline_header:
+            first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+            if first_url:
+                try:
+                    status_code, resp_data, direct_put_length = self._direct_put_stream(
+                        first_url, output_iter, remaining_pipeline, path
+                    )
+                finally:
+                    self.close_reader(reader)
+                return Response(
+                    response=resp_data,
+                    status=status_code,
+                    headers=(
+                        {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
+                        if direct_put_length != 0
+                        else {}
+                    ),
+                )
+
+        def _iter_and_close():
+            try:
+                yield from output_iter
+            finally:
+                self.close_reader(reader)
+
+        return Response(
+            response=_iter_and_close(),
+            status=STATUS_OK,
+            content_type=self.get_mime_type(),
+        )
+
+    def _get_stream_reader(self, path):
+        """Get a BinaryIO reader for the request source data."""
+        fqn = request.args.get(QPARAM_ETL_FQN, "").strip()
+        if fqn:
+            return open(self.sanitize_fqn(fqn), "rb")
+        if request.method == "GET":
+            obj_path = quote(path, safe="@")
+            target_url = f"{self.host_target}/{obj_path}"
+            self.logger.debug("Forwarding GET (stream) to: %s", target_url)
+            resp = self.session.get(target_url, stream=True, timeout=None)
+            resp.raise_for_status()
+            return resp.raw
+        return request.stream
+
+    def _direct_put_stream(
+        self,
+        direct_put_url: str,
+        data_iter: Iterator[bytes],
+        remaining_pipeline: str = "",
+        path: str = "",
+    ) -> Tuple[int, bytes, int]:
+        """Stream transformed output directly to the next pipeline stage."""
+        try:
+            url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
+            headers = {}
+            if remaining_pipeline:
+                headers[HEADER_NODE_URL] = remaining_pipeline
+
+            counted = CountingIterator(data_iter)
+            resp = self.session.put(url, data=counted, timeout=None, headers=headers)
+            return self.handle_direct_put_response(
+                resp, b"", data_length=counted.bytes_sent
+            )
+
+        except Exception as e:
+            error = str(e).encode()
+            self.logger.error(
+                "Exception in streaming direct put to %s: %s", direct_put_url, e
+            )
+            return STATUS_INTERNAL_SERVER_ERROR, error, 0
 
     def _handle_get(self, path):
         etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()

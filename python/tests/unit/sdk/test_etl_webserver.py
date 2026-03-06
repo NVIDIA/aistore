@@ -1,3 +1,5 @@
+# pylint: disable=too-many-lines
+
 import os
 import sys
 import io
@@ -18,6 +20,7 @@ from aistore.sdk.const import (
     QPARAM_ETL_FQN,
     AIS_DIRECT_PUT_RETRIES,
 )
+from aistore.sdk.etl.webserver.base_etl_server import CountingIterator
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
@@ -55,6 +58,7 @@ class DummyRequestHandler(HTTPMultiThreadedServer.RequestHandler):
         self.server.etl_server.host_target = "http://localhost:8080"
         self.server.etl_server.get_mime_type.return_value = "application/test"
         self.server.etl_server.transform.return_value = b"transformed"
+        self.server.etl_server.use_streaming = False
 
         s = DummyHTTPETLServer()
         self.server.etl_server.handle_direct_put_response = s.handle_direct_put_response
@@ -703,15 +707,17 @@ class TestBaseEnforcement(unittest.TestCase):
         self.assertIn("AIS_TARGET_URL", str(context.exception))
 
     def test_http_multithreaded_server_without_transform(self):
-        if "AIS_TARGET_URL" in os.environ:
-            del os.environ["AIS_TARGET_URL"]
+        os.environ["AIS_TARGET_URL"] = "http://localhost"
 
         class IncompleteETLServer(HTTPMultiThreadedServer):
             pass
 
         with self.assertRaises(TypeError) as context:
-            IncompleteETLServer()  # pylint: disable=abstract-class-instantiated
-        self.assertIn("Can't instantiate abstract class", str(context.exception))
+            IncompleteETLServer()
+        self.assertIn(
+            "must override either transform() or transform_stream()",
+            str(context.exception),
+        )
 
     def test_fastapi_server_without_transform(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost"
@@ -720,8 +726,11 @@ class TestBaseEnforcement(unittest.TestCase):
             pass
 
         with self.assertRaises(TypeError) as context:
-            IncompleteFastAPIServer()  # pylint: disable=abstract-class-instantiated
-        self.assertIn("Can't instantiate abstract class", str(context.exception))
+            IncompleteFastAPIServer()
+        self.assertIn(
+            "must override either transform() or transform_stream()",
+            str(context.exception),
+        )
 
     def test_flask_server_without_transform(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost"
@@ -730,8 +739,11 @@ class TestBaseEnforcement(unittest.TestCase):
             pass
 
         with self.assertRaises(TypeError) as context:
-            IncompleteFlaskServer()  # pylint: disable=abstract-class-instantiated
-        self.assertIn("Can't instantiate abstract class", str(context.exception))
+            IncompleteFlaskServer()
+        self.assertIn(
+            "must override either transform() or transform_stream()",
+            str(context.exception),
+        )
 
 
 class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
@@ -933,3 +945,232 @@ class TestHTTPDirectFQN(unittest.TestCase):
         handler.server.etl_server.transform.assert_called_with(
             os.path.normpath(fqn), "/test/object", ""
         )
+
+
+# ---------------------------------------------------------------------------
+# Streaming transform tests
+# ---------------------------------------------------------------------------
+
+
+class DummyStreamingFastAPIServer(FastAPIServer):
+    """FastAPI server that uses transform_stream instead of transform."""
+
+    def transform_stream(self, reader, _path, _etl_args):
+        data = reader.read()
+        yield data[::-1]
+
+    def get_mime_type(self):
+        return "application/test"
+
+
+class DummyStreamingFlaskServer(FlaskServer):
+    """Flask server that uses transform_stream instead of transform."""
+
+    def transform_stream(self, reader, _path, _etl_args):
+        data = reader.read()
+        yield b"flask: " + data
+
+    def get_mime_type(self):
+        return "application/flask"
+
+
+class DummyStreamingHTTPServer(HTTPMultiThreadedServer):
+    """HTTP server that uses transform_stream instead of transform."""
+
+    def transform_stream(self, reader, _path, _etl_args):
+        data = reader.read()
+        yield data.upper()
+
+    def get_mime_type(self):
+        return "text/caps"
+
+
+class TestStreamingDetection(unittest.TestCase):
+    """Test that _use_streaming detection works correctly."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+
+    def test_stream_only_uses_streaming(self):
+        server = DummyStreamingFastAPIServer()
+        self.assertTrue(server.use_streaming)
+
+    def test_transform_only_uses_buffered(self):
+        server = DummyFastAPIServer()
+        self.assertFalse(server.use_streaming)
+
+    def test_both_overridden_prefers_transform(self):
+        class BothServer(FastAPIServer):
+            def transform(self, data, _path, _etl_args):
+                return data
+
+            def transform_stream(self, reader, _path, _etl_args):
+                yield reader.read()
+
+        server = BothServer()
+        self.assertFalse(server.use_streaming)
+
+    def test_neither_overridden_raises(self):
+        class EmptyServer(FastAPIServer):
+            pass
+
+        with self.assertRaises(TypeError) as ctx:
+            EmptyServer()
+        self.assertIn(
+            "must override either transform() or transform_stream()", str(ctx.exception)
+        )
+
+
+class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["DIRECT_PUT"] = "false"
+        self.etl_server = DummyStreamingFastAPIServer()
+        self.client = TestClient(self.etl_server.app)
+
+    def test_health_check(self):
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"Running")
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_streaming_put(self):
+        input_content = b"input data"
+        response = self.client.put("/test/object", content=input_content)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, input_content[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_streaming_get(self):
+        original_content = b"original data"
+        with patch.object(
+            self.etl_server,
+            "_get_network_content",
+            AsyncMock(return_value=original_content),
+        ):
+            response = self.client.get("/test/object")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content, original_content[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_websocket_raises_for_streaming_server(self):
+        """WebSocket should fail for streaming-only servers."""
+        with self.assertRaises(Exception):
+            with self.client.websocket_connect("/ws") as websocket:
+                websocket.send_json(data={}, mode="binary")
+                websocket.send_bytes(b"test")
+                websocket.receive_bytes()
+
+
+class TestStreamingFlaskServer(unittest.TestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost"
+        self.etl_server = DummyStreamingFlaskServer()
+        self.client = self.etl_server.app.test_client()
+
+    def test_streaming_put(self):
+        input_data = b"hello"
+        response = self.client.put("/some/key", data=input_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b"flask: " + input_data)
+
+    def test_streaming_get(self):
+        input_data = b"flask get data"
+        with patch("requests.Session.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.raw = io.BytesIO(input_data)
+            mock_get.return_value = mock_resp
+            response = self.client.get("/some/key")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data, b"flask: " + input_data)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_put_with_direct_put(self):
+        path = "test/object"
+        input_content = b"input data"
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+
+        def _consume_and_respond(_url, **kwargs):
+            # Consume the iterator so CountingIterator tracks bytes
+            data = kwargs.get("data")
+            if hasattr(data, "__iter__") and not isinstance(data, (bytes, str)):
+                b"".join(data)
+            return MagicMock(status_code=200, content=b"")
+
+        with patch("requests.Session.put", side_effect=_consume_and_respond):
+            response = self.client.put(f"/{path}", data=input_content, headers=headers)
+            self.assertEqual(response.status_code, 204)
+            self.assertEqual(response.data, b"")
+            # Verify HEADER_DIRECT_PUT_LENGTH is set (bytes were counted)
+            dpl = response.headers.get(HEADER_DIRECT_PUT_LENGTH)
+            self.assertIsNotNone(dpl)
+            self.assertGreater(int(dpl), 0)
+
+
+class TestStreamingHTTPServer(unittest.TestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+
+    def _make_streaming_handler(self):
+        handler = DummyRequestHandler()
+        handler.server.etl_server.use_streaming = True
+        handler.server.etl_server.transform_stream.return_value = iter([b"TRANSFORMED"])
+        handler.server.etl_server.close_reader = MagicMock()
+        return handler
+
+    def test_streaming_put(self):
+        handler = self._make_streaming_handler()
+        handler.headers = {"Content-Length": "10"}
+        handler.rfile = io.BytesIO(b"1234567890")
+        handler.do_PUT()
+
+        handler.server.etl_server.transform_stream.assert_called_once()
+        self.assertIn(b"TRANSFORMED", handler.wfile.getvalue())
+
+    def test_streaming_get(self):
+        handler = self._make_streaming_handler()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raw = io.BytesIO(b"original")
+        handler.server.etl_server.session.get.return_value = mock_resp
+
+        handler.do_GET()
+
+        handler.server.etl_server.transform_stream.assert_called_once()
+        self.assertIn(b"TRANSFORMED", handler.wfile.getvalue())
+
+    def test_streaming_put_with_direct_put(self):
+        handler = self._make_streaming_handler()
+        direct_put_url = "http://some-target/put/object"
+        handler.headers = {
+            HEADER_NODE_URL: direct_put_url,
+            HEADER_CONTENT_LENGTH: "5",
+        }
+        handler.rfile = io.BytesIO(b"hello")
+
+        mock_put_resp = MagicMock()
+        mock_put_resp.status_code = 200
+        mock_put_resp.content = b""
+        handler.server.etl_server.session.put.return_value = mock_put_resp
+
+        handler.do_PUT()
+
+        handler.server.etl_server.session.put.assert_called_once()
+        handler.send_response.assert_called_with(204)
+
+
+class TestCountingIterator(unittest.TestCase):
+    def test_counts_bytes(self):
+        data = [b"hello", b" ", b"world"]
+        counted = CountingIterator(iter(data))
+        result = b"".join(counted)
+        self.assertEqual(result, b"hello world")
+        self.assertEqual(counted.bytes_sent, 11)
+
+    def test_empty_iterator(self):
+        counted = CountingIterator(iter([]))
+        result = b"".join(counted)
+        self.assertEqual(result, b"")
+        self.assertEqual(counted.bytes_sent, 0)
