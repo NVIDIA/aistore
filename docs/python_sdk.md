@@ -155,6 +155,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [props](#obj.object.Object.props)
     * [props\_cached](#obj.object.Object.props_cached)
     * [head](#obj.object.Object.head)
+    * [head\_v2](#obj.object.Object.head_v2)
     * [get\_reader](#obj.object.Object.get_reader)
     * [get](#obj.object.Object.get)
     * [get\_semantic\_url](#obj.object.Object.get_semantic_url)
@@ -204,6 +205,11 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [obj\_version](#obj.object_attributes.ObjectAttributes.obj_version)
     * [custom\_metadata](#obj.object_attributes.ObjectAttributes.custom_metadata)
     * [present](#obj.object_attributes.ObjectAttributes.present)
+  * [ChunksInfo](#obj.object_attributes.ChunksInfo)
+  * [ObjectAttributesV2](#obj.object_attributes.ObjectAttributesV2)
+    * [last\_modified](#obj.object_attributes.ObjectAttributesV2.last_modified)
+    * [etag](#obj.object_attributes.ObjectAttributesV2.etag)
+    * [chunks](#obj.object_attributes.ObjectAttributesV2.chunks)
 
 <a id="authn.authn_client.AuthNClient"></a>
 
@@ -577,7 +583,7 @@ def create(name: str,
            desc: str,
            cluster_alias: str,
            perms: List[AccessAttr],
-           bucket_name: str = None) -> RoleInfo
+           bucket_name: Optional[str] = None) -> RoleInfo
 ```
 
 Creates a new role.
@@ -607,10 +613,10 @@ Creates a new role.
 
 ```python
 def update(name: str,
-           desc: str = None,
-           cluster_alias: str = None,
-           perms: List[AccessAttr] = None,
-           bucket_name: str = None) -> RoleInfo
+           desc: Optional[str] = None,
+           cluster_alias: Optional[str] = None,
+           perms: Optional[List[AccessAttr]] = None,
+           bucket_name: Optional[str] = None) -> None
 ```
 
 Updates an existing role.
@@ -801,14 +807,14 @@ Create a new user in the AuthN Server.
 ### list
 
 ```python
-def list()
+def list() -> UserMap
 ```
 
-List all users in the AuthN Server.
+Get all users in the AuthN Server.
 
 **Returns**:
 
-- `str` - The list of users in the AuthN Server.
+- `UserMap` - A map of user IDs to their info in the AuthN Server.
   
 
 **Raises**:
@@ -943,7 +949,7 @@ The name of this bucket.
 
 ```python
 @property
-def namespace() -> Namespace
+def namespace() -> Optional[Namespace]
 ```
 
 The namespace for this bucket.
@@ -1112,7 +1118,7 @@ NOTE: only Cloud buckets can be evicted.
 ### head
 
 ```python
-def head() -> Header
+def head() -> CaseInsensitiveDict
 ```
 
 Requests bucket properties.
@@ -1262,7 +1268,7 @@ def list_objects(prefix: str = "",
                  page_size: int = 0,
                  uuid: str = "",
                  continuation_token: str = "",
-                 flags: List[ListObjectFlag] = None,
+                 flags: Optional[List[ListObjectFlag]] = None,
                  target: str = "") -> BucketList
 ```
 
@@ -1310,7 +1316,7 @@ available).
 def list_objects_iter(prefix: str = "",
                       props: str = "",
                       page_size: int = 0,
-                      flags: List[ListObjectFlag] = None,
+                      flags: Optional[List[ListObjectFlag]] = None,
                       target: str = "") -> ObjectIterator
 ```
 
@@ -1354,7 +1360,7 @@ Returns an iterator for all objects in bucket
 def list_all_objects(prefix: str = "",
                      props: str = "",
                      page_size: int = 0,
-                     flags: List[ListObjectFlag] = None,
+                     flags: Optional[List[ListObjectFlag]] = None,
                      target: str = "") -> List[BucketEntry]
 ```
 
@@ -1443,7 +1449,7 @@ def transform(etl_name: str,
               sync: bool = False,
               num_workers: Optional[int] = 0,
               cont_on_err: bool = False,
-              etl_pipeline: List[str] = None) -> str
+              etl_pipeline: Optional[List[str]] = None) -> str
 ```
 
 Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -1478,11 +1484,11 @@ result to the destination bucket
 ### put\_files
 
 ```python
-def put_files(path: str,
+def put_files(path: Union[str, Path],
               prefix_filter: str = "",
               pattern: str = "*",
               basename: bool = False,
-              prepend: str = None,
+              prepend: Optional[str] = None,
               recursive: bool = False,
               dry_run: bool = False,
               verbose: bool = True) -> List[str]
@@ -1492,7 +1498,7 @@ Puts files found in a given filepath as objects to a bucket in AIS storage.
 
 **Arguments**:
 
-- `path` _str_ - Local filepath, can be relative or absolute
+- `path` _str or Path_ - Local filepath, can be relative or absolute
 - `prefix_filter` _str, optional_ - Only put files with names starting with this prefix
 - `pattern` _str, optional_ - Shell-style wildcard pattern to filter files
 - `basename` _bool, optional_ - Whether to use the file names only as object names and omit the path information
@@ -1521,7 +1527,7 @@ Puts files found in a given filepath as objects to a bucket in AIS storage.
 ### object
 
 ```python
-def object(obj_name: str, props: ObjectProps = None) -> Object
+def object(obj_name: str, props: Optional[ObjectProps] = None) -> Object
 ```
 
 Factory constructor for an object in this bucket.
@@ -1542,9 +1548,9 @@ Does not make any HTTP request, only instantiates an object in a bucket owned by
 ### objects
 
 ```python
-def objects(obj_names: List[str] = None,
-            obj_range: ObjectRange = None,
-            obj_template: str = None) -> ObjectGroup
+def objects(obj_names: Optional[List[str]] = None,
+            obj_range: Optional[ObjectRange] = None,
+            obj_template: Optional[str] = None) -> ObjectGroup
 ```
 
 Factory constructor for multiple objects belonging to this bucket.
@@ -1567,8 +1573,8 @@ Factory constructor for multiple objects belonging to this bucket.
 ```python
 def make_request(method: str,
                  action: str,
-                 value: Dict = None,
-                 params: Dict = None) -> requests.Response
+                 value: Optional[Dict] = None,
+                 params: Optional[Dict] = None) -> requests.Response
 ```
 
 Use the bucket's client to make a request to the bucket endpoint on the AIS server
@@ -1577,7 +1583,7 @@ Use the bucket's client to make a request to the bucket endpoint on the AIS serv
 
 - `method` _str_ - HTTP method to use, e.g. POST/GET/DELETE
 - `action` _str_ - Action string used to create an ActionMsg to pass to the server
-- `value` _dict_ - Additional value parameter to pass in the ActionMsg
+- `value` _dict, optional_ - Additional value parameter to pass in the ActionMsg
 - `params` _dict, optional_ - Optional parameters to pass in the request
   
 
@@ -1649,7 +1655,8 @@ AIStore client for managing buckets, objects, and ETL jobs.
 **Arguments**:
 
 - `endpoint` _str_ - AIStore endpoint.
-- `skip_verify` _bool, optional_ - If True, skip SSL certificate verification. Defaults to False.
+- `skip_verify` _bool, optional_ - If True, skip SSL certificate verification. If False (default),
+  the 'AIS_SKIP_VERIFY' environment variable is also checked.
 - `ca_cert` _str, optional_ - Path to a CA certificate file for SSL verification. If not provided,
   the 'AIS_CLIENT_CA' environment variable will be used. Defaults to None.
 - `client_cert` _Union[str, Tuple[str, str], None], optional_ - Path to a client certificate PEM file
@@ -1658,14 +1665,17 @@ AIStore client for managing buckets, objects, and ETL jobs.
 - `timeout` _Union[float, Tuple[float, float], None], optional_ - Timeout for HTTP requests.
   - Single float (e.g., `5.0`): Applies to both connection and read timeouts.
   - Tuple (e.g., `(3.0, 20.0)`): First value is the connection timeout, second is the read timeout.
-  - `None`: Disables timeouts (not recommended). Defaults to `(3, 20)`.
+  - Tuple with 0 (e.g., `(0, 20.0)` or `(3.0, 0)`): Use `0` to disable specific timeout.
+  - `0` or `0.0` or `(0, 0)`: Disables all timeouts.
+  - `None` (default): Check environment variables 'AIS_CONNECT_TIMEOUT' and 'AIS_READ_TIMEOUT'.
+  If env var is set to `0`, that specific timeout is disabled. Defaults to `(3, 20)` if not set.
 - `retry_config` _RetryConfig, optional_ - Defines retry behavior for HTTP and network failures.
   If not provided, the default retry configuration (`RetryConfig.default()`) is used.
 - `retry` _urllib3.Retry, optional_ - [Deprecated] Retry configuration from urllib3. Use `retry_config` instead.
 - `token` _str, optional_ - Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
   will be used. Defaults to None.
 - `max_pool_size` _int, optional_ - Maximum number of connections per host in the connection pool.
-  Defaults to 10.
+  If not provided, the 'AIS_MAX_CONN_POOL' environment variable will be used, or defaults to 10.
 
 <a id="client.Client.bucket"></a>
 
@@ -1829,11 +1839,54 @@ def batch(objects: Union[List[Object], Object, str, List[str]] = None,
           output_format: str = EXT_TAR,
           cont_on_err: bool = True,
           only_obj_name: bool = False,
-          streaming_get: bool = True)
+          streaming_get: bool = True,
+          colocation: Colocation = Colocation.NONE)
 ```
 
-Factory constructor for Get-Batch.
-Contains APIs related to AIStore Get-Batch operations.
+Factory constructor for Get-Batch API (MOSS - Multi-Object Streaming Service).
+
+Efficiently retrieve multiple objects, archive files, or byte ranges in a single request,
+reducing network overhead and improving throughput for ML training workloads.
+
+**Arguments**:
+
+- `objects` _Optional[Union[List[Object], Object, str, List[str]]]_ - Objects to retrieve. Can be:
+  - Single object name: "file.txt"
+  - List of names: ["file1.txt", "file2.txt"]
+  - Single Object instance
+  - List of Object instances
+  - None (add objects later via batch.add())
+- `Note` - if objects are specified as raw names (str or list of str), bucket must be provided
+- `bucket` _Optional[Bucket]_ - Default bucket for all objects
+- `output_format` _str_ - Archive format (tar, tgz, zip). Defaults to ".tar"
+- `cont_on_err` _bool_ - Continue on errors (missing files under __404__/). Defaults to True
+- `only_obj_name` _bool_ - Use only obj name in archive path. Defaults to False
+- `streaming_get` _bool_ - Stream resulting archive prior to finalizing it in memory. Defaults to True
+- `colocation` _Colocation_ - Colocation hint for optimization. Defaults to Colocation.NONE.
+  - Colocation.NONE: no optimization - suitable for uniformly distributed data
+  - Colocation.TARGET_AWARE: target-aware - objects are collocated on few targets
+  - Colocation.TARGET_AND_SHARD_AWARE: target and shard-aware - enables archive handle reuse
+  
+
+**Returns**:
+
+- `Batch` - Batch object for building and executing Get-Batch requests
+  
+
+**Example**:
+
+  # Quick batch with string names
+  batch = client.batch(["file1.txt", "file2.txt"], bucket=bucket)
+  for obj_info, data in batch.get():
+- `print(f"Object` - {obj_info.obj_name}, Size: {len(data)}")
+  
+  # Build batch incrementally with advanced options
+  batch = client.batch(bucket=bucket)
+  batch.add("simple.txt")
+  batch.add("archive.tar", archpath="images/photo.jpg")  # extract from archive
+  batch.add("tracked.txt", opaque=b"user-id-123")  # with tracking data
+  for obj_info, data in batch.get():
+- `print(f"Object` - {obj_info.obj_name}")
 
 <a id="cluster.Cluster"></a>
 
@@ -2089,7 +2142,8 @@ Return status of a job
 ### wait
 
 ```python
-def wait(timeout: int = DEFAULT_JOB_WAIT_TIMEOUT, verbose: bool = True)
+def wait(timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
+         verbose: bool = True) -> WaitResult
 ```
 
 Wait for a job to finish
@@ -2098,6 +2152,11 @@ Wait for a job to finish
 
 - `timeout` _int, optional_ - The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
 - `verbose` _bool, optional_ - Whether to log wait status to standard output
+  
+
+**Returns**:
+
+- `WaitResult` - Outcome of the wait operation
   
 
 **Raises**:
@@ -2114,7 +2173,7 @@ Wait for a job to finish
 
 ```python
 def wait_for_idle(timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
-                  verbose: bool = True)
+                  verbose: bool = True) -> WaitResult
 ```
 
 Wait for a job to reach an idle state
@@ -2125,6 +2184,11 @@ Wait for a job to reach an idle state
 - `verbose` _bool, optional_ - Whether to log wait status to standard output
   
 
+**Returns**:
+
+- `WaitResult` - Outcome of the wait operation
+  
+
 **Raises**:
 
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
@@ -2132,7 +2196,6 @@ Wait for a job to reach an idle state
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `errors.Timeout` - Timeout while waiting for the job to finish
-- `errors.JobInfoNotFound` - Raised when information on a job's status could not be found on the AIS cluster
 
 <a id="job.Job.wait_single_node"></a>
 
@@ -2140,7 +2203,7 @@ Wait for a job to reach an idle state
 
 ```python
 def wait_single_node(timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
-                     verbose: bool = True)
+                     verbose: bool = True) -> WaitResult
 ```
 
 Wait for a job running on a single node
@@ -2151,6 +2214,11 @@ Wait for a job running on a single node
 - `verbose` _bool, optional_ - Whether to log wait status to standard output
   
 
+**Returns**:
+
+- `WaitResult` - Outcome of the wait operation
+  
+
 **Raises**:
 
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
@@ -2158,7 +2226,6 @@ Wait for a job running on a single node
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `errors.Timeout` - Timeout while waiting for the job to finish
-- `errors.JobInfoNotFound` - Raised when information on a job's status could not be found on the AIS cluster
 
 <a id="job.Job.start"></a>
 
@@ -2167,7 +2234,7 @@ Wait for a job running on a single node
 ```python
 def start(daemon_id: str = "",
           force: bool = False,
-          buckets: List[Bucket] = None) -> str
+          buckets: Optional[List[Bucket]] = None) -> str
 ```
 
 Start a job and return its ID.
@@ -2356,7 +2423,7 @@ The client bound to the bucket used by the ObjectGroup.
 
 ```python
 @client.setter
-def client(client) -> RequestClient
+def client(client)
 ```
 
 Update the client bound to the bucket used by the ObjectGroup.
@@ -2461,8 +2528,8 @@ NOTE: only Cloud buckets can be evicted.
 ### prefetch
 
 ```python
-def prefetch(blob_threshold: int = None,
-             num_workers: int = None,
+def prefetch(blob_threshold: Optional[int] = None,
+             num_workers: Optional[int] = None,
              latest: bool = False,
              continue_on_error: bool = False)
 ```
@@ -2550,14 +2617,14 @@ def transform(to_bck: "Bucket",
               etl_name: str,
               timeout: str = DEFAULT_ETL_TIMEOUT,
               prepend: str = "",
-              ext: Dict[str, str] = None,
+              ext: Optional[Dict[str, str]] = None,
               continue_on_error: bool = False,
               dry_run: bool = False,
               force: bool = False,
               latest: bool = False,
               sync: bool = False,
-              num_workers: int = None,
-              etl_pipeline: List[str] = None)
+              num_workers: Optional[int] = None,
+              etl_pipeline: Optional[List[str]] = None)
 ```
 
 Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
@@ -2842,6 +2909,11 @@ def head() -> CaseInsensitiveDict
 
 Requests object properties and returns headers. Updates props.
 
+Deprecation notice:
+This is the legacy HEAD(object) v1 call. It remains supported in AIS 4.2,
+but new development should target Object HEAD v2 when available in the SDK.
+The v1 path is planned for removal in a future major release.
+
 **Returns**:
 
   Response header with the object properties.
@@ -2855,6 +2927,36 @@ Requests object properties and returns headers. Updates props.
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `requests.exceptions.HTTPError(404)` - The object does not exist
 
+<a id="obj.object.Object.head_v2"></a>
+
+### head\_v2
+
+```python
+def head_v2(props: str = "") -> ObjectAttributesV2
+```
+
+Make a HEAD request with selective property retrieval (V2 API).
+
+EXPERIMENTAL: This API is experimental and may change in future releases.
+
+This method allows requesting specific object properties, reducing
+response size and processing overhead when only certain attributes
+are needed.
+
+**Arguments**:
+
+- `props` - Comma-separated list of properties to retrieve.
+  Available values: name, size, version, checksum, atime, present,
+  copies, ec, custom, location, chunked, last-modified, etag.
+- `See` - https://github.com/NVIDIA/aistore/blob/main/api/apc/lsmsg.go
+  If empty, returns default properties (name, size).
+  
+  
+
+**Returns**:
+
+- `ObjectAttributesV2` - Parsed V2 object attributes (includes chunk info, last-modified, etag).
+
 <a id="obj.object.Object.get_reader"></a>
 
 ### get\_reader
@@ -2862,12 +2964,13 @@ Requests object properties and returns headers. Updates props.
 ```python
 def get_reader(archive_config: Optional[ArchiveConfig] = None,
                blob_download_config: Optional[BlobDownloadConfig] = None,
-               chunk_size: int = DEFAULT_CHUNK_SIZE,
+               chunk_size: Optional[int] = None,
                etl: Optional[ETLConfig] = None,
                writer: Optional[BufferedWriter] = None,
                latest: bool = False,
                byte_range: Optional[str] = None,
-               direct: bool = False) -> ObjectReader
+               direct: bool = False,
+               num_workers: Optional[int] = None) -> ObjectReader
 ```
 
 Creates and returns an ObjectReader with access to object contents
@@ -2877,7 +2980,9 @@ and optionally writes to a provided writer.
 
 - `archive_config` _Optional[ArchiveConfig]_ - Settings for archive extraction.
 - `blob_download_config` _Optional[BlobDownloadConfig]_ - Settings for using blob download.
-- `chunk_size` _int, optional_ - Chunk size to use while reading from stream.
+- `chunk_size` _Optional[int]_ - Chunk size in bytes. For parallel downloads (num_workers
+  set), defaults to the server-provided optimal size. For sequential reads,
+  defaults to DEFAULT_CHUNK_SIZE.
 - `etl` _Optional[ETLConfig]_ - Settings for ETL-specific operations (name, args).
 - `writer` _Optional[BufferedWriter]_ - User-provided writer for writing content output.
   The user is responsible for closing the writer.
@@ -2887,6 +2992,9 @@ and optionally writes to a provided writer.
 - `See` - https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
 - `direct` _bool, optional_ - If True, the object content is read directly from the target node,
   bypassing the proxy.
+- `num_workers` _Optional[int]_ - If provided, use concurrent range-reads with this many
+  workers for faster downloads. Uses ProcessPoolExecutor with shared memory for
+  optimal throughput.
   
 
 **Returns**:
@@ -2896,7 +3004,7 @@ and optionally writes to a provided writer.
 
 **Raises**:
 
-- `ValueError` - If Byte Range is used with Blob Download.
+- `ValueError` - If `byte_range` is used with `blob_download_config`.
 - `requests.RequestException` - If an error occurs during the request.
 - `requests.ConnectionError` - If there is a connection error.
 - `requests.ConnectionTimeout` - If the connection times out.
@@ -2907,13 +3015,13 @@ and optionally writes to a provided writer.
 ### get
 
 ```python
-def get(archive_config: ArchiveConfig = None,
-        blob_download_config: BlobDownloadConfig = None,
+def get(archive_config: Optional[ArchiveConfig] = None,
+        blob_download_config: Optional[BlobDownloadConfig] = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl: ETLConfig = None,
-        writer: BufferedWriter = None,
+        etl: Optional[ETLConfig] = None,
+        writer: Optional[BufferedWriter] = None,
         latest: bool = False,
-        byte_range: str = None) -> ObjectReader
+        byte_range: Optional[str] = None) -> ObjectReader
 ```
 
 Deprecated: Use 'get_reader' instead.
@@ -2942,7 +3050,7 @@ Creates and returns an ObjectReader with access to object contents and optionall
 
 **Raises**:
 
-- `ValueError` - If Byte Range is used with Blob Download.
+- `ValueError` - If `byte_range` is used with `blob_download_config`.
 - `requests.RequestException` - If an error occurs during the request.
 - `requests.ConnectionError` - If there is a connection error.
 - `requests.ConnectionTimeout` - If the connection times out.
@@ -2967,7 +3075,7 @@ Get the semantic URL to the object
 ### get\_url
 
 ```python
-def get_url(archpath: str = "", etl: ETLConfig = None) -> str
+def get_url(archpath: str = "", etl: Optional[ETLConfig] = None) -> str
 ```
 
 Get the full url to the object including base url and any query parameters
@@ -3259,6 +3367,8 @@ Provide a way to read an object's contents and attributes, optionally iterating 
 - `object_client` _ObjectClient_ - Client for making requests to a specific object in AIS
 - `chunk_size` _int, optional_ - Size of each data chunk to be fetched from the stream.
   Defaults to DEFAULT_CHUNK_SIZE.
+- `num_workers` _int, optional_ - If provided, use concurrent range-reads with this
+  many workers.
 
 <a id="obj.object_reader.ObjectReader.head"></a>
 
@@ -3310,14 +3420,14 @@ This requires all object content to fit in memory at once and downloads all cont
 ### raw
 
 ```python
-def raw() -> requests.Response
+def raw() -> Any
 ```
 
-Return the raw byte stream of object content.
+Return the raw byte stream of the object content.
 
 **Returns**:
 
-- `requests.Response` - Raw byte stream of the object content.
+- `requests.Response.raw` - Raw byte stream of the object content.
 
 <a id="obj.object_reader.ObjectReader.as_file"></a>
 
@@ -3362,7 +3472,7 @@ Make a request to get a stream from the provided object and yield chunks of the 
 
 **Returns**:
 
-  Generator[bytes, None, None]: An iterator over each chunk of bytes in the object.
+  Generator[bytes, None, None]: An iterator over each chunk of bytes in the object
 
 <a id="obj.obj_file.object_file.ObjectFileReader"></a>
 
@@ -3385,7 +3495,7 @@ retrieved chunk. The `max_resume` parameter controls how many retry attempts are
 
 **Arguments**:
 
-- `content_provider` _ContentIterProvider_ - A provider that creates iterators which can fetch object data from AIS in chunks.
+- `content_provider` _BaseContentIterProvider_ - A provider that creates iterators which can fetch object data from AIS in chunks.
 - `max_resume` _int_ - Maximum number of resumes allowed for an ObjectFileReader instance.
 
 <a id="obj.obj_file.object_file.ObjectFileReader.readable"></a>
@@ -3692,4 +3802,74 @@ def present() -> bool
 ```
 
 Whether the object is present/cached.
+
+<a id="obj.object_attributes.ChunksInfo"></a>
+
+## Class: ChunksInfo
+
+```python
+@dataclass
+class ChunksInfo()
+```
+
+Information about chunked object storage.
+
+**Attributes**:
+
+- `chunk_count` - Number of chunks the object is split into.
+- `max_chunk_size` - Size of the largest chunk in bytes.
+
+<a id="obj.object_attributes.ObjectAttributesV2"></a>
+
+## Class: ObjectAttributesV2
+
+```python
+class ObjectAttributesV2(ObjectAttributes)
+```
+
+Extended object attributes returned from HeadObjectV2 API.
+
+This class extends ObjectAttributes with V2-specific fields like
+chunk information, last modified time, and ETag.
+
+**Arguments**:
+
+- `response_headers` _CaseInsensitiveDict_ - Response header dict containing object attributes
+
+<a id="obj.object_attributes.ObjectAttributesV2.last_modified"></a>
+
+### last\_modified
+
+```python
+@property
+def last_modified() -> str
+```
+
+Last modification time of the object (RFC1123 format).
+
+<a id="obj.object_attributes.ObjectAttributesV2.etag"></a>
+
+### etag
+
+```python
+@property
+def etag() -> str
+```
+
+Entity tag (ETag) of the object.
+
+<a id="obj.object_attributes.ObjectAttributesV2.chunks"></a>
+
+### chunks
+
+```python
+@property
+def chunks() -> Optional[ChunksInfo]
+```
+
+Chunk information for chunked objects.
+
+**Returns**:
+
+  ChunksInfo if object is chunked, None otherwise.
 
