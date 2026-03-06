@@ -25,7 +25,8 @@ linters:
     - dupword
     - durationcheck
     # errcheck
-    # errorlint   ## TODO (wrapped errors; non-wrapping)
+    - errorlint   ## excluding "wrapped errors"
+    # exhaustive  ## TODO: "missing cases in switch of type"
     - fatcontext
     - gochecksumtype
     - gocritic
@@ -57,9 +58,9 @@ linters:
     - usetesting
     - wastedassign
     - whitespace
-    # containedctx ## (TODO: revisit this group)
-    # ginkgolinter
-    # recvcheck ## (config below)
+    # containedctx ## ("found a struct that contains a context.Context field")
+    # ginkgolinter ## (TODO: use it to cleanup unit tests)
+    # recvcheck    ## (config below)
 
 # See: https://golangci-lint.run/usage/linters/
   settings:
@@ -70,8 +71,10 @@ linters:
       # ignore-generated-header: true
       severity: warning
       rules:
-        # name: import-shadowing ## (e.g., url)
-        # name: unhandled-error  ## TODO (wtp)
+        # name: import-shadowing
+        # name: time-naming
+        # name: unhandled-error
+        # name: var-naming
         - name: blank-imports
         - name: context-as-argument
         - name: context-keys-type
@@ -82,15 +85,12 @@ linters:
         - name: increment-decrement
         - name: indent-error-flow
         - name: modifies-value-receiver
-        # name: package-comments  TODO (wtp)
         - name: range
         - name: receiver-naming
         - name: redefines-builtin-id
         - name: string-of-int
         - name: superfluous-else
-        # name: time-naming
         - name: time-date
-        # name: var-naming
         - name: var-declaration
         - name: unconditional-recursion
         - name: unexported-naming
@@ -115,7 +115,7 @@ linters:
     govet:
       enable-all: true
       disable:
-        - fieldalignment ## TODO (wtp)
+        - fieldalignment ## (fieldalignment -fix path)
         - shadow         ## ditto
 
     gocritic:
@@ -216,6 +216,14 @@ linters:
       - linters:
           - staticcheck
         text: "SA1019:"
+
+      # Exclude errorlint "wrapped errors. Use errors.Is" and "non-wrapping format ... Use `%w` to format error"
+      - linters:
+          - errorlint
+        text: "wrapped errors"
+      - linters:
+          - errorlint
+        text: "non-wrapping format"
 
 formatters:
   enable:
