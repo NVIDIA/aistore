@@ -293,6 +293,7 @@ var (
 			allPropsFlag,
 			nbiPagesPerChunkFlag,
 			nbiMaxEntriesPerChunkFlag,
+			forceNBIFlag,
 		},
 	}
 )
@@ -1045,7 +1046,7 @@ func createInventoryHandler(c *cli.Context) error {
 	}
 
 	// msg
-	msg := &apc.CreateInvMsg{}
+	msg := &apc.CreateNBIMsg{}
 	msg.SetFlag(apc.LsNoDirs)
 
 	if flagIsSet(c, invPrefixFlag) {

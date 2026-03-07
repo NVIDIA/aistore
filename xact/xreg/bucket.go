@@ -126,7 +126,7 @@ func RenewLso(bck *meta.Bck, uuid string, msg *apc.LsoMsg, hdr http.Header) Rene
 	return dreg.renewByID(e, bck)
 }
 
-func RenewNBI(bck *meta.Bck, uuid string, msg *apc.CreateInvMsg) RenewRes {
+func RenewNBI(bck *meta.Bck, uuid string, msg *apc.CreateNBIMsg) RenewRes {
 	return RenewBucketXact(
 		apc.ActCreateNBI,
 		bck,

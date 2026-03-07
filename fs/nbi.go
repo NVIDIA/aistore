@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
@@ -29,7 +28,7 @@ type (
 	}
 )
 
-func findNBI(bck *cmn.Bck) (map[string]string, error) {
+func CollectNBI(bck *cmn.Bck) (map[string]string, error) {
 	var (
 		avail  = GetAvail()
 		sysBck = meta.SysBckNBI().Bucket()
@@ -66,8 +65,6 @@ func findNBI(bck *cmn.Bck) (map[string]string, error) {
 
 func (j *nbiJogger) run() {
 	defer j.wg.Done()
-
-	nlog.Errorln(">>>>> j.dir", j.dir) // DEBUG
 
 	ents, err := os.ReadDir(j.dir)
 	if err != nil {

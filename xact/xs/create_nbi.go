@@ -64,7 +64,7 @@ type (
 		xreg.RenewBase
 	}
 	XactNBI struct {
-		msg    *apc.CreateInvMsg
+		msg    *apc.CreateNBIMsg
 		lom    *core.LOM
 		ufest  *core.Ufest
 		slab   *memsys.Slab
@@ -96,7 +96,7 @@ func (p *nbiFactory) Start() error {
 		return cmn.NewErrNotImpl("create bucket inventory for", "multi-target cluster")
 	}
 
-	msg := p.Args.Custom.(*apc.CreateInvMsg)
+	msg := p.Args.Custom.(*apc.CreateNBIMsg)
 	r := &XactNBI{msg: msg}
 	r.InitBase(p.UUID(), p.Kind(), bck)
 

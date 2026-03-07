@@ -45,7 +45,7 @@ func TestCreateInventorySimple(t *testing.T) {
 	m.init(true /*cleanup*/)
 	m.remotePuts(true /*evict*/)
 
-	msg := &apc.CreateInvMsg{
+	msg := &apc.CreateNBIMsg{
 		LsoMsg: apc.LsoMsg{
 			Prefix:   m.prefix,
 			Props:    apc.GetPropsName,
@@ -99,7 +99,7 @@ func TestCreateInventoryPermuteOnDisk(t *testing.T) {
 			)
 			m.remotePuts(true /*evict*/)
 
-			msg := &apc.CreateInvMsg{
+			msg := &apc.CreateNBIMsg{
 				LsoMsg: apc.LsoMsg{
 					Prefix:   m.prefix,
 					Props:    apc.GetPropsName,
@@ -145,7 +145,7 @@ func TestListInventory(t *testing.T) {
 	type test struct {
 		name             string
 		num              int
-		pageSize         int64 // CreateInvMsg.PageSize (inventory creation)
+		pageSize         int64 // CreateNBIMsg.PageSize (inventory creation)
 		pagesPerChunk    int64
 		maxEntriesPerChk int64
 		listPageSize     int64  // LsoMsg.PageSize (listing)
@@ -216,7 +216,7 @@ func TestListInventory(t *testing.T) {
 			m.remotePuts(true /*evict*/)
 
 			// 1. create inventory
-			createMsg := &apc.CreateInvMsg{
+			createMsg := &apc.CreateNBIMsg{
 				Name: tc.invName,
 				LsoMsg: apc.LsoMsg{
 					Prefix:   m.prefix,
@@ -330,7 +330,7 @@ func TestListInventoryPrefix(t *testing.T) {
 	m2.puts()
 
 	// create inventory covering both sub-prefixes
-	createMsg := &apc.CreateInvMsg{
+	createMsg := &apc.CreateNBIMsg{
 		Name: "inv-prefix-" + cos.GenTie(),
 		LsoMsg: apc.LsoMsg{
 			Prefix:   parent,
@@ -402,7 +402,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 	type test struct {
 		name             string
 		numA, numM, numZ int
-		pageSize         int64 // CreateInvMsg.PageSize
+		pageSize         int64 // CreateNBIMsg.PageSize
 		pagesPerChunk    int64
 		maxEntriesPerChk int64
 		listPageSize     int64 // listing PageSize
@@ -456,7 +456,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			mz.puts()
 
 			// Create inventory covering the entire parent prefix
-			createMsg := &apc.CreateInvMsg{
+			createMsg := &apc.CreateNBIMsg{
 				Name: tc.invName,
 				LsoMsg: apc.LsoMsg{
 					Prefix:   parent,

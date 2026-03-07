@@ -1191,7 +1191,7 @@ func (t *target) createNBI(c *txnSrv) (string, error) {
 		}
 
 		// control msg
-		cimsg := &apc.CreateInvMsg{}
+		cimsg := &apc.CreateNBIMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, cimsg); err != nil {
 			return "", fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}

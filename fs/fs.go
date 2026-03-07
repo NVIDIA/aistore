@@ -1136,10 +1136,6 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) error {
 // - unlike DestroyBucket, there is no undelete semantics - we remove all matching subtrees
 // - failures are best-effort but reported to FSHC
 func DestroyNBI(op string, bck *cmn.Bck) {
-	// DEBUG
-	found, err := findNBI(bck)
-	nlog.Errorf(">>>>>> %+v, %v", found, err)
-
 	var (
 		n      int
 		avail  = GetAvail()

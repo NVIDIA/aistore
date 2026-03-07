@@ -311,7 +311,7 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int, checkAndRecove
 }
 
 // Create bucket inventory
-func CreateBucketInventory(bp BaseParams, bck cmn.Bck, cinvMsg *apc.CreateInvMsg) (string, error) {
+func CreateBucketInventory(bp BaseParams, bck cmn.Bck, cinvMsg *apc.CreateNBIMsg) (string, error) {
 	q := qalloc()
 	bck.SetQuery(q)
 	bp.Method = http.MethodPost

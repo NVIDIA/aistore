@@ -185,7 +185,7 @@ type (
 		PageSize          int64       `json:"pagesize"`              // max entries returned by list objects call
 	}
 
-	CreateInvMsg struct {
+	CreateNBIMsg struct {
 		Name string `json:"name,omitempty"` // inventory name (optional; must be unique for a given bucket)
 		LsoMsg
 
@@ -196,6 +196,9 @@ type (
 		// MaxEntriesPerChunk puts a hard cap on the number of entries in a single inventory chunk.
 		// If zero, the cap is disabled.
 		MaxEntriesPerChunk int64 `json:"max_entries_per_chunk,omitempty"`
+
+		// Remove all existing inventories.
+		Force bool `json:"force,omitempty"`
 	}
 )
 
@@ -347,7 +350,7 @@ func (lsmsg *LsoMsg) Clone() *LsoMsg {
 }
 
 //////////////////
-// CreateInvMsg //
+// CreateNBIMsg //
 //////////////////
 
 const (
@@ -357,7 +360,7 @@ const (
 )
 
 // validate; set defaults
-func (m *CreateInvMsg) SetValidate() error {
+func (m *CreateNBIMsg) SetValidate() error {
 	const etag = "invalid '" + ActCreateNBI + "'"
 
 	// 1) disallow

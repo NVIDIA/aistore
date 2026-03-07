@@ -643,6 +643,10 @@ var (
 		Usage: "Proceed with removing misplaced objects even if global rebalance (or local resilver) is running or was interrupted,\n" +
 			indent1 + "\tor the node has recently restarted. Does not override the 'dont_cleanup_time' window or other flags",
 	}
+	forceNBIFlag = cli.BoolFlag{
+		Name:  forceFlag.Name,
+		Usage: "Proceed with removing existing bucket inventories and creating a new one",
+	}
 
 	rmZeroSizeFlag = cli.BoolFlag{Name: "rm-zero-size", Usage: "Remove zero size objects " + advancedUsageOnly}
 
