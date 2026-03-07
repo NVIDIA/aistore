@@ -53,7 +53,7 @@ func TestCreateInventorySimple(t *testing.T) {
 		},
 	}
 
-	xid, err := api.CreateBucketInventory(bp, m.bck, msg)
+	xid, err := api.CreateNBI(bp, m.bck, msg)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logfln("%s[%s] started", apc.ActCreateNBI, xid)
@@ -108,7 +108,7 @@ func TestCreateInventoryPermuteOnDisk(t *testing.T) {
 				PagesPerChunk: tc.pagesPerChunk,
 			}
 
-			xid, err := api.CreateBucketInventory(bp, m.bck, msg)
+			xid, err := api.CreateNBI(bp, m.bck, msg)
 			tassert.CheckFatal(t, err)
 
 			tlog.Logfln("%s[%s] started (%s: num=%d pageSize=%d ppc=%d)",
@@ -227,7 +227,7 @@ func TestListInventory(t *testing.T) {
 				MaxEntriesPerChunk: tc.maxEntriesPerChk,
 			}
 
-			xid, err := api.CreateBucketInventory(bp, m.bck, createMsg)
+			xid, err := api.CreateNBI(bp, m.bck, createMsg)
 			tassert.CheckFatal(t, err)
 
 			tlog.Logfln("%s[%s] started (%s: num=%d invPage=%d ppc=%d maxEnt=%d listPage=%d props=%q)",
@@ -340,7 +340,7 @@ func TestListInventoryPrefix(t *testing.T) {
 		PagesPerChunk: 2,
 	}
 
-	xid, err := api.CreateBucketInventory(bp, m1.bck, createMsg)
+	xid, err := api.CreateNBI(bp, m1.bck, createMsg)
 	tassert.CheckFatal(t, err)
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
@@ -467,7 +467,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 				MaxEntriesPerChunk: tc.maxEntriesPerChk,
 			}
 
-			xid, err := api.CreateBucketInventory(bp, cliBck, createMsg)
+			xid, err := api.CreateNBI(bp, cliBck, createMsg)
 			tassert.CheckFatal(t, err)
 
 			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}

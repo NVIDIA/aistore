@@ -364,6 +364,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		}
 	}
 
+	bck := apireq.bck
 	switch msg.Action {
 	case apc.ActEvictRemoteBck:
 		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
@@ -375,7 +376,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		// (compare with t.destroyBucket transaction)
 		var (
 			wg  = &sync.WaitGroup{}
-			nlp = newBckNLP(apireq.bck)
+			nlp = newBckNLP(bck)
 			xid = apireq.query.Get(apc.QparamUUID)
 		)
 		nlp.Lock()
@@ -385,16 +386,16 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		// start and immdiately finish xaction with a singular purpose:
 		// to have a record in xreg (via `ais show job`): name and timestamp only
 		debug.Assert(strings.HasPrefix(xid, xact.PrefixEvictKeepID), xid)
-		_ = xreg.RenewEvictDelete(xid, apc.ActEvictRemoteBck, apireq.bck, nil)
+		_ = xreg.RenewEvictDelete(xid, apc.ActEvictRemoteBck, bck, nil)
 
-		core.LcacheClearBcks(wg, apireq.bck)
-		err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)
+		core.LcacheClearBcks(wg, bck)
+		err := fs.DestroyBucket(msg.Action, bck.Bucket(), bck.Props.BID)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
 		// Recreate bucket directories (now empty), since bck is still in BMD
-		errs := fs.CreateBucket(apireq.bck.Bucket(), false /*nilbmd*/)
+		errs := fs.CreateBucket(bck.Bucket(), false /*nilbmd*/)
 		if len(errs) > 0 {
 			debug.AssertNoErr(errs[0])
 			t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
@@ -412,7 +413,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 				return
 			}
 		}
-		rns := xreg.RenewEvictDelete(msg.UUID, msg.Action /*xaction kind*/, apireq.bck, evdMsg)
+		rns := xreg.RenewEvictDelete(msg.UUID, msg.Action /*xaction kind*/, bck, evdMsg)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err)
 			return
@@ -424,6 +425,19 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		}
 		xctn.AddNotif(notif)
 		xact.GoRunW(xctn)
+	case apc.ActDestroyNBI:
+		nlp := newBckNLP(bck)
+		if !nlp.TryLock(cmn.Rom.MaxKeepalive()) {
+			t.writeErr(w, r, cmn.NewErrBusy("bucket", bck.Cname("")))
+			return
+		}
+		err := fs.DestroyNBI(msg.Action, bck.Bucket(), msg.Name /*invName*/)
+		nlp.Unlock()
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		nlog.Infoln(msg.Action, "for bucket", bck.Cname(""), "[", msg.Name, "]")
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}

@@ -38,6 +38,8 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -647,6 +649,33 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		return
 	}
 
+	// (I.5) show bucket inventory
+	if msg.Action == apc.ActShowNBI {
+		if !qbck.IsBucket() {
+			p.writeErrf(w, r, "bad %s request: %q is not a bucket", msg.Action, qbck.String())
+			return
+		}
+		bck := meta.CloneBck((*cmn.Bck)(qbck))
+		bckArgs := allocBctx()
+		{
+			bckArgs.p = p
+			bckArgs.w = w
+			bckArgs.r = r
+			bckArgs.msg = msg
+			bckArgs.perms = apc.AceBckHEAD
+			bckArgs.bck = bck
+			bckArgs.dpq = dpq
+			bckArgs.createAIS = false
+		}
+		bck, err := bckArgs.initAndTry()
+		freeBctx(bckArgs)
+		if err != nil {
+			return
+		}
+		p.showNBI(w, r, bck, msg)
+		return
+	}
+
 	// (II) invalid action
 	if msg.Action != apc.ActList {
 		p.writeErrAct(w, r, msg.Action)
@@ -726,6 +755,46 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 
 	// do
 	p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
+}
+
+func (p *proxy) showNBI(w http.ResponseWriter, r *http.Request, bck *meta.Bck, msg *apc.ActMsg) {
+	args := allocBcArgs()
+	body := cos.MustMarshal(msg)
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path, Body: body,
+		Header: http.Header{cos.HdrContentType: []string{cos.ContentJSON}},
+	}
+	args.req.Query = bck.AddToQuery(nil)
+	results := p.bcastGroup(args)
+	freeBcArgs(args)
+
+	merged := make(apc.NBIInfoMap)
+	for _, res := range results {
+		if res.err != nil {
+			err := res.toErr()
+			freeBcastRes(results)
+			p.writeErr(w, r, err)
+			return
+		}
+		var local apc.NBIInfoMap
+		if err := jsoniter.Unmarshal(res.bytes, &local); err != nil {
+			freeBcastRes(results)
+			p.writeErr(w, r, err)
+			return
+		}
+		for k, info := range local {
+			if existing, ok := merged[k]; ok {
+				existing.Size += info.Size
+				if info.Mtime > existing.Mtime {
+					existing.Mtime = info.Mtime
+				}
+			} else {
+				merged[k] = info
+			}
+		}
+	}
+	freeBcastRes(results)
+
+	p.writeJSON(w, r, merged, msg.Action)
 }
 
 // +gen:endpoint GET /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamOrigURL=string,apc.QparamLatestVer=bool]
@@ -1034,6 +1103,28 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 				p.writeErr(w, r, err)
 			}
 		}
+	case apc.ActDestroyNBI:
+		// (currently, create/destroy inventory requires admin perm)
+		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+			return
+		}
+		args := allocBcArgs()
+		body := cos.MustMarshal(apc.ActMsg{Action: apc.ActDestroyNBI, Name: msg.Name}) // TODO: avoid re-marshaling
+		args.req = cmn.HreqArgs{Method: r.Method, Path: r.URL.Path, Body: body}
+		results := p.bcastGroup(args)
+		freeBcArgs(args)
+		for _, res := range results {
+			if res.err == nil {
+				continue
+			}
+			err := res.toErr()
+			freeBcastRes(results)
+			p.writeErr(w, r, err)
+			return
+		}
+		nlog.Infoln(msg.Action, "for bucket", bck.Cname(""), "[", msg.Name, "]")
+		freeBcastRes(results)
+
 	case apc.ActDeleteObjects, apc.ActEvictObjects:
 		if msg.Action == apc.ActEvictObjects {
 			if err := cmn.ValidateRemoteBck(apc.ActEvictRemoteBck, bck.Bucket()); err != nil {

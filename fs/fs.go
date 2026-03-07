@@ -1133,20 +1133,24 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) error {
 }
 
 // remove all local native-bucket-inventory artifacts for a given source bucket:
+// - invName is optional: when present we filter accordingly, otherwise delete all
 // - unlike DestroyBucket, there is no undelete semantics - we remove all matching subtrees
 // - failures are best-effort but reported to FSHC
-func DestroyNBI(op string, bck *cmn.Bck) error {
+func DestroyNBI(op string, bck *cmn.Bck, invName string /*optional*/) error {
 	var (
 		n      int
 		avail  = GetAvail()
 		sysBck = meta.SysBckNBI().Bucket()
-		buname = string(bck.MakeUname(""))
+		prefix = string(bck.MakeUname(""))
 	)
+	if invName != "" {
+		prefix = filepath.Join(prefix, invName)
+	}
 	for _, mi := range avail {
 		nerr := 0
 		// subset of content types used for NBI
 		for _, contentType := range []string{ObjCT, WorkCT, ChunkCT, ChunkMetaCT} {
-			rmdir := mi.makePathCTPrefix(sysBck, contentType, buname)
+			rmdir := mi.makePathCTPrefix(sysBck, contentType, prefix)
 			if err := os.RemoveAll(rmdir); err != nil {
 				if cmn.Rom.V(4, cos.ModFS) {
 					nlog.Warningf("%s %q: failed to rm NBI dir %q: %v", op, bck.String(), rmdir, err)

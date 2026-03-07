@@ -9,26 +9,27 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
 type nbiJogger struct {
-	mi    *Mountpath
-	wg    *sync.WaitGroup
-	mu    *sync.Mutex
-	found cos.StrKVs
-	errCh chan<- error
-	dir   string
+	mi     *Mountpath
+	wg     *sync.WaitGroup
+	mu     *sync.Mutex
+	found  apc.NBIInfoMap
+	errCh  chan<- error
+	dir    string
+	prefix string // bck.MakeUname("")
 }
 
-func CollectNBI(bck *cmn.Bck) (cos.StrKVs, error) {
+func CollectNBI(bck *cmn.Bck) (apc.NBIInfoMap, error) {
 	var (
 		avail  = GetAvail()
 		sysBck = meta.SysBckNBI().Bucket()
 		prefix = string(bck.MakeUname(""))
-		found  = make(cos.StrKVs, 1)
+		found  = make(apc.NBIInfoMap, 1)
 		mu     sync.Mutex
 		errCh  = make(chan error, len(avail))
 		wg     sync.WaitGroup
@@ -37,12 +38,13 @@ func CollectNBI(bck *cmn.Bck) (cos.StrKVs, error) {
 	for _, mi := range avail {
 		wg.Add(1)
 		j := &nbiJogger{
-			mi:    mi,
-			dir:   mi.makePathCTPrefix(sysBck, ObjCT, prefix),
-			found: found,
-			mu:    &mu,
-			errCh: errCh,
-			wg:    &wg,
+			mi:     mi,
+			dir:    mi.makePathCTPrefix(sysBck, ObjCT, prefix),
+			found:  found,
+			mu:     &mu,
+			errCh:  errCh,
+			wg:     &wg,
+			prefix: prefix,
 		}
 		go j.run()
 	}
@@ -79,9 +81,23 @@ func (j *nbiJogger) run() {
 
 		name := ent.Name()
 		fqn := filepath.Join(j.dir, name)
+		fi, err := os.Stat(fqn)
+		if err != nil {
+			continue // best effort
+		}
+
 		j.mu.Lock()
-		if _, ok := j.found[name]; !ok {
-			j.found[name] = fqn
+		e, ok := j.found[name]
+		if !ok {
+			e = &apc.NBIInfo{
+				Name:    name,
+				ObjName: filepath.Join(j.prefix, name),
+			}
+			j.found[name] = e
+		}
+		e.Size += fi.Size()
+		if mt := fi.ModTime().UnixNano(); mt > e.Mtime {
+			e.Mtime = mt
 		}
 		j.mu.Unlock()
 	}

@@ -286,15 +286,6 @@ var (
 			waitFlag,
 			waitJobXactFinishedFlag,
 		},
-		cmdCreateNBI: {
-			nbiNameFlag,
-			invPrefixFlag,
-			nameOnlyFlag,
-			allPropsFlag,
-			nbiPagesPerChunkFlag,
-			nbiMaxEntriesPerChunkFlag,
-			nbiForceFlag,
-		},
 	}
 )
 
@@ -350,21 +341,6 @@ var (
 		BashComplete: bucketCompletions(
 			bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 		),
-	}
-	bucketCmdCreateNBI = cli.Command{
-		Name: cmdCreateNBI,
-		Usage: "Create bucket inventory for subsequent distributed listing,\n" +
-			indent1 + "e.g.:\n" +
-			indent1 + "\t* create-inventory s3://abc\t- create inventory with default (name, size) properties;\n" +
-			indent1 + "\t* create-inventory s3://abc --inv-name my-first-inventory\t- same, with a custom inventory name;\n" +
-			indent1 + "\t* create-inventory s3://abc --prefix images/\t- inventory only objects under 'images/';\n" +
-			indent1 + "\t* create-inventory s3://abc --all\t- inventory with all object properties;\n" +
-			indent1 + "\t* create-inventory s3://abc --name-only\t- lightweight: object names only;\n" +
-			indent1 + "\t* create-inventory ais://@remais/xyz --inv-pages 2\t- remote AIS, with 2 pages per chunk.",
-		ArgsUsage:    bucketArgument,
-		Flags:        sortFlags(bucketCmdsFlags[cmdCreateNBI]),
-		Action:       createInventoryHandler,
-		BashComplete: bucketCompletions(bcmplop{}),
 	}
 
 	bucketCmd = cli.Command{
@@ -433,7 +409,6 @@ var (
 					makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
 				},
 			},
-			bucketCmdCreateNBI,
 		},
 	}
 )
@@ -1027,69 +1002,6 @@ proceed:
 		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested
 		return listObjects(c, bck, prefix, listArch, true /*print empty*/)
 	}
-}
-
-//
-// createInventoryHandler
-//
-
-func createInventoryHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-	if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "", c.Args()[1:])
-	}
-	bck, err := parseBckURI(c, c.Args().Get(0), false)
-	if err != nil {
-		return err
-	}
-
-	// msg
-	msg := &apc.CreateNBIMsg{}
-	msg.SetFlag(apc.LsNoDirs)
-
-	if flagIsSet(c, invPrefixFlag) {
-		msg.Prefix = parseStrFlag(c, invPrefixFlag)
-	}
-
-	switch {
-	case flagIsSet(c, nameOnlyFlag):
-		msg.SetFlag(apc.LsNameOnly)
-		msg.Props = apc.GetPropsName // abs. minimum
-	case flagIsSet(c, allPropsFlag):
-		msg.AddProps(apc.GetPropsAll...) // all supported props
-	default:
-		msg.AddProps(apc.GetPropsName, apc.GetPropsSize, apc.GetPropsCached) // NOTE default
-	}
-
-	// inv name
-	if flagIsSet(c, nbiNameFlag) {
-		msg.Name = parseStrFlag(c, nbiNameFlag)
-		if err := cos.CheckAlphaPlus(msg.Name, "inventory name"); err != nil {
-			return err
-		}
-	}
-
-	// advanced
-	if flagIsSet(c, nbiPagesPerChunkFlag) {
-		a := parseIntFlag(c, nbiPagesPerChunkFlag)
-		msg.PagesPerChunk = int64(a)
-	}
-	if flagIsSet(c, nbiMaxEntriesPerChunkFlag) {
-		a := parseIntFlag(c, nbiMaxEntriesPerChunkFlag)
-		msg.MaxEntriesPerChunk = int64(a)
-	}
-	msg.Force = flagIsSet(c, nbiForceFlag)
-
-	// do
-	xid, err := api.CreateBucketInventory(apiBP, bck, msg)
-	if err != nil {
-		return V(err)
-	}
-
-	actionDone(c, fmt.Sprintf("Creating inventory %s. %s", bck.Cname(""), toMonitorMsg(c, xid, "")))
-	return nil
 }
 
 ////////////

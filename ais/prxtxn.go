@@ -1292,8 +1292,10 @@ func (p *proxy) etlInitTxn(initMsg etl.InitMsg, xid, secret string) (string, etl
 
 // begin phase customized to collect pod info from nodes
 func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) {
+	// Broadcast initMsg with init timeout + network timeout
+	// (wait for initialization error propagation from target)
 	initTimeout, _ := initMsg.Timeouts()
-	results := c.bcast(apc.Begin2PC, initTimeout.D()+c.timeout.netw) // Broadcast initMsg with init timeout + network timeout (wait for initialization error propagation from target)
+	results := c.bcast(apc.Begin2PC, initTimeout.D()+c.timeout.netw)
 	podMap = make(etl.PodMap, len(results))
 	for _, res := range results {
 		podInfo := etl.PodInfo{}
