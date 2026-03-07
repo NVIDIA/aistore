@@ -1446,4 +1446,8 @@ var (
 		Name:  "inv-max-entries",
 		Usage: "Maximum number of entries per inventory chunk (advanced usage)",
 	}
+	nbiForceFlag = cli.BoolFlag{
+		Name:  forceFlag.Name,
+		Usage: "Proceed with removing existing bucket inventories and creating a new one",
+	}
 )

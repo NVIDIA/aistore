@@ -115,7 +115,7 @@ const (
 	// api/ml.go; x-moss
 	ActGetBatch = "get-batch"
 
-	// bucket inventory (for control message, see CreateInvMsg in apc/lsmsg)
+	// bucket inventory (for control message, see CreateNBIMsg in apc/lsmsg)
 	ActCreateNBI = "create-inventory"
 )
 

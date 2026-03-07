@@ -1191,13 +1191,14 @@ func (t *target) createNBI(c *txnSrv) (string, error) {
 		}
 
 		// control msg
-		cimsg := &apc.CreateInvMsg{}
+		cimsg := &apc.CreateNBIMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, cimsg); err != nil {
 			return "", fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}
 		if err := cimsg.SetValidate(); err != nil {
 			return "", err
 		}
+
 		if cimsg.Name != "" {
 			if err := cos.CheckAlphaPlus(cimsg.Name, "inventory name"); err != nil {
 				return "", err
@@ -1213,9 +1214,34 @@ func (t *target) createNBI(c *txnSrv) (string, error) {
 			return "", cmn.NewErrBusy("bucket", c.bck.Cname(""))
 		}
 
+		// NOTE: ensure single inventory per bucket
+		nbis, errN := fs.CollectNBI(c.bck.Bucket())
+		if errN != nil {
+			nlp.Unlock()
+			nlog.Errorln("failed to collect bucket inventories:", errN)
+			return "", errN
+		}
+		if len(nbis) > 0 {
+			invNames := nbis.Keys()
+			if !cimsg.Force {
+				const (
+					hint = "(only one inventory per bucket is supported, use CLI '--force' or 'CreateNBIMsg.Force' to override)"
+				)
+				nlp.Unlock()
+				return "", fmt.Errorf("inventory for bucket %s already exists: %v\n%s", c.bck.Cname(""), invNames, hint)
+			}
+			if err := fs.DestroyNBI(apc.ActCreateNBI, c.bck.Bucket()); err != nil {
+				nlp.Unlock()
+				nlog.Errorln(err)
+				return "", err
+			}
+			nlog.Infoln("removed existing inventories:", invNames, "for", c.bck.Bucket())
+		}
+
 		// xaction early (DM)
 		rns := xreg.RenewNBI(c.bck, c.uuid, cimsg)
 		if rns.Err != nil {
+			nlp.Unlock()
 			nlog.Errorf("%s: create %s inventory %q: %v", t, c.bck.Cname(""), cimsg.Name, rns.Err)
 			return "", rns.Err
 		}

@@ -137,7 +137,7 @@ type (
 		fshare bool
 	}
 	txnCreateNBI struct {
-		msg  *apc.CreateInvMsg
+		msg  *apc.CreateNBIMsg
 		xinv *xs.XactNBI
 		txnBckBase
 	}
@@ -662,7 +662,7 @@ func (txn *txnPromote) String() (s string) {
 // txnCreateNBI //
 //////////////////
 
-func newTxnCreateNBI(c *txnSrv, msg *apc.CreateInvMsg, xinv *xs.XactNBI) (txn *txnCreateNBI) {
+func newTxnCreateNBI(c *txnSrv, msg *apc.CreateNBIMsg, xinv *xs.XactNBI) (txn *txnCreateNBI) {
 	txn = &txnCreateNBI{msg: msg, xinv: xinv}
 	txn.init(c.bck)
 	txn.fillFromCtx(c)

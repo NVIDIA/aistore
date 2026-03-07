@@ -918,7 +918,9 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 func _gcNBI(tag string, rmbcks []*meta.Bck) {
 	for _, bck := range rmbcks {
 		if bck.IsRemote() {
-			fs.DestroyNBI("post-bmd-"+tag, bck.Bucket())
+			if err := fs.DestroyNBI("post-bmd-"+tag, bck.Bucket()); err != nil {
+				nlog.Warningln(err)
+			}
 		}
 	}
 }

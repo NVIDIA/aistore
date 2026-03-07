@@ -293,6 +293,7 @@ var (
 			allPropsFlag,
 			nbiPagesPerChunkFlag,
 			nbiMaxEntriesPerChunkFlag,
+			nbiForceFlag,
 		},
 	}
 )
@@ -1045,7 +1046,7 @@ func createInventoryHandler(c *cli.Context) error {
 	}
 
 	// msg
-	msg := &apc.CreateInvMsg{}
+	msg := &apc.CreateNBIMsg{}
 	msg.SetFlag(apc.LsNoDirs)
 
 	if flagIsSet(c, invPrefixFlag) {
@@ -1079,6 +1080,7 @@ func createInventoryHandler(c *cli.Context) error {
 		a := parseIntFlag(c, nbiMaxEntriesPerChunkFlag)
 		msg.MaxEntriesPerChunk = int64(a)
 	}
+	msg.Force = flagIsSet(c, nbiForceFlag)
 
 	// do
 	xid, err := api.CreateBucketInventory(apiBP, bck, msg)
