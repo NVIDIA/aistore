@@ -16,6 +16,7 @@ from aistore.sdk.bucket import Bucket
 from aistore.sdk.obj.object import Object
 from aistore.sdk.job import Job
 from aistore.sdk.etl.etl import Etl
+from aistore.sdk.batch.batch import Batch
 
 # Config objects, types and dataclasses
 from aistore.sdk.archive_config import ArchiveConfig
