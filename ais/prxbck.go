@@ -42,11 +42,11 @@ type bctx struct {
 
 	// 5 user or caller-provided control flags followed by
 	// 3 result flags
-	skipBackend    bool // initialize bucket via `bck.InitNoBackend`
-	createAIS      bool // create ais bucket on the fly
-	dontAddRemote  bool // do not create (ie., add -> BMD) remote bucket on the fly
-	dontHeadRemote bool // do not HEAD remote bucket (to find out whether it exists and/or get properties)
-	tryHeadRemote  bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemote)
+	skipBackend     bool // initialize bucket via `bck.InitNoBackend`
+	createAIS       bool // create ais bucket on the fly
+	dontAddRemote   bool // do not create (ie., add -> BMD) remote bucket on the fly
+	dontHeadRemote  bool // do not HEAD remote bucket (to find out whether it exists and/or get properties)
+	probeHeadRemote bool // probe remote bucket existence via HEAD, but do not fail the request (e.g., when listing anonymously)
 
 	// out
 	isPresent bool // the bucket is confirmed to be present (in the cluster's BMD) // caution wrt mem-pool
@@ -457,13 +457,13 @@ func (bctx *bctx) lookup(bck *meta.Bck) (hdr http.Header, code int, err error) {
 		origURL := bctx.getOrigURL()
 		q.Set(apc.QparamOrigURL, origURL)
 	}
-	if bctx.tryHeadRemote {
+	if bctx.probeHeadRemote {
 		q.Set(apc.QparamSilent, "true")
 	}
 retry:
 	hdr, code, err = bctx.p.headRemoteBck(bck.Bucket(), q)
 
-	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && bctx.tryHeadRemote {
+	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && bctx.probeHeadRemote {
 		if bctx.dontAddRemote {
 			return nil, code, err
 		}

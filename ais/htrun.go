@@ -2650,6 +2650,7 @@ func (h *htrun) newAmsg(amsg *apc.ActMsg, bmd *bucketMD, uuid ...string) *actMsg
 }
 
 // apc.ActMsg c-tor and reader
+// (compare w/ readActionMsgRaw)
 func (*htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.ActMsg, err error) {
 	msg = &apc.ActMsg{}
 	err = cmn.ReadJSON(w, r, msg)
@@ -2664,6 +2665,20 @@ func readJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 		return nil
 	}
 	return cmn.WriteErrJSON(w, r, out, err)
+}
+
+func (h *htrun) readActionMsgRaw(w http.ResponseWriter, r *http.Request) (am actMsgRaw, err error) {
+	am.body, err = cos.ReadAllN(r.Body, r.ContentLength)
+	cos.Close(r.Body)
+	if err != nil {
+		h.writeErr(w, r, err)
+		return am, err
+	}
+	am.msg = &apc.ActMsg{}
+	if err = jsoniter.Unmarshal(am.body, am.msg); err != nil {
+		return am, cmn.WriteErrJSON(w, r, am.msg, err)
+	}
+	return am, nil
 }
 
 // (via apc.WhatNodeStatsAndStatus)

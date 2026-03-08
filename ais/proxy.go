@@ -77,6 +77,14 @@ type (
 	}
 )
 
+type (
+	// action message with its own original payload
+	actMsgRaw struct {
+		msg  *apc.ActMsg
+		body []byte
+	}
+)
+
 // interface guard
 var _ cos.Runner = (*proxy)(nil)
 
@@ -587,7 +595,9 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	var (
 		msg     *apc.ActMsg
 		bckName string
+		am      actMsgRaw
 	)
+
 	apiItems, err := p.parseURL(w, r, apc.URLPathBuckets.L, 0, true)
 	if err != nil {
 		return
@@ -595,13 +605,27 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
 	}
+
 	ctype := r.Header.Get(cos.HdrContentType)
 	if r.ContentLength == 0 && !strings.HasPrefix(ctype, cos.ContentJSON) {
 		// e.g. "easy URL" request: curl -L -X GET 'http://aistore/ais/abc'
-		msg = &apc.ActMsg{Action: apc.ActList, Value: &apc.LsoMsg{}}
-	} else if msg, err = p.readActionMsg(w, r); err != nil {
-		return
+		if bckName == "" {
+			msg = &apc.ActMsg{Action: apc.ActList}
+		} else {
+			msg = &apc.ActMsg{Action: apc.ActList, Value: &apc.LsoMsg{}}
+		}
+		am = actMsgRaw{
+			msg:  msg,
+			body: cos.MustMarshal(msg),
+		}
+	} else {
+		am, err = p.readActionMsgRaw(w, r)
+		if err != nil {
+			return
+		}
+		msg = am.msg
 	}
+
 	if err := dpq.parse(r.URL.RawQuery); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -613,68 +637,78 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		return
 	}
 
-	// switch (I) through (IV) --------------------------
+	switch {
+	case msg.Action == apc.ActSummaryBck:
+		p._bckgetSumm(w, r, qbck, msg, dpq)
 
-	// (I) summarize buckets
-	if msg.Action == apc.ActSummaryBck {
-		var summMsg apc.BsummCtrlMsg
-		if err := cos.MorphMarshal(msg.Value, &summMsg); err != nil {
-			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-			return
-		}
-		summMsg.Prefix = cos.TrimPrefix(summMsg.Prefix)
-		if qbck.IsBucket() {
-			bck := (*meta.Bck)(qbck)
-			bckArgs := allocBctx()
-			{
-				bckArgs.p = p
-				bckArgs.w = w
-				bckArgs.r = r
-				bckArgs.msg = msg
-				bckArgs.perms = apc.AceBckHEAD
-				bckArgs.bck = bck
-				bckArgs.dpq = dpq
-				bckArgs.createAIS = false
-				bckArgs.dontHeadRemote = summMsg.BckPresent
-			}
-			_, err := bckArgs.initAndTry()
-			freeBctx(bckArgs)
-			if err != nil {
-				return
-			}
-		}
-		p.bsummact(w, r, qbck, &summMsg)
-		return
-	}
-
-	// (II) invalid action
-	if msg.Action != apc.ActList {
+	case msg.Action != apc.ActList:
 		p.writeErrAct(w, r, msg.Action)
+	// NOTE:
+	// apc.ActList serves two purposes depending on msg.Value:
+	//   nil       -> list buckets
+	//   non-nil   -> list objects (LsoMsg payload)
+	// TODO: make this explicit in the API in the future.
+	case msg.Value == nil:
+		p._bckgetBuckets(w, r, qbck, am, dpq)
+
+	default:
+		p._bckgetObjects(w, r, qbck, msg, dpq)
+	}
+}
+
+func (p *proxy) _bckgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
+	var summMsg apc.BsummCtrlMsg
+	if err := cos.MorphMarshal(msg.Value, &summMsg); err != nil {
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+	summMsg.Prefix = cos.TrimPrefix(summMsg.Prefix)
 
-	// (III) list buckets
-	if msg.Value == nil {
-		if qbck.Name != "" && qbck.Name != msg.Name {
-			p.writeErrf(w, r, "bad list-buckets request: %q vs %q (%+v, %+v)", qbck.Name, msg.Name, qbck, msg)
+	if qbck.IsBucket() {
+		bck := (*meta.Bck)(qbck)
+		bckArgs := allocBctx()
+		{
+			bckArgs.p = p
+			bckArgs.w = w
+			bckArgs.r = r
+			bckArgs.msg = msg
+			bckArgs.perms = apc.AceBckHEAD
+			bckArgs.bck = bck
+			bckArgs.dpq = dpq
+			bckArgs.createAIS = false
+			bckArgs.dontHeadRemote = summMsg.BckPresent
+		}
+		_, err := bckArgs.initAndTry()
+		freeBctx(bckArgs)
+		if err != nil {
 			return
 		}
-		qbck.Name = msg.Name
-		if qbck.IsRemoteAIS() {
-			qbck.Ns.UUID = p.a2u(qbck.Ns.UUID)
-		}
-
-		ace := apc.AceListBuckets
-		if dpq.system {
-			ace |= apc.AceAdmin
-		}
-		if err := p.checkAccess(w, r, nil, ace); err == nil {
-			p.listBuckets(w, r, qbck, msg, dpq)
-		}
-		return
 	}
 
-	// (IV) list objects (NOTE -- TODO: currently, always forwarding)
+	p.bsummact(w, r, qbck, &summMsg)
+}
+
+func (p *proxy) _bckgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, am actMsgRaw, dpq *dpq) {
+	if qbck.Name != "" && qbck.Name != am.msg.Name {
+		p.writeErrf(w, r, "bad list-buckets request: %q vs %q (%+v, %+v)", qbck.Name, am.msg.Name, qbck, am.msg)
+		return
+	}
+	qbck.Name = am.msg.Name
+	if qbck.IsRemoteAIS() {
+		qbck.Ns.UUID = p.a2u(qbck.Ns.UUID)
+	}
+
+	ace := apc.AceListBuckets
+	if dpq.system {
+		ace |= apc.AceAdmin
+	}
+	if err := p.checkAccess(w, r, nil, ace); err == nil {
+		p.listBuckets(w, r, qbck, am, dpq)
+	}
+}
+
+func (p *proxy) _bckgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
+	// NOTE -- TODO: currently, always forwarding
 	if !qbck.IsBucket() {
 		p.writeErrf(w, r, "bad list-objects request: %q is not a bucket (is a bucket query?)", qbck.String())
 		return
@@ -683,7 +717,6 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		return
 	}
 
-	// lsmsg
 	var (
 		lsmsg apc.LsoMsg
 		bck   = meta.CloneBck((*cmn.Bck)(qbck))
@@ -699,7 +732,6 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		return
 	}
 
-	// bucket
 	bckArgs := allocBctx()
 	{
 		bckArgs.p = p
@@ -714,7 +746,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			bckArgs.dontHeadRemote = true
 			bckArgs.dontAddRemote = true
 		} else {
-			bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote)
+			bckArgs.probeHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote)
 			bckArgs.dontAddRemote = lsmsg.IsFlagSet(apc.LsDontAddRemote)
 		}
 	}
@@ -724,7 +756,6 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		return
 	}
 
-	// do
 	p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
 }
 
@@ -2283,7 +2314,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 }
 
-func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
+func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, am actMsgRaw, dpq *dpq) {
 	var (
 		bmd     = p.owner.bmd.get()
 		present bool
@@ -2322,7 +2353,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 			Path:     r.URL.Path,
 			RawQuery: r.URL.RawQuery,
 			Header:   r.Header,
-			Body:     cos.MustMarshal(msg),
+			Body:     am.body,
 		}
 		cargs.timeout = apc.DefaultTimeout
 	}

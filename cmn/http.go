@@ -134,6 +134,7 @@ func ParseURL(path string, itemsPresent []string, itemsAfter int, splitAfter boo
 	return apiItems, nil
 }
 
+// read the request body and close it
 func ReadBytes(r *http.Request) (b []byte, err error) {
 	var e error
 
@@ -152,6 +153,8 @@ func ReadBytes(r *http.Request) (b []byte, err error) {
 	return b, err
 }
 
+// decode JSON from the request body and close it
+// (compare w/ ais/htrun readJSON())
 func ReadJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 	err = jsoniter.NewDecoder(r.Body).Decode(out)
 	cos.Close(r.Body)
