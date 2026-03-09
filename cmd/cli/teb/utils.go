@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -78,6 +78,7 @@ var (
 		"FormatMAM":            func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, cos.UnitsIEC, 2)) },
 		"FormatMilli":          func(dur cos.Duration) string { return fmtMilli(dur, cos.UnitsIEC) },
 		"FormatDuration":       FormatDuration,
+		"FormatUnixNano":       fmtUnixNano,
 		"FormatStart":          FmtTime,
 		"FormatEnd":            FmtTime,
 		"FormatDsortStatus":    dsortJobInfoStatus,
@@ -604,4 +605,11 @@ func FmtDateTime(t time.Time) (s string) {
 		return
 	}
 	return cos.FormatTime(t, time.Stamp)
+}
+
+func fmtUnixNano(v int64) string {
+	if v == 0 {
+		return "-"
+	}
+	return time.Unix(0, v).UTC().Format(time.RFC3339)
 }

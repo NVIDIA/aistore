@@ -374,7 +374,28 @@ See '--help' and docs/cli for details.`
 	// `search`
 	SearchTmpl = "{{ JoinListNL . }}\n"
 
-	// `show mountpath`
+	NBITmpl = "BUCKET\t NAME\t SIZE\t STARTED\t FINISHED\t PREFIX\n" +
+		"{{range $v := .}}" +
+		"{{$v.Bucket}}\t " +
+		"{{$v.Name}}\t " +
+		"{{FormatBytesSig $v.Size 2}}\t " +
+		"{{FormatUnixNano $v.Started}}\t " +
+		"{{FormatUnixNano $v.Finished}}\t " +
+		"{{if $v.Prefix}}{{$v.Prefix}}{{else}}-{{end}}\n" +
+		"{{end}}"
+
+	NBITmplVerbose = "BUCKET\t NAME\t OBJECT\t SIZE\t STARTED\t FINISHED\t PREFIX\n" +
+		"{{range $v := .}}" +
+		"{{$v.Bucket}}\t " +
+		"{{$v.Name}}\t " +
+		"{{$v.ObjName}}\t " +
+		"{{FormatBytesSig $v.Size 2}}\t " +
+		"{{FormatUnixNano $v.Started}}\t " +
+		"{{FormatUnixNano $v.Finished}}\t " +
+		"{{if $v.Prefix}}{{$v.Prefix}}{{else}}-{{end}}\n" +
+		"{{end}}"
+
+	// 'show mountpath'
 	MpathListTmpl = "{{range $p := . }}" +
 		"{{ $p.DaemonID }}\n" +
 		"{{if and (eq (len $p.Mpl.Available) 0) (eq (len $p.Mpl.Disabled) 0)}}" +

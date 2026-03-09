@@ -33,6 +33,7 @@ const (
 	commandPerf      = "performance"
 	commandStorage   = "storage"
 	commandTLS       = "tls"
+	commandNBI       = "nbi"
 
 	commandSearch = "search"
 )
@@ -1400,8 +1401,6 @@ var (
 //
 // bucket inventory
 //
-
-const cmdCreateNBI = apc.ActCreateNBI
 
 // Deprecated: Feb 2026 - planned removal by April–May 2026.
 // S3-specific bucket inventory support will be replaced by the native API and CLI
