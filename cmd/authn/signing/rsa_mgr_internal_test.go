@@ -17,6 +17,7 @@ import (
 
 	aisapc "github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
+	"github.com/NVIDIA/aistore/cmd/authn/kvdb/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -39,7 +40,7 @@ func encryptInvalid(t *testing.T, keyPath string, passphrase cmn.Censored, conte
 		Filepath: keyPath,
 		Size:     keyBits,
 	}
-	mgr := NewRSAKeyManager(conf, passphrase)
+	mgr := NewRSAKeyManager(conf, passphrase, nil)
 	encrypted, err := mgr.encryptPrivateKey(content)
 	if err != nil {
 		t.Fatalf("failed to encrypt invalid PKCS8: %v", err)
@@ -170,7 +171,8 @@ func TestRSAKeyManager_LoadEncryptedKeyFailures(t *testing.T) {
 			keyPath := filepath.Join(t.TempDir(), tmpKeyFilename)
 
 			mgrConf := &config.RSAKeyConfig{Filepath: keyPath, Size: keyBits}
-			writer := NewRSAKeyManager(mgrConf, writePass)
+			db := &mock.KeyDataStorage{}
+			writer := NewRSAKeyManager(mgrConf, writePass, db)
 			err := writer.createKey()
 			tassert.CheckFatal(t, err)
 
@@ -185,7 +187,7 @@ func TestRSAKeyManager_LoadEncryptedKeyFailures(t *testing.T) {
 				readPass = cmn.Censored(*tt.mgrPass)
 			}
 			// A new manager should fail loading the key in all of the above scenarios
-			mgr := NewRSAKeyManager(mgrConf, readPass)
+			mgr := NewRSAKeyManager(mgrConf, readPass, db)
 			err = mgr.loadFromDisk()
 			tassert.Fatal(t, err != nil, tt.msg)
 		})

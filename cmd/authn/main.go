@@ -53,7 +53,7 @@ func main() {
 	cm.Init(*cfgPath)
 	driver := kvdb.CreateDriver(cm)
 	// Initialize the interface used to sign tokens and validate key signatures
-	signer := initSigner(cm)
+	signer := initSigner(cm, driver)
 	mgr, code, err := newMgr(cm, signer, driver)
 	if err != nil {
 		cos.ExitLogf("Failed to init manager: %v(%d)", err, code)
@@ -142,20 +142,20 @@ func printVer() {
 	fmt.Printf("version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
 }
 
-func initSigner(cm *config.ConfManager) tok.Signer {
+func initSigner(cm *config.ConfManager, authDB kvdb.AuthStorageDriver) tok.Signer {
 	if hmac := cm.GetSecret(); hmac != "" {
 		return signing.NewHMACSigner(hmac)
 	}
 	nlog.Infof("No HMAC secret provided via config or %q, initializing with RSA", env.AisAuthSecretKey)
-	return initRSA(cm)
+	return initRSA(cm, authDB)
 }
 
-func initRSA(cm *config.ConfManager) *signing.RSAKeyManager {
+func initRSA(cm *config.ConfManager, authDB kvdb.AuthStorageDriver) *signing.RSAKeyManager {
 	passphrase, err := validatePassphrase()
 	if err != nil {
 		cos.ExitLogf("Failed RSA key passphrase validation for %s: %v", env.AisAuthPrivateKeyPass, err)
 	}
-	rsaMgr := signing.NewRSAKeyManager(cm.GetRSAConfig(), passphrase)
+	rsaMgr := signing.NewRSAKeyManager(cm.GetRSAConfig(), passphrase, authDB)
 	if err = rsaMgr.Init(); err != nil {
 		cos.ExitLogf("Failed to initialize RSA key: %v", err)
 	}

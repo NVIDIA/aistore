@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
+	"github.com/NVIDIA/aistore/cmd/authn/kvdb"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -64,6 +65,7 @@ type (
 	RSAKeyManager struct {
 		conf       *config.RSAKeyConfig
 		passphrase cmn.Censored
+		db         kvdb.AuthStorageDriver
 		rotateMu   sync.Mutex
 		bundle     atomic.Pointer[keyBundle]
 	}
@@ -81,18 +83,22 @@ type (
 var _ tok.Signer = (*RSAKeyManager)(nil)
 var _ JWKSProvider = (*RSAKeyManager)(nil)
 
-func NewRSAKeyManager(conf *config.RSAKeyConfig, passphrase cmn.Censored) *RSAKeyManager {
+func NewRSAKeyManager(conf *config.RSAKeyConfig, passphrase cmn.Censored, db kvdb.AuthStorageDriver) *RSAKeyManager {
 	// All fields are value types, copy to avoid external mutation
 	c := *conf
 	return &RSAKeyManager{
 		conf:       &c,
 		passphrase: passphrase,
+		db:         db,
 	}
 }
 
 // Init sets up an RSA key pair, using one from disk if provided
 // Must only be called at init time -- key rotation not yet implemented
 func (r *RSAKeyManager) Init() error {
+	if r.db == nil {
+		return errors.New("storage driver required for RSA key manager")
+	}
 	path := r.conf.Filepath
 	// Try to load existing key
 	err := r.loadFromDisk()
@@ -119,7 +125,26 @@ func (r *RSAKeyManager) loadFromDisk() error {
 	if err != nil {
 		return err
 	}
-	return r.parseAndLoadKey(keyBytes)
+	key, err := parseAndValidateKey(keyBytes)
+	if err != nil {
+		return err
+	}
+	jwks, err := r.loadJWKS()
+	if err != nil {
+		// Recover from missing JWKS to allow for backwards compatibility and previously failed persistence
+		if errors.Is(err, fs.ErrNotExist) {
+			return r.recreateMissingMetadata(key)
+		}
+		// Fail loading on failed read of an existing JWKS
+		return err
+	}
+	nlog.Infoln("Loaded existing JWKS from database")
+	bundle, err := createKeyBundle(key, jwks)
+	if err != nil {
+		return err
+	}
+	r.bundle.Store(bundle)
+	return nil
 }
 
 func (r *RSAKeyManager) loadFileBytes() ([]byte, error) {
@@ -133,29 +158,27 @@ func (r *RSAKeyManager) loadFileBytes() ([]byte, error) {
 	return rawBytes, nil
 }
 
-func (r *RSAKeyManager) parseAndLoadKey(fileBytes []byte) error {
-	block, _ := pem.Decode(fileBytes)
-	if block == nil {
-		return errors.New("decoding PEM block failed")
-	}
-	keyAny, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+func (r *RSAKeyManager) loadJWKS() (jwk.Set, error) {
+	meta, err := r.db.LoadKeyData()
 	if err != nil {
-		return fmt.Errorf("parse PKCS8 private key: %w", err)
+		return nil, err
 	}
-	key, ok := keyAny.(*rsa.PrivateKey)
-	if !ok {
-		return errors.New("key type invalid")
+	return meta.JWKS, nil
+}
+
+// WARNING: Only call in the init flow (no existing JWKS) as this will overwrite all stored key data
+// Backwards compatibility or recovery case: no key metadata in DB
+func (r *RSAKeyManager) recreateMissingMetadata(key *rsa.PrivateKey) error {
+	nlog.Warningln("No key data in DB, deriving JWKS from loaded key and persisting")
+	bundle, bundleErr := createKeyBundle(key, jwk.NewSet())
+	if bundleErr != nil {
+		return bundleErr
 	}
-	if keyErr := key.Validate(); keyErr != nil {
-		return fmt.Errorf("key validation failed: %w", keyErr)
-	}
-	// TODO: persist JWKS instead of regenerating only from current key
-	bundle, err := createKeyBundle(key, jwk.NewSet())
-	if err != nil {
-		return err
-	}
-	r.bundle.Store(bundle)
-	return nil
+	// Lock to perform atomic persist + bundle update (even in init)
+	r.rotateMu.Lock()
+	defer r.rotateMu.Unlock()
+	// No need to write private key again as we've already loaded it from disk
+	return r.commitUnderLock(bundle, false /*writeKey*/)
 }
 
 // Generate a new RSA key pair and the derived bundle and atomically save it to disk and update in memory
@@ -165,24 +188,39 @@ func (r *RSAKeyManager) createKey() error {
 		return err
 	}
 	nlog.Infof("Generated new RSA key pair with modulus size %d bits", r.conf.Size)
-	bundle, err := createKeyBundle(key, jwk.NewSet())
-	if err != nil {
-		return err
-	}
 	r.rotateMu.Lock()
 	defer r.rotateMu.Unlock()
-	return r.commitUnderLock(bundle)
-}
-
-// commitUnderLock writes to disk atomically, then updates memory
-// Must be called under lock to ensure file and memory contents are kept in sync
-func (r *RSAKeyManager) commitUnderLock(bundle *keyBundle) error {
-	// TODO: persist entire key bundle
-	err := r.saveToDisk(bundle.privateKey)
+	var jwks jwk.Set
+	// If we have an existing bundle, add the new key to it
+	bundle := r.bundle.Load()
+	if bundle != nil && bundle.jwks.Len() > 0 {
+		jwks = bundle.jwks
+	} else {
+		jwks = jwk.NewSet()
+	}
+	bundle, err = createKeyBundle(key, jwks)
 	if err != nil {
 		return err
 	}
-	// If succeeded, update in-memory state for current bundle
+	return r.commitUnderLock(bundle, true /*writeKey*/)
+}
+
+// commitUnderLock persists key metadata to DB, then key to disk, then updates memory.
+// Metadata is written first so that if it fails we do not leave a key file on disk without matching metadata.
+// Must be called under lock to ensure file, DB, and memory stay in sync.
+func (r *RSAKeyManager) commitUnderLock(bundle *keyBundle, writeKey bool) error {
+	meta := &kvdb.KeyData{
+		MetaVersion: kvdb.KeyMetadataVersion,
+		JWKS:        bundle.jwks,
+	}
+	if err := r.db.PersistKeyData(meta); err != nil {
+		return fmt.Errorf("persist key metadata: %w", err)
+	}
+	if writeKey {
+		if err := r.saveToDisk(bundle.privateKey); err != nil {
+			return err
+		}
+	}
 	r.bundle.Store(bundle)
 	return nil
 }
@@ -303,8 +341,28 @@ func createGCM(pass cmn.Censored, salt []byte) (cipher.AEAD, error) {
 	return gcm, nil
 }
 
-// createKeyBundle creates a keyBundle struct with the associated public key PEM and JWKS
-// Modifies the given jwks
+// parseAndValidateKey takes raw bytes, parses a PKCS8 RSA private key, and validates it
+func parseAndValidateKey(fileBytes []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(fileBytes)
+	if block == nil {
+		return nil, errors.New("decoding PEM block failed")
+	}
+	keyAny, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse PKCS8 private key: %w", err)
+	}
+	key, ok := keyAny.(*rsa.PrivateKey)
+	if !ok {
+		return nil, errors.New("key type invalid")
+	}
+	if keyErr := key.Validate(); keyErr != nil {
+		return nil, fmt.Errorf("key validation failed: %w", keyErr)
+	}
+	return key, nil
+}
+
+// createKeyBundle creates a keyBundle struct with the associated public key PEM and JWKS.
+// Modifies the given JWKS by adding the key's public JWK.
 func createKeyBundle(key *rsa.PrivateKey, jwks jwk.Set) (*keyBundle, error) {
 	pubPEM, err := getPubPEM(key)
 	if err != nil {
@@ -314,15 +372,19 @@ func createKeyBundle(key *rsa.PrivateKey, jwks jwk.Set) (*keyBundle, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = jwks.AddKey(jwkKey)
-	if err != nil {
-		return nil, err
+	keyID := jwkKey.KeyID()
+	// Key may already exist in cached JWKS -- ensure it does in case it's a new key or an old JWKS
+	if _, ok := jwks.LookupKeyID(keyID); !ok {
+		err = jwks.AddKey(jwkKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add missing key %q to JWKS: %v", keyID, err)
+		}
 	}
 
 	return &keyBundle{
 		privateKey:   key,
 		publicKeyPEM: pubPEM,
-		keyID:        jwkKey.KeyID(),
+		keyID:        keyID,
 		jwks:         jwks,
 	}, nil
 }
@@ -396,6 +458,7 @@ func (r *RSAKeyManager) GetSigConf() *cmn.AuthSignatureConf {
 func (r *RSAKeyManager) SignToken(c jwt.Claims) (string, error) {
 	b := r.bundle.Load()
 	if b == nil || b.privateKey == nil {
+		debug.Assert(false, msgUninitialized)
 		return "", errors.New("RSA key manager not initialized")
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodRS256, c)

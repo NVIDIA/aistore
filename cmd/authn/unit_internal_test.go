@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
+	authnkvdb "github.com/NVIDIA/aistore/cmd/authn/kvdb"
 	"github.com/NVIDIA/aistore/cmd/authn/signing"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
@@ -150,39 +150,30 @@ func createEmptyCM(t *testing.T) *config.ConfManager {
 	return createCM(t, conf)
 }
 
-func createRSAManager(t *testing.T) *signing.RSAKeyManager {
+func createRSAManager(t *testing.T, jwksStore authnkvdb.AuthStorageDriver) *signing.RSAKeyManager {
 	tmp := t.TempDir()
 	conf := &config.RSAKeyConfig{
 		Size:     2048,
 		Filepath: filepath.Join(tmp, fname.AuthNRSAKey),
 	}
-	rm := signing.NewRSAKeyManager(conf, "valid-length-passphrase")
+	rm := signing.NewRSAKeyManager(conf, "valid-length-passphrase", jwksStore)
 	err := rm.Init()
 	tassert.CheckFatal(t, err)
 	return rm
 }
 
-func createManagerWithAdmin(cm *config.ConfManager, rm *signing.RSAKeyManager, driver kvdb.Driver) (*mgr, error) {
-	oldPass, wasSet := os.LookupEnv(env.AisAuthAdminPassword)
-	os.Setenv(env.AisAuthAdminPassword, "admin-pass-for-test")
-	// Reset after test
-	defer func() {
-		if wasSet {
-			os.Setenv(env.AisAuthAdminPassword, oldPass)
-		} else {
-			os.Unsetenv(env.AisAuthAdminPassword)
-		}
-	}()
+func createManagerWithAdmin(t *testing.T, cm *config.ConfManager, rm *signing.RSAKeyManager, driver kvdb.Driver) (*mgr, error) {
+	t.Setenv(env.AisAuthAdminPassword, "admin-pass-for-test")
 	m, _, err := newMgr(cm, rm, driver)
 	return m, err
 }
 
 func TestManager(t *testing.T) {
-	driver := mock.NewDBDriver()
+	driver := &authnkvdb.Driver{Driver: mock.NewDBDriver()}
 	cm := createEmptyCM(t)
-	rm := createRSAManager(t)
+	rm := createRSAManager(t, driver)
 	// NOTE: new manager initializes users DB and adds a default user as a Guest
-	mgr, err := createManagerWithAdmin(cm, rm, driver)
+	mgr, err := createManagerWithAdmin(t, cm, rm, driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
@@ -191,9 +182,9 @@ func TestManager(t *testing.T) {
 }
 
 func TestManagerNoAdminPass(t *testing.T) {
-	driver := mock.NewDBDriver()
+	driver := &authnkvdb.Driver{Driver: mock.NewDBDriver()}
 	cm := createEmptyCM(t)
-	rm := createRSAManager(t)
+	rm := createRSAManager(t, driver)
 	// If no admin password exists in env, initializing manager must fail
 	_, _, err := newMgr(cm, rm, driver)
 	if err == nil {
@@ -209,10 +200,10 @@ func TestToken(t *testing.T) {
 		err   error
 		token string
 	)
-	driver := mock.NewDBDriver()
+	driver := &authnkvdb.Driver{Driver: mock.NewDBDriver()}
 	cm := createEmptyCM(t)
-	rm := createRSAManager(t)
-	mgr, err := createManagerWithAdmin(cm, rm, driver)
+	rm := createRSAManager(t, driver)
+	mgr, err := createManagerWithAdmin(t, cm, rm, driver)
 	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)
@@ -693,7 +684,7 @@ func TestMergeBckACLS(t *testing.T) {
 
 // Test retrieving the max age header for JWKS based on the configured key expiry with bounds
 func TestGetJWKSMaxAge(t *testing.T) {
-	driver := mock.NewDBDriver()
+	driver := &authnkvdb.Driver{Driver: mock.NewDBDriver()}
 	tests := []struct {
 		expire time.Duration
 		want   int
@@ -707,8 +698,8 @@ func TestGetJWKSMaxAge(t *testing.T) {
 	for _, tt := range tests {
 		conf := &authn.Config{Server: authn.ServerConf{Secret: "secret", Expire: cos.Duration(tt.expire)}}
 		cm := createCM(t, conf)
-		rm := createRSAManager(t)
-		mgr, err := createManagerWithAdmin(cm, rm, driver)
+		rm := createRSAManager(t, driver)
+		mgr, err := createManagerWithAdmin(t, cm, rm, driver)
 		tassert.CheckFatal(t, err)
 		got := mgr.getJWKSMaxAge()
 		tassert.Errorf(t, got == tt.want, "getJWKSMaxAge() = %d, want %d", got, tt.want)

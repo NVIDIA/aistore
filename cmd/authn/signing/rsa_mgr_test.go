@@ -9,13 +9,18 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
+	"errors"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmd/authn/config"
+	"github.com/NVIDIA/aistore/cmd/authn/kvdb/mock"
 	"github.com/NVIDIA/aistore/cmd/authn/signing"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
@@ -119,8 +124,14 @@ func compareMgrKeyBundle(t *testing.T, expectedMgr, actualMgr *signing.RSAKeyMan
 	tassert.CheckFatal(t, err)
 }
 
+func TestInitNoDB(t *testing.T) {
+	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), nil)
+	err := mgr.Init()
+	tassert.Fatalf(t, err != nil, "expected Init to fail with no DB provided")
+}
+
 func TestGetSigConf_RSA(t *testing.T) {
-	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t))
+	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), &mock.KeyDataStorage{})
 	err := mgr.Init()
 	tassert.CheckFatal(t, err)
 
@@ -131,15 +142,16 @@ func TestGetSigConf_RSA(t *testing.T) {
 }
 
 func TestRSAKeyManagerLoad(t *testing.T) {
-	// Write out private key with a previous manager
+	// Write out private key with a previous manager; share JWKS storage so load can read what create persisted
 	conf := defaultTestRSAConfig(t)
 	passphrase := genRandomPassphrase(t)
-	writer := signing.NewRSAKeyManager(conf, passphrase)
+	db := &mock.KeyDataStorage{}
+	writer := signing.NewRSAKeyManager(conf, passphrase, db)
 	err := writer.Init()
 	tassert.CheckFatal(t, err)
 	assertKeyBundleValid(t, writer)
 
-	mgr := signing.NewRSAKeyManager(conf, passphrase)
+	mgr := signing.NewRSAKeyManager(conf, passphrase, db)
 	err = mgr.Init()
 	tassert.CheckFatal(t, err)
 	assertKeyBundleValid(t, mgr)
@@ -153,7 +165,7 @@ func TestSignToken(t *testing.T) {
 	testSub := "testUser"
 	testAud := "testAudience"
 	basicAdminClaims := tok.AdminClaims(futureTime, testSub, testAud)
-	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t))
+	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), &mock.KeyDataStorage{})
 	err := mgr.Init()
 	tassert.CheckFatal(t, err)
 
@@ -195,14 +207,15 @@ func TestSignToken(t *testing.T) {
 func TestRSAKeyManagerNoPassphrase(t *testing.T) {
 	keyPath := newTempKeyFile(t)
 	conf := newRSAConfig(keyPath)
+	jwksStore := &mock.KeyDataStorage{}
 
-	writer := signing.NewRSAKeyManager(conf, "")
+	writer := signing.NewRSAKeyManager(conf, "", jwksStore)
 	err := writer.Init()
 	tassert.CheckFatal(t, err)
 	assertKeyBundleValid(t, writer)
 
 	// Load the unencrypted key with a fresh manager
-	reader := signing.NewRSAKeyManager(conf, "")
+	reader := signing.NewRSAKeyManager(conf, "", jwksStore)
 	err = reader.Init()
 	tassert.CheckFatal(t, err)
 	assertKeyBundleValid(t, reader)
@@ -214,19 +227,20 @@ func TestRSAKeyManagerNoPassphrase(t *testing.T) {
 func TestRSAKeyManagerUnencryptedWithPassphrase(t *testing.T) {
 	keyPath := newTempKeyFile(t)
 	conf := newRSAConfig(keyPath)
+	db := &mock.KeyDataStorage{}
 	// Write an unencrypted key
-	writer := signing.NewRSAKeyManager(conf, "")
+	writer := signing.NewRSAKeyManager(conf, "", db)
 	err := writer.Init()
 	tassert.CheckFatal(t, err)
 
 	// Try to load with a passphrase — should fail (raw PEM isn't valid encrypted data)
-	reader := signing.NewRSAKeyManager(conf, genRandomPassphrase(t))
+	reader := signing.NewRSAKeyManager(conf, genRandomPassphrase(t), db)
 	err = reader.Init()
 	tassert.Fatal(t, err != nil, "expected Init to fail when loading unencrypted key with passphrase configured")
 }
 
 func TestValidationConf_RSA(t *testing.T) {
-	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t))
+	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), &mock.KeyDataStorage{})
 	err := mgr.Init()
 	tassert.CheckFatal(t, err)
 
@@ -244,4 +258,74 @@ func TestValidationConf_RSA(t *testing.T) {
 	sigConf := mgr.GetSigConf()
 	tassert.Fatalf(t, string(sigConf.Key) == *conf.PubKey,
 		"expected ValidationConf PubKey to match GetSigConf Key")
+}
+
+func TestKeyWithNoMetadata(t *testing.T) {
+	// Write out private key with a previous manager
+	conf := defaultTestRSAConfig(t)
+	passphrase := genRandomPassphrase(t)
+	db := &mock.KeyDataStorage{}
+	writer := signing.NewRSAKeyManager(conf, passphrase, db)
+	err := writer.Init()
+	tassert.CheckFatal(t, err)
+	assertKeyBundleValid(t, writer)
+
+	// New manager gets a new JWKS storage mock, so we load key but no existing metadata
+	mgr := signing.NewRSAKeyManager(conf, passphrase, &mock.KeyDataStorage{})
+	err = mgr.Init()
+	tassert.CheckFatal(t, err)
+	assertKeyBundleValid(t, mgr)
+
+	// Verify all bundle data matches
+	compareMgrKeyBundle(t, writer, mgr)
+}
+
+func TestKeyWithInvalidMetadata(t *testing.T) {
+	// Write out private key with a previous manager
+	conf := defaultTestRSAConfig(t)
+	passphrase := genRandomPassphrase(t)
+	db := &mock.KeyDataStorage{}
+	writer := signing.NewRSAKeyManager(conf, passphrase, db)
+	err := writer.Init()
+	tassert.CheckFatal(t, err)
+	assertKeyBundleValid(t, writer)
+
+	// Metadata will fail marshaling with invalid json error, so will fail loading
+	storageDriver := mock.NewKeyDataStorage(make(json.RawMessage, 10), nil)
+	// New manager loads key but fails metadata loading -- init must fail
+	mgr := signing.NewRSAKeyManager(conf, passphrase, storageDriver)
+	err = mgr.Init()
+	tassert.Fatalf(t, err != nil, "expected Init to fail when loading invalid metadata")
+}
+
+// TestPersistKeyDataFailsInLegacyPath: key exists, no key data
+// PersistKeyData error in legacy path causes init failure
+func TestPersistKeyDataFailsInLegacyPath(t *testing.T) {
+	conf := defaultTestRSAConfig(t)
+	passphrase := genRandomPassphrase(t)
+	writerStore := &mock.KeyDataStorage{}
+	writer := signing.NewRSAKeyManager(conf, passphrase, writerStore)
+	err := writer.Init()
+	tassert.CheckFatal(t, err)
+	assertKeyBundleValid(t, writer)
+	// New manager: same key path, empty key data (legacy path), but persist fails
+	persistErr := errors.New("storage unavailable")
+	readerStore := mock.NewKeyDataStorage(nil, persistErr)
+	mgr := signing.NewRSAKeyManager(conf, passphrase, readerStore)
+	err = mgr.Init()
+	tassert.Fatalf(t, err != nil, "expected Init to fail when PersistKeyData fails in legacy path")
+}
+
+// PersistKeyData error in createKey path causes key update failure: key file must not be created.
+func TestPersistKeyDataFailsOnCreate(t *testing.T) {
+	keyPath := newTempKeyFile(t)
+	conf := newRSAConfig(keyPath)
+	persistErr := errors.New("persist failed")
+	db := mock.NewKeyDataStorage(nil, persistErr)
+	mgr := signing.NewRSAKeyManager(conf, genRandomPassphrase(t), db)
+	err := mgr.Init()
+	tassert.Fatalf(t, err != nil, "expected Init to fail when PersistKeyData fails on create")
+	// Key file must not have been written
+	_, err = os.Stat(keyPath)
+	tassert.Fatalf(t, err != nil && errors.Is(err, fs.ErrNotExist), "key file must not exist after failed create, got err: %v", err)
 }
