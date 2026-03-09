@@ -74,11 +74,8 @@ const (
 
 const mdCksumTyXXHash = 1 // metadata checksum type: xxhash
 
-// on-disk xattr
+// on-disk xattr: 4K limit
 const (
-	xattrLOM = "user.ais.lom"
-
-	// NOTE: 4K limit
 	xattrLomSize = memsys.MaxSmallSlabSize
 )
 
@@ -326,7 +323,7 @@ func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
 		if copyFQN == lom.FQN {
 			continue
 		}
-		if err = fs.SetXattr(copyFQN, xattrLOM, buf); err != nil {
+		if err = fs.SetXattr(copyFQN, fs.XattrLOM, buf); err != nil {
 			break
 		}
 	}

@@ -1,6 +1,6 @@
 // Package core_test provides tests for cluster package
 /*
-* Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package core_test
 
@@ -23,11 +23,6 @@ import (
 	onexxh "github.com/OneOfOne/xxhash"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-)
-
-// on-disk xattr name
-const (
-	xattrLOM = "user.ais.lom"
 )
 
 var _ = Describe("LOM Xattributes", func() {
@@ -129,7 +124,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
-				b, err := fs.GetXattr(localFQN, xattrLOM)
+				b, err := fs.GetXattr(localFQN, fs.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 
@@ -166,7 +161,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
-				b, err := fs.GetXattr(cachedFQN, xattrLOM)
+				b, err := fs.GetXattr(cachedFQN, fs.XattrLOM)
 				Expect(b).To(BeEmpty())
 				Expect(err).To(HaveOccurred())
 
@@ -208,7 +203,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetVersion("second_version")
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
-				b, err := fs.GetXattr(cachedFQN, xattrLOM)
+				b, err := fs.GetXattr(cachedFQN, fs.XattrLOM)
 				Expect(b).To(BeEmpty())
 				Expect(err).To(HaveOccurred())
 
@@ -321,7 +316,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
-				b, err := fs.GetXattr(localFQN, xattrLOM)
+				b, err := fs.GetXattr(localFQN, fs.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 
@@ -377,54 +372,54 @@ var _ = Describe("LOM Xattributes", func() {
 				})
 
 				It("should fail when checksum does not match", func() {
-					b, err := fs.GetXattr(localFQN, xattrLOM)
+					b, err := fs.GetXattr(localFQN, fs.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
 
 					b[2]++ // changing first byte of meta checksum
-					Expect(fs.SetXattr(localFQN, xattrLOM, b)).NotTo(HaveOccurred())
+					Expect(fs.SetXattr(localFQN, fs.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
 					Expect(err.Error()).To(ContainSubstring("BAD META CHECKSUM"))
 				})
 
 				It("should fail when checksum type is invalid", func() {
-					b, err := fs.GetXattr(localFQN, xattrLOM)
+					b, err := fs.GetXattr(localFQN, fs.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
 
 					b[1] = 200 // corrupting checksum type
-					Expect(fs.SetXattr(localFQN, xattrLOM, b)).NotTo(HaveOccurred())
+					Expect(fs.SetXattr(localFQN, fs.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
 					Expect(err).To(MatchError("bad lmeta: unknown checksum 200"))
 
-					b, err = fs.GetXattr(localFQN, xattrLOM)
+					b, err = fs.GetXattr(localFQN, fs.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
 
 					b[1] = 0 // corrupting checksum type
-					Expect(fs.SetXattr(localFQN, xattrLOM, b)).NotTo(HaveOccurred())
+					Expect(fs.SetXattr(localFQN, fs.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
 					Expect(err).To(MatchError("bad lmeta: unknown checksum 0"))
 				})
 
 				It("should fail when metadata version is invalid", func() {
-					b, err := fs.GetXattr(localFQN, xattrLOM)
+					b, err := fs.GetXattr(localFQN, fs.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
 
 					b[0] = 128 // corrupting metadata version
-					Expect(fs.SetXattr(localFQN, xattrLOM, b)).NotTo(HaveOccurred())
+					Expect(fs.SetXattr(localFQN, fs.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
 					Expect(err).To(MatchError("bad lmeta: unknown LOM meta-version 128"))
 
 					b[0] = 0 // corrupting metadata version
-					Expect(fs.SetXattr(localFQN, xattrLOM, b)).NotTo(HaveOccurred())
+					Expect(fs.SetXattr(localFQN, fs.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
 					Expect(err).To(MatchError("bad lmeta: unknown LOM meta-version 0"))
 				})
 
 				It("should fail when metadata is too short", func() {
-					Expect(fs.SetXattr(localFQN, xattrLOM, []byte{1})).NotTo(HaveOccurred())
+					Expect(fs.SetXattr(localFQN, fs.XattrLOM, []byte{1})).NotTo(HaveOccurred())
 					err := lom.LoadMetaFromFS()
 					Expect(err).To(HaveOccurred())
 
-					Expect(fs.SetXattr(localFQN, xattrLOM, []byte{1, 1, 2})).NotTo(HaveOccurred())
+					Expect(fs.SetXattr(localFQN, fs.XattrLOM, []byte{1, 1, 2})).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
 					Expect(err).To(MatchError("bad lmeta: too short (3)"))
 				})
@@ -432,10 +427,10 @@ var _ = Describe("LOM Xattributes", func() {
 				It("should fail when meta is corrupted", func() {
 					// This test is supposed to end with LoadMetaFromFS error
 					// not with nil pointer exception / panic
-					b, err := fs.GetXattr(localFQN, xattrLOM)
+					b, err := fs.GetXattr(localFQN, fs.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
 					copy(b[40:], "1321wr")
-					Expect(fs.SetXattr(localFQN, xattrLOM, b)).NotTo(HaveOccurred())
+					Expect(fs.SetXattr(localFQN, fs.XattrLOM, b)).NotTo(HaveOccurred())
 
 					err = lom.LoadMetaFromFS()
 					Expect(err.Error()).To(ContainSubstring("BAD META CHECKSUM"))
@@ -463,7 +458,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(persist(lom)).To(Succeed())
 
 				// read raw xattr → first byte is metadata version
-				raw, err := fs.GetXattr(fqn, xattrLOM)
+				raw, err := fs.GetXattr(fqn, fs.XattrLOM)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(raw)).To(BeNumerically(">=", 10))    // >= prefLen
 				Expect(raw[0]).To(Equal(byte(core.MetaverLOM))) // MetaverLOM == 2
@@ -530,7 +525,7 @@ var _ = Describe("LOM Xattributes", func() {
 				binary.BigEndian.PutUint64(raw[2:], sum)
 
 				// write legacy v1 xattr
-				Expect(fs.SetXattr(fqn, xattrLOM, raw)).To(Succeed())
+				Expect(fs.SetXattr(fqn, fs.XattrLOM, raw)).To(Succeed())
 
 				// Load legacy v1 *without* enforcing BID (policy: no adoption on Load)
 				lom := newBasicLom(fqn)
@@ -541,7 +536,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(persist(lom)).To(Succeed())
 
 				// Verify xattr version flipped to 2
-				got, err := fs.GetXattr(fqn, xattrLOM)
+				got, err := fs.GetXattr(fqn, fs.XattrLOM)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(got)).To(BeNumerically(">=", prefLen))
 				Expect(got[0]).To(Equal(byte(2)))

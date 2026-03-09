@@ -1,6 +1,6 @@
 // Package space_test is a unit test for the package.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package space_test
 
@@ -321,7 +321,6 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		})
 
 		It("should remove old objects with corrupted metadata", func() {
-			const xattrLOM = "user.ais.lom"
 			avail := fs.GetAvail()
 			mi := avail[mpaths[0]]
 
@@ -330,7 +329,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			createTestLOM(fqn, 2000, old)
 
 			// Corrupt object metadata
-			err := fs.SetXattr(fqn, xattrLOM, []byte{0x00, 0xFF, 0x13, 0x37})
+			err := fs.SetXattr(fqn, fs.XattrLOM, []byte{0x00, 0xFF, 0x13, 0x37})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = os.Chtimes(fqn, old, old)

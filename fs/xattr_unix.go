@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -16,6 +16,17 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 
 	"golang.org/x/sys/unix"
+)
+
+// all system xattrs
+const (
+	xattrPrefix = "user.ais." // common prefix: all xattrs
+
+	xattrNodeID = xattrPrefix + "daemon_id"
+	XattrLOM    = xattrPrefix + "lom"
+	xattrNBI    = xattrPrefix + "nbi"
+
+	maxszName = xattrPrefix + "probe" // (internal probe)
 )
 
 //
@@ -71,7 +82,6 @@ func removeXattr(fqn, attrName string) error {
 
 const (
 	maxszBase   = ".$maxszprobe"
-	maxszName   = "user.ais.probe"
 	maxszPrompt = "max xattr size"
 )
 

@@ -431,7 +431,7 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 			if copyFQN == lom.FQN {
 				continue
 			}
-			if err = fs.SetXattr(copyFQN, xattrLOM, buf); err != nil {
+			if err = fs.SetXattr(copyFQN, fs.XattrLOM, buf); err != nil {
 				tstats.Inc(LcacheErrCount)
 				nlog.Errorln("set-xattr [", copyFQN, err, "]")
 				break

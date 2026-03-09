@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -330,10 +330,6 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 	return err
 }
 
-//
-// archive // TODO -- FIXME: test with chunked objects
-//
-
 // extract a single file from a (.tar, .tgz or .tar.gz, .zip, .tar.lz4) shard
 // uses the provided `mime` or lom.ObjName to detect formatting (empty = auto-detect)
 func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl cos.ReadCloseSizer, err error) {
@@ -363,10 +359,11 @@ func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl 
 }
 
 //
-// other FQN access
+// xattr get/set
 //
 
-func (lom *LOM) GetXattr(buf []byte) ([]byte, error)      { return fs.GetXattrBuf(lom.FQN, xattrLOM, buf) }
-func (lom *LOM) GetXattrN(name string) ([]byte, error)    { return fs.GetXattr(lom.FQN, name) }
-func (lom *LOM) SetXattr(data []byte) error               { return fs.SetXattr(lom.FQN, xattrLOM, data) }
-func (lom *LOM) SetXattrN(name string, data []byte) error { return fs.SetXattr(lom.FQN, name, data) }
+func (lom *LOM) GetXattr(buf []byte) ([]byte, error) {
+	return fs.GetXattrBuf(lom.FQN, fs.XattrLOM, buf)
+}
+
+func (lom *LOM) SetXattr(data []byte) error { return fs.SetXattr(lom.FQN, fs.XattrLOM, data) }

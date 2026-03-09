@@ -165,7 +165,7 @@ func demd(allmpi []MPI) (rerr error) {
 				rerr = err
 			}
 			// node ID (SID)
-			if err := removeXattr(mi.Path, nodeXattrID); err != nil {
+			if err := removeXattr(mi.Path, xattrNodeID); err != nil {
 				debug.AssertNoErr(err)
 				rerr = err
 			}
