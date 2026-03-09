@@ -73,47 +73,9 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			t.listBuckets(w, r, qbck, dpq)
 			return
 		}
-		bck := meta.CloneBck((*cmn.Bck)(qbck))
-		if err := bck.Init(t.owner.bmd); err != nil {
-			if cmn.IsErrRemoteBckNotFound(err) {
-				if dpq.dontAddRemote {
-					// don't add it - proceed anyway (TODO: assert(wantOnlyRemote) below)
-					err = nil
-				} else {
-					// in an inlikely case updated BMD's in flight
-					t.BMDVersionFixup(r)
-					err = bck.Init(t.owner.bmd)
-				}
-			}
-			if err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
-		}
-		var (
-			begin = mono.NanoTime()
-			lsmsg *apc.LsoMsg
-		)
-		if err := cos.MorphMarshal(msg.Value, &lsmsg); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-			return
-		}
-		if !cos.IsValidUUID(lsmsg.UUID) {
-			debug.Assert(false, lsmsg.UUID)
-			t.writeErrf(w, r, "list-objects: invalid UUID %q", lsmsg.UUID)
-			return
-		}
-		if ok := t.listObjects(w, r, bck, lsmsg); !ok {
-			t.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-			return
-		}
+		// list objects
+		t.bgetObjects(w, r, qbck, msg, dpq)
 
-		delta := mono.SinceNano(begin)
-		vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
-		t.statsT.IncWith(stats.ListCount, vlabs)
-		t.statsT.AddWith(
-			cos.NamedVal64{Name: stats.ListLatency, Value: delta, VarLabs: vlabs},
-		)
 	case apc.ActSummaryBck:
 		var bucket, phase string // txn
 		if len(apiItems) == 0 {
@@ -135,32 +97,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			t.writeErr(w, r, err)
 			return
 		}
-
-		var bsumMsg apc.BsummCtrlMsg
-		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-			return
-		}
-		// if in fact it is a specific named bucket
-		bck := (*meta.Bck)(qbck)
-		if qbck.IsBucket() {
-			if err := bck.Init(t.owner.bmd); err != nil {
-				if cmn.IsErrRemoteBckNotFound(err) {
-					if bsumMsg.DontAddRemote || dpq.dontAddRemote {
-						// don't add it - proceed anyway
-						err = nil
-					} else {
-						t.BMDVersionFixup(r)
-						err = bck.Init(t.owner.bmd)
-					}
-				}
-				if err != nil {
-					t.writeErr(w, r, err)
-					return
-				}
-			}
-		}
-		t.bsumm(w, r, phase, bck, &bsumMsg, dpq)
+		t.bgetSumm(w, r, qbck, msg, dpq, phase)
 
 	case apc.ActShowNBI:
 		var bckName string
@@ -172,35 +109,81 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			t.writeErr(w, r, err)
 			return
 		}
-		if !qbck.IsBucket() {
-			t.writeErrf(w, r, "bad %s request: %q is not a bucket", msg.Action, qbck.String())
-			return
-		}
-
-		bck := meta.CloneBck((*cmn.Bck)(qbck))
-		if err := bck.Init(t.owner.bmd); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-
-		info, err := fs.CollectNBI(bck.Bucket())
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-
-		if msg.Name != "" {
-			if one, ok := info[msg.Name]; ok {
-				info = apc.NBIInfoMap{msg.Name: one}
-			} else {
-				info = make(apc.NBIInfoMap)
-			}
-		}
-		t.writeJSON(w, r, info, msg.Action)
+		t.bgetNBI(w, r, qbck, msg, dpq)
 
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
+}
+
+func (t *target) _resolveQbck(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, dontAddRemote bool) (*meta.Bck, error) {
+	bck := meta.CloneBck((*cmn.Bck)(qbck))
+	err := bck.Init(t.owner.bmd)
+	if err == nil {
+		return bck, nil
+	}
+	if cmn.IsErrRemoteBckNotFound(err) {
+		if dontAddRemote {
+			return bck, nil
+		}
+		t.BMDVersionFixup(r)
+		err = bck.Init(t.owner.bmd)
+	}
+	if err != nil {
+		t.writeErr(w, r, err)
+		return nil, err
+	}
+	return bck, nil
+}
+
+func (t *target) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *actMsgExt, dpq *dpq) {
+	bck, err := t._resolveQbck(w, r, qbck, dpq.dontAddRemote)
+	if err != nil {
+		return
+	}
+
+	var (
+		begin = mono.NanoTime()
+		lsmsg *apc.LsoMsg
+	)
+	if err := cos.MorphMarshal(msg.Value, &lsmsg); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+		return
+	}
+	if !cos.IsValidUUID(lsmsg.UUID) {
+		debug.Assert(false, lsmsg.UUID)
+		t.writeErrf(w, r, "list-objects: invalid UUID %q", lsmsg.UUID)
+		return
+	}
+	if ok := t.listObjects(w, r, bck, lsmsg); !ok {
+		t.statsT.IncBck(stats.ErrListCount, bck.Bucket())
+		return
+	}
+
+	delta := mono.SinceNano(begin)
+	vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
+	t.statsT.IncWith(stats.ListCount, vlabs)
+	t.statsT.AddWith(
+		cos.NamedVal64{Name: stats.ListLatency, Value: delta, VarLabs: vlabs},
+	)
+}
+
+func (t *target) bgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *actMsgExt, dpq *dpq, phase string) {
+	var bsumMsg apc.BsummCtrlMsg
+	err := cos.MorphMarshal(msg.Value, &bsumMsg)
+	if err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+		return
+	}
+	// if in fact it is a specific named bucket
+	bck := (*meta.Bck)(qbck)
+	if qbck.IsBucket() {
+		bck, err = t._resolveQbck(w, r, qbck, bsumMsg.DontAddRemote || dpq.dontAddRemote)
+		if err != nil {
+			return
+		}
+	}
+	t.bsumm(w, r, phase, bck, &bsumMsg, dpq)
 }
 
 // there's a difference between looking for all (any) provider vs a specific one -
@@ -463,18 +446,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		xctn.AddNotif(notif)
 		xact.GoRunW(xctn)
 	case apc.ActDestroyNBI:
-		nlp := newBckNLP(bck)
-		if !nlp.TryLock(cmn.Rom.MaxKeepalive()) {
-			t.writeErr(w, r, cmn.NewErrBusy("bucket", bck.Cname("")))
-			return
-		}
-		err := fs.DestroyNBI(msg.Action, bck.Bucket(), msg.Name /*invName*/)
-		nlp.Unlock()
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-		nlog.Infoln(msg.Action, "for bucket", bck.Cname(""), "[", msg.Name, "]")
+		t.destroyNBI(w, r, bck, &msg)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}

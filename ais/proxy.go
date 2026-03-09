@@ -590,12 +590,11 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // +gen:endpoint GET /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
-// List buckets or list objects within a bucket
+// List buckets, bucket inventories, or objects within a bucket
 func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	var (
 		msg     *apc.ActMsg
 		bckName string
-		am      actMsgRaw
 	)
 
 	apiItems, err := p.parseURL(w, r, apc.URLPathBuckets.L, 0, true)
@@ -614,16 +613,11 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		} else {
 			msg = &apc.ActMsg{Action: apc.ActList, Value: &apc.LsoMsg{}}
 		}
-		am = actMsgRaw{
-			msg:  msg,
-			body: cos.MustMarshal(msg),
-		}
 	} else {
-		am, err = p.readActionMsgRaw(w, r)
+		msg, err = p.readActionMsg(w, r)
 		if err != nil {
 			return
 		}
-		msg = am.msg
 	}
 
 	if err := dpq.parse(r.URL.RawQuery); err != nil {
@@ -641,7 +635,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	case msg.Action == apc.ActSummaryBck:
 		p.bgetSumm(w, r, qbck, msg, dpq)
 	case msg.Action == apc.ActShowNBI:
-		p.bgetNBI(w, r, qbck, am, dpq)
+		p.bgetNBI(w, r, qbck, msg, dpq)
 
 	case msg.Action != apc.ActList:
 		p.writeErrAct(w, r, msg.Action)
@@ -651,7 +645,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	//   non-nil   -> list objects (LsoMsg payload)
 	// TODO: make this explicit in the API in the future.
 	case msg.Value == nil:
-		p.bgetBuckets(w, r, qbck, am, dpq)
+		p.bgetBuckets(w, r, qbck, msg, dpq)
 
 	default:
 		p.bgetObjects(w, r, qbck, msg, dpq)
@@ -690,12 +684,12 @@ func (p *proxy) bgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 	p.bsummact(w, r, qbck, &summMsg)
 }
 
-func (p *proxy) bgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, am actMsgRaw, dpq *dpq) {
-	if qbck.Name != "" && qbck.Name != am.msg.Name {
-		p.writeErrf(w, r, "bad list-buckets request: %q vs %q (%+v, %+v)", qbck.Name, am.msg.Name, qbck, am.msg)
+func (p *proxy) bgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
+	if qbck.Name != "" && qbck.Name != msg.Name {
+		p.writeErrf(w, r, "bad list-buckets request: %q vs %q (%+v, %+v)", qbck.Name, msg.Name, qbck, msg)
 		return
 	}
-	qbck.Name = am.msg.Name
+	qbck.Name = msg.Name
 	if qbck.IsRemoteAIS() {
 		qbck.Ns.UUID = p.a2u(qbck.Ns.UUID)
 	}
@@ -705,7 +699,7 @@ func (p *proxy) bgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		ace |= apc.AceAdmin
 	}
 	if err := p.checkAccess(w, r, nil, ace); err == nil {
-		p.listBuckets(w, r, qbck, am, dpq)
+		p.listBuckets(w, r, qbck, msg, dpq)
 	}
 }
 
@@ -983,7 +977,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	am, err := p.readActionMsgRaw(w, r)
+	am, err := p.readActionMsgRaw(w, r) // (using user message as is w/ no "BMD fixup" on the target side)
 	if err != nil {
 		return
 	}
@@ -2320,7 +2314,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 }
 
-func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, am actMsgRaw, dpq *dpq) {
+func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
 	var (
 		bmd     = p.owner.bmd.get()
 		present bool
@@ -2351,6 +2345,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		return
 	}
 
+	amsg := p.newAmsg(msg, bmd)
 	cargs := allocCargs()
 	{
 		cargs.si = si
@@ -2359,7 +2354,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 			Path:     r.URL.Path,
 			RawQuery: r.URL.RawQuery,
 			Header:   r.Header,
-			Body:     am.body,
+			Body:     cos.MustMarshal(amsg),
 		}
 		cargs.timeout = apc.DefaultTimeout
 	}

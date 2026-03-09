@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"maps"
 	"net/http"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -13,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -21,36 +23,36 @@ import (
 // proxy --------------------------------------------
 //
 
-func (p *proxy) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, am actMsgRaw, dpq *dpq) {
-	if !qbck.IsBucket() {
-		p.writeErrf(w, r, "bad %s request: %q is not a bucket", am.msg.Action, qbck.String())
-		return
-	}
+func (p *proxy) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
 	// bucket
 	bck := meta.CloneBck((*cmn.Bck)(qbck))
-	bckArgs := allocBctx()
-	{
-		bckArgs.p = p
-		bckArgs.w = w
-		bckArgs.r = r
-		bckArgs.msg = am.msg
-		bckArgs.perms = apc.AceBckHEAD
-		bckArgs.bck = bck
-		bckArgs.dpq = dpq
-		bckArgs.createAIS = false
-	}
-	bck, err := bckArgs.initAndTry()
-	freeBctx(bckArgs)
-	if err != nil {
-		return
+	if qbck.IsBucket() {
+		var err error
+		bckArgs := allocBctx()
+		{
+			bckArgs.p = p
+			bckArgs.w = w
+			bckArgs.r = r
+			bckArgs.msg = msg
+			bckArgs.perms = apc.AceBckHEAD
+			bckArgs.bck = bck
+			bckArgs.dpq = dpq
+			bckArgs.createAIS = false
+		}
+		bck, err = bckArgs.initAndTry()
+		freeBctx(bckArgs)
+		if err != nil {
+			return
+		}
 	}
 
 	// bcast
 	args := allocBcArgs()
+	amsg := p.newAmsg(msg, nil /*bmd*/)
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   r.URL.Path,
-		Body:   am.body,
+		Body:   cos.MustMarshal(amsg),
 		Header: http.Header{cos.HdrContentType: []string{cos.ContentJSON}},
 	}
 	args.req.Query = bck.AddToQuery(nil)
@@ -92,7 +94,7 @@ func (p *proxy) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryB
 	}
 	freeBcastRes(results)
 
-	p.writeJSON(w, r, merged, am.msg.Action)
+	p.writeJSON(w, r, merged, msg.Action)
 }
 
 // currently, create/destroy inventory requires admin perm
@@ -102,6 +104,7 @@ func (p *proxy) destroyNBI(w http.ResponseWriter, r *http.Request, bck *meta.Bck
 	}
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: r.Method, Path: r.URL.Path, Body: am.body}
+	args.req.Query = bck.AddToQuery(nil)
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {
@@ -115,4 +118,76 @@ func (p *proxy) destroyNBI(w http.ResponseWriter, r *http.Request, bck *meta.Bck
 	}
 	nlog.Infoln(am.msg.Action, "for bucket", bck.Cname(""), "[", am.msg.Name, "]")
 	freeBcastRes(results)
+}
+
+//
+// target ------------------------------------------------------
+//
+
+func (t *target) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *actMsgExt, dpq *dpq) {
+	// 1. specific bucket
+	if qbck.IsBucket() {
+		bck, err := t._resolveQbck(w, r, qbck, dpq.dontAddRemote)
+		if err != nil {
+			return
+		}
+		info, err := fs.CollectNBI(bck.Bucket())
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		if msg.Name != "" {
+			if one, ok := info[msg.Name]; ok {
+				info = apc.NBIInfoMap{msg.Name: one}
+			} else {
+				info = make(apc.NBIInfoMap)
+			}
+		}
+		t.writeJSON(w, r, info, msg.Action)
+		return
+	}
+
+	// 2. all buckets matching qbck filter
+	var (
+		bmd      = t.owner.bmd.get()
+		merged   apc.NBIInfoMap
+		provider *string
+		ns       *cmn.Ns
+	)
+	if qbck.Provider != "" {
+		provider = &qbck.Provider
+	}
+	if !qbck.Ns.IsGlobal() {
+		ns = &qbck.Ns
+	}
+	bmd.Range(provider, ns, func(bck *meta.Bck) bool {
+		info, err := fs.CollectNBI(bck.Bucket())
+		if err != nil || len(info) == 0 {
+			return false
+		}
+		if merged == nil {
+			merged = make(apc.NBIInfoMap)
+		}
+		maps.Copy(merged, info)
+		return false
+	})
+	if merged == nil {
+		merged = make(apc.NBIInfoMap)
+	}
+	t.writeJSON(w, r, merged, msg.Action)
+}
+
+func (t *target) destroyNBI(w http.ResponseWriter, r *http.Request, bck *meta.Bck, msg *actMsgExt) {
+	nlp := newBckNLP(bck)
+	if !nlp.TryLock(cmn.Rom.MaxKeepalive()) {
+		t.writeErr(w, r, cmn.NewErrBusy("bucket", bck.Cname("")))
+		return
+	}
+	err := fs.DestroyNBI(msg.Action, bck.Bucket(), msg.Name /*invName*/)
+	nlp.Unlock()
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	nlog.Infoln(msg.Action, "for bucket", bck.Cname(""), "[", msg.Name, "]")
 }

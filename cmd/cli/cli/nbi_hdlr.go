@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 
 	"github.com/urfave/cli"
@@ -81,7 +82,7 @@ var (
 	cmdShowNBI = cli.Command{
 		Name:         commandShow,
 		Usage:        showNBIUsage,
-		ArgsUsage:    bucketArgument,
+		ArgsUsage:    optionalBucketArgument,
 		Flags:        sortFlags(nbiCmdFlags[commandShow]),
 		Action:       showNBIHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
@@ -204,16 +205,8 @@ func removeNBIHandler(c *cli.Context) error {
 //
 
 func showNBIHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
 	if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
-	}
-
-	bck, err := parseBckURI(c, c.Args().Get(0), false)
-	if err != nil {
-		return err
 	}
 
 	invName := parseStrFlag(c, nbiNameFlag)
@@ -223,16 +216,47 @@ func showNBIHandler(c *cli.Context) error {
 		}
 	}
 
+	// optional bucket
+	var (
+		bck cmn.Bck
+		err error
+	)
+	if c.NArg() == 1 {
+		var (
+			objName string
+			opts    = cmn.ParseURIOpts{IsQuery: true}
+			uri     = c.Args().Get(0)
+		)
+		uri = preparseBckObjURI(uri)
+		bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
+		if err != nil {
+			return err
+		}
+		if objName != "" {
+			return objectNameArgNotExpected(c, objName)
+		}
+	}
+
+	// do
 	infos, err := api.GetNBI(apiBP, bck, invName)
 	if err != nil {
 		return V(err)
 	}
 
+	if len(infos) == 0 {
+		var s string
+		if invName != "" {
+			s = fmt.Sprintf(" '%s'", invName)
+		}
+		fmt.Fprintf(c.App.Writer, "No inventories%s for %s\n", s, bck.Cname(""))
+		return nil
+	}
+
+	// show table
 	type extInfo struct {
 		apc.NBIInfo
 		Bucket string
 	}
-
 	lst := make([]*extInfo, 0, len(infos))
 	for _, v := range infos {
 		var ext extInfo
