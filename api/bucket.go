@@ -309,12 +309,3 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int, checkAndRecove
 	bp.Method = http.MethodPost
 	return doBckAct(bp, bck, cos.MustMarshal(msg), q)
 }
-
-// Create bucket inventory
-func CreateBucketInventory(bp BaseParams, bck cmn.Bck, cinvMsg *apc.CreateNBIMsg) (string, error) {
-	q := qalloc()
-	bck.SetQuery(q)
-	bp.Method = http.MethodPost
-	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActCreateNBI, Value: cinvMsg})
-	return doBckAct(bp, bck, jbody, q)
-}

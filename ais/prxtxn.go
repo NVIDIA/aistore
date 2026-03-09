@@ -919,7 +919,7 @@ func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
 }
 
 // delete in-cluster bucket data, keep bucket metadata AND bucket inventory (if present)
-func (p *proxy) evictRemoteKeepMD(msg *apc.ActMsg, bck *meta.Bck) error {
+func (p *proxy) evictRemoteKeepMD(am actMsgRaw, bck *meta.Bck) error {
 	query := bck.AddToQuery(url.Values{
 		apc.QparamKeepRemote: []string{"true"},
 		apc.QparamUUID:       []string{xact.PrefixEvictKeepID + cos.GenUUID()}, // vs destroyBucket above
@@ -928,7 +928,7 @@ func (p *proxy) evictRemoteKeepMD(msg *apc.ActMsg, bck *meta.Bck) error {
 	args.req = cmn.HreqArgs{
 		Method: http.MethodDelete,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Body:   cos.MustMarshal(msg),
+		Body:   am.body,
 		Query:  query,
 	}
 	args.to = core.Targets
@@ -1292,8 +1292,10 @@ func (p *proxy) etlInitTxn(initMsg etl.InitMsg, xid, secret string) (string, etl
 
 // begin phase customized to collect pod info from nodes
 func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) {
+	// Broadcast initMsg with init timeout + network timeout
+	// (wait for initialization error propagation from target)
 	initTimeout, _ := initMsg.Timeouts()
-	results := c.bcast(apc.Begin2PC, initTimeout.D()+c.timeout.netw) // Broadcast initMsg with init timeout + network timeout (wait for initialization error propagation from target)
+	results := c.bcast(apc.Begin2PC, initTimeout.D()+c.timeout.netw)
 	podMap = make(etl.PodMap, len(results))
 	for _, res := range results {
 		podInfo := etl.PodInfo{}

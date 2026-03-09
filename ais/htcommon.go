@@ -868,8 +868,8 @@ func newBckFromQ(bckName string, query url.Values, dpq *dpq) (*meta.Bck, error) 
 	return bck, err
 }
 
-func newQbckFromQ(bckName string, query url.Values, dpq *dpq) (*cmn.QueryBcks, error) {
-	qbck := (*cmn.QueryBcks)(_bckFromQ(bckName, query, dpq))
+func qbckFromDpq(bckName string, dpq *dpq) (*cmn.QueryBcks, error) {
+	qbck := (*cmn.QueryBcks)(_bckFromQ(bckName, nil, dpq))
 	err := qbck.Validate()
 	return qbck, err
 }

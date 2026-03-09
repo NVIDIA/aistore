@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -27,10 +28,9 @@ import (
 // XactNBI: create native bucket inventory (NBI)
 
 // TODO -- FIXME:
-// - destroy-bucket and evict-bucket => remove inventory
-// - integration tests
+// - integration tests: a) functional create/destroy/show; b) stress
 // ----
-// - .sys-inventory/BUCKET-UNAME/.sys-redirect => HRW(inventory LOM)
+// - progress notif
 // ----
 // - multi-target (***** remove smap.CountActiveTs = 1)
 // - stats: internal (-> CtlMsg) and Prometheus
@@ -280,12 +280,23 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 	}
 
 	r.Finish()
+
+	a, b := r.StartTime(), r.EndTime()
+	if err := fs.SetNBI(r.lom.FQN, a.UnixNano(), b.UnixNano(), r.msg.Prefix, r.buf); err != nil {
+		nlog.Errorf("%s: ex-post-facto failure to store metadata: [%q, %q, %v]", r.Name(), r.msg.Name, r.lom.Cname(), err)
+		core.T.FSHC(err, r.lom.Mountpath(), r.lom.FQN)
+	}
+
 	r.cleanup()
 }
 
-// writeChunk writes one chunk part file:
+// write one chunk with the following framing header:
 //
-// [u32 headerLen] [bytepack header: entryCount|first|last] [msgp-encoded LsoEntries]
+//	[u32 headerLen] bytepack[entryCount | first | last ]
+//
+// and payload:
+//
+//	[msgp-encoded LsoEntries]
 func (r *XactNBI) writeChunk(num int, entries cmn.LsoEntries) error {
 	chunk, err := r.ufest.NewChunk(num, r.lom)
 	if err != nil {

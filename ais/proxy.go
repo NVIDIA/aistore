@@ -631,7 +631,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		return
 	}
 
-	qbck, errV := newQbckFromQ(bckName, nil, dpq)
+	qbck, errV := qbckFromDpq(bckName, dpq)
 	if errV != nil {
 		p.writeErr(w, r, errV)
 		return
@@ -639,7 +639,9 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 
 	switch {
 	case msg.Action == apc.ActSummaryBck:
-		p._bckgetSumm(w, r, qbck, msg, dpq)
+		p.bgetSumm(w, r, qbck, msg, dpq)
+	case msg.Action == apc.ActShowNBI:
+		p.bgetNBI(w, r, qbck, am, dpq)
 
 	case msg.Action != apc.ActList:
 		p.writeErrAct(w, r, msg.Action)
@@ -649,14 +651,14 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	//   non-nil   -> list objects (LsoMsg payload)
 	// TODO: make this explicit in the API in the future.
 	case msg.Value == nil:
-		p._bckgetBuckets(w, r, qbck, am, dpq)
+		p.bgetBuckets(w, r, qbck, am, dpq)
 
 	default:
-		p._bckgetObjects(w, r, qbck, msg, dpq)
+		p.bgetObjects(w, r, qbck, msg, dpq)
 	}
 }
 
-func (p *proxy) _bckgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
+func (p *proxy) bgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
 	var summMsg apc.BsummCtrlMsg
 	if err := cos.MorphMarshal(msg.Value, &summMsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
@@ -688,7 +690,7 @@ func (p *proxy) _bckgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	p.bsummact(w, r, qbck, &summMsg)
 }
 
-func (p *proxy) _bckgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, am actMsgRaw, dpq *dpq) {
+func (p *proxy) bgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, am actMsgRaw, dpq *dpq) {
 	if qbck.Name != "" && qbck.Name != am.msg.Name {
 		p.writeErrf(w, r, "bad list-buckets request: %q vs %q (%+v, %+v)", qbck.Name, am.msg.Name, qbck, am.msg)
 		return
@@ -707,7 +709,7 @@ func (p *proxy) _bckgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn
 	}
 }
 
-func (p *proxy) _bckgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
+func (p *proxy) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
 	// NOTE -- TODO: currently, always forwarding
 	if !qbck.IsBucket() {
 		p.writeErrf(w, r, "bad list-objects request: %q is not a bucket (is a bucket query?)", qbck.String())
@@ -981,10 +983,11 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	msg, err := p.readActionMsg(w, r)
+	am, err := p.readActionMsgRaw(w, r)
 	if err != nil {
 		return
 	}
+	msg := am.msg
 	delObjs := msg.Action == apc.ActDeleteObjects || msg.Action == apc.ActEvictObjects
 	perms := cos.Ternary(delObjs, apc.AceObjDELETE, apc.AceDestroyBucket)
 
@@ -1031,7 +1034,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 		}
 		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
 		if keepMD {
-			if err := p.evictRemoteKeepMD(msg, bck); err != nil {
+			if err := p.evictRemoteKeepMD(am, bck); err != nil {
 				p.writeErr(w, r, err)
 			}
 			return
@@ -1078,6 +1081,9 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 			return
 		}
 		writeXid(w, xid)
+	case apc.ActDestroyNBI:
+		p.destroyNBI(w, r, bck, am)
+
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}

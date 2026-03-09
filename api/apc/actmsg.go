@@ -115,8 +115,10 @@ const (
 	// api/ml.go; x-moss
 	ActGetBatch = "get-batch"
 
-	// bucket inventory (for control message, see CreateNBIMsg in apc/lsmsg)
-	ActCreateNBI = "create-inventory"
+	// native bucket inventory
+	ActCreateNBI  = "create-inventory"
+	ActDestroyNBI = "destroy-inventory"
+	ActShowNBI    = "show-inventory"
 )
 
 // internal use

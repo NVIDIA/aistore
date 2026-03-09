@@ -1222,7 +1222,7 @@ func (t *target) createNBI(c *txnSrv) (string, error) {
 			return "", errN
 		}
 		if len(nbis) > 0 {
-			invNames := nbis.Keys()
+			invNames := nbis.Names()
 			if !cimsg.Force {
 				const (
 					hint = "(only one inventory per bucket is supported, use CLI '--force' or 'CreateNBIMsg.Force' to override)"
@@ -1230,7 +1230,7 @@ func (t *target) createNBI(c *txnSrv) (string, error) {
 				nlp.Unlock()
 				return "", fmt.Errorf("inventory for bucket %s already exists: %v\n%s", c.bck.Cname(""), invNames, hint)
 			}
-			if err := fs.DestroyNBI(apc.ActCreateNBI, c.bck.Bucket()); err != nil {
+			if err := fs.DestroyNBI(apc.ActCreateNBI, c.bck.Bucket(), "" /*invName*/); err != nil {
 				nlp.Unlock()
 				nlog.Errorln(err)
 				return "", err
