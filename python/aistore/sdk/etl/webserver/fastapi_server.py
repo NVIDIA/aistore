@@ -230,40 +230,37 @@ class FastAPIServer(ETLServer):
         self.logger.debug("streaming: etl_args = %r, fqn = %r", etl_args, fqn)
 
         reader = await self._get_stream_reader(fqn, path, request, is_get)
-        # transform_stream is a sync generator — creating it is instant (no I/O).
-        # StreamingResponse iterates sync iterators in a threadpool automatically,
-        # so the blocking generator body runs off the event loop.
-        output_iter = self.transform_stream(reader, path, etl_args)
+        try:
+            # transform_stream is a sync generator — creating it is instant (no I/O).
+            # StreamingResponse iterates sync iterators in a threadpool automatically,
+            # so the blocking generator body runs off the event loop.
+            output_iter = self.transform_stream(reader, path, etl_args)
 
-        # TODO: extract common pipeline handling into a shared helper
-        pipeline_header = request.headers.get(HEADER_NODE_URL)
-        self.logger.debug("pipeline_header: %r", pipeline_header)
-        if pipeline_header:
-            first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
-            if first_url:
-                try:
-                    status_code, resp_data, direct_put_length = (
-                        await self._direct_put_stream(
-                            first_url, output_iter, remaining_pipeline, path
+            pipeline_header = request.headers.get(HEADER_NODE_URL)
+            self.logger.debug("pipeline_header: %r", pipeline_header)
+            if pipeline_header:
+                first_url, remaining = parse_etl_pipeline(pipeline_header)
+                if first_url:
+                    try:
+                        result = await self._direct_put_stream(
+                            first_url, output_iter, remaining, path
                         )
+                    finally:
+                        self.close_reader(reader)
+                    return Response(
+                        content=result[1],
+                        status_code=result[0],
+                        headers=self.make_direct_put_headers(result[2]),
                     )
-                finally:
-                    self.close_reader(reader)
-                return Response(
-                    content=resp_data,
-                    status_code=status_code,
-                    headers=(
-                        {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
-                        if direct_put_length != 0
-                        else {}
-                    ),
-                )
 
-        return StreamingResponse(
-            self.iter_and_close(output_iter, reader),
-            status_code=STATUS_OK,
-            media_type=self.get_mime_type(),
-        )
+            return StreamingResponse(
+                self.iter_and_close(output_iter, reader),
+                status_code=STATUS_OK,
+                media_type=self.get_mime_type(),
+            )
+        except Exception:
+            self.close_reader(reader)
+            raise
 
     async def _get_stream_reader(self, fqn, path, request, is_get) -> BinaryIO:
         """Get a BinaryIO reader for the request source data."""

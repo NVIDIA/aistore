@@ -161,6 +161,13 @@ class ETLServer(ABC):
         finally:
             ETLServer.close_reader(reader)
 
+    @staticmethod
+    def make_direct_put_headers(direct_put_length: int) -> dict:
+        """Build response headers for a direct-put result."""
+        if direct_put_length != 0:
+            return {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
+        return {}
+
     def sanitize_fqn(self, fqn: str) -> str:
         """Normalize an FQN to a safe absolute path."""
         return os.path.normpath(os.path.join("/", unquote(fqn).lstrip("/")))

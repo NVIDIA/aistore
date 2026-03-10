@@ -58,6 +58,7 @@ class DummyRequestHandler(HTTPMultiThreadedServer.RequestHandler):
         self.server.etl_server.host_target = "http://localhost:8080"
         self.server.etl_server.get_mime_type.return_value = "application/test"
         self.server.etl_server.transform.return_value = b"transformed"
+        self.server.etl_server.use_streaming = False
 
         s = DummyHTTPETLServer()
         self.server.etl_server.handle_direct_put_response = s.handle_direct_put_response
@@ -1052,3 +1053,85 @@ class TestCountingIterator(unittest.TestCase):
         result = b"".join(counted)
         self.assertEqual(result, b"")
         self.assertEqual(counted.bytes_sent, 0)
+
+
+# ---------------------------------------------------------------------------
+# Flask and HTTP streaming tests
+# ---------------------------------------------------------------------------
+
+
+class DummyStreamingFlaskServer(FlaskServer):
+    """Flask server that uses transform_stream instead of transform."""
+
+    def transform_stream(self, reader, _path, _etl_args):
+        data = reader.read()
+        yield b"flask: " + data
+
+    def get_mime_type(self):
+        return "application/flask"
+
+
+class DummyStreamingHTTPServer(HTTPMultiThreadedServer):
+    """HTTP server that uses transform_stream instead of transform."""
+
+    def transform_stream(self, reader, _path, _etl_args):
+        data = reader.read()
+        yield data.upper()
+
+    def get_mime_type(self):
+        return "text/caps"
+
+
+class TestStreamingFlaskServer(unittest.TestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost"
+        self.etl_server = DummyStreamingFlaskServer()
+        self.client = self.etl_server.app.test_client()
+
+    def test_streaming_put(self):
+        input_data = b"hello"
+        response = self.client.put("/some/key", data=input_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b"flask: " + input_data)
+
+    def test_streaming_get(self):
+        input_data = b"flask get data"
+        with patch("requests.Session.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.raw = io.BytesIO(input_data)
+            mock_get.return_value = mock_resp
+            response = self.client.get("/some/key")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data, b"flask: " + input_data)
+
+
+class TestStreamingHTTPServer(unittest.TestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+
+    def _make_streaming_handler(self):
+        handler = DummyRequestHandler()
+        handler.server.etl_server.use_streaming = True
+        handler.server.etl_server.transform_stream.return_value = iter([b"TRANSFORMED"])
+        handler.server.etl_server.close_reader = MagicMock()
+        return handler
+
+    def test_streaming_put(self):
+        handler = self._make_streaming_handler()
+        handler.headers = {HEADER_CONTENT_LENGTH: "10"}
+        handler.rfile = io.BytesIO(b"test input")
+        handler.do_PUT()
+        handler.server.etl_server.transform_stream.assert_called_once()
+        handler.server.etl_server.close_reader.assert_called_once()
+
+    def test_streaming_get(self):
+        handler = self._make_streaming_handler()
+        handler.path = "/test/object"
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raw = io.BytesIO(b"target data")
+        handler.server.etl_server.session.get.return_value = mock_resp
+        handler.do_GET()
+        handler.server.etl_server.transform_stream.assert_called_once()
+        handler.server.etl_server.close_reader.assert_called_once()

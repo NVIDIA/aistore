@@ -3,15 +3,16 @@
 #
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from io import BytesIO
 from socketserver import ThreadingMixIn
-from typing import Type, Tuple
+from typing import Iterator, Type, Tuple
 import signal
 import threading
 from urllib.parse import urlparse, parse_qs
 
 import requests
 
-from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.etl.webserver.base_etl_server import ETLServer, CountingIterator
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
@@ -129,6 +130,88 @@ class HTTPMultiThreadedServer(ETLServer):
             with open(safe_path, "rb") as f:
                 return f.read()
 
+        def _get_stream_reader(self, fqn, raw_path, is_get):
+            """Get a BinaryIO reader for the request source data."""
+            etl_server = self.server.etl_server
+            if fqn:
+                return open(etl_server.sanitize_fqn(fqn), "rb")
+            if is_get:
+                target_url = f"{etl_server.host_target}{raw_path}"
+                etl_server.logger.debug(
+                    "Forwarding GET (stream) to AIS target: %s", target_url
+                )
+                resp = etl_server.session.get(target_url, stream=True, timeout=None)
+                if resp.status_code != STATUS_OK:
+                    resp.close()
+                    return None
+                return resp.raw
+            content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
+            return BytesIO(self.rfile.read(content_length))
+
+        def _send_streaming_response(self, output_iter, path):
+            """Stream transformed output, handling pipeline if present."""
+            pipeline_header = self.headers.get(HEADER_NODE_URL)
+            if pipeline_header:
+                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+                if first_url:
+                    status_code, resp_data, direct_put_length = self._direct_put_stream(
+                        first_url, output_iter, remaining_pipeline, path
+                    )
+                    self._set_headers(
+                        status_code=status_code,
+                        length=len(resp_data),
+                        direct_put_length=direct_put_length,
+                    )
+                    if resp_data:
+                        self.wfile.write(resp_data)
+                    return
+
+            # No pipeline: stream directly to client without Content-Length
+            self.send_response(STATUS_OK)
+            mime_type = self.server.etl_server.get_mime_type()
+            self.send_header(HEADER_CONTENT_TYPE, mime_type)
+            self.end_headers()
+            for chunk in output_iter:
+                if chunk:
+                    self.wfile.write(chunk)
+            self.wfile.flush()
+
+        def _direct_put_stream(
+            self,
+            direct_put_url: str,
+            data_iter: Iterator[bytes],
+            remaining_pipeline: str = "",
+            path: str = "",
+        ) -> Tuple[int, bytes, int]:
+            """Stream transformed output directly to the next pipeline stage."""
+            try:
+                url = compose_etl_direct_put_url(
+                    direct_put_url, self.server.etl_server.host_target, path
+                )
+                headers = {}
+                if remaining_pipeline:
+                    headers[HEADER_NODE_URL] = remaining_pipeline
+
+                counted = CountingIterator(data_iter)
+                resp = self.server.etl_server.session.put(
+                    url, data=counted, timeout=None, headers=headers
+                )
+                return self.server.etl_server.handle_direct_put_response(
+                    resp, b"", data_length=counted.bytes_sent
+                )
+
+            except Exception as e:
+                root = e.__cause__ or e
+                self.server.etl_server.logger.error(
+                    "streaming direct put to %s failed after %d bytes: %s: %s",
+                    direct_put_url,
+                    counted.bytes_sent,
+                    type(root).__name__,
+                    root,
+                    exc_info=True,
+                )
+                return STATUS_INTERNAL_SERVER_ERROR, str(e).encode(), 0
+
         def _send_with_pipeline(self, transformed: bytes, path: str):
             """
             Forward transformed data to the next ETL stage if a pipeline header exists;
@@ -161,6 +244,20 @@ class HTTPMultiThreadedServer(ETLServer):
             )
             self.wfile.write(transformed)
 
+        def _handle_streaming(self, fqn, raw_path, etl_args, is_get):
+            """Handle a streaming GET or PUT request."""
+            reader = self._get_stream_reader(fqn, raw_path, is_get=is_get)
+            if reader is None:
+                self.send_error(502, "Failed to retrieve data from target")
+                return
+            try:
+                output_iter = self.server.etl_server.transform_stream(
+                    reader, raw_path, etl_args
+                )
+                self._send_streaming_response(output_iter, raw_path)
+            finally:
+                self.server.etl_server.close_reader(reader)
+
         # pylint: disable=too-many-locals
         def do_GET(self):
             """
@@ -191,6 +288,10 @@ class HTTPMultiThreadedServer(ETLServer):
                 return
 
             try:
+                if self.server.etl_server.use_streaming:
+                    self._handle_streaming(fqn, raw_path, etl_args, is_get=True)
+                    return
+
                 if fqn and self.server.etl_server.direct_fqn:
                     source = self.server.etl_server.sanitize_fqn(
                         fqn
@@ -267,6 +368,10 @@ class HTTPMultiThreadedServer(ETLServer):
             )
 
             try:
+                if self.server.etl_server.use_streaming:
+                    self._handle_streaming(fqn, raw_path, etl_args, is_get=False)
+                    return
+
                 if fqn and self.server.etl_server.direct_fqn:
                     source = self.server.etl_server.sanitize_fqn(
                         fqn
