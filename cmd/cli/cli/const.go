@@ -1430,7 +1430,6 @@ var (
 			indent4 + "\t  2) 'ais ls oci://abc --inventory --paged --prefix=subdir'",
 	}
 
-	// TODO -- FIXME: consider optional inv-name instead: `--inventory [NAME]`
 	nbiNameFlag = cli.StringFlag{
 		Name:  "inv-name", // compare w/ HdrInvName
 		Usage: "Bucket inventory name (optional; system default name is '.inventory')",

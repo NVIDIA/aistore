@@ -89,8 +89,6 @@ func (*nbiFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *nbiFactory) Start() error {
 	bck := p.Bucket()
 
-	debug.Assert(bck.IsRemote()) // guarded by proxy (case apc.ActCreateNBI)
-
 	smap := core.T.Sowner().Get()
 	if smap.CountActiveTs() > 1 {
 		return cmn.NewErrNotImpl("create bucket inventory for", "multi-target cluster")

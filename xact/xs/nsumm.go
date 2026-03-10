@@ -90,7 +90,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 		}
 	}
 
-	listRemote := lsoIsRemote(p.Bck, p.msg.ObjCached)
+	listRemote := !p.msg.ObjCached && p.Bck.IsRemote()
 	if listRemote {
 		var (
 			smap = core.T.Sowner().Get()
@@ -369,7 +369,7 @@ func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 	lsmsg.SetFlag(apc.LsNameSize | apc.LsNoDirs)
 
 	for !r.IsAborted() {
-		npg := newNpgCtx(bck, lsmsg, noopCb, nil, nil, bp) // TODO -- FIXME: support NBI
+		npg := newNpgCtx(bck, lsmsg, noopCb, nil, bp)
 
 		if cap(page) > maxPageCap {
 			page = make(cmn.LsoEntries, 0, apc.MaxPageSizeGlobal)

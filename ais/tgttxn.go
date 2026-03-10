@@ -1214,7 +1214,7 @@ func (t *target) createNBI(c *txnSrv) (string, error) {
 			return "", cmn.NewErrBusy("bucket", c.bck.Cname(""))
 		}
 
-		// NOTE: ensure single inventory per bucket
+		// NOTE 4.3 limitation: single inventory per bucket
 		nbis, errN := fs.CollectNBI(c.bck.Bucket())
 		if errN != nil {
 			nlp.Unlock()

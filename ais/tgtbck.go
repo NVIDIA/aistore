@@ -281,6 +281,35 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 		}
 	}
 
+	if lsmsg.IsFlagSet(apc.LsNBI) {
+		debug.AssertNoErr(lsmsg.ValidateNBI()) // checked by proxy
+
+		if invName := r.Header.Get(apc.HdrInvName); invName == "" {
+			// must exist and be single
+			nbis, err := fs.CollectNBI(bck.Bucket())
+			if err != nil {
+				t.writeErrf(w, r, "failed to collect bucket inventories: %w", err)
+				return false
+			}
+			if l := len(nbis); l != 1 {
+				if l == 0 {
+					t.writeErrf(w, r, "bucket %q has no inventories", bck.Cname(""))
+				} else {
+					t.writeErrf(w, r, "missing %q header: bucket %q has %d inventories; please specify which one",
+						apc.HdrInvName, bck.Cname(""), l)
+				}
+				return false
+			}
+			invName = nbis.SingleName()
+			r.Header.Set(apc.HdrInvName, invName)
+		} else {
+			if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {
+				t.writeErr(w, r, err)
+				return false
+			}
+		}
+	}
+
 	var (
 		xctn core.Xact
 		rns  = xreg.RenewLso(bck, lsmsg.UUID, lsmsg, r.Header)

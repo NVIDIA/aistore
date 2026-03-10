@@ -261,7 +261,7 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	var (
 		lst     *cmn.LsoRes
 		lsmsg   = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus, Flags: r.lsflags | apc.LsNoDirs}
-		npg     = newNpgCtx(r.bck, lsmsg, noopCb, nil, nil /*inventory*/, nil /*bp: see below*/) // TODO -- FIXME: support NBI
+		npg     = newNpgCtx(r.bck, lsmsg, noopCb, nil, nil /*bp: see below*/)
 		bremote = r.bck.IsRemote()
 	)
 	if err := r.bck.Init(core.T.Bowner()); err != nil {

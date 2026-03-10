@@ -21,13 +21,12 @@ type npgCtx struct {
 	bp    core.Backend
 	bck   *meta.Bck
 	s3ctx *core.LsoS3InvCtx // Deprecated: remove by April-May 2026; use NBI instead
-	nbi   *nbiCtx
 	wi    walkInfo
 	page  cmn.LsoRes
 	idx   int
 }
 
-func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, s3ctx *core.LsoS3InvCtx, nbi *nbiCtx, bp core.Backend) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, s3ctx *core.LsoS3InvCtx, bp core.Backend) (npg *npgCtx) {
 	npg = &npgCtx{
 		bp:  bp,
 		bck: bck,
@@ -38,7 +37,6 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, s3ctx *core.LsoS
 			smap:         core.T.Sowner().Get(),
 		},
 		s3ctx: s3ctx,
-		nbi:   nbi,
 	}
 	if msg.IsFlagSet(apc.LsDiff) {
 		npg.wi.custom = make(cos.StrKVs) // TODO: move to parent x-lso; clear and reuse here
@@ -46,7 +44,8 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, s3ctx *core.LsoS
 	return npg
 }
 
-// limited usage: lrit (compare w/ LsoXact.doWalk)
+// A-flow by list-range (lrit) xactions
+// (compare w/ LsoXact.doWalk)
 func (npg *npgCtx) nextPageA() error {
 	npg.page.UUID = npg.wi.msg.UUID
 	npg.idx = 0
@@ -99,7 +98,8 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 	return nil
 }
 
-// Returns the next page from the remote bucket's "list-objects" result set.
+// R-flow:
+// returns next page from the remote bucket's "list-objects" result set
 func (npg *npgCtx) nextPageR(entries cmn.LsoEntries) (lst *cmn.LsoRes, err error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsCached))
 	lst = &cmn.LsoRes{Entries: entries}
@@ -112,8 +112,6 @@ func (npg *npgCtx) nextPageR(entries cmn.LsoEntries) (lst *cmn.LsoRes, err error
 		if err == nil {
 			err = npg.bp.ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.s3ctx)
 		}
-	case npg.nbi != nil:
-		err = npg.nbi.nextPage(npg.wi.msg, lst)
 	default:
 		_, err = npg.bp.ListObjects(npg.bck, npg.wi.msg, lst)
 	}

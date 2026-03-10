@@ -43,6 +43,33 @@ type (
 	NBIInfoMap map[string]*NBIInfo // by NBIInfo.Name
 )
 
+//
+// LsoMsg - NBI extension
+//
+
+func (m *LsoMsg) ValidateNBI() error {
+	const etag = "invalid list via native bucket inventory"
+
+	// inventory snapshot is flat; StartAfter currently unsupported
+	if m.StartAfter != "" {
+		return errors.New(etag + ": start_after is not supported")
+	}
+
+	// flags that do not make sense for inventory listing
+	const badFlags = LsNotCached | LsMissing | LsDeleted | LsArchDir |
+		lsWantOnlyRemoteProps | LsNoRecursion | LsDiff
+
+	if m.Flags&badFlags != 0 {
+		var sb cos.SB
+		sb.Grow(96)
+		sb.WriteString("flags:")
+		m.appendFlags(&sb)
+		return fmt.Errorf("%s: %s", etag, sb.String())
+	}
+
+	return nil
+}
+
 //////////////////
 // CreateNBIMsg //
 //////////////////
@@ -129,4 +156,11 @@ func (m NBIInfoMap) Names() []string {
 		names = append(names, k)
 	}
 	return names
+}
+
+func (m NBIInfoMap) SingleName() (name string) {
+	for name = range m {
+		break
+	}
+	return
 }

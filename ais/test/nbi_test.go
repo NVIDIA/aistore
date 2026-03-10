@@ -193,6 +193,12 @@ func TestListInventory(t *testing.T) {
 		},
 	}
 
+	if cliBck.IsRemote() {
+		t.Cleanup(func() {
+			tools.EvictRemoteBucket(t, proxyURL, cliBck, false /*keepMD*/)
+		})
+	}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			if cliBck.IsRemoteAIS() {
@@ -329,6 +335,12 @@ func TestListInventoryPrefix(t *testing.T) {
 
 	m2.puts()
 
+	if cliBck.IsRemote() {
+		t.Cleanup(func() {
+			tools.EvictRemoteBucket(t, proxyURL, cliBck, false /*keepMD*/)
+		})
+	}
+
 	// create inventory covering both sub-prefixes
 	createMsg := &apc.CreateNBIMsg{
 		Name: "inv-prefix-" + cos.GenTie(),
@@ -428,9 +440,14 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			invName: "inv-pfxp-maxent-" + cos.GenTie(),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			if cliBck.IsRemote() {
+				t.Cleanup(func() {
+					tools.EvictRemoteBucket(t, proxyURL, cliBck, false /*keepMD*/)
+				})
+			}
+
 			var (
 				parent = "pfxp-" + cos.GenTie() + "/"
 				bp     = tools.BaseAPIParams()

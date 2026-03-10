@@ -95,7 +95,7 @@ var (
 		Subcommands: []cli.Command{
 			cmdCreateNBI,
 			cmdRemoveNBI,
-			cmdShowNBI, // TODO -- FIXME: add `ais show nbi` alias
+			cmdShowNBI,
 		},
 	}
 )

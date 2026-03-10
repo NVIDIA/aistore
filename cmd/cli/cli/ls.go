@@ -446,13 +446,25 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 
 	// inventories
 
-	if flagIsSet(c, nbiFlag) {
-		msg.SetFlag(apc.LsNBI)
-		lsargs.Header = http.Header{
-			apc.HdrInvName: []string{parseStrFlag(c, nbiNameFlag)},
+	if haveInvName := flagIsSet(c, nbiNameFlag); flagIsSet(c, nbiFlag) || haveInvName {
+		if err := msg.ValidateNBI(); err != nil {
+			return fmt.Errorf("%s: the request to list via native bucket inventory has invalid or unsupported flags: %v",
+				bck.Cname(""), err)
 		}
+
+		msg.SetFlag(apc.LsNBI)
+		if haveInvName {
+			invName := parseStrFlag(c, nbiNameFlag)
+			if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {
+				return err
+			}
+			lsargs.Header = http.Header{
+				apc.HdrInvName: []string{invName},
+			}
+		} // else: works iff there's a single inventory
 	}
-	// Deprecated
+
+	// Deprecated: remove by April-May 2026
 	if flagIsSet(c, useS3InventoryFlag) {
 		if flagIsSet(c, nameOnlyFlag) {
 			return fmt.Errorf(errFmtExclusive, qflprn(nbiFlag), qflprn(useS3InventoryFlag))

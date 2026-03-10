@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -26,8 +25,11 @@ import (
 )
 
 // TODO -- FIXME:
-// - double-check cleanup() called when aborted
-// - see below
+// - feat: support LsCached (semantics? a) per recorded in chunks or b) w/ respect to local data)
+// - feat: support listing jobs that currently rely-on/reuse:
+//   - npgCtx.nextPageR() (bucket summary)
+//   - npgCtx.nextPageA() (all list-range jobs: prefetch, evict, transform-copy-objs, etc.)
+// - returned errors: unify; add details
 
 type nbiCtx struct {
 	bck   *meta.Bck
@@ -107,7 +109,7 @@ func (nbi *nbiCtx) cleanup() {
 func (nbi *nbiCtx) readChunk() error {
 	chunk, err := nbi.ufest.GetChunk(nbi.chunkNum)
 	if err != nil {
-		return nbi.emit(err) // TODO -- FIXME: add more details, here and elsewhere
+		return nbi.emit(err)
 	}
 
 	fh, err := os.Open(chunk.Path())
@@ -175,26 +177,24 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	lst.Entries = lst.Entries[:0]
 	lst.ContinuationToken = ""
 
-	pageSize := cos.NonZero(msg.PageSize, apc.MaxPageSizeAIS) // (not taking bucket's - native backend override)
-
 	if msg.ContinuationToken != "" {
-		saveNum := nbi.chunkNum
-		if err := nbi.parseContToken(msg.ContinuationToken); err != nil {
+		if err := nbi.seekAfter(msg.ContinuationToken); err != nil {
 			return err
 		}
-		if saveNum != nbi.chunkNum {
-			if err := nbi.readChunk(); err != nil {
-				return err
-			}
+		if nbi.chunkNum > nbi.ufest.Count() {
+			// no more chunks - we are done
+			return nil
 		}
 	}
 
+	pageSize := cos.NonZero(msg.PageSize, apc.MaxPageSizeAIS) // (not taking bucket's - native backend override)
 	for len(lst.Entries) < int(pageSize) {
 		// next chunk
 		if nbi.nidx >= len(nbi.entries) {
-			// TODO: rather than crossing chunk boundary, currently returning a partially filled page
-			if len(lst.Entries) > 0 {
-				break
+			// clone entries from the current (soon previous)  chunk
+			for i, e := range lst.Entries {
+				cp := *e
+				lst.Entries[i] = &cp
 			}
 
 			nbi.chunkNum++
@@ -227,8 +227,8 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 			}
 			out := nbi.entries[nbi.nidx]
 			if !strings.HasPrefix(out.Name, msg.Prefix) {
-				// done
-				return nil
+				nbi.skip()
+				continue
 			}
 			nbi.nidx++ // next
 			lst.Entries = append(lst.Entries, out)
@@ -240,51 +240,58 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		lst.Entries = append(lst.Entries, out)
 	}
 
-	if nbi.nidx < len(nbi.entries) || nbi.chunkNum < nbi.ufest.Count() {
-		lst.ContinuationToken = nbi.makeContToken()
+	more := true
+	if nbi.nidx == len(nbi.entries) {
+		nbi.entries = nbi.entries[:0]
+		nbi.nidx = 0
+		more = nbi.chunkNum < nbi.ufest.Count()
 	}
+	if more {
+		lst.ContinuationToken = lst.Entries[len(lst.Entries)-1].Name
+		debug.Assert(lst.ContinuationToken != "")
+	}
+
 	return nil
 }
 
 //
-// helpers: (nbi.chunkNum, nbi.nidx) to/from continuation-token
+// cont. token helpers
 //
 
-const tokenBufLen = 1 + cos.SizeofI32 + cos.SizeofI32
+func (nbi *nbiCtx) seekAfter(token string) error {
+	debug.Assert(token != "")
 
-func (nbi *nbiCtx) makeContToken() string {
-	debug.Assert(nbi.chunkNum > 0 && nbi.chunkNum <= core.MaxChunkCount)
-	debug.Assert(nbi.nidx >= 0 && nbi.nidx < apc.MaxInvEntriesPerChunk)
-
-	var buf [tokenBufLen]byte
-	buf[0] = nbiMetaVer
-	off := 1
-	binary.BigEndian.PutUint32(buf[off:], uint32(nbi.chunkNum))
-	off += cos.SizeofI32
-	binary.BigEndian.PutUint32(buf[off:], uint32(nbi.nidx))
-
-	return base64.RawURLEncoding.EncodeToString(buf[:])
-}
-
-func (nbi *nbiCtx) parseContToken(tok string) error {
-	debug.Assert(tok != "")
-	decoded, err := base64.RawURLEncoding.DecodeString(tok)
-	if err != nil {
-		return nbi.emit(err)
+	// fast path: search current chunk
+	if len(nbi.entries) > 0 && token < nbi.hdr.last {
+		i := sort.Search(len(nbi.entries), func(i int) bool {
+			return nbi.entries[i].Name > token
+		})
+		if i < len(nbi.entries) {
+			nbi.nidx = i
+			return nil
+		}
 	}
-	if len(decoded) != tokenBufLen {
-		err := fmt.Errorf("invalid continuation-token length: %d vs %d (expected)", len(decoded), tokenBufLen)
-		return nbi.emit(err)
-	}
-	if decoded[0] != nbiMetaVer {
-		err := fmt.Errorf("unsupported continuation-token meta-version: %d vs %d (expected)", decoded[0], nbiMetaVer)
-		return nbi.emit(err)
-	}
-	nbi.chunkNum = int(binary.BigEndian.Uint32(decoded[1:]))
-	nbi.nidx = int(binary.BigEndian.Uint32(decoded[1+4:]))
 
-	debug.Assert(nbi.chunkNum > 0 && nbi.chunkNum <= core.MaxChunkCount)
-	debug.Assert(nbi.nidx >= 0 && nbi.nidx < apc.MaxInvEntriesPerChunk)
-
-	return nil
+	// token is >= current chunk's last item, move forward until we find
+	// the first chunk whose range may contain something > token
+	for {
+		nbi.chunkNum++
+		if nbi.chunkNum > nbi.ufest.Count() {
+			// Canonical EOF state: exhausted.
+			nbi.nidx = 0
+			nbi.entries = nbi.entries[:0]
+			return nil
+		}
+		if err := nbi.readChunk(); err != nil {
+			return err
+		}
+		if len(nbi.entries) == 0 || nbi.hdr.last <= token {
+			continue
+		}
+		i := sort.Search(len(nbi.entries), func(i int) bool { return nbi.entries[i].Name > token })
+		if i < len(nbi.entries) {
+			nbi.nidx = i
+			return nil
+		}
+	}
 }

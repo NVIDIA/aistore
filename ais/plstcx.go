@@ -124,6 +124,7 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 	}
 
 	if listRemote {
+		// R-flow
 		if lsmsg.StartAfter != "" {
 			// TODO: remote AIS first, then Cloud
 			return nil, fmt.Errorf("%s option --start_after (%s) not yet supported for remote buckets (%s)",
@@ -144,37 +145,57 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 		config := cmn.GCO.Get()
 		lst, err = p.lsObjsR(bck, lsmsg, hdr, smap, tsi, config, wantOnlyRemote)
 
-		// TODO: `status == http.StatusGone`: at this point we know that this
+		// TODO `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
 		// cached objects. This isn't easy as we basically need to start a new
 		// xaction and return a new `UUID`.
 	} else {
-		lst, err = p.lsObjsA(bck, lsmsg)
+		// A-flow
+		lst, err = p.lsObjsA(bck, lsmsg, hdr)
 	}
 
 	return lst, err
 }
 
 // list-objects: flow control helper
+// - decide: R-flow or A-flow
+// - designate target for R-flow, etc.
 func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (_ *meta.Snode, listRemote, wantOnlyRemote bool, _ error) {
-	if !bck.IsRemote() {
-		if lsmsg.IsFlagSet(apc.LsNotCached) {
-			return nil, false, false, fmt.Errorf("%s is not a remote bucket - cannot list 'not cached' objects", bck.Cname(""))
-		}
-		return nil, false, false, nil
+	switch {
+	case lsmsg.IsFlagSet(apc.LsNBI):
+		return p._lsofcNBI(bck, lsmsg)
+	case !bck.IsRemote() || lsmsg.IsFlagSet(apc.LsCached):
+		return p._lsofcInCluster(bck, lsmsg)
+	default:
+		return p._lsofcRemote(bck, lsmsg, smap)
 	}
+}
 
-	listRemote = !lsmsg.IsFlagSet(apc.LsCached)
-	if !listRemote {
-		return nil, false, false, nil
+func (*proxy) _lsofcNBI(bck *meta.Bck, lsmsg *apc.LsoMsg) (_ *meta.Snode, listRemote, wantOnlyRemote bool, _ error) {
+	if err := lsmsg.ValidateNBI(); err != nil {
+		e := fmt.Errorf("%s: the request to list via native bucket inventory has invalid or unsupported flags: %v",
+			bck.Cname(""), err)
+		return nil, false, false, e
 	}
+	// NBI is always A-flow: each target enumerates its local inventory chunks,
+	// proxy merges and paginates the result.
+	return nil, false, false, nil
+}
 
-	// --- list remote bucket ---
+func (*proxy) _lsofcInCluster(bck *meta.Bck, lsmsg *apc.LsoMsg) (_ *meta.Snode, listRemote, wantOnlyRemote bool, _ error) {
+	if lsmsg.IsFlagSet(apc.LsNotCached) {
+		return nil, false, false, fmt.Errorf("%s is not a remote bucket - cannot list 'not cached' objects", bck.Cname(""))
+	}
+	return nil, false, false, nil
+}
 
+func (p *proxy) _lsofcRemote(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (_ *meta.Snode, listRemote, wantOnlyRemote bool, _ error) {
+	debug.Assert(bck.IsRemote())
+	debug.Assert(!lsmsg.IsFlagSet(apc.LsCached))
+
+	// remote bucket outside cluster (not in BMD) that hasn't been added ("on the fly") by the caller
+	// (lsmsg flag below)
 	if bck.Props.BID == 0 {
-		// remote bucket outside cluster (not in BMD) that hasn't been added ("on the fly") by the caller
-		// (lsmsg flag below)
-		debug.Assert(bck.IsRemote())
 		debug.Assert(lsmsg.IsFlagSet(apc.LsDontAddRemote))
 		wantOnlyRemote = true
 		if !lsmsg.WantOnlyRemoteProps() {
@@ -183,30 +204,12 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (_ *meta.S
 			return nil, true, true, err
 		}
 	} else {
-		// default
 		wantOnlyRemote = lsmsg.WantOnlyRemoteProps()
 	}
 
 	// check previously designated target vs Smap
 	if lsmsg.SID != "" {
-		var (
-			err error
-			tsi = smap.GetTarget(lsmsg.SID)
-		)
-		if tsi == nil || tsi.InMaintOrDecomm() {
-			err = &errNodeNotFound{p.si, smap, lsotag + " failure:", lsmsg.SID}
-			nlog.Errorln(err)
-			if smap.CountActiveTs() == 1 {
-				// (walk an extra mile)
-				orig := err
-				tsi, err = smap.HrwTargetTask(lsmsg.UUID)
-				if err == nil {
-					nlog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, tsi)
-					lsmsg.SID = tsi.ID()
-				}
-			}
-		}
-		return tsi, true, wantOnlyRemote, err
+		return p._lsofcSID(lsmsg, smap, wantOnlyRemote)
 	}
 
 	// designate one target to carry-out backend.list-objects
@@ -218,10 +221,31 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (_ *meta.S
 	return tsi, true, wantOnlyRemote, err
 }
 
-// lsObjsA reads object list from all targets, combines, sorts and returns
-// the final list. Excess of object entries from each target is remembered in the
-// buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRes, err error) {
+func (p *proxy) _lsofcSID(lsmsg *apc.LsoMsg, smap *smapX, wantOnlyRemote bool) (_ *meta.Snode, listRemote, _ bool, _ error) {
+	var (
+		err error
+		tsi = smap.GetTarget(lsmsg.SID)
+	)
+	if tsi == nil || tsi.InMaintOrDecomm() {
+		err = &errNodeNotFound{p.si, smap, lsotag + " failure:", lsmsg.SID}
+		nlog.Errorln(err)
+		if smap.CountActiveTs() == 1 {
+			// (walk an extra mile)
+			orig := err
+			tsi, err = smap.HrwTargetTask(lsmsg.UUID)
+			if err == nil {
+				nlog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, tsi)
+				lsmsg.SID = tsi.ID()
+			}
+		}
+	}
+	return tsi, true, wantOnlyRemote, err
+}
+
+// A-flow:
+// - bcast list-objects to all targets;
+// - combine, sort and return a merged and sorted result
+func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header) (allEntries *cmn.LsoRes, err error) {
 	var (
 		actMsgExt *actMsgExt
 		args      *bcastArgs
@@ -237,6 +261,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
+		Header: hdr,
 		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(actMsgExt),
 	}
@@ -269,6 +294,11 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	return page, nil
 }
 
+// R-flow:
+//   - call designated target to list remote source;
+//   - when wantOnlyRemote: just return the next page
+//   - otherwise, use intra-cluster streams to share the latter
+//     for subsequent local filtering and adding local metadata (`filterAddLmeta`)
 func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, tsi *meta.Snode, config *cmn.Config,
 	wantOnlyRemote bool) (*cmn.LsoRes, error) {
 	var (
@@ -277,8 +307,9 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		args      = allocBcArgs()
 		timeout   = config.Client.ListObjTimeout.D()
 	)
+
+	// Deprecated: remove by April-May 2026 (use NBI instead)
 	if cos.IsParseBool(hdr.Get(apc.HdrInventory)) {
-		// TODO: extend to other Clouds or, more precisely, other list-objects supporting backends
 		if !bck.IsRemoteS3() {
 			return nil, cmn.NewErrUnsupp("list (via bucket inventory) non-S3 bucket", bck.Cname(""))
 		}
@@ -297,6 +328,7 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 			timeout = config.Client.TimeoutLong.D()
 		}
 	}
+
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
