@@ -10,6 +10,17 @@ import (
 	"github.com/lufia/iostat"
 )
 
+// cpuTracker stub for Darwin: no cgroup/proc stat
+type cpuTracker struct{}
+
+var dflTracker = &cpuTracker{}
+
+func (*cpuTracker) utilPct() (float64, error) {
+	return 0, errors.New("darwin: no cpu tracker")
+}
+
+func (*cpuTracker) throttlePct() float64 { return 0 }
+
 // Containerized returns true if the application is running
 // inside a container(docker/lxc/k8s)
 func isContainerized() bool { return false }
