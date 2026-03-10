@@ -96,6 +96,7 @@ var (
 			showCmdLog,
 			showTLS,
 			makeAlias(&showCmdETL, &mkaliasOpts{newName: commandETL}),
+			makeAlias(&cmdShowNBI, &mkaliasOpts{newName: commandNBI}),
 		},
 	}
 

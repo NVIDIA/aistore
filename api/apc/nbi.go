@@ -32,6 +32,7 @@ type (
 	}
 
 	NBIInfo struct {
+		Bucket   string `json:"bucket"`
 		Name     string `json:"name"`
 		ObjName  string `json:"obj_name"`
 		Prefix   string `json:"prefix,omitempty"`

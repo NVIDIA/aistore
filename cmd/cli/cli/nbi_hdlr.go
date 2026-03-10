@@ -244,27 +244,29 @@ func showNBIHandler(c *cli.Context) error {
 	}
 
 	if len(infos) == 0 {
-		var s string
-		if invName != "" {
-			s = fmt.Sprintf(" '%s'", invName)
+		switch {
+		case bck.IsEmpty() && invName == "":
+			fmt.Fprintln(c.App.Writer, "No bucket inventories in the cluster")
+		case bck.IsEmpty() && invName != "":
+			fmt.Fprintf(c.App.Writer, "No inventory named %q in the cluster\n", invName)
+		case invName == "":
+			fmt.Fprintln(c.App.Writer, "No inventories for", bck.Cname(""))
+		default:
+			fmt.Fprintf(c.App.Writer, "No inventory named %q for %s\n", invName, bck.Cname(""))
 		}
-		fmt.Fprintf(c.App.Writer, "No inventories%s for %s\n", s, bck.Cname(""))
 		return nil
 	}
 
-	// show table
-	type extInfo struct {
-		apc.NBIInfo
-		Bucket string
-	}
-	lst := make([]*extInfo, 0, len(infos))
+	lst := make([]*apc.NBIInfo, 0, len(infos))
 	for _, v := range infos {
-		var ext extInfo
-		ext.NBIInfo = *v
-		ext.Bucket = bck.Cname("")
-		lst = append(lst, &ext)
+		lst = append(lst, v)
 	}
-	sort.Slice(lst, func(i, j int) bool { return lst[i].Name < lst[j].Name })
+	sort.Slice(lst, func(i, j int) bool {
+		if lst[i].Bucket == lst[j].Bucket {
+			return lst[i].Name < lst[j].Name
+		}
+		return lst[i].Bucket < lst[j].Bucket
+	})
 
 	if flagIsSet(c, verboseFlag) {
 		return teb.Print(lst, teb.NBITmplVerbose)

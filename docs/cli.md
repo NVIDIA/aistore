@@ -8,13 +8,12 @@ The entire (diverse and growing) command set is partitioned into top-level _name
 ```console
 $ ais <TAB-TAB>
 
-advanced         config           get              object           scrub            tls
-alias            cp               help             performance      search           wait
-archive          create           job              prefetch         show
-auth             download         log              put              space-cleanup
-blob-download    dsort            ls               remote-cluster   start
-bucket           etl              ml               rmb              stop
-cluster          evict            mpu              rmo              storage
+advanced         cluster          etl              ls               prefetch         search           tls
+alias            config           evict            ml               put              show             wait
+archive          cp               get              mpu              remote-cluster   space-cleanup
+auth             create           help             nbi              rmb              start
+blob-download    download         job              object           rmo              stop
+bucket           dsort            log              performance      scrub            storage
 ```
 
 ### CLI namespaces
@@ -35,8 +34,8 @@ p[DlPmJiRU]      0.01%           366.36GiB       [0.1 0.3 0.3]   526h28m20s     
 p[JedAkLgG][P]   0.02%           366.52GiB       [0.7 0.3 0.3]   526h27m30s      ais-proxy-7     online
 ...
 
-TARGET         MEM USED(%)     MEM AVAIL     CAP USED(%)   CAP AVAIL     LOAD AVERAGE    REBALANCE     UPTIME        K8s POD         STATUS
-t[KoplySra]    0.03%           366.37GiB     52%           8.324TiB      [0.1 0.3 0.3]   -             526h26m10s    ais-target-1    online
+TARGET         MEM USED(%)  MEM AVAIL  CAP USED(%)   CAP AVAIL  LOAD AVERAGE    REBALANCE  UPTIME       K8s POD       STATUS
+t[KoplySra]    0.03%        366.37GiB  52%           8.324TiB   [0.1 0.3 0.3]   -          526h26m10s   ais-target-1  online
 ...
 
 Summary:

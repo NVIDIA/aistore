@@ -35,10 +35,11 @@ type nbiJogger struct {
 	mi     *Mountpath
 	wg     *sync.WaitGroup
 	mu     *sync.Mutex
-	found  apc.NBIInfoMap
 	errCh  chan<- error
-	dir    string
-	prefix string // bck.MakeUname("")
+	out    apc.NBIInfoMap // result: shared map
+	prefix string         // bck.MakeUname("")
+	dir    string         // mi.makePath
+	cname  string         // bck.Cname("")
 }
 
 func CollectNBI(bck *cmn.Bck) (apc.NBIInfoMap, error) {
@@ -46,7 +47,8 @@ func CollectNBI(bck *cmn.Bck) (apc.NBIInfoMap, error) {
 		avail  = GetAvail()
 		sysBck = meta.SysBckNBI().Bucket()
 		prefix = string(bck.MakeUname(""))
-		found  = make(apc.NBIInfoMap, 1)
+		cname  = bck.Cname("")
+		out    = make(apc.NBIInfoMap, 1)
 		mu     sync.Mutex
 		errCh  = make(chan error, len(avail))
 		wg     sync.WaitGroup
@@ -56,12 +58,13 @@ func CollectNBI(bck *cmn.Bck) (apc.NBIInfoMap, error) {
 		wg.Add(1)
 		j := &nbiJogger{
 			mi:     mi,
-			dir:    mi.makePathCTPrefix(sysBck, ObjCT, prefix),
-			found:  found,
+			out:    out,
 			mu:     &mu,
 			errCh:  errCh,
 			wg:     &wg,
 			prefix: prefix,
+			dir:    mi.makePathCTPrefix(sysBck, ObjCT, prefix),
+			cname:  cname,
 		}
 		go j.run()
 	}
@@ -72,10 +75,10 @@ func CollectNBI(bck *cmn.Bck) (apc.NBIInfoMap, error) {
 	for err := range errCh {
 		return nil, err
 	}
-	if len(found) == 0 {
+	if len(out) == 0 {
 		return nil, nil
 	}
-	return found, nil
+	return out, nil
 }
 
 func (j *nbiJogger) run() {
@@ -110,6 +113,7 @@ func (j *nbiJogger) run() {
 		}
 
 		info := &apc.NBIInfo{
+			Bucket:  j.cname,
 			Name:    name,
 			ObjName: filepath.Join(j.prefix, name),
 			Size:    fi.Size(),
@@ -123,7 +127,7 @@ func (j *nbiJogger) run() {
 		}
 
 		j.mu.Lock()
-		j.found[name] = info
+		j.out[info.ObjName] = info
 		j.mu.Unlock()
 	}
 }

@@ -8,19 +8,38 @@ The command is a "hub" for all information-viewing commands that are currently s
 $ ais show --help
 
 COMMANDS:
-   auth            show entity in authn
-   object          show object properties
-   bucket          show bucket properties
+$ ais show --help
+
+NAME:
+   ais show - Show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself
+
+USAGE:
+   ais show command [arguments...]  [command options]
+
+COMMANDS:
+   auth            Show entity in authn
+   object          Show object properties
+   bucket          Show bucket properties
    cluster         Show cluster: health, version and build, and nodes (including capacity and memory, load averages and alerts)
-   dashboard       show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more
-   performance     show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
-   storage         show storage usage and utilization, disks and mountpaths
+   dashboard       Show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more
+   performance     Show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
+   storage         Show storage usage and utilization, disks and mountpaths
    rebalance       show rebalance status and stats
-   config          show CLI, cluster, or node configurations (nodes inherit cluster and have local)
-   remote-cluster  show attached AIS clusters
-   job             show running and finished jobs ('--all' for all, or press <TAB-TAB> to select, '--help' for more options)
-   log             for a given node: show its current log (use '--refresh' to update, '--help' for details)
-   tls             show TLS certificate: version, issuer's common name, from/to validity bounds
+   config          Show CLI, cluster, or node configurations (nodes inherit cluster and have local)
+   remote-cluster  Show attached remote AIS clusters
+   remote          Show remote cluster information and statistics
+
+   job      Show running and/or finished jobs:
+            archive              blob-download  cleanup     copy-bucket   copy-objects   create-inventory
+            delete-objects       download       dsort       ec-bucket     ec-get         ec-put
+            ec-resp              elect-primary  etl-bucket  etl-inline    etl-objects    evict-objects
+            evict-remote-bucket  get-batch      list        lru-eviction  mirror         prefetch-objects
+            promote-files        put-copies     rebalance   rechunk       rename-bucket  resilver
+            summary              warm-up-metadata
+
+   tls  Show TLS certificate's version, issuer's common name, from/to validity bounds
+   etl  Show ETL(s)
+   nbi  Show bucket inventory
 ```
 
 For easy usage, all `show` commands have been aliased to their respective top-level counterparts:
@@ -48,8 +67,9 @@ As far as `ais show`, the command currently extends as follows:
 ```console
 $ ais show <TAB-TAB>
 
-auth             bucket           performance      rebalance        remote-cluster   log
-object           cluster          dashboard        storage          config           job              tls
+auth             cluster          storage          remote-cluster   log              nbi
+object           dashboard        rebalance        remote           tls
+bucket           performance      config           job              etl
 ```
 
 In other words, there are currently 12 subcommands that are briefly described in the rest of this text.
