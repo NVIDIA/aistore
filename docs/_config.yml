@@ -1,5 +1,7 @@
 title: AIStore
 name: AIStore - scalable storage for AI applications
+url: "https://aistore.nvidia.com"
+lang: en
 markdown: kramdown
 kramdown:
   input: GFM
@@ -15,6 +17,12 @@ description: >
   AIStore is a lightweight object storage system with the capability to linearly
   scale-out with each added storage node and a special focus on petascale deep learning.
   See more at: github.com/NVIDIA/aistore
+author:
+  name: NVIDIA AIStore Team
+social:
+  name: NVIDIA AIStore
+  links:
+    - https://github.com/NVIDIA/aistore
 theme: minima
 header_pages:
   - blog.md
@@ -23,6 +31,9 @@ header_pages:
 include:
   - _pages/
   - assets/
+  - robots.txt
+  - llms.txt
+  - _headers
 exclude:
   - .sass-cache/
   - .jekyll-cache/
@@ -34,3 +45,5 @@ exclude:
 plugins:
   - jekyll-redirect-from
   - jekyll-relative-links
+  - jekyll-seo-tag
+  - jekyll-sitemap

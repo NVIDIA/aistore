@@ -1,6 +1,7 @@
 ---
 layout: post
 title: DOCUMENTATION
+description: "Complete AIStore documentation: architecture, CLI, Python SDK, HTTP API, ETL, deployment, and configuration guides."
 permalink: /docs
 redirect_from:
  - /docs.md/

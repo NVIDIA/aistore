@@ -1,6 +1,7 @@
 ---
 layout: post
 title: AIStore - scalable storage for AI applications
+description: "AIStore is a lightweight distributed object storage by NVIDIA for AI workloads with multi-cloud access and linear scalability."
 permalink: /
 redirect_from:
  - /index.md/

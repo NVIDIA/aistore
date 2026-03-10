@@ -1,0 +1,49 @@
+# AIStore
+
+> AIStore (AIS) is a lightweight, open-source distributed object storage system by NVIDIA designed for AI/ML workloads. It provides multi-cloud unified access (AWS S3, GCS, Azure, OCI), linear scalability, high-performance I/O with no routing overhead, and AI-optimized features including sharding, ETL, batch operations, and PyTorch/TensorFlow integration.
+
+## Documentation
+
+- [Getting Started](https://aistore.nvidia.com/docs/getting_started): Deploy AIStore from single machine to bare-metal cluster
+- [Architecture Overview](https://aistore.nvidia.com/docs/overview): Proxy nodes, target nodes, distributed metadata consensus
+- [Buckets](https://aistore.nvidia.com/docs/bucket): Data organization — native (ais://) and remote (s3://, gs://, az://, oc://) buckets
+- [S3 Compatibility](https://aistore.nvidia.com/docs/s3compat): Amazon S3 API support — backend and frontend modes
+- [ETL](https://aistore.nvidia.com/docs/etl): Extract, Transform, Load — run transforms on storage nodes alongside data
+- [Batch Operations](https://aistore.nvidia.com/docs/batch): 30+ async operations — rebalance, prefetch, copy, transform, and more
+- [Performance Tuning](https://aistore.nvidia.com/docs/performance): CPU, network, filesystem, and kernel optimization guide
+- [CLI Reference](https://aistore.nvidia.com/docs/cli): Command-line interface for all AIStore operations
+- [HTTP API Reference](https://aistore.nvidia.com/docs/http_api): Complete RESTful API for cluster, bucket, object, and job operations
+- [Python SDK](https://aistore.nvidia.com/docs/python-sdk): Python client for bucket/object ops, ETL, and framework integrations
+- [PyTorch Integration](https://aistore.nvidia.com/docs/pytorch): Custom datasets and dataloaders for AI training pipelines
+- [Configuration](https://aistore.nvidia.com/docs/configuration): Cluster-wide and per-node settings
+- [High Availability](https://aistore.nvidia.com/docs/ha): Resilience, mirroring, erasure coding, and self-healing
+- [Monitoring](https://aistore.nvidia.com/docs/monitoring-overview): Prometheus metrics, Grafana dashboards, CLI, and logging
+- [Backend Providers](https://aistore.nvidia.com/docs/providers): AWS S3, Google Cloud, Azure, OCI, HDFS access
+
+## APIs
+
+- **Go client API**: [github.com/NVIDIA/aistore/api](https://github.com/NVIDIA/aistore/tree/main/api) — native Go client with full cluster management
+- **Python SDK**: [pypi.org/project/aistore](https://pypi.org/project/aistore/) — `pip install aistore`
+- **S3-compatible endpoint**: `http(s)://<gateway-ip>:<port>/s3/<bucket>/<object>` — drop-in S3 replacement
+- **HTTP RESTful API**: [aistore.nvidia.com/docs/http_api](https://aistore.nvidia.com/docs/http_api) — full REST reference with OpenAPI spec
+
+## Key Concepts
+
+- **Proxy nodes (gateways)**: Stateless HTTP(S) entry points that route client requests; any proxy can serve any request
+- **Target nodes (storage)**: Data nodes that store objects on local drives and execute ETL transforms alongside data
+- **Buckets**: Named containers for objects — native `ais://` buckets or remote cloud buckets (`s3://`, `gs://`, `az://`, `oc://`)
+- **Xactions**: Asynchronous batch operations (rebalance, prefetch, copy, ETL, download, etc.) that run across the cluster
+- **ETL**: User-defined data transformations that run on target nodes, minimizing data movement
+- **LOM (Local Object Metadata)**: Per-object metadata on each target node — checksum, version, size, copies
+- **BMD (Bucket Metadata)**: Cluster-wide bucket registry with properties, versioned and replicated
+- **Smap (Cluster Map)**: Current cluster membership (proxy + target nodes), versioned and distributed
+
+## Optional
+
+- [Distributed Sort (dSort)](https://aistore.nvidia.com/docs/dsort): Reshard and shuffle massive datasets
+- [Blob Downloader](https://aistore.nvidia.com/docs/blob_downloader): Chunked parallel downloads of large remote objects
+- [Get-Batch](https://aistore.nvidia.com/docs/get_batch): Bulk object retrieval for training data pipelines
+- [Networking](https://aistore.nvidia.com/docs/networking): Multi-homing, network separation, IPv6
+- [Authentication](https://aistore.nvidia.com/docs/authn): AuthN server for user/token management
+- [Environment Variables](https://aistore.nvidia.com/docs/environment-vars): Runtime configuration reference
+- [Troubleshooting](https://aistore.nvidia.com/docs/troubleshooting): Diagnostics and common solutions

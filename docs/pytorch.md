@@ -1,6 +1,7 @@
 ---
 layout: post
-title: PYTORCH
+title: PyTorch Integration
+description: "AIStore PyTorch integration with custom datasets and dataloaders for efficient AI training data pipelines."
 permalink: /docs/pytorch
 redirect_from:
  - /pytorch.md/

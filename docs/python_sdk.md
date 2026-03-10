@@ -1,6 +1,7 @@
 ---
 layout: post
-title: PYTHON SDK
+title: Python SDK
+description: "AIStore Python SDK for bucket and object operations, ETL management, and integration with PyTorch and other ML frameworks."
 permalink: /docs/python-sdk
 redirect_from:
  - /python_sdk.md/
