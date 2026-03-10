@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/sys"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -253,4 +254,32 @@ func parseLhotseBatchFlags(c *cli.Context) (batchSize int, pt *cos.ParsedTemplat
 		return 0, nil, err
 	}
 	return batchSize, pt, nil
+}
+
+func parseExtFlag(c *cli.Context, ext *cos.StrKVs) error {
+	if !flagIsSet(c, etlExtFlag) {
+		return nil
+	}
+	mapStr := parseStrFlag(c, etlExtFlag)
+	extMap := make(cos.StrKVs, 1)
+	err := jsoniter.UnmarshalFromString(mapStr, &extMap)
+	if err != nil {
+		// The flag accepts a shell-friendly, quote-free syntax (e.g. {jpg:txt})
+		// that is not valid JSON. Attempt to normalise it into proper JSON by
+		// wrapping every key and value token in double-quotes before retrying.
+		tmp := strings.ReplaceAll(mapStr, " ", "")
+		tmp = strings.ReplaceAll(tmp, "{", "{\"")
+		tmp = strings.ReplaceAll(tmp, "}", "\"}")
+		tmp = strings.ReplaceAll(tmp, ":", "\":\"")
+		tmp = strings.ReplaceAll(tmp, ",", "\",\"")
+		if jsoniter.UnmarshalFromString(tmp, &extMap) == nil {
+			err = nil
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("invalid format --%s=%q. Usage examples: {jpg:txt}, \"{in1:out1,in2:out2}\"",
+			etlExtFlag.GetName(), mapStr)
+	}
+	*ext = extMap
+	return nil
 }

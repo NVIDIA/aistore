@@ -90,6 +90,9 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		if flagIsSet(c, numWorkersFlag) {
 			msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
 		}
+		if err := parseExtFlag(c, &msg.Ext); err != nil {
+			return err
+		}
 	}
 	// 3. start copying/transforming
 	var (

@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -316,26 +315,8 @@ func etlBucket(c *cli.Context, etlNameOrPipeline string, bckFrom, bckTo cmn.Bck)
 	if err := _iniTCBMsg(c, &msg); err != nil {
 		return err
 	}
-	if flagIsSet(c, etlExtFlag) {
-		mapStr := parseStrFlag(c, etlExtFlag)
-		extMap := make(cos.StrKVs, 1)
-		err := jsoniter.UnmarshalFromString(mapStr, &extMap)
-		if err != nil {
-			// add quotation marks and reparse
-			tmp := strings.ReplaceAll(mapStr, " ", "")
-			tmp = strings.ReplaceAll(tmp, "{", "{\"")
-			tmp = strings.ReplaceAll(tmp, "}", "\"}")
-			tmp = strings.ReplaceAll(tmp, ":", "\":\"")
-			tmp = strings.ReplaceAll(tmp, ",", "\",\"")
-			if jsoniter.UnmarshalFromString(tmp, &extMap) == nil {
-				err = nil
-			}
-		}
-		if err != nil {
-			return fmt.Errorf("invalid format --%s=%q. Usage examples: {jpg:txt}, \"{in1:out1,in2:out2}\"",
-				etlExtFlag.GetName(), mapStr)
-		}
-		msg.Ext = extMap
+	if err := parseExtFlag(c, &msg.Ext); err != nil {
+		return err
 	}
 
 	// by default, copying objects in the cluster, with an option to override
