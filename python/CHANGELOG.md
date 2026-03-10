@@ -9,6 +9,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Added
 
 - ETL `FastAPIServer`: configure `AsyncHTTPTransport` with retries to recover from transient connect errors (e.g. DNS `EAI_AGAIN`, connection reset). Tunable via `AIS_DIRECT_PUT_RETRIES` (default 3).
+- ETL base class: add `transform_stream(reader, path, etl_args) -> Iterator[bytes]` as a streaming alternative to the buffered `transform()`. Subclasses override one or the other; the base class auto-detects which is implemented. Enables constant-memory transforms for workloads that produce output incrementally.
 
 ## [1.21.1] - 2026-03-05
 

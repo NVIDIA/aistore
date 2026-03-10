@@ -703,15 +703,17 @@ class TestBaseEnforcement(unittest.TestCase):
         self.assertIn("AIS_TARGET_URL", str(context.exception))
 
     def test_http_multithreaded_server_without_transform(self):
-        if "AIS_TARGET_URL" in os.environ:
-            del os.environ["AIS_TARGET_URL"]
+        os.environ["AIS_TARGET_URL"] = "http://localhost"
 
         class IncompleteETLServer(HTTPMultiThreadedServer):
             pass
 
         with self.assertRaises(TypeError) as context:
-            IncompleteETLServer()  # pylint: disable=abstract-class-instantiated
-        self.assertIn("Can't instantiate abstract class", str(context.exception))
+            IncompleteETLServer()
+        self.assertIn(
+            "must override either transform() or transform_stream()",
+            str(context.exception),
+        )
 
     def test_fastapi_server_without_transform(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost"
@@ -720,8 +722,11 @@ class TestBaseEnforcement(unittest.TestCase):
             pass
 
         with self.assertRaises(TypeError) as context:
-            IncompleteFastAPIServer()  # pylint: disable=abstract-class-instantiated
-        self.assertIn("Can't instantiate abstract class", str(context.exception))
+            IncompleteFastAPIServer()
+        self.assertIn(
+            "must override either transform() or transform_stream()",
+            str(context.exception),
+        )
 
     def test_flask_server_without_transform(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost"
@@ -730,8 +735,11 @@ class TestBaseEnforcement(unittest.TestCase):
             pass
 
         with self.assertRaises(TypeError) as context:
-            IncompleteFlaskServer()  # pylint: disable=abstract-class-instantiated
-        self.assertIn("Can't instantiate abstract class", str(context.exception))
+            IncompleteFlaskServer()
+        self.assertIn(
+            "must override either transform() or transform_stream()",
+            str(context.exception),
+        )
 
 
 class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):

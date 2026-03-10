@@ -7,7 +7,7 @@ import sys
 import logging
 import resource
 from abc import ABC, abstractmethod
-from typing import Tuple, Union
+from typing import BinaryIO, Iterator, Tuple, Union
 from urllib.parse import unquote
 import requests
 from aistore.sdk.const import (
@@ -79,6 +79,16 @@ class ETLServer(ABC):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
 
+        # Detect whether the subclass overrides transform_stream (streaming)
+        # or transform (buffered). If both are overridden, transform wins.
+        has_transform = type(self).transform is not ETLServer.transform
+        has_stream = type(self).transform_stream is not ETLServer.transform_stream
+        if not has_transform and not has_stream:
+            raise TypeError(
+                f"{type(self).__name__} must override either transform() or transform_stream()"
+            )
+        self.use_streaming = has_stream and not has_transform
+
     def _build_session(self) -> requests.Session:
         """Build a requests.Session by delegating SSL/cert config to SessionManager."""
         session = SessionManager().session
@@ -86,10 +96,12 @@ class ETLServer(ABC):
             session.headers.update({HEADER_AUTHORIZATION: f"Bearer {self.token}"})
         return session
 
-    @abstractmethod
     def transform(self, data: Union[bytes, str], path: str, etl_args: str) -> bytes:
         """
-        Transform the data received from a request.
+        Transform the data received from a request (buffered mode).
+
+        Override this OR `transform_stream` in your subclass. If both are
+        overridden, `transform` takes priority (backward compatibility).
 
         Args:
             data (Union[bytes, str]): Object bytes by default. When
@@ -103,6 +115,51 @@ class ETLServer(ABC):
         Returns:
             bytes: Transformed data to return to the caller.
         """
+        raise NotImplementedError(
+            "Subclass must override either transform() or transform_stream()"
+        )
+
+    def transform_stream(
+        self, reader: BinaryIO, path: str, etl_args: str
+    ) -> Iterator[bytes]:
+        """
+        Transform data in streaming mode — constant memory usage.
+
+        Override this OR `transform` in your subclass. If both are
+        overridden, `transform` takes priority (backward compatibility).
+
+        The method receives a file-like input (`reader`) and yields output
+        chunks as they become available. This avoids buffering the entire
+        object in memory.
+
+        Args:
+            reader (BinaryIO): File-like object for reading input data.
+            path (str): The object path (e.g. `"bucket/object-name"`).
+            etl_args (str): Optional per-request arguments.
+
+        Yields:
+            bytes: Chunks of transformed data.
+        """
+        raise NotImplementedError(
+            "Subclass must override either transform() or transform_stream()"
+        )
+
+    @staticmethod
+    def close_reader(reader):
+        """Close a BinaryIO reader if it has a close method."""
+        if hasattr(reader, "close"):
+            try:
+                reader.close()
+            except Exception:  # pylint: disable=broad-except
+                pass
+
+    @staticmethod
+    def iter_and_close(output_iter: Iterator[bytes], reader) -> Iterator[bytes]:
+        """Yield from output_iter and close reader when done."""
+        try:
+            yield from output_iter
+        finally:
+            ETLServer.close_reader(reader)
 
     def sanitize_fqn(self, fqn: str) -> str:
         """Normalize an FQN to a safe absolute path."""
@@ -131,9 +188,20 @@ class ETLServer(ABC):
         return self.session.put(url, data=data, timeout=timeout, headers=headers)
 
     def handle_direct_put_response(
-        self, resp: requests.Response, data: bytes
+        self, resp: requests.Response, data: bytes, data_length: int = -1
     ) -> Tuple[int, bytes, int]:
-        """Handle the response from a direct PUT request."""
+        """Handle the response from a direct PUT request.
+
+        Args:
+            resp: The HTTP response from the direct PUT.
+            data: The original data bytes (used to compute length for the
+                200-OK-empty-content case). Can be `b""` for streaming.
+            data_length: Explicit byte count override. When >= 0, used instead
+                of `len(data)`. Pass this from a `CountingIterator` for
+                streaming pipeline PUTs where `data` is empty.
+        """
+        size = data_length if data_length >= 0 else len(data)
+
         if resp.status_code == STATUS_NO_CONTENT:
             return (
                 resp.status_code,
@@ -145,7 +213,7 @@ class ETLServer(ABC):
             if resp.content:  # from other ETL server, forward the content back
                 return resp.status_code, resp.content, 0
 
-            return STATUS_NO_CONTENT, b"", len(data)  # from target, no content
+            return STATUS_NO_CONTENT, b"", size  # from target, no content
 
         error = resp.content
         self.logger.error(
@@ -155,3 +223,16 @@ class ETLServer(ABC):
             error,
         )
         return resp.status_code, error, 0
+
+
+class CountingIterator:  # pylint: disable=too-few-public-methods
+    """Wraps an iterator of `bytes` chunks to count total bytes yielded."""
+
+    def __init__(self, inner: Iterator[bytes]):
+        self._inner = inner
+        self.bytes_sent = 0
+
+    def __iter__(self) -> Iterator[bytes]:
+        for chunk in self._inner:
+            self.bytes_sent += len(chunk)
+            yield chunk
