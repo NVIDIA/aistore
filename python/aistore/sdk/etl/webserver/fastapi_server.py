@@ -1,11 +1,12 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import os
 import asyncio
+from io import BytesIO
 from urllib.parse import quote
-from typing import Optional, List, Tuple
+from typing import BinaryIO, Iterator, Optional, List, Tuple
 
 from fastapi import (
     FastAPI,
@@ -14,11 +15,12 @@ from fastapi import (
     Response,
     WebSocket,
 )
+from fastapi.responses import StreamingResponse
 import httpx
 import aiofiles
 import uvicorn
 
-from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.etl.webserver.base_etl_server import ETLServer, CountingIterator
 from aistore.sdk.session_manager import resolve_ssl_config
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
@@ -126,62 +128,16 @@ class FastAPIServer(ETLServer):
         await self.client.aclose()
         self.logger.info("Server shutting down")
 
-    # pylint: disable=too-many-locals
     async def _handle_request(self, path: str, request: Request, is_get: bool):
         """Unified request handler for GET/PUT operations."""
         self.logger.debug(
             "Processing %s request for path: %s", "GET" if is_get else "PUT", path
         )
-        etl_args = request.query_params.get(QPARAM_ETL_ARGS, "").strip()
-        fqn = request.query_params.get(QPARAM_ETL_FQN, "").strip()
-        self.logger.debug("etl_args = %r, fqn = %r", etl_args, fqn)
 
         try:
-            if fqn and self.direct_fqn:
-                source = self.sanitize_fqn(fqn)
-            elif fqn:
-                source = await self._get_fqn_content(fqn)
-            elif is_get:
-                source = await self._get_network_content(path)
-            else:
-                source = await request.body()
-
-            # Transform the source (bytes or str)
-            transformed = self.transform(source, path, etl_args)
-
-            # Handle pipeline if present
-            pipeline_header = request.headers.get(HEADER_NODE_URL)
-            self.logger.debug("pipeline_header: %r", pipeline_header)
-            if pipeline_header:
-                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
-                if first_url:
-                    status_code, transformed, direct_put_length = (
-                        await self._direct_put(
-                            first_url, transformed, remaining_pipeline, path
-                        )
-                    )
-                    self.logger.debug("status_code: %r", status_code)
-
-                    return Response(
-                        content=transformed,
-                        status_code=status_code,
-                        headers=(
-                            {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
-                            if direct_put_length != 0
-                            else {}
-                        ),
-                    )
-
-            self.logger.debug(
-                "no pipeline, returning transformed content directly, length: %r",
-                len(transformed),
-            )
-            # No pipeline, return transformed content directly
-            return Response(
-                content=transformed,
-                status_code=STATUS_OK,
-                media_type=self.get_mime_type(),
-            )
+            if self.use_streaming:
+                return await self._handle_request_streaming(path, request, is_get)
+            return await self._handle_request_buffered(path, request, is_get)
 
         except InvalidPipelineError as e:
             self.logger.error("Invalid pipeline header: %s", str(e))
@@ -215,6 +171,143 @@ class FastAPIServer(ETLServer):
             self.logger.exception("Critical error during processing")
             raise HTTPException(500, detail=f"Processing error: {str(e)}") from e
 
+    async def _handle_request_buffered(self, path: str, request: Request, is_get: bool):
+        """Buffered request handler — loads entire object, transforms, returns."""
+        etl_args = request.query_params.get(QPARAM_ETL_ARGS, "").strip()
+        fqn = request.query_params.get(QPARAM_ETL_FQN, "").strip()
+        self.logger.debug("etl_args = %r, fqn = %r", etl_args, fqn)
+
+        if fqn and self.direct_fqn:
+            source = self.sanitize_fqn(fqn)
+        elif fqn:
+            source = await self._get_fqn_content(fqn)
+        elif is_get:
+            source = await self._get_network_content(path)
+        else:
+            source = await request.body()
+
+        transformed = self.transform(source, path, etl_args)
+
+        # TODO: extract common pipeline handling into a shared helper
+        # (currently duplicated between buffered and streaming paths;
+        # deferred because each framework constructs responses differently)
+        pipeline_header = request.headers.get(HEADER_NODE_URL)
+        self.logger.debug("pipeline_header: %r", pipeline_header)
+        if pipeline_header:
+            first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+            if first_url:
+                status_code, transformed, direct_put_length = await self._direct_put(
+                    first_url, transformed, remaining_pipeline, path
+                )
+                self.logger.debug("status_code: %r", status_code)
+
+                return Response(
+                    content=transformed,
+                    status_code=status_code,
+                    headers=(
+                        {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
+                        if direct_put_length != 0
+                        else {}
+                    ),
+                )
+
+        self.logger.debug(
+            "no pipeline, returning transformed content directly, length: %r",
+            len(transformed),
+        )
+        return Response(
+            content=transformed,
+            status_code=STATUS_OK,
+            media_type=self.get_mime_type(),
+        )
+
+    async def _handle_request_streaming(
+        self, path: str, request: Request, is_get: bool
+    ):
+        """Streaming request handler — yields output chunks without buffering."""
+        etl_args = request.query_params.get(QPARAM_ETL_ARGS, "").strip()
+        fqn = request.query_params.get(QPARAM_ETL_FQN, "").strip()
+        self.logger.debug("streaming: etl_args = %r, fqn = %r", etl_args, fqn)
+
+        reader = await self._get_stream_reader(fqn, path, request, is_get)
+        # transform_stream is a sync generator — creating it is instant (no I/O).
+        # StreamingResponse iterates sync iterators in a threadpool automatically,
+        # so the blocking generator body runs off the event loop.
+        output_iter = self.transform_stream(reader, path, etl_args)
+
+        # TODO: extract common pipeline handling into a shared helper
+        pipeline_header = request.headers.get(HEADER_NODE_URL)
+        self.logger.debug("pipeline_header: %r", pipeline_header)
+        if pipeline_header:
+            first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+            if first_url:
+                try:
+                    status_code, resp_data, direct_put_length = (
+                        await self._direct_put_stream(
+                            first_url, output_iter, remaining_pipeline, path
+                        )
+                    )
+                finally:
+                    self.close_reader(reader)
+                return Response(
+                    content=resp_data,
+                    status_code=status_code,
+                    headers=(
+                        {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
+                        if direct_put_length != 0
+                        else {}
+                    ),
+                )
+
+        return StreamingResponse(
+            self.iter_and_close(output_iter, reader),
+            status_code=STATUS_OK,
+            media_type=self.get_mime_type(),
+        )
+
+    async def _get_stream_reader(self, fqn, path, request, is_get) -> BinaryIO:
+        """Get a BinaryIO reader for the request source data."""
+        if fqn:
+            # Both direct_fqn and non-direct_fqn open the file — transform_stream
+            # always receives a BinaryIO reader, never a path string.
+            return open(self.sanitize_fqn(fqn), "rb")
+        if is_get:
+            content = await self._get_network_content(path)
+            return BytesIO(content)
+        body = await request.body()
+        return BytesIO(body)
+
+    async def _direct_put_stream(
+        self,
+        direct_put_url: str,
+        data_iter: Iterator[bytes],
+        remaining_pipeline: str = "",
+        path: str = "",
+    ) -> Tuple[int, bytes, int]:
+        """Stream transformed output directly to the next pipeline stage."""
+        try:
+            url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
+            headers = {}
+            if remaining_pipeline:
+                headers[HEADER_NODE_URL] = remaining_pipeline
+
+            counted = CountingIterator(data_iter)
+            resp = await self.client.put(
+                url, content=self._to_async_iter(counted), headers=headers
+            )
+            return self.handle_direct_put_response(
+                resp, b"", data_length=counted.bytes_sent
+            )
+
+        except Exception as exc:
+            self.logger.error(
+                "streaming direct_put to %s failed: %s",
+                direct_put_url,
+                exc,
+                exc_info=True,
+            )
+            return STATUS_INTERNAL_SERVER_ERROR, str(exc).encode(), 0
+
     async def _get_fqn_content(self, path: str) -> bytes:
         """Safely read local file content with path normalization."""
         safe_path = self.sanitize_fqn(path)
@@ -232,6 +325,12 @@ class FastAPIServer(ETLServer):
         response = await self.client.get(target_url)
         response.raise_for_status()
         return response.content
+
+    @staticmethod
+    async def _to_async_iter(sync_iter):
+        """Wrap a sync iterator as an async generator for httpx.AsyncClient."""
+        for chunk in sync_iter:
+            yield chunk
 
     @staticmethod
     async def _iter_chunks(data: bytes, chunk_size: int = MIB):
@@ -295,7 +394,13 @@ class FastAPIServer(ETLServer):
         )
 
     async def _handle_ws_message(self, websocket: WebSocket):
-        """Handle a single WebSocket message."""
+        """Handle a single WebSocket message. Always uses buffered transform()."""
+        if self.use_streaming:
+            raise NotImplementedError(
+                "WebSocket transport requires transform(), not transform_stream(). "
+                "Override transform() to use WebSocket, or use HTTP transport for streaming."
+            )
+
         ctrl_msg = await websocket.receive_json(mode="binary")
         self.logger.debug("Received control message: %s", ctrl_msg)
 

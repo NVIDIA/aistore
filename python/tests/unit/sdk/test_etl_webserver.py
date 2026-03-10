@@ -1,3 +1,5 @@
+# pylint: disable=too-many-lines
+
 import os
 import sys
 import io
@@ -18,6 +20,7 @@ from aistore.sdk.const import (
     QPARAM_ETL_FQN,
     AIS_DIRECT_PUT_RETRIES,
 )
+from aistore.sdk.etl.webserver.base_etl_server import CountingIterator
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
@@ -941,3 +944,111 @@ class TestHTTPDirectFQN(unittest.TestCase):
         handler.server.etl_server.transform.assert_called_with(
             os.path.normpath(fqn), "/test/object", ""
         )
+
+
+# ---------------------------------------------------------------------------
+# Streaming transform tests
+# ---------------------------------------------------------------------------
+
+
+class DummyStreamingFastAPIServer(FastAPIServer):
+    """FastAPI server that uses transform_stream instead of transform."""
+
+    def transform_stream(self, reader, _path, _etl_args):
+        data = reader.read()
+        yield data[::-1]
+
+    def get_mime_type(self):
+        return "application/test"
+
+
+class TestStreamingDetection(unittest.TestCase):
+    """Test that use_streaming detection works correctly."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+
+    def test_stream_only_uses_streaming(self):
+        server = DummyStreamingFastAPIServer()
+        self.assertTrue(server.use_streaming)
+
+    def test_transform_only_uses_buffered(self):
+        server = DummyFastAPIServer()
+        self.assertFalse(server.use_streaming)
+
+    def test_both_overridden_prefers_transform(self):
+        class BothServer(FastAPIServer):
+            def transform(self, data, _path, _etl_args):
+                return data
+
+            def transform_stream(self, reader, _path, _etl_args):
+                yield reader.read()
+
+        server = BothServer()
+        self.assertFalse(server.use_streaming)
+
+    def test_neither_overridden_raises(self):
+        class EmptyServer(FastAPIServer):
+            pass
+
+        with self.assertRaises(TypeError) as ctx:
+            EmptyServer()
+        self.assertIn(
+            "must override either transform() or transform_stream()", str(ctx.exception)
+        )
+
+
+class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["DIRECT_PUT"] = "false"
+        self.etl_server = DummyStreamingFastAPIServer()
+        self.client = TestClient(self.etl_server.app)
+
+    def test_health_check(self):
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"Running")
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_streaming_put(self):
+        input_content = b"input data"
+        response = self.client.put("/test/object", content=input_content)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, input_content[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_streaming_get(self):
+        original_content = b"original data"
+        with patch.object(
+            self.etl_server,
+            "_get_network_content",
+            AsyncMock(return_value=original_content),
+        ):
+            response = self.client.get("/test/object")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content, original_content[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_websocket_raises_for_streaming_server(self):
+        """WebSocket should fail for streaming-only servers."""
+        with self.assertRaises(Exception):
+            with self.client.websocket_connect("/ws") as websocket:
+                websocket.send_json(data={}, mode="binary")
+                websocket.send_bytes(b"test")
+                websocket.receive_bytes()
+
+
+class TestCountingIterator(unittest.TestCase):
+    def test_counts_bytes(self):
+        data = [b"hello", b" ", b"world"]
+        counted = CountingIterator(iter(data))
+        result = b"".join(counted)
+        self.assertEqual(result, b"hello world")
+        self.assertEqual(counted.bytes_sent, 11)
+
+    def test_empty_iterator(self):
+        counted = CountingIterator(iter([]))
+        result = b"".join(counted)
+        self.assertEqual(result, b"")
+        self.assertEqual(counted.bytes_sent, 0)
