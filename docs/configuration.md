@@ -78,7 +78,7 @@ $ ais config cluster backend --json
 See also:
 
 * [Backend providers and supported backends](/docs/providers.md)
-* [Disable/Enable cloud backend at runtime](/docs/cli/advanced.mdi#disableenable-cloud-backend-at-runtime)
+* [Disable/Enable cloud backend at runtime](/docs/cli/advanced.md#disableenable-cloud-backend-at-runtime)
 * [Networking Model: three logical networks and additional intra-cluster data plane](/docs/networking.md)
 
 ## Configuring for production

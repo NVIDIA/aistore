@@ -490,5 +490,5 @@ Run [dSort](/docs/dsort.md).
 
 `ais start download` or `ais start download`
 
-Run the AIS [Downloader](/docs/README.md).
+Run the AIS [Downloader](/docs/downloader.md).
 [Further reference for this command can be found here.](/docs/downloader.md)

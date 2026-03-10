@@ -585,6 +585,6 @@ print(f"Successfully uploaded {response['ContentLength']} bytes")
 
 * [Backend Providers](/docs/overview.md#backend-provider)
 * [AIS CLI reference](/docs/cli.md)
-* [Auth & ACL](/docs/auth.md)
+* [Auth & ACL](/docs/authn.md)
 * [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
 * [Boto3 compatibility](https://github.com/NVIDIA/aistore/blob/main/python/aistore/botocore_patch/README.md)

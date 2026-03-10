@@ -313,7 +313,7 @@ Notice: this command is executed on the aistore cluster, not AuthN per se.
 See also:
 
 * [AIS AuthN server](/docs/authn.md)
-* [AIS AuthN server: CLI management](/docs/cli/authn.md)
+* [AIS AuthN server: CLI management](/docs/cli/auth.md)
 
 ## References
 

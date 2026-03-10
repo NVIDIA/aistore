@@ -2,7 +2,7 @@
 
 This section documents ETL management operations with `ais etl`.
 
-> As with [global rebalance](/docs/rebalance.md), [dSort](/docs/dsort.md), and [download](/docs/download.md), all ETL management commands can also be executed via `ais job` and `ais show`—the commands that, by definition, support all AIS *xactions*, including AIS-ETL.
+> As with [global rebalance](/docs/rebalance.md), [dSort](/docs/dsort.md), and [download](/docs/downloader.md), all ETL management commands can also be executed via `ais job` and `ais show`—the commands that, by definition, support all AIS *xactions*, including AIS-ETL.
 
 In the `ais etl` namespace, the commands include:
 

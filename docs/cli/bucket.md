@@ -1162,7 +1162,7 @@ A few additional words must be said about `--validate`. The option is provided t
 > Location of each stored object must at any point in time correspond to the current cluster map and, within each storage target, to the target's [mountpaths](/docs/overview.md#terminology). A failure to abide by location rules is called *misplacement*; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
 
 * [global rebalance and resilver](/docs/rebalance.md)
-* [resilvering selected targets: advanced usage](/docs/resourcesvanced.md)
+* [resilvering selected targets: advanced usage](/docs/cli/advanced.md#manual-resilvering)
 
 ### Notes
 
@@ -1751,7 +1751,7 @@ For background and usage examples, please see [AWS-specific bucket configuration
 
 `ais bucket props reset BUCKET`
 
-Reset bucket properties to [cluster defaults](/docs/resourcesnfig.md).
+Reset bucket properties to [cluster defaults](/docs/configuration.md).
 
 ### Examples
 

@@ -15,6 +15,7 @@ declare -A title_overrides=(
   ["etl"]="ETL: Extract, Transform, Load"
   ["s3compat"]="S3 API Compatibility"
   ["http_api"]="HTTP RESTful API Reference"
+  ["http-api"]="HTTP API"
   ["performance"]="Performance Tuning"
   ["batch"]="Batch Operations and Xactions"
   ["configuration"]="Configuration Guide"
