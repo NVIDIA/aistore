@@ -26,6 +26,8 @@ pip install aistore[etl]
   For bucket-to-bucket jobs, send transformed objects straight to the target node (3 - 5× speedup).
 * **Direct FQN mode**
   Set `ETL_DIRECT_FQN=true` to receive the local file path instead of bytes — zero memory allocation for large objects or tools like `ffmpeg` that read directly from disk.
+* **Streaming transforms**
+  Override `transform_stream()` instead of `transform()` for constant-memory processing — yield output chunks as they're produced instead of buffering the entire result. Ideal for workloads that build large output incrementally (e.g., multi-GB TAR archives).
 
 ---
 
@@ -49,9 +51,17 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
 ## Quickstart
 
 1. **Extend a server**
-   Override `transform(data: Union[bytes, str], path: str, etl_args: str) -> bytes`.
-   - `data` is `bytes` by default (full object content).
-   - Set `ETL_DIRECT_FQN=true` in your container to receive the local file path as `str` instead, enabling direct file access without loading the file into the Python process's memory.
+
+   Override **one** of the two transform methods:
+
+   | Method | Signature | When to use |
+   |--------|-----------|-------------|
+   | `transform()` | `(data: bytes\|str, path, etl_args) -> bytes` | Most transforms — input buffered, output returned as bytes |
+   | `transform_stream()` | `(reader: BinaryIO, path, etl_args) -> Iterator[bytes]` | Large or incremental output — constant memory, chunks yielded as produced |
+
+   If both are overridden, `transform()` takes priority (backward compatibility). If neither is overridden, a `TypeError` is raised at init time.
+
+   **Buffered example (default):**
 
     ```python
     # echo_server.py
@@ -61,10 +71,30 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
         def transform(self, data, *_):
             return data
 
-    # Create the server instance and expose the FastAPI app
     fastapi_server = EchoServerFastAPI(port=8000)
     fastapi_app = fastapi_server.app
     ```
+
+   **Streaming example (constant memory):**
+
+    ```python
+    # streaming_upper.py
+    from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
+
+    class UpperCaseStream(FastAPIServer):
+        def transform_stream(self, reader, path, etl_args):
+            """Upper-case input in 64 KB chunks — constant memory."""
+            while True:
+                chunk = reader.read(65536)
+                if not chunk:
+                    break
+                yield chunk.upper()
+
+    fastapi_server = UpperCaseStream(port=8000)
+    fastapi_app = fastapi_server.app
+    ```
+
+   > **Note:** `transform_stream()` always receives a `BinaryIO` reader, even when `ETL_DIRECT_FQN=true` (the framework opens the file for you). Set `ETL_DIRECT_FQN=true` in your container to enable direct file access for `transform()` — it receives the local file path as `str` instead of bytes.
 
 2. **Containerize**
 
@@ -172,6 +202,29 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
 * **Audio Splitter**
   Slices audio by `from_time`/`to_time` (JSONL via `etl_args`) and bundles segments into a tar.
   [Source](https://github.com/NVIDIA/ais-etl/tree/main/transformers/NeMo/audio_split_consolidate)
+
+---
+
+## Streaming vs. Buffered Transforms
+
+| | `transform()` (buffered) | `transform_stream()` (streaming) |
+|---|---|---|
+| **Input** | `bytes` or `str` (FQN path) | `BinaryIO` reader |
+| **Output** | `bytes` (entire result) | `Iterator[bytes]` (chunked) |
+| **Memory** | O(input + output) | O(one chunk) |
+| **Best for** | Most 1:1 transforms (resize, convert, hash) | Fan-out / aggregation (JSONL -> TAR, large archive builders) |
+| **WebSocket** | Supported | Not supported (use HTTP transport) |
+| **Pipeline / direct-put** | Supported | Supported (uses `CountingIterator` for size tracking) |
+
+**When to use streaming:**
+- Output is significantly larger than input (e.g., small manifest -> multi-GB TAR)
+- Output is composed of independent pieces that can be emitted incrementally
+- Memory is constrained and you cannot afford buffering the full result
+
+**When to use buffered (default):**
+- Most transforms — the input and output are roughly the same size
+- You need WebSocket transport
+- The transform logic requires random access to the full input
 
 ---
 
