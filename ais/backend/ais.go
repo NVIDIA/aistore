@@ -91,7 +91,7 @@ func (r *remAis) String() string {
 
 func unsetUUID(bck *cmn.Bck) { bck.Ns.UUID = "" }
 
-func extractErrCode(e error, uuid string) (int, error) {
+func (m *AISbp) extractErrCode(e error, uuid string) (int, error) {
 	if e == nil {
 		return http.StatusOK, nil
 	}
@@ -105,16 +105,37 @@ func extractErrCode(e error, uuid string) (int, error) {
 	if herr.Status == http.StatusRequestedRangeNotSatisfiable {
 		return http.StatusRequestedRangeNotSatisfiable, cmn.NewErrRangeNotSatisfiable(herr, nil, 0)
 	}
-	if uuid != "" {
-		msg := herr.Message
-		loc := preg.FindStringIndex(msg)
-		if loc == nil {
-			loc = treg.FindStringIndex(msg)
-		}
-		if len(loc) > 1 && loc[1] > loc[0]+2 {
-			herr.Message = msg[loc[0]:loc[1]-2] + "@" + uuid + ": " + msg[loc[1]:]
+
+	if uuid == "" {
+		return herr.Status, herr
+	}
+
+	msg := herr.Message
+	loc := preg.FindStringIndex(msg)
+	if loc == nil {
+		loc = treg.FindStringIndex(msg)
+	}
+	if len(loc) > 1 && loc[1] > loc[0]+2 {
+		herr.Message = msg[loc[0]:loc[1]-2] + "@" + uuid + ": " + msg[loc[1]:]
+	}
+
+	// best-effort:
+	// prepend remote-cluster context for disambiguation
+	var alias string
+	m.mu.RLock()
+	for a, u := range m.alias {
+		if u == uuid {
+			alias = a
+			break
 		}
 	}
+	m.mu.RUnlock()
+	prefix := "remote-cluster[" + uuid
+	if alias != "" {
+		prefix += "/@" + alias
+	}
+	herr.Message = prefix + "]: " + herr.Message
+
 	return herr.Status, herr
 }
 
@@ -421,7 +442,7 @@ func (m *AISbp) HeadBucket(_ context.Context, remoteBck *meta.Bck) (bckProps cos
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
 	if p, err = api.HeadBucket(remAis.bp, bck, false /*dontAddRemote*/); err != nil {
-		ecode, err = extractErrCode(err, remAis.uuid)
+		ecode, err = m.extractErrCode(err, remAis.uuid)
 		return
 	}
 
@@ -460,7 +481,7 @@ func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRe
 
 	lstRes, err := api.ListObjectsPage(remAis.bpL, bck, remoteMsg, api.ListArgs{})
 	if err != nil {
-		return extractErrCode(err, remAis.uuid)
+		return m.extractErrCode(err, remAis.uuid)
 	}
 
 	// [convention] reuse caller-provided entries slice
@@ -478,7 +499,7 @@ func (m *AISbp) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err e
 	if !qbck.Ns.IsAnyRemote() {
 		// caller provided uuid (or alias)
 		bcks, err = m.blist(qbck.Ns.UUID, qbck)
-		ecode, err = extractErrCode(err, qbck.Ns.UUID)
+		ecode, err = m.extractErrCode(err, qbck.Ns.UUID)
 		return bcks, ecode, err
 	}
 
@@ -500,9 +521,9 @@ func (m *AISbp) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err e
 		}
 	}
 	if len(uuids) == 1 {
-		ecode, err = extractErrCode(err, uuids[0])
+		ecode, err = m.extractErrCode(err, uuids[0])
 	} else {
-		ecode, err = extractErrCode(err, "")
+		ecode, err = m.extractErrCode(err, "")
 	}
 	return bcks, ecode, err
 }
@@ -522,7 +543,7 @@ func (m *AISbp) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error
 	}
 	bcks, err = api.ListBuckets(remAis.bp, remoteQuery, apc.FltExists)
 	if err != nil {
-		_, err = extractErrCode(err, uuid)
+		_, err = m.extractErrCode(err, uuid)
 		return nil, err
 	}
 	for i, bck := range bcks {
@@ -548,7 +569,7 @@ func (m *AISbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *
 	unsetUUID(&remoteBck)
 	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName,
 		api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}); err != nil {
-		ecode, err = extractErrCode(err, remAis.uuid)
+		ecode, err = m.extractErrCode(err, remAis.uuid)
 		return
 	}
 	oa = &cmn.ObjAttrs{}
@@ -570,7 +591,7 @@ func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Re
 	}
 	unsetUUID(&remoteBck)
 	if r, size, err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, nil /*api.GetArgs*/); err != nil {
-		return extractErrCode(err, remAis.uuid)
+		return m.extractErrCode(err, remAis.uuid)
 	}
 	params := core.AllocPutParams()
 	{
@@ -585,7 +606,7 @@ func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Re
 
 	// TODO: retry upon 'unreachable' or timeout
 
-	return extractErrCode(err, remAis.uuid)
+	return m.extractErrCode(err, remAis.uuid)
 }
 
 func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
@@ -610,7 +631,7 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 	} else {
 		hargs := api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}
 		if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, hargs); res.Err != nil {
-			res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
+			res.ErrCode, res.Err = m.extractErrCode(res.Err, remAis.uuid)
 			return res
 		}
 		oa := lom.ObjAttrs()
@@ -622,7 +643,7 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 	}
 
 	res.R, res.Size, res.Err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, args)
-	res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
+	res.ErrCode, res.Err = m.extractErrCode(res.Err, remAis.uuid)
 	return res
 }
 
@@ -647,7 +668,7 @@ func (m *AISbp) PutObj(_ context.Context, r io.ReadCloser, lom *core.LOM, _ *htt
 	}
 	oah, errV := api.PutObject(&args)
 	if errV != nil {
-		return extractErrCode(errV, remAis.uuid)
+		return m.extractErrCode(errV, remAis.uuid)
 	}
 
 	// compare w/ lom.CopyAttrs
@@ -671,5 +692,5 @@ func (m *AISbp) DeleteObj(_ context.Context, lom *core.LOM) (ecode int, err erro
 	}
 	unsetUUID(&remoteBck)
 	err = api.DeleteObject(remAis.bp, remoteBck, lom.ObjName)
-	return extractErrCode(err, remAis.uuid)
+	return m.extractErrCode(err, remAis.uuid)
 }
