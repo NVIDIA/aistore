@@ -355,12 +355,19 @@ func (b *Bck) LenUnameGlob(objName string) int {
 // Bck and optional objName => unique name (uname); note:
 // - use ParseUname below to translate back
 // - compare with HashUname
-func (b *Bck) MakeUname(objName string) []byte {
+// - use extraCap to append objnames to the same bucket's uname
+
+const unameExtraCap = 256
+
+func (b *Bck) MakeUname(objName string, withExtraCap ...bool) []byte {
 	var (
 		nsUname = b.Ns.Uname()
 		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName) // compare with the above
-		buf     = make([]byte, 0, l)
 	)
+	if len(withExtraCap) > 0 && withExtraCap[0] {
+		l += unameExtraCap
+	}
+	buf := make([]byte, 0, l)
 	return b.ubuf(buf, nsUname, objName)
 }
 

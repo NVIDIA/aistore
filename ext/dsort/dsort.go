@@ -800,6 +800,8 @@ func (m *Manager) phase3(maxSize int64) error {
 	if err := bck.Init(core.T.Bowner()); err != nil {
 		return err
 	}
+
+	// TODO: micro-opt: reuse bucket uname prefix for repeated HRW calls (e.g., xs/nextpage)
 	for _, s := range shards {
 		si, err := m.smap.HrwName2T(bck.MakeUname(s.Name))
 		if err != nil {

@@ -5,8 +5,6 @@
  */
 package xs
 
-// core next-page and next-remote-page methods for object listing
-
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -17,9 +15,12 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+// core next-page and next-remote-page methods for object listing
+
 type npgCtx struct {
 	bp    core.Backend
 	bck   *meta.Bck
+	ubuf  []byte            // reusable uname buffer
 	s3ctx *core.LsoS3InvCtx // Deprecated: remove by April-May 2026; use NBI instead
 	wi    walkInfo
 	page  cmn.LsoRes
@@ -39,8 +40,9 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, s3ctx *core.LsoS
 		s3ctx: s3ctx,
 	}
 	if msg.IsFlagSet(apc.LsDiff) {
-		npg.wi.custom = make(cos.StrKVs) // TODO: move to parent x-lso; clear and reuse here
+		npg.wi.custom = make(cos.StrKVs)
 	}
+	npg.ubuf = bck.MakeUname("", true /*with extra cap*/)
 	return npg
 }
 
@@ -137,7 +139,8 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 	)
 
 	for _, en := range lst.Entries {
-		si, err := npg.wi.smap.HrwName2T(npg.bck.MakeUname(en.Name))
+		uname := append(npg.ubuf, en.Name...) //nolint:gocritic // reusing ubuf - intentionally not assigning
+		si, err := npg.wi.smap.HrwName2T(uname)
 		if err != nil {
 			return err
 		}

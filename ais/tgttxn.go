@@ -1135,6 +1135,7 @@ func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int,
 func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool) error {
 	smap := t.owner.smap.Get()
 	config := cmn.GCO.Get()
+	ubuf := c.bck.MakeUname("", true /*with extra cap*/)
 	for _, fqn := range txnPrm.fqns {
 		objName, err := xs.PrmObjName(fqn, txnPrm.dirFQN, txnPrm.msg.ObjName)
 		if err != nil {
@@ -1142,7 +1143,8 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 		}
 		// file share == true: promote only the part of the txnPrm.fqns that "lands" locally
 		if confirmedFshare {
-			si, err := smap.HrwName2T(c.bck.MakeUname(objName))
+			uname := append(ubuf, objName...) //nolint:gocritic // reusing ubuf - intentionally not assigning
+			si, err := smap.HrwName2T(uname)
 			if err != nil {
 				return err
 			}

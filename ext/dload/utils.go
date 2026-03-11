@@ -43,6 +43,8 @@ func countObjects(pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, er
 		si   *meta.Snode
 	)
 	pt.InitIter()
+
+	// TODO: micro-opt: reuse bucket uname prefix for repeated HRW calls (see e.g. xs/nextpage)
 	for link, ok := pt.Next(); ok; link, ok = pt.Next() {
 		name := path.Join(dir, path.Base(link))
 		name, err = NormalizeObjName(name)

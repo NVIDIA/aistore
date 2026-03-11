@@ -49,20 +49,23 @@ func (b *Bck) Bucket() *cmn.Bck { return (*cmn.Bck)(b) }
 // inline delegations => cmn.Bck
 //
 
-func (b *Bck) IsAIS() bool                  { return (*cmn.Bck)(b).IsAIS() }
-func (b *Bck) HasProvider() bool            { return (*cmn.Bck)(b).HasProvider() }
-func (b *Bck) IsHT() bool                   { return (*cmn.Bck)(b).IsHT() }
-func (b *Bck) IsCloud() bool                { return (*cmn.Bck)(b).IsCloud() }
-func (b *Bck) IsRemote() bool               { return (*cmn.Bck)(b).IsRemote() }
-func (b *Bck) IsRemoteAIS() bool            { return (*cmn.Bck)(b).IsRemoteAIS() }
-func (b *Bck) IsQuery() bool                { return (*cmn.Bck)(b).IsQuery() }
-func (b *Bck) RemoteBck() *cmn.Bck          { return (*cmn.Bck)(b).RemoteBck() }
-func (b *Bck) Validate() error              { return (*cmn.Bck)(b).Validate() }
-func (b *Bck) MakeUname(name string) []byte { return (*cmn.Bck)(b).MakeUname(name) }
-func (b *Bck) HashUname(s string) uint64    { return (*cmn.Bck)(b).HashUname(s) }
-func (b *Bck) Cname(name string) string     { return (*cmn.Bck)(b).Cname(name) }
-func (b *Bck) IsEmpty() bool                { return (*cmn.Bck)(b).IsEmpty() }
-func (b *Bck) HasVersioningMD() bool        { return (*cmn.Bck)(b).HasVersioningMD() }
+func (b *Bck) IsAIS() bool               { return (*cmn.Bck)(b).IsAIS() }
+func (b *Bck) HasProvider() bool         { return (*cmn.Bck)(b).HasProvider() }
+func (b *Bck) IsHT() bool                { return (*cmn.Bck)(b).IsHT() }
+func (b *Bck) IsCloud() bool             { return (*cmn.Bck)(b).IsCloud() }
+func (b *Bck) IsRemote() bool            { return (*cmn.Bck)(b).IsRemote() }
+func (b *Bck) IsRemoteAIS() bool         { return (*cmn.Bck)(b).IsRemoteAIS() }
+func (b *Bck) IsQuery() bool             { return (*cmn.Bck)(b).IsQuery() }
+func (b *Bck) RemoteBck() *cmn.Bck       { return (*cmn.Bck)(b).RemoteBck() }
+func (b *Bck) Validate() error           { return (*cmn.Bck)(b).Validate() }
+func (b *Bck) HashUname(s string) uint64 { return (*cmn.Bck)(b).HashUname(s) }
+func (b *Bck) Cname(name string) string  { return (*cmn.Bck)(b).Cname(name) }
+func (b *Bck) IsEmpty() bool             { return (*cmn.Bck)(b).IsEmpty() }
+func (b *Bck) HasVersioningMD() bool     { return (*cmn.Bck)(b).HasVersioningMD() }
+
+func (b *Bck) MakeUname(name string, withExtraCap ...bool) []byte {
+	return (*cmn.Bck)(b).MakeUname(name, withExtraCap...)
+}
 
 func (b *Bck) IsRemoteS3() bool {
 	if b.Provider == apc.AWS {
