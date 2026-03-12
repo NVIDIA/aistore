@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.22.1] - 2026-03-12
+
 ### Added
 
 - ETL `FastAPIServer`: manual exponential-backoff retry for streaming direct-put on transient `httpx` errors
