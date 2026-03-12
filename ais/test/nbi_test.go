@@ -21,11 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-// TODO -- FIXME:
-// - support multi-target - remove Skip(MaxTargets == 1)
-// - if bck.IsRemoteAIS() m.num *= 100
-// - support ais://
-
 //
 // create inventory
 //
@@ -40,7 +35,7 @@ func TestCreateInventorySimple(t *testing.T) {
 		}
 		bp = tools.BaseAPIParams()
 	)
-	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	m.init(true /*cleanup*/)
 	m.remotePuts(true /*evict*/)
@@ -64,7 +59,7 @@ func TestCreateInventorySimple(t *testing.T) {
 }
 
 func TestCreateInventoryPermuteOnDisk(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, RemoteBck: true, Bck: cliBck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	type test struct {
 		num           int
@@ -140,7 +135,7 @@ func TestCreateInventoryPermuteOnDisk(t *testing.T) {
 //
 
 func TestListInventory(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, RemoteBck: true, Bck: cliBck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	type test struct {
 		name             string
@@ -193,11 +188,7 @@ func TestListInventory(t *testing.T) {
 		},
 	}
 
-	if cliBck.IsRemote() {
-		t.Cleanup(func() {
-			tools.EvictRemoteBucket(t, proxyURL, cliBck, false /*keepMD*/)
-		})
-	}
+	_nbiIniCln(t, cliBck)
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -312,7 +303,7 @@ func TestListInventory(t *testing.T) {
 
 // prefix filtering over NBI
 func TestListInventoryPrefix(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, RemoteBck: true, Bck: cliBck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	var (
 		parent = "pfx-" + cos.GenTie() + "/"
@@ -335,11 +326,7 @@ func TestListInventoryPrefix(t *testing.T) {
 
 	m2.puts()
 
-	if cliBck.IsRemote() {
-		t.Cleanup(func() {
-			tools.EvictRemoteBucket(t, proxyURL, cliBck, false /*keepMD*/)
-		})
-	}
+	_nbiIniCln(t, cliBck)
 
 	// create inventory covering both sub-prefixes
 	createMsg := &apc.CreateNBIMsg{
@@ -409,7 +396,7 @@ func TestListInventoryPrefix(t *testing.T) {
 }
 
 func TestListInventoryPrefixPermute(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1, RemoteBck: true, Bck: cliBck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	type test struct {
 		name             string
@@ -442,11 +429,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if cliBck.IsRemote() {
-				t.Cleanup(func() {
-					tools.EvictRemoteBucket(t, proxyURL, cliBck, false /*keepMD*/)
-				})
-			}
+			_nbiIniCln(t, cliBck)
 
 			var (
 				parent = "pfxp-" + cos.GenTie() + "/"
@@ -565,4 +548,18 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			tassert.Fatalf(t, len(gotMissing) == 0, "prefix %q: expected 0, got %d", missing, len(gotMissing))
 		})
 	}
+}
+
+//
+// local helper
+//
+
+func _nbiIniCln(t *testing.T, bck cmn.Bck) {
+	if !bck.IsRemote() {
+		return
+	}
+	proxyURL := tools.GetPrimaryURL()
+	t.Cleanup(func() {
+		tools.EvictRemoteBucket(t, proxyURL, bck, false /*keepMD*/)
+	})
 }

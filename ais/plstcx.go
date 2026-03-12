@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 
@@ -289,6 +290,11 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header) (allE
 	}
 	freeBcastRes(results)
 
+	if lsmsg.IsFlagSet(apc.LsNBI) {
+		page := finLsoNBI(lists, lsmsg)
+		return page, nil
+	}
+
 	page := concatLso(lists, lsmsg)
 	finLsoA(page, lsmsg)
 	return page, nil
@@ -437,10 +443,10 @@ func finLsoA(objs *cmn.LsoRes, lsmsg *apc.LsoMsg) {
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
 		objs.Entries = dedupLso(objs.Entries, maxSize, false /*no-dirs*/)
 	}
-	if len(objs.Entries) >= maxSize {
+	if l := len(objs.Entries); l >= maxSize {
 		objs.Entries = objs.Entries[:maxSize]
 		clear(objs.Entries[maxSize:])
-		objs.ContinuationToken = objs.Entries[len(objs.Entries)-1].Name
+		objs.ContinuationToken = objs.Entries[maxSize-1].Name
 	}
 }
 
@@ -463,6 +469,64 @@ func dedupLso(entries cmn.LsoEntries, maxSize int, noDirs bool) []*cmn.LsoEnt {
 	}
 	clear(entries[j:])
 	return entries[:j]
+}
+
+// NBI merge: targets are resumable via seekAfter(token), inventories are HRW-disjoint.
+// Each target returns up to pageSize entries > token. Proxy merge-sorts and truncates.
+// Entries above the cut will be re-emitted by their owning target on the next call.
+func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
+	var (
+		minToken   string
+		entryCount int
+		page       = &cmn.LsoRes{UUID: lsmsg.UUID}
+	)
+
+	// 1. find min continuation token and count entries
+	for _, l := range lists {
+		page.Flags |= l.Flags
+		entryCount += len(l.Entries)
+		if l.ContinuationToken != "" {
+			if minToken == "" || l.ContinuationToken < minToken {
+				minToken = l.ContinuationToken
+			}
+		}
+	}
+	page.ContinuationToken = minToken
+
+	if entryCount == 0 {
+		return page
+	}
+
+	// 2. merge and sort
+	page.Entries = make(cmn.LsoEntries, 0, entryCount)
+	for _, l := range lists {
+		page.Entries = append(page.Entries, l.Entries...)
+	}
+	cmn.SortLso(page.Entries)
+
+	// 3. drop already-delivered entries (re-emitted due to minToken backtrack)
+	if lsmsg.ContinuationToken != "" {
+		i := sort.Search(len(page.Entries), func(i int) bool {
+			return page.Entries[i].Name > lsmsg.ContinuationToken
+		})
+		if i > 0 {
+			clear(page.Entries[:i])
+			page.Entries = page.Entries[i:]
+		}
+	}
+
+	// 4. keep only entries <= minToken
+	if minToken != "" {
+		i := sort.Search(len(page.Entries), func(i int) bool {
+			return page.Entries[i].Name > minToken
+		})
+		if i < len(page.Entries) {
+			clear(page.Entries[i:])
+			page.Entries = page.Entries[:i]
+		}
+	}
+
+	return page
 }
 
 ///////////

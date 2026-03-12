@@ -178,6 +178,11 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	lst.ContinuationToken = ""
 
 	if msg.ContinuationToken != "" {
+		if msg.ContinuationToken < nbi.hdr.first {
+			if err := nbi.rewind(msg.ContinuationToken); err != nil {
+				return err
+			}
+		}
 		if err := nbi.seekAfter(msg.ContinuationToken); err != nil {
 			return err
 		}
@@ -187,7 +192,7 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		}
 	}
 
-	pageSize := cos.NonZero(msg.PageSize, apc.MaxPageSizeAIS) // (not taking bucket's - native backend override)
+	pageSize := cos.Ternary(msg.PageSize <= 0, apc.MaxPageSizeAIS, msg.PageSize)
 	for len(lst.Entries) < int(pageSize) {
 		// next chunk
 		if nbi.nidx >= len(nbi.entries) {
@@ -242,8 +247,8 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 
 	more := true
 	if nbi.nidx == len(nbi.entries) {
-		nbi.entries = nbi.entries[:0]
-		nbi.nidx = 0
+		// nbi.entries = nbi.entries[:0]
+		// nbi.nidx = 0
 		more = nbi.chunkNum < nbi.ufest.Count()
 	}
 	if more {
@@ -261,8 +266,41 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 func (nbi *nbiCtx) seekAfter(token string) error {
 	debug.Assert(token != "")
 
+	// page loop already advanced past last chunk
+	if nbi.chunkNum > nbi.ufest.Count() {
+		if token >= nbi.hdr.last {
+			// we are done
+			return nil
+		}
+		// undo eof state - from previous only
+		// nlog.Warningf("token points back %q < %q (nbi.hdr.last)", token, nbi.hdr.last)
+		nbi.chunkNum--
+		if err := nbi.readChunk(); err != nil {
+			return err
+		}
+		nbi.nidx = 0
+	}
+
+	// TODO -- FIXME: (brute-force and non-optimal)
+	if token != "" {
+		nbi.nidx = 0
+	}
+
+	// current chunk exhausted: must load next before searching
+	if nbi.nidx >= len(nbi.entries) || len(nbi.entries) == 0 {
+		nbi.chunkNum++
+		if nbi.chunkNum > nbi.ufest.Count() {
+			nbi.nidx = 0
+			nbi.entries = nbi.entries[:0]
+			return nil
+		}
+		if err := nbi.readChunk(); err != nil {
+			return err
+		}
+	}
+
 	// fast path: search current chunk
-	if len(nbi.entries) > 0 && token < nbi.hdr.last {
+	if nbi.nidx < len(nbi.entries) && len(nbi.entries) > 0 && token < nbi.hdr.last {
 		i := sort.Search(len(nbi.entries), func(i int) bool {
 			return nbi.entries[i].Name > token
 		})
@@ -294,4 +332,21 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 			return nil
 		}
 	}
+}
+
+func (nbi *nbiCtx) rewind(token string) error {
+	for nbi.chunkNum > 1 {
+		nbi.chunkNum--
+		if err := nbi.readChunk(); err != nil {
+			return err
+		}
+		if token >= nbi.hdr.first {
+			nbi.nidx = 0
+			return nil
+		}
+	}
+	nbi.nidx = 0
+	// reached all the way to the left boundary with continuation token
+	// pointing even more to the left (which is legal)
+	return nil
 }

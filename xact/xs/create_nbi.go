@@ -26,21 +26,14 @@ import (
 )
 
 // XactNBI: create native bucket inventory (NBI)
-
+//
 // TODO -- FIXME:
-// - integration tests: a) functional create/destroy/show; b) stress
-// ----
 // - progress notif
-// ----
-// - multi-target (***** remove smap.CountActiveTs = 1)
+// - designated-target + filterAddLmeta()
 // - stats: internal (-> CtlMsg) and Prometheus
-//
 // ================ v4.4 ==================================
-//
 // - inventory manifest { meta-version = nbiMetaVer; started/finished; schema (lsmsg); prefix[; optimizing meta] }
-// - multi-choice logic: best-fitting inventory when multiple present
-// - cleanup/GC
-// - `ais show bucket-inventory` and `ais rm bucket-inventory`
+// - multiple inventories: a) periodic re-sync, b) cleanup/GC old
 
 // on-disk formatting
 const (
@@ -88,12 +81,6 @@ func (*nbiFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *nbiFactory) Start() error {
 	bck := p.Bucket()
-
-	smap := core.T.Sowner().Get()
-	if smap.CountActiveTs() > 1 {
-		return cmn.NewErrNotImpl("create bucket inventory for", "multi-target cluster")
-	}
-
 	msg := p.Args.Custom.(*apc.CreateNBIMsg)
 	r := &XactNBI{msg: msg}
 	r.InitBase(p.UUID(), p.Kind(), bck)
@@ -208,7 +195,9 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 	lsmsg.ContinuationToken = ""
 
 	var (
+		smap      = core.T.Sowner().Get()
 		bp        = core.T.Backend(bck)
+		ubuf      = bck.MakeUname("", true)
 		lastToken = "__dummy__"
 		all       = make(cmn.LsoEntries, 0, lsmsg.PageSize*r.msg.PagesPerChunk) // prealloc and reuse
 		fast      = true
@@ -227,6 +216,10 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 			lst.Entries = dst
 
 			if _, err := bp.ListObjects(bck, lsmsg, lst); err != nil {
+				r.Abort(err)
+				return
+			}
+			if err := r.filterKeepMine(lst, ubuf, smap); err != nil {
 				r.Abort(err)
 				return
 			}
@@ -288,13 +281,30 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 	r.cleanup()
 }
 
+func (*XactNBI) filterKeepMine(lst *cmn.LsoRes, ubuf []byte, smap *meta.Smap) error {
+	j := 0
+	sid := core.T.SID()
+
+	for _, en := range lst.Entries {
+		uname := append(ubuf, en.Name...) //nolint:gocritic // reusing ubuf - intentionally not assigning
+		si, err := smap.HrwName2T(uname)
+		if err != nil {
+			return err
+		}
+		if si.ID() != sid {
+			continue
+		}
+		lst.Entries[j] = en
+		j++
+	}
+	lst.Entries = lst.Entries[:j]
+	return nil
+}
+
 // write one chunk with the following framing header:
-//
-//	[u32 headerLen] bytepack[entryCount | first | last ]
-//
+// - [u32 headerLen] bytepack[entryCount | first | last ]
 // and payload:
-//
-//	[msgp-encoded LsoEntries]
+// -[msgp-encoded LsoEntries]
 func (r *XactNBI) writeChunk(num int, entries cmn.LsoEntries) error {
 	chunk, err := r.ufest.NewChunk(num, r.lom)
 	if err != nil {
