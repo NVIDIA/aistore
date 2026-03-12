@@ -21,6 +21,7 @@ from aistore.sdk.const import (
     AIS_DIRECT_PUT_RETRIES,
 )
 from aistore.sdk.etl.webserver.base_etl_server import CountingIterator
+from aistore.sdk.errors import ETLDirectPutTransientError
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
@@ -281,7 +282,7 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_startup_event_default_retries(self):
-        """startup_event() defaults to 3 retries when AIS_DIRECT_PUT_RETRIES is not set."""
+        """startup_event() defaults to 3 transport retries when AIS_DIRECT_PUT_RETRIES is not set."""
         os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
         with patch(
             "aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncHTTPTransport"
@@ -308,14 +309,22 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         finally:
             os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_direct_put_returns_500_when_all_retries_exhausted(self):
-        """_direct_put() returns 500 when ConnectError propagates after all transport retries.
+    def test_direct_put_retries_default(self):
+        """direct_put_retries field defaults to 3 when AIS_DIRECT_PUT_RETRIES is not set."""
+        os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
+        self.assertEqual(DummyFastAPIServer().direct_put_retries, 3)
 
-        Retries are handled inside httpx.AsyncHTTPTransport — our code calls client.put()
-        once. If the transport exhausts its retries and surfaces ConnectError, _direct_put
-        must catch it gracefully and return a 500 rather than crash.
-        """
+    def test_direct_put_retries_custom(self):
+        """direct_put_retries field reads AIS_DIRECT_PUT_RETRIES at construction time."""
+        os.environ[AIS_DIRECT_PUT_RETRIES] = "7"
+        try:
+            self.assertEqual(DummyFastAPIServer().direct_put_retries, 7)
+        finally:
+            os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_direct_put_raises_transient_error_on_connect_error(self):
+        """_direct_put() raises ETLDirectPutTransientError on ConnectError for caller retry."""
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
         os.environ["DIRECT_PUT"] = "true"
         server = DummyFastAPIServer()
@@ -325,16 +334,13 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         )
         server.client = mock_client
 
-        status, body, length = (
+        with self.assertRaises(ETLDirectPutTransientError) as ctx:
             await server._direct_put(  # pylint: disable=protected-access
                 "http://localhost:8080/ais/@/dst/obj", b"hello"
             )
-        )
 
-        mock_client.put.assert_awaited_once()  # transport retries internally; we call once
-        self.assertEqual(status, 500)
-        self.assertIn(b"DNS resolution failed", body)
-        self.assertEqual(length, 0)
+        mock_client.put.assert_awaited_once()
+        self.assertIsInstance(ctx.exception.cause, httpx.ConnectError)
 
 
 class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
@@ -1135,3 +1141,168 @@ class TestStreamingHTTPServer(unittest.TestCase):
         handler.do_GET()
         handler.server.etl_server.transform_stream.assert_called_once()
         handler.server.etl_server.close_reader.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _direct_put_stream_with_retry unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
+    """Unit tests for _direct_put_stream_with_retry: retry logic and reader lifecycle."""
+
+    _DIRECT_PUT_URL = "http://target:51081/ais/@/dst/test/obj"
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["DIRECT_PUT"] = "true"
+        self.server = DummyStreamingFastAPIServer()
+        self.server.direct_put_retries = 3
+        self.server.client = AsyncMock()
+
+    def _make_request(self, body: bytes = b"input") -> MagicMock:
+        req = MagicMock()
+        req.body = AsyncMock(return_value=body)
+        return req
+
+    def _ok_response(self) -> MagicMock:
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.content = b""
+        resp.headers = {}
+        return resp
+
+    async def _call(self, req, retries=None):
+        if retries is not None:
+            self.server.direct_put_retries = retries
+        return await self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+            "", "test/obj", req, False, "", self._DIRECT_PUT_URL, ""
+        )
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_succeeds_on_first_attempt(self):
+        """No retry when first attempt succeeds."""
+        self.server.client.put.return_value = self._ok_response()
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            result = await self._call(self._make_request())
+        # 200 + empty content → handle_direct_put_response returns 204
+        self.assertEqual(result[0], 204)
+        self.server.client.put.assert_awaited_once()
+        mock_sleep.assert_not_called()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_retries_on_read_error_then_succeeds(self):
+        """Retries on ReadError and succeeds on the third attempt."""
+        call_count = 0
+
+        async def mock_put(*_, **__):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise httpx.ReadError("connection closed")
+            return self._ok_response()
+
+        self.server.client.put.side_effect = mock_put
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await self._call(self._make_request())
+        self.assertEqual(result[0], 204)  # 200 + empty content → 204
+        self.assertEqual(call_count, 3)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_raises_after_exhausting_retries(self):
+        """ETLDirectPutTransientError is raised after all retries are exhausted."""
+        self.server.client.put.side_effect = httpx.ConnectError("refused")
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with self.assertRaises(ETLDirectPutTransientError):
+                await self._call(self._make_request(), retries=2)
+        # initial attempt + 2 retries = 3 total
+        self.assertEqual(self.server.client.put.await_count, 3)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_non_transient_error_not_retried(self):
+        """A non-transient exception in client.put returns 500 without retrying."""
+        self.server.client.put.side_effect = ValueError("unexpected")
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            result = await self._call(self._make_request())
+        self.assertEqual(result[0], 500)
+        self.server.client.put.assert_awaited_once()
+        mock_sleep.assert_not_called()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_reader_reopened_on_each_retry(self):
+        """_get_stream_reader is called once per attempt (initial + each retry)."""
+        call_count = 0
+
+        async def mock_put(*_, **__):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                raise httpx.ReadError("dropped")
+            return self._ok_response()
+
+        self.server.client.put.side_effect = mock_put
+
+        get_reader_calls = []
+        original = self.server._get_stream_reader  # pylint: disable=protected-access
+
+        async def tracking(*args, **kwargs):
+            reader = await original(*args, **kwargs)
+            get_reader_calls.append(reader)
+            return reader
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with patch.object(self.server, "_get_stream_reader", side_effect=tracking):
+                await self._call(self._make_request(), retries=2)
+
+        # initial + 2 retries = 3 readers
+        self.assertEqual(len(get_reader_calls), 3)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_reader_always_closed_on_success(self):
+        """close_reader is called exactly once (via finally) after success."""
+        self.server.client.put.return_value = self._ok_response()
+        with patch.object(
+            self.server, "close_reader", wraps=self.server.close_reader
+        ) as mc:
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                await self._call(self._make_request())
+        mc.assert_called_once()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_reader_always_closed_on_exhausted_retries(self):
+        """Every reader opened during retries is closed; finally closes the last one."""
+        self.server.client.put.side_effect = httpx.ReadError("dropped")
+
+        close_calls = []
+        original = self.server.close_reader
+
+        def tracking(reader):
+            close_calls.append(reader)
+            return original(reader)
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with patch.object(self.server, "close_reader", side_effect=tracking):
+                with self.assertRaises(ETLDirectPutTransientError):
+                    await self._call(self._make_request(), retries=2)
+
+        # 2 retries close the old reader in except + 1 finally close = 3 total
+        self.assertEqual(len(close_calls), 3)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_exponential_backoff_delays(self):
+        """asyncio.sleep is called with exponentially increasing delays."""
+        call_count = 0
+
+        async def mock_put(*_, **__):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 4:
+                raise httpx.ReadError("dropped")
+            return self._ok_response()
+
+        self.server.client.put.side_effect = mock_put
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await self._call(self._make_request(), retries=3)
+
+        delays = [call.args[0] for call in mock_sleep.call_args_list]
+        self.assertEqual(delays, [1.0, 2.0, 4.0])  # 2**0, 2**1, 2**2

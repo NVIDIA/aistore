@@ -6,6 +6,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Added
+
+- ETL `FastAPIServer`: manual exponential-backoff retry for streaming direct-put on transient `httpx` errors
+  (`ReadError`, `ConnectError`, `RemoteProtocolError`); configurable via `AIS_DIRECT_PUT_RETRIES` (default 3).
+- `ETLDirectPutTransientError`: new exception in `aistore.sdk.errors` for retryable streaming direct-put
+  failures; carries the destination URL and underlying cause.
+
 ## [1.22.0] - 2026-03-11
 
 ### Added

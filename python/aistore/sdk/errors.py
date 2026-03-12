@@ -164,3 +164,17 @@ class InvalidPipelineError(ValueError):
     """
     Raised when an ETL pipeline header is malformed or invalid.
     """
+
+
+class ETLDirectPutTransientError(Exception):
+    """
+    Raised when a direct-put from an ETL pod fails with a transient network error
+    that is safe to retry (connection lost before a response was received).
+    """
+
+    def __init__(self, url: str, cause: Exception):
+        self.url = url
+        self.cause = cause
+        super().__init__(
+            f"direct_put to {url!r} failed with transient error: {type(cause).__name__}({cause})"
+        )

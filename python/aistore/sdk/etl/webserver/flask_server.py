@@ -92,6 +92,7 @@ class FlaskServer(ETLServer):
         if pipeline_header:
             first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
             if first_url:
+                # TODO: add retry loop (ETLDirectPutTransientError) matching FastAPIServer
                 status_code, transformed, direct_put_length = self._direct_put(
                     first_url, transformed, remaining_pipeline, path
                 )
@@ -123,6 +124,7 @@ class FlaskServer(ETLServer):
                 first_url, remaining = parse_etl_pipeline(pipeline_header)
                 if first_url:
                     try:
+                        # TODO: add retry loop (ETLDirectPutTransientError) matching FastAPIServer
                         result = self._direct_put_stream(
                             first_url, output_iter, remaining, path
                         )

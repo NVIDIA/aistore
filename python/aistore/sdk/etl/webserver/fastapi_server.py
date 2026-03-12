@@ -26,7 +26,7 @@ from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
 )
-from aistore.sdk.errors import InvalidPipelineError
+from aistore.sdk.errors import InvalidPipelineError, ETLDirectPutTransientError
 from aistore.sdk.const import (
     MIB,
     AIS_DIRECT_PUT_CHUNK_SIZE,
@@ -50,6 +50,18 @@ HTTP_LIMITS = httpx.Limits(
     keepalive_expiry=int(os.getenv("KEEPALIVE_EXPIRY", "30")),
 )
 
+# Transient httpx errors that are safe to retry: the connection was lost before
+# a response arrived, but the server state is unknown so the caller can resend.
+_DIRECT_PUT_TRANSIENT_ERRORS = (
+    httpx.ReadError,
+    httpx.ConnectError,
+    httpx.RemoteProtocolError,
+)
+
+# Direct-put retry: exponential backoff with a cap.
+_RETRY_BACKOFF_BASE = 2.0  # seconds; delay = base ** attempt
+_RETRY_BACKOFF_MAX = 30.0  # seconds; upper bound on per-attempt delay
+
 
 class FastAPIServer(ETLServer):
     """
@@ -64,6 +76,7 @@ class FastAPIServer(ETLServer):
         self.client: Optional[httpx.AsyncClient] = None
         self.active_connections: List[WebSocket] = []
         self.chunk_size: int = int(os.getenv(AIS_DIRECT_PUT_CHUNK_SIZE, str(MIB)))
+        self.direct_put_retries: int = int(os.getenv(AIS_DIRECT_PUT_RETRIES, "3"))
         self._setup_app()
 
     def _setup_app(self):
@@ -196,8 +209,10 @@ class FastAPIServer(ETLServer):
         if pipeline_header:
             first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
             if first_url:
-                status_code, transformed, direct_put_length = await self._direct_put(
-                    first_url, transformed, remaining_pipeline, path
+                status_code, transformed, direct_put_length = (
+                    await self._direct_put_with_retry(
+                        first_url, transformed, remaining_pipeline, path
+                    )
                 )
                 self.logger.debug("status_code: %r", status_code)
 
@@ -229,30 +244,27 @@ class FastAPIServer(ETLServer):
         fqn = request.query_params.get(QPARAM_ETL_FQN, "").strip()
         self.logger.debug("streaming: etl_args = %r, fqn = %r", etl_args, fqn)
 
+        pipeline_header = request.headers.get(HEADER_NODE_URL)
+        self.logger.debug("pipeline_header: %r", pipeline_header)
+        if pipeline_header:
+            first_url, remaining = parse_etl_pipeline(pipeline_header)
+            if first_url:
+                result = await self._direct_put_stream_with_retry(
+                    fqn, path, request, is_get, etl_args, first_url, remaining
+                )
+                return Response(
+                    content=result[1],
+                    status_code=result[0],
+                    headers=self.make_direct_put_headers(result[2]),
+                )
+
+        # No pipeline — open reader here; iter_and_close owns its lifecycle.
+        # transform_stream is a sync generator — creating it is instant (no I/O).
+        # StreamingResponse iterates sync iterators in a threadpool automatically,
+        # so the blocking generator body runs off the event loop.
         reader = await self._get_stream_reader(fqn, path, request, is_get)
         try:
-            # transform_stream is a sync generator — creating it is instant (no I/O).
-            # StreamingResponse iterates sync iterators in a threadpool automatically,
-            # so the blocking generator body runs off the event loop.
             output_iter = self.transform_stream(reader, path, etl_args)
-
-            pipeline_header = request.headers.get(HEADER_NODE_URL)
-            self.logger.debug("pipeline_header: %r", pipeline_header)
-            if pipeline_header:
-                first_url, remaining = parse_etl_pipeline(pipeline_header)
-                if first_url:
-                    try:
-                        result = await self._direct_put_stream(
-                            first_url, output_iter, remaining, path
-                        )
-                    finally:
-                        self.close_reader(reader)
-                    return Response(
-                        content=result[1],
-                        status_code=result[0],
-                        headers=self.make_direct_put_headers(result[2]),
-                    )
-
             return StreamingResponse(
                 self.iter_and_close(output_iter, reader),
                 status_code=STATUS_OK,
@@ -274,6 +286,54 @@ class FastAPIServer(ETLServer):
         body = await request.body()
         return BytesIO(body)
 
+    async def _direct_put_stream_with_retry(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        fqn: str,
+        path: str,
+        request: Request,
+        is_get: bool,
+        etl_args: str,
+        first_url: str,
+        remaining: str,
+    ) -> Tuple[int, bytes, int]:
+        """
+        Stream-put with exponential-backoff retry on transient network errors.
+
+        Each retry reopens the source and rebuilds the transform generator from scratch.
+
+        Returns:
+            (status_code, body, length) — see _direct_put_stream for semantics.
+        Raises:
+            ETLDirectPutTransientError: if all retry attempts are exhausted.
+        """
+        reader = await self._get_stream_reader(fqn, path, request, is_get)
+        try:
+            for attempt in range(self.direct_put_retries + 1):
+                try:
+                    return await self._direct_put_stream(
+                        first_url,
+                        self.transform_stream(reader, path, etl_args),
+                        remaining,
+                        path,
+                    )
+                except ETLDirectPutTransientError as exc:
+                    if attempt >= self.direct_put_retries:
+                        raise
+                    delay = min(_RETRY_BACKOFF_BASE**attempt, _RETRY_BACKOFF_MAX)
+                    self.logger.warning(
+                        "direct_put attempt %d/%d failed, retrying in %.1fs: %s",
+                        attempt + 1,
+                        self.direct_put_retries + 1,
+                        delay,
+                        exc,
+                        exc_info=True,
+                    )
+                    self.close_reader(reader)
+                    reader = await self._get_stream_reader(fqn, path, request, is_get)
+                    await asyncio.sleep(delay)
+        finally:
+            self.close_reader(reader)
+
     async def _direct_put_stream(
         self,
         direct_put_url: str,
@@ -281,7 +341,15 @@ class FastAPIServer(ETLServer):
         remaining_pipeline: str = "",
         path: str = "",
     ) -> Tuple[int, bytes, int]:
-        """Stream transformed output directly to the next pipeline stage."""
+        """
+        Stream transformed output directly to the next pipeline stage.
+
+        Returns:
+            (status_code, body, length) where:
+              - status_code: HTTP status of the PUT (200/204 on success, 500 on error).
+              - body: response bytes forwarded back to the AIS target (empty on success).
+              - length: bytes sent to the destination, from CountingIterator.
+        """
         try:
             url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
             headers = {}
@@ -296,6 +364,8 @@ class FastAPIServer(ETLServer):
                 resp, b"", data_length=counted.bytes_sent
             )
 
+        except _DIRECT_PUT_TRANSIENT_ERRORS as exc:
+            raise ETLDirectPutTransientError(direct_put_url, exc) from exc
         except Exception as exc:
             self.logger.error(
                 "streaming direct_put to %s failed: %s",
@@ -303,7 +373,7 @@ class FastAPIServer(ETLServer):
                 exc,
                 exc_info=True,
             )
-            return STATUS_INTERNAL_SERVER_ERROR, str(exc).encode(), 0
+            return STATUS_INTERNAL_SERVER_ERROR, repr(exc).encode(), 0
 
     async def _get_fqn_content(self, path: str) -> bytes:
         """Safely read local file content with path normalization."""
@@ -340,6 +410,39 @@ class FastAPIServer(ETLServer):
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]
 
+    async def _direct_put_with_retry(
+        self,
+        direct_put_url: str,
+        data: bytes,
+        remaining_pipeline: str = "",
+        path: str = "",
+    ) -> Tuple[int, bytes, int]:
+        """
+        Buffered direct-put with exponential-backoff retry on transient network errors.
+
+        Returns:
+            (status_code, body, length) — see _direct_put for semantics.
+        Raises:
+            ETLDirectPutTransientError: if all retry attempts are exhausted.
+        """
+        for attempt in range(self.direct_put_retries + 1):
+            try:
+                return await self._direct_put(
+                    direct_put_url, data, remaining_pipeline, path
+                )
+            except ETLDirectPutTransientError as exc:
+                if attempt >= self.direct_put_retries:
+                    raise
+                delay = min(_RETRY_BACKOFF_BASE**attempt, _RETRY_BACKOFF_MAX)
+                self.logger.warning(
+                    "direct_put attempt %d/%d failed, retrying in %.1fs",
+                    attempt + 1,
+                    self.direct_put_retries + 1,
+                    delay,
+                    exc_info=exc,
+                )
+                await asyncio.sleep(delay)
+
     async def _direct_put(
         self,
         direct_put_url: str,
@@ -359,6 +462,9 @@ class FastAPIServer(ETLServer):
             path: The path of the object.
         Returns:
             status code, transformed data, length of the transformed data (if any)
+        Raises:
+            ETLDirectPutTransientError: on ReadError/ConnectError/RemoteProtocolError
+                so the caller can retry without re-fetching data.
         """
         try:
             url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
@@ -372,6 +478,8 @@ class FastAPIServer(ETLServer):
             )
             return self.handle_direct_put_response(resp, data)
 
+        except _DIRECT_PUT_TRANSIENT_ERRORS as exc:
+            raise ETLDirectPutTransientError(direct_put_url, exc) from exc
         except Exception as exc:
             self.logger.error(
                 "direct_put to %s failed (data_len=%d): %s",
@@ -380,7 +488,7 @@ class FastAPIServer(ETLServer):
                 exc,
                 exc_info=True,
             )
-            return STATUS_INTERNAL_SERVER_ERROR, str(exc).encode(), 0
+            return STATUS_INTERNAL_SERVER_ERROR, repr(exc).encode(), 0
 
     def _build_response(self, content: bytes, mime_type: str) -> Response:
         """Construct standardized response with appropriate headers."""
@@ -423,7 +531,7 @@ class FastAPIServer(ETLServer):
                 first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
                 if first_url:
                     status_code, transformed, direct_put_length = (
-                        await self._direct_put(
+                        await self._direct_put_with_retry(
                             first_url, transformed, remaining_pipeline, path
                         )
                     )
@@ -439,6 +547,9 @@ class FastAPIServer(ETLServer):
         except InvalidPipelineError as e:
             self.logger.error("Invalid pipeline header: %s", str(e))
             await websocket.send_text(f"Invalid pipeline header: {str(e)}")
+        except ETLDirectPutTransientError as e:
+            self.logger.error("Direct put failed after retries: %s", str(e))
+            await websocket.send_text("0")
         except Exception as e:
             self.logger.error("Transform error: %s", str(e))
             await websocket.send_text(f"Transform error: {str(e)}")
