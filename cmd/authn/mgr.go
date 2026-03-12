@@ -48,6 +48,7 @@ type (
 
 var (
 	errInvalidCredentials = errors.New("invalid credentials")
+	errJWKSUnavailable    = errors.New("JWKS not available for current signing method")
 
 	predefinedRoles = []struct {
 		prefix string
@@ -90,10 +91,18 @@ func (m *mgr) validateToken(ctx context.Context, token string) (*tok.AISClaims, 
 	return m.getParser().ValidateToken(ctx, token)
 }
 
+func (m *mgr) getPubKey() (string, error) {
+	provider, ok := m.getSigner().(signing.AsymmetricKeySigner)
+	if !ok {
+		return "", errors.New("current signing method does not have a public key")
+	}
+	return provider.GetPubKey(), nil
+}
+
 func (m *mgr) getJWKS() (jwk.Set, error) {
 	provider, ok := m.getSigner().(signing.JWKSProvider)
 	if !ok {
-		return nil, errors.New("JWKS not available for current signing method")
+		return nil, errJWKSUnavailable
 	}
 	return provider.GetJWKS()
 }

@@ -51,6 +51,7 @@ const (
 	OIDCPrefix = ".well-known"
 	OIDCConfig = "openid-configuration"
 	JWKS       = "jwks.json"
+	PubKey     = "public-key"
 )
 
 // l3 ---
@@ -200,6 +201,7 @@ var (
 	URLPathUsers    = urlpath(Version, Users)
 	URLPathClusters = urlpath(Version, Clusters)
 	URLPathRoles    = urlpath(Version, Roles)
+	URLPathPubKey   = urlpath(Version, PubKey)
 	URLPathOIDC     = urlpath(OIDCPrefix, OIDCConfig)
 	URLPathJWKS     = urlpath(OIDCPrefix, JWKS)
 

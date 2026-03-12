@@ -39,6 +39,10 @@ type (
 		Token string `json:"token"`
 	}
 
+	PubKeyMsg struct {
+		PublicKey string `json:"public_key"`
+	}
+
 	LoginMsg struct {
 		ExpiresIn *time.Duration `json:"expires_in"`
 		Password  string         `json:"password"`

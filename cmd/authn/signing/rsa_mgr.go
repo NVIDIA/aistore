@@ -61,6 +61,9 @@ type (
 	JWKSProvider interface {
 		GetJWKS() (jwk.Set, error)
 	}
+	AsymmetricKeySigner interface {
+		GetPubKey() string
+	}
 
 	RSAKeyManager struct {
 		conf       *config.RSAKeyConfig
@@ -435,6 +438,14 @@ func (r *RSAKeyManager) ValidationConf() *authn.ServerConf {
 	}
 	debug.Assert(false, msgUninitialized)
 	return nil
+}
+
+func (r *RSAKeyManager) GetPubKey() string {
+	if c := r.bundle.Load(); c != nil {
+		return c.publicKeyPEM
+	}
+	debug.Assert(false, msgUninitialized)
+	return ""
 }
 
 func (r *RSAKeyManager) GetJWKS() (jwk.Set, error) {

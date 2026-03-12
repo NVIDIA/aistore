@@ -108,7 +108,8 @@ func (h *hserv) registerPublicHandlers() {
 	h.registerHandler(apc.URLPathRoles.S, h.roleHandler)
 	h.registerHandler(apc.URLPathDae.S, h.configHandler)
 	h.registerHandler(apc.URLPathOIDC.S, h.oidcConfigHandler)
-	h.registerHandler(apc.URLPathJWKS.S, h.pubKeyHandler)
+	h.registerHandler(apc.URLPathJWKS.S, h.jwksHandler)
+	h.registerHandler(apc.URLPathPubKey.S, h.pubKeyHandler)
 }
 
 func (h *hserv) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -634,9 +635,28 @@ func (h *hserv) pubKeyHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet)
 		return
 	}
+	pubKey, err := h.mgr.getPubKey()
+	// Pub key always returns a value -- any error means an invalid request for this instance
+	if err != nil {
+		cmn.WriteErr(w, r, err)
+		return
+	}
+	writeJSON(w, &authn.PubKeyMsg{PublicKey: pubKey}, "get public signing key")
+}
+
+func (h *hserv) jwksHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		cmn.WriteErr405(w, r, http.MethodGet)
+		return
+	}
 	jwks, err := h.mgr.getJWKS()
 	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusBadRequest)
+		// Differentiate between no JWKS for this instance vs. failure cloning to return
+		status := http.StatusInternalServerError
+		if errors.Is(err, errJWKSUnavailable) {
+			status = http.StatusBadRequest
+		}
+		cmn.WriteErr(w, r, err, status)
 		return
 	}
 	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d, public", h.mgr.getJWKSMaxAge()))

@@ -329,3 +329,17 @@ func GetJWKS(bp api.BaseParams) (*json.RawMessage, error) {
 	_, err := reqParams.DoReqAny(&raw)
 	return &raw, err
 }
+
+// GetPublicKey returns the public key used by the authN signer when using asymmetric key pairs (e.g. RSA)
+func GetPublicKey(bp api.BaseParams) (string, error) {
+	bp.Method = http.MethodGet
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathPubKey.S
+	}
+	msg := &PubKeyMsg{}
+	_, err := reqParams.DoReqAny(&msg)
+	return msg.PublicKey, err
+}
