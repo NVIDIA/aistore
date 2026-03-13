@@ -159,6 +159,7 @@ const GetPropsNameSize = GetPropsName + LsPropsSepa + GetPropsSize
 
 // NOTE: update when changing any of the above :NOTE
 var (
+	// TODO [v4.5]: remove V1 props and HeadObject() API and impl. - superseded by V2
 	GetPropsMinimal      = []string{GetPropsName, GetPropsSize, GetPropsCached}
 	GetPropsDefaultCloud = []string{GetPropsName, GetPropsSize, GetPropsCached,
 		GetPropsChecksum, GetPropsVersion, GetPropsCustom}
@@ -166,6 +167,16 @@ var (
 	GetPropsDefaultAIS = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
 	GetPropsAll        = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime,
 		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation}
+
+	// GetPropsAllV2 extends GetPropsAll with fields exclusive to ObjectPropsV2.
+	// Note: GetPropsCached ("cached") and GetPropsStatus ("status") are intentionally
+	// omitted — the V2 HEAD handler rejects them; `present` is always returned separately.
+	GetPropsAllV2 = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime,
+		GetPropsVersion, GetPropsLastModified, GetPropsETag,
+		GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation, GetPropsChunked}
+
+	GetPropsMinimalV2      = []string{GetPropsName, GetPropsSize}
+	GetPropsDefaultCloudV2 = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsVersion, GetPropsCustom, GetPropsLastModified, GetPropsETag}
 )
 
 type (

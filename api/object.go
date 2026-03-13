@@ -421,6 +421,7 @@ func TransformObject(bp BaseParams, args *TransformArgs) error {
 // - The v1 path is planned for removal in a future major release.
 //
 // See also: HeadObjectV2()
+// TODO [v4.5]: remove V1 props and HeadObject() API and impl. - superseded by V2
 
 func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (op *cmn.ObjectProps, err error) {
 	q := qalloc()
