@@ -52,6 +52,7 @@ const (
 	OIDCConfig = "openid-configuration"
 	JWKS       = "jwks.json"
 	PubKey     = "public-key"
+	Rotate     = "rotate-key"
 )
 
 // l3 ---
@@ -204,6 +205,7 @@ var (
 	URLPathPubKey   = urlpath(Version, PubKey)
 	URLPathOIDC     = urlpath(OIDCPrefix, OIDCConfig)
 	URLPathJWKS     = urlpath(OIDCPrefix, JWKS)
+	URLPathRotate   = urlpath(Version, Rotate)
 
 	URLPathML = urlpath(Version, ML)
 )

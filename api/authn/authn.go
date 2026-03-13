@@ -343,3 +343,15 @@ func GetPublicKey(bp api.BaseParams) (string, error) {
 	_, err := reqParams.DoReqAny(&msg)
 	return msg.PublicKey, err
 }
+
+// RotateKey triggers key rotation when using asymmetric keys.
+func RotateKey(bp api.BaseParams) error {
+	bp.Method = http.MethodPost
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathRotate.S
+	}
+	return reqParams.DoRequest()
+}

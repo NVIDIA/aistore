@@ -294,7 +294,7 @@ func TestPersistKeyDataFailsInLegacyPath(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "expected Init to fail when PersistKeyData fails in legacy path")
 }
 
-// PersistKeyData error in createKey path causes key update failure: key file must not be created.
+// PersistKeyData error in rotateKey path causes key update failure: key file must not be created.
 func TestPersistKeyDataFailsOnCreate(t *testing.T) {
 	keyPath := newTempKeyFile(t)
 	conf := newRSAConfig(keyPath)
@@ -306,4 +306,81 @@ func TestPersistKeyDataFailsOnCreate(t *testing.T) {
 	// Key file must not have been written
 	_, err = os.Stat(keyPath)
 	tassert.Fatalf(t, err != nil && errors.Is(err, fs.ErrNotExist), "key file must not exist after failed create, got err: %v", err)
+}
+
+// Rotate multiple times: each rotation changes the active key, accumulates all public keys in JWKS,
+// and tokens signed with any prior key remain valid.
+func TestRotateKey(t *testing.T) {
+	db := &mock.KeyDataStorage{}
+	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), db)
+	err := mgr.Init()
+	tassert.CheckFatal(t, err)
+	assertKeyBundleValid(t, mgr)
+
+	const numRotations = 3
+	tokens := make([]string, numRotations+1)
+	pubKeys := make([]string, numRotations+1)
+	claims := tok.AdminClaims(time.Now().Add(time.Hour), "rotate-test", "")
+
+	pubKeys[0] = getAndAssertPubKey(t, mgr)
+	tokens[0], err = mgr.SignToken(claims)
+	tassert.CheckFatal(t, err)
+
+	for i := 1; i <= numRotations; i++ {
+		err = mgr.RotateKey()
+		tassert.CheckFatal(t, err)
+
+		pubKeys[i] = getAndAssertPubKey(t, mgr)
+		tassert.Fatalf(t, pubKeys[i] != pubKeys[i-1], "rotation %d: public key should change", i)
+
+		jwks, err := mgr.GetJWKS()
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, jwks.Len() == i+1, "rotation %d: expected %d keys in JWKS, got %d", i, i+1, jwks.Len())
+
+		tokens[i], err = mgr.SignToken(claims)
+		tassert.CheckFatal(t, err)
+	}
+
+	// New parser with the same rsa key manager should validate all token signatures
+	parser := tok.NewTokenParser(mgr, nil)
+	for _, token := range tokens {
+		_, err = parser.ValidateToken(t.Context(), token)
+		tassert.CheckFatal(t, err)
+	}
+}
+
+// After rotation, a new manager loading from the same config and storage must validate with both keys
+func TestRotateKeyPersistsAcrossReload(t *testing.T) {
+	conf := defaultTestRSAConfig(t)
+	passphrase := genRandomPassphrase(t)
+	db := &mock.KeyDataStorage{}
+	mgr := signing.NewRSAKeyManager(conf, passphrase, db)
+	err := mgr.Init()
+	tassert.CheckFatal(t, err)
+
+	claims := tok.AdminClaims(time.Now().Add(time.Hour), "rotate-test", "")
+	preToken, err := mgr.SignToken(claims)
+	tassert.CheckFatal(t, err)
+
+	err = mgr.RotateKey()
+	tassert.CheckFatal(t, err)
+
+	postToken, err := mgr.SignToken(claims)
+	tassert.CheckFatal(t, err)
+
+	// Simulate server restart: new manager with same config + storage
+	mgr2 := signing.NewRSAKeyManager(conf, passphrase, db)
+	err = mgr2.Init()
+	tassert.CheckFatal(t, err)
+	assertKeyBundleValid(t, mgr2)
+
+	parser := tok.NewTokenParser(mgr2, nil)
+	_, err = parser.ValidateToken(t.Context(), preToken)
+	tassert.CheckFatal(t, err)
+	_, err = parser.ValidateToken(t.Context(), postToken)
+	tassert.CheckFatal(t, err)
+
+	jwks, err := mgr2.GetJWKS()
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, jwks.Len() == 2, "expected 2 keys in JWKS after reload, got %d", jwks.Len())
 }

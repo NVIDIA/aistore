@@ -49,6 +49,7 @@ type (
 var (
 	errInvalidCredentials = errors.New("invalid credentials")
 	errJWKSUnavailable    = errors.New("JWKS not available for current signing method")
+	errInvalidRotation    = errors.New("rotation not supported for current signing method")
 
 	predefinedRoles = []struct {
 		prefix string
@@ -120,6 +121,14 @@ func (m *mgr) getJWKSMaxAge() int {
 	ttr := m.cm.GetExpiry() - cacheWindow
 	maxAge := max(cacheMinRefresh, min(ttr, cacheMaxRefresh))
 	return int(maxAge.Seconds())
+}
+
+func (m *mgr) rotateKey() error {
+	signer, ok := m.getSigner().(signing.AsymmetricKeySigner)
+	if !ok {
+		return errInvalidRotation
+	}
+	return signer.RotateKey()
 }
 
 //

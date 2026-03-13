@@ -56,16 +56,16 @@ var (
 	errEncryptedDataTooShort = errors.New("encrypted data is too short")
 )
 
-// RSAKeyManager is responsible for the lifecycle of RSA key pairs
-// TODO: currently, only written at init time; key rotation will require sync
 type (
 	JWKSProvider interface {
 		GetJWKS() (jwk.Set, error)
 	}
 	AsymmetricKeySigner interface {
 		GetPubKey() string
+		RotateKey() error
 	}
 
+	// RSAKeyManager is responsible for the lifecycle of RSA key pairs
 	RSAKeyManager struct {
 		conf       *config.RSAKeyConfig
 		passphrase cmn.Censored
@@ -86,6 +86,7 @@ type (
 // interface guard
 var _ tok.Signer = (*RSAKeyManager)(nil)
 var _ JWKSProvider = (*RSAKeyManager)(nil)
+var _ AsymmetricKeySigner = (*RSAKeyManager)(nil)
 
 func NewRSAKeyManager(conf *config.RSAKeyConfig, passphrase cmn.Censored, db kvdb.AuthStorageDriver) *RSAKeyManager {
 	// All fields are value types, copy to avoid external mutation
@@ -113,7 +114,7 @@ func (r *RSAKeyManager) Init() error {
 	// No existing file -- generate and persist a new one
 	if errors.Is(err, fs.ErrNotExist) {
 		nlog.Infof("No RSA key found on disk at %q, generating...", path)
-		return r.createKey()
+		return r.rotateKey()
 	}
 	// Any failed attempt to load an existing key from disk is treated as an error
 	// This includes loading an unencrypted key if passphrase is set
@@ -186,7 +187,7 @@ func (r *RSAKeyManager) recreateMissingMetadata(key *rsa.PrivateKey) error {
 }
 
 // Generate a new RSA key pair and the derived bundle and atomically save it to disk and update in memory
-func (r *RSAKeyManager) createKey() error {
+func (r *RSAKeyManager) rotateKey() error {
 	key, err := rsa.GenerateKey(rand.Reader, r.conf.Size)
 	if err != nil {
 		return err
@@ -438,6 +439,11 @@ func deriveKeyWithID(key *rsa.PrivateKey) (jwk.Key, error) {
 		return nil, fmt.Errorf("failed to assign key id: %w", err)
 	}
 	return jwkKey, nil
+}
+
+func (r *RSAKeyManager) RotateKey() error {
+	nlog.Infof("Rotating RSA key")
+	return r.rotateKey()
 }
 
 func (r *RSAKeyManager) ValidationConf() *authn.ServerConf {

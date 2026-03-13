@@ -173,7 +173,7 @@ func TestRSAKeyManager_LoadEncryptedKeyFailures(t *testing.T) {
 			mgrConf := &config.RSAKeyConfig{Filepath: keyPath, Size: keyBits}
 			db := &mock.KeyDataStorage{}
 			writer := NewRSAKeyManager(mgrConf, writePass, db)
-			err := writer.createKey()
+			err := writer.rotateKey()
 			tassert.CheckFatal(t, err)
 
 			// Apply the custom corruption function if testing a corrupted key on disk

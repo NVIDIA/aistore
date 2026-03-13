@@ -30,7 +30,7 @@ func newTestHserv(t *testing.T) (*hserv, string) {
 	}
 	mgr := newMgrWithConf(t, conf)
 	srv := newServer(mgr)
-	srv.registerPublicHandlers()
+	srv.registerHandlers()
 
 	loginMsg := &authn.LoginMsg{}
 	token, _, err := mgr.issueToken(adminUserID, adminPass, loginMsg)

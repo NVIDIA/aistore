@@ -59,7 +59,7 @@ func (h *hserv) Run() error {
 	laddr := _listenAddr(h.mgr.cm.GetPort())
 	nlog.Infoln("Listening on", laddr)
 
-	h.registerPublicHandlers()
+	h.registerHandlers()
 	h.s = &http.Server{
 		Addr:              laddr,
 		Handler:           h.mux,
@@ -101,7 +101,7 @@ func (h *hserv) registerHandler(path string, handler func(http.ResponseWriter, *
 	}
 }
 
-func (h *hserv) registerPublicHandlers() {
+func (h *hserv) registerHandlers() {
 	h.registerHandler(apc.URLPathUsers.S, h.userHandler)
 	h.registerHandler(apc.URLPathTokens.S, h.tokenHandler)
 	h.registerHandler(apc.URLPathClusters.S, h.clusterHandler)
@@ -110,6 +110,7 @@ func (h *hserv) registerPublicHandlers() {
 	h.registerHandler(apc.URLPathOIDC.S, h.oidcConfigHandler)
 	h.registerHandler(apc.URLPathJWKS.S, h.jwksHandler)
 	h.registerHandler(apc.URLPathPubKey.S, h.pubKeyHandler)
+	h.registerHandler(apc.URLPathRotate.S, h.rotationHandler)
 }
 
 func (h *hserv) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -661,4 +662,23 @@ func (h *hserv) jwksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d, public", h.mgr.getJWKSMaxAge()))
 	writeJSON(w, jwks, "get public JWKS")
+}
+
+func (h *hserv) rotationHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		cmn.WriteErr405(w, r, http.MethodPost)
+		return
+	}
+	if err := h.validateAdminPerms(w, r); err != nil {
+		return
+	}
+	err := h.mgr.rotateKey()
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, errInvalidRotation) {
+			status = http.StatusBadRequest
+		}
+		cmn.WriteErr(w, r, err, status)
+		return
+	}
 }

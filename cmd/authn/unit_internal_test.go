@@ -706,6 +706,48 @@ func TestGetJWKSMaxAge(t *testing.T) {
 	}
 }
 
+func TestMgrRotateKeyHMAC(t *testing.T) {
+	t.Setenv(env.AisAuthAdminPassword, "admin-pass-for-test")
+	conf := &authn.Config{
+		Server: authn.ServerConf{
+			Secret: "test-secret-for-hmac",
+			Expire: cos.Duration(time.Hour),
+		},
+	}
+	testMgr := newMgrWithConf(t, conf)
+	err := testMgr.rotateKey()
+	tassert.Fatalf(t, errors.Is(err, errInvalidRotation), "expected errInvalidRotation for HMAC signer, got %v", err)
+}
+
+func TestMgrRotateKeyRSA(t *testing.T) {
+	driver := &authnkvdb.Driver{Driver: mock.NewDBDriver()}
+	cm := createEmptyCM(t)
+	rm := createRSAManager(t, driver)
+	testMgr, err := createManagerWithAdmin(t, cm, rm, driver)
+	tassert.CheckFatal(t, err)
+
+	loginMsg := &authn.LoginMsg{}
+	token, _, err := testMgr.issueToken(adminUserID, "admin-pass-for-test", loginMsg)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, token != "", "expected non-empty token")
+	_, err = testMgr.validateToken(t.Context(), token)
+	tassert.CheckFatal(t, err)
+
+	err = testMgr.rotateKey()
+	tassert.CheckFatal(t, err)
+
+	// Pre-rotation token must still validate
+	_, err = testMgr.validateToken(t.Context(), token)
+	tassert.CheckFatal(t, err)
+
+	// Post-rotation token must validate
+	token2, _, err := testMgr.issueToken(adminUserID, "admin-pass-for-test", loginMsg)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, token2 != "", "expected non-empty token after rotation")
+	_, err = testMgr.validateToken(t.Context(), token2)
+	tassert.CheckFatal(t, err)
+}
+
 func TestValidatePassphrase(t *testing.T) {
 	tests := []struct {
 		name      string
