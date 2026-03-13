@@ -1888,6 +1888,11 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 	case apc.ActDisableBackend:
 		p.actBackend(w, r, "disable", apc.URLPathDaeBendDisable, items)
 	case apc.LoadX509:
+		config := cmn.GCO.Get()
+		if !config.Net.HTTP.UseHTTPS {
+			p.writeErrMsg(w, r, "invalid request to reload X509 certs (running plain HTTP)")
+			return
+		}
 		if len(items) < 2 {
 			p.cluLoadX509(w, r)
 		} else if sid := items[1]; sid == p.SID() {

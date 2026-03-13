@@ -44,6 +44,8 @@ const (
 	BadSmapPrefix = "[bad cluster map]"
 
 	StartupMayTimeout = "cluster startup is taking unusually long time..." // related ErrStartupTimeout
+
+	FmtErrNewHTTPReq = "failed to create HTTP request %s %s: %v"
 )
 
 // API error structure

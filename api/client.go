@@ -213,7 +213,7 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		req, errR = http.NewRequestWithContext(context.Background(), reqParams.BaseParams.Method, urlPath, body)
 	)
 	if errR != nil {
-		return nil, fmt.Errorf("failed to create http request: %w", errR)
+		return nil, fmt.Errorf(cmn.FmtErrNewHTTPReq, reqParams.BaseParams.Method, urlPath, errR)
 	}
 	reqParams.setRequestOptParams(req)
 	SetAuxHeaders(req, &reqParams.BaseParams)

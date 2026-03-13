@@ -7,6 +7,7 @@ package cmn
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -78,7 +79,7 @@ func (u *HreqArgs) Req() (*http.Request, error) {
 
 	req, err := newRequest(u.Method, u.URL())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(FmtErrNewHTTPReq, u.Method, u.URL(), err)
 	}
 
 	req.Body = rc

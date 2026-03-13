@@ -744,12 +744,32 @@ func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 	freeCargs(cargs)
 }
 
+// timeout handling
+// - timeout causes context.deadlineExceededError, i.e. "context deadline exceeded"
+// - the two knobs are configurable via "client_timeout" and "client_long_timeout",
+// respectively (client section in the global config)
+func (args *callArgs) client() (*http.Client, bool) {
+	switch args.timeout {
+	case apc.LongTimeout:
+		return g.client.data, false
+	case apc.DefaultTimeout:
+		return g.client.control, false
+	case 0:
+		args.timeout = cmn.Rom.CplaneOperation()
+		return g.client.control, true
+	default:
+		if args.timeout > g.client.control.Timeout {
+			return g.client.data, true
+		}
+		return g.client.control, true
+	}
+}
+
 func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	var (
-		req    *http.Request
-		resp   *http.Response
-		client *http.Client
-		sid    = unknownDaemonID
+		req  *http.Request
+		resp *http.Response
+		sid  = unknownDaemonID
 	)
 	res = allocCR()
 	if args.si != nil {
@@ -762,37 +782,17 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		args.req.Base = args.si.ControlNet.URL // by default, use intra-cluster control network
 	}
 
-	switch args.timeout {
-	case apc.DefaultTimeout:
-		req, res.err = args.req.Req()
-		client = g.client.control // timeout = config.Client.Timeout ("client.client_timeout")
-	case apc.LongTimeout:
-		req, res.err = args.req.Req()
-		client = g.client.data // timeout = config.Client.TimeoutLong ("client.client_long_timeout")
-	default:
+	client, withCancel := args.client()
+	if withCancel {
 		var cancel context.CancelFunc
-		if args.timeout == 0 {
-			args.timeout = cmn.Rom.CplaneOperation()
-		}
 		req, _, cancel, res.err = args.req.ReqWith(args.timeout)
-		if res.err != nil {
-			break
+		if res.err == nil {
+			defer cancel()
 		}
-		defer cancel()
-
-		// NOTE: timeout handling
-		// - timeout causes context.deadlineExceededError, i.e. "context deadline exceeded"
-		// - the two knobs are configurable via "client_timeout" and "client_long_timeout",
-		// respectively (client section in the global config)
-		if args.timeout > g.client.control.Timeout {
-			client = g.client.data
-		} else {
-			client = g.client.control
-		}
+	} else {
+		req, res.err = args.req.Req()
 	}
 	if res.err != nil {
-		res.details = fmt.Sprintf("FATAL: failed to create HTTP request %s %s: %v",
-			args.req.Method, args.req.URL(), res.err)
 		return res
 	}
 
