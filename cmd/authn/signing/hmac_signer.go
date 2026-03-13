@@ -5,6 +5,8 @@
 package signing
 
 import (
+	"context"
+
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
@@ -29,11 +31,13 @@ func (h *hmacSigner) SignToken(c jwt.Claims) (string, error) {
 	return t.SignedString([]byte(h.secret))
 }
 
-func (h *hmacSigner) GetSigConf() *cmn.AuthSignatureConf {
-	return &cmn.AuthSignatureConf{Key: h.secret, Method: cmn.SigMethodHMAC}
-}
-
 func (h *hmacSigner) ValidationConf() *authn.ServerConf {
 	checksum := cos.ChecksumB2S(cos.UnsafeB(string(h.secret)), cos.ChecksumSHA256)
 	return &authn.ServerConf{Secret: checksum}
+}
+
+// ResolveKey returns the key used to validate a token
+// In the case of HMAC, it's just the secret -- there's no key ID to look up
+func (h *hmacSigner) ResolveKey(_ context.Context, _ *jwt.Token) (any, error) {
+	return []byte(h.secret), nil
 }

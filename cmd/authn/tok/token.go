@@ -7,23 +7,16 @@ package tok
 
 import (
 	"context"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/base64"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -41,12 +34,10 @@ type (
 	}
 
 	TokenParser struct {
-		// used for validating JWT signature with e.g. a public key
-		sigConfig *SigConfig
+		// provides public keys for validating JWT signature with e.g. a public key
+		keyProvider KeyProvider
 		// options for the jwt parser to use
 		parseOpts []jwt.ParserOption
-		// manages cached public keys from issuers
-		keyCacheManager *KeyCacheManager
 	}
 
 	TokenHdr struct {
@@ -56,23 +47,14 @@ type (
 		Token string
 	}
 
-	SigConfig struct {
-		HMACSecret   cmn.Censored
-		RSAPublicKey *rsa.PublicKey
-	}
-
 	Parser interface {
 		// ValidateToken verifies JWT signature and extracts token claims.
 		ValidateToken(ctx context.Context, tokenStr string) (*AISClaims, error)
-		// IsSecretCksumValid checks if a provided secret checksum is valid.
-		IsSecretCksumValid(cksumVal string) bool
-		// IsPublicKeyValid checks if a provided public key matches the parser's key.
-		IsPublicKeyValid(pubKeyStr string) (bool, error)
 	}
 
 	Signer interface {
+		KeyProvider
 		SignToken(c jwt.Claims) (string, error)
-		GetSigConf() *cmn.AuthSignatureConf
 		ValidationConf() *authn.ServerConf
 	}
 )
@@ -148,49 +130,15 @@ func ExtractToken(hdr http.Header) (*TokenHdr, error) {
 // TokenParser //
 /////////////////
 
-// NewTokenParser creates a new instance of TokenParser.
-// If using allowed issuers and public key lookups, call InitKeyCache after creation
-func NewTokenParser(conf *cmn.AuthConf, cacheManager *KeyCacheManager) *TokenParser {
-	return &TokenParser{
-		sigConfig:       newSigConfig(conf),
-		parseOpts:       buildParseOptions(conf.RequiredClaims),
-		keyCacheManager: cacheManager,
+// NewTokenParser creates a new instance of TokenParser given a key provider and an optional set of auth configs
+func NewTokenParser(keyProvider KeyProvider, conf *cmn.AuthConf) *TokenParser {
+	parser := &TokenParser{
+		keyProvider: keyProvider,
 	}
-}
-
-// Parse config and environment variables to determine keys for validating JWT signatures
-func newSigConfig(authConf *cmn.AuthConf) *SigConfig {
-	// First check for env vars as they take precedence
-	if pubKeyEnvStr := os.Getenv(env.AisAuthPublicKey); pubKeyEnvStr != "" {
-		pubKey, err := parsePubKey(pubKeyEnvStr)
-		if err != nil {
-			cos.ExitLogf("Failed to parse RSA public key: %v", err)
-		}
-		return &SigConfig{RSAPublicKey: pubKey}
+	if conf != nil {
+		parser.parseOpts = buildParseOptions(conf.RequiredClaims)
 	}
-	if hmacEnvStr := os.Getenv(env.AisAuthSecretKey); hmacEnvStr != "" {
-		return &SigConfig{HMACSecret: cmn.Censored(hmacEnvStr)}
-	}
-	// Empty config is valid with enabled auth as OIDC issuer lookup may be used
-	if authConf.Signature == nil || authConf.Signature.Method == "" {
-		return &SigConfig{}
-	}
-
-	// Finally check config -- parse according to provided method
-	m := strings.ToUpper(authConf.Signature.Method)
-	switch {
-	case authConf.Signature.IsHMAC():
-		return &SigConfig{HMACSecret: authConf.Signature.Key}
-	case authConf.Signature.IsRSA():
-		pubKey, err := parsePubKey(string(authConf.Signature.Key))
-		if err != nil {
-			cos.ExitLogf("Failed to parse RSA public key: %v", err)
-		}
-		return &SigConfig{RSAPublicKey: pubKey}
-	default:
-		cos.ExitLogf("Auth enabled with invalid key signature: %q. Supported values are: %s", m, authConf.Signature.ValidMethods())
-		return nil
-	}
+	return parser
 }
 
 func buildParseOptions(reqClaims *cmn.RequiredClaimsConf) []jwt.ParserOption {
@@ -203,67 +151,19 @@ func buildParseOptions(reqClaims *cmn.RequiredClaimsConf) []jwt.ParserOption {
 	return opts
 }
 
-// Based on the token provided, return the key for the jwt library to verify the signature
-func (tm *TokenParser) parseJWTKey(ctx context.Context, tok *jwt.Token) (any, error) {
-	switch tok.Method.(type) {
-	case *jwt.SigningMethodHMAC:
-		return []byte(tm.getHMACSecret()), nil
-	case *jwt.SigningMethodRSA:
-		switch {
-		// Static public key provided directly in config
-		case tm.getRSAPublicKey() != nil:
-			return tm.getRSAPublicKey(), nil
-		case tm.keyCacheManager != nil:
-			// Lookup by issuer claim
-			return tm.keyCacheManager.getKeyForToken(ctx, tok)
-		default:
-			return nil, errors.New("invalid rsa validation options -- no static key or oidc lookup configured")
-		}
-	default:
-		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", tok.Method, tok.Header["alg"])
-	}
-}
-
-func parsePubKey(str string) (*rsa.PublicKey, error) {
-	if str == "" {
-		return nil, nil
-	}
-	var derBytes []byte
-	var err error
-
-	// Try PEM format first
-	if block, _ := pem.Decode([]byte(str)); block != nil {
-		derBytes = block.Bytes
-	} else {
-		// Fall back to raw base64 DER
-		derBytes, err = base64.StdEncoding.DecodeString(str)
-		if err != nil {
-			return nil, fmt.Errorf("invalid public key format: %w", err)
-		}
-	}
-	pub, err := x509.ParsePKIXPublicKey(derBytes)
-	if err != nil {
-		return nil, err
-	}
-	rsaPub, ok := pub.(*rsa.PublicKey)
-	if !ok {
-		return nil, errors.New("not an RSA public key")
-	}
-	return rsaPub, nil
-}
-
 // ValidateToken verifies JWT signature and extracts token claims
 // (supporting both HMAC (HS256) and RSA (RS256) signing methods)
 // - HS256: validates with secret (symmetric)
 // - RS256: validates with pubKey (asymmetric)
-func (tm *TokenParser) ValidateToken(ctx context.Context, tokenStr string) (*AISClaims, error) {
+func (p *TokenParser) ValidateToken(ctx context.Context, tokenStr string) (*AISClaims, error) {
 	jwtToken, err := jwt.ParseWithClaims(
 		tokenStr,
 		&AISClaims{},
 		func(t *jwt.Token) (any, error) {
-			return tm.parseJWTKey(ctx, t)
+			// Use the key provider to look up the key to validate this token's signature
+			return p.keyProvider.ResolveKey(ctx, t)
 		},
-		tm.parseOpts...,
+		p.parseOpts...,
 	)
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
@@ -278,32 +178,21 @@ func (tm *TokenParser) ValidateToken(ctx context.Context, tokenStr string) (*AIS
 	return claims, nil
 }
 
-// IsSecretCksumValid Checks if a provided secret checksum is valid for signing requests to be parsed by this cluster
-func (tm *TokenParser) IsSecretCksumValid(cksumVal string) bool {
-	return cos.ChecksumB2S(cos.UnsafeB(tm.getHMACSecret()), cos.ChecksumSHA256) == cksumVal
-}
-
-// IsPublicKeyValid Checks if a provided public key matches what this cluster will use to validate tokens
-func (tm *TokenParser) IsPublicKeyValid(pubKeyStr string) (bool, error) {
-	reqKey, err := parsePubKey(pubKeyStr)
-	if err != nil {
-		return false, err
+// GetKeyID returns the key ID from the provided token's headers
+// Used by callers (KeyProviders) that must look up the associated public key of a token in a JWKS
+func GetKeyID(t *jwt.Token) (string, error) {
+	kid, ok := t.Header["kid"].(string)
+	if !ok || kid == "" {
+		return "", errors.New("header 'kid' missing")
 	}
-	return reqKey.Equal(tm.getRSAPublicKey()), nil
-}
-
-func (tm *TokenParser) getRSAPublicKey() *rsa.PublicKey {
-	if tm.sigConfig == nil {
-		return nil
+	// Validate kid to prevent injection attacks
+	if strings.ContainsAny(kid, "/\\|;&$<>`\"'()") {
+		return "", errors.New("invalid characters in 'kid' header")
 	}
-	return tm.sigConfig.RSAPublicKey
-}
-
-func (tm *TokenParser) getHMACSecret() string {
-	if tm.sigConfig == nil {
-		return ""
+	if len(kid) > maxKidLength {
+		return "", errors.New("'kid' header too long")
 	}
-	return string(tm.sigConfig.HMACSecret)
+	return kid, nil
 }
 
 ///////////////

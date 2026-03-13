@@ -82,8 +82,7 @@ func (m *mgr) getParser() tok.Parser { return m.sb.Load().parser }
 func (*mgr) String() string { return config.ServiceName }
 
 func (m *mgr) updateSignerBundle(signer tok.Signer) {
-	// Create a limited token parser with no issuer lookup
-	parser := tok.NewTokenParser(&cmn.AuthConf{Signature: signer.GetSigConf()}, nil)
+	parser := tok.NewTokenParser(signer, nil)
 	m.sb.Store(&signerBundle{signer: signer, parser: parser})
 }
 

@@ -12,14 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
-func TestGetSigConf(t *testing.T) {
-	testSecret := "myTestSecret"
-	signer := signing.NewHMACSigner(cmn.Censored(testSecret))
-	sigConf := signer.GetSigConf()
-	tassert.Fatalf(t, sigConf.Method == cmn.SigMethodHMAC, "expected HMAC method, got %v", sigConf.Method)
-	tassert.Fatalf(t, string(sigConf.Key) == testSecret, "expected key %q, got %q", testSecret, sigConf.Key)
-}
-
 func TestValidationConf(t *testing.T) {
 	testSecret := "myTestSecret"
 	signer := signing.NewHMACSigner(cmn.Censored(testSecret))

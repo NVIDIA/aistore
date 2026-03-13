@@ -31,6 +31,8 @@ type (
 	authManager struct {
 		// used for parsing and validating claims from token strings
 		tokenParser tok.Parser
+		// provides the configured keys for validating client key config and tokens
+		keyProvider tok.ServerKeyProvider
 		// provides thread-safe access to a cache of decrypted token claims
 		tokenMap *shardedTokenMap
 		// provides thread-safe access to an underlying map of tokens
@@ -88,22 +90,38 @@ const (
 
 func newAuthManager(config *cmn.Config, statsT stats.Tracker) *authManager {
 	debug.Assert(g.netServ.pub != nil)
-
 	rootCtx, rootCancel := context.WithCancel(context.Background())
-	keyCacheClient := newKeyCacheClient(config, statsT)
-	keyCacheManager := tok.NewKeyCacheManager(config.Auth.OIDC, keyCacheClient, nil, statsT)
-	keyCacheManager.Init(rootCtx)
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), TokenParserInitTimeout)
-	defer cancel()
-	if err := keyCacheManager.PopulateJWKSCache(timeoutCtx); err != nil {
-		nlog.Errorf("Errors occurred while pre-populating JWKS key cache: %v", err)
+	keyProvider, err := newKeyProvider(rootCtx, config, statsT)
+	if err != nil {
+		cos.ExitLogf("Failed to initialize key provider: %v", err)
 	}
 	return &authManager{
-		tokenParser:   tok.NewTokenParser(&config.Auth, keyCacheManager),
+		tokenParser:   tok.NewTokenParser(keyProvider, &config.Auth),
+		keyProvider:   keyProvider,
 		tokenMap:      newShardedTokenMap(TokenMapShardExponent),
 		revokedTokens: newRevokedTokensMap(),
 		cancelCtx:     rootCancel,
 	}
+}
+
+// Build a server key provider to fetch the key to use for JWT validation from config or OIDC issuers
+func newKeyProvider(ctx context.Context, config *cmn.Config, statsT stats.Tracker) (tok.ServerKeyProvider, error) {
+	// If we have a key directly configured, use that
+	prov, err := tok.NewStaticKeyProvider(&config.Auth)
+	if prov != nil || (err != nil && !errors.Is(err, tok.ErrNoStaticKey)) {
+		return prov, err
+	}
+	// Otherwise, set up a key cache client to cache keys from configured OIDC issuers
+	keyCacheClient := newKeyCacheClient(config, statsT)
+	keyCacheManager := tok.NewKeyCacheManager(config.Auth.OIDC, keyCacheClient, nil, statsT)
+	keyCacheManager.Init(ctx)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), TokenParserInitTimeout)
+	defer cancel()
+	// Best-effort attempt to pre-populate. A single invalid (external) issuer should not block startup.
+	if err := keyCacheManager.PopulateJWKSCache(timeoutCtx); err != nil {
+		nlog.Errorf("Errors occurred while pre-populating JWKS key cache: %v", err)
+	}
+	return keyCacheManager, nil
 }
 
 // Define the client used by the key cache manager for contacting token issuers
@@ -284,21 +302,10 @@ func (p *proxy) validateKey(w http.ResponseWriter, r *http.Request) {
 		p.writeErrf(w, r, "no secret or public key provided to validate")
 		return
 	}
-	if reqConf.Secret != "" {
-		if !p.authn.tokenParser.IsSecretCksumValid(reqConf.Secret) {
-			p.writeErrf(w, r, "%s: invalid secret sha256(%q)", p, cos.SHead(reqConf.Secret))
-		}
-	}
-	if reqConf.PubKey != nil {
-		valid, err := p.authn.tokenParser.IsPublicKeyValid(*reqConf.PubKey)
-		if err != nil {
-			p.writeErrf(w, r, "%s: invalid public key (%q)", p, cos.SHead(*reqConf.PubKey))
-			return
-		}
-		if !valid {
-			p.writeErrf(w, r, "%s: provided public key (%q) does not match cluster's public key", p, cos.SHead(*reqConf.PubKey))
-			return
-		}
+	code, err := p.authn.keyProvider.ValidateKey(r.Context(), reqConf)
+	if err != nil {
+		p.writeErr(w, r, err, code)
+		return
 	}
 }
 

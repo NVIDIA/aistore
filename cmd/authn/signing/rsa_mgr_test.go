@@ -88,9 +88,7 @@ func assertKeyBundleValid(t *testing.T, mgr *signing.RSAKeyManager) {
 	signed, err := mgr.SignToken(dummyClaims)
 	tassert.CheckFatal(t, err)
 
-	sigConf := mgr.GetSigConf()
-	tassert.Fatal(t, sigConf != nil, "expected non-nil sig config from initialized manager")
-	parser := tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil)
+	parser := tok.NewTokenParser(mgr, nil)
 	_, err = parser.ValidateToken(t.Context(), signed)
 	tassert.CheckFatal(t, err)
 }
@@ -113,13 +111,12 @@ func compareMgrKeyBundle(t *testing.T, expectedMgr, actualMgr *signing.RSAKeyMan
 		tassert.Fatalf(t, ok, "expected key with keyID %q not found in actual set", expectedJWK.KeyID())
 		tassert.Fatalf(t, jwk.Equal(expectedJWK, actualJWK), "key with keyID %q differs between expected and actual sets", expectedJWK.KeyID())
 	}
-	// Cross-validate: token signed by one manager must validate with the other's public key
+	// Cross-validate: token signed by one manager must validate with the other's JWKS
 	dummyClaims := tok.AdminClaims(time.Now().Add(time.Minute), "cross-check", "")
 	signed, err := expectedMgr.SignToken(dummyClaims)
 	tassert.CheckFatal(t, err)
 
-	sigConf := actualMgr.GetSigConf()
-	parser := tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil)
+	parser := tok.NewTokenParser(actualMgr, nil)
 	_, err = parser.ValidateToken(t.Context(), signed)
 	tassert.CheckFatal(t, err)
 }
@@ -128,17 +125,6 @@ func TestInitNoDB(t *testing.T) {
 	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), nil)
 	err := mgr.Init()
 	tassert.Fatalf(t, err != nil, "expected Init to fail with no DB provided")
-}
-
-func TestGetSigConf_RSA(t *testing.T) {
-	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), &mock.KeyDataStorage{})
-	err := mgr.Init()
-	tassert.CheckFatal(t, err)
-
-	sig := mgr.GetSigConf()
-	tassert.Fatalf(t, sig.Method == cmn.SigMethodRSA, "expected RSA method, got %v", sig.Method)
-	// We don't know pubKey at deploy time, so just make sure it's set and valid
-	assertValidPublicKey(t, string(sig.Key))
 }
 
 func TestRSAKeyManagerLoad(t *testing.T) {
@@ -173,10 +159,7 @@ func TestSignToken(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatal(t, signed != "", "expected non-empty signed token")
 
-	// Validate the signed token using the public key from GetSigConf
-	sigConf := mgr.GetSigConf()
-	tassert.Fatal(t, sigConf != nil, "expected non-nil sig config")
-	parser := tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil)
+	parser := tok.NewTokenParser(mgr, nil)
 
 	claims, err := parser.ValidateToken(t.Context(), signed)
 	tassert.CheckFatal(t, err)
@@ -253,11 +236,6 @@ func TestValidationConf_RSA(t *testing.T) {
 
 	// Public key must be a valid PEM-encoded RSA public key
 	assertValidPublicKey(t, *conf.PubKey)
-
-	// Must be consistent with GetSigConf
-	sigConf := mgr.GetSigConf()
-	tassert.Fatalf(t, string(sigConf.Key) == *conf.PubKey,
-		"expected ValidationConf PubKey to match GetSigConf Key")
 }
 
 func TestKeyWithNoMetadata(t *testing.T) {

@@ -5,6 +5,7 @@
 package signing
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -193,19 +194,25 @@ func (r *RSAKeyManager) createKey() error {
 	nlog.Infof("Generated new RSA key pair with modulus size %d bits", r.conf.Size)
 	r.rotateMu.Lock()
 	defer r.rotateMu.Unlock()
-	var jwks jwk.Set
-	// If we have an existing bundle, add the new key to it
-	bundle := r.bundle.Load()
-	if bundle != nil && bundle.jwks.Len() > 0 {
-		jwks = bundle.jwks
-	} else {
-		jwks = jwk.NewSet()
+	// If we have an existing bundle, add the new key to a clone before persisting
+	jwks, err := r.getMutableJWKS()
+	if err != nil {
+		return err
 	}
-	bundle, err = createKeyBundle(key, jwks)
+	bundle, err := createKeyBundle(key, jwks)
 	if err != nil {
 		return err
 	}
 	return r.commitUnderLock(bundle, true /*writeKey*/)
+}
+
+func (r *RSAKeyManager) getMutableJWKS() (jwk.Set, error) {
+	bundle := r.bundle.Load()
+	if bundle != nil && bundle.jwks.Len() > 0 {
+		// Create a new JWKS to modify and atomically add along with other components to the bundle on success
+		return bundle.jwks.Clone()
+	}
+	return jwk.NewSet(), nil
 }
 
 // commitUnderLock persists key metadata to DB, then key to disk, then updates memory.
@@ -366,6 +373,7 @@ func parseAndValidateKey(fileBytes []byte) (*rsa.PrivateKey, error) {
 
 // createKeyBundle creates a keyBundle struct with the associated public key PEM and JWKS.
 // Modifies the given JWKS by adding the key's public JWK.
+// Note: ensure the provided JWKS is NOT a pointer to the same JWKS as the current bundle
 func createKeyBundle(key *rsa.PrivateKey, jwks jwk.Set) (*keyBundle, error) {
 	pubPEM, err := getPubPEM(key)
 	if err != nil {
@@ -456,15 +464,6 @@ func (r *RSAKeyManager) GetJWKS() (jwk.Set, error) {
 	return jwk.NewSet(), nil
 }
 
-func (r *RSAKeyManager) GetSigConf() *cmn.AuthSignatureConf {
-	if c := r.bundle.Load(); c != nil {
-		// Public key is not sensitive, but must be a censored type in conf
-		return &cmn.AuthSignatureConf{Key: cmn.Censored(c.publicKeyPEM), Method: cmn.SigMethodRSA}
-	}
-	debug.Assert(false, msgUninitialized)
-	return nil
-}
-
 // SignToken signs JWT claims with the current RSA private key and includes the key ID header
 func (r *RSAKeyManager) SignToken(c jwt.Claims) (string, error) {
 	b := r.bundle.Load()
@@ -475,4 +474,25 @@ func (r *RSAKeyManager) SignToken(c jwt.Claims) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodRS256, c)
 	t.Header["kid"] = b.keyID
 	return t.SignedString(b.privateKey)
+}
+
+func (r *RSAKeyManager) ResolveKey(_ context.Context, t *jwt.Token) (any, error) {
+	kid, err := tok.GetKeyID(t)
+	if err != nil {
+		return nil, err
+	}
+	b := r.bundle.Load()
+	if b == nil {
+		debug.Assert(false, msgUninitialized)
+		return nil, errors.New("RSA key manager not initialized")
+	}
+	key, found := b.jwks.LookupKeyID(kid)
+	if !found {
+		return nil, fmt.Errorf("key %q not found in JWKS", kid)
+	}
+	var rawKey any
+	if err := key.Raw(&rawKey); err != nil {
+		return nil, err
+	}
+	return rawKey, nil
 }

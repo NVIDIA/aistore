@@ -9,15 +9,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/json"
-	"encoding/pem"
 	"errors"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -29,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 const (
@@ -42,34 +34,34 @@ var (
 	previousTime = time.Now().Add(-time.Second)
 	futureTime   = time.Now().Add(1 * time.Hour)
 	reqAud       = []string{testAudience}
-	reqClaims    = &cmn.RequiredClaimsConf{
-		Aud: reqAud,
-	}
-	hmacSigConfig = &cmn.AuthSignatureConf{
-		Key:    testHMACSigningSecret,
-		Method: cmn.SigMethodHMAC,
-	}
-	hmacParser       = tok.NewTokenParser(&cmn.AuthConf{RequiredClaims: reqClaims, Signature: hmacSigConfig}, nil)
-	hmacSigner       = signing.NewHMACSigner(testHMACSigningSecret)
-	basicAdminClaims = tok.AdminClaims(futureTime, testUser, testAudience)
-	cacheConfNoRetry = &tok.CacheConfig{
-		DiscoveryConf: &tok.DiscoveryConf{
-			Retries:   0,
-			BaseDelay: time.Duration(0),
-		},
-		MinCacheRefreshInterval: nil,
-	}
-	// Invalid for both discovery and JWKS
-	invalidIssuerURLs = []string{
-		"http://not-https.com/jwks",  // not https
-		"not-absolute",               // not absolute
-		"://missing-scheme",          // malformed URL
-		"https://",                   // missing host
-		"/relative/path",             // relative URL
-		"https://?query=missinghost", // missing host, query only
-		"https://host:invalidport",   // invalid port
-	}
+
+	hmacSigner = signing.NewHMACSigner(testHMACSigningSecret)
 )
+
+func newAdminClaims() *tok.AISClaims {
+	return tok.AdminClaims(futureTime, testUser, testAudience)
+}
+
+func newAdminClaimsWithIssuer(iss string) *tok.AISClaims {
+	adminClaims := newAdminClaims()
+	adminClaims.Issuer = iss
+	return adminClaims
+}
+
+func newHMACParser(t *testing.T) tok.Parser {
+	hmacConf := &cmn.AuthConf{
+		Signature: &cmn.AuthSignatureConf{
+			Method: "hmac",
+			Key:    testHMACSigningSecret,
+		},
+		RequiredClaims: &cmn.RequiredClaimsConf{
+			Aud: reqAud,
+		},
+	}
+	hmacKeyProvider, err := tok.NewStaticKeyProvider(hmacConf)
+	tassert.CheckFatal(t, err)
+	return tok.NewTokenParser(hmacKeyProvider, hmacConf)
+}
 
 // Helper for dummy permission structs
 func makeBckACL(access apc.AccessAttrs, clusterID, name string) *authn.BckACL {
@@ -128,49 +120,8 @@ func assertClusterClaims(t *testing.T, c *tok.AISClaims, user, cid string) {
 	tassert.Error(t, err != nil, "Expected validation error when requesting RO access on unauthorized cluster")
 }
 
-// Other helper functions
-
-func generateTestJWKS(t *testing.T, privKey *rsa.PrivateKey, keyID string) string {
-	pubJWK, err := jwk.FromRaw(privKey.Public())
-	tassert.CheckFatal(t, err)
-	_ = pubJWK.Set(jwk.KeyIDKey, keyID)
-	jwks := jwk.NewSet()
-	err = jwks.AddKey(pubJWK)
-	tassert.CheckFatal(t, err)
-	raw, err := json.Marshal(jwks)
-	tassert.CheckFatal(t, err)
-	return string(raw)
-}
-
-func createMockJWKSServer(jwksJSON string) *httptest.Server {
-	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, jwksJSON)
-	}))
-}
-
-func createMockOIDCServer(jwksURL string) *httptest.Server {
-	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/.well-known/openid-configuration" {
-			resp := map[string]string{
-				"jwks_uri": jwksURL,
-			}
-			_ = json.NewEncoder(w).Encode(resp)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-}
-
-func createTokenWithKeyID(t *testing.T, claims jwt.Claims, rsaKey *rsa.PrivateKey, keyID string) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	token.Header["kid"] = keyID
-	res, err := token.SignedString(rsaKey)
-	tassert.CheckFatal(t, err)
-	return res
-}
-
 func TestAdminClaims(t *testing.T) {
-	assertAdminClaims(t, basicAdminClaims, testUser)
+	assertAdminClaims(t, newAdminClaims(), testUser)
 }
 
 func TestStandardClaimsBucket(t *testing.T) {
@@ -307,31 +258,21 @@ func TestClaims_BackwardsCompat(t *testing.T) {
 
 // Test validating a token successfully
 func TestValidateToken_Success(t *testing.T) {
-	tokenStr, err := hmacSigner.SignToken(basicAdminClaims)
+	tokenStr, err := hmacSigner.SignToken(newAdminClaims())
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
-	claims, err := hmacParser.ValidateToken(t.Context(), tokenStr)
+	claims, err := newHMACParser(t).ValidateToken(t.Context(), tokenStr)
 	tassert.Errorf(t, err == nil, "Expected successful validation but got %v", err)
 	assertAdminClaims(t, claims, testUser)
-}
-
-// Test validating token with invalid claims
-func TestValidateToken_InvalidKey(t *testing.T) {
-	tokenStr, err := hmacSigner.SignToken(basicAdminClaims)
-	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
-	invalidSig := &cmn.AuthSignatureConf{Key: "invalid-secret", Method: cmn.SigMethodHMAC}
-	invalidParser := tok.NewTokenParser(&cmn.AuthConf{Signature: invalidSig}, nil)
-	_, err = invalidParser.ValidateToken(t.Context(), tokenStr)
-	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with wrong key to fail")
 }
 
 // Test validating an expired token with an unsupported signing method
 func TestValidateToken_Unsupported(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	tassert.Fatalf(t, err == nil, "Failed to generate ecdsa key: %v", err)
-	tk := jwt.NewWithClaims(jwt.SigningMethodES256, basicAdminClaims)
+	tk := jwt.NewWithClaims(jwt.SigningMethodES256, newAdminClaims())
 	tokenStr, err := tk.SignedString(key)
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
-	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
+	_, err = newHMACParser(t).ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with invalid signing method to fail")
 }
 
@@ -340,7 +281,7 @@ func TestValidateToken_Expired(t *testing.T) {
 	c := tok.AdminClaims(previousTime, testUser, testAudience)
 	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
-	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
+	_, err = newHMACParser(t).ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, tok.ErrTokenExpired), "Expected an error when token is expired")
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "An expired token is invalid")
 }
@@ -355,7 +296,7 @@ func TestValidateToken_AudienceMismatch(t *testing.T) {
 	}
 	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "Token generation failed: %v", err)
-	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
+	_, err = newHMACParser(t).ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, jwt.ErrTokenInvalidClaims), "Error raised from JWT parse from invalid claims")
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with wrong audience to fail")
 }
@@ -368,7 +309,7 @@ func TestValidateToken_NoAudience(t *testing.T) {
 	}
 	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "Token generation failed: %v", err)
-	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
+	_, err = newHMACParser(t).ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, jwt.ErrTokenInvalidClaims), "Error raised from JWT parse from invalid claims")
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with missing audience to fail")
 }
@@ -382,212 +323,9 @@ func TestValidateToken_NoSubject(t *testing.T) {
 	}
 	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "Token generation failed: %v", err)
-	_, err = hmacParser.ValidateToken(t.Context(), tokenStr)
+	_, err = newHMACParser(t).ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with missing subject and username to fail")
 	tassert.Fatal(t, errors.Is(err, tok.ErrNoSubject), "Expected validating token with missing subject and username to fail")
-}
-
-// For testing tokens with public key lookup by token issuer
-
-type testTokenEnv struct {
-	keyID    string
-	rsaKey   *rsa.PrivateKey
-	jwksJSON string
-	jwksSrv  *httptest.Server
-	oidcSrv  *httptest.Server
-	keyCache *tok.KeyCacheManager
-	tkParser *tok.TokenParser
-}
-
-func setupTokenTestEnv(t *testing.T, init bool) testTokenEnv {
-	keyID := "123"
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	tassert.Errorf(t, err == nil, "Failed to create rsa signing key: %v", err)
-	// Get the JWKS we'd expect the issuer to give to match this key info
-	jwksJSON := generateTestJWKS(t, rsaKey, keyID)
-	// Mock JWKS server will return a JWKS including an entry for this key ID
-	jwksS := createMockJWKSServer(jwksJSON)
-	// Mock OIDC discovery server will return the URL to the JWKS endpoint
-	oidcS := createMockOIDCServer(jwksS.URL)
-	// The URL of the mock server is our issuer
-	oidcConf := &cmn.OIDCConf{AllowedIssuers: []string{oidcS.URL}}
-	// Set up the TLS config and get the config for our client
-	authConf := &cmn.AuthConf{OIDC: oidcConf}
-	client := getKeyCacheClient(t, oidcS.Certificate())
-	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, client, nil, nil)
-	tkParser := tok.NewTokenParser(authConf, keyCacheManager)
-	tassert.Fatalf(t, err == nil, "Failed to create token parser: %v", err)
-	if init {
-		initKeyCacheManager(t, keyCacheManager)
-	}
-	t.Cleanup(func() {
-		jwksS.Close()
-		oidcS.Close()
-	})
-
-	return testTokenEnv{
-		keyID, rsaKey, jwksJSON, jwksS, oidcS, keyCacheManager, tkParser,
-	}
-}
-
-func initKeyCacheManager(t *testing.T, kcm *tok.KeyCacheManager) {
-	kcm.Init(t.Context())
-	jwksCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	err := kcm.PopulateJWKSCache(jwksCtx)
-	tassert.Fatalf(t, err == nil, "Failed to populate key manager cache: %v", err)
-}
-
-func getKeyCacheClient(t *testing.T, cert *x509.Certificate) *http.Client {
-	tls := cmn.TLSArgs{
-		SkipVerify: false,
-	}
-	if cert != nil {
-		// Extract the certificate from the test server and encode it as PEM
-		caCertPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Raw,
-		})
-
-		// Write to a temp file
-		caFile, err := os.CreateTemp(t.TempDir(), "test-ca-*.pem")
-		tassert.Fatalf(t, err == nil, "Failed to create temp CA file: %v", err)
-		t.Cleanup(func() {
-			os.Remove(caFile.Name())
-		})
-
-		_, err = caFile.Write(caCertPEM)
-		tassert.Fatalf(t, err == nil, "Failed to write CA cert: %v", err)
-		caFile.Close()
-
-		tls = cmn.TLSArgs{
-			ClientCA:   caFile.Name(), // Path to the CA cert file
-			SkipVerify: false,
-		}
-	}
-	transport := cmn.TransportArgs{
-		DialTimeout:      1 * time.Second,
-		Timeout:          2 * time.Second,
-		IdleConnsPerHost: 0,
-		MaxIdleConns:     1,
-	}
-	return cmn.NewClientTLS(transport, tls, false)
-}
-
-func TestValidateToken_IssLookup(t *testing.T) {
-	env := setupTokenTestEnv(t, true)
-	// Test with claims issued by the allowed issuer
-	basicAdminClaims.Issuer = env.oidcSrv.URL
-	tk := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
-	_, err := env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Errorf(t, err == nil, "Failed to validate RSA-signed token: %v", err)
-}
-
-func TestValidateToken_IssLookupNoInit(t *testing.T) {
-	env := setupTokenTestEnv(t, false)
-
-	// Test with claims issued by the allowed issuer
-	basicAdminClaims.Issuer = env.oidcSrv.URL
-	tk := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
-	_, err := env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Error(t, err != nil, "Expected token validation to fail with uninitialized cache manager")
-
-	// Init and repeat
-	env.keyCache.Init(t.Context())
-	_, err = env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Errorf(t, err == nil, "Expected validation to succeed after initialization without pre-population: %v", err)
-
-	// "Proper" pre-population after dynamic lookup
-	jwksCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	err = env.keyCache.PopulateJWKSCache(jwksCtx)
-	tassert.Fatalf(t, err == nil, "Failed to populate key manager cache: %v", err)
-	_, err = env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Errorf(t, err == nil, "Expected validation to still succeed after manual pre-population: %v", err)
-}
-
-func TestValidateToken_IssLookupNoKey(t *testing.T) {
-	env := setupTokenTestEnv(t, true)
-
-	emptyKeyToken := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, "")
-	_, err := env.tkParser.ValidateToken(t.Context(), emptyKeyToken)
-	tassert.Errorf(t, err != nil, "Expected validation failure with no key id in token header")
-
-	badKeyToken := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, "999")
-	_, err = env.tkParser.ValidateToken(t.Context(), badKeyToken)
-	tassert.Errorf(t, err != nil, "Expected validation failure with no matching key id in token header")
-}
-
-func TestValidateToken_IssLookupNotAllowed(t *testing.T) {
-	env := setupTokenTestEnv(t, true)
-	// Empty allowed issuer fails validation
-	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{}}}
-	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, nil, nil, nil)
-	initKeyCacheManager(t, keyCacheManager)
-	emptyTkParser := tok.NewTokenParser(authConf, keyCacheManager)
-	basicAdminClaims.Issuer = env.oidcSrv.URL
-	tk := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
-	_, err := emptyTkParser.ValidateToken(t.Context(), tk)
-	tassert.Error(t, err != nil, "Expected validation failure with no allowed issuers")
-
-	basicAdminClaims.Issuer = "wrong-issuer"
-	tk = createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
-	_, err = env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Error(t, err != nil, "Expected validation failure with incorrect token issuer")
-
-	basicAdminClaims.Issuer = ""
-	tk = createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
-	_, err = env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Error(t, err != nil, "Expected validation failure with missing token issuer")
-}
-
-func TestKeyCacheManager_Population_InvalidDiscovery(t *testing.T) {
-	// Test that an invalid discovery URL raises an error when initializing a KeyCacheManager
-	for _, url := range invalidIssuerURLs {
-		authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{url}}}
-		kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), nil, nil)
-		kcm.Init(t.Context())
-		err := kcm.PopulateJWKSCache(t.Context())
-		tassert.Errorf(
-			t, err != nil,
-			"Key Cache Manager population should raise error for invalid discovery URL %s", url,
-		)
-	}
-}
-
-func TestKeyCacheManager_Population_UnresponsiveDiscovery(t *testing.T) {
-	// Test that a valid but unresponsive discovery URL does NOT raise an error when initializing a KeyCacheManager
-	validURL := "https://missing-host:1234"
-	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{validURL}}}
-	kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), cacheConfNoRetry, nil)
-	kcm.Init(t.Context())
-	err := kcm.PopulateJWKSCache(t.Context())
-	tassert.Errorf(
-		t, err == nil,
-		"Key Cache Manager population should not raise error for valid unresponsive discovery URL, got %v", err,
-	)
-}
-
-func TestValidateClaims_CertificateValidation(t *testing.T) {
-	env := setupTokenTestEnv(t, false)
-	oidcConf := &cmn.OIDCConf{AllowedIssuers: []string{env.oidcSrv.URL}}
-	authConf := &cmn.AuthConf{OIDC: oidcConf}
-	// Add OIDC server WITHOUT adding certificate to trusted certs
-	clientNoTrust := getKeyCacheClient(t, nil)
-	kcm := tok.NewKeyCacheManager(authConf.OIDC, clientNoTrust, cacheConfNoRetry, nil)
-	// No error, but issuer isn't added
-	initKeyCacheManager(t, kcm)
-	parser := tok.NewTokenParser(authConf, kcm)
-	// Token validation fails
-	tk := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
-	_, err := parser.ValidateToken(t.Context(), tk)
-	tassert.Error(t, err != nil, "Token validation should fail without certificate trust on issuer")
-	// Recreate with client using trusted certificate
-	clientWithTrust := getKeyCacheClient(t, env.oidcSrv.Certificate())
-	kcmWithTrust := tok.NewKeyCacheManager(authConf.OIDC, clientWithTrust, cacheConfNoRetry, nil)
-	parser = tok.NewTokenParser(authConf, kcmWithTrust)
-	_, err = parser.ValidateToken(t.Context(), tk)
-	tassert.Error(t, err != nil, "Token parser initialization should succeed with issuer certificate trust")
 }
 
 func TestCheckPermissions_Denied(t *testing.T) {
@@ -620,4 +358,88 @@ func TestCheckPermissions_Granted(t *testing.T) {
 			tassert.Errorf(t, err == nil, "%s should be allowed, got: %v", perm.Describe(false), err)
 		})
 	}
+}
+
+func TestValidateToken_IssLookup(t *testing.T) {
+	env := setupTokenTestEnv(t, true)
+	// Test with claims issued by the allowed issuer
+	tk := createTokenWithKeyID(t, newAdminClaimsWithIssuer(env.oidcSrv.URL), env.rsaKey, env.keyID)
+	_, err := env.tkParser.ValidateToken(t.Context(), tk)
+	tassert.Errorf(t, err == nil, "Failed to validate RSA-signed token: %v", err)
+}
+
+func TestValidateToken_IssLookupNoInit(t *testing.T) {
+	env := setupTokenTestEnv(t, false)
+
+	// Test with claims issued by the allowed issuer
+	tk := createTokenWithKeyID(t, newAdminClaimsWithIssuer(env.oidcSrv.URL), env.rsaKey, env.keyID)
+	_, err := env.tkParser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Expected token validation to fail with uninitialized cache manager")
+
+	// Init and repeat
+	env.keyCache.Init(t.Context())
+	_, err = env.tkParser.ValidateToken(t.Context(), tk)
+	tassert.Errorf(t, err == nil, "Expected validation to succeed after initialization without pre-population: %v", err)
+
+	// "Proper" pre-population after dynamic lookup
+	jwksCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err = env.keyCache.PopulateJWKSCache(jwksCtx)
+	tassert.Fatalf(t, err == nil, "Failed to populate key manager cache: %v", err)
+	_, err = env.tkParser.ValidateToken(t.Context(), tk)
+	tassert.Errorf(t, err == nil, "Expected validation to still succeed after manual pre-population: %v", err)
+}
+
+func TestValidateToken_IssLookupNoKey(t *testing.T) {
+	env := setupTokenTestEnv(t, true)
+
+	emptyKeyToken := createTokenWithKeyID(t, newAdminClaims(), env.rsaKey, "")
+	_, err := env.tkParser.ValidateToken(t.Context(), emptyKeyToken)
+	tassert.Errorf(t, err != nil, "Expected validation failure with no key id in token header")
+
+	badKeyToken := createTokenWithKeyID(t, newAdminClaims(), env.rsaKey, "999")
+	_, err = env.tkParser.ValidateToken(t.Context(), badKeyToken)
+	tassert.Errorf(t, err != nil, "Expected validation failure with no matching key id in token header")
+}
+
+func TestValidateToken_IssLookupNotAllowed(t *testing.T) {
+	env := setupTokenTestEnv(t, true)
+	// Empty allowed issuer fails validation
+	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{}}}
+	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, nil, nil, nil)
+	initKeyCacheManager(t, keyCacheManager)
+	emptyTkParser := tok.NewTokenParser(keyCacheManager, authConf)
+	tk := createTokenWithKeyID(t, newAdminClaimsWithIssuer(env.oidcSrv.URL), env.rsaKey, env.keyID)
+	_, err := emptyTkParser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Expected validation failure with no allowed issuers")
+
+	tk = createTokenWithKeyID(t, newAdminClaimsWithIssuer("wrong-issuer"), env.rsaKey, env.keyID)
+	_, err = env.tkParser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Expected validation failure with incorrect token issuer")
+
+	tk = createTokenWithKeyID(t, newAdminClaimsWithIssuer(""), env.rsaKey, env.keyID)
+	_, err = env.tkParser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Expected validation failure with missing token issuer")
+}
+
+func TestValidateToken_IssLookupCertificateValidation(t *testing.T) {
+	env := setupTokenTestEnv(t, false)
+	oidcConf := &cmn.OIDCConf{AllowedIssuers: []string{env.oidcSrv.URL}}
+	authConf := &cmn.AuthConf{OIDC: oidcConf}
+	// Add OIDC server WITHOUT adding certificate to trusted certs
+	clientNoTrust := getKeyCacheClient(t, nil)
+	kcm := tok.NewKeyCacheManager(authConf.OIDC, clientNoTrust, cacheConfNoRetry, nil)
+	// No error, but issuer isn't added
+	initKeyCacheManager(t, kcm)
+	parser := tok.NewTokenParser(kcm, authConf)
+	// Token validation fails
+	tk := createTokenWithKeyID(t, newAdminClaims(), env.rsaKey, env.keyID)
+	_, err := parser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Token validation should fail without certificate trust on issuer")
+	// Recreate with client using trusted certificate
+	clientWithTrust := getKeyCacheClient(t, env.oidcSrv.Certificate())
+	kcmWithTrust := tok.NewKeyCacheManager(authConf.OIDC, clientWithTrust, cacheConfNoRetry, nil)
+	parser = tok.NewTokenParser(kcmWithTrust, authConf)
+	_, err = parser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Token parser initialization should succeed with issuer certificate trust")
 }
