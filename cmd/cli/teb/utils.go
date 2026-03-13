@@ -269,6 +269,10 @@ func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	return info
 }
 
+func FmtChunked(count int, maxSize int64) string {
+	return fmt.Sprintf("%d chunks / %s", count, cos.IEC(maxSize, 2))
+}
+
 func fmtDaemonID(id string, smap *meta.Smap, daeStatus string) (snamePlus string) {
 	snamePlus, _ = fmtStatusSID(id, smap, daeStatus)
 	return

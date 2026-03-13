@@ -9,9 +9,12 @@ version          1
 PROPERTY         VALUE
 ^atime(.*)$
 checksum         xxhash2[05967d5390ac53b0]
+chunked          -
 ^copies\s*1(.*)$
 custom           -
 ec               -
+^etag(.*)$
+^last-modified(.*)$
 ^location(t.+:mp.+)$
 name             ais://$BUCKET_1/object_1.txt
 size             11B
@@ -19,9 +22,25 @@ version          1
 PROPERTY         VALUE
 ^atime(.*)$
 checksum         xxhash2[05967d5390ac53b0]
+chunked          -
+^copies\s*1(.*)$
+custom           -
+ec               -
+^etag(.*)$
+^last-modified(.*)$
+^location(t.+:mp.+)$
+name             ais://$BUCKET_1/object_1.txt
+size             11B
+version          1
+PROPERTY         VALUE
+^atime(.*)$
+checksum         xxhash2[05967d5390ac53b0]
+chunked          -
 ^copies\s*1(.*)$
 ^custom\s*\[key(.*)$
 ec               -
+^etag(.*)$
+^last-modified(.*)$
 ^location(t.+:mp.+)$
 name             ais://$BUCKET_1/object_1.txt
 size             11B

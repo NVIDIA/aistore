@@ -8,6 +8,8 @@ ais show object ais://$BUCKET_2/object_1.txt // FAIL "Bucket "ais://$BUCKET_2" d
 ais show object ais://$BUCKET_1/object_1.txt
 ais show object ais://$BUCKET_1/object_1.txt --props=size,version
 ais show object ais://$BUCKET_1/object_1.txt --props=all
+ais show object ais://$BUCKET_1/object_1.txt --props=all,size
+ais show object ais://$BUCKET_1/object_1.txt --props=invalidprop // FAIL "invalid property"
 
 ais show object aiss://$BUCKET_1/object_1.txt // FAIL "invalid backend provider "aiss""
 

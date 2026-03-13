@@ -244,8 +244,9 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 
 func isObjPresent(c *cli.Context, bck cmn.Bck, objName string) error {
 	name := bck.Cname(objName)
+	// TODO: replace with api.CheckPresence once implemented
 	hargs := api.HeadArgs{FltPresence: apc.FltPresentNoProps, Silent: true}
-	_, err := api.HeadObject(apiBP, bck, objName, hargs)
+	_, err := api.HeadObjectV2(apiBP, bck, objName, apc.GetPropsName, hargs)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
 			fmt.Fprintf(c.App.Writer, "%s is not present (\"not cached\") in cluster\n", name)
@@ -272,9 +273,7 @@ func calcPutRefresh(c *cli.Context) time.Duration {
 // via `ais ls bucket/object` and `ais show bucket/object`
 func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (notfound bool, _ error) {
 	var (
-		propsFlag     []string
-		selectedProps []string
-		hargs         = api.HeadArgs{
+		hargs = api.HeadArgs{
 			Silent: flagIsSet(c, silentFlag) || silent,
 		}
 		isList      = actionIsHandler(c.Command.Action, listAnyHandler)
@@ -299,8 +298,31 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 		encObjName = warnEscapeObjName(c, objName, &warned)
 	)
 
+	var selectedProps []string
+	switch {
+	case flagIsSet(c, allPropsFlag):
+		selectedProps = apc.GetPropsAllV2
+	case flagIsSet(c, objPropsFlag):
+		parsed := splitCsv(parseStrFlag(c, objPropsFlag))
+		if slices.Contains(parsed, allPropsFlag.GetName()) {
+			selectedProps = apc.GetPropsAllV2
+		} else {
+			selectedProps = parsed
+		}
+	default:
+		// NOTE: three different defaults; compare w/ `listObjects()`
+		switch {
+		case bck.IsAIS() || bck.IsRemoteAIS():
+			selectedProps = apc.GetPropsDefaultAIS
+		case bck.IsCloud():
+			selectedProps = apc.GetPropsDefaultCloudV2
+		default:
+			selectedProps = apc.GetPropsMinimalV2
+		}
+	}
+
 	// do
-	objProps, err := api.HeadObject(apiBP, bck, encObjName, hargs)
+	objProps, err := api.HeadObjectV2(apiBP, bck, encObjName, strings.Join(selectedProps, apc.LsPropsSepa), hargs)
 	if err != nil {
 		notfound = cmn.IsStatusNotFound(err)
 		if !notfound {
@@ -322,34 +344,9 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 		return notfound, fmt.Errorf("%s%q not found in %s%s", tag, objName, bck.Cname(""), hint)
 	}
 
-	if flagIsSet(c, allPropsFlag) {
-		propsFlag = apc.GetPropsAll
-	} else if flagIsSet(c, objPropsFlag) {
-		s := parseStrFlag(c, objPropsFlag)
-		propsFlag = splitCsv(s)
-	}
-
-	// NOTE: three different defaults; compare w/ `listObjects()`
-	switch {
-	case len(propsFlag) == 0:
-		selectedProps = apc.GetPropsMinimal
-		if bck.IsAIS() {
-			selectedProps = apc.GetPropsDefaultAIS
-		} else if bck.IsCloud() {
-			selectedProps = apc.GetPropsDefaultCloud
-		}
-	case slices.Contains(propsFlag, "all"):
-		selectedProps = apc.GetPropsAll
-	default:
-		selectedProps = propsFlag
-	}
-
 	propNVs := make(nvpairList, 0, len(selectedProps))
 	for _, name := range selectedProps {
-		v, err := propVal(objProps, name)
-		if err != nil {
-			return false, err
-		}
+		v := propVal(objProps, name, bck, objName)
 		if v == "" {
 			continue
 		}
@@ -378,46 +375,62 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 	return false, teb.Print(propNVs, teb.PropValTmpl)
 }
 
-func propVal(op *cmn.ObjectProps, name string) (v string, _ error) {
+func propVal(op *cmn.ObjectPropsV2, name string, bck cmn.Bck, objName string) string {
 	switch name {
 	case apc.GetPropsName:
-		v = op.Bck.Cname(op.Name)
+		return bck.Cname(objName)
 	case apc.GetPropsSize:
-		v = cos.IEC(op.Size, 2)
+		return cos.IEC(op.Size, 2)
 	case apc.GetPropsChecksum:
-		v = op.Cksum.String()
-	case apc.GetPropsAtime:
-		v = cos.FormatNanoTime(op.Atime, "")
-	case apc.GetPropsVersion:
-		v = op.Version()
-	case apc.GetPropsCached:
-		if op.Bck.IsAIS() {
-			debug.Assert(op.Present)
-			return "", nil
+		if op.Cksum == nil {
+			return teb.NotSetVal
 		}
-		v = teb.FmtBool(op.Present)
+		return op.Cksum.String()
+	case apc.GetPropsAtime:
+		return cos.FormatNanoTime(op.Atime, "")
+	case apc.GetPropsVersion:
+		return op.Version()
+	case apc.GetPropsLastModified:
+		return op.LastModified
+	case apc.GetPropsETag:
+		return op.ETag
+	case apc.GetPropsCached:
+		if bck.IsAIS() {
+			debug.Assert(op.Present)
+			return ""
+		}
+		return teb.FmtBool(op.Present)
 	case apc.GetPropsCopies:
-		v = teb.FmtCopies(op.Mirror.Copies)
+		if op.Mirror == nil {
+			return teb.NotSetVal
+		}
+		v := teb.FmtCopies(op.Mirror.Copies)
 		if len(op.Mirror.Paths) != 0 {
 			v += fmt.Sprintf(" %v", op.Mirror.Paths)
 		}
+		return v
 	case apc.GetPropsEC:
-		v = teb.FmtEC(op.EC.Generation, op.EC.DataSlices, op.EC.ParitySlices, op.EC.IsECCopy)
-	case apc.GetPropsCustom:
-		if custom := op.GetCustomMD(); len(custom) == 0 {
-			v = teb.NotSetVal
-		} else {
-			v = cmn.CustomMD2S(custom)
+		if op.EC == nil {
+			return teb.NotSetVal
 		}
+		return teb.FmtEC(op.EC.Generation, op.EC.DataSlices, op.EC.ParitySlices, op.EC.IsECCopy)
+	case apc.GetPropsCustom:
+		if custom := op.GetCustomMD(); len(custom) != 0 {
+			return cmn.CustomMD2S(custom)
+		}
+		return teb.NotSetVal
 	case apc.GetPropsLocation:
-		v = op.Location
-	case apc.GetPropsStatus:
-		// no "object status" in `cmn.ObjectProps` - nothing to do (see also: `cmn.LsoEnt`)
-	default:
-		return "", fmt.Errorf("invalid object property %q (expecting one of: %v)", name, apc.GetPropsAll)
+		if op.Location == nil {
+			return teb.NotSetVal
+		}
+		return *op.Location
+	case apc.GetPropsChunked:
+		if op.Chunks == nil || op.Chunks.ChunkCount == 0 {
+			return teb.NotSetVal
+		}
+		return teb.FmtChunked(op.Chunks.ChunkCount, op.Chunks.MaxChunkSize)
 	}
-
-	return v, nil
+	return ""
 }
 
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {

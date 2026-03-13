@@ -275,8 +275,9 @@ func archMultiObjHandler(c *cli.Context) error {
 		maxw = 8 * time.Second
 	}
 	for total < maxw {
+		// TODO: replace with api.CheckPresence once implemented
 		hargs := api.HeadArgs{FltPresence: apc.FltPresentNoProps, Silent: true}
-		if _, errV := api.HeadObject(apiBP, a.dst.bck, a.dst.oname, hargs); errV == nil {
+		if _, errV := api.HeadObjectV2(apiBP, a.dst.bck, a.dst.oname, apc.GetPropsName, hargs); errV == nil {
 			goto ex
 		}
 		time.Sleep(sleep)

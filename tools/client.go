@@ -116,9 +116,10 @@ func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh 
 }
 
 func CheckObjIsPresent(proxyURL string, bck cmn.Bck, objName string) bool {
+	// TODO: replace with api.CheckPresence once implemented
 	bp := BaseAPIParams(proxyURL)
-	hargs := api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}
-	_, err := api.HeadObject(bp, bck, objName, hargs)
+	hargs := api.HeadArgs{FltPresence: apc.FltPresentNoProps, Silent: true}
+	_, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsName, hargs)
 	return err == nil
 }
 

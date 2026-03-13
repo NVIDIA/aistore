@@ -542,6 +542,9 @@ func headobjV2(reqParams *ReqParams, noprops bool, props string) (*cmn.ObjectPro
 	return op, nil
 }
 
+// TODO: add CheckPresence(bp BaseParams, bck cmn.Bck, objName string) error
+// as a convenience wrapper around HeadObjectV2 for presence-only checks (FltPresentNoProps).
+
 // SetObjectCustomProps ================================================================================
 //
 // Given cos.StrKVs (map[string]string) keys and values, sets object's custom properties.
