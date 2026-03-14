@@ -7,6 +7,8 @@ package xs
 
 import (
 	"encoding/binary"
+	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -201,6 +203,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 		lastToken = "__dummy__"
 		all       = make(cmn.LsoEntries, 0, lsmsg.PageSize*r.msg.PagesPerChunk) // prealloc and reuse
 		fast      = true
+		nonRecurs = lsmsg.IsFlagSet(apc.LsNoRecursion)
 	)
 	const warn = "backend returned non-reused entries slice; falling back to append path"
 	for num := 1; !r.IsAborted() && lastToken != ""; num++ {
@@ -222,6 +225,14 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 			if err := r.filterKeepMine(lst, ubuf, smap); err != nil {
 				r.Abort(err)
 				return
+			}
+
+			// make an exception for apc.LsNoRecursion;
+			// otherwise rely on sorted backend.ListObjects()
+			if nonRecurs {
+				sort.Slice(lst.Entries, func(i, j int) bool {
+					return lst.Entries[i].Name < lst.Entries[j].Name
+				})
 			}
 
 			// backend must reuse the passed-in slice ([:0] + append)
@@ -281,6 +292,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 	r.cleanup()
 }
 
+// TODO: ref
 func (*XactNBI) filterKeepMine(lst *cmn.LsoRes, ubuf []byte, smap *meta.Smap) error {
 	j := 0
 	sid := core.T.SID()
@@ -294,10 +306,19 @@ func (*XactNBI) filterKeepMine(lst *cmn.LsoRes, ubuf []byte, smap *meta.Smap) er
 		if si.ID() != sid {
 			continue
 		}
+
+		// NOTE:
+		// - always skip virtual dirs (a.k.a. common prefixes)
+		// - see also "trailing slash" convention across codebase
+		if en.IsAnyFlagSet(apc.EntryIsDir) || cos.IsLastB(en.Name, filepath.Separator) {
+			continue
+		}
+
 		lst.Entries[j] = en
 		j++
 	}
 	lst.Entries = lst.Entries[:j]
+
 	return nil
 }
 

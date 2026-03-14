@@ -38,7 +38,7 @@ type nbiCtx struct {
 
 	// runtime state
 	chunkNum int            // current chunk number (1-based)
-	nidx     int            // next index within LsoEntries
+	nidx     int            // next index within LsoEntries (limited scope)
 	entries  cmn.LsoEntries // decoded from current chunk
 	hdr      nbiChunkHdr    // current chunk header=[first, last, cnt]
 
@@ -177,8 +177,18 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	lst.Entries = lst.Entries[:0]
 	lst.ContinuationToken = ""
 
+	nbi.nidx = 0 // (scope: within one call)
+
 	if msg.ContinuationToken != "" {
 		if msg.ContinuationToken < nbi.hdr.first {
+			if err := nbi.rewind(msg.ContinuationToken); err != nil {
+				return err
+			}
+		} else if nbi.chunkNum > nbi.ufest.Count() {
+			if msg.ContinuationToken >= nbi.hdr.last {
+				// we are done
+				return nil
+			}
 			if err := nbi.rewind(msg.ContinuationToken); err != nil {
 				return err
 			}
@@ -195,7 +205,7 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	pageSize := cos.Ternary(msg.PageSize <= 0, apc.MaxPageSizeAIS, msg.PageSize)
 	for len(lst.Entries) < int(pageSize) {
 		// next chunk
-		if nbi.nidx >= len(nbi.entries) {
+		if nbi.nidx >= len(nbi.entries) { // TODO: use nbi.hdr.entryCount here and elsewhere
 			// clone entries from the current (soon previous)  chunk
 			for i, e := range lst.Entries {
 				cp := *e
@@ -210,50 +220,48 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 			if err := nbi.readChunk(); err != nil {
 				return err
 			}
-			// skip this chunk (#1)
-			if msg.Prefix != "" && nbi.hdr.last < msg.Prefix {
-				nbi.skip()
-				continue
-			}
 		}
 
 		// prefix
 		if msg.Prefix != "" {
-			if nbi.nidx == 0 && nbi.entries[0].Name < msg.Prefix {
+			if nbi.nidx < len(nbi.entries) && nbi.entries[nbi.nidx].Name < msg.Prefix {
 				i := sort.Search(len(nbi.entries), func(i int) bool {
 					return nbi.entries[i].Name >= msg.Prefix
 				})
-				// skip this chunk (#2)
 				if i >= len(nbi.entries) {
 					nbi.skip()
 					continue
 				}
 				nbi.nidx = i
 			}
+
 			out := nbi.entries[nbi.nidx]
 			if !strings.HasPrefix(out.Name, msg.Prefix) {
-				nbi.skip()
+				nbi.nidx++
 				continue
 			}
-			nbi.nidx++ // next
+			nbi.nidx++
 			lst.Entries = append(lst.Entries, out)
 			continue
 		}
-
 		out := nbi.entries[nbi.nidx]
 		nbi.nidx++ // next
 		lst.Entries = append(lst.Entries, out)
 	}
 
-	more := true
+	more := len(nbi.entries) > 0
 	if nbi.nidx == len(nbi.entries) {
-		// nbi.entries = nbi.entries[:0]
-		// nbi.nidx = 0
 		more = nbi.chunkNum < nbi.ufest.Count()
 	}
-	if more {
-		lst.ContinuationToken = lst.Entries[len(lst.Entries)-1].Name
+	if l := len(lst.Entries); more && l > 0 {
+		lst.ContinuationToken = lst.Entries[l-1].Name
 		debug.Assert(lst.ContinuationToken != "")
+
+		if msg.Prefix != "" {
+			if nbi.nidx < len(nbi.entries) && !strings.HasPrefix(nbi.entries[nbi.nidx].Name, msg.Prefix) {
+				lst.ContinuationToken = ""
+			}
+		}
 	}
 
 	return nil
@@ -265,39 +273,6 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 
 func (nbi *nbiCtx) seekAfter(token string) error {
 	debug.Assert(token != "")
-
-	// page loop already advanced past last chunk
-	if nbi.chunkNum > nbi.ufest.Count() {
-		if token >= nbi.hdr.last {
-			// we are done
-			return nil
-		}
-		// undo eof state - from previous only
-		// nlog.Warningf("token points back %q < %q (nbi.hdr.last)", token, nbi.hdr.last)
-		nbi.chunkNum--
-		if err := nbi.readChunk(); err != nil {
-			return err
-		}
-		nbi.nidx = 0
-	}
-
-	// TODO -- FIXME: (brute-force and non-optimal)
-	if token != "" {
-		nbi.nidx = 0
-	}
-
-	// current chunk exhausted: must load next before searching
-	if nbi.nidx >= len(nbi.entries) || len(nbi.entries) == 0 {
-		nbi.chunkNum++
-		if nbi.chunkNum > nbi.ufest.Count() {
-			nbi.nidx = 0
-			nbi.entries = nbi.entries[:0]
-			return nil
-		}
-		if err := nbi.readChunk(); err != nil {
-			return err
-		}
-	}
 
 	// fast path: search current chunk
 	if nbi.nidx < len(nbi.entries) && len(nbi.entries) > 0 && token < nbi.hdr.last {

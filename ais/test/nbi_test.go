@@ -255,7 +255,7 @@ func TestListInventory(t *testing.T) {
 				lst, err := api.ListObjects(bp, m.bck, lsmsg, args)
 				tassert.CheckFatal(t, err)
 
-				numPages++
+				numPages++ // FIXME: implies api.ListObjectsPage()
 				allEntries = append(allEntries, lst.Entries...)
 
 				if lst.ContinuationToken == "" {
@@ -321,6 +321,13 @@ func TestListInventoryPrefix(t *testing.T) {
 		}
 		bp = tools.BaseAPIParams()
 	)
+
+	if cliBck.IsRemoteAIS() {
+		a := max(rand.IntN(100), 10)
+		m1.num *= a
+		m2.num *= a
+	}
+
 	m1.init(true /*cleanup*/)
 	m1.puts()
 
@@ -334,9 +341,9 @@ func TestListInventoryPrefix(t *testing.T) {
 		LsoMsg: apc.LsoMsg{
 			Prefix:   parent,
 			Props:    apc.GetPropsName,
-			PageSize: 5,
+			PageSize: max(int64(m1.num/10), 4),
 		},
-		PagesPerChunk: 2,
+		PagesPerChunk: int64(max(rand.IntN(4), 1)),
 	}
 
 	xid, err := api.CreateNBI(bp, m1.bck, createMsg)
@@ -364,14 +371,14 @@ func TestListInventoryPrefix(t *testing.T) {
 			lsmsg := &apc.LsoMsg{
 				Prefix:            tc.prefix,
 				Props:             apc.GetPropsName,
-				PageSize:          3,
+				PageSize:          max(int64(m1.num/10), 4),
 				Flags:             apc.LsNBI,
 				ContinuationToken: token,
 			}
 			args := api.ListArgs{
 				Header: http.Header{apc.HdrInvName: []string{createMsg.Name}},
 			}
-			lst, err := api.ListObjects(bp, m1.bck, lsmsg, args)
+			lst, err := api.ListObjectsPage(bp, m1.bck, lsmsg, args)
 			tassert.CheckFatal(t, err)
 
 			numPages++

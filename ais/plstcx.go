@@ -441,7 +441,7 @@ func finLsoA(objs *cmn.LsoRes, lsmsg *apc.LsoMsg) {
 	// when recursion is disabled (apc.LsNoRecursion)
 	// the result _may_ include duplicated names of the virtual subdirectories
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
-		objs.Entries = dedupLso(objs.Entries, maxSize, false /*no-dirs*/)
+		objs.Entries = dedupLso(objs.Entries, maxSize)
 	}
 	if l := len(objs.Entries); l >= maxSize {
 		objs.Entries = objs.Entries[:maxSize]
@@ -450,15 +450,12 @@ func finLsoA(objs *cmn.LsoRes, lsmsg *apc.LsoMsg) {
 	}
 }
 
-func dedupLso(entries cmn.LsoEntries, maxSize int, noDirs bool) []*cmn.LsoEnt {
+func dedupLso(entries cmn.LsoEntries, maxSize int) []*cmn.LsoEnt {
 	var j int
 	for _, en := range entries {
 		if j > 0 && entries[j-1].Name == en.Name {
 			continue
 		}
-
-		// expecting backends for filter out accordingly
-		debug.Assert(!noDirs || !en.IsAnyFlagSet(apc.EntryIsDir))
 
 		entries[j] = en
 		j++
@@ -476,16 +473,18 @@ func dedupLso(entries cmn.LsoEntries, maxSize int, noDirs bool) []*cmn.LsoEnt {
 // Entries above the cut will be re-emitted by their owning target on the next call.
 func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
 	var (
-		minToken   string
-		entryCount int
-		page       = &cmn.LsoRes{UUID: lsmsg.UUID}
+		minToken string
+		ncap     int
+		page     = &cmn.LsoRes{UUID: lsmsg.UUID}
 	)
 
 	// 1. find min continuation token and count entries
 	for _, l := range lists {
 		page.Flags |= l.Flags
-		entryCount += len(l.Entries)
+		n := len(l.Entries)
+		ncap += n
 		if l.ContinuationToken != "" {
+			debug.Assert(n == 0 || l.ContinuationToken == l.Entries[n-1].Name)
 			if minToken == "" || l.ContinuationToken < minToken {
 				minToken = l.ContinuationToken
 			}
@@ -493,39 +492,29 @@ func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
 	}
 	page.ContinuationToken = minToken
 
-	if entryCount == 0 {
+	if ncap == 0 {
 		return page
 	}
 
 	// 2. merge and sort
-	page.Entries = make(cmn.LsoEntries, 0, entryCount)
+	entries := make(cmn.LsoEntries, 0, ncap)
 	for _, l := range lists {
-		page.Entries = append(page.Entries, l.Entries...)
+		entries = append(entries, l.Entries...)
 	}
-	cmn.SortLso(page.Entries)
+	cmn.SortLso(entries)
 
-	// 3. drop already-delivered entries (re-emitted due to minToken backtrack)
-	if lsmsg.ContinuationToken != "" {
-		i := sort.Search(len(page.Entries), func(i int) bool {
-			return page.Entries[i].Name > lsmsg.ContinuationToken
-		})
-		if i > 0 {
-			clear(page.Entries[:i])
-			page.Entries = page.Entries[i:]
-		}
-	}
-
-	// 4. keep only entries <= minToken
+	// 3. truncate (> minToken)
 	if minToken != "" {
-		i := sort.Search(len(page.Entries), func(i int) bool {
-			return page.Entries[i].Name > minToken
+		i := sort.Search(len(entries), func(i int) bool {
+			return entries[i].Name > minToken
 		})
-		if i < len(page.Entries) {
-			clear(page.Entries[i:])
-			page.Entries = page.Entries[:i]
+		if i < len(entries) {
+			clear(entries[i:])
+			entries = entries[:i]
 		}
 	}
 
+	page.Entries = entries
 	return page
 }
 
