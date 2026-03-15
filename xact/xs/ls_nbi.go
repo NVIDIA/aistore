@@ -225,14 +225,15 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		// prefix
 		if msg.Prefix != "" {
 			if nbi.nidx < len(nbi.entries) && nbi.entries[nbi.nidx].Name < msg.Prefix {
-				i := sort.Search(len(nbi.entries), func(i int) bool {
-					return nbi.entries[i].Name >= msg.Prefix
+				entries := nbi.entries[nbi.nidx:]
+				i := sort.Search(len(entries), func(i int) bool {
+					return entries[i].Name >= msg.Prefix
 				})
-				if i >= len(nbi.entries) {
+				if i >= len(entries) {
 					nbi.skip()
 					continue
 				}
-				nbi.nidx = i
+				nbi.nidx += i
 			}
 
 			out := nbi.entries[nbi.nidx]
@@ -257,11 +258,9 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		lst.ContinuationToken = lst.Entries[l-1].Name
 		debug.Assert(lst.ContinuationToken != "")
 
-		if msg.Prefix != "" {
-			if nbi.nidx < len(nbi.entries) && !strings.HasPrefix(nbi.entries[nbi.nidx].Name, msg.Prefix) {
-				lst.ContinuationToken = ""
-			}
-		}
+		// TODO:
+		// design-in prefix-based early termination
+		// ie., when listed and delivered entries already included the entire prefix-defined range
 	}
 
 	return nil
@@ -290,9 +289,6 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 	for {
 		nbi.chunkNum++
 		if nbi.chunkNum > nbi.ufest.Count() {
-			// Canonical EOF state: exhausted.
-			nbi.nidx = 0
-			nbi.entries = nbi.entries[:0]
 			return nil
 		}
 		if err := nbi.readChunk(); err != nil {
