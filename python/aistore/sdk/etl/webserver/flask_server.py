@@ -4,18 +4,26 @@
 
 # pylint: disable=duplicate-code
 
+import time
+from io import BytesIO
 from urllib.parse import quote
 from typing import Iterator, Tuple
 
 import requests
 from flask import Flask, request, Response, jsonify
 
-from aistore.sdk.etl.webserver.base_etl_server import ETLServer, CountingIterator
+from aistore.sdk.etl.webserver.base_etl_server import (
+    ETLServer,
+    CountingIterator,
+    SYNC_DIRECT_PUT_TRANSIENT_ERRORS,
+    RETRY_BACKOFF_BASE,
+    RETRY_BACKOFF_MAX,
+)
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
 )
-from aistore.sdk.errors import InvalidPipelineError
+from aistore.sdk.errors import InvalidPipelineError, ETLDirectPutTransientError
 from aistore.sdk.const import (
     HEADER_NODE_URL,
     STATUS_OK,
@@ -48,7 +56,7 @@ class FlaskServer(ETLServer):
     def _health(self):
         return Response(response=b"Running", status=200)
 
-    def _handle_request(self, path):
+    def _handle_request(self, path):  # pylint: disable=too-many-return-statements
         try:
             if self.use_streaming:
                 return self._handle_request_streaming(path)
@@ -73,6 +81,11 @@ class FlaskServer(ETLServer):
                 ),
                 404,
             )
+        except ETLDirectPutTransientError as e:
+            self.logger.error(
+                "Direct put failed after %d retries: %s", self.direct_put_retries, e
+            )
+            return jsonify({"error": str(e)}), 502
         except requests.RequestException as e:
             self.logger.error("Request to AIS target failed: %s", str(e))
             return jsonify({"error": str(e)}), 502
@@ -92,9 +105,10 @@ class FlaskServer(ETLServer):
         if pipeline_header:
             first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
             if first_url:
-                # TODO: add retry loop (ETLDirectPutTransientError) matching FastAPIServer
-                status_code, transformed, direct_put_length = self._direct_put(
-                    first_url, transformed, remaining_pipeline, path
+                status_code, transformed, direct_put_length = (
+                    self._direct_put_with_retry(
+                        first_url, transformed, remaining_pipeline, path
+                    )
                 )
                 return Response(
                     response=transformed,
@@ -113,29 +127,26 @@ class FlaskServer(ETLServer):
         )
 
     def _handle_request_streaming(self, path):
+        etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
+
+        pipeline_header = request.headers.get(HEADER_NODE_URL)
+        self.logger.debug("pipeline_header: %r", pipeline_header)
+        if pipeline_header:
+            first_url, remaining = parse_etl_pipeline(pipeline_header)
+            if first_url:
+                result = self._direct_put_stream_with_retry(
+                    first_url, path, remaining, etl_args
+                )
+                return Response(
+                    response=result[1],
+                    status=result[0],
+                    headers=self.make_direct_put_headers(result[2]),
+                )
+
+        # No pipeline: stream directly to client
         reader = self._get_stream_reader(path)
         try:
-            etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
             output_iter = self.transform_stream(reader, path, etl_args)
-
-            pipeline_header = request.headers.get(HEADER_NODE_URL)
-            self.logger.debug("pipeline_header: %r", pipeline_header)
-            if pipeline_header:
-                first_url, remaining = parse_etl_pipeline(pipeline_header)
-                if first_url:
-                    try:
-                        # TODO: add retry loop (ETLDirectPutTransientError) matching FastAPIServer
-                        result = self._direct_put_stream(
-                            first_url, output_iter, remaining, path
-                        )
-                    finally:
-                        self.close_reader(reader)
-                    return Response(
-                        response=result[1],
-                        status=result[0],
-                        headers=self.make_direct_put_headers(result[2]),
-                    )
-
             return Response(
                 response=self.iter_and_close(output_iter, reader),
                 status=STATUS_OK,
@@ -145,8 +156,15 @@ class FlaskServer(ETLServer):
             self.close_reader(reader)
             raise
 
-    def _get_stream_reader(self, path):
-        """Get a BinaryIO reader for the request source data."""
+    def _get_stream_reader(self, path, buffered=False):
+        """Get a BinaryIO reader for the request source data.
+
+        Args:
+            path: The object path being processed.
+            buffered: If True, buffer the PUT body into a BytesIO so it can be
+                replayed on retry. If False (default), return request.stream for
+                true constant-memory streaming (no-pipeline path only).
+        """
         fqn = request.args.get(QPARAM_ETL_FQN, "").strip()
         if fqn:
             # S2083: FQN is an internal AIS target path, not external user input.
@@ -159,7 +177,79 @@ class FlaskServer(ETLServer):
             resp = self.session.get(target_url, stream=True, timeout=None)
             resp.raise_for_status()
             return resp.raw
+        if buffered:
+            return BytesIO(request.get_data())
         return request.stream
+
+    def _direct_put_with_retry(
+        self,
+        direct_put_url: str,
+        data: bytes,
+        remaining_pipeline: str = "",
+        path: str = "",
+    ) -> Tuple[int, bytes, int]:
+        """Buffered direct-put with exponential-backoff retry on transient errors."""
+        for attempt in range(self.direct_put_retries + 1):
+            try:
+                return self._direct_put(direct_put_url, data, remaining_pipeline, path)
+            except ETLDirectPutTransientError as exc:
+                if attempt >= self.direct_put_retries:
+                    raise
+                delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
+                self.logger.warning(
+                    "direct_put attempt %d/%d failed, retrying in %.1fs: %s",
+                    attempt + 1,
+                    self.direct_put_retries + 1,
+                    delay,
+                    exc,
+                    exc_info=True,
+                )
+                time.sleep(delay)
+        raise AssertionError("unreachable: loop always returns or raises")
+
+    def _direct_put_stream_with_retry(
+        self,
+        direct_put_url: str,
+        path: str,
+        remaining_pipeline: str = "",
+        etl_args: str = "",
+    ) -> Tuple[int, bytes, int]:
+        """
+        Streaming direct-put with exponential-backoff retry on transient errors.
+
+        Manages reader lifecycle internally, reopening the source on each retry
+        (mirrors FastAPIServer._direct_put_stream_with_retry). For PUT requests
+        without FQN, the body is buffered into a BytesIO via get_data() so retries
+        replay the same bytes.
+        """
+        reader = self._get_stream_reader(path, buffered=True)
+        try:
+            for attempt in range(self.direct_put_retries + 1):
+                try:
+                    return self._direct_put_stream(
+                        direct_put_url,
+                        self.transform_stream(reader, path, etl_args),
+                        remaining_pipeline,
+                        path,
+                    )
+                except ETLDirectPutTransientError as exc:
+                    if attempt >= self.direct_put_retries:
+                        raise
+                    delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
+                    self.logger.warning(
+                        "direct_put_stream attempt %d/%d failed, retrying in %.1fs: %s",
+                        attempt + 1,
+                        self.direct_put_retries + 1,
+                        delay,
+                        exc,
+                        exc_info=True,
+                    )
+                    self.close_reader(reader)
+                    reader = self._get_stream_reader(path, buffered=True)
+                    time.sleep(delay)
+        finally:
+            self.close_reader(reader)
+        raise AssertionError("unreachable: loop always returns or raises")
 
     def _direct_put_stream(
         self,
@@ -181,6 +271,8 @@ class FlaskServer(ETLServer):
                 resp, b"", data_length=counted.bytes_sent
             )
 
+        except SYNC_DIRECT_PUT_TRANSIENT_ERRORS as exc:
+            raise ETLDirectPutTransientError(direct_put_url, exc) from exc
         except Exception as e:
             root = e.__cause__ or e
             self.logger.error(
@@ -255,6 +347,8 @@ class FlaskServer(ETLServer):
             resp = self.client_put(url, data, headers=headers)
             return self.handle_direct_put_response(resp, data)
 
+        except SYNC_DIRECT_PUT_TRANSIENT_ERRORS as exc:
+            raise ETLDirectPutTransientError(direct_put_url, exc) from exc
         except Exception as e:
             error = str(e).encode()
             self.logger.error("Exception in direct put to %s: %s", direct_put_url, e)

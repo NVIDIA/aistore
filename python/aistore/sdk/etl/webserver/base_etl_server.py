@@ -16,11 +16,22 @@ from aistore.sdk.const import (
     HEADER_AUTHORIZATION,
     HEADER_DIRECT_PUT_LENGTH,
     AIS_AUTHN_TOKEN,
+    AIS_DIRECT_PUT_RETRIES,
 )
 from aistore.sdk.session_manager import SessionManager
 
+# Transient requests errors that are safe to retry (connection lost before response).
+SYNC_DIRECT_PUT_TRANSIENT_ERRORS = (
+    requests.ConnectionError,
+    requests.exceptions.ChunkedEncodingError,
+)
 
-class ETLServer(ABC):
+# Direct-put retry: exponential backoff with a cap.
+RETRY_BACKOFF_BASE = 2.0  # seconds; delay = base ** attempt
+RETRY_BACKOFF_MAX = 30.0  # seconds; upper bound on per-attempt delay
+
+
+class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
     """
     Abstract base class for all ETL servers.
 
@@ -66,6 +77,7 @@ class ETLServer(ABC):
             raise EnvironmentError("Environment variable 'AIS_TARGET_URL' must be set.")
         self.direct_put = os.getenv("DIRECT_PUT", "false").lower() == "true"
         self.direct_fqn = os.getenv("ETL_DIRECT_FQN", "false").lower() == "true"
+        self.direct_put_retries: int = int(os.getenv(AIS_DIRECT_PUT_RETRIES, "3"))
 
         self.token = os.environ.get(AIS_AUTHN_TOKEN)
         self.session = self._build_session()

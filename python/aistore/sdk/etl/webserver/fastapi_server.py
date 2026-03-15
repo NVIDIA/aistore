@@ -20,7 +20,12 @@ import httpx
 import aiofiles
 import uvicorn
 
-from aistore.sdk.etl.webserver.base_etl_server import ETLServer, CountingIterator
+from aistore.sdk.etl.webserver.base_etl_server import (
+    ETLServer,
+    CountingIterator,
+    RETRY_BACKOFF_BASE,
+    RETRY_BACKOFF_MAX,
+)
 from aistore.sdk.session_manager import resolve_ssl_config
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
@@ -58,10 +63,6 @@ _DIRECT_PUT_TRANSIENT_ERRORS = (
     httpx.RemoteProtocolError,
 )
 
-# Direct-put retry: exponential backoff with a cap.
-_RETRY_BACKOFF_BASE = 2.0  # seconds; delay = base ** attempt
-_RETRY_BACKOFF_MAX = 30.0  # seconds; upper bound on per-attempt delay
-
 
 class FastAPIServer(ETLServer):
     """
@@ -76,7 +77,6 @@ class FastAPIServer(ETLServer):
         self.client: Optional[httpx.AsyncClient] = None
         self.active_connections: List[WebSocket] = []
         self.chunk_size: int = int(os.getenv(AIS_DIRECT_PUT_CHUNK_SIZE, str(MIB)))
-        self.direct_put_retries: int = int(os.getenv(AIS_DIRECT_PUT_RETRIES, "3"))
         self._setup_app()
 
     def _setup_app(self):
@@ -319,7 +319,7 @@ class FastAPIServer(ETLServer):
                 except ETLDirectPutTransientError as exc:
                     if attempt >= self.direct_put_retries:
                         raise
-                    delay = min(_RETRY_BACKOFF_BASE**attempt, _RETRY_BACKOFF_MAX)
+                    delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                     self.logger.warning(
                         "direct_put attempt %d/%d failed, retrying in %.1fs: %s",
                         attempt + 1,
@@ -433,7 +433,7 @@ class FastAPIServer(ETLServer):
             except ETLDirectPutTransientError as exc:
                 if attempt >= self.direct_put_retries:
                     raise
-                delay = min(_RETRY_BACKOFF_BASE**attempt, _RETRY_BACKOFF_MAX)
+                delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                 self.logger.warning(
                     "direct_put attempt %d/%d failed, retrying in %.1fs",
                     attempt + 1,
