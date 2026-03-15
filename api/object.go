@@ -823,6 +823,7 @@ func CheckObjectLock(bp BaseParams, bck cmn.Bck, objName string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	cos.DrainReader(resp.Body)
 	resp.Body.Close()
 
 	switch status := resp.StatusCode; status {
