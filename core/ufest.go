@@ -672,7 +672,9 @@ func (u *Ufest) storeCompleted(lom *LOM, overrideCompleted bool) error {
 		}
 	}
 	if u.count == 0 || int(u.count) != len(u.chunks) {
-		return fmt.Errorf("%s: num %d vs %d", u._itag(lom.Cname()), u.count, len(u.chunks))
+		err := fmt.Errorf("%s: num %d vs %d", u._itag(lom.Cname()), u.count, len(u.chunks))
+		debug.AssertNoErr(err)
+		return err
 	}
 
 	lsize := lom.Lsize(true)

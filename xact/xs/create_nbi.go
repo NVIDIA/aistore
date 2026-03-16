@@ -315,6 +315,7 @@ func (*XactNBI) filterKeepMine(lst *cmn.LsoRes, ubuf []byte, smap *meta.Smap) er
 		}
 
 		lst.Entries[j] = en
+		debug.Assert(j == 0 || en.Name > lst.Entries[j-1].Name)
 		j++
 	}
 	lst.Entries = lst.Entries[:j]

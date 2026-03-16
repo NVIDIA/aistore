@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -24,6 +25,8 @@ import (
 //
 // create inventory
 //
+
+const nbiCreateTimeout = 15 * time.Second
 
 func TestCreateInventorySimple(t *testing.T) {
 	var (
@@ -53,7 +56,7 @@ func TestCreateInventorySimple(t *testing.T) {
 
 	tlog.Logfln("%s[%s] started", apc.ActCreateNBI, xid)
 
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 }
@@ -109,7 +112,7 @@ func TestCreateInventoryPermuteOnDisk(t *testing.T) {
 			tlog.Logfln("%s[%s] started (%s: num=%d pageSize=%d ppc=%d)",
 				apc.ActCreateNBI, xid, tc.name, tc.num, tc.pageSize, tc.pagesPerChunk)
 
-			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
+			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 			_, err = api.WaitForXactionIC(bp, &args)
 			tassert.CheckFatal(t, err)
 
@@ -231,7 +234,7 @@ func TestListInventory(t *testing.T) {
 				apc.ActCreateNBI, xid, tc.name, tc.num, tc.pageSize,
 				tc.pagesPerChunk, tc.maxEntriesPerChk, tc.listPageSize, tc.props)
 
-			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
+			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 			_, err = api.WaitForXactionIC(bp, &wargs)
 			tassert.CheckFatal(t, err)
 
@@ -349,7 +352,7 @@ func TestListInventoryPrefix(t *testing.T) {
 	xid, err := api.CreateNBI(bp, m1.bck, createMsg)
 	tassert.CheckFatal(t, err)
 
-	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
+	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 	_, err = api.WaitForXactionIC(bp, &wargs)
 	tassert.CheckFatal(t, err)
 
@@ -477,7 +480,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			xid, err := api.CreateNBI(bp, cliBck, createMsg)
 			tassert.CheckFatal(t, err)
 
-			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: tools.ListRemoteBucketTimeout}
+			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 			_, err = api.WaitForXactionIC(bp, &wargs)
 			tassert.CheckFatal(t, err)
 

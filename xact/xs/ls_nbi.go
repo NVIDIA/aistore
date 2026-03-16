@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
@@ -30,6 +31,7 @@ import (
 //   - npgCtx.nextPageR() (bucket summary)
 //   - npgCtx.nextPageA() (all list-range jobs: prefetch, evict, transform-copy-objs, etc.)
 // - returned errors: unify; add details
+// - pagesize default set by proxy (10k when zero) - not optimal for NBI
 
 type nbiCtx struct {
 	bck   *meta.Bck
@@ -37,10 +39,11 @@ type nbiCtx struct {
 	ufest *core.Ufest // completed and loaded
 
 	// runtime state
-	chunkNum int            // current chunk number (1-based)
-	nidx     int            // next index within LsoEntries (limited scope)
-	entries  cmn.LsoEntries // decoded from current chunk
-	hdr      nbiChunkHdr    // current chunk header=[first, last, cnt]
+	chunkNum  int            // current chunk number (1-based)
+	nidx      int            // next index within LsoEntries (limited scope)
+	entries   cmn.LsoEntries // decoded from current chunk
+	hdr       nbiChunkHdr    // current chunk header=[first, last, cnt]
+	prevToken string         // responded
 
 	buf   []byte
 	slab  *memsys.Slab
@@ -93,7 +96,11 @@ func (nbi *nbiCtx) _load(lom *core.LOM) error {
 }
 
 func (nbi *nbiCtx) emit(err error) error {
-	return fmt.Errorf("native bucket inventory: %w [%s]", err, nbi.bck.Cname(""))
+	e := fmt.Errorf("native bucket inventory: %w [%s]", err, nbi.bck.Cname(""))
+	if cmn.Rom.V(4, cos.ModXs) {
+		nlog.Errorln(e)
+	}
+	return e
 }
 
 func (nbi *nbiCtx) cleanup() {
@@ -168,7 +175,16 @@ func (nbi *nbiCtx) readChunk() error {
 	} else {
 		nbi.entries = nbi.entries[:0]
 	}
-	return nbi.entries.DecodeMsg(mr)
+	if err := nbi.entries.DecodeMsg(mr); err != nil {
+		return err
+	}
+
+	// TODO: remove
+	debug.Assert(len(nbi.entries) == int(nbi.hdr.entryCount))
+	debug.Assert(len(nbi.entries) > 0)
+	debug.Assert(nbi.hdr.first == nbi.entries[0].Name)
+	debug.Assert(nbi.hdr.last == nbi.entries[len(nbi.entries)-1].Name)
+	return nil
 }
 
 func (nbi *nbiCtx) skip() { nbi.nidx = len(nbi.entries) } // in re: prefix
@@ -177,9 +193,14 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	lst.Entries = lst.Entries[:0]
 	lst.ContinuationToken = ""
 
-	nbi.nidx = 0 // (scope: within one call)
-
-	if msg.ContinuationToken != "" {
+	switch msg.ContinuationToken {
+	case "":
+		debug.Assert(nbi.chunkNum == 1 && nbi.nidx == 0)
+	case nbi.prevToken:
+		// do nothing
+	default:
+		// resync nbi iterator
+		nbi.nidx = 0
 		if msg.ContinuationToken < nbi.hdr.first {
 			if err := nbi.rewind(msg.ContinuationToken); err != nil {
 				return err
@@ -205,7 +226,7 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	pageSize := cos.Ternary(msg.PageSize <= 0, apc.MaxPageSizeAIS, msg.PageSize)
 	for len(lst.Entries) < int(pageSize) {
 		// next chunk
-		if nbi.nidx >= len(nbi.entries) { // TODO: use nbi.hdr.entryCount here and elsewhere
+		if nbi.nidx >= len(nbi.entries) {
 			// clone entries from the current (soon previous)  chunk
 			for i, e := range lst.Entries {
 				cp := *e
@@ -221,6 +242,8 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 				return err
 			}
 		}
+		debug.Assert(nbi.nidx == 0 || nbi.nidx == len(nbi.entries) || nbi.entries[nbi.nidx].Name > nbi.entries[nbi.nidx-1].Name)
+		debug.Assert(nbi.nidx == 0 || nbi.nidx == len(nbi.entries) || nbi.entries[nbi.nidx].Name > nbi.hdr.first)
 
 		// prefix
 		if msg.Prefix != "" {
@@ -258,10 +281,15 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		lst.ContinuationToken = lst.Entries[l-1].Name
 		debug.Assert(lst.ContinuationToken != "")
 
-		// TODO:
-		// design-in prefix-based early termination
-		// ie., when listed and delivered entries already included the entire prefix-defined range
+		// out of prefix-defined range
+		if msg.Prefix != "" {
+			if nbi.nidx < len(nbi.entries) && !strings.HasPrefix(nbi.entries[nbi.nidx].Name, msg.Prefix) {
+				lst.ContinuationToken = ""
+			}
+		}
 	}
+
+	nbi.prevToken = lst.ContinuationToken
 
 	return nil
 }
@@ -306,6 +334,8 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 }
 
 func (nbi *nbiCtx) rewind(token string) error {
+	debug.Assert(nbi.chunkNum <= nbi.ufest.Count()+1, nbi.chunkNum, " vs ", nbi.ufest.Count())
+	nbi.chunkNum = min(nbi.chunkNum, nbi.ufest.Count())
 	for nbi.chunkNum > 1 {
 		nbi.chunkNum--
 		if err := nbi.readChunk(); err != nil {
