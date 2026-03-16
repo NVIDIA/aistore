@@ -406,6 +406,7 @@ func TestListInventoryPrefix(t *testing.T) {
 	}
 }
 
+// TODO -- FIXME: add test case(s) with empty invName
 func TestListInventoryPrefixPermute(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
@@ -423,39 +424,47 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			name: "small-chunks-small-pages",
 			numA: 40, numM: 30, numZ: 50,
 			pageSize: 3, pagesPerChunk: 2, listPageSize: 4,
-			invName: "inv-pfxp-sc-sp-" + cos.GenTie(),
+			invName: "inv-sc-sp",
+		},
+		{
+			name: "small-chunks-large-pages",
+			numA: 40, numM: 30, numZ: 50,
+			pageSize: 3, pagesPerChunk: 2, listPageSize: 1000,
+			invName: "inv-sc-lp",
 		},
 		{
 			name: "large-chunks-small-pages",
 			numA: 70, numM: 60, numZ: 80,
 			pageSize: 6, pagesPerChunk: 10, listPageSize: 3,
-			invName: "inv-pfxp-lc-sp-" + cos.GenTie(),
+			invName: "inv-lc-sp",
 		},
 		{
 			name: "max-entries-per-chunk",
 			numA: 30, numM: 25, numZ: 35,
 			pageSize: 10, pagesPerChunk: 50, maxEntriesPerChk: 8, listPageSize: 5,
-			invName: "inv-pfxp-maxent-" + cos.GenTie(),
+			invName: "inv-maxent",
 		},
 	}
+
+	bck := cliBck
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_nbiIniCln(t, cliBck)
+			_nbiIniCln(t, bck)
 
 			var (
-				parent = "pfxp-" + cos.GenTie() + "/"
+				parent = "p-" + cos.GenTie() + "/"
 				bp     = tools.BaseAPIParams()
 			)
 
 			// One init/cleanup only
-			m0 := &ioContext{t: t, bck: cliBck, prefix: parent}
+			m0 := &ioContext{t: t, bck: bck, prefix: parent}
 			m0.init(true /*cleanup*/)
 
 			// Three disjoint subtrees under parent: a/, m/, z/
 			// Ensures: a/ < m/ < z/ in lexicographic order.
-			ma := &ioContext{t: t, bck: cliBck, prefix: parent + "a/"}
-			mm := &ioContext{t: t, bck: cliBck, prefix: parent + "m/"}
-			mz := &ioContext{t: t, bck: cliBck, prefix: parent + "z/"}
+			ma := &ioContext{t: t, bck: bck, prefix: parent + "a/"}
+			mm := &ioContext{t: t, bck: bck, prefix: parent + "m/"}
+			mz := &ioContext{t: t, bck: bck, prefix: parent + "z/"}
 
 			ma.num = tc.numA
 			mm.num = tc.numM
@@ -478,15 +487,17 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 				MaxEntriesPerChunk: tc.maxEntriesPerChk,
 			}
 
-			xid, err := api.CreateNBI(bp, cliBck, createMsg)
+			xid, err := api.CreateNBI(bp, bck, createMsg)
 			tassert.CheckFatal(t, err)
+
+			time.Sleep(3 * time.Second) // TODO -- FIXME: remove
 
 			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 			_, err = api.WaitForXactionIC(bp, &wargs)
 			tassert.CheckFatal(t, err)
 
 			// Helper: list NBI with token-loop guard, strict order, and prefix check.
-			list := func(prefix string) (entries []*cmn.LsoEnt) {
+			list := func(prefix string, tc *test, invName string) (entries []*cmn.LsoEnt) {
 				var (
 					token   string
 					seenTok = make(cos.StrSet, 16)
@@ -500,9 +511,9 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 						ContinuationToken: token,
 					}
 					args := api.ListArgs{
-						Header: http.Header{apc.HdrInvName: []string{createMsg.Name}},
+						Header: http.Header{apc.HdrInvName: []string{invName}},
 					}
-					lst, err := api.ListObjects(bp, cliBck, lsmsg, args)
+					lst, err := api.ListObjects(bp, bck, lsmsg, args)
 					tassert.CheckFatal(t, err)
 
 					// page size sanity
@@ -536,7 +547,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			}
 
 			// 1) list sub-prefix in the middle => exercises: skip a/ chunks + Search in-chunk + stop before z/
-			gotM := list(mm.prefix)
+			gotM := list(mm.prefix, &tc, createMsg.Name)
 
 			// validate set equality with PUT names
 			gotSet := make(cos.StrSet, len(gotM))
@@ -553,7 +564,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			tassert.Fatalf(t, len(gotM) == mm.num, "prefix %q: expected %d, got %d", mm.prefix, mm.num, len(gotM))
 
 			// 2) list parent => must include all
-			gotParent := list(parent)
+			gotParent := list(parent, &tc, createMsg.Name)
 			expTotal := ma.num + mm.num + mz.num
 			clear(missed)
 			missed = missed[:0]
@@ -577,7 +588,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 
 			// 3) list missing prefix => must be empty (and must not loop tokens)
 			missing := parent + "zzzz/"
-			gotMissing := list(missing)
+			gotMissing := list(missing, &tc, createMsg.Name)
 			tassert.Fatalf(t, len(gotMissing) == 0, "prefix %q: expected 0, got %d", missing, len(gotMissing))
 		})
 	}

@@ -301,6 +301,9 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 				return false
 			}
 			invName = nbis.SingleName()
+			if cmn.Rom.V(4, cos.ModAIS) {
+				nlog.Infoln("located inventory", invName, "for bucket", bck.Cname(""))
+			}
 			r.Header.Set(apc.HdrInvName, invName)
 		} else {
 			if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {

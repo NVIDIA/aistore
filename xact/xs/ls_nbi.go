@@ -27,6 +27,7 @@ import (
 
 // TODO -- FIXME:
 // - corner case: very small inventory w/ not every target having chunks
+// - test list-objects with empty invName (target must resolve single)
 // - feat: support LsCached (semantics? a) per recorded in chunks or b) w/ respect to local data)
 // - feat: support listing jobs that currently rely-on/reuse:
 //   - npgCtx.nextPageR() (bucket summary)
