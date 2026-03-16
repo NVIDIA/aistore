@@ -85,6 +85,9 @@ etl = [
     "flask>=2.3.0",
     "gunicorn>=23.0.0",
 ]
+mcp = [
+    "mcp[cli]>=1.4.1",
+]
 
 [project.urls]
 "Homepage" = "https://aistore.nvidia.com"

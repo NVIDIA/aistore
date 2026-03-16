@@ -341,6 +341,7 @@ test:short:python-unit:
         make python_sdk_unit_tests
         make python_unit_tests_scenario_gen
         make python_botocore_unit_tests
+        make python_mcp_unit_tests
         deactivate || true
         rm -rf .venv
       done

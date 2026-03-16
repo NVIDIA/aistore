@@ -60,6 +60,18 @@ python_sdk_integration_tests: common_deps
 python_sdk_unit_tests: common_deps
 	$(PYTEST) -v -n auto tests/unit/sdk
 
+.PHONY: mcp_deps
+mcp_deps:
+	@$(PYTHON) -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" 2>/dev/null && \
+		$(PIP) install "mcp[cli]>=1.4.1" --quiet || \
+		echo "Skipping mcp install (requires Python >= 3.10)"
+
+.PHONY: python_mcp_unit_tests
+python_mcp_unit_tests: common_deps mcp_deps
+	@$(PYTHON) -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" 2>/dev/null && \
+		$(PYTEST) -v tests/unit/mcp || \
+		echo "Skipping MCP tests (requires Python >= 3.10)"
+
 # Run tests with `extended` marker with `AIS_STRESS_TEST` to control increased object count, size, etc.
 .PHONY: python_sdk_extended_tests
 python_sdk_extended_tests: common_deps
@@ -102,7 +114,7 @@ python_pytorch_integration_tests: common_deps dev_deps
 	$(PYTEST) -v tests/integration/pytorch
 
 .PHONY: lint
-lint: common_deps botocore_deps
+lint: common_deps botocore_deps mcp_deps
 	pylint --rcfile=.pylintrc --recursive=y aistore
 
 .PHONY: lint-tests

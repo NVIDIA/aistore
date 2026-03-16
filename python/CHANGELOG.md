@@ -6,6 +6,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Added
+
+- MCP server (`aistore.mcp`) for AI agent integration (Claude, Cursor, etc.):
+  cluster health/info/performance, bucket list/summary/objects, all read-only.
+  Install via `pip install aistore[mcp]`.
+
 ## [1.22.1] - 2026-03-12
 
 ### Added
