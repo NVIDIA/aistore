@@ -38,6 +38,10 @@ const ua = "aisnode/backend"
 
 const remAisDefunct = "defunct" // uuid configured offline
 
+// props to request when doing a HEAD — covers all cmn.ObjAttrs fields
+const remAisHeadProps = apc.GetPropsSize + apc.LsPropsSepa + apc.GetPropsChecksum + apc.LsPropsSepa +
+	apc.GetPropsAtime + apc.LsPropsSepa + apc.GetPropsVersion + apc.LsPropsSepa + apc.GetPropsCustom
+
 type (
 	remAis struct {
 		smap *meta.Smap
@@ -560,15 +564,15 @@ func (m *AISbp) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error
 func (m *AISbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		remAis    *remAis
-		op        *cmn.ObjectProps
+		op        *cmn.ObjectPropsV2
 		remoteBck = lom.Bck().Clone()
 	)
 	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
 		return
 	}
 	unsetUUID(&remoteBck)
-	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName,
-		api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}); err != nil {
+	if op, err = api.HeadObjectV2(remAis.bp, remoteBck, lom.ObjName,
+		remAisHeadProps, api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}); err != nil {
 		ecode, err = m.extractErrCode(err, remAis.uuid)
 		return
 	}
@@ -612,7 +616,6 @@ func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Re
 func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		remAis    *remAis
-		op        *cmn.ObjectProps
 		args      *api.GetArgs
 		remoteBck = lom.Bck().Clone()
 	)
@@ -630,7 +633,8 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 		}
 	} else {
 		hargs := api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}
-		if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, hargs); res.Err != nil {
+		var op *cmn.ObjectPropsV2
+		if op, res.Err = api.HeadObjectV2(remAis.bp, remoteBck, lom.ObjName, remAisHeadProps, hargs); res.Err != nil {
 			res.ErrCode, res.Err = m.extractErrCode(res.Err, remAis.uuid)
 			return res
 		}
