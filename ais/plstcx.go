@@ -284,7 +284,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header) (allE
 			return nil, err
 		}
 		lst := res.v.(*cmn.LsoRes)
-		if len(lst.Entries) > 0 {
+		if len(lst.Entries) > 0 || (lsmsg.IsFlagSet(apc.LsNBI) && lst.ContinuationToken != "") {
 			lists = append(lists, lst)
 		}
 	}

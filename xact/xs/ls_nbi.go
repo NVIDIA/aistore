@@ -26,6 +26,7 @@ import (
 )
 
 // TODO -- FIXME:
+// - corner case: very small inventory w/ not every target having chunks
 // - feat: support LsCached (semantics? a) per recorded in chunks or b) w/ respect to local data)
 // - feat: support listing jobs that currently rely-on/reuse:
 //   - npgCtx.nextPageR() (bucket summary)
@@ -308,6 +309,7 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 		})
 		if i < len(nbi.entries) {
 			nbi.nidx = i
+			debug.Assert(nbi.entries[i].Name > token, "seekAfter: ", token, " -> ", nbi.entries[i].Name)
 			return nil
 		}
 	}
@@ -328,6 +330,7 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 		i := sort.Search(len(nbi.entries), func(i int) bool { return nbi.entries[i].Name > token })
 		if i < len(nbi.entries) {
 			nbi.nidx = i
+			debug.Assert(nbi.entries[i].Name > token, "seekAfter: ", token, " -> ", nbi.entries[i].Name)
 			return nil
 		}
 	}

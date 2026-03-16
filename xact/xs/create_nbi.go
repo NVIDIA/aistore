@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -276,20 +277,26 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 			nlog.Infoln(r.Name(), "listed entries:", idx, "npages:", npages, "token:", cos.SHead(lastToken) /*16*/)
 		}
 	}
+
+	if r.ufest.Count() == 0 {
+		r.cleanup()
+		r.Finish()
+		return
+	}
+
 	if err := r.lom.CompleteUfest(r.ufest, false /*locked*/); err != nil {
 		r.Abort(err)
 		return
 	}
 
-	r.Finish()
-
-	a, b := r.StartTime(), r.EndTime()
+	a, b := r.StartTime(), time.Now()
 	if err := fs.SetNBI(r.lom.FQN, a.UnixNano(), b.UnixNano(), r.msg.Prefix, r.buf); err != nil {
 		nlog.Errorf("%s: ex-post-facto failure to store metadata: [%q, %q, %v]", r.Name(), r.msg.Name, r.lom.Cname(), err)
 		core.T.FSHC(err, r.lom.Mountpath(), r.lom.FQN)
 	}
 
 	r.cleanup()
+	r.Finish()
 }
 
 // TODO: ref

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -536,21 +537,43 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 
 			// 1) list sub-prefix in the middle => exercises: skip a/ chunks + Search in-chunk + stop before z/
 			gotM := list(mm.prefix)
-			tassert.Fatalf(t, len(gotM) == mm.num, "prefix %q: expected %d, got %d", mm.prefix, mm.num, len(gotM))
 
 			// validate set equality with PUT names
 			gotSet := make(cos.StrSet, len(gotM))
 			for _, e := range gotM {
 				gotSet.Set(e.Name)
 			}
+			var missed = make([]string, 0, 4)
 			for _, name := range mm.objNames {
-				tassert.Fatalf(t, gotSet.Contains(name), "missing %q for prefix %q", name, mm.prefix)
+				if _, ok := gotSet[name]; !ok {
+					missed = append(missed, name)
+				}
 			}
+			tassert.Fatalf(t, len(missed) == 0, "missing %v for prefix %q - %d out of %d expected", missed, mm.prefix, len(missed), len(mm.objNames))
+			tassert.Fatalf(t, len(gotM) == mm.num, "prefix %q: expected %d, got %d", mm.prefix, mm.num, len(gotM))
 
 			// 2) list parent => must include all
 			gotParent := list(parent)
 			expTotal := ma.num + mm.num + mz.num
-			tassert.Fatalf(t, len(gotParent) == expTotal, "prefix %q: expected %d, got %d", parent, expTotal, len(gotParent))
+			clear(missed)
+			missed = missed[:0]
+			expSet := make(cos.StrSet, expTotal)
+			expSet.Add(ma.objNames...)
+			expSet.Add(mm.objNames...)
+			expSet.Add(mz.objNames...)
+			debug.Assert(len(expSet) == expTotal)
+			gotParentSet := make(cos.StrSet, len(gotParent))
+			for _, en := range gotParent {
+				gotParentSet.Set(en.Name)
+			}
+			for name := range expSet {
+				if _, ok := gotParentSet[name]; !ok {
+					missed = append(missed, name)
+				}
+			}
+
+			tassert.Fatalf(t, len(missed) == 0, "missing %v for parent prefix %q - %d out of %d expected", missed, parent, len(missed), expTotal)
+			tassert.Fatalf(t, len(gotParent) == expTotal, "parent prefix %q: expected %d, got %d", parent, expTotal, len(gotParent))
 
 			// 3) list missing prefix => must be empty (and must not loop tokens)
 			missing := parent + "zzzz/"
