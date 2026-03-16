@@ -45,6 +45,10 @@ const (
 	nbiMaxHdrLen       = 4 * cos.KiB       // (unlikely to ever exceed)
 )
 
+const (
+	nbiMinEntriesPerChunk = 2
+)
+
 type (
 	nbiChunkHdr struct {
 		first      string
@@ -214,7 +218,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 		)
 		all = all[:0]
 
-		for ; lastToken != "" && npages < r.msg.PagesPerChunk; npages++ {
+		for ; lastToken != "" && (npages < r.msg.PagesPerChunk || idx < nbiMinEntriesPerChunk); npages++ {
 			lst := &cmn.LsoRes{}
 			dst := all[idx:idx:cap(all)] // safe for append
 			lst.Entries = dst
@@ -242,8 +246,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 			switch {
 			case fast && !reused: // switch fast => slow
 				fast = false
-				debug.Assert(reused, warn)
-				nlog.Warningln(r.Name(), warn)
+				nlog.Errorln(r.Name(), "Warning: fast->slow:", warn) // TODO: find out
 				tmp := make(cmn.LsoEntries, 0, lsmsg.PageSize*r.msg.PagesPerChunk)
 				tmp = append(tmp, all[:idx]...)
 				tmp = append(tmp, lst.Entries...)
@@ -269,12 +272,17 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 
 		// next chunk
 		all = all[:idx]
+
 		if err := r.writeChunk(num, all); err != nil {
 			r.Abort(err)
 			return
 		}
 		if cmn.Rom.V(5, cos.ModXs) {
-			nlog.Infoln(r.Name(), "listed entries:", idx, "npages:", npages, "token:", cos.SHead(lastToken) /*16*/)
+			if idx == 1 {
+				nlog.Warningln(core.T.String(), r.Name(), "single-entry chunk-num:", num, "npages:", npages)
+			} else {
+				nlog.Infoln(r.Name(), "chunk-num:", num, "entries:", idx, "npages:", npages)
+			}
 		}
 	}
 
