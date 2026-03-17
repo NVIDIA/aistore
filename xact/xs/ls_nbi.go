@@ -25,6 +25,21 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+// NBI pagination note:
+//
+// In the context of inventory listing, lsmsg.PageSize is best-effort and approximate:
+// - each target delivers an approximate share of the requested page size,
+//   subject to local chunking, minimum bounds, and slight overfetch;
+// - proxy then merges, sorts, and truncates the combined result.
+// - the actual number of returned entries may differ from the requested PageSize
+//   (if specified).
+// PageSize=0 is strongly recommended: lets the system optimize per-target
+// chunk reads and minimize the total number of distributed-merge roundtrips.
+
+const (
+	minPageSize = max(10, apc.MinInvNamesPerChunk)
+)
+
 // TODO -- FIXME:
 // - corner case: very small inventory w/ not every target having chunks
 // - test list-objects with empty invName (target must resolve single)
@@ -50,6 +65,7 @@ type nbiCtx struct {
 	buf   []byte
 	slab  *memsys.Slab
 	cksum *cos.CksumHash
+	nat   int
 }
 
 func (nbi *nbiCtx) init(invName string) error {
@@ -75,6 +91,14 @@ func (nbi *nbiCtx) init(invName string) error {
 	if err := nbi.readChunk(); err != nil {
 		nbi.cleanup()
 		return err
+	}
+
+	smap := core.T.Sowner().Get()
+	nbi.nat = smap.CountActiveTs()
+
+	if nbi.nat == 0 {
+		nbi.cleanup()
+		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
 
 	return nil
@@ -191,6 +215,18 @@ func (nbi *nbiCtx) readChunk() error {
 
 func (nbi *nbiCtx) skip() { nbi.nidx = len(nbi.entries) } // in re: prefix
 
+func (nbi *nbiCtx) pageSize(msg *apc.LsoMsg) int {
+	// chunk-driven (optimize local reads/merge roundtrips)
+	n := max(len(nbi.entries), minPageSize)
+	if msg.PageSize == 0 {
+		return n
+	}
+
+	// honor requested size approximately, per target
+	share := cos.DivRound(int(msg.PageSize), nbi.nat)
+	return max(minPageSize, cos.DivRound(share*5, 4)) // overshoot by 25%
+}
+
 func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	lst.Entries = lst.Entries[:0]
 	lst.ContinuationToken = ""
@@ -225,8 +261,9 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		}
 	}
 
-	pageSize := cos.Ternary(msg.PageSize <= 0, apc.MaxPageSizeAIS, msg.PageSize)
-	for len(lst.Entries) < int(pageSize) {
+	pageSize := nbi.pageSize(msg) // apply msg.PageSize
+
+	for len(lst.Entries) < pageSize {
 		// next chunk
 		if nbi.nidx >= len(nbi.entries) {
 			// clone entries from the current (soon previous)  chunk

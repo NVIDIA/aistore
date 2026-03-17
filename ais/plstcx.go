@@ -252,8 +252,9 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header) (allE
 		args      *bcastArgs
 		results   sliceResults
 		smap      = p.owner.smap.get()
+		isNBI     = lsmsg.IsFlagSet(apc.LsNBI)
 	)
-	if lsmsg.PageSize == 0 {
+	if lsmsg.PageSize == 0 && !isNBI {
 		lsmsg.PageSize = apc.MaxPageSizeAIS
 	}
 
@@ -284,13 +285,13 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header) (allE
 			return nil, err
 		}
 		lst := res.v.(*cmn.LsoRes)
-		if len(lst.Entries) > 0 || (lsmsg.IsFlagSet(apc.LsNBI) && lst.ContinuationToken != "") {
+		if len(lst.Entries) > 0 || (isNBI && lst.ContinuationToken != "") {
 			lists = append(lists, lst)
 		}
 	}
 	freeBcastRes(results)
 
-	if lsmsg.IsFlagSet(apc.LsNBI) {
+	if isNBI {
 		page := finLsoNBI(lists, lsmsg)
 		return page, nil
 	}

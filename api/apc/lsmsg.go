@@ -92,6 +92,10 @@ const (
 	LsIsS3
 
 	// instead of (remote) bucket: list native bucket inventory (NBI) snapshot
+	// NOTE on pagination:
+	// in the context of inventory listing, lsmsg.PageSize (if non-zero) is best-effort and approximate:
+	// each target delivers an approximate share of the requested page size,
+	// subject to local chunking, minimum bounds, and slight overfetch
 	LsNBI
 )
 
