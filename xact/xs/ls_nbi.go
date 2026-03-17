@@ -37,11 +37,11 @@ import (
 // chunk reads and minimize the total number of distributed-merge roundtrips.
 
 const (
-	minPageSize = max(10, apc.MinInvNamesPerChunk)
+	minPageSize = max(10, apc.MinInvNamesPerChunk) // 10
 )
 
-// TODO -- FIXME:
-// - corner case: very small inventory w/ not every target having chunks
+// TODO:
+// - corner case: very small bucket w/ not every target having inventory LOM
 // - test list-objects with empty invName (target must resolve single)
 // - feat: support LsCached (semantics? a) per recorded in chunks or b) w/ respect to local data)
 // - feat: support listing jobs that currently rely-on/reuse:
@@ -51,21 +51,23 @@ const (
 // - pagesize default set by proxy (10k when zero) - not optimal for NBI
 
 type nbiCtx struct {
-	bck   *meta.Bck
-	lom   *core.LOM   // .sys_inventory/BUCKET-UNAME/INV-NAME
-	ufest *core.Ufest // completed and loaded
-
-	// runtime state
-	chunkNum  int            // current chunk number (1-based)
-	nidx      int            // next index within LsoEntries (limited scope)
-	entries   cmn.LsoEntries // decoded from current chunk
-	hdr       nbiChunkHdr    // current chunk header=[first, last, cnt]
-	prevToken string         // responded
-
-	buf   []byte
-	slab  *memsys.Slab
-	cksum *cos.CksumHash
-	nat   int
+	lom       *core.LOM      // .sys_inventory/BUCKET-UNAME/INV-NAME
+	ufest     *core.Ufest    // completed and loaded
+	cksum     *cos.CksumHash // chunk header checksum (protection)
+	slab      *memsys.Slab   // see (reusable buffer)
+	bck       *meta.Bck      // source bucket
+	prevToken string         // responded with prev. nextPage() call
+	hdr       nbiChunkHdr    // current chunk header
+	entries   cmn.LsoEntries // decoded from the current chunk
+	buf       []byte         // reusable buffer: chunk meta, msgpack
+	cache     struct {
+		hdr      nbiChunkHdr
+		entries  cmn.LsoEntries
+		chunkNum int
+	}
+	nidx     int // next index within `entries` (limited scope)
+	chunkNum int // current chunk number (1-based)
+	nat      int // number of active targets (excepting mainternance mode)
 }
 
 func (nbi *nbiCtx) init(invName string) error {
@@ -100,6 +102,9 @@ func (nbi *nbiCtx) init(invName string) error {
 		nbi.cleanup()
 		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
+
+	hroom := max(nbi.hdr.entryCount>>4, 128)
+	nbi.cache.entries = make(cmn.LsoEntries, 0, nbi.hdr.entryCount+hroom)
 
 	return nil
 }
@@ -137,9 +142,54 @@ func (nbi *nbiCtx) cleanup() {
 	if nbi.buf != nil && nbi.slab != nil {
 		nbi.slab.Free(nbi.buf)
 	}
+	clear(nbi.entries)
+	nbi.entries = nbi.entries[:0]
+	clear(nbi.cache.entries)
+	nbi.cache.entries = nbi.cache.entries[:0]
+	nbi.cache.chunkNum = 0
+	nbi.cache.hdr = nbiChunkHdr{}
+	nbi.prevToken = ""
+}
+
+func (nbi *nbiCtx) cacheIt() {
+	if nbi.chunkNum <= 0 || len(nbi.entries) == 0 {
+		debug.Assert(false, "invalid state: ", nbi.chunkNum, " len: ", len(nbi.entries))
+		return
+	}
+	if nbi.chunkNum >= nbi.ufest.Count() {
+		return // not caching last (proxy's minToken can only rewind)
+	}
+	if nbi.cache.chunkNum == nbi.chunkNum {
+		return // already cached
+	}
+
+	clear(nbi.cache.entries)
+	cnt := len(nbi.entries)
+	if cap(nbi.cache.entries) < cnt {
+		nbi.cache.entries = make(cmn.LsoEntries, cnt)
+	} else {
+		nbi.cache.entries = nbi.cache.entries[:cnt]
+	}
+	copy(nbi.cache.entries, nbi.entries)
+	nbi.cache.hdr = nbi.hdr
+	nbi.cache.chunkNum = nbi.chunkNum
 }
 
 func (nbi *nbiCtx) readChunk() error {
+	// cache
+	if nbi.chunkNum == nbi.cache.chunkNum {
+		clear(nbi.entries)
+		cnt := len(nbi.cache.entries)
+		if cap(nbi.entries) < cnt {
+			nbi.entries = make(cmn.LsoEntries, cnt)
+		} else {
+			nbi.entries = nbi.entries[:cnt]
+		}
+		copy(nbi.entries, nbi.cache.entries)
+		nbi.hdr = nbi.cache.hdr
+		return nil
+	}
+
 	chunk, err := nbi.ufest.GetChunk(nbi.chunkNum)
 	if err != nil {
 		return nbi.emit(err)
@@ -205,11 +255,12 @@ func (nbi *nbiCtx) readChunk() error {
 		return err
 	}
 
-	// TODO: remove
+	// TODO: remove eventually
 	debug.Assert(len(nbi.entries) == int(nbi.hdr.entryCount))
 	debug.Assert(len(nbi.entries) > 0)
 	debug.Assert(nbi.hdr.first == nbi.entries[0].Name)
 	debug.Assert(nbi.hdr.last == nbi.entries[len(nbi.entries)-1].Name)
+
 	return nil
 }
 
@@ -271,7 +322,7 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 				cp := *e
 				lst.Entries[i] = &cp
 			}
-
+			nbi.cacheIt()
 			nbi.chunkNum++
 			if nbi.chunkNum > nbi.ufest.Count() {
 				// no more chunks - we are done
@@ -355,6 +406,7 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 	// token is >= current chunk's last item, move forward until we find
 	// the first chunk whose range may contain something > token
 	for {
+		nbi.cacheIt()
 		nbi.chunkNum++
 		if nbi.chunkNum > nbi.ufest.Count() {
 			return nil

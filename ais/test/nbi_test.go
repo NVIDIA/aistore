@@ -371,6 +371,17 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			pageSize: 3, namesPerChunk: 6, listPageSize: 0,
 			invName: "inv-zero-ps",
 		},
+		{
+			name: "tiny-pages-large-chunks",
+			numA: 60, numM: 80, numZ: 40,
+			pageSize: 5, namesPerChunk: 100, listPageSize: 2,
+			invName: "inv-tiny-ps",
+		},
+		{
+			name: "many-chunks-tiny-pages",
+			numA: 50, numM: 50, numZ: 50,
+			pageSize: 5, namesPerChunk: 10, listPageSize: 2,
+		},
 	}
 
 	bck := cliBck
