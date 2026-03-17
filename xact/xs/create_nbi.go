@@ -45,10 +45,6 @@ const (
 	nbiMaxHdrLen       = 4 * cos.KiB       // (unlikely to ever exceed)
 )
 
-const (
-	nbiMinEntriesPerChunk = 2
-)
-
 type (
 	nbiChunkHdr struct {
 		first      string
@@ -195,30 +191,26 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 	if pgsize := bck.MaxPageSize(); lsmsg.PageSize <= 0 || lsmsg.PageSize > pgsize {
 		lsmsg.PageSize = pgsize
 	}
-	// adjust to min
-	if n := r.msg.MaxEntriesPerChunk; n > 0 {
-		r.msg.PagesPerChunk = min(cos.DivRoundI64(n, lsmsg.PageSize), r.msg.PagesPerChunk)
-	}
 	lsmsg.ContinuationToken = ""
 
 	var (
+		ntotal    int64
 		smap      = core.T.Sowner().Get()
 		bp        = core.T.Backend(bck)
 		ubuf      = bck.MakeUname("", true)
 		lastToken = "__dummy__"
-		all       = make(cmn.LsoEntries, 0, lsmsg.PageSize*r.msg.PagesPerChunk) // prealloc and reuse
+		all       = make(cmn.LsoEntries, 0, r.msg.NamesPerChunk) // prealloc and reuse
 		fast      = true
 		nonRecurs = lsmsg.IsFlagSet(apc.LsNoRecursion)
 	)
 	const warn = "backend returned non-reused entries slice; falling back to append path"
 	for num := 1; !r.IsAborted() && lastToken != ""; num++ {
 		var (
-			idx    int
-			npages int64
+			idx int
 		)
 		all = all[:0]
 
-		for ; lastToken != "" && (npages < r.msg.PagesPerChunk || idx < nbiMinEntriesPerChunk); npages++ {
+		for lastToken != "" && idx < int(r.msg.NamesPerChunk) {
 			lst := &cmn.LsoRes{}
 			dst := all[idx:idx:cap(all)] // safe for append
 			lst.Entries = dst
@@ -246,8 +238,8 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 			switch {
 			case fast && !reused: // switch fast => slow
 				fast = false
-				nlog.Errorln(r.Name(), "Warning: fast->slow:", warn) // TODO: find out
-				tmp := make(cmn.LsoEntries, 0, lsmsg.PageSize*r.msg.PagesPerChunk)
+				nlog.Warningln(r.Name(), "fast->slow:", warn) // TODO: find out
+				tmp := make(cmn.LsoEntries, 0, r.msg.NamesPerChunk)
 				tmp = append(tmp, all[:idx]...)
 				tmp = append(tmp, lst.Entries...)
 				all = tmp
@@ -272,6 +264,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 
 		// next chunk
 		all = all[:idx]
+		ntotal += int64(idx)
 
 		if err := r.writeChunk(num, all); err != nil {
 			r.Abort(err)
@@ -279,9 +272,9 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 		}
 		if cmn.Rom.V(5, cos.ModXs) {
 			if idx == 1 {
-				nlog.Warningln(core.T.String(), r.Name(), "single-entry chunk-num:", num, "npages:", npages)
+				nlog.Warningln(core.T.String(), r.Name(), "single-entry chunk-num:", num, "total:", ntotal)
 			} else {
-				nlog.Infoln(r.Name(), "chunk-num:", num, "entries:", idx, "npages:", npages)
+				nlog.Infoln(r.Name(), "chunk-num:", num, "lso-entries:", idx, "total:", ntotal)
 			}
 		}
 	}
@@ -301,6 +294,11 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 	if err := fs.SetNBI(r.lom.FQN, a.UnixNano(), b.UnixNano(), r.msg.Prefix, r.buf); err != nil {
 		nlog.Errorf("%s: ex-post-facto failure to store metadata: [%q, %q, %v]", r.Name(), r.msg.Name, r.lom.Cname(), err)
 		core.T.FSHC(err, r.lom.Mountpath(), r.lom.FQN)
+	}
+
+	if cmn.Rom.V(5, cos.ModXs) {
+		nlog.Infof("completed %s [%s]: size %d, chunks %d, lso-entries %d (per chunk: %d)",
+			r.lom.Cname(), r.msg.Name, r.lom.Lsize(), r.ufest.Count(), ntotal, r.msg.NamesPerChunk)
 	}
 
 	r.cleanup()

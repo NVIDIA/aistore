@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -39,8 +38,10 @@ func TestCreateInventorySimple(t *testing.T) {
 		}
 		bp = tools.BaseAPIParams()
 	)
+
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
+	_nbiIniCln(t, m.bck)
 	m.init(true /*cleanup*/)
 	m.remotePuts(true /*evict*/)
 
@@ -54,84 +55,11 @@ func TestCreateInventorySimple(t *testing.T) {
 
 	xid, err := api.CreateNBI(bp, m.bck, msg)
 	tassert.CheckFatal(t, err)
-
 	tlog.Logfln("%s[%s] started", apc.ActCreateNBI, xid)
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
-}
-
-func TestCreateInventoryPermuteOnDisk(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
-
-	type test struct {
-		num           int
-		pageSize      int64
-		pagesPerChunk int64
-		name          string
-	}
-	tests := []test{
-		{num: 5, pageSize: 10, pagesPerChunk: 1, name: "few-objects-large-page"},
-		{num: 20, pageSize: 3, pagesPerChunk: 10, name: "multi-page-one-chunk"},
-		{num: 50, pageSize: 3, pagesPerChunk: 2, name: "multi-page-multi-chunk"},
-		{num: 12, pageSize: 4, pagesPerChunk: 1, name: "exact-page-boundary"},
-		{num: 40, pageSize: 2, pagesPerChunk: 2, name: "small-pages-many-chunks"},
-		{num: 30, pageSize: 5, pagesPerChunk: 3, name: "medium-pages-medium-chunks"},
-	}
-
-	sysBck := meta.SysBckNBI().Clone()
-
-	proxyURL := tools.GetPrimaryURL()
-	initMountpaths(t, proxyURL)
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			var (
-				m = &ioContext{
-					t:      t,
-					num:    tc.num,
-					bck:    cliBck,
-					prefix: t.Name(),
-				}
-				bp = tools.BaseAPIParams()
-			)
-			m.remotePuts(true /*evict*/)
-
-			msg := &apc.CreateNBIMsg{
-				LsoMsg: apc.LsoMsg{
-					Prefix:   m.prefix,
-					Props:    apc.GetPropsName,
-					PageSize: tc.pageSize,
-				},
-				PagesPerChunk: tc.pagesPerChunk,
-			}
-
-			xid, err := api.CreateNBI(bp, m.bck, msg)
-			tassert.CheckFatal(t, err)
-
-			tlog.Logfln("%s[%s] started (%s: num=%d pageSize=%d ppc=%d)",
-				apc.ActCreateNBI, xid, tc.name, tc.num, tc.pageSize, tc.pagesPerChunk)
-
-			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
-			_, err = api.WaitForXactionIC(bp, &args)
-			tassert.CheckFatal(t, err)
-
-			// expected chunks: ceil(num / (pageSize * pagesPerChunk))
-			entriesPerChunk := tc.pageSize * tc.pagesPerChunk
-			expectedChunks := int((int64(tc.num) + entriesPerChunk - 1) / entriesPerChunk)
-
-			tlog.Logfln("expecting %d chunk(s)", expectedChunks)
-
-			// validate chunks on disk (local deployments only)
-			if expectedChunks > 1 {
-				srcUname := string(m.bck.MakeUname(""))
-				invObjName := srcUname + xid
-
-				m.validateChunksOnDisk(sysBck, invObjName, expectedChunks)
-			}
-		})
-	}
 }
 
 //
@@ -142,52 +70,56 @@ func TestListInventory(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	type test struct {
-		name             string
-		num              int
-		pageSize         int64 // CreateNBIMsg.PageSize (inventory creation)
-		pagesPerChunk    int64
-		maxEntriesPerChk int64
-		listPageSize     int64  // LsoMsg.PageSize (listing)
-		props            string // used for both create and list
-		invName          string
+		name          string
+		num           int
+		pageSize      int64 // CreateNBIMsg.PageSize (inventory creation)
+		namesPerChunk int64
+		listPageSize  int64  // LsoMsg.PageSize (listing)
+		props         string // used for both create and list
+		invName       string
 	}
 	tests := []test{
 		// A x B: vary chunk granularity vs list page size
 		{
+			name: "small-chunks-pages-empty-name", num: 30,
+			pageSize: 3, namesPerChunk: 6, listPageSize: 4,
+			props: apc.GetPropsName, invName: "",
+		},
+		{
 			name: "small-chunks-small-pages", num: 30,
-			pageSize: 3, pagesPerChunk: 2, listPageSize: 4,
+			pageSize: 3, namesPerChunk: 6, listPageSize: 4,
 			props: apc.GetPropsName, invName: "inv-sc-sp-" + cos.GenTie(),
 		},
 		{
 			name: "small-chunks-large-pages", num: 30,
-			pageSize: 3, pagesPerChunk: 2, listPageSize: 50,
+			pageSize: 3, namesPerChunk: 6, listPageSize: 50,
 			props: apc.GetPropsName, invName: "inv-sc-lp-" + cos.GenTie(),
 		},
 		{
 			name: "large-chunks-small-pages", num: 40,
-			pageSize: 5, pagesPerChunk: 10, listPageSize: 3,
+			pageSize: 5, namesPerChunk: 50, listPageSize: 3,
 			props: apc.GetPropsName, invName: "inv-lc-sp-" + cos.GenTie(),
 		},
 		{
 			name: "one-chunk-multi-pages", num: 20,
-			pageSize: 4, pagesPerChunk: 10, listPageSize: 7,
+			pageSize: 4, namesPerChunk: 40, listPageSize: 7,
 			props: apc.GetPropsName, invName: "inv-1c-mp-" + cos.GenTie(),
 		},
-		// B: MaxEntriesPerChunk
+		// B: NamesPerChunk (small, forces many chunks)
 		{
-			name: "max-entries-per-chunk", num: 25,
-			pageSize: 10, pagesPerChunk: 50, maxEntriesPerChk: 8, listPageSize: 5,
+			name: "names-per-chunk", num: 25,
+			pageSize: 10, namesPerChunk: 8, listPageSize: 5,
 			props: apc.GetPropsName, invName: "inv-maxent-" + cos.GenTie(),
 		},
 		// C: props coverage
 		{
 			name: "props-name-size", num: 15,
-			pageSize: 5, pagesPerChunk: 3, listPageSize: 6,
+			pageSize: 5, namesPerChunk: 15, listPageSize: 6,
 			props: apc.GetPropsNameSize, invName: "inv-ns-" + cos.GenTie(),
 		},
 		{
 			name: "props-all", num: 15,
-			pageSize: 5, pagesPerChunk: 3, listPageSize: 6,
+			pageSize: 5, namesPerChunk: 15, listPageSize: 6,
 			props: strings.Join(apc.GetPropsAll, apc.LsPropsSepa), invName: "inv-all-" + cos.GenTie(),
 		},
 	}
@@ -200,8 +132,7 @@ func TestListInventory(t *testing.T) {
 				a := max(rand.IntN(100), 10)
 				tc.num *= a
 				tc.pageSize *= int64(a)
-				tc.pagesPerChunk = min(tc.pagesPerChunk*int64(a), apc.MaxInvPagesPerChunk)
-				tc.maxEntriesPerChk *= int64(a)
+				tc.namesPerChunk *= int64(a)
 				tc.listPageSize *= int64(a)
 			}
 			var (
@@ -224,16 +155,14 @@ func TestListInventory(t *testing.T) {
 					Props:    tc.props,
 					PageSize: tc.pageSize,
 				},
-				PagesPerChunk:      tc.pagesPerChunk,
-				MaxEntriesPerChunk: tc.maxEntriesPerChk,
+				NamesPerChunk: tc.namesPerChunk,
 			}
 
 			xid, err := api.CreateNBI(bp, m.bck, createMsg)
 			tassert.CheckFatal(t, err)
-
-			tlog.Logfln("%s[%s] started (%s: num=%d invPage=%d ppc=%d maxEnt=%d listPage=%d props=%q)",
+			tlog.Logfln("%s[%s] started (%s: num=%d invPage=%d npc=%d listPage=%d props=%q)",
 				apc.ActCreateNBI, xid, tc.name, tc.num, tc.pageSize,
-				tc.pagesPerChunk, tc.maxEntriesPerChk, tc.listPageSize, tc.props)
+				tc.namesPerChunk, tc.listPageSize, tc.props)
 
 			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 			_, err = api.WaitForXactionIC(bp, &wargs)
@@ -244,7 +173,11 @@ func TestListInventory(t *testing.T) {
 				allEntries []*cmn.LsoEnt
 				token      string
 				numPages   int
+				args       api.ListArgs
 			)
+			if createMsg.Name != "" {
+				args.Header = http.Header{apc.HdrInvName: []string{createMsg.Name}}
+			}
 			for {
 				lsmsg := &apc.LsoMsg{
 					Prefix:            m.prefix,
@@ -253,25 +186,18 @@ func TestListInventory(t *testing.T) {
 					Flags:             apc.LsNBI,
 					ContinuationToken: token,
 				}
-				args := api.ListArgs{
-					Header: http.Header{apc.HdrInvName: []string{createMsg.Name}},
-				}
 				lst, err := api.ListObjects(bp, m.bck, lsmsg, args)
 				tassert.CheckFatal(t, err)
-
 				numPages++ // FIXME: implies api.ListObjectsPage()
 				allEntries = append(allEntries, lst.Entries...)
-
 				if lst.ContinuationToken == "" {
 					break
 				}
 				token = lst.ContinuationToken
-
 				// sanity: each page must respect page size
 				tassert.Fatalf(t, len(lst.Entries) <= int(tc.listPageSize),
 					"page too large: got %d, max %d", len(lst.Entries), tc.listPageSize)
 			}
-
 			// 3. validate entry count
 			tassert.Fatalf(t, len(allEntries) == tc.num,
 				"expected %d entries, got %d", tc.num, len(allEntries))
@@ -299,7 +225,6 @@ func TestListInventory(t *testing.T) {
 						"expected non-zero size for %q", e.Name)
 				}
 			}
-
 			tlog.Logfln("listed %d entries in %d page(s) - OK", len(allEntries), numPages)
 		})
 	}
@@ -325,7 +250,6 @@ func TestListInventoryPrefix(t *testing.T) {
 		}
 		bp = tools.BaseAPIParams()
 	)
-
 	if cliBck.IsRemoteAIS() {
 		a := max(rand.IntN(100), 10)
 		m1.num *= a
@@ -334,9 +258,7 @@ func TestListInventoryPrefix(t *testing.T) {
 
 	m1.init(true /*cleanup*/)
 	m1.puts()
-
 	m2.puts()
-
 	_nbiIniCln(t, cliBck)
 
 	// create inventory covering both sub-prefixes
@@ -347,12 +269,11 @@ func TestListInventoryPrefix(t *testing.T) {
 			Props:    apc.GetPropsName,
 			PageSize: max(int64(m1.num/10), 4),
 		},
-		PagesPerChunk: int64(max(rand.IntN(4), 1)),
+		NamesPerChunk: int64(max(rand.IntN(40)+4, 4)),
 	}
 
 	xid, err := api.CreateNBI(bp, m1.bck, createMsg)
 	tassert.CheckFatal(t, err)
-
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 	_, err = api.WaitForXactionIC(bp, &wargs)
 	tassert.CheckFatal(t, err)
@@ -370,7 +291,11 @@ func TestListInventoryPrefix(t *testing.T) {
 			allEntries []*cmn.LsoEnt
 			token      string
 			numPages   int
+			args       api.ListArgs
 		)
+		if createMsg.Name != "" {
+			args.Header = http.Header{apc.HdrInvName: []string{createMsg.Name}}
+		}
 		for {
 			lsmsg := &apc.LsoMsg{
 				Prefix:            tc.prefix,
@@ -379,12 +304,8 @@ func TestListInventoryPrefix(t *testing.T) {
 				Flags:             apc.LsNBI,
 				ContinuationToken: token,
 			}
-			args := api.ListArgs{
-				Header: http.Header{apc.HdrInvName: []string{createMsg.Name}},
-			}
 			lst, err := api.ListObjectsPage(bp, m1.bck, lsmsg, args)
 			tassert.CheckFatal(t, err)
-
 			numPages++
 			allEntries = append(allEntries, lst.Entries...)
 			if lst.ContinuationToken == "" {
@@ -392,15 +313,12 @@ func TestListInventoryPrefix(t *testing.T) {
 			}
 			token = lst.ContinuationToken
 		}
-
 		tassert.Fatalf(t, len(allEntries) == tc.num,
 			"prefix %q: expected %d, got %d", tc.prefix, tc.num, len(allEntries))
-
 		for _, e := range allEntries {
 			tassert.Fatalf(t, strings.HasPrefix(e.Name, tc.prefix),
 				"entry %q doesn't match prefix %q", e.Name, tc.prefix)
 		}
-
 		tlog.Logfln("prefix %q: listed %d out of %d in %d page(s) - OK",
 			tc.prefix, len(allEntries), m1.num+m2.num, numPages)
 	}
@@ -414,8 +332,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 		name             string
 		numA, numM, numZ int
 		pageSize         int64 // CreateNBIMsg.PageSize
-		pagesPerChunk    int64
-		maxEntriesPerChk int64
+		namesPerChunk    int64
 		listPageSize     int64 // listing PageSize
 		invName          string
 	}
@@ -423,25 +340,25 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 		{
 			name: "small-chunks-small-pages",
 			numA: 40, numM: 30, numZ: 50,
-			pageSize: 3, pagesPerChunk: 2, listPageSize: 4,
+			pageSize: 3, namesPerChunk: 6, listPageSize: 4,
 			invName: "inv-sc-sp",
 		},
 		{
 			name: "small-chunks-large-pages",
 			numA: 40, numM: 30, numZ: 50,
-			pageSize: 3, pagesPerChunk: 2, listPageSize: 1000,
+			pageSize: 3, namesPerChunk: 6, listPageSize: 1000,
 			invName: "inv-sc-lp",
 		},
 		{
 			name: "large-chunks-small-pages",
 			numA: 70, numM: 60, numZ: 80,
-			pageSize: 6, pagesPerChunk: 10, listPageSize: 3,
+			pageSize: 6, namesPerChunk: 60, listPageSize: 3,
 			invName: "inv-lc-sp",
 		},
 		{
-			name: "max-entries-per-chunk",
+			name: "names-per-chunk",
 			numA: 30, numM: 25, numZ: 35,
-			pageSize: 10, pagesPerChunk: 50, maxEntriesPerChk: 8, listPageSize: 5,
+			pageSize: 10, namesPerChunk: 8, listPageSize: 5,
 			invName: "inv-maxent",
 		},
 	}
@@ -455,7 +372,6 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 				parent = "p-" + cos.GenTie() + "/"
 				bp     = tools.BaseAPIParams()
 			)
-
 			// One init/cleanup only
 			m0 := &ioContext{t: t, bck: bck, prefix: parent}
 			m0.init(true /*cleanup*/)
@@ -483,14 +399,11 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 					Props:    apc.GetPropsName,
 					PageSize: tc.pageSize,
 				},
-				PagesPerChunk:      tc.pagesPerChunk,
-				MaxEntriesPerChunk: tc.maxEntriesPerChk,
+				NamesPerChunk: tc.namesPerChunk,
 			}
 
 			xid, err := api.CreateNBI(bp, bck, createMsg)
 			tassert.CheckFatal(t, err)
-
-			time.Sleep(3 * time.Second) // TODO -- FIXME: remove
 
 			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
 			_, err = api.WaitForXactionIC(bp, &wargs)
@@ -501,7 +414,11 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 				var (
 					token   string
 					seenTok = make(cos.StrSet, 16)
+					args    api.ListArgs
 				)
+				if invName != "" {
+					args.Header = http.Header{apc.HdrInvName: []string{invName}}
+				}
 				for {
 					lsmsg := &apc.LsoMsg{
 						Prefix:            prefix,
@@ -509,9 +426,6 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 						PageSize:          tc.listPageSize,
 						Flags:             apc.LsNBI,
 						ContinuationToken: token,
-					}
-					args := api.ListArgs{
-						Header: http.Header{apc.HdrInvName: []string{invName}},
 					}
 					lst, err := api.ListObjects(bp, bck, lsmsg, args)
 					tassert.CheckFatal(t, err)
@@ -523,7 +437,6 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 					}
 
 					entries = append(entries, lst.Entries...)
-
 					if lst.ContinuationToken == "" {
 						break
 					}
@@ -532,7 +445,6 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 					seenTok.Set(lst.ContinuationToken)
 					token = lst.ContinuationToken
 				}
-
 				// strict order + prefix match
 				for i := range entries {
 					tassert.Fatalf(t, strings.HasPrefix(entries[i].Name, prefix),
@@ -566,6 +478,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			// 2) list parent => must include all
 			gotParent := list(parent, &tc, createMsg.Name)
 			expTotal := ma.num + mm.num + mz.num
+
 			clear(missed)
 			missed = missed[:0]
 			expSet := make(cos.StrSet, expTotal)
@@ -573,6 +486,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 			expSet.Add(mm.objNames...)
 			expSet.Add(mz.objNames...)
 			debug.Assert(len(expSet) == expTotal)
+
 			gotParentSet := make(cos.StrSet, len(gotParent))
 			for _, en := range gotParent {
 				gotParentSet.Set(en.Name)
@@ -582,7 +496,6 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 					missed = append(missed, name)
 				}
 			}
-
 			tassert.Fatalf(t, len(missed) == 0, "missing %v for parent prefix %q - %d out of %d expected", missed, parent, len(missed), expTotal)
 			tassert.Fatalf(t, len(gotParent) == expTotal, "parent prefix %q: expected %d, got %d", parent, expTotal, len(gotParent))
 

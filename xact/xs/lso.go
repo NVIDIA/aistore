@@ -180,7 +180,7 @@ func (p *lsoFactory) Start() error {
 
 		if r.msg.IsFlagSet(apc.LsNBI) {
 			invName := p.hdr.Get(apc.HdrInvName)
-			debug.Assert(invName != "") // checked by target
+			debug.Assert(invName != "") // checked (or set) by target
 			r.nbi = &nbiCtx{bck: bck}
 			if err := r.nbi.init(invName); err != nil {
 				return err

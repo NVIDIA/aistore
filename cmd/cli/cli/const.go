@@ -1436,13 +1436,9 @@ var (
 	}
 
 	// advanced options
-	nbiPagesPerChunkFlag = cli.IntFlag{
-		Name:  "inv-pages",
-		Usage: "Number of list-object pages to pack in a single inventory chunk (advanced usage)",
-	}
-	nbiMaxEntriesPerChunkFlag = cli.IntFlag{
-		Name:  "inv-max-entries",
-		Usage: "Maximum number of entries per inventory chunk (advanced usage)",
+	nbiNamesPerChunkFlag = cli.IntFlag{
+		Name:  "names-per-chunk",
+		Usage: "Number of object names per inventory chunk (advanced usage)",
 	}
 	nbiForceFlag = cli.BoolFlag{
 		Name:  forceFlag.Name,

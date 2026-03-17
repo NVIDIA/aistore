@@ -47,8 +47,7 @@ var (
 			invPrefixFlag,
 			nameOnlyFlag,
 			allPropsFlag,
-			nbiPagesPerChunkFlag,
-			nbiMaxEntriesPerChunkFlag,
+			nbiNamesPerChunkFlag,
 			nbiForceFlag,
 		},
 		commandRemove: {
@@ -143,13 +142,9 @@ func createNBIHandler(c *cli.Context) error {
 	}
 
 	// advanced
-	if flagIsSet(c, nbiPagesPerChunkFlag) {
-		a := parseIntFlag(c, nbiPagesPerChunkFlag)
-		msg.PagesPerChunk = int64(a)
-	}
-	if flagIsSet(c, nbiMaxEntriesPerChunkFlag) {
-		a := parseIntFlag(c, nbiMaxEntriesPerChunkFlag)
-		msg.MaxEntriesPerChunk = int64(a)
+	if flagIsSet(c, nbiNamesPerChunkFlag) {
+		a := parseIntFlag(c, nbiNamesPerChunkFlag)
+		msg.NamesPerChunk = int64(a)
 	}
 	msg.Force = flagIsSet(c, nbiForceFlag)
 

@@ -18,13 +18,10 @@ type (
 		Name string `json:"name,omitempty"` // inventory name (optional; must be unique for a given bucket)
 		LsoMsg
 
-		// PagesPerChunk overrides the default number of pages to pack into a single inventory chunk.
-		// If zero, the default is used.
-		PagesPerChunk int64 `json:"pages_per_chunk,omitempty"`
-
-		// MaxEntriesPerChunk puts a hard cap on the number of entries in a single inventory chunk.
-		// If zero, the cap is disabled.
-		MaxEntriesPerChunk int64 `json:"max_entries_per_chunk,omitempty"`
+		// Number of object names to store in each inventory chunk.
+		// Requested properties are stored alongside each name.
+		// Advanced usage only - non-zero overrides system default.
+		NamesPerChunk int64 `json:"names_per_chunk,omitempty"`
 
 		// Remove all existing inventories, if any, and proceed to create the new one
 		// (only one inventory per bucket is supported).
@@ -48,11 +45,11 @@ type (
 //
 
 func (m *LsoMsg) ValidateNBI() error {
-	const etag = "invalid list via native bucket inventory"
+	const epref = "invalid list via native bucket inventory"
 
 	// inventory snapshot is flat; StartAfter currently unsupported
 	if m.StartAfter != "" {
-		return errors.New(etag + ": start_after is not supported")
+		return errors.New(epref + ": start_after is not supported")
 	}
 
 	// flags that do not make sense for inventory listing
@@ -64,7 +61,7 @@ func (m *LsoMsg) ValidateNBI() error {
 		sb.Grow(96)
 		sb.WriteString("flags:")
 		m.appendFlags(&sb)
-		return fmt.Errorf("%s: %s", etag, sb.String())
+		return fmt.Errorf("%s: %s", epref, sb.String())
 	}
 
 	return nil
@@ -75,21 +72,21 @@ func (m *LsoMsg) ValidateNBI() error {
 //////////////////
 
 const (
-	DefaultInvPagesPerChunk = 50
-	MaxInvPagesPerChunk     = 256
-	MaxInvEntriesPerChunk   = MaxInvPagesPerChunk * MaxPageSizeGlobal
+	DfltInvNamesPerChunk = 2 * MaxPageSizeAIS  // 20K
+	MaxInvNamesPerChunk  = 64 * MaxPageSizeAIS // 640K
+	MinInvNamesPerChunk  = 2
 )
 
 // validate; set defaults
 func (m *CreateNBIMsg) SetValidate() error {
-	const etag = "invalid '" + ActCreateNBI + "'"
+	const epref = "invalid '" + ActCreateNBI + "'"
 
 	// 1) disallow
 	if m.ContinuationToken != "" {
-		return errors.New(etag + ": continuation_token must be empty")
+		return errors.New(epref + ": continuation_token must be empty")
 	}
 	if m.StartAfter != "" {
-		return errors.New(etag + ": start_after is not supported")
+		return errors.New(epref + ": start_after is not supported")
 	}
 	// flags that don't make sense for inventory generation
 	const badFlags = LsCached | LsNotCached | LsMissing | LsDeleted | LsArchDir |
@@ -100,23 +97,19 @@ func (m *CreateNBIMsg) SetValidate() error {
 		sb.Grow(96)
 		sb.WriteString("flags:")
 		m.appendFlags(&sb)
-		return fmt.Errorf("%s: %s", etag, sb.String())
+		return fmt.Errorf("%s: %s", epref, sb.String())
 	}
 
 	// 2) advanced tunables
 	switch {
-	case m.PagesPerChunk == 0:
-		m.PagesPerChunk = DefaultInvPagesPerChunk
-	case m.PagesPerChunk < 0:
-		return fmt.Errorf("%s: pages_per_chunk=%d", etag, m.PagesPerChunk)
-	case m.PagesPerChunk > MaxInvPagesPerChunk:
-		return fmt.Errorf("%s: pages_per_chunk too large: %d", etag, m.PagesPerChunk)
-	}
-	if m.MaxEntriesPerChunk < 0 {
-		return fmt.Errorf("%s: negative max_entries_per_chunk=%d", etag, m.MaxEntriesPerChunk)
-	}
-	if m.MaxEntriesPerChunk > MaxInvEntriesPerChunk {
-		return fmt.Errorf("%s: too large max_entries_per_chunk=%d", etag, m.MaxEntriesPerChunk)
+	case m.NamesPerChunk == 0:
+		m.NamesPerChunk = DfltInvNamesPerChunk
+	case m.NamesPerChunk < 0:
+		return fmt.Errorf("%s: negative names_per_chunk=%d", epref, m.NamesPerChunk)
+	case m.NamesPerChunk < MinInvNamesPerChunk:
+		return fmt.Errorf("%s: names_per_chunk=%d too small (min=%d)", epref, m.NamesPerChunk, MinInvNamesPerChunk)
+	case m.NamesPerChunk > MaxInvNamesPerChunk:
+		return fmt.Errorf("%s: names_per_chunk=%d too large (max=%d)", epref, m.NamesPerChunk, MaxInvNamesPerChunk)
 	}
 
 	// 3) NOTE: otherwise, backend _may_ append extra (virt-dir) entries (in re: pre-allocation+reuse)
@@ -158,9 +151,9 @@ func (m NBIInfoMap) Names() []string {
 	return names
 }
 
-func (m NBIInfoMap) SingleName() (name string) {
-	for name = range m {
-		break
+func (m NBIInfoMap) SingleName() string {
+	for _, info := range m {
+		return info.Name
 	}
-	return
+	return ""
 }

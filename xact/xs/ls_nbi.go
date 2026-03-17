@@ -275,16 +275,15 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		lst.Entries = append(lst.Entries, out)
 	}
 
-	more := len(nbi.entries) > 0
-	if nbi.nidx == len(nbi.entries) {
-		more = nbi.chunkNum < nbi.ufest.Count()
-	}
-	if l := len(lst.Entries); more && l > 0 {
+	if l := len(lst.Entries); l > 0 {
 		lst.ContinuationToken = lst.Entries[l-1].Name
 		debug.Assert(lst.ContinuationToken != "")
 
-		// out of prefix-defined range
-		if msg.Prefix != "" {
+		// eof
+		if nbi.nidx >= len(nbi.entries) && nbi.chunkNum > nbi.ufest.Count() {
+			lst.ContinuationToken = ""
+		} else if msg.Prefix != "" {
+			// out of prefix-defined range
 			if nbi.nidx < len(nbi.entries) && !strings.HasPrefix(nbi.entries[nbi.nidx].Name, msg.Prefix) {
 				lst.ContinuationToken = ""
 			}
@@ -302,6 +301,7 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 
 func (nbi *nbiCtx) seekAfter(token string) error {
 	debug.Assert(token != "")
+	debug.Assert(nbi.nidx == 0) // otherwise we better search from nidx onwards
 
 	// fast path: search current chunk
 	if nbi.nidx < len(nbi.entries) && len(nbi.entries) > 0 && token < nbi.hdr.last {
