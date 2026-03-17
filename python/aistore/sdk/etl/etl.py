@@ -13,6 +13,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_POST,
     HTTP_METHOD_PUT,
     URL_PATH_ETL,
+    URL_PATH_ETL_LOGS,
     UTF_ENCODING,
     QPARAM_UUID,
 )
@@ -26,6 +27,7 @@ from aistore.sdk.etl.etl_const import (
 
 from aistore.sdk.types import (
     ETLDetails,
+    ETLNodeLogs,
     InitSpecETLArgs,
     ETLSpecMsg,
     EnvVar,
@@ -382,6 +384,32 @@ class Etl:
             path=f"{URL_PATH_ETL}/{self._name}",
             timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
+
+    def logs(self, target_id: str = "") -> List[ETLNodeLogs]:
+        """
+        Get logs from ETL pods.
+
+        Args:
+            target_id (str, optional): Target node ID to get logs from a specific pod.
+                If empty, returns logs from all pods.
+
+        Returns:
+            List[ETLNodeLogs]: Logs from each target node. The `logs` field
+                contains the decoded plaintext log output.
+        """
+        path = f"{URL_PATH_ETL}/{self._name}/{URL_PATH_ETL_LOGS}"
+        if target_id:
+            path = f"{path}/{target_id}"
+        entries = self._client.request_deserialize(
+            HTTP_METHOD_GET,
+            path=path,
+            res_model=List[ETLNodeLogs],
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
+        )
+        # AIS returns logs as base64-encoded strings; decode them
+        for entry in entries:
+            entry.logs = base64.b64decode(entry.logs).decode("utf-8", errors="replace")
+        return entries
 
     @staticmethod
     def validate_etl_name(name: str):

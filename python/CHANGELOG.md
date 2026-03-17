@@ -8,6 +8,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- `Etl.logs()`: fetch ETL pod logs via the SDK (returns `List[ETLNodeLogs]`).
 - MCP server (`aistore.mcp`) for AI agent integration (Claude, Cursor, etc.):
   cluster health/info/performance, bucket list/summary/objects, all read-only.
   Install via `pip install aistore[mcp]`.

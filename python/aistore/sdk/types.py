@@ -452,6 +452,15 @@ class ETLDetails(BaseModel):
     obj_errors: Optional[List[ETLObjError]] = None
 
 
+class ETLNodeLogs(BaseModel):  # pylint: disable=too-few-public-methods
+    """
+    Represents decoded logs from a single ETL pod on one target node.
+    """
+
+    target_id: str = ""
+    logs: str = ""
+
+
 class PromoteAPIArgs(BaseModel):
     """
     Represents the set of args the sdk will pass to AIStore when making a promote request and

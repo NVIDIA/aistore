@@ -2,6 +2,7 @@ import os
 import sys
 import base64
 import unittest
+from typing import List
 from unittest.mock import Mock
 from unittest.mock import patch
 
@@ -14,6 +15,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_POST,
     HTTP_METHOD_DELETE,
     URL_PATH_ETL,
+    URL_PATH_ETL_LOGS,
     UTF_ENCODING,
     QPARAM_UUID,
     QPARAM_ETL_FQN,
@@ -30,7 +32,7 @@ from aistore.sdk.etl.etl_const import (
 from aistore.sdk.etl.webserver import serialize_class
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
-from aistore.sdk.types import ETLDetails
+from aistore.sdk.types import ETLDetails, ETLNodeLogs
 from aistore.sdk.utils import convert_to_seconds
 
 from tests.const import ETL_NAME
@@ -256,6 +258,40 @@ class TestEtl(
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE,
             path=f"etl/{ self.etl_name }",
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
+        )
+
+    def test_logs_all_targets(self):
+        # Use real ETLNodeLogs with base64-encoded logs (as AIS returns)
+        encoded = base64.b64encode(b"log line 1\nlog line 2").decode()
+        self.mock_client.request_deserialize.return_value = [
+            ETLNodeLogs(target_id="t1", logs=encoded),
+            ETLNodeLogs(target_id="t2", logs=encoded),
+        ]
+        response = self.etl.logs()
+        self.assertEqual(len(response), 2)
+        self.assertIn("log line 1", response[0].logs)
+        self.mock_client.request_deserialize.assert_called_with(
+            HTTP_METHOD_GET,
+            path=f"{URL_PATH_ETL}/{ self.etl_name }/{URL_PATH_ETL_LOGS}",
+            res_model=List[ETLNodeLogs],
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
+        )
+
+    def test_logs_specific_target(self):
+        encoded = base64.b64encode(b"target log").decode()
+        self.mock_client.request_deserialize.return_value = [
+            ETLNodeLogs(target_id="t1234", logs=encoded),
+        ]
+        target_id = "t1234"
+        response = self.etl.logs(target_id=target_id)
+        self.assertEqual(len(response), 1)
+        self.assertEqual(response[0].target_id, target_id)
+        self.assertIn("target log", response[0].logs)
+        self.mock_client.request_deserialize.assert_called_with(
+            HTTP_METHOD_GET,
+            path=f"{URL_PATH_ETL}/{ self.etl_name }/{URL_PATH_ETL_LOGS}/{target_id}",
+            res_model=List[ETLNodeLogs],
             timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
 

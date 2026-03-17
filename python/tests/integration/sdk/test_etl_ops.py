@@ -37,7 +37,7 @@ from tests.utils import (
 from tests.const import TEST_TIMEOUT
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable,too-many-public-methods
 class TestETLOps(unittest.TestCase):
     def setUp(self) -> None:
         self.client = DEFAULT_TEST_CLIENT
@@ -715,3 +715,28 @@ class TestETLOps(unittest.TestCase):
         finally:
             etl_ok.stop()
             etl_ok.delete()
+
+    @pytest.mark.etl
+    def test_etl_logs(self):
+        """Test that Etl.logs() returns logs from running ETL pods."""
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class()
+        class EchoServer(FastAPIServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                return data
+
+        # Fetch logs from all targets
+        logs = etl.logs()
+        self.assertIsInstance(logs, list)
+        self.assertGreater(len(logs), 0)
+
+        for entry in logs:
+            self.assertTrue(entry.target_id)
+            self.assertIsInstance(entry.logs, str)
+
+        # Fetch logs from a specific target
+        target_id = logs[0].target_id
+        single = etl.logs(target_id=target_id)
+        self.assertEqual(len(single), 1)
+        self.assertEqual(single[0].target_id, target_id)
