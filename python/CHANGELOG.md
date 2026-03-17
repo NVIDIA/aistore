@@ -12,6 +12,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - MCP server (`aistore.mcp`) for AI agent integration (Claude, Cursor, etc.):
   cluster health/info/performance, bucket list/summary/objects, all read-only.
   Install via `pip install aistore[mcp]`.
+- MCP server: job and ETL tools — list jobs, job status, list ETLs,
+  ETL details, ETL pod logs.
 
 ## [1.22.1] - 2026-03-12
 

@@ -35,6 +35,17 @@ python -m aistore.mcp
 | `ais_list_objects` | List objects in a bucket with optional prefix filtering |
 | `ais_object_info` | Get metadata/properties for a specific object |
 
+### Jobs & ETL Tools
+
+| Tool | Description |
+|------|-------------|
+| `ais_list_jobs` | List all jobs in the cluster with their status |
+| `ais_running_jobs` | List currently running jobs |
+| `ais_job_status` | Get detailed status of a specific job |
+| `ais_list_etls` | List all ETL transformers in the cluster |
+| `ais_etl_details` | Get ETL details including object-level errors |
+| `ais_etl_logs` | Get logs from ETL pods (base64-decoded) |
+
 ## Configuration
 
 The server reads the AIStore endpoint from the `AIS_ENDPOINT` environment variable (default: `http://localhost:8080`).

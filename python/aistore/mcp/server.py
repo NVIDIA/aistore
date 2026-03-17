@@ -21,14 +21,15 @@ from mcp.server.fastmcp import FastMCP
 from aistore.sdk.client import Client
 from aistore.mcp.tools.cluster import register_cluster_tools
 from aistore.mcp.tools.buckets import register_bucket_tools
+from aistore.mcp.tools.jobs import register_job_tools
 
 # Initialize MCP server
 mcp = FastMCP(
     name="aistore",
     instructions=(
         "AIStore MCP Server for cluster management and debugging. "
-        "Use these tools to check cluster health and list buckets. "
-        "All tools are read-only."
+        "Use these tools to check cluster health, list buckets, "
+        "inspect jobs/ETLs, and debug issues. All tools are read-only."
     ),
 )
 
@@ -47,6 +48,7 @@ def _get_client() -> Client:
 # Register all tools
 register_cluster_tools(mcp, _get_client)
 register_bucket_tools(mcp, _get_client)
+register_job_tools(mcp, _get_client)
 
 
 def main():
