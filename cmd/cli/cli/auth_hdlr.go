@@ -102,6 +102,11 @@ var (
 				Usage:  "Show AuthN public JWKS",
 				Action: wrapAuthN(showAuthJWKSHandler),
 			},
+			{
+				Name:   cmdAuthPubKey,
+				Usage:  "Show AuthN public key (asymmetric signing, e.g. RSA)",
+				Action: wrapAuthN(showAuthPubKeyHandler),
+			},
 		},
 	}
 
@@ -224,6 +229,11 @@ var (
 				Usage:  "Log out",
 				Flags:  sortFlags(authFlags[flagsAuthUserLogout]),
 				Action: wrapAuthN(logoutUserHandler),
+			},
+			{
+				Name:   cmdAuthRotateKey,
+				Usage:  "Rotate AuthN signing key (asymmetric keys, e.g. RSA; requires admin permissions)",
+				Action: wrapAuthN(rotateKeyHandler),
 			},
 		},
 	}
@@ -770,6 +780,23 @@ func showAuthJWKSHandler(_ *cli.Context) (err error) {
 		return err
 	}
 	return teb.Print(jwks, teb.PropValTmpl, teb.Jopts(true))
+}
+
+func showAuthPubKeyHandler(c *cli.Context) error {
+	key, err := authn.GetPublicKey(authParams)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer, key)
+	return nil
+}
+
+func rotateKeyHandler(c *cli.Context) error {
+	if err := authn.RotateKey(authParams); err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer, "Key rotated successfully")
+	return nil
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {

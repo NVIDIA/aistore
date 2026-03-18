@@ -182,19 +182,21 @@ const (
 	cmdResetBprops = cmdReset
 
 	// AuthN subcommands
-	cmdAuthAdd     = "add"
-	cmdAuthShow    = "show"
-	cmdAuthSet     = commandSet
-	cmdAuthRemove  = commandRemove
-	cmdAuthLogin   = "login"
-	cmdAuthLogout  = "logout"
-	cmdAuthUser    = "user"
-	cmdAuthRole    = "role"
-	cmdAuthCluster = cmdCluster
-	cmdAuthToken   = "token"
-	cmdAuthConfig  = cmdConfig
-	cmdAuthOIDC    = "oidc"
-	cmdAuthJWKS    = "jwks"
+	cmdAuthAdd       = "add"
+	cmdAuthShow      = "show"
+	cmdAuthSet       = commandSet
+	cmdAuthRemove    = commandRemove
+	cmdAuthLogin     = "login"
+	cmdAuthLogout    = "logout"
+	cmdAuthUser      = "user"
+	cmdAuthRole      = "role"
+	cmdAuthCluster   = cmdCluster
+	cmdAuthToken     = "token"
+	cmdAuthConfig    = cmdConfig
+	cmdAuthOIDC      = "oidc"
+	cmdAuthJWKS      = "jwks"
+	cmdAuthPubKey    = apc.PubKey
+	cmdAuthRotateKey = apc.Rotate
 
 	// K8s subcommans
 	cmdK8s        = "kubectl"
