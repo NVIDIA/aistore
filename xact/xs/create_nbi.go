@@ -7,6 +7,7 @@ package xs
 
 import (
 	"encoding/binary"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -30,13 +31,13 @@ import (
 
 // XactNBI: create native bucket inventory (NBI)
 //
-// TODO:
+// TODO in 4.4+ =================================================
 // - progress notif
 // - designated-target + filterAddLmeta()
 // - stats: internal (-> CtlMsg) and Prometheus
-// ================ v4.4 ==================================
-// - inventory manifest { meta-version = nbiMetaVer; started/finished; schema (lsmsg); prefix[; optimizing meta] }
+// - single backend.ListObjects(0 in the cluster; filterKeepMine
 // - multiple inventories: a) periodic re-sync, b) cleanup/GC old
+// ==============================================================
 
 // on-disk formatting
 const (
@@ -92,11 +93,11 @@ func (p *nbiFactory) Start() error {
 	invName := r.msg.Name
 	debug.Assert(invName != "")
 
-	// nbi LOM is always chunked
-	r.lom = core.AllocLOM(nbiObjName(r.Bck(), invName))
-
+	// nbi LOM is (almost) always chunked
+	r.lom = &core.LOM{
+		ObjName: nbiObjName(r.Bck(), invName),
+	}
 	if err := r.init(); err != nil {
-		core.FreeLOM(r.lom)
 		return err
 	}
 
@@ -105,6 +106,7 @@ func (p *nbiFactory) Start() error {
 	return nil
 }
 
+// naming convention: inventory name => inventory LOM
 func nbiObjName(bck *meta.Bck, invName string) string {
 	debug.Assert(invName != "")
 	return string(bck.MakeUname(invName))
@@ -156,7 +158,6 @@ func (r *XactNBI) cleanup() {
 	if !r.clean.CAS(false, true) {
 		return
 	}
-	defer core.FreeLOM(r.lom)
 	r.slab.Free(r.buf)
 
 	if r.IsAborted() {
@@ -279,38 +280,76 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 		}
 	}
 
-	if r.ufest.Count() == 0 {
-		r.cleanup()
-		r.Finish()
-		return
-	}
-
-	if err := r.lom.CompleteUfest(r.ufest, false /*locked*/); err != nil {
+	if err := r.fini(smap, ntotal); err != nil {
 		r.Abort(err)
-		return
+	}
+}
+
+func (r *XactNBI) fini(smap *meta.Smap, ntotal int64) error {
+	var (
+		size int64
+		lom  = r.lom
+	)
+	lom.Lock(true)
+	defer lom.Unlock(true)
+
+	errLoad := lom.Load(false, true)
+	if errLoad == nil {
+		// unlikely (and currently impossible given single-inventory-per-bucket)
+		return fmt.Errorf("%s: inventory %q already exists (%s)", r.Name(), r.msg.Name, lom.Cname())
+	}
+	if !cos.IsNotExist(errLoad) {
+		return errLoad // IO err
 	}
 
+	now := time.Now()
+	if r.ufest.Count() != 0 {
+		err := lom.CompleteUfest(r.ufest, true /*locked*/)
+		if err != nil {
+			return err
+		}
+		size = lom.Lsize()
+	} else {
+		// special: when bucket is "smaller" than the cluster
+		debug.Assert(ntotal == 0)
+		fh, err := lom.Create()
+		if err != nil {
+			core.T.FSHC(err, lom.Mountpath(), lom.FQN)
+			return err
+		}
+		cos.Close(fh)
+		lom.SetSize(0)
+		lom.SetCksum(cos.NoneCksum)
+		lom.SetAtimeUnix(now.UnixNano())
+		if err := lom.PersistMain(false /*chunked*/); err != nil {
+			return err
+		}
+	}
+
+	// write NBI's own meta
 	meta := &apc.NBIMeta{
 		Prefix:   r.msg.Prefix,
 		Started:  r.StartTime().UnixNano(),
-		Finished: time.Now().UnixNano(),
+		Finished: now.UnixNano(),
 		Ntotal:   ntotal,
 		SmapVer:  smap.Version,
 		Chunks:   int32(r.ufest.Count()),
 		Nat:      int32(smap.CountActiveTs()),
 	}
-	if err := fs.SetNBI(r.lom.FQN, meta, r.buf); err != nil {
-		nlog.Errorf("%s: ex-post-facto failure to store metadata: [%q, %q, %v]", r.Name(), r.msg.Name, r.lom.Cname(), err)
-		core.T.FSHC(err, r.lom.Mountpath(), r.lom.FQN)
+	if err := fs.SetNBI(lom.FQN, meta, r.buf); err != nil {
+		nlog.Errorf("%s: ex-post-facto failure to store metadata: [%q, %q, %v]", r.Name(), r.msg.Name, lom.Cname(), err)
+		core.T.FSHC(err, lom.Mountpath(), lom.FQN)
+		// unlikely; keeping it for possible further troubleshooting
 	}
 
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infof("completed %s [%s]: size %d, chunks %d, lso-entries %d (per chunk: %d)",
-			r.lom.Cname(), r.msg.Name, r.lom.Lsize(), r.ufest.Count(), ntotal, r.msg.NamesPerChunk)
+			lom.Cname(), r.msg.Name, size, r.ufest.Count(), ntotal, r.msg.NamesPerChunk)
 	}
 
 	r.cleanup()
 	r.Finish()
+	return nil
 }
 
 // TODO: ref

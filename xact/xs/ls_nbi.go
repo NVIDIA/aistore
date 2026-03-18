@@ -69,9 +69,10 @@ type nbiCtx struct {
 }
 
 func (nbi *nbiCtx) init(invName string) error {
-	lom := core.AllocLOM(nbiObjName(nbi.bck, invName))
+	lom := &core.LOM{
+		ObjName: nbiObjName(nbi.bck, invName),
+	}
 	if err := lom.InitBck(meta.SysBckNBI()); err != nil {
-		core.FreeLOM(lom)
 		return err
 	}
 
@@ -81,12 +82,21 @@ func (nbi *nbiCtx) init(invName string) error {
 		nbi.cleanup()
 		return err
 	}
+	if nbi.ufest.Count() == 0 {
+		// see "special" below and create_nbi; cleanup() checks buf != nil, etc.
+		if cmn.Rom.V(5, cos.ModXs) {
+			nlog.Infoln(core.T.String(), "- empty inventory", invName, lom.Cname())
+		}
+		return nil
+	}
 
 	nbi.cksum = cos.NewCksumHash(cos.ChecksumCRC32C)
 	debug.Assert(nbi.cksum.H.Size() == cos.SizeofI32)
 
 	nbi.buf, nbi.slab = core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
 	nbi.nidx = 0
+
+	// readahead first chunk
 	nbi.chunkNum = 1
 	if err := nbi.readChunk(); err != nil {
 		nbi.cleanup()
@@ -111,6 +121,14 @@ func (nbi *nbiCtx) _load(lom *core.LOM) error {
 	if err := lom.Load(true, true); err != nil {
 		return err
 	}
+
+	// special: when bucket is "smaller" than cluster
+	if lom.Lsize() == 0 {
+		nbi.lom = lom
+		nbi.ufest = &core.Ufest{}
+		return nil
+	}
+
 	ufest, err := core.NewUfest("", lom, true /*mustExist*/)
 	if err != nil {
 		return nbi.emit(err)
@@ -135,7 +153,6 @@ func (nbi *nbiCtx) emit(err error) error {
 func (nbi *nbiCtx) cleanup() {
 	if nbi.lom != nil {
 		nbi.lom.Unlock(false)
-		core.FreeLOM(nbi.lom)
 	}
 	if nbi.buf != nil && nbi.slab != nil {
 		nbi.slab.Free(nbi.buf)
@@ -279,6 +296,10 @@ func (nbi *nbiCtx) pageSize(msg *apc.LsoMsg) int {
 func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	lst.Entries = lst.Entries[:0]
 	lst.ContinuationToken = ""
+
+	if nbi.ufest.Count() == 0 {
+		return nil
+	}
 
 	switch msg.ContinuationToken {
 	case "":

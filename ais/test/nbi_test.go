@@ -77,6 +77,7 @@ func TestListInventory(t *testing.T) {
 		listPageSize  int64  // LsoMsg.PageSize (listing)
 		props         string // used for both create and list
 		invName       string
+		smallBucket   bool
 	}
 	tests := []test{
 		// A x B: vary chunk granularity vs list page size
@@ -89,6 +90,12 @@ func TestListInventory(t *testing.T) {
 			name: "small-chunks-small-pages", num: 30,
 			pageSize: 3, namesPerChunk: 6, listPageSize: 4,
 			props: apc.GetPropsName, invName: "inv-sc-sp-" + cos.GenTie(),
+		},
+		{
+			name: "small-chunks-small-pages-small-bucket-empty-invName", num: 3,
+			pageSize: 3, namesPerChunk: 6, listPageSize: 4,
+			props:       apc.GetPropsName,
+			smallBucket: true,
 		},
 		{
 			name: "small-chunks-large-pages", num: 30,
@@ -128,7 +135,7 @@ func TestListInventory(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if cliBck.IsRemoteAIS() {
+			if cliBck.IsRemoteAIS() && !tc.smallBucket {
 				a := max(rand.IntN(100), 10)
 				tc.num *= a
 				tc.pageSize *= int64(a)
