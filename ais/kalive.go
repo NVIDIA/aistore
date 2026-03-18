@@ -75,7 +75,7 @@ type (
 
 	hbTracker interface {
 		HeardFrom(id string, now int64) int64 // callback for 'id' to respond
-		TimedOut(id string) bool              // true if 'id` didn't keepalive or called (via "heard") within the interval (above)
+		TimedOut(id string) bool              // true if 'id' didn't keepalive or called (via "heard") within the interval (above)
 
 		reg(id string)
 		set(interval time.Duration) bool

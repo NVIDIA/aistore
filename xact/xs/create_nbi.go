@@ -30,7 +30,7 @@ import (
 
 // XactNBI: create native bucket inventory (NBI)
 //
-// TODO -- FIXME:
+// TODO:
 // - progress notif
 // - designated-target + filterAddLmeta()
 // - stats: internal (-> CtlMsg) and Prometheus
@@ -290,8 +290,16 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 		return
 	}
 
-	a, b := r.StartTime(), time.Now()
-	if err := fs.SetNBI(r.lom.FQN, a.UnixNano(), b.UnixNano(), r.msg.Prefix, r.buf); err != nil {
+	meta := &apc.NBIMeta{
+		Prefix:   r.msg.Prefix,
+		Started:  r.StartTime().UnixNano(),
+		Finished: time.Now().UnixNano(),
+		Ntotal:   ntotal,
+		SmapVer:  smap.Version,
+		Chunks:   int32(r.ufest.Count()),
+		Nat:      int32(smap.CountActiveTs()),
+	}
+	if err := fs.SetNBI(r.lom.FQN, meta, r.buf); err != nil {
 		nlog.Errorf("%s: ex-post-facto failure to store metadata: [%q, %q, %v]", r.Name(), r.msg.Name, r.lom.Cname(), err)
 		core.T.FSHC(err, r.lom.Mountpath(), r.lom.FQN)
 	}

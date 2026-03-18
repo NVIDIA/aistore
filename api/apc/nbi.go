@@ -28,14 +28,21 @@ type (
 		Force bool `json:"force,omitempty"`
 	}
 
+	NBIMeta struct {
+		Prefix   string `json:"prefix,omitempty"`   // lsmsg.Prefix
+		Started  int64  `json:"started,omitempty"`  // time started creating (ns)
+		Finished int64  `json:"finished,omitempty"` // finished (ns)
+		Ntotal   int64  `json:"ntotal,omitempty"`   // total number of names in the inventory
+		SmapVer  int64  `json:"smap_ver,omitempty"` // cluster map when writing inventory
+		Chunks   int32  `json:"chunks,omitempty"`   // number of chunks (manifest.Count())
+		Nat      int32  `json:"nat,omitempty"`      // number of active (not in maintenance) targets
+	}
 	NBIInfo struct {
-		Bucket   string `json:"bucket"`
-		Name     string `json:"name"`
-		ObjName  string `json:"obj_name"`
-		Prefix   string `json:"prefix,omitempty"`
-		Size     int64  `json:"size"`
-		Started  int64  `json:"started,omitempty"`
-		Finished int64  `json:"finished,omitempty"`
+		Bucket  string `json:"bucket"`
+		Name    string `json:"name"`
+		ObjName string `json:"obj_name"`
+		Size    int64  `json:"size"` // inventory size on disk
+		NBIMeta
 	}
 	NBIInfoMap map[string]*NBIInfo // by NBIInfo.Name
 )

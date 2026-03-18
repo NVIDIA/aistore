@@ -17,18 +17,43 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
-// (1) NBI xattr v1 (pre-manifest)
-// (2) NBI discovery
+// In this source:
+//  (1) NBI xattr v1 (pre-manifest)
+//  (2) NBI discovery
+
+//
+// nbiXattr: native bucket inventory (NBI) on-disk metadata
+//
+// Versioned binary layout (big-endian via cos.BytePack):
+//
+// | -- FIXED-SIZE FIELDS ----------------------------------------------- | -- VAR -- |
+// | ver | started | finished | ntotal | smapVer | chunks | nat | prefix |
+// | u8  |  int64  |  int64   |  int64 |  int64  |  int32 | int32 | string |
+//
+// where:
+//   - ver      : metadata version (nbiMetaVersion)
+//   - started  : creation start time (UnixNano)
+//   - finished : creation completion time (UnixNano)
+//   - ntotal   : total number of object names in the inventory
+//   - smapVer  : cluster Smap version at creation time
+//   - chunks   : total number of inventory chunks (manifest.Count())
+//   - nat      : number of active targets at creation time
+//   - prefix   : lsmsg.Prefix used to generate the inventory
+//
+// Notes:
+//   - `prefix` is variable-length stored last.
+//   - All fixed-size fields must be appended only; do not reorder existing fields.
+//   - Any post-4.3 format change must bump `nbiMetaVersion` and preserve backward compatibility.
+//   - Consumers must validate `ver` meta-version before interpreting the payload.
+//
 
 const (
 	nbiMetaVersion = 1
 )
 
 type nbiXattr struct {
-	prefix   string
-	started  int64
-	finished int64
-	version  uint8
+	apc.NBIMeta
+	version uint8 // set internally; not exported
 }
 
 type nbiJogger struct {
@@ -118,11 +143,11 @@ func (j *nbiJogger) run() {
 			ObjName: filepath.Join(j.prefix, name),
 			Size:    fi.Size(),
 		}
+
 		if ok {
-			info.Started = meta.started
-			info.Finished = meta.finished
-			info.Prefix = meta.prefix
+			info.NBIMeta = meta.NBIMeta
 		} else {
+			// TODO: indicate "likely in progress"
 			info.Finished = _nbiMtime(fqn)
 		}
 
@@ -141,14 +166,6 @@ func _nbiMtime(fqn string) int64 {
 	return t.UnixNano()
 }
 
-//
-// nbiXattr: on-disk metadata format (versioned):
-// - version (1 byte)
-// - started (int64 unix-nano)
-// - finished (int64 unix-nano)
-// - prefix (length-prefixed string)
-//
-
 // interface guard
 var (
 	_ cos.Packer   = (*nbiXattr)(nil)
@@ -156,57 +173,73 @@ var (
 )
 
 func (x *nbiXattr) PackedSize() int {
-	return 1 + cos.SizeofI64 + cos.SizeofI64 + cos.PackedStrLen(x.prefix)
+	return 1 + 4*cos.SizeofI64 + 2*cos.SizeofI32 + cos.PackedStrLen(x.Prefix)
 }
 
 func (x *nbiXattr) Pack(packer *cos.BytePack) {
 	packer.WriteUint8(x.version)
-	packer.WriteInt64(x.started)
-	packer.WriteInt64(x.finished)
-	packer.WriteString(x.prefix)
+	packer.WriteInt64(x.Started)
+	packer.WriteInt64(x.Finished)
+	packer.WriteInt64(x.Ntotal)
+	packer.WriteInt64(x.SmapVer)
+	packer.WriteInt32(x.Chunks)
+	packer.WriteInt32(x.Nat)
+	packer.WriteString(x.Prefix)
 }
 
 func (x *nbiXattr) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if x.version, err = unpacker.ReadByte(); err != nil {
 		return
 	}
-	if x.started, err = unpacker.ReadInt64(); err != nil {
+
+	if x.Started, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
-	if x.finished, err = unpacker.ReadInt64(); err != nil {
+	if x.Finished, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
-	x.prefix, err = unpacker.ReadString()
+	if x.Ntotal, err = unpacker.ReadInt64(); err != nil {
+		return
+	}
+	if x.SmapVer, err = unpacker.ReadInt64(); err != nil {
+		return
+	}
+	if x.Chunks, err = unpacker.ReadInt32(); err != nil {
+		return
+	}
+	if x.Nat, err = unpacker.ReadInt32(); err != nil {
+		return
+	}
+
+	x.Prefix, err = unpacker.ReadString()
 	return
 }
 
-func getNBI(fqn string) (meta nbiXattr, ok bool, err error) {
+func getNBI(fqn string) (x *nbiXattr, ok bool, err error) {
 	b, err := GetXattr(fqn, xattrNBI)
 	if err != nil {
 		if cos.IsErrXattrNotFound(err) {
-			return meta, false, nil
+			return nil, false, nil
 		}
-		return meta, false, err
+		return nil, false, err
 	}
 
+	x = &nbiXattr{}
 	u := cos.NewUnpacker(b)
-	if err = meta.Unpack(u); err != nil {
-		return meta, false, err
+	if err = x.Unpack(u); err != nil {
+		return nil, false, err
 	}
-	if meta.version != nbiMetaVersion {
-		return meta, false, fmt.Errorf("unsupported NBI metadata version %d", meta.version)
+	if x.version != nbiMetaVersion {
+		return nil, false, fmt.Errorf("unsupported NBI metadata version %d", x.version)
 	}
-	return meta, true, nil
+	return x, true, nil
 }
 
-func SetNBI(fqn string, started, finished int64, prefix string, buf []byte) error {
-	x := &nbiXattr{
-		version:  nbiMetaVersion,
-		started:  started,
-		finished: finished,
-		prefix:   prefix,
+func SetNBI(fqn string, meta *apc.NBIMeta, buf []byte) error {
+	x := nbiXattr{
+		NBIMeta: *meta,
+		version: nbiMetaVersion,
 	}
-
 	packer := cos.NewPacker(buf, x.PackedSize())
 	x.Pack(packer)
 

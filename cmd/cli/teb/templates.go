@@ -374,22 +374,27 @@ See '--help' and docs/cli for details.`
 	// `search`
 	SearchTmpl = "{{ JoinListNL . }}\n"
 
-	NBITmpl = "BUCKET\t NAME\t SIZE\t STARTED\t FINISHED\t PREFIX\n" +
+	NBITmpl = "BUCKET\t NAME\t SIZE\t OBJECTS\t STARTED\t FINISHED\t PREFIX\n" +
 		"{{range $v := .}}" +
 		"{{$v.Bucket}}\t " +
 		"{{$v.Name}}\t " +
 		"{{FormatBytesSig $v.Size 2}}\t " +
+		"{{if $v.Ntotal}}{{$v.Ntotal}}{{else}}-{{end}}\t " +
 		"{{FormatUnixNano $v.Started}}\t " +
 		"{{FormatUnixNano $v.Finished}}\t " +
 		"{{if $v.Prefix}}{{$v.Prefix}}{{else}}-{{end}}\n" +
 		"{{end}}"
 
-	NBITmplVerbose = "BUCKET\t NAME\t OBJECT\t SIZE\t STARTED\t FINISHED\t PREFIX\n" +
+	NBITmplVerbose = "BUCKET\t NAME\t OBJECT\t SIZE\t OBJECTS\t CHUNKS\t TARGETS\t SMAP\t STARTED\t FINISHED\t PREFIX\n" +
 		"{{range $v := .}}" +
 		"{{$v.Bucket}}\t " +
 		"{{$v.Name}}\t " +
 		"{{$v.ObjName}}\t " +
 		"{{FormatBytesSig $v.Size 2}}\t " +
+		"{{if $v.Ntotal}}{{$v.Ntotal}}{{else}}-{{end}}\t " +
+		"{{if $v.Chunks}}{{$v.Chunks}}{{else}}-{{end}}\t " +
+		"{{if $v.Nat}}{{$v.Nat}}{{else}}-{{end}}\t " +
+		"{{if $v.SmapVer}}v{{$v.SmapVer}}{{else}}-{{end}}\t " +
 		"{{FormatUnixNano $v.Started}}\t " +
 		"{{FormatUnixNano $v.Finished}}\t " +
 		"{{if $v.Prefix}}{{$v.Prefix}}{{else}}-{{end}}\n" +

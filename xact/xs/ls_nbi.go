@@ -42,13 +42,11 @@ const (
 
 // TODO:
 // - corner case: very small bucket w/ not every target having inventory LOM
-// - test list-objects with empty invName (target must resolve single)
 // - feat: support LsCached (semantics? a) per recorded in chunks or b) w/ respect to local data)
 // - feat: support listing jobs that currently rely-on/reuse:
 //   - npgCtx.nextPageR() (bucket summary)
 //   - npgCtx.nextPageA() (all list-range jobs: prefetch, evict, transform-copy-objs, etc.)
 // - returned errors: unify; add details
-// - pagesize default set by proxy (10k when zero) - not optimal for NBI
 
 type nbiCtx struct {
 	lom       *core.LOM      // .sys_inventory/BUCKET-UNAME/INV-NAME
