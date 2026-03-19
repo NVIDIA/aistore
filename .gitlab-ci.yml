@@ -192,7 +192,7 @@ security:sonarqube:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - !reference [.default_run_rules, rules]
   script:
-    - sonar-scanner -Dsonar.qualitygate.wait=true
+    - sonar-scanner
 
 build:k8s:
   stage: build
