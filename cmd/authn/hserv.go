@@ -192,7 +192,7 @@ func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := h.mgr.validateToken(r.Context(), msg.Token); err != nil {
-		cmn.WriteErr(w, r, err)
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 	code, err := h.mgr.revokeToken(msg.Token)
@@ -299,13 +299,13 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, users, "list users")
 		return
 	}
-	tk, err := h.getToken(r)
+	claims, err := h.getClaims(r)
 	if err != nil {
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 	reqUser := items[0]
-	if !tk.IsAdmin && !tk.IsUser(reqUser) {
+	if !claims.IsAdmin && !claims.IsUser(reqUser) {
 		err := errors.New("not authorized: requires admin or self")
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
@@ -319,7 +319,7 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, uInfo, "get user")
 }
 
-func (h *hserv) getToken(r *http.Request) (*tok.AISClaims, error) {
+func (h *hserv) getClaims(r *http.Request) (*tok.AISClaims, error) {
 	tokenHdr, err := tok.ExtractToken(r.Header)
 	if err != nil {
 		return nil, err
@@ -327,7 +327,7 @@ func (h *hserv) getToken(r *http.Request) (*tok.AISClaims, error) {
 	claims, err := h.mgr.validateToken(r.Context(), tokenHdr.Token)
 	if err != nil {
 		if errors.Is(err, tok.ErrInvalidToken) {
-			return nil, fmt.Errorf("not authorized (token expired): %q", tokenHdr.Token)
+			return nil, fmt.Errorf("not authorized (%v): %q", err, tokenHdr.Token)
 		}
 		return nil, err
 	}
@@ -337,13 +337,13 @@ func (h *hserv) getToken(r *http.Request) (*tok.AISClaims, error) {
 // Checks if the request header contains valid admin credentials.
 // (admin is created at deployment time and cannot be modified via API)
 func (h *hserv) validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
-	tk, err := h.getToken(r)
+	claims, err := h.getClaims(r)
 	if err != nil {
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
 	}
-	if !tk.IsAdmin {
-		err := fmt.Errorf("not authorized: requires admin (%s)", tk)
+	if !claims.IsAdmin {
+		err := fmt.Errorf("not authorized: requires admin (%s)", claims)
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
 	}
@@ -351,18 +351,18 @@ func (h *hserv) validateAdminPerms(w http.ResponseWriter, r *http.Request) error
 }
 
 func (h *hserv) validateUpdatePerms(w http.ResponseWriter, r *http.Request, userID string, updateReq *authn.User) error {
-	tk, err := h.getToken(r)
+	claims, err := h.getClaims(r)
 	if err != nil {
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
 	}
-	if tk.IsAdmin {
+	if claims.IsAdmin {
 		return nil
 	}
-	if tk.IsUser(userID) && len(updateReq.Roles) == 0 {
+	if claims.IsUser(userID) && len(updateReq.Roles) == 0 {
 		return nil
 	}
-	err = fmt.Errorf("not authorized: (%s)", tk)
+	err = fmt.Errorf("not authorized: (%s)", claims)
 	cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 	return err
 }

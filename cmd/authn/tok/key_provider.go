@@ -83,7 +83,7 @@ func NewStaticKeyProvider(conf *cmn.AuthConf) (*StaticKeyProvider, error) {
 
 func parsePubKey(str string) (*rsa.PublicKey, error) {
 	if str == "" {
-		return nil, nil
+		return nil, errors.New("empty public key string")
 	}
 	var derBytes []byte
 	var err error
@@ -113,8 +113,14 @@ func parsePubKey(str string) (*rsa.PublicKey, error) {
 func (s *StaticKeyProvider) ResolveKey(_ context.Context, t *jwt.Token) (any, error) {
 	switch t.Method.(type) {
 	case *jwt.SigningMethodHMAC:
+		if s.hmacSecret == "" {
+			return nil, errors.New("HMAC secret not configured")
+		}
 		return []byte(s.hmacSecret), nil
 	case *jwt.SigningMethodRSA:
+		if s.rsaPublicKey == nil {
+			return nil, errors.New("RSA public key not configured")
+		}
 		return s.rsaPublicKey, nil
 	default:
 		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", t.Method, t.Header["alg"])
