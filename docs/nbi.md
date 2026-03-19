@@ -6,6 +6,27 @@ It is designed for **very large, read-mostly buckets** - for instance, large tra
 
 In v4.3, NBI status is **experimental**. The code is new, has little production mileage, and inventories are currently created **manually**. There is no periodic refresh or automatic resynchronization yet.
 
+This document references Go types and constants from the AIS codebase. For SDK usage, see the [Go API](https://github.com/NVIDIA/aistore/tree/main/api) and [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) documentation.
+
+## Table of Contents
+
+- [Motivation](#motivation)
+- [Supported buckets](#supported-buckets)
+- [Overview](#overview)
+  - [Creating](#creating)
+  - [Listing](#listing)
+- [System buckets](#system-buckets)
+- [Creating an inventory](#creating-an-inventory)
+- [Monitoring inventory creation](#monitoring-inventory-creation)
+- [Showing inventories](#showing-inventories)
+- [Listing objects using inventory](#listing-objects-using-inventory)
+- [How inventory-backed listing works](#how-inventory-backed-listing-works)
+- [Inventory metadata](#inventory-metadata)
+- [Small buckets and empty local inventories](#small-buckets-and-empty-local-inventories)
+- [Current limitations](#current-limitations)
+- [Legacy --s3-inventory](#legacy---s3-inventory)
+- [Examples](#examples)
+
 ## Motivation
 
 NBI is intended to replace the older S3-inventory integration.
@@ -17,64 +38,76 @@ Compared to the legacy S3-specific path, NBI is:
 - **format-independent**: does not depend on provider-generated inventory formats such as CSV or Parquet
 - **operationally simpler**: no external scripting or AWS CLI required
 
-This document references Go types and constants from the AIS codebase. For SDK usage, see the [Go API](https://github.com/NVIDIA/aistore/tree/main/api) and [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) documentation.
-
-Rest of it is structured as follows:
-
-**Table of Contents**
-
-- [Supported buckets](#supported-buckets)
-- [Overview](#overview)
-- [Current status in v4.3](#current-status-in-v43)
-- [Creating an inventory](#creating-an-inventory)
-- [Monitoring inventory creation](#monitoring-inventory-creation)
-- [Showing inventories](#showing-inventories)
-- [Listing objects using inventory](#listing-objects-using-inventory)
-- [How inventory-backed listing works](#how-inventory-backed-listing-works)
-- [Inventory metadata](#inventory-metadata)
-- [Small buckets and empty local inventories](#small-buckets-and-empty-local-inventories)
-- [Current limitations](#current-limitations)
-- [Legacy --s3-inventory](#legacy---s3-inventory)
-- [Examples](#examples)
-- [Summary](#summary)
-
 ## Supported buckets
 
-NBI applies to **remote buckets**:
-
-- cloud buckets
-- remote AIS buckets
-
-NBI is not meant for regular in-cluster AIS buckets.
+NBI applies to **remote buckets** only: cloud buckets (S3, GCS, Azure, OCI) and remote AIS buckets. It is not currently supported for in-cluster `ais://` buckets (with little motivation to add such support in the future).
 
 ## Overview
 
-At a high level, NBI works as follows:
+At a high level, NBI works in two phases: **create** and **list**.
+
+### Creating
 
 1. A user explicitly creates an inventory for a remote bucket.
-2. AIS runs a distributed `create-inventory` job across all storage nodes.
-3. Each storage node lists the backend bucket, keeps only the names that belong to it, and stores them locally in inventory chunks.
-4. Later, list-objects requests with the `LsNBI` flag - whether via CLI (`ais ls --inventory`), Go SDK, or Python SDK - are served from the stored snapshot instead of walking the backend again.
+2. The proxy initiates a 2PC (two-phase commit) transaction across all storage nodes.
+3. During the Begin phase, each target validates the request, checks capacity, verifies that no other `create-inventory` job is running for the same bucket, and enforces the one-inventory-per-bucket limit (removing any prior inventory if `--force` is specified).
+4. On Commit, each target runs a `create-inventory` xaction: it lists the backend bucket, keeps only the object names that belong to it - where "belong" is uniquely defined by the triplet (cluster map, bucket, object name) - and stores them locally as inventory chunks.
 
-The create step uses nearly the same control structure as a normal bucket listing. In particular, inventory creation embeds `apc.LsoMsg`, with a number of validations and restrictions described below.
+> **Note:** In the current (v4.3) implementation, all targets independently list the remote backend. A future optimization will use a designated target to list once and distribute the results - the same approach that regular `list-objects` already uses.
 
-## Current status in v4.3
+### Listing
 
-NBI is **experimental** in v4.3.
+1. A list-objects request with `--inventory` (the `LsNBI` flag) arrives at the proxy.
+2. The proxy broadcasts to all targets, each of which reads its local inventory chunks and returns its portion.
+3. The proxy merges the per-target responses into a single sorted listing stream.
 
-Current characteristics:
+Here is a quick example - ~48M objects in an S3 bucket, 24 targets:
 
-- manual creation only
-- no periodic refresh
-- no automatic resync
-- no progress reporting yet
-- one inventory per bucket is currently supported
+```console
+## create
+$ ais nbi create s3://training-data-v5
+...
+
+## list using the inventory
+$ time ais ls s3://training-data-v5 --inventory | tail
+zzy/shard-0489132.tar         128.00MiB       yes
+zzy/shard-0489133.tar         128.00MiB       yes
+zzz/shard-0491718.tar         128.00MiB       yes
+Listed 48,017,395 names
+
+real    0m14.238s
+user    0m9.671s
+sys     0m3.102s
+```
+
+The same `ais ls` without `--inventory` produces identical results but walks the remote backend each time.
+
+## System buckets
+
+Inventories are stored as chunked objects in a designated **system bucket** - a special AIS bucket whose name starts with a dot (`.`).
+
+> System buckets are AIS infrastructure and are not intended for direct user access. The dot-prefix naming convention (`.sys-*`) is reserved.
+> For details on naming rules, visibility, and future plans, see [System Buckets](/docs/bucket.md#system-buckets).
+
+The first (and currently only) system bucket is `ais://.sys-inventory`. It is created on the fly upon the very first inventory creation request. There is no need to create it manually.
+
+Creating an inventory requires admin permissions. When AIStore is deployed with the [Authentication Server (AuthN)](/docs/authn.md), the operation requires `admin` [permissions](/docs/authn.md#permissions). AuthN is a deployment-time option; clusters without AuthN do not enforce this check.
+
+```console
+$ ais ls ais://.sys-inventory
+NAME                                              SIZE
+aws/@#/training-data-v5/inv-Tp4nR7kWx             1.28GiB
+
+$ ais ls ais://.sys-inventory --props chunked,size
+NAME                                              CHUNKED         SIZE
+aws/@#/training-data-v5/inv-Tp4nR7kWx             yes             1.28GiB
+```
+
+System buckets are AIS infrastructure and are not intended for direct user access. The dot-prefix naming convention (`.sys-*`) is reserved.
 
 ## Creating an inventory
 
-Use the `ais nbi create` command to create a native bucket inventory for a remote bucket.
-
-Examples:
+Use `ais nbi create` to create a native bucket inventory for a remote bucket:
 
 ```console
 ais nbi create s3://my-bucket
@@ -134,30 +167,25 @@ Advanced tunables:
 
 ## Monitoring inventory creation
 
-Inventory creation is implemented as a distributed xaction, so it shows up in regular job monitoring.
-
-Example:
+Inventory creation is a distributed xaction, so it shows up in regular job monitoring:
 
 ```console
 $ ais show job create-inventory --all
-
-create-inventory[inv-n9yTGoY8D] (ctl: ais://@G-pURnyMti/nnn, props:name,cached, flags:no-dirs)
-NODE             ID              KIND                    BUCKET                  START      END        STATE
-QNDt8082         inv-n9yTGoY8D   create-inventory        ais://@G-pURnyMti/nnn   16:45:39   16:55:29   Finished
-RFht8081         inv-n9yTGoY8D   create-inventory        ais://@G-pURnyMti/nnn   16:45:39   16:55:34   Finished
-VgAt8084         inv-n9yTGoY8D   create-inventory        ais://@G-pURnyMti/nnn   16:45:39   16:55:01   Finished
-fgSt8085         inv-n9yTGoY8D   create-inventory        ais://@G-pURnyMti/nnn   16:45:39   16:55:31   Finished
-lFkt8086         inv-n9yTGoY8D   create-inventory        ais://@G-pURnyMti/nnn   16:45:39   16:55:15   Finished
-mUkt8083         inv-n9yTGoY8D   create-inventory        ais://@G-pURnyMti/nnn   16:45:39   16:55:39   Finished
+create-inventory[inv-Tp4nR7kWx] (ctl: s3://training-data-v5, props:name,size,cached, flags:no-dirs)
+NODE             ID              KIND                    BUCKET                  OBJECTS         BYTES   START           END             STATE
+TnKtfgHp         inv-Tp4nR7kWx   create-inventory        s3://training-data-v5   2001384         -       02:15:07        03:01:38        Finished
+VpRtorrn         inv-Tp4nR7kWx   create-inventory        s3://training-data-v5   1998017         -       02:15:07        03:02:11        Finished
+WqBtywqm         inv-Tp4nR7kWx   create-inventory        s3://training-data-v5   2000891         -       02:15:07        03:01:54        Finished
+...
+nFYteelz         inv-Tp4nR7kWx   create-inventory        s3://training-data-v5   2001562         -       02:15:07        03:02:29        Finished
+                                Total:                                          48017395        -
 ```
 
-In other words, NBI creation is "just another xaction" in AIS terms.
+Note the per-target object counts - each target stores only the names that properly belong to it (as determined by the cluster map, bucket, and object name). The total (48,017,395) is the full bucket namespace.
 
 ## Showing inventories
 
-Use `ais show nbi` to inspect inventories stored for a bucket.
-
-Examples:
+Use `ais show nbi` to inspect inventories:
 
 ```console
 ais show nbi gs://my-bucket
@@ -180,16 +208,15 @@ BUCKET  NAME  OBJECT  SIZE  OBJECTS  CHUNKS  TARGETS  SMAP  STARTED  FINISHED  P
 For example:
 
 ```console
-$ ais show nbi ais://@remais/nnn --v
-BUCKET                   NAME            OBJECT                               SIZE      OBJECTS  CHUNKS  TARGETS  SMAP  STARTED               FINISHED              PREFIX
-ais://@G59v2CUztI/nnn    inv-d8p8-QavW   ais/@G59v2CUztI#/nnn/inv-d8p8-QavW   5.37MiB   33062    2       6        v45   2026-03-18T16:43:22Z  2026-03-18T16:43:34Z  -
+$ ais show nbi s3://training-data-v5 --verbose
+
+BUCKET                 NAME           OBJECT                                 SIZE      OBJECTS     CHUNKS  TARGETS  SMAP  STARTED               FINISHED              PREFIX
+s3://training-data-v5  inv-Tp4nR7kWx  aws/@#/training-data-v5/inv-Tp4nR7kWx  1.28GiB   48017395    101     24       v138  2026-03-18T02:15:07Z  2026-03-18T03:02:29Z  -
 ```
 
 ## Listing objects using inventory
 
-Once an inventory has been created, use it by adding `--inventory` to a regular `ais ls` command.
-
-Examples:
+Once an inventory has been created, use it by adding `--inventory` to a regular `ais ls` command:
 
 ```console
 ais ls gs://abc --inventory
@@ -197,40 +224,26 @@ ais ls oci://abc --inventory --paged --prefix=subdir
 ais ls s3://abc --inventory --inv-name my-first-inventory
 ```
 
-This is still a normal list-objects request. The difference is that the request sets the `LsNBI` flag internally and switches to the inventory-backed path.
+This is still a normal list-objects request. The difference is that AIS sets the `LsNBI` flag internally and switches to the inventory-backed path.
 
 ### Pagination
 
 When listing via NBI, `page-size` is **best-effort and approximate**.
 
-Because NBI listing is distributed across targets, each target returns an approximate share of the requested page size, subject to:
-
-* local chunking
-* minimum bounds
-* slight overfetch
-
-This behavior is intentional.
+Because NBI listing is distributed across targets, each target returns an approximate share of the requested page size, subject to local chunking and minimum bounds.
+This behavior is intentional and helps to reduce roundtrips, optimize list-objects latency.
 
 ## How inventory-backed listing works
 
-When the `LsNBI` flag is set on a list-objects request:
+See [Overview - Listing](#listing) for the high-level flow.
 
-* the request uses a previously stored inventory snapshot
-* AIS reads inventory chunks from local storage
-* targets return their local portions
-* the proxy merges results into a single listing stream
+The `LsNBI` flag is what switches a list-objects request to the inventory-backed path. When set, AIS reads pre-stored inventory chunks from local storage on each target rather than walking the remote backend. The proxy merges and sorts the per-target results into a single listing stream.
 
-The result is that repeated listing avoids re-walking the remote backend.
-
-The flag is defined as:
-
-```go
-LsNBI // list native bucket inventory (NBI) snapshot instead of walking the remote backend
-```
+The result is that repeated listing avoids re-walking the remote backend entirely.
 
 ## Inventory metadata
 
-AIS stores metadata alongside each inventory. Current metadata includes:
+AIS stores metadata alongside each inventory:
 
 ```go
 type NBIMeta struct {
@@ -250,21 +263,7 @@ This metadata is surfaced by `ais show nbi`, especially in verbose mode.
 
 When a bucket is smaller than the cluster, not every target will necessarily own any names for the inventory.
 
-This is expected.
-
-In that case, a target stores a valid local inventory object with:
-
-* zero size
-* zero chunks
-* valid NBI metadata
-
-This allows AIS to distinguish:
-
-* **inventory exists but is empty on this target**
-* from
-* **inventory does not exist**
-
-This distinction matters for correct EOF behavior during distributed listing.
+This is expected. In that case, a target stores a valid local inventory object with zero size, zero chunks, and valid NBI metadata. This allows AIS to distinguish "inventory exists but is empty on this target" from "inventory does not exist" - a distinction that matters for correct EOF behavior during distributed listing.
 
 ## Current limitations
 
@@ -304,17 +303,6 @@ In short, listing via NBI is optimized for fast, repeated listing of a previousl
 | `--diff` (`LsDiff`) | Inventory creation is not a diff job. |
 | `LsIsS3` | Not applicable. |
 
-### Operational limitations
-
-| Limitation | Description |
-|---|---|
-| Manual creation only | Inventories must be created explicitly by the user or API caller. |
-| No periodic refresh | AIS does not yet rebuild inventories automatically. |
-| No automatic resync | Inventories are snapshots, not self-updating views of the remote bucket. |
-| No progress reporting yet | Creation runs as an xaction and can be monitored as a job, but there is no dedicated progress API yet. |
-| One inventory per bucket | Current implementation supports a single inventory per bucket at a time. `--force` can be used to remove and recreate. |
-| Experimental status | NBI is new in v4.3 and should be treated accordingly. |
-
 ## Legacy `--s3-inventory`
 
 AIS currently supports both:
@@ -324,49 +312,41 @@ AIS currently supports both:
 
 The legacy S3 path is deprecated and scheduled for removal.
 
-NBI is the intended replacement.
-
-Unlike the legacy S3 inventory support, NBI:
-
-* is not limited to S3
-* is not tied to provider-generated inventory formats
-* does not require external tooling such as AWS CLI scripts
-* is created and consumed entirely through AIS
+Unlike the legacy S3 inventory support, NBI is not limited to S3, is not tied to provider-generated inventory formats, does not require external tooling such as AWS CLI scripts, and is created and consumed entirely through AIS.
 
 ## Examples
 
-### Create and inspect an inventory
+### Create, inspect, and list
 
 ```console
-ais nbi create gs://imagenet --inv-name trainset-v1
-ais show nbi gs://imagenet --inv-name trainset-v1
-ais show nbi gs://imagenet --inv-name trainset-v1 --verbose
+## create an inventory for a GCS bucket
+$ ais nbi create gs://imagenet --inv-name trainset-v1
+
+## inspect
+$ ais show nbi gs://imagenet --inv-name trainset-v1
+$ ais show nbi gs://imagenet --inv-name trainset-v1 --verbose
+
+## list via inventory
+$ ais ls gs://imagenet --inventory --inv-name trainset-v1
+$ ais ls gs://imagenet/train/ --inventory --paged --page-size 1000
+$ ais ls gs://imagenet --inventory --prefix train/dogs/
 ```
 
-### List via inventory
+### Remote AIS bucket
 
 ```console
-ais ls gs://imagenet --inventory --inv-name trainset-v1
-ais ls gs://imagenet/train/ --inventory --paged --page-size 1000
-ais ls gs://imagenet --inventory --prefix train/dogs/
+$ ais nbi create ais://@remote-cluster/datasets --inv-name snapshot-1
+$ ais ls ais://@remote-cluster/datasets --inventory --inv-name snapshot-1
 ```
 
-### Create inventory for a remote AIS bucket
+### Where inventories are stored
 
 ```console
-ais nbi create ais://@remote-cluster/datasets --inv-name snapshot-1
-ais ls ais://@remote-cluster/datasets --inventory --inv-name snapshot-1
+$ ais ls ais://.sys-inventory
+NAME                                              SIZE
+aws/@#/training-data-v5/inv-Tp4nR7kWx             1.28GiB
+
+$ ais ls ais://.sys-inventory --props chunked,size
+NAME                                              CHUNKED         SIZE
+aws/@#/training-data-v5/inv-Tp4nR7kWx             yes             1.28GiB
 ```
-
-## Summary
-
-Native bucket inventory is an AIS-native way to accelerate repeated listing of very large remote buckets.
-
-It is especially useful when:
-
-* the bucket namespace is very large
-* the dataset is read-mostly
-* repeated listing would otherwise keep hitting the backend
-* the same bucket is listed many times over time
-
-In v4.3, NBI is experimental, manual, and intentionally narrow in scope. Even so, it already provides a backend-agnostic replacement for the older S3-specific inventory integration and lays the foundation for future refresh, resync, and broader list-objects support.

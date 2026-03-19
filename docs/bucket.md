@@ -13,8 +13,8 @@ AIS uses a **flat hierarchy**: `bucket-name/object-name` key space. It supports 
 
 This document is organized in two parts:
 
-- [**Part I: Design**](#part-i-design) — covers the bucket abstraction, identity model, namespaces, remote clusters, and backend buckets
-- [**Part II: How-To**](#part-ii-how-to) — practical operations: working with same-name buckets, prefetch/evict, access control, provider configuration, and [CLI](/docs/cli.md) reference
+- [**Part I: Design**](#part-i-design) - covers the bucket abstraction, identity model, namespaces, remote clusters, and backend buckets
+- [**Part II: How-To**](#part-ii-how-to) - practical operations: working with same-name buckets, prefetch/evict, access control, provider configuration, and [CLI](/docs/cli.md) reference
 
 ---
 
@@ -27,6 +27,7 @@ AIS does not treat a bucket as a passive container. A bucket is a *logical names
    - [Creation](#creation)
    - [Bucket Identity](#bucket-identity)
 2. [The Bucket](#the-bucket)
+   - [Bucket Name](#bucket-name)
    - [Provider](#provider)
    - [Namespace](#namespace)
    - [Bucket Properties](#bucket-properties)
@@ -46,6 +47,10 @@ AIS does not treat a bucket as a passive container. A bucket is a *logical names
    - [Creating backend relationships](#creating-backend-relationships)
    - [Use cases](#use-cases)
    - [Disconnecting](#disconnecting)
+7. [System Buckets](#system-buckets)
+   - [Naming rules](#naming-rules)
+   - [Visibility and lifecycle](#visibility-and-lifecycle)
+   - [Future plans](#future-plans)
 
 ## Motivation
 
@@ -139,6 +144,12 @@ AIS never guesses or rewrites identity. `s3://#ns1/bucket` and `s3://#ns2/bucket
 ```
 
 > See also: [Blog: The Many Lives of a Dataset Called "data"](https://aistore.nvidia.com/blog/2025/12/15/s3-data-with-namespace)
+
+### Bucket Name
+
+Bucket names are limited to 64 bytes and may contain only letters, digits, dashes (`-`), underscores (`_`), and single dots (`.`). Consecutive dots (`..`) are not allowed.
+
+Names that start with `.` are reserved for system buckets. User-defined buckets therefore cannot use a leading dot, and any unrecognized `.`-prefixed name is rejected.
 
 ### Provider
 
@@ -275,11 +286,11 @@ ais create s3://logs \
 
 #### Tag meanings
 
-- `integrity+` — enhances data safety
-- `integrity-` — trades safety for performance
-- `perf` — performance optimization
-- `overhead` — may impact performance
-- `s3,compat` — S3 compatibility
+- `integrity+` - enhances data safety
+- `integrity-` - trades safety for performance
+- `perf` - performance optimization
+- `overhead` - may impact performance
+- `s3,compat` - S3 compatibility
 
 #### Setting bucket features
 
@@ -297,7 +308,7 @@ ais bucket props set ais://mybucket features Fsync-PUT S3-Use-Path-Style
 ais bucket props set ais://mybucket features none
 ```
 
-> Some flags are mutually exclusive. For example, `Disable-Cold-GET` and `Streaming-Cold-GET` cannot both be set — the system will reject the configuration. For complete details on all feature flags (cluster-wide and bucket-level), see [Feature Flags](/docs/feature_flags.md).
+> Some flags are mutually exclusive. For example, `Disable-Cold-GET` and `Streaming-Cold-GET` cannot both be set - the system will reject the configuration. For complete details on all feature flags (cluster-wide and bucket-level), see [Feature Flags](/docs/feature_flags.md).
 
 ## Bucket Lifecycle
 
@@ -544,6 +555,41 @@ ais bucket props set ais://cache backend_bck=none
 Cached objects remain in the AIS bucket.
 
 > See also: [Backend Bucket CLI examples](/docs/cli/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket)
+
+## System Buckets
+
+AIS distinguishes between **user buckets** and **system buckets**.
+
+User buckets are created by users (or lazily on first remote access) and follow standard naming rules: alphanumeric characters, dashes, underscores, and single dots are allowed, up to 64 characters.
+
+System buckets are AIS-internal infrastructure. They are created automatically when needed and are identified by a reserved dot-prefix: names starting with `.` are reserved for system use. Any attempt to create a user bucket with a `.`-prefixed name is rejected unless it matches a known system bucket.
+
+The current naming convention is `.sys-*`. The first system bucket is:
+
+| Bucket | Purpose | Introduced |
+|--------|---------|------------|
+| `ais://.sys-inventory` | Stores [native bucket inventory](/docs/nbi.md) (NBI) snapshots as chunked objects | v4.3 |
+
+### Naming rules
+
+Bucket names are limited to 64 bytes and may contain only letters, digits, dashes (`-`), underscores (`_`), and single dots (`.`). Consecutive dots (`..`) are not allowed.
+
+Names that start with `.` are reserved for system buckets. User-defined buckets therefore cannot use a leading dot, and any unrecognized `.`-prefixed name is rejected.
+
+### Visibility and lifecycle
+
+System buckets are visible in regular `ais ls` output and can be listed and read with appropriate permissions. They are not intended for direct user writes - AIS creates and destroys them behind the scenes, and manages their content.
+
+System buckets are created on demand (for example, `ais://.sys-inventory` is created on the fly upon the first inventory creation request) and follow the same cluster-wide replication and metasync lifecycle as user buckets.
+
+### Future plans
+
+The `.sys-*` namespace is designed to accommodate additional AIS-internal services over time. Planned and potential uses include:
+
+* **Checkpoints** - durable storage for multi-hour and multi-day distributed training jobs
+* **Logs** - cluster-wide log aggregation and archival
+* **Indexes** - content indexes for direct access into large archives (TAR, ZIP)
+* **Inventories** - already implemented in v4.3 via `ais://.sys-inventory`
 
 --------------------
 

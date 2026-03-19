@@ -37,6 +37,7 @@ import (
 // - stats: internal (-> CtlMsg) and Prometheus
 // - single backend.ListObjects(0 in the cluster; filterKeepMine
 // - multiple inventories: a) periodic re-sync, b) cleanup/GC old
+// - disallow user PUT or copy => system buckets (not even admin)
 // ==============================================================
 
 // on-disk formatting
@@ -266,6 +267,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 		// next chunk
 		all = all[:idx]
 		ntotal += int64(idx)
+		r.ObjsAdd(idx, 0) // like x-lso: count names, zero bytes
 
 		if err := r.writeChunk(num, all); err != nil {
 			r.Abort(err)

@@ -69,6 +69,8 @@ Every object a) belongs to exactly one bucket and b) is identified by a unique n
 
 Bucket [properties](/docs/bucket.md#bucket-properties) define data protection (checksums, mirroring, erasure coding), chunked representation, versioning and synchronization with remote sources, access control, backend linkage, feature flags, rate-limit settings, and more.
 
+AIS also defines **system buckets** - infrastructure buckets with reserved `.sys-*` names (e.g., `ais://.sys-inventory`), created automatically for internal services. See [System Buckets](/docs/bucket.md#system-buckets).
+
 > See [AIS Buckets: Design and Operations](/docs/bucket.md) for complete description including: identity model, namespaces, lifecycle, and operations.
 
 ---

@@ -41,7 +41,6 @@ const (
 )
 
 // TODO:
-// - corner case: very small bucket w/ not every target having inventory LOM
 // - feat: support LsCached (semantics? a) per recorded in chunks or b) w/ respect to local data)
 // - feat: support listing jobs that currently rely-on/reuse:
 //   - npgCtx.nextPageR() (bucket summary)
