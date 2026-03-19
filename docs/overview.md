@@ -279,7 +279,7 @@ $ ais cluster
 ## and so on...
 ```
 
-At the time of this writing, AIS CLI is at version (ais version) v1.17 and is actively being maintained, improved, and extended. For more information, please see the [CLI overview](/docs/cli.md).
+AIS CLI is actively being maintained, improved, and extended. For more information, please see the [CLI overview](/docs/cli.md).
 
 ## AIStore APIs
 

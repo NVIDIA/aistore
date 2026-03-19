@@ -5,7 +5,7 @@ permalink: /404.html
 
 <style type="text/css" media="screen">
   .container {
-    margin: 10px auto;
+    margin: 30px auto;
     max-width: 600px;
     text-align: center;
   }
@@ -15,11 +15,35 @@ permalink: /404.html
     line-height: 1;
     letter-spacing: -1px;
   }
+  .nav-links {
+    margin-top: 30px;
+    text-align: left;
+  }
+  .nav-links ul {
+    list-style: none;
+    padding: 0;
+  }
+  .nav-links li {
+    margin: 8px 0;
+  }
 </style>
 
 <div class="container">
   <h1>404</h1>
 
-  <p><strong>Page not found :(</strong></p>
-  <p>The requested page could not be found.</p>
+  <p><strong>Page not found</strong></p>
+  <p>The page you're looking for doesn't exist or may have moved.</p>
+
+  <div class="nav-links">
+    <p>Try one of these instead:</p>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/docs">Documentation</a></li>
+      <li><a href="/docs/getting_started">Getting Started</a></li>
+      <li><a href="/docs/cli">CLI Reference</a></li>
+      <li><a href="/docs/python-sdk">Python SDK</a></li>
+      <li><a href="/blog">Blog</a></li>
+    </ul>
+    <p>Or search the <a href="https://github.com/NVIDIA/aistore">GitHub repository</a>.</p>
+  </div>
 </div>

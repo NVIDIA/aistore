@@ -25,9 +25,11 @@ redirect_from:
 - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore), and also:
   - [pip package](https://pypi.org/project/aistore/)
   - [reference guide](/docs/python_sdk.md)
+- [PyTorch Integration](/docs/pytorch.md)
+- [TensorFlow Integration](/docs/tensorflow.md)
 - [HTTP API Reference](https://aistore.nvidia.com/docs/http-api)
   - [curl examples](/docs/http_api.md)
-  - [Easy URL](https://github.com/NVIDIA/aistore/blob/main/docs/easy_url.md)
+  - [Easy URL](/docs/easy_url.md)
 - Amazon S3
   - [`s3cmd` client](/docs/s3compat.md#quick-start-with-s3cmd)
   - [S3 compatibility](/docs/s3compat.md)
@@ -56,13 +58,14 @@ redirect_from:
 
 - [Storage Services](/docs/storage_svcs.md)
 - [Buckets and Bucket Management](/docs/bucket.md)
+- [Bucket Lifecycle](/docs/lifecycle.md)
 - [CLI: Operations on Buckets](/docs/cli/bucket.md)
 - [CLI: `ais show storage` and subcommands](/docs/cli/show.md)
 - [CLI: `ais storage` and subcommands](/docs/cli/storage.md)
 - [On-disk layout](/docs/on_disk_layout.md)
-- [CLI: Three Ways to Evict Remote Bucket](https://github.com/NVIDIA/aistore/blob/main/docs/cli/evicting_buckets_andor_data.md)
+- [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
 - [Backend Providers](/docs/providers.md)
-- [Virtual directories](https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md)
+- [Virtual directories](/docs/howto_virt_dirs.md)
 - [System files](/docs/sysfiles.md)
 
 ## Cluster Administration
@@ -72,7 +75,9 @@ redirect_from:
 - [Joining AIS cluster](/docs/join_cluster.md)
 - [Leaving AIS cluster](/docs/leave_cluster.md)
 - [Global Rebalance](/docs/rebalance.md)
+- [Resilver](/docs/resilver.md)
 - [Highly available control plane](/docs/ha.md)
+- [Information Center (IC)](/docs/ic.md)
 - [Start/stop maintenance mode, shutdown, decommission, and related operations](/docs/lifecycle_node.md)
 - [Out-of-band updates](/docs/out_of_band.md)
 - [Troubleshooting](/docs/troubleshooting.md)
@@ -83,9 +88,12 @@ redirect_from:
 - [Environment variables](/docs/environment-vars.md)
 - [CLI: `ais config`](/docs/cli/config.md)
 - [Feature flags](/docs/feature_flags.md)
+- [Build tags](/docs/build_tags.md)
 - [Security and Access Control](/docs/authn.md)
   - [Authentication Server (AuthN)](/docs/authn.md)
+  - [Authentication Validation](/docs/auth_validation.md)
 - [HTTPS: loading, reloading, and generating certificates; switching cluster between HTTP and HTTPS](/docs/https.md)
+  - [Switching to HTTPS](/docs/switch_https.md)
   - [Managing TLS Certificates](/docs/cli/x509.md)
 
 ## ETL - Extract, Transform, Load
@@ -103,6 +111,8 @@ redirect_from:
 - [Distributed Shuffle (`dsort`)](/docs/dsort.md)
 - [Initial Sharding utility (`ishard`)](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
 - [Downloader](/docs/downloader.md)
+- [Blob Downloader](/docs/blob_downloader.md)
+- [Batch Object Retrieval (get-batch)](/docs/get_batch.md)
 - [Tools and utilities](/docs/tools.md)
 - [Batch operations](/docs/batch.md)
 - [eXtended Actions (xactions)](https://github.com/NVIDIA/aistore/blob/main/xact/README.md)
@@ -118,18 +128,31 @@ redirect_from:
 - [How to benchmark](/docs/howto_benchmark.md)
 - [Performance tuning and testing](/docs/performance.md)
 - [Performance monitoring](/docs/cli/performance.md)
-- [Using Rate Limits to Enhance Reliability and Performance](https://aistore.nvidia.com/blog/2025/03/19/rate-limit-blog)
+- [Rate limiting](/docs/rate_limit.md)
 - [Checksumming: brief theory of operations](/docs/checksum.md)
+- [Filesystem Health Checker (FSHC)](/docs/fshc.md)
+- [Blog: Using Rate Limits to Enhance Reliability and Performance](https://aistore.nvidia.com/blog/2025/03/19/rate-limit-blog)
 - [Blog: Maintaining Resilient Connectivity During Lifecycle Events](https://aistore.nvidia.com/blog/2025/04/02/python-retry)
 
 ## Observability and Monitoring
 
 - [Introduction to AIS observability](/docs/monitoring-overview.md)
+- [Monitoring with CLI](/docs/monitoring-cli.md)
 - [Configuring, accessing, and utilizing AIS logs](/docs/monitoring-logs.md)
 - [Prometheus integration](/docs/monitoring-prometheus.md)
 - [Metrics reference](/docs/monitoring-metrics.md)
 - [Visualizing AIS metrics with Grafana](/docs/monitoring-grafana.md)
 - [Working with Kubernetes monitoring stacks](/docs/monitoring-kubernetes.md)
+- [Monitoring get-batch operations](/docs/monitoring-get-batch.md)
+- [Distributed tracing](/docs/distributed-tracing.md)
+
+## Networking
+
+- [Networking: multi-homing, network separation, IPv6](/docs/networking.md)
+- [HTTPS configuration](/docs/https.md)
+- [Switching to HTTPS](/docs/switch_https.md)
+- [Idle connections](/docs/idle_connections.md)
+- [MessagePack protocol](/docs/msgp.md)
 
 ## Developer Resources
 
@@ -138,6 +161,8 @@ redirect_from:
 - [Docker](/docs/docker_main.md)
 - [Assorted scripts; profiling](/docs/development.md)
 - [`aisnode` command line](/docs/command_line.md)
+- [Build tags](/docs/build_tags.md)
+- [Helpful links](/docs/helpful_links.md)
 
 ## Production Deployment
 

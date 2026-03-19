@@ -3,7 +3,8 @@
 read -r -d '' SDK_PREFIX << EOM
 ---
 layout: post
-title: PYTHON SDK
+title: Python SDK
+description: "AIStore Python SDK for bucket and object operations, ETL management, and integration with PyTorch and other ML frameworks."
 permalink: /docs/python-sdk
 redirect_from:
  - /python_sdk.md/
@@ -24,7 +25,8 @@ export SDK_PREFIX
 read -r -d '' TORCH_PREFIX << EOM
 ---
 layout: post
-title: PYTORCH
+title: PyTorch Integration
+description: "AIStore PyTorch integration with custom datasets and dataloaders for efficient AI training data pipelines."
 permalink: /docs/pytorch
 redirect_from:
  - /pytorch.md/
