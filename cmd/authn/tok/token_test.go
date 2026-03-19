@@ -211,16 +211,12 @@ func TestExtractTokenS3Compat(t *testing.T) {
 }
 
 func TestClaims_IsExpired(t *testing.T) {
-	c := &tok.AISClaims{Expires: previousTime}
-	tassert.Error(t, c.IsExpired(), "AISClaims should be expired")
-	c = &tok.AISClaims{
+	c := &tok.AISClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(previousTime),
 		},
 	}
 	tassert.Error(t, c.IsExpired(), "AISClaims should be expired")
-	c = &tok.AISClaims{Expires: futureTime}
-	tassert.Error(t, !c.IsExpired(), "AISClaims should not be expired")
 	c = &tok.AISClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(futureTime),
@@ -230,41 +226,13 @@ func TestClaims_IsExpired(t *testing.T) {
 }
 
 func TestClaims_IsUser(t *testing.T) {
-	c := &tok.AISClaims{UserID: testUser}
-	tassert.Error(t, c.IsUser(testUser), "Claims should equal user")
-	tassert.Error(t, !c.IsUser("someOtherUser"), "Claims should not equal user")
-	c = &tok.AISClaims{
+	c := &tok.AISClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject: testUser,
 		},
 	}
 	tassert.Error(t, c.IsUser(testUser), "Claims should equal user")
 	tassert.Error(t, !c.IsUser("someOtherUser"), "Claims should not equal user")
-}
-
-// Create claims containing both old and new fields and validate the standard fields take precedence
-func TestClaims_BackwardsCompat(t *testing.T) {
-	expectedExp := jwt.NewNumericDate(time.Now().Add(30 * time.Minute))
-	expectedSub := "sub claim"
-	oldExp := jwt.NewNumericDate(time.Now().Add(2 * time.Hour))
-	userID := "username field"
-	combinedClaims := &tok.AISClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: expectedExp,
-			Subject:   expectedSub,
-		},
-		UserID:  userID,
-		Expires: oldExp.UTC(),
-	}
-	sub, err := combinedClaims.GetSubject()
-	tassert.Errorf(t, err == nil, "Error getting subject from token: %v", err)
-	tassert.Error(t, expectedSub == sub, "Expected token subject to be equal to the OIDC sub claim")
-	exp, err := combinedClaims.GetExpirationTime()
-	tassert.Errorf(t, err == nil, "Error getting expiration time from token: %v", err)
-	tassert.Error(t, expectedExp.UTC().Equal(exp.UTC()), "Expected token expiration time to be equal to the OIDC exp claim")
-	// The old fields are still set, just not used by the overridden Claims methods
-	tassert.Error(t, oldExp.UTC().Equal(combinedClaims.Expires), "Expected token to contain old expiry field")
-	tassert.Error(t, userID == combinedClaims.UserID, "Expected user id to match old userID field")
 }
 
 // Test validating a token successfully
@@ -336,8 +304,8 @@ func TestValidateToken_NoSubject(t *testing.T) {
 	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "Token generation failed: %v", err)
 	_, err = newHMACParser(t).ValidateToken(t.Context(), tokenStr)
-	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with missing subject and username to fail")
-	tassert.Fatal(t, errors.Is(err, tok.ErrNoSubject), "Expected validating token with missing subject and username to fail")
+	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with missing subject to fail")
+	tassert.Fatal(t, errors.Is(err, tok.ErrNoSubject), "Expected validating token with missing subject to fail")
 }
 
 func TestCheckPermissions_Denied(t *testing.T) {

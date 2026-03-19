@@ -56,8 +56,8 @@ These are subject to change as we improve AIS auth capabilities.
 Example token claim format:
 ```json
 {
-  "sub": "john", // "username" also supported for backwards compatibility
-  "exp": "2025-10-05T12:00:00Z", // "expires" also supported for backwards compatibility
+  "sub": "john", // Standard subject JWT claim
+  "exp": "2025-10-05T12:00:00Z", // Standard expiry JWT claim
   "clusters": [
     {
       "id": "abc123-cluster-uuid", // Permission only valid for this specific cluster

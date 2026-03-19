@@ -22,11 +22,10 @@ import (
 )
 
 type (
+	// AISClaims contains JWT claims with additional AIS functionality
+	// Note: JWTs relying on legacy claims issued prior to v4.3 will fail validation on v4.3 clusters
+	// Deprecated legacy claims 'username' and 'expires' have been removed in favor of 'sub' and 'exp'
 	AISClaims struct {
-		// Deprecated: Use RegisteredClaims.Subject instead, mapped to 'sub' claim.
-		UserID string `json:"username"`
-		// Deprecated: Use RegisteredClaims.ExpiresAt instead, mapped to 'exp' claim.
-		Expires     time.Time       `json:"expires"`
 		ClusterACLs []*authn.CluACL `json:"clusters"`
 		BucketACLs  []*authn.BckACL `json:"buckets,omitempty"`
 		IsAdmin     bool            `json:"admin"`
@@ -62,7 +61,7 @@ type (
 var (
 	ErrNoPermissions        = errors.New("insufficient permissions")
 	ErrInvalidToken         = errors.New("invalid token")
-	ErrNoSubject            = errors.New("missing 'sub' or 'username' claims")
+	ErrNoSubject            = errors.New("missing 'sub' claim")
 	ErrNoToken              = errors.New("token required")
 	ErrTokenExpired         = errors.New("token expired")
 	ErrTokenRevoked         = errors.New("token revoked")
@@ -199,37 +198,16 @@ func (c *AISClaims) Validate() error {
 	return nil
 }
 
-// GetExpirationTime implements Claims interface with backwards-compatible support for 'expires'
-func (c *AISClaims) GetExpirationTime() (*jwt.NumericDate, error) {
-	if c.ExpiresAt != nil && !c.ExpiresAt.IsZero() {
-		return c.ExpiresAt, nil
-	}
-	return jwt.NewNumericDate(c.Expires), nil
-}
-
-// GetSubject implements Claims interface with backwards-compatible support for 'username'
-func (c *AISClaims) GetSubject() (string, error) {
-	if c.Subject != "" {
-		return c.Subject, nil
-	}
-	return c.UserID, nil
-}
-
 func (c *AISClaims) String() string {
 	sub, _ := c.GetSubject()
-	return fmt.Sprintf("user %s, %s", sub, expiresIn(c.getExpiry()))
-}
-
-// Supports both our old `expires` and standard `exp` fields, with `exp` taking precedence
-func (c *AISClaims) getExpiry() time.Time {
-	if c.ExpiresAt != nil && !c.ExpiresAt.IsZero() {
-		return c.ExpiresAt.UTC()
-	}
-	return c.Expires
+	return fmt.Sprintf("user %s, %s", sub, c.expiresIn())
 }
 
 func (c *AISClaims) IsExpired() bool {
-	return c.getExpiry().Before(time.Now())
+	if c.ExpiresAt != nil && !c.ExpiresAt.IsZero() {
+		return c.ExpiresAt.UTC().Before(time.Now())
+	}
+	return true
 }
 
 func (c *AISClaims) IsUser(user string) bool {
@@ -307,8 +285,11 @@ func (c *AISClaims) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.A
 // private
 //
 
-func expiresIn(tm time.Time) string {
-	dur := time.Until(tm)
+func (c *AISClaims) expiresIn() string {
+	if c.ExpiresAt == nil || c.ExpiresAt.IsZero() {
+		return "token missing expiration"
+	}
+	dur := time.Until(c.ExpiresAt.UTC())
 	if dur <= 0 {
 		return ErrTokenExpired.Error()
 	}
