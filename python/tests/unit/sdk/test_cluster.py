@@ -9,8 +9,12 @@ from aistore.sdk.const import (
     HTTP_METHOD_GET,
     QPARAM_WHAT,
     QPARAM_PROVIDER,
+    QPARAM_LOG_SEV,
+    QPARAM_ALL_LOGS,
     ACT_LIST,
+    HEADER_NODE_ID,
     WHAT_SMAP,
+    WHAT_LOG,
     URL_PATH_DAEMON,
     URL_PATH_BUCKETS,
     URL_PATH_HEALTH,
@@ -22,6 +26,7 @@ from aistore.sdk.const import (
     URL_PATH_REVERSE,
     WHAT_NODE_STATS_AND_STATUS,
 )
+from aistore.sdk.enums import LogSeverity, NodeFilter
 from aistore.sdk.etl.etl_const import ETL_STAGE_RUNNING, ETL_STAGE_ABORTED
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
@@ -231,3 +236,88 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             params={QPARAM_WHAT: WHAT_NODE_STATS_AND_STATUS},
             headers={"ais-node-id": "target2"},
         )
+
+    def test_get_node_log(self):
+        mock_resp = Mock()
+        mock_resp.text = (
+            "I 14:00:00.000000 some log line\nI 14:01:00.000000 another line\n"
+        )
+        self.mock_client.request.return_value = mock_resp
+
+        result = self.cluster.get_node_log("t1")
+        self.assertIn("some log line", result)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_GET,
+            path=f"{URL_PATH_REVERSE}/{URL_PATH_DAEMON}",
+            params={QPARAM_WHAT: WHAT_LOG, QPARAM_LOG_SEV: LogSeverity.INFO.value},
+            headers={HEADER_NODE_ID: "t1"},
+        )
+
+    def test_get_node_log_error_severity(self):
+        mock_resp = Mock()
+        mock_resp.text = "E 14:00:00.000000 error line\n"
+        self.mock_client.request.return_value = mock_resp
+
+        self.cluster.get_node_log("t1", severity=LogSeverity.ERROR)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_GET,
+            path=f"{URL_PATH_REVERSE}/{URL_PATH_DAEMON}",
+            params={QPARAM_WHAT: WHAT_LOG, QPARAM_LOG_SEV: LogSeverity.ERROR.value},
+            headers={HEADER_NODE_ID: "t1"},
+        )
+
+    def test_get_node_log_archive(self):
+        mock_resp = Mock()
+        mock_resp.content = b"tar.gz archive bytes"
+        self.mock_client.request.return_value = mock_resp
+
+        result = self.cluster.get_node_log_archive("t1")
+        self.assertEqual(result, b"tar.gz archive bytes")
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_GET,
+            path=f"{URL_PATH_REVERSE}/{URL_PATH_DAEMON}",
+            params={
+                QPARAM_WHAT: WHAT_LOG,
+                QPARAM_LOG_SEV: LogSeverity.INFO.value,
+                QPARAM_ALL_LOGS: "true",
+            },
+            headers={HEADER_NODE_ID: "t1"},
+        )
+
+    @patch("aistore.sdk.cluster.Cluster._get_smap")
+    def test_get_cluster_logs(self, mock_get_smap):
+        mock_smap = Smap(
+            tmap={"t1": Mock(spec=Snode), "t2": Mock(spec=Snode)},
+            pmap={"p1": Mock(spec=Snode)},
+            proxy_si=Mock(spec=Snode),
+        )
+        mock_get_smap.return_value = mock_smap
+
+        mock_resp_1 = Mock()
+        mock_resp_1.text = "target 1 logs"
+        mock_resp_2 = Mock()
+        mock_resp_2.text = "target 2 logs"
+        self.mock_client.request.side_effect = [mock_resp_1, mock_resp_2]
+
+        result = self.cluster.get_cluster_logs(severity=LogSeverity.ERROR)
+        self.assertEqual(len(result), 2)
+        self.assertIn("t1", result)
+        self.assertIn("t2", result)
+
+    @patch("aistore.sdk.cluster.Cluster._get_smap")
+    def test_get_cluster_logs_all_roles(self, mock_get_smap):
+        mock_smap = Smap(
+            tmap={"t1": Mock(spec=Snode)},
+            pmap={"p1": Mock(spec=Snode)},
+            proxy_si=Mock(spec=Snode),
+        )
+        mock_get_smap.return_value = mock_smap
+
+        mock_resp = Mock()
+        mock_resp.text = "some logs"
+        self.mock_client.request.return_value = mock_resp
+
+        result = self.cluster.get_cluster_logs(role=NodeFilter.ALL)
+        self.assertEqual(len(result), 2)
+        self.assertIn("t1", result)
+        self.assertIn("p1", result)

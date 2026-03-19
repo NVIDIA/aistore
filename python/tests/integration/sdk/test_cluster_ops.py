@@ -5,6 +5,7 @@ import pytest
 
 from aistore.sdk import Client
 from aistore.sdk.const import ACT_COPY_OBJECTS
+from aistore.sdk.enums import LogSeverity
 from tests.integration.sdk import TEST_RETRY_CONFIG
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import random_string
@@ -87,3 +88,36 @@ class TestClusterOps(ParallelTestBase):  # pylint: disable=unused-variable
         for target_id in smap.tmap:
             self.assertIn(target_id, performance)
             self.assertIsInstance(performance[target_id], dict)
+
+    def test_get_node_log(self):
+        smap = self.cluster.get_info()
+        target_id = list(smap.tmap.keys())[0]
+
+        log_text = self.cluster.get_node_log(target_id)
+        self.assertIsInstance(log_text, str)
+        self.assertGreater(len(log_text), 0)
+
+    def test_get_node_log_archive(self):
+        smap = self.cluster.get_info()
+        target_id = list(smap.tmap.keys())[0]
+
+        archive = self.cluster.get_node_log_archive(target_id)
+        self.assertIsInstance(archive, bytes)
+        self.assertGreater(len(archive), 0)
+
+    def test_get_node_log_error_severity(self):
+        smap = self.cluster.get_info()
+        target_id = list(smap.tmap.keys())[0]
+
+        log_text = self.cluster.get_node_log(target_id, severity=LogSeverity.ERROR)
+        self.assertIsInstance(log_text, str)
+
+    def test_get_cluster_logs(self):
+        smap = self.cluster.get_info()
+        logs = self.cluster.get_cluster_logs()
+
+        self.assertIsInstance(logs, dict)
+        self.assertEqual(len(smap.tmap), len(logs))
+        for target_id in smap.tmap:
+            self.assertIn(target_id, logs)
+            self.assertIsInstance(logs[target_id], str)

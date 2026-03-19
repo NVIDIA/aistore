@@ -8,6 +8,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- `Cluster.get_node_log()`, `Cluster.get_node_log_archive()`, `Cluster.get_cluster_logs()`:
+  fetch AIS daemon logs via the SDK.
+- `LogSeverity`, `NodeFilter` enums for log retrieval and cluster operations.
 - `Etl.logs()`: fetch ETL pod logs via the SDK (returns `List[ETLNodeLogs]`).
 - MCP server (`aistore.mcp`) for AI agent integration (Claude, Cursor, etc.):
   cluster health/info/performance, bucket list/summary/objects, all read-only.

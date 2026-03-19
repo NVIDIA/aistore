@@ -7,12 +7,16 @@ from __future__ import annotations  # pylint: disable=unused-variable
 import logging
 from typing import Dict, List, Optional, Union
 
+import requests
+
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     ACT_LIST,
     QPARAM_WHAT,
     QPARAM_PRIMARY_READY_REB,
     QPARAM_PROVIDER,
+    QPARAM_LOG_SEV,
+    QPARAM_ALL_LOGS,
     HEADER_NODE_ID,
     URL_PATH_ETL,
     URL_PATH_REVERSE,
@@ -24,7 +28,9 @@ from aistore.sdk.const import (
     WHAT_ALL_XACT_STATUS,
     WHAT_ALL_RUNNING_STATUS,
     WHAT_NODE_STATS_AND_STATUS,
+    WHAT_LOG,
 )
+from aistore.sdk.enums import LogSeverity, NodeFilter
 from aistore.sdk.etl.etl_const import ETL_STAGE_RUNNING
 from aistore.sdk.provider import Provider
 
@@ -234,3 +240,87 @@ class Cluster:
         Returns: UUID of AIStore Cluster
         """
         return self._get_smap().uuid
+
+    def get_node_log(
+        self, node_id: str, severity: LogSeverity = LogSeverity.INFO
+    ) -> str:
+        """
+        Get the current log from a specific cluster node (target or proxy).
+
+        Args:
+            node_id (str): Daemon ID of the node (e.g., "hHQZBnBQ").
+            severity (LogSeverity): Log severity level (default: LogSeverity.INFO).
+
+        Returns:
+            str: Current log content as text.
+        """
+        resp = self._request_log(node_id, severity.value)
+        return resp.text
+
+    def get_node_log_archive(
+        self, node_id: str, severity: LogSeverity = LogSeverity.INFO
+    ) -> bytes:
+        """
+        Download a TAR.GZ archive of all rotated logs from a specific node.
+
+        Args:
+            node_id (str): Daemon ID of the node (e.g., "hHQZBnBQ").
+            severity (LogSeverity): Log severity level (default: LogSeverity.INFO).
+
+        Returns:
+            bytes: TAR.GZ archive containing all rotated log files.
+                Loaded into memory; typically ~5MB compressed per node.
+
+        TODO: stream the archive instead of loading into memory for large logs.
+        """
+        resp = self._request_log(node_id, severity.value, all_logs=True)
+        return resp.content
+
+    def get_cluster_logs(
+        self,
+        severity: LogSeverity = LogSeverity.INFO,
+        role: NodeFilter = NodeFilter.TARGET,
+    ) -> Dict[str, str]:
+        """
+        Get logs from all nodes of a given role.
+
+        Args:
+            severity (LogSeverity): Log severity level (default: LogSeverity.INFO).
+            role (NodeFilter): Node filter (default: NodeFilter.TARGET).
+
+        Returns:
+            Dict[str, str]: Mapping of node ID to log content.
+        """
+        smap = self._get_smap()
+        nodes = {}
+        if role in (NodeFilter.TARGET, NodeFilter.ALL):
+            nodes.update(smap.tmap)
+        if role in (NodeFilter.PROXY, NodeFilter.ALL):
+            nodes.update(smap.pmap)
+
+        result = {}
+        for node_id in nodes:
+            result[node_id] = self.get_node_log(node_id, severity=severity)
+        return result
+
+    def _request_log(
+        self, node_id: str, severity: str, all_logs: bool = False
+    ) -> requests.Response:
+        """
+        Make the HTTP request to fetch a node's log.
+
+        Args:
+            node_id (str): Daemon ID of the node.
+            severity (str): Log severity string value.
+            all_logs (bool): If True, fetch all rotated logs as TAR.GZ archive.
+        """
+        params = {QPARAM_WHAT: WHAT_LOG, QPARAM_LOG_SEV: severity}
+        if all_logs:
+            params[QPARAM_ALL_LOGS] = "true"
+        headers = {HEADER_NODE_ID: node_id}
+        return self.client.request(
+            HTTP_METHOD_GET,
+            path=f"{URL_PATH_REVERSE}/{URL_PATH_DAEMON}",
+            params=params,
+            headers=headers,
+        )

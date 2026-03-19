@@ -1,7 +1,7 @@
 #
-# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 
 class Colocation(IntEnum):
@@ -50,3 +50,19 @@ class FLTPresence(IntEnum):
     # (including replicas, EC slices, misplaced, or rebalancing)
     FLT_PRESENT_CLUSTER = 4
     FLT_EXISTS_OUTSIDE = 5  # not present - exists _outside_ cluster
+
+
+class LogSeverity(str, Enum):
+    """Log severity levels for AIStore daemon logs."""
+
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class NodeFilter(str, Enum):
+    """Filter for selecting cluster nodes by type."""
+
+    TARGET = "target"
+    PROXY = "proxy"
+    ALL = "all"

@@ -108,6 +108,11 @@ WHAT_ALL_XACT_STATUS = "status_all"
 WHAT_ALL_RUNNING_STATUS = "running_all"
 WHAT_QUERY_XACT_STATS = "qryxstats"
 WHAT_NODE_STATS_AND_STATUS = "node_status"
+WHAT_LOG = "log"
+
+# Log query params (see api/apc/query.go)
+QPARAM_LOG_SEV = "severity"
+QPARAM_ALL_LOGS = "all"
 
 # URL paths
 URL_PATH_CLUSTER = "cluster"
