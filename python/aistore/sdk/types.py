@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2026, NVIDIA CORPORATION. All rights reserved.
 #
 from __future__ import annotations
 import base64
@@ -214,12 +214,6 @@ class BucketList(msgspec.Struct):
     @property
     def entries(self):
         return [] if self.Entries is None else self.Entries
-
-    def get_entries(self):
-        """
-        Deprecated -- use entries property
-        """
-        return self.entries
 
 
 class BucketModel(BaseModel):

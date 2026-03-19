@@ -6,6 +6,15 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Removed
+
+- Removed deprecated methods and parameters:
+  - `Object.get()` replaced by `Object.get_reader()`
+  - `Object.put_content()`, `Object.put_file()`, `Object.append_content()`, `Object.set_custom_props()` replaced by `Object.get_writer()` equivalents
+  - `Client.fetch_object_by_url()` replaced by `Client.get_object_from_url()`
+  - `Client` constructor `retry` (`urllib3.Retry`) parameter replaced by `retry_config` (`RetryConfig`)
+  - `BucketList.get_entries()` replaced by `BucketList.entries` property
+
 ### Added
 
 - `Cluster.get_node_log()`, `Cluster.get_node_log_archive()`, `Cluster.get_cluster_logs()`:

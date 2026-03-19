@@ -10,8 +10,6 @@ import unittest
 from unittest.mock import Mock, patch, mock_open
 from json import dumps as json_dumps
 
-import warnings
-
 from requests import Response
 from requests.structures import CaseInsensitiveDict
 from aistore.sdk.provider import Provider
@@ -460,18 +458,6 @@ class TestObject(unittest.TestCase):
         self.assertEqual(props.size, entry.s)
         self.assertEqual(props.access_time, entry.a)
 
-    @patch.object(Object, "get_reader", return_value="READER")
-    def test_get_deprecated_wrapper(self, mock_get_reader):
-        """Ensure Object.get emits DeprecationWarning and forwards to get_reader."""
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", DeprecationWarning)
-            result = self.object.get()
-            mock_get_reader.assert_called_once()
-            self.assertEqual(result, "READER")
-            self.assertTrue(
-                any(issubclass(item.category, DeprecationWarning) for item in w)
-            )
-
     def test_get_semantic_url(self):
         """Verify get_semantic_url without touching protected members."""
 
@@ -485,80 +471,6 @@ class TestObject(unittest.TestCase):
 
         expected = f"{Provider.AIS.value}://{BCK_NAME}/{OBJ_NAME}"
         self.assertEqual(temp_obj.get_semantic_url(), expected)
-
-    @patch.object(Object, "get_writer")
-    def test_put_content_deprecated_wrapper(self, mock_get_writer):
-        """Ensure put_content forwards to writer and emits DeprecationWarning."""
-        mock_writer = Mock()
-        mock_writer.put_content.return_value = "RESP"
-        mock_get_writer.return_value = mock_writer
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", DeprecationWarning)
-            resp = self.object.put_content(b"data")
-
-            mock_get_writer.assert_called_once()
-            mock_writer.put_content.assert_called_once_with(b"data")
-            self.assertEqual(resp, "RESP")
-            self.assertTrue(
-                any(issubclass(item.category, DeprecationWarning) for item in w)
-            )
-
-    @patch.object(Object, "get_writer")
-    def test_put_file_deprecated_wrapper(self, mock_get_writer):
-        """Ensure put_file forwards to writer and emits DeprecationWarning."""
-        mock_writer = Mock()
-        mock_writer.put_file.return_value = "RESP"
-        mock_get_writer.return_value = mock_writer
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", DeprecationWarning)
-            resp = self.object.put_file("/tmp/f")
-
-            mock_get_writer.assert_called_once()
-            mock_writer.put_file.assert_called_once_with("/tmp/f")
-            self.assertEqual(resp, "RESP")
-            self.assertTrue(
-                any(issubclass(item.category, DeprecationWarning) for item in w)
-            )
-
-    @patch.object(Object, "get_writer")
-    def test_append_content_deprecated_wrapper(self, mock_get_writer):
-        """Ensure append_content forwards to writer and emits DeprecationWarning."""
-        mock_writer = Mock()
-        mock_writer.append_content.return_value = "HANDLE"
-        mock_get_writer.return_value = mock_writer
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", DeprecationWarning)
-            handle = self.object.append_content(b"data", handle="prev", flush=True)
-
-            mock_get_writer.assert_called_once()
-            mock_writer.append_content.assert_called_once_with(b"data", "prev", True)
-            self.assertEqual(handle, "HANDLE")
-            self.assertTrue(
-                any(issubclass(item.category, DeprecationWarning) for item in w)
-            )
-
-    @patch.object(Object, "get_writer")
-    def test_set_custom_props_deprecated_wrapper(self, mock_get_writer):
-        """Ensure set_custom_props forwards to writer and emits DeprecationWarning."""
-        mock_writer = Mock()
-        mock_writer.set_custom_props.return_value = "RESP"
-        mock_get_writer.return_value = mock_writer
-
-        custom = {"a": "b"}
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", DeprecationWarning)
-            resp = self.object.set_custom_props(custom, replace_existing=True)
-
-            mock_get_writer.assert_called_once()
-            mock_writer.set_custom_props.assert_called_once_with(custom, True)
-            self.assertEqual(resp, "RESP")
-            self.assertTrue(
-                any(issubclass(item.category, DeprecationWarning) for item in w)
-            )
 
     def test_get_url_with_etl_args(self):
         """Ensure get_url adds both etl_name and etl_args params when args provided."""

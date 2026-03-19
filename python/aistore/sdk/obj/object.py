@@ -2,11 +2,8 @@
 # Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
-import warnings
-
 from dataclasses import dataclass
 from io import BufferedWriter
-from pathlib import Path
 from typing import Dict, Optional
 import os
 from urllib.parse import quote
@@ -18,7 +15,6 @@ from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.etl import ETLConfig
 from aistore.sdk.const import (
     BYTE_RANGE_PREFIX_LENGTH,
-    DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_HEAD,
     QPARAM_ARCHPATH,
@@ -348,61 +344,6 @@ class Object:
 
         return obj_reader
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def get(
-        self,
-        archive_config: Optional[ArchiveConfig] = None,
-        blob_download_config: Optional[BlobDownloadConfig] = None,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl: Optional[ETLConfig] = None,
-        writer: Optional[BufferedWriter] = None,
-        latest: bool = False,
-        byte_range: Optional[str] = None,
-    ) -> ObjectReader:
-        """
-        Deprecated: Use 'get_reader' instead.
-
-        Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
-
-        Args:
-            archive_config (ArchiveConfig, optional): Settings for archive extraction.
-            blob_download_config (BlobDownloadConfig, optional): Settings for using blob download.
-            chunk_size (int, optional): Chunk size to use while reading from stream.
-            etl (ETLConfig, optional): Settings for ETL-specific operations (name, meta).
-            writer (BufferedWriter, optional): User-provided writer for writing content output.
-                The user is responsible for closing the writer.
-            latest (bool, optional): GET the latest object version from the associated remote bucket.
-            byte_range (str, optional): Byte range in RFC 7233 format for single-range requests
-                (e.g., "bytes=0-499", "bytes=500-", "bytes=-500").
-                See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
-
-        Returns:
-            ObjectReader: An ObjectReader that can be iterated over to stream chunks of object content
-            or used to read all content directly.
-
-        Raises:
-            ValueError: If `byte_range` is used with `blob_download_config`.
-            requests.RequestException: If an error occurs during the request.
-            requests.ConnectionError: If there is a connection error.
-            requests.ConnectionTimeout: If the connection times out.
-            requests.ReadTimeout: If the read operation times out.
-        """
-        warnings.warn(
-            "The `Object.get(...)` method is deprecated and will be removed in a future release."
-            "Please replace it with `Object.get_reader()` using the new `ObjectReader` API.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.get_reader(
-            archive_config=archive_config,
-            blob_download_config=blob_download_config,
-            chunk_size=chunk_size,
-            etl=etl,
-            writer=writer,
-            latest=latest,
-            byte_range=byte_range,
-        )
-
     def get_semantic_url(self) -> str:
         """
         Get the semantic URL to the object
@@ -437,53 +378,6 @@ class Object:
                 params[QPARAM_ETL_ARGS] = etl.args
 
         return self._client.get_full_url(self._object_path, params)
-
-    def put_content(self, content: bytes) -> Response:
-        """
-        Deprecated: Use 'ObjectWriter.put_content' instead.
-
-        Puts bytes as an object to a bucket in AIS storage.
-
-        Args:
-            content (bytes): Bytes to put as an object.
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-        """
-        warnings.warn(
-            "The `Object.put_content(...)` method is deprecated and will be removed in a future release."
-            "Please replace it with `Object.get_writer().put_content(...)` using the new `ObjectWriter` API.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.get_writer().put_content(content)
-
-    def put_file(self, path: str or Path) -> Response:
-        """
-        Deprecated: Use 'ObjectWriter.put_file' instead.
-
-        Puts a local file as an object to a bucket in AIS storage.
-
-        Args:
-            path (str or Path): Path to local file
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-            ValueError: The path provided is not a valid file
-        """
-        warnings.warn(
-            "The `Object.put_file(...)` method is deprecated and will be removed in a future release."
-            "Please replace it with `Object.get_writer().put_file(...)` using the new `ObjectWriter` API.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.get_writer().put_file(path)
 
     def get_writer(self) -> ObjectWriter:
         """
@@ -658,54 +552,3 @@ class Object:
         return self._client.request(
             HTTP_METHOD_POST, path=self._bck_path, params=params, json=json_val
         ).text
-
-    def append_content(
-        self, content: bytes, handle: str = "", flush: bool = False
-    ) -> str:
-        """
-        Deprecated: Use 'ObjectWriter.append_content' instead.
-
-        Append bytes as an object to a bucket in AIS storage.
-
-        Args:
-            content (bytes): Bytes to append to the object.
-            handle (str): Handle string to use for subsequent appends or flush (empty for the first append).
-            flush (bool): Whether to flush and finalize the append operation, making the object accessible.
-
-        Returns:
-            handle (str): Handle string to pass for subsequent appends or flush.
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-            requests.exceptions.HTTPError(404): The object does not exist
-        """
-        warnings.warn(
-            "The `Object.append_content(...)` method is deprecated and will be removed in a future release."
-            "Please replace it with `Object.get_writer().append_content(...)` using the new `ObjectWriter` API.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.get_writer().append_content(content, handle, flush)
-
-    def set_custom_props(
-        self, custom_metadata: Dict[str, str], replace_existing: bool = False
-    ) -> Response:
-        """
-        Deprecated: Use 'ObjectWriter.set_custom_props' instead.
-
-        Set custom properties for the object.
-
-        Args:
-            custom_metadata (Dict[str, str]): Custom metadata key-value pairs.
-            replace_existing (bool, optional): Whether to replace existing metadata. Defaults to False.
-        """
-        warnings.warn(
-            "The `Object.set_custom_props(...)` method is deprecated and will be removed in a future release."
-            "Please replace it with `Object.get_writer().set_custom_props(...)` using the new `ObjectWriter` API.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.get_writer().set_custom_props(custom_metadata, replace_existing)

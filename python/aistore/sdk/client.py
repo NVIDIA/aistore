@@ -4,7 +4,6 @@
 from typing import List, Optional, Tuple, Union
 import os
 import warnings
-from urllib3 import Retry
 
 from aistore.sdk.enums import Colocation
 from aistore.sdk.bucket import Bucket
@@ -52,7 +51,6 @@ class Client:
               If env var is set to `0`, that specific timeout is disabled. Defaults to `(3, 20)` if not set.
         retry_config (RetryConfig, optional): Defines retry behavior for HTTP and network failures.
             If not provided, the default retry configuration (`RetryConfig.default()`) is used.
-        retry (urllib3.Retry, optional): [Deprecated] Retry configuration from urllib3. Use `retry_config` instead.
         token (str, optional): Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
             will be used. Defaults to None.
         max_pool_size (int, optional): Maximum number of connections per host in the connection pool.
@@ -192,24 +190,12 @@ class Client:
         client_cert: Optional[Union[str, Tuple[str, str]]] = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         retry_config: Optional[RetryConfig] = None,
-        retry: Optional[Retry] = None,  # deprecated
         token: Optional[str] = None,
         max_pool_size: Optional[int] = None,
     ):
-        # Use `retry_config` (RetryConfig) if provided; otherwise, fall back to the deprecated `retry` (urllib3.Retry)
-        if retry_config is not None:
-            self.retry_config = retry_config
-        elif retry is not None:
-            warnings.warn(
-                "'retry' is deprecated and will be removed in a future release. "
-                "Use 'retry_config' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self.retry_config = RetryConfig.default()
-            self.retry_config.http_retry = retry
-        else:
-            self.retry_config = RetryConfig.default()
+        self.retry_config = (
+            retry_config if retry_config is not None else RetryConfig.default()
+        )
 
         # Resolve configuration values: params > env_vars > defaults
         timeout = self._resolve_timeout(timeout)
@@ -312,28 +298,6 @@ class Client:
             dSort object created
         """
         return Dsort(client=self._request_client, dsort_id=dsort_id)
-
-    def fetch_object_by_url(self, url: str) -> Object:
-        """
-        Deprecated: Use `get_object_from_url` instead.
-
-        Creates an Object instance from a URL.
-
-        This method does not make any HTTP requests.
-
-        Args:
-            url (str): Full URL of the object (e.g., "ais://bucket1/file.txt")
-
-        Returns:
-            Object: The object constructed from the specified URL
-        """
-        warnings.warn(
-            "The 'fetch_object_by_url' method is deprecated and will be removed in a future release. "
-            "Please use 'get_object_from_url' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.get_object_from_url(url)
 
     def get_object_from_url(self, url: str) -> Object:
         """
