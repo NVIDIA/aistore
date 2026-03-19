@@ -38,8 +38,20 @@ var (
 	hmacSigner = signing.NewHMACSigner(testHMACSigningSecret)
 )
 
+func newRegClaims() *jwt.RegisteredClaims {
+	return &jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(futureTime),
+		Subject:   testUser,
+		Audience:  reqAud,
+	}
+}
+
+func newStandardClaims(bckACL []*authn.BckACL, cluACL []*authn.CluACL) *tok.AISClaims {
+	return tok.StandardClaims(newRegClaims(), bckACL, cluACL)
+}
+
 func newAdminClaims() *tok.AISClaims {
-	return tok.AdminClaims(futureTime, testUser, testAudience)
+	return tok.AdminClaims(newRegClaims())
 }
 
 func newAdminClaimsWithIssuer(iss string) *tok.AISClaims {
@@ -129,7 +141,7 @@ func TestStandardClaimsBucket(t *testing.T) {
 
 	bckACL := makeBckACL(apc.AccessRO, cluster, "b1")
 
-	claims := tok.StandardClaims(futureTime, testUser, testAudience, []*authn.BckACL{bckACL}, nil)
+	claims := newStandardClaims([]*authn.BckACL{bckACL}, nil)
 
 	// When comparing against bucket, don't include the cluster id in the namespace
 	bck1 := &cmn.Bck{Name: "b1", Provider: "ais"}
@@ -142,8 +154,7 @@ func TestStandardClaimsCluster(t *testing.T) {
 	cluster := "cid1"
 
 	cluACL := makeCluACL(apc.ClusterAccessRO, cluster)
-
-	claims := tok.StandardClaims(futureTime, testUser, testAudience, nil, []*authn.CluACL{cluACL})
+	claims := newStandardClaims(nil, []*authn.CluACL{cluACL})
 	assertClusterClaims(t, claims, testUser, cluster)
 }
 
@@ -278,7 +289,8 @@ func TestValidateToken_Unsupported(t *testing.T) {
 
 // Test that validating an expired token raises the appropriate exception
 func TestValidateToken_Expired(t *testing.T) {
-	c := tok.AdminClaims(previousTime, testUser, testAudience)
+	c := newAdminClaims()
+	c.ExpiresAt = jwt.NewNumericDate(previousTime)
 	tokenStr, err := hmacSigner.SignToken(c)
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
 	_, err = newHMACParser(t).ValidateToken(t.Context(), tokenStr)
@@ -331,7 +343,7 @@ func TestValidateToken_NoSubject(t *testing.T) {
 func TestCheckPermissions_Denied(t *testing.T) {
 	cluID := "clu"
 	bck := &cmn.Bck{Name: "bck", Provider: apc.AIS}
-	noPerms := tok.StandardClaims(futureTime, "user", testAudience, nil, nil)
+	noPerms := newStandardClaims(nil, nil)
 
 	for perm := apc.AccessAttrs(1); perm < apc.AceMax; perm <<= 1 {
 		err := noPerms.CheckPermissions(cluID, bck, perm)
@@ -348,10 +360,10 @@ func TestCheckPermissions_Granted(t *testing.T) {
 		t.Run(perm.Describe(false), func(t *testing.T) {
 			var claims *tok.AISClaims
 			if perm&cluScope != 0 {
-				claims = tok.StandardClaims(futureTime, "user", testAudience, nil,
+				claims = newStandardClaims(nil,
 					[]*authn.CluACL{{ID: cluID, Access: perm}})
 			} else {
-				claims = tok.StandardClaims(futureTime, "user", testAudience,
+				claims = newStandardClaims(
 					[]*authn.BckACL{{Bck: cmn.Bck{Name: bck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: cluID}}, Access: perm}}, nil)
 			}
 			err := claims.CheckPermissions(cluID, &bck, perm)

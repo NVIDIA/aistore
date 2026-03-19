@@ -33,9 +33,10 @@ const (
 // Provides utilities used only by the authN service (not API)
 type (
 	ConfManager struct {
-		filePath string
-		conf     atomic.Pointer[authn.Config]
-		mu       sync.Mutex
+		filePath    string
+		conf        atomic.Pointer[authn.Config]
+		mu          sync.Mutex
+		externalURL *url.URL
 	}
 	RSAKeyConfig struct {
 		Filepath string
@@ -112,16 +113,20 @@ func (cm *ConfManager) Init(cfgPathArg string) {
 		cos.ExitLogf("Invalid config for %s: %v", ServiceName, err)
 	}
 	cm.filePath = filePath
-	// Load from disk first because log directory is configurable
 	conf, err := cm.loadFromDisk()
 	if err != nil {
 		cos.ExitLogf("%s service failed to start: %v", ServiceName, err)
 	}
+	// Store raw config so initLogs and initExternalURL can read it
+	cm.conf.Store(conf)
 	err = cm.initLogs()
 	if err != nil {
 		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
-	// Log config loading after initializing the logger
+	err = cm.initExternalURL()
+	if err != nil {
+		cos.ExitLogf("Failed to set up external URL: %v", err)
+	}
 	nlog.Infoln("Loaded configuration from", cm.filePath)
 	if val := os.Getenv(env.AisAuthSecretKey); val != "" {
 		conf.Server.Secret = val
@@ -144,6 +149,28 @@ func (cm *ConfManager) initLogs() error {
 	return nil
 }
 
+// Parse the URL configured for an external client to access this service
+// Note this is most likely different from what we serve, because of port mappings, tls termination, etc.
+func (cm *ConfManager) initExternalURL() error {
+	var (
+		external *url.URL
+		err      error
+	)
+	raw := cos.GetEnvOrDefault(env.AisAuthExternalURL, cm.conf.Load().Net.ExternalURL)
+	if raw != "" {
+		external, err = authn.ParseExternalURL(raw)
+		if err != nil {
+			return err
+		}
+	} else {
+		// fallback to localhost if not configured
+		external = cm.getLocalHost()
+	}
+	nlog.Infof("Using %s as externally accessible URL", external)
+	cm.externalURL = external
+	return nil
+}
+
 func (cm *ConfManager) loadFromDisk() (*authn.Config, error) {
 	rawConf := &authn.Config{}
 	if _, err := jsp.LoadMeta(cm.filePath, rawConf); err != nil {
@@ -161,15 +188,6 @@ func (cm *ConfManager) saveToDisk() error {
 
 func (cm *ConfManager) GetLogFlushInterval() time.Duration {
 	return cm.conf.Load().Log.FlushInterval.D()
-}
-
-func (cm *ConfManager) ParseExternalURL() (*url.URL, error) {
-	raw := cos.GetEnvOrDefault(env.AisAuthExternalURL, cm.conf.Load().Net.ExternalURL)
-	if raw != "" {
-		return url.Parse(raw)
-	}
-	// fallback to localhost if not configured
-	return cm.getLocalHost(), nil
 }
 
 func (cm *ConfManager) getLocalHost() *url.URL {
@@ -233,6 +251,10 @@ func (cm *ConfManager) GetDBPath() string {
 		return fp
 	}
 	return filepath.Join(filepath.Dir(cm.filePath), fname.AuthNDB)
+}
+
+func (cm *ConfManager) GetExternalURL() *url.URL {
+	return cm.externalURL
 }
 
 //////////

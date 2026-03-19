@@ -84,7 +84,7 @@ func assertKeyBundleValid(t *testing.T, mgr *signing.RSAKeyManager) {
 	tassert.Fatalf(t, jwks.Len() > 0, "expected JWKS to have at least one key")
 
 	// Sign and validate: proves private key, public key, and kid are all consistent
-	dummyClaims := tok.AdminClaims(time.Now().Add(time.Minute), "bundle-check", "")
+	dummyClaims := newAdminClaims(time.Now().Add(time.Minute), "bundle-check", "")
 	signed, err := mgr.SignToken(dummyClaims)
 	tassert.CheckFatal(t, err)
 
@@ -112,13 +112,22 @@ func compareMgrKeyBundle(t *testing.T, expectedMgr, actualMgr *signing.RSAKeyMan
 		tassert.Fatalf(t, jwk.Equal(expectedJWK, actualJWK), "key with keyID %q differs between expected and actual sets", expectedJWK.KeyID())
 	}
 	// Cross-validate: token signed by one manager must validate with the other's JWKS
-	dummyClaims := tok.AdminClaims(time.Now().Add(time.Minute), "cross-check", "")
+	dummyClaims := newAdminClaims(time.Now().Add(time.Minute), "cross-check", "")
 	signed, err := expectedMgr.SignToken(dummyClaims)
 	tassert.CheckFatal(t, err)
 
 	parser := tok.NewTokenParser(actualMgr, nil)
 	_, err = parser.ValidateToken(t.Context(), signed)
 	tassert.CheckFatal(t, err)
+}
+
+func newAdminClaims(exp time.Time, sub, aud string) *tok.AISClaims {
+	regClaims := &jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(exp),
+		Subject:   sub,
+		Audience:  []string{aud},
+	}
+	return tok.AdminClaims(regClaims)
 }
 
 func TestInitNoDB(t *testing.T) {
@@ -150,7 +159,7 @@ func TestSignToken(t *testing.T) {
 	futureTime := time.Now().Add(1 * time.Hour)
 	testSub := "testUser"
 	testAud := "testAudience"
-	basicAdminClaims := tok.AdminClaims(futureTime, testSub, testAud)
+	basicAdminClaims := newAdminClaims(futureTime, testSub, testAud)
 	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), &mock.KeyDataStorage{})
 	err := mgr.Init()
 	tassert.CheckFatal(t, err)
@@ -320,7 +329,7 @@ func TestRotateKey(t *testing.T) {
 	const numRotations = 3
 	tokens := make([]string, numRotations+1)
 	pubKeys := make([]string, numRotations+1)
-	claims := tok.AdminClaims(time.Now().Add(time.Hour), "rotate-test", "")
+	claims := newAdminClaims(time.Now().Add(time.Hour), "rotate-test", "")
 
 	pubKeys[0] = getAndAssertPubKey(t, mgr)
 	tokens[0], err = mgr.SignToken(claims)
@@ -358,7 +367,7 @@ func TestRotateKeyPersistsAcrossReload(t *testing.T) {
 	err := mgr.Init()
 	tassert.CheckFatal(t, err)
 
-	claims := tok.AdminClaims(time.Now().Add(time.Hour), "rotate-test", "")
+	claims := newAdminClaims(time.Now().Add(time.Hour), "rotate-test", "")
 	preToken, err := mgr.SignToken(claims)
 	tassert.CheckFatal(t, err)
 

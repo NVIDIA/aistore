@@ -69,26 +69,18 @@ var (
 	supportedSigningMethods = []string{jwt.SigningMethodRS256.Name, jwt.SigningMethodRS384.Name, jwt.SigningMethodRS512.Name, jwt.SigningMethodHS256.Name}
 )
 
-func StandardClaims(expires time.Time, userID, aud string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL) *AISClaims {
+func StandardClaims(regClaims *jwt.RegisteredClaims, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL) *AISClaims {
 	return &AISClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expires),
-			Subject:   userID,
-			Audience:  []string{aud},
-		},
-		BucketACLs:  bucketACLs,
-		ClusterACLs: clusterACLs,
+		RegisteredClaims: *regClaims,
+		BucketACLs:       bucketACLs,
+		ClusterACLs:      clusterACLs,
 	}
 }
 
-func AdminClaims(expires time.Time, userID, aud string) *AISClaims {
+func AdminClaims(regClaims *jwt.RegisteredClaims) *AISClaims {
 	return &AISClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expires),
-			Subject:   userID,
-			Audience:  []string{aud},
-		},
-		IsAdmin: true,
+		RegisteredClaims: *regClaims,
+		IsAdmin:          true,
 	}
 }
 

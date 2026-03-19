@@ -7,6 +7,7 @@ package authn
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -172,6 +173,11 @@ func (c *LogConf) Validate() error {
 }
 
 func (c *NetConf) Validate() error {
+	if c.ExternalURL != "" {
+		if _, err := ParseExternalURL(c.ExternalURL); err != nil {
+			return err
+		}
+	}
 	return c.HTTP.Validate()
 }
 
@@ -211,4 +217,18 @@ func (cu *ConfigToUpdate) Validate() error {
 		return errors.New("secret defined but empty string")
 	}
 	return nil
+}
+
+func ParseExternalURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("external URL %q: scheme must be http or https", raw)
+	}
+	if u.Host == "" {
+		return nil, fmt.Errorf("external URL %q: missing host", raw)
+	}
+	return u, nil
 }

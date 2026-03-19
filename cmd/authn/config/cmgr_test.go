@@ -209,44 +209,44 @@ func TestGetLogFlushInterval(t *testing.T) {
 	tassert.Errorf(t, got == expected, "expected %v, got %v", expected, got)
 }
 
-func TestParseExternalURL_Env(t *testing.T) {
+func TestExternalURL_Env(t *testing.T) {
 	urlStr := "https://example.com:8443/base"
 	t.Setenv(env.AisAuthExternalURL, urlStr)
-	// Not set in base
 	cm := newConfManagerWithConf(t, newBaseConfig())
-	u, err := cm.ParseExternalURL()
-	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
+	u := cm.GetExternalURL()
+	tassert.Fatalf(t, u != nil, "expected non-nil external URL")
 	tassert.Errorf(t, u.String() == urlStr, "expected URL %q, got %q", urlStr, u.String())
 }
 
-func TestParseExternalURL_Conf(t *testing.T) {
+func TestExternalURL_Conf(t *testing.T) {
+	t.Setenv(env.AisAuthExternalURL, "")
 	urlStr := "https://example.com:8443/base"
 	base := newBaseConfig()
 	base.Net.ExternalURL = urlStr
 	cm := newConfManagerWithConf(t, base)
-	u, err := cm.ParseExternalURL()
-	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
+	u := cm.GetExternalURL()
+	tassert.Fatalf(t, u != nil, "expected non-nil external URL")
 	tassert.Errorf(t, u.String() == urlStr, "expected URL %q, got %q", urlStr, u.String())
 }
 
-func TestParseExternalURL_FallbackHTTP(t *testing.T) {
-	// First, when not using https
+func TestExternalURL_FallbackHTTP(t *testing.T) {
+	t.Setenv(env.AisAuthExternalURL, "")
 	expectedURL := "http://localhost:12345"
 	base := newBaseConfig()
 	base.Net.HTTP.UseHTTPS = false
 	cm := newConfManagerWithConf(t, base)
-	u, err := cm.ParseExternalURL()
-	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
+	u := cm.GetExternalURL()
+	tassert.Fatalf(t, u != nil, "expected non-nil external URL")
 	tassert.Errorf(t, u.String() == expectedURL, "expected URL %q, got %q", expectedURL, u.String())
 }
 
-func TestParseExternalURL_FallbackHTTPS(t *testing.T) {
-	// First, when not using https
+func TestExternalURL_FallbackHTTPS(t *testing.T) {
+	t.Setenv(env.AisAuthExternalURL, "")
 	expectedURL := "https://localhost:12345"
 	base := newBaseConfig()
 	cm := newConfManagerWithConf(t, base)
-	u, err := cm.ParseExternalURL()
-	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
+	u := cm.GetExternalURL()
+	tassert.Fatalf(t, u != nil, "expected non-nil external URL")
 	tassert.Errorf(t, u.String() == expectedURL, "expected URL %q, got %q", expectedURL, u.String())
 }
 

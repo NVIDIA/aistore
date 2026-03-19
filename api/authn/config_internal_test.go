@@ -46,6 +46,11 @@ func TestConfigValidateValid(t *testing.T) {
 	c.Server.RSAKeyBits = 0
 	tassert.CheckFatal(t, c.Validate())
 	tassert.Errorf(t, c.Server.RSAKeyBits == defaultRSAKeyBits, "expected RSAKeyBits default, got %d", c.Server.RSAKeyBits)
+
+	// valid external url is parsed
+	c = validConfig()
+	c.Net.ExternalURL = "https://auth.example.com:8443"
+	tassert.CheckFatal(t, c.Validate())
 }
 
 func TestConfigValidateInvalid(t *testing.T) {
@@ -59,6 +64,9 @@ func TestConfigValidateInvalid(t *testing.T) {
 		{"log level too low", func(c *Config) { c.Log.Level = "-1" }},
 		{"log level too high", func(c *Config) { c.Log.Level = "6" }},
 		{"flush interval too short", func(c *Config) { c.Log.FlushInterval = minLogFlushInterval - 1 }},
+		{"external URL no scheme", func(c *Config) { c.Net.ExternalURL = "example.com:8443" }},
+		{"external URL bad scheme", func(c *Config) { c.Net.ExternalURL = "ftp://example.com" }},
+		{"external URL no host", func(c *Config) { c.Net.ExternalURL = "http://" }},
 		{"port too low", func(c *Config) { c.Net.HTTP.Port = minPort - 1 }},
 		{"port too high", func(c *Config) { c.Net.HTTP.Port = maxPort + 1 }},
 		{"HTTPS without cert", func(c *Config) { c.Net.HTTP.UseHTTPS = true }},

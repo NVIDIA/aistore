@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	jsoniter "github.com/json-iterator/go"
@@ -69,10 +68,6 @@ func (h *hserv) Run() error {
 		h.s.ReadHeaderTimeout = timeout
 	}
 
-	external, err := h.mgr.cm.ParseExternalURL()
-	if err == nil {
-		nlog.Infof("Using %s as externally accessible URL", external)
-	}
 	// Start the appropriate server based on the configuration
 	if h.mgr.cm.IsHTTPS() {
 		// Retrieve and set HTTPS configuration with environment variables taking precedence
@@ -620,15 +615,7 @@ func (h *hserv) oidcConfigHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet)
 		return
 	}
-	// Parse the URL configured for an external client to access this service
-	// Note this is most likely different from what we serve, because of port mappings, tls termination, etc.
-	base, err := h.mgr.cm.ParseExternalURL()
-	if err != nil {
-		cmn.WriteErr(w, r, fmt.Errorf("error parsing configured external URL: %v", err))
-		return
-	}
-	debug.Assert(base != nil)
-	writeJSON(w, authn.NewOIDCConfiguration(base), "get oidc configuration")
+	writeJSON(w, authn.NewOIDCConfiguration(h.mgr.cm.GetExternalURL()), "get oidc configuration")
 }
 
 func (h *hserv) pubKeyHandler(w http.ResponseWriter, r *http.Request) {

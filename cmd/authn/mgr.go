@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
+	"github.com/golang-jwt/jwt/v5"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"golang.org/x/crypto/bcrypt"
@@ -471,15 +473,48 @@ func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, co
 		bckACLs = mergeBckACLs(bckACLs, role.BucketACLs, cid)
 	}
 
-	// generate token
-	token, err = m._token(msg, uInfo, cluACLs, bckACLs)
+	claims, err := m.buildClaims(msg, uInfo, cluACLs, bckACLs)
+	if err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+	token, err = m.getSigner().SignToken(claims)
 	if err != nil {
 		return "", http.StatusInternalServerError, err
 	}
 	return token, http.StatusOK, nil
 }
 
-func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) (string, error) {
+func (m *mgr) buildClaims(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) (*tok.AISClaims, error) {
+	now := time.Now().UTC()
+	// Standard claims: iss, sub, exp, iat
+	regClaims := &jwt.RegisteredClaims{
+		Issuer:    m.cm.GetExternalURL().String(),
+		Subject:   uInfo.ID,
+		ExpiresAt: m.getExp(now, msg),
+		IssuedAt:  jwt.NewNumericDate(now),
+	}
+	// Create with appropriate AIS ACLs
+	if uInfo.IsAdmin() {
+		// Admin tokens contain aud claims for ALL registered clusters
+		// Note: requires re-issued token if new cluster is added with required aud claims
+		cluIDs, err := m.getAllClusterIDs()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cluster IDs for aud claim: %v", err)
+		}
+		regClaims.Audience = cluIDs
+		return tok.AdminClaims(regClaims), nil
+	}
+	if cluACLs != nil {
+		if err := m.fixClusterIDs(cluACLs); err != nil {
+			return nil, fmt.Errorf("failed to build cluster ACLs: %v", err)
+		}
+	}
+	regClaims.Audience = getAud(bckACLs, cluACLs)
+	return tok.StandardClaims(regClaims, bckACLs, cluACLs), nil
+}
+
+// Get the expiry for a newly signed JWT based on the login data
+func (m *mgr) getExp(now time.Time, msg *authn.LoginMsg) *jwt.NumericDate {
 	expDelta := m.cm.GetExpiry()
 	if msg.ExpiresIn != nil {
 		expDelta = *msg.ExpiresIn
@@ -487,19 +522,28 @@ func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.Cl
 	if expDelta == 0 {
 		expDelta = authn.ForeverTokenTime.D()
 	}
+	return jwt.NewNumericDate(now.Add(expDelta))
+}
 
-	// put all useful info into token: who owns the token, when it was issued,
-	// when it expires and credentials to log in AWS, GCP etc.
-	// If a user is a super user, it is enough to pass only isAdmin marker
-	expires := time.Now().UTC().Add(expDelta)
-	uid := uInfo.ID
-	// TODO: parse from ACLs and/or LoginMsg
-	aud := ""
-	if uInfo.IsAdmin() {
-		return m.getSigner().SignToken(tok.AdminClaims(expires, uid, aud))
+// Get the audience to include in new JWT -- AIS can optionally verify this
+func getAud(bckACLs []*authn.BckACL, cluACLs []*authn.CluACL) []string {
+	seen := make(map[string]struct{}, len(cluACLs)+len(bckACLs))
+	for _, acl := range cluACLs {
+		if acl.ID != "" {
+			seen[acl.ID] = struct{}{}
+		}
 	}
-	m.fixClusterIDs(cluACLs)
-	return m.getSigner().SignToken(tok.StandardClaims(expires, uid, aud, bckACLs, cluACLs))
+	for _, acl := range bckACLs {
+		if uuid := acl.Bck.Ns.UUID; uuid != "" {
+			seen[uuid] = struct{}{}
+		}
+	}
+	aud := make([]string, 0, len(seen))
+	for id := range seen {
+		aud = append(aud, id)
+	}
+	slices.Sort(aud)
+	return aud
 }
 
 func (m *mgr) updateConf(cu *authn.ConfigToUpdate) error {
@@ -517,10 +561,10 @@ func (m *mgr) updateConf(cu *authn.ConfigToUpdate) error {
 
 // Before putting a list of cluster permissions to a token, cluster aliases
 // must be replaced with their IDs.
-func (m *mgr) fixClusterIDs(lst []*authn.CluACL) {
+func (m *mgr) fixClusterIDs(lst []*authn.CluACL) error {
 	clus, _, err := m.clus()
 	if err != nil {
-		return
+		return err
 	}
 	for _, cInfo := range lst {
 		if _, ok := clus[cInfo.ID]; ok {
@@ -532,6 +576,20 @@ func (m *mgr) fixClusterIDs(lst []*authn.CluACL) {
 			}
 		}
 	}
+	return nil
+}
+
+func (m *mgr) getAllClusterIDs() ([]string, error) {
+	clus, _, err := m.clus()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(clus))
+	for id := range clus {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids, nil
 }
 
 // Add the given token to the revoked list within AuthN
