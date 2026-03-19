@@ -718,11 +718,16 @@ class TestETLOps(unittest.TestCase):
 
     @pytest.mark.etl
     def test_etl_logs(self):
-        """Test that Etl.logs() returns logs from running ETL pods."""
+        """Test that Etl.logs() returns logs from running ETL pods, including init-time logs."""
+        init_msg = "EchoServer initialized successfully"
         etl = self.client.etl(self.etl_name)
 
         @etl.init_class()
         class EchoServer(FastAPIServer):
+            def __init__(self):
+                super().__init__()
+                self.logger.info(init_msg)
+
             def transform(self, data: bytes, *_args) -> bytes:
                 return data
 
@@ -734,6 +739,10 @@ class TestETLOps(unittest.TestCase):
         for entry in logs:
             self.assertTrue(entry.target_id)
             self.assertIsInstance(entry.logs, str)
+
+        # Verify init-time log message is captured
+        all_logs = "\n".join(entry.logs for entry in logs)
+        self.assertIn(init_msg, all_logs)
 
         # Fetch logs from a specific target
         target_id = logs[0].target_id
