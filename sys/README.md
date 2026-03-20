@@ -21,7 +21,7 @@ The `sys` package provides lightweight runtime visibility into host and containe
 - [Current limitations and future plans](#current-limitations-and-future-plans)
   - [Container detection](#container-detection)
   - [cgroup v2 memory](#cgroup-v2-memory)
-  - [Hardcoded thresholds](#hardcoded-thresholds)
+  - [Hardcoded thresholds and stale samples](#hardcoded-thresholds-and-stale-samples)
   - [Future plans](#future-plans)
 
 ## CPU reporting
@@ -157,7 +157,7 @@ CPU support already uses cgroup v2, but memory reporting does not yet have a ded
 
 As a result, a container running under cgroup v2 memory controls may currently fall back to host memory statistics.
 
-### Hardcoded thresholds
+### Hardcoded thresholds and stale samples
 
 Several operational constants are currently compiled in, including:
 
@@ -165,7 +165,10 @@ Several operational constants are currently compiled in, including:
 - CPU load thresholds
 - throttling threshold for extreme CPU starvation
 
-These defaults are reasonable for current usage but may eventually need deployment-specific overrides.
+In particular, CPU utilization is computed from sampled deltas and depends on periodic sampling.
+There is currently no synchronous (or asynchronous) path to refresh utilization sample on demand.
+
+If the previous sample is considered stale, the package will return `0` utilization instead of a current value.
 
 ### Future work
 

@@ -17,8 +17,14 @@ import (
 // README.md in this package.
 
 const (
-	maxSampleAge          = int64(10 * time.Second) // when prev. sample is considered outdated
-	throttleExtremeThresh = 10                      // >10% wall-clock throttled => extreme starvation
+	// when prev. sample is considered outdated
+	// see also:
+	// - ios.doRefresh()
+	// - stats_time
+	maxSampleAge = int64(13 * time.Second)
+
+	// >10% wall-clock throttled => extreme starvation
+	throttleExtremeThresh = 10
 
 	// USER_HZ
 	// - what-if: kernel gets compiled w/ non-default
