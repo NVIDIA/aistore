@@ -45,7 +45,13 @@ At startup, the package initializes a process-wide CPU count:
 - default: `runtime.NumCPU()`
 - container override: cgroup-based CPU quota when detected
 
-Today, Linux CPU counting prefers cgroup v2 quota (`cpu.max`) and falls back to cgroup v1 quota/period.
+The package employs prioritized capability detection:
+
+1. Attempt cgroup v2 (cpu.max) parsing.
+2. Fall back to cgroup v1 (`cpu.cfs_quota_us`).
+3. If both fail or are missing, fallback to host runtime.NumCPU().
+
+Errors from both v1 and v2 paths are aggregated and reported to stderr.
 
 ### Utilization model
 
@@ -56,6 +62,8 @@ CPU utilization is sampled as a delta of cumulative CPU time over wall-clock tim
 - utilization is computed as:
 
 `delta_cpu_usage / (delta_wall_time * NumCPU)`
+
+Utilization and throttling are computed atomically in a single pass from the same time delta (specifically, to synchronize "Extreme Load" signal based on throttling).
 
 A sample gap older than the configured stale interval is discarded and treated as a reset. This avoids reporting a long-window average as if it were current load.
 

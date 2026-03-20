@@ -5,6 +5,7 @@
 package sys
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -58,6 +59,23 @@ func isContainerized() (yes bool) {
 // is between 0.01 CPU and the number of CPUs on the host machine.
 // The function rounds up the calculated number.
 
+func containerNumCPU() (int, error) {
+	n2, errV2 := containerNumCPUV2()
+	if errV2 == nil {
+		return n2, nil
+	}
+	n1, errV1 := containerNumCPUV1()
+	if errV1 == nil {
+		return n1, nil
+	}
+
+	if cos.IsNotExist(errV2) && cos.IsNotExist(errV1) {
+		return 0, errors.New("containerized: no cgroup CPU controller files found; using runtime.NumCPU()")
+	}
+	return 0, fmt.Errorf("failed to read container CPU count: v2 (%q): %v; v1 (%q, %q): %v",
+		contCPUV2Max, errV2, contCPULimit, contCPUPeriod, errV1)
+}
+
 func containerNumCPUV2() (int, error) {
 	line, err := cos.ReadOneLine(contCPUV2Max)
 	if err != nil {
@@ -89,15 +107,7 @@ func containerNumCPUV2() (int, error) {
 	return int(max(approx, 1)), nil
 }
 
-func containerNumCPU() (int, error) {
-	// try cgroup v2
-	if n, err := containerNumCPUV2(); err == nil {
-		return n, nil
-	} else if !cos.IsNotExist(err) {
-		return 0, err
-	}
-
-	// cgroup v1
+func containerNumCPUV1() (int, error) {
 	quota, err := cos.ReadOneInt64(contCPULimit)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", contCPULimit, err)
