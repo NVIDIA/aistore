@@ -8,6 +8,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+// NOTE: for CPU and memory reporting, cgroup support and future plans, see
+// README.md in this package - in particular, "limitations and plans."
+
 // Memory stats for the host OS or for container, depending on where the app is running.
 // For the host, returns an error if memory cannot be read. If the function fails to read
 // container's stats, it returns host memory. Swap stats, however, are _always_ host stats.

@@ -13,30 +13,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-// 1. Motivation:
-// Provide CPU utilization for both bare-metal and containerized deployments.
-//
-// 2. Utilization:
-// We track cumulative CPU time (usage_usec) over a wall-clock
-// interval (mono.NanoTime). Utilization is: delta-usage / (delta-time * NumCPU)
-//
-// 3. Throttling (cgroup v2 only):
-// We also monitor 'throttled_usec' from cpu.stat. If the container is being
-// throttled, it is CPU-starved by definition - even when utilization appears
-// low (e.g., a 4-CPU container on a busy node may show 60% util but still
-// get throttled when bursting above its quota).
-//
-// 4. Hierarchy:
-// a) Cgroup v2 (cpu.stat) - Primary source for unified usage and pressure.
-// b) Cgroup v1 (cpuacct.usage) - Fallback for older container runtimes.
-// c) /proc/stat - Bare-metal fallback using Jiffy-delta math.
-// d) /proc/loadavg - Last resort fallback (normalized by NumCPU).
-//
-// 5. Statefulness:
-// The 'cpuTracker' maintains the previous sample to calculate deltas. To avoid
-// stale math after long pauses, samples older than 'maxSampleAge' are discarded.
+// NOTE: for CPU and memory reporting, cgroup support and future plans, see
+// README.md in this package.
 
-// TODO: hardcoded
 const (
 	maxSampleAge          = int64(10 * time.Second) // when prev. sample is considered outdated
 	throttleExtremeThresh = 10                      // >10% wall-clock throttled => extreme starvation
@@ -107,6 +86,7 @@ func HighLoadWM() int {
 }
 
 // MaxLoad returns CPU utilization percentage (0-100).
+// See also: README.md in this package.
 func MaxLoad() (load float64) {
 	util, _, err := ctracker.get()
 	if err != nil {
@@ -117,9 +97,10 @@ func MaxLoad() (load float64) {
 
 // MaxLoad2 returns CPU utilization percentage and whether the system
 // is in an "extreme" CPU-starvation condition.
-//
 // In containers (cgroup v2): also check throttled_usec - if the container
 // is being throttled, that's CPU starvation regardless of utilization percentage.
+//
+// See also: README.md in this package.
 func MaxLoad2() (load float64, isExtreme bool) {
 	util, throttled, err := ctracker.get()
 	if err != nil {
