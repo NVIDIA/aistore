@@ -34,12 +34,12 @@ import (
 //
 // 5. Statefulness:
 // The 'cpuTracker' maintains the previous sample to calculate deltas. To avoid
-// stale math after long pauses, samples older than 'maxSampleGap' are discarded.
+// stale math after long pauses, samples older than 'maxSampleAge' are discarded.
 
-// TODO: hardcoded :TODO
+// TODO: hardcoded
 const (
-	maxSampleGap          = int64(30 * time.Second) // when cpuTracker state is considered outdated
-	throttleExtremeThresh = 10                      // >10% wall-clock throttled => extreme
+	maxSampleAge          = int64(10 * time.Second) // when prev. sample is considered outdated
+	throttleExtremeThresh = 10                      // >10% wall-clock throttled => extreme starvation
 
 	// USER_HZ
 	// - what-if: kernel gets compiled w/ non-default
@@ -108,11 +108,11 @@ func HighLoadWM() int {
 
 // MaxLoad returns CPU utilization percentage (0-100).
 func MaxLoad() (load float64) {
-	pct, err := dflTracker.utilPct()
+	util, _, err := ctracker.get()
 	if err != nil {
 		return maxLoadFallback()
 	}
-	return pct // side effect: updated dflTracker state
+	return util
 }
 
 // MaxLoad2 returns CPU utilization percentage and whether the system
@@ -121,23 +121,20 @@ func MaxLoad() (load float64) {
 // In containers (cgroup v2): also check throttled_usec - if the container
 // is being throttled, that's CPU starvation regardless of utilization percentage.
 func MaxLoad2() (load float64, isExtreme bool) {
-	pct, err := dflTracker.utilPct()
+	util, throttled, err := ctracker.get()
 	if err != nil {
 		load = maxLoadFallback()
 		return load, load >= ExtremeLoad
 	}
-	if pct == 0 {
-		return 0, false // side effect: ditto
+	if util == 0 {
+		return 0, false
 	}
 
-	if containerized {
-		tpct := dflTracker.throttlePct()
-		if tpct > throttleExtremeThresh {
-			return max(pct, ExtremeLoad), true
-		}
+	if containerized && throttled > throttleExtremeThresh {
+		return max(util, ExtremeLoad), true
 	}
 
-	return pct, pct >= ExtremeLoad
+	return util, util >= ExtremeLoad
 }
 
 // fallback when cpuTracker returns an error:

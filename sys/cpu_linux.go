@@ -29,15 +29,14 @@ type (
 		ts            int64 // mono.NanoTime
 	}
 
-	// cpuTracker: periodic CPU utilization and throttle sampling
+	// (previous) raw cumulative cpuSample
 	cpuTracker struct {
-		mu              sync.Mutex
-		prev            cpuSample
-		lastThrottlePct float64 // computed alongside utilPct() for the same interval
+		prev cpuSample
+		mu   sync.Mutex
 	}
 )
 
-var dflTracker = &cpuTracker{}
+var ctracker = &cpuTracker{}
 
 func isContainerized() (yes bool) {
 	err := cos.ReadLines(rootProcess, func(line string) error {
@@ -134,7 +133,7 @@ func LoadAverage() (avg LoadAvg, _ error) {
 		return avg, &errLoadAvg{err}
 	}
 
-	fields := strings.Fields(line)
+	fields := strings.Fields(line) // TODO: manual parse to reduce string allocations (can wait)
 	if l := len(fields); l < 3 {
 		err := fmt.Errorf("unexpected %s format: num-fields=%d", hostLoadAvgPath, l)
 		return avg, &errLoadAvg{err}
@@ -158,66 +157,45 @@ func LoadAverage() (avg LoadAvg, _ error) {
 //
 
 // return:
-// - CPU utilization as a percentage since the last call
-// - 0 on the first call and old prev. sample
-func (t *cpuTracker) utilPct() (float64, error) {
+// - CPU utilization as a percentage since the last call, and
+// - percentage of wall-clock time the container was CPU-throttled since the last call
+// or:
+// - 0 if the prev. sample is old (or first call)
+func (t *cpuTracker) get() (util, throttled float64, _ error) {
 	cur, err := readCPUUsage()
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	var (
-		prev   cpuSample
-		wallDt int64
+		prev cpuSample
 	)
-
 	t.mu.Lock()
 	prev = t.prev
 	t.prev = cur
 
-	// cannot compute without a previous sample
 	if prev.ts == 0 {
-		t.lastThrottlePct = 0
 		t.mu.Unlock()
-		return 0, nil
+		return 0, 0, nil
 	}
 
-	wallDt = cur.ts - prev.ts
-	if wallDt <= 0 || wallDt > maxSampleGap {
-		t.lastThrottlePct = 0
+	wallDt := cur.ts - prev.ts
+	if wallDt <= 0 || wallDt > maxSampleAge {
 		t.mu.Unlock()
-		return 0, nil
+		return 0, 0, nil
 	}
 
-	// update throttling (container + cgroup v2 only)
 	if containerized && cur.throttledUsec > 0 {
 		dtUsec := max(cur.throttledUsec-prev.throttledUsec, 0)
-		// usec -> ns (x1000), then percent (x100): => x100_000
-		t.lastThrottlePct = min(float64(dtUsec)*100_000/float64(wallDt), 100)
-	} else {
-		t.lastThrottlePct = 0
+		throttled = min(float64(dtUsec)*100_000/float64(wallDt), 100)
 	}
 
 	t.mu.Unlock()
 
-	// utilization is computed outside the lock
 	cpuDt := max(cur.usage-prev.usage, 0)
 	ncpu := float64(NumCPU())
-	pct := float64(cpuDt) * 100 / float64(wallDt) / ncpu
-	return min(pct, 100), nil
-}
-
-// return:
-// - percentage of wall-clock time the container was CPU-throttled since the last utilPct() interval
-// - 0 on: a) bare metal, b) cgroup v1, c) first/invalid interval
-func (t *cpuTracker) throttlePct() float64 {
-	if !containerized {
-		return 0
-	}
-	t.mu.Lock()
-	v := t.lastThrottlePct
-	t.mu.Unlock()
-	return v
+	util = float64(cpuDt) * 100 / float64(wallDt) / ncpu
+	return min(util, 100), throttled, nil
 }
 
 //
@@ -287,30 +265,26 @@ func readProcStatCPUUsage() (int64, error) {
 		return 0, fmt.Errorf("%s: %w", hostProcStat, err)
 	}
 
+	line, _, _ := strings.Cut(string(data), "\n")
+	if !strings.HasPrefix(line, "cpu ") {
+		return 0, fmt.Errorf("unexpected %s format: first line %q", hostProcStat, line)
+	}
+
+	fields := strings.Fields(line)
+	if len(fields) < 5 {
+		return 0, fmt.Errorf("unexpected %s format: num-fields=%d", hostProcStat, len(fields))
+	}
+
 	var totalJiffies int64
-	for line := range strings.SplitSeq(string(data), "\n") {
-		if !strings.HasPrefix(line, "cpu ") {
-			if strings.HasPrefix(line, "cpu") {
-				continue // per-CPU lines, skip
-			}
-			break // past all cpu lines
+	for i, f := range fields[1:] {
+		if i == 3 || i == 4 { // idle, iowait
+			continue
 		}
-		// cpu  user nice system idle iowait irq softirq steal [guest guest_nice]
-		fields := strings.Fields(line)
-		if l := len(fields); l < 5 {
-			return 0, fmt.Errorf("unexpected %s format: num-fields=%d", hostProcStat, l)
+		v, e := strconv.ParseInt(f, 10, 64)
+		if e != nil {
+			continue
 		}
-		for i, f := range fields[1:] {
-			if i == 3 || i == 4 { // idle, iowait
-				continue
-			}
-			v, e := strconv.ParseInt(f, 10, 64)
-			if e != nil {
-				continue
-			}
-			totalJiffies += v
-		}
-		break
+		totalJiffies += v
 	}
 	return int64(float64(totalJiffies) * nsPerJiffy), nil
 }
