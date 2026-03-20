@@ -1,8 +1,8 @@
 github.com/BurntSushi/toml v1.5.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
-github.com/NVIDIA/aistore v1.4.3-0.20260318201531-511462dc2bbb h1:Qp3GKcrx4omFQgMrLLzOY1L7xjqUcQDHt1fH6PRxeR0=
-github.com/NVIDIA/aistore v1.4.3-0.20260318201531-511462dc2bbb/go.mod h1:LWOYptrTZyGfxqIg6M7IIO+8UNmHBQZM68CbYVyPVM8=
+github.com/NVIDIA/aistore v1.4.3-0.20260320133958-4d794615a15b h1:Wa2DVVRIc3hkmQwTMv+fdnGAkBufU8TSxymGxGbcQCU=
+github.com/NVIDIA/aistore v1.4.3-0.20260320133958-4d794615a15b/go.mod h1:lMk/XlagoWh7JVW3unQCwqE9S8E9IIZaBM2mWqxvQ8w=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=
 github.com/OneOfOne/xxhash v1.2.8/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=
 github.com/VividCortex/ewma v1.1.1/go.mod h1:2Tkkvm3sRDVXaiyucHiACn4cqf7DpdyLvmxzcbUokwA=
@@ -297,8 +297,8 @@ google.golang.org/genproto/googleapis/api v0.0.0-20260114163908-3f89685c29c3 h1:
 google.golang.org/genproto/googleapis/api v0.0.0-20260114163908-3f89685c29c3/go.mod h1:dd646eSK+Dk9kxVBl1nChEOhJPtMXriCcVb4x3o6J+E=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260114163908-3f89685c29c3 h1:C4WAdL+FbjnGlpp2S+HMVhBeCq2Lcib4xZqfPNF6OoQ=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260114163908-3f89685c29c3/go.mod h1:j9x/tPzZkyxcgEFkiKEEGxfvyumM01BEtsW8xzOahRQ=
-google.golang.org/grpc v1.78.0 h1:K1XZG/yGDJnzMdd/uZHAkVqJE+xIDOcmdSFZkBUicNc=
-google.golang.org/grpc v1.78.0/go.mod h1:I47qjTo4OKbMkjA/aOOwxDIiPSBofUtQUI5EfpWvW7U=
+google.golang.org/grpc v1.79.3 h1:sybAEdRIEtvcD68Gx7dmnwjZKlyfuc61Dyo9pGXXkKE=
+google.golang.org/grpc v1.79.3/go.mod h1:KmT0Kjez+0dde/v2j9vzwoAScgEPx/Bw1CYChhHLrHQ=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
 google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=

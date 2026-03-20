@@ -10,10 +10,12 @@ issues:
   max-same-issues: 0
 
 linters:
-  default: standard  ## TODO: 'none|standard|all'; enable
+  default: standard  ## 'none|standard|all'; enable
   disable:
     - errcheck
     - gosec
+    - wsl
+    - wsl_v5
   enable:
     - asciicheck
     - bodyclose
