@@ -82,8 +82,8 @@ class FastAPIServer(ETLServer):
     def _setup_app(self):
         """Configure FastAPI routes and event handlers."""
         self.app.state.etl_server = self
-        self.app.add_event_handler("startup", self.startup_event)
-        self.app.add_event_handler("shutdown", self.shutdown_event)
+        self.app.router.on_startup.append(self.startup_event)
+        self.app.router.on_shutdown.append(self.shutdown_event)
 
         @self.app.get("/health")
         async def health_check():
