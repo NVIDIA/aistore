@@ -40,7 +40,14 @@ Compared to the legacy S3-specific path, NBI is:
 
 ## Supported buckets
 
-NBI applies to **remote buckets** only: cloud buckets (S3, GCS, Azure, OCI) and remote AIS buckets. It is not currently supported for in-cluster `ais://` buckets (with little motivation to add such support in the future).
+
+## Supported buckets
+
+NBI applies to **remote buckets** only: cloud buckets (S3, GCS, Azure, OCI) and remote AIS buckets. It is not (yet) supported for in-cluster `ais://` buckets for one simple reason: little (if any) performance benefit expected.
+
+After all, the primary goal of NBI is to eliminate the latency and repeated backend traffic of remote listing. For in-cluster `ais://` buckets, metadata is already local and served at native AIS speed, so an additional inventory layer would bring little value.
+
+> Still, it remains a valid option for point-in-time consistency (snapshotting) - to be possibly considered in the future.
 
 ## Overview
 
@@ -237,7 +244,19 @@ This behavior is intentional and helps to reduce roundtrips, optimize list-objec
 
 See [Overview - Listing](#listing) for the high-level flow.
 
-The `LsNBI` flag is what switches a list-objects request to the inventory-backed path. When set, AIS reads pre-stored inventory chunks from local storage on each target rather than walking the remote backend. The proxy merges and sorts the per-target results into a single listing stream.
+
+When inventory-backed listing is requested - for example, via `--inventory` in the CLI or [`ListObjectFlag.NBI`](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/list_object_flag.py) in the Python SDK - AIS serves the request from pre-stored inventory chunks on each target rather than walking the remote backend.
+
+The flow is as follows:
+
+1. A list-objects-page request with `--inventory` (the `LsNBI` flag) arrives at AIS proxy.
+2. The proxy broadcasts the request to all storage nodes (targets). Each target seeks to the first inventory name greater than the provided **continuation token** within its local, lexicographically ordered inventory chunks.
+3. Each target returns its next locally sorted batch of object names, together with its own continuation token if more names remain.
+4. The proxy merges all returned names into a single sorted stream and applies **min-token logic**:
+   * the global continuation token is the minimum non-empty per-target continuation token;
+   * the merged result is truncated to names not greater than that minimum token.
+
+Because continuation tokens are literal object names rather than opaque cursors, the process is deterministic, stateless on the proxy, and relatively easy to maintain.
 
 The result is that repeated listing avoids re-walking the remote backend entirely.
 
@@ -261,9 +280,9 @@ This metadata is surfaced by `ais show nbi`, especially in verbose mode.
 
 ## Small buckets and empty local inventories
 
-When a bucket is smaller than the cluster, not every target will necessarily own any names for the inventory.
+When an inventory contains relatively few object names, some targets may end up with no local inventory entries.
 
-This is expected. In that case, a target stores a valid local inventory object with zero size, zero chunks, and valid NBI metadata. This allows AIS to distinguish "inventory exists but is empty on this target" from "inventory does not exist" - a distinction that matters for correct EOF behavior during distributed listing.
+This may be expected, e.g., when the number of names is less than `1.2 * N`, where `N` is the number of storage nodes. In that case, a target stores a valid local inventory object with zero size, zero chunks, and valid NBI metadata. This allows AIS to distinguish "inventory exists but is empty on this target" from "inventory does not exist" - a distinction that matters for correct EOF behavior during distributed listing.
 
 ## Current limitations
 

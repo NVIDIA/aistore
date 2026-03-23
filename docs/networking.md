@@ -71,7 +71,12 @@ Rest of this document is structured as follows:
 
 ### Logical vs Physical Networks
 
-The presence of three logical networks **does not require** three physical networks:
+AIS separates traffic across **three logical networks**: a user-facing public network, and two intra-cluster networks for control and data. Each can be placed on a dedicated NIC or VLAN. The most impactful use is isolating the intra-cluster data network - which carries global rebalance, get-batch, and other bulk data movement - from the public network serving foreground I/O.
+
+In fact, on loaded clusters there's also a sufficiently high motivation to isolate latency-sensitive (small-bandwidth) control plane from all of the above. Logical network separation is a designed-in capability that pays off most at high drive counts and high utilization, and is worth configuring explicitly rather than relying on shared bandwidth of 100GbE links.
+
+Having said all of the above - the presence of three logical networks **does not** necessarily require three physical networks:
+
 ```
                      ┌───────────────────────────────────────┐
                      │               Clients                 │
