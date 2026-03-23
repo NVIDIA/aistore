@@ -34,7 +34,7 @@ Public function include:
 | `MaxParallelism()` | derives internal parallelism from `NumCPU()` |
 | `GoEnvMaxprocs()` | adjusts `GOMAXPROCS` downward when needed |
 | `MaxLoad()` | returns CPU utilization as a percentage |
-| `MaxLoad2()` | returns CPU utilization plus an `isExtreme` signal for CPU starvation |
+| `MaxLoad2()` | returns CPU utilization plus a boolean `isExtreme` indicating CPU starvation |
 | `HighLoadWM()` | derives a high-load watermark from CPU count |
 | `LoadAverage()` | reads system load averages |
 
@@ -155,13 +155,13 @@ This makes the package resilient across bare-metal, VMs, containers, and mixed d
 
 ### Container detection
 
-Some Linux logic still branches early on a process-wide `containerized` flag derived from simple string matching on /proc/1/cgroup.
+Some Linux logic still branches early on a process-wide `containerized` flag, derived at node startup from simple string matching on `/proc/1/cgroup`.
 
 This is simple, but it can mis-detect certain deployment environments and steer source selection down the wrong path.
 
 ### cgroup v2 memory
 
-CPU support already uses cgroup v2, but memory reporting does not yet have a dedicated cgroup v2 path.
+CPU reporting already uses cgroup v2, but memory reporting does not yet have a dedicated cgroup v2 path.
 
 As a result, a container running under cgroup v2 memory controls may currently fall back to host memory statistics.
 
@@ -173,10 +173,10 @@ Several operational constants are currently compiled in, including:
 - CPU load thresholds
 - throttling threshold for extreme CPU starvation
 
-In particular, CPU utilization is computed from sampled deltas and depends on periodic sampling.
+CPU utilization is computed from sampled deltas and depends on periodic sampling.
 There is currently no synchronous (or asynchronous) path to refresh utilization sample on demand.
 
-If the previous sample is considered stale, the package will return `0` utilization instead of a current value.
+If the previous sample is considered stale, the package will return 0 (zero) utilization instead of a current value.
 
 ### Future work
 
@@ -187,6 +187,5 @@ Planned follow-ups include:
    - then cgroup v1
    - then host fallbacks
 2. add cgroup v2 memory support
-3. tighten error handling for cgroup CPU quota parsing
+3. revisit error handling for cgroup CPU quota parsing
 4. consider environment-variable overrides for selected thresholds and tunables
-5. continue reducing parser overhead only where profiling shows it matters
