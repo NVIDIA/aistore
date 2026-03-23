@@ -44,7 +44,7 @@ type (
 		Size    int64  `json:"size"` // inventory size on disk
 		NBIMeta
 	}
-	NBIInfoMap map[string]*NBIInfo // by NBIInfo.Name
+	NBIInfoMap map[string]*NBIInfo // by NBIInfo.ObjName
 )
 
 //

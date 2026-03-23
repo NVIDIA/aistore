@@ -82,6 +82,8 @@ func (p *proxy) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryB
 				continue
 			}
 			existing.Size += info.Size
+			existing.Ntotal += info.Ntotal
+			existing.Chunks += info.Chunks
 
 			if info.Started != 0 && (existing.Started == 0 || info.Started < existing.Started) {
 				existing.Started = info.Started
