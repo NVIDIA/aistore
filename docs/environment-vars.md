@@ -279,25 +279,30 @@ AIStore Authentication Server (**AuthN**) provides OAuth 2.0 compliant [JSON Web
 
 AuthN supports multiple AIS clusters; in fact, there's no limit on the number of clusters a given AuthN instance can provide authentication and access control service for.
 
-| Variable               | Default Value    | Description                                                                              |
-|------------------------|------------------|------------------------------------------------------------------------------------------|
-| `AIS_AUTHN_ENABLED`    | `false`          | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)           |
-| `AIS_AUTHN_PORT`       | `52001`          | Port on which AuthN listens to requests                                                  |
-| `AIS_AUTHN_TTL`        | `24h`            | Token expiration time. Can be set to `0` for no expiration                               |
-| `AIS_AUTHN_USE_HTTPS`  | `false`          | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY` |
-| `AIS_SERVER_CRT`       | `""`             | TLS certificate (pathname). Required when `AIS_AUTHN_USE_HTTPS` is `true`                |
-| `AIS_SERVER_KEY`       | `""`             | pathname that contains X.509 certificate private key                                     |
-| `AIS_AUTHN_SU_NAME`    | `admin`          | Superuser (admin) name for AuthN                                                         |
-| `AIS_AUTHN_SU_PASS`    | None -- required | Superuser (admin) password for AuthN                                                     |
-| `AIS_AUTHN_SECRET_KEY` | `""`             | Secret key used to sign tokens.                                                          |
+| Variable                     | Default Value    | Description                                                                              |
+|------------------------------|------------------|------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_ENABLED`          | `false`          | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)           |
+| `AIS_AUTHN_DEPLOY`           | `false`          | Deploy AuthN alongside AIStore in deployment scripts (`false` to use existing service)   |
+| `AIS_AUTHN_PORT`             | `52001`          | Port on which AuthN listens to requests                                                  |
+| `AIS_AUTHN_TTL`              | `24h`            | Token expiration time. Can be set to `0` for no expiration                               |
+| `AIS_AUTHN_USE_HTTPS`        | `false`          | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY` |
+| `AIS_SERVER_CRT`             | `""`             | TLS certificate (pathname). Required when `AIS_AUTHN_USE_HTTPS` is `true`                |
+| `AIS_SERVER_KEY`             | `""`             | pathname that contains X.509 certificate private key                                     |
+| `AIS_AUTHN_SU_NAME`          | `admin`          | Superuser (admin) name for AuthN                                                         |
+| `AIS_AUTHN_SU_PASS`          | None -- required | Superuser (admin) password for AuthN                                                     |
+| `AIS_AUTHN_SECRET_KEY`       | `""`             | HMAC secret key used to sign tokens                                                      |
+| `AIS_AUTHN_PUBLIC_KEY`       | `""`             | RSA public key (PEM or base64 DER) for verifying tokens signed by AuthN                  |
+| `AIS_AUTHN_PRIVATE_KEY_FILE` | `""`             | RSA private key file path (AuthN server)                                                 |
+| `AIS_AUTHN_PRIVATE_KEY_PASS` | `""`             | RSA private key passphrase (AuthN server, optional)                                      |
+| `AIS_AUTHN_ALLOWED_ISS`      | `""`             | Comma-separated list of allowed OIDC issuer URLs for token validation (deploy scripts)   |
 
 Separately, there's also client-side AuthN environment that includes:
 
-| Name                  | Description                                                                                                                          |
-|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `AIS_AUTHN_URL`       | Used by [CLI](./cli/auth.md) to configure and query the authentication server (AuthN).                                            |
-| `AIS_AUTHN_TOKEN_FILE`| Token file pathname; can be used to override the default `$HOME/.config/ais/cli/<fname.Token>`.                                      |
-| `AIS_AUTHN_TOKEN`     | The JWT token itself (excluding the file and JSON); can be used to specify the token directly, bypassing the need for a token file.  |
+| Name                   | Description                                                                                                                         |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_URL`        | Used by [CLI](./cli/auth.md) to configure and query the authentication server (AuthN).                                              |
+| `AIS_AUTHN_TOKEN_FILE` | Token file pathname; can be used to override the default `$HOME/.config/ais/cli/<fname.Token>`.                                     |
+| `AIS_AUTHN_TOKEN`      | The JWT token itself (excluding the file and JSON); can be used to specify the token directly, bypassing the need for a token file. |
 
 When AuthN is disabled (i.e., not used), `ais config` CLI will show something like:
 

@@ -236,6 +236,11 @@ ifeq ($(FLAGS),)
 endif
 	@./deploy/dev/docker/stop_docker.sh $(FLAGS)
 
+# Independent authN service
+authn-deploy: ## Build and deploy AuthN
+	@./deploy/dev/local/authn_deploy.sh
+
+
 #
 # tests
 #

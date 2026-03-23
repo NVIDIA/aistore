@@ -55,6 +55,8 @@ stages:
         - '**/*authn*.go'
         - '**/*authn*.py'
         - 'api/apc/*'
+    - &auth_labels_rule
+      if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*authn?.*/'
     - &python_req_changes_rule
       if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -393,6 +395,7 @@ test:short:python-authn:
   timeout: 20m
   <<: *gather_logs_def
   variables:
+    AIS_AUTHN_DEPLOY: "true"
     AIS_AUTHN_ENABLED: "true"
     AIS_AUTHN_SU_NAME: "admin"
     AIS_AUTHN_SU_PASS: "admin"
@@ -404,7 +407,7 @@ test:short:python-authn:
     - make python_authn_tests
   rules:
     - !reference [.test_short_template, rules]
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
+    - *auth_labels_rule
     - *python_req_changes_rule
     - *authn_changes_rule
 
@@ -496,6 +499,7 @@ test:short:s3-compat:
 test:short:authn:
   <<: *test_short_optional_def
   variables:
+    AIS_AUTHN_DEPLOY: "true"
     AIS_AUTHN_ENABLED: "true"
     AIS_AUTHN_SU_NAME: "admin"
     AIS_AUTHN_SU_PASS: "admin"
@@ -511,7 +515,7 @@ test:short:authn:
     - ais auth logout
   rules:
       - !reference [ .default_test_rules, rules ]
-      - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
+      - *auth_labels_rule
       - *authn_changes_rule
       - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
       - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'

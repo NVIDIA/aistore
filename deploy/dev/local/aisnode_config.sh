@@ -8,7 +8,30 @@
 #      "extra.aws.max_pagesize"
 #      "extra.aws.multipart_size"
 
-cat > $AIS_CONF_FILE <<EOL
+# AIS configuration for JWT validation -- see authn_config.sh for authN service config
+make_auth_conf() {
+	local mode=""
+	if [[ -n "$AIS_AUTHN_SECRET_KEY" ]]; then
+		mode='"signature": {"method": "HMAC"},'
+	elif [[ -n "$AIS_AUTHN_PUBLIC_KEY" ]]; then
+		mode='"signature": {"method": "RSA"},'
+	elif [[ -n "$AIS_AUTHN_ALLOWED_ISS" ]]; then
+		local json_arr
+		json_arr=$(echo "$AIS_AUTHN_ALLOWED_ISS" | awk -F',' '{
+			printf "["
+			for (i=1; i<=NF; i++) {
+				gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
+				printf "\"%s\"", $i
+				if (i < NF) printf ","
+			}
+			printf "]"
+		}')
+		mode="\"oidc\": {\"allowed_iss\": ${json_arr}},"
+	fi
+	echo "{${mode} \"enabled\": ${AIS_AUTHN_ENABLED:-false}}"
+}
+
+cat > "$AIS_CONF_FILE" <<EOL
 {
 	"backend": $(make_backend_conf),
 	"mirror": {
@@ -154,13 +177,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"io_err_time":    "10s",
 		"enabled":        true
 	},
-	"auth": {
-		"signature": {
-			"key":    "$AIS_AUTHN_SECRET_KEY",
-			"method": "HMAC"
-		},
-		"enabled": ${AIS_AUTHN_ENABLED:-false}
-	},
+	"auth": $(make_auth_conf),
 	"keepalivetracker": {
 		"proxy": {
 			"interval": "10s",

@@ -239,21 +239,11 @@ for (( c=START; c<=END; c++ )); do
   fi
 done
 
-if [[ $AIS_AUTH_ENABLED == "true" ]]; then
-	exit_error "env var 'AIS_AUTH_ENABLED' is deprecated (use 'AIS_AUTHN_ENABLED')"
-	exit 1
-fi
-if [[ $AIS_AUTHN_ENABLED == "true" ]]; then
-  # conf file for authn
-  AIS_AUTHN_CONF_DIR="${APP_CONF_DIR}/authn"
-  mkdir -p "$AIS_AUTHN_CONF_DIR"
-  AIS_AUTHN_LOG_DIR="$LOG_ROOT/authn/log"
-  source "${AISTORE_PATH}/deploy/dev/local/authn_config.sh"
-
-  if ! make --no-print-directory -C ${AISTORE_PATH} authn; then
-    exit_error "failed to compile 'authn' binary"
-  fi
-  run_cmd "${GOPATH}/bin/authn -config=${AIS_AUTHN_CONF_DIR}"
+if [[ $AIS_AUTHN_DEPLOY == "true" ]]; then
+  source "$AISTORE_PATH/deploy/dev/local/authn_deploy.sh"
+  build_authn
+  generate_authn_conf
+  run_authn
 fi
 
 if [[ $MODE == "debug" ]]; then

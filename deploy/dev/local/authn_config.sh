@@ -1,3 +1,8 @@
+authn_auth_block=$(printf '\t\t"expiration_time": "%s"' "${AIS_AUTHN_TTL:-24h}")
+if [[ -n "$AIS_AUTHN_SECRET_KEY" ]]; then
+  authn_auth_block=$(printf '\t\t"secret": "%s",\n%s' "$AIS_AUTHN_SECRET_KEY" "$authn_auth_block")
+fi
+
 cat > "$AIS_AUTHN_CONF_DIR/authn.json" <<EOL
 {
 	"log": {
@@ -13,8 +18,7 @@ cat > "$AIS_AUTHN_CONF_DIR/authn.json" <<EOL
 		}
 	},
 	"auth": {
-		"secret": "$AIS_AUTHN_SECRET_KEY",
-		"expiration_time": "${AIS_AUTHN_TTL:-24h}"
+${authn_auth_block}
 	},
 	"timeout": {
 		"default_timeout": "30s"
