@@ -23,7 +23,10 @@ generate_authn_conf() {
 }
 
 run_authn() {
-  echo "Running authN in background with config from ${AIS_AUTHN_CONF_DIR}..."
+  if [[ -z "${AIS_AUTHN_SU_PASS}" ]]; then
+    exit_error "AIS_AUTHN_SU_PASS is required but not set."
+  fi
+  echo "Running authN in background with config from ${AIS_AUTHN_CONF_DIR}"
   "${GOPATH}/bin/authn" "-config=${AIS_AUTHN_CONF_DIR}" &
 }
 

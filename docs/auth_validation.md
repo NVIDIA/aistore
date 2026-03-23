@@ -137,11 +137,19 @@ Static credential validation uses a fixed shared secret or public key configured
 
 OIDC validation enables dynamic public key discovery from trusted OIDC compatible providers.
 To enable, configure `auth.oidc.allowed_iss` with a list of trusted issuer URLs (e.g., `["https://keycloak.svc.cluster.local:8543/realms/aistore"]`).
+These URLs must use HTTPS and must exactly match the `iss` claim in tokens issued by that provider (including scheme, host, port, and path).
 Optionally, configure `auth.oidc.issuer_ca_bundle` to provide custom CA certificates for issuer TLS validation.
 
-1. AIS performs automatic OIDC discovery by querying `/.well-known/openid-configuration` to discover the issuer's public JWKS endpoint
-1. Public keys (JWKS) are retrieved from the issuer's published JWKS URI and cached with automatic refresh
-1. Token validation checks that the `iss` claim matches an allowed issuer and uses the issuer's public key (identified by `kid` header) to verify the signature
+Token verification via OIDC discovery follows this flow:
+
+1. The AIS proxy queries each configured allowed issuer's `/.well-known/openid-configuration` endpoint
+2. The discovery document returns a `jwks_uri` pointing to the issuer's public key set
+3. The proxy fetches the JWKS from the `jwks_uri` and caches the keys (with automatic periodic refresh)
+4. When validating a token, the proxy checks the `iss` claim against the allowed issuer list and uses the issuer's public key (identified by `kid` header) to verify the signature
+
+See the diagram below for an example of how this flow works with the AuthN service:
+
+![OIDC Issuer flow](images/auth/OIDC_issuer.png)
 
 ## Cluster Key
 
