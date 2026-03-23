@@ -6,6 +6,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Fixed
+
+- `ListObjectFlag`: fix enum to match Go `api/apc/lsmsg.go` — wrong names (ALL → MISSING, USE_CACHE → NOT_CACHED), wrong positions (DONT_HEAD_REMOTE), and missing flags (BCK_PRESENT, NO_RECURSION, DIFF, NO_DIRS, IS_S3, NBI).
+
 ### Removed
 
 - Removed deprecated methods and parameters:

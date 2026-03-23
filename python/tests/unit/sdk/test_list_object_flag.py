@@ -8,9 +8,11 @@ from tests.utils import cases
 class TestListObjectFlag(unittest.TestCase):
     @cases(
         ([], 0),
-        ([ListObjectFlag.ALL], 2),
+        ([ListObjectFlag.MISSING], 2),
         ([ListObjectFlag.ONLY_REMOTE_PROPS], 1024),
         ([ListObjectFlag.DELETED, ListObjectFlag.NAME_ONLY], 20),
+        ([ListObjectFlag.NO_RECURSION], 2048),
+        ([ListObjectFlag.NBI], 32768),
     )
     def test_join_flags(self, test_case):
         self.assertEqual(test_case[1], ListObjectFlag.join_flags(test_case[0]))
