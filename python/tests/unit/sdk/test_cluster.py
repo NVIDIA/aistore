@@ -228,13 +228,13 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             HTTP_METHOD_GET,
             path=f"{URL_PATH_REVERSE}/{URL_PATH_DAEMON}",
             params={QPARAM_WHAT: WHAT_NODE_STATS_AND_STATUS},
-            headers={"ais-node-id": "target1"},
+            headers={"Ais-Node-Id": "target1"},
         )
         self.mock_client.request.assert_any_call(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_REVERSE}/{URL_PATH_DAEMON}",
             params={QPARAM_WHAT: WHAT_NODE_STATS_AND_STATUS},
-            headers={"ais-node-id": "target2"},
+            headers={"Ais-Node-Id": "target2"},
         )
 
     def test_get_node_log(self):
