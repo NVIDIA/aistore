@@ -138,13 +138,21 @@ func (t *target) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 			t.writeErr(w, r, err)
 			return
 		}
-		if msg.Name != "" {
-			if one, ok := info[msg.Name]; ok {
-				info = apc.NBIInfoMap{msg.Name: one}
-			} else {
-				info = make(apc.NBIInfoMap)
+		if msg.Name == "" {
+			t.writeJSON(w, r, info, msg.Action)
+			return
+		}
+
+		// filter by inv-name
+		for k, one := range info {
+			if one.Name == msg.Name {
+				info = apc.NBIInfoMap{k: one}
+				t.writeJSON(w, r, info, msg.Action) // found
+				return
 			}
 		}
+
+		info = make(apc.NBIInfoMap) // not found
 		t.writeJSON(w, r, info, msg.Action)
 		return
 	}
@@ -170,7 +178,17 @@ func (t *target) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 		if merged == nil {
 			merged = make(apc.NBIInfoMap)
 		}
-		maps.Copy(merged, info)
+		if msg.Name == "" {
+			maps.Copy(merged, info)
+			return false
+		}
+		// filter by inv-name
+		for k, one := range info {
+			if one.Name == msg.Name {
+				merged[k] = one
+				break
+			}
+		}
 		return false
 	})
 	if merged == nil {
