@@ -615,6 +615,42 @@ class ListObjectsMsg(BaseModel):
         }
 
 
+class CreateNBIMsg(BaseModel):
+    """
+    API message structure for creating a native bucket inventory.
+    See api/apc/nbi.go CreateNBIMsg.
+    """
+
+    name: str = ""
+    names_per_chunk: int = 0
+    force: bool = False
+    prefix: str = ""
+    props: str = ""
+    flags: str = "0"
+
+    def as_dict(self):
+        return self.model_dump(exclude_defaults=True)
+
+
+class NBIInfo(BaseModel):
+    """
+    Information about a single native bucket inventory.
+    See api/apc/nbi.go NBIInfo.
+    """
+
+    bucket: str = ""
+    name: str = ""
+    obj_name: str = ""
+    size: int = 0
+    prefix: str = ""
+    started: int = 0
+    finished: int = 0
+    ntotal: int = 0
+    smap_ver: int = 0
+    chunks: int = 0
+    nat: int = 0
+
+
 class TransformBckMsg(BaseModel):
     """
     API message structure for requesting an etl transform on a bucket

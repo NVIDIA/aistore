@@ -17,7 +17,9 @@ from aistore.sdk.etl import ETLConfig
 from aistore.sdk.const import (
     ACT_COPY_BCK,
     ACT_CREATE_BCK,
+    ACT_CREATE_NBI,
     ACT_DESTROY_BCK,
+    ACT_DESTROY_NBI,
     ACT_ETL_BCK,
     ACT_EVICT_REMOTE_BCK,
     ACT_LIST,
@@ -40,6 +42,7 @@ from aistore.sdk.const import (
     HEADER_BUCKET_PROPS,
     HEADER_XACTION_ID,
     HEADER_BUCKET_SUMM,
+    HEADER_INV_NAME,
     MSGPACK_CONTENT_TYPE,
     STATUS_ACCEPTED,
     STATUS_BAD_REQUEST,
@@ -1095,3 +1098,98 @@ class TestBucket(unittest.TestCase):
 
         # Verify logger disabled state matches expectation
         self.assertEqual(mock_logger.disabled, expected_disabled)
+
+    # ======================== NBI (Native Bucket Inventory) ========================
+
+    def test_create_inventory(self):
+        mock_resp = Mock()
+        mock_resp.text = "inv-abc123"
+        self.mock_client.request.return_value = mock_resp
+
+        job_id = self.amz_bck.create_inventory(
+            name="my-inv", prefix="data/", force=True
+        )
+        self.assertEqual(job_id, "inv-abc123")
+        self.mock_client.request.assert_called_once()
+        call_args = self.mock_client.request.call_args
+        self.assertEqual(call_args[0][0], HTTP_METHOD_POST)
+        body = call_args[1]["json"]
+        self.assertEqual(body["action"], ACT_CREATE_NBI)
+        self.assertIn("name", body["value"])
+        self.assertEqual(body["value"]["name"], "my-inv")
+        self.assertTrue(body["value"]["force"])
+
+    def test_create_inventory_defaults(self):
+        mock_resp = Mock()
+        mock_resp.text = "inv-xyz"
+        self.mock_client.request.return_value = mock_resp
+
+        job_id = self.amz_bck.create_inventory()
+        self.assertEqual(job_id, "inv-xyz")
+        call_args = self.mock_client.request.call_args
+        body = call_args[1]["json"]
+        self.assertEqual(body["action"], ACT_CREATE_NBI)
+        # Default: empty value dict (no name, no force, no prefix)
+        self.assertEqual(body["value"], {})
+
+    def test_destroy_inventory(self):
+        self.mock_client.request.return_value = Mock()
+        self.amz_bck.destroy_inventory(name="my-inv")
+        self.mock_client.request.assert_called_once()
+        call_args = self.mock_client.request.call_args
+        self.assertEqual(call_args[0][0], HTTP_METHOD_DELETE)
+        body = call_args[1]["json"]
+        self.assertEqual(body["action"], ACT_DESTROY_NBI)
+        self.assertEqual(body["name"], "my-inv")
+
+    def test_destroy_inventory_all(self):
+        self.mock_client.request.return_value = Mock()
+        self.amz_bck.destroy_inventory()
+        call_args = self.mock_client.request.call_args
+        body = call_args[1]["json"]
+        self.assertEqual(body["action"], ACT_DESTROY_NBI)
+        self.assertEqual(body["name"], "")
+
+    def test_show_inventory(self):
+        mock_resp = Mock()
+        mock_resp.json.return_value = {
+            "inv-abc": {
+                "bucket": "s3://test",
+                "name": "inv-abc",
+                "obj_name": "aws/@#/test/inv-abc",
+                "size": 1024,
+                "ntotal": 500,
+                "chunks": 1,
+            }
+        }
+        self.mock_client.request.return_value = mock_resp
+
+        result = self.amz_bck.show_inventory()
+        self.assertIn("inv-abc", result)
+        self.assertEqual(result["inv-abc"].ntotal, 500)
+        self.assertEqual(result["inv-abc"].name, "inv-abc")
+
+    def test_show_inventory_empty(self):
+        mock_resp = Mock()
+        mock_resp.json.return_value = {}
+        self.mock_client.request.return_value = mock_resp
+
+        result = self.amz_bck.show_inventory()
+        self.assertEqual(len(result), 0)
+
+    def test_list_objects_with_inventory_name(self):
+        mock_list = Mock(BucketList)
+        mock_list.entries = []
+        self.mock_client.request_deserialize.return_value = mock_list
+
+        self.amz_bck.list_objects(inventory_name="my-inv")
+        call_args = self.mock_client.request_deserialize.call_args
+        # Check NBI flag is set
+        body = call_args[1]["json"]
+        flags_val = int(body["value"]["flags"])
+        nbi_bit = 1 << 15
+        self.assertTrue(flags_val & nbi_bit, "NBI flag should be set")
+        # Check inventory name header
+        headers = call_args[1]["headers"]
+        self.assertIn(HEADER_INV_NAME, headers)
+        self.assertEqual(headers[HEADER_INV_NAME], "my-inv")

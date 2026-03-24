@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations
@@ -20,15 +20,19 @@ from aistore.sdk.etl import ETLConfig
 from aistore.sdk.const import (
     ACT_COPY_BCK,
     ACT_CREATE_BCK,
+    ACT_CREATE_NBI,
     ACT_DESTROY_BCK,
+    ACT_DESTROY_NBI,
     ACT_ETL_BCK,
     ACT_EVICT_REMOTE_BCK,
     ACT_LIST,
     ACT_MOVE_BCK,
+    ACT_SHOW_NBI,
     ACT_SUMMARY_BCK,
     HEADER_ACCEPT,
     HEADER_BUCKET_PROPS,
     HEADER_BUCKET_SUMM,
+    HEADER_INV_NAME,
     HEADER_XACTION_ID,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
@@ -72,6 +76,8 @@ from aistore.sdk.types import (
     TransformBckMsg,
     TCBckMsg,
     ListObjectsMsg,
+    CreateNBIMsg,
+    NBIInfo,
 )
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.utils import validate_directory, get_file_size
@@ -543,6 +549,7 @@ class Bucket(AISSource):
         continuation_token: str = "",
         flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
+        inventory_name: str = "",
     ) -> BucketList:
         """
         Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if
@@ -560,9 +567,14 @@ class Bucket(AISSource):
                 Defaults to "0" - return maximum number of objects.
             uuid (str, optional): Job ID, required to get the next page of objects
             continuation_token (str, optional): Marks the object to start reading the next page
-            flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include as flags in the
-             request
-            target(str, optional): Only list objects on this specific target node
+            flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include
+                as flags in the request.
+            target (str, optional): Only list objects on this specific target node.
+            inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
+                Lists objects from the named inventory snapshot instead of querying the remote
+                backend. Requires a previously created inventory (see `create_inventory`).
+                Alternatively, to list without specifying a name pass
+                `flags=[ListObjectFlag.NBI]` (valid only when exactly one inventory exists).
 
         Returns:
             BucketList: the page of objects in the bucket and the continuation token to get the next page
@@ -576,6 +588,12 @@ class Bucket(AISSource):
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
+        flags = list(flags) if flags else []
+        headers = {HEADER_ACCEPT: MSGPACK_CONTENT_TYPE}
+
+        if inventory_name:
+            flags.append(ListObjectFlag.NBI)
+            headers[HEADER_INV_NAME] = inventory_name
 
         value = ListObjectsMsg(
             prefix=prefix,
@@ -583,7 +601,7 @@ class Bucket(AISSource):
             uuid=uuid,
             props=props,
             continuation_token=continuation_token,
-            flags=[] if flags is None else flags,
+            flags=flags,
             target=target,
         ).as_dict()
         action = ActionMsg(action=ACT_LIST, value=value).model_dump()
@@ -591,7 +609,7 @@ class Bucket(AISSource):
         bucket_list = self.client.request_deserialize(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_BUCKETS}/{ self.name }",
-            headers={HEADER_ACCEPT: MSGPACK_CONTENT_TYPE},
+            headers=headers,
             res_model=BucketList,
             json=action,
             params=self.qparam,
@@ -709,6 +727,84 @@ class Bucket(AISSource):
             continuation_token = resp.continuation_token
             uuid = resp.uuid
         return obj_list
+
+    # ======================== Native Bucket Inventory (NBI) ========================
+
+    def create_inventory(
+        self,
+        name: str = "",
+        prefix: str = "",
+        props: str = "",
+        names_per_chunk: int = 0,
+        force: bool = False,
+    ) -> str:
+        """
+        Create a native bucket inventory (NBI) — a pre-computed snapshot of the
+        bucket's object listing stored as chunked inventory files.
+
+        Args:
+            name (str, optional): Inventory name (must be unique per bucket).
+                Auto-generated if empty.
+            prefix (str, optional): Only inventory objects matching this prefix.
+            props (str, optional): Comma-separated object properties to include.
+                Default: "name,size,cached" (see Go `createNBIHandler`).
+            names_per_chunk (int, optional): Number of object names per inventory
+                chunk. 0 means use the server default.
+                See Go `api/apc/nbi.go`: `MinInvNamesPerChunk` (2),
+                `DfltInvNamesPerChunk` (20K), `MaxInvNamesPerChunk` (640K).
+            force (bool, optional): If True, remove any existing inventories
+                for this bucket before creating a new one.
+
+        Returns:
+            str: Job ID (xaction ID) for monitoring the inventory creation.
+        """
+        msg = CreateNBIMsg(
+            name=name,
+            prefix=prefix,
+            props=props,
+            names_per_chunk=names_per_chunk,
+            force=force,
+        )
+        resp = self.make_request(
+            HTTP_METHOD_POST,
+            action=ACT_CREATE_NBI,
+            value=msg.as_dict(),
+        )
+        return resp.text
+
+    def destroy_inventory(self, name: str = "") -> None:
+        """
+        Destroy a native bucket inventory. If no name is specified,
+        destroys all inventories for this bucket.
+
+        Args:
+            name (str, optional): Inventory name to destroy. If empty,
+                all inventories for this bucket are destroyed.
+        """
+        self.make_request(
+            HTTP_METHOD_DELETE,
+            action=ACT_DESTROY_NBI,
+            name=name,
+        )
+
+    def show_inventory(self, name: str = "") -> Dict[str, NBIInfo]:
+        """
+        Show native bucket inventory metadata.
+
+        Args:
+            name (str, optional): Inventory name to query. If empty,
+                returns all inventories for this bucket.
+
+        Returns:
+            Dict[str, NBIInfo]: Mapping of inventory object name to its metadata.
+        """
+        resp = self.make_request(
+            HTTP_METHOD_GET,
+            action=ACT_SHOW_NBI,
+            name=name,
+        )
+        data = resp.json()
+        return {k: NBIInfo(**v) for k, v in data.items()}
 
     def list_archive(
         self,
@@ -943,6 +1039,7 @@ class Bucket(AISSource):
         action: str,
         value: Optional[Dict] = None,
         params: Optional[Dict] = None,
+        name: str = "",
     ) -> requests.Response:
         """
         Use the bucket's client to make a request to the bucket endpoint on the AIS server
@@ -952,6 +1049,7 @@ class Bucket(AISSource):
             action (str): Action string used to create an ActionMsg to pass to the server
             value (dict, optional): Additional value parameter to pass in the ActionMsg
             params (dict, optional): Optional parameters to pass in the request
+            name (str, optional): Name parameter to pass in the ActionMsg
 
         Returns:
             Response from the server
@@ -962,7 +1060,7 @@ class Bucket(AISSource):
                 "Bucket requires a client to use functions. Try defining a client and accessing this bucket with "
                 "client.bucket()"
             )
-        json_val = ActionMsg(action=action, value=value).model_dump()
+        json_val = ActionMsg(action=action, value=value, name=name).model_dump()
         return self._client.request(
             method,
             path=f"{URL_PATH_BUCKETS}/{self.name}",

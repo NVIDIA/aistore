@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 # Units
@@ -52,6 +52,7 @@ HEADER_BUCKET_SUMM = HEADER_PREFIX + "Bucket-Summ"
 HEADER_XACTION_ID = HEADER_PREFIX + "Xaction-Id"
 HEADER_NODE_ID = HEADER_PREFIX + "Node-Id"
 HEADER_NODE_URL = HEADER_PREFIX + "Node-Url"
+HEADER_INV_NAME = HEADER_PREFIX + "Inv-Name"
 # Object Props Header Keys
 HEADER_OBJECT_BLOB_DOWNLOAD = HEADER_PREFIX + "Blob-Download"
 HEADER_OBJECT_BLOB_CHUNK_SIZE = HEADER_PREFIX + "Blob-Chunk"
@@ -153,6 +154,10 @@ ACT_MOVE_BCK = "move-bck"
 ACT_PROMOTE = "promote"
 ACT_SUMMARY_BCK = "summary-bck"
 ACT_BLOB_DOWNLOAD = "blob-download"
+# Native Bucket Inventory (NBI) actions
+ACT_CREATE_NBI = "create-inventory"
+ACT_DESTROY_NBI = "destroy-inventory"
+ACT_SHOW_NBI = "show-inventory"
 # Multi-object actions
 ACT_DELETE_OBJECTS = "delete-listrange"
 ACT_EVICT_OBJECTS = "evict-listrange"

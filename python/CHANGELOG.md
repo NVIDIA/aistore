@@ -21,6 +21,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- Native Bucket Inventory (NBI) support: `Bucket.create_inventory()`,
+  `Bucket.destroy_inventory()`, `Bucket.show_inventory()`.
+- `list_objects(inventory_name=...)` to list objects from an NBI snapshot.
 - `Cluster.get_node_log()`, `Cluster.get_node_log_archive()`, `Cluster.get_cluster_logs()`:
   fetch AIS daemon logs via the SDK.
 - `LogSeverity`, `NodeFilter` enums for log retrieval and cluster operations.
