@@ -626,6 +626,7 @@ class Bucket(AISSource):
         page_size: int = 0,
         flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
+        inventory_name: str = "",
     ) -> ObjectIterator:
         """
         Returns an iterator for all objects in bucket
@@ -642,7 +643,9 @@ class Bucket(AISSource):
                 Defaults to "0" - return maximum number objects
             flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include as flags in the
              request
-            target(str, optional): Only list objects on this specific target node
+            target (str, optional): Only list objects on this specific target node
+            inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
+                See `list_objects` for details.
 
         Returns:
             ObjectIterator: object iterator
@@ -665,6 +668,7 @@ class Bucket(AISSource):
                 continuation_token=token,
                 flags=flags,
                 target=target,
+                inventory_name=inventory_name,
             )
 
         return ObjectIterator(fetch_objects)
@@ -676,6 +680,7 @@ class Bucket(AISSource):
         page_size: int = 0,
         flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
+        inventory_name: str = "",
     ) -> List[BucketEntry]:
         """
         Returns a list of all objects in bucket
@@ -692,7 +697,9 @@ class Bucket(AISSource):
                 Defaults to "0" - return maximum number objects
             flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include as flags in the
              request
-            target(str, optional): Only list objects on this specific target node
+            target (str, optional): Only list objects on this specific target node
+            inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
+                See `list_objects` for details.
 
         Returns:
             List[BucketEntry]: list of objects in bucket
@@ -718,6 +725,7 @@ class Bucket(AISSource):
                 continuation_token=continuation_token,
                 flags=flags,
                 target=target,
+                inventory_name=inventory_name,
             )
             if obj_list:
                 obj_list = obj_list + resp.entries

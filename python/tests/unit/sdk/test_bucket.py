@@ -1193,3 +1193,37 @@ class TestBucket(unittest.TestCase):
         headers = call_args[1]["headers"]
         self.assertIn(HEADER_INV_NAME, headers)
         self.assertEqual(headers[HEADER_INV_NAME], "my-inv")
+
+    def test_list_objects_iter_with_inventory_name(self):
+        mock_list = Mock(BucketList)
+        mock_list.entries = [BucketEntry(n="obj1")]
+        mock_list.continuation_token = ""
+        mock_list.uuid = ""
+        self.mock_client.request_deserialize.return_value = mock_list
+
+        entries = list(self.amz_bck.list_objects_iter(inventory_name="iter-inv"))
+        call_args = self.mock_client.request_deserialize.call_args
+        body = call_args[1]["json"]
+        flags_val = int(body["value"]["flags"])
+        self.assertTrue(flags_val & (1 << 15), "NBI flag should be set")
+        headers = call_args[1]["headers"]
+        self.assertIn(HEADER_INV_NAME, headers)
+        self.assertEqual(headers[HEADER_INV_NAME], "iter-inv")
+        self.assertEqual(len(entries), 1)
+
+    def test_list_all_objects_with_inventory_name(self):
+        mock_list = Mock(BucketList)
+        mock_list.entries = [BucketEntry(n="obj1"), BucketEntry(n="obj2")]
+        mock_list.continuation_token = ""
+        mock_list.uuid = ""
+        self.mock_client.request_deserialize.return_value = mock_list
+
+        result = self.amz_bck.list_all_objects(inventory_name="all-inv")
+        call_args = self.mock_client.request_deserialize.call_args
+        body = call_args[1]["json"]
+        flags_val = int(body["value"]["flags"])
+        self.assertTrue(flags_val & (1 << 15), "NBI flag should be set")
+        headers = call_args[1]["headers"]
+        self.assertIn(HEADER_INV_NAME, headers)
+        self.assertEqual(headers[HEADER_INV_NAME], "all-inv")
+        self.assertEqual(len(result), 2)

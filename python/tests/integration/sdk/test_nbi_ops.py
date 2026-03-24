@@ -163,3 +163,17 @@ class TestNBIOps(unittest.TestCase):
         self._create_and_wait(name="list-test")
         result = self.bck.list_objects(inventory_name="list-test", page_size=100)
         self.assertIsNotNone(result.entries)
+
+    def test_list_objects_iter_with_inventory_name(self):
+        """Iterate objects using a specific inventory name."""
+        self._create_and_wait(name="iter-test")
+        entries = list(
+            self.bck.list_objects_iter(inventory_name="iter-test", page_size=100)
+        )
+        self.assertIsNotNone(entries)
+
+    def test_list_all_objects_with_inventory_name(self):
+        """List all objects using a specific inventory name."""
+        self._create_and_wait(name="all-test")
+        entries = self.bck.list_all_objects(inventory_name="all-test", page_size=100)
+        self.assertIsNotNone(entries)
