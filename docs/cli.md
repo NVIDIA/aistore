@@ -333,7 +333,7 @@ Supported backend providers currently include:
 See also:
 
 > [Backend Providers](/docs/providers.md)
-> [Buckets: definition, operations, properties](/docs/bucket.md)
+> [Buckets: design, operations, properties](/docs/bucket.md)
 
 ## Verbose errors
 

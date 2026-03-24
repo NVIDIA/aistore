@@ -17,7 +17,7 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 - [Terminology and core abstractions](/docs/terminology.md)
 - [Getting Started](/docs/getting_started.md)
 - [Networking model](/docs/networking.md)
-- [Buckets: design, operations, and system buckets](/docs/bucket.md)
+- [Buckets: design, operations, namespaces, and system buckets](/docs/bucket.md)
 - [Observability overview](/docs/monitoring-overview.md)
 - [CLI overview](/docs/cli.md)
 - [Production deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md)
@@ -61,7 +61,7 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 ## Storage and Data Management
 
 - [Storage services](/docs/storage_svcs.md)
-- [Buckets: design, operations, and system buckets](/docs/bucket.md)
+- [Buckets: design, operations, namespaces, and system buckets](/docs/bucket.md)
 - [Bucket lifecycle](/docs/lifecycle.md)
 - [Native Bucket Inventory (NBI)](/docs/nbi.md)
 - [Backend providers](/docs/providers.md)
