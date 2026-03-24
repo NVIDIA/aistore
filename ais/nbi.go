@@ -25,8 +25,9 @@ import (
 
 func (p *proxy) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
 	// bucket
-	bck := meta.CloneBck((*cmn.Bck)(qbck))
+	var bck *meta.Bck
 	if qbck.IsBucket() {
+		bck = meta.CloneBck((*cmn.Bck)(qbck))
 		var err error
 		bckArgs := allocBctx()
 		{
@@ -44,6 +45,8 @@ func (p *proxy) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryB
 		if err != nil {
 			return
 		}
+	} else {
+		bck = (*meta.Bck)(qbck) // keep as is for subsequent bmd.Range()
 	}
 
 	// bcast

@@ -33,8 +33,10 @@ const (
 		indent1 + "\t* ais nbi rm s3://abc\t- remove inventory for the bucket;\n" +
 		indent1 + "\t* ais nbi rm s3://abc --inv-name my-first-inventory\t- remove specific named inventory."
 
-	showNBIUsage = "Show bucket inventory,\n" +
+	showNBIUsage = "Show bucket inventory or all matching inventories,\n" +
 		indent1 + "e.g.:\n" +
+		indent1 + "\t* ais nbi show\t- show all inventories in the cluster;\n" +
+		indent1 + "\t* ais nbi show s3:\t- show inventories for all s3:// buckets;\n" +
 		indent1 + "\t* ais nbi show s3://abc\t- show inventory details for the bucket;\n" +
 		indent1 + "\t* ais nbi show s3://abc --inv-name my-first-inventory\t- show specific named inventory."
 )
