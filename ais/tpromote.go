@@ -68,7 +68,7 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 	if params.DeleteSrc {
 		// To use `params.SrcFQN` as `workFQN`, make sure both are
 		// located on the same filesystem. About "filesystem sharing" see also:
-		// * https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#terminology
+		// * https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#mountpath
 		mi, _, err := fs.FQN2Mpath(params.SrcFQN)
 		extraCopy = err != nil || !mi.FS.Equal(lom.Mountpath().FS)
 	}

@@ -1159,7 +1159,7 @@ The output includes the total number of objects in a bucket, the bucket's size (
 
 A few additional words must be said about `--validate`. The option is provided to run integrity checks, namely: locations of objects, replicas, and EC slices in the bucket, the number of replicas (and whether this number agrees with the bucket configuration), and more.
 
-> Location of each stored object must at any point in time correspond to the current cluster map and, within each storage target, to the target's [mountpaths](/docs/overview.md#terminology). A failure to abide by location rules is called *misplacement*; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
+> Location of each stored object must at any point in time correspond to the current cluster map and, within each storage target, to the target's [mountpaths](/docs/terminology.md#mountpath). A failure to abide by location rules is called *misplacement*; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
 
 * [global rebalance and resilver](/docs/rebalance.md)
 * [resilvering selected targets: advanced usage](/docs/cli/advanced.md#manual-resilvering)

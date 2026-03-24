@@ -139,7 +139,7 @@ In this section, we show how to run all-in-one-docker AIS cluster with virtual d
 
 But first:
 
-> **NOTE**: mounted disk paths must resolve to _distinct_ and _disjoint_ file systems. AIStore checks and enforces non-sharing of local filesystems: each target [mountpath](/docs/overview.md#terminology) must have its own, undivided.
+> **NOTE**: mounted disk paths must resolve to _distinct_ and _disjoint_ file systems. AIStore checks and enforces non-sharing of local filesystems: each target [mountpath](/docs/terminology.md#mountpath) must have its own, undivided.
 
 And of course, when there are no spare drives for data storage, one uses loopback, as follows:
 
@@ -163,7 +163,7 @@ yynRQpXV
 
 Notice (above): upon startup, the cluster shows a single disk. That's because initial (hardcoded) configuration that we provided specifies only one.
 
-This is easily fiable, though: AIStore supports adding [mountpath](/docs/overview.md#terminology) at runtime. More exactly, all 4 verbs are supported: attach, detach, enable, disable.
+This is easily fixable, though: AIStore supports adding [mountpath](/docs/terminology.md#mountpath) at runtime. More exactly, all 4 verbs are supported: attach, detach, enable, disable.
 
 ```console
 $ ais storage mountpath attach t[yynRQpXV] /ais/disk2

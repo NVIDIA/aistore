@@ -352,7 +352,7 @@ xmeta -x -in=~/.ais0/.ais.emd -out=/tmp/emd.txt
 
 ## References
 
-* [AIStore: Terminology](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#terminology)
+* [AIStore: Terminology](https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md)
 * [AIStore: Troubleshooting](https://github.com/NVIDIA/aistore/blob/main/docs/troubleshooting.md)
 * [On-disk layout](https://github.com/NVIDIA/aistore/blob/main/docs/on_disk_layout.md)
 * [AIS buckets: on-disk layout](/docs/bucket.md#appendix-a-on-disk-layout)

@@ -263,7 +263,7 @@ If unsure, stop to inspect existing metadata before proceeding, and maybe back i
 
 ## References
 
-* [AIStore: Terminology](/docs/overview.md#terminology)
+* [AIStore: Terminology](/docs/terminology.md)
 * [On-disk layout](https://github.com/NVIDIA/aistore/blob/main/docs/on_disk_layout.md)
 * [xmeta](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md) - utility to inspect, extract, format, and (in limited cases) edit internal AIS metadata structures
 * [AIS buckets: on-disk layout](/docs/bucket.md#appendix-a-on-disk-layout)

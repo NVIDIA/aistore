@@ -42,7 +42,7 @@ Furthermore, the PyTorch `DataLoader` supports other useful features such as:
 
 ## Using AIStore with PyTorch
 
-AIStore can serve as the storage backend for training data, whether from the cloud or local storage. The full dataset can be retrieved from the cloud into a multi-node AIStore cluster. In AIStore, we have [gateways](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#terminology) (not shown) and storage nodes called [targets](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#terminology). All user data is equally distributed across these targets.
+AIStore can serve as the storage backend for training data, whether from the cloud or local storage. The full dataset can be retrieved from the cloud into a multi-node AIStore cluster. In AIStore, we have [gateways](https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#proxy) (not shown) and storage nodes called [targets](https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#target). All user data is equally distributed across these targets.
 
 ![System Block Diagram](/assets/pytorch-dataloading/aispytorch-systemblock.png)
 
@@ -79,7 +79,7 @@ What's going on here in the code? First, the user declares a dataset that can re
 
 ![PyTorch Workers](/assets/pytorch-dataloading/pytorch-dataloading.gif)
 
-> (*) Initially, the bucket in question may not necessarily be present inside the AIS cluster. Or, it may exist but be empty or half-empty in comparison with the corresponding Cloud bucket (we call it the Cloud [backend](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#terminology)). Or, the AIS bucket may be out of sync with its Cloud backend, which may have been updated out of band. Each specific scenario is handled by AIStore automatically, behind the scenes.
+> (*) Initially, the bucket in question may not necessarily be present inside the AIS cluster. Or, it may exist but be empty or half-empty in comparison with the corresponding Cloud bucket (we call it the Cloud [backend](https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#backend-provider)). Or, the AIS bucket may be out of sync with its Cloud backend, which may have been updated out of band. Each specific scenario is handled by AIStore automatically, behind the scenes.
 
 The integration extends PyTorch’s [`Dataset`](https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset), [`Sampler`](https://pytorch.org/docs/stable/data.html#torch.utils.data.Sampler), and [`IterableDataset`](https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset) classes to natively support AIStore. These datasets load data directly from AIStore’s [`Bucket`](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/bucket.py) or [`ObjectGroup`](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/multiobj/object_group.py), which are [`AISSources`](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py). `ObjectGroup` is a collection of objects from the same bucket: an easy way to group objects in buckets.
 

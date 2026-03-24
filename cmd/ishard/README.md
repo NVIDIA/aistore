@@ -24,7 +24,7 @@ To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an ori
 
 ### See also:
 
-* [Terminology: Shard](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#terminology).
+* [Terminology: Shard](https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#shard).
 * [Blog: Initial Sharding of Machine Learning Datasets](https://aistore.nvidia.com/blog/2024/08/16/ishard)
 
 ## CLI Parameters

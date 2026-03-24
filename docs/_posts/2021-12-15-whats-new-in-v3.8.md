@@ -59,7 +59,7 @@ All metadata from all sources is now preserved and checksum-protected, stored pe
 
 ## Volume
 
-Multi-disk volume in AIS is a collection of [mountpaths](/docs/overview.md#terminology). The corresponding metadata (called VMD) is versioned, persistent, and protected (i.e., checksummed and replicated). Version 3.8 reinforces ais volume (function) in presence of unlikely but nevertheless critical *scenarios* that include the usual:
+Multi-disk volume in AIS is a collection of [mountpaths](/docs/terminology.md#mountpath). The corresponding metadata (called VMD) is versioned, persistent, and protected (i.e., checksummed and replicated). Version 3.8 reinforces ais volume (function) in presence of unlikely but nevertheless critical *scenarios* that include the usual:
 
 * faulted drives, degraded drives, missing (unmounted or detached) drives
 * old, missing, or corrupted VMD instances

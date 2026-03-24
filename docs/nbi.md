@@ -40,9 +40,6 @@ Compared to the legacy S3-specific path, NBI is:
 
 ## Supported buckets
 
-
-## Supported buckets
-
 NBI applies to **remote buckets** only: cloud buckets (S3, GCS, Azure, OCI) and remote AIS buckets. It is not (yet) supported for in-cluster `ais://` buckets for one simple reason: little (if any) performance benefit expected.
 
 After all, the primary goal of NBI is to eliminate the latency and repeated backend traffic of remote listing. For in-cluster `ais://` buckets, metadata is already local and served at native AIS speed, so an additional inventory layer would bring little value.
@@ -110,8 +107,6 @@ NAME                                              CHUNKED         SIZE
 aws/@#/training-data-v5/inv-Tp4nR7kWx             yes             1.28GiB
 ```
 
-System buckets are AIS infrastructure and are not intended for direct user access. The dot-prefix naming convention (`.sys-*`) is reserved.
-
 ## Creating an inventory
 
 Use `ais nbi create` to create a native bucket inventory for a remote bucket:
@@ -125,10 +120,11 @@ ais nbi create ais://@remote-cluster/my-bucket --props name,size,cached
 
 ### Notes
 
-* Inventory creation is **manual**.
-* Inventory names are optional, but when provided must be unique for the bucket.
-* `--force` removes any existing inventory first and then proceeds with creation.
-* `--names-per-chunk` is an advanced tuning knob that overrides the default chunk size.
+* Inventory creation is **manual** (periodic refresh MAY be added in the future).
+* Inventory names are optional. Any human-readable name can be used, but it must be unique for the given bucket. When omitted, a unique name is assigned automatically (e.g., inv-Tp4nR7kWx).
+* CLI options:
+  * `--force` removes any existing inventory first and then proceeds with creation.
+  * `--names-per-chunk` is an advanced tuning knob that overrides the default chunk size.
 
 Internally, the control message is:
 
@@ -192,12 +188,28 @@ Note the per-target object counts - each target stores only the names that prope
 
 ## Showing inventories
 
-Use `ais show nbi` to inspect inventories:
+Use `ais show nbi` to inspect existing inventories.
+
+> As with all `ais show` subcommands, `ais show nbi` is an alias for `ais nbi show`.
+
 
 ```console
-ais show nbi gs://my-bucket
-ais show nbi s3://my-bucket --inv-name my-first-inventory
-ais show nbi ais://@remote-cluster/my-bucket --verbose
+$ ais show nbi --help
+NAME:
+   ais show nbi - Show bucket inventory or all matching inventories,
+   e.g.:
+     * ais show nbi                                         - show all inventories in the cluster;
+     * ais show nbi s3:                                     - show inventories for all s3:// buckets;
+     * ais show nbi s3://abc                                - show inventory details for the bucket;
+     * ais show nbi s3://abc --inv-name my-first-inventory  - show specific named inventory.
+
+USAGE:
+   ais show nbi [BUCKET] [command options]
+
+OPTIONS:
+   inv-name   Bucket inventory name (optional; omit to match any inventory)
+   verbose,v  Verbose output
+   help, h    Show help
 ```
 
 Default output shows a compact view, including object count:
@@ -243,7 +255,6 @@ This behavior is intentional and helps to reduce roundtrips, optimize list-objec
 ## How inventory-backed listing works
 
 See [Overview - Listing](#listing) for the high-level flow.
-
 
 When inventory-backed listing is requested - for example, via `--inventory` in the CLI or [`ListObjectFlag.NBI`](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/list_object_flag.py) in the Python SDK - AIS serves the request from pre-stored inventory chunks on each target rather than walking the remote backend.
 
