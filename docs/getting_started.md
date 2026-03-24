@@ -478,9 +478,9 @@ For production deployments, we developed the [AIS/K8s Operator](https://github.c
 * [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/main/helm)
 * [Monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
 
-#### Minimal all-in-one-docker Deployment
+#### Minimal container-based Deployment
 
-This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/single/README.md) for details.
+This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/compose/README.md) for details.
 
 #### Testing your cluster
 

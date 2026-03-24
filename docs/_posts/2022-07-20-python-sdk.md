@@ -32,14 +32,12 @@ $ pip install aistore
 
 > Note that only Python 3.x (version 3.6 or later) is currently supported for AIStore.
 
-While there are a number of options available for deploying AIStore - as is demonstrated [here](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md) - for the sake of simplicity, we will be using AIStore's [minimal standalone docker deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md):
+While there are a number of options available for deploying AIStore - as is demonstrated [here](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md) - for the sake of simplicity, we will be using AIStore's [minimal container-based deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/compose/README.md):
 
 ```console
-# Deploying the AIStore cluster in a container on port 51080
-docker run -d \
-    -p 51080:51080 \
-    -v /disk0:/ais/disk0 \
-    aistore/cluster-minimal:latest
+# Deploying the AIStore cluster in a container accessible on port 51080
+cd deploy/prod/docker/compose
+make up
 ```
 
 ### Moving Data To AIStore

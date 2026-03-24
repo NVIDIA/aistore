@@ -21,7 +21,7 @@ AIS consistently shows [balanced I/O distribution and linear scalability](https:
 ## Features
 
 * ✅ **Multi-Cloud Access:** Seamlessly access and manage content across multiple [cloud backends](/docs/overview.md#at-a-glance) (including AWS S3, GCS, Azure, and OCI), with fast-tier performance, configurable redundancy, and namespace-aware bucket identity (same-name buckets can coexist across accounts, endpoints, and providers).
-* ✅ **Deploy Anywhere:** AIS runs on any Linux machine, virtual or physical. Deployment options range from a single [Docker container](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) and [Google Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) to petascale [Kubernetes clusters](https://github.com/NVIDIA/ais-k8s). There are [no built-in limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) on deployment size or functionality.
+* ✅ **Deploy Anywhere:** AIS runs on any Linux machine, virtual or physical. Deployment options range from a [minimal container-based deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/compose/README.md) and [Google Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) to petascale [Kubernetes clusters](https://github.com/NVIDIA/ais-k8s). There are [no built-in limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) on deployment size or functionality.
 * ✅ **High Availability:** Redundant control and data planes. Self-healing, end-to-end protection, n-way mirroring, and erasure coding. Arbitrary number of lightweight access points (AIS proxies).
 * ✅ **HTTP-based API:** A feature-rich, native API (with user-friendly SDKs for Go and Python), and compliant [Amazon S3 API](/docs/s3compat.md) for running unmodified S3 clients.
 * ✅ **Monitoring:** Comprehensive observability with integrated Prometheus metrics, Grafana dashboards, detailed logs with configurable verbosity, and CLI-based performance tracking for complete cluster visibility and troubleshooting. See [AIStore Observability](/docs/monitoring-overview.md) for details.
@@ -84,7 +84,7 @@ For developers and data scientists, there's also:
 ## Quick Start
 
 1. Read the [Getting Started Guide](/docs/getting_started.md) for a 5-minute local install, or
-2. Run a [minimal](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/single) AIS cluster consisting of a single gateway and a single storage node, or
+2. Run a [minimal container-based deployment](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/compose) consisting of a single gateway and a single storage node, or
 3. Clone the repo and run `make kill cli aisloader deploy` followed by `ais show cluster`
 
 ---------------------
@@ -93,17 +93,18 @@ For developers and data scientists, there's also:
 
 AIS deployment options, as well as intended (development vs. production vs. first-time) usages, are all [summarized here](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md).
 
-Since the prerequisites essentially boil down to having Linux with a disk the deployment options range from [all-in-one container](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/single) to a petascale bare-metal cluster of any size, and from a single VM to multiple racks of high-end servers. Practical use cases require, of course, further consideration.
+The prerequisites essentially boil down to having Linux with a disk.
+Deployment options range from a single node [minimal container-based deployment](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/compose) to petascale bare-metal clusters of any size, and from a single VM to multiple racks of high-end servers.
+Practical use cases require, of course, further consideration.
 
 Some of the most popular deployment options include:
 
-| Option | Use Case |
-| --- | ---|
-| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) | AIS developers or first-time users, Linux or Mac OS. Run `make kill cli aisloader deploy <<< $'N\nM'`, where `N` is a number of [targets](/docs/terminology.md#target), `M` - [gateways](/docs/terminology.md#proxy) |
-| Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
-| [Docker container](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/single) | Quick testing and evaluation; single-node setup |
-| [GCP/GKE automated install](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-playground) | Developers, first-time users, AI researchers |
-| [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes; provided via [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
+| Option                                                                                                                 | Use Case                                                                                                                                                                                                             |
+|------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground)               | AIS developers or first-time users, Linux or Mac OS. Run `make kill cli aisloader deploy <<< $'N\nM'`, where `N` is a number of [targets](/docs/terminology.md#target), `M` - [gateways](/docs/terminology.md#proxy) |
+| [Minimal Container-based Deployment](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/compose)           | Quick testing and evaluation; single-node setup                                                                                                                                                                      |
+| [GCP/GKE automated install](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-playground) | Developers, first-time users, AI researchers                                                                                                                                                                         |
+| [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s)                                                 | Requires Kubernetes; provided via [ais-k8s](https://github.com/NVIDIA/ais-k8s)                                                                                                                                       |
 
 > For performance tuning, see [performance](/docs/performance.md) and [AIS K8s Playbooks](https://github.com/NVIDIA/ais-k8s/tree/main/playbooks/host-config).
 

@@ -13,13 +13,10 @@ ARG TARGETOS
 ARG TARGETARCH
 
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    CGO_ENABLED=0 MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} \
+    CGO_ENABLED=0 MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp azure"} \
     make node
 
 FROM ${BASE_IMAGE}
-
-ARG providers
-ENV AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"}
 
 RUN apk upgrade --no-cache && apk add --no-cache \
     bash \
@@ -27,12 +24,10 @@ RUN apk upgrade --no-cache && apk add --no-cache \
     attr
 
 WORKDIR /build
-COPY deploy/prod/docker/single/entrypoint entrypoint/
+COPY deploy/prod/docker/image/entrypoint.sh /opt/entrypoint.sh
 COPY deploy/dev/utils.sh ./
 COPY deploy/dev/local/aisnode_config.sh ./
 COPY deploy/conf/limits.conf /etc/security/limits.conf
 COPY --from=builder /go/bin/aisnode bin/
 
-EXPOSE 51080/tcp
-
-ENTRYPOINT ["/bin/bash", "entrypoint/entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "/opt/entrypoint.sh"]

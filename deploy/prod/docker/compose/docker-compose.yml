@@ -1,0 +1,76 @@
+#
+# Minimal two-container AIS cluster: one proxy (gateway) + one target (storage).
+#
+# Quick start (from repo root):
+#   docker compose -f deploy/prod/docker/compose/docker-compose.yml up -d --build
+#
+# Or from this directory:
+#   BUILD_CONTEXT=../../../../. docker compose up -d --build
+#
+# See Makefile for more options
+
+services:
+  proxy:
+    build: &build
+      context: ${BUILD_CONTEXT:-../../../../.}
+      dockerfile: deploy/prod/docker/image/Dockerfile
+      args:
+        mode: ${BUILD_MODE:-}
+        # Build for all supported providers and enable them with config at runtime
+        providers: "aws gcp azure"
+    image: ${IMAGE:-aistorage/cluster-minimal:latest}
+    command: ["proxy", "51080"]
+    hostname: proxy
+    ports:
+      - "${AIS_PORT:-51080}:51080"
+    networks:
+      - ais
+    environment:
+      - AIS_PRIMARY_URL=http://proxy:51080
+      - AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS:-aws gcp}
+      - HOSTNAME_LIST=${HOSTNAME_LIST:-127.0.0.1}
+      - HOSTNAME_LIST_INTRA_CONTROL=${HOSTNAME_LIST_INTRA_CONTROL:-proxy}
+      - HOSTNAME_LIST_INTRA_DATA=${HOSTNAME_LIST_INTRA_DATA:-proxy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:51080/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  target:
+    build: *build
+    image: ${IMAGE:-aistorage/cluster-minimal:latest}
+    command: ["target", "51081"]
+    hostname: target
+    depends_on:
+      proxy:
+        condition: service_healthy
+    ports:
+      - "${AIS_TARGET_PORT:-51081}:51081"
+    networks:
+      - ais
+    environment:
+      - AIS_PRIMARY_URL=http://proxy:51080
+      - AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS:-aws gcp}
+      - AIS_FS_PATHS=${AIS_FS_PATHS:-}
+      - AIS_FS_LABEL=${AIS_FS_LABEL:-container-local}
+      - HOSTNAME_LIST=${HOSTNAME_LIST:-127.0.0.1}
+      - HOSTNAME_LIST_INTRA_CONTROL=${HOSTNAME_LIST_INTRA_CONTROL:-target}
+      - HOSTNAME_LIST_INTRA_DATA=${HOSTNAME_LIST_INTRA_DATA:-target}
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/gcp.json
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_REGION
+      - AWS_PROFILE
+      - S3_ENDPOINT
+    volumes:
+      - target_disk0:/ais/disk0
+      - ${AWS_CREDENTIALS_PATH:-/dev/null}:/root/.aws:ro
+      - ${GCP_CREDENTIALS_PATH:-/dev/null}:/credentials/gcp.json:ro
+
+networks:
+  ais:
+
+volumes:
+  target_disk0:

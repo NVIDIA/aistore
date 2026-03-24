@@ -3,3 +3,8 @@
 docs
 go-build
 tags
+.git
+python/venv*
+python/examples
+bench
+venv

@@ -41,41 +41,28 @@ from torchdata.datapipes.iter import AISFileLister, AISFileLoader, Mapper
 
 ### Running the AIStore Cluster
 
-[Getting started with
-AIS](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md)
-will take only a few minutes (prerequisites boil down to having a Linux
-with a disk) and can be done either by running a prebuilt [all-in-one
-docker image](https://github.com/NVIDIA/aistore/tree/main/deploy) or
-directly from the open-source.
+[Getting started with AIS](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md) will take only a few minutes (prerequisites boil down to having a Linux with a disk).
+See the available [deployment options here](https://github.com/NVIDIA/aistore/blob/main/README.md#deployment-options).
 
-To keep this example simple, we will be running a [minimal standalone
-docker
-deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md)
-of AIStore.
+To keep this example simple, we will be running a [minimal container-based deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/compose/README.md) of AIStore.
 
-``` {.python}
+```sh
 # Running the AIStore cluster in a container on port 51080
-# Note: The mounted path should have enough space to load the dataset
+# Note: The docker volume must have enough space to load the dataset
 
-! docker run -d \
-    -p 51080:51080 \
-    -v <path_to_gcp_config>.json:/credentials/gcp.json \
-    -e GOOGLE_APPLICATION_CREDENTIALS="/credentials/gcp.json" \
-    -e AWS_ACCESS_KEY_ID="AWSKEYIDEXAMPLE" \
-    -e AWS_SECRET_ACCESS_KEY="AWSSECRETEACCESSKEYEXAMPLE" \
-    -e AWS_REGION="us-east-2" \
-    -e AIS_BACKEND_PROVIDERS="gcp aws" \
-    -v /disk0:/ais/disk0 \
-    aistore/cluster-minimal:latest
+cd deploy/prod/docker/compose
+
+# Set up environment variables
+export GCP_CREDENTIALS_PATH=~/.gcp/gcp.json
+export AWS_CREDENTIALS_PATH=~/.aws 
+export AWS_REGION="us-east-1"
+
+# Bring up the cluster
+make up
 ```
 
-
-To create and put objects (dataset) in the bucket, I am going to be
-using [AIS
-CLI](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md). But we
-can also use the [Python
-SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore) for the
-same.
+To create and put objects (dataset) in the bucket, I am going to be using [AIS CLI](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md). 
+But we can also use the [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore) for the same.
 
 ``` {.python}
 ! ais config cli set cluster.url=http://localhost:51080

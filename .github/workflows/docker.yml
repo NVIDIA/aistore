@@ -124,7 +124,7 @@ jobs:
     with:
       image_name: aistorage/cluster-minimal
       image_tag: ${{ inputs.image_tag }}
-      context_dir: deploy/prod/docker/single
+      context_dir: deploy/prod/docker/image
       multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
