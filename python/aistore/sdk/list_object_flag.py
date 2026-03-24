@@ -87,9 +87,9 @@ class ListObjectFlag(Enum):
 
         Returns:
             int: Combined bitmask. E.g., NOT_CACHED (9) + NAME_ONLY (4)
-                = 2^9 + 2^4 = 528.
+                = (1 << 9) | (1 << 4) = 528.
         """
         res = 0
         for flag in flags:
-            res = res ^ 2**flag.value
+            res |= 1 << flag.value
         return res
