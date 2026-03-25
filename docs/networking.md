@@ -182,7 +182,7 @@ Characteristics:
 
 ### Intra-Cluster Data Network
 
-The **data network** carries HTTP-based object movement between [targets](/docs/overview.md#target):
+The **data network** carries HTTP-based object movement between [targets](/docs/terminology.md#target):
 
 * target <=> target GET
 * target <=> target PUT
@@ -352,7 +352,7 @@ This split guarantees:
 
 ### Summary
 
-* AIStore models **three logical HTTP networks** with additional intra-cluster data plane utilized by most [xactions](/docs/overview.md#xaction).
+* AIStore models **three logical HTTP networks** with additional intra-cluster data plane utilized by most [xactions](/docs/terminology.md#xaction).
 * They may map to fewer physical networks
 * IPv6 is supported cluster-wide via `net.use_ipv6`; switching between IPv4 and IPv6 requires only a config change and restart
 * IP family selection is resolved at runtime and applied consistently

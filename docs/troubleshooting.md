@@ -78,7 +78,7 @@ AIS integrity errors fall into two distinct categories:
    Inconsistent or conflicting cluster-wide metadata (Smap, BMD, etc.)
 
 2. **Storage Integrity Errors (`sie#`)**
-   Inconsistent, missing, or invalid [mountpath](/docs/overview.md#mountpath) metadata on a target
+   Inconsistent, missing, or invalid [mountpath](/docs/terminology.md#mountpath) metadata on a target
 
 Understanding which category you are dealing with is critical:
 **CIE errors are cluster-scoped; SIE errors are target-scoped.**
@@ -152,7 +152,7 @@ lost or missing mountpath "/ais/nvme7n1"
 ### Key Concepts
 
 * VMD is **persisted and replicated** across all mountpaths of a target
-* Each [mountpath](/docs/overview.md#mountpath) records:
+* Each [mountpath](/docs/terminology.md#mountpath) records:
 
   * filesystem identity
   * filesystem type

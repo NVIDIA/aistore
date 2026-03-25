@@ -8,7 +8,7 @@ First, etymology:
 
 In AIStore, resilvering (or simply "resilver") is the mechanism for redistributing objects to their [correct locations](/docs/overview.md#data-protection) after volume changes within a storage target.
 
-When [mountpaths](/docs/overview.md#mountpath) are attached, detached, enabled, or disabled, objects may no longer reside at their proper HRW locations.
+When [mountpaths](/docs/terminology.md#mountpath) are attached, detached, enabled, or disabled, objects may no longer reside at their proper HRW locations.
 Resilver walks all objects and relocates them as needed to restore data placement and redundancy under the current configuration.
 
 > HRW: a variant of consistent hash based on rendezvous (highest‑random‑weight) algorithm by Thaler and Ravishankar.
@@ -29,7 +29,7 @@ This symmetry is intentional. The same reasoning applies at both levels:
 * Operations are preemptible.
 * Misplaced objects remain accessible.
 
-The difference is scope and mechanics: rebalance moves data over the network across targets, while resilver - locally across [mountpaths](/docs/overview.md#mountpath) on the same machine.
+The difference is scope and mechanics: rebalance moves data over the network across targets, while resilver - locally across [mountpaths](/docs/terminology.md#mountpath) on the same machine.
 
 This document is structured as follows:
 
@@ -147,7 +147,7 @@ During resilvering, chunks are verified independently. A chunked object is consi
 
 ### Monitoring and Progress
 
-Resilver runs as a batch job (or [xaction](/docs/overview.md#xaction)).
+Resilver runs as a batch job (or [xaction](/docs/terminology.md#xaction)).
 Progress is visible through standard job monitoring (`ais show job`) command, e.g.:
 
 ```console

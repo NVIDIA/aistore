@@ -11,7 +11,7 @@ AIStore supports vendor-specific configuration on a per bucket basis. For instan
 For supported backends (that include, but are not limited, to AWS S3), see also:
 
 * [Cloud backends](/docs/overview.md#at-a-glance)
-* [Backend Provider](/docs/overview.md#backend-provider)
+* [Backend Provider](/docs/terminology.md#backend-provider)
 
 ## Table of Contents
 - [Viewing vendor-specific properties](#viewing-vendor-specific-properties)

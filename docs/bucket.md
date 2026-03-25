@@ -1055,7 +1055,7 @@ ais bucket props reset s3://bucket
 
 **Note:** This section is provided for advanced [troubleshooting](/docs/troubleshooting.md) and debugging only.
 
-The bucket identity you specify in CLI or API - provider, namespace, bucket name - materializes as directory structure on every [mountpath](/docs/overview.md#mountpath). This isn't just metadata; it's physical layout.
+The bucket identity you specify in CLI or API - provider, namespace, bucket name - materializes as directory structure on every [mountpath](/docs/terminology.md#mountpath). This isn't just metadata; it's physical layout.
 
 Say, we have an S3 bucket called `s3://dataset`, and an object `images/cat.jpg` in it. Given two different bucket namespaces, the respective FQNs inside AIStore may look like:
 

@@ -709,7 +709,7 @@ Listed: 4 names
 
 ## Evict remote bucket
 
-AIS supports multiple [storage backends](/docs/overview.md#backend-provider):
+AIS supports multiple [storage backends](/docs/terminology.md#backend-provider):
 
 | Type              | Description                          | Example Name                  |
 | ----------------- | ------------------------------------ | ----------------------------- |
@@ -718,7 +718,7 @@ AIS supports multiple [storage backends](/docs/overview.md#backend-provider):
 | Cloud Bucket      | Remote bucket (e.g., S3, GCS, Azure) | `s3://dataset`                |
 | Backend Bucket    | AIS bucket linked to a remote bucket | `ais://cachebucket → s3://x`  |
 
-> See [Unified Namespace](/docs/overview.md#unified-namespace) for details on remote AIS clusters.
+> See [Unified Namespace](/docs/terminology.md#unified-namespace) for details on remote AIS clusters.
 
 One major distinction between an AIS bucket (e.g., `ais://mybucket`) and a remote bucket (e.g., `ais://@cluster/mybucket`, `s3://dataset`, etc.) boils down to the fact that - [for a variety of real-life reasons](/docs/out_of_band.md) - **in-cluster** content of the remote bucket may be different from its remote content.
 
@@ -1327,7 +1327,7 @@ All options are required and must be greater than `0`.
 Overall, the topic called "bucket properties" is rather involved and includes sub-topics "bucket property inheritance" and "cluster-wide global defaults". For background, please first see:
 
 * [Bucket Properties](/docs/bucket.md#bucket-properties)
-* [Backend Provider](/docs/overview.md#backend-provider)
+* [Backend Provider](/docs/terminology.md#backend-provider)
 * [Global cluster-wide configuration](/docs/configuration.md#cluster-and-node-configuration).
 
 Now, as far as CLI, run the following to list [properties](/docs/bucket.md#bucket-properties) of the specified bucket.

@@ -1,102 +1,221 @@
-## Table of Contents
-
-- [Global Rebalance](#global-rebalance)
-- [CLI: usage examples](#cli-usage-examples)
-- [Automated Resilvering](#automated-resilvering)
-
 ## Global Rebalance
 
-To maintain [consistent distribution of user data at all times](https://en.wikipedia.org/wiki/Consistent_hashing#Examples_of_use), AIStore rebalances itself based on *new* versions of its [cluster map](/core/meta/smap.go).
+Global rebalance is the cluster-wide process of moving objects to their **proper** storage targets after a topology change.
 
-More exactly:
+In AIStore, object placement is not arbitrary and is not tracked via a central directory. Instead, every object has a uniquely defined destination computed from the current cluster state. When that state changes, some objects acquire a new correct location. Global rebalance is the decentralized background process that brings the cluster into agreement with the new placement.
 
-* When storage targets join or leave the cluster, the current *primary* (leader) proxy transactionally creates the *next* updated version of the cluster map;
-* [Synchronizes](/ais/metasync.go) the new map across the entire cluster so that each and every node gets the version;
-* Which further results in each AIS target starting to traverse its locally stored content, recomputing object locations,
-* And sending at least some of the objects to their respective *new* locations
-* Whereby object migration is carried out via intra-cluster optimized [communication mechanism](/transport/README.md) and over a separate [physical or logical network](/cmn/network.go), if provisioned.
+Global rebalance is one of the core AIS mechanisms that makes it possible to grow or shrink a cluster, return nodes to service, and perform maintenance without taking the cluster offline.
 
-Thus, cluster-wide rebalancing is totally and completely decentralized. When a single server joins (or goes down in a) cluster of N servers, approximately 1/Nth of the entire namespace will get rebalanced via direct target-to-target transfers.
+**Table of Contents**
 
-Further, cluster-wide rebalancing does not require any downtime.
-Incoming GET requests for the objects that haven't yet migrated (or are being moved) are handled internally via the mechanism that we call "get-from-neighbor".
-The (rebalancing) target that must (according to the new cluster map) have the object but doesn't, will locate its "neighbor", get the object, and satisfy the original GET request transparently from the user.
+- [Placement: HRW and the three inputs](#placement-hrw-and-the-three-inputs)
+- [What triggers global rebalance](#what-triggers-global-rebalance)
+- [How global rebalance works](#how-global-rebalance-works)
+- [Serving reads during migration](#serving-reads-during-migration)
+- [Control and monitoring](#control-and-monitoring)
+- [CLI: usage examples](#cli-usage-examples)
+- [Starting rebalance administratively](#starting-rebalance-administratively)
+- [Rebalance vs. resilver](#rebalance-vs-resilver)
+- [Performance considerations](#performance-considerations)
 
-Similar to all other AIS modules and sub-systems, global rebalance is controlled and monitored via the native HTTP-based [Go](https://github.com/NVIDIA/aistore/tree/main/api) or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) APIs, or [CLI](/docs/cli.md).
+## Placement: HRW and the three inputs
+
+AIStore uses a variant of **highest random weight (HRW)**, also known as rendezvous hashing, to determine object placement.
+
+At the cluster level, the destination target for an object is uniquely determined by the following three inputs:
+
+- the current **cluster map**
+- the fully qualified **bucket**, including provider and namespace
+- the **object name**
+
+This is the key to understanding rebalance.
+
+When the cluster map changes, the HRW result may change as well. For some subset of objects, a different target becomes the correct owner. Those are the objects that must be moved.
+
+AIS uses the same general idea internally as well. Within a storage target, object placement across local disks is also HRW-based, except that instead of the cluster map AIS uses the set of local [`mountpaths`](/docs/terminology.md#mountpath).
+
+## What triggers global rebalance
+
+Global rebalance is triggered by changes that affect cluster-wide target placement.
+
+Typical examples include:
+
+- a storage target joining the cluster
+- a storage target leaving the cluster
+- putting a target into maintenance
+- decommissioning a target
+- bringing a target back into active service
+
+A useful rule of thumb is:
+
+> if a topology change can alter the HRW destination for stored objects, it can trigger global rebalance.
+
+When a single target is added to or removed from a cluster of `N` targets, the fraction of objects that move is typically on the order of `1/N`, though the exact amount always depends on the topology and the current object distribution.
+
+For additional background on maintenance, shutdown, and decommission workflows, see [Node lifecycle: maintenance, shutdown, decommission](/docs/lifecycle_node.md).
+
+## How global rebalance works
+
+Global rebalance is fully decentralized.
+
+At a high level:
+
+1. The current primary proxy creates the next version of the cluster map.
+2. The new map is distributed cluster-wide so that all nodes converge on the same version.
+3. Each storage target starts traversing its locally stored objects.
+4. For every object, the target recomputes the correct destination under the new map.
+5. If the local target is no longer the correct owner, the object is sent directly to the proper target.
+6. The process completes when all participating targets finish migrating the objects that no longer belong locally.
+
+A few points are worth emphasizing:
+
+- there is no central data-movement coordinator that decides ownership object by object
+- each target independently evaluates the objects it currently stores
+- object migration is performed via AIS intra-cluster transfers
+- when provisioned, rebalance traffic can use separate intra-cluster networking
+
+This design keeps rebalancing scalable and avoids turning the primary into a data path bottleneck.
+
+## Serving reads during migration
+
+Global rebalance does **not** require cluster downtime.
+
+During migration, incoming reads may target objects that have not yet moved, or are in the middle of being moved. AIS handles this transparently.
+
+In particular, the target that must own an object according to the **new** cluster map can internally locate a neighbor that still has the object and retrieve it on demand. This internal flow is often described as **get-from-neighbor**.
+
+As a result:
+
+- applications do not need to stop I/O while rebalance is running
+- object movement remains transparent to clients
+- the cluster can continue converging toward the new placement while still serving reads
+
+## Control and monitoring
+
+Global rebalance is controlled and monitored via:
+
+- native HTTP-based APIs
+- the [Go API](https://github.com/NVIDIA/aistore/tree/main/api)
+- the [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)
+- the [Command Line Interface (CLI)](/docs/cli.md)
+
+Operationally, administrators typically care about three things:
+
+- whether automated rebalance is enabled
+- whether a rebalance is currently running
+- how much data each target has sent and received for the current rebalance
+
+Like other long-running AIS activities, rebalance is tracked as a cluster job and can be inspected while in progress.
 
 ## CLI: usage examples
 
-1. Disable automated global rebalance (for instance, to perform maintenance or upgrade operations) and show resulting config in JSON on a randomly selected target:
+### Show current rebalance configuration
 
 ```console
-$ ais config cluster rebalance.enabled=false
-config successfully updated
-
-$ ais show config 361179t8088 --json | grep -A 6  rebalance
-
+$ ais config cluster rebalance --json
+{
     "rebalance": {
+        "burst_buffer": 1024,
         "dest_retry_time": "2m",
-        "quiescent": "20s",
+        "enabled": true,
         "compression": "never",
-        "multiplier": 4,
-        "enabled": false
-    },
-
+        "bundle_multiplier": 2
+    }
+}
 ```
 
-2. Re-enable automated global rebalance and show resulting config section as a simple `name/value` list:
+> **Note**: As elsewhere in the documentation, `http://localhost:8080` in the examples below denotes a [local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) endpoint and should be understood as a placeholder for an arbitrary [AIS endpoint (`AIS_ENDPOINT`)](/docs/terminology.md#endpoint).
+
+> Likewise, target names such as `t[kOHt8086]` are example node identifiers from a test cluster; production deployments will use their own node names, addresses, and ports.
+
+### Trigger rebalance by putting a target into maintenance
+
+First, populate a bucket:
 
 ```console
-$ ais config cluster rebalance.enabled=true
-config successfully updated
+$ MODE=debug make aisloader
+Building aisloader... done.
 
-$ ais show config <TAB-TAB>
-125210p8082   181883t8089   249630t8087   361179t8088   477343p8081   675515t8084   70681p8080    782227p8083   840083t8086   911875t8085
+$ aisloader -bucket=ais://nnn -pctput=100 -duration=3m -numworkers=4 -maxsize 1k -minsize 1k -cleanup=false -quiet -epochs 7
+Runtime configuration:
+{
+   "proxy": "http://localhost:8080",
+   "bucket": "ais://nnn",
+   "duration": "3m0s",
+   "# workers": 4,
+   "stats interval": "10s",
+   "% PUT": 100,
+   "minimum object size (bytes)": 1024,
+   "maximum object size (bytes)": 1024,
+   "name-getter": "random non-unique",
+   "reader-type": "sg",
+   "cleanup": false
+}
 
-$ ais show config 840083t8086 rebalance
-PROPERTY                         VALUE   DEFAULT
-rebalance.compression            never   -
-rebalance.dest_retry_time        2m      -
-rebalance.enabled                true    -
-rebalance.multiplier             2       -
-rebalance.quiescent              10s     -
+Time      OP    Count                   Size (Total)            Latency (min, avg, max)                 Throughput (Avg)        Errors (Total)
+10:13:34  PUT   105,552 (105,552 4 0)   103.1MiB (103.1MiB)     260.466µs  356.374µs  7.007ms           10.31MiB/s (10.31MiB/s) -
+10:13:44  PUT   99,826 (205,378 4 0)    97.5MiB (200.6MiB)      269.811µs  369.751µs  185.490ms         9.75MiB/s (10.03MiB/s)  -
+10:13:54  PUT   100,580 (305,958 4 0)   98.2MiB (298.8MiB)      268.668µs  366.325µs  136.984ms         9.82MiB/s (9.96MiB/s)   -
+10:14:04  PUT   97,292 (403,250 4 0)    95.0MiB (393.8MiB)      269.781µs  377.38µs   203.156ms         9.50MiB/s (9.84MiB/s)   -
+10:14:14  PUT   93,186 (496,436 4 0)    91.0MiB (484.8MiB)      267.808µs  394.835µs  155.001ms         9.10MiB/s (9.70MiB/s)   -
+^C
 ```
 
-3. Monitoring: notice per-target statistics and the `EndTime` column
+Verify the object count before rebalance:
 
 ```console
-$ ais show rebalance
-DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime          Aborted
-======       ======  ======  ======   ======   ======    ======          ======           ======
-181883t8089  1       0       0B       1058     1.27MiB   04-28 16:05:35  <not completed>  false
-249630t8087  1       0       0B       988      1.18MiB   04-28 16:05:35  <not completed>  false
-361179t8088  1       5029    6.02MiB  0        0B        04-28 16:05:35  <not completed>  false
-675515t8084  1       0       0B       989      1.18MiB   04-28 16:05:35  <not completed>  false
-840083t8086  1       0       0B       974      1.17MiB   04-28 16:05:35  <not completed>  false
-911875t8085  1       0       0B       1020     1.22MiB   04-28 16:05:35  <not completed>  false
-
-$ ais show rebalance
-DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime         Aborted
-======       ======  ======  ======   ======   ======    ======          ======          ======
-181883t8089  1       0       0B       1058     1.27MiB   04-28 16:05:35  04-28 16:05:53  false
-249630t8087  1       0       0B       988      1.18MiB   04-28 16:05:35  04-28 16:05:53  false
-361179t8088  1       5029    6.02MiB  0        0B        04-28 16:05:35  04-28 16:05:53  false
-675515t8084  1       0       0B       989      1.18MiB   04-28 16:05:35  04-28 16:05:53  false
-840083t8086  1       0       0B       974      1.17MiB   04-28 16:05:35  04-28 16:05:53  false
-911875t8085  1       0       0B       1020     1.22MiB   04-28 16:05:35  04-28 16:05:53  false
+$ ais ls ais://nnn --count-only
+Listed 504,797 names in 1.69s
 ```
 
-4. Since global rebalance is an [extended action (xaction)](/xact/README.md), it can be also monitored via generic `show xaction` API:
+Put one target into maintenance. This changes the active target set and starts global rebalance:
 
 ```console
-$ ais show job xaction rebalance
-NODE             ID      KIND            BUCKET  OBJECTS         BYTES           START           END     STATE
-181883t8089      g2      rebalance       -       1058            1.27MiB         04-28 16:10:14  -       Running
-...
+$ ais cluster add-remove-nodes start-maintenance t[kOHt8086] --yes
+Started rebalance "g1" (to monitor, run 'ais show rebalance').
+t[kOHt8086] is now in maintenance mode
 ```
 
-5. Finally, you can always start and stop global rebalance administratively, for instance:
+Monitor rebalance progress:
 
+```console
+$ ais show rebalance --refresh 30
+REB ID   NODE       OBJECTS RECV   SIZE RECV   OBJECTS SENT   SIZE SENT   START      END   STATE
+g1       lJjt8082   33404          32.62MiB    0              0B          10:14:56   -     Running
+g1       nZDt8085   33108          32.33MiB    0              0B          10:14:56   -     Running
+g1       pAXt8084   34088          33.29MiB    0              0B          10:14:56   -     Running
+g1       saLt8081   33434          32.65MiB    0              0B          10:14:56   -     Running
+g1       yCut8083   33726          32.94MiB    0              0B          10:14:56   -     Running
+```
+
+In this example, the target placed into maintenance is the one draining data, while the remaining active targets receive it.
+
+Verify the object count after rebalance:
+
+```console
+$ ais ls ais://nnn --count-only
+Listed 504,797 names in 1.7s
+```
+
+The identical counts before and after rebalance show that the cluster converged to the new placement without losing objects.
+
+## Starting rebalance administratively
+
+Global rebalance normally starts automatically - triggered by a topology change that alters object placement. It can also be started administratively, on demand.
+
+Like a few other AIS xactions, rebalance is directly startable from the CLI:
+
+```console
+$ ais start <TAB>  ## select one of the startable jobs - a strict subset of all supported xactions
+
+prefetch           dsort              rebalance          mirror             warm-up-metadata
+blob-download      lru                resilver           ec-encode          copy-bck
+download           etl                cleanup            rechunk            move-bck
+```
+
+The `rebalance` command also supports (advanced-usage) bucket-scoped operation and related synchronization/versioning options:
+
+> Bucket scope is advanced usage and generally should be avoided unless you know exactly why a partial, bucket-level rebalance is appropriate. Generally, the cluster should be allowed to rebalance globally.
 
 ```console
 $ ais start rebalance --help
@@ -134,59 +253,37 @@ OPTIONS:
    help, h    Show help
 ```
 
-## Automated Resilvering
+## Rebalance vs. resilver
 
-While rebalance (previous section) takes care of the cluster *grow* and *shrink* events, resilver, as the name implies, is responsible for the [mountpath](overview.md#mountpath) *added* and [mountpath](overview.md#mountpath) *removed* events handled locally within (and by) each storage target.
+Both rebalance and resilver restore HRW-based placement, but they do so at different scopes.
 
-In other words, global rebalance handles scaling (up and down) of the entire AIS cluster while automated *resilvering* takes care of disk attachments and disk faults within a given storage node.
+Global rebalance restores placement across the **cluster**. When the active target set changes, some objects acquire a new HRW destination under the current cluster map, and AIS moves those objects **from one storage node to another**.
 
-> To reiterate, an AIS mountpath is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of `(number of storage targets) x (number of disks in each target)`.
+Resilver restores placement within a **single target**. When the local set of [`mountpaths`](/docs/terminology.md#mountpath) changes, some objects acquire a new local destination on that node, and AIS moves those objects **across mountpaths on the same target**.
 
-As stated, mountpath removal can be done administratively (via API) or be triggered by a disk fault (see [filesystem health checking](https://github.com/NVIDIA/aistore/blob/main/fs/health/README.md).
+In short:
 
-Irrespectively of the original cause, mountpath-level events activate resilver that in many ways performs the same set of steps as the rebalance.
-The one notable difference is that all object migrations are local (and, therefore, relatively fast(er)).
+> rebalance is cluster-wide and inter-target; resilver is local and intra-target.
 
-### CLI Usage
+For more on resilver, see [Resilver](/docs/resilver.md).
 
-Resilvering can be run on a specific target node or the entire cluster (when all targets execute resilvering in parallel).
+## Performance considerations
 
-Similar to global rebalancing, resilvering is a managed *eXtended operation* or [xaction](ic.md).
-All xactions execute asyncrhonously and support a common set of documented APIs to start, terminate the xaction, inquire its progress, etc. The progress of resilvering can be monitored via `ais show job xaction` CLI.
+Rebalancing moves data in the background and competes for I/O, CPU, memory, and network resources.
 
-Examples:
+As a result, during rebalance:
 
-```console
-$ ais advanced resilver # all targets will be resilvered
-Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor the progress
+* response latency may increase
+* aggregate throughput may decrease
+* the impact may be more visible on heavily utilized clusters
 
-$ ais advanced resilver BUQOt8086  # resilver a single node
-Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor the progress
-```
+The exact overhead depends on multiple factors, including:
 
-Automated resilvering can also be disabled. Just like with `rebalance`, the resulting config can be viewed through the CLI:
-NOTE: When automated resilvering is disabled, removing a mountpath may result in data loss.
+* the amount of data that must move
+* the size and shape of the topology change
+* object sizes
+* local disk performance
+* available network bandwidth
+* whether separate intra-cluster networking is provisioned
 
-```console
-$ ais config cluster resilver.enabled=false
-config successfully updated
-
-$ ais show config 361179t8088 resilver --json | grep -A 2 resilver
-    "resilver": {
-        "enabled": false
-    },
-
-$ ais config cluster resilver.enabled=true
-config successfully updated
-
-$ ais show config <TAB-TAB>
-125210p8082   181883t8089   249630t8087   361179t8088   477343p8081   675515t8084   70681p8080    782227p8083   840083t8086   911875t8085
-
-$ ais show config 361179t8088 resilver
-PROPERTY                 VALUE
-resilver.enabled         true
-```
-
-## IO Performance
-
-During rebalancing, response latency and overall cluster throughput may substantially degrade.
+For this reason, administrators often tune rebalance behavior and may temporarily disable automated rebalance while performing planned maintenance or staged upgrades.

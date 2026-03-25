@@ -33,7 +33,7 @@ AIS consistently shows [balanced I/O distribution and linear scalability](https:
 * ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.
 * ✅ **ETL Offload:** Execute I/O intensive data transformations [close to the data](/docs/etl.md), either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
 * ✅ **Get-Batch:** Retrieve multiple objects and/or [archived files](/docs/archive.md) with a single call. Designed for ML/AI pipelines, [Get-Batch](/docs/get_batch.md) fetches an entire training batch in one operation, assembling a TAR (or other supported [serialization formats](/docs/archive.md)) that contains all requested items in the exact user-specified order.
-* ✅ **Data Consistency:** Guaranteed [consistency](/docs/overview.md#read-after-write-consistency) across all gateways, with [write-through](/docs/overview.md#write-through) semantics in presence of [remote backends](/docs/overview.md#backend-provider).
+* ✅ **Data Consistency:** Guaranteed [consistency](/docs/terminology.md#read-after-write-consistency) across all gateways, with [write-through](/docs/terminology.md#write-through) semantics in presence of [remote backends](/docs/terminology.md#backend-provider).
 * ✅ **Serialization & Sharding:** Native, first-class support for TAR, TGZ, TAR.LZ4, and ZIP [archives](/docs/archive.md) for efficient storage and processing of small-file datasets. Features include seamless integration with existing unmodified workflows across all APIs and subsystems.
 * ✅ **Kubernetes:** For production, AIS runs natively on Kubernetes. The dedicated [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository includes the AIS K8s Operator, Ansible playbooks, Helm charts, and deployment guidance.
 * ✅ **Batch Jobs:** More than 30 cluster-wide [batch operations](/docs/batch.md) that you can start, monitor, and control otherwise. The list currently includes:
@@ -99,7 +99,7 @@ Some of the most popular deployment options include:
 
 | Option | Use Case |
 | --- | ---|
-| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) | AIS developers or first-time users, Linux or Mac OS. Run `make kill cli aisloader deploy <<< $'N\nM'`, where `N` is a number of [targets](/docs/overview.md#target), `M` - [gateways](/docs/overview.md#proxy) |
+| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) | AIS developers or first-time users, Linux or Mac OS. Run `make kill cli aisloader deploy <<< $'N\nM'`, where `N` is a number of [targets](/docs/terminology.md#target), `M` - [gateways](/docs/terminology.md#proxy) |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
 | [Docker container](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/single) | Quick testing and evaluation; single-node setup |
 | [GCP/GKE automated install](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-playground) | Developers, first-time users, AI researchers |

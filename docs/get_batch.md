@@ -14,7 +14,7 @@ Other supported capabilities include:
 - Graceful handling of missing data
 - Streaming or buffered delivery
 
-> GetBatch is implemented by the [eXtended Action](/docs/overview.md#xaction) (job). Internally, the job is codenamed `x-moss`. The respective API endpoint is: `/v1/ml/moss`.
+> GetBatch is implemented by the [eXtended Action](/docs/terminology.md#xaction) (job). Internally, the job is codenamed `x-moss`. The respective API endpoint is: `/v1/ml/moss`.
 
 > Note: buffered mode always returns both metadata (that describes the output) and the resulting serialized archive containing all requested data items.
 

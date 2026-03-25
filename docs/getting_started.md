@@ -29,11 +29,11 @@ For datasets below (ballpark) 50TB, a single host may suffice and should be cons
 
 Expecting growth or already past that mark? Plan for multi-node or cloud.
 
-Note that you can always start small: a single-host deployment, a 3-node cluster in the Cloud or on-premises, etc. AIStore supports many options to inter-connect existing clusters - the capability called [unified namespace](/docs/overview.md#unified-namespace) - or migrate existing datasets (on-demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](/docs/overview.md).
+Note that you can always start small: a single-host deployment, a 3-node cluster in the Cloud or on-premises, etc. AIStore supports many options to inter-connect existing clusters - the capability called [unified namespace](/docs/terminology.md#unified-namespace) - or migrate existing datasets (on-demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](/docs/overview.md).
 
 ## Prerequisites
 
-AIStore runs on commodity Linux machines with no special requirements. It is expected that within a given cluster, all AIS [targets](/docs/overview.md#target) are identical, hardware-wise.
+AIStore runs on commodity Linux machines with no special requirements. It is expected that within a given cluster, all AIS [targets](/docs/terminology.md#target) are identical, hardware-wise.
 
 * [Linux](#linux) with `gcc`, `sysstat`, `attr`, `util-linux`
 * Linux **kernel ≥ 6.8**
@@ -202,7 +202,7 @@ In particular, we can use `make` to deploy our very first 3 nodes (and 3 gateway
 $ make kill clean cli aisloader deploy <<< $'3\n3'
 ```
 
-This `make` command executes several make targets (not to confuse with AIS [targets](/docs/overview.md#target)) - in particular, it:
+This `make` command executes several make targets (not to confuse with AIS [targets](/docs/terminology.md#target)) - in particular, it:
 
 * shuts down (via `make kill`) AIStore that _may_ have been previously deployed in the local playground;
 * removes its metadata and data (`make clean`);

@@ -87,7 +87,7 @@ To ensure the benchmark reflects production-like conditions, we ran all tests on
 #### 1.1. System Specs
 
 The benchmark was run on a high-performance AIStore cluster using the following system configuration:
-* **Kubernetes Cluster**: 3 bare-metal nodes, each hosting one [proxy](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#proxy) and one [target](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#target)
+* **Kubernetes Cluster**: 3 bare-metal nodes, each hosting one [proxy](https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#proxy) and one [target](https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#target)
 * **Storage**: 10 × 9.1 TiB HDDs per target
 * **CPU**: 48 cores per node
 * **Memory**: 187 GiB per node

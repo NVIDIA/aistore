@@ -4,7 +4,7 @@
 
 AIS integrates with Amazon S3 on **three fronts**:
 
-1. **Backend storage** – via the [backend provider abstraction](/docs/overview.md#backend-provider), AIStore can be utiized to access (and cache or reliably store in-cluster) a remote cloud bucket such as `s3://my-bucket` (`aws://` is accepted as an alias). This provides seamless access to existing S3 data.
+1. **Backend storage** – via the [backend provider abstraction](/docs/terminology.md#backend-provider), AIStore can be utiized to access (and cache or reliably store in-cluster) a remote cloud bucket such as `s3://my-bucket` (`aws://` is accepted as an alias). This provides seamless access to existing S3 data.
 
 2. **Front‑end compatibility** – every gateway speaks the S3 REST API. The default endpoint is `http(s)://gw-host:port/s3`, but you can enable the `S3-API-via-Root` [feature flag](/docs/feature_flags.md) to serve requests at the cluster root (`http(s)://gw-host:port/`). The same API works uniformly across all bucket types—native `ais://`, cloud‑backed `s3://`, `gs://`, and more.
 
@@ -21,7 +21,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
 | Need drop‑in support for unmodified S3 tools & SDKs (`aws`, `boto3`, `s3cmd`, …)                                        | Want cluster‑wide batch jobs (`ais etl`, `ais prefetch`, `ais copy`, `ais archive`, …)                          |
 | Rely on an existing S3‑centric workflow or third‑party app                                                              | Need fine‑grained control‑plane ops (`ais cluster`, `ais bucket props set`, node lifecycle)                     |
 | Accept MD5‑based ETag semantics—even though MD5 is slower and not crypto‑secure                                         | Value AIS‑native features: virtual directories, adaptive rate‑limiting, WebSocket ETL, streaming cold‑GET, etc. |
-| Accept that some S3 features (CORS, Website hosting, CloudFront) are **not** yet implemented                            | Care about advanced list-objects options (to list [shards](/docs/overview.md#shard)), working with [remote clusters](/docs/overview.md#unified-namespace), non-S3 buckets)                              |
+| Accept that some S3 features (CORS, Website hosting, CloudFront) are **not** yet implemented                            | Care about advanced list-objects options (to list [shards](/docs/terminology.md#shard)), working with [remote clusters](/docs/terminology.md#unified-namespace), non-S3 buckets)                              |
 | Are okay with slight performance overhead from the S3‑to‑AIS adaptation layer (MD5 hashing, XML marshaling/translation) | Want full [Prometheus](/docs/monitoring-prometheus.md) visibility with AIS‑rich metrics & labels                                                  |
 
 ---
@@ -583,7 +583,7 @@ print(f"Successfully uploaded {response['ContentLength']} bytes")
 
 ## Further Reading
 
-* [Backend Providers](/docs/overview.md#backend-provider)
+* [Backend Providers](/docs/terminology.md#backend-provider)
 * [AIS CLI reference](/docs/cli.md)
 * [Auth & ACL](/docs/authn.md)
 * [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
