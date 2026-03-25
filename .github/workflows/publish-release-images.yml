@@ -6,20 +6,29 @@ on:
       - 'v*'
 
 jobs:
+  release-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+    steps:
+      - id: tag
+        run: echo "image_tag=v${GITHUB_REF_NAME#v1.}" >> $GITHUB_OUTPUT
+
   aisnode:
+    needs: release-tag
     strategy:
       matrix:
         include:
           # aisnode
           - image_name: aistorage/aisnode
-            image_tag: ${{ github.ref_name }}
+            image_tag: ${{ needs.release-tag.outputs.image_tag }}
             context_dir: deploy/prod/k8s/aisnode_container
           - image_name: aistorage/aisnode
             image_tag: latest
             context_dir: deploy/prod/k8s/aisnode_container
           # aisnode tracing
           - image_name: aistorage/aisnode
-            image_tag: ${{ github.ref_name }}-oteltracing
+            image_tag: ${{ needs.release-tag.outputs.image_tag }}-oteltracing
             context_dir: deploy/prod/k8s/aisnode_container
             build_tags: oteltracing
           - image_name: aistorage/aisnode
@@ -28,11 +37,18 @@ jobs:
             build_tags: oteltracing
           # ais-init
           - image_name: aistorage/ais-init
-            image_tag: ${{ github.ref_name }}
+            image_tag: ${{ needs.release-tag.outputs.image_tag }}
             context_dir: deploy/prod/k8s/aisinit_container
           - image_name: aistorage/ais-init
             image_tag: latest
             context_dir: deploy/prod/k8s/aisinit_container
+          # authn
+          - image_name: aistorage/authn
+            image_tag: ${{ needs.release-tag.outputs.image_tag }}
+            context_dir: deploy/prod/k8s/authn_container
+          - image_name: aistorage/authn
+            image_tag: latest
+            context_dir: deploy/prod/k8s/authn_container
     uses: ./.github/workflows/docker-build.yml
     with:
       image_name: ${{ matrix.image_name }}
