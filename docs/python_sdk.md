@@ -75,6 +75,9 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [list\_objects](#bucket.Bucket.list_objects)
     * [list\_objects\_iter](#bucket.Bucket.list_objects_iter)
     * [list\_all\_objects](#bucket.Bucket.list_all_objects)
+    * [create\_inventory](#bucket.Bucket.create_inventory)
+    * [destroy\_inventory](#bucket.Bucket.destroy_inventory)
+    * [show\_inventory](#bucket.Bucket.show_inventory)
     * [list\_archive](#bucket.Bucket.list_archive)
     * [transform](#bucket.Bucket.transform)
     * [put\_files](#bucket.Bucket.put_files)
@@ -92,7 +95,6 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [job](#client.Client.job)
     * [etl](#client.Client.etl)
     * [dsort](#client.Client.dsort)
-    * [fetch\_object\_by\_url](#client.Client.fetch_object_by_url)
     * [get\_object\_from\_url](#client.Client.get_object_from_url)
     * [batch](#client.Client.batch)
 * [cluster](#cluster)
@@ -107,6 +109,9 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [is\_ready](#cluster.Cluster.is_ready)
     * [get\_performance](#cluster.Cluster.get_performance)
     * [get\_uuid](#cluster.Cluster.get_uuid)
+    * [get\_node\_log](#cluster.Cluster.get_node_log)
+    * [get\_node\_log\_archive](#cluster.Cluster.get_node_log_archive)
+    * [get\_cluster\_logs](#cluster.Cluster.get_cluster_logs)
 * [etl](#etl)
 * [job](#job)
   * [Job](#job.Job)
@@ -158,19 +163,14 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [head](#obj.object.Object.head)
     * [head\_v2](#obj.object.Object.head_v2)
     * [get\_reader](#obj.object.Object.get_reader)
-    * [get](#obj.object.Object.get)
     * [get\_semantic\_url](#obj.object.Object.get_semantic_url)
     * [get\_url](#obj.object.Object.get_url)
-    * [put\_content](#obj.object.Object.put_content)
-    * [put\_file](#obj.object.Object.put_file)
     * [get\_writer](#obj.object.Object.get_writer)
     * [multipart\_upload](#obj.object.Object.multipart_upload)
     * [promote](#obj.object.Object.promote)
     * [delete](#obj.object.Object.delete)
     * [copy](#obj.object.Object.copy)
     * [blob\_download](#obj.object.Object.blob_download)
-    * [append\_content](#obj.object.Object.append_content)
-    * [set\_custom\_props](#obj.object.Object.set_custom_props)
 * [obj.object\_reader](#obj.object_reader)
   * [ObjectReader](#obj.object_reader.ObjectReader)
     * [head](#obj.object_reader.ObjectReader.head)
@@ -1270,7 +1270,8 @@ def list_objects(prefix: str = "",
                  uuid: str = "",
                  continuation_token: str = "",
                  flags: Optional[List[ListObjectFlag]] = None,
-                 target: str = "") -> BucketList
+                 target: str = "",
+                 inventory_name: str = "") -> BucketList
 ```
 
 Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if
@@ -1289,9 +1290,14 @@ available).
   Defaults to "0" - return maximum number of objects.
 - `uuid` _str, optional_ - Job ID, required to get the next page of objects
 - `continuation_token` _str, optional_ - Marks the object to start reading the next page
-- `flags` _List[ListObjectFlag], optional_ - Optional list of ListObjectFlag enums to include as flags in the
-  request
-  target(str, optional): Only list objects on this specific target node
+- `flags` _List[ListObjectFlag], optional_ - Optional list of ListObjectFlag enums to include
+  as flags in the request.
+- `target` _str, optional_ - Only list objects on this specific target node.
+- `inventory_name` _str, optional_ - Name of a native bucket inventory (NBI) to list from.
+  Lists objects from the named inventory snapshot instead of querying the remote
+  backend. Requires a previously created inventory (see `create_inventory`).
+  Alternatively, to list without specifying a name pass
+  `flags=[ListObjectFlag.NBI]` (valid only when exactly one inventory exists).
   
 
 **Returns**:
@@ -1318,7 +1324,8 @@ def list_objects_iter(prefix: str = "",
                       props: str = "",
                       page_size: int = 0,
                       flags: Optional[List[ListObjectFlag]] = None,
-                      target: str = "") -> ObjectIterator
+                      target: str = "",
+                      inventory_name: str = "") -> ObjectIterator
 ```
 
 Returns an iterator for all objects in bucket
@@ -1336,7 +1343,9 @@ Returns an iterator for all objects in bucket
   Defaults to "0" - return maximum number objects
 - `flags` _List[ListObjectFlag], optional_ - Optional list of ListObjectFlag enums to include as flags in the
   request
-  target(str, optional): Only list objects on this specific target node
+- `target` _str, optional_ - Only list objects on this specific target node
+- `inventory_name` _str, optional_ - Name of a native bucket inventory (NBI) to list from.
+  See `list_objects` for details.
   
 
 **Returns**:
@@ -1362,7 +1371,8 @@ def list_all_objects(prefix: str = "",
                      props: str = "",
                      page_size: int = 0,
                      flags: Optional[List[ListObjectFlag]] = None,
-                     target: str = "") -> List[BucketEntry]
+                     target: str = "",
+                     inventory_name: str = "") -> List[BucketEntry]
 ```
 
 Returns a list of all objects in bucket
@@ -1380,7 +1390,9 @@ Returns a list of all objects in bucket
   Defaults to "0" - return maximum number objects
 - `flags` _List[ListObjectFlag], optional_ - Optional list of ListObjectFlag enums to include as flags in the
   request
-  target(str, optional): Only list objects on this specific target node
+- `target` _str, optional_ - Only list objects on this specific target node
+- `inventory_name` _str, optional_ - Name of a native bucket inventory (NBI) to list from.
+  See `list_objects` for details.
   
 
 **Returns**:
@@ -1396,6 +1408,76 @@ Returns a list of all objects in bucket
 - `requests.exceptions.HTTPError` - Service unavailable
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
 - `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.create_inventory"></a>
+
+### create\_inventory
+
+```python
+def create_inventory(name: str = "",
+                     prefix: str = "",
+                     props: str = "",
+                     names_per_chunk: int = 0,
+                     force: bool = False) -> str
+```
+
+Create a native bucket inventory (NBI) — a pre-computed snapshot of the
+bucket's object listing stored as chunked inventory files.
+
+**Arguments**:
+
+- `name` _str, optional_ - Inventory name (must be unique per bucket).
+  Auto-generated if empty.
+- `prefix` _str, optional_ - Only inventory objects matching this prefix.
+- `props` _str, optional_ - Comma-separated object properties to include.
+- `Default` - "name,size,cached" (see Go `createNBIHandler`).
+- `names_per_chunk` _int, optional_ - Number of object names per inventory
+  chunk. 0 means use the server default.
+  See Go `api/apc/nbi.go`: `MinInvNamesPerChunk` (2),
+  `DfltInvNamesPerChunk` (20K), `MaxInvNamesPerChunk` (640K).
+- `force` _bool, optional_ - If True, remove any existing inventories
+  for this bucket before creating a new one.
+  
+
+**Returns**:
+
+- `str` - Job ID (xaction ID) for monitoring the inventory creation.
+
+<a id="bucket.Bucket.destroy_inventory"></a>
+
+### destroy\_inventory
+
+```python
+def destroy_inventory(name: str = "") -> None
+```
+
+Destroy a native bucket inventory. If no name is specified,
+destroys all inventories for this bucket.
+
+**Arguments**:
+
+- `name` _str, optional_ - Inventory name to destroy. If empty,
+  all inventories for this bucket are destroyed.
+
+<a id="bucket.Bucket.show_inventory"></a>
+
+### show\_inventory
+
+```python
+def show_inventory(name: str = "") -> Dict[str, NBIInfo]
+```
+
+Show native bucket inventory metadata.
+
+**Arguments**:
+
+- `name` _str, optional_ - Inventory name to query. If empty,
+  returns all inventories for this bucket.
+  
+
+**Returns**:
+
+  Dict[str, NBIInfo]: Mapping of inventory object name to its metadata.
 
 <a id="bucket.Bucket.list_archive"></a>
 
@@ -1575,7 +1657,8 @@ Factory constructor for multiple objects belonging to this bucket.
 def make_request(method: str,
                  action: str,
                  value: Optional[Dict] = None,
-                 params: Optional[Dict] = None) -> requests.Response
+                 params: Optional[Dict] = None,
+                 name: str = "") -> requests.Response
 ```
 
 Use the bucket's client to make a request to the bucket endpoint on the AIS server
@@ -1586,6 +1669,7 @@ Use the bucket's client to make a request to the bucket endpoint on the AIS serv
 - `action` _str_ - Action string used to create an ActionMsg to pass to the server
 - `value` _dict, optional_ - Additional value parameter to pass in the ActionMsg
 - `params` _dict, optional_ - Optional parameters to pass in the request
+- `name` _str, optional_ - Name parameter to pass in the ActionMsg
   
 
 **Returns**:
@@ -1672,7 +1756,6 @@ AIStore client for managing buckets, objects, and ETL jobs.
   If env var is set to `0`, that specific timeout is disabled. Defaults to `(3, 20)` if not set.
 - `retry_config` _RetryConfig, optional_ - Defines retry behavior for HTTP and network failures.
   If not provided, the default retry configuration (`RetryConfig.default()`) is used.
-- `retry` _urllib3.Retry, optional_ - [Deprecated] Retry configuration from urllib3. Use `retry_config` instead.
 - `token` _str, optional_ - Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
   will be used. Defaults to None.
 - `max_pool_size` _int, optional_ - Maximum number of connections per host in the connection pool.
@@ -1780,29 +1863,6 @@ Does not make any HTTP request, only instantiates a dSort object.
 **Returns**:
 
   dSort object created
-
-<a id="client.Client.fetch_object_by_url"></a>
-
-### fetch\_object\_by\_url
-
-```python
-def fetch_object_by_url(url: str) -> Object
-```
-
-Deprecated: Use `get_object_from_url` instead.
-
-Creates an Object instance from a URL.
-
-This method does not make any HTTP requests.
-
-**Arguments**:
-
-- `url` _str_ - Full URL of the object (e.g., "ais://bucket1/file.txt")
-  
-
-**Returns**:
-
-- `Object` - The object constructed from the specified URL
 
 <a id="client.Client.get_object_from_url"></a>
 
@@ -2076,6 +2136,72 @@ def get_uuid() -> str
 ```
 
 Returns: UUID of AIStore Cluster
+
+<a id="cluster.Cluster.get_node_log"></a>
+
+### get\_node\_log
+
+```python
+def get_node_log(node_id: str,
+                 severity: LogSeverity = LogSeverity.INFO) -> str
+```
+
+Get the current log from a specific cluster node (target or proxy).
+
+**Arguments**:
+
+- `node_id` _str_ - Daemon ID of the node (e.g., "hHQZBnBQ").
+- `severity` _LogSeverity_ - Log severity level (default: LogSeverity.INFO).
+  
+
+**Returns**:
+
+- `str` - Current log content as text.
+
+<a id="cluster.Cluster.get_node_log_archive"></a>
+
+### get\_node\_log\_archive
+
+```python
+def get_node_log_archive(node_id: str,
+                         severity: LogSeverity = LogSeverity.INFO) -> bytes
+```
+
+Download a TAR.GZ archive of all rotated logs from a specific node.
+
+**Arguments**:
+
+- `node_id` _str_ - Daemon ID of the node (e.g., "hHQZBnBQ").
+- `severity` _LogSeverity_ - Log severity level (default: LogSeverity.INFO).
+  
+
+**Returns**:
+
+- `bytes` - TAR.GZ archive containing all rotated log files.
+  Loaded into memory; typically ~5MB compressed per node.
+  
+- `TODO` - stream the archive instead of loading into memory for large logs.
+
+<a id="cluster.Cluster.get_cluster_logs"></a>
+
+### get\_cluster\_logs
+
+```python
+def get_cluster_logs(severity: LogSeverity = LogSeverity.INFO,
+                     role: NodeFilter = NodeFilter.TARGET) -> Dict[str, str]
+```
+
+Get logs from all nodes of a given role.
+
+**Arguments**:
+
+- `severity` _LogSeverity_ - Log severity level (default: LogSeverity.INFO).
+- `role` _NodeFilter_ - Node filter (default: NodeFilter.TARGET).
+  
+
+**Returns**:
+
+  Dict[str, str]: Mapping of node ID to log content.
 
 <a id="job.Job"></a>
 
@@ -2993,60 +3119,13 @@ and optionally writes to a provided writer.
 - `See` - https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
 - `direct` _bool, optional_ - If True, the object content is read directly from the target node,
   bypassing the proxy.
-- `num_workers` _Optional[int]_ - If provided, use concurrent range-reads with this many
-  workers for faster downloads. Uses ProcessPoolExecutor with shared memory for
-  optimal throughput.
+- `num_workers` _Optional[int]_ - If provided, enable parallel download — the
+  object is split into byte ranges fetched concurrently by this many workers.
   
 
 **Returns**:
 
 - `ObjectReader` - An iterator for streaming object content.
-  
-
-**Raises**:
-
-- `ValueError` - If `byte_range` is used with `blob_download_config`.
-- `requests.RequestException` - If an error occurs during the request.
-- `requests.ConnectionError` - If there is a connection error.
-- `requests.ConnectionTimeout` - If the connection times out.
-- `requests.ReadTimeout` - If the read operation times out.
-
-<a id="obj.object.Object.get"></a>
-
-### get
-
-```python
-def get(archive_config: Optional[ArchiveConfig] = None,
-        blob_download_config: Optional[BlobDownloadConfig] = None,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl: Optional[ETLConfig] = None,
-        writer: Optional[BufferedWriter] = None,
-        latest: bool = False,
-        byte_range: Optional[str] = None) -> ObjectReader
-```
-
-Deprecated: Use 'get_reader' instead.
-
-Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
-
-**Arguments**:
-
-- `archive_config` _ArchiveConfig, optional_ - Settings for archive extraction.
-- `blob_download_config` _BlobDownloadConfig, optional_ - Settings for using blob download.
-- `chunk_size` _int, optional_ - Chunk size to use while reading from stream.
-- `etl` _ETLConfig, optional_ - Settings for ETL-specific operations (name, meta).
-- `writer` _BufferedWriter, optional_ - User-provided writer for writing content output.
-  The user is responsible for closing the writer.
-- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket.
-- `byte_range` _str, optional_ - Byte range in RFC 7233 format for single-range requests
-  (e.g., "bytes=0-499", "bytes=500-", "bytes=-500").
-- `See` - https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
-  
-
-**Returns**:
-
-- `ObjectReader` - An ObjectReader that can be iterated over to stream chunks of object content
-  or used to read all content directly.
   
 
 **Raises**:
@@ -3091,55 +3170,6 @@ Get the full url to the object including base url and any query parameters
 **Returns**:
 
   Full URL to get object
-
-<a id="obj.object.Object.put_content"></a>
-
-### put\_content
-
-```python
-def put_content(content: bytes) -> Response
-```
-
-Deprecated: Use 'ObjectWriter.put_content' instead.
-
-Puts bytes as an object to a bucket in AIS storage.
-
-**Arguments**:
-
-- `content` _bytes_ - Bytes to put as an object.
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="obj.object.Object.put_file"></a>
-
-### put\_file
-
-```python
-def put_file(path: str or Path) -> Response
-```
-
-Deprecated: Use 'ObjectWriter.put_file' instead.
-
-Puts a local file as an object to a bucket in AIS storage.
-
-**Arguments**:
-
-- `path` _str or Path_ - Path to local file
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `ValueError` - The path provided is not a valid file
 
 <a id="obj.object.Object.get_writer"></a>
 
@@ -3301,58 +3331,6 @@ Returns job ID that for the blob download operation.
 - `requests.exceptions.HTTPError` - Service unavailable
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
 
-<a id="obj.object.Object.append_content"></a>
-
-### append\_content
-
-```python
-def append_content(content: bytes,
-                   handle: str = "",
-                   flush: bool = False) -> str
-```
-
-Deprecated: Use 'ObjectWriter.append_content' instead.
-
-Append bytes as an object to a bucket in AIS storage.
-
-**Arguments**:
-
-- `content` _bytes_ - Bytes to append to the object.
-- `handle` _str_ - Handle string to use for subsequent appends or flush (empty for the first append).
-- `flush` _bool_ - Whether to flush and finalize the append operation, making the object accessible.
-  
-
-**Returns**:
-
-- `handle` _str_ - Handle string to pass for subsequent appends or flush.
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `requests.exceptions.HTTPError(404)` - The object does not exist
-
-<a id="obj.object.Object.set_custom_props"></a>
-
-### set\_custom\_props
-
-```python
-def set_custom_props(custom_metadata: Dict[str, str],
-                     replace_existing: bool = False) -> Response
-```
-
-Deprecated: Use 'ObjectWriter.set_custom_props' instead.
-
-Set custom properties for the object.
-
-**Arguments**:
-
-- `custom_metadata` _Dict[str, str]_ - Custom metadata key-value pairs.
-- `replace_existing` _bool, optional_ - Whether to replace existing metadata. Defaults to False.
-
 <a id="obj.object_reader.ObjectReader"></a>
 
 ## Class: ObjectReader
@@ -3405,16 +3383,18 @@ Object metadata attributes.
 ### read\_all
 
 ```python
-def read_all() -> bytes
+def read_all() -> Union[bytes, ParallelBuffer]
 ```
 
-Read all byte data directly from the object response without using a stream.
-
-This requires all object content to fit in memory at once and downloads all content before returning.
+Read all object content into memory.
 
 **Returns**:
 
-- `bytes` - Object content as bytes.
+- `bytes` - When called without `num_workers` (single-stream GET).
+- `ParallelBuffer` - When called with `num_workers` set (parallel
+  download).  A view backed by shared memory — the
+  caller **must** call `result.close()` or use it as a context
+  manager to release the shared memory segment when done.
 
 <a id="obj.object_reader.ObjectReader.raw"></a>
 

@@ -6,43 +6,49 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
-### Fixed
-
-- `ListObjectFlag`: fix enum to match Go `api/apc/lsmsg.go` — wrong names (ALL → MISSING, USE_CACHE → NOT_CACHED), wrong positions (DONT_HEAD_REMOTE), and missing flags (BCK_PRESENT, NO_RECURSION, DIFF, NO_DIRS, IS_S3, NBI).
-
-### Removed
-
-- Removed deprecated methods and parameters:
-  - `Object.get()` replaced by `Object.get_reader()`
-  - `Object.put_content()`, `Object.put_file()`, `Object.append_content()`, `Object.set_custom_props()` replaced by `Object.get_writer()` equivalents
-  - `Client.fetch_object_by_url()` replaced by `Client.get_object_from_url()`
-  - `Client` constructor `retry` (`urllib3.Retry`) parameter replaced by `retry_config` (`RetryConfig`)
-  - `BucketList.get_entries()` replaced by `BucketList.entries` property
+## [1.23.0] - 2026-03-25
 
 ### Added
 
-- Native Bucket Inventory (NBI) support: `Bucket.create_inventory()`,
-  `Bucket.destroy_inventory()`, `Bucket.show_inventory()`.
-- `inventory_name` param for `list_objects()`, `list_objects_iter()`, and
-  `list_all_objects()` to list objects from an NBI snapshot.
-- `Cluster.get_node_log()`, `Cluster.get_node_log_archive()`, `Cluster.get_cluster_logs()`:
-  fetch AIS daemon logs via the SDK.
-- `LogSeverity`, `NodeFilter` enums for log retrieval and cluster operations.
-- `Etl.logs()`: fetch ETL pod logs via the SDK (returns `List[ETLNodeLogs]`).
-- MCP server (`aistore.mcp`) for AI agent integration (Claude, Cursor, etc.):
-  cluster health/info/performance, bucket list/summary/objects, all read-only.
+- **MCP server** (experimental): initial `aistore.mcp` integration for AI agents
+  (Claude, Cursor, Windsurf, etc.). Read-only tools for cluster health/info/performance,
+  bucket listing/summary, object listing/metadata, job status, and ETL details/logs.
   Install via `pip install aistore[mcp]`.
-- MCP server: job and ETL tools — list jobs, job status, list ETLs,
-  ETL details, ETL pod logs.
-- `ParallelBuffer`: result of a parallel object download, backed by `SharedMemory`.
-  Returned by `ObjectReader.read_all()` when `num_workers` is set; use as a context manager or call `close()`.
-- `ObjectReader.read_all()` returns `ParallelBuffer` (parallel) or `bytes` (single-stream).
-- `AISParallelMapDataset`: separate PyTorch map-style dataset for parallel-download large-object workloads.
+- **Native Bucket Inventory (NBI)**: `Bucket.create_inventory()`,
+  `Bucket.destroy_inventory()`, `Bucket.show_inventory()` for managing bucket inventories.
+  `inventory_name` parameter added to `list_objects()`, `list_objects_iter()`, and
+  `list_all_objects()` to list objects from an NBI snapshot.
+- **Parallel download `read_all()`**: `ObjectReader.read_all()` with `num_workers`
+  now returns a `ParallelBuffer` backed by `SharedMemory` — eliminates the extra
+  memory copy previously required when joining chunks from the ring buffer.
+- **`AISParallelMapDataset`**: new PyTorch map-style dataset optimized for
+  parallel-download of large objects.
+- **Cluster log retrieval**: `Cluster.get_node_log()`, `Cluster.get_node_log_archive()`,
+  `Cluster.get_cluster_logs()` for fetching AIS daemon logs programmatically.
+  New `LogSeverity` and `NodeFilter` enums for filtering.
+- **ETL pod logs**: `Etl.logs()` returns `List[ETLNodeLogs]` with per-target ETL pod output.
 
 ### Changed
 
-- `read_all()` moved from `ObjectReader` into each content provider; declared as `@abstractmethod Union[bytes, ParallelBuffer]` in `BaseContentIterProvider`.
+- `read_all()` moved from `ObjectReader` into each content provider as an
+  `@abstractmethod` on `BaseContentIterProvider`, returning `Union[bytes, ParallelBuffer]`.
 - `ParallelBuffer` and `RingBuffer` extracted into `aistore.sdk.obj.content_iterator.buffer`.
+
+### Fixed
+
+- `ListObjectFlag` enum synced with Go `api/apc/lsmsg.go`:
+  renamed `ALL` to `MISSING`, `USE_CACHE` to `NOT_CACHED`; corrected bit position
+  for `DONT_HEAD_REMOTE`; added missing flags `BCK_PRESENT`, `NO_RECURSION`,
+  `DIFF`, `NO_DIRS`, `IS_S3`, `NBI`.
+
+### Removed
+
+- Removed deprecated methods and parameters (deprecated since v1.10.0–v1.13.0):
+  - `Object.get()` — use `Object.get_reader()`
+  - `Object.put_content()`, `Object.put_file()`, `Object.append_content()`, `Object.set_custom_props()` — use `Object.get_writer()` equivalents
+  - `Client.fetch_object_by_url()` — use `Client.get_object_from_url()`
+  - `Client` constructor `retry` (`urllib3.Retry`) parameter — use `retry_config` (`RetryConfig`)
+  - `BucketList.get_entries()` — use `BucketList.entries` property
 
 ## [1.22.1] - 2026-03-12
 

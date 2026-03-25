@@ -33,6 +33,9 @@ For usage examples, please see:
     * [ZeroDict](#shard_reader.AISShardReader.ZeroDict)
 * [multishard\_dataset](#multishard_dataset)
   * [AISMultiShardStream](#multishard_dataset.AISMultiShardStream)
+* [parallel\_map\_dataset](#parallel_map_dataset)
+  * [AISParallelMapDataset](#parallel_map_dataset.AISParallelMapDataset)
+    * [num\_workers](#parallel_map_dataset.AISParallelMapDataset.num_workers)
 
 Base class for AIS Map Style Datasets
 
@@ -271,4 +274,42 @@ An iterable-style dataset that iterates over multiple shard streams and yields c
 
 - `Iterable` - Iterable over the combined samples, where each sample is a tuple of
   one object bytes from each shard stream
+
+PyTorch Map-style Dataset with parallel download acceleration.
+
+Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+
+<a id="parallel_map_dataset.AISParallelMapDataset"></a>
+
+## Class: AISParallelMapDataset
+
+```python
+class AISParallelMapDataset(AISBaseMapDataset)
+```
+
+Map-style dataset that uses parallel download to fetch objects.
+
+Parallel download splits each object into byte ranges and fetches them
+concurrently using `num_workers` workers.
+
+`__getitem__` returns `(object_name, ParallelBuffer)`. The caller (or
+PyTorch DataLoader collate function) is responsible for consuming and
+closing the `ParallelBuffer`.
+
+**Arguments**:
+
+- `ais_source_list` - Single or list of AISSource objects to load data.
+- `prefix_map` - Map of AISSource to prefix(es) for filtering objects.
+- `num_workers` - Number of concurrent range-read workers per object.
+
+<a id="parallel_map_dataset.AISParallelMapDataset.num_workers"></a>
+
+### num\_workers
+
+```python
+@property
+def num_workers() -> int
+```
+
+Number of concurrent range-read workers per object.
 

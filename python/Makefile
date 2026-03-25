@@ -130,7 +130,7 @@ SDK_MODULES := \
 	-m obj.object -m obj.object_reader -m obj.obj_file.object_file -m obj.object_props -m obj.object_attributes
 
 PYTORCH_MODULES := \
-	-m base_map_dataset -m base_iter_dataset -m map_dataset -m iter_dataset -m shard_reader -m multishard_dataset
+	-m base_map_dataset -m base_iter_dataset -m map_dataset -m iter_dataset -m shard_reader -m multishard_dataset -m parallel_map_dataset
 
 .PHONY: generate-sdk-docs
 generate-sdk-docs:
