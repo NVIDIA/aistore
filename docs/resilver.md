@@ -17,7 +17,7 @@ Resilver walks all objects and relocates them as needed to restore data placemen
 
 AIStore uses the same conceptual model:
 
-At the **cluster level**, rebalance distributes objects across targets using HRW.
+At the **cluster level**, [global rebalance](/docs/rebalance.md) distributes objects across targets using HRW.
 
 At the (local) **node level**, resilver distributes objects across mountpaths using the same HRW algorithm.
 

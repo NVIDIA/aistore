@@ -7,14 +7,34 @@ The list of supported jobs can be viewed via the CLI `show` command and currentl
 ```console
 $ ais show job --help
 
-NAME:
-   show  Show running and/or finished jobs:
-         archive        blob-download  cleanup       copy-bucket    copy-objects      delete-objects
-         download       dsort          ec-bucket     ec-get         ec-put            ec-resp
-         elect-primary  etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
-         get-batch      list           lru-eviction  mirror         prefetch-objects  promote-files
-         put-copies     rebalance      rechunk       rename-bucket  resilver          summary
-         warm-up-metadata
+   ais show job - Show running and/or finished jobs:
+     archive              blob-download  cleanup     copy-bucket   copy-objects   create-inventory
+     delete-objects       download       dsort       ec-bucket     ec-get         ec-put
+     ec-resp              elect-primary  etl-bucket  etl-inline    etl-objects    evict-objects
+     evict-remote-bucket  get-batch      list        lru-eviction  mirror         prefetch-objects
+     promote-files        put-copies     rebalance   rechunk       rename-bucket  resilver
+     summary              warm-up-metadata
+   (use any of these names with 'ais show job' command, or try shortcuts: "evict", "prefetch", "copy", "delete", "ec")
+
+   e.g.:
+     - show job prefetch-listrange           - show all running prefetch jobs;
+     - show job prefetch                     - same as above;
+     - show job prefetch --top 5             - show 5 most recent prefetch jobs;
+     - show job tco-cysbohAGL                - show a given (multi-object copy/transform) job identified by its unique ID;
+     - show job copy-listrange               - show all running multi-object copies;
+     - show job copy-objects                 - same as above (using display name);
+     - show job copy                         - show all copying jobs including both bucket-to-bucket and multi-object;
+     - show job copy-objects --all           - show both running and already finished (or stopped) multi-object copies;
+     - show job copy-objects --all --top 10  - show 10 most recent multi-object copy jobs;
+     - show job rechunk                      - show all running rechunk jobs;
+     - show job ec                           - show all erasure-coding;
+     - show job list                         - show all running list-objects jobs;
+     - show job ls                           - same as above;
+     - show job ls --refresh 10              - same as above with periodic _refreshing_ every 10 seconds;
+     - show job ls --refresh 10 --count 4    - same as above but only for the first four 10-seconds intervals;
+     - show job prefetch --refresh 1m        - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
+     - show job evict                        - all running bucket and/or data evicting jobs;
+     - show job --all                        - show absolutely all jobs, running and finished.
 ```
 
 Terminology-wise, in the code we mostly call it _xaction_ by the name of the corresponding software abstraction. But elsewhere, it is simply a _job_ - the two terms are interchangeable.
@@ -53,11 +73,11 @@ Last (but not the least) is - time. Job execution may take many seconds, sometim
 
 Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset and more.
 
-Global rebalance gets (automatically) triggered by any membership changes (nodes joining, leaving, powercycling, etc.) that can be further visualized via `ais show rebalance` CLI.
+[Global rebalance](/docs/rebalance.md) gets automatically triggered by any membership changes (nodes joining, leaving, powercycling, etc.) that can be further visualized via `ais show rebalance` CLI.
 
 Another example would be _primary election_. AIS proxies provide access points ("endpoints") for the frontend API. At any point in time there is a single **primary** proxy that also controls versioning and distribution of the current cluster map. When and if the primary fails, another proxy is majority-elected to perform the (primary) role.
 
-This (election by simple majority) is also a _job_ that cannot be started via `ais start` or the corresponding API. Similar to global rebalance, it is _event-driven_. Similar to rebalance, there's a separate dedicated API to run it administratively.
+This (election by simple majority) is also a _job_ that cannot be started via `ais start` or the corresponding API. Similar to [global rebalance](/docs/rebalance.md), it is _event-driven_. Similar to rebalance, there's a separate dedicated API to run it administratively.
 
 > Rebalance and a few other AIS jobs have their own CLI extensions. Generally, though, you can always monitor *xactions* via `ais show job xaction` command that also supports verbose mode and other options.
 

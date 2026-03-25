@@ -195,7 +195,7 @@ func (t *target) initBackends() {
 func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
 	const (
 		fmtErrUnknown = "%s: unknown backend provider %q"
-		fmtErrFailed  = "%s: failed to initialize [%s] backend, err: %w"
+		fmtErrFailed  = "%s: failed to initialize %s [%s] backend, err: %w"
 	)
 	var (
 		enabled   []string
@@ -226,6 +226,7 @@ func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
 		}
 		t.bps[provider] = bp
 
+		// handle all 2x2 cases
 		configured := config.Backend.Get(provider) != nil
 		switch {
 		case err == nil && configured:
@@ -238,13 +239,20 @@ func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
 
 			if !cmn.IsErrInitMissingBackend(err) {
 				// as is
-				return fmt.Errorf(fmtErrFailed, t, provider, err)
+				return fmt.Errorf(fmtErrFailed, t, "configured", provider, err)
 			}
 			notlinked = append(notlinked, provider)
 		case err != nil && !configured:
 			_, ok := err.(*cmn.ErrInitBackend) // error type to indicate a _mock_ backend
-			if !ok {
-				return fmt.Errorf(fmtErrFailed, t, provider, err)
+			switch {
+			case ok:
+				// do nothing
+			case provider == apc.OCI:
+				// TODO: temporary OCI-specific exception (requires numerous config knobs, performs multiple validations)
+				disabled = append(disabled, provider)
+				nlog.Errorf("%s: ignoring failure to initialize not configured [%s] backend: %v", t, provider, err)
+			default:
+				return fmt.Errorf(fmtErrFailed, t, "not configured", provider, err)
 			}
 		}
 	}

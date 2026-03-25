@@ -65,7 +65,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Streaming-Cold-GET` | `perf,integrity-` | write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object |
 | `S3-Reverse-Proxy` | `s3,net,ops` | use reverse proxy calls instead of HTTP-redirect for S3 API |
 | `S3-Use-Path-Style` | `s3,compat` | use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY |
-| `Do-not-Delete-When-Rebalancing` | `integrity?,ops` | disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects |
+| `Do-not-Delete-When-Rebalancing` | `integrity?,ops` | disable lazy deletion during [global rebalance](/docs/rebalance.md): do not delete misplaced sources of the migrated objects |
 | `Do-not-Set-Control-Plane-ToS` | `net,ops` | intra-cluster control plane: use default network priority (do not set IPv4 ToS to low-latency) |
 | `Trust-Crypto-Safe-Checksums` | `integrity+,overhead` | when checking whether objects are identical trust only cryptographically secure checksums |
 | `S3-ListObjectVersions` | `s3,overhead` | when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only) |

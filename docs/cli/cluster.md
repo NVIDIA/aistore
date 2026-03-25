@@ -692,7 +692,7 @@ Node "omWp8083" has been successfully removed from the cluster.
 $ ais cluster add-remove-nodes shutdown t[23kfa10f]
 ```
 
-Similar to the `maintenance` option, `shutdown` triggers global rebalancing then shuts down the corresponding `aisnode` process (target `t[23kfa10f]` in the example above).
+Similar to the `maintenance` option, `shutdown` triggers [global rebalance](/docs/rebalance.md)ng then shuts down the corresponding `aisnode` process (target `t[23kfa10f]` in the example above).
 
 #### Temporarily put node in maintenance
 

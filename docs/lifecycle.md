@@ -113,7 +113,7 @@ or a few times manually - eventually `show cluster` will report that rebalance (
 | --- | --- |
 | $${\color{red}maintenance}$$ | $${\color{cyan}maintenance}$$ |
 
-The takeaway: global rebalance runs its full way _before_ the node in question is permitted to leave. If interrupted for any reason whatsoever (power-cycle, network disconnect, new node joining, cluster shutdown, etc.) - rebalance will resume and will keep going until the [governing condition](#proper-location) is fully and globally satisfied.
+The takeaway: [global rebalance](/docs/rebalance.md) runs its full way _before_ the node in question is permitted to leave. If interrupted for any reason whatsoever (power-cycle, network disconnect, new node joining, cluster shutdown, etc.) - rebalance will resume and will keep going until the [governing condition](#proper-location) is fully and globally satisfied.
 
 ## Summary
 
