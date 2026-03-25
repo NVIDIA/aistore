@@ -209,7 +209,8 @@ class Object:
         ).headers
         return ObjectAttributesV2(headers)
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals, too-many-branches
+    # TODO: consolidate validation rules to reduce branch count
     def get_reader(
         self,
         archive_config: Optional[ArchiveConfig] = None,
@@ -241,9 +242,8 @@ class Object:
                 See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
             direct (bool, optional): If True, the object content is read directly from the target node,
                 bypassing the proxy.
-            num_workers (Optional[int]): If provided, use concurrent range-reads with this many
-                workers for faster downloads. Uses ProcessPoolExecutor with shared memory for
-                optimal throughput.
+            num_workers (Optional[int]): If provided, enable parallel download — the
+                object is split into byte ranges fetched concurrently by this many workers.
 
         Returns:
             ObjectReader: An iterator for streaming object content.
@@ -305,6 +305,11 @@ class Object:
             if blob_download_config:
                 raise ValueError(
                     "Cannot use `num_workers` with `blob_download_config`."
+                )
+            if etl:
+                raise ValueError(
+                    "Cannot use `num_workers` with `etl`. "
+                    "Parallel download issues raw range reads that bypass ETL."
                 )
 
         if byte_range:

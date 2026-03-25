@@ -42,9 +42,8 @@ class TestObjectReader(unittest.TestCase):
         self.assertEqual(attr, mock_attr)
         self.object_client.head.assert_called_once()
 
-    @patch("aistore.sdk.obj.object_reader.ObjectAttributes", autospec=True)
-    def test_read_all(self, mock_attr):
-        # Should return the response content and update the attributes
+    def test_read_all(self):
+        # read_all() delegates to the provider; verify content is returned correctly
         chunk1 = b"chunk1"
         chunk2 = b"chunk2"
         mock_response = Mock(
@@ -56,12 +55,8 @@ class TestObjectReader(unittest.TestCase):
 
         content = self.object_reader.read_all()
 
-        # Assert the result, the call to object client
         self.assertEqual(chunk1 + chunk2, content)
         self.object_client.get.assert_called_with(stream=False)
-        # Assert attributes parsed and updated
-        self.assertIsInstance(self.object_reader.attributes, ObjectAttributes)
-        mock_attr.assert_called_with(self.response_headers)
 
     @patch("aistore.sdk.obj.object_reader.ObjectAttributes", autospec=True)
     def test_raw(self, mock_attr):

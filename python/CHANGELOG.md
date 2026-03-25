@@ -34,6 +34,15 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   Install via `pip install aistore[mcp]`.
 - MCP server: job and ETL tools — list jobs, job status, list ETLs,
   ETL details, ETL pod logs.
+- `ParallelBuffer`: result of a parallel object download, backed by `SharedMemory`.
+  Returned by `ObjectReader.read_all()` when `num_workers` is set; use as a context manager or call `close()`.
+- `ObjectReader.read_all()` returns `ParallelBuffer` (parallel) or `bytes` (single-stream).
+- `AISParallelMapDataset`: separate PyTorch map-style dataset for parallel-download large-object workloads.
+
+### Changed
+
+- `read_all()` moved from `ObjectReader` into each content provider; declared as `@abstractmethod Union[bytes, ParallelBuffer]` in `BaseContentIterProvider`.
+- `ParallelBuffer` and `RingBuffer` extracted into `aistore.sdk.obj.content_iterator.buffer`.
 
 ## [1.22.1] - 2026-03-12
 

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from typing import Generator
@@ -16,6 +16,10 @@ class ContentIterProvider(BaseContentIterProvider):
         client (ObjectClient): Client for accessing contents of an individual object.
         chunk_size (int): Size of each chunk of data yielded from the response stream.
     """
+
+    def read_all(self) -> bytes:
+        """Read all object content in a single non-streamed request."""
+        return self._client.get(stream=False).content
 
     def create_iter(self, offset: int = 0) -> Generator[bytes, None, None]:
         """

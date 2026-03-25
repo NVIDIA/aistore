@@ -3,12 +3,13 @@
 #
 
 from io import BufferedIOBase
-from typing import Optional, Generator, Any
+from typing import Optional, Generator, Any, Union
 
 import requests
 
 from aistore.sdk.obj.content_iterator import (
     ContentIterProvider,
+    ParallelBuffer,
     ParallelContentIterProvider,
 )
 from aistore.sdk.obj.object_client import ObjectClient
@@ -81,16 +82,18 @@ class ObjectReader:
             self._attributes = self.head()
         return self._attributes
 
-    def read_all(self) -> bytes:
+    def read_all(self) -> Union[bytes, ParallelBuffer]:
         """
-        Read all byte data directly from the object response without using a stream.
-
-        This requires all object content to fit in memory at once and downloads all content before returning.
+        Read all object content into memory.
 
         Returns:
-            bytes: Object content as bytes.
+            bytes: When called without `num_workers` (single-stream GET).
+            ParallelBuffer: When called with `num_workers` set (parallel
+                download).  A view backed by shared memory — the
+                caller **must** call `result.close()` or use it as a context
+                manager to release the shared memory segment when done.
         """
-        return self._make_request(stream=False).content
+        return self._content_provider.read_all()
 
     def raw(self) -> Any:
         """

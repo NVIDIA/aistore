@@ -1,4 +1,5 @@
 from aistore.pytorch.map_dataset import AISMapDataset
+from aistore.pytorch.parallel_map_dataset import AISParallelMapDataset
 from aistore.pytorch.multishard_dataset import AISMultiShardStream
 from aistore.pytorch.iter_dataset import AISIterDataset
 from aistore.pytorch.shard_reader import AISShardReader

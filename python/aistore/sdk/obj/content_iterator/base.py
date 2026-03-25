@@ -1,10 +1,11 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from abc import ABC, abstractmethod
-from typing import Generator
+from typing import Generator, Union
 
+from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer
 from aistore.sdk.obj.object_client import ObjectClient
 
 
@@ -30,6 +31,10 @@ class BaseContentIterProvider(ABC):
             ObjectClient: The client used to access object content.
         """
         return self._client
+
+    @abstractmethod
+    def read_all(self) -> Union[bytes, ParallelBuffer]:
+        """Read all object content into memory and return it."""
 
     @abstractmethod
     def create_iter(self, offset: int = 0) -> Generator[bytes, None, None]:

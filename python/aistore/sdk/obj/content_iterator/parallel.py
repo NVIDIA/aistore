@@ -3,37 +3,17 @@
 #
 
 """
-Parallel download via a shared-memory ring buffer.
+Parallel object download using forked workers and shared memory.
 
-The object is split into chunks fetched concurrently by forked workers.
-Workers write directly into a fixed-size shared memory segment (no copy).
+Provides two download modes:
 
- /dev/shm  ┌──────────┬──────────┬──────────┐
-           │ [slot 0] │ [slot 1] │ [slot 2] │  <- num_slots x slot_size bytes
-           └──────────┴──────────┴──────────┘
- chunks:   [ chunk 0 ][ chunk 1 ][ chunk 2 ][ chunk 3 ].. slot = chunk_idx % num_slots
+* `read_all()`: workers write directly into a single full-size
+  `ParallelBuffer` (shared memory).  The caller receives a memoryview
+  with no additional copy on the return path.
 
-The main process consumes slots, yields the data in order, and immediately re-submits
-each freed slot, keeping exactly `num_workers` requests in flight at all times.
-
- Main Process                       Forked Workers
- ------------                       -----------------------------------------
-                                     [slot 0]      [slot 1]      [slot 2]
-                                        │             │             │
- submit chunk 0 ------------------> write slot 0      │             │
- submit chunk 1 ------------------------------> write slot 1        │
- submit chunk 2 ----------------------------------------> write slot 2
-                                        │             │             │
- future[0].result()  <-- (n bytes) done |             │             │
- wait_slot(0)        <-- event[0] set   |             │             │
- yield read_slot(0)                     │             │             │
- submit chunk 3 ------------------> write slot 0      │             │
-                                        |             │             │
- future[1].result()  <-- (n bytes)      │             │             │
- wait_slot(1)        <-- event[1] set   |             │             │
- yield read_slot(1)                     │             │             │
- submit chunk 4 ------------------------------> write slot 1        │
- ...                                  ...           ...           ...
+* `create_iter()`: workers write into a fixed-size ring buffer in
+  shared memory; the main process yields chunks in order.  See the
+  `create_iter` docstring for the detailed data flow.
 """
 
 import multiprocessing as mp
@@ -43,6 +23,7 @@ from concurrent.futures import Future, ProcessPoolExecutor
 from typing import Dict, Generator, List, Optional, Tuple
 
 from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider
+from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer, RingBuffer
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.const import (
     PROPS_CHUNKED,
@@ -70,7 +51,6 @@ class WorkerState:
     slot_ready: List[mp.Event] = field(
         default_factory=list
     )  # Events for each slot to signal when data is ready
-    num_slots: int = 0  # Number of slots in the ring buffer
 
 
 # Module-level singleton inherited by each forked worker via fork's memory copy.
@@ -80,35 +60,46 @@ worker_state = WorkerState()
 def _init_worker(
     client: ObjectClient,
     shm_name: str,
-    slot_ready: List[mp.Event],
-    num_slots: int,
+    slot_ready: Optional[List[mp.Event]] = None,
 ) -> None:
     """
     ProcessPoolExecutor initializer hook — runs once per worker after forking.
 
     Populates `worker_state` before any `_fetch_chunk` task is dispatched so the
     worker is fully initialized before it does any work.
+
+    Args:
+        client (ObjectClient): Client for the worker to use to download chunks.
+        shm_name (str): Name of the shared memory segment to attach to.
+        slot_ready (Optional[List[mp.Event]]): Per-slot events for ring-buffer
+            mode. Omit for direct-to-destination callers.
     """
     worker_state.client = client
-    # Main process owns the segment and unlinks it via ring.close();
-    # the worker's fd is reclaimed by the OS on process exit.
+    # Main process owns the segment and unlinks it via close();
     worker_state.shm = shared_memory.SharedMemory(name=shm_name)
-    worker_state.slot_ready = slot_ready
-    worker_state.num_slots = num_slots
+    worker_state.slot_ready = slot_ready if slot_ready is not None else []
 
 
 # Must be a module-level function so ProcessPoolExecutor can pickle it by name
-def _fetch_chunk(idx: int, start: int, end: int, chunk_size: int) -> int:
+def _fetch_chunk(
+    start: int,
+    end: int,
+    offset: int,
+    slot_idx: int = -1,
+) -> int:
     """
-    Download a byte range and write directly into the assigned ring buffer slot.
+    Download byte range `[start, end)` and write into `worker_state.shm` at `offset`.
 
-    Always signals the slot's ready event — even on error — so the consumer
-    can unblock and observe the exception via `future.result()`.
+    Args:
+        start (int): First byte of the range to fetch from the object.
+        end (int): One past the last byte (exclusive).
+        offset (int): Byte offset in the shm segment to write into. Ring-buffer
+            callers pass `slot * chunk_size`; direct callers pass `start`.
+        slot_idx (int): If >= 0, signals `slot_ready[slot_idx]` on completion
+            (ring-buffer mode). Pass -1 to skip (direct mode).
     """
-    slot = idx % worker_state.num_slots
     n = 0
     try:
-        offset = slot * chunk_size
         resp = worker_state.client.get_chunk(start, end)
         try:
             # TODO: replace with resp.raw.readinto() for a further zero-copy win
@@ -118,43 +109,9 @@ def _fetch_chunk(idx: int, start: int, end: int, chunk_size: int) -> int:
         finally:
             resp.close()
     finally:
-        worker_state.slot_ready[slot].set()  # must run even on exception
+        if slot_idx >= 0:
+            worker_state.slot_ready[slot_idx].set()  # must run even on exception
     return n
-
-
-class RingBuffer:
-    """
-    Shared-memory ring buffer with per-slot ready Events.
-
-    Allocates `num_slots x slot_size` bytes in `/dev/shm`.  Each slot has
-    a dedicated `mp.Event` that a worker sets when its data is ready.
-    """
-
-    def __init__(self, num_slots: int, slot_size: int) -> None:
-        self.num_slots = num_slots
-        self.slot_size = slot_size
-        self.shm = shared_memory.SharedMemory(create=True, size=num_slots * slot_size)
-        self.slot_ready: List[mp.Event] = [mp.Event() for _ in range(num_slots)]
-
-    @property
-    def name(self) -> str:
-        """Name of the underlying shared memory segment."""
-        return self.shm.name
-
-    def wait_slot(self, slot: int) -> None:
-        """Block until the slot is ready, then reset it for reuse."""
-        self.slot_ready[slot].wait()
-        self.slot_ready[slot].clear()
-
-    def read_slot(self, slot: int, data_len: int) -> bytes:
-        """Copy `data_len` bytes out of the slot into a new bytes object."""
-        offset = slot * self.slot_size
-        return bytes(self.shm.buf[offset : offset + data_len])
-
-    def close(self) -> None:
-        """Release and unlink the shared memory segment."""
-        self.shm.close()
-        self.shm.unlink()
 
 
 class ParallelContentIterProvider(BaseContentIterProvider):
@@ -181,6 +138,12 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         attrs = client.head_v2(PROPS_CHUNKED)
         self._object_size = attrs.size
 
+        if self._object_size <= 0:
+            raise ValueError(
+                "Parallel download requires a non-empty object "
+                f"(got size={self._object_size})."
+            )
+
         if chunk_size is None or chunk_size <= 0:
             if attrs.chunks and attrs.chunks.max_chunk_size > 0:
                 chunk_size = attrs.chunks.max_chunk_size
@@ -205,12 +168,94 @@ class ParallelContentIterProvider(BaseContentIterProvider):
             pos = end
         return ranges
 
+    @staticmethod
+    def _get_fork_context():
+        """Return the 'fork' multiprocessing context, or raise RuntimeError on unsupported platforms."""
+        try:
+            return mp.get_context("fork")
+        except ValueError as exc:
+            raise RuntimeError(
+                "Parallel content iteration requires the 'fork' start method, "
+                "which is not available on this platform."
+            ) from exc
+
+    def read_all(self) -> ParallelBuffer:
+        """
+        Download the entire object into shared memory and return a :class:`ParallelBuffer`.
+
+        Workers write directly into a `SharedMemory` segment; the caller
+        receives a memoryview of that segment with no extra allocation or copy.
+        The caller **must** call `result.close()` (or use it as a context
+        manager) to release the shared memory when done.
+        """
+        dst = ParallelBuffer(
+            shared_memory.SharedMemory(create=True, size=self._object_size),
+            self._object_size,
+        )
+        try:
+            self._fill_shm(dst)
+        except Exception:
+            dst.close()
+            raise
+        return dst
+
+    def _fill_shm(self, dst: "ParallelBuffer") -> None:
+        """
+        Download the entire object into *dst* (direct-to-destination mode).
+
+        Each worker owns a disjoint byte range within *dst* — no
+        synchronization beyond waiting for all futures.
+
+        Args:
+            dst (ParallelBuffer): A `ParallelBuffer` of at least `_object_size` bytes,
+                typically created and owned by `read_all()`.
+        """
+        fork_context = self._get_fork_context()
+        chunk_ranges = self._build_chunk_ranges(0)
+        if not chunk_ranges:
+            return
+        num_workers = min(self._num_workers, len(chunk_ranges))
+
+        with ProcessPoolExecutor(
+            max_workers=num_workers,
+            mp_context=fork_context,
+            initializer=_init_worker,
+            initargs=(self.client, dst.name),  # no slot_ready: direct mode
+        ) as executor:
+            # write_offset = start (each worker owns its exact byte range in dst)
+            # slot_idx = -1 (no ring-buffer events needed)
+            futures = [
+                executor.submit(_fetch_chunk, start, end, start, -1)
+                for start, end in chunk_ranges
+            ]
+            for f in futures:
+                f.result()  # re-raises worker exceptions
+
     # pylint: disable=too-many-locals
     def create_iter(self, offset: int = 0) -> Generator[bytes, None, None]:
         """
         Yield object content in order using a sliding-window ring buffer.
 
         Keeps at most `num_workers` range-reads in flight at any time.
+        The ring buffer lives in `/dev/shm`::
+
+         /dev/shm  ┌──────────┬──────────┬──────────┐
+                   │ [slot 0] │ [slot 1] │ [slot 2] │  num_slots x slot_size bytes
+                   └──────────┴──────────┴──────────┘
+         chunks:   [ chunk 0 ][ chunk 1 ][ chunk 2 ][ chunk 3 ]..
+                   slot = chunk_idx % num_slots
+
+         Main Process                       Forked Workers
+         ─────────────                      ──────────────────────────────
+                                             [slot 0]      [slot 1]      [slot 2]
+         submit chunk 0 ───────────────> write slot 0
+         submit chunk 1 ─────────────────────────────> write slot 1
+         submit chunk 2 ───────────────────────────────────────────> write slot 2
+         future[0].result()  ← done
+         wait_slot(0)        ← event set
+         yield read_slot(0)
+         submit chunk 3 ───────────────> write slot 0  (reuse)
+         ...
 
         Args:
             offset (int, optional): Starting byte offset. Defaults to 0.
@@ -218,13 +263,7 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         Yields:
             bytes: Consecutive chunks of the object's content.
         """
-        try:
-            fork_context = mp.get_context("fork")
-        except ValueError as exc:
-            raise RuntimeError(
-                "Parallel content iteration requires the 'fork' start method, "
-                "which is not available on this platform."
-            ) from exc
+        fork_context = self._get_fork_context()
 
         if self._object_size - offset <= 0:
             return
@@ -242,13 +281,14 @@ class ParallelContentIterProvider(BaseContentIterProvider):
                 max_workers=num_slots,
                 mp_context=fork_context,
                 initializer=_init_worker,
-                initargs=(self.client, ring.name, ring.slot_ready, num_slots),
+                initargs=(self.client, ring.name, ring.slot_ready),
             ) as executor:
                 # Fill the ring with the first num_slots requests.
                 for i in range(num_slots):
                     start, end = chunk_ranges[i]
+                    # i < num_slots, so slot == i; write_offset is slot-relative
                     futures[i] = executor.submit(
-                        _fetch_chunk, i, start, end, self._chunk_size
+                        _fetch_chunk, start, end, i * self._chunk_size, i
                     )
                 next_submit = num_slots
 
@@ -263,8 +303,13 @@ class ParallelContentIterProvider(BaseContentIterProvider):
 
                     if next_submit < len(chunk_ranges):
                         start, end = chunk_ranges[next_submit]
+                        next_slot = next_submit % num_slots
                         futures[next_submit] = executor.submit(
-                            _fetch_chunk, next_submit, start, end, self._chunk_size
+                            _fetch_chunk,
+                            start,
+                            end,
+                            next_slot * self._chunk_size,
+                            next_slot,
                         )
                         next_submit += 1
         finally:

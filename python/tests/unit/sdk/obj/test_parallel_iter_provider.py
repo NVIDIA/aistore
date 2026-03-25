@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 import requests
 
 from aistore.sdk.obj.content_iterator import ParallelContentIterProvider
-from aistore.sdk.obj.content_iterator.parallel import RingBuffer
+from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer, RingBuffer
 from aistore.sdk.const import PROPS_CHUNKED
 
 
@@ -43,19 +43,17 @@ class TestParallelContentIterProvider(unittest.TestCase):
         ParallelContentIterProvider(self.mock_client, self.chunk_size, self.num_workers)
         self.mock_client.head_v2.assert_called_once_with(PROPS_CHUNKED)
 
-    def test_create_iter_empty_object(self):
-        """Test iteration over empty object."""
+    def test_empty_object_raises_on_construction(self):
+        """Constructing a provider for a zero-size object raises ValueError."""
         mock_attrs = Mock()
         mock_attrs.size = 0
         mock_attrs.chunks = None
         self.mock_client.head_v2.return_value = mock_attrs
 
-        provider = ParallelContentIterProvider(
-            self.mock_client, self.chunk_size, self.num_workers
-        )
-        result = list(provider.create_iter())
-
-        self.assertEqual(result, [])
+        with self.assertRaises(ValueError):
+            ParallelContentIterProvider(
+                self.mock_client, self.chunk_size, self.num_workers
+            )
 
     def test_create_iter_yields_chunks_in_order(self):
         """Test that chunks are yielded in correct order."""
@@ -294,4 +292,151 @@ class TestParallelContentIterProvider(unittest.TestCase):
             with self.assertRaises(BrokenProcessPool):
                 next(gen)  # chunk [100, 200) — worker killed; BrokenProcessPool raised
             self.assertTrue(spy_close.called)
+        self.assertEqual(mp.active_children(), [])
+
+
+class TestParallelContentIterProviderReadAll(unittest.TestCase):
+    """Unit tests for ParallelContentIterProvider.read_all() (direct-to-destination mode)."""
+
+    def setUp(self):
+        self.mock_client = Mock()
+        self.chunk_size = 100
+        self.num_workers = 4
+        self.object_size = 350  # 4 chunks: [0,100), [100,200), [200,300), [300,350)
+
+        mock_attrs = Mock()
+        mock_attrs.size = self.object_size
+        mock_attrs.chunks = None
+        self.mock_client.head_v2.return_value = mock_attrs
+
+        range_data = {
+            (0, 100): b"A" * 100,
+            (100, 200): b"B" * 100,
+            (200, 300): b"C" * 100,
+            (300, 350): b"D" * 50,
+        }
+        self.expected = b"A" * 100 + b"B" * 100 + b"C" * 100 + b"D" * 50
+        self.mock_client.get_chunk.side_effect = lambda s, e: _make_resp(
+            range_data[(s, e)]
+        )
+
+    def test_read_all_returns_parallel_buffer(self):
+        """read_all() returns a ParallelBuffer instance."""
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        result = provider.read_all()
+        try:
+            self.assertIsInstance(result, ParallelBuffer)
+        finally:
+            result.close()
+        self.assertEqual(mp.active_children(), [])
+
+    def test_read_all_content_correct(self):
+        """read_all() returns the complete object content in the correct order."""
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        with provider.read_all() as result:
+            self.assertEqual(bytes(result.buf), self.expected)
+        self.assertEqual(mp.active_children(), [])
+
+    def test_read_all_tobytes(self):
+        """tobytes() produces the same bytes as reading the buf directly."""
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        with provider.read_all() as result:
+            self.assertEqual(result.tobytes(), self.expected)
+        self.assertEqual(mp.active_children(), [])
+
+    def test_read_all_single_chunk_object(self):
+        """read_all() works for objects smaller than chunk_size (single range-read)."""
+        mock_attrs = Mock()
+        mock_attrs.size = 50
+        mock_attrs.chunks = None
+        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.get_chunk.side_effect = None
+        self.mock_client.get_chunk.return_value = _make_resp(b"Z" * 50)
+
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        with provider.read_all() as result:
+            self.assertEqual(result.tobytes(), b"Z" * 50)
+            self.assertEqual(len(result), 50)
+        self.assertEqual(mp.active_children(), [])
+
+    def test_read_all_len(self):
+        """len(ParallelBuffer) equals the object size."""
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        with provider.read_all() as result:
+            self.assertEqual(len(result), self.object_size)
+
+    def test_read_all_context_manager_releases_shm(self):
+        """Using read_all() as a context manager calls close() on exit."""
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        with patch.object(
+            ParallelBuffer, "close", autospec=True, wraps=ParallelBuffer.close
+        ) as spy:
+            with provider.read_all():
+                pass
+            self.assertTrue(spy.called)
+        self.assertEqual(mp.active_children(), [])
+
+    def test_read_all_worker_exception_closes_buffer(self):
+        """A worker exception causes read_all() to close the ParallelBuffer before re-raising."""
+        self.mock_client.get_chunk.side_effect = ConnectionError("Network error")
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        with patch.object(
+            ParallelBuffer, "close", autospec=True, wraps=ParallelBuffer.close
+        ) as spy:
+            with self.assertRaises(Exception):
+                provider.read_all()
+            self.assertTrue(spy.called)
+        self.assertEqual(mp.active_children(), [])
+
+    def test_read_all_empty_object_raises(self):
+        """read_all() is unreachable for zero-size objects — construction rejects them."""
+        mock_attrs = Mock()
+        mock_attrs.size = 0
+        mock_attrs.chunks = None
+        self.mock_client.head_v2.return_value = mock_attrs
+
+        with self.assertRaises(ValueError):
+            ParallelContentIterProvider(
+                self.mock_client, self.chunk_size, self.num_workers
+            )
+
+    def test_read_all_single_byte_object(self):
+        """read_all() on a 1-byte object downloads correctly."""
+        mock_attrs = Mock()
+        mock_attrs.size = 1
+        mock_attrs.chunks = None
+        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.get_chunk.side_effect = None
+        self.mock_client.get_chunk.return_value = _make_resp(b"X")
+
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        with provider.read_all() as result:
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result.tobytes(), b"X")
+        self.assertEqual(mp.active_children(), [])
+
+    def test_read_all_double_close_is_safe(self):
+        """Calling close() twice on an ParallelBuffer does not raise."""
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        result = provider.read_all()
+        result.close()
+        result.close()  # must not raise
         self.assertEqual(mp.active_children(), [])

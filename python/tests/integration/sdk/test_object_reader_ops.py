@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import os
@@ -10,8 +10,12 @@ import pytest
 
 from aistore.sdk import Bucket, Object
 from aistore.sdk.client import Client
-from aistore.sdk.const import DEFAULT_CHUNK_SIZE, AIS_CHECKSUM_VALUE
+from aistore.sdk.const import DEFAULT_CHUNK_SIZE, AIS_CHECKSUM_VALUE, MIB
+from aistore.sdk.etl.etl_config import ETLConfig
+from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer
+from tests.integration import AWS_BUCKET
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import create_and_put_object, random_string
 
 
@@ -68,6 +72,7 @@ class TestObjectReaderOps(unittest.TestCase):
         self.assertEqual(len(chunks), 2)
 
 
+# pylint: disable=too-many-public-methods
 class TestParallelObjectReaderOps(unittest.TestCase):
     """Integration tests for parallel object download using num_workers."""
 
@@ -152,6 +157,15 @@ class TestParallelObjectReaderOps(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             obj.get_reader(byte_range="0-100", num_workers=4)
+
+    def test_parallel_download_with_etl_raises(self):
+        """Test that combining num_workers with etl raises ValueError."""
+        obj, _ = create_and_put_object(
+            self.client, self.bucket.as_model(), random_string(), self.object_size
+        )
+
+        with self.assertRaises(ValueError):
+            obj.get_reader(etl=ETLConfig("some-etl"), num_workers=4)
 
     def test_parallel_download_with_offset(self):
         """Test that parallel iterator correctly handles offset parameter."""
@@ -274,6 +288,84 @@ class TestParallelObjectReaderOps(unittest.TestCase):
                 f"Content mismatch when resuming from offset {offset}",
             )
 
+    # --- read_all() tests (direct-to-destination / ParallelBuffer path) ---
+
+    def test_read_all_returns_parallel_buffer(self):
+        """read_all() with num_workers returns a ParallelBuffer with the correct content."""
+        obj, expected_content = create_and_put_object(
+            self.client, self.bucket.as_model(), random_string(), self.object_size
+        )
+        result = obj.get_reader(chunk_size=DEFAULT_CHUNK_SIZE, num_workers=4).read_all()
+        try:
+            self.assertIsInstance(result, ParallelBuffer)
+            self.assertEqual(result.tobytes(), expected_content)
+        finally:
+            result.close()
+
+    def test_read_all_content_matches_sequential(self):
+        """read_all() with num_workers produces the same bytes as sequential read_all()."""
+        obj, expected_content = create_and_put_object(
+            self.client, self.bucket.as_model(), random_string(), self.object_size
+        )
+        sequential = obj.get_reader().read_all()
+        with obj.get_reader(
+            chunk_size=DEFAULT_CHUNK_SIZE, num_workers=4
+        ).read_all() as result:
+            self.assertEqual(result.tobytes(), sequential)
+            self.assertEqual(result.tobytes(), expected_content)
+
+    def test_read_all_context_manager_releases_shm(self):
+        """ParallelBuffer.buf is unusable after exiting the context manager."""
+        obj, _ = create_and_put_object(
+            self.client, self.bucket.as_model(), random_string(), self.object_size
+        )
+        with obj.get_reader(
+            chunk_size=DEFAULT_CHUNK_SIZE, num_workers=4
+        ).read_all() as result:
+            _ = result.tobytes()  # access is fine inside the block
+
+        # After exit, the underlying shm is released; accessing buf must raise.
+        with self.assertRaises(Exception):
+            _ = bytes(result.buf)
+
+    def test_read_all_len(self):
+        """len(ParallelBuffer) equals the object size."""
+        obj, _ = create_and_put_object(
+            self.client, self.bucket.as_model(), random_string(), self.object_size
+        )
+        with obj.get_reader(
+            chunk_size=DEFAULT_CHUNK_SIZE, num_workers=4
+        ).read_all() as result:
+            self.assertEqual(len(result), self.object_size)
+
+    def test_read_all_small_chunks(self):
+        """read_all() with small chunk size (many chunks) produces correct content."""
+        obj, expected_content = create_and_put_object(
+            self.client, self.bucket.as_model(), random_string(), self.object_size
+        )
+        with obj.get_reader(
+            chunk_size=DEFAULT_CHUNK_SIZE // 8, num_workers=8
+        ).read_all() as result:
+            self.assertEqual(result.tobytes(), expected_content)
+
+    def test_read_all_empty_object_raises(self):
+        """Parallel download on a zero-size object raises ValueError."""
+        obj_name = f"empty-{random_string(8)}"
+        obj = self.bucket.object(obj_name)
+        obj.get_writer().put_content(b"")
+
+        with self.assertRaises(ValueError):
+            obj.get_reader(num_workers=4)
+
+    def test_read_all_single_byte_object(self):
+        """read_all() with num_workers on a 1-byte object returns correct content."""
+        obj, expected = create_and_put_object(
+            self.client, self.bucket.as_model(), random_string(), 1
+        )
+        with obj.get_reader(num_workers=4).read_all() as result:
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result.tobytes(), expected)
+
     @pytest.mark.extended
     def test_parallel_download_large_object(self):
         """Test parallel download with a large object (256 MiB)."""
@@ -292,3 +384,42 @@ class TestParallelObjectReaderOps(unittest.TestCase):
 
         self.assertEqual(len(downloaded), large_size)
         self.assertEqual(downloaded, large_data)
+
+
+class TestParallelColdGetOps(ParallelTestBase):
+    """Parallel download on non-cached (cold) remote objects."""
+
+    COLD_OBJ_DATA = os.urandom(4 * MIB)
+
+    @unittest.skipIf(
+        not AWS_BUCKET,
+        "AWS bucket is not set",
+    )
+    def test_cold_parallel_create_iter(self):
+        """Parallel iterator works on a non-cached remote object."""
+        obj_name = f"{self.obj_prefix}-cold-iter"
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
+        self.s3_client.put_object(
+            Bucket=self.bucket.name, Key=obj_name, Body=self.COLD_OBJ_DATA
+        )
+
+        content = b"".join(self.bucket.object(obj_name).get_reader(num_workers=4))
+        self.assertEqual(content, self.COLD_OBJ_DATA)
+
+    @unittest.skipIf(
+        not AWS_BUCKET,
+        "AWS bucket is not set",
+    )
+    def test_cold_parallel_read_all(self):
+        """Parallel read_all() works on a non-cached remote object."""
+        obj_name = f"{self.obj_prefix}-cold-readall"
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
+        self.s3_client.put_object(
+            Bucket=self.bucket.name, Key=obj_name, Body=self.COLD_OBJ_DATA
+        )
+
+        with self.bucket.object(obj_name).get_reader(
+            num_workers=4
+        ).read_all() as result:
+            self.assertIsInstance(result, ParallelBuffer)
+            self.assertEqual(result.tobytes(), self.COLD_OBJ_DATA)
