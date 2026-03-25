@@ -42,7 +42,7 @@ NAME:
     warm-up-metadata
 ```
 
-> The feature set continues to grow and also includes: [blob-downloader](/docs/blob_downloader.md); lightweight [AuthN Service (Beta)](/docs/authn.md), to manage users and roles and generate JWTs; runtime management of [TLS certificates](/docs/cli/x509.md); full support for [adding/removing nodes at runtime](/docs/lifecycle_node.md); listing, copying, prefetching, and transforming [virtual directories](/docs/howto_virt_dirs.md); executing [presigned S3 requests](/docs/s3compat.md#presigned-s3-requests); adaptive [rate limiting](/docs/rate_limit.md); and more.
+> The feature set continues to grow and also includes: [native bucket inventory (NBI)](/docs/nbi.md); [blob-downloader](/docs/blob_downloader.md); [AuthN - authentication and authorization server](/docs/authn.md); runtime management of [TLS certificates](/docs/cli/x509.md); full support for [adding/removing nodes at runtime](/docs/lifecycle_node.md); adaptive [rate limiting](/docs/rate_limit.md); and more.
 
 > For the original **white paper** and design philosophy, please see [AIStore Overview](/docs/overview.md), which also includes high-level block diagram, terminology, APIs, CLI, and more.
 > For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
