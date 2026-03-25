@@ -25,7 +25,7 @@ MAKEFLAGS += --no-print-directory
 # CROSS_COMPILE_CLI = docker run -e $(CGO_DISABLE) --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.25
 
 # Build version, flags, and tags
-VERSION = $(shell git rev-parse --short HEAD)
+VERSION ?= $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
 BUILD_FLAGS += $(if $(strip $(GORACE)),-race,)
 BUILD_DEST = $(GOPATH)/bin

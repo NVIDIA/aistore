@@ -14,11 +14,12 @@ COPY . .
 ARG mode
 ARG providers
 ARG tags
+ARG version
 ARG TARGETOS
 ARG TARGETARCH
 
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} TAGS=${tags:-""} \
+    VERSION=${version} MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} TAGS=${tags:-""} \
     make node
 
 

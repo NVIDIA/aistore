@@ -39,5 +39,6 @@ ci:
         --build-arg mode="debug" \
         --build-arg providers="gcp aws oci" \
         --build-arg tags="ci" \
+        --build-arg version="$(CI_COMMIT_SHORT_SHA)" \
         $(BUILD_CONTEXT)
 	buildah push $(CI_REGISTRY_IMAGE)/aisnode:$(CI_COMMIT_SHORT_SHA)

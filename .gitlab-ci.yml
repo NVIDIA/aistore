@@ -780,7 +780,7 @@ test:long:chunks:
   before_script:
     - cd deploy/dev/k8s
     - ./utils/ci/generate_kind_config.sh > kind_config.yml
-    - kind create cluster --config=kind_config.yml
+    - kind create cluster --config=kind_config.yml --wait=5m
     - kubectl cluster-info  # wait for k8s
     - make gitlab-ci
     - source ./export_endpoint.sh

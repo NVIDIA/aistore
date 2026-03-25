@@ -9,11 +9,12 @@ COPY . .
 
 ARG mode
 ARG providers
+ARG version
 ARG TARGETOS
 ARG TARGETARCH
 
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    CGO_ENABLED=0 MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp azure"} \
+    CGO_ENABLED=0 VERSION=${version} MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp azure"} \
     make node
 
 FROM ${BASE_IMAGE}

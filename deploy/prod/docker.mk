@@ -26,6 +26,7 @@ ifneq ("$(BASE_IMAGE)","")
 endif
 ifneq ("$(COMMIT_SHA)","")
     BUILD_ARGS += --label "org.opencontainers.image.revision=$(COMMIT_SHA)"
+    BUILD_ARGS += --build-arg "version=$(COMMIT_SHA)"
 endif
 
 .PHONY: all build push docker-buildx-multiarch

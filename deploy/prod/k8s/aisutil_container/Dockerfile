@@ -9,10 +9,11 @@ WORKDIR /go/src/aistore
 
 COPY . .
 
+ARG version
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} make cli xmeta aisloader
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} VERSION=${version} make cli xmeta aisloader
 
 RUN mv cmd/cli/autocomplete /tmp/autocomplete
 
