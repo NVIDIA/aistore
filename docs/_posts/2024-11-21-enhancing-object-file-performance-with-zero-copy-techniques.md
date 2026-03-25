@@ -42,7 +42,7 @@ We used `tarfile.extractall()` to extract the contents of a tarball stored in AI
 
 Each benchmark was run over 500 iterations to ensure reliable results and account for variability. The benchmarks were conducted from a separate client machine located within the same network as the AIS cluster, simulating a realistic environment with low network overhead. We measured throughput in megabytes per second (MB/s), calculating the median value to reduce the impact of outliers or transient network fluctuations.
 
-> For more details on the benchmarking setup and to view the source code, please refer [here](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/object_file/obj-read-benchmark.py).
+> For more details on the benchmarking setup and to view the source code, please refer [here](https://github.com/NVIDIA/aistore/blob/main/python/tests/perf/object_file/obj-read-benchmark.py).
 
 
 | Total Size | File Size | File Count | ObjectReader Throughput (MB/s) | ObjectFile Throughput (MB/s) | Improvement (%) |

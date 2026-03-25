@@ -281,7 +281,7 @@ Metadata write policy - json tag `write_policy.md` - was introduced specifically
 | `delayed`   | cache and flush when not accessed for a while (see also: [noatime](#noatime)) |
 | `never`     | never write but always keep metadata in memory (aka "transient") |
 
-> For the most recently updated enumeration, please see the [source](/cmn/api_const.go).
+> For the most recently updated enumeration, please see the [source](/xact/api_const.go).
 
 ## PUT latency
 

@@ -143,7 +143,7 @@ In addition, all embedded (intra-cluster) clients in a cluster utilize the follo
 - [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](/docs/https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
 - [Accessing HTTPS-based cluster](/docs/https.md#accessing-https-based-cluster)
 - [Testing with self-signed certificates](/docs/https.md#testing-with-self-signed-certificates)
-- [Observability: TLS related alerts]((/docs/https.md#observability-tls-related-alerts)
+- [Observability: TLS related alerts](/docs/https.md#observability-tls-related-alerts)
 - [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
 - [Switching cluster between HTTP and HTTPS](/docs/https.md#switching-cluster-between-http-and-https)
 

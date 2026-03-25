@@ -596,7 +596,7 @@ There's a separate document that tackles HTTPS topics that, in part, include:
 
 ### Build, Make, and Development Tools
 
-As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
+As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/deploy/dev/k8s/README.md). As the very first step, run `make help` for help on:
 
 * **building** AIS node binary (called `aisnode`) deployable as both storage target **or** an ais gateway (most of the time referred to as "proxy");
 * **building** [CLI](/docs/cli.md)

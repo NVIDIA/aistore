@@ -828,7 +828,7 @@ ais evict s3://bucket --template "temp-{0..999}.dat"
 
 Bucket access is controlled by a 64-bit `access` property. Bits map to operations:
 
-> **Note**: When [enabled](docs/authn.md), access permissions are enforced by AIS and apply to both local and backend operations; misconfiguration can block cold GETs or deletes. See [version 4.1 release notes](https://github.com/NVIDIA/aistore/releases/tag/v1.4.1#authentication-and-security) for additional pointers on the topics of authentication and security.
+> **Note**: When [enabled](/docs/authn.md), access permissions are enforced by AIS and apply to both local and backend operations; misconfiguration can block cold GETs or deletes. See [version 4.1 release notes](https://github.com/NVIDIA/aistore/releases/tag/v1.4.1#authentication-and-security) for additional pointers on the topics of authentication and security.
 
 | Operation | Bit | Hex |
 |-----------|-----|-----|

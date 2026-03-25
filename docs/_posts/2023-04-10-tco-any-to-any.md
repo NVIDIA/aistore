@@ -97,7 +97,7 @@ and run it while simultaneously taking out nodes and disks. It'll run and, given
 
 **NOTE:**
 
-The ability to recover is much more fundamental than any specific [job kind](https://github.com/NVIDIA/aistore/blob/main/xact/api.go#L108-L230) that's already supported today or will be added in the future.
+The ability to recover is much more fundamental than any specific [job kind](https://github.com/NVIDIA/aistore/blob/main/xact/api_table.go) that's already supported today or will be added in the future.
 
 > Not every job is _startable_. In fact, majority of the supported jobs have their own dedicated API and CLI, and there are still other jobs that run only on demand.
 
