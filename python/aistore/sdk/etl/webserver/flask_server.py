@@ -27,6 +27,7 @@ from aistore.sdk.errors import InvalidPipelineError, ETLDirectPutTransientError
 from aistore.sdk.const import (
     HEADER_NODE_URL,
     STATUS_OK,
+    STATUS_BAD_GATEWAY,
     QPARAM_ETL_ARGS,
     QPARAM_ETL_FQN,
     HEADER_DIRECT_PUT_LENGTH,
@@ -85,10 +86,10 @@ class FlaskServer(ETLServer):
             self.logger.error(
                 "Direct put failed after %d retries: %s", self.direct_put_retries, e
             )
-            return jsonify({"error": str(e)}), 502
+            return jsonify({"error": str(e)}), STATUS_BAD_GATEWAY
         except requests.RequestException as e:
             self.logger.error("Request to AIS target failed: %s", str(e))
-            return jsonify({"error": str(e)}), 502
+            return jsonify({"error": str(e)}), STATUS_BAD_GATEWAY
         except Exception as e:
             self.logger.exception("Unhandled error")
             return jsonify({"error": str(e)}), 500

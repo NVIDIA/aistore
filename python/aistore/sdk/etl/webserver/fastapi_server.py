@@ -39,6 +39,7 @@ from aistore.sdk.const import (
     HEADER_NODE_URL,
     HEADER_CONTENT_LENGTH,
     STATUS_OK,
+    STATUS_BAD_GATEWAY,
     ETL_WS_FQN,
     ETL_WS_PATH,
     ETL_WS_PIPELINE,
@@ -170,6 +171,14 @@ class FastAPIServer(ETLServer):
                     f"Error processing object {path!r}: file not found at {fs_path!r}."
                 ),
             ) from exc
+        except ETLDirectPutTransientError as e:
+            self.logger.error(
+                "Direct put failed after %d retries: %s", self.direct_put_retries, e
+            )
+            raise HTTPException(
+                status_code=STATUS_BAD_GATEWAY,
+                detail=f"Direct put failed after retries: {str(e)}",
+            ) from e
         except httpx.HTTPStatusError as e:
             self.logger.warning(
                 "Target responded with error: %s", e.response.status_code
@@ -179,7 +188,9 @@ class FastAPIServer(ETLServer):
             ) from e
         except httpx.RequestError as e:
             self.logger.error("Network error: %s", str(e))
-            raise HTTPException(502, detail=f"Network error: {str(e)}") from e
+            raise HTTPException(
+                STATUS_BAD_GATEWAY, detail=f"Network error: {str(e)}"
+            ) from e
         except Exception as e:
             self.logger.exception("Critical error during processing")
             raise HTTPException(500, detail=f"Processing error: {str(e)}") from e

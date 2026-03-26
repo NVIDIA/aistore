@@ -349,7 +349,9 @@ class HTTPMultiThreadedServer(ETLServer):
             # No pipeline: original reader-based streaming path
             reader = self._get_stream_reader(fqn, raw_path, is_get=is_get)
             if reader is None:
-                self.send_error(502, "Failed to retrieve data from target")
+                self.send_error(
+                    STATUS_BAD_GATEWAY, "Failed to retrieve data from target"
+                )
                 return
             try:
                 output_iter = self.server.etl_server.transform_stream(
@@ -446,7 +448,9 @@ class HTTPMultiThreadedServer(ETLServer):
                 self.server.etl_server.logger.error(
                     "Direct put failed after retries: %s", e
                 )
-                self.send_error(502, f"Direct put failed after retries: {e}")
+                self.send_error(
+                    STATUS_BAD_GATEWAY, f"Direct put failed after retries: {e}"
+                )
             except requests.RequestException as e:
                 logger.error("Request to AIS target failed: %s", str(e))
                 self.send_error(500, f"Error contacting AIS target: {e}")
@@ -505,7 +509,9 @@ class HTTPMultiThreadedServer(ETLServer):
                 self.server.etl_server.logger.error(
                     "Direct put failed after retries: %s", e
                 )
-                self.send_error(502, f"Direct put failed after retries: {e}")
+                self.send_error(
+                    STATUS_BAD_GATEWAY, f"Direct put failed after retries: {e}"
+                )
             except Exception as e:
                 logger.error("Error processing PUT request: %s", str(e))
                 self.send_error(500, "Internal error during transformation")
