@@ -63,11 +63,11 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 	// memory is enough: update idle times and free idle slabs, unless out of cpu
 	if p == PressureLow {
 		var (
-			load     = sys.MaxLoad()
-			highLoad = sys.HighLoadWM()
+			load, isExtreme = sys.MaxLoad2()
+			highLoad        = sys.HighLoadWM()
 		)
 		// too busy and not too "pressured"
-		if load >= highLoad {
+		if isExtreme || load >= highLoad {
 			return r.hkIval(p, now)
 		}
 		r.refreshStats(now)

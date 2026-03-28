@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -21,18 +21,15 @@ type MemCPUInfo struct {
 }
 
 func GetMemCPU() MemCPUInfo {
-	var (
-		mem sys.MemStat
-		err error
-	)
-	err = mem.Get()
+	var mem sys.MemStat
+	err := mem.Get()
 	debug.AssertNoErr(err)
 
-	proc, err := sys.ProcessStats(os.Getpid())
-	debug.AssertNoErr(err)
+	proc, ep := sys.ProcessStats(os.Getpid())
+	debug.AssertNoErr(ep)
 
-	load, err := sys.LoadAverage()
-	debug.AssertNoErr(err)
+	load, el := sys.LoadAverage()
+	debug.AssertNoErr(el)
 
 	return MemCPUInfo{
 		MemAvail:   mem.ActualFree,

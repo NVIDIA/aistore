@@ -8,13 +8,22 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-// NOTE: for CPU and memory reporting, cgroup support and future plans, see
-// README.md in this package.
+//
+// for CPU and memory reporting, cgroup support and future plans, see README.md in this package.
+//
+
+// TODO:
+// - remove (maxSampleAge, minWallIval); support alpha/(1-alpha) weighted average over fixed array of samples
+// - call Init() from cli/app.go
+// - callers to optionally pass mono-time => MaxLoad2()
+// - sys/mem.go and friends - support cgroups and all the rest of sys/cpu.go functionality
 
 const (
 	// when prev. sample is considered outdated
@@ -23,19 +32,20 @@ const (
 	// - stats_time
 	maxSampleAge = int64(13 * time.Second)
 
-	// TODO:
 	// - temp workaround against millisecond-range resampling noise
 	// - replace with cached/smoothed CPU-load state
-	//   (similar to disk utilization in `ios` package)
 	minWallIval = int64(2 * time.Second)
 
 	// >10% wall-clock throttled => extreme starvation
 	throttleExtremeThresh = 10
 
-	// USER_HZ
-	// - what-if: kernel gets compiled w/ non-default
-	// - relatively low priority: used only for bare-metal fallback when cgroups are unavailable
-	nsPerJiffy = 1e9 / 100
+	// assume the usual USER_HZ value
+	// as in: C.sysconf(C._SC_CLK_TCK)
+	userHZ = 100
+
+	// USER_HZ-derived nanoseconds per tick ("jiffy"); used only for bare-metal fallback
+	// when cgroup-based accounting is unavailable
+	nsPerJiffy = 1e9 / userHZ
 )
 
 // CPU utilization thresholds (percentage, 0-100)
@@ -45,49 +55,76 @@ const (
 	HighLoad    = 82
 )
 
-type LoadAvg struct {
-	One, Five, Fifteen float64
-}
+type (
+	LoadAvg struct {
+		One, Five, Fifteen float64
+	}
+	errLoadAvg struct {
+		err error
+	}
 
-// set at startup and never change
-var (
-	contCPUs      int
-	containerized bool
+	cpuSample struct {
+		usage         int64 // cumulative CPU time (nanoseconds)
+		throttledUsec int64 // cumulative throttled time (usec), cgroup v2 only
+		ts            int64 // mono.NanoTime
+	}
+
+	// global cpu state
+	cpu struct {
+		prev         cpuSample // previous sample
+		num          int       // num CPUs
+		mu           sync.Mutex
+		contDetected bool
+		contForced   bool // <-- feat.ForceContainerCPUMem at startup
+		okv2         bool // successfully parsed cgroup v2 at init time
+		okv1         bool // ditto v1
+	}
 )
 
+var gcpu cpu
+
+// num CPUs may get adjusted by Init() below
 func init() {
-	contCPUs = runtime.NumCPU()
-	if containerized = isContainerized(); containerized {
-		if c, err := containerNumCPU(); err == nil {
-			contCPUs = c
-		} else {
+	gcpu.num = runtime.NumCPU()
+}
+
+// container-aware CPU count; GOMAXPROCS; okv2 if { container && can read cgroup v2 }
+// - AIS node (`aisnode`) calls Init() once upon startup
+// - external modules that skip it still get a sane NumCPU() - see above
+func Init(contForced bool) bool {
+	debug.Assert(gcpu.num > 0)
+	gcpu.contForced = contForced
+	if gcpu.contDetected = contDetected(); gcpu.contDetected || contForced {
+		if err := gcpu.setNum(); err != nil {
 			fmt.Fprintln(os.Stderr, err) // (cannot nlog yet)
 		}
 	}
-}
 
-func Containerized() bool { return containerized }
-func NumCPU() int         { return contCPUs }
-
-// number of intra-cluster broadcasting goroutines
-func MaxParallelism() int { return max(NumCPU(), 4) }
-
-func GoEnvMaxprocs() {
+	// - warn GOMEMLIMIT
+	// - possibly reduce GOMAXPROCS to container's num CPUs
 	if val, exists := os.LookupEnv("GOMEMLIMIT"); exists {
 		nlog.Warningln("Go environment: GOMEMLIMIT =", val) // soft memory limit for the runtime (IEC units or raw bytes)
 	}
 	if val, exists := os.LookupEnv("GOMAXPROCS"); exists {
 		nlog.Warningln("Go environment: GOMAXPROCS =", val)
-		return
+		return gcpu.contDetected
 	}
 
 	maxprocs := runtime.GOMAXPROCS(0)
-	ncpu := NumCPU()
+	ncpu := NumCPU() // gcpu.num
 	if maxprocs > ncpu {
 		nlog.Warningf("Reducing GOMAXPROCS (prev = %d) to %d", maxprocs, ncpu)
 		runtime.GOMAXPROCS(ncpu)
 	}
+	return gcpu.contDetected
 }
+
+func isContainerized() bool { return gcpu.contDetected || gcpu.contForced }
+
+func NumCPU() int { return gcpu.num }
+
+// number of intra-cluster broadcasting goroutines
+func MaxParallelism() int { return max(NumCPU(), 4) }
 
 // HighLoadWM: "high-load watermark" as a percentage.
 // For 8 CPUs: max(100 - 100/8, 1) = 88 - between HighLoad(82) and ExtremeLoad(92).
@@ -97,16 +134,6 @@ func HighLoadWM() int64 {
 	return max(100-100/ncpu, 1)
 }
 
-// MaxLoad returns CPU utilization percentage (0-100).
-// See also: README.md in this package.
-func MaxLoad() (load int64) {
-	util, _, err := ctracker.get()
-	if err != nil {
-		return maxLoadFallback()
-	}
-	return util
-}
-
 // MaxLoad2 returns CPU utilization percentage and whether the system
 // is in an "extreme" CPU-starvation condition.
 // In containers (cgroup v2): also check throttled_usec - if the container
@@ -114,7 +141,7 @@ func MaxLoad() (load int64) {
 //
 // See also: README.md in this package.
 func MaxLoad2() (load int64, isExtreme bool) {
-	util, throttled, err := ctracker.get()
+	util, throttled, err := gcpu.get()
 	if err != nil {
 		load = maxLoadFallback()
 		return load, load >= ExtremeLoad
@@ -123,7 +150,7 @@ func MaxLoad2() (load int64, isExtreme bool) {
 		return 0, false
 	}
 
-	if containerized && throttled > throttleExtremeThresh {
+	if isContainerized() && throttled > throttleExtremeThresh {
 		return max(util, ExtremeLoad), true
 	}
 

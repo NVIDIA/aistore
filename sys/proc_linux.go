@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
@@ -14,8 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-const ticks = 100 // C.sysconf(C._SC_CLK_TCK)
-
+// memory usage by specified PID
 func procMem(pid int) (ProcMemStats, error) {
 	mem := ProcMemStats{}
 
@@ -45,8 +44,9 @@ func procMem(pid int) (ProcMemStats, error) {
 	return mem, err
 }
 
+// CPU usage by PID
 func procCPU(pid int) (ProcCPUStats, error) {
-	cpu := ProcCPUStats{}
+	var cpu ProcCPUStats
 
 	procPath := fmt.Sprintf(hostProcessStatCPUPath, pid)
 	line, err := cos.ReadOneLine(procPath)
@@ -54,20 +54,58 @@ func procCPU(pid int) (ProcCPUStats, error) {
 		return cpu, err
 	}
 
+	// TODO:
+	// - generally, comm field in /proc/<pid>/stat is parenthesized and may contain spaces
+	// - for AIStore the field will be "aisnode", so can wait
 	fields := strings.Fields(line)
-	user, err := strconv.ParseUint(fields[13], 10, 64)
-	if err != nil {
-		return cpu, err
-	}
-	sys, err := strconv.ParseUint(fields[14], 10, 64)
-	if err != nil {
-		return cpu, err
+	if len(fields) < 22 {
+		return cpu, fmt.Errorf("%s: unexpected format: num-fields=%d", procPath, len(fields))
 	}
 
-	// convert to milliseconds
-	cpu.User = user * (1000 / ticks)
-	cpu.System = sys * (1000 / ticks)
+	user, err := strconv.ParseUint(fields[13], 10, 64) // utime
+	if err != nil {
+		return cpu, fmt.Errorf("%s: parse utime %q: %w", procPath, fields[13], err)
+	}
+	sys, err := strconv.ParseUint(fields[14], 10, 64) // stime
+	if err != nil {
+		return cpu, fmt.Errorf("%s: parse stime %q: %w", procPath, fields[14], err)
+	}
+	start, err := strconv.ParseUint(fields[21], 10, 64) // starttime since boot, in ticks
+	if err != nil {
+		return cpu, fmt.Errorf("%s: parse starttime %q: %w", procPath, fields[21], err)
+	}
+
+	// cumulative CPU time in milliseconds
+	cpu.User = user * (1000 / userHZ)
+	cpu.System = sys * (1000 / userHZ)
 	cpu.Total = cpu.User + cpu.System
+
+	// lifetime-average CPU percent:
+	// - elapsed process lifetime = uptime since boot - process `starttime` since boot
+	// - cpu percent = cumulative process cpu time / elapsed process lifetime
+	upline, err := cos.ReadOneLine(proc + "uptime")
+	if err != nil {
+		return cpu, fmt.Errorf("%s: %w", proc+"uptime", err)
+	}
+	ufields := strings.Fields(upline)
+	if len(ufields) < 1 {
+		return cpu, fmt.Errorf("%s: unexpected format", proc+"uptime")
+	}
+	uptimeSec, err := strconv.ParseFloat(ufields[0], 64)
+	if err != nil {
+		return cpu, fmt.Errorf("%s: parse uptime %q: %w", proc+"uptime", ufields[0], err)
+	}
+
+	startSec := float64(start) / userHZ
+	elapsedSec := uptimeSec - startSec
+
+	if elapsedSec > 0 {
+		pct := float64(user+sys) / userHZ * 100 / elapsedSec
+		if gcpu.num > 1 {
+			pct /= float64(gcpu.num)
+		}
+		cpu.Percent = pct
+	}
 
 	return cpu, nil
 }

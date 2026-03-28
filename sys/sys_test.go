@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package sys_test
 
@@ -25,6 +25,7 @@ func checkSkipOS(t *testing.T, oss ...string) {
 }
 
 func TestNumCPU(t *testing.T) {
+	sys.Init(false)
 	checkSkipOS(t, "darwin")
 	if sys.NumCPU() < 1 || sys.NumCPU() > runtime.NumCPU() {
 		t.Errorf("Wrong number of CPUs %d (%d)", sys.NumCPU(), runtime.NumCPU())
@@ -49,6 +50,8 @@ func TestMaxProcs(t *testing.T) {
 }
 
 func TestMemoryStats(t *testing.T) {
+	sys.Init(false)
+
 	var mem sys.MemStat
 	err := mem.Get()
 	tassert.CheckFatal(t, err)
@@ -79,6 +82,7 @@ func TestProc(t *testing.T) {
 	if testing.Short() {
 		t.Skipf("skipping %s in short mode", t.Name())
 	}
+	sys.Init(false)
 	checkSkipOS(t, "darwin")
 
 	pid := os.Getpid()
@@ -110,6 +114,8 @@ func TestProc(t *testing.T) {
 	tassert.Errorf(t, newStats.CPU.User+newStats.CPU.System == newStats.CPU.Total,
 		"Total must be equal to sum of User and System: %+v", newStats.CPU)
 	tassert.Errorf(t, newStats.CPU.Total > stats.CPU.Total, "New stats must show more CPU used. Old usage %d, new one: %d", stats.CPU.Total, newStats.CPU.Total)
-	tassert.Errorf(t, newStats.CPU.Percent > 0.0, "Process must use some CPU. Usage: %g", stats.CPU.Percent)
+
+	tassert.Errorf(t, newStats.CPU.Percent > 0.1, "Process must use some CPU. Usage: %g", stats.CPU.Percent)
+	tassert.Errorf(t, newStats.CPU.Percent < 100.0, "Process CPU percent looks bogus: %g", newStats.CPU.Percent)
 	t.Logf("Process CPU usage: %6.2f%%", newStats.CPU.Percent)
 }

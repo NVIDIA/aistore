@@ -27,12 +27,14 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 	}
 
 	var (
-		load     = sys.MaxLoad()
-		highLoad = sys.HighLoadWM()
+		load, isExtreme = sys.MaxLoad2()
+		highLoad        = sys.HighLoadWM()
 	)
 	if !force {
 		// too busy and not too "pressured"
 		switch {
+		case isExtreme && p <= PressureExtreme:
+			return
 		case load >= highLoad && p <= PressureHigh:
 			return
 		case load >= max(highLoad>>1, 1) && p <= PressureModerate:

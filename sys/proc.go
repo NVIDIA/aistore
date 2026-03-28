@@ -1,10 +1,15 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
-import "github.com/NVIDIA/aistore/cmn/debug"
+import (
+	"github.com/NVIDIA/aistore/cmn/debug"
+)
+
+// in sys/proc.go and friends prefix "proc" means "process"
+// (not to confuse with /proc FS)
 
 type (
 	ProcCPUStats struct {
@@ -12,7 +17,7 @@ type (
 		System   uint64
 		Total    uint64
 		LastTime int64
-		Percent  float64
+		Percent  float64 // lifetime-average CPU percent since process start
 	}
 
 	ProcMemStats struct {
@@ -32,17 +37,16 @@ func ProcessStats(pid int) (ProcStats, error) {
 	if err != nil {
 		return ProcStats{}, err
 	}
-	stats := ProcStats{CPU: cpu}
-	if contCPUs > 1 {
-		stats.CPU.Percent = float64(stats.CPU.Total) / float64(contCPUs) // TODO: confirm
-	}
+
 	mem, err := procMem(pid)
 	if err != nil {
 		return ProcStats{}, err
 	}
-	stats.Mem = mem
 
-	return stats, nil
+	return ProcStats{
+		CPU: cpu,
+		Mem: mem,
+	}, nil
 }
 
 func ProcFDSize() int {

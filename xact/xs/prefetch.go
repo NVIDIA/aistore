@@ -366,7 +366,11 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 
 	pebl.mu.Unlock()
 
-	pebl.load.Store(sys.MaxLoad()) // pebl.busy()
+	load, isExtreme := sys.MaxLoad2()
+	if isExtreme {
+		load = 100
+	}
+	pebl.load.Store(load) // pebl.busy()
 
 	if xblob == nil {
 		return

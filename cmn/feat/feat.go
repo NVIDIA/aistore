@@ -1,6 +1,6 @@
 // Package feat: global runtime-configurable feature flags
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package feat
 
@@ -45,7 +45,7 @@ const (
 	TrustCryptoSafeChecksums  // when checking whether objects are identical trust only cryptographically secure checksums
 	S3ListObjectVersions      // when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 	EnableDetailedPromMetrics // include (bucket, xaction) Prometheus variable labels with every GET, PUT, and HEAD transaction
-	SystemReserved            // reserved; do not set: the flag may be redefined or removed at any time
+	ForceContainerCPUMem      // force cgroup-based CPU/mem accounting if auto-detect fails for containerized deployments (note: restart required)
 	ResumeInterruptedMPU      // resume interrupted multipart uploads from persisted partial manifests
 	KeepUnknownFQN            // do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 	LoadBalanceGET            // when bucket is n-way mirrored read object replica from the least-utilized mountpath
@@ -72,7 +72,7 @@ var Cluster = [...]string{
 	"Trust-Crypto-Safe-Checksums",
 	"S3-ListObjectVersions",
 	"Enable-Detailed-Prom-Metrics",
-	"System-Reserved",
+	"Force-Container-CPU-Mem",
 	"Resume-Interrupted-MPU",
 	"Keep-Unknown-FQN",
 	"Load-Balance-GET",

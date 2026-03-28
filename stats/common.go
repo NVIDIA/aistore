@@ -60,7 +60,7 @@ const (
 )
 
 const (
-	NgrPrompt   = "Number of goroutines"
+	NgrPrompt   = "number of goroutines"
 	ngrHighTime = 10 * time.Minute // log a warning if the number of goroutines remains high
 )
 

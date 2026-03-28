@@ -96,7 +96,7 @@ func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 
 	// 2. goroutine load
 	if ngrLoad == load.Critical {
-		nlog.Warningln(xname, stats.NgrPrompt, ngr)
+		nlog.Warningln(xname, "critical", stats.NgrPrompt, ngr)
 		return NwpNone, nil
 	}
 
@@ -104,7 +104,7 @@ func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 
 	// yellow alert (high)
 	if ngrLoad == load.High {
-		nlog.Warningln(xname, stats.NgrPrompt, ngr)
+		nlog.Warningln(xname, "high", stats.NgrPrompt, ngr)
 		numWorkers = min(numWorkers, numMpaths)
 	}
 
@@ -124,16 +124,19 @@ func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 		numWorkers = min(NwpMin+1, numWorkers)
 	}
 
-	// 4. CPU load averages
+	// 4. CPU load
 	cpuLoad := load.CPU()
-	if cpuLoad >= load.High {
-		if lv, wm := sys.MaxLoad(), sys.HighLoadWM(); lv >= wm {
-			nlog.Warningln(xname, "high load [", lv, wm, "]")
-		}
+	const tag = "cpu load is"
+	switch cpuLoad {
+	case load.Critical:
+		nlog.Warningln(xname, tag, "critical")
+		return NwpNone, nil
+	case load.High:
 		if ngrLoad == load.High {
+			nlog.Warningln(xname, tag, "high and high", stats.NgrPrompt, ngr)
 			return NwpNone, nil
 		}
-		numWorkers = min(NwpMin, numWorkers)
+		numWorkers = min(NwpMin+1, numWorkers)
 	}
 
 	return numWorkers, nil

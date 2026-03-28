@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -44,6 +45,7 @@ func TestMain(m *testing.M) {
 	)
 
 	initTestEnv()
+	sys.Init(false) // TODO -- FIXME: wire into CLI after `go get` in its go.mod
 	if cliBck, err = setBucket(); err == nil {
 		primaryURL, err = waitForCluster()
 	}

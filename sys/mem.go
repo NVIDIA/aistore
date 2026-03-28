@@ -28,7 +28,7 @@ type MemStat struct {
 }
 
 func (mem *MemStat) Get() error {
-	if !containerized {
+	if !isContainerized() {
 		return mem.host()
 	}
 	return mem.container()

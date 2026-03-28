@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -187,8 +188,10 @@ func initDaemon(version, buildTime string) cos.Runner {
 	}
 
 	daemon.version, daemon.buildTime = version, buildTime
-	loghdr := _loghdr()
-	sys.GoEnvMaxprocs()
+
+	contForced := config.Features.IsSet(feat.ForceContainerCPUMem)
+	contDetected := sys.Init(contForced)
+	loghdr := _loghdr(contForced, contDetected)
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 6)}
 	hk.Init(true /*run*/)
@@ -290,7 +293,7 @@ func _loghdr2(si *meta.Snode, loghdr string) string {
 	return sb.String()
 }
 
-func _loghdr() (loghdr string) {
+func _loghdr(contForced, contDetected bool) (loghdr string) {
 	var (
 		sb cos.SB
 		l  = 128
@@ -312,8 +315,11 @@ func _loghdr() (loghdr string) {
 	sb.WriteString(strconv.Itoa(runtime.NumCPU()))
 	sb.WriteUint8(')')
 
-	if sys.Containerized() {
+	if contForced || contDetected {
 		sb.WriteString(", containerized")
+		if contForced && !contDetected {
+			sb.WriteString("(forced)")
+		}
 	}
 	loghdr = sb.String()
 	nlog.Infoln(loghdr) // redundant (see below), prior to start/init

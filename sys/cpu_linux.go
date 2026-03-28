@@ -12,69 +12,133 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-type (
-	errLoadAvg struct {
-		err error
+// best-effort auto-detect running in container
+func contDetected() bool {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
 	}
 
-	cpuSample struct {
-		usage         int64 // cumulative CPU time (nanoseconds)
-		throttledUsec int64 // cumulative throttled time (usec), cgroup v2 only
-		ts            int64 // mono.NanoTime
-	}
-
-	// (previous) raw cumulative cpuSample
-	cpuTracker struct {
-		prev cpuSample
-		mu   sync.Mutex
-	}
-)
-
-var ctracker = &cpuTracker{}
-
-func isContainerized() (yes bool) {
+	var (
+		markers = [...]string{"docker", "containerd", "kubepods", "kube", "lxc", "libpod", "podman"}
+		yes     bool
+	)
 	err := cos.ReadLines(rootProcess, func(line string) error {
-		if strings.Contains(line, "docker") || strings.Contains(line, "lxc") || strings.Contains(line, "kube") {
-			yes = true
-			return io.EOF
+		line = strings.ToLower(line)
+		for _, s := range markers {
+			if strings.Contains(line, s) {
+				yes = true
+				return io.EOF
+			}
 		}
 		return nil
 	})
-	if err != nil {
-		nlog.Errorln("Failed to read system info:", err)
+	if err != nil && err != io.EOF {
+		nlog.Warningln("failed to detect containerized runtime:", err)
 	}
-	return
+	return yes
 }
 
-// Returns an approximate number of CPUs allocated for the container.
+/////////
+// cpu //
+/////////
+
+// Return:
+// - an approximate number of CPUs allocated for the container.
 // By default, container runs without limits and its cfs_quota_us is
 // negative (-1). When a container starts with limited CPU usage its quota
 // is between 0.01 CPU and the number of CPUs on the host machine.
 // The function rounds up the calculated number.
-
-func containerNumCPU() (int, error) {
+func (t *cpu) setNum() error {
 	n2, errV2 := containerNumCPUV2()
 	if errV2 == nil {
-		return n2, nil
+		t.okv2 = true
+		t.num = n2
+		return nil
 	}
+
 	n1, errV1 := containerNumCPUV1()
 	if errV1 == nil {
-		return n1, nil
+		t.okv1 = true
+		t.num = n1
+		return nil
 	}
 
 	if cos.IsNotExist(errV2) && cos.IsNotExist(errV1) {
-		return 0, errors.New("containerized: no cgroup CPU controller files found; using runtime.NumCPU()")
+		return errors.New("containerized: no cgroup CPU controller files found; using runtime.NumCPU()")
 	}
-	return 0, fmt.Errorf("failed to read container CPU count: v2 (%q): %v; v1 (%q, %q): %v",
-		contCPUV2Max, errV2, contCPULimit, contCPUPeriod, errV1)
+	return fmt.Errorf("failed to read container CPU count: v2 (%q): %v; v1 (%q, %q): %v", contCPUV2Max, errV2, contCPULimit, contCPUPeriod, errV1)
 }
+
+// Return:
+// - CPU utilization as a percentage since the last call, and
+// - percentage of wall-clock time the container was CPU-throttled since the last call
+// or:
+// - 0 if the prev. sample is old (or first call)
+func (t *cpu) get() (util, throttled int64, _ error) {
+	cur, err := t.read()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	var (
+		prev cpuSample
+	)
+	t.mu.Lock()
+	prev = t.prev
+	t.prev = cur
+
+	if prev.ts == 0 {
+		t.mu.Unlock()
+		return 0, 0, nil
+	}
+
+	wallDt := cur.ts - prev.ts
+	if wallDt < minWallIval || wallDt > maxSampleAge {
+		t.mu.Unlock()
+		return 0, 0, nil
+	}
+
+	if isContainerized() && cur.throttledUsec > 0 {
+		dtUsec := max(cur.throttledUsec-prev.throttledUsec, 0)
+		throttled = min((dtUsec*100_000+wallDt/2)/wallDt, int64(100))
+	}
+
+	t.mu.Unlock()
+
+	cpuDt := max(cur.usage-prev.usage, 0)
+	denom := wallDt * int64(NumCPU())
+	util = (cpuDt*100 + denom/2) / denom
+	return min(util, 100), throttled, nil
+}
+
+func (t *cpu) read() (sample cpuSample, err error) {
+	sample.ts = mono.NanoTime()
+	switch {
+	case t.okv2:
+		var data []byte
+		data, err = os.ReadFile(contCPUV2Stat)
+		if err == nil {
+			sample.usage, sample.throttledUsec = parseCgroupV2Stat(data)
+		}
+		return sample, err
+	case t.okv1:
+		sample.usage, err = cos.ReadOneInt64(contCPUAcctUsage)
+		return sample, err
+	default:
+		sample.usage, err = readProcStatCPUUsage()
+		return sample, err
+	}
+}
+
+//
+// stateless readers ----------------------------------------------------------------------
+//
 
 func containerNumCPUV2() (int, error) {
 	line, err := cos.ReadOneLine(contCPUV2Max)
@@ -127,102 +191,6 @@ func containerNumCPUV1() (int, error) {
 	return int(max(approx, 1)), nil
 }
 
-//
-// load averages, with the following limited usage:
-// - fallback when cpuTracker has no prior sample or read error
-// - `ais show cluster` and friends
-//
-
-func (e *errLoadAvg) Error() string {
-	return fmt.Sprint("failed to load averages: ", e.err)
-}
-
-func LoadAverage() (avg LoadAvg, _ error) {
-	line, err := cos.ReadOneLine(hostLoadAvgPath)
-	if err != nil {
-		return avg, &errLoadAvg{err}
-	}
-
-	fields := strings.Fields(line) // TODO: manual parse to reduce string allocations (can wait)
-	if l := len(fields); l < 3 {
-		err := fmt.Errorf("unexpected %s format: num-fields=%d", hostLoadAvgPath, l)
-		return avg, &errLoadAvg{err}
-	}
-
-	avg.One, err = strconv.ParseFloat(fields[0], 64)
-	if err == nil {
-		avg.Five, err = strconv.ParseFloat(fields[1], 64)
-	}
-	if err == nil {
-		avg.Fifteen, err = strconv.ParseFloat(fields[2], 64)
-	}
-	if err == nil {
-		return avg, nil
-	}
-	return avg, &errLoadAvg{err}
-}
-
-//
-// CPU utilization (percentage-based, container-aware)
-//
-
-// return:
-// - CPU utilization as a percentage since the last call, and
-// - percentage of wall-clock time the container was CPU-throttled since the last call
-// or:
-// - 0 if the prev. sample is old (or first call)
-func (t *cpuTracker) get() (util, throttled int64, _ error) {
-	cur, err := readCPUUsage()
-	if err != nil {
-		return 0, 0, err
-	}
-
-	var (
-		prev cpuSample
-	)
-	t.mu.Lock()
-	prev = t.prev
-	t.prev = cur
-
-	if prev.ts == 0 {
-		t.mu.Unlock()
-		return 0, 0, nil
-	}
-
-	wallDt := cur.ts - prev.ts
-	if wallDt < minWallIval || wallDt > maxSampleAge {
-		t.mu.Unlock()
-		return 0, 0, nil
-	}
-
-	if containerized && cur.throttledUsec > 0 {
-		dtUsec := max(cur.throttledUsec-prev.throttledUsec, 0)
-		throttled = min((dtUsec*100_000+wallDt/2)/wallDt, int64(100))
-	}
-
-	t.mu.Unlock()
-
-	cpuDt := max(cur.usage-prev.usage, 0)
-	denom := wallDt * int64(NumCPU())
-	util = (cpuDt*100 + denom/2) / denom
-	return min(util, 100), throttled, nil
-}
-
-//
-// stateless readers
-//
-
-func readCPUUsage() (cpuSample, error) {
-	now := mono.NanoTime()
-	if containerized {
-		usage, thrt, err := readCgroupCPUUsage()
-		return cpuSample{usage: usage, throttledUsec: thrt, ts: now}, err
-	}
-
-	usage, err := readProcStatCPUUsage()
-	return cpuSample{usage: usage, ts: now}, err
-}
-
 func parseCgroupV2Stat(data []byte) (usageNs, throttledUsec int64) {
 	for line := range strings.SplitSeq(string(data), "\n") {
 		fields := strings.Fields(line)
@@ -241,29 +209,6 @@ func parseCgroupV2Stat(data []byte) (usageNs, throttledUsec int64) {
 		}
 	}
 	return
-}
-
-// read cgroup CPU usage:
-// - v2: from cpu.stat (usage_usec + throttled_usec)
-// - v1: from cpuacct.usage (nanoseconds), throttled unknown => 0
-func readCgroupCPUUsage() (usageNs, throttledUsec int64, _ error) {
-	// try cgroup v2
-	data, err := os.ReadFile(contCPUV2Stat)
-	if err == nil {
-		usageNs, throttledUsec = parseCgroupV2Stat(data)
-		if usageNs > 0 {
-			return usageNs, throttledUsec, nil
-		}
-	} else if !cos.IsNotExist(err) {
-		return 0, 0, fmt.Errorf("%s: %w", contCPUV2Stat, err)
-	}
-
-	// fallback to cgroup v1
-	ns, err := cos.ReadOneInt64(contCPUAcctUsage)
-	if err != nil {
-		return 0, 0, fmt.Errorf("cgroup CPU usage (v1 at %q and v2 at %q): %w", contCPUAcctUsage, contCPUV2Stat, err)
-	}
-	return ns, 0, nil
 }
 
 // return total cumulative "active" (non-idle) CPU time in nanoseconds:

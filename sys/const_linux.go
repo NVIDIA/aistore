@@ -7,6 +7,10 @@ package sys
 const (
 	// host OS stats
 	proc = "/proc/"
+
+	hostProcStat        = proc + "stat"
+	hostCPUPressurePath = proc + "pressure/cpu" // PSI bare metal (TODO)
+
 	// to detect container vs hardware
 	rootProcess     = proc + "1/cgroup"
 	hostLoadAvgPath = proc + "loadavg"
@@ -45,8 +49,4 @@ const (
 	contCPUV2Stat   = contCgroupV2 + "cpu.stat"     // usage_usec, throttled_usec, etc.
 	contCPUV2Max    = contCgroupV2 + "cpu.max"      // "$MAX $PERIOD" or "max $PERIOD"
 	contCPUPressure = contCgroupV2 + "cpu.pressure" // PSI (TODO)
-
-	// host
-	hostProcStat        = proc + "stat"
-	hostCPUPressurePath = proc + "pressure/cpu" // PSI bare metal (TODO)
 )
