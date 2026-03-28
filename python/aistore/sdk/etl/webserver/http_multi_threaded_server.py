@@ -2,6 +2,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 from socketserver import ThreadingMixIn
@@ -12,18 +13,25 @@ from urllib.parse import urlparse, parse_qs
 
 import requests
 
-from aistore.sdk.etl.webserver.base_etl_server import ETLServer, CountingIterator
+from aistore.sdk.etl.webserver.base_etl_server import (
+    ETLServer,
+    CountingIterator,
+    SYNC_DIRECT_PUT_TRANSIENT_ERRORS,
+    RETRY_BACKOFF_BASE,
+    RETRY_BACKOFF_MAX,
+)
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
 )
-from aistore.sdk.errors import InvalidPipelineError
+from aistore.sdk.errors import InvalidPipelineError, ETLDirectPutTransientError
 from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     HEADER_CONTENT_TYPE,
     HEADER_NODE_URL,
     HEADER_DIRECT_PUT_LENGTH,
     STATUS_OK,
+    STATUS_BAD_GATEWAY,
     QPARAM_ETL_ARGS,
     QPARAM_ETL_FQN,
     STATUS_INTERNAL_SERVER_ERROR,
@@ -112,6 +120,8 @@ class HTTPMultiThreadedServer(ETLServer):
                 resp = self.server.etl_server.client_put(url, data, headers=headers)
                 return self.server.etl_server.handle_direct_put_response(resp, data)
 
+            except SYNC_DIRECT_PUT_TRANSIENT_ERRORS as exc:
+                raise ETLDirectPutTransientError(direct_put_url, exc) from exc
             except Exception as e:
                 error = str(e).encode()
                 self.server.etl_server.logger.error(
@@ -148,26 +158,95 @@ class HTTPMultiThreadedServer(ETLServer):
             content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
             return BytesIO(self.rfile.read(content_length))
 
-        def _send_streaming_response(self, output_iter, path):
-            """Stream transformed output, handling pipeline if present."""
-            pipeline_header = self.headers.get(HEADER_NODE_URL)
-            if pipeline_header:
-                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
-                if first_url:
-                    # TODO: add retry loop (ETLDirectPutTransientError) matching FastAPIServer
-                    status_code, resp_data, direct_put_length = self._direct_put_stream(
-                        first_url, output_iter, remaining_pipeline, path
+        def _direct_put_with_retry(
+            self,
+            direct_put_url: str,
+            data: bytes,
+            remaining_pipeline: str = "",
+            path: str = "",
+        ) -> Tuple[int, bytes, int]:
+            """Buffered direct-put with exponential-backoff retry on transient errors."""
+            etl = self.server.etl_server
+            for attempt in range(etl.direct_put_retries + 1):
+                try:
+                    return self._direct_put(
+                        direct_put_url, data, remaining_pipeline, path
                     )
-                    self._set_headers(
-                        status_code=status_code,
-                        length=len(resp_data),
-                        direct_put_length=direct_put_length,
+                except ETLDirectPutTransientError as exc:
+                    if attempt >= etl.direct_put_retries:
+                        raise
+                    delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
+                    etl.logger.warning(
+                        "direct_put attempt %d/%d failed, retrying in %.1fs: %s",
+                        attempt + 1,
+                        etl.direct_put_retries + 1,
+                        delay,
+                        exc,
+                        exc_info=True,
                     )
-                    if resp_data:
-                        self.wfile.write(resp_data)
-                    return
+                    time.sleep(delay)
+            raise AssertionError("unreachable: loop always returns or raises")
 
-            # No pipeline: stream directly to client without Content-Length
+        def _direct_put_stream_with_retry(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+            self,
+            direct_put_url: str,
+            fqn: str,
+            raw_path: str,
+            etl_args: str,
+            is_get: bool,
+            remaining_pipeline: str = "",
+        ) -> Tuple[int, bytes, int]:
+            """
+            Streaming direct-put with exponential-backoff retry on transient errors.
+
+            For FQN and GET sources, the reader is closed and reopened on each retry.
+            For PUT requests without FQN, the body is buffered in a BytesIO by
+            _get_stream_reader and seeked back to 0 on retry so the same bytes are
+            replayed (mirrors FastAPIServer._direct_put_stream_with_retry).
+            """
+            etl = self.server.etl_server
+            reader = self._get_stream_reader(fqn, raw_path, is_get)
+            if reader is None:
+                return (
+                    STATUS_BAD_GATEWAY,
+                    b"Failed to retrieve data from target",
+                    0,
+                )
+            try:
+                for attempt in range(etl.direct_put_retries + 1):
+                    try:
+                        return self._direct_put_stream(
+                            direct_put_url,
+                            etl.transform_stream(reader, raw_path, etl_args),
+                            remaining_pipeline,
+                            raw_path,
+                        )
+                    except ETLDirectPutTransientError as exc:
+                        if attempt >= etl.direct_put_retries:
+                            raise
+                        delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
+                        etl.logger.warning(
+                            "direct_put_stream attempt %d/%d failed, retrying in %.1fs: %s",
+                            attempt + 1,
+                            etl.direct_put_retries + 1,
+                            delay,
+                            exc,
+                            exc_info=True,
+                        )
+                        if isinstance(reader, BytesIO):
+                            reader.seek(0)
+                        else:
+                            etl.close_reader(reader)
+                            reader = self._get_stream_reader(fqn, raw_path, is_get)
+                            if reader is None:
+                                raise
+                        time.sleep(delay)
+            finally:
+                etl.close_reader(reader)
+            raise AssertionError("unreachable: loop always returns or raises")
+
+        def _send_streaming_response(self, output_iter):
+            """Stream transformed output directly to the client (no pipeline)."""
             self.send_response(STATUS_OK)
             mime_type = self.server.etl_server.get_mime_type()
             self.send_header(HEADER_CONTENT_TYPE, mime_type)
@@ -201,6 +280,8 @@ class HTTPMultiThreadedServer(ETLServer):
                     resp, b"", data_length=counted.bytes_sent
                 )
 
+            except SYNC_DIRECT_PUT_TRANSIENT_ERRORS as exc:
+                raise ETLDirectPutTransientError(direct_put_url, exc) from exc
             except Exception as e:
                 root = e.__cause__ or e
                 self.server.etl_server.logger.error(
@@ -226,9 +307,10 @@ class HTTPMultiThreadedServer(ETLServer):
             if pipeline_header:
                 first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
                 if first_url:
-                    # TODO: add retry loop (ETLDirectPutTransientError) matching FastAPIServer
-                    status_code, transformed, direct_put_length = self._direct_put(
-                        first_url, transformed, remaining_pipeline, path
+                    status_code, transformed, direct_put_length = (
+                        self._direct_put_with_retry(
+                            first_url, transformed, remaining_pipeline, path
+                        )
                     )
                     self._set_headers(
                         status_code=status_code,
@@ -248,15 +330,34 @@ class HTTPMultiThreadedServer(ETLServer):
 
         def _handle_streaming(self, fqn, raw_path, etl_args, is_get):
             """Handle a streaming GET or PUT request."""
+            pipeline_header = self.headers.get(HEADER_NODE_URL)
+            if pipeline_header:
+                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+                if first_url:
+                    result = self._direct_put_stream_with_retry(
+                        first_url, fqn, raw_path, etl_args, is_get, remaining_pipeline
+                    )
+                    self._set_headers(
+                        status_code=result[0],
+                        length=len(result[1]),
+                        direct_put_length=result[2],
+                    )
+                    if result[1]:
+                        self.wfile.write(result[1])
+                    return
+
+            # No pipeline: original reader-based streaming path
             reader = self._get_stream_reader(fqn, raw_path, is_get=is_get)
             if reader is None:
-                self.send_error(502, "Failed to retrieve data from target")
+                self.send_error(
+                    STATUS_BAD_GATEWAY, "Failed to retrieve data from target"
+                )
                 return
             try:
                 output_iter = self.server.etl_server.transform_stream(
                     reader, raw_path, etl_args
                 )
-                self._send_streaming_response(output_iter, raw_path)
+                self._send_streaming_response(output_iter)
             finally:
                 self.server.etl_server.close_reader(reader)
 
@@ -343,6 +444,13 @@ class HTTPMultiThreadedServer(ETLServer):
                         f"Error processing object {raw_path!r}: file not found at {fs_path!r}. "
                     ),
                 )
+            except ETLDirectPutTransientError as e:
+                self.server.etl_server.logger.error(
+                    "Direct put failed after retries: %s", e
+                )
+                self.send_error(
+                    STATUS_BAD_GATEWAY, f"Direct put failed after retries: {e}"
+                )
             except requests.RequestException as e:
                 logger.error("Request to AIS target failed: %s", str(e))
                 self.send_error(500, f"Error contacting AIS target: {e}")
@@ -397,6 +505,13 @@ class HTTPMultiThreadedServer(ETLServer):
             except FileNotFoundError:
                 logger.error("File not found: %s", raw_path)
                 self.send_error(404, f"Local file not found: {raw_path}")
+            except ETLDirectPutTransientError as e:
+                self.server.etl_server.logger.error(
+                    "Direct put failed after retries: %s", e
+                )
+                self.send_error(
+                    STATUS_BAD_GATEWAY, f"Direct put failed after retries: {e}"
+                )
             except Exception as e:
                 logger.error("Error processing PUT request: %s", str(e))
                 self.send_error(500, "Internal error during transformation")

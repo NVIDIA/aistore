@@ -20,7 +20,12 @@ import httpx
 import aiofiles
 import uvicorn
 
-from aistore.sdk.etl.webserver.base_etl_server import ETLServer, CountingIterator
+from aistore.sdk.etl.webserver.base_etl_server import (
+    ETLServer,
+    CountingIterator,
+    RETRY_BACKOFF_BASE,
+    RETRY_BACKOFF_MAX,
+)
 from aistore.sdk.session_manager import resolve_ssl_config
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
@@ -34,6 +39,7 @@ from aistore.sdk.const import (
     HEADER_NODE_URL,
     HEADER_CONTENT_LENGTH,
     STATUS_OK,
+    STATUS_BAD_GATEWAY,
     ETL_WS_FQN,
     ETL_WS_PATH,
     ETL_WS_PIPELINE,
@@ -58,10 +64,6 @@ _DIRECT_PUT_TRANSIENT_ERRORS = (
     httpx.RemoteProtocolError,
 )
 
-# Direct-put retry: exponential backoff with a cap.
-_RETRY_BACKOFF_BASE = 2.0  # seconds; delay = base ** attempt
-_RETRY_BACKOFF_MAX = 30.0  # seconds; upper bound on per-attempt delay
-
 
 class FastAPIServer(ETLServer):
     """
@@ -76,7 +78,6 @@ class FastAPIServer(ETLServer):
         self.client: Optional[httpx.AsyncClient] = None
         self.active_connections: List[WebSocket] = []
         self.chunk_size: int = int(os.getenv(AIS_DIRECT_PUT_CHUNK_SIZE, str(MIB)))
-        self.direct_put_retries: int = int(os.getenv(AIS_DIRECT_PUT_RETRIES, "3"))
         self._setup_app()
 
     def _setup_app(self):
@@ -170,6 +171,14 @@ class FastAPIServer(ETLServer):
                     f"Error processing object {path!r}: file not found at {fs_path!r}."
                 ),
             ) from exc
+        except ETLDirectPutTransientError as e:
+            self.logger.error(
+                "Direct put failed after %d retries: %s", self.direct_put_retries, e
+            )
+            raise HTTPException(
+                status_code=STATUS_BAD_GATEWAY,
+                detail=f"Direct put failed after retries: {str(e)}",
+            ) from e
         except httpx.HTTPStatusError as e:
             self.logger.warning(
                 "Target responded with error: %s", e.response.status_code
@@ -179,7 +188,9 @@ class FastAPIServer(ETLServer):
             ) from e
         except httpx.RequestError as e:
             self.logger.error("Network error: %s", str(e))
-            raise HTTPException(502, detail=f"Network error: {str(e)}") from e
+            raise HTTPException(
+                STATUS_BAD_GATEWAY, detail=f"Network error: {str(e)}"
+            ) from e
         except Exception as e:
             self.logger.exception("Critical error during processing")
             raise HTTPException(500, detail=f"Processing error: {str(e)}") from e
@@ -319,7 +330,7 @@ class FastAPIServer(ETLServer):
                 except ETLDirectPutTransientError as exc:
                     if attempt >= self.direct_put_retries:
                         raise
-                    delay = min(_RETRY_BACKOFF_BASE**attempt, _RETRY_BACKOFF_MAX)
+                    delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                     self.logger.warning(
                         "direct_put attempt %d/%d failed, retrying in %.1fs: %s",
                         attempt + 1,
@@ -433,7 +444,7 @@ class FastAPIServer(ETLServer):
             except ETLDirectPutTransientError as exc:
                 if attempt >= self.direct_put_retries:
                     raise
-                delay = min(_RETRY_BACKOFF_BASE**attempt, _RETRY_BACKOFF_MAX)
+                delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                 self.logger.warning(
                     "direct_put attempt %d/%d failed, retrying in %.1fs",
                     attempt + 1,
