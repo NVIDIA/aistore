@@ -171,7 +171,7 @@ func LoadAverage() (avg LoadAvg, _ error) {
 // - percentage of wall-clock time the container was CPU-throttled since the last call
 // or:
 // - 0 if the prev. sample is old (or first call)
-func (t *cpuTracker) get() (util, throttled float64, _ error) {
+func (t *cpuTracker) get() (util, throttled int64, _ error) {
 	cur, err := readCPUUsage()
 	if err != nil {
 		return 0, 0, err
@@ -190,21 +190,21 @@ func (t *cpuTracker) get() (util, throttled float64, _ error) {
 	}
 
 	wallDt := cur.ts - prev.ts
-	if wallDt <= 0 || wallDt > maxSampleAge {
+	if wallDt < minWallIval || wallDt > maxSampleAge {
 		t.mu.Unlock()
 		return 0, 0, nil
 	}
 
 	if containerized && cur.throttledUsec > 0 {
 		dtUsec := max(cur.throttledUsec-prev.throttledUsec, 0)
-		throttled = min(float64(dtUsec)*100_000/float64(wallDt), 100)
+		throttled = min((dtUsec*100_000+wallDt/2)/wallDt, int64(100))
 	}
 
 	t.mu.Unlock()
 
 	cpuDt := max(cur.usage-prev.usage, 0)
-	ncpu := float64(NumCPU())
-	util = float64(cpuDt) * 100 / float64(wallDt) / ncpu
+	denom := wallDt * int64(NumCPU())
+	util = (cpuDt*100 + denom/2) / denom
 	return min(util, 100), throttled, nil
 }
 
@@ -266,9 +266,11 @@ func readCgroupCPUUsage() (usageNs, throttledUsec int64, _ error) {
 	return ns, 0, nil
 }
 
-// aggregate "cpu" line from /proc/stat
-// - sum user+nice+system+irq+softirq+steal
-// - exclude idle and iowait
+// return total cumulative "active" (non-idle) CPU time in nanoseconds:
+// - parse the aggregate "cpu" line from /proc/stat
+// - require at least 9 fields
+// - sum up (user, nice, system, irq, softirq, and steal) jiffies
+// - explicitly exclude idle and iowait; ignor guest/guest_nice (already included)
 func readProcStatCPUUsage() (int64, error) {
 	data, err := os.ReadFile(hostProcStat)
 	if err != nil {
@@ -281,20 +283,20 @@ func readProcStatCPUUsage() (int64, error) {
 	}
 
 	fields := strings.Fields(line)
-	if len(fields) < 5 {
-		return 0, fmt.Errorf("unexpected %s format: num-fields=%d", hostProcStat, len(fields))
+	if len(fields) < 9 {
+		return 0, fmt.Errorf("unexpected %s format: num-fields=%d (old kernel?)", hostProcStat, len(fields))
 	}
 
-	var totalJiffies int64
-	for i, f := range fields[1:] {
-		if i == 3 || i == 4 { // idle, iowait
-			continue
-		}
-		v, e := strconv.ParseInt(f, 10, 64)
-		if e != nil {
-			continue
+	var (
+		totalJiffies int64
+		ii           = [...]int{1, 2, 3, 6, 7, 8} // 1:user, 2:nice, 3:system, 6:irq, 7:softirq, 8:steal
+	)
+	for _, i := range ii {
+		v, err := strconv.ParseInt(fields[i], 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("%s: parse field[%d]=%q: %w", hostProcStat, i, fields[i], err)
 		}
 		totalJiffies += v
 	}
-	return int64(float64(totalJiffies) * nsPerJiffy), nil
+	return totalJiffies * nsPerJiffy, nil
 }

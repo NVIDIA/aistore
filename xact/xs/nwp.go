@@ -127,7 +127,7 @@ func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 	// 4. CPU load averages
 	cpuLoad := load.CPU()
 	if cpuLoad >= load.High {
-		if lv, wm := sys.MaxLoad(), sys.HighLoadWM(); lv >= float64(wm) {
+		if lv, wm := sys.MaxLoad(), sys.HighLoadWM(); lv >= wm {
 			nlog.Warningln(xname, "high load [", lv, wm, "]")
 		}
 		if ngrLoad == load.High {

@@ -304,6 +304,10 @@ func (r *XactNBI) fini(smap *meta.Smap, ntotal int64) error {
 		return errLoad // IO err
 	}
 
+	if r.IsAborted() {
+		return nil
+	}
+
 	now := time.Now()
 	if r.ufest.Count() != 0 {
 		err := lom.CompleteUfest(r.ufest, true /*locked*/)

@@ -106,7 +106,7 @@ func CPU() Load {
 	switch {
 	case extreme:
 		return Critical
-	case load >= float64(high):
+	case load >= high:
 		return High
 	default:
 		return Low

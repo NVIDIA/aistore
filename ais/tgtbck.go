@@ -335,6 +335,11 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 
 	// NOTE: blocking next-page request
 	resp := xls.Do(lsmsg)
+	if resp == nil {
+		// (unlikely shutdown)
+		w.WriteHeader(http.StatusNoContent)
+		return false
+	}
 	if resp.Err != nil {
 		t.writeErr(w, r, resp.Err, resp.Status)
 		return false

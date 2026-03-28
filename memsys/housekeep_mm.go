@@ -67,7 +67,7 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 			highLoad = sys.HighLoadWM()
 		)
 		// too busy and not too "pressured"
-		if load >= float64(highLoad) {
+		if load >= highLoad {
 			return r.hkIval(p, now)
 		}
 		r.refreshStats(now)

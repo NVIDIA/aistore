@@ -572,10 +572,10 @@ func _load(sname string, flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags
 	const tag = "CPU utilization:"
 	var (
 		load, isExtreme = sys.MaxLoad2()
-		ncpu            = sys.NumCPU()
+		ncpu            = int64(sys.NumCPU())
 	)
 	// 1. normal
-	if load < float64(ncpu>>1) { // 50%
+	if load < ncpu>>1 { // 50%
 		if flags.IsAnySet(cos.LowCPU | cos.OOCPU) {
 			clr |= cos.OOCPU | cos.LowCPU
 			nlog.Infoln(sname, tag, "back to normal")
@@ -593,7 +593,7 @@ func _load(sname string, flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags
 	}
 	// 3. high
 	highcpu := ncpu * sys.HighLoad / 100
-	if load > float64(highcpu) {
+	if load > highcpu {
 		clr |= cos.OOCPU
 		if !flags.IsSet(cos.LowCPU) {
 			set |= cos.LowCPU

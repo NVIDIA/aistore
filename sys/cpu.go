@@ -23,6 +23,12 @@ const (
 	// - stats_time
 	maxSampleAge = int64(13 * time.Second)
 
+	// TODO:
+	// - temp workaround against millisecond-range resampling noise
+	// - replace with cached/smoothed CPU-load state
+	//   (similar to disk utilization in `ios` package)
+	minWallIval = int64(2 * time.Second)
+
 	// >10% wall-clock throttled => extreme starvation
 	throttleExtremeThresh = 10
 
@@ -86,14 +92,14 @@ func GoEnvMaxprocs() {
 // HighLoadWM: "high-load watermark" as a percentage.
 // For 8 CPUs: max(100 - 100/8, 1) = 88 - between HighLoad(82) and ExtremeLoad(92).
 // see also: (ExtremeLoad, HighLoad) defaults
-func HighLoadWM() int {
-	ncpu := NumCPU()
+func HighLoadWM() int64 {
+	ncpu := int64(NumCPU())
 	return max(100-100/ncpu, 1)
 }
 
 // MaxLoad returns CPU utilization percentage (0-100).
 // See also: README.md in this package.
-func MaxLoad() (load float64) {
+func MaxLoad() (load int64) {
 	util, _, err := ctracker.get()
 	if err != nil {
 		return maxLoadFallback()
@@ -107,7 +113,7 @@ func MaxLoad() (load float64) {
 // is being throttled, that's CPU starvation regardless of utilization percentage.
 //
 // See also: README.md in this package.
-func MaxLoad2() (load float64, isExtreme bool) {
+func MaxLoad2() (load int64, isExtreme bool) {
 	util, throttled, err := ctracker.get()
 	if err != nil {
 		load = maxLoadFallback()
@@ -126,7 +132,7 @@ func MaxLoad2() (load float64, isExtreme bool) {
 
 // fallback when cpuTracker returns an error:
 // convert load average to percentage: (load / NumCPU)%
-func maxLoadFallback() float64 {
+func maxLoadFallback() int64 {
 	avg, err := LoadAverage()
 	if err != nil {
 		nlog.ErrorDepth(1, err)
@@ -135,5 +141,5 @@ func maxLoadFallback() float64 {
 	load := max(avg.One, avg.Five)
 	ncpu := float64(NumCPU())
 	pct := load * 100 / ncpu
-	return min(pct, 100)
+	return min(int64(pct+0.4), 100)
 }

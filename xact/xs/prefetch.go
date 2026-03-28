@@ -8,7 +8,6 @@ package xs
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -44,7 +43,7 @@ type (
 	pebl struct {
 		parent  *prefetch
 		pending []core.Xact
-		load    atomic.Uint64
+		load    atomic.Int64
 		n       atomic.Int32
 		mu      sync.Mutex
 	}
@@ -367,7 +366,7 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 
 	pebl.mu.Unlock()
 
-	pebl.load.Store(uint64(math.Ceil(sys.MaxLoad()))) // pebl.busy()
+	pebl.load.Store(sys.MaxLoad()) // pebl.busy()
 
 	if xblob == nil {
 		return
@@ -433,7 +432,7 @@ func (pebl *pebl) abort(err error) {
 func (pebl *pebl) num() int32 { return pebl.n.Load() }
 
 func (pebl *pebl) busy() bool {
-	return pebl.n.Load() > maxPebls || pebl.load.Load() >= uint64(sys.HighLoadWM())
+	return pebl.n.Load() > maxPebls || pebl.load.Load() >= sys.HighLoadWM()
 }
 
 func (pebl *pebl) str() string {

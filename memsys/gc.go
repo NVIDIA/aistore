@@ -33,9 +33,9 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 	if !force {
 		// too busy and not too "pressured"
 		switch {
-		case load >= float64(highLoad) && p <= PressureHigh:
+		case load >= highLoad && p <= PressureHigh:
 			return
-		case load >= max(float64(highLoad>>1), 1.0) && p <= PressureModerate:
+		case load >= max(highLoad>>1, 1) && p <= PressureModerate:
 			return
 		}
 	}
