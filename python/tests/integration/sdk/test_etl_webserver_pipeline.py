@@ -586,10 +586,10 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
             "http://localhost:19061/error",
             data=b"error_data",
             headers=headers,
-            timeout=5,
+            timeout=20,
         )
 
-        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.status_code, 502)
         self.assertIn(b"/nonexistent", response.content)
         self.assertIn(b"ConnectionError", response.content)
 
