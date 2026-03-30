@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
@@ -12,7 +12,6 @@ import "C" //nolint:gci,gocritic // super weird case
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"syscall"
 	"unsafe" //nolint:gocritic // super weird case
@@ -66,15 +65,15 @@ func readVMStat(vmstat *C.vm_statistics_data_t) error {
 	return nil
 }
 
-func (mem *MemStat) host() error {
+func readMemHost() (mem MemStat, err error) {
 	totalMem, err := readTotalMemory()
 	if err != nil {
-		return err
+		return mem, err
 	}
 
 	var vmstat C.vm_statistics_data_t
 	if err := readVMStat(&vmstat); err != nil {
-		return err
+		return mem, err
 	}
 
 	var (
@@ -84,19 +83,19 @@ func (mem *MemStat) host() error {
 		kern     = uint64(vmstat.inactive_count) * pageSize
 	)
 	if err := readSysctl("vm.swapusage", &sstats); err != nil {
-		return err
+		return mem, err
 	}
-	{
-		mem.Total = totalMem
-		mem.Free = freeMem
-		mem.Used = totalMem - freeMem
-		mem.ActualFree = freeMem + kern
-		mem.ActualUsed = totalMem - freeMem - kern
-		mem.SwapTotal = sstats.Total
-		mem.SwapFree = sstats.Free
-		mem.SwapUsed = sstats.Used
-	}
-	return nil
+
+	mem.Total = totalMem
+	mem.Free = freeMem
+	mem.Used = totalMem - freeMem
+	mem.ActualFree = freeMem + kern
+	mem.ActualUsed = totalMem - freeMem - kern
+	mem.SwapTotal = sstats.Total
+	mem.SwapFree = sstats.Free
+	mem.SwapUsed = sstats.Used
+	return mem, nil
 }
 
-func (*MemStat) container() error { return errors.New("darwin: cannot get container memory stats") }
+func readMemCgroupV2() (MemStat, error) { return MemStat{}, errDarwin }
+func readMemCgroupV1() (MemStat, error) { return MemStat{}, errDarwin }

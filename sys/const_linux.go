@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
@@ -44,9 +44,14 @@ const (
 	// cgroup v1: cumulative CPU usage in nanoseconds
 	contCPUAcctUsage = "/sys/fs/cgroup/cpuacct/cpuacct.usage"
 
-	// cgroup v2 (unified hierarchy)
+	// cgroup v2: CPU
 	contCgroupV2    = "/sys/fs/cgroup/"
 	contCPUV2Stat   = contCgroupV2 + "cpu.stat"     // usage_usec, throttled_usec, etc.
 	contCPUV2Max    = contCgroupV2 + "cpu.max"      // "$MAX $PERIOD" or "max $PERIOD"
 	contCPUPressure = contCgroupV2 + "cpu.pressure" // PSI (TODO)
+
+	// cgroup v2: memory
+	contMemV2Max     = contCgroupV2 + "memory.max"     // limit in bytes or "max" (no limit)
+	contMemV2Current = contCgroupV2 + "memory.current" // current usage in bytes
+	contMemV2Stat    = contCgroupV2 + "memory.stat"    // inactive_file, etc.
 )

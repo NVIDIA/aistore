@@ -4,39 +4,49 @@ The `sys` package provides lightweight runtime visibility into host and containe
 
 - CPU count and load estimation
 - memory statistics
-- container-aware reporting on Linux
+- container-aware reporting on Linux (cgroup v2 and v1)
 - simple, dependency-free fallbacks when preferred sources are unavailable
 
 **Table of Contents**
 
+- [Initialization](#initialization)
 - [CPU reporting](#cpu-reporting)
   - [Effective CPU count](#effective-cpu-count)
   - [Utilization model](#utilization-model)
   - [Linux source hierarchy](#linux-source-hierarchy)
+  - [Bare-metal /proc/stat parsing](#bare-metal-procstat-parsing)
   - [CPU starvation vs utilization](#cpu-starvation-vs-utilization)
 - [Memory reporting](#memory-reporting)
   - [Host memory](#host-memory)
-  - [Container memory](#container-memory)
+  - [Container memory (cgroup v2)](#container-memory-cgroup-v2)
+  - [Container memory (cgroup v1)](#container-memory-cgroup-v1)
+- [Container detection](#container-detection)
 - [Fallback](#fallback)
 - [Current limitations and future plans](#current-limitations-and-future-plans)
-  - [Container detection](#container-detection)
-  - [cgroup v2 memory](#cgroup-v2-memory)
-  - [Hardcoded thresholds and stale samples](#hardcoded-thresholds-and-stale-samples)
-  - [Future plans](#future-plans)
+  - [cgroup v1 deprecation](#cgroup-v1-deprecation)
+  - [Hardcoded thresholds](#hardcoded-thresholds)
+  - [Future work](#future-work)
+
+## Initialization
+
+Package initialization is split into two phases:
+
+- `init()`: sets `NumCPU` to `runtime.NumCPU()` - always safe, no dependencies.
+- `Init(contForced bool)`: performs container auto-detection, applies cgroup-aware CPU count, adjusts `GOMAXPROCS`. External modules may skip calling `Init()` and still get a sane `NumCPU()`.
+
+A package-level `cgroupVer` variable (0, 1, or 2) is set once during `Init()` and drives all subsequent CPU and memory reads. This avoids re-probing cgroup paths on every sample.
+
+The `ForceContainerCPUMem` feature flag (in `cmn/feat`) can override failed auto-detection for deployments where the heuristics miss. Requires restart.
 
 ## CPU reporting
 
-Public function include:
-
-| Function name | Description |
+| Function | Description |
 |---|---|
-| `NumCPU()` | returns the effective CPU count used by the process |
+| `NumCPU()` | effective CPU count (container-aware) |
 | `MaxParallelism()` | derives internal parallelism from `NumCPU()` |
-| `GoEnvMaxprocs()` | adjusts `GOMAXPROCS` downward when needed |
-| `MaxLoad()` | returns CPU utilization as a percentage |
-| `MaxLoad2()` | returns CPU utilization plus a boolean `isExtreme` indicating CPU starvation |
-| `HighLoadWM()` | derives a high-load watermark from CPU count |
-| `LoadAverage()` | reads system load averages |
+| `MaxLoad2()` | CPU utilization percentage (0–100, integer) plus `isExtreme` boolean |
+| `HighLoadWM()` | high-load watermark derived from CPU count |
+| `LoadAverage()` | system load averages (fallback only) |
 
 ### Effective CPU count
 
@@ -45,147 +55,143 @@ At startup, the package initializes a process-wide CPU count:
 - default: `runtime.NumCPU()`
 - container override: cgroup-based CPU quota when detected
 
-The package employs prioritized capability detection:
+The cgroup version is determined once during package's `Init()` call:
 
-1. Attempt cgroup v2 (cpu.max) parsing.
-2. Fall back to cgroup v1 (`cpu.cfs_quota_us`).
-3. If both fail or are missing, fallback to host runtime.NumCPU().
+1. Try cgroup v2 (`cpu.max`).
+2. Fall back to cgroup v1 (`cpu.cfs_quota_us / cpu.cfs_period_us`).
+3. If both fail or are missing, keep `runtime.NumCPU()`.
 
-Errors from both v1 and v2 paths are aggregated and reported to stderr.
+Errors from both paths are aggregated and reported to stderr (nlog is not yet available at init time).
 
 ### Utilization model
 
-CPU utilization is sampled as a delta of cumulative CPU time over wall-clock time:
+CPU utilization is sampled as a delta of cumulative CPU time over wall-clock time.
+The previous raw sample is stored in the global `cpu` struct. Utilization is computed as:
 
-- cumulative CPU usage is read from the best available source
-- the previous raw sample is cached in a tracker
-- utilization is computed as:
+`(delta_cpu_usage * 100) / (delta_wall_time * NumCPU)`
 
-`delta_cpu_usage / (delta_wall_time * NumCPU)`
+All values are integer percentages. Utilization and throttling are computed atomically in a single pass from the same time delta.
 
-Utilization and throttling are computed atomically in a single pass from the same time delta (specifically, to synchronize "Extreme Load" signal based on throttling).
-
-A sample gap older than the configured stale interval is discarded and treated as a reset. This avoids reporting a long-window average as if it were current load.
+A minimum wall-clock interval (`minWallIval`) rejects millisecond-range resampling noise. Samples older than `maxSampleAge` are discarded and treated as a reset.
 
 ### Linux source hierarchy
 
-On Linux, CPU usage currently follows this order:
+The cgroup version is determined at init time and stored in `cgroupVer`. The `cpu.read()` method switches on it - there is no fallback cascade per sample:
 
-1. cgroup v2: `cpu.stat`
-   - `usage_usec`
-   - `throttled_usec`
-2. cgroup v1: `cpuacct.usage`
-3. host fallback: `/proc/stat`
-4. last-resort fallback: `/proc/loadavg`
+| `cgroupVer` | Source | Fields |
+|---|---|---|
+| 2 | `cpu.stat` | `usage_usec`, `throttled_usec` |
+| 1 | `cpuacct.usage` | cumulative nanoseconds |
+| 0 | `/proc/stat` | aggregate jiffy line |
 
-The cgroup v2 path is preferred because it provides both cumulative usage and throttling information.
+If all sources fail at read time, `MaxLoad2()` falls back to `/proc/loadavg` converted to a percentage.
+
+### Bare-metal /proc/stat parsing
+
+The aggregate `cpu` line from `/proc/stat` is parsed using a whitelist of fields:
+
+- `user` (1), `nice` (2), `system` (3), `irq` (6), `softirq` (7), `steal` (8)
+
+Explicitly excluded:
+
+- `idle` (4), `iowait` (5): not active CPU time
+- `guest` (9), `guest_nice` (10): already included in `user` and `nice` by the kernel - summing them would double-count
+
+Steal is included because it represents CPU time unavailable to the node, which is what load-based throttling and worker tuning need to make decisions.
 
 ### CPU starvation vs utilization
 
 `MaxLoad2()` distinguishes between:
 
 - **high utilization**: CPU is busy
-- **CPU starvation**: the process or container is being throttled and cannot get CPU time when needed
+- **CPU starvation**: the container is being throttled
 
-In cgroup v2 environments, throttling is read from `cpu.stat` and used only for the extreme/starvation path.
-A container may therefore be treated as under extreme CPU pressure even if raw utilization is below the normal extreme-load threshold.
+In cgroup v2 environments, `throttled_usec` from `cpu.stat` is tracked as a percentage of wall-clock time. If throttling exceeds the extreme threshold (>10%), the system is reported as under extreme CPU pressure - even if raw utilization appears moderate.
 
 This is intentional: throttling indicates lack of CPU availability, not just high usage.
 
 ## Memory reporting
 
-Public functions include:
+| Function | Description |
+|---|---|
+| `MemStat.Get()` | populates memory statistics |
+| `MemStat.Str()` | formats a compact summary |
 
-- `MemStat.Get()` populates memory statistics
-- `MemStat.Str()` formats a compact summary
+`Get()` switches on `cgroupVer` and calls the appropriate stateless reader:
+
+| `cgroupVer` | Reader | Source |
+|---|---|---|
+| 2 | `readMemCgroupV2()` | `memory.max`, `memory.current`, `memory.stat` |
+| 1 | `readMemCgroupV1()` | `memory.limit_in_bytes`, `memory.usage_in_bytes`, `memory.stat` |
+| 0 | `readMemHost()` | `/proc/meminfo` |
+
+All readers are stateless free functions returning `(MemStat, error)`.
 
 ### Host memory
 
-Host memory is read from `/proc/meminfo`.
+Host memory is read from `/proc/meminfo`. Fields used:
 
-The implementation uses:
+- `MemTotal`, `MemFree`, `MemAvailable`, `Cached`, `Buffers`, `SwapTotal`, `SwapFree`
 
-- `MemTotal`
-- `MemFree`
-- `MemAvailable` when present
-- `Cached`
-- `Buffers`
-- `SwapTotal`
-- `SwapFree`
+If `MemAvailable` is not present (older kernels), `ActualFree` falls back to `MemFree + BuffCache`.
 
-If `MemAvailable` is not present, `ActualFree` falls back to:
+### Container memory (cgroup v2)
 
-`MemFree + BuffCache`
+1. `memory.max` - limit in bytes, or `"max"` (no limit → fall back to host)
+2. `memory.current` - current usage including kernel caches
+3. `memory.stat` - `inactive_file` used as reclaimable cache (`BuffCache`)
 
-Derived values include:
+Derived: `ActualUsed = Used - BuffCache`, `ActualFree = Total - ActualUsed`.
 
-- `Used`
-- `ActualUsed`
-- `SwapUsed`
+Usage is capped at the limit to handle transient kernel overshoot before OOM.
 
-### Container memory
+### Container memory (cgroup v1)
 
-Current Linux container memory support is based on cgroup v1 memory files:
+1. `memory.limit_in_bytes` - values > `MaxInt64/2` treated as "no limit" (fall back to host)
+2. `memory.usage_in_bytes` - current usage
+3. `memory.stat` - `total_cache` used as reclaimable cache
 
-- `memory.limit_in_bytes`
-- `memory.usage_in_bytes`
-- `memory.stat` (`total_cache`)
+Swap statistics are always host statistics regardless of cgroup version.
 
-Behavior today:
+## Container detection
 
-- if not containerized, return host memory
-- if containerized but no effective memory limit is configured, return host memory
-- if cgroup memory files are unavailable or unreadable, return host memory
-- swap statistics are always host statistics
+Container detection uses a best-effort heuristic at init time:
 
-This is intentionally conservative, but it also means that cgroup v2 memory-only environments are not yet handled explicitly.
+1. Check for `/.dockerenv`
+2. Scan `/proc/1/cgroup` for markers: `docker`, `containerd`, `kubepods`, `kube`, `lxc`, `libpod`, `podman`
+
+If auto-detection fails but the deployment is known to be containerized, set the `ForceContainerCPUMem` feature flag. This forces cgroup-based CPU and memory accounting. Requires restart.
 
 ## Fallback
 
-The package generally follows these rules:
+The package follows these rules:
 
-- preferred source first
-- degrade to older or coarser source when necessary
-- for CPU, preserve a usable percentage whenever possible
-- for memory, prefer host stats over failing when container-specific files cannot be read
+- preferred source first, determined once at init time
+- degrade to older or coarser source when the preferred source is unavailable
+- for CPU: preserve a usable percentage whenever possible
+- for memory: prefer host stats over failing when container-specific files cannot be read
 
-This makes the package resilient across bare-metal, VMs, containers, and mixed deployment environments, at the cost of occasionally returning an approximation instead of a strict container-scoped answer.
+This makes the package resilient across bare-metal, VMs, containers, and mixed environments, at the cost of occasionally returning an approximation instead of a strict container-scoped answer.
 
 ## Current limitations and future plans
 
-### Container detection
+### cgroup v1 deprecation
 
-Some Linux logic still branches early on a process-wide `containerized` flag, derived at node startup from simple string matching on `/proc/1/cgroup`.
+Note that cgroup v1 support is deprecated and will be removed in a future release after v4.4. All major container runtimes and orchestrators now default to cgroup v2. Deployments still on v1 should plan to migrate.
 
-This is simple, but it can mis-detect certain deployment environments and steer source selection down the wrong path.
+### Hardcoded thresholds
 
-### cgroup v2 memory
+Several operational constants are compiled in:
 
-CPU reporting already uses cgroup v2, but memory reporting does not yet have a dedicated cgroup v2 path.
-
-As a result, a container running under cgroup v2 memory controls may currently fall back to host memory statistics.
-
-### Hardcoded thresholds and stale samples
-
-Several operational constants are currently compiled in, including:
-
-- stale CPU sample interval
-- CPU load thresholds
+- stale CPU sample interval (`maxSampleAge`)
+- minimum wall-clock interval (`minWallIval`) - temporary guard against resampling noise
+- CPU load thresholds (`ExtremeLoad`, `HighLoad`)
 - throttling threshold for extreme CPU starvation
-
-CPU utilization is computed from sampled deltas and depends on periodic sampling.
-There is currently no synchronous (or asynchronous) path to refresh utilization sample on demand.
-
-If the previous sample is considered stale, the package will return 0 (zero) utilization instead of a current value.
 
 ### Future work
 
-Planned follow-ups include:
-
-1. replace init-time container detection with capability-based source selection
-   - try cgroup v2 first
-   - then cgroup v1
-   - then host fallbacks
-2. add cgroup v2 memory support
-3. revisit error handling for cgroup CPU quota parsing
-4. consider environment-variable overrides for selected thresholds and tunables
+1. Replace `(maxSampleAge, minWallIval)` with alpha-weighted exponential averaging over a fixed sample array (similar to disk utilization in `ios` package).
+2. Allow callers to pass mono-time into `MaxLoad2()` to avoid redundant clock reads.
+3. Add cgroup-aware memory support for Darwin (currently stubs).
+4. Consider PSI (Pressure Stall Information) integration via `cpu.pressure` / `/proc/pressure/cpu`.
+5. Evaluate dropping cgroup v1 support.

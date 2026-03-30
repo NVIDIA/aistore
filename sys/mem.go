@@ -5,15 +5,12 @@
 package sys
 
 import (
+	"fmt"
+
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// NOTE: for CPU and memory reporting, cgroup support and future plans, see
-// README.md in this package - in particular, "limitations and plans."
-
-// Memory stats for the host OS or for container, depending on where the app is running.
-// For the host, returns an error if memory cannot be read. If the function fails to read
-// container's stats, it returns host memory. Swap stats, however, are _always_ host stats.
+const errPrefixMem = "sys/mem"
 
 type MemStat struct {
 	Total      uint64
@@ -28,10 +25,19 @@ type MemStat struct {
 }
 
 func (mem *MemStat) Get() error {
-	if !isContainerized() {
-		return mem.host()
+	var err error
+	switch cgroupVer {
+	case 2:
+		*mem, err = readMemCgroupV2()
+	case 1:
+		*mem, err = readMemCgroupV1()
+	default:
+		*mem, err = readMemHost()
 	}
-	return mem.container()
+	if err != nil {
+		return fmt.Errorf("%s: %w", errPrefixMem, err)
+	}
+	return nil
 }
 
 func (mem *MemStat) Str(sb *cos.SB) {

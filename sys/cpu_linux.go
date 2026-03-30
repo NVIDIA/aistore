@@ -5,9 +5,7 @@
 package sys
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"runtime"
 	"strconv"
@@ -15,34 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 )
-
-// best-effort auto-detect running in container
-func contDetected() bool {
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		return true
-	}
-
-	var (
-		markers = [...]string{"docker", "containerd", "kubepods", "kube", "lxc", "libpod", "podman"}
-		yes     bool
-	)
-	err := cos.ReadLines(rootProcess, func(line string) error {
-		line = strings.ToLower(line)
-		for _, s := range markers {
-			if strings.Contains(line, s) {
-				yes = true
-				return io.EOF
-			}
-		}
-		return nil
-	})
-	if err != nil && err != io.EOF {
-		nlog.Warningln("failed to detect containerized runtime:", err)
-	}
-	return yes
-}
 
 /////////
 // cpu //
@@ -57,22 +28,23 @@ func contDetected() bool {
 func (t *cpu) setNum() error {
 	n2, errV2 := containerNumCPUV2()
 	if errV2 == nil {
-		t.okv2 = true
+		cgroupVer = 2
 		t.num = n2
 		return nil
 	}
 
 	n1, errV1 := containerNumCPUV1()
 	if errV1 == nil {
-		t.okv1 = true
+		cgroupVer = 1
 		t.num = n1
 		return nil
 	}
 
 	if cos.IsNotExist(errV2) && cos.IsNotExist(errV1) {
-		return errors.New("containerized: no cgroup CPU controller files found; using runtime.NumCPU()")
+		return fmt.Errorf("%s no cgroup v1/v2 files; using runtime.NumCPU() = %d", errPrefixCPU, t.num)
 	}
-	return fmt.Errorf("failed to read container CPU count: v2 (%q): %v; v1 (%q, %q): %v", contCPUV2Max, errV2, contCPULimit, contCPUPeriod, errV1)
+	return fmt.Errorf("%s: failed to read container CPU count: v2 (%q): %v; v1 (%q, %q): %v",
+		errPrefixCPU, contCPUV2Max, errV2, contCPULimit, contCPUPeriod, errV1)
 }
 
 // Return:
@@ -99,7 +71,7 @@ func (t *cpu) get() (util, throttled int64, _ error) {
 	}
 
 	wallDt := cur.ts - prev.ts
-	if wallDt < minWallIval || wallDt > maxSampleAge {
+	if wallDt < MinWallIval || wallDt > maxSampleAge {
 		t.mu.Unlock()
 		return 0, 0, nil
 	}
@@ -117,23 +89,25 @@ func (t *cpu) get() (util, throttled int64, _ error) {
 	return min(util, 100), throttled, nil
 }
 
-func (t *cpu) read() (sample cpuSample, err error) {
+func (*cpu) read() (sample cpuSample, err error) {
 	sample.ts = mono.NanoTime()
-	switch {
-	case t.okv2:
+	switch cgroupVer {
+	case 2:
 		var data []byte
 		data, err = os.ReadFile(contCPUV2Stat)
 		if err == nil {
 			sample.usage, sample.throttledUsec = parseCgroupV2Stat(data)
 		}
-		return sample, err
-	case t.okv1:
+	case 1:
+		// cgroup v1 (obsolete; to be removed)
 		sample.usage, err = cos.ReadOneInt64(contCPUAcctUsage)
-		return sample, err
 	default:
 		sample.usage, err = readProcStatCPUUsage()
-		return sample, err
 	}
+	if err != nil {
+		return sample, fmt.Errorf("%s: %w", errPrefixCPU, err)
+	}
+	return sample, nil
 }
 
 //
@@ -171,6 +145,7 @@ func containerNumCPUV2() (int, error) {
 	return int(max(approx, 1)), nil
 }
 
+// cgroup v1 (obsolete; to be removed)
 func containerNumCPUV1() (int, error) {
 	quota, err := cos.ReadOneInt64(contCPULimit)
 	if err != nil {

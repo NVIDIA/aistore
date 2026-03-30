@@ -4,8 +4,6 @@
  */
 package sys_test
 
-// Do not import the main 'tools' package because of circular dependency
-// Use t.Logf or t.Errorf instead of tlog.Logf
 import (
 	"math"
 	"os"
@@ -14,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -50,8 +49,6 @@ func TestMaxProcs(t *testing.T) {
 }
 
 func TestMemoryStats(t *testing.T) {
-	sys.Init(false)
-
 	var mem sys.MemStat
 	err := mem.Get()
 	tassert.CheckFatal(t, err)
@@ -63,22 +60,39 @@ func TestMemoryStats(t *testing.T) {
 	tassert.Errorf(t, mem.Total > mem.ActualUsed, "ActualUsed is greater than Total memory: %+v", mem)
 	tassert.Errorf(t, mem.Total > mem.ActualFree, "ActualFree is greater than Total memory: %+v", mem)
 	tassert.Errorf(t, mem.Total == mem.Free+mem.Used, "Total must be = Free + Used: %+v", mem)
-	t.Logf("Memory stats: %+v", mem)
+
+	tassert.Errorf(t, mem.ActualUsed+mem.ActualFree == mem.Total, "ActualUsed + ActualFree must equal Total: %+v", mem)
+	tassert.Errorf(t, mem.Used >= mem.ActualUsed, "Used must be >= ActualUsed (BuffCache=%d): %+v", mem.BuffCache, mem)
+
+	var sb cos.SB
+	sb.Grow(80)
+	mem.Str(&sb)
+	t.Logf("Memory stats: %s", sb)
 
 	checkSkipOS(t, "darwin")
 
-	var memHost, memCont sys.MemStat
+	var memHost sys.MemStat
 	err = memHost.Get()
 	tassert.CheckFatal(t, err)
+
+	// NOTE: force "containerized" even though it'll then fail to read cgroups
+	sys.Init(true /*forceCont*/)
+
+	var memCont sys.MemStat
+	err = memCont.Get()
+	tassert.CheckFatal(t, err)
+
+	// this check in particular would make more sense if running in a container
 	tassert.Errorf(t, memHost.Total >= memCont.Total,
 		"Container's memory total is greater than the host one.\nOS: %+v\nContainer: %+v", memHost, memCont)
+
 	if memHost.SwapTotal == 0 && memHost.SwapFree == 0 {
 		// Not an error(e.g, Jenkins VM has swap off) - just a warning
 		t.Log("Either swap is off or failed to read its stats")
 	}
 }
 
-func TestProc(t *testing.T) {
+func TestProcAndMaxLoad(t *testing.T) {
 	if testing.Short() {
 		t.Skipf("skipping %s in short mode", t.Name())
 	}
@@ -90,6 +104,12 @@ func TestProc(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, stats.Mem.Size > 0 && stats.Mem.Resident > 0 && stats.Mem.Share > 0,
 		"Failed to read memory stats: %+v", stats.Mem)
+
+	load1, extreme1 := sys.MaxLoad2()
+	t.Logf("First call: load=%d, extreme=%t", load1, extreme1)
+
+	// make sure cpu tracker gets updated
+	time.Sleep(time.Duration(sys.MinWallIval))
 
 	// burn CPU for a few seconds by calculating prime numbers
 	// and make a short break to make usage lower than 100%
@@ -107,6 +127,10 @@ func TestProc(t *testing.T) {
 		t.Logf("%d is prime: %v", n, prime)
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	load2, extreme2 := sys.MaxLoad2()
+	t.Logf("Second call: load=%d, extreme=%v", load2, extreme2)
+	tassert.Errorf(t, load2 > load1 || extreme2, "Second call: (%d, %t) vs (%d, %t)", load2, extreme2, load1, extreme1)
 
 	newStats, err := sys.ProcessStats(pid)
 	tassert.CheckFatal(t, err)

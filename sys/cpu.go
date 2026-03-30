@@ -5,13 +5,9 @@
 package sys
 
 import (
-	"fmt"
-	"os"
-	"runtime"
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
@@ -23,7 +19,6 @@ import (
 // - remove (maxSampleAge, minWallIval); support alpha/(1-alpha) weighted average over fixed array of samples
 // - call Init() from cli/app.go
 // - callers to optionally pass mono-time => MaxLoad2()
-// - sys/mem.go and friends - support cgroups and all the rest of sys/cpu.go functionality
 
 const (
 	// when prev. sample is considered outdated
@@ -34,7 +29,7 @@ const (
 
 	// - temp workaround against millisecond-range resampling noise
 	// - replace with cached/smoothed CPU-load state
-	minWallIval = int64(2 * time.Second)
+	MinWallIval = int64(2 * time.Second)
 
 	// >10% wall-clock throttled => extreme starvation
 	throttleExtremeThresh = 10
@@ -47,6 +42,8 @@ const (
 	// when cgroup-based accounting is unavailable
 	nsPerJiffy = 1e9 / userHZ
 )
+
+const errPrefixCPU = "sys/cpu"
 
 // CPU utilization thresholds (percentage, 0-100)
 // HighLoad < HighLoadWM() < ExtremeLoad
@@ -71,55 +68,11 @@ type (
 
 	// global cpu state
 	cpu struct {
-		prev         cpuSample // previous sample
-		num          int       // num CPUs
-		mu           sync.Mutex
-		contDetected bool
-		contForced   bool // <-- feat.ForceContainerCPUMem at startup
-		okv2         bool // successfully parsed cgroup v2 at init time
-		okv1         bool // ditto v1
+		prev cpuSample // previous sample
+		num  int       // num CPUs
+		mu   sync.Mutex
 	}
 )
-
-var gcpu cpu
-
-// num CPUs may get adjusted by Init() below
-func init() {
-	gcpu.num = runtime.NumCPU()
-}
-
-// container-aware CPU count; GOMAXPROCS; okv2 if { container && can read cgroup v2 }
-// - AIS node (`aisnode`) calls Init() once upon startup
-// - external modules that skip it still get a sane NumCPU() - see above
-func Init(contForced bool) bool {
-	debug.Assert(gcpu.num > 0)
-	gcpu.contForced = contForced
-	if gcpu.contDetected = contDetected(); gcpu.contDetected || contForced {
-		if err := gcpu.setNum(); err != nil {
-			fmt.Fprintln(os.Stderr, err) // (cannot nlog yet)
-		}
-	}
-
-	// - warn GOMEMLIMIT
-	// - possibly reduce GOMAXPROCS to container's num CPUs
-	if val, exists := os.LookupEnv("GOMEMLIMIT"); exists {
-		nlog.Warningln("Go environment: GOMEMLIMIT =", val) // soft memory limit for the runtime (IEC units or raw bytes)
-	}
-	if val, exists := os.LookupEnv("GOMAXPROCS"); exists {
-		nlog.Warningln("Go environment: GOMAXPROCS =", val)
-		return gcpu.contDetected
-	}
-
-	maxprocs := runtime.GOMAXPROCS(0)
-	ncpu := NumCPU() // gcpu.num
-	if maxprocs > ncpu {
-		nlog.Warningf("Reducing GOMAXPROCS (prev = %d) to %d", maxprocs, ncpu)
-		runtime.GOMAXPROCS(ncpu)
-	}
-	return gcpu.contDetected
-}
-
-func isContainerized() bool { return gcpu.contDetected || gcpu.contForced }
 
 func NumCPU() int { return gcpu.num }
 

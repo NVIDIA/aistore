@@ -8,9 +8,7 @@ import (
 	"errors"
 )
 
-var errNoTracker = errors.New("darwin: no cpu tracker")
+var errDarwin = errors.New("darwin: no sys/cpu and sys/mem support")
 
-func contDetected() bool { return false }
-
-func (*cpu) setNum() error              { return errNoTracker }
-func (*cpu) get() (int64, int64, error) { return 0, 0, errNoTracker }
+func (*cpu) setNum() error              { return errDarwin }
+func (*cpu) get() (int64, int64, error) { return 0, 0, errDarwin }
