@@ -586,7 +586,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
             "http://localhost:19061/error",
             data=b"error_data",
             headers=headers,
-            timeout=20,
+            timeout=5,
         )
 
         self.assertEqual(response.status_code, 502)

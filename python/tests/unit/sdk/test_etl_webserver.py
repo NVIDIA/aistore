@@ -2001,3 +2001,132 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
             original_body,
             "retry must send original bytes, not empty bytes",
         )
+
+
+# ---------------------------------------------------------------------------
+# ConnectionRefused permanent-error guard tests
+# ---------------------------------------------------------------------------
+
+
+def _make_connection_refused_error():
+    """Build a realistic requests.ConnectionError wrapping a ConnectionRefused chain."""
+    from urllib3.exceptions import MaxRetryError, NewConnectionError  # pylint: disable=import-outside-toplevel
+
+    conn_refused = ConnectionRefusedError(111, "Connection refused")
+    new_conn_err = NewConnectionError(
+        None, "Failed to establish a new connection: [Errno 111] Connection refused"
+    )
+    new_conn_err.__cause__ = conn_refused
+    max_retry = MaxRetryError(pool=None, url="/nonexistent", reason=new_conn_err)
+    return requests.ConnectionError(max_retry)
+
+
+class TestFlaskConnectionRefusedGuard(unittest.TestCase):
+    """ConnectionRefused is a permanent error — must return 502, never retry."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        self.server = DummyFlaskServer()
+        self.server.direct_put_retries = 3
+
+    def _put(self, url="http://localhost:19999/nonexistent", data=b"data"):
+        with self.server.app.test_request_context():
+            return self.server._direct_put(url, data)  # pylint: disable=protected-access
+
+    def _retry(self, url="http://localhost:19999/nonexistent", data=b"data"):
+        with self.server.app.test_request_context():
+            return self.server._direct_put_with_retry(url, data)  # pylint: disable=protected-access
+
+    def test_connection_refused_returns_502(self):
+        """_direct_put() returns (502, ...) for ConnectionRefused — not ETLDirectPutTransientError."""
+        exc = _make_connection_refused_error()
+        with patch.object(self.server, "client_put", side_effect=exc):
+            status, body, _ = self._put()
+        self.assertEqual(status, 502)
+        self.assertIn(b"ConnectionError", body)
+        self.assertIn(b"/nonexistent", body)
+
+    def test_connection_refused_not_retried(self):
+        """_direct_put_with_retry() does not sleep for ConnectionRefused."""
+        exc = _make_connection_refused_error()
+        with patch.object(self.server, "client_put", side_effect=exc):
+            with patch("time.sleep") as mock_sleep:
+                status, _, _ = self._retry()
+        self.assertEqual(status, 502)
+        mock_sleep.assert_not_called()
+
+    def test_bare_connection_error_still_retried(self):
+        """Bare ConnectionError('lost') is still wrapped as transient (existing behavior)."""
+        with self.server.app.test_request_context():
+            with patch.object(
+                self.server,
+                "client_put",
+                side_effect=requests.ConnectionError("lost"),
+            ):
+                with self.assertRaises(ETLDirectPutTransientError):
+                    self.server._direct_put(  # pylint: disable=protected-access
+                        "http://target/obj", b"data"
+                    )
+
+    def test_connection_refused_stream_not_retried(self):
+        """Streaming direct-put with ConnectionRefused returns 502 without sleeping.
+
+        Patches session.put so the guard inside _direct_put_stream fires and returns
+        (502, ...) — which _direct_put_stream_with_retry forwards without retrying.
+        Uses DummyStreamingFlaskServer to provide a real transform_stream.
+        """
+        streaming_server = DummyStreamingFlaskServer()
+        streaming_server.direct_put_retries = 3
+        exc = _make_connection_refused_error()
+
+        with streaming_server.app.test_request_context("/test/obj", method="PUT", data=b"hello"):
+            with patch.object(
+                streaming_server.session, "put", side_effect=exc
+            ):
+                with patch("time.sleep") as mock_sleep:
+                    result = streaming_server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+                        "http://localhost:19999/nonexistent", "/test/obj"
+                    )
+        self.assertEqual(result[0], 502)
+        mock_sleep.assert_not_called()
+
+
+class TestHTTPConnectionRefusedGuard(unittest.TestCase):
+    """ConnectionRefused is a permanent error — HTTP server must return 502, never retry."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        self.handler = DummyRequestHandler()
+        self.handler.server.etl_server.direct_put_retries = 3
+
+    def _put(self, url="http://localhost:19999/nonexistent", data=b"data"):
+        return self.handler._direct_put(url, data, "", "/nonexistent")  # pylint: disable=protected-access
+
+    def _retry(self, url="http://localhost:19999/nonexistent", data=b"data"):
+        return self.handler._direct_put_with_retry(url, data)  # pylint: disable=protected-access
+
+    def test_connection_refused_returns_502(self):
+        """_direct_put() returns (502, ...) for ConnectionRefused — not ETLDirectPutTransientError."""
+        exc = _make_connection_refused_error()
+        self.handler.server.etl_server.client_put = MagicMock(side_effect=exc)
+        status, body, _ = self._put()
+        self.assertEqual(status, 502)
+        self.assertIn(b"ConnectionError", body)
+        self.assertIn(b"/nonexistent", body)
+
+    def test_connection_refused_not_retried(self):
+        """_direct_put_with_retry() does not sleep for ConnectionRefused."""
+        exc = _make_connection_refused_error()
+        self.handler.server.etl_server.client_put = MagicMock(side_effect=exc)
+        with patch("time.sleep") as mock_sleep:
+            status, _, _ = self._retry()
+        self.assertEqual(status, 502)
+        mock_sleep.assert_not_called()
+
+    def test_bare_connection_error_still_retried(self):
+        """Bare ConnectionError('lost') is still wrapped as transient (existing behavior)."""
+        self.handler.server.etl_server.client_put = MagicMock(
+            side_effect=requests.ConnectionError("lost")
+        )
+        with self.assertRaises(ETLDirectPutTransientError):
+            self._put()

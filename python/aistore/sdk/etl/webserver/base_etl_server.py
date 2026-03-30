@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from typing import BinaryIO, Iterator, Tuple, Union
 from urllib.parse import unquote
 import requests
+from urllib3.exceptions import MaxRetryError, NewConnectionError
 from aistore.sdk.const import (
     STATUS_NO_CONTENT,
     STATUS_OK,
@@ -29,6 +30,23 @@ SYNC_DIRECT_PUT_TRANSIENT_ERRORS = (
 # Direct-put retry: exponential backoff with a cap.
 RETRY_BACKOFF_BASE = 2.0  # seconds; delay = base ** attempt
 RETRY_BACKOFF_MAX = 30.0  # seconds; upper bound on per-attempt delay
+
+
+def _is_connection_refused(exc: requests.ConnectionError) -> bool:
+    """Return True if exc represents a permanent ConnectionRefused error.
+
+    Walks the urllib3 exception chain:
+      requests.ConnectionError → MaxRetryError → NewConnectionError → ConnectionRefusedError
+
+    Returns False for bare ConnectionError("lost") and other non-refused connection errors.
+    """
+    inner = exc.args[0] if exc.args else None
+    if not isinstance(inner, MaxRetryError):
+        return False
+    reason = inner.reason
+    if not isinstance(reason, NewConnectionError):
+        return False
+    return isinstance(reason.__cause__, ConnectionRefusedError)
 
 
 class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
