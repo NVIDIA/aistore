@@ -28,6 +28,8 @@ func init() {
 
 func isContainerized() bool { return contDetected || contForced }
 
+// func CgroupVer() int { return cgroupVer } // uncomment for unit tests
+
 // container-aware CPU count; GOMAXPROCS; okv2 if { container && can read cgroup v2 }
 // - AIS node (`aisnode`) calls Init() once upon startup
 // - external modules that skip it still get a sane NumCPU() - see above

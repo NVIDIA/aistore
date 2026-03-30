@@ -17,6 +17,16 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
+// example running it in a constrained container:
+// docker run --rm --cpus=1.5 --memory=512m   -v "$PWD":/src -w /src \
+//            -v "$HOME/go/pkg/mod":/go/pkg/mod -v "$HOME/.cache/go-build":/root/.cache/go-build \
+//            golang:1.25   go test ./sys -run . -v -count=1 2>&
+
+func TestMain(m *testing.M) {
+	sys.Init(false /*forceCont*/)
+	os.Exit(m.Run())
+}
+
 func checkSkipOS(t *testing.T, oss ...string) {
 	if slices.Contains(oss, runtime.GOOS) {
 		t.Skipf("skipping test for %s platform", runtime.GOOS)
@@ -24,7 +34,6 @@ func checkSkipOS(t *testing.T, oss ...string) {
 }
 
 func TestNumCPU(t *testing.T) {
-	sys.Init(false)
 	checkSkipOS(t, "darwin")
 	if sys.NumCPU() < 1 || sys.NumCPU() > runtime.NumCPU() {
 		t.Errorf("Wrong number of CPUs %d (%d)", sys.NumCPU(), runtime.NumCPU())
@@ -64,30 +73,14 @@ func TestMemoryStats(t *testing.T) {
 	tassert.Errorf(t, mem.ActualUsed+mem.ActualFree == mem.Total, "ActualUsed + ActualFree must equal Total: %+v", mem)
 	tassert.Errorf(t, mem.Used >= mem.ActualUsed, "Used must be >= ActualUsed (BuffCache=%d): %+v", mem.BuffCache, mem)
 
+	// t.Logf("cgroup version: %d", sys.CgroupVer()) // uncomment for visibility
+
 	var sb cos.SB
 	sb.Grow(80)
 	mem.Str(&sb)
 	t.Logf("Memory stats: %s", sb)
 
-	checkSkipOS(t, "darwin")
-
-	var memHost sys.MemStat
-	err = memHost.Get()
-	tassert.CheckFatal(t, err)
-
-	// NOTE: force "containerized" even though it'll then fail to read cgroups
-	sys.Init(true /*forceCont*/)
-
-	var memCont sys.MemStat
-	err = memCont.Get()
-	tassert.CheckFatal(t, err)
-
-	// this check in particular would make more sense if running in a container
-	tassert.Errorf(t, memHost.Total >= memCont.Total,
-		"Container's memory total is greater than the host one.\nOS: %+v\nContainer: %+v", memHost, memCont)
-
-	if memHost.SwapTotal == 0 && memHost.SwapFree == 0 {
-		// Not an error(e.g, Jenkins VM has swap off) - just a warning
+	if mem.SwapTotal == 0 && mem.SwapFree == 0 {
 		t.Log("Either swap is off or failed to read its stats")
 	}
 }
@@ -96,7 +89,6 @@ func TestProcAndMaxLoad(t *testing.T) {
 	if testing.Short() {
 		t.Skipf("skipping %s in short mode", t.Name())
 	}
-	sys.Init(false)
 	checkSkipOS(t, "darwin")
 
 	pid := os.Getpid()

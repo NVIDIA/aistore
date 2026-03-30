@@ -22,6 +22,7 @@ The `sys` package provides lightweight runtime visibility into host and containe
   - [Container memory (cgroup v1)](#container-memory-cgroup-v1)
 - [Container detection](#container-detection)
 - [Fallback](#fallback)
+- [Example: testing `sys` package inside a constrained container](#example-testing-sys-package-inside-a-constrained-container)
 - [Current limitations and future plans](#current-limitations-and-future-plans)
   - [cgroup v1 deprecation](#cgroup-v1-deprecation)
   - [Hardcoded thresholds](#hardcoded-thresholds)
@@ -171,7 +172,86 @@ The package follows these rules:
 - for CPU: preserve a usable percentage whenever possible
 - for memory: prefer host stats over failing when container-specific files cannot be read
 
-This makes the package resilient across bare-metal, VMs, containers, and mixed environments, at the cost of occasionally returning an approximation instead of a strict container-scoped answer.
+## Example: testing `sys` package inside a constrained container
+
+A simple way to validate container-aware CPU and memory reporting is to compare the same test run on the host and inside a Docker container with explicit CPU and memory limits.
+
+### Host run
+
+```bash
+go test -v -tags=debug
+```
+
+Example output:
+
+```text
+=== RUN   TestNumCPU
+--- PASS: TestNumCPU (0.00s)
+=== RUN   TestLoadAvg
+    sys_test.go:41: Load average: 0.63, 0.49, 0.49
+--- PASS: TestLoadAvg (0.00s)
+=== RUN   TestMaxProcs
+--- PASS: TestMaxProcs (0.00s)
+=== RUN   TestMemoryStats
+    sys_test.go:76: Memory stats: {used 29GiB, free 2GiB, buffcache 20GiB, actfree 23GiB}
+    sys_test.go:79: Either swap is off or failed to read its stats
+--- PASS: TestMemoryStats (0.00s)
+=== RUN   TestProcAndMaxLoad
+    sys_test.go:110: First call: load=0, extreme=false
+    ...
+    sys_test.go:133: Second call: load=3, extreme=false
+    sys_test.go:145: Process CPU usage:   1.85%
+--- PASS: TestProcAndMaxLoad (5.69s)
+PASS
+ok      github.com/NVIDIA/aistore/sys   5.696s
+```
+
+### Container run
+
+```bash
+docker run --rm \
+  --cpus=1.5 \
+  --memory=512m \
+  -v "$PWD":/src -w /src \
+  -v "$HOME/go/pkg/mod":/go/pkg/mod \
+  -v "$HOME/.cache/go-build":/root/.cache/go-build \
+  golang:1.25 \
+  go test ./sys -run . -v -count=1 2>&1
+```
+
+Example output:
+
+```text
+=== RUN   TestNumCPU
+--- PASS: TestNumCPU (0.00s)
+=== RUN   TestLoadAvg
+    sys_test.go:41: Load average: 0.36, 0.41, 0.47
+--- PASS: TestLoadAvg (0.00s)
+=== RUN   TestMaxProcs
+--- PASS: TestMaxProcs (0.00s)
+=== RUN   TestMemoryStats
+    sys_test.go:76: Memory stats: {used 29MiB, free 483MiB, buffcache 152KiB, actfree 483MiB}
+    sys_test.go:79: Either swap is off or failed to read its stats
+--- PASS: TestMemoryStats (0.00s)
+=== RUN   TestProcAndMaxLoad
+    sys_test.go:110: First call: load=0, extreme=false
+    ...
+    sys_test.go:133: Second call: load=15, extreme=false
+    sys_test.go:145: Process CPU usage:  14.82%
+--- PASS: TestProcAndMaxLoad (5.70s)
+```
+
+The comparison illustrates several points:
+
+* On the host, `TestMemoryStats` reports host-scale memory totals.
+* Inside the container, the same test reports memory bounded by the cgroup limit (`--memory=512m`) rather than the host's physical RAM.
+* `TestNumCPU` and `TestMaxProcs` exercise init-time CPU detection and container-aware CPU count.
+* `TestProcAndMaxLoad` burns CPU in-process and verifies that `MaxLoad2()` reports non-zero utilization on a subsequent sample.
+* Swap may report as zero or be unavailable inside short-lived containers; this is not unusual.
+
+To further confirm container-scoped memory accounting, rerun the container example with a different limit (for example, `--memory=4G`). `TestMemoryStats` should then report a total close to 4 GiB instead of 512 MiB.
+
+> The container example above assumes cgroup v2 - the default on modern Linux distributions and container runtimes.
 
 ## Current limitations and future plans
 
