@@ -10,5 +10,5 @@ import (
 
 var errDarwin = errors.New("darwin: no sys/cpu and sys/mem support")
 
-func (*cpu) setNum() error              { return errDarwin }
+func (*cpu) setNumCgroup() error        { return errDarwin }
 func (*cpu) get() (int64, int64, error) { return 0, 0, errDarwin }

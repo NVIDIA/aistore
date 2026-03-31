@@ -45,7 +45,11 @@ func TestMain(m *testing.M) {
 	)
 
 	initTestEnv()
-	sys.Init(false) // TODO -- FIXME: wire into CLI after `go get` in its go.mod
+	contTag := sys.Init(false)
+	if contTag != "" {
+		fmt.Println("TestMain/integration: running in container [", contTag, "]")
+	}
+
 	if cliBck, err = setBucket(); err == nil {
 		primaryURL, err = waitForCluster()
 	}

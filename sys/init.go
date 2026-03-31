@@ -28,16 +28,16 @@ func init() {
 
 func isContainerized() bool { return contDetected || contForced }
 
-// func CgroupVer() int { return cgroupVer } // uncomment for unit tests
-
-// container-aware CPU count; GOMAXPROCS; okv2 if { container && can read cgroup v2 }
+// container-aware CPU count; GOMAXPROCS
 // - AIS node (`aisnode`) calls Init() once upon startup
 // - external modules that skip it still get a sane NumCPU() - see above
-func Init(forceCont bool) bool {
+// - return ("cgroup-v2", etc.) enumerated tags
+func Init(forceCont bool) string {
 	debug.Assert(gcpu.num > 0)
+
 	contForced = forceCont
 	if contDetected = detect(); contDetected || forceCont {
-		if err := gcpu.setNum(); err != nil {
+		if err := gcpu.setNumCgroup(); err != nil {
 			fmt.Fprintln(os.Stderr, err) // (cannot nlog yet)
 		}
 	}
@@ -49,7 +49,7 @@ func Init(forceCont bool) bool {
 	}
 	if val, exists := os.LookupEnv("GOMAXPROCS"); exists {
 		nlog.Warningln("Go environment: GOMAXPROCS =", val)
-		return contDetected
+		return _tag()
 	}
 
 	maxprocs := runtime.GOMAXPROCS(0)
@@ -58,5 +58,24 @@ func Init(forceCont bool) bool {
 		nlog.Warningf("Reducing GOMAXPROCS (prev = %d) to %d", maxprocs, ncpu)
 		runtime.GOMAXPROCS(ncpu)
 	}
-	return contDetected
+	return _tag()
+}
+
+func _tag() string {
+	switch cgroupVer {
+	case 1:
+		return "cgroup-v1"
+	case 2:
+		return "cgroup-v2"
+	default:
+		debug.Assert(cgroupVer == 0, cgroupVer)
+		switch {
+		case contDetected:
+			return "detected-no-cgroup"
+		case contForced:
+			return "forced-no-cgroup"
+		default:
+			return "" // bare-metal
+		}
+	}
 }

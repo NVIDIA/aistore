@@ -5,6 +5,7 @@
 package sys_test
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"runtime"
@@ -23,8 +24,11 @@ import (
 //            golang:1.25   go test ./sys -run . -v -count=1 2>&
 
 func TestMain(m *testing.M) {
-	sys.Init(false /*forceCont*/)
-	os.Exit(m.Run())
+	contTag := sys.Init(false /*forceCont*/)
+	if contTag != "" {
+		fmt.Println("TestMain/sys: running in container [", contTag, "]")
+	}
+	m.Run()
 }
 
 func checkSkipOS(t *testing.T, oss ...string) {
@@ -72,8 +76,6 @@ func TestMemoryStats(t *testing.T) {
 
 	tassert.Errorf(t, mem.ActualUsed+mem.ActualFree == mem.Total, "ActualUsed + ActualFree must equal Total: %+v", mem)
 	tassert.Errorf(t, mem.Used >= mem.ActualUsed, "Used must be >= ActualUsed (BuffCache=%d): %+v", mem.BuffCache, mem)
-
-	// t.Logf("cgroup version: %d", sys.CgroupVer()) // uncomment for visibility
 
 	var sb cos.SB
 	sb.Grow(80)

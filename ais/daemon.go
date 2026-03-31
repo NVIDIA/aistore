@@ -190,8 +190,8 @@ func initDaemon(version, buildTime string) cos.Runner {
 	daemon.version, daemon.buildTime = version, buildTime
 
 	contForced := config.Features.IsSet(feat.ForceContainerCPUMem)
-	contDetected := sys.Init(contForced)
-	loghdr := _loghdr(contForced, contDetected)
+	contTag := sys.Init(contForced)
+	loghdr := _loghdr(contTag)
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 6)}
 	hk.Init(true /*run*/)
@@ -293,7 +293,7 @@ func _loghdr2(si *meta.Snode, loghdr string) string {
 	return sb.String()
 }
 
-func _loghdr(contForced, contDetected bool) (loghdr string) {
+func _loghdr(contTag string) (loghdr string) {
 	var (
 		sb cos.SB
 		l  = 128
@@ -315,11 +315,9 @@ func _loghdr(contForced, contDetected bool) (loghdr string) {
 	sb.WriteString(strconv.Itoa(runtime.NumCPU()))
 	sb.WriteUint8(')')
 
-	if contForced || contDetected {
-		sb.WriteString(", containerized")
-		if contForced && !contDetected {
-			sb.WriteString("(forced)")
-		}
+	if contTag != "" {
+		sb.WriteString(", container:")
+		sb.WriteString(contTag)
 	}
 	loghdr = sb.String()
 	nlog.Infoln(loghdr) // redundant (see below), prior to start/init

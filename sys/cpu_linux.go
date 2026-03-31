@@ -19,13 +19,12 @@ import (
 // cpu //
 /////////
 
-// Return:
-// - an approximate number of CPUs allocated for the container.
-// By default, container runs without limits and its cfs_quota_us is
-// negative (-1). When a container starts with limited CPU usage its quota
+// Set `cgroupVer` _and_ return an approximate number of CPUs available for the container.
+// By default, container runs without limits and its cfs_quota_us is (-1).
+// When a container starts with limited CPU usage its quota
 // is between 0.01 CPU and the number of CPUs on the host machine.
 // The function rounds up the calculated number.
-func (t *cpu) setNum() error {
+func (t *cpu) setNumCgroup() error {
 	n2, errV2 := containerNumCPUV2()
 	if errV2 == nil {
 		cgroupVer = 2
