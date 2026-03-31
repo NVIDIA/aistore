@@ -8,6 +8,7 @@ package tracing
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"os"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"google.golang.org/grpc/credentials"
 )
 
 // Init() enables OpenTelemetry tracing for an AIS node.
@@ -116,7 +118,9 @@ func newExporter(conf *cmn.TracingConf) (trace.SpanExporter, error) {
 		otlptracegrpc.WithEndpoint(conf.ExporterEndpoint),
 	}
 	if conf.SkipVerify {
-		options = append(options, otlptracegrpc.WithInsecure())
+		options = append(options, otlptracegrpc.WithTLSCredentials(
+			credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}),
+		))
 	}
 
 	return otlptracegrpc.New(context.Background(), options...)
