@@ -5,7 +5,6 @@ gem "wdm" if Gem.win_platform?
 gem "jekyll-redirect-from"
 gem "jekyll-relative-links"
 gem "jekyll-seo-tag"
-gem "jekyll-sitemap"
 
 gem "jekyll"
 gem "kramdown-parser-gfm"

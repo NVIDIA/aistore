@@ -1,4 +1,91 @@
-User-agent: *
-Allow: /
+#
+# Welcome to NVIDIA AIStore
+#
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@///////////////////////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@///////////////////////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@%#@#////////////////////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@//////////@@@@@@@@@@@@///////////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@//////@@@@@@@@/////////@@@@@@@///////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@//////@@@@@@//////@@@@@@@//////@@@@@@////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@//////@@@@@//////@@@@///@@@@@@@/////&@@@@@//////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@//////@@@@////@@@@@@@/////@@@@/////@@@@@@///////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@/////@@@@/////@@@@@////////////@@@@@///////@//////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@//////@@@@/////@@@/////////@@@@@///////@@@@@@@@//////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@//////@@@@@/////@@@@@@@@@@////////@@@@@@@@@@@//////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@//////@@@@@@@/////////////@@@@@@@@@@@///////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@/////////%/////@@@@@@@@@@@@@/////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@&///@@@@@@@@///////////////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@///////////////////////////////////@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+#
+# Last updated 30 March 2026 by LC
 
 Sitemap: https://aistore.nvidia.com/sitemap.xml
+
+# AI Agents
+User-agent: ai2bot
+User-agent: anthropic-ai
+User-agent: Amazonbot
+User-agent: Amazon-kendra
+User-agent: Applebot-extended
+User-agent: AutoGPT
+User-agent: BedrockBot
+User-agent: Bytespider
+User-agent: CCBot
+User-agent: Chatglm-spider
+User-agent: ChatGPT
+User-agent: ChatGPT-User
+User-agent: Claudebot
+User-agent: Claude-user
+User-agent: Claude-search
+User-agent: Claude-web
+User-agent: Cohere-ai
+User-agent: Cotoyogi
+User-agent: Deepseek
+User-agent: Deepseekbot
+User-agent: DuckAssistBot
+User-agent: DuckDuckBot
+User-agent: FacebookBot
+User-agent: Geminiios
+User-agent: Google-Extended
+User-agent: Googleagent-manier
+User-agent: GPTBot
+User-agent: Grok
+User-agent: ia-archiver
+User-agent: iaskbot
+User-agent: iaskspider
+User-agent: ICC-crawler
+User-agent: Linerbot
+User-agent: Metaaib
+User-agent: Meta-externalagent
+User-agent: Meta-externalfetcher
+User-agent: Meta-llama
+User-agent: Mistralai-user
+User-agent: NovaAct
+User-agent: OAI-Searchbot
+User-agent: Pangubot
+User-agent: Perplexity
+User-agent: PerplexityBot
+User-agent: Perplexity-user
+User-agent: Phindbot
+User-agent: PoeBot
+User-agent: Qwen
+User-agent: Sogou
+User-agent: Timpibot
+User-agent: Tongyi
+User-agent: Wenxiaobai
+User-agent: Xinghuo
+User-agent: Youbot
+User-agent: Yuanbaobot
+Allow: /*.llms.txt
+Allow: /*.md
+Allow: /llms.txt
+
+User-agent: Googlebot
+User-agent: AdsBot-Google
+User-agent: Bingbot
+Disallow: /*.md
+Disallow: /*.llms.txt

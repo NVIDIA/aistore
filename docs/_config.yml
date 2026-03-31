@@ -32,6 +32,7 @@ include:
   - _pages/
   - assets/
   - robots.txt
+  - sitemap.xml
   - llms.txt
   - _headers
 exclude:
@@ -46,4 +47,3 @@ plugins:
   - jekyll-redirect-from
   - jekyll-relative-links
   - jekyll-seo-tag
-  - jekyll-sitemap
