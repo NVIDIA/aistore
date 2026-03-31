@@ -2030,7 +2030,7 @@ def _make_connection_refused_error():
 def _make_connection_refused_error_context_only():
     """Build a ConnectionError where ConnectionRefusedError is only on __context__.
 
-    Mirrors urllib3 v1.x / Python 3.9 behaviour: NewConnectionError is raised
+    Mirrors urllib3 v1.x / Python 3.9 behavior: NewConnectionError is raised
     inside an ``except ConnectionRefusedError`` block without an explicit ``from``,
     so __cause__ is None and the root cause is only reachable via __context__.
     """
