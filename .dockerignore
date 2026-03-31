@@ -7,4 +7,5 @@ tags
 python/venv*
 python/examples
 bench
+!bench/tools/aisloader
 venv
