@@ -9,6 +9,7 @@ package tracing
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -99,17 +100,22 @@ func Init(conf *cmn.TracingConf, snode *meta.Snode, exp any /* trace.SpanExporte
 	otel.SetTracerProvider(tp)
 }
 
-func loadAccessToken(tokenFilePath string) string {
+func loadAccessToken(tokenFilePath string) (string, error) {
 	debug.Assert(tokenFilePath != "", "token filepath cannot be empty")
 	data, err := os.ReadFile(tokenFilePath)
-	debug.AssertNoErr(err)
-	return strings.TrimSpace(string(data))
+	if err != nil {
+		return "", fmt.Errorf("failed to load access token: %w", err)
+	}
+	return strings.TrimSpace(string(data)), nil
 }
 
 func newExporter(conf *cmn.TracingConf) (trace.SpanExporter, error) {
 	var headers map[string]string
 	if conf.ExporterAuth.IsEnabled() {
-		token := loadAccessToken(conf.ExporterAuth.TokenFile)
+		token, err := loadAccessToken(conf.ExporterAuth.TokenFile)
+		if err != nil {
+			return nil, err
+		}
 		headers = map[string]string{conf.ExporterAuth.TokenHeader: token}
 	}
 
