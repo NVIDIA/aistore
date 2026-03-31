@@ -14,11 +14,13 @@ from urllib3.exceptions import MaxRetryError, NewConnectionError
 from aistore.sdk.const import (
     STATUS_NO_CONTENT,
     STATUS_OK,
+    STATUS_BAD_GATEWAY,
     HEADER_AUTHORIZATION,
     HEADER_DIRECT_PUT_LENGTH,
     AIS_AUTHN_TOKEN,
     AIS_DIRECT_PUT_RETRIES,
 )
+from aistore.sdk.errors import ETLDirectPutTransientError
 from aistore.sdk.session_manager import SessionManager
 
 # Transient requests errors that are safe to retry (connection lost before response).
@@ -33,12 +35,17 @@ RETRY_BACKOFF_MAX = 30.0  # seconds; upper bound on per-attempt delay
 
 
 def _is_connection_refused(exc: requests.ConnectionError) -> bool:
-    """Return True if exc represents a permanent ConnectionRefused error.
+    """
+    Return True if exc represents a permanent ConnectionRefused error.
 
     Walks the urllib3 exception chain:
       requests.ConnectionError → MaxRetryError → NewConnectionError → ConnectionRefusedError
 
     Returns False for bare ConnectionError("lost") and other non-refused connection errors.
+
+    Note: urllib3 v1.x (Python 3.9) raises NewConnectionError without explicit ``from``
+    chaining, so ``__cause__`` is None and the ConnectionRefusedError is only reachable
+    via ``__context__``.  Both are checked for cross-version compatibility.
     """
     inner = exc.args[0] if exc.args else None
     if not isinstance(inner, MaxRetryError):
@@ -46,7 +53,36 @@ def _is_connection_refused(exc: requests.ConnectionError) -> bool:
     reason = inner.reason
     if not isinstance(reason, NewConnectionError):
         return False
-    return isinstance(reason.__cause__, ConnectionRefusedError)
+    cause = reason.__cause__ or reason.__context__
+    return isinstance(cause, ConnectionRefusedError)
+
+
+def _handle_direct_put_transient_error(
+    direct_put_url: str, exc: Exception, logger: logging.Logger
+) -> Tuple[int, bytes, int]:
+    """
+    Handle a caught SYNC_DIRECT_PUT_TRANSIENT_ERRORS exception.
+
+    Returns a ``(STATUS_BAD_GATEWAY, error_bytes, 0)`` tuple for permanent
+    ``ConnectionRefused`` errors.  Re-raises all other transient errors as
+    ``ETLDirectPutTransientError`` so the caller's retry loop can act on them.
+
+    Args:
+        direct_put_url: The direct-put URL that was being contacted.
+        exc: The caught exception (one of ``SYNC_DIRECT_PUT_TRANSIENT_ERRORS``).
+        logger: Logger used to emit the permanent-error message.
+
+    Returns:
+        ``(STATUS_BAD_GATEWAY, encoded_error_message, 0)`` for permanent errors.
+
+    Raises:
+        ETLDirectPutTransientError: For all other transient errors.
+    """
+    if isinstance(exc, requests.ConnectionError) and _is_connection_refused(exc):
+        error = f"direct_put to {direct_put_url!r} failed: {type(exc).__name__}: {exc}".encode()
+        logger.error("Permanent connection error to %s: %s", direct_put_url, exc)
+        return STATUS_BAD_GATEWAY, error, 0
+    raise ETLDirectPutTransientError(direct_put_url, exc) from exc
 
 
 class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes

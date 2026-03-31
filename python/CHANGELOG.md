@@ -6,6 +6,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Fixed
+
+- **ETL direct-put retry**: added exponential-backoff retry for transient connection
+  errors in Flask and HTTP multi-threaded ETL servers for parity with FastAPI.
+  `ConnectionRefused` is now treated as a permanent error that returns HTTP 502
+  across all server types.
+
 ## [1.23.0] - 2026-03-25
 
 ### Added

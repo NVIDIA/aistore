@@ -19,7 +19,7 @@ from aistore.sdk.etl.webserver.base_etl_server import (
     SYNC_DIRECT_PUT_TRANSIENT_ERRORS,
     RETRY_BACKOFF_BASE,
     RETRY_BACKOFF_MAX,
-    _is_connection_refused,
+    _handle_direct_put_transient_error,
 )
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
@@ -122,13 +122,9 @@ class HTTPMultiThreadedServer(ETLServer):
                 return self.server.etl_server.handle_direct_put_response(resp, data)
 
             except SYNC_DIRECT_PUT_TRANSIENT_ERRORS as exc:
-                if isinstance(exc, requests.ConnectionError) and _is_connection_refused(exc):
-                    error = f"direct_put to {direct_put_url!r} failed: {type(exc).__name__}: {exc}".encode()
-                    self.server.etl_server.logger.error(
-                        "Permanent connection error to %s: %s", direct_put_url, exc
-                    )
-                    return STATUS_BAD_GATEWAY, error, 0
-                raise ETLDirectPutTransientError(direct_put_url, exc) from exc
+                return _handle_direct_put_transient_error(
+                    direct_put_url, exc, self.server.etl_server.logger
+                )
             except Exception as e:
                 error = str(e).encode()
                 self.server.etl_server.logger.error(
@@ -288,13 +284,9 @@ class HTTPMultiThreadedServer(ETLServer):
                 )
 
             except SYNC_DIRECT_PUT_TRANSIENT_ERRORS as exc:
-                if isinstance(exc, requests.ConnectionError) and _is_connection_refused(exc):
-                    error = f"direct_put to {direct_put_url!r} failed: {type(exc).__name__}: {exc}".encode()
-                    self.server.etl_server.logger.error(
-                        "Permanent connection error to %s: %s", direct_put_url, exc
-                    )
-                    return STATUS_BAD_GATEWAY, error, 0
-                raise ETLDirectPutTransientError(direct_put_url, exc) from exc
+                return _handle_direct_put_transient_error(
+                    direct_put_url, exc, self.server.etl_server.logger
+                )
             except Exception as e:
                 root = e.__cause__ or e
                 self.server.etl_server.logger.error(

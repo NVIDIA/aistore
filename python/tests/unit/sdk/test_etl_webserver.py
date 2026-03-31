@@ -21,7 +21,10 @@ from aistore.sdk.const import (
     QPARAM_ETL_FQN,
     AIS_DIRECT_PUT_RETRIES,
 )
-from aistore.sdk.etl.webserver.base_etl_server import CountingIterator
+from aistore.sdk.etl.webserver.base_etl_server import (
+    CountingIterator,
+    _is_connection_refused,
+)
 from aistore.sdk.errors import ETLDirectPutTransientError
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
@@ -2010,7 +2013,10 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
 
 def _make_connection_refused_error():
     """Build a realistic requests.ConnectionError wrapping a ConnectionRefused chain."""
-    from urllib3.exceptions import MaxRetryError, NewConnectionError  # pylint: disable=import-outside-toplevel
+    from urllib3.exceptions import (  # pylint: disable=import-outside-toplevel
+        MaxRetryError,
+        NewConnectionError,
+    )
 
     conn_refused = ConnectionRefusedError(111, "Connection refused")
     new_conn_err = NewConnectionError(
@@ -2019,6 +2025,47 @@ def _make_connection_refused_error():
     new_conn_err.__cause__ = conn_refused
     max_retry = MaxRetryError(pool=None, url="/nonexistent", reason=new_conn_err)
     return requests.ConnectionError(max_retry)
+
+
+def _make_connection_refused_error_context_only():
+    """Build a ConnectionError where ConnectionRefusedError is only on __context__.
+
+    Mirrors urllib3 v1.x / Python 3.9 behaviour: NewConnectionError is raised
+    inside an ``except ConnectionRefusedError`` block without an explicit ``from``,
+    so __cause__ is None and the root cause is only reachable via __context__.
+    """
+    from urllib3.exceptions import (  # pylint: disable=import-outside-toplevel
+        MaxRetryError,
+        NewConnectionError,
+    )
+
+    conn_refused = ConnectionRefusedError(111, "Connection refused")
+    new_conn_err = NewConnectionError(
+        None, "Failed to establish a new connection: [Errno 111] Connection refused"
+    )
+    # Simulate urllib3 v1.x: no explicit chaining, only implicit __context__
+    new_conn_err.__cause__ = None
+    new_conn_err.__context__ = conn_refused
+    max_retry = MaxRetryError(pool=None, url="/nonexistent", reason=new_conn_err)
+    return requests.ConnectionError(max_retry)
+
+
+class TestIsConnectionRefused(unittest.TestCase):
+    """Unit tests for _is_connection_refused() covering both urllib3 v1.x and v2.x chains."""
+
+    def test_cause_chain_returns_true(self):
+        """__cause__ chain (urllib3 v2.x) is detected as ConnectionRefused."""
+        exc = _make_connection_refused_error()
+        self.assertTrue(_is_connection_refused(exc))
+
+    def test_context_only_chain_returns_true(self):
+        """__context__-only chain (urllib3 v1.x / Python 3.9) is detected as ConnectionRefused."""
+        exc = _make_connection_refused_error_context_only()
+        self.assertTrue(_is_connection_refused(exc))
+
+    def test_bare_connection_error_returns_false(self):
+        """Bare ConnectionError('lost') is not a ConnectionRefused — must return False."""
+        self.assertFalse(_is_connection_refused(requests.ConnectionError("lost")))
 
 
 class TestFlaskConnectionRefusedGuard(unittest.TestCase):
@@ -2031,11 +2078,13 @@ class TestFlaskConnectionRefusedGuard(unittest.TestCase):
 
     def _put(self, url="http://localhost:19999/nonexistent", data=b"data"):
         with self.server.app.test_request_context():
-            return self.server._direct_put(url, data)  # pylint: disable=protected-access
+            # pylint: disable=protected-access
+            return self.server._direct_put(url, data)
 
     def _retry(self, url="http://localhost:19999/nonexistent", data=b"data"):
         with self.server.app.test_request_context():
-            return self.server._direct_put_with_retry(url, data)  # pylint: disable=protected-access
+            # pylint: disable=protected-access
+            return self.server._direct_put_with_retry(url, data)
 
     def test_connection_refused_returns_502(self):
         """_direct_put() returns (502, ...) for ConnectionRefused — not ETLDirectPutTransientError."""
@@ -2079,10 +2128,10 @@ class TestFlaskConnectionRefusedGuard(unittest.TestCase):
         streaming_server.direct_put_retries = 3
         exc = _make_connection_refused_error()
 
-        with streaming_server.app.test_request_context("/test/obj", method="PUT", data=b"hello"):
-            with patch.object(
-                streaming_server.session, "put", side_effect=exc
-            ):
+        with streaming_server.app.test_request_context(
+            "/test/obj", method="PUT", data=b"hello"
+        ):
+            with patch.object(streaming_server.session, "put", side_effect=exc):
                 with patch("time.sleep") as mock_sleep:
                     result = streaming_server._direct_put_stream_with_retry(  # pylint: disable=protected-access
                         "http://localhost:19999/nonexistent", "/test/obj"
@@ -2100,10 +2149,12 @@ class TestHTTPConnectionRefusedGuard(unittest.TestCase):
         self.handler.server.etl_server.direct_put_retries = 3
 
     def _put(self, url="http://localhost:19999/nonexistent", data=b"data"):
-        return self.handler._direct_put(url, data, "", "/nonexistent")  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        return self.handler._direct_put(url, data, "", "/nonexistent")
 
     def _retry(self, url="http://localhost:19999/nonexistent", data=b"data"):
-        return self.handler._direct_put_with_retry(url, data)  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        return self.handler._direct_put_with_retry(url, data)
 
     def test_connection_refused_returns_502(self):
         """_direct_put() returns (502, ...) for ConnectionRefused — not ETLDirectPutTransientError."""
