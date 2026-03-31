@@ -366,7 +366,7 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 
 	pebl.mu.Unlock()
 
-	load, isExtreme := sys.MaxLoad2()
+	load, isExtreme := sys.CPU(false /*periodic*/)
 	if isExtreme {
 		load = 100
 	}

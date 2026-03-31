@@ -27,7 +27,7 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 	}
 
 	var (
-		load, isExtreme = sys.MaxLoad2()
+		load, isExtreme = sys.CPU(false /*periodic*/)
 		highLoad        = sys.HighLoadWM()
 	)
 	if !force {

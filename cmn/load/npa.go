@@ -100,7 +100,7 @@ func Mem() Load {
 }
 
 func CPU() Load {
-	load, extreme := sys.MaxLoad2()
+	load, extreme := sys.CPU(false /*periodic*/)
 	high := sys.HighLoadWM()
 
 	switch {

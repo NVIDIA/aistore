@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 /////////
@@ -46,50 +45,7 @@ func (t *cpu) setNumCgroup() error {
 		errPrefixCPU, contCPUV2Max, errV2, contCPULimit, contCPUPeriod, errV1)
 }
 
-// Return:
-// - CPU utilization as a percentage since the last call, and
-// - percentage of wall-clock time the container was CPU-throttled since the last call
-// or:
-// - 0 if the prev. sample is old (or first call)
-func (t *cpu) get() (util, throttled int64, _ error) {
-	cur, err := t.read()
-	if err != nil {
-		return 0, 0, err
-	}
-
-	var (
-		prev cpuSample
-	)
-	t.mu.Lock()
-	prev = t.prev
-	t.prev = cur
-
-	if prev.ts == 0 {
-		t.mu.Unlock()
-		return 0, 0, nil
-	}
-
-	wallDt := cur.ts - prev.ts
-	if wallDt < MinWallIval || wallDt > maxSampleAge {
-		t.mu.Unlock()
-		return 0, 0, nil
-	}
-
-	if isContainerized() && cur.throttledUsec > 0 {
-		dtUsec := max(cur.throttledUsec-prev.throttledUsec, 0)
-		throttled = min((dtUsec*100_000+wallDt/2)/wallDt, int64(100))
-	}
-
-	t.mu.Unlock()
-
-	cpuDt := max(cur.usage-prev.usage, 0)
-	denom := wallDt * int64(NumCPU())
-	util = (cpuDt*100 + denom/2) / denom
-	return min(util, 100), throttled, nil
-}
-
-func (*cpu) read() (sample cpuSample, err error) {
-	sample.ts = mono.NanoTime()
+func (*cpu) read() (sample sample, err error) {
 	switch cgroupVer {
 	case 2:
 		var data []byte

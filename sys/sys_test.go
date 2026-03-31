@@ -99,11 +99,11 @@ func TestProcAndMaxLoad(t *testing.T) {
 	tassert.Errorf(t, stats.Mem.Size > 0 && stats.Mem.Resident > 0 && stats.Mem.Share > 0,
 		"Failed to read memory stats: %+v", stats.Mem)
 
-	load1, extreme1 := sys.MaxLoad2()
+	load1, extreme1 := sys.CPU(false /*periodic*/)
 	t.Logf("First call: load=%d, extreme=%t", load1, extreme1)
 
 	// make sure cpu tracker gets updated
-	time.Sleep(time.Duration(sys.MinWallIval))
+	time.Sleep(sys.MinIvalShort)
 
 	// burn CPU for a few seconds by calculating prime numbers
 	// and make a short break to make usage lower than 100%
@@ -122,7 +122,7 @@ func TestProcAndMaxLoad(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	load2, extreme2 := sys.MaxLoad2()
+	load2, extreme2 := sys.CPU(true)
 	t.Logf("Second call: load=%d, extreme=%v", load2, extreme2)
 	tassert.Errorf(t, load2 > load1 || extreme2, "Second call: (%d, %t) vs (%d, %t)", load2, extreme2, load1, extreme1)
 

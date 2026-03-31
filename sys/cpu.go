@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
@@ -16,20 +19,13 @@ import (
 //
 
 // TODO:
-// - remove (maxSampleAge, minWallIval); support alpha/(1-alpha) weighted average over fixed array of samples
-// - call Init() from cli/app.go
 // - callers to optionally pass mono-time => MaxLoad2()
 
 const (
-	// when prev. sample is considered outdated
-	// see also:
-	// - ios.doRefresh()
-	// - stats_time
-	maxSampleAge = int64(13 * time.Second)
-
-	// - temp workaround against millisecond-range resampling noise
-	// - replace with cached/smoothed CPU-load state
-	MinWallIval = int64(2 * time.Second)
+	// cpu samples ring
+	MinIvalShort = time.Second
+	minIvalLong  = 8 * time.Second
+	numSamples   = 8
 
 	// >10% wall-clock throttled => extreme starvation
 	throttleExtremeThresh = 10
@@ -48,53 +44,81 @@ const errPrefixCPU = "sys/cpu"
 // CPU utilization thresholds (percentage, 0-100)
 // HighLoad < HighLoadWM() < ExtremeLoad
 const (
-	ExtremeLoad = 92
-	HighLoad    = 82
+	ExtremeLoad = 95
+	HighLoad    = 85
 )
 
 type (
-	LoadAvg struct {
-		One, Five, Fifteen float64
-	}
-	errLoadAvg struct {
-		err error
-	}
-
-	cpuSample struct {
+	sample struct {
 		usage         int64 // cumulative CPU time (nanoseconds)
 		throttledUsec int64 // cumulative throttled time (usec), cgroup v2 only
 		ts            int64 // mono.NanoTime
 	}
-
-	// global cpu state
+	ring struct {
+		a   [numSamples]sample
+		idx int // current
+		mu  sync.Mutex
+	}
+	// global cpu state (gcpu)
 	cpu struct {
-		prev cpuSample // previous sample
-		num  int       // num CPUs
-		mu   sync.Mutex
+		ring      ring
+		last      atomic.Int64
+		util      atomic.Int64
+		throttled atomic.Int64
+		// num CPUs
+		num int
 	}
 )
 
-func NumCPU() int { return gcpu.num }
+func Refresh(now int64, periodic bool) (util, throttled int64, _ error) {
+	if last := gcpu.last.Load(); last > 0 {
+		elapsed := max(time.Duration(now-last), 0)
+		if elapsed < MinIvalShort || (elapsed < minIvalLong && !periodic) {
+			return gcpu.util.Load(), gcpu.throttled.Load(), nil
+		}
+	}
 
-// number of intra-cluster broadcasting goroutines
-func MaxParallelism() int { return max(NumCPU(), 4) }
+	cur, err := gcpu.read()
+	if err != nil {
+		return gcpu.util.Load(), gcpu.throttled.Load(), err
+	}
+	cur.ts = now
 
-// HighLoadWM: "high-load watermark" as a percentage.
-// For 8 CPUs: max(100 - 100/8, 1) = 88 - between HighLoad(82) and ExtremeLoad(92).
-// see also: (ExtremeLoad, HighLoad) defaults
-func HighLoadWM() int64 {
-	ncpu := int64(NumCPU())
-	return max(100-100/ncpu, 1)
+	// atomic update
+	gcpu.ring.mu.Lock()
+	util, throttled = gcpu.ring.sample(cur)
+	gcpu.util.Store(util)
+	gcpu.throttled.Store(throttled)
+	gcpu.last.Store(now)
+	gcpu.ring.mu.Unlock()
+
+	return util, throttled, nil
 }
 
-// MaxLoad2 returns CPU utilization percentage and whether the system
-// is in an "extreme" CPU-starvation condition.
-// In containers (cgroup v2): also check throttled_usec - if the container
-// is being throttled, that's CPU starvation regardless of utilization percentage.
-//
-// See also: README.md in this package.
-func MaxLoad2() (load int64, isExtreme bool) {
-	util, throttled, err := gcpu.get()
+func (r *ring) sample(cur sample) (util, throttled int64) {
+	// samples previous and current
+	prev := r.a[r.idx]
+	r.idx = cos.Ternary(r.idx >= numSamples-1, 0, r.idx+1)
+	r.a[r.idx] = cur
+
+	if prev.ts == 0 {
+		return 0, 0
+	}
+
+	// compute
+	wallDt := cur.ts - prev.ts
+	if isContainerized() && cur.throttledUsec > 0 {
+		dtUsec := max(cur.throttledUsec-prev.throttledUsec, 0)
+		throttled = min((dtUsec*100_000+wallDt/2)/wallDt, 100)
+	}
+	cpuDt := max(cur.usage-prev.usage, 0)
+	denom := wallDt * int64(NumCPU())
+	util = (cpuDt*100 + denom/2) / denom
+	return min(util, 100), throttled
+}
+
+func CPU(periodic bool) (load int64, isExtreme bool) {
+	util, throttled, err := Refresh(mono.NanoTime(), periodic)
 	if err != nil {
 		load = maxLoadFallback()
 		return load, load >= ExtremeLoad
@@ -108,6 +132,19 @@ func MaxLoad2() (load int64, isExtreme bool) {
 	}
 
 	return util, util >= ExtremeLoad
+}
+
+func NumCPU() int { return gcpu.num }
+
+// number of intra-cluster broadcasting goroutines
+func MaxParallelism() int { return max(NumCPU(), 4) }
+
+// HighLoadWM: "high-load watermark" as a percentage.
+// For 8 CPUs: max(100 - 100/8, 1) = 88 - between HighLoad(82) and ExtremeLoad(92).
+// see also: (ExtremeLoad, HighLoad) defaults
+func HighLoadWM() int64 {
+	ncpu := int64(NumCPU())
+	return max(100-100/ncpu, 1)
 }
 
 // fallback when cpuTracker returns an error:

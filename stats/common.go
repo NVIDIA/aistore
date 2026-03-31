@@ -571,7 +571,7 @@ func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 func _load(sname string, flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStateFlags) {
 	const tag = "CPU utilization:"
 	var (
-		load, isExtreme = sys.MaxLoad2()
+		load, isExtreme = sys.CPU(true /*periodic*/)
 		ncpu            = int64(sys.NumCPU())
 	)
 	// 1. normal

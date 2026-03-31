@@ -8,7 +8,7 @@ import (
 	"errors"
 )
 
-var errDarwin = errors.New("darwin: no sys/cpu and sys/mem support")
+var errDarwin = errors.New("darwin: sys/cpu and sys/mem not supported")
 
-func (*cpu) setNumCgroup() error        { return errDarwin }
-func (*cpu) get() (int64, int64, error) { return 0, 0, errDarwin }
+func (*cpu) setNumCgroup() error   { return errDarwin }
+func (*cpu) read() (sample, error) { return sample{}, errDarwin }

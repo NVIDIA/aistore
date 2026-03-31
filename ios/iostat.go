@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 const statsdir = "/sys/class/block"
@@ -400,8 +401,13 @@ func (ios *ios) refresh() *cache {
 		return statsCache // never want callers to wait
 	}
 
+	// as aside: piggy-back CPU load sampling/averaging
+	// (most sites call sys.CPU() when they need computed load)
+	sys.Refresh(nowTs, true /*periodic*/)
+
 	ncache := ios.doRefresh(nowTs)
 	ios.busy.Store(false)
+
 	return ncache
 }
 
