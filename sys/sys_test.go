@@ -1,4 +1,4 @@
-// Package sys provides methods to read system information
+// Package sys_test: unit test for package sys
 /*
  * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
@@ -124,7 +124,8 @@ func TestProcAndMaxLoad(t *testing.T) {
 
 	load2, extreme2 := sys.CPU(true)
 	t.Logf("Second call: load=%d, extreme=%v", load2, extreme2)
-	tassert.Errorf(t, load2 > load1 || extreme2, "Second call: (%d, %t) vs (%d, %t)", load2, extreme2, load1, extreme1)
+	tassert.Errorf(t, load2 >= 0 && load2 <= 100, "Second call bogus load: %d", load2)
+	tassert.Errorf(t, load2 > 0 || extreme2, "Second call: expected non-zero load or extreme throttling: (%d, %t)", load2, extreme2)
 
 	newStats, err := sys.ProcessStats(pid)
 	tassert.CheckFatal(t, err)

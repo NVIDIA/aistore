@@ -13,6 +13,7 @@ The `sys` package provides lightweight runtime visibility into host and containe
 - [CPU reporting](#cpu-reporting)
   - [Effective CPU count](#effective-cpu-count)
   - [Utilization model](#utilization-model)
+  - [Sampling and smoothing](#sampling-and-smoothing)
   - [Linux source hierarchy](#linux-source-hierarchy)
   - [Bare-metal /proc/stat parsing](#bare-metal-procstat-parsing)
   - [CPU starvation vs utilization](#cpu-starvation-vs-utilization)
@@ -25,7 +26,6 @@ The `sys` package provides lightweight runtime visibility into host and containe
 - [Example: testing `sys` package inside a constrained container](#example-testing-sys-package-inside-a-constrained-container)
 - [Current limitations and future plans](#current-limitations-and-future-plans)
   - [cgroup v1 deprecation](#cgroup-v1-deprecation)
-  - [Hardcoded thresholds](#hardcoded-thresholds)
   - [Future work](#future-work)
 
 ## Initialization
@@ -45,7 +45,8 @@ The `ForceContainerCPUMem` feature flag (in `cmn/feat`) can override failed auto
 |---|---|
 | `NumCPU()` | effective CPU count (container-aware) |
 | `MaxParallelism()` | derives internal parallelism from `NumCPU()` |
-| `MaxLoad2()` | CPU utilization percentage (0–100, integer) plus `isExtreme` boolean |
+| `Refresh(now, periodic)` | samples CPU, updates ring and EMA; returns `(util, throttled, error)` |
+| `CPU(periodic)` | returns smoothed CPU utilization percentage (0–100) plus `isExtreme` boolean |
 | `HighLoadWM()` | high-load watermark derived from CPU count |
 | `LoadAverage()` | system load averages (fallback only) |
 
@@ -67,13 +68,33 @@ Errors from both paths are aggregated and reported to stderr (nlog is not yet av
 ### Utilization model
 
 CPU utilization is sampled as a delta of cumulative CPU time over wall-clock time.
-The previous raw sample is stored in the global `cpu` struct. Utilization is computed as:
+Utilization is computed as:
 
 `(delta_cpu_usage * 100) / (delta_wall_time * NumCPU)`
 
 All values are integer percentages. Utilization and throttling are computed atomically in a single pass from the same time delta.
 
-A minimum wall-clock interval (`minWallIval`) rejects millisecond-range resampling noise. Samples older than `maxSampleAge` are discarded and treated as a reset.
+### Sampling and smoothing
+
+CPU samples are collected in a circular ring of 4 entries, each containing cumulative usage, throttled time, and a monotonic timestamp. The ring is advanced on each `Refresh()` call; instantaneous utilization is computed as a delta between the current and previous ring entries.
+
+`Refresh()` is called from multiple paths:
+
+- **on-demand** (gated at `minIvalLong`, 8s): by `CPU()` callers that need a current value but aren't periodic
+- **periodic** (gated at `MinIvalShort`, 2s): piggybacked on three existing ticks:
+  - `ios.refresh()` (disk stats)
+  - stats-runner (`periodic.stats_time`), and
+  - memsys housekeeping callback
+
+When gated, `Refresh()` returns the cached EMA value without reading `/proc/stat` or cgroup files.
+
+Raw instantaneous utilization is smoothed using a time-scaled exponential moving average (EMA). The smoothing alpha is adjusted based on the elapsed time since the previous sample:
+
+> For details, see `compute()` method in sys/cpu.go
+
+The smoothed value and throttled percentage are stored atomically; `CPU()` reads them without locking.
+
+This approach is reminiscent of the disk utilization smoothing in the `ios` package, but it is much simpler: CPU has a single global value (not per-mountpath), so no ring walk or per-device map lookup is needed.
 
 ### Linux source hierarchy
 
@@ -85,7 +106,7 @@ The cgroup version is determined at init time and stored in `cgroupVer`. The `cp
 | 1 | `cpuacct.usage` | cumulative nanoseconds |
 | 0 | `/proc/stat` | aggregate jiffy line |
 
-If all sources fail at read time, `MaxLoad2()` falls back to `/proc/loadavg` converted to a percentage.
+If all sources fail at read time, `CPU()` falls back to `/proc/loadavg` converted to a percentage.
 
 ### Bare-metal /proc/stat parsing
 
@@ -102,7 +123,7 @@ Steal is included because it represents CPU time unavailable to the node, which 
 
 ### CPU starvation vs utilization
 
-`MaxLoad2()` distinguishes between:
+`CPU()` distinguishes between:
 
 - **high utilization**: CPU is busy
 - **CPU starvation**: the container is being throttled
@@ -110,6 +131,8 @@ Steal is included because it represents CPU time unavailable to the node, which 
 In cgroup v2 environments, `throttled_usec` from `cpu.stat` is tracked as a percentage of wall-clock time. If throttling exceeds the extreme threshold (>10%), the system is reported as under extreme CPU pressure - even if raw utilization appears moderate.
 
 This is intentional: throttling indicates lack of CPU availability, not just high usage.
+
+Operational thresholds are compile-time constants: `HighLoad` (85%), `ExtremeLoad` (95%), and `throttleExtremeThresh` (10%).
 
 ## Memory reporting
 
@@ -246,7 +269,7 @@ The comparison illustrates several points:
 * On the host, `TestMemoryStats` reports host-scale memory totals.
 * Inside the container, the same test reports memory bounded by the cgroup limit (`--memory=512m`) rather than the host's physical RAM.
 * `TestNumCPU` and `TestMaxProcs` exercise init-time CPU detection and container-aware CPU count.
-* `TestProcAndMaxLoad` burns CPU in-process and verifies that `MaxLoad2()` reports non-zero utilization on a subsequent sample.
+* `TestProcAndMaxLoad` burns CPU in-process and verifies that `CPU()` reports non-zero utilization on a subsequent sample.
 * Swap may report as zero or be unavailable inside short-lived containers; this is not unusual.
 
 To further confirm container-scoped memory accounting, rerun the container example with a different limit (for example, `--memory=4G`). `TestMemoryStats` should then report a total close to 4 GiB instead of 512 MiB.
@@ -257,21 +280,12 @@ To further confirm container-scoped memory accounting, rerun the container examp
 
 ### cgroup v1 deprecation
 
-Note that cgroup v1 support is deprecated and will be removed in a future release after v4.4. All major container runtimes and orchestrators now default to cgroup v2. Deployments still on v1 should plan to migrate.
+Note that cgroup v1 support is deprecated and will be removed in a future (post-4.4) releases.
 
-### Hardcoded thresholds
-
-Several operational constants are compiled in:
-
-- stale CPU sample interval (`maxSampleAge`)
-- minimum wall-clock interval (`minWallIval`) - temporary guard against resampling noise
-- CPU load thresholds (`ExtremeLoad`, `HighLoad`)
-- throttling threshold for extreme CPU starvation
+> All major container runtimes and orchestrators now default to cgroup v2.
 
 ### Future work
 
-1. Replace `(maxSampleAge, minWallIval)` with alpha-weighted exponential averaging over a fixed sample array (similar to disk utilization in `ios` package).
-2. Allow callers to pass mono-time into `MaxLoad2()` to avoid redundant clock reads.
-3. Add cgroup-aware memory support for Darwin (currently stubs).
-4. Consider PSI (Pressure Stall Information) integration via `cpu.pressure` / `/proc/pressure/cpu`.
-5. Evaluate dropping cgroup v1 support.
+1. Add cgroup-aware memory support for Darwin (currently stubs).
+2. Consider PSI (Pressure Stall Information) integration via `cpu.pressure` / `/proc/pressure/cpu`.
+3. Evaluate dropping cgroup v1 support.

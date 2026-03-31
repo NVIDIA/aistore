@@ -1,4 +1,5 @@
-// Package sys provides methods to read system information
+// Package sys provides helpers to read system info (CPU, memory, loadavg, processes)
+// with support for cgroup v2 and a moving-average CPU estimator.
 /*
  * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
@@ -23,9 +24,13 @@ import (
 
 const (
 	// cpu samples ring
-	MinIvalShort = time.Second
+	MinIvalShort = 2 * time.Second
 	minIvalLong  = 8 * time.Second
-	numSamples   = 8
+	maxIval      = 20 * time.Second
+	trustIval    = max(minIvalLong+(minIvalLong>>1), maxIval>>1)
+	normAlpha    = int64(20)
+	maxAlpha     = int64(100)
+	numSamples   = 4
 
 	// >10% wall-clock throttled => extreme starvation
 	throttleExtremeThresh = 10
@@ -63,58 +68,78 @@ type (
 	cpu struct {
 		ring      ring
 		last      atomic.Int64
-		util      atomic.Int64
+		utilEMA   atomic.Int64
 		throttled atomic.Int64
 		// num CPUs
 		num int
 	}
 )
 
-func Refresh(now int64, periodic bool) (util, throttled int64, _ error) {
+func Refresh(now int64, periodic bool) (int64, int64, error) {
 	if last := gcpu.last.Load(); last > 0 {
 		elapsed := max(time.Duration(now-last), 0)
 		if elapsed < MinIvalShort || (elapsed < minIvalLong && !periodic) {
-			return gcpu.util.Load(), gcpu.throttled.Load(), nil
+			return gcpu.utilEMA.Load(), gcpu.throttled.Load(), nil
 		}
 	}
 
 	cur, err := gcpu.read()
 	if err != nil {
-		return gcpu.util.Load(), gcpu.throttled.Load(), err
+		return gcpu.utilEMA.Load(), gcpu.throttled.Load(), err
 	}
 	cur.ts = now
 
-	// atomic update
+	// read and compute current
 	gcpu.ring.mu.Lock()
-	util, throttled = gcpu.ring.sample(cur)
-	gcpu.util.Store(util)
+	rawUtil, throttled, elapsed := gcpu.ring.sample(cur)
 	gcpu.throttled.Store(throttled)
 	gcpu.last.Store(now)
+
+	// compute and store moving average
+	util := gcpu.compute(elapsed, rawUtil)
+	gcpu.utilEMA.Store(util)
 	gcpu.ring.mu.Unlock()
 
 	return util, throttled, nil
 }
 
-func (r *ring) sample(cur sample) (util, throttled int64) {
+func (t *cpu) compute(elapsed, util int64) int64 {
+	since := time.Duration(elapsed)
+	if since > maxIval {
+		return util
+	}
+
+	alpha := normAlpha
+	switch {
+	case since > trustIval:
+		// "decaying" trust
+		alpha = normAlpha + int64(since-trustIval)*(maxAlpha-normAlpha)/int64(maxIval-trustIval)
+		fallthrough
+	default:
+		prevUtil := t.utilEMA.Load()
+		return cos.DivRoundI64(alpha*util+(100-alpha)*prevUtil, 100)
+	}
+}
+
+func (r *ring) sample(cur sample) (util, throttled, elapsed int64) {
 	// samples previous and current
 	prev := r.a[r.idx]
 	r.idx = cos.Ternary(r.idx >= numSamples-1, 0, r.idx+1)
 	r.a[r.idx] = cur
 
 	if prev.ts == 0 {
-		return 0, 0
+		return 0, 0, 0
 	}
 
-	// compute
-	wallDt := cur.ts - prev.ts
+	// compute current
+	elapsed = cur.ts - prev.ts
 	if isContainerized() && cur.throttledUsec > 0 {
 		dtUsec := max(cur.throttledUsec-prev.throttledUsec, 0)
-		throttled = min((dtUsec*100_000+wallDt/2)/wallDt, 100)
+		throttled = cos.DivRoundI64(dtUsec*100_000, elapsed)
 	}
-	cpuDt := max(cur.usage-prev.usage, 0)
-	denom := wallDt * int64(NumCPU())
-	util = (cpuDt*100 + denom/2) / denom
-	return min(util, 100), throttled
+	cpuSince := max(cur.usage-prev.usage, 0)
+	util = cos.DivRoundI64(cpuSince*100, elapsed*int64(NumCPU()))
+	return min(util, 100), min(throttled, 100), elapsed
 }
 
 func CPU(periodic bool) (load int64, isExtreme bool) {
