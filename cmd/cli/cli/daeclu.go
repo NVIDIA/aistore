@@ -73,6 +73,7 @@ type (
 func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, cfg *cmn.ClusterConfig, sid string, withRichAnalytics bool) error {
 	var (
 		usejs       = flagIsSet(c, jsonFlag)
+		verbose     = flagIsSet(c, verboseFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
@@ -89,23 +90,23 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	}
 	if res, ok := pstatusMap[sid]; ok {
 		h := teb.StatsAndStatusHelper{Pmap: teb.StstMap{res.Snode.ID(): res}}
-		table := h.MakeTabP(smap, units)
+		table := h.MakeTabP(smap, units, verbose)
 		out := table.Template(hideHeader)
 		return teb.Print(res, out, teb.Jopts(usejs))
 	}
 	if res, ok := tstatusMap[sid]; ok {
 		h := teb.StatsAndStatusHelper{Tmap: teb.StstMap{res.Snode.ID(): res}}
-		table := h.MakeTabT(smap, units)
+		table := h.MakeTabT(smap, units, verbose)
 		out := table.Template(hideHeader)
 		return teb.Print(res, out, teb.Jopts(usejs))
 	}
 	if sid == apc.Proxy {
-		table := body.Stst.MakeTabP(smap, units)
+		table := body.Stst.MakeTabP(smap, units, verbose)
 		out := table.Template(hideHeader)
 		return teb.Print(body, out, teb.Jopts(usejs))
 	}
 	if sid == apc.Target {
-		table := body.Stst.MakeTabT(smap, units)
+		table := body.Stst.MakeTabT(smap, units, verbose)
 		out := table.Template(hideHeader)
 		return teb.Print(body, out, teb.Jopts(usejs))
 	}
@@ -116,8 +117,8 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	//
 	// `ais show cluster` (two tables and Summary)
 	//
-	tableP := body.Stst.MakeTabP(smap, units)
-	tableT := body.Stst.MakeTabT(smap, units)
+	tableP := body.Stst.MakeTabP(smap, units, verbose)
+	tableT := body.Stst.MakeTabT(smap, units, verbose)
 
 	// totals: num disks and capacity; software version and build time; backend detection
 	body.NumDisks, body.Capacity = _totals(body.Stst.Tmap, units, cfg)

@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -15,6 +15,15 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
 )
+
+// TODO: performance tables are mostly focused on Prometheus counters
+// and derived throughput/latency metrics.
+// However, `StstMap map[string]*stats.NodeStatus` argument carries
+// full node status for each node.
+// The latter includes, for instance, MemCPUInfo.CPUUtil that could be
+// shown in a separate column, maybe in a verbose mode.
+// Generally, the idea would be to extend `ais performance` tables with
+// resource-oriented metrics (extra columns or a separate verbose section).
 
 // to indicate end-of-row error
 const errIndication = "<<<"

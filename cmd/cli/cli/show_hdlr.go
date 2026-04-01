@@ -122,8 +122,9 @@ var (
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 	showCmdCluster = cli.Command{
-		Name:         cmdCluster,
-		Usage:        "Show cluster: health, version and build, and nodes (including capacity and memory, load averages and alerts)",
+		Name: cmdCluster,
+		Usage: "Show cluster: health, version and build, and nodes including capacity, memory, CPU utilization, and alerts\n" +
+			indent4 + "\t(use '--verbose' ('--v') to also include load averages).",
 		ArgsUsage:    showClusterArgument,
 		Flags:        sortFlags(showCmdsFlags[cmdCluster]),
 		Action:       showClusterHandler,
