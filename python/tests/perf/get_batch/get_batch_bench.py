@@ -13,7 +13,7 @@ from aistore import Client
 
 
 @dataclass
-class BenchmarkResult:
+class BenchmarkResult:  # pylint: disable=too-many-instance-attributes
     """Structured benchmark result data"""
 
     bucket_name: str
@@ -71,7 +71,7 @@ class BenchmarkComparison:
             )
 
 
-def benchmark_sequential_get(
+def benchmark_sequential_get(  # pylint: disable=too-many-locals
     client: Client, bucket_name: str, num_objects: int
 ) -> BenchmarkResult:
     """Benchmark getting objects one by one sequentially."""
@@ -119,7 +119,7 @@ def benchmark_sequential_get(
     return result
 
 
-def benchmark_get_batch(
+def benchmark_get_batch(  # pylint: disable=too-many-locals
     client: Client,
     bucket_name: str,
     num_objects: int,
@@ -287,7 +287,8 @@ def print_comprehensive_results(results: List[BenchmarkComparison]):
 
     print(f"\n{'='*120}")
     print(
-        f"{'Test Configuration':<35} {'Duration':<10} {'vs Baseline':<20} {'Speedup':<10} {'Throughput':<15} {'vs Baseline':<12}"
+        f"{'Test Configuration':<35} {'Duration':<10} {'vs Baseline':<20}"
+        f" {'Speedup':<10} {'Throughput':<15} {'vs Baseline':<12}"
     )
     print(f"{'='*120}")
 
@@ -315,7 +316,8 @@ def print_comprehensive_results(results: List[BenchmarkComparison]):
             improvement_str = "N/A"
 
         print(
-            f"{comp.test_config:<35} {result.duration:<10.2f} {time_vs_baseline:<20} {speedup_str:<10} {throughput_str:<15} {improvement_str:<12}"
+            f"{comp.test_config:<35} {result.duration:<10.2f} {time_vs_baseline:<20}"
+            f" {speedup_str:<10} {throughput_str:<15} {improvement_str:<12}"
         )
 
     print(f"{'='*120}")
@@ -334,7 +336,9 @@ def print_comprehensive_results(results: List[BenchmarkComparison]):
         print(f"   Total Objects:    {result.total_objects:,}")
         print(f"   Duration:         {result.duration:.3f} seconds")
         print(
-            f"   Success Rate:     {result.successful_reads}/{result.total_objects} ({100*result.successful_reads/result.total_objects:.1f}%)"
+            f"   Success Rate:     "
+            f"{result.successful_reads}/{result.total_objects}"
+            f" ({100*result.successful_reads/result.total_objects:.1f}%)"
         )
         print(f"   Throughput:       {result.throughput_objects_per_sec:.1f} objects/s")
         print(f"   Data Throughput:  {result.throughput_mib_per_sec:.2f} MiB/s")
@@ -386,32 +390,32 @@ def save_results_to_json(results: List[BenchmarkComparison], filename: str = Non
 def main():
     """Main comprehensive benchmarking function."""
     # Configuration
-    AISTORE_URL = "http://<ais-endpt>:51080"  # Replace <ais-endpt> with the actual AIStore endpoint
-    BUCKET_NAME = "benchmark-10KiB"  # Updated to match populate_bucket.py
-    TOTAL_OBJECTS = 10000  # 100,000 objects as requested
+    aistore_url = "http://<ais-endpt>:51080"  # Replace with actual endpoint
+    bucket_name = "benchmark-10KiB"
+    total_objects = 10000
 
     print("Starting comprehensive batch benchmark...")
-    print(f"AIStore URL: {AISTORE_URL}")
-    print(f"Bucket: {BUCKET_NAME}")
-    print(f"Total objects per test: {TOTAL_OBJECTS:,}")
+    print(f"AIStore URL: {aistore_url}")
+    print(f"Bucket: {bucket_name}")
+    print(f"Total objects per test: {total_objects:,}")
 
     # Create client with optimized pool size
-    client = Client(AISTORE_URL, max_pool_size=1000)
+    client = Client(aistore_url, max_pool_size=1000)
 
     # Verify bucket exists
     try:
-        bucket = client.bucket(BUCKET_NAME)
+        bucket = client.bucket(bucket_name)
         bucket.head()
-        print(f"Bucket '{BUCKET_NAME}' found - proceeding with benchmark")
+        print(f"Bucket '{bucket_name}' found - proceeding with benchmark")
     except Exception as e:
-        print(f"Error accessing bucket '{BUCKET_NAME}': {e}")
+        print(f"Error accessing bucket '{bucket_name}': {e}")
         print("Make sure to run populate_bucket.py first to create test objects")
         print("The bucket should contain at least 100,000 objects for this benchmark")
         return
 
     # Run comprehensive benchmark
     try:
-        results = run_comprehensive_benchmark(client, BUCKET_NAME, TOTAL_OBJECTS)
+        results = run_comprehensive_benchmark(client, bucket_name, total_objects)
 
         if not results:
             print("No benchmark results obtained. Check for errors above.")

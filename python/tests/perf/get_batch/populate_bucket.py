@@ -55,9 +55,8 @@ class BucketPopulator:
                 if attempt < retries - 1:
                     time.sleep(0.1 * (2**attempt))  # Exponential backoff
                     continue
-                else:
-                    with self.lock:
-                        self.stats["failed"] += 1
+                with self.lock:
+                    self.stats["failed"] += 1
                     self.logger.error(
                         "Failed to upload %s after %d attempts: %s",
                         obj_name,
