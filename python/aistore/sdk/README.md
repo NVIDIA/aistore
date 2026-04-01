@@ -115,7 +115,7 @@ ETL webservers support all SDK client environment variables above (same semantic
 | Environment Variable | Description | Default Value |
 |---------------------|-------------|---------------|
 | `AIS_DIRECT_PUT_CHUNK_SIZE` | Chunk size in bytes for streaming direct-put bodies (`FastAPIServer` only) | `1048576` (1 MiB) |
-| `AIS_DIRECT_PUT_RETRIES` | Retries on connection errors during direct-put (`FastAPIServer` only) | `3` |
+| `AIS_DIRECT_PUT_RETRIES` | Retries on transient connection errors during direct-put (all ETL servers) | `3` |
 | `MAX_CONN` | Maximum total outbound connections in the httpx pool (`FastAPIServer` only) | `256` |
 | `MAX_KEEPALIVE_CONN` | Maximum keepalive connections in the httpx pool (`FastAPIServer` only) | `128` |
 | `KEEPALIVE_EXPIRY` | Keepalive connection expiry in seconds (`FastAPIServer` only) | `30` |

@@ -7,6 +7,7 @@ import unittest
 from unittest import mock
 from unittest.mock import MagicMock, patch, AsyncMock
 
+import requests
 import httpx
 from fastapi.testclient import TestClient
 from flask.testing import FlaskClient
@@ -20,7 +21,10 @@ from aistore.sdk.const import (
     QPARAM_ETL_FQN,
     AIS_DIRECT_PUT_RETRIES,
 )
-from aistore.sdk.etl.webserver.base_etl_server import CountingIterator
+from aistore.sdk.etl.webserver.base_etl_server import (
+    CountingIterator,
+    _is_connection_refused,
+)
 from aistore.sdk.errors import ETLDirectPutTransientError
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
@@ -1306,3 +1310,874 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
 
         delays = [call.args[0] for call in mock_sleep.call_args_list]
         self.assertEqual(delays, [1.0, 2.0, 4.0])  # 2**0, 2**1, 2**2
+
+
+# ---------------------------------------------------------------------------
+# Sync (Flask) direct-put retry unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestFlaskDirectPutRetry(unittest.TestCase):
+    """Unit tests for FlaskServer retry logic on buffered direct-put."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        self.server = DummyFlaskServer()
+        self.server.direct_put_retries = 3
+
+    def _retry(self, url="http://target/obj", data=b"data"):
+        return self.server._direct_put_with_retry(  # pylint: disable=protected-access
+            url, data
+        )
+
+    def _put(self, url="http://target/obj", data=b"data"):
+        return self.server._direct_put(url, data)  # pylint: disable=protected-access
+
+    def test_succeeds_on_first_attempt(self):
+        """No retry when first attempt succeeds."""
+        with patch.object(self.server, "_direct_put", return_value=(200, b"ok", 2)):
+            with patch("time.sleep") as mock_sleep:
+                result = self._retry()
+        self.assertEqual(result, (200, b"ok", 2))
+        mock_sleep.assert_not_called()
+
+    def test_retries_on_transient_error_then_succeeds(self):
+        """Retries on ETLDirectPutTransientError and succeeds on second attempt."""
+        self.server.direct_put_retries = 2
+        ok = (200, b"", 4)
+        side_effects = [
+            ETLDirectPutTransientError("http://target/obj", requests.ConnectionError()),
+            ok,
+        ]
+        with patch.object(self.server, "_direct_put", side_effect=side_effects):
+            with patch("time.sleep"):
+                result = self._retry()
+        self.assertEqual(result, ok)
+
+    def test_raises_after_exhausting_retries(self):
+        """ETLDirectPutTransientError is raised after all retries exhausted."""
+        self.server.direct_put_retries = 2
+        err = ETLDirectPutTransientError("url", requests.ConnectionError())
+        with patch.object(self.server, "_direct_put", side_effect=err):
+            with patch("time.sleep"):
+                with self.assertRaises(ETLDirectPutTransientError):
+                    self._retry()
+
+    def test_direct_put_wraps_connection_error(self):
+        """_direct_put() wraps requests.ConnectionError as ETLDirectPutTransientError."""
+        with self.server.app.test_request_context():
+            with patch.object(
+                self.server, "client_put", side_effect=requests.ConnectionError("lost")
+            ):
+                with self.assertRaises(ETLDirectPutTransientError):
+                    self._put()
+
+    def test_direct_put_wraps_chunked_encoding_error(self):
+        """_direct_put() wraps ChunkedEncodingError as ETLDirectPutTransientError."""
+        with self.server.app.test_request_context():
+            with patch.object(
+                self.server,
+                "client_put",
+                side_effect=requests.exceptions.ChunkedEncodingError(),
+            ):
+                with self.assertRaises(ETLDirectPutTransientError):
+                    self._put()
+
+    def test_non_transient_error_returns_500(self):
+        """Non-transient exceptions in _direct_put return 500 without retrying."""
+        with patch.object(self.server, "_direct_put", return_value=(500, b"err", 0)):
+            with patch("time.sleep") as mock_sleep:
+                result = self._retry()
+        self.assertEqual(result[0], 500)
+        mock_sleep.assert_not_called()
+
+    def test_exponential_backoff_delays(self):
+        """time.sleep is called with exponentially increasing delays."""
+        self.server.direct_put_retries = 3
+        call_count = 0
+
+        def side_effect(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 4:
+                raise ETLDirectPutTransientError("url", requests.ConnectionError())
+            return (200, b"", 0)
+
+        with patch.object(self.server, "_direct_put", side_effect=side_effect):
+            with patch("time.sleep") as mock_sleep:
+                self._retry()
+
+        delays = [c.args[0] for c in mock_sleep.call_args_list]
+        self.assertEqual(len(delays), 3)
+        self.assertEqual(delays[0], min(2.0**0, 30.0))
+        self.assertEqual(delays[1], min(2.0**1, 30.0))
+        self.assertEqual(delays[2], min(2.0**2, 30.0))
+
+    def test_zero_retries_raises_on_first_failure(self):
+        """With direct_put_retries=0, no sleep and error raised immediately."""
+        self.server.direct_put_retries = 0
+        err = ETLDirectPutTransientError("url", requests.ConnectionError())
+        with patch.object(self.server, "_direct_put", side_effect=err):
+            with patch("time.sleep") as mock_sleep:
+                with self.assertRaises(ETLDirectPutTransientError):
+                    self._retry()
+        mock_sleep.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Sync (HTTP multi-threaded) direct-put retry unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestHTTPDirectPutRetry(unittest.TestCase):
+    """Unit tests for HTTPMultiThreadedServer.RequestHandler retry logic."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        self.handler = DummyRequestHandler()
+        self.handler.server.etl_server.direct_put_retries = 3
+
+    def _retry(self, url="http://target/obj", data=b"data"):
+        return self.handler._direct_put_with_retry(  # pylint: disable=protected-access
+            url, data
+        )
+
+    def _put(self, url="http://target/obj", data=b"data", path="/obj"):
+        return self.handler._direct_put(  # pylint: disable=protected-access
+            url, data, "", path
+        )
+
+    def test_succeeds_on_first_attempt(self):
+        """No retry when first attempt succeeds."""
+        with patch.object(self.handler, "_direct_put", return_value=(200, b"ok", 5)):
+            with patch("time.sleep") as mock_sleep:
+                result = self._retry()
+        self.assertEqual(result, (200, b"ok", 5))
+        mock_sleep.assert_not_called()
+
+    def test_retries_on_transient_error_then_succeeds(self):
+        """Retries on ETLDirectPutTransientError and succeeds on second attempt."""
+        self.handler.server.etl_server.direct_put_retries = 2
+        ok = (200, b"ok", 3)
+        side_effects = [
+            ETLDirectPutTransientError("url", requests.ConnectionError()),
+            ok,
+        ]
+        with patch.object(self.handler, "_direct_put", side_effect=side_effects):
+            with patch("time.sleep"):
+                result = self._retry()
+        self.assertEqual(result, ok)
+
+    def test_raises_after_exhausting_retries(self):
+        """ETLDirectPutTransientError is raised after all retries exhausted."""
+        self.handler.server.etl_server.direct_put_retries = 2
+        err = ETLDirectPutTransientError("url", requests.ConnectionError())
+        with patch.object(self.handler, "_direct_put", side_effect=err):
+            with patch("time.sleep"):
+                with self.assertRaises(ETLDirectPutTransientError):
+                    self._retry()
+
+    def test_direct_put_wraps_connection_error(self):
+        """_direct_put() wraps requests.ConnectionError as ETLDirectPutTransientError."""
+        self.handler.server.etl_server.client_put = MagicMock(
+            side_effect=requests.ConnectionError("lost")
+        )
+        with self.assertRaises(ETLDirectPutTransientError):
+            self._put()
+
+    def test_direct_put_wraps_chunked_encoding_error(self):
+        """_direct_put() wraps ChunkedEncodingError as ETLDirectPutTransientError."""
+        self.handler.server.etl_server.client_put = MagicMock(
+            side_effect=requests.exceptions.ChunkedEncodingError()
+        )
+        with self.assertRaises(ETLDirectPutTransientError):
+            self._put()
+
+    def test_non_transient_error_returns_500(self):
+        """Non-transient exceptions in _direct_put return 500 without retrying."""
+        with patch.object(self.handler, "_direct_put", return_value=(500, b"err", 0)):
+            with patch("time.sleep") as mock_sleep:
+                result = self._retry()
+        self.assertEqual(result[0], 500)
+        mock_sleep.assert_not_called()
+
+    def test_exponential_backoff_delays(self):
+        """time.sleep is called with exponentially increasing delays."""
+        self.handler.server.etl_server.direct_put_retries = 3
+        call_count = 0
+
+        def side_effect(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 4:
+                raise ETLDirectPutTransientError("url", requests.ConnectionError())
+            return (200, b"", 0)
+
+        with patch.object(self.handler, "_direct_put", side_effect=side_effect):
+            with patch("time.sleep") as mock_sleep:
+                self._retry()
+
+        delays = [c.args[0] for c in mock_sleep.call_args_list]
+        self.assertEqual(len(delays), 3)
+        self.assertEqual(delays[0], min(2.0**0, 30.0))
+        self.assertEqual(delays[1], min(2.0**1, 30.0))
+        self.assertEqual(delays[2], min(2.0**2, 30.0))
+
+    def test_zero_retries_raises_on_first_failure(self):
+        """With direct_put_retries=0, no sleep and error raised immediately."""
+        self.handler.server.etl_server.direct_put_retries = 0
+        err = ETLDirectPutTransientError("url", requests.ConnectionError())
+        with patch.object(self.handler, "_direct_put", side_effect=err):
+            with patch("time.sleep") as mock_sleep:
+                with self.assertRaises(ETLDirectPutTransientError):
+                    self._retry()
+        mock_sleep.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Sync (Flask) streaming direct-put retry unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestFlaskStreamingDirectPutRetry(unittest.TestCase):
+    """Unit tests for FlaskServer._direct_put_stream_with_retry reader lifecycle and retry."""
+
+    _DIRECT_PUT_URL = "http://target:51081/ais/@/dst/test/obj"
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        self.server = DummyStreamingFlaskServer()
+        self.server.direct_put_retries = 3
+
+    def _make_reader(self, data=b"input"):
+        return io.BytesIO(data)
+
+    def _call(self, path="test/obj"):
+        return self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+            self._DIRECT_PUT_URL, path
+        )
+
+    def test_succeeds_on_first_attempt(self):
+        """No retry when first attempt succeeds."""
+        with patch.object(
+            self.server, "_get_stream_reader", return_value=self._make_reader()
+        ):
+            with patch.object(
+                self.server, "_direct_put_stream", return_value=(204, b"", 5)
+            ):
+                with patch("time.sleep") as mock_sleep:
+                    result = self._call()
+        self.assertEqual(result, (204, b"", 5))
+        mock_sleep.assert_not_called()
+
+    def test_retries_on_transient_error_then_succeeds(self):
+        """Retries on ETLDirectPutTransientError and succeeds on second attempt."""
+        self.server.direct_put_retries = 2
+        ok = (204, b"", 4)
+        call_count = 0
+
+        def put_side(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise ETLDirectPutTransientError(
+                    self._DIRECT_PUT_URL, requests.ConnectionError()
+                )
+            return ok
+
+        readers = [self._make_reader(), self._make_reader()]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.server,
+            "_get_stream_reader",
+            side_effect=lambda *_, **__: next(reader_iter),
+        ):
+            with patch.object(self.server, "_direct_put_stream", side_effect=put_side):
+                with patch("time.sleep"):
+                    result = self._call()
+        self.assertEqual(result, ok)
+
+    def test_raises_after_exhausting_retries(self):
+        """ETLDirectPutTransientError raised after all retries exhausted."""
+        self.server.direct_put_retries = 2
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        readers = [self._make_reader() for _ in range(3)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.server,
+            "_get_stream_reader",
+            side_effect=lambda *_, **__: next(reader_iter),
+        ):
+            with patch.object(self.server, "_direct_put_stream", side_effect=err):
+                with patch("time.sleep"):
+                    with self.assertRaises(ETLDirectPutTransientError):
+                        self._call()
+
+    def test_reader_reopened_on_each_retry(self):
+        """_get_stream_reader is called once per attempt (initial + each retry)."""
+        self.server.direct_put_retries = 2
+        call_count = 0
+
+        def put_side(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise ETLDirectPutTransientError(
+                    self._DIRECT_PUT_URL, requests.ConnectionError()
+                )
+            return (204, b"", 0)
+
+        readers = [self._make_reader() for _ in range(3)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.server,
+            "_get_stream_reader",
+            side_effect=lambda *_, **__: next(reader_iter),
+        ) as mock_reader:
+            with patch.object(self.server, "_direct_put_stream", side_effect=put_side):
+                with patch("time.sleep"):
+                    self._call()
+        # initial + 2 retries = 3 total reader opens
+        self.assertEqual(mock_reader.call_count, 3)
+
+    def test_reader_always_closed_on_success(self):
+        """close_reader is called exactly once (via finally) after success."""
+        mock_reader = self._make_reader()
+        with patch.object(self.server, "_get_stream_reader", return_value=mock_reader):
+            with patch.object(
+                self.server, "_direct_put_stream", return_value=(204, b"", 0)
+            ):
+                with patch.object(
+                    self.server, "close_reader", wraps=self.server.close_reader
+                ) as mc:
+                    self._call()
+        mc.assert_called_once()
+
+    def test_reader_always_closed_on_exhausted_retries(self):
+        """All readers opened during retries are closed; finally closes the last one."""
+        self.server.direct_put_retries = 2
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        readers = [self._make_reader() for _ in range(3)]
+        reader_iter = iter(readers)
+        close_calls = []
+        original_close = self.server.close_reader
+
+        with patch.object(
+            self.server,
+            "_get_stream_reader",
+            side_effect=lambda *_, **__: next(reader_iter),
+        ):
+            with patch.object(self.server, "_direct_put_stream", side_effect=err):
+                with patch.object(
+                    self.server,
+                    "close_reader",
+                    side_effect=lambda r: close_calls.append(r) or original_close(r),
+                ):
+                    with patch("time.sleep"):
+                        with self.assertRaises(ETLDirectPutTransientError):
+                            self._call()
+        # 2 retries × close in except + 1 finally close = 3 total
+        self.assertEqual(len(close_calls), 3)
+
+    def test_exponential_backoff_delays(self):
+        """time.sleep is called with exponentially increasing delays."""
+        self.server.direct_put_retries = 3
+        call_count = 0
+
+        def put_side(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 4:
+                raise ETLDirectPutTransientError(
+                    self._DIRECT_PUT_URL, requests.ConnectionError()
+                )
+            return (204, b"", 0)
+
+        readers = [self._make_reader() for _ in range(4)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.server,
+            "_get_stream_reader",
+            side_effect=lambda *_, **__: next(reader_iter),
+        ):
+            with patch.object(self.server, "_direct_put_stream", side_effect=put_side):
+                with patch("time.sleep") as mock_sleep:
+                    self._call()
+
+        delays = [c.args[0] for c in mock_sleep.call_args_list]
+        self.assertEqual(len(delays), 3)
+        self.assertEqual(delays[0], min(2.0**0, 30.0))
+        self.assertEqual(delays[1], min(2.0**1, 30.0))
+        self.assertEqual(delays[2], min(2.0**2, 30.0))
+
+    def test_put_no_fqn_retry_sends_original_bytes(self):
+        """Regression: Flask streaming PUT without FQN replays original body on retry.
+
+        Before the fix, _get_stream_reader returned request.stream which is exhausted
+        after the first read. A second call to _get_stream_reader would return an empty
+        stream, causing the retry to PUT zero bytes. After the fix, get_data() buffers
+        the body so each retry gets a fresh BytesIO over the original bytes.
+        """
+        original_body = b"hello regression bytes"
+        bytes_read_by_transform = []
+
+        def spy_transform_stream(reader, _path, _etl_args):
+            data = reader.read()
+            bytes_read_by_transform.append(data)
+            yield data
+
+        call_count = 0
+
+        def mock_direct_put_stream(url, data_iter, *_a, **_kw):
+            nonlocal call_count
+            call_count += 1
+            # Consume the generator so transform_stream reads from reader.
+            b"".join(data_iter)
+            if call_count == 1:
+                raise ETLDirectPutTransientError(url, requests.ConnectionError())
+            return (204, b"", len(original_body))
+
+        self.server.direct_put_retries = 1
+        with self.server.app.test_request_context(
+            "/test/obj", method="PUT", data=original_body
+        ):
+            with patch.object(
+                self.server, "transform_stream", side_effect=spy_transform_stream
+            ):
+                with patch.object(
+                    self.server,
+                    "_direct_put_stream",
+                    side_effect=mock_direct_put_stream,
+                ):
+                    with patch("time.sleep"):
+                        self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+                            self._DIRECT_PUT_URL, "/test/obj"
+                        )
+
+        self.assertEqual(len(bytes_read_by_transform), 2, "expected 2 attempts")
+        self.assertEqual(bytes_read_by_transform[0], original_body)
+        self.assertEqual(
+            bytes_read_by_transform[1],
+            original_body,
+            "retry must send original bytes, not empty bytes",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Sync (HTTP multi-threaded) streaming direct-put retry unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
+    """Unit tests for HTTPMultiThreadedServer.RequestHandler._direct_put_stream_with_retry."""
+
+    _DIRECT_PUT_URL = "http://target:51081/ais/@/dst/test/obj"
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        self.handler = DummyRequestHandler()
+        self.handler.server.etl_server.direct_put_retries = 3
+
+    def _make_reader(self, data=b"input"):
+        return io.BytesIO(data)
+
+    def _call(self, fqn="", raw_path="test/obj", is_get=False):
+        return self.handler._direct_put_stream_with_retry(  # pylint: disable=protected-access
+            self._DIRECT_PUT_URL, fqn, raw_path, "", is_get
+        )
+
+    def test_succeeds_on_first_attempt(self):
+        """No retry when first attempt succeeds."""
+        with patch.object(
+            self.handler, "_get_stream_reader", return_value=self._make_reader()
+        ):
+            with patch.object(
+                self.handler, "_direct_put_stream", return_value=(204, b"", 5)
+            ):
+                with patch("time.sleep") as mock_sleep:
+                    result = self._call()
+        self.assertEqual(result, (204, b"", 5))
+        mock_sleep.assert_not_called()
+
+    def test_retries_on_transient_error_then_succeeds(self):
+        """Retries on ETLDirectPutTransientError and succeeds on second attempt."""
+        self.handler.server.etl_server.direct_put_retries = 2
+        ok = (204, b"", 4)
+        call_count = 0
+
+        def put_side(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise ETLDirectPutTransientError(
+                    self._DIRECT_PUT_URL, requests.ConnectionError()
+                )
+            return ok
+
+        readers = [self._make_reader(), self._make_reader()]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.handler, "_get_stream_reader", side_effect=lambda *_: next(reader_iter)
+        ):
+            with patch.object(self.handler, "_direct_put_stream", side_effect=put_side):
+                with patch("time.sleep"):
+                    result = self._call()
+        self.assertEqual(result, ok)
+
+    def test_raises_after_exhausting_retries(self):
+        """ETLDirectPutTransientError raised after all retries exhausted."""
+        self.handler.server.etl_server.direct_put_retries = 2
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        readers = [self._make_reader() for _ in range(3)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.handler, "_get_stream_reader", side_effect=lambda *_: next(reader_iter)
+        ):
+            with patch.object(self.handler, "_direct_put_stream", side_effect=err):
+                with patch("time.sleep"):
+                    with self.assertRaises(ETLDirectPutTransientError):
+                        self._call()
+
+    def test_reader_none_returns_error_tuple(self):
+        """When _get_stream_reader returns None, a 502 error tuple is returned (no send_error)."""
+        with patch.object(self.handler, "_get_stream_reader", return_value=None):
+            result = self._call()
+        self.assertEqual(result[0], 502)
+        # send_error must NOT be called — that would write a second response
+        self.handler.send_error.assert_not_called()
+
+    def test_reader_none_on_retry_raises(self):
+        """When reader reopening returns None on retry, the transient error is re-raised."""
+        self.handler.server.etl_server.direct_put_retries = 2
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        # First reader open succeeds; reopening on retry returns None
+        readers = [self._make_reader(), None]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.handler, "_get_stream_reader", side_effect=lambda *_: next(reader_iter)
+        ):
+            with patch.object(self.handler, "_direct_put_stream", side_effect=err):
+                with patch("time.sleep"):
+                    with self.assertRaises(ETLDirectPutTransientError):
+                        self._call()
+
+    def test_reader_reopened_on_each_retry(self):
+        """For BytesIO readers (PUT-no-FQN), seek(0) is used on retry instead of
+        reopening; _get_stream_reader is called only once (initial open)."""
+        self.handler.server.etl_server.direct_put_retries = 2
+        call_count = 0
+
+        def put_side(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise ETLDirectPutTransientError(
+                    self._DIRECT_PUT_URL, requests.ConnectionError()
+                )
+            return (204, b"", 0)
+
+        readers = [self._make_reader() for _ in range(3)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.handler,
+            "_get_stream_reader",
+            side_effect=lambda *_: next(reader_iter),
+        ) as mock_reader:
+            with patch.object(self.handler, "_direct_put_stream", side_effect=put_side):
+                with patch("time.sleep"):
+                    self._call()
+        # BytesIO readers are rewound with seek(0) on retry; _get_stream_reader
+        # is called only once (initial open), not once per attempt.
+        self.assertEqual(mock_reader.call_count, 1)
+
+    def test_reader_always_closed_on_success(self):
+        """close_reader called once (via finally) after success."""
+        mock_reader = self._make_reader()
+        with patch.object(self.handler, "_get_stream_reader", return_value=mock_reader):
+            with patch.object(
+                self.handler, "_direct_put_stream", return_value=(204, b"", 0)
+            ):
+                self._call()
+        self.handler.server.etl_server.close_reader.assert_called_once_with(mock_reader)
+
+    def test_reader_always_closed_on_exhausted_retries(self):
+        """For BytesIO readers (PUT-no-FQN), seek(0) is used on retry instead of
+        close+reopen; close_reader is called once in the finally block."""
+        self.handler.server.etl_server.direct_put_retries = 2
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        readers = [self._make_reader() for _ in range(3)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.handler, "_get_stream_reader", side_effect=lambda *_: next(reader_iter)
+        ):
+            with patch.object(self.handler, "_direct_put_stream", side_effect=err):
+                with patch("time.sleep"):
+                    with self.assertRaises(ETLDirectPutTransientError):
+                        self._call()
+        # BytesIO: no close in except (seek instead); 1 close in finally = 1 total
+        self.assertEqual(self.handler.server.etl_server.close_reader.call_count, 1)
+
+    def test_exponential_backoff_delays(self):
+        """time.sleep is called with exponentially increasing delays."""
+        self.handler.server.etl_server.direct_put_retries = 3
+        call_count = 0
+
+        def put_side(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 4:
+                raise ETLDirectPutTransientError(
+                    self._DIRECT_PUT_URL, requests.ConnectionError()
+                )
+            return (204, b"", 0)
+
+        readers = [self._make_reader() for _ in range(4)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.handler, "_get_stream_reader", side_effect=lambda *_: next(reader_iter)
+        ):
+            with patch.object(self.handler, "_direct_put_stream", side_effect=put_side):
+                with patch("time.sleep") as mock_sleep:
+                    self._call()
+
+        delays = [c.args[0] for c in mock_sleep.call_args_list]
+        self.assertEqual(len(delays), 3)
+        self.assertEqual(delays[0], min(2.0**0, 30.0))
+        self.assertEqual(delays[1], min(2.0**1, 30.0))
+        self.assertEqual(delays[2], min(2.0**2, 30.0))
+
+    def test_put_no_fqn_retry_sends_original_bytes(self):
+        """Regression: HTTP streaming PUT without FQN replays original body on retry.
+
+        Before the fix, calling _get_stream_reader again on retry would drain rfile
+        a second time and return an empty BytesIO. After the fix, seek(0) is called on
+        the existing BytesIO so the retry reads the same original bytes.
+        """
+        original_body = b"hello http regression bytes"
+        bytes_read_by_transform = []
+
+        def spy_transform_stream(reader, _path, _etl_args):
+            data = reader.read()
+            bytes_read_by_transform.append(data)
+            yield data
+
+        call_count = 0
+
+        def mock_direct_put_stream(url, data_iter, *_a, **_kw):
+            nonlocal call_count
+            call_count += 1
+            # Consume the generator so transform_stream reads from reader.
+            b"".join(data_iter)
+            if call_count == 1:
+                raise ETLDirectPutTransientError(url, requests.ConnectionError())
+            return (204, b"", len(original_body))
+
+        handler = DummyRequestHandler()
+        handler.headers = {HEADER_CONTENT_LENGTH: str(len(original_body))}
+        handler.rfile = io.BytesIO(original_body)
+        handler.server.etl_server.direct_put_retries = 1
+        handler.server.etl_server.transform_stream = spy_transform_stream
+        handler.server.etl_server.close_reader = MagicMock()
+
+        with patch.object(
+            handler, "_direct_put_stream", side_effect=mock_direct_put_stream
+        ):
+            with patch("time.sleep"):
+                handler._direct_put_stream_with_retry(  # pylint: disable=protected-access
+                    self._DIRECT_PUT_URL, "", "/test/obj", "", is_get=False
+                )
+
+        self.assertEqual(len(bytes_read_by_transform), 2, "expected 2 attempts")
+        self.assertEqual(bytes_read_by_transform[0], original_body)
+        self.assertEqual(
+            bytes_read_by_transform[1],
+            original_body,
+            "retry must send original bytes, not empty bytes",
+        )
+
+
+# ---------------------------------------------------------------------------
+# ConnectionRefused permanent-error guard tests
+# ---------------------------------------------------------------------------
+
+
+def _make_connection_refused_error():
+    """Build a realistic requests.ConnectionError wrapping a ConnectionRefused chain."""
+    from urllib3.exceptions import (  # pylint: disable=import-outside-toplevel
+        MaxRetryError,
+        NewConnectionError,
+    )
+
+    conn_refused = ConnectionRefusedError(111, "Connection refused")
+    new_conn_err = NewConnectionError(
+        None, "Failed to establish a new connection: [Errno 111] Connection refused"
+    )
+    new_conn_err.__cause__ = conn_refused
+    max_retry = MaxRetryError(pool=None, url="/nonexistent", reason=new_conn_err)
+    return requests.ConnectionError(max_retry)
+
+
+def _make_connection_refused_error_context_only():
+    """Build a ConnectionError where ConnectionRefusedError is only on __context__.
+
+    Mirrors urllib3 v1.x / Python 3.9 behavior: NewConnectionError is raised
+    inside an ``except ConnectionRefusedError`` block without an explicit ``from``,
+    so __cause__ is None and the root cause is only reachable via __context__.
+    """
+    from urllib3.exceptions import (  # pylint: disable=import-outside-toplevel
+        MaxRetryError,
+        NewConnectionError,
+    )
+
+    conn_refused = ConnectionRefusedError(111, "Connection refused")
+    new_conn_err = NewConnectionError(
+        None, "Failed to establish a new connection: [Errno 111] Connection refused"
+    )
+    # Simulate urllib3 v1.x: no explicit chaining, only implicit __context__
+    new_conn_err.__cause__ = None
+    new_conn_err.__context__ = conn_refused
+    max_retry = MaxRetryError(pool=None, url="/nonexistent", reason=new_conn_err)
+    return requests.ConnectionError(max_retry)
+
+
+class TestIsConnectionRefused(unittest.TestCase):
+    """Unit tests for _is_connection_refused() covering both urllib3 v1.x and v2.x chains."""
+
+    def test_cause_chain_returns_true(self):
+        """__cause__ chain (urllib3 v2.x) is detected as ConnectionRefused."""
+        exc = _make_connection_refused_error()
+        self.assertTrue(_is_connection_refused(exc))
+
+    def test_context_only_chain_returns_true(self):
+        """__context__-only chain (urllib3 v1.x / Python 3.9) is detected as ConnectionRefused."""
+        exc = _make_connection_refused_error_context_only()
+        self.assertTrue(_is_connection_refused(exc))
+
+    def test_bare_connection_error_returns_false(self):
+        """Bare ConnectionError('lost') is not a ConnectionRefused — must return False."""
+        self.assertFalse(_is_connection_refused(requests.ConnectionError("lost")))
+
+
+class TestFlaskConnectionRefusedGuard(unittest.TestCase):
+    """ConnectionRefused is a permanent error — must return 502, never retry."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        self.server = DummyFlaskServer()
+        self.server.direct_put_retries = 3
+
+    def _put(self, url="http://localhost:19999/nonexistent", data=b"data"):
+        with self.server.app.test_request_context():
+            # pylint: disable=protected-access
+            return self.server._direct_put(url, data)
+
+    def _retry(self, url="http://localhost:19999/nonexistent", data=b"data"):
+        with self.server.app.test_request_context():
+            # pylint: disable=protected-access
+            return self.server._direct_put_with_retry(url, data)
+
+    def test_connection_refused_returns_502(self):
+        """_direct_put() returns (502, ...) for ConnectionRefused — not ETLDirectPutTransientError."""
+        exc = _make_connection_refused_error()
+        with patch.object(self.server, "client_put", side_effect=exc):
+            status, body, _ = self._put()
+        self.assertEqual(status, 502)
+        self.assertIn(b"ConnectionError", body)
+        self.assertIn(b"/nonexistent", body)
+
+    def test_connection_refused_not_retried(self):
+        """_direct_put_with_retry() does not sleep for ConnectionRefused."""
+        exc = _make_connection_refused_error()
+        with patch.object(self.server, "client_put", side_effect=exc):
+            with patch("time.sleep") as mock_sleep:
+                status, _, _ = self._retry()
+        self.assertEqual(status, 502)
+        mock_sleep.assert_not_called()
+
+    def test_bare_connection_error_still_retried(self):
+        """Bare ConnectionError('lost') is still wrapped as transient (existing behavior)."""
+        with self.server.app.test_request_context():
+            with patch.object(
+                self.server,
+                "client_put",
+                side_effect=requests.ConnectionError("lost"),
+            ):
+                with self.assertRaises(ETLDirectPutTransientError):
+                    self.server._direct_put(  # pylint: disable=protected-access
+                        "http://target/obj", b"data"
+                    )
+
+    def test_connection_refused_stream_not_retried(self):
+        """Streaming direct-put with ConnectionRefused returns 502 without sleeping.
+
+        Patches session.put so the guard inside _direct_put_stream fires and returns
+        (502, ...) — which _direct_put_stream_with_retry forwards without retrying.
+        Uses DummyStreamingFlaskServer to provide a real transform_stream.
+        """
+        streaming_server = DummyStreamingFlaskServer()
+        streaming_server.direct_put_retries = 3
+        exc = _make_connection_refused_error()
+
+        with streaming_server.app.test_request_context(
+            "/test/obj", method="PUT", data=b"hello"
+        ):
+            with patch.object(streaming_server.session, "put", side_effect=exc):
+                with patch("time.sleep") as mock_sleep:
+                    result = streaming_server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+                        "http://localhost:19999/nonexistent", "/test/obj"
+                    )
+        self.assertEqual(result[0], 502)
+        mock_sleep.assert_not_called()
+
+
+class TestHTTPConnectionRefusedGuard(unittest.TestCase):
+    """ConnectionRefused is a permanent error — HTTP server must return 502, never retry."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        self.handler = DummyRequestHandler()
+        self.handler.server.etl_server.direct_put_retries = 3
+
+    def _put(self, url="http://localhost:19999/nonexistent", data=b"data"):
+        # pylint: disable=protected-access
+        return self.handler._direct_put(url, data, "", "/nonexistent")
+
+    def _retry(self, url="http://localhost:19999/nonexistent", data=b"data"):
+        # pylint: disable=protected-access
+        return self.handler._direct_put_with_retry(url, data)
+
+    def test_connection_refused_returns_502(self):
+        """_direct_put() returns (502, ...) for ConnectionRefused — not ETLDirectPutTransientError."""
+        exc = _make_connection_refused_error()
+        self.handler.server.etl_server.client_put = MagicMock(side_effect=exc)
+        status, body, _ = self._put()
+        self.assertEqual(status, 502)
+        self.assertIn(b"ConnectionError", body)
+        self.assertIn(b"/nonexistent", body)
+
+    def test_connection_refused_not_retried(self):
+        """_direct_put_with_retry() does not sleep for ConnectionRefused."""
+        exc = _make_connection_refused_error()
+        self.handler.server.etl_server.client_put = MagicMock(side_effect=exc)
+        with patch("time.sleep") as mock_sleep:
+            status, _, _ = self._retry()
+        self.assertEqual(status, 502)
+        mock_sleep.assert_not_called()
+
+    def test_bare_connection_error_still_retried(self):
+        """Bare ConnectionError('lost') is still wrapped as transient (existing behavior)."""
+        self.handler.server.etl_server.client_put = MagicMock(
+            side_effect=requests.ConnectionError("lost")
+        )
+        with self.assertRaises(ETLDirectPutTransientError):
+            self._put()

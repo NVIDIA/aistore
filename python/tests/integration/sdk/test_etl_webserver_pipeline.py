@@ -589,7 +589,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
             timeout=5,
         )
 
-        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.status_code, 502)
         self.assertIn(b"/nonexistent", response.content)
         self.assertIn(b"ConnectionError", response.content)
 
