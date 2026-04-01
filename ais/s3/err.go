@@ -21,6 +21,13 @@ import (
 
 const ErrPrefix = "aws-error"
 
+// assorted popular codes
+const (
+	NoSuchKey    = "NoSuchKey"
+	NoSuchBucket = "NoSuchBucket"
+	NoSuchUpload = "NoSuchUpload"
+)
+
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 // e.g. XML:
 // <Error>
@@ -34,6 +41,27 @@ type Error struct {
 	Message   string `xml:"Message"`
 	Resource  string `xml:"Resource"`
 	RequestID string `xml:"RequestId"`
+}
+
+// NOTE: deleting a nonexistent object ------------------------------------------
+//
+// AIStore does not emulate S3's silent-success delete semantics. In AIS,
+// deleting a missing object is reported as "not found" - with a single exception:
+// when the bucket has an S3 backend. This does not violate HTTP idempotency:
+// a repeated DELETE still has the same intended effect on server state,
+// even though the response differs.
+//
+// When the bucket does have an S3 backend and the object is missing,
+// we return whatever the backend gives us - which, for S3, is 204 (no error).
+//
+// Apart from this single exception, returning an error on delete of a nonexistent
+// object is an intentional semantic choice for consistency with the rest of AIS.
+
+// auxiliary structure to assist producing s3-compat error
+type ErrInfo struct {
+	Err    error
+	Status int
+	Code   string
 }
 
 func (e *Error) mustMarshal(sgl *memsys.SGL) {
@@ -58,7 +86,7 @@ func WriteMptErr(w http.ResponseWriter, r *http.Request, err error, ecode int, l
 		err = fmt.Errorf("%w (Use upload ID %q on %s to abort)", err, uploadID, objectPath)
 	}
 
-	WriteErr(w, r, err, ecode)
+	WriteErr(w, r, ErrInfo{Err: err, Status: ecode})
 }
 
 // aisToS3Path converts ais:// scheme to s3:// scheme
@@ -66,25 +94,30 @@ func aisToS3Path(path string) string {
 	return strings.Replace(path, apc.AISScheme+apc.BckProviderSeparator, apc.S3Scheme+apc.BckProviderSeparator, 1)
 }
 
-func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
+func WriteErr(w http.ResponseWriter, r *http.Request, errInfo ErrInfo) {
 	var (
-		out       Error
+		err       = errInfo.Err // in error
+		out       Error         // out error
 		in        *cmn.ErrHTTP
 		ok        bool
 		allocated bool
 	)
+	debug.Assert(err != nil)
+
 	if in, ok = err.(*cmn.ErrHTTP); !ok {
-		in = cmn.InitErrHTTP(r, err, ecode)
+		in = cmn.InitErrHTTP(r, err, errInfo.Status)
 		allocated = true
 	}
 	out.Message = in.Message
 	switch {
+	case errInfo.Code != "":
+		out.Code = errInfo.Code
 	case cmn.IsErrBucketAlreadyExists(err):
 		out.Code = "BucketAlreadyExists"
 	case cmn.IsErrBckNotFound(err):
-		out.Code = "NoSuchBucket"
+		out.Code = NoSuchBucket
 	case isErrNoSuchUpload(err):
-		out.Code = "NoSuchUpload"
+		out.Code = NoSuchUpload
 	case in.TypeCode != "":
 		out.Code = in.TypeCode
 	default:

@@ -50,6 +50,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
   * [Enabling inventory via AWS CLI](#enabling-inventory-via-aws-cli)
   * [Managing inventories with helper scripts](#managing-inventories-with-helper-scripts)
   * [Inventory XML example](#inventory-xml-example)
+* [Deleting nonexistent object](#deleting-nonexistent-object)
 * [Compatibility Matrix](#compatibility-matrix)
 * [Boto3 Examples](#boto3-examples)
 * [FAQs & Troubleshooting](#faqs--troubleshooting)
@@ -423,6 +424,22 @@ ais ls s3://webdataset --all --inventory
 ```
 
 This is dramatically faster than listing objects via the standard API calls, particularly for large buckets.
+
+---
+
+## Deleting nonexistent object
+
+AIStore does not emulate S3's silent-success delete semantics. In AIS,
+deleting a missing object is reported as "not found" - with a single exception:
+when the bucket has an S3 backend. This does not violate HTTP idempotency:
+a repeated DELETE still has the same intended effect on server state,
+even though the response differs.
+
+When the bucket does have an S3 backend and the object is missing,
+we return whatever the backend gives us - which, for S3, is 204 (no error).
+
+Apart from this single exception, returning an error on delete of a nonexistent
+object is an intentional semantic choice for consistency with the rest of AIS.
 
 ---
 

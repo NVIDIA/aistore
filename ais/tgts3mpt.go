@@ -27,6 +27,8 @@ import (
 // S3 multipart upload API impl.: all method names with "MptS3" suffix
 //
 
+const emptyUploadID = "empty uploadId"
+
 // Initialize multipart upload.
 // - Generate UUID for the upload
 // - Return the UUID to a caller
@@ -38,13 +40,13 @@ func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, items []stri
 	)
 	err := lom.InitBck(bck)
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 
 	uploadID, err := t.ups.start(r, lom, false /*skipBackend*/)
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 	result := &s3.InitiateMptUploadResult{Bucket: bck.Name, Key: objName, UploadID: uploadID}
@@ -69,17 +71,18 @@ func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []st
 	// 1. parse/validate
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID == "" {
-		s3.WriteErr(w, r, errors.New("empty uploadId"), 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: errors.New(emptyUploadID)})
 		return
 	}
 	part := q.Get(s3.QparamMptPartNo)
 	if part == "" {
-		s3.WriteErr(w, r, fmt.Errorf("upload %q: missing part number", uploadID), 0)
+		err := fmt.Errorf("upload %q: missing part number", uploadID)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 	partNum, err := t.ups.parsePartNum(part)
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 
@@ -87,7 +90,7 @@ func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []st
 	objName := s3.ObjName(items)
 	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 
@@ -127,30 +130,30 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []s
 	// parse/validate
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID == "" {
-		s3.WriteErr(w, r, errors.New("empty uploadId"), 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: errors.New(emptyUploadID)})
 		return
 	}
 	nlog.Infoln("complete", uploadID)
 
 	body, err := cos.ReadAllN(r.Body, r.ContentLength)
 	if err != nil {
-		s3.WriteErr(w, r, err, http.StatusBadRequest)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest})
 		return
 	}
 	s3PartList, err := s3.DecodeXML[*s3.CompleteMptUpload](body)
 	if err != nil {
-		s3.WriteErr(w, r, err, http.StatusBadRequest)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest})
 		return
 	}
 	if s3PartList == nil || len(s3PartList.Parts) == 0 {
-		s3.WriteErr(w, r, errors.New("no parts"), http.StatusBadRequest)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: errors.New("no parts"), Status: http.StatusBadRequest})
 		return
 	}
 
 	objName := s3.ObjName(items)
 	lom := &core.LOM{ObjName: objName} // TODO: use core.AllocLOM()
 	if err := lom.InitBck(bck); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 
@@ -206,13 +209,13 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []s
 func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
 	bck, ecode, err := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
 	objName := s3.ObjName(items)
 	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 
@@ -237,7 +240,7 @@ func (t *target) listPartsMptS3(w http.ResponseWriter, r *http.Request, bck *met
 
 	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 
@@ -249,7 +252,7 @@ func (t *target) listPartsMptS3(w http.ResponseWriter, r *http.Request, bck *met
 
 	parts, ecode, err := s3.ListParts(manifest)
 	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
 	result := &s3.ListPartsResult{Bucket: bck.Name, Key: objName, UploadID: uploadID, Parts: parts}
@@ -292,17 +295,17 @@ func (t *target) listUploadsMptS3(w http.ResponseWriter, bck *meta.Bck, q url.Va
 func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM, q url.Values) {
 	startTime := mono.NanoTime()
 	if err := lom.InitBck(bck); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 	partNum, err := t.ups.parsePartNum(q.Get(s3.QparamMptPartNo))
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 	manifest, err := core.NewUfest("", lom, true /*must-exist*/)
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 
@@ -310,26 +313,26 @@ func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.
 	defer lom.Unlock(false)
 
 	if err := lom.Load(true, true); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 	// load chunk manifest and find out the part num's offset & size
 	if err := manifest.LoadCompleted(lom); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 
 	// get specific chunk
 	chunk, err := manifest.GetChunk(int(partNum))
 	if err != nil {
-		s3.WriteErr(w, r, err, http.StatusNotFound)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusNotFound})
 		return
 	}
 
 	// read chunk file
 	fh, err := os.Open(chunk.Path())
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
 	defer cos.Close(fh)
@@ -338,7 +341,7 @@ func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.
 	defer slab.Free(buf)
 
 	if _, err := io.CopyBuffer(w, fh, buf); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 	}
 
 	vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}

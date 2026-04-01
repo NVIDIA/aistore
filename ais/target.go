@@ -922,8 +922,13 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		// handle right here, return nil
 		if err != cmn.ErrGetTxBenign && !isErrGetTxSevere(err) {
 			goi.lom.UncacheDel()
+
 			if dpq.isS3 {
-				s3.WriteErr(w, r, err, ecode)
+				ei := s3.ErrInfo{Err: err, Status: ecode}
+				if ecode == http.StatusNotFound {
+					ei.Code = s3.NoSuchKey
+				}
+				s3.WriteErr(w, r, ei)
 			} else {
 				t._erris(w, r, err, ecode, !goi.isIOErr /*silent*/)
 			}
