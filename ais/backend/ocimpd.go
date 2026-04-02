@@ -35,6 +35,7 @@ type ociMPDChildStruct struct {
 type ociMPDStruct struct {
 	sync.Mutex      // serializes accessed to .nextStart, .closeInProgress, & .childList
 	bp              *ocibp
+	client          *ocios.ObjectStorageClient
 	bucketName      string
 	objectName      string
 	objectSize      int64
@@ -57,7 +58,7 @@ type ociMPDStruct struct {
 // Errors will be reported as and when each such child is called upon to return its data. The
 // role of GetObjectReaderViaMPD is merely to set up those children to return their data (or
 // errors obtaining their data) via the returned io.ReadCloser (res.R).
-func (bp *ocibp) getObjReaderViaMPD(lom *core.LOM, resp *ocios.GetObjectResponse) (res core.GetReaderResult) {
+func (bp *ocibp) getObjReaderViaMPD(lom *core.LOM, client *ocios.ObjectStorageClient, resp *ocios.GetObjectResponse) (res core.GetReaderResult) {
 	var (
 		cloudBck      = lom.Bck().RemoteBck()
 		err           error
@@ -107,6 +108,7 @@ func (bp *ocibp) getObjReaderViaMPD(lom *core.LOM, resp *ocios.GetObjectResponse
 
 	mpd = &ociMPDStruct{
 		bp:         bp,
+		client:     client,
 		bucketName: cloudBck.Name,
 		objectName: lom.ObjName,
 		objectSize: objectSize,
@@ -166,7 +168,7 @@ func (mpdChild *ociMPDChildStruct) Run() {
 		Range:         &rangeHeader,
 	}
 
-	resp, err := mpdChild.mpd.bp.client.GetObject(context.Background(), req)
+	resp, err := mpdChild.mpd.client.GetObject(context.Background(), req)
 	if err == nil {
 		mpdChild.rc = resp.Content
 	} else {

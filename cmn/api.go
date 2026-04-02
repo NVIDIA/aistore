@@ -75,6 +75,7 @@ type (
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
 		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
 		GCP  ExtraPropsGCP  `json:"gcp,omitempty" list:"omitempty"`
+                OCI  ExtraPropsOCI  `json:"oci,omitempty" list:"omitempty"`
 		// e.g. "team=alpha;project=beta;id=123"
 		Custom string `json:"custom,omitempty"`
 	}
@@ -82,6 +83,7 @@ type (
 		AWS  *ExtraPropsAWSToSet  `json:"aws,omitempty"`
 		HTTP *ExtraPropsHTTPToSet `json:"http,omitempty"`
 		GCP  *ExtraPropsGCPToSet  `json:"gcp,omitempty"`
+                OCI  *ExtraPropsOCIToSet  `json:"oci,omitempty"`
 		// beware: any change to this field is still a version-bump + metasync
 		Custom *string `json:"custom,omitempty"`
 	}
@@ -127,6 +129,15 @@ type (
 	}
 	ExtraPropsGCPToSet struct {
 		ApplicationCreds *string `json:"application_creds,omitempty"`
+	}
+
+	ExtraPropsOCI struct {
+		// OCI region for this bucket.
+		// Overrides the global OCI_REGION environment / CLI config default.
+		Region string `json:"region,omitempty"`
+	}
+	ExtraPropsOCIToSet struct {
+		Region *string `json:"region,omitempty"`
 	}
 
 	ExtraPropsHTTP struct {
@@ -320,6 +331,7 @@ const (
 
 	maxAWSProfileLen = 256
 	maxAWSRegionLen  = 64
+        maxOCIRegionLen  = 64
 
 	maxCustomLen = 128
 )
@@ -372,6 +384,8 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 		return c.AWS.validate()
 	case apc.GCP:
 		return c.GCP.validate()
+	case apc.OCI:
+		return c.OCI.validate()
 	}
 	return nil
 }
@@ -447,6 +461,18 @@ func (conf *ExtraPropsGCP) validate() error {
 	}
 	if clean := filepath.Clean(path); clean != path {
 		return fmt.Errorf("%s %q: expecting clean path %q", etag, path, clean)
+	}
+	return nil
+}
+
+func (conf *ExtraPropsOCI) validate() error {
+	if r := conf.Region; r != "" {
+		if strings.TrimSpace(r) != r {
+			return errors.New("invalid extra.oci.region: leading/trailing whitespace")
+		}
+		if len(r) > maxOCIRegionLen {
+			return fmt.Errorf("invalid extra.oci.region: too long (%d > %d)", len(r), maxOCIRegionLen)
+		}
 	}
 	return nil
 }

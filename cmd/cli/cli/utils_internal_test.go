@@ -5,6 +5,7 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"reflect"
@@ -569,4 +570,16 @@ func TestCheckCertExpiration(t *testing.T) {
 	info = cos.StrKVs{}
 	result = checkCertExpiration(c, info, node)
 	tassert.Errorf(t, result == 0, "expected 0 for no issues case, got %d", result)
+}
+
+func TestBpropsFilterExtraOCI(t *testing.T) {
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	tassert.CheckFatal(t, fs.Parse([]string{apc.OCIScheme}))
+
+	app := cli.NewApp()
+	app.ErrWriter = io.Discard
+	c := cli.NewContext(app, fs, nil)
+
+	tassert.Fatalf(t, bpropsFilterExtra(c, "extra.oci.region"), "expected OCI extra props to be included")
+	tassert.Fatalf(t, !bpropsFilterExtra(c, "extra.aws.profile"), "expected non-OCI extra props to be excluded")
 }

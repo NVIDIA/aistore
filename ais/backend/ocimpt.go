@@ -40,7 +40,7 @@ import (
 // a pre-configured backend instance containing stateful components:
 // - namespace (OCI-specific namespace identifier)
 // - configurationProvider (authentication setup)
-// - client (_single_ instance shared across all oc:// buckets
+// - clients (region-keyed cache shared across oc:// buckets;
 //        expensive to create (DNS, auth handshake)))
 // - compartmentOCID and various MPU settings
 //
@@ -49,6 +49,7 @@ import (
 
 func (bp *ocibp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) {
 	var (
+		client                       *ocios.ObjectStorageClient
 		cloudBck                     = lom.Bck().RemoteBck()
 		createMultipartUploadRequest = ocios.CreateMultipartUploadRequest{
 			NamespaceName: &bp.namespace,
@@ -62,8 +63,13 @@ func (bp *ocibp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) {
 		uploadID                      string
 		ecode                         int
 	)
+	client, _, err = bp.ociClient(cloudBck)
+	if err != nil {
+		ecode, err = ociClientToAISError("CreateMultipartUpload", cloudBck.Name, lom.ObjName, err)
+		return "", ecode, err
+	}
 
-	createMultipartUploadResponse, err = bp.client.CreateMultipartUpload(context.Background(), createMultipartUploadRequest)
+	createMultipartUploadResponse, err = client.CreateMultipartUpload(context.Background(), createMultipartUploadRequest)
 
 	if err == nil {
 		uploadID = *createMultipartUploadResponse.MultipartUpload.UploadId
@@ -76,6 +82,7 @@ func (bp *ocibp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) {
 
 func (bp *ocibp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
 	var (
+		client            *ocios.ObjectStorageClient
 		cloudBck          = lom.Bck().RemoteBck()
 		partNumInt        = int(partNum)
 		uploadPartRequest = ocios.UploadPartRequest{
@@ -92,8 +99,13 @@ func (bp *ocibp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request
 		etag               string
 		ecode              int
 	)
+	client, _, err = bp.ociClient(cloudBck)
+	if err != nil {
+		ecode, err = ociClientToAISError("UploadPart", cloudBck.Name, lom.ObjName, err)
+		return "", ecode, err
+	}
 
-	uploadPartResponse, err = bp.client.UploadPart(context.Background(), uploadPartRequest)
+	uploadPartResponse, err = client.UploadPart(context.Background(), uploadPartRequest)
 
 	if err == nil {
 		etag = *uploadPartResponse.ETag
@@ -106,6 +118,7 @@ func (bp *ocibp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request
 
 func (bp *ocibp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (string, string, int, error) {
 	var (
+		client                       *ocios.ObjectStorageClient
 		cloudBck                     = lom.Bck().RemoteBck()
 		commitMultipartUploadRequest = ocios.CommitMultipartUploadRequest{
 			NamespaceName: &bp.namespace,
@@ -121,6 +134,11 @@ func (bp *ocibp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ 
 		etag                          string
 		ecode                         int
 	)
+	client, _, err = bp.ociClient(cloudBck)
+	if err != nil {
+		ecode, err = ociClientToAISError("CommitMultipartUpload", cloudBck.Name, lom.ObjName, err)
+		return "", "", ecode, err
+	}
 
 	// Convert apc.MptCompletedParts to OCI types
 	for _, completedPart := range parts {
@@ -132,7 +150,7 @@ func (bp *ocibp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ 
 			})
 	}
 
-	commitMultipartUploadResponse, err = bp.client.CommitMultipartUpload(context.Background(), commitMultipartUploadRequest)
+	commitMultipartUploadResponse, err = client.CommitMultipartUpload(context.Background(), commitMultipartUploadRequest)
 
 	if err == nil {
 		etag = *commitMultipartUploadResponse.ETag
@@ -145,6 +163,7 @@ func (bp *ocibp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ 
 
 func (bp *ocibp) AbortMpt(lom *core.LOM, _ *http.Request, uploadID string) (int, error) {
 	var (
+		client                      *ocios.ObjectStorageClient
 		cloudBck                    = lom.Bck().RemoteBck()
 		abortMultipartUploadRequest = ocios.AbortMultipartUploadRequest{
 			NamespaceName: &bp.namespace,
@@ -156,8 +175,12 @@ func (bp *ocibp) AbortMpt(lom *core.LOM, _ *http.Request, uploadID string) (int,
 		err                          error
 		ecode                        int
 	)
+	client, _, err = bp.ociClient(cloudBck)
+	if err != nil {
+		return ociClientToAISError("AbortMultipartUpload", cloudBck.Name, lom.ObjName, err)
+	}
 
-	abortMultipartUploadResponse, err = bp.client.AbortMultipartUpload(context.Background(), abortMultipartUploadRequest)
+	abortMultipartUploadResponse, err = client.AbortMultipartUpload(context.Background(), abortMultipartUploadRequest)
 
 	if err != nil {
 		ecode, err = ociErrorToAISError(fmt.Sprintf("AbortMultipartUpload(%s)", uploadID), cloudBck.Name, lom.ObjName, "", err, abortMultipartUploadResponse.RawResponse)
