@@ -26,6 +26,7 @@ Feature flags are now organized with descriptive tags to help users understand t
 - **Performance impact**: `perf`, `overhead`
 - **Network/operations**: `net`, `ops`, `security`
 - **Compatibility**: `compat`, `promote`
+- **Deployment**: `deploy`
 
 ### Integrity impact indicators
 
@@ -70,7 +71,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Trust-Crypto-Safe-Checksums` | `integrity+,overhead` | when checking whether objects are identical trust only cryptographically secure checksums |
 | `S3-ListObjectVersions` | `s3,overhead` | when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only) |
 | `Enable-Detailed-Prom-Metrics` | `telemetry,overhead` | include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction |
-| `System-Reserved` | `ops` | system-reserved (do not set: the flag may be redefined or removed at any time) |
+| `Force-Container-CPU-Mem` | `deploy` | force container-based CPU and memory metrics when automated environment detection fails; unlike all other feature flags, takes effect only at startup (not at runtime) |
 | `Resume-Interrupted-MPU` | `mpu,ops` | resume interrupted multipart uploads from persisted partial manifests |
 | `Keep-Unknown-FQN` | `integrity?,ops` | do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup') |
 | `Load-Balance-GET` | `perf` | when bucket is n-way mirrored read object replica from the least-utilized mountpath |
@@ -82,7 +83,7 @@ $ ais config cluster features <TAB-TAB>
 
 Enforce-IntraCluster-Access            S3-Presigned-Request                   S3-ListObjectVersions
 Skip-Loading-VersionChecksum-MD        Do-not-Optimize-Listing-Virtual-Dirs   Enable-Detailed-Prom-Metrics
-Do-not-Auto-Detect-FileShare           Disable-Cold-GET                       System-Reserved
+Do-not-Auto-Detect-FileShare           Disable-Cold-GET                       Force-Container-CPU-Mem
 S3-API-via-Root                        Streaming-Cold-GET                     Resume-Interrupted-MPU
 Fsync-PUT                              S3-Reverse-Proxy                       Keep-Unknown-FQN
 LZ4-Block-1MB                          S3-Use-Path-Style                      Load-Balance-GET
@@ -122,7 +123,7 @@ Do-not-Set-Control-Plane-ToS         net,ops                intra-cluster contro
 Trust-Crypto-Safe-Checksums          integrity+,overhead    when checking whether objects are identical trust only cryptographically secure checksums
 S3-ListObjectVersions                s3,overhead            when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 Enable-Detailed-Prom-Metrics         telemetry,overhead     include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction
-System-Reserved                      ops                    system-reserved (do not set: the flag may be redefined or removed at any time)
+Force-Container-CPU-Mem              deploy                 force container-based CPU and memory metrics when automated environment detection fails (startup only)
 Resume-Interrupted-MPU               mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 Keep-Unknown-FQN                     integrity?,ops         do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 Load-Balance-GET                     perf                   when bucket is n-way mirrored read object replica from the least-utilized mountpath               <<< colored
@@ -165,7 +166,7 @@ Do-not-Set-Control-Plane-ToS         net,ops                intra-cluster contro
 Trust-Crypto-Safe-Checksums          integrity+,overhead    when checking whether objects are identical trust only cryptographically secure checksums
 S3-ListObjectVersions                s3,overhead            when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 Enable-Detailed-Prom-Metrics         telemetry,overhead     include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction
-System-Reserved                      ops                    system-reserved (do not set: the flag may be redefined or removed at any time)
+Force-Container-CPU-Mem              deploy                 force container-based CPU and memory metrics when automated environment detection fails (startup only)
 Resume-Interrupted-MPU               mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 Keep-Unknown-FQN                     integrity?,ops         do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 Load-Balance-GET                     perf                   when bucket is n-way mirrored read object replica from the least-utilized mountpath               <<< colored

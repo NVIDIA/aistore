@@ -63,12 +63,12 @@ ais show cluster --help
 ```console
 $ ais show cluster
 
-PROXY            MEM AVAIL  LOAD AVERAGE    UPTIME      STATUS  ALERT
-p[KKFpNjqo][P]   127.77GiB  [5.2 7.2 3.1]   108h30m40s  online  **tls-cert-will-soon-expire**
+PROXY            MEM AVAIL  SYS CPU(%)  UPTIME      STATUS  ALERT
+p[KKFpNjqo][P]   127.77GiB  32%         108h30m40s  online  **tls-cert-will-soon-expire**
 ...
 
-TARGET           MEM AVAIL  CAP USED(%)     CAP AVAIL   LOAD AVERAGE    UPTIME      STATUS  ALERT
-t[pDztYhhb]      98.02GiB   16%             960.824GiB  [9.1 13.4 8.3]  108h30m1s  online   **tls-cert-will-soon-expire**
+TARGET           MEM AVAIL  CAP USED(%)     CAP AVAIL   SYS CPU(%)  UPTIME      STATUS  ALERT
+t[pDztYhhb]      98.02GiB   16%             960.824GiB  61%         108h30m1s   online  **tls-cert-will-soon-expire**
 ...
 ...
 ```

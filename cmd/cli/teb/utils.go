@@ -161,8 +161,19 @@ func (h *StatsAndStatusHelper) onlineStatus() []string { return h.toSlice("statu
 func (h *StatsAndStatusHelper) deployments() []string  { return h.toSlice("deployment") }
 func (h *StatsAndStatusHelper) versions() []string     { return h.toSlice("ais_version") }
 func (h *StatsAndStatusHelper) buildTimes() []string   { return h.toSlice("build_time") }
-func (h *StatsAndStatusHelper) rebalance() []string    { return h.toSlice("rebalance_snap") }
 func (h *StatsAndStatusHelper) pods() []string         { return h.toSlice("k8s_pod_name") }
+
+func (h *StatsAndStatusHelper) rebalance() []string {
+	set := cos.NewStrSet()
+	for _, m := range []StstMap{h.Pmap, h.Tmap} {
+		for _, s := range m {
+			if v := fmtRebStatus(s.RebSnap); v != unknownVal {
+				set.Add(v)
+			}
+		}
+	}
+	return set.ToSlice()
+}
 
 // internal helper for the methods above
 func (h *StatsAndStatusHelper) toSlice(jtag string) []string {

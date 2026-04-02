@@ -295,11 +295,11 @@ $ mount | grep dev/loop
 
 ```console
 $ ais show cluster
-PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME  STATUS  VERSION         BUILD TIME
-p[BOxqibgv][P]   0.14%           27.28GiB        [1.2 1.1 1.1]   -       online  3.22.bf26375e5  2024-02-29T11:11:52-0500
+PROXY            MEM USED(%)     MEM AVAIL       SYS CPU(%)    UPTIME   STATUS    VERSION
+p[BOxqibgv][P]   0.14%           27.28GiB        2%            -        online    4.4.db3a5a4a557
 
-TARGET           MEM USED(%)     MEM AVAIL    CAP USED(%)  CAP AVAIL    LOAD AVERAGE    REBALANCE   UPTIME  STATUS  VERSION
-t[IwzSpiIm]      0.14%           27.28GiB     6%           1.770GiB     [1.2 1.1 1.1]   -           -       online  3.22.bf26375e5
+TARGET           MEM USED(%)     MEM AVAIL    CAP USED(%)  CAP AVAIL    SYS CPU(%)  REBALANCE   UPTIME  STATUS  VERSION
+t[IwzSpiIm]      0.14%           27.28GiB     6%           1.770GiB     2%          -           -       online  4.4.db3a5a4a557
 
 Summary:
    Proxies:             1
@@ -309,8 +309,8 @@ Summary:
    Status:              2 online
    Rebalance:           n/a
    Authentication:      disabled
-   Version:             3.22.bf26375e5
-   Build:               2024-02-29T11:11:52-0500
+   Version:             4.4.db3a5a4a557
+   Build:               2026-04-01T19:46:17-0400
 ```
 
 See also:

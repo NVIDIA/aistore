@@ -29,13 +29,14 @@ Given an existing AIS instance, maybe the very first command you run would be `a
 
 ```console
 $ ais show cluster
-PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME          K8s POD         STATUS
-p[DlPmJiRU]      0.01%           366.36GiB       [0.1 0.3 0.3]   526h28m20s      ais-proxy-5     online
-p[JedAkLgG][P]   0.02%           366.52GiB       [0.7 0.3 0.3]   526h27m30s      ais-proxy-7     online
+PROXY            MEM USED(%)     MEM AVAIL       SYS CPU(%)      UPTIME          K8s POD         STATUS
+p[DlPmJiRU]      0.01%           366.36GiB       1%              526h28m20s      ais-proxy-5     online
+p[JedAkLgG][P]   0.02%           366.52GiB       2%              526h27m30s      ais-proxy-7     online
 ...
 
-TARGET         MEM USED(%)  MEM AVAIL  CAP USED(%)   CAP AVAIL  LOAD AVERAGE    REBALANCE  UPTIME       K8s POD       STATUS
-t[KoplySra]    0.03%        366.37GiB  52%           8.324TiB   [0.1 0.3 0.3]   -          526h26m10s   ais-target-1  online
+TARGET         MEM USED(%)  MEM AVAIL  CAP USED(%)   CAP AVAIL   SYS CPU(%)  UPTIME       K8s POD       STATUS
+t[KoplySra]    0.03%        366.37GiB  52%           8.324TiB    7%          526h26m10s   ais-target-1  online
+...
 ...
 
 Summary:
@@ -50,11 +51,16 @@ Summary:
    Build:               ...
 ```
 
+> Use `--verbose` to additionally show `LOAD AVERAGE` columns.
+
 > Press <TAB-TAB> to see all `ais show` subcommands:
+
 ```
 $ ais show <TAB>
-auth         bucket       performance      rebalance    remote-cluster   log      etl
-object       cluster      storage          config       job              tls
+
+auth         cluster          storage          remote-cluster   log        nbi
+object       dashboard        rebalance        remote           tls
+bucket       performance      config           job              etl
 ```
 
 Next, monitoring-wise, you'd maybe run `ais show performance`, etc.
