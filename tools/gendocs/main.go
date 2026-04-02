@@ -180,13 +180,13 @@ func generateHTTPCommand(ep *endpoint, payload string) string {
 // Parse payload annotation: apc.ActCopyBck={"action": "copy-bck"}
 func parsePayload(line string) (string, string) {
 	content := strings.TrimSpace(line[len(commentWithSpace+payloadPrefix):])
-	equalsIndex := strings.Index(content, "=")
-	if equalsIndex == -1 {
+	before, after, ok := strings.Cut(content, "=")
+	if !ok {
 		return "", ""
 	}
 
-	action := strings.TrimSpace(content[:equalsIndex])
-	payload := strings.TrimSpace(content[equalsIndex+1:])
+	action := strings.TrimSpace(before)
+	payload := strings.TrimSpace(after)
 
 	return action, payload
 }
@@ -221,8 +221,8 @@ func (ep *endpointProcessor) collectGlobalPayloads() error {
 			return fmt.Errorf("failed to read file %s: %w", file, err)
 		}
 
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(string(content), "\n")
+		for line := range lines {
 			trimmedLine := strings.TrimSpace(line)
 			if strings.Contains(trimmedLine, payloadPrefix) {
 				action, payload := parsePayload(trimmedLine)
@@ -398,9 +398,9 @@ func parseActionClause(annotationLine string) []actionModel {
 	}
 
 	actionBlock := annotationLine[openIdx : openIdx+closeIdx]
-	pairs := strings.Split(actionBlock, pipe)
+	pairs := strings.SplitSeq(actionBlock, pipe)
 
-	for _, pair := range pairs {
+	for pair := range pairs {
 		parts := strings.SplitN(strings.TrimSpace(pair), equals, 2)
 		if len(parts) != 2 {
 			continue
@@ -449,9 +449,9 @@ func parseModelClause(annotationLine string) []string {
 	}
 
 	modelBlock := annotationLine[openIdx : openIdx+closeIdx]
-	modelList := strings.Split(modelBlock, pipe)
+	modelList := strings.SplitSeq(modelBlock, pipe)
 
-	for _, model := range modelList {
+	for model := range modelList {
 		model = strings.TrimSpace(model)
 		if model != "" {
 			models = append(models, model)
@@ -489,8 +489,8 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	path := strings.TrimSpace(fields[1])
 	var params []param
 	if paramString != "" {
-		paramList := strings.Split(paramString, comma)
-		for _, entry := range paramList {
+		paramList := strings.SplitSeq(paramString, comma)
+		for entry := range paramList {
 			entry = strings.TrimSpace(entry)
 			if entry == "" {
 				continue

@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -46,11 +46,9 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 			t.Fatal(err)
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			tools.Put(proxyURL, bck, keyName, r, fileSize, 0 /*numChunks*/, errCh)
-		}()
+		})
 		fileNames = append(fileNames, fileName)
 	}
 
@@ -62,11 +60,9 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 			t.Fatal(err)
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			tools.Put(proxyURL, bck, keyName, r, fileSize, 0 /*numChunks*/, errCh)
-		}()
+		})
 		fileNames = append(fileNames, fName)
 	}
 

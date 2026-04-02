@@ -116,7 +116,7 @@ func UpdateFieldValue(s any, name string, value any) error {
 
 func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, stop bool, err error) {
 	srcVal := reflect.ValueOf(v)
-	if srcVal.Kind() == reflect.Ptr {
+	if srcVal.Kind() == reflect.Pointer {
 		srcVal = srcVal.Elem()
 	}
 	for i := range srcVal.NumField() {
@@ -148,7 +148,7 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 		var allocatedStruct bool
 
 		// If the field is a pointer to a struct we must dereference it.
-		if srcValField.Kind() == reflect.Ptr && srcValField.Type().Elem().Kind() == reflect.Struct {
+		if srcValField.Kind() == reflect.Pointer && srcValField.Type().Elem().Kind() == reflect.Struct {
 			if srcValField.IsNil() {
 				if opts.OnlyRead {
 					// read-only:
@@ -262,7 +262,7 @@ func CopyProps(src, dst any, asType string, copts ...CopyPropsOpts) error {
 		opts = copts[0]
 	}
 	debug.Assertf(slices.Contains([]string{apc.Daemon, apc.Cluster}, asType), "unexpected config level: %s", asType)
-	if srcVal.Kind() == reflect.Ptr {
+	if srcVal.Kind() == reflect.Pointer {
 		srcVal = srcVal.Elem()
 	}
 	return _copyProps(srcVal, dstVal, asType, opts)
@@ -278,7 +278,7 @@ func peel2(v reflect.Value) reflect.Value {
 				return v
 			}
 			v = v.Elem()
-		case reflect.Ptr:
+		case reflect.Pointer:
 			if v.IsNil() {
 				return v
 			}
@@ -292,10 +292,10 @@ func peel2(v reflect.Value) reflect.Value {
 
 func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts) error {
 	// normalize pointers on entry
-	for srcVal.Kind() == reflect.Ptr && !srcVal.IsNil() {
+	for srcVal.Kind() == reflect.Pointer && !srcVal.IsNil() {
 		srcVal = srcVal.Elem()
 	}
-	for dstVal.Kind() == reflect.Ptr {
+	for dstVal.Kind() == reflect.Pointer {
 		if dstVal.IsNil() && dstVal.CanSet() && dstVal.Type().Elem().Kind() == reflect.Struct {
 			dstVal.Set(reflect.New(dstVal.Type().Elem()))
 		}
@@ -308,7 +308,7 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts)
 		srcVal = peel2(srcVal)
 
 		// make dst addressable inner value
-		if dstVal.Kind() == reflect.Ptr {
+		if dstVal.Kind() == reflect.Pointer {
 			if dstVal.IsNil() && dstVal.CanSet() {
 				dstVal.Set(reflect.New(dstVal.Type().Elem()))
 			}
@@ -359,7 +359,7 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts)
 		// embedded (anonymous) src struct not present by name on dst: recurse into parent
 		if !dstField.IsValid() && sf.Anonymous {
 			kind := sf.Type.Kind()
-			if kind == reflect.Ptr {
+			if kind == reflect.Pointer {
 				kind = sf.Type.Elem().Kind()
 			}
 			if kind == reflect.Struct {
@@ -413,11 +413,11 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts)
 		}
 
 		d := dstField
-		if d.Kind() == reflect.Ptr {
+		if d.Kind() == reflect.Pointer {
 			if d.IsNil() && d.CanSet() && d.Type().Elem().Kind() == reflect.Struct {
 				d.Set(reflect.New(d.Type().Elem()))
 			}
-			if d.Kind() == reflect.Ptr && d.Elem().IsValid() {
+			if d.Kind() == reflect.Pointer && d.Elem().IsValid() {
 				d = d.Elem()
 			}
 		}
@@ -434,7 +434,7 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts)
 		// not recursing - assigning
 		//
 		leafDst := dstField
-		if leafDst.Kind() == reflect.Ptr {
+		if leafDst.Kind() == reflect.Pointer {
 			// if nil, allocate only when we can set; skip otherwise
 			if leafDst.IsNil() {
 				if !leafDst.CanSet() {
@@ -517,7 +517,7 @@ func mergeMaps(src, dst any) {
 
 func getElem(a any) reflect.Value {
 	val := reflect.ValueOf(a)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		return val.Elem()
 	}
 	return val
@@ -603,7 +603,7 @@ reflectDst:
 				return err
 			}
 			dst.SetFloat(n)
-		case reflect.Ptr:
+		case reflect.Pointer:
 			dst.Set(reflect.New(dst.Type().Elem())) // set pointer to default value
 			dst = dst.Elem()                        // dereference pointer
 			goto reflectDst
@@ -644,7 +644,7 @@ reflectDst:
 			}
 			srcVal = reflect.Zero(dst.Type())
 		}
-		if dst.Kind() == reflect.Ptr {
+		if dst.Kind() == reflect.Pointer {
 			if dst.IsNil() {
 				dst.Set(reflect.New(dst.Type().Elem()))
 			}

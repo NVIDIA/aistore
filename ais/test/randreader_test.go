@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -31,11 +31,9 @@ func TestRandomReaderPutStress(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	for range numworkers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			tools.PutRR(t, baseParams, fileSize, cksumType, bck, dir, numobjects)
-		}()
+		})
 	}
 	wg.Wait()
 }

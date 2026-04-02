@@ -353,10 +353,8 @@ func TestAuthConfManagerConcurrency(t *testing.T) {
 	var ops atomic.Int64
 
 	started.Add(1)
-	done.Add(1)
 
-	go func() {
-		defer done.Done()
+	done.Go(func() {
 		// signal that the goroutine has started and cm is being read
 		started.Done()
 
@@ -365,7 +363,7 @@ func TestAuthConfManagerConcurrency(t *testing.T) {
 			cm.GetExpiry()
 			ops.Add(1)
 		}
-	}()
+	})
 
 	// wait until the goroutine is in its loop
 	started.Wait()

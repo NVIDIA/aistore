@@ -159,14 +159,12 @@ func TestDynSemaphore(t *testing.T) {
 
 	for range 10 * limit {
 		sema.Acquire()
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			ch <- i.Inc()
 			time.Sleep(time.Millisecond)
 			i.Dec()
 			sema.Release()
-			wg.Done()
-		}()
+		})
 	}
 
 	wg.Wait()

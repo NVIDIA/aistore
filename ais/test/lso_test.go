@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -895,15 +895,11 @@ func TestLsoWithRebalance(t *testing.T) {
 
 	m.puts()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		rebID = m.stopMaintenance(target)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range 15 {
 			tlog.Logfln("listing all objects, iter: %d", i)
 			lst, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
@@ -916,7 +912,7 @@ func TestLsoWithRebalance(t *testing.T) {
 
 			time.Sleep(time.Second)
 		}
-	}()
+	})
 
 	wg.Wait()
 	m.waitAndCheckCluState()

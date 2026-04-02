@@ -135,11 +135,9 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	m.proxyURL = newPrimaryURL
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		killRestorePrimary(t, m.proxyURL, false, nil)
-	}()
+	})
 
 	// delay PUTs to ensure they run during primary elections
 	time.Sleep(5 * time.Second)
@@ -405,11 +403,9 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// Get objects and register targets in parallel
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		m.gets(nil, false)
-	}()
+	})
 
 	// and join 2 targets in parallel
 	time.Sleep(time.Second)
@@ -534,11 +530,9 @@ func TestPutDuringRebalance(t *testing.T) {
 
 	// Start putting files and register target in parallel.
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		m.puts()
-	}()
+	})
 
 	// Sleep some time to wait for PUT operations to begin.
 	time.Sleep(3 * time.Second)
@@ -615,11 +609,9 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// Start getting objects
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		m.gets(nil, false)
-	}()
+	})
 
 	// Let's give gets some momentum
 	time.Sleep(time.Second * 4)
@@ -674,11 +666,9 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Start getting objects and register target in parallel.
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		m.gets(nil, false)
-	}()
+	})
 
 	rebID := m.stopMaintenance(target)
 

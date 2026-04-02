@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -492,11 +493,9 @@ func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData,
 			ReadHeaderTimeout: 10 * time.Second,
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			s.ListenAndServe()
-		}()
+		})
 
 		select {
 		case <-timer.C:
@@ -556,11 +555,9 @@ func TestMetasyncData(t *testing.T) {
 		f := func(w http.ResponseWriter, r *http.Request) {
 			cnt++
 
-			for _, v := range failCnt {
-				if v == cnt {
-					http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
-					return
-				}
+			if slices.Contains(failCnt, cnt) {
+				http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
+				return
 			}
 
 			d := make(msPayload)

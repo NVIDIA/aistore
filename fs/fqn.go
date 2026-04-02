@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -54,11 +54,11 @@ func ContainsCT(fqn, bname string) bool {
 		return false
 	}
 	ct := fqn[i+2+len(bname):]
-	j := strings.IndexByte(ct, filepath.Separator)
-	if j < 0 {
+	before, _, ok := strings.Cut(ct, cos.PathSeparator)
+	if !ok {
 		return false
 	}
-	return LikelyCT(ct[:j])
+	return LikelyCT(before)
 }
 
 ///////////////

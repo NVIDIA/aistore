@@ -641,7 +641,7 @@ func listObjectNames(p *params) (names []string, fcnt int /*num archived files*/
 			debug.Assert(msg.Flags&apc.LsArchDir != 0)
 			objName, archPath := archive.SplitAtExtension(en.Name)
 			if archPath != "" {
-				names = append(names, encodeArchName(objName, archPath)) // with `archSep` delimiter
+				names = append(names, encodeArchName(objName, archPath)) // with `archSepB` delimiter
 				fcnt++
 				continue
 			}

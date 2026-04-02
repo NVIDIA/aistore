@@ -403,9 +403,9 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, _ error) {
 
 		// apply gap (either to next range or end of the template)
 		template = template[left:]
-		right := strings.IndexByte(template, '@')
-		if right >= 0 {
-			tr.Gap = template[:right]
+		before, _, ok := strings.Cut(template, "@")
+		if ok {
+			tr.Gap = before
 		} else {
 			tr.Gap = template
 		}

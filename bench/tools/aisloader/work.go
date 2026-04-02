@@ -584,21 +584,24 @@ func shouldUsePercentage(pct int) bool {
 // within bucket conversions: {objname[, archpath]} <=> FQN
 //
 
-const archSep = '\x00'
+const (
+	archSepB = '\x00'
+	archSepS = "\x00"
+)
 
 func encodeArchName(objName, archpath string) string {
 	if archpath == "" {
 		return objName
 	}
-	debug.Assert(!strings.ContainsRune(objName, archSep))
-	debug.Assert(!strings.ContainsRune(archpath, archSep))
-	return objName + string(archSep) + archpath
+	debug.Assert(!strings.ContainsRune(objName, archSepB))
+	debug.Assert(!strings.ContainsRune(archpath, archSepB))
+	return objName + archSepS + archpath
 }
 
 func decodeArchName(s string) (objName, archpath string) {
-	i := strings.IndexByte(s, archSep)
-	if i < 0 {
+	before, after, ok := strings.Cut(s, archSepS)
+	if !ok {
 		return s, ""
 	}
-	return s[:i], s[i+1:]
+	return before, after
 }

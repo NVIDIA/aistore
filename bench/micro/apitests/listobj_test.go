@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package apitests_test
 
@@ -44,12 +44,10 @@ func createAndFillBucket(b *testing.B, objCnt int, u string) cmn.Bck {
 
 	// Iterations of PUT
 	for range workerCount {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			objDir := tools.RandomObjDir(10, 5)
 			tools.PutRR(b, baseParams, 128, cos.ChecksumCesXxh, bck, objDir, objCntPerWorker)
-		}()
+		})
 	}
 	wg.Wait()
 	return bck

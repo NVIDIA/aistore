@@ -1,6 +1,6 @@
 // Package frandread is a file-reading benchmark that makes a special effort to visit the files randomly and equally.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -102,8 +102,8 @@ func main() {
 	if cliv.pctPut == 0 {
 		// 1. open and read prepared list of file names
 		if cliv.dirs != "" {
-			dirs := strings.Split(cliv.dirs, ",")
-			for _, dir := range dirs {
+			dirs := strings.SplitSeq(cliv.dirs, ",")
+			for dir := range dirs {
 				fileNames = fileNamesFromDir(dir, fileNames)
 			}
 		} else {

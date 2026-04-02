@@ -818,11 +818,9 @@ func testGetDuringResilver(t *testing.T, num int, chunked bool) {
 
 	// Start getting objects and enable mountpaths in parallel
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		m.getsUntilStop()
-	}()
+	})
 
 	for _, mp := range mpaths {
 		sleep := time.Duration(600+rand.IntN(900)) * time.Millisecond

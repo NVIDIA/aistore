@@ -44,12 +44,12 @@ func extractFunctionName(line string) string {
 	}
 
 	// Extract function name
-	openParenIndex := strings.Index(withoutFunc, openParen)
-	if openParenIndex == -1 {
+	before, _, ok := strings.Cut(withoutFunc, openParen)
+	if !ok {
 		return ""
 	}
 
-	return strings.TrimSpace(withoutFunc[:openParenIndex])
+	return strings.TrimSpace(before)
 }
 
 // Creates a unique operation ID by combining function name with path segments and method
@@ -86,9 +86,9 @@ func generateUniqueOperationID(functionName, method, path string) string {
 // Determines API Class based on the endpoint path by parsing the first segment
 func determineTag(path string) string {
 	cleanPath := strings.Trim(path, "/")
-	segments := strings.Split(cleanPath, "/")
+	segments := strings.SplitSeq(cleanPath, "/")
 
-	for _, segment := range segments {
+	for segment := range segments {
 		// Skip version segments like "v1"
 		if strings.HasPrefix(segment, "v") && len(segment) <= 3 {
 			continue

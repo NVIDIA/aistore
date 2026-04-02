@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"path/filepath"
 	"strings"
 )
@@ -58,9 +59,7 @@ func (ps *paramSet) processParamFile(filePath string) error {
 	packagePrefix := node.Name.Name + dot
 	newParams := extractQparamConstants(node, packagePrefix)
 
-	for k, v := range newParams {
-		(*ps)[k] = v
-	}
+	maps.Copy((*ps), newParams)
 	return nil
 }
 

@@ -1,6 +1,6 @@
 // Packager docker provides common utilities for managing containerized AIS deployments
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package docker
 
@@ -35,9 +35,9 @@ func init() {
 	}
 
 	r := regexp.MustCompile(pattern)
-	lines := strings.Split(string(bytes), "\n")
+	lines := strings.SplitSeq(string(bytes), "\n")
 	// Checks to see if there is any container P_proxy_{jj}" running
-	for _, line := range lines {
+	for line := range lines {
 		match := r.MatchString(line)
 		if match {
 			dockerRunning = true
@@ -64,8 +64,8 @@ func clustersMap() (map[int]int, error) {
 	clusterRegex := regexp.MustCompile(`ais(\d+)_(target|proxy)_\d+`)
 
 	m := make(map[int]int)
-	lines := strings.Split(string(bytes), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(bytes), "\n")
+	for line := range lines {
 		if !clusterRegex.MatchString(line) {
 			continue
 		}
@@ -113,8 +113,8 @@ func nodesInCluster(i int, prefix string) (ans []string) {
 		return
 	}
 	targetPrefix := prefixStr + strconv.Itoa(i) + prefix
-	lines := strings.Split(string(bytes), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(bytes), "\n")
+	for line := range lines {
 		if strings.Contains(line, targetPrefix) {
 			ans = append(ans, strings.Trim(line, "\""))
 		}

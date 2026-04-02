@@ -1196,11 +1196,9 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 				return
 			case <-ticker.C:
 				objName := fmt.Sprintf(o.pattern, o.objCount+numCreated)
-				wgPut.Add(1)
-				go func() {
-					defer wgPut.Done()
+				wgPut.Go(func() {
 					putRandomFile(t, baseParams, bck, objName, cos.KiB)
-				}()
+				})
 				numCreated++
 			}
 		}

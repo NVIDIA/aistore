@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -214,22 +214,18 @@ func TestAuth_RevokedTokensMap_Concurrency(t *testing.T) {
 	r := newRevokedTokensMap()
 	wg := sync.WaitGroup{}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range 100 {
 			err := r.update(&tokenList{Tokens: []string{fmt.Sprintf("tok-%d", i)}})
 			tassert.Error(t, err == nil, "expected manual token update to succeed")
 		}
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	})
+	wg.Go(func() {
 		for i := range 100 {
 			_ = r.contains(fmt.Sprintf("tok-%d", i))
 			_ = r.getAll()
 		}
-	}()
+	})
 	wg.Wait()
 	// No assertion here as success is absence of data race or panic.
 }

@@ -657,11 +657,9 @@ func TestDeleteList(t *testing.T) {
 
 			keyname := fmt.Sprintf("%s%d", prefix, i)
 
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				tools.Put(proxyURL, b, keyname, r, fileSize /*size*/, 0 /*numChunks*/, errCh)
-			}()
+			})
 			files = append(files, keyname)
 		}
 		wg.Wait()

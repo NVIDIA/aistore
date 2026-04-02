@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -254,9 +254,9 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 		num   int64
 	)
 	for _, ln := range lines {
-		i := strings.Index(ln, lpiGenPrefix)
-		if i >= 0 {
-			s := ln[i+len(lpiGenPrefix):]
+		_, after, ok := strings.Cut(ln, lpiGenPrefix)
+		if ok {
+			s := after
 			num, err = strconv.ParseInt(s, 10, 64)
 			tassert.CheckFatal(t, err)
 		}

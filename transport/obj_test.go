@@ -341,21 +341,19 @@ func TestSendCallback(t *testing.T) {
 	}
 }
 
-func _ptrstr(s string) *string { return &s }
-
 func TestObjAttrs(t *testing.T) {
 	testAttrs := []cmn.ObjAttrs{
 		{
 			Size:  1024,
 			Atime: 1024,
 			Cksum: cos.NewCksum("", ""),
-			Ver:   _ptrstr("102.44"),
+			Ver:   new("102.44"),
 		},
 		{
 			Size:  1024,
 			Atime: math.MaxInt64,
 			Cksum: cos.NewCksum(cos.ChecksumCesXxh, "120421"),
-			Ver:   _ptrstr("102.44"),
+			Ver:   new("102.44"),
 		},
 		{
 			Size:  0,

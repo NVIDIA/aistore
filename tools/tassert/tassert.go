@@ -1,6 +1,6 @@
 // Package tassert provides common asserts for tests
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package tassert
 
@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -54,10 +55,8 @@ func DoAndCheckResp(tb testing.TB, client *http.Client, req *http.Request, statu
 	resp, err := client.Do(req)
 	CheckFatal(tb, err)
 	resp.Body.Close()
-	for _, code := range statusCode {
-		if resp.StatusCode == code {
-			return
-		}
+	if slices.Contains(statusCode, resp.StatusCode) {
+		return
 	}
 	Errorf(tb, false, "expected %v status code, got %d", statusCode, resp.StatusCode)
 }

@@ -51,7 +51,7 @@ func UnsafeBptr(s *string) *[]byte {
 // (see cmn/gco.Clone() for special handling)
 func CopyStruct(dst, src any) {
 	x := reflect.ValueOf(src)
-	debug.Assert(x.Kind() == reflect.Ptr)
+	debug.Assert(x.Kind() == reflect.Pointer)
 	starX := x.Elem()
 	y := reflect.New(starX.Type())
 	starY := y.Elem()
@@ -62,7 +62,7 @@ func CopyStruct(dst, src any) {
 // whether v.Kind() supports IsNil()
 func Nilable(k reflect.Kind) bool {
 	switch k {
-	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Func, reflect.Chan, reflect.UnsafePointer:
+	case reflect.Pointer, reflect.Interface, reflect.Slice, reflect.Map, reflect.Func, reflect.Chan, reflect.UnsafePointer:
 		return true
 	default:
 		return false
