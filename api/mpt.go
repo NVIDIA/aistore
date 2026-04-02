@@ -55,8 +55,8 @@ type (
 		callback  MpdCB
 		startTime int64
 		callAfter int64
-		current   int64 // bytes downloaded (atomic)
 		total     int64
+		current   atomic.Int64
 		done      bool
 	}
 	MpdCB func(*MpdCounter)
@@ -373,7 +373,7 @@ func (w *mpdWorker) run() {
 		}
 		// progress callback
 		if w.counter != nil {
-			atomic.AddInt64(&w.counter.current, chunk.length)
+			w.counter.current.Add(chunk.length)
 			if w.counter.mustCall() {
 				w.counter.callback(w.counter)
 			}
@@ -409,7 +409,7 @@ func mptDownloadChunkRange(bp BaseParams, bck cmn.Bck, objName string, writer io
 ////////////////
 
 func (c *MpdCounter) IsFinished() bool { return c.done }
-func (c *MpdCounter) Current() int64   { return atomic.LoadInt64(&c.current) }
+func (c *MpdCounter) Current() int64   { return c.current.Load() }
 func (c *MpdCounter) Total() int64     { return c.total }
 
 func (c *MpdCounter) mustCall() bool {

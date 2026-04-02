@@ -29,7 +29,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           # NOTE: See `lint-update-ci` target in Makefile.
-          version: v2.11.1
+          version: v2.11.4
           args: --timeout=30m
 
       - name: Lint go

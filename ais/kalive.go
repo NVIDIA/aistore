@@ -369,28 +369,35 @@ func (pkr *palive) _pre(ctx *smapModifier, clone *smapX) error {
 	if !ctx.smap.isPrimary(pkr.p.si) {
 		return newErrNotPrimary(pkr.p.si, ctx.smap)
 	}
-	metaction := "keepalive: removing ["
-	cnt := 0
+
+	var (
+		cnt int
+		sb  cos.SB
+	)
+	sb.Grow(96)
+	sb.WriteString("keepalive: removing [")
 loop:
 	for {
 		select {
 		case sid := <-pkr.toRemoveCh:
-			metaction += " ["
+			sb.WriteString(" [")
 			switch {
 			case clone.GetProxy(sid) != nil:
 				clone.delProxy(sid)
 				clone.staffIC()
-				metaction += apc.Proxy
+				sb.WriteString(apc.Proxy)
 				cnt++
 			case clone.GetTarget(sid) != nil:
 				clone.delTarget(sid)
-				metaction += apc.Target
+				sb.WriteString(apc.Target)
 				cnt++
 			default:
-				metaction += unknownDaemonID
+				sb.WriteString(unknownDaemonID) // (unlikely)
 				nlog.Warningf("node %s not present in the %s (old %s)", sid, clone, ctx.smap)
 			}
-			metaction += ":" + sid + "] "
+			sb.WriteUint8(':')
+			sb.WriteString(sid)
+			sb.WriteString("] ")
 
 			// Remove reverse proxy entry for the node.
 			pkr.p.rproxy.nodes.Delete(sid)
@@ -398,7 +405,8 @@ loop:
 			break loop
 		}
 	}
-	metaction += "]"
+	sb.WriteUint8(']')
+	metaction := sb.String()
 	if cnt == 0 {
 		return fmt.Errorf("%s: nothing to do [%s, %s]", pkr.p.si, ctx.smap.StringEx(), metaction)
 	}

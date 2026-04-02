@@ -433,6 +433,7 @@ func propVal(op *cmn.ObjectPropsV2, name string, bck cmn.Bck, objName string) st
 	return ""
 }
 
+//nolint:modernize // keeping old-style atomics
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 	lst, err := api.ListObjects(apiBP, bck, nil, api.ListArgs{})
 	if err != nil {

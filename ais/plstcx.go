@@ -469,9 +469,8 @@ func dedupLso(entries cmn.LsoEntries, maxSize int) []*cmn.LsoEnt {
 	return entries[:j]
 }
 
-// NBI merge: targets are resumable via seekAfter(token), inventories are HRW-disjoint.
-// Each target returns up to pageSize entries > token. Proxy merge-sorts and truncates.
-// Entries above the cut will be re-emitted by their owning target on the next call.
+// Merge at the speed of the "slowest" target lexicographically.
+// Entries above `minToken` (see below) will be re-emitted by their owning target on the next call.
 func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
 	var (
 		minToken string

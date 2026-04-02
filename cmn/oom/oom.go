@@ -6,20 +6,13 @@ package oom
 
 import (
 	rdebug "runtime/debug"
-	ratomic "sync/atomic"
 	"time"
+
+	"sync/atomic"
 
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
-
-// TODO below
-
-// FreeToOS executes in a separate goroutine with at least so-many minutes
-// between the runs. It calls GC and returns allocated memory to the operating system.
-// Notes:
-// - forceTime (below) is expected to be >> the time spent in the goroutine
-// - unlikely overlap is handled via `running` atomic
 
 const (
 	ivalTime  = 32 * time.Minute
@@ -27,15 +20,15 @@ const (
 )
 
 var (
-	last    int64
-	running int64
+	last    atomic.Int64
+	running atomic.Int64
 )
 
 func FreeToOS(force bool) bool {
 	var (
 		since time.Duration
 		now   = mono.NanoTime()
-		prev  = ratomic.LoadInt64(&last)
+		prev  = last.Load()
 		ival  = ivalTime
 	)
 	if force {
@@ -48,7 +41,7 @@ func FreeToOS(force bool) bool {
 			return false
 		}
 	}
-	if !ratomic.CompareAndSwapInt64(&running, 0, now) {
+	if !running.CompareAndSwap(0, now) {
 		nlog.Infoln("still running [", since, "]")
 		return false
 	}
@@ -63,8 +56,6 @@ func do(started int64) {
 	now := mono.NanoTime()
 	nlog.Warningln("free-mem runtime:", time.Duration(now-started))
 
-	// TODO: check mem pressure right away and, possibly, repeat after a while
-
-	ratomic.StoreInt64(&last, now)
-	ratomic.StoreInt64(&running, 0)
+	last.Store(now)
+	running.Store(0)
 }
