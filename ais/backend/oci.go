@@ -14,7 +14,7 @@ package backend
 //   5) Add MPD stress (and benchmarking?)
 //   6) Add support for object versioning
 //   7) Resolve test:long:oci CI Pipeline failure in TestMultiProxy
-//   8) Support "bucket props" that also avoids ENV OCI_COMPARTMENT_OCID
+//   8) Support remaining OCI bucket props (for example, compartment overrides)
 //   9) Define our own "rcFile" equivalent if desired (preferably in something like JSON)
 //  10) Add in support for OCI SDK's rcFile if desired (perhaps in lieu of 9)
 
@@ -41,6 +41,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 
 	ocicmn "github.com/oracle/oci-go-sdk/v65/common"
+	ociauth "github.com/oracle/oci-go-sdk/v65/common/auth"
 	ocios "github.com/oracle/oci-go-sdk/v65/objectstorage"
 )
 
@@ -86,6 +87,8 @@ type ocibp struct {
 	sync.Mutex            // serializes access to .mpChildPendingList & .mpChildActiveCount
 	t                     core.TargetPut
 	configurationProvider ocicmn.ConfigurationProvider
+	clientsMu             sync.Mutex
+	defaultRegion         string
 	compartmentOCID       string
 	maxPageSize           int64
 	mpdSegmentMaxSize     int64
@@ -97,13 +100,20 @@ type ocibp struct {
 	mpThreadPoolSize      int64
 	mpChildPendingList    *list.List
 	mpChildActiveCount    int64
-	client                ocios.ObjectStorageClient
+	clients               sync.Map // map[string]*ocios.ObjectStorageClient, keyed by region
 	namespace             string
 	base
 }
 
 // interface guard
 var _ core.Backend = (*ocibp)(nil)
+
+var newOCIInstancePrincipalProvider = func(region string) (ocicmn.ConfigurationProvider, error) {
+	if region == "" {
+		return ociauth.InstancePrincipalConfigurationProvider()
+	}
+	return ociauth.InstancePrincipalConfigurationProviderForRegion(ocicmn.StringToRegion(region))
+}
 
 func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
 	bp := &ocibp{
@@ -121,13 +131,12 @@ func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 		return nil, err
 	}
 
-	client, err := ocios.NewObjectStorageClientWithConfigurationProvider(bp.configurationProvider)
+	client, _, err := bp.ociClient(nil)
 	if err != nil {
 		_, err = ociErrorToAISError("NewOCI(client create)", "", "", "", err, nil)
 		return nil, err
 	}
-	bp.client = client
-	resp, err := bp.client.GetNamespace(context.Background(), ocios.GetNamespaceRequest{})
+	resp, err := client.GetNamespace(context.Background(), ocios.GetNamespaceRequest{})
 	if err != nil {
 		_, err = ociErrorToAISError("NewOCI(GetNamespace)", "", "", "", err, resp)
 		return nil, err
@@ -141,8 +150,10 @@ func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 }
 
 // fetchCliConfig populates bp with configurationProvider and compartmentOCID fetched
-// from ENVs while defaulting to their corresponding key values from the configFile
-// (selected via the optional OCI_CLI_CONFIG_FILE ENV or default ~/.oci/config).
+// from ENVs. By default, it resolves user-principal auth via an OCI CLI config file
+// (selected via the optional OCI_CLI_CONFIG_FILE ENV or default ~/.oci/config). When
+// OCI_INSTANCE_PRINCIPAL_AUTH is set to a true value, it instead uses OCI's instance
+// principal provider and skips CLI config loading entirely.
 //
 // OCI's CLI also supports configuration of a default Profile and a CompartmentOCID
 // in an rcFile, but we will not support that here. The Profile may already be selected
@@ -163,6 +174,7 @@ func (bp *ocibp) fetchCliConfig() (err error) {
 	var (
 		configFileProvider ocicmn.ConfigurationProvider
 		fingerprint        string
+		instancePrincipal  bool
 		privateKey         string
 		profile            string
 		region             string
@@ -170,11 +182,32 @@ func (bp *ocibp) fetchCliConfig() (err error) {
 		userOCID           string
 	)
 
+	if instancePrincipal, err = bp.useInstancePrincipalAuth(); err != nil {
+		return err
+	}
+
 	if profile = os.Getenv(env.OCIProfile); profile == "" {
 		profile = profileDefault
 	}
 
 	bp.compartmentOCID = os.Getenv(env.OCICompartmentOCID)
+	region = os.Getenv(env.OCIRegion)
+
+	if instancePrincipal {
+		if bp.configurationProvider, err = newOCIInstancePrincipalProvider(region); err != nil {
+			return err
+		}
+		if region == "" {
+			if region, err = bp.configurationProvider.Region(); err != nil {
+				return err
+			}
+		}
+		if region == "" {
+			return fmt.Errorf("missing OCI region: set %s or ensure instance principal resolves a default region", env.OCIRegion)
+		}
+		bp.defaultRegion = region
+		return nil
+	}
 
 	configFilePath := os.Getenv(env.OCIConfigFilePath)
 	if configFilePath == "" {
@@ -196,7 +229,7 @@ func (bp *ocibp) fetchCliConfig() (err error) {
 			userOCID = valueFromConfigFile
 		}
 	}
-	if region = os.Getenv(env.OCIRegion); region == "" {
+	if region == "" {
 		valueFromConfigFile, err := configFileProvider.Region()
 		if err == nil {
 			region = valueFromConfigFile
@@ -229,8 +262,24 @@ func (bp *ocibp) fetchCliConfig() (err error) {
 		privateKey,
 		nil,
 	)
+	if region == "" {
+		return fmt.Errorf("missing OCI region: set %s or configure region in %s", env.OCIRegion, configFilePath)
+	}
+	bp.defaultRegion = region
 
 	return nil
+}
+
+func (*ocibp) useInstancePrincipalAuth() (bool, error) {
+	s := os.Getenv(env.OCIInstancePrincipalAuth)
+	if s == "" {
+		return false, nil
+	}
+	enabled, err := cos.ParseBool(s)
+	if err != nil {
+		return false, fmt.Errorf("env '%s=%s' not parse-able: %v", env.OCIInstancePrincipalAuth, s, err)
+	}
+	return enabled, nil
 }
 
 func (bp *ocibp) fetchTuningENVs() error {
@@ -366,7 +415,15 @@ func ociErrorToAISError(op, bucketName, objectPath, byteRange string, errIn erro
 	return statusCode, errOut
 }
 
-func (bp *ocibp) pooledLauchChild(mpChild mpChildIf) {
+func ociClientToAISError(op, bucketName, objectPath string, err error) (int, error) {
+	ecode, err := ociErrorToAISError(op+"(client create)", bucketName, objectPath, "", err, nil)
+	if ecode == 0 {
+		ecode = http.StatusInternalServerError
+	}
+	return ecode, err
+}
+
+func (bp *ocibp) pooledLaunchChild(mpChild mpChildIf) {
 	bp.Lock()
 	if bp.mpChildActiveCount < bp.mpThreadPoolSize {
 		bp.mpChildActiveCount++
@@ -394,6 +451,37 @@ func (bp *ocibp) pooledLaunchChildRunner(mpChild mpChildIf) {
 	}
 }
 
+func (bp *ocibp) regionForBck(bck *cmn.Bck) string {
+	if bck != nil && bck.Props != nil && bck.Props.Extra.OCI.Region != "" {
+		return bck.Props.Extra.OCI.Region
+	}
+	return bp.defaultRegion
+}
+
+func (bp *ocibp) ociClient(bck *cmn.Bck) (*ocios.ObjectStorageClient, string, error) {
+	region := bp.regionForBck(bck)
+	if v, ok := bp.clients.Load(region); ok {
+		return v.(*ocios.ObjectStorageClient), region, nil
+	}
+
+	bp.clientsMu.Lock()
+	defer bp.clientsMu.Unlock()
+
+	if v, ok := bp.clients.Load(region); ok {
+		return v.(*ocios.ObjectStorageClient), region, nil
+	}
+
+	client, err := ocios.NewObjectStorageClientWithConfigurationProvider(bp.configurationProvider)
+	if err != nil {
+		return nil, region, err
+	}
+	if region != "" {
+		client.SetRegion(region)
+	}
+	bp.clients.Store(region, &client)
+	return &client, region, nil
+}
+
 // as core.Backend --------------------------------------------------------------
 
 func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
@@ -415,6 +503,10 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (i
 			Fields:        &fields,
 		}
 	)
+	client, _, err := bp.ociClient(cloudBck)
+	if err != nil {
+		return ociClientToAISError("ListObjects", cloudBck.Name, msg.Prefix, err)
+	}
 
 	if msg.Prefix != "" {
 		req.Prefix = &msg.Prefix
@@ -461,7 +553,7 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (i
 			req.Start = &continuationToken
 		}
 
-		resp, err := bp.client.ListObjects(context.Background(), req)
+		resp, err := client.ListObjects(context.Background(), req)
 		if err != nil {
 			return ociErrorToAISError("ListObjects", cloudBck.Name, msg.Prefix, "", err, resp)
 		}
@@ -539,11 +631,16 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (i
 }
 
 func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
+	client, _, err := bp.ociClient(nil)
+	if err != nil {
+		ecode, err := ociClientToAISError("ListBuckets", "", "", err)
+		return nil, ecode, err
+	}
 	req := ocios.ListBucketsRequest{
 		NamespaceName: &bp.namespace,
 		CompartmentId: &bp.compartmentOCID,
 	}
-	resp, err := bp.client.ListBuckets(context.Background(), req)
+	resp, err := client.ListBuckets(context.Background(), req)
 	if err != nil {
 		ecode, err := ociErrorToAISError("ListBuckets", "", "", "", err, resp)
 		return nil, ecode, err
@@ -568,6 +665,10 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 
 		cksumType, cksumValue = lom.Checksum().Get()
 	)
+	client, _, err := bp.ociClient(cloudBck)
+	if err != nil {
+		return ociClientToAISError("PutObject", cloudBck.Name, lom.ObjName, err)
+	}
 
 	if objectAttrs == nil {
 		avoidingMPU = true
@@ -594,7 +695,7 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 		OpcMeta:       md,
 	}
 
-	resp, err := bp.client.PutObject(ctx, req)
+	resp, err := client.PutObject(ctx, req)
 	// Note: in case PutObject() failed to close r...
 	_ = r.Close()
 	if err != nil {
@@ -616,13 +717,17 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 
 func (bp *ocibp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 	cloudBck := lom.Bck().RemoteBck()
+	client, _, err := bp.ociClient(cloudBck)
+	if err != nil {
+		return ociClientToAISError("DeleteObject", cloudBck.Name, lom.ObjName, err)
+	}
 	req := ocios.DeleteObjectRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &cloudBck.Name,
 		ObjectName:    &lom.ObjName,
 	}
 
-	resp, err := bp.client.DeleteObject(ctx, req)
+	resp, err := client.DeleteObject(ctx, req)
 	if err != nil {
 		return ociErrorToAISError("DeleteObject", cloudBck.Name, lom.ObjName, "", err, resp)
 	}
@@ -631,19 +736,27 @@ func (bp *ocibp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 
 func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	cloudBck := bck.RemoteBck()
+	client, region, err := bp.ociClient(cloudBck)
+	if err != nil {
+		ecode, err := ociClientToAISError("HeadBucket", cloudBck.Name, "", err)
+		return nil, ecode, err
+	}
 	req := ocios.HeadBucketRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &cloudBck.Name,
 	}
 
-	resp, err := bp.client.HeadBucket(ctx, req)
+	resp, err := client.HeadBucket(ctx, req)
 	if err != nil {
 		ecode, err := ociErrorToAISError("HeadBucket", cloudBck.Name, "", "", err, resp)
 		return nil, ecode, err
 	}
 
-	bckProps := make(cos.StrKVs, 2)
+	bckProps := make(cos.StrKVs, 3)
 	bckProps[apc.HdrBackendProvider] = apc.OCI
+	if cloudBck.Props != nil && cloudBck.Props.Extra.OCI.Region != "" {
+		bckProps[apc.HdrOCIRegion] = region
+	}
 	bckProps[apc.HdrBucketVerEnabled] = "false" // [TODO] At some point, if needed, add support for bucket versioning
 
 	return bckProps, 0, nil
@@ -652,13 +765,18 @@ func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int
 func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	h := cmn.BackendHelpers.OCI
 	cloudBck := lom.Bck().RemoteBck()
+	client, _, err := bp.ociClient(cloudBck)
+	if err != nil {
+		ecode, err := ociClientToAISError("HeadObject", cloudBck.Name, lom.ObjName, err)
+		return nil, ecode, err
+	}
 	req := ocios.HeadObjectRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &cloudBck.Name,
 		ObjectName:    &lom.ObjName,
 	}
 
-	resp, err := bp.client.HeadObject(ctx, req)
+	resp, err := client.HeadObject(ctx, req)
 	if err != nil {
 		ecode, err := ociErrorToAISError("HeadObject", cloudBck.Name, lom.ObjName, "", err, resp)
 		return nil, ecode, err
@@ -709,6 +827,11 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 		err           error
 		rangeHeader   string
 	)
+	client, _, err := bp.ociClient(cloudBck)
+	if err != nil {
+		res.ErrCode, res.Err = ociClientToAISError("GetObject", cloudBck.Name, lom.ObjName, err)
+		return res
+	}
 
 	req := ocios.GetObjectRequest{
 		NamespaceName: &bp.namespace,
@@ -723,14 +846,14 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 		req.Range = &rangeHeader
 	}
 
-	resp, err := bp.client.GetObject(ctx, req)
+	resp, err := client.GetObject(ctx, req)
 	if err != nil {
 		res.ErrCode, res.Err = ociErrorToAISError("GetObject", cloudBck.Name, lom.ObjName, rangeHeader, err, resp)
 		return res
 	}
 
 	if attemptingMPD {
-		return bp.getObjReaderViaMPD(lom, &resp)
+		return bp.getObjReaderViaMPD(lom, client, &resp)
 	}
 
 	res.R = resp.Content

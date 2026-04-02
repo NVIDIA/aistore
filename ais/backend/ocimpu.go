@@ -35,7 +35,7 @@ type ociMPUStruct struct {
 	sync.Mutex      // serializes access to .abortInProgress, .childList, .childSlice, err, & .rc
 	sync.WaitGroup  // .Wait() will return when last .childList element completes & no others are needed
 	bp              *ocibp
-	namespaceName   string
+	client          *ocios.ObjectStorageClient
 	bucketName      string
 	objectName      string
 	objectSize      int64
@@ -69,37 +69,42 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 	var (
 		cloudBck   = lom.Bck().RemoteBck()
 		err        error
+		client     *ocios.ObjectStorageClient
 		mpu        *ociMPUStruct
 		mpuChild   *ociMPUChildStruct
 		totalParts int
 	)
+	client, _, err = bp.ociClient(cloudBck)
+	if err != nil {
+		return ociClientToAISError("CreateMultipartUpload", cloudBck.Name, lom.ObjName, err)
+	}
 
 	totalParts = int(objectSize + bp.mpuSegmentMaxSize - 1)
 	totalParts /= int(bp.mpuSegmentMaxSize)
 
 	mpu = &ociMPUStruct{
-		bp:            bp,
-		namespaceName: bp.namespace,
-		bucketName:    cloudBck.Name,
-		objectName:    lom.ObjName,
-		objectSize:    objectSize,
-		totalParts:    totalParts,
-		nextPartNum:   1,
-		childList:     list.New(),
-		childSlice:    make([]*ociMPUChildStruct, 0, totalParts),
-		err:           make([]error, 0, totalParts),
-		rc:            r,
+		bp:          bp,
+		client:      client,
+		bucketName:  cloudBck.Name,
+		objectName:  lom.ObjName,
+		objectSize:  objectSize,
+		totalParts:  totalParts,
+		nextPartNum: 1,
+		childList:   list.New(),
+		childSlice:  make([]*ociMPUChildStruct, 0, totalParts),
+		err:         make([]error, 0, totalParts),
+		rc:          r,
 	}
 
 	createReq := ocios.CreateMultipartUploadRequest{
-		NamespaceName: &mpu.namespaceName,
+		NamespaceName: &mpu.bp.namespace,
 		BucketName:    &mpu.bucketName,
 		CreateMultipartUploadDetails: ocios.CreateMultipartUploadDetails{
 			Object: &mpu.objectName,
 		},
 	}
 
-	createResp, err := bp.client.CreateMultipartUpload(context.Background(), createReq)
+	createResp, err := mpu.client.CreateMultipartUpload(context.Background(), createReq)
 	if err != nil {
 		return ociErrorToAISError("CreateMultipartUpload", cloudBck.Name, lom.ObjName, "", err, createResp)
 	}
@@ -114,7 +119,7 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 
 	if len(mpu.err) > 0 {
 		abortReq := ocios.AbortMultipartUploadRequest{
-			NamespaceName: &mpu.namespaceName,
+			NamespaceName: &mpu.bp.namespace,
 			BucketName:    &mpu.bucketName,
 			ObjectName:    &mpu.objectName,
 			UploadId:      &mpu.uploadID,
@@ -122,14 +127,14 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 
 		// Note: We are ignoring the Status returned by the Abort...() call as this is
 		//       just trying to clean up for some prior error we are already handling.
-		_, _ = bp.client.AbortMultipartUpload(context.Background(), abortReq)
+		_, _ = mpu.client.AbortMultipartUpload(context.Background(), abortReq)
 
 		err = fmt.Errorf("%v of %v part uploads failed", len(mpu.err), totalParts)
 		return ociErrorToAISError("UploadPart", mpu.bucketName, mpu.objectName, "", err, nil)
 	}
 
 	commitReq := ocios.CommitMultipartUploadRequest{
-		NamespaceName: &mpu.namespaceName,
+		NamespaceName: &mpu.bp.namespace,
 		BucketName:    &mpu.bucketName,
 		ObjectName:    &mpu.objectName,
 		UploadId:      &mpu.uploadID,
@@ -147,7 +152,7 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 			})
 	}
 
-	commitResp, err := bp.client.CommitMultipartUpload(context.Background(), commitReq)
+	commitResp, err := mpu.client.CommitMultipartUpload(context.Background(), commitReq)
 	if err != nil {
 		return ociErrorToAISError("CommitMultipartUpload", mpu.bucketName, mpu.objectName, "", err, commitResp)
 	}
@@ -214,7 +219,7 @@ func (mpu *ociMPUStruct) launchChildren() {
 
 func (mpuChild *ociMPUChildStruct) Run() {
 	req := ocios.UploadPartRequest{
-		NamespaceName:  &mpuChild.mpu.namespaceName,
+		NamespaceName:  &mpuChild.mpu.bp.namespace,
 		BucketName:     &mpuChild.mpu.bucketName,
 		ObjectName:     &mpuChild.mpu.objectName,
 		UploadId:       &mpuChild.mpu.uploadID,
@@ -223,7 +228,7 @@ func (mpuChild *ociMPUChildStruct) Run() {
 		UploadPartBody: mpuChild,
 	}
 
-	resp, err := mpuChild.mpu.bp.client.UploadPart(context.Background(), req)
+	resp, err := mpuChild.mpu.client.UploadPart(context.Background(), req)
 
 	mpuChild.mpu.Lock()
 	defer mpuChild.mpu.Unlock()

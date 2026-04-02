@@ -15,6 +15,7 @@ package env
 const (
 	OCIConfigFilePath              = "OCI_CLI_CONFIG_FILE" // defaults to ~/.oci/config
 	OCIProfile                     = "OCI_CLI_PROFILE"     // defaults to DEFAULT
+	OCIInstancePrincipalAuth       = "OCI_INSTANCE_PRINCIPAL_AUTH"
 	OCITenancyOCID                 = "OCI_TENANCY_OCID"
 	OCICompartmentOCID             = "OCI_COMPARTMENT_OCID"
 	OCIUserOCID                    = "OCI_USER_OCID"

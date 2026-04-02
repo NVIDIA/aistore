@@ -121,6 +121,26 @@ var _ = Describe("API", func() {
 					Access: 10,
 				},
 			),
+			Entry("provider-specific extra fields",
+				cmn.Bprops{
+					Provider: apc.OCI,
+				},
+				cmn.BpropsToSet{
+					Extra: &cmn.ExtraToSet{
+						OCI: &cmn.ExtraPropsOCIToSet{
+							Region: apc.Ptr("us-phoenix-1"),
+						},
+					},
+				},
+				cmn.Bprops{
+					Provider: apc.OCI,
+					Extra: cmn.ExtraProps{
+						OCI: cmn.ExtraPropsOCI{
+							Region: "us-phoenix-1",
+						},
+					},
+				},
+			),
 			Entry("all fields",
 				cmn.Bprops{},
 				cmn.BpropsToSet{

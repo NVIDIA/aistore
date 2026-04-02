@@ -234,7 +234,7 @@ At the top level:
 | `chunks`       | `ChunksConf`      | Chunked-object layout and multipart-upload behavior.                        |
 | `lru`          | `LRUConf`         | LRU caching policy: watermarks, enable/disable.                             |
 | `rate_limit`   | `RateLimitConf`   | Frontend and backend rate limiting (bursty/adaptive shaping).               |
-| `extra`        | `ExtraProps`      | Provider-specific: `extra.aws.{profile,endpoint,region}` for S3-compatible, `extra.gcp.application_creds` for GCS. |
+| `extra`        | `ExtraProps`      | Provider-specific: `extra.aws.{profile,endpoint,cloud_region}` for S3-compatible, `extra.gcp.application_creds` for GCS, `extra.oci.region` for OCI. |
 | `access`       | `AccessAttrs`     | Bucket access mask (GET, PUT, DELETE, etc.).                                |
 | `features`     | `feat.Flags`      | [Feature flags](#feature-flags) to flip assorted defaults (e.g., S3 path-style). |
 | `bid`          | `uint64`          | Unique bucket ID (assigned by AIS, read-only).                              |
@@ -867,7 +867,7 @@ ais bucket props set ais://data access=0xFFFFFFFFFFFFFFEF
 |----------|-------------|
 | `extra.aws.profile` | Named AWS profile from `~/.aws/credentials` |
 | `extra.aws.endpoint` | Custom S3 endpoint URL |
-| `extra.aws.region` | Region override |
+| `extra.aws.cloud_region` | Region override |
 
 ```console
 # Use named profile
@@ -879,6 +879,18 @@ ais create s3://#minio/bucket \
 ```
 
 > See also: [AWS Profiles and S3 Endpoints](/docs/cli/aws_profile_endpoint.md)
+
+### Oracle Cloud Infrastructure
+
+| Property | Description |
+|----------|-------------|
+| `extra.oci.region` | OCI region override for this bucket |
+
+```console
+# Two same-name OCI buckets in different regions, separated by namespace
+ais create oc://#iad/data --props="extra.oci.region=us-ashburn-1"
+ais create oc://#phx/data --props="extra.oci.region=us-phoenix-1"
+```
 
 ### Google Cloud
 

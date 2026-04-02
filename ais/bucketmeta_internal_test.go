@@ -120,6 +120,19 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 					}
 				}
 			})
+
+			It("should merge OCI region into bucket props for "+node, func() {
+				bck := meta.NewBck("oci-bck", apc.OCI, cmn.NsGlobal)
+				bargs := bckPropsArgs{
+					bck: bck,
+					hdr: http.Header{
+						apc.HdrBackendProvider: []string{apc.OCI},
+						apc.HdrOCIRegion:       []string{"us-phoenix-1"},
+					},
+				}
+				props := bargs.inheritMerge()
+				Expect(props.Extra.OCI.Region).To(Equal("us-phoenix-1"))
+			})
 		})
 	}
 })

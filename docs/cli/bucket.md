@@ -80,6 +80,7 @@ NAME:
      - ais create s3://mybucket                                                                               - add existing cloud (S3) bucket; normally AIS would auto-add it on first access;
      - ais create s3://mybucket --props='extra.aws.profile=prod extra.aws.multipart_size=333M'                - add S3 bucket using a non-default cloud profile;
      - ais create s3://#myaccount/mybucket --props='extra.aws.profile=swift extra.aws.endpoint=$S3_ENDPOINT'  - attach S3-compatible bucket via namespace '#myaccount';
+     - ais create oc://#phx/mybucket --props='extra.oci.region=us-phoenix-1'                                  - add OCI bucket using a non-default region and namespace '#phx';
      - ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'                                 - advanced: register bucket without verifying its existence/accessibility (use with care);
      - ais create gs://mybucket --skip-lookup --props='extra.gcp.application_creds=/mnt/vault/sa.json'        - GCS bucket with per-bucket service-account credentials.
 
