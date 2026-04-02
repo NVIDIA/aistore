@@ -238,7 +238,7 @@ docker run --rm \
   -v "$PWD":/src -w /src \
   -v "$HOME/go/pkg/mod":/go/pkg/mod \
   -v "$HOME/.cache/go-build":/root/.cache/go-build \
-  golang:1.25 \
+  golang:1.26 \
   go test ./sys -run . -v -count=1 2>&1
 ```
 

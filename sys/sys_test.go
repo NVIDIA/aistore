@@ -21,7 +21,7 @@ import (
 // example running it in a constrained container:
 // docker run --rm --cpus=1.5 --memory=512m   -v "$PWD":/src -w /src \
 //            -v "$HOME/go/pkg/mod":/go/pkg/mod -v "$HOME/.cache/go-build":/root/.cache/go-build \
-//            golang:1.25   go test ./sys -run . -v -count=1 2>&
+//            golang:1.26   go test ./sys -run . -v -count=1 2>&
 
 func TestMain(m *testing.M) {
 	contTag := sys.Init(false /*forceCont*/)

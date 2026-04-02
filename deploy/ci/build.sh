@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e  # Exit immediately on error
 
-GO_BASE_VERSION="1.25"
+GO_BASE_VERSION="1.26"
 DOCKER="${DOCKER:-docker}"
 INTERNAL_DOCKERFILE="k8s.dockerfile"
 DOCKERFILE="${DOCKERFILE:-"fedora.dockerfile"}"

@@ -4,4 +4,4 @@
  */
 package apc
 
-func Ptr[T any](v T) *T { return &v }
+func Ptr[T any](v T) *T { return new(v) }

@@ -328,7 +328,7 @@ func TestLsoGoBack(t *testing.T) {
 			tassert.Errorf(
 				t, entries[idx].Name == expectedEntries[idx].Name,
 				"unexpected en (got: %q, expected: %q)",
-				entries[idx], expectedEntries[idx],
+				entries[idx].Name, expectedEntries[idx].Name,
 			)
 		}
 	})
