@@ -280,6 +280,25 @@ func (nbi *nbiCtx) readChunk() error {
 
 func (nbi *nbiCtx) skip() { nbi.nidx = len(nbi.entries) } // in re: prefix
 
+// nrCollapse checks whether the entry should be collapsed into a virtual directory
+// (i.e., the object name has a '/' separator below the listing prefix).
+// If so, appends the directory entry to lst (when past the continuation token)
+// and returns the directory prefix for subsequent skipping.
+// Returns "" when no collapsing is needed.
+func nrCollapse(name string, msg *apc.LsoMsg, lst *cmn.LsoRes) string {
+	rel := strings.TrimPrefix(name, msg.Prefix)
+	idx := strings.Index(rel, cos.PathSeparator)
+	if idx < 0 {
+		// no subdirectory, no collapsing needed
+		return ""
+	}
+	dirName := msg.Prefix + rel[:idx+1]
+	if dirName > msg.ContinuationToken {
+		lst.Entries = append(lst.Entries, &cmn.LsoEnt{Name: dirName, Flags: apc.EntryIsDir})
+	}
+	return dirName
+}
+
 func (nbi *nbiCtx) pageSize(msg *apc.LsoMsg) int {
 	// chunk-driven (optimize local reads/merge roundtrips)
 	n := max(len(nbi.entries), minPageSize)
@@ -332,6 +351,9 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 
 	pageSize := nbi.pageSize(msg) // apply msg.PageSize
 
+	noRecursion := msg.IsFlagSet(apc.LsNoRecursion)
+	var skipDir string // when non-empty, skip entries under this virtual directory
+
 	for len(lst.Entries) < pageSize {
 		// next chunk
 		if nbi.nidx >= len(nbi.entries) {
@@ -353,6 +375,17 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		debug.Assert(nbi.nidx == 0 || nbi.nidx == len(nbi.entries) || nbi.entries[nbi.nidx].Name > nbi.entries[nbi.nidx-1].Name)
 		debug.Assert(nbi.nidx == 0 || nbi.nidx == len(nbi.entries) || nbi.entries[nbi.nidx].Name > nbi.hdr.first)
 
+		// non-recursive: skip entries under a previously collapsed virtual directory
+		if skipDir != "" {
+			// TODO: binary-search to the first entry without the skipDir prefix
+			// within this chunk, instead of advancing one entry at a time.
+			if strings.HasPrefix(nbi.entries[nbi.nidx].Name, skipDir) {
+				nbi.nidx++
+				continue
+			}
+			skipDir = "" // reset when the current entry no longer falls under the collapsed directory
+		}
+
 		// prefix
 		if msg.Prefix != "" {
 			if nbi.nidx < len(nbi.entries) && nbi.entries[nbi.nidx].Name < msg.Prefix {
@@ -373,11 +406,21 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 				continue
 			}
 			nbi.nidx++
+			if noRecursion {
+				if skipDir = nrCollapse(out.Name, msg, lst); skipDir != "" {
+					continue
+				}
+			}
 			lst.Entries = append(lst.Entries, out)
 			continue
 		}
 		out := nbi.entries[nbi.nidx]
 		nbi.nidx++ // next
+		if noRecursion {
+			if skipDir = nrCollapse(out.Name, msg, lst); skipDir != "" {
+				continue
+			}
+		}
 		lst.Entries = append(lst.Entries, out)
 	}
 

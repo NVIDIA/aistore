@@ -133,6 +133,11 @@ const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz
 	indent1 + "\t  →                                        \t  and show missing objects;\n" +
 	indent1 + "\t* ais ls s3://abc --check-versions --cached \t- for each in-cluster object: check for identical remote copy\n" +
 	indent1 + "\t  →                                        \t  and show deleted objects.\n" +
+	indent1 + "with bucket inventory (fast listing from a pre-built snapshot):\n" +
+	indent1 + "\t* ais ls s3://abc --inventory \t- list using native bucket inventory (NBI);\n" +
+	indent1 + "\t* ais ls s3://abc --inventory --prefix images/ \t- list only objects under 'images/' prefix;\n" +
+	indent1 + "\t* ais ls s3://abc --inventory --nr \t- non-recursive: show immediate files and subdirectories;\n" +
+	indent1 + "\t* ais ls s3://abc --inventory --nr --prefix images/ \t- non-recursive listing under 'images/' prefix.\n" +
 	indent1 + "with summary (bucket sizes and numbers of objects):\n" +
 	indent1 + "\t* ais ls ais://nnn --summary --prefix=aaa/bbb \t- summarize objects matching the given prefix;\n" +
 	indent1 + "\t* ais ls ais://nnn/aaa/bbb --summary \t- same as above;\n" +

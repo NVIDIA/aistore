@@ -5,8 +5,10 @@
 package integration_test
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/xact"
@@ -535,8 +538,432 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 }
 
 //
-// local helper
+// non-recursive listing over NBI
 //
+
+func TestListInventoryNoRecursion(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
+
+	var (
+		bck    = cliBck
+		bp     = tools.BaseAPIParams()
+		parent = "nrtest-" + cos.GenTie() + "/"
+	)
+
+	_nbiIniCln(t, bck)
+
+	// Hierarchical object layout:
+	//   parent/file-a.txt
+	//   parent/file-b.txt
+	//   parent/sub1/obj1 .. obj3
+	//   parent/sub1/deep/obj4
+	//   parent/sub2/obj5, obj6
+	//   parent/sub3/obj7
+	objNames := []string{
+		parent + "file-a.txt",
+		parent + "file-b.txt",
+		parent + "sub1/obj1",
+		parent + "sub1/obj2",
+		parent + "sub1/obj3",
+		parent + "sub1/deep/obj4",
+		parent + "sub2/obj5",
+		parent + "sub2/obj6",
+		parent + "sub3/obj7",
+	}
+
+	for _, name := range objNames {
+		r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: 128, CksumType: cos.ChecksumNone})
+		_, err := api.PutObject(&api.PutArgs{
+			BaseParams: bp,
+			Bck:        bck,
+			ObjName:    name,
+			Reader:     r,
+		})
+		tassert.CheckFatal(t, err)
+	}
+	t.Cleanup(func() {
+		for _, name := range objNames {
+			api.DeleteObject(bp, bck, name)
+		}
+	})
+
+	invName := "inv-nr-" + cos.GenTie()
+	createMsg := &apc.CreateNBIMsg{
+		Name: invName,
+		LsoMsg: apc.LsoMsg{
+			Prefix:   parent,
+			Props:    apc.GetPropsName,
+			PageSize: 3,
+		},
+		NamesPerChunk: 4,
+		Force:         true,
+	}
+
+	xid, err := api.CreateNBI(bp, bck, createMsg)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("%s[%s] started (9 objects, hierarchical)", apc.ActCreateNBI, xid)
+
+	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
+	_, err = api.WaitForXactionIC(bp, &wargs)
+	tassert.CheckFatal(t, err)
+
+	largs := api.ListArgs{
+		Header: http.Header{apc.HdrInvName: []string{invName}},
+	}
+
+	listNBI := func(t *testing.T, prefix string, flags uint64, pageSize int64) []*cmn.LsoEnt {
+		var (
+			allEntries []*cmn.LsoEnt
+			token      string
+			seenTok    = make(cos.StrSet, 16)
+		)
+		for {
+			lsmsg := &apc.LsoMsg{
+				Prefix:            prefix,
+				Props:             apc.GetPropsName,
+				PageSize:          pageSize,
+				Flags:             flags,
+				ContinuationToken: token,
+			}
+			lst, err := api.ListObjectsPage(bp, bck, lsmsg, largs)
+			tassert.CheckFatal(t, err)
+
+			tassert.Fatalf(t, len(lst.Entries) > 0 || lst.ContinuationToken == "",
+				"empty page with non-empty token %q (prefix %q)", lst.ContinuationToken, prefix)
+
+			allEntries = append(allEntries, lst.Entries...)
+			if lst.ContinuationToken == "" {
+				break
+			}
+			tassert.Fatalf(t, !seenTok.Contains(lst.ContinuationToken),
+				"repeated continuation token %q", lst.ContinuationToken)
+			seenTok.Set(lst.ContinuationToken)
+			token = lst.ContinuationToken
+		}
+
+		for i := 1; i < len(allEntries); i++ {
+			tassert.Fatalf(t, allEntries[i-1].Name < allEntries[i].Name,
+				"entries not sorted at [%d]: %q >= %q", i, allEntries[i-1].Name, allEntries[i].Name)
+		}
+		return allEntries
+	}
+
+	// 1. non-recursive at root prefix
+	t.Run("root-nr", func(t *testing.T) {
+		entries := listNBI(t, parent, apc.LsNBI|apc.LsNoRecursion, 2)
+
+		exp := []string{
+			parent + "file-a.txt",
+			parent + "file-b.txt",
+			parent + "sub1/",
+			parent + "sub2/",
+			parent + "sub3/",
+		}
+		tassert.Fatalf(t, len(entries) == len(exp),
+			"expected %d, got %d", len(exp), len(entries))
+
+		for i, e := range entries {
+			tassert.Fatalf(t, e.Name == exp[i],
+				"[%d] expected %q, got %q", i, exp[i], e.Name)
+		}
+
+		for _, e := range entries {
+			isDir := strings.HasSuffix(e.Name, "/")
+			hasFlag := e.Flags&apc.EntryIsDir != 0
+			tassert.Fatalf(t, isDir == hasFlag,
+				"%q: trailing-slash=%v, EntryIsDir=%v", e.Name, isDir, hasFlag)
+		}
+		tlog.Logfln("root-nr: %d entries OK", len(entries))
+	})
+
+	// 2. non-recursive at sub-prefix (one level deeper)
+	t.Run("sub1-nr", func(t *testing.T) {
+		entries := listNBI(t, parent+"sub1/", apc.LsNBI|apc.LsNoRecursion, 2)
+
+		exp := []string{
+			parent + "sub1/deep/",
+			parent + "sub1/obj1",
+			parent + "sub1/obj2",
+			parent + "sub1/obj3",
+		}
+		tassert.Fatalf(t, len(entries) == len(exp),
+			"expected %d, got %d", len(exp), len(entries))
+		for i, e := range entries {
+			tassert.Fatalf(t, e.Name == exp[i],
+				"[%d] expected %q, got %q", i, exp[i], e.Name)
+		}
+
+		tassert.Fatalf(t, entries[0].Flags&apc.EntryIsDir != 0,
+			"%q: expected EntryIsDir", entries[0].Name)
+
+		tlog.Logfln("sub1-nr: %d entries OK", len(entries))
+	})
+
+	// 3. non-recursive at leaf prefix (no subdirectories at this level)
+	t.Run("leaf-nr", func(t *testing.T) {
+		entries := listNBI(t, parent+"sub1/deep/", apc.LsNBI|apc.LsNoRecursion, 10)
+
+		tassert.Fatalf(t, len(entries) == 1,
+			"expected 1, got %d", len(entries))
+		tassert.Fatalf(t, entries[0].Name == parent+"sub1/deep/obj4",
+			"expected %q, got %q", parent+"sub1/deep/obj4", entries[0].Name)
+		tassert.Fatalf(t, entries[0].Flags&apc.EntryIsDir == 0,
+			"%q: expected file, not dir", entries[0].Name)
+
+		tlog.Logfln("leaf-nr: OK")
+	})
+
+	// 4. regular NBI (no --nr) still returns all flat objects
+	t.Run("flat-nbi", func(t *testing.T) {
+		entries := listNBI(t, parent, apc.LsNBI, 4)
+
+		tassert.Fatalf(t, len(entries) == len(objNames),
+			"expected %d, got %d", len(objNames), len(entries))
+
+		nameSet := make(cos.StrSet, len(entries))
+		for _, e := range entries {
+			nameSet.Set(e.Name)
+		}
+		for _, name := range objNames {
+			tassert.Fatalf(t, nameSet.Contains(name),
+				"PUT'd object %q missing from inventory", name)
+		}
+		tlog.Logfln("flat-nbi: %d entries OK", len(entries))
+	})
+
+	// 5. sweep page sizes to stress pagination boundaries
+	t.Run("page-sweep", func(t *testing.T) {
+		for _, ps := range []int64{1, 2, 3, 5, 10, 0} {
+			entries := listNBI(t, parent, apc.LsNBI|apc.LsNoRecursion, ps)
+
+			tassert.Fatalf(t, len(entries) == 5,
+				"pageSize=%d: expected 5, got %d", ps, len(entries))
+		}
+		tlog.Logfln("page-sweep: all page sizes OK")
+	})
+
+	// 6. non-recursive with prefix that has only dirs (no files at this level)
+	t.Run("dirs-only-nr", func(t *testing.T) {
+		entries := listNBI(t, parent+"sub2/", apc.LsNBI|apc.LsNoRecursion, 10)
+
+		tassert.Fatalf(t, len(entries) == 2,
+			"expected 2, got %d", len(entries))
+		tassert.Fatalf(t, entries[0].Name == parent+"sub2/obj5", "got %q", entries[0].Name)
+		tassert.Fatalf(t, entries[1].Name == parent+"sub2/obj6", "got %q", entries[1].Name)
+
+		for _, e := range entries {
+			tassert.Fatalf(t, e.Flags&apc.EntryIsDir == 0,
+				"%q: unexpected dir flag", e.Name)
+		}
+		tlog.Logfln("dirs-only-nr: OK")
+	})
+}
+
+// Cross-validates NR listing against flat listing at multiple prefix levels
+// with page-size sweep, using an object layout that covers edge cases:
+//   - adjacent names (aaa-readme vs aaa/)
+//   - deep nesting (bbb/deep/x/y/, zzz/a/b/c/)
+//   - single-object and many-object directories
+//   - root files interleaved with directories
+//   - dir-only prefix levels (no files)
+//   - file-only prefix levels (no dirs)
+//   - non-existent prefix
+func TestListInventoryNoRecursionPagination(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
+
+	var (
+		bck    = cliBck
+		bp     = tools.BaseAPIParams()
+		parent = "nrpag-" + cos.GenTie() + "/"
+	)
+
+	_nbiIniCln(t, bck)
+
+	var objNames []string
+	add := func(pattern string, n int) {
+		for i := range n {
+			objNames = append(objNames, fmt.Sprintf(pattern, parent, i))
+		}
+	}
+	// 31 objects total
+	objNames = append(objNames, parent+"aaa-readme")     // adjacent to aaa/
+	add("%saaa/%02d", 10)                                // 10 under aaa/
+	add("%sbbb/%02d", 5)                                 // 5 direct under bbb/
+	add("%sbbb/deep/x/y/%02d", 3)                        // 3 deeply nested under bbb/
+	objNames = append(objNames, parent+"ccc/only")       // single-object dir
+	add("%sroot-%02d", 10)                               // 10 root files
+	objNames = append(objNames, parent+"zzz/a/b/c/deep") // deeply nested → zzz/
+
+	for _, name := range objNames {
+		r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: 128, CksumType: cos.ChecksumNone})
+		_, err := api.PutObject(&api.PutArgs{
+			BaseParams: bp,
+			Bck:        bck,
+			ObjName:    name,
+			Reader:     r,
+		})
+		tassert.CheckFatal(t, err)
+	}
+	t.Cleanup(func() {
+		for _, name := range objNames {
+			api.DeleteObject(bp, bck, name)
+		}
+	})
+
+	invName := "inv-nrpag-" + cos.GenTie()
+	createMsg := &apc.CreateNBIMsg{
+		Name: invName,
+		LsoMsg: apc.LsoMsg{
+			Prefix:   parent,
+			Props:    apc.GetPropsName,
+			PageSize: 5,
+		},
+		NamesPerChunk: 3, // very small chunks → many chunks per target
+		Force:         true,
+	}
+
+	xid, err := api.CreateNBI(bp, bck, createMsg)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("%s[%s] started (31 objects, edge-case layout)", apc.ActCreateNBI, xid)
+
+	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
+	_, err = api.WaitForXactionIC(bp, &wargs)
+	tassert.CheckFatal(t, err)
+
+	largs := api.ListArgs{
+		Header: http.Header{apc.HdrInvName: []string{invName}},
+	}
+
+	listNBI := func(t *testing.T, prefix string, flags uint64, pageSize int64) []*cmn.LsoEnt {
+		var (
+			all     []*cmn.LsoEnt
+			token   string
+			seenTok = make(cos.StrSet, 16)
+		)
+		for {
+			lsmsg := &apc.LsoMsg{
+				Prefix:            prefix,
+				Props:             apc.GetPropsName,
+				PageSize:          pageSize,
+				Flags:             flags,
+				ContinuationToken: token,
+			}
+			lst, err := api.ListObjectsPage(bp, bck, lsmsg, largs)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(lst.Entries) > 0 || lst.ContinuationToken == "",
+				"empty page with token %q (prefix %q ps %d)", lst.ContinuationToken, prefix, pageSize)
+			all = append(all, lst.Entries...)
+			if lst.ContinuationToken == "" {
+				break
+			}
+			tassert.Fatalf(t, !seenTok.Contains(lst.ContinuationToken),
+				"repeated token %q (prefix %q ps %d)", lst.ContinuationToken, prefix, pageSize)
+			seenTok.Set(lst.ContinuationToken)
+			token = lst.ContinuationToken
+		}
+		for i := 1; i < len(all); i++ {
+			tassert.Fatalf(t, all[i-1].Name < all[i].Name,
+				"not sorted at [%d]: %q >= %q (prefix %q ps %d)",
+				i, all[i-1].Name, all[i].Name, prefix, pageSize)
+		}
+		return all
+	}
+
+	// ground truth: flat NBI listing
+	flat := listNBI(t, parent, apc.LsNBI, 0)
+	tassert.Fatalf(t, len(flat) == len(objNames),
+		"flat: expected %d, got %d", len(objNames), len(flat))
+
+	flatNames := make([]string, len(flat))
+	for i, e := range flat {
+		flatNames[i] = e.Name
+	}
+
+	// cross-validate at various prefix levels with page-size sweep
+	prefixes := []struct {
+		tag    string
+		prefix string
+	}{
+		{"root", parent},                       // 10 files + 3 dirs = 13
+		{"aaa", parent + "aaa/"},               // 10 files, 0 dirs
+		{"bbb", parent + "bbb/"},               // 5 files + 1 dir = 6
+		{"bbb-deep", parent + "bbb/deep/"},     // 0 files + 1 dir = 1
+		{"bbb-leaf", parent + "bbb/deep/x/y/"}, // 3 files, 0 dirs (leaf)
+		{"ccc", parent + "ccc/"},               // 1 file, 0 dirs
+		{"zzz", parent + "zzz/"},               // 0 files + 1 dir = 1
+		{"zzz-deep", parent + "zzz/a/b/c/"},    // 1 file, 0 dirs (leaf)
+		{"miss", parent + "nonexistent/"},      // 0 entries
+	}
+
+	pageSizes := []int64{1, 2, 3, 5, 10, 0}
+
+	for _, pc := range prefixes {
+		t.Run(pc.tag, func(t *testing.T) {
+			exp := _expectedNR(flatNames, pc.prefix)
+
+			for _, ps := range pageSizes {
+				got := listNBI(t, pc.prefix, apc.LsNBI|apc.LsNoRecursion, ps)
+
+				tassert.Fatalf(t, len(got) == len(exp),
+					"prefix=%q ps=%d: expected %d, got %d\n  exp: %v\n  got: %v",
+					pc.prefix, ps, len(exp), len(got),
+					exp, _lsoNames(got))
+
+				for i, e := range got {
+					tassert.Fatalf(t, e.Name == exp[i],
+						"prefix=%q ps=%d [%d]: expected %q, got %q",
+						pc.prefix, ps, i, exp[i], e.Name)
+
+					// dir entries must have EntryIsDir; files must not
+					isDir := strings.HasSuffix(e.Name, "/")
+					hasFlag := e.Flags&apc.EntryIsDir != 0
+					tassert.Fatalf(t, isDir == hasFlag,
+						"prefix=%q ps=%d %q: trail-slash=%v flag=%v",
+						pc.prefix, ps, e.Name, isDir, hasFlag)
+				}
+			}
+
+			tlog.Logfln("%s: %d entries, %d page-sizes OK", pc.tag, len(exp), len(pageSizes))
+		})
+	}
+}
+
+//
+// local helpers
+//
+
+// _expectedNR computes the expected non-recursive listing from a sorted flat name list.
+// Since flatNames is sorted and directory entries replace a contiguous run of children,
+// the output is also sorted — no separate sort step needed.
+func _expectedNR(flatNames []string, prefix string) []string {
+	seen := make(cos.StrSet, 8)
+	var result []string
+	for _, name := range flatNames {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		rel := strings.TrimPrefix(name, prefix)
+		if idx := strings.IndexByte(rel, '/'); idx >= 0 {
+			dirName := prefix + rel[:idx+1]
+			if !seen.Contains(dirName) {
+				seen.Set(dirName)
+				result = append(result, dirName)
+			}
+		} else {
+			result = append(result, name)
+		}
+	}
+	sort.Strings(result) // defensive; should already be sorted
+	return result
+}
+
+func _lsoNames(entries []*cmn.LsoEnt) []string {
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name
+	}
+	return names
+}
 
 func _nbiIniCln(t *testing.T, bck cmn.Bck) {
 	if !bck.IsRemote() {

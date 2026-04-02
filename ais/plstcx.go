@@ -501,7 +501,12 @@ func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
 	for _, l := range lists {
 		entries = append(entries, l.Entries...)
 	}
-	cmn.SortLso(entries)
+	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
+		cmn.SortLsoLex(entries)
+		entries = dedupLso(entries, 0)
+	} else {
+		cmn.SortLso(entries)
+	}
 
 	// 3. truncate (> minToken)
 	if minToken != "" {

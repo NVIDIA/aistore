@@ -61,7 +61,7 @@ func (m *LsoMsg) ValidateNBI() error {
 
 	// flags that do not make sense for inventory listing
 	const badFlags = LsNotCached | LsMissing | LsDeleted | LsArchDir |
-		lsWantOnlyRemoteProps | LsNoRecursion | LsDiff
+		lsWantOnlyRemoteProps | LsDiff
 
 	if m.Flags&badFlags != 0 {
 		var sb cos.SB
