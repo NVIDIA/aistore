@@ -212,7 +212,7 @@ func (mpu *ociMPUStruct) launchChildren() {
 			mpu.nextPartNum++
 			mpu.nextStart += partLength
 			mpuChild.le = mpu.childList.PushBack(mpuChild)
-			mpu.bp.pooledLauchChild(mpuChild)
+			mpu.bp.pooledLaunchChild(mpuChild)
 		}
 	}
 }

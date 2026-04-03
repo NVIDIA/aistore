@@ -75,7 +75,7 @@ type (
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
 		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
 		GCP  ExtraPropsGCP  `json:"gcp,omitempty" list:"omitempty"`
-                OCI  ExtraPropsOCI  `json:"oci,omitempty" list:"omitempty"`
+		OCI  ExtraPropsOCI  `json:"oci,omitempty" list:"omitempty"`
 		// e.g. "team=alpha;project=beta;id=123"
 		Custom string `json:"custom,omitempty"`
 	}
@@ -83,7 +83,7 @@ type (
 		AWS  *ExtraPropsAWSToSet  `json:"aws,omitempty"`
 		HTTP *ExtraPropsHTTPToSet `json:"http,omitempty"`
 		GCP  *ExtraPropsGCPToSet  `json:"gcp,omitempty"`
-                OCI  *ExtraPropsOCIToSet  `json:"oci,omitempty"`
+		OCI  *ExtraPropsOCIToSet  `json:"oci,omitempty"`
 		// beware: any change to this field is still a version-bump + metasync
 		Custom *string `json:"custom,omitempty"`
 	}
@@ -331,7 +331,7 @@ const (
 
 	maxAWSProfileLen = 256
 	maxAWSRegionLen  = 64
-        maxOCIRegionLen  = 64
+	maxOCIRegionLen  = 64
 
 	maxCustomLen = 128
 )

@@ -153,7 +153,7 @@ func (mpd *ociMPDStruct) launchChildren() {
 			mpd.nextStart += partLength
 			mpdChild.Add(1)
 			mpdChild.le = mpd.childList.PushBack(mpdChild)
-			mpd.bp.pooledLauchChild(mpdChild)
+			mpd.bp.pooledLaunchChild(mpdChild)
 		}
 	}
 }
