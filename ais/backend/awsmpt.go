@@ -46,18 +46,16 @@ func (*s3bp) StartMpt(lom *core.LOM, oreq *http.Request) (id string, ecode int, 
 		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(oreq.Header)
 	}
 
-	var (
-		cloudBck = lom.Bck().RemoteBck()
-		sessConf = sessConf{bck: cloudBck}
-		input    = s3.CreateMultipartUploadInput{
-			Bucket:   aws.String(cloudBck.Name),
-			Key:      aws.String(lom.ObjName),
-			Metadata: metadata,
-		}
-	)
-	svc, errN := sessConf.s3client("[start_mpt]")
-	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
-		nlog.Warningln(errN)
+	cloudBck := lom.Bck().RemoteBck()
+	svc, errN := getS3Svc(cloudBck, "[start_mpt]")
+	if errN != nil {
+		return "", http.StatusInternalServerError, errN
+	}
+
+	input := s3.CreateMultipartUploadInput{
+		Bucket:   aws.String(cloudBck.Name),
+		Key:      aws.String(lom.ObjName),
+		Metadata: metadata,
 	}
 	out, err := svc.CreateMultipartUpload(context.Background(), &input)
 	if err == nil {
@@ -85,22 +83,19 @@ func (*s3bp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, oreq *http.Request,
 	}
 
 	// regular
-	var (
-		cloudBck = lom.Bck().RemoteBck()
-		sessConf = sessConf{bck: cloudBck}
-		input    = s3.UploadPartInput{
-			Bucket:        aws.String(cloudBck.Name),
-			Key:           aws.String(lom.ObjName),
-			Body:          r,
-			UploadId:      aws.String(uploadID),
-			PartNumber:    &partNum,
-			ContentLength: &size,
-		}
-	)
+	cloudBck := lom.Bck().RemoteBck()
+	svc, errN := getS3Svc(cloudBck, "[put_mpt_part]")
+	if errN != nil {
+		return "", http.StatusInternalServerError, errN
+	}
 
-	svc, errN := sessConf.s3client("[put_mpt_part]")
-	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
-		nlog.Warningln(errN)
+	input := s3.UploadPartInput{
+		Bucket:        aws.String(cloudBck.Name),
+		Key:           aws.String(lom.ObjName),
+		Body:          r,
+		UploadId:      aws.String(uploadID),
+		PartNumber:    &partNum,
+		ContentLength: &size,
 	}
 
 	// disable retries if the reader is not seekable (to avoid "failed to rewind transport stream for retry")
@@ -148,20 +143,20 @@ func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obo
 	}
 
 	// regular
+	cloudBck := lom.Bck().RemoteBck()
+	svc, errN := getS3Svc(cloudBck, "[complete_mpt]")
+	if errN != nil {
+		return "", "", http.StatusInternalServerError, errN
+	}
+
 	var (
-		cloudBck = lom.Bck().RemoteBck()
-		sessConf = sessConf{bck: cloudBck}
-		s3parts  types.CompletedMultipartUpload
-		input    = s3.CompleteMultipartUploadInput{
+		s3parts types.CompletedMultipartUpload
+		input   = s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(cloudBck.Name),
 			Key:      aws.String(lom.ObjName),
 			UploadId: aws.String(uploadID),
 		}
 	)
-	svc, errN := sessConf.s3client("[complete_mpt]")
-	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
-		nlog.Warningln(errN)
-	}
 
 	// Convert apc.MptCompletedParts to AWS types.CompletedPart
 	s3parts.Parts = make([]types.CompletedPart, len(parts))
@@ -197,21 +192,30 @@ func (*s3bp) AbortMpt(lom *core.LOM, oreq *http.Request, uploadID string) (ecode
 		}
 	}
 
-	var (
-		cloudBck = lom.Bck().RemoteBck()
-		sessConf = sessConf{bck: cloudBck}
-		input    = s3.AbortMultipartUploadInput{
-			Bucket:   aws.String(cloudBck.Name),
-			Key:      aws.String(lom.ObjName),
-			UploadId: aws.String(uploadID),
-		}
-	)
-	svc, errN := sessConf.s3client("[abort_mpt]")
-	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
-		nlog.Warningln(errN)
+	cloudBck := lom.Bck().RemoteBck()
+	svc, errN := getS3Svc(cloudBck, "[abort_mpt]")
+	if errN != nil {
+		return http.StatusInternalServerError, errN
+	}
+	input := s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(cloudBck.Name),
+		Key:      aws.String(lom.ObjName),
+		UploadId: aws.String(uploadID),
 	}
 	if _, err = svc.AbortMultipartUpload(context.Background(), &input); err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 	return ecode, err
+}
+
+func getS3Svc(bck *cmn.Bck, tag string) (*s3.Client, error) {
+	sc := sessConf{bck: bck}
+	svc, err := sc.s3client(tag)
+	if err != nil {
+		if cmn.Rom.V(5, cos.ModBackend) {
+			nlog.Warningln(tag, err)
+		}
+		return nil, err
+	}
+	return svc, nil
 }
