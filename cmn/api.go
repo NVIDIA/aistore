@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -74,11 +75,15 @@ type (
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
 		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
 		GCP  ExtraPropsGCP  `json:"gcp,omitempty" list:"omitempty"`
+		// e.g. "team=alpha;project=beta;id=123"
+		Custom string `json:"custom,omitempty"`
 	}
 	ExtraToSet struct { // ref. bpropsFilterExtra
 		AWS  *ExtraPropsAWSToSet  `json:"aws,omitempty"`
 		HTTP *ExtraPropsHTTPToSet `json:"http,omitempty"`
 		GCP  *ExtraPropsGCPToSet  `json:"gcp,omitempty"`
+		// beware: any change to this field is still a version-bump + metasync
+		Custom *string `json:"custom,omitempty"`
 	}
 
 	ExtraPropsAWS struct {
@@ -315,6 +320,8 @@ const (
 
 	maxAWSProfileLen = 256
 	maxAWSRegionLen  = 64
+
+	maxCustomLen = 128
 )
 
 func (c *ExtraProps) UnmarshalJSON(data []byte) error {
@@ -342,6 +349,18 @@ func (c *ExtraProps) UnmarshalJSON(data []byte) error {
 func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	provider, ok := arg[0].(string)
 	debug.Assert(ok)
+
+	// custom
+	if s := c.Custom; s != "" {
+		if len(s) > maxCustomLen {
+			return fmt.Errorf("invalid extra.custom: too long (%d > %d)", len(s), maxCustomLen)
+		}
+		for i, r := range s {
+			if unicode.IsControl(r) {
+				return fmt.Errorf("invalid extra.custom: control character at byte position %d", i)
+			}
+		}
+	}
 
 	switch provider {
 	case apc.HT:

@@ -160,9 +160,11 @@ const setBpropsUsage = "Update bucket properties; the command accepts both JSON-
 	indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true\n" +
 	indent1 + "\t* ais bucket props set gs://vvv mirror.enabled=true mirror.copies=4 checksum.type=md5\n" +
 	indent1 + "\t* ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force\n" +
-	indent1 + "\tReferences:\n" +
+	indent1 + "\t* ais bucket props set ais://nnn extra.custom=\"owner:team-a; project:research\"\n" +
+	indent1 + "\tNotes:\n" +
 	indent1 + "\t* for details and many more examples, see docs/cli/bucket.md\n" +
-	indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'"
+	indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'\n" +
+	indent1 + "\t* 'extra.custom' is an opaque string (up to 128 characters) for per-bucket user-defined metadata"
 
 // ais evict
 const evictUsage = "Evict one remote bucket, multiple remote buckets, or\n" +

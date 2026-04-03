@@ -2162,7 +2162,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 		return
 	}
 	if err := cos.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
-		p.writeErrMsg(w, r, "invalid props-to-update value in apireq: "+msg.String())
+		p.writeErrf(w, r, "invalid set-bucket-props request (msg=%s): %v", msg, err)
 		return
 	}
 	bck := apireq.bck
