@@ -291,13 +291,21 @@ The following variables can be used to configure deployment scripts and [validat
 
 For configuring the AuthN service and clients, see the [AuthN Environment Variables](/docs/authn.md#environment-configuration).
 
-When AuthN is disabled (i.e., not used), `ais config` CLI will show something like:
+When AuthN is disabled (i.e., not used), the respective `ais config` command will show something like:
 
 ```console
 $ ais config cluster auth
-PROPERTY         VALUE
-auth.secret      **********
-auth.enabled     false
+PROPERTY                         VALUE
+auth.signature.key               **********
+auth.signature.method            hmac
+auth.required_claims.aud         []
+auth.oidc.issuer_ca_bundle
+auth.oidc.allowed_iss            []
+auth.cluster_key.enabled         false
+auth.cluster_key.ttl             0s
+auth.cluster_key.nonce_window    1m
+auth.cluster_key.rotation_grace  1m
+auth.enabled                     false ## <<<< disabled
 ```
 
 Notice: this command is executed on the AIStore cluster, not AuthN.

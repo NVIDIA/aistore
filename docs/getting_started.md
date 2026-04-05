@@ -87,6 +87,8 @@ Benchmarking and stress-testing is done on Linux only - another reason to consid
 
 This section provides the fastest way to get an AIStore cluster running on your local machine. For more detailed steps, see the [Local Playground](#local-playground) section.
 
+> **Docker shortcut**: If you already have Docker or Podman, you can skip everything below and get a running cluster in seconds with `make up` - see [Minimal Compose Deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/compose/README.md).
+
 ### Install Go (if not already installed)
 
 Follow the official [Go installation instructions](https://go.dev/doc/install) for your platform (use the Linux tab for AIStore deployments).
@@ -596,11 +598,17 @@ There's a separate document that tackles HTTPS topics that, in part, include:
 
 ### Build, Make, and Development Tools
 
-As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/deploy/dev/k8s/README.md). As the very first step, run `make help` for help on:
+As noted, the project utilizes GNU `make` to build and run locally and remotely.
+
+> Locally - with or without [K8s](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md).
+
+As the very first step, run `make help` for help on:
 
 * **building** AIS node binary (called `aisnode`) deployable as both storage target **or** an ais gateway (most of the time referred to as "proxy");
 * **building** [CLI](/docs/cli.md)
-* **building** [benchmark tools](/bench/tools/README.md).
+* **building** [benchmark tools](https://github.com/NVIDIA/aistore/blob/main/bench/tools/README.md).
+
+> For the complete list of AIS executables (with build and install instructions), see [Tools and Utilities](https://github.com/NVIDIA/aistore/blob/main/cmd/README.md).
 
 In particular, the `make` provides a growing number of developer-friendly commands to:
 
@@ -612,6 +620,7 @@ Of course, local build is intended for development only. For production, there i
 
 In summary:
 
+* for the complete list of AIS executables (with build and install instructions), see [Tools and Utilities](https://github.com/NVIDIA/aistore/blob/main/cmd/README.md);
 * for development using _local playground_, please also see [local playground](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/local);
 * for docker and minikube builds supported by _this_ repository, see [docker and minikube](https://github.com/NVIDIA/aistore/tree/main/deploy) deployments;
 * finally, for production build and deployment, please refer to the [ais-k8s repository](https://github.com/NVIDIA/ais-k8s).

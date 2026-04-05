@@ -1,80 +1,142 @@
-There's a set of topics in system management that can often be found under alternative subtitles:
-"graceful termination and cleanup", "shutting down and restarting", "adding/removing members", "joining and leaving cluster", and similar.
+There's a set of system-management topics that often appear under alternative subtitles:
+"graceful termination and cleanup", "shutting down and restarting", "adding and removing members", "joining and leaving cluster", and similar.
 
-Any discussion along those lines typically involves state transitions, so let's go ahead and name the states (and transitions).
+All of these topics involve state transitions, so let's start by naming the states and the transitions between them.
 
 ![Node lifecycle: states and transitions](images/lifecycle-graceful-term.png)
 
-To put things in perspective, this picture is about a node (not shown) in an aistore cluster (not shown). Tracking it from the top downwards, first notice a state called "maintenance mode". "Maintenance mode" constitutes maybe the most gentle, if you will, way of removing a node from the operating cluster.
+To put things in perspective, this picture is about a node (not shown) in an AIStore cluster (also not shown).
 
-When in maintenance, the node stops keep-alive heartbeats but remains in the cluster map and remains connected. That is, unless you disconnect or shut it down manually (which would be perfectly fine and expected).
+Tracking it from top to bottom, first notice the state called **maintenance mode**. This is the gentlest way to remove a node from an operating cluster. When in maintenance, the node stops keepalive heartbeats but remains in the cluster map and remains connected, unless you disconnect or shut it down manually, which is perfectly valid and often expected.
 
-Next is "shutdown". Graceful shutdown can also be achieved in a single shot, as indicated by one of those curly arrows in the picture's left:
- "online" => "shutdown".
+Next comes **shutdown**. Graceful shutdown can also be achieved in a single shot, as indicated by one of the arrows on the left:
 
-When in "shutdown", a node can easily get back and rejoin the cluster at any _later_ time. It'll take two steps, not one - see the blue arrows on the picture's right where RESTART must be understood as a deployment-specific operation (e.g., `kubectl run`).
+`online => shutdown`
 
-Both "maintenance" and "shutdown" involve a certain intra-cluster operation called "global rebalance" (aka "rebalance").
+When in `shutdown`, the node can later return and rejoin the cluster. That takes two steps, not one: restart the node first, then take it out of maintenance. In the diagram, `RESTART` must be understood as a deployment-specific action such as `kubectl run`, restarting a systemd unit, or powering the machine back on.
 
-But before we talk about it in any greater detail, let's finish with the node's lifecycle. The third and final special state is "decommission". Loosely synonymous with *cleanup* (a very thorough cleanup, as it were), "decommission" entails:
+Both `maintenance` and `shutdown` involve a certain intra-cluster operation called **global rebalance**.
 
-* migrating all user data the node is storing to other nodes that are currently "online" - the step that's followed by:
-* partial or complete cleanup of the node in question, whereby the complete cleanup further entails:
-* removing all AIS metadata, all configuration files, and - last but not least - user data in its entirety.
+The third and final special state is **decommission**. Loosely synonymous with cleanup - very thorough cleanup - decommission entails:
 
-Needless to say, there's no way back out of "decommission" - the proverbial point of no return. To rejoin the cluster, a decommissioned node will have to be redeployed from scratch, but then it would be a totally different node, of course...
+* migrating all user data currently stored on the node to other online nodes;
+* partial or complete cleanup of the node itself; and
+* removing AIS metadata, configuration files, and, optionally, user data in its entirety.
 
-### Table of Contents
+Needless to say, there's no simple way back out of `decommission` - the proverbial point of no return. To rejoin the cluster after a completed decommission, the node must be rejoined or redeployed, depending on how far the cleanup progressed and whether local AIS metadata and data were removed.
+
+## Table of Contents
+
+- [Joining a Cluster: Discovery URL](#joining-a-cluster-discovery-url)
 - [Cluster](#cluster)
 - [Privileges](#privileges)
 - [Rebalance](#rebalance)
+  - [Proper Location](#proper-location)
+  - [Quick Example](#quick-example)
+- [Putting a Node in Maintenance](#putting-a-node-in-maintenance)
+  - [Skipping Rebalance](#skipping-rebalance)
+- [Clearing Maintenance State](#clearing-maintenance-state)
+- [Removing a Node from a Cluster](#removing-a-node-from-a-cluster)
+- [Interrupting Node Removal](#interrupting-node-removal)
+- [Checking Removal Status](#checking-removal-status)
 - [Summary](#summary)
-- [Usage](#usage)
 - [References](#references)
+
+## Joining a Cluster: Discovery URL
+
+AIStore clusters can be deployed with an arbitrary number of AIStore proxies (a.k.a. gateways). Each proxy implements RESTful APIs, both native and S3-compatible, and provides full access to user data stored in the cluster.
+
+Each proxy collaborates with the others to perform majority-voted HA failovers; see [Highly Available Control Plane](/docs/ha.md). All _electable_ proxies are functionally equivalent. The one elected as the current _primary_ is, among other things, responsible for joining nodes to the running cluster.
+
+To facilitate node joins in the presence of disruptive events such as:
+
+* network failures; and/or
+* partial or complete loss of local AIS metadata such as cluster maps,
+
+AIStore uses the so-called *original* and *discovery* URLs in the cluster configuration. The latter is versioned, replicated, protected, and distributed solely by the elected primary.
+
+> **March 2024 update:** starting with v3.23, the *original* URL does _not_ track the original primary. Instead, the current primary takes full responsibility for updating both URLs with a single purpose: optimizing time to join or rejoin the cluster.
+
+When an HA event triggers automated failover, the role of primary is assumed by a different proxy, with the corresponding cluster map (Smap) update synchronized across all running nodes.
+
+A new node, however, may still have configuration that refers to the old primary. The *original* and *discovery* URLs exist precisely to address that scenario:
+
+```console
+$ ais config cluster proxy --json
+{
+    "proxy": {
+        "primary_url": "https://ais-proxy-15.ais-proxy.ais.svc.cluster.local:51082",
+        "original_url": "https://ais-proxy-15.ais-proxy.ais.svc.cluster.local:51082",
+        "discovery_url": "https://ais-proxy.ais.svc.cluster.local:51082",
+        "non_electable": false
+    }
+}
+```
 
 ## Cluster
 
-There's one question that absolutely cannot wait: how to "terminate" or "cleanup" a cluster? Here's how:
+There is one cluster-level lifecycle command that deserves to be called out separately:
 
 ```console
 $ ais cluster decommission --rm-user-data --yes
 ```
 
-The above command will destroy an existing cluster - completely and utterly, no questions asked. It can be conveniently used in testing/benchmarking situations or in any sort of non-production environment - see `--help` for details. It also executes very fast - Ctrl-C's unlikely to help in case of change-of-mind...
+The above command destroys an existing cluster - completely and utterly, no questions asked. It is useful in testing, benchmarking, and other non-production environments. See `--help` for details.
 
 ## Privileges
 
-Full Disclosure: all lifecycle management commands and all associated APIs require administrative privileges. There are, essentially, three ways:
+All lifecycle management commands and their associated APIs require administrative privileges.
+
+Broadly, there are three ways to satisfy that requirement:
 
 * deploy the cluster with authentication disabled:
 
 ```console
 $ ais config cluster auth --json
+{
     "auth": {
-        "secret": "xxxxxxxx",
-        "enabled": false
+        "signature": {
+            "key": "**********",
+            "method": "hmac"
+        },
+        "required_claims": {
+            "aud": null
+        },
+        "oidc": {
+            "issuer_ca_bundle": "-",
+            "allowed_iss": null
+        },
+        "cluster_key": {
+            "enabled": false,
+            "ttl": "0s",
+            "nonce_window": "1m",
+            "rotation_grace": "1m"
+        },
+        "enabled": false ### <<<<< authentication disabled
     }
+}
 ```
-* use integrated `AuthN` server that provides OAuth 2.0 compliant JWT and a set of [easy commands](/docs/cli/auth.md) to manage users and roles (with certain permissions to access certain clusters, etc.);
-* outsource authorization to a separate, centralized (usually, LDAP-integrated) management system to manage existing users, groups, and mappings.
+
+* use the integrated `AuthN` server, which provides OAuth 2.0-compliant JWTs and a set of [CLI auth commands](/docs/cli/auth.md) to manage users, roles, and permissions; or
+* outsource authorization to a separate centralized system, often LDAP-integrated, that manages existing users, groups, and mappings.
 
 ## Rebalance
 
-Conceptually, aistore rebalance is similar to what's often called "RAID rebuild". The underlying mechanics would be very different but the general idea is the same: user data massively migrating from some nodes in a cluster (or disks in an array) to some other nodes (disks), and vice versa.
+Conceptually, AIStore rebalance is somewhat similar to what is often called a RAID rebuild. The underlying mechanics are different, but the high-level idea is similar: user data migrates from some nodes in a cluster to other nodes to restore the correct placement.
 
-In aistore, all the migration (aka "rebalancing") that's taking in place is the system response to a lifecycle event that's already happened or is about to happen. In fact, it is the response to satisfy a singular purpose and a single location-governing rule that simply states: **user data must be _properly_ located**.
+In AIStore, rebalancing is the system response to a lifecycle event that has already happened or is about to happen. Its singular purpose is to satisfy one governing rule:
 
-### Proper location
+**user data must be *properly* located**
 
-For any object in a cluster, its _proper_ location is defined by the current cluster map and locally - on each target node - by the locally configured target's [mountpaths](/docs/terminology.md#mountpath).
+### Proper Location
 
-In that sense, the "maintenance" state, for instance, has its _beginning_ - when the cluster starts rebalancing, and the post-rebalancing _end_, whereby the corresponding sub-state get recorded in a new version of the cluster map, which then gets safely distributed across all nodes, etc., etc.
+For any object in a cluster, its proper location is defined by the current cluster map and, locally on each target, by the configured target [mountpaths](/docs/terminology.md#mountpath).
 
-Next section gives an example and clarifies "maintenance sub-states" - in color.
+In that sense, the `maintenance` state, for instance, has its beginning when the cluster starts rebalancing, and its post-rebalancing end when the corresponding sub-state is recorded in the next Smap version and safely distributed across all nodes.
 
-### Quick example
+### Quick Example
 
-Given a 3-node single-gateway cluster, we go ahead and shut down one of the nodes:
+Given a 3-node single-gateway cluster, suppose we shut down one of the nodes:
 
 ```console
 $ ais cluster add-remove-nodes shutdown <TAB-TAB>
@@ -97,50 +159,177 @@ $ ais show cluster
 t[ikht8083][x]   -   -   -   -   maintenance
 ```
 
-At first, `maintenance` will show up in red indicating a simple fact that data is expeditiously migrating from the node (which is about to leave the cluster).
+At first, `maintenance` will show up in red, indicating a simple fact: data is expeditiously migrating from the node that is about to leave the cluster.
 
-> A visual cue, which is supposed to imply something like: "please don't disconnect, do not power off".
+> A visual cue that effectively says: please don't disconnect it yet, and do not power it off.
 
-But eventually, if you run the command periodically:
+Eventually, if you run:
 
 ```console
 $ ais show cluster --refresh 3
 ```
 
-or a few times manually - eventually `show cluster` will report that rebalance ("g47" in the example) has finished and the node `t[ikht8083]` - gracefully terminated. Simultaneously, `maintenance` in the `show` output will become non-red:
+or simply check a few times manually, the output will report that rebalance (`g47` in this example) has finished and the node `t[ikht8083]` has gracefully left service. Simultaneously, `maintenance` in the `show` output becomes non-red:
 
-| when rebalancing | after |
-| --- | --- |
+| when rebalancing             | after                         |
+| ---------------------------- | ----------------------------- |
 | $${\color{red}maintenance}$$ | $${\color{cyan}maintenance}$$ |
 
-The takeaway: [global rebalance](/docs/rebalance.md) runs its full way _before_ the node in question is permitted to leave. If interrupted for any reason whatsoever (power-cycle, network disconnect, new node joining, cluster shutdown, etc.) - rebalance will resume and will keep going until the [governing condition](#proper-location) is fully and globally satisfied.
+The takeaway is simple: [global rebalance](/docs/rebalance.md) runs its full course *before* the node is permitted to leave cleanly. If interrupted for any reason - power cycle, network disconnect, another node joining, cluster shutdown, and so on - rebalance resumes and continues until the [governing condition](#proper-location) is globally satisfied.
+
+## Putting a Node in Maintenance
+
+To temporarily take a node out of the cluster, put it in maintenance mode. Nodes in maintenance remain in the cluster map but stop participating in normal request processing.
+
+```console
+$ ais cluster add-remove-nodes start-maintenance 59262t8087
+Node "59262t8087" is in maintenance mode
+Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
+```
+
+Alternatively, you can shut the node down as part of the same workflow:
+
+```console
+$ ais cluster add-remove-nodes shutdown 59262t8087
+Node "59262t8087" is in maintenance mode
+Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
+```
+
+If the node is a target, the cluster will rebalance after a short preparation phase. When the rebalance finishes, it is safe to power the node off.
+
+### Skipping Rebalance
+
+> **Advanced usage only:** `--no-rebalance` is not recommended for routine cluster operations.
+> In normal operation, let AIS run rebalance automatically.
+>
+> The primary recommended use case is a controlled rolling-maintenance or rolling-upgrade workflow, where nodes are taken out of service and returned in a coordinated sequence. In Kubernetes deployments, this sequencing is typically handled automatically by the [AIS Kubernetes operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator).
+
+If you use `--no-rebalance`, the node enters maintenance immediately without waiting for data migration:
+
+```console
+$ ais cluster add-remove-nodes start-maintenance 59262t8087 --no-rebalance --yes
+
+Node "59262t8087" is in maintenance
+```
+
+Keeping automatic rebalance enabled is strongly recommended, but there are cases where skipping it is safe:
+
+* all buckets are empty;
+* maintenance was started with `--no-rebalance` and no objects were added or updated during maintenance;
+* all objects can be refetched from remote backends such as remote AIS, HTTP, or cloud buckets, understanding that this may incur extra cloud traffic charges; or
+* multiple nodes are being returned from maintenance in sequence, in which case all but the last can use `--no-rebalance` and the last node can trigger a single rebalance for the entire batch.
+
+The `--no-rebalance` flag is available for `start-maintenance`, `shutdown`, `stop-maintenance`, and `decommission`.
+
+## Clearing Maintenance State
+
+Once a node is in maintenance mode, the cluster keeps it there until you explicitly clear that state.
+
+If the node was shut down, restart or power it on first and wait for it to register with the primary proxy. Then run:
+
+```console
+$ ais cluster add-remove-nodes stop-maintenance 59262t8087
+Node "59262t8087" maintenance stopped
+Started rebalance "g3", use 'ais show job xaction g3' to monitor the progress
+```
+
+To skip automatic rebalance, provide `--no-rebalance` (advanced usage only; see [Skipping Rebalance](#skipping-rebalance).
+
+> In general, automatic rebalance should remain enabled. The same considerations listed under [Skipping Rebalance](#skipping-rebalance) apply here as well.
+
+The node starts accepting requests again after it rejoins and the cluster clears its maintenance state. You do not have to wait for the rebalance to finish before using it again.
+
+## Removing a Node from a Cluster
+
+To permanently remove a node from the cluster, decommission it:
+
+```console
+$ ais cluster add-remove-nodes decommission 59262t8087
+Node "59262t8087" is in maintenance
+Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
+```
+
+When the rebalance finishes, the primary proxy removes the node automatically from the cluster map. On unregistering, the node erases its AIS metadata.
+
+Skipping rebalance performs only the minimal preparation and removes the node immediately:
+
+```console
+$ ais cluster add-remove-nodes decommission --no-rebalance 59262t8087
+Node "59262t8087" removed from the cluster
+```
+
+Note that `decommission` cleans up AIS metadata and stops the node. By contrast, `shutdown` only stops AIS services.
+
+If the node is a target, shutdown takes full effect after the rebalance completes. If the node is a proxy, shutdown is immediate.
+
+## Interrupting Node Removal
+
+While rebalance is still running, a removal can be interrupted and the node returned to service.
+
+```console
+$ ais cluster add-remove-nodes stop-maintenance 59262t8087
+Node "59262t8087" maintenance stopped
+Started rebalance "g3", use 'ais show job xaction g3' to monitor the progress
+```
+
+This workflow applies to a node that is in maintenance or shutdown and to a decommission workflow that has not yet completed.
+
+Once decommission finishes and the node has been removed and cleaned up, returning it to the cluster may require an explicit rejoin or a full redeployment, depending on the cleanup that was performed.
+
+## Checking Removal Status
+
+Putting a node in maintenance does **not** automatically power it off.
+
+AIS runs a rebalance when a node enters maintenance mode. You should verify cluster state via `ais show cluster target` before deciding that it is safe to power the node off.
+
+In the example below, the `REBALANCE` column shows `finished` and the node is labeled `maintenance` - it is safe to power it off:
+
+```console
+$ ais show cluster target
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE    UPTIME  STATUS
+59262t8087       0.13%           31.28GiB        16%             2.435TiB        0.00%           finished     31m     maintenance
+93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           finished     31m     online
+```
+
+For decommissioning nodes, the status looks like this while rebalance is still running:
+
+```console
+$ ais show cluster target
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE    UPTIME  STATUS
+59262t8087       0.13%           31.28GiB        16%             2.435TiB        0.00%           running      31m     decommission
+93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           running      31m     online
+```
+
+When rebalance finishes, the primary proxy removes the decommissioned node automatically:
+
+```console
+$ ais show cluster target
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE    UPTIME
+93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           running      31m
+```
 
 ## Summary
 
-| lifecycle operation | CLI |  brief description |
-| --- | --- | -- |
-| maintenance mode | `start-maintenance`  | The most lightweight way to remove a node. Stop keep-alive heartbeats, do not insist on metadata updates - ignore the failures. For advanced usage options, see `--help`. |
-| shutdown | `shutdown` | Same as above, plus node shutdown (`aisnode` exit). |
-| decommission | `decommission` | Same as above, plus partial (metadata only) or complete (both data and AIS metadata) cleanup. A decommissioned node is forever "forgotten" - removed from the cluster map. |
-| remove node from cluster map | `ais advanced remove-from-smap` | Strictly intended for testing purposes and special use-at-your-own-risk scenarios. Immediately remove the node from the cluster and distribute updated cluster map with no rebalancing. |
-| take node out of maintenance | `stop-maintenance`  | Update the node with the current cluster-level metadata, re-enable keep-alive, run global rebalance. Finally, when all succeeds, distribute updated cluster map (where the node shows up "online"). |
-| join new node (ie., grow cluster) | `join` | Essentially, same as above: update the node, run global rebalance, etc. |
+| lifecycle operation          | CLI                             | brief description                                                                                                                                                          |
+| ---------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| maintenance mode             | `start-maintenance`             | The lightest way to remove a node from service. Stop keepalive heartbeats, do not insist on metadata updates, and ignore transient failures while the cluster transitions. |
+| shutdown                     | `shutdown`                      | Same as above, plus node shutdown (`aisnode` exit).                                                                                                                        |
+| decommission                 | `decommission`                  | Same as above, plus partial or complete cleanup. A decommissioned node is eventually removed from the cluster map.                                                         |
+| remove node from cluster map | `ais advanced remove-from-smap` | Strictly intended for testing and special use-at-your-own-risk scenarios. Immediately remove the node from the cluster and distribute an updated Smap with no rebalancing. |
+| take node out of maintenance | `stop-maintenance`              | Re-enable keepalive, update the node with current cluster metadata, run global rebalance, and return the node to `online`.                                                 |
+| join new node                | `join`                          | Update the node, synchronize current cluster metadata, and run global rebalance as needed.                                                                                 |
 
-### Assorted notes
+### Assorted Notes
 
-Normally, a starting-up AIS node (`aisnode`) will use its local [configuration](/docs/configuration.md) to communicate with any other node in the cluster and perform what's called [self-join](https://github.com/NVIDIA/aistore/blob/main/api/apc/actmsg.go). The latter does not require a `join` command or any other explicit administration.
+Normally, a starting AIS node (`aisnode`) uses its local [configuration](/docs/configuration.md) to contact the cluster and perform a self-join. That does not require an explicit `join` command or any separate administrative action.
 
-Still, the `join` command can solve the case when the node is misconfigured. Secondly and separately, it can be used to join a standby node - a node that started in a `standby` mode, as per:
+Still, the `join` command is useful when the node is misconfigured. Separately, it can also be used to join a standby node - that is, a node started in standby mode; see [`aisnode` command line](/docs/command_line.md).
 
-* [`aisnode` command line](/docs/command_line.md)
-
-When rebalancing, the cluster remains fully operational and can be used to read and write data, list, create, and destroy buckets, run jobs and more. In other words, none of the listed lifecycle operations requires downtime. The idea is that users never notice (and if the cluster has enough spare capacity - they won't).
+During rebalance, the cluster remains fully operational: users can read and write data, list, create, and destroy buckets, run jobs, and so on. In other words, none of the lifecycle operations described here requires downtime.
 
 ## References
 
 * [CLI: cluster management commands](/docs/cli/cluster.md)
-  - [Joining](/docs/join_cluster.md)
-  - [Leaving](/docs/leave_cluster.md)
 * [Global Rebalance](/docs/rebalance.md)
 * [AuthN](/docs/authn.md)
 * [AIS on Kubernetes deployment: playbooks](https://github.com/NVIDIA/ais-k8s/tree/main/playbooks)

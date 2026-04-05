@@ -63,7 +63,7 @@ Note that there is a single CLI command to [grow](#join-a-node) a cluster, and m
 
 Scaling down can be done gracefully or forcefully, and also temporarily or permanently.
 
-For background, usage examples, and details, please see [this document](/docs/leave_cluster.md).
+For background, usage examples, and details, please see [Node lifecycle: maintenance, shutdown, decommission](/docs/lifecycle_node.md).
 
 # Adding/removing nodes
 

@@ -62,7 +62,6 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 
 - [Storage services](/docs/storage_svcs.md)
 - [Buckets: design, operations, namespaces, and system buckets](/docs/bucket.md)
-- [Bucket lifecycle](/docs/lifecycle.md)
 - [Native Bucket Inventory (NBI)](/docs/nbi.md)
 - [Backend providers](/docs/providers.md)
 - [On-disk layout](/docs/on_disk_layout.md)
@@ -73,8 +72,6 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 ## Cluster Operations
 
 - [Node lifecycle: maintenance, shutdown, decommission](/docs/lifecycle_node.md)
-- [Joining a cluster](/docs/join_cluster.md)
-- [Leaving a cluster](/docs/leave_cluster.md)
 - [Global rebalance](/docs/rebalance.md)
 - [Resilver](/docs/resilver.md)
 - [Highly available control plane](/docs/ha.md)
@@ -107,7 +104,7 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 - [Blob Downloader](/docs/blob_downloader.md)
 - [Batch object retrieval (get-batch)](/docs/get_batch.md)
 - [Batch operations](/docs/batch.md)
-- [Tools and utilities](/docs/tools.md)
+- [Tools and utilities](https://github.com/NVIDIA/aistore/blob/main/cmd/README.md)
 - [Extended actions (xactions)](https://github.com/NVIDIA/aistore/blob/main/xact/README.md)
 
 ## Observability, Monitoring, and Performance
