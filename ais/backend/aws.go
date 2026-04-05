@@ -101,6 +101,18 @@ func NewAWS(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 
 const gotBucketLocation = "got_bucket_location"
 
+// HeadBucket queries the backend S3 bucket and returns props
+//
+// `sessConf.region` is normally expected to come from bucket props or from
+// AWS SDK config resolution (`sessConf.options()` back-fills it from
+// `options.Region`).
+//
+// If region is still unknown after creating the client, avoid caching under
+// an incomplete (profile, region, endpoint) tuple.
+//
+// `gotBucketLocation` is a special-case tag used by HeadBucket()'s fallback
+// location probe. It does not pass the resolved region back here; it only
+// bypasses the early return below and permits caching on that path.
 func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	var (
 		cloudBck = bck.RemoteBck()
@@ -143,18 +155,17 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, erro
 	return bckProps, 0, nil
 }
 
-func _location(svc *s3.Client, bckName string) (region string, err error) {
-	resp, err := svc.GetBucketLocation(context.Background(), &s3.GetBucketLocationInput{
+func _location(svc *s3.Client, bckName string) (string, error) {
+	resp, err := svc.HeadBucket(context.Background(), &s3.HeadBucketInput{
 		Bucket: aws.String(bckName),
 	})
 	if err != nil {
-		return
+		return "", err
 	}
-	region = string(resp.LocationConstraint)
-	if region == "" {
-		region = env.AwsDefaultRegion() // env "AWS_REGION" or "us-east-1" - in that order
+	if resp.BucketRegion != nil && *resp.BucketRegion != "" {
+		return *resp.BucketRegion, nil
 	}
-	return
+	return env.AwsDefaultRegion(), nil // env "AWS_REGION" or "us-east-1" - in that order
 }
 
 func _versioning(svc *s3.Client, bck *cmn.Bck) (enabled bool, errV error) {
