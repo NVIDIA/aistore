@@ -4,7 +4,6 @@
  */
 package apc
 
-// swagger:model
 // Rechunk transforms object storage format (monolithic <-> chunked).
 // By default, rechunk operates only on in-cluster (cached) objects - it does not
 // fetch objects from remote backends. Use `SyncRemote=true` to also update remote storage.

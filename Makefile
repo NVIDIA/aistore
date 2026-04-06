@@ -98,8 +98,10 @@ endif
 BUILD_TAGS += mono
 
 # Colors
+red = $(shell { tput setaf 1 || tput AF 1; } 2>/dev/null)
 cyan = $(shell { tput setaf 6 || tput AF 6; } 2>/dev/null)
 term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)
+$(call make-lazy,red)
 $(call make-lazy,cyan)
 $(call make-lazy,term-reset)
 
@@ -381,62 +383,25 @@ help:
 		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally" \
 		"GORACE='log_path=/tmp/race' make aisloader test-aisloader" "Build and test aisloader with race detection" \
 
-.PHONY: restful-api-doc
-
-## Generate RESTful API documentation using swagger
-restful-api-doc: ## Generate OpenAPI/Swagger documentation from code annotations
-	@echo "Generating swagger annotations from code comments..."
-	@GOROOT="" go generate ./...
-	@echo "Installing swag if not present..."
-	@command -v swag >/dev/null 2>&1 || GOOS="" go install github.com/swaggo/swag/cmd/swag@v1.16.4
-	@echo "Generating OpenAPI specification..."
-	@mkdir -p .docs
-	@swag init --generalInfo tools/gendocs/gendocs-temp/annotations.go --output .docs
-	@echo "Injecting model extensions..."
-	@GOROOT="" go run ./tools/gendocs -inject-extensions
-	@echo "Cleaning up generated temp files..."
-	@GOROOT="" go run ./tools/gendocs -cleanup
-	@echo "$(cyan)Documentation generated successfully!$(term-reset)"
-	@echo "$(cyan)Generated files:$(term-reset)"
-	@echo "  .docs/swagger.json  - OpenAPI JSON specification"
-	@echo "  .docs/swagger.yaml  - OpenAPI YAML specification"
-	@echo "  .docs/docs.go       - Go documentation file"
-	@echo ""
-	@echo "$(cyan)To test the documentation:$(term-reset)"
-	@echo "  1. Copy the content of .docs/swagger.json"
-	@echo "  2. Paste it into https://editor.swagger.io/"
-	@echo "  3. View the rendered API documentation"
-
-
 .PHONY: api-docs-website
 
-## Generate API documentation for the website with custom template
-api-docs-website: restful-api-doc ## Generate complete API documentation for Jekyll website
-	@echo "$(cyan)Generating website API documentation...$(term-reset)"
-	@echo "Checking OpenAPI Generator CLI availability..."
+## Generate API documentation: OpenAPI 3.0 spec → Markdown for Jekyll website
+api-docs-website: ## Generate API docs from code annotations
 	@if ! command -v openapi-generator-cli >/dev/null 2>&1; then \
 		echo "$(red)Error: openapi-generator-cli not found in PATH$(term-reset)"; \
-		echo "$(cyan)Please install it using the bash launcher script:$(term-reset)"; \
-		echo "  mkdir -p ~/bin/openapitools"; \
-		echo "  curl https://raw.githubusercontent.com/OpenAPITools/openapi-generator/master/bin/utils/openapi-generator-cli.sh > ~/bin/openapitools/openapi-generator-cli"; \
-		echo "  chmod u+x ~/bin/openapitools/openapi-generator-cli"; \
-		echo "  export PATH=\$$PATH:~/bin/openapitools"; \
+		echo "$(cyan)Install: https://openapi-generator.tech/docs/installation$(term-reset)"; \
 		exit 1; \
 	fi
-	@echo "Generating markdown documentation with custom template..."
-	@openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
-	@echo "Copying generated documentation to website location..."
+	@echo "Generating OpenAPI 3.0 specification..."
+	@GOROOT="" go run ./tools/gendocs
+	@echo "Generating Markdown from spec..."
+	@openapi-generator-cli generate -i .docs/openapi.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template
 	@cp docs-generated/README.md docs/http-api.md
 	@cp -r docs-generated/Apis docs/
 	@cp -r docs-generated/Models docs/
-	@echo "Adding Jekyll front matter..."
 	@./scripts/website-preprocess.sh
-	@echo "$(cyan)Website API documentation generated successfully!$(term-reset)"
-	@echo "$(cyan)Updated files:$(term-reset)"
-	@echo "  docs/http-api.md - Website HTTP API documentation"
-	@echo "  docs-generated/README.md - Generated documentation"
-	@echo ""
-	@echo "$(cyan)The documentation is now ready for the Jekyll website!$(term-reset)"
+	@rm -rf .docs docs-generated
+	@echo "$(cyan)API documentation generated successfully!$(term-reset)"
 
 #
 # Fern documentation

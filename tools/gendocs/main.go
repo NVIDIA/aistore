@@ -1,4 +1,4 @@
-// Package main generates swagger annotations from AIStore source code comments.
+// Package main generates an OpenAPI 3.0 specification from AIStore source code annotations.
 //
 // Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 package main
@@ -17,11 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-var (
-	targetRoot      string
-	annotationsPath string
-	swaggerYamlPath string
-)
+var targetRoot string
 
 var (
 	// Parameter directories to scan for Qparam constants
@@ -30,11 +26,9 @@ var (
 
 const (
 	// File paths and extensions
-	aisRelativePath         = "ais"
-	annotationsRelativePath = "tools/gendocs/gendocs-temp/annotations.go"
-	docsRelativePath        = ".docs"
-	tempDirRelativePath     = "tools/gendocs/gendocs-temp"
-	goFileExt               = ".go"
+	aisRelativePath  = "ais"
+	docsRelativePath = ".docs"
+	goFileExt        = ".go"
 
 	// Generation annotation prefixes
 	endpointPrefix = "+gen:endpoint"
@@ -44,12 +38,6 @@ const (
 	commentPrefix    = "//"
 	commentWithSpace = "// "
 	funcKeyword      = "func "
-
-	// Swagger annotation keywords
-	atSummary = "@Summary"
-	atParam   = "@Param"
-	atSuccess = "@Success"
-	atRouter  = "@Router"
 
 	baseURL          = "AIS_ENDPOINT"
 	paramPlaceholder = "<value>"
@@ -67,25 +55,6 @@ const (
 	modelPrefix      = "model=["
 	payloadRefPrefix = "payload="
 	apcPrefix        = "apc."
-
-	// Temporary files for vendor extensions
-	modelActionsFileName = "model-actions.yaml"
-	httpExamplesFileName = "http-examples.yaml"
-
-	// YAML keys for vendor extensions
-	definitionsKey       = "definitions"
-	xSupportedActionsKey = "x-supported-actions"
-	XHTTPExamplesKey     = "x-http-examples"
-
-	// Template strings for Swagger generation
-
-	summaryAnnotation = "// @Summary "
-	paramTemplate     = "// @Param %s query %s false \"%s\""
-	successTemplate   = "// @Success 200 {object} object \"Success\""
-	routerTemplate    = "// @Router %s [%s]"
-	idTemplate        = "// @ID %s"
-	tagsTemplate      = "// @Tags %s"
-	bodyParamTemplate = "// @Param request body %s true \"%s\""
 )
 
 type (
@@ -98,9 +67,6 @@ type (
 		Label   string `yaml:"label"`   // Example title (e.g., "Copy Bucket")
 		Command string `yaml:"command"` // HTTP command
 	}
-
-	// maps operation IDs to their HTTP examples
-	operationHTTPExamples map[string][]commandExample
 
 	endpoint struct {
 		Method       string
@@ -120,8 +86,8 @@ type (
 		ParamSet       *paramSet
 		ActionMap      map[string]string
 		ModelActions   map[string][]string
-		HTTPExamples   operationHTTPExamples
 		GlobalPayloads map[string]string
+		Endpoints      *[]endpoint
 	}
 
 	fileWalker struct {
@@ -134,8 +100,8 @@ type (
 		ParamSet       *paramSet
 		ActionMap      map[string]string
 		ModelActions   map[string][]string
-		HTTPExamples   operationHTTPExamples
 		GlobalPayloads map[string]string
+		Endpoints      []endpoint
 	}
 )
 
@@ -333,29 +299,11 @@ func collectAndGenerateHTTPExamples(ep *endpoint, actionMap, globalPayloads map[
 }
 
 func main() {
-	// Set up dynamic paths
 	projectRoot, err := getProjectRoot()
 	if err != nil {
 		panic(fmt.Errorf("failed to determine project root: %v", err))
 	}
 	targetRoot = filepath.Join(projectRoot, aisRelativePath)
-	annotationsPath = filepath.Join(projectRoot, annotationsRelativePath)
-	swaggerYamlPath = filepath.Join(projectRoot, docsRelativePath, "swagger.yaml")
-
-	if len(os.Args) > 1 && os.Args[1] == "-cleanup" {
-		cleanupAnnotations()
-		return
-	}
-
-	if len(os.Args) > 1 && os.Args[1] == "-inject-extensions" {
-		if err := injectModelExtensions(); err != nil {
-			panic(fmt.Errorf("failed to inject model extensions: %v", err))
-		}
-		if err := injectCodeSamples(); err != nil {
-			panic(fmt.Errorf("failed to inject code extensions: %v", err))
-		}
-		return
-	}
 
 	var paramSet paramSet
 	if err := paramSet.loadFromDirectories(projectRoot, paramDirectories); err != nil {
@@ -374,13 +322,74 @@ func main() {
 		ParamSet:       &paramSet,
 		ActionMap:      actionMap,
 		ModelActions:   make(map[string][]string),
-		HTTPExamples:   make(operationHTTPExamples),
 		GlobalPayloads: make(map[string]string),
 	}
 
 	if err := processor.run(targetRoot); err != nil {
 		panic(err)
 	}
+
+	// Collect all model names referenced by endpoints
+	modelNames := collectReferencedModels(processor.Endpoints)
+
+	// Build import map from parsed source files
+	importMap, err := buildImportMap(projectRoot, targetRoot)
+	if err != nil {
+		panic(fmt.Errorf("failed to build import map: %v", err))
+	}
+
+	// Parse Go structs into OpenAPI schemas
+	schemas := parseModelSchemas(projectRoot, modelNames, importMap)
+
+	// Add x-supported-actions to schemas
+	for model, actions := range processor.ModelActions {
+		if schema, exists := schemas[model]; exists {
+			schema.XSupportedActions = actions
+		}
+	}
+
+	// Build and write the OpenAPI 3.0 spec
+	spec := buildSpec(processor.Endpoints, schemas, processor.ActionMap)
+
+	outDir := filepath.Join(projectRoot, docsRelativePath)
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		panic(err)
+	}
+
+	data, err := yaml.Marshal(spec)
+	if err != nil {
+		panic(fmt.Errorf("failed to marshal spec: %v", err))
+	}
+
+	outPath := filepath.Join(outDir, "openapi.yaml")
+	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Generated OpenAPI 3.0 spec: %s\n", outPath)
+	fmt.Printf("  Endpoints: %d\n", len(processor.Endpoints))
+	fmt.Printf("  Schemas:   %d\n", len(schemas))
+}
+
+// collectReferencedModels gathers all model names referenced from endpoint annotations.
+func collectReferencedModels(endpoints []endpoint) []string {
+	seen := make(map[string]bool)
+	var models []string
+	for i := range endpoints {
+		for _, action := range endpoints[i].Actions {
+			if !seen[action.Model] {
+				seen[action.Model] = true
+				models = append(models, action.Model)
+			}
+		}
+		for _, model := range endpoints[i].Models {
+			if !seen[model] {
+				seen[model] = true
+				models = append(models, model)
+			}
+		}
+	}
+	return models
 }
 
 // Extracts action/model pairs from the action=[...] clause
@@ -548,16 +557,14 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		}
 	}
 
-	// Get API class tag for the link
 	tag := determineTag(path)
 
-	// Reverse mapping for model actions with API links
+	// Reverse mapping: which actions use which models (plain text, no HTML)
 	for _, action := range actions {
 		actionName := strings.TrimPrefix(action.Action, apcPrefix)
 		if realValue, exists := fp.ActionMap[actionName]; exists {
-			actionLink := fmt.Sprintf(apiLinkFormat, tag, operationID, realValue)
-			if !slices.Contains(fp.ModelActions[action.Model], actionLink) {
-				fp.ModelActions[action.Model] = append(fp.ModelActions[action.Model], actionLink)
+			if !slices.Contains(fp.ModelActions[action.Model], realValue) {
+				fp.ModelActions[action.Model] = append(fp.ModelActions[action.Model], realValue)
 			}
 		}
 	}
@@ -567,67 +574,33 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		Params:       params,
 		Summary:      summary,
 		OperationID:  operationID,
-		Tag:          determineTag(path),
+		Tag:          tag,
 		Actions:      actions,
 		Models:       models,
 		HTTPExamples: httpExamples,
 	}, nil
 }
 
-var dummyFuncCounter int
-
-func writeToAnnotations(swaggerComments []string) error {
-	// Read existing content
-	content, err := os.ReadFile(annotationsPath)
-	if err != nil {
-		return err
-	}
-
-	// Append the swagger comments with a unique function (needed for swagger to generate docs)
-	existingContent := string(content)
-	swaggerBlock := strings.Join(swaggerComments, newlineChar)
-	dummyFuncCounter++
-	dummyFunc := fmt.Sprintf("func dummyHandler%d() {}", dummyFuncCounter) + newlineChar
-	newContent := existingContent + swaggerBlock + newlineChar + dummyFunc + newlineChar
-
-	return os.WriteFile(annotationsPath, []byte(newContent), 0o644)
-}
-
+// process scans a source file for +gen:endpoint annotations and collects endpoints.
 func (fp *fileParser) process() error {
 	content, err := os.ReadFile(fp.Path)
 	if err != nil {
 		return err
 	}
 	lines := strings.Split(string(content), newlineChar)
-	out := make([]string, 0, len(lines))
 
-	for i := 0; i < len(lines); {
+	for i := range lines {
 		line := strings.TrimSpace(lines[i])
-
-		if isSwaggerComment(line) {
-			i++
-			continue
-		}
-
 		if strings.HasPrefix(line, commentWithSpace+endpointPrefix) {
-			out = append(out, lines[i])
 			ep, err := fp.parseEndpoint(lines, i)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, errorParsingEndpoint, err)
-				i++
 				continue
 			}
-			swaggerComments := generateSwaggerComments(&ep, fp.ActionMap, fp.HTTPExamples)
-			writeToAnnotations(swaggerComments)
-			i++
-			continue
+			*fp.Endpoints = append(*fp.Endpoints, ep)
 		}
-
-		out = append(out, lines[i])
-		i++
 	}
-
-	return os.WriteFile(fp.Path, []byte(strings.Join(out, newlineChar)), 0o644)
+	return nil
 }
 
 func (fw *fileWalker) walk() error {
@@ -657,68 +630,20 @@ func (ep *endpointProcessor) run(root string) error {
 		return err
 	}
 
-	// Clear annotations file and reset counter
-	if err := ep.clearAnnotations(); err != nil {
-		return err
-	}
-
 	for _, file := range ep.Walker.Files {
 		parser := &fileParser{
 			Path:           file,
 			ParamSet:       ep.ParamSet,
 			ActionMap:      ep.ActionMap,
 			ModelActions:   ep.ModelActions,
-			HTTPExamples:   ep.HTTPExamples,
 			GlobalPayloads: ep.GlobalPayloads,
+			Endpoints:      &ep.Endpoints,
 		}
 		if err := parser.process(); err != nil {
 			return err
 		}
 	}
-
-	// Save ModelActions to temporary file for extension injection
-	if err := ep.saveModelActions(); err != nil {
-		return err
-	}
-
-	// Save HTTPExamples to temporary file for code samples injection
-	return ep.saveHTTPExamples()
-}
-
-// Writes the collected ModelActions to a temporary file for inject-extensions
-func (ep *endpointProcessor) saveModelActions() error {
-	if len(ep.ModelActions) == 0 {
-		return nil
-	}
-
-	projectRoot, err := getProjectRoot()
-	if err != nil {
-		return err
-	}
-
-	modelActionsPath := filepath.Join(projectRoot, tempDirRelativePath, modelActionsFileName)
-
-	// Ensure the temp directory exists
-	if err := os.MkdirAll(filepath.Dir(modelActionsPath), 0o755); err != nil {
-		return err
-	}
-
-	data, err := yaml.Marshal(ep.ModelActions)
-	if err != nil {
-		return fmt.Errorf("failed to marshal model actions: %v", err)
-	}
-
-	return os.WriteFile(modelActionsPath, data, 0o644)
-}
-
-func (*endpointProcessor) clearAnnotations() error {
-	if err := os.MkdirAll(filepath.Dir(annotationsPath), 0o755); err != nil {
-		return err
-	}
-	// Write the basic header content
-	headerContent := "package main\n"
-	dummyFuncCounter = 0
-	return os.WriteFile(annotationsPath, []byte(headerContent), 0o644)
+	return nil
 }
 
 func collectSummaryLines(lines []string, i int) []string {
@@ -735,13 +660,7 @@ func collectSummaryLines(lines []string, i int) []string {
 		if !strings.HasPrefix(next, commentPrefix) {
 			break
 		}
-		if strings.Contains(next, endpointPrefix) {
-			continue
-		}
-		if strings.Contains(next, payloadPrefix) {
-			continue
-		}
-		if isSwaggerComment(next) {
+		if strings.Contains(next, endpointPrefix) || strings.Contains(next, payloadPrefix) {
 			continue
 		}
 		cleanLine := strings.TrimSpace(strings.TrimPrefix(next, commentPrefix))
@@ -750,97 +669,4 @@ func collectSummaryLines(lines []string, i int) []string {
 		}
 	}
 	return summaryLines
-}
-
-func generateSwaggerComments(ep *endpoint, actionMap map[string]string, httpExamples operationHTTPExamples) []string {
-	swaggerComments := []string{}
-	if ep.Summary != "" {
-		swaggerComments = append(swaggerComments, summaryAnnotation+ep.Summary)
-	}
-	if ep.OperationID != "" {
-		swaggerComments = append(swaggerComments, fmt.Sprintf(idTemplate, ep.OperationID))
-	}
-	swaggerComments = append(swaggerComments, fmt.Sprintf(tagsTemplate, ep.Tag))
-
-	if len(ep.HTTPExamples) > 0 {
-		httpExamples[ep.OperationID] = ep.HTTPExamples
-	}
-
-	for _, param := range ep.Params {
-		paramName := param.Value
-		desc := param.Description
-		if desc == "" {
-			fmt.Fprintf(os.Stderr, warningNoComment, param.Name)
-			continue
-		}
-		desc = strings.ReplaceAll(desc, quote, escapedQuote)
-		swaggerComments = append(swaggerComments, fmt.Sprintf(paramTemplate, paramName, param.Type, desc))
-	}
-
-	// Add single parameters that references the action(s)
-	if len(ep.Actions) > 0 {
-		var actionLinks []string
-		for _, action := range ep.Actions {
-			actionName := strings.TrimPrefix(action.Action, apcPrefix)
-			if realValue, exists := actionMap[actionName]; exists {
-				actionName = realValue
-			}
-			link := fmt.Sprintf(actionLinkFormat, action.Model, actionName)
-			actionLinks = append(actionLinks, link)
-		}
-
-		description := fmt.Sprintf("%s%s", supportedActionsHeader, strings.Join(actionLinks, ", "))
-
-		// Generate one @Param request body for each model
-		for _, action := range ep.Actions {
-			bodyParamComment := fmt.Sprintf(bodyParamTemplate, action.Model, description)
-			swaggerComments = append(swaggerComments, bodyParamComment)
-		}
-	}
-
-	// Add request body parameters for direct model references
-	if len(ep.Models) > 0 {
-		var modelLinks []string
-		for _, model := range ep.Models {
-			modelName := model
-			if strings.Contains(model, dot) {
-				parts := strings.Split(model, dot)
-				modelName = parts[len(parts)-1]
-			}
-			link := fmt.Sprintf(actionLinkFormat, model, modelName)
-			modelLinks = append(modelLinks, link)
-		}
-
-		description := "Request model: " + strings.Join(modelLinks, ", ")
-
-		// Generate one @Param request body for each model
-		for _, model := range ep.Models {
-			bodyParamComment := fmt.Sprintf(bodyParamTemplate, model, description)
-			swaggerComments = append(swaggerComments, bodyParamComment)
-		}
-	}
-
-	swaggerComments = append(swaggerComments,
-		successTemplate,
-		fmt.Sprintf(routerTemplate, ep.Path, ep.Method))
-	return swaggerComments
-}
-
-func (ep *endpointProcessor) saveHTTPExamples() error {
-	if len(ep.HTTPExamples) == 0 {
-		return nil
-	}
-
-	projectRoot, err := getProjectRoot()
-	if err != nil {
-		return err
-	}
-
-	httpExamplesPath := filepath.Join(projectRoot, tempDirRelativePath, httpExamplesFileName)
-	yamlData, err := yaml.Marshal(ep.HTTPExamples)
-	if err != nil {
-		return fmt.Errorf("failed to marshal HTTP examples: %v", err)
-	}
-
-	return os.WriteFile(httpExamplesPath, yamlData, 0o644)
 }

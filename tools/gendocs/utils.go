@@ -149,18 +149,3 @@ func isFunctionDeclaration(line string) bool {
 	}
 	return strings.Contains(trimmed, openParen)
 }
-
-// Checks if a line is a swagger annotation comment
-func isSwaggerComment(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	if !strings.HasPrefix(trimmed, commentPrefix) {
-		return false
-	}
-	content := strings.TrimSpace(strings.TrimPrefix(trimmed, commentPrefix))
-	for _, prefix := range []string{atSummary, atParam, atSuccess, atRouter} {
-		if strings.HasPrefix(content, prefix) {
-			return true
-		}
-	}
-	return false
-}

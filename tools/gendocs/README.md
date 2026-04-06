@@ -1,10 +1,10 @@
 # AIStore API Documentation Generator
 
-This tool automatically generates OpenAPI/Swagger documentation from Go source code comments using special annotations.
+This tool generates an OpenAPI 3.0 specification from Go source code annotations. Struct schemas are extracted via `go/ast`.
 
 ## How It Works
 
-The documentation generator scans Go source files in the `../ais` directory looking for `+gen:endpoint` annotations in comments. These annotations define REST API endpoints and their parameters.
+The generator scans Go source files in `ais/` for `+gen:endpoint` annotations, resolves referenced Go packages from the import declarations in those files, parses referenced Go structs into OpenAPI schemas using `go/ast`, and writes a single `openapi.yaml` file.
 
 ## Annotation Syntax
 
@@ -177,25 +177,11 @@ The system automatically maps action constants to their string values:
 
 This mapping ensures consistency between the `+gen:endpoint` action definitions and the `+gen:payload` labels.
 
-## Data Model Annotations
+## Data Model Schemas
 
-### Swagger Model Annotation
-Use `// swagger:model` to mark Go structs as API data models that should be included in the OpenAPI specification:
+Structs referenced in `action=[...]` or `model=[...]` annotations are automatically parsed into OpenAPI schemas. The generator reads struct fields, JSON tags, and types directly.
 
-```go
-// swagger:model
-type PromoteArgs struct {
-    DaemonID  string `json:"tid,omitempty"` // target ID
-    SrcFQN    string `json:"src,omitempty"` // source file or directory
-    // ... more fields
-}
-```
-
-**Model Usage Flow:**
-1. Define struct with `// swagger:model` annotation
-2. Reference the model in endpoint `action` parameters
-3. Generator automatically creates OpenAPI schema definitions
-4. Request/response documentation includes the model's fields and types
+Fields are marked as `required` in the schema unless they are pointers or have `omitempty` in their JSON tag.
 
 ## Parameter Definitions
 
@@ -271,8 +257,6 @@ namespace. Returns detailed bucket information including size and object count."
 
 ### Example 2: POST Endpoint with Action Parameters and Data Models
 ```go
-// Define the data model first
-// swagger:model
 type PromoteArgs struct {
     DaemonID  string `json:"tid,omitempty"` // target ID
     SrcFQN    string `json:"src,omitempty"` // source file path
@@ -282,81 +266,21 @@ type PromoteArgs struct {
 
 // +gen:endpoint POST /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string] action=[apc.ActPromote=apc.PromoteArgs]
 func PromoteObjects(w http.ResponseWriter, r *http.Request) {
-    var args PromoteArgs
-    if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-        // Handle error...
-        return
-    }
-
     // Implementation...
 }
 ```
 
-This generates documentation that appears on the website as:
+The generator automatically parses `apc.PromoteArgs` and produces an OpenAPI schema with its fields and types.
 
-```
-Supported actions: ActPromote
+## Custom Type Handling
 
-APC.PROMOTEARGS
-
-apc.PromoteArgs
-Properties
-Name     Type      Description
-tid      String    target ID
-src      String    source file path
-obj      String    destination object name
-rcr      Boolean   recursively promote nested dirs
-```
-
-**Supported Actions**: Action names are automatically converted to clickable HTML links that navigate to their corresponding model documentation.
-
-## Limitations of Swagger with Custom Go Types
-
-### Why Manual Swagger Type Annotations Are Needed
-
-Swagger (OpenAPI) documentation generators, such as Swaggo and go-swagger, attempt to infer the OpenAPI primitive type from your Go struct fields. However, they often cannot automatically determine the correct type when your code uses custom types that wrap primitives (e.g., `type Duration time.Duration`). As a result, these fields are either omitted, incorrectly documented, or default to ambiguous or empty object schemas in the generated documentation.
-
-**Main Reasons:**
-- **Custom Types**: Types like `cos.Duration` are Go-defined wrappers around primitives (`int64`, etc.), but Swagger sees them as opaque types and cannot guess their intended serialization.
-- **Ambiguous Serialization**: Swagger does not understand that `cos.Duration` is stored as nanoseconds, for example, and does not know to emit an integer type automatically.
-- **Resulting Issues**: Without intervention, the OpenAPI schema may describe fields as `{}` (empty objects), or the documentation generator may raise errors at build time.
-
-### How to Fix: The swaggertype Tag
-
-To bridge this gap, Swaggo and similar tools offer special struct tags (such as `swaggertype`) so you can explicitly declare how a custom type should appear in the OpenAPI output. This ensures your API consumers see clear, validated primitive types.
-
-**Example Usage:**
-```go
-// swagger:model
-type Transform struct {
-    Name    string       `json:"id,omitempty"`
-    Timeout cos.Duration `json:"request_timeout,omitempty" swaggertype:"primitive,integer"` // appears as plain integer in OpenAPI
-}
-```
-
-**Syntax Reference:**
-```go
-FieldName CustomType `json:"field_name" swaggertype:"primitive,type"`
-```
-Where `type` can be `integer`, `string`, `boolean`, etc., matching the OpenAPI spec.
-
-### Common Cases Needing Manual Annotation
-
-| Custom Type | Example Tag | OpenAPI Type | Intended Semantics |
-|-------------|-------------|--------------|-------------------|
-| `cos.Duration` | `swaggertype:"primitive,integer"` | `integer` | Duration, e.g. nanoseconds |
-| `cos.SizeIEC` | `swaggertype:"primitive,string"` | `string` | Size, e.g. "1GB", "512MiB" |
-
-### What Happens Without Explicit Annotation
-
-- **Unannotated**: Field may show as an empty object (`{}`), or be omitted or cause validation/documentation errors during Swagger generation.
-- **Annotated** (`swaggertype`): Field appears with correct type, format, and examples—aligned with how your code handles serialization and deserialization.
+Custom types that wrap primitives (e.g., `cos.Duration`, `cos.SizeIEC`) are mapped to their OpenAPI types in `externalTypeToSchema` in `schema.go`, matching the JSON wire format of each type.
 
 ## Running the Generator
 
 ### Locally
 ```bash
-# Generate annotations and markdown documentation
+# Generate OpenAPI spec and website markdown
 make api-docs-website
 ```
 
@@ -365,7 +289,5 @@ The documentation is automatically generated and deployed when changes are pushe
 
 ## Output Files
 
-- `.docs/swagger.yaml` - OpenAPI specification
-- `.docs/swagger.json` - OpenAPI specification (JSON format)
-- `docs-generated/README.md` - Generated markdown documentation
-- `docs/http-api.md` - Final documentation for website
+- `.docs/openapi.yaml` - OpenAPI 3.0 specification (generated then removed by `make api-docs-website`)
+- `docs/http-api.md` - Final documentation for the Jekyll website

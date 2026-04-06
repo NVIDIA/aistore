@@ -269,14 +269,8 @@ build:gendocs:
   variables:
     GENERATOR_IMG: docker.io/openapitools/openapi-generator-cli:v7.14.0
   script:
-    - cd tools/gendocs
-    - go run .
-    - cd ../..
-    - make restful-api-doc
-    - podman run --rm -v "${PWD}:/work:z" "${GENERATOR_IMG}" generate -i /work/.docs/swagger.yaml -g markdown -o /work/docs-generated --template-dir /work/markdown-template --skip-validate-spec
-    - cp docs-generated/README.md docs/http-api.md
-    - cp -r docs-generated/Apis docs/
-    - cp -r docs-generated/Models docs/
+    - go run ./tools/gendocs
+    - podman run --rm -v "${PWD}:/work:z" "${GENERATOR_IMG}" generate -i /work/.docs/openapi.yaml -g markdown -o /work/docs-generated --template-dir /work/markdown-template
     - ./scripts/website-preprocess.sh
 
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).

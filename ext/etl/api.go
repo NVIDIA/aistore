@@ -108,35 +108,31 @@ type (
 	}
 
 	// and implementations
-	// swagger:model
 	InitMsgBase struct {
 		EtlName          string          `json:"name" yaml:"name"`
 		CommTypeX        string          `json:"communication" yaml:"communication"`
-		Env              []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty" swaggertype:"array,object"`
-		InitTimeout      cos.Duration    `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty" swaggertype:"primitive,string"`
-		ObjTimeout       cos.Duration    `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty" swaggertype:"primitive,string"`
+		Env              []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
+		InitTimeout      cos.Duration    `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty"`
+		ObjTimeout       cos.Duration    `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty"`
 		SupportDirectPut bool            `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
 	}
 
-	// swagger:model
 	InitSpecMsg struct {
 		Spec        []byte `json:"spec"`
 		InitMsgBase `yaml:",inline"`
 	}
 
 	// ETLSpecMsg is a YAML representation of the ETL pod spec.
-	// swagger:model
 	ETLSpecMsg struct {
 		InitMsgBase `yaml:",inline"`            // included all optional fields from InitMsgBase
 		Runtime     RuntimeSpec                 `json:"runtime" yaml:"runtime"`
-		Resources   corev1.ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty" swaggertype:"object"`
+		Resources   corev1.ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
 	}
 
-	// swagger:model
 	RuntimeSpec struct {
 		Image   string          `json:"image" yaml:"image"`
 		Command []string        `json:"command,omitempty" yaml:"command,omitempty"`
-		Env     []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty" swaggertype:"array,object"`
+		Env     []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
 	}
 
 	WebsocketCtrlMsg struct {

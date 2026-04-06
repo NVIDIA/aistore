@@ -14,12 +14,10 @@ import (
 // (common for all multi-object operations)
 type (
 	// List of object names _or_ a template specifying { optional Prefix, zero or more Ranges }
-	// swagger:model
 	ListRange struct {
 		Template string   `json:"template"`
 		ObjNames []string `json:"objnames"`
 	}
-	// swagger:model
 	EvdMsg struct {
 		ListRange
 		NumWorkers      int  `json:"num-workers,omitempty"` // number of concurrent workers; (-1) none; (0) auto-computed (see xs/nwp.go, "media type", load.Advice)
@@ -59,7 +57,6 @@ func (lrm *ListRange) Str(sb *cos.SB, isPrefix bool) {
 }
 
 // prefetch
-// swagger:model
 type PrefetchMsg struct {
 	ListRange
 	BlobThreshold   int64 `json:"blob-threshold"`       // when greater than threshold prefetch using blob-downloader; otherwise cold GET
@@ -108,7 +105,6 @@ func (*PrefetchMsg) delim(sb *cos.SB) {
 // --------------------  terminology   ---------------------
 // here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object.
 // [NOTE] see cmn/api for cmn.ArchiveMsg (that also contains ToBck)
-// swagger:model
 type ArchiveMsg struct {
 	TxnUUID     string `json:"-"`        // internal use
 	FromBckName string `json:"-"`        // ditto

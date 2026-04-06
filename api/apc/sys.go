@@ -12,8 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
-// swagger:model
-
 type MemCPUInfo struct {
 	MemUsed    uint64      `json:"mem_used" msg:"u"`
 	MemAvail   uint64      `json:"mem_avail" msg:"a"`

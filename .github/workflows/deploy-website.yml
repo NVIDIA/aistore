@@ -36,22 +36,11 @@ jobs:
 
       - name: Generate API Documentation
         run: |
-          cd tools/gendocs
-          go run .
-          cd ../..
-          make restful-api-doc
-          OPENAPI_GENERATOR_VERSION=7.14.0 openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
-          cp docs-generated/README.md docs/http-api.md
-          cp -r docs-generated/Apis docs/
-          cp -r docs-generated/Models docs/
+          OPENAPI_GENERATOR_VERSION=7.14.0 make api-docs-website
 
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: 3.1.3
-
-      - name: Prepare docs with front-matter
-        run: |
-          ./scripts/website-preprocess.sh
 
       - name: Build and deploy
         env:

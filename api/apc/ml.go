@@ -70,7 +70,6 @@ const (
 )
 
 type (
-	// swagger:model
 	MossIn struct {
 		ObjName string `json:"objname"`
 		// optional fields
@@ -82,7 +81,6 @@ type (
 		Start    int64  `json:"start,omitempty"`
 		Length   int64  `json:"length,omitempty"`
 	}
-	// swagger:model
 	MossReq struct {
 		OutputFormat  string     `json:"mime,omitempty"`  // enum { archive.ExtTar, archive.ExtTGZ, ... } from "cmn/archive/mime.go"; empty string defaults to TAR
 		In            []MossIn   `json:"in"`              // of arbitrary size >= 1
@@ -91,7 +89,6 @@ type (
 		StreamingGet  bool       `json:"strm"`            // stream resulting archive prior to finalizing it in memory
 		Colocation    ColocLevel `json:"coloc,omitempty"` // enum { 0=ColocNone, 1=ColocOne, 2=ColocTwo }
 	}
-	// swagger:model
 	MossOut struct {
 		ObjName  string `json:"objname"`            // same as the corresponding MossIn.ObjName
 		ArchPath string `json:"archpath,omitempty"` // ditto
@@ -101,7 +98,6 @@ type (
 		Opaque   []byte `json:"opaque,omitempty"`   // from the corresponding MossIn; multi-objname logic on the client side
 		Size     int64  `json:"size"`
 	}
-	// swagger:model
 	MossResp struct {
 		UUID string    `json:"uuid"`
 		Out  []MossOut `json:"out"`
