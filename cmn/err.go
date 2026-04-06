@@ -382,7 +382,7 @@ func NewErrBckNotFound(bck *Bck) error {
 	return NewErrAisBckNotFound(bck)
 }
 
-func (e *ErrRemoteBckNotFound) Set(ctx string) { e.ctx = ctx }
+func (e *ErrRemoteBckNotFound) CannotCreate() { e.ctx = " (cannot create cloud bucket on the fly)" }
 
 func (e *ErrRemoteBckNotFound) Error() string {
 	if e.bck.IsCloud() {

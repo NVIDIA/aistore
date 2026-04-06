@@ -1012,11 +1012,15 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 		// handle assorted status codes
 		switch status := rspErr.HTTPStatusCode(); status {
 		case http.StatusMovedPermanently:
-			// [BUG] when bucket does not exist or isn't accessible AWS may return
-			// 301 ("MovedPermanently") with code == "PermanentRedirect" which is 308
-			err := cmn.NewErrRemBckNotFound(bck)
-			err.Set(" (PermanentRedirect)")
-			return http.StatusNotFound, err
+			// NOTE:
+			// - when bucket does not exist OR is not accessible AWS may return 301 ("MovedPermanently") with code == "PermanentRedirect" (which is 308)
+			// - cmn.NewErrRemBckNotFound() carries a fixed brief message; here we need some context
+			const (
+				tip = "(tip: if the remote bucket does not exist create it out of band; further details at " +
+					cmn.GitHubHome + "/blob/main/docs/bucket.md#bucket-lifecycle)"
+			)
+			e := fmt.Errorf("cannot access %s with the provided AWS region/endpoint\n%s", bck.Cname(""), tip)
+			return http.StatusNotFound, e
 		case http.StatusTooManyRequests, http.StatusServiceUnavailable:
 			if code == "" {
 				debug.Assert(false, "empty error code in ", awsError.Error()) // (unlikely)

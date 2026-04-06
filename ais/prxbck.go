@@ -352,7 +352,7 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 	if err == nil && ecode != http.StatusOK && bck.IsCloud() {
 		debug.Assert(ecode == http.StatusNotFound, ecode)
 		e := cmn.NewErrRemBckNotFound(bck.Bucket())
-		e.Set(" (cannot create cloud bucket on the fly)")
+		e.CannotCreate()
 		err = e
 	}
 	if err != nil {

@@ -1838,9 +1838,8 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 	}
 	if err != nil {
 		// user-friendly:
-		if origAction == apc.ActCreateBck && (ecode == http.StatusNotFound || ecode == http.StatusBadRequest) {
-			ecode = http.StatusNotImplemented
-			err = cmn.NewErrNotImpl("create", bck.Provider+" bucket")
+		if origAction == apc.ActCreateBck && ecode == http.StatusNotFound {
+			err = cmn.NewErrUnsuppErr(err)
 		}
 		p.writeErr(w, r, err, ecode)
 		return
