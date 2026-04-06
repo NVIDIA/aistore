@@ -99,20 +99,15 @@ func NewAWS(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 // HEAD BUCKET
 //
 
-const gotBucketLocation = "got_bucket_location"
-
 // HeadBucket queries the backend S3 bucket and returns props
 //
 // `sessConf.region` is normally expected to come from bucket props or from
 // AWS SDK config resolution (`sessConf.options()` back-fills it from
 // `options.Region`).
 //
-// If region is still unknown after creating the client, avoid caching under
-// an incomplete (profile, region, endpoint) tuple.
-//
-// `gotBucketLocation` is a special-case tag used by HeadBucket()'s fallback
-// location probe. It does not pass the resolved region back here; it only
-// bypasses the early return below and permits caching on that path.
+// If the bucket's region is still unknown after creating the client, HeadBucket
+// resolves it via `_location` and caches the client under the complete
+// (profile, region, endpoint) tuple.
 func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	var (
 		cloudBck = bck.RemoteBck()
@@ -132,10 +127,14 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, erro
 			return nil, ecode, errV
 		}
 		if cmn.Rom.V(4, cos.ModBackend) {
-			nlog.Infoln("get-bucket-location", cloudBck.Name, "region", region)
+			nlog.Infoln("[svc.head_bucket]", cloudBck.Name, "region", region)
 		}
-		svc, err = sessConf.s3client(gotBucketLocation)
+		sessConf.region = region
+		svc, err = sessConf.s3client("[svc.head_bucket]")
 		debug.AssertNoErr(err)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err // (awsLoadConfig w/ error already normalized)
+		}
 	}
 
 	// NOTE: return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
@@ -868,10 +867,7 @@ func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 
 	svc := s3.NewFromConfig(cfg, sessConf.options)
 
-	// NOTE:
-	// - gotBucketLocation special case
-	// - otherwise, not caching s3 client for an unknown or missing region
-	if sessConf.region == "" && tag != gotBucketLocation {
+	if sessConf.region == "" {
 		if tag != "" && cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Warningln(tag, "no region for bucket", sessConf.bck.Cname(""))
 		}
