@@ -26,12 +26,14 @@ const (
 	hostProcessInfo = proc + "self/status"
 )
 
-// container stats
+// container stats: cgroup v1 (fixed hierarchy with per-controller directories)
 const (
+	contBase = "/sys/fs/cgroup"
+
 	// path to read all memory info for cgroup
-	contMemPath = "/sys/fs/cgroup/memory/"
+	contMemPath = contBase + "/memory/"
 	// path to read all CPU info for cgroup
-	contCPUPath = "/sys/fs/cgroup/cpu/"
+	contCPUPath = contBase + "/cpu/"
 	// memory counters
 	contMemUsedPath  = contMemPath + "memory.usage_in_bytes"
 	contMemLimitPath = contMemPath + "memory.limit_in_bytes"
@@ -43,16 +45,14 @@ const (
 	contCPUPeriod = contCPUPath + "cpu.cfs_period_us"
 
 	// cgroup v1: cumulative CPU usage in nanoseconds
-	contCPUAcctUsage = "/sys/fs/cgroup/cpuacct/cpuacct.usage"
+	contCPUAcctUsage = contBase + "/cpuacct/cpuacct.usage"
+)
 
-	// cgroup v2: CPU
-	contCgroupV2    = "/sys/fs/cgroup/"
-	contCPUV2Stat   = contCgroupV2 + "cpu.stat"     // usage_usec, throttled_usec, etc.
-	contCPUV2Max    = contCgroupV2 + "cpu.max"      // "$MAX $PERIOD" or "max $PERIOD"
-	contCPUPressure = contCgroupV2 + "cpu.pressure" // PSI (TODO)
-
-	// cgroup v2: memory
-	contMemV2Max     = contCgroupV2 + "memory.max"     // limit in bytes or "max" (no limit)
-	contMemV2Current = contCgroupV2 + "memory.current" // current usage in bytes
-	contMemV2Stat    = contCgroupV2 + "memory.stat"    // inactive_file, etc.
+// cgroup v2 knob basenames
+const (
+	cgV2CPUStat = "cpu.stat"
+	cgV2CPUMax  = "cpu.max"
+	cgV2MemMax  = "memory.max"
+	cgV2MemCur  = "memory.current"
+	cgV2MemStat = "memory.stat"
 )

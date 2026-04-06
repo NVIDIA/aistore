@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const errPrefixMem = "sys/mem"
@@ -29,6 +30,7 @@ func (mem *MemStat) Get() error {
 	var err error
 	switch cgroupVer {
 	case 2:
+		debug.Assert(contMemV2Max != "") // must be resolved via initCgroupV2Paths()
 		*mem, err = readMemCgroupV2()
 	case 1:
 		*mem, err = readMemCgroupV1()

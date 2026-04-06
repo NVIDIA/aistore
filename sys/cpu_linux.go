@@ -25,11 +25,15 @@ import (
 // is between 0.01 CPU and the number of CPUs on the host machine.
 // The function rounds up the calculated number.
 func (t *cpu) setNumCgroup() error {
-	n2, errV2 := containerNumCPUV2()
-	if errV2 == nil {
-		cgroupVer = 2
-		t.num = n2
-		return nil
+	var errV2 error
+	if contCPUV2Max != "" {
+		n, err := containerNumCPUV2()
+		if err == nil {
+			cgroupVer = 2
+			t.num = n
+			return nil
+		}
+		errV2 = err
 	}
 
 	n1, errV1 := containerNumCPUV1()

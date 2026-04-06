@@ -22,6 +22,19 @@ var (
 	contDetected bool
 )
 
+// resolved cgroup-v2 paths (Linux only)
+// (may be nested: K8s, CRI-O, systemd-nspawn, cgroupns=private, etc.)
+// - e.g. plain Docker: "/sys/fs/cgroup/"
+// - K8s:               "/sys/fs/cgroup/kubepods.slice/.../crio-<hash>.scope/"
+var (
+	contCPUV2Stat string // contCgroupV2Base + "cpu.stat" (usage_usec, throttled_usec)
+	contCPUV2Max  string // contCgroupV2Base + "cpu.max"
+
+	contMemV2Max     string // contCgroupV2Base + "memory.max"     (limit in bytes or "max" (no limit))
+	contMemV2Current string // contCgroupV2Base + "memory.current" (current usage (bytes))
+	contMemV2Stat    string // contCgroupV2Base + "memory.stat"
+)
+
 // num CPUs may get adjusted by Init() below
 func init() {
 	gcpu.num = runtime.NumCPU()
@@ -38,6 +51,7 @@ func Init(forceCont bool) string {
 
 	contForced = forceCont
 	if contDetected = detect(); contDetected || forceCont {
+		initCgroupV2Paths() // resolve v2 base (noop on v1/bare-metal)
 		if err := gcpu.setNumCgroup(); err != nil {
 			fmt.Fprintln(os.Stderr, err) // (cannot nlog yet)
 		}
