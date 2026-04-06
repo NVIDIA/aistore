@@ -48,6 +48,7 @@ func initCgroupV2Paths() bool {
 		return false
 	}
 
+	// standard v2 knobs in the same cgroup directory
 	contCPUV2Stat = base + cgV2CPUStat
 	contCPUV2Max = base + cgV2CPUMax
 	contMemV2Max = base + cgV2MemMax
