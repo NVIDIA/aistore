@@ -1839,7 +1839,10 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 	if err != nil {
 		// user-friendly:
 		if origAction == apc.ActCreateBck && ecode == http.StatusNotFound {
-			err = cmn.NewErrUnsuppErr(err)
+			ecode = http.StatusNotImplemented
+			e := cmn.NewErrRemBckNotFound(rembck)
+			e.CannotCreate()
+			err = e
 		}
 		p.writeErr(w, r, err, ecode)
 		return
