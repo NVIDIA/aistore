@@ -473,6 +473,7 @@ func (*s3bp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, _ error) {
 		sessConf sessConf
 		result   *s3.ListBucketsOutput
 	)
+	sessConf.region = env.AwsDefaultRegion()
 	svc, err := sessConf.s3client("")
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
@@ -883,10 +884,16 @@ func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 }
 
 func (sessConf *sessConf) options(options *s3.Options) {
-	if sessConf.region != "" {
+	switch {
+	case sessConf.region != "":
+		// 1. Set in sessConf (from bucket props or HEAD)
 		options.Region = sessConf.region
-	} else {
+	case options.Region != "":
+		// 2. AWS config file (parsed by SDK into options)
 		sessConf.region = options.Region
+	default:
+		// 3. SDK uses "AWS_REGION" environment or global default
+		// (note ListBuckets() special case)
 	}
 	if bck := sessConf.bck; bck != nil {
 		if bck.Props != nil {
