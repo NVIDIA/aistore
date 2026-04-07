@@ -23,10 +23,9 @@ const HdrError = "Hdr-Error"
 const (
 	aisPrefix = "Ais-"
 
-	// bucket inventory - an alternative way to list (very large) buckets
+	// bucket inventory - request inventory-backed listing (implemented via NBI)
 	HdrInventory = aisPrefix + "Bucket-Inventory" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
 	HdrInvName   = aisPrefix + "Inv-Name"         // optional; name of the inventory (to override the system default)
-	HdrS3InvID   = aisPrefix + "Inv-Id"           // Deprecated: inventory ID
 
 	// GET via x-blob-download
 	HdrBlobDownload = aisPrefix + "Blob-Download" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)

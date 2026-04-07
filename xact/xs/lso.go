@@ -50,8 +50,7 @@ type (
 		streamingF
 	}
 	LsoXact struct {
-		s3ctx *core.LsoS3InvCtx // Deprecated: remove by April-May 2026 (use NBI instead)
-		nbi   *nbiCtx           // native bucket inventory
+		nbi *nbiCtx // native bucket inventory
 
 		msg       *apc.LsoMsg      // first message
 		msgCh     chan *apc.LsoMsg // next messages
@@ -162,11 +161,6 @@ func (p *lsoFactory) Start() error {
 		}
 		if r.walk.this {
 			r.page = make(cmn.LsoEntries, 0, iniPageCap) // reuse across all remote pages (may grow in cap)
-		}
-
-		// Deprecated: remove by April-May 2026; use NBI instead
-		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) && r.walk.this {
-			r.s3ctx = &core.LsoS3InvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrS3InvID)}
 		}
 
 		// engage local page iterator (lpi)
@@ -330,24 +324,6 @@ func (r *LsoXact) stop() {
 
 	clear(r.page)
 	r.page = nil
-
-	// Deprecated: remove by April-May 2026; use NBI instead
-	if r.s3ctx != nil {
-		if r.s3ctx.Lom != nil {
-			cos.Close(r.s3ctx.Lmfh)
-			r.s3ctx.Lom.Unlock(false)
-			core.FreeLOM(r.s3ctx.Lom)
-			r.s3ctx.Lom = nil
-		}
-		if r.s3ctx.SGL != nil {
-			if r.s3ctx.SGL.Len() > 0 {
-				nlog.Errorln(r.String(), "non-paginated leftover upon exit (bytes)", r.s3ctx.SGL.Len())
-			}
-			r.s3ctx.SGL.Free()
-			r.s3ctx.SGL = nil
-		}
-		r.s3ctx = nil
-	}
 
 	if r.nbi != nil {
 		r.nbi.cleanup()
@@ -522,7 +498,7 @@ func (r *LsoXact) havePage(token string, cnt int64) bool {
 func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoRes
-		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.s3ctx, r.walk.bp)
+		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.walk.bp)
 		smap = core.T.Sowner().Get()
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)

@@ -385,6 +385,12 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	// - "encoding-type"
 	s3.FillLsoMsg(q, lsmsg)
 
+	// via NBI
+	if err := _setupLsNBIHdr(r.Header, lsmsg); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+		return
+	}
+
 	lst, err := p.lsAllPagesS3(bck, amsg, lsmsg, r.Header)
 	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln("lsoS3", bck.Cname(""), len(lst.Entries), err)
@@ -415,6 +421,29 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	clear(lst.Entries)
 	lst.Entries = lst.Entries[:0]
 	lst.Entries = nil
+}
+
+func _setupLsNBIHdr(hdr http.Header, lsmsg *apc.LsoMsg) error {
+	var (
+		haveInvName = hdr.Get(apc.HdrInvName) != ""
+		invVal      = hdr.Get(apc.HdrInventory)
+	)
+	switch {
+	case !cos.IsParseBool(invVal) && !haveInvName:
+		return nil
+	case haveInvName && invVal != "" && !cos.IsParseBool(invVal):
+		return fmt.Errorf("conflicting headers: %s=%q with %s=%q", apc.HdrInventory, invVal, apc.HdrInvName, hdr.Get(apc.HdrInvName))
+	}
+	if err := lsmsg.ValidateNBI(); err != nil {
+		return err
+	}
+	lsmsg.SetFlag(apc.LsNBI)
+	if haveInvName {
+		if err := cos.CheckAlphaPlus(hdr.Get(apc.HdrInvName), "inventory name"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header) (lst *cmn.LsoRes, _ error) {

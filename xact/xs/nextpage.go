@@ -18,16 +18,15 @@ import (
 // core next-page and next-remote-page methods for object listing
 
 type npgCtx struct {
-	bp    core.Backend
-	bck   *meta.Bck
-	ubuf  []byte            // reusable uname buffer
-	s3ctx *core.LsoS3InvCtx // Deprecated: remove by April-May 2026; use NBI instead
-	wi    walkInfo
-	page  cmn.LsoRes
-	idx   int
+	bp   core.Backend
+	bck  *meta.Bck
+	ubuf []byte // reusable uname buffer
+	wi   walkInfo
+	page cmn.LsoRes
+	idx  int
 }
 
-func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, s3ctx *core.LsoS3InvCtx, bp core.Backend) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, bp core.Backend) (npg *npgCtx) {
 	npg = &npgCtx{
 		bp:  bp,
 		bck: bck,
@@ -37,7 +36,6 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, s3ctx *core.LsoS
 			wanted:       wanted(msg),
 			smap:         core.T.Sowner().Get(),
 		},
-		s3ctx: s3ctx,
 	}
 	if msg.IsFlagSet(apc.LsDiff) {
 		npg.wi.custom = make(cos.StrKVs)
@@ -102,29 +100,16 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 
 // R-flow:
 // returns next page from the remote bucket's "list-objects" result set
-func (npg *npgCtx) nextPageR(entries cmn.LsoEntries) (lst *cmn.LsoRes, err error) {
+func (npg *npgCtx) nextPageR(entries cmn.LsoEntries) (*cmn.LsoRes, error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsCached))
-	lst = &cmn.LsoRes{Entries: entries}
+	lst := &cmn.LsoRes{Entries: entries}
 
-	switch {
-	case npg.s3ctx != nil:
-		if npg.s3ctx.Lom == nil {
-			_, err = npg.bp.GetBucketInv(npg.bck, npg.s3ctx)
-		}
-		if err == nil {
-			err = npg.bp.ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.s3ctx)
-		}
-	default:
-		_, err = npg.bp.ListObjects(npg.bck, npg.wi.msg, lst)
-	}
-
-	if err != nil {
+	if _, err := npg.bp.ListObjects(npg.bck, npg.wi.msg, lst); err != nil {
 		return nil, err
 	}
-
 	debug.Assert(lst.UUID == "" || lst.UUID == npg.wi.msg.UUID)
 	lst.UUID = npg.wi.msg.UUID
-	return lst, err
+	return lst, nil
 }
 
 // - filter entries to keep only mine

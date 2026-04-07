@@ -444,46 +444,19 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	// lsargs
 	lsargs := api.ListArgs{Limit: limit}
 
-	// inventories
-
-	if haveInvName := flagIsSet(c, nbiNameFlag); flagIsSet(c, nbiFlag) || haveInvName {
-		if err := msg.ValidateNBI(); err != nil {
-			return fmt.Errorf("%s: the request to list via native bucket inventory has invalid or unsupported flags: %v",
-				bck.Cname(""), err)
-		}
-
-		msg.SetFlag(apc.LsNBI)
-		if haveInvName {
-			invName := parseStrFlag(c, nbiNameFlag)
-			if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {
-				return err
-			}
-			lsargs.Header = http.Header{
-				apc.HdrInvName: []string{invName},
-			}
-		} // else: works iff there's a single inventory
+	// setup list-objects via NBI (flags nbi*)
+	if err := setupLsNBI(c, msg, &lsargs); err != nil {
+		return fmt.Errorf("%s: the request to list via native bucket inventory has invalid or unsupported flags: %v",
+			bck.Cname(""), err)
 	}
 
-	// Deprecated: remove by April-May 2026
-	if flagIsSet(c, useS3InventoryFlag) {
-		if flagIsSet(c, nameOnlyFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(nbiFlag), qflprn(useS3InventoryFlag))
-		}
-		lsargs.Header = http.Header{
-			apc.HdrInventory: []string{"true"},
-			apc.HdrInvName:   []string{parseStrFlag(c, nbiNameFlag)},
-			apc.HdrS3InvID:   []string{parseStrFlag(c, s3InvIDFlag)},
-		}
-	}
-
-	var (
-		now int64
-	)
 	if catOnly && flagIsSet(c, noFooterFlag) {
 		warn := fmt.Sprintf(errFmtExclusive, qflprn(countAndTimeFlag), qflprn(noFooterFlag))
 		actionWarn(c, warn)
 	}
+
 	// list (and immediately show) pages, one page at a time
+	var now int64
 	if flagIsSet(c, pagedFlag) {
 		var (
 			pageCounter int
@@ -883,4 +856,26 @@ func _sortDirsFirst(lst cmn.LsoEntries) {
 		}
 	}
 	copy(lst, out)
+}
+
+func setupLsNBI(c *cli.Context, msg *apc.LsoMsg, lsargs *api.ListArgs) error {
+	haveInvName := flagIsSet(c, nbiNameFlag)
+	if !flagIsSet(c, nbiFlag) && !haveInvName {
+		return nil
+	}
+	if err := msg.ValidateNBI(); err != nil {
+		return err
+	}
+
+	msg.SetFlag(apc.LsNBI)
+	if haveInvName {
+		invName := parseStrFlag(c, nbiNameFlag)
+		if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {
+			return err
+		}
+		lsargs.Header = http.Header{
+			apc.HdrInvName: []string{invName},
+		}
+	} // else: works iff there's a single inventory
+	return nil
 }

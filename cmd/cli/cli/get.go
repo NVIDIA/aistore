@@ -221,14 +221,11 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 	}
 	msg.PageSize = pageSize
 
-	// setup lsargs
+	// setup list-objects via NBI (flags nbi*)
 	lsargs := api.ListArgs{Limit: limit}
-	if flagIsSet(c, useS3InventoryFlag) { // Deprecated; TODO -- FIXME: wire via NBI
-		lsargs.Header = http.Header{
-			apc.HdrInventory: []string{"true"},
-			apc.HdrInvName:   []string{parseStrFlag(c, nbiNameFlag)},
-			apc.HdrS3InvID:   []string{parseStrFlag(c, s3InvIDFlag)},
-		}
+	if err := setupLsNBI(c, msg, &lsargs); err != nil {
+		return fmt.Errorf("%s: the request to get objects via native bucket inventory has invalid or unsupported flags: %v",
+			bck.Cname(""), err)
 	}
 
 	// list-objects

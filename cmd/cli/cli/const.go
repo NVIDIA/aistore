@@ -1400,28 +1400,6 @@ var (
 	}
 )
 
-//
-// bucket inventory
-//
-
-// Deprecated: Feb 2026 - planned removal by April–May 2026.
-// S3-specific bucket inventory support will be replaced by the native API and CLI
-// supporting all remote buckets and all backends
-var (
-	useS3InventoryFlag = cli.BoolFlag{
-		Name: "s3-inventory",
-		Usage: "List objects using _bucket inventory_ (docs/s3compat.md); requires s3:// backend; will provide significant performance\n" +
-			indent4 + "\tboost when used with very large s3 buckets; e.g. usage:\n" +
-			indent4 + "\t  1) 'ais ls s3://abc --inventory'\n" +
-			indent4 + "\t  2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'\n" +
-			indent4 + "\t(see also: docs/s3compat.md)",
-	}
-	s3InvIDFlag = cli.StringFlag{
-		Name:  "inv-id", // compare w/ HdrS3InvID
-		Usage: "Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
-	}
-)
-
 // Native Bucket Inventory (NBI)
 var (
 	nbiFlag = cli.BoolFlag{

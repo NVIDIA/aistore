@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -214,7 +213,6 @@ func (p *proxy) _lsofcRemote(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (_ *
 	}
 
 	// designate one target to carry-out backend.list-objects
-	// (but note: when listing bucket inventory (`apc.HdrInventory`) target selection can change - see lsObjsR)
 	tsi, err := smap.HrwTargetTask(lsmsg.UUID)
 	if err == nil {
 		lsmsg.SID = tsi.ID()
@@ -314,27 +312,6 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		args      = allocBcArgs()
 		timeout   = config.Client.ListObjTimeout.D()
 	)
-
-	// Deprecated: remove by April-May 2026 (use NBI instead)
-	if cos.IsParseBool(hdr.Get(apc.HdrInventory)) {
-		if !bck.IsRemoteS3() {
-			return nil, cmn.NewErrUnsupp("list (via bucket inventory) non-S3 bucket", bck.Cname(""))
-		}
-		if lsmsg.ContinuationToken == "" /*first page*/ {
-			// override _lsofc selection (see above)
-			var (
-				err        error
-				_, objName = s3.InvPrefObjname(bck.Bucket(), hdr.Get(apc.HdrInvName), hdr.Get(apc.HdrS3InvID))
-			)
-			tsi, err = smap.HrwName2T(bck.MakeUname(objName))
-			if err != nil {
-				return nil, err
-			}
-			lsmsg.SID = tsi.ID()
-
-			timeout = config.Client.TimeoutLong.D()
-		}
-	}
 
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,

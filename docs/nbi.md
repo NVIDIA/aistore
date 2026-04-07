@@ -2,11 +2,13 @@
 
 Native bucket inventory (NBI) lets AIS create and serve a **local snapshot** of a remote bucket namespace.
 
-It is intended for **very large, read-mostly buckets** - for example, training and inference datasets - where repeatedly walking the remote backend to list the same objects is expensive, slow, and operationally noisy.
+It is designed for **very large, read-mostly buckets** - for example, training and inference datasets - where repeatedly listing the remote backend is expensive, slow, and operationally noisy.
 
-In v4.3, NBI status is **experimental**. The code is new, has limited production mileage, and inventories are currently created **manually**. There is no built-in periodic refresh or automatic resynchronization yet.
+Native bucket inventory (NBI) was introduced in [v4.3](https://github.com/NVIDIA/aistore/releases/tag/v1.4.3) and is stable as of **4.4**.
 
-This document references Go types and constants from the AIS codebase. For SDK usage, see the [Go API](https://github.com/NVIDIA/aistore/tree/main/api) and [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) documentation.
+Inventories are currently created manually: AIS does not yet provide built-in periodic refresh or automatic resynchronization.
+
+This document occasionally references Go types and constants from the AIS codebase. For SDK usage, see the [Go API](https://github.com/NVIDIA/aistore/tree/main/api) and [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) documentation.
 
 ## Table of Contents
 
@@ -15,32 +17,43 @@ This document references Go types and constants from the AIS codebase. For SDK u
 - [Overview](#overview)
 - [System bucket](#system-bucket)
 - [Creating an inventory](#creating-an-inventory)
+  - [Defaults and stored properties](#defaults-and-stored-properties)
 - [Monitoring inventory creation](#monitoring-inventory-creation)
 - [Showing inventories](#showing-inventories)
 - [Listing via inventory](#listing-via-inventory)
+  - [Pagination](#pagination)
+  - [How inventory-backed listing works](#how-inventory-backed-listing-works)
+  - [Non-recursive listing](#non-recursive-listing)
 - [Inventory metadata](#inventory-metadata)
 - [Small buckets and empty local inventories](#small-buckets-and-empty-local-inventories)
 - [Limitations and validation](#limitations-and-validation)
-- [Legacy `--s3-inventory`](#legacy---s3-inventory)
+  - [Why creation is narrower than regular listing](#why-creation-is-narrower-than-regular-listing)
+  - [Restrictions during inventory creation](#restrictions-during-inventory-creation)
+  - [Restrictions during inventory-backed listing](#restrictions-during-inventory-backed-listing)
 - [Examples](#examples)
 - [Performance](#performance)
 
 ## Motivation
 
-NBI is intended to replace the older S3-inventory integration.
+NBI replaces the older S3-specific inventory path.
 
-Compared to the legacy S3-specific path, NBI is:
+Compared to that legacy approach, NBI is:
 
 - **AIS-native**: created and consumed via AIS API, CLI, and xactions
-- **backend-agnostic**: works with remote buckets generally, not just S3
-- **format-independent**: does not depend on provider-generated inventory formats such as CSV or Parquet
-- **operationally simpler**: does not require external scripting or provider-specific tooling
+- **backend-agnostic**: works with remote buckets generally, not only S3
+- **format-independent**: does not depend on provider-generated inventory formats such as CSV, ORC, or Parquet
+- **operationally simpler**: does not require provider-specific scripts or external tooling
+
+In practice, NBI turns repeated remote listing into a two-step workflow:
+
+1. create a reusable snapshot once
+2. serve subsequent listings from that stored snapshot
 
 ## Supported buckets
 
 NBI applies to **remote buckets** only: cloud buckets (S3, GCS, Azure, OCI) and remote AIS buckets.
 
-It is not currently supported for in-cluster `ais://` buckets. The main reason is simple: the primary goal of NBI is to avoid the latency and repeated backend traffic of **remote** listing. For local AIS buckets, namespace metadata is already local and served at native AIS speed, so an additional inventory layer would bring little practical benefit.
+It is not currently supported for in-cluster `ais://` buckets. The main reason is simple: NBI exists to avoid the latency and repeated backend traffic of **remote** listing. For local AIS buckets, namespace metadata is already local and served at native AIS speed, so an additional inventory layer would bring little practical benefit.
 
 > A point-in-time snapshot of an in-cluster bucket may still be a valid future use case, but that is not part of the current implementation.
 
@@ -51,7 +64,7 @@ At a high level, NBI has two phases:
 1. **create** a reusable inventory snapshot for a remote bucket
 2. **list** from that snapshot instead of re-walking the remote backend
 
-The important design point is that inventories are stored as a **flat, lexicographically ordered snapshot** of object names plus selected properties. Listing behavior is then derived from that stored snapshot.
+The key design point is that inventories are stored as a **flat, lexicographically ordered snapshot** of object names plus selected properties. Listing behavior is derived from that stored snapshot.
 
 ### Create path
 
@@ -62,11 +75,13 @@ When a user creates an inventory:
 3. If `--force` is specified, any existing inventory for the bucket is removed first.
 4. During Commit, each target runs a `create-inventory` xaction: it lists the remote bucket, keeps only the object names that belong to it under the current cluster map, and writes them locally as inventory chunks.
 
-> In the current v4.3 implementation, all targets independently list the remote backend. A future optimization may designate a single target to list once and distribute the results.
+> In the current implementation, all targets independently list the remote backend. A future optimization may designate a single target to list once and distribute the results.
 
 ### Listing path
 
-When a user lists with `--inventory`:
+When a user lists with `--inventory`, AIS serves the request from NBI.
+
+The flow is:
 
 1. The request arrives at the proxy as a normal list-objects operation.
 2. AIS sets the `LsNBI` flag internally and switches to the inventory-backed path.
@@ -75,6 +90,8 @@ When a user lists with `--inventory`:
 5. The proxy merges the per-target responses into a single sorted result.
 
 The result is a normal AIS list response, but without walking the remote backend on every call.
+
+> S3-compatible clients may also request NBI-backed listing by sending the `Ais-Bucket-Inventory: true` header; `Ais-Inv-Name` may be used to select a specific inventory.
 
 ### Example
 
@@ -110,7 +127,7 @@ The first and currently only system bucket is:
 ais://.sys-inventory
 ```
 
-It is created automatically on the very first inventory creation request. There is no need to create it manually.
+It is created automatically on the first inventory creation request. There is no need to create it manually.
 
 Creating an inventory requires admin permissions. When AIStore is deployed with the [Authentication Server (AuthN)](/docs/authn.md), the operation requires `admin` [permissions](/docs/authn.md#permissions). Clusters without AuthN do not enforce this check.
 
@@ -138,7 +155,7 @@ ais nbi create ais://@remote-cluster/my-bucket --props name,size,cached
 ### Notes
 
 * Inventory creation is **manual**.
-* Inventory names are optional. Any human-readable name can be used, but it must be unique for the given bucket.
+* Inventory names are optional, but if specified they must be unique for the given bucket.
 * When omitted, AIS generates a unique inventory name automatically (for example, `inv-Tp4nR7kWx`).
 * `--force` removes any existing inventory for the bucket first and then proceeds with creation.
 * `--names-per-chunk` is an advanced tuning knob that overrides the default chunk size.
@@ -261,7 +278,9 @@ ais ls s3://abc --inventory --inv-name my-first-inventory
 ais ls s3://abc --inventory --nr --prefix images/
 ```
 
-This is still a normal list-objects request. The difference is that AIS sets the `LsNBI` flag internally and switches to the inventory-backed path.
+`--inventory` now means NBI-backed listing.
+
+This is still a normal list-objects request. The difference is that AIS sets the `LsNBI` flag internally and serves the request from pre-stored inventory chunks rather than walking the remote backend.
 
 In the Python SDK, the corresponding flag is [`ListObjectFlag.NBI`](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/list_object_flag.py).
 
@@ -275,7 +294,7 @@ Because NBI listing is distributed across targets, each target returns an approx
 
 When inventory-backed listing is requested, AIS serves the request from pre-stored inventory chunks on each target rather than walking the remote backend.
 
-The flow is as follows:
+The flow is:
 
 1. A list-objects-page request with `--inventory` arrives at the proxy.
 2. The proxy broadcasts the request to all targets.
@@ -321,7 +340,7 @@ This metadata is surfaced by `ais show nbi`, especially in verbose mode.
 
 When an inventory contains relatively few object names compared with the number of targets, some targets may end up with no local inventory entries.
 
-That is expected. In such cases, a target still stores a valid local inventory object with zero size, zero chunks, and valid NBI metadata. This allows AIS to distinguish:
+That is expected. In such cases, a target still stores a valid local inventory object with zero size, zero chunks, and valid NBI metadata. This allows AIS to distinguish between:
 
 * **inventory exists but is empty on this target**
 * **inventory does not exist**
@@ -330,9 +349,9 @@ That distinction matters for correct EOF behavior during distributed listing.
 
 ## Limitations and validation
 
-NBI in v4.3 is intentionally narrower than general remote listing.
+NBI is intentionally narrower than general remote listing.
 
-The best mental model is:
+A useful mental model is:
 
 * **inventory creation** is a snapshot-building job
 * **inventory listing** is a fast read path over that stored snapshot
@@ -352,23 +371,23 @@ That is why several options that make sense for a live list request do **not** m
 
 ### Restrictions during inventory creation
 
-| Option / behavior                   | Description                                                                                                       |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| non-empty `continuation_token`      | Inventory creation always starts from the beginning of the selected namespace.                                    |
-| `start_after`                       | Not supported during inventory generation.                                                                        |
-| `--cached` (`LsCached`)             | Not applicable. Inventory creation walks the remote bucket namespace, not only currently cached content.          |
-| `--not-cached` (`LsNotCached`)      | Not applicable for the same reason.                                                                               |
-| `LsMissing`                         | Not supported during creation.                                                                                    |
-| `LsDeleted`                         | Not supported during creation.                                                                                    |
-| `--archive` / `LsArchDir`           | Inventory creation does not expand archive contents.                                                              |
-| `LsBckPresent`                      | Not applicable. Inventory creation operates on a concrete remote bucket request.                                  |
-| `LsDontHeadRemote`                  | Inventory creation requires normal remote-bucket validation.                                                      |
-| `LsDontAddRemote`                   | The bucket must participate in normal AIS metadata flow.                                                          |
-| `lsWantOnlyRemoteProps`             | NBI creation stores selected inventory properties rather than exposing backend metadata only.                     |
-| `--non-recursive` (`LsNoRecursion`) | Inventory creation always stores a flat snapshot. Non-recursive behavior is a listing-time view.                  |
-| `--diff` (`LsDiff`)                 | Inventory creation is not a diff job.                                                                             |
-| `LsIsS3`                            | Not applicable.                                                                                                   |
-| `LsNoDirs`                          | Always set internally; directories are never stored in inventory snapshots.                                       |
+| Option / behavior                   | Description                                                                                              |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| non-empty `continuation_token`      | Inventory creation always starts from the beginning of the selected namespace.                           |
+| `start_after`                       | Not supported during inventory generation.                                                               |
+| `--cached` (`LsCached`)             | Not applicable. Inventory creation walks the remote bucket namespace, not only currently cached content. |
+| `--not-cached` (`LsNotCached`)      | Not applicable for the same reason.                                                                      |
+| `LsMissing`                         | Not supported during creation.                                                                           |
+| `LsDeleted`                         | Not supported during creation.                                                                           |
+| `--archive` / `LsArchDir`           | Inventory creation does not expand archive contents.                                                     |
+| `LsBckPresent`                      | Not applicable. Inventory creation operates on a concrete remote bucket request.                         |
+| `LsDontHeadRemote`                  | Inventory creation requires normal remote-bucket validation.                                             |
+| `LsDontAddRemote`                   | The bucket must participate in normal AIS metadata flow.                                                 |
+| `lsWantOnlyRemoteProps`             | NBI creation stores selected inventory properties rather than exposing backend metadata only.            |
+| `--non-recursive` (`LsNoRecursion`) | Inventory creation always stores a flat snapshot. Non-recursive behavior is a listing-time view.         |
+| `--diff` (`LsDiff`)                 | Inventory creation is not a diff job.                                                                    |
+| `LsIsS3`                            | Not applicable.                                                                                          |
+| `LsNoDirs`                          | Always set internally; directories are never stored in inventory snapshots.                              |
 
 ### Restrictions during inventory-backed listing
 
@@ -382,18 +401,7 @@ That is why several options that make sense for a live list request do **not** m
 | `lsWantOnlyRemoteProps`        | NBI is not a pass-through remote-property listing path.                                                               |
 | `--diff` (`LsDiff`)            | NBI does not perform remote-versus-cluster diff during listing.                                                       |
 
-In short, listing via NBI is optimized for fast, repeated listing of a previously captured bucket snapshot.
-
-## Legacy `--s3-inventory`
-
-AIS currently supports both:
-
-* `--inventory` for native bucket inventory (NBI)
-* `--s3-inventory` for the older S3-specific inventory path
-
-The legacy S3 path is deprecated and **will be removed with v4.4**.
-
-Unlike the legacy S3 inventory support, NBI is not limited to buckets with S3 backend, is not tied to provider-generated inventory formats, does not require external tooling such as AWS CLI scripts, and is created and consumed entirely through AIS.
+In short, NBI is optimized for fast, repeated listing of a previously captured bucket snapshot.
 
 ## Examples
 

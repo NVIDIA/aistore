@@ -216,8 +216,6 @@ var (
 		diffFlag,
 		countAndTimeFlag,
 		// bucket inventory
-		useS3InventoryFlag, // Deprecated
-		s3InvIDFlag,        // Deprecated
 		nbiFlag,
 		nbiNameFlag,
 		// alias for 'ais object show'

@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -34,7 +34,7 @@ type (
 	// additional and optional list-objects args (compare with: GetArgs, PutArgs)
 	ListArgs struct {
 		Callback  LsoCB
-		Header    http.Header // to optimize listing very large buckets, e.g.: Header.Set(apc.HdrInventory, "true")
+		Header    http.Header // optional request headers, e.g.: http.Header{apc.HdrInvName: []string{createMsg.Name}}
 		CallAfter time.Duration
 		Limit     int64
 	}

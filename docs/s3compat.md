@@ -45,11 +45,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
   * [Range reads](#range-reads)
   * [Multipart uploads (aws CLI)](#multipart-uploads-with-aws-cli)
   * [Presigned requests](#presigned-s3-requests)
-* [S3 Bucket Inventory](#s3-bucket-inventory-support)
-  * [Why inventories matter](#why-inventories-matter)
-  * [Enabling inventory via AWS CLI](#enabling-inventory-via-aws-cli)
-  * [Managing inventories with helper scripts](#managing-inventories-with-helper-scripts)
-  * [Inventory XML example](#inventory-xml-example)
+* [Use Native Bucket Inventory](#use-native-bucket-inventory)
 * [Deleting nonexistent object](#deleting-nonexistent-object)
 * [Compatibility Matrix](#compatibility-matrix)
 * [Boto3 Examples](#boto3-examples)
@@ -59,11 +55,11 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
 ---
 
 > **Environment assumption – Local Playground**
-> 
+>
 > The CLI examples below use `localhost:8080`, which is the default endpoint when running AIS in the [Local Playground](/docs/getting_started.md#local-playground).
 >
 > For other deployment modes (including [Kubernetes Playground](/docs/getting_started.md#kubernetes-playground), Docker Compose, bare-metal cluster, or [Kubernetes for production deployments](https://github.com/NVIDIA/ais-k8s)) — replace the `host:port` with any **AIS gateway** endpoint.
-> 
+>
 > See [Deployment Options](/docs/getting_started.md#multiple-deployment-options) and the main project [Features](https://github.com/NVIDIA/aistore/tree/main?tab=readme-ov-file#features) list for a broader overview.
 
 ---
@@ -343,87 +339,13 @@ This allows AIS to handle the authenticated S3 request on behalf of the client.
 
 ---
 
-## S3 Bucket Inventory Support
+## Use Native Bucket Inventory
 
-### Why inventories matter
+The older S3-specific inventory integration has been removed in v4.4.
 
-For buckets with millions of objects, using S3's `ListObjectsV2` API can be slow, expensive, and time-consuming. S3 Bucket Inventory provides a manifest file (CSV/ORC/Parquet) of all objects that AIS can process instantly. This is crucial for efficiently working with very large buckets.
+Use [native bucket inventory (NBI)](/docs/nbi.md) for fast, inventory-backed listing of large remote buckets, including (but not limited to) s3 buckets.
 
-For example, listing a 10-million object bucket could take:
-- Without inventory: Minutes of API calls, potentially costing money
-- With inventory: Seconds to parse a pre-generated manifest file
-
----
-
-### Enabling inventory via AWS CLI
-
-```console
-aws s3api put-bucket-inventory-configuration \
-  --bucket webdataset \
-  --id ais-scan \
-  --inventory-configuration file://inventory.json
-```
-
-**`inventory.json`**
-
-```json
-{
-  "Id": "ais-scan",
-  "IsEnabled": true,
-  "IncludedObjectVersions": "All",
-  "Destination": {
-    "S3BucketDestination": {
-      "Bucket": "arn:aws:s3:::webdataset-inv",
-      "Format": "CSV"
-    }
-  },
-  "Prefix": "",
-  "Schedule": { "Frequency": "Daily" }
-}
-```
-
-### Managing inventories with helper scripts
-
-AIS repo ships ready‑to‑use wrappers in `scripts/s3/`:
-
-| Script                       | Purpose                    |
-| ---------------------------- | -------------------------- |
-| `put-bucket-inventory.sh`    | create/update an inventory |
-| `list-bucket-inventory.sh`   | list existing configs      |
-| `delete-bucket-inventory.sh` | disable inventory          |
-| `get-bucket-inventory.sh`    | show detailed info for a specific inventory |
-| `put-bucket-policy.sh`       | grant access for S3 to store inventory files |
-
-These scripts simplify inventory management with minimal required parameters.
-
----
-
-### Inventory XML example
-
-```xml
-<InventoryConfiguration>
-  <Id>ais-scan</Id>
-  <IsEnabled>true</IsEnabled>
-  <IncludedObjectVersions>All</IncludedObjectVersions>
-  <Schedule>
-    <Frequency>Daily</Frequency>
-  </Schedule>
-  <Destination>
-    <S3BucketDestination>
-      <Bucket>arn:aws:s3:::webdataset-inv</Bucket>
-      <Format>CSV</Format>
-    </S3BucketDestination>
-  </Destination>
-</InventoryConfiguration>
-```
-
-Once inventory lands (typically after 24 hours for the first run), you can instantly list bucket contents:
-
-```console
-ais ls s3://webdataset --all --inventory
-```
-
-This is dramatically faster than listing objects via the standard API calls, particularly for large buckets.
+Note that S3-compatible clients may request NBI-backed listing via `Ais-Bucket-Inventory: true`, and optionally select a specific inventory via `Ais-Inv-Name`.
 
 ---
 

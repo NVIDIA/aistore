@@ -205,18 +205,6 @@ func (b *base) CreateBucket(_ *meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrUnsupp("create", b.provider+" bucket")
 }
 
-func newErrInventory(provider string) error {
-	return cmn.NewErrUnsupp("list "+provider+" backend objects via", "bucket inventory")
-}
-
-func (b *base) GetBucketInv(*meta.Bck, *core.LsoS3InvCtx) (int, error) {
-	return 0, newErrInventory(b.provider)
-}
-
-func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoS3InvCtx) error {
-	return newErrInventory(b.provider)
-}
-
 //
 // multipart upload - default "not implemented" methods
 //
