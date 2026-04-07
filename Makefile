@@ -437,3 +437,18 @@ api-docs-website: restful-api-doc ## Generate complete API documentation for Jek
 	@echo "  docs-generated/README.md - Generated documentation"
 	@echo ""
 	@echo "$(cyan)The documentation is now ready for the Jekyll website!$(term-reset)"
+
+#
+# Fern documentation
+#
+
+.PHONY: fern-generate fern-preview fern-build
+
+fern-generate: ## Generate Fern pages from docs/
+	@$(SHELL) $(SCRIPTS_DIR)/fern/generate-pages.sh
+
+fern-preview: ## Generate Fern pages and start local preview
+	@$(SHELL) $(SCRIPTS_DIR)/fern/generate-pages.sh --preview
+
+fern-build: ## Generate Fern pages and publish to Fern
+	@$(SHELL) $(SCRIPTS_DIR)/fern/generate-pages.sh --build

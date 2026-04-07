@@ -1,0 +1,95 @@
+title: NVIDIA AIStore
+
+instances:
+  - url: aistore.docs.buildwithfern.com
+    custom-domain: docs.nvidia.com/aistore
+
+layout:
+  searchbar-placement: header
+  page-width: 1376px
+  sidebar-width: 248px
+  content-width: 812px
+  tabs-placement: header
+  hide-feedback: true
+
+colors:
+  accentPrimary:
+    dark: "#76B900"
+    light: "#76B900"
+  background:
+    light: "#FFFFFF"
+    dark: "#000000"
+
+theme:
+  page-actions: toolbar
+  footer-nav: minimal
+
+logo:
+  dark: ./assets/NVIDIA_dark.svg
+  light: ./assets/NVIDIA_light.svg
+  height: 20
+  href: /
+  right-text: AIStore
+
+favicon: ./assets/NVIDIA_symbol.svg
+
+js:
+  - url: https://assets.adobedtm.com/5d4962a43b79/c1061d2c5e7b/launch-191c2462b890.min.js
+    strategy: beforeInteractive
+
+css:
+  - ./main.css
+
+footer: ./components/CustomFooter.tsx
+
+navbar-links:
+  - type: github
+    value: https://github.com/NVIDIA/aistore
+
+experimental:
+  mdx-components:
+    - ./components
+  basepath-aware: true
+
+tabs:
+  home:
+    display-name: Home
+    slug: ""
+  docs:
+    display-name: Documentation
+    slug: docs
+  blog:
+    display-name: Blog
+    slug: blog
+
+navigation:
+  # ── Home Tab ───────────────────────────────────────────────────────────
+  - tab: home
+    layout:
+      - page: AIStore
+        path: ./pages/readme.md
+        slug: ""
+
+  # ── Documentation Tab (auto-generated from docs/docs.md) ────────────────
+  - tab: docs
+    layout:
+      - page: Documentation
+        path: ./pages/docs.md
+        slug: ""
+      # AUTO_GENERATED_DOCS_ENTRIES
+
+  # ── Blog Tab (auto-generated at build time, newest first) ───────────────
+  - tab: blog
+    layout:
+      - section: Blog
+        slug: ""
+        contents:
+          - page: All Posts
+            path: ./pages/blog/index.md
+            slug: ""
+          # AUTO_GENERATED_BLOG_ENTRIES
+
+redirects:
+  # Old blog date-based URLs → new flat blog slugs
+  - source: /blog/:year/:month/:day/:slug
+    destination: /blog/:slug

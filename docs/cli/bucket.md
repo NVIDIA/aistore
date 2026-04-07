@@ -993,7 +993,7 @@ copying objects operation ("ais://bck1" => "ais://bck2") is in progress...
 copying objects operation succeeded.
 ```
 
-**Example 2.** Copy objects matching Bash brace-expansion `obj{2..4}, do not wait for the operation is done.
+**Example 2.** Copy objects matching Bash brace-expansion `obj{2..4}`, do not wait for the operation is done.
 
 ```console
 $ ais cp ais://bck1 ais://bck2 --template "obj{2..4}"
