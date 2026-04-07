@@ -10,6 +10,9 @@ The second related option is [`noatime`](#noatime) - and the same argument appli
 
 > (**) The interface between AIS and a local filesystem is extremely limited and boils down to writing/reading key/value pairs (where values are, effectively, files) and checking existence of keys (filenames). Moving AIS off of POSIX to some sort of (TBD) key/value storage engine should be a straightforward exercise. Related expectations/requirements include reliability and performance under stressful workloads that read and write "values" of 1MB and greater in size.
 
+> Most of the tuning guidance below applies to bare-metal deployments - host-level settings like CPU governor, disk scheduler, sysctl, and ionice that must be configured outside the container.
+> When AIS runs in containers or Kubernetes pods, it handles resource-awareness internally via cgroup integration. See [AIS in Containerized Environments](/docs/containerized.md) for details.
+
 - [Operating System](#operating-system)
 - [CPU](#cpu)
 - [Network](#network)
@@ -21,6 +24,7 @@ The second related option is [`noatime`](#noatime) - and the same argument appli
   - [Local filesystem](#local-filesystem)
   - [`noatime`](#noatime)
 - [Virtualization](#virtualization)
+- [Containerized Environments](#containerized-environments)
 - [Metadata write policy](#metadata-write-policy)
 - [PUT latency](#put-latency)
 - [GET throughput](#get-throughput)
@@ -268,6 +272,14 @@ Make sure to use PCI passthrough to assign a device (NIC, HDD) directly to the A
 AIStore's primary goal is to scale with clustered drives. Therefore, the choice of a drive type and its capabilities remains very important.
 
 Finally, when initializing virtualized disks it'd be advisable to set an optimal [block size](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/disk-performance.html).
+
+## Containerized Environments
+
+When AIS runs inside containers or Kubernetes pods, several of the bare-metal tunings above (CPU governor, ionice, disk scheduler, sysctl) are host-level settings that must be applied outside the container - typically via node-preparation playbooks or StatefulSets rather than inside the pod spec.
+
+AIS itself handles the container-side concerns: cgroup-aware CPU count, container-scoped memory, GOMAXPROCS adjustment, and CPU throttle detection.
+
+For details, see [AIS in Containerized Environments](/docs/containerized.md).
 
 ## Metadata write policy
 

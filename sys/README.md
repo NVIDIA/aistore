@@ -26,7 +26,7 @@ The `sys` package provides lightweight runtime visibility into host and containe
 - [Example: testing `sys` package inside a constrained container](#example-testing-sys-package-inside-a-constrained-container)
 - [Current limitations and future plans](#current-limitations-and-future-plans)
   - [cgroup v1 deprecation](#cgroup-v1-deprecation)
-  - [Future work](#future-work)
+- [References](#references)
 
 ## Initialization
 
@@ -284,8 +284,6 @@ Note that cgroup v1 support is deprecated and will be removed in a future (post-
 
 > All major container runtimes and orchestrators now default to cgroup v2.
 
-### Future work
+## References
 
-1. Add cgroup-aware memory support for Darwin (currently stubs).
-2. Consider PSI (Pressure Stall Information) integration via `cpu.pressure` / `/proc/pressure/cpu`.
-3. Evaluate dropping cgroup v1 support.
+* [AIS in Containerized Environments](/docs/containerized.md)

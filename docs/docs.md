@@ -74,6 +74,7 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 - [Node lifecycle: maintenance, shutdown, decommission](/docs/lifecycle_node.md)
 - [Global rebalance](/docs/rebalance.md)
 - [Resilver](/docs/resilver.md)
+- [AIS in Containerized Environments](/docs/containerized.md)
 - [Highly available control plane](/docs/ha.md)
 - [Information Center (IC)](/docs/ic.md)
 - [Out-of-band updates](/docs/out_of_band.md)
