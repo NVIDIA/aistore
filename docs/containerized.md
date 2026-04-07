@@ -20,6 +20,8 @@ In practice, this means AIS runtime behavior and operator-facing metrics align m
 - [CPU reporting](#cpu-reporting)
 - [Interpreting CPU Signals](#interpreting-cpu-signals)
 - [Memory reporting](#memory-reporting)
+  - [Two different views of memory](#two-different-views-of-memory)
+  - [About RSS](#about-rss)
 - [Kubernetes note](#kubernetes-note)
 - [When to use `ForceContainerCPUMem`](#when-to-use-forcecontainercpumem)
 - [How to validate the behavior](#how-to-validate-the-behavior)
@@ -50,7 +52,7 @@ In this example:
 * `CPUs(40, ...)` is the effective CPU count AIS uses after applying cgroup-aware accounting
 * `container:cgroup-v2` means AIS detected a containerized cgroup-v2 environment
 
-This is expected when a pod or container is allowed to use only a subset of the host’s CPU capacity.
+This is expected when a pod or container is allowed to use only a subset of the host's CPU capacity.
 
 ## CPU reporting
 
@@ -119,9 +121,9 @@ A few things are worth noting:
 * `SYS CPU(%)` is the node CPU utilization reported by AIS, not the older load-average view.
 * `THROTTLED(%)` appears only when at least one node in the displayed section reports non-zero cgroup-v2 throttling.
    - Small non-zero throttling values are not unusual in busy containerized environments.
-* Memory and CPU totals shown by AIS should reflect the container’s effective limits rather than the host’s full physical capacity.
+* Memory and CPU totals shown by AIS should reflect the container's effective limits rather than the host's full physical capacity.
 
-> The numbers above are illustrative, but the format and interpretation match AIS 4.4 behavior.
+> The numbers above are illustrative, but the format and interpretation match AIS 4.4 behavior. To better understand the numbers in memory columns, please see [Two different views of memory](#two-different-views-of-memory) section below.
 
 ### Example: verbose view
 
@@ -178,9 +180,33 @@ In containerized Linux environments:
 
 If the container has no explicit memory limit, AIS falls back to host memory reporting.
 
-This means that memory shown by AIS inside a constrained container should reflect the container’s configured limit rather than the host’s total RAM.
+This means that memory shown by AIS inside a constrained container should reflect the container's configured limit rather than the host's total RAM.
 
 AIS also treats some auxiliary memory details as best-effort so that missing or unreadable secondary files do not cause runtime failure.
+
+### Two different views of memory
+
+`MEM USED(%)` and `MEM AVAIL` use different but complementary views of memory. In the current 4.4 implementation, `MEM USED(%)` is derived from the AIS process resident set size (RSS) as a percentage of the node's effective memory total, or the container's memory limit when running under cgroups.
+
+`MEM AVAIL`, on the other hand, is not simply raw free memory. `MEM AVAIL` reflects the node's available memory (`ActualFree`), which accounts for reclaimable kernel caches - memory that is technically in use (e.g., for kernel's pagecache) but can be freed under pressure.
+
+As a result, these columns are useful for operational triage, but they are not directly comparable to Prometheus metrics such as `container_memory_usage_bytes`, which report container-wide usage using different accounting semantics.
+
+In particular, `MEM USED(%)` will typically be much smaller than what Prometheus metrics such as `container_memory_usage_bytes` report, and often smaller than what operators see via `kubectl top` (which is a separate Kubernetes resource-usage view and should be treated as such).
+
+That's because `MEM USED(%)` reports only its own process footprint (see next section), while those tools generally reflect broader container memory usage.
+
+### About RSS
+
+`MEM USED(%)` in AIS is based on the process RSS (Resident Set Size) - the portion of a process's memory that is currently resident in physical RAM. This includes the Go heap, goroutine stacks, the Go runtime itself, loaded code and libraries, and other in-process data structures.
+
+> AIS nodes do not allocate custom off-heap buffers (e.g., via `mmap`), so RSS remains a reasonable approximation of the process's own memory footprint.
+
+RSS is a **process-level** view of memory, not a **container-level** one. It explains why `MEM USED(%)` may remain relatively small even when Prometheus metrics such as `container_memory_usage_bytes` - or operator-facing tools such as `kubectl top` - report much larger memory usage for the same pod or container.
+
+The difference is expected: container-level metrics commonly include memory charged to the container beyond the AIS process RSS, including filesystem page cache and other kernel-accounted memory associated with the workload.
+
+In AIS, this distinction is especially visible during heavy I/O: large reads and writes can increase container memory usage through page cache activity even when the AIS process RSS itself changes only modestly.
 
 ## Kubernetes note
 
@@ -223,7 +249,7 @@ docker run --rm \
 
 In that setup:
 
-* CPU count and memory totals should reflect the container’s limits rather than the host’s capacity
+* CPU count and memory totals should reflect the container's limits rather than the host's capacity
 * changing `--memory=512m` to `--memory=4G` should change the observed memory totals accordingly
 * the same workload should produce different CPU and memory observations on host versus inside the container
 
