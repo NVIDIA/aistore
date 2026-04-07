@@ -386,7 +386,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	s3.FillLsoMsg(q, lsmsg)
 
 	// via NBI
-	if err := _setupLsNBIHdr(r.Header, lsmsg); err != nil {
+	if err := _setupNBI(r.Header, lsmsg); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
@@ -423,26 +423,29 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	lst.Entries = nil
 }
 
-func _setupLsNBIHdr(hdr http.Header, lsmsg *apc.LsoMsg) error {
+func _setupNBI(hdr http.Header, lsmsg *apc.LsoMsg) error {
 	var (
-		haveInvName = hdr.Get(apc.HdrInvName) != ""
-		invVal      = hdr.Get(apc.HdrInventory)
+		invName = hdr.Get(apc.HdrInvName)
+		invUse  = hdr.Get(apc.HdrInventory)
 	)
-	switch {
-	case !cos.IsParseBool(invVal) && !haveInvName:
-		return nil
-	case haveInvName && invVal != "" && !cos.IsParseBool(invVal):
-		return fmt.Errorf("conflicting headers: %s=%q with %s=%q", apc.HdrInventory, invVal, apc.HdrInvName, hdr.Get(apc.HdrInvName))
-	}
-	if err := lsmsg.ValidateNBI(); err != nil {
-		return err
-	}
-	lsmsg.SetFlag(apc.LsNBI)
-	if haveInvName {
-		if err := cos.CheckAlphaPlus(hdr.Get(apc.HdrInvName), "inventory name"); err != nil {
+	if invName == "" {
+		if !cos.IsParseBool(invUse) {
+			return nil
+		}
+	} else {
+		if invUse != "" && !cos.IsParseBool(invUse) {
+			return fmt.Errorf("conflicting headers: '%s=%s' vs '%s=%s'", apc.HdrInventory, invUse, apc.HdrInvName, invName)
+		}
+		if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {
 			return err
 		}
 	}
+
+	if err := lsmsg.ValidateNBI(); err != nil {
+		return err
+	}
+
+	lsmsg.SetFlag(apc.LsNBI)
 	return nil
 }
 
