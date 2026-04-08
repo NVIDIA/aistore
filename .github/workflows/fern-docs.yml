@@ -1,0 +1,38 @@
+name: Fern Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'fern/**'
+      - 'scripts/fern/**'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish Fern docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Fern
+        run: npm install -g fern-api
+
+      - name: Generate Fern pages
+        run: bash scripts/fern/generate-pages.sh
+
+      - name: Validate configuration
+        run: fern check
+
+      - name: Publish to production
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: fern generate --docs
