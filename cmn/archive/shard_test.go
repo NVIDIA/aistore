@@ -1,0 +1,549 @@
+// Package archive: write, read, copy, append, list primitives
+// across all supported formats
+/*
+ * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+ */
+package archive_test
+
+import (
+	"archive/tar"
+	"bytes"
+	"fmt"
+	"io"
+	mrand "math/rand/v2"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/NVIDIA/aistore/cmn/archive"
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/tools/readers"
+)
+
+var modTime = time.Unix(1_000_000, 0)
+
+// TODO: add round-trip test: BuildShardIndex → Save → LoadShardIndex, assert entries match
+
+// fileMap maps archived filenames to the readers used to write them.
+// The same reader is reopened via Open() during validation, so each entry
+// carries both the write-side content and its own comparison source.
+type fileMap map[string]readers.Reader
+
+// scenarios names the cases run against every format in TestBuildShardIndex.
+// Build logic lives in buildScenario; adding a new case requires one entry here
+// and one case in that switch.
+var scenarios = []string{
+	"MultipleFiles",
+	"SingleFile",
+	"ZeroSizeFile",
+	"DuplicateNames",
+	"512ByteBoundaries",
+	"BinaryContent",
+	"SkipsNonRegular",
+}
+
+// every scenario × every format.
+func TestBuildShardIndex(t *testing.T) {
+	for _, sc := range scenarios {
+		for _, f := range []tar.Format{tar.FormatUSTAR, tar.FormatGNU, tar.FormatPAX} {
+			t.Run(sc+"/"+f.String(), func(t *testing.T) {
+				fh := tempFile(t)
+				defer fh.Close()
+
+				tw := tar.NewWriter(fh)
+				expected := buildScenario(t, sc, tw, f)
+				size := sealTAR(t, fh, tw)
+
+				idx, err := archive.BuildShardIndex(fh, size)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(idx.Entries) != len(expected) {
+					t.Fatalf("entry count: got %d, want %d", len(idx.Entries), len(expected))
+				}
+				for name, r := range expected {
+					checkEntry(t, fh, name, idx.Entries[name], r)
+				}
+			})
+		}
+	}
+}
+
+// TestBuildShardIndex_Empty verifies no error and an empty Entries map for an
+// empty TAR (format-independent).
+func TestBuildShardIndex_Empty(t *testing.T) {
+	fh := tempFile(t)
+	defer fh.Close()
+
+	size := sealTAR(t, fh, tar.NewWriter(fh))
+
+	idx, err := archive.BuildShardIndex(fh, size)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(idx.Entries) != 0 {
+		t.Fatalf("expected empty index, got %d entries", len(idx.Entries))
+	}
+}
+
+// TestBuildShardIndex_GNUSparse verifies that a TypeGNUSparse entry is skipped.
+// A GNU sparse file's logical Size exceeds its physical data, so the recorded
+// Offset would not point to contiguous content.  The regular file that follows
+// must still be correctly indexed.
+//
+// tar.Writer does not emit TypeGNUSparse directly; the header is constructed
+// as a raw 512-byte block with a valid checksum (see gnuSparseHeader).
+func TestBuildShardIndex_GNUSparse(t *testing.T) {
+	var buf bytes.Buffer
+
+	// TypeGNUSparse header, size=0 — no data blocks follow.
+	hdrBlk := gnuSparseHeader("sparse.bin")
+	buf.Write(hdrBlk[:])
+
+	// Regular file appended immediately after via tar.Writer.
+	tw := tar.NewWriter(&buf)
+	r := randReader(t, 64)
+	writeTAREntry(t, tw, &tar.Header{
+		Name: "regular.txt", Mode: 0o644, ModTime: modTime, Format: tar.FormatGNU,
+	}, 64, r)
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	fh := tempFile(t)
+	defer fh.Close()
+	if _, err := fh.Write(buf.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+
+	idx, err := archive.BuildShardIndex(fh, int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := idx.Entries["sparse.bin"]; ok {
+		t.Error(`"sparse.bin" must not be indexed (TypeGNUSparse)`)
+	}
+	checkEntry(t, fh, "regular.txt", idx.Entries["regular.txt"], r)
+}
+
+// TestBuildShardIndex_GNULongName verifies that a GNU long-name auxiliary entry
+// (TypeGNULongName, emitted before the real header for names > 100 bytes) is
+// fully consumed before Offset is recorded.
+func TestBuildShardIndex_GNULongName(t *testing.T) {
+	// 535 chars: forces two 512-byte data blocks for the TypeGNULongName entry,
+	// not just one.  Single-block long names (> 100 chars) are covered by the
+	// GNULongName scenario in the main table.
+	longName := "deeply/nested/" + strings.Repeat("x", 512) + "/file.txt"
+	r := randReader(t, 64)
+
+	fh := tempFile(t)
+	defer fh.Close()
+
+	tw := tar.NewWriter(fh)
+	writeTAREntry(t, tw, &tar.Header{Name: longName, Mode: 0o644, ModTime: modTime, Format: tar.FormatGNU}, 64, r)
+	size := sealTAR(t, fh, tw)
+
+	idx, err := archive.BuildShardIndex(fh, size)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkEntry(t, fh, longName, idx.Entries[longName], r)
+}
+
+// TestBuildShardIndex_PAXLongName verifies PAX-format long filenames (> 100 chars).
+// PAX encodes the name as a path= attribute in the extension block — a different
+// mechanism than GNU TypeGNULongName, but likewise adds an extra block before data.
+func TestBuildShardIndex_PAXLongName(t *testing.T) {
+	// 531 chars: forces the PAX path= attribute to spill across multiple 512-byte
+	// extension blocks, not just one.
+	longName := "deep/path/" + strings.Repeat("y", 512) + "/data.bin"
+	r := randReader(t, 64)
+
+	fh := tempFile(t)
+	defer fh.Close()
+
+	tw := tar.NewWriter(fh)
+	writeTAREntry(t, tw, &tar.Header{Name: longName, Mode: 0o644, ModTime: modTime, Format: tar.FormatPAX}, 64, r)
+	size := sealTAR(t, fh, tw)
+
+	idx, err := archive.BuildShardIndex(fh, size)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkEntry(t, fh, longName, idx.Entries[longName], r)
+}
+
+// TestBuildShardIndex_PAXExplicitExtension verifies that an explicit PAXRecords
+// entry (independent of filename length) still forces an extension block, and the
+// resulting Offset correctly skips it.
+func TestBuildShardIndex_PAXExplicitExtension(t *testing.T) {
+	const (
+		name = "pax_explicit.txt"
+		size = 64 * cos.KiB
+	)
+	r := randReader(t, size)
+
+	fh := tempFile(t)
+	defer fh.Close()
+
+	tw := tar.NewWriter(fh)
+	writeTAREntry(t, tw, &tar.Header{
+		Name: name, Mode: 0o644, ModTime: modTime, Format: tar.FormatPAX,
+		PAXRecords: map[string]string{"comment": "forces PAX extension block"},
+	}, size, r)
+	sz := sealTAR(t, fh, tw)
+
+	idx, err := archive.BuildShardIndex(fh, sz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkEntry(t, fh, name, idx.Entries[name], r)
+}
+
+// TestBuildShardIndex_PAXLargeExtension verifies that PAX extension headers spanning
+// four or more 512-byte blocks are fully consumed before the data Offset is recorded.
+// A 4096-byte comment encodes to ~8 extension blocks; the data must follow them.
+func TestBuildShardIndex_PAXLargeExtension(t *testing.T) {
+	const (
+		name = "pax_large.bin"
+		size = 128 * cos.KiB
+	)
+	r := randReader(t, 128*cos.KiB)
+
+	fh := tempFile(t)
+	defer fh.Close()
+
+	tw := tar.NewWriter(fh)
+	writeTAREntry(t, tw, &tar.Header{
+		Name: name, Mode: 0o644, ModTime: modTime, Format: tar.FormatPAX,
+		PAXRecords: map[string]string{"comment": strings.Repeat("x", 4096)},
+	}, size, r)
+	sz := sealTAR(t, fh, tw)
+
+	idx, err := archive.BuildShardIndex(fh, sz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := idx.Entries[name]
+	// Header must be past 8 extension blocks (8 × 512 = 4096 bytes).
+	if entry == nil || entry.Offset < 8*archive.TarBlockSize {
+		t.Fatalf("entry %q: expected Offset >= %d (large PAX extension), got %v", name, 8*archive.TarBlockSize, entry)
+	}
+	checkEntry(t, fh, name, entry, r)
+}
+
+// buildScenario writes TAR entries for the named scenario into tw and returns
+// a fileMap.  Each reader in the map was used to write the corresponding entry;
+// Open() on it yields a fresh reader at position 0 for byte-exact comparison.
+func buildScenario(t *testing.T, name string, tw *tar.Writer, format tar.Format) fileMap {
+	t.Helper()
+	switch name {
+	case "MultipleFiles":
+		return buildMultipleFiles(t, tw, format)
+	case "SingleFile":
+		return buildSingleFile(t, tw, format)
+	case "ZeroSizeFile":
+		return buildZeroSizeFile(t, tw, format)
+	case "DuplicateNames":
+		return buildDuplicateNames(t, tw, format)
+	case "512ByteBoundaries":
+		return build512ByteBoundaries(t, tw, format)
+	case "BinaryContent":
+		return buildBinaryContent(t, tw, format)
+	case "SkipsNonRegular":
+		return buildSkipsNonRegular(t, tw, format)
+	default:
+		t.Fatalf("unknown scenario %q", name)
+		return nil
+	}
+}
+
+func buildMultipleFiles(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
+	t.Helper()
+	rng := cos.NowRand()
+	count := 10_000 + rng.IntN(90_000) // [10K, 100K)
+	if testing.Short() {
+		count = 1_000 + rng.IntN(1_000) // [1K, 2K)
+	}
+	m := make(fileMap, count)
+	for i := range count {
+		name := fmt.Sprintf("file_%06d.bin", i)
+		size := randFileSize(rng)
+		r := randReader(t, size)
+		writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: format}, size, r)
+		m[name] = r
+	}
+	return m
+}
+
+func buildSingleFile(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
+	t.Helper()
+	rng := cos.NowRand()
+	size := 64*cos.KiB + rng.Int64N(448*cos.KiB) // [64KB, 512KB)
+	if !testing.Short() {
+		size = cos.MiB + rng.Int64N(7*cos.MiB) // [1MB, 8MB)
+	}
+	r := randReader(t, size)
+	writeTAREntry(t, tw, &tar.Header{Name: "only.txt", Mode: 0o644, ModTime: modTime, Format: format}, size, r)
+	return fileMap{"only.txt": r}
+}
+
+// buildZeroSizeFile interleaves zero-size and regular files.
+// Zero-size files write no data blocks; the next header must follow immediately —
+// any off-by-one in padding shifts every subsequent entry's Offset.
+func buildZeroSizeFile(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
+	t.Helper()
+	rng := cos.NowRand()
+	count := 100 + rng.IntN(400) // [100, 500)
+	if !testing.Short() {
+		count = 1_000 + rng.IntN(4_000) // [1K, 5K)
+	}
+	m := make(fileMap, 2*count)
+	for i := range count {
+		zeroName := fmt.Sprintf("zero_%06d.txt", i)
+		empty := readers.NewBytes([]byte{})
+		writeTAREntry(t, tw, &tar.Header{Name: zeroName, Mode: 0o644, ModTime: modTime, Format: format}, 0, empty)
+		m[zeroName] = empty
+
+		afterName := fmt.Sprintf("file_%06d.bin", i)
+		size := randFileSize(rng)
+		r := randReader(t, size)
+		writeTAREntry(t, tw, &tar.Header{Name: afterName, Mode: 0o644, ModTime: modTime, Format: format}, size, r)
+		m[afterName] = r
+	}
+	return m
+}
+
+// buildDuplicateNames writes each name twice.
+// TAR allows duplicate names (it is a plain sequential stream with no uniqueness
+// constraint).  ReadOne returns the first match and stops, so the index must agree:
+// first-wins, not last-wins.  This keeps the O(1) index path a drop-in replacement
+// for the sequential scan — callers see identical bytes either way.
+func buildDuplicateNames(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
+	t.Helper()
+	rng := cos.NowRand()
+	count := 500 + rng.IntN(500) // [500, 1K) unique names
+	if !testing.Short() {
+		count = 5_000 + rng.IntN(5_000) // [5K, 10K) unique names
+	}
+	m := make(fileMap, count)
+	for i := range count {
+		name := fmt.Sprintf("dup_%06d.txt", i)
+		sz1 := randFileSize(rng)
+		sz2 := randFileSize(rng)
+		r1 := randReader(t, sz1) // first occurrence — index must point here
+		r2 := randReader(t, sz2) // second occurrence — must NOT be returned
+		writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: format}, sz1, r1)
+		writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: format}, sz2, r2)
+		m[name] = r1
+	}
+	return m
+}
+
+// build512ByteBoundaries writes files at sizes that straddle 512-byte TAR block
+// boundaries, repeated many times.  TAR pads each file's data to the next 512-byte
+// multiple; a wrong padding calculation shifts every subsequent entry's Offset.
+func build512ByteBoundaries(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
+	t.Helper()
+	rng := cos.NowRand()
+	repeat := 50 + rng.IntN(50) // [50, 100) repetitions of each boundary size
+	if !testing.Short() {
+		repeat = 500 + rng.IntN(500) // [500, 1K) repetitions
+	}
+	sizes := []int64{1, 511, 512, 513, 1023, 1024, 1025}
+	m := make(fileMap, len(sizes)*repeat)
+	for rep := range repeat {
+		for _, sz := range sizes {
+			name := fmt.Sprintf("file_%04d_%06d.bin", sz, rep)
+			r := randReader(t, sz)
+			writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: format}, sz, r)
+			m[name] = r
+		}
+	}
+	return m
+}
+
+func buildBinaryContent(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
+	t.Helper()
+	rng := cos.NowRand()
+	count := 1_000 + rng.IntN(1_000) // [1K, 2K)
+	if !testing.Short() {
+		count = 10_000 + rng.IntN(90_000) // [10K, 100K)
+	}
+	m := make(fileMap, count)
+	for i := range count {
+		name := fmt.Sprintf("binary_%06d.bin", i)
+		size := randFileSize(rng)
+		r := randReader(t, size)
+		writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: format}, size, r)
+		m[name] = r
+	}
+	return m
+}
+
+// buildSkipsNonRegular interleaves dirs and symlinks before each regular file.
+// Only regular files should appear in the index; dirs and symlinks must be skipped.
+func buildSkipsNonRegular(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
+	t.Helper()
+	rng := cos.NowRand()
+	count := 500 + rng.IntN(500) // [500, 1K) regular files
+	if !testing.Short() {
+		count = 5_000 + rng.IntN(5_000) // [5K, 10K) regular files
+	}
+	m := make(fileMap, count)
+	for i := range count {
+		if err := tw.WriteHeader(&tar.Header{
+			Name: fmt.Sprintf("dir_%06d/", i), Typeflag: tar.TypeDir, Mode: 0o755, ModTime: modTime, Format: format,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := tw.WriteHeader(&tar.Header{
+			Name: fmt.Sprintf("link_%06d.txt", i), Typeflag: tar.TypeSymlink, Linkname: "target.txt", ModTime: modTime, Format: format,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		name := fmt.Sprintf("regular_%06d.txt", i)
+		size := 1 + rng.Int64N(512)
+		r := randReader(t, size)
+		writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: format}, size, r)
+		m[name] = r
+	}
+	return m
+}
+
+// low-level helpers
+
+// tempFile creates a temp file inside t.TempDir() (auto-cleaned after the test).
+func tempFile(t *testing.T) *os.File {
+	t.Helper()
+	fh, err := os.CreateTemp(t.TempDir(), "shard_*.tar")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	return fh
+}
+
+// sealTAR flushes and closes tw, then returns the size of fh.
+func sealTAR(t *testing.T, fh *os.File, tw *tar.Writer) int64 {
+	t.Helper()
+	if err := tw.Close(); err != nil {
+		t.Fatalf("tar.Close: %v", err)
+	}
+	info, err := fh.Stat()
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	return info.Size()
+}
+
+func randReader(t *testing.T, size int64) readers.Reader {
+	t.Helper()
+	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: cos.ChecksumOneXxh})
+	if err != nil {
+		t.Fatalf("readers.New(size=%d): %v", size, err)
+	}
+	return r
+}
+
+// randFileSize returns a size drawn from either [1, 1K) or [1K, 4K) with equal
+// probability, ensuring stress tests cover both small and medium file sizes.
+func randFileSize(rng *mrand.Rand) int64 {
+	if rng.IntN(2) == 0 {
+		return 1 + rng.Int64N(cos.KiB) // small [1, 1K)
+	}
+	return cos.KiB + rng.Int64N(3*cos.KiB) // medium [1K, 4K)
+}
+
+func writeTAREntry(t *testing.T, tw *tar.Writer, hdr *tar.Header, size int64, r io.Reader) {
+	t.Helper()
+	hdr.Size = size
+	if err := tw.WriteHeader(hdr); err != nil {
+		t.Fatalf("WriteHeader %q: %v", hdr.Name, err)
+	}
+	if size > 0 {
+		if _, err := io.Copy(tw, r); err != nil {
+			t.Fatalf("Write %q: %v", hdr.Name, err)
+		}
+	}
+}
+
+// checkEntry verifies the index entry for name against the raw TAR bytes.
+// Content is verified via xxhash: the hash precomputed during writing must match
+// the hash of the bytes at [Offset, Offset+Size) in the TAR file.
+func checkEntry(t *testing.T, raw io.ReaderAt, name string, entry *archive.ShardIndexEntry, r readers.Reader) {
+	t.Helper()
+	if entry == nil {
+		t.Fatalf("entry %q: missing from index", name)
+		return
+	}
+	// Offset points to the file's TAR header block — must be non-negative and 512-aligned.
+	if entry.Offset < 0 {
+		t.Fatalf("entry %q: negative offset %d", name, entry.Offset)
+	}
+	if entry.Offset%archive.TarBlockSize != 0 {
+		t.Fatalf("entry %q: offset %d not aligned to TarBlockSize", name, entry.Offset)
+	}
+	if entry.Size < 0 {
+		t.Fatalf("entry %q: negative size %d", name, entry.Size)
+	}
+	if entry.Size == 0 {
+		return // zero-size file: no content to verify
+	}
+	section := io.NewSectionReader(raw, entry.DataOffset(), entry.Size)
+	n, actual, err := cos.CopyAndChecksum(io.Discard, section, nil, cos.ChecksumOneXxh)
+	if err != nil {
+		t.Fatalf("entry %q: CopyAndChecksum: %v", name, err)
+	}
+	if n != entry.Size {
+		t.Fatalf("entry %q: read %d bytes, want %d", name, n, entry.Size)
+	}
+	if !actual.Equal(r.Cksum()) {
+		t.Fatalf("entry %q: xxhash mismatch at offset %d size %d", name, entry.Offset, entry.Size)
+	}
+}
+
+// gnuSparseHeader returns a minimal valid 512-byte TAR header block with
+// Typeflag=TypeGNUSparse and Size=0 (no data blocks follow).
+//
+// Ref: https://www.gnu.org/software/tar/manual/html_node/Standard.html
+//
+//	https://www.gnu.org/software/tar/manual/html_section/Sparse-Formats.html
+//
+// A USTAR/GNU header block is exactly 512 bytes.  The layout used here:
+//
+//	[  0.. 99]  name       — filename, null-padded
+//	[100..107]  mode       — octal string, e.g. "0000644\0"
+//	[124..135]  size       — octal string, 11 digits + null; 0 here (no data)
+//	[136..147]  mtime      — octal string, 11 digits + null
+//	[148..155]  checksum   — sum of all header bytes (checksum field as spaces)
+//	[156]       typeflag   — 'S' = TypeGNUSparse
+//	[257..262]  magic      — "ustar  \0" (GNU variant: two spaces, not "00")
+//
+// All fields not listed above remain zero, which is valid for a size=0 entry.
+func gnuSparseHeader(name string) [512]byte {
+	var blk [512]byte
+
+	copy(blk[0:], name)
+	copy(blk[100:], fmt.Sprintf("%07o\x00", 0o644))           // mode
+	copy(blk[124:], fmt.Sprintf("%011o\x00", 0))              // size = 0
+	copy(blk[136:], fmt.Sprintf("%011o\x00", modTime.Unix())) // mtime
+	blk[156] = tar.TypeGNUSparse                              // typeflag = 'S'
+	copy(blk[257:], "ustar  \x00")                            // GNU magic (two spaces)
+
+	// Checksum: arithmetic sum of every byte in the 512-byte block,
+	// with the 8-byte checksum field itself treated as all spaces (0x20).
+	// The result is written back as a 6-digit octal string followed by
+	// null and space — the standard GNU/POSIX checksum encoding.
+	var chk int
+	for i, b := range &blk {
+		if i >= 148 && i < 156 {
+			chk += 32 // treat checksum field as spaces
+		} else {
+			chk += int(b)
+		}
+	}
+	copy(blk[148:], fmt.Sprintf("%06o\x00 ", chk))
+
+	return blk
+}
