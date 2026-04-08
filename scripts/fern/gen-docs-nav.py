@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+import glob
 import os
 import re
 import sys
@@ -96,9 +97,43 @@ def path_to_fern_page(path: str, pages_dir: str) -> dict:
     }
 
 
+def _discover_all_pages(pages_dir: str) -> list:
+    """Auto-discover all .md pages in fern/pages/ recursively."""
+    pages = []
+    for f in sorted(glob.glob(os.path.join(pages_dir, "**", "*.md"), recursive=True)):
+        rel = os.path.relpath(f, pages_dir)
+        # Skip special files and blog (handled separately)
+        if rel in ("readme.md", "docs.md") or rel.startswith("blog/"):
+            continue
+        name = os.path.splitext(os.path.basename(f))[0]
+        # full_slug includes directory prefix (e.g., cli/archive) for dedup matching
+        full_slug = os.path.splitext(rel)[0]
+        # page_slug is filename-only (used in YAML inside a section with dir as slug)
+        page_slug = name
+        # Prefix numeric-only slugs (e.g., release notes "3.30" -> "v3.30")
+        if page_slug and page_slug[0].isdigit():
+            page_slug = f"v{page_slug}"
+        title = name.replace("_", " ").replace("-", " ").title()
+        # Prefix numeric titles too (YAML parses "3.30" as float)
+        if title and title[0].isdigit():
+            title = f"v{title}"
+        pages.append(
+            {
+                "title": title,
+                "path": f"./pages/{rel}",
+                "slug": page_slug,
+                "full_slug": full_slug,
+            }
+        )
+    return pages
+
+
 def generate_yaml(sections: list, pages_dir: str, indent: str = "      ") -> str:
     """Generate Fern navigation YAML from parsed sections."""
     lines = []
+
+    # Track all slugs added across all sections
+    all_seen_slugs = set()
 
     for section in sections:
         title = quote_yaml_title(section["title"])
@@ -111,11 +146,46 @@ def generate_yaml(sections: list, pages_dir: str, indent: str = "      ") -> str
             if entry is None:
                 continue
 
-            title = quote_yaml_title(link["title"])
+            link_title = quote_yaml_title(link["title"])
+            all_seen_slugs.add(entry["slug"])
 
-            lines.append(f"{indent}    - page: {title}")
+            lines.append(f"{indent}    - page: {link_title}")
             lines.append(f"{indent}      path: {entry['path']}")
             lines.append(f"{indent}      slug: {entry['slug']}")
+
+    # Add unlisted pages as hidden (accessible via URL but not in sidebar)
+    # Group by directory so subdirectory pages get correct URL prefixes
+    all_pages = _discover_all_pages(pages_dir)
+    unlisted = [p for p in all_pages if p["full_slug"] not in all_seen_slugs]
+
+    if unlisted:
+        groups = {}
+        for page in unlisted:
+            rel = os.path.relpath(page["path"], "./pages")
+            directory = os.path.dirname(rel)
+            groups.setdefault(directory or "", []).append(page)
+
+        for group_dir, pages in sorted(groups.items()):
+            if group_dir:
+                # Wrap in a hidden section with the directory as slug
+                section_title = group_dir.replace("/", " - ").replace("_", " ").title()
+                lines.append(f"{indent}- section: {quote_yaml_title(section_title)}")
+                lines.append(f'{indent}  slug: "{group_dir}"')
+                lines.append(f"{indent}  hidden: true")
+                lines.append(f"{indent}  contents:")
+                for page in pages:
+                    page_title = quote_yaml_title(page["title"])
+                    lines.append(f"{indent}    - page: {page_title}")
+                    lines.append(f"{indent}      path: {page['path']}")
+                    lines.append(f"{indent}      slug: {page['slug']}")
+            else:
+                # Root-level pages — hidden individually
+                for page in pages:
+                    page_title = quote_yaml_title(page["title"])
+                    lines.append(f"{indent}- page: {page_title}")
+                    lines.append(f"{indent}  path: {page['path']}")
+                    lines.append(f"{indent}  slug: {page['slug']}")
+                    lines.append(f"{indent}  hidden: true")
 
     return "\n".join(lines)
 

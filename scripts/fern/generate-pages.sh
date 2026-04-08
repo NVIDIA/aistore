@@ -109,14 +109,21 @@ find "$FERN_PAGES/tutorials" -name '*.md' -exec perl -pi \
 
 # ── 6. Fix internal links ───────────────────────────────────────────────
 
-# Strip .md extensions from markdown link targets only
+# Strip .md extensions from internal links only (skip http/https URLs)
 find "$FERN_PAGES" -name '*.md' -exec perl -pi \
-    -e 's/(\]\([^)]*?)\.md(\))/$1$2/g;' \
-    -e 's/(\]\([^)]*?)\.md(#)/$1$2/g;' \
+    -e 's/(\]\((?!https?:\/\/)[^)]*?)\.md(\))/$1$2/g;' \
+    -e 's/(\]\((?!https?:\/\/)[^)]*?)\.md(#)/$1$2/g;' \
     {} +
 
-# Fix README link to point to docs/readme
+# Fix README link to point to docs/readme (internal only)
 find "$FERN_PAGES" -name '*.md' -exec perl -pi -e 's|\]\(/README\)|](/docs/readme)|g' {} +
+
+# Convert repo-internal paths to full GitHub URLs
+# Any absolute link starting with / that is NOT /docs/ or /blog/ is a repo path
+GITHUB_BASE="https://github.com/NVIDIA/aistore/blob/main"
+find "$FERN_PAGES" -name '*.md' -exec perl -pi \
+    -e 's{\]\(/(?!docs/|blog/|cli/|assets/|images/|[#])([^)]+)\)}{]('"$GITHUB_BASE"'/$1)}g;' \
+    {} +
 
 # ── 7. Fix known source doc issues ──────────────────────────────────────
 
