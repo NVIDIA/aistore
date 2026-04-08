@@ -1,7 +1,7 @@
 title: NVIDIA AIStore
 
 instances:
-  - url: aistore.docs.buildwithfern.com
+  - url: aistore.docs.buildwithfern.com/aistore
     custom-domain: docs.nvidia.com/aistore
 
 layout:
