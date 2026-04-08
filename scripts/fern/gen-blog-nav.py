@@ -53,14 +53,24 @@ def extract_post_info(filepath: str) -> dict:
     return {"date": date, "slug": slug, "title": title, "path": filepath}
 
 
-def generate_yaml(posts: list, indent: str = "          ") -> str:
-    """Generate YAML entries for the blog navigation."""
+def generate_yaml(posts: list, indent: str = "  ") -> str:
+    """Generate YAML for blog as hidden pages (no tab, accessible via navbar link)."""
     lines = []
+    # Blog index — hidden page at /blog
+    lines.append(f"{indent}- page: All Posts")
+    lines.append(f"{indent}  path: ./pages/blog/index.md")
+    lines.append(f"{indent}  slug: blog")
+    lines.append(f"{indent}  hidden: true")
+    # All blog posts in a hidden section at /blog/<slug>
+    lines.append(f"{indent}- section: Blog Posts")
+    lines.append(f'{indent}  slug: "blog"')
+    lines.append(f"{indent}  hidden: true")
+    lines.append(f"{indent}  contents:")
     for post in posts:
         title = quote_yaml_title(post["title"])
-        lines.append(f"{indent}- page: {title}")
-        lines.append(f"{indent}  path: ./pages/blog/{post['slug']}.md")
-        lines.append(f"{indent}  slug: {post['slug']}")
+        lines.append(f"{indent}    - page: {title}")
+        lines.append(f"{indent}      path: ./pages/blog/{post['slug']}.md")
+        lines.append(f"{indent}      slug: {post['slug']}")
     return "\n".join(lines)
 
 
@@ -101,7 +111,7 @@ def main():
         except IOError as exc:
             print(f"ERROR: Cannot read {inject_file}: {exc}", file=sys.stderr)
             sys.exit(1)
-        placeholder = "          # AUTO_GENERATED_BLOG_ENTRIES"
+        placeholder = "  # AUTO_GENERATED_BLOG_ENTRIES"
         if placeholder not in content:
             print(
                 f"ERROR: Placeholder '{placeholder}' not found in {inject_file}",

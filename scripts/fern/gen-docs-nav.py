@@ -47,6 +47,8 @@ def parse_docs_md(filepath: str) -> list:
         link = re.match(r"^\s*- \[(.+?)\]\((.+?)\)$", line)
         if link:
             title = link.group(1)
+            # Strip backticks — inline code doesn't render in Fern navigation
+            title = title.replace("`", "")
             path = link.group(2)
             current_section["links"].append({"title": title, "path": path})
 
@@ -128,12 +130,12 @@ def _discover_all_pages(pages_dir: str) -> list:
     return pages
 
 
-def generate_yaml(sections: list, pages_dir: str, indent: str = "      ") -> str:
+def generate_yaml(sections: list, pages_dir: str, indent: str = "  ") -> str:
     """Generate Fern navigation YAML from parsed sections."""
     lines = []
 
-    # Track all slugs added across all sections
-    all_seen_slugs = set()
+    # Track all slugs to skip duplicates (README is already the landing page)
+    all_seen_slugs = {"readme"}
 
     for section in sections:
         title = quote_yaml_title(section["title"])
@@ -146,9 +148,12 @@ def generate_yaml(sections: list, pages_dir: str, indent: str = "      ") -> str
             if entry is None:
                 continue
 
+            # Skip README — it's already the landing page
+            if entry["slug"] == "readme":
+                continue
+
             link_title = quote_yaml_title(link["title"])
             all_seen_slugs.add(entry["slug"])
-
             lines.append(f"{indent}    - page: {link_title}")
             lines.append(f"{indent}      path: {entry['path']}")
             lines.append(f"{indent}      slug: {entry['slug']}")
@@ -231,7 +236,7 @@ def main():
         except IOError as exc:
             print(f"ERROR: Cannot read {inject_file}: {exc}", file=sys.stderr)
             sys.exit(1)
-        placeholder = "      # AUTO_GENERATED_DOCS_ENTRIES"
+        placeholder = "  # AUTO_GENERATED_DOCS_ENTRIES"
         if placeholder not in content:
             print(
                 f"ERROR: Placeholder '{placeholder}' not found in {inject_file}",

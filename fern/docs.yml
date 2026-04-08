@@ -43,6 +43,9 @@ css:
 footer: ./components/CustomFooter.tsx
 
 navbar-links:
+  - type: minimal
+    text: Blog
+    href: /blog
   - type: github
     value: https://github.com/NVIDIA/aistore
 
@@ -51,43 +54,20 @@ experimental:
     - ./components
   basepath-aware: true
 
-tabs:
-  home:
-    display-name: Home
-    slug: ""
-  docs:
-    display-name: Documentation
-    slug: docs
-  blog:
-    display-name: Blog
-    slug: blog
-
 navigation:
-  # ── Home Tab ───────────────────────────────────────────────────────────
-  - tab: home
-    layout:
-      - page: AIStore
-        path: ./pages/readme.md
-        slug: ""
+  # Landing page: main README
+  - page: AIStore
+    path: ./pages/readme.md
+    slug: ""
 
-  # ── Documentation Tab (auto-generated from docs/docs.md) ────────────────
-  - tab: docs
-    layout:
-      - page: Documentation
-        path: ./pages/docs.md
-        slug: ""
-      # AUTO_GENERATED_DOCS_ENTRIES
+  # Docs index: links to all documentation
+  - page: Documentation
+    path: ./pages/docs.md
+    slug: docs
 
-  # ── Blog Tab (auto-generated at build time, newest first) ───────────────
-  - tab: blog
-    layout:
-      - section: Blog
-        slug: ""
-        contents:
-          - page: All Posts
-            path: ./pages/blog/index.md
-            slug: ""
-          # AUTO_GENERATED_BLOG_ENTRIES
+  # AUTO_GENERATED_DOCS_ENTRIES
+
+  # AUTO_GENERATED_BLOG_ENTRIES
 
 redirects:
   # Old blog date-based URLs → new flat blog slugs
