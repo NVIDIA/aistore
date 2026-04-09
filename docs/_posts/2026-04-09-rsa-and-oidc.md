@@ -32,6 +32,28 @@ For any AIStore deployments that are not carefully gated in a protected environm
 
 With the 4.3 and subsequent 4.4 releases, AIStore AuthN now supports RSA signing keys and OIDC Issuer Discovery -- two essential features to mitigate the risk of this total security collapse.
 
+---
+
+## Table of Contents
+
+- [RSA JWT Signing](#rsa-jwt-signing)
+- [OIDC Issuer Discovery](#oidc-issuer-discovery)
+  - [Static Key Distribution](#static-key-distribution)
+  - [Trusted Issuers](#trusted-issuers)
+  - [OIDC in AuthN](#oidc-in-authn)
+  - [Drawbacks and Limitations](#drawbacks-and-limitations)
+- [Complete Kubernetes Deployment](#complete-kubernetes-deployment)
+  - [Running the Deployment](#running-the-deployment)
+  - [AuthN Config](#authn-config)
+  - [AIS Config](#ais-config)
+- [Conclusion and Future Work](#conclusion-and-future-work)
+  - [Signing Key Rotation](#signing-key-rotation)
+  - [Multi-replica Support](#multi-replica-support)
+  - [Service Account Authentication](#service-account-authentication)
+- [References](#references)
+
+---
+
 ## RSA JWT Signing
 
 Previously, AIStore AuthN relied on HS256, which uses HMAC-SHA256 with a shared secret key.
@@ -47,6 +69,8 @@ JWT signatures are validated only by a public key that cannot be used to sign ne
 AuthN also now supports encrypting the private key locally with a passphrase so it's never unprotected on disk even within the service.
 
 See [RSA Signing](https://github.com/NVIDIA/aistore/blob/main/docs/authn.md#rsa-signing) in the AuthN docs for more details.
+
+---
 
 ## OIDC Issuer Discovery
 
@@ -96,6 +120,8 @@ However, AIS will not need to query AuthN on every request, and in fact caches t
 > Note: AIS currently only refreshes its cached key sets for a specific issuer on proxy restart. 
 > This is a known deficiency that limits the usability of key rotation and will be fixed in a future release.
 > See the [signing key rotation](#signing-key-rotation) section below. 
+
+---
 
 ## Complete Kubernetes Deployment
 
@@ -190,6 +216,7 @@ auth:
   usernamePassword:
     secretName: ais-authn-su-creds
 ```
+---
 
 ## Conclusion and Future Work
 
@@ -222,6 +249,8 @@ One proposed alternative is to support AuthN token provisioning via a [K8s proje
 This moves the access control used for the operator and admin client deployments to K8s RBAC and away from static credentials.
 
 Follow our progress on the [main AIStore repo](https://github.com/NVIDIA/aistore) or try out the [local deployment](https://github.com/NVIDIA/ais-k8s/tree/main/local) yourself!
+
+---
 
 ## References
 
