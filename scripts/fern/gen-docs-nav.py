@@ -130,11 +130,47 @@ def _discover_all_pages(pages_dir: str) -> list:
     return pages
 
 
+def _emit_hidden_pages(pages_dir: str, all_seen_slugs: set, indent: str) -> list:
+    """Emit hidden YAML entries for pages not in the main navigation."""
+    lines = []
+    all_pages = _discover_all_pages(pages_dir)
+    unlisted = [p for p in all_pages if p["full_slug"] not in all_seen_slugs]
+
+    if not unlisted:
+        return lines
+
+    groups = {}
+    for page in unlisted:
+        rel = os.path.relpath(page["path"], "./pages")
+        directory = os.path.dirname(rel)
+        groups.setdefault(directory or "", []).append(page)
+
+    for group_dir, pages in sorted(groups.items()):
+        if group_dir:
+            section_title = group_dir.replace("/", " - ").replace("_", " ").title()
+            lines.append(f"{indent}- section: {quote_yaml_title(section_title)}")
+            lines.append(f'{indent}  slug: "{group_dir}"')
+            lines.append(f"{indent}  hidden: true")
+            lines.append(f"{indent}  contents:")
+            for page in pages:
+                page_title = quote_yaml_title(page["title"])
+                lines.append(f"{indent}    - page: {page_title}")
+                lines.append(f"{indent}      path: {page['path']}")
+                lines.append(f"{indent}      slug: {page['slug']}")
+        else:
+            for page in pages:
+                page_title = quote_yaml_title(page["title"])
+                lines.append(f"{indent}- page: {page_title}")
+                lines.append(f"{indent}  path: {page['path']}")
+                lines.append(f"{indent}  slug: {page['slug']}")
+                lines.append(f"{indent}  hidden: true")
+
+    return lines
+
+
 def generate_yaml(sections: list, pages_dir: str, indent: str = "  ") -> str:
     """Generate Fern navigation YAML from parsed sections."""
     lines = []
-
-    # Track all slugs to skip duplicates (README is already the landing page)
     all_seen_slugs = {"readme"}
 
     for section in sections:
@@ -144,54 +180,28 @@ def generate_yaml(sections: list, pages_dir: str, indent: str = "  ") -> str:
         lines.append(f"{indent}  contents:")
 
         for link in section["links"]:
-            entry = path_to_fern_page(link["path"], pages_dir)
+            link_title = quote_yaml_title(link["title"])
+            path = link["path"]
+
+            # External links → emit as Fern link (opens in new tab)
+            if path.startswith("http://") or path.startswith("https://"):
+                lines.append(f"{indent}    - link: {link_title}")
+                lines.append(f'{indent}      href: "{path}"')
+                continue
+
+            entry = path_to_fern_page(path, pages_dir)
             if entry is None:
                 continue
 
-            # Skip README — it's already the landing page
             if entry["slug"] == "readme":
                 continue
 
-            link_title = quote_yaml_title(link["title"])
             all_seen_slugs.add(entry["slug"])
             lines.append(f"{indent}    - page: {link_title}")
             lines.append(f"{indent}      path: {entry['path']}")
             lines.append(f"{indent}      slug: {entry['slug']}")
 
-    # Add unlisted pages as hidden (accessible via URL but not in sidebar)
-    # Group by directory so subdirectory pages get correct URL prefixes
-    all_pages = _discover_all_pages(pages_dir)
-    unlisted = [p for p in all_pages if p["full_slug"] not in all_seen_slugs]
-
-    if unlisted:
-        groups = {}
-        for page in unlisted:
-            rel = os.path.relpath(page["path"], "./pages")
-            directory = os.path.dirname(rel)
-            groups.setdefault(directory or "", []).append(page)
-
-        for group_dir, pages in sorted(groups.items()):
-            if group_dir:
-                # Wrap in a hidden section with the directory as slug
-                section_title = group_dir.replace("/", " - ").replace("_", " ").title()
-                lines.append(f"{indent}- section: {quote_yaml_title(section_title)}")
-                lines.append(f'{indent}  slug: "{group_dir}"')
-                lines.append(f"{indent}  hidden: true")
-                lines.append(f"{indent}  contents:")
-                for page in pages:
-                    page_title = quote_yaml_title(page["title"])
-                    lines.append(f"{indent}    - page: {page_title}")
-                    lines.append(f"{indent}      path: {page['path']}")
-                    lines.append(f"{indent}      slug: {page['slug']}")
-            else:
-                # Root-level pages — hidden individually
-                for page in pages:
-                    page_title = quote_yaml_title(page["title"])
-                    lines.append(f"{indent}- page: {page_title}")
-                    lines.append(f"{indent}  path: {page['path']}")
-                    lines.append(f"{indent}  slug: {page['slug']}")
-                    lines.append(f"{indent}  hidden: true")
-
+    lines.extend(_emit_hidden_pages(pages_dir, all_seen_slugs, indent))
     return "\n".join(lines)
 
 
