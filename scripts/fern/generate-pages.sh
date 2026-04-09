@@ -109,20 +109,26 @@ find "$FERN_PAGES/tutorials" -name '*.md' -exec perl -pi \
 
 # ── 6. Fix internal links ───────────────────────────────────────────────
 
+# All internal links use /aistore/ as the basepath (matches docs.nvidia.com/aistore/)
+BASEPATH="/aistore"
+GITHUB_BASE="https://github.com/NVIDIA/aistore/blob/main"
+
 # Strip .md extensions from internal links only (skip http/https URLs)
 find "$FERN_PAGES" -name '*.md' -exec perl -pi \
     -e 's/(\]\((?!https?:\/\/)[^)]*?)\.md(\))/$1$2/g;' \
     -e 's/(\]\((?!https?:\/\/)[^)]*?)\.md(#)/$1$2/g;' \
     {} +
 
-# Fix README link to point to docs/readme (internal only)
-find "$FERN_PAGES" -name '*.md' -exec perl -pi -e 's|\]\(/README\)|](/docs/readme)|g' {} +
-
-# Convert repo-internal paths to full GitHub URLs
-# Any absolute link starting with / that is NOT /docs/ or /blog/ is a repo path
-GITHUB_BASE="https://github.com/NVIDIA/aistore/blob/main"
+# Convert repo-internal paths (not /docs/, /blog/, /cli/) to full GitHub URLs
 find "$FERN_PAGES" -name '*.md' -exec perl -pi \
-    -e 's{\]\(/(?!docs/|blog/|cli/|assets/|images/|[#])([^)]+)\)}{]('"$GITHUB_BASE"'/$1)}g;' \
+    -e 's{\]\(/(?!docs/|blog/|cli/|relnotes/|tutorials/|proposals/|assets/|images/|README|[#])([^)]+)\)}{]('"$GITHUB_BASE"'/$1)}g;' \
+    {} +
+
+# Rewrite /docs/X → /aistore/X, /blog/X → /aistore/blog/X, /README → /aistore/
+find "$FERN_PAGES" -name '*.md' -exec perl -pi \
+    -e "s{\\]\\(/docs/([^)]+)\\)}{]($BASEPATH/\$1)}g;" \
+    -e "s{\\]\\(/blog/([^)]+)\\)}{]($BASEPATH/blog/\$1)}g;" \
+    -e "s{\\]\\(/README(#[^)]*)?\\)}{]($BASEPATH/\$1)}g;" \
     {} +
 
 # ── 7. Fix known source doc issues ──────────────────────────────────────

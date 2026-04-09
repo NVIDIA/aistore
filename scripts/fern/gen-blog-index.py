@@ -110,7 +110,9 @@ def main():
     for year in sorted(years.keys(), reverse=True):
         lines.append(f"## {year}\n")
         for p in years[year]:
-            lines.append(f"**[{p['title']}](/blog/{p['slug']})** — {p['display_date']}")
+            lines.append(
+                f"**[{p['title']}](/aistore/blog/{p['slug']})** — {p['display_date']}"
+            )
             if p["description"]:
                 lines.append(f"> {p['description']}")
             lines.append("")
