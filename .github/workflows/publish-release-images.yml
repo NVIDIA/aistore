@@ -49,6 +49,20 @@ jobs:
           - image_name: aistorage/authn
             image_tag: latest
             context_dir: deploy/prod/k8s/authn_container
+          # ais-util
+          - image_name: aistorage/ais-util
+            image_tag: ${{ needs.release-tag.outputs.image_tag }}
+            context_dir: deploy/prod/k8s/aisutil_container
+          - image_name: aistorage/ais-util
+            image_tag: latest
+            context_dir: deploy/prod/k8s/aisutil_container
+          # cluster-minimal
+          - image_name: aistorage/cluster-minimal
+            image_tag: ${{ needs.release-tag.outputs.image_tag }}
+            context_dir: deploy/prod/docker/image
+          - image_name: aistorage/cluster-minimal
+            image_tag: latest
+            context_dir: deploy/prod/docker/image
     uses: ./.github/workflows/docker-build.yml
     with:
       image_name: ${{ matrix.image_name }}
