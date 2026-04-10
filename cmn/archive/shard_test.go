@@ -21,9 +21,134 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 )
 
-var modTime = time.Unix(1_000_000, 0)
+var (
+	modTime    = time.Unix(1_000_000, 0)
+	tarFormats = []tar.Format{tar.FormatUSTAR, tar.FormatGNU, tar.FormatPAX}
+)
 
-// TODO: add round-trip test: BuildShardIndex → Save → LoadShardIndex, assert entries match
+// TestPackUnpackRoundTrip verifies the Pack → Unpack round-trip:
+// Build an index from a real TAR, pack it to bytes, unpack back, and assert
+// every entry's Offset and Size survive the serialization unchanged.
+func TestPackUnpackRoundTrip(t *testing.T) {
+	rng := cos.NowRand()
+	counts := []int{0, 1, 100}
+	if !testing.Short() {
+		counts = append(counts, 10_000)
+	}
+	for _, f := range tarFormats {
+		for _, count := range counts {
+			t.Run(fmt.Sprintf("%s/count=%d", f, count), func(t *testing.T) {
+				fh := tempFile(t)
+				defer fh.Close()
+
+				tw := tar.NewWriter(fh)
+				for i := range count {
+					name := fmt.Sprintf("file_%06d.bin", i)
+					size := 1 + rng.Int64N(4*cos.KiB)
+					r := randReader(t, size)
+					writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: f}, size, r)
+				}
+				size := sealTAR(t, fh, tw)
+
+				orig, err := archive.BuildShardIndex(fh, size)
+				if err != nil {
+					t.Fatal("BuildShardIndex:", err)
+				}
+
+				b, err := orig.Pack()
+				if err != nil {
+					t.Fatal("Pack:", err)
+				}
+
+				got := &archive.ShardIndex{}
+				if err := got.Unpack(b); err != nil {
+					t.Fatal("Unpack:", err)
+				}
+
+				if len(got.Entries) != len(orig.Entries) {
+					t.Fatalf("entry count: got %d, want %d", len(got.Entries), len(orig.Entries))
+				}
+				for name, want := range orig.Entries {
+					have, ok := got.Entries[name]
+					if !ok {
+						t.Fatalf("entry %q: missing after Unpack", name)
+					}
+					if have.Offset != want.Offset {
+						t.Fatalf("entry %q: Offset got %d, want %d", name, have.Offset, want.Offset)
+					}
+					if have.Size != want.Size {
+						t.Fatalf("entry %q: Size got %d, want %d", name, have.Size, want.Size)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestPackNegativeValues verifies that Pack rejects entries with negative Offset or Size.
+func TestPackNegativeValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry archive.ShardIndexEntry
+	}{
+		{"negative offset", archive.ShardIndexEntry{Offset: -1, Size: 0}},
+		{"negative size", archive.ShardIndexEntry{Offset: 0, Size: -1}},
+		{"both negative", archive.ShardIndexEntry{Offset: -512, Size: -1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			idx := &archive.ShardIndex{
+				Entries: map[string]archive.ShardIndexEntry{"f": tc.entry},
+			}
+			if _, err := idx.Pack(); err == nil {
+				t.Fatalf("%s: expected Pack to return error, got nil", tc.name)
+			}
+		})
+	}
+}
+
+// TestUnpackChecksumCorruption verifies that a single flipped bit anywhere in
+// the packed payload is caught by the xxhash integrity check on Unpack,
+// across all supported TAR formats.
+func TestUnpackChecksumCorruption(t *testing.T) {
+	for _, f := range tarFormats {
+		t.Run(f.String(), func(t *testing.T) {
+			fh := tempFile(t)
+			defer fh.Close()
+
+			tw := tar.NewWriter(fh)
+			for i := range 10 {
+				name := fmt.Sprintf("file_%02d.bin", i)
+				r := randReader(t, 512)
+				writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: f}, 512, r)
+			}
+			size := sealTAR(t, fh, tw)
+
+			idx, err := archive.BuildShardIndex(fh, size)
+			if err != nil {
+				t.Fatal("BuildShardIndex:", err)
+			}
+			b, err := idx.Pack()
+			if err != nil {
+				t.Fatal("Pack:", err)
+			}
+
+			// flip one bit at each byte position in the payload (everything after the preamble)
+			// and confirm Unpack rejects it every time
+			const prefLen = 11 // shardIdxPrefLen
+			for i := prefLen; i < len(b); i++ {
+				corrupted := make([]byte, len(b))
+				copy(corrupted, b)
+				corrupted[i] ^= 0x01
+
+				got := &archive.ShardIndex{}
+				if err := got.Unpack(corrupted); err == nil {
+					t.Fatalf("byte %d: expected checksum error, got nil", i)
+				}
+			}
+		})
+	}
+}
 
 // fileMap maps archived filenames to the readers used to write them.
 // The same reader is reopened via Open() during validation, so each entry
@@ -46,7 +171,7 @@ var scenarios = []string{
 // every scenario × every format.
 func TestBuildShardIndex(t *testing.T) {
 	for _, sc := range scenarios {
-		for _, f := range []tar.Format{tar.FormatUSTAR, tar.FormatGNU, tar.FormatPAX} {
+		for _, f := range tarFormats {
 			t.Run(sc+"/"+f.String(), func(t *testing.T) {
 				fh := tempFile(t)
 				defer fh.Close()
@@ -63,7 +188,11 @@ func TestBuildShardIndex(t *testing.T) {
 					t.Fatalf("entry count: got %d, want %d", len(idx.Entries), len(expected))
 				}
 				for name, r := range expected {
-					checkEntry(t, fh, name, idx.Entries[name], r)
+					entry, ok := idx.Entries[name]
+					if !ok {
+						t.Fatalf("entry %q: missing from index", name)
+					}
+					checkEntry(t, fh, name, entry, r)
 				}
 			})
 		}
@@ -124,7 +253,11 @@ func TestBuildShardIndex_GNUSparse(t *testing.T) {
 	if _, ok := idx.Entries["sparse.bin"]; ok {
 		t.Error(`"sparse.bin" must not be indexed (TypeGNUSparse)`)
 	}
-	checkEntry(t, fh, "regular.txt", idx.Entries["regular.txt"], r)
+	entry, ok := idx.Entries["regular.txt"]
+	if !ok {
+		t.Fatal(`entry "regular.txt": missing from index`)
+	}
+	checkEntry(t, fh, "regular.txt", entry, r)
 }
 
 // TestBuildShardIndex_GNULongName verifies that a GNU long-name auxiliary entry
@@ -148,7 +281,11 @@ func TestBuildShardIndex_GNULongName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkEntry(t, fh, longName, idx.Entries[longName], r)
+	entry, ok := idx.Entries[longName]
+	if !ok {
+		t.Fatalf("entry %q: missing from index", longName)
+	}
+	checkEntry(t, fh, longName, entry, r)
 }
 
 // TestBuildShardIndex_PAXLongName verifies PAX-format long filenames (> 100 chars).
@@ -171,7 +308,11 @@ func TestBuildShardIndex_PAXLongName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkEntry(t, fh, longName, idx.Entries[longName], r)
+	entry, ok := idx.Entries[longName]
+	if !ok {
+		t.Fatalf("entry %q: missing from index", longName)
+	}
+	checkEntry(t, fh, longName, entry, r)
 }
 
 // TestBuildShardIndex_PAXExplicitExtension verifies that an explicit PAXRecords
@@ -198,7 +339,11 @@ func TestBuildShardIndex_PAXExplicitExtension(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkEntry(t, fh, name, idx.Entries[name], r)
+	entry, ok := idx.Entries[name]
+	if !ok {
+		t.Fatalf("entry %q: missing from index", name)
+	}
+	checkEntry(t, fh, name, entry, r)
 }
 
 // TestBuildShardIndex_PAXLargeExtension verifies that PAX extension headers spanning
@@ -225,9 +370,9 @@ func TestBuildShardIndex_PAXLargeExtension(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry := idx.Entries[name]
+	entry, ok := idx.Entries[name]
 	// Header must be past 8 extension blocks (8 × 512 = 4096 bytes).
-	if entry == nil || entry.Offset < 8*archive.TarBlockSize {
+	if !ok || entry.Offset < 8*archive.TarBlockSize {
 		t.Fatalf("entry %q: expected Offset >= %d (large PAX extension), got %v", name, 8*archive.TarBlockSize, entry)
 	}
 	checkEntry(t, fh, name, entry, r)
@@ -471,12 +616,8 @@ func writeTAREntry(t *testing.T, tw *tar.Writer, hdr *tar.Header, size int64, r 
 // checkEntry verifies the index entry for name against the raw TAR bytes.
 // Content is verified via xxhash: the hash precomputed during writing must match
 // the hash of the bytes at [Offset, Offset+Size) in the TAR file.
-func checkEntry(t *testing.T, raw io.ReaderAt, name string, entry *archive.ShardIndexEntry, r readers.Reader) {
+func checkEntry(t *testing.T, raw io.ReaderAt, name string, entry archive.ShardIndexEntry, r readers.Reader) {
 	t.Helper()
-	if entry == nil {
-		t.Fatalf("entry %q: missing from index", name)
-		return
-	}
 	// Offset points to the file's TAR header block — must be non-negative and 512-aligned.
 	if entry.Offset < 0 {
 		t.Fatalf("entry %q: negative offset %d", name, entry.Offset)
