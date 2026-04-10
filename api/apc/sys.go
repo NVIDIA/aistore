@@ -22,6 +22,9 @@ type MemCPUInfo struct {
 	// added in 4.4
 	CPUUtil      int64 `json:"cpu_util"`                // sampled system/container CPU util (%)
 	CPUThrottled int64 `json:"cpu_throttled,omitempty"` // %% time container was CPU throttled (cgroup-v2)
+	// added in 4.5
+	Mem  *sys.MemStat   `json:"mem,omitempty"`
+	Proc *sys.ProcStats `json:"proc,omitempty"`
 }
 
 func GetMemCPU() MemCPUInfo {
@@ -46,5 +49,7 @@ func GetMemCPU() MemCPUInfo {
 		LoadAvg:      load,
 		CPUUtil:      utilEMA,
 		CPUThrottled: throttled,
+		Mem:          &mem,
+		Proc:         &proc,
 	}
 }

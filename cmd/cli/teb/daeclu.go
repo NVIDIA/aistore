@@ -41,102 +41,87 @@ const (
 	memOOM      = 200 * cos.MiB
 )
 
+type (
+	NodeStatusMap map[string]*stats.NodeStatus // by node ID (SID)
+
+	ClusterTabOpts struct {
+		Units      string
+		Verbose    bool
+		ShowSysCPU bool
+		ShowLoad   bool
+	}
+)
+
 // proxy(ies)
-func (h *StatsAndStatusHelper) MakeTabP(smap *meta.Smap, units string, verbose bool) *Table {
+func (h *StatsAndStatusHelper) MakeTabP(smap *meta.Smap, opts ClusterTabOpts) *Table {
 	var (
 		pods         = h.pods()
 		status       = h.onlineStatus()
 		versions     = h.versions()
 		builds       = h.buildTimes()
-		showThrottle = h.anyThrottled(false /*targets*/)
+		showThrottle = anyThrottled(h.Pmap) // can optimize-out if !opts.ShowSysCPU (pre-4.4)
 		cols         = []*header{
 			{name: colProxy},
 			{name: colMemUsed},
 			{name: colMemAvail},
-			{name: colSysCPU},
+			{name: colSysCPU, hide: !opts.ShowSysCPU},
+			{name: colThrottled, hide: !showThrottle},
+			{name: colLoadAvg, hide: !opts.ShowLoad},
+			{name: colUptime},
+			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
+			{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
+			{name: colVersion, hide: len(versions) == 1 && len(builds) == 1},
+			{name: colBuildTime, hide: len(versions) == 1 && len(builds) == 1},
+			{name: colStateFlags, hide: h.Pmap.allStateFlagsOK()},
 		}
-		table *Table
+		table = newTable(cols...)
 	)
-
-	// two "conditional" columns
-	if showThrottle {
-		cols = append(cols, &header{name: colThrottled})
-	}
-	if verbose {
-		cols = append(cols, &header{name: colLoadAvg})
-	}
-
-	cols = append(cols,
-		&header{name: colUptime},
-		&header{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
-		&header{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
-		&header{name: colVersion, hide: len(versions) == 1 && len(builds) == 1},
-		&header{name: colBuildTime, hide: len(versions) == 1 && len(builds) == 1},
-		&header{name: colStateFlags, hide: h.Pmap.allStateFlagsOK()},
-	)
-
-	table = newTable(cols...)
 
 	ids := h.Pmap.sortPODs(smap, true)
 	for _, sid := range ids {
 		ds := h.Pmap[sid]
-
 		if ds.Status != NodeOnline {
 			nid, nstatus := fmtStatusSID(ds.Snode.ID(), smap, ds.Status)
-			row := []string{
+			table.addRow(row{
 				nid,
-				unknownVal,
-				unknownVal,
+				unknownVal, // mem used
+				unknownVal, // mem avail
 				unknownVal, // sys cpu
-			}
-			if showThrottle {
-				row = append(row, unknownVal)
-			}
-			if verbose {
-				row = append(row, unknownVal) // load avg
-			}
-			row = append(row,
+				unknownVal, // throttled
+				unknownVal, // load avg
 				unknownVal, // uptime
 				ds.K8sPodName,
 				nstatus,
 				ds.Version,
 				ds.BuildTime,
 				unknownVal, // alert
-			)
-			table.addRow(row)
+			})
 			continue
 		}
 
 		memUsed, high, oom := _memUsed(ds.MemCPUInfo.PctMemUsed)
-		memAvail, status := _memAvail(int64(ds.MemCPUInfo.MemAvail), units, ds.Status, high, oom)
+		memAvail, status := _memAvail(int64(ds.MemCPUInfo.MemAvail), opts.Units, ds.Status, high, oom)
 
 		upns := ds.Tracker[stats.Uptime].Value
-		uptime := FmtDuration(upns, units)
+		uptime := FmtDuration(upns, opts.Units)
 		if upns == 0 {
 			uptime = unknownVal
 		}
 
-		row := []string{
+		table.addRow(row{
 			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 			memUsed,
 			memAvail,
 			_sysCPU(ds.MemCPUInfo),
-		}
-		if showThrottle {
-			row = append(row, _throttled(ds.MemCPUInfo))
-		}
-		if verbose {
-			row = append(row, _load(ds.MemCPUInfo))
-		}
-		row = append(row,
+			_throttled(ds.MemCPUInfo),
+			_load(ds.MemCPUInfo),
 			uptime,
 			ds.K8sPodName,
 			status,
 			ds.Version,
 			ds.BuildTime,
 			fmtAlerts(ds.Cluster.Flags),
-		)
-		table.addRow(row)
+		})
 	}
 	return table
 }
@@ -169,65 +154,47 @@ func _memAvail(avail int64, units, status string, high, oom bool) (string, strin
 }
 
 // target(s)
-func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, units string, verbose bool) *Table {
+func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, opts ClusterTabOpts) *Table {
 	var (
 		pods         = h.pods()
 		status       = h.onlineStatus()
 		versions     = h.versions()
 		builds       = h.buildTimes()
-		showThrottle = h.anyThrottled(true /*targets*/)
+		showThrottle = anyThrottled(h.Tmap) // ditto
 		cols         = []*header{
 			{name: colTarget},
 			{name: colMemUsed},
 			{name: colMemAvail},
 			{name: colCapUsed},
 			{name: colCapAvail},
-			{name: colSysCPU},
+			{name: colSysCPU, hide: !opts.ShowSysCPU},
+			{name: colThrottled, hide: !showThrottle},
+			{name: colLoadAvg, hide: !opts.ShowLoad},
+			{name: colRebalance, hide: len(h.rebalance()) == 0},
+			{name: colUptime},
+			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
+			{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
+			{name: colVersion, hide: len(versions) == 1 && len(builds) == 1},
+			{name: colBuildTime, hide: len(versions) == 1 && len(builds) == 1},
+			{name: colStateFlags, hide: h.Tmap.allStateFlagsOK()},
 		}
-		table *Table
+		table = newTable(cols...)
 	)
-
-	// two "conditional" columns
-	if showThrottle {
-		cols = append(cols, &header{name: colThrottled})
-	}
-	if verbose {
-		cols = append(cols, &header{name: colLoadAvg})
-	}
-
-	cols = append(cols,
-		&header{name: colRebalance, hide: len(h.rebalance()) == 0},
-		&header{name: colUptime},
-		&header{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
-		&header{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
-		&header{name: colVersion, hide: len(versions) == 1 && len(builds) == 1},
-		&header{name: colBuildTime, hide: len(versions) == 1 && len(builds) == 1},
-		&header{name: colStateFlags, hide: h.Tmap.allStateFlagsOK()},
-	)
-
-	table = newTable(cols...)
 
 	ids := h.Tmap.sortPODs(smap, false)
 	for _, sid := range ids {
 		ds := h.Tmap[sid]
-
 		if ds.Status != NodeOnline {
 			nid, nstatus := fmtStatusSID(ds.Snode.ID(), smap, ds.Status)
-			row := []string{
+			table.addRow(row{
 				nid,
-				unknownVal,
-				unknownVal,
-				unknownVal,
-				unknownVal,
+				unknownVal, // mem used
+				unknownVal, // mem avail
+				unknownVal, // cap used
+				unknownVal, // cap avail
 				unknownVal, // sys cpu
-			}
-			if showThrottle {
-				row = append(row, unknownVal)
-			}
-			if verbose {
-				row = append(row, unknownVal) // load avg
-			}
-			row = append(row,
+				unknownVal, // throttled
+				unknownVal, // load avg
 				unknownVal, // rebalance
 				unknownVal, // uptime
 				ds.K8sPodName,
@@ -235,42 +202,35 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, units string, verbose b
 				ds.Version,
 				ds.BuildTime,
 				unknownVal, // alert
-			)
-			table.addRow(row)
+			})
 			continue
 		}
 
 		memUsed, high, oom := _memUsed(ds.MemCPUInfo.PctMemUsed)
-		memAvail, status := _memAvail(int64(ds.MemCPUInfo.MemAvail), units, ds.Status, high, oom)
+		memAvail, status := _memAvail(int64(ds.MemCPUInfo.MemAvail), opts.Units, ds.Status, high, oom)
 
 		upns := ds.Tracker[stats.Uptime].Value
-		uptime := FmtDuration(upns, units)
+		uptime := FmtDuration(upns, opts.Units)
 		if upns == 0 {
 			uptime = unknownVal
 		}
 
 		capUsed := fmt.Sprintf("%d%%", ds.Tcdf.PctAvg)
 		v := calcCap(ds)
-		capAvail := FmtSize(int64(v), units, 3)
+		capAvail := FmtSize(int64(v), opts.Units, 3)
 		if v == 0 {
 			capUsed, capAvail = UnknownStatusVal, UnknownStatusVal
 		}
 
-		row := []string{
+		table.addRow(row{
 			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 			memUsed,
 			memAvail,
 			capUsed,
 			capAvail,
 			_sysCPU(ds.MemCPUInfo),
-		}
-		if showThrottle {
-			row = append(row, _throttled(ds.MemCPUInfo))
-		}
-		if verbose {
-			row = append(row, _load(ds.MemCPUInfo))
-		}
-		row = append(row,
+			_throttled(ds.MemCPUInfo),
+			_load(ds.MemCPUInfo),
 			fmtRebStatus(ds.RebSnap),
 			uptime,
 			ds.K8sPodName,
@@ -278,8 +238,7 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, units string, verbose b
 			ds.Version,
 			ds.BuildTime,
 			fmtAlerts(ds.Cluster.Flags),
-		)
-		table.addRow(row)
+		})
 	}
 	return table
 }
@@ -311,16 +270,8 @@ func _load(info apc.MemCPUInfo) string {
 	return load
 }
 
-func (h *StatsAndStatusHelper) anyThrottled(targets bool) bool {
-	if targets {
-		for _, ds := range h.Tmap {
-			if ds.MemCPUInfo.CPUThrottled != 0 {
-				return true
-			}
-		}
-		return false
-	}
-	for _, ds := range h.Pmap {
+func anyThrottled(m NodeStatusMap) bool {
+	for _, ds := range m {
 		if ds.MemCPUInfo.CPUThrottled != 0 {
 			return true
 		}

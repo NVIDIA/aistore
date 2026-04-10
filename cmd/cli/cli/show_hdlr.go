@@ -437,8 +437,8 @@ func showRemoteConfigHandler(c *cli.Context) error {
 func clusterDashboardHandler(c *cli.Context) error {
 	var (
 		smap       *meta.Smap
-		tstatusMap teb.StstMap
-		pstatusMap teb.StstMap
+		tstatusMap teb.NodeStatusMap
+		pstatusMap teb.NodeStatusMap
 		what, sid  string
 	)
 	if c.NArg() > 0 {
@@ -791,7 +791,7 @@ func showRemoteDashboardHandler(c *cli.Context) error {
 }
 
 func getRemoteClusterDashboard(c *cli.Context, bp api.BaseParams, smap *meta.Smap, units string) (string, error) {
-	tstatusMap := make(teb.StstMap, smap.CountTargets())
+	tstatusMap := make(teb.NodeStatusMap, smap.CountTargets())
 	for _, tnode := range smap.Tmap {
 		if ds, err := api.GetStatsAndStatus(bp, tnode); err == nil {
 			tstatusMap[tnode.ID()] = ds

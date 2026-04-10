@@ -18,7 +18,7 @@ import (
 
 // TODO: performance tables are mostly focused on Prometheus counters
 // and derived throughput/latency metrics.
-// However, `StstMap map[string]*stats.NodeStatus` argument carries
+// However, `NodeStatusMap map[string]*stats.NodeStatus` argument carries
 // full node status for each node.
 // The latter includes, for instance, MemCPUInfo.CPUUtil that could be
 // shown in a separate column, maybe in a verbose mode.
@@ -42,7 +42,7 @@ type PerfTabCtx struct {
 }
 
 // return numNZ (non-zero) metrics OR bad status
-func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
+func (c *PerfTabCtx) MakeTab(st NodeStatusMap) (*Table, int, error) {
 	var (
 		numNZ int        // num non-zero metrics
 		numTs int        // num active targets in `st`
@@ -248,7 +248,7 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 //
 
 // remove all-zeros columns
-func (st StstMap) _zerout(cols []*header) []*header {
+func (st NodeStatusMap) _zerout(cols []*header) []*header {
 	for i := 0; i < len(cols); i++ {
 		var found bool
 		h := cols[i]
@@ -274,7 +274,7 @@ func (st StstMap) _zerout(cols []*header) []*header {
 }
 
 // (aternatively, could always add, conditionally hide)
-func (st StstMap) _addStatus(cols []*header) []*header {
+func (st NodeStatusMap) _addStatus(cols []*header) []*header {
 	for _, ds := range st {
 		if ds.Status != NodeOnline {
 			cols = append(cols, &header{name: colStatus, hide: false})

@@ -29,7 +29,7 @@ const (
 	colCapStatus = "CAP STATUS"
 )
 
-func NewMpathCapTab(st StstMap, c *PerfTabCtx, showMpaths bool) *Table {
+func NewMpathCapTab(st NodeStatusMap, c *PerfTabCtx, showMpaths bool) *Table {
 	var cols []*header
 
 	// 1. columns
@@ -204,7 +204,7 @@ func _fmtMpathDisks(cdfs map[string]*fs.CDF, idx int) (s string) {
 	return sb.String()
 }
 
-func _inclStatus(st StstMap) bool {
+func _inclStatus(st NodeStatusMap) bool {
 	for _, ds := range st {
 		if ds.Status != NodeOnline || ds.Tcdf.CsErr != "" {
 			return true

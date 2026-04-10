@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -40,27 +39,25 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 }
 
 //
-// teb.StstMap
+// teb.NodeStatusMap
 //
 
 const versionSepa = "."
 
-func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, err error) {
+func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.NodeStatusMap, err error) {
 	smap, tstatusMap, pstatusMap, err = fillStatusMapNoVersion(c, daeType)
 	checkNodeStatusVersion(c, tstatusMap, pstatusMap)
 	return smap, tstatusMap, pstatusMap, err
 }
 
-func checkNodeStatusVersion(c *cli.Context, tstatusMap, pstatusMap teb.StstMap) {
-	mmc := strings.Split(cmn.VersionAIStore, versionSepa)
-	debug.Assert(len(mmc) > 1)
-	ok := checkVersionWarn(c, apc.Target, mmc, tstatusMap)
+func checkNodeStatusVersion(c *cli.Context, tstatusMap, pstatusMap teb.NodeStatusMap) {
+	ok := checkVersionWarn(c, apc.Target, tstatusMap)
 	if ok && pstatusMap != nil {
-		_ = checkVersionWarn(c, apc.Proxy, mmc, pstatusMap)
+		_ = checkVersionWarn(c, apc.Proxy, pstatusMap)
 	}
 }
 
-func fillStatusMapNoVersion(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, err error) {
+func fillStatusMapNoVersion(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.NodeStatusMap, err error) {
 	if smap, err = getClusterMap(c); err != nil {
 		return nil, nil, nil, err
 	}
@@ -72,16 +69,16 @@ func fillStatusMapNoVersion(c *cli.Context, daeType string) (smap *meta.Smap, ts
 	switch daeType {
 	case apc.Target:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), tcnt)
-		tstatusMap = make(teb.StstMap, tcnt)
+		tstatusMap = make(teb.NodeStatusMap, tcnt)
 		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 	case apc.Proxy:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt)
-		pstatusMap = make(teb.StstMap, pcnt)
+		pstatusMap = make(teb.NodeStatusMap, pcnt)
 		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	default:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt+tcnt)
-		tstatusMap = make(teb.StstMap, tcnt)
-		pstatusMap = make(teb.StstMap, pcnt)
+		tstatusMap = make(teb.NodeStatusMap, tcnt)
+		pstatusMap = make(teb.NodeStatusMap, pcnt)
 		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	}
@@ -90,7 +87,7 @@ func fillStatusMapNoVersion(c *cli.Context, daeType string) (smap *meta.Smap, ts
 	return smap, tstatusMap, pstatusMap, nil
 }
 
-func isRebalancing(tstatusMap teb.StstMap) bool {
+func isRebalancing(tstatusMap teb.NodeStatusMap) bool {
 	for _, ds := range tstatusMap {
 		if ds.RebSnap != nil {
 			if !ds.RebSnap.IsAborted() && ds.RebSnap.EndTime.IsZero() {
@@ -101,7 +98,7 @@ func isRebalancing(tstatusMap teb.StstMap) bool {
 	return false
 }
 
-func daeStatus(nodeMap meta.NodeMap, out teb.StstMap, wg cos.WG, mu *sync.Mutex) {
+func daeStatus(nodeMap meta.NodeMap, out teb.NodeStatusMap, wg cos.WG, mu *sync.Mutex) {
 	for _, si := range nodeMap {
 		wg.Add(1)
 		go func(si *meta.Snode) {
@@ -111,7 +108,7 @@ func daeStatus(nodeMap meta.NodeMap, out teb.StstMap, wg cos.WG, mu *sync.Mutex)
 	}
 }
 
-func _addStatus(node *meta.Snode, mu *sync.Mutex, out teb.StstMap) {
+func _addStatus(node *meta.Snode, mu *sync.Mutex, out teb.NodeStatusMap) {
 	ds, err := _status(node)
 	if err != nil {
 		ds = &stats.NodeStatus{}
@@ -140,7 +137,7 @@ func _status(node *meta.Snode) (ds *stats.NodeStatus, err error) {
 // throughput
 //
 
-func _cluStatusBeginEnd(c *cli.Context, ini teb.StstMap, sleep time.Duration) (b, e teb.StstMap, err error) {
+func _cluStatusBeginEnd(c *cli.Context, ini teb.NodeStatusMap, sleep time.Duration) (b, e teb.NodeStatusMap, err error) {
 	b = ini
 	if b == nil {
 		// begin stats

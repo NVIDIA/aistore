@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains utility functions and types.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -20,19 +21,83 @@ import (
 	"github.com/urfave/cli"
 )
 
-// CLI version-check policy
+// The CLI determines compatibility as follows:
 //
-// The CLI determines compatibility based on *release step count*, not on the
-// conventional major/minor semantic versioning:
+// * different major-version always means: incompatible
 //
-// * gap == 0 => fully compatible
-// * gap == 1 => warn: “may not be fully compatible”
-// * gap >= 2 => incompatible
-//
-// This rule has always been true for CLI <=> cluster checks, and remains true even
-// across a major version bump (e.g., 3.31 → 4.0 counts as a single step).
+// * minor-version distance:
+//   - gap == 0 => fully compatible
+//   - gap == 1 => warn: "may not be fully compatible"
+//   - gap >= 2 => incompatible
 
-func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstMap) bool {
+type cliVersion struct {
+	major int
+	minor int
+}
+
+func parseCliVersion(s string) (v cliVersion, ok bool) {
+	mm := strings.Split(s, versionSepa)
+	if len(mm) < 2 {
+		return v, false
+	}
+	major, err := strconv.Atoi(mm[0])
+	if err != nil {
+		return v, false
+	}
+	minor, err := strconv.Atoi(mm[1])
+	if err != nil {
+		return v, false
+	}
+	return cliVersion{major: major, minor: minor}, true
+}
+
+func parseCliVersionOrWarn(c *cli.Context, s string) (v cliVersion, ok bool) {
+	v, ok = parseCliVersion(s)
+	if ok {
+		return v, true
+	}
+	warn := fmt.Sprintf("unexpected aistore version format: %q", s)
+	fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
+	debug.Assert(false)
+	return v, false
+}
+
+func versionExpected(v cliVersion) string {
+	return strconv.Itoa(v.major) + versionSepa + strconv.Itoa(v.minor)
+}
+
+// NOTE: return absolute gap (CLI older than AIS, and vice versa)
+func versionGap(expected, actual cliVersion) (gap int, incompat bool) {
+	if expected.major != actual.major {
+		return 2, true
+	}
+	gap = expected.minor - actual.minor
+	if gap < 0 {
+		gap = -gap
+	}
+	return gap, gap > 1
+}
+
+func supportsAllAtLeast(statusMap teb.NodeStatusMap, major, minor int) bool {
+	for _, ds := range statusMap {
+		if ds.Node.Snode.InMaintOrDecomm() {
+			continue
+		}
+		if !supportsAtLeast(ds.Version, major, minor) {
+			return false
+		}
+	}
+	return true // default
+}
+func supportsAtLeast(version string, major, minor int) bool {
+	v, ok := parseCliVersion(version)
+	if !ok {
+		return false
+	}
+	return v.major > major || (v.major == major && v.minor >= minor)
+}
+
+func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool {
 	const fmtEmptyVer = "empty version from %s (in maintenance mode?)"
 
 	longParams := getLongRunParams(c)
@@ -40,14 +105,11 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 		return false // already warned once, nothing to do
 	}
 
-	expected := mmc[0] + versionSepa + mmc[1]
-	minc, err := strconv.Atoi(mmc[1])
-	if err != nil {
-		warn := fmt.Sprintf("unexpected aistore version format: %v", mmc)
-		fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
-		debug.Assert(false)
+	expectedVer, ok := parseCliVersionOrWarn(c, cmn.VersionAIStore)
+	if !ok {
 		return false
 	}
+	expected := versionExpected(expectedVer)
 
 	for _, ds := range stmap {
 		if ds.Version == "" {
@@ -58,50 +120,32 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 			actionWarn(c, warn)
 			continue
 		}
-		mmx := strings.Split(ds.Version, versionSepa)
-		if _, err := strconv.Atoi(mmx[0]); err != nil {
-			warn := fmt.Sprintf("%s: unexpected version format: %s, %v", ds.Node.Snode.StringEx(), ds.Version, mmx)
+
+		actualVer, ok := parseCliVersion(ds.Version)
+		if !ok {
+			warn := fmt.Sprintf("%s: unexpected version format: %q", ds.Node.Snode.StringEx(), ds.Version)
 			fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
 			debug.Assert(false)
 			continue
 		}
 
-		// 1. special exception for CLI: (4.0 <=> 3.31) does not constitute major incompatibility
-		if verExcept(mmc, mmx) {
-			cnt := countMismatch(stmap, ds, func(mmx2 []string) bool {
-				return verExcept(mmc, mmx2)
-			})
-			verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, false)
-			return false
+		gap, incompat := versionGap(expectedVer, actualVer)
+		if gap == 0 {
+			continue
 		}
 
-		// 2. major
-		if mmc[0] != mmx[0] {
-			cnt := countMismatch(stmap, ds, func(mmx2 []string) bool {
-				return mmc[0] != mmx2[0]
-			})
-			verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, true)
-			return false
-		}
-
-		// 3. minor
-		minx, err := strconv.Atoi(mmx[1])
-		debug.AssertNoErr(err)
-		if minc != minx {
-			incompat := minc-minx > 1 || minc-minx < -1
-			cnt := countMismatch(stmap, ds, func(mmx2 []string) bool {
-				minx2, _ := strconv.Atoi(mmx2[1])
-				return minc != minx2
-			})
-			verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, incompat)
-			return false
-		}
+		cnt := countMismatch(stmap, ds, func(v cliVersion) bool {
+			gap2, _ := versionGap(expectedVer, v)
+			return gap2 == gap
+		})
+		verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, incompat)
+		return false
 	}
 	return true
 }
 
-// countMismatch counts nodes (excluding ds itself) that match the mismatch condition
-func countMismatch(stmap teb.StstMap, ds *stats.NodeStatus, matchFunc func([]string) bool) int {
+// countMismatch counts nodes (excluding ds itself) that match the mismatch condition.
+func countMismatch(stmap teb.NodeStatusMap, ds *stats.NodeStatus, matchFunc func(cliVersion) bool) int {
 	var cnt int
 	for _, ds2 := range stmap {
 		if ds2.Node.Snode.InMaintOrDecomm() {
@@ -113,27 +157,15 @@ func countMismatch(stmap teb.StstMap, ds *stats.NodeStatus, matchFunc func([]str
 		if ds2.Version == "" {
 			continue // empty versions already warned about in main loop
 		}
-		mmx2 := strings.Split(ds2.Version, versionSepa)
-		if matchFunc(mmx2) {
+		v, ok := parseCliVersion(ds2.Version)
+		if !ok {
+			continue
+		}
+		if matchFunc(v) {
 			cnt++
 		}
 	}
 	return cnt
-}
-
-func verExcept(mmc, mmx []string) bool {
-	switch {
-	case len(mmx) < 2 || len(mmc) < 2:
-		return false
-	case mmc[0] == mmx[0]:
-		return false
-	case mmc[0] == "4" && mmc[1] == "0" && mmx[0] == "3" && mmx[1] == "31":
-		return true
-	case mmx[0] == "4" && mmx[1] == "0" && mmc[0] == "3" && mmc[1] == "31":
-		return true
-	default:
-		return false
-	}
 }
 
 func verWarn(c *cli.Context, snode *meta.Snode, role, version, expected string, cnt int, incompat bool) {

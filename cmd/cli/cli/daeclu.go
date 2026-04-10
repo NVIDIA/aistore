@@ -62,7 +62,7 @@ type (
 
 		// Cluster state
 		nodeCount int
-		tmap      teb.StstMap
+		tmap      teb.NodeStatusMap
 		warnNodes *cluWarnNodes
 
 		// Active jobs
@@ -70,7 +70,7 @@ type (
 	}
 )
 
-func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, cfg *cmn.ClusterConfig, sid string, withRichAnalytics bool) error {
+func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.NodeStatusMap, cfg *cmn.ClusterConfig, sid string, withRichAnalytics bool) error {
 	var (
 		usejs       = flagIsSet(c, jsonFlag)
 		verbose     = flagIsSet(c, verboseFlag)
@@ -80,6 +80,7 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	if errU != nil {
 		return errU
 	}
+
 	body := teb.StatusHelper{
 		Smap:      smap,
 		CluConfig: cfg,
@@ -89,24 +90,26 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 		},
 	}
 	if res, ok := pstatusMap[sid]; ok {
-		h := teb.StatsAndStatusHelper{Pmap: teb.StstMap{res.Snode.ID(): res}}
-		table := h.MakeTabP(smap, units, verbose)
+		pm := teb.NodeStatusMap{res.Snode.ID(): res}
+		h := teb.StatsAndStatusHelper{Pmap: pm}
+		table := h.MakeTabP(smap, _clusterTabOpts(units, verbose, pm))
 		out := table.Template(hideHeader)
 		return teb.Print(res, out, teb.Jopts(usejs))
 	}
 	if res, ok := tstatusMap[sid]; ok {
-		h := teb.StatsAndStatusHelper{Tmap: teb.StstMap{res.Snode.ID(): res}}
-		table := h.MakeTabT(smap, units, verbose)
+		tm := teb.NodeStatusMap{res.Snode.ID(): res}
+		h := teb.StatsAndStatusHelper{Tmap: tm}
+		table := h.MakeTabT(smap, _clusterTabOpts(units, verbose, tm))
 		out := table.Template(hideHeader)
 		return teb.Print(res, out, teb.Jopts(usejs))
 	}
 	if sid == apc.Proxy {
-		table := body.Stst.MakeTabP(smap, units, verbose)
+		table := body.Stst.MakeTabP(smap, _clusterTabOpts(units, verbose, pstatusMap))
 		out := table.Template(hideHeader)
 		return teb.Print(body, out, teb.Jopts(usejs))
 	}
 	if sid == apc.Target {
-		table := body.Stst.MakeTabT(smap, units, verbose)
+		table := body.Stst.MakeTabT(smap, _clusterTabOpts(units, verbose, tstatusMap))
 		out := table.Template(hideHeader)
 		return teb.Print(body, out, teb.Jopts(usejs))
 	}
@@ -117,8 +120,16 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	//
 	// `ais show cluster` (two tables and Summary)
 	//
-	tableP := body.Stst.MakeTabP(smap, units, verbose)
-	tableT := body.Stst.MakeTabT(smap, units, verbose)
+	// Unified opts so both tables agree on SysCPU/Load columns during rolling upgrades
+	showSysCPU := supportsAllAtLeast(tstatusMap, 4, 4) && supportsAllAtLeast(pstatusMap, 4, 4)
+	opts := teb.ClusterTabOpts{
+		Units:      units,
+		Verbose:    verbose,
+		ShowSysCPU: showSysCPU,
+		ShowLoad:   verbose || !showSysCPU,
+	}
+	tableP := body.Stst.MakeTabP(smap, opts)
+	tableT := body.Stst.MakeTabT(smap, opts)
 
 	// totals: num disks and capacity; software version and build time; backend detection
 	body.NumDisks, body.Capacity = _totals(body.Stst.Tmap, units, cfg)
@@ -181,7 +192,20 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	return teb.Print(body, out.String(), teb.Jopts(usejs))
 }
 
-func _totals(tmap teb.StstMap, units string, cfg *cmn.ClusterConfig) (num int, cs string) {
+// per-map ClusterTabOpts:
+// - SysCPU shown iff every live node supports it;
+// - LoadAvg - in verbose mode or as a fallback when SysCPU is hidden.
+func _clusterTabOpts(units string, verbose bool, m teb.NodeStatusMap) teb.ClusterTabOpts {
+	showSysCPU := supportsAllAtLeast(m, 4, 4)
+	return teb.ClusterTabOpts{
+		Units:      units,
+		Verbose:    verbose,
+		ShowSysCPU: showSysCPU,
+		ShowLoad:   verbose || !showSysCPU,
+	}
+}
+
+func _totals(tmap teb.NodeStatusMap, units string, cfg *cmn.ClusterConfig) (num int, cs string) {
 	var used, avail int64
 outer:
 	for _, ds := range tmap {
@@ -235,7 +259,7 @@ outer:
 	return num, cs
 }
 
-func _clusoft(nodemaps ...teb.StstMap) (version, build string) {
+func _clusoft(nodemaps ...teb.NodeStatusMap) (version, build string) {
 	var multiver, multibuild bool
 	for _, m := range nodemaps {
 		for _, ds := range m {
@@ -269,7 +293,7 @@ func _getTrackerValue(ds *stats.NodeStatus, key string) int64 {
 }
 
 // _measureThroughput calculates actual throughput by taking two snapshots
-func _measureThroughput(c *cli.Context, initialTmap teb.StstMap, duration time.Duration) (readRate, writeRate int64) {
+func _measureThroughput(c *cli.Context, initialTmap teb.NodeStatusMap, duration time.Duration) (readRate, writeRate int64) {
 	// Get initial byte counts
 	initialRead, initialWrite := _getTotalBytes(initialTmap)
 
@@ -293,7 +317,7 @@ func _measureThroughput(c *cli.Context, initialTmap teb.StstMap, duration time.D
 }
 
 // sum up total bytes read/written across all nodes at that time
-func _getTotalBytes(tmap teb.StstMap) (totalRead, totalWrite int64) {
+func _getTotalBytes(tmap teb.NodeStatusMap) (totalRead, totalWrite int64) {
 	for _, ds := range tmap {
 		totalRead += _getTrackerValue(ds, "get.size")
 		totalWrite += _getTrackerValue(ds, "put.size")
@@ -421,7 +445,7 @@ func _calculateStats(values []float64) (minVal, maxVal, avg float64) {
 }
 
 // newAnalytics collects all statistics from the target map
-func newAnalytics(c *cli.Context, tmap teb.StstMap, _ string) *cluAnalytics {
+func newAnalytics(c *cli.Context, tmap teb.NodeStatusMap, _ string) *cluAnalytics {
 	ca := &cluAnalytics{
 		nodeCount:         len(tmap),
 		tmap:              tmap,
@@ -665,7 +689,7 @@ func (ca *cluAnalytics) writeRunningJobs(out *strings.Builder) {
 }
 
 // details: storage, performance, network, error, and throughput
-func _fmtStorageSummary(c *cli.Context, tmap teb.StstMap, units string) string {
+func _fmtStorageSummary(c *cli.Context, tmap teb.NodeStatusMap, units string) string {
 	ca := newAnalytics(c, tmap, units)
 
 	var out strings.Builder

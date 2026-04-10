@@ -25,7 +25,7 @@ import (
 
 type (
 	perfcb func(c *cli.Context,
-		metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) bool
+		metrics cos.StrKVs, mapBegin, mapEnd teb.NodeStatusMap, elapsed time.Duration) bool
 )
 
 // true when called by top-level handler
@@ -237,7 +237,7 @@ func showThroughputHandler(c *cli.Context) error {
 }
 
 // update mapBegin <= (size/s)
-func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) (idle bool) {
+func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.NodeStatusMap, elapsed time.Duration) (idle bool) {
 	var (
 		seconds = max(int64(elapsed.Seconds()), 1) // averaging per second
 		num     int
@@ -349,7 +349,7 @@ func showLatencyHandler(c *cli.Context) error {
 }
 
 // update mapBegin <= (elapsed/num-samples)
-func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, _ time.Duration) (idle bool) {
+func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.NodeStatusMap, _ time.Duration) (idle bool) {
 	var num int // num computed latencies
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
@@ -487,7 +487,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 
 	cntRun.init(c, true /*run once unless*/)
 	for countdown := cntRun.count; countdown > 0 || cntRun.isForever(); countdown-- {
-		var mapBegin, mapEnd teb.StstMap
+		var mapBegin, mapEnd teb.NodeStatusMap
 
 		for name := range totals { // reset
 			totals[name] = 0

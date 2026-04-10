@@ -57,7 +57,7 @@ type (
 		iters            int
 		refreshRate      time.Duration
 		offset           int64
-		mapBegin, mapEnd teb.StstMap
+		mapBegin, mapEnd teb.NodeStatusMap
 		outFile          *os.File
 	}
 )

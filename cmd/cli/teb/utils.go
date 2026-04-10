@@ -43,8 +43,8 @@ type (
 		ExtendedURLs bool
 	}
 	StatsAndStatusHelper struct {
-		Pmap StstMap
-		Tmap StstMap
+		Pmap NodeStatusMap
+		Tmap NodeStatusMap
 	}
 	StatusHelper struct {
 		Smap      *meta.Smap
@@ -165,7 +165,7 @@ func (h *StatsAndStatusHelper) pods() []string         { return h.toSlice("k8s_p
 
 func (h *StatsAndStatusHelper) rebalance() []string {
 	set := cos.NewStrSet()
-	for _, m := range []StstMap{h.Pmap, h.Tmap} {
+	for _, m := range []NodeStatusMap{h.Pmap, h.Tmap} {
 		for _, s := range m {
 			if v := fmtRebStatus(s.RebSnap); v != unknownVal {
 				set.Add(v)
@@ -179,7 +179,7 @@ func (h *StatsAndStatusHelper) rebalance() []string {
 func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 	if jtag == "status" {
 		counts := make(map[string]int, 2)
-		for _, m := range []StstMap{h.Pmap, h.Tmap} {
+		for _, m := range []NodeStatusMap{h.Pmap, h.Tmap} {
 			for _, s := range m {
 				status := s.Status
 				if status == "" {
@@ -200,7 +200,7 @@ func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 
 	// all other tags
 	set := cos.NewStrSet()
-	for _, m := range []StstMap{h.Pmap, h.Tmap} {
+	for _, m := range []NodeStatusMap{h.Pmap, h.Tmap} {
 		for _, s := range m {
 			switch jtag {
 			case "deployment":
@@ -233,7 +233,7 @@ func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 	return res
 }
 
-func (m StstMap) allStateFlagsOK() bool {
+func (m NodeStatusMap) allStateFlagsOK() bool {
 	for _, ds := range m {
 		if !ds.Cluster.Flags.IsOK() {
 			return false
