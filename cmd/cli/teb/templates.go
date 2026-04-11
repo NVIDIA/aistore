@@ -105,11 +105,10 @@ const (
 		indent1 + "Creation Time:\t{{if (eq $value.CreationDuration 0) }}-{{else}}{{FormatDuration $value.CreationDuration}}{{end}}\n" +
 		indent1 + "Description:\t{{$value.Metrics.Description}}\n" +
 		"{{end}}"
+)
 
-	//
-	// ETL
-	//
-
+// ETL
+const (
 	ETLListHdr  = "NAME\t STAGE\t XACTION\t OBJECTS\n"
 	ETLListBody = "{{$value.Name}}\t {{$value.Stage}}\t {{$value.XactID}}\t " +
 		"{{if (eq $value.ObjCount 0) }}-{{else}}{{$value.ObjCount}}{{end}}\n"
@@ -120,11 +119,10 @@ const (
 	ETLObjErrorsBody      = "{{$value.ObjName}}\t {{$value.Ecode}}\t {{$value.Message}}\n"
 	ETLObjErrorsNoHdrTmpl = "{{ range $value := . }}" + ETLObjErrorsBody + "{{end}}"
 	ETLObjErrorsTmpl      = ETLObjErrorsHdr + ETLObjErrorsNoHdrTmpl
+)
 
-	//
-	// BEGIN: xactions as `nodeSnaps` ------------------------------------------------------------------------------
-	//
-
+// xactions
+const (
 	XactColTotals = "Total:" // total OBJECTS\t BYTES\t
 
 	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
@@ -267,11 +265,9 @@ const (
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
 		"{{FormatXactRunFinAbrt $xctn}}\n"
+)
 
-	//
-	// END: xactions as `nodeSnaps` ------------------------------------------------------------------------------
-	//
-
+const (
 	listBucketsSummHdr  = "NAME\t PRESENT\t OBJECTS\t SIZE (apparent, objects, remote)\t USAGE(%)\n"
 	ListBucketsSummBody = "{{range $k, $v := . }}" +
 		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsBckPresent}}\t " +
@@ -325,7 +321,9 @@ USAGE:
    {{.HelpName}} {{.ArgsUsage}}
 
 See '--help' and docs/cli for details.`
+)
 
+const (
 	AuthNClusterTmpl = "CLUSTER ID\tALIAS\tURLs\n" +
 		"{{ range $clu := . }}" +
 		"{{ $clu.ID }}\t{{ $clu.Alias }}\t{{ JoinList $clu.URLs }}\n" +
@@ -370,10 +368,14 @@ See '--help' and docs/cli for details.`
 		"{{ range $bck := .BucketACLs }}" +
 		"{{ FormatBckName $bck.Bck }}\t{{ FormatACL $bck.Access }}\n" +
 		"{{end}}{{end}}"
+)
 
-	// `search`
+// `search`
+const (
 	SearchTmpl = "{{ JoinListNL . }}\n"
+)
 
+const (
 	NBITmpl = "BUCKET\t NAME\t SIZE\t OBJECTS\t STARTED\t FINISHED\t PREFIX\n" +
 		"{{range $v := .}}" +
 		"{{$v.Bucket}}\t " +
@@ -399,8 +401,10 @@ See '--help' and docs/cli for details.`
 		"{{FormatUnixNano $v.Finished}}\t " +
 		"{{if $v.Prefix}}{{$v.Prefix}}{{else}}-{{end}}\n" +
 		"{{end}}"
+)
 
-	// 'show mountpath'
+// 'show mountpath'
+const (
 	MpathListTmpl = "{{range $p := . }}" +
 		"{{ $p.DaemonID }}\n" +
 		"{{if and (eq (len $p.Mpl.Available) 0) (eq (len $p.Mpl.Disabled) 0)}}" +
@@ -429,4 +433,54 @@ See '--help' and docs/cli for details.`
 		"\t\t{{ $mp }}\n" +
 		"{{end}}{{end}}" +
 		"{{end}}{{end}}"
+)
+
+// CPU and memory
+const (
+	CluCPUTmplHdr = "NODE\t TYPE\t PROC CPU\t SYS CPU\t THROTTLED\t LOAD AVG\t USER\t SYSTEM\t TOTAL\n"
+
+	CluCPUBody = "{{range $ds := .Rows}}" +
+		"{{FormatDaemonID $ds.Snode.ID $.Smap $ds.Status}}\t " +
+		"{{$ds.Snode.DaeType}}\t " +
+
+		"{{printf \"%.1f%%\" $ds.MemCPUInfo.PctCPUUsed}}\t " +
+		"{{if (eq $ds.MemCPUInfo.CPUUtil 0)}}-{{else}}{{$ds.MemCPUInfo.CPUUtil}}%{{end}}\t " +
+		"{{if (eq $ds.MemCPUInfo.CPUThrottled 0)}}-{{else}}{{$ds.MemCPUInfo.CPUThrottled}}%{{end}}\t " +
+
+		"{{if and (eq $ds.MemCPUInfo.LoadAvg.One 0.0) (eq $ds.MemCPUInfo.LoadAvg.Five 0.0) (eq $ds.MemCPUInfo.LoadAvg.Fifteen 0.0)}}" +
+		"-" +
+		"{{else}}{{printf \"[%.1f %.1f %.1f]\" $ds.MemCPUInfo.LoadAvg.One $ds.MemCPUInfo.LoadAvg.Five $ds.MemCPUInfo.LoadAvg.Fifteen}}{{end}}\t " +
+
+		"{{if $ds.MemCPUInfo.Proc}}{{$ds.MemCPUInfo.Proc.CPU.User}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Proc}}{{$ds.MemCPUInfo.Proc.CPU.System}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Proc}}{{$ds.MemCPUInfo.Proc.CPU.Total}}{{else}}-{{end}}\n" +
+		"{{end}}"
+
+	CluCPUTmpl      = CluCPUTmplHdr + CluCPUBody
+	CluCPUTmplNoHdr = CluCPUBody
+
+	CluMemTmplHdr = "NODE\t TYPE\t PROC RSS\t PROC SIZE\t PROC SHARED\t PROC MEM\t TOTAL\t USED\t FREE\t BUFF/CACHE\t ACTUAL USED\t ACTUAL FREE\t SWAP USED\t SWAP FREE\t SWAP TOTAL\n"
+
+	CluMemBody = "{{range $ds := .Rows}}" +
+		"{{FormatDaemonID $ds.Snode.ID $.Smap $ds.Status}}\t " +
+		"{{$ds.Snode.DaeType}}\t " +
+
+		"{{if $ds.MemCPUInfo.Proc}}{{FormatBytesUns $ds.MemCPUInfo.Proc.Mem.Resident 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Proc}}{{FormatBytesUns $ds.MemCPUInfo.Proc.Mem.Size 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Proc}}{{FormatBytesUns $ds.MemCPUInfo.Proc.Mem.Share 2}}{{else}}-{{end}}\t " +
+		"{{printf \"%.1f%%\" $ds.MemCPUInfo.PctMemUsed}}\t " +
+
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.Total 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.Used 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.Free 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.BuffCache 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.ActualUsed 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.ActualFree 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.SwapUsed 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.SwapFree 2}}{{else}}-{{end}}\t " +
+		"{{if $ds.MemCPUInfo.Mem}}{{FormatBytesUns $ds.MemCPUInfo.Mem.SwapTotal 2}}{{else}}-{{end}}\n" +
+		"{{end}}"
+
+	CluMemTmpl      = CluMemTmplHdr + CluMemBody
+	CluMemTmplNoHdr = CluMemBody
 )

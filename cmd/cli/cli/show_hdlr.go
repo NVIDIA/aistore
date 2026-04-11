@@ -1,5 +1,4 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
-// This file contains implementation of the top-level `show` command.
 /*
  * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
@@ -19,10 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/urfave/cli"
 )
+
+// This file contains most of the implementation of the top-level `show` command.
 
 var (
 	showCmdsFlags = map[string][]cli.Flag{
@@ -50,6 +50,14 @@ var (
 		cmdBMD: append(
 			longRunFlags,
 			jsonFlag,
+			noHeaderFlag,
+		),
+		cmdCPU: append(
+			longRunFlags,
+			noHeaderFlag,
+		),
+		cmdMemory: append(
+			longRunFlags,
 			noHeaderFlag,
 		),
 		cmdBucket: {
@@ -158,6 +166,23 @@ var (
 				newName:  cmdShowStats,
 				aliasFor: joinCommandWords(commandShow, commandPerf),
 			}),
+
+			{
+				Name:         cmdCPU,
+				Usage:        "Show CPU details: entire cluster or selected node",
+				ArgsUsage:    optionalNodeIDArgument,
+				Flags:        sortFlags(showCmdsFlags[cmdCPU]),
+				Action:       showCPUHandler,
+				BashComplete: suggestAllNodes,
+			},
+			{
+				Name:         cmdMemory,
+				Usage:        "Show memory details: entire cluster or selected node",
+				ArgsUsage:    optionalNodeIDArgument,
+				Flags:        sortFlags(showCmdsFlags[cmdMemory]),
+				Action:       showMemHandler,
+				BashComplete: suggestAllNodes,
+			},
 		},
 	}
 	showCmdBucket = cli.Command{
@@ -208,28 +233,6 @@ var (
 		},
 	}
 )
-
-// part of "Usage:" (via 'ais show job --help')
-func formatJobNames() string {
-	const (
-		maxPerLine = 6
-	)
-	var (
-		sb    strings.Builder
-		names = xact.ListDisplayNames(false)
-	)
-	for i, name := range names {
-		if i > 0 && i%maxPerLine == 0 {
-			sb.WriteString("\n\t")
-		}
-		sb.WriteString(name)
-		if i != len(names)-1 {
-			sb.WriteByte('\t')
-		}
-	}
-	sb.WriteByte('\n')
-	return sb.String()
-}
 
 func showClusterHandler(c *cli.Context) error {
 	var (

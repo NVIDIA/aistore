@@ -151,9 +151,9 @@ func calcCap(ds *stats.NodeStatus) (total uint64) {
 	return total
 }
 
-////////////////////////
+//////////////////////////
 // StatsAndStatusHelper //
-////////////////////////
+//////////////////////////
 
 // for all stats.NodeStatus structs: select specific field and append to the returned slice
 // (using the corresponding jtags here for no particular reason)

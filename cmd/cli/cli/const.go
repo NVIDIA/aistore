@@ -92,6 +92,8 @@ const (
 	cmdBMD    = apc.WhatBMD
 	cmdConfig = "config" // apc.WhatNodeConfig and apc.WhatClusterConfig
 	cmdLog    = apc.WhatLog
+	cmdCPU    = "cpu"
+	cmdMemory = "memory"
 
 	cmdBucket = "bucket"
 	cmdObject = "object"
@@ -393,7 +395,10 @@ const (
 	jobStateFinished = "Finished"
 
 	// cluster
-	showClusterArgument = "[NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]"
+	showClusterArgument = "\n" +
+		indent4 + "\t[NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [smap [NODE_ID]] | [bmd [NODE_ID]] |\n" +
+		indent4 + "\t[config [NODE_ID]] | [stats [NODE_ID]] |\n" +
+		indent4 + "\t[cpu [NODE_ID]] | [memory [NODE_ID]]"
 
 	// config
 	showConfigArgument = "cli | cluster [CONFIG SECTION OR PREFIX] |\n" +

@@ -27,6 +27,28 @@ import (
 	"github.com/urfave/cli"
 )
 
+// part of "Usage:" (via 'ais show job --help')
+func formatJobNames() string {
+	const (
+		maxPerLine = 6
+	)
+	var (
+		sb    strings.Builder
+		names = xact.ListDisplayNames(false)
+	)
+	for i, name := range names {
+		if i > 0 && i%maxPerLine == 0 {
+			sb.WriteString("\n\t")
+		}
+		sb.WriteString(name)
+		if i != len(names)-1 {
+			sb.WriteByte('\t')
+		}
+	}
+	sb.WriteByte('\n')
+	return sb.String()
+}
+
 var showJobUsage = "Show running and/or finished jobs:\n" +
 	indent1 + "\t" + formatJobNames() +
 	indent1 + "(use any of these names with 'ais show job' command, or try shortcuts: \"evict\", \"prefetch\", \"copy\", \"delete\", \"ec\")\n" +

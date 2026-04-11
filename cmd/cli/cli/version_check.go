@@ -30,12 +30,12 @@ import (
 //   - gap == 1 => warn: "may not be fully compatible"
 //   - gap >= 2 => incompatible
 
-type cliVersion struct {
+type aisnodeVer struct {
 	major int
 	minor int
 }
 
-func parseCliVersion(s string) (v cliVersion, ok bool) {
+func parseAisnodeVersion(s string) (v aisnodeVer, ok bool) {
 	mm := strings.Split(s, versionSepa)
 	if len(mm) < 2 {
 		return v, false
@@ -48,11 +48,11 @@ func parseCliVersion(s string) (v cliVersion, ok bool) {
 	if err != nil {
 		return v, false
 	}
-	return cliVersion{major: major, minor: minor}, true
+	return aisnodeVer{major: major, minor: minor}, true
 }
 
-func parseCliVersionOrWarn(c *cli.Context, s string) (v cliVersion, ok bool) {
-	v, ok = parseCliVersion(s)
+func parseAisnodeVersionOrWarn(c *cli.Context, s string) (v aisnodeVer, ok bool) {
+	v, ok = parseAisnodeVersion(s)
 	if ok {
 		return v, true
 	}
@@ -62,12 +62,12 @@ func parseCliVersionOrWarn(c *cli.Context, s string) (v cliVersion, ok bool) {
 	return v, false
 }
 
-func versionExpected(v cliVersion) string {
+func versionExpected(v aisnodeVer) string {
 	return strconv.Itoa(v.major) + versionSepa + strconv.Itoa(v.minor)
 }
 
 // NOTE: return absolute gap (CLI older than AIS, and vice versa)
-func versionGap(expected, actual cliVersion) (gap int, incompat bool) {
+func versionGap(expected, actual aisnodeVer) (gap int, incompat bool) {
 	if expected.major != actual.major {
 		return 2, true
 	}
@@ -78,23 +78,23 @@ func versionGap(expected, actual cliVersion) (gap int, incompat bool) {
 	return gap, gap > 1
 }
 
-func supportsAllAtLeast(statusMap teb.NodeStatusMap, major, minor int) bool {
+func supportsAllAtLeast(statusMap teb.NodeStatusMap, version aisnodeVer) bool {
 	for _, ds := range statusMap {
 		if ds.Node.Snode.InMaintOrDecomm() {
 			continue
 		}
-		if !supportsAtLeast(ds.Version, major, minor) {
+		if !supportsAtLeast(ds.Version, version) {
 			return false
 		}
 	}
 	return true // default
 }
-func supportsAtLeast(version string, major, minor int) bool {
-	v, ok := parseCliVersion(version)
+func supportsAtLeast(raw string, version aisnodeVer) bool {
+	v, ok := parseAisnodeVersion(raw)
 	if !ok {
 		return false
 	}
-	return v.major > major || (v.major == major && v.minor >= minor)
+	return v.major > version.major || (v.major == version.major && v.minor >= version.minor)
 }
 
 func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool {
@@ -105,7 +105,7 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 		return false // already warned once, nothing to do
 	}
 
-	expectedVer, ok := parseCliVersionOrWarn(c, cmn.VersionAIStore)
+	expectedVer, ok := parseAisnodeVersionOrWarn(c, cmn.VersionAIStore)
 	if !ok {
 		return false
 	}
@@ -121,7 +121,7 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 			continue
 		}
 
-		actualVer, ok := parseCliVersion(ds.Version)
+		actualVer, ok := parseAisnodeVersion(ds.Version)
 		if !ok {
 			warn := fmt.Sprintf("%s: unexpected version format: %q", ds.Node.Snode.StringEx(), ds.Version)
 			fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
@@ -134,7 +134,7 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 			continue
 		}
 
-		cnt := countMismatch(stmap, ds, func(v cliVersion) bool {
+		cnt := countMismatch(stmap, ds, func(v aisnodeVer) bool {
 			gap2, _ := versionGap(expectedVer, v)
 			return gap2 == gap
 		})
@@ -145,7 +145,7 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 }
 
 // countMismatch counts nodes (excluding ds itself) that match the mismatch condition.
-func countMismatch(stmap teb.NodeStatusMap, ds *stats.NodeStatus, matchFunc func(cliVersion) bool) int {
+func countMismatch(stmap teb.NodeStatusMap, ds *stats.NodeStatus, matchFunc func(aisnodeVer) bool) int {
 	var cnt int
 	for _, ds2 := range stmap {
 		if ds2.Node.Snode.InMaintOrDecomm() {
@@ -157,7 +157,7 @@ func countMismatch(stmap teb.NodeStatusMap, ds *stats.NodeStatus, matchFunc func
 		if ds2.Version == "" {
 			continue // empty versions already warned about in main loop
 		}
-		v, ok := parseCliVersion(ds2.Version)
+		v, ok := parseAisnodeVersion(ds2.Version)
 		if !ok {
 			continue
 		}

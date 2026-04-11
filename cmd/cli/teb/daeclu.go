@@ -112,9 +112,9 @@ func (h *StatsAndStatusHelper) MakeTabP(smap *meta.Smap, opts ClusterTabOpts) *T
 			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 			memUsed,
 			memAvail,
-			_sysCPU(ds.MemCPUInfo),
-			_throttled(ds.MemCPUInfo),
-			_load(ds.MemCPUInfo),
+			_sysCPU(&ds.MemCPUInfo),
+			_throttled(&ds.MemCPUInfo),
+			_load(&ds.MemCPUInfo),
 			uptime,
 			ds.K8sPodName,
 			status,
@@ -228,9 +228,9 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, opts ClusterTabOpts) *T
 			memAvail,
 			capUsed,
 			capAvail,
-			_sysCPU(ds.MemCPUInfo),
-			_throttled(ds.MemCPUInfo),
-			_load(ds.MemCPUInfo),
+			_sysCPU(&ds.MemCPUInfo),
+			_throttled(&ds.MemCPUInfo),
+			_load(&ds.MemCPUInfo),
 			fmtRebStatus(ds.RebSnap),
 			uptime,
 			ds.K8sPodName,
@@ -243,7 +243,7 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, opts ClusterTabOpts) *T
 	return table
 }
 
-func _sysCPU(info apc.MemCPUInfo) string {
+func _sysCPU(info *apc.MemCPUInfo) string {
 	if info.CPUUtil == 0 &&
 		info.LoadAvg.One == 0 &&
 		info.LoadAvg.Five == 0 &&
@@ -253,7 +253,7 @@ func _sysCPU(info apc.MemCPUInfo) string {
 	return fmt.Sprintf("%d%%", info.CPUUtil) // not using %3d - tabwriter aligns the column
 }
 
-func _throttled(info apc.MemCPUInfo) string {
+func _throttled(info *apc.MemCPUInfo) string {
 	if info.CPUThrottled == 0 {
 		return NotSetVal
 	}
@@ -261,7 +261,7 @@ func _throttled(info apc.MemCPUInfo) string {
 	return fred(s) // fixed-width and colored
 }
 
-func _load(info apc.MemCPUInfo) string {
+func _load(info *apc.MemCPUInfo) string {
 	load := fmt.Sprintf("[%.1f %.1f %.1f]", info.LoadAvg.One, info.LoadAvg.Five, info.LoadAvg.Fifteen)
 	// older version
 	if info.LoadAvg.One == 0 && info.LoadAvg.Five == 0 && info.LoadAvg.Fifteen == 0 {

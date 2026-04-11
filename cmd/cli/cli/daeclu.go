@@ -121,7 +121,8 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.No
 	// `ais show cluster` (two tables and Summary)
 	//
 	// Unified opts so both tables agree on SysCPU/Load columns during rolling upgrades
-	showSysCPU := supportsAllAtLeast(tstatusMap, 4, 4) && supportsAllAtLeast(pstatusMap, 4, 4)
+	expVerOrLater := aisnodeVer{major: 4, minor: 4}
+	showSysCPU := supportsAllAtLeast(tstatusMap, expVerOrLater) && supportsAllAtLeast(pstatusMap, expVerOrLater)
 	opts := teb.ClusterTabOpts{
 		Units:      units,
 		Verbose:    verbose,
@@ -196,7 +197,8 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.No
 // - SysCPU shown iff every live node supports it;
 // - LoadAvg - in verbose mode or as a fallback when SysCPU is hidden.
 func _clusterTabOpts(units string, verbose bool, m teb.NodeStatusMap) teb.ClusterTabOpts {
-	showSysCPU := supportsAllAtLeast(m, 4, 4)
+	expVerOrLater := aisnodeVer{major: 4, minor: 4}
+	showSysCPU := supportsAllAtLeast(m, expVerOrLater)
 	return teb.ClusterTabOpts{
 		Units:      units,
 		Verbose:    verbose,
