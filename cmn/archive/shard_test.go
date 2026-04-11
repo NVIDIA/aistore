@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	mrand "math/rand/v2"
+	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
@@ -26,10 +26,10 @@ var (
 	tarFormats = []tar.Format{tar.FormatUSTAR, tar.FormatGNU, tar.FormatPAX}
 )
 
-// TestPackUnpackRoundTrip verifies the Pack → Unpack round-trip:
+// TestShardPackUnpackRoundTrip verifies the Pack → Unpack round-trip:
 // Build an index from a real TAR, pack it to bytes, unpack back, and assert
 // every entry's Offset and Size survive the serialization unchanged.
-func TestPackUnpackRoundTrip(t *testing.T) {
+func TestShardPackUnpackRoundTrip(t *testing.T) {
 	rng := cos.NowRand()
 	counts := []int{0, 1, 100}
 	if !testing.Short() {
@@ -85,8 +85,8 @@ func TestPackUnpackRoundTrip(t *testing.T) {
 	}
 }
 
-// TestPackNegativeValues verifies that Pack rejects entries with negative Offset or Size.
-func TestPackNegativeValues(t *testing.T) {
+// TestShardPackNegativeValues verifies that Pack rejects entries with negative Offset or Size.
+func TestShardPackNegativeValues(t *testing.T) {
 	cases := []struct {
 		name  string
 		entry archive.ShardIndexEntry
@@ -107,10 +107,10 @@ func TestPackNegativeValues(t *testing.T) {
 	}
 }
 
-// TestUnpackChecksumCorruption verifies that a single flipped bit anywhere in
+// TestShardUnpackChecksumCorruption verifies that a single flipped bit anywhere in
 // the packed payload is caught by the xxhash integrity check on Unpack,
 // across all supported TAR formats.
-func TestUnpackChecksumCorruption(t *testing.T) {
+func TestShardUnpackChecksumCorruption(t *testing.T) {
 	for _, f := range tarFormats {
 		t.Run(f.String(), func(t *testing.T) {
 			fh := tempFile(t)
@@ -155,7 +155,7 @@ func TestUnpackChecksumCorruption(t *testing.T) {
 // carries both the write-side content and its own comparison source.
 type fileMap map[string]readers.Reader
 
-// scenarios names the cases run against every format in TestBuildShardIndex.
+// scenarios names the cases run against every format in TestShardBuildIndex.
 // Build logic lives in buildScenario; adding a new case requires one entry here
 // and one case in that switch.
 var scenarios = []string{
@@ -169,7 +169,7 @@ var scenarios = []string{
 }
 
 // every scenario × every format.
-func TestBuildShardIndex(t *testing.T) {
+func TestShardBuildIndex(t *testing.T) {
 	for _, sc := range scenarios {
 		for _, f := range tarFormats {
 			t.Run(sc+"/"+f.String(), func(t *testing.T) {
@@ -199,9 +199,9 @@ func TestBuildShardIndex(t *testing.T) {
 	}
 }
 
-// TestBuildShardIndex_Empty verifies no error and an empty Entries map for an
+// TestShardBuildIndex_Empty verifies no error and an empty Entries map for an
 // empty TAR (format-independent).
-func TestBuildShardIndex_Empty(t *testing.T) {
+func TestShardBuildIndex_Empty(t *testing.T) {
 	fh := tempFile(t)
 	defer fh.Close()
 
@@ -216,14 +216,14 @@ func TestBuildShardIndex_Empty(t *testing.T) {
 	}
 }
 
-// TestBuildShardIndex_GNUSparse verifies that a TypeGNUSparse entry is skipped.
+// TestShardBuildIndex_GNUSparse verifies that a TypeGNUSparse entry is skipped.
 // A GNU sparse file's logical Size exceeds its physical data, so the recorded
 // Offset would not point to contiguous content.  The regular file that follows
 // must still be correctly indexed.
 //
 // tar.Writer does not emit TypeGNUSparse directly; the header is constructed
 // as a raw 512-byte block with a valid checksum (see gnuSparseHeader).
-func TestBuildShardIndex_GNUSparse(t *testing.T) {
+func TestShardBuildIndex_GNUSparse(t *testing.T) {
 	var buf bytes.Buffer
 
 	// TypeGNUSparse header, size=0 — no data blocks follow.
@@ -260,10 +260,10 @@ func TestBuildShardIndex_GNUSparse(t *testing.T) {
 	checkEntry(t, fh, "regular.txt", entry, r)
 }
 
-// TestBuildShardIndex_GNULongName verifies that a GNU long-name auxiliary entry
+// TestShardBuildIndex_GNULongName verifies that a GNU long-name auxiliary entry
 // (TypeGNULongName, emitted before the real header for names > 100 bytes) is
 // fully consumed before Offset is recorded.
-func TestBuildShardIndex_GNULongName(t *testing.T) {
+func TestShardBuildIndex_GNULongName(t *testing.T) {
 	// 535 chars: forces two 512-byte data blocks for the TypeGNULongName entry,
 	// not just one.  Single-block long names (> 100 chars) are covered by the
 	// GNULongName scenario in the main table.
@@ -288,10 +288,10 @@ func TestBuildShardIndex_GNULongName(t *testing.T) {
 	checkEntry(t, fh, longName, entry, r)
 }
 
-// TestBuildShardIndex_PAXLongName verifies PAX-format long filenames (> 100 chars).
+// TestShardBuildIndex_PAXLongName verifies PAX-format long filenames (> 100 chars).
 // PAX encodes the name as a path= attribute in the extension block — a different
 // mechanism than GNU TypeGNULongName, but likewise adds an extra block before data.
-func TestBuildShardIndex_PAXLongName(t *testing.T) {
+func TestShardBuildIndex_PAXLongName(t *testing.T) {
 	// 531 chars: forces the PAX path= attribute to spill across multiple 512-byte
 	// extension blocks, not just one.
 	longName := "deep/path/" + strings.Repeat("y", 512) + "/data.bin"
@@ -315,10 +315,10 @@ func TestBuildShardIndex_PAXLongName(t *testing.T) {
 	checkEntry(t, fh, longName, entry, r)
 }
 
-// TestBuildShardIndex_PAXExplicitExtension verifies that an explicit PAXRecords
+// TestShardBuildIndex_PAXExplicitExtension verifies that an explicit PAXRecords
 // entry (independent of filename length) still forces an extension block, and the
 // resulting Offset correctly skips it.
-func TestBuildShardIndex_PAXExplicitExtension(t *testing.T) {
+func TestShardBuildIndex_PAXExplicitExtension(t *testing.T) {
 	const (
 		name = "pax_explicit.txt"
 		size = 64 * cos.KiB
@@ -346,10 +346,10 @@ func TestBuildShardIndex_PAXExplicitExtension(t *testing.T) {
 	checkEntry(t, fh, name, entry, r)
 }
 
-// TestBuildShardIndex_PAXLargeExtension verifies that PAX extension headers spanning
+// TestShardBuildIndex_PAXLargeExtension verifies that PAX extension headers spanning
 // four or more 512-byte blocks are fully consumed before the data Offset is recorded.
 // A 4096-byte comment encodes to ~8 extension blocks; the data must follow them.
-func TestBuildShardIndex_PAXLargeExtension(t *testing.T) {
+func TestShardBuildIndex_PAXLargeExtension(t *testing.T) {
 	const (
 		name = "pax_large.bin"
 		size = 128 * cos.KiB
@@ -593,7 +593,7 @@ func randReader(t *testing.T, size int64) readers.Reader {
 
 // randFileSize returns a size drawn from either [1, 1K) or [1K, 4K) with equal
 // probability, ensuring stress tests cover both small and medium file sizes.
-func randFileSize(rng *mrand.Rand) int64 {
+func randFileSize(rng *rand.Rand) int64 {
 	if rng.IntN(2) == 0 {
 		return 1 + rng.Int64N(cos.KiB) // small [1, 1K)
 	}
