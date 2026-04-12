@@ -7,8 +7,11 @@ package sys
 
 type (
 	LoadAvg struct {
-		One, Five, Fifteen float64
+		One     float64 `msg:"o"`
+		Five    float64 `msg:"f"`
+		Fifteen float64 `msg:"t"`
 	}
+	//msgp:ignore errLoadAvg
 	errLoadAvg struct {
 		err error
 	}

@@ -57,34 +57,10 @@ type (
 )
 
 type (
-	// Snode's networking info
-	// swagger:model
-	NetInfo struct {
-		Hostname    string `json:"node_ip_addr"`
-		Port        string `json:"daemon_port"`
-		URL         string `json:"direct_url"`
-		tcpEndpoint string
-	}
 	errNetInfoChanged struct {
 		sname    string
 		tag      string
 		oep, nep string
-	}
-
-	// Snode - a node (gateway or target) in a cluster
-	// swagger:model
-	Snode struct {
-		nmr        NetNamer
-		LocalNet   *net.IPNet `json:"-"`
-		PubNet     NetInfo    `json:"public_net"`        // cmn.NetPublic
-		DataNet    NetInfo    `json:"intra_data_net"`    // cmn.NetIntraData
-		ControlNet NetInfo    `json:"intra_control_net"` // cmn.NetIntraControl
-		DaeType    string     `json:"daemon_type"`       // apc.Proxy | apc.Target
-		DaeID      string     `json:"daemon_id"`
-		name       string
-		PubExtra   []NetInfo    `json:"pub_extra,omitempty"`
-		Flags      cos.BitFlags `json:"flags"` // enum { SnodeNonElectable, SnodeIC, ... }
-		IDDigest   uint64       `json:"id_digest"`
 	}
 
 	Nodes   []*Snode          // slice of Snodes

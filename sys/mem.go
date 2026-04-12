@@ -15,15 +15,15 @@ import (
 const errPrefixMem = "sys/mem"
 
 type MemStat struct {
-	Total      uint64
-	Used       uint64
-	Free       uint64
-	BuffCache  uint64
-	ActualFree uint64
-	ActualUsed uint64
-	SwapTotal  uint64
-	SwapFree   uint64
-	SwapUsed   uint64
+	Total      uint64 `msg:"t"`
+	Used       uint64 `msg:"u"`
+	Free       uint64 `msg:"f"`
+	BuffCache  uint64 `msg:"b"`
+	ActualFree uint64 `msg:"af"`
+	ActualUsed uint64 `msg:"au"`
+	SwapTotal  uint64 `msg:"st"`
+	SwapFree   uint64 `msg:"sf"`
+	SwapUsed   uint64 `msg:"su"`
 }
 
 func (mem *MemStat) Get() error {

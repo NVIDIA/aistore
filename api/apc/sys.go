@@ -13,18 +13,19 @@ import (
 )
 
 // swagger:model
+
 type MemCPUInfo struct {
-	MemUsed    uint64      `json:"mem_used"`
-	MemAvail   uint64      `json:"mem_avail"`
-	PctMemUsed float64     `json:"pct_mem_used"` // process memory
-	PctCPUUsed float64     `json:"pct_cpu_used"` // process CPU
-	LoadAvg    sys.LoadAvg `json:"load_avg"`
+	MemUsed    uint64      `json:"mem_used" msg:"u"`
+	MemAvail   uint64      `json:"mem_avail" msg:"a"`
+	PctMemUsed float64     `json:"pct_mem_used" msg:"p"`
+	PctCPUUsed float64     `json:"pct_cpu_used" msg:"c"`
+	LoadAvg    sys.LoadAvg `json:"load_avg" msg:"l"`
 	// added in 4.4
-	CPUUtil      int64 `json:"cpu_util"`                // sampled system/container CPU util (%)
-	CPUThrottled int64 `json:"cpu_throttled,omitempty"` // %% time container was CPU throttled (cgroup-v2)
+	CPUUtil      int64 `json:"cpu_util" msg:"t"`
+	CPUThrottled int64 `json:"cpu_throttled,omitempty" msg:"h,omitempty"`
 	// added in 4.5
-	Mem  *sys.MemStat   `json:"mem,omitempty"`
-	Proc *sys.ProcStats `json:"proc,omitempty"`
+	Mem  *sys.MemStat   `json:"mem,omitempty" msg:"m,omitempty"`
+	Proc *sys.ProcStats `json:"proc,omitempty" msg:"r,omitempty"`
 }
 
 func GetMemCPU() MemCPUInfo {

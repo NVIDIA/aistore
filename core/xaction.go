@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 )
@@ -86,40 +85,6 @@ var (
 )
 
 type (
-	Stats struct {
-		Objs     int64 `json:"loc-objs,string"`  // locally processed
-		Bytes    int64 `json:"loc-bytes,string"` //
-		OutObjs  int64 `json:"out-objs,string"`  // transmit
-		OutBytes int64 `json:"out-bytes,string"` //
-		InObjs   int64 `json:"in-objs,string"`   // receive
-		InBytes  int64 `json:"in-bytes,string"`
-	}
-	Snap struct {
-		// xaction-specific stats counters
-		Ext any `json:"ext"`
-
-		// common static props
-		StartTime time.Time `json:"start-time"`
-		EndTime   time.Time `json:"end-time"`
-		Bck       cmn.Bck   `json:"bck"`
-		SrcBck    cmn.Bck   `json:"src-bck"`
-		DstBck    cmn.Bck   `json:"dst-bck"`
-		ID        string    `json:"id"`
-		Kind      string    `json:"kind"`
-		CtlMsg    string    `json:"ctlmsg,omitempty"` // initiating control msg (a.k.a. "run options"; added v3.26)
-
-		// extended error info
-		AbortErr string `json:"abort-err"`
-		Err      string `json:"err"`
-
-		// packed field: number of workers, et al.
-		Packed int64 `json:"glob.id,string"`
-
-		// common runtime: stats counters (above) and state
-		Stats    Stats `json:"stats"`
-		AbortedX bool  `json:"aborted"`
-		IdleX    bool  `json:"is_idle"`
-	}
 	AllRunningInOut struct {
 		Kind    string
 		Running []string
