@@ -1243,6 +1243,10 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 	case apc.WhatNodeStats:
 		statsNode := h.statsT.GetStats()
 		statsNode.Snode = h.si
+		if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+			h.writeMsgPack(w, statsNode, "httpdaeget-"+what)
+			return
+		}
 		body = statsNode
 	case apc.WhatMetricNames:
 		body = h.statsT.GetMetricNames()

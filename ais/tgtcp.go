@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -404,12 +405,15 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.WhatSysInfo:
 		tsysinfo := apc.TSysInfo{MemCPUInfo: apc.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
+
 	case apc.WhatNodeStats:
-		ds := t.statsAndStatus()
 		daeStats := t.statsT.GetStats()
-		ds.Tracker = daeStats.Tracker
-		ds.Tcdf = daeStats.Tcdf
-		t.writeJSON(w, r, ds, httpdaeWhat)
+		daeStats.Snode = t.si
+		if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+			t.writeMsgPack(w, daeStats, httpdaeWhat)
+		} else {
+			t.writeJSON(w, r, daeStats, httpdaeWhat)
+		}
 	case apc.WhatNodeStatsAndStatus:
 		ds := t.statsAndStatus()
 		ds.RebSnap = _rebSnap()
@@ -417,7 +421,11 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds.Tracker = daeStats.Tracker
 		ds.Tcdf = daeStats.Tcdf
 		t.fillNsti(&ds.Cluster)
-		t.writeJSON(w, r, ds, httpdaeWhat)
+		if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+			t.writeMsgPack(w, ds, httpdaeWhat)
+		} else {
+			t.writeJSON(w, r, ds, httpdaeWhat)
+		}
 
 	case apc.WhatMountpaths:
 		var (

@@ -21,27 +21,6 @@ import (
 )
 
 type (
-	// Ns (or Namespace) adds additional layer for scoping the data under
-	// the same provider. It allows to have same dataset and bucket names
-	// under different namespaces what allows for easy data manipulation without
-	// affecting data in different namespaces.
-	Ns struct {
-		// UUID of other remote AIS cluster (for now only used for AIS). Note
-		// that we can have different namespaces which refer to same UUID (cluster).
-		// This means that in a sense UUID is a parent of the actual namespace.
-		UUID string `json:"uuid" yaml:"uuid"`
-		// Name uniquely identifies a namespace under the same UUID (which may
-		// be empty) and is used in building FQN for the objects.
-		Name string `json:"name" yaml:"name"`
-	}
-
-	Bck struct {
-		Props    *Bprops `json:"-"`
-		Name     string  `json:"name" yaml:"name"`
-		Provider string  `json:"provider" yaml:"provider"` // NOTE: see api/apc/provider.go for supported enum
-		Ns       Ns      `json:"namespace" yaml:"namespace" list:"omitempty"`
-	}
-
 	// Represents the AIS bucket, object and URL associated with a HTTP resource
 	HTTPBckObj struct {
 		Bck        Bck

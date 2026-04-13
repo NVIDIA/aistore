@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -8,7 +8,7 @@ import (
 	"fmt"
 )
 
-type NodeStateFlags BitFlags
+type NodeStateFlags uint64 // same as cos.BitFlags
 
 const NodeAlerts = "state.flags"
 
@@ -187,21 +187,21 @@ type (
 			}
 			UUID    string `json:"uuid"`
 			Version int64  `json:"version,string"`
-		} `json:"smap"`
+		} `json:"smap" msg:"s"`
 		BMD struct {
 			UUID    string `json:"uuid"`
 			Version int64  `json:"version,string"`
-		} `json:"bmd"`
+		} `json:"bmd" msg:"b"`
 		RMD struct {
 			Version int64 `json:"version,string"`
-		} `json:"rmd"`
+		} `json:"rmd" msg:"r"`
 		Config struct {
 			Version int64 `json:"version,string"`
-		} `json:"config"`
+		} `json:"config" msg:"c"`
 		EtlMD struct {
 			Version int64 `json:"version,string"`
-		} `json:"etlmd"`
-		Flags NodeStateFlags `json:"flags"`
+		} `json:"etlmd" msg:"e"`
+		Flags NodeStateFlags `json:"flags" msg:"f"`
 	}
 )
 

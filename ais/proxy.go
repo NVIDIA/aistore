@@ -2475,7 +2475,11 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		daeStats := p.statsT.GetStats()
 		ds.Tracker = daeStats.Tracker
 		p.fillNsti(&ds.Cluster)
-		p.writeJSON(w, r, ds, what)
+		if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+			p.writeMsgPack(w, ds, what)
+		} else {
+			p.writeJSON(w, r, ds, what)
+		}
 
 	case apc.WhatSysInfo:
 		p.writeJSON(w, r, apc.GetMemCPU(), what)

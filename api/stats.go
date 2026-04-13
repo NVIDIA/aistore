@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -65,7 +65,7 @@ func GetClusterStats(bp BaseParams) (res stats.Cluster, err error) {
 // node ----------------------
 //
 
-func anyStats(bp BaseParams, sid, what string, out any) (err error) {
+func _nodeStats(bp BaseParams, sid, what string, out any) (err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -74,6 +74,11 @@ func anyStats(bp BaseParams, sid, what string, out any) (err error) {
 		reqParams.Query = url.Values{apc.QparamWhat: []string{what}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{sid}}
 	}
+
+	// always msgpack stats.NodeStatus and stats.Node
+	reqParams.Header.Set(cos.HdrAccept, cos.ContentMsgPack)
+	reqParams.buf = make([]byte, 16*cos.KiB)
+
 	_, err = reqParams.DoReqAny(out)
 	FreeRp(reqParams)
 	return err
@@ -82,14 +87,14 @@ func anyStats(bp BaseParams, sid, what string, out any) (err error) {
 // NOTE: direct call used only in tests (remove?)
 func GetDaemonStats(bp BaseParams, node *meta.Snode) (ds *stats.Node, err error) {
 	ds = &stats.Node{}
-	err = anyStats(bp, node.ID(), apc.WhatNodeStats, ds)
+	err = _nodeStats(bp, node.ID(), apc.WhatNodeStats, ds)
 	return ds, err
 }
 
 // returns both node's stats (as above) and extended status
 func GetStatsAndStatus(bp BaseParams, node *meta.Snode) (ds *stats.NodeStatus, err error) {
 	ds = &stats.NodeStatus{}
-	err = anyStats(bp, node.ID(), apc.WhatNodeStatsAndStatus, ds)
+	err = _nodeStats(bp, node.ID(), apc.WhatNodeStatsAndStatus, ds)
 	return ds, err
 }
 

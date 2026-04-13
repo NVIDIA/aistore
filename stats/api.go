@@ -13,9 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 // enum: `statsValue` kinds
@@ -74,13 +72,6 @@ type (
 )
 
 type (
-
-	// REST API
-	Node struct {
-		Snode   *meta.Snode `json:"snode"`
-		Tracker copyTracker `json:"tracker"`
-		Tcdf    fs.Tcdf     `json:"capacity"`
-	}
 	Cluster struct {
 		Proxy  *Node            `json:"proxy"`
 		Target map[string]*Node `json:"target"`
@@ -88,25 +79,6 @@ type (
 	ClusterRaw struct {
 		Proxy  *Node           `json:"proxy"`
 		Target cos.JSONRawMsgs `json:"target"`
-	}
-
-	// (includes stats.Node and more; NOTE: direct API call w/ no proxying)
-	NodeStatus struct {
-		RebSnap *core.Snap `json:"rebalance_snap,omitempty"`
-		// assorted props
-		Status         string `json:"status"`
-		DeploymentType string `json:"deployment"`
-		Version        string `json:"ais_version"`  // major.minor.build
-		BuildTime      string `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
-		K8sPodName     string `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
-		Reserved1      string `json:"reserved1,omitempty"`
-		Reserved2      string `json:"reserved2,omitempty"`
-		Node
-		Cluster     cos.NodeStateInfo
-		MemCPUInfo  apc.MemCPUInfo `json:"sys_info"`
-		SmapVersion int64          `json:"smap_version,string"`
-		Reserved3   int64          `json:"reserved3,omitempty"`
-		Reserved4   int64          `json:"reserved4,omitempty"`
 	}
 )
 

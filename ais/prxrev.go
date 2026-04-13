@@ -81,11 +81,15 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 			what := r.URL.Query().Get(apc.QparamWhat)
 			if what == apc.WhatNodeStatsAndStatus {
 				// skip reversing, return status as per Smap
-				msg := &stats.NodeStatus{
+				ds := &stats.NodeStatus{
 					Node:   stats.Node{Snode: si},
 					Status: daeStatus,
 				}
-				p.writeJSON(w, r, msg, what)
+				if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+					p.writeMsgPack(w, ds, what)
+				} else {
+					p.writeJSON(w, r, ds, what)
+				}
 				return
 			}
 		}

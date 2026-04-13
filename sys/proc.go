@@ -14,22 +14,22 @@ import (
 
 type (
 	ProcCPUStats struct {
-		User     uint64
-		System   uint64
-		Total    uint64
-		LastTime int64
-		Percent  float64 // lifetime-average CPU percent since process start
+		User     uint64  `msg:"u"`
+		System   uint64  `msg:"s"`
+		Total    uint64  `msg:"t"`
+		LastTime int64   `msg:"l"`
+		Percent  float64 `msg:"p"`
 	}
 
 	ProcMemStats struct {
-		Size     uint64
-		Resident uint64
-		Share    uint64
+		Size     uint64 `msg:"s"`
+		Resident uint64 `msg:"r"`
+		Share    uint64 `msg:"h"`
 	}
 
 	ProcStats struct {
-		CPU ProcCPUStats
-		Mem ProcMemStats
+		CPU ProcCPUStats `msg:"c"`
+		Mem ProcMemStats `msg:"m"`
 	}
 )
 

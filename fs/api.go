@@ -1,7 +1,8 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
+//msgp:shim cos.MountpathLabel as:string using:(string)/cos.MountpathLabel
 package fs
 
 import (
@@ -31,30 +32,31 @@ const (
 
 type (
 	Capacity struct {
-		Used    uint64 `json:"used,string"`  // bytes
-		Avail   uint64 `json:"avail,string"` // ditto
-		PctUsed int32  `json:"pct_used"`     // %% used (redundant ok)
+		Used    uint64 `json:"used,string" msg:"u"`  // bytes
+		Avail   uint64 `json:"avail,string" msg:"a"` // ditto
+		PctUsed int32  `json:"pct_used" msg:"p"`     // %% used (redundant ok)
 	}
+
 	// Capacity, Disks, Filesystem (CDF)
 	CDF struct {
-		Label cos.MountpathLabel `json:"mountpath_label"`
-		FS    cos.FS             `json:"fs"`
-		Disks []string           `json:"disks"` // owned or shared disks (ios.FsDisks map => slice); "name[.faulted | degraded]"
+		Label cos.MountpathLabel `json:"mountpath_label" msg:"l"`
+		FS    cos.FS             `json:"fs" msg:"f"`
+		Disks []string           `json:"disks" msg:"d"` // owned or shared disks (ios.FsDisks map => slice); "name[.faulted | degraded]"
 		Capacity
 	}
+
 	// Target (cumulative) CDF
 	Tcdf struct {
-		Mountpaths map[string]*CDF // mpath => [Capacity, Disks, FS (CDF)]
-		CsErr      string          `json:"cs_err"`             // OOS or high-wm error message; disk fault
-		TotalUsed  uint64          `json:"total_used,string"`  // bytes
-		TotalAvail uint64          `json:"total_avail,string"` // bytes
-		PctMax     int32           `json:"pct_max"`            // max used (%)
-		PctAvg     int32           `json:"pct_avg"`            // avg used (%)
-		PctMin     int32           `json:"pct_min"`            // min used (%)
-	}
-	TcdfExt struct {
-		cos.AllDiskStats
-		Tcdf
+		// mpath => [Capacity, Disks, FS (CDF)]
+		// (4.5 note: add explicit json tag)
+		Mountpaths map[string]*CDF `json:"mountpaths" msg:"m"`
+
+		CsErr      string `json:"cs_err" msg:"e"`             // OOS or high-wm error message; disk fault
+		TotalUsed  uint64 `json:"total_used,string" msg:"u"`  // bytes
+		TotalAvail uint64 `json:"total_avail,string" msg:"a"` // bytes
+		PctMax     int32  `json:"pct_max" msg:"x"`            // max used (%)
+		PctAvg     int32  `json:"pct_avg" msg:"v"`            // avg used (%)
+		PctMin     int32  `json:"pct_min" msg:"n"`            // min used (%)
 	}
 )
 
