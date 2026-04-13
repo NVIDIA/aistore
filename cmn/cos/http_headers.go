@@ -4,13 +4,21 @@
  */
 package cos
 
+import (
+	"net/http"
+	"strings"
+)
+
+// this source contains standard and 3rd party HTTP headers
+// for AIS headers, see api/apc/headers.go
+
 // standard MIME types
 // - https://www.iana.org/assignments/media-types/media-types.xhtml
 // - https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
 const (
 	ContentJSON           = "application/json"
 	ContentJSONCharsetUTF = "application/json; charset=utf-8"
-	ContentMsgPack        = "application/msgpack"
+	ContentMsgPack        = "application/msgpack" // see AcceptsMsgPack() parser below
 	ContentXML            = "application/xml"
 	ContentBinary         = "application/octet-stream"
 	ContentZip            = "application/zip"
@@ -89,4 +97,21 @@ const (
 	AzVersionHeader = HdrETag
 )
 
-// NOTE: for AIS headers, see api/apc/headers.go
+// parse HdrAccept for ContentMsgPack
+// e.g.: "application/json", "application/msgpack;q=0.5", "application/msgpack, */*"
+func AcceptsMsgPack(hdr http.Header) bool {
+	v := hdr.Get(HdrAccept)
+	if v == "" {
+		return false
+	}
+	for part := range strings.SplitSeq(v, ",") {
+		mt := part
+		if i := strings.IndexByte(mt, ';'); i >= 0 {
+			mt = mt[:i]
+		}
+		if strings.TrimSpace(mt) == ContentMsgPack {
+			return true
+		}
+	}
+	return false
+}

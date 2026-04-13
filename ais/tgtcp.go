@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -409,7 +408,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.WhatNodeStats:
 		daeStats := t.statsT.GetStats()
 		daeStats.Snode = t.si
-		if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+		if cos.AcceptsMsgPack(r.Header) {
 			t.writeMsgPack(w, daeStats, httpdaeWhat)
 		} else {
 			t.writeJSON(w, r, daeStats, httpdaeWhat)
@@ -421,7 +420,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds.Tracker = daeStats.Tracker
 		ds.Tcdf = daeStats.Tcdf
 		t.fillNsti(&ds.Cluster)
-		if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+		if cos.AcceptsMsgPack(r.Header) {
 			t.writeMsgPack(w, ds, httpdaeWhat)
 		} else {
 			t.writeJSON(w, r, ds, httpdaeWhat)

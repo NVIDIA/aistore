@@ -85,7 +85,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 					Node:   stats.Node{Snode: si},
 					Status: daeStatus,
 				}
-				if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+				if cos.AcceptsMsgPack(r.Header) {
 					p.writeMsgPack(w, ds, what)
 				} else {
 					p.writeJSON(w, r, ds, what)

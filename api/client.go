@@ -291,7 +291,8 @@ func (reqParams *ReqParams) readAny(resp *http.Response, out any) (err error) {
 	if code := resp.StatusCode; code != http.StatusOK && code != http.StatusPartialContent {
 		return
 	}
-	// json or msgpack
+
+	// json or msgpack (strict either/or)
 	if resp.Header.Get(cos.HdrContentType) == cos.ContentMsgPack {
 		debug.Assert(cap(reqParams.buf) > cos.KiB) // caller must allocate
 		r := msgp.NewReaderBuf(resp.Body, reqParams.buf)
@@ -299,6 +300,7 @@ func (reqParams *ReqParams) readAny(resp *http.Response, out any) (err error) {
 	} else {
 		err = jsoniter.NewDecoder(resp.Body).Decode(out)
 	}
+
 	if err != nil {
 		err = fmt.Errorf("unexpected: failed to decode response: %w -> %T", err, out)
 	}

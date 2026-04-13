@@ -2475,7 +2475,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		daeStats := p.statsT.GetStats()
 		ds.Tracker = daeStats.Tracker
 		p.fillNsti(&ds.Cluster)
-		if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+		if cos.AcceptsMsgPack(r.Header) {
 			p.writeMsgPack(w, ds, what)
 		} else {
 			p.writeJSON(w, r, ds, what)

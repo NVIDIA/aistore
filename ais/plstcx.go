@@ -60,7 +60,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	)
 
 	var ok bool
-	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+	if cos.AcceptsMsgPack(r.Header) {
 		ok = p.writeMsgPack(w, lst, lsotag)
 	} else {
 		ok = p.writeJS(w, r, lst, lsotag)

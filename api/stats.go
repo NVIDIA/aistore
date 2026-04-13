@@ -77,9 +77,11 @@ func _nodeStats(bp BaseParams, sid, what string, out any) (err error) {
 
 	// always msgpack stats.NodeStatus and stats.Node
 	reqParams.Header.Set(cos.HdrAccept, cos.ContentMsgPack)
-	reqParams.buf = make([]byte, 16*cos.KiB)
+	reqParams.buf = allocMbuf()
 
 	_, err = reqParams.DoReqAny(out)
+
+	freeMbuf(reqParams.buf)
 	FreeRp(reqParams)
 	return err
 }

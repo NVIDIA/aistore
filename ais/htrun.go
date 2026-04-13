@@ -1243,7 +1243,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 	case apc.WhatNodeStats:
 		statsNode := h.statsT.GetStats()
 		statsNode.Snode = h.si
-		if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+		if cos.AcceptsMsgPack(r.Header) {
 			h.writeMsgPack(w, statsNode, "httpdaeget-"+what)
 			return
 		}
