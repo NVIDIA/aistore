@@ -450,7 +450,12 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			nlog.Warningln(t.String(), cmn.ErrNoMountpaths)
 		}
 		fs.DiskStats(tcdfExt.AllDiskStats, &tcdfExt.Tcdf, config, true)
-		t.writeJSON(w, r, tcdfExt, httpdaeWhat)
+
+		if cos.AcceptsMsgPack(r.Header) {
+			t.writeMsgPack(w, &tcdfExt, httpdaeWhat)
+		} else {
+			t.writeJSON(w, r, &tcdfExt, httpdaeWhat)
+		}
 
 	case apc.WhatRemoteAIS:
 		var (

@@ -509,3 +509,239 @@ func (z *Tcdf) Msgsize() (s int) {
 	s += 2 + msgp.StringPrefixSize + len(z.CsErr) + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Int32Size + 2 + msgp.Int32Size + 2 + msgp.Int32Size
 	return
 }
+
+// DecodeMsg implements msgp.Decodable
+func (z *TcdfExt) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "AllDiskStats":
+			err = z.AllDiskStats.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "AllDiskStats")
+				return
+			}
+		case "m":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Mountpaths")
+				return
+			}
+			if z.Mountpaths == nil {
+				z.Mountpaths = make(map[string]*CDF, zb0002)
+			} else if len(z.Mountpaths) > 0 {
+				for key := range z.Mountpaths {
+					delete(z.Mountpaths, key)
+				}
+			}
+			for zb0002 > 0 {
+				zb0002--
+				var za0001 string
+				var za0002 *CDF
+				za0001, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Mountpaths")
+					return
+				}
+				if dc.IsNil() {
+					err = dc.ReadNil()
+					if err != nil {
+						err = msgp.WrapError(err, "Mountpaths", za0001)
+						return
+					}
+					za0002 = nil
+				} else {
+					if za0002 == nil {
+						za0002 = new(CDF)
+					}
+					err = za0002.DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Mountpaths", za0001)
+						return
+					}
+				}
+				z.Mountpaths[za0001] = za0002
+			}
+		case "e":
+			z.CsErr, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "CsErr")
+				return
+			}
+		case "u":
+			z.TotalUsed, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "TotalUsed")
+				return
+			}
+		case "a":
+			z.TotalAvail, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "TotalAvail")
+				return
+			}
+		case "x":
+			z.PctMax, err = dc.ReadInt32()
+			if err != nil {
+				err = msgp.WrapError(err, "PctMax")
+				return
+			}
+		case "v":
+			z.PctAvg, err = dc.ReadInt32()
+			if err != nil {
+				err = msgp.WrapError(err, "PctAvg")
+				return
+			}
+		case "n":
+			z.PctMin, err = dc.ReadInt32()
+			if err != nil {
+				err = msgp.WrapError(err, "PctMin")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *TcdfExt) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 8
+	// write "AllDiskStats"
+	err = en.Append(0x88, 0xac, 0x41, 0x6c, 0x6c, 0x44, 0x69, 0x73, 0x6b, 0x53, 0x74, 0x61, 0x74, 0x73)
+	if err != nil {
+		return
+	}
+	err = z.AllDiskStats.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "AllDiskStats")
+		return
+	}
+	// write "m"
+	err = en.Append(0xa1, 0x6d)
+	if err != nil {
+		return
+	}
+	err = en.WriteMapHeader(uint32(len(z.Mountpaths)))
+	if err != nil {
+		err = msgp.WrapError(err, "Mountpaths")
+		return
+	}
+	for za0001, za0002 := range z.Mountpaths {
+		err = en.WriteString(za0001)
+		if err != nil {
+			err = msgp.WrapError(err, "Mountpaths")
+			return
+		}
+		if za0002 == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			err = za0002.EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, "Mountpaths", za0001)
+				return
+			}
+		}
+	}
+	// write "e"
+	err = en.Append(0xa1, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.CsErr)
+	if err != nil {
+		err = msgp.WrapError(err, "CsErr")
+		return
+	}
+	// write "u"
+	err = en.Append(0xa1, 0x75)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.TotalUsed)
+	if err != nil {
+		err = msgp.WrapError(err, "TotalUsed")
+		return
+	}
+	// write "a"
+	err = en.Append(0xa1, 0x61)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.TotalAvail)
+	if err != nil {
+		err = msgp.WrapError(err, "TotalAvail")
+		return
+	}
+	// write "x"
+	err = en.Append(0xa1, 0x78)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt32(z.PctMax)
+	if err != nil {
+		err = msgp.WrapError(err, "PctMax")
+		return
+	}
+	// write "v"
+	err = en.Append(0xa1, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt32(z.PctAvg)
+	if err != nil {
+		err = msgp.WrapError(err, "PctAvg")
+		return
+	}
+	// write "n"
+	err = en.Append(0xa1, 0x6e)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt32(z.PctMin)
+	if err != nil {
+		err = msgp.WrapError(err, "PctMin")
+		return
+	}
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *TcdfExt) Msgsize() (s int) {
+	s = 1 + 13 + z.AllDiskStats.Msgsize() + 2 + msgp.MapHeaderSize
+	if z.Mountpaths != nil {
+		for za0001, za0002 := range z.Mountpaths {
+			_ = za0002
+			s += msgp.StringPrefixSize + len(za0001)
+			if za0002 == nil {
+				s += msgp.NilSize
+			} else {
+				s += za0002.Msgsize()
+			}
+		}
+	}
+	s += 2 + msgp.StringPrefixSize + len(z.CsErr) + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Int32Size + 2 + msgp.Int32Size + 2 + msgp.Int32Size
+	return
+}

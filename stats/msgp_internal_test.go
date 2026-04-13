@@ -19,6 +19,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+// See scripts/msgp/README.md for the existing msgpack coverage and notes.
+
 func marshalMsgp(v interface {
 	EncodeMsg(*msgp.Writer) error
 }) ([]byte, error) {

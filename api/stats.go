@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 
 	jsoniter "github.com/json-iterator/go"
@@ -98,6 +99,12 @@ func GetStatsAndStatus(bp BaseParams, node *meta.Snode) (ds *stats.NodeStatus, e
 	ds = &stats.NodeStatus{}
 	err = _nodeStats(bp, node.ID(), apc.WhatNodeStatsAndStatus, ds)
 	return ds, err
+}
+
+func GetDiskRWUtilCap(bp BaseParams, tid string) (out *fs.TcdfExt, err error) {
+	out = &fs.TcdfExt{}
+	err = _nodeStats(bp, tid, apc.WhatDiskRWUtilCap, out)
+	return out, err
 }
 
 func GetAnyStats(bp BaseParams, sid, what string) (out []byte, err error) {

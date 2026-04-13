@@ -6,9 +6,8 @@ package cos
 
 import "github.com/tinylib/msgp/msgp"
 
-// NOTE:
-// - this is hand-written `*_msg.go` for types that `msgp` cannot follow across sources
-// - FsID is [2]int32
+// This is hand-written `*_msg.go` for types that `msgp` cannot follow across sources (FsID is [2]int32).
+// See scripts/msgp/README.md for the existing msgpack coverage and notes.
 
 func (z *FsID) DecodeMsg(dc *msgp.Reader) error {
 	sz, err := dc.ReadArrayHeader()

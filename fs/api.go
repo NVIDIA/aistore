@@ -58,6 +58,12 @@ type (
 		PctAvg     int32  `json:"pct_avg" msg:"v"`            // avg used (%)
 		PctMin     int32  `json:"pct_min" msg:"n"`            // min used (%)
 	}
+
+	// extend Tcdf with disk statistics (apc.WhatDiskRWUtilCap)
+	TcdfExt struct {
+		cos.AllDiskStats
+		Tcdf `msg:",flatten"`
+	}
 )
 
 func InitCDF(tcdf *Tcdf) {

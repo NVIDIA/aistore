@@ -11,11 +11,11 @@ import (
 
 const MsgpLsoBufSize = 32 * cos.KiB
 
-// [NOTE]
-// - changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
+// NOTE:
+// - changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md
+//   and the command-line at the top of cmn/objlist_gen.go
 // - all json tags except `Flags` must belong to the (apc.GetPropsName, apc.GetPropsSize, etc.) enumeration
-// [TODO]
-// - revisit (make) allocation of LsoEntries (optimize)
+// - see scripts/msgp/README.md for the rest msgpack coverage and notes.
 
 type (
 	// a single entry in LsoRes.Entries (below); contains list-objects results

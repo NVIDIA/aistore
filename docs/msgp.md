@@ -1,12 +1,10 @@
-## Table of Contents
-
-- [Introduction](#introduction)
-- [Code generation](#code-generation)
-
 ## Introduction
 
 MsgPack (aka "MessagePack") is a binary exchange format that provides better performance and lower bandwidth usage comparing to JSON.
 To make a struct MsgPack-compatible, add tags to the struct in the same way you add JSON tags.
+
+> **NOTE:** For the post-4.4 control-plane msgpack coverage that spans multiple packages and uses `*_wire.go` and `*_msg.go`,
+> see scripts/msgp/README.md.
 
 Example from `cmn/objlist.go`:
 

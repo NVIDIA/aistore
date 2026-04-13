@@ -10,8 +10,13 @@ const (
 
 type (
 	DiskStats struct {
-		RBps, Ravg, WBps, Wavg, Util int64
+		RBps int64 `msg:"r"`
+		Ravg int64 `msg:"s"`
+		WBps int64 `msg:"w"`
+		Wavg int64 `msg:"x"`
+		Util int64 `msg:"u"`
 	}
+	//msgp:ignore AllDiskStats
 	AllDiskStats map[string]DiskStats
 )
 

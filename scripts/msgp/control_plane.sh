@@ -1,4 +1,9 @@
 #!/bin/bash
+
+##
+## See also: README.md in this directory
+##
+
 set -e  # exit on any error
 
 usage() {
@@ -31,6 +36,7 @@ run_gen() {
   gen_if fs/api.go
   gen_if sys/loadavg.go
   gen_if cmn/cos/fs_unix.go
+  gen_if cmn/cos/ios.go
 
   gen_if stats/api_wire.go
   gen_if cmn/bck_wire.go
@@ -41,7 +47,7 @@ run_gen() {
 run_clean() {
   rm -f api/apc/sys_gen.go cmn/bck_wire_gen.go cmn/cos/node_state_gen.go cmn/cos/fs_unix_gen.go \
        core/meta/snode_wire_gen.go core/xaction_wire_gen.go fs/api_gen.go stats/api_wire_gen.go \
-       sys/mem_gen.go sys/proc_gen.go sys/loadavg_gen.go
+       sys/mem_gen.go sys/proc_gen.go sys/loadavg_gen.go cmn/cos/ios_gen.go
 }
 
 # No args -> show usage

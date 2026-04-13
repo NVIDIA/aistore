@@ -11,14 +11,12 @@ import (
 	"sort"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
@@ -36,14 +34,9 @@ type (
 )
 
 func (ctx *dstatsCtx) get() error {
-	out, err := api.GetAnyStats(apiBP, ctx.tid, apc.WhatDiskRWUtilCap)
+	tcdfExt, err := api.GetDiskRWUtilCap(apiBP, ctx.tid)
 	if err != nil {
 		return V(err)
-	}
-
-	var tcdfExt fs.TcdfExt
-	if err := jsoniter.Unmarshal(out, &tcdfExt); err != nil {
-		return fmt.Errorf("failed to unmarshal disk stats: %v", err)
 	}
 	if tcdfExt.AllDiskStats != nil {
 		ctx.ch <- dstats{tid: ctx.tid, stats: tcdfExt.AllDiskStats, tcdf: &tcdfExt.Tcdf}

@@ -1,41 +1,28 @@
-// Package stats provides methods and functionality to register, track, log,
-// and export metrics that, for the most part, include "counter" and "latency" kinds.
+// Package cos provides common low-level types and utilities for all aistore projects.
 /*
  * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
  */
-package stats
+package cos
 
 import "github.com/tinylib/msgp/msgp"
 
-// This is hand-written `*_msg.go` for types that `msgp` cannot follow across sources
-// (copyValue encodes as a bare int64, not a 1-element map).
+// This is hand-written `*_msg.go` for types that `msgp` cannot follow across sources (from fs.TcdfExt).
 // See scripts/msgp/README.md for the existing msgpack coverage and notes.
 
-func (z *copyValue) DecodeMsg(dc *msgp.Reader) (err error) {
-	z.Value, err = dc.ReadInt64()
-	return
-}
-
-func (z copyValue) EncodeMsg(en *msgp.Writer) error {
-	return en.WriteInt64(z.Value)
-}
-
-func (copyValue) Msgsize() int { return msgp.Int64Size }
-
-func (z *copyTracker) DecodeMsg(dc *msgp.Reader) error {
+func (z *AllDiskStats) DecodeMsg(dc *msgp.Reader) error {
 	sz, err := dc.ReadMapHeader()
 	if err != nil {
 		return err
 	}
 	if *z == nil {
-		*z = make(copyTracker, sz)
+		*z = make(AllDiskStats, sz)
 	}
 	for range sz {
 		k, err := dc.ReadString()
 		if err != nil {
 			return err
 		}
-		var v copyValue
+		var v DiskStats
 		if err := v.DecodeMsg(dc); err != nil {
 			return err
 		}
@@ -44,7 +31,7 @@ func (z *copyTracker) DecodeMsg(dc *msgp.Reader) error {
 	return nil
 }
 
-func (z copyTracker) EncodeMsg(en *msgp.Writer) error {
+func (z AllDiskStats) EncodeMsg(en *msgp.Writer) error {
 	if err := en.WriteMapHeader(uint32(len(z))); err != nil {
 		return err
 	}
@@ -59,7 +46,7 @@ func (z copyTracker) EncodeMsg(en *msgp.Writer) error {
 	return nil
 }
 
-func (z copyTracker) Msgsize() int {
+func (z AllDiskStats) Msgsize() int {
 	s := msgp.MapHeaderSize
 	for k, v := range z {
 		s += msgp.StringPrefixSize + len(k) + v.Msgsize()
