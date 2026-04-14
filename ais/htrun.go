@@ -503,6 +503,11 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 		muxers = newMuxers(false /*enableTracing*/)
 		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: useIPv6}
 	}
+
+	// this netServer is facing users _and_ is not used for intra-cluster comm
+	// used to detect caller-id spoofing
+	// (another small reason to deploy 3 logical nets; both proxy and target)
+	g.netServ.pub.isSeparatePub = g.netServ.pub != g.netServ.control && g.netServ.pub != g.netServ.data
 }
 
 func mustDiffer(ip1 meta.NetInfo, port1 int, use1 bool, ip2 meta.NetInfo, port2 int, use2 bool, tag string) {
@@ -664,6 +669,7 @@ func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.
 		muxers:        g.netServ.pub.muxers,
 		sndRcvBufSize: g.netServ.pub.sndRcvBufSize,
 		useIPv6:       useIPv6, // in fact, expecting the same TCP port _and_ the same IP family as PubNet
+		isSeparatePub: g.netServ.pub.isSeparatePub,
 	}
 	ep := pubExtra.TCPEndpoint()
 	go func() {

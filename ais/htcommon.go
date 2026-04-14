@@ -176,6 +176,7 @@ type (
 		sync.Mutex
 		lowLatencyToS bool
 		useIPv6       bool
+		isSeparatePub bool // this netServer is facing users _and_ is not used for intra-cluster comm
 	}
 
 	nlogWriter struct{}
@@ -503,7 +504,24 @@ func (*nlogWriter) Write(p []byte) (int, error) {
 // netServer //
 ///////////////
 
+func _yelp(hdr http.Header, name string) error {
+	if v := hdr.Get(name); v != "" {
+		return fmt.Errorf("unexpected intra-cluster header on pub: '%s=%s'", name, v)
+	}
+	return nil
+}
+
 func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if server.isSeparatePub {
+		err := _yelp(r.Header, apc.HdrSenderID)
+		if err == nil {
+			err = _yelp(r.Header, apc.HdrSenderName)
+		}
+		if err != nil {
+			cmn.WriteErr(w, r, err, http.StatusForbidden)
+			return
+		}
+	}
 	server.muxers.ServeHTTP(w, r)
 }
 
