@@ -21,9 +21,10 @@ import (
 
 // See scripts/msgp/README.md for the existing msgpack coverage and notes.
 
-func marshalMsgp(v interface {
-	EncodeMsg(*msgp.Writer) error
-}) ([]byte, error) {
+// note: identical marshalMsgp and unmarshalMsgp helpers in stats/msgp_internal_test.go
+// (to keep each source self-contained)
+
+func marshalMsgp(v interface{ EncodeMsg(*msgp.Writer) error }) ([]byte, error) {
 	var buf bytes.Buffer
 	w := msgp.NewWriter(&buf)
 	if err := v.EncodeMsg(w); err != nil {
@@ -34,10 +35,7 @@ func marshalMsgp(v interface {
 	}
 	return buf.Bytes(), nil
 }
-
-func unmarshalMsgp[T interface {
-	DecodeMsg(*msgp.Reader) error
-}](b []byte, v T) error {
+func unmarshalMsgp[T interface{ DecodeMsg(*msgp.Reader) error }](b []byte, v T) error {
 	r := msgp.NewReader(bytes.NewReader(b))
 	return v.DecodeMsg(r)
 }
