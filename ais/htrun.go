@@ -2411,16 +2411,17 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 // - readiness: 200 when node and cluster started + not in maint/decomm, 503 otherwise
 // TODO: check receiving on PubNet
 func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) bool {
-	isIntra, err := h.validateIntraRequest(r.Header, false /* from primary */)
-	if err != nil {
-		h.writeErr(w, r, err, http.StatusServiceUnavailable)
-		return true
-	}
-	if isIntra {
+	hdr := r.Header
+	if hdr.Get(apc.HdrSenderID) != "" || hdr.Get(apc.HdrSenderName) != "" {
+		if err := h.checkIntraCall(hdr, false /* from primary */); err != nil {
+			h.writeErr(w, r, err, http.StatusServiceUnavailable)
+			return true
+		}
 		return false
 	}
 
-	// NOTE: check via substring (not parsed query) to avoid allocation
+	// substring match to avoid ParseQuery alloc on fast path
+	// (the apc constant includes "=true")
 	isReadiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
 	if cmn.Rom.V(5, cos.ModKalive) {
 		nlog.Infoln(h.String(), "external health-probe:", r.RemoteAddr, isReadiness, "[", r.URL.RawQuery, "]")
@@ -2437,16 +2438,6 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) bool {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 	return true
-}
-
-func (h *htrun) validateIntraRequest(hdr http.Header, fromPrimary bool) (isIntra bool, err error) {
-	senderID := hdr.Get(apc.HdrSenderID)
-	senderName := hdr.Get(apc.HdrSenderName)
-	isIntra = senderID != "" || senderName != ""
-	if isIntra {
-		err = h.checkIntraCall(hdr, fromPrimary)
-	}
-	return
 }
 
 // ready when node started, not in maint/decomm, and cluster started
@@ -2499,48 +2490,81 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 }
 
 func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
+	const ferr = "%s: invalid intra-cluster request from [name=%q, id=%q]"
 	var (
-		smap       = h.owner.smap.get()
-		senderID   = hdr.Get(apc.HdrSenderID)
-		senderName = hdr.Get(apc.HdrSenderName)
-		senderSver = hdr.Get(apc.HdrSenderSmapVer)
+		smap  = h.owner.smap.get()
+		sid   = hdr.Get(apc.HdrSenderID)
+		sname = hdr.Get(apc.HdrSenderName)
+		sver  = hdr.Get(apc.HdrSenderSmapVer)
 	)
-	if ok := senderID != "" && senderName != ""; !ok {
+	// 1. both headers must be present
+	if sid == "" && sname == "" {
 		return errIntraControl
 	}
+	if sid == "" || sname == "" {
+		return fmt.Errorf(ferr, h, sname, sid)
+	}
+
+	// 2. name must be valid
+	before, after, ok := strings.Cut(sname, sid)
+	if !ok || after != meta.SnameSuffix {
+		return fmt.Errorf(ferr, h, sname, sid)
+	}
+	if before != meta.PnamePrefix && before != meta.TnamePrefix {
+		return fmt.Errorf(ferr, h, sname, sid)
+	}
+
+	// 3. (inconclusive)
 	if !smap.isValid() {
 		return nil
 	}
-	node := smap.GetNode(senderID)
-	if ok := node != nil && (!fromPrimary || smap.isPrimary(node)); ok {
+
+	snode := smap.GetNode(sid)
+
+	// 4. unknown sender: newly-joined, and only when !fromPrimary
+	if snode == nil {
+		if !fromPrimary {
+			return nil
+		}
+		return fmt.Errorf("%s: expected %s from a valid node, %s", h, cmn.NetIntraControl, smap)
+	}
+
+	// 5. sname prefix must match the role (completing check #2 above)
+	wantPrefix := meta.PnamePrefix
+	if snode.IsTarget() {
+		wantPrefix = meta.TnamePrefix
+	}
+	if before != wantPrefix {
+		return fmt.Errorf(ferr, h, sname, sid)
+	}
+
+	// 6. a known cluster member (the fact that it's known is enough)
+	if !fromPrimary {
 		return nil
 	}
-	if senderSver != smap.vstr && senderSver != "" {
-		ver, err := strconv.ParseInt(senderSver, 10, 64)
-		if err != nil { // (unlikely)
-			e := fmt.Errorf("%s: invalid sender's Smap ver [%s, %q, %w], %s", h, senderName, senderSver, err, smap)
-			nlog.Errorln(e)
-			return e
+
+	// 7. primary-only call: accept current primary immediately
+	if smap.isPrimary(snode) {
+		return nil
+	}
+
+	// 8. primary's calling but my local Smap disagrees: still trust the caller if its Smap is strictly newer
+	if sver != "" && sver != smap.vstr {
+		ver, err := strconv.ParseInt(sver, 10, 64)
+		if err != nil || ver < 0 {
+			return fmt.Errorf("%s: invalid sender's Smap ver [%s, %q, %v], %s", h, sname, sver, err, smap)
 		}
-		// we still trust the request when the sender's Smap is more current
 		if ver > smap.version() {
 			if h.ClusterStarted() {
-				// (exception: setting primary w/ force)
-				warn := h.String() + ": local " + smap.String() + " is older than (sender's) " + senderName + " Smap v" + senderSver
+				warn := h.String() + ": local " + smap.String() + " is older than (sender's) " + sname + " Smap v" + sver
 				nlog.ErrorDepth(1, warn, "- proceeding anyway...")
 			}
 			runtime.Gosched()
 			return nil
 		}
 	}
-	if node == nil {
-		if !fromPrimary {
-			// assume request from a newly joined node and proceed
-			return nil
-		}
-		return fmt.Errorf("%s: expected %s from a valid node, %s", h, cmn.NetIntraControl, smap)
-	}
-	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h, cmn.NetIntraControl, node, smap)
+
+	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h, cmn.NetIntraControl, snode, smap)
 }
 
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
