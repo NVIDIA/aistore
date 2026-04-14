@@ -569,6 +569,7 @@ The current naming convention is `.sys-*`. The first system bucket is:
 | Bucket | Purpose | Introduced |
 |--------|---------|------------|
 | `ais://.sys-inventory` | Stores [native bucket inventory](/docs/nbi.md) (NBI) snapshots as chunked objects | v4.3 |
+| `ais://.sys-shardidx` | Stores shard indexes for direct random access into TAR archives | v4.4 |
 
 ### Naming rules
 

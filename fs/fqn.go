@@ -36,6 +36,7 @@ const (
 	WorkfileAppend       = "append"         // APPEND to object (as file)
 	WorkfileAppendToArch = "append-to-arch" // APPEND to existing archive
 	WorkfileCreateArch   = "create-arch"    // CREATE multi-object archive
+	WorkfileShardIdx     = "shardidx"       // write shard index to ais://.sys-shardidx
 )
 
 type ParsedFQN struct {

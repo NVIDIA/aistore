@@ -45,6 +45,9 @@ const (
 	shardIdxFmtTAR   = 0  // format: TAR
 	shardIdxCksumXXH = 1  // checksum: onexxh.Checksum64S with cos.MLCG32 seed
 	shardIdxPrefLen  = 11 // [1:ver | 1:fmt | 1:cksum-type | 8:xxhash64]
+
+	// ShardIdxMinLen is the smallest valid packed-index payload (preamble + zero-entry count varint).
+	ShardIdxMinLen = shardIdxPrefLen + 1
 )
 
 type (
@@ -118,14 +121,18 @@ func BuildShardIndex(r io.ReaderAt, size int64) (*ShardIndex, error) {
 ////////////////
 
 // Pack serializes the index into a compact binary format.
-// binary.AppendUvarint grows the slice and appends the encoded bytes in one call.
 func (idx *ShardIndex) Pack() ([]byte, error) {
-	var payload []byte
+	// Pre-allocates a single buffer: preamble first, then payload appended in-place.
+	// upper bound: count varint + per-entry (name-len varint + name bytes + offset varint + size varint).
+	total := shardIdxPrefLen + binary.MaxVarintLen64
+	for name := range idx.Entries {
+		// one uvarint for name length + the name itself + two uvarints for offset and size
+		total += 3*binary.MaxVarintLen64 + len(name)
+	}
+	buf := make([]byte, shardIdxPrefLen, total)
 
-	// 1. number of entries
-	payload = binary.AppendUvarint(payload, uint64(len(idx.Entries)))
-
-	// 2. for each entry: name length, name bytes, TAR header offset, file size
+	// Append payload directly after the preamble placeholder.
+	buf = binary.AppendUvarint(buf, uint64(len(idx.Entries)))
 	for name, e := range idx.Entries {
 		if e.Offset < 0 {
 			return nil, _emitErr("entry %q has negative offset %d", name, e.Offset)
@@ -133,21 +140,18 @@ func (idx *ShardIndex) Pack() ([]byte, error) {
 		if e.Size < 0 {
 			return nil, _emitErr("entry %q has negative size %d", name, e.Size)
 		}
-		payload = binary.AppendUvarint(payload, uint64(len(name)))
-		payload = append(payload, name...)
-		payload = binary.AppendUvarint(payload, uint64(e.Offset))
-		payload = binary.AppendUvarint(payload, uint64(e.Size))
+		buf = binary.AppendUvarint(buf, uint64(len(name)))
+		buf = append(buf, name...)
+		buf = binary.AppendUvarint(buf, uint64(e.Offset))
+		buf = binary.AppendUvarint(buf, uint64(e.Size))
 	}
 
-	// 3. checksum the payload, then prepend the fixed preamble
-	h := onexxh.Checksum64S(payload, cos.MLCG32)
-
-	buf := make([]byte, shardIdxPrefLen+len(payload))
+	// Checksum the payload, then fill in the preamble.
+	h := onexxh.Checksum64S(buf[shardIdxPrefLen:], cos.MLCG32)
 	buf[0] = shardIdxMetaver
 	buf[1] = shardIdxFmtTAR
 	buf[2] = shardIdxCksumXXH
 	binary.BigEndian.PutUint64(buf[3:], h)
-	copy(buf[shardIdxPrefLen:], payload)
 
 	return buf, nil
 }

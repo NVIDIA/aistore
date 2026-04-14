@@ -67,6 +67,22 @@ func (b *Bck) MakeUname(name string, withExtraCap ...bool) []byte {
 	return (*cmn.Bck)(b).MakeUname(name, withExtraCap...)
 }
 
+// SysObjName returns the deterministic, collision-free object name for
+// storing content in a system bucket (.sys-*). name must be non-empty.
+//
+// System bucket object naming convention:
+// Objects in .sys-* buckets are named using bck.MakeUname(<source-name>),
+// which encodes (provider, namespace, bucket, source-name) into a single
+// flat, collision-free key.
+// Examples:
+//
+//	NBI:      bck.MakeUname(invName)              => stored in ais://.sys-inventory
+//	ShardIdx: bck.MakeUname(objName + ".idx")     => stored in ais://.sys-shardidx
+func (b *Bck) SysObjName(name string) string {
+	debug.Assert(name != "")
+	return string(b.MakeUname(name))
+}
+
 func (b *Bck) IsRemoteS3() bool {
 	if b.Provider == apc.AWS {
 		return true
@@ -398,4 +414,5 @@ func BckFromUBP(uname, bucket, provider string) (*Bck, error) {
 // system buckets
 //
 
-func SysBckNBI() *Bck { return &Bck{Provider: apc.AIS, Name: cmn.SysNBI} }
+func SysBckNBI() *Bck      { return &Bck{Provider: apc.AIS, Name: cmn.SysNBI} }
+func SysBckShardIdx() *Bck { return &Bck{Provider: apc.AIS, Name: cmn.SysShardIdx} }

@@ -69,7 +69,7 @@ type nbiCtx struct {
 
 func (nbi *nbiCtx) init(invName string) error {
 	lom := &core.LOM{
-		ObjName: nbiObjName(nbi.bck, invName),
+		ObjName: nbi.bck.SysObjName(invName),
 	}
 	if err := lom.InitBck(meta.SysBckNBI()); err != nil {
 		return err

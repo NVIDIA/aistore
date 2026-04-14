@@ -152,6 +152,20 @@ func (lom *LOM) setHRW(v bool) {
 	}
 }
 
+// HasShardIdx reports whether the LOM has an associated shard index persisted
+// in ais://.sys-shardidx.
+func (lom *LOM) HasShardIdx() bool { return lom.md.flags&lmflShardIdx != 0 }
+
+// SetShardIdx sets or clears the lmflShardIdx flag. The flag is persisted with
+// the next Persist/PersistMain call on this LOM.
+func (lom *LOM) SetShardIdx(v bool) {
+	if v {
+		lom.md.flags |= lmflShardIdx
+	} else {
+		lom.md.flags &^= lmflShardIdx
+	}
+}
+
 // given an existing (on-disk) object, determines whether it is a _copy_
 // (compare with isMirror below)
 func (lom *LOM) IsCopy() bool {

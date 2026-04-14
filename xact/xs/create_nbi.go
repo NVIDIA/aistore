@@ -96,7 +96,7 @@ func (p *nbiFactory) Start() error {
 
 	// nbi LOM is (almost) always chunked
 	r.lom = &core.LOM{
-		ObjName: nbiObjName(r.Bck(), invName),
+		ObjName: r.Bck().SysObjName(invName),
 	}
 	if err := r.init(); err != nil {
 		return err
@@ -105,12 +105,6 @@ func (p *nbiFactory) Start() error {
 	_ = r.CtlMsg()
 	p.xctn = r
 	return nil
-}
-
-// naming convention: inventory name => inventory LOM
-func nbiObjName(bck *meta.Bck, invName string) string {
-	debug.Assert(invName != "")
-	return string(bck.MakeUname(invName))
 }
 
 func (*nbiFactory) Kind() string     { return apc.ActCreateNBI }

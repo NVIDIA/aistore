@@ -68,7 +68,8 @@ func (lid lomBID) clrlmfl(fl lomFlags) lomBID {
 //
 
 const (
-	lmflHRW = uint64(1) << 63 // high bit: object is at HRW location (runtime-only)
+	lmflHRW      = uint64(1) << 63 // high bit: object is at HRW location (runtime-only, never persisted)
+	lmflShardIdx = uint64(1) << 0  // persisted: object has an associated shard index in ais://.sys-shardidx
 )
 
 // runtime-only bits may need a (future) mask, e.g.:
