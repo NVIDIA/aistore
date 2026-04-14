@@ -113,7 +113,11 @@ func newKeyProvider(ctx context.Context, config *cmn.Config, statsT stats.Tracke
 	}
 	// Otherwise, set up a key cache client to cache keys from configured OIDC issuers
 	keyCacheClient := newKeyCacheClient(config, statsT)
-	keyCacheManager := tok.NewKeyCacheManager(config.Auth.OIDC, keyCacheClient, nil, statsT)
+	kcmConf := &tok.KCMConfig{}
+	if config.Auth.OIDC != nil {
+		kcmConf = &tok.KCMConfig{OIDCConf: *config.Auth.OIDC}
+	}
+	keyCacheManager := tok.NewKeyCacheManager(kcmConf, keyCacheClient, statsT)
 	keyCacheManager.Init(ctx)
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), TokenParserInitTimeout)
 	defer cancel()

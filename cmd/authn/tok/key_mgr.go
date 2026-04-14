@@ -11,13 +11,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -36,30 +34,48 @@ type (
 		keyCache *keyCache
 		// Client for looking up JWKS URI and caching key sets
 		jwksClient *http.Client
-		// Exposed config options for the JWK client and cache
-		cacheConfig *CacheConfig
+		// Config options for the JWK client cache
+		cacheConfig *cacheConfig
 		// Optional stats tracker when used by AIS nodes
 		statsT stats.Tracker
 	}
 
-	keyCache struct {
-		// Map of iss URL to JWKS URL
-		issuerToJWKS map[string]string
-		// Cache for key sets
-		jwksCache *jwk.Cache
-		// Lock to allow for dynamic updates
-		// All key cache fields should be updated within the same lock
-		sync.RWMutex
-	}
-
-	CacheConfig struct {
-		DiscoveryConf           *DiscoveryConf
-		MinCacheRefreshInterval *time.Duration
+	KCMConfig struct {
+		// User-exposed config for key validation with OIDC issuer lookup
+		cmn.OIDCConf
+		// Configuration for issuer discovery URL used to find JWKS URL
+		Discovery *DiscoveryConf
 	}
 
 	DiscoveryConf struct {
-		Retries   int
-		BaseDelay time.Duration
+		// Number of retry attempts for the discovery URL of an allowed issuer
+		Retries *int
+		// Base for exponential backoff when retrying issuer discovery
+		BaseDelay *time.Duration
+	}
+
+	keyCache struct {
+		// Per-issuer state keyed by issuer URL
+		issuers map[string]*issuerEntry
+		// Cache for key sets
+		jwksCache *jwk.Cache
+		// Minimum interval between explicit refreshes per issuer
+		minRotationRefresh time.Duration
+		// Lock to allow for dynamic updates
+		sync.RWMutex
+	}
+
+	issuerEntry struct {
+		sync.Mutex
+		jwksURL            string
+		lastRefreshAttempt time.Time
+	}
+
+	cacheConfig struct {
+		discoveryRetries     int
+		discoveryBaseDelay   time.Duration
+		minBackgroundRefresh time.Duration // floor for background auto-refresh polling
+		minRotationRefresh   time.Duration // throttle for explicit refresh on kid miss
 	}
 
 	discoverResp struct {
@@ -73,10 +89,15 @@ type (
 	}
 )
 
-var ErrNoJWKSForIssuer = errors.New("no JWKS entry exists for issuer")
+var (
+	ErrNoJWKSForIssuer           = errors.New("no JWKS entry exists for issuer")
+	ErrJWKSCacheNotInitialized   = errors.New("JWKS cache not initialized")
+	ErrJWKSCacheRefreshThrottled = errors.New("JWKS cache refresh throttled")
+)
 
 const (
-	defaultMinCacheRefreshInterval = 15 * time.Minute
+	defaultMinBackgroundRefresh    = 15 * time.Minute
+	defaultMinRotationRefresh      = 30 * time.Second
 	defaultOIDCDiscoveryRetries    = 3
 	defaultOIDCDiscoveryRetryDelay = cos.PollSleepShort
 	oidcDiscoveryEndpoint          = "/.well-known/openid-configuration"
@@ -89,36 +110,49 @@ const (
 // NewKeyCacheManager creates an instance of KeyCacheManager with an unpopulated cache
 // After creating, call Init with a long-lived context to create a key cache
 // Optionally, also pre-populate the cache to register and preload the allowed issuers
-func NewKeyCacheManager(oidc *cmn.OIDCConf, client *http.Client, cacheConf *CacheConfig, statsT stats.Tracker) *KeyCacheManager {
+func NewKeyCacheManager(conf *KCMConfig, client *http.Client, statsT stats.Tracker) *KeyCacheManager {
 	return &KeyCacheManager{
-		allowedIss:  newAllowSet(oidc),
+		allowedIss:  newAllowSet(conf),
 		jwksClient:  client,
-		cacheConfig: newCacheConfig(cacheConf),
+		cacheConfig: newCacheConfig(conf),
 		statsT:      statsT,
 	}
 }
 
-func newAllowSet(oidc *cmn.OIDCConf) map[string]struct{} {
-	if oidc == nil {
+func newAllowSet(conf *KCMConfig) map[string]struct{} {
+	if conf == nil {
 		return make(map[string]struct{})
 	}
-	return oidc.GetAllowedIssSet()
+	return conf.GetAllowedIssSet()
 }
 
-func newCacheConfig(conf *CacheConfig) *CacheConfig {
-	if conf == nil {
-		conf = &CacheConfig{}
+func newCacheConfig(conf *KCMConfig) *cacheConfig {
+	cc := &cacheConfig{
+		discoveryRetries:     defaultOIDCDiscoveryRetries,
+		discoveryBaseDelay:   defaultOIDCDiscoveryRetryDelay,
+		minBackgroundRefresh: defaultMinBackgroundRefresh,
+		minRotationRefresh:   defaultMinRotationRefresh,
 	}
-	if conf.DiscoveryConf == nil {
-		conf.DiscoveryConf = &DiscoveryConf{
-			Retries:   defaultOIDCDiscoveryRetries,
-			BaseDelay: defaultOIDCDiscoveryRetryDelay,
+	if conf == nil {
+		return cc
+	}
+	if conf.JWKSCacheConf != nil {
+		if conf.JWKSCacheConf.MinBackgroundRefresh != 0 {
+			cc.minBackgroundRefresh = conf.JWKSCacheConf.MinBackgroundRefresh.D()
+		}
+		if conf.JWKSCacheConf.MinRotationRefresh != 0 {
+			cc.minRotationRefresh = conf.JWKSCacheConf.MinRotationRefresh.D()
 		}
 	}
-	if conf.MinCacheRefreshInterval == nil {
-		conf.MinCacheRefreshInterval = apc.Ptr(defaultMinCacheRefreshInterval)
+	if conf.Discovery != nil {
+		if conf.Discovery.Retries != nil {
+			cc.discoveryRetries = *conf.Discovery.Retries
+		}
+		if conf.Discovery.BaseDelay != nil {
+			cc.discoveryBaseDelay = *conf.Discovery.BaseDelay
+		}
 	}
-	return conf
+	return cc
 }
 
 func NewJWKSRoundTripper(base http.RoundTripper, statsT stats.Tracker) *JWKSRoundTripper {
@@ -153,8 +187,9 @@ func (km *KeyCacheManager) isInitialized() bool {
 // The provided context must be valid for the life of the cache for automatic refresh
 func (km *KeyCacheManager) Init(rootCtx context.Context) {
 	km.keyCache = &keyCache{
-		jwksCache:    jwk.NewCache(rootCtx),
-		issuerToJWKS: make(map[string]string, len(km.allowedIss)),
+		jwksCache:          jwk.NewCache(rootCtx),
+		issuers:            make(map[string]*issuerEntry, len(km.allowedIss)),
+		minRotationRefresh: km.cacheConfig.minRotationRefresh,
 	}
 }
 
@@ -218,7 +253,7 @@ func (km *KeyCacheManager) registerIssWithCache(ctx context.Context, iss, discov
 	}
 	regOpts := []jwk.RegisterOption{
 		jwk.WithHTTPClient(km.jwksClient),
-		jwk.WithMinRefreshInterval(*km.cacheConfig.MinCacheRefreshInterval),
+		jwk.WithMinRefreshInterval(km.cacheConfig.minBackgroundRefresh),
 	}
 	err = km.keyCache.registerIss(iss, jwksURL, regOpts)
 	if err != nil {
@@ -303,16 +338,47 @@ func (km *KeyCacheManager) getPubKey(ctx context.Context, iss, kid string) (any,
 		km.IncCounter(stats.AuthInvalidIssCount)
 		return nil, fmt.Errorf("failed to get keyset for issuer %s: %v", iss, err)
 	}
-	jwKey, found := keySet.LookupKeyID(kid)
-	if !found {
-		km.IncCounter(stats.AuthInvalidKidCount)
-		return nil, fmt.Errorf("unrecognized key id %s for issuer %s", kid, iss)
+	jwKey, err := km.lookupKey(ctx, keySet, iss, kid)
+	if err != nil {
+		return nil, fmt.Errorf("unrecognized key id %s for issuer %s: %v", kid, iss, err)
 	}
 	var pubKey any
 	if err = jwKey.Raw(&pubKey); err != nil {
 		return nil, fmt.Errorf("failed to parse public key [iss: %s, kid: %s, err: %w]", iss, kid, err)
 	}
 	return pubKey, nil
+}
+
+func (km *KeyCacheManager) lookupKey(ctx context.Context, keySet jwk.Set, iss, kid string) (jwk.Key, error) {
+	jwKey, found := keySet.LookupKeyID(kid)
+	if found {
+		return jwKey, nil
+	}
+	// Key not found — attempt to refresh the issuer's key set
+	jwKey, err := km.refreshAndLookup(ctx, iss, kid)
+	if err != nil {
+		km.IncCounter(stats.AuthInvalidKidCount)
+	}
+	return jwKey, err
+}
+
+func (km *KeyCacheManager) refreshAndLookup(ctx context.Context, iss, kid string) (jwk.Key, error) {
+	lookupSet, err := km.keyCache.refreshKeySetForIss(ctx, iss)
+	if err != nil && !errors.Is(err, ErrJWKSCacheRefreshThrottled) {
+		return nil, err
+	}
+	// If throttled, retry get in case another routine refreshed between check and lock acquisition
+	if errors.Is(err, ErrJWKSCacheRefreshThrottled) {
+		var getErr error
+		lookupSet, getErr = km.getKeySetFromCache(ctx, iss)
+		if getErr != nil {
+			return nil, errors.Join(err, getErr)
+		}
+	}
+	if jwKey, found := lookupSet.LookupKeyID(kid); found {
+		return jwKey, nil
+	}
+	return nil, errors.Join(err, errors.New("kid not found after JWKS refresh attempt"))
 }
 
 func (km *KeyCacheManager) getKeySetFromCache(ctx context.Context, iss string) (jwk.Set, error) {
@@ -356,8 +422,8 @@ func getDiscoveryURL(issuer string) (string, error) {
 
 func (km *KeyCacheManager) discoverJWKSURI(ctx context.Context, issuer, discoveryURL string) (string, error) {
 	var (
-		attempts  = km.cacheConfig.DiscoveryConf.Retries + 1
-		baseDelay = km.cacheConfig.DiscoveryConf.BaseDelay
+		attempts  = km.cacheConfig.discoveryRetries + 1
+		baseDelay = km.cacheConfig.discoveryBaseDelay
 		lastErr   error
 	)
 	for attempt := range attempts {
@@ -379,7 +445,7 @@ func (km *KeyCacheManager) discoverJWKSURI(ctx context.Context, issuer, discover
 		}
 		urlErr := cmn.ValidateIssuerURL(jwksURL)
 		if urlErr != nil {
-			return "", fmt.Errorf("invalid issuer URL received from discovery %s: %w", issuer, urlErr)
+			return "", fmt.Errorf("invalid JWKS URL received from discovery for issuer %s: %w", issuer, urlErr)
 		}
 		nlog.Infof("Registered JWKS URL %q for configured issuer %s", jwksURL, issuer)
 		return jwksURL, nil
@@ -425,14 +491,15 @@ func (km *KeyCacheManager) makeDiscoveryRequest(ctx context.Context, reqURL, iss
 
 // Best-effort attempt to refresh all cached JWKS
 func (kc *keyCache) preLoadAll(ctx context.Context) {
-	// Snapshot issuerToJWKS under lock
 	kc.RLock()
-	issuerToJWKS := maps.Clone(kc.issuerToJWKS)
+	snapshot := make(map[string]string, len(kc.issuers))
+	for iss, entry := range kc.issuers {
+		snapshot[iss] = entry.jwksURL
+	}
 	kc.RUnlock()
 
-	// Refresh all JWKS in parallel
 	var wg sync.WaitGroup
-	for iss, jwksURL := range issuerToJWKS {
+	for iss, jwksURL := range snapshot {
 		wg.Add(1)
 		go func(issuer, url string) {
 			defer wg.Done()
@@ -452,19 +519,49 @@ func (kc *keyCache) registerIss(iss, jwksURL string, regOpts []jwk.RegisterOptio
 	if err != nil {
 		return fmt.Errorf("failed to register jwksURL in cache: %w", err)
 	}
-	kc.issuerToJWKS[iss] = jwksURL
+	kc.issuers[iss] = &issuerEntry{jwksURL: jwksURL}
 	return nil
 }
 
-func (kc *keyCache) getKeySetForIss(ctx context.Context, iss string) (jwk.Set, error) {
+func (kc *keyCache) getIssEntry(iss string) (*issuerEntry, error) {
 	if kc.jwksCache == nil {
-		return nil, errors.New("jwks cache not initialized")
+		return nil, ErrJWKSCacheNotInitialized
 	}
 	kc.RLock()
 	defer kc.RUnlock()
-	jwksURL, ok := kc.issuerToJWKS[iss]
+	entry, ok := kc.issuers[iss]
 	if !ok {
 		return nil, ErrNoJWKSForIssuer
 	}
-	return kc.jwksCache.Get(ctx, jwksURL)
+	return entry, nil
+}
+
+func (kc *keyCache) getKeySetForIss(ctx context.Context, iss string) (jwk.Set, error) {
+	entry, err := kc.getIssEntry(iss)
+	if err != nil {
+		return nil, err
+	}
+	return kc.jwksCache.Get(ctx, entry.jwksURL)
+}
+
+func (kc *keyCache) refreshKeySetForIss(ctx context.Context, iss string) (jwk.Set, error) {
+	entry, err := kc.getIssEntry(iss)
+	if err != nil {
+		return nil, err
+	}
+	// For a given issuer, only one routine should refresh
+	entry.Lock()
+	defer entry.Unlock()
+	now := time.Now()
+	if now.Sub(entry.lastRefreshAttempt) < kc.minRotationRefresh {
+		return nil, fmt.Errorf("%w: (last attempt %s ago)", ErrJWKSCacheRefreshThrottled, now.Sub(entry.lastRefreshAttempt).Round(time.Second))
+	}
+	entry.lastRefreshAttempt = now
+
+	keySet, err := kc.jwksCache.Refresh(ctx, entry.jwksURL)
+	if err != nil {
+		nlog.Warningf("JWKS refresh failed for issuer %s, err: %v", iss, err)
+		return nil, err
+	}
+	return keySet, err
 }

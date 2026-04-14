@@ -386,7 +386,7 @@ func TestValidateToken_IssLookupNotAllowed(t *testing.T) {
 	env := setupTokenTestEnv(t, true)
 	// Empty allowed issuer fails validation
 	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{}}}
-	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, nil, nil, nil)
+	keyCacheManager := tok.NewKeyCacheManager(kcmConf(authConf.OIDC), nil, nil)
 	initKeyCacheManager(t, keyCacheManager)
 	emptyTkParser := tok.NewTokenParser(keyCacheManager, authConf)
 	tk := createTokenWithKeyID(t, newAdminClaimsWithIssuer(env.oidcSrv.URL), env.rsaKey, env.keyID)
@@ -408,7 +408,7 @@ func TestValidateToken_IssLookupCertificateValidation(t *testing.T) {
 	authConf := &cmn.AuthConf{OIDC: oidcConf}
 	// Add OIDC server WITHOUT adding certificate to trusted certs
 	clientNoTrust := getKeyCacheClient(t, nil)
-	kcm := tok.NewKeyCacheManager(authConf.OIDC, clientNoTrust, cacheConfNoRetry, nil)
+	kcm := tok.NewKeyCacheManager(kcmConfNoRetry(authConf.OIDC), clientNoTrust, nil)
 	// No error, but issuer isn't added
 	initKeyCacheManager(t, kcm)
 	parser := tok.NewTokenParser(kcm, authConf)
@@ -418,7 +418,7 @@ func TestValidateToken_IssLookupCertificateValidation(t *testing.T) {
 	tassert.Error(t, err != nil, "Token validation should fail without certificate trust on issuer")
 	// Recreate with client using trusted certificate
 	clientWithTrust := getKeyCacheClient(t, env.oidcSrv.Certificate())
-	kcmWithTrust := tok.NewKeyCacheManager(authConf.OIDC, clientWithTrust, cacheConfNoRetry, nil)
+	kcmWithTrust := tok.NewKeyCacheManager(kcmConfNoRetry(authConf.OIDC), clientWithTrust, nil)
 	parser = tok.NewTokenParser(kcmWithTrust, authConf)
 	_, err = parser.ValidateToken(t.Context(), tk)
 	tassert.Error(t, err != nil, "Token parser initialization should succeed with issuer certificate trust")

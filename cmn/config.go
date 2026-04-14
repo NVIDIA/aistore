@@ -704,13 +704,24 @@ type (
 		Aud *[]string `json:"aud,omitempty"`
 	}
 	OIDCConf struct {
-		IssuerCA       string   `json:"issuer_ca_bundle,omitempty"`
-		AllowedIssuers []string `json:"allowed_iss"`
+		AllowedIssuers []string       `json:"allowed_iss"`
+		IssuerCA       string         `json:"issuer_ca_bundle,omitempty"`
+		JWKSCacheConf  *JWKSCacheConf `json:"jwks_cache,omitempty"`
 	}
 	OIDCConfToSet struct {
-		AllowedIssuers *[]string `json:"allowed_iss,omitempty"`
-		IssuerCA       *string   `json:"issuer_ca_bundle,omitempty"`
+		AllowedIssuers *[]string           `json:"allowed_iss,omitempty"`
+		IssuerCA       *string             `json:"issuer_ca_bundle,omitempty"`
+		JWKSCacheConf  *JWKSCacheConfToSet `json:"jwks_cache,omitempty"`
 	}
+	JWKSCacheConf struct {
+		MinRotationRefresh   cos.Duration `json:"min_rotation_refresh,omitempty"`   // minimum interval between JWKS cache refreshes on missing key ID (default 30s)
+		MinBackgroundRefresh cos.Duration `json:"min_background_refresh,omitempty"` // minimum interval between JWKS background cache refreshes (default 15m)
+	}
+	JWKSCacheConfToSet struct {
+		MinRotationRefresh   *cos.Duration `json:"min_rotation_refresh,omitempty" swaggertype:"primitive,string"`
+		MinBackgroundRefresh *cos.Duration `json:"min_background_refresh,omitempty" swaggertype:"primitive,string"`
+	}
+
 	ClusterKeyConf struct {
 		Enabled       bool         `json:"enabled"`
 		TTL           cos.Duration `json:"ttl"`            // default: 0 (never expire)
@@ -2056,6 +2067,12 @@ func (c *OIDCConf) validate() error {
 			return fmt.Errorf("failed to parse allowed issuer URL in auth OIDC config: %v", err)
 		}
 	}
+	if c.JWKSCacheConf != nil {
+		err := c.JWKSCacheConf.validate()
+		if err != nil {
+			return fmt.Errorf("failed to validate OIDC JWKS cache config: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -2065,6 +2082,16 @@ func (c *OIDCConf) GetAllowedIssSet() map[string]struct{} {
 		allowSet[v] = struct{}{}
 	}
 	return allowSet
+}
+
+func (c *JWKSCacheConf) validate() error {
+	if c.MinBackgroundRefresh != 0 && c.MinBackgroundRefresh < cos.Duration(5*time.Minute) {
+		return fmt.Errorf("invalid jwks_cache.min_background_refresh %v (must be at least 5m)", c.MinBackgroundRefresh)
+	}
+	if c.MinRotationRefresh != 0 && c.MinRotationRefresh < cos.Duration(time.Second) {
+		return fmt.Errorf("invalid jwks_cache.min_rotation_refresh %v (must be at least 1s)", c.MinRotationRefresh)
+	}
+	return nil
 }
 
 // ValidateIssuerURL Parse and validate key issuer URLs used for JWKS discovery and fetching

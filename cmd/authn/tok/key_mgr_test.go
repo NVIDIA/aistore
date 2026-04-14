@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -29,13 +32,6 @@ import (
 )
 
 var (
-	cacheConfNoRetry = &tok.CacheConfig{
-		DiscoveryConf: &tok.DiscoveryConf{
-			Retries:   0,
-			BaseDelay: time.Duration(0),
-		},
-		MinCacheRefreshInterval: nil,
-	}
 	invalidIssuerURLs = []string{
 		"http://not-https.com/jwks",  // not https
 		"not-absolute",               // not absolute
@@ -47,16 +43,28 @@ var (
 	}
 )
 
-func generateTestJWKS(t *testing.T, privKey *rsa.PrivateKey, keyID string) string {
-	pubJWK, err := jwk.FromRaw(privKey.Public())
+func genRSAKey(t *testing.T) *rsa.PrivateKey {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	tassert.CheckFatal(t, err)
-	_ = pubJWK.Set(jwk.KeyIDKey, keyID)
+	return key
+}
+
+func generateMultiKeyJWKS(t *testing.T, keys map[string]*rsa.PrivateKey) string {
 	jwks := jwk.NewSet()
-	err = jwks.AddKey(pubJWK)
-	tassert.CheckFatal(t, err)
+	for kid, key := range keys {
+		pubJWK, err := jwk.FromRaw(key.Public())
+		tassert.CheckFatal(t, err)
+		_ = pubJWK.Set(jwk.KeyIDKey, kid)
+		err = jwks.AddKey(pubJWK)
+		tassert.CheckFatal(t, err)
+	}
 	raw, err := json.Marshal(jwks)
 	tassert.CheckFatal(t, err)
 	return string(raw)
+}
+
+func generateTestJWKS(t *testing.T, privKey *rsa.PrivateKey, keyID string) string {
+	return generateMultiKeyJWKS(t, map[string]*rsa.PrivateKey{keyID: privKey})
 }
 
 func createMockJWKSServer(jwksJSON string) *httptest.Server {
@@ -100,8 +108,7 @@ type testTokenEnv struct {
 
 func setupTokenTestEnv(t *testing.T, init bool) testTokenEnv {
 	keyID := "123"
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	tassert.Errorf(t, err == nil, "Failed to create rsa signing key: %v", err)
+	rsaKey := genRSAKey(t)
 	// Get the JWKS we'd expect the issuer to give to match this key info
 	jwksJSON := generateTestJWKS(t, rsaKey, keyID)
 	// Mock JWKS server will return a JWKS including an entry for this key ID
@@ -113,9 +120,8 @@ func setupTokenTestEnv(t *testing.T, init bool) testTokenEnv {
 	// Set up the TLS config and get the config for our client
 	authConf := &cmn.AuthConf{OIDC: oidcConf}
 	client := getKeyCacheClient(t, oidcS.Certificate())
-	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, client, nil, nil)
+	keyCacheManager := tok.NewKeyCacheManager(kcmConf(authConf.OIDC), client, nil)
 	tkParser := tok.NewTokenParser(keyCacheManager, authConf)
-	tassert.Fatalf(t, err == nil, "Failed to create token parser: %v", err)
 	if init {
 		initKeyCacheManager(t, keyCacheManager)
 	}
@@ -135,6 +141,21 @@ func initKeyCacheManager(t *testing.T, kcm *tok.KeyCacheManager) {
 	defer cancel()
 	err := kcm.PopulateJWKSCache(jwksCtx)
 	tassert.Fatalf(t, err == nil, "Failed to populate key manager cache: %v", err)
+}
+
+func kcmConf(oidc *cmn.OIDCConf) *tok.KCMConfig {
+	if oidc == nil {
+		return nil
+	}
+	return &tok.KCMConfig{OIDCConf: *oidc}
+}
+
+func kcmConfNoRetry(oidc *cmn.OIDCConf) *tok.KCMConfig {
+	conf := kcmConf(oidc)
+	if conf != nil {
+		conf.Discovery = &tok.DiscoveryConf{Retries: apc.Ptr(0), BaseDelay: apc.Ptr(time.Duration(0))}
+	}
+	return conf
 }
 
 func getKeyCacheClient(t *testing.T, cert *x509.Certificate) *http.Client {
@@ -177,7 +198,7 @@ func TestKeyCacheManager_Population_InvalidDiscovery(t *testing.T) {
 	// Test that an invalid discovery URL raises an error when initializing a KeyCacheManager
 	for _, url := range invalidIssuerURLs {
 		authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{url}}}
-		kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), nil, nil)
+		kcm := tok.NewKeyCacheManager(kcmConf(authConf.OIDC), getKeyCacheClient(t, nil), nil)
 		kcm.Init(t.Context())
 		err := kcm.PopulateJWKSCache(t.Context())
 		tassert.Errorf(
@@ -191,7 +212,7 @@ func TestKeyCacheManager_Population_UnresponsiveDiscovery(t *testing.T) {
 	// Test that a valid but unresponsive discovery URL does NOT raise an error when initializing a KeyCacheManager
 	validURL := "https://missing-host:1234"
 	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{validURL}}}
-	kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), cacheConfNoRetry, nil)
+	kcm := tok.NewKeyCacheManager(kcmConfNoRetry(authConf.OIDC), getKeyCacheClient(t, nil), nil)
 	kcm.Init(t.Context())
 	err := kcm.PopulateJWKSCache(t.Context())
 	tassert.Errorf(
@@ -217,9 +238,7 @@ func TestKeyCacheManager_ValidateKey(t *testing.T) {
 	})
 
 	t.Run("NonMatchingKey", func(t *testing.T) {
-		otherKey, err := rsa.GenerateKey(rand.Reader, 2048)
-		tassert.CheckFatal(t, err)
-		pemStr := rsaPubKeyPEM(t, otherKey)
+		pemStr := rsaPubKeyPEM(t, genRSAKey(t))
 		code, err := env.keyCache.ValidateKey(t.Context(), &authn.ServerConf{PubKey: &pemStr})
 		tassert.Error(t, err != nil, "Expected non-matching key to be rejected")
 		tassert.Errorf(t, code == http.StatusForbidden, "Expected 403, got %d", code)
@@ -246,10 +265,155 @@ func TestKeyCacheManager_ValidateKey(t *testing.T) {
 
 	t.Run("UninitializedCache", func(t *testing.T) {
 		authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{"https://example.com"}}}
-		kcm := tok.NewKeyCacheManager(authConf.OIDC, nil, nil, nil)
+		kcm := tok.NewKeyCacheManager(kcmConf(authConf.OIDC), nil, nil)
 		pemStr := rsaPubKeyPEM(t, env.rsaKey)
 		code, err := kcm.ValidateKey(t.Context(), &authn.ServerConf{PubKey: apc.Ptr(pemStr)})
 		tassert.Error(t, err != nil, "Expected validation to fail with uninitialized cache")
 		tassert.Errorf(t, code == http.StatusInternalServerError, "Expected 500, got %d", code)
 	})
+}
+
+//
+// Dynamic JWKS server + key rotation / refresh tests
+//
+
+type dynamicJWKSHandler struct {
+	mu       sync.RWMutex
+	jwksJSON string
+	reqCount atomic.Int64
+}
+
+func (h *dynamicJWKSHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	h.reqCount.Add(1)
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	fmt.Fprint(w, h.jwksJSON)
+}
+
+type dynamicTokenEnv struct {
+	keys        map[string]*rsa.PrivateKey
+	jwksHandler *dynamicJWKSHandler
+	oidcSrv     *httptest.Server
+	tkParser    *tok.TokenParser
+}
+
+// addKey generates a new RSA key, adds it to the JWKS served by the mock server
+func (env *dynamicTokenEnv) addKey(t *testing.T, kid string) {
+	key := genRSAKey(t)
+	env.keys[kid] = key
+	env.jwksHandler.mu.Lock()
+	env.jwksHandler.jwksJSON = generateMultiKeyJWKS(t, env.keys)
+	env.jwksHandler.mu.Unlock()
+}
+
+func (env *dynamicTokenEnv) signToken(t *testing.T, kid string) string {
+	key, ok := env.keys[kid]
+	tassert.Fatalf(t, ok, "no key registered for kid %q", kid)
+	return createTokenWithKeyID(t, newAdminClaimsWithIssuer(env.oidcSrv.URL), key, kid)
+}
+
+func setupDynamicTokenEnv(t *testing.T, rotationRefresh time.Duration) *dynamicTokenEnv {
+	initKey := genRSAKey(t)
+	keys := map[string]*rsa.PrivateKey{"key-1": initKey}
+
+	handler := &dynamicJWKSHandler{
+		jwksJSON: generateMultiKeyJWKS(t, keys),
+	}
+	jwksSrv := httptest.NewTLSServer(handler)
+	oidcSrv := createMockOIDCServer(jwksSrv.URL)
+
+	oidcConf := &cmn.OIDCConf{AllowedIssuers: []string{oidcSrv.URL}}
+	if rotationRefresh > 0 {
+		oidcConf.JWKSCacheConf = &cmn.JWKSCacheConf{
+			MinRotationRefresh: cos.Duration(rotationRefresh),
+		}
+	}
+	authConf := &cmn.AuthConf{OIDC: oidcConf}
+	client := getKeyCacheClient(t, oidcSrv.Certificate())
+	kcm := tok.NewKeyCacheManager(kcmConf(authConf.OIDC), client, nil)
+	initKeyCacheManager(t, kcm)
+
+	t.Cleanup(func() {
+		jwksSrv.Close()
+		oidcSrv.Close()
+	})
+
+	return &dynamicTokenEnv{
+		keys:        keys,
+		jwksHandler: handler,
+		oidcSrv:     oidcSrv,
+		tkParser:    tok.NewTokenParser(kcm, authConf),
+	}
+}
+
+func TestKeyCacheManager_KeyRotation(t *testing.T) {
+	env := setupDynamicTokenEnv(t, 0)
+
+	// Original key validates from cache
+	_, err := env.tkParser.ValidateToken(t.Context(), env.signToken(t, "key-1"))
+	tassert.Errorf(t, err == nil, "original key: %v", err)
+
+	// Rotate: add key-2, keeping key-1
+	env.addKey(t, "key-2")
+
+	// New key triggers cache miss → refresh → success
+	_, err = env.tkParser.ValidateToken(t.Context(), env.signToken(t, "key-2"))
+	tassert.Errorf(t, err == nil, "rotated key: %v", err)
+
+	// Original key still works
+	_, err = env.tkParser.ValidateToken(t.Context(), env.signToken(t, "key-1"))
+	tassert.Errorf(t, err == nil, "original key after rotation: %v", err)
+}
+
+func TestKeyCacheManager_UnknownKidAfterRefresh(t *testing.T) {
+	env := setupDynamicTokenEnv(t, 0)
+
+	// Sign with a key the JWKS server doesn't know about (not added via addKey)
+	unknownKey := genRSAKey(t)
+	tk := createTokenWithKeyID(t, newAdminClaimsWithIssuer(env.oidcSrv.URL), unknownKey, "unknown-kid")
+	_, err := env.tkParser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Expected validation to fail for unknown kid even after refresh")
+}
+
+func TestKeyCacheManager_RefreshThrottle_CacheFallback(t *testing.T) {
+	env := setupDynamicTokenEnv(t, 10*time.Minute)
+
+	// Add key-2 and key-3 to the JWKS server
+	env.addKey(t, "key-2")
+	env.addKey(t, "key-3")
+
+	// key-2: triggers refresh, cache now has all three keys
+	_, err := env.tkParser.ValidateToken(t.Context(), env.signToken(t, "key-2"))
+	tassert.Errorf(t, err == nil, "key-2 after refresh: %v", err)
+
+	// key-3: cache.Get already returns the refreshed set, so it's found without a new refresh
+	_, err = env.tkParser.ValidateToken(t.Context(), env.signToken(t, "key-3"))
+	tassert.Errorf(t, err == nil, "key-3 from updated cache: %v", err)
+}
+
+func TestKeyCacheManager_ConcurrentRefresh(t *testing.T) {
+	env := setupDynamicTokenEnv(t, 10*time.Minute)
+	env.addKey(t, "key-2")
+
+	countBefore := env.jwksHandler.reqCount.Load()
+	tk := env.signToken(t, "key-2")
+
+	const numRoutines = 20
+	var wg sync.WaitGroup
+	errs := make([]error, numRoutines)
+	for i := range numRoutines {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, errs[idx] = env.tkParser.ValidateToken(t.Context(), tk)
+		}(i)
+	}
+	wg.Wait()
+
+	for i, e := range errs {
+		tassert.Errorf(t, e == nil, "goroutine %d: %v", i, e)
+	}
+
+	refreshCount := env.jwksHandler.reqCount.Load() - countBefore
+	tassert.Errorf(t, refreshCount == 1, "Expected exactly 1 JWKS fetch, got %d", refreshCount)
 }

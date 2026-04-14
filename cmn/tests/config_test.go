@@ -92,6 +92,8 @@ func TestAuthConfValidateFailure(t *testing.T) {
 		{auth: cmn.AuthConf{Enabled: true, Signature: &cmn.AuthSignatureConf{Key: "key", Method: "HS256"}, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls}}, desc: "both configs set"},
 		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: invalidIssUrls}}, desc: "invalid allowed issuer"},
 		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: []string{}}}, desc: "missing allowed issuers"},
+		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls, JWKSCacheConf: &cmn.JWKSCacheConf{MinBackgroundRefresh: cos.Duration(time.Second)}}}, desc: "min_refresh_interval too small"},
+		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls, JWKSCacheConf: &cmn.JWKSCacheConf{MinRotationRefresh: cos.Duration(500 * time.Millisecond)}}}, desc: "min_rotation_refresh too small"},
 	}
 	for _, tt := range tests {
 		if err := tt.auth.Validate(); err == nil {
@@ -107,6 +109,8 @@ func TestAuthConfValidateSuccess(t *testing.T) {
 	}{
 		{auth: cmn.AuthConf{Enabled: true, Signature: &cmn.AuthSignatureConf{Key: "key", Method: "HS256"}}, desc: "valid signature"},
 		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls}}, desc: "valid OIDC"},
+		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls, JWKSCacheConf: &cmn.JWKSCacheConf{MinBackgroundRefresh: cos.Duration(10 * time.Minute)}}}, desc: "valid OIDC with custom background refresh"},
+		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls, JWKSCacheConf: &cmn.JWKSCacheConf{MinRotationRefresh: cos.Duration(5 * time.Second)}}}, desc: "valid OIDC with custom rotation refresh"},
 		{auth: cmn.AuthConf{Enabled: false, Signature: nil, OIDC: nil}, desc: "not enabled"},
 	}
 	for _, tt := range tests {
