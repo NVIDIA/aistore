@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/xact/xs"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // TODO:
@@ -38,12 +38,12 @@ type (
 )
 
 func (reb *Reb) runNwp(rargs *rargs) {
-	numWorkers, err := xs.TuneNumWorkers(rargs.xreb.Name(), xs.NwpDflt, len(rargs.avail))
+	numWorkers, err := xact.TuneNumWorkers(rargs.xreb.Name(), xact.NwpDflt, len(rargs.avail))
 	if err != nil {
 		nlog.Errorln("Warning:", err)
 		return
 	}
-	if numWorkers == xs.NwpNone || numWorkers < len(rargs.avail) {
+	if numWorkers == xact.NwpNone || numWorkers < len(rargs.avail) {
 		return
 	}
 
@@ -51,7 +51,7 @@ func (reb *Reb) runNwp(rargs *rargs) {
 	nwp := &nwp{}
 	rargs.nwp = nwp
 
-	chsize := cos.ClampInt(numWorkers*xs.NwpBurstMult, rargs.config.Rebalance.Burst, xs.NwpBurstMax)
+	chsize := cos.ClampInt(numWorkers*xact.NwpBurstMult, rargs.config.Rebalance.Burst, xact.NwpBurstMax)
 	nwp.workCh = make(chan wi, chsize)
 
 	nwp.workers = make([]rebWorker, numWorkers)

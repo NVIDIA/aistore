@@ -281,7 +281,7 @@ func (p *blobFactory) Start() (err error) {
 
 	// num-workers parallelism (nwp)
 	l := fs.NumAvail()
-	numWorkers, err := TuneNumWorkers(r.Name(), r.numWorkers, l)
+	numWorkers, err := xact.TuneNumWorkers(r.Name(), r.numWorkers, l)
 	if err != nil {
 		return err
 	}
@@ -289,7 +289,7 @@ func (p *blobFactory) Start() (err error) {
 
 	r.calcChunkSize()
 
-	if r.numWorkers != NwpNone {
+	if r.numWorkers != xact.NwpNone {
 		r.workers = make([]*worker, r.numWorkers)
 		r.adv.Refresh() // refresh advice one more time before copying to workers
 		for i := range r.workers {
@@ -365,7 +365,7 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 	}
 
 	switch r.numWorkers {
-	case NwpNone:
+	case xact.NwpNone:
 		err = r.runSerial()
 	default:
 		err = r.runWorkers()

@@ -29,7 +29,7 @@ import (
 type LoadType int
 
 const (
-	noLoad LoadType = iota
+	NoLoad LoadType = iota
 	Load
 )
 
@@ -85,7 +85,7 @@ func NewJgroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup 
 		la      = len(avail)
 		jg      = &Jgroup{}
 	)
-	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
+	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > NoLoad))
 
 	opts.onFinish = jg.markFinished
 

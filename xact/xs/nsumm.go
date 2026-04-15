@@ -32,6 +32,7 @@ type (
 		msg  *apc.BsummCtrlMsg
 		xreg.RenewBase
 	}
+	// TODO: migrate to xact.BckJogRunner to reduce boilerplate and gain auto-tuned worker pool
 	XactNsumm struct {
 		p       *nsummFactory
 		mapRes  map[uint64]*cmn.BsummResult

@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
@@ -41,9 +40,6 @@ type (
 		xctn *XactTCB
 		kind string
 	}
-	tcbworker struct {
-		r *XactTCB
-	}
 	XactTCB struct {
 		copier                  // function: copy/transform
 		transform etl.Session   // etl: used for aborting websocket connections
@@ -54,17 +50,8 @@ type (
 		prune     prune    // function: sync
 		sntl      sentinel // function: coordinate finish, abort, progress
 
-		// copying parallelism
-		nwp struct {
-			workCh   chan core.LIF
-			stopCh   *cos.StopCh
-			workers  []tcbworker
-			wg       sync.WaitGroup
-			chanFull cos.ChanFull
-		}
-
-		xact.BckJog // mountpath joggers
-		owt         cmn.OWT
+		xact.BckJogRunner // mountpath joggers + managed worker pool
+		owt               cmn.OWT
 	}
 )
 
@@ -94,20 +81,29 @@ func (p *tcbFactory) Start() error {
 
 func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	var (
-		smap      = core.T.Sowner().Get()
-		nat       = smap.CountActiveTs()
-		config    = cmn.GCO.Get()
-		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // estimate
-		r         = &XactTCB{args: args}
-		msg       = args.Msg
+		smap   = core.T.Sowner().Get()
+		nat    = smap.CountActiveTs()
+		config = cmn.GCO.Get()
+		r      = &XactTCB{args: args}
+		msg    = args.Msg
 	)
-	debug.AssertNoErr(err)
 
-	r.init(uuid, kind, slab, config, smap, nat)
+	// `NwpNone` means: no additional workers; joggers only (copy/transform happens in joggers);
+	// msg.NumWorkers == 0 triggers system tune-up (media + load) default.
+	numWorkers := msg.NumWorkers
+	if nat <= 1 || msg.DryRun { // TODO: absorb `nat` resolution and num-worker tuning into `TuneNumWorkers`
+		// single-node: no DM, no sentinels; dry-run: joggers-only for correct accounting
+		numWorkers = xact.NwpNone
+	}
+
+	if err := r.init(uuid, kind, config, smap, nat, numWorkers); err != nil {
+		return nil, err
+	}
 
 	r.owt = cmn.OwtCopy
 	if kind == apc.ActETLBck {
 		r.owt = cmn.OwtTransform
+		var err error
 		r.copier.getROC, r.copier.xetl, r.transform, err = etl.GetOfflineTransform(args.Msg.Transform.Name, r)
 		if err != nil {
 			return nil, err
@@ -124,24 +120,6 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	// single-node cluster
 	if nat <= 1 {
 		return r, nil // ---->
-	}
-
-	// unlike tco and other lrit-based xactions,
-	// tcb - via xact.BckJog - employs conventional mountpath joggers;
-	// `NwpNone` means: no additional workers; joggers only (copy/transform happens in joggers);
-	// msg.NumWorkers == 0 triggers system tune-up (media + load) default.
-	l := fs.NumAvail()
-	numWorkers, err := TuneNumWorkers(r.Name(), msg.NumWorkers, l)
-	if err != nil {
-		return nil, err
-	}
-	if numWorkers >= l && !msg.DryRun {
-		// exclude dry-run (uses joggers-only path for correct accounting);
-		// delegate intra-cluster copying/transforming to additional workers;
-		// run them in parallel with traversing joggers
-		r._iniNwp(numWorkers)
-	} else if msg.NumWorkers > l {
-		nlog.Warningln(r.Name(), "workers: 0 (ignoring ", msg.NumWorkers, "under load)")
 	}
 
 	// TODO: Revisit `r.args.DisableDM` — consider removing it.
@@ -168,17 +146,6 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	// use DM to communicate sentinel opcodes (transport.OpcDone, transport.OpcAbort, ...)
 	r.sntl.init(r, r.dm, r.Config, smap, nat)
 	return r, nil
-}
-
-func (r *XactTCB) _iniNwp(numWorkers int) {
-	r.nwp.workers = make([]tcbworker, 0, numWorkers)
-	for range numWorkers {
-		r.nwp.workers = append(r.nwp.workers, tcbworker{r})
-	}
-	chsize := cos.ClampInt(numWorkers*NwpBurstMult, r.Config.TCB.Burst, NwpBurstMax)
-	r.nwp.workCh = make(chan core.LIF, chsize)
-	r.nwp.stopCh = cos.NewStopCh()
-	nlog.Infoln(r.Name(), "workers:", numWorkers)
 }
 
 func (p *tcbFactory) Kind() string   { return p.kind }
@@ -232,29 +199,27 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) {
+func (r *XactTCB) init(uuid, kind string, config *cmn.Config, smap *meta.Smap, nat, numWorkers int) error {
 	var (
-		args   = r.args
-		msg    = r.args.Msg
-		mpopts = &mpather.JgroupOpts{
-			Parent:   r,
-			CTs:      []string{fs.ObjCT},
-			VisitObj: r.do,
-			Prefix:   msg.Prefix,
-			Slab:     slab,
-			DoLoad:   mpather.Load,
-			RW:       true,
+		args = r.args
+		msg  = r.args.Msg
+		opts = xact.BckJogRunnerOpts{
+			CbObj:      r.do,
+			WalkBck:    args.BckFrom,
+			Prefix:     msg.Prefix,
+			RW:         true,
+			NumWorkers: numWorkers,
+			Burst:      config.TCB.Burst,
 		}
 	)
-	mpopts.Bck.Copy(args.BckFrom.Bucket())
-
-	// init base
-	r.BckJog.Init(uuid, kind, args.BckTo, mpopts, config)
+	if err := r.BckJogRunner.Init(uuid, kind, args.BckTo, opts, config); err != nil {
+		return err
+	}
 
 	// xname
 	fromCname := args.BckFrom.Cname(msg.Prefix)
 	toCname := args.BckTo.Cname(msg.Prepend)
-	r._name(fromCname, toCname, r.BckJog.NumJoggers())
+	r._name(fromCname, toCname, r.NumJoggers())
 
 	r.rate.init(args.BckFrom, args.BckTo, nat)
 
@@ -281,6 +246,7 @@ func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config,
 		stats.VlabBucket: args.BckFrom.Cname(""),
 		stats.VlabXkind:  r.Kind(),
 	}
+	return nil
 }
 
 // sub-routine that does the core copy bucket logic; doesn't include the Finish() call and abort check
@@ -299,28 +265,17 @@ func (r *XactTCB) run(wg *sync.WaitGroup) {
 	}
 	wg.Done()
 
-	for _, worker := range r.nwp.workers {
-		buf, slab := core.T.PageMM().Alloc()
-		r.nwp.wg.Add(1)
-		go worker.run(buf, slab)
-	}
-
-	// run
-	r.BckJog.Run()
+	// BckJogRunner.Run() launches workers (if any) then starts mountpath joggers
+	r.BckJogRunner.Run()
 	if r.args.Msg.Sync {
 		r.prune.run() // the 2nd jgroup
 	}
 	nlog.Infoln(core.T.String(), "run:", r.Name())
 
-	errJog := r.BckJog.Wait()
+	// BckJogRunner.Wait() joins joggers then drains and closes the worker pool
+	errJog := r.BckJogRunner.Wait()
 	if errJog != nil && !r.IsAborted() {
 		nlog.Warningln(r.Name(), errJog, "- benign?")
-	}
-
-	if r.nwp.workers != nil {
-		// at this point, we are done with all do() calls on the workers
-		close(r.nwp.workCh)
-		r.nwp.wg.Wait()
 	}
 
 	if r.dm != nil {
@@ -355,32 +310,25 @@ func (r *XactTCB) run(wg *sync.WaitGroup) {
 func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.run(wg)
 	r.Finish()
-
-	if a := r.nwp.chanFull.Load(); a > 0 {
-		nlog.Warningln(r.Name(), "work channel full (final)", a)
-	}
 }
 
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
-	if r.nwp.workers == nil {
-		args := r.args // TCBArgs
-		a, err := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
-		if err != nil {
-			return err
-		}
-
-		err = r.copier.do(a, lom, r.dm)
-		if err == nil && args.Msg.Sync {
-			r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
-		}
+	args := r.args // TCBArgs
+	a, err := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
+	if err != nil {
 		return err
 	}
-
-	l, c := len(r.nwp.workCh), cap(r.nwp.workCh)
-	r.nwp.chanFull.Check(l, c)
-
-	r.nwp.workCh <- lom.LIF()
-
+	if err := r.copier.do(a, lom, r.dm); err != nil {
+		// Do not add to the filter if there was an error (e.g., "not found"),
+		// so that prune can recognize and delete destination objects whose sources have been removed.
+		return err
+	}
+	if args.Msg.Sync {
+		// Only successfully copied objects are added to the filter.
+		// Objects NOT in the filter will be checked against the source;
+		// if source doesn't exist, prune deletes them from the destination.
+		r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
+	}
 	return nil
 }
 
@@ -402,7 +350,7 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 			o := transport.AllocSend()
 			o.Hdr.Opcode = transport.OpcResponse
 			b := make([]byte, cos.SizeofI64)
-			binary.BigEndian.PutUint64(b, uint64(r.BckJog.NumVisits())) // report progress
+			binary.BigEndian.PutUint64(b, uint64(r.NumVisits())) // report progress
 			o.Hdr.Opaque = b
 			r.dm.Bcast(o, nil) // TODO: consider limiting this broadcast to only quiescing (waiting) targets
 		case transport.OpcResponse:
@@ -451,17 +399,6 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 	}
 
 	return nil
-}
-
-func (r *XactTCB) Abort(err error) bool {
-	if !r.Base.Abort(err) { // already aborted?
-		return false
-	}
-	if r.nwp.stopCh != nil {
-		debug.Assert(r.nwp.workers != nil)
-		r.nwp.stopCh.Close()
-	}
-	return true
 }
 
 func (r *XactTCB) Args() *xreg.TCBArgs { return r.args }
@@ -522,63 +459,9 @@ func (r *XactTCB) formatCtlMsg(rename bool) string {
 
 func (r *XactTCB) Snap() (snap *core.Snap) {
 	snap = r.Base.NewSnap(r)
-	snap.Pack(fs.NumAvail(), len(r.nwp.workers), r.nwp.chanFull.Load())
+	snap.Pack(fs.NumAvail(), r.BckJogRunner.NumWorkers(), r.BckJogRunner.WorkChanFull())
 
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	return
-}
-
-///////////////
-// tcbworker //
-///////////////
-
-func (worker *tcbworker) run(buf []byte, slab *memsys.Slab) {
-	p := &worker.r.nwp
-outer:
-	for {
-		select {
-		case lif, ok := <-p.workCh:
-			if !ok {
-				break outer
-			}
-			if aborted := worker.do(lif, buf); aborted {
-				break outer
-			}
-		case <-p.stopCh.Listen():
-			break outer
-		}
-	}
-	p.wg.Done()
-	slab.Free(buf)
-}
-
-func (worker *tcbworker) do(lif core.LIF, buf []byte) bool {
-	var (
-		r    = worker.r
-		args = r.args // TCBArgs
-	)
-	lom, err := lif.LOM()
-	if err != nil {
-		nlog.Warningln(r.Name(), lif.Cname(), err)
-		r.Abort(err)
-		return true
-	}
-
-	a, err := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
-	if err != nil {
-		return true
-	}
-	if err := r.copier.do(a, lom, r.dm); err != nil {
-		// Do not add to the filter if there was an error (e.g., "not found"),
-		// so that prune can recognize and delete destination objects whose sources have been removed.
-		return r.IsAborted()
-	}
-	if args.Msg.Sync {
-		// Only successfully copied objects are added to the filter.
-		// Objects NOT in the filter will be checked against the source
-		// if source doesn't exist, prune deletes them from the destination.
-		r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
-	}
-	return false
 }

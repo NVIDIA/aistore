@@ -32,6 +32,7 @@ type (
 
 	// mncXact runs in a background, traverses all local mountpaths, and makes sure
 	// the bucket is N-way replicated (where N >= 1).
+	// TODO: migrate to xact.BckJogRunner to reduce boilerplate and gain auto-tuned worker pool
 	mncXact struct {
 		p *mncFactory
 		xact.BckJog

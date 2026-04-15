@@ -285,7 +285,7 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 	}
 
 	// `NwpNone` since we need a single writer to serialize adding files into an eventual `archlom`
-	err := lrit.init(r, &msg.ListRange, r.Bck(), lsflags, NwpNone, r.config.Arch.Burst)
+	err := lrit.init(r, &msg.ListRange, r.Bck(), lsflags, xact.NwpNone, r.config.Arch.Burst)
 	if err != nil {
 		r.Abort(err)
 		r.DecPending()

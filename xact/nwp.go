@@ -1,9 +1,8 @@
-// Package xs is a collection of eXtended actions (xactions), including multi-object
-// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
+// Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
  */
-package xs
+package xact
 
 import (
 	"errors"

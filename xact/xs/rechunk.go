@@ -35,6 +35,7 @@ type (
 	}
 	xactRechunk struct {
 		args *apc.RechunkMsg
+		// TODO: migrate to xact.BckJogRunner to reduce boilerplate and gain auto-tuned worker pool
 		xact.BckJog
 	}
 )

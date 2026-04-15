@@ -27,6 +27,7 @@ type (
 		xctn *xactLLC
 	}
 	xactLLC struct {
+		// TODO: migrate to xact.BckJogRunner (use NwpNone — work is the DoLoad side effect, no CbObj needed)
 		xact.BckJog
 	}
 )

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // Assorted multi-object (list/range templated) xactions: evict, delete, prefetch multiple objects
@@ -98,16 +99,16 @@ func (r *lrit) init(xctn cos.Stopper, msg *apc.ListRange, bck *meta.Bck, lsflags
 	}
 
 	// run single-threaded
-	if numWorkers == NwpNone {
+	if numWorkers == xact.NwpNone {
 		return nil
 	}
 
 	// tune up: media-aware default + load-based clamping
-	numWorkers, err := TuneNumWorkers(r.parent.Name(), numWorkers, l)
+	numWorkers, err := xact.TuneNumWorkers(r.parent.Name(), numWorkers, l)
 	if err != nil {
 		return err
 	}
-	if numWorkers == NwpNone {
+	if numWorkers == xact.NwpNone {
 		return nil
 	}
 
@@ -140,7 +141,7 @@ func (r *lrit) _iniNwp(numWorkers, confBurst int) {
 	}
 
 	// [burst] work channel capacity: up to 4 pending work items per
-	chsize := cos.ClampInt(numWorkers*NwpBurstMult, confBurst, NwpBurstMax)
+	chsize := cos.ClampInt(numWorkers*xact.NwpBurstMult, confBurst, xact.NwpBurstMax)
 	r.nwp.workCh = make(chan lrpair, chsize)
 	nlog.Infoln(r.parent.Name(), "workers:", numWorkers)
 }
