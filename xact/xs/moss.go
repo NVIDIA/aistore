@@ -104,6 +104,11 @@ const (
 
 	// max slice cap to reuse
 	poolMaxCap = 512
+
+	// additional admission control
+	pendingHighWm   = 64                    // start throttling
+	pendingCritWm   = 256                   // 429
+	pendingThrottle = 10 * time.Millisecond // same as `dfltRateMinBtwn`
 )
 
 type (
@@ -430,31 +435,13 @@ func (r *XactMoss) bewarmStop() {
 func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
 	now := mono.NanoTime()
 
-	// admission control:
-	// refresh load.Advice periodically; when under stress return 429 or throttle
-	if next := r.advNextCheck.Load(); now >= next {
-		// benign race: temporarily set far-future value to minimize duplicate adv.Refresh()
-		r.advNextCheck.Store(now + int64(time.Hour))
-
-		adv := newAdvice(config)
-		ival := advIval(adv.Load)
-		r.advNextCheck.Store(now + int64(ival))
-
-		// DT's admission control
-		tstats := core.T.StatsUpdater()
-		if adv.MemLoad() == load.Critical {
-			tstats.Inc(stats.ErrGetBatchCount)
-			err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s)", r.Name(), wid, adv.String())
-			return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
-		}
-		if adv.Sleep > 0 && adv.Load == load.Critical {
-			if cmn.Rom.V(4, cos.ModXs) || time.Duration(now-r.lastLog.Load()) > sparseLog {
-				nlog.Warningln("resource pressure:", adv.String(), "- sleeping/delaying:", adv.Sleep)
-			}
-			time.Sleep(adv.Sleep)
-			tstats.Add(stats.GetBatchThrottleTotal, int64(adv.Sleep))
-			now += adv.Sleep.Nanoseconds()
-		}
+	// admission control
+	throttled, err429 := r.admit(config, wid, now)
+	if err429 != nil {
+		return err429
+	}
+	if throttled {
+		now = mono.NanoTime()
 	}
 
 	// DT's work item
@@ -516,6 +503,61 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 	wi.awfin.Store(true)
 
 	return nil
+}
+
+// DT admission control:
+// - pendingCritWm is enforced immediately => 429
+// - load-based decisions are refreshed periodically via load.Advice:
+//   - mem-critical  OR  disk-critical    => 429
+//   - mem-high      AND pending-high-wm  => 429
+//   - mem-high      OR  pending-high-wm  => throttle
+func (r *XactMoss) admit(config *cmn.Config, wid string, now int64) (throttled bool, _ error) {
+	var (
+		tstats   = core.T.StatsUpdater()
+		pdt      = r.pendingCnt.Load()
+		critical = pdt >= pendingCritWm
+	)
+	if critical {
+		tstats.Inc(stats.ErrGetBatchCount)
+		err := fmt.Errorf("%s: work item %q rejected: pending=%d", r.Name(), wid, pdt)
+		return false, cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+	}
+
+	// refresh load.Advice periodically
+	next := r.advNextCheck.Load()
+	if now < next {
+		return false, nil
+	}
+	// benign race: temporarily set far-future value to minimize duplicate adv.Refresh()
+	r.advNextCheck.Store(now + int64(time.Hour))
+
+	adv := newAdvice(config)
+	ival := advIval(adv.Load)
+	r.advNextCheck.Store(now + int64(ival))
+
+	critical = adv.MemLoad() == load.Critical || (adv.DskLoad() == load.Critical && !cmn.Rom.TestingEnv()) ||
+		(adv.MemLoad() >= load.High && pdt >= pendingHighWm)
+	if critical {
+		tstats.Inc(stats.ErrGetBatchCount)
+		err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s, pending=%d)", r.Name(), wid, adv.String(), pdt)
+		return false, cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+	}
+
+	sleep := adv.Sleep
+	if (sleep > 0 && adv.MemLoad() >= load.High) || pdt >= pendingHighWm {
+		sleep = cos.NonZero(sleep, pendingThrottle)
+		if cmn.Rom.V(4, cos.ModXs) || time.Duration(now-r.lastLog.Load()) > sparseLog {
+			nlog.Warningln(r.Name(), "pending:", pdt, "resource pressure:", adv.String(), "throttle:", sleep)
+
+			// shared between two log sites: the throttle warning (in admit) and the CtlMsg snapshot
+			// (split if need be)
+			r.lastLog.Store(now)
+		}
+		time.Sleep(sleep)
+		tstats.Add(stats.GetBatchThrottleTotal, int64(sleep))
+		throttled = true
+	}
+	return throttled, nil
 }
 
 // gather other requested data (local and remote); emit resulting archive
