@@ -44,7 +44,7 @@ const (
 	HdrS3Profile  = aisPrefix + "Profile"
 
 	// including BucketProps.Extra.OCI
-	HdrOCIRegion = aisPrefix + "OCI-Region"
+	HdrOCIRegion = aisPrefix + "Oci-Region"
 
 	// including BucketProps.Extra.HTTP
 	HdrOrigURLBck = aisPrefix + "Original-Url"
