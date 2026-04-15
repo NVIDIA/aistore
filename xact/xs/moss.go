@@ -519,7 +519,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 }
 
 // gather other requested data (local and remote); emit resulting archive
-// (phase 3)
+// (phase 2)
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
@@ -583,7 +583,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 }
 
 // send all requested local data => DT (`tsi`)
-// (phase 2)
+// (phase 3)
 func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string, usingPrev bool) error {
 	// insert self to properly demux => receive sentinels
 	// (currently, only transport.OpcAbort)
@@ -593,11 +593,9 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 		bundle.SDM.RegRecv(r)
 	}
 
-	// note optional future tuning:
-	// init sender's own load.Advice and check periodically inside the loop
-
-	r.IncPending()
-	defer r.DecPending()
+	// note:
+	// - optional future tuning: init sender's own load.Advice and check periodically inside the loop
+	// - IncPending/DecPending is done by the caller
 
 	for i := range req.In {
 		if r.IsAborted() || r.IsDone() {

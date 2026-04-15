@@ -43,7 +43,7 @@ import (
 //
 // Changed in v4.5:
 // - phase 2 (redirect) now precedes phase 3 (sender broadcast).
-// - phase 3 is now async; x-moss renewal and SDM.Open failures are no longer propagated to client
+// - phase 3 is now async; sender-side phase-3 setup failures are no longer propagated to client
 // -----------------------------------------------------------------------
 
 // TODO: add support for apc.ColocTwo
@@ -249,6 +249,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		args.nodeCount = len(nodes)
 		args.timeout = cmn.Rom.MaxKeepalive()
 
+		// see also ctx._startSend on the target side
 		go p._startSend(args)
 	}
 }
@@ -323,14 +324,16 @@ func (p *proxy) _startSend(args *bcastArgs) {
 // target ---------------------------------------------------------------------------------
 //
 
+// local context to set up x-moss (can be owned by a phase3 goroutine)
 type mossCtx struct {
-	t   *target
-	req *apc.MossReq
-	bck *meta.Bck
-	tid string
-	xid string
-	wid string
-	nat int
+	t    *target
+	req  *apc.MossReq
+	bck  *meta.Bck
+	smap *smapX
+	tid  string
+	xid  string
+	wid  string
+	nat  int
 }
 
 func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
@@ -484,6 +487,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 }
 
 // Phase 3: Senders open SDM and start sending
+// (is run async via p._startSend)
 func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.Config, smap *smapX, tsi *meta.Snode, nat int) {
 	debug.Assert(nat > 1)
 	t := ctx.t
@@ -499,6 +503,7 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	// renew x-moss by ID
 	rns := xreg.RenewGetBatch(ctx.bck, ctx.xid, false /*designated*/)
 	if rns.Err != nil {
+		// TODO -- FIXME: no SDM to abort DT
 		t.writeErr(w, r, rns.Err)
 		return
 	}
@@ -515,19 +520,22 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 
 	// open SDM and start sending
 	if err := bundle.SDM.Open(config, &config.GetBatch.XactConf); err != nil {
+		// TODO -- FIXME: ditto (abort DT)
+		xmoss.Abort(err)
 		t.writeErr(w, r, err)
 		return
 	}
 
-	// TODO: this part must run in a goroutine (`moss-async-send`)
+	ctx.smap = smap
+	xmoss.IncPending()
+	go ctx._startSend(xmoss, tsi, usingPrev)
+}
 
-	if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid, usingPrev); err != nil {
-		//
-		// not aborting x-moss on a single wid failure; silent log
-		//
+func (ctx *mossCtx) _startSend(xmoss *xs.XactMoss, tsi *meta.Snode, usingPrev bool) {
+	if err := xmoss.Send(ctx.req, &ctx.smap.Smap, tsi, ctx.wid, usingPrev); err != nil {
 		xmoss.AddErr(fmt.Errorf("send wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
-		t.writeErr(w, r, err, 0, Silent)
 	}
+	xmoss.DecPending()
 }
 
 func _checkMossEmpty(req *apc.MossReq) (err error) {
