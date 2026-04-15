@@ -33,12 +33,17 @@ import (
 // -----------------------------------------------------------------------
 
 // ---------------------- Control Flow -----------------------------------
-// phase 1 (POST): Client → Proxy → DT
-//   DT: PrepRx(receiving=true) → SDM.RegRecv() → Return XID
-// phase 2 (POST): Proxy → Senders
-//   Senders: PrepRx(receiving=false) → SDM.Open() → Send() to DT
-// phase 3 (GET): Client → DT (redirected)
-//   DT: Assemble() → Use pre-existing basewi state
+// phase 1 (POST): Client => Proxy => DT
+//   DT: PrepRx(receiving=true) => SDM.RegRecv() => Return XID
+// phase 2 (GET):  Client => DT (redirected)
+//   DT: Assemble() => Use pre-existing basewi state
+//
+// phase 3 (POST): Proxy => Senders   (async)
+//   Senders: PrepRx(receiving=false) => SDM.Open() => Send() to DT
+//
+// Changed in v4.5:
+// - phase 2 (redirect) now precedes phase 3 (sender broadcast).
+// - phase 3 is now async; x-moss renewal and SDM.Open failures are no longer propagated to client
 // -----------------------------------------------------------------------
 
 // TODO: add support for apc.ColocTwo
@@ -216,7 +221,17 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		p.dm.nonpSetActive(mono.NanoTime())
 	}
 
-	// phase 2: broadcast -> all except DT
+	// phase 2: redirect user's GET => DT
+	r.URL.Path = path
+	started := time.Now()
+	redirectURL := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+
+	if cmn.Rom.V(5, cos.ModAIS) {
+		nlog.Infoln(r.Method, items, "=> redirect to", tsi.String(), "at", redirectURL)
+	}
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+
+	// phase 3: async broadcast -> all except DT
 	if nat > 1 {
 		args := allocBcArgs()
 		{
@@ -234,36 +249,11 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		args.nodeCount = len(nodes)
 		args.timeout = cmn.Rom.MaxKeepalive()
 
-		results := p.bcastSelected(args)
-		freeBcArgs(args)
-		for _, res := range results {
-			if res.err == nil {
-				continue
-			}
-			err := res.toErr()
-			status := res.status
-			freeBcastRes(results)
-			p.writeErr(w, r, err, status)
-			return
-		}
-		freeBcastRes(results)
+		go p._startSend(args)
 	}
-
-	// phase 3: redirect user's GET => DT
-	r.URL.Path = path
-	started := time.Now()
-	redirectURL := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
-
-	if cmn.Rom.V(5, cos.ModAIS) {
-		nlog.Infoln(r.Method, items, "=> redirect to", tsi.String(), "at", redirectURL)
-	}
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
-//
-// proxy: select DT when requested via apc.QparamColoc -----------------------------------------
-//
-
+// proxy: select DT when requested via apc.QparamColoc
 func _selectDT(req *apc.MossReq, dfltBck *meta.Bck, smap *smapX, nat int) (*meta.Snode, error) {
 	var (
 		m      map[string]int // the map of scores or hits: req.In entries => target
@@ -316,6 +306,19 @@ func _selectDT(req *apc.MossReq, dfltBck *meta.Bck, smap *smapX, nat int) (*meta
 	return smap.GetTarget(dt), nil
 }
 
+// proxy: phase 3 bcast to senders - async and after the phase-2 redirect
+// x-moss renewal and SDM.Open failures are not propagated to client (logged at V(4))
+func (p *proxy) _startSend(args *bcastArgs) {
+	results := p.bcastSelected(args)
+	freeBcArgs(args)
+	for _, res := range results {
+		if res.err != nil && cmn.Rom.V(4, cos.ModAIS) {
+			nlog.Errorln(p.String(), "phase 3 (bcast senders) err:", res.err, "from", res.si.StringEx())
+		}
+	}
+	freeBcastRes(results)
+}
+
 //
 // target ---------------------------------------------------------------------------------
 //
@@ -333,7 +336,7 @@ type mossCtx struct {
 func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	// phase 1: DT to initialize Rx (see `designated`)
-	// phase 2: senders to open SDM and start sending
+	// phase 3: senders to open SDM and start sending
 	case http.MethodPost:
 		var ctx mossCtx
 		if err := t.mossparse(w, r, &ctx); err != nil {
@@ -360,7 +363,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// phases 1 or 2
+		// phases 1 or 3
 		var (
 			config     = cmn.GCO.Get()
 			designated = ctx.tid == t.SID()
@@ -368,10 +371,10 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		if designated {
 			ctx.phase1(w, r, config, smap, nat)
 		} else {
-			ctx.phase2(w, r, config, smap, tsi, nat)
+			ctx.phase3(w, r, config, smap, tsi, nat)
 		}
 
-	// phase 3: redirect; start an assembly
+	// phase 2: redirect - ready to start assembly, waiting for the phase 3
 	case http.MethodGet:
 		var ctx mossCtx
 		if err := t.mossparse(w, r, &ctx); err != nil {
@@ -406,7 +409,9 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Phase 1: DT renews x-moss and initializes Rx
+// Phase 1: DT renews x-moss and initializes Rx.
+// Senders are triggered later by phase 3 (proxy bcast), which fires
+// asynchronously after the phase-2 redirect.
 func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.Config, smap *smapX, nat int) {
 	t := ctx.t
 
@@ -470,22 +475,22 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 		return
 	}
 
-	// to have a fresh full idle window for the eventual phase3 GET
+	// to have a fresh full idle window for the eventual phase2 GET
 	xmoss.IncPending()
 	xmoss.DecPending()
 
-	// return xid (proxy will send it to phase 2 senders)
+	// return xid (proxy will send it to phase 3 senders)
 	w.Header().Set(apc.HdrXactionID, xid)
 }
 
-// Phase 2: Senders open SDM and start sending
-func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, config *cmn.Config, smap *smapX, tsi *meta.Snode, nat int) {
+// Phase 3: Senders open SDM and start sending
+func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.Config, smap *smapX, tsi *meta.Snode, nat int) {
 	debug.Assert(nat > 1)
 	t := ctx.t
 
 	// expecting valid xid from phase 1
 	if !cos.IsValidUUID(ctx.xid) {
-		err := fmt.Errorf("x-moss: invalid xid %q at phase 2 (non-DT)", ctx.xid)
+		err := fmt.Errorf("x-moss: invalid xid %q at phase 3 (non-DT)", ctx.xid)
 		debug.AssertNoErr(err)
 		t.writeErr(w, r, err)
 		return
@@ -513,6 +518,9 @@ func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, config *cmn.C
 		t.writeErr(w, r, err)
 		return
 	}
+
+	// TODO: this part must run in a goroutine (`moss-async-send`)
+
 	if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid, usingPrev); err != nil {
 		//
 		// not aborting x-moss on a single wid failure; silent log
