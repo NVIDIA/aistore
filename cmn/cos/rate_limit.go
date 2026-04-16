@@ -17,7 +17,7 @@ import (
 
 // tunables
 const (
-	dfltRateMinBtwn = 10 * time.Millisecond
+	DfltRateMinBtwn = 10 * time.Millisecond
 
 	DfltRateMinIval = time.Second
 	DfltRateMaxIval = time.Hour
@@ -120,7 +120,7 @@ func (rl *RateLim) LastUsed() int64 { return max(rl.tsb.granted, rl.tsb.refill) 
 
 // recompute minBtwn
 func (rl *RateLim) recompute() time.Duration {
-	return max(time.Duration(rl.tokenIval/rl.maxTokens), dfltRateMinBtwn)
+	return max(time.Duration(rl.tokenIval/rl.maxTokens), DfltRateMinBtwn)
 }
 
 func (rl *RateLim) TryAcquire() bool {

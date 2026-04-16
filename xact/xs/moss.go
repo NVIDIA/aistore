@@ -106,9 +106,13 @@ const (
 	poolMaxCap = 512
 
 	// additional admission control
-	pendingHighWm   = 64                    // start throttling
-	pendingCritWm   = 256                   // 429
-	pendingThrottle = 10 * time.Millisecond // same as `dfltRateMinBtwn`
+	pendingHighWm   = 64                  // start throttling
+	pendingCritWm   = 256                 // 429
+	pendingThrottle = cos.DfltRateMinBtwn // see cos/rate_limit.go
+
+	// response controller (streaming mode only)
+	streamingWriteTimeout = 30 * time.Second
+	streamingFlushIval    = 5 * time.Second
 )
 
 type (
@@ -153,6 +157,7 @@ type (
 		config *cmn.Config
 		smap   *meta.Smap
 		req    *apc.MossReq
+		wctrl  *http.ResponseController
 		wid    string   // work item ID
 		sid    string   // current sender ID
 		recv   struct { // Tx/Rx shared state
@@ -1567,9 +1572,10 @@ func (wi *basewi) _errSoft(limit int) error {
 
 func (wi *basewi) asm() error {
 	var (
-		r   = wi.r
-		adv = newAdvice(wi.config)
-		l   = len(wi.req.In)
+		r         = wi.r
+		adv       = newAdvice(wi.config)
+		l         = len(wi.req.In)
+		nextFlush = mono.NanoTime() + int64(streamingFlushIval)
 	)
 	for i := 0; i < l; {
 		if r.IsAborted() || r.IsDone() {
@@ -1582,6 +1588,18 @@ func (wi *basewi) asm() error {
 		if err != nil {
 			return err
 		}
+
+		if wi.wctrl != nil {
+			if now := mono.NanoTime(); now >= nextFlush {
+				erd := wi.wctrl.SetWriteDeadline(time.Now().Add(streamingWriteTimeout))
+				debug.AssertNoErr(erd)
+				if err := wi.wctrl.Flush(); err != nil {
+					return err
+				}
+				nextFlush = now + int64(streamingFlushIval)
+			}
+		}
+
 		debug.Assert(j > i && j <= l, i, " vs ", j, " vs ", l)
 		i = j
 
@@ -1738,7 +1756,17 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 
 func (wi *streamwi) asm(w http.ResponseWriter) error {
 	debug.Assert(wi.req.StreamingGet)
+
+	wi.wctrl = http.NewResponseController(w)
 	w.Header().Set(cos.HdrContentType, archive.ContentTypeFromExt(wi.req.OutputFormat))
+
+	erd := wi.wctrl.SetWriteDeadline(time.Now().Add(streamingWriteTimeout))
+	debug.AssertNoErr(erd)
+	if err := wi.wctrl.Flush(); err != nil {
+		nlog.Warningln(wi.r.Name(), "client gone before first write:", err)
+		return cmn.ErrGetTxBenign
+	}
+
 	if err := wi.basewi.asm(); err != nil {
 		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
 		return cmn.ErrGetTxBenign
