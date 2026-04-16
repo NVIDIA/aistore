@@ -14,8 +14,7 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from yaml_utils import quote_yaml_title
+from yaml_utils import inject_into_docs_yml, quote_yaml_title
 
 
 def parse_docs_md(filepath: str) -> list:
@@ -237,29 +236,9 @@ def main():
     yaml_content = generate_yaml(sections, pages_dir)
 
     if inject_file:
-        if not os.path.isfile(inject_file):
-            print(f"ERROR: Inject file not found: {inject_file}", file=sys.stderr)
-            sys.exit(1)
-        try:
-            with open(inject_file, encoding="utf-8") as f:
-                content = f.read()
-        except IOError as exc:
-            print(f"ERROR: Cannot read {inject_file}: {exc}", file=sys.stderr)
-            sys.exit(1)
-        placeholder = "  # AUTO_GENERATED_DOCS_ENTRIES"
-        if placeholder not in content:
-            print(
-                f"ERROR: Placeholder '{placeholder}' not found in {inject_file}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        content = content.replace(placeholder, yaml_content)
-        try:
-            with open(inject_file, "w", encoding="utf-8") as f:
-                f.write(content)
-        except IOError as exc:
-            print(f"ERROR: Cannot write to {inject_file}: {exc}", file=sys.stderr)
-            sys.exit(1)
+        inject_into_docs_yml(
+            inject_file, "  # AUTO_GENERATED_DOCS_ENTRIES", yaml_content
+        )
         print(
             f"Injected {len(sections)} sections, {total_pages} pages into {inject_file}"
         )

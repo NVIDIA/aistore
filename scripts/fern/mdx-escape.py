@@ -5,9 +5,9 @@ Fern parses .md files with MDX, so curly braces and bare angle-bracket
 placeholders outside code fences/backticks must be escaped.
 """
 
+import argparse
 import glob
 import re
-import sys
 
 SAFE_TAGS = {
     "br",
@@ -228,8 +228,15 @@ def escape_file(filepath):
 
 
 def main():
-    pages_dir = sys.argv[1] if len(sys.argv) > 1 else "fern/pages"
-    files = glob.glob(f"{pages_dir}/**/*.md", recursive=True)
+    parser = argparse.ArgumentParser(
+        description="Escape MDX-unsafe patterns in Fern .md pages."
+    )
+    parser.add_argument(
+        "pages_dir", nargs="?", default="fern/pages", help="fern pages directory"
+    )
+    args = parser.parse_args()
+
+    files = glob.glob(f"{args.pages_dir}/**/*.md", recursive=True)
     fixed = sum(1 for f in files if escape_file(f))
     print(f"MDX-escaped {fixed} of {len(files)} files")
 

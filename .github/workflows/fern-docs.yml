@@ -23,6 +23,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Python dependencies
+        run: pip install pyyaml
+
       - name: Install Fern
         run: npm install -g fern-api
 

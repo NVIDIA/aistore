@@ -63,12 +63,22 @@ else
 fi
 
 # ── 4. Strip Jekyll frontmatter ─────────────────────────────────────────
+#
+# TODO: consolidate this step. Non-blog stripping goes away entirely once the
+# /docs → docs.nvidia.com/aistore redirect lands (Jekyll will serve those
+# pages). The blog path should then be rewritten so frontmatter stripping and
+# metadata injection live in a single place (Python), not split across bash
+# and Python.
 
-find "$FERN_PAGES" -name '*.md' | while read -r f; do
+# Strip frontmatter from non-blog files (blog posts handled separately with metadata injection)
+find "$FERN_PAGES" -name '*.md' -not -path "*/blog/*" | while read -r f; do
     if head -1 "$f" | grep -q '^---$'; then
         awk 'BEGIN{skip=0} /^---$/{skip++;next} skip<2{next} {print}' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
     fi
 done
+
+# Strip blog frontmatter and inject author/date/tags metadata
+python3 "$SCRIPTS_DIR/inject-blog-meta.py" "$DOCS_DIR/_posts" "$FERN_PAGES/blog"
 
 # ── 5. Fix image paths (portable: perl instead of sed -i) ───────────────
 
