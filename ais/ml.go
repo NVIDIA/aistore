@@ -401,9 +401,9 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
 			// NOTE: not aborting x-moss on a single wid failure
 			if err == cmn.ErrGetTxBenign {
-				xmoss.AddErr(fmt.Errorf("assemble wid=%s: %v", ctx.wid, err), 4)
+				xmoss.AddErr(fmt.Errorf("assemble wid=%q: %v", ctx.wid, err), 4)
 			} else {
-				xmoss.AddErr(fmt.Errorf("assemble wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
+				xmoss.AddErr(fmt.Errorf("assemble wid=%q: %v", ctx.wid, err), 4, cos.ModXs)
 				t.writeErr(w, r, err, 0, Silent)
 			}
 		}
@@ -458,8 +458,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 	xmoss, ok := xctn.(*xs.XactMoss)
 	debug.Assert(ok, xctn.Name())
 
-	receiving := nat > 1 // multi-target cluster: setup Rx
-	if receiving {
+	if nat > 1 { // multi-target cluster: setup Rx
 		// open SDM
 		if err := bundle.SDM.Open(config, &config.GetBatch.XactConf); err != nil {
 			xmoss.Abort(err)
@@ -467,7 +466,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 			return
 		}
 	}
-	if err := xmoss.PrepRx(ctx.req, config, &smap.Smap, ctx.wid, receiving, usingPrev); err != nil {
+	if err := xmoss.PrepRx(ctx.req, config, &smap.Smap, ctx.wid, nat, usingPrev); err != nil {
 		var ecode int
 		if !cmn.IsErrTooManyRequests(err) {
 			xmoss.Abort(err)

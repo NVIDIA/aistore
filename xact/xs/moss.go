@@ -113,6 +113,9 @@ const (
 	// response controller (streaming mode only)
 	streamingWriteTimeout = 30 * time.Second
 	streamingFlushIval    = 5 * time.Second
+
+	// (best-effort)
+	sendersStartupTime = 30 * time.Second
 )
 
 type (
@@ -165,6 +168,11 @@ type (
 			m    []rxentry
 			next int
 			mtx  sync.Mutex
+		}
+		startup struct { // (reason: all senders run async via phase 3)
+			m   cos.StrSet
+			nat int // number of active (not in-maintenance) targets including self
+			mtx sync.Mutex
 		}
 		stats   moss
 		started int64       // (mono)
@@ -437,7 +445,7 @@ func (r *XactMoss) bewarmStop() {
 //    - asm() refreshes as prescribed (adv.ShouldCheck(i)) ---------------
 
 // (phase 1)
-func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
+func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap, wid string, nat int, usingPrev bool) error {
 	now := mono.NanoTime()
 
 	// admission control
@@ -464,7 +472,8 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 		wi.started = now
 	}
 
-	if receiving {
+	// receiving
+	if nat > 1 {
 		// insert self to properly demux => receive data (to assemble)
 		if usingPrev {
 			bundle.SDM.UseRecv(r)
@@ -488,6 +497,9 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 			r.lastLog.Store(wi.started)
 		}
 
+		wi.startup.m = make(cos.StrSet, nat-1)
+		wi.startup.nat = nat
+
 		wi.timer = time.NewTimer(time.Hour)
 		wi.timer.Stop()
 	}
@@ -495,7 +507,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 	if a, loaded := r.pending.LoadOrStore(wid, wi); loaded {
 		old := a.(*basewi)
 		age := mono.Since(old.started)
-		err := fmt.Errorf("%s: work item %q already exists for %v (duplicate WID generated?)", r.Name(), wid, age)
+		err := fmt.Errorf("%s: wid=%q already exists for %v (duplicate?)", r.Name(), wid, age)
 		if age >= mossAbandonTime {
 			nlog.Errorln(core.T.String(), err)
 		}
@@ -524,7 +536,7 @@ func (r *XactMoss) admit(config *cmn.Config, wid string, now int64) (throttled b
 	)
 	if critical {
 		tstats.Inc(stats.ErrGetBatchCount)
-		err := fmt.Errorf("%s: work item %q rejected: pending=%d", r.Name(), wid, pdt)
+		err := fmt.Errorf("%s: wid=%q rejected: pending=%d", r.Name(), wid, pdt)
 		return false, cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
 	}
 
@@ -544,7 +556,7 @@ func (r *XactMoss) admit(config *cmn.Config, wid string, now int64) (throttled b
 		(adv.MemLoad() >= load.High && pdt >= pendingHighWm)
 	if critical {
 		tstats.Inc(stats.ErrGetBatchCount)
-		err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s, pending=%d)", r.Name(), wid, adv.String(), pdt)
+		err := fmt.Errorf("%s: wid=%q rejected due to resource pressure (%s, pending=%d)", r.Name(), wid, adv.String(), pdt)
 		return false, cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
 	}
 
@@ -567,6 +579,9 @@ func (r *XactMoss) admit(config *cmn.Config, wid string, now int64) (throttled b
 
 // gather other requested data (local and remote); emit resulting archive
 // (phase 2)
+// A note on error handling:
+// - buffered mode: full error propagation, real HTTP status, client sees the error
+// - streaming: truncated TAR on the wire, user sees the error via CLI 'ais show job' ex post facto
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
@@ -638,6 +653,16 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 		bundle.SDM.UseRecv(r)
 	} else {
 		bundle.SDM.RegRecv(r)
+	}
+
+	// announce oneself
+	o := transport.AllocSend()
+	o.Hdr.Opcode = transport.OpcMossStarted
+	o.Hdr.Demux = r.ID()
+	o.Hdr.Opaque = cos.UnsafeB(wid)
+	if err := bundle.SDM.Send(o, nil, dt, r); err != nil {
+		nlog.Errorf("%s => %s: SDM.Send failure [%v]", core.T, dt, err) // (unlikely)
+		return err
 	}
 
 	// note:
@@ -828,6 +853,13 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 			sntl := &sentinel{r: r}
 			sntl.rxAbort(hdr)
 			return nil
+		case transport.OpcMossStarted:
+			if wi := r._getwi(cos.UnsafeS(hdr.Opaque), hdr.SID, true /*warn*/); wi != nil {
+				wi.startup.mtx.Lock()
+				wi.startup.m.Set(hdr.SID)
+				wi.startup.mtx.Unlock()
+			}
+			return nil
 		default:
 			return abortOpcode(r, hdr.Opcode)
 		}
@@ -846,6 +878,17 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 	return nil
 }
 
+func (r *XactMoss) _getwi(wid, sid string, warn bool) *basewi {
+	a, loaded := r.pending.Load(wid)
+	if !loaded {
+		if warn || cmn.Rom.V(4, cos.ModXs) {
+			nlog.Warningln(r.Name(), "stale or unknown wid", wid, "from", meta.Tname(sid), "[ warn:", warn, "]")
+		}
+		return nil
+	}
+	return a.(*basewi)
+}
+
 // (note: ObjHdr and its fields must be consumed synchronously)
 func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if err != nil {
@@ -855,15 +898,11 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	if err != nil {
 		return err
 	}
-	a, loaded := r.pending.Load(mopaque.wid)
-	if !loaded {
-		// stale or unknown WID: drop quietly
-		if cmn.Rom.V(4, cos.ModXs) {
-			nlog.Infof("%s: wi %q not pending - dropping", r.Name(), mopaque.wid)
-		}
+
+	wi := r._getwi(mopaque.wid, hdr.SID, false /*warn*/)
+	if wi == nil {
 		return nil
 	}
-	wi := a.(*basewi)
 
 	// already cleaned up via gcAbandoned()? drop silently
 	if mopaque.wid != wi.wid || wi.clean.Load() {
@@ -1180,7 +1219,7 @@ func (wi *basewi) _recvObj(index int, hdr *transport.ObjHdr, mopaque *mossOpaque
 		if r.IsAborted() || r.IsDone() {
 			return false, sgl != nil, nil
 		}
-		return false, sgl != nil, fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%s)",
+		return false, sgl != nil, fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%q)",
 			r.Name(), core.T.String(), index, len(wi.recv.m), wi.wid)
 	}
 
@@ -1292,11 +1331,11 @@ func (wi *basewi) waitAnyRx(timeout time.Duration) error {
 func (wi *basewi) newErrHole(total time.Duration, err error) error {
 	index := wi.recv.next
 	if err == nil {
-		s := fmt.Sprintf("%s: timed out waiting for missing entry at index %d [ %s, wid=%s, total-wait=%v ]",
+		s := fmt.Sprintf("%s: timed out waiting for missing entry at index %d [ %s, wid=%q, total-wait=%v ]",
 			wi.r.Name(), index, core.T.String(), wi.wid, total)
 		return &errHole{s}
 	}
-	s := fmt.Sprintf("%s: network error while retrieving entry at index %d [ %s, wid=%s, err=%v ]",
+	s := fmt.Sprintf("%s: network error while retrieving entry at index %d [ %s, wid=%q, err=%v ]",
 		wi.r.Name(), index, core.T.String(), wi.wid, err)
 	return &errHole{s}
 }
@@ -1567,7 +1606,7 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 }
 
 func (wi *basewi) _errSoft(limit int) error {
-	return fmt.Errorf("%s: work item %q exceeded soft-errors limit: %d (max: %d)", wi.r.Name(), wi.wid, wi.soft, limit)
+	return fmt.Errorf("%s: wid=%q exceeded soft-errors limit: %d (max: %d)", wi.r.Name(), wi.wid, wi.soft, limit)
 }
 
 func (wi *basewi) asm() error {
@@ -1575,7 +1614,9 @@ func (wi *basewi) asm() error {
 		r         = wi.r
 		adv       = newAdvice(wi.config)
 		l         = len(wi.req.In)
-		nextFlush = mono.NanoTime() + int64(streamingFlushIval)
+		started   = mono.NanoTime()
+		nextFlush = started + int64(streamingFlushIval)
+		sendersOk bool
 	)
 	for i := 0; i < l; {
 		if r.IsAborted() || r.IsDone() {
@@ -1600,6 +1641,23 @@ func (wi *basewi) asm() error {
 			}
 		}
 
+		if !sendersOk && mono.Since(started) > sendersStartupTime {
+			wi.startup.mtx.Lock()
+			if len(wi.startup.m) < wi.startup.nat-1 {
+				// ContinueOnErr does not apply: it covers per-entry retrieval failures
+				// (missing objects or archived files), not request execution failures. Missing
+				// phase-3 sender means this work item cannot be assembled reliably.
+				out := _neverStarted(wi.smap, wi.startup.m)
+				wi.startup.mtx.Unlock()
+				return fmt.Errorf("%s: %d of %d senders did not ack start within %v: %v",
+					wi.r.Name(), len(out), wi.startup.nat-1, sendersStartupTime, out)
+			}
+			// all expected senders announced startup
+			sendersOk = true
+			clear(wi.startup.m)
+			wi.startup.mtx.Unlock()
+		}
+
 		debug.Assert(j > i && j <= l, i, " vs ", j, " vs ", l)
 		i = j
 
@@ -1612,6 +1670,16 @@ func (wi *basewi) asm() error {
 		}
 	}
 	return nil
+}
+
+func _neverStarted(smap *meta.Smap, started cos.StrSet) (out []string) {
+	self := core.T.SID()
+	for tid, tsi := range smap.Tmap {
+		if tid != self && !tsi.InMaintOrDecomm() && !started.Contains(tid) {
+			out = append(out, tid)
+		}
+	}
+	return
 }
 
 // drains recv.m[] in strict input order
