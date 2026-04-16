@@ -7,13 +7,22 @@ version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    labels:
+      - "dependencies"
+      - "dependabot"
     schedule:
       interval: "monthly"
   - package-ecosystem: "docker"
     directory: "/deploy/prod/k8s/aisnode_container/"
+    labels:
+      - "dependencies"
+      - "dependabot"
     schedule:
       interval: "monthly"
   - package-ecosystem: "pip"
     directory: "/python/"
+    labels:
+      - "dependencies"
+      - "dependabot"
     schedule:
       interval: "monthly"
