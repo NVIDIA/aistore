@@ -1,0 +1,8 @@
+# Redirect /docs and anything under /docs to the Fern-based docs site.
+# Everything else stays on the Jekyll site.
+#
+# Syntax: https://docs.netlify.com/routing/redirects/
+
+/docs                https://docs.nvidia.com/aistore/docs     301!
+/docs/               https://docs.nvidia.com/aistore/docs     301!
+/docs/*              https://docs.nvidia.com/aistore/:splat   301!
