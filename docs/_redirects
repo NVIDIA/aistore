@@ -3,6 +3,10 @@
 #
 # Syntax: https://docs.netlify.com/routing/redirects/
 
+# Exception: keep the OpenAPI HTTP API reference on Jekyll (generated at CI
+# time, not present on the Fern site). Must precede the /docs/* splat below.
+/docs/http-api       /docs/http-api.html                      200!
+
 /docs                https://docs.nvidia.com/aistore/docs     301!
 /docs/               https://docs.nvidia.com/aistore/docs     301!
 /docs/*              https://docs.nvidia.com/aistore/:splat   301!
