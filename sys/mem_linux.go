@@ -122,24 +122,46 @@ func readMemCgroupV2() (mem MemStat, _ error) {
 	mem.Used = min(memUsed, memLimit)
 	mem.Free = memLimit - mem.Used
 
-	// 3. reclaimable cache from memory.stat (inactive_file)
+	// 3. reclaimable-cache (estimate) = (total file-backed cache) - (dirty/writeback pages)
+	// note the compromise between:
+	// - immediately reclaimable "inactive_file" on the one hand, and
+	// - "file", on the other
 	data, err := os.ReadFile(contMemV2Stat)
 	if err != nil {
 		mem.ActualUsed = mem.Used
 		mem.ActualFree = mem.Free
 		return mem, nil
 	}
+	var (
+		file, dirty, writeback uint64
+		num                    int
+	)
 	for line := range strings.SplitSeq(string(data), "\n") {
 		key, val, ok := strings.Cut(line, " ")
-		if ok && key == "inactive_file" {
-			if v, e := strconv.ParseUint(val, 10, 64); e == nil {
-				mem.BuffCache = v
-			}
+		if !ok {
+			continue
+		}
+		switch key {
+		case "file":
+			file, _ = strconv.ParseUint(val, 10, 64)
+			num++
+		case "file_dirty":
+			dirty, _ = strconv.ParseUint(val, 10, 64)
+			num++
+		case "file_writeback":
+			writeback, _ = strconv.ParseUint(val, 10, 64)
+			num++
+		}
+
+		if num >= 3 {
 			break
 		}
 	}
+	dirtyWriteback := dirty + writeback
+	mem.BuffCache = cos.Ternary(file > dirtyWriteback, file-dirtyWriteback, 0)
 	mem.ActualUsed = cos.Ternary(mem.BuffCache < mem.Used, mem.Used-mem.BuffCache, 0)
-	mem.ActualFree = mem.Total - mem.ActualUsed // NOTE: unsigned arithmetic (trusting kernel)
+
+	mem.ActualFree = cos.Ternary(mem.Total > mem.ActualUsed, mem.Total-mem.ActualUsed, 0)
 	return mem, nil
 }
 
