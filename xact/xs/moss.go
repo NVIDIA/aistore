@@ -99,7 +99,7 @@ const (
 	// - stays enabled for the entire lifetime
 	bewarmSize = cos.MiB
 
-	// next(i) poll interval: a fraction of configured timeout
+	// waitFlushRx(i) poll interval: a fraction of configured max-wait timeout
 	pollDiv = 8
 
 	// max slice cap to reuse
@@ -108,10 +108,11 @@ const (
 	// additional admission control
 	pendingHighWm   = 64                  // start throttling
 	pendingCritWm   = 256                 // 429
-	pendingThrottle = cos.DfltRateMinBtwn // see cos/rate_limit.go
+	pendingThrottle = cos.DfltRateMinBtwn // 10ms (see cos/rate_limit.go)
 
 	// response controller (streaming mode only)
-	streamingWriteTimeout = 30 * time.Second
+	// purpose: detect a stuck client (extremely slow reader, dead connection, broken TLS session)
+	streamingWriteTimeout = max(30*time.Second, cmn.GetBatchWaitMin<<2) // max(30s, 4s) - see pollIval
 	streamingFlushIval    = 5 * time.Second
 
 	// (best-effort)
@@ -1248,9 +1249,20 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 		elapsed        time.Duration
 		recvDrainBurst = cos.ClampInt(8, 1, cap(wi.recv.ch)>>1)
 		timeout        = wi.config.GetBatch.MaxWait.D()
-		pollIval       = cos.Ternary(timeout > pollDiv*cmn.GetBatchWaitMin, timeout/pollDiv, cmn.GetBatchWaitMin)
+		pollIval       = cos.ClampDuration(timeout/pollDiv, cmn.GetBatchWaitMin, streamingWriteTimeout>>1)
+		lastDeadline   int64
 	)
+	const refreshIval = streamingWriteTimeout / 3
 	for {
+		// refresh response-controller (streaming) deadline
+		if wi.wctrl != nil {
+			if now := mono.NanoTime(); now-lastDeadline >= int64(refreshIval) {
+				erd := wi.wctrl.SetWriteDeadline(time.Now().Add(streamingWriteTimeout))
+				debug.AssertNoErr(erd)
+				lastDeadline = now
+			}
+		}
+
 		wi.recv.mtx.Lock()
 		err := wi.flushRx()
 		next := wi.recv.next
@@ -1289,14 +1301,16 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 		debug.Assert(rem > 0)
 		switch err := wi.waitAnyRx(rem); err {
 		case nil:
-			continue // TODO: elapsed (stats) won't be very precise
+			continue
 		case errStopped:
 			return 0, errStopped
 		default:
 			debug.Assert(err == context.DeadlineExceeded)
 		}
 
+		// TODO: not a true wall-clock elapsed time
 		elapsed += pollIval
+		// timeout
 		if elapsed >= timeout {
 			return 0, wi.newErrHole(timeout, nil)
 		}
@@ -1416,6 +1430,9 @@ func (wi *basewi) next(i int) (int, error) {
 	}
 
 	if wi.req.StreamingGet {
+		// unlike waitFlushRx(), the local path does not re-set streamingWriteTimeout
+		// while processing; long no-progress gaps here are treated as a stuck
+		// client
 		if err := wi.aw.Flush(); err != nil {
 			return 0, err
 		}
@@ -1632,6 +1649,9 @@ func (wi *basewi) asm() error {
 
 		if wi.wctrl != nil {
 			if now := mono.NanoTime(); now >= nextFlush {
+				// note:
+				// set streaming write deadline; waitFlushRx()
+				// refreshes it while blocked waiting for peer data
 				erd := wi.wctrl.SetWriteDeadline(time.Now().Add(streamingWriteTimeout))
 				debug.AssertNoErr(erd)
 				if err := wi.wctrl.Flush(); err != nil {
