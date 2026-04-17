@@ -644,6 +644,127 @@ func checkEntry(t *testing.T, raw io.ReaderAt, name string, entry archive.ShardI
 	}
 }
 
+// TestShardSrcMetadataRoundTrip verifies that SrcCksum and SrcSize survive
+// a Pack → Unpack round-trip, and that IsStale returns the correct answer
+// when compared against the original values.
+func TestShardSrcMetadataRoundTrip(t *testing.T) {
+	cases := []struct {
+		name     string
+		srcCksum *cos.Cksum
+		srcSize  int64
+	}{
+		{"nil_cksum", nil, 0},
+		{"none_cksum", cos.NewCksum(cos.ChecksumNone, ""), 0},
+		{"xxhash_cksum", cos.NewCksum(cos.ChecksumOneXxh, "0123456789abcdef"), 1 << 20},
+		{"md5_cksum", cos.NewCksum(cos.ChecksumMD5, "d41d8cd98f00b204e9800998ecf8427e"), 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			orig := &archive.ShardIndex{
+				Entries:  map[string]archive.ShardIndexEntry{"a.txt": {Offset: 0, Size: 512}},
+				SrcCksum: tc.srcCksum,
+				SrcSize:  tc.srcSize,
+			}
+			b, err := orig.Pack()
+			if err != nil {
+				t.Fatal("Pack:", err)
+			}
+
+			got := &archive.ShardIndex{}
+			if err := got.Unpack(b); err != nil {
+				t.Fatal("Unpack:", err)
+			}
+
+			// Entry must survive.
+			if len(got.Entries) != 1 {
+				t.Fatalf("expected 1 entry, got %d", len(got.Entries))
+			}
+
+			// SrcSize must match.
+			if got.SrcSize != tc.srcSize {
+				t.Fatalf("SrcSize: got %d, want %d", got.SrcSize, tc.srcSize)
+			}
+
+			// SrcCksum must match (nil/none inputs both serialize as "none").
+			if tc.srcCksum == nil || cos.NoneC(tc.srcCksum) {
+				if !cos.NoneC(got.SrcCksum) {
+					t.Fatalf("SrcCksum: got %v, want none", got.SrcCksum)
+				}
+			} else {
+				if !got.SrcCksum.Equal(tc.srcCksum) {
+					t.Fatalf("SrcCksum: got %v, want %v", got.SrcCksum, tc.srcCksum)
+				}
+			}
+
+			// IsStale must be false when compared against the same values.
+			if got.IsStale(tc.srcCksum, tc.srcSize) {
+				t.Fatal("IsStale: expected false for matching cksum+size")
+			}
+		})
+	}
+}
+
+// TestShardIsStale verifies IsStale using a realistic re-upload scenario:
+// build a real shard, stamp the index with its cksum/size, then "re-upload"
+// (a new shard with different content) and confirm IsStale fires.
+func TestShardIsStale(t *testing.T) {
+	// Build the original shard and compute its checksum.
+	fh1 := tempFile(t)
+	defer fh1.Close()
+	tw := tar.NewWriter(fh1)
+	writeTAREntry(t, tw, &tar.Header{Name: "a.txt", Mode: 0o644, ModTime: modTime, Format: tar.FormatUSTAR}, 1024, randReader(t, 1024))
+	size1 := sealTAR(t, fh1, tw)
+	ck1 := shardCksum(t, fh1, size1)
+
+	// Build the index, stamp it with the original shard's metadata.
+	idx, err := archive.BuildShardIndex(fh1, size1)
+	if err != nil {
+		t.Fatal("BuildShardIndex:", err)
+	}
+	idx.SrcCksum = ck1
+	idx.SrcSize = size1
+
+	b, err := idx.Pack()
+	if err != nil {
+		t.Fatal("Pack:", err)
+	}
+	loaded := &archive.ShardIndex{}
+	if err := loaded.Unpack(b); err != nil {
+		t.Fatal("Unpack:", err)
+	}
+
+	// Same shard — index is fresh.
+	if loaded.IsStale(ck1, size1) {
+		t.Fatal("IsStale: expected false for unchanged shard")
+	}
+
+	// Re-upload: a new shard with different content → different cksum and size.
+	fh2 := tempFile(t)
+	defer fh2.Close()
+	tw2 := tar.NewWriter(fh2)
+	writeTAREntry(t, tw2, &tar.Header{Name: "a.txt", Mode: 0o644, ModTime: modTime, Format: tar.FormatUSTAR}, 2048, randReader(t, 2048))
+	size2 := sealTAR(t, fh2, tw2)
+	ck2 := shardCksum(t, fh2, size2)
+
+	// Re-uploaded shard → index is stale.
+	if !loaded.IsStale(ck2, size2) {
+		t.Fatal("IsStale: expected true after shard re-upload")
+	}
+}
+
+// shardCksum computes the xxhash checksum of the first `size` bytes of fh.
+func shardCksum(t *testing.T, fh *os.File, size int64) *cos.Cksum {
+	t.Helper()
+	if _, err := fh.Seek(0, io.SeekStart); err != nil {
+		t.Fatal("Seek:", err)
+	}
+	_, ckh, err := cos.CopyAndChecksum(io.Discard, io.LimitReader(fh, size), nil, cos.ChecksumOneXxh)
+	if err != nil {
+		t.Fatal("shardCksum:", err)
+	}
+	return ckh.Clone()
+}
+
 // gnuSparseHeader returns a minimal valid 512-byte TAR header block with
 // Typeflag=TypeGNUSparse and Size=0 (no data blocks follow).
 //

@@ -8,6 +8,7 @@ package archive
 import (
 	"archive/tar"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -22,12 +23,17 @@ import (
 //
 //	┌─────────────────────────────────────────────────────────────────────────┐
 //	│  PREAMBLE (11 bytes, fixed)                                             │
-//	│  [0]      metaversion  uint8   — shardIdxMetaver                        │
+//	│  [0]      meta-version uint8   — shardIdxMetaver                        │
 //	│  [1]      format       uint8   — 0 = TAR (shardIdxFmtTAR)               │
 //	│  [2]      cksum type   uint8   — 1 = onexxh (shardIdxCksumXXH)          │
 //	│  [3..10]  xxhash64     uint64  — onexxh.Checksum64S(payload, MLCG32)    │
 //	├─────────────────────────────────────────────────────────────────────────┤
 //	│  PAYLOAD (variable, covered by xxhash)                                  │
+//	│  src_cksum_type_len  uvarint — byte length of LOM cksum type            │
+//	│  src_cksum_type      []byte  — e.g. "xxhash" (UTF-8)                    │
+//	│  src_cksum_val_len   uvarint — byte length of LOM cksum value           │
+//	│  src_cksum_val       []byte  — hex-encoded value                        │
+//	│  src_size            uvarint — LOM size in bytes                        │
 //	│  count    uvarint              — number of entries                      │
 //	│  for each entry:                                                        │
 //	│    name_len  uvarint           — byte length of the name string         │
@@ -41,13 +47,13 @@ import (
 // and non-regular entries (directories, links, device nodes, FIFOs).
 
 const (
-	shardIdxMetaver  = 1  // current version of the shard index binary format
+	shardIdxMetaver  = 1  // current meta-version
 	shardIdxFmtTAR   = 0  // format: TAR
 	shardIdxCksumXXH = 1  // checksum: onexxh.Checksum64S with cos.MLCG32 seed
 	shardIdxPrefLen  = 11 // [1:ver | 1:fmt | 1:cksum-type | 8:xxhash64]
 
-	// ShardIdxMinLen is the smallest valid packed-index payload (preamble + zero-entry count varint).
-	ShardIdxMinLen = shardIdxPrefLen + 1
+	// ShardIdxMinLen: preamble + four single-byte uvarints (lower bound, not exact).
+	ShardIdxMinLen = shardIdxPrefLen + 4
 )
 
 type (
@@ -62,9 +68,23 @@ type (
 	}
 	ShardIndex struct {
 		Entries map[string]ShardIndexEntry
-		raw     []byte // (GC)
+		// SrcCksum and SrcSize are the LOM's checksum and size captured at index-build time.
+		// to detect re-uploaded shards without reading the TAR content.
+		// Set by the caller before passing the index to SaveShardIndex.
+		SrcCksum *cos.Cksum
+		SrcSize  int64
+		raw      []byte // (GC)
+	}
+	// idxDecoder is a cursor for sequential decoding of the shard-index payload.
+	idxDecoder struct {
+		b   []byte
+		off int
 	}
 )
+
+// ErrShardIdxStale is returned by core.LoadShardIndex when the stored index was built
+// from a prior version of the shard (checksum or size mismatch). The caller should rebuild.
+var ErrShardIdxStale = errors.New("shard index: stale")
 
 func _emitErr(format string, a ...any) error { return fmt.Errorf("shard index: "+format, a...) }
 
@@ -122,16 +142,31 @@ func BuildShardIndex(r io.ReaderAt, size int64) (*ShardIndex, error) {
 
 // Pack serializes the index into a compact binary format.
 func (idx *ShardIndex) Pack() ([]byte, error) {
-	// Pre-allocates a single buffer: preamble first, then payload appended in-place.
-	// upper bound: count varint + per-entry (name-len varint + name bytes + offset varint + size varint).
-	total := shardIdxPrefLen + binary.MaxVarintLen64
+	if idx.SrcSize < 0 {
+		return nil, _emitErr("negative src size %d", idx.SrcSize)
+	}
+	cksumTy, cksumVal := idx.SrcCksum.Get() // nil-safe; returns ("none", "") when nil
+
+	// Pre-allocate a single buffer: preamble placeholder, then payload appended in-place.
+	// Payload: src cksum type + value (each length-prefixed), src size, entry count, entries.
+	total := shardIdxPrefLen +
+		2*binary.MaxVarintLen64 + len(cksumTy) + len(cksumVal) + // src cksum type + value
+		binary.MaxVarintLen64 + // src size
+		binary.MaxVarintLen64 // entry count
 	for name := range idx.Entries {
 		// one uvarint for name length + the name itself + two uvarints for offset and size
 		total += 3*binary.MaxVarintLen64 + len(name)
 	}
 	buf := make([]byte, shardIdxPrefLen, total)
 
-	// Append payload directly after the preamble placeholder.
+	// Source metadata — allows LoadShardIndex to detect stale indexes.
+	buf = binary.AppendUvarint(buf, uint64(len(cksumTy)))
+	buf = append(buf, cksumTy...)
+	buf = binary.AppendUvarint(buf, uint64(len(cksumVal)))
+	buf = append(buf, cksumVal...)
+	buf = binary.AppendUvarint(buf, uint64(idx.SrcSize))
+
+	// Entry count and entries.
 	buf = binary.AppendUvarint(buf, uint64(len(idx.Entries)))
 	for name, e := range idx.Entries {
 		if e.Offset < 0 {
@@ -156,6 +191,79 @@ func (idx *ShardIndex) Pack() ([]byte, error) {
 	return buf, nil
 }
 
+/////////////////////
+// ShardIndexEntry //
+/////////////////////
+
+// DataOffset returns the byte offset of the file's data within the archive.
+// Callers use this for direct random access: io.NewSectionReader(r, entry.DataOffset(), entry.Size).
+func (e ShardIndexEntry) DataOffset() int64 { return e.Offset + TarBlockSize }
+
+////////////////
+// idxDecoder //
+////////////////
+
+// readU64 reads a length-prefixed (uvarint) uint64.
+// The `field` argument is for error messages only.
+func (d *idxDecoder) readU64(field string) (uint64, error) {
+	v, n := binary.Uvarint(d.b[d.off:])
+	if n <= 0 {
+		return 0, _emitErr("failed to decode %s", field)
+	}
+	d.off += n
+	return v, nil
+}
+
+// The `field` argument is for error messages only.
+func (d *idxDecoder) readI64(field string) (int64, error) {
+	v, err := d.readU64(field)
+	if err != nil {
+		return 0, err
+	}
+	if v > math.MaxInt64 {
+		return 0, _emitErr("%s overflows int64", field)
+	}
+	return int64(v), nil
+}
+
+// readStr reads a length-prefixed (uvarint) string, copying bytes from the payload.
+// The `field` argument is for error messages only.
+func (d *idxDecoder) readStr(field string) (string, error) {
+	slen, err := d.readU64(field + " length")
+	if err != nil {
+		return "", err
+	}
+	if slen > math.MaxInt {
+		return "", _emitErr("%s length too large", field)
+	}
+	end := d.off + int(slen)
+	if end > len(d.b) {
+		return "", _emitErr("%s overruns buffer", field)
+	}
+	s := string(d.b[d.off:end])
+	d.off = end
+	return s, nil
+}
+
+// readName reads a length-prefixed entry name via cos.UnsafeS (zero-copy).
+// Caller must retain idx.raw to keep the payload alive while the ShardIndex is in use.
+func (d *idxDecoder) readName() (string, error) {
+	nlen, err := d.readU64("name length")
+	if err != nil {
+		return "", err
+	}
+	if nlen > math.MaxInt {
+		return "", _emitErr("name length too large")
+	}
+	end := d.off + int(nlen)
+	if end > len(d.b) {
+		return "", _emitErr("name overruns buffer")
+	}
+	name := cos.UnsafeS(d.b[d.off:end])
+	d.off = end
+	return name, nil
+}
+
 // Unpack deserializes a packed ShardIndex produced by Pack.
 func (idx *ShardIndex) Unpack(b []byte) error {
 	if len(b) < shardIdxPrefLen {
@@ -171,70 +279,62 @@ func (idx *ShardIndex) Unpack(b []byte) error {
 		return _emitErr("unsupported checksum type %d", b[2])
 	}
 
-	var (
-		storedHash = binary.BigEndian.Uint64(b[3:])
-		payload    = b[shardIdxPrefLen:]
-	)
+	storedHash := binary.BigEndian.Uint64(b[3:])
+	payload := b[shardIdxPrefLen:]
 	if h := onexxh.Checksum64S(payload, cos.MLCG32); h != storedHash {
 		return _emitErr("checksum mismatch (stored %016x, computed %016x)", storedHash, h)
 	}
 
-	count, nCount := binary.Uvarint(payload)
-	if nCount <= 0 {
-		return _emitErr("failed to decode entry count")
-	}
-	off := nCount
+	d := idxDecoder{b: payload}
 
+	// Source metadata: cksum type, cksum value, size.
+	cksumTy, err := d.readStr("src cksum type")
+	if err != nil {
+		return err
+	}
+	cksumVal, err := d.readStr("src cksum value")
+	if err != nil {
+		return err
+	}
+	srcSize, err := d.readI64("src size")
+	if err != nil {
+		return err
+	}
+	idx.SrcCksum = cos.NewCksum(cksumTy, cksumVal)
+	idx.SrcSize = srcSize
+
+	// Entry count and entries.
+	count, err := d.readU64("entry count")
+	if err != nil {
+		return err
+	}
 	entries := make(map[string]ShardIndexEntry, count)
 	for range count {
-		nameLen, nNameLen := binary.Uvarint(payload[off:])
-		if nNameLen <= 0 {
-			return _emitErr("failed to decode name length")
+		name, err := d.readName()
+		if err != nil {
+			return err
 		}
-		off += nNameLen
-		if nameLen > math.MaxInt {
-			return _emitErr("name length too large")
+		offset, err := d.readI64("offset")
+		if err != nil {
+			return err
 		}
-		if off+int(nameLen) > len(payload) {
-			return _emitErr("name overruns buffer (len %d)", nameLen)
+		size, err := d.readI64("size")
+		if err != nil {
+			return err
 		}
-		// UnsafeS aliases payload; caller must NOT modify the input buffer while the ShardIndex is in use.
-		name := cos.UnsafeS(payload[off : off+int(nameLen)])
-		off += int(nameLen)
-
-		offset, nOffset := binary.Uvarint(payload[off:])
-		if nOffset <= 0 {
-			return _emitErr("failed to decode offset for %q", name)
-		}
-		off += nOffset
-
-		size, nSize := binary.Uvarint(payload[off:])
-		if nSize <= 0 {
-			return _emitErr("failed to decode size for %q", name)
-		}
-		off += nSize
-
-		if offset > math.MaxInt64 {
-			return _emitErr("offset %d overflows int64 for %q", offset, name)
-		}
-		if size > math.MaxInt64 {
-			return _emitErr("size %d overflows int64 for %q", size, name)
-		}
-		entries[name] = ShardIndexEntry{
-			Offset: int64(offset),
-			Size:   int64(size),
-		}
+		entries[name] = ShardIndexEntry{Offset: offset, Size: size}
 	}
 
 	idx.Entries = entries
-	idx.raw = payload // retain for entry names
+	idx.raw = d.b // retain for entry names
 	return nil
 }
 
-/////////////////////
-// ShardIndexEntry //
-/////////////////////
-
-// DataOffset returns the byte offset of the file's data within the archive.
-// Callers use this for direct random access: io.NewSectionReader(r, entry.DataOffset(), entry.Size).
-func (e ShardIndexEntry) DataOffset() int64 { return e.Offset + TarBlockSize }
+// IsStale reports whether the index was built from a different version of the shard.
+// Always checks size; also compares cksum when SrcCksum is set.
+func (idx *ShardIndex) IsStale(cksum *cos.Cksum, size int64) bool {
+	if !cos.NoneC(idx.SrcCksum) && !idx.SrcCksum.Equal(cksum) {
+		return true
+	}
+	return idx.SrcSize != size
+}

@@ -6,6 +6,7 @@ package core_test
 
 import (
 	"archive/tar"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -116,6 +117,19 @@ func siSave(archlom *core.LOM, idx *archive.ShardIndex) error {
 	archlom.Lock(true)
 	defer archlom.Unlock(true)
 	return core.SaveShardIndex(archlom, idx)
+}
+
+// siShardCksum computes the xxhash checksum of the first `size` bytes of fh.
+func siShardCksum(t GinkgoTInterface, fh *os.File, size int64) *cos.Cksum {
+	t.Helper()
+	if _, err := fh.Seek(0, io.SeekStart); err != nil {
+		t.Fatalf("siShardCksum Seek: %v", err)
+	}
+	_, ckh, err := cos.CopyAndChecksum(io.Discard, io.LimitReader(fh, size), nil, cos.ChecksumOneXxh)
+	if err != nil {
+		t.Fatalf("siShardCksum CopyAndChecksum: %v", err)
+	}
+	return ckh.Clone()
 }
 
 // siVerifyContent confirms that every entry in loaded can be used to read back
@@ -401,6 +415,45 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			Entry("GNU", tar.FormatGNU),
 			Entry("PAX", tar.FormatPAX),
 		)
+	})
+
+	Describe("staleness", func() {
+		It("returns ErrShardIdxStale after shard is re-uploaded", func() {
+			// Build original shard, stamp index with its cksum/size.
+			fh1, size1, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 10)
+			defer fh1.Close()
+			ck1 := siShardCksum(GinkgoT(), fh1, size1)
+
+			orig, err := archive.BuildShardIndex(fh1, size1)
+			Expect(err).NotTo(HaveOccurred())
+			orig.SrcCksum = ck1
+			orig.SrcSize = size1
+
+			archlom := siArchLOM(GinkgoT(), "reupload.tar")
+			archlom.SetCksum(ck1)
+			archlom.SetSize(size1)
+			Expect(siSave(archlom, orig)).To(Succeed())
+
+			// Cksum matches — index is fresh.
+			loaded, err := core.LoadShardIndex(archlom)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded).NotTo(BeNil())
+
+			// Re-upload: new shard with different content → different cksum/size.
+			fh2, size2, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
+			defer fh2.Close()
+			ck2 := siShardCksum(GinkgoT(), fh2, size2)
+
+			archlom.SetCksum(ck2)
+			archlom.SetSize(size2)
+
+			// Index now stale — must return ErrShardIdxStale.
+			idx, err := core.LoadShardIndex(archlom)
+			Expect(errors.Is(err, archive.ErrShardIdxStale)).To(BeTrue())
+			Expect(idx).To(BeNil())
+			// HasShardIdx must be cleared so the next load rebuilds the index.
+			Expect(archlom.HasShardIdx()).To(BeFalse())
+		})
 	})
 
 	Describe("corruption", func() {

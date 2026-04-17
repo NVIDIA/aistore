@@ -119,6 +119,11 @@ func LoadShardIndex(archlom *LOM) (*archive.ShardIndex, error) {
 		clearShardIdx(archlom)
 		return nil, err
 	}
+	// Staleness check: if the shard was re-uploaded, the stored cksum/size will differ.
+	if idx.IsStale(archlom.Checksum(), archlom.Lsize()) {
+		clearShardIdx(archlom)
+		return nil, archive.ErrShardIdxStale
+	}
 	return idx, nil
 }
 
