@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/doc/comment"
 	"go/parser"
 	"go/token"
 	"os"
@@ -32,6 +33,7 @@ type schemaProperty struct {
 // schemaObject represents an OpenAPI schema definition.
 type schemaObject struct {
 	Type              string                    `yaml:"type"`
+	Description       string                    `yaml:"description,omitempty"`
 	Required          []string                  `yaml:"required,omitempty"`
 	Properties        map[string]schemaProperty `yaml:"properties,omitempty"`
 	XSupportedActions []string                  `yaml:"x-supported-actions,omitempty"`
@@ -137,26 +139,29 @@ func (sp *schemaParser) resolveSchema(qualifiedName string) error {
 		return fmt.Errorf("unknown package %q (not imported by source files)", pkg)
 	}
 
-	st, err := sp.findStruct(dir, typeName)
+	ts, gen, err := sp.findStruct(dir, typeName)
 	if err != nil {
 		return err
 	}
 
 	schema := &schemaObject{
-		Type:       "object",
-		Properties: make(map[string]schemaProperty),
+		Type:        "object",
+		Description: structDoc(ts, gen),
+		Properties:  make(map[string]schemaProperty),
 	}
 	sp.schemas[qualifiedName] = schema // register early to handle cycles
 
-	sp.extractFields(schema, st, pkg)
+	sp.extractFields(schema, ts.Type.(*ast.StructType), pkg)
 	return nil
 }
 
-// findStruct locates a struct by name in the given package directory.
-func (sp *schemaParser) findStruct(dir, typeName string) (*ast.StructType, error) {
+// findStruct locates a struct type declaration by name. The enclosing GenDecl
+// is returned so callers can recover the struct-level godoc, which may live on
+// either the TypeSpec or the GenDecl.
+func (sp *schemaParser) findStruct(dir, typeName string) (*ast.TypeSpec, *ast.GenDecl, error) {
 	files, err := sp.parseDir(dir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, file := range files {
@@ -170,15 +175,27 @@ func (sp *schemaParser) findStruct(dir, typeName string) (*ast.StructType, error
 				if !ok || ts.Name.Name != typeName {
 					continue
 				}
-				st, ok := ts.Type.(*ast.StructType)
-				if !ok {
-					return nil, fmt.Errorf("%s is not a struct", typeName)
+				if _, ok := ts.Type.(*ast.StructType); !ok {
+					return nil, nil, fmt.Errorf("%s is not a struct", typeName)
 				}
-				return st, nil
+				return ts, gen, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("struct %s not found in %s", typeName, dir)
+	return nil, nil, fmt.Errorf("struct %s not found in %s", typeName, dir)
+}
+
+// structDoc returns the struct-level godoc. A group-level doc is only used
+// when the group declares a single spec; otherwise it documents the group,
+// not this type.
+func structDoc(ts *ast.TypeSpec, gen *ast.GenDecl) string {
+	if ts.Doc != nil {
+		return commentGroupText(ts.Doc)
+	}
+	if gen.Doc != nil && len(gen.Specs) == 1 {
+		return commentGroupText(gen.Doc)
+	}
+	return ""
 }
 
 // parseDir parses all Go files in a directory, caching the results.
@@ -357,15 +374,12 @@ func fieldDescription(field *ast.Field) string {
 	return ""
 }
 
+// commentGroupText renders a Go comment group as Markdown via go/doc/comment,
+// preserving paragraphs, lists, and code blocks.
 func commentGroupText(g *ast.CommentGroup) string {
-	var parts []string
-	for _, c := range g.List {
-		line := strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
-		if line != "" {
-			parts = append(parts, line)
-		}
-	}
-	return strings.Join(parts, " ")
+	var p comment.Parser
+	var pr comment.Printer
+	return strings.TrimSpace(string(pr.Markdown(p.Parse(g.Text()))))
 }
 
 func getJSONTag(field *ast.Field) (name string, omitempty bool) {
