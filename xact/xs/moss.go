@@ -106,8 +106,8 @@ const (
 	poolMaxCap = 512
 
 	// additional admission control
-	pendingHighWm   = 64                  // start throttling
-	pendingCritWm   = 256                 // 429
+	pendingHighWm   = 96                  // high-watermark to start throttling
+	pendingCritWm   = 256                 // critical-watermark to return 429
 	pendingThrottle = cos.DfltRateMinBtwn // 10ms (see cos/rate_limit.go)
 
 	// response controller (streaming mode only)
