@@ -38,8 +38,6 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-const ua = "aisnode"
-
 const unknownDaemonID = "unknown"
 
 const whatRenamedLB = "renamedlb"

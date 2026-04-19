@@ -102,6 +102,7 @@ type (
 
 		// target <=> target & target => backend (no streams)
 		DataClient() *http.Client
+		ControlClient() *http.Client
 
 		// core object (+ PutObject above)
 		FinalizeObj(lom *LOM, workFQN string, xctn Xact, owt cmn.OWT) (ecode int, err error)

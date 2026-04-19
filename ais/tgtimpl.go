@@ -28,7 +28,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
-func (*target) DataClient() *http.Client { return g.client.data }
+func (*target) DataClient() *http.Client    { return g.client.data }
+func (*target) ControlClient() *http.Client { return g.client.control }
 
 func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	xreg.GetAllRunning(inout, periodic)

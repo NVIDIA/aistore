@@ -578,6 +578,16 @@ func (r *XactMoss) admit(config *cmn.Config, wid string, now int64) (throttled b
 	return throttled, nil
 }
 
+func (r *XactMoss) RxSenderStarted(wid, sid string) {
+	wi := r._getwi(wid, sid, true)
+	if wi == nil {
+		return
+	}
+	wi.startup.mtx.Lock()
+	wi.startup.m.Set(sid)
+	wi.startup.mtx.Unlock()
+}
+
 // gather other requested data (local and remote); emit resulting archive
 // (phase 2)
 // A note on error handling:
@@ -648,8 +658,10 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 // send all requested local data => DT (`tsi`)
 // (phase 3)
 func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string, usingPrev bool) error {
-	// insert self to properly demux => receive sentinels
-	// (currently, only transport.OpcAbort)
+	// TODO -- FIXME:
+	// - refactor transport.OpcAbort - use the new T2T control path
+	// - but note: it's a broadcast
+	// - if/when done, remove the next 4 lines
 	if usingPrev {
 		bundle.SDM.UseRecv(r)
 	} else {
@@ -657,12 +669,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 	}
 
 	// announce oneself
-	o := transport.AllocSend()
-	o.Hdr.Opcode = transport.OpcMossStarted
-	o.Hdr.Demux = r.ID()
-	o.Hdr.Opaque = cos.UnsafeB(wid)
-	if err := bundle.SDM.Send(o, nil, dt, r); err != nil {
-		nlog.Errorf("%s => %s: SDM.Send failure [%v]", core.T, dt, err) // (unlikely)
+	if err := r._announce(dt, wid); err != nil {
 		return err
 	}
 
@@ -705,6 +712,36 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 		nlog.Infoln(r.Name(), core.T.String(), "done Send", wid)
 	}
 	return nil
+}
+
+// TODO: part of this method can become generic and reusable
+func (r *XactMoss) _announce(dt *meta.Snode, wid string) error {
+	reqArgs := cmn.HreqArgs{
+		Method: http.MethodPost,
+		Base:   dt.URL(cmn.NetIntraControl),
+		Path:   xact.JoinCtrlPath(r, wid, xact.OpcodeStartedWI),
+	}
+	req, _, cancel, errR := reqArgs.ReqWith(cmn.Rom.MaxKeepalive())
+	if errR != nil {
+		return errR
+	}
+	defer cancel()
+	req.Header.Set(apc.HdrSenderID, core.T.SID())
+	req.Header.Set(apc.HdrSenderName, core.T.Snode().Name())
+	// note: not setting apc.HdrSenderSmapVer
+	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
+
+	resp, err := core.T.ControlClient().Do(req)
+	if err == nil {
+		if code := resp.StatusCode; code >= http.StatusBadRequest {
+			err = &cmn.ErrHTTP{Message: http.StatusText(code), Status: code}
+		}
+	}
+	if resp != nil && resp.Body != nil {
+		cos.DrainReader(resp.Body)
+		resp.Body.Close()
+	}
+	return err
 }
 
 func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, index int) error {
@@ -853,13 +890,6 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		case transport.OpcAbort:
 			sntl := &sentinel{r: r}
 			sntl.rxAbort(hdr)
-			return nil
-		case transport.OpcMossStarted:
-			if wi := r._getwi(cos.UnsafeS(hdr.Opaque), hdr.SID, true /*warn*/); wi != nil {
-				wi.startup.mtx.Lock()
-				wi.startup.m.Set(hdr.SID)
-				wi.startup.mtx.Unlock()
-			}
 			return nil
 		default:
 			return abortOpcode(r, hdr.Opcode)

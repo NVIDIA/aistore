@@ -83,6 +83,9 @@ const (
 	HdrNodeFlags = aisPrefix + "Node-Flags"
 )
 
+// the value for cos.HdrUserAgent header (internal usage)
+const HdrUA = aisPrefix + "Node"
+
 // Custom S3 headers
 const (
 	// HdrSignedRequestStyle describes what type of request style was used to sign the request.

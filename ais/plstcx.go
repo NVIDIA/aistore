@@ -691,11 +691,19 @@ func (c *lstcx) _page() (int, error) {
 }
 
 // calls t.httpxpost (TODO: slice of names is the only "delta" - optimize)
+// POST /v1/xactions/{ProxyToContTCO}
+// See also: xact/t2tctrl.go - another intra-cluster client
+
+const (
+	proxyToContTCO = "continueTCO" // see also: xact.T2TCtrl
+)
+
 func (c *lstcx) bcast() (err error) {
 	body := cos.MustMarshal(c.altmsg)
 	args := allocBcArgs()
+	path := apc.URLPathXactions.Join(proxyToContTCO)
 	{
-		args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathXactions.S, Body: body}
+		args.req = cmn.HreqArgs{Method: http.MethodPost, Path: path, Body: body}
 		args.to = core.Targets
 		args.timeout = cmn.Rom.MaxKeepalive()
 	}

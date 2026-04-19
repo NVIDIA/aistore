@@ -811,7 +811,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	}
 	req.Header.Set(apc.HdrSenderID, h.SID())
 	req.Header.Set(apc.HdrSenderName, h.si.Name())
-	req.Header.Set(cos.HdrUserAgent, ua)
+	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
 
 	resp, res.err = client.Do(req)
 	if res.err != nil {

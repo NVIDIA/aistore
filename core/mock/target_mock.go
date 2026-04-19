@@ -45,6 +45,7 @@ func (*TargetMock) Snode() *meta.Snode             { return &meta.Snode{DaeID: m
 func (*TargetMock) ClusterStarted() bool           { return true }
 func (*TargetMock) NodeStarted() bool              { return true }
 func (*TargetMock) DataClient() *http.Client       { return http.DefaultClient }
+func (*TargetMock) ControlClient() *http.Client    { return http.DefaultClient }
 func (*TargetMock) StatsUpdater() cos.StatsUpdater { return NewStatsTracker() }
 func (*TargetMock) PageMM() *memsys.MMSA           { return memsys.PageMM() }
 func (*TargetMock) ByteMM() *memsys.MMSA           { return memsys.ByteMM() }

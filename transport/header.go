@@ -40,7 +40,6 @@ const (
 	OpcAbort
 	OpcRequest
 	OpcResponse
-	OpcMossStarted // x-moss phase-3 sender-to-DT startup ack
 )
 
 // group 2: transport/bundle (data mover's) opcodes

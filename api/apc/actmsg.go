@@ -121,18 +121,6 @@ const (
 	ActShowNBI    = "show-inventory"
 )
 
-// internal use
-const (
-	ActAddRemoteBck = "add-remote-bck"         // add to BMD existing remote bucket, usually on the fly
-	ActHeadBckWith  = "head-bck-with-bprops"   // HEAD(cloud bucket) with one-shot bprops (such as `extra.aws.profile` et al.)
-	ActRmNodeUnsafe = "rm-unsafe"              // primary => the node to be removed
-	ActStartGFN     = "start-gfn"              // get-from-neighbor
-	ActStopGFN      = "stop-gfn"               // off
-	ActSelfRemove   = "self-initiated-removal" // e.g., when losing last mountpath
-	ActPrimaryForce = "primary-force"          // set primary with force (BEWARE! advanced usage only)
-	ActBumpMetasync = "bump-metasync"          // when executing ActPrimaryForce - the final step
-)
-
 const (
 	// Actions on mountpaths (/v1/daemon/mountpaths)
 	ActMountpathAttach  = "attach-mp"
@@ -146,6 +134,18 @@ const (
 	// Actions on xactions
 	ActXactStop  = Stop
 	ActXactStart = Start
+)
+
+// intra-cluster actions (internal use)
+const (
+	ActAddRemoteBck = "add-remote-bck"         // add to BMD existing remote bucket, usually on the fly
+	ActHeadBckWith  = "head-bck-with-bprops"   // HEAD(cloud bucket) with one-shot bprops (such as `extra.aws.profile` et al.)
+	ActRmNodeUnsafe = "rm-unsafe"              // primary => the node to be removed
+	ActStartGFN     = "start-gfn"              // get-from-neighbor
+	ActStopGFN      = "stop-gfn"               // off
+	ActSelfRemove   = "self-initiated-removal" // e.g., when losing last mountpath
+	ActPrimaryForce = "primary-force"          // set primary with force (BEWARE! advanced usage only)
+	ActBumpMetasync = "bump-metasync"          // when executing ActPrimaryForce - the final step
 )
 
 const (

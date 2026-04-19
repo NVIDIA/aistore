@@ -28,7 +28,8 @@ import (
 
 // verb /v1/xactions
 func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
-	if _, err := t.parseURL(w, r, apc.URLPathXactions.L, 0, true); err != nil {
+	items, err := t.parseURL(w, r, apc.URLPathXactions.L, 0, true)
+	if err != nil {
 		return
 	}
 	switch r.Method {
@@ -37,9 +38,13 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		t.httpxput(w, r)
 	case http.MethodPost:
-		t.httpxpost(w, r)
+		if len(items) == 0 {
+			t.writeErrURL(w, r)
+			return
+		}
+		t.httpxpost(w, r, items)
 	default:
-		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut, http.MethodPost)
 	}
 }
 
@@ -323,22 +328,39 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 }
 
 //
-// POST
+// POST /v1/xactions/"continueTCO" => apc.ActMsg path
+// or
+// POST /v1/xactions/"t2tctrl"/{xkind}/{xid}/{wid}/{opcode} => T2T control path for a given xaction
 //
 
-// client: plstcx.go
-func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
-	var (
-		err    error
-		xctn   core.Xact
-		amsg   *apc.ActMsg
-		tcomsg cmn.TCOMsg
-	)
-	if amsg, err = t.readActionMsg(w, r); err != nil {
+func (t *target) httpxpost(w http.ResponseWriter, r *http.Request, items []string) {
+	switch items[0] {
+	case proxyToContTCO:
+		t.continueTCO(w, r)
+	case xact.T2TCtrl:
+		if len(items) < xact.NumT2TCtrlItems {
+			t.writeErrURL(w, r)
+			return
+		}
+		kind, xid, wid, opcode := items[1], items[2], items[3], items[4]
+		t.xactCtrl(w, r, kind, xid, wid, opcode)
+	default:
+		t.writeErrURL(w, r)
+	}
+}
+
+// client: proxy (via plstcx.go)
+func (t *target) continueTCO(w http.ResponseWriter, r *http.Request) {
+	amsg, err := t.readActionMsg(w, r)
+	if err != nil {
 		return
 	}
 
-	xactID := amsg.Name
+	var (
+		xctn   core.Xact
+		tcomsg cmn.TCOMsg
+		xactID = amsg.Name
+	)
 	if strings.IndexByte(xactID, xact.SepaID[0]) > 0 {
 		for xid := range strings.SplitSeq(xactID, xact.SepaID) {
 			if xctn, err = xreg.GetXact(xid); err == nil {
@@ -360,8 +382,32 @@ func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
 	debug.Assert(ok)
 
 	if err = cos.MorphMarshal(amsg.Value, &tcomsg); err != nil {
-		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "special", amsg.Value, err)
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "cmn.TCOMsg", amsg.Value, err)
 		return
 	}
 	xtco.ContMsg(&tcomsg)
+}
+
+// client: target running the same xaction ID
+// TODO: transition transport.Opc* enum to this out-of-band path
+func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid, opcode string) {
+	xctn, err := xreg.GetXact(xid)
+	if err != nil || xctn == nil {
+		xname := xact.Cname(kind, xid)
+		t.writeErr(w, r, cos.NewErrNotFound(t, xname), http.StatusNotFound)
+		return
+	}
+
+	if kind != apc.ActGetBatch || opcode != xact.OpcodeStartedWI {
+		err := fmt.Errorf("expecting x-moss sender announcing itself, got %q [%q, %q, %q, %q]", xctn.Name(), kind, xid, wid, opcode)
+		debug.AssertNoErr(err)
+		t.writeErr(w, r, err)
+		return
+	}
+
+	// TODO: those cases that expect a real WID must also check for wid != xact.NoneWID
+
+	xmoss, ok := xctn.(*xs.XactMoss)
+	debug.Assert(ok)
+	xmoss.RxSenderStarted(wid, r.Header.Get(apc.HdrSenderID))
 }
