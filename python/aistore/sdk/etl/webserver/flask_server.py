@@ -177,7 +177,13 @@ class FlaskServer(ETLServer):
             target_url = f"{self.host_target}/{obj_path}"
             self.logger.debug("Forwarding GET (stream) to: %s", target_url)
             resp = self.session.get(target_url, stream=True, timeout=None)
-            resp.raise_for_status()
+            try:
+                resp.raise_for_status()
+            except Exception:
+                # stream=True pins the connection until we close or fully
+                # consume the body; release it immediately on error.
+                resp.close()
+                raise
             return resp.raw
         if buffered:
             return BytesIO(request.get_data())
