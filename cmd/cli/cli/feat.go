@@ -49,6 +49,7 @@ var clusterFeatDesc = [...]string{
 	"resume interrupted multipart uploads from persisted partial manifests",
 	"do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')",
 	"when bucket is n-way mirrored read object replica from the least-utilized mountpath",
+	"count GET(object) 404 as errors (default: don't)",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -79,6 +80,7 @@ var featTags = map[string]string{
 	"Resume-Interrupted-MPU":               "mpu,ops",
 	"Keep-Unknown-FQN":                     "integrity?,ops",
 	"Load-Balance-GET":                     "perf",
+	"Count-Object-NotFound-Stats":          "telemetry,ops",
 }
 
 // common (cluster, bucket) feature-flags (set, show) helper

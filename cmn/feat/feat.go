@@ -49,6 +49,7 @@ const (
 	ResumeInterruptedMPU      // resume interrupted multipart uploads from persisted partial manifests
 	KeepUnknownFQN            // do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 	LoadBalanceGET            // when bucket is n-way mirrored read object replica from the least-utilized mountpath
+	CountObjectNotFoundStats  // count GET(object) 404 (not-found) as errors (default: don't); TODO: add Prometheus to count HEAD(object) errors
 )
 
 var Cluster = [...]string{
@@ -76,6 +77,7 @@ var Cluster = [...]string{
 	"Resume-Interrupted-MPU",
 	"Keep-Unknown-FQN",
 	"Load-Balance-GET",
+	"Count-Object-NotFound-Stats",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -89,6 +91,7 @@ var Bucket = [...]string{
 	"S3-Use-Path-Style", // https://aws.amazon.com/blogs/aws/amazon-s3-path-deprecation-plan-the-rest-of-the-story
 	"S3-ListObjectVersions",
 	"Resume-Interrupted-MPU",
+	"Count-Object-NotFound-Stats",
 
 	// apc.ResetToken ("none") ===========
 }

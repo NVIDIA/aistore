@@ -909,13 +909,18 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	if ecode, err := goi.getObject(); err != nil {
 		// stats
 		vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
-		if goi.isIOErr {
+		switch {
+		case goi.isIOErr:
 			t.statsT.IncWith(stats.ErrGetCount, vlabs)
 			t.statsT.IncWith(stats.IOErrGetCount, vlabs)
 			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Warningln("io-error [", err, "]", goi.lom.String())
 			}
-		} else {
+		case cos.IsNotExist(err, ecode):
+			if goi.lom.IsFeatureSet(feat.CountObjectNotFoundStats) {
+				t.statsT.IncWith(stats.ErrGetCount, vlabs)
+			}
+		default:
 			t.statsT.IncWith(stats.ErrGetCount, vlabs)
 		}
 

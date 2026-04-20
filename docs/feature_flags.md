@@ -15,6 +15,7 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 - [Names and comments](#names-and-comments)
 - [Global features](#global-features)
 - [Bucket features](#bucket-features)
+- [Example: Count-Object-NotFound-Stats](#example-count-object-notfound-stats)
 
 ## Tagging system
 
@@ -75,6 +76,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Resume-Interrupted-MPU` | `mpu,ops` | resume interrupted multipart uploads from persisted partial manifests |
 | `Keep-Unknown-FQN` | `integrity?,ops` | do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup') |
 | `Load-Balance-GET` | `perf` | when bucket is n-way mirrored read object replica from the least-utilized mountpath |
+| `Count-Object-NotFound-Stats` | `telemetry,ops` | count GET(object) 404 as errors (default: don't) |
 
 ## Global features
 
@@ -87,8 +89,8 @@ Do-not-Auto-Detect-FileShare           Disable-Cold-GET                       Fo
 S3-API-via-Root                        Streaming-Cold-GET                     Resume-Interrupted-MPU
 Fsync-PUT                              S3-Reverse-Proxy                       Keep-Unknown-FQN
 LZ4-Block-1MB                          S3-Use-Path-Style                      Load-Balance-GET
-LZ4-Frame-Checksum                     Do-not-Delete-When-Rebalancing         none
-Do-not-Allow-Passing-FQN-to-ETL        Do-not-Set-Control-Plane-ToS
+LZ4-Frame-Checksum                     Do-not-Delete-When-Rebalancing         Count-Object-NotFound-Stats
+Do-not-Allow-Passing-FQN-to-ETL        Do-not-Set-Control-Plane-ToS           none
 Ignore-LimitedCoexistence-Conflicts    Trust-Crypto-Safe-Checksums
 ```
 
@@ -127,6 +129,7 @@ Force-Container-CPU-Mem              deploy                 force container-base
 Resume-Interrupted-MPU               mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 Keep-Unknown-FQN                     integrity?,ops         do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 Load-Balance-GET                     perf                   when bucket is n-way mirrored read object replica from the least-utilized mountpath               <<< colored
+Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 404 as errors
 
 Cluster config updated
 ```
@@ -170,6 +173,7 @@ Force-Container-CPU-Mem              deploy                 force container-base
 Resume-Interrupted-MPU               mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 Keep-Unknown-FQN                     integrity?,ops         do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 Load-Balance-GET                     perf                   when bucket is n-way mirrored read object replica from the least-utilized mountpath               <<< colored
+Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 404 as errors
 ```
 
 The same in JSON:
@@ -207,9 +211,10 @@ Here's a brief 1-2-3 demonstration in re specifically: feature flags.
 ```console
 $ ais bucket props set ais://nnn features <TAB-TAB>
 
-Skip-Loading-VersionChecksum-MD   Disable-Cold-GET                  S3-ListObjectVersions
-Fsync-PUT                         Streaming-Cold-GET                Resume-Interrupted-MPU
-S3-Presigned-Request              S3-Use-Path-Style                 none
+Skip-Loading-VersionChecksum-MD   Streaming-Cold-GET                Count-Object-NotFound-Stats
+Fsync-PUT                         S3-Use-Path-Style                 none
+S3-Presigned-Request              S3-ListObjectVersions
+Disable-Cold-GET                  Resume-Interrupted-MPU
 ```
 
 #### 2. select and set
@@ -228,6 +233,9 @@ S3-Presigned-Request             s3,security,compat     (*) pass-through client-
 Disable-Cold-GET                 perf,integrity-        disable cold-GET (from remote bucket)
 Streaming-Cold-GET               perf,integrity-        write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 S3-Use-Path-Style                s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
+Resume-Interrupted-MPU           mpu,ops                resume interrupted multipart uploads from persisted partial manifests
+S3-ListObjectVersions            s3,overhead            when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
+Count-Object-NotFound-Stats      telemetry,ops          count GET(object) 404 as errors
 ```
 
 #### 3. reset feature flags back to zero (or 'none')
@@ -247,6 +255,7 @@ Streaming-Cold-GET               perf,integrity-        write and transmit cold-
 S3-Use-Path-Style                s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
 Resume-Interrupted-MPU           mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 S3-ListObjectVersions            s3,overhead            when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
+Count-Object-NotFound-Stats      telemetry,ops          count GET(object) 404 as errors
 ```
 
 ### Validation errors
@@ -258,3 +267,41 @@ $ ais config cluster features Disable-Cold-GET Streaming-Cold-GET
 
 Error: feature flags "Disable-Cold-GET" and "Streaming-Cold-GET" are mutually exclusive
 ```
+
+## Example: Count-Object-NotFound-Stats
+
+By default, a missing object (`GET(object)` returning 404) does **not** increment `ERR-GET`.
+
+```console
+$ ais get ais://nnn/missing
+Error: object "ais://nnn/missing" does not exist
+
+$ ais performance counters --regex err-get
+TARGET           ERR-GET(n)      ERR-GETBATCH(n)         ERR-GETBLOB(n)
+t[...]           -               -                       -
+````
+
+To restore the legacy behavior, enable `Count-Object-NotFound-Stats` either globally or on a per-bucket basis.
+
+For example, set it on a bucket:
+
+```console
+$ ais bucket props set ais://nnn features Count-Object-NotFound-Stats
+"features" set to: "Count-Object-NotFound-Stats" (was: "none")
+
+Bucket props successfully updated.
+```
+
+Now the same missing-object GET increments `ERR-GET`:
+
+```console
+$ ais get ais://nnn/missing
+Error: object "ais://nnn/missing" does not exist
+
+$ ais performance counters --regex err-get
+TARGET           ERR-GET(n)      ERR-GETBATCH(n)         ERR-GETBLOB(n)
+t[...]           1               -                       -
+```
+
+In other words, the feature does **not** change GET semantics: the request still returns 404.
+It only changes whether object-not-found responses are counted as GET errors in the corresponding telemetry.

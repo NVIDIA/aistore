@@ -32,9 +32,13 @@ import (
 )
 
 // TODO:
-// 1. load, latest-ver, checksum, write, finalize
-// 2. track each chunk reader with 'started' timestamp; abort/retry individual chunks; timeout
-// 3. validate `expCksum`
+// 1. check that caller always checks remote non-existence (target does - via t.blobdl)
+// 2. general error handling:
+//    - support io-errors (higher severity)
+//    - pass http status from backend => finalize
+// 3. load, latest-ver, checksum, write, finalize
+// 4. track each chunk reader with 'started' timestamp; abort/retry individual chunks; timeout
+// 5. validate `expCksum`
 
 // default tunables (can override via apc.BlobMsg)
 const (
@@ -450,11 +454,14 @@ func (r *XactBlobDl) runWorkers() error {
 
 			// out-of-order chunks: temporarily store in map and wait for the next sequential chunk
 			if done.roff != r.woff {
-				debug.Assertf(done.roff > r.woff, "out-of-order chunk's offset should be greater than the current write offset")
-				debug.Assertf((done.roff-r.woff)%r.chunkSize == 0, "out-of-order chunk's offset should be a multiple of chunk size")
+				debug.Assertf(done.roff > r.woff, "out-of-order chunk's offset should be greater than the current write offset: %d vs %d",
+					done.roff, r.woff)
+				debug.Assertf((done.roff-r.woff)%r.chunkSize == 0, "out-of-order chunk's offset should be a multiple of chunk size: %d, %d",
+					done.roff-r.woff, r.chunkSize)
 
-				debug.Assertf(r.pending[done.roff] == nil, "out-of-order chunk should not be already in the pending map")
+				debug.Assert(r.pending[done.roff] == nil, "out-of-order chunk should not be already in the pending map")
 				r.pending[done.roff] = done
+
 				continue
 			}
 
@@ -529,12 +536,7 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 
 		r.ObjsAdd(1, 0)
 	} else {
-		tstats := core.T.StatsUpdater()
-
-		// Increment global GET error count
-		tstats.IncWith(stats.ErrGetCount, r.vlabs)
-		// Increment blob-download specific GET error count
-		tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
+		r._errStats()
 
 		// cleanup the manifest for both user abort and runtime error abort
 		if r.manifest != nil {
@@ -544,6 +546,14 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 
 	r.cleanup()
 	r.Finish()
+}
+
+// bump both generic and blob-downloader's own error counters
+// (compare w/ ais/target.go getObject() but note: 404 here implies runtime race)
+func (r *XactBlobDl) _errStats() {
+	tstats := core.T.StatsUpdater()
+	tstats.IncWith(stats.ErrGetCount, r.vlabs)
+	tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
 }
 
 func (r *XactBlobDl) _fini(lom *core.LOM) (err error) {
