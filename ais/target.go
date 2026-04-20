@@ -909,13 +909,17 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	if ecode, err := goi.getObject(); err != nil {
 		// stats
 		vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
-		if goi.isIOErr {
+		switch {
+		case goi.isIOErr:
 			t.statsT.IncWith(stats.ErrGetCount, vlabs)
 			t.statsT.IncWith(stats.IOErrGetCount, vlabs)
 			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Warningln("io-error [", err, "]", goi.lom.String())
 			}
-		} else {
+		case ecode != http.StatusNotFound:
+			// 404 is a caller-visible "no such object", not a target-side error.
+			// Counting it here made ais_target_err_get_count spike whenever a
+			// client probed non-existent keys - see #286.
 			t.statsT.IncWith(stats.ErrGetCount, vlabs)
 		}
 
