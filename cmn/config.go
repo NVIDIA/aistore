@@ -188,10 +188,15 @@ type (
 		Burst   int   `json:"burst_buffer"` // xaction channel (buffer) size
 		Enabled bool  `json:"enabled"`      // enabled (to generate copies)
 	}
+	// MirrorConfToSet is the partial-update counterpart of MirrorConf.
 	MirrorConfToSet struct {
-		Copies  *int64 `json:"copies,omitempty"`
-		Burst   *int   `json:"burst_buffer,omitempty"`
-		Enabled *bool  `json:"enabled,omitempty"`
+		// Number of copies (replicas) to maintain per object.
+		Copies *int64 `json:"copies,omitempty"` // +gen:optional
+		// Size of the mirror xaction's input channel (buffer). Larger
+		// values absorb bursty producers at the cost of memory.
+		Burst *int `json:"burst_buffer,omitempty"` // +gen:optional
+		// Toggles intra-cluster mirroring for the bucket.
+		Enabled *bool `json:"enabled,omitempty"` // +gen:optional
 	}
 
 	ECConf struct {
@@ -225,13 +230,32 @@ type (
 		Enabled  bool `json:"enabled"`   // EC is enabled
 		DiskOnly bool `json:"disk_only"` // if true, EC does not use SGL - data goes directly to drives
 	}
+	// ECConfToSet is the partial-update counterpart of ECConf and the
+	// request body for `ec-encode`. DataSlices and ParitySlices are
+	// the required inputs.
 	ECConfToSet struct {
 		XactConfToSet
-		ObjSizeLimit *int64 `json:"objsize_limit,omitempty"`
-		DataSlices   *int   `json:"data_slices,omitempty"`
-		ParitySlices *int   `json:"parity_slices,omitempty"`
-		Enabled      *bool  `json:"enabled,omitempty"`
-		DiskOnly     *bool  `json:"disk_only,omitempty"`
+		// Object-size threshold that separates intra-cluster mirroring
+		// from erasure coding:
+		//   - `0`: Slice every object into (D) data slices and
+		//     (P) parity slices, regardless of size.
+		//   - `-1`: Replicate all objects as-is, providing (P+1)-way
+		//     mirroring instead of coding.
+		//   - `>0`: Mirror objects smaller than this threshold; code
+		//     objects at or above it.
+		ObjSizeLimit *int64 `json:"objsize_limit,omitempty"` // +gen:optional
+		// Number of data slices (D) per object. A value of 1 produces
+		// (P) additional full-size replicas instead of coded slices.
+		DataSlices *int `json:"data_slices,omitempty"` // +gen:optional
+		// Number of parity slices (P) - or full replicas - generated per
+		// object, depending on object size and ObjSizeLimit. Slices and
+		// copies always land on different storage nodes.
+		ParitySlices *int `json:"parity_slices,omitempty"` // +gen:optional
+		// Toggles erasure coding for the bucket.
+		Enabled *bool `json:"enabled,omitempty"` // +gen:optional
+		// When true, bypasses the in-memory SGL and writes data directly
+		// to drives.
+		DiskOnly *bool `json:"disk_only,omitempty"` // +gen:optional
 	}
 
 	ChunksConf struct {
@@ -271,12 +295,30 @@ type (
 		Flags uint64 `json:"flags,omitempty"`
 	}
 
+	// ChunksConfToSet is the partial-update counterpart of ChunksConf.
 	ChunksConfToSet struct {
-		ObjSizeLimit      *cos.SizeIEC `json:"objsize_limit,omitempty"`
-		MaxMonolithicSize *cos.SizeIEC `json:"max_monolithic_size,omitempty"`
-		ChunkSize         *cos.SizeIEC `json:"chunk_size,omitempty"`
-		CheckpointEvery   *int         `json:"checkpoint_every,omitempty"`
-		Flags             *uint64      `json:"flags,omitempty"`
+		// Object-size threshold (bytes) that triggers auto-chunking:
+		//   - `0`: Never auto-chunk.
+		//   - `>0`: Auto-chunk using `chunk_size` when object size is
+		//     at or above this threshold.
+		//
+		// Soft limit (user preference). Multipart uploads are always
+		// stored chunked regardless of this value.
+		ObjSizeLimit *cos.SizeIEC `json:"objsize_limit,omitempty"` // +gen:optional
+		// Maximum size for storing objects as single contiguous files.
+		// Hard limit; when set, must be at or above ObjSizeLimit and
+		// within the `[1 GiB, 1 TiB]` range.
+		MaxMonolithicSize *cos.SizeIEC `json:"max_monolithic_size,omitempty"` // +gen:optional
+		// Default chunk size (a.k.a. "part size") used for auto-chunking.
+		// `0` selects the system default (1 GiB).
+		ChunkSize *cos.SizeIEC `json:"chunk_size,omitempty"` // +gen:optional
+		// Persist the partial upload manifest after every N received
+		// chunks. `0` keeps the partial manifest strictly in memory
+		// for the duration of the upload.
+		CheckpointEvery *int `json:"checkpoint_every,omitempty"` // +gen:optional
+		// Reserved bitwise field for future advanced behaviors
+		// (compression, GC, placement, etc.).
+		Flags *uint64 `json:"flags,omitempty"` // +gen:optional
 	}
 
 	LogConf struct {
@@ -456,11 +498,19 @@ type (
 		// Enabled: LRU will only run when set to true
 		Enabled bool `json:"enabled"`
 	}
+	// LRUConfToSet is the partial-update counterpart of LRUConf.
 	LRUConfToSet struct {
-		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty"`
-		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty"`
-		BatchSize       *int64        `json:"batch_size,omitempty"`
-		Enabled         *bool         `json:"enabled,omitempty"`
+		// Period after an object's access time during which eviction
+		// is forbidden: `[atime, atime + dont_evict_time]`.
+		DontEvictTime *cos.Duration `json:"dont_evict_time,omitempty"` // +gen:optional
+		// Frequency at which targets update their free/available
+		// capacity utilization numbers.
+		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty"` // +gen:optional
+		// Unit of LRU eviction processing (objects per batch). `0`
+		// selects the system default.
+		BatchSize *int64 `json:"batch_size,omitempty"` // +gen:optional
+		// Toggles LRU-based space reclamation for the bucket.
+		Enabled *bool `json:"enabled,omitempty"` // +gen:optional
 	}
 
 	DiskConf struct {
@@ -531,12 +581,24 @@ type (
 		// EnableReadRange: Return read range checksum otherwise return entire object checksum.
 		EnableReadRange bool `json:"enable_read_range"`
 	}
+	// CksumConfToSet is the partial-update counterpart of CksumConf.
 	CksumConfToSet struct {
-		Type            *string `json:"type,omitempty"`
-		ValidateColdGet *bool   `json:"validate_cold_get,omitempty"`
-		ValidateWarmGet *bool   `json:"validate_warm_get,omitempty"`
-		ValidateObjMove *bool   `json:"validate_obj_move,omitempty"`
-		EnableReadRange *bool   `json:"enable_read_range,omitempty"`
+		// Checksum algorithm: `"xxhash"`, `"md5"`, `"sha256"`, etc.
+		// Use `"none"` to disable checksumming.
+		Type *string `json:"type,omitempty"` // +gen:optional
+		// Validate checksum on cold GET (the first download from the
+		// remote backend).
+		ValidateColdGet *bool `json:"validate_cold_get,omitempty"` // +gen:optional
+		// Validate checksum on warm GET. On mismatch, recover from
+		// redundant copies, EC slices, or the remote backend; fail
+		// the GET if recovery is not possible.
+		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"` // +gen:optional
+		// Validate checksums of objects migrated or replicated within
+		// the cluster.
+		ValidateObjMove *bool `json:"validate_obj_move,omitempty"` // +gen:optional
+		// Return the range checksum for range reads. When `false`,
+		// returns the whole-object checksum instead.
+		EnableReadRange *bool `json:"enable_read_range,omitempty"` // +gen:optional
 	}
 
 	VersionConf struct {
@@ -565,10 +627,17 @@ type (
 		// See also: apc.QparamSync, apc.CopyBckMsg
 		Sync bool `json:"synchronize"`
 	}
+	// VersionConfToSet is the partial-update counterpart of VersionConf.
 	VersionConfToSet struct {
-		Enabled         *bool `json:"enabled,omitempty"`
-		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"`
-		Sync            *bool `json:"synchronize,omitempty"`
+		// Toggles object versioning for the bucket.
+		Enabled *bool `json:"enabled,omitempty"` // +gen:optional
+		// On reads that touch remote objects (warm GET, prefetch,
+		// copy-bucket, rebalance, etc.), revalidate the remote version
+		// and refresh the in-cluster copy when stale.
+		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"` // +gen:optional
+		// Stronger form of `validate_warm_get`: additionally, delete
+		// in-cluster objects whose remote counterpart no longer exists.
+		Sync *bool `json:"synchronize,omitempty"` // +gen:optional
 	}
 
 	// NetConf: network configuration
@@ -846,10 +915,18 @@ type (
 		SbundleMult int    `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
 		Burst       int    `json:"burst_buffer"`      // xaction channel (buffer) size
 	}
+	// XactConfToSet is the partial-update counterpart of XactConf.
 	XactConfToSet struct {
-		Compression *string `json:"compression,omitempty"`
-		SbundleMult *int    `json:"bundle_multiplier,omitempty"`
-		Burst       *int    `json:"burst_buffer,omitempty"`
+		// On-wire compression policy for the xaction's data streams
+		// (`"never"`, `"always"`, etc.). See `api/apc/compression.go`
+		// for the full enum.
+		Compression *string `json:"compression,omitempty"` // +gen:optional
+		// Stream-bundle multiplier: number of parallel streams opened
+		// to each destination target.
+		SbundleMult *int `json:"bundle_multiplier,omitempty"` // +gen:optional
+		// Size of the xaction's input channel (buffer). Larger values
+		// absorb bursty producers at the cost of memory.
+		Burst *int `json:"burst_buffer,omitempty"` // +gen:optional
 	}
 
 	// bucket-to-bucket copy/transform
@@ -868,9 +945,14 @@ type (
 		Data apc.WritePolicy `json:"data"`
 		MD   apc.WritePolicy `json:"md"`
 	}
+	// WritePolicyConfToSet is the partial-update counterpart of WritePolicyConf.
 	WritePolicyConfToSet struct {
-		Data *apc.WritePolicy `json:"data,omitempty" list:"readonly"` // NOTE: NIY
-		MD   *apc.WritePolicy `json:"md,omitempty"`
+		// When to persist object data writes. Read-only (not yet
+		// implemented).
+		Data *apc.WritePolicy `json:"data,omitempty" list:"readonly"` // +gen:optional
+		// When to persist object metadata writes. One of `"immediate"`,
+		// `"delayed"`, or `"never"`.
+		MD *apc.WritePolicy `json:"md,omitempty"` // +gen:optional
 	}
 )
 
@@ -882,9 +964,15 @@ type (
 		Backend  Adaptive `json:"backend"`
 		Frontend Bursty   `json:"frontend"`
 	}
+	// RateLimitConfToSet is the partial-update counterpart of RateLimitConf.
 	RateLimitConfToSet struct {
-		Backend  *AdaptiveToSet `json:"backend,omitempty"`
-		Frontend *BurstyToSet   `json:"frontend,omitempty"`
+		// Adaptive rate limit for the backend (Cloud-facing) side of
+		// the bucket - handles HTTP 429/503 responses from remote
+		// backends.
+		Backend *AdaptiveToSet `json:"backend,omitempty"` // +gen:optional
+		// Bursty rate limit for frontend (user-facing) GET, PUT, and
+		// DELETE traffic.
+		Frontend *BurstyToSet `json:"frontend,omitempty"` // +gen:optional
 	}
 	RateLimitBase struct {
 		// optional per-operation MaxTokens override - a space-separated key:value list, e.g.:
@@ -899,11 +987,21 @@ type (
 		MaxTokens int          `json:"max_tokens"`
 		Enabled   bool         `json:"enabled"`
 	}
+	// RateLimitBaseToSet is the partial-update counterpart of
+	// RateLimitBase - the common rate-limit knobs shared by Adaptive
+	// and Bursty.
 	RateLimitBaseToSet struct {
-		Verbs     *string       `json:"per_op_max_tokens,omitempty"`
-		Interval  *cos.Duration `json:"interval,omitempty"`
-		MaxTokens *int          `json:"max_tokens,omitempty"`
-		Enabled   *bool         `json:"enabled,omitempty"`
+		// Per-operation `max_tokens` override: a space-separated,
+		// case-insensitive list of `verb:value` pairs (e.g.
+		// `"put:3500"` or `"get:5000 delete:1000"`). When empty, every
+		// verb falls back to the top-level `max_tokens`.
+		Verbs *string `json:"per_op_max_tokens,omitempty"` // +gen:optional
+		// Duration of a single rate-limit window. Range `[1s, 1h]`.
+		Interval *cos.Duration `json:"interval,omitempty"` // +gen:optional
+		// Maximum tokens (requests) per `interval`. Must be positive.
+		MaxTokens *int `json:"max_tokens,omitempty"` // +gen:optional
+		// Toggles this rate limit.
+		Enabled *bool `json:"enabled,omitempty"` // +gen:optional
 	}
 
 	// Adaptive rate limit (a.k.a. rate shaper):
@@ -915,9 +1013,12 @@ type (
 		RateLimitBase
 		NumRetries int `json:"num_retries"`
 	}
+	// AdaptiveToSet is the partial-update counterpart of Adaptive.
 	AdaptiveToSet struct {
-		RateLimitBaseToSet      // NOTE: must be in the same exact order/position as above
-		NumRetries         *int `json:"num_retries,omitempty"`
+		RateLimitBaseToSet // NOTE: must be in the same exact order/position as above
+		// Automatic retries on throttled (429) or unavailable (503)
+		// responses before propagating the error. Range `[1, 10]`.
+		NumRetries *int `json:"num_retries,omitempty"` // +gen:optional
 	}
 
 	// rate limit that fails 'too-many requests' while permitting a certain level of burstiness
@@ -927,9 +1028,13 @@ type (
 		RateLimitBase
 		Size int `json:"burst_size"`
 	}
+	// BurstyToSet is the partial-update counterpart of Bursty.
 	BurstyToSet struct {
 		RateLimitBaseToSet
-		Size *int `json:"burst_size,omitempty"`
+		// Maximum burst above the steady-state `max_tokens`-per-
+		// `interval` rate before the limiter returns "too many
+		// requests". Must be positive and at most 50% of `max_tokens`.
+		Size *int `json:"burst_size,omitempty"` // +gen:optional
 	}
 )
 

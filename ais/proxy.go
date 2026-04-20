@@ -589,8 +589,10 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// +gen:endpoint GET /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
-// List buckets, bucket inventories, or objects within a bucket
+// +gen:payload apc.ActList={"action": "list", "value": {"prefix": "images/", "props": "name,size,checksum", "pagesize": 1000}}
+// +gen:payload apc.ActSummaryBck={"action": "summary-bck", "value": {"prefix": "images/", "cached": true}}
+// +gen:endpoint GET /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string] action=[apc.ActList=apc.LsoMsg|apc.ActSummaryBck=apc.BsummCtrlMsg|apc.ActShowNBI=apc.ActMsg]
+// List bucket contents, compute a bucket summary, or show a bucket inventory
 func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	var (
 		msg     *apc.ActMsg
@@ -1273,8 +1275,9 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// +gen:endpoint PUT /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
-// Perform actions on a bucket (like archiving)
+// +gen:endpoint PUT /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string] action=[apc.ActArchive=cmn.ArchiveBckMsg]
+// +gen:payload apc.ActArchive={"action": "archive", "value": {"tobck": {"name": "destination-bucket", "provider": "ais"}, "archname": "shard-001.tar", "mime": "tar", "template": "prefix{001..100}"}}
+// Archive objects from a bucket into a new shard object
 func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg           *apc.ActMsg
@@ -1350,14 +1353,20 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// +gen:endpoint POST /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] action=[apc.ActMoveBck=apc.ActMsg|apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg|apc.ActCopyObjects=cmn.TCOMsg|apc.ActETLObjects=cmn.TCOMsg|apc.ActAddRemoteBck=apc.ActMsg|apc.ActPrefetchObjects=apc.ActMsg|apc.ActMakeNCopies=apc.ActMsg|apc.ActECEncode=apc.ActMsg]
-// +gen:payload apc.ActCopyBck={"action": "copy-bck", "value": {"dry_run": false, "force": false}}
-// +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {"id": "ETL_NAME"}}
-// +gen:payload apc.ActCopyObjects={"action": "copy-objects", "value": {"to_bck": {"name": "destination-bucket", "provider": "ais"}, "template": "prefix{001..100}"}}
-// +gen:payload apc.ActETLObjects={"action": "etl-objects", "value": {"to_bck": {"name": "destination-bucket", "provider": "ais"}, "transform": {"name": "ETL_NAME"}, "template": "prefix{001..100}"}}
+// +gen:endpoint POST /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] action=[apc.ActCreateBck=cmn.BpropsToSet|apc.ActMoveBck=apc.ActMsg|apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg|apc.ActCopyObjects=cmn.TCOMsg|apc.ActETLObjects=cmn.TCOMsg|apc.ActPrefetchObjects=apc.PrefetchMsg|apc.ActMakeNCopies=int|apc.ActECEncode=cmn.ECConfToSet|apc.ActRechunk=apc.RechunkMsg|apc.ActCreateNBI=apc.CreateNBIMsg]
+// +gen:payload apc.ActCopyBck={"action": "copy-bck", "value": {"prefix": "images/", "prepend": "backup/", "latest-ver": true, "num-workers": 8}}
+// +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {"id": "ETL_NAME", "prefix": "images/", "num-workers": 8}}
+// +gen:payload apc.ActCopyObjects={"action": "copy-objects", "value": {"tobck": {"name": "destination-bucket", "provider": "ais"}, "template": "shard-{001..100}.tar"}}
+// +gen:payload apc.ActETLObjects={"action": "etl-objects", "value": {"tobck": {"name": "destination-bucket", "provider": "ais"}, "id": "ETL_NAME", "template": "shard-{001..100}.tar"}}
 // +gen:payload apc.ActPrefetchObjects={"action": "prefetch-objects", "value": {"template": "shard-{001..999}.tar"}}
-// +gen:payload apc.ActMakeNCopies={"action": "make-n-copies", "value": {"copies": 2}}
-// Perform bucket operations: move, copy, ETL transform, prefetch, make copies, EC encode, and add remote buckets
+// +gen:payload apc.ActMakeNCopies={"action": "make-n-copies", "value": 2}
+// +gen:payload apc.ActECEncode={"action": "ec-encode", "value": {"data_slices": 4, "parity_slices": 2}}
+// +gen:payload apc.ActCreateBck={"action": "create-bck", "value": {"versioning": {"enabled": true}, "mirror": {"enabled": true, "copies": 2}}}
+// +gen:payload apc.ActRechunk={"action": "rechunk", "value": {"chunk-size": 4194304, "objsize-limit": 1048576}}
+// +gen:payload apc.ActCreateNBI={"action": "create-inventory", "value": {"name": "my-inventory"}}
+// +gen:name apc.ActECEncode="Set to \"recover\" to validate and rebuild missing or corrupted EC slices"
+// +gen:value apc.ActMakeNCopies="Target n-way replication level: total number of copies to maintain for each object in the bucket"
+// Create, rename, copy, transform, or manage a bucket
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var msg *apc.ActMsg
 	apiItems, err := p.parseURL(w, r, apc.URLPathBuckets.L, 1, true)
@@ -2026,10 +2035,8 @@ func _checkObjMv(bck *meta.Bck, msg *apc.ActMsg, apireq *apiRequest) error {
 	return nil
 }
 
-// +gen:endpoint HEAD /v1/buckets/{bucket-name}/[apc.QparamFltPresence=string,apc.QparamBinfoWithOrWithoutRemote=string,apc.QparamDontAddRemote=bool]
+// +gen:endpoint HEAD /v1/buckets/{bucket-name}[apc.QparamFltPresence=int,apc.QparamBinfoWithOrWithoutRemote=string,apc.QparamDontAddRemote=bool]
 // Get bucket metadata and properties
-// with additional preparsing step to support api.GetBucketInfo prefix
-// (e.g. 'ais ls ais://nnn --summary --prefix=aaa/bbb')
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var prefix string
 
@@ -2156,8 +2163,9 @@ func toHdr(w http.ResponseWriter, bck *meta.Bck, info *cmn.BsummResult, status i
 	}
 }
 
-// +gen:endpoint PATCH /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
-// Update bucket properties and settings
+// +gen:endpoint PATCH /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string] action=[apc.ActSetBprops=cmn.BpropsToSet|apc.ActResetBprops=apc.ActMsg]
+// +gen:payload apc.ActSetBprops={"action": "set-bprops", "value": {"versioning": {"enabled": true}, "mirror": {"enabled": true, "copies": 2}}}
+// Update or reset bucket properties
 func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		err           error

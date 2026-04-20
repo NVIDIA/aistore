@@ -14,18 +14,27 @@ import (
 // native bucket inventory
 
 type (
+	// CreateNBIMsg requests creation of a Native Bucket Inventory (NBI):
+	// a local, flat, lexicographically-ordered snapshot of a remote
+	// bucket's namespace (object names plus selected properties). Once
+	// created, inventories can back fast, cheap listings that do not
+	// re-walk the remote backend. NBI applies to remote buckets only
+	// (S3, GCS, Azure, OCI, remote AIS); not to ais:// buckets.
+	// Embeds LsoMsg to reuse prefix, props, and flag semantics during
+	// inventory generation. See docs/nbi.md for the full design.
 	CreateNBIMsg struct {
-		Name string `json:"name,omitempty"` // inventory name (optional; must be unique for a given bucket)
+		// Optional inventory name. Must be unique per bucket.
+		Name string `json:"name,omitempty"` // +gen:optional
 		LsoMsg
 
-		// Number of object names to store in each inventory chunk.
-		// Requested properties are stored alongside each name.
-		// Advanced usage only - non-zero overrides system default.
-		NamesPerChunk int64 `json:"names_per_chunk,omitempty"`
+		// Number of object names to store in each inventory chunk; zero
+		// selects a server-side default (DfltInvNamesPerChunk). Requested
+		// properties are stored alongside each name. Advanced tuning only.
+		NamesPerChunk int64 `json:"names_per_chunk,omitempty"` // +gen:optional
 
-		// Remove all existing inventories, if any, and proceed to create the new one
-		// (only one inventory per bucket is supported).
-		Force bool `json:"force,omitempty"`
+		// Remove any existing inventory for this bucket before creating
+		// the new one (only one inventory per bucket is supported).
+		Force bool `json:"force,omitempty"` // +gen:optional
 	}
 
 	NBIMeta struct {

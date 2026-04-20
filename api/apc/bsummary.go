@@ -7,13 +7,27 @@ package apc
 import "github.com/NVIDIA/aistore/cmn/cos"
 
 type (
-	// to generate bucket summary (or summaries)
+	// BsummCtrlMsg is the control message for computing a bucket
+	// summary (object count, total size, used percentage, etc.).
+	// Depending on the flags below, the summary covers only
+	// cached-in-cluster objects or all objects (cached + remote).
 	BsummCtrlMsg struct {
-		UUID          string `json:"uuid"`
-		Prefix        string `json:"prefix"`
-		ObjCached     bool   `json:"cached"`
-		BckPresent    bool   `json:"present"`
-		DontAddRemote bool   `json:"dont_add_remote"`
+		// Stable ID that ties together the pages/streaming chunks of
+		// one summary computation. Server-assigned on the first
+		// response; the client echoes it back on each subsequent page.
+		UUID string `json:"uuid"` // +gen:optional
+		// Include only objects whose name starts with this prefix.
+		Prefix string `json:"prefix"` // +gen:optional
+		// Restrict the summary to objects currently cached in the
+		// cluster. When `false`, remote objects are also counted.
+		ObjCached bool `json:"cached"` // +gen:optional
+		// Require the bucket to already be present in BMD. When
+		// `false` and the bucket is remote-not-yet-present, the server
+		// may add it on the fly (unless `dont_add_remote` is also set).
+		BckPresent bool `json:"present"` // +gen:optional
+		// Do not add a remote bucket to BMD as a side effect of
+		// summarizing it. Takes precedence over `present`.
+		DontAddRemote bool `json:"dont_add_remote"` // +gen:optional
 	}
 
 	// "summarized" result for a given bucket

@@ -13,16 +13,36 @@ import (
 
 // (common for all multi-object operations)
 type (
-	// List of object names _or_ a template specifying { optional Prefix, zero or more Ranges }
+	// ListRange selects the objects a multi-object operation will act
+	// on. Three modes:
+	//   - `objnames` set: operate on exactly those named objects
+	//   - `template` set: operate on objects matching the range
+	//     template (e.g. `"shard-{001..999}.tar"`)
+	//   - both empty: operate on all objects in the source bucket
 	ListRange struct {
-		Template string   `json:"template"`
-		ObjNames []string `json:"objnames"`
+		// Range template selecting objects by name (e.g.
+		// `"shard-{001..999}.tar"`).
+		Template string `json:"template"` // +gen:optional
+		// Explicit list of object names.
+		ObjNames []string `json:"objnames"` // +gen:optional
 	}
+	// EvdMsg parameterizes multi-object delete and evict ("evd")
+	// operations. Objects are selected via ListRange. For evict, only
+	// the in-cluster (cached) copy is removed; for delete, the object
+	// is removed from both the cluster and (when applicable) the
+	// remote backend.
 	EvdMsg struct {
 		ListRange
-		NumWorkers      int  `json:"num-workers,omitempty"` // number of concurrent workers; (-1) none; (0) auto-computed (see xs/nwp.go, "media type", load.Advice)
-		ContinueOnError bool `json:"coer,omitempty"`        // ignore non-critical errors, keep going
-		NonRecurs       bool `json:"non-recurs,omitempty"`  // do not evict (delete) nested subdirs (see also: `apc.LsNoRecursion`, `apc.CopyBckMsg`)
+		// Number of concurrent workers:
+		//   - `0`: Auto-computed.
+		//   - `-1`: Serial execution in the iterating goroutine.
+		//   - `>0`: Exact worker count.
+		NumWorkers int `json:"num-workers,omitempty"` // +gen:optional
+		// Soft-error semantics for per-object retrieval or processing
+		// failures. Support varies by job.
+		ContinueOnError bool `json:"coer,omitempty"` // +gen:optional
+		// Do not recurse into nested virtual subdirectories.
+		NonRecurs bool `json:"non-recurs,omitempty"` // +gen:optional
 	}
 )
 
@@ -56,14 +76,30 @@ func (lrm *ListRange) Str(sb *cos.SB, isPrefix bool) {
 	}
 }
 
-// prefetch
+// PrefetchMsg parameterizes multi-object prefetch from a remote bucket
+// into the cluster. Objects are selected via ListRange. Objects already
+// cached in-cluster are skipped unless `latest-ver` is set, in which
+// case their version is revalidated against the backend.
 type PrefetchMsg struct {
 	ListRange
-	BlobThreshold   int64 `json:"blob-threshold"`       // when greater than threshold prefetch using blob-downloader; otherwise cold GET
-	NumWorkers      int   `json:"num-workers"`          // number of concurrent workers; (-1) none; (0) auto-computed (see xs/nwp.go, "media type", load.Advice)
-	ContinueOnError bool  `json:"coer"`                 // ignore non-critical errors, keep going
-	LatestVer       bool  `json:"latest-ver"`           // when true & in-cluster: check with remote whether (deleted | version-changed)
-	NonRecurs       bool  `json:"non-recurs,omitempty"` // do not prefetch nested subdirs (see also: `apc.LsNoRecursion`, `apc.CopyBckMsg`, `apc.EvdMsg`)
+	// Object-size threshold (bytes): objects larger than this are
+	// fetched via the blob downloader; smaller objects are fetched as
+	// a single cold GET. `0` selects the server default.
+	BlobThreshold int64 `json:"blob-threshold"` // +gen:optional
+	// Number of concurrent workers:
+	//   - `0`: Auto-computed.
+	//   - `-1`: No additional workers.
+	//   - `>0`: Exact worker count.
+	NumWorkers int `json:"num-workers"` // +gen:optional
+	// Soft-error semantics for per-object retrieval or processing
+	// failures. Support varies by job.
+	ContinueOnError bool `json:"coer"` // +gen:optional
+	// For in-cluster objects, revalidate against the remote backend
+	// and refetch if the remote copy was deleted or its version
+	// changed. Overrides the bucket's `versioning.validate_warm_get`.
+	LatestVer bool `json:"latest-ver"` // +gen:optional
+	// Do not recurse into nested virtual subdirectories.
+	NonRecurs bool `json:"non-recurs,omitempty"` // +gen:optional
 }
 
 // +ctlmsg
@@ -98,22 +134,33 @@ func (*PrefetchMsg) delim(sb *cos.SB) {
 	}
 }
 
-// ArchiveMsg contains the parameters (all except the destination bucket)
-// for archiving multiple objects as one of the supported archive.FileExtensions types
-// at the specified (bucket) destination.
-// See also: api.PutApndArchArgs
-// --------------------  terminology   ---------------------
-// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object.
-// [NOTE] see cmn/api for cmn.ArchiveMsg (that also contains ToBck)
+// ArchiveMsg parameterizes archiving multiple objects into a single
+// archive ("shard") object - one of `.tar`, `.tgz` / `.tar.gz`, `.zip`,
+// or `.tar.lz4`. Source objects are selected via ListRange. See
+// cmn.ArchiveMsg for the full request that wraps this with a
+// destination bucket.
+//
+// For the single-object append variant, see api.PutApndArchArgs.
 type ArchiveMsg struct {
-	TxnUUID     string `json:"-"`        // internal use
-	FromBckName string `json:"-"`        // ditto
-	ArchName    string `json:"archname"` // one of the archive.FileExtensions
-	Mime        string `json:"mime"`     // user-specified mime type (NOTE: takes precedence if defined)
+	TxnUUID     string `json:"-"` // Internal use only
+	FromBckName string `json:"-"` // Internal use only
+	// Destination archive object name, including a supported archive
+	// extension (`.tar`, `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`).
+	ArchName string `json:"archname"`
+	// Override the archive MIME type. When set, takes precedence over
+	// the extension inferred from `archname`.
+	Mime string `json:"mime"` // +gen:optional
 	ListRange
-	BaseNameOnly    bool `json:"bnonly"`               // only extract the base name of objects as names of archived objects
-	InclSrcBname    bool `json:"isbn"`                 // include source bucket name into the names of archived objects
-	AppendIfExists  bool `json:"aate"`                 // adding a list or a range of objects to an existing archive
-	ContinueOnError bool `json:"coer"`                 // on err, keep running arc xaction in a any given multi-object transaction
-	NonRecurs       bool `json:"non-recurs,omitempty"` // do not archive contents of nested virtual subdirectories (see also: `apc.LsNoRecursion`, `apc.CopyBckMsg`)
+	// Store archived entries under each source object's base name
+	// only, stripping any virtual directory prefix.
+	BaseNameOnly bool `json:"bnonly"` // +gen:optional
+	// Prefix archived entry names with the source bucket name.
+	InclSrcBname bool `json:"isbn"` // +gen:optional
+	// Append to the destination archive if it already exists.
+	AppendIfExists bool `json:"aate"` // +gen:optional
+	// Soft-error semantics for per-entry retrieval or processing
+	// failures. Support varies by job.
+	ContinueOnError bool `json:"coer"` // +gen:optional
+	// Do not archive contents of nested virtual subdirectories.
+	NonRecurs bool `json:"non-recurs,omitempty"` // +gen:optional
 }

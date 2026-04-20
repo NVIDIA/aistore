@@ -184,17 +184,49 @@ var (
 )
 
 type (
+	// LsoMsg is the list-objects control message. It carries paging
+	// state (`uuid`, `continuation_token`) plus filters and
+	// presentation options that select which objects to return and
+	// which properties to include. For multi-page listings, the server
+	// echoes an opaque `continuation_token` that the client passes back
+	// on the next request; `uuid` ties all pages of the same listing
+	// together.
 	LsoMsg struct {
-		Header            http.Header `json:"hdr,omitempty"`         // (for pointers, see `ListArgs` in api/ls.go)
-		UUID              string      `json:"uuid"`                  // ID to identify a single multi-page request
-		Props             string      `json:"props"`                 // comma-delimited, e.g. "checksum,size,custom" (see GetProps* enum)
-		TimeFormat        string      `json:"time_format,omitempty"` // RFC822 is the default
-		Prefix            string      `json:"prefix"`                // return names starting with prefix (including arch. files (e.g. "A.tar/tutorials/"))
-		StartAfter        string      `json:"start_after,omitempty"` // start listing after (AIS buckets only)
-		ContinuationToken string      `json:"continuation_token"`    // => LsoResult.ContinuationToken => LsoMsg.ContinuationToken
-		SID               string      `json:"target"`                // selected target to solely execute backend.list-objects
-		Flags             uint64      `json:"flags,string"`          // enum {LsCached, ...} - "LsoMsg flags" above
-		PageSize          int64       `json:"pagesize"`              // max entries returned by list objects call
+		// Request headers forwarded to the backend (remote buckets only).
+		Header http.Header `json:"hdr,omitempty"` // +gen:optional
+		// Stable ID that ties all pages of one listing together.
+		// Server-assigned on the first response; echoed by the client
+		// on each subsequent page.
+		UUID string `json:"uuid"` // +gen:optional
+		// Comma-separated list of object properties to include per
+		// entry (e.g. `"checksum,size,custom"`). See the `GetProps*`
+		// constants in this package for the full set. Empty selects
+		// server-side defaults.
+		Props string `json:"props"` // +gen:optional
+		// Go time format used to render time-valued properties.
+		// Defaults to RFC822.
+		TimeFormat string `json:"time_format,omitempty"` // +gen:optional
+		// Return only entries whose name starts with this prefix. For
+		// archive objects, the prefix also matches paths inside the
+		// archive (e.g. `"A.tar/tutorials/"`).
+		Prefix string `json:"prefix"` // +gen:optional
+		// Start listing strictly after this name (exclusive). AIS
+		// buckets only.
+		StartAfter string `json:"start_after,omitempty"` // +gen:optional
+		// Opaque token returned by the previous page; pass it back to
+		// fetch the next page. Empty on the first request; empty again
+		// once the listing is exhausted.
+		ContinuationToken string `json:"continuation_token"` // +gen:optional
+		// Pin the backend list-objects call to a single target by
+		// daemon ID. Advanced; typically left empty.
+		SID string `json:"target"` // +gen:optional
+		// Bit flags selecting presentation and filters (see the `Ls*`
+		// constants, e.g. `LsCached`, `LsNotCached`, `LsDiff`,
+		// `LsNameOnly`, `LsNameSize`, `LsNoRecursion`).
+		Flags uint64 `json:"flags,string"` // +gen:optional
+		// Maximum entries returned in a single page. `0` selects the
+		// server-side default.
+		PageSize int64 `json:"pagesize"` // +gen:optional
 	}
 )
 

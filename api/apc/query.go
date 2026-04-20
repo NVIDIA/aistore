@@ -34,8 +34,8 @@ const (
 	QparamNewCustom = "set-new-custom"
 
 	// Main bucket query params.
-	QparamProvider  = "provider"  // Backend provider type (ais, s3, gcp, azure, etc.)
-	QparamNamespace = "namespace" // Namespace for remote buckets and cross-cluster operations
+	QparamProvider  = "provider"  // Backend provider: one of "ais", "aws", "gcp", "azure", "oci", "ht". Defaults to "ais".
+	QparamNamespace = "namespace" // Bucket namespace; used for remote buckets and cross-cluster operations. Leave empty for the default namespace.
 
 	// e.g., usage: copy bucket, copy object
 	QparamBckTo = "bck_to"    // Destination bucket for copy/move operations
@@ -46,7 +46,7 @@ const (
 	// By default, when existence of a remote buckets is confirmed the bucket's
 	// metadata gets automatically (and transactionally) added to the cluster's BMD.
 	// This query parameter can be used to override the default behavior.
-	QparamDontAddRemote = "dont_add_remote_bck_md" // Don't add remote bucket to cluster BMD
+	QparamDontAddRemote = "dont_add_remote_bck_md" // Skip auto-registering the remote bucket in cluster metadata (by default, remote buckets are registered on first access).
 
 	// Add remote bucket to BMD _unconditionally_ and without executing HEAD request
 	// (to check access and load the bucket's properties)
@@ -63,13 +63,13 @@ const (
 
 	// (api.GetBucketInfo)
 	// NOTE: non-empty value indicates api.GetBucketInfo; "true" value further requires "with remote obj-s"
-	QparamBinfoWithOrWithoutRemote = "bsumm_remote" // Include remote objects in bucket summary/info
+	QparamBinfoWithOrWithoutRemote = "bsumm_remote" // Request bucket info (any non-empty value); set to "true" to also include remote (out-of-cluster) objects in the summary.
 
 	// "presence" in a given cluster shall not be confused with "existence" (possibly, remote).
 	// See also:
 	// - Flt* enum below
 	// - ListObjsMsg flags, docs/providers.md (for terminology)
-	QparamFltPresence = "presence" // Filter bucket/object by presence state (FltExists, FltPresent, etc.)
+	QparamFltPresence = "presence" // Presence filter (integer code): 0 exists, 1 exists-no-props, 2 present, 3 present-no-props, 4 present-in-cluster, 5 exists-outside-cluster.
 
 	// APPEND(object) operation - QparamAppendType enum below
 	QparamAppendType   = "append_type"   // Type of append operation (append, flush)

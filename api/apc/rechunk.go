@@ -4,12 +4,23 @@
  */
 package apc
 
-// Rechunk transforms object storage format (monolithic <-> chunked).
-// By default, rechunk operates only on in-cluster (cached) objects - it does not
-// fetch objects from remote backends. Use `SyncRemote=true` to also update remote storage.
+// RechunkMsg parameterizes an in-place transform of a bucket's objects
+// between monolithic and chunked storage formats.
+//
+// Rechunk operates only on in-cluster (cached) objects and does not
+// fetch from remote backends. Set `sync-remote` to also write the
+// rechunked result back to the remote backend.
 type RechunkMsg struct {
-	ObjSizeLimit int64  `json:"objsize-limit"` // 0: disable chunking (restore existing chunks to monolithic); > 0: chunk objects >= this size
-	ChunkSize    int64  `json:"chunk-size"`    // size of each chunk
-	Prefix       string `json:"prefix"`        // only rechunk objects with this prefix
-	SyncRemote   bool   `json:"sync-remote"`   // if true, also write rechunked objects to remote backend (default: false, local-only)
+	// Object-size threshold (bytes):
+	//   - `0`: Disable chunking; restore any existing chunked objects
+	//     to monolithic form.
+	//   - `>0`: Rechunk objects at or above this size.
+	ObjSizeLimit int64 `json:"objsize-limit"` // +gen:optional
+	// Target chunk size in bytes.
+	ChunkSize int64 `json:"chunk-size"` // +gen:optional
+	// Rechunk only objects whose name starts with this prefix. Empty
+	// applies to all objects in the bucket.
+	Prefix string `json:"prefix"` // +gen:optional
+	// Also write rechunked objects back to the remote backend.
+	SyncRemote bool `json:"sync-remote"` // +gen:optional
 }

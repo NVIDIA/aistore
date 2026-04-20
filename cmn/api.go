@@ -79,13 +79,21 @@ type (
 		// e.g. "team=alpha;project=beta;id=123"
 		Custom string `json:"custom,omitempty"`
 	}
+	// ExtraToSet is the partial-update counterpart of ExtraProps.
+	// Carries provider-specific bucket extras - only the block matching
+	// the bucket's provider is interpreted.
 	ExtraToSet struct { // ref. bpropsFilterExtra
-		AWS  *ExtraPropsAWSToSet  `json:"aws,omitempty"`
-		HTTP *ExtraPropsHTTPToSet `json:"http,omitempty"`
-		GCP  *ExtraPropsGCPToSet  `json:"gcp,omitempty"`
-		OCI  *ExtraPropsOCIToSet  `json:"oci,omitempty"`
-		// beware: any change to this field is still a version-bump + metasync
-		Custom *string `json:"custom,omitempty"`
+		// AWS/S3 extras.
+		AWS *ExtraPropsAWSToSet `json:"aws,omitempty"` // +gen:optional
+		// HTTP backend extras.
+		HTTP *ExtraPropsHTTPToSet `json:"http,omitempty"` // +gen:optional
+		// Google Cloud Storage extras.
+		GCP *ExtraPropsGCPToSet `json:"gcp,omitempty"` // +gen:optional
+		// Oracle Cloud Infrastructure object storage extras.
+		OCI *ExtraPropsOCIToSet `json:"oci,omitempty"` // +gen:optional
+		// Opaque user-defined extras (JSON-encoded). Any change to
+		// this field triggers a version bump and cluster-wide metasync.
+		Custom *string `json:"custom,omitempty"` // +gen:optional
 	}
 
 	ExtraPropsAWS struct {
@@ -114,12 +122,25 @@ type (
 		// - NOTE: the threshold is, effectively, one of the **performance tunables**
 		MultiPartSize cos.SizeIEC `json:"multipart_size,omitempty"`
 	}
+	// ExtraPropsAWSToSet is the partial-update counterpart of ExtraPropsAWS.
 	ExtraPropsAWSToSet struct {
-		CloudRegion   *string      `json:"cloud_region,omitempty"`
-		Endpoint      *string      `json:"endpoint,omitempty"`
-		Profile       *string      `json:"profile,omitempty"`
-		MaxPageSize   *int64       `json:"max_pagesize,omitempty"`
-		MultiPartSize *cos.SizeIEC `json:"multipart_size,omitempty"`
+		// AWS region for this bucket (e.g. `"us-east-1"`).
+		CloudRegion *string `json:"cloud_region,omitempty"` // +gen:optional
+		// S3 endpoint URL (hostname or fully qualified URI) that
+		// overrides the default AWS-generated endpoint.
+		Endpoint *string `json:"endpoint,omitempty"` // +gen:optional
+		// AWS shared-config profile to use for this bucket. When
+		// empty, falls back to `AWS_PROFILE` / `AWS_DEFAULT_PROFILE`
+		// and the default SDK provider chain.
+		Profile *string `json:"profile,omitempty"` // +gen:optional
+		// Server-side pagination limit for list-objects requests.
+		// `0` selects the provider default (S3: `1000`, Swift: `10000`).
+		MaxPageSize *int64 `json:"max_pagesize,omitempty"` // +gen:optional
+		// Object-size threshold (bytes) above which uploads are split
+		// into multipart parts; also used as the part size. Must be
+		// at least 5 MiB. Falls back to the AIS-provided default when
+		// omitted. Primarily a performance tunable.
+		MultiPartSize *cos.SizeIEC `json:"multipart_size,omitempty"` // +gen:optional
 	}
 
 	ExtraPropsGCP struct {
@@ -127,8 +148,12 @@ type (
 		// Overrides the global GOOGLE_APPLICATION_CREDENTIALS environment.
 		ApplicationCreds string `json:"application_creds,omitempty"`
 	}
+	// ExtraPropsGCPToSet is the partial-update counterpart of ExtraPropsGCP.
 	ExtraPropsGCPToSet struct {
-		ApplicationCreds *string `json:"application_creds,omitempty"`
+		// Path to a GCP service-account credentials JSON file.
+		// Overrides the `GOOGLE_APPLICATION_CREDENTIALS` environment
+		// variable.
+		ApplicationCreds *string `json:"application_creds,omitempty"` // +gen:optional
 	}
 
 	ExtraPropsOCI struct {
@@ -136,40 +161,77 @@ type (
 		// Overrides the global OCI_REGION environment / CLI config default.
 		Region string `json:"region,omitempty"`
 	}
+	// ExtraPropsOCIToSet is the partial-update counterpart of ExtraPropsOCI.
 	ExtraPropsOCIToSet struct {
-		Region *string `json:"region,omitempty"`
+		// OCI region for this bucket. Overrides the `OCI_REGION`
+		// environment variable and CLI config default.
+		Region *string `json:"region,omitempty"` // +gen:optional
 	}
 
 	ExtraPropsHTTP struct {
 		// Original URL prior to hashing.
 		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
 	}
+	// ExtraPropsHTTPToSet is the partial-update counterpart of ExtraPropsHTTP.
 	ExtraPropsHTTPToSet struct {
-		OrigURLBck *string `json:"original_url"`
+		// Original upstream URL (prior to hashing into the ht:// bucket
+		// name). Read-only; set by the system when the bucket is first
+		// materialized.
+		OrigURLBck *string `json:"original_url"` // +gen:optional
 	}
 
-	// Once validated, BpropsToSet are copied to Bprops.
-	// The struct may have extra fields that do not exist in Bprops.
-	// Add tag 'copy:"skip"' to ignore those fields when copying values.
+	// BpropsToSet is the partial-update counterpart of Bprops - the
+	// request body for both ActCreateBck (create a new bucket with
+	// these non-default properties) and ActSetBprops (update an
+	// existing bucket's properties).
+	//
+	// Only the fields the caller wants to specify need to be set:
+	//   - on create, fields omitted here inherit from the cluster-wide
+	//     configuration
+	//   - on update, fields omitted here leave the current value
+	//     unchanged
 	BpropsToSet struct {
-		BackendBck  *BackendBckToSet      `json:"backend_bck,omitempty"`
-		Versioning  *VersionConfToSet     `json:"versioning,omitempty"`
-		Cksum       *CksumConfToSet       `json:"checksum,omitempty"`
-		LRU         *LRUConfToSet         `json:"lru,omitempty"`
-		Mirror      *MirrorConfToSet      `json:"mirror,omitempty"`
-		Chunks      *ChunksConfToSet      `json:"chunks,omitempty"`
-		EC          *ECConfToSet          `json:"ec,omitempty"`
-		Access      *apc.AccessAttrs      `json:"access,string,omitempty"`
-		RateLimit   *RateLimitConfToSet   `json:"rate_limit,omitempty"`
-		Features    *feat.Flags           `json:"features,string,omitempty"`
-		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"`
-		Extra       *ExtraToSet           `json:"extra,omitempty"`
-		Force       bool                  `json:"force,omitempty" copy:"skip" list:"omit"`
+		// Remote backend bucket that this `ais://` bucket mirrors.
+		BackendBck *BackendBckToSet `json:"backend_bck,omitempty"` // +gen:optional
+		// Object versioning controls.
+		Versioning *VersionConfToSet `json:"versioning,omitempty"` // +gen:optional
+		// Checksum type and validation policy.
+		Cksum *CksumConfToSet `json:"checksum,omitempty"` // +gen:optional
+		// LRU-based space reclamation.
+		LRU *LRUConfToSet `json:"lru,omitempty"` // +gen:optional
+		// N-way mirroring (intra-cluster replication).
+		Mirror *MirrorConfToSet `json:"mirror,omitempty"` // +gen:optional
+		// Large-object chunking.
+		Chunks *ChunksConfToSet `json:"chunks,omitempty"` // +gen:optional
+		// Erasure coding (data and parity slices).
+		EC *ECConfToSet `json:"ec,omitempty"` // +gen:optional
+		// Bitwise access-permission mask. See `apc.AccessAttrs` for
+		// the flag definitions.
+		Access *apc.AccessAttrs `json:"access,string,omitempty"` // +gen:optional
+		// Per-bucket rate limiting for HTTP verbs (GET, PUT, etc.).
+		RateLimit *RateLimitConfToSet `json:"rate_limit,omitempty"` // +gen:optional
+		// Bitwise feature flags scoped to this bucket. See `feat.Flags`
+		// for the flag definitions.
+		Features *feat.Flags `json:"features,string,omitempty"` // +gen:optional
+		// When to persist metadata and data writes.
+		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"` // +gen:optional
+		// Provider-specific extras (S3, GCS, Azure, OCI, HTTP).
+		Extra *ExtraToSet `json:"extra,omitempty"` // +gen:optional
+		// Skip safety validations that would otherwise reject the
+		// update (e.g., changing EC settings while a bucket is
+		// non-empty).
+		Force bool `json:"force,omitempty" copy:"skip" list:"omit"` // +gen:optional
 	}
 
+	// BackendBckToSet identifies a remote backend bucket that an
+	// `ais://` bucket mirrors (proxies). Both fields are typically
+	// specified together.
 	BackendBckToSet struct {
-		Name     *string `json:"name"`
-		Provider *string `json:"provider"`
+		// Remote bucket name.
+		Name *string `json:"name"` // +gen:optional
+		// Remote provider: one of `"aws"`, `"gcp"`, `"azure"`,
+		// `"oci"`, `"ht"`.
+		Provider *string `json:"provider"` // +gen:optional
 	}
 )
 
@@ -545,19 +607,22 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 //
 
 type (
-	// ArchiveBckMsg contains parameters to archive multiple objects from the specified (source) bucket.
-	// Destination bucket may the same as the source or a different one.
-	// --------------------  NOTE on terminology:   ---------------------
-	// "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object often also called "shard"
+	// ArchiveBckMsg is the payload for archiving multiple source-bucket objects
+	// into a single archive object (also called a "shard"), formatted as a
+	// .tar, .tgz/.tar.gz, .zip, or .tar.lz4 file. The destination bucket may
+	// be the same as the source.
 	//
-	// See also: apc.PutApndArchArgs
+	// The single-object append variant is apc.PutApndArchArgs.
 	ArchiveBckMsg struct {
-		ToBck Bck `json:"tobck"`
+		ToBck Bck `json:"tobck"` // Destination bucket that will receive the archive object.
 		apc.ArchiveMsg
 	}
 
-	//  Multi-object copy & transform (see also: TCBMsg)
+	// TCOMsg is the wire payload for multi-object copy & transform. Source
+	// objects are selected via the embedded ListRange (see apc.TCOMsg).
+	// See also: cmn.TCBMsg for the bucket-to-bucket variant.
 	TCOMsg struct {
+		// Destination bucket that receives copied or transformed objects.
 		ToBck Bck `json:"tobck"`
 		apc.TCOMsg
 	}
