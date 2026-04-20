@@ -502,7 +502,7 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	// renew x-moss by ID
 	rns := xreg.RenewGetBatch(ctx.bck, ctx.xid, false /*designated*/)
 	if rns.Err != nil {
-		// TODO -- FIXME: no SDM to abort DT
+		// TODO -- FIXME: use new T2T method
 		t.writeErr(w, r, rns.Err)
 		return
 	}
@@ -519,7 +519,7 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 
 	// open SDM and start sending
 	if err := bundle.SDM.Open(config, &config.GetBatch.XactConf); err != nil {
-		// TODO -- FIXME: ditto (abort DT)
+		// TODO -- FIXME: use new T2T method
 		xmoss.Abort(err)
 		t.writeErr(w, r, err)
 		return
@@ -527,11 +527,11 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 
 	ctx.smap = smap
 	xmoss.IncPending()
-	go ctx._startSend(xmoss, tsi, usingPrev)
+	go ctx._startSend(xmoss, tsi)
 }
 
-func (ctx *mossCtx) _startSend(xmoss *xs.XactMoss, tsi *meta.Snode, usingPrev bool) {
-	if err := xmoss.Send(ctx.req, &ctx.smap.Smap, tsi, ctx.wid, usingPrev); err != nil {
+func (ctx *mossCtx) _startSend(xmoss *xs.XactMoss, tsi *meta.Snode) {
+	if err := xmoss.Send(ctx.req, &ctx.smap.Smap, tsi, ctx.wid); err != nil {
 		xmoss.AddErr(fmt.Errorf("send wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
 	}
 	xmoss.DecPending()

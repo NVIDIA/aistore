@@ -322,20 +322,6 @@ func (r *XactMoss) DecPending() {
 	r.activeWG.Done()
 }
 
-func (r *XactMoss) BcastAbort(err error) {
-	if isErrRecvAbort(err) {
-		return
-	}
-	o := transport.AllocSend()
-	o.Hdr.Opcode = transport.OpcAbort
-	o.Hdr.Demux = r.ID()
-	o.Hdr.ObjName = err.Error()
-	e := bundle.SDM.Bcast(o, nil /*roc*/) // receive via sntl.rxAbort
-	if cmn.Rom.V(4, cos.ModXs) {
-		nlog.Infoln(r.Name(), core.T.String(), "bcast abort [", err, e, "]")
-	}
-}
-
 func (r *XactMoss) Abort(err error) bool {
 	if !r.DemandBase.Abort(err) {
 		return false
@@ -578,14 +564,29 @@ func (r *XactMoss) admit(config *cmn.Config, wid string, now int64) (throttled b
 	return throttled, nil
 }
 
-func (r *XactMoss) RxSenderStarted(wid, sid string) {
-	wi := r._getwi(wid, sid, true)
-	if wi == nil {
-		return
+func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
+	switch opcode {
+	case xact.OpcodeStartedWI:
+		debug.Assert(wid != xact.NoneWID)
+		debug.Assert(len(body) == 0)
+		wi := r._getwi(wid, sid, true)
+		if wi == nil {
+			return nil
+		}
+		wi.startup.mtx.Lock()
+		wi.startup.m.Set(sid)
+		wi.startup.mtx.Unlock()
+	case xact.OpcodeAbortXact:
+		var err error
+		if len(body) > 0 {
+			errCause := string(body)
+			err = r.NewErrRecvAbort(sid, errCause)
+		}
+		r.Abort(err)
+	default:
+		return fmt.Errorf("%s: unknown ctrl opcode %q", r.Name(), opcode)
 	}
-	wi.startup.mtx.Lock()
-	wi.startup.m.Set(sid)
-	wi.startup.mtx.Unlock()
+	return nil
 }
 
 // gather other requested data (local and remote); emit resulting archive
@@ -657,24 +658,14 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 
 // send all requested local data => DT (`tsi`)
 // (phase 3)
-func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string, usingPrev bool) error {
-	// TODO -- FIXME:
-	// - refactor transport.OpcAbort - use the new T2T control path
-	// - but note: it's a broadcast
-	// - if/when done, remove the next 4 lines
-	if usingPrev {
-		bundle.SDM.UseRecv(r)
-	} else {
-		bundle.SDM.RegRecv(r)
-	}
-
+func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string) error {
 	// announce oneself
-	if err := r._announce(dt, wid); err != nil {
+	if err := r.SendCtrl(dt, wid, xact.OpcodeStartedWI, nil /*body*/); err != nil {
 		return err
 	}
 
 	// note:
-	// - optional future tuning: init sender's own load.Advice and check periodically inside the loop
+	// - throttle sender as well: init load.Advice and check periodically inside the loop
 	// - IncPending/DecPending is done by the caller
 
 	for i := range req.In {
@@ -712,36 +703,6 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 		nlog.Infoln(r.Name(), core.T.String(), "done Send", wid)
 	}
 	return nil
-}
-
-// TODO: part of this method can become generic and reusable
-func (r *XactMoss) _announce(dt *meta.Snode, wid string) error {
-	reqArgs := cmn.HreqArgs{
-		Method: http.MethodPost,
-		Base:   dt.URL(cmn.NetIntraControl),
-		Path:   xact.JoinCtrlPath(r, wid, xact.OpcodeStartedWI),
-	}
-	req, _, cancel, errR := reqArgs.ReqWith(cmn.Rom.MaxKeepalive())
-	if errR != nil {
-		return errR
-	}
-	defer cancel()
-	req.Header.Set(apc.HdrSenderID, core.T.SID())
-	req.Header.Set(apc.HdrSenderName, core.T.Snode().Name())
-	// note: not setting apc.HdrSenderSmapVer
-	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
-
-	resp, err := core.T.ControlClient().Do(req)
-	if err == nil {
-		if code := resp.StatusCode; code >= http.StatusBadRequest {
-			err = &cmn.ErrHTTP{Message: http.StatusText(code), Status: code}
-		}
-	}
-	if resp != nil && resp.Body != nil {
-		cos.DrainReader(resp.Body)
-		resp.Body.Close()
-	}
-	return err
 }
 
 func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, index int) error {
@@ -884,21 +845,13 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		return nil
 	}
 
-	// control
+	// not expecting transport control opcodes (utilizing t2tctrl instead)
 	if hdr.Opcode != 0 {
-		switch hdr.Opcode {
-		case transport.OpcAbort:
-			sntl := &sentinel{r: r}
-			sntl.rxAbort(hdr)
-			return nil
-		default:
-			return abortOpcode(r, hdr.Opcode)
-		}
+		return abortOpcode(r, hdr.Opcode)
 	}
 
 	// data
 	if err := r._recvObj(hdr, reader, err); err != nil {
-		nlog.Errorln(r.Name(), core.T.String(), "RecvObj:", err)
 		r.BcastAbort(err)
 		r.Abort(err)
 		return err

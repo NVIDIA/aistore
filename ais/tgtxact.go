@@ -398,16 +398,22 @@ func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid
 		return
 	}
 
-	if kind != apc.ActGetBatch || opcode != xact.OpcodeStartedWI {
-		err := fmt.Errorf("expecting x-moss sender announcing itself, got %q [%q, %q, %q, %q]", xctn.Name(), kind, xid, wid, opcode)
+	body, err := cmn.ReadBytes(r)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+
+	if kind != apc.ActGetBatch {
+		err := fmt.Errorf("expecting x-moss, got %q [%q, %q, %q, %q]", xctn.Name(), kind, xid, wid, opcode)
 		debug.AssertNoErr(err)
 		t.writeErr(w, r, err)
 		return
 	}
 
-	// TODO: those cases that expect a real WID must also check for wid != xact.NoneWID
-
 	xmoss, ok := xctn.(*xs.XactMoss)
 	debug.Assert(ok)
-	xmoss.RxSenderStarted(wid, r.Header.Get(apc.HdrSenderID))
+	if err := xmoss.RecvCtrl(wid, r.Header.Get(apc.HdrSenderID), opcode, body); err != nil {
+		t.writeErr(w, r, err)
+	}
 }
