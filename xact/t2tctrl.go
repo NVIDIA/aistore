@@ -65,7 +65,9 @@ func (xctn *Base) SendCtrl(tsi *meta.Snode, wid, opcode string, body []byte) err
 	req.Header.Set(apc.HdrSenderName, core.T.Snode().Name())
 	// note: not setting apc.HdrSenderSmapVer
 	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
-
+	if len(body) > 0 {
+		req.Header.Set(cos.HdrContentType, cos.ContentBinary)
+	}
 	resp, err := core.T.ControlClient().Do(req)
 	if err == nil {
 		if code := resp.StatusCode; code >= http.StatusBadRequest {

@@ -1993,6 +1993,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 	)
 	cmn.ToHeader(sargs.objAttrs, hdr, size)
 	hdr.Set(apc.HdrT2TPutterID, t.SID())
+	hdr.Set(cos.HdrContentType, cos.ContentBinary)
 	query.Set(apc.QparamOWT, sargs.owt.ToS())
 	if coi.Xact != nil {
 		query.Set(apc.QparamUUID, coi.Xact.ID())

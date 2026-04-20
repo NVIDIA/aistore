@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -95,9 +95,6 @@ func (u *HreqArgs) ReqWith(timeout time.Duration) (*http.Request, context.Contex
 	req, err := u.Req()
 	if err != nil {
 		return nil, nil, nil, err
-	}
-	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(cos.HdrContentType, cos.ContentJSON)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	req = req.WithContext(ctx)

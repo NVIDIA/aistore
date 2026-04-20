@@ -793,6 +793,13 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		var cancel context.CancelFunc
 		req, _, cancel, res.err = args.req.ReqWith(args.timeout)
 		if res.err == nil {
+			if (req.Method == http.MethodPost || req.Method == http.MethodPut) &&
+				// caller controls content-type:
+				// - non-JSON content can be set into args.req.Header, with subsequent
+				// - req.Req() => cmn.CopyHeaders() to the resulting `req` here
+				req.Header.Get(cos.HdrContentType) == "" {
+				req.Header.Set(cos.HdrContentType, cos.ContentJSON)
+			}
 			defer cancel()
 		}
 	} else {
