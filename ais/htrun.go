@@ -2496,13 +2496,25 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 	return 0, nil
 }
 
+// isClusterNode returns the Snode for the given sender ID if it is a known cluster member.
+// Returns (nil, nil) when smap is not yet valid.
+func (h *htrun) isClusterNode(hdr http.Header) (*meta.Snode, *smapX) {
+	sid := hdr.Get(apc.HdrSenderID)
+	if sid == "" {
+		return nil, nil
+	}
+	smap := h.owner.smap.get()
+	if !smap.isValid() {
+		return nil, nil
+	}
+	return smap.GetNode(sid), smap
+}
+
 func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 	const ferr = "%s: invalid intra-cluster request from [name=%q, id=%q]"
 	var (
-		smap  = h.owner.smap.get()
 		sid   = hdr.Get(apc.HdrSenderID)
 		sname = hdr.Get(apc.HdrSenderName)
-		sver  = hdr.Get(apc.HdrSenderSmapVer)
 	)
 	// 1. both headers must be present
 	if sid == "" && sname == "" {
@@ -2521,14 +2533,15 @@ func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 		return fmt.Errorf(ferr, h, sname, sid)
 	}
 
-	// 3. (inconclusive)
-	if !smap.isValid() {
+	// 3. look up sender in smap
+	snode, smap := h.isClusterNode(hdr)
+
+	if smap == nil {
+		// smap not yet valid — inconclusive during startup
 		return nil
 	}
 
-	snode := smap.GetNode(sid)
-
-	// 4. unknown sender: newly-joined, and only when !fromPrimary
+	// 4. unknown sender
 	if snode == nil {
 		if !fromPrimary {
 			return nil
@@ -2556,6 +2569,7 @@ func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 	}
 
 	// 8. primary's calling but my local Smap disagrees: still trust the caller if its Smap is strictly newer
+	sver := hdr.Get(apc.HdrSenderSmapVer)
 	if sver != "" && sver != smap.vstr {
 		ver, err := strconv.ParseInt(sver, 10, 64)
 		if err != nil || ver < 0 {

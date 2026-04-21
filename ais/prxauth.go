@@ -371,16 +371,7 @@ func (p *proxy) extractAndValidate(ctx context.Context, hdr http.Header) (*tok.A
 	return claims, nil
 }
 
-// When AuthN is on, accessing a bucket requires two permissions:
-//   - access to the bucket is granted to a user
-//   - bucket ACL allows the required operation
-//     Exception: a superuser can always PATCH the bucket/Set ACL
-//
-// If AuthN is off, only bucket permissions are checked.
-//
-//	Exceptions:
-//	- read-only access to a bucket is always granted
-//	- PATCH cannot be forbidden
+// Wraps the access check with an HTTP error message
 func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	if err = p.access(r.Context(), r.Header, bck, ace); err != nil {
 		// Use writeErrMsg (with the combined message from wrapped errors) instead of writeErr
@@ -404,9 +395,20 @@ func aceErrToCode(err error) (status int) {
 
 // Validate the given header contains a token allowing access to the given bucket with the requested permissions
 // All failures must be logged at this level
+//
+// When AuthN is on, accessing a bucket requires two permissions:
+//   - access to the bucket is granted to a user
+//   - bucket ACL allows the required operation
+//     Exception: a superuser can always PATCH the bucket/Set ACL
+//
+// If AuthN is off, only bucket permissions are checked.
+//
+//	Exceptions:
+//	- read-only access to a bucket is always granted
+//	- PATCH cannot be forbidden
 func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	// Skip internal calls
-	if p.checkIntraCall(hdr, false /*from primary*/) == nil {
+	if snode, _ := p.isClusterNode(hdr); snode != nil {
 		return nil
 	}
 
