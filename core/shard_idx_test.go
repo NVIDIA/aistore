@@ -112,10 +112,14 @@ func siMakeTAR(t GinkgoTInterface, tmpDir string, format tar.Format, count int) 
 	return tmp, size, content
 }
 
-// siSave locks archlom and calls SaveShardIndex.
+// siSave persists the stub archlom's initial metadata (simulating a real PUT's xattr write)
 func siSave(archlom *core.LOM, idx *archive.ShardIndex) error {
 	archlom.Lock(true)
-	defer archlom.Unlock(true)
+	err := archlom.PersistMain(false)
+	archlom.Unlock(true)
+	if err != nil {
+		return err
+	}
 	return core.SaveShardIndex(archlom, idx)
 }
 
