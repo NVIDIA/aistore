@@ -2372,7 +2372,7 @@ Start a job and return its ID.
 - `force` _bool, optional_ - Override existing restrictions for a bucket (e.g., run LRU eviction even if the
   bucket has LRU disabled).
 - `buckets` _List[Bucket], optional_ - List of one or more buckets; applicable only for jobs that have bucket
-  scope (for details on job types, see `Table` in xact/api.go).
+  scope (for details on job types, see `Table` in xact/api_table.go).
   
 
 **Returns**:

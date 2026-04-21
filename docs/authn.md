@@ -83,7 +83,7 @@ Follow these steps to deploy a new local AIS cluster with AuthN enabled and RSA 
     make kill clean cli
     ```
 
-2. Build AuthN and deploy an AuthN server. The following example exports the required admin password. Then it runs AuthN with an auto-generated local config at `$HOME/.config/ais/authn` (see the [deployment script](../deploy/dev/local/authn_deploy.sh)). See [key passphrase](#private-key-passphrase) to optionally protect the private key on disk.
+2. Build AuthN and deploy an AuthN server. The following example exports the required admin password. Then it runs AuthN with an auto-generated local config at `$HOME/.config/ais/authn` (see the [deployment script](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/authn_deploy.sh)). See [key passphrase](#private-key-passphrase) to optionally protect the private key on disk.
 
     ```sh
     export AIS_AUTHN_SU_PASS="adminpass"
@@ -416,7 +416,7 @@ By default, the AIStore deployment does not launch the AuthN server. To start th
     ```
 
 2. **Create a Configuration File:**
-    - Reference [deploy/dev/local/authn_config.sh](../deploy/dev/local/authn_config.sh) for current config generation.
+    - Reference [deploy/dev/local/authn_config.sh](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/authn_config.sh) for current config generation.
     - You will need a configuration file similar to the following:
     ```json
     {

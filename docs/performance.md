@@ -230,7 +230,7 @@ More: [Tune hard disk with `hdparm`](http://www.linux-magazine.com/Online/Featur
 Another way to increase storage performance is to benchmark different filesystems: `ext`, `xfs`, `openzfs`.
 Tuning the corresponding IO scheduler can prove to be important:
 
-* [ais_enable_multiqueue](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/host-config/docs/ais_enable_multiqueue.md)
+* [AIStore host-config playbooks](https://github.com/NVIDIA/ais-k8s/tree/main/playbooks/host-config) (includes IO scheduler and sysctl tuning)
 
 Other related references:
 

@@ -123,15 +123,17 @@ find "$FERN_PAGES/tutorials" -name '*.md' -exec perl -pi \
 BASEPATH="/aistore"
 GITHUB_BASE="https://github.com/NVIDIA/aistore/blob/main"
 
-# Strip .md extensions from internal links only (skip http/https URLs)
+# Convert repo-internal paths (not /docs/, /blog/, /cli/) to full GitHub URLs.
+# MUST come before the .md-stripping step below; otherwise paths like
+# /memsys/README.md lose their .md and GitHub 404s the resulting URL.
+find "$FERN_PAGES" -name '*.md' -exec perl -pi \
+    -e 's{\]\(/(?!docs/|blog/|cli/|relnotes/|tutorials/|proposals/|assets/|images/|README|[#])([^)]+)\)}{]('"$GITHUB_BASE"'/$1)}g;' \
+    {} +
+
+# Strip .md extensions from remaining internal links only (skip http/https URLs)
 find "$FERN_PAGES" -name '*.md' -exec perl -pi \
     -e 's/(\]\((?!https?:\/\/)[^)]*?)\.md(\))/$1$2/g;' \
     -e 's/(\]\((?!https?:\/\/)[^)]*?)\.md(#)/$1$2/g;' \
-    {} +
-
-# Convert repo-internal paths (not /docs/, /blog/, /cli/) to full GitHub URLs
-find "$FERN_PAGES" -name '*.md' -exec perl -pi \
-    -e 's{\]\(/(?!docs/|blog/|cli/|relnotes/|tutorials/|proposals/|assets/|images/|README|[#])([^)]+)\)}{]('"$GITHUB_BASE"'/$1)}g;' \
     {} +
 
 # Rewrite /docs/X → /aistore/X, /blog/X → /aistore/blog/X, /README → /aistore/

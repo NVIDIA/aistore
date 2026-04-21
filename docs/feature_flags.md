@@ -66,7 +66,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Disable-Cold-GET` | `perf,integrity-` | do not perform [cold GET](/docs/overview.md#existing-datasets) request when using remote bucket |
 | `Streaming-Cold-GET` | `perf,integrity-` | write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object |
 | `S3-Reverse-Proxy` | `s3,net,ops` | use reverse proxy calls instead of HTTP-redirect for S3 API |
-| `S3-Use-Path-Style` | `s3,compat` | use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY |
+| `S3-Use-Path-Style` | `s3,compat` | use older path-style addressing (as opposed to virtual-hosted style), e.g., `https://s3.amazonaws.com/BUCKET/KEY` |
 | `Do-not-Delete-When-Rebalancing` | `integrity?,ops` | disable lazy deletion during [global rebalance](/docs/rebalance.md): do not delete misplaced sources of the migrated objects |
 | `Do-not-Set-Control-Plane-ToS` | `net,ops` | intra-cluster control plane: use default network priority (do not set IPv4 ToS to low-latency) |
 | `Trust-Crypto-Safe-Checksums` | `integrity+,overhead` | when checking whether objects are identical trust only cryptographically secure checksums |
@@ -119,7 +119,7 @@ Do-not-Optimize-Listing-Virtual-Dirs overhead               when prefix doesn't 
 Disable-Cold-GET                     perf,integrity-        disable cold-GET (from remote bucket)
 Streaming-Cold-GET                   perf,integrity-        write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 S3-Reverse-Proxy                     s3,net,ops             intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets
-S3-Use-Path-Style                    s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
+S3-Use-Path-Style                    s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., `https://s3.amazonaws.com/BUCKET/KEY`
 Do-not-Delete-When-Rebalancing       integrity?,ops         disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects
 Do-not-Set-Control-Plane-ToS         net,ops                intra-cluster control plane: use default network priority (do not set IPv4 ToS to low-latency)
 Trust-Crypto-Safe-Checksums          integrity+,overhead    when checking whether objects are identical trust only cryptographically secure checksums
@@ -163,7 +163,7 @@ Do-not-Optimize-Listing-Virtual-Dirs overhead               when prefix doesn't 
 Disable-Cold-GET                     perf,integrity-        disable cold-GET (from remote bucket)
 Streaming-Cold-GET                   perf,integrity-        write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 S3-Reverse-Proxy                     s3,net,ops             intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets
-S3-Use-Path-Style                    s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
+S3-Use-Path-Style                    s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., `https://s3.amazonaws.com/BUCKET/KEY`
 Do-not-Delete-When-Rebalancing       integrity?,ops         disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects
 Do-not-Set-Control-Plane-ToS         net,ops                intra-cluster control plane: use default network priority (do not set IPv4 ToS to low-latency)
 Trust-Crypto-Safe-Checksums          integrity+,overhead    when checking whether objects are identical trust only cryptographically secure checksums
@@ -232,7 +232,7 @@ Fsync-PUT                        integrity+,overhead    (*) when finalizing PUT(
 S3-Presigned-Request             s3,security,compat     (*) pass-through client-signed (presigned) S3 requests for subsequent authentication by S3   <<<<<< colored
 Disable-Cold-GET                 perf,integrity-        disable cold-GET (from remote bucket)
 Streaming-Cold-GET               perf,integrity-        write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
-S3-Use-Path-Style                s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
+S3-Use-Path-Style                s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., `https://s3.amazonaws.com/BUCKET/KEY`
 Resume-Interrupted-MPU           mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 S3-ListObjectVersions            s3,overhead            when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 Count-Object-NotFound-Stats      telemetry,ops          count GET(object) 404 as errors
@@ -252,7 +252,7 @@ Fsync-PUT                        integrity+,overhead    (*) when finalizing PUT(
 S3-Presigned-Request             s3,security,compat     (*) pass-through client-signed (presigned) S3 requests for subsequent authentication by S3
 Disable-Cold-GET                 perf,integrity-        disable cold-GET (from remote bucket)
 Streaming-Cold-GET               perf,integrity-        write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
-S3-Use-Path-Style                s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
+S3-Use-Path-Style                s3,compat              use older path-style addressing (as opposed to virtual-hosted style), e.g., `https://s3.amazonaws.com/BUCKET/KEY`
 Resume-Interrupted-MPU           mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 S3-ListObjectVersions            s3,overhead            when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 Count-Object-NotFound-Stats      telemetry,ops          count GET(object) 404 as errors

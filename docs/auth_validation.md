@@ -2,7 +2,7 @@ AIStore (AIS) supports authentication and authorization with [JSON Web Tokens](h
 These tokens can be issued from the first party [AuthN service](/docs/authn.md) OR compatible 3rd party OAuth services.
 This doc covers how AIS validates requests based on their included tokens.
 
-For details on configuring auth in K8s, see the [AIS K8s Operator README](https://github.com/NVIDIA/ais-k8s/tree/main/operator.README.md).
+For details on configuring auth in K8s, see the [AIS K8s Operator README](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md).
 
 For an end-to-end example of setting up Keycloak with AIS in K8s, see the [auth deployment guide in the ais-k8s repo](https://github.com/NVIDIA/ais-k8s/blob/main/docs/deploy_with_auth.md).
 

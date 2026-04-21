@@ -443,4 +443,4 @@ aws/@#/training-data-v5/inv-Tp4nR7kWx             yes             1.28GiB
 
 ## Performance
 
-A latency-vs-scale benchmark comparing NBI listing, regular AIS remote listing, and direct S3 access (`boto3`) from 1K to 80K objects is available at [`python/tests/perf/nbi/`](../python/tests/perf/nbi/README.md).
+A latency-vs-scale benchmark comparing NBI listing, regular AIS remote listing, and direct S3 access (`boto3`) from 1K to 80K objects is available at [`python/tests/perf/nbi/`](https://github.com/NVIDIA/aistore/blob/main/python/tests/perf/nbi/README.md).

@@ -43,7 +43,7 @@ AIS also defines **system buckets** - infrastructure buckets with reserved `.sys
 ### Backend Provider
 Backend Provider is a designed-in backend interface [abstraction](https://github.com/NVIDIA/aistore/blob/main/core/backend.go) and, simultaneously, an API-supported option that allows to delineate between _remote_ and _local_ buckets with respect to a given AIS cluster.
 
-AIS [supports multiple storage backends](images/supported-backends.png) including its own (`ais://@uuid` or `ais://@alias` for remote clusters).
+AIS [supports multiple storage backends](https://github.com/NVIDIA/aistore/blob/main/docs/images/supported-backends.png) including its own (`ais://@uuid` or `ais://@alias` for remote clusters).
 
 > See [providers](/docs/providers.md) for the current list of supported clouds and instructions on chaining AIS clusters.
 

@@ -67,7 +67,7 @@ Not all supported jobs can be started via `ais start` or by the corresponding Go
 
 > See e.g., `ais cp --help`
 
-Complete and most recently updated list of supported jobs can be found in this [table of job descriptors](https://github.com/NVIDIA/aistore/blob/main/xact/api.go#L111-L116).
+Complete and most recently updated list of supported jobs can be found in this [table of job descriptors](https://github.com/NVIDIA/aistore/blob/main/xact/api_table.go).
 
 Last (but not the least) is - time. Job execution may take many seconds, sometimes minutes or hours.
 

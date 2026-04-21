@@ -4,7 +4,7 @@ Batch operations that run asynchronously and may take seconds (minutes, hours, e
 
 Internally, `xaction` is an abstraction at the root of the inheritance hierarchy that also contains specific user-visible jobs: `copy-bucket`, `evict-objects`, and more.
 
-> For the most recently updated list of all supported jobs and their respective compile-time properties, see the [source](https://github.com/NVIDIA/aistore/blob/main/xact/api.go#L108).
+> For the most recently updated list of all supported jobs and their respective compile-time properties, see the [source](https://github.com/NVIDIA/aistore/blob/main/xact/api_table.go).
 
 **All jobs run asynchronously, have start and stop times, and common generic statistics**
 
@@ -27,7 +27,7 @@ Rest of this document covers starting, stopping, and otherwise managing job kind
 
 ### See also
 
-- [static descriptors (source code)](https://github.com/NVIDIA/aistore/blob/main/xact/api.go#L108)
+- [static descriptors (source code)](https://github.com/NVIDIA/aistore/blob/main/xact/api_table.go)
 - [`xact` package README](https://github.com/NVIDIA/aistore/blob/main/xact/README.md).
 - [`batch jobs`](/docs/batch.md)
 - [CLI: `dsort` (distributed shuffle)](/docs/cli/dsort.md)
