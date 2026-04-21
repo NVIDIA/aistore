@@ -77,11 +77,12 @@ import (
    Note that per-request (maximum number of soft errors) and GFN are separately
    configurable (https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md)
 
-TBD:
+TODO:
+   - add BcastAbortWI(xid, wid); use in DT to stop senders (currently, keep silently dropping)
    - gcAbandoned - currently, only via graceful fini(); consider periodic (lazy) alternative
-   - throttle maybe more aggressively (see load.Advice below)
-   - perf. feature: return unsorted batch
-   - range read
+   - throttle senders as well
+   - future extension: return unsorted batch (curious to see perf. difference)
+   - implement range read
 -------------------------------------------------------------------------------------------------------------*/
 
 // hardcoded tunables
@@ -835,7 +836,7 @@ func (r *XactMoss) unpackOpaque(opaque []byte) (*mossOpaque, error) {
 }
 
 // demux -> wi.recv()
-// note convention: received hdr.ObjName is `nameInArch` (ie., filename in resulting TAR)
+// [convention:] received hdr.ObjName is `nameInArch` (ie., filename in resulting TAR)
 func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(reader)
 	if err != nil {
@@ -852,7 +853,8 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 
 	// data
 	if err := r._recvObj(hdr, reader, err); err != nil {
-		r.BcastAbort(err)
+		smap := core.T.Sowner().Get()
+		r.BcastAbort(err, smap)
 		r.Abort(err)
 		return err
 	}

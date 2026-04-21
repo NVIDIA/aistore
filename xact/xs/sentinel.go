@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 const apairDeleted int64 = -1
@@ -66,6 +67,7 @@ func (s *sentinel) cleanup() {
 	s.pend.p = s.pend.p[:0]
 }
 
+// TODO -- FIXME: transition to T2T (off streams) control path
 func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = transport.OpcDone
@@ -73,7 +75,7 @@ func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
 		o.Hdr.Opaque = cos.UnsafeB(uuid)
 	}
 	if abortErr != nil {
-		if isErrRecvAbort(abortErr) {
+		if xact.IsErrRecvAbort(abortErr) {
 			return // do nothing
 		}
 		o.Hdr.Opcode = transport.OpcAbort
@@ -214,12 +216,14 @@ func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 	}
 }
 
-func (s *sentinel) rxAbort(hdr *transport.ObjHdr) {
+// TODO -- FIXME: transition to T2T (off streams) control path
+func (s *sentinel) rxAbort(hdr *transport.ObjHdr, self *xact.Base) {
 	r := s.r
 	if r.IsAborted() || r.IsDone() {
 		return
 	}
-	err := newErrRecvAbort(r, hdr)
+	errCause := hdr.ObjName // see s.bcast(abortErr)
+	err := self.NewErrRecvAbort(hdr.SID, errCause)
 	r.Abort(err)
 	nlog.WarningDepth(1, err)
 }

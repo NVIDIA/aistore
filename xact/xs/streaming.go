@@ -153,7 +153,9 @@ func (r *streamingX) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-// TODO: dup sentinel.bcast
+// TODO:
+// - dup sentinel.bcast
+// - both sentinel.bcast and this code must transition to use T2T off-streams control path
 func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error) {
 	if r.p.dm == nil { // single target
 		return
@@ -165,7 +167,7 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error) {
 		o.Hdr.Opcode = transport.OpcDone
 	} else {
 		o.Hdr.Opcode = transport.OpcAbort
-		o.Hdr.ObjName = abortErr.Error()
+		o.Hdr.ObjName = abortErr.Error() // (see NewErrRecvAbort)
 	}
 
 	var err error

@@ -345,7 +345,7 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		case transport.OpcDone:
 			r.sntl.rxDone(hdr)
 		case transport.OpcAbort:
-			r.sntl.rxAbort(hdr)
+			r.sntl.rxAbort(hdr, &r.Base)
 		case transport.OpcRequest:
 			o := transport.AllocSend()
 			o.Hdr.Opcode = transport.OpcResponse

@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -16,20 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/transport"
 )
-
-var (
-	errRecvAbort = errors.New("remote target abort") // to avoid duplicated broadcast
-)
-
-func newErrRecvAbort(r core.Xact, hdr *transport.ObjHdr) error {
-	return fmt.Errorf("%s: %w [%s: %s]", r.Name(), errRecvAbort, meta.Tname(hdr.SID), hdr.ObjName /*emsg*/)
-}
-
-func isErrRecvAbort(err error) bool {
-	return errors.Is(err, errRecvAbort)
-}
 
 func rgetstats(bp core.Backend, vlabs map[string]string, size, started int64) {
 	tstats := core.T.StatsUpdater()

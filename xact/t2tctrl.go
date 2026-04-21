@@ -35,7 +35,6 @@ const (
 
 const NoneWID = "-" // wid is optional, may not be present
 
-// TODO -- FIXME: copy/paste from xact/xs/xutils.go
 var (
 	errRecvAbort = errors.New("remote target abort") // to avoid duplicated broadcast
 )
@@ -44,7 +43,7 @@ func (xctn *Base) NewErrRecvAbort(tid, errCause string) error {
 	return fmt.Errorf("%s: %w [%s: %s]", xctn.Name(), errRecvAbort, meta.Tname(tid), errCause)
 }
 
-func isErrRecvAbort(err error) bool {
+func IsErrRecvAbort(err error) bool {
 	return errors.Is(err, errRecvAbort)
 }
 
@@ -82,14 +81,13 @@ func (xctn *Base) SendCtrl(tsi *meta.Snode, wid, opcode string, body []byte) err
 }
 
 // asynchronous broadcast with bounded launch parallelism
-// (NOT waiting for completion)
-func (xctn *Base) BcastAbort(err error) {
+// (note: NOT waiting for completion)
+func (xctn *Base) BcastAbort(err error, smap *meta.Smap) {
 	debug.Assert(err != nil)
-	if err == nil || isErrRecvAbort(err) {
+	if err == nil || IsErrRecvAbort(err) {
 		return
 	}
 	var (
-		smap  = core.T.Sowner().Get()
 		tmap  = smap.Tmap
 		wg    = cos.NewLimitedWaitGroup(sys.MaxParallelism(), len(tmap))
 		cause = []byte(err.Error())

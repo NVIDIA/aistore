@@ -455,7 +455,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 				r.sntl.rxDone(hdr)
 			}
 		case transport.OpcAbort:
-			r.sntl.rxAbort(hdr)
+			r.sntl.rxAbort(hdr, &r.Base)
 		case transport.OpcRequest:
 			// progress request during quiesce - respond with current count
 			o := transport.AllocSend()

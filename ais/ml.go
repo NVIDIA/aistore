@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
 
@@ -428,7 +429,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 	//
 	// start new or keep using prev x-moss
 	//
-	xid := cos.GenUUID()
+	xid := xact.PrefixGbtID + cos.GenUUID()
 	rns := xreg.RenewGetBatch(ctx.bck, xid, true /*designated*/)
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
@@ -485,8 +486,9 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 	w.Header().Set(apc.HdrXactionID, xid)
 }
 
-// Phase 3: Senders open SDM and start sending
-// (is run async via p._startSend)
+// Phase 3: Senders open SDM and start sending (flow: async via p._startSend)
+// - abort x-moss on failure to open SDM
+// - TODO: consider aborting on failure to renew (but see x-moss _neverStarted() timeout)
 func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.Config, smap *smapX, tsi *meta.Snode, nat int) {
 	debug.Assert(nat > 1)
 	t := ctx.t
@@ -502,7 +504,6 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	// renew x-moss by ID
 	rns := xreg.RenewGetBatch(ctx.bck, ctx.xid, false /*designated*/)
 	if rns.Err != nil {
-		// TODO -- FIXME: use new T2T method
 		t.writeErr(w, r, rns.Err)
 		return
 	}
@@ -519,7 +520,7 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 
 	// open SDM and start sending
 	if err := bundle.SDM.Open(config, &config.GetBatch.XactConf); err != nil {
-		// TODO -- FIXME: use new T2T method
+		xmoss.BcastAbort(err, &smap.Smap)
 		xmoss.Abort(err)
 		t.writeErr(w, r, err)
 		return
