@@ -95,6 +95,8 @@ const (
 	sparseLog    = time.Minute // low-level stats: total processed files, objects, etc.
 	sparseAdvice = time.Minute // initial interval to check memory, CPU, etc.
 
+	sparseLogWIMask = 0x7f // verbose mode: log an already assembled work item every 128 requests
+
 	// bewarm is a small-size worker pool per x-moss instance - unless under heavy load
 	// - created at init time
 	// - stays enabled for the entire lifetime
@@ -278,7 +280,7 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	}
 
 	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(core.T.String(), "DT prev:", r.Name(), "curr:", p.UUID(), "- using prev...")
+		nlog.Infoln(core.T.String(), "DT prev:", r.Cname(), "curr:", p.UUID(), "- using prev...")
 	}
 	// reset DemandBase.last timestamp to prevent idle timeout between now and Assemble()
 	r.DemandBase.IncPending()
@@ -395,7 +397,7 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 		bundle.SDM.UnregRecv(r.ID())
 
 		msg := r.CtlMsg()
-		nlog.Infoln(r.Name(), "idle expired [", msg, "]")
+		nlog.Infoln(r.Cname(), "idle expired [", msg, "]")
 
 		r.pending.Range(r.cleanup)
 		r.pending.Clear()
@@ -413,7 +415,7 @@ func (r *XactMoss) bewarmStop() {
 	}
 	r.bewarm.Stop()
 	if n := r.bewarm.NumDone(); n > 0 {
-		nlog.Infoln(r.Name(), "bewarm count:", n)
+		nlog.Infoln(r.Cname(), "bewarm count:", n)
 	}
 	r.bewarm.Wait()
 }
@@ -477,11 +479,9 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 		}
 		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap
 
-		if time.Duration(wi.started-r.lastLog.Load()) > sparseLog {
-			// log and `ais show job`
-			if msg := r.CtlMsg(); msg != "" {
-				nlog.Infoln(r.Name(), "ctlmsg (", msg, ")")
-			}
+		interval := cos.Ternary(cmn.Rom.V(4, cos.ModXs), sparseLog/2, sparseLog)
+		if since := time.Duration(wi.started - r.lastLog.Load()); since > interval {
+			nlog.Infoln(r.Cname(), "ctlmsg (", r.CtlMsg(), ")")
 			r.lastLog.Store(wi.started)
 		}
 
@@ -598,7 +598,7 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
-		err := cos.NewErrNotFoundFmt(r, "work item %q (prep-rx not done?)", wid)
+		err := cos.NewErrNotFoundFmt(r, "wid=%q (prep-rx not done?)", wid)
 		if cmn.Rom.V(4, cos.ModXs) {
 			nlog.Errorln(core.T.String(), err)
 		}
@@ -612,7 +612,14 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 
 	err := r.asm(req, w, wi)
 	if err != nil {
+		nlog.Warningln(r.Cname(), "err:", err, "[", wi.ctlMsg(), "] streaming:", req.StreamingGet)
 		core.T.StatsUpdater().Inc(stats.ErrGetBatchCount)
+	} else if cmn.Rom.V(5, cos.ModXs) {
+		tstats := core.T.StatsUpdater()
+		nreq := tstats.Get(stats.GetBatchCount)
+		if cmn.Rom.SuperV(5, cos.ModXs) || (nreq&sparseLogWIMask) == 0 {
+			nlog.Infoln(r.Cname(), "[", wi.ctlMsg(), "] streaming:", req.StreamingGet)
+		}
 	}
 
 	demand := wi.demand.CAS(true, false)
@@ -633,11 +640,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 		wi := streamwi{basewi: basewi}
 		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
 		wi.awfin.Store(false)
-		err := wi.asm(w)
-		if cmn.Rom.V(5, cos.ModXs) {
-			nlog.Infoln(r.Name(), core.T.String(), "done streaming Assemble", basewi.wid, "err", err)
-		}
-		return err
+		return wi.asm(w)
 	}
 
 	// buffered
@@ -649,12 +652,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
 	wi.awfin.Store(false)
-	err := wi.asm(w)
-
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(r.Name(), core.T.String(), "done multipart Assemble", basewi.wid, "err", err)
-	}
-	return err
+	return wi.asm(w)
 }
 
 // send all requested local data => DT (`tsi`)
@@ -700,8 +698,8 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 		}
 	}
 
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(r.Name(), core.T.String(), "done Send", wid)
+	if cmn.Rom.SuperV(5, cos.ModXs) {
+		nlog.Infoln(r.Cname(), core.T.String(), "done Send", wid)
 	}
 	return nil
 }
@@ -893,7 +891,7 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	// already cleaned up via gcAbandoned()? drop silently
 	if mopaque.wid != wi.wid || wi.clean.Load() {
 		if cmn.Rom.V(4, cos.ModXs) {
-			nlog.Infof("%s: wi %q is already clean/done - dropping", r.Name(), wi.wid)
+			nlog.Infof("%s: wi %q is already clean/done - dropping", r.Cname(), wi.wid)
 		}
 		return nil
 	}
@@ -956,79 +954,123 @@ func (*XactMoss) bewarmFQN(fqn string) {
 	}
 }
 
-// read from StatsUpdater and report:
-// 1) _global_ target metrics, and
-// 2) this xaction's just-in-time _pending_ and bewarm
+// CtlMsg
+// - this xaction's just-in-time pending counts and bewarm ("job:" prefix)
+// - this target's kind=get-batch counters ("node:" prefix)
+const (
+	ctlMaxLen = 256
+)
+
 func (r *XactMoss) CtlMsg() string {
+	var sb cos.SB
+	sb.Init(ctlMaxLen)
+	r._ctlMsg(&sb)
+	return sb.String()
+}
+
+func (r *XactMoss) _ctlMsg(sb *cos.SB) {
 	tstats := core.T.StatsUpdater()
 	nreq := tstats.Get(stats.GetBatchCount)
 	if nreq == 0 {
-		return ""
+		return
 	}
 
-	var sb cos.SB
-	sb.Init(256)
-
-	// (e.g.: pending:2 objs:576730 files:391284 size:8.70GiB avg-wait:2.3ms reqs:123 bewarm:on)
-
+	// [this xaction]
+	sb.WriteString("job:[")
 	pdemand, pdt := r.Pending(), r.pendingCnt.Load()
-	if pdt > 0 {
+	if pdemand != 0 || pdt != 0 {
 		sb.WriteString("pending:(")
 		sb.WriteString(strconv.FormatInt(pdemand, 10))
-		sb.WriteString(", ")
+		sb.WriteUint8(',')
 		sb.WriteString(strconv.FormatInt(pdt, 10))
 		sb.WriteUint8(')')
-	} else if pdemand > 0 {
-		sb.WriteString("pending:")
-		sb.WriteString(strconv.FormatInt(pdemand, 10))
 	}
+	if r.bewarm != nil {
+		if pdemand != 0 || pdt != 0 {
+			sb.WriteUint8(' ')
+		}
+		sb.WriteString("bewarm:(")
+		sb.WriteString(strconv.Itoa(r.bewarm.NumWorkers()))
+		sb.WriteUint8(',')
+		sb.WriteString(strconv.FormatInt(r.bewarm.NumDone(), 10))
+		sb.WriteUint8(')')
+	}
+	sb.WriteString("] ")
 
-	if sb.Len() > 0 {
-		sb.WriteUint8(' ')
-	}
+	// [this target]
+	sb.WriteString("node:[")
 	sb.WriteString("reqs:")
 	sb.WriteString(strconv.FormatInt(nreq, 10))
 
 	ocnt := tstats.Get(stats.GetBatchObjCount)
 	if ocnt > 0 {
-		if sb.Len() > 0 {
-			sb.WriteUint8(' ')
-		}
-		sb.WriteString("objs: [")
+		sb.WriteString(" objs:(")
 		sb.WriteString(strconv.FormatInt(ocnt, 10))
-		sb.WriteUint8(' ')
-		osize := tstats.Get(stats.GetBatchObjSize)
-		sb.WriteString(cos.IEC(osize, 2))
-		sb.WriteUint8(']')
+		sb.WriteUint8(',')
+		sb.WriteString(cos.IEC(tstats.Get(stats.GetBatchObjSize), 2))
+		sb.WriteUint8(')')
 	}
-	fcnt := tstats.Get(stats.GetBatchFileCount)
-	if fcnt > 0 {
-		if sb.Len() > 0 {
-			sb.WriteUint8(' ')
-		}
-		sb.WriteString("files: [")
+	if fcnt := tstats.Get(stats.GetBatchFileCount); fcnt > 0 {
+		sb.WriteString(" files:(")
 		sb.WriteString(strconv.FormatInt(fcnt, 10))
-		sb.WriteUint8(' ')
-		fsize := tstats.Get(stats.GetBatchFileSize)
-		sb.WriteString(cos.IEC(fsize, 2))
-		sb.WriteUint8(']')
-	}
-	if r.bewarm != nil {
-		sb.WriteString(" bewarm: on")
+		sb.WriteUint8(',')
+		sb.WriteString(cos.IEC(tstats.Get(stats.GetBatchFileSize), 2))
+		sb.WriteUint8(')')
 	}
 	if wait := tstats.Get(stats.GetBatchRxWaitTotal); wait > 0 {
-		avg := time.Duration(wait / nreq)
 		sb.WriteString(" avg-wait:")
-		sb.WriteString(avg.String())
+		sb.WriteString((time.Duration(wait / nreq)).String())
 	}
-
-	msg := sb.String()
-	return msg
+	sb.WriteUint8(']')
 }
 
 ////////////
 // basewi //
 ////////////
+
+func (wi *basewi) ctlMsg() string {
+	var sb cos.SB
+	sb.Init(ctlMaxLen)
+	wi._ctlMsg(&sb)
+	return sb.String()
+}
+
+func (wi *basewi) _ctlMsg(sb *cos.SB) {
+	sb.WriteString("work:wid=\"")
+	sb.WriteString(wi.wid)
+	sb.WriteUint8('"')
+
+	if c := wi.stats.obj.cnt; c > 0 {
+		sb.WriteString(" objs:[")
+		sb.WriteString(strconv.FormatInt(c, 10))
+		sb.WriteUint8(' ')
+		sb.WriteString(cos.IEC(wi.stats.obj.size, 2))
+		sb.WriteUint8(']')
+	}
+	if c := wi.stats.fil.cnt; c > 0 {
+		sb.WriteString(" files:[")
+		sb.WriteString(strconv.FormatInt(c, 10))
+		sb.WriteUint8(' ')
+		sb.WriteString(cos.IEC(wi.stats.fil.size, 2))
+		sb.WriteUint8(']')
+	}
+	if n := wi.inRx.Load(); n > 0 {
+		sb.WriteString(" in-rx:")
+		sb.WriteString(strconv.FormatInt(int64(n), 10))
+	}
+	if n := wi.stats.ngfn; n > 0 {
+		sb.WriteString(" gfn:")
+		sb.WriteString(strconv.Itoa(n))
+	}
+	if n := wi.stats.errn; n > 0 {
+		sb.WriteString(" gfn-err:")
+		sb.WriteString(strconv.Itoa(n))
+	}
+	if wi.started > 0 {
+		sb.WriteString(" age:")
+		sb.WriteString(mono.Since(wi.started).String())
+	}
+}
 
 func (wi *basewi) receiving() bool { return wi.recv.m != nil }
 
@@ -1066,7 +1108,7 @@ func (wi *basewi) cleanup(xdone bool) bool {
 
 	if !xdone { // when xdone == true: full cleanup via parent's Range(r.cleanup)
 		_, loaded := r.pending.LoadAndDelete(wi.wid)
-		debug.Assert(loaded, "work item not found:", wi.wid)
+		debug.Assertf(loaded, "wid=%q not found", wi.wid)
 		if loaded {
 			r.pendingCnt.Dec()
 		}
@@ -1186,8 +1228,8 @@ add:
 		wi.recv.ch <- index
 	}
 	if err == nil {
-		if cmn.Rom.V(5, cos.ModXs) {
-			nlog.Infoln(r.Name(), core.T.String(), "Rx [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "size:", size, "]")
+		if cmn.Rom.SuperV(5, cos.ModXs) {
+			nlog.Infoln(r.Cname(), core.T.String(), "Rx [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "size:", size, "]")
 		}
 		return nil
 	}
@@ -1475,7 +1517,7 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 	defer cos.Close(resp.Body)
 
 	if cmn.Rom.V(4, cos.ModXs) {
-		nlog.Infoln(wi.r.Name(), wi.wid, "GFN ok:", nameInArch)
+		nlog.Infoln(wi.r.Cname(), wi.wid, "GFN ok:", nameInArch)
 	}
 	if in.ArchPath == "" {
 		oah := cos.SimpleOAH{Size: resp.ContentLength}
@@ -1788,7 +1830,7 @@ func (wi *buffwi) asm(w http.ResponseWriter) error {
 	mpw := multipart.NewWriter(w)
 	w.Header().Set(cos.HdrContentType, "multipart/mixed; boundary="+mpw.Boundary())
 
-	written, erw := wi.multipart(mpw, wi.resp)
+	_, erw := wi.multipart(mpw, wi.resp)
 	if err := mpw.Close(); err != nil && erw == nil {
 		erw = err
 	}
@@ -1798,10 +1840,6 @@ func (wi *buffwi) asm(w http.ResponseWriter) error {
 	}
 
 	wi.sgl.Reset()
-
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", wi.req.OutputFormat, "]")
-	}
 	return nil
 }
 
@@ -1841,7 +1879,6 @@ func (wi *streamwi) asm(w http.ResponseWriter) error {
 	}
 
 	if err := wi.basewi.asm(); err != nil {
-		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
 		return cmn.ErrGetTxBenign
 	}
 

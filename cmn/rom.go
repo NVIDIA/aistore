@@ -61,3 +61,6 @@ func (rom *readMostly) CSKEnabled() bool               { return rom.cskEnabled }
 func (rom *readMostly) V(verbosity, fl int) bool {
 	return rom.level >= verbosity || rom.modules&fl != 0
 }
+func (rom *readMostly) SuperV(verbosity, fl int) bool {
+	return rom.level >= verbosity && rom.modules&fl != 0
+}

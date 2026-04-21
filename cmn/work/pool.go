@@ -29,6 +29,7 @@ type Pool struct {
 	stop   *cos.StopCh
 	cnt    atomic.Int64
 	wg     sync.WaitGroup
+	numwrk int
 }
 
 // Other than self-explanatory parameters, the `abort <-chan error` is
@@ -39,6 +40,7 @@ func New(numWorkers, chanCap int, cb Callback, abort <-chan error) *Pool {
 		cb:     cb,
 		abort:  abort,
 		stop:   cos.NewStopCh(),
+		numwrk: numWorkers,
 	}
 	for range numWorkers {
 		p.wg.Add(1)
@@ -72,7 +74,8 @@ func (p *Pool) TrySubmit(item string) bool {
 	}
 }
 
-func (p *Pool) NumDone() int64 { return p.cnt.Load() }
-func (p *Pool) Stop()          { p.stop.Close() }
-func (p *Pool) Wait()          { p.wg.Wait() }
-func (p *Pool) IsBusy() bool   { return p.stop.Stopped() || len(p.workCh) == cap(p.workCh) }
+func (p *Pool) NumWorkers() int { return p.numwrk }
+func (p *Pool) NumDone() int64  { return p.cnt.Load() }
+func (p *Pool) Stop()           { p.stop.Close() }
+func (p *Pool) Wait()           { p.wg.Wait() }
+func (p *Pool) IsBusy() bool    { return p.stop.Stopped() || len(p.workCh) == cap(p.workCh) }
