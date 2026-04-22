@@ -297,8 +297,8 @@ func (u *ChanFull) Check(l, c int) bool {
 		return false
 	case l == c:
 		cnt := u.Inc()
-		if (cnt > 5 && cnt < 10) || cnt%1000 == 999 {
-			nlog.WarningDepth(1, ErrWorkChanFull, "[ len:", l, "cap:", c, "]")
+		if cnt <= 3 || cnt == 100 || cnt == 1000 || cnt&(cnt-1) == 0 {
+			nlog.WarningDepth(1, ErrWorkChanFull, "[ len:", l, "cap:", c, "cnt:", cnt, "]")
 		}
 		time.Sleep(chanFullSleep)
 	default:

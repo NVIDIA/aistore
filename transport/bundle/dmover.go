@@ -315,7 +315,11 @@ func (dm *DM) Close(err error) {
 	if dm.useACKs() {
 		dm.ack.streams.Close(err == nil)
 	}
-	nlog.Infoln(dm.String(), err)
+	if err == nil {
+		nlog.Infoln("closed", dm.String())
+	} else {
+		nlog.Warningln("closed", dm.String(), "cause:", err)
+	}
 }
 
 func (dm *DM) Abort() {
