@@ -97,7 +97,7 @@ type (
 		kind   string      // criteria: all of a kind
 		bcks   []*meta.Bck // buckets to apply
 		scope  []int       // { ScopeG, ScopeB, ... } enum
-		newreb bool        // (rebalance is starting) vs (dtor.AbortRebRes)
+		newreb bool        // this abort is triggered by a new rebalance (ie., select via AbortByReb() rather than a kind/bck/scope)
 	}
 
 	entries struct {
@@ -384,7 +384,7 @@ func (args *abortArgs) do(entry Renewable) bool {
 		debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
 		_, dtor, err := xact.GetDescriptor(xctn.Kind())
 		debug.AssertNoErr(err)
-		if dtor.AbortRebRes {
+		if dtor.AbortByReb {
 			abort = true
 		}
 	case len(args.bcks) > 0:

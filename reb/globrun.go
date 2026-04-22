@@ -297,7 +297,8 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 		nlog.Warningln(logHdr, "initializing - limited scope: [", extArgs.Bck.Cname(extArgs.Prefix), "]")
 	}
 
-	// abort all running `dtor.AbortRebRes` xactions (download, dsort, etl)
+	// abort all running xactions that have `AbortByReb: true`
+	// in static descriptor table (xact.Table)
 	xreg.AbortByNewReb(errors.New("reason: starting " + rargs.xreb.Name()))
 
 	// only one rebalance is running -----------------

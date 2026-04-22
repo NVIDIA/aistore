@@ -14,6 +14,48 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// Static descriptor table (xact.Table) - one entry per xaction kind.
+// The table drives runtime decisions that would otherwise be scattered across the codebase:
+// what can be started, what aborts what, and which xactions can coexist.
+//
+// The table (below) is static, public, and global Kind => [] map that contains
+// xaction kinds and static properties, such as `Startable`, `Owned`, etc.
+//
+// In particular, "startability" is defined as ability to start xaction via `api.StartXaction`
+// (whereby copying bucket, for instance, requires a separate `api.CopyBucket`, etc.)
+//
+// Coexistence with rebalance and resilver
+// ---------------------------------------
+// Two flags govern the relationship between a given xaction kind and a cluster-wide
+// rebalance (or node-local resilver) run:
+//
+//   ConflictRebRes - refuse to start this kind when rebalance/resilver is already in progress;
+//                    conversely, refuse to start rebalance/resilver when this kind is running.
+//                    Enforced at xreg renew time.
+//
+//   AbortByReb     - abort in-flight instances of this kind when a new rebalance starts.
+//                    Enforced by xreg.AbortByNewReb() at the top of reb.Run().
+//
+// In practice the two almost always travel together: if the target set must be stable to
+// start the xaction, it must remain stable to finish it. The exceptions are deliberate:
+//
+//   AbortByReb without ConflictRebRes - ETLInline, BlobDl, Download.
+//     These are long-running or on-demand and shouldn't be refused at start time just
+//     because rebalance happens to be running, but they cannot correctly survive a
+//     topology change mid-flight.
+//
+//   ConflictRebRes without AbortByReb - IndexShard.
+//     Builds a best-effort index; stale entries are detected via LOM checksum and fall
+//     back to tar.Next() scan. Aborting a 90%-complete build is wasteful when the partial
+//     output remains useful and a resumed build atomically skips already-indexed LOMs
+//     (lom.md.flags&Indexed + index file as an atomic pair).
+//
+// Rebalance and Resilver flags
+// ----------------------------
+// Rebalance=true and Resilver=true mark the xactions that ARE the rebalance/resilver
+// themselves (plus ActMoveBck which performs a rebalance-like move). They are informational
+// and used by xreg to recognize self-conflicts.
+
 const (
 	ScopeG  = iota + 1 // cluster
 	ScopeB             // bucket
@@ -33,8 +75,8 @@ type (
 		// see xreg for "limited coexistence"
 		Rebalance      bool // moves data between nodes
 		Resilver       bool // moves data between mountpaths
-		ConflictRebRes bool // conflicts with rebalance/resilver
-		AbortRebRes    bool // gets aborted upon rebalance/resilver - currently, all `ext`-ensions
+		ConflictRebRes bool // starting this job would conflict with rebalance or resilver that's currently in progress
+		AbortByReb     bool // gets aborted upon rebalance (coincides with ConflictRebRes with very few exceptions)
 
 		// xaction has an intermediate `idle` state whereby it "idles" between requests
 		// (see related: xact/demand.go)
@@ -54,17 +96,12 @@ type (
 // Descriptor //
 ////////////////
 
-// `xact.Table` is a static, public, and global Kind=>[Xaction Descriptor] map that contains
-// xaction kinds and static properties, such as `Startable`, `Owned`, etc.
-// In particular, "startability" is narrowly defined as ability to start xaction
-// via `api.StartXaction`
-// (whereby copying bucket, for instance, requires a separate `api.CopyBucket`, etc.)
 var Table = map[string]Descriptor{
 	// bucket-less xactions that will typically have a 'cluster' scope (with resilver being a notable exception)
 	apc.ActElection:  {DisplayName: "elect-primary", Scope: ScopeG, Startable: false},
 	apc.ActRebalance: {Scope: ScopeG, Startable: true, Metasync: true, Rebalance: true},
 
-	apc.ActETLInline: {Scope: ScopeG, Startable: false, AbortRebRes: true},
+	apc.ActETLInline: {Scope: ScopeG, Startable: false, AbortByReb: true},
 
 	// (one bucket) | (all buckets)
 	apc.ActLRU:          {DisplayName: "lru-eviction", Scope: ScopeGB, Startable: true},
@@ -79,8 +116,8 @@ var Table = map[string]Descriptor{
 
 	// single target (node)
 	apc.ActResilver:   {Scope: ScopeT, Startable: true, Resilver: true},
-	apc.ActRechunk:    {Scope: ScopeB, Startable: true, RefreshCap: true, ConflictRebRes: true},
-	apc.ActIndexShard: {Scope: ScopeB, Startable: true, RefreshCap: false, ConflictRebRes: true},
+	apc.ActRechunk:    {Scope: ScopeB, Startable: true, RefreshCap: true, ConflictRebRes: true, AbortByReb: true},
+	apc.ActIndexShard: {Scope: ScopeB, Startable: true, RefreshCap: false, ConflictRebRes: true, AbortByReb: false},
 
 	// on-demand EC and n-way replication
 	// (non-startable, triggered by PUT => erasure-coded or mirrored bucket)
@@ -90,30 +127,33 @@ var Table = map[string]Descriptor{
 	apc.ActPutCopies: {Scope: ScopeB, Startable: false, RefreshCap: true, Idles: true},
 
 	//
-	// on-demand multi-object (consider setting ConflictRebRes = true)
+	// on-demand multi-object
 	//
 	apc.ActArchive: {Scope: ScopeB, Access: apc.AccessRW, Startable: false, RefreshCap: true, Idles: true},
 	apc.ActCopyObjects: {
-		DisplayName: "copy-objects",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW, // apc.AceCreateBucket is checked as well but only if ais://dst doesn't exist
-		Startable:   false,
-		RefreshCap:  true,
-		Idles:       true,
+		DisplayName:    "copy-objects",
+		Scope:          ScopeB,
+		Access:         apc.AccessRW, // apc.AceCreateBucket is checked as well but only if ais://dst doesn't exist
+		Startable:      false,
+		RefreshCap:     true,
+		Idles:          true,
+		ConflictRebRes: true,
+		AbortByReb:     true,
 	},
 	apc.ActETLObjects: {
-		DisplayName: "etl-objects",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW, // ditto
-		Startable:   false,
-		RefreshCap:  true,
-		Idles:       true,
-		AbortRebRes: true,
+		DisplayName:    "etl-objects",
+		Scope:          ScopeB,
+		Access:         apc.AccessRW, // ditto
+		Startable:      false,
+		RefreshCap:     true,
+		Idles:          true,
+		ConflictRebRes: true,
+		AbortByReb:     true,
 	},
 
-	apc.ActBlobDl: {Access: apc.AccessRW, Scope: ScopeB, Startable: true, AbortRebRes: true, RefreshCap: true},
+	apc.ActBlobDl: {Access: apc.AccessRW, Scope: ScopeB, Startable: true, AbortByReb: true, RefreshCap: true},
 
-	apc.ActDownload: {Access: apc.AccessRW, Scope: ScopeG, Startable: false, Idles: true, AbortRebRes: true},
+	apc.ActDownload: {Access: apc.AccessRW, Scope: ScopeG, Startable: false, Idles: true, AbortByReb: true},
 
 	// in its own class
 	apc.ActDsort: {
@@ -122,9 +162,9 @@ var Table = map[string]Descriptor{
 		Access:         apc.AccessRW,
 		Startable:      false,
 		RefreshCap:     true,
-		ConflictRebRes: true,
 		ExtendedStats:  true,
-		AbortRebRes:    true,
+		ConflictRebRes: true,
+		AbortByReb:     true,
 	},
 
 	// multi-object
@@ -173,6 +213,7 @@ var Table = map[string]Descriptor{
 		Metasync:       true,
 		RefreshCap:     true,
 		ConflictRebRes: true,
+		AbortByReb:     true,
 	},
 	apc.ActMakeNCopies: {
 		DisplayName: "mirror",
@@ -190,6 +231,7 @@ var Table = map[string]Descriptor{
 		Metasync:       true,
 		Rebalance:      true,
 		ConflictRebRes: true,
+		AbortByReb:     true,
 	},
 	apc.ActCopyBck: {
 		DisplayName:    "copy-bucket",
@@ -199,22 +241,24 @@ var Table = map[string]Descriptor{
 		Metasync:       true,
 		RefreshCap:     true,
 		ConflictRebRes: true,
+		AbortByReb:     true,
 	},
 	apc.ActETLBck: {
-		DisplayName: "etl-bucket",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW, // ditto
-		Startable:   false,        // ditto
-		Metasync:    true,
-		RefreshCap:  true,
-		AbortRebRes: true,
+		DisplayName:    "etl-bucket",
+		Scope:          ScopeB,
+		Access:         apc.AccessRW, // ditto
+		Startable:      false,        // ditto
+		Metasync:       true,
+		RefreshCap:     true,
+		ConflictRebRes: true,
+		AbortByReb:     true,
 	},
 
 	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true, QuietBrief: true},
 
-	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: true, QuietBrief: true}, // x-moss
+	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: true, QuietBrief: true}, // x-moss
 
-	apc.ActCreateNBI: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: false},
+	apc.ActCreateNBI: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: false},
 
 	// cache management, internal usage
 	apc.ActLoadLomCache: {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},
