@@ -260,14 +260,14 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	if reb.rebID() == extArgs.NID {
 		return
 	}
-	if err := reb.dm.RegRecv(); err != nil {
+	if err := reb.dm.RegRecv(false /*force*/); err != nil {
 		if !_preempt2(logHdr, extArgs.NID) {
 			nlog.Errorln(logHdr, "failed to preempt #2:", err)
 			return
 		}
 		// sleep and retry just once
 		time.Sleep(rargs.config.Timeout.MaxKeepalive.D())
-		if err = reb.dm.RegRecv(); err != nil {
+		if err = reb.dm.RegRecv(true /*force*/); err != nil {
 			nlog.Errorln(logHdr, err)
 			return
 		}

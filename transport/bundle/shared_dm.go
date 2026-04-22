@@ -110,7 +110,7 @@ func (sdm *sharedDM) Open(config *cmn.Config, selected *cmn.XactConf) error {
 	sdm.receivers = make(map[string]*rxent, iniSdmCap)
 	sdm.rxmu.Unlock()
 
-	if err := sdm.dm.RegRecv(); err != nil {
+	if err := sdm.dm.RegRecv(false /*force*/); err != nil {
 		sdm.ocmu.Unlock()
 		nlog.ErrorDepth(1, core.T.String(), err)
 		debug.AssertNoErr(err)

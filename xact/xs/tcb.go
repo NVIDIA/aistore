@@ -176,7 +176,7 @@ func (r *XactTCB) newDM(sizePDU int32) error {
 	}
 	// in re cmn.OwtPut: see comment inside _recv()
 	dm := bundle.NewDM(trname+r.ID(), r.recv, r.owt, extra)
-	if err := dm.RegRecv(); err != nil {
+	if err := dm.RegRecv(false /*force*/); err != nil {
 		return err
 	}
 	dm.SetXact(r)

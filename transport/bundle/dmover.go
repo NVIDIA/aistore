@@ -128,12 +128,27 @@ func (dm *DM) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra 
 		return nil
 	}
 
-	nlog.Infoln("renew DM", dm.String(), "=> [", extra.XactConf, "]")
+	// avoid identity swap
+	if !dm.IsFree() {
+		nlog.Warningln("cannot update", dm.String(), "config => [", extra.XactConf, "] - reg/unreg in progress")
+		return nil
+	}
+
+	nlog.Infoln("renew DM:", dm.String(), "=> [", extra.XactConf, "]")
 	return NewDM(trname, recvCB, owt, extra)
 }
 
-// register user's receive-data (and, optionally, receive-ack) wrappers
-func (dm *DM) RegRecv() error {
+// RegRecv: register user's receive-data (and, optionally, receive-ack) wrappers.
+//
+// force=true: if a stale handler exists for this DM's trname, remove it (under mutex)
+// and retry once.
+// Callers may set force only when they own the trname exclusively across the lifetime
+// of the process - i.e., when the trname is a package-level constant used by a single
+// DM-owning subsystem (e.g., "reb"). In that case a duplicate entry can only be a
+// leftover from a prior life of the same DM, and clearing it is safe.
+//
+// Callers that have dynamic or shared `trname` must not use force.
+func (dm *DM) RegRecv(force bool) error {
 	dm.stage.regmtx.Lock()
 	defer dm.stage.regmtx.Unlock()
 
@@ -141,9 +156,21 @@ func (dm *DM) RegRecv() error {
 		return errors.New("duplicated reg: " + dm.String())
 	}
 	if err := transport.Handle(dm.data.trname, dm.wrapRecvData); err != nil {
-		debug.Assert(err == nil, dm.String(), ": ", err)
-		return err
+		debug.Assert(transport.IsErrDuplicateTrname(err), dm.String(), ": ", err) // the only reason for transport.Handle to fail
+		if force && transport.IsErrDuplicateTrname(err) {
+			debug.Assert(!dm.stage.opened.Load())
+			if nerr := transport.Unhandle(dm.data.trname); nerr != nil {
+				nlog.Errorln("FATAL:", err, "[ nested:", nerr, dm.String(), "]")
+				debug.AssertNoErr(nerr)
+				return err
+			}
+			err = transport.Handle(dm.data.trname, dm.wrapRecvData)
+		}
+		if err != nil {
+			return err
+		}
 	}
+
 	if dm.useACKs() {
 		if err := transport.Handle(dm.ack.trname, dm.wrapRecvACK); err != nil {
 			if nerr := transport.Unhandle(dm.data.trname); nerr != nil {
@@ -183,6 +210,8 @@ func (dm *DM) UnregRecv() {
 		dm.stage.regmtx.Unlock()
 		timeout := dm.Config.Transport.QuiesceTime.D()
 		if xctn.IsAborted() {
+			// aborted xaction: inbound Rx is winding down via quicb returning QuiInactiveCB;
+			// full QuiesceTime is wasted, but allow a small window for in-flight Rx to drain
 			timeout = time.Second
 		}
 		dm.quiesce(timeout)
@@ -203,6 +232,7 @@ func (dm *DM) UnregRecv() {
 	dm.stage.unregg.Store(false)
 }
 
+// `dm.stage.opened` is bracketed inside `regged` - is therefore included
 func (dm *DM) IsFree() bool {
 	return !dm.stage.regged.Load() && !dm.stage.unregg.Load()
 }

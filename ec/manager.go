@@ -55,12 +55,9 @@ func initManager() error {
 	}
 	// EC `trnames` (ReqStreamName, RespStreamName) are constants, receive handlers static
 	if err := transport.Handle(ReqStreamName, ECM.recvRequest); err != nil {
-		return fmt.Errorf("failed to register recvRequest: %v", err)
+		return err
 	}
-	if err := transport.Handle(RespStreamName, ECM.recvResponse); err != nil {
-		return fmt.Errorf("failed to register respResponse: %v", err)
-	}
-	return nil
+	return transport.Handle(RespStreamName, ECM.recvResponse)
 }
 
 func (mgr *Manager) req() *bundle.Streams  { return mgr.reqBundle.Load() }

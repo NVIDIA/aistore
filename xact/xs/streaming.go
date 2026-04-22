@@ -112,13 +112,13 @@ func (p *streamingF) newDM(trname string, recv transport.RecvObj, smap *meta.Sma
 
 	p.dm = bundle.NewDM(trname, recv, owt, dmxtra)
 
-	err := p.dm.RegRecv()
+	err := p.dm.RegRecv(false /*force*/)
 	if err != nil {
 		nlog.Errorln(err)
 		sleep := cos.ProbingFrequency(waitRegRecv)
 		for total := time.Duration(0); err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv; total += sleep {
 			time.Sleep(sleep)
-			err = p.dm.RegRecv()
+			err = p.dm.RegRecv(false /*force*/) // (dynamic trname is not the case for `force=true`)
 		}
 	}
 	if err != nil {
