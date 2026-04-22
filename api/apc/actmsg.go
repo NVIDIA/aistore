@@ -40,6 +40,7 @@ const (
 	ActMakeNCopies = "make-n-copies"
 	ActPutCopies   = "put-copies"
 	ActRechunk     = "rechunk"
+	ActIndexShard  = "index-shard"
 
 	ActRebalance = "rebalance"
 	ActMoveBck   = "move-bck"

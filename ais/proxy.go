@@ -1629,6 +1629,15 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
+	case apc.ActIndexShard:
+		// ensure the system bucket for shard indices exists before starting the xaction
+		if err = p.initTrySysBck(w, r, msg, meta.SysBckShardIdx()); err != nil {
+			return
+		}
+		if xid, err = p.bcastBckAction(r.Method, bucket, msg, query); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
 	case apc.ActMakeNCopies:
 		if xid, err = p.makeNCopies(msg, bck); err != nil {
 			p.writeErr(w, r, err)
@@ -1646,7 +1655,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 	case apc.ActCreateNBI:
-		if err := p.initTrySysInv(w, r, msg); err != nil {
+		if err := p.initTrySysBck(w, r, msg, meta.SysBckNBI()); err != nil {
 			return
 		}
 		if xid, err = p.createNBI(msg, bck); err != nil {
@@ -1662,12 +1671,12 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 	writeXid(w, xid)
 }
 
-// currently, creating inventories requires admin access
-// (see p.access() for IsSystem)
-func (p *proxy) initTrySysInv(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg /*orig*/) error {
+// initTrySysBck initializes (or creates) a system bucket in BMD.
+// System operations require admin access (see p.access() for IsSystem).
+func (p *proxy) initTrySysBck(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, bck *meta.Bck) error {
 	bctx := allocBctx()
 	bctx.p, bctx.w, bctx.r = p, w, r
-	bctx.bck = meta.SysBckNBI()
+	bctx.bck = bck
 	bctx.msg = msg
 	bctx.createAIS = true
 	bctx.perms = apc.AceAdmin

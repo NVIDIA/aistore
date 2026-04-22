@@ -278,6 +278,17 @@ func RechunkBucket(bp BaseParams, bck cmn.Bck, msg *apc.RechunkMsg) (string, err
 	return doBckAct(bp, bck, jbody, q)
 }
 
+// IndexBucketShards starts an xaction that walks all TAR objects in bck and
+// builds a shard index for each. The index is stored as a system-bucket object
+// and later used for direct random access into the archive.
+func IndexBucketShards(bp BaseParams, bck cmn.Bck, msg *apc.IndexShardMsg) (string, error) {
+	q := qalloc()
+	bck.SetQuery(q)
+	bp.Method = http.MethodPost
+	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActIndexShard, Value: msg})
+	return doBckAct(bp, bck, jbody, q)
+}
+
 // Start an eXtended Action (xaction) to bring a given bucket to a
 // certain redundancy level (num copies).
 // Return xaction ID if successful, or an error otherwise.

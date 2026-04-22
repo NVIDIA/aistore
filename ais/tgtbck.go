@@ -535,6 +535,13 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 			return
 		}
 		_, err = t.runRechunk(msg.UUID, apireq.bck, rechunkMsg)
+	case apc.ActIndexShard:
+		sishMsg := &apc.IndexShardMsg{}
+		if err = cos.MorphMarshal(msg.Value, sishMsg); err != nil {
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+			return
+		}
+		_, err = t.runIndexShard(msg.UUID, apireq.bck, sishMsg)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -563,6 +570,24 @@ func (t *target) runRechunk(xactID string, bck *meta.Bck, rechunkMsg *apc.Rechun
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln("start rechunk", bck.String(), "xid", xactID)
 	}
+	xact.GoRunW(xctn)
+	return xctn.ID(), nil
+}
+
+func (t *target) runIndexShard(xactID string, bck *meta.Bck, msg *apc.IndexShardMsg) (xid string, err error) {
+	if err := xreg.LimitedCoexistence(t.si, bck, apc.ActIndexShard); err != nil {
+		return "", err
+	}
+	rns := xreg.RenewBckShardIndex(bck, xactID, msg)
+	if rns.Err != nil {
+		return "", rns.Err
+	}
+	xctn := rns.Entry.Get()
+	notif := &xact.NotifXact{
+		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+		Xact: xctn,
+	}
+	xctn.AddNotif(notif)
 	xact.GoRunW(xctn)
 	return xctn.ID(), nil
 }
