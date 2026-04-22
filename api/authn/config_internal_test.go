@@ -7,6 +7,7 @@ package authn
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -41,15 +42,15 @@ func TestConfigValidateValid(t *testing.T) {
 	tassert.CheckFatal(t, c.Validate())
 	tassert.Errorf(t, c.Log.FlushInterval == defaultLogFlushInterval, "expected FlushInterval default, got %v", c.Log.FlushInterval)
 
-	// zero RSA.Bits gets default
+	// zero SigningKey.Bits gets default
 	c = validConfig()
-	c.Server.RSA.Bits = 0
+	c.Server.SigningKey.Bits = 0
 	tassert.CheckFatal(t, c.Validate())
-	tassert.Errorf(t, c.Server.RSA.Bits == defaultRSAKeyBits, "expected RSA.Bits default, got %d", c.Server.RSA.Bits)
+	tassert.Errorf(t, c.Server.SigningKey.Bits == defaultRSAKeyBits, "expected SigningKey.Bits default, got %d", c.Server.SigningKey.Bits)
 
 	// external mode is accepted
 	c = validConfig()
-	c.Server.RSA.Mode = RSAModeExternal
+	c.Server.SigningKey.Mode = SigningKeyModeExternal
 	tassert.CheckFatal(t, c.Validate())
 
 	// valid external url is parsed
@@ -58,14 +59,69 @@ func TestConfigValidateValid(t *testing.T) {
 	tassert.CheckFatal(t, c.Validate())
 }
 
+func TestSigningKeyConfValidate(t *testing.T) {
+	t.Run("BitsDefaulted", func(t *testing.T) {
+		conf := SigningKeyConf{}
+		tassert.CheckFatal(t, conf.validate())
+		tassert.Errorf(t, conf.Bits == defaultRSAKeyBits,
+			"expected SigningKey.Bits default %d, got %d", defaultRSAKeyBits, conf.Bits)
+	})
+	t.Run("BitsPreserved", func(t *testing.T) {
+		conf := SigningKeyConf{Bits: minRSAKeyBits + 1024}
+		tassert.CheckFatal(t, conf.validate())
+		tassert.Errorf(t, conf.Bits == minRSAKeyBits+1024,
+			"expected SigningKey.Bits %d, got %d", minRSAKeyBits+1024, conf.Bits)
+	})
+	t.Run("BitsTooSmall", func(t *testing.T) {
+		conf := SigningKeyConf{Bits: minRSAKeyBits - 1}
+		tassert.Errorf(t, conf.validate() != nil, "expected error when signing key bits < minimum")
+	})
+	t.Run("ExternalModeAccepted", func(t *testing.T) {
+		conf := SigningKeyConf{Mode: SigningKeyModeExternal}
+		tassert.CheckFatal(t, conf.validate())
+	})
+	t.Run("InvalidMode", func(t *testing.T) {
+		conf := SigningKeyConf{Mode: "auto"}
+		tassert.Errorf(t, conf.validate() != nil, "expected error for invalid signing key mode")
+	})
+}
+
+func TestServerConfValidateLegacyRSAKeyBits(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want int
+	}{
+		{
+			name: "LegacyOnly",
+			raw:  `{"secret":"test-secret","rsa_key_bits":4096}`,
+			want: 4096,
+		},
+		{
+			name: "SigningKeyOverridesLegacy",
+			raw:  `{"secret":"test-secret","rsa_key_bits":4096,"signing_key":{"bits":3072}}`,
+			want: 3072,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var conf ServerConf
+			tassert.CheckFatal(t, cos.JSON.Unmarshal([]byte(tt.raw), &conf))
+			tassert.CheckFatal(t, conf.Validate())
+			tassert.Errorf(t, conf.SigningKey.Bits == tt.want,
+				"expected SigningKey.Bits %d, got %d", tt.want, conf.SigningKey.Bits)
+		})
+	}
+}
+
 func TestConfigValidateInvalid(t *testing.T) {
 	cases := []struct {
 		name   string
 		modify func(*Config)
 	}{
 		{"expire too short", func(c *Config) { c.Server.Expire = minAuthExpiration - 1 }},
-		{"RSA bits too small", func(c *Config) { c.Server.RSA.Bits = minRSAKeyBits - 1 }},
-		{"RSA mode invalid", func(c *Config) { c.Server.RSA.Mode = "auto" }},
+		{"signing key bits too small", func(c *Config) { c.Server.SigningKey.Bits = minRSAKeyBits - 1 }},
+		{"signing key mode invalid", func(c *Config) { c.Server.SigningKey.Mode = "auto" }},
 		{"bad log level", func(c *Config) { c.Log.Level = "verbose" }},
 		{"log level too low", func(c *Config) { c.Log.Level = "-1" }},
 		{"log level too high", func(c *Config) { c.Log.Level = "6" }},
