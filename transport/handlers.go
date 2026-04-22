@@ -122,6 +122,11 @@ func IsErrDuplicateTrname(e error) bool {
 	return ok
 }
 
+func IsErrAlreadyRemovedTrname(err error) bool {
+	_, ok := err.(*errAlreadyRemovedTrname)
+	return ok
+}
+
 const fmtep = " transport endpoint %q"
 
 func (e *errDuplicateTrname) Error() string      { return fmt.Sprintf("duplicate"+fmtep, e.name) }

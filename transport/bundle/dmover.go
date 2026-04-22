@@ -148,6 +148,24 @@ func (dm *DM) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra 
 // leftover from a prior life of the same DM, and clearing it is safe.
 //
 // Callers that have dynamic or shared `trname` must not use force.
+
+func (dm *DM) _force(err error, trname string, rxCb transport.RecvObj, force bool) error {
+	debug.Assert(transport.IsErrDuplicateTrname(err), dm.String(), ": ", err) // the only reason for transport.Handle to fail
+	if !force || !transport.IsErrDuplicateTrname(err) {
+		return err
+	}
+	debug.Assert(!dm.stage.opened.Load())
+
+	nlog.WarningDepth(1, "force-reclaim stale transport handler:", trname, dm.String())
+
+	if nerr := transport.Unhandle(trname); nerr != nil && !transport.IsErrAlreadyRemovedTrname(nerr) {
+		nlog.Errorln("FATAL:", err, "[ nested:", nerr, dm.String(), "]")
+		debug.AssertNoErr(nerr)
+		return err
+	}
+	return transport.Handle(trname, rxCb)
+}
+
 func (dm *DM) RegRecv(force bool) error {
 	dm.stage.regmtx.Lock()
 	defer dm.stage.regmtx.Unlock()
@@ -156,28 +174,20 @@ func (dm *DM) RegRecv(force bool) error {
 		return errors.New("duplicated reg: " + dm.String())
 	}
 	if err := transport.Handle(dm.data.trname, dm.wrapRecvData); err != nil {
-		debug.Assert(transport.IsErrDuplicateTrname(err), dm.String(), ": ", err) // the only reason for transport.Handle to fail
-		if force && transport.IsErrDuplicateTrname(err) {
-			debug.Assert(!dm.stage.opened.Load())
-			if nerr := transport.Unhandle(dm.data.trname); nerr != nil {
-				nlog.Errorln("FATAL:", err, "[ nested:", nerr, dm.String(), "]")
-				debug.AssertNoErr(nerr)
-				return err
-			}
-			err = transport.Handle(dm.data.trname, dm.wrapRecvData)
-		}
-		if err != nil {
+		if err = dm._force(err, dm.data.trname, dm.wrapRecvData, force); err != nil {
 			return err
 		}
 	}
 
 	if dm.useACKs() {
 		if err := transport.Handle(dm.ack.trname, dm.wrapRecvACK); err != nil {
-			if nerr := transport.Unhandle(dm.data.trname); nerr != nil {
-				nlog.Errorln("FATAL:", err, "[ nested:", nerr, dm.String(), "]")
-				debug.AssertNoErr(nerr)
+			if err = dm._force(err, dm.ack.trname, dm.wrapRecvACK, force); err != nil {
+				if nerr := transport.Unhandle(dm.data.trname); nerr != nil {
+					nlog.Errorln("FATAL:", err, "[ nested:", nerr, dm.String(), "]")
+					debug.AssertNoErr(nerr)
+				}
+				return err
 			}
-			return err
 		}
 	}
 
