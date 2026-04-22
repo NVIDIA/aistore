@@ -54,7 +54,30 @@ experimental:
     - ./components
   basepath-aware: true
 
+# Python (and, later, HTTP + Go) API reference is auto-generated from source
+# via `fern docs md generate` in CI. Output lands under fern/pages/python/
+# and is gitignored — do not commit the generated pages.
+libraries:
+  python:
+    input:
+      git: https://github.com/NVIDIA/aistore
+      subpath: python/aistore
+    output:
+      path: ./pages/python
+    lang: python
+
+tabs:
+  docs:
+    display-name: Docs
+    icon: fa-regular fa-book
+    skip-slug: true
+  api-reference:
+    display-name: API Reference
+    icon: fa-regular fa-code
+
 navigation:
+- tab: docs
+  layout:
   # Landing page: main README
   - page: AIStore
     path: ./pages/readme.md
@@ -68,6 +91,13 @@ navigation:
   # AUTO_GENERATED_DOCS_ENTRIES
 
   # AUTO_GENERATED_BLOG_ENTRIES
+
+- tab: api-reference
+  layout:
+  - section: Python SDK
+    slug: ""
+    contents:
+    - folder: ./pages/python
 
 redirects:
   # Old blog date-based URLs → new flat blog slugs

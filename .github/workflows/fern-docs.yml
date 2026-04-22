@@ -32,6 +32,11 @@ jobs:
       - name: Generate Fern pages
         run: bash scripts/fern/generate-pages.sh
 
+      - name: Generate Python API reference (from source docstrings)
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: fern docs md generate
+
       - name: Validate configuration
         run: fern check
 
