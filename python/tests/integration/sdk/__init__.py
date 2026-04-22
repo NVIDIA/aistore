@@ -13,7 +13,7 @@ from tenacity import (
 
 from aistore.sdk.retry_config import RetryConfig, NETWORK_RETRY_EXCEPTIONS
 from aistore.sdk.utils import get_logger
-from aistore.client import Client
+from aistore.sdk.client import Client
 from tests.const import TEST_TIMEOUT
 from tests.integration import CLUSTER_ENDPOINT
 
