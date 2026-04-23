@@ -152,6 +152,24 @@ const rechunkUsage = "Re-chunk bucket objects based on size threshold.\n" +
 	indent1 + "\tSet --objsize-limit=0 to disable chunking and restore all chunked objects to monolithic format.\n" +
 	indent1 + "\tBy default, rechunk operates only on in-cluster (cached) objects; use --sync-remote to also update remote backend."
 
+// ais bucket shard-index
+// Parent command groups the shard-index lifecycle (build today; rm/show to follow in separate commits).
+const shardIndexUsage = "Manage TAR shard indexes for fast random access into archives.\n" +
+	indent1 + "\tSubcommands:\n" +
+	indent1 + "\t- build\t- build a shard index for each TAR object in a bucket (see 'ais bucket shard-index build --help');\n" +
+	indent1 + "\t- rm\t- (TODO, separate commit) remove existing shard indexes;\n" +
+	indent1 + "\t- show\t- (TODO, separate commit) list/inspect existing shard indexes."
+
+// ais bucket shard-index build
+const shardIndexBuildUsage = "Build a shard index for each TAR object in a bucket (for fast random access into archives).\n" +
+	indent1 + "\tNon-TAR objects are skipped; stale indexes (e.g., after re-upload) are automatically re-indexed.\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t- 'ais bucket shard-index build ais://nnn'\t- index all TAR shards in 'ais://nnn';\n" +
+	indent1 + "\t- 'ais bucket shard-index build ais://nnn --prefix shards/'\t- only index TAR shards under 'shards/';\n" +
+	indent1 + "\t- 'ais bucket shard-index build ais://nnn --num-workers 16'\t- run with 16 concurrent workers;\n" +
+	indent1 + "\t- 'ais bucket shard-index build ais://nnn --skip-verify'\t- fast re-run: trust existing indexes without re-verifying;\n" +
+	indent1 + "\t- 'ais bucket shard-index build ais://nnn --wait'\t- start and wait for the job to finish."
+
 // ais bucket ... props
 const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs,\n" +
 	indent1 + "\te.g.:\n" +
@@ -291,6 +309,15 @@ var (
 			waitFlag,
 			waitJobXactFinishedFlag,
 		},
+		cmdShardIndexBuild: {
+			verbObjPrefixFlag,
+			nonRecursFlag, // TODO: wire into shard-index build handler (non-recursive prefix walk)
+			numWorkersFlag,
+			skipVerifyFlag,
+			waitFlag,
+			waitJobXactFinishedFlag,
+			nonverboseFlag,
+		},
 	}
 )
 
@@ -364,6 +391,21 @@ var (
 				ArgsUsage: bucketArgument,
 				Flags:     sortFlags(bucketCmdsFlags[apc.ActRechunk]),
 				Action:    rechunkBucketHandler,
+			},
+			{
+				Name:  commandShardIndex,
+				Usage: shardIndexUsage,
+				Subcommands: []cli.Command{
+					{
+						Name:      cmdShardIndexBuild,
+						Usage:     shardIndexBuildUsage,
+						ArgsUsage: bucketArgument,
+						Flags:     sortFlags(bucketCmdsFlags[cmdShardIndexBuild]),
+						Action:    shardIndexBuildHandler,
+					},
+					// TODO (separate commit): {Name: "rm",   Action: shardIndexRmHandler}   - remove existing shard indexes
+					// TODO (separate commit): {Name: "show", Action: shardIndexShowHandler} - list/inspect existing shard indexes
+				},
 			},
 			makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
 			{
@@ -670,6 +712,56 @@ func parseRechunkConfig(c *cli.Context, bck cmn.Bck) (chunkSize, objSizeLimit in
 	}
 
 	return chunkSize, objSizeLimit, nil
+}
+
+//
+// shardIndexBuildHandler: 'ais bucket shard-index build BUCKET'
+//
+
+func shardIndexBuildHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket name")
+	}
+
+	bck, objName, err := parseBckObjURI(c, c.Args().Get(0), true /*optObjName*/)
+	if err != nil {
+		return err
+	}
+
+	// combine embedded prefix (if any) with --prefix flag
+	prefix := parseStrFlag(c, verbObjPrefixFlag)
+	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
+		return fmt.Errorf("conflict between embedded prefix (%q) and --prefix flag (%q): --prefix must start with the embedded prefix",
+			objName, prefix)
+	}
+	if prefix == "" {
+		prefix = objName
+	}
+
+	msg := &apc.IndexShardMsg{
+		Prefix:     prefix,
+		NumWorkers: parseIntFlag(c, numWorkersFlag),
+		SkipVerify: flagIsSet(c, skipVerifyFlag),
+	}
+	xid, err := api.IndexBucketShards(apiBP, bck, msg)
+	if err != nil {
+		return V(err)
+	}
+
+	_, xname := xact.GetKindName(apc.ActIndexShard)
+	if flagIsSet(c, waitFlag) || flagIsSet(c, waitJobXactFinishedFlag) {
+		return waitJob(c, xname, xid, bck)
+	}
+	if flagIsSet(c, nonverboseFlag) {
+		fmt.Fprintln(c.App.Writer, xid)
+		return nil
+	}
+	text := fmt.Sprintf("%s: %s", xact.Cname(xname, xid), bck.Cname(""))
+	if prefix != "" {
+		text += fmt.Sprintf(" (prefix: %q)", prefix)
+	}
+	actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
+	return nil
 }
 
 //

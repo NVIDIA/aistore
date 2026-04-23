@@ -109,15 +109,19 @@ const (
 	commandEvict    = "evict"    // apc.ActEvictRemoteBck or apc.ActEvictObjects
 	commandPrefetch = "prefetch" // apc.ActPrefetchObjects
 
-	cmdBlobDownload = apc.ActBlobDl   // blob-download
-	cmdDownload     = apc.ActDownload // download
-	cmdDsort        = apc.ActDsort
-	cmdRebalance    = apc.ActRebalance
-	cmdLRU          = apc.ActLRU
-	commandRechunk  = apc.ActRechunk
-	cmdStgCleanup   = "cleanup" // display name for apc.ActStoreCleanup
-	cmdScrub        = "validate"
-	cmdSummary      = "summary" // ditto apc.ActSummaryBck
+	cmdBlobDownload    = apc.ActBlobDl   // blob-download
+	cmdDownload        = apc.ActDownload // download
+	cmdDsort           = apc.ActDsort
+	cmdRebalance       = apc.ActRebalance
+	cmdLRU             = apc.ActLRU
+	commandRechunk     = apc.ActRechunk
+	commandShardIndex  = "shard-index" // parent; xaction kind is apc.ActIndexShard
+	cmdShardIndexBuild = "build"
+	// TODO: cmdShardIndexRm   = "rm"   - remove existing shard indexes
+	// TODO: cmdShardIndexShow = "show" - list/inspect existing shard indexes
+	cmdStgCleanup = "cleanup" // display name for apc.ActStoreCleanup
+	cmdScrub      = "validate"
+	cmdSummary    = "summary" // ditto apc.ActSummaryBck
 
 	cmdCluster    = commandCluster
 	cmdDashboard  = commandDashboard
@@ -1076,6 +1080,13 @@ var (
 		Name: "sync-remote",
 		Usage: "Write rechunked objects to remote backend via multipart upload;\n" +
 			indent1 + "\tapplies only to buckets with remote backend (e.g., S3, GCS, remote AIS)",
+	}
+
+	// usage: shard-index build
+	skipVerifyFlag = cli.BoolFlag{
+		Name: "skip-verify",
+		Usage: "If a shard already has an index, trust it without loading and verifying staleness (fast re-run);\n" +
+			indent1 + "\tuse with caution: stale indexes will remain until the next non-skip-verify run",
 	}
 
 	blobThresholdFlag = cli.StringFlag{

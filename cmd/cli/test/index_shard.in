@@ -1,0 +1,21 @@
+# Test shard-index build command
+
+# Create bucket
+ais bucket create ais://$BUCKET // IGNORE
+
+# Generate 5 TAR shards (2 files each) directly into the bucket
+ais archive gen-shards "ais://$BUCKET/shard-{001..005}.tar" --fcount 2 // IGNORE
+
+# Add a non-TAR object (must be skipped, not indexed)
+head -c 1024 /dev/urandom | ais object put - ais://$BUCKET/readme.md // IGNORE
+
+# Run shard-index build and wait for completion
+ais bucket shard-index build ais://$BUCKET --wait // IGNORE
+
+# Extract processed-object count from the job summary;
+# 5 TAR shards were indexed, readme.md was skipped (non-TAR) --> expect indexed=5
+# Sum the OBJECTS column across all target rows.
+ais show job index-shard ais://$BUCKET --all --no-headers 2>&1 | awk '$3 == "index-shard" {sum += $5} END {print "indexed=" sum}'
+
+# Clean up
+ais bucket rm --yes ais://$BUCKET // IGNORE
