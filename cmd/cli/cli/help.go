@@ -133,7 +133,7 @@ const (
    {{.HelpName}} - {{if .Description}}{{.Description}}{{else}}{{.Usage}}{{end}}
 
 USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} command {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}} {{if .VisibleFlags}} [command options]{{end}}{{end}}
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}command [arguments...]{{end}} {{if .VisibleFlags}} [command options]{{end}}{{end}}
 
 COMMANDS:{{range .VisibleCategories}}{{if .Name}}
 
@@ -151,7 +151,7 @@ OPTIONS:
    {{colorStr .HelpName}} - {{if .Description}}{{.Description}}{{else}}{{.Usage}}{{end}}
 
 USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} command {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}} {{if .VisibleFlags}} [command options]{{end}}{{end}}
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}command [arguments...]{{end}} {{if .VisibleFlags}} [command options]{{end}}{{end}}
 
 COMMANDS:{{range .VisibleCategories}}{{if .Name}}
 
