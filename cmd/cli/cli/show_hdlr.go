@@ -24,6 +24,21 @@ import (
 
 // This file contains most of the implementation of the top-level `show` command.
 
+const showClusterUsage = "" +
+	"Show cluster summary by default: health, version/build, and nodes including capacity, memory, CPU utilization, and alerts.\n" +
+	"\tUse subcommands to drill down into specific views (Smap, BMD, config, stats, CPU, memory).\n" +
+	"\tExamples:\n" +
+	indent1 + "\t- ais show cluster\t- show the default cluster summary;\n" +
+	indent1 + "\t- ais show cluster t[abc]\t- same as above, but only for the selected target;\n" +
+	indent1 + "\t- ais show cluster proxy\t- show proxies only;\n" +
+	indent1 + "\t- ais show cluster proxy p[xyz]\t- show specific proxy;\n" +
+	indent1 + "\t- ais show cluster smap\t- show cluster map (Smap);\n" +
+	indent1 + "\t- ais show cluster smap t[xyz]\t- ask selected target to show its copy of the Smap;\n" +
+	indent1 + "\t- ais show cluster config\t- show cluster and node configuration;\n" +
+	indent1 + "\t- ais show cluster stats\t- show performance counters and related stats;\n" +
+	indent1 + "\t- ais show cluster cpu\t- show detailed CPU view for all nodes;\n" +
+	indent1 + "\t- ais show cluster memory t[abc]\t- show detailed memory view for the selected target."
+
 var (
 	showCmdsFlags = map[string][]cli.Flag{
 		cmdObject: {
@@ -134,9 +149,8 @@ var (
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 	showCmdCluster = cli.Command{
-		Name: cmdCluster,
-		Usage: "Show cluster: health, version and build, and nodes including capacity, memory, CPU utilization, and alerts\n" +
-			indent4 + "\t(use '--verbose' ('--v') to also include load averages).",
+		Name:         cmdCluster,
+		Usage:        showClusterUsage,
 		ArgsUsage:    showClusterArgument,
 		Flags:        sortFlags(showCmdsFlags[cmdCluster]),
 		Action:       showClusterHandler,
