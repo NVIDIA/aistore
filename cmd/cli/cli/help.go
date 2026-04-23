@@ -22,6 +22,18 @@ import (
 	"github.com/urfave/cli"
 )
 
+// TODO: NAME vs DESCRIPTION inconsistency across help templates        --------------------
+//
+// subcommandHelpTemplate / subcommandColoredHelpTemplate currently use "NAME:" for commands
+// that may either:
+// - require completion via a subcommand (e.g. `ais bucket props`), or
+// - be runnable on their own with or without subcommands (e.g. `ais show cluster`).
+//
+// Ideally, split cli.Command.Usage (short one-liner used in listings) from
+// cli.Command.Description (extended help with examples), and render them under
+// separate "NAME:" and "DESCRIPTION:" sections (but that requires auditing 500+ Usage: fields)
+// -----------------------------------------------------------------------------------------
+
 // custom cli.AppHelpTemplate
 const (
 	// plain
