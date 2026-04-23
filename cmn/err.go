@@ -1267,9 +1267,16 @@ func IsStatusGone(err error) (yes bool) {
 // sends HTTP response header with the provided status (alloc/free via mem-pool)
 func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[status[, silent]]*/) {
 	if herr, allocated := err2HTTP(err); herr != nil {
-		herr.Status = http.StatusBadRequest
-		if len(opts) > 0 && opts[0] > http.StatusBadRequest {
+		// status precedence:
+		// 1) explicit ecode via opts[0] (if it's a real error status)
+		// 2) preserve existing herr.Status when it's already set to an error (>= 400);
+		//    this matters on the proxy side, where a target's 429/404/etc.
+		//    decoded into *ErrHTTP must not be silently rewritten to 400
+		// 3) default to 400
+		if len(opts) > 0 && opts[0] >= http.StatusBadRequest {
 			herr.Status = opts[0]
+		} else if herr.Status < http.StatusBadRequest {
+			herr.Status = http.StatusBadRequest
 		}
 		herr.write(w, r, len(opts) > 1 /*silent*/)
 		if allocated {
