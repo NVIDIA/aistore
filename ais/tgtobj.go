@@ -1282,6 +1282,7 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 	)
 	// read single
 	if dpq.arch.path != "" {
+		// Note: This will use the shard index fast path if available.
 		csl, err := lom.NewArchpathReader(lmfh, dpq.arch.path, dpq.arch.mime)
 		if err != nil {
 			return err

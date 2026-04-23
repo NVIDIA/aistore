@@ -183,9 +183,9 @@ var (
 
 	_ ReadSizer = (*sizedReader)(nil)
 
-	_ ReadOpenCloser = (*SectionHandle)(nil)
-	_ ReadOpenCloser = (*FileSectionHandle)(nil)
-	_ ReadOpenCloser = (*nopOpener)(nil)
+	_ ReadOpenCloseSizer = (*SectionHandle)(nil)
+	_ ReadOpenCloser     = (*FileSectionHandle)(nil)
+	_ ReadOpenCloser     = (*nopOpener)(nil)
 
 	_ io.WriteCloser = (*nopWriteCloser)(nil)
 	_ io.Writer      = (*SectionWriter)(nil)
@@ -348,6 +348,8 @@ func (f *SectionHandle) Read(buf []byte) (n int, err error) {
 }
 
 func (*SectionHandle) Close() error { return nil }
+
+func (f *SectionHandle) Size() int64 { return f.size }
 
 ///////////////////////
 // FileSectionHandle //

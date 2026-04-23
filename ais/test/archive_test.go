@@ -48,11 +48,17 @@ func TestGetFromArch(t *testing.T) {
 			errCh       = make(chan error, m.num)
 			numArchived = 100
 			randomNames = make([]string, numArchived)
-			subtests    = []struct {
+			// idx: state of the shard index at GET time (TAR only; no-op otherwise)
+			//   "none"  — no index built; exercises sequential scan
+			//   "fresh" — index built and up-to-date; exercises the fast-path seek
+			//   "stale" — index built, then the TAR is re-PUT with different bytes;
+			//             exercises the IsStale + fallback-to-scan path
+			subtests = []struct {
 				ext        string // one of archive.FileExtensions
 				nested     bool   // subdirs
 				autodetect bool   // auto-detect by magic
 				mime       bool   // specify mime type
+				idx        string // "none" | "fresh" | "stale"
 			}{
 				{
 					ext: archive.ExtTar, nested: false, autodetect: false, mime: false,
@@ -90,6 +96,15 @@ func TestGetFromArch(t *testing.T) {
 				{
 					ext: archive.ExtTarLz4, nested: true, autodetect: true, mime: true,
 				},
+				{
+					ext: archive.ExtTar, nested: false, autodetect: false, mime: false, idx: "fresh",
+				},
+				{
+					ext: archive.ExtTar, nested: true, autodetect: true, mime: true, idx: "fresh",
+				},
+				{
+					ext: archive.ExtTar, nested: true, autodetect: true, mime: true, idx: "stale",
+				},
 			}
 		)
 		if testing.Short() {
@@ -100,7 +115,11 @@ func TestGetFromArch(t *testing.T) {
 			corruptAutoDetectOnce atomic.Int64
 		)
 		for _, test := range subtests {
-			tname := fmt.Sprintf("%s/nested=%t/detect=%t/mime=%t", test.ext, test.nested, test.autodetect, test.mime)
+			idxLabel := test.idx
+			if idxLabel == "" {
+				idxLabel = "none"
+			}
+			tname := fmt.Sprintf("%s/nested=%t/detect=%t/mime=%t/idx=%s", test.ext, test.nested, test.autodetect, test.mime, idxLabel)
 			for _, tf := range []tar.Format{tar.FormatUnknown, tar.FormatGNU, tar.FormatPAX} {
 				tarFormat := tf
 				t.Run(path.Join(tname, "format-"+tarFormat.String()), func(t *testing.T) {
@@ -169,6 +188,29 @@ func TestGetFromArch(t *testing.T) {
 					tassert.Error(t, reader.Close() != nil, "expecting file reader to be closed")
 
 					tassert.SelectErr(t, errCh, "put", true)
+
+					// Optionally index the shard, and optionally re-PUT different bytes
+					// to make the index stale. Results must be identical in all three
+					// modes (none/fresh/stale) — see subtests comment above.
+					if !corrupted && (test.idx == "fresh" || test.idx == "stale") {
+						idxRunAndWait(t, baseParams, m.bck, &apc.IndexShardMsg{})
+					}
+					if !corrupted && test.idx == "stale" {
+						// re-create the TAR with the same names but fresh random bytes,
+						// then re-PUT. PUT preserves HasShardIdx; new cksum != indexed
+						// cksum => IsStale fires; GET falls back to sequential scan.
+						err = tarch.CreateArchRandomFiles(archName, tarFormat, test.ext,
+							numArchived, fsize, nil, randomNames, false, false, false)
+						tassert.CheckFatal(t, err)
+						r2, err := readers.New(&readers.Arg{
+							Type: readers.File, Path: archName,
+							Size: readers.ExistingFileSize, CksumType: cos.ChecksumNone,
+						})
+						tassert.CheckFatal(t, err)
+						tools.Put(m.proxyURL, m.bck, objname, r2, 0, 0, errCh)
+						tassert.Error(t, r2.Close() != nil, "expecting file reader to be closed")
+						tassert.SelectErr(t, errCh, "re-put", true)
+					}
 
 					for _, randomName := range randomNames {
 						var mime string

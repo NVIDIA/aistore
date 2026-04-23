@@ -333,6 +333,7 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 // extract a single file from a (.tar, .tgz or .tar.gz, .zip, .tar.lz4) shard
 // uses the provided `mime` or lom.ObjName to detect formatting (empty = auto-detect)
 func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl cos.ReadCloseSizer, err error) {
+	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
 	debug.Assert(archpath != "")
 	if err := cos.ValidateArchpath(archpath); err != nil {
 		return nil, err
@@ -340,6 +341,25 @@ func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl 
 	mime, err = archive.MimeFile(lh, T.ByteMM(), mime, lom.ObjName)
 	if err != nil {
 		return nil, err
+	}
+	debug.Assert(mime != "", "unknown MIME for", lom.Cname(), "/", archpath)
+
+	// Fast path: TAR with a stored shard index — seek directly to the file's
+	// data offset instead of a sequential TAR scan.
+	// Any miss (no index, stale, unreadable, or entry not indexed) falls through
+	// to the sequential scan below, which is the authoritative source.
+	if mime == archive.ExtTar {
+		// TODO: IsStale degrades to size-only when archlom cksum is None — see
+		// "checksum" TODOs in ais/tgtobj.go and xact/xs/archive.go (fast-append).
+		idx, err := LoadShardIndex(lom)
+		if err != nil && cmn.Rom.V(4, cos.ModCore) {
+			nlog.Warningln(lom.Cname(), "shard index unusable, falling back to scan:", err)
+		}
+		if err == nil && idx != nil {
+			if entry, ok := idx.Entries[archpath]; ok {
+				return cos.NewSectionHandle(lh, entry.DataOffset(), entry.Size, 0), nil
+			}
+		}
 	}
 
 	var ar archive.Reader

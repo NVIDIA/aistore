@@ -765,6 +765,7 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 		mopaque.emsg = err.Error()
 		nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 	} else {
+		// Note: This will use the shard index fast path if available.
 		csl, err := lom.NewArchpathReader(lh, archpath, "" /*mime*/)
 		if err != nil {
 			nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
@@ -1591,6 +1592,7 @@ func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameIn
 	case in.ArchPath != "":
 		nameInArch = _withArchpath(nameInArch, in.ArchPath)
 		var csl cos.ReadCloseSizer
+		// Note: This will use the shard index fast path if available.
 		csl, err = lom.NewArchpathReader(lmfh, in.ArchPath, "" /*mime*/)
 		if err != nil {
 			if cos.IsNotExist(err) && wi.req.ContinueOnErr {

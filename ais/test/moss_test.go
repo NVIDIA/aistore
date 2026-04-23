@@ -52,6 +52,11 @@ type mossConfig struct {
 	nested             bool   // subdirs in archives
 	streaming          bool   // streaming GET (w/ no out-of-band apc.MossResp metadata)
 	emptyDefaultBucket bool   // use empty default bucket, specify bucket (or multiple different buckets) explicitly via `apc.MossIn` entries
+	// idx: shard-index state at moss-GET time (TAR input only; no-op otherwise)
+	//   "" / "none" — no index; sequential scan
+	//   "fresh"     — index built and matching; fast-path seek
+	//   "stale"     — index built, then archives re-PUT with fresh seed; IsStale + fallback
+	idx string
 }
 
 func (c *mossConfig) name() (s string) {
@@ -76,6 +81,9 @@ func (c *mossConfig) name() (s string) {
 	}
 	if c.emptyDefaultBucket {
 		s += "/empty-default-bck"
+	}
+	if c.idx != "" && c.idx != "none" {
+		s += "/idx=" + c.idx
 	}
 	if c.outputFormat != "" {
 		s += "=>" + c.outputFormat
@@ -172,6 +180,17 @@ func TestMoss(t *testing.T) {
 		{inputFormat: archive.ExtTar, outputFormat: archive.ExtTgz, streaming: true},
 		{inputFormat: archive.ExtTar, outputFormat: archive.ExtTarLz4, continueOnErr: true, withMissing: true, streaming: true},
 		{inputFormat: archive.ExtTarLz4, outputFormat: archive.ExtZip, continueOnErr: true, onlyObjName: true, withMissing: true, streaming: true},
+
+		// Indexed TAR variants: exercise NewArchpathReader's shard-index paths in moss.
+		// "fresh" hits the fast-path seek; "stale" hits IsStale + fallback to scan.
+		// Output must be byte-identical to the non-indexed counterparts in both modes.
+		{inputFormat: archive.ExtTar, continueOnErr: false, onlyObjName: false, idx: "fresh"},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true, idx: "fresh"},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, nested: true, idx: "fresh"},
+		{inputFormat: archive.ExtTar, streaming: true, idx: "fresh"},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true, streaming: true, idx: "fresh"},
+		{inputFormat: archive.ExtTar, continueOnErr: false, onlyObjName: false, idx: "stale"},
+		{inputFormat: archive.ExtTar, streaming: true, idx: "stale"},
 
 		// NEW: Test case - empty default bucket with explicit bucket specification in each entry
 		{inputFormat: "", continueOnErr: false, onlyObjName: false, emptyDefaultBucket: true},
@@ -348,6 +367,24 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 		archives = append(archives, info)
 	}
 
+	// Optionally index the shards, and optionally re-PUT with different bytes
+	// to make the index stale. moss must produce byte-identical output in all
+	// three modes (none/fresh/stale) — none hits sequential scan, fresh hits
+	// the fast-path seek, stale hits IsStale + fallback to scan.
+	if test.idx == "fresh" || test.idx == "stale" {
+		bp := tools.BaseAPIParams(m.proxyURL)
+		idxRunAndWait(t, bp, m.bck, &apc.IndexShardMsg{})
+	}
+	if test.idx == "stale" {
+		// re-PUT each archive with a different seed → different bytes, same
+		// names. HasShardIdx preserved by PUT; new cksum != indexed cksum =>
+		// IsStale fires; moss falls back to sequential scan.
+		for _, archInfo := range archives {
+			_, err := _createMossArchSeeded(m, test, archInfo.name, numInArch, uint64(time.Now().UnixNano()))
+			tassert.CheckFatal(t, err)
+		}
+	}
+
 	// Build apc.MossIn entries
 	var mossIn []apc.MossIn
 	for _, archInfo := range archives {
@@ -385,6 +422,10 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 }
 
 func _createMossArch(m *ioContext, test *mossConfig, archName string, numInArch int) ([]string, error) {
+	return _createMossArchSeeded(m, test, archName, numInArch, 1 /*deterministic*/)
+}
+
+func _createMossArchSeeded(m *ioContext, test *mossConfig, archName string, numInArch int, seed uint64) ([]string, error) {
 	// 1) generate filenames for archive content
 	randomNames := make([]string, 0, numInArch)
 	for j := range numInArch {
@@ -411,7 +452,7 @@ func _createMossArch(m *ioContext, test *mossConfig, archName string, numInArch 
 			TarFormat: tar.FormatUnknown,
 			MinSize:   int64(m.fileSize), // fixed per-entry size
 			MaxSize:   int64(m.fileSize),
-			Seed:      1, // deterministic (any nonzero)
+			Seed:      seed,
 			Num:       numInArch,
 			Names:     randomNames, // use explicit names
 		},
