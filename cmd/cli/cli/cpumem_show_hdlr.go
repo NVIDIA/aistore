@@ -6,39 +6,46 @@ package cli
 
 import (
 	"errors"
-	"sort"
 
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
-	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/stats"
 
 	"github.com/urfave/cli"
 )
 
 // This file contains implementation of the top-level `show cluster cpu` and `show cluster memory` command.
-//
-// TODO:
-// - support [NODE_ID]
-// - support --refresh / --count
-// - add a second memory template that omits SWAP * columns when swap is zero across all nodes
-// - CPU UX: either rename USER / SYSTEM / TOTAL to make units explicit, or drop them from the default view
-// - memory UX pass: shorten headers (PROC SHARED, ACTUAL USED, ACTUAL FREE) to reduce width
-// - make proxy/target ordering - respect K8s POD names; primary must be always first
-
-type cluDetail struct {
-	Smap *meta.Smap
-	Rows []*stats.NodeStatus
-}
 
 func showCPUHandler(c *cli.Context) error { return showCluDetail(c, true) }
 func showMemHandler(c *cli.Context) error { return showCluDetail(c, false) }
 
 func showCluDetail(c *cli.Context, cpu bool) error {
+	var (
+		usejs       = flagIsSet(c, jsonFlag)
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
+	)
+	if errU != nil {
+		return errU
+	}
+
 	setLongRunParams(c)
 
 	smap, tstatusMap, pstatusMap, err := fillNodeStatusMap(c, "")
 	if err != nil {
 		return err
+	}
+	node, _, errA := arg0Node(c)
+	if errA != nil {
+		return errA
+	}
+	if node != nil {
+		sid := node.ID()
+		if node.IsProxy() {
+			tstatusMap = nil
+			pstatusMap = teb.NodeStatusMap{sid: pstatusMap[sid]}
+		} else {
+			pstatusMap = nil
+			tstatusMap = teb.NodeStatusMap{sid: tstatusMap[sid]}
+		}
 	}
 
 	// Capability check is structural (nil Proc/Mem), not version-based,
@@ -59,53 +66,25 @@ func showCluDetail(c *cli.Context, cpu bool) error {
 		}
 	}
 
-	rows := flattenNodeStatusMap(tstatusMap, pstatusMap)
-	if len(rows) == 0 {
-		return nil
+	if usejs {
+		body := struct {
+			Proxies teb.NodeStatusMap `json:"proxies,omitempty"`
+			Targets teb.NodeStatusMap `json:"targets,omitempty"`
+		}{
+			Proxies: pstatusMap,
+			Targets: tstatusMap,
+		}
+		return teb.Print(body, "", teb.Jopts(true))
 	}
 
-	body := cluDetail{
-		Smap: smap,
-		Rows: rows,
-	}
-
-	tmpl := teb.CluMemTmpl
 	if cpu {
-		tmpl = teb.CluCPUTmpl
+		tableP, tableT := teb.MakeTabCPU(smap, pstatusMap, tstatusMap)
+		out := tableP.Template(hideHeader) + tableT.Template(true)
+		return teb.Print(out, out, teb.Jopts(usejs))
 	}
-	if flagIsSet(c, noHeaderFlag) {
-		if cpu {
-			tmpl = teb.CluCPUTmplNoHdr
-		} else {
-			tmpl = teb.CluMemTmplNoHdr
-		}
-	}
-
-	return teb.Print(body, tmpl)
-}
-
-func flattenNodeStatusMap(tstatusMap, pstatusMap teb.NodeStatusMap) []*stats.NodeStatus {
-	rows := make([]*stats.NodeStatus, 0, len(pstatusMap)+len(tstatusMap))
-
-	for _, ds := range pstatusMap {
-		rows = append(rows, ds)
-	}
-	for _, ds := range tstatusMap {
-		rows = append(rows, ds)
-	}
-
-	sort.Slice(rows, func(i, j int) bool {
-		di, dj := rows[i].Snode.ID(), rows[j].Snode.ID()
-
-		// proxies first, then targets; within each group sort by node ID
-		ti, tj := rows[i].Snode.DaeType, rows[j].Snode.DaeType
-		if ti != tj {
-			return ti < tj
-		}
-		return di < dj
-	})
-
-	return rows
+	tableP, tableT := teb.MakeTabMem(smap, pstatusMap, tstatusMap, units)
+	out := tableP.Template(hideHeader) + tableT.Template(true)
+	return teb.Print(out, out, teb.Jopts(usejs))
 }
 
 func supportsDetailedCPU(statusMap teb.NodeStatusMap) bool {

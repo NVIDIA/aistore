@@ -54,10 +54,14 @@ var (
 		),
 		cmdCPU: append(
 			longRunFlags,
+			jsonFlag,
+			unitsFlag,
 			noHeaderFlag,
 		),
 		cmdMemory: append(
 			longRunFlags,
+			jsonFlag,
+			unitsFlag,
 			noHeaderFlag,
 		),
 		cmdBucket: {
