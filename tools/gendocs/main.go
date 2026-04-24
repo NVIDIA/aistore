@@ -36,6 +36,7 @@ const (
 	payloadPrefix  = "+gen:payload"
 	namePrefix     = "+gen:name"
 	valuePrefix    = "+gen:value"
+	optionalPrefix = "+gen:optional"
 
 	// Comment parsing
 	commentPrefix    = "//"

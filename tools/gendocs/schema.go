@@ -239,8 +239,8 @@ func (sp *schemaParser) parseDir(dir string) (map[string]*ast.File, error) {
 	return files, nil
 }
 
-// extractFields walks struct fields and populates schema properties and required list.
-// A field is required if it is not a pointer and its json tag does not contain omitempty.
+// extractFields populates schema.Properties and schema.Required from a struct.
+// A field is required unless it carries a `+gen:optional` trailing comment.
 func (sp *schemaParser) extractFields(schema *schemaObject, st *ast.StructType, currentPkg string) {
 	for _, field := range st.Fields.List {
 		if len(field.Names) == 0 {
@@ -248,13 +248,12 @@ func (sp *schemaParser) extractFields(schema *schemaObject, st *ast.StructType, 
 			continue
 		}
 
-		jsonName, omitempty := getJSONTag(field)
+		jsonName, _ := getJSONTag(field)
 		if jsonName == "" || jsonName == "-" {
 			continue
 		}
 
-		_, isPointer := field.Type.(*ast.StarExpr)
-		if !isPointer && !omitempty {
+		if !hasOptionalMarker(field) {
 			schema.Required = append(schema.Required, jsonName)
 		}
 
@@ -393,15 +392,15 @@ func (sp *schemaParser) externalTypeToSchema(pkg, typeName string) schemaPropert
 
 // fieldDescription returns text from a // line comment after the field, else Doc above the field.
 func fieldDescription(field *ast.Field) string {
-	if field.Comment != nil {
-		if s := commentGroupText(field.Comment); s != "" {
-			return s
-		}
-	}
 	if field.Doc != nil {
 		return commentGroupText(field.Doc)
 	}
 	return ""
+}
+
+// hasOptionalMarker reports whether the field carries a `+gen:optional` trailing comment.
+func hasOptionalMarker(field *ast.Field) bool {
+	return field.Comment != nil && strings.Contains(field.Comment.Text(), optionalPrefix)
 }
 
 // commentGroupText renders a Go comment group as Markdown via go/doc/comment,

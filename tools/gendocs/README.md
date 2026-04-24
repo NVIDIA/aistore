@@ -181,7 +181,7 @@ This mapping ensures consistency between the `+gen:endpoint` action definitions 
 
 Structs referenced in `action=[...]` or `model=[...]` annotations are automatically parsed into OpenAPI schemas. The generator reads struct fields, JSON tags, and types directly.
 
-Fields are marked as `required` in the schema unless they are pointers or have `omitempty` in their JSON tag.
+All fields are emitted as `required` unless they carry a `// +gen:optional` trailing comment.
 
 ## Parameter Definitions
 
