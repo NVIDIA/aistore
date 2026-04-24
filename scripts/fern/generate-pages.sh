@@ -176,6 +176,36 @@ if [[ "${1:-}" == "--preview" || "${1:-}" == "--build" ]]; then
 
     cd "$REPO_ROOT"
 
+    # fern/pages/python/ is auto-generated from source docstrings by
+    # `fern docs md generate` (requires FERN_TOKEN). Run it here so users get
+    # real Python API reference docs in their local preview without remembering
+    # the extra step. Falls back to a stub if the token isn't set or the call
+    # fails — otherwise the navigation ref in docs.yml triggers a blank 500.
+    PYTHON_PAGES="$FERN_PAGES/python"
+    if [ -n "${FERN_TOKEN:-}" ]; then
+        echo "Generating Python API reference (fern docs md generate)..."
+        if ! fern docs md generate; then
+            echo "WARNING: 'fern docs md generate' failed; falling back to stub" >&2
+        fi
+    else
+        echo "FERN_TOKEN not set; skipping 'fern docs md generate' (stub will be used)"
+    fi
+
+    if [ ! -d "$PYTHON_PAGES" ] || [ -z "$(ls -A "$PYTHON_PAGES" 2>/dev/null)" ]; then
+        mkdir -p "$PYTHON_PAGES"
+        cat > "$PYTHON_PAGES/index.mdx" <<'EOF'
+# Python SDK API Reference
+
+The Python SDK API reference is auto-generated from source docstrings by
+`fern docs md generate` (requires `FERN_TOKEN`). To preview it locally, set
+`FERN_TOKEN` and re-run `make fern-preview`.
+
+View the published reference at
+[docs.nvidia.com/aistore/api-reference](https://docs.nvidia.com/aistore/api-reference).
+EOF
+        echo "Created local-preview stub: $PYTHON_PAGES/index.mdx"
+    fi
+
     if [[ "${1:-}" == "--preview" ]]; then
         fern docs dev --port 3000
     else
