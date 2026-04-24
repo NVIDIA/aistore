@@ -11,6 +11,7 @@ import (
 	"go/doc/comment"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -26,8 +27,20 @@ type schemaProperty struct {
 	Items                *schemaProperty           `yaml:"items,omitempty"`
 	AdditionalProperties *schemaProperty           `yaml:"additionalProperties,omitempty"`
 	Ref                  string                    `yaml:"$ref,omitempty"`
+	AllOf                []schemaProperty          `yaml:"allOf,omitempty"`
 	OneOf                []schemaProperty          `yaml:"oneOf,omitempty"`
+	Discriminator        *oaDiscriminator          `yaml:"discriminator,omitempty"`
 	Properties           map[string]schemaProperty `yaml:"properties,omitempty"`
+	Enum                 []string                  `yaml:"enum,omitempty"`
+}
+
+// oaDiscriminator is the OpenAPI 3.0 Discriminator Object (§4.7.25). Paired
+// with oneOf, it tells consumers (e.g. Fern) which subschema applies by
+// inspecting the value of PropertyName, optionally via an explicit Mapping
+// from property value to schema $ref.
+type oaDiscriminator struct {
+	PropertyName string            `yaml:"propertyName"`
+	Mapping      map[string]string `yaml:"mapping,omitempty"`
 }
 
 // schemaObject represents an OpenAPI schema definition.
@@ -131,6 +144,9 @@ func (sp *schemaParser) resolveSchema(qualifiedName string) error {
 
 	pkg, typeName := splitQualifiedName(qualifiedName)
 	if pkg == "" {
+		if isBasicType(typeName) {
+			return nil // inlined as OpenAPI scalar; no named schema needed
+		}
 		return fmt.Errorf("unqualified type: %s", qualifiedName)
 	}
 
@@ -263,7 +279,8 @@ func (sp *schemaParser) handleEmbedded(schema *schemaObject, expr ast.Expr, curr
 	}
 
 	if embedded, exists := sp.schemas[qualified]; exists {
-		for name, prop := range embedded.Properties {
+		for name := range embedded.Properties {
+			prop := embedded.Properties[name]
 			if _, exists := schema.Properties[name]; !exists {
 				schema.Properties[name] = prop
 				if slices.Contains(embedded.Required, name) && !slices.Contains(schema.Required, name) {
@@ -312,6 +329,19 @@ func (sp *schemaParser) goTypeToSchema(expr ast.Expr, currentPkg string) schemaP
 	default:
 		return schemaProperty{Type: "object"}
 	}
+}
+
+// isBasicType reports whether name is a predeclared Go basic type
+// (bool, string, or any numeric kind). Such identifiers map to inline
+// OpenAPI scalars via identToSchema and must not be emitted as named
+// entries under components/schemas.
+func isBasicType(name string) bool {
+	obj := types.Universe.Lookup(name)
+	if obj == nil {
+		return false
+	}
+	_, ok := obj.Type().(*types.Basic)
+	return ok
 }
 
 // identToSchema maps Go built-in type names to OpenAPI types.
@@ -375,11 +405,12 @@ func fieldDescription(field *ast.Field) string {
 }
 
 // commentGroupText renders a Go comment group as Markdown via go/doc/comment,
-// preserving paragraphs, lists, and code blocks.
+// preserving paragraphs, lists, and indented code blocks (same parser as pkg.go.dev).
 func commentGroupText(g *ast.CommentGroup) string {
-	var p comment.Parser
-	var pr comment.Printer
-	return strings.TrimSpace(string(pr.Markdown(p.Parse(g.Text()))))
+	var parser comment.Parser
+	doc := parser.Parse(g.Text())
+	var printer comment.Printer
+	return strings.TrimSpace(string(printer.Markdown(doc)))
 }
 
 func getJSONTag(field *ast.Field) (name string, omitempty bool) {

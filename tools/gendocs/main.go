@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -33,6 +34,8 @@ const (
 	// Generation annotation prefixes
 	endpointPrefix = "+gen:endpoint"
 	payloadPrefix  = "+gen:payload"
+	namePrefix     = "+gen:name"
+	valuePrefix    = "+gen:value"
 
 	// Comment parsing
 	commentPrefix    = "//"
@@ -61,6 +64,27 @@ type (
 	actionModel struct {
 		Action string
 		Model  string
+		// NameDesc, when non-empty, declares that the ActMsg.Name top-level
+		// field is meaningful for this action and carries the given
+		// per-action description. Sourced from `+gen:name` annotations.
+		NameDesc string
+		// NameRequired marks ActMsg.Name as required for this action (e.g.
+		// `apc.ActPromote` where Name is the absolute source pathname).
+		NameRequired bool
+		// ValueDesc, when non-empty, documents the per-action semantics of
+		// ActMsg.Value. Most useful for scalar-value actions (where the
+		// value type is `int`, `string`, etc. and carries no struct godoc
+		// to anchor context). Sourced from `+gen:value` annotations.
+		ValueDesc string
+	}
+
+	nameAnnotation struct {
+		Description string
+		Required    bool
+	}
+
+	valueAnnotation struct {
+		Description string
 	}
 
 	commandExample struct {
@@ -87,6 +111,8 @@ type (
 		ActionMap      map[string]string
 		ModelActions   map[string][]string
 		GlobalPayloads map[string]string
+		GlobalNames    map[string]nameAnnotation
+		GlobalValues   map[string]valueAnnotation
 		Endpoints      *[]endpoint
 	}
 
@@ -101,6 +127,8 @@ type (
 		ActionMap      map[string]string
 		ModelActions   map[string][]string
 		GlobalPayloads map[string]string
+		GlobalNames    map[string]nameAnnotation
+		GlobalValues   map[string]valueAnnotation
 		Endpoints      []endpoint
 	}
 )
@@ -190,11 +218,136 @@ func (ep *endpointProcessor) collectGlobalPayloads() error {
 		lines := strings.SplitSeq(string(content), "\n")
 		for line := range lines {
 			trimmedLine := strings.TrimSpace(line)
-			if strings.Contains(trimmedLine, payloadPrefix) {
-				action, payload := parsePayload(trimmedLine)
-				if action != "" && payload != "" {
-					ep.GlobalPayloads[action] = payload
-				}
+			if !strings.HasPrefix(trimmedLine, commentWithSpace+payloadPrefix) {
+				continue
+			}
+			action, payload := parsePayload(trimmedLine)
+			if action != "" && payload != "" {
+				ep.GlobalPayloads[action] = payload
+			}
+		}
+	}
+	return nil
+}
+
+// Parse name annotation. Format:
+//
+//	+gen:name <ActionConst>="<description>" [required]
+//
+// The description documents what ActMsg.Name means for this specific action
+// (e.g. "source pathname (must be absolute)"). The optional trailing
+// `required` keyword marks Name as required for that action.
+func parseNameAnnotation(line string) (string, nameAnnotation) {
+	content := strings.TrimSpace(line[len(commentWithSpace+namePrefix):])
+	before, after, ok := strings.Cut(content, equals)
+	if !ok {
+		return "", nameAnnotation{}
+	}
+	action := strings.TrimSpace(before)
+	after = strings.TrimSpace(after)
+	if !strings.HasPrefix(after, `"`) {
+		return "", nameAnnotation{}
+	}
+	// Scan for the closing quote, honoring simple backslash escapes.
+	i := 1
+	for i < len(after) {
+		if after[i] == '\\' && i+1 < len(after) {
+			i += 2
+			continue
+		}
+		if after[i] == '"' {
+			break
+		}
+		i++
+	}
+	if i >= len(after) {
+		return "", nameAnnotation{}
+	}
+	desc, err := strconv.Unquote(after[:i+1])
+	if err != nil {
+		return "", nameAnnotation{}
+	}
+	rest := strings.TrimSpace(after[i+1:])
+	return action, nameAnnotation{Description: desc, Required: rest == "required"}
+}
+
+// Collect all +gen:name annotations across the walker.
+func (ep *endpointProcessor) collectGlobalNames() error {
+	for _, file := range ep.Walker.Files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read file %s: %w", file, err)
+		}
+		lines := strings.SplitSeq(string(content), "\n")
+		for line := range lines {
+			trimmedLine := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmedLine, commentWithSpace+namePrefix) {
+				continue
+			}
+			action, meta := parseNameAnnotation(trimmedLine)
+			if action != "" {
+				ep.GlobalNames[action] = meta
+			}
+		}
+	}
+	return nil
+}
+
+// parseValueAnnotation parses a single `+gen:value` comment line. Syntax:
+//
+//	// +gen:value <action>="<description>"
+//
+// The description documents the per-action semantics of ActMsg.Value.
+// Primarily useful for scalar-value actions (int, string, etc.) that have
+// no struct godoc to anchor context.
+func parseValueAnnotation(line string) (string, valueAnnotation) {
+	content := strings.TrimSpace(line[len(commentWithSpace+valuePrefix):])
+	before, after, ok := strings.Cut(content, equals)
+	if !ok {
+		return "", valueAnnotation{}
+	}
+	action := strings.TrimSpace(before)
+	after = strings.TrimSpace(after)
+	if !strings.HasPrefix(after, `"`) {
+		return "", valueAnnotation{}
+	}
+	i := 1
+	for i < len(after) {
+		if after[i] == '\\' && i+1 < len(after) {
+			i += 2
+			continue
+		}
+		if after[i] == '"' {
+			break
+		}
+		i++
+	}
+	if i >= len(after) {
+		return "", valueAnnotation{}
+	}
+	desc, err := strconv.Unquote(after[:i+1])
+	if err != nil {
+		return "", valueAnnotation{}
+	}
+	return action, valueAnnotation{Description: desc}
+}
+
+// Collect all +gen:value annotations across the walker.
+func (ep *endpointProcessor) collectGlobalValues() error {
+	for _, file := range ep.Walker.Files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read file %s: %w", file, err)
+		}
+		lines := strings.SplitSeq(string(content), "\n")
+		for line := range lines {
+			trimmedLine := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmedLine, commentWithSpace+valuePrefix) {
+				continue
+			}
+			action, meta := parseValueAnnotation(trimmedLine)
+			if action != "" {
+				ep.GlobalValues[action] = meta
 			}
 		}
 	}
@@ -323,6 +476,8 @@ func main() {
 		ActionMap:      actionMap,
 		ModelActions:   make(map[string][]string),
 		GlobalPayloads: make(map[string]string),
+		GlobalNames:    make(map[string]nameAnnotation),
+		GlobalValues:   make(map[string]valueAnnotation),
 	}
 
 	if err := processor.run(targetRoot); err != nil {
@@ -349,7 +504,7 @@ func main() {
 	}
 
 	// Build and write the OpenAPI 3.0 spec
-	spec := buildSpec(processor.Endpoints, schemas, processor.ActionMap)
+	spec := buildSpec(processor.Endpoints, schemas, processor.ActionMap, processor.GlobalPayloads)
 
 	outDir := filepath.Join(projectRoot, docsRelativePath)
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
@@ -527,6 +682,15 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	summary := strings.Join(summaryLines, " ")
 
 	actions := parseActionClause(line)
+	for i := range actions {
+		if meta, ok := fp.GlobalNames[actions[i].Action]; ok {
+			actions[i].NameDesc = meta.Description
+			actions[i].NameRequired = meta.Required
+		}
+		if meta, ok := fp.GlobalValues[actions[i].Action]; ok {
+			actions[i].ValueDesc = meta.Description
+		}
+	}
 	models := parseModelClause(line)
 	payloadRef := parsePayloadClause(line)
 
@@ -629,6 +793,12 @@ func (ep *endpointProcessor) run(root string) error {
 	if err := ep.collectGlobalPayloads(); err != nil {
 		return err
 	}
+	if err := ep.collectGlobalNames(); err != nil {
+		return err
+	}
+	if err := ep.collectGlobalValues(); err != nil {
+		return err
+	}
 
 	for _, file := range ep.Walker.Files {
 		parser := &fileParser{
@@ -637,6 +807,8 @@ func (ep *endpointProcessor) run(root string) error {
 			ActionMap:      ep.ActionMap,
 			ModelActions:   ep.ModelActions,
 			GlobalPayloads: ep.GlobalPayloads,
+			GlobalNames:    ep.GlobalNames,
+			GlobalValues:   ep.GlobalValues,
 			Endpoints:      &ep.Endpoints,
 		}
 		if err := parser.process(); err != nil {
@@ -660,7 +832,10 @@ func collectSummaryLines(lines []string, i int) []string {
 		if !strings.HasPrefix(next, commentPrefix) {
 			break
 		}
-		if strings.Contains(next, endpointPrefix) || strings.Contains(next, payloadPrefix) {
+		if strings.Contains(next, endpointPrefix) ||
+			strings.Contains(next, payloadPrefix) ||
+			strings.Contains(next, namePrefix) ||
+			strings.Contains(next, valuePrefix) {
 			continue
 		}
 		cleanLine := strings.TrimSpace(strings.TrimPrefix(next, commentPrefix))

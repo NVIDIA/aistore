@@ -19,8 +19,11 @@ const (
 
 	// Display and formatting constants
 	defaultLabel           = "Request"
-	bashLang               = "Bash"
 	supportedActionsHeader = "Supported actions: "
+
+	// actMsgModel is the sentinel "model" in +gen:endpoint action annotations
+	// that marks a payloadless action — one whose ActMsg.Value is absent.
+	actMsgModel = "apc.ActMsg"
 
 	// Error and log messages
 	errorParsingEndpoint = "Error parsing endpoint: %v\n"

@@ -4,8 +4,23 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 )
+
+// decodeJSONExample parses a +gen:payload JSON string into a generic value
+// suitable for the Fern example.request field. Returns nil on malformed JSON.
+func decodeJSONExample(s string) any {
+	if s == "" {
+		return nil
+	}
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		return nil
+	}
+	return v
+}
 
 // OpenAPI 3.0 document types.
 
@@ -29,13 +44,30 @@ type openapiComponents struct {
 type pathItem map[string]*operation
 
 type operation struct {
-	Summary      string                `yaml:"summary,omitempty"`
-	OperationID  string                `yaml:"operationId,omitempty"`
-	Tags         []string              `yaml:"tags,omitempty"`
-	Parameters   []oaParameter         `yaml:"parameters,omitempty"`
-	RequestBody  *oaRequestBody        `yaml:"requestBody,omitempty"`
-	Responses    map[string]oaResponse `yaml:"responses"` // required by OpenAPI 3.0 (§4.7.15)
-	XCodeSamples []codeSample          `yaml:"x-code-samples,omitempty"`
+	Summary       string                `yaml:"summary,omitempty"`
+	OperationID   string                `yaml:"operationId,omitempty"`
+	Tags          []string              `yaml:"tags,omitempty"`
+	Parameters    []oaParameter         `yaml:"parameters,omitempty"`
+	RequestBody   *oaRequestBody        `yaml:"requestBody,omitempty"`
+	Responses     map[string]oaResponse `yaml:"responses"` // required by OpenAPI 3.0 (§4.7.15)
+	XFernExamples []fernExample         `yaml:"x-fern-examples,omitempty"`
+}
+
+// fernExample is a single entry in the `x-fern-examples` operation-level array.
+// Fern's OpenAPI importer uses these to populate its named-example selector in
+// the rendered docs. Names shared across requests/responses get correlated.
+// Per-example CodeSamples override Fern's auto-cURL generator, which is
+// method-driven and strips request bodies on GET/HEAD/DELETE.
+// See https://buildwithfern.com/learn/api-definitions/openapi/extensions/request-response-examples
+type fernExample struct {
+	Name        string           `yaml:"name,omitempty"`
+	Request     any              `yaml:"request,omitempty"`
+	CodeSamples []fernCodeSample `yaml:"code-samples,omitempty"`
+}
+
+type fernCodeSample struct {
+	Language string `yaml:"language"`
+	Code     string `yaml:"code"`
 }
 
 type oaParameter struct {
@@ -60,14 +92,8 @@ type oaResponse struct {
 	Description string `yaml:"description"`
 }
 
-type codeSample struct {
-	Lang   string `yaml:"lang"`
-	Label  string `yaml:"label,omitempty"`
-	Source string `yaml:"source"`
-}
-
 // buildSpec constructs the full OpenAPI 3.0 document.
-func buildSpec(endpoints []endpoint, schemas map[string]*schemaObject, actionMap map[string]string) *openapiSpec {
+func buildSpec(endpoints []endpoint, schemas map[string]*schemaObject, actionMap, globalPayloads map[string]string) *openapiSpec {
 	spec := &openapiSpec{
 		OpenAPI: "3.0.3",
 		Info: openapiInfo{
@@ -81,9 +107,12 @@ func buildSpec(endpoints []endpoint, schemas map[string]*schemaObject, actionMap
 		spec.Components = &openapiComponents{Schemas: schemas}
 	}
 
+	if spec.Components == nil {
+		spec.Components = &openapiComponents{Schemas: make(map[string]*schemaObject)}
+	}
 	for i := range endpoints {
 		ep := &endpoints[i]
-		op := buildOperation(ep, actionMap)
+		op := buildOperation(ep, actionMap, globalPayloads, spec.Components.Schemas)
 
 		if _, exists := spec.Paths[ep.Path]; !exists {
 			spec.Paths[ep.Path] = make(pathItem)
@@ -95,7 +124,7 @@ func buildSpec(endpoints []endpoint, schemas map[string]*schemaObject, actionMap
 }
 
 // buildOperation converts a parsed endpoint into an OpenAPI operation.
-func buildOperation(ep *endpoint, actionMap map[string]string) *operation {
+func buildOperation(ep *endpoint, actionMap, globalPayloads map[string]string, schemas map[string]*schemaObject) *operation {
 	op := &operation{
 		Summary:     ep.Summary,
 		OperationID: ep.OperationID,
@@ -131,61 +160,184 @@ func buildOperation(ep *endpoint, actionMap map[string]string) *operation {
 		}
 	}
 
-	// Request body (not valid on GET, HEAD)
-	if ep.Method != "get" && ep.Method != "head" {
-		if len(ep.Actions) > 0 {
-			op.RequestBody = buildActionRequestBody(ep.Actions, actionMap)
+	// Emit request body whenever the endpoint declares actions or a
+	// model. AIS carries an ActMsg body on non-HEAD methods (including
+	// GET and DELETE) to select a variant; HEAD is bodyless.
+	hasActions := ep.Method != "head" && len(ep.Actions) > 0
+	if ep.Method != "head" {
+		if hasActions {
+			op.RequestBody = buildActionRequestBody(ep, ep.Actions, actionMap, schemas)
+			op.XFernExamples = buildFernExamples(ep.Actions, actionMap, globalPayloads, ep.HTTPExamples)
 		} else if len(ep.Models) > 0 {
 			op.RequestBody = buildModelRequestBody(ep.Models)
 		}
 	}
 
-	// Code samples
-	for _, ex := range ep.HTTPExamples {
-		op.XCodeSamples = append(op.XCodeSamples, codeSample{
-			Lang:   bashLang,
-			Label:  ex.Label,
-			Source: ex.Command,
-		})
+	// For bodyless endpoints (HEAD, or any without actions), emit
+	// x-fern-examples carrying just the code-samples. Fern's own
+	// method-driven auto-generator strips bodies on HEAD/GET/DELETE and
+	// produces a minimal bare-cURL; x-fern-examples is honored in all
+	// cases and renders our fully-qualified command (with AIS_ENDPOINT
+	// and query-parameter placeholders) verbatim.
+	if !hasActions {
+		for _, ex := range ep.HTTPExamples {
+			op.XFernExamples = append(op.XFernExamples, fernExample{
+				Name:        ex.Label,
+				CodeSamples: []fernCodeSample{{Language: "curl", Code: ex.Command}},
+			})
+		}
 	}
 
 	return op
 }
 
-func buildActionRequestBody(actions []actionModel, actionMap map[string]string) *oaRequestBody {
-	var names []string
-	seen := make(map[string]bool)
-	var uniqueModels []string
+// buildActionRequestBody emits a tagged-union request body for an
+// action-based endpoint. The wire format is the universal ActMsg envelope
+// ({action, name, value}) where action is the tag and value's shape is
+// determined by the tag. For each supported wire we create a dedicated
+// request schema that pins action to a single-value enum and declares the
+// exact value shape for that wire (a $ref to the typed payload struct, or
+// omitted entirely for payloadless actions). These per-wire schemas are tied
+// together with oneOf + discriminator at the request-body level — the
+// idiomatic OAS 3.0 tagged-union pattern, which Fern renders as one tab per
+// action.
+func buildActionRequestBody(ep *endpoint, actions []actionModel, actionMap map[string]string, schemas map[string]*schemaObject) *oaRequestBody {
+	var (
+		wires   = make([]string, 0, len(actions))
+		refs    = make([]schemaProperty, 0, len(actions))
+		mapping = make(map[string]string, len(actions))
+	)
 	for _, action := range actions {
-		name := strings.TrimPrefix(action.Action, apcPrefix)
-		if val, exists := actionMap[name]; exists {
-			name = val
+		wire := strings.TrimPrefix(action.Action, apcPrefix)
+		if val, exists := actionMap[wire]; exists {
+			wire = val
 		}
-		names = append(names, name)
-		if !seen[action.Model] {
-			seen[action.Model] = true
-			uniqueModels = append(uniqueModels, action.Model)
+		wires = append(wires, wire)
+
+		branchName := ep.OperationID + dot + pascalWire(wire)
+		branch := &schemaObject{
+			Type:     "object",
+			Required: []string{"action"},
+			Properties: map[string]schemaProperty{
+				"action": {
+					Type: "string",
+					Enum: []string{wire},
+				},
+			},
 		}
+		// ActMsg.Name is a sibling of action/value in the wire envelope, but
+		// its semantics are per-action and not inferrable from type info. Only
+		// surface it on branches whose action opts in via a `+gen:name`
+		// annotation; other branches omit `name` to avoid misleading readers.
+		if action.NameDesc != "" || action.NameRequired {
+			branch.Properties["name"] = schemaProperty{
+				Type:        "string",
+				Description: action.NameDesc,
+			}
+			if action.NameRequired {
+				branch.Required = append(branch.Required, "name")
+			}
+		}
+		// Model semantics:
+		//  - apc.ActMsg (Sentinel): Action is payloadless; omit value.
+		//  - Qualified Name (e.g. cmn.TCBMsg): Typed struct; $ref into
+		//    components/schemas.
+		//  - Bare Identifier (e.g. int, string, bool): Go primitive whose
+		//    OAS mapping is resolved via identToSchema.
+		// An optional +gen:value description is attached as a schema
+		// description (scalar) or an allOf+$ref wrapper (struct, per OAS
+		// 3.0 which disallows siblings to $ref).
+		if action.Model != actMsgModel {
+			branch.Required = append(branch.Required, "value")
+			switch {
+			case strings.Contains(action.Model, dot):
+				valueRef := schemaProperty{Ref: "#/components/schemas/" + action.Model}
+				if action.ValueDesc != "" {
+					branch.Properties["value"] = schemaProperty{
+						Description: action.ValueDesc,
+						AllOf:       []schemaProperty{valueRef},
+					}
+				} else {
+					branch.Properties["value"] = valueRef
+				}
+			default:
+				prop := identToSchema(action.Model)
+				if prop.Type == "object" {
+					fmt.Printf("  Warning: unrecognized primitive %q in action %q; emitting generic object\n", action.Model, action.Action)
+				}
+				prop.Description = action.ValueDesc
+				branch.Properties["value"] = prop
+			}
+		}
+		schemas[branchName] = branch
+
+		ref := "#/components/schemas/" + branchName
+		refs = append(refs, schemaProperty{Ref: ref})
+		mapping[wire] = ref
 	}
 
-	var schema *schemaProperty
-	if len(uniqueModels) == 1 {
-		schema = &schemaProperty{Ref: "#/components/schemas/" + uniqueModels[0]}
-	} else {
-		var refs []schemaProperty
-		for _, model := range uniqueModels {
-			refs = append(refs, schemaProperty{Ref: "#/components/schemas/" + model})
-		}
-		schema = &schemaProperty{OneOf: refs}
+	schema := &schemaProperty{
+		OneOf: refs,
+		Discriminator: &oaDiscriminator{
+			PropertyName: "action",
+			Mapping:      mapping,
+		},
 	}
 
 	return &oaRequestBody{
-		Description: supportedActionsHeader + strings.Join(names, ", "),
+		Description: supportedActionsHeader + strings.Join(wires, ", "),
 		Required:    true,
 		Content: map[string]oaContent{
 			"application/json": {Schema: schema},
 		},
 	}
+}
+
+// buildFernExamples emits one `x-fern-examples` entry per action-wire.
+// Each entry carries a named request body that matches the shape of the
+// corresponding per-wire oneOf branch, and an explicit code-samples block
+// so Fern renders our cURL verbatim instead of falling back to its
+// method-driven auto-generator (which strips bodies on GET, HEAD, DELETE).
+//
+// When the action has a +gen:payload annotation, we use it verbatim;
+// otherwise we synthesize a minimal {"action": <wire>} body.
+func buildFernExamples(actions []actionModel, actionMap, globalPayloads map[string]string, httpExamples []commandExample) []fernExample {
+	curlByLabel := make(map[string]string, len(httpExamples))
+	for _, ex := range httpExamples {
+		curlByLabel[ex.Label] = ex.Command
+	}
+	examples := make([]fernExample, 0, len(actions))
+	for _, action := range actions {
+		wire := strings.TrimPrefix(action.Action, apcPrefix)
+		if mapped, ok := actionMap[wire]; ok {
+			wire = mapped
+		}
+		var body any
+		if raw, ok := globalPayloads[action.Action]; ok {
+			body = decodeJSONExample(raw)
+		}
+		if body == nil {
+			body = map[string]any{"action": wire}
+		}
+		ex := fernExample{Name: wire, Request: body}
+		if curl, ok := curlByLabel[wire]; ok {
+			ex.CodeSamples = []fernCodeSample{{Language: "curl", Code: curl}}
+		}
+		examples = append(examples, ex)
+	}
+	return examples
+}
+
+// pascalWire converts a wire value (e.g. "copy-bck", "make-n-copies") into
+// PascalCase suitable for a schema name suffix (e.g. "CopyBck", "MakeNCopies").
+func pascalWire(wire string) string {
+	parts := strings.Split(wire, "-")
+	for i, p := range parts {
+		if p != "" {
+			parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return strings.Join(parts, "")
 }
 
 func buildModelRequestBody(models []string) *oaRequestBody {
