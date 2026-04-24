@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -576,8 +575,10 @@ func TestSameBucketName(t *testing.T) {
 	}
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName2, hargs)
-	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
-		t.Errorf("Local file %s not deleted", fileName2)
+	if err == nil {
+		t.Errorf("Object %s not deleted", fileName2)
+	} else if status := api.HTTPStatus(err); status != http.StatusNotFound {
+		t.Errorf("HEAD(deleted-object %q): expected status 404, got %d: %v (%T)", fileName2, status, err, err)
 	}
 
 	hargsRemote := api.HeadArgs{FltPresence: apc.FltExists}

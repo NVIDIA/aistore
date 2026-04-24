@@ -289,11 +289,13 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 
 	// error handling
 	switch {
+	case err == nil:
+		// do nothing
 	case cmn.IsErrTooManyRequests(err):
 		// fall back to regular cold GET if blob download is rejected due to resource pressure
 		nlog.Warningln(r.Name(), ": blob download rejected due to resource pressure, falling back to regular cold GET, error: ", err)
 		return r.getCold(lom)
-	case err != nil:
+	default:
 		return 0, err
 	}
 

@@ -430,10 +430,7 @@ func (res *callResult) toErr() error {
 	}
 	// is cmn.ErrHTTP
 	if herr := cmn.AsErrHTTP(res.err); herr != nil {
-		// add status, details
-		if res.status >= http.StatusBadRequest {
-			herr.Status = res.status
-		}
+		debug.Assert(herr.Status == res.status, "herr status: ", herr.Status, " vs http status: ", res.status)
 		if herr.Message == "" {
 			herr.Message = res.details
 		}
@@ -453,11 +450,17 @@ func (res *callResult) toErr() error {
 	return cmn.NewErrFailedTo(nil, "call "+res.si.StringEx(), res.details, res.err)
 }
 
+// (compare w/ cmn.CheckResp())
 func (res *callResult) herr(r *http.Request, msg string) *cmn.ErrHTTP {
 	orig := &cmn.ErrHTTP{}
-	if e := jsoniter.Unmarshal([]byte(msg), orig); e == nil {
-		return orig
+	if err := jsoniter.Unmarshal(cos.UnsafeB(msg), orig); err == nil {
+		if orig.Status >= http.StatusBadRequest {
+			debug.Assert(orig.Status == res.status, "herr status: ", orig.Status, " vs http status: ", res.status)
+			return orig
+		}
+		// valid json w/ bad status - use http status (unlikely)
 	}
+
 	nherr := cmn.NewErrHTTP(r, errors.New(msg), res.status)
 	if res.si != nil {
 		nherr.Node = res.si.StringEx()

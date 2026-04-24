@@ -48,8 +48,14 @@ const (
 	FmtErrNewHTTPReq = "failed to create HTTP request %s %s: %v"
 )
 
-// API error structure
-// is returned to aistore client and carries one of the specific errors enumerated below
+// ErrHTTP is the wire error type crossing HTTP boundaries. Its Status field
+// is serialized alongside TypeCode and Message, and must match the HTTP response
+// status line. Invariants:
+// - Status >= 400 always (zero or <400 indicates incomplete/malformed - using HTTP response instead)
+// - Status is preserved as-is when forwarding; callers must not reclassify from TypeCode/Message
+// - TypeCode is a stable API, e.g.:
+//   - ErrTooManyRequests is 1-to-1 with 429
+//   - ErrBckNotFound is a specific 404
 type (
 	ErrHTTP struct {
 		TypeCode   string `json:"tcode,omitempty"`
@@ -339,8 +345,12 @@ func (e *ErrUnsupp) Error() string {
 }
 
 func isErrUnsupp(err error) bool {
-	_, ok := err.(*ErrUnsupp)
-	return ok
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrUnsupp); ok {
+		return true
+	}
+	var wrapped *ErrUnsupp
+	return errors.As(err, &wrapped)
 }
 
 func NewErrNotImpl(action, what string) *ErrNotImpl { return &ErrNotImpl{action, what} }
@@ -350,8 +360,12 @@ func (e *ErrNotImpl) Error() string {
 }
 
 func isErrNotImpl(err error) bool {
-	_, ok := err.(*ErrNotImpl)
-	return ok
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrNotImpl); ok {
+		return true
+	}
+	var wrapped *ErrNotImpl
+	return errors.As(err, &wrapped)
 }
 
 // (ais) ErrBucketAlreadyExists
@@ -462,8 +476,12 @@ func (e *ErrBusy) Error() string {
 }
 
 func IsErrBusy(err error) bool {
-	_, ok := err.(*ErrBusy)
-	return ok
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrBusy); ok {
+		return true
+	}
+	var wrapped *ErrBusy
+	return errors.As(err, &wrapped)
 }
 
 // errAccessDenied & ErrBucketAccessDenied
@@ -520,8 +538,12 @@ func (e *ErrCapExceeded) Error() string {
 }
 
 func IsErrCapExceeded(err error) bool {
-	_, ok := err.(*ErrCapExceeded)
-	return ok || cos.IsErrOOS(err) // NOTE: a superset
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrCapExceeded); ok || cos.IsErrOOS(err) /*syscall.ENOSPC*/ {
+		return true
+	}
+	var wrapped *ErrCapExceeded
+	return errors.As(err, &wrapped)
 }
 
 // ErrGetCap
@@ -915,8 +937,12 @@ func (e *ErrLimitedCoexistence) Error() string {
 }
 
 func isErrLimitedCoexistence(err error) bool {
-	_, ok := err.(*ErrLimitedCoexistence)
-	return ok
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrLimitedCoexistence); ok {
+		return true
+	}
+	var wrapped *ErrLimitedCoexistence
+	return errors.As(err, &wrapped)
 }
 
 // ErrXactUsePrev
@@ -977,8 +1003,12 @@ func (e *ErrRangeNotSatisfiable) Error() string {
 }
 
 func IsErrRangeNotSatisfiable(err error) bool {
-	_, ok := err.(*ErrRangeNotSatisfiable)
-	return ok
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrRangeNotSatisfiable); ok {
+		return true
+	}
+	var wrapped *ErrRangeNotSatisfiable
+	return errors.As(err, &wrapped)
 }
 
 // ErrTooManyRequests (429, 503)
@@ -993,8 +1023,12 @@ func (e *ErrTooManyRequests) Error() string {
 }
 
 func IsErrTooManyRequests(err error) bool {
-	_, ok := err.(*ErrTooManyRequests)
-	return ok
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrTooManyRequests); ok {
+		return true
+	}
+	var wrapped *ErrTooManyRequests
+	return errors.As(err, &wrapped)
 }
 
 func NewErrRateLimitFrontend() *ErrRateLimitFrontend {
@@ -1063,7 +1097,7 @@ func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 
 func Str2HTTPErr(msg string) *ErrHTTP {
 	var herr ErrHTTP
-	if err := jsoniter.UnmarshalFromString(msg, &herr); err == nil {
+	if err := jsoniter.UnmarshalFromString(msg, &herr); err == nil && herr.Status >= http.StatusBadRequest {
 		return &herr
 	}
 	return nil
@@ -1266,7 +1300,8 @@ func IsStatusGone(err error) (yes bool) {
 
 // sends HTTP response header with the provided status (alloc/free via mem-pool)
 func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[status[, silent]]*/) {
-	if herr, allocated := err2HTTP(err); herr != nil {
+	// 1. err is ErrHTTP
+	if herr := _err2HTTP(err); herr != nil {
 		// status precedence:
 		// 1) explicit ecode via opts[0] (if it's a real error status)
 		// 2) preserve existing herr.Status when it's already set to an error (>= 400);
@@ -1279,11 +1314,10 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 			herr.Status = http.StatusBadRequest
 		}
 		herr.write(w, r, len(opts) > 1 /*silent*/)
-		if allocated {
-			FreeHterr(herr)
-		}
 		return
 	}
+
+	// 2. regular error (not ErrHTTP)
 	var (
 		herr   = allocHterr()
 		l      = len(opts)
@@ -1292,7 +1326,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 
 	// assign status (in order of priority)
 	if cos.IsNotExist(err) {
-		// NOTE: override opts[0] status, e.g.: "remote cluster "uuid" does not exist, status=500"
+		// override opts[0] status, e.g.: "remote cluster "uuid" does not exist, status=500"
 		status = http.StatusNotFound
 	} else if l > 0 {
 		status = opts[0]
@@ -1320,17 +1354,17 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 	FreeHterr(herr)
 }
 
-// NOTE: internal use w/ duplication/simplicity traded off
-func err2HTTP(err error) (*ErrHTTP, bool) {
+// internal use w/ duplication/simplicity traded off
+func _err2HTTP(err error) *ErrHTTP {
 	if e, ok := err.(*ErrHTTP); ok {
-		return e, false
+		return e
 	}
-	e := allocHterr()
+
+	var e *ErrHTTP
 	if !errors.As(err, &e) {
-		FreeHterr(e)
-		return nil, false
+		return nil
 	}
-	return e, true
+	return e
 }
 
 // Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.

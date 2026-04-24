@@ -2151,6 +2151,9 @@ func (a *putA2I) fast(rwfh *os.File, tarFormat tar.Format, offset int64) (size i
 }
 
 func (*putA2I) reterr(err error) (int, error) {
+	if err == nil {
+		return 0, nil
+	}
 	ecode := cos.Ternary(cmn.IsErrCapExceeded(err), http.StatusInsufficientStorage, http.StatusInternalServerError)
 	return ecode, err
 }

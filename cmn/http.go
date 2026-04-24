@@ -193,6 +193,7 @@ func ParseReadHeaderTimeout() (_ time.Duration, isSet bool) {
 	return timeout, true
 }
 
+// (compare with callResult.herr())
 func CheckResp(resp *http.Response, method, path string) error {
 	if resp.StatusCode < http.StatusBadRequest {
 		return nil
@@ -200,6 +201,11 @@ func CheckResp(resp *http.Response, method, path string) error {
 	if method == http.MethodHead {
 		// "A response to a HEAD method should not have a body."
 		if msg := resp.Header.Get(apc.HdrError); msg != "" {
+			if herr := Str2HTTPErr(msg); herr != nil {
+				debug.Assert(herr.Status == resp.StatusCode, "herr status: ", herr.Status, " vs resp status: ", resp.StatusCode)
+				return herr
+			}
+			// default fallback
 			return &ErrHTTP{
 				TypeCode: TypeCodeHTTPErr(msg),
 				Message:  msg,
@@ -226,7 +232,11 @@ func CheckResp(resp *http.Response, method, path string) error {
 
 	herr := &ErrHTTP{}
 	if err := jsoniter.Unmarshal(b, herr); err == nil {
-		return herr
+		if herr.Status >= http.StatusBadRequest {
+			debug.Assert(herr.Status == resp.StatusCode, "herr status: ", herr.Status, " vs resp status: ", resp.StatusCode)
+			return herr
+		}
+		// valid json w/ bad status - use http response
 	}
 	msg := string(b)
 	return &ErrHTTP{
