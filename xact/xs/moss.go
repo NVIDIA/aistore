@@ -851,7 +851,7 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 	}
 
 	// data
-	if err := r._recvObj(hdr, reader, err); err != nil {
+	if err := r._recvObj(hdr, reader); err != nil {
 		smap := core.T.Sowner().Get()
 		r.BcastAbort(err, smap)
 		r.Abort(err)
@@ -875,10 +875,7 @@ func (r *XactMoss) _getwi(wid, sid string, warn bool) *basewi {
 }
 
 // (note: ObjHdr and its fields must be consumed synchronously)
-func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
-	if err != nil {
-		return err
-	}
+func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader) error {
 	mopaque, err := r.unpackOpaque(hdr.Opaque)
 	if err != nil {
 		return err
