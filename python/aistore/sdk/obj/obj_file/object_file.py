@@ -9,7 +9,10 @@ from io import BufferedIOBase, BufferedWriter
 from typing import Optional, Generator
 from overrides import override
 from aistore.sdk.obj.content_iterator import BaseContentIterProvider
-from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
+from aistore.sdk.obj.obj_file.errors import (
+    ObjectFileReaderMaxResumeError,
+    ObjectFileReaderUnexpectedEOF,
+)
 from aistore.sdk.utils import get_logger
 
 logger = get_logger(__name__)
@@ -129,6 +132,20 @@ class ObjectFileReader(BufferedIOBase):
                     continue
 
                 except StopIteration:
+                    expected_end_position = self._expected_end_position()
+                    if (
+                        expected_end_position is not None
+                        and self._resume_position < expected_end_position
+                    ):
+                        err = ObjectFileReaderUnexpectedEOF(
+                            self._resume_position,
+                            expected_end_position,
+                        )
+                        self._content_iter = self._handle_broken_stream(err)
+                        if not self._content_iter:
+                            self._reset(retain_resumes=True)
+                            size = sys_maxsize if original_size < 0 else original_size
+                        continue
                     # End of stream, exit loop
                     break
 
@@ -168,6 +185,11 @@ class ObjectFileReader(BufferedIOBase):
         if self._content_iter:
             self._content_iter.close()
 
+    def _expected_end_position(self) -> Optional[int]:
+        # Treat anything that isn't a real int as unknown.
+        expected = self._content_provider.expected_end_position
+        return expected if isinstance(expected, int) else None
+
     def _handle_broken_stream(
         self, err: Exception
     ) -> Optional[Generator[bytes, None, None]]:
@@ -193,14 +215,16 @@ class ObjectFileReader(BufferedIOBase):
 
         obj_path = self._content_provider.client.path
         logger.warning(
-            "Error while reading '%s', retrying %d/%d",
+            "Resuming '%s' after %s (%d/%d)",
             obj_path,
+            err,
             self._resume_total,
             self._max_resume,
-            exc_info=err,
         )
 
-        # If remote object is not cached, start over
+        # If remote object is not cached, start over.
+        # Required even on clean short EOF: under Streaming-Cold-GET the object
+        # may not be fully cached yet, and a range resume can hang.
         if not self._content_provider.client.head().present:
             return None
 

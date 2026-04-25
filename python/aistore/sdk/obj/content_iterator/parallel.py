@@ -263,6 +263,7 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         Yields:
             bytes: Consecutive chunks of the object's content.
         """
+        self._expected_end_position = self._object_size
         fork_context = self._get_fork_context()
 
         if self._object_size - offset <= 0:
@@ -298,6 +299,10 @@ class ParallelContentIterProvider(BaseContentIterProvider):
                     data_len = futures.pop(
                         next_yield
                     ).result()  # re-raises worker exceptions
+                    # TODO: Validate data_len against this range's expected length
+                    # before yielding. A clean short range read must be retried or
+                    # raised here; file-level EOF recovery cannot safely infer the
+                    # missing absolute offset after later parallel ranges are yielded.
                     ring.wait_slot(slot)
                     yield ring.read_slot(slot, data_len)
 

@@ -9,8 +9,39 @@ from unittest.mock import Mock, patch
 from io import IOBase
 from requests.exceptions import ChunkedEncodingError
 from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
-from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
+from aistore.sdk.obj.obj_file.errors import (
+    ObjectFileReaderMaxResumeError,
+    ObjectFileReaderUnexpectedEOF,
+)
 from tests.utils import BadContentIterProvider
+
+
+class ShortEOFContentIterProvider:  # pylint: disable=too-few-public-methods
+    """Simulates a stream that ends cleanly before the full object is delivered."""
+
+    def __init__(self, data: bytes, first_stream_len: int, chunk_size: int):
+        self.data = data
+        self.first_stream_len = first_stream_len
+        self.chunk_size = chunk_size
+        self.offsets = []
+        self.expected_end_position = None
+        self.client = Mock()
+        self.client.path = "ais://bucket/object"
+        self.client.head = Mock(return_value=Mock(present=True))
+
+    def create_iter(self, offset: int = 0):
+        self.offsets.append(offset)
+        self.expected_end_position = len(self.data)
+        end = self.first_stream_len if len(self.offsets) == 1 else len(self.data)
+
+        def iterator():
+            pos = offset
+            while pos < end:
+                next_pos = min(pos + self.chunk_size, end)
+                yield self.data[pos:next_pos]
+                pos = next_pos
+
+        return iterator()
 
 
 class TestObjectFileReader(unittest.TestCase):
@@ -370,3 +401,38 @@ class TestObjectFileReaderResume(unittest.TestCase):
                 object_file.read()
         # Verify that _reset was not called
         mock_reset.assert_not_called()
+
+    def test_read_success_after_clean_short_eof(self):
+        """
+        Test that ObjectFileReader resumes when a stream ends early without raising.
+        """
+        provider = ShortEOFContentIterProvider(
+            data=self.data,
+            first_stream_len=self.chunk_size,
+            chunk_size=self.chunk_size,
+        )
+        object_file = ObjectFileReader(provider, max_resume=1)
+
+        result = object_file.read()
+
+        self.assertEqual(result, self.data)
+        self.assertEqual(provider.offsets, [0, self.chunk_size])
+        provider.client.head.assert_called_once()
+
+    def test_read_clean_short_eof_fails_after_max_retries(self):
+        """
+        Test that a clean short EOF still respects max_resume.
+        """
+        provider = ShortEOFContentIterProvider(
+            data=self.data,
+            first_stream_len=self.chunk_size,
+            chunk_size=self.chunk_size,
+        )
+        object_file = ObjectFileReader(provider, max_resume=0)
+
+        with self.assertRaises(ObjectFileReaderMaxResumeError) as context:
+            object_file.read()
+
+        self.assertIsInstance(
+            context.exception.original_error, ObjectFileReaderUnexpectedEOF
+        )

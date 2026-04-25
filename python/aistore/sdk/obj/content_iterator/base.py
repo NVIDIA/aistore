@@ -3,7 +3,7 @@
 #
 
 from abc import ABC, abstractmethod
-from typing import Generator, Union
+from typing import Generator, Optional, Union
 
 from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer
 from aistore.sdk.obj.object_client import ObjectClient
@@ -21,6 +21,7 @@ class BaseContentIterProvider(ABC):
     def __init__(self, client: ObjectClient, chunk_size: int):
         self._client = client
         self._chunk_size = chunk_size
+        self._expected_end_position: Optional[int] = None
 
     @property
     def client(self) -> ObjectClient:
@@ -31,6 +32,13 @@ class BaseContentIterProvider(ABC):
             ObjectClient: The client used to access object content.
         """
         return self._client
+
+    @property
+    def expected_end_position(self) -> Optional[int]:
+        """
+        Expected logical byte position at EOF, if known from response metadata.
+        """
+        return self._expected_end_position
 
     @abstractmethod
     def read_all(self) -> Union[bytes, ParallelBuffer]:

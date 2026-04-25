@@ -19,6 +19,7 @@ HEADER_ACCEPT = "Accept"
 HEADER_USER_AGENT = "User-Agent"
 HEADER_CONTENT_TYPE = "Content-Type"
 HEADER_CONTENT_LENGTH = "Content-Length"
+HEADER_CONTENT_ENCODING = "Content-Encoding"
 HEADER_LOCATION = "Location"
 HEADER_CONNECTION = "Connection"
 # Standard Header Values

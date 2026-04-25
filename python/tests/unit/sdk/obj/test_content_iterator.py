@@ -61,3 +61,27 @@ class TestContentIterProvider(unittest.TestCase):
         iterator.close()
 
         mock_stream.close.assert_called_once()
+
+    def test_iter_tracks_expected_end_from_content_length(self):
+        """Test that the iterator records expected EOF from the GET response."""
+        mock_stream = Mock()
+        mock_stream.headers = {"Content-Length": "42"}
+        mock_stream.iter_content.return_value = byte_chunks
+        self.mock_client.get.return_value = mock_stream
+
+        offset = 100
+        res = list(self.content_provider.create_iter(offset))
+
+        self.assertEqual(byte_chunks, res)
+        self.assertEqual(self.content_provider.expected_end_position, offset + 42)
+
+    def test_iter_skips_expected_end_when_content_encoded(self):
+        """Content-Length is wire bytes when Content-Encoding is set; skip tracking."""
+        mock_stream = Mock()
+        mock_stream.headers = {"Content-Length": "42", "Content-Encoding": "gzip"}
+        mock_stream.iter_content.return_value = byte_chunks
+        self.mock_client.get.return_value = mock_stream
+
+        list(self.content_provider.create_iter(0))
+
+        self.assertIsNone(self.content_provider.expected_end_position)

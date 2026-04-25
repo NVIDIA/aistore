@@ -15,6 +15,19 @@ class ObjectFileReaderMaxResumeError(Exception):
         )
 
 
+class ObjectFileReaderUnexpectedEOF(Exception):
+    """
+    Raised internally when an object stream ends before the expected byte position.
+    """
+
+    def __init__(self, actual: int, expected: int):
+        self.actual = actual
+        self.expected = expected
+        super().__init__(
+            f"Object stream ended early at byte {actual}; expected byte {expected}"
+        )
+
+
 class ObjectFileReaderStreamError(Exception):
     """
     Raised when ObjectFileReader fails to establish a stream for an object

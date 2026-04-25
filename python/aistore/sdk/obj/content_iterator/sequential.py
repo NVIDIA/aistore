@@ -4,6 +4,7 @@
 
 from typing import Generator
 
+from aistore.sdk.const import HEADER_CONTENT_ENCODING, HEADER_CONTENT_LENGTH
 from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider
 
 
@@ -32,7 +33,22 @@ class ContentIterProvider(BaseContentIterProvider):
         Yields:
             bytes: Chunks of the object's content.
         """
+        self._expected_end_position = None
         stream = self._client.get(stream=True, offset=offset)
+        # Per RFC 9110 §8.4 (https://www.rfc-editor.org/rfc/rfc9110.html#section-8.4),
+        # when Content-Encoding is non-identity the representation metadata
+        # (Content-Length included) describes the *coded* form, while
+        # iter_content yields decoded bytes — so the two would not match
+        # and every successful read would look like a short EOF. Skip
+        # tracking in that case.
+        encoding = stream.headers.get(HEADER_CONTENT_ENCODING, "identity").lower()
+        if encoding in ("", "identity"):
+            content_length = stream.headers.get(HEADER_CONTENT_LENGTH)
+            if content_length is not None:
+                try:
+                    self._expected_end_position = offset + int(content_length)
+                except (TypeError, ValueError):
+                    self._expected_end_position = None
         try:
             yield from stream.iter_content(chunk_size=self._chunk_size)
         finally:

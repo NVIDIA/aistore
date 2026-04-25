@@ -8,6 +8,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- **`ObjectFileReader` clean short-EOF recovery**: detect streams that end
+  without raising but deliver fewer bytes than the GET `Content-Length`
+  advertised, and resume from the last delivered byte instead of returning a
+  truncated read. Recovery shares the existing broken-stream path (cached-
+  presence check, `max_resume` bound, restart-from-zero on eviction).
+  Detection is skipped when the response carries a non-identity
+  `Content-Encoding`.
 - **ETL direct-put retry**: added exponential-backoff retry for transient connection
   errors in Flask and HTTP multi-threaded ETL servers for parity with FastAPI.
   `ConnectionRefused` is now treated as a permanent error that returns HTTP 502
