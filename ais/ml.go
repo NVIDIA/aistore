@@ -520,7 +520,7 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 
 	// open SDM and start sending
 	if err := bundle.SDM.Open(config, &config.GetBatch.XactConf); err != nil {
-		xmoss.BcastAbort(err, &smap.Smap)
+		xmoss.BcastCtrl(&smap.Smap, "" /*wid*/, xact.OpcodeAbortXact, err)
 		xmoss.Abort(err)
 		t.writeErr(w, r, err)
 		return
@@ -533,7 +533,9 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 
 func (ctx *mossCtx) _startSend(xmoss *xs.XactMoss, tsi *meta.Snode) {
 	if err := xmoss.Send(ctx.req, &ctx.smap.Smap, tsi, ctx.wid); err != nil {
-		xmoss.AddErr(fmt.Errorf("send wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
+		if !xact.IsErrRecvAbortWI(err) {
+			xmoss.AddErr(fmt.Errorf("send wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
+		}
 	}
 	xmoss.DecPending()
 }

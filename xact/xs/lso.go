@@ -849,7 +849,7 @@ func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 
 	if hdr.Opcode == transport.OpcAbort {
 		errCause := hdr.ObjName // (see streamingX.sendTerm)
-		err = r.NewErrRecvAbort(hdr.SID, errCause)
+		err = r.NewErrRecvAbortXact(hdr.SID, errCause)
 		r.Abort(err)
 	}
 	if err != nil && !cos.IsOkEOF(err) {

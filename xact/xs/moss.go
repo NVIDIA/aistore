@@ -78,11 +78,10 @@ import (
    configurable (https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md)
 
 TODO:
-   - add BcastAbortWI(xid, wid); use in DT to stop senders (currently, keep silently dropping)
-   - gcAbandoned - currently, only via graceful fini(); consider periodic (lazy) alternative
-   - throttle senders as well
-   - future extension: return unsorted batch (curious to see perf. difference)
-   - implement range read
+   - gcAbandoned - currently, only via graceful fini()
+   - throttle senders
+   - feat: return a) unsorted batch; b) shuffled batch
+   - range read
 -------------------------------------------------------------------------------------------------------------*/
 
 // hardcoded tunables
@@ -95,7 +94,9 @@ const (
 	sparseLog    = time.Minute // low-level stats: total processed files, objects, etc.
 	sparseAdvice = time.Minute // initial interval to check memory, CPU, etc.
 
-	sparseLogWIMask = 0x7f // verbose mode: log an already assembled work item every 128 requests
+	sparseLogWIMask = 0xff // verbose mode: log an already assembled work item every 256 requests
+
+	ttlAbortedWID = time.Minute
 
 	// bewarm is a small-size worker pool per x-moss instance - unless under heavy load
 	// - created at init time
@@ -181,6 +182,7 @@ type (
 		stats   moss
 		started int64       // (mono)
 		soft    int         // number of soft errors must be <= maxSoftErrs; see definition above
+		idx     int         // current position in outgoing batch
 		clean   atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
 		demand  atomic.Bool // true: DemandBase.IncPending() done
 		awfin   atomic.Bool // true: need to close (outgoing) archive writer
@@ -196,15 +198,17 @@ type (
 
 type (
 	XactMoss struct {
-		gmm     *memsys.MMSA
-		smm     *memsys.MMSA
-		bewarm  *work.Pool
-		pending sync.Map // [wid => *basewi]
+		gmm         *memsys.MMSA
+		smm         *memsys.MMSA
+		bewarm      *work.Pool
+		pending     sync.Map // [wid => *basewi]
+		abortedWIDs sync.Map // wid => error from DT
 		xact.DemandBase
 		activeWG     sync.WaitGroup // when pending
 		lastLog      atomic.Int64   // last log timestamp (sparse)
 		advNextCheck atomic.Int64
 		pendingCnt   atomic.Int64
+		lastAbrtWID  atomic.Int64 // mon-time(abortedWIDs.Store)
 	}
 )
 
@@ -341,6 +345,8 @@ func (r *XactMoss) Abort(err error) bool {
 	r.pending.Clear()
 	r.pendingCnt.Store(0)
 
+	r.abortedWIDs.Clear()
+
 	r.DemandBase.Stop()
 
 	r.bewarmStop()
@@ -381,6 +387,28 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 	})
 }
 
+func (r *XactMoss) gcAbortedWIDs(now int64) {
+	last := r.lastAbrtWID.Load()
+	if last == 0 || time.Duration(now-last) < ttlAbortedWID {
+		return
+	}
+
+	// snapshot first, CAS second
+
+	const iniCap = 8
+	keys := make([]string, 0, iniCap)
+	r.abortedWIDs.Range(func(k, _ any) bool {
+		keys = append(keys, k.(string))
+		return true
+	})
+	if !r.lastAbrtWID.CAS(last, 0) {
+		return
+	}
+	for _, k := range keys {
+		r.abortedWIDs.Delete(k)
+	}
+}
+
 // terminate via (<-- xact.Demand <-- hk)
 func (r *XactMoss) fini(now int64) (d time.Duration) {
 	switch {
@@ -402,6 +430,8 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 		r.pending.Range(r.cleanup)
 		r.pending.Clear()
 		r.pendingCnt.Store(0)
+
+		r.abortedWIDs.Clear()
 
 		r.bewarmStop()
 		r.Finish()
@@ -437,6 +467,8 @@ func (r *XactMoss) bewarmStop() {
 // (phase 1)
 func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap, wid string, nat int, usingPrev bool) error {
 	now := mono.NanoTime()
+
+	r.gcAbortedWIDs(now)
 
 	// admission control
 	throttled, err429 := r.admit(config, wid, now)
@@ -581,27 +613,34 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 		var err error
 		if len(body) > 0 {
 			errCause := string(body)
-			err = r.NewErrRecvAbort(sid, errCause)
+			err = r.NewErrRecvAbortXact(sid, errCause)
 		}
 		r.Abort(err)
+	case xact.OpcodeAbortWI:
+		debug.Assert(wid != xact.NoneWID)
+		var errCause string
+		if len(body) > 0 {
+			errCause = string(body)
+		}
+		err := r.NewErrRecvAbortWI(sid, wid, errCause)
+		r.abortedWIDs.Store(wid, err)
+		r.lastAbrtWID.Store(mono.NanoTime())
 	default:
 		return fmt.Errorf("%s: unknown ctrl opcode %q", r.Name(), opcode)
 	}
 	return nil
 }
 
-// gather other requested data (local and remote); emit resulting archive
 // (phase 2)
-// A note on error handling:
+// assemble requested data (local and remote); emit resulting archive
+// a note on error handling:
 // - buffered mode: full error propagation, real HTTP status, client sees the error
 // - streaming: truncated TAR on the wire, user sees the error via CLI 'ais show job' ex post facto
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
 		err := cos.NewErrNotFoundFmt(r, "wid=%q (prep-rx not done?)", wid)
-		if cmn.Rom.V(4, cos.ModXs) {
-			nlog.Errorln(core.T.String(), err)
-		}
+		debug.AssertNoErr(err)
 		return err
 	}
 	wi := a.(*basewi)
@@ -612,8 +651,15 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 
 	err := r.asm(req, w, wi)
 	if err != nil {
-		nlog.Warningln(r.Cname(), "err:", err, "[", wi.ctlMsg(), "] streaming:", req.StreamingGet)
-		core.T.StatsUpdater().Inc(stats.ErrGetBatchCount)
+		if r.shouldAbortWI(wi) {
+			r.BcastCtrl(wi.smap, wi.wid, xact.OpcodeAbortWI, err)
+		}
+		tstats := core.T.StatsUpdater()
+		tstats.Inc(stats.ErrGetBatchCount)
+		nerr := tstats.Get(stats.ErrGetBatchCount)
+		if cmn.Rom.SuperV(4, cos.ModXs) || nerr < 5 || (nerr < 100 && nerr%10 == 0) || (nerr&sparseLogWIMask) == 0 {
+			nlog.Warningln(r.Cname(), "err:", err, "[", wi.ctlMsg(), "] streaming:", req.StreamingGet)
+		}
 	} else if cmn.Rom.V(5, cos.ModXs) {
 		tstats := core.T.StatsUpdater()
 		nreq := tstats.Get(stats.GetBatchCount)
@@ -630,6 +676,29 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 		r.DecPending()
 	}
 	return err
+}
+
+func (r *XactMoss) shouldAbortWI(wi *basewi) bool {
+	if r.IsAborted() || r.IsDone() {
+		return false
+	}
+	nat := wi.startup.nat // number of active targets in wi.smap (write-once in PrepRx, read via pending sync.Map)
+	if nat <= 1 {
+		return false
+	}
+
+	var (
+		pdt = r.pendingCnt.Load()
+		rem = len(wi.req.In) - wi.idx
+	)
+	switch {
+	case pdt >= pendingCritWm:
+		return rem > 0
+	case pdt >= pendingHighWm:
+		return rem >= nat-1
+	default:
+		return rem >= nat*4
+	}
 }
 
 func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) error {
@@ -667,9 +736,15 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 	// - throttle sender as well: init load.Advice and check periodically inside the loop
 	// - IncPending/DecPending is done by the caller
 
+	defer r.abortedWIDs.Delete(wid)
 	for i := range req.In {
 		if r.IsAborted() || r.IsDone() {
 			return nil
+		}
+		if e, ok := r.abortedWIDs.LoadAndDelete(wid); ok {
+			err := e.(error)
+			debug.Assertf(xact.IsErrRecvAbortWI(err), "%v (%T)", e, e)
+			return err
 		}
 		in := &req.In[i]
 		if err := _assertNoRange(in); err != nil {
@@ -853,7 +928,7 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 	// data
 	if err := r._recvObj(hdr, reader); err != nil {
 		smap := core.T.Sowner().Get()
-		r.BcastAbort(err, smap)
+		r.BcastCtrl(smap, "" /*wid*/, xact.OpcodeAbortXact, err)
 		r.Abort(err)
 		return err
 	}
@@ -969,10 +1044,10 @@ func (r *XactMoss) CtlMsg() string {
 func (r *XactMoss) _ctlMsg(sb *cos.SB) {
 	tstats := core.T.StatsUpdater()
 	nreq := tstats.Get(stats.GetBatchCount)
-	if nreq == 0 {
+	nerr := tstats.Get(stats.ErrGetBatchCount)
+	if nreq == 0 && nerr == 0 {
 		return
 	}
-
 	// [this xaction]
 	sb.WriteString("job:[")
 	pdemand, pdt := r.Pending(), r.pendingCnt.Load()
@@ -999,6 +1074,10 @@ func (r *XactMoss) _ctlMsg(sb *cos.SB) {
 	sb.WriteString("node:[")
 	sb.WriteString("reqs:")
 	sb.WriteString(strconv.FormatInt(nreq, 10))
+	if nerr > 0 {
+		sb.WriteString(" errs:")
+		sb.WriteString(strconv.FormatInt(nerr, 10))
+	}
 
 	ocnt := tstats.Get(stats.GetBatchObjCount)
 	if ocnt > 0 {
@@ -1672,6 +1751,7 @@ func (wi *basewi) asm() error {
 		if err != nil {
 			return err
 		}
+		wi.idx = j
 
 		if wi.wctrl != nil {
 			if now := mono.NanoTime(); now >= nextFlush {

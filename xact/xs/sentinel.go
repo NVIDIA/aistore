@@ -75,7 +75,7 @@ func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
 		o.Hdr.Opaque = cos.UnsafeB(uuid)
 	}
 	if abortErr != nil {
-		if xact.IsErrRecvAbort(abortErr) {
+		if xact.IsErrRecvAbortXact(abortErr) {
 			return // do nothing
 		}
 		o.Hdr.Opcode = transport.OpcAbort
@@ -223,7 +223,7 @@ func (s *sentinel) rxAbort(hdr *transport.ObjHdr, self *xact.Base) {
 		return
 	}
 	errCause := hdr.ObjName // see s.bcast(abortErr)
-	err := self.NewErrRecvAbort(hdr.SID, errCause)
+	err := self.NewErrRecvAbortXact(hdr.SID, errCause)
 	r.Abort(err)
 	nlog.WarningDepth(1, err)
 }
