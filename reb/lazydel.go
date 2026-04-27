@@ -21,7 +21,7 @@ const (
 	lazyDfltChanSize = 2048
 	lazyMaxChanSize  = 64 * 1024
 
-	lazyDelayMin = 4 * time.Second
+	lazyDelayMinReset = 4 * time.Second
 
 	lazyClipCap = 128
 
@@ -92,7 +92,7 @@ func (r *lazydel) reuse() {
 
 // tunables
 func lazytimes(config *cmn.Config) (delay, idle, busy time.Duration) {
-	lazyDelay := max(config.Timeout.MaxHostBusy.D(), lazyDelayMin)
+	lazyDelay := max(config.Timeout.MaxHostBusy.D(), lazyDelayMinReset)
 	return lazyDelay, lazyDelay << 2, lazyDelay >> 2
 }
 
@@ -118,7 +118,7 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 		r.chanFull.Store(0)
 
 		size = min(size*2, lazyMaxChanSize)
-		delay = max(delay>>1, lazyDelayMin)
+		delay = max(delay>>1, lazyDelayMinReset)
 
 		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "cnt:", a, "- resizing work channel to", size, "delay:", delay)
 	}
