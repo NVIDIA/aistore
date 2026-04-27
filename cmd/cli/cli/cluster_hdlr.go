@@ -8,6 +8,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -38,6 +39,28 @@ const shutdownUsage = "Shutdown a node, gracefully or immediately.\n" +
 	indent1 + "\tNote: upon shutdown, the node won't be decommissioned - it'll remain in the cluster map\n" +
 	indent1 + "\tand can be manually restarted to rejoin the cluster at any later time;\n" +
 	indent1 + "\tsee also: 'ais advanced " + cmdRmSmap + "'"
+
+const setPrimaryUsage = "Select a new primary proxy/gateway.\n" +
+	indent1 + "Without '--force': orderly handover within the same cluster; the request must hit the current primary,\n" +
+	indent1 + "and NODE_ID must be an electable proxy in the current cluster.\n" +
+	indent1 + "With '--force': advanced recovery operation; the request must still hit the source/current primary.\n" +
+	indent1 + "If NODE_ID belongs to a different cluster, the source primary force-joins that destination cluster\n" +
+	indent1 + "and then makes sure all source-cluster members do the same. This can be used (a) to grow the destination\n" +
+	indent1 + "cluster by all nodes from the source cluster at once, and (b) to recover from split-brain.\n" +
+	indent1 + "\te.g.:\n" +
+	indent1 + "\torderly handover (no '--force'):\n" +
+	indent1 + "\t- 'ais cluster set-primary p[abc]'\t- transfer primary role to p[abc];\n" +
+	indent1 + "\t- 'ais cluster set-primary p[abc] http://10.0.0.5:51080'\t- same, with direct URL of p[abc];\n" +
+	indent1 + "\tsame-cluster primary change with '--force':\n" +
+	indent1 + "\t- 'ais cluster set-primary p[abc] --force'\t- set p[abc] as primary, still subject to same-cluster validation;\n" +
+	indent1 + "\tcross-cluster force-join ('--force'):\n" +
+	indent1 + "\t  Force-joins all source-cluster nodes into a destination cluster in one shot.\n" +
+	indent1 + "\t  Prerequisite: disable rebalance in the destination cluster:\n" +
+	indent1 + "\t  'AIS_ENDPOINT=http://DST:PORT ais config cluster rebalance.enabled false'.\n" +
+	indent1 + "\t- 'ais cluster set-primary p[dst] http://DST:PORT --force'\t- run against the source primary; force-join the source cluster\n" +
+	indent1 + "\t       into the destination cluster led by p[dst] at DST:PORT;\n" +
+	indent1 + "\t- 'AIS_ENDPOINT=http://SRC:PORT ais cluster set-primary p[dst] http://DST:PORT --force'\t- same, with the source endpoint explicit.\n" +
+	indent1 + "After cross-cluster force-join, re-enable rebalance and consider 'ais start rebalance' and, for remote backends, 'ais prefetch'."
 
 var (
 	clusterCmdsFlags = map[string][]cli.Flag{
@@ -145,7 +168,7 @@ var (
 			},
 			{
 				Name:         cmdPrimary,
-				Usage:        "Select a new primary proxy/gateway",
+				Usage:        setPrimaryUsage,
 				ArgsUsage:    nodeIDArgument + " [URL]",
 				Flags:        sortFlags(clusterCmdsFlags[cmdPrimary]),
 				Action:       setPrimaryHandler,
@@ -524,29 +547,54 @@ func setPrimaryHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
+
+	toURL, errU := parsePrimaryURL(c)
+	if errU != nil {
+		return errU
+	}
+
+	force := flagIsSet(c, forceFlag)
 	node, sname, err := arg0Node(c)
 	if err != nil {
+		// (split brain)
+		if _, ok := err.(*errDoesNotExist); ok && force {
+			if toURL == "" {
+				return errors.New("force-joining source cluster to destination cluster requires destination primary URL")
+			}
+			pid := c.Args().Get(0)
+			sname = meta.Pname(pid)
+
+			if strings.HasPrefix(pid, meta.TnamePrefix) {
+				return incorrectUsageMsg(c, "expecting proxy ID or name, got target %s", pid)
+			}
+			if strings.HasPrefix(pid, meta.PnamePrefix) {
+				sname = pid
+				pid = meta.N2ID(sname)
+			}
+
+			smap, e := getClusterMap(c)
+			if e != nil {
+				return V(e)
+			}
+			warn := fmt.Sprintf("about to force-join cluster (UUID=%s, primary=[%s, %s]) to a different cluster where primary=[%s, %s]\n"+
+				"Prerequisite: destination cluster rebalance must be disabled, e.g.:\n"+
+				"  AIS_ENDPOINT=%s ais config cluster rebalance.enabled false",
+				smap.UUID, smap.Primary.ID(), smap.Primary.PubNet.URL, pid, toURL, toURL,
+			)
+			actionWarn(c, warn)
+			if !confirm(c, "The operation cannot be undone. Proceed?") {
+				return nil
+			}
+			return psetForce(c, pid, sname, toURL)
+		}
 		return err
 	}
+
 	if !node.IsProxy() {
 		return incorrectUsageMsg(c, "%s is not a proxy", sname)
 	}
-
-	// force
-	var (
-		toURL = c.Args().Get(1)
-		force = flagIsSet(c, forceFlag)
-	)
 	if force {
-		if err := api.SetPrimary(apiBP, node.ID(), toURL, true /*force*/); err != nil {
-			return err
-		}
-		var s string
-		if toURL != "" {
-			s = " (at " + toURL + ")"
-		}
-		actionDone(c, fmt.Sprintf("%s%s is now a new primary", sname, s))
-		return nil
+		return psetForce(c, node.ID(), sname, toURL) // same cluster
 	}
 
 	// regular
@@ -560,10 +608,45 @@ func setPrimaryHandler(c *cli.Context) error {
 	}
 
 	if err := api.SetPrimary(apiBP, node.ID(), toURL, false /*force*/); err != nil {
-		return err
+		return V(err)
 	}
 
 	actionDone(c, sname+" is now a new primary")
+	return nil
+}
+
+func parsePrimaryURL(c *cli.Context) (string, error) {
+	if c.NArg() > 2 {
+		return "", incorrectUsageMsg(c, "too many arguments")
+	}
+	if c.NArg() < 2 {
+		return "", nil
+	}
+
+	raw := c.Args().Get(1)
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("invalid URL %q: expecting full URL, e.g. http://host:port", raw)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("invalid URL %q: expecting http:// or https://", raw)
+	}
+	return raw, nil
+}
+
+func psetForce(c *cli.Context, pid, sname, toURL string) error {
+	if err := cos.ValidateDaemonID(pid); err != nil {
+		return fmt.Errorf("set primary with force: %v", err)
+	}
+	if err := api.SetPrimary(apiBP, pid, toURL, true /*force*/); err != nil {
+		return V(err)
+	}
+
+	var s string
+	if toURL != "" {
+		s = " (at " + toURL + ")"
+	}
+	actionDone(c, fmt.Sprintf("%s%s is now a new primary (set with force)", sname, s))
 	return nil
 }
 

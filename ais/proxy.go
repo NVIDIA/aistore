@@ -2533,7 +2533,8 @@ func (p *proxy) readyToJoinClu(smap *smapX) error {
 	case !smap.IsPrimary(p.si):
 		return newErrNotPrimary(p.si, smap)
 	case cmn.GCO.Get().Rebalance.Enabled && smap.CountTargets() > 1:
-		return errors.New(p.String() + ": please disable global rebalance for the duration of the critical (force-join) operation")
+		return errors.New(p.String() +
+			": destination cluster has rebalance enabled; disable global rebalance on the destination cluster for the duration of the critical force-join operation")
 	case nlog.Stopping():
 		return p.errStopping()
 	}
