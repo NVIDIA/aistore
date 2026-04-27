@@ -272,6 +272,7 @@ func (lwg *LimitedWaitGroup) Wait() {
 
 //
 // common channel-full helper
+// where l = len(workCh), c = cap(workCh)
 //
 
 const (
@@ -288,18 +289,22 @@ var ErrWorkChanFull = errors.New("work channel full")
 
 func _threshold(c int) int { return c - c>>3 }
 
-// where l = len(workCh), c = cap(workCh)
-// - returns true on error and warning, both
-// - may resched and sleep
+func (u *ChanFull) IncWarn(l, c, depth int) int64 {
+	cnt := u.Inc()
+	if cnt <= 3 || (cnt <= 1000 && cnt%100 == 0) || cnt&(cnt-1) == 0 {
+		nlog.WarningDepth(depth, ErrWorkChanFull, "[ len:", l, "cap:", c, "cnt:", cnt, "]")
+	}
+	return cnt
+}
+
+// return true on error and warning, both
+// may resched and sleep
 func (u *ChanFull) Check(l, c int) bool {
 	switch {
 	case l < _threshold(c):
 		return false
 	case l == c:
-		cnt := u.Inc()
-		if cnt <= 3 || cnt == 100 || cnt == 1000 || cnt&(cnt-1) == 0 {
-			nlog.WarningDepth(1, ErrWorkChanFull, "[ len:", l, "cap:", c, "cnt:", cnt, "]")
-		}
+		u.IncWarn(l, c, 2 /*nlog-depth*/)
 		time.Sleep(chanFullSleep)
 	default:
 		if l == _threshold(c) {

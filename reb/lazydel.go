@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	lazyDfltChanSize = 1024 // NOTE: may become 4096 if we ever hit chanFull
+	lazyDfltChanSize = 2048
 	lazyMaxChanSize  = 64 * 1024
 
 	lazyDelayMin = 4 * time.Second
@@ -37,7 +37,7 @@ type lazydel struct {
 	workCh   chan core.LIF
 	rebID    atomic.Int64
 	running  atomic.Bool
-	chanFull atomic.Bool // TODO: consider storing prev. full size instead
+	chanFull cos.ChanFull
 }
 
 // is called via recvRegularAck -> ackLomAck
@@ -48,17 +48,13 @@ func (r *lazydel) enqueue(lif core.LIF, xname string, rebID int64) {
 		}
 		return
 	}
-	l, c := len(r.workCh), cap(r.workCh)
+	c := cap(r.workCh)
 	debug.Assert(c >= lazyDfltChanSize)
 
-	if l == c-c>>2 || l == c-c>>3 {
-		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "[", xname, l, "]")
-	}
 	select {
 	case r.workCh <- lif:
 	default:
-		r.chanFull.Store(true)
-		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "- dropping [", lif.Cname(), xname, "]")
+		r.chanFull.IncWarn(c, c, 1 /*nlog-depth*/)
 	}
 }
 
@@ -118,10 +114,13 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 
 	// (re)init
 	size := max(lazyDfltChanSize, config.Rebalance.Burst)
-	if r.chanFull.Load() {
-		r.chanFull.Store(false)
+	if a := r.chanFull.Load(); a > 0 {
+		r.chanFull.Store(0)
+
 		size = min(size*2, lazyMaxChanSize)
 		delay = max(delay>>1, lazyDelayMin)
+
+		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "cnt:", a, "- resizing work channel to", size, "delay:", delay)
 	}
 	if cap(r.put) == 0 {
 		r.put = make([]core.LIF, 0, size)
