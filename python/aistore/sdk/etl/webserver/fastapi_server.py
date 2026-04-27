@@ -17,6 +17,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 import httpx
+import requests
 import aiofiles
 import uvicorn
 
@@ -49,6 +50,32 @@ from aistore.sdk.const import (
     STATUS_INTERNAL_SERVER_ERROR,
     HEADER_AUTHORIZATION,
 )
+
+
+class _ResponseRawReader:
+    """Wrap a requests.Response so close() releases the connection to the pool.
+
+    resp.raw.close() closes the socket but skips resp.close()'s release_conn()
+    call, which returns the socket to the keep-alive pool. Under early-close
+    (mid-stream errors, client disconnects), that leaks connections.
+    All reads are delegated to resp.raw; everything else falls through to resp.raw.
+    """
+
+    def __init__(self, response: requests.Response):
+        self._response = response
+        self._raw = response.raw
+
+    def read(self, *args, **kwargs):
+        """Read bytes from the underlying raw response stream."""
+        return self._raw.read(*args, **kwargs)
+
+    def close(self):
+        """Close the response so requests releases the connection to the pool."""
+        self._response.close()
+
+    def __getattr__(self, name):
+        return getattr(self._raw, name)
+
 
 HTTP_LIMITS = httpx.Limits(
     max_connections=int(os.getenv("MAX_CONN", "256")),
@@ -191,6 +218,17 @@ class FastAPIServer(ETLServer):
             raise HTTPException(
                 STATUS_BAD_GATEWAY, detail=f"Network error: {str(e)}"
             ) from e
+        except requests.HTTPError as e:
+            status = (
+                e.response.status_code if e.response is not None else STATUS_BAD_GATEWAY
+            )
+            self.logger.debug("Upstream GET returned %s", status)
+            raise HTTPException(status, detail="Target request failed") from e
+        except requests.RequestException as e:
+            self.logger.error("Network error on upstream GET: %s", str(e))
+            raise HTTPException(
+                STATUS_BAD_GATEWAY, detail=f"Network error: {str(e)}"
+            ) from e
         except Exception as e:
             self.logger.exception("Critical error during processing")
             raise HTTPException(500, detail=f"Processing error: {str(e)}") from e
@@ -269,10 +307,6 @@ class FastAPIServer(ETLServer):
                     headers=self.make_direct_put_headers(result[2]),
                 )
 
-        # No pipeline — open reader here; iter_and_close owns its lifecycle.
-        # transform_stream is a sync generator — creating it is instant (no I/O).
-        # StreamingResponse iterates sync iterators in a threadpool automatically,
-        # so the blocking generator body runs off the event loop.
         reader = await self._get_stream_reader(fqn, path, request, is_get)
         try:
             output_iter = self.transform_stream(reader, path, etl_args)
@@ -292,10 +326,28 @@ class FastAPIServer(ETLServer):
             # always receives a BinaryIO reader, never a path string.
             return open(self.sanitize_fqn(fqn), "rb")
         if is_get:
-            content = await self._get_network_content(path)
-            return BytesIO(content)
-        body = await request.body()
-        return BytesIO(body)
+            obj_path = quote(path, safe="@")
+            target_url = f"{self.host_target}/{obj_path}"
+            self.logger.debug("Forwarding GET (stream) to: %s", target_url)
+            return await asyncio.to_thread(self._open_sync_get_stream, target_url)
+        # TODO: non-FQN PUT still buffers the full request body into BytesIO so retries
+        # can replay it; true streaming for this path still needs to be implemented.
+        return BytesIO(await request.body())
+
+    def _open_sync_get_stream(self, target_url: str) -> BinaryIO:
+        """Open a streaming GET against the AIS target using the shared sync session.
+
+        Blocking — must be called via asyncio.to_thread from an async context.
+        Returns a _ResponseRawReader wrapping the response so close() releases
+        the connection back to the urllib3 keep-alive pool.
+        """
+        resp = self.session.get(target_url, stream=True, timeout=None)
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError:
+            resp.close()
+            raise
+        return _ResponseRawReader(resp)
 
     async def _direct_put_stream_with_retry(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -404,6 +456,8 @@ class FastAPIServer(ETLServer):
         response.raise_for_status()
         return response.content
 
+    # TODO: benchmark alternatives to direct sync iteration here; blocking reads can
+    # stall the event loop, but per-chunk asyncio.to_thread(...) may add overhead.
     @staticmethod
     async def _to_async_iter(sync_iter):
         """Wrap a sync iterator as an async generator for httpx.AsyncClient."""

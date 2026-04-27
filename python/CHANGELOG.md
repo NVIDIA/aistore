@@ -15,6 +15,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   presence check, `max_resume` bound, restart-from-zero on eviction).
   Detection is skipped when the response carries a non-identity
   `Content-Encoding`.
+- ETL `FastAPIServer`: stream no-FQN `hpull` GETs in constant memory via the
+  shared `requests.Session`, wrapped in `asyncio.to_thread` to keep the event
+  loop responsive. Previously the full upstream object was buffered into memory
+  before being handed to `transform_stream`.
 - **ETL direct-put retry**: added exponential-backoff retry for transient connection
   errors in Flask and HTTP multi-threaded ETL servers for parity with FastAPI.
   `ConnectionRefused` is now treated as a permanent error that returns HTTP 502

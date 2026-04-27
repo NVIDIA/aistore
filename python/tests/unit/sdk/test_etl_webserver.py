@@ -4,6 +4,7 @@ import os
 import sys
 import io
 import unittest
+from urllib.parse import quote as url_quote
 from unittest import mock
 from unittest.mock import MagicMock, patch, AsyncMock
 
@@ -1010,6 +1011,9 @@ class TestStreamingDetection(unittest.TestCase):
 
 
 class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
+    """Sync def tests drive the app through FastAPI's sync TestClient / websocket_connect.
+    Async def tests directly await async server helpers (e.g. _get_stream_reader)."""
+
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
         os.environ["DIRECT_PUT"] = "false"
@@ -1022,26 +1026,185 @@ class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content, b"Running")
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_streaming_put(self):
+    def test_streaming_put(self):
+        # TODO: non-FQN PUT body is still buffered; "streaming PUT" refers to the
+        # transform_stream path, not request-body streaming.
         input_content = b"input data"
         response = self.client.put("/test/object", content=input_content)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, input_content[::-1])
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_streaming_get(self):
-        original_content = b"original data"
-        with patch.object(
-            self.etl_server,
-            "_get_network_content",
-            AsyncMock(return_value=original_content),
-        ):
-            response = self.client.get("/test/object")
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.content, original_content[::-1])
+    def _make_mock_session_get(self, raw_data=b"", status_code=200, side_effect=None):
+        """Return a mock requests.Response with .raw configured for streaming."""
+        mock_raw = MagicMock()
+        mock_raw.read.side_effect = [raw_data, b""]  # one chunk then EOF
+        mock_resp = MagicMock()
+        mock_resp.status_code = status_code
+        mock_resp.raw = mock_raw
+        if side_effect:
+            mock_resp.raise_for_status.side_effect = side_effect
+        else:
+            mock_resp.raise_for_status = MagicMock()
+        return mock_resp
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_websocket_raises_for_streaming_server(self):
+    def test_streaming_get(self):
+        """No-FQN GET streams via the shared sync session; output is transformed."""
+        input_data = b"streaming get data"
+        mock_resp = self._make_mock_session_get(raw_data=input_data)
+
+        with patch.object(
+            self.etl_server.session, "get", return_value=mock_resp
+        ) as mock_get:
+            response = self.client.get("/test/object")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, input_data[::-1])
+        mock_get.assert_called_once_with(
+            "http://localhost:8080/test%2Fobject", stream=True, timeout=None
+        )
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_get_does_not_buffer(self):
+        """Streaming GET must not use _get_network_content (the buffering path)."""
+        mock_resp = self._make_mock_session_get(raw_data=b"data")
+
+        with patch.object(self.etl_server.session, "get", return_value=mock_resp):
+            with patch.object(
+                self.etl_server, "_get_network_content", new_callable=AsyncMock
+            ) as mock_net:
+                self.client.get("/test/object")
+                mock_net.assert_not_called()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_get_forwards_upstream_error_status(self):
+        """Upstream HTTP errors must be forwarded, not collapsed into 502."""
+        mock_requests_resp = MagicMock()
+        mock_requests_resp.status_code = 404
+        err = requests.HTTPError(response=mock_requests_resp)
+        mock_resp = self._make_mock_session_get(status_code=404, side_effect=err)
+
+        with patch.object(self.etl_server.session, "get", return_value=mock_resp):
+            response = self.client.get("/test/object")
+
+        self.assertEqual(response.status_code, 404)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_get_network_error_returns_502(self):
+        """Network-level failures on GET must return 502 Bad Gateway."""
+        with patch.object(
+            self.etl_server.session,
+            "get",
+            side_effect=requests.ConnectionError("refused"),
+        ):
+            response = self.client.get("/test/object")
+
+        self.assertEqual(response.status_code, 502)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_get_closes_response_on_upstream_error(self):
+        """Upstream errors must close the response to release the connection."""
+        mock_requests_resp = MagicMock()
+        mock_requests_resp.status_code = 404
+        err = requests.HTTPError(response=mock_requests_resp)
+        mock_resp = self._make_mock_session_get(status_code=404, side_effect=err)
+
+        with patch.object(self.etl_server.session, "get", return_value=mock_resp):
+            response = self.client.get("/test/object")
+
+        self.assertEqual(response.status_code, 404)
+        mock_resp.close.assert_called_once()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_get_upstream_500_forwarded_and_closes(self):
+        """Upstream 500 is forwarded as-is and the response is closed to avoid leaks."""
+        mock_requests_resp = MagicMock()
+        mock_requests_resp.status_code = 500
+        err = requests.HTTPError(response=mock_requests_resp)
+        mock_resp = self._make_mock_session_get(status_code=500, side_effect=err)
+
+        with patch.object(self.etl_server.session, "get", return_value=mock_resp):
+            response = self.client.get("/test/object")
+
+        self.assertEqual(response.status_code, 500)
+        mock_resp.close.assert_called_once()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_get_uname_path_preserved(self):
+        """Uname path with @, slashes, spaces, and non-ASCII is forwarded byte-exact.
+
+        Guards against any future re-introduction of bucket/object path parsing.
+        The ETL target contract requires quote(path, safe='@') appended verbatim
+        to host_target — not a /v1/objects/... rewrite.
+        """
+        uname_path = "ais/@ns/mybucket/path with ñ/obj"
+        expected_url = f"http://localhost:8080/{url_quote(uname_path, safe='@')}"
+
+        mock_resp = self._make_mock_session_get(raw_data=b"data")
+        with patch.object(
+            self.etl_server.session, "get", return_value=mock_resp
+        ) as mock_get:
+            srv = self.etl_server
+            get_reader = srv._get_stream_reader  # pylint: disable=protected-access
+            reader = await get_reader(
+                fqn="", path=uname_path, request=None, is_get=True
+            )
+            reader.close()
+
+        mock_get.assert_called_once_with(expected_url, stream=True, timeout=None)
+        # No SDK-style path rewriting should occur.
+        self.assertNotIn("/v1/objects/", mock_get.call_args[0][0])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_get_reader_returns_binary_io(self):
+        """_get_stream_reader returns a sync BinaryIO whose read() yields upstream bytes."""
+        upstream_bytes = b"hello from upstream"
+        mock_resp = self._make_mock_session_get(raw_data=upstream_bytes)
+
+        with patch.object(self.etl_server.session, "get", return_value=mock_resp):
+            srv = self.etl_server
+            get_reader = srv._get_stream_reader  # pylint: disable=protected-access
+            reader = await get_reader(
+                fqn="", path="bucket/obj", request=None, is_get=True
+            )
+
+        self.assertTrue(hasattr(reader, "read"))
+        self.assertTrue(hasattr(reader, "close"))
+        self.assertEqual(reader.read(), upstream_bytes)
+        reader.close()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_get_reader_close_releases_connection_pool(self):
+        """reader.close() must call resp.close(), not just resp.raw.close().
+
+        resp.close() calls release_conn() which returns the socket to the
+        keep-alive pool. Closing only raw skips that and leaks connections on
+        early-close (mid-stream errors, client disconnect).
+        """
+        mock_resp = self._make_mock_session_get(raw_data=b"bytes")
+
+        with patch.object(self.etl_server.session, "get", return_value=mock_resp):
+            srv = self.etl_server
+            reader = await srv._get_stream_reader(  # pylint: disable=protected-access
+                fqn="", path="bucket/obj", request=None, is_get=True
+            )
+
+        reader.close()
+        mock_resp.close.assert_called_once()
+        mock_resp.raw.close.assert_not_called()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_put_no_pipeline_round_trip(self):
+        """Non-pipeline streaming PUT round-trips correctly."""
+        # TODO: non-FQN PUT body is still buffered; "streaming PUT" refers to the
+        # transform_stream path, not request-body streaming.
+        input_content = b"streaming put no-pipeline"
+        resp = self.client.put("/test/object", content=input_content)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content, input_content[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_raises_for_streaming_server(self):
         """WebSocket should fail for streaming-only servers."""
         with self.assertRaises(Exception):
             with self.client.websocket_connect("/ws") as websocket:
@@ -1167,6 +1330,11 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
     def _make_request(self, body: bytes = b"input") -> MagicMock:
         req = MagicMock()
         req.body = AsyncMock(return_value=body)
+
+        async def _stream():
+            yield body
+
+        req.stream.return_value = _stream()
         return req
 
     def _ok_response(self) -> MagicMock:
@@ -1233,8 +1401,8 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         mock_sleep.assert_not_called()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_reader_reopened_on_each_retry(self):
-        """_get_stream_reader is called once per attempt (initial + each retry)."""
+    async def test_get_reader_reopened_on_each_retry(self):
+        """For GET (non-replayable), _get_stream_reader is called once per attempt."""
         call_count = 0
 
         async def mock_put(*_, **__):
@@ -1247,18 +1415,27 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         self.server.client.put.side_effect = mock_put
 
         get_reader_calls = []
-        original = self.server._get_stream_reader  # pylint: disable=protected-access
 
-        async def tracking(*args, **kwargs):
-            reader = await original(*args, **kwargs)
+        async def tracking(*_args, **_kwargs):
+            reader = MagicMock()
+            reader.read.return_value = b"data"
             get_reader_calls.append(reader)
             return reader
 
         with patch("asyncio.sleep", new_callable=AsyncMock):
             with patch.object(self.server, "_get_stream_reader", side_effect=tracking):
-                await self._call(self._make_request(), retries=2)
+                # is_get=True → non-replayable, reader reopened on each retry
+                await self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+                    "",
+                    "test/obj",
+                    self._make_request(),
+                    True,
+                    "",
+                    self._DIRECT_PUT_URL,
+                    "",
+                )
 
-        # initial + 2 retries = 3 readers
+        # initial + 2 retries = 3 readers opened
         self.assertEqual(len(get_reader_calls), 3)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
@@ -1274,7 +1451,7 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_reader_always_closed_on_exhausted_retries(self):
-        """Every reader opened during retries is closed; finally closes the last one."""
+        """Reader is closed after each failed attempt and again by the finally block."""
         self.server.client.put.side_effect = httpx.ReadError("dropped")
 
         close_calls = []
@@ -1289,7 +1466,7 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ETLDirectPutTransientError):
                     await self._call(self._make_request(), retries=2)
 
-        # 2 retries close the old reader in except + 1 finally close = 3 total
+        # 2 retries -> 2 mid-loop closes + 1 finally close = 3 total
         self.assertEqual(len(close_calls), 3)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
