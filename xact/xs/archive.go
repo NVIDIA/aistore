@@ -141,10 +141,11 @@ func (p *archFactory) Start() (err error) {
 		dmxtra := bundle.Extra{
 			RecvAck:  nil, // no ACKs
 			Config:   r.config,
+			Smap:     r.smap,
 			XactConf: r.config.Arch.XactConf,
 			SizePDU:  0,
 		}
-		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.smap, dmxtra, cmn.OwtPut); err != nil {
+		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, dmxtra, cmn.OwtPut); err != nil {
 			return err
 		}
 	}

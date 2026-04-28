@@ -37,27 +37,50 @@ type (
 	bundle map[string]*robin // stream "bundle" indexed by node ID
 )
 
+// Stream bundles maintain long-lived peer-to-peer streams -
+// target-to-target data paths used by AIS xactions (batch jobs).
+//
+// Target membership policy is owned by each specific xaction. A job
+// requires a stable target set iff it sets ConflictRebRes (refuse to
+// start during rebalance) or AbortByReb (abort if rebalance starts
+// mid-flight) - see xact/api_table.go. Jobs with neither flag tolerate
+// membership drift; jobs that don't use stream bundles are unaffected.
+//
+// Generally, AIS jobs fall into three broad groups:
+// - jobs that generate/place new objects and require a stable target set
+//   (prefetch, rebalance, copy/transform, create-bucket-inventory);
+// - jobs that do not generate objects and can tolerate membership drift
+//   (LRU eviction, space cleanup);
+// - jobs that create local derived state and may engage joined targets via
+//   xaction-level policy rather than bundle-level resync
+//   (rechunk, shard-index).
+//
+// The bundle itself records the Smap snapshot used to establish its streams:
+// caller-provided Extra.Smap, if present, or the current Smap otherwise.
+// Callers can use DM.Smap() to send control messages to the same peer set/epoch.
+//
+// ReopenPeerStream repairs connectivity to an existing peer in that epoch; it
+// does not add/remove peers.
+//
+// For the documented mechanism for xactions to express their membership policy
+// via static flags (ConflictRebRes, AbortByReb), see xact/api_table.go.
+
 type (
 	Streams struct {
-		client       transport.Client
-		smap         *meta.Smap // current Smap
-		smaplock     *sync.Mutex
-		streams      ratomic.Pointer[bundle] // stream bundle
-		trname       string
-		network      string
-		lid          string
-		extra        transport.Extra
-		rxNodeType   int // receiving nodes (currently, only core.Targets from the respective enum)
-		multiplier   int // optionally: multiple streams per destination (round-robin)
-		manualResync bool
+		client     transport.Client
+		smap       *meta.Smap              // assigned at sb.open() for the lifetime; used to build the bundle
+		streams    ratomic.Pointer[bundle] // stream bundle (CoW atomic by ReopenPeerStream)
+		trname     string
+		network    string
+		lid        string
+		extra      transport.Extra
+		multiplier int // optionally: multiple streams per destination (round-robin a.k.a. `robin`)
 	}
 
 	Args struct {
-		Extra        *transport.Extra // additional parameters
-		Net          string           // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
-		Trname       string           // transport endpoint name
-		Ntype        int              // core.Target (0) by default
-		ManualResync bool             // auto-resync by default
+		Extra  *transport.Extra // additional parameters
+		Net    string           // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
+		Trname string           // transport endpoint name
 	}
 
 	ErrDestinationMissing struct {
@@ -66,9 +89,6 @@ type (
 		smapStr   string
 	}
 )
-
-// interface guard
-var _ meta.Slistener = (*Streams)(nil)
 
 //
 // public
@@ -79,16 +99,12 @@ func (sb *Streams) Trname() string { return sb.trname }
 
 func New(cl transport.Client, args Args) (sb *Streams) {
 	if args.Net == "" {
-		args.Net = cmn.NetIntraData // intra-cluster default
+		args.Net = cmn.NetIntraData // default net
 	}
 	sb = &Streams{
-		smap:         &meta.Smap{}, // empty on purpose (see Resync)
-		smaplock:     &sync.Mutex{},
-		client:       cl,
-		network:      args.Net,
-		trname:       args.Trname,
-		rxNodeType:   core.Targets, // NOTE: currently, only target <=> target; other options easy to add if and when
-		manualResync: args.ManualResync,
+		client:  cl,
+		network: args.Net,
+		trname:  args.Trname,
 	}
 	sb.extra = *args.Extra
 	sb.multiplier = cos.NonZero(args.Extra.SbundleMult, int(1))
@@ -96,19 +112,12 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 		sb.extra.Config = cmn.GCO.Get()
 	}
 
-	// update streams when Smap changes
-	sb.smaplock.Lock()
-	sb.resync()
-	sb.smaplock.Unlock()
+	// open streams (or stream "robins") to all peer targets
+	sb.open()
 
 	sb.lid = sb._lid()
 	nlog.Infoln("open", sb.lid)
 
-	// for auto-resync, register this stream-bundle as Smap listener
-	if !sb.manualResync {
-		listeners := core.T.Sowner().Listeners()
-		listeners.Reg(sb)
-	}
 	return sb
 }
 
@@ -135,7 +144,7 @@ func (sb *Streams) _lid() string {
 	return s.String()
 }
 
-// Close closes all contained streams and unregisters the bundle from Smap listeners;
+// Close closes all contained streams;
 // graceful=true blocks until all pending objects get completed (for "completion", see transport/README.md)
 func (sb *Streams) Close(gracefully bool) {
 	if gracefully {
@@ -144,10 +153,6 @@ func (sb *Streams) Close(gracefully bool) {
 	} else {
 		nlog.Infoln("stop", sb.lid)
 		sb.apply(closeStop)
-	}
-	if !sb.manualResync {
-		listeners := core.T.Sowner().Listeners()
-		listeners.Unreg(sb)
 	}
 }
 
@@ -232,19 +237,7 @@ func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	}
 }
 
-func (sb *Streams) Smap() *meta.Smap { return sb.smap }
-
-// keep streams to => (clustered nodes as per rxNodeType) in sync at all times
-func (sb *Streams) ListenSmapChanged() {
-	smap := core.T.Sowner().Get()
-	if smap.Version <= sb.smap.Version {
-		return
-	}
-
-	sb.smaplock.Lock()
-	sb.resync()
-	sb.smaplock.Unlock()
-}
+func (sb *Streams) Smap() *meta.Smap { return sb.smap } // TODO -- FIXME: start using
 
 //
 // private methods
@@ -319,128 +312,68 @@ func (sb *Streams) apply(action int) {
 	wg.Wait()
 }
 
-// Resync streams asynchronously
-// is a slowpath; is called under lock; NOTE: calls stream.Stop()
-func (sb *Streams) resync() {
-	smap := core.T.Sowner().Get()
-	if smap.Version <= sb.smap.Version {
-		debug.Assertf(smap.Version == sb.smap.Version, "%s[%s]: %s vs %s", sb.trname, sb.lid, smap, sb.smap)
+// Open streams to all target peers from the given Smap.
+func (sb *Streams) open() {
+	smap := sb.extra.Smap
+	if smap == nil {
+		smap = core.T.Sowner().Get()
+	}
+	// drop the snapshot reference; bundle membership is fixed post-construction
+	sb.extra.Smap = nil
+
+	node := smap.GetNode(core.T.SID())
+	if node == nil {
+		debug.Assert(false, core.T.SID())
+		// keep the post-open invariant: sb.streams is non-nil
+		sb.streams.Store(&bundle{})
+		sb.smap = smap
 		return
 	}
+	core.T.Snode().Flags = node.Flags
 
-	var (
-		oldm []meta.NodeMap
-		newm []meta.NodeMap
-		node = smap.GetNode(core.T.SID()) // upd flags
-	)
+	// Xactions that use intra-cluster transport may increase burstiness for their own
+	// data movers by setting their XactConf.Burst (work channel cap). Stream bundles
+	// then derive a per-destination stream burst from XactConf.Burst and the
+	// number of active peers.
 	if sb.extra.XactBurst > 0 {
-		debug.Assert(sb.rxNodeType == core.Targets)
-		numPeers := smap.CountActiveTs() - 1
-		if numPeers > 0 {
-			// Xactions that use intra-cluster transport may increase burstiness for their own
-			// data movers by setting their XactConf.Burst (work channel cap). Stream bundles
-			// may then derive a per-destination stream burst from XactConf.Burst and the
-			// number of active peers.
+		if numPeers := smap.CountActiveTs() - 1; numPeers > 0 {
 			xburst := cos.DivRound(sb.extra.XactBurst, numPeers)
-			sb.extra.Burst = cos.ClampInt(xburst, max(sb.extra.Config.Transport.Burst, cmn.TransportBurstMin), cmn.TransportBurstMax)
+			sb.extra.Burst = cos.ClampInt(
+				xburst,
+				max(sb.extra.Config.Transport.Burst, cmn.TransportBurstMin),
+				cmn.TransportBurstMax,
+			)
 		}
 	}
 
-	switch sb.rxNodeType {
-	case core.Targets:
-		oldm = []meta.NodeMap{sb.smap.Tmap}
-		newm = []meta.NodeMap{smap.Tmap}
-	case core.Proxies:
-		oldm = []meta.NodeMap{sb.smap.Pmap}
-		newm = []meta.NodeMap{smap.Pmap}
-	case core.AllNodes:
-		oldm = []meta.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
-		newm = []meta.NodeMap{smap.Tmap, smap.Pmap}
-	default:
-		debug.Assert(false)
-	}
-	if node == nil {
-		// extremely unlikely
-		debug.Assert(false, core.T.SID())
-		newm = []meta.NodeMap{make(meta.NodeMap)}
-	} else {
-		core.T.Snode().Flags = node.Flags
-	}
-
-	added, removed := mdiff(oldm, newm)
-
-	obundle := sb.get()
-	l := len(added) - len(removed)
-	if obundle != nil {
-		l = max(len(obundle), len(obundle)+l)
-	}
-	nbundle := make(bundle, l)
-	maps.Copy(nbundle, obundle)
-
-	for id, si := range added {
-		if id == core.T.SID() {
-			continue
-		}
-		// not connecting to the peer that's in maintenance and already rebalanced-out
-		if si.InMaintPostReb() {
-			nlog.Infof("%s => %s[-/%s] per %s - skipping", sb, si.StringEx(), si.Fl2S(), smap)
-			continue
-		}
-
-		dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname) // direct destination URL
-		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
-		for k := range sb.multiplier {
-			ns := transport.NewObjStream(sb.client, dstURL, id /*dstID*/, &sb.extra)
-			nrobin.stsdest[k] = ns
-		}
-		nbundle[id] = nrobin
-	}
-	for id := range removed {
-		if id == core.T.SID() {
-			continue
-		}
-		orobin := nbundle[id]
-		for k := range sb.multiplier {
-			os := orobin.stsdest[k]
-			if !os.IsTerminated() {
-				os.Stop() // the node is gone but the stream appears to be still active - stop it
-			}
-		}
-		delete(nbundle, id)
-	}
+	nbundle := make(bundle, smap.CountActiveTs())
+	sb._open(nbundle, smap.Tmap, smap)
 
 	sb.streams.Store(&nbundle)
 	sb.smap = smap
 }
 
-// helper to find out NodeMap "delta" or "diff"
-func mdiff(oldMaps, newMaps []meta.NodeMap) (added, removed meta.NodeMap) {
-	for i, mold := range oldMaps {
-		mnew := newMaps[i]
-		for id, si := range mnew {
-			if _, ok := mold[id]; !ok {
-				if added == nil {
-					added = make(meta.NodeMap, max(len(mnew)-len(mold), 1))
-				}
-				added[id] = si
-			}
+func (sb *Streams) _open(nbundle bundle, nm meta.NodeMap, smap *meta.Smap) {
+	for id, si := range nm {
+		if id == core.T.SID() {
+			continue
 		}
-	}
-	for i, mold := range oldMaps {
-		mnew := newMaps[i]
-		for id, si := range mold {
-			if _, ok := mnew[id]; !ok {
-				if removed == nil {
-					removed = make(meta.NodeMap, 1)
-				}
-				removed[id] = si
-			}
+		// not connecting to the peer that's in maintenance _and_ already rebalanced-out
+		if si.InMaintPostReb() {
+			nlog.Infof("%s => %s[-/%s] per %s - skipping", sb, si.StringEx(), si.Fl2S(), smap)
+			continue
 		}
+
+		dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname)
+		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
+		for k := range sb.multiplier {
+			nrobin.stsdest[k] = transport.NewObjStream(sb.client, dstURL, id /*dstID*/, &sb.extra)
+		}
+		nbundle[id] = nrobin
 	}
-	return
 }
 
-// renew stream (or streams) to a given peer
+// renew stream (or streams) to a given peer in the same Smap "epoch"
 func (sb *Streams) ReopenPeerStream(dstID string) error {
 	// 1) validate
 	old := sb.get()

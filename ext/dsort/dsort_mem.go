@@ -211,7 +211,6 @@ func (ds *dsorterMem) start() error {
 	reqSbArgs := bundle.Args{
 		Net:    reqNetwork,
 		Trname: trname,
-		Ntype:  core.Targets,
 		Extra: &transport.Extra{
 			Config:      config,
 			SbundleMult: ds.m.Pars.SbundleMult,
@@ -225,7 +224,6 @@ func (ds *dsorterMem) start() error {
 	respSbArgs := bundle.Args{
 		Net:    respNetwork,
 		Trname: trname,
-		Ntype:  core.Targets,
 		Extra: &transport.Extra{
 			Compression: config.Dsort.Compression,
 			SbundleMult: ds.m.Pars.SbundleMult,

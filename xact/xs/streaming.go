@@ -102,7 +102,9 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 	return "", err
 }
 
-func (p *streamingF) newDM(trname string, recv transport.RecvObj, smap *meta.Smap, dmxtra bundle.Extra, owt cmn.OWT) error {
+func (p *streamingF) newDM(trname string, recv transport.RecvObj, dmxtra bundle.Extra, owt cmn.OWT) error {
+	smap := dmxtra.Smap
+	debug.Assert(smap != nil)
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
 		return err
 	}

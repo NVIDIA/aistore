@@ -39,6 +39,7 @@ type (
 		// extra
 		RecvAck    transport.RecvObj
 		Config     *cmn.Config
+		Smap       *meta.Smap // TODO -- FIXME: xactions to pass
 		SizePDU    int32
 		MaxHdrSize int32
 	}
@@ -251,6 +252,7 @@ func (dm *DM) Open() {
 	// data
 	extra := &transport.Extra{
 		Config:      dm.Config,
+		Smap:        dm.Extra.Smap,
 		Compression: dm.XactConf.Compression,
 		XactBurst:   dm.XactConf.Burst,
 		SbundleMult: dm.XactConf.SbundleMult,
@@ -258,10 +260,9 @@ func (dm *DM) Open() {
 		MaxHdrSize:  dm.MaxHdrSize,
 	}
 	dataArgs := Args{
-		Net:          dm.data.net,
-		Trname:       dm.data.trname,
-		Extra:        extra,
-		ManualResync: true,
+		Net:    dm.data.net,
+		Trname: dm.data.trname,
+		Extra:  extra,
 	}
 	dataArgs.Extra.Parent = dm.parent
 	dm.data.streams = New(dm.data.client, dataArgs)
@@ -269,10 +270,9 @@ func (dm *DM) Open() {
 	// acks back (optional)
 	if dm.useACKs() {
 		ackArgs := Args{
-			Net:          dm.ack.net,
-			Trname:       dm.ack.trname,
-			Extra:        &transport.Extra{Config: dm.Config},
-			ManualResync: true,
+			Net:    dm.ack.net,
+			Trname: dm.ack.trname,
+			Extra:  &transport.Extra{Config: dm.Config, Smap: dm.Extra.Smap},
 		}
 		ackArgs.Extra.Parent = dm.parent
 		dm.ack.streams = New(dm.ack.client, ackArgs)
@@ -280,6 +280,13 @@ func (dm *DM) Open() {
 
 	dm.stage.opened.Store(true)
 	nlog.Infoln(dm.String(), "is open")
+}
+
+// return the version of Smap used to establish this data mover's streams
+// (callers can use it to send xaction control messages to the same set of peers)
+func (dm *DM) Smap() *meta.Smap {
+	debug.Assert(dm.stage.opened.Load(), "must be open")
+	return dm.data.streams.Smap()
 }
 
 func (dm *DM) String() string {

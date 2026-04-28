@@ -57,7 +57,7 @@ A stream preserves ordering: the objects posted for sending will get *completed*
 | Term | Description | Example |
 |--- | --- | ---|
 | Stream | A peer-to-peer flow over HTTP where a single HTTP request (and, therefore, a single TCP session) is used to transfer multiple objects | `transport.NewStream(client, "http://example.com", nil)` - creates a stream between the local client and the `example.com` host |
-| Stream bundle | Multiple streams (see previous) aggregating completions and preserving FIFO ordering; note that the number of streams in a _bundle_ is configurable - see `bundle_multiplier` | `transport.NewStreamBundle(smap, si, client, transport.SBArgs{Network: transport.cmn.NetworkPublic, Trname: "path-name", Extra: &extra, Ntype: cluster.Targets, ManualResync: false, Multiplier: 4})` |
+| Stream bundle | Multiple streams (see previous) aggregating completions and preserving FIFO ordering; note that the number of streams in a _bundle_ is configurable - see `bundle_multiplier` | `transport.NewStreamBundle(smap, si, client, transport.SBArgs{Network: transport.cmn.NetworkPublic, Trname: "path-name", Extra: &extra, Ntype: cluster.Targets, Multiplier: 4})` |
 | Object | Any [io.ReadCloser](https://golang.org/pkg/io/#ReadCloser) that is accompanied by a transport header that specifies, in part, the object's size and the object's (bucket, name) at the destination | `transport.Header{"abc", "X", nil, 1024*1024}` - specifies a 1MB object that will be named `abc/X` at the destination |
 | Object Attributes | Objects are often associated with their attributes like size, access time, checksum and version. When sending the object it is often necessary to also send these attributes with the object so the receiver can update the object metadata. | `transport.ObjectAttrs{Atime: time.Now(), Size: 13, CksumType: "xxhash", Chksum: "s0m3ck5um", Version: "2"}`
 | Object Header | A `transport.Header` structure that, in addition to bucket name, object name, and object size, carries an arbitrary (*opaque*) sequence of bytes that, for instance, may be a JSON message or anything else. | `transport.Header{"abracadabra", "p/q/s", false, []byte{'1', '2', '3'}, transport.ObjectAttrs{Size: 13}}` - describes a 13-byte object that, in the example, has some application-specific and non-nil *opaque* field in the header |
@@ -207,7 +207,6 @@ sbArgs := &SBArgs{
   Trname	string,		// transport endpoint name
   Extra		*Extra, // additional stream control parameters
   Ntype 	int,		// destination type: all targets, ..., all nodes
-  ManualResync bool,		// if false, establishes/removes connections with new/old nodes when new smap is received
   Multiplier int,		// number of streams per destination, with subsequent round-robin selection
 }
 

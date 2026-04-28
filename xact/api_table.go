@@ -55,6 +55,13 @@ import (
 // Rebalance=true and Resilver=true mark the xactions that ARE the rebalance/resilver
 // themselves (plus ActMoveBck which performs a rebalance-like move). They are informational
 // and used by xreg to recognize self-conflicts.
+//
+// Stable Target Set
+// ----------------------------
+// A job requires a stable target set iff it sets ConflictRebRes (refuse to
+// start during rebalance) or AbortByReb (abort if rebalance starts mid-flight).
+// Xactions that open intra-cluster peer-to-peer streams generally pin those
+// streams to the Smap snapshot selected at construction; see transport/bundle.
 
 const (
 	ScopeG  = iota + 1 // cluster

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -70,6 +71,7 @@ type (
 	Extra struct {
 		Parent       *Parent
 		Config       *cmn.Config   // (to optimize-out GCO.Get())
+		Smap         *meta.Smap    // (e.g., when caller already has the current Smap and used it to make decisions)
 		Compression  string        // see CompressAlways, etc. enum
 		XactBurst    int           // parent xaction work chan cap (optional)
 		Burst        int           // this stream's burst capacity (may indirectly relate to the above)

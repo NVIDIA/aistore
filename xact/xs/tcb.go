@@ -138,7 +138,7 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	if kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
 	}
-	if err := r.newDM(sizePDU); err != nil {
+	if err := r.newDM(sizePDU, smap); err != nil {
 		return nil, err
 	}
 
@@ -165,12 +165,13 @@ func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactTCB copies one bucket _into_ another with or without transformation
 /////////////
 
-func (r *XactTCB) newDM(sizePDU int32) error {
+func (r *XactTCB) newDM(sizePDU int32, smap *meta.Smap) error {
 	const trname = "tcb-"
 	config := r.BckJog.Config
 	extra := bundle.Extra{
 		RecvAck:  nil, // no ACKs
 		Config:   config,
+		Smap:     smap,
 		XactConf: config.TCB.XactConf,
 		SizePDU:  sizePDU,
 	}

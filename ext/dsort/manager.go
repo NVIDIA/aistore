@@ -257,7 +257,6 @@ func (m *Manager) initStreams() error {
 	shardsSbArgs := bundle.Args{
 		Net:    respNetwork,
 		Trname: trname,
-		Ntype:  core.Targets,
 		Extra: &transport.Extra{
 			Compression: config.Dsort.Compression,
 			Config:      config,

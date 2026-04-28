@@ -427,9 +427,10 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 		extra := bundle.Extra{
 			RecvAck:  reb.recvAckNtfn,
 			Config:   rargs.config,
+			Smap:     rargs.smap,
 			XactConf: rargs.config.Rebalance.XactConf,
 		}
-		if dm := reb.dm.Renew(trname, reb.recvObj, cmn.OwtRebalance, extra); dm != nil {
+		if dm := reb.dm.Renew(trname, reb.recvObj, cmn.OwtRebalance, extra); dm != nil { // TODO -- FIXME: try to get rid of it
 			reb.dm = dm
 		}
 		if err := reb.beginStreams(rargs); err != nil {

@@ -145,10 +145,11 @@ func (p *tcoFactory) Start() error {
 		extra := bundle.Extra{
 			RecvAck:  nil, // no ACKs
 			Config:   r.config,
+			Smap:     smap,
 			XactConf: config.TCO.XactConf,
 			SizePDU:  sizePDU,
 		}
-		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, smap, extra, r.owt); err != nil {
+		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, extra, r.owt); err != nil {
 			return err
 		}
 	}
