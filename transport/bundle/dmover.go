@@ -115,59 +115,8 @@ func (dm *DM) xctn() core.Xact {
 	return dm.parent.Xact
 }
 
-// when config changes
-func (dm *DM) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DM {
-	debug.Assert(owt == dm.owt)
-
-	// always refresh
-	dm.Config = extra.Config
-
-	if extra.Compression == "" {
-		extra.Compression = apc.CompressNever
-	}
-	if dm.XactConf == extra.XactConf && dm.SizePDU == extra.SizePDU && dm.MaxHdrSize == extra.MaxHdrSize {
-		return nil
-	}
-
-	// avoid identity swap
-	if !dm.IsFree() {
-		nlog.Warningln("cannot update", dm.String(), "config => [", extra.XactConf, "] - reg/unreg in progress")
-		return nil
-	}
-
-	nlog.Infoln("renew DM:", dm.String(), "=> [", extra.XactConf, "]")
-	return NewDM(trname, recvCB, owt, extra)
-}
-
 // RegRecv: register user's receive-data (and, optionally, receive-ack) wrappers.
-//
-// force=true: if a stale handler exists for this DM's trname, remove it (under mutex)
-// and retry once.
-// Callers may set force only when they own the trname exclusively across the lifetime
-// of the process - i.e., when the trname is a package-level constant used by a single
-// DM-owning subsystem (e.g., "reb"). In that case a duplicate entry can only be a
-// leftover from a prior life of the same DM, and clearing it is safe.
-//
-// Callers that have dynamic or shared `trname` must not use force.
-
-func (dm *DM) _force(err error, trname string, rxCb transport.RecvObj, force bool) error {
-	debug.Assert(transport.IsErrDuplicateTrname(err), dm.String(), ": ", err) // the only reason for transport.Handle to fail
-	if !force || !transport.IsErrDuplicateTrname(err) {
-		return err
-	}
-	debug.Assert(!dm.stage.opened.Load())
-
-	nlog.WarningDepth(1, "force-reclaim stale transport handler:", trname, dm.String())
-
-	if nerr := transport.Unhandle(trname); nerr != nil && !transport.IsErrAlreadyRemovedTrname(nerr) {
-		nlog.Errorln("FATAL:", err, "[ nested:", nerr, dm.String(), "]")
-		debug.AssertNoErr(nerr)
-		return err
-	}
-	return transport.Handle(trname, rxCb)
-}
-
-func (dm *DM) RegRecv(force bool) error {
+func (dm *DM) RegRecv() error {
 	dm.stage.regmtx.Lock()
 	defer dm.stage.regmtx.Unlock()
 
@@ -175,20 +124,16 @@ func (dm *DM) RegRecv(force bool) error {
 		return errors.New("duplicated reg: " + dm.String())
 	}
 	if err := transport.Handle(dm.data.trname, dm.wrapRecvData); err != nil {
-		if err = dm._force(err, dm.data.trname, dm.wrapRecvData, force); err != nil {
-			return err
-		}
+		return err
 	}
 
 	if dm.useACKs() {
 		if err := transport.Handle(dm.ack.trname, dm.wrapRecvACK); err != nil {
-			if err = dm._force(err, dm.ack.trname, dm.wrapRecvACK, force); err != nil {
-				if nerr := transport.Unhandle(dm.data.trname); nerr != nil {
-					nlog.Errorln("FATAL:", err, "[ nested:", nerr, dm.String(), "]")
-					debug.AssertNoErr(nerr)
-				}
-				return err
+			if nerr := transport.Unhandle(dm.data.trname); nerr != nil {
+				nlog.Errorln("FATAL:", err, "[ nested:", nerr, dm.String(), "]")
+				debug.AssertNoErr(nerr)
 			}
+			return err
 		}
 	}
 
@@ -243,9 +188,9 @@ func (dm *DM) UnregRecv() {
 	dm.stage.unregg.Store(false)
 }
 
-// `dm.stage.opened` is bracketed inside `regged` - is therefore included
-func (dm *DM) IsFree() bool {
-	return !dm.stage.regged.Load() && !dm.stage.unregg.Load()
+// `dm.stage.opened` is bracketed inside `regged`
+func (dm *DM) IsOpen() bool {
+	return dm.stage.opened.Load()
 }
 
 func (dm *DM) Open() {

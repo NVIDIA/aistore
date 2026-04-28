@@ -210,7 +210,7 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 	}
 	p.dm = bundle.NewDM(trname, r.recv, cmn.OwtPut, extra)
 
-	if err := p.dm.RegRecv(false /*force*/); err != nil {
+	if err := p.dm.RegRecv(); err != nil {
 		if p.msg.ContinuationToken != "" {
 			err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", core.T,
 				p.msg.UUID, p.msg.ContinuationToken, err)
