@@ -6,7 +6,6 @@
 package sys
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 
@@ -53,7 +52,7 @@ func Init(forceCont bool) string {
 	if contDetected = detect(); contDetected || forceCont {
 		initCgroupV2Paths() // resolve v2 base (noop on v1/bare-metal)
 		if err := gcpu.setNumCgroup(); err != nil {
-			fmt.Fprintln(os.Stderr, err) // (cannot nlog yet)
+			nlog.Warningln(err)
 		}
 	}
 

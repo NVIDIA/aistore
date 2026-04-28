@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/sys"
 
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
@@ -92,8 +91,6 @@ func Run(version, buildtime string, args []string) error {
 	a.init(version, emptyCmdline)
 
 	teb.Init(os.Stdout, gcfg.NoColor)
-
-	sys.Init(false) // (container)
 
 	// run
 	if err := a.runOnce(args); err != nil {

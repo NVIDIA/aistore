@@ -148,7 +148,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		cos.ExitLogf(erfm, "local-config")
 	}
 
-	// config
+	// config; once loaded can use nlog
 	config = &cmn.Config{}
 	if err := cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config); err != nil {
 		cos.ExitLog(err)
