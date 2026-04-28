@@ -147,9 +147,10 @@ func (csm *contentSpecMgr) Gen(objName, cttype string, bck *cmn.Bck, mi *Mountpa
 		oname = ShortenFntl(objName)
 	}
 
-	// new (and unique) base
 	ubase := cr.makeUbase(oname, extras...)
-	debug.Assertf(!IsFntl(ubase), "ubase too long [%q (%q, %q) %v]", cttype, oname, objName, extras) // (unlikely)
+	if IsFntl(ubase) {
+		ubase = ShortenFntl(ubase)
+	}
 
 	return mi.MakePathFQN(bck, cttype, ubase)
 }

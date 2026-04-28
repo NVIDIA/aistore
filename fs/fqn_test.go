@@ -6,6 +6,7 @@ package fs_test
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -382,6 +383,91 @@ func TestMakeAndParseFQN(t *testing.T) {
 			}
 			if gotObjName != tt.objName {
 				t.Errorf("gotObjName = %v, want %v", gotObjName, tt.objName)
+			}
+		})
+	}
+}
+
+// Borderline obj names produce workfile basenames that overflow NAME_MAX
+// once <tag>.<obj>.<tie>.<pid> decoration is added; verify CSM.Gen catches
+// this and returns a basename within the per-component filesystem limit.
+func TestWorkfileFntlBorderline(t *testing.T) {
+	tmpMpath := t.TempDir()
+
+	mios := mock.NewIOS()
+	fs.TestNew(mios)
+	_, err := fs.Add(tmpMpath, "daeID")
+	tassert.CheckFatal(t, err)
+
+	mpaths := fs.GetAvail()
+	mi := mpaths[tmpMpath]
+	bck := &cmn.Bck{Name: "bucket", Provider: apc.AIS, Ns: cmn.NsGlobal}
+
+	tests := []struct {
+		name    string
+		objName string
+	}{
+		{"short obj name", "obj.bin"},
+		{"borderline obj name (252B)", strings.Repeat("a", 252)},
+		{"already-too-long obj name (300B)", strings.Repeat("b", 300)},
+		{"extremely long obj name (4096B)", strings.Repeat("c", 4096)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fqn := fs.CSM.Gen(tc.objName, fs.WorkCT, bck, mi, fs.WorkfileColdget)
+			base := filepath.Base(fqn)
+			if len(base) > 255 {
+				t.Fatalf("workfile basename %d > NAME_MAX: %q", len(base), base)
+			}
+		})
+	}
+}
+
+func TestObjCTDeepPath(t *testing.T) {
+	tmpMpath := t.TempDir()
+
+	mios := mock.NewIOS()
+	fs.TestNew(mios)
+	_, err := fs.Add(tmpMpath, "daeID")
+	tassert.CheckFatal(t, err)
+
+	mpaths := fs.GetAvail()
+	mi := mpaths[tmpMpath]
+	bck := &cmn.Bck{Name: "bucket", Provider: apc.AIS, Ns: cmn.NsGlobal}
+
+	tests := []struct {
+		name        string
+		objName     string
+		expectFntl  bool // true = expect basename to be the .x<sha> hash form
+		expectRound bool // true = expect ParseFQN to recover the original obj name
+	}{
+		{"flat short obj", "obj.bin", false, true},
+		{"deep dir, short base, total=308B", strings.Repeat("p/", 150) + "file.bin", false, true},
+		{"flat 252B obj (under NAME_MAX)", strings.Repeat("a", 252), false, true},
+		{"flat 300B obj (over NAME_MAX)", strings.Repeat("b", 300), true, false},
+		{"deep dir totaling >PATH_MAX budget", strings.Repeat("p/", 1700) + "file.bin", true, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fqn := fs.CSM.Gen(tc.objName, fs.ObjCT, bck, mi, "")
+			base := filepath.Base(fqn)
+			if len(base) > 255 {
+				t.Fatalf("obj basename %d > NAME_MAX: %q", len(base), base)
+			}
+
+			isHashed := fs.HasPrefixFntl(base)
+			if isHashed != tc.expectFntl {
+				t.Fatalf("expectFntl=%v, got hashed=%v (basename=%q)", tc.expectFntl, isHashed, base)
+			}
+
+			var parsed fs.ParsedFQN
+			if err := parsed.Init(fqn); err != nil {
+				t.Fatalf("ParseFQN: %v", err)
+			}
+			roundtrips := parsed.ObjName == tc.objName
+			if roundtrips != tc.expectRound {
+				t.Fatalf("expectRound=%v, got roundtrip=%v (parsed=%d bytes)",
+					tc.expectRound, roundtrips, len(parsed.ObjName))
 			}
 		})
 	}
