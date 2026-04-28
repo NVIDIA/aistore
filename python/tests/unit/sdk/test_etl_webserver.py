@@ -8,6 +8,7 @@ from urllib.parse import quote as url_quote
 from unittest import mock
 from unittest.mock import MagicMock, patch, AsyncMock
 
+import anyio
 import requests
 import httpx
 from fastapi.testclient import TestClient
@@ -29,7 +30,10 @@ from aistore.sdk.etl.webserver.base_etl_server import (
 from aistore.sdk.errors import ETLDirectPutTransientError
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
-from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
+from aistore.sdk.etl.webserver.fastapi_server import (
+    FastAPIServer,
+    _RequestStreamReader,
+)
 
 
 class DummyHTTPETLServer(HTTPMultiThreadedServer):
@@ -1027,8 +1031,6 @@ class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_put(self):
-        # TODO: non-FQN PUT body is still buffered; "streaming PUT" refers to the
-        # transform_stream path, not request-body streaming.
         input_content = b"input data"
         response = self.client.put("/test/object", content=input_content)
         self.assertEqual(response.status_code, 200)
@@ -1196,12 +1198,143 @@ class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_put_no_pipeline_round_trip(self):
         """Non-pipeline streaming PUT round-trips correctly."""
-        # TODO: non-FQN PUT body is still buffered; "streaming PUT" refers to the
-        # transform_stream path, not request-body streaming.
         input_content = b"streaming put no-pipeline"
         resp = self.client.put("/test/object", content=input_content)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.content, input_content[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_put_chunked_round_trip(self):
+        """Multi-chunk PUT round-trips through transform_stream byte-exact."""
+        input_content = (
+            b"abcdefghij" * 4096
+        )  # ~40 KB to span Starlette chunk boundaries
+        resp = self.client.put("/test/object", content=input_content)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content, input_content[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_put_with_direct_put_consumes_request_stream(self):
+        """Streaming no-FQN PUT + direct-put: real `_RequestStreamReader` bytes
+        must reach the next-stage httpx PUT body.
+
+        Pins the combo (real reader × direct-put × httpx body iteration)
+        end-to-end: no `_get_stream_reader` patching, so `_RequestStreamReader`
+        is actually iterated by `iterate_in_threadpool` while the body is
+        consumed from `httpx.AsyncClient.put(content=...)`.
+        """
+        input_content = b"abcdefghij" * 4096  # ~40 KB to span chunk boundaries
+        expected = input_content[::-1]  # DummyStreamingFastAPIServer reverses
+
+        received = bytearray()
+
+        async def fake_put(_url, *, content=None, headers=None):  # noqa: ARG001
+            async for chunk in content:
+                received.extend(chunk)
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.content = b""
+            return mock_resp
+
+        self.etl_server.client = AsyncMock()
+        self.etl_server.client.put.side_effect = fake_put
+
+        direct_put_url = "http://next-stage/ais/@/dst/test/object"
+        response = self.client.put(
+            "/test/object",
+            content=input_content,
+            headers={HEADER_NODE_URL: direct_put_url},
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.content, b"")
+        self.assertEqual(
+            response.headers.get(HEADER_DIRECT_PUT_LENGTH), str(len(expected))
+        )
+        self.assertEqual(bytes(received), expected)
+        self.etl_server.client.put.assert_awaited_once()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_put_reader_does_not_buffer_request_body(self):
+        """Streaming no-FQN PUT must not call request.body() (buffering path)."""
+        req = MagicMock()
+        req.body = AsyncMock(return_value=b"")
+
+        async def _stream():
+            yield b"chunk-1"
+            yield b"chunk-2"
+
+        req.stream.return_value = _stream()
+
+        srv = self.etl_server
+        reader = await srv._get_stream_reader(  # pylint: disable=protected-access
+            fqn="", path="bucket/obj", request=req, is_get=False
+        )
+        self.assertIsInstance(reader, _RequestStreamReader)
+        req.body.assert_not_called()
+        self.assertTrue(hasattr(reader, "read"))
+        self.assertTrue(hasattr(reader, "close"))
+
+    @staticmethod
+    def _make_streaming_request(*chunks: bytes) -> MagicMock:
+        """Fake Request whose stream() yields the given chunks."""
+        req = MagicMock()
+        req.body = AsyncMock(return_value=b"".join(chunks))
+
+        async def _stream():
+            for chunk in chunks:
+                yield chunk
+
+        req.stream.return_value = _stream()
+        return req
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_request_stream_reader_full_read(self):
+        """read() with no size returns the concatenation of all chunks."""
+        req = self._make_streaming_request(b"abc", b"def", b"ghi")
+        reader = _RequestStreamReader(req)
+        # read() uses anyio.from_thread.run, which requires the call to
+        # come from an anyio-spawned worker thread.
+        result = await anyio.to_thread.run_sync(reader.read)
+        self.assertEqual(result, b"abcdefghi")
+        result_eof = await anyio.to_thread.run_sync(reader.read)
+        self.assertEqual(result_eof, b"")
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_request_stream_reader_partial_read_across_chunks(self):
+        """read(n) slices across chunk boundaries with leftover preserved."""
+        req = self._make_streaming_request(b"abc", b"de", b"fghij")
+        reader = _RequestStreamReader(req)
+
+        def _consume():
+            return [reader.read(2), reader.read(4), reader.read(3), reader.read(99)]
+
+        parts = await anyio.to_thread.run_sync(_consume)
+        self.assertEqual(parts, [b"ab", b"cdef", b"ghi", b"j"])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_request_stream_reader_propagates_stream_error(self):
+        """An exception from request.stream() surfaces from read()."""
+        req = MagicMock()
+
+        async def _stream():
+            yield b"first"
+            raise RuntimeError("client disconnect mid-stream")
+
+        req.stream.return_value = _stream()
+        reader = _RequestStreamReader(req)
+
+        def _consume_until_error():
+            first = reader.read(5)
+            try:
+                reader.read()
+            except RuntimeError as exc:
+                return first, str(exc)
+            return first, None
+
+        first, err = await anyio.to_thread.run_sync(_consume_until_error)
+        self.assertEqual(first, b"first")
+        self.assertEqual(err, "client disconnect mid-stream")
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_websocket_raises_for_streaming_server(self):
@@ -1422,12 +1555,26 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         resp.headers = {}
         return resp
 
-    async def _call(self, req, retries=None):
+    async def _call(self, req, retries=None, is_get=True, fqn=""):
+        # Default is_get=True keeps the source replayable so the retry
+        # mechanism is exercised. Use is_get=False, fqn="" for the
+        # streaming no-FQN PUT path (one-shot, retries skipped).
+        # _get_stream_reader is patched to a fake to avoid real I/O —
+        # these tests cover the retry loop, not the reader source.
         if retries is not None:
             self.server.direct_put_retries = retries
-        return await self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
-            "", "test/obj", req, False, "", self._DIRECT_PUT_URL, ""
-        )
+
+        async def _fake_get_reader(*_args, **_kwargs):
+            reader = MagicMock()
+            reader.read.return_value = b"data"
+            return reader
+
+        with patch.object(
+            self.server, "_get_stream_reader", side_effect=_fake_get_reader
+        ):
+            return await self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+                fqn, "test/obj", req, is_get, "", self._DIRECT_PUT_URL, ""
+            )
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_succeeds_on_first_attempt(self):
@@ -1502,7 +1649,8 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
 
         with patch("asyncio.sleep", new_callable=AsyncMock):
             with patch.object(self.server, "_get_stream_reader", side_effect=tracking):
-                # is_get=True → non-replayable, reader reopened on each retry
+                # is_get=True → replayable (re-issue upstream GET), reader
+                # reopened on each retry
                 await self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
                     "",
                     "test/obj",
@@ -1565,6 +1713,63 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
 
         delays = [call.args[0] for call in mock_sleep.call_args_list]
         self.assertEqual(delays, [1.0, 2.0, 4.0])  # 2**0, 2**1, 2**2
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_no_fqn_put_skips_local_retries(self):
+        """Streaming no-FQN PUT is one-shot: no local retry; AIS retries the PUT.
+
+        request.stream() cannot be replayed, so the retry loop must run exactly
+        once and surface ETLDirectPutTransientError on the first transient
+        failure (regardless of direct_put_retries).
+        """
+        self.server.client.put.side_effect = httpx.ReadError("dropped")
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with self.assertRaises(ETLDirectPutTransientError):
+                await self._call(self._make_request(), retries=3, is_get=False, fqn="")
+
+        self.assertEqual(self.server.client.put.await_count, 1)
+        mock_sleep.assert_not_called()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_fqn_put_still_retries(self):
+        """FQN-backed PUT is replayable (file can be reopened); retries proceed."""
+        self.server.direct_put_retries = 3
+        call_count = 0
+
+        async def mock_put(*_, **__):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise httpx.ReadError("dropped")
+            return self._ok_response()
+
+        self.server.client.put.side_effect = mock_put
+
+        get_reader_calls = []
+
+        async def tracking(*_args, **_kwargs):
+            reader = MagicMock()
+            reader.read.return_value = b"data"
+            get_reader_calls.append(reader)
+            return reader
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with patch.object(self.server, "_get_stream_reader", side_effect=tracking):
+                # Bypass _call (which patches _get_stream_reader itself) so
+                # this test's tracking patch wins.
+                result = await self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+                    "/tmp/some/file",
+                    "test/obj",
+                    self._make_request(),
+                    False,
+                    "",
+                    self._DIRECT_PUT_URL,
+                    "",
+                )
+
+        self.assertEqual(result[0], 204)
+        # initial + 2 retries = 3 readers opened
+        self.assertEqual(len(get_reader_calls), 3)
 
 
 # ---------------------------------------------------------------------------
