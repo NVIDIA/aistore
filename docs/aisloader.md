@@ -80,10 +80,11 @@ For the most recently updated command-line options and examples, please run `ais
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
 | -arch.format | `string` | Archive format (`.tar`, `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`) | `.tar` |
+| -arch.list | `bool` | Treat the bucket as archive-aware on listing/GET (enumerate inner files; enables archpath-selective GetBatch). Required for read-only archpath workloads (`-pctput=0`) | `false` |
 | -arch.minsize | `string` | Minimum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
 | -arch.maxsize | `string` | Maximum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
 | -arch.num-files | `int` | Number of archived files per shard (PUT only; 0 = auto-computed from file sizes) | `0` |
-| -arch.pct | `int` | Percentage of PUTs that create shards (0-100); does NOT affect GET operations | `0` |
+| -arch.pct | `int` | Percentage of PUTs that create shards (0-100). For pure-read archpath workloads, set `-arch.list` instead | `0` |
 | -arch.prefix | `string` | Optional prefix inside archive (e.g., `trunk-` or `a/b/c/trunk-`) | `""` |
 | -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
 | -bucket | `string` | Bucket name or bucket URI. If empty, aisloader generates a new random bucket name | `""` |
@@ -205,11 +206,12 @@ For the most recently updated command-line options and examples, please run `ais
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
 | -arch.format | `string` | Archive format (`.tar`, `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`) | `.tar` |
+| -arch.list | `bool` | Treat the bucket as archive-aware on listing/GET (enumerate inner files; enables archpath-selective GetBatch). Required for read-only archpath workloads (`-pctput=0`) | `false` |
 | -arch.prefix | `string` | Optional prefix inside archive (e.g., `trunk-` or `a/b/c/trunk-`) | `""` |
 | -arch.num-files | `int` | Number of archived files per shard (PUT only; 0 = auto-computed from file sizes) | `0` |
 | -arch.minsize | `string` | Minimum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
 | -arch.maxsize | `string` | Maximum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
-| -arch.pct | `int` | Percentage of PUTs that create shards (0-100); does NOT affect GET operations | `0` |
+| -arch.pct | `int` | Percentage of PUTs that create shards (0-100). For pure-read archpath workloads, set `-arch.list` instead | `0` |
 
 #### Object Naming Strategy (`namingParams`)
 
@@ -451,16 +453,19 @@ AISLoader can benchmark both **archive creation (PUT)** and **reading individual
 
 | Parameter | Description |
 |----------|-------------|
-| `-arch.pct` | Percentage of PUTs that create shards (0–100). Does **not** affect GET operations. `100` = all PUTs create shards; `30` = 30% shards, 70% plain objects. |
+| `-arch.pct` | Percentage of PUTs that create shards (0–100). `100` = all PUTs create shards; `30` = 30% shards, 70% plain objects. For pure-read archpath workloads (`-pctput=0`), set `-arch.list` instead. |
+| `-arch.list` | Treat the bucket as archive-aware on listing/GET. Enables archpath-selective GetBatch reads. Required for read-only archpath workloads. |
 | `-arch.format` | Archive format: `.tar` (default), `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`. |
 | `-arch.num-files` | Files per shard for PUT. `0` = auto-computed from `arch.minsize` / `arch.maxsize`. |
 | `-arch.minsize` | Minimum size of files inside shards (supports multiplicative suffixes). |
 | `-arch.maxsize` | Maximum size of files inside shards (supports multiplicative suffixes). |
 
-When the bucket contains shards, aisloader automatically:
-1. Lists objects with archive expansion enabled
+When `-arch.pct > 0` (PUT workloads that create shards) or `-arch.list` is set (read workloads), aisloader:
+1. Lists objects with archive expansion enabled (`LsArchDir`)
 2. Detects archived files (e.g., `shard-987.tar/file-042.bin`)
-3. Reads from them using the `?archpath=` API parameter
+3. Reads from them using the `?archpath=` API parameter / `MossIn.ArchPath` for GetBatch
+
+Without either flag, an archive bucket is treated as a flat object store — GETs and GetBatch fetch whole shards, not inner files.
 
 The displayed statistics will show whether objects are plain or archived, e.g.:
 
@@ -490,13 +495,15 @@ $ aisloader -bucket=ais://abc -pctput=100 -arch.pct=30 \
 
 30% of PUT operations create shards; the rest create plain objects.
 
-#### **Read from existing shards**
+#### **Read from existing shards (archpath-aware)**
 
 ```console
-$ aisloader -bucket=ais://abc -pctput=0 -duration=1h -cleanup=false
+$ aisloader -bucket=ais://abc -pctput=0 -arch.list -duration=1h -cleanup=false
 ```
 
-When the target bucket contains shards, aisloader automatically:
+`-arch.list` is required for read-only archpath workloads — without it, listing returns shard names only and GET / GetBatch fetch whole shards.
+
+With `-arch.list` set, aisloader:
 
 1. Lists objects with archive expansion enabled
 2. Identifies archived files (e.g., `photos.tar/00042.jpg`)

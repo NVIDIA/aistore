@@ -90,7 +90,8 @@ type (
 		minSz int64
 		maxSz int64
 
-		pct int // broadly: percentage of archive workload (affects both reading and writing when positive)
+		pct  int  // PUT: percentage of PUTs that create shards (0-100)
+		list bool // GET: list/read the bucket as archive-aware (enables archpath selection)
 	}
 
 	// Object naming strategy and distribution
@@ -244,7 +245,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.IntVar(&p.archParams.numFiles, "arch.num-files", 0, "number of archived files per shard (PUT only; default gets computed from sizes)")
 	f.StringVar(&p.archParams.minSzStr, "arch.minsize", "", "minimum file size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.archParams.maxSzStr, "arch.maxsize", "", "maximum file size (with or without multiplicative suffix K, MB, GiB, etc.)")
-	f.IntVar(&p.archParams.pct, "arch.pct", 0, "percentage of PUTs that create shards (0-100); does _not_ affect GET operations")
+	f.IntVar(&p.archParams.pct, "arch.pct", 0, "percentage of PUTs that create shards (0-100). For pure-read archpath workloads use -arch.list instead")
+	f.BoolVar(&p.archParams.list, "arch.list", false, "treat the bucket as archive-aware on listing/GET: enumerate inner files and drive archpath-selective GetBatch reads. Required for read-only archpath benchmarks (-pctput=0)")
 
 	// ============ Naming ============
 	f.StringVar(&p.subDir, "subdir", "", "For GET requests, '-subdir' is a prefix that may or may not be an actual _virtual directory_;\n"+

@@ -626,7 +626,10 @@ func listObjectNames(p *params) (names []string, fcnt int /*num archived files*/
 		msg.Flags |= apc.LsNoDirs // aisloader's default (to override, use --list-dirs)
 	}
 	args := api.ListArgs{Callback: listObjCallback, CallAfter: longListTime}
-	if p.archParams.pct > 0 {
+	// Enable archive-aware listing when either:
+	//   - producing shards in this run (-arch.pct > 0), or
+	//   - explicitly requested for read paths (-arch.list).
+	if p.archParams.pct > 0 || p.archParams.list {
 		msg.Flags |= apc.LsArchDir
 	}
 
