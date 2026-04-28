@@ -1311,6 +1311,84 @@ class TestStreamingHTTPServer(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# HTTP streaming lifecycle: connection release, status forwarding, 502 mapping
+# ---------------------------------------------------------------------------
+
+
+class TestHTTPStreamingLifecycle(unittest.TestCase):
+    """Tests for the response-lifecycle correctness fixes in HTTPMultiThreadedServer."""
+
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+
+    def _make_streaming_handler(self):
+        handler = DummyRequestHandler()
+        handler.server.etl_server.use_streaming = True
+        handler.server.etl_server.transform_stream.return_value = iter([b"TRANSFORMED"])
+        handler.server.etl_server.close_reader = MagicMock()
+        return handler
+
+    def _make_ok_resp(self, body=b"data"):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.raw = io.BytesIO(body)
+        return mock_resp
+
+    def test_reader_close_releases_pool_connection(self):
+        """close() on the reader from _get_stream_reader calls resp.close(), not just raw.close()."""
+        handler = DummyRequestHandler()
+        mock_resp = self._make_ok_resp()
+        handler.server.etl_server.session.get.return_value = mock_resp
+
+        reader = handler._get_stream_reader(  # pylint: disable=protected-access
+            fqn="", raw_path="/some/key", is_get=True
+        )
+        reader.close()
+        mock_resp.close.assert_called_once()
+
+    def test_upstream_non200_status_forwarded(self):
+        """Non-200 upstream responses propagate the exact status code (not collapsed to 502)."""
+        handler = self._make_streaming_handler()
+        handler.path = "/test/object"
+        mock_resp = MagicMock()
+        mock_http_error = requests.HTTPError(response=MagicMock(status_code=404))
+        mock_resp.raise_for_status.side_effect = mock_http_error
+        handler.server.etl_server.session.get.return_value = mock_resp
+
+        handler.do_GET()
+
+        handler.send_error.assert_called_once()
+        self.assertEqual(handler.send_error.call_args[0][0], 404)
+
+    def test_network_error_returns_502(self):
+        """requests.RequestException (network failure) maps to 502, not 500."""
+        handler = self._make_streaming_handler()
+        handler.path = "/test/object"
+        handler.server.etl_server.session.get.side_effect = requests.ConnectionError(
+            "connection refused"
+        )
+
+        handler.do_GET()
+
+        handler.send_error.assert_called_once()
+        self.assertEqual(handler.send_error.call_args[0][0], 502)
+
+    def test_client_disconnect_mid_stream_releases_connection(self):
+        """BrokenPipeError mid-stream still calls close_reader via the finally block."""
+        handler = self._make_streaming_handler()
+        handler.path = "/test/object"
+        mock_resp = self._make_ok_resp()
+        handler.server.etl_server.session.get.return_value = mock_resp
+        handler.server.etl_server.transform_stream.return_value = iter([b"chunk"])
+        handler.wfile = MagicMock()
+        handler.wfile.write.side_effect = BrokenPipeError("client disconnected")
+
+        handler.do_GET()
+
+        handler.server.etl_server.close_reader.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # _direct_put_stream_with_retry unit tests
 # ---------------------------------------------------------------------------
 
@@ -2021,30 +2099,46 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
                     with self.assertRaises(ETLDirectPutTransientError):
                         self._call()
 
-    def test_reader_none_returns_error_tuple(self):
-        """When _get_stream_reader returns None, a 502 error tuple is returned (no send_error)."""
-        with patch.object(self.handler, "_get_stream_reader", return_value=None):
-            result = self._call()
-        self.assertEqual(result[0], 502)
-        # send_error must NOT be called — that would write a second response
-        self.handler.send_error.assert_not_called()
+    def test_upstream_error_propagates_from_direct_put(self):
+        """When _get_stream_reader raises HTTPError (upstream non-200), it propagates."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        err = requests.HTTPError(response=mock_response)
+        with patch.object(self.handler, "_get_stream_reader", side_effect=err):
+            with self.assertRaises(requests.HTTPError):
+                self._call()
 
-    def test_reader_none_on_retry_raises(self):
-        """When reader reopening returns None on retry, the transient error is re-raised."""
+    def test_upstream_error_on_retry_reopen_propagates(self):
+        """When reader reopening raises HTTPError on retry (GET path), the error propagates."""
         self.handler.server.etl_server.direct_put_retries = 2
-        err = ETLDirectPutTransientError(
+        transient_err = ETLDirectPutTransientError(
             self._DIRECT_PUT_URL, requests.ConnectionError()
         )
-        # First reader open succeeds; reopening on retry returns None
-        readers = [self._make_reader(), None]
-        reader_iter = iter(readers)
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+        upstream_err = requests.HTTPError(response=mock_response)
+        # Use a non-BytesIO reader so the retry loop calls _get_stream_reader again
+        # (BytesIO triggers seek(0) instead of reopening).
+        first_reader = MagicMock()
+        first_reader.close = MagicMock()
+        side_effects = [first_reader, upstream_err]
+        side_effect_iter = iter(side_effects)
+
+        def reader_side_effect(*_):
+            val = next(side_effect_iter)
+            if isinstance(val, Exception):
+                raise val
+            return val
+
         with patch.object(
-            self.handler, "_get_stream_reader", side_effect=lambda *_: next(reader_iter)
+            self.handler, "_get_stream_reader", side_effect=reader_side_effect
         ):
-            with patch.object(self.handler, "_direct_put_stream", side_effect=err):
+            with patch.object(
+                self.handler, "_direct_put_stream", side_effect=transient_err
+            ):
                 with patch("time.sleep"):
-                    with self.assertRaises(ETLDirectPutTransientError):
-                        self._call()
+                    with self.assertRaises(requests.HTTPError):
+                        self._call(is_get=True)
 
     def test_reader_reopened_on_each_retry(self):
         """For BytesIO readers (PUT-no-FQN), seek(0) is used on retry instead of
