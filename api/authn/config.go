@@ -76,8 +76,18 @@ type (
 		DBConf     DatabaseConf `json:"db"`
 	}
 	DatabaseConf struct {
-		DBType   string `json:"type"`
-		Filepath string `json:"filepath"`
+		DBType   string    `json:"type"`
+		Filepath string    `json:"filepath,omitempty"`
+		Redis    RedisConf `json:"redis,omitempty"`
+	}
+
+	// RedisConf holds connection parameters for the Redis backend.
+	// All fields are overridable via environment variables.
+	RedisConf struct {
+		Addr       string `json:"addr"`                 // host:port, default "localhost:6379"
+		Password   string `json:"password,omitempty"`   //nolint:gosec // not a hardcoded cred
+		DB         int    `json:"db,omitempty"`         // Redis DB index (0–15), default 0
+		TLSEnabled bool   `json:"tls_enabled,omitempty"` // enable TLS when connecting
 	}
 
 	// TimeoutConf sets the default timeout for the HTTP client used by the auth manager
@@ -149,6 +159,13 @@ func (c *ServerConf) Validate() error {
 	}
 	if c.RSAKeyBits < minRSAKeyBits {
 		return fmt.Errorf("invalid auth.rsa_key_bits=%d, (must be >= %d)", c.RSAKeyBits, minRSAKeyBits)
+	}
+	return c.DBConf.Validate()
+}
+
+func (c *DatabaseConf) Validate() error {
+	if c.DBType == "Redis" && c.Redis.Addr == "" {
+		c.Redis.Addr = "localhost:6379"
 	}
 	return nil
 }

@@ -111,8 +111,17 @@ func (r *RSAKeyManager) Init() error {
 		nlog.Infof("Loaded existing RSA private key from %s", path)
 		return nil
 	}
-	// No existing file -- generate and persist a new one
+	// No existing file -- generate and persist a new one, or fail if key must be
+	// externally provisioned (multi-replica / shared-key deployments).
 	if errors.Is(err, fs.ErrNotExist) {
+		if !r.conf.AllowKeyGeneration {
+			return fmt.Errorf(
+				"RSA key not found at %q and auto-generation is disabled; "+
+					"pre-provision the key and mount it at that path "+
+					"(see docs/authn.md for Kubernetes multi-replica setup)",
+				path,
+			)
+		}
 		nlog.Infof("No RSA key found on disk at %q, generating...", path)
 		return r.rotateKey()
 	}
@@ -442,6 +451,12 @@ func deriveKeyWithID(key *rsa.PrivateKey) (jwk.Key, error) {
 }
 
 func (r *RSAKeyManager) RotateKey() error {
+	if !r.conf.AllowKeyGeneration {
+		return errors.New(
+			"key rotation is not supported when the RSA key is externally provisioned; " +
+				"generate a new key, update the Kubernetes Secret, and redeploy",
+		)
+	}
 	nlog.Infof("Rotating RSA key")
 	return r.rotateKey()
 }

@@ -28,4 +28,9 @@ const (
 	AisAuthPublicKey      = "AIS_AUTHN_PUBLIC_KEY"       // for asymmetric tokens
 	AisAuthAdminUsername  = "AIS_AUTHN_SU_NAME"
 	AisAuthAdminPassword  = "AIS_AUTHN_SU_PASS"
+
+	// Redis backend (used when auth.db.type = "Redis")
+	AisAuthRedisAddr     = "AIS_AUTHN_REDIS_ADDR"     // host:port, default localhost:6379
+	AisAuthRedisPassword = "AIS_AUTHN_REDIS_PASSWORD" //nolint:gosec // env var name, not a secret
+	AisAuthRedisDB       = "AIS_AUTHN_REDIS_DB"       // integer DB index, default 0
 )
