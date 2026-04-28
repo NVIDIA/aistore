@@ -220,6 +220,9 @@ class TestRequestHandlerHelpers(unittest.TestCase):
 
 
 class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
+    """Sync def tests drive the app through FastAPI's sync TestClient / websocket_connect.
+    Async def tests directly await async server helpers."""
+
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
         os.environ["DIRECT_PUT"] = "false"
@@ -250,7 +253,7 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
             mock_client.get.assert_called_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_handle_get_request(self):
+    def test_handle_get_request(self):
         path = "test/object?etl_args=arg"
         original_content = b"original data"
         transformed_content = original_content[::-1]
@@ -266,7 +269,7 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.content, transformed_content)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_handle_put_request(self):
+    def test_handle_put_request(self):
         path = "test/object"
         input_content = b"input data"
         transformed_content = input_content[::-1]
@@ -277,7 +280,7 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content, transformed_content)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_websocket(self):
+    def test_websocket(self):
         with self.client.websocket_connect("/ws") as websocket:
             original_data = b"abcdef"
             websocket.send_json(data={}, mode="binary")
@@ -348,7 +351,7 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(ctx.exception.cause, httpx.ConnectError)
 
 
-class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
+class TestFastAPIServerWithDirectPut(unittest.TestCase):
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
         os.environ["DIRECT_PUT"] = "true"
@@ -356,7 +359,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         self.client = TestClient(self.etl_server.app)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_hpush_with_direct_put(self):
+    def test_hpush_with_direct_put(self):
         path = "test/object"
         input_content = b"input data"
         transformed_content = self.etl_server.transform(input_content, path, "")
@@ -394,7 +397,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         self.etl_server.client.put.assert_awaited_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_hpush_with_direct_put_and_fqn(self):
+    def test_hpush_with_direct_put_and_fqn(self):
         path = "test/object"
         fqn = "test@some%fqn"
         input_content = b"input data"
@@ -455,7 +458,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
             get_fqn_mock.assert_called_once_with(fqn)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_websocket_with_direct_put(self):
+    def test_websocket_with_direct_put(self):
         input_data = b"testdata"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
 
@@ -523,7 +526,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
             mock_client.put.assert_not_called()  # direct put shouldn't be called
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_websocket_with_direct_put_and_fqn(self):
+    def test_websocket_with_direct_put_and_fqn(self):
         fqn = "test/object"
         original_content = b"original data"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
@@ -758,6 +761,9 @@ class TestBaseEnforcement(unittest.TestCase):
 
 
 class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
+    """Sync def tests drive the app through FastAPI's sync TestClient / websocket_connect.
+    Async def tests directly await async server helpers."""
+
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
         os.environ["DIRECT_PUT"] = "false"
@@ -786,7 +792,7 @@ class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
             mock_client.get.assert_called_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_put_with_etl_args(self):
+    def test_put_with_etl_args(self):
         path = "test/object?etl_args=arg"
         input_content = b"input data"
         transformed_content = b"arg"
@@ -826,7 +832,7 @@ class CapturingHTTPServer(_CapturingServer, HTTPMultiThreadedServer):
     pass
 
 
-class TestFastAPIDirectFQN(unittest.IsolatedAsyncioTestCase):
+class TestFastAPIDirectFQN(unittest.TestCase):
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
         os.environ["ETL_DIRECT_FQN"] = "true"
@@ -837,7 +843,7 @@ class TestFastAPIDirectFQN(unittest.IsolatedAsyncioTestCase):
         os.environ.pop("ETL_DIRECT_FQN", None)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_put_with_fqn_receives_path_string(self):
+    def test_put_with_fqn_receives_path_string(self):
         """ETL_DIRECT_FQN=true: transform() receives the sanitized file path as str."""
         fqn = "/local/data/object.bin"
         self.client.put("/test/object", content=b"", params={QPARAM_ETL_FQN: fqn})
@@ -845,7 +851,7 @@ class TestFastAPIDirectFQN(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(CapturingFastAPIServer.last_data, os.path.normpath(fqn))
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_put_without_fqn_receives_bytes(self):
+    def test_put_without_fqn_receives_bytes(self):
         """ETL_DIRECT_FQN=true but no FQN (pipeline stage): transform() receives bytes."""
         input_data = b"pipeline bytes"
         self.client.put("/test/object", content=input_data)
@@ -853,7 +859,7 @@ class TestFastAPIDirectFQN(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(CapturingFastAPIServer.last_data, input_data)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_websocket_with_fqn_receives_path_string(self):
+    def test_websocket_with_fqn_receives_path_string(self):
         """ETL_DIRECT_FQN=true via WebSocket: transform() receives the file path as str."""
         fqn = "/local/data/object.bin"
         with self.client.websocket_connect("/ws") as ws:
@@ -863,7 +869,7 @@ class TestFastAPIDirectFQN(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(CapturingFastAPIServer.last_data, os.path.normpath(fqn))
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_websocket_without_fqn_receives_bytes(self):
+    def test_websocket_without_fqn_receives_bytes(self):
         """ETL_DIRECT_FQN=true via WebSocket but no FQN: transform() receives bytes."""
         input_data = b"ws bytes"
         with self.client.websocket_connect("/ws") as ws:
