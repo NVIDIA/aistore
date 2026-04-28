@@ -24,6 +24,7 @@ from aistore.sdk.etl.webserver.base_etl_server import (
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
+    _ResponseRawReader,
 )
 from aistore.sdk.errors import InvalidPipelineError, ETLDirectPutTransientError
 from aistore.sdk.const import (
@@ -154,10 +155,15 @@ class HTTPMultiThreadedServer(ETLServer):
                     "Forwarding GET (stream) to AIS target: %s", target_url
                 )
                 resp = etl_server.session.get(target_url, stream=True, timeout=None)
-                if resp.status_code != STATUS_OK:
+                try:
+                    resp.raise_for_status()
+                except requests.HTTPError:
                     resp.close()
-                    return None
-                return resp.raw
+                    raise
+                return _ResponseRawReader(resp)
+            # TODO: non-FQN PUT still buffers the full request body into BytesIO so
+            # retries can replay it; true streaming for this path still needs to be
+            # implemented.
             content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
             return BytesIO(self.rfile.read(content_length))
 
@@ -209,12 +215,6 @@ class HTTPMultiThreadedServer(ETLServer):
             """
             etl = self.server.etl_server
             reader = self._get_stream_reader(fqn, raw_path, is_get)
-            if reader is None:
-                return (
-                    STATUS_BAD_GATEWAY,
-                    b"Failed to retrieve data from target",
-                    0,
-                )
             try:
                 for attempt in range(etl.direct_put_retries + 1):
                     try:
@@ -241,8 +241,6 @@ class HTTPMultiThreadedServer(ETLServer):
                         else:
                             etl.close_reader(reader)
                             reader = self._get_stream_reader(fqn, raw_path, is_get)
-                            if reader is None:
-                                raise
                         time.sleep(delay)
             finally:
                 etl.close_reader(reader)
@@ -353,11 +351,6 @@ class HTTPMultiThreadedServer(ETLServer):
 
             # No pipeline: original reader-based streaming path
             reader = self._get_stream_reader(fqn, raw_path, is_get=is_get)
-            if reader is None:
-                self.send_error(
-                    STATUS_BAD_GATEWAY, "Failed to retrieve data from target"
-                )
-                return
             try:
                 output_iter = self.server.etl_server.transform_stream(
                     reader, raw_path, etl_args
@@ -366,7 +359,7 @@ class HTTPMultiThreadedServer(ETLServer):
             finally:
                 self.server.etl_server.close_reader(reader)
 
-        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-locals,too-many-statements
         def do_GET(self):
             """
             Handle GET requests by forwarding them to the AIS target or reading from FQN,
@@ -456,9 +449,17 @@ class HTTPMultiThreadedServer(ETLServer):
                 self.send_error(
                     STATUS_BAD_GATEWAY, f"Direct put failed after retries: {e}"
                 )
+            except requests.HTTPError as e:
+                status = (
+                    e.response.status_code
+                    if e.response is not None
+                    else STATUS_BAD_GATEWAY
+                )
+                logger.debug("Upstream GET returned %s", status)
+                self.send_error(status, "Target request failed")
             except requests.RequestException as e:
                 logger.error("Request to AIS target failed: %s", str(e))
-                self.send_error(500, f"Error contacting AIS target: {e}")
+                self.send_error(STATUS_BAD_GATEWAY, f"Error contacting AIS target: {e}")
 
             except Exception as e:
                 logger.exception("Unexpected error processing GET request")

@@ -19,6 +19,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   shared `requests.Session`, wrapped in `asyncio.to_thread` to keep the event
   loop responsive. Previously the full upstream object was buffered into memory
   before being handed to `transform_stream`.
+- ETL `HTTPMultiThreadedServer`: release upstream keep-alive connections
+  through response-level close on early-close, error, and client-disconnect
+  paths (previously `resp.raw.close()` skipped `release_conn()` and leaked
+  sockets from the urllib3 pool). Forward upstream HTTP error statuses as-is
+  instead of collapsing them, and map `requests.RequestException` to HTTP 502
+  (was 500) for the no-FQN `hpull` GET path.
 - **ETL direct-put retry**: added exponential-backoff retry for transient connection
   errors in Flask and HTTP multi-threaded ETL servers for parity with FastAPI.
   `ConnectionRefused` is now treated as a permanent error that returns HTTP 502

@@ -7,9 +7,35 @@ from typing import Type, Tuple
 from urllib.parse import urlparse, urlunparse
 
 import cloudpickle
+import requests
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
 from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.errors import InvalidPipelineError
+
+
+class _ResponseRawReader:
+    """Wrap a requests.Response so close() releases the connection to the pool.
+
+    resp.raw.close() closes the socket but skips resp.close()'s release_conn()
+    call, which returns the socket to the keep-alive pool. Under early-close
+    (mid-stream errors, client disconnects), that leaks connections.
+    All reads are delegated to resp.raw; everything else falls through to resp.raw.
+    """
+
+    def __init__(self, response: requests.Response):
+        self._response = response
+        self._raw = response.raw
+
+    def read(self, *args, **kwargs):
+        """Read bytes from the underlying raw response stream."""
+        return self._raw.read(*args, **kwargs)
+
+    def close(self):
+        """Close the response so requests releases the connection to the pool."""
+        self._response.close()
+
+    def __getattr__(self, name):
+        return getattr(self._raw, name)
 
 
 def serialize_class(cls: Type[ETLServer], encoding: str = UTF_ENCODING) -> str:
