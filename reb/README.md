@@ -50,18 +50,20 @@ fini()
 3. **Atomic generation end.** `Close + UnregRecv + (reb.dm = nil)` runs under
    `reb.mu` inside `endStreams`, the sole DM teardown site.
 
-4. **Preempt waits 10s for full cleanup.** The next generation's preempt polls
+4. **Preempt waits `preemptRetries` seconds for full cleanup.** The next generation's preempt polls
    `oxreb.EndTime().IsZero()`, not `IsDone()`. `EndTime` becomes non-zero only
    after `xreb.Finish()`, which runs strictly after `endStreams` completes.
    Therefore, when preempt observes a non-zero `EndTime`, the previous
    generation's `UnregRecv` has already happened and the trname slot is free.
 
 
-### 10s preempt timeout
+### Preempt timeout
 
-The (currently hardcoded) 10s polling budget in `_preempt()` is a compromise.
+The (currently hardcoded) `preemptRetries` polling budget in `_preempt()` is a compromise.
 
-During 10s the previous - and already aborted - generation must fully exit,
+> `preemptRetries` is currently 16 seconds
+
+During this time the previous - already aborted - generation must fully exit,
 which entails:
 * abort propagation through joggers and (optional) nwp workers
 * in-flight transport, and
@@ -69,6 +71,6 @@ which entails:
 
 Under degraded disks or heavy load, abort propagation alone can approach this bound.
 
-In the end, the 10s value is a compromise: long enough to cover
+In the end, the timeout value is a compromise: long enough to cover
 typical cleanup, short enough that Smap flicker (when nodes keep leaving and (re)joining)
 doesn't stack waiters.

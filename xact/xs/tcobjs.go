@@ -237,7 +237,7 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 		r.Abort(err)
 		return true // stop
 	}
-	if err := r.sntl.checkSmap(smap, nil); err != nil {
+	if err := r.sntl.checkSmap(smap); err != nil {
 		r.Abort(err)
 		return true // stop
 	}

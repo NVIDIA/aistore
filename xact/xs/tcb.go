@@ -255,7 +255,7 @@ func (r *XactTCB) run(wg *sync.WaitGroup) {
 	// make sure `nat` hasn't changed between Start and now (highly unlikely)
 	if r.dm != nil {
 		smap := core.T.Sowner().Get()
-		if err := r.sntl.checkSmap(smap, nil); err != nil {
+		if err := r.sntl.checkSmap(smap); err != nil {
 			r.Abort(err)
 			wg.Done()
 			return

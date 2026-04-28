@@ -34,7 +34,12 @@ const (
 	SnodeMaintPostReb
 )
 
-const SnodeMaintDecomm = SnodeMaint | SnodeDecomm
+// convenience shortcuts
+// usage: new stream bundles, rebalance decisions during graceful membership changes
+const (
+	SnodeMaintDecomm = SnodeMaint | SnodeDecomm
+	rebalanceGrace   = SnodeMaint | SnodeDecomm | SnodeMaintPostReb
+)
 
 // desirable gateway count in the Information Center (IC)
 const DfltCountIC = 3
@@ -477,20 +482,25 @@ func (m *Smap) HasActiveTs(except string) bool {
 	return false
 }
 
+// return true if the two Smaps have identical active+inactive
+// target membership and identical per-target flags that influence global-rebalance
+// decisions during graceful membership changes
+// (rebalanceGrace)
 func (m *Smap) SameTargets(other *Smap) bool {
+	if m.Version == other.Version {
+		return true
+	}
 	for tid, t := range m.Tmap {
-		if t.InMaintOrDecomm() {
-			continue
+		o := other.Tmap[tid]
+		if o == nil {
+			return false
 		}
-		if !other.Tmap.Contains(tid) {
+		if (o.Flags & rebalanceGrace) != (t.Flags & rebalanceGrace) {
 			return false
 		}
 	}
-	for tid, t := range other.Tmap {
-		if t.InMaintOrDecomm() {
-			continue
-		}
-		if !m.Tmap.Contains(tid) {
+	for tid := range other.Tmap {
+		if _, ok := m.Tmap[tid]; !ok {
 			return false
 		}
 	}

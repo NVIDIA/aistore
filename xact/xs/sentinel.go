@@ -33,6 +33,7 @@ type (
 		r      core.Xact
 		dm     *bundle.DM
 		config *cmn.Config
+		smap   *meta.Smap
 		pend   struct {
 			m map[string]*apair // map [tid => apair]
 			p []string          // reusable slice [tid]
@@ -47,6 +48,7 @@ func (s *sentinel) init(r core.Xact, dm *bundle.DM, config *cmn.Config, smap *me
 	s.r = r
 	s.dm = dm
 	s.config = config
+	s.smap = smap
 	s.nat = nat
 	if nat <= 1 || dm == nil {
 		return // single-target or no DM: no peers to coordinate with
@@ -137,7 +139,7 @@ func (s *sentinel) _qcb(tot, ival, progressTimeout time.Duration, ecnt int) core
 
 	// 2. check Smap; abort if membership changed
 	smap := core.T.Sowner().Get()
-	if err := s.checkSmap(smap, s.pend.p); err != nil {
+	if err := s.checkSmap(smap); err != nil {
 		return s._qabort(err)
 	}
 
@@ -172,16 +174,11 @@ func (s *sentinel) _qabort(err error) core.QuiRes {
 	return core.QuiAborted
 }
 
-func (s *sentinel) checkSmap(smap *meta.Smap, pending []string) error {
-	if nat := smap.CountActiveTs(); nat != s.nat {
-		return cmn.NewErrMembershipChanges(fmt.Sprint(s.r.Name(), smap.String(), nat, s.nat))
+func (s *sentinel) checkSmap(smap *meta.Smap) error {
+	if s.smap.SameTargets(smap) {
+		return nil
 	}
-	for _, tid := range pending {
-		if smap.GetNode(tid) == nil || smap.InMaintOrDecomm(tid) {
-			return cmn.NewErrMembershipChanges(fmt.Sprint(s.r.Name(), smap.String(), tid))
-		}
-	}
-	return nil
+	return cmn.NewErrMembershipChanges(fmt.Sprint(s.r.Name(), smap.String(), "vs", s.smap.String()))
 }
 
 func (s *sentinel) pending() {

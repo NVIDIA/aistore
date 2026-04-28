@@ -151,10 +151,13 @@ func New(config *cmn.Config) *Reb {
 // See README.md in this package for a sketch of execution flow and
 // a note on _preempt() timeout.
 const (
-	preemptRetries = 10 // 10 seconds poll
+	preemptRetries = 16 // poll <= 16 seconds
 )
 
 func (*Reb) _preempt(logHdr, oxid string) error {
+	const (
+		tag = "preempt"
+	)
 	oxreb, err := xreg.GetXact(oxid)
 	if err != nil {
 		debug.AssertNoErr(err) // (can only be invalid xid)
@@ -168,16 +171,22 @@ func (*Reb) _preempt(logHdr, oxid string) error {
 
 	// reb.fini() always performs full cleanup, that's why we can just poll here
 	// for valid end-time (not a sentinel indicating "almost done")
+	smap1 := core.T.Sowner().Get()
 	for i := range preemptRetries {
 		time.Sleep(time.Second)
 		if !oxreb.EndTime().IsZero() {
 			return nil
 		}
+
+		if smap2 := core.T.Sowner().Get(); !smap1.SameTargets(smap2) {
+			return fmt.Errorf("%s: Smap changed mid-wait %s => %s", tag, smap1.StringEx(), smap2.StringEx())
+		}
+
 		if i > 5 && i&1 == 1 {
-			nlog.Warningln(logHdr, "preempt: polling for", oxreb.String())
+			nlog.Warningf("%s: %s polling for %s ...", tag, logHdr, oxreb.String())
 		}
 	}
-	return fmt.Errorf("previous rebalance takes more than %v to finish: %s", preemptRetries*time.Second, oxreb.String())
+	return fmt.Errorf("%s: previous rebalance %q takes more than %v to finish", tag, oxreb.String(), preemptRetries*time.Second)
 }
 
 // Run() is the main method: serialized to execute one at a time (while possibly _preempting_
@@ -392,11 +401,9 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 	// not every change in Smap warants a different rebalance but this one (below) definitely does
 	// check for post-renew change
 	smap := core.T.Sowner().Get()
-	if smap.Version != rargs.smap.Version {
-		if !smap.SameTargets(rargs.smap) {
-			debug.Assert(smap.Version > rargs.smap.Version)
-			return fmt.Errorf("%s post-renew change %s => %s", xreb, rargs.smap.StringEx(), smap.StringEx())
-		}
+	if !smap.SameTargets(rargs.smap) {
+		debug.Assert(smap.Version > rargs.smap.Version)
+		return fmt.Errorf("%s post-renew change %s => %s", xreb, rargs.smap.StringEx(), smap.StringEx())
 	}
 	reb.smap.Store(rargs.smap)
 
