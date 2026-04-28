@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -636,6 +637,167 @@ func TestBlobDownloadSingleThreaded(t *testing.T) {
 			m.validateChunksOnDisk(bck, objName, expectedChunks)
 
 			tlog.Logfln("Single-threaded blob download test (%s) completed successfully", test.name)
+		})
+	}
+}
+
+// TestPrefetchBlobInvalidWorkers validates that prefetch rejects an out-of-range
+// BlobNumWorkers (anything below NwpNone == -1).
+func TestPrefetchBlobInvalidWorkers(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cliBck
+	)
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+
+	for _, n := range []int{-2, -100} {
+		msg := &apc.PrefetchMsg{
+			BlobThreshold:  cos.MiB,
+			BlobNumWorkers: n,
+		}
+		msg.Template = "prefetch-bad-workers/" + trand.String(5) + "/*"
+		_, err := api.Prefetch(baseParams, bck, msg)
+		tassert.Fatalf(t, err != nil, "expected error for blob-num-workers=%d, got nil", n)
+		tassert.Fatalf(t, strings.Contains(err.Error(), "blob-num-workers"),
+			"expected error to mention 'blob-num-workers', got: %v", err)
+	}
+}
+
+// TestPrefetchBlobChunkSize validates that PrefetchMsg.BlobChunkSize is honored:
+// the prefetched object is byte-equal to the source, and on disk it is split
+// into ceil(objSize/chunkSize) chunks (which is the only externally observable
+// effect of the new param).
+func TestPrefetchBlobChunkSize(t *testing.T) {
+	const (
+		objSize    = 8 * cos.MiB // small but > minBlobDlPrefetch (1MiB)
+		blobThresh = cos.MiB
+	)
+
+	chunkSizes := []int64{cos.MiB, 2 * cos.MiB}
+
+	for _, chunkSize := range chunkSizes {
+		t.Run("chunk-"+cos.ToSizeIEC(chunkSize, 0), func(t *testing.T) {
+			var (
+				proxyURL   = tools.RandomProxyURL(t)
+				baseParams = tools.BaseAPIParams(proxyURL)
+				bck        = cliBck
+				uniq       = "prefetch-blob-chunk/" + trand.String(5)
+				objName    = uniq + "/obj"
+			)
+
+			tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck, Long: true})
+			initMountpaths(t, proxyURL)
+
+			tlog.Logfln("Provisioning %s of size %s", objName, cos.ToSizeIEC(objSize, 0))
+			reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
+			tassert.CheckFatal(t, err)
+			tools.PutObject(t, bck, objName, reader, uint64(objSize))
+			defer api.DeleteObject(baseParams, bck, objName)
+
+			tlog.Logfln("Evicting %s", objName)
+			tassert.CheckFatal(t, api.EvictObject(baseParams, bck, objName))
+
+			msg := &apc.PrefetchMsg{
+				BlobThreshold: blobThresh,
+				BlobChunkSize: chunkSize,
+			}
+			msg.Template = uniq + "/*"
+
+			tlog.Logfln("Prefetching with blob-threshold=%s, blob-chunk-size=%s",
+				cos.ToSizeIEC(blobThresh, 0), cos.ToSizeIEC(chunkSize, 0))
+			xid, err := api.Prefetch(baseParams, bck, msg)
+			tassert.CheckFatal(t, err)
+			args := xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
+			_, err = api.WaitForXactionIC(baseParams, &args)
+			tassert.CheckFatal(t, err)
+
+			// Byte-equality check.
+			result, size, err := api.GetObjectReader(baseParams, bck, objName, nil)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+			readerDup, err := reader.Open()
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, tools.ReaderEqual(readerDup, result), "data mismatch after blob prefetch")
+
+			// On-disk chunk count: the only externally observable effect of BlobChunkSize.
+			expected := int((int64(objSize) + chunkSize - 1) / chunkSize)
+			tlog.Logfln("Verifying object has at least %d chunks", expected)
+			m := &ioContext{t: t, bck: bck}
+			m.validateChunksOnDisk(bck, objName, expected)
+		})
+	}
+}
+
+// TestPrefetchBlobNumWorkers validates that PrefetchMsg.BlobNumWorkers is
+// accepted across its full valid range and produces a correct, byte-identical
+// download in every case.
+//
+// Covered values:
+//
+//	-1 (NwpNone, serial path), 0 (auto-tuned), small positive (4),
+//	above blobMaxWorkers cap (64).
+func TestPrefetchBlobNumWorkers(t *testing.T) {
+	const (
+		objSize    = 4 * cos.MiB // small but > minBlobDlPrefetch (1MiB)
+		blobThresh = cos.MiB
+	)
+
+	cases := []struct {
+		name      string
+		requested int
+	}{
+		{name: "single-thread", requested: -1},
+		{name: "auto-zero", requested: 0},
+		{name: "small-positive", requested: 4},
+		{name: "over-max-cap", requested: 64},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				proxyURL   = tools.RandomProxyURL(t)
+				baseParams = tools.BaseAPIParams(proxyURL)
+				bck        = cliBck
+				uniq       = "prefetch-blob-workers/" + tc.name + "/" + trand.String(5)
+				objName    = uniq + "/obj"
+			)
+
+			tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck, Long: true})
+			initMountpaths(t, proxyURL)
+
+			tlog.Logfln("Provisioning %s of size %s", objName, cos.ToSizeIEC(objSize, 0))
+			reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
+			tassert.CheckFatal(t, err)
+			tools.PutObject(t, bck, objName, reader, uint64(objSize))
+			defer api.DeleteObject(baseParams, bck, objName)
+
+			tlog.Logfln("Evicting %s", objName)
+			tassert.CheckFatal(t, api.EvictObject(baseParams, bck, objName))
+
+			msg := &apc.PrefetchMsg{
+				BlobThreshold:  blobThresh,
+				BlobNumWorkers: tc.requested,
+			}
+			msg.Template = uniq + "/*"
+
+			tlog.Logfln("Prefetching with blob-threshold=%s, blob-num-workers=%d",
+				cos.ToSizeIEC(blobThresh, 0), tc.requested)
+			xid, err := api.Prefetch(baseParams, bck, msg)
+			tassert.CheckFatal(t, err)
+			args := xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
+			_, err = api.WaitForXactionIC(baseParams, &args)
+			tassert.CheckFatal(t, err)
+
+			// Byte-equality check: result must be identical across all valid BlobNumWorkers values.
+			result, size, err := api.GetObjectReader(baseParams, bck, objName, nil)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+			readerDup, err := reader.Open()
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, tools.ReaderEqual(readerDup, result),
+				"data mismatch after blob prefetch with blob-num-workers=%d", tc.requested)
 		})
 	}
 }

@@ -47,6 +47,9 @@ const (
 	maxChunkSize  = 16 * cos.MiB
 
 	minBlobDlPrefetch = cos.MiB // size threshold for x-prefetch
+
+	blobMinBytesPerWorker = 256 * cos.MiB // one blob worker should get at least this much object data
+	blobMaxWorkers        = 32            // absolute max workers for a single blob-download job
 )
 
 type (
@@ -223,6 +226,26 @@ func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
+// Effective workers = min(tuned, objCap, blobMaxWorkers), where
+//   - tuned  = TuneNumWorkers(requested, mpaths) -- folds in user request, media, system load;
+//   - objCap = ceil(fullSize / blobMinBytesPerWorker) -- one worker per ~256MiB of data.
+//
+// `requested == -1` (NwpNone) and extreme load short-circuit to -1 (serial).
+// Examples (auto request, 4 mountpaths):
+//   - 64 MiB, SSD : tuned=16, objCap=1  -> 1   (object too small to fan out)
+//   - 2 GiB, NVMe : tuned=32, objCap=8  -> 8   (object-size cap binds)
+//   - 8 GiB, NVMe : tuned=32, objCap=32 -> 32  (hits hard cap)
+//   - 16 GiB, NVMe: tuned=32, objCap=64 -> 32  (clamped by blobMaxWorkers)
+func TuneBlobDlWorkers(xname string, requestedWorkers, numMpaths int, fullSize int64) (int, error) {
+	tunedWorkers, err := xact.TuneNumWorkers(xname, requestedWorkers, numMpaths)
+	if err != nil || tunedWorkers == xact.NwpNone {
+		return tunedWorkers, err
+	}
+	debug.Assert(fullSize > 0)
+	workerSizeCap := int(cos.DivCeil(fullSize, blobMinBytesPerWorker))   // ceil(object_size / 256MiB)
+	return max(1, min(tunedWorkers, workerSizeCap, blobMaxWorkers)), nil // min(tuned_capacity, object-size cap, hard cap)
+}
+
 // calcChunkSize determines optimal chunk size based on:
 // - memory load level (from load advisory system)
 // - user's preference (preferred chunk size if load permits)
@@ -285,7 +308,7 @@ func (p *blobFactory) Start() (err error) {
 
 	// num-workers parallelism (nwp)
 	l := fs.NumAvail()
-	numWorkers, err := xact.TuneNumWorkers(r.Name(), r.numWorkers, l)
+	numWorkers, err := TuneBlobDlWorkers(r.Name(), r.numWorkers, l, r.fullSize)
 	if err != nil {
 		return err
 	}

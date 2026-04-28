@@ -86,6 +86,10 @@ type PrefetchMsg struct {
 	// fetched via the blob downloader; smaller objects are fetched as
 	// a single cold GET. `0` selects the server default.
 	BlobThreshold int64 `json:"blob-threshold"` // +gen:optional
+	// Chunk size for blob-downloads started by prefetch
+	BlobChunkSize int64 `json:"blob-chunk-size"` // +gen:optional
+	// Number of workers for each blob-download started by prefetch; auto-computed when zero
+	BlobNumWorkers int `json:"blob-num-workers"` // +gen:optional
 	// Number of concurrent workers:
 	//   - `0`: Auto-computed.
 	//   - `-1`: No additional workers.
@@ -111,6 +115,16 @@ func (msg *PrefetchMsg) Str(isPrefix bool) string {
 		msg.delim(&sb)
 		sb.WriteString("blob-threshold:")
 		sb.WriteString(cos.IEC(msg.BlobThreshold, 0))
+	}
+	if msg.BlobChunkSize > 0 {
+		msg.delim(&sb)
+		sb.WriteString("blob-chunk-size:")
+		sb.WriteString(cos.IEC(msg.BlobChunkSize, 0))
+	}
+	if msg.BlobNumWorkers != 0 {
+		msg.delim(&sb)
+		sb.WriteString("blob-workers:")
+		sb.WriteString(strconv.Itoa(msg.BlobNumWorkers))
 	}
 	if msg.NumWorkers > 0 {
 		msg.delim(&sb)

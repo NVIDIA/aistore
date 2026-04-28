@@ -77,6 +77,9 @@ func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *prfFactory) Start() (err error) {
+	if p.msg.BlobNumWorkers < xact.NwpNone {
+		return fmt.Errorf("invalid blob-num-workers=%d: expecting (-1..N) range", p.msg.BlobNumWorkers)
+	}
 	if p.msg.BlobThreshold > 0 && p.msg.BlobThreshold < minBlobDlPrefetch {
 		a, b := cos.IEC(p.msg.BlobThreshold, 0), cos.IEC(minBlobDlPrefetch, 0)
 		nlog.Warningln("blob-threshold (", a, ") is too small, must be at least", b, "- updating...")
@@ -278,9 +281,13 @@ func (r *prefetch) Snap() (snap *core.Snap) {
 //
 
 func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
+	// pass user preferences through; blobFactory.Start tunes them once
 	params := &core.BlobParams{
 		Lom: core.AllocLOM(lom.ObjName),
-		Msg: &apc.BlobMsg{},
+		Msg: &apc.BlobMsg{
+			ChunkSize:  r.msg.BlobChunkSize,
+			NumWorkers: r.msg.BlobNumWorkers,
+		},
 	}
 	if err := params.Lom.InitBck(lom.Bck()); err != nil {
 		return 0, err
