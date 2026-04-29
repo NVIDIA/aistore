@@ -389,10 +389,19 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) {
 // walk a given bucket and visit assorted content types (below)
 func (j *clnJ) _jogBck() {
 	xcln := j.ini.Xaction
+	// TODO: cleanup chunk manifests as well
+	//
+	// fs.ChunkMetaCT (%ut/) is intentionally excluded: the
+	// "<obj>" / "<obj>.<uploadID>" filename encoding cannot be parsed
+	// unambiguously when object names contain '.' (chunkMetaCR.parseUbase
+	// in fs/content.go), and the prior cleanup logic misclassified
+	// completed manifests of objects with extensions (.tar, .json, ...)
+	// as "invalid" and deleted them, silently corrupting chunked LOMs.
+	// Re-enable once a proper disambiguation mechanism is in place.
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      j.bck,
-		CTs:      []string{fs.WorkCT, fs.ObjCT, fs.ECSliceCT, fs.ECMetaCT, fs.ChunkCT, fs.ChunkMetaCT},
+		CTs:      []string{fs.WorkCT, fs.ObjCT, fs.ECSliceCT, fs.ECMetaCT, fs.ChunkCT},
 		Callback: j.visit,
 		Sorted:   false,
 	}
@@ -542,6 +551,8 @@ func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
 		}
 		core.FreeLOM(lom)
 	case fs.ChunkMetaCT:
+		// unreachable: ChunkMetaCT is intentionally excluded from the walker in _jogBck (see TODO there)
+		debug.Assert(false, "ChunkMetaCT should not be visited")
 		contentInfo := fs.CSM.ParseUbase(parsed.ObjName, fs.ChunkMetaCT)
 		if !contentInfo.Ok {
 			j.rmInvalidFQN(fqn, "chunk-manifest", nil)

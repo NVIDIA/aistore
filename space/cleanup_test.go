@@ -533,8 +533,11 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		// assert: stray chunk is removed
 		Expect(stray.Path()).NotTo(BeAnExistingFile())
 
-		// assert: partial manifest is removed
-		Expect(partialFQN).NotTo(BeAnExistingFile())
+		// partial manifest is NOT removed: chunk-manifest cleanup is
+		// intentionally disabled (see TODO in space/cleanup.go::_jogBck).
+		// This test will need its expectation flipped back to NotTo(...)
+		// once chunk-manifest cleanup is re-enabled.
+		Expect(partialFQN).To(BeAnExistingFile())
 
 		// completed must exist
 		uu2, err := core.NewUfest("", lom, true)
@@ -546,6 +549,59 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(uu2.ID()).To(Equal(u2.ID()))
+	})
+
+	// Regression: a chunked LOM whose name contains '.' (e.g. "audio_21.tar")
+	// previously had its completed manifest at %ut/<obj> deleted by the
+	// space cleanup -- the suffix-based parseUbase (chunkMetaCR.parseUbase
+	// in fs/content.go) misclassified the filename as "invalid" because
+	// "tar" failed cos.ValidateManifestID, and rmInvalidFQN removed it.
+	// Lead's fix: drop fs.ChunkMetaCT from the walker's CTs in _jogBck so
+	// %ut/ is no longer visited. This test guards that behavior end-to-end:
+	// after a cleanup run, the completed manifest of a chunked LOM with a
+	// '.' in its name must still exist and be loadable.
+	It("does not touch the completed chunk-manifest of a chunked LOM (with '.' in name)", func() {
+		objName := "regress/audio_21.tar"
+		lom := core.AllocLOM(objName)
+		defer core.FreeLOM(lom)
+		Expect(lom.InitCmnBck(&bck)).NotTo(HaveOccurred())
+
+		u, err := core.NewUfest("", lom, false /*mustExist*/)
+		Expect(err).NotTo(HaveOccurred())
+
+		const (
+			chunkSize = 64 * cos.KiB
+			numChunks = 3
+		)
+		for part := 1; part <= numChunks; part++ {
+			ch, err := u.NewChunk(part, lom)
+			Expect(err).NotTo(HaveOccurred())
+			createTestChunk(ch.Path(), chunkSize, nil)
+			Expect(u.Add(ch, chunkSize, int64(part))).NotTo(HaveOccurred())
+		}
+		Expect(lom.CompleteUfest(u, false)).NotTo(HaveOccurred())
+
+		completedFQN := lom.GenFQN(fs.ChunkMetaCT)
+		Expect(completedFQN).To(BeAnExistingFile())
+
+		// age past dont_cleanup_time so a hypothetical walker wouldn't skip
+		old := now.Add(-3 * time.Hour)
+		Expect(os.Chtimes(completedFQN, old, old)).NotTo(HaveOccurred())
+		Expect(os.Chtimes(lom.FQN, old, old)).NotTo(HaveOccurred())
+
+		space.RunCleanup(ini)
+
+		Expect(completedFQN).To(BeAnExistingFile(),
+			"completed chunk-manifest of chunked LOM %q was wrongly removed", objName)
+
+		// and it must still load -- verifies the chunked LOM is intact
+		reload, err := core.NewUfest("", lom, true /*mustExist*/)
+		Expect(err).NotTo(HaveOccurred())
+		lom.Lock(false)
+		loadErr := reload.LoadCompleted(lom)
+		lom.Unlock(false)
+		Expect(loadErr).NotTo(HaveOccurred())
+		Expect(reload.ID()).To(Equal(u.ID()))
 	})
 
 	It("should remove files with malformed FQNs", func() {
