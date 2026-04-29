@@ -22,6 +22,19 @@ func decodeJSONExample(s string) any {
 	return v
 }
 
+// payloadToRequest converts a +gen:payload body into a value for
+// x-fern-examples[].request. JSON parses to structured data; other formats
+// (XML, plain text) round-trip as raw strings; empty input returns nil.
+func payloadToRequest(body string) any {
+	if body == "" {
+		return nil
+	}
+	if parsed := decodeJSONExample(body); parsed != nil {
+		return parsed
+	}
+	return body
+}
+
 // OpenAPI 3.0 document types.
 
 type openapiSpec struct {
@@ -110,17 +123,140 @@ func buildSpec(endpoints []endpoint, schemas map[string]*schemaObject, actionMap
 	if spec.Components == nil {
 		spec.Components = &openapiComponents{Schemas: make(map[string]*schemaObject)}
 	}
+	// Group by (path, method). Track first-seen order for deterministic output.
+	type pmKey struct{ path, method string }
+	groups := make(map[pmKey][]*endpoint)
+	order := make([]pmKey, 0, len(endpoints))
 	for i := range endpoints {
 		ep := &endpoints[i]
-		op := buildOperation(ep, actionMap, globalPayloads, spec.Components.Schemas)
-
-		if _, exists := spec.Paths[ep.Path]; !exists {
-			spec.Paths[ep.Path] = make(pathItem)
+		k := pmKey{ep.Path, ep.Method}
+		if _, seen := groups[k]; !seen {
+			order = append(order, k)
 		}
-		spec.Paths[ep.Path][ep.Method] = op
+		groups[k] = append(groups[k], ep)
+	}
+	for _, k := range order {
+		eps := groups[k]
+		var op *operation
+		if len(eps) == 1 {
+			op = buildOperation(eps[0], actionMap, globalPayloads, spec.Components.Schemas)
+		} else {
+			op = mergeOperations(eps, actionMap, globalPayloads, spec.Components.Schemas)
+		}
+		if _, exists := spec.Paths[k.path]; !exists {
+			spec.Paths[k.path] = make(pathItem)
+		}
+		spec.Paths[k.path][k.method] = op
 	}
 
 	return spec
+}
+
+// mergeOperations combines endpoints sharing a method+path into one OAS
+// operation. OAS 3.0 allows only one operation per route, but AIS dispatches
+// some endpoints by query-param presence (e.g. /s3/{bucket} on `?versioning`).
+func mergeOperations(eps []*endpoint, actionMap, globalPayloads map[string]string,
+	schemas map[string]*schemaObject) *operation {
+	ops := make([]*operation, len(eps))
+	for i, ep := range eps {
+		ops[i] = buildOperation(ep, actionMap, globalPayloads, schemas)
+	}
+	return &operation{
+		Summary:       joinSummaries(ops),
+		OperationID:   ops[0].OperationID,
+		Tags:          ops[0].Tags,
+		Parameters:    unionParameters(ops),
+		RequestBody:   mergeRequestBody(ops),
+		Responses:     ops[0].Responses,
+		XFernExamples: concatExamples(eps, ops, globalPayloads),
+	}
+}
+
+// joinSummaries concatenates variant summaries with " / " as the alternatives
+// separator (titles are not modified).
+func joinSummaries(ops []*operation) string {
+	parts := make([]string, 0, len(ops))
+	for _, op := range ops {
+		if op.Summary != "" {
+			parts = append(parts, op.Summary)
+		}
+	}
+	return strings.Join(parts, " / ")
+}
+
+// unionParameters concatenates parameters across variants, deduped by (In, Name).
+func unionParameters(ops []*operation) []oaParameter {
+	seen := make(map[string]bool)
+	var out []oaParameter
+	for _, op := range ops {
+		for _, p := range op.Parameters {
+			key := p.In + ":" + p.Name
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// mergeRequestBody returns the first non-nil body. Forces required=false
+// when any variant lacks a body, since OAS 3.0 cannot express conditional
+// requiredness.
+func mergeRequestBody(ops []*operation) *oaRequestBody {
+	var first *oaRequestBody
+	allHave := true
+	for _, op := range ops {
+		if op.RequestBody == nil {
+			allHave = false
+			continue
+		}
+		if first == nil {
+			first = op.RequestBody
+		}
+	}
+	if first == nil {
+		return nil
+	}
+	if !allHave {
+		cpy := *first
+		cpy.Required = false
+		return &cpy
+	}
+	return first
+}
+
+// concatExamples appends each variant's examples, relabels by summary, and
+// sets a non-nil Request to anchor Fern's named-example selector.
+func concatExamples(eps []*endpoint, ops []*operation, globalPayloads map[string]string) []fernExample {
+	var out []fernExample
+	for i, op := range ops {
+		label := eps[i].Summary
+		for _, ex := range op.XFernExamples {
+			if label != "" {
+				ex.Name = label
+			}
+			if ex.Request == nil {
+				ex.Request = requestAnchor(eps[i], globalPayloads)
+			}
+			out = append(out, ex)
+		}
+	}
+	return out
+}
+
+// requestAnchor returns the variant's payload (via payloadToRequest) or an
+// empty object. Anchors Fern's named-example selector.
+func requestAnchor(ep *endpoint, globalPayloads map[string]string) any {
+	if ep.PayloadRef != "" {
+		if body, ok := globalPayloads[ep.PayloadRef]; ok {
+			if req := payloadToRequest(body); req != nil {
+				return req
+			}
+		}
+	}
+	return map[string]any{}
 }
 
 // buildOperation converts a parsed endpoint into an OpenAPI operation.
@@ -318,7 +454,7 @@ func buildFernExamples(actions []actionModel, actionMap, globalPayloads map[stri
 		}
 		var body any
 		if raw, ok := globalPayloads[action.Action]; ok {
-			body = decodeJSONExample(raw)
+			body = payloadToRequest(raw)
 		}
 		if body == nil {
 			body = map[string]any{"action": wire}

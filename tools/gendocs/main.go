@@ -751,6 +751,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		Tag:          tag,
 		Actions:      actions,
 		Models:       models,
+		PayloadRef:   payloadRef,
 		HTTPExamples: httpExamples,
 	}, nil
 }
@@ -842,8 +843,10 @@ func collectSummaryLines(lines []string, i int) []string {
 		if !strings.HasPrefix(next, commentPrefix) {
 			break
 		}
-		if strings.Contains(next, endpointPrefix) ||
-			strings.Contains(next, payloadPrefix) ||
+		if strings.Contains(next, endpointPrefix) {
+			break
+		}
+		if strings.Contains(next, payloadPrefix) ||
 			strings.Contains(next, namePrefix) ||
 			strings.Contains(next, valuePrefix) {
 			continue
