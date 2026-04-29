@@ -1506,7 +1506,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 		tcbmsg.Prefix = cos.TrimPrefix(tcbmsg.Prefix)
-		if bckFrom.Equal(bckTo, true, true) {
+		if bckFrom.Equal(bckTo, true /*same BID*/, true) {
 			if !bckFrom.IsRemote() {
 				p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bckFrom.Cname(""))
 				return
@@ -1589,7 +1589,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		tcomsg.Prefix = cos.TrimPrefix(tcomsg.Prefix) // trim trailing wildcard
 		bckTo = meta.CloneBck(&tcomsg.ToBck)
 
-		if bck.Equal(bckTo, true, true) {
+		if bck.Equal(bckTo, true /*same BID*/, true) {
 			eq = true
 			nlog.Warningf("multi-object operation %q within the same bucket %q", msg.Action, bck)
 		}

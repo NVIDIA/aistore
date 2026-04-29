@@ -491,7 +491,7 @@ func _rebSnap() (rebSnap *core.Snap) {
 	return rebSnap
 }
 
-// admin-join target | enable/disable mountpath
+// admin-join target | force-join | enable/disable mountpath
 func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.parseURL(w, r, apc.URLPathDae.L, 0, true)
 	if err != nil {
@@ -804,6 +804,7 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, t
 
 // executes under lock
 // returns: removed buckets, old (ie., prev) version, errmsg(remove buckets), error
+// NOTE: keep in sync with _commitForceJoin -> _forceCreateBdirs
 func (t *target) _syncBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, psi *meta.Snode) ([]*meta.Bck, int64, string, error) {
 	var (
 		bmd    = t.owner.bmd.get()
@@ -881,7 +882,7 @@ skip:
 }
 
 func (f *delb) do(nbck *meta.Bck) bool {
-	if !f.obck.Equal(nbck, false /*ignore BID*/, false /* ignore backend */) {
+	if !f.obck.Equal(nbck, false /*same BID*/, false /* same backend */) {
 		return false // keep going
 	}
 	f.present = true

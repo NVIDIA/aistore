@@ -390,7 +390,7 @@ func (args *abortArgs) do(entry Renewable) bool {
 	case len(args.bcks) > 0:
 		debug.Assertf(args.scope == nil, "scope %v", args.scope)
 		for _, bck := range args.bcks {
-			if xctn.Bck() != nil && bck.Equal(xctn.Bck(), true /*sameID*/, true /*same backend*/) {
+			if xctn.Bck() != nil && bck.Equal(xctn.Bck(), true /*same BID*/, true /*same backend*/) {
 				abort = true
 				break
 			}
@@ -746,12 +746,12 @@ func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck
 
 func _eqAny(bck1, bck2, from, to *meta.Bck) (eq bool) {
 	if from != nil {
-		if bck1.Equal(from, false, true) || bck2.Equal(from, false, true) {
+		if bck1.Equal(from, false /*same BID*/, true) || bck2.Equal(from, false, true) {
 			return true
 		}
 	}
 	if to != nil {
-		eq = bck1.Equal(to, false, true) || bck2.Equal(to, false, true)
+		eq = bck1.Equal(to, false /*same BID*/, true) || bck2.Equal(to, false, true)
 	}
 	return
 }
@@ -848,7 +848,7 @@ func (flt *Flt) Matches(xctn core.Xact) (yes bool) {
 		from, to := xctn.FromTo()
 		if from != nil { // XactArch special case
 			debug.Assert(to != nil)
-			return from.Equal(flt.Buckets[0], false, false) && to.Equal(flt.Buckets[1], false, false)
+			return from.Equal(flt.Buckets[0], false /*same BID*/, false) && to.Equal(flt.Buckets[1], false, false)
 		}
 	}
 

@@ -277,7 +277,7 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 			sameBucket bool
 			locked     bool
 		)
-		sameBucket = dst.Bck().Equal(lom.Bck(), true /*same ID*/, true /*same backend*/)
+		sameBucket = dst.Bck().Equal(lom.Bck(), true /*same BID*/, true /*same backend*/)
 		err, nested, locked = lom._copy2fqn(dst, buf, sameBucket)
 		if locked {
 			dst.Unlock(true)

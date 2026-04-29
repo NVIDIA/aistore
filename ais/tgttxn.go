@@ -674,7 +674,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, disableDM bool) error {
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
 		return cmn.NewErrBusy("bucket", bckFrom.Cname(""))
 	}
-	if !msg.DryRun && !bckFrom.Equal(bckTo, true, true) {
+	if !msg.DryRun && !bckFrom.Equal(bckTo, true /*same BID*/, true) {
 		nlpTo = newBckNLP(bckTo)
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpFrom.Unlock()
@@ -879,7 +879,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 		if err := bckTo.Validate(); err != nil {
 			return xid, err
 		}
-		if !bckFrom.Equal(bckTo, false, false) {
+		if !bckFrom.Equal(bckTo, false /*same BID*/, false) {
 			if err := bckFrom.Validate(); err != nil {
 				return xid, err
 			}

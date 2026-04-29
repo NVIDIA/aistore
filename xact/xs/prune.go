@@ -51,7 +51,7 @@ func (rp *prune) init(config *cmn.Config) {
 	rmopts.Bck.Copy(rp.bckTo.Bucket())
 	rp.joggers = mpather.NewJgroup(rmopts, config, nil)
 	rp.filter = prob.NewDefaultFilter()
-	rp.same = rp.bckTo.Equal(rp.bckFrom, true, true)
+	rp.same = rp.bckTo.Equal(rp.bckFrom, true /*same BID*/, true)
 }
 
 func (rp *prune) run() {

@@ -114,7 +114,7 @@ func (p *nbiFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	if p.UUID() != prevEntry.UUID() {
 		return wpr, cmn.NewErrXactUsePrev(prevEntry.Get().String())
 	}
-	bckEq := prevEntry.Bucket().Equal(p.Bucket(), true, true)
+	bckEq := prevEntry.Bucket().Equal(p.Bucket(), true /*same BID*/, true)
 	debug.Assert(bckEq)
 	return xreg.WprUse, nil
 }

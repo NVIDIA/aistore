@@ -119,14 +119,14 @@ func usePrev(xprev core.Xact, nentry Renewable, flt *Flt) bool {
 	}
 	bck := flt.Bck
 	debug.Assert(!bck.IsEmpty())
-	if !bck.Equal(xprev.Bck(), true, true) {
+	if !bck.Equal(xprev.Bck(), true /*same BID*/, true) {
 		return false
 	}
 	// on-demand (from-bucket, to-bucket)
 	from, to := xprev.FromTo()
 	if len(flt.Buckets) == 2 && from != nil && to != nil {
 		for _, bck := range flt.Buckets {
-			if !bck.Equal(from, true, true) && !bck.Equal(to, true, true) {
+			if !bck.Equal(from, true /*same BID*/, true) && !bck.Equal(to, true, true) {
 				return false
 			}
 		}

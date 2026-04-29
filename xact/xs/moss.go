@@ -277,7 +277,7 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	case (prevBck == nil) != (currBck == nil):
 		return xreg.WprKeepAndStartNew, nil
 	default:
-		if !prevBck.Equal(currBck, true, true) {
+		if !prevBck.Equal(currBck, true /*same BID*/, true) {
 			return xreg.WprKeepAndStartNew, nil
 		}
 		// reuse

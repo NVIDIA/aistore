@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 // Set new primary, including:
@@ -731,9 +732,9 @@ func (h *htrun) _prepForceJoin(w http.ResponseWriter, r *http.Request, msg *actM
 	nlog.Infoln(tag, h.String(), smap.StringEx(), "-> [", npname, nsmap.StringEx(), "]")
 }
 
-func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *actMsgExt) {
-	const tag = "commit-force-join:"
+const _cfjtag = "commit-force-join:"
 
+func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *actMsgExt) {
 	ncm := &cluMeta{}
 	if err := cos.MorphMarshal(msg.Value, ncm); err != nil {
 		h.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, h.si, msg.Action, msg.Value, err)
@@ -749,11 +750,20 @@ func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *ac
 	// update cluMeta in mem (= destination, brute force)
 	nconfig := &ncm.Config.ClusterConfig
 	if err := cmn.GCO.Update(nconfig); err != nil {
-		err = fmt.Errorf("%s failed to update config %s: %w", tag, nconfig.String(), err)
+		err = fmt.Errorf("%s failed to update config %s: %w", _cfjtag, nconfig.String(), err)
 		debug.AssertNoErr(err)
 		h.writeErr(w, r, err)
 		return
 	}
+
+	// target to create bucket dirs (bdir) directly
+	if h.si.IsTarget() {
+		if err := h._forceCreateBdirs(ncm.BMD); err != nil {
+			h.writeErr(w, r, err)
+			return
+		}
+	}
+
 	h.owner.bmd.put(ncm.BMD)
 	h.owner.rmd.put(ncm.RMD)
 	h.owner.smap.put(nsmap)
@@ -764,7 +774,7 @@ func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *ac
 		npname             = npsi.StringEx()
 		joinURL, secondURL = npsi.ControlNet.URL, npsi.PubNet.URL
 	)
-	nlog.Infoln(tag, h.String(), "(self) ->", npname, "[", msg.String(), nsmap.StringEx(), "]")
+	nlog.Infoln(_cfjtag, h.String(), "(self) ->", npname, "[", msg.String(), nsmap.StringEx(), "]")
 
 	res := h.regTo(joinURL, npsi, apc.DefaultTimeout, nil, false /*keepalive*/)
 	eh := res.toErr()
@@ -775,17 +785,37 @@ func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *ac
 	// retry once
 	if joinURL != secondURL {
 		time.Sleep(time.Second)
-		nlog.Errorln(tag, eh, "- 2nd attempt via", secondURL)
+		nlog.Errorln(_cfjtag, eh, "- 2nd attempt via", secondURL)
 		res = h.regTo(secondURL, npsi, apc.DefaultTimeout, nil, false)
 		eh = res.toErr()
 		freeCR(res)
 	}
 	if eh != nil {
-		h.writeErrf(w, r, "%s -> %s failed: %v", tag, npname, eh) // FATAL
+		h.writeErrf(w, r, "%s -> %s failed: %v", _cfjtag, npname, eh) // FATAL
 		return
 	}
 ok:
-	nlog.Infoln(tag, h.String(), "->", npname, "done")
+	nlog.Infoln(_cfjtag, h.String(), "->", npname, "done")
+}
+
+// NOTE:
+//   - bypass target's receiveBMD/applyBMD/_syncBMD sequence
+//   - create destination bucket dirs explicitly and directly
+//   - use nilbmd=true: current local BMD (if exists) belongs
+//     to the source cluster and is not _comparable_
+func (h *htrun) _forceCreateBdirs(newBMD *bucketMD) error {
+	var createErrs []error
+	newBMD.Range(nil, nil, func(bck *meta.Bck) bool {
+		if errs := fs.CreateBucket(bck.Bucket(), true /*nilbmd*/); len(errs) > 0 {
+			createErrs = append(createErrs, errs...)
+		}
+		return false
+	})
+	if len(createErrs) > 0 {
+		return fmt.Errorf("%s %s: failed to create force-join bucket dirs: new %s: %w",
+			_cfjtag, h, newBMD, errors.Join(createErrs...))
+	}
+	return nil
 }
 
 //
