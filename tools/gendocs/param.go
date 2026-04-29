@@ -6,16 +6,26 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/parser"
 	"go/token"
+	"go/types"
+	"io/fs"
 	"maps"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
 const (
 	qparamPrefix    = "Qparam"
 	apcQparamPrefix = "apc.Qparam"
+	hdrPrefix       = "Hdr"
+	actPrefix       = "Act"
+
+	// OpenAPI parameter `in` values
+	inQuery  = "query"
+	inHeader = "header"
 )
 
 type param struct {
@@ -23,119 +33,203 @@ type param struct {
 	Type        string
 	Description string
 	Value       string
+	In          string // "query" or "header"
 }
 
-// paramSet is a map of parameter names to their definitions
+// paramSet is a map of parameter names to their definitions.
 type paramSet map[string]param
 
-// scans multiple directories for Go files with Qparam constants
-func (ps *paramSet) loadFromDirectories(projectRoot string, dirs []string) error {
-	*ps = make(paramSet)
+// loadConstantsFromPackages walks each directory (including any subdirectories
+// that contain Go source) as a Go package, type-checks it, and extracts
+// Qparam, Hdr, and Action string constants in one pass.
+//
+// Type-checking at package scope resolves intra-package identifier aliases
+// such as `ActXactStart = Start` where the right-hand side is defined in a
+// sibling file. Cross-package references are not resolved.
+func loadConstantsFromPackages(projectRoot string, dirs []string) (paramSet, map[string]string, error) {
+	params := paramSet{}
+	actions := map[string]string{}
 
 	for _, dir := range dirs {
-		dirPath := filepath.Join(projectRoot, dir)
-		walker := &fileWalker{Root: dirPath}
-
-		if err := walker.walk(); err != nil {
-			return fmt.Errorf("failed to walk directory %s: %v", dir, err)
+		root := filepath.Join(projectRoot, dir)
+		pkgDirs, err := goPackageDirs(root)
+		if err != nil {
+			return nil, nil, fmt.Errorf("scan %s: %w", dir, err)
 		}
-
-		for _, filePath := range walker.Files {
-			if err := ps.processParamFile(filePath); err != nil {
-				fmt.Printf("Warning: failed to parse %s: %v\n", filePath, err)
+		for _, pkgDir := range pkgDirs {
+			files, info, err := typeCheckPackage(pkgDir)
+			if err != nil {
+				return nil, nil, fmt.Errorf("load %s: %w", pkgDir, err)
 			}
+			if len(files) == 0 {
+				continue
+			}
+			pkgPrefix := files[0].Name.Name + dot
+
+			maps.Copy(params, extractQparamConstants(files, info, pkgPrefix))
+			maps.Copy(params, extractHeaderConstants(files, info, pkgPrefix))
+			// Action keys are unprefixed: today only api/apc/actmsg.go defines
+			// Act* string constants in the scanned directories.
+			maps.Copy(actions, extractActionConstants(files, info))
 		}
 	}
-	return nil
+	return params, actions, nil
 }
 
-// processes a single Go file for Qparam constants
-func (ps *paramSet) processParamFile(filePath string) error {
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return err
-	}
-	packagePrefix := node.Name.Name + dot
-	newParams := extractQparamConstants(node, packagePrefix)
-
-	maps.Copy((*ps), newParams)
-	return nil
-}
-
-// loads Action constants from actmsg.go and returns a map of constant names to their string values
-func loadActionsFromFile(filePath string) (map[string]string, error) {
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse file %s: %v", filePath, err)
-	}
-	return extractActionConstants(node), nil
-}
-
-// extracts Action constants from the AST and reads their actual values
-func extractActionConstants(node *ast.File) map[string]string {
-	actions := make(map[string]string)
-	for _, decl := range node.Decls {
-		gen, ok := decl.(*ast.GenDecl)
-		if !ok || gen.Tok != token.CONST {
-			continue
+// goPackageDirs returns root and every subdirectory containing at least one
+// Go source file, sorted for deterministic order.
+func goPackageDirs(root string) ([]string, error) {
+	seen := map[string]struct{}{}
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		for _, spec := range gen.Specs {
-			valSpec := spec.(*ast.ValueSpec)
-			for i, name := range valSpec.Names {
-				if !strings.HasPrefix(name.Name, "Act") {
+		if d.IsDir() || filepath.Ext(path) != goFileExt {
+			return nil
+		}
+		seen[filepath.Dir(path)] = struct{}{}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(seen))
+	for d := range seen {
+		out = append(out, d)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// typeCheckPackage parses every non-test .go file in dir as one Go package
+// and type-checks them together. The returned types.Info is suitable for
+// evalStringConst. Type errors (unresolved imports, etc.) are silently
+// ignored — only constant evaluation is required.
+func typeCheckPackage(dir string) ([]*ast.File, *types.Info, error) {
+	fset := token.NewFileSet()
+	skipTests := func(fi fs.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}
+	pkgs, err := parser.ParseDir(fset, dir, skipTests, parser.ParseComments)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(pkgs) == 0 {
+		return nil, nil, nil
+	}
+
+	// A valid Go directory has at most one non-test package; pick it
+	// deterministically by name in case of accidental drift.
+	names := make([]string, 0, len(pkgs))
+	for name := range pkgs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	pkg := pkgs[names[0]]
+
+	files := make([]*ast.File, 0, len(pkg.Files))
+	for _, f := range pkg.Files {
+		files = append(files, f)
+	}
+
+	info := &types.Info{Types: make(map[ast.Expr]types.TypeAndValue)}
+	conf := types.Config{Error: func(error) {}}
+	_, _ = conf.Check(pkg.Name, fset, files, info)
+	return files, info, nil
+}
+
+// evalStringConst returns the computed string value of a Go constant
+// expression via the type-checker. Empty if unresolvable.
+func evalStringConst(expr ast.Expr, info *types.Info) string {
+	tv, ok := info.Types[expr]
+	if !ok || tv.Value == nil || tv.Value.Kind() != constant.String {
+		return ""
+	}
+	return constant.StringVal(tv.Value)
+}
+
+// walkStringConsts visits every CONST value-spec across files. For each name
+// matching predicate, it evaluates the right-hand side to a string via the
+// type-checker and calls yield. Names without a string constant value are
+// skipped.
+func walkStringConsts(
+	files []*ast.File,
+	info *types.Info,
+	match func(name string) bool,
+	yield func(name, value string, vs *ast.ValueSpec),
+) {
+	for _, f := range files {
+		for _, decl := range f.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
 					continue
 				}
-
-				actualValue := ""
-				if valSpec.Values != nil && i < len(valSpec.Values) {
-					if lit, ok := valSpec.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-						actualValue = strings.Trim(lit.Value, `"`)
+				for i, name := range vs.Names {
+					if !match(name.Name) {
+						continue
 					}
-				}
-
-				if actualValue != "" {
-					actions[name.Name] = actualValue
+					if vs.Values == nil || i >= len(vs.Values) {
+						continue
+					}
+					value := evalStringConst(vs.Values[i], info)
+					if value == "" {
+						continue
+					}
+					yield(name.Name, value, vs)
 				}
 			}
 		}
 	}
-	return actions
 }
 
-// extracts Qparam constants from the AST with specified package prefix
-func extractQparamConstants(node *ast.File, packagePrefix string) map[string]param {
-	params := make(map[string]param)
-	for _, decl := range node.Decls {
-		gen, ok := decl.(*ast.GenDecl)
-		if !ok || gen.Tok != token.CONST {
-			continue
-		}
-		for _, spec := range gen.Specs {
-			valSpec := spec.(*ast.ValueSpec)
-			for i, name := range valSpec.Names {
-				if !strings.HasPrefix(name.Name, qparamPrefix) {
-					continue
-				}
-				actualValue := ""
-				if valSpec.Values != nil && i < len(valSpec.Values) {
-					if lit, ok := valSpec.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-						actualValue = strings.Trim(lit.Value, `"`)
-					}
-				}
-
-				desc := extractDescription(valSpec)
-				paramName := packagePrefix + name.Name
-				params[paramName] = param{
-					Name:        paramName,
-					Description: desc,
-					Value:       actualValue,
-				}
+// extracts Qparam constants and tags them as query parameters.
+func extractQparamConstants(files []*ast.File, info *types.Info, pkgPrefix string) paramSet {
+	out := paramSet{}
+	walkStringConsts(files, info,
+		func(n string) bool { return strings.HasPrefix(n, qparamPrefix) },
+		func(name, value string, vs *ast.ValueSpec) {
+			full := pkgPrefix + name
+			out[full] = param{
+				Name:        full,
+				Description: extractDescription(vs),
+				Value:       value,
+				In:          inQuery,
 			}
-		}
-	}
-	return params
+		})
+	return out
+}
+
+// extracts HTTP header constants (any name containing "Hdr") and tags them as
+// header parameters.
+func extractHeaderConstants(files []*ast.File, info *types.Info, pkgPrefix string) paramSet {
+	out := paramSet{}
+	walkStringConsts(files, info,
+		func(n string) bool { return strings.Contains(n, hdrPrefix) },
+		func(name, value string, vs *ast.ValueSpec) {
+			full := pkgPrefix + name
+			out[full] = param{
+				Name:        full,
+				Description: extractDescription(vs),
+				Value:       value,
+				In:          inHeader,
+			}
+		})
+	return out
+}
+
+// extracts Act* string constants. Keys are bare names (no package prefix);
+// today only api/apc/actmsg.go defines them within the scanned directories.
+func extractActionConstants(files []*ast.File, info *types.Info) map[string]string {
+	out := map[string]string{}
+	walkStringConsts(files, info,
+		func(n string) bool { return strings.HasPrefix(n, actPrefix) },
+		func(name, value string, _ *ast.ValueSpec) { out[name] = value })
+	return out
 }
 
 // gets the description from comments

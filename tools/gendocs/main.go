@@ -21,8 +21,8 @@ import (
 var targetRoot string
 
 var (
-	// Parameter directories to scan for Qparam constants
-	paramDirectories = []string{"api/apc", "ais/s3"}
+	// Parameter directories to scan for Qparam (query) and Hdr (header) constants
+	paramDirectories = []string{"api/apc", "ais/s3", "cmn/cos"}
 )
 
 const (
@@ -138,15 +138,15 @@ type (
 func buildURLFromEndpoint(ep *endpoint) string {
 	url := baseURL + ep.Path
 
-	// Add query parameters if they exist
-	if len(ep.Params) > 0 {
-		var queryParams []string
-		for _, param := range ep.Params {
-			queryParams = append(queryParams, fmt.Sprintf("%s=%s", param.Value, paramPlaceholder))
+	var queryParams []string
+	for _, param := range ep.Params {
+		if param.In == inHeader {
+			continue
 		}
-		if len(queryParams) > 0 {
-			url += queryStart + strings.Join(queryParams, queryJoin)
-		}
+		queryParams = append(queryParams, fmt.Sprintf("%s=%s", param.Value, paramPlaceholder))
+	}
+	if len(queryParams) > 0 {
+		url += queryStart + strings.Join(queryParams, queryJoin)
 	}
 
 	return url
@@ -159,7 +159,17 @@ func generateHTTPCommand(ep *endpoint, payload string) string {
 
 	cmd := curlBase + method + backslash + newlineChar
 
-	// Add headers and payload only if payload provided
+	// Header params -> -H flags
+	var headerLines []string
+	for _, param := range ep.Params {
+		if param.In != inHeader {
+			continue
+		}
+		headerLines = append(headerLines, fmt.Sprintf("  %s '%s: %s'%s%s", headerFlag, param.Value, paramPlaceholder, backslash, newlineChar))
+	}
+	cmd += strings.Join(headerLines, "")
+
+	// Body + Content-Type if payload provided
 	if payload != "" {
 		// Detect S3 endpoints and use appropriate content type
 		isS3Endpoint := strings.HasPrefix(ep.Path, "/s3/") || ep.Path == "/s3"
@@ -459,13 +469,7 @@ func main() {
 	}
 	targetRoot = filepath.Join(projectRoot, aisRelativePath)
 
-	var paramSet paramSet
-	if err := paramSet.loadFromDirectories(projectRoot, paramDirectories); err != nil {
-		panic(err)
-	}
-
-	// Load action constants from actmsg.go
-	actionMap, err := loadActionsFromFile(filepath.Join(projectRoot, "api/apc/actmsg.go"))
+	paramSet, actionMap, err := loadConstantsFromPackages(projectRoot, paramDirectories)
 	if err != nil {
 		panic(err)
 	}
@@ -667,15 +671,20 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 			fullKey, typ := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 			desc := ""
 			value := ""
+			in := inQuery
 			if def, ok := (*fp.ParamSet)[fullKey]; ok {
 				desc = def.Description
 				value = def.Value
+				if def.In != "" {
+					in = def.In
+				}
 			}
 			params = append(params, param{
 				Name:        fullKey,
 				Type:        typ,
 				Description: desc,
 				Value:       value,
+				In:          in,
 			})
 		}
 	}

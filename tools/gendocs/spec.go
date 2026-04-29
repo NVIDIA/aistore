@@ -135,14 +135,18 @@ func buildOperation(ep *endpoint, actionMap, globalPayloads map[string]string, s
 		},
 	}
 
-	// Query parameters
+	// Query and header parameters
 	for _, p := range ep.Params {
 		if p.Description == "" {
 			continue
 		}
+		in := p.In
+		if in == "" {
+			in = "query"
+		}
 		op.Parameters = append(op.Parameters, oaParameter{
 			Name:        p.Value,
-			In:          "query",
+			In:          in,
 			Description: p.Description,
 			Schema:      &schemaProperty{Type: mapParamType(p.Type)},
 		})
