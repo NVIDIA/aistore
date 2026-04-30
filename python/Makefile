@@ -3,8 +3,6 @@ PYTHON = python3
 GO = go
 PYTEST = $(PYTHON) -m pytest
 PIP ?= pip3
-SDK_DOCFILE := ../docs/python_sdk.md
-TORCH_DOCFILE := ../docs/pytorch.md
 PYAISLOADER_TEST_TYPE ?= short
 
 BOTO_UNIT_TEST_COUNT := $(shell ls -1 tests/unit/botocore_patch/test*py | wc -l)
@@ -120,29 +118,6 @@ lint: common_deps botocore_deps mcp_deps
 .PHONY: lint-tests
 lint-tests: common_deps botocore_deps
 	pylint --rcfile=.pylintrc-tests --recursive=y tests
-
-PYDOC_MD_RENDERER := { renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }
-
-SDK_MODULES := \
-	-m authn.authn_client -m authn.cluster_manager -m authn.role_manager -m authn.token_manager -m authn.user_manager -m authn.access_attr \
-	-m bucket -m client -m cluster -m etl -m job -m retry_config \
-	-m multiobj.object_group -m multiobj.object_names -m multiobj.object_range -m multiobj.object_template \
-	-m obj.object -m obj.object_reader -m obj.obj_file.object_file -m obj.object_props -m obj.object_attributes
-
-PYTORCH_MODULES := \
-	-m base_map_dataset -m base_iter_dataset -m map_dataset -m iter_dataset -m shard_reader -m multishard_dataset -m parallel_map_dataset
-
-.PHONY: generate-sdk-docs
-generate-sdk-docs:
-	@command -v pydoc-markdown >/dev/null 2>&1 || $(PIP) install pydoc-markdown[novella] --quiet
-	@source doc_prefixes.sh && echo "$$SDK_PREFIX" > $(SDK_DOCFILE) && \
-		pydoc-markdown -I ./aistore/sdk $(SDK_MODULES) '$(PYDOC_MD_RENDERER)' | sed 's/####/###/g' >> $(SDK_DOCFILE)
-
-.PHONY: generate-pytorch-docs
-generate-pytorch-docs:
-	@command -v pydoc-markdown >/dev/null 2>&1 || $(PIP) install pydoc-markdown[novella] --quiet
-	@source doc_prefixes.sh && echo "$$TORCH_PREFIX" > $(TORCH_DOCFILE) && \
-		pydoc-markdown -I ./aistore/pytorch $(PYTORCH_MODULES) '$(PYDOC_MD_RENDERER)' | sed 's/####/###/g' >> $(TORCH_DOCFILE)
 
 # Coverage targets (unit, integration, combined)
 COV_PKG := aistore

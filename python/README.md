@@ -5,7 +5,7 @@ See the README files in each module for usage details:
 
 - [SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md)
 - [PyTorch](https://github.com/NVIDIA/aistore/blob/main/python/aistore/pytorch/README.md)
-- [Botocore](https://github.com/NVIDIA/aistore/blob/main/python/aistore/botocore_patch/README.md)
+- [Botocore](https://docs.nvidia.com/aistore/python/aistore/botocore_patch)
 
 ## References
 

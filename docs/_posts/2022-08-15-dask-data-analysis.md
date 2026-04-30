@@ -101,6 +101,6 @@ filtered_df = df[df[' "Year"'] > 2000]
 
 * [Dask API](https://docs.dask.org/en/stable/dataframe-api.html)
 * [Pandas API](https://pandas.pydata.org/docs/reference/index.html)
-* [AIStore Python SDK](https://github.com/NVIDIA/aistore/blob/main/docs/python_sdk.md)
+* [AIStore Python SDK](https://docs.nvidia.com/aistore/python/aistore/sdk)
 
 

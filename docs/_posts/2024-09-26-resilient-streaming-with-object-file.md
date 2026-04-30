@@ -130,7 +130,7 @@ Easy integration with existing workflows and familiar file-like behavior makes `
 - [AIS Python SDK PyPI](https://pypi.org/project/aistore/)
 - ObjectFile
     - [Source](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/obj/obj_file/object_file.py)
-    - [Docs](https://github.com/NVIDIA/aistore/blob/main/docs/python_sdk.md#obj.obj_file.object_file.ObjectFile)
+    - [Docs](https://docs.nvidia.com/aistore/python/aistore/sdk/obj/obj_file/object_file)
     - [Demo](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/resilient-streaming-object-file.ipynb)
 - [Python BufferedIOBase](https://docs.python.org/3/library/io.html#io.BufferedIOBase)
 - [Requests Library Streams](https://requests.readthedocs.io/en/latest/user/advanced/#body-content-workflow)

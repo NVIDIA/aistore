@@ -28,8 +28,8 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 - [Go API](https://github.com/NVIDIA/aistore/tree/main/api)
 - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
   - [PyPI package](https://pypi.org/project/aistore/)
-  - [Python SDK reference guide](/docs/python_sdk.md)
-- [PyTorch integration](/docs/pytorch.md)
+  - [Python SDK reference guide](https://docs.nvidia.com/aistore/python/aistore/sdk)
+- [PyTorch integration](https://docs.nvidia.com/aistore/python/aistore/pytorch)
 - [TensorFlow integration](/docs/tensorflow.md)
 - [HTTP API reference](https://aistore.nvidia.com/docs/http-api)
   - [curl examples](/docs/http_api.md)
@@ -37,7 +37,7 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 - [S3 compatibility](/docs/s3compat.md)
   - [`s3cmd` quick start](/docs/s3compat.md#quick-start-with-s3cmd)
   - [Presigned S3 requests](/docs/s3compat.md#presigned-s3-requests)
-  - [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch)
+  - [Boto3 support](https://docs.nvidia.com/aistore/python/aistore/botocore_patch)
 
 ## Command-Line Interface
 

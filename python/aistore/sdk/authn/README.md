@@ -54,7 +54,7 @@ cluster_info = cluster_manager.register(cluster_alias, ["http://localhost:8080"]
 
 Define custom roles and manage users to control access to AIStore resources at the bucket or cluster level, and use the `AccessAttr` class to specify permissions like `GET`, `PUT`, `CREATE-BUCKET`, etc., tailored to your needs.
 
-> For more information on the specific access permissions, refer to the please refer to the permissions section of the [AuthN documentation](https://github.com/NVIDIA/aistore/blob/main/docs/authn.md#permissions) and the section [`AccessAttr`](https://github.com/NVIDIA/aistore/blob/main/docs/python_sdk.md#authn.access_attr.AccessAttr) under the [Python SDK Documentation](https://github.com/NVIDIA/aistore/blob/main/docs/python_sdk.md).
+> For more information on the specific access permissions, refer to the please refer to the permissions section of the [AuthN documentation](https://github.com/NVIDIA/aistore/blob/main/docs/authn.md#permissions) and the section [`AccessAttr`](https://docs.nvidia.com/aistore/python/aistore/sdk/authn/access_attr) under the [Python SDK Documentation](https://docs.nvidia.com/aistore/python/aistore/sdk/authn).
 
 ##### Creating a Custom Role
 
@@ -118,7 +118,7 @@ When a token is revoked, the AuthN server updates all registered clusters to ens
 | [user_manager.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/authn/user_manager.py) | Manages users and their roles within AIStore. |
 | [access_attr.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/authn/access_attr.py) | Defines permissions for access control, including predefined sets like read-only and admin access. |
 
-For more detailed information on available methods, roles, and permissions, as well as best practices for using the AuthN module as well as the AIStore SDK, please refer to the [Python SDK documentation](https://aistore.nvidia.com/docs/python_sdk.md).
+For more detailed information on available methods, roles, and permissions, as well as best practices for using the AuthN module as well as the AIStore SDK, please refer to the [Python SDK documentation](https://docs.nvidia.com/aistore/python/aistore/sdk).
 
 ### References
 

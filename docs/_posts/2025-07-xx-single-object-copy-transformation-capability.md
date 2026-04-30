@@ -66,7 +66,7 @@ $ ais object get ais://dest/bbb -
 
 ### AIStore Python SDK
 
-The [Python SDK](/docs/python_sdk.md) provides an intuitive interface for using the single-object copy API.
+The [Python SDK](https://docs.nvidia.com/aistore/python/aistore/sdk) provides an intuitive interface for using the single-object copy API.
 
 ```python
 # Create source and destination buckets

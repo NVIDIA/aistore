@@ -222,5 +222,5 @@ Get-Batch provides the largest gains for small-to-medium object sizes, where it 
 
 - [Blog Post: Get-Batch API](https://aistore.nvidia.com/blog/2025/10/06/get-batch-sequential) - Detailed performance analysis and use cases
 - [AIStore 4.0 Release Notes](https://github.com/NVIDIA/aistore/releases/tag/v1.4.0) - Full release information
-- [Python SDK Documentation](/docs/python_sdk.md) - Complete SDK reference
+- [Python SDK Documentation](https://docs.nvidia.com/aistore/python/aistore/sdk) - Complete SDK reference
 - [Example Notebook](https://github.com/NVIDIA/aistore/tree/main/python/examples/sdk/ais-batch-requests.ipynb) - Jupyter notebook with examples

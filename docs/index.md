@@ -77,9 +77,9 @@ AIS runs natively on Kubernetes and features open format - thus, the freedom to 
 For developers and data scientists, there's also:
 
 * [Go API](https://github.com/NVIDIA/aistore/tree/main/api) used in [CLI](/docs/cli.md) and [benchmarking tools](/docs/aisloader.md)
-* [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) + [Reference Guide](/docs/python_sdk.md)
+* [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) + [Reference Guide](https://docs.nvidia.com/aistore/python/aistore/sdk)
 * [PyTorch integration](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch) and usage examples
-* [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch)
+* [Boto3 support](https://docs.nvidia.com/aistore/python/aistore/botocore_patch)
 
 ## Quick Start
 
@@ -134,7 +134,7 @@ The script installs [aisloader](/docs/aisloader.md) and [CLI](/docs/cli.md) from
 
 PyTorch integration is a growing set of datasets (both iterable and map-style), samplers, and dataloaders:
 
-* [Taxonomy of abstractions and API reference](/docs/pytorch.md)
+* [Taxonomy of abstractions and API reference](https://docs.nvidia.com/aistore/python/aistore/pytorch)
 * [AIS plugin for PyTorch: usage examples](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
 * [Jupyter notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/pytorch/)
 

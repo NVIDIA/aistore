@@ -57,7 +57,7 @@ client = Client("http://localhost:8080")
 > Note: `http://localhost:8080` address (above and elsewhere) must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
 
 The newly created `client` object can be used to interact with your AIS cluster, buckets, and objects. 
-See the [examples](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk) and the [reference docs](https://aistore.nvidia.com/docs/python-sdk) for more details
+See the [examples](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk) and the [reference docs](https://docs.nvidia.com/aistore/python/aistore/sdk) for more details
 
 **External Cloud Storage Buckets**
 
@@ -87,7 +87,7 @@ client.bucket("my-azure-bucket", provider="azure").object("filename.ext").get_re
 client.bucket("my-aws-bucket", provider="aws").list_objects()
 ```
 
-Please note that certain operations do **not** support external cloud storage buckets. Please refer to the [SDK reference documentation](https://aistore.nvidia.com/docs/python_sdk.md) for more information on which bucket/object operations support remote cloud buckets, as well as general information on class and method usage.
+Please note that certain operations do **not** support external cloud storage buckets. Please refer to the [SDK reference documentation](https://docs.nvidia.com/aistore/python/aistore/sdk) for more information on which bucket/object operations support remote cloud buckets, as well as general information on class and method usage.
 
 ---
 
@@ -196,7 +196,7 @@ To learn more about working with AIS ETL, check out [examples](https://github.co
 |[dsort/core.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/dsort/core.py)|Contains class `Dsort` and all dsort-related operations.|
 |[etl.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/etl/etl.py)|Contains class `Etl` and all ETL-related operations.|
 
-For more information on SDK usage, refer to the [SDK reference documentation](https://aistore.nvidia.com/docs/python_sdk.md) or see the examples [here](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/).
+For more information on SDK usage, refer to the [SDK reference documentation](https://docs.nvidia.com/aistore/python/aistore/sdk) or see the examples [here](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/).
 
 
 ## References

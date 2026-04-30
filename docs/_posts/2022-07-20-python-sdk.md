@@ -12,7 +12,7 @@ Python has grounded itself as a popular language of choice among data scientists
 
 [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore) is a project which includes a growing library of client-side APIs to easily access and utilize AIStore clusters, objects, and buckets, as well as a number of tools for AIStore usage/integration with PyTorch.
 
-The [AIStore Python API](https://aistore.nvidia.com/docs/python-sdk) is essentially a Python port of AIStore's [Go APIs](https://github.com/NVIDIA/aistore/tree/main/api). In terms of functionality, the AIStore Python and Go APIs are quite similar, both of which essentially make simple [HTTP requests](https://aiatscale.org/docs/http_api#api-reference) to an AIStore endpoint. The HTTP requests allow the APIs to interact (reads and writes) with an AIStore instance's metadata. The API provides convenient and flexible ways (similar to those provided by the [CLI](https://aiatscale.org/docs/cli)) to move data (as objects) in and out of buckets on AIStore, manage AIStore clusters, and much more.
+The [AIStore Python API](https://docs.nvidia.com/aistore/python/aistore/sdk) is essentially a Python port of AIStore's [Go APIs](https://github.com/NVIDIA/aistore/tree/main/api). In terms of functionality, the AIStore Python and Go APIs are quite similar, both of which essentially make simple [HTTP requests](https://aiatscale.org/docs/http_api#api-reference) to an AIStore endpoint. The HTTP requests allow the APIs to interact (reads and writes) with an AIStore instance's metadata. The API provides convenient and flexible ways (similar to those provided by the [CLI](https://aiatscale.org/docs/cli)) to move data (as objects) in and out of buckets on AIStore, manage AIStore clusters, and much more.
 
 This technical blog will demonstrate a few potential ways the Python API provided in the [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore) could be used with a running AIStore instance to manage and utilize data.
 
@@ -112,7 +112,7 @@ reader = client.bucket(BUCKET_NAME).object(OBJECT_NAME).get_reader()
 data = reader.read_all()
 ```
 
-If we want to get the *uncompressed* TinyImageNet from AIStore bucket `ais://tinyimagenet_uncompressed`, we can easily do that with [Bucket.list_objects()](https://aistore.nvidia.com/docs/python-sdk#bucket.Bucket.list_objects) and [Object.get_reader()](https://aistore.nvidia.com/docs/python-sdk#obj.object.Object.get_reader).
+If we want to get the *uncompressed* TinyImageNet from AIStore bucket `ais://tinyimagenet_uncompressed`, we can easily do that with [Bucket.list_objects()](https://docs.nvidia.com/aistore/python/aistore/sdk/bucket#aistore-sdk-bucket-Bucket-list_objects) and [Object.get_reader()](https://docs.nvidia.com/aistore/python/aistore/sdk/obj/object#aistore-sdk-obj-object-Object-get_reader).
 
 ```python
 BUCKET_NAME = "tinyimagenet_uncompressed"
@@ -125,7 +125,7 @@ for FILENAME in TINYIMAGENET_UNCOMPRESSED:
     client.bucket(BUCKET_NAME).object(FILENAME.name).get_reader()
 ```
 
-We can also pick a *specific* section of the uncompressed dataset and only get those specific objects. By specifying a `prefix` to our [Bucket.list_objects()](https://aistore.nvidia.com/docs/python-sdk#bucket.Bucket.list_objects) call, we can manipulate the *symbolic* file system and list only the contents in our desired directory.
+We can also pick a *specific* section of the uncompressed dataset and only get those specific objects. By specifying a `prefix` to our [Bucket.list_objects()](https://docs.nvidia.com/aistore/python/aistore/sdk/bucket#aistore-sdk-bucket-Bucket-list_objects) call, we can manipulate the *symbolic* file system and list only the contents in our desired directory.
 
 ```python
 BUCKET_NAME = "tinyimagenet_uncompressed"
@@ -162,7 +162,7 @@ docker run -d \
 
 > Deploying an AIStore cluster with third-party cloud backends simply *imports/copies the buckets and objects from the provided third-party backends to AIStore*. The client-side APIs themselves do **not** interact with the actual external backends at any point. The client-side APIs only interact with duplicate instances of those external cloud storage buckets residing in the AIStore cluster.
 
-The [Object.get_reader()](https://aistore.nvidia.com/docs/python-sdk#obj.object.Object.get_reader) works with external cloud storage buckets as well. We can use the method in a similar fashion as shown previously to easily get either a compressed or uncompressed version of the dataset from, for examples, `gcp://tinyimagenet_compressed` and `gcp://tinyimagenet_uncompressed`. 
+The [Object.get_reader()](https://docs.nvidia.com/aistore/python/aistore/sdk/obj/object#aistore-sdk-obj-object-Object-get_reader) works with external cloud storage buckets as well. We can use the method in a similar fashion as shown previously to easily get either a compressed or uncompressed version of the dataset from, for examples, `gcp://tinyimagenet_compressed` and `gcp://tinyimagenet_uncompressed`. 
 
 ```python
 # Getting compressed TinyImageNet dataset from [gcp://tinyimagenet_compressed]
@@ -184,9 +184,9 @@ for FILENAME in TINYIMAGENET_UNCOMPRESSED_VAL:
     client.bucket(BUCKET_NAME).object(FILENAME.name).get_reader()
 ```
 
-> Note the added argument `provider` supplied in [`Client.bucket()`](https://aistore.nvidia.com/docs/python-sdk#client.Client.bucket) for the examples shown above.
+> Note the added argument `provider` supplied in [`Client.bucket()`](https://docs.nvidia.com/aistore/python/aistore/sdk/client#aistore-sdk-client-Client-bucket) for the examples shown above.
 
-We can instead choose to *copy* the contents of an external cloud storage bucket on AIStore to a native (AISProvider) AIStore bucket with [`Bucket.copy()`](https://aistore.nvidia.com/docs/python-sdk#bucket.Bucket.copy) as well:
+We can instead choose to *copy* the contents of an external cloud storage bucket on AIStore to a native (AISProvider) AIStore bucket with [`Bucket.copy()`](https://docs.nvidia.com/aistore/python/aistore/sdk/bucket#aistore-sdk-bucket-Bucket-copy) as well:
 
 ```python
 # Copy bucket [gcp://tinyimagenet_uncompressed] and its objects to new bucket [ais://tinyimagetnet_validationset]
@@ -214,7 +214,7 @@ For more information on dataloading from AIStore with PyTorch, please refer to t
 
 For more examples, please refer to additional documentation [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore) and try out the [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/sdk-basics.ipynb).
 
-For information on specific API usage, please refer to the [API reference](https://aistore.nvidia.com/docs/python-sdk).
+For information on specific API usage, please refer to the [API reference](https://docs.nvidia.com/aistore/python/aistore/sdk).
 
 
 ## References
