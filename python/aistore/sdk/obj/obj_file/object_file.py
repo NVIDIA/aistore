@@ -2,12 +2,18 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-from sys import maxsize as sys_maxsize
-from requests.exceptions import ChunkedEncodingError, ConnectionError, ReadTimeout
-from urllib3.exceptions import ProtocolError, ReadTimeoutError
 from io import BufferedIOBase, BufferedWriter
+from sys import maxsize as sys_maxsize
 from typing import Optional, Generator
+
 from overrides import override
+from requests.exceptions import (
+    ChunkedEncodingError,
+    ConnectionError as RequestsConnectionError,
+    ReadTimeout,
+)
+from urllib3.exceptions import ProtocolError, ReadTimeoutError
+
 from aistore.sdk.obj.content_iterator import BaseContentIterProvider
 from aistore.sdk.obj.obj_file.errors import (
     ObjectFileReaderMaxResumeError,
@@ -32,13 +38,21 @@ class ObjectFileReader(BufferedIOBase):
     retrieved chunk. The `max_resume` parameter controls how many retry attempts are made before an error is raised.
 
     Args:
-        content_provider (BaseContentIterProvider): A provider that creates iterators which can fetch object data from AIS in chunks.
+        content_provider (BaseContentIterProvider): A provider that creates iterators which
+            can fetch object data from AIS in chunks.
         max_resume (int): Maximum number of resumes allowed for an ObjectFileReader instance.
     """
 
     def __init__(self, content_provider: BaseContentIterProvider, max_resume: int):
         self._content_provider = content_provider
         self._max_resume = max_resume  # Maximum number of resume attempts allowed
+        # Declared here so static analysis sees them as instance attributes;
+        # actual values are (re)assigned by _reset().
+        self._content_iter: Optional[Generator[bytes, None, None]] = None
+        self._remainder: Optional[memoryview] = None
+        self._resume_position = 0
+        self._closed = False
+        self._resume_total = 0
         self._reset()
 
     def _reset(self, retain_resumes: bool = False) -> None:
@@ -60,6 +74,7 @@ class ObjectFileReader(BufferedIOBase):
         return not self._closed
 
     @override
+    # pylint: disable=too-many-branches,too-many-statements
     def read(self, size: Optional[int] = -1) -> bytes:
         """
         Read up to 'size' bytes from the object. If size is -1, read until the end of the stream.
@@ -109,7 +124,7 @@ class ObjectFileReader(BufferedIOBase):
                 try:
                     chunk = memoryview(next(self._content_iter))
                 except (
-                    ConnectionError,
+                    RequestsConnectionError,
                     ChunkedEncodingError,
                     ProtocolError,
                     ReadTimeout,
@@ -265,7 +280,7 @@ class ObjectFileWriter(BufferedWriter):
         Write data to the object.
 
         Args:
-            data (bytes): The data to write.
+            buffer (bytes): The data to write.
 
         Returns:
             int: Number of bytes written.

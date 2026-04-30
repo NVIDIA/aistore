@@ -28,6 +28,7 @@ class BodyStreamReader(BufferedIOBase):
         # Cache content/iterator for efficient reading
         self._read_iterator = None
         self._cached_content = None
+        self._iterator_exhausted = False
 
     @override
     def read(self, size: int = -1) -> bytes:

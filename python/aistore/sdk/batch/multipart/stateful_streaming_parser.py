@@ -12,6 +12,7 @@ from aistore.sdk.batch.multipart.body_stream_reader import BodyStreamReader
 logger = get_logger(__name__)
 
 
+# pylint: disable=too-few-public-methods
 class StatefulStreamingParser:
     """
     A stateful streaming parser for efficiently processing multipart HTTP responses.
