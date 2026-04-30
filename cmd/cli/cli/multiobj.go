@@ -675,6 +675,15 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 					return "", "", "", err
 				}
 			}
+			if flagIsSet(c, blobChunkSizeFlag) {
+				msg.BlobChunkSize, err = parseSizeFlag(c, blobChunkSizeFlag)
+				if err != nil {
+					return "", "", "", err
+				}
+			}
+			if flagIsSet(c, blobNumWorkersFlag) {
+				msg.BlobNumWorkers = parseIntFlag(c, blobNumWorkersFlag)
+			}
 			if flagIsSet(c, numWorkersFlag) {
 				msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
 			}

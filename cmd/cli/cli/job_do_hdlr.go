@@ -153,6 +153,8 @@ var (
 			latestVerFlag,
 			nonRecursFlag, // (embedded prefix dopOLTP)
 			blobThresholdFlag,
+			blobChunkSizeFlag,
+			blobNumWorkersFlag,
 			yesFlag,
 			numWorkersFlag,
 			dontHeadRemoteFlag,
