@@ -40,7 +40,7 @@ const (
 	trname = "reb"
 )
 
-// rebalance stage enum
+// rebalance stage enum (see reb/stages.go for `isInStage` etc. helpers)
 const (
 	rebStageInactive = iota
 	rebStageInit

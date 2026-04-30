@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -25,41 +25,29 @@ func newNodeStages() *nodeStages {
 	return &nodeStages{targets: make(map[string]uint32)}
 }
 
-// Returns true if the target is in `newStage` or in any next stage
+// Returns true if the target is at `newStage` or any next stage
 func (*nodeStages) stageReached(stage, newStage uint32) bool {
-	return stage > newStage
+	return stage >= newStage
 }
 
-// Mark a 'node' that it has reached the 'stage'. Do nothing if the target
-// is already in this stage or has finished it already
+// Record that daemonID has reached `stage`. No-op if already at this stage or beyond
+// (forward-only transition).
 func (ns *nodeStages) setStage(daemonID string, stage uint32) {
 	ns.mtx.Lock()
-	status, ok := ns.targets[daemonID]
-	if !ok {
-		ns.targets[daemonID] = status
-	}
-
-	if !ns.stageReached(status, stage) {
+	cur, ok := ns.targets[daemonID]
+	if !ok || cur < stage {
 		ns.targets[daemonID] = stage
 	}
 	ns.mtx.Unlock()
 }
 
-// Returns true if the target is in `newStage` or in any next stage.
-func (ns *nodeStages) isInStage(si *meta.Snode, stage uint32) bool {
+// Returns true if the target is at `stage` or any later stage.
+func (ns *nodeStages) isInStage(tsi *meta.Snode, stage uint32) bool {
 	ns.mtx.Lock()
-	inStage := ns.isInStageUnlocked(si, stage)
+	cur, ok := ns.targets[tsi.ID()]
 	ns.mtx.Unlock()
-	return inStage
-}
 
-// Returns true if the target is in `newStage` or in any next stage
-func (ns *nodeStages) isInStageUnlocked(si *meta.Snode, stage uint32) bool {
-	status, ok := ns.targets[si.ID()]
-	if !ok {
-		return false
-	}
-	return ns.stageReached(status, stage)
+	return ok && ns.stageReached(cur, stage)
 }
 
 func (ns *nodeStages) cleanup() {
