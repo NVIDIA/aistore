@@ -25,10 +25,6 @@ const (
 )
 
 type (
-	regularAck struct {
-		daemonID string // sender's DaemonID
-		rebID    int64
-	}
 	ecAck struct {
 		daemonID string // sender's DaemonID
 		rebID    int64
@@ -50,39 +46,11 @@ type (
 
 // interface guard
 var (
-	_ cos.Unpacker = (*regularAck)(nil)
 	_ cos.Unpacker = (*ecAck)(nil)
-	_ cos.Packer   = (*regularAck)(nil)
 	_ cos.Packer   = (*ecAck)(nil)
 	_ cos.Packer   = (*stageNtfn)(nil)
 	_ cos.Unpacker = (*stageNtfn)(nil)
 )
-
-func (rack *regularAck) Unpack(unpacker *cos.ByteUnpack) (err error) {
-	if rack.rebID, err = unpacker.ReadInt64(); err != nil {
-		return
-	}
-	rack.daemonID, err = unpacker.ReadString()
-	return
-}
-
-func (rack *regularAck) Pack(packer *cos.BytePack) {
-	packer.WriteInt64(rack.rebID)
-	packer.WriteString(rack.daemonID)
-}
-
-func (rack *regularAck) NewPack() []byte {
-	l := rebMsgKindSize + rack.PackedSize()
-	packer := cos.NewPacker(nil, l)
-	packer.WriteUint8(rebMsgRegular)
-	packer.WriteAny(rack)
-	return packer.Bytes()
-}
-
-// rebID + len(DaemonID) + DaemonID
-func (rack *regularAck) PackedSize() int {
-	return cos.SizeofI64 + cos.SizeofLen + len(rack.daemonID)
-}
 
 func (eack *ecAck) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if eack.rebID, err = unpacker.ReadInt64(); err != nil {

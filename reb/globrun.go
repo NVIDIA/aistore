@@ -5,6 +5,7 @@
 package reb
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -45,16 +46,12 @@ const (
 	rebStageInactive = iota
 	rebStageInit
 	rebStageTraverse
-	rebStageWaitAck
+	rebStageWaitAck // is now used as a post-traverse barrier; regular per-object ACKs are gone
 	rebStageFin
 	rebStageFinStreams
 	rebStageDone
 	rebStageAbort // one of targets aborts the rebalancing (never set, only sent)
 )
-
-const maxWackTargets = 4
-
-const initCapLomAcks = 512
 
 type (
 	Reb struct {
@@ -64,14 +61,6 @@ type (
 		filterGFN *prob.Filter
 		ecClient  *http.Client
 		stages    *nodeStages
-		lomacks   [cos.MultiHashMapCount]*lomAcks
-		awaiting  struct {
-			targets meta.Nodes // targets for which we are waiting for
-			ts      int64      // last time we have recomputed
-			mtx     sync.Mutex
-		}
-		// [run] lazy delete migrated objects
-		lazydel lazydel
 		// (smap, xreb) + atomic state
 		id atomic.Int64
 		// quiescence
@@ -90,11 +79,9 @@ type (
 	}
 )
 
+const regOpaqueSize = 1 + cos.SizeofI64
+
 type (
-	lomAcks struct {
-		mu *sync.Mutex
-		q  map[string]core.LIF // on the wire, waiting for ACK
-	}
 	rebJogger struct {
 		rargs *rargs
 		opts  fs.WalkOpts
@@ -113,7 +100,8 @@ type (
 		logHdr string
 		prefix string // ditto, as in: traverse only bck[/prefix]
 		id     int64
-		resent atomic.Int64 // total num retransmits
+		resent atomic.Int64        // total num retransmits
+		opaque [regOpaqueSize]byte // []byte{rebMsgRegular, rebID} => hdr.Opaque
 		ecUsed bool
 	}
 )
@@ -142,8 +130,6 @@ func New(config *cmn.Config) *Reb {
 	} else {
 		reb.ecClient = cmn.NewClient(cargs)
 	}
-
-	reb.lazydel.init()
 
 	return reb
 }
@@ -213,8 +199,6 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 		return
 	}
 
-	reb.lazydel.stop()
-
 	logHdr := reb.logHdr(extArgs.NID, smap, true /*initializing*/)
 	// preempt
 	if xact.IsValidRebID(extArgs.Oxid) {
@@ -252,6 +236,10 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	if reb.rebID() == extArgs.NID {
 		return
 	}
+
+	// transport.Hdr.Opaque: message kind + this rebalance ID (checked by recv)
+	rargs.opaque[0] = rebMsgRegular
+	binary.BigEndian.PutUint64(rargs.opaque[1:], uint64(rargs.id))
 
 	haveStreams := smap.HasPeersToRebalance(core.T.SID())
 	if bmd.IsEmpty() {
@@ -298,15 +286,17 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	if !rargs.ecUsed {
 		reb.runNwp(rargs)
 	}
-	go reb.lazydel.run(rargs.xreb, rargs.config, rargs.id)
 	err := reb.run(rargs)
 
 	if err == nil {
-		errCnt := reb.rebWaitAck(rargs)
-		if errCnt == 0 {
-			nlog.Infoln(logHdr, "=> stage-fin")
-		} else {
-			nlog.Warningln(logHdr, "=> stage-fin", "[ num-errors:", errCnt, "]")
+		// synchronize: wait for peers to finish traversing
+		reb.changeStage(rebStageWaitAck)
+		nlog.Infof("%s: poll peers for stage >= %s", rargs.logHdr, stages[rebStageWaitAck])
+		errCnt := bcast(rargs, reb.waitPostTraverse)
+		if err = rargs.xreb.AbortErr(); err != nil {
+			nlog.Infoln(rargs.logHdr, "post-traverse abort", err, "num-fail", errCnt)
+		} else if errCnt > 0 {
+			nlog.Warningln(rargs.logHdr, "post-traverse num-fail", errCnt)
 		}
 	} else {
 		nlog.Errorln(logHdr, "fail => stage-fin:", err)
@@ -430,16 +420,6 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 		}
 	}
 
-	if reb.awaiting.targets == nil {
-		reb.awaiting.targets = make(meta.Nodes, 0, maxWackTargets)
-	} else {
-		reb.awaiting.targets = reb.awaiting.targets[:0]
-	}
-	acks := reb.lomAcks()
-	for i := range len(acks) { // init lom acks
-		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]core.LIF, initCapLomAcks)}
-	}
-
 	// 4. create persistent mark
 	fatalErr, warnErr := fs.PersistMarker(fname.RebalanceMarker, true /*quiet*/)
 	if fatalErr != nil {
@@ -513,7 +493,7 @@ func (reb *Reb) runNoEC(rargs *rargs) error {
 		return err
 	}
 	if errCnt > 0 {
-		nlog.Errorln(rargs.logHdr, "rx-ready num-fail:", errCnt) // unlikely
+		nlog.Errorln(rargs.logHdr, "rx-ready num-fail:", errCnt)
 	}
 	var (
 		wg  = &sync.WaitGroup{}
@@ -543,167 +523,6 @@ func (reb *Reb) runNoEC(rargs *rargs) error {
 	}
 	nlog.Infoln(rargs.logHdr, "finish no-ec run")
 	return nil
-}
-
-func (reb *Reb) rebWaitAck(rargs *rargs) (errCnt int) {
-	var (
-		cnt   int
-		sleep = rargs.config.Timeout.CplaneOperation.D()
-		maxwt = rargs.config.Rebalance.DestRetryTime.D()
-		xreb  = rargs.xreb
-		smap  = rargs.smap
-	)
-	maxwt += time.Duration(int64(time.Minute) * int64(rargs.smap.CountTargets()/10))
-	maxwt = min(maxwt, rargs.config.Rebalance.DestRetryTime.D()*2)
-	reb.changeStage(rebStageWaitAck)
-
-	for {
-		curwt := time.Duration(0)
-		// poll for no more than maxwt while keeping track of the cumulative polling time via curwt
-		// (here and elsewhere)
-		for curwt < maxwt {
-			cnt = 0
-			var logged bool
-			for _, lomack := range reb.lomAcks() {
-				lomack.mu.Lock()
-				if l := len(lomack.q); l > 0 {
-					cnt += l
-					if !logged {
-						for _, lif := range lomack.q {
-							tsi, err := smap.HrwHash2T(lif.Digest)
-							if err == nil {
-								nlog.Infoln(rargs.logHdr, "waiting for", lif.Cname(), "ACK from", tsi.StringEx())
-								logged = true
-								break
-							}
-						}
-					}
-				}
-				lomack.mu.Unlock()
-
-				if err := xreb.AbortErr(); err != nil {
-					nlog.Infoln(rargs.logHdr, "abort wait-ack:", err)
-					return 0
-				}
-			}
-			if cnt == 0 {
-				nlog.Infoln(rargs.logHdr, "received all ACKs")
-				break
-			}
-			if err := xreb.AbortedAfter(sleep); err != nil {
-				nlog.Infoln(rargs.logHdr, "abort wait-ack:", err)
-				return 0
-			}
-
-			nlog.Warningln(rargs.logHdr, "waiting for", cnt, "ACKs")
-			curwt += sleep
-		}
-		if cnt > 0 {
-			nlog.Warningf("%s timed out waiting for %d ACK%s", rargs.logHdr, cnt, cos.Plural(cnt))
-		}
-		if xreb.IsAborted() {
-			return 0
-		}
-
-		// NOTE: requires locally migrated objects *not* to be removed at the src
-		aPaths, _ := fs.Get()
-		if len(aPaths) > len(rargs.avail) {
-			nlog.Warningf("%s mountpath changes detected (%d, %d)", rargs.logHdr, len(aPaths), len(rargs.avail))
-		}
-
-		// 8. synchronize
-		nlog.Infof("%s poll targets for: stage=(%s or %s***)", rargs.logHdr, stages[rebStageFin], stages[rebStageWaitAck])
-		errCnt = bcast(rargs, reb.waitAcksExtended)
-		if xreb.IsAborted() {
-			return errCnt
-		}
-
-		// 9. retransmit if needed
-		numResent := reb.retransmit(rargs)
-		if numResent == 0 || xreb.IsAborted() {
-			break
-		}
-		rargs.resent.Add(numResent)
-		nlog.Warningln(rargs.logHdr, "retransmitted", numResent, "keeping wack...")
-	}
-
-	return errCnt
-}
-
-func (reb *Reb) retransmit(rargs *rargs) (cnt int64) {
-	xreb := rargs.xreb
-	if xreb.IsAborted() {
-		return 0
-	}
-	var (
-		loghdr = rargs.logHdr
-	)
-	for _, lomAck := range reb.lomAcks() {
-		lomAck.mu.Lock()
-		for uname, lif := range lomAck.q {
-			lom, err := lif.LOM()
-			if err != nil {
-				delete(lomAck.q, uname)
-				if cmn.Rom.V(4, cos.ModReb) {
-					nlog.Warningln(err)
-				}
-				continue
-			}
-			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-				if cos.IsNotExist(err) {
-					if cmn.Rom.V(5, cos.ModReb) {
-						nlog.Infoln(loghdr, lom.Cname(), "not found")
-					}
-				} else {
-					err = cmn.NewErrFailedTo(core.T, "load", lom.Cname(), err)
-					xreb.AddErr(err)
-				}
-				delete(lomAck.q, uname)
-				core.FreeLOM(lom)
-				continue
-			}
-			tsi, _ := rargs.smap.HrwHash2T(lif.Digest)
-			if core.T.HeadObjT2T(lom, tsi) {
-				if cmn.Rom.V(4, cos.ModReb) {
-					nlog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
-				}
-				delete(lomAck.q, uname)
-				core.FreeLOM(lom)
-				continue
-			}
-			// retransmit
-			roc, err := getROC(lom)
-			if err == nil {
-				err = rargs.doSend(lom, tsi, roc)
-			}
-			if err == nil {
-				if cmn.Rom.V(4, cos.ModReb) {
-					nlog.Infof("%s: retransmit %s => %s", loghdr, lom, tsi.StringEx())
-				}
-				cnt++
-			} else {
-				if cmn.IsErrStreamTerminated(err) {
-					xreb.Abort(err)
-					nlog.Errorln(loghdr, "stream term-ed:", err)
-				} else {
-					err = fmt.Errorf("%s: failed to retransmit %s => %s: %w", loghdr, lom, tsi.StringEx(), err)
-					xreb.AddErr(err)
-				}
-			}
-
-			if xreb.IsAborted() {
-				lomAck.mu.Unlock()
-				return 0
-			}
-		}
-
-		lomAck.mu.Unlock()
-		if xreb.IsAborted() {
-			return 0
-		}
-	}
-
-	return cnt
 }
 
 func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
@@ -737,7 +556,13 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 	xctn := reb.xctn()
 	debug.Assert(xctn != nil && xctn.ID() == xreb.ID())
 
+	// Close and Rx-unregister data mover:
+	// - inbound drain is bounded by transport.Quiescent (Config.Transport.QuiesceTime. default 10s) of inbound silence
+	// - enforced by UnregRecv inside endStreams;
+	// - Stage transitions to WaitAck signal "no more new sends";
+	// - the receiver-side quiesce in UnregRecv catches everything in flight at that moment
 	ok, curStage := reb.endStreams(err)
+
 	reb.filterGFN.Reset()
 
 	xreb.ToStats(&stats)
@@ -904,9 +729,7 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	}
 
 	// transmit (unlock via transport completion => roc.Close)
-	m.addLomAck(lom)
 	if err := rargs.doSend(lom, tsi, roc); err != nil {
-		m.cleanupLomAck(lom)
 		rargs.xreb.Abort(err) // NOTE: failure to send == abort
 		return err
 	}
@@ -955,15 +778,12 @@ func (rargs *rargs) pingall() bool {
 func (rargs *rargs) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenCloser) error {
 	debug.Assert(tsi.ID() != core.T.SID(), "unexpected local destination")
 	var (
-		m      = rargs.m
-		ack    = regularAck{rebID: m.rebID(), daemonID: core.T.SID()}
-		o      = transport.AllocSend()
-		opaque = ack.NewPack()
+		m = rargs.m
+		o = transport.AllocSend()
 	)
-	debug.Assert(ack.rebID != 0)
 	o.Hdr.Bck.Copy(lom.Bucket())
 	o.Hdr.ObjName = lom.ObjName
-	o.Hdr.Opaque = opaque
+	o.Hdr.Opaque = rargs.opaque[:]
 	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
 	o.SentCB, o.CmplArg = rargs.objSentCallback, lom
 	return m.dm.Send(o, roc, tsi)
@@ -974,7 +794,7 @@ func (rargs *rargs) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg 
 	lom, ok := arg.(*core.LOM)
 	debug.Assert(ok)
 	if err == nil {
-		rargs.xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions
+		rargs.xreb.OutObjsAdd(1, hdr.ObjAttrs.Size)
 		if ok {
 			core.FreeLOM(lom)
 		}
@@ -983,14 +803,16 @@ func (rargs *rargs) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg 
 
 	// err
 	if cmn.Rom.V(4, cos.ModReb) || !cos.IsErrRetriableConn(err) {
-		switch {
-		case bundle.IsErrDestinationMissing(err):
-			nlog.Errorf("%s: %v, %s", rargs.xreb.Name(), err, rargs.smap.StringEx())
-		case cmn.IsErrStreamTerminated(err):
-			rargs.xreb.Abort(err)
-			nlog.Errorln("stream term-ed: [", err, rargs.xreb.Name(), "]")
-		default:
-			nlog.Errorf("%s: %s failed to send %s: %v (%T)", core.T, rargs.xreb.Name(), lom, err, err) // abort???
+		if !rargs.xreb.IsAborted() {
+			switch {
+			case bundle.IsErrDestinationMissing(err):
+				nlog.Errorf("%s: %v, %s", rargs.xreb.Name(), err, rargs.smap.StringEx())
+			case cmn.IsErrStreamTerminated(err):
+				rargs.xreb.Abort(err)
+				nlog.Errorln("stream term-ed: [", err, rargs.xreb.Name(), "]")
+			default:
+				nlog.Errorf("%s: %s failed to send %s: %v (%T)", core.T, rargs.xreb.Name(), lom, err, err) // abort???
+			}
 		}
 	}
 	if ok {

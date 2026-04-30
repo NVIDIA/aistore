@@ -83,7 +83,6 @@ func (worker *rebWorker) run() {
 
 func (worker *rebWorker) do(wi wi) {
 	var (
-		m     = worker.m
 		rargs = worker.rargs
 		xreb  = rargs.xreb
 	)
@@ -98,9 +97,7 @@ func (worker *rebWorker) do(wi wi) {
 	}
 
 	// transmit
-	m.addLomAck(wi.lom)
 	if err := rargs.doSend(wi.lom, wi.tsi, roc); err != nil {
-		m.cleanupLomAck(wi.lom)
 		xreb.Abort(err) // NOTE: failure to send == abort
 	}
 }

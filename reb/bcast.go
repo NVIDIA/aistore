@@ -130,17 +130,14 @@ func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rargs) bool /*ready*/ {
 	return false
 }
 
-// wait for the target to reach `rebStageFin` (i.e., finish traversing and sending)
-// if the target that has reached rebStageWaitAck but not yet in the rebStageFin stage,
-// separately check whether it is waiting for my ACKs
-func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rargs) (ok bool) {
+// wait for `tsi` to finish traversal/sending submission
+// rebStageWaitAck is now used as a post-traverse barrier; regular per-object ACKs are gone
+func (reb *Reb) waitPostTraverse(tsi *meta.Snode, rargs *rargs) (ok bool) {
 	var (
-		curwt      time.Duration
-		status     *Status
-		sleep      = rargs.config.Timeout.CplaneOperation.D()
-		maxwt      = rargs.config.Rebalance.DestRetryTime.D()
-		sleepRetry = cmn.KeepaliveRetryDuration(rargs.config)
-		xreb       = rargs.xreb
+		curwt time.Duration
+		sleep = rargs.config.Timeout.CplaneOperation.D()
+		maxwt = rargs.config.Rebalance.DestRetryTime.D()
+		xreb  = rargs.xreb
 	)
 	debug.Assertf(reb.rebID() == xreb.RebID(), "%s (rebID=%d) vs %s", rargs.logHdr, reb.rebID(), xreb)
 
@@ -149,38 +146,20 @@ func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rargs) (ok bool) {
 			nlog.Infof("%s: abort wack (%v)", rargs.logHdr, err)
 			return false
 		}
-		if reb.stages.isInStage(tsi, rebStageFin) {
-			return true // tsi stage=<fin>
+		if reb.stages.isInStage(tsi, rebStageWaitAck) {
+			return true
 		}
-		// otherwise, inquire status and check the stage
 		curwt += sleep
-		if status, ok = reb.checkStage(tsi, rargs, rebStageFin); ok || status == nil {
-			return ok
+		if _, ok = reb.checkStage(tsi, rargs, rebStageWaitAck); ok {
+			return true
 		}
 		if err := xreb.AbortErr(); err != nil {
 			nlog.Infof("%s: abort wack (%v)", rargs.logHdr, err)
 			return false
 		}
-		//
-		// tsi in rebStageWaitAck
-		//
-		var w4me bool // true: this target is waiting for ACKs from me
-		for _, si := range status.Targets {
-			if si.ID() == core.T.SID() {
-				nlog.Infof("%s: keep wack <= %s[%s]", rargs.logHdr, tsi.StringEx(), stages[status.Stage])
-				w4me = true
-				break
-			}
-		}
-		if !w4me {
-			nlog.Infof("%s: %s[%s] ok (not waiting for me)", rargs.logHdr, tsi.StringEx(), stages[status.Stage])
-			return true // Ok
-		}
-		time.Sleep(sleepRetry)
-		curwt += sleepRetry
 	}
 
-	nlog.Errorf("%s: timed out waiting for %s to reach %s", rargs.logHdr, tsi.StringEx(), stages[rebStageFin])
+	nlog.Errorf("%s: timed out waiting for %s to reach %s", rargs.logHdr, tsi.StringEx(), stages[rebStageWaitAck])
 	return false
 }
 
@@ -251,7 +230,6 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rargs, desiredStage uint32) (
 	if status.RebID == reb.rebID() && status.Aborted {
 		err := cmn.NewErrAborted(xreb.Name(), rargs.logHdr, fmt.Errorf("status 'aborted' from %s", tname))
 		xreb.Abort(err)
-		reb.lazydel.stop()
 		return status, false
 	}
 	if status.Stage >= desiredStage {

@@ -713,7 +713,7 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *
 	if m.getErrIsFatal && m.numGetErrs.Load() > 0 {
 		return
 	}
-	if idx > 0 && idx%5000 == 0 && !m.silent {
+	if idx > 0 && idx%10_000 == 0 && !m.silent {
 		if totalGets > 0 {
 			tlog.Logfln(" %d/%d GET requests completed...", idx, totalGets)
 		} else {

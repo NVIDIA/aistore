@@ -5,14 +5,9 @@
 package reb
 
 import (
-	"time"
-
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -67,48 +62,4 @@ func (reb *Reb) RebStatus(status *Status) {
 		nlog.Warningf("%s: Smap v%d != %d", core.T, status.SmapVersion, status.RebVersion)
 		return
 	}
-	reb.awaiting.mtx.Lock()
-	reb.wackStatus(status, smap)
-	reb.awaiting.mtx.Unlock()
-}
-
-// extended info when stage is <wack>
-func (reb *Reb) wackStatus(status *Status, rsmap *meta.Smap) {
-	var (
-		config     = cmn.GCO.Get()
-		sleepRetry = cmn.KeepaliveRetryDuration(config)
-	)
-	now := mono.NanoTime()
-	if time.Duration(now-reb.awaiting.ts) < sleepRetry {
-		status.Targets = reb.awaiting.targets
-		return
-	}
-	reb.awaiting.ts = now
-	reb.awaiting.targets = reb.awaiting.targets[:0]
-	for _, lomAcks := range reb.lomAcks() {
-		lomAcks.mu.Lock()
-		reb.awaiting.targets = _wackStatusLom(lomAcks, reb.awaiting.targets, rsmap)
-		lomAcks.mu.Unlock()
-	}
-	status.Targets = reb.awaiting.targets
-}
-
-func _wackStatusLom(lomAcks *lomAcks, targets meta.Nodes, rsmap *meta.Smap) meta.Nodes {
-outer:
-	for _, lif := range lomAcks.q {
-		tsi, err := rsmap.HrwHash2T(lif.Digest)
-		if err != nil {
-			continue
-		}
-		for _, si := range targets {
-			if si.ID() == tsi.ID() {
-				continue outer
-			}
-		}
-		targets = append(targets, tsi)
-		if len(targets) >= maxWackTargets { // limit reporting
-			break
-		}
-	}
-	return targets
 }

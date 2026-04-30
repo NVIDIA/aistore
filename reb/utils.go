@@ -8,10 +8,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -36,7 +33,6 @@ func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
 	if smap.Version == olderSmapV {
 		if xreb.Abort(err) {
 			nlog.Warningf("%v - aborted", err)
-			reb.lazydel.stop()
 		}
 	}
 }
@@ -106,7 +102,6 @@ func (reb *Reb) abortAll(err error, xreb *xs.Rebalance) {
 	if xreb == nil || !xreb.Abort(err) {
 		return
 	}
-	reb.lazydel.stop()
 	nlog.InfoDepth(1, xreb.Name(), "abort-and-bcast", err)
 
 	var (
@@ -117,64 +112,5 @@ func (reb *Reb) abortAll(err error, xreb *xs.Rebalance) {
 
 	if err := reb.dm.Notif(&hdr); err != nil {
 		nlog.Errorln("failed to bcast abort notif: [", ntfn.rebID, err, "]")
-	}
-}
-
-/////////////
-// lomAcks //
-/////////////
-
-// transaction: addLomAck => (cleanupLomAck | ackLomAck)
-
-func (reb *Reb) lomAcks() *[cos.MultiHashMapCount]*lomAcks { return &reb.lomacks }
-
-func (reb *Reb) addLomAck(lom *core.LOM) {
-	lomAck := reb.lomAcks()[lom.CacheIdx()]
-	lomAck.mu.Lock()
-	lomAck.q[lom.Uname()] = lom.LIF()
-	lomAck.mu.Unlock()
-}
-
-// called upon failure to send
-func (reb *Reb) cleanupLomAck(lom *core.LOM) {
-	lomAck := reb.lomAcks()[lom.CacheIdx()]
-
-	lomAck.mu.Lock()
-	delete(lomAck.q, lom.Uname())
-	lomAck.mu.Unlock()
-}
-
-// called by recvRegularAck
-func (reb *Reb) ackLomAck(lom *core.LOM, rebID int64, xreb *xs.Rebalance) {
-	lomAck := reb.lomAcks()[lom.CacheIdx()]
-
-	lomAck.mu.Lock()
-	uname := lom.Uname()
-	lif, ok := lomAck.q[uname] // via addLomAck() above
-	if !ok {
-		lomAck.mu.Unlock()
-		return
-	}
-	debug.Assert(uname == lif.Uname)
-	delete(lomAck.q, uname)
-	lomAck.mu.Unlock()
-
-	if lif.BID != lom.Bprops().BID {
-		err := cmn.NewErrObjDefunct(lom.String(), lif.BID, lom.Bprops().BID)
-		nlog.Warningln(err)
-		return
-	}
-	debug.Assert(lif.Digest != 0)
-
-	size := lif.Size
-
-	// counting acknowledged migrations (as initiator)
-	xreb.ObjsAdd(1, size)
-
-	// NOTE: rm migrated object (and local copies, if any) right away
-	// TODO [feature]: mark "deleted" instead
-	if !cmn.Rom.Features().IsSet(feat.DontDeleteWhenRebalancing) {
-		lom.UncacheDel()
-		reb.lazydel.enqueue(lif, xreb.Name(), rebID)
 	}
 }

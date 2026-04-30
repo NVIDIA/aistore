@@ -150,8 +150,9 @@ func showRebalanceHandler(c *cli.Context) error {
 					latestFinished = latestFinished || !sts.snap.EndTime.IsZero()
 					displayRebStats(tw, sts, units, datedTime)
 				}
-				numMigratedObjs += sts.snap.Stats.Objs
-				sizeMigratedBytes += sts.snap.Stats.Bytes
+				// migrated total, as in: objects successfully sent out
+				numMigratedObjs += sts.snap.Stats.OutObjs
+				sizeMigratedBytes += sts.snap.Stats.OutBytes
 				prevID = sts.snap.ID
 			}
 			tw.Flush()

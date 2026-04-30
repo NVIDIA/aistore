@@ -7,6 +7,7 @@ package reb
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -27,9 +28,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
-func (reb *Reb) _recvAbrt(err error, xreb *xs.Rebalance) error {
+func (*Reb) _recvAbrt(err error, xreb *xs.Rebalance) error {
 	xreb.Abort(err)
-	reb.lazydel.stop()
 	return nil
 }
 
@@ -42,30 +42,54 @@ func (reb *Reb) recvObj(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 
 	// guard
 	xreb := reb.xctn()
-	if xreb == nil || xreb.IsDone() || xreb.IsAborted() || xreb.RebID() != reb.rebID() {
+	rebID := reb.rebID()
+	if xreb == nil || xreb.IsDone() || xreb.IsAborted() || xreb.RebID() != rebID {
 		return nil
 	}
 	smap := reb.smap.Load()
 	if smap == (*meta.Smap)(nil) {
-		nlog.Warningln("nil Smap during Rx", reb.rebID())
+		nlog.Warningln("nil Smap during Rx", rebID)
 		return nil
+	}
+	if len(hdr.Opaque) == 0 {
+		err := fmt.Errorf("g[%d]: empty recv-obj action", rebID)
+		debug.AssertNoErr(err)
+		return reb._recvAbrt(err, xreb)
 	}
 
 	reb.lastrx.Store(mono.NanoTime())
 
-	unpacker := cos.NewUnpacker(hdr.Opaque)
-	act, err := unpacker.ReadByte()
-	if err != nil {
-		nlog.Errorf("g[%d]: failed to recv recv-obj action (regular or EC): %v", reb.rebID(), err)
-		return reb._recvAbrt(err, xreb)
-	}
-	if act == rebMsgRegular {
-		if err := reb.recvObjRegular(hdr, smap, unpacker, objReader, xreb); err != nil {
+	if hdr.Opaque[0] == rebMsgRegular {
+		if len(hdr.Opaque) != regOpaqueSize {
+			err := fmt.Errorf("g[%d]: invalid opaque len=%d (expecting %d)", rebID, len(hdr.Opaque), regOpaqueSize)
+			debug.AssertNoErr(err)
+			return reb._recvAbrt(err, xreb)
+		}
+		senderRebID := int64(binary.BigEndian.Uint64(hdr.Opaque[1:]))
+		if senderRebID != rebID {
+			if cmn.Rom.V(4, cos.ModReb) {
+				nlog.Warningf("g[%d]: cross-generational recv-obj <= g[%d] from %s", rebID, senderRebID, meta.Tname(hdr.SID))
+			}
+			return nil
+		}
+		if err := reb.recvObjRegular(hdr, objReader, xreb); err != nil {
 			return reb._recvAbrt(err, xreb)
 		}
 		return nil
 	}
-	debug.Assertf(act == rebMsgEC, "act=%d", act)
+
+	unpacker := cos.NewUnpacker(hdr.Opaque)
+	act, err := unpacker.ReadByte()
+	if err != nil {
+		nlog.Errorf("g[%d]: failed to recv recv-obj action (regular or EC): %v", rebID, err)
+		return reb._recvAbrt(err, xreb)
+	}
+
+	if act != rebMsgEC {
+		err := fmt.Errorf("g[%d]: invalid recv-obj action %d", rebID, act)
+		debug.AssertNoErr(err)
+		return reb._recvAbrt(err, xreb)
+	}
 	if err := reb.recvECData(hdr, unpacker, objReader, xreb); err != nil {
 		return reb._recvAbrt(err, xreb)
 	}
@@ -102,7 +126,7 @@ func (reb *Reb) recvAckNtfn(hdr *transport.ObjHdr, _ io.Reader, err error) error
 	case rebMsgEC:
 		err = reb.recvECAck(hdr, unpacker)
 	case rebMsgRegular:
-		err = reb.recvRegularAck(hdr, unpacker, xreb)
+		debug.Assert(false, "regularAck/lomAck has been removed")
 	case rebMsgNtfn:
 		var ntfn stageNtfn
 		err = unpacker.ReadAny(&ntfn)
@@ -145,17 +169,7 @@ func (reb *Reb) _handleNtfn(ntfn *stageNtfn, xreb *xs.Rebalance, smap *meta.Smap
 // regular (non-EC) receive
 //
 
-func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker *cos.ByteUnpack, objReader io.Reader, xreb *xs.Rebalance) error {
-	ack := &regularAck{}
-	if err := unpacker.ReadAny(ack); err != nil {
-		nlog.Errorf("g[%d]: failed to parse ACK: %v", reb.rebID(), err)
-		return err
-	}
-	if ack.rebID != reb.rebID() {
-		nlog.Warningln("received", hdr.Cname(), reb.warnID(ack.rebID, ack.daemonID))
-		return nil
-	}
-	tsid := ack.daemonID // the sender
+func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, objReader io.Reader, xreb *xs.Rebalance) error {
 	// Rx
 	lom := core.AllocLOM(hdr.ObjName)
 	defer core.FreeLOM(lom)
@@ -165,13 +179,13 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 	}
 
 	// log warn
+	sid := hdr.SID
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
 		if stage > rebStageFin {
-			warn := fmt.Sprintf("%s g[%d]: post stage-fin receive from %s %s (stage %s)", core.T, ack.rebID, meta.Tname(tsid), lom, stages[stage])
-			nlog.Warningln(warn)
+			nlog.Warningf("%s g[%d]: post stage-fin receive from %s %s (stage %s)", core.T, reb.rebID(), meta.Tname(sid), lom, stages[stage])
 		}
 	} else if stage < rebStageTraverse {
-		nlog.Errorf("%s g[%d]: early receive from %s %s (stage %s)", core.T, reb.rebID(), meta.Tname(tsid), lom, stages[stage])
+		nlog.Errorf("%s g[%d]: early receive from %s %s (stage %s)", core.T, reb.rebID(), meta.Tname(sid), lom, stages[stage])
 	}
 
 	latestVer, sync := _latestVer(lom.VersionConf(), xreb.Args.Flags)
@@ -263,7 +277,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 
 	drain: // drop/discard paths (no stats)
 		cos.DrainReader(objReader)
-		return reb.regACK(smap, hdr, tsid)
+		return nil
 	}
 
 rx:
@@ -290,9 +304,7 @@ rx:
 	}
 	// stats
 	xreb.InObjsAdd(1, hdr.ObjAttrs.Size)
-
-	// ACK
-	return reb.regACK(smap, hdr, tsid)
+	return nil
 }
 
 func _latestVer(conf cmn.VersionConf, flags uint32) (latestVer, sync bool) {
@@ -304,58 +316,6 @@ func _latestVer(conf cmn.VersionConf, flags uint32) (latestVer, sync bool) {
 	default:
 		return false, false
 	}
-}
-
-func (reb *Reb) regACK(smap *meta.Smap, hdr *transport.ObjHdr, tsid string) error {
-	tsi := smap.GetTarget(tsid)
-	if tsi == nil {
-		err := fmt.Errorf("g[%d]: %s is not in the %s", reb.rebID(), meta.Tname(tsid), smap)
-		nlog.Errorln(err)
-		return err
-	}
-	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
-		ack := &regularAck{rebID: reb.rebID(), daemonID: core.T.SID()}
-		hdr.Opaque = ack.NewPack()
-		hdr.ObjAttrs.Size = 0
-		if err := reb.dm.ACK(hdr, nil, tsi); err != nil {
-			nlog.Errorln(err)
-			return err
-		}
-	}
-	return nil
-}
-
-func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, xreb *xs.Rebalance) error {
-	var (
-		rebID = reb.rebID()
-		ack   = &regularAck{}
-	)
-	if err := unpacker.ReadAny(ack); err != nil {
-		return fmt.Errorf("g[%d]: failed to unpack regular ACK: %v", rebID, err)
-	}
-	if ack.rebID == 0 {
-		return fmt.Errorf("g[%d]: invalid g[0] ACK from %s", rebID, meta.Tname(ack.daemonID))
-	}
-	if ack.rebID != rebID {
-		nlog.Warningln("ACK from", ack.daemonID, "[", reb.warnID(ack.rebID, ack.daemonID), "]")
-		return nil
-	}
-	debug.Assert(xreb.RebID() == rebID)
-
-	lom := core.AllocLOM(hdr.ObjName)
-	if err := lom.InitCmnBck(&hdr.Bck); err != nil {
-		core.FreeLOM(lom)
-		nlog.Errorln(err)
-		return nil
-	}
-
-	// [NOTE]
-	// - remove migrated object and copies (unless disallowed by feature flag)
-	// - free pending (original) transmitted LOM
-	reb.ackLomAck(lom, rebID, xreb)
-	core.FreeLOM(lom)
-
-	return nil
 }
 
 //
