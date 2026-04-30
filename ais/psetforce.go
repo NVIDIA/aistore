@@ -812,7 +812,7 @@ func (h *htrun) _forceCreateBdirs(newBMD *bucketMD) error {
 		return false
 	})
 	if len(createErrs) > 0 {
-		return fmt.Errorf("%s %s: failed to create force-join bucket dirs: new %s: %w",
+		return fmt.Errorf("%s %s: failed to create bucket dirs: new %s: %w",
 			_cfjtag, h, newBMD, errors.Join(createErrs...))
 	}
 	return nil

@@ -10,7 +10,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/xact"
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-	lazyDfltChanSize = 2048
+	lazyDfltChanSize = 4096 // NOTE the size
 	lazyMaxChanSize  = 64 * 1024
 
 	lazyDelayMinReset = 4 * time.Second
@@ -36,20 +35,19 @@ type lazydel struct {
 	stopCh   *cos.StopCh
 	workCh   chan core.LIF
 	rebID    atomic.Int64
-	running  atomic.Bool
 	chanFull cos.ChanFull
+	running  atomic.Bool
 }
 
 // is called via recvRegularAck -> ackLomAck
 func (r *lazydel) enqueue(lif core.LIF, xname string, rebID int64) {
 	if id := r.rebID.Load(); id != rebID {
-		if id != 0 {
-			nlog.Warningln(lazyTag, "enqueue from invalid (previous?)", xname, "[", rebID, "vs current", id, "]")
+		if id != 0 && cmn.Rom.V(4, cos.ModReb) {
+			nlog.Warningln(lazyTag, "enqueue from previous", xname, "[", rebID, "vs current", id, "]")
 		}
 		return
 	}
 	c := cap(r.workCh)
-	debug.Assert(c >= lazyDfltChanSize)
 
 	select {
 	case r.workCh <- lif:

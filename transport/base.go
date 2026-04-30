@@ -346,10 +346,11 @@ func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 		}
 	}
 
-	// count and log chanFull
+	// TODO: use cos.ChanFull instead
 	if cnt := s.chanFull.Load(); cnt > 0 {
-		if (cnt >= 10 && cnt <= 20) || cmn.Rom.V(4, cos.ModTransport) {
-			nlog.Errorln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
+		verbose := cmn.Rom.V(4, cos.ModTransport)
+		if verbose || (cnt >= 10 && cnt <= 20) || (cnt <= 1000 && cnt%100 == 0) || cnt&(cnt-1) == 0 {
+			nlog.Warningln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
 		}
 	}
 }
