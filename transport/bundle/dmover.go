@@ -42,6 +42,7 @@ type (
 		Smap       *meta.Smap // TODO -- FIXME: xactions to pass
 		SizePDU    int32
 		MaxHdrSize int32
+		OwnStats   bool // if true, DM does not auto-increment In/OutObjs - caller does
 	}
 	// data mover is an easy-to-use stream bundle
 	DM struct {
@@ -295,7 +296,7 @@ func (dm *DM) Abort() {
 
 func (dm *DM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctns ...core.Xact) (err error) {
 	err = dm.data.streams.Send(obj, roc, tsi)
-	if err == nil && !transport.ReservedOpcode(obj.Hdr.Opcode) {
+	if err == nil && !transport.ReservedOpcode(obj.Hdr.Opcode) && !dm.OwnStats {
 		xctn := dm.xctn()
 		if len(xctns) > 0 {
 			xctn = xctns[0]
@@ -341,7 +342,7 @@ func (dm *DM) wrapRecvData(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		return dm.data.recv(hdr, reader, err)
 	}
 
-	if hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
+	if !dm.OwnStats && hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
 		if xctn := dm.xctn(); xctn != nil {
 			xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 		}

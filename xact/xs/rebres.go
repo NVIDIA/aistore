@@ -7,14 +7,17 @@ package xs
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	ratomic "sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -40,6 +43,14 @@ type (
 	Rebalance struct {
 		Args *xreg.RebArgs
 		xact.Base
+
+		// CtlMsg
+		ctl struct {
+			mu   sync.Mutex
+			sb   cos.SB        // guarded by ctl.mu when refreshed
+			fn   func(*cos.SB) // guarded by ctl.mu; installed by reb.Run
+			last int64         // last-refresh mono nanos
+		}
 	}
 	Resilver struct {
 		Args   *xreg.ResArgs
@@ -125,18 +136,75 @@ func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 	}
 	_rebID.Store(id)
 
+	xreb.ctl.sb.Init(ctlMsgBufSize)
+	xreb.writeStatic(&xreb.ctl.sb)
+
 	return xreb, nil
 }
 
+//
+// CtlMsg begin ---------------------------------------
+//
+
+const (
+	ctlMsgRefreshFreq = 10 * time.Second
+	ctlMsgBufSize     = 512
+)
+
+// The callback is not cleared. FinalCtlMsg freezes the last
+// rendered message for historical show-job output.
+func (xreb *Rebalance) SetCtlMsgFn(fn func(*cos.SB)) {
+	debug.Assert(fn != nil)
+
+	xreb.ctl.mu.Lock()
+	xreb.ctl.fn = fn
+	xreb.refreshLocked()
+	xreb.ctl.last = mono.NanoTime()
+	xreb.ctl.mu.Unlock()
+}
+
+func (xreb *Rebalance) FinalCtlMsg() {
+	xreb.ctl.mu.Lock()
+	xreb.refreshLocked()
+	xreb.ctl.last = math.MaxInt64
+	xreb.ctl.mu.Unlock()
+}
+
 func (xreb *Rebalance) CtlMsg() string {
-	var sb cos.SB
-	sb.Init(80)
+	xreb.ctl.mu.Lock()
+
+	last := xreb.ctl.last
+	if last != math.MaxInt64 {
+		now := mono.NanoTime()
+		if now-last >= int64(ctlMsgRefreshFreq) {
+			xreb.refreshLocked()
+			xreb.ctl.last = now
+		}
+	}
+
+	// safe enough here: refresh is serialized and throttled, and callers
+	// consume CtlMsg immediately
+	s := xreb.ctl.sb.String()
+	xreb.ctl.mu.Unlock()
+	return s
+}
+
+// must hold ctl.mu
+func (xreb *Rebalance) refreshLocked() {
+	xreb.ctl.sb.Reset(ctlMsgBufSize, false)
+	xreb.writeStatic(&xreb.ctl.sb)
+	if xreb.ctl.fn != nil {
+		xreb.ctl.fn(&xreb.ctl.sb)
+	}
+}
+
+func (xreb *Rebalance) writeStatic(sb *cos.SB) {
 	if xreb.Args.Bck != nil {
 		sb.WriteString(xreb.Args.Bck.Cname(xreb.Args.Prefix))
 	}
 	fl := xreb.Args.Flags
 	if fl == 0 {
-		return sb.String()
+		return
 	}
 	sb.WriteString(", flags:")
 	first := true
@@ -160,8 +228,17 @@ func (xreb *Rebalance) CtlMsg() string {
 		sb.WriteString("0x")
 		sb.WriteString(strconv.FormatUint(uint64(fl), 16))
 	}
-	return sb.String()
 }
+
+func (xreb *Rebalance) Snap() (snap *core.Snap) {
+	snap = xreb.Base.NewSnap(xreb)
+	snap.CtlMsg = xreb.CtlMsg()
+	return
+}
+
+//
+// CtlMsg end ---------------------------------------
+//
 
 func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }
 
@@ -169,16 +246,6 @@ func (xreb *Rebalance) RebID() int64 {
 	id, err := xact.S2RebID(xreb.ID())
 	debug.AssertNoErr(err)
 	return id
-}
-
-func (xreb *Rebalance) Snap() (snap *core.Snap) {
-	snap = xreb.Base.NewSnap(xreb)
-
-	// the number of rebalanced objects _is_ the number of transmitted objects (definition)
-	// (TODO: revisit)
-	snap.Stats.Objs = snap.Stats.OutObjs
-	snap.Stats.Bytes = snap.Stats.OutBytes
-	return
 }
 
 //////////////

@@ -46,7 +46,7 @@ const (
 	rebStageInactive = iota
 	rebStageInit
 	rebStageTraverse
-	rebStageWaitAck // is now used as a post-traverse barrier; regular per-object ACKs are gone
+	rebStagePostTraverse // post-traverse (post-Tx) barrier
 	rebStageFin
 	rebStageFinStreams
 	rebStageDone
@@ -60,7 +60,7 @@ type (
 		dm        *bundle.DM
 		filterGFN *prob.Filter
 		ecClient  *http.Client
-		stages    *nodeStages
+		stages    *nodeStages // (map[tid => stage]; my own stage)
 		// (smap, xreb) + atomic state
 		id atomic.Int64
 		// quiescence
@@ -94,27 +94,27 @@ type (
 		smap   *meta.Smap
 		config *cmn.Config
 		xreb   *xs.Rebalance
-		bck    *meta.Bck // advanced usage, limited scope
-		nwp    *nwp      // num-workers parallelism (when not used read-and-transmit happens in joggers)
-		avail  fs.MPI
-		logHdr string
-		prefix string // ditto, as in: traverse only bck[/prefix]
-		id     int64
-		resent atomic.Int64        // total num retransmits
+		bck    *meta.Bck           // advanced usage, limited scope
+		nwp    *nwp                // num-workers parallelism (when not used read-and-transmit happens in joggers)
+		avail  fs.MPI              // mountpaths
+		logHdr string              // prefix "t[xyz] g[ID] smap V..." in log records
+		prefix string              // ditto, as in: traverse only bck[/prefix]
+		id     int64               // as in "g[id]"
 		opaque [regOpaqueSize]byte // []byte{rebMsgRegular, rebID} => hdr.Opaque
+		stats  rebStats            // observability: stage waiting times, counters via CtlMsg (`ais show job`)
 		ecUsed bool
 	}
 )
 
 var stages = map[uint32]string{
-	rebStageInactive:   "<inactive>",
-	rebStageInit:       "<init>",
-	rebStageTraverse:   "<traverse>",
-	rebStageWaitAck:    "<wack>",
-	rebStageFin:        "<fin>",
-	rebStageFinStreams: "<fin-streams>",
-	rebStageDone:       "<done>",
-	rebStageAbort:      "<abort>",
+	rebStageInactive:     "<inactive>",
+	rebStageInit:         "<init>",
+	rebStageTraverse:     "<traverse>",
+	rebStagePostTraverse: "<post-traverse>",
+	rebStageFin:          "<fin>",
+	rebStageFinStreams:   "<fin-streams>",
+	rebStageDone:         "<done>",
+	rebStageAbort:        "<abort>",
 }
 
 func New(config *cmn.Config) *Reb {
@@ -190,8 +190,8 @@ func (*Reb) _preempt(logHdr, oxid string) error {
 //  2. Execution starts after the `Reb` sets the current stage to rebStageTraverse
 //  3. Only EC rebalance changes the current stage
 //  4. Global rebalance performs checks such as `stage > rebStageTraverse` or
-//     `stage < rebStageWaitAck`. Since all EC stages are between
-//     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
+//     `stage < rebStagePostTraverse`. Since all EC stages are between
+//     `Traverse` and `PostTraverse` non-EC rebalance does not "notice" stage changes.
 //
 // See also: README.md in this package.
 func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
@@ -286,12 +286,15 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	if !rargs.ecUsed {
 		reb.runNwp(rargs)
 	}
+
+	rargs.xreb.SetCtlMsgFn(rargs.ctlMsg) // TODO -- FIXME: pass via RenewRebalance()
+
 	err := reb.run(rargs)
 
 	if err == nil {
 		// synchronize: wait for peers to finish traversing
-		reb.changeStage(rebStageWaitAck)
-		nlog.Infof("%s: poll peers for stage >= %s", rargs.logHdr, stages[rebStageWaitAck])
+		reb.changeStage(rargs, rebStagePostTraverse)
+		nlog.Infof("%s: poll peers for stage >= %s", rargs.logHdr, stages[rebStagePostTraverse])
 		errCnt := bcast(rargs, reb.waitPostTraverse)
 		if err = rargs.xreb.AbortErr(); err != nil {
 			nlog.Infoln(rargs.logHdr, "post-traverse abort", err, "num-fail", errCnt)
@@ -301,9 +304,10 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	} else {
 		nlog.Errorln(logHdr, "fail => stage-fin:", err)
 	}
-	reb.changeStage(rebStageFin)
+	reb.changeStage(rargs, rebStageFin)
 
 	reb.fini(rargs, err, extArgs.Tstats)
+	rargs.xreb.FinalCtlMsg()
 	extArgs.Tstats.ClrFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	offGFN()
@@ -321,6 +325,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 //     It then waits until everything finishes.
 func (reb *Reb) run(rargs *rargs) error {
 	reb.stages.stage.Store(rebStageTraverse)
+	rargs.stats.stage(rebStageTraverse)
 
 	// No EC-enabled buckets - run only regular rebalance
 	if !rargs.ecUsed {
@@ -405,6 +410,7 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 			Config:   rargs.config,
 			Smap:     rargs.smap,
 			XactConf: rargs.config.Rebalance.XactConf,
+			OwnStats: true, // do not auto-increment In/OutObjs
 		}
 		debug.Assert(reb.dm == nil)
 		reb.dm = bundle.NewDM(trname, reb.recvObj, cmn.OwtRebalance, extra)
@@ -423,7 +429,7 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 	// 4. create persistent mark
 	fatalErr, warnErr := fs.PersistMarker(fname.RebalanceMarker, true /*quiet*/)
 	if fatalErr != nil {
-		_, _ = reb.endStreams(fatalErr)
+		_, _ = reb.endStreams(rargs, fatalErr)
 		return fatalErr
 	}
 	if warnErr != nil {
@@ -448,13 +454,22 @@ func (reb *Reb) beginStreams(rargs *rargs) error {
 	return nil
 }
 
-func (reb *Reb) endStreams(err error) (ok bool, stage uint32) {
+func (reb *Reb) endStreams(rargs *rargs, err error) (ok bool, stage uint32) {
 	stage = reb.stages.stage.Load()
 	ok = reb.stages.stage.CAS(rebStageFin, rebStageFinStreams)
+
+	debug.Assert(reb.dm != nil || !ok, "rebalance fin-streams without DM")
+
 	if reb.dm != nil {
+		if ok {
+			rargs.stats.stage(rebStageFinStreams)
+		}
 		reb.dm.Close(err)
 		reb.dm.UnregRecv()
 		reb.dm = nil
+		if ok {
+			rargs.stats.finalize()
+		}
 	}
 	return
 }
@@ -531,12 +546,11 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 		qui   = &qui{rargs: rargs, reb: reb}
 		xreb  = rargs.xreb
 		ecnt  = xreb.ErrCnt()
-		rcnt  = rargs.resent.Load()
 	)
-	if ecnt == 0 && rcnt == 0 {
+	if ecnt == 0 {
 		nlog.Infoln(rargs.logHdr, "fini => quiesce")
 	} else {
-		nlog.Warningln(rargs.logHdr, "fini [ errors:", ecnt, "retransmit:", rcnt, "] => quiesce")
+		nlog.Warningln(rargs.logHdr, "fini [ errors:", ecnt, "] => quiesce")
 	}
 
 	// prior to closing streams
@@ -559,9 +573,9 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 	// Close and Rx-unregister data mover:
 	// - inbound drain is bounded by transport.Quiescent (Config.Transport.QuiesceTime. default 10s) of inbound silence
 	// - enforced by UnregRecv inside endStreams;
-	// - Stage transitions to WaitAck signal "no more new sends";
+	// - Stage transitions to PostTraverse signal "no more new sends";
 	// - the receiver-side quiesce in UnregRecv catches everything in flight at that moment
-	ok, curStage := reb.endStreams(err)
+	ok, curStage := reb.endStreams(rargs, err)
 
 	reb.filterGFN.Reset()
 
@@ -600,7 +614,7 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 	case que != core.QuiAborted && que != core.QuiTimeout && ecnt == 0:
 		nlog.Infoln(rargs.logHdr, "done", xname)
 	default:
-		nlog.Warningln(rargs.logHdr, "finished [ que:", que, "errors:", ecnt, "retransmit:", rcnt, "]", xname)
+		nlog.Warningln(rargs.logHdr, "finished [ que:", que, "errors:", ecnt, "]", xname)
 	}
 }
 

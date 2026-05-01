@@ -81,7 +81,9 @@ func (reb *Reb) warnID(remoteID int64, tid string) (s string) {
 // Rebalance moves to the next stage:
 // - update internal stage
 // - send notification to all other targets that this one is in a new stage
-func (reb *Reb) changeStage(newStage uint32) {
+func (reb *Reb) changeStage(rargs *rargs, newStage uint32) {
+	rargs.stats.stage(newStage)
+
 	// set our own stage
 	reb.stages.stage.Store(newStage)
 

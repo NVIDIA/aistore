@@ -131,7 +131,7 @@ func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rargs) bool /*ready*/ {
 }
 
 // wait for `tsi` to finish traversal/sending submission
-// rebStageWaitAck is now used as a post-traverse barrier; regular per-object ACKs are gone
+// rebStagePostTraverse is a post-traverse (post-Tx) barrier
 func (reb *Reb) waitPostTraverse(tsi *meta.Snode, rargs *rargs) (ok bool) {
 	var (
 		curwt time.Duration
@@ -143,23 +143,23 @@ func (reb *Reb) waitPostTraverse(tsi *meta.Snode, rargs *rargs) (ok bool) {
 
 	for curwt < maxwt {
 		if err := xreb.AbortedAfter(sleep); err != nil {
-			nlog.Infof("%s: abort wack (%v)", rargs.logHdr, err)
+			nlog.Infof("%s: abort %s (%v)", rargs.logHdr, stages[rebStagePostTraverse], err)
 			return false
 		}
-		if reb.stages.isInStage(tsi, rebStageWaitAck) {
+		if reb.stages.isInStage(tsi, rebStagePostTraverse) {
 			return true
 		}
 		curwt += sleep
-		if _, ok = reb.checkStage(tsi, rargs, rebStageWaitAck); ok {
+		if _, ok = reb.checkStage(tsi, rargs, rebStagePostTraverse); ok {
 			return true
 		}
 		if err := xreb.AbortErr(); err != nil {
-			nlog.Infof("%s: abort wack (%v)", rargs.logHdr, err)
+			nlog.Infof("%s: abort %s (%v)", rargs.logHdr, stages[rebStagePostTraverse], err)
 			return false
 		}
 	}
 
-	nlog.Errorf("%s: timed out waiting for %s to reach %s", rargs.logHdr, tsi.StringEx(), stages[rebStageWaitAck])
+	nlog.Errorf("%s: timed out waiting for %s to reach %s", rargs.logHdr, tsi.StringEx(), stages[rebStagePostTraverse])
 	return false
 }
 

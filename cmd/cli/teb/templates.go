@@ -265,6 +265,35 @@ const (
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
 		"{{FormatXactRunFinAbrt $xctn}}\n"
+
+		// rebalance: tx/rx split
+	XactRebalanceTmpl      = xactRebalanceHdr + XactRebalanceNoHdrTmpl
+	XactRebalanceNoHdrTmpl = "{{range $nodeSnaps := . }}" + xactRebalanceBodyAll + "{{end}}"
+
+	xactRebalanceHdr = "NODE\t ID\t KIND\t TX OBJECTS\t TX BYTES\t RX OBJECTS\t RX BYTES\t START\t END\t STATE\n"
+
+	xactRebalanceBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" +
+		"{{if (IsTotals $nodeSnaps.DaemonID)}}" +
+		"\t\tTotal:\t" +
+		"{{if (eq $xctn.Stats.OutObjs 0)}}-{{else}}{{$xctn.Stats.OutObjs}}{{end}}\t" +
+		"{{if (eq $xctn.Stats.OutBytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.OutBytes 2}}{{end}}\t" +
+		"{{if (eq $xctn.Stats.InObjs 0)}}-{{else}}{{$xctn.Stats.InObjs}}{{end}}\t" +
+		"{{if (eq $xctn.Stats.InBytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.InBytes 2}}{{FancyTotalsCheck}}{{end}}\n" +
+		"{{else}}" +
+		xactRebalanceBodyOne +
+		"{{end}}" +
+		"{{end}}"
+
+	xactRebalanceBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{$xctn.Kind}}\t " +
+		"{{if (eq $xctn.Stats.OutObjs 0) }}-{{else}}{{$xctn.Stats.OutObjs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.OutBytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.OutBytes 2}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.InObjs 0) }}-{{else}}{{$xctn.Stats.InObjs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.InBytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.InBytes 2}}{{end}}\t " +
+		"{{FormatStart $xctn.StartTime}}\t " +
+		"{{FormatEnd $xctn.EndTime}}\t " +
+		"{{FormatXactRunFinAbrt $xctn}}\n"
 )
 
 const (

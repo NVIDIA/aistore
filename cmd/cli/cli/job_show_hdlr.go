@@ -646,6 +646,12 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		} else {
 			err = teb.Print(dts, teb.XactECPutTmpl, opts)
 		}
+	case apc.ActRebalance:
+		if hideHeader {
+			err = teb.Print(dts, teb.XactRebalanceNoHdrTmpl, opts)
+		} else {
+			err = teb.Print(dts, teb.XactRebalanceTmpl, opts)
+		}
 	default:
 		switch {
 		case fromToBck && hideHeader:

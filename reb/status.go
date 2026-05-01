@@ -54,8 +54,8 @@ func (reb *Reb) RebStatus(status *Status) {
 		status.Running = false
 	}
 
-	// wack status
-	if smap == nil || status.Stage != rebStageWaitAck {
+	// post-traverse status
+	if smap == nil || status.Stage != rebStagePostTraverse {
 		return
 	}
 	if status.SmapVersion != status.RebVersion {
