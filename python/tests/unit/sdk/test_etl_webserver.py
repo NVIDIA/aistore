@@ -10,6 +10,19 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import requests
 import httpx
+
+# Force eager import of pydantic.v1 before FastAPI registers any routes.
+# FastAPI's `is_pydantic_v1_model_class` (in fastapi/_compat/shared.py) lazily
+# does `from pydantic import v1` per route parameter, and Python 3.9's
+# importlib has a `_ModuleLock` race (cpython#87863, fixed in 3.10) that can
+# raise `KeyError` in `_blocking_on[tid]` when this lazy import runs while
+# another thread (e.g. starlette TestClient's ASGI thread from a prior test)
+# is finalizing.
+try:
+    from pydantic import v1 as _pydantic_v1  # pylint: disable=unused-import
+except ImportError:
+    pass
+
 from fastapi.testclient import TestClient
 from flask.testing import FlaskClient
 
@@ -93,7 +106,9 @@ class DummyFlaskServer(FlaskServer):
 
 class TestETLServerLogic(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
         self.etl = DummyHTTPETLServer()
 
     def test_transform_uppercase(self):
@@ -110,7 +125,9 @@ class TestETLServerLogic(unittest.TestCase):
 
 class TestRequestHandlerHelpers(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
 
     def test_set_headers_calls_expected_methods(self):
         """Ensure set_headers sets correct status and content-type."""
@@ -224,8 +241,12 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
     Async def tests directly await async server helpers."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["DIRECT_PUT"] = "false"
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "DIRECT_PUT": "false"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
         self.etl_server = DummyFastAPIServer()
         self.client = TestClient(self.etl_server.app)
 
@@ -291,20 +312,22 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_startup_event_default_retries(self):
         """startup_event() defaults to 3 transport retries when AIS_DIRECT_PUT_RETRIES is not set."""
-        os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
-        with patch(
-            "aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncHTTPTransport"
-        ) as mock_transport_cls:
-            with patch("aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncClient"):
-                mock_transport_cls.return_value = MagicMock()
-                await self.etl_server.startup_event()
-                self.assertEqual(mock_transport_cls.call_args.kwargs["retries"], 3)
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
+            with patch(
+                "aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncHTTPTransport"
+            ) as mock_transport_cls:
+                with patch(
+                    "aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncClient"
+                ):
+                    mock_transport_cls.return_value = MagicMock()
+                    await self.etl_server.startup_event()
+                    self.assertEqual(mock_transport_cls.call_args.kwargs["retries"], 3)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_startup_event_custom_retries(self):
         """startup_event() passes AIS_DIRECT_PUT_RETRIES value to AsyncHTTPTransport."""
-        os.environ[AIS_DIRECT_PUT_RETRIES] = "7"
-        try:
+        with mock.patch.dict(os.environ, {AIS_DIRECT_PUT_RETRIES: "7"}):
             with patch(
                 "aistore.sdk.etl.webserver.fastapi_server.httpx.AsyncHTTPTransport"
             ) as mock_transport_cls:
@@ -314,47 +337,47 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
                     mock_transport_cls.return_value = MagicMock()
                     await self.etl_server.startup_event()
                     self.assertEqual(mock_transport_cls.call_args.kwargs["retries"], 7)
-        finally:
-            os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
 
     def test_direct_put_retries_default(self):
         """direct_put_retries field defaults to 3 when AIS_DIRECT_PUT_RETRIES is not set."""
-        os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
-        self.assertEqual(DummyFastAPIServer().direct_put_retries, 3)
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
+            self.assertEqual(DummyFastAPIServer().direct_put_retries, 3)
 
     def test_direct_put_retries_custom(self):
         """direct_put_retries field reads AIS_DIRECT_PUT_RETRIES at construction time."""
-        os.environ[AIS_DIRECT_PUT_RETRIES] = "7"
-        try:
+        with mock.patch.dict(os.environ, {AIS_DIRECT_PUT_RETRIES: "7"}):
             self.assertEqual(DummyFastAPIServer().direct_put_retries, 7)
-        finally:
-            os.environ.pop(AIS_DIRECT_PUT_RETRIES, None)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_direct_put_raises_transient_error_on_connect_error(self):
         """_direct_put() raises ETLDirectPutTransientError on ConnectError for caller retry."""
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["DIRECT_PUT"] = "true"
-        server = DummyFastAPIServer()
-        mock_client = AsyncMock()
-        mock_client.put.side_effect = httpx.ConnectError(
-            "DNS resolution failed: EAI_AGAIN"
-        )
-        server.client = mock_client
-
-        with self.assertRaises(ETLDirectPutTransientError) as ctx:
-            await server._direct_put(  # pylint: disable=protected-access
-                "http://localhost:8080/ais/@/dst/obj", b"hello"
+        # setUp already sets AIS_TARGET_URL; override DIRECT_PUT for this test only.
+        with mock.patch.dict(os.environ, {"DIRECT_PUT": "true"}):
+            server = DummyFastAPIServer()
+            mock_client = AsyncMock()
+            mock_client.put.side_effect = httpx.ConnectError(
+                "DNS resolution failed: EAI_AGAIN"
             )
+            server.client = mock_client
 
-        mock_client.put.assert_awaited_once()
-        self.assertIsInstance(ctx.exception.cause, httpx.ConnectError)
+            with self.assertRaises(ETLDirectPutTransientError) as ctx:
+                await server._direct_put(  # pylint: disable=protected-access
+                    "http://localhost:8080/ais/@/dst/obj", b"hello"
+                )
+
+            mock_client.put.assert_awaited_once()
+            self.assertIsInstance(ctx.exception.cause, httpx.ConnectError)
 
 
 class TestFastAPIServerWithDirectPut(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["DIRECT_PUT"] = "true"
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "DIRECT_PUT": "true"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
         self.etl_server = DummyFastAPIServer()
         self.client = TestClient(self.etl_server.app)
 
@@ -623,7 +646,9 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
 
 class TestFlaskServer(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost"})
+        env.start()
+        self.addCleanup(env.stop)
         self.etl_server = DummyFlaskServer()
         self.client: FlaskClient = self.etl_server.app.test_client()
 
@@ -685,79 +710,79 @@ class TestFlaskServer(unittest.TestCase):
 
 class TestBaseEnforcement(unittest.TestCase):
     def test_fastapi_server_without_target_url(self):
-        if "AIS_TARGET_URL" in os.environ:
-            del os.environ["AIS_TARGET_URL"]
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AIS_TARGET_URL", None)
 
-        class MinimalFastAPIServer(FastAPIServer):
-            def transform(self, data: bytes, *_args) -> bytes:
-                return data
+            class MinimalFastAPIServer(FastAPIServer):
+                def transform(self, data: bytes, *_args) -> bytes:
+                    return data
 
-        with self.assertRaises(EnvironmentError) as context:
-            MinimalFastAPIServer()
-        self.assertIn("AIS_TARGET_URL", str(context.exception))
+            with self.assertRaises(EnvironmentError) as context:
+                MinimalFastAPIServer()
+            self.assertIn("AIS_TARGET_URL", str(context.exception))
 
     def test_flask_server_without_target_url(self):
-        if "AIS_TARGET_URL" in os.environ:
-            del os.environ["AIS_TARGET_URL"]
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AIS_TARGET_URL", None)
 
-        class MinimalFlaskServer(FlaskServer):
-            def transform(self, data: bytes, *_args) -> bytes:
-                return data
+            class MinimalFlaskServer(FlaskServer):
+                def transform(self, data: bytes, *_args) -> bytes:
+                    return data
 
-        with self.assertRaises(EnvironmentError) as context:
-            MinimalFlaskServer()
-        self.assertIn("AIS_TARGET_URL", str(context.exception))
+            with self.assertRaises(EnvironmentError) as context:
+                MinimalFlaskServer()
+            self.assertIn("AIS_TARGET_URL", str(context.exception))
 
     def test_http_server_server_without_target_url(self):
-        if "AIS_TARGET_URL" in os.environ:
-            del os.environ["AIS_TARGET_URL"]
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AIS_TARGET_URL", None)
 
-        class MinimalHTTPServer(HTTPMultiThreadedServer):
-            def transform(self, data: bytes, *_args) -> bytes:
-                return data
+            class MinimalHTTPServer(HTTPMultiThreadedServer):
+                def transform(self, data: bytes, *_args) -> bytes:
+                    return data
 
-        with self.assertRaises(EnvironmentError) as context:
-            MinimalHTTPServer()
-        self.assertIn("AIS_TARGET_URL", str(context.exception))
+            with self.assertRaises(EnvironmentError) as context:
+                MinimalHTTPServer()
+            self.assertIn("AIS_TARGET_URL", str(context.exception))
 
     def test_http_multithreaded_server_without_transform(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost"
+        with mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost"}):
 
-        class IncompleteETLServer(HTTPMultiThreadedServer):
-            pass
+            class IncompleteETLServer(HTTPMultiThreadedServer):
+                pass
 
-        with self.assertRaises(TypeError) as context:
-            IncompleteETLServer()
-        self.assertIn(
-            "must override either transform() or transform_stream()",
-            str(context.exception),
-        )
+            with self.assertRaises(TypeError) as context:
+                IncompleteETLServer()
+            self.assertIn(
+                "must override either transform() or transform_stream()",
+                str(context.exception),
+            )
 
     def test_fastapi_server_without_transform(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost"
+        with mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost"}):
 
-        class IncompleteFastAPIServer(FastAPIServer):
-            pass
+            class IncompleteFastAPIServer(FastAPIServer):
+                pass
 
-        with self.assertRaises(TypeError) as context:
-            IncompleteFastAPIServer()
-        self.assertIn(
-            "must override either transform() or transform_stream()",
-            str(context.exception),
-        )
+            with self.assertRaises(TypeError) as context:
+                IncompleteFastAPIServer()
+            self.assertIn(
+                "must override either transform() or transform_stream()",
+                str(context.exception),
+            )
 
     def test_flask_server_without_transform(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost"
+        with mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost"}):
 
-        class IncompleteFlaskServer(FlaskServer):
-            pass
+            class IncompleteFlaskServer(FlaskServer):
+                pass
 
-        with self.assertRaises(TypeError) as context:
-            IncompleteFlaskServer()
-        self.assertIn(
-            "must override either transform() or transform_stream()",
-            str(context.exception),
-        )
+            with self.assertRaises(TypeError) as context:
+                IncompleteFlaskServer()
+            self.assertIn(
+                "must override either transform() or transform_stream()",
+                str(context.exception),
+            )
 
 
 class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
@@ -765,8 +790,12 @@ class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
     Async def tests directly await async server helpers."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["DIRECT_PUT"] = "false"
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "DIRECT_PUT": "false"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
 
         class ArgFastAPI(FastAPIServer):
             def transform(self, _data: bytes, _path: str, etl_args: str) -> bytes:
@@ -834,13 +863,14 @@ class CapturingHTTPServer(_CapturingServer, HTTPMultiThreadedServer):
 
 class TestFastAPIDirectFQN(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["ETL_DIRECT_FQN"] = "true"
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "ETL_DIRECT_FQN": "true"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
         self.etl_server = CapturingFastAPIServer()
         self.client = TestClient(self.etl_server.app)
-
-    def tearDown(self):
-        os.environ.pop("ETL_DIRECT_FQN", None)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_put_with_fqn_receives_path_string(self):
@@ -882,13 +912,14 @@ class TestFastAPIDirectFQN(unittest.TestCase):
 
 class TestFlaskDirectFQN(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["ETL_DIRECT_FQN"] = "true"
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "ETL_DIRECT_FQN": "true"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
         self.etl_server = CapturingFlaskServer()
         self.client = self.etl_server.app.test_client()
-
-    def tearDown(self):
-        os.environ.pop("ETL_DIRECT_FQN", None)
 
     def test_put_with_fqn_receives_path_string(self):
         """ETL_DIRECT_FQN=true: Flask transform() receives the file path as str."""
@@ -914,11 +945,12 @@ class TestFlaskDirectFQN(unittest.TestCase):
 
 class TestHTTPDirectFQN(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["ETL_DIRECT_FQN"] = "true"
-
-    def tearDown(self):
-        os.environ.pop("ETL_DIRECT_FQN", None)
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "ETL_DIRECT_FQN": "true"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
 
     def _make_handler(self):
         handler = DummyRequestHandler()
@@ -984,7 +1016,9 @@ class TestStreamingDetection(unittest.TestCase):
     """Test that use_streaming detection works correctly."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
 
     def test_stream_only_uses_streaming(self):
         server = DummyStreamingFastAPIServer()
@@ -1021,8 +1055,12 @@ class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
     Async def tests directly await async server helpers (e.g. _get_stream_reader)."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["DIRECT_PUT"] = "false"
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "DIRECT_PUT": "false"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
         self.etl_server = DummyStreamingFastAPIServer()
         self.client = TestClient(self.etl_server.app)
 
@@ -1263,7 +1301,9 @@ class DummyStreamingHTTPServer(HTTPMultiThreadedServer):
 
 class TestStreamingFlaskServer(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost"})
+        env.start()
+        self.addCleanup(env.stop)
         self.etl_server = DummyStreamingFlaskServer()
         self.client = self.etl_server.app.test_client()
 
@@ -1287,7 +1327,9 @@ class TestStreamingFlaskServer(unittest.TestCase):
 
 class TestStreamingHTTPServer(unittest.TestCase):
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
 
     def _make_streaming_handler(self):
         handler = DummyRequestHandler()
@@ -1325,7 +1367,9 @@ class TestHTTPStreamingLifecycle(unittest.TestCase):
     """Tests for the response-lifecycle correctness fixes in HTTPMultiThreadedServer."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
 
     def _make_streaming_handler(self):
         handler = DummyRequestHandler()
@@ -1405,8 +1449,12 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
     _DIRECT_PUT_URL = "http://target:51081/ais/@/dst/test/obj"
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["DIRECT_PUT"] = "true"
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "DIRECT_PUT": "true"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
         self.server = DummyStreamingFastAPIServer()
         self.server.direct_put_retries = 3
         self.server.client = AsyncMock()
@@ -1582,7 +1630,9 @@ class TestFlaskDirectPutRetry(unittest.TestCase):
     """Unit tests for FlaskServer retry logic on buffered direct-put."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
         self.server = DummyFlaskServer()
         self.server.direct_put_retries = 3
 
@@ -1694,7 +1744,9 @@ class TestHTTPDirectPutRetry(unittest.TestCase):
     """Unit tests for HTTPMultiThreadedServer.RequestHandler retry logic."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
         self.handler = DummyRequestHandler()
         self.handler.server.etl_server.direct_put_retries = 3
 
@@ -1806,7 +1858,9 @@ class TestFlaskStreamingDirectPutRetry(unittest.TestCase):
     _DIRECT_PUT_URL = "http://target:51081/ais/@/dst/test/obj"
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
         self.server = DummyStreamingFlaskServer()
         self.server.direct_put_retries = 3
 
@@ -2039,7 +2093,9 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
     _DIRECT_PUT_URL = "http://target:51081/ais/@/dst/test/obj"
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
         self.handler = DummyRequestHandler()
         self.handler.server.etl_server.direct_put_retries = 3
 
@@ -2349,7 +2405,9 @@ class TestFlaskConnectionRefusedGuard(unittest.TestCase):
     """ConnectionRefused is a permanent error — must return 502, never retry."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
         self.server = DummyFlaskServer()
         self.server.direct_put_retries = 3
 
@@ -2421,7 +2479,9 @@ class TestHTTPConnectionRefusedGuard(unittest.TestCase):
     """ConnectionRefused is a permanent error — HTTP server must return 502, never retry."""
 
     def setUp(self):
-        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
         self.handler = DummyRequestHandler()
         self.handler.server.etl_server.direct_put_retries = 3
 
