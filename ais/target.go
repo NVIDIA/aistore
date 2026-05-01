@@ -428,7 +428,7 @@ func (t *target) Run() error {
 	// When `auth.intra_cluster.enabled`, restarted node must _not_ originate signed traffic to a peer
 	// until that peer has received an (updated version of) Smap containing the node's (current)
 	// verifying key.
-	fatalErr, writeErr := t.checkRestarted(config)
+	fatalErr, writeErr := t.checkStartupMarkers(config)
 	if fatalErr != nil {
 		cos.ExitLog(fatalErr)
 	}
@@ -679,7 +679,7 @@ func rxAnyStream(w http.ResponseWriter, r *http.Request) {
 	transport.RxAnyStream(w, r)
 }
 
-func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
+func (t *target) checkStartupMarkers(config *cmn.Config) (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
 		red := redial{t: t, dialTout: config.Timeout.CplaneOperation.D(), totalTout: config.Timeout.MaxKeepalive.D()}
 		if red.acked() {
@@ -688,6 +688,12 @@ func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
 		}
 		t.statsT.SetFlag(cos.NodeAlerts, cos.NodeRestarted)
 		fs.PersistMarker(fname.NodeRestartedPrev, false /*quiet*/)
+	}
+	if fs.MarkerExists(fname.RebalanceMarker) {
+		t.statsT.SetFlag(cos.NodeAlerts, cos.RebalanceInterrupted)
+	}
+	if fs.MarkerExists(fname.ResilverMarker) {
+		t.statsT.SetFlag(cos.NodeAlerts, cos.ResilverInterrupted)
 	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker, false /*quiet*/)
 	return

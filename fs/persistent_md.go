@@ -118,6 +118,18 @@ func RemoveMarker(marker string, stup cos.StatsUpdater, stopping bool) (ok bool)
 			}
 		}
 	}
+
+	if !ok {
+		switch marker {
+		case fname.RebalanceMarker:
+			stup.SetClrFlag(cos.NodeAlerts, cos.RebalanceInterrupted, cos.Rebalancing)
+		case fname.ResilverMarker:
+			stup.SetClrFlag(cos.NodeAlerts, cos.ResilverInterrupted, cos.Resilvering)
+		}
+
+		return ok
+	}
+
 	switch marker {
 	case fname.RebalanceMarker:
 		stup.ClrFlag(cos.NodeAlerts, cos.RebalanceInterrupted|cos.Rebalancing)
