@@ -653,6 +653,9 @@ func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
 		t.statsT.SetFlag(cos.NodeAlerts, cos.NodeRestarted)
 		fs.PersistMarker(fname.NodeRestartedPrev, false /*quiet*/)
 	}
+	if fs.MarkerExists(fname.RebalanceMarker) {
+		t.statsT.SetFlag(cos.NodeAlerts, cos.RebalanceInterrupted)
+	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker, false /*quiet*/)
 	return
 }
