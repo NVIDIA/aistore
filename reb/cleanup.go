@@ -151,10 +151,15 @@ func (reb *Reb) RunCleanup(smap *meta.Smap, extArgs *ExtArgs, force bool) {
 		nlog.Warningln(logHdr, "initializing cleanup - limited scope: [", extArgs.Bck.Cname(extArgs.Prefix), "]")
 	}
 
+	// starting cleanup: set Rebalancing and clear a stale RebalanceInterrupted
+	// left over from a previously aborted/interrupted run (or a node restart)
+	extArgs.Tstats.SetClrFlag(cos.NodeAlerts, cos.Rebalancing, cos.RebalanceInterrupted)
+
 	// walk mpaths with the cleanup visitor
 	reb.runCleanup(clnArgs)
 
 	reb.finiCleanup(clnArgs, extArgs.Tstats)
+	extArgs.Tstats.ClrFlag(cos.NodeAlerts, cos.Rebalancing)
 	clnArgs.xreb.FinalCtlMsg()
 }
 
@@ -215,10 +220,15 @@ func (reb *Reb) finiCleanup(clnArgs *clnArgs, tstats cos.StatsUpdater) {
 		ecnt = xreb.ErrCnt()
 	)
 	if !xreb.IsAborted() {
+		// TODO: fix race condition where a stop request arrives after Quiesce() returns but before xreb.Finish().
+		// The marker is already removed here, but the xaction is still running, so the stop is accepted.
+		// Finish() then records it as aborted while the marker and Prometheus flag indicate success.
 		if fs.RemoveMarker(fname.RebalanceMarker, tstats, false /*stopping*/) {
 			nlog.Infoln(clnArgs.logHdr, "removed marker ok")
 		}
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats, false /*stopping*/)
+	} else {
+		tstats.SetFlag(cos.NodeAlerts, cos.RebalanceInterrupted)
 	}
 
 	reb.mu.Lock()

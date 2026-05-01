@@ -122,6 +122,10 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 		return
 	}
 
+	// starting a new resilver: set Resilvering and clear a stale ResilverInterrupted
+	// left over from a previously aborted/interrupted run (or a node restart)
+	tstats.SetClrFlag(cos.NodeAlerts, cos.Resilvering, cos.ResilverInterrupted)
+
 	// jgroup
 	var (
 		jgroup    *mpather.Jgroup
@@ -172,6 +176,8 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	}
 
 	xres.Finish()
+
+	tstats.ClrFlag(cos.NodeAlerts, cos.Resilvering)
 
 	res.mu.Lock()
 	if xres == res.xres {
@@ -237,13 +243,17 @@ func (res *Res) initRenew(args *Args) *xs.Resilver {
 func wait(jgroup *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) {
 	for {
 		select {
-		case <-xres.ChanAbort():
-			_ = jgroup.Stop()
-			return
 		case <-jgroup.ListenFinished():
+			// TODO: there's a potential race condition if a "stop" request is received after this function call but
+			// before xres.Finish(). In this case, the marker and Prometheus flag indicate success, while Finish()
+			// records the resilver as aborted.
 			if fs.RemoveMarker(fname.ResilverMarker, tstats, false /*stopping*/) {
 				nlog.Infoln(core.T.String()+":", xres.Name(), "removed marker ok")
 			}
+			return
+		case <-xres.ChanAbort():
+			_ = jgroup.Stop()
+			tstats.SetFlag(cos.NodeAlerts, cos.ResilverInterrupted)
 			return
 		}
 	}

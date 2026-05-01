@@ -306,7 +306,9 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	}
 	onGFN()
 
-	extArgs.Tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
+	// starting a new rebalance: set Rebalancing and clear a stale RebalanceInterrupted
+	// left over from a previously aborted/interrupted run (or a node restart)
+	extArgs.Tstats.SetClrFlag(cos.NodeAlerts, cos.Rebalancing, cos.RebalanceInterrupted)
 
 	// run: nwp workers (if any), lazy deletion, rebalance joggers (no-EC[, EC))
 	if !rargs.ecUsed {
@@ -605,10 +607,15 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 
 	// cleanup markers
 	if que != core.QuiAborted && que != core.QuiTimeout {
+		// TODO: fix race condition where a stop request arrives after Quiesce() returns but before xreb.Finish().
+		// The marker is already removed here, but the xaction is still running, so the stop is accepted.
+		// Finish() then records it as aborted while the marker and Prometheus flag indicate success.
 		if fs.RemoveMarker(fname.RebalanceMarker, tstats, false /*stopping*/) {
 			nlog.Infoln(rargs.logHdr, "removed marker ok")
 		}
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats, false /*stopping*/)
+	} else {
+		tstats.SetFlag(cos.NodeAlerts, cos.RebalanceInterrupted)
 	}
 
 	// Close and Rx-unregister data mover:
