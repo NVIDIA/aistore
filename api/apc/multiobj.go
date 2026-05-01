@@ -87,9 +87,9 @@ type PrefetchMsg struct {
 	// a single cold GET. `0` selects the server default.
 	BlobThreshold int64 `json:"blob-threshold"` // +gen:optional
 	// Chunk size for blob-downloads started by prefetch
-	BlobChunkSize int64 `json:"blob-chunk-size"` // +gen:optional
+	BlobChunkSize int64 `json:"blob-chunk-size,omitempty"` // +gen:optional
 	// Number of workers for each blob-download started by prefetch; auto-computed when zero
-	BlobNumWorkers int `json:"blob-num-workers"` // +gen:optional
+	BlobNumWorkers int `json:"blob-num-workers,omitempty"` // +gen:optional
 	// Number of concurrent workers:
 	//   - `0`: Auto-computed.
 	//   - `-1`: No additional workers.
