@@ -38,6 +38,7 @@ const (
 	defaultLogFlushInterval = cos.Duration(30 * time.Second)
 	defaultTimeout          = cos.Duration(30 * time.Second)
 	defaultPort             = 52001
+	defaultKVServiceAddr    = "localhost:6379"
 )
 
 type (
@@ -76,17 +77,17 @@ type (
 		DBConf     DatabaseConf `json:"db"`
 	}
 	DatabaseConf struct {
-		DBType   string    `json:"type"`
-		Filepath string    `json:"filepath,omitempty"`
-		Redis    RedisConf `json:"redis,omitempty"`
+		DBType   string        `json:"type"`
+		Filepath string        `json:"filepath,omitempty"`
+		Service  KVServiceConf `json:"service,omitempty"`
 	}
 
-	// RedisConf holds connection parameters for the Redis backend.
+	// KVServiceConf holds connection parameters for an external key-value service backend.
 	// All fields are overridable via environment variables.
-	RedisConf struct {
-		Addr       string `json:"addr"`                 // host:port, default "localhost:6379"
-		Password   string `json:"password,omitempty"`   //nolint:gosec // not a hardcoded cred
-		DB         int    `json:"db,omitempty"`         // Redis DB index (0–15), default 0
+	KVServiceConf struct {
+		Addr       string `json:"addr"`                  // host:port
+		Password   string `json:"password,omitempty"`    //nolint:gosec // not a hardcoded cred
+		DBIndex    int    `json:"db_index,omitempty"`    // database index (e.g. Redis DB 0–15)
 		TLSEnabled bool   `json:"tls_enabled,omitempty"` // enable TLS when connecting
 	}
 
@@ -164,8 +165,8 @@ func (c *ServerConf) Validate() error {
 }
 
 func (c *DatabaseConf) Validate() error {
-	if c.DBType == "Redis" && c.Redis.Addr == "" {
-		c.Redis.Addr = "localhost:6379"
+	if c.DBType == "Redis" && c.Service.Addr == "" {
+		c.Service.Addr = defaultKVServiceAddr
 	}
 	return nil
 }

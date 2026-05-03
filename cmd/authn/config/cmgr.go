@@ -41,12 +41,10 @@ type (
 	RSAKeyConfig struct {
 		Filepath string
 		Size     int
-		// AllowKeyGeneration controls whether the manager may auto-generate a new
-		// RSA key pair when none is found at Filepath.  Set to false when the key
-		// is externally provisioned (e.g. mounted from a Kubernetes Secret for
-		// multi-replica deployments): a missing key is then a configuration error,
-		// not a recoverable situation, and key rotation via the API is also blocked.
-		AllowKeyGeneration bool
+		// ExternallyProvisioned signals that the RSA key is managed outside this process
+		// (e.g. mounted from a Kubernetes Secret). Auto-generation and API-driven rotation
+		// are both disabled: a missing key is a configuration error, not a recoverable state.
+		ExternallyProvisioned bool
 	}
 )
 
@@ -277,39 +275,37 @@ func (cm *ConfManager) GetSecret() cmn.Censored {
 
 func (cm *ConfManager) GetRSAConfig() *RSAKeyConfig {
 	keyFilePath := cos.GetEnvOrDefault(env.AisAuthPrivateKeyFile, filepath.Join(filepath.Dir(cm.filePath), fname.AuthNRSAKey))
-	// When using Redis, the key must be pre-provisioned and shared across all
-	// replicas (e.g. from a Kubernetes Secret).  Auto-generation would produce a
-	// different key on every replica, breaking cross-replica token validation.
-	allowGen := cm.GetDBType() != "Redis"
+	// When using an external KV backend (e.g. Redis), the RSA key must be pre-provisioned
+	// and shared across all replicas. Auto-generation would produce a different key on every
+	// replica, breaking cross-replica token validation.
+	externalKey := cm.GetDBType() == "Redis"
 	return &RSAKeyConfig{
-		Filepath:           keyFilePath,
-		Size:               cm.conf.Load().Server.RSAKeyBits,
-		AllowKeyGeneration: allowGen,
+		Filepath:              keyFilePath,
+		Size:                  cm.conf.Load().Server.RSAKeyBits,
+		ExternallyProvisioned: externalKey,
 	}
 }
 
-//////////
-// Redis //
-//////////
+////////////////////
+// KV service conf //
+////////////////////
 
-// GetRedisConf returns the Redis connection configuration, with env vars taking precedence over config file values.
-func (cm *ConfManager) GetRedisConf() *authn.RedisConf {
-	base := cm.conf.Load().Server.DBConf.Redis
+// GetKVServiceConf returns the external KV service connection configuration,
+// with env vars taking precedence over config file values.
+func (cm *ConfManager) GetKVServiceConf() *authn.KVServiceConf {
+	base := cm.conf.Load().Server.DBConf.Service
 	c := base // copy
 
-	if v := os.Getenv(env.AisAuthRedisAddr); v != "" {
+	if v := os.Getenv(env.AisAuthKVAddr); v != "" {
 		c.Addr = v
 	}
-	if v := os.Getenv(env.AisAuthRedisPassword); v != "" {
+	if v := os.Getenv(env.AisAuthKVPassword); v != "" {
 		c.Password = v
 	}
-	if v := os.Getenv(env.AisAuthRedisDB); v != "" {
+	if v := os.Getenv(env.AisAuthKVDBIndex); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
-			c.DB = n
+			c.DBIndex = n
 		}
-	}
-	if c.Addr == "" {
-		c.Addr = "localhost:6379"
 	}
 	return &c
 }

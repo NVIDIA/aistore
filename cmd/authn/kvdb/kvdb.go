@@ -110,7 +110,7 @@ func CreateDriver(cm *config.ConfManager) *Driver {
 	case EmptyDB, BuntDB:
 		return &Driver{Driver: createBuntDB(cm.GetDBPath())}
 	case RedisDB:
-		return &Driver{Driver: createRedisDB(cm.GetRedisConf())}
+		return &Driver{Driver: createRedisDB(cm.GetKVServiceConf())}
 	default:
 		cos.ExitLogf(
 			"Invalid database type provided in config: %q. Supported types: %q, %q.",
@@ -128,7 +128,7 @@ func createBuntDB(path string) kvdb.Driver {
 	return driver
 }
 
-func createRedisDB(conf *authn.RedisConf) kvdb.Driver {
+func createRedisDB(conf *authn.KVServiceConf) kvdb.Driver {
 	driver, err := newRedisDriver(conf)
 	if err != nil {
 		cos.ExitLogf("Failed to connect to Redis: %v", err)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/cmd/authn/signing"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -662,7 +663,7 @@ func (h *hserv) rotationHandler(w http.ResponseWriter, r *http.Request) {
 	err := h.mgr.rotateKey()
 	if err != nil {
 		status := http.StatusInternalServerError
-		if errors.Is(err, errInvalidRotation) {
+		if errors.Is(err, errInvalidRotation) || errors.Is(err, signing.ErrExternallyProvisioned) {
 			status = http.StatusBadRequest
 		}
 		cmn.WriteErr(w, r, err, status)

@@ -32,11 +32,11 @@ type redisDriver struct {
 // interface guard
 var _ kvdb.Driver = (*redisDriver)(nil)
 
-func newRedisDriver(conf *authn.RedisConf) (*redisDriver, error) {
+func newRedisDriver(conf *authn.KVServiceConf) (*redisDriver, error) {
 	opts := &redis.Options{
 		Addr:     conf.Addr,
 		Password: conf.Password,
-		DB:       conf.DB,
+		DB:       conf.DBIndex,
 	}
 	if conf.TLSEnabled {
 		opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}

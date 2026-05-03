@@ -29,8 +29,8 @@ const (
 	AisAuthAdminUsername  = "AIS_AUTHN_SU_NAME"
 	AisAuthAdminPassword  = "AIS_AUTHN_SU_PASS"
 
-	// Redis backend (used when auth.db.type = "Redis")
-	AisAuthRedisAddr     = "AIS_AUTHN_REDIS_ADDR"     // host:port, default localhost:6379
-	AisAuthRedisPassword = "AIS_AUTHN_REDIS_PASSWORD" //nolint:gosec // env var name, not a secret
-	AisAuthRedisDB       = "AIS_AUTHN_REDIS_DB"       // integer DB index, default 0
+	// External KV service backend (used when auth.db.type = "Redis" or similar)
+	AisAuthKVAddr     = "AIS_AUTHN_KV_ADDR"     // host:port
+	AisAuthKVPassword = "AIS_AUTHN_KV_PASSWORD" //nolint:gosec // env var name, not a secret
+	AisAuthKVDBIndex  = "AIS_AUTHN_KV_DB_INDEX" // integer DB index, default 0
 )
