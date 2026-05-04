@@ -72,11 +72,10 @@ const (
 
 	// 3-column: FEATURE | TAGS | DESCRIPTION
 	FeatTagsDescTmplHdr = "FEATURE\t TAGS\t DESCRIPTION\n"
+)
 
-	//
-	// special xactions & dsort
-	//
-
+// extensions: download & dsort
+const (
 	downloadListHdr  = "JOB ID\t XACTION\t STATUS\t ERRORS\t DESCRIPTION\n"
 	downloadListBody = "{{$value.ID}}\t " +
 		"{{$value.XactID}}\t " +
@@ -123,7 +122,7 @@ const (
 
 // xactions
 const (
-	XactColTotals = "Total:" // total OBJECTS\t BYTES\t
+	XactColTotals = "Total:" // total OBJECTS\t BYTES\t (see "Total:" below)
 
 	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
 	XactNoHdrBucketTmpl = "{{range $nodeSnaps := . }}" + xactBucketBodyAll + "{{end}}"
@@ -291,6 +290,36 @@ const (
 		"{{if (eq $xctn.Stats.OutBytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.OutBytes 2}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.InObjs 0) }}-{{else}}{{$xctn.Stats.InObjs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.InBytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.InBytes 2}}{{end}}\t " +
+		"{{FormatStart $xctn.StartTime}}\t " +
+		"{{FormatEnd $xctn.EndTime}}\t " +
+		"{{FormatXactRunFinAbrt $xctn}}\n"
+
+		// list objects
+	XactListRemoteTmpl      = xactListRemoteHdr + XactListRemoteNoHdrTmpl
+	XactListRemoteNoHdrTmpl = "{{range $nodeSnaps := . }}" + xactListRemoteBodyAll + "{{end}}"
+
+	xactListRemoteHdr = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t TX PAGES\t RX PAGES\t START\t END\t STATE\n"
+
+	xactListRemoteBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" +
+		"{{if (IsTotals $nodeSnaps.DaemonID)}}" +
+		"\t\tTotal:\t\t" + // tabs/spaces align totals under OBJECTS, BYTES, TX PAGES, RX PAGES
+		"{{if (eq $xctn.Stats.Objs 0)}}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t" +
+		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t" +
+		"{{if (eq $xctn.Stats.OutObjs 0)}}-{{else}}{{$xctn.Stats.OutObjs}}{{end}}\t" +
+		"{{if (eq $xctn.Stats.InObjs 0)}}-{{else}}{{$xctn.Stats.InObjs}}{{FancyTotalsCheck}}{{end}}\n" +
+		"{{else}}" +
+		xactListRemoteBodyOne +
+		"{{end}}" +
+		"{{end}}"
+
+	xactListRemoteBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{$xctn.Kind}}\t " +
+		"{{FormatBckName $xctn.Bck}}\t " +
+		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.OutObjs 0) }}-{{else}}{{$xctn.Stats.OutObjs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.InObjs 0) }}-{{else}}{{$xctn.Stats.InObjs}}{{end}}\t " +
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
 		"{{FormatXactRunFinAbrt $xctn}}\n"

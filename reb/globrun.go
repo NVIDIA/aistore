@@ -406,11 +406,11 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 	reb.stages.stage.Store(rebStageInit)
 	if haveStreams {
 		extra := bundle.Extra{
-			RecvAck:  reb.recvAckNtfn,
-			Config:   rargs.config,
-			Smap:     rargs.smap,
-			XactConf: rargs.config.Rebalance.XactConf,
-			OwnStats: true, // do not auto-increment In/OutObjs
+			RecvAck:          reb.recvAckNtfn,
+			Config:           rargs.config,
+			Smap:             rargs.smap,
+			XactConf:         rargs.config.Rebalance.XactConf,
+			SkipGenericStats: true, // do not auto-increment In/OutObjs
 		}
 		debug.Assert(reb.dm == nil)
 		reb.dm = bundle.NewDM(trname, reb.recvObj, cmn.OwtRebalance, extra)

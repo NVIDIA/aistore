@@ -205,8 +205,9 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 	}
 	trname := "lso-" + p.UUID()
 	extra := bundle.Extra{
-		XactConf: cmn.XactConf{SbundleMult: 1, Compression: apc.CompressNever}, // NOTE: hardcoded
-		Config:   r.config,
+		XactConf:         cmn.XactConf{SbundleMult: 1, Compression: apc.CompressNever}, // NOTE: hardcoded
+		Config:           r.config,
+		SkipGenericStats: true,
 	}
 	p.dm = bundle.NewDM(trname, r.recv, cmn.OwtPut, extra)
 
@@ -227,6 +228,7 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 // LsoXact //
 /////////////
 
+// TODO -- FIXME: extend to include runtime stats
 func (r *LsoXact) CtlMsg() string {
 	if r.msg == nil {
 		return ""
@@ -236,10 +238,10 @@ func (r *LsoXact) CtlMsg() string {
 	sb.Init(160)
 	r.msg.Str(r.p.Bck.Cname(r.msg.Prefix), &sb)
 	if r.nextToken != "" {
-		sb.WriteString(", paging")
+		sb.WriteString(apc.LsoCtlMsgPaging)
 	}
 	if r.walk.remote {
-		sb.WriteString(", remote")
+		sb.WriteString(apc.LsoCtlMsgRemote)
 	}
 	return sb.String()
 }
