@@ -27,6 +27,13 @@ import (
 	"github.com/urfave/cli"
 )
 
+type (
+	nodeSnaps struct {
+		DaemonID  string
+		XactSnaps []*core.Snap
+	}
+)
+
 // part of "Usage:" (via 'ais show job --help')
 func formatJobNames() string {
 	const (
@@ -451,13 +458,6 @@ func xactListTopN(xs xact.MultiSnap, xactKind string, xactIDs []string, topN int
 }
 
 func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.MultiSnap) (int, error) {
-	type (
-		nodeSnaps struct {
-			DaemonID  string
-			XactSnaps []*core.Snap
-		}
-	)
-
 	// first, extract snaps for: xargs.ID, Kind
 	filteredXs := make(xact.MultiSnap, 8)
 
@@ -490,6 +490,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		jwfmax = [3]int{}
 
 		fromToBck, haveBck bool
+		isRemotePagination bool
 	)
 	for tid, snaps := range filteredXs {
 		if len(snaps) == 0 {
@@ -498,11 +499,16 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		if xargs.DaemonID != "" && xargs.DaemonID != tid {
 			continue
 		}
-		if !snaps[0].SrcBck.IsEmpty() {
-			debug.Assert(!snaps[0].DstBck.IsEmpty())
+		snap := snaps[0]
+		if !snap.SrcBck.IsEmpty() {
+			debug.Assert(!snap.DstBck.IsEmpty())
 			fromToBck = true
-		} else if !snaps[0].Bck.IsEmpty() {
+		} else if bck := snap.Bck; !bck.IsEmpty() {
 			haveBck = true
+			if snap.Kind == apc.ActList {
+				// when random DT paginates via backend.ListObjects and sends pages to (N - 1)
+				isRemotePagination = isRemotePagination || strings.Contains(snap.CtlMsg, apc.LsoCtlMsgRemote)
+			}
 		}
 
 		// [parallelism]
@@ -621,7 +627,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 
 	l := len(dts)
 	var (
-		err error
+		tmpl, noHdrTmpl string
 
 		usejs       = flagIsSet(c, jsonFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
@@ -635,42 +641,31 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 	opts := teb.Opts{AltMap: teb.FuncMapUnits(units, datedTime), UseJSON: usejs}
 	switch xargs.Kind {
 	case apc.ActECGet:
-		if hideHeader {
-			err = teb.Print(dts, teb.XactECGetNoHdrTmpl, opts)
-		} else {
-			err = teb.Print(dts, teb.XactECGetTmpl, opts)
-		}
+		tmpl, noHdrTmpl = teb.XactECGetTmpl, teb.XactECGetNoHdrTmpl
 	case apc.ActECPut:
-		if hideHeader {
-			err = teb.Print(dts, teb.XactECPutNoHdrTmpl, opts)
-		} else {
-			err = teb.Print(dts, teb.XactECPutTmpl, opts)
-		}
+		tmpl, noHdrTmpl = teb.XactECPutTmpl, teb.XactECPutNoHdrTmpl
 	case apc.ActRebalance:
-		if hideHeader {
-			err = teb.Print(dts, teb.XactRebalanceNoHdrTmpl, opts)
-		} else {
-			err = teb.Print(dts, teb.XactRebalanceTmpl, opts)
+		tmpl, noHdrTmpl = teb.XactRebalanceTmpl, teb.XactRebalanceNoHdrTmpl
+	case apc.ActList:
+		switch {
+		case isRemotePagination:
+			tmpl, noHdrTmpl = teb.XactListRemoteTmpl, teb.XactListRemoteNoHdrTmpl
+		case haveBck:
+			tmpl, noHdrTmpl = teb.XactBucketTmpl, teb.XactNoHdrBucketTmpl
+		default:
+			tmpl, noHdrTmpl = teb.XactNoBucketTmpl, teb.XactNoHdrNoBucketTmpl
 		}
 	default:
 		switch {
-		case fromToBck && hideHeader:
-			err = teb.Print(dts, teb.XactNoHdrFromToTmpl, opts)
 		case fromToBck:
-			err = teb.Print(dts, teb.XactFromToTmpl, opts)
-		case haveBck && hideHeader:
-			err = teb.Print(dts, teb.XactNoHdrBucketTmpl, opts)
+			tmpl, noHdrTmpl = teb.XactFromToTmpl, teb.XactNoHdrFromToTmpl
 		case haveBck:
-			err = teb.Print(dts, teb.XactBucketTmpl, opts)
+			tmpl, noHdrTmpl = teb.XactBucketTmpl, teb.XactNoHdrBucketTmpl
 		default:
-			if hideHeader {
-				err = teb.Print(dts, teb.XactNoHdrNoBucketTmpl, opts)
-			} else {
-				err = teb.Print(dts, teb.XactNoBucketTmpl, opts)
-			}
+			tmpl, noHdrTmpl = teb.XactNoBucketTmpl, teb.XactNoHdrNoBucketTmpl
 		}
 	}
-	if err != nil {
+	if err := _xlistPrint(dts, hideHeader, opts, tmpl, noHdrTmpl); err != nil {
 		return l, err
 	}
 	if !flagIsSet(c, verboseJobFlag) {
@@ -700,6 +695,13 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		}
 	}
 	return l, nil
+}
+
+func _xlistPrint(dts []nodeSnaps, hideHeader bool, opts teb.Opts, tmpl, noHdrTmpl string) error {
+	if hideHeader {
+		return teb.Print(dts, noHdrTmpl, opts)
+	}
+	return teb.Print(dts, tmpl, opts)
 }
 
 // ctlmsg += _parallelism()
