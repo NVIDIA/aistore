@@ -25,6 +25,15 @@ import (
 
 const CollectionSepa = "##"
 
+// MakePath constructs a unique database key from a collection name and a key.
+// Drivers must use this function so that ParsePath can correctly recover both parts.
+func MakePath(collection, key string) string {
+	if strings.HasSuffix(collection, CollectionSepa) {
+		return collection + key
+	}
+	return collection + CollectionSepa + key
+}
+
 type (
 	Driver interface {
 		// A driver should sync data with local drives on close

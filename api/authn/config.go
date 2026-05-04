@@ -38,6 +38,7 @@ const (
 	defaultLogFlushInterval = cos.Duration(30 * time.Second)
 	defaultTimeout          = cos.Duration(30 * time.Second)
 	defaultPort             = 52001
+	defaultKVServiceAddr    = "localhost:6379"
 )
 
 type (
@@ -76,8 +77,18 @@ type (
 		DBConf     DatabaseConf `json:"db"`
 	}
 	DatabaseConf struct {
-		DBType   string `json:"type"`
-		Filepath string `json:"filepath"`
+		DBType   string        `json:"type"`
+		Filepath string        `json:"filepath,omitempty"`
+		Service  KVServiceConf `json:"service,omitempty"`
+	}
+
+	// KVServiceConf holds connection parameters for an external key-value service backend.
+	// All fields are overridable via environment variables.
+	KVServiceConf struct {
+		Addr       string `json:"addr"`                  // host:port
+		Password   string `json:"password,omitempty"`    //nolint:gosec // not a hardcoded cred
+		DBIndex    int    `json:"db_index,omitempty"`    // database index (e.g. Redis DB 0–15)
+		TLSEnabled bool   `json:"tls_enabled,omitempty"` // enable TLS when connecting
 	}
 
 	// TimeoutConf sets the default timeout for the HTTP client used by the auth manager
@@ -149,6 +160,13 @@ func (c *ServerConf) Validate() error {
 	}
 	if c.RSAKeyBits < minRSAKeyBits {
 		return fmt.Errorf("invalid auth.rsa_key_bits=%d, (must be >= %d)", c.RSAKeyBits, minRSAKeyBits)
+	}
+	return c.DBConf.Validate()
+}
+
+func (c *DatabaseConf) Validate() error {
+	if c.DBType == "Redis" && c.Service.Addr == "" {
+		c.Service.Addr = defaultKVServiceAddr
 	}
 	return nil
 }

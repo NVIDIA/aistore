@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
@@ -21,6 +22,7 @@ type dbType string
 const (
 	EmptyDB dbType = ""
 	BuntDB  dbType = "BuntDB"
+	RedisDB dbType = "Redis"
 )
 
 const KeyMetadataVersion = 1
@@ -104,14 +106,15 @@ func (d *Driver) PersistKeyData(m *KeyData) error {
 }
 
 func CreateDriver(cm *config.ConfManager) *Driver {
-	dbPath := cm.GetDBPath()
 	switch dbType(cm.GetDBType()) {
 	case EmptyDB, BuntDB:
-		return &Driver{Driver: createBuntDB(dbPath)}
+		return &Driver{Driver: createBuntDB(cm.GetDBPath())}
+	case RedisDB:
+		return &Driver{Driver: createRedisDB(cm.GetKVServiceConf())}
 	default:
 		cos.ExitLogf(
-			"Invalid database type provided in config: %q. Currently supported database types are: %q.",
-			cm.GetDBType(), BuntDB,
+			"Invalid database type provided in config: %q. Supported types: %q, %q.",
+			cm.GetDBType(), BuntDB, RedisDB,
 		)
 		return nil
 	}
@@ -121,6 +124,14 @@ func createBuntDB(path string) kvdb.Driver {
 	driver, err := kvdb.NewBuntDB(path)
 	if err != nil {
 		cos.ExitLogf("Failed to init local database: %v", err)
+	}
+	return driver
+}
+
+func createRedisDB(conf *authn.KVServiceConf) kvdb.Driver {
+	driver, err := newRedisDriver(conf)
+	if err != nil {
+		cos.ExitLogf("Failed to connect to Redis: %v", err)
 	}
 	return driver
 }

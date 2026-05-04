@@ -28,4 +28,9 @@ const (
 	AisAuthPublicKey      = "AIS_AUTHN_PUBLIC_KEY"       // for asymmetric tokens
 	AisAuthAdminUsername  = "AIS_AUTHN_SU_NAME"
 	AisAuthAdminPassword  = "AIS_AUTHN_SU_PASS"
+
+	// External KV service backend (used when auth.db.type = "Redis" or similar)
+	AisAuthKVAddr     = "AIS_AUTHN_KV_ADDR"     // host:port
+	AisAuthKVPassword = "AIS_AUTHN_KV_PASSWORD" //nolint:gosec // env var name, not a secret
+	AisAuthKVDBIndex  = "AIS_AUTHN_KV_DB_INDEX" // integer DB index, default 0
 )

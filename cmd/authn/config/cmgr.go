@@ -41,6 +41,10 @@ type (
 	RSAKeyConfig struct {
 		Filepath string
 		Size     int
+		// ExternallyProvisioned signals that the RSA key is managed outside this process
+		// (e.g. mounted from a Kubernetes Secret). Auto-generation and API-driven rotation
+		// are both disabled: a missing key is a configuration error, not a recoverable state.
+		ExternallyProvisioned bool
 	}
 )
 
@@ -271,8 +275,37 @@ func (cm *ConfManager) GetSecret() cmn.Censored {
 
 func (cm *ConfManager) GetRSAConfig() *RSAKeyConfig {
 	keyFilePath := cos.GetEnvOrDefault(env.AisAuthPrivateKeyFile, filepath.Join(filepath.Dir(cm.filePath), fname.AuthNRSAKey))
+	// When using an external KV backend (e.g. Redis), the RSA key must be pre-provisioned
+	// and shared across all replicas. Auto-generation would produce a different key on every
+	// replica, breaking cross-replica token validation.
+	externalKey := cm.GetDBType() == "Redis"
 	return &RSAKeyConfig{
-		Filepath: keyFilePath,
-		Size:     cm.conf.Load().Server.RSAKeyBits,
+		Filepath:              keyFilePath,
+		Size:                  cm.conf.Load().Server.RSAKeyBits,
+		ExternallyProvisioned: externalKey,
 	}
+}
+
+////////////////////
+// KV service conf //
+////////////////////
+
+// GetKVServiceConf returns the external KV service connection configuration,
+// with env vars taking precedence over config file values.
+func (cm *ConfManager) GetKVServiceConf() *authn.KVServiceConf {
+	base := cm.conf.Load().Server.DBConf.Service
+	c := base // copy
+
+	if v := os.Getenv(env.AisAuthKVAddr); v != "" {
+		c.Addr = v
+	}
+	if v := os.Getenv(env.AisAuthKVPassword); v != "" {
+		c.Password = v
+	}
+	if v := os.Getenv(env.AisAuthKVDBIndex); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.DBIndex = n
+		}
+	}
+	return &c
 }
