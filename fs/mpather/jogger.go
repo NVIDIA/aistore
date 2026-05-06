@@ -26,28 +26,22 @@ import (
 
 // walk all or selected buckets, one at a time
 
-type LoadType int
-
-const (
-	NoLoad LoadType = iota
-	Load
-)
-
 type (
+	// JgroupOpts configures a Jgroup. The jogger does NOT pre-load LOMs:
+	// VisitObj receives an initialized-but-unloaded LOM and the callback
+	// owns the lifecycle (lom.Load, locking, IsCopy filtering, etc.).
 	JgroupOpts struct {
-		onFinish    func()
-		Parent      cos.Stopper // optional: stop walk when parent xaction aborts
-		VisitObj    func(lom *core.LOM, buf []byte) error
-		VisitCT     func(ct *core.CT, buf []byte) error
-		Slab        *memsys.Slab
-		Bck         cmn.Bck
-		Buckets     cmn.Bcks
-		Prefix      string
-		CTs         []string
-		DoLoad      LoadType // if specified, lom.Load(lock type)
-		IncludeCopy bool     // visit copies (aka replicas)
-		PerBucket   bool     // num joggers = (num mountpaths) x (num buckets)
-		RW          bool     // true when performs data IO
+		onFinish  func()
+		Parent    cos.Stopper // optional: stop walk when parent xaction aborts
+		VisitObj  func(lom *core.LOM, buf []byte) error
+		VisitCT   func(ct *core.CT, buf []byte) error
+		Slab      *memsys.Slab
+		Bck       cmn.Bck
+		Buckets   cmn.Bcks
+		Prefix    string
+		CTs       []string
+		PerBucket bool // num joggers = (num mountpaths) x (num buckets)
+		RW        bool // true when performs data IO
 	}
 
 	// Jgroup runs jogger per mountpath which walk the entire bucket and
@@ -85,7 +79,6 @@ func NewJgroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup 
 		la      = len(avail)
 		jg      = &Jgroup{}
 	)
-	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > NoLoad))
 
 	opts.onFinish = jg.markFinished
 
@@ -352,15 +345,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	return nil
 }
 
-func (j *jogger) visitObj(lom *core.LOM, buf []byte) (err error) {
-	if j.opts.DoLoad == Load {
-		if err = lom.Load(false, false); err != nil {
-			return
-		}
-		if !j.opts.IncludeCopy && lom.IsCopy() {
-			return nil
-		}
-	}
+func (j *jogger) visitObj(lom *core.LOM, buf []byte) error {
 	return j.opts.VisitObj(lom, buf)
 }
 

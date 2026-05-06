@@ -314,6 +314,16 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 }
 
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
+	// Note: the subsequent coi.do call takes the LOM lock at the actual data-I/O boundary
+	if err := lom.Load(false /*cache*/, false /*locked*/); err != nil {
+		if cos.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if lom.IsCopy() {
+		return nil
+	}
 	args := r.args // TCBArgs
 	a, err := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
 	if err != nil {

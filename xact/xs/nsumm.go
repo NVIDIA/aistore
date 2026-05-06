@@ -104,13 +104,11 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	}
 
 	opts := &mpather.JgroupOpts{
-		Parent:      r,
-		CTs:         []string{fs.ObjCT},
-		Prefix:      p.msg.Prefix,
-		VisitObj:    r.visitObj,
-		DoLoad:      mpather.Load,
-		IncludeCopy: true,
-		RW:          false,
+		Parent:   r,
+		CTs:      []string{fs.ObjCT},
+		Prefix:   p.msg.Prefix,
+		VisitObj: r.visitObj,
+		RW:       false,
 	}
 	if !p.Bck.IsQuery() {
 		r.initRes(&r.oneRes, p.Bck) // init single result-set
@@ -332,6 +330,12 @@ func (r *XactNsumm) cloneRes(dst, src *cmn.BsummResult) {
 }
 
 func (r *XactNsumm) visitObj(lom *core.LOM, _ []byte) error {
+	if err := lom.Load(false /*cache*/, false /*locked*/); err != nil {
+		if cos.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
 	var res *cmn.BsummResult
 	if r.single {
 		res = &r.oneRes

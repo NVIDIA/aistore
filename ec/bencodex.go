@@ -158,7 +158,6 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 		Parent:   r,
 		CTs:      []string{fs.ObjCT},
 		VisitObj: r.encode,
-		DoLoad:   mpather.Load,
 		RW:       true,
 	}
 	opts.Bck.Copy(r.bck.Bucket())
@@ -233,6 +232,15 @@ func (r *XactBckEncode) afterEncode(lom *core.LOM, err error) {
 // file whose HRW points to this file and the file does not have corresponding
 // metadata file in 'meta' directory
 func (r *XactBckEncode) encode(lom *core.LOM, _ []byte) error {
+	if err := lom.Load(false /*cache*/, false /*locked*/); err != nil {
+		if cos.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if lom.IsCopy() {
+		return nil
+	}
 	_, local, err := lom.HrwTarget(r.smap)
 	if err != nil {
 		return err

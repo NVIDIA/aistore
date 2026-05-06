@@ -27,7 +27,6 @@ type (
 		xctn *xactLLC
 	}
 	xactLLC struct {
-		// TODO: migrate to xact.BckJogRunner (use NwpNone — work is the DoLoad side effect, no CbObj needed)
 		xact.BckJog
 	}
 )
@@ -69,12 +68,25 @@ func newXactLLC(uuid string, bck *meta.Bck) (r *xactLLC) {
 	mpopts := &mpather.JgroupOpts{
 		Parent:   r,
 		CTs:      []string{fs.ObjCT},
-		VisitObj: func(*core.LOM, []byte) error { return nil },
-		DoLoad:   mpather.Load,
+		VisitObj: r.visitObj,
 	}
 	mpopts.Bck.Copy(bck.Bucket())
 	r.BckJog.Init(uuid, apc.ActLoadLomCache, bck, mpopts, cmn.GCO.Get())
 	return
+}
+
+func (*xactLLC) visitObj(lom *core.LOM, _ []byte) error {
+	if err := lom.Load(false /*cache*/, false); err != nil {
+		if cos.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if lom.IsCopy() {
+		return nil
+	}
+	lom.Recache()
+	return nil
 }
 
 func (r *xactLLC) Run(*sync.WaitGroup) {

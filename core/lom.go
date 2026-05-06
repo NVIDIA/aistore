@@ -140,7 +140,7 @@ func (lom *LOM) Lsize(special ...bool) int64 {
 	return lom.md.Size
 }
 
-func (lom *LOM) loaded() bool { return lom.md.lid != 0 } // internal
+func (lom *LOM) loaded() bool { return lom.md.lid != 0 }
 
 func (lom *LOM) IsHRW() bool { return lom.md.flags&lmflHRW != 0 }
 

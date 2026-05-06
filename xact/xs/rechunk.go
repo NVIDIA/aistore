@@ -113,7 +113,6 @@ func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 			VisitObj: r.do,
 			Slab:     slab,
 			Prefix:   args.Prefix,
-			DoLoad:   mpather.Load,
 			RW:       true,
 		}
 	)
@@ -137,6 +136,19 @@ func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 // | >= objSizeLimit   |     Yes      | Re-chunk               |
 // | >= objSizeLimit   |     No       | Re-chunk               |
 func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
+	lom.Lock(true)
+	defer lom.Unlock(true)
+
+	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
+		if cos.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if lom.IsCopy() {
+		return nil
+	}
+
 	var (
 		size      = lom.Lsize()
 		chunkSize = r.args.ChunkSize
@@ -149,9 +161,6 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 		}
 		chunkSize = 0 // restore chunked objects to monolithic
 	}
-
-	lom.Lock(true)
-	defer lom.Unlock(true)
 
 	lh, err := lom.Open()
 	if err != nil {

@@ -27,9 +27,7 @@ import (
 // TODOs:
 // - integrate shard index into GET datapath (GetBatch, GET with archpath
 // - inline shard index in PUT datapath (cold-GET, PUT) (no xaction)
-// - bckjogrunner:
-//   - support `NoLoad` mode
-//   - support `NonRecurs` mode
+// - bckjogrunner: support `NonRecurs` mode
 // - add self-healing mechanism: detect the corrupted index on the fly and repair it
 
 const idxLogInterval = 30 * time.Second
@@ -159,9 +157,15 @@ func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, bool) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
-	// Always load under our own lock — the jogger does not pre-load (NoLoad: true).
+	// jogger does not pre-load — load under our own lock.
 	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
+		if cos.IsNotExist(err) {
+			return nil, false
+		}
 		r.AddErr(err, 0)
+		return nil, false
+	}
+	if lom.IsCopy() {
 		return nil, false
 	}
 

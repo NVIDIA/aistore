@@ -115,19 +115,11 @@ func (r *BckJogRunner) Init(id, kind string, bck *meta.Bck, opts BckJogRunnerOpt
 		}
 	}
 
-	// When a worker pool is active, joggers must NOT load the LOM — workers
-	// reconstruct a fresh LOM from the LIF and load it themselves.
-	doLoad := mpather.Load
-	if numWorkers != NwpNone {
-		doLoad = mpather.NoLoad // workers call lom.Load() after lif.LOM()
-	}
-
 	mpopts := &mpather.JgroupOpts{
 		Parent:   r,
 		CTs:      []string{fs.ObjCT}, // TODO: make this configurable in `BckJogRunnerOpts` when needed
 		VisitObj: r.dispatch,
 		Prefix:   opts.Prefix,
-		DoLoad:   doLoad,
 		RW:       opts.RW,
 	}
 	if opts.CbObj != nil {
@@ -165,6 +157,10 @@ func (r *BckJogRunner) Init(id, kind string, bck *meta.Bck, opts BckJogRunnerOpt
 // Routes each object inline when no pool is active, or into the work channel.
 // The calling jogger frees the original LOM on return; workers reconstruct
 // a fresh LOM via lif.LOM().
+//
+// LOM lifecycle: neither the jogger nor the runner pre-loads the LOM. The
+// CbObj callback receives an initialized-but-unloaded LOM and is responsible
+// for calling lom.Load() (and acquiring locks) as needed.
 func (r *BckJogRunner) dispatch(lom *core.LOM, buf []byte) error {
 	if r.nwp == nil {
 		if r.cb != nil {
@@ -211,10 +207,6 @@ func (r *BckJogRunner) runWorker(buf []byte, slab *memsys.Slab) {
 				nlog.Warningln(r.Name(), lif.Cname(), err)
 				r.Base.Abort(err)
 				return
-			}
-			if err := lom.Load(false /*cache it*/, false); err != nil {
-				core.FreeLOM(lom)
-				continue // object may have been removed between dispatch and pickup
 			}
 			if err := r.cb(lom, buf); err != nil {
 				if !cos.IsNotExist(err) {

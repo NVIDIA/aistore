@@ -83,7 +83,6 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 		CTs:      []string{fs.ObjCT},
 		VisitObj: r.visitObj,
 		Slab:     slab,
-		DoLoad:   mpather.Load,
 		RW:       true,
 	}
 	mpopts.Bck.Copy(p.Bck.Bucket())
@@ -128,6 +127,19 @@ func (r *mncXact) Run(wg *sync.WaitGroup) {
 }
 
 func (r *mncXact) visitObj(lom *core.LOM, buf []byte) (err error) {
+	// jogger no longer pre-loads — do it here
+	if err = lom.Load(false /*cache*/, false /*locked*/); err != nil {
+		if cos.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	// must skip replicas: delCopies keeps lom.FQN and deletes the others,
+	// so calling it on a non-HRW (copy) LOM would delete the primary.
+	if lom.IsCopy() {
+		return nil
+	}
+
 	var (
 		size   int64
 		n      = lom.NumCopies()

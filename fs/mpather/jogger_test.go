@@ -57,7 +57,7 @@ func TestJoggerGroup(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
-func TestJoggerGroupLoad(t *testing.T) {
+func TestJoggerGroupNoPreload(t *testing.T) {
 	var (
 		desc = tools.ObjectsDesc{
 			CTs: []tools.ContentTypeDesc{
@@ -76,15 +76,17 @@ func TestJoggerGroupLoad(t *testing.T) {
 		Bck: *out.Bck,
 		CTs: []string{fs.ObjCT},
 		VisitObj: func(lom *core.LOM, buf []byte) error {
-			tassert.Errorf(t, lom.Lsize() == desc.ObjectSize, "incorrect object size (lom probably not loaded)")
-			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
+			tassert.Fatalf(t, len(buf) == 0, "buffer expected to be empty")
+			tassert.Errorf(t, lom.Lsize(true /*unit-test bypass*/) == 0, "jogger unexpectedly pre-loaded LOM")
+			if err := lom.Load(false, false); err != nil {
+				return err
+			}
+			tassert.Errorf(t, lom.Lsize() == desc.ObjectSize, "unexpected object size after callback-side load")
 			counter.Inc()
 			return nil
 		},
-		DoLoad: mpather.Load,
 	}
 	jg := mpather.NewJgroup(opts, cmn.GCO.Get(), nil)
-
 	jg.Run()
 	<-jg.ListenFinished()
 
