@@ -25,6 +25,7 @@ from aistore.sdk.etl.webserver.base_etl_server import (
     CountingIterator,
     RETRY_BACKOFF_BASE,
     RETRY_BACKOFF_MAX,
+    _compute_replayable_retries,
 )
 from aistore.sdk.session_manager import resolve_ssl_config
 from aistore.sdk.etl.webserver.fastapi_streaming import (
@@ -375,12 +376,14 @@ class FastAPIServer(ETLServer):
         Raises:
             ETLDirectPutTransientError: if all retry attempts are exhausted.
         """
-        replayable = bool(fqn) or is_get
-        effective_retries = self.direct_put_retries if replayable else 0
+        replayable, effective_retries = _compute_replayable_retries(
+            fqn, is_get, self.direct_put_retries
+        )
         if not replayable and self.direct_put_retries:
             self.logger.debug(
                 "no-FQN PUT: source not replayable; "
-                "local retries skipped, AIS will retry"
+                "local retries skipped; transient direct-put error "
+                "will surface as transform failure"
             )
 
         reader = await self._get_stream_reader(fqn, path, request, is_get)
