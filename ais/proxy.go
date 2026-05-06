@@ -3222,8 +3222,7 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 	if err != nil {
 		return
 	}
-	req.Header.Set(apc.HdrSenderID, p.SID())
-	req.Header.Set(apc.HdrSenderSmapVer, smap.vstr)
+	p.setIntraHdrs(req, smap)
 	g.client.control.Do(req) //nolint:bodyclose // exiting
 	cmn.HreqFree(req)
 }

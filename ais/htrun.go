@@ -780,9 +780,10 @@ func (args *callArgs) client() (*http.Client, bool) {
 
 func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	var (
-		req  *http.Request
-		resp *http.Response
-		sid  = unknownDaemonID
+		req     *http.Request
+		resp    *http.Response
+		sid     = unknownDaemonID
+		isIntra bool
 	)
 	res = allocCR()
 	if args.si != nil {
@@ -793,6 +794,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	debug.Assert(args.si != nil || args.req.Base != "") // either si or base
 	if args.req.Base == "" && args.si != nil {
 		args.req.Base = args.si.ControlNet.URL // by default, use intra-cluster control network
+		isIntra = true
 	}
 
 	client, withCancel := args.client()
@@ -817,14 +819,9 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	}
 
 	// req header
-	if smap.vstr != "" {
-		if smap.IsPrimary(h.si) {
-			req.Header.Set(apc.HdrSenderIsPrimary, "true")
-		}
-		req.Header.Set(apc.HdrSenderSmapVer, smap.vstr)
+	if isIntra || !_isPubBound(req, args.si) {
+		h.setIntraHdrs(req, smap)
 	}
-	req.Header.Set(apc.HdrSenderID, h.SID())
-	req.Header.Set(apc.HdrSenderName, h.si.Name())
 	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
 
 	resp, res.err = client.Do(req)
@@ -842,6 +839,23 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		h.keepalive.heardFrom(sid)
 	}
 	return res
+}
+
+// stamp intra-cluster sender headers
+// NOTE: caller must ensure the destination is on intra-net
+func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX) {
+	if smap.vstr != "" {
+		if smap.IsPrimary(h.si) {
+			req.Header.Set(apc.HdrSenderIsPrimary, "true")
+		}
+		req.Header.Set(apc.HdrSenderSmapVer, smap.vstr)
+	}
+	req.Header.Set(apc.HdrSenderID, h.SID())
+	req.Header.Set(apc.HdrSenderName, h.si.Name())
+}
+
+func _isPubBound(req *http.Request, si *meta.Snode) bool {
+	return si != nil && req.URL.Host == si.PubNet.TCPEndpoint()
 }
 
 func _doResp(args *callArgs, req *http.Request, resp *http.Response, res *callResult) {

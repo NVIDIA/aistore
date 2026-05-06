@@ -512,18 +512,31 @@ func _yelp(hdr http.Header, name string) error {
 	return nil
 }
 
+// dispatch request to the handler with the closest matching URL
 func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if server.isSeparatePub {
-		err := _yelp(r.Header, apc.HdrSenderID)
-		if err == nil {
-			err = _yelp(r.Header, apc.HdrSenderName)
-		}
-		if err != nil {
+	switch {
+	case !server.isSeparatePub:
+		// just dispatch
+		server.muxers._serveHTTP(w, r)
+
+	case r.Method == http.MethodPost && r.URL.Path == apc.URLPathCluAutoReg.S:
+		// self-join: remove intra-cluster headers, then dispatch
+		r.Header.Del(apc.HdrSenderID)
+		r.Header.Del(apc.HdrSenderName)
+		server.muxers._serveHTTP(w, r)
+
+	default:
+		// reject spoofed intra-cluster headers, if any
+		if err := _yelp(r.Header, apc.HdrSenderID); err != nil {
 			cmn.WriteErr(w, r, err, http.StatusForbidden)
 			return
 		}
+		if err := _yelp(r.Header, apc.HdrSenderName); err != nil {
+			cmn.WriteErr(w, r, err, http.StatusForbidden)
+			return
+		}
+		server.muxers._serveHTTP(w, r)
 	}
-	server.muxers.ServeHTTP(w, r)
 }
 
 const (
@@ -534,7 +547,7 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 	server.Lock()
 	server.s = &http.Server{
 		Addr:              addr,
-		Handler:           server.muxers,
+		Handler:           server,
 		ErrorLog:          logger,
 		ReadHeaderTimeout: apc.ReadHeaderTimeout,
 		IdleTimeout:       dfltIdleTimeout,
@@ -666,7 +679,9 @@ func (server *netServer) shutdown(config *cmn.Config) {
 ////////////////
 
 // interface guard
-var _ http.Handler = (*httpMuxers)(nil)
+var (
+	_ http.Handler = (*netServer)(nil)
+)
 
 func newMuxers(enableTracing bool) httpMuxers {
 	m := make(httpMuxers, len(htverbs))
@@ -676,9 +691,7 @@ func newMuxers(enableTracing bool) httpMuxers {
 	return m
 }
 
-// ServeHTTP dispatches the request to the handler whose
-// pattern most closely matches the request URL.
-func (m httpMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (m httpMuxers) _serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if sm, ok := m[r.Method]; ok {
 		sm.ServeHTTP(w, r)
 		return

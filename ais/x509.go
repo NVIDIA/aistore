@@ -53,10 +53,7 @@ func (p *proxy) _x509call(si *meta.Snode, smap *smapX, client *http.Client) erro
 	if errR != nil {
 		return errR
 	}
-	req.Header.Set(apc.HdrSenderIsPrimary, "true")
-	req.Header.Set(apc.HdrSenderSmapVer, smap.vstr)
-	req.Header.Set(apc.HdrSenderID, p.SID())
-	req.Header.Set(apc.HdrSenderName, p.si.Name())
+	p.setIntraHdrs(req, smap)
 	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
 
 	resp, err := client.Do(req)
