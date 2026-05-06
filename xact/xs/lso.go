@@ -151,8 +151,8 @@ func (p *lsoFactory) Start() error {
 		// R-flow
 		r.walk.this = r.msg.SID == core.T.SID()
 		if !r.walk.wor {
-			nt := core.T.Sowner().Get().CountActiveTs()
-			if nt > 1 {
+			smap := core.T.Sowner().Get()
+			if nat := smap.CountActiveTs(); nat > 1 {
 				// streams
 				if err := p.beginStreams(r); err != nil {
 					return err

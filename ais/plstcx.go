@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -144,7 +145,7 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 		}
 
 		config := cmn.GCO.Get()
-		lst, err = p.lsObjsR(bck, lsmsg, hdr, smap, fc.tsi, config, fc.wantOnlyRemote)
+		lst, err = p.lsObjsR(bck, lsmsg, hdr, smap, fc.tsi, config, fc.wantOnlyRemote, newls)
 
 		// TODO `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
@@ -301,15 +302,28 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 //   - when wantOnlyRemote: just return the next page
 //   - otherwise, use intra-cluster streams to share the latter
 //     for subsequent local filtering and adding local metadata (`filterAddLmeta`)
-func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, tsi *meta.Snode, config *cmn.Config,
-	wantOnlyRemote bool) (*cmn.LsoRes, error) {
+func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, dt *meta.Snode, config *cmn.Config,
+	wantOnlyRemote, newls bool) (*cmn.LsoRes, error) {
+	var (
+		nat           int
+		phasedStartup bool
+	)
+	if newls && !wantOnlyRemote {
+		nat = smap.CountActiveTs()
+		if nat > 1 {
+			// R-flow startup: in multi-target clusters, initialize all non-DT
+			// receive paths before calling the DT. The DT performs backend ListObjects
+			// and starts distributing listed pages - receivers must be ready.
+			phasedStartup = true
+		}
+	}
+
 	var (
 		results   sliceResults
 		actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
 		args      = allocBcArgs()
 		timeout   = config.Client.ListObjTimeout.D()
 	)
-
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
@@ -317,10 +331,12 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(actMsgExt),
 	}
-	if wantOnlyRemote {
+
+	switch {
+	case wantOnlyRemote:
 		cargs := allocCargs()
 		{
-			cargs.si = tsi
+			cargs.si = dt
 			cargs.req = args.req
 			cargs.timeout = timeout
 			cargs.cresv = cresmGeneric[cmn.LsoRes]{}
@@ -336,7 +352,50 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		freeCargs(cargs)
 		results = make(sliceResults, 1)
 		results[0] = res
-	} else {
+
+	case phasedStartup:
+		// TODO -- FIXME:
+		// - redo via additional prepare (or begin) type phase
+		// - all targets except DT must be ready to receive pages
+		args.timeout = timeout
+		args.smap = smap
+		args.network = cmn.NetIntraControl // TODO: decide control vs data for pages
+		args.cresv = cresmGeneric[cmn.LsoRes]{}
+
+		args.selected = make(meta.Nodes, 0, nat-1)
+		for _, si := range smap.Tmap {
+			if si.ID() == dt.ID() || si.InMaintOrDecomm() {
+				continue
+			}
+			args.selected = append(args.selected, si)
+		}
+		args.nodeCount = len(args.selected)
+		debug.Assert(args.nodeCount == nat-1)
+
+		var (
+			wg   sync.WaitGroup
+			bres sliceResults
+		)
+		wg.Go(func() {
+			bres = p.bcastSelected(args)
+		})
+
+		time.Sleep(2 * time.Second) // TODO -- FIXME: see above
+		cargs := allocCargs()
+		{
+			cargs.si = dt
+			cargs.req = args.req
+			cargs.timeout = timeout
+			cargs.cresv = cresmGeneric[cmn.LsoRes]{}
+		}
+		dres := p.call(cargs, smap)
+		freeCargs(cargs)
+
+		wg.Wait()
+		results = bres
+		results = append(results, dres)
+
+	default:
 		args.timeout = timeout
 		args.smap = smap
 		args.cresv = cresmGeneric[cmn.LsoRes]{}
@@ -592,7 +651,7 @@ func (c *lstcx) do() (string, error) {
 
 	// 2. ls 1st page
 	var lst *cmn.LsoRes
-	lst, err = c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, tsi /*designated target*/, c.config, true)
+	lst, err = c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, tsi /*designated target*/, c.config, true /*wantOnlyRemote*/, true /*newls*/)
 	if err != nil {
 		return "", err
 	}
@@ -662,7 +721,7 @@ func (c *lstcx) pages(s string, cnt int) {
 
 // next page
 func (c *lstcx) _page() (int, error) {
-	lst, err := c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, c.tsi, c.config, true)
+	lst, err := c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, c.tsi, c.config, true /*wantOnlyRemote*/, false /*newls*/)
 	if err != nil {
 		return 0, err
 	}
