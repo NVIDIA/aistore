@@ -37,6 +37,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - ETL `FastAPIServer`: stream no-FQN `hpush` PUTs in constant memory,
   mirroring the `hpull` GET change. Transient direct-put errors surface to AIS
   to retry the whole PUT (request body is one-shot).
+- ETL `HTTPMultiThreadedServer`: stream no-FQN `hpush` PUTs in constant
+  memory. Previously the full request body was read into a `BytesIO`
+  before being handed to `transform_stream`.
 - **ETL direct-put retry**: added exponential-backoff retry for transient connection
   errors in Flask and HTTP multi-threaded ETL servers for parity with FastAPI.
   `ConnectionRefused` is now treated as a permanent error that returns HTTP 502

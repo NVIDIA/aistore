@@ -2,11 +2,11 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
+import io
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from io import BytesIO
 from socketserver import ThreadingMixIn
-from typing import Iterator, Type, Tuple
+from typing import BinaryIO, Iterator, Type, Tuple
 import signal
 import threading
 from urllib.parse import urlparse, parse_qs
@@ -20,6 +20,7 @@ from aistore.sdk.etl.webserver.base_etl_server import (
     RETRY_BACKOFF_BASE,
     RETRY_BACKOFF_MAX,
     _handle_direct_put_transient_error,
+    _compute_replayable_retries,
 )
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
@@ -38,6 +39,57 @@ from aistore.sdk.const import (
     QPARAM_ETL_FQN,
     STATUS_INTERNAL_SERVER_ERROR,
 )
+
+
+class _RFileLimitedReader(io.RawIOBase):
+    """Bound `BaseHTTPRequestHandler.rfile` to the current PUT body length.
+
+    `self.rfile` is the raw connection stream; it has no intrinsic EOF at the
+    end of this request body. Passing it directly to `transform_stream` would
+    cause any transform that calls `reader.read()` with no size argument to
+    block indefinitely waiting for the client to close the connection.
+
+    This wrapper tracks `Content-Length` remaining bytes and clamps every
+    `read()` call accordingly, giving transforms the same EOF semantics they
+    get from a `BytesIO` — without buffering the full body upfront.
+
+    The request body is one-shot; `_direct_put_stream_with_retry` sets
+    `effective_retries=0` on this path. `close()` drains any unread bytes
+    from the request body so a transform that exits early does not leave
+    residual data on a keep-alive connection.
+    """
+
+    def __init__(self, rfile: BinaryIO, content_length: int) -> None:
+        self._rfile = rfile
+        self._remaining = content_length
+
+    def readable(self) -> bool:
+        return True
+
+    def read(self, size: int = -1) -> bytes:
+        if self._remaining == 0:
+            return b""
+        if size is None or size < 0:
+            data = self._rfile.read(self._remaining)
+            self._remaining = 0
+            return data
+        to_read = min(size, self._remaining)
+        data = self._rfile.read(to_read)
+        self._remaining -= len(data)
+        return data
+
+    def close(self) -> None:
+        try:
+            while self._remaining > 0:
+                try:
+                    chunk = self._rfile.read(min(self._remaining, 65536))
+                except (OSError, ValueError):
+                    break
+                if not chunk:
+                    break
+                self._remaining -= len(chunk)
+        finally:
+            super().close()
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
@@ -161,11 +213,10 @@ class HTTPMultiThreadedServer(ETLServer):
                     resp.close()
                     raise
                 return _ResponseRawReader(resp)
-            # TODO: non-FQN PUT still buffers the full request body into BytesIO so
-            # retries can replay it; true streaming for this path still needs to be
-            # implemented.
+            # Request body is one-shot; local retries are skipped for this path
+            # (see _direct_put_stream_with_retry).
             content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
-            return BytesIO(self.rfile.read(content_length))
+            return _RFileLimitedReader(self.rfile, content_length)
 
         def _direct_put_with_retry(
             self,
@@ -208,15 +259,18 @@ class HTTPMultiThreadedServer(ETLServer):
             """
             Streaming direct-put with exponential-backoff retry on transient errors.
 
-            For FQN and GET sources, the reader is closed and reopened on each retry.
-            For PUT requests without FQN, the body is buffered in a BytesIO by
-            _get_stream_reader and seeked back to 0 on retry so the same bytes are
-            replayed (mirrors FastAPIServer._direct_put_stream_with_retry).
+            Replayable sources (FQN-backed or GET) close and reopen the reader on
+            each retry. No-FQN PUT bodies are one-shot (request body is consumed
+            from the socket); effective_retries is forced to 0 and a transient
+            direct-put error surfaces to AIS as a transform failure.
             """
             etl = self.server.etl_server
+            replayable, effective_retries = _compute_replayable_retries(
+                fqn, is_get, etl.direct_put_retries
+            )
             reader = self._get_stream_reader(fqn, raw_path, is_get)
             try:
-                for attempt in range(etl.direct_put_retries + 1):
+                for attempt in range(effective_retries + 1):
                     try:
                         return self._direct_put_stream(
                             direct_put_url,
@@ -225,22 +279,25 @@ class HTTPMultiThreadedServer(ETLServer):
                             raw_path,
                         )
                     except ETLDirectPutTransientError as exc:
-                        if attempt >= etl.direct_put_retries:
+                        if attempt >= effective_retries:
+                            if not replayable and etl.direct_put_retries:
+                                etl.logger.debug(
+                                    "no-FQN PUT: source not replayable; "
+                                    "local retries skipped; transient direct-put error "
+                                    "will surface as transform failure"
+                                )
                             raise
                         delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                         etl.logger.warning(
                             "direct_put_stream attempt %d/%d failed, retrying in %.1fs: %s",
                             attempt + 1,
-                            etl.direct_put_retries + 1,
+                            effective_retries + 1,
                             delay,
                             exc,
                             exc_info=True,
                         )
-                        if isinstance(reader, BytesIO):
-                            reader.seek(0)
-                        else:
-                            etl.close_reader(reader)
-                            reader = self._get_stream_reader(fqn, raw_path, is_get)
+                        etl.close_reader(reader)
+                        reader = self._get_stream_reader(fqn, raw_path, is_get)
                         time.sleep(delay)
             finally:
                 etl.close_reader(reader)

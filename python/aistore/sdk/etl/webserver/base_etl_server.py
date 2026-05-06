@@ -85,6 +85,32 @@ def _handle_direct_put_transient_error(
     raise ETLDirectPutTransientError(direct_put_url, exc) from exc
 
 
+def _compute_replayable_retries(
+    fqn: str, is_get: bool, direct_put_retries: int
+) -> Tuple[bool, int]:
+    """
+    Determine whether the streaming source is replayable and the effective
+    retry budget.
+
+    Sources backed by a local FQN file or a GET stream can be reopened on
+    retry. No-FQN PUT bodies are one-shot (consumed from the request socket)
+    and cannot be replayed locally, so the retry budget is forced to zero.
+
+    Args:
+        fqn: Local FQN of the source object; empty for streaming PUT.
+        is_get: ``True`` for hpull GET, ``False`` for hpush PUT.
+        direct_put_retries: Configured retry count.
+
+    Returns:
+        ``(replayable, effective_retries)`` — `replayable` is ``True`` when
+        the source can be reopened; `effective_retries` equals
+        `direct_put_retries` when replayable, else ``0``.
+    """
+    replayable = bool(fqn) or is_get
+    effective_retries = direct_put_retries if replayable else 0
+    return replayable, effective_retries
+
+
 class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
     """
     Abstract base class for all ETL servers.
