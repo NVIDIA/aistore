@@ -43,8 +43,10 @@ import (
 // default tunables (can override via apc.BlobMsg)
 const (
 	dfltChunkSize = 4 * cos.MiB
-	minChunkSize  = memsys.DefaultBufSize
+	minChunkSize  = memsys.DefaultBufSize // 32KiB
 	maxChunkSize  = 16 * cos.MiB
+
+	dfltChunkReadTimeout = time.Minute // default for apc.BlobMsg.ChunkReadTimeout
 
 	minBlobDlPrefetch = cos.MiB // size threshold for x-prefetch
 
@@ -55,8 +57,10 @@ const (
 type (
 	XactBlobDl struct {
 		bp       core.Backend
-		pending  blobPending
-		args     *core.BlobParams
+		ctx      context.Context
+		cancel   context.CancelFunc
+		pending  blobPending      // map[roff => work item]
+		args     *core.BlobParams // including the resulting LOM and control message (apc.BlobMsg)
 		vlabs    map[string]string
 		xlabs    map[string]string
 		config   *cmn.Config
@@ -69,10 +73,11 @@ type (
 		xact.Base
 		wg         sync.WaitGroup
 		nextRoff   int64
-		numWorkers int
 		fullSize   int64
-		chunkSize  int64 // not necessarily user-provided values (chunk size & num workers might be adjusted based on resources)
+		chunkSize  int64         // not necessarily user-provided values (chunk size & num workers might be adjusted based on resources)
+		timeout    time.Duration // chunk read timeout
 		woff       int64
+		numWorkers int
 	}
 )
 
@@ -108,82 +113,24 @@ var (
 	_ xreg.Renewable = (*blobFactory)(nil)
 )
 
-//	   Main Thread                        Worker Goroutines (N)           Backend
-//	(XactBlobDl.Run())                   (chunkDownloader.run())              │
-//	   │                                        │                             │
-//	   │     chunkWi{sgl, roff} -> workCh       │                             │
-//	   ├──────────────────────────────────────> │                             │
-//	   │                                        ├─> GetObjReader(roff, size) ─┤
-//	   │                                        │                             │
-//	   │                                        |<── copy to a chunk file <───┤
-//	   │                                        │
-//	   │                                        ├── add chunk to manifest
-//	   │     doneCh <- chunkDone{sgl, roff}     │
-//	   │ <──────────────────────────────────────┤
-//	   │                                        │
-//	   ├── handle out-of-order (pending queue)  │
-//	   │                                        │
-//	   ├─── sequential write to RespWriter      │
-//	   │       (for streaming GET)              │
-//	   │                                        │
-//	   │        schedule the next chunk         │
-//	   │   chunkWi{sgl, nextRoff} -> workCh     │
-//	   │──────────────────────────────────────> │
-//	   │                                        │
-//	   (loop until woff >= fullSize)
+// Blob Download Flow =================================================================
 //
-// =====================================================================================
-// Consumer: `chunkDownloader.run()` - worker goroutines
-// Each worker continuously:
-// 1. Pull work item from workCh
-//   - roff indicates byte range [roff, roff+chunkSize)
-//   - SGL is a reusable buffer provided by main thread
+// Main goroutine coordinates reusable blobWI instances over workCh/doneCh.
+// Workers perform backend range reads, write chunk files, optionally fill SGLs
+// for streaming, and add completed chunks to the manifest.
 //
-// 2. Performs HTTP range request to remote backend
-// 3. Persist chunk:
-//   - Create chunk manifest and chunk file from LOM
-//   - Copy data from backend reader to multi-writer: chunk file + checksum (+ SGL if RespWriter set)
-//   - Add the chunk to the manifest
+// Ordering is enforced by the coordinator:
+//   - completed chunks with roff > woff are kept in pending;
+//   - chunks at roff == woff advance the ordered stream;
+//   - SGLs are written to RespWriter sequentially, when streaming;
+//   - blobWI/SGL cleanup and reuse are coordinator-owned.
 //
-// 4. Notify completion: Send chunkDone{sgl, written, roff, err} to doneCh
-// 5. Repeat: Wait for next work item on workCh
-//
-// Producer: XactBlobDl - main thread
-// ------------------------------------------------------------------------------------------------
-// PHASE 1: `blobFactory.Start()` and `XactBlobDl.start()`
-// - Initialize worker and chunk manifest
-// - Seed initial work items (chunks) to workCh (one per worker)
-// ------------------------------------------------------------------------------------------------
-// PHASE 2: `XactBlobDl.Run()` - coordination loop
-// Main thread continuously:
-// 1. Receive chunk completion from doneCh
-// 2. Handle out-of-order: If chunk arrived early (roff > woff), add to pending queue
-// 3. Sequential write: Copy SGL to RespWriter if streaming, reset SGL, advance woff
-// 4. Schedule next chunk: Send workCh <- chunkWi{sgl, nextRoff} (reuse SGL)
-// 5. Plug holes: Walk pending queue, write chunks that are now in-order (roff == woff)
-// 6. Check completion: If woff >= fullSize, exit loop
-// ------------------------------------------------------------------------------------------------
-// PHASE 3: `XactBlobDl.Run()` fin label - finalization
-// - Close workCh and wait for workers
-// - On success: Compute checksum, persist manifest via lom.CompleteUfest(), update stats
-// - On error/abort: Clean up via manifest.Abort(), update error stats
-// =====================================================================================
-// Abort Flow:
-// -----------
-// Abort() signals via Base.Abort() (sends to ChanAbort) and returns immediately.
-// It does NOT wait for workers - cleanup happens in the main thread:
-//
-// Worker mode (runWorkers):
-//  1. Main thread receives <-ChanAbort(), jumps to cleanup
-//  2. close(workCh) signals workers to exit
-//  3. wg.Wait() blocks until all workers complete their current do() call
-//  4. Returns error -> finalize() -> manifest.Abort() cleans up chunk files
-//
-// Serial mode (runSerial):
-//  1. IsAborted() checked between chunks -> returns error
-//  2. finalize() -> manifest.Abort() cleans up chunk files
-//
-// Note: manifest.Abort() is called only AFTER all I/O has stopped.
+// Abort/cancelation:
+//   - Abort() marks the xaction aborted and cancels the blob-download context;
+//   - range-read contexts derive from that context, so abort interrupts active
+//     GetObjReader/body-copy operations;
+//   - finalize() runs only after range-read I/O has stopped;
+//   - on success it completes the manifest; on error/abort it aborts it.
 //
 // =====================================================================================
 func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.RenewRes {
@@ -271,6 +218,14 @@ func (p *blobFactory) Start() (err error) {
 
 	r.setChunkSize()
 
+	// Generate uploadID and initialize manifest
+	lom := r.args.Lom
+	r.uploadID = cos.GenUUID()
+	r.manifest, err = core.NewUfest(r.uploadID, lom, false /*must-exist*/)
+	if err != nil {
+		return err
+	}
+
 	if r.numWorkers != xact.NwpNone {
 		r.workers = make([]*blobWorker, r.numWorkers)
 		r.adv.Refresh() // refresh advice one more time before copying to workers
@@ -283,16 +238,11 @@ func (p *blobFactory) Start() (err error) {
 		r.pending = make(blobPending, r.numWorkers)
 	}
 
+	tout := r.args.Msg.ChunkReadTimeout.D()
+	r.timeout = cos.Ternary(tout > 0, tout, dfltChunkReadTimeout)
+	r.ctx, r.cancel = context.WithCancel(context.Background())
+
 	p.xctn = r
-
-	// Generate uploadID and initialize manifest
-	lom := r.args.Lom
-	r.uploadID = cos.GenUUID()
-	r.manifest, err = core.NewUfest(r.uploadID, lom, false /*must-exist*/)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -338,35 +288,43 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 		err = r.runWorkers()
 	}
 
+	if r.cancel != nil {
+		r.cancel()
+	}
 	r.finalize(err, lom, now)
 }
 
-// determine optimal chunk size based on:
-// - memory load level (from load advisory system)
-// - user's preference (preferred chunk size if load permits)
-// - blob size (can't exceed the full size)
-func (r *XactBlobDl) setChunkSize() {
-	memLoad := r.adv.MemLoad()
-	// Handle critical and high memory loads first
-	if memLoad == load.Critical {
-		nlog.Warningf("%s: critical memory load, using minimum chunk size: %s", r.Name(), cos.IEC(minChunkSize, 0))
-		r.chunkSize = minChunkSize
+func (r *XactBlobDl) Abort(err error) bool {
+	if !r.Base.Abort(err) {
+		return false
 	}
-	if memLoad == load.High {
-		nlog.Warningf("%s: high memory load, using conservative chunk size: %s", r.Name(), cos.IEC(2*minChunkSize, 0))
-		r.chunkSize = 2 * minChunkSize
+	if r.cancel != nil {
+		r.cancel()
 	}
+	return true
+}
 
-	// Low/Moderate memory load: validate and adjust user preference
-	switch {
-	case r.chunkSize == 0:
-		r.chunkSize = dfltChunkSize
-	case r.chunkSize < minChunkSize:
-		nlog.Warningf("chunk size", cos.IEC(r.chunkSize, 1), "is below permitted minimum", cos.IEC(minChunkSize, 0))
+// setChunkSize determines the effective chunk size based on memory pressure
+// and user preference.
+func (r *XactBlobDl) setChunkSize() {
+	switch r.adv.MemLoad() {
+	case load.Critical:
 		r.chunkSize = minChunkSize
-	case r.chunkSize > maxChunkSize:
-		nlog.Warningf("chunk size", cos.IEC(r.chunkSize, 1), "exceeds permitted maximum", cos.IEC(maxChunkSize, 0))
-		r.chunkSize = maxChunkSize
+		nlog.Warningf("%s: critical memory load, using minimum chunk size: %s", r.Name(), cos.IEC(r.chunkSize, 0))
+	case load.High:
+		r.chunkSize = 2 * minChunkSize
+		nlog.Warningf("%s: high memory load, reducing chunk size to %s", r.Name(), cos.IEC(r.chunkSize, 0))
+	default:
+		switch {
+		case r.chunkSize == 0:
+			r.chunkSize = dfltChunkSize
+		case r.chunkSize < minChunkSize:
+			nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "is below permitted minimum", cos.IEC(minChunkSize, 0))
+			r.chunkSize = minChunkSize
+		case r.chunkSize > maxChunkSize:
+			nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "exceeds permitted maximum", cos.IEC(maxChunkSize, 0))
+			r.chunkSize = maxChunkSize
+		}
 	}
 }
 
@@ -490,10 +448,15 @@ func (r *XactBlobDl) runWorkers() error {
 	}
 
 cleanup:
-	if err != nil && done != nil {
-		// runtime error in main thread: cleanup the leftover blobWI
-		done.cleanup()
+	if err != nil {
+		if done != nil {
+			done.cleanup()
+		}
+		if r.cancel != nil {
+			r.cancel()
+		}
 	}
+
 	close(r.workCh)
 	r.wg.Wait()
 	close(r.doneCh)
@@ -738,7 +701,6 @@ func (r *XactBlobDl) Snap() (snap *core.Snap) {
 // blobWorker //
 ////////////////
 
-// get range reader -> create chunk file -> copy data to chunk file -> add chunk to manifest -> notify completion | report error
 func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 	var (
 		chunkSize  = w.parent.chunkSize
@@ -749,43 +711,55 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 
 	partNum := wi.roff/chunkSize + 1
 
-	// Throttle under high disk pressure; reject under critical resource pressure.
+	// 1. Throttle under high disk pressure; reject under critical resource pressure.
 	if err := w.throttle(); err != nil {
 		return http.StatusTooManyRequests, err
 	}
 
-	// Get object range reader
-	res := core.T.Backend(lom.Bck()).GetObjReader(context.Background(), lom, wi.roff, chunkSize)
-	if res.Err != nil || res.ErrCode == http.StatusRequestedRangeNotSatisfiable || res.R == nil {
+	// 2. Get object range reader. The context covers both reader acquisition and response-body copy.
+	parentCtx := w.parent.ctx
+	debug.Assert(parentCtx != nil)
+
+	ctx, cancel := context.WithTimeout(parentCtx, w.parent.timeout)
+	defer cancel()
+
+	res := core.T.Backend(lom.Bck()).GetObjReader(ctx, lom, wi.roff, chunkSize)
+	if res.Err != nil {
+		if res.R != nil {
+			cos.Close(res.R)
+		}
 		return res.ErrCode, res.Err
 	}
+	debug.Assert(res.R != nil)
 
-	// Create chunk in manifest
+	// 3. Create chunk in manifest
 	chunk, chunkErr := manifest.NewChunk(int(partNum), lom)
 	if chunkErr != nil {
+		cos.Close(res.R)
 		return 0, chunkErr
 	}
 
-	// Create chunk file
+	// 4. Create chunk file
 	chunkPath := chunk.Path()
 	chunkFh, chunkFhErr := lom.CreatePart(chunkPath)
 	if chunkFhErr != nil {
+		cos.Close(res.R)
 		return 0, chunkFhErr
 	}
 
 	// Setup writers: chunk file + SGL (for RespWriter if needed)
-	writers := make([]io.Writer, 0, 3)
-	writers = append(writers, chunkFh)
-
 	// If RespWriter is set, copy the data to the work-item's SGL.
 	// This SGL will later be stitched together and sequentially written
 	// to the RespWriter via the `doneCh` channel (see `XactBlobDl.write()`).
+	writers := make([]io.Writer, 0, 3)
+	writers = append(writers, chunkFh)
 	if respWriter != nil {
 		writers = append(writers, wi.sgl)
 	}
 
 	multiWriter := cos.NewWriterMulti(writers...)
 
+	// 5. Read remote, write local
 	chwritten, cksum, copyErr := cos.CopyAndChecksum(multiWriter, res.R, buf, lom.CksumConf().Type)
 	cos.Close(res.R)
 	cos.Close(chunkFh)
@@ -800,9 +774,9 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		chunk.SetCksum(&cksum.Cksum)
 	}
 
-	// Add chunk to manifest with size and checksum
+	// 6. Done
 	if addErr := manifest.Add(chunk, chwritten, partNum); addErr != nil {
-		if nerr := cos.RemoveFile(chunkPath); nerr != nil && !cos.IsNotExist(nerr) {
+		if nerr := cos.RemoveFile(chunkPath); nerr != nil {
 			nlog.Errorln("nested error removing chunk:", nerr)
 		}
 		return 0, addErr

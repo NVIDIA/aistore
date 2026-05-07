@@ -28,9 +28,10 @@ const (
 	HdrInvName   = aisPrefix + "Inv-Name"         // optional; name of the inventory (to override the system default)
 
 	// GET via x-blob-download
-	HdrBlobDownload = aisPrefix + "Blob-Download" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
-	HdrBlobChunk    = aisPrefix + "Blob-Chunk"    // optional; e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
-	HdrBlobWorkers  = aisPrefix + "Blob-Workers"  // optional: num concurrent downloading readers (see also: xs/nwp.go, "media type", load.Advice)
+	HdrBlobDownload    = aisPrefix + "Blob-Download"     // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
+	HdrBlobChunk       = aisPrefix + "Blob-Chunk"        // optional; e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
+	HdrBlobWorkers     = aisPrefix + "Blob-Workers"      // optional: num concurrent downloading readers (see also: xs/nwp.go, "media type", load.Advice)
+	HdrBlobReadTimeout = aisPrefix + "Blob-Read-Timeout" // per-attempt timeout for backend range read; zero selects default
 
 	// Bucket props headers
 	HdrBucketProps      = aisPrefix + "Bucket-Props"       // => cmn.Bprops

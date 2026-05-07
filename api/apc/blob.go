@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -16,10 +17,11 @@ import (
 const _bldl = "blob-downloader"
 
 type BlobMsg struct {
-	ChunkSize  int64 `json:"chunk-size"`  // as in: chunk size
-	FullSize   int64 `json:"full-size"`   // user-specified (full) size of the object to download
-	NumWorkers int   `json:"num-workers"` // number of concurrent workers; auto-computed when zero (see xs/nwp.go, "media type", load.Advice)
-	LatestVer  bool  `json:"latest-ver"`  // when true and in-cluster: check with remote whether (deleted | version-changed)
+	ChunkSize        int64        `json:"chunk-size"`                   // as in: chunk size
+	FullSize         int64        `json:"full-size"`                    // user-specified (full) size of the object to download
+	ChunkReadTimeout cos.Duration `json:"chunk-read-timeout,omitempty"` // per-attempt timeout for backend range read; zero selects default
+	NumWorkers       int          `json:"num-workers"`                  // number of concurrent workers; auto-computed when zero (see xs/nwp.go, "media type", load.Advice)
+	LatestVer        bool         `json:"latest-ver"`                   // when true and in-cluster: check with remote whether (deleted | version-changed)
 }
 
 // in re LatestVer, see also: `QparamLatestVer`, 'versioning.validate_warm_get'
@@ -52,5 +54,20 @@ func (msg *BlobMsg) FromHeader(hdr http.Header) error {
 		return fmt.Errorf("%s: failed to parse %s=%s: %v", _bldl, HdrBlobChunk, valChunkSz[0], err)
 	}
 	msg.ChunkSize = chunk
+
+	canTimeout := textproto.CanonicalMIMEHeaderKey(HdrBlobReadTimeout)
+	valTimeout, okt := hdr[canTimeout]
+	if okt {
+		// single value
+		d, err := time.ParseDuration(valTimeout[0])
+		if err != nil {
+			return fmt.Errorf("%s: failed to parse %s=%s: %w", _bldl, HdrBlobReadTimeout, valTimeout[0], err)
+		}
+		if d < 0 {
+			return fmt.Errorf("%s: invalid %s=%s: expecting non-negative duration", _bldl, HdrBlobReadTimeout, valTimeout[0])
+		}
+		msg.ChunkReadTimeout = cos.Duration(d)
+	}
+
 	return nil
 }
