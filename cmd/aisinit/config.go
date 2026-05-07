@@ -126,7 +126,7 @@ var (
 		HighWM:          90,
 		OOS:             95,
 		BatchSize:       32768,
-		DontCleanupTime: cos.Duration(120 * time.Minute),
+		DontCleanupTime: cos.Duration(60 * time.Minute),
 	}
 
 	defaultMemsys = aiscmn.MemsysConf{

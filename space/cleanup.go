@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -46,13 +47,15 @@ const (
 )
 
 const (
-	sparseLogCnt = 100
+	sparseLogCnt  = 100
+	ctlMsgBufSize = 256
 )
 
 type (
 	XactCln struct {
-		p   *clnFactory
-		ini *IniCln
+		p     *clnFactory
+		ini   *IniCln
+		stats clnStats // observability surfaced via CtlMsg (`ais show job`)
 		xact.Base
 	}
 	IniCln struct {
@@ -60,6 +63,25 @@ type (
 		Xaction *XactCln
 		WG      *sync.WaitGroup
 		Args    *xact.ArgsMsg
+	}
+
+	// per-xact-run atomic counters; cumulative cluster stats remain in
+	// stats.Tracker (CleanupStoreCount/CleanupStoreSize) and are not
+	// duplicated here.
+	clnStats struct {
+		visits           atomic.Int64 // LOMs classified by visitObj (passed both gates)
+		tooFresh         atomic.Int64 // files skipped by the outer mtime gate (visit: mtime+dont>now)
+		recentlyAccessed atomic.Int64 // LOMs skipped by the inner atime gate (visitObj: xattr atime+dont>now)
+		migrated         atomic.Int64 // classified misplaced via cluster-HRW (migratedAway)
+		localMisplc      atomic.Int64 // classified misplaced via local-mpath HRW (default arm)
+		orphans          atomic.Int64 // orphan chunks observed by visitChunk
+		oldWorkN         atomic.Int64 // old workfiles queued for removal
+		invalidN         atomic.Int64 // invalid/malformed FQNs queued for removal
+		rmFiles          atomic.Int64 // files actually removed by rmLeftovers
+		rmBytes          atomic.Int64 // bytes actually removed by rmLeftovers
+		keepPeerMissing  atomic.Int64 // cluster-HRW peer returned 404: keep local copy (last-known good)
+		keepDiverged     atomic.Int64 // peer holds same name but different content: keep local copy
+		errHEAD          atomic.Int64 // HEAD-to-peer failed with non-404 error
 	}
 )
 
@@ -69,6 +91,7 @@ type (
 	clnP struct {
 		ini     IniCln
 		joggers map[string]*clnJ
+		smap    *meta.Smap // captured at start: for cluster-wide HRW ownership check
 		cs      struct {
 			a fs.CapStatus // initial
 			b fs.CapStatus // after removing 'deleted'
@@ -119,11 +142,83 @@ var (
 func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) } // via RunCleanup() below
 
 func (r *XactCln) CtlMsg() string {
-	s := r.p.Args.Custom.(string)
-	if r.ini == nil || r.ini.Args == nil {
-		return s
+	var sb cos.SB
+	sb.Init(ctlMsgBufSize)
+
+	// caller-supplied prefix + request-args echo (existing behavior)
+	if s, _ := r.p.Args.Custom.(string); s != "" {
+		sb.WriteString(s)
 	}
-	return s + ", " + r.ini.Args.String()
+	if r.ini != nil && r.ini.Args != nil {
+		if s := r.ini.Args.String(); s != "" {
+			if sb.Len() > 0 {
+				sb.WriteString("; ")
+			}
+			sb.WriteString(s)
+		}
+	}
+
+	// dynamic per-run counters (only emit fields with non-zero values)
+	r.stats.write(&sb)
+
+	return sb.String()
+}
+
+func (s *clnStats) write(sb *cos.SB) {
+	visits, tooFresh, recentlyAccessed := s.visits.Load(), s.tooFresh.Load(), s.recentlyAccessed.Load()
+	if sb.Len() > 0 {
+		sb.WriteString("; ")
+	}
+	sb.WriteString(core.T.String())
+	sb.WriteString(": visits:")
+	sb.WriteString(strconv.FormatInt(visits, 10))
+
+	if tooFresh > 0 {
+		sb.WriteString(" too-fresh:")
+		sb.WriteString(strconv.FormatInt(tooFresh, 10))
+	}
+	if recentlyAccessed > 0 {
+		sb.WriteString(" recently-accessed:")
+		sb.WriteString(strconv.FormatInt(recentlyAccessed, 10))
+	}
+	if v := s.migrated.Load(); v > 0 {
+		sb.WriteString(" migrated:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
+	if v := s.localMisplc.Load(); v > 0 {
+		sb.WriteString(" misplaced-local:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
+	if v := s.keepPeerMissing.Load(); v > 0 {
+		sb.WriteString(" keep-peer-missing:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
+	if v := s.keepDiverged.Load(); v > 0 {
+		sb.WriteString(" keep-diverged:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
+	if v := s.errHEAD.Load(); v > 0 {
+		sb.WriteString(" err-head:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
+	if v := s.orphans.Load(); v > 0 {
+		sb.WriteString(" orphans:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
+	if v := s.oldWorkN.Load(); v > 0 {
+		sb.WriteString(" oldwork:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
+	if v := s.invalidN.Load(); v > 0 {
+		sb.WriteString(" invalid:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
+	if v := s.rmFiles.Load(); v > 0 {
+		sb.WriteString(" rm:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteUint8('/')
+		sb.WriteString(cos.IEC(s.rmBytes.Load(), 2))
+	}
 }
 
 func (r *XactCln) Snap() *core.Snap { return r.Base.NewSnap(r) }
@@ -170,6 +265,9 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	}
 
 	xcln.ini = ini
+	if so := core.T.Sowner(); so != nil {
+		parent.smap = so.Get()
+	}
 
 	now := time.Now()
 	for mpath, mi := range avail {
@@ -298,6 +396,8 @@ func (j *clnJ) _str() string {
 
 func (j *clnJ) stop() { j.stopCh <- struct{}{} }
 
+// TODO: cluster-HRW + HeadObjT2T (migratedAway) already establishes
+// per-LOM identity before deletion - this gate is now redundant.
 func (j *clnJ) dont() time.Duration { return j.config.Space.DontCleanupTime.D() }
 
 func (j *clnJ) rmZeroSize() bool { return j.ini.Args.Flags&xact.FlagZeroSize != 0 }
@@ -429,7 +529,12 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 	if finfo, err := os.Lstat(fqn); err == nil {
 		mtime := finfo.ModTime()
 		if mtime.Add(j.dont()).After(j.now) {
-			return nil // skipping - too early
+			// skipping - file written/migrated within `dont_cleanup_time`
+			// window; would-have-classified but the outer mtime gate is
+			// closed. Surface the deferral so operators don't conflate
+			// "nothing to clean" with "lots to clean, just too fresh".
+			j.ini.Xaction.stats.tooFresh.Add(1)
+			return nil
 		}
 	}
 
@@ -480,7 +585,15 @@ func (j *clnJ) rmInvalidFQN(fqn, ctType string, err error) {
 
 	nlog.Warningln(j.String(), "rm", e)
 	j.invalid = append(j.invalid, fqn)
+	j.ini.Xaction.stats.invalidN.Add(1)
 	j.rmAnyBatch(flagRmInvalid)
+}
+
+// appendOldWork queues `fqn` for removal as an "old work file" and bumps
+// the per-run stats counter surfaced via CtlMsg.
+func (j *clnJ) appendOldWork(fqn string) {
+	j.oldWork = append(j.oldWork, fqn)
+	j.ini.Xaction.stats.oldWorkN.Add(1)
 }
 
 func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
@@ -491,7 +604,7 @@ func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
 		if !contentInfo.Ok {
 			j.rmInvalidFQN(fqn, "work", nil)
 		} else if contentInfo.Old {
-			j.oldWork = append(j.oldWork, fqn)
+			j.appendOldWork(fqn)
 			j.rmAnyBatch(flagRmOldWork)
 		}
 
@@ -502,7 +615,7 @@ func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
 	// - remove all slices and metafiles
 	case fs.ECSliceCT:
 		if !j.bck.Props.EC.Enabled {
-			j.oldWork = append(j.oldWork, fqn)
+			j.appendOldWork(fqn)
 			j.rmAnyBatch(flagRmOldWork)
 			return
 		}
@@ -516,7 +629,7 @@ func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
 		j.rmAnyBatch(flagRmMisplacedEC)
 	case fs.ECMetaCT:
 		if !j.bck.Props.EC.Enabled {
-			j.oldWork = append(j.oldWork, fqn)
+			j.appendOldWork(fqn)
 			j.rmAnyBatch(flagRmOldWork)
 			return
 		}
@@ -535,7 +648,7 @@ func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
 
 		// Metafile is saved the last. Since there is no corresponding replica and slice,
 		// it is safe to remove the meta.
-		j.oldWork = append(j.oldWork, fqn)
+		j.appendOldWork(fqn)
 		j.rmAnyBatch(flagRmOldWork)
 
 	case fs.ChunkCT:
@@ -561,7 +674,7 @@ func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
 		if len(contentInfo.Extras) > 0 {
 			// old partial manifest
 			nlog.Warningln(j.String(), "rm old partial:", fqn, "[", contentInfo.Extras[0], j.bck.Cname(contentInfo.Base), "]")
-			j.oldWork = append(j.oldWork, fqn)
+			j.appendOldWork(fqn)
 			j.rmAnyBatch(flagRmOldWork)
 		}
 
@@ -595,16 +708,18 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	if completedID != "" {
 		if completedID != uploadID {
 			j.norphan++
+			j.ini.Xaction.stats.orphans.Add(1)
 			if j.norphan%sparseLogCnt == 1 || cmn.Rom.V(5, cos.ModSpace) {
 				nlog.Warningln(j.String(), "orphan chunk", chunkFQN, "vs completed: [", completedID, lom.Cname(), j.norphan, "]")
 			}
-			j.oldWork = append(j.oldWork, chunkFQN)
+			j.appendOldWork(chunkFQN)
 			j.rmAnyBatch(flagRmOldWork)
 		}
 		return
 	}
 
 	j.norphan++
+	j.ini.Xaction.stats.orphans.Add(1)
 
 	// 2. resolve partial; if exists check its age
 	fqn := lom.GenFQN(fs.ChunkMetaCT, uploadID) // (compare with Ufest._fqns())
@@ -615,7 +730,7 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 		if j.norphan%sparseLogCnt == 1 || cmn.Rom.V(5, cos.ModSpace) {
 			nlog.Warningln(j.String(), "orphan chunk", chunkFQN, "from partial: [", fqn, lom.Cname(), j.norphan, "]")
 		}
-		j.oldWork = append(j.oldWork, chunkFQN)
+		j.appendOldWork(chunkFQN)
 		j.rmAnyBatch(flagRmOldWork)
 	}
 
@@ -623,7 +738,7 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	if j.norphan%sparseLogCnt == 1 || cmn.Rom.V(4, cos.ModSpace) {
 		nlog.Warningln(j.String(), "orphan chunk w/ no manifests", chunkFQN, j.norphan)
 	}
-	j.oldWork = append(j.oldWork, chunkFQN)
+	j.appendOldWork(chunkFQN)
 	j.rmAnyBatch(flagRmOldWork)
 }
 
@@ -684,14 +799,23 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		return
 	}
 
+	// inner atime gate (LRU semantics): skip if the LOM xattr atime says it
+	// was recently served. Distinct from visit()'s outer mtime gate, which
+	// catches just-written files. Bumping a separate counter so an operator
+	// can tell "deferred because just rebalanced" (too-fresh) apart from
+	// "deferred because actively served" (recently-accessed).
 	atime := lom.Atime()
-	switch {
-	// too early atime-wise
-	case atime.Add(j.dont()).After(j.now):
+	if atime.Add(j.dont()).After(j.now) {
 		if cmn.Rom.V(5, cos.ModSpace) {
 			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String(), "dont-cleanup", j.dont())
 		}
-	case lom.IsHRW():
+		xcln.stats.recentlyAccessed.Add(1)
+		return
+	}
+	xcln.stats.visits.Add(1)
+
+	switch {
+	case lom.IsHRW() && !j.migratedAway(lom):
 		// cleanup extra copies; rm zero size if requested
 		if lom.HasCopies() {
 			j.rmExtraCopies(lom)
@@ -704,6 +828,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			} else {
 				nlog.Warningln(j.String(), "removed zero-size", lom.Cname())
 				j.ini.StatsT.Inc(stats.CleanupStoreCount)
+				xcln.stats.rmFiles.Add(1)
 			}
 		}
 	case lom.IsCopy():
@@ -716,8 +841,14 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			j.rmAnyBatch(flagRmMisplacedEC)
 		}
 	default:
-		// misplaced object
+		// misplaced object (either cluster-migrated-away or local-mpath orphan)
 		j.nmisplc++
+		// disambiguate for stats: IsHRW=true here can only mean
+		// "migratedAway returned true" (already counted inside migratedAway);
+		// IsHRW=false means a genuine local-mpath orphan.
+		if !lom.IsHRW() {
+			xcln.stats.localMisplc.Add(1)
+		}
 		tag, keep := j.keepMisplaced()
 
 		// an unlikely corner case: taking precedence
@@ -734,6 +865,52 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			j.rmAnyBatch(flagRmMisplacedLOMs)
 		}
 	}
+}
+
+// reports true iff (a) the cluster Smap routes this object to a different
+// target AND (b) that target confirms it has a copy — i.e., the object has
+// been migrated away and the destination is holding it. Both conditions
+// must hold before we treat the local copy as a stale leftover that's safe
+// to remove. The peer-presence check is the safety net: if a prior rebalance
+// silently dropped this particular object on the wire, our local copy may
+// be the only one left, so we keep it (and warn loudly).
+func (j *clnJ) migratedAway(lom *core.LOM) bool {
+	smap := j.p.smap
+	if smap == nil {
+		return false
+	}
+	tsi, err := smap.HrwHash2T(lom.Digest())
+	if err != nil || tsi.ID() == core.T.SID() {
+		return false
+	}
+	// Ask the cluster-HRW peer to establish identity. Two safety gates:
+	//  1. peer 404      => keep local copy as potentially last-known good
+	//                      (rebalance silently dropped this object on the wire)
+	//  2. CheckEq fails => peer holds an object by the same name but with
+	//                      different content, keep + warn rather than delete
+	// Other HEAD errors (network, 5xx) also fall back to "keep" but go through
+	// errHEAD with rate-limited warning since they likely indicate a transient
+	// problem rather than a real data-loss signal.
+	// TODO -- FIXME: HeadObjT2T() must support batch request to ensure scalability
+	stats := &j.ini.Xaction.stats
+	peer, herr := core.T.HeadObjT2T(lom, tsi,
+		apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCustom, apc.GetPropsETag)
+	if herr != nil {
+		if cmn.IsErrHTTPNotFound(herr) {
+			stats.keepPeerMissing.Inc()
+		} else {
+			cnt := stats.errHEAD.Inc()
+			cmn.SparseWarn(cos.ModSpace, cnt, tsi.StringEx(), "HEAD(", lom.Cname(), ") returned", herr)
+		}
+		return false
+	}
+	if eqErr := lom.ObjAttrs().CheckEq(peer); eqErr != nil {
+		cnt := stats.keepDiverged.Inc()
+		cmn.SparseWarn(cos.ModSpace, cnt, j.String(), "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
+		return false
+	}
+	stats.migrated.Inc()
+	return true
 }
 
 //
@@ -989,6 +1166,8 @@ func (j *clnJ) rmLeftovers(specifier int) {
 	j.ini.StatsT.Add(stats.CleanupStoreSize, nbytes)
 	j.ini.StatsT.Add(stats.CleanupStoreCount, nfiles)
 	xcln.ObjsAdd(int(nfiles), nbytes)
+	xcln.stats.rmFiles.Add(nfiles)
+	xcln.stats.rmBytes.Add(nbytes)
 }
 
 func (j *clnJ) _throttle(n int64) {

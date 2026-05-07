@@ -254,6 +254,11 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		go t.runLRU(args.ID, wg, args.Force, args.Buckets...)
 		wg.Wait()
 	case apc.ActStoreCleanup:
+		// refuse to start while rebalance/resilver is running on this target
+		// (paired with `ConflictRebRes: true` in xact.Table[apc.ActStoreCleanup])
+		if err := xreg.LimitedCoexistence(t.si, nil, apc.ActStoreCleanup); err != nil {
+			return xid, err
+		}
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		if len(args.Buckets) == 0 && !args.Bck.IsEmpty() {

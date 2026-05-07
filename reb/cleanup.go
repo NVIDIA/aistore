@@ -318,6 +318,7 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 	cl.stats.loads.Inc()
 
 	// check the expected location, request specific props to establish identity
+	// TODO -- FIXME: HeadObjT2T() must support batch request to ensure scalability
 	op, err := core.T.HeadObjT2T(lom, tsi,
 		apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCustom, apc.GetPropsETag)
 	if err != nil {
@@ -325,7 +326,7 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 			cl.stats.keepPeerMissing.Inc()
 		} else {
 			cnt := cl.stats.errHEAD.Inc()
-			sparseWarn(cnt, tsi.StringEx(), "HEAD(", lom.Cname(), ") returned", err)
+			cmn.SparseWarn(cos.ModReb, cnt, tsi.StringEx(), "HEAD(", lom.Cname(), ") returned", err)
 		}
 		return cmn.ErrSkip
 	}
@@ -334,11 +335,11 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 	if eqErr := lom.ObjAttrs().CheckEq(op); eqErr != nil {
 		if !cl.force {
 			cnt := cl.stats.keepDiverged.Inc()
-			sparseWarn(cnt, cl.rargs.logHdr, "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
+			cmn.SparseWarn(cos.ModReb, cnt, cl.rargs.logHdr, "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
 			return cmn.ErrSkip
 		}
 		cnt := cl.stats.removeDiverged.Inc()
-		sparseWarn(cnt, cl.rargs.logHdr, "force-removing diverged:", lom.Cname(), eqErr, "[ forced:", cnt, "]")
+		cmn.SparseWarn(cos.ModReb, cnt, cl.rargs.logHdr, "force-removing diverged:", lom.Cname(), eqErr, "[ forced:", cnt, "]")
 	}
 
 	// remove
@@ -346,7 +347,7 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 
 	if errRm != nil {
 		cnt := cl.stats.errRemove.Inc()
-		sparseWarn(cnt, cl.rargs.logHdr, "remove failed:", lom.Cname(), errRm, "[ failures:", cnt, "]")
+		cmn.SparseWarn(cos.ModReb, cnt, cl.rargs.logHdr, "remove failed:", lom.Cname(), errRm, "[ failures:", cnt, "]")
 		return cmn.ErrSkip
 	}
 
@@ -424,15 +425,5 @@ func (clnArgs *clnArgs) ctlMsg(sb *cos.SB) {
 	if v := s.errRemove.Load(); v > 0 {
 		sb.WriteString(" err-remove=")
 		sb.WriteString(strconv.FormatInt(v, 10))
-	}
-}
-
-//
-// misc. utils
-//
-
-func sparseWarn(cnt int64, args ...any) {
-	if cmn.Rom.V(5, cos.ModReb) || cnt <= 20 || (cnt <= 1000 && cnt%100 == 0) || cnt&(cnt-1) == 0 {
-		nlog.Warningln(args...)
 	}
 }

@@ -112,7 +112,7 @@ var Table = map[string]Descriptor{
 
 	// (one bucket) | (all buckets)
 	apc.ActLRU:          {DisplayName: "lru-eviction", Scope: ScopeGB, Startable: true},
-	apc.ActStoreCleanup: {DisplayName: "cleanup", Scope: ScopeGB, Startable: true},
+	apc.ActStoreCleanup: {DisplayName: "cleanup", Scope: ScopeGB, Startable: true, ConflictRebRes: true},
 	apc.ActSummaryBck: {
 		DisplayName: "summary",
 		Scope:       ScopeGB,

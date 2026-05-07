@@ -466,7 +466,8 @@ type (
 
 		// Sets the interval of time for cleanup and GC operations to skip (or ignore)
 		// any stored content with mtime or atime that fall within the interval;
-		// zero value _translates_ as a system default 2h (dontCleanupTimeDflt).
+		// zero value _translates_ as a system default 1h (dontCleanupTimeDflt).
+		// TODO: redundant now that cleanup uses cluster-HRW + HeadObjT2T (see space/cleanup.go: migratedAway).
 		// See also:
 		// - SpaceConf.Validate()
 		// - lru.dont_evict_time
@@ -1556,8 +1557,8 @@ func (c *DiskConf) Validate() (err error) {
 ///////////////
 
 const (
-	dontCleanupTimeDflt = 2 * time.Hour
-	dontCleanupTimeMin  = time.Hour
+	dontCleanupTimeDflt = time.Hour
+	dontCleanupTimeMin  = 10 * time.Minute
 )
 
 // common for both SpaceConf and LRUConf
