@@ -170,11 +170,24 @@ class ETLDirectPutTransientError(Exception):
     """
     Raised when a direct-put from an ETL pod fails with a transient network error
     that is safe to retry (connection lost before a response was received).
+
+    AIS-side retry contract: when the ETL bails *without* trying locally —
+    i.e., the source body is one-shot (currently only the FastAPI streaming
+    no-FQN PUT path) — `bail_without_local_retry` is set to `True` and the
+    webserver responds with HTTP 503 and the
+    `Ais-Etl-Retry-Reason: direct-put-transient` header. AIS treats that
+    pair as a soft error and retries the whole PUT against the replayable
+    LOM-backed source. When `bail_without_local_retry` is `False` (the ETL
+    exhausted its own retry budget), the webserver continues to respond
+    with HTTP 502 — adding more retries on top would just be amplification.
     """
 
-    def __init__(self, url: str, cause: Exception):
+    def __init__(
+        self, url: str, cause: Exception, bail_without_local_retry: bool = False
+    ):
         self.url = url
         self.cause = cause
+        self.bail_without_local_retry = bail_without_local_retry
         super().__init__(
             f"direct_put to {url!r} failed with transient error: {type(cause).__name__}({cause})"
         )

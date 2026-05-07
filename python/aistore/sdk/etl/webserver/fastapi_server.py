@@ -46,10 +46,13 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     STATUS_OK,
     STATUS_BAD_GATEWAY,
+    STATUS_SERVICE_UNAVAILABLE,
     ETL_WS_FQN,
     ETL_WS_PATH,
     ETL_WS_PIPELINE,
     HEADER_DIRECT_PUT_LENGTH,
+    HEADER_ETL_RETRY_REASON,
+    ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
     QPARAM_ETL_ARGS,
     QPARAM_ETL_FQN,
     STATUS_INTERNAL_SERVER_ERROR,
@@ -62,12 +65,24 @@ HTTP_LIMITS = httpx.Limits(
     keepalive_expiry=int(os.getenv("KEEPALIVE_EXPIRY", "30")),
 )
 
-# Transient httpx errors that are safe to retry: the connection was lost before
-# a response arrived, but the server state is unknown so the caller can resend.
+# Transient httpx errors raised while forwarding the transformed body to the
+# next pipeline stage (`_direct_put_stream`). All represent transport-level
+# failures with no committed response — safe to retry against a replayable
+# source, or to bail-with-503 so AIS retries the whole PUT (one-shot body).
 _DIRECT_PUT_TRANSIENT_ERRORS = (
+    # Next-stage drops while we are reading its response (post-upload).
     httpx.ReadError,
+    # Next-stage drops while we are still uploading the body — the
+    # most common failure during streaming direct-put under load.
+    httpx.WriteError,
+    # Could not establish a TCP/TLS connection to next-stage at all.
     httpx.ConnectError,
+    # Peer violated HTTP framing mid-exchange (e.g., truncated, bad chunked).
     httpx.RemoteProtocolError,
+    # Any timeout flavor: ConnectTimeout, ReadTimeout, WriteTimeout,
+    # PoolTimeout. Next-stage is wedged or saturated; retrying after
+    # backoff often succeeds.
+    httpx.TimeoutException,
 )
 
 
@@ -178,6 +193,22 @@ class FastAPIServer(ETLServer):
                 ),
             ) from exc
         except ETLDirectPutTransientError as e:
+            # Contract with AIS: 503 + `Ais-Etl-Retry-Reason: direct-put-transient`
+            # fires only when the ETL bailed without trying locally (one-shot
+            # body — currently the streaming no-FQN PUT path). Exhausted-retry
+            # cases keep emitting 502: the ETL already tried and AIS retrying
+            # on top is just amplification.
+            if e.bail_without_local_retry:
+                self.logger.error(
+                    "Direct put bailed (one-shot body); AIS will retry: %s", e
+                )
+                raise HTTPException(
+                    status_code=STATUS_SERVICE_UNAVAILABLE,
+                    detail=f"Direct put bailed (one-shot body): {str(e)}",
+                    headers={
+                        HEADER_ETL_RETRY_REASON: ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT
+                    },
+                ) from e
             self.logger.error(
                 "Direct put failed after %d retries: %s", self.direct_put_retries, e
             )
@@ -398,6 +429,11 @@ class FastAPIServer(ETLServer):
                     )
                 except ETLDirectPutTransientError as exc:
                     if attempt >= effective_retries:
+                        # Tag the bail-without-local-retry case so the outer
+                        # handler can ask AIS to retry (see contract on
+                        # ETLDirectPutTransientError).
+                        if not replayable:
+                            exc.bail_without_local_retry = True
                         raise
                     delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                     self.logger.warning(

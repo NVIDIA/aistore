@@ -33,6 +33,8 @@ from aistore.sdk.const import (
     ETL_WS_FQN,
     ETL_WS_PIPELINE,
     HEADER_DIRECT_PUT_LENGTH,
+    HEADER_ETL_RETRY_REASON,
+    ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
     QPARAM_ETL_FQN,
     AIS_DIRECT_PUT_RETRIES,
 )
@@ -1055,7 +1057,9 @@ class TestStreamingDetection(unittest.TestCase):
         )
 
 
-class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
+class TestStreamingFastAPIServer(
+    unittest.IsolatedAsyncioTestCase
+):  # pylint: disable=too-many-public-methods
     """Sync def tests drive the app through FastAPI's sync TestClient / websocket_connect.
     Async def tests directly await async server helpers (e.g. _get_stream_reader)."""
 
@@ -1147,6 +1151,56 @@ class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):
             response = self.client.get("/test/object")
 
         self.assertEqual(response.status_code, 502)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_put_bail_returns_503_with_reason(self):
+        """One-shot bail (bail_without_local_retry=True) returns 503 + reason header."""
+
+        async def boom(*_args, **_kwargs):
+            exc = ETLDirectPutTransientError(
+                "http://target/obj",
+                httpx.ReadError("dropped"),
+                bail_without_local_retry=True,
+            )
+            raise exc
+
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+        with patch.object(
+            self.etl_server,
+            "_direct_put_stream_with_retry",
+            side_effect=boom,
+        ):
+            response = self.client.put(
+                "/test/object", content=b"input", headers=headers
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.headers.get(HEADER_ETL_RETRY_REASON),
+            ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
+        )
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_streaming_put_exhausted_retries_returns_502(self):
+        """Replayable-exhausted (bail_without_local_retry=False) keeps emitting 502."""
+
+        async def boom(*_args, **_kwargs):
+            raise ETLDirectPutTransientError(
+                "http://target/obj", httpx.ReadError("dropped")
+            )
+
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+        with patch.object(
+            self.etl_server,
+            "_direct_put_stream_with_retry",
+            side_effect=boom,
+        ):
+            response = self.client.put(
+                "/test/object", content=b"input", headers=headers
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn(HEADER_ETL_RETRY_REASON, response.headers)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_get_closes_response_on_upstream_error(self):
@@ -1844,15 +1898,33 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
 
         request.stream() cannot be replayed, so the retry loop must run exactly
         once and surface ETLDirectPutTransientError on the first transient
-        failure (regardless of direct_put_retries).
+        failure (regardless of direct_put_retries). The exception must carry
+        bail_without_local_retry=True so the outer handler emits the
+        503 + Ais-Etl-Retry-Reason contract for AIS to retry.
         """
         self.server.client.put.side_effect = httpx.ReadError("dropped")
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            with self.assertRaises(ETLDirectPutTransientError):
+            with self.assertRaises(ETLDirectPutTransientError) as ctx:
                 await self._call(self._make_request(), retries=3, is_get=False, fqn="")
 
         self.assertEqual(self.server.client.put.await_count, 1)
         mock_sleep.assert_not_called()
+        self.assertTrue(ctx.exception.bail_without_local_retry)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_replayable_exhausted_does_not_set_bail_flag(self):
+        """Replayable-exhausted PUTs raise with bail_without_local_retry=False.
+
+        AIS retrying after the ETL already exhausted its budget is just
+        amplification, so the outer handler must continue to emit 502.
+        """
+        self.server.client.put.side_effect = httpx.ReadError("dropped")
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with self.assertRaises(ETLDirectPutTransientError) as ctx:
+                # is_get=True keeps the source replayable; retries=2 exhaust.
+                await self._call(self._make_request(), retries=2, is_get=True)
+
+        self.assertFalse(ctx.exception.bail_without_local_retry)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_fqn_put_still_retries(self):

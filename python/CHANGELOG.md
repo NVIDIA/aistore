@@ -40,6 +40,16 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - ETL `HTTPMultiThreadedServer`: stream no-FQN `hpush` PUTs in constant
   memory. Previously the full request body was read into a `BytesIO`
   before being handed to `transform_stream`.
+- **ETL → AIS retry contract** (FastAPI streaming no-FQN PUT only): when the
+  ETL bails on a transient direct-put failure *without* trying locally (the
+  one-shot body case), `FastAPIServer` now responds with HTTP 503 and the
+  `Ais-Etl-Retry-Reason: direct-put-transient` header. AIS treats that exact
+  pair as a soft error and retries the whole PUT against the replayable
+  LOM-backed source. Other paths (FastAPI buffered/FQN/GET, `FlaskServer`,
+  `HTTPMultiThreadedServer`) continue to emit HTTP 502 on `direct_put_retries`
+  exhaustion — they already attempted local retries and AIS retrying on top
+  would just be amplification. The header disambiguates this signal from a
+  generic 503 emitted by a next-stage pipeline pod.
 - **ETL direct-put retry**: added exponential-backoff retry for transient connection
   errors in Flask and HTTP multi-threaded ETL servers for parity with FastAPI.
   `ConnectionRefused` is now treated as a permanent error that returns HTTP 502
