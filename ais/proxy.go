@@ -211,6 +211,7 @@ func (p *proxy) Run() error {
 
 	p.notifs.init(p)
 	p.ic.init(p)
+	stats.RegSmapMetrics(p.owner.smap)
 
 	p.initRecvHandlers()
 

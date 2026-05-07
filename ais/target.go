@@ -480,6 +480,7 @@ func (t *target) Run() error {
 	tstats.RegMetrics(t.si)
 
 	t.initBackends() // (+ reg backend metrics)
+	stats.RegSmapMetrics(t.owner.smap)
 	// end target metrics -----------------------
 
 	// probe xattrs
