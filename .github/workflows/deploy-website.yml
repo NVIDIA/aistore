@@ -3,7 +3,7 @@ name: Deploy Website
 on:
   push:
     branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   deploy_website:
