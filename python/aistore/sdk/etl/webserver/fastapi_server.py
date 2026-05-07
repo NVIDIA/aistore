@@ -4,7 +4,6 @@
 
 import os
 import asyncio
-from io import BytesIO
 from urllib.parse import quote
 from typing import BinaryIO, Iterator, Optional, List, Tuple
 
@@ -15,7 +14,7 @@ from fastapi import (
     Response,
     WebSocket,
 )
-from fastapi.responses import StreamingResponse
+from starlette.concurrency import iterate_in_threadpool
 import httpx
 import requests
 import aiofiles
@@ -28,6 +27,10 @@ from aistore.sdk.etl.webserver.base_etl_server import (
     RETRY_BACKOFF_MAX,
 )
 from aistore.sdk.session_manager import resolve_ssl_config
+from aistore.sdk.etl.webserver.fastapi_streaming import (
+    _RequestStreamReader,
+    _DeferredStartStreamingResponse,
+)
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
@@ -285,7 +288,11 @@ class FastAPIServer(ETLServer):
         reader = await self._get_stream_reader(fqn, path, request, is_get)
         try:
             output_iter = self.transform_stream(reader, path, etl_args)
-            return StreamingResponse(
+            # _DeferredStartStreamingResponse (not StreamingResponse) — see its
+            # docstring: defers http.response.start until the first body chunk
+            # is pulled, so request.stream() iteration in transform_stream's
+            # reader still sees body chunks via receive().
+            return _DeferredStartStreamingResponse(
                 self.iter_and_close(output_iter, reader),
                 status_code=STATUS_OK,
                 media_type=self.get_mime_type(),
@@ -305,9 +312,11 @@ class FastAPIServer(ETLServer):
             target_url = f"{self.host_target}/{obj_path}"
             self.logger.debug("Forwarding GET (stream) to: %s", target_url)
             return await asyncio.to_thread(self._open_sync_get_stream, target_url)
-        # TODO: non-FQN PUT still buffers the full request body into BytesIO so retries
-        # can replay it; true streaming for this path still needs to be implemented.
-        return BytesIO(await request.body())
+        # Streaming no-FQN PUT: bridge Starlette's async request.stream() into
+        # a sync BinaryIO so transform_stream() can consume it from a worker
+        # thread. request.stream() is one-shot; _direct_put_stream_with_retry
+        # forces effective_retries=0 here (AIS retries the whole PUT instead).
+        return _RequestStreamReader(request)
 
     def _open_sync_get_stream(self, target_url: str) -> BinaryIO:
         """Open a streaming GET against the AIS target using the shared sync session.
@@ -337,16 +346,46 @@ class FastAPIServer(ETLServer):
         """
         Stream-put with exponential-backoff retry on transient network errors.
 
-        Each retry reopens the source and rebuilds the transform generator from scratch.
+        Each retry reopens the source and rebuilds the transform generator
+        from scratch. Sources that can be reopened: FQN-backed (re-open the
+        file) or GET (re-issue the upstream stream). Streaming no-FQN PUT is
+        not replayable — `request.stream()` is one-shot — so retries are
+        skipped for that case and AIS retries the whole PUT instead.
+
+        Args:
+            fqn (str): Local FQN of the source object on the target's
+                filesystem. Empty string when the body comes from
+                `request.stream()`.
+            path (str): Object path (e.g. `"bucket/object-name"`) forwarded
+                to the next pipeline stage and passed to `transform_stream`.
+            request (Request): Incoming `Request`; its body is the source
+                when `fqn` is empty and `is_get` is `False`.
+            is_get (bool): `True` for hpull GET, `False` for hpush PUT.
+            etl_args (str): Per-request transformation arguments (may be
+                empty).
+            first_url (str): First URL in the direct-put pipeline (next
+                stage).
+            remaining (str): Comma-separated remaining pipeline stages,
+                forwarded to the next stage via the `AIS-Node-Url` header.
 
         Returns:
-            (status_code, body, length) — see _direct_put_stream for semantics.
+            Tuple[int, bytes, int]: `(status_code, body, length)` — see
+                `_direct_put_stream` for semantics.
+
         Raises:
             ETLDirectPutTransientError: if all retry attempts are exhausted.
         """
+        replayable = bool(fqn) or is_get
+        effective_retries = self.direct_put_retries if replayable else 0
+        if not replayable and self.direct_put_retries:
+            self.logger.debug(
+                "no-FQN PUT: source not replayable; "
+                "local retries skipped, AIS will retry"
+            )
+
         reader = await self._get_stream_reader(fqn, path, request, is_get)
         try:
-            for attempt in range(self.direct_put_retries + 1):
+            for attempt in range(effective_retries + 1):
                 try:
                     return await self._direct_put_stream(
                         first_url,
@@ -355,13 +394,13 @@ class FastAPIServer(ETLServer):
                         path,
                     )
                 except ETLDirectPutTransientError as exc:
-                    if attempt >= self.direct_put_retries:
+                    if attempt >= effective_retries:
                         raise
                     delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                     self.logger.warning(
                         "direct_put attempt %d/%d failed, retrying in %.1fs: %s",
                         attempt + 1,
-                        self.direct_put_retries + 1,
+                        effective_retries + 1,
                         delay,
                         exc,
                         exc_info=True,
@@ -396,7 +435,7 @@ class FastAPIServer(ETLServer):
 
             counted = CountingIterator(data_iter)
             resp = await self.client.put(
-                url, content=self._to_async_iter(counted), headers=headers
+                url, content=iterate_in_threadpool(counted), headers=headers
             )
             return self.handle_direct_put_response(
                 resp, b"", data_length=counted.bytes_sent
@@ -430,14 +469,6 @@ class FastAPIServer(ETLServer):
         response = await self.client.get(target_url)
         response.raise_for_status()
         return response.content
-
-    # TODO: benchmark alternatives to direct sync iteration here; blocking reads can
-    # stall the event loop, but per-chunk asyncio.to_thread(...) may add overhead.
-    @staticmethod
-    async def _to_async_iter(sync_iter):
-        """Wrap a sync iterator as an async generator for httpx.AsyncClient."""
-        for chunk in sync_iter:
-            yield chunk
 
     @staticmethod
     async def _iter_chunks(data: bytes, chunk_size: int = MIB):
