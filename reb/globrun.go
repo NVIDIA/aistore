@@ -245,7 +245,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	if bmd.IsEmpty() {
 		haveStreams = false
 	}
-	if !reb.initRenew(rargs, extArgs, haveStreams) {
+	if !reb.initRenew(rargs, extArgs, rargs.ctlMsg, haveStreams) {
 		return
 	}
 	if !haveStreams {
@@ -341,11 +341,11 @@ func (reb *Reb) run(rargs *rargs) error {
 	return group.Wait()
 }
 
-func (reb *Reb) initRenew(rargs *rargs, extArgs *ExtArgs, haveStreams bool) bool {
+func (reb *Reb) initRenew(rargs *rargs, extArgs *ExtArgs, ctlMsg func(sb *cos.SB), haveStreams bool) bool {
 	xargs := &xreg.RebArgs{
 		Bck:    rargs.bck,
 		Prefix: rargs.prefix,
-		CtlMsg: rargs.ctlMsg,
+		CtlMsg: ctlMsg,
 		Flags:  extArgs.Flags,
 	}
 	rns := xreg.RenewRebalance(rargs.id, xargs)
@@ -524,6 +524,7 @@ func (reb *Reb) runNoEC(rargs *rargs) error {
 			ver:   ver,
 			wg:    wg,
 		}
+		rl.opts.Callback = rl.visitObj
 		wg.Add(1)
 		go rl.jog(mi)
 	}
@@ -627,13 +628,11 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 //////////////////////////////
 
 func (rj *rebJogger) jog(mi *fs.Mountpath) {
-	// the jogger is running in separate goroutine, so use defer to be
-	// sure that `Done` is called even if the jogger crashes to avoid hang up
+	debug.Assert(rj.opts.Callback != nil) // caller (globrun, cleanup) must set it
 	defer rj.wg.Done()
 	{
 		rj.opts.Mi = mi
 		rj.opts.CTs = []string{fs.ObjCT}
-		rj.opts.Callback = rj.visitObj
 		rj.opts.Sorted = false
 	}
 	// limited scope

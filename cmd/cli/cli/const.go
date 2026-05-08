@@ -675,6 +675,19 @@ var (
 		Usage: "Count and report all objects that are larger or equal in size  (e.g.: 4mb, 1MiB, 1048576, 128k; default: 5 GiB)",
 	}
 
+	// alternative cleanup via global rebalance (running rebalance in "cleanup" mode)
+	rebalanceCleanupModeFlag = cli.BoolFlag{
+		Name: "cleanup",
+		Usage: "Remove local copies of misplaced objects - monolithic and chunked (non-EC);\n" +
+			indent1 + "\tfails if rebalance is running; incompatible with '--latest' and '--sync'",
+	}
+	rebalanceForceFlag = cli.BoolFlag{
+		Name: forceFlag.Name,
+		Usage: "With '--cleanup': also remove local misplaced copies that fail the safe identity check against copies\n" +
+			indent1 + "\tat their expected locations; will not run concurrently with active rebalance/resilver\n" +
+			indent1 + "\t" + advancedUsageOnly,
+	}
+
 	// units enum { unitsIEC, unitsSI, unitsRaw }
 	unitsFlag = cli.StringFlag{
 		Name: "units",

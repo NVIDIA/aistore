@@ -297,6 +297,17 @@ func (n *notifs) findAll(flt nlFilter) (nls []nl.Listener) {
 	return
 }
 
+// isRebRunning reports whether a global rebalance is currently running cluster-wide,
+// per the primary's notification-listener registry. Returns the rebID when running.
+func (n *notifs) isRebRunning() (bool, string) {
+	onl := true
+	flt := nlFilter{Kind: apc.ActRebalance, OnlyRunning: &onl}
+	if nl := n.find(flt); nl != nil {
+		return true, nl.UUID()
+	}
+	return false, ""
+}
+
 func (n *notifs) size() int32 {
 	return n.nls.l.Load() + n.fin.l.Load()
 }

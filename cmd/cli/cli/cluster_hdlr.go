@@ -119,7 +119,7 @@ var (
 		Usage:     jobStartRebalance.Usage,
 		ArgsUsage: jobStartRebalance.ArgsUsage,
 		Flags:     sortFlags(jobStartRebalance.Flags),
-		Action:    jobStartRebalance.Action,
+		Action:    jobStartRebalance.Action, // startRebHandler
 	}
 	stopRebalance = cli.Command{
 		Name:   commandStop,
@@ -657,6 +657,23 @@ func startRebHandler(c *cli.Context) (err error) {
 	}
 
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance}
+
+	cleanup := flagIsSet(c, rebalanceCleanupModeFlag)
+	if cleanup {
+		if flagIsSet(c, latestVerFlag) || flagIsSet(c, syncFlag) {
+			return incorrectUsageMsg(c, "%s is incompatible with %s and %s",
+				qflprn(rebalanceCleanupModeFlag), qflprn(latestVerFlag), qflprn(syncFlag))
+		}
+		// any running rebalance blocks --cleanup, regardless of scope on either side
+		if running, xid := isRebRunning(); running {
+			return fmt.Errorf("cannot 'start rebalance --cleanup': %q is currently running", xid)
+		}
+		xargs.Flags |= xact.FlagRemoveMisplaced
+		xargs.Force = flagIsSet(c, rebalanceForceFlag)
+	} else if flagIsSet(c, rebalanceForceFlag) {
+		return fmt.Errorf("%s is only valid with %s", qflprn(rebalanceForceFlag), qflprn(rebalanceCleanupModeFlag))
+	}
+
 	if flagIsSet(c, latestVerFlag) {
 		xargs.Flags |= xact.FlagLatestVer
 	}

@@ -312,6 +312,23 @@ func queryXactions(xargs *xact.ArgsMsg, summarize bool) (xs xact.MultiSnap, cms 
 	return xs, cms, nil
 }
 
+// isRebRunning reports whether any global rebalance is currently running, cluster-wide.
+// Returns the xaction ID when known; xid may be empty if multiple rebalances with
+// different IDs are running concurrently (unusual, but the summarize path handles it).
+// Best-effort: on query error, returns (false, "") and lets the caller proceed —
+// the authoritative check belongs on the primary.
+//
+// Callers: 'ais start rebalance --cleanup' preflight, and (TODO) any operation that
+// places new content or otherwise conflicts with a rebalance in flight.
+func isRebRunning() (bool, string) {
+	qargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true}
+	_, cms, err := queryXactions(&qargs, true /*summarize*/)
+	if err != nil {
+		return false, ""
+	}
+	return cms.running, cms.xid
+}
+
 //
 // xact.MultiSnap regrouping helpers
 //

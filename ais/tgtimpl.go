@@ -103,7 +103,9 @@ func (t *target) EvictObject(lom *core.LOM) (ecode int, err error) {
 	return
 }
 
-// empty reqProps => probe presence only (and return nil props-v2)
+// - when reqProps are empty or nil: probe presence only (and return nil objprops-v2);
+// - note that destination always checks LOM in-memory cache first (that's how lom.Load() always works);
+// - see ais/tgthead.go
 func (t *target) HeadObjT2T(lom *core.LOM, tsi *meta.Snode, reqProps ...string) (*cmn.ObjectPropsV2, error) {
 	smap := t.owner.smap.get()
 	return t.headt2t(lom, tsi, smap, reqProps)

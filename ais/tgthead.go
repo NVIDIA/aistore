@@ -41,6 +41,9 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 		}
 		return 0, err
 	}
+
+	// reminder: lom.Load() may return already-cached metadata
+	// (not to confuse with `cache=true` to retain metadata loaded on a cache miss)
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err == nil {
 		if apc.IsFltNoProps(fltPresence) {
 			return 0, nil

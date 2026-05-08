@@ -1007,13 +1007,20 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 	if msg.Action == apc.ActRebalance {
 		xname := tag + msg.UUID + "]"
 
+		var xargs xact.ArgsMsg
 		if msg.Value != nil {
-			var xargs xact.ArgsMsg
 			if err := cos.MorphMarshal(msg.Value, &xargs); err == nil {
 				extArgs.Bck = (*meta.Bck)(&xargs.Bck)
 				extArgs.Prefix = msg.Name
 				extArgs.Flags = xargs.Flags
 			}
+		}
+
+		// fork: cleanup mode piggy-backs on rebalance lifecycle but is not a migration
+		if extArgs.Flags&xact.FlagRemoveMisplaced != 0 {
+			nlog.Infoln(tname, "starting user-requested cleanup", xname, nxid)
+			go t.reb.RunCleanup(&smap.Smap, &extArgs, xargs.Force)
+			return
 		}
 
 		nlog.Infoln(tname, "starting user-requested", xname, nxid)
@@ -1025,6 +1032,9 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 
 	// 2. by RMD
 	xname := tag + nxid + "]"
+
+	debug.Assert(extArgs.Flags&xact.FlagRemoveMisplaced == 0,
+		"cleanup mode is user-initiated only; got it via RMD-driven action:", msg.Action)
 
 	switch msg.Action {
 	// 2.1. action => metasync(newRMD)

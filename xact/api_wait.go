@@ -38,7 +38,8 @@ const (
 	FlagZeroSize = 1 << iota // usage: x-cleanup (apc.ActStoreCleanup) to remove zero size objects
 	FlagLatestVer
 	FlagSync
-	FlagKeepMisplaced // usage: x-cleanup to _not_ remove (ie, keep) misplaced objects
+	FlagKeepMisplaced   // usage: x-cleanup to _not_ remove (ie, keep) misplaced objects
+	FlagRemoveMisplaced // usage: global rebalance, cleanup mode
 )
 
 type (

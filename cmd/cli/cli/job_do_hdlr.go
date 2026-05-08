@@ -121,6 +121,8 @@ var (
 			verbObjPrefixFlag,
 			latestVerFlag,
 			syncFlag,
+			rebalanceCleanupModeFlag,
+			rebalanceForceFlag,
 		},
 		cmdDownload: {
 			dloadTimeoutFlag,
@@ -339,14 +341,15 @@ outer:
 			kind, _ := xact.GetKindName(xname)
 			// CLI is allowed to make it even shorter..
 			if strings.HasPrefix(xname, cmd.Name) || strings.HasPrefix(kind, cmd.Name) {
-				// the following x-s, even through startable, have their own custom CLI handlers:
+				// the following xactions, even though startable (as per xact/api_table),
+				// have their own custom CLI handlers:
 				// - cleanup-store
 				// - ec-encode
 				// - lru
 				// - make-n-copies
 				// - prefetch-listrange
 				// - blob-download
-				// - rebalance
+				// - rebalance (startRebHandler)
 				// - resilver
 				continue outer
 			}

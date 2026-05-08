@@ -1390,6 +1390,17 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErrf(w, r, "invalid limited-scope %q: (n/a bucket, %q prefix)", apc.ActRebalance, msg.Name)
 			return
 		}
+
+		// cleanup mode piggy-backs on rebalance lifecycle but is not a migration
+		if xargs.Flags&xact.FlagRemoveMisplaced != 0 {
+			if running, xid := p.notifs.isRebRunning(); running {
+				p.writeErrf(w, r, "cannot start rebalance in cleanup mode: rebalance[%s] is currently running", xid)
+				return
+			}
+			p.rebalanceCleanup(w, r, msg)
+			return
+		}
+
 		p.rebalanceCluster(w, r, msg)
 		return
 	}
@@ -1608,6 +1619,25 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *ap
 	writeXid(w, rmdCtx.rebID)
 }
 
+// piggy-backs on the rebalance lifecycle (xreg, abort, status, rebID) to walk
+// mountpaths and remove local copies of objects whose HRW target already has them;
+// not a migration - see also: 'ais space-cleanup' (recommended for routine use)
+func (p *proxy) rebalanceCleanup(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+	smap := p.owner.smap.get()
+	rmdCtx := &rmdModifier{
+		pre:     rmdInc,
+		final:   rmdSync,
+		p:       p,
+		smapCtx: &smapModifier{smap: smap, msg: msg},
+	}
+	_, err := p.owner.rmd.modify(rmdCtx)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	writeXid(w, rmdCtx.rebID)
+}
+
 // gracefully remove node via apc.ActStartMaintenance, apc.ActDecommission, apc.ActShutdownNode
 // +gen:payload apc.ActStartMaintenance={"action": "start-maintenance", "value": {"sid": "target_id", "skip_rebalance": false}}
 // +gen:payload apc.ActDecommissionNode={"action": "decommission-node", "value": {"sid": "target_id", "skip_rebalance": false, "rm_user_data": true}}
@@ -1633,15 +1663,13 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		// only (maintenance => decommission|shutdown) permitted
 		sname := si.StringEx()
 		switch msg.Action {
-		case apc.ActDecommissionNode, apc.ActDecommissionCluster,
-			apc.ActShutdownNode, apc.ActShutdownCluster, apc.ActRmNodeUnsafe:
-			onl := true
-			flt := nlFilter{Kind: apc.ActRebalance, OnlyRunning: &onl}
-			if nl := p.notifs.find(flt); nl != nil {
+		case apc.ActDecommissionNode, apc.ActDecommissionCluster, apc.ActShutdownNode, apc.ActShutdownCluster, apc.ActRmNodeUnsafe:
+			if running, xid := p.notifs.isRebRunning(); running {
 				p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later",
-					nl.UUID(), msg.Action, si.StringEx())
+					xid, msg.Action, si.StringEx())
 				return
 			}
+
 			if !smap.InMaint(si) {
 				nlog.Errorln("Warning: " + sname + " is currently being decommissioned")
 			}

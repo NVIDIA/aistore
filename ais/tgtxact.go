@@ -34,15 +34,15 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		t.httpxget(w, r)
+		t.httpxget(w, r) // x-show
 	case http.MethodPut:
-		t.httpxput(w, r)
+		t.httpxput(w, r) // x-start, x-stop
 	case http.MethodPost:
 		if len(items) == 0 {
 			t.writeErrURL(w, r)
 			return
 		}
-		t.httpxpost(w, r, items)
+		t.httpxpost(w, r, items) // T2T control, special
 	default:
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut, http.MethodPost)
 	}
