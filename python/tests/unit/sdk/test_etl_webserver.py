@@ -37,6 +37,8 @@ from aistore.sdk.const import (
     ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
     QPARAM_ETL_FQN,
     AIS_DIRECT_PUT_RETRIES,
+    STATUS_BAD_GATEWAY,
+    STATUS_SERVICE_UNAVAILABLE,
 )
 from aistore.sdk.etl.webserver.base_etl_server import (
     CountingIterator,
@@ -2608,7 +2610,9 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
         self.assertEqual(delays[2], min(2.0**2, 30.0))
 
     def test_no_fqn_put_skips_local_retry(self):
-        """No-FQN PUT body is one-shot: a transient error raises immediately."""
+        """No-FQN PUT body is one-shot: a transient error raises immediately
+        with `bail_without_local_retry=True` so the outer handler emits the
+        503 + Ais-Etl-Retry-Reason contract for AIS to retry."""
         self.handler.server.etl_server.direct_put_retries = 3
         err = ETLDirectPutTransientError(
             self._DIRECT_PUT_URL, requests.ConnectionError()
@@ -2620,10 +2624,33 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
                 self.handler, "_direct_put_stream", side_effect=err
             ) as mock_put:
                 with patch("time.sleep") as mock_sleep:
-                    with self.assertRaises(ETLDirectPutTransientError):
+                    with self.assertRaises(ETLDirectPutTransientError) as ctx:
                         self._call(fqn="", is_get=False)
         self.assertEqual(mock_put.call_count, 1)
         mock_sleep.assert_not_called()
+        self.assertTrue(ctx.exception.bail_without_local_retry)
+
+    def test_replayable_exhausted_does_not_set_bail_flag(self):
+        """Replayable-exhausted PUTs raise with bail_without_local_retry=False.
+
+        AIS retrying after the ETL already exhausted its budget is just
+        amplification, so the outer handler must continue to emit 502.
+        """
+        self.handler.server.etl_server.direct_put_retries = 2
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        readers = [self._make_reader() for _ in range(3)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.handler, "_get_stream_reader", side_effect=lambda *_: next(reader_iter)
+        ):
+            with patch.object(self.handler, "_direct_put_stream", side_effect=err):
+                with patch("time.sleep"):
+                    # is_get=True keeps the source replayable; retries=2 exhaust.
+                    with self.assertRaises(ETLDirectPutTransientError) as ctx:
+                        self._call(is_get=True)
+        self.assertFalse(ctx.exception.bail_without_local_retry)
 
     def test_fqn_put_still_retries(self):
         """FQN-backed PUT is replayable; retries proceed normally."""
@@ -2682,6 +2709,76 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
         self.assertEqual(result, ok)
         self.assertEqual(mock_put.call_count, 2)
         self.assertEqual(mock_sleep.call_count, 1)
+
+
+# ---------------------------------------------------------------------------
+# HTTP server: ETL → AIS retry contract (503 + Ais-Etl-Retry-Reason)
+# ---------------------------------------------------------------------------
+
+
+class TestHTTPDoPUTRetryContract(unittest.TestCase):
+    """do_PUT exception handler must translate `bail_without_local_retry` to
+    503 + `Ais-Etl-Retry-Reason: direct-put-transient` and keep 502 for the
+    replayable-exhausted case (parity with FastAPIServer)."""
+
+    _DIRECT_PUT_URL = "http://target/path"
+
+    def setUp(self):
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
+
+        self.handler = DummyRequestHandler()
+        # Drive do_PUT through the streaming path so the retry contract fires.
+        self.handler.server.etl_server.use_streaming = True
+        self.handler.path = "/test/object"
+        self.handler.headers = {HEADER_NODE_URL: self._DIRECT_PUT_URL}
+
+    def _set_retry_outcome(self, exc):
+        """Make _direct_put_stream_with_retry raise `exc`."""
+        return patch.object(
+            self.handler, "_direct_put_stream_with_retry", side_effect=exc
+        )
+
+    def test_bail_returns_503_with_reason_header(self):
+        """One-shot bail (bail_without_local_retry=True) emits 503 + reason header."""
+        exc = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL,
+            requests.ConnectionError(),
+            bail_without_local_retry=True,
+        )
+        with self._set_retry_outcome(exc):
+            self.handler.do_PUT()
+
+        self.handler.send_response.assert_called_once_with(STATUS_SERVICE_UNAVAILABLE)
+        sent_headers = {
+            call.args[0]: call.args[1]
+            for call in self.handler.send_header.call_args_list
+        }
+        self.assertEqual(
+            sent_headers.get(HEADER_ETL_RETRY_REASON),
+            ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
+        )
+        self.handler.end_headers.assert_called_once()
+        self.handler.send_error.assert_not_called()
+        self.assertIn(b"Direct put bailed", self.handler.wfile.getvalue())
+
+    def test_exhausted_retries_returns_502_no_reason_header(self):
+        """Replayable-exhausted (bail_without_local_retry=False) keeps emitting 502."""
+        exc = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        with self._set_retry_outcome(exc):
+            self.handler.do_PUT()
+
+        self.handler.send_error.assert_called_once()
+        self.assertEqual(self.handler.send_error.call_args[0][0], STATUS_BAD_GATEWAY)
+        # 503 path must not have fired.
+        self.handler.send_response.assert_not_called()
+        sent_header_names = [
+            call.args[0] for call in self.handler.send_header.call_args_list
+        ]
+        self.assertNotIn(HEADER_ETL_RETRY_REASON, sent_header_names)
 
 
 # ---------------------------------------------------------------------------

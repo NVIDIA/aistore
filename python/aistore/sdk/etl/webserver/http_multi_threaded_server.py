@@ -33,8 +33,11 @@ from aistore.sdk.const import (
     HEADER_CONTENT_TYPE,
     HEADER_NODE_URL,
     HEADER_DIRECT_PUT_LENGTH,
+    HEADER_ETL_RETRY_REASON,
+    ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
     STATUS_OK,
     STATUS_BAD_GATEWAY,
+    STATUS_SERVICE_UNAVAILABLE,
     QPARAM_ETL_ARGS,
     QPARAM_ETL_FQN,
     STATUS_INTERNAL_SERVER_ERROR,
@@ -142,6 +145,24 @@ class HTTPMultiThreadedServer(ETLServer):
         def log_request(self, code="-", size="-"):
             # Suppress default request logging (or override as needed)
             pass
+
+        def _send_direct_put_bail_503(self, exc: ETLDirectPutTransientError) -> None:
+            """Emit 503 + `Ais-Etl-Retry-Reason: direct-put-transient`.
+
+            `BaseHTTPRequestHandler.send_error()` cannot attach custom headers,
+            so the response is built explicitly here. AIS uses the
+            (status, header) pair as the signal to retry the whole PUT
+            against the replayable LOM-backed source.
+            """
+            body = f"Direct put bailed (one-shot body): {exc}".encode()
+            self.send_response(STATUS_SERVICE_UNAVAILABLE)
+            self.send_header(
+                HEADER_ETL_RETRY_REASON, ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT
+            )
+            self.send_header(HEADER_CONTENT_TYPE, "text/plain; charset=utf-8")
+            self.send_header(HEADER_CONTENT_LENGTH, str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def _direct_put(
             self,
@@ -280,12 +301,17 @@ class HTTPMultiThreadedServer(ETLServer):
                         )
                     except ETLDirectPutTransientError as exc:
                         if attempt >= effective_retries:
-                            if not replayable and etl.direct_put_retries:
-                                etl.logger.debug(
-                                    "no-FQN PUT: source not replayable; "
-                                    "local retries skipped; transient direct-put error "
-                                    "will surface as transform failure"
-                                )
+                            if not replayable:
+                                # Tag the bail-without-local-retry case so the
+                                # outer handler can ask AIS to retry (see
+                                # contract on ETLDirectPutTransientError).
+                                exc.bail_without_local_retry = True
+                                if etl.direct_put_retries:
+                                    etl.logger.debug(
+                                        "no-FQN PUT: source not replayable; "
+                                        "local retries skipped; transient direct-put error "
+                                        "will surface as transform failure"
+                                    )
                             raise
                         delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                         etl.logger.warning(
@@ -569,12 +595,23 @@ class HTTPMultiThreadedServer(ETLServer):
                 logger.error("File not found: %s", raw_path)
                 self.send_error(404, f"Local file not found: {raw_path}")
             except ETLDirectPutTransientError as e:
-                self.server.etl_server.logger.error(
-                    "Direct put failed after retries: %s", e
-                )
-                self.send_error(
-                    STATUS_BAD_GATEWAY, f"Direct put failed after retries: {e}"
-                )
+                # Contract with AIS: 503 + `Ais-Etl-Retry-Reason: direct-put-transient`
+                # fires only when the ETL bailed without trying locally (one-shot
+                # body — currently the streaming no-FQN PUT path). Exhausted-retry
+                # cases keep emitting 502: the ETL already tried and AIS retrying
+                # on top is just amplification.
+                if e.bail_without_local_retry:
+                    self.server.etl_server.logger.error(
+                        "Direct put bailed (one-shot body); AIS will retry: %s", e
+                    )
+                    self._send_direct_put_bail_503(e)
+                else:
+                    self.server.etl_server.logger.error(
+                        "Direct put failed after retries: %s", e
+                    )
+                    self.send_error(
+                        STATUS_BAD_GATEWAY, f"Direct put failed after retries: {e}"
+                    )
             except Exception as e:
                 logger.error("Error processing PUT request: %s", str(e))
                 self.send_error(500, "Internal error during transformation")
