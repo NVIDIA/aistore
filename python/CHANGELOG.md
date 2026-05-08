@@ -17,6 +17,15 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- **PyTorch DataLoader picklability** (Python 3.14+ POSIX, macOS, Windows,
+  any explicit `spawn`/`forkserver`): made `RetryConfig`/`RetryManager`
+  survive `pickle` so `AISIterDataset`/`AISMapDataset` can be sent to
+  `DataLoader(num_workers > 0)` workers. The non-picklable
+  `tenacity.Retrying` (lambda predicate, `before_sleep_log` closure) is
+  dropped on serialize and rebuilt from `RetryConfig.default()` in the
+  worker — caller-customized tenacity policy is replaced by the default
+  in workers; other fields (`http_retry`, `cold_get_conf`) survive
+  unchanged. Single-process usage is unaffected.
 - **`ObjectFileReader` clean short-EOF recovery**: detect streams that end
   without raising but deliver fewer bytes than the GET `Content-Length`
   advertised, and resume from the last delivered byte instead of returning a

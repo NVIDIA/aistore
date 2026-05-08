@@ -96,6 +96,17 @@ class RetryConfig:
         network_retry (tenacity.Retrying): Configured `tenacity.Retrying` instance managing retries for network-related
             issues, such as connection failures, timeouts, or unreachable targets.
         cold_get_conf (ColdGetConf): Configuration for retrying COLD GET requests, see ColdGetConf class.
+
+    **Note on pickling (multi-process workloads):**
+        `network_retry` is a tenacity `Retrying` object that internally uses
+        lambdas/closures and is not picklable. When this config crosses a
+        process boundary (e.g. PyTorch `DataLoader(num_workers > 0)` under the
+        `forkserver`/`spawn` start method, Ray, Dask, `ProcessPoolExecutor`),
+        `network_retry` is dropped during serialization and **rebuilt from
+        `RetryConfig.default()` in the worker** — any caller-customized
+        tenacity policy is lost in workers. Other fields (`http_retry`,
+        `cold_get_conf`) survive pickling unchanged. Single-process usage is
+        unaffected.
     """
 
     http_retry: Retry
@@ -130,3 +141,18 @@ class RetryConfig:
                 retry_error_callback=_log_and_raise_on_exhaust,
             ),
         )
+
+    def __getstate__(self):
+        # `network_retry` (tenacity Retrying) holds a lambda predicate and a
+        # `before_sleep_log` closure — neither is picklable. Drop here and
+        # rebuild with defaults in `__setstate__` so RetryConfig can cross
+        # process boundaries — required for PyTorch DataLoader workers under
+        # `forkserver` (POSIX default on Python 3.14+). User-customized
+        # tenacity policy is replaced by the default in workers.
+        state = self.__dict__.copy()
+        state["network_retry"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.network_retry = RetryConfig.default().network_retry

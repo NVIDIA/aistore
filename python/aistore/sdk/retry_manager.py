@@ -36,19 +36,35 @@ class RetryManager:
         self._presence_poller = PresencePoller(
             request_func, self._retry_config.cold_get_conf
         )
-        self._retrying = self._retry_config.network_retry.copy()
+        self._retrying = self._build_retrying()
+
+    def _build_retrying(self) -> tenacity.Retrying:
+        """Compose `network_retry` with the cold-get presence-poll hook."""
+        retrying = self._retry_config.network_retry.copy()
         # Compose any existing before_sleep (default's `before_sleep_log` or a
         # user-provided one) with our cold-get presence-poll hook.
-        existing_before_sleep = self._retrying.before_sleep
+        existing_before_sleep = retrying.before_sleep
         if existing_before_sleep:
 
             def combined_before_sleep(*args):
                 self._before_sleep(*args)
                 existing_before_sleep(*args)
 
-            self._retrying.before_sleep = combined_before_sleep
+            retrying.before_sleep = combined_before_sleep
         else:
-            self._retrying.before_sleep = self._before_sleep
+            retrying.before_sleep = self._before_sleep
+        return retrying
+
+    def __getstate__(self):
+        # `_retrying` wraps a non-picklable closure; rebuild on unpickle.
+        # See `RetryConfig.__getstate__` for the Py 3.14+ context.
+        state = self.__dict__.copy()
+        state["_retrying"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._retrying = self._build_retrying()
 
     @property
     def retry_config(self) -> RetryConfig:

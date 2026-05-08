@@ -28,6 +28,33 @@ from aistore.pytorch import (
 from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
 
 
+# Module-level subclasses for the multiprocessing dataloader tests. Local
+# (test-method-scoped) classes can't be pickled, which fails under Python
+# 3.14's `forkserver` default start method on POSIX.
+class _PidTrackingIterDataset(AISIterDataset):
+    """AISIterDataset that records each worker's PID into a shared proxy list."""
+
+    def __init__(self, *, pid_list, **kwargs):
+        super().__init__(**kwargs)
+        self._pid_list = pid_list
+
+    def __iter__(self):
+        self._pid_list.append(os.getpid())
+        return super().__iter__()
+
+
+class _PidTrackingMapDataset(AISMapDataset):
+    """AISMapDataset that records each worker's PID into a shared proxy list."""
+
+    def __init__(self, *, pid_list, **kwargs):
+        super().__init__(**kwargs)
+        self._pid_list = pid_list
+
+    def __getitem__(self, index):
+        self._pid_list.append(os.getpid())
+        return super().__getitem__(index)
+
+
 class TestPytorchPlugin(unittest.TestCase):
     """Integration tests for the PyTorch plugin"""
 
@@ -118,12 +145,7 @@ class TestPytorchPlugin(unittest.TestCase):
         content_dict = self.create_test_objects(10)
         pid_list = self.get_pid_list()
 
-        class TestableDataset(AISIterDataset):
-            def __iter__(self):
-                pid_list.append(os.getpid())
-                return super().__iter__()
-
-        dataset = TestableDataset(ais_source_list=self.bck)
+        dataset = _PidTrackingIterDataset(pid_list=pid_list, ais_source_list=self.bck)
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
 
         received = {}
@@ -139,12 +161,7 @@ class TestPytorchPlugin(unittest.TestCase):
         content_dict = self.create_test_objects(10)
         pid_list = self.get_pid_list()
 
-        class TestableDataset(AISMapDataset):
-            def __getitem__(self, index):
-                pid_list.append(os.getpid())
-                return super().__getitem__(index)
-
-        dataset = TestableDataset(ais_source_list=self.bck)
+        dataset = _PidTrackingMapDataset(pid_list=pid_list, ais_source_list=self.bck)
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
 
         received = {}

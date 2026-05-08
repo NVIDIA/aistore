@@ -1,3 +1,4 @@
+import pickle
 import unittest
 from unittest.mock import patch, Mock
 from urllib.parse import urlencode
@@ -23,6 +24,11 @@ from aistore.sdk.retry_config import NETWORK_RETRY_EXCEPTIONS, RetryConfig
 from tests.utils import cases
 
 
+def _picklable_request_fn(*_args, **_kwargs):
+    # Picklable stub for the RetryManager round-trip test (Mock isn't).
+    raise RuntimeError("not invoked")
+
+
 class TestRetryManager(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         # Function passed to be retried
@@ -38,6 +44,29 @@ class TestRetryManager(unittest.TestCase):  # pylint: disable=unused-variable
         retry_config.max_retries = 45
         self.retry_manager = RetryManager(self.mock_req_func, retry_config)
         self.assertEqual(self.retry_manager.retry_config, retry_config)
+
+    def test_retry_config_pickle_round_trip(self):
+        # Tenacity Retrying holds non-picklable internals (lambda predicate
+        # in retry_if_exception_type, before_sleep_log closure). RetryConfig
+        # must drop and rebuild network_retry across a pickle cycle so it can
+        # cross process boundaries — notably PyTorch DataLoader workers under
+        # the `forkserver` start method (Python 3.14+ default on POSIX).
+        cfg = RetryConfig.default()
+        cfg2 = pickle.loads(pickle.dumps(cfg))
+        self.assertIsInstance(cfg2.network_retry, Retrying)
+        # Round-trip a second time to confirm the rebuilt instance is itself
+        # picklable (no lingering closures from the first restore).
+        pickle.loads(pickle.dumps(cfg2))
+
+    def test_retry_manager_pickle_round_trip(self):
+        # See `test_retry_config_pickle_round_trip` — RetryManager wraps a
+        # tenacity Retrying with a local before_sleep closure that is
+        # likewise non-picklable; verify it survives a full round-trip.
+        mgr = RetryManager(_picklable_request_fn)
+        mgr2 = pickle.loads(pickle.dumps(mgr))
+        # pylint: disable=protected-access
+        self.assertIsNotNone(mgr2._retrying)
+        pickle.loads(pickle.dumps(mgr2))
 
     def test_retry_on_connect_timeout(self):
         """Test that the function retries without delay on ConnectTimeout."""
