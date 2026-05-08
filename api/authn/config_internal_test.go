@@ -41,11 +41,16 @@ func TestConfigValidateValid(t *testing.T) {
 	tassert.CheckFatal(t, c.Validate())
 	tassert.Errorf(t, c.Log.FlushInterval == defaultLogFlushInterval, "expected FlushInterval default, got %v", c.Log.FlushInterval)
 
-	// zero RSAKeyBits gets default
+	// zero RSA.Bits gets default
 	c = validConfig()
-	c.Server.RSAKeyBits = 0
+	c.Server.RSA.Bits = 0
 	tassert.CheckFatal(t, c.Validate())
-	tassert.Errorf(t, c.Server.RSAKeyBits == defaultRSAKeyBits, "expected RSAKeyBits default, got %d", c.Server.RSAKeyBits)
+	tassert.Errorf(t, c.Server.RSA.Bits == defaultRSAKeyBits, "expected RSA.Bits default, got %d", c.Server.RSA.Bits)
+
+	// external mode is accepted
+	c = validConfig()
+	c.Server.RSA.Mode = RSAModeExternal
+	tassert.CheckFatal(t, c.Validate())
 
 	// valid external url is parsed
 	c = validConfig()
@@ -59,7 +64,8 @@ func TestConfigValidateInvalid(t *testing.T) {
 		modify func(*Config)
 	}{
 		{"expire too short", func(c *Config) { c.Server.Expire = minAuthExpiration - 1 }},
-		{"RSA bits too small", func(c *Config) { c.Server.RSAKeyBits = minRSAKeyBits - 1 }},
+		{"RSA bits too small", func(c *Config) { c.Server.RSA.Bits = minRSAKeyBits - 1 }},
+		{"RSA mode invalid", func(c *Config) { c.Server.RSA.Mode = "auto" }},
 		{"bad log level", func(c *Config) { c.Log.Level = "verbose" }},
 		{"log level too low", func(c *Config) { c.Log.Level = "-1" }},
 		{"log level too high", func(c *Config) { c.Log.Level = "6" }},

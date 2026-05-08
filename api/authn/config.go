@@ -40,6 +40,14 @@ const (
 	defaultPort             = 52001
 )
 
+// RSA key management modes for auth.rsa.mode
+const (
+	// RSAModeExternal signals that the RSA key is managed outside this process
+	// (e.g. mounted from a secret manager or HSM). Auto-generation and API-driven
+	// rotation are disabled; a missing key file is a fatal configuration error.
+	RSAModeExternal = "external"
+)
+
 type (
 	Config struct {
 		Server  ServerConf  `json:"auth"`
@@ -70,10 +78,14 @@ type (
 		// Also used to determine max-age for client caches of JWKS
 		Expire cos.Duration `json:"expiration_time"`
 		// Only used for validating RSA public key against AIS clusters
-		PubKey *string `json:"public_key"`
-		// Size of RSA private key to generate
-		RSAKeyBits int          `json:"rsa_key_bits"`
-		DBConf     DatabaseConf `json:"db"`
+		PubKey *string      `json:"public_key"`
+		RSA    RSAConf      `json:"rsa"`
+		DBConf DatabaseConf `json:"db"`
+	}
+	RSAConf struct {
+		Bits int `json:"bits,omitempty"`
+		// "external": key is managed outside this process; auto-generation and API rotation are disabled
+		Mode string `json:"mode,omitempty"`
 	}
 	DatabaseConf struct {
 		DBType   string `json:"type"`
@@ -144,11 +156,14 @@ func (c *ServerConf) Validate() error {
 	if c.Expire < minAuthExpiration {
 		return fmt.Errorf("invalid auth.expiration_time=%s, (expected 0 (infinite) or >= %s)", c.Expire, minAuthExpiration)
 	}
-	if c.RSAKeyBits == 0 {
-		c.RSAKeyBits = defaultRSAKeyBits
+	if c.RSA.Bits == 0 {
+		c.RSA.Bits = defaultRSAKeyBits
 	}
-	if c.RSAKeyBits < minRSAKeyBits {
-		return fmt.Errorf("invalid auth.rsa_key_bits=%d, (must be >= %d)", c.RSAKeyBits, minRSAKeyBits)
+	if c.RSA.Bits < minRSAKeyBits {
+		return fmt.Errorf("invalid auth.rsa.bits=%d (must be >= %d)", c.RSA.Bits, minRSAKeyBits)
+	}
+	if c.RSA.Mode != "" && c.RSA.Mode != RSAModeExternal {
+		return fmt.Errorf("invalid auth.rsa.mode=%q (valid values: %q or empty)", c.RSA.Mode, RSAModeExternal)
 	}
 	return nil
 }
