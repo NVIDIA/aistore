@@ -1029,7 +1029,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, ecode i
 		doubleCheck = true
 	}
 	if running && tsi.ID() != goi.t.SID() {
-		if goi.t.headt2t(goi.lom, tsi, smap) {
+		if _, errH := goi.t.headt2t(goi.lom, tsi, smap, nil /*reqProps*/); errH == nil { // TODO: handle/nlog
 			gfnNode = tsi
 			goto gfn
 		}
@@ -1932,6 +1932,7 @@ func (coi *coi) send(t *target, dm *bundle.DM, lom *core.LOM, reader cos.ReadOpe
 			sargs.owt = dm.OWT() // (precedence; cmn.OwtCopy, cmn.OwtTransform - what else?)
 		}
 	}
+
 	res = coi._send(t, lom, sargs)
 	freeSnda(sargs)
 	return res

@@ -114,9 +114,9 @@ type (
 		HeadCold(lom *LOM, origReq *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error)
 
 		Promote(params *PromoteParams) (ecode int, err error)
-		HeadObjT2T(lom *LOM, si *meta.Snode) bool
+		HeadObjT2T(lom *LOM, tsi *meta.Snode, reqProps ...string) (*cmn.ObjectPropsV2, error)
 
-		ECRestoreReq(ct *CT, si *meta.Snode, uuid string) error
+		ECRestoreReq(ct *CT, tsi *meta.Snode, uuid string) error
 
 		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 

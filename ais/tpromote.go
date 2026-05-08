@@ -142,8 +142,10 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 	lom.FQN = params.SrcFQN
 
 	// when not overwriting check w/ remote target first (and separately)
-	if !params.OverwriteDst && t.headt2t(lom, tsi, smap) {
-		return -1, nil
+	if !params.OverwriteDst {
+		if _, errH := t.headt2t(lom, tsi, smap, nil /*reqProps*/); errH == nil {
+			return -1, nil
+		}
 	}
 
 	coiParams := xs.AllocCOI()

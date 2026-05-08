@@ -491,7 +491,7 @@ func headobj(reqParams *ReqParams, noprops bool) (*cmn.ObjectProps, error) {
 //
 // Example:
 //
-//	props := apc.GetPropsSize + apc.LsPropsSepa + apc.GetPropsChecksum
+//	props := apc.JoinProps(apc.GetPropsSize, apc.GetPropsChecksum)
 //	opV2, err := api.HeadObjectV2(bp, bck, objName, props, args)
 func HeadObjectV2(bp BaseParams, bck cmn.Bck, objName, props string, args HeadArgs) (op *cmn.ObjectPropsV2, err error) {
 	q := qalloc()

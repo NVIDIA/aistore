@@ -442,7 +442,8 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 		chunkSize = defaultMptDownloadChunkSize
 	}
 	if objectSize <= 0 {
-		opV2, err := HeadObjectV2(bp, bck, objName, apc.GetPropsSize+apc.LsPropsSepa+apc.GetPropsChecksum, HeadArgs{})
+		reqProps := apc.JoinProps(apc.GetPropsSize, apc.GetPropsChecksum)
+		opV2, err := HeadObjectV2(bp, bck, objName, reqProps, HeadArgs{})
 		if err != nil {
 			return nil, oah, fmt.Errorf("head %s: %w", bck.Cname(objName), err)
 		}

@@ -1412,12 +1412,20 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// checks with a given target to see if it has the object.
-// target acts as a client - compare with api.HeadObject
-func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX) (ok bool) {
+// perform intra-cluster HEAD(object) against the given target:
+// - if reqProps is empty, we only probe presence and return nil props.
+// - otherwise, request and parse the specified ObjectPropsV2 fields
+func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX, reqProps []string) (op *cmn.ObjectPropsV2, err error) {
 	q := lom.Bck().NewQuery()
 	q.Set(apc.QparamSilent, "true")
 	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent))
+
+	var parseProps string
+	if len(reqProps) > 0 {
+		parseProps = apc.JoinProps(reqProps...)
+		q.Set(apc.QparamProps, parseProps)
+	}
+
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
@@ -1430,10 +1438,16 @@ func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX) (ok bool) 
 		cargs.timeout = cmn.Rom.CplaneOperation()
 	}
 	res := t.call(cargs, smap)
-	ok = res.err == nil
 	freeCargs(cargs)
+
+	if err = res.err; err == nil && parseProps != "" {
+		op = &cmn.ObjectPropsV2{}
+		err = op.FromHeaders(res.header, parseProps)
+		debug.AssertNoErr(err) // (unlikely)
+	}
 	freeCR(res)
-	return
+
+	return op, err
 }
 
 // headObjBcast broadcasts to all targets to find out if anyone has the specified object.

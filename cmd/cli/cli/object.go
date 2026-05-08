@@ -322,7 +322,8 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 	}
 
 	// do
-	objProps, err := api.HeadObjectV2(apiBP, bck, encObjName, strings.Join(selectedProps, apc.LsPropsSepa), hargs)
+	reqProps := apc.JoinProps(selectedProps...)
+	objProps, err := api.HeadObjectV2(apiBP, bck, encObjName, reqProps, hargs)
 	if err != nil {
 		notfound = cmn.IsStatusNotFound(err)
 		if !notfound {

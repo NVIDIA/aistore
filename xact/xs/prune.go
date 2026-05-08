@@ -120,7 +120,10 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 		if tsi.ID() == core.T.SID() {
 			err = src.Load(false, false)
 		} else {
-			if present := core.T.HeadObjT2T(src, tsi); !present {
+			if _, err := core.T.HeadObjT2T(src, tsi); err != nil {
+				if cmn.Rom.V(4, cos.ModXs) && !cmn.IsErrHTTPNotFound(err) {
+					nlog.Warningln(tsi.StringEx(), "HEAD(", src.Cname(), ") returned", err)
+				}
 				ecode = http.StatusNotFound
 			}
 		}

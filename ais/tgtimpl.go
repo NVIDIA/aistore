@@ -103,8 +103,10 @@ func (t *target) EvictObject(lom *core.LOM) (ecode int, err error) {
 	return
 }
 
-func (t *target) HeadObjT2T(lom *core.LOM, si *meta.Snode) bool {
-	return t.headt2t(lom, si, t.owner.smap.get())
+// empty reqProps => probe presence only (and return nil props-v2)
+func (t *target) HeadObjT2T(lom *core.LOM, tsi *meta.Snode, reqProps ...string) (*cmn.ObjectPropsV2, error) {
+	smap := t.owner.smap.get()
+	return t.headt2t(lom, tsi, smap, reqProps)
 }
 
 // CopyObject:

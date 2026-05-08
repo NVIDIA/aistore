@@ -81,6 +81,7 @@ func TestListInventory(t *testing.T) {
 		invName       string
 		smallBucket   bool
 	}
+	allProps := apc.JoinProps(apc.GetPropsAll...)
 	tests := []test{
 		// A x B: vary chunk granularity vs list page size
 		{
@@ -129,7 +130,7 @@ func TestListInventory(t *testing.T) {
 		{
 			name: "props-all", num: 15,
 			pageSize: 5, namesPerChunk: 15, listPageSize: 6,
-			props: strings.Join(apc.GetPropsAll, apc.LsPropsSepa), invName: "inv-all-" + cos.GenTie(),
+			props: allProps, invName: "inv-all-" + cos.GenTie(),
 		},
 	}
 

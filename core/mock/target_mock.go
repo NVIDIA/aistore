@@ -59,11 +59,14 @@ func (*TargetMock) EvictObject(*core.LOM) (int, error)                          
 func (*TargetMock) DeleteObject(*core.LOM, bool) (int, error)                      { return 0, nil }
 func (*TargetMock) Promote(*core.PromoteParams) (int, error)                       { return 0, nil }
 func (t *TargetMock) Backend(bck *meta.Bck) core.Backend                           { return t.Backends[bck.Provider] }
-func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode) bool                         { return false }
 func (*TargetMock) HeadCold(*core.LOM, *http.Request) (*cmn.ObjAttrs, int, error)  { return nil, 0, nil }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                      {}
 func (*TargetMock) GetFromNeighbor(*core.GfnParams) (*http.Response, error)        { return nil, nil }
 func (*TargetMock) OOS(*fs.CapStatus, *cmn.Config, *fs.Tcdf) fs.CapStatus          { return fs.CapStatus{} }
+
+func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode, ...string) (*cmn.ObjectPropsV2, error) {
+	return nil, nil
+}
 
 func (*TargetMock) SoftFSHC()                         {}
 func (*TargetMock) FSHC(error, *fs.Mountpath, string) {}

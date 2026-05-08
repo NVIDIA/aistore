@@ -326,7 +326,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 	})
 
 	t.Run("WithLocation", func(t *testing.T) {
-		props := apc.GetPropsLocation + apc.LsPropsSepa + apc.GetPropsSize
+		props := apc.JoinProps(apc.GetPropsLocation, apc.GetPropsSize)
 		opV2, err := api.HeadObjectV2(baseParams, bck, objName, props, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
@@ -339,7 +339,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 	})
 
 	t.Run("WithCopies", func(t *testing.T) {
-		props := apc.GetPropsCopies + apc.LsPropsSepa + apc.GetPropsSize
+		props := apc.JoinProps(apc.GetPropsCopies, apc.GetPropsSize)
 		opV2, err := api.HeadObjectV2(baseParams, bck, objName, props, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
@@ -353,7 +353,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 	})
 
 	t.Run("WithCustom", func(t *testing.T) {
-		props := apc.GetPropsCustom + apc.LsPropsSepa + apc.GetPropsSize
+		props := apc.JoinProps(apc.GetPropsCustom, apc.GetPropsSize)
 		opV2, err := api.HeadObjectV2(baseParams, bck, objName, props, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
@@ -365,8 +365,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 	})
 
 	t.Run("MultipleProps", func(t *testing.T) {
-		props := apc.GetPropsSize + apc.LsPropsSepa + apc.GetPropsChecksum + apc.LsPropsSepa +
-			apc.GetPropsLocation + apc.LsPropsSepa + apc.GetPropsCopies
+		props := apc.JoinProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsLocation, apc.GetPropsCopies)
 		opV2, err := api.HeadObjectV2(baseParams, bck, objName, props, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
@@ -381,7 +380,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 
 	t.Run("InvalidProperty", func(t *testing.T) {
 		// Request an invalid property - should return 400 Bad Request
-		props := apc.GetPropsSize + apc.LsPropsSepa + "invalid_prop"
+		props := apc.JoinProps(apc.GetPropsSize, "invalid_prop")
 		_, err := api.HeadObjectV2(baseParams, bck, objName, props, api.HeadArgs{})
 		tassert.Fatalf(t, err != nil, "expected error for invalid property")
 
@@ -434,7 +433,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Use HeadObjectV2 with "chunked" property
-		props := apc.GetPropsChunked + apc.LsPropsSepa + apc.GetPropsSize
+		props := apc.JoinProps(apc.GetPropsChunked, apc.GetPropsSize)
 		opV2, err := api.HeadObjectV2(baseParams, bck, chunkedObjName, props, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
@@ -455,7 +454,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Get V2 (selective props)
-		props := apc.GetPropsSize + apc.LsPropsSepa + apc.GetPropsChecksum + apc.LsPropsSepa + apc.GetPropsAtime
+		props := apc.JoinProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime)
 		opV2, err := api.HeadObjectV2(baseParams, bck, objName, props, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 

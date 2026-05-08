@@ -39,6 +39,7 @@ const ua = "aisnode/backend"
 const remAisDefunct = "defunct" // uuid configured offline
 
 // props to request when doing a HEAD — covers all cmn.ObjAttrs fields
+// TODO -- FIXME: remove
 const remAisHeadProps = apc.GetPropsSize + apc.LsPropsSepa + apc.GetPropsChecksum + apc.LsPropsSepa +
 	apc.GetPropsAtime + apc.LsPropsSepa + apc.GetPropsVersion + apc.LsPropsSepa + apc.GetPropsCustom
 
@@ -559,7 +560,7 @@ func (m *AISbp) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error
 
 // TODO: remote AIS clusters provide native frontend API with additional capabilities
 // in part including apc.Flt* location specifier.
-// Here, and elsewhere down below, we hardcode (the default) `apc.FltPresent` to, eesentially,
+// Here, and elsewhere down below, we hardcode (the default) `apc.FltPresent` to, essentially,
 // keep HeadObj() consistent across backends.
 func (m *AISbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (

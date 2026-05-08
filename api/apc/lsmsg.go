@@ -183,6 +183,15 @@ var (
 	GetPropsDefaultCloudV2 = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsVersion, GetPropsCustom, GetPropsLastModified, GetPropsETag}
 )
 
+// join object property names for the `props` query parameter;
+// empty input maps to the default "name,size"
+func JoinProps(props ...string) string {
+	if len(props) == 0 {
+		return GetPropsNameSize
+	}
+	return strings.Join(props, LsPropsSepa)
+}
+
 type (
 	// LsoMsg is the list-objects control message. It carries paging
 	// state (`uuid`, `continuation_token`) plus filters and

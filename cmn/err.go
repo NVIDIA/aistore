@@ -1114,6 +1114,13 @@ func AsErrHTTP(err error) *ErrHTTP {
 	return nil
 }
 
+func IsErrHTTPNotFound(err error) bool {
+	if herr := AsErrHTTP(err); herr != nil {
+		return herr.Status == http.StatusNotFound
+	}
+	return false
+}
+
 const maxTypeCodeLen = 30
 
 func TypeCodeHTTPErr(s string) (tcode string) {

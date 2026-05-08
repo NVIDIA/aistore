@@ -1059,7 +1059,7 @@ func validateSyncRemoteAIS(t *testing.T, bck *meta.Bck, objName string, objSize,
 	remoteBck := cmn.Bck{Name: bck.Name, Provider: apc.AIS}
 
 	// HEAD the object on the remote cluster with chunked props
-	props := apc.GetPropsChunked + apc.LsPropsSepa + apc.GetPropsSize
+	props := apc.JoinProps(apc.GetPropsChunked, apc.GetPropsSize)
 	opV2, err := api.HeadObjectV2(remoteBP, remoteBck, objName, props, api.HeadArgs{})
 	tassert.CheckFatal(t, err)
 
