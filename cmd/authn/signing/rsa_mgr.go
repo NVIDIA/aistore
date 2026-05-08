@@ -54,6 +54,10 @@ const msgUninitialized = "init failed (fatal) or never called"
 
 var (
 	errEncryptedDataTooShort = errors.New("encrypted data is too short")
+
+	// ErrExternallyProvisioned is returned by RotateKey when the RSA key is externally
+	// managed. Callers should map this to a 400 Bad Request rather than 500.
+	ErrExternallyProvisioned = errors.New("key rotation is not supported when the RSA key is externally provisioned")
 )
 
 type (
@@ -98,8 +102,10 @@ func NewRSAKeyManager(conf *config.RSAKeyConfig, passphrase cmn.Censored, db kvd
 	}
 }
 
-// Init sets up an RSA key pair, using one from disk if provided
-// Must only be called at init time -- key rotation not yet implemented
+// Init loads or generates the RSA key pair used for token signing. Must be called once at startup.
+// When ExternallyProvisioned, a missing key file is a fatal error and API rotation is rejected.
+// To pick up an externally rotated key, replace the file on disk and restart the process;
+// live reload without a restart is not supported.
 func (r *RSAKeyManager) Init() error {
 	if r.db == nil {
 		return errors.New("storage driver required for RSA key manager")
@@ -111,8 +117,11 @@ func (r *RSAKeyManager) Init() error {
 		nlog.Infof("Loaded existing RSA private key from %s", path)
 		return nil
 	}
-	// No existing file -- generate and persist a new one
+	// No existing file -- fail if key is externally provisioned, otherwise generate one.
 	if errors.Is(err, fs.ErrNotExist) {
+		if r.conf.ExternallyProvisioned {
+			return fmt.Errorf("RSA key not found at %q and auto-generation is disabled; pre-provision the key and mount it at that path", path)
+		}
 		nlog.Infof("No RSA key found on disk at %q, generating...", path)
 		return r.rotateKey()
 	}
@@ -442,6 +451,9 @@ func deriveKeyWithID(key *rsa.PrivateKey) (jwk.Key, error) {
 }
 
 func (r *RSAKeyManager) RotateKey() error {
+	if r.conf.ExternallyProvisioned {
+		return ErrExternallyProvisioned
+	}
 	nlog.Infof("Rotating RSA key")
 	return r.rotateKey()
 }
