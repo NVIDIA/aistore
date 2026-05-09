@@ -62,11 +62,11 @@ type (
 	clnArgs struct {
 		rargs
 		stats clnStats
+		force bool // xact.ArgsMsg.Force (to remove diverged)
 	}
 	clnJogger struct {
 		rebJogger
-		stats *clnStats
-		force bool // xact.ArgsMsg.Force (to remove diverged)
+		clnArgs *clnArgs
 	}
 
 	// clnWorker struct { rebWorker }
@@ -87,7 +87,7 @@ func (reb *Reb) RunCleanup(smap *meta.Smap, extArgs *ExtArgs, force bool) {
 		return
 	}
 
-	logHdr := reb.logHdrCleanup(extArgs.NID, smap)
+	logHdr := reb.logHdrCleanup(extArgs.NID, smap, force)
 
 	// refuse-on-prior: cleanup must NOT supersede a running rebalance.
 	// Migration's _preempt aborts a stale prior generation; cleanup refuses instead.
@@ -126,6 +126,7 @@ func (reb *Reb) RunCleanup(smap *meta.Smap, extArgs *ExtArgs, force bool) {
 			prefix: extArgs.Prefix, // ditto
 			logHdr: logHdr,
 		},
+		force: force,
 	}
 	if clnArgs.bck != nil {
 		debug.Assert(!clnArgs.bck.IsEmpty(), extArgs.Bck)
@@ -151,14 +152,14 @@ func (reb *Reb) RunCleanup(smap *meta.Smap, extArgs *ExtArgs, force bool) {
 	}
 
 	// walk mpaths with the cleanup visitor
-	reb.runCleanup(clnArgs, force)
+	reb.runCleanup(clnArgs)
 
 	reb.finiCleanup(clnArgs, extArgs.Tstats)
 	clnArgs.xreb.FinalCtlMsg()
 }
 
-// format: "%s[g%d,v%d,mode=cleanup]"
-func (*Reb) logHdrCleanup(rebID int64, smap *meta.Smap) string {
+// format: "%s[g%d,v%d,mode=cleanup[-force]]"
+func (*Reb) logHdrCleanup(rebID int64, smap *meta.Smap, force bool) string {
 	var (
 		sb cos.SB
 		l  = 64
@@ -174,11 +175,15 @@ func (*Reb) logHdrCleanup(rebID int64, smap *meta.Smap) string {
 	} else {
 		sb.WriteString("v<???>")
 	}
-	sb.WriteString(",mode=cleanup]")
+	if force {
+		sb.WriteString(",mode=cleanup-force]")
+	} else {
+		sb.WriteString(",mode=cleanup]")
+	}
 	return sb.String()
 }
 
-func (reb *Reb) runCleanup(clnArgs *clnArgs, force bool) {
+func (reb *Reb) runCleanup(clnArgs *clnArgs) {
 	debug.Assert(clnArgs.m == reb)
 	nlog.Infoln(clnArgs.logHdr, "start cleanup run")
 
@@ -189,8 +194,7 @@ func (reb *Reb) runCleanup(clnArgs *clnArgs, force bool) {
 	for _, mi := range clnArgs.avail {
 		cl := &clnJogger{
 			rebJogger: rebJogger{rargs: &clnArgs.rargs, ver: ver, wg: wg},
-			stats:     &clnArgs.stats,
-			force:     force,
+			clnArgs:   clnArgs,
 		}
 		cl.opts.Callback = cl.visitObj
 		wg.Add(1)
@@ -242,8 +246,8 @@ func (reb *Reb) finiCleanup(clnArgs *clnArgs, tstats cos.StatsUpdater) {
 // clnJogger //
 ///////////////
 
-func (cl *clnJogger) visitObj(fqn string, de fs.DirEntry) error {
-	xreb := cl.rargs.xreb
+func (j *clnJogger) visitObj(fqn string, de fs.DirEntry) error {
+	xreb := j.rargs.xreb
 	if err := xreb.AbortErr(); err != nil {
 		return err
 	}
@@ -251,7 +255,7 @@ func (cl *clnJogger) visitObj(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	lom := core.AllocLOM(fqn)
-	err := cl._lwalk(lom, fqn)
+	err := j._lwalk(lom, fqn)
 	core.FreeLOM(lom)
 
 	if err == cmn.ErrSkip {
@@ -260,22 +264,24 @@ func (cl *clnJogger) visitObj(fqn string, de fs.DirEntry) error {
 	return err
 }
 
-func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
+func (j *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		if cmn.IsErrBucketLevel(err) {
-			nlog.Errorln(cl.rargs.logHdr, err)
+			nlog.Errorln(j.rargs.logHdr, err)
 			return err
 		}
 		return cmn.ErrSkip
 	}
-	cl.stats.visits.Inc()
+
+	stats := &j.clnArgs.stats
+	stats.visits.Inc()
 
 	// skip entire dir
 	if lom.ECEnabled() {
 		return filepath.SkipDir
 	}
 
-	rargs := cl.rargs
+	rargs := j.rargs
 
 	// limited scope (TODO: consider a shared helper w/ migration)
 	if rargs.prefix != "" {
@@ -303,7 +309,7 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 
 	// lock
 	if !lom.TryLock(true) {
-		cl.stats.skipBusy.Inc()
+		stats.skipBusy.Inc()
 		return cmn.ErrSkip
 	}
 	defer lom.Unlock(true)
@@ -312,10 +318,10 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 		if cos.IsNotExist(err) {
 			return cmn.ErrSkip
 		}
-		cl.stats.errLoad.Inc()
+		stats.errLoad.Inc()
 		return cmn.ErrSkip
 	}
-	cl.stats.loads.Inc()
+	stats.loads.Inc()
 
 	// check the expected location, request specific props to establish identity
 	// TODO -- FIXME: HeadObjT2T() must support batch request to ensure scalability
@@ -323,9 +329,9 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 		apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCustom, apc.GetPropsETag)
 	if err != nil {
 		if cmn.IsErrHTTPNotFound(err) {
-			cl.stats.keepPeerMissing.Inc()
+			stats.keepPeerMissing.Inc()
 		} else {
-			cnt := cl.stats.errHEAD.Inc()
+			cnt := stats.errHEAD.Inc()
 			cmn.SparseWarn(cos.ModReb, cnt, tsi.StringEx(), "HEAD(", lom.Cname(), ") returned", err)
 		}
 		return cmn.ErrSkip
@@ -333,25 +339,27 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 
 	// identical?
 	if eqErr := lom.ObjAttrs().CheckEq(op); eqErr != nil {
-		if !cl.force {
-			cnt := cl.stats.keepDiverged.Inc()
-			cmn.SparseWarn(cos.ModReb, cnt, cl.rargs.logHdr, "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
+		if !j.clnArgs.force {
+			cnt := stats.keepDiverged.Inc()
+			cmn.SparseWarn(cos.ModReb, cnt, j.rargs.logHdr, "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
 			return cmn.ErrSkip
 		}
-		cnt := cl.stats.removeDiverged.Inc()
-		cmn.SparseWarn(cos.ModReb, cnt, cl.rargs.logHdr, "force-removing diverged:", lom.Cname(), eqErr, "[ forced:", cnt, "]")
+		cnt := stats.removeDiverged.Inc()
+		cmn.SparseWarn(cos.ModReb, cnt, j.rargs.logHdr, "force-removing diverged:", lom.Cname(), eqErr, "[ forced:", cnt, "]")
 	}
 
 	// remove
+	size := lom.Lsize()
 	errRm := lom.RemoveObj()
 
 	if errRm != nil {
-		cnt := cl.stats.errRemove.Inc()
-		cmn.SparseWarn(cos.ModReb, cnt, cl.rargs.logHdr, "remove failed:", lom.Cname(), errRm, "[ failures:", cnt, "]")
+		cnt := stats.errRemove.Inc()
+		cmn.SparseWarn(cos.ModReb, cnt, j.rargs.logHdr, "remove failed:", lom.Cname(), errRm, "[ failures:", cnt, "]")
 		return cmn.ErrSkip
 	}
 
-	cl.stats.removeMisplaced.Inc()
+	rargs.xreb.ObjsAdd(1, size)
+	stats.removeMisplaced.Inc()
 	return nil
 }
 
@@ -359,15 +367,18 @@ func (cl *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 // clnArgs //
 /////////////
 
-// xreb.CtlMsg() callback (set via xreg.RebArgs)
+// xreb.CtlMsg() callback (set via xreg.RebArgs; compare with reb/ctlmsg.go)
 func (clnArgs *clnArgs) ctlMsg(sb *cos.SB) {
 	if sb.Len() > 0 {
 		sb.WriteString("; ")
 	}
 
 	sb.WriteString(core.T.String())
-	sb.WriteString(":cleanup")
-
+	if clnArgs.force {
+		sb.WriteString(":cleanup-force")
+	} else {
+		sb.WriteString(":cleanup")
+	}
 	xreb := clnArgs.xreb
 	if xreb.IsAborted() {
 		sb.WriteString(" aborted")

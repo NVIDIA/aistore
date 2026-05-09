@@ -198,7 +198,10 @@ func (xreb *Rebalance) writeStatic(sb *cos.SB) {
 	if fl == 0 {
 		return
 	}
-	sb.WriteString(", flags:")
+	if sb.Len() > 0 {
+		sb.WriteString(", ")
+	}
+	sb.WriteString("flags:")
 	first := true
 	if fl&xact.FlagLatestVer != 0 {
 		first = false
@@ -212,6 +215,14 @@ func (xreb *Rebalance) writeStatic(sb *cos.SB) {
 		first = false
 		sb.WriteString("sync")
 		fl &^= xact.FlagSync
+	}
+	if fl&xact.FlagRemoveMisplaced != 0 {
+		if !first {
+			sb.WriteUint8(',')
+		}
+		first = false
+		sb.WriteString("cleanup")
+		fl &^= xact.FlagRemoveMisplaced
 	}
 	if fl != 0 {
 		if !first {
