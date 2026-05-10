@@ -1319,7 +1319,7 @@ func killRandNonPrimaryIC(t testing.TB, smap *meta.Smap) (tools.RestoreCmd, *met
 
 	smap, err = tools.WaitForClusterState(primary.URL(cmn.NetPublic), "propagate new Smap",
 		smap.Version, origProxyCount-1, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	return cmd, smap
 }
 

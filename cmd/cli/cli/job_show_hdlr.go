@@ -646,6 +646,21 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 	case apc.ActECPut:
 		tmpl, noHdrTmpl = teb.XactECPutTmpl, teb.XactECPutNoHdrTmpl
 	case apc.ActRebalance:
+		showAll := flagIsSet(c, allJobsFlag)
+		if !usejs && rebMultiSnapCleanup(filteredXs, xargs.DaemonID, showAll) {
+			tw := newTabWriter(c)
+			ropts := rebShowOpts{
+				daemonID:   xargs.DaemonID,
+				units:      units,
+				datedTime:  datedTime,
+				hideHeader: hideHeader,
+				showAll:    showAll,
+			}
+			_, _, printed, _ := showRebSnaps(c, tw, filteredXs, ropts)
+			if printed {
+				return l, nil
+			}
+		}
 		tmpl, noHdrTmpl = teb.XactRebalanceTmpl, teb.XactRebalanceNoHdrTmpl
 	case apc.ActList:
 		switch {

@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -1322,4 +1323,14 @@ func warnEscapeObjName(c *cli.Context, s string, warned *bool) string {
 		*warned = true
 	}
 	return s
+}
+
+//
+// tab writer
+//
+
+func newTabWriter(c *cli.Context) *tabwriter.Writer {
+	tw := &tabwriter.Writer{}
+	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
+	return tw
 }

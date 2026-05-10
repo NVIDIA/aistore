@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -386,8 +385,7 @@ func showBMDHandler(c *cli.Context) error {
 		return teb.Print(bmd, "", teb.Jopts(usejs))
 	}
 
-	tw := &tabwriter.Writer{}
-	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
+	tw := newTabWriter(c)
 	if !flagIsSet(c, noHeaderFlag) {
 		fmt.Fprintln(tw, "PROVIDER\tNAMESPACE\tNAME\tBACKEND\tCOPIES\tEC\tCREATED")
 	}
@@ -743,8 +741,7 @@ For details and usage examples, see: docs/cli/config.md`
 		return err
 	}
 
-	tw := &tabwriter.Writer{}
-	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
+	tw := newTabWriter(c)
 	if !flagIsSet(c, noHeaderFlag) {
 		fmt.Fprintln(tw, "UUID\tURL\tAlias\tPrimary\tSmap\tTargets\tUptime")
 	}
