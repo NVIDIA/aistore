@@ -872,7 +872,7 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, join
 	if si.IsProxy() {
 		return nil
 	}
-	if err := p.canRebalance(); err != nil {
+	if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {
 		if err == errRebalanceDisabled {
 			err = nil
 		}
@@ -915,7 +915,7 @@ func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
 	if ctx.nsi.IsProxy() {
 		return
 	}
-	if err := p.canRebalance(); err != nil {
+	if err := p.canRebalance(ctx.smap, false /*cleanup mode*/); err != nil {
 		return
 	}
 	if !mustRebalance(ctx, clone) {
@@ -1391,17 +1391,19 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			return
 		}
 
-		// cleanup mode piggy-backs on rebalance lifecycle but is not a migration
+		var cleanup bool
 		if xargs.Flags&xact.FlagRemoveMisplaced != 0 {
 			if running, xid := p.notifs.isRebRunning(); running {
 				p.writeErrf(w, r, "cannot start rebalance in cleanup mode: rebalance[%s] is currently running", xid)
 				return
 			}
-			p.rebalanceCleanup(w, r, msg)
-			return
+			// special cleanup mode:
+			// piggy-back on the rebalance lifecycle (xreg, abort, status, rebID) to walk
+			// mountpaths and remove local copies of objects upon checking their respective
+			// expected locations
+			cleanup = true
 		}
-
-		p.rebalanceCluster(w, r, msg)
+		p.rebalanceCluster(w, r, msg, cleanup)
 		return
 	}
 
@@ -1591,47 +1593,31 @@ func (p *proxy) reloadCreds(w http.ResponseWriter, r *http.Request, msg *apc.Act
 	nlog.Infoln("reloaded", tag)
 }
 
-func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	// note operational priority over config-disabled `errRebalanceDisabled`
-	if err := p.canRebalance(); err != nil && err != errRebalanceDisabled {
+// admin call
+func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, cleanup bool) {
+	smap := p.owner.smap.get()
+	if err := p.canRebalance(smap, cleanup); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	smap := p.owner.smap.get()
 	if smap.CountTargets() < 2 {
 		p.writeErr(w, r, &errNotEnoughTargets{p.si, smap, 2})
 		return
 	}
-	if na := smap.CountActiveTs(); na < 2 {
-		nlog.Warningf("%s: not enough active targets (%d) - proceeding to rebalance anyway", p, na)
+	if nat := smap.CountActiveTs(); nat < 2 {
+		if cleanup {
+			p.writeErrf(w, r, "not enough active targets (%d, %s) - cannot run rebalance in cleanup mode", nat, smap.StringEx())
+			return
+		}
+		nlog.Warningf("%s: not enough active targets (%d) - proceeding to rebalance cluster anyway", p, nat)
 	}
-	rmdCtx := &rmdModifier{
-		pre:     rmdInc,
-		final:   rmdSync, // metasync new rmd instance
-		p:       p,
-		smapCtx: &smapModifier{smap: smap, msg: msg},
-	}
-	_, err := p.owner.rmd.modify(rmdCtx)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	writeXid(w, rmdCtx.rebID)
-}
-
-// piggy-backs on the rebalance lifecycle (xreg, abort, status, rebID) to walk
-// mountpaths and remove local copies of objects whose HRW target already has them;
-// not a migration - see also: 'ais space-cleanup' (recommended for routine use)
-func (p *proxy) rebalanceCleanup(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	smap := p.owner.smap.get()
 	rmdCtx := &rmdModifier{
 		pre:     rmdInc,
 		final:   rmdSync,
 		p:       p,
 		smapCtx: &smapModifier{smap: smap, msg: msg},
 	}
-	_, err := p.owner.rmd.modify(rmdCtx)
-	if err != nil {
+	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1652,12 +1638,14 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
 		err := cos.NewErrNotFound(p, "node "+opts.DaemonID)
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
+
 	var inMaint bool
 	if smap.InMaintOrDecomm(si.ID()) {
 		// only (maintenance => decommission|shutdown) permitted
@@ -1716,7 +1704,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled && !inMaint
 		nlog.Infof("%s: %s reb=%t", p, msg.Action, reb)
 		if reb {
-			if err := p.canRebalance(); err != nil {
+			if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {
 				p.writeErr(w, r, err)
 				return
 			}
@@ -2345,29 +2333,35 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 }
 
 // rebalance's `can`: factors not including cluster map
-func (p *proxy) canRebalance() (err error) {
+func (p *proxy) canRebalance(smap *smapX, cleanup bool) error {
 	if nlog.Stopping() {
 		return p.errStopping()
 	}
-	smap := p.owner.smap.get()
-	if err = smap.validate(); err != nil {
-		return
+	if err := smap.validate(); err != nil {
+		return err
 	}
 	if !smap.IsPrimary(p.si) {
-		err = newErrNotPrimary(p.si, smap)
+		err := newErrNotPrimary(p.si, smap)
 		debug.AssertNoErr(err)
-		return
+		return err
 	}
-	// NOTE: cluster startup handles rebalance elsewhere (see p.resumeReb), and so
+
+	// cluster startup handles rebalance elsewhere (see p.resumeReb), and so
 	// all rebalance-triggering events (shutdown, decommission, maintenance, etc.)
 	// are not permitted and will fail during startup.
-	if err = p.pready(smap, true); err != nil {
-		return
+	if err := p.pready(smap, true); err != nil {
+		return err
+	}
+
+	// cleanup mode is an admin-requested local cleanup pass and intentionally
+	// bypasses config.Rebalance.Enabled; the knob only disables regular rebalance
+	if cleanup {
+		return nil
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
-		err = errRebalanceDisabled
+		return errRebalanceDisabled
 	}
-	return
+	return nil
 }
 
 // rebalance's `must`: compares previous and current (cloned, updated) Smap

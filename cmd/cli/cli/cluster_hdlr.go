@@ -658,6 +658,9 @@ func startRebHandler(c *cli.Context) (err error) {
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance}
 
 	cleanup := flagIsSet(c, rebalanceCleanupModeFlag)
+	if cleanup && flagIsSet(c, rebalanceForceFlag) {
+		return fmt.Errorf("%s is only valid with %s", qflprn(rebalanceForceFlag), qflprn(rebalanceCleanupModeFlag))
+	}
 	if cleanup {
 		if flagIsSet(c, latestVerFlag) || flagIsSet(c, syncFlag) {
 			return incorrectUsageMsg(c, "%s is incompatible with %s and %s",
@@ -669,8 +672,6 @@ func startRebHandler(c *cli.Context) (err error) {
 		}
 		xargs.Flags |= xact.FlagRemoveMisplaced
 		xargs.Force = flagIsSet(c, rebalanceForceFlag)
-	} else if flagIsSet(c, rebalanceForceFlag) {
-		return fmt.Errorf("%s is only valid with %s", qflprn(rebalanceForceFlag), qflprn(rebalanceCleanupModeFlag))
 	}
 
 	if flagIsSet(c, latestVerFlag) {
