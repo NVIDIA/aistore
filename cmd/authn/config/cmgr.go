@@ -41,7 +41,7 @@ type (
 	RSAKeyConfig struct {
 		Filepath string
 		Size     int
-		// ExternallyProvisioned is true when auth.signing_key.mode is "external" (or AIS_AUTHN_RSA_MODE=external).
+		// ExternallyProvisioned is true when auth.signing_key.mode is "external".
 		// A missing key file is a fatal configuration error; key rotation via API is rejected.
 		ExternallyProvisioned bool
 	}
@@ -274,10 +274,10 @@ func (cm *ConfManager) GetSecret() cmn.Censored {
 
 func (cm *ConfManager) GetRSAConfig() *RSAKeyConfig {
 	keyFilePath := cos.GetEnvOrDefault(env.AisAuthPrivateKeyFile, filepath.Join(filepath.Dir(cm.filePath), fname.AuthNRSAKey))
-	mode := cos.GetEnvOrDefault(env.AisAuthRSAMode, cm.conf.Load().Server.SigningKey.Mode)
+	conf := cm.conf.Load()
 	return &RSAKeyConfig{
 		Filepath:              keyFilePath,
-		Size:                  cm.conf.Load().Server.SigningKey.Bits,
-		ExternallyProvisioned: mode == authn.SigningKeyModeExternal,
+		Size:                  conf.Server.SigningKey.Bits,
+		ExternallyProvisioned: conf.Server.SigningKey.Mode == authn.SigningKeyModeExternal,
 	}
 }

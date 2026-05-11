@@ -28,5 +28,4 @@ const (
 	AisAuthPublicKey      = "AIS_AUTHN_PUBLIC_KEY"       // for asymmetric tokens
 	AisAuthAdminUsername  = "AIS_AUTHN_SU_NAME"
 	AisAuthAdminPassword  = "AIS_AUTHN_SU_PASS"
-	AisAuthRSAMode        = "AIS_AUTHN_RSA_MODE" // RSA key management mode; set to "external" to disable auto-generation and API rotation
 )
