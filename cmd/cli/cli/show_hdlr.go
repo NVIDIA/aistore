@@ -802,7 +802,7 @@ func showRemoteDashboardHandler(c *cli.Context) error {
 			fmt.Fprint(c.App.Writer, dashStr)
 			fmt.Fprintln(c.App.Writer)
 		} else {
-			actionWarn(c, fmt.Sprintf("Failed to get dashboard for %s: %v", ra.Alias, err))
+			actionWarnf(c, "Failed to get dashboard for %s: %v", ra.Alias, err)
 		}
 	}
 	return nil

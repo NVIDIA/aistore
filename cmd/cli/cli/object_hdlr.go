@@ -559,7 +559,7 @@ func putStdin(c *cli.Context, a *putargs) error {
 	if err := putAppendChunks(c, a.dst.bck, encDstName, os.Stdin, cksum.Type(), chunkSize); err != nil {
 		return err
 	}
-	actionDone(c, fmt.Sprintf("PUT (standard input) => %s\n", a.dst.bck.Cname(a.dst.oname)))
+	actionDonef(c, "PUT (standard input) => %s\n", a.dst.bck.Cname(a.dst.oname))
 	return nil
 }
 

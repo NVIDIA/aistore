@@ -347,7 +347,7 @@ func evictBuckets(c *cli.Context, buckets []cmn.Bck) error {
 	var evicted int
 	for _, bck := range buckets {
 		if err := evictBucket(c, bck); err != nil {
-			actionWarn(c, fmt.Sprintf("failed to evict %s: %v", bck.Cname(""), err))
+			actionWarnf(c, "failed to evict %s: %v", bck.Cname(""), err)
 			continue
 		}
 		evicted++

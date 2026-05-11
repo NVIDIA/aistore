@@ -513,7 +513,7 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		progress.Wait()
 	}
 
-	actionDone(c, fmt.Sprintf("PUT %q => %s\n", path, bck.Cname(objName)))
+	actionDonef(c, "PUT %q => %s\n", path, bck.Cname(objName))
 	return err
 }
 

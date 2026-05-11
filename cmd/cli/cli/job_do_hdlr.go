@@ -473,7 +473,12 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 
 	switch xargs.Kind {
 	case apc.ActRebalance:
-		actionDone(c, "Started global rebalance. To monitor the progress, run 'ais show rebalance'")
+		var s string
+		if xargs.Flags&xact.FlagRemoveMisplaced != 0 {
+			s = " (cleanup mode)"
+		}
+		actionDonef(c, "Started rebalance[%s]%s. To monitor the progress, run 'ais show rebalance'", xid, s)
+
 	case apc.ActResilver:
 		const add = " To monitor the progress, run 'ais show job " + apc.ActResilver + "'"
 		var s string
@@ -481,9 +486,9 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 			s = "[" + xid + "]"
 		}
 		if xargs.DaemonID != "" {
-			actionDone(c, fmt.Sprintf("Started %s%s on %s."+add, apc.ActResilver, s, meta.Tname(xargs.DaemonID)))
+			actionDonef(c, "Started %s%s on %s."+add, apc.ActResilver, s, meta.Tname(xargs.DaemonID))
 		} else {
-			actionDone(c, fmt.Sprintf("Started %s%s simultaneously on all targets."+add, apc.ActResilver, s))
+			actionDonef(c, "Started %s%s simultaneously on all targets."+add, apc.ActResilver, s)
 		}
 	default:
 		actionX(c, xargs, "")
@@ -792,9 +797,9 @@ func newHFDownloadJobDef(c *cli.Context, req *downloadRequest) (*HFDownloadJobDe
 	}
 
 	if isDataset {
-		actionDone(c, fmt.Sprintf("Found %d parquet files in dataset '%s'", len(files), identifier))
+		actionDonef(c, "Found %d parquet files in dataset '%s'", len(files), identifier)
 	} else {
-		actionDone(c, fmt.Sprintf("Found %d files in model '%s'", len(files), identifier))
+		actionDonef(c, "Found %d files in model '%s'", len(files), identifier)
 	}
 
 	return &HFDownloadJobDef{
@@ -1034,7 +1039,7 @@ func singleJobProgress(c *cli.Context, id string) error {
 func checkJobCompletion(c *cli.Context, jobID string, completed map[string]struct{}) {
 	resp, err := api.DownloadStatus(apiBP, jobID, false /*onlyActive*/)
 	if err != nil {
-		actionWarn(c, fmt.Sprintf("Failed to check status for job %s: %v", jobID, err))
+		actionWarnf(c, "Failed to check status for job %s: %v", jobID, err)
 		return
 	}
 
@@ -1177,7 +1182,7 @@ func stopJobHandler(c *cli.Context) error {
 	if warn != "" {
 		switch {
 		case xid != "":
-			actionWarn(c, fmt.Sprintf("ignoring %s in presence of %s argument ('%s')", warn, jobIDArgument, xid))
+			actionWarnf(c, "ignoring %s in presence of %s argument ('%s')", warn, jobIDArgument, xid)
 		case name == commandRebalance:
 			actionWarn(c, "global rebalance is _global_ - ignoring"+warn)
 		case regex != "" && name != cmdDownload && name != cmdDsort:
@@ -1292,7 +1297,7 @@ func stopJobHandler(c *cli.Context) error {
 	if err := xstop(&args); err != nil {
 		return err
 	}
-	actionDone(c, fmt.Sprintf("Stopped %s\n", msg))
+	actionDonef(c, "Stopped %s\n", msg)
 	return nil
 }
 
@@ -1308,7 +1313,7 @@ func stopXactionKindOrAll(c *cli.Context, xactKind, xname string, bck cmn.Bck) e
 		if xname != "" {
 			what = " '" + xname + "'"
 		}
-		actionDone(c, fmt.Sprintf("No running%s jobs, nothing to do", what))
+		actionDonef(c, "No running%s jobs, nothing to do", what)
 		return nil
 	}
 	for _, cname := range cnames {
@@ -1319,7 +1324,7 @@ func stopXactionKindOrAll(c *cli.Context, xactKind, xname string, bck cmn.Bck) e
 		}
 		args := xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: bck}
 		if err := xstop(&args); err != nil {
-			actionWarn(c, fmt.Sprintf("failed to stop %s: %v", cname, err))
+			actionWarnf(c, "failed to stop %s: %v", cname, err)
 		} else {
 			actionDone(c, "Stopped "+cname)
 		}
@@ -1357,7 +1362,7 @@ func stopDownloadRegex(c *cli.Context, regex string) error {
 			actionDone(c, "Stopped download job "+dl.ID)
 			cnt++
 		} else {
-			actionWarn(c, fmt.Sprintf("failed to stop download job %q: %v", dl.ID, err))
+			actionWarnf(c, "failed to stop download job %q: %v", dl.ID, err)
 		}
 	}
 	if err != nil {
@@ -1373,7 +1378,7 @@ func stopDownloadHandler(c *cli.Context, id string) (err error) {
 	if err = api.AbortDownload(apiBP, id); err != nil {
 		return
 	}
-	actionDone(c, fmt.Sprintf("Stopped download job %s\n", id))
+	actionDonef(c, "Stopped download job %s\n", id)
 	return
 }
 
@@ -1390,7 +1395,7 @@ func stopDsortRegex(c *cli.Context, regex string) error {
 			actionDone(c, "Stopped dsort job "+dsort.ID)
 			cnt++
 		} else {
-			actionWarn(c, fmt.Sprintf("failed to stop dsort job %q: %v", dsort.ID, err))
+			actionWarnf(c, "failed to stop dsort job %q: %v", dsort.ID, err)
 		}
 	}
 	if err != nil {
@@ -1406,7 +1411,7 @@ func stopDsortHandler(c *cli.Context, id string) (err error) {
 	if err = api.AbortDsort(apiBP, id); err != nil {
 		return
 	}
-	actionDone(c, fmt.Sprintf("Stopped dsort job %s\n", id))
+	actionDonef(c, "Stopped dsort job %s\n", id)
 	return
 }
 
@@ -1428,7 +1433,7 @@ func waitJobHandler(c *cli.Context) error {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if daemonID != "" {
-		actionWarn(c, fmt.Sprintf("node ID %q will be ignored (waiting for a single target not supported)\n", daemonID))
+		actionWarnf(c, "node ID %q will be ignored (waiting for a single target not supported)\n", daemonID)
 	}
 
 	if name == "" && xid != "" {
@@ -1655,7 +1660,7 @@ func removeDownloadHandler(c *cli.Context) error {
 	if err := api.RemoveDownload(apiBP, id); err != nil {
 		return V(err)
 	}
-	actionDone(c, fmt.Sprintf("Removed finished download job %q", id))
+	actionDonef(c, "Removed finished download job %q", id)
 	return nil
 }
 
@@ -1672,10 +1677,10 @@ func removeDownloadRegex(c *cli.Context, regex string) error {
 		}
 		err = api.RemoveDownload(apiBP, dl.ID)
 		if err == nil {
-			actionDone(c, fmt.Sprintf("Removed download job %q", dl.ID))
+			actionDonef(c, "Removed download job %q", dl.ID)
 			cnt++
 		} else {
-			actionWarn(c, fmt.Sprintf("failed to remove download job %q: %v", dl.ID, err))
+			actionWarnf(c, "failed to remove download job %q: %v", dl.ID, err)
 		}
 	}
 	if err != nil {
@@ -1705,7 +1710,7 @@ func removeDsortHandler(c *cli.Context) error {
 		return V(err)
 	}
 
-	actionDone(c, fmt.Sprintf("Removed finished dsort job %q", id))
+	actionDonef(c, "Removed finished dsort job %q", id)
 	return nil
 }
 
@@ -1722,10 +1727,10 @@ func removeDsortRegex(c *cli.Context, regex string) error {
 		}
 		err = api.RemoveDsort(apiBP, dsort.ID)
 		if err == nil {
-			actionDone(c, fmt.Sprintf("Removed dsort job %q", dsort.ID))
+			actionDonef(c, "Removed dsort job %q", dsort.ID)
 			cnt++
 		} else {
-			actionWarn(c, fmt.Sprintf("failed to remove dsort job %q: %v", dsort.ID, err))
+			actionWarnf(c, "failed to remove dsort job %q: %v", dsort.ID, err)
 		}
 	}
 	if err != nil {

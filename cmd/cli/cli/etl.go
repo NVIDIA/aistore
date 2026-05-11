@@ -844,7 +844,7 @@ func etlObjectHandler(c *cli.Context) error {
 		cos.Close(wfh)
 		if err != nil {
 			if e := cos.RemoveFile(outputDest); e != nil {
-				actionWarn(c, fmt.Sprintf("failed to delete %s: %v", outputDest, e))
+				actionWarnf(c, "failed to delete %s: %v", outputDest, e)
 			}
 		}
 	}

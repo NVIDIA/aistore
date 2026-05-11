@@ -145,7 +145,7 @@ func copyObject(c *cli.Context, bckFrom cmn.Bck, objFrom string, bckTo cmn.Bck, 
 		if objTo == "" {
 			objTo = objFrom
 		}
-		actionDone(c, fmt.Sprintf("COPY %s => %s", bckFrom.Cname(objFrom), bckTo.Cname(objTo)))
+		actionDonef(c, "COPY %s => %s", bckFrom.Cname(objFrom), bckTo.Cname(objTo))
 	}
 	return
 }

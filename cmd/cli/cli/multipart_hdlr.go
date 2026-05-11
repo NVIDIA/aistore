@@ -154,8 +154,7 @@ func mptPutHandler(c *cli.Context) error {
 		return fmt.Errorf("failed to upload part %d: %v", partNumber, err)
 	}
 
-	actionDone(c, fmt.Sprintf("Uploaded part %d for %s (upload ID: %s)",
-		partNumber, bck.Cname(objName), uploadID))
+	actionDonef(c, "Uploaded part %d for %s (upload ID: %s)", partNumber, bck.Cname(objName), uploadID)
 	return nil
 }
 

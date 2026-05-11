@@ -645,7 +645,7 @@ func psetForce(c *cli.Context, pid, sname, toURL string) error {
 	if toURL != "" {
 		s = " (at " + toURL + ")"
 	}
-	actionDone(c, fmt.Sprintf("%s%s is now a new primary (set with force)", sname, s))
+	actionDonef(c, "%s%s is now a new primary (set with force)", sname, s)
 	return nil
 }
 
@@ -658,7 +658,13 @@ func startRebHandler(c *cli.Context) (err error) {
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance}
 
 	cleanup := flagIsSet(c, rebalanceCleanupModeFlag)
-	if cleanup && flagIsSet(c, rebalanceForceFlag) {
+
+	// --force is meaningful only in cleanup mode. Without it, an object whose HRW peer
+	// has a diverged copy (size/checksum/version mismatch) is kept locally; with it,
+	// the local (misplaced) copy is removed.
+	// See reb/cleanup.go (keepDiverged vs removeDiverged).
+
+	if !cleanup && flagIsSet(c, rebalanceForceFlag) {
 		return fmt.Errorf("%s is only valid with %s", qflprn(rebalanceForceFlag), qflprn(rebalanceCleanupModeFlag))
 	}
 	if cleanup {
@@ -739,7 +745,7 @@ func stopReb(c *cli.Context, xid string) error {
 	if err := xstop(&xargs); err != nil {
 		return V(err)
 	}
-	actionDone(c, fmt.Sprintf("Stopped %s[%s]\n", apc.ActRebalance, xid))
+	actionDonef(c, "Stopped %s[%s]\n", apc.ActRebalance, xid)
 	return nil
 }
 

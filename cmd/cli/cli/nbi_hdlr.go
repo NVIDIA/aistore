@@ -155,7 +155,7 @@ func createNBIHandler(c *cli.Context) error {
 		return V(err)
 	}
 
-	actionDone(c, fmt.Sprintf("Creating inventory %s. %s", bck.Cname(""), toMonitorMsg(c, xid, "")))
+	actionDonef(c, "Creating inventory %s. %s", bck.Cname(""), toMonitorMsg(c, xid, ""))
 	return nil
 }
 
@@ -192,7 +192,7 @@ func removeNBIHandler(c *cli.Context) error {
 		return V(err)
 	}
 
-	actionDone(c, fmt.Sprintf("Removed inventory%s for bucket %s", s, bck.String()))
+	actionDonef(c, "Removed inventory%s for bucket %s", s, bck.String())
 	return nil
 }
 

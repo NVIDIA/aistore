@@ -186,13 +186,13 @@ func parseRetriesFlag(c *cli.Context, flag cli.IntFlag, warn bool) (retries int)
 	retries = parseIntFlag(c, flag)
 	if retries < 0 {
 		if warn {
-			actionWarn(c, fmt.Sprintf(efmt, flprn(flag), retries))
+			actionWarnf(c, efmt, flprn(flag), retries)
 		}
 		return 0
 	}
 	if retries > maxr {
 		if warn {
-			actionWarn(c, fmt.Sprintf(efmt, flprn(flag), retries))
+			actionWarnf(c, efmt, flprn(flag), retries)
 		}
 		return maxr
 	}

@@ -150,7 +150,7 @@ func uploadFileInChunks(c *cli.Context, filePath string, fileSize, chunkSize int
 		return err
 	}
 
-	actionDone(c, fmt.Sprintf("PUT in chunks %q => %s\n", filePath, bck.Cname(objName)))
+	actionDonef(c, "PUT in chunks %q => %s\n", filePath, bck.Cname(objName))
 
 	return nil
 }

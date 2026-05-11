@@ -592,7 +592,7 @@ func fmtBucketCreatedTime(created int64) string {
 func isUnsetTime(c *cli.Context, ts string) bool {
 	t, err := time.Parse(time.RFC822, ts)
 	if err != nil {
-		actionWarn(c, fmt.Sprintf("failed to parse %q using RFC822", ts))
+		actionWarnf(c, "failed to parse %q using RFC822", ts)
 		return false
 	}
 	if t.IsZero() {
@@ -813,8 +813,7 @@ func showSectionNotFoundError(c *cli.Context, section string, config any, helpCm
 		}
 	}
 
-	actionWarn(c, fmt.Sprintf("config section %q not found. %s: %s",
-		section, label, strings.Join(available, ", ")))
+	actionWarnf(c, "config section %q not found. %s: %s", section, label, strings.Join(available, ", "))
 
 	if helpCmd != "" {
 		actionNote(c, helpCmd)
@@ -887,7 +886,7 @@ func printSectionJSON(c *cli.Context, in any, section string) bool {
 	if section == "" {
 		data, err := jsonMarshalIndent(in)
 		if err != nil {
-			actionWarn(c, fmt.Sprintf("failed to marshal config: %v", err))
+			actionWarnf(c, "failed to marshal config: %v", err)
 			return false
 		}
 		fmt.Fprintln(c.App.Writer, string(data))
@@ -955,7 +954,7 @@ func printSectionJSON(c *cli.Context, in any, section string) bool {
 	out := _wrapNestedJSON(section, rootObj)
 	data, err := jsonMarshalIndent(out)
 	if err != nil {
-		actionWarn(c, fmt.Sprintf("failed to marshal section %q: %v", section, err))
+		actionWarnf(c, "failed to marshal section %q: %v", section, err)
 		return false
 	}
 	fmt.Fprintln(c.App.Writer, string(data))
@@ -1056,8 +1055,22 @@ func selectProvidersExclRais(bcks cmn.Bcks) (sorted []string) {
 
 // see related: `verboseWarnings()`
 
+func _fprintlnf(w io.Writer, prefix, format string, a ...any) {
+	fmt.Fprintf(w, prefix+format+"\n", a...)
+}
+
 func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
+
+func actionDonef(c *cli.Context, format string, a ...any) {
+	_fprintlnf(c.App.Writer, "", format, a...)
+}
+
 func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Warning: ")+msg) }
+
+func actionWarnf(c *cli.Context, format string, a ...any) {
+	_fprintlnf(c.App.ErrWriter, fcyan("Warning: "), format, a...)
+}
+
 func actionNote(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fblue("Note: ")+msg) }
 
 func actionX(c *cli.Context, xargs *xact.ArgsMsg, s string) {
