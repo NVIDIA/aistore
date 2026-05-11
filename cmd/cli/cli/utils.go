@@ -32,7 +32,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/xact"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -1072,15 +1071,6 @@ func actionWarnf(c *cli.Context, format string, a ...any) {
 }
 
 func actionNote(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fblue("Note: ")+msg) }
-
-func actionX(c *cli.Context, xargs *xact.ArgsMsg, s string) {
-	if flagIsSet(c, nonverboseFlag) {
-		fmt.Fprintln(c.App.Writer, xargs.ID)
-		return
-	}
-	msg := fmt.Sprintf("Started %s%s. %s", xact.Cname(xargs.Kind, xargs.ID), s, toMonitorMsg(c, xargs.ID, ""))
-	actionDone(c, msg)
-}
 
 func actionCptn(c *cli.Context, prefix string, msgs ...any) {
 	if prefix == "" {

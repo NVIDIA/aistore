@@ -112,7 +112,7 @@ stages:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 49m
+  timeout: 53m
   rules:
   <<: *gather_logs_def
   <<: *default_test_rules
@@ -121,7 +121,7 @@ stages:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 49m
+  timeout: 53m
   <<: *gather_logs_def
   <<: *skip_scheduled_rules
 
@@ -129,7 +129,7 @@ stages:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 49m
+  timeout: 53m
   rules:
     - !reference [.default_test_rules, rules]
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
@@ -299,7 +299,7 @@ test:short:
 
 test:short:aisloader:
   <<: *test_short_def
-  timeout: 30m
+  timeout: 20m
   rules:
     - !reference [.test_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'

@@ -41,6 +41,19 @@ type (
 	}
 )
 
+// TODO -- FIXME: consolidate job-starting cases into actionX (which already encapsulates
+// "Started X[xid]. To monitor..."). Would also enable --non-verbose to work uniformly
+// across xstart paths, and is a natural place to add a script-friendly short-output flag.
+
+func actionX(c *cli.Context, xargs *xact.ArgsMsg, s string) {
+	if flagIsSet(c, nonverboseFlag) {
+		fmt.Fprintln(c.App.Writer, xargs.ID)
+		return
+	}
+	msg := fmt.Sprintf("Started %s%s. %s", xact.Cname(xargs.Kind, xargs.ID), s, toMonitorMsg(c, xargs.ID, ""))
+	actionDone(c, msg)
+}
+
 func toMonitorMsg(c *cli.Context, xjid, suffix string) (out string) {
 	out = toShowMsg(c, xjid, "To monitor the progress", false)
 	if suffix != "" && out != "" {
