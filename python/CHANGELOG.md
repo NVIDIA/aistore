@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.24.0] - 2026-05-08
+
 ### Changed
 
 - **Retry logging**: emit the failing request's call stack at ERROR
