@@ -523,13 +523,16 @@ Generating a token for data access requires users to log in with a username and 
 By default, the token expiration time is set to 24 hours.
 Modify `expiration_time` in the configuration file to change the default expiration time.
 
+The maximum allowed token lifetime for a user to request can be configured with `auth.max_token_age` in the configuration file.
+By default, this is set to 90 days and will disallow infinite tokens.
+
 To issue a single token with a custom expiration time, pass an optional expiration duration in the request:
 
 ```sh
 ais auth login -p password username -e 5h
 ```
 
-Pass a zero value with `-e 0` to generate a token with no expiration.
+Pass a zero value with `-e 0` to generate a token with the maximum allowed token lifetime, as configured by `auth.max_token_age`.
 
 AuthN returns the generated token as JSON. Example: `{"token": "issued_token"}`.
 The revoke token API shown below will forcefully invalidate a token before it expires.

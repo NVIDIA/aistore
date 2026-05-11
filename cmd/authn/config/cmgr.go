@@ -25,8 +25,9 @@ import (
 )
 
 const (
-	ServiceName   = "AuthN"
-	defaultLogDir = "logs"
+	ServiceName       = "AuthN"
+	defaultLogDir     = "logs"
+	defaultJWKSMaxAge = 24 * time.Hour
 )
 
 // ConfManager Used by AuthN to interface with the shared authN config used on both API and server-side
@@ -237,11 +238,20 @@ func (cm *ConfManager) IsVerbose() bool {
 }
 
 func (cm *ConfManager) GetExpiry() time.Duration {
-	return cm.conf.Load().Expire()
+	return cm.conf.Load().Server.Expire.D()
+}
+
+func (cm *ConfManager) GetMaxTokenAge() cos.Duration {
+	return cm.conf.Load().Server.MaxTokenAge
 }
 
 func (cm *ConfManager) GetDefaultTimeout() time.Duration {
 	return time.Duration(cm.conf.Load().Timeout.Default)
+}
+
+// GetJWKSMaxAge Determines time a client can wait before refreshing the JWKS, set via Cache-Control max-age header
+func (*ConfManager) GetJWKSMaxAge() int {
+	return int(defaultJWKSMaxAge.Seconds())
 }
 
 func (cm *ConfManager) GetDBType() string {

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -146,6 +147,50 @@ func TestBuildClaims(t *testing.T) {
 		tassert.Errorf(t, len(claims.Audience) == 1, "Expected a single audience to be set, got %d", len(claims.Audience))
 		tassert.Errorf(t, claims.Audience[0] == cluster, "Expected audience to match cluster ACL, got %s", claims.Audience[0])
 	})
+}
+
+func TestGetExp(t *testing.T) {
+	const (
+		adminPass  = "admin-pass"
+		defaultExp = time.Hour
+		maxAge     = 24 * time.Hour
+	)
+	t.Setenv(env.AisAuthAdminPassword, adminPass)
+	conf := &authn.Config{
+		Server: authn.ServerConf{
+			Secret:      "test-secret",
+			Expire:      cos.Duration(defaultExp),
+			MaxTokenAge: cos.Duration(maxAge),
+		},
+	}
+	testMgr := newMgrWithConf(t, conf)
+	now := time.Unix(1710000000, 0).UTC()
+
+	tests := []struct {
+		name      string
+		expiresIn *time.Duration
+		expected  time.Time
+		wantErr   bool
+	}{
+		{name: "Default", expected: now.Add(defaultExp)},
+		{name: "MaxAge", expiresIn: apc.Ptr(0 * time.Second), expected: now.Add(maxAge)},
+		{name: "Requested", expiresIn: apc.Ptr(2 * time.Hour), expected: now.Add(2 * time.Hour)},
+		{name: "TooShort", expiresIn: apc.Ptr(time.Second), wantErr: true},
+		{name: "TooLong", expiresIn: apc.Ptr(48 * time.Hour), wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exp, err := testMgr.getExp(now, &authn.LoginMsg{ExpiresIn: tt.expiresIn})
+			if tt.wantErr {
+				tassert.Errorf(t, errors.Is(err, errInvalidRequestedExp), "expected invalid expiration error, got %v", err)
+				tassert.Errorf(t, exp == nil, "expected nil expiration on error, got %v", exp)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, exp != nil, "expected expiration to be set")
+			tassert.Errorf(t, exp.Time.Equal(tt.expected), "expected expiration %v, got %v", tt.expected, exp.Time)
+		})
+	}
 }
 
 func TestGetAud(t *testing.T) {

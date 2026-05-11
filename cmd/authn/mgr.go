@@ -49,9 +49,10 @@ type (
 )
 
 var (
-	errInvalidCredentials = errors.New("invalid credentials")
-	errJWKSUnavailable    = errors.New("JWKS not available for current signing method")
-	errInvalidRotation    = errors.New("rotation not supported for current signing method")
+	errInvalidCredentials  = errors.New("invalid credentials")
+	errInvalidRequestedExp = errors.New("invalid requested expiry date")
+	errJWKSUnavailable     = errors.New("JWKS not available for current signing method")
+	errInvalidRotation     = errors.New("rotation not supported for current signing method")
 
 	predefinedRoles = []struct {
 		prefix string
@@ -110,19 +111,7 @@ func (m *mgr) getJWKS() (jwk.Set, error) {
 }
 
 func (m *mgr) getJWKSMaxAge() int {
-	const (
-		cacheMinRefresh = 5 * time.Minute
-		cacheMaxRefresh = 720 * time.Hour
-		cacheWindow     = 10 * time.Minute
-	)
-	exp := m.cm.GetExpiry()
-	if exp == 0 {
-		return int(cacheMaxRefresh.Seconds())
-	}
-	// Client should refresh "cacheWindow" before the key expiry, bounded by the reasonable age constants
-	ttr := m.cm.GetExpiry() - cacheWindow
-	maxAge := max(cacheMinRefresh, min(ttr, cacheMaxRefresh))
-	return int(maxAge.Seconds())
+	return m.cm.GetJWKSMaxAge()
 }
 
 func (m *mgr) rotateKey() error {
@@ -475,6 +464,9 @@ func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, co
 
 	claims, err := m.buildClaims(msg, uInfo, cluACLs, bckACLs)
 	if err != nil {
+		if errors.Is(err, errInvalidRequestedExp) {
+			return "", http.StatusBadRequest, err
+		}
 		return "", http.StatusInternalServerError, err
 	}
 	token, err = m.getSigner().SignToken(claims)
@@ -486,11 +478,15 @@ func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, co
 
 func (m *mgr) buildClaims(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) (*tok.AISClaims, error) {
 	now := time.Now().UTC()
+	exp, expErr := m.getExp(now, msg)
+	if expErr != nil {
+		return nil, expErr
+	}
 	// Standard claims: iss, sub, exp, iat
 	regClaims := &jwt.RegisteredClaims{
 		Issuer:    m.cm.GetExternalURL().String(),
 		Subject:   uInfo.ID,
-		ExpiresAt: m.getExp(now, msg),
+		ExpiresAt: exp,
 		IssuedAt:  jwt.NewNumericDate(now),
 	}
 	// Create with appropriate AIS ACLs
@@ -514,15 +510,25 @@ func (m *mgr) buildClaims(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*aut
 }
 
 // Get the expiry for a newly signed JWT based on the login data
-func (m *mgr) getExp(now time.Time, msg *authn.LoginMsg) *jwt.NumericDate {
-	expDelta := m.cm.GetExpiry()
-	if msg.ExpiresIn != nil {
-		expDelta = *msg.ExpiresIn
+func (m *mgr) getExp(now time.Time, msg *authn.LoginMsg) (*jwt.NumericDate, error) {
+	// If not specified in request, return default
+	if msg.ExpiresIn == nil {
+		return jwt.NewNumericDate(now.Add(m.cm.GetExpiry())), nil
 	}
-	if expDelta == 0 {
-		expDelta = authn.ForeverTokenTime.D()
+	// User-requested expiration
+	delta := *msg.ExpiresIn
+	maxAge := m.cm.GetMaxTokenAge()
+
+	if delta == 0 {
+		delta = maxAge.D()
+	} else if delta < authn.MinAuthExpiration.D() {
+		return nil, fmt.Errorf("%w: must be 0 or >= %s", errInvalidRequestedExp, authn.MinAuthExpiration)
 	}
-	return jwt.NewNumericDate(now.Add(expDelta))
+
+	if delta > maxAge.D() {
+		return nil, fmt.Errorf("%w: cannot exceed configured max token age: %s", errInvalidRequestedExp, maxAge.String())
+	}
+	return jwt.NewNumericDate(now.Add(delta)), nil
 }
 
 // Get the audience to include in new JWT -- AIS can optionally verify this

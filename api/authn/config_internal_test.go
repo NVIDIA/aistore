@@ -6,6 +6,7 @@ package authn
 
 import (
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -13,7 +14,7 @@ import (
 
 func validConfig() *Config {
 	return &Config{
-		Server:  ServerConf{Secret: "test-secret", Expire: minAuthExpiration},
+		Server:  ServerConf{Secret: "test-secret", Expire: MinAuthExpiration},
 		Log:     LogConf{Level: "3", FlushInterval: minLogFlushInterval},
 		Net:     NetConf{HTTP: HTTPConf{Port: minPort}},
 		Timeout: TimeoutConf{Default: minTimeout},
@@ -57,6 +58,34 @@ func TestConfigValidateValid(t *testing.T) {
 	c = validConfig()
 	c.Net.ExternalURL = "https://auth.example.com:8443"
 	tassert.CheckFatal(t, c.Validate())
+}
+
+func TestServerConfValidate(t *testing.T) {
+	t.Run("MaxTokenAgeDefaulted", func(t *testing.T) {
+		sc := ServerConf{Secret: "s", Expire: cos.Duration(time.Hour)}
+		tassert.CheckFatal(t, sc.Validate())
+		tassert.Errorf(t, sc.MaxTokenAge == defaultMaxTokenAge,
+			"expected MaxTokenAge default %v, got %v", defaultMaxTokenAge, sc.MaxTokenAge)
+	})
+	t.Run("MaxTokenAgePreserved", func(t *testing.T) {
+		custom := cos.Duration(7 * 24 * time.Hour)
+		sc := ServerConf{Secret: "s", Expire: cos.Duration(time.Hour), MaxTokenAge: custom}
+		tassert.CheckFatal(t, sc.Validate())
+		tassert.Errorf(t, sc.MaxTokenAge == custom,
+			"expected MaxTokenAge %v, got %v", custom, sc.MaxTokenAge)
+	})
+	t.Run("ExpireExceedsMaxTokenAge", func(t *testing.T) {
+		sc := ServerConf{Secret: "s", Expire: cos.Duration(48 * time.Hour), MaxTokenAge: cos.Duration(24 * time.Hour)}
+		tassert.Errorf(t, sc.Validate() != nil, "expected error when Expire > MaxTokenAge")
+	})
+	t.Run("ExpireEqualsMaxTokenAge", func(t *testing.T) {
+		sc := ServerConf{Secret: "s", Expire: cos.Duration(24 * time.Hour), MaxTokenAge: cos.Duration(24 * time.Hour)}
+		tassert.CheckFatal(t, sc.Validate())
+	})
+	t.Run("ExpireWithinMaxTokenAge", func(t *testing.T) {
+		sc := ServerConf{Secret: "s", Expire: cos.Duration(time.Hour), MaxTokenAge: cos.Duration(48 * time.Hour)}
+		tassert.CheckFatal(t, sc.Validate())
+	})
 }
 
 func TestSigningKeyConfValidate(t *testing.T) {
@@ -119,7 +148,7 @@ func TestConfigValidateInvalid(t *testing.T) {
 		name   string
 		modify func(*Config)
 	}{
-		{"expire too short", func(c *Config) { c.Server.Expire = minAuthExpiration - 1 }},
+		{"expire too short", func(c *Config) { c.Server.Expire = MinAuthExpiration - 1 }},
 		{"signing key bits too small", func(c *Config) { c.Server.SigningKey.Bits = minRSAKeyBits - 1 }},
 		{"signing key mode invalid", func(c *Config) { c.Server.SigningKey.Mode = "auto" }},
 		{"bad log level", func(c *Config) { c.Log.Level = "verbose" }},

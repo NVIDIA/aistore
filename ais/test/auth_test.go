@@ -119,16 +119,6 @@ func TestAuth(t *testing.T) {
 			_, err := api.HeadBucket(bp, bck, true)
 			expectStatus(t, err, http.StatusUnauthorized)
 		})
-		t.Run("expired", func(t *testing.T) {
-			exp := time.Nanosecond
-			tok, err := authn.LoginUser(authBP, uid, pass, &exp)
-			tassert.CheckFatal(t, err)
-			time.Sleep(time.Millisecond)
-			bp := aisBP
-			bp.Token = tok.Token
-			_, err = api.HeadBucket(bp, bck, true)
-			expectStatus(t, err, http.StatusUnauthorized)
-		})
 		t.Run("revoked", func(t *testing.T) {
 			tok, err := authn.LoginUser(authBP, uid, pass, nil)
 			tassert.CheckFatal(t, err)

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
@@ -193,9 +195,6 @@ func TestManagerNoAdminPass(t *testing.T) {
 }
 
 func TestToken(t *testing.T) {
-	if testing.Short() {
-		t.Skipf("skipping %s in short mode", t.Name())
-	}
 	var (
 		err   error
 		token string
@@ -219,7 +218,7 @@ func TestToken(t *testing.T) {
 	defer mgr.delCluster(clu.ID)
 
 	// correct user creds
-	shortExpiration := 2 * time.Second
+	shortExpiration := 2 * time.Minute
 	loginMsg := &authn.LoginMsg{ExpiresIn: &shortExpiration}
 	token, _, err = mgr.issueToken(users[1], passs[1], loginMsg)
 	if err != nil || token == "" {
@@ -243,9 +242,19 @@ func TestToken(t *testing.T) {
 	}
 
 	// expired token test
-	time.Sleep(shortExpiration)
-	_, err = mgr.validateToken(t.Context(), token)
-	tassert.Fatalf(t, errors.Is(err, tok.ErrTokenExpired), "Token must be expired: %s", token)
+	expiredClaims := tok.StandardClaims(
+		&jwt.RegisteredClaims{
+			Subject:   users[1],
+			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(-time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC().Add(-2 * time.Minute)),
+		},
+		nil,
+		nil,
+	)
+	expiredToken, err := mgr.getSigner().SignToken(expiredClaims)
+	tassert.CheckFatal(t, err)
+	_, err = mgr.validateToken(t.Context(), expiredToken)
+	tassert.Fatalf(t, errors.Is(err, tok.ErrTokenExpired), "Token must be expired: %s", expiredToken)
 }
 
 func TestMergeCluACLS(t *testing.T) {
@@ -679,30 +688,6 @@ func TestMergeBckACLS(t *testing.T) {
 				t.Errorf("%s[filter: %s]: %v[%v] != %v[%v]", test.title, test.cluFlt, r.Bck, r.Access, test.resACLs[i], test.resACLs[i].Access)
 			}
 		}
-	}
-}
-
-// Test retrieving the max age header for JWKS based on the configured key expiry with bounds
-func TestGetJWKSMaxAge(t *testing.T) {
-	driver := &authnkvdb.Driver{Driver: mock.NewDBDriver()}
-	tests := []struct {
-		expire time.Duration
-		want   int
-	}{
-		{1 * time.Hour, int((50 * time.Minute).Seconds())},
-		{2 * time.Minute, int((5 * time.Minute).Seconds())},
-		{9000 * time.Hour, int((720 * time.Hour).Seconds())},
-		{0, int((720 * time.Hour).Seconds())},
-	}
-
-	for _, tt := range tests {
-		conf := &authn.Config{Server: authn.ServerConf{Secret: "secret", Expire: cos.Duration(tt.expire)}}
-		cm := createCM(t, conf)
-		rm := createRSAManager(t, driver)
-		mgr, err := createManagerWithAdmin(t, cm, rm, driver)
-		tassert.CheckFatal(t, err)
-		got := mgr.getJWKSMaxAge()
-		tassert.Errorf(t, got == tt.want, "getJWKSMaxAge() = %d, want %d", got, tt.want)
 	}
 }
 

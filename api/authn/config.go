@@ -20,7 +20,7 @@ import (
 // Constraints
 const (
 	minRSAKeyBits     = 2048
-	minAuthExpiration = cos.Duration(time.Minute)
+	MinAuthExpiration = cos.Duration(time.Minute) // minimum JWT lifetime
 	// minPort avoids 0-1023 system-reserved port range
 	minPort             = 1024
 	maxPort             = 65535
@@ -31,13 +31,12 @@ const (
 
 // Defaults
 const (
-	// ForeverTokenTime is a duration of 20 years, used to define, effectively, no expiration on tokens
-	// Used when user-provided token expiration time is zero
-	ForeverTokenTime        = cos.Duration(20 * 365 * 24 * time.Hour)
 	defaultRSAKeyBits       = minRSAKeyBits
 	defaultLogFlushInterval = cos.Duration(30 * time.Second)
 	defaultTimeout          = cos.Duration(30 * time.Second)
 	defaultPort             = 52001
+	defaultTokenExpiration  = cos.Duration(24 * time.Hour)
+	defaultMaxTokenAge      = cos.Duration(90 * 24 * time.Hour)
 )
 
 // Signing key management modes
@@ -71,12 +70,12 @@ type (
 		UseHTTPS    bool   `json:"use_https"`
 	}
 	ServerConf struct {
-		psecret *string       `json:"-"`
-		pexpire *cos.Duration `json:"-"`
-		Secret  string        `json:"secret"`
-		// Determines when the secret or key expires
-		// Also used to determine max-age for client caches of JWKS
+		psecret *string `json:"-"`
+		Secret  string  `json:"secret"`
+		// Default lifetime for issued JWT
 		Expire cos.Duration `json:"expiration_time"`
+		// Max JWT lifetime
+		MaxTokenAge cos.Duration `json:"max_token_age"`
 		// Only used for validating signing key public key against AIS clusters
 		PubKey *string `json:"public_key"`
 		// Deprecated: use signing_key.bits instead.
@@ -125,7 +124,6 @@ func (*Config) JspOpts() jsp.Options { return authcfgJspOpts }
 
 func (c *Config) Init() {
 	c.Server.psecret = &c.Server.Secret
-	c.Server.pexpire = &c.Server.Expire
 }
 
 func (c *Config) Verbose() bool {
@@ -137,8 +135,9 @@ func (c *Config) Verbose() bool {
 	return level > 3
 }
 
-func (c *Config) Secret() cmn.Censored  { return cmn.Censored(*c.Server.psecret) }
-func (c *Config) Expire() time.Duration { return time.Duration(*c.Server.pexpire) }
+func (c *Config) Secret() cmn.Censored {
+	return cmn.Censored(*c.Server.psecret)
+}
 
 func (c *Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
@@ -154,16 +153,28 @@ func (c *Config) Validate() error {
 }
 
 func (c *ServerConf) Validate() error {
-	if c.Expire == 0 {
-		c.Expire = ForeverTokenTime
-	}
-	if c.Expire < minAuthExpiration {
-		return fmt.Errorf("invalid auth.expiration_time=%s, (expected 0 (infinite) or >= %s)", c.Expire, minAuthExpiration)
+	if c.MaxTokenAge == 0 {
+		c.MaxTokenAge = defaultMaxTokenAge
 	}
 	if c.SigningKey.Bits == 0 && c.RSAKeyBits != 0 {
 		c.SigningKey.Bits = c.RSAKeyBits
 	}
-	return c.SigningKey.validate()
+	if err := c.SigningKey.validate(); err != nil {
+		return err
+	}
+	if c.Expire == 0 {
+		c.Expire = defaultTokenExpiration
+	}
+	if c.Expire < MinAuthExpiration {
+		return fmt.Errorf("invalid auth.expiration_time=%s, expected 0 (default 24h) or >= %s", c.Expire, MinAuthExpiration)
+	}
+	if c.MaxTokenAge < MinAuthExpiration {
+		return fmt.Errorf("invalid auth.max_token_age=%s, expected >= %s", c.MaxTokenAge, MinAuthExpiration)
+	}
+	if c.Expire > c.MaxTokenAge {
+		return fmt.Errorf("invalid config: auth.expiration_time=%s cannot exceed auth.max_token_age=%s", c.Expire, c.MaxTokenAge)
+	}
+	return nil
 }
 
 func (c *SigningKeyConf) validate() error {

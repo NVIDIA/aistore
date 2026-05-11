@@ -155,7 +155,6 @@ func TestInitFromDisk(t *testing.T) {
 	cm := config.NewConfManager()
 	cm.Init(path)
 	compareSecret(t, cm, base.Server.Secret)
-	compareExpiry(t, cm, base.Expire())
 
 	// override secret via env
 	const envSecret = "env-secret"
@@ -342,6 +341,15 @@ func TestHMACSecret(t *testing.T) {
 	base.Server.Secret = ""
 	cm = newConfManagerWithConf(t, base)
 	tassert.Fatal(t, cm.GetSecret() == "", "expected empty secret")
+}
+
+// Test retrieving the max age header for JWKS
+func TestGetJWKSMaxAge(t *testing.T) {
+	base := newBaseConfig()
+	cm := newConfManagerWithConf(t, base)
+	got := cm.GetJWKSMaxAge()
+	expected := int((24 * time.Hour).Seconds())
+	tassert.Fatalf(t, expected == cm.GetJWKSMaxAge(), "Expected JWKSMaxAge to be %v, got %v", expected, got)
 }
 
 // TestAuth prefix ensures we run as part of the auth tests with TEST_RACE true to run with go test -race
