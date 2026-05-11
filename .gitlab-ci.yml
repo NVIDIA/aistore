@@ -61,6 +61,14 @@ stages:
       if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - 'python/aistore/common_requirements'
+    - &pytorch_label_rule
+      if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*pytorch.*/'
+    - &pytorch_changes_rule
+      if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - 'python/aistore/pytorch/**/*'
+        - 'python/tests/unit/pytorch/**/*'
+        - 'python/tests/integration/pytorch/**/*'
 
 .default_rules: &default_rules
   rules:
@@ -368,7 +376,7 @@ test:short:python-integration:
       done
 
 test:short:pytorch:
-  <<: *test_short_def
+  <<: *test_short_optional_def
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
     BUCKET: "aws://ais-ci-python"
@@ -378,9 +386,9 @@ test:short:pytorch:
     - make python_pytorch_tests
   rules:
     - !reference [.test_short_template, rules]
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS !~ /.*pytorch.*/'
-      when: manual
-      allow_failure: true
+    - *pytorch_label_rule
+    - *pytorch_changes_rule
+    - !reference [.test_short_optional_template, rules]
 
 test:short:python-authn:
   stage: test-short
