@@ -434,6 +434,7 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 	fatalErr, warnErr := fs.PersistMarker(fname.RebalanceMarker, true /*quiet*/)
 	if fatalErr != nil {
 		_, _ = reb.endStreams(rargs, fatalErr)
+		reb.dm = nil
 		return fatalErr
 	}
 	if warnErr != nil {
@@ -470,7 +471,6 @@ func (reb *Reb) endStreams(rargs *rargs, err error) (ok bool, stage uint32) {
 		}
 		reb.dm.Close(err)
 		reb.dm.UnregRecv()
-		reb.dm = nil
 		if ok {
 			rargs.stats.finalize()
 		}
@@ -570,17 +570,22 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats, false /*stopping*/)
 	}
 
-	reb.mu.Lock() // ---------------------------------------
-
-	xctn := reb.xctn()
-	debug.Assert(xctn != nil && xctn.ID() == xreb.ID())
-
 	// Close and Rx-unregister data mover:
 	// - inbound drain is bounded by transport.Quiescent (Config.Transport.QuiesceTime. default 10s) of inbound silence
 	// - enforced by UnregRecv inside endStreams;
 	// - Stage transitions to PostTraverse signal "no more new sends";
 	// - the receiver-side quiesce in UnregRecv catches everything in flight at that moment
 	ok, curStage := reb.endStreams(rargs, err)
+	if !ok {
+		nlog.Warningln(rargs.logHdr, "ended streams when curr. stage:", stages[curStage])
+	}
+
+	reb.mu.Lock() // ---------------------------------------
+
+	reb.dm = nil
+
+	xctn := reb.xctn()
+	debug.Assert(xctn != nil && xctn.ID() == xreb.ID())
 
 	reb.filterGFN.Reset()
 
@@ -604,9 +609,6 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 
 	reb.mu.Unlock() // ---------------------------------------
 
-	if !ok {
-		nlog.Warningln(rargs.logHdr, "ended streams when curr. stage:", stages[curStage])
-	}
 	if finStats != "" {
 		nlog.Infoln(finStats)
 	}
