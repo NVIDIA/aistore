@@ -228,7 +228,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 endpoint=self.default_request_client.base_url,
                 session_manager=self.mock_session_manager,
                 timeout=None,
-                token=None,
+                token="",
                 response_handler=self.mock_response_handler,
                 retry_config=retry_config,
             )
@@ -264,17 +264,15 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             )
             self.assertEqual(new_client, mock_constructor.return_value)
 
-    @patch("aistore.sdk.request_client.RequestClient._make_session_request")
-    def test_successful_request(self, mock_request):
+    def test_successful_request(self):
         """Test successful request with no retries."""
         self.mock_response.text = "Success"
-        mock_request.return_value = self.mock_response
         response = self.default_request_client.request("GET", "http://test-url")
 
         # Validate expected attributes
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.text, "Success")
 
-        # Ensure only one request was made
-        mock_request.assert_called_once()
+        # Ensure only one request was made through the underlying session
+        self.mock_session.request.assert_called_once()
         self.mock_retry_manager_instance.with_retry.assert_called_once()

@@ -1,16 +1,16 @@
 #
-# Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
 #
 from typing import Callable, Optional
 
 import requests
 import tenacity
-from requests import Response
+from requests import PreparedRequest, Response
 
-from aistore.sdk.retry_config import RetryConfig
 from aistore.sdk.const import HTTP_METHOD_GET, URL_PATH_OBJECTS
-from aistore.sdk.presence_poller import PresencePoller
-from aistore.sdk.provider import Provider
+from aistore.sdk.lock_poller import LockPoller
+from aistore.sdk.request_executor import RequestExecutor
+from aistore.sdk.retry_config import RetryConfig
 from aistore.sdk import utils
 
 logger = utils.get_logger(__name__)
@@ -22,27 +22,24 @@ class RetryManager:
     Manages applying the retry configuration along with any custom logic to requests.
 
     Args:
-        request_func (Callable): A function that takes request parameters and returns a requests.Response object.
+        executor (RequestExecutor): Sends requests without a retry wrapper to the configured AIS endpoint
         retry_config (Optional[RetryConfig]): Retry configuration, containing config for both tenacity retry logic
             and logic for cold gets from remote backend providers.
     """
 
     def __init__(
         self,
-        request_func: Callable[..., Response],
+        executor: RequestExecutor,
         retry_config: Optional[RetryConfig] = None,
     ):
         self._retry_config = retry_config or RetryConfig.default()
-        self._presence_poller = PresencePoller(
-            request_func, self._retry_config.cold_get_conf
-        )
+        self._lock_poller = LockPoller(executor, self._retry_config.cold_get_conf)
         self._retrying = self._build_retrying()
 
     def _build_retrying(self) -> tenacity.Retrying:
-        """Compose `network_retry` with the cold-get presence-poll hook."""
+        """Compose `network_retry` with the cold-get write-lock polling hook."""
         retrying = self._retry_config.network_retry.copy()
-        # Compose any existing before_sleep (default's `before_sleep_log` or a
-        # user-provided one) with our cold-get presence-poll hook.
+        # Preserve existing or user-provided before_sleep
         existing_before_sleep = retrying.before_sleep
         if existing_before_sleep:
 
@@ -75,7 +72,7 @@ class RetryManager:
         """
         Hook called by Tenacity before sleeping between retries.
         Determine if we want to delay the retry.
-        If so, use PresencePoller to poll until the object is present.
+        If so, use LockPoller to poll until the object is unlocked.
 
         Args:
             retry_state (tenacity.RetryCallState): Retry state from tenacity.
@@ -83,26 +80,36 @@ class RetryManager:
         outcome = retry_state.outcome
         if not outcome:
             return
-        exc = retry_state.outcome.exception()
+        exc = outcome.exception()
 
-        # Early return if no special handling is needed
+        # Early return if no special handling is needed for this exception
         if not isinstance(exc, requests.ConnectionError):
             return
-        if not self._should_delay_retry(exc):
+
+        # Invalid case to delay polling: no usable PreparedRequest on the exception.
+        req = exc.request
+        if not isinstance(req, PreparedRequest):
             return
-        # Otherwise: poll for object presence
+
+        # Invalid case to delay polling: not a remote-bucket cold-GET.
+        if not self._should_delay_retry(exc, req):
+            return
+
+        # Otherwise: poll for in-flight cold-GET write-lock release
         logger.info(
-            "Delaying retry by polling for object presence after: '%s'",
+            "Delaying retry by polling for object write-lock release after: '%s'",
             type(exc).__name__,
         )
         try:
-            self._presence_poller.wait_for_presence(exc.request)
+            self._lock_poller.wait_for_unlock(req)
         except Exception as retry_err:
             # Allow tenacity to continue retrying and do not re-raise
-            logger.error("Error while polling for object presence: %s", retry_err)
+            logger.error("Error while polling for object write-lock: %s", retry_err)
 
     @staticmethod
-    def _should_delay_retry(exc: requests.ConnectionError) -> bool:
+    def _should_delay_retry(
+        exc: requests.ConnectionError, req: PreparedRequest
+    ) -> bool:
         """
         If we get a read timeout, it's possible AIS is currently downloading and writing a remote object,
             so our initial request failed to acquire a read lock.
@@ -112,26 +119,24 @@ class RetryManager:
 
         Args:
             exc (requests.ConnectionError): Original exception.
+            req (PreparedRequest): Validated request that produced `exc`.
         Returns:
             Whether to delay tenacity retry.
         """
         if not utils.is_read_timeout(exc):
             return False
-        if exc.request is None:
-            return False
-        req = exc.request
         exc_type = type(exc).__name__
         # Do nothing if it's not a GET
         if req.method is None or req.method.lower() != HTTP_METHOD_GET:
             logger.debug("Received error: '%s' from non-GET request", exc_type)
             return False
         # Do nothing if it's not a request for an object
-        if f"{URL_PATH_OBJECTS}/" not in req.url:
+        if not req.url or f"{URL_PATH_OBJECTS}/" not in req.url:
             logger.debug("Received error: '%s' from non-object request", exc_type)
             return False
         # Do nothing if the bucket is not remote
         provider = utils.get_provider_from_request(req)
-        if provider == Provider.AIS:
+        if not provider.is_remote():
             logger.debug(
                 "Received error: '%s' from object request to AIS bucket", exc_type
             )

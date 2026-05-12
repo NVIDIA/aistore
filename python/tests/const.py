@@ -10,6 +10,7 @@ GB = 10**9
 KIB = 2**10
 MIB = 2**20
 GIB = 2**30
+MBIT = int(MB / 8)
 
 # Object Sizes
 LARGE_FILE_SIZE = 20 * MIB

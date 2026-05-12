@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import os
 from urllib.parse import urljoin, urlencode
@@ -8,11 +8,6 @@ from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
 from requests import Response
 
 from aistore.sdk.const import (
-    JSON_CONTENT_TYPE,
-    HEADER_USER_AGENT,
-    USER_AGENT_BASE,
-    HEADER_CONTENT_TYPE,
-    HEADER_AUTHORIZATION,
     HEADER_CONNECTION,
     HTTPS,
     HEADER_LOCATION,
@@ -25,10 +20,10 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
 )
 
+from aistore.sdk.request_executor import RequestExecutor
 from aistore.sdk.response_handler import ResponseHandler, AISResponseHandler
 from aistore.sdk.retry_manager import RetryManager
 from aistore.sdk.session_manager import SessionManager
-from aistore.version import __version__ as sdk_version
 from aistore.sdk.types import Smap
 from aistore.sdk.utils import decode_response, get_logger
 from aistore.sdk.retry_config import RetryConfig
@@ -57,28 +52,30 @@ class RequestClient:
         endpoint: str,
         session_manager: SessionManager,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
-        token: str = None,
+        token: str = "",
         response_handler: ResponseHandler = AISResponseHandler(),
         retry_config: Optional[RetryConfig] = None,
     ):
-        self._base_url = urljoin(endpoint, "v1")
-        self._session_manager = session_manager
-        self._token = token
-        self._timeout = timeout
+        self._executor = RequestExecutor(
+            base_url=urljoin(endpoint, "v1"),
+            session_manager=session_manager,
+            token=token,
+            timeout=timeout,
+        )
         self._response_handler = response_handler
         # smap is used to calculate the target node for a given object
         self._smap = None
-        self._retry_manager = RetryManager(self._make_session_request, retry_config)
+        self._retry_manager = RetryManager(self._executor, retry_config)
 
     @property
     def base_url(self):
         """Return the base URL."""
-        return self._base_url
+        return self._executor.base_url
 
     @property
     def timeout(self):
         """Return the timeout for requests."""
-        return self._timeout
+        return self._executor.timeout
 
     @timeout.setter
     def timeout(self, timeout: Union[float, Tuple[float, float]]):
@@ -88,25 +85,25 @@ class RequestClient:
         Args:
             timeout: Timeout for requests.
         """
-        self._timeout = timeout
+        self._executor.timeout = timeout
 
     @property
     def session_manager(self) -> SessionManager:
         """
         Return the SessionManager used to create sessions for this client.
         """
-        return self._session_manager
+        return self._executor.session_manager
 
     @session_manager.setter
     def session_manager(self, session_manager):
-        self._session_manager = session_manager
+        self._executor.session_manager = session_manager
 
     @property
     def token(self) -> str:
         """
         Return the token for authorization.
         """
-        return self._token
+        return self._executor.token
 
     @token.setter
     def token(self, token: str):
@@ -116,7 +113,7 @@ class RequestClient:
         Args:
             token (str): Token for authorization.
         """
-        self._token = token
+        self._executor.token = token
 
     def get_smap(self, force_update: bool = False) -> "Smap":
         """Return the smap."""
@@ -141,16 +138,16 @@ class RequestClient:
         """
 
         # Default to the existing base URL if none is provided
-        base_url = base_url or self._base_url
+        base_url = base_url or self.base_url
 
         # Ensure the base URL ends with "/v1"
         base_url = base_url if base_url.endswith("/v1") else urljoin(base_url, "v1")
 
         return RequestClient(
             endpoint=base_url,
-            session_manager=self._session_manager,
-            timeout=self._timeout,
-            token=self._token,
+            session_manager=self.session_manager,
+            timeout=self.timeout,
+            token=self.token,
             response_handler=self._response_handler,
             retry_config=self._retry_manager.retry_config,
         )
@@ -177,53 +174,43 @@ class RequestClient:
         self,
         method: str,
         path: str,
-        endpoint: str = None,
-        headers: Dict[str, Any] = None,
+        endpoint: Optional[str] = None,
+        headers: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> Response:
         """
         Make a request with the request_client's retry manager.
 
-        If the request is an HTTPS request with a payload (`data`), it uses `_request_with_manual_redirect`.
-        Otherwise, it makes a direct call using the current session manager with `_make_session_request`.
+        If the request is an HTTPS request with a payload (`data`), it uses
+        `_request_with_manual_redirect`. Otherwise, it delegates to the
+        `RequestExecutor` for a single send through the configured endpoint.
 
         Args:
             method (str): HTTP method (e.g. POST, GET, PUT, DELETE).
             path (str): URL path to call.
-            endpoint (str): Alternative endpoint for the AIS cluster (e.g. for connecting to a specific proxy).
-            headers (Dict[str, Any]): Extra headers to be passed with the request.
-                Content-Type and User-Agent will be overridden.
+            endpoint (str, optional): Alternative endpoint for the AIS cluster
+                (e.g. for connecting to a specific proxy).
+            headers (Dict[str, Any], optional): Extra headers to be passed with the request.
+                Content-Type and User-Agent will be overridden by the executor.
             **kwargs (optional): Optional keyword arguments to pass with the call to request.
 
         Returns:
             The HTTP response from the server.
         """
-        base = urljoin(endpoint, "v1") if endpoint else self._base_url
+        base = urljoin(endpoint, "v1") if endpoint else self.base_url
         url = f"{base}/{path.lstrip('/')}"
-        headers = self._generate_headers(headers)
 
         def request_op():
             if url.startswith(HTTPS) and "data" in kwargs:
                 return self._request_with_manual_redirect(
                     method=method, url=url, headers=headers, **kwargs
                 )
-            return self._make_session_request(
+            return self._executor.request_absolute(
                 method=method, url=url, headers=headers, **kwargs
             )
 
         response = self._retry_manager.with_retry(request_op)
         return self._response_handler.handle_response(response)
-
-    def _generate_headers(
-        self, headers: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        if headers is None:
-            headers = {}
-        headers[HEADER_CONTENT_TYPE] = JSON_CONTENT_TYPE
-        headers[HEADER_USER_AGENT] = f"{USER_AGENT_BASE}/{sdk_version}"
-        if self.token:
-            headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
-        return headers
 
     def _calculate_content_length(self, data: Union[bytes, str, Any]) -> Optional[int]:
         """
@@ -288,7 +275,7 @@ class RequestClient:
         return None
 
     def _prepare_proxy_request(
-        self, headers: Dict[str, Any], kwargs: Dict[str, Any]
+        self, headers: Optional[Dict[str, Any]], kwargs: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Prepare the request parameters for the initial proxy request.
@@ -308,7 +295,7 @@ class RequestClient:
             IOError: If file operations fail during content length calculation
         """
         # Create a copy of headers to avoid mutating the original
-        proxy_headers = {**headers, HEADER_CONNECTION: "close"}
+        proxy_headers = {**(headers or {}), HEADER_CONNECTION: "close"}
 
         if "data" not in kwargs:
             return {
@@ -338,7 +325,7 @@ class RequestClient:
         }
 
     def _request_with_manual_redirect(
-        self, method: str, url: str, headers: Dict[str, Any], **kwargs
+        self, method: str, url: str, headers: Optional[Dict[str, Any]], **kwargs
     ) -> Response:
         """
         Execute a request with manual redirect handling for HTTPS connections with data.
@@ -378,10 +365,12 @@ class RequestClient:
             )
             raise
 
-        # Send request to proxy to get redirect URL
+        # Send request to proxy to get redirect URL via the executor so the
+        # AIS default headers (Content-Type, User-Agent, Authorization) and
+        # configured timeout are applied consistently with the target leg.
         logger.debug("Sending %s request to proxy: %s", method, url)
         try:
-            proxy_response = self.session_manager.session.request(
+            proxy_response = self._executor.request_absolute(
                 method, url, **proxy_request_kwargs
             )
         except Exception as e:
@@ -421,7 +410,7 @@ class RequestClient:
         # Send the actual request with data to the target
         logger.debug("Sending %s request to target: %s", method, target_url)
         try:
-            target_response = self._make_session_request(
+            target_response = self._executor.request_absolute(
                 method=method, url=target_url, headers=headers, **kwargs
             )
         except Exception as e:
@@ -431,14 +420,6 @@ class RequestClient:
             raise
 
         return target_response
-
-    def _make_session_request(
-        self, method: str, url: str, headers: Any, **kwargs
-    ) -> Response:
-        request_kwargs = {"headers": headers, **kwargs}
-        if self._timeout is not None and "timeout" not in request_kwargs:
-            request_kwargs["timeout"] = self._timeout
-        return self.session_manager.session.request(method, url, **request_kwargs)
 
     def get_full_url(self, path: str, params: Dict[str, Any]) -> str:
         """
@@ -452,4 +433,4 @@ class RequestClient:
             URL including cluster base URL and parameters.
 
         """
-        return f"{self._base_url}/{path.lstrip('/')}?{urlencode(params)}"
+        return f"{self.base_url}/{path.lstrip('/')}?{urlencode(params)}"

@@ -15,8 +15,9 @@ from tenacity import (
     retry_if_exception_type,
 )
 from aistore.sdk.const import QPARAM_PROVIDER, HTTP_METHOD_GET
-from aistore.sdk.presence_poller import PresencePoller
+from aistore.sdk.lock_poller import LockPoller
 from aistore.sdk.provider import Provider
+from aistore.sdk.request_executor import RequestExecutor
 
 from aistore.sdk.retry_manager import RetryManager
 from aistore.sdk.errors import AISRetryableError
@@ -24,9 +25,16 @@ from aistore.sdk.retry_config import NETWORK_RETRY_EXCEPTIONS, RetryConfig
 from tests.utils import cases
 
 
-def _picklable_request_fn(*_args, **_kwargs):
-    # Picklable stub for the RetryManager round-trip test (Mock isn't).
-    raise RuntimeError("not invoked")
+# pylint: disable=too-few-public-methods
+class _PicklableExecutor(RequestExecutor):
+    """Minimal picklable stand-in for ``RequestExecutor`` (``Mock`` isn't
+    picklable)."""
+
+    def __init__(self):  # pylint: disable=super-init-not-called
+        pass
+
+    def request(self, *_args, **_kwargs):
+        raise RuntimeError("not invoked")
 
 
 class TestRetryManager(unittest.TestCase):  # pylint: disable=unused-variable
@@ -41,7 +49,8 @@ class TestRetryManager(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_config(self):
         retry_config = RetryConfig.default()
-        retry_config.max_retries = 45
+        retry_config.http_retry.total = 6
+        retry_config.network_retry.stop = stop_after_attempt(2)
         self.retry_manager = RetryManager(self.mock_req_func, retry_config)
         self.assertEqual(self.retry_manager.retry_config, retry_config)
 
@@ -62,7 +71,7 @@ class TestRetryManager(unittest.TestCase):  # pylint: disable=unused-variable
         # See `test_retry_config_pickle_round_trip` — RetryManager wraps a
         # tenacity Retrying with a local before_sleep closure that is
         # likewise non-picklable; verify it survives a full round-trip.
-        mgr = RetryManager(_picklable_request_fn)
+        mgr = RetryManager(_PicklableExecutor())
         mgr2 = pickle.loads(pickle.dumps(mgr))
         # pylint: disable=protected-access
         self.assertIsNotNone(mgr2._retrying)
@@ -122,13 +131,13 @@ class TestRetryManager(unittest.TestCase):  # pylint: disable=unused-variable
         return initial_request, mock_err
 
     @cases((urllib3.exceptions.ReadTimeoutError, 1), (urllib3.exceptions.HTTPError, 0))
-    @patch("aistore.sdk.retry_manager.PresencePoller")
-    def test_delayed_retry_on_error_source(self, case, mock_presence_poller):
-        """Test that the function uses the presence retryer only when a Connection error is caused by a
+    @patch("aistore.sdk.retry_manager.LockPoller")
+    def test_delayed_retry_on_error_source(self, case, mock_lock_poller):
+        """Test that the function uses the write-lock retryer only when a Connection error is caused by a
         ReadTimeoutError."""
         source_exc, poller_calls = case
-        poller_instance = Mock(spec=PresencePoller)
-        mock_presence_poller.return_value = poller_instance
+        poller_instance = Mock(spec=LockPoller)
+        mock_lock_poller.return_value = poller_instance
         # Re-create to pick up the mock in init
         self.retry_manager = RetryManager(self.mock_req_func)
         self.mock_response.status_code = 200
@@ -142,23 +151,25 @@ class TestRetryManager(unittest.TestCase):  # pylint: disable=unused-variable
         response = self.retry_manager.with_retry(self.primary_func)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(poller_instance.wait_for_presence.call_count, poller_calls)
+        self.assertEqual(poller_instance.wait_for_unlock.call_count, poller_calls)
         # Assert original request was passed to poller to wait, if needed
-        for call_args in poller_instance.wait_for_presence.call_args_list:
+        for call_args in poller_instance.wait_for_unlock.call_args_list:
             self.assertEqual(call_args[0][0], initial_req)
         self.assertEqual(self.primary_func.call_count, 2)
         # reset for cases
         self.primary_func.reset_mock()
 
-    @patch("aistore.sdk.retry_manager.PresencePoller")
-    def test_failed_presence_poller(self, mock_presence_poller):
-        """Test that the function raises properly if the presence poller also raises an error on a ReadTimeoutError."""
+    @patch("aistore.sdk.retry_manager.LockPoller")
+    def test_failed_lock_poller(self, mock_lock_poller):
+        """
+        Test that the function raises properly if the write-lock poller also raises an error on a ReadTimeoutError.
+        """
         # Same setup as the success-flow, but this time make the poller error
         initial_req, err = self.get_req_and_err(urllib3.exceptions.ReadTimeoutError)
-        inner_exc = RuntimeError("An error inside the presence poller")
-        poller_instance = Mock(spec=PresencePoller)
-        poller_instance.wait_for_presence.side_effect = [inner_exc, None]
-        mock_presence_poller.return_value = poller_instance
+        inner_exc = RuntimeError("An error inside the lock poller")
+        poller_instance = Mock(spec=LockPoller)
+        poller_instance.wait_for_unlock.side_effect = [inner_exc, None]
+        mock_lock_poller.return_value = poller_instance
         # Re-create to pick up the mock in init
         self.retry_manager = RetryManager(self.mock_req_func)
         self.primary_func.side_effect = [
@@ -168,7 +179,7 @@ class TestRetryManager(unittest.TestCase):  # pylint: disable=unused-variable
         # Fail the session request with a ConnectionError wrapping MaxRetryError wrapping ReadTimeout
         # Then fail polling with a RuntimeError, which will be wrapped in the original ConnectionError and retried
         self.retry_manager.with_retry(self.primary_func)
-        poller_instance.wait_for_presence.assert_called_once_with(initial_req)
+        poller_instance.wait_for_unlock.assert_called_once_with(initial_req)
         self.assertEqual(self.primary_func.call_count, 2)
 
     def test_max_retries_exceeded(self):

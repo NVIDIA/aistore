@@ -13,6 +13,7 @@ from aistore.sdk.const import (
     MSGPACK_CONTENT_TYPE,
     HEADER_CONTENT_TYPE,
     XX_HASH_SEED,
+    QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
 )
 from aistore.sdk.provider import Provider
@@ -21,6 +22,7 @@ from aistore.sdk.utils import (
     decode_response,
     expand_braces,
     get_file_size,
+    get_object_url_components,
     probing_frequency,
     read_file_bytes,
     validate_directory,
@@ -178,6 +180,77 @@ class TestUtils(unittest.TestCase):
     def test_get_provider_from_request_invalid(self, req):
         with self.assertRaises(ValueError):
             get_provider_from_request(req)
+
+    @staticmethod
+    def _prepared(url: str) -> PreparedRequest:
+        req = PreparedRequest()
+        req.url = url
+        return req
+
+    def test_get_object_url_components_drops_unrequested_qparams(self):
+        """Only the qparams the caller asks for survive; CSK signing params,
+        feature flags, and any other extras are stripped."""
+        req = self._prepared(
+            "https://target:8081/v1/objects/mybkt/myobj"
+            "?provider=aws&latest=true&pid=p1&hsig=s&hnonce=42&hsmap=7"
+        )
+        path, params = get_object_url_components(req, [QPARAM_PROVIDER])
+        self.assertEqual(path, "objects/mybkt/myobj")
+        # Raw qparam value is preserved as-is
+        self.assertEqual(params, {QPARAM_PROVIDER: "aws"})
+
+    def test_get_object_url_components_preserves_namespace(self):
+        """Namespace qparam (e.g. remote-AIS @uuid#ns) is preserved alongside
+        provider when the caller asks for it."""
+        req = self._prepared(
+            "https://target:8081/v1/objects/mybkt/myobj"
+            f"?provider=aws&{QPARAM_NAMESPACE}=%40uuid123%23ns&latest=true"
+        )
+        path, params = get_object_url_components(
+            req, [QPARAM_PROVIDER, QPARAM_NAMESPACE]
+        )
+        self.assertEqual(path, "objects/mybkt/myobj")
+        self.assertEqual(
+            params,
+            {
+                QPARAM_PROVIDER: "aws",
+                QPARAM_NAMESPACE: "@uuid123#ns",
+            },
+        )
+
+    def test_get_object_url_components_skips_missing_requested_qparams(self):
+        """Requested qparams that aren't on the URL are silently omitted —
+        the caller gets back only what was actually present."""
+        req = self._prepared("https://target:8081/v1/objects/mybkt/myobj?provider=aws")
+        _, params = get_object_url_components(req, [QPARAM_PROVIDER, QPARAM_NAMESPACE])
+        self.assertEqual(params, {QPARAM_PROVIDER: "aws"})
+
+    @cases(
+        # Object name contains "objects/" — split must keep the tail intact.
+        (
+            "https://target:8081/v1/objects/mybkt/path/objects/blob.bin?provider=aws",
+            "objects/mybkt/path/objects/blob.bin",
+        ),
+        # Bucket literally named "objects".
+        (
+            "https://target:8081/v1/objects/objects/foo?provider=aws",
+            "objects/objects/foo",
+        ),
+        # Bucket "objects" AND object starting with "objects/".
+        (
+            "https://target:8081/v1/objects/objects/objects/blob?provider=aws",
+            "objects/objects/objects/blob",
+        ),
+    )
+    def test_get_object_url_components_marker_robustness(self, test_case):
+        url, expected_path = test_case
+        path, _ = get_object_url_components(self._prepared(url), [QPARAM_PROVIDER])
+        self.assertEqual(path, expected_path)
+
+    def test_get_object_url_components_no_marker_raises(self):
+        req = self._prepared("https://target:8081/v1/buckets/mybkt?provider=aws")
+        with self.assertRaises(ValueError):
+            get_object_url_components(req, [QPARAM_PROVIDER])
 
     @cases(
         ("bucket 'ais://bucket' does not exist", ("ais", "bucket", False)),

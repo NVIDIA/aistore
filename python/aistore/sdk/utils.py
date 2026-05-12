@@ -5,8 +5,8 @@
 import logging
 import re
 from pathlib import Path
-from typing import Iterator, Optional, Tuple, Type, TypeVar, Union
-from urllib.parse import urlparse, parse_qs
+from typing import Iterator, Optional, Tuple, Type, TypeVar, Union, Dict, List
+from urllib.parse import urlparse, ParseResult, parse_qsl
 
 import braceexpand
 import humanize
@@ -15,6 +15,7 @@ import xxhash
 
 from msgspec import msgpack
 from pydantic import BaseModel, TypeAdapter
+from requests import PreparedRequest
 from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from aistore.sdk.const import (
@@ -23,6 +24,7 @@ from aistore.sdk.const import (
     DEFAULT_LOG_FORMAT,
     XX_HASH_SEED,
     QPARAM_PROVIDER,
+    URL_PATH_OBJECTS,
 )
 from aistore.sdk.provider import Provider, provider_aliases
 
@@ -328,12 +330,61 @@ def get_provider_from_request(
     if isinstance(req, requests.Request):
         qparams = req.params
     else:
-        parsed_url = urlparse(req.url)
-        qparams = (
-            {k: v[0] for k, v in parse_qs(parsed_url.query).items()}
-            if parsed_url.query and isinstance(parsed_url.query, str)
-            else None
-        )
+        parsed_url = parse_request_url(req)
+        qparams = dict(parse_qsl(parsed_url.query))
     if not qparams:
         raise ValueError("Cannot parse provider from request with no query params")
     return Provider.parse(qparams.get(QPARAM_PROVIDER, ""))
+
+
+def parse_request_url(
+    req: Union[requests.Request, requests.PreparedRequest],
+) -> ParseResult:
+    """
+    Parse a request or prepared request into a type-safe ParseResult guaranteed not to be ParseResultBytes.
+
+    Args:
+        req: requests library Request or PreparedRequest
+
+    Returns:
+        Resulting urllib.parse.ParseResult from the request URL
+    """
+    url = req.url
+    if not isinstance(url, str):
+        raise ValueError(f"Cannot parse request with non-string URL: {url!r}")
+    return urlparse(url)
+
+
+def get_object_url_components(
+    req: PreparedRequest, qparams: List[str]
+) -> Tuple[str, Dict[str, str]]:
+    """
+    Extract the bucket+object path and the bucket-identifying qparams
+    (provider, and namespace when present) from the failed request's URL.
+
+    Args:
+        req (PreparedRequest): Original AIS object request
+        qparams (List[str]): List of qparams to preserve
+
+    Returns:
+        Tuple of (path, params):
+            - path: e.g. `"objects/<bucket>/<encoded-obj>"`
+            - params: Provider and namespace query params from original request
+    """
+    parsed_url = parse_request_url(req)
+    marker = f"/{URL_PATH_OBJECTS}/"
+    # First "/objects/" in the path is always the AIS API boundary; any
+    # later occurrence is part of bucket/object names and must be preserved.
+    # Drop /v1/ prefix so the final output looks like "objects/bucket/obj"
+    try:
+        bck_obj = parsed_url.path.split(marker, 1)[1]
+    except IndexError:
+        raise ValueError(
+            f"Cannot extract object path from request URL: {req.url!r}"
+        ) from None
+    path = f"{URL_PATH_OBJECTS}/{bck_obj}"
+
+    # Preserve only requested qparams and drop all others (including cluster signing key)
+    original_params = dict(parse_qsl(parsed_url.query))
+    out_params = {k: v for k in qparams if (v := original_params.get(k))}
+    return path, out_params

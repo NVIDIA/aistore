@@ -6,8 +6,15 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Changed
+
+- Updated cold-GET retry delay mechanism to check write-lock status rather than object presence
+- Raised default cold-GET estimated bandwidth for retry delay from 1Gbps to 10Gbps
+
 ### Fixed
 
+- Requests for cold-GET retry polling will now go to the SDK's configured AIS endpoint instead of modifying the target request
+  - Preserves compatibility with cluster-key redirect signing
 - ETL `FlaskServer`: stream no-FQN `hpush` PUTs in constant memory via Werkzeug
   `request.stream` (with chunked drain-on-close to keep keep-alive sockets
   clean); release upstream `hpull` GET connections through `_ResponseRawReader`;

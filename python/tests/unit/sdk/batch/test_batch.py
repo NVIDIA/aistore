@@ -1153,10 +1153,9 @@ class TestBatch(unittest.TestCase):
             response=mock_response_429
         )
 
-        # Always return 429
-        custom_request_client._make_session_request = Mock(
-            return_value=mock_response_429
-        )
+        # Always return 429 from the underlying session (the RequestExecutor
+        # owned by `custom_request_client` calls into this same session).
+        mock_session_manager.session.request = Mock(return_value=mock_response_429)
 
         # Should raise AISError after exhausting retries
         with self.assertRaises(AISError) as context:
