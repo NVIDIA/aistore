@@ -217,7 +217,9 @@ func (r *BckJogRunner) runWorker(buf []byte, slab *memsys.Slab) {
 				continue // object may have been removed between dispatch and pickup
 			}
 			if err := r.cb(lom, buf); err != nil {
-				r.AddErr(err, 0)
+				if !cos.IsNotExist(err) {
+					r.AddErr(err, 0)
+				}
 				if r.AbortErr() != nil {
 					core.FreeLOM(lom)
 					return
