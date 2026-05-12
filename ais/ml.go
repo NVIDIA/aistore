@@ -240,18 +240,10 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 			args.smap = smap
 			args.network = cmn.NetIntraControl
 		}
-		nodes := args.selected[:0]
-		for _, si := range smap.Tmap {
-			if si.ID() != tsi.ID() && !si.InMaintOrDecomm() {
-				nodes = append(nodes, si)
-			}
-		}
-		args.selected = nodes
-		args.nodeCount = len(nodes)
 		args.timeout = cmn.Rom.MaxKeepalive()
 
 		// see also ctx._startSend on the target side
-		go p._startSend(args)
+		go p._startSend(args, tsi)
 	}
 }
 
@@ -310,8 +302,8 @@ func _selectDT(req *apc.MossReq, dfltBck *meta.Bck, smap *smapX, nat int) (*meta
 
 // proxy: phase 3 bcast to senders - async and after the phase-2 redirect
 // x-moss renewal and SDM.Open failures are not propagated to client (logged at V(4))
-func (p *proxy) _startSend(args *bcastArgs) {
-	results := p.bcastSelected(args)
+func (p *proxy) _startSend(args *bcastArgs, tsi *meta.Snode) {
+	results := p.bcastExcept(args, tsi)
 	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil && cmn.Rom.V(4, cos.ModAIS) {

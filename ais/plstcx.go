@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -321,23 +322,27 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	var (
 		results   sliceResults
 		actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
-		args      = allocBcArgs()
+		bargs     = allocBcArgs()
 		timeout   = config.Client.ListObjTimeout.D()
 	)
-	args.req = cmn.HreqArgs{
+	bargs.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
 		Header: hdr,
 		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(actMsgExt),
 	}
+	bargs.timeout = timeout
+	bargs.smap = smap
+	bargs.cresv = cresmGeneric[cmn.LsoRes]{}
+	bargs.network = cmn.NetIntraControl // note: targets => proxy to merge pages - over control-net
 
 	switch {
 	case wantOnlyRemote:
 		cargs := allocCargs()
 		{
 			cargs.si = dt
-			cargs.req = args.req
+			cargs.req = bargs.req
 			cargs.timeout = timeout
 			cargs.cresv = cresmGeneric[cmn.LsoRes]{}
 		}
@@ -355,36 +360,28 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 
 	case phasedStartup:
 		// TODO -- FIXME:
-		// - redo via additional prepare (or begin) type phase
+		// - reflow list-objects(remote-bucket): introduce prepare (or begin) type phase
 		// - all targets except DT must be ready to receive pages
-		args.timeout = timeout
-		args.smap = smap
-		args.network = cmn.NetIntraControl // TODO: decide control vs data for pages
-		args.cresv = cresmGeneric[cmn.LsoRes]{}
-
-		args.selected = make(meta.Nodes, 0, nat-1)
-		for _, si := range smap.Tmap {
-			if si.ID() == dt.ID() || si.InMaintOrDecomm() {
-				continue
-			}
-			args.selected = append(args.selected, si)
-		}
-		args.nodeCount = len(args.selected)
-		debug.Assert(args.nodeCount == nat-1)
-
+		// - remove sleep
 		var (
 			wg   sync.WaitGroup
 			bres sliceResults
 		)
+
 		wg.Go(func() {
-			bres = p.bcastSelected(args)
+			bres = p.bcastExcept(bargs, dt)
 		})
 
-		time.Sleep(2 * time.Second) // TODO -- FIXME: see above
+		sleep := 2 * time.Second
+		if cmn.Rom.Features().IsSet(feat.Reserved) {
+			sleep = 4 * time.Second
+		}
+		time.Sleep(sleep)
+
 		cargs := allocCargs()
 		{
 			cargs.si = dt
-			cargs.req = args.req
+			cargs.req = bargs.req
 			cargs.timeout = timeout
 			cargs.cresv = cresmGeneric[cmn.LsoRes]{}
 		}
@@ -396,13 +393,10 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		results = append(results, dres)
 
 	default:
-		args.timeout = timeout
-		args.smap = smap
-		args.cresv = cresmGeneric[cmn.LsoRes]{}
-		results = p.bcastGroup(args)
+		results = p.bcastGroup(bargs)
 	}
 
-	freeBcArgs(args)
+	freeBcArgs(bargs)
 
 	var (
 		lists     = make([]*cmn.LsoRes, 0, len(results))

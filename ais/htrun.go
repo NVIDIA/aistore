@@ -998,7 +998,7 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 	)
 	debug.Assert(len(bargs.selected) == 0)
 	if !bargs.async {
-		results.s = allocBcastRes(len(bargs.nodes))
+		results.s = allocBcastRes(bargs.nodeCount)
 	}
 	for _, nodeMap := range bargs.nodes {
 		for _, si := range nodeMap {
@@ -1035,6 +1035,39 @@ func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 		go f(si)
 	}
 	wg.Wait()
+	return results.s
+}
+
+// call all active targets except `except`
+func (h *htrun) bcastExcept(bargs *bcastArgs, except *meta.Snode) sliceResults {
+	var results bcastResults
+
+	bargs.nodeCount = bargs.smap.CountTargets() - 1 /*except*/
+	wg := cos.NewLimitedWaitGroup(sys.MaxParallelism(), bargs.nodeCount)
+
+	f := func(si *meta.Snode) {
+		h._call(si, bargs, &results)
+		wg.Done()
+	}
+	if !bargs.async {
+		results.s = allocBcastRes(bargs.nodeCount)
+		if bargs.timeout == 0 {
+			bargs.timeout = cmn.Rom.MaxKeepalive()
+		}
+	}
+
+	var n int
+	for _, si := range bargs.smap.Tmap {
+		if si.ID() == h.si.ID() || si.ID() == except.ID() || si.InMaintOrDecomm() {
+			continue
+		}
+		n++
+		wg.Add(1)
+		go f(si)
+	}
+	debug.Assert(n > 0)
+	wg.Wait()
+
 	return results.s
 }
 

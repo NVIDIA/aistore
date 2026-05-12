@@ -203,12 +203,15 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 	if !r.walk.this {
 		r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
 	}
-	trname := "lso-" + p.UUID()
+
+	// TODO -- FIXME: list-objects must have its own config section
 	extra := bundle.Extra{
-		XactConf:         cmn.XactConf{SbundleMult: 1, Compression: apc.CompressNever}, // NOTE: hardcoded
+		XactConf:         cmn.XactConf{SbundleMult: 1, Compression: apc.CompressNever},
 		Config:           r.config,
 		SkipGenericStats: true,
 	}
+
+	trname := "lso-" + p.UUID()
 	p.dm = bundle.NewDM(trname, r.recv, cmn.OwtPut, extra)
 
 	if err := p.dm.RegRecv(); err != nil {
