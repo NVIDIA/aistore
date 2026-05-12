@@ -1838,15 +1838,16 @@ func (c *ChunksConf) Validate() error {
 			chunksosl, c.ObjSizeLimit, c.ObjSizeLimit, chunksmms, c.MaxMonolithicSize, c.MaxMonolithicSize)
 	}
 
-	if !c.AutoEnabled() { // including v4.0 and prior
-		return nil
-	}
-
+	// ChunkSize is always normalized
 	if c.ChunkSize == 0 {
 		c.ChunkSize = chunkSizeDflt
 	} else if c.ChunkSize < chunkSizeMin || c.ChunkSize > chunkSizeMax {
 		return fmt.Errorf("expecting chunks.chunk_size in the range [%s, %s], got %d (%s)",
 			cos.IEC(chunkSizeMin, 0), cos.IEC(chunkSizeMax, 0), c.ChunkSize, c.ChunkSize)
+	}
+
+	if !c.AutoEnabled() { // including v4.0 and prior
+		return nil
 	}
 
 	if c.CheckpointEvery < 0 || c.CheckpointEvery > checkpointEveryMax {

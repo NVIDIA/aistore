@@ -68,6 +68,79 @@ func thisFileDir(t *testing.T) string {
 	return filepath.Dir(filename)
 }
 
+func TestChunksConfValidate(t *testing.T) {
+	// these mirror unexported constants in cmn/config.go: chunkSizeDflt=1GiB,
+	// chunkSizeMin=1KiB, chunkSizeMax=5GiB, minMaxMonolithicSize=1GiB, MaxMonolithicSize=1TiB
+	const (
+		chunkSizeDflt = cos.GiB
+		chunkSizeMin  = cos.KiB
+		chunkSizeMax  = 5 * cos.GiB
+		maxMonoDflt   = cos.TiB
+	)
+
+	tests := []struct {
+		name          string
+		in            cmn.ChunksConf
+		wantErr       bool
+		wantChunkSize cos.SizeIEC
+		wantMaxMono   cos.SizeIEC
+	}{
+		{
+			// the prod-cluster panic scenario: legacy seed file or untouched bucket
+			// where AutoEnabled is off and ChunkSize was never set. The validator
+			// must normalize ChunkSize to chunkSizeDflt so the > MaxMonolithicSize
+			// safety branch in putObject() can never see a zero.
+			name:          "auto-disabled, zero chunk_size backfilled",
+			in:            cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: 0, MaxMonolithicSize: 0},
+			wantChunkSize: chunkSizeDflt,
+			wantMaxMono:   maxMonoDflt,
+		},
+		{
+			name:          "auto-enabled, zero chunk_size backfilled",
+			in:            cmn.ChunksConf{ObjSizeLimit: 64 * cos.MiB, ChunkSize: 0, MaxMonolithicSize: 0},
+			wantChunkSize: chunkSizeDflt,
+			wantMaxMono:   maxMonoDflt,
+		},
+		{
+			name:          "auto-disabled, explicit chunk_size preserved",
+			in:            cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: 2 * cos.GiB, MaxMonolithicSize: 0},
+			wantChunkSize: 2 * cos.GiB,
+			wantMaxMono:   maxMonoDflt,
+		},
+		{
+			// range check must apply even when auto-chunking is disabled
+			name:    "auto-disabled, chunk_size below min rejected",
+			in:      cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: chunkSizeMin / 2, MaxMonolithicSize: 0},
+			wantErr: true,
+		},
+		{
+			name:    "auto-disabled, chunk_size above max rejected",
+			in:      cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: chunkSizeMax + 1, MaxMonolithicSize: 0},
+			wantErr: true,
+		},
+		{
+			name:    "auto-enabled, chunk_size above max rejected",
+			in:      cmn.ChunksConf{ObjSizeLimit: 64 * cos.MiB, ChunkSize: chunkSizeMax + 1, MaxMonolithicSize: 0},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := tt.in
+			err := c.Validate()
+			if tt.wantErr {
+				tassert.Fatalf(t, err != nil, "expected error, got nil; result=%+v", c)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, c.ChunkSize == tt.wantChunkSize,
+				"chunk_size: want %d, got %d", tt.wantChunkSize, c.ChunkSize)
+			tassert.Fatalf(t, c.MaxMonolithicSize == tt.wantMaxMono,
+				"max_monolithic_size: want %d, got %d", tt.wantMaxMono, c.MaxMonolithicSize)
+		})
+	}
+}
+
 func TestValidateMpath(t *testing.T) {
 	mpaths := []string{
 		"tmp", // not absolute path

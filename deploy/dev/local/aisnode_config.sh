@@ -49,12 +49,13 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"enabled":		${AIS_EC_ENABLED:-false},
 		"disk_only":		false
 	},
-        "chunks": {
-                "objsize_limit":    "0",
-                "chunk_size":       "1GiB",
-                "checkpoint_every": 0,
-                "flags":            0
-        },
+	"chunks": {
+		"objsize_limit":        "0",
+		"chunk_size":           "1GiB",
+		"max_monolithic_size":  "1TiB",
+		"checkpoint_every":     0,
+		"flags":                0
+	},
 	"log": {
 		"level":      "${AIS_LOG_LEVEL:-3}",
 		"max_size":   "10mb",
