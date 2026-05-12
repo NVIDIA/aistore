@@ -13,6 +13,8 @@ import (
 )
 
 // via GET /v1/health (apc.Health)
+// - lock-free: all fields below are independently atomic
+// - this path is used by peer health/status polling and must not contend with writers in fini/_renew/cleanup
 func (reb *Reb) RebStatus(status *Status) {
 	var (
 		tsmap  = core.T.Sowner().Get()
@@ -21,8 +23,6 @@ func (reb *Reb) RebStatus(status *Status) {
 	status.Aborted = marked.Interrupted
 	status.Running = marked.Xact != nil
 
-	// rlock
-	reb.mu.Lock()
 	status.Stage = reb.stages.stage.Load()
 	status.RebID = reb.rebID()
 	status.SmapVersion = tsmap.Version
@@ -30,7 +30,6 @@ func (reb *Reb) RebStatus(status *Status) {
 	if smap != nil {
 		status.RebVersion = smap.Version
 	}
-	reb.mu.Unlock()
 
 	// xreb, ?running
 	xreb := reb.xctn()

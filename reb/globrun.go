@@ -571,10 +571,10 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 	}
 
 	// Close and Rx-unregister data mover:
-	// - inbound drain is bounded by transport.Quiescent (Config.Transport.QuiesceTime. default 10s) of inbound silence
+	// - inbound drain is bounded by transport.Quiescent (Config.Transport.QuiesceTime, default 10s) of inbound silence;
 	// - enforced by UnregRecv inside endStreams;
-	// - Stage transitions to PostTraverse signal "no more new sends";
-	// - the receiver-side quiesce in UnregRecv catches everything in flight at that moment
+	// - endStreams transitions stage to <fin-streams>;
+	// - MUST run lock-free.
 	ok, curStage := reb.endStreams(rargs, err)
 	if !ok {
 		nlog.Warningln(rargs.logHdr, "ended streams when curr. stage:", stages[curStage])
