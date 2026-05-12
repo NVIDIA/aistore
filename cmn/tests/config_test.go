@@ -69,15 +69,6 @@ func thisFileDir(t *testing.T) string {
 }
 
 func TestChunksConfValidate(t *testing.T) {
-	// these mirror unexported constants in cmn/config.go: chunkSizeDflt=1GiB,
-	// chunkSizeMin=1KiB, chunkSizeMax=5GiB, minMaxMonolithicSize=1GiB, MaxMonolithicSize=1TiB
-	const (
-		chunkSizeDflt = cos.GiB
-		chunkSizeMin  = cos.KiB
-		chunkSizeMax  = 5 * cos.GiB
-		maxMonoDflt   = cos.TiB
-	)
-
 	tests := []struct {
 		name          string
 		in            cmn.ChunksConf
@@ -88,39 +79,39 @@ func TestChunksConfValidate(t *testing.T) {
 		{
 			// the prod-cluster panic scenario: legacy seed file or untouched bucket
 			// where AutoEnabled is off and ChunkSize was never set. The validator
-			// must normalize ChunkSize to chunkSizeDflt so the > MaxMonolithicSize
+			// must normalize ChunkSize to ChunkSizeDflt so the > MaxMonolithicSize
 			// safety branch in putObject() can never see a zero.
 			name:          "auto-disabled, zero chunk_size backfilled",
 			in:            cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: 0, MaxMonolithicSize: 0},
-			wantChunkSize: chunkSizeDflt,
-			wantMaxMono:   maxMonoDflt,
+			wantChunkSize: cmn.ChunkSizeDflt,
+			wantMaxMono:   cmn.MaxMonolithicSize,
 		},
 		{
 			name:          "auto-enabled, zero chunk_size backfilled",
 			in:            cmn.ChunksConf{ObjSizeLimit: 64 * cos.MiB, ChunkSize: 0, MaxMonolithicSize: 0},
-			wantChunkSize: chunkSizeDflt,
-			wantMaxMono:   maxMonoDflt,
+			wantChunkSize: cmn.ChunkSizeDflt,
+			wantMaxMono:   cmn.MaxMonolithicSize,
 		},
 		{
 			name:          "auto-disabled, explicit chunk_size preserved",
 			in:            cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: 2 * cos.GiB, MaxMonolithicSize: 0},
 			wantChunkSize: 2 * cos.GiB,
-			wantMaxMono:   maxMonoDflt,
+			wantMaxMono:   cmn.MaxMonolithicSize,
 		},
 		{
 			// range check must apply even when auto-chunking is disabled
 			name:    "auto-disabled, chunk_size below min rejected",
-			in:      cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: chunkSizeMin / 2, MaxMonolithicSize: 0},
+			in:      cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: cmn.ChunkSizeMin / 2, MaxMonolithicSize: 0},
 			wantErr: true,
 		},
 		{
 			name:    "auto-disabled, chunk_size above max rejected",
-			in:      cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: chunkSizeMax + 1, MaxMonolithicSize: 0},
+			in:      cmn.ChunksConf{ObjSizeLimit: 0, ChunkSize: cmn.ChunkSizeMax + 1, MaxMonolithicSize: 0},
 			wantErr: true,
 		},
 		{
 			name:    "auto-enabled, chunk_size above max rejected",
-			in:      cmn.ChunksConf{ObjSizeLimit: 64 * cos.MiB, ChunkSize: chunkSizeMax + 1, MaxMonolithicSize: 0},
+			in:      cmn.ChunksConf{ObjSizeLimit: 64 * cos.MiB, ChunkSize: cmn.ChunkSizeMax + 1, MaxMonolithicSize: 0},
 			wantErr: true,
 		},
 	}

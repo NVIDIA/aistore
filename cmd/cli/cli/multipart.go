@@ -192,11 +192,11 @@ func promptForChunking(c *cli.Context, fileSize int64, fileName string) (int64, 
 		if chunkSize > fileSize {
 			return 0, false, fmt.Errorf("chunk size (%s) larger than file size (%s)", cos.IEC(chunkSize, 0), fileSizeStr)
 		}
-		if chunkSize < chunkSizeMin {
-			return 0, false, fmt.Errorf("chunk size (%s) smaller than minimum (%s)", cos.IEC(chunkSize, 0), cos.IEC(chunkSizeMin, 0))
+		if chunkSize < cmn.ChunkSizeMin {
+			return 0, false, fmt.Errorf("chunk size (%s) is below the system minimum (%s)", cos.IEC(chunkSize, 0), cos.IEC(cmn.ChunkSizeMin, 0))
 		}
-		if chunkSize > chunkSizeMax {
-			return 0, false, fmt.Errorf("chunk size (%s) larger than maximum (%s)", cos.IEC(chunkSize, 0), cos.IEC(chunkSizeMax, 0))
+		if chunkSize > cmn.ChunkSizeMax {
+			return 0, false, fmt.Errorf("chunk size (%s) exceeds system maximum (%s)", cos.IEC(chunkSize, 0), cos.IEC(cmn.ChunkSizeMax, 0))
 		}
 		fmt.Fprintf(c.App.Writer, "Using custom chunk size: %s\n", cos.IEC(chunkSize, 0))
 		return chunkSize, true, nil

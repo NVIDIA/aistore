@@ -283,7 +283,7 @@ type (
 		MaxMonolithicSize cos.SizeIEC `json:"max_monolithic_size,omitempty"`
 
 		// Default chunk size (aka "part size") used for auto-chunking (see above);
-		// 0 (zero) means default; Validate() sets it to chunkSizeDflt (1GiB).
+		// 0 (zero) means default; Validate() sets it to ChunkSizeDflt (1GiB).
 		ChunkSize cos.SizeIEC `json:"chunk_size,omitempty"`
 
 		// Persist the partial manifest after every N received chunks.
@@ -1802,9 +1802,9 @@ const (
 	MaxMonolithicSize    = cos.TiB
 	minMaxMonolithicSize = cos.GiB
 
-	chunkSizeMin  = cos.KiB
-	chunkSizeDflt = cos.GiB
-	chunkSizeMax  = 5 * cos.GiB
+	ChunkSizeMin  = cos.KiB
+	ChunkSizeDflt = cos.GiB
+	ChunkSizeMax  = 5 * cos.GiB
 
 	checkpointEveryMax = 1024
 )
@@ -1840,10 +1840,10 @@ func (c *ChunksConf) Validate() error {
 
 	// ChunkSize is always normalized
 	if c.ChunkSize == 0 {
-		c.ChunkSize = chunkSizeDflt
-	} else if c.ChunkSize < chunkSizeMin || c.ChunkSize > chunkSizeMax {
+		c.ChunkSize = ChunkSizeDflt
+	} else if c.ChunkSize < ChunkSizeMin || c.ChunkSize > ChunkSizeMax {
 		return fmt.Errorf("expecting chunks.chunk_size in the range [%s, %s], got %d (%s)",
-			cos.IEC(chunkSizeMin, 0), cos.IEC(chunkSizeMax, 0), c.ChunkSize, c.ChunkSize)
+			cos.IEC(ChunkSizeMin, 0), cos.IEC(ChunkSizeMax, 0), c.ChunkSize, c.ChunkSize)
 	}
 
 	if !c.AutoEnabled() { // including v4.0 and prior
