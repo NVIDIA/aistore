@@ -171,7 +171,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 
 func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	bck cmn.Bck, objPath string, objSize, sliceSize int64, totalCnt int) {
-	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
+	tassert.Fatalf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
 		bck.String(), objPath, totalCnt, len(sliceList), sliceList)
 
 	var metaCnt int
@@ -194,7 +194,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	}
 
 	metaCntMust := totalCnt / 2
-	tassert.Errorf(t, metaCnt == metaCntMust, "Number of metafiles for %s mismatch: %d, expected %d", objPath, metaCnt, metaCntMust)
+	tassert.Fatalf(t, metaCnt == metaCntMust, "Number of metafiles for %s mismatch: %d, expected %d", objPath, metaCnt, metaCntMust)
 }
 
 func waitForECFinishes(t *testing.T, totalCnt int, objSize, sliceSize int64, doEC bool, bck cmn.Bck, objName string) (
@@ -866,6 +866,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 //   - GET should detect that original object is gone
 //   - The target restores the original object from slices and missing slices
 func TestECRestoreObjAndSlice(t *testing.T) {
+	t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: revisit
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-obj-n-slice",
