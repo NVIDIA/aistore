@@ -72,7 +72,7 @@ type (
 		visits           atomic.Int64 // LOMs classified by visitObj (passed both gates)
 		tooFresh         atomic.Int64 // files skipped by the outer mtime gate (visit: mtime+dont>now)
 		recentlyAccessed atomic.Int64 // LOMs skipped by the inner atime gate (visitObj: xattr atime+dont>now)
-		migrated         atomic.Int64 // classified misplaced via cluster-HRW (migratedAway)
+		migrated         atomic.Int64 // classified misplaced via cluster-HRW (peerHasIdentical)
 		localMisplc      atomic.Int64 // classified misplaced via local-mpath HRW (default arm)
 		orphans          atomic.Int64 // orphan chunks observed by visitChunk
 		oldWorkN         atomic.Int64 // old workfiles queued for removal
@@ -396,7 +396,7 @@ func (j *clnJ) _str() string {
 
 func (j *clnJ) stop() { j.stopCh <- struct{}{} }
 
-// TODO: cluster-HRW + HeadObjT2T (migratedAway) already establishes
+// TODO: cluster-HRW + HeadObjT2T (peerHasIdentical) already establishes
 // per-LOM identity before deletion - this gate is now redundant.
 func (j *clnJ) dont() time.Duration { return j.config.Space.DontCleanupTime.D() }
 
@@ -815,8 +815,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	xcln.stats.visits.Add(1)
 
 	switch {
-	case lom.IsHRW() && !j.migratedAway(lom):
-		// cleanup extra copies; rm zero size if requested
+	case lom.IsHRW():
 		if lom.HasCopies() {
 			j.rmExtraCopies(lom)
 		}
@@ -830,6 +829,12 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 				j.ini.StatsT.Inc(stats.CleanupStoreCount)
 				xcln.stats.rmFiles.Add(1)
 			}
+			return
+		}
+		if j.peerHasIdentical(lom) {
+			lom = lom.Clone()
+			j.misplaced.loms = append(j.misplaced.loms, lom)
+			j.rmAnyBatch(flagRmMisplacedLOMs)
 		}
 	case lom.IsCopy():
 		// will be _visited_ separately (if not already)
@@ -841,14 +846,9 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			j.rmAnyBatch(flagRmMisplacedEC)
 		}
 	default:
-		// misplaced object (either cluster-migrated-away or local-mpath orphan)
+		// local-mpath orphan
 		j.nmisplc++
-		// disambiguate for stats: IsHRW=true here can only mean
-		// "migratedAway returned true" (already counted inside migratedAway);
-		// IsHRW=false means a genuine local-mpath orphan.
-		if !lom.IsHRW() {
-			xcln.stats.localMisplc.Add(1)
-		}
+		xcln.stats.localMisplc.Add(1)
 		tag, keep := j.keepMisplaced()
 
 		// an unlikely corner case: taking precedence
@@ -867,14 +867,8 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	}
 }
 
-// reports true iff (a) the cluster Smap routes this object to a different
-// target AND (b) that target confirms it has a copy — i.e., the object has
-// been migrated away and the destination is holding it. Both conditions
-// must hold before we treat the local copy as a stale leftover that's safe
-// to remove. The peer-presence check is the safety net: if a prior rebalance
-// silently dropped this particular object on the wire, our local copy may
-// be the only one left, so we keep it (and warn loudly).
-func (j *clnJ) migratedAway(lom *core.LOM) bool {
+// true when cluster-HRW peer (not us) confirms identical content
+func (j *clnJ) peerHasIdentical(lom *core.LOM) bool {
 	smap := j.p.smap
 	if smap == nil {
 		return false
