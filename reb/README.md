@@ -5,12 +5,22 @@ streaming. Because the trname is fixed, at most one DM may be registered against
 the transport at any moment. This document describes how that constraint is
 maintained across rebalance generations.
 
+> Cleanup mode is a separate rebalance generation mode; it reuses the `*Reb`
+lifecycle but does not open data streams. See [Cleanup mode](#cleanup-mode).
+Unless explicitly stated otherwise, the lifecycle and invariants below describe
+regular, data-moving rebalance generations that use DM/transport streaming.
+
 ## Lifecycle
 
 The `*Reb` service is constructed once at target startup and reused across all
-rebalance generations. The DM, however, is **per-generation**: a new DM is
-constructed at the start of each `Run()` that needs streams (single-node cluster
-doesn't) - and torn down before `Run()` returns.
+rebalance generations.
+
+The DM, however, is **per-streaming generation**: a new DM is
+constructed at the start of each `Run()` that needs streams, and torn down before
+`Run()` returns.
+
+> When rebalance runs in cleanup mode it certainly does not open streams.
+
 
 ```
 New()
@@ -74,3 +84,18 @@ Under degraded disks or heavy load, abort propagation alone can approach this bo
 In the end, the timeout value is a compromise: long enough to cover
 typical cleanup, short enough that Smap flicker (when nodes keep leaving and (re)joining)
 doesn't stack waiters.
+
+## Cleanup mode
+
+Cleanup mode is a rebalance generation that reuses the `*Reb` lifecycle but does
+not open data streams and does not migrate object payloads.
+
+The motivation is scalability. A regular data-moving rebalance may temporarily
+leave extra local copies while the cluster converges. Tracking every migrated
+object at runtime, only to remove the old copy later, would not scale for large
+clusters and buckets with millions or billions of objects.
+
+Cleanup mode is therefore out-of-band. It performs a separate local walk,
+recomputes the expected HRW owner for each object, verifies the object at that
+expected location, and removes the local misplaced copy only when it is safe to
+do so.

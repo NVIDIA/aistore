@@ -10,10 +10,11 @@ it does not coordinate across targets.
 **Table of Contents**
 
 1. [Overview](#1-overview)
-2. [Cleanup Policies](#2-cleanup-policies)
-3. [Implementation Details](#3-implementation-details)
-4. [Corner Cases & Constraints](#4-corner-cases--constraints)
-5. [Future Enhancements](#5-future-enhancements)
+2. [Relation to rebalance cleanup mode](#relation-to-rebalance-cleanup-mode)
+3. [Cleanup Policies](#2-cleanup-policies)
+4. [Implementation Details](#3-implementation-details)
+5. [Corner Cases & Constraints](#4-corner-cases--constraints)
+6. [Future Enhancements](#5-future-enhancements)
 
 ## 1. Overview
 
@@ -36,7 +37,30 @@ Any file with `mtime + dont_cleanup_time > now` is skipped to avoid racing again
 
 Invalid entries (malformed FQNs, bucket mismatches) are logged and removed.
 
-## 2. Cleanup Policies
+## 2. Relation to rebalance cleanup mode
+
+`ais space-cleanup` is a general local-storage cleanup tool. It walks local
+mountpaths and removes several classes of safely reclaimable files, including
+objects with corrupted or missing local metadata, zero-size objects when
+configured, extra local copies, misplaced EC artifacts, local mountpath orphans,
+and verified migrated-away leftovers.
+
+AIStore also provides:
+
+```console
+$ ais start rebalance --cleanup
+````
+
+Rebalance cleanup is narrower and more explicit. It reuses the global rebalance lifecycle and monitoring machinery, does not migrate object payloads, and is
+intended specifically for reclaiming source-side copies left after topology changes and regular data-moving rebalance.
+
+In short:
+
+* use `ais start rebalance --cleanup` when the goal is post-rebalance,
+  placement-specific cleanup after maintenance, decommission, scale-out, scale-in, or node return (from maintenance);
+* use `ais space-cleanup` for broader local-storage hygiene and capacity reclamation.
+
+## 3. Cleanup Policies
 
 ### Work Files (`fs.WorkCT`)
 
@@ -79,7 +103,7 @@ Behavior depends on whether EC is enabled for the bucket:
 - Handled in `visitObj()`
 - For EC-enabled buckets: objects missing corresponding metafiles flagged as *misplaced EC*
 
-## 3. Implementation Details
+## 4. Implementation Details
 
 ### Throttling
 
@@ -92,14 +116,14 @@ Space cleanup uses the unified `cmn/load` throttling (`load.Advice`) to avoid I/
 ### Time Dependencies
 Relies on filesystem mtimes. Clock changes on the operator may influence cleanup decisions.
 
-## 4. Corner Cases & Constraints
+## 5. Corner Cases & Constraints
 
 - **Race Protection**: Slice => Meta and Replica => Meta sequences covered by global recency guard
 - **Local Scope**: Does not consult cluster maps; global orphan detection is out of scope
 - **Encoding Requirements**: `fs.WorkCT` tags, chunk uploadIDs, and chunk numbers must never be empty
 - **Legacy State**: Partial manifests treated as invalid and always removed
 
-## 5. Future Enhancements
+## 6. Future Enhancements
 
 ### Generation-Aware EC Cleanup
 Delay removal when conflicting generations exist; prefer newest metadata.

@@ -8,15 +8,16 @@ Global rebalance is one of the core AIS mechanisms that makes it possible to gro
 
 **Table of Contents**
 
-- [Placement: HRW and the three inputs](#placement-hrw-and-the-three-inputs)
-- [What triggers global rebalance](#what-triggers-global-rebalance)
-- [How global rebalance works](#how-global-rebalance-works)
-- [Serving reads during migration](#serving-reads-during-migration)
-- [Control and monitoring](#control-and-monitoring)
-- [CLI: usage examples](#cli-usage-examples)
-- [Starting rebalance administratively](#starting-rebalance-administratively)
-- [Rebalance vs. resilver](#rebalance-vs-resilver)
-- [Performance considerations](#performance-considerations)
+* [Placement: HRW and the three inputs](#placement-hrw-and-the-three-inputs)
+* [What triggers global rebalance](#what-triggers-global-rebalance)
+* [How global rebalance works](#how-global-rebalance-works)
+* [Serving reads during migration](#serving-reads-during-migration)
+* [Control and monitoring](#control-and-monitoring)
+* [CLI: usage examples](#cli-usage-examples)
+* [Starting rebalance administratively](#starting-rebalance-administratively)
+* [Cleanup mode](#cleanup-mode)
+* [Rebalance vs. resilver](#rebalance-vs-resilver)
+* [Performance considerations](#performance-considerations)
 
 ## Placement: HRW and the three inputs
 
@@ -24,9 +25,9 @@ AIStore uses a variant of **highest random weight (HRW)**, also known as rendezv
 
 At the cluster level, the destination target for an object is uniquely determined by the following three inputs:
 
-- the current **cluster map**
-- the fully qualified **bucket**, including provider and namespace
-- the **object name**
+* the current **cluster map**
+* the fully qualified **bucket**, including provider and namespace
+* the **object name**
 
 This is the key to understanding rebalance.
 
@@ -40,15 +41,15 @@ Global rebalance is triggered by changes that affect cluster-wide target placeme
 
 Typical examples include:
 
-- a storage target joining the cluster
-- a storage target leaving the cluster
-- putting a target into maintenance
-- decommissioning a target
-- bringing a target back into active service
+* a storage target joining the cluster
+* a storage target leaving the cluster
+* putting a target into maintenance
+* decommissioning a target
+* bringing a target back into active service
 
 A useful rule of thumb is:
 
-> if a topology change can alter the HRW destination for stored objects, it can trigger global rebalance.
+> if a topology change can alter the destination for stored objects, it can trigger global rebalance.
 
 When a single target is added to or removed from a cluster of `N` targets, the fraction of objects that move is typically on the order of `1/N`, though the exact amount always depends on the topology and the current object distribution.
 
@@ -67,12 +68,14 @@ At a high level:
 5. If the local target is no longer the correct owner, the object is sent directly to the proper target.
 6. The process completes when all participating targets finish migrating the objects that no longer belong locally.
 
+The steps above describe regular, data-moving rebalance. Cleanup mode, described below, reuses the rebalance lifecycle but does not migrate object payloads.
+
 A few points are worth emphasizing:
 
-- there is no central data-movement coordinator that decides ownership object by object
-- each target independently evaluates the objects it currently stores
-- object migration is performed via AIS intra-cluster transfers
-- when provisioned, rebalance traffic can use separate intra-cluster networking
+* there is no central data-movement coordinator that decides ownership object by object
+* each target independently evaluates the objects it currently stores
+* object migration is performed via AIS intra-cluster transfers
+* when provisioned, rebalance traffic can use separate intra-cluster networking
 
 This design keeps rebalancing scalable and avoids turning the primary into a data path bottleneck.
 
@@ -86,24 +89,24 @@ In particular, the target that must own an object according to the **new** clust
 
 As a result:
 
-- applications do not need to stop I/O while rebalance is running
-- object movement remains transparent to clients
-- the cluster can continue converging toward the new placement while still serving reads
+* applications do not need to stop I/O while rebalance is running
+* object movement remains transparent to clients
+* the cluster can continue converging toward the new placement while still serving reads
 
 ## Control and monitoring
 
 Global rebalance is controlled and monitored via:
 
-- native HTTP-based APIs
-- the [Go API](https://github.com/NVIDIA/aistore/tree/main/api)
-- the [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)
-- the [Command Line Interface (CLI)](/docs/cli.md)
+* native HTTP-based APIs
+* the [Go API](https://github.com/NVIDIA/aistore/tree/main/api)
+* the [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)
+* the [Command Line Interface (CLI)](/docs/cli.md)
 
 Operationally, administrators typically care about three things:
 
-- whether automated rebalance is enabled
-- whether a rebalance is currently running
-- how much data each target has sent and received for the current rebalance
+* whether automated rebalance is enabled
+* whether a rebalance is currently running
+* how much data each target has sent and received, or removed in cleanup mode
 
 Like other long-running AIS activities, rebalance is tracked as a cluster job and can be inspected while in progress.
 
@@ -226,6 +229,11 @@ USAGE:
    ais start rebalance [BUCKET[/PREFIX]] [command options]
 
 OPTIONS:
+   cleanup    Remove local copies of misplaced objects - monolithic and chunked (non-EC);
+              fails if rebalance is running; incompatible with '--latest' and '--sync'
+   force,f    With '--cleanup': also remove local misplaced copies that fail the safe identity check against copies
+              at their expected locations; will not run concurrently with active rebalance/resilver
+              (caution: advanced usage only)
    latest     Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
               from the associated remote bucket;
               the option provides operation-level control over object versioning (and version synchronization)
@@ -252,6 +260,115 @@ OPTIONS:
                 - 'ais ls --check-versions'
    help, h    Show help
 ```
+
+For cleanup mode, see the next section.
+
+## Cleanup mode
+
+Rebalance can also run in **cleanup mode**:
+
+```console
+$ ais start rebalance --cleanup
+```
+
+Cleanup mode is an administrative maintenance operation. It reuses the rebalance lifecycle and monitoring machinery, but it does **not** migrate object payloads between targets.
+
+### Why cleanup mode was introduced
+
+Versions 4.4 and earlier tracked every migrated object with per-object acknowledgments from destination to source, and used those acknowledgments to delete the source copy once placement was confirmed at the destination. That implicit reclamation mechanism did not scale to clusters and buckets with billions of objects and was removed.
+
+As a result, regular rebalance no longer reclaims source-side copies implicitly. After a topology change converges, the cluster may continue to hold local copies of objects whose proper owner is now a different target. These copies are not lost data and they do not affect correctness, but they do consume local capacity until something reclaims them.
+
+Cleanup mode is the explicit, operator-driven replacement: a separate verified pass - rebalance retracing its own steps - that discovers misplaced local copies and removes only those whose proper owner already has the object.
+
+> For broader local-storage hygiene, AIS also provides `ais space-cleanup`.  That tool can remove several classes of local garbage, including corrupted metadata files, zero-size objects when requested, extra local copies, misplaced EC artifacts, local mountpath orphans, and verified migrated-away leftovers. Rebalance's cleanup mode is narrower: it is the placement-specific, rebalance-lifecycle mode intended for cleaning up source-side copies left after topology changes and regular data-moving rebalance.
+
+### How cleanup mode operates
+
+Each target walks its local mountpaths and looks for object copies that no longer belong on that target according to the current cluster map. For every local object, AIS recomputes the expected location. If the local target is already the expected owner, the object is skipped.
+
+For a misplaced local copy, AIS contacts the expected owner and requests object properties used to establish identity - size, checksum, version, custom metadata,
+and ETag. Different byte content means a different version: two copies with the same name but divergent metadata are not the same object.
+
+The local copy is removed only when AIS can verify that the expected owner holds the same version.
+
+In other words, regular rebalance converges placement by moving objects to their proper targets. Cleanup mode converges local storage by removing misplaced copies that are already present at their proper targets.
+
+Cleanup mode is intentionally out-of-band. Regular data-moving rebalance can temporarily create extra local copies while the cluster converges, but tracking every migrated object at runtime would not scale for large clusters and buckets with millions or billions of objects. Cleanup mode therefore performs a separate verified pass: it discovers misplaced local copies from the current on-disk namespace and safely removes only those that are already present at their expected locations.
+
+### Default behavior is conservative
+
+By default, cleanup mode:
+
+* removes only local misplaced copies
+* skips objects that already belong on the local target
+* skips EC buckets entirely
+* skips objects with local mirror copies (`mirror.enabled=true`)
+* keeps objects that cannot be verified at their expected location
+* keeps objects whose local metadata differs from the expected owner's metadata
+* does not run concurrently with active rebalance or resilver
+
+Cleanup mode is useful after operational workflows such as maintenance, rolling upgrades, or recovery procedures where misplaced local copies may remain and an administrator wants to reclaim local capacity without running a full data-moving rebalance.
+
+Cleanup mode can be bucket-scoped and prefix-scoped, similarly to administrative rebalance. It is incompatible with `--latest` and `--sync`.
+
+### Monitoring
+
+Cleanup mode can be monitored with the usual rebalance commands:
+
+```console
+$ ais show rebalance
+$ ais show job
+```
+
+When cleanup mode is running or has completed, reported counters describe objects removed and bytes reclaimed rather than objects sent and received.
+
+### Example: cleanup after returning a target to service
+
+The following abbreviated example shows a three-target cluster where `t[VCft8081]` has been returned from maintenance. Regular rebalance `g23` first moves objects according to the updated cluster map. Cleanup rebalance `g24` then removes leftover misplaced local copies from the other targets.
+
+```console
+$ ais show job
+rebalance[g23] (ctl: t[gsCt8083]:<fin-streams> trav:2s post-trav:2s fin:1m2s fin-streams:5s)
+NODE             ID      KIND            TX OBJECTS      TX BYTES        RX OBJECTS      RX BYTES        START           END     STATE
+gsCt8083         g23     rebalance       107663          107.61MiB       -               -               17:13:55        -       Running
+------------------------------------------------------------------------
+rebalance[g24] (ctl:
+  flags:cleanup; t[gsCt8083]:cleanup visits=12678 loads=12678 removed=12678
+  flags:cleanup; t[vTnt8082]:cleanup visits=12605 loads=12605 removed=12605
+)
+```
+
+Note that `t[VCft8081]` does not appear in the cleanup output. Having just returned to service under the current cluster map, it holds no misplaced copies - every local object is HRW-correct from its perspective. Only the targets that had to send data during `g23` carry misplaced leftovers.
+
+Cleanup-specific rebalance output reports objects removed and bytes reclaimed:
+
+```console
+$ ais show rebalance
+REB ID   NODE       REMOVED OBJECTS   REMOVED BYTES   START      END   STATE
+g24      gsCt8083   12678             12.38MiB        17:15:16   -     Running
+g24      vTnt8082   12605             12.31MiB        17:15:16   -     Running
+g24: 25283 objects removed (total size 24.7MiB)
+```
+
+### Forced cleanup
+
+The `--force` option is valid only with cleanup mode:
+
+```console
+$ ais start rebalance --cleanup --force
+```
+
+Forced cleanup is advanced usage. To explain what it does, recall the default identity check: cleanup removes a misplaced local copy only when the expected owner reports identical metadata (size, checksum, version, ETag, custom metadata).
+
+When local metadata diverges from the expected owner's metadata, the two copies are not byte-identical - same name, different content. Concretely, this can happen with a raced write, an out-of-band update at the remote backend, or a stale pre-overwrite leftover. By default, cleanup *keeps* such divergent local copies, because removing one of two non-identical copies is data loss for whoever happens to hold the version that gets deleted.
+
+`--force` removes them anyway, treating the HRW owner's copy as authoritative. Use forced cleanup only when you have established that the divergent local copy is the one to discard.
+
+Two things `--force` does **not** do:
+
+* it does not skip the HRW verification step - AIS still confirms the expected owner has *some* copy of the object before removing the local one;
+* it does not override safety windows (such as `dont_cleanup_time`) and does not allow cleanup to run concurrently with active rebalance or resilver.
 
 ## Rebalance vs. resilver
 
@@ -287,3 +404,5 @@ The exact overhead depends on multiple factors, including:
 * whether separate intra-cluster networking is provisioned
 
 For this reason, administrators often tune rebalance behavior and may temporarily disable automated rebalance while performing planned maintenance or staged upgrades.
+
+Cleanup mode has a different resource profile: it does not migrate object payloads, but it still walks local namespace entries, loads object metadata, performs intra-cluster verification, and removes local files. It should therefore still be treated as a background maintenance operation.
