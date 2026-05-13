@@ -1579,7 +1579,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		if msg.Action == apc.ActETLBck {
+		if msg.Action == apc.ActETLObjects {
 			if err := p.etlExists(tcomsg.Transform.Name); err != nil {
 				p.writeErr(w, r, err, http.StatusNotFound)
 				return
