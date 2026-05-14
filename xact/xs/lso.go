@@ -78,7 +78,7 @@ type (
 		adv  load.Advice
 		streamingX
 		npages int64
-		lensgl int64 // channel to accumulate listed object entries
+		lensgl int64
 		// list remote
 	}
 	LsoRsp struct {

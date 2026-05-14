@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"runtime"
 	"sort"
@@ -57,9 +58,17 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 
 	switch msg.Action {
 	case apc.ActList:
-		var bckName string
+		var bckName, phase string
 		if len(apiItems) > 0 {
 			bckName = apiItems[0]
+			if len(apiItems) > 1 {
+				phase = apiItems[1]
+				if err := apc.Validate2PC(phase); err != nil {
+					debug.AssertNoErr(err)
+					t.writeErr(w, r, err)
+					return
+				}
+			}
 		}
 		qbck, err := qbckFromDpq(bckName, dpq)
 		if err != nil {
@@ -74,7 +83,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			return
 		}
 		// list objects
-		t.bgetObjects(w, r, qbck, msg, dpq)
+		t.bgetObjects(w, r, qbck, msg, dpq, phase)
 
 	case apc.ActSummaryBck:
 		var bucket, phase string // txn
@@ -136,7 +145,7 @@ func (t *target) _resolveQbck(w http.ResponseWriter, r *http.Request, qbck *cmn.
 	return bck, nil
 }
 
-func (t *target) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *actMsgExt, dpq *dpq) {
+func (t *target) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *actMsgExt, dpq *dpq, phase string) {
 	bck, err := t._resolveQbck(w, r, qbck, dpq.dontAddRemote)
 	if err != nil {
 		return
@@ -155,8 +164,16 @@ func (t *target) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 		t.writeErrf(w, r, "list-objects: invalid UUID %q", lsmsg.UUID)
 		return
 	}
-	if ok := t.listObjects(w, r, bck, lsmsg); !ok {
-		t.statsT.IncBck(stats.ErrListCount, bck.Bucket())
+
+	ok := t.listObjects(w, r, bck, lsmsg, phase)
+
+	if !ok {
+		if phase != apc.Abort2PC {
+			t.statsT.IncBck(stats.ErrListCount, bck.Bucket())
+		}
+		return
+	}
+	if phase == apc.Begin2PC || phase == apc.Abort2PC { // 2PC control-only phases do not produce pages
 		return
 	}
 
@@ -270,7 +287,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config) (bcks cmn.Bcks, 
 
 // returns `cmn.LsoRes` containing object names and (requested) props
 // control/scope - via `apc.LsoMsg`
-func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) bool /*ok*/ {
+func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg, phase string) bool /*ok*/ {
 	// (advanced) user-selected target to execute remote ls
 	if lsmsg.SID != "" {
 		smap := t.owner.smap.get()
@@ -282,58 +299,78 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	}
 
 	if lsmsg.IsFlagSet(apc.LsNBI) {
-		debug.AssertNoErr(lsmsg.ValidateNBI()) // checked by proxy
-
-		if invName := r.Header.Get(apc.HdrInvName); invName == "" {
-			// must exist and be single
-			nbis, err := fs.CollectNBI(bck.Bucket())
-			if err != nil {
-				t.writeErrf(w, r, "failed to collect bucket inventories: %w", err)
-				return false
-			}
-			if l := len(nbis); l != 1 {
-				if l == 0 {
-					t.writeErrf(w, r, "bucket %q has no inventories", bck.Cname(""))
-				} else {
-					t.writeErrf(w, r, "missing %q header: bucket %q has %d inventories; please specify which one",
-						apc.HdrInvName, bck.Cname(""), l)
-				}
-				return false
-			}
-			invName = nbis.SingleName()
-			if cmn.Rom.V(4, cos.ModAIS) {
-				nlog.Infoln("located inventory", invName, "for bucket", bck.Cname(""))
-			}
-			r.Header.Set(apc.HdrInvName, invName)
-		} else {
-			if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {
-				t.writeErr(w, r, err)
-				return false
-			}
+		if ok := t._resolveInvName(w, r, bck, lsmsg); !ok {
+			return false
 		}
 	}
 
 	var (
-		xctn core.Xact
-		rns  = xreg.RenewLso(bck, lsmsg.UUID, lsmsg, r.Header)
+		xls *xs.LsoXact
 	)
-	// check that xaction hasn't finished prior to this page read, restart if needed
-	if rns.Err == xs.ErrGone {
-		runtime.Gosched()
-		rns = xreg.RenewLso(bck, lsmsg.UUID, lsmsg, r.Header)
-	}
-	if rns.Err != nil {
-		t.writeErr(w, r, rns.Err)
-		return false
-	}
-	// run
-	xctn = rns.Entry.Get()
-	if !rns.IsRunning() {
-		xact.GoRunW(xctn)
-	}
-	xls := xctn.(*xs.LsoXact)
+	if phase == apc.Commit2PC || phase == apc.Abort2PC {
+		// commit: xls must exist
+		xctn, err := xreg.GetXact(lsmsg.UUID)
+		switch {
+		case err != nil:
+			t.writeErr(w, r, err)
+			return false
+		case xctn == nil:
+			if phase == apc.Commit2PC {
+				err = cmn.NewErrXactNotFoundError(xact.Cname(apc.ActList, lsmsg.UUID))
+				t.writeErr(w, r, err, http.StatusNotFound, Silent)
+			}
+			return false
+		case xctn.IsAborted() || xctn.IsDone():
+			if phase == apc.Commit2PC {
+				err := fmt.Errorf("late commit phase: %s already finished", xact.Cname(apc.ActList, lsmsg.UUID))
+				if e := xctn.AbortErr(); e != nil {
+					err = e
+				}
+				t.writeErr(w, r, err)
+			}
+			return false
+		case phase == apc.Abort2PC:
+			err := fmt.Errorf("2pc abort: %s", xact.Cname(apc.ActList, lsmsg.UUID))
+			xctn.Abort(err)
+			return false
+		}
+		xls = xctn.(*xs.LsoXact)
 
-	// NOTE: blocking next-page request
+		// reset idle timer (here and elsewhere)
+		xls.IncPending()
+		xls.DecPending()
+	} else {
+		// renew-or-create. Begin relies on RenewLso->Start() running synchronously:
+		// Start() opens R-flow streams and RegRecv() completes before begin acks.
+		// Commit/abort must instead find an already renewed xls.
+		rns := xreg.RenewLso(bck, lsmsg.UUID, lsmsg, r.Header)
+		if rns.Err == xs.ErrGone {
+			runtime.Gosched()
+			rns = xreg.RenewLso(bck, lsmsg.UUID, lsmsg, r.Header)
+		}
+		if rns.Err != nil {
+			t.writeErr(w, r, rns.Err)
+			return false
+		}
+		xctn := rns.Entry.Get()
+		if !rns.IsRunning() {
+			xact.GoRunW(xctn)
+		}
+		xls = xctn.(*xs.LsoXact)
+
+		if phase == apc.Begin2PC {
+			// R-flow:
+			// - beginStreams (in x-lso.Start) including dm.RegRecv
+			// - have a fresh full idle window for commit phase (and first page)
+			// - ack without paging
+			xls.IncPending()
+			xls.DecPending()
+			w.WriteHeader(http.StatusOK)
+			return true
+		}
+	}
+
+	// commit, or single-phase: drive paging
 	resp := xls.Do(lsmsg)
 	if resp == nil {
 		// (unlikely shutdown)
@@ -353,6 +390,39 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	}
 
 	return t.writeMsgPack(w, resp.Lst, "list_objects") // ok
+}
+
+// resolve NBI (native bucket inventory) name: locate-and-set when not provided,
+// validate when provided
+func (t *target) _resolveInvName(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) bool /*ok*/ {
+	debug.AssertNoErr(lsmsg.ValidateNBI()) // checked by proxy
+
+	if invName := r.Header.Get(apc.HdrInvName); invName == "" {
+		// must exist and be single
+		nbis, err := fs.CollectNBI(bck.Bucket())
+		if err != nil {
+			t.writeErrf(w, r, "failed to collect bucket inventories: %w", err)
+			return false
+		}
+		if l := len(nbis); l != 1 {
+			if l == 0 {
+				t.writeErrf(w, r, "bucket %q has no inventories", bck.Cname(""))
+			} else {
+				t.writeErrf(w, r, "missing %q header: bucket %q has %d inventories; please specify which one",
+					apc.HdrInvName, bck.Cname(""), l)
+			}
+			return false
+		}
+		invName = nbis.SingleName()
+		if cmn.Rom.V(4, cos.ModAIS) {
+			nlog.Infoln("located inventory", invName, "for bucket", bck.Cname(""))
+		}
+		r.Header.Set(apc.HdrInvName, invName)
+	} else if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {
+		t.writeErr(w, r, err)
+		return false
+	}
+	return true
 }
 
 func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck *meta.Bck, msg *apc.BsummCtrlMsg, dpq *dpq) {

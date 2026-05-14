@@ -50,7 +50,6 @@ const (
 	KeepUnknownFQN            // do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 	LoadBalanceGET            // when bucket is n-way mirrored read object replica from the least-utilized mountpath
 	CountObjectNotFoundStats  // count GET(object) 404 (not-found) as errors (default: don't); TODO: add Prometheus to count HEAD(object) errors
-	Reserved                  // reserved for internal use; subject to change without notice
 )
 
 var Cluster = [...]string{
@@ -79,7 +78,6 @@ var Cluster = [...]string{
 	"Keep-Unknown-FQN",
 	"Load-Balance-GET",
 	"Count-Object-NotFound-Stats",
-	"Reserved", // TODO -- FIXME: remove
 
 	// apc.ResetToken ("none") ===========
 }

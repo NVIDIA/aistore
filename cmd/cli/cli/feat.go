@@ -50,7 +50,6 @@ var clusterFeatDesc = [...]string{
 	"do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')",
 	"when bucket is n-way mirrored read object replica from the least-utilized mountpath",
 	"count GET(object) 404 as errors (default: don't)",
-	"system-reserved (do not set: the flag may be redefined or removed at any time)",
 
 	// apc.ResetToken ("none") ===========
 }

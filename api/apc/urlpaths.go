@@ -4,7 +4,11 @@
  */
 package apc
 
-import "github.com/NVIDIA/aistore/cmn/cos"
+import (
+	"fmt"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
+)
 
 // -------------------------------------------------------------
 // RESTful URL path: levels l1/l2/l3
@@ -126,6 +130,13 @@ const SyncSmap = "syncsmap" // obsolete (keeping it)
 type URLPath struct {
 	S string
 	L []string
+}
+
+func Validate2PC(phase string) error {
+	if phase == Begin2PC || phase == Commit2PC || phase == Abort2PC {
+		return nil
+	}
+	return fmt.Errorf("invalid 2PC phase %q (expecting begin|commit|abort)", phase)
 }
 
 func urlpath(words ...string) URLPath {

@@ -137,11 +137,9 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch phase {
-	case apc.Begin2PC, apc.Abort2PC, apc.Commit2PC:
-	default:
-		debug.Assert(false, phase)
-		t.writeErrAct(w, r, phase+" (expecting begin|abort|commit)")
+	if err := apc.Validate2PC(phase); err != nil {
+		debug.AssertNoErr(err)
+		t.writeErr(w, r, err)
 		return
 	}
 

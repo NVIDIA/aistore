@@ -11,14 +11,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -343,8 +341,8 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		{
 			cargs.si = dt
 			cargs.req = bargs.req
-			cargs.timeout = timeout
-			cargs.cresv = cresmGeneric[cmn.LsoRes]{}
+			cargs.cresv = bargs.cresv
+			cargs.timeout = timeout // config.Client default
 		}
 		// duplicate via query to have target ignoring an (early) failure to initialize bucket
 		if lsmsg.IsFlagSet(apc.LsDontHeadRemote) {
@@ -359,39 +357,40 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		results[0] = res
 
 	case phasedStartup:
-		// TODO -- FIXME:
-		// - reflow list-objects(remote-bucket): introduce prepare (or begin) type phase
-		// - all targets except DT must be ready to receive pages
-		// - remove sleep
-		var (
-			wg   sync.WaitGroup
-			bres sliceResults
-		)
-
-		wg.Go(func() {
-			bres = p.bcastExcept(bargs, dt)
-		})
-
-		sleep := 2 * time.Second
-		if cmn.Rom.Features().IsSet(feat.Reserved) {
-			sleep = 4 * time.Second
+		if !p.ClusterStarted() {
+			i := http.StatusServiceUnavailable
+			return nil, &cmn.ErrHTTP{Message: http.StatusText(i), Status: i}
 		}
-		time.Sleep(sleep)
+		cresv, path := bargs.cresv, bargs.req.Path
+		bargs.cresv = nil
+		bargs.req.Path += "/" + apc.Begin2PC
+		bargs.timeout = cmn.Rom.MaxKeepalive()
+		results = p.bcastGroup(bargs)
+		for _, res := range results {
+			if res.err == nil {
+				continue
+			}
+			err := res.toErr()
+			freeBcastRes(results)
 
-		cargs := allocCargs()
-		{
-			cargs.si = dt
-			cargs.req = bargs.req
-			cargs.timeout = timeout
-			cargs.cresv = cresmGeneric[cmn.LsoRes]{}
+			p._abrtR(bargs, path)
+
+			freeBcArgs(bargs)
+			return nil, err
 		}
-		dres := p.call(cargs, smap)
-		freeCargs(cargs)
+		freeBcastRes(results)
 
-		wg.Wait()
-		results = bres
-		results = append(results, dres)
+		if smap2 := p.owner.smap.Get(); !smap.SameTargets(smap2) {
+			err := fmt.Errorf("%s R-flow: detected %s => %s between 2PC phases", lsotag, smap.StringEx(), smap2.StringEx())
+			p._abrtR(bargs, path)
+			freeBcArgs(bargs)
+			return nil, err
+		}
 
+		bargs.cresv = cresv
+		bargs.req.Path = path + "/" + apc.Commit2PC
+		bargs.timeout = timeout // config.Client default
+		fallthrough
 	default:
 		results = p.bcastGroup(bargs)
 	}
@@ -421,6 +420,13 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	page := concatLso(lists, lsmsg)
 	page.ContinuationToken = nextToken
 	return page, nil
+}
+
+// (best-effort, async)
+func (p *proxy) _abrtR(bargs *bcastArgs, path string) {
+	bargs.noResults = true
+	bargs.req.Path = path + "/" + apc.Abort2PC // mutates bargs w/ no reuse
+	p.bcastGroup(bargs)                        // TODO: propagate cause (and cover prx/tgttxn aborts as well)
 }
 
 //
