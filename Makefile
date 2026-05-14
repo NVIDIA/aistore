@@ -290,13 +290,13 @@ ci: spell-check fmt-check lint test-short ## Run CI related checkers and linters
 ## Removes the previous version of `golangci-lint` and installs the latest (compare with lint-update-ci below)
 lint-update:
 	@rm -f $(GOPATH)/bin/golangci-lint
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin latest
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
 ## Install specific `golangci-lint` version (hardcoded)
 ## See also: .github/workflows/lint.yml
 lint-update-ci:
 	@rm -f $(GOPATH)/bin/golangci-lint
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.11.4
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 
 lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true

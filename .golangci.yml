@@ -40,7 +40,7 @@ linters:
     - importas
     - ineffassign
     - intrange
-    - modernize
+    # modernize  ## TODO: slicesbackward vs `config verify`
     - musttag
     - misspell
     - nakedret

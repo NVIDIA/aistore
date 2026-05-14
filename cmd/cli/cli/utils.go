@@ -963,8 +963,8 @@ func printSectionJSON(c *cli.Context, in any, section string) bool {
 func _wrapNestedJSON(path string, v any) any {
 	parts := strings.Split(path, ".")
 	m := v
-	for i := len(parts) - 1; i >= 0; i-- {
-		m = map[string]any{parts[i]: m}
+	for _, part := range slices.Backward(parts) {
+		m = map[string]any{part: m}
 	}
 	return m
 }
