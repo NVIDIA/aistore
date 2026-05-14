@@ -1558,7 +1558,7 @@ func (c *DiskConf) Validate() (err error) {
 
 const (
 	dontCleanupTimeDflt = time.Hour
-	dontCleanupTimeMin  = 10 * time.Minute
+	dontCleanupTimeMin  = 15 * time.Minute
 )
 
 // common for both SpaceConf and LRUConf

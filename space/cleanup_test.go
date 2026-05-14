@@ -467,35 +467,15 @@ var _ = Describe("AIStore content cleanup tests", func() {
 	})
 
 	It("removes stray chunk with mismatched uploadID while keeping completed manifest (HRW-correct)", func() {
-		objName := "cleanup/completed-vs-stray.bin"
-		lom := core.AllocLOM(objName)
-		Expect(lom.InitCmnBck(&bck)).NotTo(HaveOccurred())
+		lom, u2 := makeChunkedLOM(&bck, "cleanup/completed-vs-stray.bin")
 		defer core.FreeLOM(lom)
-
-		u2, err := core.NewUfest("", lom, false /*mustExist*/)
-		Expect(err).NotTo(HaveOccurred())
-
-		const (
-			chunkSize = 64 * cos.KiB
-			numChunks = 3
-		)
-		for part := 1; part <= numChunks; part++ {
-			ch, err := u2.NewChunk(part, lom)
-			Expect(err).NotTo(HaveOccurred())
-			createTestChunk(ch.Path(), chunkSize, nil)
-			Expect(u2.Add(ch, chunkSize, int64(part))).NotTo(HaveOccurred())
-		}
-		err = lom.CompleteUfest(u2, false)
-		Expect(err).NotTo(HaveOccurred())
 
 		uu, err := core.NewUfest("", lom, true /* must-exist */)
 		Expect(err).NotTo(HaveOccurred())
-
 		lom.Lock(false)
 		err = uu.LoadCompleted(lom)
 		lom.Unlock(false)
 		Expect(err).NotTo(HaveOccurred())
-
 		Expect(uu.ID()).To(Equal(u2.ID())) // the completed ID should equal the one we just wrote
 
 		// create a stray chunk under a different uploadid (u1) ---
@@ -504,13 +484,14 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 		Expect(u1.ID()).NotTo(Equal(u2.ID()))
 
+		const strayChunkSize = 64 * cos.KiB
 		stray, err := u1.NewChunk(1, lom)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cos.CreateDir(filepath.Dir(stray.Path()))).NotTo(HaveOccurred())
-		createTestChunk(stray.Path(), chunkSize, nil)
+		createTestChunk(stray.Path(), strayChunkSize, nil)
 
 		// make the stray chunk legitimate/discoverable
-		Expect(u1.Add(stray, chunkSize, 1)).NotTo(HaveOccurred())
+		Expect(u1.Add(stray, strayChunkSize, 1)).NotTo(HaveOccurred())
 		// persist a partial for u1; current cleanup removes it too
 		err = u1.StorePartial(lom, true)
 		Expect(err).NotTo(HaveOccurred())
@@ -533,11 +514,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		// assert: stray chunk is removed
 		Expect(stray.Path()).NotTo(BeAnExistingFile())
 
-		// partial manifest is NOT removed: chunk-manifest cleanup is
-		// intentionally disabled (see TODO in space/cleanup.go::_jogBck).
-		// This test will need its expectation flipped back to NotTo(...)
-		// once chunk-manifest cleanup is re-enabled.
-		Expect(partialFQN).To(BeAnExistingFile())
+		Expect(partialFQN).NotTo(BeAnExistingFile())
 
 		// completed must exist
 		uu2, err := core.NewUfest("", lom, true)
@@ -551,57 +528,82 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		Expect(uu2.ID()).To(Equal(u2.ID()))
 	})
 
-	// Regression: a chunked LOM whose name contains '.' (e.g. "audio_21.tar")
-	// previously had its completed manifest at %ut/<obj> deleted by the
-	// space cleanup -- the suffix-based parseUbase (chunkMetaCR.parseUbase
-	// in fs/content.go) misclassified the filename as "invalid" because
-	// "tar" failed cos.ValidateManifestID, and rmInvalidFQN removed it.
-	// Lead's fix: drop fs.ChunkMetaCT from the walker's CTs in _jogBck so
-	// %ut/ is no longer visited. This test guards that behavior end-to-end:
-	// after a cleanup run, the completed manifest of a chunked LOM with a
-	// '.' in its name must still exist and be loadable.
-	It("does not touch the completed chunk-manifest of a chunked LOM (with '.' in name)", func() {
-		objName := "regress/audio_21.tar"
-		lom := core.AllocLOM(objName)
-		defer core.FreeLOM(lom)
-		Expect(lom.InitCmnBck(&bck)).NotTo(HaveOccurred())
+	Describe("chunk manifest cleanup", func() {
+		old := time.Now().Add(-3 * time.Hour)
 
-		u, err := core.NewUfest("", lom, false /*mustExist*/)
-		Expect(err).NotTo(HaveOccurred())
+		DescribeTable("keeps completed manifest of a chunked LOM",
+			func(objName string) {
+				lom, u := makeChunkedLOM(&bck, objName)
+				defer core.FreeLOM(lom)
 
-		const (
-			chunkSize = 64 * cos.KiB
-			numChunks = 3
+				completedFQN := lom.GenFQN(fs.ChunkMetaCT)
+				Expect(os.Chtimes(completedFQN, old, old)).NotTo(HaveOccurred())
+				Expect(os.Chtimes(lom.FQN, old, old)).NotTo(HaveOccurred())
+
+				space.RunCleanup(ini)
+
+				Expect(completedFQN).To(BeAnExistingFile())
+				reload, err := core.NewUfest("", lom, true /*mustExist*/)
+				Expect(err).NotTo(HaveOccurred())
+				lom.Lock(false)
+				Expect(reload.LoadCompleted(lom)).NotTo(HaveOccurred())
+				lom.Unlock(false)
+				Expect(reload.ID()).To(Equal(u.ID()))
+			},
+			Entry(".tar extension", "regress/audio_21.tar"),
+			Entry(".json extension", "configs/cluster.json"),
+			Entry("suffix shape collides with uploadID", "regress/foo.r4kzG8GMfA"),
 		)
-		for part := 1; part <= numChunks; part++ {
-			ch, err := u.NewChunk(part, lom)
+
+		It("removes stale partial manifest of an absent LOM", func() {
+			lom := core.AllocLOM("regress/parent-obj")
+			defer core.FreeLOM(lom)
+			Expect(lom.InitCmnBck(&bck)).NotTo(HaveOccurred())
+
+			u, err := core.NewUfest("", lom, false /*mustExist*/)
 			Expect(err).NotTo(HaveOccurred())
-			createTestChunk(ch.Path(), chunkSize, nil)
-			Expect(u.Add(ch, chunkSize, int64(part))).NotTo(HaveOccurred())
-		}
-		Expect(lom.CompleteUfest(u, false)).NotTo(HaveOccurred())
+			ch, err := u.NewChunk(1, lom)
+			Expect(err).NotTo(HaveOccurred())
+			createTestChunk(ch.Path(), 64*cos.KiB, nil)
+			Expect(u.Add(ch, 64*cos.KiB, 1)).NotTo(HaveOccurred())
+			Expect(u.StorePartial(lom, false)).NotTo(HaveOccurred())
 
-		completedFQN := lom.GenFQN(fs.ChunkMetaCT)
-		Expect(completedFQN).To(BeAnExistingFile())
+			partialFQN := lom.GenFQN(fs.ChunkMetaCT, u.ID())
+			Expect(partialFQN).To(BeAnExistingFile())
+			Expect(os.Chtimes(partialFQN, old, old)).NotTo(HaveOccurred())
 
-		// age past dont_cleanup_time so a hypothetical walker wouldn't skip
-		old := now.Add(-3 * time.Hour)
-		Expect(os.Chtimes(completedFQN, old, old)).NotTo(HaveOccurred())
-		Expect(os.Chtimes(lom.FQN, old, old)).NotTo(HaveOccurred())
+			space.RunCleanup(ini)
 
-		space.RunCleanup(ini)
+			Expect(partialFQN).NotTo(BeAnExistingFile())
+		})
 
-		Expect(completedFQN).To(BeAnExistingFile(),
-			"completed chunk-manifest of chunked LOM %q was wrongly removed", objName)
+		It("removes orphan completed manifest when LOM is absent", func() {
+			mi := fs.GetAvail()[mpaths[0]]
+			orphanFQN := filepath.Join(mi.MakePathCT(&bck, fs.ChunkMetaCT), "ghost", "audio_21.tar")
+			createTestFile(orphanFQN, 256)
+			Expect(os.Chtimes(orphanFQN, old, old)).NotTo(HaveOccurred())
 
-		// and it must still load -- verifies the chunked LOM is intact
-		reload, err := core.NewUfest("", lom, true /*mustExist*/)
-		Expect(err).NotTo(HaveOccurred())
-		lom.Lock(false)
-		loadErr := reload.LoadCompleted(lom)
-		lom.Unlock(false)
-		Expect(loadErr).NotTo(HaveOccurred())
-		Expect(reload.ID()).To(Equal(u.ID()))
+			space.RunCleanup(ini)
+
+			Expect(orphanFQN).NotTo(BeAnExistingFile())
+		})
+
+		It("removes orphan manifest of a monolithic LOM without touching the LOM", func() {
+			lom := core.AllocLOM("regress/monolithic.tar")
+			defer core.FreeLOM(lom)
+			Expect(lom.InitCmnBck(&bck)).NotTo(HaveOccurred())
+			createTestLOM(lom.FQN, 1024)
+
+			orphanFQN := lom.GenFQN(fs.ChunkMetaCT)
+			createTestFile(orphanFQN, 256)
+			Expect(os.Chtimes(orphanFQN, old, old)).NotTo(HaveOccurred())
+			Expect(os.Chtimes(lom.FQN, old, old)).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(orphanFQN).NotTo(BeAnExistingFile())
+			Expect(lom.FQN).To(BeAnExistingFile())
+		})
 	})
 
 	It("should remove files with malformed FQNs", func() {
@@ -878,6 +880,26 @@ func findOtherMpath(mi *fs.Mountpath) *fs.Mountpath {
 	}
 	Fail("No other mountpath found")
 	return nil
+}
+
+func makeChunkedLOM(bck *cmn.Bck, objName string) (*core.LOM, *core.Ufest) {
+	const (
+		chunkSize = 64 * cos.KiB
+		numChunks = 3
+	)
+	lom := core.AllocLOM(objName)
+	Expect(lom.InitCmnBck(bck)).NotTo(HaveOccurred())
+
+	u, err := core.NewUfest("", lom, false /*mustExist*/)
+	Expect(err).NotTo(HaveOccurred())
+	for part := 1; part <= numChunks; part++ {
+		ch, err := u.NewChunk(part, lom)
+		Expect(err).NotTo(HaveOccurred())
+		createTestChunk(ch.Path(), chunkSize, nil)
+		Expect(u.Add(ch, chunkSize, int64(part))).NotTo(HaveOccurred())
+	}
+	Expect(lom.CompleteUfest(u, false)).NotTo(HaveOccurred())
+	return lom, u
 }
 
 func createTestChunk(fqn string, size int, xxhash io.Writer) {

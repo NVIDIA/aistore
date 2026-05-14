@@ -489,19 +489,10 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) {
 // walk a given bucket and visit assorted content types (below)
 func (j *clnJ) _jogBck() {
 	xcln := j.ini.Xaction
-	// TODO: cleanup chunk manifests as well
-	//
-	// fs.ChunkMetaCT (%ut/) is intentionally excluded: the
-	// "<obj>" / "<obj>.<uploadID>" filename encoding cannot be parsed
-	// unambiguously when object names contain '.' (chunkMetaCR.parseUbase
-	// in fs/content.go), and the prior cleanup logic misclassified
-	// completed manifests of objects with extensions (.tar, .json, ...)
-	// as "invalid" and deleted them, silently corrupting chunked LOMs.
-	// Re-enable once a proper disambiguation mechanism is in place.
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      j.bck,
-		CTs:      []string{fs.WorkCT, fs.ObjCT, fs.ECSliceCT, fs.ECMetaCT, fs.ChunkCT},
+		CTs:      []string{fs.WorkCT, fs.ObjCT, fs.ECSliceCT, fs.ECMetaCT, fs.ChunkCT, fs.ChunkMetaCT},
 		Callback: j.visit,
 		Sorted:   false,
 	}
@@ -664,8 +655,9 @@ func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
 		}
 		core.FreeLOM(lom)
 	case fs.ChunkMetaCT:
-		// unreachable: ChunkMetaCT is intentionally excluded from the walker in _jogBck (see TODO there)
-		debug.Assert(false, "ChunkMetaCT should not be visited")
+		if j.isCompletedManifest(parsed) {
+			return // keep -- legitimate completed manifest of a chunked LOM
+		}
 		contentInfo := fs.CSM.ParseUbase(parsed.ObjName, fs.ChunkMetaCT)
 		if !contentInfo.Ok {
 			j.rmInvalidFQN(fqn, "chunk-manifest", nil)
@@ -740,6 +732,20 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	}
 	j.appendOldWork(chunkFQN)
 	j.rmAnyBatch(flagRmOldWork)
+}
+
+func (*clnJ) isCompletedManifest(parsed *fs.ParsedFQN) bool {
+	objFQN := parsed.Mountpath.MakePathFQN(&parsed.Bck, fs.ObjCT, parsed.ObjName)
+
+	lom := core.AllocLOM("")
+	defer core.FreeLOM(lom)
+	if err := lom.InitFQN(objFQN, nil); err != nil {
+		return false
+	}
+	if err := lom.Load(false /*cache*/, false /*locked*/); err != nil {
+		return false // %ob/<obj> absent or unreadable -> not a chunked-LOM manifest
+	}
+	return lom.IsChunked()
 }
 
 func (j *clnJ) _getCompletedID(lom *core.LOM) (id string) {
