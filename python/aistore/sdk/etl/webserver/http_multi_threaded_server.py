@@ -19,6 +19,7 @@ from aistore.sdk.etl.webserver.base_etl_server import (
     SYNC_DIRECT_PUT_TRANSIENT_ERRORS,
     RETRY_BACKOFF_BASE,
     RETRY_BACKOFF_MAX,
+    DRAIN_CHUNK_BYTES,
     _handle_direct_put_transient_error,
     _compute_replayable_retries,
 )
@@ -85,7 +86,7 @@ class _RFileLimitedReader(io.RawIOBase):
         try:
             while self._remaining > 0:
                 try:
-                    chunk = self._rfile.read(min(self._remaining, 65536))
+                    chunk = self._rfile.read(min(self._remaining, DRAIN_CHUNK_BYTES))
                 except (OSError, ValueError):
                     break
                 if not chunk:

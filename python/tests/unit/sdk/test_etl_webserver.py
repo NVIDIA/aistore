@@ -49,7 +49,10 @@ from aistore.sdk.etl.webserver.http_multi_threaded_server import (
     HTTPMultiThreadedServer,
     _RFileLimitedReader,
 )
-from aistore.sdk.etl.webserver.flask_server import FlaskServer
+from aistore.sdk.etl.webserver.flask_server import (
+    FlaskServer,
+    _FlaskRequestStreamReader,
+)
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 from aistore.sdk.etl.webserver.fastapi_streaming import _RequestStreamReader
 
@@ -1515,6 +1518,74 @@ class TestStreamingFlaskServer(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.data, b"flask: " + input_data)
 
+    def test_streaming_put_bail_returns_503_with_reason(self):
+        """One-shot bail (bail_without_local_retry=True) returns 503 + retry-reason header."""
+        exc = ETLDirectPutTransientError(
+            "http://target/obj",
+            requests.ConnectionError("dropped"),
+            bail_without_local_retry=True,
+        )
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/dst/test/obj"}
+        with patch.object(
+            self.etl_server, "_direct_put_stream_with_retry", side_effect=exc
+        ):
+            response = self.client.put("/test/obj", data=b"body", headers=headers)
+
+        self.assertEqual(response.status_code, STATUS_SERVICE_UNAVAILABLE)
+        self.assertEqual(
+            response.headers.get(HEADER_ETL_RETRY_REASON),
+            ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
+        )
+
+    def test_streaming_put_exhausted_retries_returns_502(self):
+        """Replayable-exhausted (bail_without_local_retry=False) keeps emitting 502."""
+        exc = ETLDirectPutTransientError(
+            "http://target/obj", requests.ConnectionError("dropped")
+        )
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/dst/test/obj"}
+        with patch.object(
+            self.etl_server, "_direct_put_stream_with_retry", side_effect=exc
+        ):
+            response = self.client.put("/test/obj", data=b"body", headers=headers)
+
+        self.assertEqual(response.status_code, STATUS_BAD_GATEWAY)
+        self.assertNotIn(HEADER_ETL_RETRY_REASON, response.headers)
+
+    def test_streaming_get_forwards_upstream_404(self):
+        """Upstream 404 is forwarded as-is, not collapsed to 502."""
+        mock_http_resp = MagicMock()
+        mock_http_resp.status_code = 404
+        err = requests.HTTPError(response=mock_http_resp)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = err
+        with patch.object(self.etl_server.session, "get", return_value=mock_resp):
+            response = self.client.get("/test/obj")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_streaming_get_forwards_upstream_500(self):
+        """Upstream 500 is forwarded as-is, not collapsed to 502."""
+        mock_http_resp = MagicMock()
+        mock_http_resp.status_code = 500
+        err = requests.HTTPError(response=mock_http_resp)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = err
+        with patch.object(self.etl_server.session, "get", return_value=mock_resp):
+            response = self.client.get("/test/obj")
+
+        self.assertEqual(response.status_code, 500)
+
+    def test_streaming_get_connection_error_returns_502(self):
+        """Network-level connection errors return 502 Bad Gateway."""
+        with patch.object(
+            self.etl_server.session,
+            "get",
+            side_effect=requests.ConnectionError("refused"),
+        ):
+            response = self.client.get("/test/obj")
+
+        self.assertEqual(response.status_code, STATUS_BAD_GATEWAY)
+
 
 class TestStreamingHTTPServer(unittest.TestCase):
     def setUp(self):
@@ -1695,6 +1766,96 @@ class TestHTTPStreamingLifecycle(unittest.TestCase):
         handler.do_GET()
 
         handler.server.etl_server.close_reader.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Flask streaming lifecycle: connection release and drain-on-close
+# ---------------------------------------------------------------------------
+
+
+class TestFlaskStreamingLifecycle(unittest.TestCase):
+    """Tests for response-lifecycle correctness in FlaskServer's streaming path."""
+
+    def setUp(self):
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
+        self.server = DummyStreamingFlaskServer()
+        self.client = self.server.app.test_client()
+
+    def _make_ok_resp(self, body=b"data"):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.raw = io.BytesIO(body)
+        return mock_resp
+
+    def test_reader_close_releases_pool_connection(self):
+        """Closing the GET reader calls resp.close(), releasing the urllib3 pool slot."""
+        mock_resp = self._make_ok_resp()
+        with self.server.app.test_request_context("/test/obj", method="GET"):
+            with patch.object(self.server.session, "get", return_value=mock_resp):
+                reader = (
+                    self.server._get_stream_reader(  # pylint: disable=protected-access
+                        "test/obj"
+                    )
+                )
+        reader.close()
+        mock_resp.close.assert_called_once()
+
+    def test_raise_for_status_closes_resp(self):
+        """When raise_for_status fails, resp is closed before the exception propagates."""
+        mock_http_resp = MagicMock()
+        mock_http_resp.status_code = 404
+        err = requests.HTTPError(response=mock_http_resp)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = err
+        with self.server.app.test_request_context("/test/obj", method="GET"):
+            with patch.object(self.server.session, "get", return_value=mock_resp):
+                with self.assertRaises(requests.HTTPError):
+                    self.server._get_stream_reader(  # pylint: disable=protected-access
+                        "test/obj"
+                    )
+        mock_resp.close.assert_called_once()
+
+    def test_mid_stream_transform_error_closes_reader(self):
+        """Exception raised inside transform_stream still closes the GET reader."""
+        mock_resp = self._make_ok_resp()
+        with patch.object(self.server.session, "get", return_value=mock_resp):
+            with patch.object(
+                self.server,
+                "transform_stream",
+                side_effect=RuntimeError("transform crashed"),
+            ):
+                response = self.client.get("/test/obj")
+
+        mock_resp.close.assert_called_once()
+        self.assertEqual(response.status_code, 500)
+
+    def test_flask_request_stream_reader_close_drains_residual(self):
+        """_FlaskRequestStreamReader.close() drains all unread bytes from the stream."""
+        payload = b"ABCDEFGHIJ"  # 10 bytes
+        fake_stream = io.BytesIO(payload)
+        reader = _FlaskRequestStreamReader(fake_stream)
+        reader.read(4)  # consume 4; 6 remain
+        reader.close()
+        self.assertEqual(fake_stream.tell(), len(payload))
+        self.assertTrue(reader.closed)
+
+    def test_flask_request_stream_reader_close_swallows_oserror(self):
+        """close() swallows OSError during drain so it doesn't mask transform errors."""
+        fake_stream = MagicMock()
+        fake_stream.read.side_effect = OSError("socket reset")
+        reader = _FlaskRequestStreamReader(fake_stream)
+        reader.close()  # must not raise
+        self.assertTrue(reader.closed)
+
+    def test_flask_request_stream_reader_close_swallows_valueerror(self):
+        """close() swallows ValueError (closed stream) during drain."""
+        fake_stream = MagicMock()
+        fake_stream.read.side_effect = ValueError("I/O operation on closed file")
+        reader = _FlaskRequestStreamReader(fake_stream)
+        reader.close()  # must not raise
+        self.assertTrue(reader.closed)
 
 
 # ---------------------------------------------------------------------------
@@ -2216,10 +2377,18 @@ class TestFlaskStreamingDirectPutRetry(unittest.TestCase):
     def _make_reader(self, data=b"input"):
         return io.BytesIO(data)
 
-    def _call(self, path="test/obj"):
-        return self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
-            self._DIRECT_PUT_URL, path
-        )
+    def _call(self, path="test/obj", fqn="/fake/fqn.dat", method="PUT"):
+        """Run _direct_put_stream_with_retry inside a Flask request context.
+
+        Defaults to a FQN-backed PUT (replayable=True) so retry-logic tests
+        exercise the full retry budget without needing real file I/O (because
+        _get_stream_reader is mocked in every retry test).
+        """
+        qs = f"?{QPARAM_ETL_FQN}={fqn}" if fqn else ""
+        with self.server.app.test_request_context(f"/{path}{qs}", method=method):
+            return self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
+                self._DIRECT_PUT_URL, path
+            )
 
     def test_succeeds_on_first_attempt(self):
         """No retry when first attempt succeeds."""
@@ -2378,57 +2547,79 @@ class TestFlaskStreamingDirectPutRetry(unittest.TestCase):
         self.assertEqual(delays[1], min(2.0**1, 30.0))
         self.assertEqual(delays[2], min(2.0**2, 30.0))
 
-    def test_put_no_fqn_retry_sends_original_bytes(self):
-        """Regression: Flask streaming PUT without FQN replays original body on retry.
+    def test_no_fqn_put_skips_local_retries(self):
+        """Streaming no-FQN PUT is one-shot: no local retry; AIS retries the PUT.
 
-        Before the fix, _get_stream_reader returned request.stream which is exhausted
-        after the first read. A second call to _get_stream_reader would return an empty
-        stream, causing the retry to PUT zero bytes. After the fix, get_data() buffers
-        the body so each retry gets a fresh BytesIO over the original bytes.
+        request.stream cannot be replayed, so the retry loop must run exactly
+        once and surface ETLDirectPutTransientError on the first transient
+        failure (regardless of direct_put_retries). The exception must carry
+        bail_without_local_retry=True so the outer handler emits the
+        503 + Ais-Etl-Retry-Reason contract for AIS to retry.
         """
-        original_body = b"hello regression bytes"
-        bytes_read_by_transform = []
-
-        def spy_transform_stream(reader, _path, _etl_args):
-            data = reader.read()
-            bytes_read_by_transform.append(data)
-            yield data
-
-        call_count = 0
-
-        def mock_direct_put_stream(url, data_iter, *_a, **_kw):
-            nonlocal call_count
-            call_count += 1
-            # Consume the generator so transform_stream reads from reader.
-            b"".join(data_iter)
-            if call_count == 1:
-                raise ETLDirectPutTransientError(url, requests.ConnectionError())
-            return (204, b"", len(original_body))
-
-        self.server.direct_put_retries = 1
-        with self.server.app.test_request_context(
-            "/test/obj", method="PUT", data=original_body
+        self.server.direct_put_retries = 3
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        with patch.object(
+            self.server, "_get_stream_reader", return_value=self._make_reader()
         ):
             with patch.object(
-                self.server, "transform_stream", side_effect=spy_transform_stream
-            ):
-                with patch.object(
-                    self.server,
-                    "_direct_put_stream",
-                    side_effect=mock_direct_put_stream,
-                ):
-                    with patch("time.sleep"):
-                        self.server._direct_put_stream_with_retry(  # pylint: disable=protected-access
-                            self._DIRECT_PUT_URL, "/test/obj"
-                        )
+                self.server, "_direct_put_stream", side_effect=err
+            ) as mock_put:
+                with patch("time.sleep") as mock_sleep:
+                    with self.assertRaises(ETLDirectPutTransientError) as ctx:
+                        self._call(fqn="", method="PUT")
 
-        self.assertEqual(len(bytes_read_by_transform), 2, "expected 2 attempts")
-        self.assertEqual(bytes_read_by_transform[0], original_body)
-        self.assertEqual(
-            bytes_read_by_transform[1],
-            original_body,
-            "retry must send original bytes, not empty bytes",
+        self.assertEqual(mock_put.call_count, 1)
+        mock_sleep.assert_not_called()
+        self.assertTrue(ctx.exception.bail_without_local_retry)
+
+    def test_skip_retries_debug_log(self):
+        """Debug log fires when no-FQN PUT skips local retries."""
+        self.server.direct_put_retries = 3
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
         )
+        with patch.object(
+            self.server, "_get_stream_reader", return_value=self._make_reader()
+        ):
+            with patch.object(self.server, "_direct_put_stream", side_effect=err):
+                with patch("time.sleep"):
+                    with self.assertLogs(self.server.logger, level="DEBUG") as log_ctx:
+                        with self.assertRaises(ETLDirectPutTransientError):
+                            self._call(fqn="", method="PUT")
+
+        self.assertTrue(
+            any(
+                "not replayable" in msg or "local retries skipped" in msg
+                for msg in log_ctx.output
+            )
+        )
+
+    def test_replayable_exhausted_does_not_set_bail_flag(self):
+        """Replayable-exhausted PUTs raise with bail_without_local_retry=False.
+
+        AIS retrying after the ETL already exhausted its budget is just
+        amplification, so the outer handler must continue to emit 502.
+        """
+        self.server.direct_put_retries = 2
+        err = ETLDirectPutTransientError(
+            self._DIRECT_PUT_URL, requests.ConnectionError()
+        )
+        readers = [self._make_reader() for _ in range(3)]
+        reader_iter = iter(readers)
+        with patch.object(
+            self.server,
+            "_get_stream_reader",
+            side_effect=lambda *_, **__: next(reader_iter),
+        ):
+            with patch.object(self.server, "_direct_put_stream", side_effect=err):
+                with patch("time.sleep"):
+                    with self.assertRaises(ETLDirectPutTransientError) as ctx:
+                        # Default _call uses FQN → replayable; retries are exhausted.
+                        self._call()
+
+        self.assertFalse(ctx.exception.bail_without_local_retry)
 
 
 # ---------------------------------------------------------------------------

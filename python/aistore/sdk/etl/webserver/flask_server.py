@@ -4,8 +4,8 @@
 
 # pylint: disable=duplicate-code
 
+import io
 import time
-from io import BytesIO
 from urllib.parse import quote
 from typing import Iterator, Tuple
 
@@ -18,22 +18,59 @@ from aistore.sdk.etl.webserver.base_etl_server import (
     SYNC_DIRECT_PUT_TRANSIENT_ERRORS,
     RETRY_BACKOFF_BASE,
     RETRY_BACKOFF_MAX,
+    DRAIN_CHUNK_BYTES,
     _handle_direct_put_transient_error,
+    _compute_replayable_retries,
 )
 from aistore.sdk.etl.webserver.utils import (
     compose_etl_direct_put_url,
     parse_etl_pipeline,
+    _ResponseRawReader,
 )
 from aistore.sdk.errors import InvalidPipelineError, ETLDirectPutTransientError
 from aistore.sdk.const import (
     HEADER_NODE_URL,
     STATUS_OK,
     STATUS_BAD_GATEWAY,
+    STATUS_SERVICE_UNAVAILABLE,
     QPARAM_ETL_ARGS,
     QPARAM_ETL_FQN,
     HEADER_DIRECT_PUT_LENGTH,
+    HEADER_ETL_RETRY_REASON,
+    ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
     STATUS_INTERNAL_SERVER_ERROR,
 )
+
+
+class _FlaskRequestStreamReader(io.RawIOBase):
+    """Wrap Werkzeug's request.stream for no-FQN PUT on the streaming path.
+
+    Werkzeug's LimitedStream inherits io.RawIOBase.close() without draining;
+    a transform that exits early would leave unread bytes on a keep-alive
+    connection. close() drains residual bytes in 64 KiB chunks (mirroring
+    _RFileLimitedReader.close() in HTTPMultiThreadedServer).
+    """
+
+    def __init__(self, stream) -> None:
+        self._stream = stream
+
+    def readable(self) -> bool:
+        return True
+
+    def read(self, size: int = -1) -> bytes:
+        return self._stream.read(size)
+
+    def close(self) -> None:
+        try:
+            while True:
+                try:
+                    chunk = self._stream.read(DRAIN_CHUNK_BYTES)
+                except (OSError, ValueError):
+                    break
+                if not chunk:
+                    break
+        finally:
+            super().close()
 
 
 class FlaskServer(ETLServer):
@@ -84,10 +121,30 @@ class FlaskServer(ETLServer):
                 404,
             )
         except ETLDirectPutTransientError as e:
+            # Contract with AIS: 503 + `Ais-Etl-Retry-Reason: direct-put-transient`
+            # fires only when the ETL bailed without trying locally (one-shot
+            # body — the streaming no-FQN PUT path). Exhausted-retry cases keep
+            # emitting 502: the ETL already tried and AIS retrying on top is
+            # just amplification.
+            if e.bail_without_local_retry:
+                self.logger.error(
+                    "Direct put bailed (one-shot body); AIS will retry: %s", e
+                )
+                return (
+                    jsonify({"error": f"Direct put bailed (one-shot body): {e}"}),
+                    STATUS_SERVICE_UNAVAILABLE,
+                    {HEADER_ETL_RETRY_REASON: ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT},
+                )
             self.logger.error(
                 "Direct put failed after %d retries: %s", self.direct_put_retries, e
             )
             return jsonify({"error": str(e)}), STATUS_BAD_GATEWAY
+        except requests.HTTPError as e:
+            status = (
+                e.response.status_code if e.response is not None else STATUS_BAD_GATEWAY
+            )
+            self.logger.debug("Upstream GET returned %s", status)
+            return jsonify({"error": "Target request failed"}), status
         except requests.RequestException as e:
             self.logger.error("Request to AIS target failed: %s", str(e))
             return jsonify({"error": str(e)}), STATUS_BAD_GATEWAY
@@ -158,15 +215,8 @@ class FlaskServer(ETLServer):
             self.close_reader(reader)
             raise
 
-    def _get_stream_reader(self, path, buffered=False):
-        """Get a BinaryIO reader for the request source data.
-
-        Args:
-            path: The object path being processed.
-            buffered: If True, buffer the PUT body into a BytesIO so it can be
-                replayed on retry. If False (default), return request.stream for
-                true constant-memory streaming (no-pipeline path only).
-        """
+    def _get_stream_reader(self, path):
+        """Get a BinaryIO reader for the request source data."""
         fqn = request.args.get(QPARAM_ETL_FQN, "").strip()
         if fqn:
             # S2083: FQN is an internal AIS target path, not external user input.
@@ -179,15 +229,15 @@ class FlaskServer(ETLServer):
             resp = self.session.get(target_url, stream=True, timeout=None)
             try:
                 resp.raise_for_status()
-            except Exception:
+            except requests.HTTPError:
                 # stream=True pins the connection until we close or fully
                 # consume the body; release it immediately on error.
                 resp.close()
                 raise
-            return resp.raw
-        if buffered:
-            return BytesIO(request.get_data())
-        return request.stream
+            return _ResponseRawReader(resp)
+        # Request body is one-shot; local retries are skipped for this path
+        # (see _direct_put_stream_with_retry).
+        return _FlaskRequestStreamReader(request.stream)
 
     def _direct_put_with_retry(
         self,
@@ -225,14 +275,25 @@ class FlaskServer(ETLServer):
         """
         Streaming direct-put with exponential-backoff retry on transient errors.
 
-        Manages reader lifecycle internally, reopening the source on each retry
-        (mirrors FastAPIServer._direct_put_stream_with_retry). For PUT requests
-        without FQN, the body is buffered into a BytesIO via get_data() so retries
-        replay the same bytes.
+        Replayable sources (FQN-backed or GET) close and reopen the reader on
+        each retry. No-FQN PUT bodies are one-shot (request body consumed from
+        the socket); effective_retries is forced to 0 and a transient direct-put
+        error surfaces to AIS as a transform failure.
         """
-        reader = self._get_stream_reader(path, buffered=True)
+        fqn = request.args.get(QPARAM_ETL_FQN, "").strip()
+        is_get = request.method == "GET"
+        replayable, effective_retries = _compute_replayable_retries(
+            fqn, is_get, self.direct_put_retries
+        )
+        if not replayable and self.direct_put_retries:
+            self.logger.debug(
+                "no-FQN PUT: source not replayable; "
+                "local retries skipped; transient direct-put error "
+                "will surface as transform failure"
+            )
+        reader = self._get_stream_reader(path)
         try:
-            for attempt in range(self.direct_put_retries + 1):
+            for attempt in range(effective_retries + 1):
                 try:
                     return self._direct_put_stream(
                         direct_put_url,
@@ -241,19 +302,21 @@ class FlaskServer(ETLServer):
                         path,
                     )
                 except ETLDirectPutTransientError as exc:
-                    if attempt >= self.direct_put_retries:
+                    if attempt >= effective_retries:
+                        if not replayable:
+                            exc.bail_without_local_retry = True
                         raise
                     delay = min(RETRY_BACKOFF_BASE**attempt, RETRY_BACKOFF_MAX)
                     self.logger.warning(
                         "direct_put_stream attempt %d/%d failed, retrying in %.1fs: %s",
                         attempt + 1,
-                        self.direct_put_retries + 1,
+                        effective_retries + 1,
                         delay,
                         exc,
                         exc_info=True,
                     )
                     self.close_reader(reader)
-                    reader = self._get_stream_reader(path, buffered=True)
+                    reader = self._get_stream_reader(path)
                     time.sleep(delay)
         finally:
             self.close_reader(reader)
