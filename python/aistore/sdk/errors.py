@@ -172,14 +172,14 @@ class ETLDirectPutTransientError(Exception):
     that is safe to retry (connection lost before a response was received).
 
     AIS-side retry contract: when the ETL bails *without* trying locally —
-    i.e., the source body is one-shot (currently only the streaming no-FQN
-    PUT path on FastAPI/HTTP webservers) — `bail_without_local_retry` is
-    set to `True` and the webserver responds with HTTP 503 and the
-    `Ais-Etl-Retry-Reason: direct-put-transient` header. AIS treats that
-    pair as a soft error and retries the whole PUT against the replayable
-    LOM-backed source. When `bail_without_local_retry` is `False` (the ETL
-    exhausted its own retry budget), the webserver continues to respond
-    with HTTP 502 — adding more retries on top would just be amplification.
+    i.e., the source body is one-shot (the streaming no-FQN PUT path) —
+    `bail_without_local_retry` is set to `True` and the webserver responds
+    with HTTP 503 and the `Ais-Etl-Retry-Reason: direct-put-transient`
+    header. AIS treats that pair as a soft error and retries the whole PUT
+    against the replayable LOM-backed source. When `bail_without_local_retry`
+    is `False` (the ETL exhausted its own retry budget), the webserver
+    continues to respond with HTTP 502 — adding more retries on top would
+    just be amplification.
     """
 
     def __init__(

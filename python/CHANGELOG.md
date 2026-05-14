@@ -6,6 +6,18 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Fixed
+
+- ETL `FlaskServer`: stream no-FQN `hpush` PUTs in constant memory via Werkzeug
+  `request.stream` (with chunked drain-on-close to keep keep-alive sockets
+  clean); release upstream `hpull` GET connections through `_ResponseRawReader`;
+  forward upstream HTTP error statuses as-is instead of collapsing them to 502.
+- ETL `FlaskServer` joins the **ETL → AIS retry contract** (streaming no-FQN
+  PUT): one-shot bail emits HTTP 503 with
+  `Ais-Etl-Retry-Reason: direct-put-transient` so AIS retries against the
+  replayable LOM-backed source; replayable-exhausted cases keep emitting 502.
+  Matches the behavior already in `FastAPIServer` and `HTTPMultiThreadedServer`.
+
 ## [1.24.0] - 2026-05-08
 
 ### Changed

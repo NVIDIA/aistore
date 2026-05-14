@@ -33,6 +33,10 @@ SYNC_DIRECT_PUT_TRANSIENT_ERRORS = (
 RETRY_BACKOFF_BASE = 2.0  # seconds; delay = base ** attempt
 RETRY_BACKOFF_MAX = 30.0  # seconds; upper bound on per-attempt delay
 
+# Drain-on-close chunk size for one-shot request-body readers
+# (used by `_FlaskRequestStreamReader` and `_RFileLimitedReader`).
+DRAIN_CHUNK_BYTES = 65536
+
 
 def _is_connection_refused(exc: requests.ConnectionError) -> bool:
     """
