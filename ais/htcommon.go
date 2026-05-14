@@ -129,7 +129,7 @@ type (
 		to                int            // (all targets, all proxies, all nodes) enum
 		nodeCount         int            // m.b. greater or equal destination count
 		ignoreMaintenance bool           // do not skip nodes in maintenance mode
-		async             bool           // ignore results
+		noResults         bool           // ignore results
 	}
 
 	networkHandler struct {

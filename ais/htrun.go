@@ -747,7 +747,7 @@ func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 	}
 	cargs.cresv = bargs.cresv
 	res := h.call(cargs, bargs.smap)
-	if bargs.async {
+	if bargs.noResults {
 		freeCR(res) // discard right away
 	} else {
 		results.mu.Lock()
@@ -937,7 +937,7 @@ func (h *htrun) _nfy(n core.Notif, err error, upon string, aborted bool) {
 	args.selected = nodes
 	args.nodeCount = len(nodes)
 	args.smap = smap
-	args.async = true
+	args.noResults = true
 	_ = h.bcastSelected(args)
 	freeBcArgs(args)
 }
@@ -997,7 +997,7 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) == 0)
-	if !bargs.async {
+	if !bargs.noResults {
 		results.s = allocBcastRes(bargs.nodeCount)
 	}
 	for _, nodeMap := range bargs.nodes {
@@ -1023,7 +1023,7 @@ func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) > 0)
-	if !bargs.async {
+	if !bargs.noResults {
 		results.s = allocBcastRes(len(bargs.selected))
 		if bargs.timeout == 0 {
 			bargs.timeout = cmn.Rom.MaxKeepalive()
@@ -1049,7 +1049,7 @@ func (h *htrun) bcastExcept(bargs *bcastArgs, except *meta.Snode) sliceResults {
 		h._call(si, bargs, &results)
 		wg.Done()
 	}
-	if !bargs.async {
+	if !bargs.noResults {
 		results.s = allocBcastRes(bargs.nodeCount)
 		if bargs.timeout == 0 {
 			bargs.timeout = cmn.Rom.MaxKeepalive()

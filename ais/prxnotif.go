@@ -355,8 +355,8 @@ func (n *notifs) done(nl nl.Listener) {
 			args.nodes = []meta.NodeMap{nl.Notifiers()}
 			args.nodeCount = len(args.nodes[0])
 			args.smap = smap
-			args.async = true
-			_ = n.p.bcastNodes(args) // args.async: result is already discarded/freed
+			args.noResults = true
+			_ = n.p.bcastNodes(args) // (results already discarded)
 			freeBcArgs(args)
 		}
 	}
