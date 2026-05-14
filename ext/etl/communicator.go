@@ -555,6 +555,22 @@ func (rtyr *retryer) call() (status int, err error) {
 	rtyr.resp, err = rtyr.client.Do(req) //nolint:bodyclose // closed by a caller
 	if rtyr.resp != nil {
 		status = rtyr.resp.StatusCode
+		if err == nil && rtyr.isReplayable() {
+			cos.DrainReader(rtyr.resp.Body)
+			cos.Close(rtyr.resp.Body)
+			rtyr.resp = nil
+			return status, cos.NewRetriableSoftFromStatus(status)
+		}
 	}
 	return status, err
+}
+
+// ETL → AIS retry contract: 503 + `Ais-Etl-Retry-Reason: direct-put-transient`
+// signals the ETL bailed on a transient direct-put failure without trying
+// locally (one-shot body case). The body source here is LOM-backed and
+// replayable, so RetryArgs can replay the PUT against a fresh getBody().
+func (rtyr *retryer) isReplayable() bool {
+	return rtyr.getBody != nil &&
+		rtyr.resp.StatusCode == http.StatusServiceUnavailable &&
+		rtyr.resp.Header.Get(apc.HdrETLRetryReason) == apc.ETLRetryReasonDirectPutTransient
 }

@@ -345,6 +345,120 @@ var _ = Describe("CommunicatorTest", func() {
 			}
 		})
 	}
+
+	// ---------------------------------------------------------------------------
+	// retryer: ETL → AIS retry contract — 503 + `Ais-Etl-Retry-Reason:
+	// direct-put-transient` is a soft error: replay the PUT against the
+	// LOM-backed (replayable) body. Other 5xx status codes (or 503 without the
+	// header) surface to the caller without retry.
+	// ---------------------------------------------------------------------------
+	mkGetBody := func(payload []byte) (getBodyFunc, *atomic.Int32) {
+		var bodyCount atomic.Int32
+		return func() core.ReadResp {
+			bodyCount.Add(1)
+			return core.ReadResp{
+				R:   cos.NopOpener(io.NopCloser(bytes.NewReader(payload))),
+				OAH: &cos.SimpleOAH{Size: int64(len(payload))},
+			}
+		}, &bodyCount
+	}
+
+	It("retryer on 503 + direct-put-transient header: retries and succeeds", func() {
+		var reqCount atomic.Int32
+		failFirst := 2
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			n := reqCount.Add(1)
+			if int(n) <= failFirst {
+				w.Header().Set(apc.HdrETLRetryReason, apc.ETLRetryReasonDirectPutTransient)
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		getBody, bodyCount := mkGetBody([]byte("payload"))
+		rtyr := &retryer{
+			client:  &http.Client{},
+			reqArgs: &cmn.HreqArgs{Method: http.MethodPut, Base: srv.URL, Path: "/"},
+			getBody: getBody,
+		}
+		args := &cmn.RetryArgs{Call: rtyr.call, SoftErr: 5, Sleep: 0}
+		_, err := args.Do()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(reqCount.Load()).To(Equal(int32(failFirst + 1)))
+		// Each attempt must obtain a fresh body — proves the LOM-backed source
+		// was replayed, not the original (one-shot) reader.
+		Expect(bodyCount.Load()).To(Equal(int32(failFirst + 1)))
+	})
+
+	It("retryer on 503 + direct-put-transient header: exhausts soft budget", func() {
+		var reqCount atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reqCount.Add(1)
+			w.Header().Set(apc.HdrETLRetryReason, apc.ETLRetryReasonDirectPutTransient)
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer srv.Close()
+
+		getBody, _ := mkGetBody([]byte("payload"))
+		rtyr := &retryer{
+			client:  &http.Client{},
+			reqArgs: &cmn.HreqArgs{Method: http.MethodPut, Base: srv.URL, Path: "/"},
+			getBody: getBody,
+		}
+		args := &cmn.RetryArgs{Call: rtyr.call, SoftErr: 2, Sleep: 0}
+		_, err := args.Do()
+
+		Expect(err).To(HaveOccurred())
+		Expect(reqCount.Load()).To(Equal(int32(3))) // SoftErr+1 attempts
+	})
+
+	It("retryer on 503 without retry-reason header: not retried", func() {
+		var reqCount atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reqCount.Add(1)
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer srv.Close()
+
+		getBody, _ := mkGetBody([]byte("payload"))
+		rtyr := &retryer{
+			client:  &http.Client{},
+			reqArgs: &cmn.HreqArgs{Method: http.MethodPut, Base: srv.URL, Path: "/"},
+			getBody: getBody,
+		}
+		args := &cmn.RetryArgs{Call: rtyr.call, SoftErr: 5, Sleep: 0}
+		_, err := args.Do()
+
+		Expect(err).NotTo(HaveOccurred(), "non-2xx with no header is a status, not a retryable error")
+		Expect(rtyr.resp.StatusCode).To(Equal(http.StatusServiceUnavailable))
+		Expect(reqCount.Load()).To(Equal(int32(1)))
+	})
+
+	It("retryer on 502 with retry-reason header: not retried (only 503 honored)", func() {
+		var reqCount atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reqCount.Add(1)
+			w.Header().Set(apc.HdrETLRetryReason, apc.ETLRetryReasonDirectPutTransient)
+			w.WriteHeader(http.StatusBadGateway)
+		}))
+		defer srv.Close()
+
+		getBody, _ := mkGetBody([]byte("payload"))
+		rtyr := &retryer{
+			client:  &http.Client{},
+			reqArgs: &cmn.HreqArgs{Method: http.MethodPut, Base: srv.URL, Path: "/"},
+			getBody: getBody,
+		}
+		args := &cmn.RetryArgs{Call: rtyr.call, SoftErr: 5, Sleep: 0}
+		_, err := args.Do()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rtyr.resp.StatusCode).To(Equal(http.StatusBadGateway))
+		Expect(reqCount.Load()).To(Equal(int32(1)))
+	})
 })
 
 // Creates a file with random content.

@@ -15,7 +15,7 @@ from requests.exceptions import ConnectionError as RequestConnectionError
 
 from aistore.sdk import Bucket
 from aistore.sdk.etl import ETLConfig
-from aistore.sdk.errors import AISError
+from aistore.sdk.errors import AISError, ETLDirectPutTransientError
 from aistore.sdk.etl.etl_templates import MD5, ECHO, HASH
 from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPUSH,
@@ -630,6 +630,62 @@ class TestETLOps(unittest.TestCase):
             .read_all()
         )
         self.assertEqual(result, bytes(self.content))
+
+    @pytest.mark.etl
+    def test_etl_503_retry_contract_error_surfaced(self):
+        """
+        ETL → AIS retry contract: when the ETL webserver bails on a transient
+        direct-put failure without trying locally, it surfaces HTTP 503 +
+        `Ais-Etl-Retry-Reason: direct-put-transient`. AIS replays the PUT
+        against the LOM-backed (replayable) source up to the soft-retry budget
+        (see `retryConnSoftErr` in `ext/etl/communicator.go`). Once the budget
+        is exhausted, the error must surface to the client.
+
+        Mechanics (per-attempt retry handling) are covered in
+        `ext/etl/comm_internal_test.go`; this test validates the contract
+        end-to-end with the FastAPI webserver and a real cluster.
+        """
+        src_bck = self.client.bucket(random_string()).create()
+        src_bck.object("obj1").get_writer().put_content(b"payload")
+
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class()
+        class AlwaysBailServer(FastAPIServer):
+            # Every transform raises the transient direct-put error with
+            # `bail_without_local_retry=True`, which makes the FastAPI server
+            # respond with 503 + `Ais-Etl-Retry-Reason: direct-put-transient`.
+            def transform(self, data: bytes, *_args) -> bytes:
+                raise ETLDirectPutTransientError(
+                    "http://stub",
+                    RuntimeError("simulated transient bail"),
+                    bail_without_local_retry=True,
+                )
+
+        dst_bck = self.client.bucket(random_string()).create()
+        try:
+            job_id = src_bck.transform(
+                etl_name=etl.name,
+                to_bck=dst_bck,
+                cont_on_err=True,
+            )
+            result = self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+            self.assertFalse(
+                result.success,
+                "Transform should fail after the ETL retry budget is exhausted",
+            )
+            self.assertIsNotNone(result.error)
+
+            etl_details = etl.view(job_id=job_id)
+            self.assertIsNotNone(etl_details.obj_errors)
+            self.assertGreater(
+                len(etl_details.obj_errors),
+                0,
+                "Expected per-object error surfaced through etl.view()",
+            )
+        finally:
+            src_bck.delete(missing_ok=True)
+            dst_bck.delete(missing_ok=True)
 
     @pytest.mark.etl
     def test_etl_pod_runtime_failure(self):

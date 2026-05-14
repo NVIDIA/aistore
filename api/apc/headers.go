@@ -130,6 +130,12 @@ const (
 	// ETL
 	HdrETLPodInfo      = aisPrefix + "ETL-Pod-Info" // serialized etl.Info
 	HdrDirectPutLength = aisPrefix + "Direct-Put-Length"
+	// ETL → AIS retry contract: emitted by the ETL webserver alongside HTTP 503
+	// to signal that the ETL bailed on a transient direct-put failure without
+	// trying locally (one-shot body case). AIS retries the whole PUT against
+	// the replayable LOM-backed source. See ext/etl/communicator.go.
+	HdrETLRetryReason                = aisPrefix + "Etl-Retry-Reason"
+	ETLRetryReasonDirectPutTransient = "direct-put-transient"
 
 	// shared streams
 	HdrActiveEC = aisPrefix + "Ec"
