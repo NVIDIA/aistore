@@ -320,6 +320,8 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 	defer srcUfest.Unlock()
 
 	var (
+		// disk-bound replica copy: MaxParallelism caps concurrent I/O per node;
+		// hard ceiling of 4 prevents thrashing.
 		wg = cos.NewLimitedWaitGroup(min(sys.MaxParallelism(), 4), srcUfest.Count())
 		// errs  = cos.NewErrs(srcUfest.Count())
 		errCh = make(chan error, srcUfest.Count())

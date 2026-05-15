@@ -270,6 +270,21 @@ func (lwg *LimitedWaitGroup) Wait() {
 	lwg.wg.Wait()
 }
 
+// ClusterWaitGroup: parallelism limiter for intra-cluster broadcast
+// (e.g., bcast*, keepalive, rebalance and xaction T2T control paths).
+//
+// Use for one-to-many fanouts across cluster nodes. For CPU- or disk-bound
+// local parallelism, use NewLimitedWaitGroup with sys.MaxParallelism().
+//
+// The ceiling is max(maxClusterWG, ncpu): a floor that protects against
+// cgroup-v2-collapsed CPU counts, with room to scale up on hosts that can
+// handle wider fanout.
+const minClusterWG = 128
+
+func NewClusterWaitGroup(ncpu, wanted int) WG {
+	return NewLimitedWaitGroup(max(minClusterWG, ncpu), wanted)
+}
+
 //
 // common channel-full helper
 // where l = len(workCh), c = cap(workCh)

@@ -94,7 +94,7 @@ func (xctn *Base) BcastCtrl(smap *meta.Smap, wid, opcode string, err error) {
 
 	var (
 		tmap  = smap.Tmap
-		wg    = cos.NewLimitedWaitGroup(sys.MaxParallelism(), len(tmap))
+		wg    = cos.NewClusterWaitGroup(sys.NumCPU(), len(tmap))
 		cause []byte
 	)
 	wid = cos.Left(wid, NoneWID)

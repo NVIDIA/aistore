@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -866,9 +866,9 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 // nodes(with their EC metadata) that have the latest object version
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
-		wg     = cos.NewLimitedWaitGroup(sys.MaxParallelism(), 8)
+		wg     cos.WG
 		mtx    = &sync.Mutex{}
-		tmap   = core.T.Sowner().Get().Tmap
+		smap   = core.T.Sowner().Get()
 		ctMeta = core.NewCTFromLOM(ctx.lom, fs.ECMetaCT)
 
 		md, err  = LoadMetadata(ctMeta.FQN())
@@ -878,6 +878,7 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		// Metafile exists and contains a list of targets
 		nodes := md.RemoteTargets()
 		ctx.nodes = make(map[string]*Metadata, len(nodes))
+		wg = cos.NewClusterWaitGroup(sys.NumCPU(), len(nodes))
 		for _, node := range nodes {
 			if node.InMaintOrDecomm() {
 				continue
@@ -890,8 +891,10 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		}
 	} else {
 		// Otherwise, broadcast
-		ctx.nodes = make(map[string]*Metadata, len(tmap))
-		for _, node := range tmap {
+		num := smap.CountTargets()
+		ctx.nodes = make(map[string]*Metadata, num)
+		wg = cos.NewClusterWaitGroup(sys.NumCPU(), num)
+		for _, node := range smap.Tmap {
 			if node.ID() == core.T.SID() {
 				continue
 			}

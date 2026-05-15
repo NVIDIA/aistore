@@ -249,7 +249,7 @@ func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 		cnt  = smap.Count()
 	)
 	pkr.openCh(cnt)
-	wg := cos.NewLimitedWaitGroup(sys.MaxParallelism(), cnt) // limit parallelism
+	wg := cos.NewClusterWaitGroup(sys.NumCPU(), cnt) // limit parallelism
 	for _, nm := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range nm {
 			if sid == p.SID() {

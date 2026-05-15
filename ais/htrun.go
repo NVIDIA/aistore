@@ -993,7 +993,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewLimitedWaitGroup(sys.MaxParallelism(), bargs.nodeCount)
+		wg      = cos.NewClusterWaitGroup(sys.NumCPU(), bargs.nodeCount)
 		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) == 0)
@@ -1019,7 +1019,7 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewLimitedWaitGroup(sys.MaxParallelism(), bargs.nodeCount)
+		wg      = cos.NewClusterWaitGroup(sys.NumCPU(), bargs.nodeCount)
 		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) > 0)
@@ -1043,7 +1043,7 @@ func (h *htrun) bcastExcept(bargs *bcastArgs, except *meta.Snode) sliceResults {
 	var results bcastResults
 
 	bargs.nodeCount = bargs.smap.CountTargets() - 1 /*except*/
-	wg := cos.NewLimitedWaitGroup(sys.MaxParallelism(), bargs.nodeCount)
+	wg := cos.NewClusterWaitGroup(sys.NumCPU(), bargs.nodeCount)
 
 	f := func(si *meta.Snode) {
 		h._call(si, bargs, &results)
@@ -1646,8 +1646,10 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 		nodemap = smap.Tmap
 	}
 	if c.checkAll {
-		wg = cos.NewLimitedWaitGroup(sys.MaxParallelism(), len(nodemap))
+		wg = cos.NewClusterWaitGroup(sys.NumCPU(), len(nodemap))
 	} else {
+		// quorum-bounded: this path does not broadcast to all nodes;
+		// keep it locally bounded at ~2x maxVerConfirmations
 		count = min(sys.MaxParallelism(), maxVerConfirmations<<1)
 		wg = cos.NewLimitedWaitGroup(count, len(nodemap) /*have*/)
 	}

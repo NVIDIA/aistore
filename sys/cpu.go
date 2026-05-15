@@ -161,7 +161,9 @@ func CPU(periodic bool) (load int64, isExtreme bool) {
 
 func NumCPU() int { return gcpu.num }
 
-// number of intra-cluster broadcasting goroutines
+// Parallelism budget for local CPU- or disk-bound work
+// (joggers, EC, dsort, lcopy, etc.). Floor of 4 guards single-core hosts.
+// NOT for intra-cluster RPC fanout - use cos.NewClusterWaitGroup.
 func MaxParallelism() int { return max(NumCPU(), 4) }
 
 // HighLoadWM: "high-load watermark" as a percentage.
