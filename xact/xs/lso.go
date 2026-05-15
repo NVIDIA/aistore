@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/load"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -30,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/fs/lpi"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -59,6 +61,7 @@ type (
 		nextToken string           // next continuation token -> next pages
 		token     string           // continuation token -> last responded page
 		stopCh    cos.StopCh       // to stop xaction
+		vlabs     map[string]string
 		walk      struct {
 			bp           core.Backend     // t.Backend(bck)
 			pageCh       chan *cmn.LsoEnt // channel to accumulate listed object entries
@@ -194,6 +197,7 @@ func (p *lsoFactory) Start() error {
 	}
 
 	_ = r.CtlMsg()
+	r.vlabs = map[string]string{stats.VlabBucket: bck.Cname("")}
 	p.xctn = r
 
 	return nil
@@ -385,13 +389,24 @@ func (r *LsoXact) initWalk() {
 	runtime.Gosched()
 }
 
+// The guarantee here is that we either put something on the channel and our
+// request will be processed (since the `msgCh` is unbuffered) or we receive
+// message that the xaction has been stopped.
 func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
-	// The guarantee here is that we either put something on the channel and our
-	// request will be processed (since the `msgCh` is unbuffered) or we receive
-	// message that the xaction has been stopped.
+	debug.Assert(r.vlabs != nil)
+	begin := mono.NanoTime()
 	select {
 	case r.msgCh <- msg:
-		return <-r.respCh
+		resp := <-r.respCh
+		if resp != nil && resp.Err == nil {
+			delta := mono.SinceNano(begin)
+			tstats := core.T.StatsUpdater()
+			tstats.IncWith(stats.ListCount, r.vlabs)
+			tstats.AddWith(
+				cos.NamedVal64{Name: stats.ListLatency, Value: delta, VarLabs: r.vlabs},
+			)
+		}
+		return resp
 	case <-r.stopCh.Listen():
 		return &LsoRsp{Err: ErrGone}
 	}
