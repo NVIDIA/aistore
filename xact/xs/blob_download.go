@@ -55,14 +55,29 @@ const (
 )
 
 type (
+	// pairs a metric name with its variable-labels map so the hot path can
+	// call .inc()/.add() without re-specifying both at every update site.
+	// (replaceable when handle-based stats lands for xactions.)
+	bdMetric struct {
+		name  string
+		vlabs map[string]string
+	}
+	bdMetrics struct {
+		getCnt  bdMetric // per-backend GET count (e.g., aws.get.n)
+		getLat  bdMetric // per-backend GET latency
+		getSz   bdMetric // per-backend GET size
+		blobCnt bdMetric // blob-download count
+		blobSz  bdMetric // blob-download size
+		errGet  bdMetric // generic GET error
+		errBlob bdMetric // blob-download error
+	}
+
 	XactBlobDl struct {
 		bp       core.Backend
 		ctx      context.Context
 		cancel   context.CancelFunc
 		pending  blobPending      // map[roff => work item]
 		args     *core.BlobParams // including the resulting LOM and control message (apc.BlobMsg)
-		vlabs    map[string]string
-		xlabs    map[string]string
 		config   *cmn.Config
 		workCh   chan *blobWI
 		doneCh   chan *blobWI
@@ -72,6 +87,7 @@ type (
 		workers  []*blobWorker
 		adv      load.Advice
 		xact.Base
+		bdm        bdMetrics // resolved once in factory.Start
 		wg         sync.WaitGroup
 		nextRoff   int64
 		fullSize   int64
@@ -81,6 +97,14 @@ type (
 		numWorkers int
 	}
 )
+
+func (m *bdMetric) inc(tstats cos.StatsUpdater) {
+	tstats.IncWith(m.name, m.vlabs)
+}
+
+func (m *bdMetric) add(tstats cos.StatsUpdater, val int64) {
+	tstats.AddWith(cos.NamedVal64{Name: m.name, Value: val, VarLabs: m.vlabs})
+}
 
 // internal
 type (
@@ -188,12 +212,18 @@ func (p *blobFactory) Start() (err error) {
 	r.InitBase(p.Args.UUID, p.Kind(), bck)
 
 	r.bp = core.T.Backend(bck)
-	r.vlabs = map[string]string{
-		stats.VlabBucket: bck.Cname(""),
-	}
-	r.xlabs = map[string]string{
-		stats.VlabBucket: bck.Cname(""),
-		stats.VlabXkind:  r.Kind(),
+
+	// resolve (metric, vlabs) pairings once; reuse on the hot path
+	vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
+	xlabs := map[string]string{stats.VlabBucket: bck.Cname(""), stats.VlabXkind: r.Kind()}
+	r.bdm = bdMetrics{
+		getCnt:  bdMetric{r.bp.MetricName(stats.GetCount), xlabs},
+		getLat:  bdMetric{r.bp.MetricName(stats.GetLatencyTotal), xlabs},
+		getSz:   bdMetric{r.bp.MetricName(stats.GetSize), xlabs},
+		blobCnt: bdMetric{stats.GetBlobCount, vlabs},
+		blobSz:  bdMetric{stats.GetBlobSize, vlabs},
+		errGet:  bdMetric{stats.ErrGetCount, vlabs},
+		errBlob: bdMetric{stats.ErrGetBlobCount, vlabs},
 	}
 
 	// Admission check: assess load to determine if we can start
@@ -484,16 +514,12 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 	if err == nil {
 		// stats
 		tstats := core.T.StatsUpdater()
-		tstats.IncWith(r.bp.MetricName(stats.GetCount), r.xlabs)
-		tstats.AddWith(
-			cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(startTime), VarLabs: r.xlabs},
-		)
+		r.bdm.getCnt.inc(tstats)
+		r.bdm.getLat.add(tstats, mono.SinceNano(startTime))
 
 		debug.Assert(lom.Lsize() == r.woff)
-		tstats.IncWith(stats.GetBlobCount, r.vlabs)
-		tstats.AddWith(
-			cos.NamedVal64{Name: stats.GetBlobSize, Value: lom.Lsize(), VarLabs: r.vlabs},
-		)
+		r.bdm.blobCnt.inc(tstats)
+		r.bdm.blobSz.add(tstats, lom.Lsize())
 
 		r.ObjsAdd(1, 0)
 	} else {
@@ -513,8 +539,8 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 // (compare w/ ais/target.go getObject() but note: 404 here implies runtime race)
 func (r *XactBlobDl) _errStats() {
 	tstats := core.T.StatsUpdater()
-	tstats.IncWith(stats.ErrGetCount, r.vlabs)
-	tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
+	r.bdm.errGet.inc(tstats)
+	r.bdm.errBlob.inc(tstats)
 }
 
 func (r *XactBlobDl) _fini(lom *core.LOM) (err error) {
@@ -583,10 +609,7 @@ func (r *XactBlobDl) write(sgl *memsys.SGL, size int64) (err error) {
 	}
 
 	// stats
-	tstats := core.T.StatsUpdater()
-	tstats.AddWith(
-		cos.NamedVal64{Name: r.bp.MetricName(stats.GetSize), Value: size, VarLabs: r.xlabs},
-	)
+	r.bdm.getSz.add(core.T.StatsUpdater(), size)
 	r.ObjsAdd(0, size)
 
 	return nil
