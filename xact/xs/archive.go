@@ -313,11 +313,8 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 func (r *XactArch) CtlMsg() string {
 	var sb cos.SB
 	n := r.wiCnt.Load()
-	if n == 0 {
-		sb.Init(64)
-	} else {
-		sb.Init(64 + 80*int(n))
-	}
+	sb.Init(64 + 80*int(n))
+
 	sb.WriteString(r.Bck().Cname(""))
 	if r.bckTo != nil {
 		sb.WriteString("=>")

@@ -92,7 +92,7 @@ func (r *evictDelete) CtlMsg() string {
 		return r.ctlmsg
 	}
 	var sb cos.SB
-	sb.Init(80)
+	sb.Init(ctlMsgBufSize)
 	r.msg.Str(&sb, r.lrit.lrp == lrpPrefix)
 	if r.msg.NonRecurs {
 		sb.WriteString(", non-recurs")

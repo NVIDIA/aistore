@@ -461,11 +461,7 @@ func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM
 func (r *XactTCO) CtlMsg() string {
 	var sb cos.SB
 	n := r.wiCnt.Load()
-	if n == 0 {
-		sb.Init(64)
-	} else {
-		sb.Init(64 + 100*int(n))
-	}
+	sb.Init(64 + 80*int(n))
 	tag := cos.Ternary(r.Kind() == apc.ActETLObjects, "etl ", "cp ")
 	sb.WriteString(tag)
 	sb.WriteString(r.args.BckFrom.Cname(""))

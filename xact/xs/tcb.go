@@ -433,6 +433,7 @@ func (r *XactTCB) CtlMsg() string {
 	return r.ctlmsg
 }
 
+// TODO -- FIXME: add internal stats
 func (r *XactTCB) formatCtlMsg(rename bool) string {
 	if r.args == nil || r.args.Msg == nil || r.args.BckFrom == nil || r.args.BckTo == nil {
 		return ""
@@ -453,7 +454,7 @@ func (r *XactTCB) formatCtlMsg(rename bool) string {
 		tag = "cp "
 	}
 
-	sb.Init(80)
+	sb.Init(ctlMsgBufSize)
 	msg.Str(&sb, fromCname, toCname, tag)
 	return sb.String()
 }

@@ -238,7 +238,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 
 func (r *prefetch) _whinge(lom *core.LOM, size int64) {
 	var sb cos.SB
-	sb.Init(256)
+	sb.Init(ctlMsgBufSize)
 	sb.WriteString(r.Name())
 	sb.WriteString(": prefetching large size ")
 	sb.WriteString(cos.IEC(size, 1))
@@ -453,7 +453,7 @@ func (pebl *pebl) str() string {
 
 	pebl.mu.Lock()
 	n := int(pebl.num())
-	sb.Init(max(256, n*64))
+	sb.Init(max(ctlMsgBufSize, n*64))
 
 	sb.WriteUint8('[')
 

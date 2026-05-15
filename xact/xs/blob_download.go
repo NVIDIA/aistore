@@ -662,7 +662,7 @@ func (r *XactBlobDl) CtlMsg() string {
 	}
 
 	var sb cos.SB
-	sb.Init(128)
+	sb.Init(ctlMsgBufSize)
 
 	sb.WriteString(r.args.Lom.Cname())
 

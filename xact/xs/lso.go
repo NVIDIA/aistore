@@ -14,12 +14,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/load"
@@ -51,17 +53,27 @@ type (
 		hdr http.Header
 		streamingF
 	}
+	lsoStats struct {
+		nreq   atomic.Int64 // doPage requests
+		npages atomic.Int64 // successful page responses
+		ents   atomic.Int64 // total returned entries
+		errs   atomic.Int64 // failed page responses
+		totLat atomic.Int64 // total successful Do() latency, nanos
+		maxLat atomic.Int64 // max successful Do() latency, nanos
+	}
 	LsoXact struct {
 		nbi *nbiCtx // native bucket inventory
 
-		msg       *apc.LsoMsg      // first message
-		msgCh     chan *apc.LsoMsg // next messages
-		respCh    chan *LsoRsp     // responses - next pages
-		remtCh    chan *LsoRsp     // remote paging by the responsible target
-		nextToken string           // next continuation token -> next pages
-		token     string           // continuation token -> last responded page
-		stopCh    cos.StopCh       // to stop xaction
-		vlabs     map[string]string
+		msg       *apc.LsoMsg       // first message
+		msgCh     chan *apc.LsoMsg  // next messages
+		respCh    chan *LsoRsp      // responses - next pages
+		remtCh    chan *LsoRsp      // remote paging by the responsible target
+		nextToken string            // next continuation token -> next pages
+		token     string            // continuation token -> last responded page
+		stopCh    cos.StopCh        // to stop xaction
+		vlabs     map[string]string // -> Prometheus
+		stats     lsoStats          // -> CtlMsg (`ais show job`) observability
+		smap      *meta.Smap
 		walk      struct {
 			bp           core.Backend     // t.Backend(bck)
 			pageCh       chan *cmn.LsoEnt // channel to accumulate listed object entries
@@ -75,12 +87,12 @@ type (
 			this         bool             // r.msg.SID == core.T.SID(): true when this target does remote paging
 			last         bool             // last remote page
 			remote       bool             // list remote
+			ctlVerbose   bool             // this target prints static request details in CtlMsg
 		}
 		lpis lpi.Lpis
 		page cmn.LsoEntries // current page (contents)
 		adv  load.Advice
 		streamingX
-		npages int64
 		lensgl int64
 		// list remote
 	}
@@ -150,12 +162,19 @@ func (p *lsoFactory) Start() error {
 	r.walk.dontPopulate = r.walk.wor && bck.Props == nil
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
+	r.smap = core.T.Sowner().Get()
+	tsi, err := r.smap.HrwTargetTask(r.ID())
+	if err != nil {
+		return err
+	}
+	// select one target to show the CtlMsg's static part
+	r.walk.ctlVerbose = tsi.ID() == core.T.SID()
+
 	if r.walk.remote {
 		// R-flow
 		r.walk.this = r.msg.SID == core.T.SID()
 		if !r.walk.wor {
-			smap := core.T.Sowner().Get()
-			if nat := smap.CountActiveTs(); nat > 1 {
+			if nat := r.smap.CountActiveTs(); nat > 1 {
 				// streams
 				if err := p.beginStreams(r); err != nil {
 					return err
@@ -235,21 +254,65 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 // LsoXact //
 /////////////
 
-// TODO -- FIXME: extend to include runtime stats
 func (r *LsoXact) CtlMsg() string {
 	if r.msg == nil {
 		return ""
 	}
 
 	var sb cos.SB
-	sb.Init(160)
-	r.msg.Str(r.p.Bck.Cname(r.msg.Prefix), &sb)
-	if r.nextToken != "" {
-		sb.WriteString(apc.LsoCtlMsgPaging)
+	sb.Init(ctlMsgBufSize)
+
+	sb.WriteString(core.T.String())
+	sb.WriteUint8(':')
+
+	if r.walk.ctlVerbose {
+		sb.WriteUint8(' ')
+		r.msg.Str(r.p.Bck.Cname(r.msg.Prefix), &sb)
+		if r.nextToken != "" {
+			sb.WriteString(apc.LsoCtlMsgPaging)
+		}
+		if r.walk.remote {
+			sb.WriteString(apc.LsoCtlMsgRemote)
+		}
 	}
-	if r.walk.remote {
-		sb.WriteString(apc.LsoCtlMsgRemote)
+
+	s := &r.stats
+
+	nreq := s.nreq.Load()
+	if nreq == 0 {
+		return sb.String()
 	}
+
+	// internal stats
+	sb.WriteString(" job:[")
+	sb.WriteString("reqs:")
+	sb.WriteString(strconv.FormatInt(nreq, 10))
+
+	npages := s.npages.Load()
+	if npages != 0 {
+		sb.WriteString(" pages:")
+		sb.WriteString(strconv.FormatInt(npages, 10))
+
+		ents := s.ents.Load()
+		sb.WriteString(" entries:")
+		sb.WriteString(strconv.FormatInt(ents, 10))
+
+		totLat := s.totLat.Load()
+		avgLat := totLat / npages
+		sb.WriteString(" avg-lat:")
+		sb.WriteString(time.Duration(avgLat).Truncate(time.Microsecond).String())
+
+		maxLat := s.maxLat.Load()
+		sb.WriteString(" max-lat:")
+		sb.WriteString(time.Duration(maxLat).Truncate(time.Microsecond).String())
+	}
+	errs := s.errs.Load()
+	if errs != 0 {
+		sb.WriteString(" errs:")
+		sb.WriteString(strconv.FormatInt(errs, 10))
+	}
+	sb.WriteUint8(']')
+
 	return sb.String()
 }
 
@@ -389,23 +452,30 @@ func (r *LsoXact) initWalk() {
 	runtime.Gosched()
 }
 
-// The guarantee here is that we either put something on the channel and our
-// request will be processed (since the `msgCh` is unbuffered) or we receive
-// message that the xaction has been stopped.
 func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 	debug.Assert(r.vlabs != nil)
 	begin := mono.NanoTime()
 	select {
 	case r.msgCh <- msg:
 		resp := <-r.respCh
-		if resp != nil && resp.Err == nil {
-			delta := mono.SinceNano(begin)
-			tstats := core.T.StatsUpdater()
-			tstats.IncWith(stats.ListCount, r.vlabs)
-			tstats.AddWith(
-				cos.NamedVal64{Name: stats.ListLatency, Value: delta, VarLabs: r.vlabs},
-			)
+		if resp == nil {
+			return nil
 		}
+		if resp.Err != nil {
+			r.stats.errs.Inc()
+			return resp
+		}
+		delta := mono.SinceNano(begin)
+
+		// prom metrics
+		tstats := core.T.StatsUpdater()
+		tstats.IncWith(stats.ListCount, r.vlabs)
+		tstats.AddWith(
+			cos.NamedVal64{Name: stats.ListLatency, Value: delta, VarLabs: r.vlabs},
+		)
+		// internal (via CtlMsg)
+		r.stats.addResp(resp, delta)
+
 		return resp
 	case <-r.stopCh.Listen():
 		return &LsoRsp{Err: ErrGone}
@@ -414,8 +484,8 @@ func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 
 func (r *LsoXact) doPage() *LsoRsp {
 	// throttle
-	r.npages++
-	if r.adv.ShouldCheck(r.npages) {
+	nreq := r.stats.nreq.Inc()
+	if r.adv.ShouldCheck(nreq) {
 		r.adv.Refresh()
 		if r.adv.Sleep > 0 {
 			time.Sleep(r.adv.Sleep)
@@ -519,13 +589,19 @@ func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoRes
 		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.walk.bp)
-		smap = core.T.Sowner().Get()
-		tsi  = smap.GetActiveNode(r.msg.SID)
+		tsi  = r.smap.GetActiveNode(r.msg.SID)
 	)
 	if tsi == nil {
-		err = fmt.Errorf("%s: designated (\"paging\") %s is down or inactive, %s", r, meta.Tname(r.msg.SID), smap)
+		err = fmt.Errorf("%s: designated (\"paging\") %s is down or inactive, %s", r, meta.Tname(r.msg.SID), r.smap)
 		goto ex
 	}
+
+	if smap2 := core.T.Sowner().Get(); !smap2.SameTargets(r.smap) {
+		if !r.walk.wor {
+			return fmt.Errorf("%s: list-objects topology changed: %s => %s", r, r.smap.StringEx(), smap2.StringEx())
+		}
+	}
+
 	r.wiCnt.Inc()
 
 	if r.walk.this {
@@ -907,4 +983,18 @@ func (r *LsoXact) _recv(hdr *transport.ObjHdr, objReader io.Reader, buf []byte) 
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 	}
 	return
+}
+
+//////////////
+// lsoStats //
+//////////////
+
+func (s *lsoStats) addResp(resp *LsoRsp, delta int64) {
+	s.npages.Add(1)
+	s.ents.Add(int64(len(resp.Lst.Entries)))
+	s.totLat.Add(delta)
+	maxLat := s.maxLat.Load()
+	if delta > maxLat {
+		s.maxLat.CAS(maxLat, delta)
+	}
 }

@@ -151,7 +151,6 @@ func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 
 const (
 	ctlMsgRefreshIval = 10 * time.Second // coarse refresh must be enough for `ais show job`
-	ctlMsgBufSize     = 256
 )
 
 func (xreb *Rebalance) FinalCtlMsg() {

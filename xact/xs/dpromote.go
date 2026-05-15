@@ -80,7 +80,7 @@ func (r *XactDirPromote) SetFshare(v bool) { r.confirmedFshare = v } // is calle
 
 func (r *XactDirPromote) CtlMsg() string {
 	var sb cos.SB
-	sb.Init(128)
+	sb.Init(ctlMsgBufSize)
 	r.p.args.Str(&sb)
 	return sb.String()
 }

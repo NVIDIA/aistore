@@ -160,7 +160,7 @@ func (r *XactNsumm) CtlMsg() string {
 		return r.ctlmsg
 	}
 	var sb cos.SB
-	sb.Init(96)
+	sb.Init(ctlMsgBufSize)
 	p, msg := r.p, r.p.msg
 	msg.Str(p.Bck.Cname(msg.Prefix), &sb)
 	r.ctlmsg = sb.String()

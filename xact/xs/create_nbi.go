@@ -166,7 +166,7 @@ func (r *XactNBI) CtlMsg() string {
 		return r.ctlmsg
 	}
 	sb := &cos.SB{}
-	sb.Init(80)
+	sb.Init(ctlMsgBufSize)
 	r.msg.Str(r.Bck().Cname(""), sb)
 	r.ctlmsg = sb.String()
 	return r.ctlmsg

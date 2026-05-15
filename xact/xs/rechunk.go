@@ -203,7 +203,7 @@ func (r *xactRechunk) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 func (r *xactRechunk) CtlMsg() string {
 	var sb cos.SB
-	sb.Init(128)
+	sb.Init(ctlMsgBufSize)
 
 	sb.WriteString("objsize-limit:")
 	sb.WriteString(cos.ToSizeIEC(r.args.ObjSizeLimit, 0))

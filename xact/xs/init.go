@@ -11,6 +11,10 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+const (
+	ctlMsgBufSize = 256
+)
+
 // for additional startup-time reg-s see lru, downloader, ec
 func Pinit() {
 	xreg.RegNonBckXact(&eleFactory{})
