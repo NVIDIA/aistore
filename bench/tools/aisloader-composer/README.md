@@ -30,7 +30,7 @@ This directory contains scripts and ansible playbooks to benchmark an AIS cluste
 
 ### Optional
 
-1. To run disk benchmarks, uncomment the desired sections from the [disk_bench.sh](/bench/aisloader-composer/playbooks/scripts/disk_bench.sh) and run the `disk_bench.yaml` playbook with the `target_hosts` variable. This will trigger [fio](https://github.com/axboe/fio) benchmarks on the corresponding AIS targets.
+1. To run disk benchmarks, uncomment the desired sections from the [disk_bench.sh](/bench/tools/aisloader-composer/playbooks/scripts/disk_bench.sh) and run the `disk_bench.yaml` playbook with the `target_hosts` variable. This will trigger [fio](https://github.com/axboe/fio) benchmarks on the corresponding AIS targets.
 2. To view [grafana](https://github.com/grafana/grafana) dashboards with metrics sent by `aisloader` and `netdata`, use your browser to access `grafana_host` (see `grafana_host` argument in the scripts). Note that the default grafana port is `3000`. Then you can optionally import the included throughput dashboard in `grafana_dashboards`.
 3. To view individual host `netdata` dashboards, use your browser to access the host's IP at the `netdata` default port `19999`.
 
