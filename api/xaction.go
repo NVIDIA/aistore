@@ -320,14 +320,6 @@ func WaitForStatus(bp BaseParams, args *xact.ArgsMsg, cond StatusCond) (*nl.Stat
 	return pollStatus(bp, args, cond)
 }
 
-// Query IC once (no polling).
-func GetStatus(bp BaseParams, args *xact.ArgsMsg) (*nl.Status, error) {
-	if err := _validateXargs(args); err != nil {
-		return nil, err
-	}
-	return GetOneXactionStatus(bp, args)
-}
-
 // Usage: xactions that report status back to IC (e.g. rebalance).
 func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (out *nl.Status, err error) {
 	out, err = WaitForStatus(bp, args, nil)

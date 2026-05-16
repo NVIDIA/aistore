@@ -46,7 +46,6 @@ type (
 		nl    nl.Listener
 		smap  *smapX
 		query url.Values
-		msg   any
 	}
 
 	xactRegMsg struct {

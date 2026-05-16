@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -100,7 +99,6 @@ func _checkVerChanged(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
 // one page; common code (native, s3 api)
 func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX) (*cmn.LsoRes, error) {
 	var (
-		nl    nl.Listener
 		lst   *cmn.LsoRes
 		newls bool
 	)
@@ -111,17 +109,6 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 	fc, err := p._lsofc(bck, lsmsg, smap)
 	if err != nil {
 		return nil, err
-	}
-	if newls {
-		if fc.wantOnlyRemote {
-			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, meta.NodeMap{fc.tsi.ID(): fc.tsi}, bck.Bucket())
-		} else {
-			// bcast
-			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
-		}
-		// NOTE #2: TODO: currently, always primary - hrw redirect vs scenarios***
-		nl.SetOwner(smap.Primary.ID())
-		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
 	}
 
 	if fc.listRemote {

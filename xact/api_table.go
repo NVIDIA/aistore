@@ -70,6 +70,34 @@ const (
 	ScopeT             // target
 )
 
+// ICMode declares whether and how an xaction kind reports status to IC.
+//
+// When non-zero, targets notify IC members, and the status/wait API may query
+// an IC proxy instead of polling all targets. When zero, the generic IC status
+// path is not available; callers must use the snaps-based API or an
+// action-specific status path.
+//
+// The flags are independent and may be combined:
+//
+//	ICUponTerm     - target notifies IC on terminal state (finished/aborted);
+//	                 most IC-tracked kinds use this (rebalance, ec-encode, ...).
+//
+//	ICUponProgress - target notifies IC periodically with progress
+//	                 (see nl.Base.Interval); currently: ActDownload only.
+//
+// Intrinsic for ScopeT (resilver) and on-demand PUT/GET lifecycles (ECGet/ECPut/ECRespond, PutCopies).
+//
+// For idle-cycle multi-object kinds (Archive, CopyObjects, ETLObjects, GetBatch), "finished" is ill-defined
+// under UponTerm, hence ICNone today; a future migration to ICUponProgress would be the natural fit.
+type ICMode uint8
+
+const (
+	ICUponTerm     ICMode = 1 << iota // -> core.UponTerm
+	ICUponProgress                    // -> core.UponProgress
+)
+
+const ICNone ICMode = 0
+
 type (
 	Descriptor struct {
 		DisplayName string          // as implied
@@ -96,6 +124,9 @@ type (
 		// suppress verbose per-state log records and keep only hk.OldAgeXshort (1m)
 		// in registry history
 		QuietBrief bool
+
+		// IC reporting mode; see ICMode comment above
+		ICMode ICMode
 	}
 )
 
@@ -106,25 +137,27 @@ type (
 var Table = map[string]Descriptor{
 	// bucket-less xactions that will typically have a 'cluster' scope (with resilver being a notable exception)
 	apc.ActElection:  {DisplayName: "elect-primary", Scope: ScopeG, Startable: false},
-	apc.ActRebalance: {Scope: ScopeG, Startable: true, Metasync: true, Rebalance: true},
+	apc.ActRebalance: {Scope: ScopeG, Startable: true, Metasync: true, Rebalance: true, ICMode: ICUponTerm},
 
-	apc.ActETLInline: {Scope: ScopeG, Startable: false, AbortByReb: true},
+	apc.ActETLInline: {Scope: ScopeG, Startable: false, AbortByReb: true, ICMode: ICUponTerm},
 
 	// (one bucket) | (all buckets)
-	apc.ActLRU:          {DisplayName: "lru-eviction", Scope: ScopeGB, Startable: true},
-	apc.ActStoreCleanup: {DisplayName: "cleanup", Scope: ScopeGB, Startable: true, ConflictRebRes: true},
+	apc.ActLRU:          {DisplayName: "lru-eviction", Scope: ScopeGB, Startable: true, ICMode: ICUponTerm},
+	apc.ActStoreCleanup: {DisplayName: "cleanup", Scope: ScopeGB, Startable: true, ConflictRebRes: true, ICMode: ICUponTerm},
+
 	apc.ActSummaryBck: {
 		DisplayName: "summary",
 		Scope:       ScopeGB,
 		Access:      apc.AceObjLIST | apc.AceBckHEAD,
 		Startable:   false,
 		Metasync:    false,
+		// ICMode: ICNone - synchronous; proxy aggregates per-target results and returns to client
 	},
 
 	// single target (node)
-	apc.ActResilver:   {Scope: ScopeT, Startable: true, Resilver: true},
-	apc.ActRechunk:    {Scope: ScopeB, Startable: true, RefreshCap: true, ConflictRebRes: true, AbortByReb: true},
-	apc.ActIndexShard: {Scope: ScopeB, Startable: true, RefreshCap: false, ConflictRebRes: true, AbortByReb: false},
+	apc.ActResilver:   {Scope: ScopeT, Startable: true, Resilver: true}, // ICMode: ICNone - ScopeT, single-target, no aggregation
+	apc.ActRechunk:    {Scope: ScopeB, Startable: true, RefreshCap: true, ConflictRebRes: true, AbortByReb: true, ICMode: ICUponTerm},
+	apc.ActIndexShard: {Scope: ScopeB, Startable: true, RefreshCap: false, ConflictRebRes: true, AbortByReb: false, ICMode: ICUponTerm},
 
 	// on-demand EC and n-way replication
 	// (non-startable, triggered by PUT => erasure-coded or mirrored bucket)
@@ -137,6 +170,8 @@ var Table = map[string]Descriptor{
 	// on-demand multi-object
 	//
 	apc.ActArchive: {Scope: ScopeB, Access: apc.AccessRW, Startable: false, RefreshCap: true, Idles: true},
+
+	// TODO: support ICUponProgress
 	apc.ActCopyObjects: {
 		DisplayName:    "copy-objects",
 		Scope:          ScopeB,
@@ -147,6 +182,8 @@ var Table = map[string]Descriptor{
 		ConflictRebRes: true,
 		AbortByReb:     true,
 	},
+
+	// TODO: support ICUponProgress
 	apc.ActETLObjects: {
 		DisplayName:    "etl-objects",
 		Scope:          ScopeB,
@@ -158,9 +195,10 @@ var Table = map[string]Descriptor{
 		AbortByReb:     true,
 	},
 
-	apc.ActBlobDl: {Access: apc.AccessRW, Scope: ScopeB, Startable: true, AbortByReb: true, RefreshCap: true},
+	apc.ActBlobDl: {Access: apc.AccessRW, Scope: ScopeB, Startable: true, AbortByReb: true, RefreshCap: true, ICMode: ICUponTerm},
 
-	apc.ActDownload: {Access: apc.AccessRW, Scope: ScopeG, Startable: false, Idles: true, AbortByReb: true},
+	// target pushes periodic progress (tgtdl.go); also finalizes on term
+	apc.ActDownload: {Access: apc.AccessRW, Scope: ScopeG, Startable: false, Idles: true, AbortByReb: true, ICMode: ICUponTerm | ICUponProgress},
 
 	// in its own class
 	apc.ActDsort: {
@@ -172,6 +210,7 @@ var Table = map[string]Descriptor{
 		ExtendedStats:  true,
 		ConflictRebRes: true,
 		AbortByReb:     true,
+		// ICMode: ICNone - dsort has its own manager/notification machinery (see ext/dsort)
 	},
 
 	// multi-object
@@ -181,6 +220,7 @@ var Table = map[string]Descriptor{
 		Access:      apc.AcePromote,
 		Startable:   false,
 		RefreshCap:  true,
+		ICMode:      ICUponTerm,
 	},
 	apc.ActEvictObjects: {
 		DisplayName: "evict-objects",
@@ -188,6 +228,7 @@ var Table = map[string]Descriptor{
 		Access:      apc.AceObjDELETE,
 		Startable:   false,
 		RefreshCap:  true,
+		ICMode:      ICUponTerm,
 	},
 	apc.ActEvictRemoteBck: {
 		DisplayName: "evict-remote-bucket",
@@ -195,6 +236,9 @@ var Table = map[string]Descriptor{
 		Access:      apc.AceObjDELETE,
 		Startable:   false,
 		RefreshCap:  true,
+		// TODO: migrate to ICUponTerm; currently:
+		// - keep-md is multi-object evict;
+		// - full destroy is synchronous BMD update + per-target DestroyBucket, not IC-tracked
 	},
 	apc.ActDeleteObjects: {
 		DisplayName: "delete-objects",
@@ -202,13 +246,17 @@ var Table = map[string]Descriptor{
 		Access:      apc.AceObjDELETE,
 		Startable:   false,
 		RefreshCap:  true,
+		ICMode:      ICUponTerm,
 	},
+
+	// TODO: support ICUponProgress
 	apc.ActPrefetchObjects: {
 		DisplayName: "prefetch-objects",
 		Scope:       ScopeB,
 		Access:      apc.AccessRW,
 		Startable:   true,
 		RefreshCap:  true,
+		ICMode:      ICUponTerm,
 	},
 
 	// entire bucket (storage svcs)
@@ -221,6 +269,7 @@ var Table = map[string]Descriptor{
 		RefreshCap:     true,
 		ConflictRebRes: true,
 		AbortByReb:     true,
+		ICMode:         ICUponTerm,
 	},
 	apc.ActMakeNCopies: {
 		DisplayName: "mirror",
@@ -229,6 +278,7 @@ var Table = map[string]Descriptor{
 		Startable:   true,
 		Metasync:    true,
 		RefreshCap:  true,
+		ICMode:      ICUponTerm,
 	},
 	apc.ActMoveBck: {
 		DisplayName:    "rename-bucket",
@@ -239,6 +289,7 @@ var Table = map[string]Descriptor{
 		Rebalance:      true,
 		ConflictRebRes: true,
 		AbortByReb:     true,
+		ICMode:         ICUponTerm,
 	},
 	apc.ActCopyBck: {
 		DisplayName:    "copy-bucket",
@@ -249,6 +300,7 @@ var Table = map[string]Descriptor{
 		RefreshCap:     true,
 		ConflictRebRes: true,
 		AbortByReb:     true,
+		ICMode:         ICUponTerm,
 	},
 	apc.ActETLBck: {
 		DisplayName:    "etl-bucket",
@@ -259,15 +311,18 @@ var Table = map[string]Descriptor{
 		RefreshCap:     true,
 		ConflictRebRes: true,
 		AbortByReb:     true,
+		ICMode:         ICUponTerm,
 	},
 
-	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true, QuietBrief: true},
+	// in re IC: list-objects clients stream pages directly; 'show job' uses snaps; zero WaitForXactionIC callers
+	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true, QuietBrief: true, ICMode: ICNone},
 
-	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: true, QuietBrief: true}, // x-moss
+	// x-moss; IC: ICNone - proxy-coordinated, target-direct status
+	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: true, QuietBrief: true},
 
-	apc.ActCreateNBI: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: false},
+	apc.ActCreateNBI: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: false, ICMode: ICUponTerm},
 
-	// cache management, internal usage
+	// metadata-cache management, internal usage
 	apc.ActLoadLomCache: {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},
 }
 
