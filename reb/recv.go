@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -394,10 +395,21 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 		}
 		return err
 	}
+
 	// Send local slice
+	dm := reb.dm
+	if dm == nil {
+		err := errors.New("reb/ec: dm nil")
+		if e := xreb.AbortErr(); e != nil {
+			err = e
+		} else {
+			xreb.Abort(err)
+		}
+		return err
+	}
 	if moveTo != nil {
 		req.md.SliceID = md.SliceID
-		if err = reb.sendFromDisk(ct, req.md, moveTo, xreb, workFQN); err != nil {
+		if err = reb.sendFromDisk(ct, req.md, moveTo, xreb, dm, workFQN); err != nil {
 			nlog.Errorln("failed to move slice to", moveTo, "[", err, "]")
 		}
 	}
@@ -417,7 +429,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 		o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: 0}}
 		o.Hdr.Bck.Copy(ct.Bck().Bucket())
 		o.Hdr.Opaque = ntfnMD.NewPack(rebMsgEC)
-		if errSend := reb.dm.Send(o, nil, tsi); errSend != nil && err == nil {
+		if errSend := dm.Send(o, nil, tsi); errSend != nil && err == nil {
 			// TODO: consider r.AddErr(errSend)
 			err = fmt.Errorf("%s %s: failed to send updated EC MD: %v", core.T, xreb.ID(), err)
 		}
