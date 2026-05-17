@@ -15,53 +15,27 @@ import (
 )
 
 // Static descriptor table (xact.Table) - one entry per xaction kind.
-// The table drives runtime decisions that would otherwise be scattered across the codebase:
-// what can be started, what aborts what, and which xactions can coexist.
 //
-// The table (below) is static, public, and global Kind => [] map that contains
-// xaction kinds and static properties, such as `Startable`, `Owned`, etc.
+// The table is the source of truth for static xaction properties that would
+// otherwise be scattered across the codebase: scope, startability, metadata
+// effects, capacity refresh, idling behavior, mutual coexistence with global
+// rebalance and node-local resilver, and generic status/wait reporting mode.
 //
-// In particular, "startability" is defined as ability to start xaction via `api.StartXaction`
-// (whereby copying bucket, for instance, requires a separate `api.CopyBucket`, etc.)
+// Per-property semantics are documented inline on the Descriptor struct fields below.
 //
-// Coexistence with rebalance and resilver
-// ---------------------------------------
-// Two flags govern the relationship between a given xaction kind and a cluster-wide
-// rebalance (or node-local resilver) run:
+// Key properties:
+//   - Startable means the kind can be started via the generic StartXaction path.
+//     Non-startable kinds may still be real xactions started through other paths.
+//   - ConflictRebRes and AbortByReb define limited coexistence with rebalance
+//     and resilver. They usually travel together; exceptions are deliberate and
+//     documented next to their descriptor entries.
+//   - Idles marks demand-driven xactions that may remain alive between requests.
+//   - ICMode declares whether the kind supports the generic IC status/wait path.
+//     ICNone does not mean "no status"; callers must use snaps-based or
+//     action-specific status/wait.
 //
-//   ConflictRebRes - refuse to start this kind when rebalance/resilver is already in progress;
-//                    conversely, refuse to start rebalance/resilver when this kind is running.
-//                    Enforced at xreg renew time.
-//
-//   AbortByReb     - abort in-flight instances of this kind when a new rebalance starts.
-//                    Enforced by xreg.AbortByNewReb() at the top of reb.Run().
-//
-// In practice the two almost always travel together: if the target set must be stable to
-// start the xaction, it must remain stable to finish it. The exceptions are deliberate:
-//
-//   AbortByReb without ConflictRebRes - ETLInline, BlobDl, Download.
-//     These are long-running or on-demand and shouldn't be refused at start time just
-//     because rebalance happens to be running, but they cannot correctly survive a
-//     topology change mid-flight.
-//
-//   ConflictRebRes without AbortByReb - IndexShard.
-//     Builds a best-effort index; stale entries are detected via LOM checksum and fall
-//     back to tar.Next() scan. Aborting a 90%-complete build is wasteful when the partial
-//     output remains useful and a resumed build atomically skips already-indexed LOMs
-//     (lom.md.flags&Indexed + index file as an atomic pair).
-//
-// Rebalance and Resilver flags
-// ----------------------------
-// Rebalance=true and Resilver=true mark the xactions that ARE the rebalance/resilver
-// themselves (plus ActMoveBck which performs a rebalance-like move). They are informational
-// and used by xreg to recognize self-conflicts.
-//
-// Stable Target Set
-// ----------------------------
-// A job requires a stable target set iff it sets ConflictRebRes (refuse to
-// start during rebalance) or AbortByReb (abort if rebalance starts mid-flight).
-// Xactions that open intra-cluster peer-to-peer streams generally pin those
-// streams to the Smap snapshot selected at construction; see transport/bundle.
+// See xact/README.md for the full coexistence model, xaction lifecycle,
+// IC vs snaps, status/wait models, and the theory of operation behind this table.
 
 const (
 	ScopeG  = iota + 1 // cluster
@@ -71,24 +45,14 @@ const (
 )
 
 // ICMode declares whether and how an xaction kind reports status to IC.
-//
 // When non-zero, targets notify IC members, and the status/wait API may query
 // an IC proxy instead of polling all targets. When zero, the generic IC status
 // path is not available; callers must use the snaps-based API or an
 // action-specific status path.
 //
 // The flags are independent and may be combined:
-//
-//	ICUponTerm     - target notifies IC on terminal state (finished/aborted);
-//	                 most IC-tracked kinds use this (rebalance, ec-encode, ...).
-//
-//	ICUponProgress - target notifies IC periodically with progress
-//	                 (see nl.Base.Interval); currently: ActDownload only.
-//
-// Intrinsic for ScopeT (resilver) and on-demand PUT/GET lifecycles (ECGet/ECPut/ECRespond, PutCopies).
-//
-// For idle-cycle multi-object kinds (Archive, CopyObjects, ETLObjects, GetBatch), "finished" is ill-defined
-// under UponTerm, hence ICNone today; a future migration to ICUponProgress would be the natural fit.
+// * ICUponTerm - target notifies IC on terminal state (finished/aborted);
+// * ICUponProgress - target notifies IC periodically with progress
 type ICMode uint8
 
 const (
@@ -155,8 +119,12 @@ var Table = map[string]Descriptor{
 	},
 
 	// single target (node)
-	apc.ActResilver:   {Scope: ScopeT, Startable: true, Resilver: true}, // ICMode: ICNone - ScopeT, single-target, no aggregation
-	apc.ActRechunk:    {Scope: ScopeB, Startable: true, RefreshCap: true, ConflictRebRes: true, AbortByReb: true, ICMode: ICUponTerm},
+	apc.ActResilver: {Scope: ScopeT, Startable: true, Resilver: true}, // ICMode: ICNone - ScopeT, single-target, no aggregation
+	apc.ActRechunk:  {Scope: ScopeB, Startable: true, RefreshCap: true, ConflictRebRes: true, AbortByReb: true, ICMode: ICUponTerm},
+
+	// IndexShard is a best-effort build: stale entries are detected via LOM checksum
+	// and fall back to tar.Next() scan. A partial index remains useful, and resumed
+	// builds atomically skip already-indexed LOMs (lom.md.flags&Indexed + index file).
 	apc.ActIndexShard: {Scope: ScopeB, Startable: true, RefreshCap: false, ConflictRebRes: true, AbortByReb: false, ICMode: ICUponTerm},
 
 	// on-demand EC and n-way replication

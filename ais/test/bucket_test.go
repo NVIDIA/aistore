@@ -930,7 +930,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	bp := tools.BaseAPIParams(m.proxyURL)
 
 	xargs := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
-	_, _ = api.WaitForXactionIC(bp, &xargs)
+	api.WaitForSnaps(bp, &xargs, xargs.Idle())
 
 	for _, copies := range numCopies {
 		makeNCopies(t, bp, m.bck, copies)

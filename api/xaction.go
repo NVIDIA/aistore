@@ -5,6 +5,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -60,9 +61,16 @@ import (
 //     - See xact.IdlesBeforeFinishing(kind) to check if a given xaction kind _idles_.
 //
 // See also: xact.ArgsMsg, xact.MultiSnap, xact.IdlesBeforeFinishing.
-// Related documentation: docs/overview.md, docs/batch.md, docs/cli.md
+// Related documentation: xact/README.md, docs/overview.md, docs/batch.md, docs/cli.md
+
+const (
+	fmtErrNosel = "api.xaction: missing selector (expecting kind and/or UUID): %s"
+)
 
 func StartXaction(bp BaseParams, args *xact.ArgsMsg, extra string /* e.g. blob-downloader objname */) (xid string, err error) {
+	if err := _validateKindID(args, false /*need IC*/); err != nil {
+		return "", err
+	}
 	if !xact.Table[args.Kind].Startable {
 		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
@@ -91,6 +99,9 @@ func StartXaction(bp BaseParams, args *xact.ArgsMsg, extra string /* e.g. blob-d
 
 // a.k.a. stop
 func AbortXaction(bp BaseParams, args *xact.ArgsMsg) (err error) {
+	if err := _validateKindID(args, false /*need IC*/); err != nil {
+		return err
+	}
 	var (
 		q   = qalloc()
 		msg = apc.ActMsg{Action: apc.ActXactStop, Value: args}
@@ -146,6 +157,9 @@ func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err 
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
 // NOTE: args.Kind can be either xaction kind or name - here and elsewhere
 func QueryXactionSnaps(bp BaseParams, args *xact.ArgsMsg) (xs xact.MultiSnap, err error) {
+	if err := _validateKindID(args, false /*need IC*/); err != nil {
+		return nil, err
+	}
 	var (
 		msg = xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 		q   = qalloc()
@@ -181,6 +195,9 @@ func QueryXactionSnaps(bp BaseParams, args *xact.ArgsMsg) (xs xact.MultiSnap, er
 // the one that's finished most recently,
 // if exists
 func GetOneXactionStatus(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, err error) {
+	if err = _validateKindID(args, true /*need IC*/); err != nil {
+		return nil, err
+	}
 	status = &nl.Status{}
 	q := qalloc()
 	q.Set(apc.QparamWhat, apc.WhatOneXactStatus)
@@ -193,6 +210,9 @@ func GetOneXactionStatus(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, 
 
 // same as above, except that it returns _all_ matching xactions
 func GetAllXactionStatus(bp BaseParams, args *xact.ArgsMsg) (matching nl.StatusVec, err error) {
+	if err := _validateKindID(args, true /*need IC*/); err != nil {
+		return nil, err
+	}
 	q := qalloc()
 	q.Set(apc.QparamWhat, apc.WhatAllXactStatus)
 	if args.Force {
@@ -252,7 +272,10 @@ func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error
 
 // Poll QueryXactionSnaps() until `cond` returns done=true; if `cond` is nil, default to args.Finished()
 func WaitForSnaps(bp BaseParams, args *xact.ArgsMsg, cond xact.SnapsCond) (xact.MultiSnap, error) {
-	if err := _validateXargs(args); err != nil {
+	if args.Kind == "" && args.ID == "" {
+		return nil, fmt.Errorf(fmtErrNosel, args.String())
+	}
+	if err := _validateKindID(args, false /*need IC*/); err != nil {
 		return nil, err
 	}
 
@@ -269,7 +292,10 @@ func WaitForSnaps(bp BaseParams, args *xact.ArgsMsg, cond xact.SnapsCond) (xact.
 
 // Query once (no polling).
 func GetSnaps(bp BaseParams, args *xact.ArgsMsg) (xact.MultiSnap, error) {
-	if err := _validateXargs(args); err != nil {
+	if args.Kind == "" && args.ID == "" {
+		return nil, fmt.Errorf(fmtErrNosel, args.String())
+	}
+	if err := _validateKindID(args, false /*need IC*/); err != nil {
 		return nil, err
 	}
 	return QueryXactionSnaps(bp, args)
@@ -311,7 +337,10 @@ func StatusFinished() StatusCond {
 // WaitForStatus polls GetOneXactionStatus until cond returns done=true.
 // If cond is nil, it waits until status.IsFinished().
 func WaitForStatus(bp BaseParams, args *xact.ArgsMsg, cond StatusCond) (*nl.Status, error) {
-	if err := _validateXargs(args); err != nil {
+	if args.Kind == "" && args.ID == "" {
+		return nil, fmt.Errorf(fmtErrNosel, args.String())
+	}
+	if err := _validateKindID(args, true /*need IC*/); err != nil {
 		return nil, err
 	}
 	if cond == nil {
@@ -332,6 +361,28 @@ func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (out *nl.Status, err er
 		err = nil
 	}
 	return
+}
+
+// Generic (convenient and minimal) API to wait on xaction:
+// - requires xaction kind
+// - dispatches to status-based or snaps-based polling based on xact.Table[kind].ICMode
+// - discards the polled result; caller can re-fetch via GetOneXactionStatus or QueryXactionSnaps
+// - returns: nil on success, error otherwise (includes timeout as plain error)
+func WaitForXaction(bp BaseParams, kind, id string, timeout time.Duration) error {
+	if kind == "" {
+		return errors.New("WaitForXaction: missing required xaction kind")
+	}
+	args := xact.ArgsMsg{Kind: kind, ID: id, Timeout: timeout}
+	err := xact.CheckValidKindIC(args.Kind)
+	if err == nil {
+		_, err = WaitForStatus(bp, &args, nil)
+		return err
+	}
+	if !cmn.IsErrXactNonIC(err) {
+		return err
+	}
+	_, err = WaitForSnaps(bp, &args, nil)
+	return err
 }
 
 //
@@ -414,13 +465,17 @@ func pollAny[T any](prefix string, args *xact.ArgsMsg, apicb func() (T, error), 
 // helpers
 //
 
-// `args` filter must contain at least kind or UUID
-func _validateXargs(args *xact.ArgsMsg) error {
-	if args.Kind == "" && args.ID == "" {
-		return fmt.Errorf("api.xaction: missing selector (expecting kind and/or UUID): %s", args.String())
-	}
+// validates args.Kind / args.ID format only (does NOT require either to be set).
+// Callers that need at-least-one-selector enforcement must check explicitly.
+func _validateKindID(args *xact.ArgsMsg, needIC bool) error {
 	if args.Kind != "" {
-		if err := xact.CheckValidKind(args.Kind); err != nil {
+		var err error
+		if needIC {
+			err = xact.CheckValidKindIC(args.Kind)
+		} else {
+			err = xact.CheckValidKind(args.Kind)
+		}
+		if err != nil {
 			return err
 		}
 	}

@@ -223,12 +223,15 @@ type (
 		action  string
 		detail  string
 	}
-	ErrXactUsePrev struct { // equivalent to xreg.WprUse
+	ErrXactUsePrev struct { // (equivalent to xreg.WprUse; internal use)
 		xaction string
 	}
 	ErrXactTgtInMaint struct {
 		xaction string
 		tname   string
+	}
+	ErrXactNonIC struct {
+		xaction string
 	}
 	ErrStreamTerminated struct {
 		err    error
@@ -952,7 +955,7 @@ func NewErrXactUsePrev(xaction string) *ErrXactUsePrev {
 }
 
 func (e *ErrXactUsePrev) Error() string {
-	return e.xaction + "is already running - not starting"
+	return e.xaction + " is already running - not starting"
 }
 
 func IsErrXactUsePrev(err error) bool {
@@ -982,6 +985,22 @@ func NewErrXactTgtInMaint(xaction, tname string) *ErrXactTgtInMaint {
 func (e *ErrXactTgtInMaint) Error() string {
 	return fmt.Sprintf("%s is in maintenance or being decommissioned - cannot run %s",
 		e.tname, e.xaction)
+}
+
+// ErrXactNonIC
+
+func NewErrXactNonIC(xaction string) *ErrXactNonIC {
+	return &ErrXactNonIC{xaction: xaction}
+}
+
+func (e *ErrXactNonIC) Error() string {
+	return e.xaction + " does not report status to IC; use snaps-based status\n" +
+		"(further details at " + GitHubHome + "/blob/main/xact/README.md)"
+}
+
+func IsErrXactNonIC(err error) bool {
+	_, ok := err.(*ErrXactNonIC)
+	return ok
 }
 
 // ErrRangeNotSatisfiable

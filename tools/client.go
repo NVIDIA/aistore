@@ -703,12 +703,6 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
 	}
 }
 
-// TODO -- FIXME: revise and rewrite
-//
-// Waits for both resilver and rebalance to complete.
-// If they were not started, this function treats them as completed
-// and returns. If timeout set, if any of rebalances doesn't complete before timeout
-// the function ends with fatal.
 func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Duration) {
 	var (
 		wg    = &sync.WaitGroup{}
@@ -718,7 +712,6 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	tassert.CheckFatal(t, err)
 
 	if nat := smap.CountActiveTs(); nat < 1 {
-		// NOTE in re nat == 1: single remaining target vs. graceful shutdown and such
 		s := "No targets"
 		tlog.Logfln("%s, %s - cannot rebalance", s, smap)
 		_waitResil(t, bp, controlPlaneSleep)
@@ -745,13 +738,7 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 
 	go func() {
 		defer wg.Done()
-		xargs := xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
-		if _, err := api.WaitForXactionIC(bp, &xargs); err != nil {
-			if cmn.IsStatusNotFound(err) {
-				return
-			}
-			errCh <- err
-		}
+		_waitResil(t, bp, timeout)
 	}()
 
 	wg.Wait()
@@ -762,28 +749,12 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	}
 }
 
-// compare w/ `tools.WaitForResilvering`
 func _waitResil(t testing.TB, bp api.BaseParams, timeout time.Duration) {
 	xargs := xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
-	_, err := api.WaitForXactionIC(bp, &xargs)
-	if err == nil {
-		return
+	_, err := api.WaitForSnaps(bp, &xargs, xargs.NotRunning())
+	if err != nil {
+		tassert.CheckError(t, err)
 	}
-	if herr, ok := err.(*cmn.ErrHTTP); ok {
-		if herr.Status == http.StatusNotFound { // double check iff not found
-			time.Sleep(xactPollSleep)
-			_, err = api.WaitForXactionIC(bp, &xargs)
-		}
-	}
-	if err == nil {
-		return
-	}
-	if herr, ok := err.(*cmn.ErrHTTP); ok {
-		if herr.Status == http.StatusNotFound {
-			err = nil
-		}
-	}
-	tassert.CheckError(t, err)
 }
 
 func WaitForRebalanceByID(t *testing.T, bp api.BaseParams, rebID string, timeouts ...time.Duration) {

@@ -756,7 +756,7 @@ func TestSingleResilver(t *testing.T) {
 
 	// Wait for specific resilvering x[id]
 	args = xact.ArgsMsg{ID: id, Kind: apc.ActResilver, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(bp, &args)
+	_, err = api.WaitForSnaps(bp, &args, nil)
 	tassert.CheckFatal(t, err)
 
 	// Make sure other nodes were not resilvered

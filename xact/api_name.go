@@ -51,16 +51,30 @@ func ParseCname(cname string) (xactKind, xactID string, _ error) {
 // validators (helpers)
 //
 
+const fmtErrInvalidKind = "invalid xaction (job) kind %q"
+
 func IsValidKind(kind string) bool {
 	_, ok := Table[kind]
 	return ok
 }
 
 func CheckValidKind(kind string) (err error) {
-	if _, ok := Table[kind]; !ok {
-		err = fmt.Errorf("invalid xaction (job) kind %q", kind)
+	_, dtor := getDtor(kind)
+	if dtor == nil {
+		err = fmt.Errorf(fmtErrInvalidKind, kind)
 	}
 	return err
+}
+
+func CheckValidKindIC(kind string) (err error) {
+	_, dtor := getDtor(kind)
+	if dtor == nil {
+		return fmt.Errorf(fmtErrInvalidKind, kind)
+	}
+	if dtor.ICMode == ICNone {
+		return cmn.NewErrXactNonIC(kind)
+	}
+	return nil
 }
 
 func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id) }

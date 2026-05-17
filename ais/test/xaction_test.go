@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/nl"
@@ -57,6 +58,10 @@ func TestXactionAllStatus(t *testing.T) {
 				xargs.Kind = xname
 			}
 			vec, err := api.GetAllXactionStatus(baseParams, &xargs)
+			if cmn.IsErrXactNonIC(err) {
+				continue
+			}
+
 			tassert.CheckFatal(t, err)
 			if len(vec) == 0 {
 				continue
