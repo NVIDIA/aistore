@@ -17,9 +17,20 @@ from aistore.sdk.const import (
     AIS_CLIENT_KEY,
     AIS_CLIENT_CRT,
     AIS_SKIP_VERIFY,
+    AIS_SKIP_VERIFY_CRT,
     HTTPS,
     HTTP,
 )
+from aistore.sdk.utils import parse_bool
+
+
+def _env_skip_verify() -> bool:
+    # `AIS_SKIP_VERIFY_CRT` is the canonical name (matches Go CLI / aisloader);
+    # `AIS_SKIP_VERIFY` is retained for backward compatibility.
+    value = os.environ.get(AIS_SKIP_VERIFY_CRT)
+    if value is None:
+        value = os.environ.get(AIS_SKIP_VERIFY)
+    return parse_bool(value)
 
 
 def resolve_ssl_config(
@@ -41,11 +52,7 @@ def resolve_ssl_config(
           - cert: None if no client cert, a path string, or a (cert_path, key_path) tuple for mTLS
     """
     if not skip_verify:
-        skip_verify = os.environ.get(AIS_SKIP_VERIFY, "").lower() in (
-            "1",
-            "true",
-            "yes",
-        )
+        skip_verify = _env_skip_verify()
     if not client_cert:
         cert = os.getenv(AIS_CLIENT_CRT)
         key = os.getenv(AIS_CLIENT_KEY)
@@ -86,11 +93,7 @@ class SessionManager:
         self._retry = retry
         self._ca_cert = ca_cert
         if not skip_verify:
-            skip_verify = os.environ.get(AIS_SKIP_VERIFY, "").lower() in (
-                "1",
-                "true",
-                "yes",
-            )
+            skip_verify = _env_skip_verify()
         self._skip_verify = skip_verify
         if self._skip_verify:
             warnings.warn(

@@ -59,6 +59,28 @@ class HttpError(BaseModel):
     node: str = ""
 
 
+_TRUE_VALUES = frozenset(("1", "t", "true", "y", "yes", "on"))
+
+
+def parse_bool(s: Optional[str]) -> bool:
+    """
+    Parse a string as a boolean (case-insensitive).
+
+    Returns True for `1`, `t`, `true`, `y`, `yes`, `on`; False for any other
+    value (including empty string and None). Mirrors the truthy set accepted
+    by Go's `cos.ParseBool`.
+
+    Args:
+        s (Optional[str]): String value to parse.
+
+    Returns:
+        bool: Parsed boolean value.
+    """
+    if not s:
+        return False
+    return s.strip().lower() in _TRUE_VALUES
+
+
 def probing_frequency(dur: int) -> float:
     """
     Given a timeout, return an interval to wait between retries

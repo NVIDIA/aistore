@@ -6,6 +6,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Added
+
+- `AIS_SKIP_VERIFY_CRT` environment variable to disable SSL certificate
+  verification (matches the Go CLI / `aisloader` naming). The legacy
+  `AIS_SKIP_VERIFY` continues to work for backward compatibility. Truthy values
+  are parsed via a new `parse_bool` helper in `aistore.sdk.utils` that mirrors
+  Go's `cos.ParseBool` (accepts `1/t/true/y/yes/on`, case-insensitive).
+
 ### Changed
 
 - Updated cold-GET retry delay mechanism to check write-lock status rather than object presence

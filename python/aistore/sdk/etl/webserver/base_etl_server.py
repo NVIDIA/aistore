@@ -22,6 +22,7 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.errors import ETLDirectPutTransientError
 from aistore.sdk.session_manager import SessionManager
+from aistore.sdk.utils import parse_bool
 
 # Transient requests errors that are safe to retry (connection lost before response).
 SYNC_DIRECT_PUT_TRANSIENT_ERRORS = (
@@ -135,8 +136,8 @@ class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
           from environment variables (see below).
 
         SSL / auth environment variables:
-        - `AIS_SKIP_VERIFY`: Set to `"true"`, `"1"`, or `"yes"` to disable SSL
-          certificate verification when the server contacts AIS targets.
+        - `AIS_SKIP_VERIFY_CRT` (or legacy `AIS_SKIP_VERIFY`): Set to `"true"`, `"1"`,
+          or `"yes"` to disable SSL certificate verification when the server contacts AIS targets.
         - `AIS_CLIENT_CA`: Path to a CA certificate bundle used for SSL verification.
         - `AIS_CRT`: Path to a client certificate PEM file (used for mTLS).
         - `AIS_CRT_KEY`: Path to the client certificate private key (used for mTLS).
@@ -159,8 +160,8 @@ class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
         self.host_target = os.getenv("AIS_TARGET_URL")
         if not self.host_target:
             raise EnvironmentError("Environment variable 'AIS_TARGET_URL' must be set.")
-        self.direct_put = os.getenv("DIRECT_PUT", "false").lower() == "true"
-        self.direct_fqn = os.getenv("ETL_DIRECT_FQN", "false").lower() == "true"
+        self.direct_put = parse_bool(os.getenv("DIRECT_PUT"))
+        self.direct_fqn = parse_bool(os.getenv("ETL_DIRECT_FQN"))
         self.direct_put_retries: int = int(os.getenv(AIS_DIRECT_PUT_RETRIES, "3"))
 
         self.token = os.environ.get(AIS_AUTHN_TOKEN)
