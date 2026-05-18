@@ -11,21 +11,22 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+// LsoMsg flags: two separate enumerations sharing the same lsmsg.Flags 64bit
+//
+// Bit layout:
+//   - low-order bits (LSB up via iota):  client-facing, part of the wire format.
+//     Positions are frozen across releases; clients send them, server reads them.
+//   - high-order bits (MSB down via 63-iota): internal use only, intra-cluster.
+//     Not part of the client-facing wire format; free to evolve.
 const (
-	LocationPropSepa = ":"
-	LsPropsSepa      = ","
-)
-
-// LsoMsg flags
-const (
-	// only list in-cluster objects, i.e., those from the respective remote bucket that are present (\"cached\")
+	// list only in-cluster ("cached") objects of the respective remote bucket;
 	// see also: flt* enum and `LsNotCached` below
 	LsCached = 1 << iota
 
 	// include missing main obj (with copy existing)
 	LsMissing
 
-	// include obj-s marked for deletion (TODO: not implemented yet)
+	// include obj-s marked for deletion (TODO: reserved; not implemented yet)
 	LsDeleted
 
 	// expand archives as directories
@@ -34,69 +35,80 @@ const (
 	// return only object names and, separately, statuses
 	LsNameOnly
 
-	// same as above and size (minor speedup)
+	// return only names and sizes (minor speedup over default props)
 	LsNameSize
 
 	// Background: ============================================================
-	// as far as AIS is concerned, adding a (confirmed to exist)
-	// remote bucket (and its properties) to the cluster metadata is equivalent
-	// to creating the bucket on the fly. =====================================
+	// adding a (confirmed-to-exist) remote bucket and its properties to the
+	// cluster metadata is equivalent to creating the bucket on the fly. ======
 
 	// same as fltPresence == apc.Present (see query.go)
 	LsBckPresent
 
-	// LsDontHeadRemote is introduced primarily to support GCP buckets with
-	// ACL policies that allow public _anonymous_ access.
-	//
-	// It appears that sometimes those policies do honor HEAD(bucket),
-	// while other times they don't, failing the request with 401 or 403 status.
+	// LsDontHeadRemote: skip HEAD(bucket) on remote.
+	// Primarily for GCP buckets with ACL policies that allow public _anonymous_
+	// access: those policies sometimes honor HEAD(bucket) and sometimes don't,
+	// failing the request with 401 or 403.
 	// See also:
 	// * https://cloud.google.com/storage/docs/access-control/making-data-public
 	// * cmd/cli/cli/const.go for `dontHeadRemoteFlag`
 	// * `QparamDontHeadRemote` (this package)
 	LsDontHeadRemote
 
-	// list remote buckets without adding them to aistore
+	// list a remote bucket without adding it to the cluster BMD
 	// See also:
 	// * cmd/cli/cli/const.go for `dontAddRemoteFlag`
 	// * `QparamDontAddRemote` (this package)
 	LsDontAddRemote
 
-	// strict opposite of the `LsCached`
+	// strict opposite of `LsCached`
 	LsNotCached
 
-	// NOTE: optimization-only and not used yet -------------------------------------------------
-	// for remote buckets - list only remote props (aka `wantOnlyRemote`). When false,
-	// the default that's being used is: `WantOnlyRemoteProps` - see below.
-	// When true, the request gets executed in a pass-through fashion whereby a single ais target
-	// simply forwards it to the associated remote backend and delivers the results as is to the
-	// requesting proxy and, subsequently, to client. -------------------------------------------
-	lsWantOnlyRemoteProps
-
-	// list objects without recursion (POSIX-wise).
+	// list objects without recursion (POSIX-wise);
 	// see related feature flag: feat.DontOptimizeVirtualDir
 	LsNoRecursion
 
-	// bidirectional (remote <-> in-cluster) diff requires remote metadata-capable (`HasVersioningMD`) buckets;
-	// it entails:
-	// - checking whether remote version exists,
-	//   and if it does,
-	// - checking whether it differs from its in-cluster copy.
-	// see related `cmn.LsoEnt` flags: `EntryVerChanged` and `EntryVerRemoved`, respectively.
+	// bidirectional (remote <-> in-cluster) diff; requires remote
+	// metadata-capable (`HasVersioningMD`) buckets. Entails:
+	// - check whether remote version exists, and if so,
+	// - check whether it differs from the in-cluster copy.
+	// See related `cmn.LsoEnt` flags: `EntryVerChanged`, `EntryVerRemoved`.
 	LsDiff
 
-	// do not return virtual subdirectories - do not include them as `cmn.LsoEnt` entries
+	// do not return virtual subdirectories as `cmn.LsoEnt` entries
 	LsNoDirs
 
-	// the caller is s3 compatibility API
-	LsIsS3
-
-	// instead of (remote) bucket: list native bucket inventory (NBI) snapshot
-	// NOTE on pagination:
-	// in the context of inventory listing, lsmsg.PageSize (if non-zero) is best-effort and approximate:
-	// each target delivers an approximate share of the requested page size,
-	// subject to local chunking, minimum bounds, and slight overfetch
+	// list native bucket inventory (NBI) snapshot instead of the (remote) bucket
+	// Note on pagination:
+	//   with NBI, lsmsg.PageSize (if non-zero) is best-effort and approximate:
+	//   each target delivers an approximate share of the requested page size,
+	//   subject to local chunking, minimum bounds, and slight overfetch
 	LsNBI
+)
+
+// LsoMsg flags -- internal use only (intra-cluster; not part of the
+// client-facing wire format above).
+const (
+	// the caller is the s3 compatibility API
+	LsIsS3 uint64 = 1 << (63 - iota)
+
+	// optimization-only, not used yet: for remote buckets, list only remote
+	// props (aka `wantOnlyRemote`). When false, the default is
+	// `WantOnlyRemoteProps` (see below). When true, the request is executed
+	// pass-through: a single target forwards to the remote backend and
+	// delivers results as-is to the proxy and, in turn, to the client.
+	lsWantOnlyRemoteProps
+
+	// list-objects request ownership: when set, the listing session is owned
+	// by HRW(UUID) -> proxy; subsequent pages route to that owner.
+	// When clear: legacy behavior -- forward to primary.
+	// TBD: rollout strategy; eventual default; interaction with the S3 path.
+	lsOwner
+)
+
+const (
+	LocationPropSepa = ":"
+	LsPropsSepa      = ","
 )
 
 // max page sizes

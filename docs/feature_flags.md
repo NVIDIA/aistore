@@ -39,6 +39,15 @@ Feature flags that affect data integrity are marked with directional indicators:
 
 This helps operators quickly identify flags that involve safety trade-offs.
 
+### Scalability indicators
+
+Feature flags that affect cluster-wide horizontal scaling are marked with directional indicators:
+
+- **`scale+`** - Improves horizontal scaling (spreads load across nodes)
+- **`scale-`** - Reduces horizontal scaling (concentrates load, e.g., forwards to primary)
+
+This helps operators identify flags that change the cluster's distribution behavior independently of per-request performance.
+
 ## Validation and conflicts
 
 Feature flags now include validation logic to prevent conflicting configurations:

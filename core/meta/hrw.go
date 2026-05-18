@@ -116,27 +116,39 @@ func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 	return pi, err
 }
 
-// Returns a target for a given task. E.g. usage: list objects in a cloud bucket
-// (we want only one target to do it).
-func (smap *Smap) HrwTargetTask(uuid string) (si *Snode, err error) {
-	var (
-		maxH   uint64
-		digest = onexxh.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
-	)
-	for _, tsi := range smap.Tmap {
-		if tsi.InMaintOrDecomm() {
+// Common (digest+walk+max) over a given NodeMap, skipping nodes in maintenance/decommission.
+// `role` is apc.Target or apc.Proxy, used only for the not-found error.
+func hrwOver(nmap NodeMap, digest uint64, role string) (si *Snode, err error) {
+	var maxH uint64
+	for _, sn := range nmap {
+		if sn.InMaintOrDecomm() {
 			continue
 		}
-		cs := xoshiro256.Hash(tsi.digest() ^ digest)
+		cs := xoshiro256.Hash(sn.digest() ^ digest)
 		if cs >= maxH {
 			maxH = cs
-			si = tsi
+			si = sn
 		}
 	}
 	if si == nil {
-		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
+		err = cmn.NewErrNoNodes(role, len(nmap))
 	}
 	return si, err
+}
+
+// Returns a target for a given task. E.g. usage: list objects in a cloud bucket
+// (we want only one target to do it).
+func (smap *Smap) HrwTargetTask(uuid string) (*Snode, error) {
+	digest := onexxh.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
+	return hrwOver(smap.Tmap, digest, apc.Target)
+}
+
+// HrwLsoOwner: list-objects request ownership.
+// Maps a listing's UUID to its owner proxy via HRW; subsequent pages route
+// to the same owner across the lifetime of the listing session.
+func (smap *Smap) HrwLsoOwner(uuid string) (*Snode, error) {
+	digest := onexxh.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
+	return hrwOver(smap.Pmap, digest, apc.Proxy)
 }
 
 /////////////

@@ -50,6 +50,7 @@ var clusterFeatDesc = [...]string{
 	"do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')",
 	"when bucket is n-way mirrored read object replica from the least-utilized mountpath",
 	"count GET(object) 404 as errors (default: don't)",
+	"do not distribute list-objects across proxies: forward all sessions to primary (legacy)",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -79,8 +80,9 @@ var featTags = map[string]string{
 	"System-Reserved":                      "ops",
 	"Resume-Interrupted-MPU":               "mpu,ops",
 	"Keep-Unknown-FQN":                     "integrity?,ops",
-	"Load-Balance-GET":                     "perf",
+	"Load-Balance-GET":                     "perf,scale+",
 	"Count-Object-NotFound-Stats":          "telemetry,ops",
+	"Do-not-Distribute-List-Objects":       "scale-,ops",
 }
 
 // common (cluster, bucket) feature-flags (set, show) helper
