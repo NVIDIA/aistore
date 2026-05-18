@@ -60,20 +60,14 @@ class ColdGetConf:
         max_cold_wait (int): Within an individual retry, the maximum seconds to wait for an object's write lock to be
             released before re-raising a ReadTimeoutError to be handled by the top-level RetryConfig.
             Defaults to 3 minutes.
+        enable_remote_head (bool): Whether to send a HEAD request to the backend bucket if no size information for an
+            object exists locally. Used for retry optimization, but increases requests to the remote backend.
+            Defaults to True.
     """
 
-    est_bandwidth_bps: int
-    max_cold_wait: int
-
-    @staticmethod
-    def default() -> "ColdGetConf":
-        """
-        Returns the default cold get config options.
-        """
-        return ColdGetConf(
-            est_bandwidth_bps=DEFAULT_COLD_GET_EST_BPS,
-            max_cold_wait=DEFAULT_COLD_GET_MAX_WAIT,
-        )
+    est_bandwidth_bps: int = field(default=DEFAULT_COLD_GET_EST_BPS)
+    max_cold_wait: int = field(default=DEFAULT_COLD_GET_MAX_WAIT)
+    enable_remote_head: bool = field(default=True)
 
 
 @dataclass
@@ -111,7 +105,7 @@ class RetryConfig:
 
     http_retry: Retry
     network_retry: Retrying
-    cold_get_conf: ColdGetConf = field(default_factory=ColdGetConf.default)
+    cold_get_conf: ColdGetConf = field(default_factory=ColdGetConf)
 
     @staticmethod
     def default() -> "RetryConfig":

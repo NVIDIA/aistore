@@ -38,7 +38,9 @@ from aistore.sdk.const import (
     STATUS_LOCKED,
     STATUS_OK,
     URL_PATH_OBJECTS,
+    QPARAM_FLT_PRESENCE,
 )
+from aistore.sdk.enums import FLTPresence
 from aistore.sdk.provider import Provider
 from aistore.sdk.retry_config import NETWORK_RETRY_EXCEPTIONS, RetryConfig
 from aistore.sdk.types import ActionMsg
@@ -50,7 +52,11 @@ OBJ = "my-obj"
 PROVIDER = Provider.AMAZON
 # Object endpoint as seen by `requests.Session.request`
 EXPECTED_OBJ_URL = f"{PROXY_ENDPOINT}/v1/{URL_PATH_OBJECTS}/{BUCKET}/{OBJ}"
-EXPECTED_PARAMS = {QPARAM_PROVIDER: PROVIDER.value}
+EXPECTED_HEAD_PARAMS = {
+    QPARAM_FLT_PRESENCE: str(FLTPresence.FLT_EXISTS.value),
+    QPARAM_PROVIDER: PROVIDER.value,
+}
+EXPECTED_PROVIDER_PARAMS = {QPARAM_PROVIDER: PROVIDER.value}
 EXPECTED_LOCK_BODY = ActionMsg(action=ACT_CHECK_LOCK).model_dump_json()
 # Values for retry polling are calculated based on this size and validated below
 HEAD_SIZE_BYTES = GB
@@ -166,7 +172,10 @@ class TestColdGetRetryE2E(unittest.TestCase):  # pylint: disable=unused-variable
         args, kwargs = mock_call
         self.assertEqual(args[0], method)
         self.assertEqual(args[1], EXPECTED_OBJ_URL)
-        self.assertEqual(kwargs.get("params"), EXPECTED_PARAMS)
+        if method == HTTP_METHOD_HEAD:
+            self.assertEqual(kwargs.get("params"), EXPECTED_HEAD_PARAMS)
+        else:
+            self.assertEqual(kwargs.get("params"), EXPECTED_PROVIDER_PARAMS)
         return kwargs
 
     def _calls_for_method(self, method: str) -> list:
@@ -182,7 +191,7 @@ class TestColdGetRetryE2E(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertGreaterEqual(len(gets), 1, "expected at least one GET")
         for c in gets:
             self.assertEqual(c.args[1], EXPECTED_OBJ_URL)
-            self.assertEqual(c.kwargs.get("params"), EXPECTED_PARAMS)
+            self.assertEqual(c.kwargs.get("params"), EXPECTED_PROVIDER_PARAMS)
 
     def _assert_inner_retryer_creation(self) -> None:
         """`LockPoller._create_cold_get_retryer` should have been

@@ -22,7 +22,9 @@ from aistore.sdk.const import (
     QPARAM_NAMESPACE,
     DEFAULT_COLD_GET_EST_BPS,
     STATUS_OK,
+    QPARAM_FLT_PRESENCE,
 )
+from aistore.sdk.enums import FLTPresence
 from aistore.sdk.obj.object_attributes import ObjectAttributes
 from aistore.sdk.request_executor import RequestExecutor
 from aistore.sdk.retry_config import ColdGetConf
@@ -153,10 +155,16 @@ class LockPoller:
 
         HEAD on a cold-get with write-lock held should fail to load local object metadata.
         It will fall back to previous cached attributes if the object exists (lock is a new update).
-        If the object doesn't exist locally, it will call HEAD on the remote backend object.
         """
+        # `FLT_EXISTS` calls HEAD on remote if the object doesn't exist locally, `FLT_PRESENT` skips
+        presence_filter = (
+            FLTPresence.FLT_EXISTS
+            if self._cold_get_conf.enable_remote_head
+            else FLTPresence.FLT_PRESENT
+        )
+        head_params = {**params, QPARAM_FLT_PRESENCE: str(presence_filter.value)}
         try:
-            resp = self._executor.request(HTTP_METHOD_HEAD, path, params=params)
+            resp = self._executor.request(HTTP_METHOD_HEAD, path, params=head_params)
         except requests.RequestException as e:
             logger.debug("HEAD for cold-get sizing failed (%s); using size=0", e)
             return 0
