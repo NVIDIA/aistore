@@ -45,7 +45,6 @@ type resilverStressCtx struct {
 	reg *ioContext
 	chk *ioContext
 	mir *ioContext
-	ec  *ioContext
 }
 
 func TestResilverStress(t *testing.T) {
@@ -354,7 +353,7 @@ func (c *resilverStressCtx) waitMpathPostDD(t *testing.T, bp api.BaseParams, mp 
 func (c *resilverStressCtx) validateAPIOnly(t *testing.T) {
 	t.Helper()
 
-	c.reg.t, c.chk.t, c.mir.t, c.ec.t = t, t, t, t
+	c.reg.t, c.chk.t, c.mir.t = t, t, t
 
 	tlog.Logln("Validating data via API only...")
 
@@ -371,17 +370,13 @@ func (c *resilverStressCtx) validateAPIOnly(t *testing.T) {
 	c.mir.ensureNoGetErrors()
 	// copies can legitimately be >2 during transitions; keep it lenient here
 	c.mir.ensureNumCopies(tools.BaseAPIParams() /*bp*/, 2, true /*greaterOk*/)
-
-	// EC
-	c.ec.gets(nil, true /*withValidation*/)
-	c.ec.ensureNoGetErrors()
 }
 
 func (c *resilverStressCtx) validateAllData(t *testing.T, stage string) {
 	t.Helper()
 
 	// ioContext captures `t` - refresh per subtest
-	c.reg.t, c.chk.t, c.mir.t, c.ec.t = t, t, t, t
+	c.reg.t, c.chk.t, c.mir.t = t, t, t
 
 	tlog.Logfln("[%s] Validating all data...", stage)
 
@@ -411,10 +406,6 @@ func (c *resilverStressCtx) validateAllData(t *testing.T, stage string) {
 	c.mir.ensureNoGetErrors()
 	c.mir.ensureNumCopies(tools.BaseAPIParams() /*bp*/, 2, true /*greaterOk*/)
 
-	// EC
-	c.ec.gets(nil, true /*withValidation*/)
-	c.ec.ensureNoGetErrors()
-
 	tlog.Logfln("[%s] All data validated successfully", stage)
 }
 
@@ -435,7 +426,7 @@ func createAndPopulateResilverBuckets(t *testing.T, c *resilverStressCtx) {
 		bckRegular  = cmn.Bck{Name: "resilver-regular-" + trand.String(6), Provider: apc.AIS}
 		bckChunked  = cmn.Bck{Name: "resilver-chunked-" + trand.String(6), Provider: apc.AIS}
 		bckMirrored = cmn.Bck{Name: "resilver-mirrored-" + trand.String(6), Provider: apc.AIS}
-		bckEC       = cmn.Bck{Name: "resilver-ec-" + trand.String(6), Provider: apc.AIS}
+		// bckEC       = cmn.Bck{Name: "resilver-ec-" + trand.String(6), Provider: apc.AIS} // NOTE: removed in 4.6
 	)
 
 	tlog.Logln("Creating buckets...")
@@ -451,17 +442,6 @@ func createAndPopulateResilverBuckets(t *testing.T, c *resilverStressCtx) {
 		},
 	}
 	tools.CreateBucket(t, purl, bckMirrored, mirrorProps, true /*cleanup*/)
-
-	// EC bucket (2 data + 2 parity)
-	ecProps := &cmn.BpropsToSet{
-		EC: &cmn.ECConfToSet{
-			Enabled:      apc.Ptr(true),
-			DataSlices:   apc.Ptr(2),
-			ParitySlices: apc.Ptr(2),
-			ObjSizeLimit: apc.Ptr(int64(0)), // all objects
-		},
-	}
-	tools.CreateBucket(t, purl, bckEC, ecProps, true /*cleanup*/)
 
 	tlog.Logln("Populating buckets with objects...")
 
@@ -512,25 +492,8 @@ func createAndPopulateResilverBuckets(t *testing.T, c *resilverStressCtx) {
 	xargs := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: bckMirrored, Timeout: resilLongTimeout}
 	api.WaitForSnapsIdle(tools.BaseAPIParams(purl), &xargs)
 
-	// EC
-	c.ec = &ioContext{
-		t:             t,
-		num:           numEC,
-		bck:           bckEC,
-		proxyURL:      purl,
-		fileSizeRange: [2]uint64{64 * cos.KiB, 256 * cos.KiB},
-		prefix:        "ec-",
-		silent:        false,
-	}
-	c.ec.init(false)
-	c.ec.puts()
-
-	// wait for EC encoding
-	xargs = xact.ArgsMsg{Kind: apc.ActECPut, Bck: bckEC, Timeout: resilLongTimeout}
-	api.WaitForSnapsIdle(tools.BaseAPIParams(purl), &xargs)
-
-	totalObjects := numRegular + numChunked + numMirrored + numEC
-	tlog.Logfln("All %d objects created across 4 buckets", totalObjects)
+	totalObjects := numRegular + numChunked + numMirrored
+	tlog.Logfln("All %d objects created across 3 buckets", totalObjects)
 }
 
 // ---------------- stress test cases: scenarios A through E -------------------------
