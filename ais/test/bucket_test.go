@@ -466,7 +466,8 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	}
 	// wait for pending writes (of the copies)
 	args := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck}
-	api.WaitForSnapsIdle(bp, &args)
+	err = api.WaitForXaction(bp, &args)
+	tassert.CheckFatal(t, err)
 
 	tlog.Logfln("List %s new versions", m.bck.String())
 	msg = &apc.LsoMsg{}
@@ -916,7 +917,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		// Even though the bucket is empty, it can take a short while until the
 		// xaction is propagated and finished.
 		reqArgs := xact.ArgsMsg{ID: xid, Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: xactTimeout}
-		_, err = api.WaitForXactionIC(bp, &reqArgs)
+		err = api.WaitForXaction(bp, &reqArgs)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -1077,7 +1078,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: uuid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
@@ -1952,7 +1953,7 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 			tlog.Logfln("copying %s => %s: %s", srcBck.String(), dstBck.String(), uuid)
 
 			args := xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyBck, Timeout: tools.CopyBucketTimeout}
-			_, err = api.WaitForXactionIC(bp, &args)
+			err = api.WaitForXaction(bp, &args)
 			tassert.CheckFatal(t, err)
 
 			// Validate destination bucket properties
@@ -2755,7 +2756,8 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	// wait for erasure-coding
 	if eced {
 		args := xact.ArgsMsg{Kind: apc.ActECPut, Bck: m.bck, Timeout: xactTimeout}
-		api.WaitForSnapsIdle(bp, &args)
+		err := api.WaitForXaction(bp, &args)
+		tassert.CheckFatal(t, err)
 	}
 
 	// read all

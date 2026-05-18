@@ -53,6 +53,8 @@ type (
 		ErrMsg   string `json:"err"`     // error.Error()
 		Data     []byte `json:"message"` // (e.g. usage: custom progress stats)
 		AbortedX bool   `json:"aborted"` // true if aborted (see related: Snap.AbortedX)
+		// added in 4.6
+		IsIdleX bool `json:"is_idle,omitempty"` // notifier-reported `idle` state at the moment of sending
 	}
 )
 

@@ -100,6 +100,8 @@ type (
 		ErrMsg   string `json:"err"`      // error
 		EndTimeX int64  `json:"end_time"` // time xaction ended
 		AbortedX bool   `json:"aborted"`  // true if aborted
+		// added in 4.6
+		IsIdleX bool `json:"is_idle,omitempty"` // listener-aggregated idle (TODO: wire from NotifMsg)
 	}
 	StatusVec []Status
 )

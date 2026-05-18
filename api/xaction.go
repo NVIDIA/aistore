@@ -271,6 +271,7 @@ func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error
 //
 
 // Poll QueryXactionSnaps() until `cond` returns done=true; if `cond` is nil, default to args.Finished()
+// See related (generic) WaitForXaction
 func WaitForSnaps(bp BaseParams, args *xact.ArgsMsg, cond xact.SnapsCond) (xact.MultiSnap, error) {
 	if args.Kind == "" && args.ID == "" {
 		return nil, fmt.Errorf(fmtErrNosel, args.String())
@@ -302,7 +303,9 @@ func GetSnaps(bp BaseParams, args *xact.ArgsMsg) (xact.MultiSnap, error) {
 }
 
 // Wait for a given on-demand xaction to become idle.
-// See related xact.IdlesBeforeFinishing()
+// See related:
+// - xact.IdlesBeforeFinishing()
+// - WaitForXaction
 func WaitForSnapsIdle(bp BaseParams, args *xact.ArgsMsg) error {
 	_, err := WaitForSnaps(bp, args, args.Idle())
 	return err
@@ -350,6 +353,9 @@ func WaitForStatus(bp BaseParams, args *xact.ArgsMsg, cond StatusCond) (*nl.Stat
 }
 
 // Usage: xactions that report status back to IC (e.g. rebalance).
+// See related:
+// - xact.IdlesBeforeFinishing()
+// - WaitForXaction
 func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (out *nl.Status, err error) {
 	out, err = WaitForStatus(bp, args, nil)
 	if err == nil || !args.OnlyRunning || args.ID != "" || args.Kind == "" {
@@ -363,25 +369,45 @@ func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (out *nl.Status, err er
 	return
 }
 
-// Generic (convenient and minimal) API to wait on xaction:
-// - requires xaction kind
-// - dispatches to status-based or snaps-based polling based on xact.Table[kind].ICMode
-// - discards the polled result; caller can re-fetch via GetOneXactionStatus or QueryXactionSnaps
-// - returns: nil on success, error otherwise (includes timeout as plain error)
-func WaitForXaction(bp BaseParams, kind, id string, timeout time.Duration) error {
-	if kind == "" {
-		return errors.New("WaitForXaction: missing required xaction kind")
+// Generic API to wait on xaction
+// - dispatch to IC-based or snaps-based polling based on xact.Table[args.Kind].ICMode
+// - for kinds that idle (xact.IdlesBeforeFinishing), waits for idle, not terminal
+// - discard the polled result; caller can re-fetch via GetOneXactionStatus or QueryXactionSnaps
+//
+// - required `args` fields: Kind (required; the dispatcher needs it to look up ICMode)
+// - internally managed fields: OnlyRunning
+// - not applicable: Flags
+//
+// Return:
+// - nil on success, error otherwise (includes timeout)
+func WaitForXaction(bp BaseParams, args *xact.ArgsMsg) error {
+	if args.Kind == "" {
+		return errors.New("WaitForXaction: missing xaction kind (required)")
 	}
-	args := xact.ArgsMsg{Kind: kind, ID: id, Timeout: timeout}
+	idles := xact.IdlesBeforeFinishing(args.Kind)
+
 	err := xact.CheckValidKindIC(args.Kind)
 	if err == nil {
-		_, err = WaitForStatus(bp, &args, nil)
+		// TODO:
+		// Wire nl.Status.IsIdleX from NotifMsg.IsIdleX (currently always false)
+		// Until then, (IC + idles) cannot be waited via the IC path - hence, falling back
+		if idles {
+			_, err = WaitForSnaps(bp, args, args.Idle())
+			return err
+		}
+		_, err = WaitForXactionIC(bp, args)
 		return err
 	}
 	if !cmn.IsErrXactNonIC(err) {
 		return err
 	}
-	_, err = WaitForSnaps(bp, &args, nil)
+	var cond xact.SnapsCond
+	if idles {
+		cond = args.Idle()
+	} else {
+		cond = args.Finished()
+	}
+	_, err = WaitForSnaps(bp, args, cond)
 	return err
 }
 
