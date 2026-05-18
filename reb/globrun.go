@@ -568,6 +568,8 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 			nlog.Infoln(rargs.logHdr, "removed marker ok")
 		}
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats, false /*stopping*/)
+	} else {
+		tstats.SetFlag(cos.NodeAlerts, cos.RebalanceInterrupted)
 	}
 
 	// Close and Rx-unregister data mover:
