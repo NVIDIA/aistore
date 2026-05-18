@@ -74,6 +74,16 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		bck = cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
 
 		// mock BMD, mock target
+		sysNBI := meta.SysBckNBI()
+		sysNBI.Props = &cmn.Bprops{
+			Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
+			Access: apc.AccessAll,
+		}
+		sysShardIdx := meta.SysBckShardIdx()
+		sysShardIdx.Props = &cmn.Bprops{
+			Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
+			Access: apc.AccessAll,
+		}
 		bmd := mock.NewBaseBownerMock(
 			meta.NewBck(
 				bucketName, apc.AIS, cmn.NsGlobal,
@@ -84,6 +94,8 @@ var _ = Describe("AIStore content cleanup tests", func() {
 					BID:    0xa7b8c1d2,
 				},
 			),
+			sysNBI,
+			sysShardIdx,
 		)
 		core.T = mock.NewTarget(bmd)
 
@@ -437,6 +449,169 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			deletedFilesAfter, err := os.ReadDir(mi.DeletedRoot())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(deletedFilesAfter)).To(Equal(0))
+		})
+	})
+
+	Describe("System bucket cleanup", func() {
+		It("keeps shard-index content when the source object still references it", func() {
+			old := now.Add(-3 * time.Hour)
+			src := core.AllocLOM("archives/live.tar")
+			defer core.FreeLOM(src)
+
+			Expect(src.InitCmnBck(&bck)).NotTo(HaveOccurred())
+			createTestLOM(src.FQN, 1024, old)
+			Expect(src.Load(false, false)).NotTo(HaveOccurred())
+
+			src.Lock(true)
+			src.SetShardIdx(true)
+			Expect(persist(src)).NotTo(HaveOccurred())
+			src.Unlock(true)
+
+			Expect(os.Chtimes(src.FQN, old, old)).NotTo(HaveOccurred())
+
+			sysBck := cmn.Bck(*meta.SysBckShardIdx())
+			idxName := string(bck.MakeUname(src.ObjName + core.IdxSuffix))
+			idxFQN := fs.GetAvail()[mpaths[0]].MakePathFQN(&sysBck, fs.ObjCT, idxName)
+			createTestFile(idxFQN, 128)
+			Expect(os.Chtimes(idxFQN, old, old)).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(idxFQN).To(BeAnExistingFile())
+		})
+
+		It("keeps shard-index content while the source object is busy", func() {
+			old := now.Add(-3 * time.Hour)
+			src := core.AllocLOM("archives/busy.tar")
+			defer core.FreeLOM(src)
+
+			Expect(src.InitCmnBck(&bck)).NotTo(HaveOccurred())
+			createTestLOM(src.FQN, 1024, old)
+			Expect(src.Load(false, false)).NotTo(HaveOccurred())
+
+			src.Lock(true)
+			src.SetShardIdx(true)
+			Expect(persist(src)).NotTo(HaveOccurred())
+			src.Unlock(true)
+
+			Expect(os.Chtimes(src.FQN, old, old)).NotTo(HaveOccurred())
+
+			sysBck := cmn.Bck(*meta.SysBckShardIdx())
+			idxName := string(bck.MakeUname(src.ObjName + core.IdxSuffix))
+			idxFQN := fs.GetAvail()[mpaths[0]].MakePathFQN(&sysBck, fs.ObjCT, idxName)
+			createTestFile(idxFQN, 128)
+			Expect(os.Chtimes(idxFQN, old, old)).NotTo(HaveOccurred())
+
+			src.Lock(true)
+			defer src.Unlock(true)
+
+			space.RunCleanup(ini)
+
+			Expect(idxFQN).To(BeAnExistingFile())
+		})
+
+		It("keeps shard-index content when source metadata cannot be loaded", func() {
+			old := now.Add(-3 * time.Hour)
+			src := core.AllocLOM("archives/bad-meta.tar")
+			defer core.FreeLOM(src)
+
+			Expect(src.InitCmnBck(&bck)).NotTo(HaveOccurred())
+			createTestFile(src.FQN, 1024)
+			Expect(os.Chtimes(src.FQN, old, old)).NotTo(HaveOccurred())
+
+			sysBck := cmn.Bck(*meta.SysBckShardIdx())
+			idxName := string(bck.MakeUname(src.ObjName + core.IdxSuffix))
+			idxFQN := fs.GetAvail()[mpaths[0]].MakePathFQN(&sysBck, fs.ObjCT, idxName)
+			createTestFile(idxFQN, 128)
+			Expect(os.Chtimes(idxFQN, old, old)).NotTo(HaveOccurred())
+
+			ini.Args.Buckets = []cmn.Bck{sysBck}
+			space.RunCleanup(ini)
+
+			Expect(idxFQN).To(BeAnExistingFile())
+		})
+
+		It("removes shard-index content when the source object is missing", func() {
+			old := now.Add(-3 * time.Hour)
+			sysBck := cmn.Bck(*meta.SysBckShardIdx())
+			idxName := string(bck.MakeUname("archives/missing.tar" + core.IdxSuffix))
+			idxFQN := fs.GetAvail()[mpaths[0]].MakePathFQN(&sysBck, fs.ObjCT, idxName)
+			createTestFile(idxFQN, 128)
+			Expect(os.Chtimes(idxFQN, old, old)).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(idxFQN).NotTo(BeAnExistingFile())
+		})
+
+		It("removes shard-index content when it cannot be associated with a source", func() {
+			old := now.Add(-3 * time.Hour)
+			sysBck := cmn.Bck(*meta.SysBckShardIdx())
+			idxFQN := fs.GetAvail()[mpaths[0]].MakePathFQN(&sysBck, fs.ObjCT, "not-a-uname.idx")
+			createTestFile(idxFQN, 128)
+			Expect(os.Chtimes(idxFQN, old, old)).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(idxFQN).NotTo(BeAnExistingFile())
+		})
+
+		It("removes shard-index content when the source object does not reference it", func() {
+			old := now.Add(-3 * time.Hour)
+			src := core.AllocLOM("archives/not-indexed.tar")
+			defer core.FreeLOM(src)
+
+			Expect(src.InitCmnBck(&bck)).NotTo(HaveOccurred())
+			createTestLOM(src.FQN, 1024, old)
+			Expect(os.Chtimes(src.FQN, old, old)).NotTo(HaveOccurred())
+
+			sysBck := cmn.Bck(*meta.SysBckShardIdx())
+			idxName := string(bck.MakeUname(src.ObjName + core.IdxSuffix))
+			idxFQN := fs.GetAvail()[mpaths[0]].MakePathFQN(&sysBck, fs.ObjCT, idxName)
+			createTestFile(idxFQN, 128)
+			Expect(os.Chtimes(idxFQN, old, old)).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(idxFQN).NotTo(BeAnExistingFile())
+		})
+
+		It("keeps NBI content while the source bucket exists", func() {
+			old := now.Add(-3 * time.Hour)
+			sysBck := cmn.Bck(*meta.SysBckNBI())
+			nbiName := string(bck.MakeUname("inventory-live"))
+			nbiFQN := fs.GetAvail()[mpaths[0]].MakePathFQN(&sysBck, fs.ObjCT, nbiName)
+			createTestFile(nbiFQN, 128)
+			Expect(os.Chtimes(nbiFQN, old, old)).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(nbiFQN).To(BeAnExistingFile())
+		})
+
+		It("removes NBI content when the source bucket is missing", func() {
+			old := now.Add(-3 * time.Hour)
+			goneBck := cmn.Bck{Name: "gone-bucket", Provider: apc.AIS, Ns: cmn.NsGlobal}
+			sysBck := cmn.Bck(*meta.SysBckNBI())
+			mi := fs.GetAvail()[mpaths[0]]
+			nbiName := string(goneBck.MakeUname("inventory-stale"))
+			uploadID := "cleanupUpload1"
+			fqns := []string{
+				mi.MakePathFQN(&sysBck, fs.ObjCT, nbiName),
+				fs.CSM.Gen(nbiName, fs.ChunkCT, &sysBck, mi, uploadID, "1"),
+				fs.CSM.Gen(nbiName, fs.ChunkMetaCT, &sysBck, mi),
+				fs.CSM.Gen(nbiName, fs.ChunkMetaCT, &sysBck, mi, uploadID),
+			}
+			for _, fqn := range fqns {
+				createTestFile(fqn, 128)
+				Expect(os.Chtimes(fqn, old, old)).NotTo(HaveOccurred())
+			}
+
+			space.RunCleanup(ini)
+
+			for _, fqn := range fqns {
+				Expect(fqn).NotTo(BeAnExistingFile())
+			}
 		})
 	})
 
@@ -843,6 +1018,8 @@ func createTestLOM(fqn string, size int, atime ...time.Time) {
 		lom.SetAtimeUnix(atime[0].UnixNano())
 	}
 
+	lom.Lock(true)
+	defer lom.Unlock(true)
 	Expect(persist(lom)).NotTo(HaveOccurred())
 }
 

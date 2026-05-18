@@ -42,13 +42,15 @@ const (
 	flagRmOldWork = 1 << iota
 	flagRmMisplacedLOMs
 	flagRmMisplacedEC
+	flagRmSysBck
 	flagRmInvalid
-	flagRmAll = flagRmOldWork | flagRmMisplacedLOMs | flagRmMisplacedEC | flagRmInvalid
+	flagRmAll = flagRmOldWork | flagRmMisplacedLOMs | flagRmMisplacedEC | flagRmSysBck | flagRmInvalid
 )
 
 const (
 	sparseLogCnt  = 100
 	ctlMsgBufSize = 256
+	initCap       = 64
 )
 
 type (
@@ -75,6 +77,7 @@ type (
 		migrated         atomic.Int64 // classified misplaced via cluster-HRW (peerHasIdentical)
 		localMisplc      atomic.Int64 // classified misplaced via local-mpath HRW (default arm)
 		orphans          atomic.Int64 // orphan chunks observed by visitChunk
+		sysBckRm         atomic.Int64 // system-bucket entries queued for removal
 		oldWorkN         atomic.Int64 // old workfiles queued for removal
 		invalidN         atomic.Int64 // invalid/malformed FQNs queued for removal
 		rmFiles          atomic.Int64 // files actually removed by rmLeftovers
@@ -117,8 +120,8 @@ type (
 			loms []*core.LOM
 			ec   []*core.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
 		}
-		oldWork []string // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
-
+		oldWork []string
+		sysBck  []string
 		invalid []string
 		nmisplc int64
 		norphan int64
@@ -205,6 +208,10 @@ func (s *clnStats) write(sb *cos.SB) {
 		sb.WriteString(" orphans:")
 		sb.WriteString(strconv.FormatInt(v, 10))
 	}
+	if v := s.sysBckRm.Load(); v > 0 {
+		sb.WriteString(" sysbck-rm:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
 	if v := s.oldWorkN.Load(); v > 0 {
 		sb.WriteString(" oldwork:")
 		sb.WriteString(strconv.FormatInt(v, 10))
@@ -272,8 +279,9 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	now := time.Now()
 	for mpath, mi := range avail {
 		j := &clnJ{
-			oldWork: make([]string, 0, 64),
-			invalid: make([]string, 0, 64),
+			oldWork: make([]string, 0, initCap),
+			sysBck:  make([]string, 0, initCap),
+			invalid: make([]string, 0, initCap),
 			stopCh:  make(chan struct{}, 1),
 			mi:      mi,
 			config:  config,
@@ -421,6 +429,7 @@ func (j *clnJ) jog(providers []string) {
 	}
 
 	j.oldWork = slices.Clip(j.oldWork)
+	j.sysBck = slices.Clip(j.sysBck)
 	j.invalid = slices.Clip(j.invalid)
 	j.misplaced.loms = slices.Clip(j.misplaced.loms)
 	j.misplaced.ec = slices.Clip(j.misplaced.ec)
@@ -542,6 +551,18 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
+	if j.adv.ShouldCheck(j.nvisits) {
+		j.adv.Refresh()
+		if j.adv.Sleep > 0 {
+			time.Sleep(j.adv.Sleep)
+		}
+	}
+
+	if j.bck.IsAIS() && j.bck.IsSystem() {
+		j.visitSysBck(&parsed, fqn)
+		return nil
+	}
+
 	if parsed.ContentType != fs.ObjCT {
 		j.visitCT(&parsed, fqn)
 	} else {
@@ -550,14 +571,24 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 		core.FreeLOM(lom)
 	}
 
-	if j.adv.ShouldCheck(j.nvisits) {
-		j.adv.Refresh()
-		if j.adv.Sleep > 0 {
-			time.Sleep(j.adv.Sleep)
-		}
-	}
-
 	return nil
+}
+
+func (j *clnJ) visitSysBck(parsed *fs.ParsedFQN, fqn string) {
+	switch parsed.ContentType {
+	case fs.WorkCT:
+		j.visitCT(parsed, fqn)
+	case fs.ObjCT, fs.ChunkCT, fs.ChunkMetaCT:
+		if sysBckEntryOrphaned(&j.bck, parsed.ContentType, parsed.ObjName) {
+			cnt := j.ini.Xaction.stats.sysBckRm.Inc()
+			cmn.SparseWarn(cos.ModSpace, cnt, j.String(), "rm orphan system-bucket entry:", fqn, "[", cnt, "]")
+			j.sysBck = append(j.sysBck, fqn)
+			j.rmAnyBatch(flagRmSysBck)
+		}
+	default:
+		debug.Assertf(false, "unexpected content type: %q in system bucket: %q", parsed.ContentType, j.bck.String())
+		nlog.Warningln(j.String(), "unexpected content type: "+parsed.ContentType+" in system bucket: "+j.bck.String())
+	}
 }
 
 func (j *clnJ) rmInvalidFQN(fqn, ctType string, err error) {
@@ -934,6 +965,10 @@ func (j *clnJ) rmAnyBatch(specifier int) {
 		if int64(len(j.misplaced.ec)) < batch {
 			return
 		}
+	case flagRmSysBck:
+		if int64(len(j.sysBck)) < batch {
+			return
+		}
 	case flagRmInvalid:
 		if int64(len(j.invalid)) < batch {
 			return
@@ -1050,8 +1085,8 @@ func (j *clnJ) rmLeftovers(specifier int) {
 		nfiles, nbytes int64
 		xcln           = j.ini.Xaction
 	)
-	old, ml, me, inv := len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec), len(j.invalid)
-	nlog.Infoln(j.String(), "[ old:", old, "misplaced obj:", ml, "misplaced ec:", me, "invalid:", inv, "]")
+	old, ml, me, sys, inv := len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec), len(j.sysBck), len(j.invalid)
+	nlog.Infoln(j.String(), "[ old:", old, "misplaced obj:", ml, "misplaced ec:", me, "sysbck:", sys, "invalid:", inv, "]")
 
 	// 1. rm older work
 	if specifier&flagRmOldWork != 0 {
@@ -1141,24 +1176,16 @@ func (j *clnJ) rmLeftovers(specifier int) {
 		j.now = time.Now()
 	}
 
-	// 4. rm invalid FQNs - unrecognized or malformed content types
+	// 4. rm orphaned system-bucket entries
+	if specifier&flagRmSysBck != 0 {
+		j.rmFQNs(j.sysBck, "system-bucket entry", &nfiles, &nbytes)
+		j.sysBck = j.sysBck[:0]
+		j.now = time.Now()
+	}
+
+	// 5. rm invalid FQNs - unrecognized or malformed content types
 	if specifier&flagRmInvalid != 0 {
-		for _, fqn := range j.invalid {
-			finfo, erw := os.Lstat(fqn)
-			if erw == nil {
-				if err := cos.RemoveFile(fqn); err != nil {
-					e := fmt.Errorf("%s: rm invalid %q: %v", j, fqn, err)
-					xcln.AddErr(e)
-				} else {
-					nfiles++
-					nbytes += finfo.Size()
-					if cmn.Rom.V(5, cos.ModSpace) {
-						nlog.Infoln(j.String(), "rm invalid", fqn, "size", finfo.Size())
-					}
-					j._throttle(nfiles)
-				}
-			}
-		}
+		j.rmFQNs(j.invalid, "invalid", &nfiles, &nbytes)
 		j.invalid = j.invalid[:0]
 		j.now = time.Now()
 	}
@@ -1168,6 +1195,28 @@ func (j *clnJ) rmLeftovers(specifier int) {
 	xcln.ObjsAdd(int(nfiles), nbytes)
 	xcln.stats.rmFiles.Add(nfiles)
 	xcln.stats.rmBytes.Add(nbytes)
+}
+
+func (j *clnJ) rmFQNs(fqns []string, label string, nfiles, nbytes *int64) {
+	xcln := j.ini.Xaction
+	for _, fqn := range fqns {
+		finfo, err := os.Lstat(fqn)
+		if err != nil {
+			continue
+		}
+		if err := cos.RemoveFile(fqn); err != nil {
+			e := fmt.Errorf("%s: rm %s %q: %v", j, label, fqn, err)
+			xcln.AddErr(e)
+			continue
+		}
+		(*nfiles)++
+		size := finfo.Size()
+		*nbytes += size
+		if cmn.Rom.V(5, cos.ModSpace) {
+			nlog.Infoln(j.String(), "rm", label, fqn, "size", size)
+		}
+		j._throttle(*nfiles)
+	}
 }
 
 func (j *clnJ) _throttle(n int64) {
