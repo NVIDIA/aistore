@@ -68,6 +68,7 @@ type (
 		doneCh   chan *blobWI
 		manifest *core.Ufest
 		uploadID string
+		cname    string
 		workers  []*blobWorker
 		adv      load.Advice
 		xact.Base
@@ -181,7 +182,9 @@ func (p *blobFactory) Start() (err error) {
 	// reuse the same args-carrying structure and keep initializing
 	r := p.pre
 
-	bck := r.args.Lom.Bck()
+	lom := r.args.Lom
+	r.cname = lom.Cname()
+	bck := lom.Bck()
 	r.InitBase(p.Args.UUID, p.Kind(), bck)
 
 	r.bp = core.T.Backend(bck)
@@ -219,7 +222,6 @@ func (p *blobFactory) Start() (err error) {
 	r.setChunkSize()
 
 	// Generate uploadID and initialize manifest
-	lom := r.args.Lom
 	r.uploadID = cos.GenUUID()
 	r.manifest, err = core.NewUfest(r.uploadID, lom, false /*must-exist*/)
 	if err != nil {
@@ -266,7 +268,7 @@ func (p *blobFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 // XactBlobDl //
 ////////////////
 
-func (r *XactBlobDl) Name() string { return r.Base.Name() + "/" + r.args.Lom.ObjName }
+func (r *XactBlobDl) Name() string { return r.cname }
 func (r *XactBlobDl) Size() int64  { return r.fullSize }
 
 func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
@@ -643,9 +645,9 @@ func _drainWich(ch chan *blobWI) {
 // TODO: remove; use CtlMsg() instead
 func (r *XactBlobDl) String() string {
 	var sb cos.SB
-	sb.Init(len(r.args.Lom.ObjName) + 3*16)
+	sb.Init(len(r.cname) + 3*16)
 	sb.WriteString("-[")
-	sb.WriteString(r.args.Lom.ObjName)
+	sb.WriteString(r.cname)
 	sb.WriteUint8('-')
 	sb.WriteString(strconv.FormatInt(r.fullSize, 10))
 	sb.WriteUint8('-')
@@ -657,14 +659,14 @@ func (r *XactBlobDl) String() string {
 }
 
 func (r *XactBlobDl) CtlMsg() string {
-	if r.args == nil || r.args.Lom == nil {
+	if r.args == nil {
 		return ""
 	}
 
 	var sb cos.SB
 	sb.Init(ctlMsgBufSize)
 
-	sb.WriteString(r.args.Lom.Cname())
+	sb.WriteString(r.cname)
 
 	debug.Assert(r.args.Parent != "") // (convention)
 	if r.args.Parent != "" {
