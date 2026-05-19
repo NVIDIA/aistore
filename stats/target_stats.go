@@ -133,6 +133,17 @@ const (
 	ErrGetBatchCount     = errPrefix + "getbatch.n"
 	GetBatchSoftErrCount = errPrefix + "soft.getbatch.n"
 	GetBatchErrCountGFN  = errPrefix + "gfn.getbatch.n"
+
+	// prefetch
+	PrefetchColdCount        = "prefetch.cold.n"
+	PrefetchColdSize         = "prefetch.cold.size"
+	PrefetchColdLatencyTotal = "prefetch.cold.ns.total"
+
+	PrefetchBlobCount = "prefetch.blob.n"
+	PrefetchBlobSize  = "prefetch.blob.size"
+
+	PrefetchBlobRejCount = "prefetch.blob.rejected.n"
+	ErrPrefetchCount     = errPrefix + "prefetch.n"
 )
 
 // 4, streams (peer-to-peer long-lived connections)
@@ -631,6 +642,52 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, ErrGetBatchCount, KindCounter,
 		&Extra{
 			Help: "get-batch: number of hard errors including request failures and 429 rejections",
+		},
+	)
+
+	// prefetch
+	r.reg(snode, PrefetchColdCount, KindCounter,
+		&Extra{
+			Help:    "prefetch: total number of objects completed via cold GET",
+			VarLabs: BckXlabs,
+		},
+	)
+	r.reg(snode, PrefetchColdSize, KindSize,
+		&Extra{
+			Help:    "prefetch: total cumulative size (bytes) completed via cold GET",
+			VarLabs: BckXlabs,
+		},
+	)
+	r.reg(snode, PrefetchColdLatencyTotal, KindTotal,
+		&Extra{
+			Help:    "prefetch: total cumulative latency (nanoseconds) of cold-GET prefetch completions",
+			VarLabs: BckXlabs,
+		},
+	)
+
+	r.reg(snode, PrefetchBlobCount, KindCounter,
+		&Extra{
+			Help:    "prefetch: total number of objects completed via blob-downloader",
+			VarLabs: BckXlabs,
+		},
+	)
+	r.reg(snode, PrefetchBlobSize, KindSize,
+		&Extra{
+			Help:    "prefetch: total cumulative size (bytes) completed via blob-downloader",
+			VarLabs: BckXlabs,
+		},
+	)
+	r.reg(snode, PrefetchBlobRejCount, KindCounter,
+		&Extra{
+			Help:    "prefetch: total number of blob-downloader admission rejects with cold-GET fallback attempted",
+			VarLabs: BckXlabs,
+		},
+	)
+
+	r.reg(snode, ErrPrefetchCount, KindCounter,
+		&Extra{
+			Help:    "prefetch: total number of object-level prefetch errors",
+			VarLabs: BckXlabs,
 		},
 	)
 }

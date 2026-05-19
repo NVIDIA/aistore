@@ -63,7 +63,7 @@ type (
 		bp     core.Backend
 		config *cmn.Config
 		msg    *apc.PrefetchMsg
-		vlabs  map[string]string
+		xlabs  map[string]string
 		brl    *cos.BurstRateLim
 		pebl   pebl
 		stats  prfStats
@@ -137,89 +137,16 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
 
 	r.bp = core.T.Backend(bck)
-	r.vlabs = map[string]string{
+	r.xlabs = map[string]string{
 		stats.VlabBucket: bck.Cname(""),
 		stats.VlabXkind:  r.Kind(),
 	}
-	r.ctx = xact.NewCtxVlabs(r.vlabs)
+	r.ctx = xact.NewCtxVlabs(r.xlabs)
 
 	if r.msg.BlobThreshold > 0 {
 		r.pebl.init(r)
 	}
 	return r, nil
-}
-
-func (r *prefetch) CtlMsg() string {
-	if r.msg == nil {
-		return ""
-	}
-
-	var sb cos.SB
-	sb.Init(ctlMsgBufSize)
-	r._ctlMsg(&sb)
-	return sb.String()
-}
-
-func (r *prefetch) _ctlMsg(sb *cos.SB) {
-	// [node]
-	sb.WriteString(core.T.String())
-	sb.WriteString(": cfg(")
-	sb.WriteString(r.msg.Str(r.lrit.lrp == lrpPrefix))
-	sb.WriteUint8(')')
-
-	// [job]
-	r._ctlMsgJob(sb)
-}
-
-func (r *prefetch) _ctlMsgJob(sb *cos.SB) {
-	var (
-		coldN   = r.stats.coldN.Load()
-		blobN   = r.stats.blobN.Load()
-		blobRej = r.stats.blobRej.Load()
-		peblN   = r.pebl.num()
-	)
-	if coldN == 0 && blobN == 0 && blobRej == 0 && peblN == 0 {
-		return
-	}
-
-	sb.WriteString(" job:[")
-	first := true
-	sep := func() {
-		if !first {
-			sb.WriteUint8(' ')
-		}
-		first = false
-	}
-
-	if coldN > 0 {
-		sep()
-		sb.WriteString("cold:(")
-		sb.WriteString(strconv.FormatInt(coldN, 10))
-		sb.WriteUint8(',')
-		sb.WriteString(cos.IEC(r.stats.coldSize.Load(), 2))
-		sb.WriteUint8(')')
-	}
-	if blobN > 0 || blobRej > 0 {
-		sep()
-		sb.WriteString("blob:(")
-		sb.WriteString(strconv.FormatInt(blobN, 10))
-		sb.WriteUint8(',')
-		sb.WriteString(cos.IEC(r.stats.blobSize.Load(), 2))
-		if blobRej > 0 {
-			sb.WriteString(" rejected:")
-			sb.WriteString(strconv.FormatInt(blobRej, 10))
-		}
-		sb.WriteUint8(')')
-	}
-	if peblN > 0 {
-		sep()
-		sb.WriteString("pending:(")
-		sb.WriteString(strconv.FormatInt(int64(peblN), 10))
-		sb.WriteUint8(',')
-		sb.WriteString(cos.IEC(r.stats.peblSize.Load(), 2))
-		sb.WriteUint8(')')
-	}
-	sb.WriteUint8(']')
 }
 
 func (r *prefetch) Run(wg *sync.WaitGroup) {
@@ -267,6 +194,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 			return // deleted or not found remotely, prefix or range
 		}
 		r.AddErr(err, 5, cos.ModXs)
+		r.errStats()
 		return
 	case oa != nil:
 		// not latest
@@ -275,6 +203,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		return // nothing to do
 	case !cmn.IsErrObjNought(err):
 		r.AddErr(err, 5, cos.ModXs)
+		r.errStats()
 		return
 	}
 
@@ -306,8 +235,10 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		}
 	case cos.IsErrOOS(err):
 		r.Abort(err)
+		r.errStats()
 	default:
 		r.AddErr(err, 5, cos.ModXs)
+		r.errStats()
 	}
 }
 
@@ -338,12 +269,13 @@ func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 
 	// RGET stats (compare with ais/tgtimpl namesake)
 	size := lom.Lsize()
-	rgetstats(r.bp, r.vlabs, size, started)
+	rgetstats(r.bp, r.xlabs, size, started)
 
 	// own stats
 	r.ObjsAdd(1, size)
 	r.stats.coldN.Inc()
 	r.stats.coldSize.Add(size)
+	r.coldStats(size, started)
 
 	return 0, nil
 }
@@ -380,6 +312,7 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 	case cmn.IsErrTooManyRequests(err):
 		// fall back to regular cold GET if blob download is rejected due to resource pressure
 		r.stats.blobRej.Inc()
+		r.blobRejStats()
 		nlog.Warningln(r.Name(), ": blob download rejected due to resource pressure, falling back to regular cold GET, error: ", err)
 		return r.getCold(lom)
 	default:
@@ -402,6 +335,8 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 
 	if xctn.IsDone() {
 		r.stats.peblSize.Add(-oa.Size)
+		r.ObjsAdd(1, oa.Size)
+		r.blobStats(oa.Size)
 		return 0, nil
 	}
 	r.pebl.add(xctn)
@@ -478,9 +413,11 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 		nlog.Warningln(xname, "::", xblob.String(), "[", msg.String(), err, "]")
 		pebl.parent.AddErr(err)
 		pebl.parent.stats.peblSize.Add(-xblob.Size())
+		pebl.parent.errStats()
 	default:
 		pebl.parent.ObjsAdd(1, xblob.Size())
 		pebl.parent.stats.peblSize.Add(-xblob.Size())
+		pebl.parent.blobStats(xblob.Size())
 		if xblob.Size() >= cos.GiB/2 || cmn.Rom.V(4, cos.ModXs) {
 			if n > 0 {
 				nlog.Infoln(xname, "::", xblob.String(), "( num-pending", strconv.Itoa(int(n)), ")")
@@ -555,4 +492,164 @@ func (pebl *pebl) str() string {
 
 	sb.WriteUint8(']')
 	return sb.String()
+}
+
+//
+// Prometheus
+//
+
+func (r *prefetch) coldStats(size, started int64) {
+	tstats := core.T.StatsUpdater()
+	delta := mono.SinceNano(started)
+	tstats.IncWith(stats.PrefetchColdCount, r.xlabs)
+	tstats.AddWith(
+		cos.NamedVal64{Name: stats.PrefetchColdSize, Value: size, VarLabs: r.xlabs},
+		cos.NamedVal64{Name: stats.PrefetchColdLatencyTotal, Value: delta, VarLabs: r.xlabs},
+	)
+	// blob latency lives in XactBlobDl
+}
+
+func (r *prefetch) blobStats(size int64) {
+	tstats := core.T.StatsUpdater()
+	tstats.IncWith(stats.PrefetchBlobCount, r.xlabs)
+	tstats.AddWith(
+		cos.NamedVal64{Name: stats.PrefetchBlobSize, Value: size, VarLabs: r.xlabs},
+	)
+}
+
+func (r *prefetch) blobRejStats() {
+	core.T.StatsUpdater().IncWith(stats.PrefetchBlobRejCount, r.xlabs)
+}
+
+func (r *prefetch) errStats() {
+	core.T.StatsUpdater().IncWith(stats.ErrPrefetchCount, r.xlabs)
+}
+
+//
+// CtlMsg
+//
+
+func (r *prefetch) CtlMsg() string {
+	if r.msg == nil {
+		return ""
+	}
+
+	var sb cos.SB
+	sb.Init(ctlMsgBufSize)
+	r._ctlMsg(&sb)
+	return sb.String()
+}
+
+func (r *prefetch) _ctlMsg(sb *cos.SB) {
+	// [node]
+	sb.WriteString(core.T.String())
+	sb.WriteString(": cfg(")
+	sb.WriteString(r.msg.Str(r.lrit.lrp == lrpPrefix))
+	sb.WriteUint8(')')
+
+	// [this job]
+	r._ctlMsgJob(sb)
+
+	// [lifetime]
+	r._ctlMsgNode(sb)
+}
+
+func (r *prefetch) _ctlMsgJob(sb *cos.SB) {
+	var (
+		coldN   = r.stats.coldN.Load()
+		blobN   = r.stats.blobN.Load()
+		blobRej = r.stats.blobRej.Load()
+		peblN   = r.pebl.num()
+	)
+	if coldN == 0 && blobN == 0 && blobRej == 0 && peblN == 0 {
+		return
+	}
+
+	sb.WriteString(" job:[")
+	first := true
+	sep := func() {
+		if !first {
+			sb.WriteUint8(' ')
+		}
+		first = false
+	}
+
+	if coldN > 0 {
+		sep()
+		sb.WriteString("cold:(")
+		sb.WriteString(strconv.FormatInt(coldN, 10))
+		sb.WriteUint8(',')
+		sb.WriteString(cos.IEC(r.stats.coldSize.Load(), 2))
+		sb.WriteUint8(')')
+	}
+	if blobN > 0 || blobRej > 0 {
+		sep()
+		sb.WriteString("blob-started:(")
+		sb.WriteString(strconv.FormatInt(blobN, 10))
+		sb.WriteUint8(',')
+		sb.WriteString(cos.IEC(r.stats.blobSize.Load(), 2))
+		if blobRej > 0 {
+			sb.WriteString(" rejected:")
+			sb.WriteString(strconv.FormatInt(blobRej, 10))
+		}
+		sb.WriteUint8(')')
+	}
+	if peblN > 0 {
+		sep()
+		sb.WriteString("pending:(")
+		sb.WriteString(strconv.FormatInt(int64(peblN), 10))
+		sb.WriteUint8(',')
+		sb.WriteString(cos.IEC(r.stats.peblSize.Load(), 2))
+		sb.WriteUint8(')')
+	}
+	sb.WriteUint8(']')
+}
+
+func (*prefetch) _ctlMsgNode(sb *cos.SB) {
+	tstats := core.T.StatsUpdater()
+
+	var (
+		coldN    = tstats.Get(stats.PrefetchColdCount)
+		coldSize = tstats.Get(stats.PrefetchColdSize)
+		coldLat  = tstats.Get(stats.PrefetchColdLatencyTotal)
+
+		blobN    = tstats.Get(stats.PrefetchBlobCount)
+		blobSize = tstats.Get(stats.PrefetchBlobSize)
+	)
+
+	if coldN == 0 && blobN == 0 {
+		return
+	}
+
+	first := true
+	sep := func() {
+		if !first {
+			sb.WriteUint8(' ')
+		}
+		first = false
+	}
+
+	sb.WriteString(" lifetime:[")
+	if coldN > 0 {
+		sep()
+		sb.WriteString("cold:(")
+		sb.WriteString(strconv.FormatInt(coldN, 10))
+		sb.WriteUint8(',')
+		sb.WriteString(cos.IEC(coldSize, 2))
+		if coldLat > 0 {
+			avg := time.Duration(coldLat / coldN).Truncate(time.Millisecond)
+			sb.WriteString(" avg-lat:")
+			sb.WriteString(avg.String())
+		}
+		sb.WriteUint8(')')
+	}
+	if blobN > 0 {
+		sep()
+		sb.WriteString("blob-done:(")
+		sb.WriteString(strconv.FormatInt(blobN, 10))
+		sb.WriteUint8(',')
+		sb.WriteString(cos.IEC(blobSize, 2))
+		sb.WriteUint8(')')
+	}
+	sb.WriteUint8(']')
 }
