@@ -1048,39 +1048,17 @@ func (r *XactMoss) _ctlMsg(sb *cos.SB) {
 	if nreq == 0 && nerr == 0 {
 		return
 	}
-	// [this xaction]
-	sb.WriteString("job:[")
-	pdemand, pdt := r.Pending(), r.pendingCnt.Load()
-	if pdemand != 0 || pdt != 0 {
-		sb.WriteString("pending:(")
-		sb.WriteString(strconv.FormatInt(pdemand, 10))
-		sb.WriteUint8(',')
-		sb.WriteString(strconv.FormatInt(pdt, 10))
-		sb.WriteUint8(')')
-	}
-	if r.bewarm != nil {
-		if pdemand != 0 || pdt != 0 {
-			sb.WriteUint8(' ')
-		}
-		sb.WriteString("bewarm:(")
-		sb.WriteString(strconv.Itoa(r.bewarm.NumWorkers()))
-		sb.WriteUint8(',')
-		sb.WriteString(strconv.FormatInt(r.bewarm.NumDone(), 10))
-		sb.WriteUint8(')')
-	}
-	sb.WriteString("] ")
 
 	// [this target]
-	sb.WriteString("node:[")
+	sb.WriteString(core.T.String())
+	sb.WriteString(":[")
 	sb.WriteString("reqs:")
 	sb.WriteString(strconv.FormatInt(nreq, 10))
 	if nerr > 0 {
 		sb.WriteString(" errs:")
 		sb.WriteString(strconv.FormatInt(nerr, 10))
 	}
-
-	ocnt := tstats.Get(stats.GetBatchObjCount)
-	if ocnt > 0 {
+	if ocnt := tstats.Get(stats.GetBatchObjCount); ocnt > 0 {
 		sb.WriteString(" objs:(")
 		sb.WriteString(strconv.FormatInt(ocnt, 10))
 		sb.WriteUint8(',')
@@ -1097,6 +1075,32 @@ func (r *XactMoss) _ctlMsg(sb *cos.SB) {
 	if wait := tstats.Get(stats.GetBatchRxWaitTotal); wait > 0 {
 		sb.WriteString(" avg-wait:")
 		sb.WriteString((time.Duration(wait / nreq)).String())
+	}
+	sb.WriteUint8(']')
+
+	// [this xaction]
+	pdemand, pdt := r.Pending(), r.pendingCnt.Load()
+	hasJob := pdemand != 0 || pdt != 0 || r.bewarm != nil
+	if !hasJob {
+		return
+	}
+	sb.WriteString(" job:[")
+	if pdemand != 0 || pdt != 0 {
+		sb.WriteString("pending:(")
+		sb.WriteString(strconv.FormatInt(pdemand, 10))
+		sb.WriteUint8(',')
+		sb.WriteString(strconv.FormatInt(pdt, 10))
+		sb.WriteUint8(')')
+	}
+	if r.bewarm != nil {
+		if pdemand != 0 || pdt != 0 {
+			sb.WriteUint8(' ')
+		}
+		sb.WriteString("bewarm:(")
+		sb.WriteString(strconv.Itoa(r.bewarm.NumWorkers()))
+		sb.WriteUint8(',')
+		sb.WriteString(strconv.FormatInt(r.bewarm.NumDone(), 10))
+		sb.WriteUint8(')')
 	}
 	sb.WriteUint8(']')
 }
