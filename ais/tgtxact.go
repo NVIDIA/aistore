@@ -309,8 +309,9 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		err := lom.InitCmnBck(&args.Bck)
 		if err == nil {
 			params := &core.BlobParams{
-				Lom: lom,
-				Msg: &apc.BlobMsg{}, // default tunables when executing via x-start API
+				Lom:    lom,
+				Msg:    &apc.BlobMsg{}, // default tunables when executing via x-start API
+				Parent: "x-start",      // generic start-xaction path (compare with dedicated api.BlobDownload)
 			}
 			xid, _, err = t.blobdl(params, nil /*oa*/, nil /*object headers*/)
 		}

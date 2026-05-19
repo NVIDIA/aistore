@@ -666,6 +666,12 @@ func (r *XactBlobDl) CtlMsg() string {
 
 	sb.WriteString(r.args.Lom.Cname())
 
+	debug.Assert(r.args.Parent != "") // (convention)
+	if r.args.Parent != "" {
+		sb.WriteString(" parent:")
+		sb.WriteString(r.args.Parent)
+	}
+
 	sb.WriteString(" chunk-size:")
 	sb.WriteString(cos.IEC(r.chunkSize, 0))
 

@@ -366,6 +366,7 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 			ChunkSize:  r.msg.BlobChunkSize,
 			NumWorkers: r.msg.BlobNumWorkers,
 		},
+		Parent: xact.Cname("prefetch", r.ID()),
 	}
 	if err := params.Lom.InitBck(lom.Bck()); err != nil {
 		return 0, err

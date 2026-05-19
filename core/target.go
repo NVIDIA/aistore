@@ -49,6 +49,10 @@ type (
 		Lom *LOM
 		Msg *apc.BlobMsg
 
+		// caller/spawner for observability
+		// (e.g.: prefetch[abcdef], GET, api-blobdl, and x-start)
+		Parent string
+
 		// When `RespWriter` is set, `XactBlobDl` not only downloads chunks into the cluster,
 		// but also stitches them together and sequentially writes to `RespWriter`.
 		// This makes the blob downloading job synchronous and blocking until all chunks are written.

@@ -853,6 +853,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			RespWriter: w, // NOTE: make a blocking call
 			Lom:        lom,
 			Msg:        &msg,
+			Parent:     "GET",
 		}
 		xid, _, err := t.blobdl(args, nil /*oa*/, w.Header())
 		if err != nil && xid != "" {
@@ -1203,8 +1204,9 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			break
 		}
 		args := &core.BlobParams{
-			Lom: lom, // eventually freed by x-blob
-			Msg: &blobMsg,
+			Lom:    lom, // eventually freed by x-blob
+			Msg:    &blobMsg,
+			Parent: "api-blobdl", // directly via the dedicated object API
 		}
 		if xid, _, err = t.blobdl(args, nil /*oa*/, nil /*object headers*/); xid != "" {
 			debug.AssertNoErr(err)
