@@ -14,20 +14,39 @@ import sys
 from blog_utils import display_date, load_post, strip_frontmatter
 from yaml_utils import atomic_write
 
+# Inline styles instead of a CSS class hook: Fern's `global-theme: nvidia`
+# replaces the user-supplied `css:` entry in docs.yml, so an external
+# main.css with .blog-* rules never reaches the bundle. Inline `style="..."`
+# survives that override. The var(--grayscale-a*) tokens adapt to light/dark.
+_META_WRAP = (
+    "display: flex; align-items: center; gap: 0.5rem;"
+    " font-size: 0.9rem; color: var(--grayscale-a11);"
+    " margin-bottom: 0.25rem; flex-wrap: wrap;"
+)
+_META_DATE = "font-weight: 500;"
+_META_SEP = "color: var(--grayscale-a9);"
+_META_AUTHOR = "font-style: italic;"
+_TAGS_WRAP = "display: flex; flex-wrap: wrap; gap: 0.375rem; margin-bottom: 1.5rem;"
+_TAG = (
+    "display: inline-block; padding: 0.125rem 0.5rem;"
+    " font-size: 0.75rem; font-weight: 500; border-radius: 999px;"
+    " background-color: var(--grayscale-a3); color: var(--grayscale-a11);"
+)
+
 
 def _build_meta_html(date_str: str, author: str, categories: list) -> str:
     """Build the HTML metadata block to prepend to blog posts."""
-    lines = ['<div class="blog-post-meta">']
-    lines.append(f'  <span class="blog-meta-date">{html.escape(date_str)}</span>')
+    lines = [f'<div style="{_META_WRAP}">']
+    lines.append(f'  <span style="{_META_DATE}">{html.escape(date_str)}</span>')
     if author:
-        lines.append('  <span class="blog-meta-separator">&middot;</span>')
-        lines.append(f'  <span class="blog-meta-author">{html.escape(author)}</span>')
+        lines.append(f'  <span style="{_META_SEP}">&middot;</span>')
+        lines.append(f'  <span style="{_META_AUTHOR}">{html.escape(author)}</span>')
     lines.append("</div>")
 
     if categories:
-        lines.append('<div class="blog-post-tags">')
+        lines.append(f'<div style="{_TAGS_WRAP}">')
         for cat in categories:
-            lines.append(f'  <span class="blog-tag">{html.escape(cat)}</span>')
+            lines.append(f'  <span style="{_TAG}">{html.escape(cat)}</span>')
         lines.append("</div>")
 
     lines.append("")  # blank line before post content
