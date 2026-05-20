@@ -96,7 +96,7 @@ func (r *DemandBase) hkcb(now int64) time.Duration {
 			r.ticks.Close()
 		}
 		if r.parentCB != nil {
-			r.parentCB(now)
+			return r.parentCB(now)
 		}
 	}
 	return time.Duration(idle)
