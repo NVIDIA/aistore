@@ -338,8 +338,23 @@ func (r *XactMoss) Abort(err error) bool {
 
 	nlog.Infoln(r.Name(), "aborting:", err)
 
-	// make sure all asm() and Send() exited
-	r.activeWG.Wait()
+	// best-effort wait for pending WIs to drain; never block indefinitely
+	const (
+		pollIval = 100 * time.Millisecond
+	)
+	{
+		var (
+			total   time.Duration
+			maxWait = max(cmn.Rom.MaxKeepalive(), 8*time.Second)
+		)
+		for r.pendingCnt.Load() > 0 && total < maxWait {
+			time.Sleep(pollIval)
+			total += pollIval
+		}
+		if r.pendingCnt.Load() > 0 {
+			nlog.Warningln(r.Name(), "abort: still", r.pendingCnt.Load(), "pending after", maxWait, "- proceeding anyway")
+		}
+	}
 
 	r.pending.Range(r.cleanup)
 	r.pending.Clear()
@@ -356,7 +371,7 @@ func (r *XactMoss) Abort(err error) bool {
 // (Abort, fini) => pending (sync.Map's) callback to cleanup all pending work items
 func (*XactMoss) cleanup(_, value any) bool {
 	wi := value.(*basewi)
-	wi.cleanup(true)
+	wi.cleanup(true /*xdone*/, false /*abandoned*/)
 	return true
 }
 
@@ -365,20 +380,41 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 		iters  int
 		tout   = mossAbandonTime
 		cutoff = now - tout.Nanoseconds()
+		warn1  bool
+		warn2  bool
 	)
 	debug.Assert(maxIters > 0)
 	r.pending.Range(func(_, value any) bool {
 		iters++
 		cont := iters < maxIters
 		wi := value.(*basewi)
+
 		// old enough
 		if wi.started != 0 && wi.started < cutoff {
-			demand := wi.demand.CAS(true, false)
-			if wi.cleanup(false) {
-				if cmn.Rom.V(4, cos.ModXs) {
-					nlog.Infof("%s: GC abandoned wi %q", r.Name(), wi.wid)
+			age := time.Duration(now - wi.started)
+			inRx := wi.inRx.Load() > 0
+
+			if inRx && age < 2*mossAbandonTime {
+				// defer to next pass while Rx may still drain
+				if !warn1 || cmn.Rom.V(4, cos.ModXs) {
+					nlog.Warningln(r.Name(), "cannot GC wi", wi.wid, "- in Rx, age:", age)
+					warn1 = true
 				}
+				return cont
 			}
+
+			demand := wi.demand.CAS(true, false)
+
+			ok := wi.cleanup(false, inRx /*abandoned*/)
+
+			switch {
+			case inRx:
+				nlog.Errorln(r.Name(), "GC in-Rx stuck wi", wi.wid, "age:", age, "cleanup-ok:", ok)
+			case ok && (!warn2 || cmn.Rom.V(4, cos.ModXs)):
+				nlog.Warningln(r.Name(), "GC abandoned wi", wi.wid, "age:", age)
+				warn2 = true
+			}
+
 			if demand {
 				r.DecPending()
 			}
@@ -669,7 +705,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 
 	demand := wi.demand.CAS(true, false)
-	if wi.cleanup(false) {
+	if wi.cleanup(false /*xdone*/, false /*abandoned*/) {
 		freeMossWi(wi)
 	}
 	if demand {
@@ -1155,36 +1191,20 @@ func (wi *basewi) _ctlMsg(sb *cos.SB) {
 
 func (wi *basewi) receiving() bool { return wi.recv.m != nil }
 
-func (wi *basewi) cleanup(xdone bool) bool {
+func (wi *basewi) cleanup(xdone, abandoned bool) bool {
 	if !wi.clean.CAS(false, true) {
 		return false
 	}
 
-	var (
-		r       = wi.r
-		started int64
-	)
-	for spins := 0; wi.inRx.Load() > 0; spins++ {
-		switch {
-		case spins < 10:
-			runtime.Gosched()
-		case spins == 10:
-			started = mono.NanoTime()
-			fallthrough
-		case spins < 100:
-			time.Sleep(min(time.Second, time.Millisecond*time.Duration(spins)))
-		default:
-			debug.Assert(started != 0)
-			if dur := mono.Since(started); dur >= cleanupRxTimeout {
-				err := fmt.Errorf("FATAL: wi.cleanup timed out waiting for inRx to drain [%s,  %q, %v]", r.Name(), wi.wid, dur)
-				r.AddErr(err, 0)
-				if _, loaded := r.pending.LoadAndDelete(wi.wid); loaded {
-					r.pendingCnt.Dec()
-				}
-				return false // not freeing to pool - the state is uncertain
+	r := wi.r
+	if !wi.quiesce(abandoned || xdone) {
+		// TODO: unlikely(rxentry SGLs, rxStuck state) :TODO
+		if !xdone {
+			if _, loaded := r.pending.LoadAndDelete(wi.wid); loaded {
+				r.pendingCnt.Dec()
 			}
-			time.Sleep(time.Second)
 		}
+		return false
 	}
 
 	if !xdone { // when xdone == true: full cleanup via parent's Range(r.cleanup)
@@ -1269,6 +1289,45 @@ func (wi *basewi) cleanup(xdone bool) bool {
 	}
 
 	return true
+}
+
+func (wi *basewi) quiesce(brief bool) bool {
+	const numSpins = 10
+
+	r := wi.r
+	var started int64
+	for spins := 0; wi.inRx.Load() > 0; spins++ {
+		if brief {
+			if spins >= numSpins {
+				err := fmt.Errorf("wi.quiesce: inRx still busy on brief cleanup [%s, %q, spins=%d]",
+					r.Name(), wi.wid, spins)
+				r.AddErr(err, 0)
+				return false
+			}
+			time.Sleep(min(time.Second, time.Millisecond*time.Duration(spins)))
+			continue
+		}
+		switch {
+		case spins < numSpins:
+			runtime.Gosched()
+		case spins == numSpins:
+			started = mono.NanoTime()
+			fallthrough
+		case spins < 10*numSpins:
+			time.Sleep(min(time.Second, time.Millisecond*time.Duration(spins)))
+		default:
+			debug.Assert(started != 0)
+			if dur := mono.Since(started); dur >= cleanupRxTimeout {
+				err := fmt.Errorf("wi.quiesce timed out waiting for inRx to drain [%s, %q, %v]",
+					r.Name(), wi.wid, dur)
+				r.AddErr(err, 0)
+				return false
+			}
+			time.Sleep(time.Second)
+		}
+	}
+
+	return true // ok
 }
 
 // receive work item at [index]
