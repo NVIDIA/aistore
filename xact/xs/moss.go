@@ -86,10 +86,9 @@ TODO:
 
 // hardcoded tunables
 const (
-	mossIdleTime    = xact.IdleDefault                         // xact.Demand idle-ness
-	mossAbandonTime = max(mossIdleTime, cmn.SharedStreamsDflt) // work item GC (10m)
-
-	cleanupRxTimeout = max(xact.IdleDefault, mossAbandonTime/2) // max time to wait on `inRx` ref-count (unlikely)
+	mossIdleTime     = xact.IdleDefault                 // xact.Demand idle-ness
+	mossAbandonTime  = max(mossIdleTime, 5*time.Minute) // max WI age (see gcAbandoned)
+	cleanupRxTimeout = mossAbandonTime                  // max time to wait on `inRx` ref-count (unlikely)
 
 	sparseLog    = time.Minute // low-level stats: total processed files, objects, etc.
 	sparseAdvice = time.Minute // initial interval to check memory, CPU, etc.
@@ -186,7 +185,10 @@ type (
 		clean   atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
 		demand  atomic.Bool // true: DemandBase.IncPending() done
 		awfin   atomic.Bool // true: need to close (outgoing) archive writer
-		inRx    atomic.Int32
+
+		// mutual gates:  `abandoned` stops new Rx admissions; `inRx` counts in-flight _recvObj
+		abandoned atomic.Bool
+		inRx      atomic.Int32
 	}
 	buffwi struct {
 		*basewi
@@ -313,8 +315,30 @@ func newMoss(p *mossFactory) *XactMoss {
 	}
 	r.advNextCheck.Store(mono.NanoTime())
 
+	hk.Reg(r.hkName(), r.housekeep, mossAbandonTime)
+
 	nlog.Infoln(core.T.String(), "run:", r.Name(), s, "\"bewarm\"", v)
 	return r
+}
+
+const (
+	// housekeep: per-tick cap on gcAbandoned iterations
+	gcAbandonedMaxIters = 16
+)
+
+func (r *XactMoss) hkName() string { return r.ID() + "/aband" + hk.NameSuffix }
+
+func (r *XactMoss) housekeep(now int64) time.Duration {
+	if r.IsAborted() || r.IsDone() {
+		return hk.UnregInterval
+	}
+
+	r.gcAbortedWIDs(now)
+
+	if r.pendingCnt.Load() > 0 {
+		r.gcAbandoned(now, gcAbandonedMaxIters)
+	}
+	return mossAbandonTime >> 1
 }
 
 func (*XactMoss) Run(*sync.WaitGroup) { debug.Assert(false) }
@@ -335,6 +359,8 @@ func (r *XactMoss) Abort(err error) bool {
 	}
 	// stop receiving
 	bundle.SDM.UnregRecv(r.ID())
+
+	hk.UnregIf(r.hkName(), func(int64) time.Duration { return 0 })
 
 	nlog.Infoln(r.Name(), "aborting:", err)
 
@@ -371,7 +397,7 @@ func (r *XactMoss) Abort(err error) bool {
 // (Abort, fini) => pending (sync.Map's) callback to cleanup all pending work items
 func (*XactMoss) cleanup(_, value any) bool {
 	wi := value.(*basewi)
-	wi.cleanup(true /*xdone*/, false /*abandoned*/)
+	wi.cleanup(true /*xdone*/)
 	return true
 }
 
@@ -389,32 +415,38 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 		cont := iters < maxIters
 		wi := value.(*basewi)
 
-		// old enough
+		// TODO: track last progress to eliminate (unlikely) false positives
 		if wi.started != 0 && wi.started < cutoff {
 			age := time.Duration(now - wi.started)
-			inRx := wi.inRx.Load() > 0
 
-			if inRx && age < 2*mossAbandonTime {
-				// defer to next pass while Rx may still drain
+			// first pass
+			if wi.abandoned.CAS(false, true) {
 				if !warn1 || cmn.Rom.V(4, cos.ModXs) {
-					nlog.Warningln(r.Name(), "cannot GC wi", wi.wid, "- in Rx, age:", age)
+					nlog.Warningln(r.Name(), "marking wi", wi.wid, "abandoned, age:", age)
 					warn1 = true
 				}
 				return cont
 			}
 
-			demand := wi.demand.CAS(true, false)
-
-			ok := wi.cleanup(false, inRx /*abandoned*/)
-
-			switch {
-			case inRx:
-				nlog.Errorln(r.Name(), "GC in-Rx stuck wi", wi.wid, "age:", age, "cleanup-ok:", ok)
-			case ok && (!warn2 || cmn.Rom.V(4, cos.ModXs)):
-				nlog.Warningln(r.Name(), "GC abandoned wi", wi.wid, "age:", age)
-				warn2 = true
+			if r.IsAborted() || r.IsDone() {
+				return false
 			}
 
+			inRx := wi.inRx.Load() > 0
+
+			// second pass
+			if inRx {
+				// didn't drain after a full housekeep interval with abandoned=true
+				go r._fatal(wi.wid, age)
+				return false
+			}
+
+			demand := wi.demand.CAS(true, false)
+			ok := wi.cleanup(false)
+			if ok && (!warn2 || cmn.Rom.V(4, cos.ModXs)) {
+				nlog.Warningln(r.Name(), "GC abandoned wi", wi.wid, "age:", age, "ok:", ok)
+				warn2 = true
+			}
 			if demand {
 				r.DecPending()
 			}
@@ -423,13 +455,18 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 	})
 }
 
+func (r *XactMoss) _fatal(wid string, age time.Duration) {
+	err := fmt.Errorf("wedged Rx for wi %q, age %v", wid, age)
+	if r.Abort(err) {
+		nlog.Errorln(r.Name(), err)
+	}
+}
+
 func (r *XactMoss) gcAbortedWIDs(now int64) {
 	last := r.lastAbrtWID.Load()
 	if last == 0 || time.Duration(now-last) < ttlAbortedWID {
 		return
 	}
-
-	// snapshot first, CAS second
 
 	const iniCap = 8
 	keys := make([]string, 0, iniCap)
@@ -445,18 +482,17 @@ func (r *XactMoss) gcAbortedWIDs(now int64) {
 	}
 }
 
-// terminate via (<-- xact.Demand <-- hk)
-func (r *XactMoss) fini(now int64) (d time.Duration) {
+// graceful termination via (<-- xact.Demand <-- hk)
+func (r *XactMoss) fini(int64) (d time.Duration) {
 	switch {
 	case r.IsAborted() || r.IsDone():
 		return hk.UnregInterval
 	case r.Pending() > 0:
-		// best-effort cleanup abandoned wi-s, if any
-		r.gcAbandoned(now, 32 /*max-iters*/)
-		// and keep going
 		return mossIdleTime
 	default:
 		r.SetStopping()
+
+		hk.UnregIf(r.hkName(), func(int64) time.Duration { return 0 })
 		// stop receiving
 		bundle.SDM.UnregRecv(r.ID())
 
@@ -503,8 +539,6 @@ func (r *XactMoss) bewarmStop() {
 // (phase 1)
 func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap, wid string, nat int, usingPrev bool) error {
 	now := mono.NanoTime()
-
-	r.gcAbortedWIDs(now)
 
 	// admission control
 	throttled, err429 := r.admit(config, wid, now)
@@ -705,7 +739,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 
 	demand := wi.demand.CAS(true, false)
-	if wi.cleanup(false /*xdone*/, false /*abandoned*/) {
+	if wi.cleanup(false /*xdone*/) {
 		freeMossWi(wi)
 	}
 	if demand {
@@ -982,7 +1016,11 @@ func (r *XactMoss) _getwi(wid, sid string, warn bool) *basewi {
 		}
 		return nil
 	}
-	return a.(*basewi)
+	wi := a.(*basewi)
+	if wi.clean.Load() || wi.abandoned.Load() {
+		return nil
+	}
+	return wi
 }
 
 // (note: ObjHdr and its fields must be consumed synchronously)
@@ -997,19 +1035,11 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader) error {
 		return nil
 	}
 
-	// already cleaned up via gcAbandoned()? drop silently
-	if mopaque.wid != wi.wid || wi.clean.Load() {
-		if cmn.Rom.V(4, cos.ModXs) {
-			nlog.Infof("%s: wi %q is already clean/done - dropping", r.Cname(), wi.wid)
-		}
-		return nil
-	}
-
 	// protect Rx path from untimely cleanup
 	wi.inRx.Inc()
-	if mopaque.wid != wi.wid || wi.clean.Load() {
+	if mopaque.wid != wi.wid || wi.clean.Load() || wi.abandoned.Load() {
 		wi.inRx.Dec()
-		return nil // (unlikely; drop silently)
+		return nil // (drop silently)
 	}
 	defer wi.inRx.Dec()
 
@@ -1191,13 +1221,13 @@ func (wi *basewi) _ctlMsg(sb *cos.SB) {
 
 func (wi *basewi) receiving() bool { return wi.recv.m != nil }
 
-func (wi *basewi) cleanup(xdone, abandoned bool) bool {
+func (wi *basewi) cleanup(xdone bool) bool {
 	if !wi.clean.CAS(false, true) {
 		return false
 	}
 
 	r := wi.r
-	if !wi.quiesce(abandoned || xdone) {
+	if !wi.quiesce(xdone) {
 		// TODO: unlikely(rxentry SGLs, rxStuck state) :TODO
 		if !xdone {
 			if _, loaded := r.pending.LoadAndDelete(wi.wid); loaded {
@@ -1804,7 +1834,7 @@ func (wi *basewi) asm() error {
 		sendersOk bool
 	)
 	for i := 0; i < l; {
-		if r.IsAborted() || r.IsDone() {
+		if r.IsAborted() || r.IsDone() || wi.abandoned.Load() {
 			return nil
 		}
 		if limit := wi.config.GetBatch.MaxSoftErrs; wi.soft > limit {

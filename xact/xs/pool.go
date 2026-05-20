@@ -53,6 +53,8 @@ func allocMossWi() *basewi {
 // TODO: reuse resp.Out cap
 func freeMossWi(a *basewi) {
 	debug.Assert(basewi0.clean.Load()) // (see Tinit)
+	debug.Assert(!basewi0.abandoned.Load())
+
 	rxents := a.recv.m
 	*a = basewi0 //nolint:govet // reset; atomic.noCopy does not apply
 	a.recv.m = rxents
