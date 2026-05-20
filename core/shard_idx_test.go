@@ -49,6 +49,9 @@ func siArchLOMInBucket(t GinkgoTInterface, bckName, name string) *core.LOM {
 		t.Fatalf("siArchLOMInBucket InitCmnBck: %v", err)
 	}
 	// Create a stub shard file so SaveShardIndex can persist xattr on archlom.
+	if err := os.RemoveAll(lom.FQN); err != nil {
+		t.Fatalf("siArchLOMInBucket RemoveAll %s: %v", lom.FQN, err)
+	}
 	fh, err := cos.CreateFile(lom.FQN)
 	if err != nil {
 		t.Fatalf("siArchLOMInBucket CreateFile %s: %v", lom.FQN, err)
@@ -121,6 +124,15 @@ func siSave(archlom *core.LOM, idx *archive.ShardIndex) error {
 		return err
 	}
 	return core.SaveShardIndex(archlom, idx)
+}
+
+func siIdxPath(t GinkgoTInterface, archlom *core.LOM) string {
+	t.Helper()
+	idxlom := &core.LOM{ObjName: archlom.Bck().SysObjName(archlom.ObjName + core.IdxSuffix)}
+	if err := idxlom.InitBck(meta.SysBckShardIdx()); err != nil {
+		t.Fatalf("siIdxPath InitBck: %v", err)
+	}
+	return idxlom.FQN
 }
 
 // siShardCksum computes the xxhash checksum of the first `size` bytes of fh.
@@ -460,6 +472,72 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		})
 	})
 
+	Describe("removal", func() {
+		It("removes the shard index when the shard object is removed", func() {
+			fh, sz, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
+			defer fh.Close()
+			idx, err := archive.BuildShardIndex(fh, sz)
+			Expect(err).NotTo(HaveOccurred())
+
+			archlom := siArchLOM(GinkgoT(), "remove-index.tar")
+			Expect(siSave(archlom, idx)).To(Succeed())
+
+			idxPath := siIdxPath(GinkgoT(), archlom)
+			Expect(idxPath).To(BeAnExistingFile())
+
+			archlom.Lock(true)
+			err = archlom.RemoveObj()
+			archlom.Unlock(true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(idxPath).NotTo(BeAnExistingFile())
+		})
+
+		It("does not fail when the shard index is already absent", func() {
+			fh, sz, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
+			defer fh.Close()
+			idx, err := archive.BuildShardIndex(fh, sz)
+			Expect(err).NotTo(HaveOccurred())
+
+			archlom := siArchLOM(GinkgoT(), "remove-missing-index.tar")
+			Expect(siSave(archlom, idx)).To(Succeed())
+
+			idxPath := siIdxPath(GinkgoT(), archlom)
+			Expect(os.Remove(idxPath)).To(Succeed())
+
+			archlom.Lock(true)
+			err = archlom.RemoveObj()
+			archlom.Unlock(true)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("keeps the shard index when main object removal fails", func() {
+			fh, sz, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
+			defer fh.Close()
+			idx, err := archive.BuildShardIndex(fh, sz)
+			Expect(err).NotTo(HaveOccurred())
+
+			archlom := siArchLOM(GinkgoT(), "remove-main-fails.tar")
+			Expect(siSave(archlom, idx)).To(Succeed())
+
+			idxPath := siIdxPath(GinkgoT(), archlom)
+			Expect(idxPath).To(BeAnExistingFile())
+			defer os.RemoveAll(archlom.FQN)
+			defer os.Remove(idxPath)
+
+			// replaces the shard object file with a non-empty directory
+			// so lom.RemoveMain() fails because cos.RemoveFile(lom.FQN) cannot remove that directory
+			Expect(os.Remove(archlom.FQN)).To(Succeed())
+			Expect(os.Mkdir(archlom.FQN, 0o755)).To(Succeed())
+			Expect(os.WriteFile(filepath.Join(archlom.FQN, "blocked"), []byte("x"), 0o644)).To(Succeed())
+
+			archlom.Lock(true)
+			err = archlom.RemoveObj()
+			archlom.Unlock(true)
+			Expect(err).To(HaveOccurred())
+			Expect(idxPath).To(BeAnExistingFile())
+		})
+	})
+
 	Describe("corruption", func() {
 		DescribeTable("reports checksum error when index payload is corrupted",
 			func(format tar.Format) {
@@ -473,9 +551,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				Expect(siSave(archlom, idx)).To(Succeed())
 
 				// Compute the index FQN directly using the same LOM machinery as SaveShardIndex.
-				idxlom := &core.LOM{ObjName: archlom.Bck().SysObjName(archlom.ObjName + core.IdxSuffix)}
-				Expect(idxlom.InitBck(meta.SysBckShardIdx())).To(Succeed())
-				idxPath := idxlom.FQN
+				idxPath := siIdxPath(GinkgoT(), archlom)
 				data, err := os.ReadFile(idxPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(data)).To(BeNumerically(">", 11))

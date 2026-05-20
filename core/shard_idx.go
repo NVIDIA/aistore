@@ -19,7 +19,8 @@ import (
 // Locking protocol for shard indexes
 // ====================================
 //
-// Three lock sequences exist; archlom and idxlom are never held simultaneously in any thread:
+// Four lock sequences exist; archlom and idxlom are never held simultaneously
+// except when the caller already holds archlom and then briefly locks idxlom:
 //
 //   SaveShardIndex — two sequential, non-overlapping critical sections:
 //     Phase 1:  idxlom(W) only  — write the index file to ais://.sys-shardidx
@@ -28,17 +29,18 @@ import (
 //   LoadShardIndex — always called with archlom already locked by the caller:
 //     archlom(R) [held by caller] --> idxlom(R)
 //
+//   lom.rmShardIdx — called with archlom already write-locked by the caller:
+//     archlom(W) [held by caller] --> idxlom(W)
+//
 //   External TAR operations (GET, PUT, ...):
 //     archlom(R or W) only — idxlom reached only via LoadShardIndex above
 //
 // No-deadlock proof:
-//   The only pair of locks ever held simultaneously is archlom(R) --> idxlom(R)
-//   inside LoadShardIndex.  SaveShardIndex never holds both at once: idxlom(W)
-//   is fully released before archlom(W) is acquired.  Future callers that hold
-//   archlom and call LoadShardIndex to seek within a TAR follow the same
-//   archlom --> idxlom direction.  The lock graph therefore has exactly one
-//   directed edge (archlom --> idxlom) and no cycle exists, making deadlock
-//   impossible under any interleaving.
+//   Every simultaneous pair follows the same global order: archlom --> idxlom.
+//   SaveShardIndex never holds both at once: idxlom(W) is fully released before
+//   archlom(W) is acquired.  The lock graph therefore has exactly one directed
+//   edge (archlom --> idxlom) and no cycle exists, making deadlock impossible
+//   under any interleaving.
 
 // IdxSuffix is appended to the source object name when forming the index object
 const IdxSuffix = ".idx"
@@ -180,6 +182,26 @@ func LoadShardIndex(archlom *LOM) (*archive.ShardIndex, error) {
 		return nil, archive.ErrShardIdxStale
 	}
 	return idx, nil
+}
+
+// rmShardIdx removes the shard index object associated with lom.
+// Caller holds lom write-locked for removal; idxlom is write-locked only here.
+func (lom *LOM) rmShardIdx() error {
+	idxlom, err := newIdxLOM(lom)
+	if err != nil {
+		return err
+	}
+	idxlom.Lock(true)
+	defer idxlom.Unlock(true)
+
+	err = idxlom.Load(false /*cache it*/, true /*locked*/)
+	if cos.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return idxlom.RemoveObj()
 }
 
 // clearShardIdx clears the HasShardIdx flag on archlom.

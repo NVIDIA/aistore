@@ -73,6 +73,63 @@ func TestIndexShard(t *testing.T) {
 	}
 }
 
+func TestIndexShardDeleteObjectCleanup(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: "test-shard-idx-del-" + trand.String(6), Provider: apc.AIS}
+		numShards  = 20
+		numFiles   = 10
+		fileSize   = 4 * cos.KiB
+	)
+	if testing.Short() {
+		numShards = 12
+	}
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+
+	tmpDir := t.TempDir()
+
+	for _, tc := range []struct {
+		name string
+		nw   int
+	}{
+		{"nw=none", xact.NwpNone},
+		{"nw=default", xact.NwpDflt},
+		{"nw=2", 2},
+		{"nw=8", 8},
+		{"nw=32", 32},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pfx := tc.name + "/"
+			names := idxUploadTarShards(t, baseParams, bck, tmpDir, pfx, numShards, numFiles, fileSize)
+			processed := idxRunAndWaitCounts(t, baseParams, bck, &apc.IndexShardMsg{NumWorkers: tc.nw, Prefix: pfx})
+			tassert.Fatalf(t, processed == int64(numShards), "index run: want processed=%d, got %d", numShards, processed)
+			idxValidate(t, bck, names, "" /*nonTarName*/, numFiles)
+
+			third := numShards / 3
+			deleteFresh := names[:third]
+			deleteStale := names[third : 2*third]
+			keep := names[2*third:]
+
+			idxDeleteObjects(t, baseParams, bck, deleteFresh)
+			idxAssertNoIndex(t, bck, deleteFresh)
+
+			// Re-upload preserves HasShardIdx, but makes the existing index stale.
+			// Deleting must still remove the stale index object.
+			idxReplaceShards(t, baseParams, bck, tmpDir, deleteStale, numFiles+3, fileSize+cos.KiB)
+			idxAssertHasIndex(t, bck, deleteStale)
+			idxDeleteObjects(t, baseParams, bck, deleteStale)
+			idxAssertNoIndex(t, bck, deleteStale)
+
+			idxValidate(t, bck, keep, "" /*nonTarName*/, numFiles)
+			tlog.Logf("Delete cleanup OK: removed %d fresh and %d stale indices; kept %d valid\n",
+				len(deleteFresh), len(deleteStale), len(keep))
+		})
+	}
+}
+
 func TestIndexShardPrefix(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
@@ -567,6 +624,20 @@ func idxFindFile(bck cmn.Bck, objName string) string {
 	return m.findObjOnDisk(sysBck, idxObjName)
 }
 
+func idxAssertHasIndex(t *testing.T, bck cmn.Bck, names []string) {
+	t.Helper()
+	for _, name := range names {
+		tassert.Fatalf(t, idxFindFile(bck, name) != "", "shard %q: index file not found", name)
+	}
+}
+
+func idxAssertNoIndex(t *testing.T, bck cmn.Bck, names []string) {
+	t.Helper()
+	for _, name := range names {
+		tassert.Fatalf(t, idxFindFile(bck, name) == "", "deleted shard %q: index file still exists", name)
+	}
+}
+
 // idxValidate checks that every name in tarNames has a valid index with numFiles entries,
 // and that nonTarName (if non-empty) has no index.
 func idxValidate(t *testing.T, bck cmn.Bck, tarNames []string, nonTarName string, numFiles int) {
@@ -624,6 +695,14 @@ func idxRunAndWaitCounts(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, m
 		}
 	}
 	return
+}
+
+func idxDeleteObjects(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, names []string) {
+	t.Helper()
+	for _, name := range names {
+		err := api.DeleteObject(baseParams, bck, name)
+		tassert.CheckFatal(t, err)
+	}
 }
 
 var idxFormats = []tar.Format{tar.FormatGNU, tar.FormatPAX, tar.FormatUSTAR}

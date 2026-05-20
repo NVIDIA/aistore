@@ -206,21 +206,43 @@ func (lom *LOM) RemoveObj(force ...bool) (err error) {
 		return len(force) > 0 && force[0] && locked == apc.LockRead
 	})
 	err = lom.RemoveMain()
-	for copyFQN := range lom.md.copies {
-		if erc := cos.RemoveFile(copyFQN); erc != nil && !cos.IsNotExist(erc) && err == nil {
-			err = erc
-		}
-	}
-	if lom.IsChunked() {
-		u, e := NewUfest("", lom, true /*must-exist*/)
-		debug.AssertNoErr(e)
-		errN := u.removeCompleted(false /*except first*/)
-		if err == nil {
-			err = errN
-		}
+	if err == nil {
+		err = lom._cleanup()
 	}
 	lom.md.lid = 0
 	return err
+}
+
+func (lom *LOM) _cleanup() error {
+	var errs []error
+
+	// 1. remove copies
+	for copyFQN := range lom.md.copies {
+		if err := cos.RemoveFile(copyFQN); err != nil && !cos.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("remove copy %q: %w", copyFQN, err))
+		}
+	}
+
+	// 2. remove chunks
+	if lom.IsChunked() {
+		u, e := NewUfest("", lom, true /*must-exist*/)
+		debug.AssertNoErr(e)
+		if err := u.removeCompleted(false /*except first*/); err != nil {
+			errs = append(errs, fmt.Errorf("remove chunks: %w", err))
+		}
+	}
+
+	// 3. remove shard index
+	if lom.HasShardIdx() {
+		if err := lom.rmShardIdx(); err != nil {
+			errs = append(errs, fmt.Errorf("remove shard index: %w", err))
+		}
+	}
+
+	if len(errs) == 0 {
+		return nil
+	}
+	return errors.Join(errs...)
 }
 
 //
