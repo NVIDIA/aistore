@@ -111,8 +111,8 @@ const (
 )
 
 var (
-	errStopped = errors.New("stopped")
-	ErrGone    = errors.New("gone")
+	errLsoStopped = errors.New("stopped")
+	ErrGone       = errors.New("gone")
 )
 
 // interface guard
@@ -822,7 +822,7 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
 	if err := fs.WalkBck(opts); err != nil {
-		if err != filepath.SkipDir && err != errStopped {
+		if err != filepath.SkipDir && err != errLsoStopped {
 			r.AddErr(err, 0)
 		}
 	}
@@ -878,7 +878,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		select {
 		case r.walk.pageCh <- entry:
 		case <-r.walk.stopCh.Listen():
-			return errStopped
+			return errLsoStopped
 		}
 		return nil
 	}
@@ -897,7 +897,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	case r.walk.pageCh <- entry:
 		/* do nothing */
 	case <-r.walk.stopCh.Listen():
-		return errStopped
+		return errLsoStopped
 	}
 
 	if !msg.IsFlagSet(apc.LsArchDir) {
@@ -927,7 +927,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		case r.walk.pageCh <- e:
 			/* do nothing */
 		case <-r.walk.stopCh.Listen():
-			return errStopped
+			return errLsoStopped
 		}
 	}
 	return nil
