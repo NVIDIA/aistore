@@ -181,12 +181,12 @@ type (
 			mtx sync.Mutex
 		}
 		stats   moss
-		started int64       // (mono)
-		soft    int         // number of soft errors must be <= maxSoftErrs; see definition above
-		idx     int         // current position in outgoing batch
-		clean   atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
-		owned   atomic.Bool // ownership: asm() path vs gc; Inc/DecPending() symmetry
-		awfin   atomic.Bool // true: need to close (outgoing) archive writer
+		started int64        // (mono)
+		soft    int          // number of soft errors must be <= maxSoftErrs; see definition above
+		idx     int          // current position in outgoing batch
+		clean   atomic.Bool  // true: wi.cleanup() done _or_ recycled via mem-pool
+		owned   atomic.Int32 // ownership: asm() path vs gc; Inc/DecPending() symmetry
+		awfin   atomic.Bool  // true: need to close (outgoing) archive writer
 
 		// mutual gates:  `abandoned` stops new Rx admissions; `inRx` counts in-flight _recvObj
 		inRx      atomic.Int32
@@ -550,8 +550,12 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 		return err
 	}
 
-	debug.Assert(!wi.owned.Load())
-	wi.clean.Store(false) // (see also: freeMossWi)
+	debug.Assert(wi.owned.Load() == wiownNone)
+
+	wi.abandoned.Store(nil)
+	wi.owned.Store(wiownNone)
+	wi.clean.Store(false) // (last; see also: freeMossWi)
+
 	r.pendingCnt.Inc()
 	wi.awfin.Store(true)
 
@@ -661,7 +665,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 	wi := a.(*basewi)
 
-	if !wi.owned.CAS(false, true) {
+	if !wi.owned.CAS(wiownNone, wiownASM) {
 		if err := wi.errAbandoned(); err != nil {
 			return err
 		}
@@ -694,15 +698,15 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 		}
 	}
 
-	var (
-		ok    = wi.cleanup(false /*xdone*/)
-		owned = wi.owned.CAS(true, false)
-	)
-	debug.Assert(owned) // asm path must still own it here
+	ok := wi.cleanup(false /*xdone*/)
+	debug.Assert(wi.owned.Load() == wiownASM)
+
 	if ok {
 		freeMossWi(wi)
+	} else {
+		owned := wi.owned.CAS(wiownASM, wiownNone)
+		debug.Assert(owned)
 	}
-
 	return err
 }
 
@@ -2184,6 +2188,12 @@ const (
 	gcAbandonedMaxIters = 16 // to limit the time spent in HK callback
 )
 
+const (
+	wiownNone int32 = iota
+	wiownASM
+	wiownGC
+)
+
 type (
 	mossGC struct {
 		r      *XactMoss
@@ -2200,12 +2210,16 @@ func (gc *mossGC) do() {
 	gc.r.pending.Range(gc.visit)
 }
 
+func (gc *mossGC) recycled(wi *basewi) bool {
+	return wi.wid == "" || wi.started == 0 || wi.started > gc.cutoff // skip it
+}
+
 func (gc *mossGC) visit(_, value any) bool {
 	gc.iters++
 	cont := gc.iters < gcAbandonedMaxIters
 
 	wi := value.(*basewi)
-	if wi.started == 0 || wi.started > gc.cutoff {
+	if gc.recycled(wi) {
 		return cont
 	}
 
@@ -2228,6 +2242,10 @@ func (gc *mossGC) mark(wi *basewi, age time.Duration) bool {
 	if !wi.abandoned.CompareAndSwap(nil, err) {
 		return false
 	}
+	if gc.recycled(wi) {
+		wi.abandoned.CompareAndSwap(err, nil) // undo
+		return false
+	}
 
 	r := gc.r
 	r.AddErr(err)
@@ -2245,6 +2263,9 @@ func (gc *mossGC) cleanup(wi *basewi, age time.Duration, cont bool) bool {
 	if r.IsAborted() || r.IsDone() {
 		return false // stop #1
 	}
+	if gc.recycled(wi) {
+		return cont
+	}
 
 	// in-flight Rx => stuck Rx
 	if wi.inRx.Load() > 0 {
@@ -2252,7 +2273,7 @@ func (gc *mossGC) cleanup(wi *basewi, age time.Duration, cont bool) bool {
 		return false // stop #2
 	}
 
-	if !wi.owned.CAS(false, true) {
+	if !wi.owned.CAS(wiownNone, wiownGC) {
 		if wi.clean.Load() {
 			return cont
 		}
@@ -2262,12 +2283,15 @@ func (gc *mossGC) cleanup(wi *basewi, age time.Duration, cont bool) bool {
 	}
 
 	// gc claims ownership (no IncPending was done, so no DecPending owed)
-	if !wi.cleanup(false) {
-		debug.Assertf(false, "%s: GC failed to cleanup abandoned wi %q, age %v", r.Name(), wi.wid, age)
-		go r._fatal(wi.wid, "abandoned cleanup", age)
-		return false // stop #4
+	if gc.recycled(wi) {
+		wi.owned.CAS(wiownGC, wiownNone)
+		return cont
 	}
-
+	if !wi.cleanup(false) {
+		// benign: asm cleaned/recycled after gc.Range observed it
+		wi.owned.CAS(wiownGC, wiownNone)
+		return cont
+	}
 	if !gc.warn2 || cmn.Rom.V(4, cos.ModXs) {
 		nlog.Warningln(r.Name(), "GC cleaned abandoned wi", wi.wid, "age:", age)
 		gc.warn2 = true

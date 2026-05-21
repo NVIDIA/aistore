@@ -55,7 +55,7 @@ func freeMossWi(a *basewi) {
 	// debug-assert basewi0 (using it to reset the instance)
 	debug.Assert(basewi0.clean.Load()) // (note: see Tinit)
 	debug.Assert(basewi0.abandoned.Load() == nil)
-	debug.Assert(!basewi0.owned.Load())
+	debug.Assert(basewi0.owned.Load() == wiownNone)
 
 	rxents := a.recv.m
 	*a = basewi0 //nolint:govet // reset; atomic.noCopy does not apply
