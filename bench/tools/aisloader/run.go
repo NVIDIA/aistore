@@ -478,7 +478,11 @@ Done:
 
 	// Verify chunked objects if multipart upload was used
 	if runParams.multipartChunks > 0 && runParams.putPct > 0 {
-		chunkedLs, err := api.ListObjects(runParams.bp, runParams.bck, &apc.LsoMsg{Props: apc.GetPropsChunked}, api.ListArgs{})
+		lsmsg := &apc.LsoMsg{Props: apc.GetPropsChunked}
+		if runParams.useNBI {
+			lsmsg.Flags |= apc.LsNBI
+		}
+		chunkedLs, err := api.ListObjects(runParams.bp, runParams.bck, lsmsg, api.ListArgs{})
 		if err != nil {
 			fmt.Println("failed to list chunked objects: ", err)
 		} else {
@@ -595,6 +599,9 @@ func setupBucket(runParams *params, created *bool) error {
 	}
 	if runParams.listDirs && !runParams.bck.IsRemote() {
 		return fmt.Errorf("--list-dirs option applies to remote buckets only (have %s)", runParams.bck.Cname(""))
+	}
+	if runParams.useNBI && !runParams.bck.IsRemote() {
+		return fmt.Errorf("--nbi option applies to remote buckets only (have %s)", runParams.bck.Cname(""))
 	}
 
 	//

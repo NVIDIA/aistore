@@ -114,6 +114,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -mpdstream-chunk-size | `int` | Chunk size for multipart download stream, may contain [multiplicative suffix](#bytes-multiplicative-suffix) (0 = API default: 8MiB) | `0` |
 | -mpdstream-workers | `int` | Number of concurrent workers for multipart download stream (0 = API default: 16) | `0` |
 | -multipart-chunks | `int` | Number of chunks for multipart upload (0 = disabled, >0 = use multipart with specified chunks) | `0` |
+| -nbi | `bool` | List via [native bucket inventory](/docs/nbi.md) (NBI) snapshot. Remote buckets only; the inventory must already exist - aisloader does **not** create it | `false` |
 | -num-subdirs | `int` | Spread generated objects over this many virtual subdirectories (< 100k) | `0` |
 | -numworkers | `int` | Number of goroutine workers operating on AIS in parallel | `10` |
 | -pctmpdstream | `int` | Percentage of GET operations that use multipart download stream (0-100) | `0` |
@@ -233,6 +234,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
 | -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
 | -cached | `bool` | List in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
+| -nbi | `bool` | List via [native bucket inventory](/docs/nbi.md) (NBI) snapshot. Remote buckets only; the inventory must already exist - aisloader does **not** create it | `false` |
 | -evict-batchsize | `int` | Batch size to list and evict the next batch of remote objects | `1000` |
 | -cont-on-err | `bool` | GetBatch: ignore missing files and/or objects - include them under `__404__/` prefix and keep going | `false` |
 

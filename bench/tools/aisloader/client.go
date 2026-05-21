@@ -625,6 +625,9 @@ func listObjectNames(p *params) (names []string, fcnt int /*num archived files*/
 	if !listDirs {
 		msg.Flags |= apc.LsNoDirs // aisloader's default (to override, use --list-dirs)
 	}
+	if p.useNBI {
+		msg.Flags |= apc.LsNBI // native bucket inventory snapshot (remote buckets only)
+	}
 	args := api.ListArgs{Callback: listObjCallback, CallAfter: longListTime}
 	// Enable archive-aware listing when either:
 	//   - producing shards in this run (-arch.pct > 0), or

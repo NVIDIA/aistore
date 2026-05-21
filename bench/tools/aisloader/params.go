@@ -114,6 +114,7 @@ type (
 		latest         bool   // check metadata and GET latest version from remote bucket
 		cached         bool   // list only cached objects from remote bucket
 		listDirs       bool   // list virtual subdirectories (remote buckets only)
+		useNBI         bool   // list via native bucket inventory snapshot (remote buckets only)
 		continueOnErr  bool   // [GetBatch] ignore missing files and/or objects - include them under "__404__/" prefix and keep going
 	}
 
@@ -267,6 +268,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.latest, "latest", false, "when true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket")
 	f.BoolVar(&p.cached, "cached", false, "list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")")
 	f.BoolVar(&p.listDirs, "list-dirs", false, "list virtual subdirectories (remote buckets only)")
+	f.BoolVar(&p.useNBI, "nbi", false, "list via native bucket inventory (NBI) snapshot (remote buckets only); the inventory must already exist - aisloader does not create it (see docs/nbi.md)")
 	f.IntVar(&p.evictBatchSize, "evict-batchsize", 1000, "batch size to list and evict the _next_ batch of remote objects")
 	f.BoolVar(&p.continueOnErr, "cont-on-err", false, "GetBatch: ignore missing files and/or objects - include them under \"__404__/\" prefix and keep going")
 
