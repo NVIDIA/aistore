@@ -471,8 +471,8 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 	}
 
 	// to have a fresh full idle window for the eventual phase2 GET
-	xmoss.IncPending()
-	xmoss.DecPending()
+	xmoss.DemandBase.IncPending()
+	xmoss.DemandBase.DecPending()
 
 	// return xid (proxy will send it to phase 3 senders)
 	w.Header().Set(apc.HdrXactionID, xid)
@@ -519,7 +519,7 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	}
 
 	ctx.smap = smap
-	xmoss.IncPending()
+	xmoss.DemandBase.IncPending()
 	go ctx._startSend(xmoss, tsi)
 }
 
@@ -529,7 +529,7 @@ func (ctx *mossCtx) _startSend(xmoss *xs.XactMoss, tsi *meta.Snode) {
 			xmoss.AddErr(fmt.Errorf("send wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
 		}
 	}
-	xmoss.DecPending()
+	xmoss.DemandBase.DecPending()
 }
 
 func _checkMossEmpty(req *apc.MossReq) (err error) {

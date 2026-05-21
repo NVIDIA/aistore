@@ -208,7 +208,7 @@ type (
 		pending     sync.Map // [wid => *basewi]
 		abortedWIDs sync.Map // wid => error from DT
 		xact.DemandBase
-		activeWG     sync.WaitGroup // when pending
+		activeWG     sync.WaitGroup // active asm()
 		lastLog      atomic.Int64   // last log timestamp (sparse)
 		advNextCheck atomic.Int64
 		pendingCnt   atomic.Int64
@@ -350,12 +350,12 @@ func (r *XactMoss) housekeep(now int64) time.Duration {
 
 func (*XactMoss) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-func (r *XactMoss) IncPending() {
+func (r *XactMoss) incPending() {
 	r.DemandBase.IncPending()
 	r.activeWG.Add(1)
 }
 
-func (r *XactMoss) DecPending() {
+func (r *XactMoss) decPending() {
 	r.DemandBase.DecPending()
 	r.activeWG.Done()
 }
@@ -371,23 +371,8 @@ func (r *XactMoss) Abort(err error) bool {
 
 	nlog.Infoln(r.Name(), "aborting:", err)
 
-	// best-effort wait for pending WIs to drain; never block indefinitely
-	const (
-		pollIval = 100 * time.Millisecond
-	)
-	{
-		var (
-			total   time.Duration
-			maxWait = max(cmn.Rom.MaxKeepalive(), 8*time.Second)
-		)
-		for r.pendingCnt.Load() > 0 && total < maxWait {
-			time.Sleep(pollIval)
-			total += pollIval
-		}
-		if r.pendingCnt.Load() > 0 {
-			nlog.Warningln(r.Name(), "abort: still", r.pendingCnt.Load(), "pending after", maxWait, "- proceeding anyway")
-		}
-	}
+	r.activeWG.Wait()
+	r._abortQuiesce()
 
 	r.pending.Range(r.cleanup)
 	r.pending.Clear()
@@ -399,6 +384,22 @@ func (r *XactMoss) Abort(err error) bool {
 
 	r.bewarmStop()
 	return true
+}
+
+// best-effort (and extremely unlikely): quiesce prior to cleanups
+func (r *XactMoss) _abortQuiesce() {
+	const pollIval = cos.PollSleepShort // 100ms
+	var (
+		total   time.Duration
+		maxWait = max(cmn.Rom.MaxKeepalive(), 8*time.Second)
+	)
+	for r.Pending() > 0 && total < maxWait {
+		time.Sleep(pollIval)
+		total += pollIval
+	}
+	if p := r.Pending(); p > 0 {
+		nlog.Warningln(r.Name(), "abort: still", p, "demand-pending after", maxWait, "- proceeding anyway")
+	}
 }
 
 // (Abort, fini) => pending (sync.Map's) callback to cleanup all pending work items
@@ -674,11 +675,20 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 		return err
 	}
 
-	// asm() path owns wi; DecPending below
-	debug.Assert(wid == wi.wid)
-	r.IncPending()
-	defer r.DecPending()
+	if r.IsAborted() || r.IsDone() {
+		wi.owned.CAS(wiownASM, wiownNone) // Abort/fini owns final cleanup
+		return nil
+	}
 
+	// asm() path owns wi; DecPending below
+	r.incPending()
+	defer r.decPending()
+	if r.IsAborted() || r.IsDone() {
+		wi.owned.CAS(wiownASM, wiownNone) // ditto
+		return nil
+	}
+
+	debug.Assert(wid == wi.wid)
 	err := r.asm(req, w, wi)
 	if err != nil {
 		if r.shouldAbortWI(wi) {
