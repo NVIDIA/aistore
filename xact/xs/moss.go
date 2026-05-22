@@ -973,16 +973,17 @@ func (r *XactMoss) _pinwi(wid, sid string, warn bool) *basewi {
 	wi := a.(*basewi)
 	debug.Assertf(wi.wid == wid, "%q vs %q", wi.wid, wid)
 
-	// vs cleanup's quiesce (marks Rx activity)
-	wi.lastRx.Store(mono.NanoTime())
+	if wi.clean.Load() || wi.errAbandoned() != nil {
+		return nil
+	}
 	wi.inRx.Inc()
-
-	// - clean     => cleanup is in progress or done
-	// - abandoned => gc-flagged; no new work
 	if wi.clean.Load() || wi.errAbandoned() != nil {
 		wi.inRx.Dec()
 		return nil
 	}
+
+	// vs cleanup's quiesce (marks Rx activity)
+	wi.lastRx.Store(mono.NanoTime())
 	return wi
 }
 
@@ -2240,7 +2241,7 @@ func (gc *mossGC) do() {
 }
 
 func (gc *mossGC) recycled(wi *basewi) bool {
-	return wi.wid == "" || wi.started == 0 || wi.started > gc.cutoff // skip it
+	return wi.wid == "" || wi.started == 0 || wi.lastAsm.Load() > gc.cutoff // skip it
 }
 
 func (gc *mossGC) visit(_, value any) bool {
