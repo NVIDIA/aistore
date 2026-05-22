@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -26,6 +27,11 @@ var (
 	gmm              *MMSA     // page-based system allocator
 	smm              *MMSA     // slab allocator for small sizes in the range 1 - 4K
 	gmmOnce, smmOnce sync.Once // ensures singleton-ness
+)
+
+var (
+	logPressLast atomic.Int64
+	logPressCnt  atomic.Int64
 )
 
 func Init(gmmName, smmName string, config *cmn.Config) {

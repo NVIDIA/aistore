@@ -7,8 +7,11 @@ package memsys
 
 import (
 	"strconv"
+	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/sys"
 )
@@ -125,13 +128,24 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) int {
 	ncrit := r.swap.crit.Load()
 	switch {
 	case ncrit > 2:
-		nlog.ErrorDepth(1, FmtErrExtreme, "[ ncrit", ncrit, "]")
+		if _sparseLog() {
+			nlog.ErrorDepth(1, FmtErrExtreme, "swap-crit:", ncrit, "cnt:", logPressCnt.Load())
+		}
 		return OOM
-	case ncrit > 1 || mem.ActualFree <= r.MinFree:
-		nlog.ErrorDepth(1, FmtErrExtreme, "[ ncrit", ncrit, "actual", mem.ActualFree, "min", r.MinFree, "]")
+	case ncrit > 1:
+		if _sparseLog() {
+			nlog.ErrorDepth(1, FmtErrExtreme, "swap-crit:", ncrit, "actual:", mem.ActualFree, "min:", r.MinFree, "cnt:", logPressCnt.Load())
+		}
+		return PressureExtreme
+	case mem.ActualFree <= r.MinFree:
+		if _sparseLog() {
+			nlog.ErrorDepth(1, FmtErrExtreme, "actual:", mem.ActualFree, "min:", r.MinFree, "cnt:", logPressCnt.Load())
+		}
 		return PressureExtreme
 	case ncrit > 0:
-		nlog.WarningDepth(1, fmtErrHigh, "[ ncrit", ncrit, "]")
+		if _sparseLog() {
+			nlog.WarningDepth(1, fmtErrHigh, "swap-crit:", ncrit)
+		}
 		return PressureHigh
 	case free <= r.MinFree:
 		return PressureHigh
@@ -147,7 +161,28 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) int {
 	return p
 }
 
-func (r *MMSA) _p2s(sb *cos.SB, mem *sys.MemStat) {
+// rate-limit pressure logging
+func _sparseLog() bool {
+	const minInterval = int64(10 * time.Second)
+	var (
+		now  = mono.NanoTime()
+		last = logPressLast.Load()
+	)
+	if now-last < minInterval {
+		return false
+	}
+
+	var (
+		cnt = logPressCnt.Inc()
+	)
+	if !cmn.Sparse(cnt) {
+		return false
+	}
+	logPressLast.Store(now)
+	return true
+}
+
+func (r *MMSA) pressure2s(sb *cos.SB, mem *sys.MemStat) {
 	sb.WriteString("pressure '")
 	p := r.Pressure(mem)
 	sb.WriteString(memPressureText[p])
