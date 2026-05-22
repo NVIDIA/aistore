@@ -7,8 +7,6 @@ package xs
 
 import (
 	"sync"
-
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 //
@@ -34,31 +32,8 @@ func FreeCOI(a *CoiParams) {
 }
 
 //
-// Moss
+// TODO: support partial-and-safe mem-pooling for x-moss
 //
 
-var (
-	mossPool = sync.Pool{
-		New: func() any {
-			return new(basewi)
-		},
-	}
-	basewi0 basewi // basewi0.clean == true via Tinit (pooled wi-s start in "already cleaned" state)
-)
-
-func allocMossWi() *basewi {
-	return mossPool.Get().(*basewi)
-}
-
-// TODO: reuse resp.Out cap
-func freeMossWi(a *basewi) {
-	// debug-assert basewi0 (using it to reset the instance)
-	debug.Assert(basewi0.clean.Load()) // (note: see Tinit)
-	debug.Assert(basewi0.abandoned.Load() == nil)
-	debug.Assert(basewi0.owned.Load() == wiownNone)
-
-	rxents := a.recv.m
-	*a = basewi0 //nolint:govet // reset; atomic.noCopy does not apply
-	a.recv.m = rxents
-	mossPool.Put(a)
-}
+func allocMossWi() *basewi { return &basewi{} }
+func freeMossWi(*basewi)   {}

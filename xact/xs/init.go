@@ -36,9 +36,6 @@ func Tinit(coi COI) {
 		allLsoFlags[n] = cos.BitFlags(1) << i
 	}
 
-	// (see freeMossWi)
-	basewi0.clean.Store(true)
-
 	// xreg scope: global and multi-bucket
 	xreg.RegNonBckXact(&eleFactory{})
 	xreg.RegNonBckXact(&resFactory{})

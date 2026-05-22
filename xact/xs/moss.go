@@ -50,65 +50,52 @@ import (
 // 2. Monitoring GetBatch Performance,      at https://github.com/NVIDIA/aistore/blob/main/docs/monitoring-get-batch.md
 // -----------------------------------------------------------------------
 
-/* ---------------------------------------------------------------------------------------------------------
-   client →  any proxy →  randomly selected designated-target (DT (= T0))
-                      │
-                      ├── basewi.next()      ←  local data-items
-                      │
-                      ├── shared-dm.recvd[i] = ...     ←  data-items from other targets via recv()
-                      │
-                      └── stream TAR         ←  in-order via flushRx()
-   senders (T1..Tn)
-       └── shared-DM.Send(req, smap, DT)
-              └── for locality(data-item) == self:
-                       shared-dm.Send(data-item, hdr.Opaque = [wid, oname, emsg, index, missing]) → DT
-
-   where data-item = (object | archived file)
-
-   Peer-to-peer stream drops/terminations manifest themselves as `transport.ErrSBR` and
-   are handled by shared-DM
-
-   Soft errors: any execution path that invokes addMissing() is classified as a _soft_ error,
-   irrespective of its original cause; these include:
-   a) missing data (404) - object or archived file doesn't exist;
-   b) remote stream-break (`ErrSBR`) - a temporary failure of a long-lived;
-      peer-to-peer connection that gets converted into a special missing entry
-   c) timeout waiting for peer to "push" next data item (object or archived file),
-      with subsequent recovery via direct target-to-target GET dubbed GFN
-      (get-from-neighbor).
-   Note that per-request (maximum number of soft errors) and GFN are separately
-   configurable (https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md)
-
-TODO:
-   - gcAbandoned - currently, only via graceful fini()
-   - throttle senders
-   - feat: return a) unsorted batch; b) shuffled batch
-   - range read
--------------------------------------------------------------------------------------------------------------*/
+// -----------------------------------------------------------------------
+//   client -> ais/ml -> DT (phase 1)
+//
+//   redirected client -> ais/ml -> DT (phase 2)
+//
+//   ais/ml proxy -> senders (phase 3)
+//     run asynchronously; each active target sends OpcodeStartedWI => DT
+//     then pushes its local entries
+//
+//   DT assembly does the heavy lifting:
+//     local entries      -> wi.next()
+//     remote entries     -> recv.m[] / flushRx()
+//     missing/soft errs  -> addMissing(); optional GFN recovery
+//
+// TODO:
+// - range read
+// - throttle senders
+// -----------------------------------------------------------------------
 
 // hardcoded tunables
 const (
-	mossIdleTime     = xact.IdleDefault                 // xact.Demand idle-ness
-	mossAbandonTime  = max(mossIdleTime, 5*time.Minute) // max WI age (see gcAbandoned)
+	mossIdleTime = xact.IdleDefault // xact.Demand idle-ness
+
+	// when work item is subject to GC
+	mossAbandonTime  = max(mossIdleTime, 5*time.Minute) // max age (see gcAbandoned)
 	cleanupRxTimeout = mossAbandonTime                  // max time to wait on `inRx` ref-count (unlikely)
 
-	sparseLog    = time.Minute // low-level stats: total processed files, objects, etc.
-	sparseAdvice = time.Minute // initial interval to check memory, CPU, etc.
+	// senders to announce themselves
+	sendersStartupWarn = 30 * time.Second
+	sendersStartupFail = max(mossAbandonTime>>2, sendersStartupWarn*3)
 
-	sparseLogWIMask = 0xff // verbose mode: log an already assembled work item every 256 requests
+	// log
+	sparseLog       = time.Minute // low-level stats: total processed files, objects, etc.
+	sparseAdvice    = time.Minute // initial interval to check memory, CPU, etc.
+	sparseLogWIMask = 0xff        // verbose mode: log an already assembled work item every 256 requests
 
-	ttlAbortedWID = time.Minute
+	// via OpcodeAbortWI from DT
+	gcWIsAbortedByDT = time.Minute
 
-	// bewarm is a small-size worker pool per x-moss instance - unless under heavy load
+	// small-size worker pool per x-moss instance - unless under heavy load
 	// - created at init time
-	// - stays enabled for the entire lifetime
+	// - stays enabled for the entire x-moss lifetime
 	bewarmSize = cos.MiB
 
-	// waitFlushRx(i) poll interval: a fraction of configured max-wait timeout
+	// asm() size Rx poll
 	pollDiv = 8
-
-	// max slice cap to reuse
-	poolMaxCap = 512
 
 	// additional admission control
 	pendingHighWm   = 96                  // high-watermark to start throttling
@@ -119,9 +106,6 @@ const (
 	// purpose: detect a stuck client (extremely slow reader, dead connection, broken TLS session)
 	streamingWriteTimeout = max(30*time.Second, cmn.GetBatchWaitMin<<2) // max(30s, 4s) - see pollIval
 	streamingFlushIval    = 5 * time.Second
-
-	// (best-effort)
-	sendersStartupTime = 30 * time.Second
 )
 
 type (
@@ -175,20 +159,20 @@ type (
 			next int
 			mtx  sync.Mutex
 		}
-		startup struct { // (reason: all senders run async via phase 3)
-			m   cos.StrSet
-			nat int // number of active (not in-maintenance) targets including self
-			mtx sync.Mutex
+		startup struct { // (since senders run async via phase 3)
+			nat  int64         // number of active targets including self
+			refc atomic.Int64  // number of ACKs received
+			warn time.Duration // last time warned
 		}
 		stats   moss
 		started int64        // (mono)
 		soft    int          // number of soft errors must be <= maxSoftErrs; see definition above
 		idx     int          // current position in outgoing batch
-		clean   atomic.Bool  // true: wi.cleanup() done _or_ recycled via mem-pool
+		clean   atomic.Bool  // true: wi.cleanup() in progress or done
 		owned   atomic.Int32 // ownership: asm() path vs gc; Inc/DecPending() symmetry
-		awfin   atomic.Bool  // true: need to close (outgoing) archive writer
+		awfin   atomic.Bool  // true: is closed; false: need to close (outgoing) archive writer
 
-		// mutual gates:  `abandoned` stops new Rx admissions; `inRx` counts in-flight _recvObj
+		// mutual gates:  `abandoned` stops new Rx (data, control); `inRx` counts in-flight pins
 		inRx      atomic.Int32
 		abandoned ratomic.Pointer[errAbandonedWI]
 	}
@@ -328,6 +312,10 @@ func newMoss(p *mossFactory) *XactMoss {
 	return r
 }
 
+//
+// secondary HK: GC path
+//
+
 func (r *XactMoss) hkName() string { return r.ID() + "/aband" + hk.NameSuffix }
 
 func (r *XactMoss) housekeep(now int64) time.Duration {
@@ -335,8 +323,9 @@ func (r *XactMoss) housekeep(now int64) time.Duration {
 		return hk.UnregInterval
 	}
 
-	r.gcAbortedWIDs(now)
+	r.gcAbortedByDT(now)
 
+	// abandoned work items
 	if r.pendingCnt.Load() > 0 {
 		gc := mossGC{
 			r:      r,
@@ -350,6 +339,10 @@ func (r *XactMoss) housekeep(now int64) time.Duration {
 
 func (*XactMoss) Run(*sync.WaitGroup) { debug.Assert(false) }
 
+//
+// DemandBase idle logic and asm() wait-group
+//
+
 func (r *XactMoss) incPending() {
 	r.DemandBase.IncPending()
 	r.activeWG.Add(1)
@@ -360,6 +353,7 @@ func (r *XactMoss) decPending() {
 	r.activeWG.Done()
 }
 
+// base abort + more
 func (r *XactMoss) Abort(err error) bool {
 	if !r.DemandBase.Abort(err) {
 		return false
@@ -386,7 +380,7 @@ func (r *XactMoss) Abort(err error) bool {
 	return true
 }
 
-// best-effort (and extremely unlikely): quiesce prior to cleanups
+// best-effort: quiesce prior to cleanups
 func (r *XactMoss) _abortQuiesce() {
 	const pollIval = cos.PollSleepShort // 100ms
 	var (
@@ -407,26 +401,6 @@ func (*XactMoss) cleanup(_, value any) bool {
 	wi := value.(*basewi)
 	wi.cleanup(true /*xdone*/)
 	return true
-}
-
-func (r *XactMoss) gcAbortedWIDs(now int64) {
-	last := r.lastAbrtWID.Load()
-	if last == 0 || time.Duration(now-last) < ttlAbortedWID {
-		return
-	}
-
-	const iniCap = 8
-	keys := make([]string, 0, iniCap)
-	r.abortedWIDs.Range(func(k, _ any) bool {
-		keys = append(keys, k.(string))
-		return true
-	})
-	if !r.lastAbrtWID.CAS(last, 0) {
-		return
-	}
-	for _, k := range keys {
-		r.abortedWIDs.Delete(k)
-	}
 }
 
 // graceful termination via (<-- xact.Demand <-- hk)
@@ -534,8 +508,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 			r.lastLog.Store(wi.started)
 		}
 
-		wi.startup.m = make(cos.StrSet, nat-1)
-		wi.startup.nat = nat
+		wi.startup.nat = int64(nat)
 
 		wi.timer = time.NewTimer(time.Hour)
 		wi.timer.Stop()
@@ -550,12 +523,6 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 		}
 		return err
 	}
-
-	debug.Assert(wi.owned.Load() == wiownNone)
-
-	wi.abandoned.Store(nil)
-	wi.owned.Store(wiownNone)
-	wi.clean.Store(false) // (last; see also: freeMossWi)
 
 	r.pendingCnt.Inc()
 	wi.awfin.Store(true)
@@ -623,13 +590,12 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 	case xact.OpcodeStartedWI:
 		debug.Assert(wid != xact.NoneWID)
 		debug.Assert(len(body) == 0)
-		wi := r._getwi(wid, sid, true)
+		wi := r._pinwi(wid, sid, true)
 		if wi == nil {
 			return nil
 		}
-		wi.startup.mtx.Lock()
-		wi.startup.m.Set(sid)
-		wi.startup.mtx.Unlock()
+		defer wi.unpin()
+		wi.startup.refc.Inc()
 	case xact.OpcodeAbortXact:
 		var err error
 		if len(body) > 0 {
@@ -691,7 +657,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	debug.Assert(wid == wi.wid)
 	err := r.asm(req, w, wi)
 	if err != nil {
-		if r.shouldAbortWI(wi) {
+		if r.shouldBcastAbortWI(wi) {
 			r.BcastCtrl(wi.smap, wi.wid, xact.OpcodeAbortWI, err)
 		}
 		tstats := core.T.StatsUpdater()
@@ -720,11 +686,11 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	return err
 }
 
-func (r *XactMoss) shouldAbortWI(wi *basewi) bool {
+func (r *XactMoss) shouldBcastAbortWI(wi *basewi) bool {
 	if r.IsAborted() || r.IsDone() {
 		return false
 	}
-	nat := wi.startup.nat // number of active targets in wi.smap (write-once in PrepRx, read via pending sync.Map)
+	nat := int(wi.startup.nat) // number of active targets in wi.smap (write-once in PrepRx, read via pending sync.Map)
 	if nat <= 1 {
 		return false
 	}
@@ -980,7 +946,8 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 	return nil
 }
 
-func (r *XactMoss) _getwi(wid, sid string, warn bool) *basewi {
+// callers must wi.unpin()
+func (r *XactMoss) _pinwi(wid, sid string, warn bool) *basewi {
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
 		if warn || cmn.Rom.V(4, cos.ModXs) {
@@ -989,14 +956,21 @@ func (r *XactMoss) _getwi(wid, sid string, warn bool) *basewi {
 		return nil
 	}
 	wi := a.(*basewi)
-	if wi.clean.Load() {
-		return nil
-	}
-	if wi.errAbandoned() != nil {
+	debug.Assertf(wi.wid == wid, "%q vs %q", wi.wid, wid)
+
+	// reserve before checking: cleanup's quiesce must wait for our Dec
+	wi.inRx.Inc()
+
+	// - clean     => cleanup is in progress or done
+	// - abandoned => gc-flagged; no new work
+	if wi.clean.Load() || wi.errAbandoned() != nil {
+		wi.inRx.Dec()
 		return nil
 	}
 	return wi
 }
+
+func (wi *basewi) unpin() { wi.inRx.Dec() }
 
 // (note: ObjHdr and its fields must be consumed synchronously)
 func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader) error {
@@ -1005,18 +979,11 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader) error {
 		return err
 	}
 
-	wi := r._getwi(mopaque.wid, hdr.SID, false /*warn*/)
+	wi := r._pinwi(mopaque.wid, hdr.SID, false /*warn*/)
 	if wi == nil {
 		return nil
 	}
-
-	// protect Rx path from untimely cleanup
-	wi.inRx.Inc()
-	if mopaque.wid != wi.wid || wi.clean.Load() || wi.errAbandoned() != nil {
-		wi.inRx.Dec()
-		return nil // (drop silently)
-	}
-	defer wi.inRx.Dec()
+	defer wi.unpin()
 
 	debug.Assert(wi.receiving())
 	return wi.recvObj(int(mopaque.index), hdr, reader, mopaque)
@@ -1275,11 +1242,7 @@ func (wi *basewi) cleanup(xdone bool) bool {
 		}
 	}
 	clear(wi.recv.m)
-	if cap(wi.recv.m) <= max(len(wi.req.In), poolMaxCap) {
-		wi.recv.m = wi.recv.m[:0]
-	} else {
-		wi.recv.m = nil
-	}
+	wi.recv.m = nil
 	wi.recv.mtx.Unlock()
 
 	// finally
@@ -1861,21 +1824,11 @@ func (wi *basewi) asm() error {
 			}
 		}
 
-		if !sendersOk && mono.Since(started) > sendersStartupTime {
-			wi.startup.mtx.Lock()
-			if len(wi.startup.m) < wi.startup.nat-1 {
-				// ContinueOnErr does not apply: it covers per-entry retrieval failures
-				// (missing objects or archived files), not request execution failures. Missing
-				// phase-3 sender means this work item cannot be assembled reliably.
-				out := _neverStarted(wi.smap, wi.startup.m)
-				wi.startup.mtx.Unlock()
-				return fmt.Errorf("%s: %d of %d senders did not ack start within %v: %v",
-					wi.r.Name(), len(out), wi.startup.nat-1, sendersStartupTime, out)
+		if !sendersOk {
+			sendersOk, err = wi._allStarted(mono.Since(started))
+			if err != nil {
+				return err // (req.ContinueOnErr does not apply)
 			}
-			// all expected senders announced startup
-			sendersOk = true
-			clear(wi.startup.m)
-			wi.startup.mtx.Unlock()
 		}
 
 		debug.Assert(j > i && j <= l, i, " vs ", j, " vs ", l)
@@ -1892,14 +1845,30 @@ func (wi *basewi) asm() error {
 	return nil
 }
 
-func _neverStarted(smap *meta.Smap, started cos.StrSet) (out []string) {
-	self := core.T.SID()
-	for tid, tsi := range smap.Tmap {
-		if tid != self && !tsi.InMaintOrDecomm() && !started.Contains(tid) {
-			out = append(out, tid)
+// all expected senders must announce themselves within the sendersStartupFail interval
+func (wi *basewi) _allStarted(since time.Duration) (ok bool, err error) {
+	const fmtErr = "%s: %d of %d senders did not ack start within %v"
+	var (
+		cnt      = wi.startup.refc.Load()
+		expected = wi.startup.nat - 1
+	)
+	switch {
+	case expected <= 0:
+		return true, nil // not receiving
+	case cnt >= expected:
+		if cnt > expected {
+			nlog.Warningln(wi.r.Name(), "extra startup acks:", cnt, "expected:", expected)
 		}
+		return true, nil // ok
+	case since < sendersStartupWarn:
+		// do nothing
+	case since >= sendersStartupFail:
+		return false, fmt.Errorf(fmtErr, wi.r.Name(), expected-cnt, expected, sendersStartupFail)
+	case since-wi.startup.warn >= sendersStartupWarn:
+		nlog.Warningf(fmtErr, wi.r.Name(), expected-cnt, expected, since)
+		wi.startup.warn = since
 	}
-	return
+	return false, nil
 }
 
 // drains recv.m[] in strict input order
@@ -2314,5 +2283,26 @@ func (r *XactMoss) _fatal(wid, reason string, age time.Duration) {
 	err := fmt.Errorf("wedged %s for wi %q, age %v", reason, wid, age)
 	if r.Abort(err) {
 		nlog.Errorln(r.Name(), err)
+	}
+}
+
+// via xact.OpcodeAbortWI from DT
+func (r *XactMoss) gcAbortedByDT(now int64) {
+	last := r.lastAbrtWID.Load()
+	if last == 0 || time.Duration(now-last) < gcWIsAbortedByDT {
+		return
+	}
+
+	const iniCap = 8
+	keys := make([]string, 0, iniCap)
+	r.abortedWIDs.Range(func(k, _ any) bool {
+		keys = append(keys, k.(string))
+		return true
+	})
+	if !r.lastAbrtWID.CAS(last, 0) {
+		return
+	}
+	for _, k := range keys {
+		r.abortedWIDs.Delete(k)
 	}
 }
