@@ -6,9 +6,12 @@ package ais
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"runtime"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
@@ -146,6 +149,16 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 			config.Proxy.PrimaryURL == p.si.URL(cmn.NetPublic)
 		if !prim.isCfg {
 			prim.isCfg = p.si.HasURL(config.Proxy.PrimaryURL)
+		}
+		// if config designates this node as primary but there is no local Smap,
+		// probe well-known URLs to detect an already-running cluster; if found
+		// with a different primary, join as secondary rather than attempting
+		// to create a new cluster that would conflict with the existing one.
+		if prim.isCfg {
+			if existingPrimary := p.probeForCluster(config); existingPrimary != "" {
+				prim.isCfg = false
+				prim.url = existingPrimary
+			}
 		}
 	}
 
@@ -1019,6 +1032,71 @@ ret:
 	}
 	after.Config = config
 	return after.Smap
+}
+
+// probeForCluster probes the configured discovery URL to detect
+// an already-running AIStore cluster.
+func (p *proxy) probeForCluster(config *cmn.Config) (primaryURL string) {
+	var (
+		selfPub  = p.si.URL(cmn.NetPublic)
+		selfCtrl = p.si.URL(cmn.NetIntraControl)
+	)
+
+	nsti, err := p._probeOne(config.Proxy.DiscoveryURL)
+	if err != nil {
+		nlog.Infof("%s: probe %s: %v", p, config.Proxy.DiscoveryURL, err)
+		return ""
+	}
+	if nsti.Smap.UUID == "" || nsti.Smap.Version == 0 || nsti.Smap.Primary.ID == "" {
+		return ""
+	}
+	// resolve primary URL, preferring intra-control
+	pURL := nsti.Smap.Primary.CtrlURL
+	if pURL == "" {
+		pURL = nsti.Smap.Primary.PubURL
+	}
+	// if the existing cluster still considers us primary, let primaryStartup
+	// handle recovery (other nodes will re-register with us)
+	if nsti.Smap.Primary.ID == p.SID() || pURL == selfPub || pURL == selfCtrl {
+		nlog.Infof("%s: probed %s - existing cluster (UUID=%s v%d) still has self as primary",
+			p, config.Proxy.DiscoveryURL, nsti.Smap.UUID, nsti.Smap.Version)
+		return ""
+	}
+	nlog.Warningf("%s: detected existing cluster (UUID=%s v%d, primary=%s) via %s - joining as secondary",
+		p, nsti.Smap.UUID, nsti.Smap.Version, nsti.Smap.Primary.ID, config.Proxy.DiscoveryURL)
+	return pURL
+}
+
+// _probeOne sends a health+cluster-info request to baseURL and returns the
+// parsed NodeStateInfo. Unlike reqHealth, it works with a bare URL (no
+// *meta.Snode needed) and skips the Smap-UUID consistency check, making it
+// safe to use before this node has established its own local Smap.
+func (p *proxy) _probeOne(baseURL string) (*cos.NodeStateInfo, error) {
+	cargs := allocCargs()
+	defer freeCargs(cargs)
+	cargs.req = cmn.HreqArgs{
+		Method: http.MethodGet,
+		Base:   baseURL,
+		Path:   apc.URLPathHealth.S,
+		Query:  url.Values{apc.QparamClusterInfo: []string{"true"}},
+	}
+	cargs.timeout = cmn.Rom.CplaneOperation()
+	// p.owner.smap.get() may return nil before bootstrap puts anything in;
+	// pass a blank smapX so that setIntraHdrs does not dereference a nil pointer.
+	smap := p.owner.smap.get()
+	if smap == nil {
+		smap = newSmap()
+	}
+	res := p.call(cargs, smap)
+	defer freeCR(res)
+	if res.err != nil {
+		return nil, res.err
+	}
+	var nsti cos.NodeStateInfo
+	if err := jsoniter.Unmarshal(res.bytes, &nsti); err != nil {
+		return nil, err
+	}
+	return &nsti, nil
 }
 
 func _updNetInfo(smap *smapX, nsi *meta.Snode, cloned bool) (*smapX, bool) {
