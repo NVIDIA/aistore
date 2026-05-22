@@ -48,25 +48,30 @@ import (
 // For background and usage, refer to:
 // 1. GetBatch: Multi-Object Retrieval API, at https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md
 // 2. Monitoring GetBatch Performance,      at https://github.com/NVIDIA/aistore/blob/main/docs/monitoring-get-batch.md
-// -----------------------------------------------------------------------
-
-// -----------------------------------------------------------------------
-//   client -> ais/ml -> DT (phase 1)
-//
-//   redirected client -> ais/ml -> DT (phase 2)
-//
-//   ais/ml proxy -> senders (phase 3)
+// ----------------------------------------------------------------------
+// Flow:
+//  1. client -> ais/ml -> DT (phase 1)
+//  2. redirected client -> ais/ml -> DT (phase 2)
+//  3. ais/ml proxy -> senders (phase 3)
 //     run asynchronously; each active target sends OpcodeStartedWI => DT
-//     then pushes its local entries
+//      then pushes its local entries
 //
-//   DT assembly does the heavy lifting:
-//     local entries      -> wi.next()
-//     remote entries     -> recv.m[] / flushRx()
-//     missing/soft errs  -> addMissing(); optional GFN recovery
-//
-// TODO:
-// - range read
-// - throttle senders
+// DT assembly does the heavy lifting:
+//    local entries      -> wi.next()
+//    remote entries     -> recv.m[] / flushRx()
+//    missing/soft errs  -> addMissing(); optional GFN recovery
+// ----------------------------------------------------------------------
+// Soft errors: any execution path that invokes addMissing() is classified as a _soft_ error,
+//    irrespective of its original cause; these include:
+//    a) missing data (404) - object or archived file doesn't exist;
+//    b) remote stream-break (`ErrSBR`) - a temporary failure of a long-lived;
+//       peer-to-peer connection that gets converted into a special missing entry
+//    c) timeout waiting for peer to "push" next data item (object or archived file),
+//       with subsequent recovery via direct target-to-target GET dubbed GFN (get-from-neighbor).
+// Per-request max-number-soft-errors and GFN are separately
+// configurable (https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md)
+// -----------------------------------------------------------------------
+// TODO: range read; throttle senders
 // -----------------------------------------------------------------------
 
 // hardcoded tunables
@@ -74,8 +79,13 @@ const (
 	mossIdleTime = xact.IdleDefault // xact.Demand idle-ness
 
 	// when work item is subject to GC
-	mossAbandonTime  = max(mossIdleTime, 5*time.Minute) // max age (see gcAbandoned)
-	cleanupRxTimeout = mossAbandonTime                  // max time to wait on `inRx` ref-count (unlikely)
+	mossAbandonTime = max(mossIdleTime, 5*time.Minute) // max age (see gcAbandoned)
+
+	// max time inRx may remain non-zero before cleanup forces
+	// sized for large-batch workloads (e.g. 1G+ objects under contention)
+	inRxTimeout = min(90*time.Second, mossAbandonTime>>1)
+	// quiesce window when finishing/aborting
+	noRxWindow = 100 * time.Millisecond
 
 	// senders to announce themselves
 	sendersStartupWarn = 30 * time.Second
@@ -164,7 +174,7 @@ type (
 			refc atomic.Int64  // number of ACKs received
 			warn time.Duration // last time warned
 		}
-		stats   moss
+		stats   moss         // internal stats (-> CtlMsg)
 		started int64        // (mono)
 		soft    int          // number of soft errors must be <= maxSoftErrs; see definition above
 		idx     int          // current position in outgoing batch
@@ -172,9 +182,13 @@ type (
 		owned   atomic.Int32 // ownership: asm() path vs gc; Inc/DecPending() symmetry
 		awfin   atomic.Bool  // true: is closed; false: need to close (outgoing) archive writer
 
-		// mutual gates:  `abandoned` stops new Rx (data, control); `inRx` counts in-flight pins
-		inRx      atomic.Int32
+		// Rx atomic state vs: (abandoned) | (Abort) | late arrival on a completed work item (with 404s)
+		inRx      atomic.Int32 // ref-count
+		lastRx    atomic.Int64 // (mono)
 		abandoned ratomic.Pointer[errAbandonedWI]
+
+		// asm() path: last progress (but gets initialized to wi.started in PrepRx prior to asm())
+		lastAsm atomic.Int64 // (mono)
 	}
 	buffwi struct {
 		*basewi
@@ -483,6 +497,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 		wi.resp = resp
 		wi.wid = wid
 		wi.started = now
+		wi.lastAsm.Store(now)
 	}
 
 	// receiving
@@ -632,7 +647,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 	wi := a.(*basewi)
 
-	if !wi.owned.CAS(wiownNone, wiownASM) {
+	if !wi.owned.CAS(wiownNone, wiownAsm) {
 		if err := wi.errAbandoned(); err != nil {
 			return err
 		}
@@ -642,7 +657,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 
 	if r.IsAborted() || r.IsDone() {
-		wi.owned.CAS(wiownASM, wiownNone) // Abort/fini owns final cleanup
+		wi.owned.CAS(wiownAsm, wiownNone) // Abort/fini owns final cleanup
 		return nil
 	}
 
@@ -650,7 +665,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	r.incPending()
 	defer r.decPending()
 	if r.IsAborted() || r.IsDone() {
-		wi.owned.CAS(wiownASM, wiownNone) // ditto
+		wi.owned.CAS(wiownAsm, wiownNone) // ditto
 		return nil
 	}
 
@@ -675,12 +690,12 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 
 	ok := wi.cleanup(false /*xdone*/)
-	debug.Assert(wi.owned.Load() == wiownASM)
+	debug.Assert(wi.owned.Load() == wiownAsm)
 
 	if ok {
 		freeMossWi(wi)
 	} else {
-		owned := wi.owned.CAS(wiownASM, wiownNone)
+		owned := wi.owned.CAS(wiownAsm, wiownNone)
 		debug.Assert(owned)
 	}
 	return err
@@ -958,7 +973,8 @@ func (r *XactMoss) _pinwi(wid, sid string, warn bool) *basewi {
 	wi := a.(*basewi)
 	debug.Assertf(wi.wid == wid, "%q vs %q", wi.wid, wid)
 
-	// reserve before checking: cleanup's quiesce must wait for our Dec
+	// vs cleanup's quiesce (marks Rx activity)
+	wi.lastRx.Store(mono.NanoTime())
 	wi.inRx.Inc()
 
 	// - clean     => cleanup is in progress or done
@@ -1259,7 +1275,38 @@ func (wi *basewi) cleanup(xdone bool) bool {
 	return true
 }
 
+//
+// work-item quiescence
+//
+
+// wait for inRx to drain and remain zero for noRxWindow
+// brief mode is an exception: best-effort, no stability gate
 func (wi *basewi) quiesce(brief bool) bool {
+	if brief {
+		return wi._quiesce(true)
+	}
+
+	started := mono.NanoTime()
+
+	for {
+		if !wi._quiesce(false) {
+			return false // inner timed out
+		}
+
+		now := mono.NanoTime()
+		if time.Duration(now-wi.lastRx.Load()) >= noRxWindow {
+			return true // ok
+		}
+		if dur := time.Duration(now - started); dur >= inRxTimeout {
+			err := fmt.Errorf("wi.quiesce timed out (stable) [%s, %q, %v > %v timeout]", wi.r.Name(), wi.wid, dur, inRxTimeout)
+			wi.r.AddErr(err, 0)
+			return false
+		}
+		time.Sleep(noRxWindow / 4)
+	}
+}
+
+func (wi *basewi) _quiesce(brief bool) bool {
 	const numSpins = 10
 
 	r := wi.r
@@ -1267,8 +1314,8 @@ func (wi *basewi) quiesce(brief bool) bool {
 	for spins := 0; wi.inRx.Load() > 0; spins++ {
 		if brief {
 			if spins >= numSpins {
-				err := fmt.Errorf("wi.quiesce: inRx still busy on brief cleanup [%s, %q, spins=%d]",
-					r.Name(), wi.wid, spins)
+				err := fmt.Errorf("wi.quiesce: inRx still busy on brief cleanup [%s, %q, spins=%d > %d limit]",
+					r.Name(), wi.wid, spins, numSpins)
 				r.AddErr(err, 0)
 				return false
 			}
@@ -1285,9 +1332,9 @@ func (wi *basewi) quiesce(brief bool) bool {
 			time.Sleep(min(time.Second, time.Millisecond*time.Duration(spins)))
 		default:
 			debug.Assert(started != 0)
-			if dur := mono.Since(started); dur >= cleanupRxTimeout {
-				err := fmt.Errorf("wi.quiesce timed out waiting for inRx to drain [%s, %q, %v]",
-					r.Name(), wi.wid, dur)
+			if dur := mono.Since(started); dur >= inRxTimeout {
+				err := fmt.Errorf("wi.quiesce timed out waiting for inRx to drain [%s, %q, %v >= %v timeout]",
+					r.Name(), wi.wid, dur, inRxTimeout)
 				r.AddErr(err, 0)
 				return false
 			}
@@ -1810,8 +1857,11 @@ func (wi *basewi) asm() error {
 		}
 		wi.idx = j
 
+		now := mono.NanoTime()
+		wi.lastAsm.Store(now)
+
 		if wi.wctrl != nil {
-			if now := mono.NanoTime(); now >= nextFlush {
+			if now >= nextFlush {
 				// note:
 				// set streaming write deadline; waitFlushRx()
 				// refreshes it while blocked waiting for peer data
@@ -1825,7 +1875,7 @@ func (wi *basewi) asm() error {
 		}
 
 		if !sendersOk {
-			sendersOk, err = wi._allStarted(mono.Since(started))
+			sendersOk, err = wi._allStarted(time.Duration(now - started))
 			if err != nil {
 				return err // (req.ContinueOnErr does not apply)
 			}
@@ -2169,7 +2219,7 @@ const (
 
 const (
 	wiownNone int32 = iota
-	wiownASM
+	wiownAsm
 	wiownGC
 )
 
@@ -2202,9 +2252,7 @@ func (gc *mossGC) visit(_, value any) bool {
 		return cont
 	}
 
-	// TODO: track last progress to eliminate (unlikely) false positives
-	age := time.Duration(gc.now - wi.started)
-
+	age := time.Duration(gc.now - wi.lastAsm.Load())
 	if gc.mark(wi, age) {
 		return cont
 	}
