@@ -17,6 +17,8 @@ For quick getting-started (local-playground) session _and_ in-depth overview, pl
   - [Unregister existing user](#unregister-existing-user)
   - [List registered users](#list-registered-users)
   - [Add a new role](#add-a-new-role)
+  - [Update role](#update-role)
+  - [Remove existing role](#remove-existing-role)
   - [List existing roles](#list-existing-roles)
   - [Log in to AIS cluster](#log-in-to-ais-cluster)
   - [Log out](#log-out)
@@ -168,6 +170,7 @@ Creates a role and grants the list of permissions to the role.
 | --- | --- | --- |
 | `--cluster` | Grants permissions to access and operate on a cluster (scope: cluster) | Cluster ID or alias |
 | `--bucket` | Grants permissions to access and operate on a specific bucket (scope: bucket) | Bucket URI (provider and bucket name), e.g. `ais://imagenet` |
+| `--desc` | Optional role description (alias: `--description`) | Arbitrary text |
 
 If only `--cluster` is defined, the permissions are used as default ones to access *every* bucket in the cluster.
 
@@ -187,14 +190,45 @@ Description
 CLUSTER ID      ALIAS        PERMISSIONS
 k5zAzdhbr       clusterOne   GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,HEAD-BUCKET,LIST-OBJECTS
 
+# Create a role with a description
+$ ais auth add role listRole --cluster clusterOne --desc "Read-only listing access" LIST-OBJECTS LIST-BUCKETS
+$ ais auth show role listRole
+ROLE      DESCRIPTION
+listRole  Read-only listing access
+
 # Grant specific permission to a cluster-level role
-$ ais auth add role specRole clusterOne GET HEAD-BUCKET LIST-OBJECT
+$ ais auth add role specRole --cluster clusterOne GET HEAD-BUCKET LIST-OBJECTS
 $ ais auth show role specRole -v
 Role            specRole
 Description
 CLUSTER ID      ALIAS        PERMISSIONS
 k5zAzdhbr       clusterOne   GET,HEAD-BUCKET,LIST-OBJECTS
 ```
+
+### Update role
+
+`ais auth update role ROLE [PERMISSION [PERMISSION...]] [--flags]`
+
+Updates an existing role. Changes apply to all users that have the role assigned.
+The built-in `Admin` role cannot be modified.
+
+Accepts the same flags as [Add a new role](#add-a-new-role): `--cluster`, `--bucket`, and `--desc`.
+
+#### Examples
+
+```console
+# Update a role description
+$ ais auth update role listRole --desc "List buckets and objects only"
+
+# Grant additional permissions to a cluster-level role
+$ ais auth update role specRole --cluster clusterOne GET HEAD-BUCKET LIST-OBJECTS
+```
+
+### Remove existing role
+
+`ais auth rm role ROLE`
+
+Remove an existing role. The built-in `Admin` role cannot be removed.
 
 ### List existing roles
 
