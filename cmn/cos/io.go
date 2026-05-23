@@ -76,7 +76,7 @@ type (
 	ReaderWithArgs struct {
 		R       io.Reader
 		ReadCb  func(int, error)
-		DeferCb func()
+		OnClose func()
 		Rsize   int64
 	}
 	nopOpener struct{ io.ReadCloser }
@@ -284,8 +284,8 @@ func (r *ReaderWithArgs) Close() (err error) {
 	if rc, ok := r.R.(io.ReadCloser); ok {
 		err = rc.Close()
 	}
-	if r.DeferCb != nil {
-		r.DeferCb()
+	if r.OnClose != nil {
+		r.OnClose()
 	}
 	return err
 }

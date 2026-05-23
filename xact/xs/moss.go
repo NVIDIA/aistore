@@ -1595,7 +1595,7 @@ func (wi *basewi) next(i int) (int, error) {
 				return 0, err
 			}
 			out, nameInArch := wi._out(lom, in)
-			if e := wi.addMissing(err, nameInArch, out); e != nil {
+			if e := wi.addMissingIn(err, in, out, nameInArch); e != nil {
 				return 0, e
 			}
 			return i + 1, nil
@@ -1615,15 +1615,7 @@ func (wi *basewi) next(i int) (int, error) {
 		}
 
 		wi.stats.ngfn++
-		err = wi.gfn(lom, tsi, in, out, nameInArch, err) // direct GFN
-		if err != nil {
-			if errClu := wi._checkSameTargets(); errClu != nil {
-				return 0, errClu
-			}
-			// soft err-s include a), b), and c) GFN
-			// see cmn/config comment
-			wi.soft++
-		}
+		err = wi.gfn(lom, tsi, in, out, nameInArch) // direct GFN
 	} else {
 		err = wi.write(lom, in, out, nameInArch)
 	}
@@ -1670,28 +1662,34 @@ func (wi *basewi) _out(lom *core.LOM, in *apc.MossIn) (*apc.MossOut, string) {
 	return &out, nameInArch
 }
 
-func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.MossOut, nameInArch string, errHole error) error {
+func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.MossOut, nameInArch string) error {
 	debug.Assert(tsi != nil)
 	params := &core.GfnParams{
 		Lom:      lom,
 		Tsi:      tsi,
 		ArchPath: in.ArchPath,
 		Size:     wi.avgSize(),
+		// give it a double-MaxWait, but do not inherit the generic data-client long timeout
+		Timeout: wi.config.GetBatch.MaxWait.D() << 1,
 	}
 
 	resp, err := core.T.GetFromNeighbor(params) //nolint:bodyclose // closed below
 
 	if err != nil {
-		// GFN failure is not necessarily fatal.
-		// With ContinueOnErr=true, we convert it to a missing-entry (soft error).
-		// Track separately from soft errors since it indicates cluster pressure,
-		// not genuinely missing data.
-		nlog.Warningln(wi.r.Name(), wi.wid, nameInArch, err)
-		wi.stats.errn++
-		if wi.req.ContinueOnErr {
-			return wi.write(lom, in, out, nameInArch)
+		if cmn.Rom.V(4, cos.ModXs) {
+			nlog.Warningln("GFN failure:", wi.r.Name(), wi.wid, nameInArch, err)
 		}
-		return errHole // remains orig err
+		wi.stats.errn++
+		if errClu := wi._checkSameTargets(); errClu != nil {
+			return errClu
+		}
+		if !wi.req.ContinueOnErr {
+			return err // instead of the original errHole
+		}
+		if !cmn.IsErrHTTPNotFound(err) {
+			return err
+		}
+		return wi.addMissingIn(err, in, out, nameInArch)
 	}
 
 	defer cos.Close(resp.Body)
@@ -1790,13 +1788,6 @@ func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameIn
 	return size, err
 }
 
-func _withArchpath(nameInArch, archpath string) string {
-	if archpath[0] == '/' {
-		return nameInArch + archpath
-	}
-	return nameInArch + cos.PathSeparator + archpath
-}
-
 func (wi *basewi) _txreg(oah cos.OAH, reader io.Reader, out *apc.MossOut, nameInArch string) error {
 	if err := wi.aw.Write(nameInArch, oah, reader); err != nil {
 		return err
@@ -1814,6 +1805,20 @@ func (wi *basewi) _txarch(reader io.Reader, out *apc.MossOut, nameInArch string,
 	return nil
 }
 
+func (wi *basewi) addMissingIn(err error, in *apc.MossIn, out *apc.MossOut, nameInArch string) error {
+	if in.ArchPath != "" {
+		nameInArch = _withArchpath(nameInArch, in.ArchPath)
+	}
+	return wi.addMissing(err, nameInArch, out)
+}
+
+func _withArchpath(nameInArch, archpath string) string {
+	if archpath[0] == '/' {
+		return nameInArch + archpath
+	}
+	return nameInArch + cos.PathSeparator + archpath
+}
+
 func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) error {
 	var (
 		missingName = apc.MossMissingDir + cos.PathSeparator + nameInArch
@@ -1824,8 +1829,10 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 		return err
 	}
 
-	// NOTE: always inc number of soft errors
 	out.ErrMsg = err.Error()
+
+	// soft err-s include a), b), and c) GFN
+	// see cmn/config comment
 	wi.soft++
 	return nil
 }

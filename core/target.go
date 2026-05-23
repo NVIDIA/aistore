@@ -66,6 +66,7 @@ type (
 		Config   *cmn.Config
 		ArchPath string
 		Size     int64
+		Timeout  time.Duration
 	}
 )
 

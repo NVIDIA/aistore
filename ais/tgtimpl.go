@@ -244,24 +244,44 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 		return nil, err
 	}
 
-	config := params.Config
+	var (
+		tout   = params.Timeout
+		config = params.Config
+	)
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
-	tout := config.Timeout.SendFile.D()
-	if params.ArchPath == "" {
-		tout = cos.ClampDuration(tout, config.Client.Timeout.D(), time.Minute)
+	if tout == 0 {
+		tout = config.Timeout.SendFile.D()
+		if params.ArchPath == "" {
+			tout = cos.ClampDuration(tout, config.Client.Timeout.D(), time.Minute)
+		}
 	}
-	_, cancel := context.WithTimeout(context.Background(), tout)
+	ctx, cancel := context.WithTimeout(context.Background(), tout)
+	reqWith := req.WithContext(ctx)
 
-	resp, err := g.client.data.Do(req)
+	resp, err := g.client.data.Do(reqWith)
 
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
-	cancel()
 
+	if err == nil {
+		if code := resp.StatusCode; code >= http.StatusBadRequest {
+			err = &cmn.ErrHTTP{Message: http.StatusText(code), Status: code}
+		}
+	}
 	if err != nil {
+		if resp != nil && resp.Body != nil {
+			cos.DrainReader(resp.Body)
+			cos.Close(resp.Body)
+		}
+		cancel()
 		return nil, fmt.Errorf("GFN(%s, %s): %w", lom.Cname(), params.Tsi.StringEx(), err)
+	}
+
+	resp.Body = &cos.ReaderWithArgs{
+		R:       resp.Body,
+		OnClose: cancel,
 	}
 	return resp, nil
 }
