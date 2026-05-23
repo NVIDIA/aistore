@@ -175,10 +175,7 @@ func (s *sentinel) _qabort(err error) core.QuiRes {
 }
 
 func (s *sentinel) checkSmap(smap *meta.Smap) error {
-	if s.smap.SameTargets(smap) {
-		return nil
-	}
-	return cmn.NewErrMembershipChanges(fmt.Sprint(s.r.Name(), smap.String(), "vs", s.smap.String()))
+	return s.smap.CheckSameTargets(smap, s.r.Name())
 }
 
 func (s *sentinel) pending() {

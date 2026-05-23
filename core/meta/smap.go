@@ -482,11 +482,24 @@ func (m *Smap) HasActiveTs(except string) bool {
 	return false
 }
 
+func (m *Smap) CheckSameTargets(curr *Smap, tag string) error {
+	if m == nil || m.Version == 0 || curr == nil || curr.Version == 0 || m.Primary == nil || curr.Primary == nil {
+		err := errors.New("check-same-targets: expecting valid Smap(s)")
+		debug.AssertNoErr(err)
+		return err
+	}
+	if m._sameTargets(curr) {
+		return nil
+	}
+	debug.Assertf(curr.Version > m.Version, "make sure the \"curr\" Smap is current (v%d vs v%d)", curr.Version, m.Version)
+	return cmn.NewErrMembershipChange(tag, m.StringEx(), curr.StringEx())
+}
+
 // return true if the two Smaps have identical active+inactive
 // target membership and identical per-target flags that influence global-rebalance
 // decisions during graceful membership changes
 // (rebalanceGrace)
-func (m *Smap) SameTargets(other *Smap) bool {
+func (m *Smap) _sameTargets(other *Smap) bool {
 	if m.Version == other.Version {
 		return true
 	}

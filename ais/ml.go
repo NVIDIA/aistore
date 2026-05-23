@@ -393,9 +393,13 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 
 		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
 			// NOTE: not aborting x-moss on a single wid failure
-			if err == cmn.ErrGetTxBenign {
+			switch {
+			case err == cmn.ErrGetTxBenign:
 				xmoss.AddErr(fmt.Errorf("assemble wid=%q: %v", ctx.wid, err), 4)
-			} else {
+			case cmn.IsErrMembershipChange(err):
+				xmoss.Abort(err)
+				t.writeErr(w, r, err, 0)
+			default:
 				xmoss.AddErr(fmt.Errorf("assemble wid=%q: %v", ctx.wid, err), 4, cos.ModXs)
 				t.writeErr(w, r, err, 0, Silent)
 			}

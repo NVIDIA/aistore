@@ -164,8 +164,9 @@ func (*Reb) _preempt(logHdr, oxid string) error {
 			return nil
 		}
 
-		if smap2 := core.T.Sowner().Get(); !smap1.SameTargets(smap2) {
-			return fmt.Errorf("%s: Smap changed mid-wait %s => %s", tag, smap1.StringEx(), smap2.StringEx())
+		smap2 := core.T.Sowner().Get()
+		if err := smap1.CheckSameTargets(smap2, tag); err != nil {
+			return err
 		}
 
 		if i > 5 && i&1 == 1 {
@@ -399,10 +400,9 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 	// prior to opening streams:
 	// not every change in Smap warants a different rebalance but this one (below) definitely does
 	// check for post-renew change
-	smap := core.T.Sowner().Get()
-	if !smap.SameTargets(rargs.smap) {
-		debug.Assert(smap.Version > rargs.smap.Version)
-		return fmt.Errorf("%s post-renew change %s => %s", xreb, rargs.smap.StringEx(), smap.StringEx())
+	smapCurr := core.T.Sowner().Get()
+	if err := rargs.smap.CheckSameTargets(smapCurr, xreb.Name()+" post-renew"); err != nil {
+		return err
 	}
 	reb.smap.Store(rargs.smap)
 

@@ -258,8 +258,9 @@ type (
 	ErrCreateHreq struct {
 		err error // original
 	}
-	ErrMembershipChanges struct {
-		info string
+	ErrMembershipChange struct {
+		tag      string
+		from, to string
 	}
 )
 
@@ -1071,14 +1072,23 @@ func (e *ErrCreateHreq) Error() string {
 
 func (e *ErrCreateHreq) Unwrap() (err error) { return e.err }
 
-// ErrMembershipChanges
+// ErrMembershipChange
 
-func NewErrMembershipChanges(info string) *ErrMembershipChanges {
-	return &ErrMembershipChanges{info}
+func NewErrMembershipChange(tag, from, to string) *ErrMembershipChange {
+	return &ErrMembershipChange{tag, from, to}
 }
 
-func (e *ErrMembershipChanges) Error() string {
-	return fmt.Sprint("encountered membership changes [", e.info, "]")
+func (e *ErrMembershipChange) Error() string {
+	return fmt.Sprintf("%s: detected cluster membership change from %s to %s", e.tag, e.from, e.to)
+}
+
+func IsErrMembershipChange(err error) bool {
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrMembershipChange); ok {
+		return true
+	}
+	var wrapped *ErrMembershipChange
+	return errors.As(err, &wrapped)
 }
 
 //

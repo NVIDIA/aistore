@@ -368,6 +368,7 @@ func (r *XactMoss) decPending() {
 }
 
 // base abort + more
+// (do NOT call from the asm() path - activeWG must be done)
 func (r *XactMoss) Abort(err error) bool {
 	if !r.DemandBase.Abort(err) {
 		return false
@@ -1606,11 +1607,20 @@ func (wi *basewi) next(i int) (int, error) {
 
 	out, nameInArch := wi._out(lom, in)
 	if isErrHole(err) {
+		if errClu := wi._checkSameTargets(); errClu != nil {
+			return 0, errClu
+		}
+
 		wi.stats.ngfn++
-		// soft err-s include a), b), and c) GFN
-		// see cmn/config comment
-		wi.soft++
-		err = wi.gfn(lom, tsi, in, out, nameInArch, err)
+		err = wi.gfn(lom, tsi, in, out, nameInArch, err) // direct GFN
+		if err != nil {
+			if errClu := wi._checkSameTargets(); errClu != nil {
+				return 0, errClu
+			}
+			// soft err-s include a), b), and c) GFN
+			// see cmn/config comment
+			wi.soft++
+		}
 	} else {
 		err = wi.write(lom, in, out, nameInArch)
 	}
@@ -1637,6 +1647,11 @@ func (wi *basewi) next(i int) (int, error) {
 		wi.recv.mtx.Unlock()
 	}
 	return i + 1, nil
+}
+
+func (wi *basewi) _checkSameTargets() error {
+	smapCurr := core.T.Sowner().Get()
+	return wi.smap.CheckSameTargets(smapCurr, wi.r.Name())
 }
 
 func (wi *basewi) _out(lom *core.LOM, in *apc.MossIn) (*apc.MossOut, string) {

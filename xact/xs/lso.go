@@ -596,9 +596,11 @@ func (r *LsoXact) nextPageR() (err error) {
 		goto ex
 	}
 
-	if smap2 := core.T.Sowner().Get(); !smap2.SameTargets(r.smap) {
-		if !r.walk.wor {
-			return fmt.Errorf("%s: list-objects topology changed: %s => %s", r, r.smap.StringEx(), smap2.StringEx())
+	if !r.walk.wor {
+		smapCurr := core.T.Sowner().Get()
+		if err := r.smap.CheckSameTargets(smapCurr, r.Name()); err != nil {
+			r.Abort(err)
+			return err
 		}
 	}
 

@@ -367,8 +367,8 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		}
 		freeBcastRes(results)
 
-		if smap2 := p.owner.smap.Get(); !smap.SameTargets(smap2) {
-			err := fmt.Errorf("%s R-flow: detected %s => %s between 2PC phases", lsotag, smap.StringEx(), smap2.StringEx())
+		smapCurr := p.owner.smap.Get()
+		if err := smap.CheckSameTargets(smapCurr, lsotag+" R-flow"); err != nil {
 			p._abrtR(bargs, path)
 			freeBcArgs(bargs)
 			return nil, err
