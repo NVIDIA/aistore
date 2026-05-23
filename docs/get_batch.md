@@ -490,6 +490,18 @@ training/exists-2.bin          (2 MB)
 - Limited by network bandwidth or disk I/O
 - No additional per-object overhead once streaming starts
 
+### Indexed archive extraction (shard index)
+
+When the same TAR shard appears in many batches — typical of sharded ML training datasets — linear scanning of the archive for each requested `archpath` entry becomes the dominant cost. The [shard index](/docs/relnotes/4.5.md#shard-index) subsystem builds and persists a per-shard index of offsets/lengths so that `lom.NewArchpathReader` can seek directly to the requested file.
+
+GetBatch consults the index transparently on the read path (`xact/xs/moss.go` calls `NewArchpathReader`, which uses the fast path when an index exists). To prepare a bucket:
+
+- `ais shard-index create <bucket>` builds indexes for existing shards.
+- New shards are indexed on first read or via the indexing xaction.
+- Indexes live in the `ais://.sys-shardidx` system bucket and are removed automatically when the underlying shard object is deleted.
+
+For batches that fan out across many archived files in different shards, this changes per-file extraction from O(archive size) to O(1) + read.
+
 ### Memory & Resource Usage
 
 **Memory:** Bounded by DT capacity + load-based throttling
@@ -752,13 +764,37 @@ for moss_out, data in get_worker_partition(worker_id=0, num_workers=10, total_ob
 
 ## Limitations & Future Work
 
-**Current limitations:**
-- Range reads (`start`/`length`) not yet implemented
-- Shard extraction is sequential within each archive
+### Supported scope
 
-**Roadmap:**
+GetBatch works on **in-cluster data**: sharded (with shards of any kind — TAR, TAR.GZ, TAR.LZ4, ZIP), or plain monolithic objects, or chunked objects. As long as the requested data is stored on the cluster's target disks, GetBatch will assemble and return it.
+
+For TAR shards, GetBatch reads files via the [shard index](/docs/relnotes/4.5.md#shard-index) fast path when an index has been built for the shard — extracting an `archpath` entry becomes direct random access into the archive instead of a linear scan. The index is persisted in the `ais://.sys-shardidx` system bucket and is consulted transparently by both `GET` and GetBatch.
+
+### Known limitations
+
+**Remote (cold) GET is not supported.**
+When GetBatch is invoked on a remote bucket (`s3://`, `gs://`, `az://`, `oc://`) and one or more requested objects are *not already stored on any target's disks*, GetBatch will not fetch them from the backend. Instead, each missing object is recorded as a soft-error placeholder (`__404__/<objname>` in the output archive), and the request as a whole may fail when the soft-error budget (`max_soft_errs`) is exceeded. The requested objects must be pre-loaded into the cluster (e.g., via `ais bucket prefetch`, an explicit `ais get`, or a separate warmup pass) before issuing GetBatch.
+
+**Cluster membership changes are disruptive to in-flight requests.**
+Any event that mutates the cluster map (target restart, pod reschedule, scale-up, scale-down, primary proxy failover) will:
+
+- Abort all currently-running GetBatch work items with `reason: starting x-rebalance[...]` and surface as `ErrNotFound: (prep-rx not done?)` on the client.
+- Trigger an automatic global rebalance.
+- May leave inter-target shared-DM streams in an unrecoverable state until the affected targets are re-bounced. Re-issuing GetBatch immediately after a membership event may fail with `context deadline exceeded` for several minutes.
+
+Clients should retry GetBatch after a brief backoff once the rebalance completes. For long-running training pipelines, treat GetBatch failures during/after a membership event as expected and rely on the client-side retry path.
+
+**Range reads not yet implemented.**
+Per-entry `start`/`length` fields in `MossIn` are reserved for future use; supplying them currently returns `ErrNotImpl`.
+
+**Shard extraction is sequential within each archive.**
+When multiple files are requested from the same shard, they are extracted in sequence rather than in parallel. This is a performance limitation, not a correctness issue — and is largely mitigated when the [shard index](/docs/relnotes/4.5.md#shard-index) is enabled, which converts each per-file lookup from a linear scan into direct random access.
+
+### Roadmap
+
+- Self-healing shared-DM bundles across Smap version changes
 - Range read support for partial object retrieval
-- Multi-file extraction from single shard (performance optimization)
+- Multi-file parallel extraction from a single shard
 - Finer-grained work item abort controls
 
 ---
