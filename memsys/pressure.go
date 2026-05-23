@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -175,7 +174,7 @@ func _sparseLog() bool {
 	var (
 		cnt = logPressCnt.Inc()
 	)
-	if !cmn.Sparse(cnt) {
+	if !cos.Sparse(cnt) {
 		return false
 	}
 	logPressLast.Store(now)

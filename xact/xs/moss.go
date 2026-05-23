@@ -642,8 +642,11 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
+		if err := r.AbortErr(); err != nil {
+			return err
+		}
 		err := cos.NewErrNotFoundFmt(r, "wid=%q (prep-rx not done?)", wid)
-		debug.AssertNoErr(err)
+		debug.Assert(r.IsDone() || r.IsAborted() || err == nil)
 		return err
 	}
 	wi := a.(*basewi)

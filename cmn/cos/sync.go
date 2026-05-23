@@ -6,7 +6,6 @@ package cos
 
 import (
 	"errors"
-	"runtime"
 	"sync"
 	"time"
 
@@ -291,7 +290,7 @@ func NewClusterWaitGroup(ncpu, wanted int) WG {
 //
 
 const (
-	chanFullSleep = PollSleepShort
+	chanFullSleep = PollSleepShort // 100ms
 )
 
 type (
@@ -302,32 +301,22 @@ type (
 
 var ErrWorkChanFull = errors.New("work channel full")
 
-func _threshold(c int) int { return c - c>>3 }
-
-func (u *ChanFull) IncWarn(l, c, depth int) int64 {
+func (u *ChanFull) incWarn(l, c, depth int) int64 {
 	cnt := u.Inc()
-	if cnt <= 3 || (cnt <= 1000 && cnt%100 == 0) || cnt&(cnt-1) == 0 {
+	if Sparse(cnt) {
 		nlog.WarningDepth(depth, ErrWorkChanFull, "[ len:", l, "cap:", c, "cnt:", cnt, "]")
 	}
 	return cnt
 }
 
-// return true on error and warning, both
-// may resched and sleep
+// when observed full, warn sparsely and briefly sleep
 func (u *ChanFull) Check(l, c int) bool {
-	switch {
-	case l < _threshold(c):
+	debug.Assert(c > 0, "expecting non-zero capacity: ", c)
+	if l < c {
 		return false
-	case l == c:
-		u.IncWarn(l, c, 2 /*nlog-depth*/)
-		time.Sleep(chanFullSleep)
-	default:
-		if l == _threshold(c) {
-			nlog.WarningDepth(1, ErrWorkChanFull)
-		} else {
-			runtime.Gosched()
-		}
 	}
+	u.incWarn(l, c, 2 /*nlog-depth*/)
+	time.Sleep(chanFullSleep)
 	return true
 }
 
