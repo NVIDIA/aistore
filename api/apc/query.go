@@ -214,6 +214,9 @@ const (
 	QparamClusterInfo      = "cii" // true: /Health to return `cos.NodeStateInfo` including cluster metadata versions and state flags
 	QparamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
 
+	// combines QparamClusterInfo and QparamAskPrimary: the responder must be primary and return NodeStateInfo
+	QparamPrimaryCii = QparamClusterInfo + "-" + QparamAskPrimary
+
 	QparamDontResilver = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
 
 	// dsort

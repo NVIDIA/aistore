@@ -1196,7 +1196,7 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 	}
 }
 
-// +gen:endpoint GET /v1/health[apc.QparamPrimaryReadyReb=bool,apc.QparamClusterInfo=bool,apc.QparamAskPrimary=bool]
+// +gen:endpoint GET /v1/health[apc.QparamPrimaryReadyReb=bool,apc.QparamClusterInfo=bool,apc.QparamPrimaryCii=bool,apc.QparamAskPrimary=bool]
 // Get cluster and node health status
 func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.NodeStarted() {
@@ -1207,36 +1207,52 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	p.uptime2hdr(w.Header())
 
 	var (
-		prr, getCii, askPrimary bool
+		prr           bool
+		wantNsti      bool
+		mustBePrimary bool
+		senderID      string
 	)
+	// 1. parse
 	if r.URL.RawQuery != "" {
 		query := r.URL.Query()
-		prr = cos.IsParseBool(query.Get(apc.QparamPrimaryReadyReb))
-		getCii = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
-		askPrimary = cos.IsParseBool(query.Get(apc.QparamAskPrimary))
+		prr = cos.IsParseBool(query.Get(apc.QparamPrimaryReadyReb))    // ready to rebalance
+		cii := cos.IsParseBool(query.Get(apc.QparamClusterInfo))       // NodeStateInfo - from any node
+		pir := cos.IsParseBool(query.Get(apc.QparamPrimaryCii))        // NodeStateInfo - from primary only
+		askPrimary := cos.IsParseBool(query.Get(apc.QparamAskPrimary)) // primary is healthy
+
+		// validate: pir is shorthand and cannot combine with the two it composes
+		if pir && (cii || askPrimary) {
+			err := fmt.Errorf("invalid query: %q implies (%q + %q); the explicit form must not be combined",
+				apc.QparamPrimaryCii, apc.QparamClusterInfo, apc.QparamAskPrimary)
+			p.writeErr(w, r, err)
+			return
+		}
+		// validate: cii and prr are mutually exclusive
+		if prr && (cii || pir) {
+			err := fmt.Errorf("invalid query: %q cannot be combined with %q or %q",
+				apc.QparamPrimaryReadyReb, apc.QparamClusterInfo, apc.QparamPrimaryCii)
+			p.writeErr(w, r, err)
+			return
+		}
+		wantNsti = cii || pir
+		mustBePrimary = askPrimary || pir
 	}
 
-	// externalWD is terminal and returns a minimal/empty response for ordinary liveness/readiness probes;
-	// OTOH, internal:
-	// - cii=true asks for NodeStateInfo (used by bootstrap/rejoin)
-	// - prr=true checks whether primary is ready for global rebalance
-	if !prr && !getCii {
+	// 2. ordinary liveness/readiness probe
+	if !prr && !wantNsti {
 		if responded := p.externalWD(w, r); responded {
 			return
 		}
 	}
-	// piggy-backing cluster info on health
-	if getCii {
-		if prr {
-			err := fmt.Errorf("invalid query parameters: %q (internal use only) and %q", apc.QparamClusterInfo, apc.QparamPrimaryReadyReb)
-			p.writeErr(w, r, err)
-			return
-		}
+
+	// 3. cluster-info from any node (no Smap validation required for the bare cii case)
+	if wantNsti && !mustBePrimary && !prr {
 		nsti := &cos.NodeStateInfo{}
 		p.fillNsti(nsti)
 		p.writeJSON(w, r, nsti, "cluster-info")
 		return
 	}
+
 	smap := p.owner.smap.get()
 	if err := smap.validate(); err != nil {
 		if !p.ClusterStarted() {
@@ -1247,44 +1263,54 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	senderID := r.Header.Get(apc.HdrSenderID)
+	senderID = r.Header.Get(apc.HdrSenderID)
 	if senderID != "" && smap.GetProxy(senderID) != nil {
 		p.keepalive.heardFrom(senderID)
 	}
 
-	// primary
-	if smap.isPrimary(p.si) {
+	// 4. non-primary
+	if !smap.isPrimary(p.si) {
+		if !p.ClusterStarted() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if mustBePrimary {
+			p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %q, %s",
+				p, senderID, smap.StringEx())
+			return
+		}
 		if prr {
-			if err := p.pready(smap, true); err != nil {
-				if cmn.Rom.V(5, cos.ModAIS) {
-					p.writeErr(w, r, err, http.StatusServiceUnavailable)
-				} else {
-					p.writeErr(w, r, err, http.StatusServiceUnavailable, Silent)
-				}
-				return
+			// readiness question, forward to actual primary
+			if !p.forwardCP(w, r, nil /*msg*/, "health(prr)") {
+				// (unlikely)
+				p.writeErrMsg(w, r, "failing to forward health(prr) => primary", http.StatusServiceUnavailable)
 			}
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	// non-primary
-	if !p.ClusterStarted() {
-		// keep returning 503 until cluster starts up
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return
-	}
+
+	// 5. primary
+	// 5.1. primary ready to rebalance
 	if prr {
-		if !p.forwardCP(w, r, nil /*msg*/, "health(prr)") {
-			// (unlikely)
-			p.writeErrMsg(w, r, "failing to forward health(prr) => primary", http.StatusServiceUnavailable)
+		if err := p.pready(smap, true); err != nil {
+			if cmn.Rom.V(5, cos.ModAIS) {
+				p.writeErr(w, r, err, http.StatusServiceUnavailable)
+			} else {
+				p.writeErr(w, r, err, http.StatusServiceUnavailable, Silent)
+			}
+			return
 		}
+	}
+	// 5.2. primary to provide its own NodeStateInfo
+	if wantNsti {
+		nsti := &cos.NodeStateInfo{}
+		p.fillNsti(nsti)
+		p.writeJSON(w, r, nsti, "cluster-info")
 		return
 	}
-	if askPrimary {
-		p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %q, %s",
-			p, senderID, smap.StringEx())
-		return
-	}
+
 	w.WriteHeader(http.StatusOK)
 }
 

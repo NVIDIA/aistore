@@ -172,7 +172,8 @@ func (p *proxy) tryConfirmPrimaryViaConfig(config *cmn.Config, prim *primRes) (o
 
 	// (I) discover
 	for _, u := range urls {
-		nsti := p._tryReqHealth(u, timeout, config)
+		query := url.Values{apc.QparamClusterInfo: []string{"true"}}
+		nsti := p._tryReqHealth(u, timeout, config, query)
 		if nsti == nil {
 			continue
 		}
@@ -205,8 +206,10 @@ func (p *proxy) tryConfirmPrimaryViaConfig(config *cmn.Config, prim *primRes) (o
 	// (II) confirm directly
 	var (
 		primaryURL = out.Smap.Primary.PubURL
-		direct     = p._tryReqHealth(primaryURL, timeout, config)
+		query      = url.Values{apc.QparamPrimaryCii: []string{"true"}} // with query that combines the two
 	)
+
+	direct := p._tryReqHealth(primaryURL, timeout, config, query)
 	switch {
 	case direct == nil:
 		nlog.Warningf("%s: alleged primary %s at %q did not respond - inconclusive",
@@ -233,6 +236,11 @@ func (p *proxy) tryConfirmPrimaryViaConfig(config *cmn.Config, prim *primRes) (o
 
 	out = direct
 
+	debug.Func(func() {
+		_, ok := cos.ParseURL(out.Smap.Primary.PubURL)
+		debug.Assert(ok, "invalid PubURL after direct confirmation: ", out.Smap.Primary.PubURL)
+	})
+
 	// change-of-mind #0: override local config's hint
 	prim.isCfg, prim.isEP = false, false
 	prim.url = out.Smap.Primary.PubURL
@@ -240,8 +248,8 @@ func (p *proxy) tryConfirmPrimaryViaConfig(config *cmn.Config, prim *primRes) (o
 	return out, confirmed
 }
 
-// anonymous GET /v1/health?cii=true (compare with htrun.reqHealth)
-func (p *proxy) _tryReqHealth(u string, timeout time.Duration, config *cmn.Config) *cos.NodeStateInfo {
+// anonymous GET /v1/health (compare with htrun.reqHealth)
+func (p *proxy) _tryReqHealth(u string, timeout time.Duration, config *cmn.Config, q url.Values) *cos.NodeStateInfo {
 	_, valid := cos.ParseURL(u)
 	if !valid {
 		nlog.Warningf("%s: invalid URL %q", p, u)
@@ -250,7 +258,6 @@ func (p *proxy) _tryReqHealth(u string, timeout time.Duration, config *cmn.Confi
 
 	var (
 		empty smapX
-		query = url.Values{apc.QparamClusterInfo: []string{"true"}}
 		cargs = allocCargs()
 	)
 	cargs.si = nil
@@ -258,7 +265,7 @@ func (p *proxy) _tryReqHealth(u string, timeout time.Duration, config *cmn.Confi
 		Method: http.MethodGet,
 		Base:   u,
 		Path:   apc.URLPathHealth.S,
-		Query:  query,
+		Query:  q,
 	}
 	cargs.timeout = timeout
 
