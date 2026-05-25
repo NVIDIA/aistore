@@ -505,6 +505,8 @@ func (*nlogWriter) Write(p []byte) (int, error) {
 // netServer //
 ///////////////
 
+// public handlers must reject intra-cluster sender headers;
+// bootstrap/public probes must stay intra-header free even when they are peer-to-peer calls within the same cluster
 func _yelp(hdr http.Header, name string) error {
 	if v := hdr.Get(name); v != "" {
 		return fmt.Errorf("unexpected intra-cluster header on pub: '%s=%s'", name, v)

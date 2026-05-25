@@ -780,10 +780,9 @@ func (args *callArgs) client() (*http.Client, bool) {
 
 func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	var (
-		req     *http.Request
-		resp    *http.Response
-		sid     = unknownDaemonID
-		isIntra bool
+		req  *http.Request
+		resp *http.Response
+		sid  = unknownDaemonID
 	)
 	res = allocCR()
 	if args.si != nil {
@@ -791,10 +790,22 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		res.si = args.si
 	}
 
-	debug.Assert(args.si != nil || args.req.Base != "") // either si or base
-	if args.req.Base == "" && args.si != nil {
-		args.req.Base = args.si.ControlNet.URL // by default, use intra-cluster control network
-		isIntra = true
+	debug.Assert(args.si != nil || args.req.Base != "") // either destination `si` or base
+
+	// intra-control routing:
+	// - si == nil: raw/base-URL call with no trusted destination peer, e.g.:
+	//   bootstrap-phase join, health probe, force-join across clusters) =>
+	//   do not stamp sender headers
+	// - si != nil with empty Base: default to peer's control-net URL
+	// - si != nil with explicit Base: intra-control only if Base matches peer's control-net
+	var isIntraControl bool
+	if args.si != nil {
+		if args.req.Base == "" {
+			args.req.Base = args.si.ControlNet.URL
+			isIntraControl = true
+		} else {
+			isIntraControl = args.req.Base == args.si.ControlNet.URL
+		}
 	}
 
 	client, withCancel := args.client()
@@ -818,8 +829,8 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		return res
 	}
 
-	// req header
-	if isIntra || !_isPubBound(req, args.si) {
+	// stamp intra-cluster sender identity only on intra-control calls
+	if isIntraControl {
 		h.setIntraHdrs(req, smap)
 	}
 	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
@@ -852,10 +863,6 @@ func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX) {
 	}
 	req.Header.Set(apc.HdrSenderID, h.SID())
 	req.Header.Set(apc.HdrSenderName, h.si.Name())
-}
-
-func _isPubBound(req *http.Request, si *meta.Snode) bool {
-	return si != nil && req.URL.Host == si.PubNet.TCPEndpoint()
 }
 
 func _doResp(args *callArgs, req *http.Request, resp *http.Response, res *callResult) {
