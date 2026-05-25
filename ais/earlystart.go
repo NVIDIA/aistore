@@ -6,6 +6,7 @@ package ais
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"runtime"
 	"time"
@@ -18,6 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 const maxVerConfirmations = 3 // NOTE: minimum number of max-ver confirmations required to make the decision
@@ -70,9 +73,17 @@ func (p *proxy) bootstrap() {
 	config := cmn.GCO.Get()
 	prim := p.determineRole(smap, config)
 
-	// 3: start as primary
-	forcePrimaryChange := prim.isCfg || prim.isEP
-	if prim.isSmap || forcePrimaryChange {
+	// 3. differentiate: (new cluster) vs (restarting w/no Smap)
+	if !prim.isSmap && (prim.isCfg || prim.isEP) {
+		rsmap, confirmed := p.tryConfirmPrimaryViaConfig(config, &prim)
+		if rsmap != nil {
+			nlog.Warningf("%s: discovered existing cluster %+v (%d confirmation%s) - joining as non-primary",
+				p, rsmap, confirmed, cos.Plural(confirmed))
+		}
+	}
+
+	// 4: start as primary
+	if prim.isSmap || prim.isCfg || prim.isEP {
 		// log
 		switch {
 		case prim.isSmap:
@@ -87,7 +98,7 @@ func (p *proxy) bootstrap() {
 		return
 	}
 
-	// 4: otherwise, join as non-primary
+	// 5: otherwise, join as non-primary
 	nlog.Infoln(p.String() + ": starting up as non-primary")
 	err := p.secondaryStartup(smap, prim.url)
 	if err != nil {
@@ -150,6 +161,174 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 	}
 
 	return prim
+}
+
+func (p *proxy) tryConfirmPrimaryViaConfig(config *cmn.Config, prim *primRes) (out *cos.NodeStateInfo, confirmed int) {
+	urls := p._tryPrimaryURLs(config, prim)
+	if len(urls) == 0 {
+		return nil, 0
+	}
+	timeout := config.Timeout.CplaneOperation.D()
+
+	// (I) discover
+	for _, u := range urls {
+		nsti := p._tryReqHealth(u, timeout, config)
+		if nsti == nil {
+			continue
+		}
+		// peer reports self as primary: stale Smap on their side - inconclusive,
+		// do not count as a confirmation
+		if nsti.Smap.Primary.ID == p.SID() {
+			nlog.Warningf("%s: node at %q reports stale Smap with self as primary - skipping", p, u)
+			continue
+		}
+
+		confirmed++
+		if out == nil {
+			out = nsti
+			continue
+		}
+		if out.Smap.UUID != nsti.Smap.UUID {
+			nlog.Errorf("%s: encountered two different clusters %+v vs %+v - aborting all further attempts", p, out, nsti)
+			return nil, 0
+		}
+		if out.Smap.Version < nsti.Smap.Version {
+			out = nsti // more recent
+		}
+	}
+
+	if out == nil || confirmed == 0 {
+		nlog.Infoln(p.String(), "no existing cluster confirmed via config - proceeding as primary")
+		return nil, 0
+	}
+
+	// (II) confirm directly
+	var (
+		primaryURL = out.Smap.Primary.PubURL
+		direct     = p._tryReqHealth(primaryURL, timeout, config)
+	)
+	switch {
+	case direct == nil:
+		nlog.Warningf("%s: alleged primary %s at %q did not respond - inconclusive",
+			p, out.Smap.Primary.ID, primaryURL)
+		return nil, 0
+	case direct.Smap.UUID != out.Smap.UUID:
+		nlog.Warningf("%s: UUID mismatch on direct confirmation [%s != %s] - inconclusive",
+			p, direct.Smap.UUID, out.Smap.UUID)
+		return nil, 0
+	case direct.Smap.Primary.ID == p.SID():
+		// alleged primary believes we are primary - cluster never re-elected;
+		// inconclusive for "join as secondary", let primary startup handle it
+		nlog.Warningln(p.String(), "alleged primary at", primaryURL, "self-reports self-as-primary == us - inconclusive")
+		return nil, 0
+	case direct.Smap.Primary.ID != out.Smap.Primary.ID:
+		nlog.Warningf("%s: alleged primary %s self-reports different primary %s - inconclusive",
+			p, out.Smap.Primary.ID, direct.Smap.Primary.ID)
+		return nil, 0
+	case direct.Smap.Version < out.Smap.Version:
+		nlog.Warningf("%s: alleged primary %s reports older Smap v%d than indirect v%d - inconclusive",
+			p, out.Smap.Primary.ID, direct.Smap.Version, out.Smap.Version)
+		return nil, 0
+	}
+
+	out = direct
+
+	// change-of-mind #0: override local config's hint
+	prim.isCfg, prim.isEP = false, false
+	prim.url = out.Smap.Primary.PubURL
+
+	return out, confirmed
+}
+
+// anonymous GET /v1/health?cii=true (compare with htrun.reqHealth)
+func (p *proxy) _tryReqHealth(u string, timeout time.Duration, config *cmn.Config) *cos.NodeStateInfo {
+	_, valid := cos.ParseURL(u)
+	if !valid {
+		nlog.Warningf("%s: invalid URL %q", p, u)
+		return nil
+	}
+
+	var (
+		empty smapX
+		query = url.Values{apc.QparamClusterInfo: []string{"true"}}
+		cargs = allocCargs()
+	)
+	cargs.si = nil
+	cargs.req = cmn.HreqArgs{
+		Method: http.MethodGet,
+		Base:   u,
+		Path:   apc.URLPathHealth.S,
+		Query:  query,
+	}
+	cargs.timeout = timeout
+
+	res := p.call(cargs, &empty)
+	body, status, err := res.bytes, res.status, res.err
+	freeCR(res)
+	freeCargs(cargs)
+
+	if err != nil {
+		if cos.IsErrRetriableConn(err) {
+			nlog.Warningf("%s: node at %q is likely starting up", p, u)
+		} else {
+			nlog.Warningf("%s: node at %q failed health-check: %v(%d)", p, u, err, status)
+		}
+		return nil
+	}
+
+	nsti := &cos.NodeStateInfo{}
+	if e := jsoniter.Unmarshal(body, nsti); e != nil {
+		if len(body) == 0 {
+			nlog.Warningf("%s: empty node-state-info from %s", p, u)
+		} else {
+			ee := fmt.Errorf(cmn.FmtErrUnmarshal+" from %s", p, "node-state-info", cos.BHead(body), e, u)
+			nlog.Warningln(ee)
+		}
+		return nil
+	}
+
+	// structural validation
+	rsmap := &nsti.Smap
+	if !cos.IsValidUUID(rsmap.UUID) || cos.ValidateDaemonID(rsmap.Primary.ID) != nil || rsmap.Version == 0 {
+		nlog.Warningf("%s: node at %q fails validity checks: [uuid %q, pid %q, v%d]",
+			p, u, rsmap.UUID, rsmap.Primary.ID, rsmap.Version)
+		return nil
+	}
+	if cos.IsValidUUID(config.UUID) && rsmap.UUID != config.UUID {
+		nlog.Warningf("%s: skipping node at %q - it's a different cluster: [%q != %q]",
+			p, u, config.UUID, rsmap.UUID)
+		return nil
+	}
+	if rver := nsti.Config.Version; config.Version > rver {
+		nlog.Warningf("%s: skipping node at %q - cannot trust its config [%d > %d]",
+			p, u, config.Version, rver)
+		return nil
+	}
+
+	return nsti
+}
+
+func (p *proxy) _tryPrimaryURLs(config *cmn.Config, prim *primRes) []string {
+	var (
+		urls                = make([]string, 0, 2)
+		selfPub, pubValid   = cos.ParseURL(p.si.URL(cmn.NetPublic))
+		selfCtrl, ctrlValid = cos.ParseURL(p.si.URL(cmn.NetIntraControl))
+		selfPubH, selfCtrlH string
+	)
+	if pubValid {
+		selfPubH = selfPub.Host
+	}
+	if ctrlValid {
+		selfCtrlH = selfCtrl.Host
+	}
+	// validate and append unique candidate URLs;
+	// if local config says this node is primary, PrimaryURL is self by definition - skip it
+	if !prim.isCfg {
+		urls = _addCan(config.Proxy.PrimaryURL, selfPubH, selfCtrlH, urls)
+	}
+	urls = _addCan(config.Proxy.DiscoveryURL, selfPubH, selfCtrlH, urls)
+	urls = _addCan(config.Proxy.OriginalURL, selfPubH, selfCtrlH, urls)
+	return urls
 }
 
 // join cluster

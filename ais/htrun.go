@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -2200,7 +2201,11 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 			}
 			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
 			if res.err == nil {
-				nlog.Infoln(h.String()+": primary responded Ok via", candidateURL)
+				if candidateURL == primaryURL || (psi != nil && candidateURL == psi.URL(cmn.NetPublic)) {
+					nlog.Infoln(h.String()+": primary responded Ok via", candidateURL)
+				} else {
+					nlog.Infoln(h.String()+": join accepted via", candidateURL)
+				}
 				return res, nil // ok
 			}
 			resPrev = res
@@ -2244,13 +2249,35 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 }
 
 func _addCan(url, selfPub, selfCtrl string, candidates []string) []string {
-	if u, valid := cos.ParseURL(url); !valid || u.Host == selfPub || u.Host == selfCtrl {
+	u, valid := cos.ParseURL(url)
+	if !valid || _sameSelfHost(u.Host, selfPub) || _sameSelfHost(u.Host, selfCtrl) {
 		return candidates
 	}
 	if slices.Contains(candidates, url) {
 		return candidates
 	}
 	return append(candidates, url)
+}
+
+// filter loopback aliases; no DNS/canonicalization
+func _sameSelfHost(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ah, ap, ea := net.SplitHostPort(a)
+	bh, bp, eb := net.SplitHostPort(b)
+	if ea != nil || eb != nil || ap != bp {
+		return false
+	}
+	return _isLocalhost(ah) && _isLocalhost(bh)
+}
+
+func _isLocalhost(h string) bool {
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext htext, keepalive bool) *callResult {

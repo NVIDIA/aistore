@@ -1216,7 +1216,11 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		askPrimary = cos.IsParseBool(query.Get(apc.QparamAskPrimary))
 	}
 
-	if !prr {
+	// externalWD is terminal and returns a minimal/empty response for ordinary liveness/readiness probes;
+	// OTOH, internal:
+	// - cii=true asks for NodeStateInfo (used by bootstrap/rejoin)
+	// - prr=true checks whether primary is ready for global rebalance
+	if !prr && !getCii {
 		if responded := p.externalWD(w, r); responded {
 			return
 		}
