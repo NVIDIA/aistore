@@ -59,12 +59,12 @@ type (
 )
 
 var (
-	ErrNoPermissions        = errors.New("insufficient permissions")
-	ErrInvalidToken         = errors.New("invalid token")
-	ErrNoSubject            = errors.New("missing 'sub' claim")
-	ErrNoToken              = errors.New("token required")
-	ErrTokenExpired         = errors.New("token expired")
-	ErrTokenRevoked         = errors.New("token revoked")
+	ErrNoPermissions        = authn.ErrNoPermissions
+	ErrInvalidToken         = authn.ErrInvalidToken
+	ErrNoSubject            = authn.ErrNoSubject
+	ErrNoToken              = authn.ErrNoToken
+	ErrTokenExpired         = authn.ErrTokenExpired
+	ErrTokenRevoked         = authn.ErrTokenRevoked
 	supportedSigningMethods = []string{jwt.SigningMethodRS256.Name, jwt.SigningMethodRS384.Name, jwt.SigningMethodRS512.Name, jwt.SigningMethodHS256.Name}
 )
 
@@ -249,13 +249,13 @@ func (c *AISClaims) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.A
 	if cluPerms != 0 {
 		// Cluster-wide permissions requested
 		if !cluOk {
-			return fmt.Errorf("user `%s` has %v", sub, ErrNoPermissions)
+			return fmt.Errorf("user `%s` has %w", sub, ErrNoPermissions)
 		}
 		if clusterID == "" {
 			return errors.New("requested cluster permissions without cluster ID")
 		}
 		if !cluACL.Has(cluPerms) {
-			return fmt.Errorf("user `%s` has %v: [cluster %s, %s, granted(%s)]", sub,
+			return fmt.Errorf("user `%s` has %w: [cluster %s, %s, granted(%s)]", sub,
 				ErrNoPermissions, clusterID, c, cluACL.Describe(false /*include all*/))
 		}
 	}
@@ -272,11 +272,11 @@ func (c *AISClaims) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.A
 		if bckACL.Has(objPerms) {
 			return nil
 		}
-		return fmt.Errorf("user `%s` has %v: [%s, bucket %s, granted(%s)]", sub,
+		return fmt.Errorf("user `%s` has %w: [%s, bucket %s, granted(%s)]", sub,
 			ErrNoPermissions, c, bck.String(), bckACL.Describe(false /*include all*/))
 	}
 	if !cluOk || !cluACL.Has(objPerms) {
-		return fmt.Errorf("user `%s` has %v: [%s, granted(%s)]", sub, ErrNoPermissions, c, cluACL.Describe(false /*include all*/))
+		return fmt.Errorf("user `%s` has %w: [%s, granted(%s)]", sub, ErrNoPermissions, c, cluACL.Describe(false /*include all*/))
 	}
 	return nil
 }
