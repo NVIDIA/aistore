@@ -489,7 +489,7 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 	}
 
 	client := cmn.NewClient(cmn.TransportArgs{
-		Timeout:          bp.Client.Timeout,
+		ClientTimeout:    bp.Client.Timeout,
 		IdleConnsPerHost: numWorkers,
 		MaxIdleConns:     numWorkers,
 	})

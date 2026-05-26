@@ -854,8 +854,14 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	resp.Body.Close()
 	cmn.HreqFree(req)
 
-	if sid != unknownDaemonID {
-		h.keepalive.heardFrom(sid)
+	// keep-alive operates strictly between the primary and all other nodes:
+	// the primary tracks every peer (to short-circuit explicit heartbeats),
+	// and every non-primary tracks the primary. Skip the rest - target<->target,
+	// non-primary<->non-primary, etc. - where the recorded timestamp has no reader
+	if sid != unknownDaemonID && smap.Primary != nil {
+		if h.si.ID() == smap.Primary.ID() || sid == smap.Primary.ID() {
+			h.keepalive.heardFrom(sid)
+		}
 	}
 	return res
 }

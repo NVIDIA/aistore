@@ -142,7 +142,7 @@ func (r *XactGet) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 func (r *XactGet) newGetJogger(mpath string) *getJogger {
 	var (
 		client *http.Client
-		cargs  = cmn.TransportArgs{Timeout: r.config.Client.Timeout.D()}
+		cargs  = cmn.TransportArgs{ClientTimeout: r.config.Client.Timeout.D()}
 	)
 	if r.config.Net.HTTP.UseHTTPS {
 		client = cmn.NewIntraClientTLS(cargs, r.config)

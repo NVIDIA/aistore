@@ -187,7 +187,7 @@ func getKeyCacheClient(t *testing.T, cert *x509.Certificate) *http.Client {
 	}
 	transport := cmn.TransportArgs{
 		DialTimeout:      1 * time.Second,
-		Timeout:          2 * time.Second,
+		ClientTimeout:    2 * time.Second,
 		IdleConnsPerHost: 0,
 		MaxIdleConns:     1,
 	}

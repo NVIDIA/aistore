@@ -36,7 +36,7 @@ import (
 const longListTime = 10 * time.Second // list-objects progress
 
 var (
-	// see related command-line: `transportArgs.Timeout` and UseHTTPS
+	// see related command-line: `transportArgs.ClientTimeout` and UseHTTPS
 	cargs = cmn.TransportArgs{
 		UseHTTPProxyEnv: true,
 	}

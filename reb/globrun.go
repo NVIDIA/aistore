@@ -123,7 +123,7 @@ func New(config *cmn.Config) *Reb {
 			filterGFN: prob.NewDefaultFilter(),
 			stages:    newNodeStages(),
 		}
-		cargs = cmn.TransportArgs{Timeout: config.Client.Timeout.D()}
+		cargs = cmn.TransportArgs{ClientTimeout: config.Client.Timeout.D()}
 	)
 	if config.Net.HTTP.UseHTTPS {
 		reb.ecClient = cmn.NewIntraClientTLS(cargs, config)

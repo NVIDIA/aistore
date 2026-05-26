@@ -246,7 +246,7 @@ func rpTransport(config *cmn.Config) *http.Transport {
 	var (
 		err       error
 		transport = cmn.NewTransport(cmn.TransportArgs{
-			Timeout:          config.Client.Timeout.D(),
+			ClientTimeout:    config.Client.Timeout.D(),
 			IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
 			IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 			MaxIdleConns:     config.Net.HTTP.MaxIdleConns,

@@ -49,7 +49,7 @@ type (
 	// assorted http(s) client options
 	TransportArgs struct {
 		DialTimeout      time.Duration
-		Timeout          time.Duration
+		ClientTimeout    time.Duration // http.Client.Timeout: end-to-end request
 		IdleConnTimeout  time.Duration
 		IdleConnsPerHost int
 		MaxIdleConns     int
@@ -154,16 +154,15 @@ func NewTLS(sargs TLSArgs, intra bool) (tlsConf *tls.Config, err error) {
 }
 
 func NewDefaultClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
-	clientH = NewClient(TransportArgs{Timeout: timeout})
-	clientTLS = NewClientTLS(TransportArgs{Timeout: timeout}, TLSArgs{SkipVerify: true}, false /*intra-cluster*/)
+	clientH = NewClient(TransportArgs{ClientTimeout: timeout})
+	clientTLS = NewClientTLS(TransportArgs{ClientTimeout: timeout}, TLSArgs{SkipVerify: true}, false /*intra-cluster*/)
 	return
 }
 
 // NewClient creates a plain-HTTP client with a new transport (and therefore a new
-// connection pool). TransportArgs.Timeout is assigned to http.Client.Timeout;
-// it is not used by NewTransport.
+// connection pool). TransportArgs.ClientTimeout is assigned to http.Client.Timeout;
 func NewClient(cargs TransportArgs) *http.Client {
-	return &http.Client{Transport: NewTransport(cargs), Timeout: cargs.Timeout}
+	return &http.Client{Transport: NewTransport(cargs), Timeout: cargs.ClientTimeout}
 }
 
 // CloneClient returns a new *http.Client with an independent transport cloned from base
@@ -182,9 +181,8 @@ func NewIntraClientTLS(cargs TransportArgs, config *Config) *http.Client {
 	return NewClientTLS(cargs, config.Net.HTTP.ToTLS(), true /*intra-cluster*/)
 }
 
-// NewClientTLS creates a new transport (and therefore a new connection pool).
-// TransportArgs.Timeout becomes http.Client.Timeout; it does not configure
-// dial, idle, TLS-handshake, or response-header timeouts on the transport.
+// NewClientTLS creates a new transport and therefore a new connection pool.
+// TransportArgs.ClientTimeout becomes http.Client.Timeout.
 func NewClientTLS(cargs TransportArgs, sargs TLSArgs, intra bool) *http.Client {
 	transport := NewTransport(cargs)
 
@@ -194,7 +192,7 @@ func NewClientTLS(cargs TransportArgs, sargs TLSArgs, intra bool) *http.Client {
 		cos.ExitLog(err) // FATAL
 	}
 	transport.TLSClientConfig = tlsConfig
-	return &http.Client{Transport: transport, Timeout: cargs.Timeout}
+	return &http.Client{Transport: transport, Timeout: cargs.ClientTimeout}
 }
 
 // EnvToTLS usage is limited to aisloader and tools

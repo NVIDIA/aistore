@@ -45,8 +45,8 @@ func Init(args []string) (err error) {
 
 	var (
 		cargs = cmn.TransportArgs{
-			DialTimeout: gcfg.Timeout.TCPTimeout,
-			Timeout:     gcfg.Timeout.HTTPTimeout,
+			DialTimeout:   gcfg.Timeout.TCPTimeout,
+			ClientTimeout: gcfg.Timeout.HTTPTimeout,
 		}
 		sargs = cmn.TLSArgs{
 			ClientCA:    gcfg.Cluster.ClientCA,

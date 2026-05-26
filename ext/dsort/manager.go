@@ -155,7 +155,7 @@ func Tinit(db kvdb.Driver, config *cmn.Config) {
 }
 
 func newBcastClient(config *cmn.Config) {
-	cargs := cmn.TransportArgs{Timeout: config.Timeout.MaxHostBusy.D()}
+	cargs := cmn.TransportArgs{ClientTimeout: config.Timeout.MaxHostBusy.D()}
 	if config.Net.HTTP.UseHTTPS {
 		bcastClient = cmn.NewIntraClientTLS(cargs, config)
 	} else {
@@ -197,8 +197,8 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 
 	// NOTE: total size of the records metadata can sometimes be large, and so this is why such a long timeout
 	cargs := cmn.TransportArgs{
-		DialTimeout: m.config.Client.Timeout.D(),
-		Timeout:     m.config.Client.TimeoutLong.D(),
+		DialTimeout:   m.config.Client.Timeout.D(),
+		ClientTimeout: m.config.Client.TimeoutLong.D(),
 	}
 	if m.config.Net.HTTP.UseHTTPS {
 		m.client = cmn.NewIntraClientTLS(cargs, m.config)

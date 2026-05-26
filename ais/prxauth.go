@@ -152,7 +152,7 @@ func newKeyCacheClient(config *cmn.Config, statsT stats.Tracker) *http.Client {
 
 	transport := cmn.TransportArgs{
 		DialTimeout:      KeyCacheDialTimeout,
-		Timeout:          KeyCacheTimeout,
+		ClientTimeout:    KeyCacheTimeout,
 		IdleConnsPerHost: KeyCacheIdleConnsPerHost,
 		MaxIdleConns:     maxIdleConns,
 		PreferIPv6:       g.netServ.pub.useIPv6,

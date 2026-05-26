@@ -35,7 +35,7 @@ var (
 
 func main() {
 	flag.Parse()
-	bp := api.BaseParams{URL: *endpoint, Client: cmn.NewClient(cmn.TransportArgs{Timeout: 10 * time.Minute})}
+	bp := api.BaseParams{URL: *endpoint, Client: cmn.NewClient(cmn.TransportArgs{ClientTimeout: 10 * time.Minute})}
 	bck := cmn.Bck{Name: *bucket, Provider: apc.AIS}
 	if err := api.CreateBucket(bp, bck, nil); err != nil && !cmn.IsErrBucketAlreadyExists(err) {
 		panic(err)

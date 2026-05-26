@@ -713,8 +713,8 @@ func createRemoteBaseParams(ra *meta.RemAis) api.BaseParams {
 		UA:    ua,
 	}
 	cargs := cmn.TransportArgs{
-		DialTimeout: gcfg.Timeout.TCPTimeout,
-		Timeout:     gcfg.Timeout.HTTPTimeout,
+		DialTimeout:   gcfg.Timeout.TCPTimeout,
+		ClientTimeout: gcfg.Timeout.HTTPTimeout,
 	}
 	if cos.IsHTTPS(bp.URL) {
 		sargs := cmn.TLSArgs{SkipVerify: true}

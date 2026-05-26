@@ -66,7 +66,7 @@ var (
 	restoreNodes     map[string]RestoreCmd // initial proxy and target nodes => command to restore them
 
 	transportArgs = cmn.TransportArgs{
-		Timeout:         600 * time.Second,
+		ClientTimeout:   600 * time.Second,
 		UseHTTPProxyEnv: true,
 
 		// Allow a lot of idle connections so they can be reused when making huge
@@ -119,7 +119,7 @@ func NewClientWithProxy(proxyURL string) *http.Client {
 	}
 	return &http.Client{
 		Transport: transport,
-		Timeout:   transportArgs.Timeout,
+		Timeout:   transportArgs.ClientTimeout,
 	}
 }
 

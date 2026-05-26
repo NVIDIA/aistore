@@ -193,7 +193,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&flagUsage, "usage", false, "show command-line options, usage, and examples")
 	f.BoolVar(&flagVersion, "version", false, "show aisloader version")
 	f.BoolVar(&flagQuiet, "quiet", false, "when starting to run, do not print command line arguments, default settings, and usage examples")
-	f.DurationVar(&cargs.Timeout, "timeout", 10*time.Minute, "client HTTP timeout - used in LIST/GET/PUT/DELETE")
+	f.DurationVar(&cargs.ClientTimeout, "timeout", 10*time.Minute, "client HTTP timeout - used in LIST/GET/PUT/DELETE")
 
 	// ============ Cluster ============
 	f.StringVar(&ip, "ip", defaultClusterIP, "AIS proxy/gateway IP address or hostname")

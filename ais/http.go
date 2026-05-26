@@ -103,7 +103,7 @@ func initDataClient(config *cmn.Config, preferIPv6 bool) {
 		rbuf = cmn.DefaultReadBufferSize
 	}
 	cargs := cmn.TransportArgs{
-		Timeout:          config.Client.TimeoutLong.D(),
+		ClientTimeout:    config.Client.TimeoutLong.D(),
 		WriteBufferSize:  wbuf,
 		ReadBufferSize:   rbuf,
 		IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
