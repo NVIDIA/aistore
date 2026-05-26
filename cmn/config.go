@@ -392,12 +392,16 @@ type (
 
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		CplaneOperation cos.Duration `json:"cplane_operation"`  // read-mostly via global cmn.Rom.CplaneOperation
-		MaxKeepalive    cos.Duration `json:"max_keepalive"`     // ditto, cmn.Rom.MaxKeepalive - see below
-		MaxHostBusy     cos.Duration `json:"max_host_busy"`     // 2-phase transactions and more
-		Startup         cos.Duration `json:"startup_time"`      // primary wait for joins at (primary's) startup; indirectly, cluster startup
-		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout; (2 * Startup) when zero
-		SendFile        cos.Duration `json:"send_file_time"`    // large file or blob and/or slow network
+		// NOTE v4.6: update takes effect upon restart
+		CplaneOperation cos.Duration `json:"cplane_operation"` // see also: g.client.cplane; cmn.Rom.CplaneOperation
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // see also: g.client.maxkalive, cmn.Rom.MaxKeepalive
+		//
+		// can be updated at runtime
+		//
+		MaxHostBusy   cos.Duration `json:"max_host_busy"`     // 2-phase transactions and more
+		Startup       cos.Duration `json:"startup_time"`      // primary wait for joins at (primary's) startup; indirectly, cluster startup
+		JoinAtStartup cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout; (2 * Startup) when zero
+		SendFile      cos.Duration `json:"send_file_time"`    // large file or blob and/or slow network
 		// intra-cluster EC streams; default SharedStreamsDflt; never timeout when negative
 		EcStreams cos.Duration `json:"ec_streams_time,omitempty"`
 		// object metadata timeout; for training apps an approx. duration of 2 (two) epochs
@@ -1103,7 +1107,7 @@ type (
 // changes to take an effect; note:
 // - this is NOT a "read-only" list
 // - used by CLI to warn
-var ConfigRestartRequired = [...]string{"memsys", "net"}
+var ConfigRestartRequired = [...]string{"memsys", "net", "tracing", "timeout.cplane_operation", "timeout.max_keepalive"}
 
 //
 // config meta-versioning & serialization
@@ -2592,6 +2596,9 @@ const (
 
 func (c *TimeoutConf) Validate() error {
 	debug.Assert(SharedStreamsDflt >= 2*hk.Prune2mIval)
+	//
+	// NOTE: starting 4.6, update takes effect upon restart
+	//
 	if c.CplaneOperation.D() < 10*time.Millisecond {
 		return fmt.Errorf("invalid timeout.cplane_operation=%s", c.CplaneOperation)
 	}
@@ -2599,6 +2606,10 @@ func (c *TimeoutConf) Validate() error {
 		return fmt.Errorf("invalid timeout.max_keepalive=%s, must be >= 2*(cplane_operation=%s)",
 			c.MaxKeepalive, c.CplaneOperation)
 	}
+
+	//
+	// the rest config.Timeout knobs can be updated at runtime
+	//
 	if c.MaxHostBusy.D() < 10*time.Second {
 		return fmt.Errorf("invalid timeout.max_host_busy=%s (cannot be less than 10s)", c.MaxHostBusy)
 	}

@@ -6,7 +6,6 @@ package integration_test
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	iofs "io/fs"
@@ -537,10 +536,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 }
 
 func isContextDeadline(err error) bool {
-	if err == nil {
-		return false
-	}
-	return err == context.DeadlineExceeded || strings.Contains(err.Error(), context.DeadlineExceeded.Error())
+	return err != nil && cos.IsErrClientTimeout(err)
 }
 
 // bucket cleanup

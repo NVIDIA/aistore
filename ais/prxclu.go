@@ -1200,7 +1200,12 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		wait:     true,
 	}
 	config := cmn.GCO.Get()
-	// NOTE: critical cluster-wide config updates requiring restart (of the cluster)
+
+	//
+	// assorted validations: 1 through 4
+	//
+
+	// 1. critical cluster-wide config updates require cluster restart
 	if toUpdate.Net != nil && toUpdate.Net.HTTP != nil {
 		from, _ := jsoniter.Marshal(config.Net.HTTP)
 		to, _ := jsoniter.Marshal(toUpdate.Net.HTTP)
@@ -1217,6 +1222,7 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			}
 		}
 	}
+	// 2. AuthN
 	if toUpdate.Auth != nil && toUpdate.Auth.Enabled != nil {
 		authEnabled := *toUpdate.Auth.Enabled
 
@@ -1242,10 +1248,22 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			}
 		}
 	}
+	// 3. Tracing
 	if toUpdate.Tracing != nil {
 		from, _ := jsoniter.Marshal(config.Tracing)
 		to, _ := jsoniter.Marshal(toUpdate.Tracing)
 		whingeToUpdate("config.tracing", string(from), string(to))
+	}
+	// 4. config.Timeout section
+	if toUpdate.Timeout != nil {
+		if toUpdate.Timeout.CplaneOperation != nil &&
+			*toUpdate.Timeout.CplaneOperation != config.Timeout.CplaneOperation {
+			whingeToUpdate("timeout.cplane_operation", config.Timeout.CplaneOperation.String(), toUpdate.Timeout.CplaneOperation.String())
+		}
+		if toUpdate.Timeout.MaxKeepalive != nil &&
+			*toUpdate.Timeout.MaxKeepalive != config.Timeout.MaxKeepalive {
+			whingeToUpdate("timeout.max_keepalive", config.Timeout.MaxKeepalive.String(), toUpdate.Timeout.MaxKeepalive.String())
+		}
 	}
 
 	// do

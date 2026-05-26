@@ -153,32 +153,38 @@ func NewTLS(sargs TLSArgs, intra bool) (tlsConf *tls.Config, err error) {
 	return nil, fmt.Errorf("client tls: failed to load public/private key pair: (%q, %q)%s", sargs.Certificate, sargs.Key, hint)
 }
 
-// TODO -- FIXME: this call must get cert file and key to be used for the `clientTLS`
 func NewDefaultClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
 	clientH = NewClient(TransportArgs{Timeout: timeout})
 	clientTLS = NewClientTLS(TransportArgs{Timeout: timeout}, TLSArgs{SkipVerify: true}, false /*intra-cluster*/)
 	return
 }
 
-// NOTE: `NewTransport` (below) fills-in certain defaults
+// NewClient creates a plain-HTTP client with a new transport (and therefore a new
+// connection pool). TransportArgs.Timeout is assigned to http.Client.Timeout;
+// it is not used by NewTransport.
 func NewClient(cargs TransportArgs) *http.Client {
 	return &http.Client{Transport: NewTransport(cargs), Timeout: cargs.Timeout}
 }
 
 // CloneClient returns a new *http.Client with an independent transport cloned from base
 // (same TLS config, proxy settings, dial options, pool sizes) but with a different Timeout.
-// TODO: tune connection pool settings for ETL access pattern (few hosts, long requests)
 func CloneClient(base *http.Client, timeout time.Duration) *http.Client {
 	bt := base.Transport.(*http.Transport)
 	t := bt.Clone() // deep-copies TLS config, dial funcs, proxy — independent pool
 	return &http.Client{Transport: t, Timeout: timeout}
 }
 
+// NewIntraClientTLS returns a client with its own transport and connection pool.
+//
+// Historically, AIS intra-control clients used this helper directly; currently
+// the intra-control clients are constructed inline in ais/http.go with a shared transport
 func NewIntraClientTLS(cargs TransportArgs, config *Config) *http.Client {
 	return NewClientTLS(cargs, config.Net.HTTP.ToTLS(), true /*intra-cluster*/)
 }
 
-// https client (ditto)
+// NewClientTLS creates a new transport (and therefore a new connection pool).
+// TransportArgs.Timeout becomes http.Client.Timeout; it does not configure
+// dial, idle, TLS-handshake, or response-header timeouts on the transport.
 func NewClientTLS(cargs TransportArgs, sargs TLSArgs, intra bool) *http.Client {
 	transport := NewTransport(cargs)
 

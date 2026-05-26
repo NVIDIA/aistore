@@ -14,8 +14,13 @@ import (
 
 type global struct {
 	client struct {
-		control *http.Client // http client for intra-cluster comm
-		data    *http.Client // http client to execute target <=> target GET & PUT (object)
+		// config.Timeout
+		cplane    *http.Client // intra-control, config.Timeout.CplaneOperation (keep-alive)
+		maxkalive *http.Client // intra-control, config.Timeout.MaxKeepalive (bcastGroup and friends)
+
+		// config.Client timeout
+		control *http.Client // intra-control, config.Client.Timeout
+		data    *http.Client // intra-data,    config.Client.TimeoutLong
 	}
 	netServ struct {
 		pub      *netServer
@@ -54,26 +59,38 @@ func handleData(path string, handler func(http.ResponseWriter, *http.Request)) {
 	}
 }
 
+const (
+	defaultControlWriteBufferSize = 16 * cos.KiB
+	defaultControlReadBufferSize  = 16 * cos.KiB
+)
+
 func initCtrlClient(config *cmn.Config, preferIPv6 bool) {
-	const (
-		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
-		defaultControlReadBufferSize  = 16 * cos.KiB
-	)
 	cargs := cmn.TransportArgs{
-		Timeout:          config.Client.Timeout.D(),
-		WriteBufferSize:  defaultControlWriteBufferSize,
-		ReadBufferSize:   defaultControlReadBufferSize,
+		DialTimeout:      config.Client.Timeout.D(),
 		IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
 		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
+		WriteBufferSize:  defaultControlWriteBufferSize,
+		ReadBufferSize:   defaultControlReadBufferSize,
 		LowLatencyToS:    true,
 		PreferIPv6:       preferIPv6,
 	}
+
+	// single shared transport => one connection pool across all three
+	// intra-cluster control-plane clients (below)
+	tr := cmn.NewTransport(cargs)
 	if config.Net.HTTP.UseHTTPS {
-		g.client.control = cmn.NewIntraClientTLS(cargs, config)
-	} else {
-		g.client.control = cmn.NewClient(cargs)
+		tlsConfig, err := cmn.NewTLS(config.Net.HTTP.ToTLS(), true /*intra*/)
+		if err != nil {
+			cos.ExitLog(err)
+		}
+		tr.TLSClientConfig = tlsConfig
 	}
+
+	// per-tier Timeout; Transport (and therefore connection pool) is shared
+	g.client.control = &http.Client{Transport: tr, Timeout: config.Client.Timeout.D()}
+	g.client.cplane = &http.Client{Transport: tr, Timeout: config.Timeout.CplaneOperation.D()}
+	g.client.maxkalive = &http.Client{Transport: tr, Timeout: config.Timeout.MaxKeepalive.D()}
 }
 
 // wbuf/rbuf - when not configured use AIS defaults (to override the usual 4KB)

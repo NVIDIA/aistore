@@ -758,19 +758,26 @@ func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 	freeCargs(cargs)
 }
 
-// timeout handling
-// - timeout causes context.deadlineExceededError, i.e. "context deadline exceeded"
-// - the two knobs are configurable via "client_timeout" and "client_long_timeout",
-// respectively (client section in the global config)
+// Intra-cluster Timeout Handling
+// * well-known assorted timeouts map to statically-configured http.Clients:
+//   - 0 or "timeout.cplane_operation"  => g.client.cplane  (keepalive probes, implicit default)
+//   - "timeout.max_keepalive"          => g.client.maxkalive (bcastGroup default; broadcast fanout)
+//   - apc.DefaultTimeout               => g.client.control (config "client_timeout")
+//   - apc.LongTimeout                  => g.client.data    (config "client_long_timeout")
+//   - explicit timeouts use per-call context.WithTimeout via ReqWith;
+//     routed to control or data client based on duration
+//
+// * an actual timeout error will look like url.Error with Timeout() == true
 func (args *callArgs) client() (*http.Client, bool) {
 	switch args.timeout {
-	case apc.LongTimeout:
-		return g.client.data, false
+	case 0, g.client.cplane.Timeout:
+		return g.client.cplane, false
+	case g.client.maxkalive.Timeout:
+		return g.client.maxkalive, false
 	case apc.DefaultTimeout:
 		return g.client.control, false
-	case 0:
-		args.timeout = cmn.Rom.CplaneOperation()
-		return g.client.control, true
+	case apc.LongTimeout:
+		return g.client.data, false
 	default:
 		if args.timeout > g.client.control.Timeout {
 			return g.client.data, true
