@@ -12,7 +12,7 @@ pip install aistore[mcp]
 export AIS_ENDPOINT="http://localhost:8080"
 
 # Run the server
-python -m aistore.mcp
+python -m aistore.mcp.server
 ```
 
 ## Available Tools
@@ -59,7 +59,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "aistore": {
       "command": "python",
-      "args": ["-m", "aistore.mcp"],
+      "args": ["-m", "aistore.mcp.server"],
       "env": {
         "AIS_ENDPOINT": "http://localhost:8080"
       }
@@ -77,7 +77,7 @@ Add to your project's `.claude/settings.json` or use the `/mcp` command:
   "mcpServers": {
     "aistore": {
       "command": "python",
-      "args": ["-m", "aistore.mcp"],
+      "args": ["-m", "aistore.mcp.server"],
       "env": {
         "AIS_ENDPOINT": "http://localhost:8080"
       }
