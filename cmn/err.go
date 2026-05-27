@@ -912,8 +912,8 @@ func (e *ErrLmetaCorrupted) Error() string       { return e.err.Error() }
 func (e *ErrLmetaCorrupted) Unwrap() (err error) { return e.err }
 
 func IsErrLmetaCorrupted(err error) bool {
-	_, ok := err.(*ErrLmetaCorrupted)
-	return ok
+	var wrapped *ErrLmetaCorrupted
+	return errors.As(err, &wrapped)
 }
 
 func NewErrLmetaNotFound(name string, err error) *ErrLmetaNotFound {

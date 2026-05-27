@@ -730,6 +730,20 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			Entry("suffix shape collides with uploadID", "regress/foo.r4kzG8GMfA"),
 		)
 
+		It("keeps completed manifest when source metadata cannot be loaded", func() {
+			lom, _ := makeChunkedLOM(&bck, "regress/source-meta-unreadable.tar")
+			defer core.FreeLOM(lom)
+
+			completedFQN := lom.GenFQN(fs.ChunkMetaCT)
+			Expect(fs.SetXattr(lom.FQN, fs.XattrLOM, []byte{0x00, 0xff, 0x13, 0x37})).NotTo(HaveOccurred())
+			Expect(os.Chtimes(completedFQN, old, old)).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(completedFQN).To(BeAnExistingFile())
+			Expect(lom.FQN).To(BeAnExistingFile())
+		})
+
 		It("removes stale partial manifest of an absent LOM", func() {
 			lom := core.AllocLOM("regress/parent-obj")
 			defer core.FreeLOM(lom)

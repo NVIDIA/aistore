@@ -765,18 +765,43 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	j.rmAnyBatch(flagRmOldWork)
 }
 
-func (*clnJ) isCompletedManifest(parsed *fs.ParsedFQN) bool {
-	objFQN := parsed.Mountpath.MakePathFQN(&parsed.Bck, fs.ObjCT, parsed.ObjName)
-
-	lom := core.AllocLOM("")
+// isCompletedManifest returns true when a fs.ChunkMetaCT entry must be kept as
+// a valid completed manifest. Ambiguous source/manifest errors are kept for retry.
+func (*clnJ) isCompletedManifest(parsed *fs.ParsedFQN) (keep bool) {
+	lom := core.AllocLOM(parsed.ObjName)
 	defer core.FreeLOM(lom)
-	if err := lom.InitFQN(objFQN, nil); err != nil {
-		return false
+	if err := lom.InitCmnBck(&parsed.Bck); err != nil {
+		return true
 	}
-	if err := lom.Load(false /*cache*/, false /*locked*/); err != nil {
-		return false // %ob/<obj> absent or unreadable -> not a chunked-LOM manifest
+	if !lom.TryLock(false) {
+		return true
 	}
-	return lom.IsChunked()
+	defer lom.Unlock(false)
+
+	// force md loading from disk
+	lom.Uncache()
+	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
+		return !cos.IsNotExist(err) // remove when the source object is absent or unreadable
+	}
+	if !lom.IsChunked() {
+		return false // remove when the source object is not marked as chunked
+	}
+
+	manifest, err := core.NewUfest("", lom, true /*mustExist*/)
+	if err != nil {
+		return true
+	}
+	if err := manifest.LoadCompleted(lom); err != nil {
+		// Keep when the error indicates missing/ambiguous metadata that should be retried.
+		if cos.IsNotExist(err) {
+			return true // nothing to do
+		}
+		if cmn.IsErrLmetaCorrupted(err) || cmn.IsErrLmetaNotFound(err) {
+			return true // cannot decide
+		}
+		return false // failed chunk-manifest load is garbage
+	}
+	return true
 }
 
 func (j *clnJ) _getCompletedID(lom *core.LOM) (id string) {
