@@ -110,6 +110,7 @@ After deploying the cluster, you won't be able to access it without authenticati
 ```sh
 ais show cluster
 Error: token required
+(Hint: log in with AuthN (i.e. 'ais auth login USER_NAME -p USER_PASS') or provide a JWT using 'AIS_AUTHN_TOKEN' or 'AIS_AUTHN_TOKEN_FILE')
 ```
 
 1. **Log in as Admin**:
@@ -457,6 +458,7 @@ By default, the AIStore deployment does not launch the AuthN server. To start th
     ```sh
     ais ls
     Error: token required
+    (Hint: log in with AuthN (i.e. 'ais auth login USER_NAME -p USER_PASS') or provide a JWT using 'AIS_AUTHN_TOKEN' or 'AIS_AUTHN_TOKEN_FILE')
     ```
 
 6. **Log in as Admin:**

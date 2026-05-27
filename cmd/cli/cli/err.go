@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
@@ -375,6 +376,17 @@ func V(err error) error {
 	return err
 }
 
+func hintForTokenRequired(herr *cmn.ErrHTTP) string {
+	if herr.Status == http.StatusUnauthorized && strings.Contains(herr.Message, authn.ErrNoToken.Error()) {
+		return fmt.Sprintf(
+			"\n(Hint: log in with AuthN (i.e. '%s %s %s %s -p %s') or provide a JWT using '%s' or '%s')",
+			cliName, commandAuth, cmdAuthLogin, userLoginArgument, userPassArgument,
+			env.AisAuthToken, env.AisAuthTokenFile,
+		)
+	}
+	return ""
+}
+
 // with hints and tips (compare with `stripErr` below)
 func formatErr(err error) error {
 	if err == nil {
@@ -390,6 +402,9 @@ func formatErr(err error) error {
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
 		herr := err
+		if hint := hintForTokenRequired(herr); hint != "" {
+			return redErr(errors.New(herr.Message + hint))
+		}
 		return redErr(herr)
 	case *errUsage:
 		return err

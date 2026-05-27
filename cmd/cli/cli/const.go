@@ -433,6 +433,7 @@ const (
 
 	// Auth
 	userLoginArgument = "USER_NAME"
+	userPassArgument  = "USER_PASS"
 
 	addAuthUserArgument       = "USER_NAME [ROLE...]"
 	deleteAuthUserArgument    = "USER_NAME"
