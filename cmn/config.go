@@ -2449,13 +2449,13 @@ func ValidateMpath(mpath string) (string, error) {
 	cleanMpath := filepath.Clean(mpath)
 
 	if cleanMpath[0] != filepath.Separator {
-		return mpath, NewErrInvalidaMountpath(mpath, "mountpath must be an absolute path")
+		return mpath, NewErrInvalidMountpath(mpath, "mountpath must be an absolute path")
 	}
 	if cleanMpath == cos.PathSeparator {
-		return "", NewErrInvalidaMountpath(mpath, "root directory is not a valid mountpath")
+		return "", NewErrInvalidMountpath(mpath, "root directory is not a valid mountpath")
 	}
 	if len(cleanMpath) > maxLenMountpath {
-		return "", NewErrInvalidaMountpath(mpath, "mountpath length cannot exceed "+strconv.Itoa(maxLenMountpath))
+		return "", NewErrInvalidMountpath(mpath, "mountpath length cannot exceed "+strconv.Itoa(maxLenMountpath))
 	}
 	return cleanMpath, nil
 }
