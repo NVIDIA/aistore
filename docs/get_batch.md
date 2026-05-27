@@ -492,7 +492,7 @@ training/exists-2.bin          (2 MB)
 
 ### Indexed archive extraction (shard index)
 
-When the same TAR shard appears in many batches — typical of sharded ML training datasets — linear scanning of the archive for each requested `archpath` entry becomes the dominant cost. The [shard index](/docs/relnotes/4.5.md#shard-index) subsystem builds and persists a per-shard index of offsets/lengths so that `lom.NewArchpathReader` can seek directly to the requested file.
+When the same TAR shard appears in many batches — typical of sharded ML training datasets — linear scanning of the archive for each requested `archpath` entry becomes the dominant cost. The [shard index](https://docs.nvidia.com/aistore/relnotes/v4.5#shard-index) subsystem builds and persists a per-shard index of offsets/lengths so that `lom.NewArchpathReader` can seek directly to the requested file.
 
 GetBatch consults the index transparently on the read path (`xact/xs/moss.go` calls `NewArchpathReader`, which uses the fast path when an index exists). To prepare a bucket:
 
@@ -768,7 +768,7 @@ for moss_out, data in get_worker_partition(worker_id=0, num_workers=10, total_ob
 
 GetBatch works on **in-cluster data**: sharded (with shards of any kind — TAR, TAR.GZ, TAR.LZ4, ZIP), or plain monolithic objects, or chunked objects. As long as the requested data is stored on the cluster's target disks, GetBatch will assemble and return it.
 
-For TAR shards, GetBatch reads files via the [shard index](/docs/relnotes/4.5.md#shard-index) fast path when an index has been built for the shard — extracting an `archpath` entry becomes direct random access into the archive instead of a linear scan. The index is persisted in the `ais://.sys-shardidx` system bucket and is consulted transparently by both `GET` and GetBatch.
+For TAR shards, GetBatch reads files via the [shard index](https://docs.nvidia.com/aistore/relnotes/v4.5#shard-index) fast path when an index has been built for the shard — extracting an `archpath` entry becomes direct random access into the archive instead of a linear scan. The index is persisted in the `ais://.sys-shardidx` system bucket and is consulted transparently by both `GET` and GetBatch.
 
 ### Known limitations
 
@@ -788,7 +788,7 @@ Clients should retry GetBatch after a brief backoff once the rebalance completes
 Per-entry `start`/`length` fields in `MossIn` are reserved for future use; supplying them currently returns `ErrNotImpl`.
 
 **Shard extraction is sequential within each archive.**
-When multiple files are requested from the same shard, they are extracted in sequence rather than in parallel. This is a performance limitation, not a correctness issue — and is largely mitigated when the [shard index](/docs/relnotes/4.5.md#shard-index) is enabled, which converts each per-file lookup from a linear scan into direct random access.
+When multiple files are requested from the same shard, they are extracted in sequence rather than in parallel. This is a performance limitation, not a correctness issue — and is largely mitigated when the [shard index](https://docs.nvidia.com/aistore/relnotes/v4.5#shard-index) is enabled, which converts each per-file lookup from a linear scan into direct random access.
 
 ### Roadmap
 
