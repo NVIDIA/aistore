@@ -613,7 +613,7 @@ func (e *ErrInvalidMountpath) Error() string {
 	return "invalid mountpath [" + e.mpath + "]; " + e.cause
 }
 
-func NewErrInvalidaMountpath(mpath, cause string) *ErrInvalidMountpath {
+func NewErrInvalidMountpath(mpath, cause string) *ErrInvalidMountpath {
 	return &ErrInvalidMountpath{mpath: mpath, cause: cause}
 }
 
