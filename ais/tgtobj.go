@@ -1268,9 +1268,13 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 	goi.setwhdr(whdr, goi.lom.Checksum(), size)
 
 	// Tx
-	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.MaxPageSlabSize))
-	err = goi.transmit(lmfh, buf, fqn, size)
-	slab.Free(buf)
+	if false && goi.canSendfile(lmfh) { // TODO -- FIXME: benchmark plain-HTTP deployments
+		err = goi.sendfile(lmfh, fqn, size)
+	} else {
+		buf, slab := goi.t.gmm.AllocSize(min(size, memsys.MaxPageSlabSize))
+		err = goi.transmit(lmfh, buf, fqn, size)
+		slab.Free(buf)
+	}
 	return err
 }
 
@@ -1348,6 +1352,36 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 	//
 	goi.stats(written)
 	return nil
+}
+
+//
+// fast (sendfile) path
+//
+
+func (goi *getOI) sendfile(r io.Reader, fqn string, size int64) error {
+	written, err := cos.CopySendfile(goi.w, r)
+	if err != nil || written != size {
+		if errTx := goi._txerr(err, fqn, written, size); errTx != nil {
+			return errTx
+		}
+	}
+	goi.stats(written)
+	return nil
+}
+
+// source must be monolithic file-backed (see assert)
+func (goi *getOI) canSendfile(lmfh cos.LomReader) bool {
+	if cmn.Rom.UseHTTPS() || goi.lom.IsChunked() {
+		return false
+	}
+
+	debug.Func(func() {
+		_, ok := lmfh.(*os.File)
+		debug.Assertf(ok, "expecting file-backed, got %T", lmfh)
+	})
+
+	_, ok := goi.w.(io.ReaderFrom)
+	return ok
 }
 
 func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {

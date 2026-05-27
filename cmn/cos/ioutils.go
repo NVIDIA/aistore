@@ -196,7 +196,9 @@ func _save(fqn string, w io.Writer, r io.Reader, buf []byte, cksumType string, s
 // a slightly modified excerpt from https://github.com/golang/go/blob/master/src/io/io.go#L407
 // - regular streaming copy with `io.WriteTo` and `io.ReaderFrom` not checked and not used
 // - buffer _must_ be provided
-// - see also: WriterOnly comment (above)
+// - see also:
+//   - WriterOnly comment (above)
+//   - CopySendfile (below)
 func CopyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
 	for {
 		nr, er := src.Read(buf)
@@ -227,6 +229,19 @@ func CopyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err er
 		}
 	}
 	return written, err
+}
+
+// NOTE:
+// caller must guarantee that this path is eligible for the stdlib/net sendfile
+// fast path: plain HTTP, stdlib response writer, and file-backed source.
+func CopySendfile(dst io.Writer, src io.Reader) (written int64, err error) {
+	rf, ok := dst.(io.ReaderFrom)
+	if !ok {
+		err = fmt.Errorf("destination does not implement io.ReaderFrom (%T)", dst)
+		debug.AssertNoErr(err)
+		return 0, err
+	}
+	return rf.ReadFrom(src)
 }
 
 // Read only the first line of a file.

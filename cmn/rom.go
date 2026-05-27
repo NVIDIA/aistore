@@ -25,6 +25,7 @@ type readMostly struct {
 	testingEnv     bool
 	authEnabled    bool
 	cskEnabled     bool
+	useHTTPS       bool
 }
 
 var Rom readMostly
@@ -45,6 +46,7 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 
 	rom.authEnabled = cfg.Auth.Enabled
 	rom.cskEnabled = cfg.Auth.CSKEnabled()
+	rom.useHTTPS = cfg.Net.HTTP.UseHTTPS
 
 	// pre-parse for V (below)
 	rom.level, rom.modules = cfg.Log.Level.Parse()
@@ -57,6 +59,7 @@ func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
 func (rom *readMostly) AuthEnabled() bool              { return rom.authEnabled }
 func (rom *readMostly) CSKEnabled() bool               { return rom.cskEnabled }
+func (rom *readMostly) UseHTTPS() bool                 { return rom.useHTTPS }
 
 func (rom *readMostly) V(verbosity, fl int) bool {
 	return rom.level >= verbosity || rom.modules&fl != 0
