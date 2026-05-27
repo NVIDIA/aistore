@@ -213,10 +213,12 @@ func (sdm *sharedDM) Close(err ...error) error {
 		nlog.Errorln(sdm.trname(), "closing despite", msg, "[", err[0], "]")
 	}
 
-	sdm.dm.Close(nil)
-	sdm.dm.UnregRecv()
+	// release rxmu (intended only to protect sdm.receivers) before calling dm.Close()
 	sdm.receivers = nil
 	sdm.rxmu.Unlock()
+
+	sdm.dm.Close(nil)
+	sdm.dm.UnregRecv()
 
 	sdm.ocmu.Unlock()
 
@@ -305,19 +307,25 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 		return err
 	}
 
+	var (
+		en         *rxent
+		closed, ok bool
+	)
 	sdm.rxmu.RLock()
-	en, ok := sdm.receivers[xid]
+	closed = sdm.receivers == nil
+	en, ok = sdm.receivers[xid]
+	sdm.rxmu.RUnlock()
+
 	if !ok {
-		sdm.rxmu.RUnlock()
 		transport.DrainAndFreeReader(r)
 		n := sdm.stats.drops.Inc()
-		if n < 5 || n%100 == 0 || cmn.Rom.V(4, cos.ModTransport) {
-			nlog.Warningf("%s: xid %s not found, dropping recv [oname: %s, drops: %d]",
-				sdm.trname(), xid, hdr.ObjName, n)
+		if closed {
+			cmn.SparseWarn(cos.ModTransport, n, sdm.trname(), "is closed (dropping all Rx)")
+		} else {
+			cmn.SparseWarn(cos.ModTransport, n, sdm.trname(), "xid", xid, "not found - dropping", hdr.ObjName)
 		}
 		return nil
 	}
-	sdm.rxmu.RUnlock()
 
 	// (unlikely)
 	if en.rx.ID() != xid {

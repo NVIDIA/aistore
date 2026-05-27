@@ -15,6 +15,6 @@ import (
 // per-module verbose level is at or above 5.
 func SparseWarn(mod int, cnt int64, args ...any) {
 	if Rom.V(5, mod) || cos.Sparse(cnt) {
-		nlog.Warningln(args...)
+		nlog.WarningDepth(1, args...)
 	}
 }
