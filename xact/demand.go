@@ -43,7 +43,8 @@ type (
 			d    atomic.Int64 // duration hk idle
 			last atomic.Int64 // mono.NanoTime
 		}
-		pending atomic.Int64
+		pending  atomic.Int64
+		unregged atomic.Bool // hk.Unreg() at most once per instance; NOTE: same-UUID renewals reuse HK names
 	}
 )
 
@@ -76,7 +77,9 @@ func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duratio
 	r.InitBase(uuid, kind, bck)
 
 	r.idle.last.Store(mono.NanoTime())
+
 	hk.Reg(r.hkName+hk.NameSuffix, r.hkcb, 0 /*time.Duration*/)
+	r.unregged.Store(false)
 }
 
 // (e.g. usage: listed last page)
@@ -124,14 +127,19 @@ func (r *DemandBase) SubPending(n int) {
 }
 
 func (r *DemandBase) Stop() {
+	if !r.unregged.CAS(false, true) {
+		return
+	}
 	r.SetStopping()
 	hk.Unreg(r.hkName + hk.NameSuffix)
 	if r.ticks != nil {
 		r.ticks.Close()
-		r.ticks = nil
 	}
 }
 
+// Only abort the Base part, and note:
+// for demand xactions, Stop() is a cleanup-sequence sensitive barrier: it unregisters
+// the idle HK callback and can allow same-UUID renewal to register the same HK name.
 func (r *DemandBase) Abort(err error) (ok bool) {
 	if err == nil && !r.IsIdle() {
 		err = cmn.NewErrAborted(r.Name(), "aborting non-idle", nil)

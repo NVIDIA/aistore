@@ -98,8 +98,12 @@ func (xctn *Base) Bck() *meta.Bck { return &xctn.bck }
 // return true if 'stopping' OR 'finished'
 func (xctn *Base) IsDone() bool { return xctn.eutime.Load() != 0 }
 
-// mark the xaction as stopping (and finishing soon); EndTime remains zero until Finish()
-func (xctn *Base) SetStopping() { xctn.eutime.CAS(0, cos.MSB64) } // i.e., not running vis-à-vis xreg
+// mark the xaction as stopping (and finishing soon);
+// callers that perform terminal cleanup can use the return value to decide
+// whether they own that cleanup path
+func (xctn *Base) SetStopping() bool {
+	return xctn.eutime.CAS(0, cos.MSB64)
+}
 
 func (xctn *Base) IsRunning() (yes bool) {
 	yes = xctn.sutime.Load() != 0 && !xctn.IsDone() && !xctn.IsAborted()

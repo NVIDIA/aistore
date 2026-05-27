@@ -378,6 +378,9 @@ func (r *XactMoss) Abort(err error) bool {
 
 	hk.UnregIf(r.hkName(), func(int64) time.Duration { return 0 })
 
+	// unreg idle callback prior to quiesce
+	r.DemandBase.Stop()
+
 	nlog.Infoln(r.Name(), "aborting:", err)
 
 	r.activeWG.Wait()
@@ -388,8 +391,6 @@ func (r *XactMoss) Abort(err error) bool {
 	r.pendingCnt.Store(0)
 
 	r.abortedWIDs.Clear()
-
-	r.DemandBase.Stop()
 
 	r.bewarmStop()
 	return true
@@ -426,7 +427,9 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 	case r.Pending() > 0:
 		return mossIdleTime
 	default:
-		r.SetStopping()
+		if !r.SetStopping() {
+			return hk.UnregInterval
+		}
 
 		hk.UnregIf(r.hkName(), func(int64) time.Duration { return 0 })
 		// stop receiving
