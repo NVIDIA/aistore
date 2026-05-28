@@ -16,8 +16,10 @@ import (
 )
 
 type (
-	// List bucket response
+	// List buckets response — emits <ListAllMyBucketsResult> per AWS S3 ListBuckets spec
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html#API_ListBuckets_ResponseSyntax
 	ListBucketResult struct {
+		XMLName xml.Name  `xml:"ListAllMyBucketsResult"`
 		Ns      string    `xml:"xmlns,attr"`
 		Owner   BckOwner  `xml:"Owner"`
 		Buckets []*Bucket `xml:"Buckets>Bucket"`

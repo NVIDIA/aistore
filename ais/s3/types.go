@@ -23,12 +23,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-// NOTE: do not rename structs that have `xml` tags. The names of those structs
-// become a top level tag of resulting XML, and those tags S3-compatible
-// clients require.
+// NOTE: for structs without an `XMLName` field, the Go struct name becomes the
+// top-level tag of the resulting XML, and those tags S3-compatible clients require.
+// Do not rename such structs.
+//
+// Where the spec's root element name differs from our struct name, we pin it
+// explicitly via `XMLName xml.Name` (below) so the wire format stays AWS-spec
+// compliant regardless of the Go identifier. Strict-parsing clients (e.g. the
+// AWS Rust SDK, used by s3dlio) reject non-spec root tags.
 type (
-	// List objects response
+	// List objects response — emits <ListBucketResult> per AWS S3 ListObjectsV2 spec
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html#API_ListObjectsV2_ResponseSyntax
 	ListObjectResult struct {
+		XMLName               xml.Name        `xml:"ListBucketResult"`
 		Name                  string          `xml:"Name"`
 		Ns                    string          `xml:"xmlns,attr"`
 		Prefix                string          `xml:"Prefix"`
@@ -51,17 +58,20 @@ type (
 		Prefix string `xml:"Prefix"`
 	}
 
-	// Response for object copy request
+	// Response for object copy request — emits <CopyObjectResult> per AWS S3 CopyObject spec
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html#API_CopyObject_ResponseSyntax
 	CopyObjectResult struct {
 		LastModified string `xml:"LastModified"` // e.g. <LastModified>2009-10-12T17:50:30.000Z</LastModified>
 		ETag         string `xml:"ETag"`
 	}
 
-	// Multipart upload start response
+	// Multipart upload start response — emits <InitiateMultipartUploadResult> per AWS S3 spec
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html#API_CreateMultipartUpload_ResponseSyntax
 	InitiateMptUploadResult struct {
-		Bucket   string `xml:"Bucket"`
-		Key      string `xml:"Key"`
-		UploadID string `xml:"UploadId"`
+		XMLName  xml.Name `xml:"InitiateMultipartUploadResult"`
+		Bucket   string   `xml:"Bucket"`
+		Key      string   `xml:"Key"`
+		UploadID string   `xml:"UploadId"`
 	}
 
 	// Multipart upload completion request
@@ -69,14 +79,17 @@ type (
 		Parts []types.CompletedPart `xml:"Part"`
 	}
 
-	// Multipart upload completion response
+	// Multipart upload completion response — emits <CompleteMultipartUploadResult> per AWS S3 spec
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html#API_CompleteMultipartUpload_ResponseSyntax
 	CompleteMptUploadResult struct {
-		Bucket string `xml:"Bucket"`
-		Key    string `xml:"Key"`
-		ETag   string `xml:"ETag"`
+		XMLName xml.Name `xml:"CompleteMultipartUploadResult"`
+		Bucket  string   `xml:"Bucket"`
+		Key     string   `xml:"Key"`
+		ETag    string   `xml:"ETag"`
 	}
 
-	// Multipart uploaded parts response
+	// Multipart uploaded parts response — emits <ListPartsResult> per AWS S3 ListParts spec
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html#API_ListParts_ResponseSyntax
 	ListPartsResult struct {
 		Bucket   string                `xml:"Bucket"`
 		Key      string                `xml:"Key"`
@@ -91,8 +104,10 @@ type (
 		UploadID  string    `xml:"UploadId"`
 	}
 
-	// List of active multipart uploads response
+	// List of active multipart uploads response — emits <ListMultipartUploadsResult> per AWS S3 spec
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html#API_ListMultipartUploads_ResponseSyntax
 	ListMptUploadsResult struct {
+		XMLName        xml.Name           `xml:"ListMultipartUploadsResult"`
 		Bucket         string             `xml:"Bucket"`
 		UploadIDMarker string             `xml:"UploadIdMarker"`
 		Uploads        []UploadInfoResult `xml:"Upload"`
@@ -104,6 +119,8 @@ type (
 	DeletedObjInfo struct {
 		Key string `xml:"Key"`
 	}
+	// Multiple object delete response — emits <DeleteResult> per AWS S3 DeleteObjects spec
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html#API_DeleteObjects_ResponseSyntax
 	DeleteResult struct {
 		Objs []DeletedObjInfo `xml:"Deleted"`
 	}
