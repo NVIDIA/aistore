@@ -389,11 +389,14 @@ func abortReq(nl nl.Listener) cmn.HreqArgs {
 const maxNotifsHK = time.Second >> 2
 
 func (n *notifs) housekeep(now int64) time.Duration {
+	// nl.EndTime() is wall-clock (set via time.Now().UnixNano() in nl.Callback);
+	// the hk-supplied `now` is mono, so use wall-clock for the EndTime comparison.
+	wallNow := time.Now().UnixNano()
 	n.fin.wlockAll()
 	for i := range shimcnt {
 		for uuid, nl := range n.fin.all[i].m {
 			timeout := cos.Ternary(nl.Kind() == apc.ActList, hk.OldAgeNotifLso, hk.OldAgeNotif)
-			if time.Duration(now-nl.EndTime()) > timeout {
+			if time.Duration(wallNow-nl.EndTime()) > timeout {
 				delete(n.fin.all[i].m, uuid)
 				n.fin.l.Dec()
 			}

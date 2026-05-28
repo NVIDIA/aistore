@@ -527,6 +527,30 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(finalCount).To(BeNumerically("<", initialCount), "Housekeep should have cleaned up old listeners")
 		})
 
+		It("should clean up finished NLs when `now` is mono", func() {
+			// nl.Callback stamps EndTime with wall-clock time
+			// (time.Now().UnixNano()); the hk runner passes mono time as `now`.
+			// The housekeep EndTime comparison must use wall-clock, not `now`.
+			n = testNotifs()
+
+			xid := cos.GenUUID()
+			xnl := xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, getNodeMap(target1ID))
+			// stamp finished well past hk.OldAgeNotif via the production
+			// Callback path (wall-clock)
+			oldWall := time.Now().Add(-time.Hour).UnixNano()
+			xnl.Callback(xnl, oldWall)
+			Expect(xnl.EndTime()).To(Equal(oldWall))
+			n.fin.add(xnl, false)
+			Expect(n.fin.l.Load()).To(BeEquivalentTo(1))
+
+			// simulate mono `now` from the hk runner (mono.NanoTime() <<
+			// time.Now().UnixNano() on builds with the `mono` tag)
+			n.housekeep(int64(time.Hour))
+
+			Expect(n.fin.l.Load()).To(BeEquivalentTo(0),
+				"finished NL should be cleaned up even when `now` is mono time")
+		})
+
 	})
 })
 

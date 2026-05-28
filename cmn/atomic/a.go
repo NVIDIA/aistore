@@ -56,6 +56,12 @@ func (v *Uint32) Swap(n uint32) uint32 { return (*atomic.Uint32)(v).Swap(n) }
 
 type Int64 atomic.Int64
 
+// interface guard
+var (
+	_ json.Marshaler   = (*Int64)(nil)
+	_ json.Unmarshaler = (*Int64)(nil)
+)
+
 func NewInt64(i int64) *Int64 {
 	v := &atomic.Int64{}
 	v.Store(i)
@@ -70,6 +76,36 @@ func (v *Int64) Inc() int64          { return (*atomic.Int64)(v).Add(1) }
 func (v *Int64) Dec() int64          { return (*atomic.Int64)(v).Add(-1) }
 func (v *Int64) CAS(o, n int64) bool { return (*atomic.Int64)(v).CompareAndSwap(o, n) }
 func (v *Int64) Swap(n int64) int64  { return (*atomic.Int64)(v).Swap(n) }
+
+// int64Wire is the wire format for Int64 ({"v":N}). Wrapping in an object is
+// intentional for backwards compatibility: prior versions had no MarshalJSON
+// on atomic.Int64 and the default encoder produced {} (sync/atomic.Int64 has
+// only unexported fields). An older receiver decoding {"v":N} via default
+// struct rules sees an unknown field, ignores it, and yields zero — same
+// observable behavior as before. A bare number on the wire would instead
+// make older receivers fail to decode.
+type int64Wire struct {
+	V int64 `json:"v"`
+}
+
+func (v *Int64) MarshalJSON() ([]byte, error) {
+	return json.Marshal(int64Wire{V: v.Load()})
+}
+
+func (v *Int64) UnmarshalJSON(data []byte) error {
+	var obj int64Wire
+	if err := json.Unmarshal(data, &obj); err == nil {
+		v.Store(obj.V)
+		return nil
+	}
+	// accept a bare number too (resilient to future format changes)
+	var y int64
+	if err := json.Unmarshal(data, &y); err != nil {
+		return err
+	}
+	v.Store(y)
+	return nil
+}
 
 //
 // uint64
