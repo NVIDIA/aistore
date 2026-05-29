@@ -111,7 +111,7 @@ report to IC.
 
 ## Snapshots
 
-A snapshot, or [`core.Snap`](core/xaction.go), is a local description of an xaction instance.
+A snapshot, or [`core.Snap`](../core/xaction.go), is a local description of an xaction instance.
 
 Snapshots are the general-purpose status representation for xactions registered
 locally. A snapshot can include common fields such as kind, ID, bucket, start
