@@ -188,6 +188,8 @@ func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string, extra *Extra
 func (r *runner) regCommon(snode *meta.Snode) {
 	initProm(snode)
 
+	regGoRuntime(snode.Type())
+
 	// basic counters
 	r.reg(snode, GetCount, KindCounter,
 		&Extra{

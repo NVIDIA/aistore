@@ -39,7 +39,8 @@ const (
 
 // static labels
 const (
-	ConstlabNode = "node_id"
+	ConstlabNode      = "node_id"
+	ConstlabComponent = "component"
 )
 
 // variable labels
