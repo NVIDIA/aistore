@@ -7,67 +7,89 @@ package atomic_test
 import (
 	"encoding/json"
 	"strconv"
-	stdatomic "sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cos"
+
+	jsoniter "github.com/json-iterator/go"
 )
+
+// Each atomic type with a custom MarshalJSON/UnmarshalJSON must round-trip
+// through cos.MustMarshal (cos.JSON, frozen) into any of the three decoders:
+// - default jsoniter: jsoniter.ConfigDefault
+// - project frozen config cos.JSON
+// - stdlib encoding/json.
+var unmarshalers = []struct {
+	name string
+	fn   func([]byte, any) error
+}{
+	{"jsoniter", jsoniter.Unmarshal},
+	{"cos.JSON", cos.JSON.Unmarshal},
+	{"stdlib", json.Unmarshal},
+}
 
 func TestInt64JSONRoundTrip(t *testing.T) {
 	for _, want := range []int64{0, 1, -1, 1 << 30, -1 << 30, 1700000000000000000} {
-		in := atomic.NewInt64(want)
-		data, err := json.Marshal(in)
-		if err != nil {
-			t.Fatalf("marshal %d: %v", want, err)
+		data := cos.MustMarshal(atomic.NewInt64(want))
+		if s, exp := string(data), `{"v":`+strconv.FormatInt(want, 10)+`}`; s != exp {
+			t.Fatalf("wire format for %d: got %s, want %s", want, s, exp)
 		}
-		if string(data) != `{"v":`+strconv.FormatInt(want, 10)+`}` {
-			t.Fatalf("unexpected wire format for %d: %s", want, data)
-		}
-		var got atomic.Int64
-		if err := json.Unmarshal(data, &got); err != nil {
-			t.Fatalf("unmarshal %s: %v", data, err)
-		}
-		if got.Load() != want {
-			t.Fatalf("round-trip mismatch: want %d, got %d (json=%s)", want, got.Load(), data)
+		for _, u := range unmarshalers {
+			t.Run(strconv.FormatInt(want, 10)+"/"+u.name, func(t *testing.T) {
+				var got atomic.Int64
+				if err := u.fn(data, &got); err != nil {
+					t.Fatalf("unmarshal %s: %v", data, err)
+				}
+				if got.Load() != want {
+					t.Fatalf("round-trip mismatch: want %d, got %d", want, got.Load())
+				}
+			})
 		}
 	}
 }
 
-// Cross-version IC sync compat: new code must accept legacy `{}` (from a
-// pre-MarshalJSON peer), and an older default-struct decoder must accept the
-// new `{"v":N}` without error - both yielding zero, matching current behavior.
-func TestInt64JSONMixedVersionCompat(t *testing.T) {
-	type newShape struct {
-		EndTimeX atomic.Int64 `json:"EndTimeX"`
+func TestBoolJSONRoundTrip(t *testing.T) {
+	for _, want := range []bool{true, false} {
+		data := cos.MustMarshal(atomic.NewBool(want))
+		if s, exp := string(data), strconv.FormatBool(want); s != exp {
+			t.Fatalf("wire format for %v: got %s, want %s", want, s, exp)
+		}
+		for _, u := range unmarshalers {
+			t.Run(strconv.FormatBool(want)+"/"+u.name, func(t *testing.T) {
+				var got atomic.Bool
+				if err := u.fn(data, &got); err != nil {
+					t.Fatalf("unmarshal %s: %v", data, err)
+				}
+				if got.Load() != want {
+					t.Fatalf("round-trip mismatch: want %v, got %v", want, got.Load())
+				}
+			})
+		}
 	}
-	type oldShape struct {
-		EndTimeX stdatomic.Int64 `json:"EndTimeX"`
-	}
+}
 
-	// old -> new: legacy `{}` decodes to zero
-	var n newShape
-	if err := json.Unmarshal([]byte(`{"EndTimeX":{}}`), &n); err != nil {
-		t.Fatalf("new failed to decode legacy {}: %v", err)
-	}
-	if n.EndTimeX.Load() != 0 {
-		t.Fatalf("expected 0 from legacy {}, got %d", n.EndTimeX.Load())
-	}
-
-	// backward-compat: `{"v":N}` parsed to 0 by default struct decoder (unknown key ignored)
-	var o oldShape
-	if err := json.Unmarshal([]byte(`{"EndTimeX":{"v":1700000000000000000}}`), &o); err != nil {
-		t.Fatalf("old failed to decode new format: %v", err)
-	}
-	if o.EndTimeX.Load() != 0 {
-		t.Fatalf("old decoder should yield zero from unknown nested object, got %d", o.EndTimeX.Load())
-	}
-
-	// forward-compat: new also accepts a bare number
-	var n2 newShape
-	if err := json.Unmarshal([]byte(`{"EndTimeX":12345}`), &n2); err != nil {
-		t.Fatalf("new failed to decode bare number: %v", err)
-	}
-	if n2.EndTimeX.Load() != 12345 {
-		t.Fatalf("expected 12345, got %d", n2.EndTimeX.Load())
+func TestTimeJSONRoundTrip(t *testing.T) {
+	for _, want := range []time.Time{
+		time.Unix(0, 0),
+		time.Unix(0, 1),
+		time.Unix(0, 1700000000000000000),
+	} {
+		data := cos.MustMarshal(atomic.NewTime(want))
+		if s, exp := string(data), strconv.FormatInt(want.UnixNano(), 10); s != exp {
+			t.Fatalf("wire format for %v: got %s, want %s", want, s, exp)
+		}
+		for _, u := range unmarshalers {
+			t.Run(strconv.FormatInt(want.UnixNano(), 10)+"/"+u.name, func(t *testing.T) {
+				var got atomic.Time
+				if err := u.fn(data, &got); err != nil {
+					t.Fatalf("unmarshal %s: %v", data, err)
+				}
+				if got.Load().UnixNano() != want.UnixNano() {
+					t.Fatalf("round-trip mismatch: want %v, got %v", want.UnixNano(), got.Load().UnixNano())
+				}
+			})
+		}
 	}
 }

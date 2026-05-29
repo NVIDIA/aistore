@@ -462,7 +462,7 @@ func (ic *ic) syncICBundle() error {
 	if !smap.IsIC(ic.p.si) {
 		return nil
 	}
-	if err := jsoniter.Unmarshal(bundle.OwnershipTbl, &ic.p.notifs); err != nil {
+	if err := cos.JSON.Unmarshal(bundle.OwnershipTbl, &ic.p.notifs); err != nil {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p, "ownership table", cos.BHead(bundle.OwnershipTbl), err)
 	}
 	return nil

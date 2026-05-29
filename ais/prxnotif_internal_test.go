@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 
+	jsoniter "github.com/json-iterator/go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -553,6 +555,123 @@ var _ = Describe("Notifications xaction test", func() {
 
 	})
 })
+
+func newTestNotifs() *notifs {
+	return &notifs{
+		nls: newListeners(),
+		fin: newListeners(),
+	}
+}
+
+func ownershipTblWithEndTime(t *testing.T, want int64) (*notifs, string) {
+	t.Helper()
+	xid := cos.GenUUID()
+	smap := &meta.Smap{}
+	targets := meta.NodeMap{"t1": &meta.Snode{DaeID: "t1"}}
+	sampleNL := xact.NewXactNL(xid, apc.ActECEncode, smap, targets)
+	sampleNL.EndTimeX.Store(want)
+	src := newTestNotifs()
+	if err := src.add(sampleNL); err != nil {
+		t.Fatalf("add listener: %v", err)
+	}
+	return src, xid
+}
+
+// Pull path (syncICBundle): ownership table bytes unmarshaled directly into notifs.
+func TestOwnershipTblPullJSON(t *testing.T) {
+	cos.InitShortID(0)
+
+	const want = int64(1700000000000000000)
+	src, xid := ownershipTblWithEndTime(t, want)
+	data := cos.MustMarshal(src)
+	wireEndTime := `"EndTimeX":{"v":` + strconv.FormatInt(want, 10) + `}`
+	if !bytes.Contains(data, []byte(wireEndTime)) {
+		t.Fatalf("marshaled ownership table missing %s: %s", wireEndTime, data)
+	}
+
+	t.Run("roundTrip", func(t *testing.T) {
+		dst := newTestNotifs()
+		if err := cos.JSON.Unmarshal(data, dst); err != nil {
+			t.Fatalf("unmarshal ownership table: %v", err)
+		}
+		got := dst.entry(xid)
+		if got == nil {
+			t.Fatal("listener missing after unmarshal")
+		}
+		if got.EndTime() != want {
+			t.Fatalf("EndTimeX round-trip: want %d, got %d", want, got.EndTime())
+		}
+	})
+	// Previous versions did not define marshaling for int64 atomics
+	// With no exported fields, EndTimeX always marshaled as {}
+	t.Run("legacyEmptyEndTimeX", func(t *testing.T) {
+		legacy := bytes.Replace(data, []byte(wireEndTime), []byte(`"EndTimeX":{}`), 1)
+		dst := newTestNotifs()
+		if err := cos.JSON.Unmarshal(legacy, dst); err != nil {
+			t.Fatalf("unmarshal legacy ownership table: %v", err)
+		}
+		got := dst.entry(xid)
+		if got == nil {
+			t.Fatal("listener missing after legacy unmarshal")
+		}
+		if got.EndTime() != 0 {
+			t.Fatalf("legacy EndTimeX: want 0, got %d", got.EndTime())
+		}
+	})
+
+	t.Run("bareNumberEndTimeX", func(t *testing.T) {
+		const bare = int64(12345)
+		patched := bytes.Replace(data, []byte(wireEndTime), []byte(`"EndTimeX":12345`), 1)
+		dst := newTestNotifs()
+		if err := cos.JSON.Unmarshal(patched, dst); err != nil {
+			t.Fatalf("unmarshal bare-number ownership table: %v", err)
+		}
+		got := dst.entry(xid)
+		if got == nil {
+			t.Fatal("listener missing after bare-number unmarshal")
+		}
+		if got.EndTime() != bare {
+			t.Fatalf("bare-number EndTimeX: want %d, got %d", bare, got.EndTime())
+		}
+	})
+}
+
+// Push path (sendOwnershipTbl -> handlePost ActMergeOwnershipTbl): notifs embedded in
+// actMsgExt.Value, wire round-trip via jsoniter, then MorphMarshal into notifs.
+func TestOwnershipTblActMergeOwnershipTbl(t *testing.T) {
+	cos.InitShortID(0)
+
+	const want = int64(1700000000000000000)
+	src, xid := ownershipTblWithEndTime(t, want)
+
+	sent := &actMsgExt{
+		ActMsg: apc.ActMsg{
+			Action: apc.ActMergeOwnershipTbl,
+			Value:  src,
+		},
+	}
+	wire := cos.MustMarshal(sent)
+
+	decoded := &actMsgExt{}
+	if err := jsoniter.Unmarshal(wire, decoded); err != nil {
+		t.Fatalf("unmarshal actMsgExt (ReadJSON path): %v", err)
+	}
+	if decoded.Action != apc.ActMergeOwnershipTbl {
+		t.Fatalf("action: want %q, got %q", apc.ActMergeOwnershipTbl, decoded.Action)
+	}
+
+	dst := newTestNotifs()
+	if err := cos.MorphMarshal(decoded.Value, dst); err != nil {
+		t.Fatalf("MorphMarshal ownership table: %v", err)
+	}
+	got := dst.entry(xid)
+	if got == nil {
+		t.Fatal("listener missing after MorphMarshal")
+	}
+	if got.EndTime() != want {
+		t.Fatalf("EndTimeX push path: want %d, got %d", want, got.EndTime())
+	}
+}
 
 //
 // micro-benches ------- TODO: isolate from TestMain() and side effects - see ais/tgtobj_internal_test.go :TODO
