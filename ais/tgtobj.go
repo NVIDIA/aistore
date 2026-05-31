@@ -1199,9 +1199,8 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 	)
 	debug.Assertf(ok, "expecting ReaderAt, got (%T)", lmfh) // m.b. fh or UfestReader
 
-	r = io.NewSectionReader(ra, hrng.Start, size)
-
 	if goi._ckrange(hrng) {
+		r = io.NewSectionReader(ra, hrng.Start, size)
 		if !goi.lom.IsChunked() && size <= checksumRangeSizeThreshold {
 			// non-chunked object & relatively small range -- pagecache
 			_, cksumH, err := cos.CopyAndChecksum(io.Discard, r, nil, goi.lom.CksumType())
@@ -1230,10 +1229,18 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 	// RFC 9110: "server SHOULD send 206 (Partial Content) for satisfied range requests"
 	goi.w.WriteHeader(http.StatusPartialContent)
 
-	// transmit
-	buf, slab := goi.t.gmm.AllocSize(_txsize(size))
-	err := goi.transmit(r, buf, fqn, size)
-	slab.Free(buf)
+	// Tx
+	var err error
+	if sgl == nil && goi.canSendfile(lmfh) {
+		err = goi.sendfileRange(lmfh, fqn, hrng.Start, size)
+	} else {
+		if r == nil {
+			r = io.NewSectionReader(ra, hrng.Start, size)
+		}
+		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
+		err = goi.transmit(r, buf, fqn, size)
+		slab.Free(buf)
+	}
 	if sgl != nil {
 		sgl.Free()
 	}
@@ -1268,7 +1275,7 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 	goi.setwhdr(whdr, goi.lom.Checksum(), size)
 
 	// Tx
-	if false && goi.canSendfile(lmfh) { // TODO -- FIXME: benchmark plain-HTTP deployments
+	if goi.canSendfile(lmfh) {
 		err = goi.sendfile(lmfh, fqn, size)
 	} else {
 		buf, slab := goi.t.gmm.AllocSize(min(size, memsys.MaxPageSlabSize))
@@ -1367,6 +1374,20 @@ func (goi *getOI) sendfile(r io.Reader, fqn string, size int64) error {
 	}
 	goi.stats(written)
 	return nil
+}
+
+// SectionReader cannot be used; use a LimitedReader after seeking the underlying file
+func (goi *getOI) sendfileRange(lmfh cos.LomReader, fqn string, off, size int64) error {
+	rocs, ok := lmfh.(io.Seeker)
+	debug.Assert(ok)
+	if _, err := rocs.Seek(off, io.SeekStart); err != nil {
+		if !cmn.IsErrObjNought(err) {
+			goi.isIOErr = true
+		}
+		return cmn.ErrGetTxBenign
+	}
+
+	return goi.sendfile(&io.LimitedReader{R: lmfh, N: size}, fqn, size)
 }
 
 // source must be monolithic file-backed (see assert)
