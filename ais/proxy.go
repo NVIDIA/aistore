@@ -642,6 +642,8 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	}
 
 	switch {
+	// TODO: add apc.ActSummaryShard handler here: proxy starts/queries the
+	// shard-summary action via 2PC and aggregates target Result snapshots.
 	case msg.Action == apc.ActSummaryBck:
 		p.bgetSumm(w, r, qbck, msg, dpq)
 	case msg.Action == apc.ActShowNBI:

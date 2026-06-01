@@ -89,6 +89,10 @@ func RenewBckShardIndex(bck *meta.Bck, uuid string, msg *apc.IndexShardMsg) Rene
 	return RenewBucketXact(apc.ActIndexShard, bck, Args{Custom: msg, UUID: uuid})
 }
 
+func RenewBckShardSumm(bck *meta.Bck, msg *apc.ShardSummMsg) RenewRes {
+	return RenewBucketXact(apc.ActSummaryShard, bck, Args{Custom: msg, UUID: msg.UUID})
+}
+
 func RenewPutMirror(lom *core.LOM) RenewRes {
 	return RenewBucketXact(apc.ActPutCopies, lom.Bck(), Args{Custom: lom})
 }

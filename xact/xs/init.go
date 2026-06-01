@@ -59,6 +59,7 @@ func Tinit(coi COI) {
 	xreg.RegBckXact(&blobFactory{})
 
 	xreg.RegBckXact(&rechunkFactory{kind: apc.ActRechunk})
+	xreg.RegBckXact(&shardSummFactory{})
 	xreg.RegBckXact(&shardIndexFactory{kind: apc.ActIndexShard})
 
 	// assign COI singleton

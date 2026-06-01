@@ -117,6 +117,13 @@ var Table = map[string]Descriptor{
 		Metasync:    false,
 		// ICMode: ICNone - synchronous; proxy aggregates per-target results and returns to client
 	},
+	apc.ActSummaryShard: {
+		DisplayName: "shard-summary",
+		Scope:       ScopeB,
+		Access:      apc.AceObjLIST,
+		Startable:   false,
+		Metasync:    false,
+	},
 
 	// single target (node)
 	apc.ActResilver: {Scope: ScopeT, Startable: true, Resilver: true}, // ICMode: ICNone - ScopeT, single-target, no aggregation
@@ -124,7 +131,7 @@ var Table = map[string]Descriptor{
 
 	// IndexShard is a best-effort build: stale entries are detected via LOM checksum
 	// and fall back to tar.Next() scan. A partial index remains useful, and resumed
-	// builds atomically skip already-indexed LOMs (lom.md.flags&Indexed + index file).
+	// builds atomically skip already-indexed LOMs (lom.md.flags&Indexed + index object).
 	apc.ActIndexShard: {Scope: ScopeB, Startable: true, RefreshCap: false, ConflictRebRes: true, AbortByReb: false, ICMode: ICUponTerm},
 
 	// on-demand EC and n-way replication
