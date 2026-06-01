@@ -4,6 +4,14 @@ All notable changes to the AIStore Python SDK project are documented in this fil
 
 We structure this changelog in accordance with [Keep a Changelog](https://keepachangelog.com/) guidelines, and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `aistore.sdk.xact_const` mirroring Go's `xact/api_table.go`: `XACT_KIND_*`
+  string constants, `IDLE_KINDS` / `KNOWN_KINDS` frozensets, and the
+  `idles_before_finishing()` / `is_valid_kind()` predicates.
+
 ## [1.25.0] - 2026-05-20
 
 ### Added
