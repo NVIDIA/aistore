@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from datetime import datetime, timedelta, timezone
@@ -30,6 +30,7 @@ from aistore.sdk.types import (
     AggregatedJobSnap,
 )
 from aistore.sdk.utils import probing_frequency, get_logger
+from aistore.sdk.xact_const import idles_before_finishing, is_valid_kind
 
 logger = get_logger(__name__)
 
@@ -95,7 +96,26 @@ class Job:
         verbose: bool = True,
     ) -> WaitResult:
         """
-        Wait for a job to finish
+        Wait for a job to reach the appropriate "done" state for its kind.
+
+        Mirrors the Go-side `api/xaction.go: WaitForXaction(bp, args)`
+        descriptor-aware dispatch:
+          - if `self.job_kind` is an idle kind (e.g. `download`, `get-batch`,
+            `copy-listrange`, `etl-listrange`, `archive`, `list`,
+            `put-copies`, `ec-get`/`ec-put`/`ec-resp`), wait for the job to
+            reach an idle state across all targets (see `wait_for_idle`).
+          - otherwise (including unknown or empty kind), wait for the job to
+            reach a terminal state (its `end_time` becomes set).
+
+        Abort is handled cleanly on both paths: the idle path returns as soon
+        as any target reports aborted (`AggregatedJobSnap.idle_or_aborted`),
+        with the resulting `WaitResult` reporting `success=False` and the abort
+        error -- so an aborted idle-kind job returns promptly instead of
+        blocking until timeout. The terminal path reports the abort via
+        `JobStatus.aborted`.
+
+        For finer control (single-node fan-out, explicit idle/terminal),
+        call `wait_for_idle` or `wait_single_node` directly.
 
         Args:
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
@@ -111,6 +131,25 @@ class Job:
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
         """
+        kind = self._job_kind
+        if kind and idles_before_finishing(kind):
+            return self._wait_for_condition(
+                AggregatedJobSnap.idle_or_aborted,
+                timeout,
+                verbose,
+                "reached idle state",
+            )
+        if kind and not is_valid_kind(kind):
+            # not an error: SDK kind table may lag server; default to terminal
+            logger.debug("unknown xaction kind %r; defaulting to terminal wait", kind)
+        return self._wait_terminal(timeout, verbose)
+
+    def _wait_terminal(
+        self,
+        timeout: int,
+        verbose: bool,
+    ) -> WaitResult:
+        """Poll `status()` until the job reaches a terminal state."""
         logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
@@ -177,7 +216,7 @@ class Job:
             errors.Timeout: Timeout while waiting for the job to finish
         """
         return self._wait_for_condition(
-            lambda d: d.all_idle(), timeout, verbose, "reached idle state"
+            AggregatedJobSnap.idle_or_aborted, timeout, verbose, "reached idle state"
         )
 
     def wait_single_node(
@@ -203,7 +242,7 @@ class Job:
             errors.Timeout: Timeout while waiting for the job to finish
         """
         return self._wait_for_condition(
-            lambda d: d.any_finished(), timeout, verbose, "finished"
+            AggregatedJobSnap.any_finished, timeout, verbose, "finished"
         )
 
     def start(

@@ -24,6 +24,11 @@ from aistore.sdk.types import (
 )
 from aistore.sdk.utils import probing_frequency
 from aistore.sdk.job import Job
+from aistore.sdk.xact_const import (
+    XACT_KIND_DELETE_OBJECTS,
+    XACT_KIND_DOWNLOAD,
+    XACT_KIND_LRU,
+)
 
 
 # pylint: disable=unused-variable, too-many-public-methods
@@ -103,6 +108,126 @@ class TestJob(unittest.TestCase):
 
         with self.assertRaises(Timeout):
             self.job.wait()
+
+    #
+    # Descriptor-aware wait() dispatch (mirrors Go `api.WaitForXaction`).
+    #
+
+    @patch("aistore.sdk.job.time.sleep")
+    @patch("aistore.sdk.job.Job.status")
+    def test_wait_dispatch_terminal_for_non_idle_kind(self, mock_status, mock_sleep):
+        # `delete-listrange` is non-idle in `xact.Table` -> terminal path.
+        job = Job(
+            self.mock_client, job_id=self.job_id, job_kind=XACT_KIND_DELETE_OBJECTS
+        )
+        mock_status.side_effect = [
+            JobStatus(end_time=0),
+            JobStatus(end_time=1),
+        ]
+
+        result = job.wait(timeout=20)
+
+        self.assertTrue(result.success)
+        # Uses Job.status() (terminal path), NOT get_details/request_deserialize.
+        self.assertEqual(2, mock_status.call_count)
+        self.mock_client.request_deserialize.assert_not_called()
+        mock_sleep.assert_called()
+
+    @patch("aistore.sdk.job.time.sleep")
+    @patch("aistore.sdk.job.Job.status")
+    def test_wait_dispatch_idle_for_idle_kind(self, mock_status, mock_sleep):
+        # `download` is an idle kind -> snaps path via `_wait_for_condition`.
+        job = Job(self.mock_client, job_id=self.job_id, job_kind=XACT_KIND_DOWNLOAD)
+        snap_running = JobSnap(id=self.job_id, is_idle=False)
+        snap_idle = JobSnap(id=self.job_id, is_idle=True)
+        self.mock_client.request_deserialize.side_effect = [
+            AggregatedJobSnap.model_validate(
+                {"d1": [snap_running], "d2": [snap_running]}
+            ),
+            AggregatedJobSnap.model_validate({"d1": [snap_idle], "d2": [snap_idle]}),
+        ]
+
+        result = job.wait(timeout=20)
+
+        self.assertTrue(result.success)
+        # Uses snaps endpoint (WHAT_QUERY_XACT_STATS), NOT Job.status().
+        mock_status.assert_not_called()
+        self.assertEqual(2, self.mock_client.request_deserialize.call_count)
+        called_kwargs = self.mock_client.request_deserialize.call_args.kwargs
+        self.assertEqual(called_kwargs["params"], {QPARAM_WHAT: WHAT_QUERY_XACT_STATS})
+        self.assertEqual(called_kwargs["res_model"], AggregatedJobSnap)
+        mock_sleep.assert_called()
+
+    @patch("aistore.sdk.job.time.sleep")
+    @patch("aistore.sdk.job.Job.status")
+    def test_wait_dispatch_no_kind_uses_terminal(self, mock_status, mock_sleep):
+        # Empty kind preserves pre-convergence behavior: terminal wait.
+        job = Job(self.mock_client, job_id=self.job_id, job_kind="")
+        mock_status.side_effect = [JobStatus(end_time=1)]
+
+        result = job.wait(timeout=20)
+
+        self.assertTrue(result.success)
+        self.assertEqual(1, mock_status.call_count)
+        self.mock_client.request_deserialize.assert_not_called()
+        mock_sleep.assert_not_called()
+
+    @patch("aistore.sdk.job.time.sleep")
+    @patch("aistore.sdk.job.Job.status")
+    def test_wait_dispatch_unknown_kind_uses_terminal(self, mock_status, mock_sleep):
+        # Unknown kind -> SDK falls back to terminal (does not raise).
+        job = Job(self.mock_client, job_id=self.job_id, job_kind="future-xaction-kind")
+        mock_status.side_effect = [JobStatus(end_time=1)]
+
+        result = job.wait(timeout=20)
+
+        self.assertTrue(result.success)
+        self.assertEqual(1, mock_status.call_count)
+        self.mock_client.request_deserialize.assert_not_called()
+        mock_sleep.assert_not_called()
+
+    @patch("aistore.sdk.job.time.sleep", Mock())
+    def test_wait_dispatch_idle_kind_timeout(self):
+        # Idle kind that never reaches idle -> Timeout via snaps path.
+        job = Job(self.mock_client, job_id=self.job_id, job_kind=XACT_KIND_DOWNLOAD)
+        never_idle = AggregatedJobSnap.model_validate(
+            {"d1": [JobSnap(id=self.job_id, is_idle=False)]}
+        )
+        self.mock_client.request_deserialize.return_value = never_idle
+
+        with self.assertRaises(Timeout):
+            job.wait(timeout=1)
+
+    @patch("aistore.sdk.job.time.sleep", Mock())
+    def test_wait_dispatch_idle_kind_aborted_single_target(self):
+        # Idle kind: wait() returns as soon as ANY target reports aborted,
+        # without requiring all targets to converge.
+        job = Job(self.mock_client, job_id=self.job_id, job_kind=XACT_KIND_DOWNLOAD)
+        aborted_mix = AggregatedJobSnap.model_validate(
+            {
+                "d1": [JobSnap(id=self.job_id, aborted=True, abort_err="user abort")],
+                "d2": [JobSnap(id=self.job_id, is_idle=False)],
+            }
+        )
+        self.mock_client.request_deserialize.return_value = aborted_mix
+
+        result = job.wait(timeout=20)
+
+        self.assertFalse(result.success)
+        self.assertEqual("user abort", result.error)
+        # Returned on the first snaps poll; did not wait for d2.
+        self.assertEqual(1, self.mock_client.request_deserialize.call_count)
+
+    @patch("aistore.sdk.job.time.sleep", Mock())
+    def test_wait_dispatch_terminal_kind_lru(self):
+        # `lru` is non-idle -> terminal path, same as default `wait()`.
+        job = Job(self.mock_client, job_id=self.job_id, job_kind=XACT_KIND_LRU)
+        with patch("aistore.sdk.job.Job.status") as mock_status:
+            mock_status.side_effect = [JobStatus(end_time=1)]
+            result = job.wait(timeout=20)
+            self.assertTrue(result.success)
+            mock_status.assert_called_once()
+        self.mock_client.request_deserialize.assert_not_called()
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def wait_exec_assert(

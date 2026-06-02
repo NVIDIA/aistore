@@ -555,6 +555,20 @@ class AggregatedJobSnap(RootModel[Dict[str, List[JobSnap]]]):
         """
         return all(s.is_idle or s.aborted or s.abort_err for s in self.list_snapshots())
 
+    def any_aborted(self) -> bool:
+        """
+        Check if any snapshot is aborted or has an abort error.
+        """
+        return any(s.aborted or s.abort_err for s in self.list_snapshots())
+
+    def idle_or_aborted(self) -> bool:
+        """
+        Done condition for an idle-kind wait: all snapshots are idle, or any
+        snapshot is aborted. Mirrors the Go side, which stops waiting as soon
+        as a single target reports aborted rather than requiring all targets.
+        """
+        return self.all_idle() or self.any_aborted()
+
     def any_finished(self) -> bool:
         """
         Check if any snapshot is finished (aborted, errored, or has valid end_time).

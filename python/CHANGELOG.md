@@ -12,6 +12,17 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   string constants, `IDLE_KINDS` / `KNOWN_KINDS` frozensets, and the
   `idles_before_finishing()` / `is_valid_kind()` predicates.
 
+### Changed
+
+- `Job.wait()` is now descriptor-aware, mirroring Go's
+  `api.WaitForXaction`: when `job_kind` is an idle kind (e.g. `download`,
+  `get-batch`, `copy-listrange`, `etl-listrange`, `archive`, `list`,
+  `put-copies`, `ec-get`/`ec-put`/`ec-resp`) it waits for cluster-wide idle;
+  otherwise — including
+  empty or unknown kinds — it waits for terminal state (preserving the
+  pre-convergence behavior). `wait_for_idle` and `wait_single_node` remain
+  available as explicit overrides.
+
 ## [1.25.0] - 2026-05-20
 
 ### Added
