@@ -175,6 +175,7 @@ ACT_TRANSFORM_OBJECTS = "etl-listrange"
 ACT_ARCHIVE_OBJECTS = "archive"
 # Job actions
 ACT_START = "start"
+ACT_XACT_STOP = "stop"  # a.k.a. abort (see api/apc/actmsg.go: ActXactStop)
 # Multipart upload actions
 ACT_MPT_UPLOAD = "mpt-upload"
 ACT_MPT_COMPLETE = "mpt-complete"

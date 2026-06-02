@@ -5,6 +5,7 @@
 # pylint: disable=duplicate-code
 
 from datetime import datetime, timedelta, timezone
+import threading
 import time
 import unittest
 
@@ -17,7 +18,7 @@ from aistore.sdk.xact_const import (
 )
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.integration import REMOTE_SET
-from tests.const import TEST_TIMEOUT
+from tests.const import TEST_TIMEOUT, MEDIUM_FILE_SIZE
 
 
 class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
@@ -106,7 +107,8 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
 
     #
     # get-batch (x-moss) is an idle kind; exercise the descriptor-aware
-    # wait() against a real running job.
+    # wait() against a real running job, including the aborted case raised
+    # in review ("does this handle aborted idle-type jobs cleanly?").
     #
 
     def _get_batch_job_ids(self) -> set:
@@ -145,6 +147,72 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
             timeout=TEST_TIMEOUT
         )
         self.assertTrue(result.success, f"get-batch wait failed: {result.error}")
+
+    @pytest.mark.nonparallel("get-batch wait/abort dispatch")
+    def test_job_wait_get_batch_aborted(self):
+        """An aborted get-batch (idle kind) must make `wait()` return promptly
+        with a failed result -- not block until timeout."""
+        obj_names = list(self._create_objects().keys())
+        before = self._get_batch_job_ids()
+
+        batch = self.client.batch(
+            objects=obj_names, bucket=self.bucket, streaming_get=True
+        )
+        list(batch.get())  # drain so the streaming target is not blocked on write
+        job_id = self._await_new_get_batch_id(before)
+
+        self.client.job(job_id=job_id, job_kind=XACT_KIND_GET_BATCH).abort()
+
+        result = self.client.job(job_id=job_id, job_kind=XACT_KIND_GET_BATCH).wait(
+            timeout=TEST_TIMEOUT
+        )
+        self.assertFalse(result.success, "aborted get-batch should not report success")
+        self.assertIsNotNone(result.error)
+
+    @pytest.mark.nonparallel("get-batch wait/abort dispatch")
+    def test_job_wait_get_batch_aborted_while_running(self):
+        """Abort a get-batch that is still streaming, then `wait()`: it must
+        return a failed result rather than raising Timeout. The stream is
+        drained slowly in the background so the target keeps making progress
+        (never hard-blocks on a full socket buffer) while the job runs."""
+        obj_names = list(
+            self._create_objects(num_obj=12, obj_size=MEDIUM_FILE_SIZE).keys()
+        )
+        before = self._get_batch_job_ids()
+
+        batch = self.client.batch(
+            objects=obj_names, bucket=self.bucket, streaming_get=True
+        )
+        stream = batch.get(raw=True)
+        stop = threading.Event()
+
+        def _drain():
+            try:
+                while not stop.is_set():
+                    chunk = stream.read(128 * 1024)
+                    if not chunk:
+                        break
+                    time.sleep(0.01)
+            except Exception:  # pylint: disable=broad-except
+                pass  # stream torn down by the abort -- expected
+
+        drainer = threading.Thread(target=_drain, daemon=True)
+        drainer.start()
+        try:
+            job_id = self._await_new_get_batch_id(before)
+            self.client.job(job_id=job_id, job_kind=XACT_KIND_GET_BATCH).abort()
+            result = self.client.job(job_id=job_id, job_kind=XACT_KIND_GET_BATCH).wait(
+                timeout=TEST_TIMEOUT
+            )
+            self.assertFalse(result.success)
+            self.assertIsNotNone(result.error)
+        finally:
+            stop.set()
+            drainer.join(timeout=TEST_TIMEOUT)
+            try:
+                stream.close()
+            except Exception:  # pylint: disable=broad-except
+                pass
 
     @pytest.mark.nonparallel("lru incompatible with some job types")
     def test_get_within_timeframe(self):

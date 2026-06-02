@@ -10,6 +10,7 @@ from aistore.sdk.const import (
     WHAT_ONE_XACT_STATUS,
     URL_PATH_CLUSTER,
     ACT_START,
+    ACT_XACT_STOP,
     WHAT_QUERY_XACT_STATS,
 )
 from aistore.sdk.errors import JobInfoNotFound, Timeout
@@ -392,6 +393,28 @@ class TestJob(unittest.TestCase):
             json=expected_action,
             params=expected_params,
         )
+
+    def test_job_abort(self):
+        # abort issues an `xstop` ActionMsg scoped by id+kind (mirrors
+        # Go api.AbortXaction).
+        expected_action = ActionMsg(
+            action=ACT_XACT_STOP,
+            value=JobArgs(id=self.job_id, kind=self.job_kind).as_dict(),
+        ).model_dump()
+
+        self.job.abort()
+
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_PUT,
+            path=URL_PATH_CLUSTER,
+            json=expected_action,
+        )
+
+    def test_job_abort_requires_id_or_kind(self):
+        # A job with neither id nor kind cannot be scoped -> ValueError.
+        with self.assertRaises(ValueError):
+            self.default_job.abort()
+        self.mock_client.request.assert_not_called()
 
     @patch("aistore.sdk.job.time.sleep", Mock())
     def test_wait_single_node_finishes_successfully(self):

@@ -16,6 +16,7 @@ from aistore.sdk.const import (
     WHAT_ONE_XACT_STATUS,
     URL_PATH_CLUSTER,
     ACT_START,
+    ACT_XACT_STOP,
     WHAT_QUERY_XACT_STATS,
 )
 from aistore.sdk.errors import JobInfoNotFound, Timeout
@@ -289,6 +290,27 @@ class Job:
             HTTP_METHOD_PUT, path=URL_PATH_CLUSTER, json=action, params=params
         )
         return resp.text
+
+    def abort(self) -> None:
+        """
+        Abort (stop) this job.
+
+        After aborting, `wait()` (or `wait_for_idle`) will return a
+        `WaitResult` with `success=False` and the abort error rather than
+        blocking until timeout.
+
+        Raises:
+            ValueError: If neither job_id nor job_kind is set
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+        """
+        if not self._job_id and not self._job_kind:
+            raise ValueError("Cannot abort a job without an id or kind")
+        job_args = JobArgs(id=self._job_id, kind=self._job_kind)
+        action = ActionMsg(action=ACT_XACT_STOP, value=job_args.as_dict()).model_dump()
+        self._client.request(HTTP_METHOD_PUT, path=URL_PATH_CLUSTER, json=action)
 
     def get_within_timeframe(
         self, start_time: datetime, end_time: Optional[datetime] = None
