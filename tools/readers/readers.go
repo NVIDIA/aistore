@@ -84,6 +84,11 @@ func New(a *Arg) (Reader, error) {
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
+	if a.CksumType == "" {
+		a.CksumType = cos.ChecksumNone
+	}
+
+	// construct
 	switch a.Type {
 	case SG:
 		debug.Assert(a.SGL != nil)
@@ -124,19 +129,19 @@ func newRand(a *Arg) (Reader, error) {
 		return nil, fmt.Errorf("reader %q does not support archival content; use %q or %q", Rand, SG, File)
 	}
 
-	truffle := newTruffle()
-
-	var cksum *cos.Cksum
+	var (
+		truffle = newTruffle()
+		rr      = &rrLimited{truffle, a.Size, 0}
+		cksum   *cos.Cksum
+	)
 	if a.CksumType != cos.ChecksumNone {
-		rr := &rrLimited{truffle, a.Size, 0}
-		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, nil, a.CksumType)
+		_, cksumHash, err := cos.ChecksumReader(rr, a.CksumType)
 		if err != nil {
 			return nil, err
 		}
 		cksum = cksumHash.Clone()
 		truffle.setPos(0)
 	}
-
 	return &randReader{
 		truffle: truffle,
 		size:    a.Size,

@@ -227,10 +227,17 @@ func TestMain(m *testing.M) {
 
 		// Verify checksum.
 		var (
+			cksum      *cos.CksumHash
+			err        error
 			cksumType  = r.Header.Get(apc.HdrObjCksumType)
 			cksumValue = r.Header.Get(apc.HdrObjCksumVal)
 		)
-		_, cksum, err := cos.CopyAndChecksum(io.Discard, r.Body, nil, cksumType)
+		if cksumType == "" || cksumType == cos.ChecksumNone {
+			_, err = io.Copy(io.Discard, r.Body)
+			cksum = nil
+		} else {
+			_, cksum, err = cos.ChecksumReader(r.Body, cksumType)
+		}
 		if err != nil {
 			errCb(http.StatusBadRequest, "server failed to read, error %v", err)
 			return

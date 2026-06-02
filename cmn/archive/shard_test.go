@@ -632,7 +632,7 @@ func checkEntry(t *testing.T, raw io.ReaderAt, name string, entry archive.ShardI
 		return // zero-size file: no content to verify
 	}
 	section := io.NewSectionReader(raw, entry.DataOffset(), entry.Size)
-	n, actual, err := cos.CopyAndChecksum(io.Discard, section, nil, cos.ChecksumOneXxh)
+	n, actual, err := cos.ChecksumReader(section, cos.ChecksumOneXxh)
 	if err != nil {
 		t.Fatalf("entry %q: CopyAndChecksum: %v", name, err)
 	}
@@ -758,7 +758,7 @@ func shardCksum(t *testing.T, fh *os.File, size int64) *cos.Cksum {
 	if _, err := fh.Seek(0, io.SeekStart); err != nil {
 		t.Fatal("Seek:", err)
 	}
-	_, ckh, err := cos.CopyAndChecksum(io.Discard, io.LimitReader(fh, size), nil, cos.ChecksumOneXxh)
+	_, ckh, err := cos.ChecksumReader(io.LimitReader(fh, size), cos.ChecksumOneXxh)
 	if err != nil {
 		t.Fatal("shardCksum:", err)
 	}

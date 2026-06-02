@@ -1203,7 +1203,7 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 		r = io.NewSectionReader(ra, hrng.Start, size)
 		if !goi.lom.IsChunked() && size <= checksumRangeSizeThreshold {
 			// non-chunked object & relatively small range -- pagecache
-			_, cksumH, err := cos.CopyAndChecksum(io.Discard, r, nil, goi.lom.CksumType())
+			_, cksumH, err := cos.ChecksumReader(r, goi.lom.CksumType())
 			if err != nil {
 				goi.isIOErr = true
 				return err

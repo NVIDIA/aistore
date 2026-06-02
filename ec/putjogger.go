@@ -371,7 +371,7 @@ func (c *putJogger) createCopies(ctx *encodeCtx) error {
 func checksumDataSlices(ctx *encodeCtx, cksmReaders []io.Reader, cksumType string) error {
 	debug.Assert(cksumType != "") // caller checks for 'none'
 	for i, reader := range cksmReaders {
-		_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, nil, cksumType)
+		_, cksum, err := cos.ChecksumReader(reader, cksumType)
 		if err != nil {
 			return err
 		}

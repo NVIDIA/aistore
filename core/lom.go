@@ -6,7 +6,6 @@ package core
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"runtime"
@@ -623,8 +622,7 @@ func (lom *LOM) ComputeCksum(cksumType string, locked bool) (cksum *cos.CksumHas
 		return nil, fmt.Errorf("compute-checksum -- open: %v", err)
 	}
 
-	// `buf` is nil: `io.Discard` has efficient `io.ReaderFrom`
-	_, cksum, err = cos.CopyAndChecksum(io.Discard, lmfh, nil, cksumType)
+	_, cksum, err = cos.ChecksumReader(lmfh, cksumType)
 	cos.Close(lmfh)
 	return cksum, err
 }

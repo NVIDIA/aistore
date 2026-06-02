@@ -472,7 +472,7 @@ func cksumSlice(reader io.Reader, recvCksum *cos.Cksum, objName string) error {
 	if cksumType == cos.ChecksumNone {
 		return nil
 	}
-	_, actualCksum, err := cos.CopyAndChecksum(io.Discard, reader, nil, cksumType)
+	_, actualCksum, err := cos.ChecksumReader(reader, cksumType)
 	if err != nil {
 		return fmt.Errorf("failed to checksum: %v", err)
 	}

@@ -1063,11 +1063,12 @@ func (e *ErrRateLimitFrontend) Error() string { return e.err.Error() }
 // ErrCreateHreq
 
 func NewErrCreateHreq(err error) *ErrCreateHreq {
+	debug.Assert(err != nil)
 	return &ErrCreateHreq{err}
 }
 
 func (e *ErrCreateHreq) Error() string {
-	return fmt.Sprintf("%v (cannot create http request)", e.err)
+	return fmt.Sprintf("cannot create HTTP request: %v", e.err)
 }
 
 func (e *ErrCreateHreq) Unwrap() (err error) { return e.err }

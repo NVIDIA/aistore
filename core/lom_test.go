@@ -1212,7 +1212,7 @@ func createTestChunk(fqn string, size int, xxhash io.Writer) {
 
 func getTestFileHash(fqn string) (hash string) {
 	reader, _ := os.Open(fqn)
-	_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, nil, cos.ChecksumOneXxh)
+	_, cksum, err := cos.ChecksumReader(reader, cos.ChecksumOneXxh)
 	Expect(err).NotTo(HaveOccurred())
 	hash = cksum.Value()
 	reader.Close()

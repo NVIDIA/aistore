@@ -325,13 +325,22 @@ func CopyAndChecksum(w io.Writer, r io.Reader, buf []byte, cksumType string) (n 
 	return n, cksum, err
 }
 
-// ChecksumBytes computes checksum of given bytes using additional buffer.
+// computes checksum of given bytes
 func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
-	_, hash, err := CopyAndChecksum(io.Discard, bytes.NewReader(b), nil, cksumType)
+	_, hash, err := ChecksumReader(bytes.NewReader(b), cksumType)
 	if err != nil {
 		return nil, err
 	}
 	return &hash.Cksum, nil
+}
+
+// NOTE: cksumType must be a valid checksum, not empty and not ChecksumNone
+func ChecksumReader(r io.Reader, cksumType string) (n int64, cksum *CksumHash, err error) {
+	debug.Assert(cksumType != ChecksumNone && cksumType != "")
+	cksum = NewCksumHash(cksumType)
+	n, err = io.Copy(cksum.H, r)
+	cksum.Finalize()
+	return n, cksum, err
 }
 
 // DrainReader reads and discards all the data from a reader.

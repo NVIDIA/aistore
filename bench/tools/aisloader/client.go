@@ -575,28 +575,26 @@ func getMpdStreamDiscard(proxyURL string, wo *workOrder, p *params) (int64, erro
 	}
 	defer rc.Close()
 
-	mpdCksum := oah.Attrs().Cksum
-
-	var mpdCksumType string
-	if p.verifyHash && !cos.NoneC(mpdCksum) {
-		mpdCksumType = mpdCksum.Type()
+	var (
+		mpdCksum = oah.Attrs().Cksum
+		verify   = p.verifyHash && !cos.NoneC(mpdCksum)
+	)
+	if !verify {
+		n, err := io.Copy(io.Discard, rc)
+		if err != nil {
+			return 0, fmt.Errorf("MPD stream (drain) %s: %v", p.bck.Cname(wo.objName), err)
+		}
+		return n, nil
 	}
 
-	n, cksum, err := cos.CopyAndChecksum(io.Discard, rc, nil, mpdCksumType)
+	n, cksum, err := cos.ChecksumReader(rc, mpdCksum.Ty())
 	if err != nil {
-		return 0, fmt.Errorf("MPD stream %s: %v", p.bck.Cname(wo.objName), err)
+		return 0, fmt.Errorf("MPD stream (drain+checksum) %s: %v", p.bck.Cname(wo.objName), err)
 	}
 
-	if p.verifyHash && !cos.NoneC(mpdCksum) {
-		var cksumValue string
-		if cksum != nil {
-			cksumValue = cksum.Value()
-		}
-		if mpdCksum.Value() != cksumValue {
-			return 0, cmn.NewErrInvalidCksum(mpdCksum.Value(), cksumValue)
-		}
+	if mpdCksum.Val() != cksum.Val() {
+		return 0, cmn.NewErrInvalidCksum(mpdCksum.Value(), cksum.Val())
 	}
-
 	return n, nil
 }
 
@@ -758,15 +756,16 @@ func readDiscard(r *http.Response, cksumType string) (int64, string, error) {
 		return 0, "", fmt.Errorf("bad status %d: %v", r.StatusCode, err)
 	}
 
-	n, cksum, err := cos.CopyAndChecksum(io.Discard, r.Body, nil, cksumType)
+	if cksumType == "" || cksumType == cos.ChecksumNone {
+		n, err := io.Copy(io.Discard, r.Body)
+		return n, "", err
+	}
+
+	n, cksum, err := cos.ChecksumReader(r.Body, cksumType)
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 	}
-	var cksumValue string
-	if cksum != nil {
-		cksumValue = cksum.Value()
-	}
-	return n, cksumValue, nil
+	return n, cksum.Val(), nil
 }
 
 func timeDelta(time1, time2 time.Time) time.Duration {

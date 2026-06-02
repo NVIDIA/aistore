@@ -300,24 +300,31 @@ func (args *PutArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	req.GetBody = args.getBody
 
 	// compute client-side checksum
-	if args.Cksum != nil && args.Cksum.Ty() != cos.ChecksumNone {
-		req.Header.Set(apc.HdrObjCksumType, args.Cksum.Ty())
-		val := args.Cksum.Value()
-		if val == "" {
-			rocs, ok := args.Reader.(io.Seeker)
-			if !ok {
-				err := fmt.Errorf("cannot compute client-side checksum: reader (%T) does not implement io.Seeker",
-					args.Reader)
-				return nil, cmn.NewErrCreateHreq(err)
+	if cksum := args.Cksum; cksum != nil {
+		var (
+			typ = cksum.Ty()
+			val = cksum.Val()
+		)
+		if typ != "" && typ != cos.ChecksumNone {
+			req.Header.Set(apc.HdrObjCksumType, typ)
+			if val == "" {
+				rocs, ok := args.Reader.(io.Seeker)
+				if !ok {
+					err := fmt.Errorf("cannot compute client-side checksum: reader (%T) does not implement io.Seeker",
+						args.Reader)
+					return nil, cmn.NewErrCreateHreq(err)
+				}
+				_, ckhash, err := cos.ChecksumReader(args.Reader, typ)
+				if err != nil {
+					return nil, cmn.NewErrCreateHreq(err)
+				}
+				val = hex.EncodeToString(ckhash.Sum())
+				if _, err := rocs.Seek(0, io.SeekStart); err != nil {
+					return nil, cmn.NewErrCreateHreq(err)
+				}
 			}
-			_, ckhash, err := cos.CopyAndChecksum(io.Discard, args.Reader, nil, args.Cksum.Ty())
-			if err != nil {
-				return nil, cmn.NewErrCreateHreq(err)
-			}
-			val = hex.EncodeToString(ckhash.Sum())
-			rocs.Seek(0, io.SeekStart)
+			req.Header.Set(apc.HdrObjCksumVal, val)
 		}
-		req.Header.Set(apc.HdrObjCksumVal, val)
 	}
 
 	if args.Size != 0 {

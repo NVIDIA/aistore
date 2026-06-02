@@ -141,7 +141,7 @@ func siShardCksum(t GinkgoTInterface, fh *os.File, size int64) *cos.Cksum {
 	if _, err := fh.Seek(0, io.SeekStart); err != nil {
 		t.Fatalf("siShardCksum Seek: %v", err)
 	}
-	_, ckh, err := cos.CopyAndChecksum(io.Discard, io.LimitReader(fh, size), nil, cos.ChecksumOneXxh)
+	_, ckh, err := cos.ChecksumReader(io.LimitReader(fh, size), cos.ChecksumOneXxh)
 	if err != nil {
 		t.Fatalf("siShardCksum CopyAndChecksum: %v", err)
 	}
@@ -156,7 +156,7 @@ func siVerifyContent(fh *os.File, loaded *archive.ShardIndex, content siContent)
 			continue // nothing to checksum for zero-size entries
 		}
 		section := io.NewSectionReader(fh, entry.DataOffset(), entry.Size)
-		n, actual, err := cos.CopyAndChecksum(io.Discard, section, nil, cos.ChecksumOneXxh)
+		n, actual, err := cos.ChecksumReader(section, cos.ChecksumOneXxh)
 		Expect(err).NotTo(HaveOccurred(), "CopyAndChecksum entry %q", name)
 		Expect(n).To(Equal(entry.Size), "entry %q: read byte count mismatch", name)
 		Expect(actual.Equal(content[name].Cksum())).To(BeTrue(), "entry %q: xxhash mismatch at DataOffset %d", name, entry.DataOffset())
