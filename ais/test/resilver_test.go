@@ -887,6 +887,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 //     slices in HEAD response
 //  7. Extra check: the number of objects after rebalance equals initial number
 func TestECResilver(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-resilver",

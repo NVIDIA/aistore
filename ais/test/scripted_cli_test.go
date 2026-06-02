@@ -380,7 +380,7 @@ func TestSpecialSymbols(t *testing.T) {
 
 // 'ais start rebalance --cleanup' against a cluster with rejoin-induced misplacements
 func TestRebalanceCleanupUsingScript(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
 	cmd := exec.Command("./scripts/reb-cleanup-mode.sh")
 
 	out, err := cmd.CombinedOutput()

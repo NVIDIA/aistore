@@ -372,7 +372,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 }
 
 func TestMaintenanceRebalanceWithChunkedObjects(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
 		bck = cmn.Bck{Name: "maint-reb", Provider: apc.AIS}
 		m   = &ioContext{
@@ -523,6 +523,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 }
 
 func TestNodeShutdown(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
 	for _, ty := range []string{apc.Proxy, apc.Target} {
 		t.Run(ty, func(t *testing.T) {
 			testNodeShutdown(t, ty)

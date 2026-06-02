@@ -937,6 +937,9 @@ func TestLsoLocalGetLocation(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 		smap       = tools.GetClusterMap(t, proxyURL)
 	)
+	if testing.Short() {
+		m.num = 100
+	}
 
 	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
