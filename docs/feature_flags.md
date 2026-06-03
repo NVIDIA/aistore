@@ -78,6 +78,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Load-Balance-GET` | `perf` | when bucket is n-way mirrored read object replica from the least-utilized mountpath |
 | `Count-Object-NotFound-Stats` | `telemetry,ops` | count GET(object) 404 as errors (default: don't) |
 | `Enable-Go-Runtime-Metrics` | `telemetry,ops,overhead` | publish a low-cardinality subset of Go runtime metrics (goroutines, GC, heap) via Prometheus |
+| `Dload-Allow-Private-Egress` | `security-` | allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked |
 
 ## Global features
 
@@ -91,8 +92,9 @@ S3-API-via-Root                        Streaming-Cold-GET                     Re
 Fsync-PUT                              S3-Reverse-Proxy                       Keep-Unknown-FQN
 LZ4-Block-1MB                          S3-Use-Path-Style                      Load-Balance-GET
 LZ4-Frame-Checksum                     Do-not-Delete-When-Rebalancing         Count-Object-NotFound-Stats
-Do-not-Allow-Passing-FQN-to-ETL        Do-not-Set-Control-Plane-ToS           none
-Ignore-LimitedCoexistence-Conflicts    Trust-Crypto-Safe-Checksums
+Do-not-Allow-Passing-FQN-to-ETL        Do-not-Set-Control-Plane-ToS           Enable-Go-Runtime-Metrics
+Ignore-LimitedCoexistence-Conflicts    Trust-Crypto-Safe-Checksums            Dload-Allow-Private-Egress
+none
 ```
 
 For example:
@@ -132,6 +134,7 @@ Keep-Unknown-FQN                     integrity?,ops         do not delete unreco
 Load-Balance-GET                     perf                   when bucket is n-way mirrored read object replica from the least-utilized mountpath               <<< colored
 Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 404 as errors
 Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go runtime metrics via Prometheus
+Dload-Allow-Private-Egress           security-              allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 
 Cluster config updated
 ```
@@ -177,6 +180,7 @@ Keep-Unknown-FQN                     integrity?,ops         do not delete unreco
 Load-Balance-GET                     perf                   when bucket is n-way mirrored read object replica from the least-utilized mountpath               <<< colored
 Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 404 as errors
 Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go runtime metrics via Prometheus
+Dload-Allow-Private-Egress           security-              allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 ```
 
 The same in JSON:
