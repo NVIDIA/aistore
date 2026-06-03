@@ -7,7 +7,6 @@ package stats
 
 import (
 	"net/http"
-	"regexp"
 	"strings"
 	ratomic "sync/atomic"
 	"time"
@@ -17,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -47,38 +45,14 @@ var (
 	staticLabs = prometheus.Labels{ConstlabNode: ""}
 )
 
+// 1) initialize Prometheus registry without default Go/process collectors
+// 2) register Go runtime collector - a no-op unless feat.EnableGoRuntimeMetrics
 func initProm(snode *meta.Snode) {
 	promRegistry = prometheus.NewRegistry()
 
 	staticLabs[ConstlabNode] = strings.ReplaceAll(snode.ID(), ".", "_")
-}
 
-// Expose a low-cardinality subset of Go runtime metrics on the AIS Prometheus registry:
-//   - base collector (unconditional):
-//     go_goroutines, go_threads, go_info, go_gc_duration_seconds, go_memstats_last_gc_time_seconds
-//   - default runtime/metrics matcher:
-//     go_gc_gogc_percent, go_gc_gomemlimit_bytes, go_sched_gomaxprocs_threads
-//   - explicit picks via WithGoCollectorRuntimeMetrics below (one series each)
-func regGoRuntime(daeType string) {
-	nodeLabs := prometheus.Labels{
-		ConstlabNode:      staticLabs[ConstlabNode],
-		ConstlabComponent: daeType,
-	}
-	reg := prometheus.WrapRegistererWith(nodeLabs, promRegistry)
-	reg.MustRegister(collectors.NewGoCollector(
-		// skip legacy go_memstats_* block (21 series, mostly duplicative); use runtime/metrics names instead
-		collectors.WithGoCollectorMemStatsMetricsDisabled(),
-		collectors.WithGoCollectorRuntimeMetrics(
-			collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile(
-				`^/memory/classes/heap/objects:bytes$` + // heap in use
-					`|^/memory/classes/total:bytes$` + // total from OS
-					`|^/gc/heap/goal:bytes$` + // next GC target
-					`|^/gc/heap/allocs:bytes$` + // cumulative alloc bytes (counter)
-					`|^/cpu/classes/gc/total:cpu-seconds$` + // cumulative GC CPU time
-					`|^/gc/cycles/total:gc-cycles$`, // cumulative GC cycle count
-			)},
-		),
-	))
+	regGoRuntime(snode.Type())
 }
 
 // usage: log resulting `copyValue` numbers:

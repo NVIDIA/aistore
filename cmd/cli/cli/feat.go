@@ -50,6 +50,7 @@ var clusterFeatDesc = [...]string{
 	"do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')",
 	"when bucket is n-way mirrored read object replica from the least-utilized mountpath",
 	"count GET(object) 404 as errors (default: don't)",
+	"publish selected Go runtime metrics via Prometheus",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -81,6 +82,7 @@ var featTags = map[string]string{
 	"Keep-Unknown-FQN":                     "integrity?,ops",
 	"Load-Balance-GET":                     "perf",
 	"Count-Object-NotFound-Stats":          "telemetry,ops",
+	"Enable-Go-Runtime-Metrics":            "telemetry,ops,overhead",
 }
 
 // common (cluster, bucket) feature-flags (set, show) helper

@@ -37,10 +37,9 @@ const (
 	KindThroughput = "bw"      // ditto (MB/s)
 )
 
-// static labels
+// common static labels (see also: stats/go_runtime)
 const (
-	ConstlabNode      = "node_id"
-	ConstlabComponent = "component"
+	ConstlabNode = "node_id"
 )
 
 // variable labels
