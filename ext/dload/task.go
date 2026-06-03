@@ -131,7 +131,8 @@ func (task *singleTask) _dlocal(lom *core.LOM, timeout time.Duration) (bool /*er
 
 	resp, err := clientForURL(task.obj.link).Do(req) //nolint:bodyclose // cos.Close
 	if err != nil {
-		return false, err
+		fatal := errors.Is(err, errBlockedEgress)
+		return fatal, err
 	}
 
 	fatal, err := task._dput(lom, req, resp)

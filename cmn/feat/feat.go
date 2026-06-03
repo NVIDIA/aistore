@@ -51,6 +51,7 @@ const (
 	LoadBalanceGET            // when bucket is n-way mirrored read object replica from the least-utilized mountpath
 	CountObjectNotFoundStats  // count GET(object) 404 (not-found) as errors (default: don't); TODO: add Prometheus to count HEAD(object) errors
 	EnableGoRuntimeMetrics    // publish selected Go runtime metrics via Prometheus
+	DloadAllowPrivateEgress   // allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 )
 
 var Cluster = [...]string{
@@ -80,6 +81,7 @@ var Cluster = [...]string{
 	"Load-Balance-GET",
 	"Count-Object-NotFound-Stats",
 	"Enable-Go-Runtime-Metrics",
+	"Dload-Allow-Private-Egress",
 
 	// apc.ResetToken ("none") ===========
 }
