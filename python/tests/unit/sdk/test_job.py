@@ -159,19 +159,53 @@ class TestJob(unittest.TestCase):
         self.assertEqual(called_kwargs["res_model"], AggregatedJobSnap)
         mock_sleep.assert_called()
 
-    @patch("aistore.sdk.job.time.sleep")
     @patch("aistore.sdk.job.Job.status")
-    def test_wait_dispatch_no_kind_uses_terminal(self, mock_status, mock_sleep):
-        # Empty kind preserves pre-convergence behavior: terminal wait.
+    def test_wait_no_kind_resolves_then_terminal(self, mock_status):
+        # Empty kind: wait() resolves the kind by id; a terminal kind (lru)
+        # then follows the status path.
         job = Job(self.mock_client, job_id=self.job_id, job_kind="")
+        self.mock_client.request_deserialize.return_value = (
+            AggregatedJobSnap.model_validate(
+                {"d1": [JobSnap(id=self.job_id, kind=XACT_KIND_LRU)]}
+            )
+        )
         mock_status.side_effect = [JobStatus(end_time=1)]
 
         result = job.wait(timeout=20)
 
         self.assertTrue(result.success)
-        self.assertEqual(1, mock_status.call_count)
-        self.mock_client.request_deserialize.assert_not_called()
-        mock_sleep.assert_not_called()
+        self.assertEqual(XACT_KIND_LRU, job.job_kind)  # resolved + cached
+        mock_status.assert_called_once()
+
+    @patch("aistore.sdk.job.time.sleep", Mock())
+    def test_wait_no_kind_resolves_idle(self):
+        # Empty kind: wait() resolves an idle kind (download) and dispatches
+        # via the snaps/idle path.
+        job = Job(self.mock_client, job_id=self.job_id, job_kind="")
+        self.mock_client.request_deserialize.side_effect = [
+            AggregatedJobSnap.model_validate(
+                {"d1": [JobSnap(id=self.job_id, kind=XACT_KIND_DOWNLOAD)]}
+            ),
+            AggregatedJobSnap.model_validate(
+                {"d1": [JobSnap(id=self.job_id, kind=XACT_KIND_DOWNLOAD, is_idle=True)]}
+            ),
+        ]
+
+        result = job.wait(timeout=20)
+
+        self.assertTrue(result.success)
+        self.assertEqual(XACT_KIND_DOWNLOAD, job.job_kind)
+        self.assertEqual(2, self.mock_client.request_deserialize.call_count)
+
+    def test_wait_no_kind_not_found(self):
+        # Empty kind and id not found -> JobInfoNotFound.
+        job = Job(self.mock_client, job_id=self.job_id, job_kind="")
+        self.mock_client.request_deserialize.return_value = (
+            AggregatedJobSnap.model_validate({})
+        )
+
+        with self.assertRaises(JobInfoNotFound):
+            job.wait(timeout=20)
 
     @patch("aistore.sdk.job.time.sleep")
     @patch("aistore.sdk.job.Job.status")

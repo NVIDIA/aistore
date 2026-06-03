@@ -25,6 +25,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   empty or unknown kinds — it waits for terminal state (preserving the
   pre-convergence behavior). `wait_for_idle` and `wait_single_node` remain
   available as explicit overrides.
+- `Job.wait()` resolves the job kind from the cluster when only a job id is
+  given (raising `JobInfoNotFound` if the id is unknown), so a job created
+  with just an id still dispatches correctly.
 
 ## [1.25.0] - 2026-05-20
 

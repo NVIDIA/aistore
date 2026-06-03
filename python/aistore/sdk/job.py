@@ -108,6 +108,10 @@ class Job:
           - otherwise (including unknown or empty kind), wait for the job to
             reach a terminal state (its `end_time` becomes set).
 
+        If `job_kind` is empty but `job_id` is set, the kind is first
+        resolved from the cluster so the job dispatches correctly (raising
+        `JobInfoNotFound` if the id does not exist).
+
         Abort is handled cleanly on both paths: the idle path returns as soon
         as any target reports aborted (`AggregatedJobSnap.idle_or_aborted`),
         with the resulting `WaitResult` reporting `success=False` and the abort
@@ -131,8 +135,11 @@ class Job:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
+            errors.JobInfoNotFound: If `job_kind` is empty and `job_id` is not found
         """
         kind = self._job_kind
+        if not kind and self._job_id:
+            kind = self._resolve_kind()
         if kind and idles_before_finishing(kind):
             return self._wait_for_condition(
                 AggregatedJobSnap.idle_or_aborted,
@@ -144,6 +151,21 @@ class Job:
             # not an error: SDK kind table may lag server; default to terminal
             logger.debug("unknown xaction kind %r; defaulting to terminal wait", kind)
         return self._wait_terminal(timeout, verbose)
+
+    def _resolve_kind(self) -> str:
+        """
+        Look up this job's kind from the cluster by id and cache it, so
+        `wait()` can dispatch correctly when only a job id was provided.
+
+        Raises:
+            JobInfoNotFound: if no snapshot for `job_id` is found
+        """
+        # get_details() already scopes the query to this job's id
+        for snap in self.get_details().list_snapshots():
+            if snap.kind:
+                self._job_kind = snap.kind
+                return snap.kind
+        raise JobInfoNotFound(f"No job info found for '{self._job_id}'")
 
     def _wait_terminal(
         self,
