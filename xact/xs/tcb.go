@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -49,6 +50,7 @@ type (
 		ctlmsg    string
 		prune     prune    // function: sync
 		sntl      sentinel // function: coordinate finish, abort, progress
+		copyErr   atomic.Int64
 
 		xact.BckJogRunner // mountpath joggers + managed worker pool
 		owt               cmn.OWT
@@ -332,6 +334,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 	if err := r.copier.do(a, lom, r.dm); err != nil {
 		// Do not add to the filter if there was an error (e.g., "not found"),
 		// so that prune can recognize and delete destination objects whose sources have been removed.
+		r.copyErr.Inc()
 		return err
 	}
 	if args.Msg.Sync {
@@ -436,14 +439,38 @@ func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
 }
 
 func (r *XactTCB) CtlMsg() string {
-	if r.ctlmsg != "" {
-		return r.ctlmsg
+	msg := r.ctlmsg
+	if msg == "" {
+		msg = r.formatCtlMsg(false)
+		r.ctlmsg = msg
 	}
-	r.ctlmsg = r.formatCtlMsg(false)
-	return r.ctlmsg
+	if msg == "" {
+		return ""
+	}
+
+	var sb cos.SB
+	sb.Init(len(msg) + ctlMsgBufSize)
+	sb.WriteString(msg)
+	sb.WriteString("; ")
+	sb.WriteString(core.T.String())
+	sb.WriteString(": job:[ visited:")
+	sb.WriteString(strconv.FormatInt(r.NumVisits(), 10))
+	sb.WriteString(" locally-processed:")
+	sb.WriteString(strconv.FormatInt(r.Objs(), 10))
+	sb.WriteString(" sent:")
+	sb.WriteString(strconv.FormatInt(r.OutObjs(), 10))
+	sb.WriteString(" received:")
+	sb.WriteString(strconv.FormatInt(r.InObjs(), 10))
+	sb.WriteString(" copy-err:")
+	sb.WriteString(strconv.FormatInt(r.copyErr.Load(), 10))
+	sb.WriteString(" chan-full:")
+	sb.WriteString(strconv.FormatInt(r.WorkChanFull(), 10))
+	sb.WriteString(" pruned:")
+	sb.WriteString(strconv.FormatInt(r.prune.pruned.Load(), 10))
+	sb.WriteUint8(']')
+	return sb.String()
 }
 
-// TODO -- FIXME: add internal stats
 func (r *XactTCB) formatCtlMsg(rename bool) string {
 	if r.args == nil || r.args.Msg == nil || r.args.BckFrom == nil || r.args.BckTo == nil {
 		return ""

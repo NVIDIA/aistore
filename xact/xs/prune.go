@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -35,6 +36,7 @@ type prune struct {
 	filter  *prob.Filter
 	prefix  string
 	lsflags uint64
+	pruned  atomic.Int64
 	same    bool
 }
 
@@ -145,6 +147,7 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 	dst.Unlock(true)
 
 	if err == nil {
+		rp.pruned.Inc()
 		if cmn.Rom.V(5, cos.ModXs) {
 			nlog.Infoln(rp.r.Name(), dst.Cname())
 		}

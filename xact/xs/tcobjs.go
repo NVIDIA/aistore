@@ -53,6 +53,7 @@ type (
 		streamingX
 		chanFull cos.ChanFull
 		nworkers atomic.Int64 // total across all pending (currently, always zero)
+		ctl      tcoCtlStats
 		owt      cmn.OWT
 	}
 	tcowi struct {
@@ -62,6 +63,12 @@ type (
 			n atomic.Int64
 		}
 		lrp int
+	}
+	tcoCtlStats struct {
+		begin  atomic.Int64
+		done   atomic.Int64
+		rxPut  atomic.Int64
+		pruned atomic.Int64
 	}
 )
 
@@ -204,6 +211,7 @@ func (r *XactTCO) BeginMsg(msg *cmn.TCOMsg) {
 	// arrives before doMsg sets pend.n. sntl.nat is valid since Start() ran.
 	wi.pend.n.Store(int64(r.sntl.nat - 1))
 	r.wiCnt.Inc()
+	r.ctl.begin.Inc()
 
 	r.pend.mtx.Unlock()
 }
@@ -303,6 +311,7 @@ outer:
 		select {
 		case msg := <-r.workCh:
 			stop := r.doMsg(msg)
+			r.ctl.done.Inc()
 			r.DecPending()
 			if stop {
 				break outer
@@ -430,7 +439,8 @@ func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 
 func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM) (err error) {
 	if err = lom.InitCmnBck(&hdr.Bck); err != nil {
-		return
+		r.AddErr(err, 0)
+		return err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
 	params := core.AllocPutParams()
@@ -455,18 +465,48 @@ func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM
 	} else if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
 	}
-	return
+	if err == nil {
+		r.ctl.rxPut.Inc()
+	}
+	return nil
 }
 
 func (r *XactTCO) CtlMsg() string {
+	if r.args == nil || r.args.Msg == nil || r.args.BckFrom == nil || r.args.BckTo == nil {
+		return ""
+	}
+
 	var sb cos.SB
 	n := r.wiCnt.Load()
-	sb.Init(64 + 80*int(n))
+	sb.Init(ctlMsgBufSize + 80*int(n))
 	tag := cos.Ternary(r.Kind() == apc.ActETLObjects, "etl ", "cp ")
 	sb.WriteString(tag)
 	sb.WriteString(r.args.BckFrom.Cname(""))
 	sb.WriteString("=>")
 	sb.WriteString(r.args.BckTo.Cname(""))
+
+	done, begin := r.ctl.done.Load(), r.ctl.begin.Load()
+	sb.WriteString("; ")
+	sb.WriteString(core.T.String())
+	sb.WriteString(": job:[ xid:")
+	sb.WriteString(r.ID())
+	sb.WriteString(" txns:")
+	sb.WriteString(strconv.FormatInt(done, 10))
+	sb.WriteUint8('/')
+	sb.WriteString(strconv.FormatInt(begin, 10))
+	sb.WriteString(" pending:")
+	sb.WriteString(strconv.FormatInt(r.Pending(), 10))
+	sb.WriteString(" sent:")
+	sb.WriteString(strconv.FormatInt(r.OutObjs(), 10))
+	sb.WriteString(" received:")
+	sb.WriteString(strconv.FormatInt(r.ctl.rxPut.Load(), 10))
+	sb.WriteString(" err:")
+	sb.WriteString(strconv.FormatInt(int64(r.ErrCnt()), 10))
+	sb.WriteString(" chan-full:")
+	sb.WriteString(strconv.FormatInt(r.chanFull.Load(), 10))
+	sb.WriteString(" pruned:")
+	sb.WriteString(strconv.FormatInt(r.ctl.pruned.Load(), 10))
+	sb.WriteUint8(']')
 
 	if n == 0 {
 		return sb.String()
@@ -572,6 +612,7 @@ func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate, 
 		rp.init(r.config)
 		rp.run()
 		rp.wait()
+		r.ctl.pruned.Add(rp.pruned.Load())
 		return
 	}
 
@@ -585,6 +626,7 @@ func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate, 
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)
 	syncit.run(syncwi, smap, false /*prealloc buf*/)
 	syncit.wait()
+	r.ctl.pruned.Add(rp.pruned.Load())
 }
 
 func (syncwi *syncwi) do(lom *core.LOM, _ *lrit, _ []byte) {
