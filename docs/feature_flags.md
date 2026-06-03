@@ -77,6 +77,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Keep-Unknown-FQN` | `integrity?,ops` | do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup') |
 | `Load-Balance-GET` | `perf` | when bucket is n-way mirrored read object replica from the least-utilized mountpath |
 | `Count-Object-NotFound-Stats` | `telemetry,ops` | count GET(object) 404 as errors (default: don't) |
+| `Enable-Go-Runtime-Metrics` | `telemetry,ops,overhead` | publish a low-cardinality subset of Go runtime metrics (goroutines, GC, heap) via Prometheus |
 
 ## Global features
 
@@ -130,6 +131,7 @@ Resume-Interrupted-MPU               mpu,ops                resume interrupted m
 Keep-Unknown-FQN                     integrity?,ops         do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 Load-Balance-GET                     perf                   when bucket is n-way mirrored read object replica from the least-utilized mountpath               <<< colored
 Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 404 as errors
+Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go runtime metrics via Prometheus
 
 Cluster config updated
 ```
@@ -174,6 +176,7 @@ Resume-Interrupted-MPU               mpu,ops                resume interrupted m
 Keep-Unknown-FQN                     integrity?,ops         do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 Load-Balance-GET                     perf                   when bucket is n-way mirrored read object replica from the least-utilized mountpath               <<< colored
 Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 404 as errors
+Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go runtime metrics via Prometheus
 ```
 
 The same in JSON:
