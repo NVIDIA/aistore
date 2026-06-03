@@ -1,0 +1,7 @@
+// RUN authn
+echo "/tmp/auth-token.$RANDOM.exp" > /tmp/e2e.expired.rand
+python3 -c 'import json,base64,time,sys; exp=int(time.time())-60; p=json.dumps({"sub":"admin","admin":True,"iss":"http://localhost:52001","exp":exp},separators=(",",":")); b64=lambda s: base64.urlsafe_b64encode(s.encode()).decode().rstrip("="); tok=b64("{\"alg\":\"HS256\",\"typ\":\"JWT\"}")+"."+b64(p)+".sig"; json.dump({"token":tok},open(sys.argv[1],"w"))' `cat /tmp/e2e.expired.rand`
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.expired.rand` ais auth whoami // FAIL "token expired"
+
+rm /tmp/e2e.expired.rand

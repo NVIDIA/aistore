@@ -52,6 +52,7 @@ var (
 		commandJob:      {"batch", "async"},
 		commandArch:     {"serialize", "format", "reformat", "compress", "tar", "zip", "gzip"},
 		cmdAuthAdd:      {"register", "create"},
+		cmdAuthWhoami:   {"identity", "current", "logged", "self"},
 		cmdStgCleanup:   {"remove", "delete", "evict"},
 		cmdDownload:     {"load", "populate", "copy", "cp"},
 		commandTLS:      {"x509", "X509", "X.509", "certificate", "https"},

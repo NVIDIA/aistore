@@ -1,0 +1,25 @@
+// RUN authn
+echo "/tmp/auth-token.$RANDOM.adm" > /tmp/e2e.delrole.adm.rand
+tf=`cat /tmp/e2e.delrole.adm.rand`; ais auth login admin -p admin -f $tf // IGNORE
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth rm user u2 || true // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth rm role r2 || true // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` bash -c 'cid=$(ais auth show cluster | awk "/localhost:8080/{print \$1; exit}"); [ -n "$cid" ] && ais auth rm cluster "$cid"' || true // IGNORE
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth add user u2 -p tt // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth add cluster http://localhost:8080 cluster-test // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth add role r2 ro --cluster cluster-test // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth set user u2 r2 // IGNORE
+
+echo "/tmp/auth-token.$RANDOM.usr" > /tmp/e2e.delrole.usr.rand
+tf=`cat /tmp/e2e.delrole.usr.rand`; ais auth login u2 -p tt -f $tf --cluster cluster-test // IGNORE
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth rm role r2 // IGNORE
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.usr.rand` ais auth whoami | grep -A2 Roles | tail -1 | awk '{print $1}'
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.usr.rand` ais auth whoami 2>&1 >/dev/null | grep -o "your roles have been updated and are not reflected in your token's access list shown above."
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth rm user u2 // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.delrole.adm.rand` ais auth rm cluster cluster-test // IGNORE
+
+rm /tmp/e2e.delrole.adm.rand /tmp/e2e.delrole.usr.rand

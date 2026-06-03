@@ -401,6 +401,14 @@ const (
 		"{{ $role.Name }}\t{{ $role.Description }}\n" +
 		"{{end}}"
 
+	WhoamiRoleTmpl = "ROLE\t  DESCRIPTION\n" +
+		"{{ range $role := . }}" +
+		"{{ $role.Name }}\t  {{ $role.Description }}\n" +
+		"{{end}}"
+	WhoamiPairTmpl   = "{{range $p := .}}{{$p.Name}}\t  {{$p.Value}}\n{{end}}"
+	WhoamiClusterHdr = "CLUSTER\t  PERMISSIONS\n"
+	WhoamiBucketHdr  = "BUCKET\t  PERMISSIONS\n"
+
 	AuthNUserTmpl = "NAME\tROLES\n" +
 		"{{ range $user := . }}" +
 		"{{ $user.ID }}\t{{ range $i, $role := $user.Roles }}" +

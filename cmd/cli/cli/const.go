@@ -195,6 +195,7 @@ const (
 	cmdAuthRemove    = commandRemove
 	cmdAuthLogin     = "login"
 	cmdAuthLogout    = "logout"
+	cmdAuthWhoami    = "whoami"
 	cmdAuthUser      = "user"
 	cmdAuthRole      = "role"
 	cmdAuthCluster   = cmdCluster

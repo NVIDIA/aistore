@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -234,6 +236,11 @@ var (
 				Action: wrapAuthN(logoutUserHandler),
 			},
 			{
+				Name:   cmdAuthWhoami,
+				Usage:  "Show current identity, role assignments, and token-derived access (warns if ACLs are stale)",
+				Action: wrapWhoami(whoamiHandler),
+			},
+			{
 				Name:   cmdAuthRotateKey,
 				Usage:  "Rotate AuthN signing key (asymmetric keys, e.g. RSA; requires admin permissions)",
 				Action: wrapAuthN(rotateKeyHandler),
@@ -259,6 +266,71 @@ func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 		}
 		return err
 	}
+}
+
+// wrapWhoami checks for a local token first so `ais auth whoami` reports
+// "not logged in" even when AuthN is not configured. Requests with a token
+// continue through the standard AuthN checks.
+func wrapWhoami(f cli.ActionFunc) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		if loggedUserToken == "" {
+			return errWhoamiNotLoggedIn
+		}
+		return wrapAuthN(f)(c)
+	}
+}
+
+var errWhoamiNotLoggedIn = errors.New("not logged in (run `ais auth login` or set AIS_AUTHN_TOKEN / AIS_AUTHN_TOKEN_FILE)")
+
+// whoamiClaims holds JWT claims needed to display the current session (doesn't verify signature).
+type whoamiClaims struct {
+	Subject     string
+	Admin       bool
+	Issuer      string
+	Expires     time.Time
+	ClusterACLs []*authn.CluACL
+	BucketACLs  []*authn.BckACL
+}
+
+// parseWhoamiClaims decodes relevant whoami token fields without verifying the signature.
+func parseWhoamiClaims(token string) (*whoamiClaims, error) {
+	if token == "" {
+		return nil, authn.ErrNoToken
+	}
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil, authn.ErrInvalidToken
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, authn.ErrInvalidToken
+	}
+	var raw struct {
+		Sub      string          `json:"sub"`
+		Iss      string          `json:"iss"`
+		Admin    bool            `json:"admin"`
+		Exp      float64         `json:"exp"`
+		Clusters []*authn.CluACL `json:"clusters"`
+		Buckets  []*authn.BckACL `json:"buckets"`
+	}
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, authn.ErrInvalidToken
+	}
+	if raw.Sub == "" {
+		return nil, authn.ErrNoSubject
+	}
+	var expires time.Time
+	if raw.Exp > 0 {
+		expires = time.Unix(int64(raw.Exp), 0).UTC()
+	}
+	return &whoamiClaims{
+		Subject:     raw.Sub,
+		Admin:       raw.Admin,
+		Issuer:      raw.Iss,
+		Expires:     expires,
+		ClusterACLs: raw.Clusters,
+		BucketACLs:  raw.Buckets,
+	}, nil
 }
 
 func readMasked(c *cli.Context, prompt string) string {
@@ -426,6 +498,223 @@ func logoutUserHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("failed to logout, could not remove token file %q: %v", tokenFilePath, err)
 	}
 	fmt.Fprintf(c.App.Writer, "Logged out (removed/revoked %q)\n", tokenFilePath)
+	return nil
+}
+
+func whoamiHandler(c *cli.Context) (err error) {
+	claims, err := parseWhoamiClaims(loggedUserToken)
+	if err != nil {
+		return err
+	}
+	if tokenExpired(time.Now(), claims.Expires) {
+		return fmt.Errorf("token expired at %s (run `ais auth login` to renew)", claims.Expires.Format(time.RFC3339))
+	}
+	uInfo, err := authn.GetUser(authParams, claims.Subject)
+	if err != nil {
+		actionWarn(c, fmt.Sprintf("cannot reach AuthN server to verify server-side roles (%v); showing token-derived identity and access only", err))
+		return printWhoami(c, claims, nil)
+	}
+	return printWhoami(c, claims, uInfo)
+}
+
+func tokenExpired(now, expires time.Time) bool {
+	return !expires.IsZero() && !now.Before(expires)
+}
+
+func printWhoami(c *cli.Context, claims *whoamiClaims, uInfo *authn.User) error {
+	w := c.App.Writer
+
+	adminVal := "no"
+	if claims.Admin {
+		adminVal = fgreen("yes")
+	}
+	expiresVal := "-"
+	if !claims.Expires.IsZero() {
+		expiresVal = claims.Expires.Format(time.RFC3339)
+		if d := time.Until(claims.Expires); d > 0 && d < 24*time.Hour {
+			expiresVal += fmt.Sprintf(" (%s)", d.Round(time.Minute))
+		}
+	}
+	issuerVal := claims.Issuer
+	if issuerVal == "" {
+		issuerVal = "-"
+	}
+
+	identity := nvpairList{
+		{Name: "User", Value: claims.Subject},
+		{Name: "Admin", Value: adminVal},
+		{Name: "Issuer", Value: issuerVal},
+		{Name: "Expires", Value: expiresVal},
+	}
+	fmt.Fprintln(w, fcyan("Identity"))
+	if err := teb.Print(identity, teb.WhoamiPairTmpl); err != nil {
+		return err
+	}
+
+	// Role names are not included in AuthN tokens, so show the current server-side assignments.
+	// Access below always comes from the token being used.
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, fcyan("Roles"))
+	if uInfo == nil {
+		fmt.Fprintln(w, "(unavailable)")
+	} else if len(uInfo.Roles) == 0 {
+		fmt.Fprintln(w, "(none)")
+	} else if err := teb.Print(uInfo.Roles, teb.WhoamiRoleTmpl); err != nil {
+		return err
+	}
+
+	// Access reflects what THIS token actually grants as the cluster/bucket ACLs are baked into
+	// the JWT at login time and are what the AIS gateway enforces (it does not re-query AuthN).
+	if claims.Admin {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, fcyan("Access"))
+		fmt.Fprintln(w, "Full admin access")
+	} else {
+		if err := printWhoamiAccess(w, claims.ClusterACLs, claims.BucketACLs); err != nil {
+			return err
+		}
+	}
+
+	if uInfo != nil && whoamiAccessStale(claims, uInfo) {
+		actionWarn(c, "your roles have been updated and are not reflected in your token's access list shown above.\nLog in again to refresh your token.")
+	}
+	return nil
+}
+
+func filterClusterACLs(acls []*authn.CluACL) []*authn.CluACL {
+	filtered := make([]*authn.CluACL, 0, len(acls))
+	for _, clu := range acls {
+		// Only nil entries are dropped, as an empty ID is the valid default ("all clusters") ACL.
+		if clu == nil {
+			continue
+		}
+		filtered = append(filtered, clu)
+	}
+	return filtered
+}
+
+func filterBucketACLs(acls []*authn.BckACL) []*authn.BckACL {
+	filtered := make([]*authn.BckACL, 0, len(acls))
+	for _, bck := range acls {
+		if bck == nil || bck.Bck.Name == "" {
+			continue
+		}
+		filtered = append(filtered, bck)
+	}
+	return filtered
+}
+
+// whoamiBckName returns a user-facing bucket URI (e.g. ais://project-1).
+// AuthN bucket ACLs carry the target cluster UUID in namespace; omit it for display.
+func whoamiBckName(bck cmn.Bck) string {
+	disp := cmn.Bck{Name: bck.Name, Provider: bck.Provider}
+	return disp.Cname("")
+}
+
+type whoamiBckKey struct {
+	provider string
+	name     string
+	ns       cmn.Ns
+}
+
+// whoamiAccessStale compares effective ACLs with the token's ACLs to determine if the token is stale. If the token
+// is stale, it means that the user's roles have been updated and are not reflected in the token's access list.
+func whoamiAccessStale(claims *whoamiClaims, uInfo *authn.User) bool {
+	if claims.Admin != uInfo.IsAdmin() {
+		return true
+	}
+	if claims.Admin {
+		return false
+	}
+
+	aliases := make(map[string]string, len(claims.ClusterACLs))
+	for _, acl := range claims.ClusterACLs {
+		if acl != nil && acl.Alias != "" && acl.ID != "" {
+			aliases[acl.Alias] = acl.ID
+		}
+	}
+	resolveClusterID := func(id string) string {
+		if resolved, ok := aliases[id]; ok {
+			return resolved
+		}
+		return id
+	}
+
+	tokenClu := make(map[string]apc.AccessAttrs, len(claims.ClusterACLs))
+	for _, acl := range claims.ClusterACLs {
+		if acl != nil {
+			tokenClu[resolveClusterID(acl.ID)] = acl.Access
+		}
+	}
+	tokenBck := make(map[whoamiBckKey]apc.AccessAttrs, len(claims.BucketACLs))
+	for _, acl := range claims.BucketACLs {
+		if acl != nil {
+			tokenBck[whoamiBucketKey(acl.Bck, resolveClusterID)] = acl.Access
+		}
+	}
+
+	// Mirrors cmd/authn/mgr.go issueToken + cmd/authn/utils.go mergeClusterACLs/mergeBckACLs
+	// (union=true path). If the server's ACL aggregation logic changes, this must change too.
+	serverClu := make(map[string]apc.AccessAttrs, len(tokenClu))
+	serverBck := make(map[whoamiBckKey]apc.AccessAttrs, len(tokenBck))
+	for _, role := range uInfo.Roles {
+		if role == nil {
+			continue
+		}
+		for _, acl := range role.ClusterACLs {
+			if acl != nil {
+				serverClu[resolveClusterID(acl.ID)] |= acl.Access
+			}
+		}
+		for _, acl := range role.BucketACLs {
+			if acl != nil {
+				serverBck[whoamiBucketKey(acl.Bck, resolveClusterID)] |= acl.Access
+			}
+		}
+	}
+	return !maps.Equal(tokenClu, serverClu) || !maps.Equal(tokenBck, serverBck)
+}
+
+func whoamiBucketKey(bck cmn.Bck, resolveClusterID func(string) string) whoamiBckKey {
+	bck.Ns.UUID = resolveClusterID(bck.Ns.UUID)
+	return whoamiBckKey{provider: bck.Provider, name: bck.Name, ns: bck.Ns}
+}
+
+func printWhoamiAccess(w io.Writer, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) error {
+	cluACLs = filterClusterACLs(cluACLs)
+	bckACLs = filterBucketACLs(bckACLs)
+
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, fcyan("Access"))
+	if len(cluACLs) == 0 && len(bckACLs) == 0 {
+		fmt.Fprintln(w, "(none)")
+		return nil
+	}
+	if len(cluACLs) > 0 {
+		nvs := make(nvpairList, 0, len(cluACLs))
+		for _, clu := range cluACLs {
+			name := cos.Left(clu.Alias, clu.ID)
+			if name == "" {
+				name = "all clusters"
+			}
+			nvs = append(nvs, nvpair{Name: name, Value: clu.Access.Describe(true)})
+		}
+		if err := teb.Print(nvs, teb.WhoamiClusterHdr+teb.WhoamiPairTmpl); err != nil {
+			return err
+		}
+	}
+	if len(bckACLs) > 0 {
+		if len(cluACLs) > 0 {
+			fmt.Fprintln(w)
+		}
+		nvs := make(nvpairList, 0, len(bckACLs))
+		for _, bck := range bckACLs {
+			nvs = append(nvs, nvpair{Name: whoamiBckName(bck.Bck), Value: bck.Access.Describe(true)})
+		}
+		if err := teb.Print(nvs, teb.WhoamiBucketHdr+teb.WhoamiPairTmpl); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

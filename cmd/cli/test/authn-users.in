@@ -1,4 +1,5 @@
 // RUN authn
+AIS_AUTHN_TOKEN_FILE=/tmp/e2e.no.token ais auth whoami // FAIL "not logged in"
 echo "/tmp/auth-token.$RANDOM.adm" > /tmp/e2e.admin.rand
 tf=`cat /tmp/e2e.admin.rand`; ais auth login admin -p admin -f $tf // IGNORE
 AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth add user u1 -p tt // IGNORE
@@ -9,6 +10,9 @@ AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth set user u1 r1 // IGNORE
 echo "/tmp/auth-token.$RANDOM.usr" > /tmp/e2e.user.rand
 tf=`cat /tmp/e2e.user.rand`; ais auth login u1 -p tt -f $tf --cluster cluster-test // IGNORE
 
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth whoami | grep -A2 Roles | tail -1 | awk '{print $1}'
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.user.rand` ais auth whoami | grep -A2 Roles | tail -1 | awk '{print $1}'
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.user.rand` ais auth whoami | grep -E "Admin.*yes" // FAIL
 
 AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais bucket create ais://$BUCKET_1 // IGNORE
 AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.user.rand` ais bucket rm ais://$BUCKET_1 // FAIL ermis

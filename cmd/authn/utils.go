@@ -45,6 +45,7 @@ func (cluList cluACLList) updated(cluACL *authn.CluACL, union bool) bool {
 // when union is false (role update), or OR'd together when union is true
 // (combining a user's roles into one token).
 // If cluIDFlt is set, only ACLs for buckets of the cluster with this ID are appended.
+// NOTE: cmd/cli whoamiAccessStale mirrors mergeBckACLs with union=true (keep in sync).
 func mergeBckACLs(toACLs, fromACLs bckACLList, cluIDFlt string, union bool) []*authn.BckACL {
 	for _, n := range fromACLs {
 		if cluIDFlt != "" && n.Bck.Ns.UUID != cluIDFlt {
@@ -62,6 +63,7 @@ func mergeBckACLs(toACLs, fromACLs bckACLList, cluIDFlt string, union bool) []*a
 // when union is false (role update), or OR'd together when union is true
 // (combining a user's roles into one token).
 // If cluIDFlt is set, only ACLs for cluster with this ID are appended.
+// NOTE: cmd/cli whoamiAccessStale mirrors mergeClusterACLs with union=true (keep in sync).
 func mergeClusterACLs(toACLs, fromACLs cluACLList, cluIDFlt string, union bool) []*authn.CluACL {
 	for _, n := range fromACLs {
 		if cluIDFlt != "" && cluIDFlt != n.ID {

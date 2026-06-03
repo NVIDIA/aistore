@@ -354,6 +354,32 @@ $ ais auth login -p password username -e 0
 Delete the user's token from a local machine. The token is not revoked, so it can be used by any application until it expires.
 To forbid using the token from any application, the token must be revoked manually in addition to logging out.
 
+### Show current identity
+
+`ais auth whoami`
+
+Introspects the current session token: shows the logged-in user, admin status, token expiration, server-side role assignments, and effective cluster/bucket access permissions baked into the token at login time.
+Also flags whether the token's access list is stale relative to the current server-side role assignments (a sign that roles were updated after the last login).
+
+```console
+$ ais auth whoami
+Identity
+  User     alice
+  Admin    no
+  Issuer   https://authn.example.com:52001
+  Expires  2026-06-24T19:53:11Z (3h22m)
+
+Roles
+  ROLE       DESCRIPTION
+  readers    Read-only cluster access
+
+Access
+  CLUSTER    PERMISSIONS
+  prod       GET, HEAD-OBJECT, LIST-BUCKETS
+```
+
+If AuthN is temporarily unreachable, `whoami` degrades gracefully: it shows Identity and Access (both token-derived) and prints a warning that Roles and the stale-ACL check are unavailable.
+
 ### Register new cluster
 
 `ais auth add cluster [ALIAS] [URL...]`
