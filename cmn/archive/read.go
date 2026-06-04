@@ -340,8 +340,13 @@ type (
 		R   io.Reader
 		N   int64
 	}
-	cslFile struct {
+	cslFile struct { // used only by zipReader
 		file io.ReadCloser
+		size int64
+	}
+	cslRange struct {
+		io.LimitedReader
+		r    cos.ReadCloseSizer
 		size int64
 	}
 )
@@ -407,3 +412,28 @@ func (drain *Drain) Call(_ string, r cos.ReadCloseSizer, _ any) (bool, error) {
 }
 
 func (drain *Drain) Totals() (size, num int64) { return drain.size, drain.num }
+
+//////////////
+// cslRange //
+//////////////
+
+func (csr *cslRange) Size() int64  { return csr.size }
+func (csr *cslRange) Close() error { return csr.r.Close() }
+
+// return a reader for [off, off+length) over an already-open archived-file reader:
+// - range over the extracted file bytes, not over the containing archive bytes
+// - the returned range-reader owns and closes the original archived-file `r`
+// - on error, `r` is closed before returning
+func RangeReader(r cos.ReadCloseSizer, off, length int64) (cos.ReadCloseSizer, error) {
+	if off != 0 {
+		if _, err := io.CopyN(io.Discard, r, off); err != nil {
+			_ = r.Close()
+			return nil, err
+		}
+	}
+	return &cslRange{
+		LimitedReader: io.LimitedReader{R: r, N: length},
+		r:             r,
+		size:          length,
+	}, nil
+}
