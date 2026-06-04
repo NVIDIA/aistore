@@ -28,6 +28,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `Job.wait()` resolves the job kind from the cluster when only a job id is
   given (raising `JobInfoNotFound` if the id is unknown), so a job created
   with just an id still dispatches correctly.
+- `Job.wait()` / `wait_for_idle()` require an idle-kind job to report idle on
+  2 consecutive polls before completing (mirrors Go's
+  `xact.numConsecutiveIdle`); an abort on any target still returns immediately.
 
 ## [1.25.0] - 2026-05-20
 

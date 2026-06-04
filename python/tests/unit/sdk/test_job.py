@@ -141,11 +141,13 @@ class TestJob(unittest.TestCase):
         job = Job(self.mock_client, job_id=self.job_id, job_kind=XACT_KIND_DOWNLOAD)
         snap_running = JobSnap(id=self.job_id, is_idle=False)
         snap_idle = JobSnap(id=self.job_id, is_idle=True)
+        idle = AggregatedJobSnap.model_validate({"d1": [snap_idle], "d2": [snap_idle]})
         self.mock_client.request_deserialize.side_effect = [
             AggregatedJobSnap.model_validate(
                 {"d1": [snap_running], "d2": [snap_running]}
             ),
-            AggregatedJobSnap.model_validate({"d1": [snap_idle], "d2": [snap_idle]}),
+            idle,
+            idle,
         ]
 
         result = job.wait(timeout=20)
@@ -153,11 +155,32 @@ class TestJob(unittest.TestCase):
         self.assertTrue(result.success)
         # Uses snaps endpoint (WHAT_QUERY_XACT_STATS), NOT Job.status().
         mock_status.assert_not_called()
-        self.assertEqual(2, self.mock_client.request_deserialize.call_count)
+        # running, idle, idle -> idle must hold for 2 consecutive polls
+        self.assertEqual(3, self.mock_client.request_deserialize.call_count)
         called_kwargs = self.mock_client.request_deserialize.call_args.kwargs
         self.assertEqual(called_kwargs["params"], {QPARAM_WHAT: WHAT_QUERY_XACT_STATS})
         self.assertEqual(called_kwargs["res_model"], AggregatedJobSnap)
         mock_sleep.assert_called()
+
+    @patch("aistore.sdk.job.time.sleep", Mock())
+    def test_wait_idle_requires_two_consecutive(self):
+        # A single idle poll is not enough, and an interleaved running poll
+        # resets the streak -- done only after 2 consecutive idle polls
+        # (mirrors Go's numConsecutiveIdle).
+        job = Job(self.mock_client, job_id=self.job_id, job_kind=XACT_KIND_DOWNLOAD)
+        running = AggregatedJobSnap.model_validate(
+            {"d1": [JobSnap(id=self.job_id, is_idle=False)]}
+        )
+        idle = AggregatedJobSnap.model_validate(
+            {"d1": [JobSnap(id=self.job_id, is_idle=True)]}
+        )
+        self.mock_client.request_deserialize.side_effect = [idle, running, idle, idle]
+
+        result = job.wait(timeout=20)
+
+        self.assertTrue(result.success)
+        # idle, (reset), idle, idle -> 4 polls before completing
+        self.assertEqual(4, self.mock_client.request_deserialize.call_count)
 
     @patch("aistore.sdk.job.Job.status")
     def test_wait_no_kind_resolves_then_terminal(self, mock_status):
@@ -182,20 +205,22 @@ class TestJob(unittest.TestCase):
         # Empty kind: wait() resolves an idle kind (download) and dispatches
         # via the snaps/idle path.
         job = Job(self.mock_client, job_id=self.job_id, job_kind="")
+        idle = AggregatedJobSnap.model_validate(
+            {"d1": [JobSnap(id=self.job_id, kind=XACT_KIND_DOWNLOAD, is_idle=True)]}
+        )
         self.mock_client.request_deserialize.side_effect = [
             AggregatedJobSnap.model_validate(
                 {"d1": [JobSnap(id=self.job_id, kind=XACT_KIND_DOWNLOAD)]}
-            ),
-            AggregatedJobSnap.model_validate(
-                {"d1": [JobSnap(id=self.job_id, kind=XACT_KIND_DOWNLOAD, is_idle=True)]}
-            ),
+            ),  # _resolve_kind
+            idle,  # idle poll 1
+            idle,  # idle poll 2 (idle must hold for 2 consecutive polls)
         ]
 
         result = job.wait(timeout=20)
 
         self.assertTrue(result.success)
         self.assertEqual(XACT_KIND_DOWNLOAD, job.job_kind)
-        self.assertEqual(2, self.mock_client.request_deserialize.call_count)
+        self.assertEqual(3, self.mock_client.request_deserialize.call_count)
 
     def test_wait_no_kind_not_found(self):
         # Empty kind and id not found -> JobInfoNotFound.
@@ -307,6 +332,9 @@ class TestJob(unittest.TestCase):
             AggregatedJobSnap.model_validate(
                 {"d1": [snap_job_idle], "d2": [snap_job_idle]}
             ),
+            AggregatedJobSnap.model_validate(
+                {"d1": [snap_job_idle], "d2": [snap_job_idle]}
+            ),
         ]
         timeout = 20
         frequency = probing_frequency(timeout)
@@ -321,15 +349,15 @@ class TestJob(unittest.TestCase):
         )
 
         expected_client_requests = [expected_call for _ in range(2)]
-        expected_sleep_calls = [call(frequency), call(frequency)]
+        expected_sleep_calls = [call(frequency), call(frequency), call(frequency)]
 
         result = self.job.wait_for_idle(timeout=timeout)
         self.assertTrue(result.success)
         self.assertIsInstance(result, WaitResult)
         self.mock_client.request_deserialize.assert_has_calls(expected_client_requests)
         mock_sleep.assert_has_calls(expected_sleep_calls)
-        self.assertEqual(3, self.mock_client.request_deserialize.call_count)
-        self.assertEqual(2, mock_sleep.call_count)
+        self.assertEqual(4, self.mock_client.request_deserialize.call_count)
+        self.assertEqual(3, mock_sleep.call_count)
 
     @patch("aistore.sdk.job.time.sleep")
     # pylint: disable=unused-argument

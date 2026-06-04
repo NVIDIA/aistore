@@ -35,6 +35,30 @@ from aistore.sdk.xact_const import idles_before_finishing, is_valid_kind
 
 logger = get_logger(__name__)
 
+# Number of consecutive idle polls required before an idle-kind job is
+# considered done -- mirrors Go's `xact.numConsecutiveIdle` (xact/api_wait.go).
+NUM_CONSECUTIVE_IDLE = 2
+
+
+class _IdleStreak:  # pylint: disable=too-few-public-methods
+    """
+    Idle-wait done-condition mirroring Go's `xact.snapsIdle`: the job must
+    report idle on `NUM_CONSECUTIVE_IDLE` consecutive polls before completing;
+    an abort on any target completes immediately.
+    """
+
+    def __init__(self):
+        self._count = 0
+
+    def __call__(self, details: AggregatedJobSnap) -> bool:
+        if details.any_aborted():
+            return True
+        if details.all_idle():
+            self._count += 1
+            return self._count >= NUM_CONSECUTIVE_IDLE
+        self._count = 0
+        return False
+
 
 class Job:
     """
@@ -112,12 +136,8 @@ class Job:
         resolved from the cluster so the job dispatches correctly (raising
         `JobInfoNotFound` if the id does not exist).
 
-        Abort is handled cleanly on both paths: the idle path returns as soon
-        as any target reports aborted (`AggregatedJobSnap.idle_or_aborted`),
-        with the resulting `WaitResult` reporting `success=False` and the abort
-        error -- so an aborted idle-kind job returns promptly instead of
-        blocking until timeout. The terminal path reports the abort via
-        `JobStatus.aborted`.
+        Idle is confirmed over `NUM_CONSECUTIVE_IDLE` consecutive polls; an
+        abort on any target returns immediately with `success=False`.
 
         For finer control (single-node fan-out, explicit idle/terminal),
         call `wait_for_idle` or `wait_single_node` directly.
@@ -142,7 +162,7 @@ class Job:
             kind = self._resolve_kind()
         if kind and idles_before_finishing(kind):
             return self._wait_for_condition(
-                AggregatedJobSnap.idle_or_aborted,
+                _IdleStreak(),
                 timeout,
                 verbose,
                 "reached idle state",
@@ -239,7 +259,7 @@ class Job:
             errors.Timeout: Timeout while waiting for the job to finish
         """
         return self._wait_for_condition(
-            AggregatedJobSnap.idle_or_aborted, timeout, verbose, "reached idle state"
+            _IdleStreak(), timeout, verbose, "reached idle state"
         )
 
     def wait_single_node(
