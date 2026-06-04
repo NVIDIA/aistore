@@ -173,6 +173,8 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *
 // and the numbers of objects, both _in_ the cluster and remote
 // GetBucketSummary supports a single specified bucket or multiple buckets, as per `cmn.QueryBcks` query.
 // (e.g., GetBucketSummary with an empty bucket query will return "summary" info for all buckets)
+// TODO: add GetBucketShardSummary next to this API; prepare ActSummaryShard
+// request bodies there and reuse the summary polling helpers below.
 func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, args BsummArgs) (xid string,
 	res cmn.AllBsummResults, err error) {
 	if msg == nil {
@@ -212,15 +214,10 @@ func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, 
 // - _bsummDontWait
 func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResults, args BsummArgs) (xid string, _ error) {
 	var (
-		start, after int64
-		sleep        = xact.MinPollTime
-		actMsg       = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
+		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
+		status int
 	)
 	debug.Assert(msg.UUID == "")
-	if args.Callback != nil {
-		start = mono.NanoTime()
-		after = start + args.CallAfter.Nanoseconds()
-	}
 	reqParams.Body = cos.MustMarshal(actMsg)
 	status, err := reqParams.doReqStr(&xid)
 	if err != nil {
@@ -233,24 +230,37 @@ func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResult
 		msg.UUID = xid
 		reqParams.Body = cos.MustMarshal(actMsg)
 	}
+	return xid, _summPoll(reqParams, res, args.CallAfter, args.Callback)
+}
 
+// _summPoll polls a prepared summary request; caller owns start and UUID body.
+// TODO: call from shard-summary wait path after preparing ActSummaryShard body.
+func _summPoll[T any](reqParams *ReqParams, res *T, callAfter time.Duration, cb func(*T, bool)) (err error) {
+	var (
+		start, after int64
+		sleep        = xact.MinPollTime
+	)
+	if cb != nil {
+		start = mono.NanoTime()
+		after = start + callAfter.Nanoseconds()
+	}
 	time.Sleep(sleep / 2)
 	for i := 0; ; i++ {
-		status, err = reqParams.DoReqAny(res)
+		status, err := reqParams.DoReqAny(res)
 		if err != nil {
-			return xid, err
+			return err
 		}
 		// callback w/ partial results
-		if args.Callback != nil && (status == http.StatusPartialContent || status == http.StatusOK) {
+		if cb != nil && (status == http.StatusPartialContent || status == http.StatusOK) {
 			if after == start || mono.NanoTime() >= after {
-				args.Callback(res, status == http.StatusOK)
+				cb(res, status == http.StatusOK)
 			}
 		}
 		if status == http.StatusOK {
-			return xid, nil
+			return nil
 		}
 		if status != http.StatusPartialContent && status != http.StatusAccepted {
-			return xid, _invalidStatus(status)
+			return _invalidStatus(status)
 		}
 
 		time.Sleep(sleep)
@@ -267,10 +277,10 @@ func _bsummDontWait(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsu
 	var (
 		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
 		status int
-		news   = msg.UUID == ""
+		isNew  = msg.UUID == ""
 	)
 	reqParams.Body = cos.MustMarshal(actMsg)
-	if news {
+	if isNew {
 		status, err = reqParams.doReqStr(&xid)
 		if err == nil {
 			if status != http.StatusAccepted {
@@ -279,10 +289,15 @@ func _bsummDontWait(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsu
 		}
 		return
 	}
+	return "", _summPollOnce(reqParams, res)
+}
 
-	status, err = reqParams.DoReqAny(res)
+// _summPollOnce polls a prepared summary request once.
+// TODO: call from shard-summary DontWait path after preparing ActSummaryShard body.
+func _summPollOnce[T any](reqParams *ReqParams, res *T) (err error) {
+	status, err := reqParams.DoReqAny(res)
 	if err != nil {
-		return xid, err
+		return err
 	}
 	switch status {
 	case http.StatusOK:
@@ -291,7 +306,7 @@ func _bsummDontWait(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsu
 	default:
 		err = _invalidStatus(status)
 	}
-	return
+	return err
 }
 
 func _invalidStatus(status int) error {

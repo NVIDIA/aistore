@@ -84,8 +84,8 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		// list objects
 		t.bgetObjects(w, r, qbck, msg, dpq, phase)
 
-	// TODO: add apc.ActSummaryShard handler here: target begins/queries the
-	// shard-summary xaction and returns Result snapshots to the proxy.
+	// TODO: add apc.ActSummaryShard next to ActSummaryBck: renew XactShardSumm
+	// on Begin2PC and return Result() snapshots on Query2PC.
 	case apc.ActSummaryBck:
 		var bucket, phase string // txn
 		if len(apiItems) == 0 {

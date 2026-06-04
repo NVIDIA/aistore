@@ -1,10 +1,11 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -17,16 +18,33 @@ import (
 )
 
 // in this source:
-// - bsummact  <= api.GetBucketSummary(query-bcks, ActMsg)
-// - bsummhead <= api.GetBucketInfo(bck, QparamBinfoWithOrWithoutRemote)
+// - bsummAct  <= api.GetBucketSummary(query-bcks, ActMsg)
+// - bsummHead <= api.GetBucketInfo(bck, QparamBinfoWithOrWithoutRemote)
+// Summary xactions share proxy start and query handlers (`summNew` and `summCollect`);
+// each action keeps its own message parsing and final result aggregation logic.
 
-func (p *proxy) bsummact(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) {
-	news := msg.UUID == ""
+type summCtx[T any] struct {
+	p    *proxy
+	qbck *cmn.QueryBcks
+	amsg *apc.ActMsg
+	uuid string
+
+	smap *smapX
+	nat  int
+}
+
+func (p *proxy) bsummAct(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, actMsg *apc.ActMsg, msg *apc.BsummCtrlMsg) {
+	isNew := msg.UUID == ""
 	debug.Assert(msg.UUID == "" || cos.IsValidUUID(msg.UUID), msg.UUID)
+	actMsg.Value = msg
 
 	// start new
-	if news {
-		err := p.bsummNew(qbck, msg)
+	if isNew {
+		msg.UUID = cos.GenUUID()
+		ctx, err := newSummCtx[cmn.AllBsummResults](p, qbck, actMsg, msg.UUID)
+		if err == nil {
+			err = ctx.summNew()
+		}
 		if err != nil {
 			p.writeErr(w, r, err)
 		} else {
@@ -37,7 +55,12 @@ func (p *proxy) bsummact(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 	}
 
 	// or, query partial or final results
-	summaries, status, err := p.bsummCollect(qbck, msg)
+	ctx, err := newSummCtx[cmn.AllBsummResults](p, qbck, actMsg, msg.UUID)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	summaries, status, err := p.bsummCollect(ctx)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -46,17 +69,95 @@ func (p *proxy) bsummact(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 	p.writeJSON(w, r, summaries, "bucket-summary")
 }
 
-func (p *proxy) bsummNew(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (err error) {
-	q := make(url.Values, 1)
-	qbck.SetQuery(q)
+// bsummCollect keeps bucket-specific aggregation on top of summCollect.
+// TODO: make it a summCtx[cmn.AllBsummResults] method once Go 1.27 lands.
+func (*proxy) bsummCollect(ctx *summCtx[cmn.AllBsummResults]) (_ cmn.AllBsummResults, status int, err error) {
+	results, status, err := ctx.summCollect()
+	if err != nil {
+		return nil, 0, err
+	}
+	if status == http.StatusAccepted {
+		return cmn.AllBsummResults{}, status, nil
+	}
+	var (
+		summaries = make(cmn.AllBsummResults, 0, 8)
+		dsize     = make(map[string]uint64, len(results))
+	)
+	for tid, tbsumm := range results {
+		for _, summ := range tbsumm {
+			dsize[tid] = summ.TotalSize.Disks
+			summaries = summaries.Aggregate(summ)
+		}
+	}
+	summaries.Finalize(dsize, cmn.Rom.TestingEnv())
+	return summaries, status, nil
+}
 
-	msg.UUID = cos.GenUUID()
-	actMsgExt := p.newAmsgActVal(apc.ActSummaryBck, msg)
+// fully reuse bsummAct impl.
+func (p *proxy) bsummHead(bck *meta.Bck, msg *apc.BsummCtrlMsg) (info *cmn.BsummResult, status int, err error) {
+	var (
+		summaries cmn.AllBsummResults
+		actMsg    = &apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
+		qbck      = (*cmn.QueryBcks)(bck) // adapt
+	)
+	if msg.UUID == "" {
+		msg.UUID = cos.GenUUID()
+		actMsg.Value = msg
+		ctx, e := newSummCtx[cmn.AllBsummResults](p, qbck, actMsg, msg.UUID)
+		if e != nil {
+			return info, status, e
+		}
+		if err = ctx.summNew(); err == nil {
+			status = http.StatusAccepted
+		}
+		return info, status, err
+	}
+	ctx, err := newSummCtx[cmn.AllBsummResults](p, qbck, actMsg, msg.UUID)
+	if err != nil {
+		return info, status, err
+	}
+	summaries, status, err = p.bsummCollect(ctx)
+	if err == nil && (status == http.StatusOK || status == http.StatusPartialContent) {
+		debug.Assert(len(summaries) != 0, bck.Cname(msg.Prefix))
+		if len(summaries) != 0 {
+			info = summaries[0]
+		}
+	}
+	return info, status, err
+}
+
+/////////////
+// summCtx //
+/////////////
+
+func newSummCtx[T any](p *proxy, qbck *cmn.QueryBcks, amsg *apc.ActMsg, uuid string) (*summCtx[T], error) {
+	smap := p.owner.smap.get()
+	nat := smap.CountActiveTs()
+	if nat < 1 {
+		return nil, cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
+	}
+	return &summCtx[T]{
+		p:    p,
+		qbck: qbck,
+		amsg: amsg,
+		uuid: uuid,
+		smap: smap,
+		nat:  nat,
+	}, nil
+}
+
+// summNew broadcasts Begin2PC for a prepared summary ActMsg.
+// TODO: call from shard-summary proxy handler with ActSummaryShard.
+func (c *summCtx[T]) summNew() (err error) {
+	q := make(url.Values, 1)
+	c.qbck.SetQuery(q)
+
+	actMsgExt := c.p.newAmsg(c.amsg, nil)
 
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
-		Path:   apc.URLPathBuckets.Join(qbck.Name, apc.Begin2PC), // compare w/ txn
+		Path:   apc.URLPathBuckets.Join(c.qbck.Name, apc.Begin2PC), // compare w/ txn
 		Query:  q,
 		Body:   cos.MustMarshal(actMsgExt),
 	}
@@ -65,50 +166,53 @@ func (p *proxy) bsummNew(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (err error)
 	// (see Run() in nsumm.go)
 	args.timeout = apc.DefaultTimeout
 
-	args.smap = p.owner.smap.get()
-	if cnt := args.smap.CountActiveTs(); cnt < 1 {
-		return cmn.NewErrNoNodes(apc.Target, args.smap.CountTargets())
-	}
-	results := p.bcastGroup(args)
+	args.smap = c.smap
+	results := c.p.bcastGroup(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil {
 			if res.details == "" || res.details == dfltDetail {
-				res.details = xact.Cname(apc.ActSummaryBck, msg.UUID)
+				res.details = xact.Cname(c.amsg.Action, c.uuid)
 			}
 			err = res.toErr()
 			break
 		}
 	}
 	freeBcastRes(results)
+	if err != nil {
+		return err
+	}
+	if err = c.smap.CheckSameTargets(&c.p.owner.smap.get().Smap, xact.Cname(c.amsg.Action, c.uuid)); err != nil {
+		return err
+	}
 	return err
 }
 
-func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.AllBsummResults, status int, err error) {
+// summCollect broadcasts Query2PC and returns typed per-target snapshots.
+// TODO: reuse from shard-summary proxy collect path with ShardSummResult.
+func (c *summCtx[T]) summCollect() (_ map[string]T, status int, err error) {
 	var (
 		q         = make(url.Values, 4)
-		actMsgExt = p.newAmsgActVal(apc.ActSummaryBck, msg)
+		actMsgExt = c.p.newAmsg(c.amsg, nil)
 		args      = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
-		Path:   apc.URLPathBuckets.Join(qbck.Name, apc.Query2PC),
+		Path:   apc.URLPathBuckets.Join(c.qbck.Name, apc.Query2PC),
 		Body:   cos.MustMarshal(actMsgExt),
 	}
-	args.smap = p.owner.smap.get()
-	if cnt := args.smap.CountActiveTs(); cnt < 1 {
-		return nil, 0, cmn.NewErrNoNodes(apc.Target, args.smap.CountTargets())
-	}
-	qbck.AddToQuery(q)
+	args.smap = c.smap
+	c.qbck.AddToQuery(q)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
-	args.cresv = cresjGeneric[cmn.AllBsummResults]{}
+	args.cresv = cresjGeneric[T]{}
 
-	results := p.bcastGroup(args)
+	results := c.p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil {
 			if res.details == "" || res.details == dfltDetail {
-				res.details = xact.Cname(apc.ActSummaryBck, msg.UUID)
+				res.details = xact.Cname(c.amsg.Action, c.uuid)
 			}
 			err = res.toErr()
 			freeBcastRes(results)
@@ -117,8 +221,7 @@ func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.
 	}
 
 	var (
-		summaries   = make(cmn.AllBsummResults, 0, 8)
-		dsize       = make(map[string]uint64, len(results))
+		out         = make(map[string]T, c.nat)
 		numAccepted int
 		numPartial  int
 	)
@@ -130,41 +233,22 @@ func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.
 		if res.status == http.StatusPartialContent {
 			numPartial++
 		}
-		tbsumm, tid := res.v.(*cmn.AllBsummResults), res.si.ID()
-		for _, summ := range *tbsumm {
-			dsize[tid] = summ.TotalSize.Disks
-			summaries = summaries.Aggregate(summ)
+		v, ok := res.v.(*T)
+		if !ok || v == nil {
+			freeBcastRes(results)
+			return nil, 0, fmt.Errorf("%s: invalid response from %s: %T", xact.Cname(c.amsg.Action, c.uuid), res.si, res.v)
 		}
+		out[res.si.ID()] = *v
 	}
-	summaries.Finalize(dsize, cmn.Rom.TestingEnv())
 	freeBcastRes(results)
 
 	switch {
-	case numPartial == 0 && numAccepted == 0:
-		status = http.StatusOK
-	case numPartial == 0:
+	case numAccepted > 0:
 		status = http.StatusAccepted
-	default:
+	case numPartial > 0:
 		status = http.StatusPartialContent
+	default:
+		status = http.StatusOK
 	}
-	return summaries, status, nil
-}
-
-// fully reuse bsummact impl.
-func (p *proxy) bsummhead(bck *meta.Bck, msg *apc.BsummCtrlMsg) (info *cmn.BsummResult, status int, err error) {
-	var (
-		summaries cmn.AllBsummResults
-		qbck      = (*cmn.QueryBcks)(bck) // adapt
-	)
-	if msg.UUID == "" {
-		if err = p.bsummNew(qbck, msg); err == nil {
-			status = http.StatusAccepted
-		}
-		return info, status, err
-	}
-	summaries, status, err = p.bsummCollect(qbck, msg)
-	if err == nil && (status == http.StatusOK || status == http.StatusPartialContent) {
-		info = summaries[0]
-	}
-	return info, status, err
+	return out, status, nil
 }

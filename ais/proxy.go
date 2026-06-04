@@ -643,8 +643,8 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	}
 
 	switch {
-	// TODO: add apc.ActSummaryShard handler here: proxy starts/queries the
-	// shard-summary action via 2PC and aggregates target Result snapshots.
+	// TODO: add apc.ActSummaryShard next to ActSummaryBck: morph
+	// apc.ShardSummMsg, init one bucket, then call shard-summary proxy handler.
 	case msg.Action == apc.ActSummaryBck:
 		p.bgetSumm(w, r, qbck, msg, dpq)
 	case msg.Action == apc.ActShowNBI:
@@ -695,7 +695,7 @@ func (p *proxy) bgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 		qbck = (*cmn.QueryBcks)(b)
 	}
 
-	p.bsummact(w, r, qbck, &summMsg)
+	p.bsummAct(w, r, qbck, msg, &summMsg)
 }
 
 func (p *proxy) bgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
@@ -2146,12 +2146,12 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 			nlog.Warningf("bucket %s is present, flt %d=\"outside\" not implemented yet", bck.Cname(""), fltPresence)
 		}
 		if dpq.get(apc.QparamBinfoWithOrWithoutRemote) != "" {
-			info, status, err = p.bsummhead(bck, &msg)
+			info, status, err = p.bsummHead(bck, &msg)
 			if err != nil {
 				p.writeErr(w, r, err)
 				return
 			}
-			// TODO: review IsBckPresent vs p.bsummhead() success
+			// TODO: review IsBckPresent vs p.bsummHead() success
 			if info != nil {
 				info.IsBckPresent = true
 			}
@@ -2177,7 +2177,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	} // otherwise, keep bck.Props as per (#18995)
 
 	if dpq.get(apc.QparamBinfoWithOrWithoutRemote) != "" {
-		info, status, err = p.bsummhead(bck, &msg)
+		info, status, err = p.bsummHead(bck, &msg)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return

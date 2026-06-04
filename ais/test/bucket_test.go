@@ -2953,3 +2953,139 @@ func TestBucketListAndSummary(t *testing.T) {
 		})
 	}
 }
+
+func TestBucketSummaryPollAndCallback(t *testing.T) {
+	var (
+		m = &ioContext{
+			t:         t,
+			num:       256,
+			fileSize:  4 * cos.KiB,
+			fixedSize: true,
+		}
+		bp        = tools.BaseAPIParams()
+		msg       = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
+		callbacks int
+	)
+
+	m.initAndSaveState(true /*cleanup*/)
+	m.expectTargets(1)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+	m.puts()
+
+	_, _, info, err := api.GetBucketInfo(bp, m.bck, &api.BinfoArgs{FltPresence: apc.FltPresent, Summarize: true})
+	tassert.CheckFatal(t, err)
+	checkBucketInfoSummary(t, info, m.num)
+
+	xid, summaries, err := api.GetBucketSummary(bp, cmn.QueryBcks(m.bck), msg, api.BsummArgs{
+		Callback: func(res *cmn.AllBsummResults, done bool) {
+			callbacks++
+			tassert.Fatalf(t, len(*res) <= 1, "callback: expected at most one summary, got %d", len(*res))
+			if done {
+				tassert.Fatalf(t, len(*res) == 1, "done callback: expected one summary, got %d", len(*res))
+			}
+		},
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, xid != "", "expected non-empty bucket-summary xaction ID")
+	tassert.Fatalf(t, callbacks > 0, "expected at least one bucket-summary callback")
+	checkBucketSummary(t, summaries, m.num)
+
+	msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
+	xid, summaries, err = api.GetBucketSummary(bp, cmn.QueryBcks(m.bck), msg, api.BsummArgs{DontWait: true})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, xid != "", "expected non-empty bucket-summary xaction ID")
+	tassert.Fatalf(t, len(summaries) == 0, "new dont-wait request: expected no summaries, got %d", len(summaries))
+
+	msg.UUID = xid
+	var pollErr error
+	err = tools.WaitForCondition(func() bool {
+		_, summaries, pollErr = api.GetBucketSummary(bp, cmn.QueryBcks(m.bck), msg, api.BsummArgs{DontWait: true})
+		if pollErr == nil {
+			return true
+		}
+		herr := cmn.AsErrHTTP(pollErr)
+		if herr == nil {
+			return true
+		}
+		switch herr.Status {
+		case http.StatusAccepted, http.StatusPartialContent:
+			pollErr = nil
+			return false
+		default:
+			return true
+		}
+	}, tools.WaitRetryOpts{MaxRetries: 100, Interval: 100 * time.Millisecond})
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, pollErr)
+	checkBucketSummary(t, summaries, m.num)
+}
+
+func TestBucketSummaryQueryBuckets(t *testing.T) {
+	const (
+		numFirst  = 37
+		numSecond = 53
+		fileSize  = 4 * cos.KiB
+	)
+	var (
+		ns  = genBucketNs()
+		bp  = tools.BaseAPIParams()
+		ctx = []ioContext{
+			{
+				t:         t,
+				bck:       cmn.Bck{Name: "summ-" + trand.String(8), Provider: apc.AIS, Ns: ns},
+				num:       numFirst,
+				fileSize:  fileSize,
+				fixedSize: true,
+			},
+			{
+				t:         t,
+				bck:       cmn.Bck{Name: "summ-" + trand.String(8), Provider: apc.AIS, Ns: ns},
+				num:       numSecond,
+				fileSize:  fileSize,
+				fixedSize: true,
+			},
+		}
+	)
+
+	for i := range ctx {
+		m := &ctx[i]
+		m.initAndSaveState(true /*cleanup*/)
+		m.expectTargets(1)
+		tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+		m.puts()
+	}
+
+	msg := &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
+	_, summaries, err := api.GetBucketSummary(bp, cmn.QueryBcks{Provider: apc.AIS, Ns: ns}, msg, api.BsummArgs{})
+	tassert.CheckFatal(t, err)
+	for i := range ctx {
+		checkBucketSummaryResult(t, summaries, ctx[i].bck, ctx[i].num)
+	}
+}
+
+func checkBucketSummary(t *testing.T, summaries cmn.AllBsummResults, expected int) {
+	t.Helper()
+	tassert.Fatalf(t, len(summaries) == 1, "expected one summary, got %d", len(summaries))
+	got := summaries[0].ObjCount.Present + summaries[0].ObjCount.Remote
+	tassert.Fatalf(t, got == uint64(expected), "expected %d objects, got %+v", expected, summaries[0].ObjCount)
+}
+
+func checkBucketSummaryResult(t *testing.T, summaries cmn.AllBsummResults, bck cmn.Bck, expected int) {
+	t.Helper()
+	for _, summary := range summaries {
+		if !summary.Bck.Equal(&bck) {
+			continue
+		}
+		got := summary.ObjCount.Present + summary.ObjCount.Remote
+		tassert.Fatalf(t, got == uint64(expected), "%s: expected %d objects, got %+v", bck.String(), expected, summary.ObjCount)
+		return
+	}
+	t.Fatalf("expected summary for %s in %+v", bck.String(), summaries)
+}
+
+func checkBucketInfoSummary(t *testing.T, summary *cmn.BsummResult, expected int) {
+	t.Helper()
+	tassert.Fatalf(t, summary != nil, "expected bucket summary")
+	got := summary.ObjCount.Present + summary.ObjCount.Remote
+	tassert.Fatalf(t, got == uint64(expected), "expected %d objects, got %+v", expected, summary.ObjCount)
+}
