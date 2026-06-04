@@ -376,8 +376,10 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	if length > 0 {
 		rc, res.Err = o.NewRangeReader(ctx, offset, length)
 		if res.Err != nil {
-			if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
-				res.Err = cmn.NewErrRangeNotSatisfiable(res.Err, nil, 0)
+			if offset < 0 || offset >= attrs.Size || length > attrs.Size-offset {
+				s := fmt.Sprintf("offset=%d,length=%d", offset, length)
+				res.Err = cos.NewErrRangeNotSatisfiable(nil, []string{s}, attrs.Size)
+				res.ErrCode = http.StatusRequestedRangeNotSatisfiable
 			}
 			return res
 		}

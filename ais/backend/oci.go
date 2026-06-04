@@ -390,7 +390,7 @@ func ociErrorToAISError(op, bucketName, objectPath, byteRange string, errIn erro
 
 	switch statusCode {
 	case http.StatusRequestedRangeNotSatisfiable:
-		errOut = cmn.NewErrRangeNotSatisfiable(errIn, []string{byteRange}, 0)
+		errOut = cos.NewErrRangeNotSatisfiable(errIn, []string{byteRange}, 0)
 	case http.StatusTooManyRequests:
 		errOut = cmn.NewErrTooManyRequests(nil, statusCode)
 	default:

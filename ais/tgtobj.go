@@ -1203,7 +1203,9 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 		rocs, ok := lmfh.(io.Seeker)
 		debug.Assert(ok)
 		if _, err := rocs.Seek(hrng.Start, io.SeekStart); err != nil {
-			goi.isIOErr = true
+			if cos.IsIOError(err) {
+				goi.isIOErr = true
+			}
 			return err
 		}
 		goi.setwhdr(whdr, cksum, size)
@@ -1218,7 +1220,7 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 		// monolithic or chunked (the latter via seekTo)
 		r, err = goi.lom.NewSectionReader(lmfh, hrng.Start, size)
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && cos.IsIOError(err) {
 				goi.isIOErr = true
 			}
 			return err
@@ -1538,7 +1540,7 @@ func (goi *getOI) rngToHeader(resphdr http.Header, size int64) (hrng *htrange, e
 	var ranges []htrange
 	ranges, err = parseMultiRange(goi.ranges.Range, size)
 	if err != nil {
-		if cmn.IsErrRangeNotSatisfiable(err) {
+		if cos.IsErrRangeNotSatisfiable(err) {
 			// https://datatracker.ietf.org/doc/html/rfc7233#section-4.2
 			resphdr.Set(cos.HdrContentRange, fmt.Sprintf("%s*/%d", cos.HdrContentRangeValPrefix, size))
 		}

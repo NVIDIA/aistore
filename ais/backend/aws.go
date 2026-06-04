@@ -489,7 +489,7 @@ func (*s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int
 		if err != nil {
 			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 			if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
-				res.Err = cmn.NewErrRangeNotSatisfiable(res.Err, nil, 0)
+				res.Err = cos.NewErrRangeNotSatisfiable(res.Err, nil, 0)
 			}
 			return res
 		}

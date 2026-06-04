@@ -6,6 +6,7 @@ package apc
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -14,16 +15,17 @@ import (
 // Definitions
 // ===========
 // - GetBatch() supports reading (and returning in a single TAR) - multiple objects, multiple archived (sharded) files,
-//   or any mix of thereof
+//   multiple ranges over the specified objects (or archived files), or any mix thereof.
 //
 // - TAR is not the only supported output format - compression is supported in a variety of ways (see `OutputFormat`)
-//    - here and elsewhere, "TAR" is used strictly for reading convenience
+//    - here and elsewhere, "TAR" is used strictly for reading convenience.
 //
-// - When GetBatch() returns an error all the other returned data and/or metadata (if any) can be ignored and dropped
+// - When GetBatch() returns an error all the other returned data and/or metadata (if any) can be ignored and dropped.
 //
 // - When GetBatch() succeeds (err == nil):
-//    - user should expect the same exact number of entries in the MossResp and the same number of files in the resulting TAR
-//    - the order: entries in the response (MossResp, TAR) are ordered in **precisely** the same order as in the MossReq
+//    - user should expect the same exact number of entries in the MossResp and the same number of files
+//      in the resulting TAR
+//    - the order: entries in the response (MossResp, TAR) are ordered in **precisely** the same order as in the MossReq.
 //
 // - Naming convention:
 //    - by default, files in the resulting TAR are named <Bucket>/<ObjName>
@@ -36,7 +38,7 @@ import (
 //   - missing files will not result in GetBatch() failure
 //   - missing files will be present in the resulting TAR
 //     - with "__404__/" prefix and zero size
-//     - if you extract resulting TAR you'll find them all in one place: under __404__/<Bucket>/<ObjName>
+//     - if you extract resulting TAR you'll find them all in one place: under __404__/<Bucket>/<ObjName>.
 //
 // - Colocation hint:
 //   - 0 (default): no optimization - suitable for uniformly distributed data lakes where objects are spread
@@ -48,9 +50,15 @@ import (
 //     enables additional optimization for archive handle reuse
 //   E.g., use level 1 or 2 when input TARs were constructed to requested batches.
 //
+// - Start/Length (MossIn structure below) define an optional read range.
+//   When ArchPath is empty, the range applies to the object bytes as stored.
+//   In other words, a range over an archive object with empty ArchPath is a raw byte range.
+//   When ArchPath is set, the range applies to the extracted archived file.
+//
 // - Returned size:
-//   - when the requested file is found the corresponding MossOut.Size will be equal (the number of bytes in the respective TAR-ed payload)
-//     - but when read range is defined: MossOut.Size = (length of this range)
+//   - when the requested file is found the corresponding MossOut.Size will be equal
+//     (the number of bytes in the respective TAR-ed payload)
+//   - when Start/Length define a valid read range, MossOut.Size equals Length.
 
 const (
 	MossMissingDir = "__404__"
@@ -133,8 +141,24 @@ func (in *MossIn) UnmarshalJSON(data []byte) error {
 	}
 	if in.ArchPath != "" {
 		if err := cos.ValidateArchpath(in.ArchPath); err != nil {
-			return err
+			return fmt.Errorf("%v (oname: %q)", err, in.ObjName)
 		}
 	}
+	if in.Start < 0 || in.Length < 0 || (in.Start != 0 && in.Length == 0) {
+		s := fmt.Sprintf("start=%d,length=%d (oname: %q)", in.Start, in.Length, in.ObjName)
+		return cos.NewErrRangeNotSatisfiable(nil, []string{s}, cos.ContentLengthUnknown /* -1 */)
+	}
 	return nil
+}
+
+func (in *MossIn) CheckRange(size int64) (off, length int64, err error) {
+	off, length = in.Start, in.Length
+	if off == 0 && length == 0 {
+		return 0, size, nil
+	}
+	if off < 0 || length <= 0 || off >= size || length > size-off {
+		s := fmt.Sprintf("start=%d,length=%d", off, length)
+		return 0, 0, cos.NewErrRangeNotSatisfiable(nil, []string{s}, size)
+	}
+	return off, length, nil
 }

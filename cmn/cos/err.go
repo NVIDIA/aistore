@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	ratomic "sync/atomic"
@@ -53,6 +54,14 @@ type (
 	}
 	errInvalidArchpath struct {
 		path string
+	}
+)
+
+type (
+	ErrRangeNotSatisfiable struct {
+		err    error    // original (backend reported) error
+		ranges []string // RFC 7233
+		size   int64    // [0, size)
 	}
 )
 
@@ -439,3 +448,34 @@ func ValidateArchpath(path string) error {
 }
 
 func (e *errInvalidArchpath) Error() string { return "invalid archpath \"" + e.path + "\"" }
+
+// ErrRangeNotSatisfiable
+// http.StatusRequestedRangeNotSatisfiable = 416 // RFC 9110, 15.5.17
+
+func NewErrRangeNotSatisfiable(err error, ranges []string, size int64) *ErrRangeNotSatisfiable {
+	if IsTypedNil(err) {
+		err = nil
+	}
+	return &ErrRangeNotSatisfiable{err, ranges, size}
+}
+
+func (e *ErrRangeNotSatisfiable) Error() string {
+	if e.err != nil {
+		return e.err.Error()
+	}
+	s := fmt.Sprintf("not satisfiable range%s %v", Plural(len(e.ranges)), e.ranges)
+	if e.size < 0 {
+		debug.Assert(e.size == ContentLengthUnknown)
+		return s
+	}
+	return "size=" + strconv.FormatInt(e.size, 10) + ": " + s
+}
+
+func IsErrRangeNotSatisfiable(err error) bool {
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrRangeNotSatisfiable); ok {
+		return true
+	}
+	var wrapped *ErrRangeNotSatisfiable
+	return errors.As(err, &wrapped)
+}

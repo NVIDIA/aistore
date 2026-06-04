@@ -108,7 +108,7 @@ func (m *AISbp) extractErrCode(e error, uuid string) (int, error) {
 		return http.StatusInternalServerError, e
 	}
 	if herr.Status == http.StatusRequestedRangeNotSatisfiable {
-		return http.StatusRequestedRangeNotSatisfiable, cmn.NewErrRangeNotSatisfiable(herr, nil, 0)
+		return http.StatusRequestedRangeNotSatisfiable, cos.NewErrRangeNotSatisfiable(herr, nil, 0)
 	}
 
 	if uuid == "" {

@@ -417,19 +417,18 @@ func (lom *LOM) SetXattr(data []byte) error { return fs.SetXattr(lom.FQN, fs.Xat
 type (
 	baseSection struct {
 		lom       *LOM
+		lh        cos.LomReader // original handle; closed when own
 		off, size int64
 		own       bool
 	}
 	// section over a monolithic object
 	fileSection struct {
 		*io.SectionReader
-		fh *os.File
 		baseSection
 	}
 	// section over a chunked object (sequential, open-once-per-chunk)
 	ufestSection struct {
 		io.LimitedReader // R: *UfestReader, N: size
-		r                *UfestReader
 		baseSection
 	}
 )
@@ -440,51 +439,31 @@ var (
 	_ cos.ReadOpenCloser = (*ufestSection)(nil)
 )
 
-func (fs *fileSection) Size() int64 { return fs.size }
-
-func (fs *fileSection) Close() error {
-	if !fs.own || fs.fh == nil {
-		return nil
+func (base *baseSection) Open() (cos.ReadOpenCloser, error) {
+	debug.Assert(base.own)
+	if !base.own {
+		return nil, errors.New("section.Open called on non-owning section reader")
 	}
-	err := fs.fh.Close()
-	fs.fh = nil
-	return err
-}
-
-func (fs *fileSection) Open() (cos.ReadOpenCloser, error) {
-	debug.Assert(fs.own)
-	if !fs.own {
-		return nil, errors.New("fileSection.Open called on non-owning section reader")
-	}
-	lh, err := fs.lom.Open()
+	lh, err := base.lom.Open()
 	if err != nil {
 		return nil, err
 	}
-	return fs.lom.NewSectionHandle(lh, fs.off, fs.size)
+	return base.lom.NewSectionHandle(lh, base.off, base.size)
 }
 
-func (us *ufestSection) Size() int64 { return us.size }
-
-func (us *ufestSection) Close() error {
-	if !us.own || us.r == nil {
+func (base *baseSection) Close() error {
+	if !base.own || base.lh == nil {
 		return nil
 	}
-	err := us.r.Close()
-	us.r = nil
+	err := base.lh.Close()
+	base.lh = nil
 	return err
 }
 
-func (us *ufestSection) Open() (cos.ReadOpenCloser, error) {
-	debug.Assert(us.own)
-	if !us.own {
-		return nil, errors.New("ufestSection.Open called on non-owning section reader")
-	}
-	lh, err := us.lom.Open()
-	if err != nil {
-		return nil, err
-	}
-	return us.lom.NewSectionHandle(lh, us.off, us.size)
-}
+func (base *baseSection) Size() int64 { return base.size }
+
+// disambiguate baseSection.Size() vs io.SectionReader.Size()
+func (fs *fileSection) Size() int64 { return fs.baseSection.size }
 
 // return a non-owning reader over [off, off+size) - caller is responsible for closing `lh`
 // lom must be loaded and locked
@@ -513,16 +492,16 @@ func (lom *LOM) newSection(lh cos.LomReader, off, size int64, own bool) (cos.Rea
 		return nil, io.EOF
 	}
 
-	s := baseSection{lom: lom, off: off, size: size, own: own}
+	base := baseSection{lom: lom, lh: lh, off: off, size: size, own: own}
 	if lom.IsChunked() {
 		r := lh.(*UfestReader)
 		if err := r.seekTo(off); err != nil {
 			return nil, err
 		}
-		return &ufestSection{LimitedReader: io.LimitedReader{R: r, N: size}, r: r, baseSection: s}, nil
+		return &ufestSection{LimitedReader: io.LimitedReader{R: r, N: size}, baseSection: base}, nil
 	}
 
 	fh, ok := lh.(*os.File)
 	debug.Assert(ok)
-	return &fileSection{SectionReader: io.NewSectionReader(fh, off, size), fh: fh, baseSection: s}, nil
+	return &fileSection{SectionReader: io.NewSectionReader(fh, off, size), baseSection: base}, nil
 }
