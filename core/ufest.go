@@ -1496,58 +1496,94 @@ func (r *UfestReader) Close() error {
 	return nil
 }
 
+// helper:
+// - map a global offset (off) to (chunk index, offset within chunk)
+// - off == u.size maps to EOF position: idx == len(chunks), coff == 0
+func (u *Ufest) _locate(off int64) (idx int, coff int64, err error) {
+	if off < 0 {
+		return 0, 0, errors.New(utag + ": _locate called with negative offset")
+	}
+	if off > u.size {
+		return 0, 0, io.EOF
+	}
+	coff = off
+	for idx < len(u.chunks) && coff >= u.chunks[idx].size {
+		coff -= u.chunks[idx].size
+		idx++
+	}
+	return idx, coff, nil
+}
+
+//nolint:unused // will use in the next commit (TODO)
+func (r *UfestReader) seekTo(off int64) error {
+	debug.Assert(r.cfh == nil && r.cidx == 0 && r.goff == 0, "expecting a fresh reader")
+
+	idx, coff, err := r.u._locate(off)
+	if err != nil {
+		return err
+	}
+	r.goff = off
+	r.cidx, r.coff = idx, coff
+	if r.coff == 0 {
+		return nil
+	}
+
+	fh, errN := os.Open(r.u.chunks[r.cidx].path)
+	if errN != nil {
+		return errN
+	}
+	if _, err := fh.Seek(r.coff, io.SeekStart); err != nil {
+		cos.Close(fh)
+		return err
+	}
+	r.cfh = fh
+	return nil
+}
+
 // consistent with io.ReaderAt semantics:
 // - do not use or modify reader's offset (r.goff) or any other state
 // - open the needed chunk(s) transiently and close them immediately
 // - return io.EOF when less than len(p)
 func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
-	if off < 0 {
-		return 0, errors.New(utag + ": negative offset")
-	}
-	u := r.u
-	if off >= u.size {
-		return 0, io.EOF
-	}
-
-	// skip to position
+	// locate
 	var (
-		idx      int
-		chunkoff = off
+		u    = r.u
+		idx  int
+		coff int64
 	)
-	for ; idx < len(u.chunks) && chunkoff >= u.chunks[idx].size; idx++ {
-		chunkoff -= u.chunks[idx].size
-	}
-	if idx >= len(u.chunks) {
-		return 0, io.EOF
+	idx, coff, err = r.u._locate(off)
+	if err != nil {
+		return 0, err
 	}
 
 	total := len(p)
 	if total == 0 {
 		return 0, nil
 	}
+
 	// read
 	for n < total && idx < len(u.chunks) {
 		c := &u.chunks[idx]
-		debug.Assert(c.size-chunkoff > 0, c.size, " vs ", chunkoff)
-		toRead := min(int64(total-n), c.size-chunkoff)
+		debug.Assert(c.size-coff > 0, c.size, " vs ", coff)
+		toRead := min(int64(total-n), c.size-coff)
 		fh, err := os.Open(c.path)
 		if err != nil {
 			return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._rtag(), idx+1, u.count)
 		}
 
 		var m int
-		m, err = fh.ReadAt(p[n:n+int(toRead)], chunkoff)
+		m, err = fh.ReadAt(p[n:n+int(toRead)], coff)
 		cos.Close(fh)
 
 		n += m
 		if err != nil {
 			return n, fmt.Errorf("%s: failed to read chunk (%d/%d) at offset %d: %v",
-				r.u._rtag(), idx+1, u.count, chunkoff, err)
+				r.u._rtag(), idx+1, u.count, coff, err)
 		}
 
-		// 2nd, etc. chunks
+		// next chunk
 		idx++
-		chunkoff = 0
+		coff = 0
 	}
 
 	if n < total {
