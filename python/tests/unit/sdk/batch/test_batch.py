@@ -129,7 +129,6 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(batch.request.moss_in[0].obj_name, "shard.tar")
         self.assertEqual(batch.request.moss_in[0].archpath, "images/photo.jpg")
 
-    @unittest.skip("Not Implemented")
     def test_batch_add_with_byte_range(self):
         """Test adding object with byte range."""
         batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
@@ -140,6 +139,53 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(moss_in.obj_name, "large.bin")
         self.assertEqual(moss_in.start, 1024)
         self.assertEqual(moss_in.length, 2048)
+
+    def test_batch_add_with_byte_range_from_start(self):
+        """Test adding object with a leading byte range (start=0)."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        batch.add("large.bin", start=0, length=512)
+
+        moss_in = batch.request.moss_in[0]
+        # start=0 is the default offset, so it is left unset (omitted from the wire
+        # payload, mirroring Go's omitempty), while length is carried through.
+        self.assertIsNone(moss_in.start)
+        self.assertEqual(moss_in.length, 512)
+        moss_in_dict = moss_in.dict()
+        self.assertNotIn("start", moss_in_dict)
+        self.assertEqual(moss_in_dict["length"], 512)
+
+    def test_batch_add_byte_range_with_archpath(self):
+        """Test adding a byte range scoped to an extracted archived file."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        batch.add("shard.tar", archpath="data/file.bin", start=10, length=20)
+
+        moss_in = batch.request.moss_in[0]
+        self.assertEqual(moss_in.archpath, "data/file.bin")
+        self.assertEqual(moss_in.start, 10)
+        self.assertEqual(moss_in.length, 20)
+
+    def test_batch_add_byte_range_serialization(self):
+        """Test that start/length are serialized with the expected aliases."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        batch.add("large.bin", start=1024, length=2048)
+
+        moss_in_dict = batch.request.moss_in[0].dict()
+        self.assertEqual(moss_in_dict["start"], 1024)
+        self.assertEqual(moss_in_dict["length"], 2048)
+
+    def test_batch_add_negative_start_raises_error(self):
+        """Test that a negative start offset raises ValueError."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        with self.assertRaises(ValueError) as context:
+            batch.add("large.bin", start=-1, length=10)
+        self.assertIn("start=-1", str(context.exception))
+
+    def test_batch_add_negative_length_raises_error(self):
+        """Test that a negative length raises ValueError."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        with self.assertRaises(ValueError) as context:
+            batch.add("large.bin", start=0, length=-10)
+        self.assertIn("length=-10", str(context.exception))
 
     def test_batch_add_with_opaque(self):
         """Test adding object with opaque user data."""
@@ -397,7 +443,6 @@ class TestBatch(unittest.TestCase):
             self.assertEqual(len(result), 1)
             self.assertEqual(result[0][0].err_msg, "object not found")
 
-    @unittest.skip("Not Implemented")
     def test_batch_with_mixed_parameters(self):
         """Test Batch with objects having different parameters."""
         batch = Batch(
@@ -440,7 +485,8 @@ class TestBatch(unittest.TestCase):
 
         self.assertEqual(batch.request.moss_in[4].obj_name, "complex.tar")
         self.assertEqual(batch.request.moss_in[4].archpath, "nested/data.txt")
-        self.assertEqual(batch.request.moss_in[4].start, 0)
+        # start=0 is the default offset and is left unset (omitted on the wire)
+        self.assertIsNone(batch.request.moss_in[4].start)
         self.assertEqual(batch.request.moss_in[4].length, 512)
 
     def test_batch_with_different_output_formats(self):

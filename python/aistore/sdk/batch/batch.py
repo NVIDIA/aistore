@@ -195,25 +195,42 @@ class Batch:
             obj (Union[Object, str]): Object or object name string
             opaque (Optional[bytes]): User-provided binary identifier (returned unchanged)
             archpath (Optional[str]): Extract file from archive (e.g., "images/photo.jpg")
-            start (Optional[int]): Byte range start offset
-            length (Optional[int]): Byte range length
+            start (Optional[int]): Byte range start offset. When archpath is empty the range
+                applies to the object bytes as stored; when archpath is set it applies to the
+                extracted archived file. A non-zero start requires a length.
+            length (Optional[int]): Number of bytes to read starting at start. Pass -1 to read
+                from start to the end of the object (open-ended); a positive value reads exactly
+                that many bytes (and the corresponding MossOut.size equals length).
 
         Returns:
             Batch: Self for method chaining
+
+        Raises:
+            ValueError: If the byte range is invalid (negative start, length < -1, or a
+                non-zero start without a length)
 
         Example:
             batch = Batch(client, ["simple1.txt", "simple2.txt"])
             batch.add("shard.tar", archpath="data/file.json")  # Archive extraction
             batch.add("tracked.txt", opaque=b"user-id-123")  # With tracking data
+            batch.add("large.bin", start=1024, length=2048)  # Byte range read
+            batch.add("large.bin", start=1024, length=-1)  # Open-ended range: offset 1024 to EOF
+            batch.add("shard.tar", archpath="data/file.json", start=128, length=512)  # Range within an archived file
         """
-        # TODO: Implement byte range support on server-side
-        if start or length:
-            logger.warning(
-                "Byte range request not yet supported: start=%s, length=%s",
-                start,
-                length,
+        # Validate the byte range (mirrors server-side apc.MossIn checks): start must be >= 0;
+        # length is either > 0 (bounded) or -1 to read from start to the end of the object.
+        # A non-zero start requires an explicit length (use length=-1 to read to the end).
+        if start and start < 0:
+            raise ValueError(f"Invalid byte range: start={start} must be >= 0")
+        if length is not None and length < -1:
+            raise ValueError(
+                f"Invalid byte range: length={length} must be > 0, or -1 to read to the end"
             )
-            raise NotImplementedError("Batch byte range support is not yet implemented")
+        if start and (length is None or length == 0):
+            raise ValueError(
+                f"Invalid byte range: start={start} requires length > 0 or -1 "
+                "(use -1 to read to the end)"
+            )
 
         # Build MossIn
         if isinstance(obj, Object):

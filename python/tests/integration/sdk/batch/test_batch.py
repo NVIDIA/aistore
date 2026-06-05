@@ -13,7 +13,7 @@ from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import case_matrix
 
 
-class TestBatch(ParallelTestBase):
+class TestBatch(ParallelTestBase):  # pylint: disable=too-many-public-methods
     """Integration tests for Batch API with various modes and configurations."""
 
     @case_matrix(
@@ -369,12 +369,12 @@ class TestBatch(ParallelTestBase):
             "does not exist", error_str.lower(), "Error should mention bucket not found"
         )
 
-    @unittest.skip("Not Implemented")
     def test_batch_byte_ranges(self):
         """
-        Test batch retrieval with byte range requests.
+        Test batch retrieval with byte range requests (multipart mode).
 
-        Verifies that specific byte ranges can be requested from objects.
+        Verifies that specific byte ranges can be requested from an object and that
+        the returned MossOut.size reflects the requested range length.
         """
         # Create object with known content
         obj, content = self._create_object_with_content(obj_size=100)
@@ -388,15 +388,121 @@ class TestBatch(ParallelTestBase):
         results = list(batch.get())
         self.assertEqual(len(results), 3, "Should retrieve 3 byte ranges")
 
-        # Verify byte ranges
-        _, data1 = results[0]
+        # Verify byte ranges and per-entry size metadata
+        resp1, data1 = results[0]
         self.assertEqual(data1, content[:10], "First 10 bytes mismatch")
+        self.assertEqual(resp1.size, 10, "Size should equal the range length")
+
+        resp2, data2 = results[1]
+        self.assertEqual(data2, content[10:20], "Second 10 bytes mismatch")
+        self.assertEqual(resp2.size, 10, "Size should equal the range length")
+
+        resp3, data3 = results[2]
+        self.assertEqual(data3, content[90:100], "Last 10 bytes mismatch")
+        self.assertEqual(resp3.size, 10, "Size should equal the range length")
+
+    def test_batch_byte_ranges_streaming(self):
+        """
+        Test batch retrieval with byte range requests in streaming mode.
+
+        Verifies that ranged reads also work over the pure-archive streaming path.
+        """
+        obj, content = self._create_object_with_content(obj_size=100)
+
+        batch = self.client.batch(bucket=self.bucket, streaming_get=True)
+        batch.add(obj, start=5, length=20)
+        batch.add(obj, start=50, length=25)
+
+        results = list(batch.get())
+        self.assertEqual(len(results), 2, "Should retrieve 2 byte ranges")
+
+        _, data1 = results[0]
+        self.assertEqual(data1, content[5:25], "First range mismatch")
 
         _, data2 = results[1]
-        self.assertEqual(data2, content[10:20], "Second 10 bytes mismatch")
+        self.assertEqual(data2, content[50:75], "Second range mismatch")
 
-        _, data3 = results[2]
-        self.assertEqual(data3, content[90:100], "Last 10 bytes mismatch")
+    def test_batch_byte_range_full_then_ranged(self):
+        """
+        Test mixing a full-object read with a ranged read for the same object.
+        """
+        obj, content = self._create_object_with_content(obj_size=64)
+
+        batch = self.client.batch(bucket=self.bucket, streaming_get=False)
+        batch.add(obj)  # full object
+        batch.add(obj, start=8, length=16)  # sub-range
+
+        results = list(batch.get())
+        self.assertEqual(len(results), 2, "Should retrieve full object and range")
+
+        _, full_data = results[0]
+        self.assertEqual(full_data, content, "Full object content mismatch")
+
+        _, ranged_data = results[1]
+        self.assertEqual(ranged_data, content[8:24], "Ranged content mismatch")
+
+    def test_batch_byte_range_archpath(self):
+        """
+        Test ranged reads scoped to a file extracted from an archive (shard).
+
+        When archpath is set, the range applies to the extracted archived file.
+        """
+        sample_files = {
+            "file1.txt": b"0123456789abcdefghijklmnopqrstuvwxyz",
+            "dir/file2.txt": b"the quick brown fox jumps over the lazy dog",
+        }
+
+        # Build and upload a tar shard
+        tar_buffer = BytesIO()
+        with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
+            for filename, content in sample_files.items():
+                tarinfo = tarfile.TarInfo(name=filename)
+                tarinfo.size = len(content)
+                tar.addfile(tarinfo, BytesIO(content))
+
+        archive_obj = self.bucket.object("range-archive.tar")
+        archive_obj.get_writer().put_content(tar_buffer.getvalue())
+        self._register_for_post_test_cleanup(names=[archive_obj.name], is_bucket=False)
+
+        batch = self.client.batch(bucket=self.bucket, streaming_get=False)
+        batch.add(archive_obj, archpath="file1.txt", start=0, length=10)
+        batch.add(archive_obj, archpath="dir/file2.txt", start=4, length=5)
+
+        results = list(batch.get())
+        self.assertEqual(len(results), 2, "Should retrieve 2 ranged archived files")
+
+        _, data1 = results[0]
+        self.assertEqual(
+            data1, sample_files["file1.txt"][:10], "Archived file1 range mismatch"
+        )
+
+        _, data2 = results[1]
+        self.assertEqual(
+            data2,
+            sample_files["dir/file2.txt"][4:9],
+            "Archived file2 range mismatch",
+        )
+
+    # Note: an out-of-bounds (unsatisfiable) range is intentionally not asserted
+    # here. The server's handling is object-placement dependent: a local object
+    # surfaces a hard 400 (ErrRangeNotSatisfiable), while a remote object's range
+    # error arrives at the designated target as a send-break/hole and is not
+    # reliably propagated as a client error - so there is no deterministic,
+    # topology-independent contract to assert at the SDK level. Client-side range
+    # validation is covered by test_batch_invalid_byte_range_client_side below.
+
+    def test_batch_invalid_byte_range_client_side(self):
+        """
+        Test that obviously invalid ranges are rejected client-side before any request.
+        """
+        obj, _ = self._create_object_with_content(obj_size=20)
+        batch = self.client.batch(bucket=self.bucket, streaming_get=False)
+
+        with self.assertRaises(ValueError):
+            batch.add(obj, start=-1, length=10)
+
+        with self.assertRaises(ValueError):
+            batch.add(obj, start=0, length=-5)
 
     def test_batch_no_default_bucket(self):
         """Test batch retrieval with no default bucket."""

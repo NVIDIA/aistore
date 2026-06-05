@@ -199,6 +199,30 @@ for obj_info, data in batch.get():
     print(f"Archive: {obj_info.obj_name}, File: {obj_info.archpath}, Size: {len(data)}")
 ```
 
+## Byte Range Reads
+
+You can request a byte range of an object instead of the whole object by passing `start` and
+`length` to `batch.add()`. When `archpath` is omitted the range applies to the object bytes as
+stored (a raw byte range); when `archpath` is set the range applies to the extracted archived
+file. Pass `length=-1` to read from `start` to the end of the object (an open-ended range); a
+non-zero `start` requires a `length`. In multipart mode the returned `MossOut.size` equals the
+number of bytes read.
+
+```python
+batch = client.batch(bucket=bucket, streaming_get=False)
+batch.add("large.bin", start=0, length=1024)          # first 1 KiB of the object
+batch.add("large.bin", start=4096, length=1024)        # 1 KiB starting at offset 4096
+batch.add("large.bin", start=4096, length=-1)          # open-ended: offset 4096 to EOF
+batch.add("shard.tar", archpath="sample.json", start=0, length=256)  # range over an archived file
+
+for obj_info, data in batch.get():
+    assert len(data) == obj_info.size
+    print(f"Object: {obj_info.obj_name}, Range bytes: {len(data)}")
+```
+
+Ranges that fall outside the object's bounds are reported per-entry (`obj_info.err_msg`) when
+`cont_on_err=True`, or raise otherwise.
+
 ### Advanced Features
 
 You can also add opaque tracking data to batch requests:

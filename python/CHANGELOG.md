@@ -8,6 +8,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- Get-Batch byte-range reads: `Batch.add()` now honors the `start`/`length`
+  parameters to retrieve a byte range of an object (chunked or monolithic) or of
+  a file extracted from an archive (when `archpath` is set).
 - `aistore.sdk.xact_const` mirroring Go's `xact/api_table.go`: `XACT_KIND_*`
   string constants, `IDLE_KINDS` / `KNOWN_KINDS` frozensets, and the
   `idles_before_finishing()` / `is_valid_kind()` predicates.
