@@ -1181,7 +1181,49 @@ const (
 	checksumRangeSizeThreshold = 4 * cos.MiB // see goi._txrng
 )
 
-func (goi *getOI) _ckrange(hrng *htrange) bool {
+func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng *htrange) (err error) {
+	var (
+		r     io.Reader
+		sgl   *memsys.SGL
+		cksum = goi.lom.Checksum()
+		size  = hrng.Length
+	)
+	if goi._shouldCksumRange(hrng) {
+		r, sgl, cksum, err = goi._doCksumRange(lmfh, hrng, size)
+		if err != nil {
+			return err
+		}
+		if sgl != nil {
+			defer sgl.Free()
+		}
+	}
+
+	if sgl == nil && lmfh != nil && goi.canSendfile(lmfh) {
+		goi.setwhdr(whdr, cksum, size)
+		goi.w.WriteHeader(http.StatusPartialContent)
+
+		err = goi.sendfileRange(lmfh, fqn, hrng.Start, size)
+	} else {
+		if r == nil {
+			r, err = goi.lom.NewSectionReader(lmfh, hrng.Start, size)
+			if err != nil {
+				if err != io.EOF {
+					goi.isIOErr = true
+				}
+				return err
+			}
+		}
+		goi.setwhdr(whdr, cksum, size)
+		goi.w.WriteHeader(http.StatusPartialContent)
+
+		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
+		err = goi.transmit(r, buf, fqn, size)
+		slab.Free(buf)
+	}
+	return err
+}
+
+func (goi *getOI) _shouldCksumRange(hrng *htrange) bool {
 	// S3 GetObject does not support or define "range checksum"
 	if goi.dpq.isS3 || goi.lom.CksumType() == cos.ChecksumNone {
 		return false
@@ -1189,62 +1231,60 @@ func (goi *getOI) _ckrange(hrng *htrange) bool {
 	return goi.lom.CksumConf().EnableReadRange && (hrng.Start > 0 || hrng.Length < goi.lom.Lsize())
 }
 
-func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng *htrange) error {
+func (goi *getOI) _doCksumRange(lmfh cos.LomReader, hrng *htrange, size int64) (io.Reader, *memsys.SGL, *cos.Cksum, error) {
 	var (
-		r      io.Reader
-		sgl    *memsys.SGL
-		cksum  = goi.lom.Checksum()
-		size   = hrng.Length
-		ra, ok = lmfh.(io.ReaderAt)
+		r     io.Reader
+		sgl   *memsys.SGL
+		cksum *cos.Cksum
+		start = hrng.Start
 	)
-	debug.Assertf(ok, "expecting ReaderAt, got (%T)", lmfh) // m.b. fh or UfestReader
+	if !goi.lom.IsChunked() {
+		ra, ok := lmfh.(io.ReaderAt)
+		debug.Assertf(ok, "expecting ReaderAt, got (%T)", lmfh)
 
-	if goi._ckrange(hrng) {
-		r = io.NewSectionReader(ra, hrng.Start, size)
-		if !goi.lom.IsChunked() && size <= checksumRangeSizeThreshold {
-			// non-chunked object & relatively small range -- pagecache
+		r = io.NewSectionReader(ra, start, size)
+		if size <= checksumRangeSizeThreshold {
 			_, cksumH, err := cos.ChecksumReader(r, goi.lom.CksumType())
 			if err != nil {
-				goi.isIOErr = true
-				return err
+				if err != io.EOF {
+					goi.isIOErr = true
+				}
+				return nil, nil, nil, err
 			}
 			cksum = &cksumH.Cksum
-			r = io.NewSectionReader(ra, hrng.Start, size)
-		} else {
-			// large (+ sgl)
-			sgl = goi.t.gmm.NewSGL(size)
-			_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, goi.lom.CksumType())
-			if err != nil {
-				sgl.Free()
-				goi.isIOErr = true
-				return err
-			}
-			cksum = &cksumH.Cksum
-			r = sgl
+
+			// reset
+			r = io.NewSectionReader(ra, start, size)
+			return r, nil, cksum, nil
 		}
+
+		sgl = goi.t.gmm.NewSGL(size)
+		_, cksumH, err := cos.CopyAndChecksum(sgl, r, nil, goi.lom.CksumType())
+		if err != nil {
+			sgl.Free()
+			goi.isIOErr = true
+			return nil, nil, nil, err
+		}
+		cksum = &cksumH.Cksum
+		return sgl, sgl, cksum, nil
 	}
 
-	goi.setwhdr(whdr, cksum, size)
-
-	// RFC 9110: "server SHOULD send 206 (Partial Content) for satisfied range requests"
-	goi.w.WriteHeader(http.StatusPartialContent)
-
-	// Tx
-	var err error
-	if sgl == nil && goi.canSendfile(lmfh) {
-		err = goi.sendfileRange(lmfh, fqn, hrng.Start, size)
-	} else {
-		if r == nil {
-			r = io.NewSectionReader(ra, hrng.Start, size)
-		}
-		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
-		err = goi.transmit(r, buf, fqn, size)
-		slab.Free(buf)
+	r, err := goi.lom.NewSectionReader(lmfh, start, size)
+	if err != nil {
+		goi.isIOErr = true
+		return nil, nil, nil, err
 	}
-	if sgl != nil {
+
+	sgl = goi.t.gmm.NewSGL(size)
+	_, cksumH, err := cos.CopyAndChecksum(sgl, r, nil, goi.lom.CksumType())
+	if err != nil {
 		sgl.Free()
+		goi.isIOErr = true
+		return nil, nil, nil, err
 	}
-	return err
+
+	cksum = &cksumH.Cksum
+	return sgl, sgl, cksum, nil
 }
 
 // buffer sizing for range and arch reads (compare w/ txreg)

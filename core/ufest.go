@@ -1514,7 +1514,6 @@ func (u *Ufest) _locate(off int64) (idx int, coff int64, err error) {
 	return idx, coff, nil
 }
 
-//nolint:unused // will use in the next commit (TODO)
 func (r *UfestReader) seekTo(off int64) error {
 	debug.Assert(r.cfh == nil && r.cidx == 0 && r.goff == 0, "expecting a fresh reader")
 

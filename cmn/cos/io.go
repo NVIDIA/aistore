@@ -88,8 +88,9 @@ type (
 		*os.File
 		fqn string
 	}
+
 	// SectionHandle is a section of reader with optional padding that implements
-	// ReadOpenCloser interface.
+	// ReadOpenCloser interface (compare with lom.NewSectionHandle).
 	SectionHandle struct {
 		r         io.ReaderAt
 		s         *io.SectionReader
@@ -98,12 +99,13 @@ type (
 		padding   int64 // padding size
 		padOffset int64 // offset inside padding when reading a file
 	}
-	// FileSectionHandle opens a file and reads a section of it with optional
-	// padding. It implements the ReadOpenCloser interface.
+	// FileSectionHandle opens a file and reads a section of it with optional padding.
+	// It implements the ReadOpenCloser interface (compare with lom.NewSectionHandle).
 	FileSectionHandle struct {
 		fh  *FileHandle
 		sec *SectionHandle
 	}
+
 	// ByteReader is a byte buffer(made from []byte) that implements
 	// ReadOpenCloser interface
 	ByteReader struct {
