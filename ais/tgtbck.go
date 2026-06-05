@@ -84,9 +84,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		// list objects
 		t.bgetObjects(w, r, qbck, msg, dpq, phase)
 
-	// TODO: add apc.ActSummaryShard next to ActSummaryBck: renew XactShardSumm
-	// on Begin2PC and return Result() snapshots on Query2PC.
-	case apc.ActSummaryBck:
+	case apc.ActSummaryBck, apc.ActSummaryShard:
 		var bucket, phase string // txn
 		if len(apiItems) == 0 {
 			t.writeErrURL(w, r)
@@ -107,7 +105,11 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			t.writeErr(w, r, err)
 			return
 		}
-		t.bgetSumm(w, r, qbck, msg, dpq, phase)
+		if msg.Action == apc.ActSummaryBck {
+			t.bgetBckSumm(w, r, qbck, msg, dpq, phase)
+		} else {
+			t.bgetShardSumm(w, r, qbck, msg, dpq, phase)
+		}
 
 	case apc.ActShowNBI:
 		var bckName string
@@ -178,7 +180,7 @@ func (t *target) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 	}
 }
 
-func (t *target) bgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *actMsgExt, dpq *dpq, phase string) {
+func (t *target) bgetBckSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *actMsgExt, dpq *dpq, phase string) {
 	var bsumMsg apc.BsummCtrlMsg
 	err := cos.MorphMarshal(msg.Value, &bsumMsg)
 	if err != nil {
@@ -193,7 +195,30 @@ func (t *target) bgetSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.Quer
 			return
 		}
 	}
-	t.bsumm(w, r, phase, bck, &bsumMsg, dpq)
+	t.bckSumm(w, r, phase, bck, &bsumMsg, dpq)
+}
+
+func (t *target) bgetShardSumm(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *actMsgExt, dpq *dpq, phase string) {
+	if !qbck.IsBucket() {
+		err := cmn.NewErrNotImpl("shard-summary", "bucket queries")
+		t.writeErr(w, r, err)
+		return
+	}
+	var summMsg apc.ShardSummMsg
+	if err := cos.MorphMarshal(msg.Value, &summMsg); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+		return
+	}
+	summMsg.Prefix = cos.TrimPrefix(summMsg.Prefix)
+	if err := cos.ValidatePrefix("bad shard-summary request", summMsg.Prefix); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	bck, err := t._resolveQbck(w, r, qbck, true /*dont-add-remote*/)
+	if err != nil {
+		return
+	}
+	t.shardSumm(w, r, phase, bck, &summMsg, dpq)
 }
 
 // there's a difference between looking for all (any) provider vs a specific one -
@@ -418,7 +443,7 @@ func (t *target) _resolveInvName(w http.ResponseWriter, r *http.Request, bck *me
 	return true
 }
 
-func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck *meta.Bck, msg *apc.BsummCtrlMsg, dpq *dpq) {
+func (t *target) bckSumm(w http.ResponseWriter, r *http.Request, phase string, bck *meta.Bck, msg *apc.BsummCtrlMsg, dpq *dpq) {
 	if phase == apc.Begin2PC {
 		rns := xreg.RenewBckSummary(bck, msg)
 		if rns.Err != nil {
@@ -461,6 +486,61 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck
 		}
 	}
 	t.writeJSON(w, r, result, xsumm.Name())
+}
+
+func (t *target) shardSumm(w http.ResponseWriter, r *http.Request, phase string, bck *meta.Bck, msg *apc.ShardSummMsg, dpq *dpq) {
+	if phase == apc.Begin2PC {
+		rns := xreg.RenewBckShardSumm(bck, msg)
+		if rns.Err != nil {
+			t.writeErr(w, r, rns.Err, http.StatusInternalServerError, Silent)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	debug.Assert(phase == apc.Query2PC, phase)
+	xctn, err := xreg.GetXact(msg.UUID)
+	if err != nil {
+		t.writeErr(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	if xctn == nil {
+		err := cos.NewErrNotFound(t, apc.ActSummaryShard+" job "+msg.UUID)
+		t._erris(w, r, err, http.StatusNotFound, dpq.silent)
+		return
+	}
+
+	xsumm, ok := xctn.(*xs.XactShardSumm)
+	if !ok {
+		debug.Assert(false, "expected xs.XactShardSumm, got", xctn.String())
+		err := cos.NewErrNotFound(t, apc.ActSummaryShard+" job "+msg.UUID)
+		t._erris(w, r, err, http.StatusNotFound, dpq.silent)
+		return
+	}
+	res, err := xsumm.Result()
+	if err != nil {
+		if cmn.IsErrBucketNought(err) {
+			t.writeErr(w, r, err, http.StatusGone)
+		} else {
+			t.writeErr(w, r, err)
+		}
+		return
+	}
+
+	if !xctn.IsDone() {
+		if res.IsEmpty() {
+			debug.Assert(res.TarSize == 0 && res.Shards == 0 && res.ShardSize == 0 &&
+				res.ArchivedObjs == 0 && res.StaleIndexes == 0 && res.InvalidIndexes == 0)
+			// no progress yet
+			w.WriteHeader(http.StatusAccepted)
+		} else {
+			// partial progress
+			w.WriteHeader(http.StatusPartialContent)
+		}
+	}
+	// done
+	t.writeJSON(w, r, res, xsumm.Name())
 }
 
 // DELETE { action } /v1/buckets/bucket-name

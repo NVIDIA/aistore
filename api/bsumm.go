@@ -173,12 +173,13 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *
 // and the numbers of objects, both _in_ the cluster and remote
 // GetBucketSummary supports a single specified bucket or multiple buckets, as per `cmn.QueryBcks` query.
 // (e.g., GetBucketSummary with an empty bucket query will return "summary" info for all buckets)
-// TODO: add GetBucketShardSummary next to this API; prepare ActSummaryShard
-// request bodies there and reuse the summary polling helpers below.
 func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, args BsummArgs) (xid string,
 	res cmn.AllBsummResults, err error) {
 	if msg == nil {
 		msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
+	}
+	if args.DontWait && args.Callback != nil {
+		return "", nil, fmt.Errorf("%s: callback cannot be used with dont-wait", apc.ActSummaryBck)
 	}
 	q := qalloc()
 	bp.Method = http.MethodGet
@@ -191,7 +192,6 @@ func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, 
 		reqParams.Query = q
 	}
 	if args.DontWait {
-		debug.Assert(args.Callback == nil)
 		xid, err = _bsummDontWait(reqParams, msg, &res)
 	} else {
 		xid, err = _bsumm(reqParams, msg, &res, args)
@@ -213,11 +213,17 @@ func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, 
 // - _binfo
 // - _bsummDontWait
 func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResults, args BsummArgs) (xid string, _ error) {
-	var (
-		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
-		status int
-	)
-	debug.Assert(msg.UUID == "")
+	actMsg := apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
+	xid, err := _summStart(reqParams, actMsg)
+	if err != nil {
+		return xid, err
+	}
+	msg.UUID = xid
+	reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActSummaryBck, Value: msg})
+	return xid, _summPoll(reqParams, res, args.CallAfter, args.Callback)
+}
+
+func _summStart(reqParams *ReqParams, actMsg apc.ActMsg) (xid string, err error) {
 	reqParams.Body = cos.MustMarshal(actMsg)
 	status, err := reqParams.doReqStr(&xid)
 	if err != nil {
@@ -226,15 +232,10 @@ func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResult
 	if status != http.StatusAccepted {
 		return xid, _invalidStatus(status)
 	}
-	if msg.UUID == "" {
-		msg.UUID = xid
-		reqParams.Body = cos.MustMarshal(actMsg)
-	}
-	return xid, _summPoll(reqParams, res, args.CallAfter, args.Callback)
+	return xid, nil
 }
 
 // _summPoll polls a prepared summary request; caller owns start and UUID body.
-// TODO: call from shard-summary wait path after preparing ActSummaryShard body.
 func _summPoll[T any](reqParams *ReqParams, res *T, callAfter time.Duration, cb func(*T, bool)) (err error) {
 	var (
 		start, after int64
@@ -274,13 +275,13 @@ func _summPoll[T any](reqParams *ReqParams, res *T, callAfter time.Duration, cb 
 }
 
 func _bsummDontWait(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResults) (xid string, err error) {
-	var (
-		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
-		status int
-		isNew  = msg.UUID == ""
-	)
+	return _summDontWait(reqParams, apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}, msg.UUID, res)
+}
+
+func _summDontWait[T any](reqParams *ReqParams, actMsg apc.ActMsg, uuid string, res *T) (xid string, err error) {
 	reqParams.Body = cos.MustMarshal(actMsg)
-	if isNew {
+	if uuid == "" {
+		var status int
 		status, err = reqParams.doReqStr(&xid)
 		if err == nil {
 			if status != http.StatusAccepted {
@@ -289,11 +290,10 @@ func _bsummDontWait(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsu
 		}
 		return
 	}
-	return "", _summPollOnce(reqParams, res)
+	return uuid, _summPollOnce(reqParams, res)
 }
 
 // _summPollOnce polls a prepared summary request once.
-// TODO: call from shard-summary DontWait path after preparing ActSummaryShard body.
 func _summPollOnce[T any](reqParams *ReqParams, res *T) (err error) {
 	status, err := reqParams.DoReqAny(res)
 	if err != nil {

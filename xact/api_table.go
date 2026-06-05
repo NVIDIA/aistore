@@ -120,7 +120,7 @@ var Table = map[string]Descriptor{
 	apc.ActSummaryShard: {
 		DisplayName: "shard-summary",
 		Scope:       ScopeB,
-		Access:      apc.AceObjLIST,
+		Access:      apc.AceObjLIST | apc.AceBckHEAD,
 		Startable:   false,
 		Metasync:    false,
 	},

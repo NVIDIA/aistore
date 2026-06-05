@@ -35,12 +35,15 @@ type summCtx[T any] struct {
 
 func (p *proxy) bsummAct(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, actMsg *apc.ActMsg, msg *apc.BsummCtrlMsg) {
 	isNew := msg.UUID == ""
-	debug.Assert(msg.UUID == "" || cos.IsValidUUID(msg.UUID), msg.UUID)
-	actMsg.Value = msg
+	if !isNew && !cos.IsValidUUID(msg.UUID) {
+		p.writeErrf(w, r, "%s: invalid UUID %q", apc.ActSummaryBck, msg.UUID)
+		return
+	}
 
 	// start new
 	if isNew {
 		msg.UUID = cos.GenUUID()
+		actMsg.Value = msg
 		ctx, err := newSummCtx[cmn.AllBsummResults](p, qbck, actMsg, msg.UUID)
 		if err == nil {
 			err = ctx.summNew()
@@ -55,6 +58,7 @@ func (p *proxy) bsummAct(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 	}
 
 	// or, query partial or final results
+	actMsg.Value = msg
 	ctx, err := newSummCtx[cmn.AllBsummResults](p, qbck, actMsg, msg.UUID)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -147,7 +151,6 @@ func newSummCtx[T any](p *proxy, qbck *cmn.QueryBcks, amsg *apc.ActMsg, uuid str
 }
 
 // summNew broadcasts Begin2PC for a prepared summary ActMsg.
-// TODO: call from shard-summary proxy handler with ActSummaryShard.
 func (c *summCtx[T]) summNew() (err error) {
 	q := make(url.Values, 1)
 	c.qbck.SetQuery(q)
@@ -189,7 +192,6 @@ func (c *summCtx[T]) summNew() (err error) {
 }
 
 // summCollect broadcasts Query2PC and returns typed per-target snapshots.
-// TODO: reuse from shard-summary proxy collect path with ShardSummResult.
 func (c *summCtx[T]) summCollect() (_ map[string]T, status int, err error) {
 	var (
 		q         = make(url.Values, 4)
@@ -242,13 +244,16 @@ func (c *summCtx[T]) summCollect() (_ map[string]T, status int, err error) {
 	}
 	freeBcastRes(results)
 
+	return out, summStatus(numAccepted, numPartial, len(out)), nil
+}
+
+func summStatus(numAccepted, numPartial, numResults int) int {
 	switch {
-	case numAccepted > 0:
-		status = http.StatusAccepted
-	case numPartial > 0:
-		status = http.StatusPartialContent
+	case numResults == 0:
+		return http.StatusAccepted
+	case numAccepted > 0 || numPartial > 0:
+		return http.StatusPartialContent
 	default:
-		status = http.StatusOK
+		return http.StatusOK
 	}
-	return out, status, nil
 }

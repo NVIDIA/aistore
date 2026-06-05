@@ -6,7 +6,9 @@ package integration_test
 
 import (
 	"archive/tar"
+	"bytes"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -177,6 +179,115 @@ func TestIndexShardPrefix(t *testing.T) {
 			"shard %q (prefix B): index missing after full run", name)
 	}
 	tlog.Logf("Full-bucket index OK: all %d shards indexed\n", numShards*2)
+}
+
+func TestShardSummaryCallback(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: "test-shard-summary-" + trand.String(6), Provider: apc.AIS}
+		spec       = idxShardSummarySpec{
+			numIndexed:   16,
+			numUnindexed: 4,
+			numFiles:     20,
+			fileSize:     4 * cos.KiB,
+			numStale:     3,
+			numInvalid:   2,
+		}
+	)
+	if !testing.Short() {
+		spec.numFiles = 100
+		spec.numIndexed = 80
+		spec.numUnindexed = 20
+		spec.fileSize = 64 * cos.KiB
+	}
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+
+	tmpDir := t.TempDir()
+
+	for _, tc := range idxFormats {
+		t.Run(tc.name, func(t *testing.T) {
+			prefix := "summary/" + tc.name + "/"
+			want := idxPrepareShardSummary(t, baseParams, bck, tmpDir, prefix, tc.format, spec)
+
+			var callbacks int
+			xid, got, err := api.GetBucketShardSummary(baseParams, bck, &apc.ShardSummMsg{Prefix: prefix}, api.ShardSummArgs{
+				Callback: func(res *apc.ShardSummResult, _ bool) {
+					callbacks++
+					tassert.Fatalf(t, res.TarObjs <= want.TarObjs, "callback: tar objects %d > %d", res.TarObjs, want.TarObjs)
+					tassert.Fatalf(t, res.Shards <= want.Shards, "callback: shards %d > %d", res.Shards, want.Shards)
+				},
+			})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, xid != "", "expected non-empty shard-summary xaction ID")
+			tassert.Fatalf(t, callbacks > 0, "expected at least one shard-summary callback")
+			idxAssertShardSummary(t, got, want)
+		})
+	}
+}
+
+func TestShardSummaryDontWait(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: "test-shard-summary-dw-" + trand.String(6), Provider: apc.AIS}
+		spec       = idxShardSummarySpec{
+			numIndexed:   16,
+			numUnindexed: 4,
+			numFiles:     20,
+			fileSize:     4 * cos.KiB,
+			numStale:     3,
+			numInvalid:   2,
+		}
+	)
+	if !testing.Short() {
+		spec.numFiles = 100
+		spec.numIndexed = 80
+		spec.numUnindexed = 20
+		spec.fileSize = 64 * cos.KiB
+	}
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+
+	tmpDir := t.TempDir()
+
+	for _, tc := range idxFormats {
+		t.Run(tc.name, func(t *testing.T) {
+			prefix := "summary-dw/" + tc.name + "/"
+			want := idxPrepareShardSummary(t, baseParams, bck, tmpDir, prefix, tc.format, spec)
+			msg := &apc.ShardSummMsg{Prefix: prefix}
+			xid, got, err := api.GetBucketShardSummary(baseParams, bck, msg, api.ShardSummArgs{DontWait: true})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, xid != "", "expected non-empty shard-summary xaction ID")
+			tassert.Fatalf(t, got.IsEmpty(), "new dont-wait request: expected empty summary, got %+v", got)
+
+			msg.UUID = xid
+			var pollErr error
+			err = tools.WaitForCondition(func() bool {
+				_, got, pollErr = api.GetBucketShardSummary(baseParams, bck, msg, api.ShardSummArgs{DontWait: true})
+				if pollErr == nil {
+					return true
+				}
+				herr := cmn.AsErrHTTP(pollErr)
+				if herr == nil {
+					return true
+				}
+				switch herr.Status {
+				case http.StatusAccepted, http.StatusPartialContent:
+					pollErr = nil
+					return false
+				default:
+					return true
+				}
+			}, tools.WaitRetryOpts{MaxRetries: 100, Interval: 100 * time.Millisecond})
+			tassert.CheckFatal(t, err)
+			tassert.CheckFatal(t, pollErr)
+			idxAssertShardSummary(t, got, want)
+		})
+	}
 }
 
 func TestIndexShardAbort(t *testing.T) {
@@ -614,6 +725,71 @@ func TestIndexShardPartialReupload(t *testing.T) {
 // helpers
 //
 
+type idxShardSummarySpec struct {
+	numIndexed   int
+	numUnindexed int
+	numFiles     int
+	fileSize     int
+	numStale     int
+	numInvalid   int
+}
+
+func idxPrepareShardSummary(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, tmpDir, prefix string,
+	format tar.Format, spec idxShardSummarySpec) *apc.ShardSummResult {
+	t.Helper()
+	tassert.Fatalf(t, spec.numIndexed >= spec.numStale+spec.numInvalid,
+		"summary test requires indexed=%d >= stale=%d + invalid=%d", spec.numIndexed, spec.numStale, spec.numInvalid)
+
+	indexedPfx := prefix + "indexed/"
+	unindexedPfx := prefix + "unindexed/"
+	skipPfx := "skip/" + prefix
+
+	indexed, indexedSizes := idxUploadTarShardsOneFormat(t, baseParams, bck, tmpDir, indexedPfx, spec.numIndexed, spec.numFiles, spec.fileSize, format)
+	_, unindexedSizes := idxUploadTarShardsOneFormat(t, baseParams, bck, tmpDir, unindexedPfx, spec.numUnindexed, spec.numFiles, spec.fileSize, format)
+	idxUploadTarShardsOneFormat(t, baseParams, bck, tmpDir, skipPfx, 1, spec.numFiles, spec.fileSize, format)
+
+	idxRunAndWait(t, baseParams, bck, &apc.IndexShardMsg{Prefix: indexedPfx})
+	idxRunAndWait(t, baseParams, bck, &apc.IndexShardMsg{Prefix: skipPfx})
+
+	tarSize := idxSumSizes(indexedSizes) + idxSumSizes(unindexedSizes)
+	shardSize := idxSumSizes(indexedSizes)
+	archivedObjs := uint64(spec.numIndexed) * uint64(spec.numFiles)
+	for i := range spec.numStale {
+		staleSize := idxPutOneTar(t, baseParams, bck, tmpDir, indexed[i], spec.numFiles+i+1, spec.fileSize+(i+1)*cos.KiB, format)
+		tarSize = tarSize - uint64(indexedSizes[i]) + uint64(staleSize)
+		shardSize -= uint64(indexedSizes[i])
+		archivedObjs -= uint64(spec.numFiles)
+	}
+	for i := spec.numStale; i < spec.numStale+spec.numInvalid; i++ {
+		idxCorruptShardIndex(t, bck, indexed[i])
+		shardSize -= uint64(indexedSizes[i])
+		archivedObjs -= uint64(spec.numFiles)
+	}
+	return &apc.ShardSummResult{
+		TarObjs:        uint64(spec.numIndexed + spec.numUnindexed),
+		TarSize:        tarSize,
+		Shards:         uint64(spec.numIndexed - spec.numStale - spec.numInvalid),
+		ShardSize:      shardSize,
+		ArchivedObjs:   archivedObjs,
+		StaleIndexes:   uint64(spec.numStale),
+		InvalidIndexes: uint64(spec.numInvalid),
+	}
+}
+
+func idxAssertShardSummary(t *testing.T, got, want *apc.ShardSummResult) {
+	t.Helper()
+	tassert.Fatalf(t, *got == *want, "unexpected shard summary: got %+v, want %+v", got, want)
+}
+
+func idxCorruptShardIndex(t *testing.T, bck cmn.Bck, objName string) {
+	t.Helper()
+	idxPath := idxFindFile(bck, objName)
+	tassert.Fatalf(t, idxPath != "", "TAR object %q: index file not found on any mountpath", objName)
+	st, err := os.Stat(idxPath)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.WriteFile(idxPath, bytes.Repeat([]byte{'x'}, int(st.Size())), 0o644))
+}
+
 // idxFindFile returns the on-disk FQN of the shard index for objName in bck,
 // delegating to findObjOnDisk on the ais://.sys-shardidx system bucket.
 // Requires initMountpaths to have been called in the test.
@@ -705,32 +881,52 @@ func idxDeleteObjects(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, name
 	}
 }
 
-var idxFormats = []tar.Format{tar.FormatGNU, tar.FormatPAX, tar.FormatUSTAR}
+var idxFormats = []struct {
+	name   string
+	format tar.Format
+}{
+	{"gnu", tar.FormatGNU},
+	{"pax", tar.FormatPAX},
+	{"ustar", tar.FormatUSTAR},
+}
 
-// idxUploadTarShards uploads numShards TAR archives (each with numFiles random files of fileSize bytes)
-// to bck, using prefix for object names. Rotates through GNU/PAX/USTAR formats. Returns object names.
+// idxUploadTarShards uploads numShards TAR archives and returns object names.
+// It rotates through GNU/PAX/USTAR formats.
 func idxUploadTarShards(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, tmpDir, prefix string, numShards, numFiles, fileSize int) []string {
 	t.Helper()
 	names := make([]string, numShards)
 	for i := range numShards {
 		objName := prefix + trand.String(8) + archive.ExtTar
 		names[i] = objName
-		idxPutOneTar(t, baseParams, bck, tmpDir, objName, numFiles, fileSize, idxFormats[i%len(idxFormats)])
+		idxPutOneTar(t, baseParams, bck, tmpDir, objName, numFiles, fileSize, idxFormats[i%len(idxFormats)].format)
 	}
 	return names
+}
+
+func idxUploadTarShardsOneFormat(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, tmpDir, prefix string,
+	numShards, numFiles, fileSize int, format tar.Format) ([]string, []int64) {
+	t.Helper()
+	names := make([]string, numShards)
+	sizes := make([]int64, numShards)
+	for i := range numShards {
+		objName := prefix + trand.String(8) + archive.ExtTar
+		names[i] = objName
+		sizes[i] = idxPutOneTar(t, baseParams, bck, tmpDir, objName, numFiles, fileSize, format)
+	}
+	return names, sizes
 }
 
 // idxReplaceShards re-uploads new TAR content under each name in names, rotating formats.
 func idxReplaceShards(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, tmpDir string, names []string, numFiles, fileSize int) {
 	t.Helper()
 	for i, name := range names {
-		idxPutOneTar(t, baseParams, bck, tmpDir, name, numFiles, fileSize, idxFormats[i%len(idxFormats)])
+		idxPutOneTar(t, baseParams, bck, tmpDir, name, numFiles, fileSize, idxFormats[i%len(idxFormats)].format)
 	}
 }
 
 // idxPutOneTar creates a random TAR archive (in the given format) and PUTs it to bck.
 // Uses xxhash so that GetObjectWithValidation can verify object integrity.
-func idxPutOneTar(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, tmpDir, objName string, numFiles, fileSize int, format tar.Format) {
+func idxPutOneTar(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, tmpDir, objName string, numFiles, fileSize int, format tar.Format) int64 {
 	t.Helper()
 	localPath := filepath.Join(tmpDir, trand.String(8)+archive.ExtTar)
 	err := tarch.CreateArchRandomFiles(localPath, format, archive.ExtTar, numFiles, fileSize,
@@ -757,4 +953,12 @@ func idxPutOneTar(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, tmpDir, 
 	})
 	r.Close()
 	tassert.CheckFatal(t, err)
+	return fi.Size()
+}
+
+func idxSumSizes(sizes []int64) (total uint64) {
+	for _, size := range sizes {
+		total += uint64(size)
+	}
+	return
 }

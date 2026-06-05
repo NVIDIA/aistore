@@ -27,3 +27,17 @@ type (
 		InvalidIndexes uint64 `json:"invalid-indexes,string"` // # TAR objects whose shard index failed to load
 	}
 )
+
+func (r *ShardSummResult) IsEmpty() bool {
+	return r.TarObjs == 0
+}
+
+func (r *ShardSummResult) Aggregate(from ShardSummResult) {
+	r.TarObjs += from.TarObjs
+	r.TarSize += from.TarSize
+	r.Shards += from.Shards
+	r.ShardSize += from.ShardSize
+	r.ArchivedObjs += from.ArchivedObjs
+	r.StaleIndexes += from.StaleIndexes
+	r.InvalidIndexes += from.InvalidIndexes
+}
