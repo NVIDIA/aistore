@@ -1198,28 +1198,39 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 		}
 	}
 
+	// sendfile path
 	if sgl == nil && lmfh != nil && goi.canSendfile(lmfh) {
-		goi.setwhdr(whdr, cksum, size)
-		goi.w.WriteHeader(http.StatusPartialContent)
-
-		err = goi.sendfileRange(lmfh, fqn, hrng.Start, size)
-	} else {
-		if r == nil {
-			r, err = goi.lom.NewSectionReader(lmfh, hrng.Start, size)
-			if err != nil {
-				if err != io.EOF {
-					goi.isIOErr = true
-				}
-				return err
-			}
+		rocs, ok := lmfh.(io.Seeker)
+		debug.Assert(ok)
+		if _, err := rocs.Seek(hrng.Start, io.SeekStart); err != nil {
+			goi.isIOErr = true
+			return err
 		}
 		goi.setwhdr(whdr, cksum, size)
 		goi.w.WriteHeader(http.StatusPartialContent)
 
-		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
-		err = goi.transmit(r, buf, fqn, size)
-		slab.Free(buf)
+		// note: must be LimitedReader (not SectionReader)
+		return goi.sendfile(&io.LimitedReader{R: lmfh, N: size}, fqn, size, true /*committed*/)
 	}
+
+	// regular path
+	if r == nil {
+		// monolithic or chunked (the latter via seekTo)
+		r, err = goi.lom.NewSectionReader(lmfh, hrng.Start, size)
+		if err != nil {
+			if err != io.EOF {
+				goi.isIOErr = true
+			}
+			return err
+		}
+	}
+	goi.setwhdr(whdr, cksum, size)
+	goi.w.WriteHeader(http.StatusPartialContent)
+
+	buf, slab := goi.t.gmm.AllocSize(_txsize(size))
+	err = goi.transmit(r, buf, fqn, size, true /*committed*/)
+	slab.Free(buf)
+
 	return err
 }
 
@@ -1316,10 +1327,10 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 
 	// Tx
 	if goi.canSendfile(lmfh) {
-		err = goi.sendfile(lmfh, fqn, size)
+		err = goi.sendfile(lmfh, fqn, size, false /*committed*/)
 	} else {
 		buf, slab := goi.t.gmm.AllocSize(min(size, memsys.MaxPageSlabSize))
-		err = goi.transmit(lmfh, buf, fqn, size)
+		err = goi.transmit(lmfh, buf, fqn, size, false /*committed*/)
 		slab.Free(buf)
 	}
 	return err
@@ -1348,7 +1359,7 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 		whdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 
 		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
-		err = goi.transmit(csl, buf, fqn, size)
+		err = goi.transmit(csl, buf, fqn, size, false /*committed*/)
 		slab.Free(buf)
 		csl.Close()
 		return err
@@ -1370,25 +1381,31 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 	rcb := _newRcb(goi.w)
 	whdr.Set(cos.HdrContentType, cos.ContentTar)
 	err = ar.ReadUntil(rcb, dpq.arch.regx, dpq.arch.mmode)
+
 	if err != nil {
+		if rcb.committed || cos.IsErrRetriableConn(err) {
+			return cmn.ErrGetTxBenign
+		}
 		goi.isIOErr = true
-		err = cmn.NewErrFailedTo(goi.t, "extract files that match "+dpq._archstr()+" from", lom.Cname(), err)
+		return cmn.NewErrFailedTo(goi.t, "extract files that match "+dpq._archstr()+" from", lom.Cname(), err)
 	}
-	if err == nil && rcb.num == 0 {
-		// none found
+	if rcb.num == 0 {
 		return cos.NewErrNotFound(goi.t, dpq._archstr()+" in "+lom.Cname())
 	}
-	rcb.fini()
-	return err
+	if errC := rcb.fini(); errC != nil {
+		return cmn.ErrGetTxBenign // (ReadUntil succeeded and num > 0) => committed
+	}
+
+	return nil
 }
 
-func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) error {
+func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64, committed bool) error {
 	var (
 		errTx error
 	)
 	written, err := cos.CopyBuffer(goi.w, r, buf)
 	if err != nil || written != size {
-		errTx = goi._txerr(err, fqn /*lbget*/, written, size)
+		errTx = goi._txerr(err, fqn /*lbget*/, written, size, committed)
 	}
 	if errTx != nil {
 		return errTx
@@ -1405,29 +1422,15 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 // fast (sendfile) path
 //
 
-func (goi *getOI) sendfile(r io.Reader, fqn string, size int64) error {
+func (goi *getOI) sendfile(r io.Reader, fqn string, size int64, committed bool) error {
 	written, err := cos.CopySendfile(goi.w, r)
 	if err != nil || written != size {
-		if errTx := goi._txerr(err, fqn, written, size); errTx != nil {
+		if errTx := goi._txerr(err, fqn, written, size, committed); errTx != nil {
 			return errTx
 		}
 	}
 	goi.stats(written)
 	return nil
-}
-
-// SectionReader cannot be used; use a LimitedReader after seeking the underlying file
-func (goi *getOI) sendfileRange(lmfh cos.LomReader, fqn string, off, size int64) error {
-	rocs, ok := lmfh.(io.Seeker)
-	debug.Assert(ok)
-	if _, err := rocs.Seek(off, io.SeekStart); err != nil {
-		if !cmn.IsErrObjNought(err) {
-			goi.isIOErr = true
-		}
-		return cmn.ErrGetTxBenign
-	}
-
-	return goi.sendfile(&io.LimitedReader{R: lmfh, N: size}, fqn, size)
 }
 
 // source must be monolithic file-backed (see assert)
@@ -1445,10 +1448,12 @@ func (goi *getOI) canSendfile(lmfh cos.LomReader) bool {
 	return ok
 }
 
-func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
+func (goi *getOI) _txerr(err error, fqn string, written, size int64, committed bool) error {
 	const act = "(transmit)"
 	lom := goi.lom
 	cname := lom.Cname()
+
+	committed = committed || written > 0
 
 	// enforce transmit size
 	if err == nil && written != size {
@@ -1458,7 +1463,7 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 		errTx := &errGetTxSevere{
 			msg: fmt.Sprintf("%s %s: invalid size %d != %d", act, cname, written, size),
 		}
-		nlog.WarningDepth(1, err)
+		nlog.ErrorDepth(1, errTx)
 		return errTx
 	}
 
@@ -1468,6 +1473,7 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.WarningDepth(1, act, cname, "err:", err)
 		}
+		return cmn.ErrGetTxBenign // client-disconnect is not a server-side error
 	case cmn.IsErrObjNought(err):
 		lom.UncacheDel()
 		if cmn.Rom.V(4, cos.ModAIS) {
@@ -1479,7 +1485,10 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 		nlog.ErrorDepth(1, act, cname, "err:", err)
 	}
 
-	return cmn.ErrGetTxBenign
+	if committed {
+		return cmn.ErrGetTxBenign
+	}
+	return err
 }
 
 func (goi *getOI) stats(written int64) {
@@ -2354,9 +2363,10 @@ func (u *_uplock) do(lom *core.LOM) error {
 // - Call(..., *tar.Header) to avoid typecast
 
 type rcbCtx struct {
-	w   io.Writer
-	tw  *tar.Writer
-	num int
+	w         io.Writer
+	tw        *tar.Writer
+	num       int
+	committed bool
 }
 
 var _ archive.ArchRCB = (*rcbCtx)(nil)
@@ -2375,16 +2385,18 @@ func (c *rcbCtx) Call(_ string, reader cos.ReadCloseSizer, hdr any) (_ bool /*st
 	tarHdr, ok := hdr.(*tar.Header)
 	debug.Assert(ok)
 	if err = c.tw.WriteHeader(tarHdr); err == nil {
+		c.committed = true
 		_, err = io.Copy(c.tw, reader)
 	}
 	return false, err
 }
 
-func (c *rcbCtx) fini() {
-	if c.tw != nil {
-		debug.Assert(c.num > 0)
-		c.tw.Close()
+func (c *rcbCtx) fini() error {
+	if c.tw == nil || !c.committed /*nothing written - cannot write padding*/ {
+		return nil
 	}
+	debug.Assert(c.num > 0)
+	return c.tw.Close()
 }
 
 //

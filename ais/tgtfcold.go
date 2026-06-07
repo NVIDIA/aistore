@@ -136,7 +136,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 		return cmn.ErrGetTxBenign
 	}
 	if written != res.Size {
-		errTx := goi._txerr(nil, lom.FQN, written, res.Size)
+		errTx := goi._txerr(nil, lom.FQN, written, res.Size, true /*committed*/)
 		debug.Assert(isErrGetTxSevere(errTx), errTx)
 		goi._cleanup(revert, lmfh, buf, slab, errTx, "(rr/wl)")
 		return errTx
