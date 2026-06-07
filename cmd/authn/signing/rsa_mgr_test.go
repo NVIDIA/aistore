@@ -231,6 +231,39 @@ func TestRSAKeyManagerUnencryptedWithPassphrase(t *testing.T) {
 	tassert.Fatal(t, err != nil, "expected Init to fail when loading unencrypted key with passphrase configured")
 }
 
+func TestExternallyProvisionedMissingKeyFails(t *testing.T) {
+	conf := defaultTestRSAConfig(t)
+	conf.ExternallyProvisioned = true
+	mgr := signing.NewRSAKeyManager(conf, genRandomPassphrase(t), &mock.KeyDataStorage{})
+
+	err := mgr.Init()
+	tassert.Fatalf(t, err != nil, "expected Init to fail when externally provisioned key file is missing")
+
+	_, statErr := os.Stat(conf.Filepath)
+	tassert.Fatalf(t, errors.Is(statErr, fs.ErrNotExist), "missing external key must not be generated, stat err: %v", statErr)
+}
+
+func TestExternallyProvisionedRejectsRotation(t *testing.T) {
+	conf := defaultTestRSAConfig(t)
+	passphrase := genRandomPassphrase(t)
+	db := &mock.KeyDataStorage{}
+
+	writer := signing.NewRSAKeyManager(conf, passphrase, db)
+	err := writer.Init()
+	tassert.CheckFatal(t, err)
+
+	conf.ExternallyProvisioned = true
+	mgr := signing.NewRSAKeyManager(conf, passphrase, db)
+	err = mgr.Init()
+	tassert.CheckFatal(t, err)
+	assertKeyBundleValid(t, mgr)
+
+	err = mgr.RotateKey()
+	tassert.Fatalf(t, errors.Is(err, signing.ErrExternallyProvisioned), "expected ErrExternallyProvisioned, got: %v", err)
+	assertKeyBundleValid(t, mgr)
+	compareMgrKeyBundle(t, writer, mgr)
+}
+
 func TestValidationConf_RSA(t *testing.T) {
 	mgr := signing.NewRSAKeyManager(defaultTestRSAConfig(t), genRandomPassphrase(t), &mock.KeyDataStorage{})
 	err := mgr.Init()
