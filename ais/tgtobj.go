@@ -1386,7 +1386,6 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 		if rcb.committed || cos.IsErrRetriableConn(err) {
 			return cmn.ErrGetTxBenign
 		}
-		goi.isIOErr = true
 		return cmn.NewErrFailedTo(goi.t, "extract files that match "+dpq._archstr()+" from", lom.Cname(), err)
 	}
 	if rcb.num == 0 {

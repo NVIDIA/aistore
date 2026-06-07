@@ -12,7 +12,6 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 var ioErrs = [...]error{
@@ -38,19 +37,22 @@ var ioErrs = [...]error{
 func IsIOError(err error) bool {
 	debug.Assert(err != nil)
 
-	if IsErrMv(err) {
+	if IsErrMv(err) || IsNotExist(err) {
 		return false
 	}
 
-	// via os.NewSyscallError(), with a prior check !os.IsNotExist()
-	if e, ok := err.(*os.SyscallError); ok {
-		nlog.Infoln("by syscall-error", e)
+	var se *os.SyscallError
+	if errors.As(err, &se) {
+		err = se.Err
+		if IsErrMv(err) || IsNotExist(err) {
+			return false
+		}
 		return true
 	}
+
 	// assorted errnos, via errors.Is
 	for _, e := range ioErrs {
 		if errors.Is(err, e) {
-			nlog.Infoln("by io-error", e)
 			return true
 		}
 	}

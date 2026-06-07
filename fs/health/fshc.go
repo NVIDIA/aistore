@@ -120,7 +120,7 @@ func run(f *FSHC, mi *fs.Mountpath, r *ror, fqn string, started int64) {
 	f.run(mi, fqn)
 
 	now := mono.NanoTime()
-	nlog.Infoln(mi.String(), "FSHC runtime:", time.Duration(now-started))
+	nlog.Warningln(mi.String(), "FSHC runtime:", time.Duration(now-started))
 
 	ratomic.StoreInt64(&r.last, now)
 	ratomic.StoreInt64(&r.running, 0)
@@ -245,7 +245,7 @@ func _rw(mi *fs.Mountpath, fqn string, numFiles, fsize, maxerrs int) (etag strin
 	if fqn != "" {
 		nlog.Infoln("1. read one failed fqn:", fqn)
 		if finfo, err := os.Stat(fqn); err != nil {
-			if !cos.IsNotExist(err) && cos.IsIOError(err) {
+			if cos.IsIOError(err) {
 				rerrs++ // not a read error; counting anyway
 			}
 		} else if !finfo.IsDir() {

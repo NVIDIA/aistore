@@ -912,16 +912,21 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		// stats
 		vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
 		switch {
-		case goi.isIOErr:
+		// I/O error by:
+		// (a) local context (see `goi.isIOErr = true`), or by
+		// (b) wrapped syscall/errno
+		case goi.isIOErr || cos.IsIOError(err):
 			t.statsT.IncWith(stats.ErrGetCount, vlabs)
 			t.statsT.IncWith(stats.IOErrGetCount, vlabs)
-			if cmn.Rom.V(4, cos.ModAIS) {
-				nlog.Warningln("io-error [", err, "]", goi.lom.String())
-			}
+
+			cnt := t.statsT.Get(stats.IOErrGetCount)
+			cmn.SparseWarn(cos.ModAIS, cnt, t, "GET local I/O error:", goi.lom.Cname(), "err:", err)
+
 		case cos.IsNotExist(err, ecode):
 			if goi.lom.IsFeatureSet(feat.CountObjectNotFoundStats) {
 				t.statsT.IncWith(stats.ErrGetCount, vlabs)
 			}
+
 		default:
 			t.statsT.IncWith(stats.ErrGetCount, vlabs)
 		}

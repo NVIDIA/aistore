@@ -211,7 +211,7 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 	size := int64(len(buf))
 	if size == 0 {
 		nlog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
-		return nil, os.NewSyscallError(getxattr, syscall.ENOENT)
+		return nil, cmn.NewErrLmetaNotFound(lom.Cname(), errors.New("empty metadata"))
 	}
 	if size < prefLen {
 		return nil, cmn.NewErrLmetaCorrupted(fmt.Errorf("%s: too short (%d)", badLmeta, size))
