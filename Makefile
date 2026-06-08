@@ -6,6 +6,7 @@ DEPLOY_DIR = ./deploy/dev/local
 SCRIPTS_DIR = ./scripts
 BUILD_DIR = ./cmd
 BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
+GOPATH := $(shell go env GOPATH)
 
 ifeq ($(shell go env GOOS),linux)
 ifeq ($(strip $(GORACE)),)
