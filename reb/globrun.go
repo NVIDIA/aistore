@@ -672,9 +672,11 @@ func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	lom := core.AllocLOM(fqn)
-	err := rj._lwalk(lom, fqn)
+	handedOff, err := rj._lwalk(lom, fqn)
 	if err != nil {
-		core.FreeLOM(lom)
+		if !handedOff {
+			core.FreeLOM(lom)
+		}
 		if err == cmn.ErrSkip {
 			err = nil
 		}
@@ -682,17 +684,18 @@ func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) error {
 	return err
 }
 
-func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
+// handedOff => objSentCallback frees the LOM via doCmpl
+func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) (bool /*handedOff*/, error) {
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		if cmn.IsErrBucketLevel(err) {
 			nlog.Errorln(rj.rargs.logHdr, err)
-			return err
+			return false, err
 		}
-		return cmn.ErrSkip
+		return false, cmn.ErrSkip
 	}
 	// skip EC.Enabled bucket - leave the job for EC rebalance
 	if lom.ECEnabled() {
-		return filepath.SkipDir
+		return false, filepath.SkipDir
 	}
 
 	rargs := rj.rargs
@@ -709,18 +712,18 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 				if cmn.Rom.V(4, cos.ModReb) {
 					nlog.Warningln(rargs.logHdr, "skip-dir", lom.ObjName, "prefix", rargs.prefix)
 				}
-				return filepath.SkipDir
+				return false, filepath.SkipDir
 			}
-			return cmn.ErrSkip
+			return false, cmn.ErrSkip
 		}
 	}
 
 	tsi, err := rargs.smap.HrwHash2T(lom.Digest())
 	if err != nil {
-		return err
+		return false, err
 	}
 	if tsi.ID() == core.T.SID() {
-		return cmn.ErrSkip
+		return false, cmn.ErrSkip
 	}
 
 	// skip objects that were already sent via GFN (due to probabilistic filtering
@@ -730,7 +733,7 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	m := rargs.m
 	if m.filterGFN.Lookup(*bname) {
 		m.filterGFN.Delete(*bname)
-		return cmn.ErrSkip
+		return false, cmn.ErrSkip
 	}
 
 	// nwp: delegate to a worker
@@ -738,40 +741,40 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 		l, c := len(nwp.workCh), cap(nwp.workCh)
 		nwp.chanFull.Check(l, c) // TODO: consider to-jogger "fallback" when full
 		nwp.workCh <- wi{lom, tsi}
-		return nil
+		return false, nil
 	}
 
 	// no workers: jogger does everything
 	var roc cos.ReadOpenCloser
 	if roc, err = getROC(lom); err != nil { // rlock, load, new roc
-		return err
+		return false, err
 	}
 
 	// transmit (unlock via transport completion => roc.Close)
 	if err := rargs.doSend(lom, tsi, roc); err != nil {
 		rargs.xreb.Abort(err) // NOTE: failure to send == abort
-		return err
+		return true, err
 	}
 
-	return nil
+	return true, nil
 }
 
-// takes rlock and keeps it _iff_ successful
-func getROC(lom *core.LOM) (roc cos.ReadOpenCloser, err error) {
+// upon success: take rlock and keep it until Close()
+// on error: always unlock
+func getROC(lom *core.LOM) (cos.ReadOpenCloser, error) {
 	lom.Lock(false)
-	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		lom.Unlock(false)
-		return
+		return nil, err
 	}
 	if lom.IsCopy() {
 		lom.Unlock(false)
-		err = cmn.ErrSkip
-		return
+		return nil, cmn.ErrSkip
 	}
 	if lom.Checksum() == nil {
-		if _, err = lom.ComputeSetCksum(true); err != nil {
+		if _, err := lom.ComputeSetCksum(true); err != nil {
 			lom.Unlock(false)
-			return
+			return nil, err
 		}
 	}
 	debug.Assert(lom.Checksum() != nil, lom.String())

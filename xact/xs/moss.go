@@ -779,16 +779,21 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 
 		var (
 			nameInArch = in.NameInRespArch(lom.Bck().Name, req.OnlyObjName)
+			handedOff  bool
 		)
-		lom.Lock(false) // success: unlock via transport completion; error: unlock below
+		// success: unlock via transport completion
+		// error: unlock below unless SDM took ownership
+		lom.Lock(false)
 
 		if in.ArchPath == "" {
-			err = r._sendreg(dt, lom, wid, nameInArch, in, i)
+			handedOff, err = r._sendreg(dt, lom, wid, nameInArch, in, i)
 		} else {
-			err = r._sendarch(dt, lom, wid, nameInArch, in, i)
+			handedOff, err = r._sendarch(dt, lom, wid, nameInArch, in, i)
 		}
 		if err != nil {
-			lom.Unlock(false)
+			if !handedOff {
+				lom.Unlock(false)
+			}
 			return err
 		}
 	}
@@ -808,7 +813,7 @@ type (
 )
 
 // called under r-lock
-func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, in *apc.MossIn, index int) error {
+func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, in *apc.MossIn, index int) (bool, error) {
 	var (
 		lh      cos.LomReader
 		roc     cos.ReadOpenCloser
@@ -819,7 +824,7 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 	err := lom.Load(false /*cache it*/, true)
 	if err == nil {
 		if lh, err = lom.Open(); err != nil {
-			return fmt.Errorf("%s: failed to open already loaded %s under r-lock: %w", r.Name(), lom.Cname(), err)
+			return false, fmt.Errorf("%s: failed to open already loaded %s under r-lock: %w", r.Name(), lom.Cname(), err)
 		}
 	}
 
@@ -833,14 +838,14 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 		off, length, errRng := in.CheckRange(lom.Lsize()) // note: (0,0) => full object
 		if errRng != nil {
 			cos.Close(lh)
-			return errRng
+			return false, errRng
 		}
 		if length != lom.Lsize() {
 			oah = &cmn.ObjAttrs{Size: length} // range length
 		}
 		roc, err = lom.NewSectionHandle(lh, off, length) // owns lh (mono + chunked)
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
@@ -859,7 +864,7 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 	o.SentCB = r.anySent
 	o.CmplArg = &anySentCmpl{lom: lom, opaque: opaque}
 
-	return bundle.SDM.Send(o, roc, tsi, r)
+	return true /*handedOff*/, bundle.SDM.Send(o, roc, tsi, r)
 }
 
 func (r *XactMoss) anySent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
@@ -881,7 +886,7 @@ func (r *XactMoss) anySent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err 
 }
 
 // called under r-lock
-func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, in *apc.MossIn, index int) error {
+func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, in *apc.MossIn, index int) (bool, error) {
 	var (
 		roc     cos.ReadOpenCloser
 		oah     cos.SimpleOAH
@@ -913,14 +918,14 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch str
 			if errRng != nil {
 				cos.Close(csl)
 				cos.Close(lh)
-				return errRng
+				return false, errRng
 			}
 			// range reader over archived file
 			if length != size {
 				csl, err = archive.RangeReader(csl, off, length)
 				if err != nil {
 					cos.Close(lh)
-					return err
+					return false, err
 				}
 				size = length
 			}
@@ -942,7 +947,7 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch str
 	o.SentCB = r.anySent
 	o.CmplArg = &anySentCmpl{lom: lom, lh: lh, opaque: opaque}
 
-	return bundle.SDM.Send(o, roc, tsi, r)
+	return true /*handedOff*/, bundle.SDM.Send(o, roc, tsi, r)
 }
 
 func (r *XactMoss) packOpaque(data *mossOpaque) []byte {
