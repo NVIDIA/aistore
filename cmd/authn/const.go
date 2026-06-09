@@ -11,10 +11,12 @@ const (
 )
 
 const (
-	usersCollection    = "user"
-	rolesCollection    = "role"
-	revokedCollection  = "revoked"
-	clustersCollection = "cluster"
+	usersCollection     = "user"
+	rolesCollection     = "role"
+	roleUsersCollection = "role_user"
+	revokedCollection   = "revoked"
+	clustersCollection  = "cluster"
+	metaCollection      = "meta"
 
 	adminUserID = "admin"
 )

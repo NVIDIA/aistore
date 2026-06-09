@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +41,8 @@ type (
 		db        kvdb.Driver
 		cm        *config.ConfManager
 		sb        atomic.Pointer[signerBundle]
+
+		authzMu sync.Mutex
 	}
 
 	signerBundle struct {
@@ -75,6 +78,10 @@ func newMgr(cm *config.ConfManager, signer tok.Signer, driver kvdb.Driver) (m *m
 	m.clientH, m.clientTLS = cmn.NewDefaultClients(cm.GetDefaultTimeout())
 	code, err = initializeDB(driver)
 	if err != nil {
+		return
+	}
+	if err = m.ensureRoleUsersIndex(); err != nil {
+		code = http.StatusInternalServerError
 		return
 	}
 	return
@@ -127,21 +134,37 @@ func (m *mgr) rotateKey() error {
 //
 
 // Registers a new user. It is info from a user, so the password
-// is not encrypted and a few fields are not filled(e.g, Access).
+// is not encrypted and a few fields are not filled (e.g, Access).
 func (m *mgr) addUser(info *authn.User) (int, error) {
 	if info.ID == "" || info.Password == "" {
 		return http.StatusBadRequest, errInvalidCredentials
 	}
-	// Validate user ID
 	if !cos.IsAlphaNice(info.ID) {
 		return http.StatusBadRequest, fmt.Errorf("user ID %q is invalid: %s", info.ID, cos.OnlyNice)
 	}
+	encPass := encryptPassword(info.Password)
+
+	m.authzMu.Lock()
+	defer m.authzMu.Unlock()
+
 	_, _, err := m.db.GetString(usersCollection, info.ID)
 	if err == nil {
 		return http.StatusConflict, cos.NewErrAlreadyExists(m, "user "+info.ID)
 	}
-	info.Password = encryptPassword(info.Password)
-	return m.db.Set(usersCollection, info.ID, info)
+	roles, code, err := m.fetchUserRoles(info.Roles)
+	if err != nil {
+		return code, err
+	}
+	info.Roles = roles
+	info.Password = encPass
+	if err = m.syncUserRoleIndex(info.ID, info.Roles); err != nil {
+		nlog.Errorf("failed to sync role index for user %q: %v", info.ID, err)
+		return http.StatusInternalServerError, err
+	}
+	if code, err = m.db.Set(usersCollection, info.ID, info); err != nil {
+		return code, err
+	}
+	return http.StatusOK, nil
 }
 
 // Deletes an existing user
@@ -149,28 +172,68 @@ func (m *mgr) delUser(userID string) (int, error) {
 	if userID == adminUserID {
 		return http.StatusForbidden, fmt.Errorf("cannot remove built-in %q account", adminUserID)
 	}
-	return m.db.Delete(usersCollection, userID)
+
+	m.authzMu.Lock()
+	defer m.authzMu.Unlock()
+
+	uInfo, code, err := m.lookupUser(userID)
+	if err != nil {
+		return code, err
+	}
+	if code, err = m.db.Delete(usersCollection, userID); err != nil {
+		return code, err
+	}
+	if err = m.clearUserFromRoleIndex(userID, uInfo.Roles); err != nil {
+		nlog.Errorf("failed to clear role index for user %q: %v", userID, err)
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusOK, nil
 }
 
-// Updates an existing user. The function invalidates user tokens after
-// successful update.
+// Updates an existing user.
 func (m *mgr) updateUser(userID string, updateReq *authn.User) (int, error) {
+	if userID == adminUserID && len(updateReq.Roles) != 0 {
+		return http.StatusForbidden, errors.New("cannot change administrator's role")
+	}
+
+	var (
+		encPass     string
+		rolesUpdate = len(updateReq.Roles) != 0
+	)
+	if updateReq.Password != "" {
+		encPass = encryptPassword(updateReq.Password)
+	}
+
+	m.authzMu.Lock()
+	defer m.authzMu.Unlock()
+
 	uInfo := &authn.User{}
 	code, err := m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
 		return code, err
 	}
-	if userID == adminUserID && len(updateReq.Roles) != 0 {
-		return http.StatusForbidden, errors.New("cannot change administrator's role")
+	if encPass != "" {
+		uInfo.Password = encPass
 	}
-
-	if updateReq.Password != "" {
-		uInfo.Password = encryptPassword(updateReq.Password)
+	var oldRoles []*authn.Role
+	if rolesUpdate {
+		newRoles, code, err := m.fetchUserRoles(updateReq.Roles)
+		if err != nil {
+			return code, err
+		}
+		oldRoles = uInfo.Roles
+		uInfo.Roles = newRoles
 	}
-	if len(updateReq.Roles) != 0 {
-		uInfo.Roles = updateReq.Roles
+	if code, err := m.db.Set(usersCollection, userID, uInfo); err != nil {
+		return code, err
 	}
-	return m.db.Set(usersCollection, userID, uInfo)
+	if rolesUpdate {
+		if err = m.updateUserRoleIndex(userID, oldRoles, uInfo.Roles); err != nil {
+			nlog.Errorf("failed to update role index for user %q: %v", userID, err)
+			return http.StatusInternalServerError, err
+		}
+	}
+	return http.StatusOK, nil
 }
 
 func (m *mgr) lookupUser(userID string) (*authn.User, int, error) {
@@ -206,13 +269,16 @@ func (m *mgr) addRole(info *authn.Role) (int, error) {
 	if info.Name == "" {
 		return http.StatusBadRequest, errors.New("role name is undefined")
 	}
-	// Validate role name
 	if !cos.IsAlphaNice(info.Name) {
 		return http.StatusBadRequest, fmt.Errorf("role name %q is invalid: %s", info.Name, cos.OnlyNice)
 	}
 	if info.IsAdmin {
 		return http.StatusForbidden, fmt.Errorf("only built-in roles can have %q permissions", adminUserID)
 	}
+
+	m.authzMu.Lock()
+	defer m.authzMu.Unlock()
+
 	_, _, err := m.db.GetString(rolesCollection, info.Name)
 	if err == nil {
 		return http.StatusConflict, cos.NewErrAlreadyExists(m, "role "+info.Name)
@@ -225,7 +291,14 @@ func (m *mgr) delRole(role string) (int, error) {
 	if role == authn.AdminRole {
 		return http.StatusForbidden, fmt.Errorf("cannot remove built-in %q role", authn.AdminRole)
 	}
-	return m.db.Delete(rolesCollection, role)
+
+	m.authzMu.Lock()
+	defer m.authzMu.Unlock()
+
+	if code, err := m.db.Delete(rolesCollection, role); err != nil {
+		return code, err
+	}
+	return m.removeRoleFromAllUsers(role)
 }
 
 // Updates an existing role
@@ -233,6 +306,10 @@ func (m *mgr) updateRole(role string, updateReq *authn.Role) (int, error) {
 	if role == authn.AdminRole {
 		return http.StatusForbidden, fmt.Errorf("cannot modify built-in %q role", authn.AdminRole)
 	}
+
+	m.authzMu.Lock()
+	defer m.authzMu.Unlock()
+
 	rInfo := &authn.Role{}
 	code, err := m.db.Get(rolesCollection, role, rInfo)
 	if err != nil {
@@ -245,7 +322,10 @@ func (m *mgr) updateRole(role string, updateReq *authn.Role) (int, error) {
 	rInfo.ClusterACLs = mergeClusterACLs(rInfo.ClusterACLs, updateReq.ClusterACLs, "")
 	rInfo.BucketACLs = mergeBckACLs(rInfo.BucketACLs, updateReq.BucketACLs, "")
 
-	return m.db.Set(rolesCollection, role, rInfo)
+	if code, err := m.db.Set(rolesCollection, role, rInfo); err != nil {
+		return code, err
+	}
+	return m.propagateRoleToUsers(role, rInfo)
 }
 
 func (m *mgr) lookupRole(roleID string) (*authn.Role, int, error) {
