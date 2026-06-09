@@ -54,6 +54,13 @@ import (
 //   When ArchPath is empty, the range applies to the object bytes as stored.
 //   In other words, a range over an archive object with empty ArchPath is a raw byte range.
 //   When ArchPath is set, the range applies to the extracted archived file.
+//   Forms (offset + length):
+//     - (Start=0, Length=0):    the entire object/file (no range)
+//     - (Start=N, Length=L>0):  exactly L bytes starting at offset N
+//     - (Start=N, Length=-1):   open-ended - from offset N to the end (cos.ContentLengthUnknown);
+//                               (Start=0, Length=-1) is therefore equivalent to the whole object/file
+//   Length 0 with a non-zero Start is rejected (use -1 to read to the end). Out-of-bounds
+//   ranges (Start >= size, or Start+Length > size) => ErrRangeNotSatisfiable.
 //
 // - Returned size:
 //   - when the requested file is found the corresponding MossOut.Size will be equal
@@ -144,8 +151,17 @@ func (in *MossIn) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("%v (oname: %q)", err, in.ObjName)
 		}
 	}
-	if in.Start < 0 || in.Length < 0 || (in.Start != 0 && in.Length == 0) {
-		s := fmt.Sprintf("start=%d,length=%d (oname: %q)", in.Start, in.Length, in.ObjName)
+	// Length == cos.ContentLengthUnknown (-1) is an open-ended range [Start, EOF).
+	// (Start=0, Length=0) is the whole object; a non-zero Start with Length 0 is invalid
+	// (an explicit -1 is required to read to the end). Length < -1 is always invalid.
+	if in.Start < 0 || in.Length < cos.ContentLengthUnknown || (in.Start != 0 && in.Length == 0) {
+		// note: avoid echoing the -1 open-ended sentinel back to the user
+		var s string
+		if in.Length == cos.ContentLengthUnknown {
+			s = fmt.Sprintf("start=%d (oname: %q)", in.Start, in.ObjName)
+		} else {
+			s = fmt.Sprintf("start=%d,length=%d (oname: %q)", in.Start, in.Length, in.ObjName)
+		}
 		return cos.NewErrRangeNotSatisfiable(nil, []string{s}, cos.ContentLengthUnknown /* -1 */)
 	}
 	return nil
@@ -154,7 +170,15 @@ func (in *MossIn) UnmarshalJSON(data []byte) error {
 func (in *MossIn) CheckRange(size int64) (off, length int64, err error) {
 	off, length = in.Start, in.Length
 	if off == 0 && length == 0 {
-		return 0, size, nil
+		return 0, size, nil // whole object (no range)
+	}
+	if length == cos.ContentLengthUnknown {
+		// open-ended range: read [off, EOF) - report only the start (no -1 sentinel)
+		if off < 0 || off >= size {
+			s := fmt.Sprintf("start=%d", off)
+			return 0, 0, cos.NewErrRangeNotSatisfiable(nil, []string{s}, size)
+		}
+		return off, size - off, nil
 	}
 	if off < 0 || length <= 0 || off >= size || length > size-off {
 		s := fmt.Sprintf("start=%d,length=%d", off, length)

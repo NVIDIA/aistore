@@ -1029,3 +1029,77 @@ func TestGetBatchStream_DrainTar(t *testing.T) {
 	err = ar.ReadUntil(drain, "" /*match all*/, cos.EmptyMatchAll)
 	tassert.CheckFatal(t, err)
 }
+
+//
+// --------------------------------------------
+// get-batch: ranged reads (apc.MossIn Start/Length), including open-ended (-1)
+//
+
+func _rngBytes(size int, seed byte) []byte {
+	b := make([]byte, size)
+	for i := range b {
+		b[i] = byte(i) + seed
+	}
+	return b
+}
+
+// read all archive entries (name, size, data) in order
+func _rngEntries(t *testing.T, data []byte) []tarEntry {
+	ar, err := archive.NewReader(archive.ExtTar, bytes.NewReader(data), int64(len(data)))
+	tassert.CheckFatal(t, err)
+	cb := &tarValidationCallback{mode: "multipart", t: t}
+	tassert.CheckFatal(t, ar.ReadUntil(cb, cos.EmptyMatchAll, ""))
+	return cb.entries
+}
+
+// TestMossRangeReadSmoke is a smoke test for ranged GetBatch reads end-to-end (the actual moss
+// data path), including open-ended (Length == cos.ContentLengthUnknown) ranges that read [Start, EOF).
+func TestMossRangeReadSmoke(t *testing.T) {
+	proxyURL := tools.GetPrimaryURL()
+	bp := tools.BaseAPIParams(proxyURL)
+
+	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	t.Cleanup(stopMossJobs)
+
+	const objSize = 4 * cos.KiB
+	objName := "range-obj.bin"
+	objData := _rngBytes(objSize, 0x11)
+	_, err := api.PutObject(&api.PutArgs{
+		BaseParams: bp, Bck: bck, ObjName: objName, Reader: readers.NewBytes(objData),
+	})
+	tassert.CheckFatal(t, err)
+
+	nameInArch := bck.Name + "/" + objName
+
+	cases := []struct {
+		desc string
+		in   apc.MossIn
+		want []byte
+	}{
+		{"whole-object", apc.MossIn{ObjName: objName}, objData},
+		{"bounded", apc.MossIn{ObjName: objName, Start: 1024, Length: 512}, objData[1024:1536]},
+		{"open-ended", apc.MossIn{ObjName: objName, Start: 1024, Length: cos.ContentLengthUnknown}, objData[1024:]},
+		{"open-ended-from-zero", apc.MossIn{ObjName: objName, Length: cos.ContentLengthUnknown}, objData},
+	}
+
+	in := make([]apc.MossIn, len(cases))
+	for i := range cases {
+		in[i] = cases[i].in
+	}
+
+	var buf bytes.Buffer
+	resp, err := api.GetBatch(bp, bck, &apc.MossReq{In: in, StreamingGet: false}, &buf)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(resp.Out) == len(cases), "resp.Out=%d, want %d", len(resp.Out), len(cases))
+
+	got := _rngEntries(t, buf.Bytes())
+	tassert.Fatalf(t, len(got) == len(cases), "tar entries=%d, want %d", len(got), len(cases))
+	for i := range cases {
+		c := &cases[i]
+		tassert.Errorf(t, got[i].name == nameInArch, "[%s] name=%q, want %q", c.desc, got[i].name, nameInArch)
+		tassert.Errorf(t, int(got[i].size) == len(c.want), "[%s] tar size=%d, want %d", c.desc, got[i].size, len(c.want))
+		tassert.Errorf(t, resp.Out[i].Size == int64(len(c.want)), "[%s] MossOut.Size=%d, want %d", c.desc, resp.Out[i].Size, len(c.want))
+		tassert.Errorf(t, bytes.Equal(got[i].data, c.want), "[%s] range bytes mismatch", c.desc)
+	}
+}
