@@ -159,6 +159,7 @@ class FlaskServer(ETLServer):
         else:
             transformed = self._handle_put(path)
 
+        etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
         pipeline_header = request.headers.get(HEADER_NODE_URL)
         self.logger.debug("pipeline_header: %r", pipeline_header)
         if pipeline_header:
@@ -166,7 +167,7 @@ class FlaskServer(ETLServer):
             if first_url:
                 status_code, transformed, direct_put_length = (
                     self._direct_put_with_retry(
-                        first_url, transformed, remaining_pipeline, path
+                        first_url, transformed, remaining_pipeline, path, etl_args
                     )
                 )
                 return Response(
@@ -239,17 +240,20 @@ class FlaskServer(ETLServer):
         # (see _direct_put_stream_with_retry).
         return _FlaskRequestStreamReader(request.stream)
 
-    def _direct_put_with_retry(
+    def _direct_put_with_retry(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         direct_put_url: str,
         data: bytes,
         remaining_pipeline: str = "",
         path: str = "",
+        etl_args: str = "",
     ) -> Tuple[int, bytes, int]:
         """Buffered direct-put with exponential-backoff retry on transient errors."""
         for attempt in range(self.direct_put_retries + 1):
             try:
-                return self._direct_put(direct_put_url, data, remaining_pipeline, path)
+                return self._direct_put(
+                    direct_put_url, data, remaining_pipeline, path, etl_args
+                )
             except ETLDirectPutTransientError as exc:
                 if attempt >= self.direct_put_retries:
                     raise
@@ -300,6 +304,7 @@ class FlaskServer(ETLServer):
                         self.transform_stream(reader, path, etl_args),
                         remaining_pipeline,
                         path,
+                        etl_args,
                     )
                 except ETLDirectPutTransientError as exc:
                     if attempt >= effective_retries:
@@ -322,16 +327,19 @@ class FlaskServer(ETLServer):
             self.close_reader(reader)
         raise AssertionError("unreachable: loop always returns or raises")
 
-    def _direct_put_stream(
+    def _direct_put_stream(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         direct_put_url: str,
         data_iter: Iterator[bytes],
         remaining_pipeline: str = "",
         path: str = "",
+        etl_args: str = "",
     ) -> Tuple[int, bytes, int]:
         """Stream transformed output directly to the next pipeline stage."""
         try:
-            url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
+            url = compose_etl_direct_put_url(
+                direct_put_url, self.host_target, path, etl_args
+            )
             headers = {}
             if remaining_pipeline:
                 headers[HEADER_NODE_URL] = remaining_pipeline
@@ -389,12 +397,13 @@ class FlaskServer(ETLServer):
         with open(safe_path, "rb") as f:
             return f.read()
 
-    def _direct_put(
+    def _direct_put(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         direct_put_url: str,
         data: bytes,
         remaining_pipeline: str = "",
         path: str = "",
+        etl_args: str = "",
     ) -> Tuple[int, bytes, int]:
         """
         Sends the transformed object directly to the specified AIS node (`direct_put_url`),
@@ -406,11 +415,14 @@ class FlaskServer(ETLServer):
             data: The transformed data to send
             remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
             path: The path of the object.
+            etl_args: Per-request transform arguments to forward to the next stage.
         Returns:
             status code, transformed data, length of the transformed data (if any)
         """
         try:
-            url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
+            url = compose_etl_direct_put_url(
+                direct_put_url, self.host_target, path, etl_args
+            )
             headers = {}
             if remaining_pipeline:
                 headers[HEADER_NODE_URL] = remaining_pipeline

@@ -169,7 +169,8 @@ func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (base *etlServerBase) handleRequest(objReader io.ReadCloser, w http.ResponseWriter, r *http.Request) {
-	transformedReader, size, err := base.Transform(objReader, r.URL.Path, r.URL.Query().Get(apc.QparamETLTransformArgs))
+	etlArgs := r.URL.Query().Get(apc.QparamETLTransformArgs)
+	transformedReader, size, err := base.Transform(objReader, r.URL.Path, etlArgs)
 	if err != nil {
 		cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "failed to transform", err))
 		return
@@ -177,7 +178,7 @@ func (base *etlServerBase) handleRequest(objReader io.ReadCloser, w http.Respons
 	objReader.Close() // objReader is supposed to be fully consumed by the custom transform function - safe to close at this point
 
 	if directPutURL := r.Header.Get(apc.HdrNodeURL); directPutURL != "" {
-		base.handleDirectPut(w, transformedReader, size, r.URL.Path, directPutURL)
+		base.handleDirectPut(w, transformedReader, size, r.URL.Path, directPutURL, etlArgs)
 		return
 	}
 
@@ -251,10 +252,10 @@ func (base *etlServerBase) handleWebsocketMessage(conn *websocket.Conn, ctrl etl
 	}
 	defer reader.Close()
 
-	return base.handleWebsocketPipeline(conn, transformed, size, ctrl.Path, ctrl.Pipeline)
+	return base.handleWebsocketPipeline(conn, transformed, size, ctrl.Path, ctrl.Pipeline, ctrl.Targs)
 }
 
-func (base *etlServerBase) handleWebsocketPipeline(conn *websocket.Conn, transformed io.ReadCloser, size int64, objPath, pipeline string) (err error) {
+func (base *etlServerBase) handleWebsocketPipeline(conn *websocket.Conn, transformed io.ReadCloser, size int64, objPath, pipeline, etlArgs string) (err error) {
 	// No pipeline, send transformed data
 	if pipeline == "" {
 		writer, _ := conn.NextWriter(websocket.BinaryMessage)
@@ -266,7 +267,7 @@ func (base *etlServerBase) handleWebsocketPipeline(conn *websocket.Conn, transfo
 	}
 
 	firstURL, remainingPipeline := parsePipelineURL(pipeline)
-	dresp, err := base.directPut(firstURL, transformed, size, objPath, remainingPipeline)
+	dresp, err := base.directPut(firstURL, transformed, size, objPath, remainingPipeline, etlArgs)
 	if err != nil {
 		writer, _ := conn.NextWriter(websocket.TextMessage)
 		writer.Write([]byte(err.Error()))
@@ -296,9 +297,9 @@ func (base *etlServerBase) handleWebsocketPipeline(conn *websocket.Conn, transfo
 	return nil
 }
 
-func (base *etlServerBase) handleDirectPut(w http.ResponseWriter, transformedReader io.ReadCloser, size int64, objPath, directPutURL string) {
+func (base *etlServerBase) handleDirectPut(w http.ResponseWriter, transformedReader io.ReadCloser, size int64, objPath, directPutURL, etlArgs string) {
 	firstURL, remainingPipeline := parsePipelineURL(directPutURL)
-	dresp, err := base.directPut(firstURL, transformedReader, size, objPath, remainingPipeline)
+	dresp, err := base.directPut(firstURL, transformedReader, size, objPath, remainingPipeline, etlArgs)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -385,7 +386,7 @@ func (*etlServerBase) getFQNReader(urlPath string) (io.ReadCloser, error) {
 	return os.Open(fqn)
 }
 
-func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size int64, objPath, remainingPipelineURL string) (*directPutResponse, error) {
+func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size int64, objPath, remainingPipelineURL, etlArgs string) (*directPutResponse, error) {
 	direct, err := url.Parse(directPutURL)
 	if err != nil {
 		r.Close()
@@ -399,7 +400,18 @@ func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size 
 
 	finalURL := *host
 	finalURL.Host = direct.Host
-	finalURL.RawQuery = direct.RawQuery
+	// Carry etl_args to the next pipeline stage; the receiving ETL server reads it
+	// from the incoming query (see handleRequest). Merge so the destination target's
+	// xid/owt query params (final hop) are preserved. Encode() re-serializes the
+	// merged params and percent-encodes etlArgs, which arrives decoded and may
+	// contain characters that are not safe in a raw query string (e.g. JSON braces).
+	if etlArgs != "" {
+		q := direct.Query()
+		q.Set(apc.QparamETLTransformArgs, etlArgs)
+		finalURL.RawQuery = q.Encode()
+	} else {
+		finalURL.RawQuery = direct.RawQuery
+	}
 	if direct.Path != "" {
 		finalURL.Path = cos.JoinPath(host.Path, direct.Path)
 	} else {

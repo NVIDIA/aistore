@@ -23,6 +23,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   pre-convergence behavior). `wait_for_idle` and `wait_single_node` remain
   available as explicit overrides.
 
+### Fixed
+
+- ETL webservers now forward
+  `etl_args` to the next stage on direct-put pipeline hops. Previously only the
+  first pipeline stage received `etl_args`; stages 2..N saw an empty value.
+
 ## [1.25.0] - 2026-05-20
 
 ### Added

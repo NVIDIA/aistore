@@ -4,7 +4,7 @@ import os
 import sys
 import io
 import unittest
-from urllib.parse import quote as url_quote
+from urllib.parse import quote as url_quote, urlparse, parse_qs
 from unittest import mock
 from unittest.mock import MagicMock, patch, AsyncMock
 
@@ -36,6 +36,7 @@ from aistore.sdk.const import (
     HEADER_ETL_RETRY_REASON,
     ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
     QPARAM_ETL_FQN,
+    QPARAM_ETL_ARGS,
     AIS_DIRECT_PUT_RETRIES,
     STATUS_BAD_GATEWAY,
     STATUS_SERVICE_UNAVAILABLE,
@@ -55,6 +56,7 @@ from aistore.sdk.etl.webserver.flask_server import (
 )
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 from aistore.sdk.etl.webserver.fastapi_streaming import _RequestStreamReader
+from aistore.sdk.etl.webserver.utils import compose_etl_direct_put_url
 
 
 class DummyHTTPETLServer(HTTPMultiThreadedServer):
@@ -3151,3 +3153,155 @@ class TestHTTPConnectionRefusedGuard(unittest.TestCase):
         )
         with self.assertRaises(ETLDirectPutTransientError):
             self._put()
+
+
+class TestComposeETLDirectPutURL(unittest.TestCase):
+    """compose_etl_direct_put_url forwards etl_args while preserving existing query params."""
+
+    host = "http://localhost:8080/v1/etl/_object/etl-name/secret"
+
+    def test_pipeline_stage_appends_etl_args(self):
+        """Bare next-stage URL (no query) gets etl_args added."""
+        url = compose_etl_direct_put_url(
+            "http://stage2:8080", self.host, "bucket/obj", "jpeg"
+        )
+        self.assertEqual(parse_qs(urlparse(url).query), {QPARAM_ETL_ARGS: ["jpeg"]})
+
+    def test_offline_preserves_existing_query_and_appends_args(self):
+        """Destination-target query params (xid/owt) are preserved and etl_args added."""
+        dst = "http://tgt:8080/some/path?uuid=xyz&owt=5"
+        url = compose_etl_direct_put_url(dst, self.host, "bucket/obj", "jpeg")
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["uuid"], ["xyz"])
+        self.assertEqual(query["owt"], ["5"])
+        self.assertEqual(query[QPARAM_ETL_ARGS], ["jpeg"])
+
+    def test_no_etl_args_leaves_query_unchanged(self):
+        """Empty etl_args forwards nothing and leaves the destination query as-is."""
+        dst = "http://tgt:8080/some/path?uuid=xyz"
+        url = compose_etl_direct_put_url(dst, self.host, "bucket/obj", "")
+        self.assertEqual(urlparse(url).query, "uuid=xyz")
+
+    def test_etl_args_special_chars_round_trip(self):
+        """JSON-style etl_args survive URL-encoding and decode back intact."""
+        args = '{"resize":"256x256"}'
+        url = compose_etl_direct_put_url("http://stage2:8080", self.host, "b/o", args)
+        self.assertEqual(parse_qs(urlparse(url).query)[QPARAM_ETL_ARGS], [args])
+
+    def test_existing_etl_args_replaced(self):
+        """An etl_args already in the destination query is replaced, not duplicated."""
+        dst = "http://tgt:8080/some/path?uuid=xyz&etl_args=old"
+        url = compose_etl_direct_put_url(dst, self.host, "bucket/obj", "jpeg")
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["uuid"], ["xyz"])
+        self.assertEqual(query[QPARAM_ETL_ARGS], ["jpeg"])
+
+
+class TestETLArgsPipelineForwarding(unittest.TestCase):
+    """Each server forwards the incoming etl_args onto the direct-put hop so that
+    downstream pipeline stages receive the same per-request args (previously only
+    the first stage did)."""
+
+    def setUp(self):
+        env = mock.patch.dict(
+            os.environ,
+            {"AIS_TARGET_URL": "http://localhost:8080", "DIRECT_PUT": "true"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
+
+    def test_http_buffered_forwards_etl_args(self):
+        """HTTPMultiThreadedServer forwards etl_args on the buffered direct-put hop."""
+        handler = DummyRequestHandler()
+        handler.path = "/test/object?etl_args=jpeg"
+        handler.headers = {HEADER_NODE_URL: "http://some-target/put/object"}
+
+        mock_put_resp = MagicMock(status_code=200, content=b"")
+        handler.server.etl_server.client_put.return_value = mock_put_resp
+
+        handler.do_PUT()
+
+        called_url = handler.server.etl_server.client_put.call_args.args[0]
+        self.assertEqual(
+            parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
+        )
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_fastapi_buffered_forwards_etl_args(self):
+        """FastAPIServer forwards etl_args on the buffered direct-put hop."""
+        server = DummyFastAPIServer()
+        client = TestClient(server.app)
+        server.client = AsyncMock()
+        server.client.put.return_value = AsyncMock(status_code=200, content=b"")
+
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+        response = client.put(
+            "/test/object?etl_args=jpeg", content=b"input data", headers=headers
+        )
+
+        self.assertEqual(response.status_code, 204)
+        called_url = server.client.put.call_args.args[0]
+        self.assertEqual(
+            parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
+        )
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_fastapi_websocket_forwards_etl_args(self):
+        """FastAPIServer forwards etl_args on the WebSocket direct-put hop."""
+        server = DummyFastAPIServer()
+        client = TestClient(server.app)
+        direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
+
+        with patch.object(server, "client", new=AsyncMock()) as mock_client:
+            mock_client.put.return_value = AsyncMock(status_code=200, content=b"")
+            with client.websocket_connect("/ws") as websocket:
+                websocket.send_json(
+                    data={ETL_WS_PIPELINE: direct_put_url, QPARAM_ETL_ARGS: "jpeg"},
+                    mode="binary",
+                )
+                websocket.send_bytes(b"testdata")
+                websocket.receive_text()
+
+            called_url = mock_client.put.call_args.args[0]
+            self.assertEqual(
+                parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
+            )
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_flask_buffered_forwards_etl_args(self):
+        """FlaskServer forwards etl_args on the buffered direct-put hop."""
+        server = DummyFlaskServer()
+        client = server.app.test_client()
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+
+        with patch("requests.Session.put") as mock_put:
+            mock_put.return_value = MagicMock(status_code=200, content=b"")
+            response = client.put(
+                "/test/object?etl_args=jpeg", data=b"input data", headers=headers
+            )
+
+            self.assertEqual(response.status_code, 204)
+            called_url = mock_put.call_args.args[0]
+            self.assertEqual(
+                parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
+            )
+
+    def test_flask_streaming_forwards_etl_args(self):
+        """FlaskServer forwards etl_args on the streaming direct-put hop."""
+        server = DummyFlaskServer()
+        server.session = MagicMock()
+        server.session.put.return_value = MagicMock(status_code=200, content=b"")
+
+        # pylint: disable=protected-access
+        server._direct_put_stream(
+            "http://localhost:8080/ais/@/etl_dst/obj",
+            iter([b"chunk"]),
+            "",
+            "bucket/obj",
+            "jpeg",
+        )
+
+        called_url = server.session.put.call_args.args[0]
+        self.assertEqual(
+            parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
+        )

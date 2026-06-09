@@ -270,7 +270,7 @@ class FastAPIServer(ETLServer):
             if first_url:
                 status_code, transformed, direct_put_length = (
                     await self._direct_put_with_retry(
-                        first_url, transformed, remaining_pipeline, path
+                        first_url, transformed, remaining_pipeline, path, etl_args
                     )
                 )
                 self.logger.debug("status_code: %r", status_code)
@@ -426,6 +426,7 @@ class FastAPIServer(ETLServer):
                         self.transform_stream(reader, path, etl_args),
                         remaining,
                         path,
+                        etl_args,
                     )
                 except ETLDirectPutTransientError as exc:
                     if attempt >= effective_retries:
@@ -450,12 +451,13 @@ class FastAPIServer(ETLServer):
         finally:
             self.close_reader(reader)
 
-    async def _direct_put_stream(
+    async def _direct_put_stream(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         direct_put_url: str,
         data_iter: Iterator[bytes],
         remaining_pipeline: str = "",
         path: str = "",
+        etl_args: str = "",
     ) -> Tuple[int, bytes, int]:
         """
         Stream transformed output directly to the next pipeline stage.
@@ -467,7 +469,9 @@ class FastAPIServer(ETLServer):
               - length: bytes sent to the destination, from CountingIterator.
         """
         try:
-            url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
+            url = compose_etl_direct_put_url(
+                direct_put_url, self.host_target, path, etl_args
+            )
             headers = {}
             if remaining_pipeline:
                 headers[HEADER_NODE_URL] = remaining_pipeline
@@ -520,12 +524,13 @@ class FastAPIServer(ETLServer):
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]
 
-    async def _direct_put_with_retry(
+    async def _direct_put_with_retry(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         direct_put_url: str,
         data: bytes,
         remaining_pipeline: str = "",
         path: str = "",
+        etl_args: str = "",
     ) -> Tuple[int, bytes, int]:
         """
         Buffered direct-put with exponential-backoff retry on transient network errors.
@@ -538,7 +543,7 @@ class FastAPIServer(ETLServer):
         for attempt in range(self.direct_put_retries + 1):
             try:
                 return await self._direct_put(
-                    direct_put_url, data, remaining_pipeline, path
+                    direct_put_url, data, remaining_pipeline, path, etl_args
                 )
             except ETLDirectPutTransientError as exc:
                 if attempt >= self.direct_put_retries:
@@ -553,12 +558,13 @@ class FastAPIServer(ETLServer):
                 )
                 await asyncio.sleep(delay)
 
-    async def _direct_put(
+    async def _direct_put(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         direct_put_url: str,
         data: bytes,
         remaining_pipeline: str = "",
         path: str = "",
+        etl_args: str = "",
     ) -> Tuple[int, bytes, int]:
         """
         Sends the transformed object directly to the specified AIS node (`direct_put_url`),
@@ -570,6 +576,7 @@ class FastAPIServer(ETLServer):
             data: The transformed data to send
             remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
             path: The path of the object.
+            etl_args: Per-request transform arguments to forward to the next stage.
         Returns:
             status code, transformed data, length of the transformed data (if any)
         Raises:
@@ -577,11 +584,12 @@ class FastAPIServer(ETLServer):
                 so the caller can retry without re-fetching data.
         """
         try:
-            url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
+            url = compose_etl_direct_put_url(
+                direct_put_url, self.host_target, path, etl_args
+            )
             headers = {HEADER_CONTENT_LENGTH: str(len(data))}
             if remaining_pipeline:
                 headers[HEADER_NODE_URL] = remaining_pipeline
-            # TODO: add etl_args to qparams if present
 
             resp = await self.client.put(
                 url, content=self._iter_chunks(data, self.chunk_size), headers=headers
@@ -621,7 +629,7 @@ class FastAPIServer(ETLServer):
 
         fqn = ctrl_msg.get(ETL_WS_FQN)
         path = ctrl_msg.get(ETL_WS_PATH)
-        etl_args = ctrl_msg.get(QPARAM_ETL_ARGS)
+        etl_args = ctrl_msg.get(QPARAM_ETL_ARGS, "").strip()
 
         if fqn and self.direct_fqn:
             source = self.sanitize_fqn(fqn)
@@ -642,7 +650,7 @@ class FastAPIServer(ETLServer):
                 if first_url:
                     status_code, transformed, direct_put_length = (
                         await self._direct_put_with_retry(
-                            first_url, transformed, remaining_pipeline, path
+                            first_url, transformed, remaining_pipeline, path, etl_args
                         )
                     )
                     if status_code == STATUS_OK:
