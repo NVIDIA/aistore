@@ -148,8 +148,8 @@ Each entry in the `in` array can specify:
 | `uname` | string | Fully-qualified bucket specification, including bucket name, provider and namespace. |
 | `archpath` | string | Path to file within **input** archive (for TAR/ZIP/TGZ/LZ4 shards) |
 | `opaque` | []byte | Opaque user identifier (passed through to response to implement client-side logic of any kind) |
-| `start` | int64 | Range read start offset (future) |
-| `length` | int64 | Range read length (future) |
+| `start` | int64 | Range read start offset. When `archpath` is empty, the range applies to the object bytes as stored (a raw byte range); when `archpath` is set, it applies to the extracted archived file. A non-zero `start` requires a `length`. |
+| `length` | int64 | Range read length: `L>0` reads exactly `L` bytes; `-1` reads from `start` to the end (open-ended); `(start=0, length=0)` is the whole object. For a fixed-length range, `MossOut.size` equals `length`. |
 
 ### Response: [`apc.MossResp`](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go)
 
@@ -345,24 +345,21 @@ The [AIStore PyTorch Plugin](https://github.com/NVIDIA/aistore/tree/main/python/
 
 ## Usage Examples
 
-Note: `curl` examples in this section are **purely illustrative** - do not copy/paste.
+> In the `curl` examples below, replace `aistore-gateway` and the bucket/object names with your own.
 
 ### Example 1: Retrieve Plain Objects
 
 ```console
-curl -L -X GET http://aistore-gateway/v1/ml/moss/my-bucket \
+curl -L -X GET "http://aistore-gateway/v1/ml/moss/my-bucket?provider=ais" \
   -H "Content-Type: application/json" \
   -d '{
-    "action": "getbatch",
-    "value": {
-      "mime": ".tar",
-      "in": [
-        {"objname": "file-0001.bin"},
-        {"objname": "file-0002.bin"},
-        {"objname": "file-0003.bin"}
-      ],
-      "strm": true
-    }
+    "mime": ".tar",
+    "in": [
+      {"objname": "file-0001.bin"},
+      {"objname": "file-0002.bin"},
+      {"objname": "file-0003.bin"}
+    ],
+    "strm": true
   }' --output batch.tar
 ```
 
@@ -376,22 +373,18 @@ my-bucket/file-0003.bin
 ### Example 2: Extract Files from Shards
 
 ```console
-# Extract image_42.jpg from 100 distributed shards
-curl -L -X GET http://aistore-gateway/v1/ml/moss/shards \
+# Extract image_42.jpg from each distributed shard
+curl -L -X GET "http://aistore-gateway/v1/ml/moss/shards?provider=ais" \
   -H "Content-Type: application/json" \
   -d '{
-    "action": "getbatch",
-    "value": {
-      "mime": ".tar",
-      "in": [
-        {"objname": "shard-0000.tar", "archpath": "image_42.jpg"},
-        {"objname": "shard-0001.tar", "archpath": "image_42.jpg"},
-        ...
-        {"objname": "shard-0099.tar", "archpath": "image_42.jpg"}
-      ],
-      "onob": true,
-      "strm": true
-    }
+    "mime": ".tar",
+    "in": [
+      {"objname": "shard-0000.tar", "archpath": "image_42.jpg"},
+      {"objname": "shard-0001.tar", "archpath": "image_42.jpg"},
+      {"objname": "shard-0002.tar", "archpath": "image_42.jpg"}
+    ],
+    "onob": true,
+    "strm": true
   }' --output extracted.tar
 ```
 
@@ -399,8 +392,7 @@ Result: `extracted.tar` containing:
 ```
 shard-0000.tar/image_42.jpg
 shard-0001.tar/image_42.jpg
-...
-shard-0099.tar/image_42.jpg
+shard-0002.tar/image_42.jpg
 ```
 
 ### Example 3: Cross-Bucket Retrieval
@@ -408,18 +400,15 @@ shard-0099.tar/image_42.jpg
 > The request bucket (`default-bucket` in URL) is used when bucket is omitted in an in entry.
 
 ```console
-curl -L -X GET http://aistore-gateway/v1/ml/moss/default-bucket \
+curl -L -X GET "http://aistore-gateway/v1/ml/moss/default-bucket?provider=ais" \
   -H "Content-Type: application/json" \
   -d '{
-    "action": "getbatch",
-    "value": {
-      "in": [
-        {"objname": "config.json", "bucket": "configs"},
-        {"objname": "model.pt", "bucket": "models"},
-        {"objname": "data.csv", "bucket": "datasets"}
-      ],
-      "strm": true
-    }
+    "in": [
+      {"objname": "config.json", "bucket": "configs"},
+      {"objname": "model.pt", "bucket": "models"},
+      {"objname": "data.csv", "bucket": "datasets"}
+    ],
+    "strm": true
   }' --output multi-bucket.tar
 ```
 
@@ -428,19 +417,16 @@ Result: TAR containing objects from three different buckets in one request.
 ### Example 4: Handle Missing Data Gracefully
 
 ```console
-curl -L -X GET http://aistore-gateway/v1/ml/moss \
+curl -L -X GET "http://aistore-gateway/v1/ml/moss/training?provider=ais" \
   -H "Content-Type: application/json" \
   -d '{
-    "action": "getbatch",
-    "value": {
-      "in": [
-        {"objname": "exists-1.bin"},
-        {"objname": "missing.bin"},
-        {"objname": "exists-2.bin"}
-      ],
-      "coer": true,
-      "strm": false
-    }
+    "in": [
+      {"objname": "exists-1.bin"},
+      {"objname": "missing.bin"},
+      {"objname": "exists-2.bin"}
+    ],
+    "coer": true,
+    "strm": false
   }' --output result.tar
 ```
 
@@ -460,6 +446,49 @@ TAR contains:
 training/exists-1.bin          (1 MB)
 __404__/training/missing.bin   (0 bytes)
 training/exists-2.bin          (2 MB)
+```
+
+---
+
+### Example 5: Range Reads (Partial Object Retrieval)
+
+Per-entry `start`/`length` fields request a byte range instead of the whole object. When
+`archpath` is empty the range applies to the object bytes as stored (a raw byte range); when
+`archpath` is set the range applies to the *extracted* archived file.
+
+Three forms are supported:
+- `(start=0, length=0)` - the entire object/file (no range)
+- `(start=N, length=L)` with `L>0` - exactly `L` bytes starting at offset `N` (`MossOut.size == L`)
+- `(start=N, length=-1)` - open-ended: from offset `N` to the end of the object/file
+
+A non-zero `start` requires a `length` (use `-1` to read to the end). Ranges that fall outside
+the object's bounds are reported as `ErrRangeNotSatisfiable`.
+
+```console
+curl -L -X GET "http://aistore-gateway/v1/ml/moss/my-bucket?provider=ais" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "in": [
+      {"objname": "large.bin", "start": 0, "length": 1024},
+      {"objname": "large.bin", "start": 4096, "length": 1024},
+      {"objname": "large.bin", "start": 4096, "length": -1},
+      {"objname": "shard.tar", "archpath": "sample.json", "start": 0, "length": 256}
+    ],
+    "strm": true
+  }' --output result.tar
+```
+
+With the Python SDK:
+
+```python
+batch = client.batch(bucket=bucket, streaming_get=False)
+batch.add("large.bin", start=0, length=1024)         # first 1 KiB
+batch.add("large.bin", start=4096, length=1024)      # 1 KiB at offset 4096
+batch.add("large.bin", start=4096, length=-1)        # open-ended: offset 4096 to EOF
+batch.add("shard.tar", archpath="sample.json", start=0, length=256)  # range over archived file
+
+for obj_info, data in batch.get():
+    assert len(data) == obj_info.size
 ```
 
 ---
@@ -768,6 +797,8 @@ for moss_out, data in get_worker_partition(worker_id=0, num_workers=10, total_ob
 
 GetBatch works on **in-cluster data**: sharded (with shards of any kind — TAR, TAR.GZ, TAR.LZ4, ZIP), or plain monolithic objects, or chunked objects. As long as the requested data is stored on the cluster's target disks, GetBatch will assemble and return it.
 
+Per-entry **range reads** are supported for objects (chunked or monolithic) as well as for archived files: set `start`/`length` to retrieve a byte range instead of the whole object (see [Example 5](#example-5-range-reads-partial-object-retrieval)).
+
 For TAR shards, GetBatch reads files via the [shard index](https://docs.nvidia.com/aistore/relnotes/v4.5#shard-index) fast path when an index has been built for the shard — extracting an `archpath` entry becomes direct random access into the archive instead of a linear scan. The index is persisted in the `ais://.sys-shardidx` system bucket and is consulted transparently by both `GET` and GetBatch.
 
 ### Known limitations
@@ -784,16 +815,12 @@ Any event that mutates the cluster map (target restart, pod reschedule, scale-up
 
 Clients should retry GetBatch after a brief backoff once the rebalance completes. For long-running training pipelines, treat GetBatch failures during/after a membership event as expected and rely on the client-side retry path.
 
-**Range reads not yet implemented.**
-Per-entry `start`/`length` fields in `MossIn` are reserved for future use; supplying them currently returns `ErrNotImpl`.
-
 **Shard extraction is sequential within each archive.**
 When multiple files are requested from the same shard, they are extracted in sequence rather than in parallel. This is a performance limitation, not a correctness issue — and is largely mitigated when the [shard index](https://docs.nvidia.com/aistore/relnotes/v4.5#shard-index) is enabled, which converts each per-file lookup from a linear scan into direct random access.
 
 ### Roadmap
 
 - Self-healing shared-DM bundles across Smap version changes
-- Range read support for partial object retrieval
 - Multi-file parallel extraction from a single shard
 - Finer-grained work item abort controls
 
