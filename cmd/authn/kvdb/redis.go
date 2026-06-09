@@ -7,11 +7,14 @@ package kvdb
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 
@@ -23,28 +26,35 @@ const redisScanCount = 256
 
 // redisDriver implements cmn/kvdb.Driver with the same collection/key layout as BuntDB.
 type redisDriver struct {
-	client *redis.Client
+	client  *redis.Client
+	timeout time.Duration
 }
 
 var _ kvdb.Driver = (*redisDriver)(nil)
 
 func newRedisDriver(conf authn.KVServiceConf) (*redisDriver, error) {
 	opts := &redis.Options{
-		Addr:     conf.Addr,
-		Password: conf.Password,
-		DB:       conf.DBIndex,
+		Addr:                  cmn.HostPort(conf.Host, strconv.Itoa(conf.Port)),
+		Password:              conf.Password(),
+		DB:                    conf.DBIndex,
+		ContextTimeoutEnabled: true,
 	}
 	if conf.TLSEnabled {
 		opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 	client := redis.NewClient(opts)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	driver := &redisDriver{client: client, timeout: conf.Timeout.D()}
+	ctx, cancel := driver.ctx()
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
 		_ = client.Close()
 		return nil, err
 	}
-	return &redisDriver{client: client}, nil
+	return driver, nil
+}
+
+func (r *redisDriver) ctx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), r.timeout)
 }
 
 func (r *redisDriver) Close() error {
@@ -69,7 +79,9 @@ func (r *redisDriver) Get(collection, key string, object any) (int, error) {
 
 func (r *redisDriver) SetString(collection, key, data string) (int, error) {
 	name := kvdb.MakePath(collection, key)
-	if err := r.client.Set(context.Background(), name, data, 0).Err(); err != nil {
+	ctx, cancel := r.ctx()
+	defer cancel()
+	if err := r.client.Set(ctx, name, data, 0).Err(); err != nil {
 		return http.StatusInternalServerError, err
 	}
 	return http.StatusOK, nil
@@ -77,7 +89,9 @@ func (r *redisDriver) SetString(collection, key, data string) (int, error) {
 
 func (r *redisDriver) GetString(collection, key string) (string, int, error) {
 	name := kvdb.MakePath(collection, key)
-	val, err := r.client.Get(context.Background(), name).Result()
+	ctx, cancel := r.ctx()
+	defer cancel()
+	val, err := r.client.Get(ctx, name).Result()
 	if err != nil {
 		return redisToCommonErr(err, collection, key)
 	}
@@ -86,7 +100,9 @@ func (r *redisDriver) GetString(collection, key string) (string, int, error) {
 
 func (r *redisDriver) Delete(collection, key string) (int, error) {
 	name := kvdb.MakePath(collection, key)
-	n, err := r.client.Del(context.Background(), name).Result()
+	ctx, cancel := r.ctx()
+	defer cancel()
+	n, err := r.client.Del(ctx, name).Result()
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -99,11 +115,13 @@ func (r *redisDriver) Delete(collection, key string) (int, error) {
 
 func (r *redisDriver) DeleteCollection(collection string) (int, error) {
 	pattern := kvdb.MakePath(collection, "*")
-	return r.scan(pattern, func(keys []string) error {
+	ctx, cancel := r.ctx()
+	defer cancel()
+	return r.scan(ctx, pattern, func(keys []string) error {
 		if len(keys) == 0 {
 			return nil
 		}
-		return r.client.Del(context.Background(), keys...).Err()
+		return r.client.Del(ctx, keys...).Err()
 	})
 }
 
@@ -111,7 +129,9 @@ func (r *redisDriver) List(collection, pattern string) ([]string, int, error) {
 	pattern = normalizePattern(pattern)
 	fullPattern := kvdb.MakePath(collection, pattern)
 	keys := make([]string, 0)
-	code, err := r.scan(fullPattern, func(batch []string) error {
+	ctx, cancel := r.ctx()
+	defer cancel()
+	code, err := r.scan(ctx, fullPattern, func(batch []string) error {
 		for _, path := range batch {
 			_, key := kvdb.ParsePath(path)
 			if key != "" {
@@ -127,11 +147,13 @@ func (r *redisDriver) GetAll(collection, pattern string) (map[string]string, int
 	pattern = normalizePattern(pattern)
 	fullPattern := kvdb.MakePath(collection, pattern)
 	values := make(map[string]string)
-	code, err := r.scan(fullPattern, func(batch []string) error {
+	ctx, cancel := r.ctx()
+	defer cancel()
+	code, err := r.scan(ctx, fullPattern, func(batch []string) error {
 		for _, path := range batch {
-			val, err := r.client.Get(context.Background(), path).Result()
+			val, err := r.client.Get(ctx, path).Result()
 			if err != nil {
-				if err == redis.Nil {
+				if errors.Is(err, redis.Nil) {
 					continue
 				}
 				return err
@@ -146,10 +168,10 @@ func (r *redisDriver) GetAll(collection, pattern string) (map[string]string, int
 	return values, code, err
 }
 
-func (r *redisDriver) scan(pattern string, fn func([]string) error) (int, error) {
+func (r *redisDriver) scan(ctx context.Context, pattern string, fn func([]string) error) (int, error) {
 	var cursor uint64
 	for {
-		keys, next, err := r.client.Scan(context.Background(), cursor, pattern, redisScanCount).Result()
+		keys, next, err := r.client.Scan(ctx, cursor, pattern, redisScanCount).Result()
 		if err != nil {
 			return http.StatusInternalServerError, err
 		}
@@ -171,7 +193,7 @@ func normalizePattern(pattern string) string {
 }
 
 func redisToCommonErr(err error, collection, key string) (string, int, error) {
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		what := collection
 		if key != "" {
 			what += " \"" + key + "\""

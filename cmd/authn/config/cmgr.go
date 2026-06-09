@@ -254,7 +254,7 @@ func (*ConfManager) GetJWKSMaxAge() int {
 	return int(defaultJWKSMaxAge.Seconds())
 }
 
-func (cm *ConfManager) GetDBType() string {
+func (cm *ConfManager) GetDBType() authn.DBDriver {
 	return cm.conf.Load().Server.DBConf.DBType
 }
 
@@ -268,29 +268,8 @@ func (cm *ConfManager) GetDBPath() string {
 
 func (cm *ConfManager) GetKVServiceConf() authn.KVServiceConf {
 	conf := cm.conf.Load().Server.DBConf.Service
-	if v := os.Getenv(env.AisAuthKVAddr); v != "" {
-		conf.Addr = v
-	}
 	if v := os.Getenv(env.AisAuthKVPassword); v != "" {
-		conf.Password = v
-	}
-	if v := os.Getenv(env.AisAuthKVDBIndex); v != "" {
-		idx, err := strconv.Atoi(v)
-		if err != nil {
-			nlog.Errorf("Failed to parse %s=%q: %v. Using config value %d",
-				env.AisAuthKVDBIndex, v, err, conf.DBIndex)
-		} else if idx < 0 {
-			nlog.Errorf("Invalid %s=%q (must be >= 0). Using config value %d",
-				env.AisAuthKVDBIndex, v, conf.DBIndex)
-		} else {
-			conf.DBIndex = idx
-		}
-	}
-	tlsEnabled, err := cos.IsParseEnvBoolOrDefault(env.AisAuthKVTLS, conf.TLSEnabled)
-	if err != nil {
-		nlog.Errorf("Failed to parse %s: %v. Using config value %t", env.AisAuthKVTLS, err, conf.TLSEnabled)
-	} else {
-		conf.TLSEnabled = tlsEnabled
+		conf.SetPassword(v)
 	}
 	return conf
 }

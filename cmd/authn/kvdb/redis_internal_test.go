@@ -7,11 +7,15 @@ package kvdb
 import (
 	"errors"
 	"io/fs"
+	"net"
 	"net/http"
 	"sort"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"github.com/alicebob/miniredis/v2"
@@ -19,7 +23,15 @@ import (
 
 func newTestRedisDriver(t *testing.T) *redisDriver {
 	srv := miniredis.RunT(t)
-	driver, err := newRedisDriver(authn.KVServiceConf{Addr: srv.Addr()})
+	host, port, err := net.SplitHostPort(srv.Addr())
+	tassert.CheckFatal(t, err)
+	portNum, err := strconv.Atoi(port)
+	tassert.CheckFatal(t, err)
+	driver, err := newRedisDriver(authn.KVServiceConf{
+		Host:    host,
+		Port:    portNum,
+		Timeout: cos.Duration(5 * time.Second),
+	})
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = driver.Close() })
 	return driver

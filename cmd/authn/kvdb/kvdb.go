@@ -17,14 +17,6 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
-type dbType string
-
-const (
-	EmptyDB dbType = ""
-	BuntDB  dbType = "BuntDB"
-	RedisDB dbType = "Redis"
-)
-
 const KeyMetadataVersion = 1
 
 // KeyData is the single unit of storage for auth key state (JWKS and future fields).
@@ -106,15 +98,15 @@ func (d *Driver) PersistKeyData(m *KeyData) error {
 }
 
 func CreateDriver(cm *config.ConfManager) *Driver {
-	switch dbType(cm.GetDBType()) {
-	case EmptyDB, BuntDB:
+	switch cm.GetDBType() {
+	case "", authn.DBDriverBuntDB:
 		return &Driver{Driver: createBuntDB(cm.GetDBPath())}
-	case RedisDB:
+	case authn.DBDriverRedis:
 		return &Driver{Driver: createRedisDB(cm.GetKVServiceConf())}
 	default:
 		cos.ExitLogf(
 			"Invalid database type provided in config: %q. Supported database types are: %q and %q.",
-			cm.GetDBType(), BuntDB, RedisDB,
+			cm.GetDBType(), authn.DBDriverBuntDB, authn.DBDriverRedis,
 		)
 		return nil
 	}
