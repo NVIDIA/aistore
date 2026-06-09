@@ -198,6 +198,65 @@ func TestGetDBPath(t *testing.T) {
 	tassert.Errorf(t, got == expected, "expected %q, got %q", expected, got)
 }
 
+func TestGetKVServiceConf(t *testing.T) {
+	base := newBaseConfig()
+	base.Server.DBConf.Service = authn.KVServiceConf{
+		Addr:       "kv.authn.svc:6379",
+		Password:   "config-password",
+		DBIndex:    3,
+		TLSEnabled: true,
+	}
+	cm := newConfManagerWithConf(t, base)
+
+	got := cm.GetKVServiceConf()
+	tassert.Errorf(t, got.Addr == "kv.authn.svc:6379", "expected addr from config, got %q", got.Addr)
+	tassert.Errorf(t, got.Password == "config-password", "expected password from config, got %q", got.Password)
+	tassert.Errorf(t, got.DBIndex == 3, "expected db index from config, got %d", got.DBIndex)
+	tassert.Errorf(t, got.TLSEnabled, "expected TLS from config")
+}
+
+func TestGetKVServiceConfEnv(t *testing.T) {
+	base := newBaseConfig()
+	base.Server.DBConf.Service = authn.KVServiceConf{
+		Addr:       "config:6379",
+		Password:   "config-password",
+		DBIndex:    1,
+		TLSEnabled: false,
+	}
+	cm := newConfManagerWithConf(t, base)
+
+	t.Setenv(env.AisAuthKVAddr, "env:6379")
+	t.Setenv(env.AisAuthKVPassword, "env-password")
+	t.Setenv(env.AisAuthKVDBIndex, "4")
+	t.Setenv(env.AisAuthKVTLS, "true")
+
+	got := cm.GetKVServiceConf()
+	tassert.Errorf(t, got.Addr == "env:6379", "expected addr from env, got %q", got.Addr)
+	tassert.Errorf(t, got.Password == "env-password", "expected password from env, got %q", got.Password)
+	tassert.Errorf(t, got.DBIndex == 4, "expected db index from env, got %d", got.DBIndex)
+	tassert.Errorf(t, got.TLSEnabled, "expected TLS from env")
+}
+
+func TestGetKVServiceConfInvalidEnv(t *testing.T) {
+	base := newBaseConfig()
+	base.Server.DBConf.Service = authn.KVServiceConf{
+		DBIndex:    2,
+		TLSEnabled: true,
+	}
+	cm := newConfManagerWithConf(t, base)
+
+	t.Setenv(env.AisAuthKVDBIndex, "not-an-int")
+	t.Setenv(env.AisAuthKVTLS, "not-a-bool")
+
+	got := cm.GetKVServiceConf()
+	tassert.Errorf(t, got.DBIndex == 2, "expected config db index after invalid env, got %d", got.DBIndex)
+	tassert.Errorf(t, got.TLSEnabled, "expected config TLS after invalid env")
+
+	t.Setenv(env.AisAuthKVDBIndex, "-1")
+	got = cm.GetKVServiceConf()
+	tassert.Errorf(t, got.DBIndex == 2, "expected config db index after negative env, got %d", got.DBIndex)
+}
+
 func TestGetLogFlushInterval(t *testing.T) {
 	base := newBaseConfig()
 	expected := 20 * time.Second

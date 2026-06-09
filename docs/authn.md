@@ -349,10 +349,16 @@ Environment variables used by the AuthN server:
 | `AIS_AUTHN_SECRET_KEY`       | `""`                        | HMAC secret key used to sign tokens.                                                                                                                                  |    
 | `AIS_AUTHN_PRIVATE_KEY_FILE` | `""`                        | RSA private key file path (AuthN server)                                                                                                                              |
 | `AIS_AUTHN_PRIVATE_KEY_PASS` | `""`                        | RSA private key passphrase (AuthN server, optional)                                                                                                                   |
+| `AIS_AUTHN_KV_ADDR`          | `""`                        | External KV service address for AuthN database backends that use `auth.db.service`                                                                                    |
+| `AIS_AUTHN_KV_PASSWORD`      | `""`                        | External KV service password for AuthN database backends that use `auth.db.service`                                                                                   |
+| `AIS_AUTHN_KV_DB_INDEX`      | `0`                         | External KV service database/index for AuthN database backends that use `auth.db.service`                                                                             |
+| `AIS_AUTHN_KV_TLS`           | `false`                     | Enable TLS for external KV service connections                                                                                                                        |
 | `AIS_AUTHN_EXTERNAL_URL`     | `http[s]://localhost:52001` | URL for AIS clusters to use when validating AuthN as allowed issuer. See [External URL](#external-url) section                                                        |
 
 All variables can be set at AIStore cluster deployment and will override values in the config.
 * More info on env vars: [api/env/authn.go](https://github.com/NVIDIA/aistore/blob/main/api/env/authn.go)
+
+AuthN defaults to local BuntDB storage. Set `auth.db.type` to `Redis` and configure `auth.db.service` (or the corresponding `AIS_AUTHN_KV_*` environment variables) to share AuthN state across replicas through an external Redis service.
 
 Separately, configure the following AuthN environment variables for client access:
 
@@ -434,7 +440,17 @@ By default, the AIStore deployment does not launch the AuthN server. To start th
             }
         },
         "auth": {
-            "expiration_time": "24h"
+            "expiration_time": "24h",
+            "db": {
+                "type": "BuntDB",
+                "filepath": "/tmp/ais/authn/authn.db",
+                "service": {
+                    "addr": "",
+                    "password": "",
+                    "db_index": 0,
+                    "tls_enabled": false
+                }
+            }
         },
         "timeout": {
             "default_timeout": "30s"

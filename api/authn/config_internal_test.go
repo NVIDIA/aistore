@@ -115,6 +115,34 @@ func TestSigningKeyConfValidate(t *testing.T) {
 	})
 }
 
+func TestDatabaseConfValidate(t *testing.T) {
+	t.Run("EmptyServiceAccepted", func(t *testing.T) {
+		conf := DatabaseConf{}
+		tassert.CheckFatal(t, conf.validate())
+	})
+	t.Run("ServiceAccepted", func(t *testing.T) {
+		conf := DatabaseConf{
+			Service: KVServiceConf{
+				Addr:       "kv.authn.svc:6379",
+				Password:   "secret",
+				DBIndex:    2,
+				TLSEnabled: true,
+			},
+		}
+		tassert.CheckFatal(t, conf.validate())
+	})
+	t.Run("RedisDefaultAddr", func(t *testing.T) {
+		conf := DatabaseConf{DBType: "Redis"}
+		tassert.CheckFatal(t, conf.validate())
+		tassert.Errorf(t, conf.Service.Addr == defaultKVServiceAddr,
+			"expected Redis service addr default %q, got %q", defaultKVServiceAddr, conf.Service.Addr)
+	})
+	t.Run("NegativeDBIndexRejected", func(t *testing.T) {
+		conf := DatabaseConf{Service: KVServiceConf{DBIndex: -1}}
+		tassert.Errorf(t, conf.validate() != nil, "expected error for negative service db_index")
+	})
+}
+
 func TestServerConfValidateLegacyRSAKeyBits(t *testing.T) {
 	tests := []struct {
 		name string
@@ -151,6 +179,7 @@ func TestConfigValidateInvalid(t *testing.T) {
 		{"expire too short", func(c *Config) { c.Server.Expire = MinAuthExpiration - 1 }},
 		{"signing key bits too small", func(c *Config) { c.Server.SigningKey.Bits = minRSAKeyBits - 1 }},
 		{"signing key mode invalid", func(c *Config) { c.Server.SigningKey.Mode = "auto" }},
+		{"db service index invalid", func(c *Config) { c.Server.DBConf.Service.DBIndex = -1 }},
 		{"bad log level", func(c *Config) { c.Log.Level = "verbose" }},
 		{"log level too low", func(c *Config) { c.Log.Level = "-1" }},
 		{"log level too high", func(c *Config) { c.Log.Level = "6" }},

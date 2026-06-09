@@ -65,17 +65,6 @@ func buntToCommonErr(err error, collection, key string) (int, error) {
 	}
 }
 
-// Create "unique" key from collection and key, so there was no trouble when
-// there is an overlap. E.g, if key and collection uses the same separator
-// for subkeys, two pairs ("abc", "def/ghi") and ("abc/def", "ghi") generate
-// the same full path. The function should make them different.
-func makePath(collection, key string) string {
-	if strings.HasSuffix(collection, "##") {
-		return collection + key
-	}
-	return collection + CollectionSepa + key
-}
-
 func (bd *BuntDriver) Close() error {
 	return bd.driver.Close()
 }
@@ -97,7 +86,7 @@ func (bd *BuntDriver) Get(collection, key string, object any) (int, error) {
 }
 
 func (bd *BuntDriver) SetString(collection, key, data string) (int, error) {
-	name := makePath(collection, key)
+	name := MakePath(collection, key)
 	err := bd.driver.Update(func(tx *buntdb.Tx) error {
 		_, _, err := tx.Set(name, data, nil)
 		return err
@@ -107,7 +96,7 @@ func (bd *BuntDriver) SetString(collection, key, data string) (int, error) {
 
 func (bd *BuntDriver) GetString(collection, key string) (string, int, error) {
 	var value string
-	name := makePath(collection, key)
+	name := MakePath(collection, key)
 	err := bd.driver.View(func(tx *buntdb.Tx) error {
 		var err error
 		value, err = tx.Get(name)
@@ -118,7 +107,7 @@ func (bd *BuntDriver) GetString(collection, key string) (string, int, error) {
 }
 
 func (bd *BuntDriver) Delete(collection, key string) (int, error) {
-	name := makePath(collection, key)
+	name := MakePath(collection, key)
 	err := bd.driver.Update(func(tx *buntdb.Tx) error {
 		_, err := tx.Delete(name)
 		return err
@@ -134,7 +123,7 @@ func (bd *BuntDriver) List(collection, pattern string) ([]string, int, error) {
 	if !strings.Contains(pattern, "*") && !strings.Contains(pattern, "?") {
 		pattern += "*"
 	}
-	filter = makePath(collection, pattern)
+	filter = MakePath(collection, pattern)
 	err := bd.driver.View(func(tx *buntdb.Tx) error {
 		tx.AscendKeys(filter, func(path, _ string) bool {
 			_, key := ParsePath(path)
@@ -174,7 +163,7 @@ func (bd *BuntDriver) GetAll(collection, pattern string) (map[string]string, int
 	if !strings.Contains(pattern, "*") && !strings.Contains(pattern, "?") {
 		pattern += "*"
 	}
-	filter = makePath(collection, pattern)
+	filter = MakePath(collection, pattern)
 	err := bd.driver.View(func(tx *buntdb.Tx) error {
 		tx.AscendKeys(filter, func(path, val string) bool {
 			_, key := ParsePath(path)

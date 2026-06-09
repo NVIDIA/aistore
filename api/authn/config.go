@@ -37,6 +37,7 @@ const (
 	defaultPort             = 52001
 	defaultTokenExpiration  = cos.Duration(24 * time.Hour)
 	defaultMaxTokenAge      = cos.Duration(90 * 24 * time.Hour)
+	defaultKVServiceAddr    = "localhost:6379"
 )
 
 // Signing key management modes
@@ -91,8 +92,15 @@ type (
 		Mode string `json:"mode,omitempty"`
 	}
 	DatabaseConf struct {
-		DBType   string `json:"type"`
-		Filepath string `json:"filepath"`
+		DBType   string        `json:"type"`
+		Filepath string        `json:"filepath"`
+		Service  KVServiceConf `json:"service"`
+	}
+	KVServiceConf struct {
+		Addr       string `json:"addr,omitempty"`
+		Password   string `json:"password,omitempty"` //nolint:gosec // configuration field, not a hardcoded credential
+		DBIndex    int    `json:"db_index,omitempty"`
+		TLSEnabled bool   `json:"tls_enabled,omitempty"`
 	}
 
 	// TimeoutConf sets the default timeout for the HTTP client used by the auth manager
@@ -162,6 +170,9 @@ func (c *ServerConf) Validate() error {
 	if err := c.SigningKey.validate(); err != nil {
 		return err
 	}
+	if err := c.DBConf.validate(); err != nil {
+		return err
+	}
 	if c.Expire == 0 {
 		c.Expire = defaultTokenExpiration
 	}
@@ -186,6 +197,16 @@ func (c *SigningKeyConf) validate() error {
 	}
 	if c.Mode != "" && c.Mode != SigningKeyModeExternal {
 		return fmt.Errorf("invalid auth.signing_key.mode=%q (valid values: %q or empty)", c.Mode, SigningKeyModeExternal)
+	}
+	return nil
+}
+
+func (c *DatabaseConf) validate() error {
+	if c.Service.DBIndex < 0 {
+		return fmt.Errorf("invalid auth.db.service.db_index=%d (must be >= 0)", c.Service.DBIndex)
+	}
+	if c.DBType == "Redis" && c.Service.Addr == "" {
+		c.Service.Addr = defaultKVServiceAddr
 	}
 	return nil
 }
