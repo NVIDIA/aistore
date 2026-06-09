@@ -4,12 +4,12 @@
 
 import base64
 from typing import Type, Tuple
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 import cloudpickle
 import requests
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
-from aistore.sdk.const import UTF_ENCODING
+from aistore.sdk.const import UTF_ENCODING, QPARAM_ETL_ARGS
 from aistore.sdk.errors import InvalidPipelineError
 
 
@@ -59,7 +59,7 @@ def serialize_class(cls: Type[ETLServer], encoding: str = UTF_ENCODING) -> str:
 
 
 def compose_etl_direct_put_url(
-    direct_put_url: str, host_target: str, obj_path: str
+    direct_put_url: str, host_target: str, obj_path: str, etl_args: str = ""
 ) -> str:
     """
     Compose the final direct PUT URL by combining components from multiple URLs.
@@ -73,6 +73,9 @@ def compose_etl_direct_put_url(
         direct_put_url (str): Destination node's direct PUT URL, possibly with path/query.
         host_target (str): Base AIS target URL used for scheme and base path.
         obj_path (str): Path of the object to PUT.
+        etl_args (str): Per-request transform arguments to forward to the next
+            pipeline stage (the receiving ETL server reads them from the incoming
+            query). Empty string forwards nothing.
     Returns:
         str: Complete direct PUT URL targeting the correct AIS node.
     """
@@ -86,11 +89,24 @@ def compose_etl_direct_put_url(
         # Case 1: pipeline stage → append object path
         final_path = obj_path
 
+    # Keep xid/stats query params from the destination, then replace any existing
+    # etl_args so downstream stages receive the same per-request args without
+    # producing duplicates (mirrors Go's q.Set semantics).
+    query = direct.query
+    if etl_args:
+        query_pairs = [
+            (k, v)
+            for k, v in parse_qsl(direct.query, keep_blank_values=True)
+            if k != QPARAM_ETL_ARGS
+        ]
+        query_pairs.append((QPARAM_ETL_ARGS, etl_args))
+        query = urlencode(query_pairs)
+
     return urlunparse(
         host._replace(
             netloc=direct.netloc,
             path=final_path,
-            query=direct.query,  # keep xid or stats query params
+            query=query,
         )
     )
 

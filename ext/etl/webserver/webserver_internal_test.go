@@ -196,6 +196,75 @@ func TestETLServerPutHandler(t *testing.T) {
 	})
 }
 
+func TestETLServerDirectPutForwardsArgs(t *testing.T) {
+	var (
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+
+		svr = &etlServerBase{
+			aisTargetURL: host + secretPrefix,
+			endpoint:     host + ":" + port,
+			client:       &http.Client{},
+			ETLServer:    &EchoServer{},
+		}
+
+		directPutPath = "ais@#test/obj"
+		etlArgs       = `{"format":"jpeg"}`
+	)
+
+	t.Run("present", func(t *testing.T) {
+		var gotArgs string
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotArgs = r.URL.Query().Get(apc.QparamETLTransformArgs)
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer directPutTargetServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+			q       = req.URL.Query()
+		)
+		q.Set(apc.QparamETLTransformArgs, etlArgs)
+		req.URL.RawQuery = q.Encode()
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		tassert.Fatalf(t, gotArgs == etlArgs, "expected forwarded etl_args %q, got %q", etlArgs, gotArgs)
+	})
+
+	t.Run("absent", func(t *testing.T) {
+		var argsExists bool
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, argsExists = r.URL.Query()[apc.QparamETLTransformArgs]
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer directPutTargetServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		tassert.Fatalf(t, !argsExists, "expected no etl_args query param when none provided")
+	})
+}
+
 func TestEchoServerGetHandler(t *testing.T) {
 	var (
 		secretPrefix = "/v1/_object/some_secret"

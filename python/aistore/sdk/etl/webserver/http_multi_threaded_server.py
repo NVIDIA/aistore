@@ -165,12 +165,13 @@ class HTTPMultiThreadedServer(ETLServer):
             self.end_headers()
             self.wfile.write(body)
 
-        def _direct_put(
+        def _direct_put(  # pylint: disable=too-many-arguments,too-many-positional-arguments
             self,
             direct_put_url: str,
             data: bytes,
             remaining_pipeline: str = "",
             path: str = "",
+            etl_args: str = "",
         ) -> Tuple[int, bytes, int]:
             """
             Sends the transformed object directly to the specified AIS node (`direct_put_url`),
@@ -182,12 +183,13 @@ class HTTPMultiThreadedServer(ETLServer):
                 data: The transformed data to send
                 remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
                 path: The path of the object.
+                etl_args: Per-request transform arguments to forward to the next stage.
             Returns:
                 status code of the direct put request, transformed data, length of the transformed data (if any)
             """
             try:
                 url = compose_etl_direct_put_url(
-                    direct_put_url, self.server.etl_server.host_target, path
+                    direct_put_url, self.server.etl_server.host_target, path, etl_args
                 )
                 headers = {}
                 if remaining_pipeline:
@@ -240,19 +242,20 @@ class HTTPMultiThreadedServer(ETLServer):
             content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
             return _RFileLimitedReader(self.rfile, content_length)
 
-        def _direct_put_with_retry(
+        def _direct_put_with_retry(  # pylint: disable=too-many-arguments,too-many-positional-arguments
             self,
             direct_put_url: str,
             data: bytes,
             remaining_pipeline: str = "",
             path: str = "",
+            etl_args: str = "",
         ) -> Tuple[int, bytes, int]:
             """Buffered direct-put with exponential-backoff retry on transient errors."""
             etl = self.server.etl_server
             for attempt in range(etl.direct_put_retries + 1):
                 try:
                     return self._direct_put(
-                        direct_put_url, data, remaining_pipeline, path
+                        direct_put_url, data, remaining_pipeline, path, etl_args
                     )
                 except ETLDirectPutTransientError as exc:
                     if attempt >= etl.direct_put_retries:
@@ -299,6 +302,7 @@ class HTTPMultiThreadedServer(ETLServer):
                             etl.transform_stream(reader, raw_path, etl_args),
                             remaining_pipeline,
                             raw_path,
+                            etl_args,
                         )
                     except ETLDirectPutTransientError as exc:
                         if attempt >= effective_retries:
@@ -341,17 +345,18 @@ class HTTPMultiThreadedServer(ETLServer):
                     self.wfile.write(chunk)
             self.wfile.flush()
 
-        def _direct_put_stream(
+        def _direct_put_stream(  # pylint: disable=too-many-arguments,too-many-positional-arguments
             self,
             direct_put_url: str,
             data_iter: Iterator[bytes],
             remaining_pipeline: str = "",
             path: str = "",
+            etl_args: str = "",
         ) -> Tuple[int, bytes, int]:
             """Stream transformed output directly to the next pipeline stage."""
             try:
                 url = compose_etl_direct_put_url(
-                    direct_put_url, self.server.etl_server.host_target, path
+                    direct_put_url, self.server.etl_server.host_target, path, etl_args
                 )
                 headers = {}
                 if remaining_pipeline:
@@ -381,7 +386,9 @@ class HTTPMultiThreadedServer(ETLServer):
                 )
                 return STATUS_INTERNAL_SERVER_ERROR, str(e).encode(), 0
 
-        def _send_with_pipeline(self, transformed: bytes, path: str):
+        def _send_with_pipeline(
+            self, transformed: bytes, path: str, etl_args: str = ""
+        ):
             """
             Forward transformed data to the next ETL stage if a pipeline header exists;
             otherwise, respond directly with the transformed data.
@@ -389,6 +396,7 @@ class HTTPMultiThreadedServer(ETLServer):
             Args:
                 transformed (bytes): The transformed data to be sent.
                 path (str): The path of the object.
+                etl_args (str): Per-request transform arguments to forward to the next stage.
             """
             pipeline_header = self.headers.get(HEADER_NODE_URL)
             if pipeline_header:
@@ -396,7 +404,7 @@ class HTTPMultiThreadedServer(ETLServer):
                 if first_url:
                     status_code, transformed, direct_put_length = (
                         self._direct_put_with_retry(
-                            first_url, transformed, remaining_pipeline, path
+                            first_url, transformed, remaining_pipeline, path, etl_args
                         )
                     )
                     self._set_headers(
@@ -506,7 +514,7 @@ class HTTPMultiThreadedServer(ETLServer):
                     source, raw_path, etl_args
                 )
 
-                self._send_with_pipeline(transformed, raw_path)
+                self._send_with_pipeline(transformed, raw_path, etl_args)
 
             except InvalidPipelineError as e:
                 self.server.etl_server.logger.error(
@@ -585,7 +593,7 @@ class HTTPMultiThreadedServer(ETLServer):
                     source, raw_path, etl_args
                 )
 
-                self._send_with_pipeline(transformed, raw_path)
+                self._send_with_pipeline(transformed, raw_path, etl_args)
 
             except InvalidPipelineError as e:
                 self.server.etl_server.logger.error(

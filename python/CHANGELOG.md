@@ -35,6 +35,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   2 consecutive polls before completing (mirrors Go's
   `xact.numConsecutiveIdle`); an abort on any target still returns immediately.
 
+### Fixed
+
+- ETL webservers now forward
+  `etl_args` to the next stage on direct-put pipeline hops. Previously only the
+  first pipeline stage received `etl_args`; stages 2..N saw an empty value.
+
 ## [1.25.0] - 2026-05-20
 
 ### Added
