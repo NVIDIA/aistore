@@ -80,6 +80,12 @@ type (
 		ctx string
 	}
 
+	ErrBckNameConflict struct {
+		Name     string
+		Matches  []string
+		Creating bool
+	}
+
 	ErrBusy struct {
 		whereOrType string
 		what        string
@@ -449,6 +455,30 @@ func (e *ErrInvalidBackendProvider) Error() string {
 func (*ErrInvalidBackendProvider) Is(err error) bool {
 	_, ok := err.(*ErrInvalidBackendProvider)
 	return ok
+}
+
+// ErrBckNameConflict
+
+func NewErrBckNameConflict(name string, matches []string, creating bool) *ErrBckNameConflict {
+	return &ErrBckNameConflict{Name: name, Matches: matches, Creating: creating}
+}
+
+func (e *ErrBckNameConflict) Error() string {
+	if e.Creating {
+		return fmt.Sprintf("cannot create bucket %q via S3 API: name already in use by %s",
+			e.Name, strings.Join(e.Matches, ", "))
+	}
+	return fmt.Sprintf("ambiguous bucket name %q: matches %s; "+
+		"S3 clients cannot disambiguate AIS bucket identities - use AIS URI syntax or expose a unique bucket name",
+		e.Name, strings.Join(e.Matches, ", "))
+}
+
+func IsErrBckNameConflict(err error) bool {
+	if _, ok := err.(*ErrBckNameConflict); ok {
+		return true
+	}
+	var e *ErrBckNameConflict
+	return errors.As(err, &e)
 }
 
 // ErrRemoteMetadataMismatch

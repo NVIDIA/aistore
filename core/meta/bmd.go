@@ -237,6 +237,13 @@ func (m *BMD) initBckGlob(bck *Bck) bool {
 	return present
 }
 
+func CheckCanCreateByNameOnly(bckName string, bowner Bowner) error {
+	if all := bowner.Get().getAllByName(bckName); len(all) > 0 {
+		return newErrBckNameConflict(bckName, all, true /*creating*/)
+	}
+	return nil
+}
+
 func (m *BMD) getAllByName(bckName string) (all []Bck) {
 	for provider, namespace := range m.Providers {
 		for nsUname, buckets := range namespace {

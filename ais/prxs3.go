@@ -191,6 +191,12 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
+
+	if err := meta.CheckCanCreateByNameOnly(bucket, p.owner.bmd); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+		return
+	}
+
 	if err := p.createBucket(&msg, bck, nil); err != nil {
 		status := crerrStatus(err)
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: status})

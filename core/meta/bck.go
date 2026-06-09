@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -266,10 +267,19 @@ func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, ecode int, err err
 			err = backend.init(bmd)
 		}
 	default:
-		err = fmt.Errorf("cannot unambiguously resolve bucket name %q to a single bucket (%v)", bckName, all)
+		err = newErrBckNameConflict(bckName, all, false)
 		ecode = http.StatusUnprocessableEntity
 	}
 	return bck, ecode, err
+}
+
+func newErrBckNameConflict(bckName string, all []Bck, creating bool) error {
+	cnames := make([]string, len(all))
+	for i := range all {
+		cnames[i] = all[i].Cname("")
+	}
+	sort.Strings(cnames)
+	return &cmn.ErrBckNameConflict{Name: bckName, Matches: cnames, Creating: creating}
 }
 
 func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }

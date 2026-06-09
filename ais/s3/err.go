@@ -116,6 +116,16 @@ func WriteErr(w http.ResponseWriter, r *http.Request, errInfo ErrInfo) {
 		out.Code = "BucketAlreadyExists"
 	case cmn.IsErrBckNotFound(err):
 		out.Code = NoSuchBucket
+	case cmn.IsErrBckNameConflict(err):
+		var e *cmn.ErrBckNameConflict
+		debug.Assert(errors.As(err, &e))
+		if e.Creating {
+			out.Code = "BucketAlreadyExists"
+			in.Status = http.StatusConflict
+		} else {
+			out.Code = "AmbiguousBucketName"
+			in.Status = http.StatusNotFound
+		}
 	case isErrNoSuchUpload(err):
 		out.Code = NoSuchUpload
 	case in.TypeCode != "":
