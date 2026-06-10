@@ -70,10 +70,20 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 	return
 }
 
-// NOTE:
-//   - CopyStruct is a shallow copy. Pointer fields (Auth.*, Tracing)
-//     are deep-copied explicitly below to break aliasing.
-//   - Not cloning (read-only) FSPaths and BackendConf
+// NOTE [backward compatibility] and future steps: =================================================================
+//
+// When pointerizing additional sections:
+// - update the corresponding <section>.Validate() to normalize zero/unset fields to their canonical defaults;
+// - review/skip fields where zero has an intentional user-visible meaning such as "disabled" or "" (for "none", etc).
+//
+// Release notes for the intervening TBD releases (v4.8 ...) must carry a disclaimer.
+//
+// Phase-2: remove ensureDefaults(); introduce instead normalizeToNil() that'd `nil` any
+// previously pointerized config section containing only the canonical defaults.
+// =================================================================================================================
+
+// CopyStruct is a shallow copy. Pointer fields (Auth.*, Tracing) are deep-copied explicitly below to break aliasing.
+// Not cloning (read-only) FSPaths and BackendConf
 func (gco *gco) Clone() *Config {
 	src := gco.Get()
 	dst := &Config{}
@@ -82,12 +92,43 @@ func (gco *gco) Clone() *Config {
 	// clone assorted pointers to structs
 	src.Auth.CopyTo(&dst.Auth)
 
-	if src.Tracing != nil {
-		v := *src.Tracing
-		dst.Tracing = &v
-	}
+	dst.clonePtrs()
 
 	return dst
+}
+
+// deep-copy pointerized sections (to break aliasing)
+func (c *ClusterConfig) clonePtrs() {
+	if c.Tracing != nil {
+		v := *c.Tracing
+		c.Tracing = &v
+	}
+	if c.TCB != nil {
+		v := *c.TCB
+		c.TCB = &v
+	}
+	if c.TCO != nil {
+		v := *c.TCO
+		c.TCO = &v
+	}
+	if c.Arch != nil {
+		v := *c.Arch
+		c.Arch = &v
+	}
+}
+
+// from `nil` to canonical defaults via subsequent config-section.Validate()
+// TODO: remove in phase-2, replace with normalizeToNil().
+func (c *ClusterConfig) ensureDefaults() {
+	if c.TCB == nil {
+		c.TCB = &TCBConf{}
+	}
+	if c.TCO == nil {
+		c.TCO = &TCOConf{}
+	}
+	if c.Arch == nil {
+		c.Arch = &ArchConf{}
+	}
 }
 
 // When updating we need to make sure that the update is transaction and no
@@ -118,8 +159,10 @@ func (gco *gco) SetInitialGconfPath(path string) { gco.confPath.Store(&path) }
 func (gco *gco) GetInitialGconfPath() string     { return *gco.confPath.Load() }
 
 func (gco *gco) Update(cluConfig *ClusterConfig) (err error) {
+	// copy
 	config := gco.Clone()
 	config.ClusterConfig = *cluConfig
+	config.ClusterConfig.clonePtrs()
 
 	// post-4.1 fixup: pointer and `omitempty`
 	if config.Tracing != nil {
@@ -137,8 +180,8 @@ func (gco *gco) Update(cluConfig *ClusterConfig) (err error) {
 		err = config.Validate()
 	}
 	if err != nil {
-		return
+		return err
 	}
 	gco.Put(config)
-	return
+	return nil
 }

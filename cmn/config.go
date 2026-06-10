@@ -110,9 +110,9 @@ type (
 		LastUpdated string          `json:"lastupdate_time"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		Cksum       CksumConf       `json:"checksum" allow:"cluster"`
-		TCB         TCBConf         `json:"tcb" allow:"cluster"`
-		TCO         TCOConf         `json:"tco" allow:"cluster"`
-		Arch        ArchConf        `json:"arch" allow:"cluster"`
+		TCB         *TCBConf        `json:"tcb,omitempty" allow:"cluster"`
+		TCO         *TCOConf        `json:"tco,omitempty" allow:"cluster"`
+		Arch        *ArchConf       `json:"arch,omitempty" allow:"cluster"`
 		RateLimit   RateLimitConf   `json:"rate_limit"`
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
@@ -1153,6 +1153,8 @@ var (
 	_ validator = (*TransportConf)(nil)
 	_ validator = (*MemsysConf)(nil)
 	_ validator = (*TCBConf)(nil)
+	_ validator = (*TCOConf)(nil)
+	_ validator = (*ArchConf)(nil)
 	_ validator = (*WritePolicyConf)(nil)
 	_ validator = (*TracingConf)(nil)
 	_ validator = (*GetBatchConf)(nil)
@@ -1198,6 +1200,8 @@ func (c *Config) Validate() error {
 		return errors.New("invalid log dir value (must be non-empty)")
 	}
 
+	c.ClusterConfig.ensureDefaults()
+
 	//
 	// NOTE: the following validations perform cross-sections checks - call them explicitly
 	//
@@ -1213,6 +1217,7 @@ func (c *Config) Validate() error {
 	if err := c.Features.Validate(); err != nil {
 		return err
 	}
+
 	opts := IterOpts{VisitAll: true}
 	return IterFields(c, c.validateFld, opts)
 }
@@ -2545,23 +2550,41 @@ func (c *TransportConf) Validate() (err error) {
 const (
 	// The default burst_buffer used when unset (0). Work channel-backed xactions
 	// should normally size their work queues to this value.
-	XactBurstDflt = 256
+	XactBurstDflt = 512
+	xactBurstMin  = 32
+	xactBurstMax  = 10_000
 
-	xactBurstMin = 32
-	xactBurstMax = 10_000
+	XactCompressionDflt = apc.CompressNever
+
+	XactSbundleMultDflt = 2
+	xactSbundleMultMin  = 1
+	xactSbundleMultMax  = 16
 )
+
+func DefaultXactConf() XactConf {
+	return XactConf{
+		Compression: XactCompressionDflt,
+		SbundleMult: XactSbundleMultDflt,
+		Burst:       XactBurstDflt,
+	}
+}
 
 func (c *XactConf) Validate() error {
 	if c.Compression == "" {
-		c.Compression = apc.CompressNever
+		c.Compression = XactCompressionDflt
 	}
 	if !apc.IsValidCompression(c.Compression) {
 		return fmt.Errorf("invalid compression: %q (expecting one of: %v)",
 			c.Compression, apc.SupportedCompression)
 	}
-	if c.SbundleMult < 0 || c.SbundleMult > 16 {
-		return fmt.Errorf("invalid bundle_multiplier: %v (expecting range [0, 16])", c.SbundleMult)
+
+	if c.SbundleMult == 0 {
+		c.SbundleMult = XactSbundleMultDflt
+	} else if c.SbundleMult < xactSbundleMultMin || c.SbundleMult > xactSbundleMultMax {
+		return fmt.Errorf("invalid bundle_multiplier: %v (expecting range [%d, %d] or zero for default)",
+			c.SbundleMult, xactSbundleMultMin, xactSbundleMultMax)
 	}
+
 	if c.Burst == 0 {
 		c.Burst = XactBurstDflt
 	} else if c.Burst < xactBurstMin || c.Burst > xactBurstMax {
@@ -2960,17 +2983,17 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 
 	nlog.SetPost(config.Log.ToStderr, int64(config.Log.MaxSize))
 
-	// initialize atomic part of the config including most often used timeouts and features
-	Rom.Set(&config.ClusterConfig)
-
 	// read-only
-	Rom.testingEnv = config.TestingEnv()
 	config.SetRole(daeRole)
 
 	// override config - locally updated global defaults
 	if err := handleOverrideConfig(config); err != nil {
 		return err
 	}
+
+	// initialize atomic part of the config including most often used timeouts and features
+	Rom.Set(&config.ClusterConfig)
+	Rom.testingEnv = config.TestingEnv()
 
 	// create dirs
 	if err := cos.CreateDir(config.LogDir); err != nil {

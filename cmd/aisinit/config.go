@@ -42,9 +42,6 @@ var (
 		SbundleMult: 2,
 		Burst:       512,
 	}
-	defaultTCB  = aiscmn.TCBConf{XactConf: defaultXconf}
-	defaultTCO  = aiscmn.TCOConf{XactConf: defaultXconf}
-	defaultArch = aiscmn.ArchConf{XactConf: defaultXconf}
 
 	defaultDisk = aiscmn.DiskConf{
 		DiskUtilLowWM:    20,
@@ -225,9 +222,9 @@ func newDefaultConfig() *aiscmn.ClusterConfig {
 		Cksum:       defaultCksum,
 		Client:      defaultClientConf,
 		Transport:   defaultTransport,
-		TCB:         defaultTCB,
-		TCO:         defaultTCO,
-		Arch:        defaultArch,
+		TCB:         &aiscmn.TCBConf{XactConf: defaultXconf},
+		TCO:         &aiscmn.TCOConf{XactConf: defaultXconf},
+		Arch:        &aiscmn.ArchConf{XactConf: defaultXconf},
 		Disk:        defaultDisk,
 		Net:         defaultNet,
 		FSHC:        defaultFSHC,
