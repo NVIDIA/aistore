@@ -1044,62 +1044,161 @@ func _rngBytes(size int, seed byte) []byte {
 }
 
 // read all archive entries (name, size, data) in order
-func _rngEntries(t *testing.T, data []byte) []tarEntry {
-	ar, err := archive.NewReader(archive.ExtTar, bytes.NewReader(data), int64(len(data)))
+func _rngEntries(t *testing.T, format string, data []byte) []tarEntry {
+	if format == "" {
+		format = archive.ExtTar
+	}
+	ar, err := archive.NewReader(format, bytes.NewReader(data), int64(len(data)))
 	tassert.CheckFatal(t, err)
 	cb := &tarValidationCallback{mode: "multipart", t: t}
 	tassert.CheckFatal(t, ar.ReadUntil(cb, cos.EmptyMatchAll, ""))
 	return cb.entries
 }
 
-// TestMossRangeReadSmoke is a smoke test for ranged GetBatch reads end-to-end (the actual moss
-// data path), including open-ended (Length == cos.ContentLengthUnknown) ranges that read [Start, EOF).
+// build an in-memory shard (TAR/TGZ/ZIP) from name->content; content is known for verification
+func _rngMkShard(t *testing.T, ext string, files map[string][]byte) []byte {
+	var buf bytes.Buffer
+	aw := archive.NewWriter(ext, &buf, nil, &archive.Opts{TarFormat: tar.FormatUnknown})
+	for name, data := range files {
+		err := aw.Write(name, cos.SimpleOAH{Size: int64(len(data))}, bytes.NewReader(data))
+		tassert.CheckFatal(t, err)
+	}
+	tassert.CheckFatal(t, aw.Fini())
+	return buf.Bytes()
+}
+
+// TestMossRangeReadSmoke byte-verifies ranged GetBatch reads across permutations: plain-object vs
+// archived-file ranges, input/output formats, multipart vs streaming, mono vs large objects, and
+// mixed range forms (mid-object, leading, open-ended -1, whole-object).
 func TestMossRangeReadSmoke(t *testing.T) {
 	proxyURL := tools.GetPrimaryURL()
 	bp := tools.BaseAPIParams(proxyURL)
-
-	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	t.Cleanup(stopMossJobs)
 
-	const objSize = 4 * cos.KiB
-	objName := "range-obj.bin"
-	objData := _rngBytes(objSize, 0x11)
-	_, err := api.PutObject(&api.PutArgs{
-		BaseParams: bp, Bck: bck, ObjName: objName, Reader: readers.NewBytes(objData),
-	})
-	tassert.CheckFatal(t, err)
-
-	nameInArch := bck.Name + "/" + objName
+	numObjs := 100
+	if testing.Short() {
+		numObjs = 20
+	}
 
 	cases := []struct {
-		desc string
-		in   apc.MossIn
-		want []byte
+		desc         string
+		inputFormat  string // "" => plain-object range; else shard ext => archived-file range
+		outputFormat string // "" => .tar
+		streaming    bool
+		count        int
+		objSize      int // plain-object size (ignored for archived cases)
 	}{
-		{"whole-object", apc.MossIn{ObjName: objName}, objData},
-		{"bounded", apc.MossIn{ObjName: objName, Start: 1024, Length: 512}, objData[1024:1536]},
-		{"open-ended", apc.MossIn{ObjName: objName, Start: 1024, Length: cos.ContentLengthUnknown}, objData[1024:]},
-		{"open-ended-from-zero", apc.MossIn{ObjName: objName, Length: cos.ContentLengthUnknown}, objData},
+		{"plain/mono => tar (multipart)", "", "", false, numObjs, 4 * cos.KiB},
+		{"plain/mono => tar (streaming)", "", "", true, numObjs, 4 * cos.KiB},
+		{"plain/mono => tgz (multipart)", "", archive.ExtTgz, false, numObjs, 4 * cos.KiB},
+		{"plain/mono => zip (multipart)", "", archive.ExtZip, false, numObjs, 4 * cos.KiB},
+		{"plain/large => tar (multipart)", "", "", false, min(numObjs, 8), 2*cos.MiB + 17},
+		{"arch:tar => tar (multipart)", archive.ExtTar, "", false, numObjs, 0},
+		{"arch:tgz => tar (multipart)", archive.ExtTgz, "", false, numObjs, 0},
+		{"arch:zip => tar (multipart)", archive.ExtZip, "", false, numObjs, 0},
+		{"arch:tar => tgz (streaming)", archive.ExtTar, archive.ExtTgz, true, numObjs, 0},
 	}
 
-	in := make([]apc.MossIn, len(cases))
-	for i := range cases {
-		in[i] = cases[i].in
-	}
-
-	var buf bytes.Buffer
-	resp, err := api.GetBatch(bp, bck, &apc.MossReq{In: in, StreamingGet: false}, &buf)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(resp.Out) == len(cases), "resp.Out=%d, want %d", len(resp.Out), len(cases))
-
-	got := _rngEntries(t, buf.Bytes())
-	tassert.Fatalf(t, len(got) == len(cases), "tar entries=%d, want %d", len(got), len(cases))
 	for i := range cases {
 		c := &cases[i]
-		tassert.Errorf(t, got[i].name == nameInArch, "[%s] name=%q, want %q", c.desc, got[i].name, nameInArch)
-		tassert.Errorf(t, int(got[i].size) == len(c.want), "[%s] tar size=%d, want %d", c.desc, got[i].size, len(c.want))
-		tassert.Errorf(t, resp.Out[i].Size == int64(len(c.want)), "[%s] MossOut.Size=%d, want %d", c.desc, resp.Out[i].Size, len(c.want))
-		tassert.Errorf(t, bytes.Equal(got[i].data, c.want), "[%s] range bytes mismatch", c.desc)
+		t.Run(c.desc, func(t *testing.T) {
+			bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+			tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+			var (
+				in    []apc.MossIn
+				want  [][]byte
+				names []string
+			)
+
+			// _rng builds a (MossIn, expected-bytes) pair from source bytes, rotating the range
+			// form by index: mid-object range, leading range, open-ended (-1), whole object.
+			_rng := func(j int, src []byte, mossIn *apc.MossIn) []byte {
+				sz := int64(len(src))
+				switch j % 4 {
+				case 0: // mid-object bounded range
+					mossIn.Start, mossIn.Length = sz/3, sz/4
+					return src[mossIn.Start : mossIn.Start+mossIn.Length]
+				case 1: // leading bounded range
+					mossIn.Start, mossIn.Length = 0, sz/2
+					return src[:mossIn.Length]
+				case 2: // open-ended: from sz/3 to EOF
+					mossIn.Start, mossIn.Length = sz/3, cos.ContentLengthUnknown
+					return src[mossIn.Start:]
+				default: // whole object (no range)
+					return src
+				}
+			}
+
+			for j := range c.count {
+				if c.inputFormat == "" {
+					// plain-object range
+					data := _rngBytes(c.objSize, byte(j+1))
+					objName := fmt.Sprintf("robj-%05d.bin", j)
+					_, err := api.PutObject(&api.PutArgs{
+						BaseParams: bp, Bck: bck, ObjName: objName, Reader: readers.NewBytes(data),
+					})
+					tassert.CheckFatal(t, err)
+
+					mossIn := apc.MossIn{ObjName: objName}
+					exp := _rng(j, data, &mossIn)
+					in = append(in, mossIn)
+					want = append(want, exp)
+					names = append(names, bck.Name+"/"+objName)
+				} else {
+					// archived-file range
+					fileName := "data/file.bin"
+					fileData := _rngBytes(2*cos.KiB+j, byte(j+1))
+					shard := _rngMkShard(t, c.inputFormat, map[string][]byte{fileName: fileData})
+					shardName := fmt.Sprintf("rshard-%05d%s", j, c.inputFormat)
+					_, err := api.PutObject(&api.PutArgs{
+						BaseParams: bp, Bck: bck, ObjName: shardName, Reader: readers.NewBytes(shard),
+					})
+					tassert.CheckFatal(t, err)
+
+					mossIn := apc.MossIn{ObjName: shardName, ArchPath: fileName}
+					exp := _rng(j, fileData, &mossIn)
+					in = append(in, mossIn)
+					want = append(want, exp)
+					names = append(names, bck.Name+"/"+shardName+"/"+fileName)
+				}
+			}
+
+			outFmt := c.outputFormat
+			if outFmt == "" {
+				outFmt = archive.ExtTar
+			}
+			req := &apc.MossReq{In: in, OutputFormat: c.outputFormat, StreamingGet: c.streaming}
+
+			var (
+				tarData []byte
+				resp    apc.MossResp
+			)
+			if c.streaming {
+				rc, _, err := api.GetBatchStream(bp, bck, req)
+				tassert.CheckFatal(t, err)
+				tarData, err = io.ReadAll(rc)
+				_ = rc.Close()
+				tassert.CheckFatal(t, err)
+			} else {
+				var buf bytes.Buffer
+				var err error
+				resp, err = api.GetBatch(bp, bck, req, &buf)
+				tassert.CheckFatal(t, err)
+				tarData = buf.Bytes()
+			}
+
+			got := _rngEntries(t, outFmt, tarData)
+			tassert.Fatalf(t, len(got) == len(in), "%s: tar entries=%d, want %d", c.desc, len(got), len(in))
+			for j := range in {
+				tassert.Errorf(t, got[j].name == names[j], "[%s] pos %d: name=%q, want %q", c.desc, j, got[j].name, names[j])
+				tassert.Errorf(t, int(got[j].size) == len(want[j]), "[%s] pos %d: tar size=%d, want %d", c.desc, j, got[j].size, len(want[j]))
+				tassert.Errorf(t, bytes.Equal(got[j].data, want[j]), "[%s] pos %d: range bytes mismatch", c.desc, j)
+				if !c.streaming {
+					tassert.Errorf(t, resp.Out[j].Size == int64(len(want[j])),
+						"[%s] pos %d: MossOut.Size=%d, want %d", c.desc, j, resp.Out[j].Size, len(want[j]))
+				}
+			}
+		})
 	}
 }
