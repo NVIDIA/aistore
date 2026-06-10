@@ -118,6 +118,7 @@ For programmatic access:
 
 * **[Go API](https://github.com/NVIDIA/aistore/tree/main/api)** - native Go client
 * **[Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)** - Python client
+* **[Client ecosystem roadmap](/docs/client-ecosystem)** - guidance for additional SDKs and ecosystem integrations
 
 ### Probing liveness and readiness
 

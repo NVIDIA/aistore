@@ -29,6 +29,7 @@ AIStore documentation is organized by task: getting started, accessing AIS via C
 - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
   - [PyPI package](https://pypi.org/project/aistore/)
   - [Python SDK reference guide](https://docs.nvidia.com/aistore/python/aistore/sdk)
+- [Client ecosystem roadmap](/docs/client-ecosystem)
 - [PyTorch integration](https://docs.nvidia.com/aistore/python/aistore/pytorch)
 - [TensorFlow integration](/docs/tensorflow.md)
 - [HTTP API reference](https://aistore.nvidia.com/docs/http-api)
