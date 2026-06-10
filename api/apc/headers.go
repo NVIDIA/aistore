@@ -141,8 +141,12 @@ const (
 	HdrActiveEC = aisPrefix + "Ec"
 	HdrActiveDM = aisPrefix + "Dm"
 
-	// (advanced use)
+	// (ais/psetforce; advanced use)
 	HdrReadyToJoinClu = aisPrefix + "Ready-Join-Clu"
+
+	// cluster key (csk)
+	HdrSenderSig   = aisPrefix + "Caller-Sig"   // base64 RawURL HMAC-SHA256 over the intra request
+	HdrSenderNonce = aisPrefix + "Caller-Nonce" // monotonic nonce bound into the signature
 )
 
 const lais = len(aisPrefix)

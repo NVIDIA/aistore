@@ -516,6 +516,11 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 	// used to detect caller-id spoofing
 	// (another small reason to deploy 3 logical nets; both proxy and target)
 	g.netServ.pub.isSeparatePub = g.netServ.pub != g.netServ.control && g.netServ.pub != g.netServ.data
+
+	// in single-network deployments, caller headers are client-spoofable - HMAC required
+	if !g.netServ.pub.isSeparatePub && config.Auth.Enabled && !config.Auth.CSKEnabled() {
+		cos.ExitLog("invalid cluster configuration: single-network deployment requires auth.cluster_key.enabled")
+	}
 }
 
 func mustDiffer(ip1 meta.NetInfo, port1 int, use1 bool, ip2 meta.NetInfo, port2 int, use2 bool, tag string) {
@@ -877,6 +882,49 @@ func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX) {
 	}
 	req.Header.Set(apc.HdrSenderID, h.SID())
 	req.Header.Set(apc.HdrSenderName, h.si.Name())
+
+	signing := cmn.Rom.CSKEnabled() && !g.netServ.pub.isSeparatePub && smap.vstr != ""
+	if signing {
+		h.signIntra(req, smap)
+	}
+}
+
+// HMAC-sign the intra-cluster control-plane request (compare with p.redurl())
+func (h *htrun) signIntra(req *http.Request, smap *smapX) {
+	sb := sbAlloc()
+	sign := &signer{
+		r:       req,
+		h:       h,
+		sb:      sb,
+		smapVer: smap.version(),
+		nonce:   h.owner.csk.nonce.Add(1),
+	}
+	sign.compute(h.SID())
+	if sign.sig != nil { // nil => key ver 0 (early startup)
+		req.Header.Set(apc.HdrSenderNonce, strconv.FormatUint(sign.nonce, 10))
+		req.Header.Set(apc.HdrSenderSig, string(sign.sig))
+	}
+	sbFree(sb)
+}
+
+// In single-network deployments, caller headers are client-spoofable.
+// When CSK is enabled, require HMAC before treating them as intra-cluster;
+// otherwise preserve legacy/bootstrap behavior.
+func (h *htrun) verifyIntra(r *http.Request, sid, sname string) error {
+	hdr := r.Header
+	cg, err := cskFromHdr(hdr)
+	if err != nil {
+		return err
+	}
+	if cg == nil {
+		return fmt.Errorf("%s: missing CSK signature for intra-cluster request from %s", h, sname)
+	}
+
+	sign := &signer{r: r, h: h}
+	if _, err := sign.verify(sid, cg); err != nil {
+		return fmt.Errorf("%s: invalid CSK signature for intra-cluster request from %s: %w", h, sname, err)
+	}
+	return nil
 }
 
 func _doResp(args *callArgs, req *http.Request, resp *http.Response, res *callResult) {
@@ -2523,7 +2571,7 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) bool {
 	hdr := r.Header
 	if hdr.Get(apc.HdrSenderID) != "" || hdr.Get(apc.HdrSenderName) != "" {
-		if err := h.checkIntraCall(hdr, false /* from primary */); err != nil {
+		if err := h.checkIntraCall(r, false /* from primary */); err != nil {
 			h.writeErr(w, r, err, http.StatusServiceUnavailable)
 			return true
 		}
@@ -2599,23 +2647,10 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 	return 0, nil
 }
 
-// isClusterNode returns the Snode for the given sender ID if it is a known cluster member.
-// Returns (nil, nil) when smap is not yet valid.
-func (h *htrun) isClusterNode(hdr http.Header) (*meta.Snode, *smapX) {
-	sid := hdr.Get(apc.HdrSenderID)
-	if sid == "" {
-		return nil, nil
-	}
-	smap := h.owner.smap.get()
-	if !smap.isValid() {
-		return nil, nil
-	}
-	return smap.GetNode(sid), smap
-}
-
-func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
+func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) error {
 	const ferr = "%s: invalid intra-cluster request from [name=%q, id=%q]"
 	var (
+		hdr   = r.Header
 		sid   = hdr.Get(apc.HdrSenderID)
 		sname = hdr.Get(apc.HdrSenderName)
 	)
@@ -2636,15 +2671,22 @@ func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 		return fmt.Errorf(ferr, h, sname, sid)
 	}
 
-	// 3. look up sender in smap
-	snode, smap := h.isClusterNode(hdr)
-
-	if smap == nil {
-		// smap not yet valid — inconclusive during startup
-		return nil
+	// 3. TODO: enable HMAC-verify (see setIntraHdrs for "signing")
+	verifying := false && cmn.Rom.CSKEnabled() && !g.netServ.pub.isSeparatePub
+	if verifying {
+		if err := h.verifyIntra(r, sid, sname); err != nil {
+			return err
+		}
 	}
 
-	// 4. unknown sender
+	// 4. look up sender in smap
+	smap := h.owner.smap.get()
+	if smap == nil || !smap.isValid() {
+		return nil // smap not yet valid — inconclusive during startup
+	}
+	snode := smap.GetNode(sid)
+
+	// 5. unknown sender
 	if snode == nil {
 		if !fromPrimary {
 			return nil
@@ -2652,7 +2694,7 @@ func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 		return fmt.Errorf("%s: expected %s from a valid node, %s", h, cmn.NetIntraControl, smap)
 	}
 
-	// 5. sname prefix must match the role (completing check #2 above)
+	// 6. sname prefix must match the role (completing check #2 above)
 	wantPrefix := meta.PnamePrefix
 	if snode.IsTarget() {
 		wantPrefix = meta.TnamePrefix
@@ -2661,17 +2703,17 @@ func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 		return fmt.Errorf(ferr, h, sname, sid)
 	}
 
-	// 6. a known cluster member (the fact that it's known is enough)
+	// 7. a known cluster member (the fact that it's known is enough)
 	if !fromPrimary {
 		return nil
 	}
 
-	// 7. primary-only call: accept current primary immediately
+	// 8. primary-only call: accept current primary immediately
 	if smap.isPrimary(snode) {
 		return nil
 	}
 
-	// 8. primary's calling but my local Smap disagrees: still trust the caller if its Smap is strictly newer
+	// 9. primary's calling but my local Smap disagrees: still trust the caller if its Smap is strictly newer
 	sver := hdr.Get(apc.HdrSenderSmapVer)
 	if sver != "" && sver != smap.vstr {
 		ver, err := strconv.ParseInt(sver, 10, 64)
@@ -2692,7 +2734,7 @@ func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 }
 
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
-	err := h.checkIntraCall(r.Header, onlyPrimary)
+	err := h.checkIntraCall(r, onlyPrimary)
 	if err != nil {
 		h.writeErr(w, r, err)
 		return

@@ -60,8 +60,11 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 	)
 	switch {
 	case enabled:
+		// HMAC-sign the redirect
+
 		sb := sbAlloc()
-		defer sbFree(sb)
+		defer sbFree(sb) // computed sign.sig points into sb (to be recycled) but buildURL (below) clones it
+
 		size := len(nodeURL) + len(r.URL.Path) + len(r.URL.RawQuery) + cskURLOverhead // !special size; not optimizing
 		sb.Reset(size, true)
 		sign = &signer{

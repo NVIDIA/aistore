@@ -2219,7 +2219,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
 		return
 	}
 
-	if err := p.checkIntraCall(r.Header, false /*from primary*/); err != nil {
+	if err := p.checkIntraCall(r, false /*from primary*/); err != nil {
 		err = fmt.Errorf("%w (action %q)", err, apc.ActSelfRemove)
 		p.writeErr(w, r, err)
 		return

@@ -14,6 +14,18 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
+func isClusterNode(h *htrun, hdr http.Header) (*meta.Snode, *smapX) {
+	sid := hdr.Get(apc.HdrSenderID)
+	if sid == "" {
+		return nil, nil
+	}
+	smap := h.owner.smap.get()
+	if !smap.isValid() {
+		return nil, nil
+	}
+	return smap.GetNode(sid), smap
+}
+
 // newHTRunWithSmap creates a minimal htrun with a valid smap containing one proxy node.
 func newHTRunWithSmap() (*htrun, string) {
 	h := &htrun{}
@@ -36,7 +48,7 @@ func TestIsClusterNode_KnownNode(t *testing.T) {
 	hdr := http.Header{}
 	hdr.Set(apc.HdrSenderID, primaryID)
 
-	snode, smap := h.isClusterNode(hdr)
+	snode, smap := isClusterNode(h, hdr)
 	tassert.Errorf(t, snode != nil, "expected known node, got nil")
 	tassert.Errorf(t, smap != nil, "expected valid smap, got nil")
 	tassert.Errorf(t, snode.ID() == primaryID, "expected ID %q, got %q", primaryID, snode.ID())
@@ -47,7 +59,7 @@ func TestIsClusterNode_UnknownNode(t *testing.T) {
 	hdr := http.Header{}
 	hdr.Set(apc.HdrSenderID, "unknown-node-id")
 
-	snode, smap := h.isClusterNode(hdr)
+	snode, smap := isClusterNode(h, hdr)
 	tassert.Errorf(t, snode == nil, "expected nil for unknown node, got %v", snode)
 	tassert.Errorf(t, smap != nil, "expected valid smap, got nil")
 }
@@ -56,7 +68,7 @@ func TestIsClusterNode_EmptyHeader(t *testing.T) {
 	h, _ := newHTRunWithSmap()
 	hdr := http.Header{}
 
-	snode, smap := h.isClusterNode(hdr)
+	snode, smap := isClusterNode(h, hdr)
 	tassert.Errorf(t, snode == nil, "expected nil for empty header, got %v", snode)
 	tassert.Errorf(t, smap == nil, "expected nil smap for empty header, got %v", smap)
 }
@@ -74,7 +86,7 @@ func TestIsClusterNode_InvalidSmap(t *testing.T) {
 	hdr := http.Header{}
 	hdr.Set(apc.HdrSenderID, "p1")
 
-	snode, smap := h.isClusterNode(hdr)
+	snode, smap := isClusterNode(h, hdr)
 	tassert.Errorf(t, snode == nil, "expected nil when smap is invalid, got %v", snode)
 	tassert.Errorf(t, smap == nil, "expected nil smap when invalid, got %v", smap)
 }
@@ -97,7 +109,7 @@ func TestIsClusterNode_SpoofedHeaders(t *testing.T) {
 				hdr.Set(apc.HdrSenderID, tc.callerID)
 				hdr.Set(apc.HdrSenderName, "p["+tc.callerID+"]")
 			}
-			snode, _ := h.isClusterNode(hdr)
+			snode, _ := isClusterNode(h, hdr)
 			tassert.Errorf(t, snode == nil, "spoofed header %q should not be treated as cluster node", tc.callerID)
 		})
 	}

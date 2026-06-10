@@ -320,6 +320,7 @@ func (dpq *dpq) _archstr() string {
 // url.Values => cskgrp
 //
 
+// (compare with cskFromHdr)
 func cskFromQ(q url.Values) (*cskgrp, error) {
 	const tag = "from-q"
 	sig := q.Get(apc.QparamHMAC)

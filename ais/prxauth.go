@@ -373,7 +373,7 @@ func (p *proxy) extractAndValidate(ctx context.Context, hdr http.Header) (*tok.A
 
 // Wraps the access check with an HTTP error message
 func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
-	if err = p.access(r.Context(), r.Header, bck, ace); err != nil {
+	if err = p.access(r, bck, ace); err != nil {
 		// Use writeErrMsg (with the combined message from wrapped errors) instead of writeErr
 		// aceErrToCode parses code from the type so additional status code parsing is not necessary
 		p.writeErrMsg(w, r, err.Error(), aceErrToCode(err))
@@ -406,10 +406,23 @@ func aceErrToCode(err error) (status int) {
 //	Exceptions:
 //	- read-only access to a bucket is always granted
 //	- PATCH cannot be forbidden
-func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
-	// Skip internal calls
-	if snode, _ := p.isClusterNode(hdr); snode != nil {
-		return nil
+func (p *proxy) access(r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
+	var (
+		hdr     = r.Header
+		sid     = hdr.Get(apc.HdrSenderID)
+		sname   = hdr.Get(apc.HdrSenderName)
+		isIntra = sid != "" || sname != ""
+	)
+	if isIntra {
+		// HMAC-verify
+		verifying := cmn.Rom.AuthEnabled() && cmn.Rom.CSKEnabled() && !g.netServ.pub.isSeparatePub
+		if verifying {
+			return p.verifyIntra(r, sid, sname)
+		}
+		smap := p.owner.smap.get()
+		if !smap.isValid() || smap.GetNode(sid) != nil {
+			return nil
+		}
 	}
 
 	// If auth is NOT enabled, only check bucket properties
@@ -434,7 +447,7 @@ func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace 
 	}
 
 	// Validate token and parse claims ONCE
-	claims, err := p.validateToken(ctx, hdr)
+	claims, err := p.validateToken(r.Context(), hdr)
 	if err != nil {
 		// NOTE: making exception to allow 3rd party clients read remote ht://bucket
 		if errors.Is(err, tok.ErrNoToken) && bck != nil && bck.IsHT() {

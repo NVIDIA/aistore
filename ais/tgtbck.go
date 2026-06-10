@@ -40,7 +40,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	if err != nil {
 		return
 	}
-	if err = t.checkIntraCall(r.Header, false); err != nil {
+	if err = t.checkIntraCall(r, false); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

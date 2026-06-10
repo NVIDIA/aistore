@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -19,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -107,9 +107,16 @@ func (csk *cskOwner) init() {
 	csk.reset()
 }
 
-func (csk *cskOwner) load() (k *clusterKey) { return csk.k.Load().(*clusterKey) }
-func (csk *cskOwner) store(k *clusterKey)   { csk.k.Store(k) }
-func (csk *cskOwner) reset()                { csk.k.Store(&clusterKey{}) }
+func (csk *cskOwner) load() (k *clusterKey) {
+	v := csk.k.Load()
+	if v == nil {
+		return &clusterKey{}
+	}
+	return v.(*clusterKey)
+}
+
+func (csk *cskOwner) store(k *clusterKey) { csk.k.Store(k) }
+func (csk *cskOwner) reset()              { csk.k.Store(&clusterKey{}) }
 
 // primary only
 // version is monotonically increasing and is loosely tied to smap version:
@@ -244,9 +251,12 @@ func (sign *signer) verify(pid string, cskgrp *cskgrp) (int, error) {
 	sign.sb.Reset(size, true /*allow shrink*/)
 
 	sign.compute(pid)
+
+	// sign.sig points into sign.sb - compare before
+	eq := hmac.Equal(sign.sig, cos.UnsafeB(cskgrp.hmacSig))
 	sbFree(sign.sb)
 
-	if !bytes.Equal(sign.sig, cos.UnsafeB(cskgrp.hmacSig)) {
+	if !eq {
 		return http.StatusUnauthorized, errors.New("HMAC signature mismatch")
 	}
 	return 0, nil
@@ -310,3 +320,29 @@ func handFree(handb *handb) { handb.h.Reset(); handPool.Put(handb) }
 
 func sbAlloc() *cos.SB  { return sbPool.Get().(*cos.SB) }
 func sbFree(sb *cos.SB) { sbPool.Put(sb) }
+
+//
+// control-plane helpers
+//
+
+// via h.checkIntraCall (compare with cskFromQ())
+func cskFromHdr(hdr http.Header) (*cskgrp, error) {
+	sig := hdr.Get(apc.HdrSenderSig)
+	if sig == "" {
+		return nil, nil
+	}
+	if len(sig) != cskSigLen {
+		return nil, fmt.Errorf("invalid %s length: %d", apc.HdrSenderSig, len(sig))
+	}
+	nonce, err := strconv.ParseUint(hdr.Get(apc.HdrSenderNonce), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", apc.HdrSenderNonce, err)
+	}
+	var smapVer int64
+	if v := hdr.Get(apc.HdrSenderSmapVer); v != "" {
+		if smapVer, err = strconv.ParseInt(v, 10, 64); err != nil {
+			return nil, fmt.Errorf("invalid %s: %w", apc.HdrSenderSmapVer, err)
+		}
+	}
+	return &cskgrp{hmacSig: sig, nonce: nonce, smapVer: smapVer}, nil
+}
