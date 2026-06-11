@@ -11,8 +11,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -25,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/kvdb"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
@@ -43,8 +42,6 @@ const (
 // Constants for creating RSA keys and key set
 const (
 	signingKeyUsage      = "sig"
-	publicKeyPEMType     = "PUBLIC KEY"
-	privateKeyPEMType    = "PRIVATE KEY"
 	tmpFileSuffix        = ".tmp"
 	MinPassphraseLength  = 8
 	MinPassphraseEntropy = 3
@@ -139,7 +136,7 @@ func (r *RSAKeyManager) loadFromDisk() error {
 	if err != nil {
 		return err
 	}
-	key, err := parseAndValidateKey(keyBytes)
+	key, err := cos.ParseRSAPrivateKeyPEM(keyBytes)
 	if err != nil {
 		return err
 	}
@@ -197,7 +194,7 @@ func (r *RSAKeyManager) recreateMissingMetadata(key *rsa.PrivateKey) error {
 
 // Generate a new RSA key pair and the derived bundle and atomically save it to disk and update in memory
 func (r *RSAKeyManager) rotateKey() error {
-	key, err := rsa.GenerateKey(rand.Reader, r.conf.Size)
+	key, err := cos.GenerateRSAKey(r.conf.Size)
 	if err != nil {
 		return err
 	}
@@ -258,14 +255,10 @@ func (r *RSAKeyManager) parseKeyBytes(keyBytes []byte) ([]byte, error) {
 }
 
 func (r *RSAKeyManager) saveToDisk(key *rsa.PrivateKey) error {
-	keyBytes, err := x509.MarshalPKCS8PrivateKey(key)
+	keyPEM, err := cos.EncodeRSAPrivateKeyPEM(key)
 	if err != nil {
 		return fmt.Errorf("failed to marshal private key: %w", err)
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  privateKeyPEMType,
-		Bytes: keyBytes,
-	})
 	if r.passphrase != "" {
 		keyPEM, err = r.encryptPrivateKey(keyPEM)
 		if err != nil {
@@ -361,26 +354,6 @@ func createGCM(pass cmn.Censored, salt []byte) (cipher.AEAD, error) {
 	return gcm, nil
 }
 
-// parseAndValidateKey takes raw bytes, parses a PKCS8 RSA private key, and validates it
-func parseAndValidateKey(fileBytes []byte) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode(fileBytes)
-	if block == nil {
-		return nil, errors.New("decoding PEM block failed")
-	}
-	keyAny, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse PKCS8 private key: %w", err)
-	}
-	key, ok := keyAny.(*rsa.PrivateKey)
-	if !ok {
-		return nil, errors.New("key type invalid")
-	}
-	if keyErr := key.Validate(); keyErr != nil {
-		return nil, fmt.Errorf("key validation failed: %w", keyErr)
-	}
-	return key, nil
-}
-
 // createKeyBundle creates a keyBundle struct with the associated public key PEM and JWKS.
 // Modifies the given JWKS by adding the key's public JWK.
 // Note: ensure the provided JWKS is NOT a pointer to the same JWKS as the current bundle
@@ -411,16 +384,8 @@ func createKeyBundle(key *rsa.PrivateKey, jwks jwk.Set) (*keyBundle, error) {
 }
 
 func getPubPEM(key *rsa.PrivateKey) (string, error) {
-	// Convert to PKIX bytes
-	pubBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		return "", err
-	}
-	pubPEM := string(pem.EncodeToMemory(&pem.Block{
-		Type:  publicKeyPEMType,
-		Bytes: pubBytes,
-	}))
-	return pubPEM, nil
+	pubPEM, err := cos.EncodeRSAPublicKeyPEM(&key.PublicKey)
+	return string(pubPEM), err
 }
 
 // Create JWK from the RSA private key with extra metadata

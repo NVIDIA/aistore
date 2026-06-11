@@ -19,7 +19,6 @@ import (
 
 // Constraints
 const (
-	minRSAKeyBits     = 2048
 	MinAuthExpiration = cos.Duration(time.Minute) // minimum JWT lifetime
 	// minPort avoids 0-1023 system-reserved port range
 	minPort             = 1024
@@ -31,7 +30,6 @@ const (
 
 // Defaults
 const (
-	defaultRSAKeyBits       = minRSAKeyBits
 	defaultLogFlushInterval = cos.Duration(30 * time.Second)
 	defaultTimeout          = cos.Duration(30 * time.Second)
 	defaultPort             = 52001
@@ -179,10 +177,10 @@ func (c *ServerConf) Validate() error {
 
 func (c *SigningKeyConf) validate() error {
 	if c.Bits == 0 {
-		c.Bits = defaultRSAKeyBits
+		c.Bits = cos.RSAKeyDefaultBits
 	}
-	if c.Bits < minRSAKeyBits {
-		return fmt.Errorf("invalid auth.signing_key.bits=%d (must be >= %d)", c.Bits, minRSAKeyBits)
+	if c.Bits < cos.RSAKeyMinBits {
+		return fmt.Errorf("invalid auth.signing_key.bits=%d (must be >= %d)", c.Bits, cos.RSAKeyMinBits)
 	}
 	if c.Mode != "" && c.Mode != SigningKeyModeExternal {
 		return fmt.Errorf("invalid auth.signing_key.mode=%q (valid values: %q or empty)", c.Mode, SigningKeyModeExternal)

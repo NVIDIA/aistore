@@ -47,7 +47,7 @@ func TestConfigValidateValid(t *testing.T) {
 	c = validConfig()
 	c.Server.SigningKey.Bits = 0
 	tassert.CheckFatal(t, c.Validate())
-	tassert.Errorf(t, c.Server.SigningKey.Bits == defaultRSAKeyBits, "expected SigningKey.Bits default, got %d", c.Server.SigningKey.Bits)
+	tassert.Errorf(t, c.Server.SigningKey.Bits == cos.RSAKeyDefaultBits, "expected SigningKey.Bits default, got %d", c.Server.SigningKey.Bits)
 
 	// external mode is accepted
 	c = validConfig()
@@ -92,17 +92,17 @@ func TestSigningKeyConfValidate(t *testing.T) {
 	t.Run("BitsDefaulted", func(t *testing.T) {
 		conf := SigningKeyConf{}
 		tassert.CheckFatal(t, conf.validate())
-		tassert.Errorf(t, conf.Bits == defaultRSAKeyBits,
-			"expected SigningKey.Bits default %d, got %d", defaultRSAKeyBits, conf.Bits)
+		tassert.Errorf(t, conf.Bits == cos.RSAKeyDefaultBits,
+			"expected SigningKey.Bits default %d, got %d", cos.RSAKeyDefaultBits, conf.Bits)
 	})
 	t.Run("BitsPreserved", func(t *testing.T) {
-		conf := SigningKeyConf{Bits: minRSAKeyBits + 1024}
+		conf := SigningKeyConf{Bits: cos.RSAKeyMinBits + 1024}
 		tassert.CheckFatal(t, conf.validate())
-		tassert.Errorf(t, conf.Bits == minRSAKeyBits+1024,
-			"expected SigningKey.Bits %d, got %d", minRSAKeyBits+1024, conf.Bits)
+		tassert.Errorf(t, conf.Bits == cos.RSAKeyMinBits+1024,
+			"expected SigningKey.Bits %d, got %d", cos.RSAKeyMinBits+1024, conf.Bits)
 	})
 	t.Run("BitsTooSmall", func(t *testing.T) {
-		conf := SigningKeyConf{Bits: minRSAKeyBits - 1}
+		conf := SigningKeyConf{Bits: cos.RSAKeyMinBits - 1}
 		tassert.Errorf(t, conf.validate() != nil, "expected error when signing key bits < minimum")
 	})
 	t.Run("ExternalModeAccepted", func(t *testing.T) {
@@ -149,7 +149,7 @@ func TestConfigValidateInvalid(t *testing.T) {
 		modify func(*Config)
 	}{
 		{"expire too short", func(c *Config) { c.Server.Expire = MinAuthExpiration - 1 }},
-		{"signing key bits too small", func(c *Config) { c.Server.SigningKey.Bits = minRSAKeyBits - 1 }},
+		{"signing key bits too small", func(c *Config) { c.Server.SigningKey.Bits = cos.RSAKeyMinBits - 1 }},
 		{"signing key mode invalid", func(c *Config) { c.Server.SigningKey.Mode = "auto" }},
 		{"bad log level", func(c *Config) { c.Log.Level = "verbose" }},
 		{"log level too low", func(c *Config) { c.Log.Level = "-1" }},

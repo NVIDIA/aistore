@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmd/authn/kvdb/mock"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -110,7 +111,7 @@ func TestRSAKeyManager_LoadEncryptedKeyFailures(t *testing.T) {
 			name: "invalid PKCS8",
 			corrupt: func(t *testing.T, keyPath string, pass cmn.Censored) {
 				data := pem.EncodeToMemory(&pem.Block{
-					Type:  privateKeyPEMType,
+					Type:  cos.PEMTypePrivateKey,
 					Bytes: []byte("this is encoded in a PEM block but not valid PKCS8 data"),
 				})
 				encryptInvalid(t, keyPath, pass, data)
@@ -155,7 +156,7 @@ func TestRSAKeyManager_LoadEncryptedKeyFailures(t *testing.T) {
 					t.Fatalf("failed to marshal EC key: %v", err)
 				}
 				pemData := pem.EncodeToMemory(&pem.Block{
-					Type:  privateKeyPEMType,
+					Type:  cos.PEMTypePrivateKey,
 					Bytes: keyBytes,
 				})
 				// Encrypt it with the same passphrase so decryption succeeds
