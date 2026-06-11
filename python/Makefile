@@ -35,7 +35,7 @@ botocore_deps:
 
 .PHONY: s3_test_deps
 s3_test_deps:
-	$(PIP) install --upgrade -r tests/s3compat/requirements --quiet
+	$(PIP) install --upgrade -r tests/s3compat/requirements.txt --quiet
 
 .PHONY: python_unit_tests_scenario_gen
 python_unit_tests_scenario_gen:
