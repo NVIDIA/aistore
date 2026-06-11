@@ -766,7 +766,12 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 		if err := t.parseReq(w, r, apireq); err == nil {
-			lom := core.AllocLOM(apireq.items[1])
+			objName := apireq.items[1]
+			if err := cos.ValidOname(objName); err != nil {
+				t.writeErr(w, r, err)
+				return
+			}
+			lom := core.AllocLOM(objName)
 			t.httpobjput(w, r, apireq, lom)
 			core.FreeLOM(lom)
 		}
@@ -819,8 +824,13 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 			return
 		}
 	}
+	objName := apireq.items[1]
+	if err := cos.ValidOname(objName); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	lom := core.AllocLOM(objName)
 
-	lom := core.AllocLOM(apireq.items[1])
 	lom, err = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
 	if err != nil {
 		t._erris(w, r, err, 0, apireq.dpq.silent)
@@ -982,6 +992,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}
+
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil || cs.PctMax > int32(config.Space.CleanupWM) {
 		cs = t.oos(config)
@@ -1125,9 +1136,13 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	objName := apireq.items[1]
 	if isRedirect(apireq.query) == "" {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
+		return
+	}
+	objName := apireq.items[1]
+	if err := cos.ValidOname(objName); err != nil {
+		t.writeErr(w, r, err)
 		return
 	}
 
@@ -1331,8 +1346,13 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 			return
 		}
 	}
+	objName := apireq.items[1]
+	if err := cos.ValidOname(objName); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 
-	lom := core.AllocLOM(apireq.items[1])
+	lom := core.AllocLOM(objName)
 	switch {
 	case apireq.dpq.get(apc.QparamProps) != "":
 		ecode, err = t.objHeadV2(r, w.Header(), apireq.dpq, apireq.bck, lom)
@@ -1516,9 +1536,15 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "set-custom", msg.Value, err)
 		return
 	}
+	objName := apireq.items[1]
+	if err := cos.ValidOname(objName); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 
-	lom := core.AllocLOM(apireq.items[1] /*objName*/)
+	lom := core.AllocLOM(objName)
 	defer core.FreeLOM(lom)
+
 	if err := lom.InitBck(apireq.bck); err != nil {
 		t.writeErr(w, r, err)
 		return

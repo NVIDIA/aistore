@@ -399,6 +399,7 @@ const (
 	inv2 = "~/"
 )
 
+// validate an externally supplied object name (empty name is invalid)
 func ValidateOname(name string) error {
 	if name == "" {
 		return &errInvalidObjName{name}
@@ -406,6 +407,7 @@ func ValidateOname(name string) error {
 	return ValidOname(name)
 }
 
+// validates object-name syntax but allow empty names
 func ValidOname(name string) error {
 	if IsLastB(name, filepath.Separator) {
 		return &errInvalidObjName{name}
