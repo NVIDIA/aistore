@@ -115,6 +115,43 @@ func TestSigningKeyConfValidate(t *testing.T) {
 	})
 }
 
+func TestDatabaseConfValidate(t *testing.T) {
+	t.Run("EmptyServiceAccepted", func(t *testing.T) {
+		conf := DatabaseConf{}
+		tassert.CheckFatal(t, conf.validate())
+	})
+	t.Run("ServiceAccepted", func(t *testing.T) {
+		conf := DatabaseConf{
+			Service: KVServiceConf{
+				Host:       "kv.authn.svc",
+				Port:       6379,
+				DBIndex:    2,
+				TLSEnabled: true,
+				Timeout:    cos.Duration(2 * time.Second),
+			},
+		}
+		tassert.CheckFatal(t, conf.validate())
+	})
+	t.Run("RedisDefaultService", func(t *testing.T) {
+		conf := DatabaseConf{DBType: DBDriverRedis}
+		tassert.CheckFatal(t, conf.validate())
+		tassert.Errorf(t, conf.Service.Host == defaultKVServiceHost,
+			"expected Redis service host default %q, got %q", defaultKVServiceHost, conf.Service.Host)
+		tassert.Errorf(t, conf.Service.Port == defaultKVServicePort,
+			"expected Redis service port default %d, got %d", defaultKVServicePort, conf.Service.Port)
+		tassert.Errorf(t, conf.Service.Timeout == defaultKVServiceTimeout,
+			"expected Redis service timeout default %s, got %s", defaultKVServiceTimeout, conf.Service.Timeout)
+	})
+	t.Run("NegativeDBIndexRejected", func(t *testing.T) {
+		conf := DatabaseConf{Service: KVServiceConf{DBIndex: -1}}
+		tassert.Errorf(t, conf.validate() != nil, "expected error for negative service db_index")
+	})
+	t.Run("InvalidDBTypeRejected", func(t *testing.T) {
+		conf := DatabaseConf{DBType: "customDB"}
+		tassert.Errorf(t, conf.validate() != nil, "expected error for invalid db type")
+	})
+}
+
 func TestServerConfValidateLegacyRSAKeyBits(t *testing.T) {
 	tests := []struct {
 		name string
@@ -151,6 +188,10 @@ func TestConfigValidateInvalid(t *testing.T) {
 		{"expire too short", func(c *Config) { c.Server.Expire = MinAuthExpiration - 1 }},
 		{"signing key bits too small", func(c *Config) { c.Server.SigningKey.Bits = minRSAKeyBits - 1 }},
 		{"signing key mode invalid", func(c *Config) { c.Server.SigningKey.Mode = "auto" }},
+		{"db service index invalid", func(c *Config) { c.Server.DBConf.Service.DBIndex = -1 }},
+		{"db service port too low", func(c *Config) { c.Server.DBConf.Service.Port = minPort - 1 }},
+		{"db service port too high", func(c *Config) { c.Server.DBConf.Service.Port = maxPort + 1 }},
+		{"db service timeout too short", func(c *Config) { c.Server.DBConf.Service.Timeout = minTimeout - 1 }},
 		{"bad log level", func(c *Config) { c.Log.Level = "verbose" }},
 		{"log level too low", func(c *Config) { c.Log.Level = "-1" }},
 		{"log level too high", func(c *Config) { c.Log.Level = "6" }},
