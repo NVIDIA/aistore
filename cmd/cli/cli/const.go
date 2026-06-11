@@ -117,11 +117,10 @@ const (
 	commandRechunk     = apc.ActRechunk
 	commandShardIndex  = "shard-index" // parent; xaction kind is apc.ActIndexShard
 	cmdShardIndexBuild = "build"
-	// TODO: cmdShardIndexRm   = "rm"   - remove existing shard indexes
-	// TODO: cmdShardIndexShow = "show" - list/inspect existing shard indexes
+	// TODO: cmdShardIndexRm = "rm" - remove existing shard indexes
 	cmdStgCleanup = "cleanup" // display name for apc.ActStoreCleanup
 	cmdScrub      = "validate"
-	cmdSummary    = "summary" // ditto apc.ActSummaryBck
+	cmdSummary    = "summary"
 
 	cmdCluster    = commandCluster
 	cmdDashboard  = commandDashboard

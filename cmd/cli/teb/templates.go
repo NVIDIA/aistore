@@ -350,6 +350,15 @@ const (
 		"{{FormatBytesUns $v.TotalSize.PresentObjs 2}} {{FormatBytesUns $v.TotalSize.RemoteObjs 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
 
+	// Shard index summary templates
+	ShardSummariesTmpl = "BUCKET\t TAR OBJECTS\t TAR SIZE\t SHARDS\t SHARD SIZE\t NOT INDEXED\t ARCHIVED OBJECTS\t STALE\t INVALID\n" +
+		ShardSummariesBody
+	ShardSummariesBody = "{{range $v := . }}" +
+		"{{$v.Name}}\t {{$v.TarObjs}}\t {{FormatBytesUns $v.TarSize 2}}\t {{$v.Shards}}\t " +
+		"{{FormatBytesUns $v.ShardSize 2}}\t {{$v.NotIndexed}}\t {{$v.ArchivedObjs}}\t " +
+		"{{$v.StaleIndexes}}\t {{$v.InvalidIndexes}}\n" +
+		"{{end}}"
+
 	// For `object put` mass uploader. A caller adds to the template
 	// total count and size. That is why the template ends with \t
 	MultiPutTmpl = "Files to upload:\nEXTENSION\t COUNT\t SIZE\n" +

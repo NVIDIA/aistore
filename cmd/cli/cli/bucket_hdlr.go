@@ -153,12 +153,12 @@ const rechunkUsage = "Re-chunk bucket objects based on size threshold.\n" +
 	indent1 + "\tBy default, rechunk operates only on in-cluster (cached) objects; use --sync-remote to also update remote backend."
 
 // ais bucket shard-index
-// Parent command groups the shard-index lifecycle (build today; rm/show to follow in separate commits).
+// Parent command groups the shard-index lifecycle.
+// TODO: add shard-index rm subcommand to remove existing shard indexes.
 const shardIndexUsage = "Manage TAR shard indexes for fast random access into archives.\n" +
 	indent1 + "\tSubcommands:\n" +
-	indent1 + "\t- build\t- build a shard index for each TAR object in a bucket (see 'ais bucket shard-index build --help');\n" +
-	indent1 + "\t- rm\t- (TODO, separate commit) remove existing shard indexes;\n" +
-	indent1 + "\t- show\t- (TODO, separate commit) list/inspect existing shard indexes."
+	indent1 + "\t- build\t- build a shard index for each TAR object in a bucket;\n" +
+	indent1 + "\t- summary\t- summarize TAR objects and their shard-index coverage."
 
 // ais bucket shard-index build
 const shardIndexBuildUsage = "Build a shard index for each TAR object in a bucket (for fast random access into archives).\n" +
@@ -169,6 +169,15 @@ const shardIndexBuildUsage = "Build a shard index for each TAR object in a bucke
 	indent1 + "\t- 'ais bucket shard-index build ais://nnn --num-workers 16'\t- run with 16 concurrent workers;\n" +
 	indent1 + "\t- 'ais bucket shard-index build ais://nnn --skip-verify'\t- fast re-run: trust existing indexes without re-verifying;\n" +
 	indent1 + "\t- 'ais bucket shard-index build ais://nnn --wait'\t- start and wait for the job to finish."
+
+// ais bucket shard-index summary
+const shardIndexSummaryUsage = "Summarize TAR objects in a bucket and their shard-index coverage.\n" +
+	indent1 + "\tOnly local in-cluster objects are summarized.\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t- 'ais bucket shard-index summary ais://nnn'\t- summarize all TAR shards in 'ais://nnn';\n" +
+	indent1 + "\t- 'ais bucket shard-index summary ais://nnn --prefix shards/'\t- summarize only TAR shards under 'shards/';\n" +
+	indent1 + "\t- 'ais bucket shard-index summary ais://nnn/shards/'\t- same as above;\n" +
+	indent1 + "\t- 'ais bucket shard-index summary ais://nnn --refresh 1s'\t- print periodic progress while summarizing."
 
 // ais bucket ... props
 const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs,\n" +
@@ -318,6 +327,13 @@ var (
 			waitJobXactFinishedFlag,
 			nonverboseFlag,
 		},
+		cmdSummary: {
+			verbObjPrefixFlag,
+			refreshFlag,
+			unitsFlag,
+			dontWaitFlag,
+			noHeaderFlag,
+		},
 	}
 )
 
@@ -403,8 +419,14 @@ var (
 						Flags:     sortFlags(bucketCmdsFlags[cmdShardIndexBuild]),
 						Action:    shardIndexBuildHandler,
 					},
-					// TODO (separate commit): {Name: "rm",   Action: shardIndexRmHandler}   - remove existing shard indexes
-					// TODO (separate commit): {Name: "show", Action: shardIndexShowHandler} - list/inspect existing shard indexes
+					{
+						Name:         cmdSummary,
+						Usage:        shardIndexSummaryUsage,
+						ArgsUsage:    bucketArgument + " [JOB_ID]",
+						Flags:        sortFlags(bucketCmdsFlags[cmdSummary]),
+						Action:       shardIndexSummaryHandler,
+						BashComplete: bucketCompletions(bcmplop{}),
+					},
 				},
 			},
 			makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
@@ -622,13 +644,9 @@ func rechunkBucketHandler(c *cli.Context) error {
 		return err
 	}
 
-	prefix := parseStrFlag(c, verbObjPrefixFlag)
-	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
-		return fmt.Errorf("cannot handle embedded prefix ('%s') and --prefix flag ('%s') simultaneously - prefix flag must start with embedded prefix",
-			objName, prefix)
-	}
-	if prefix == "" {
-		prefix = objName
+	prefix, err := parseBckObjPrefix(c, objName)
+	if err != nil {
+		return err
 	}
 
 	// Start rechunk
@@ -728,14 +746,9 @@ func shardIndexBuildHandler(c *cli.Context) error {
 		return err
 	}
 
-	// combine embedded prefix (if any) with --prefix flag
-	prefix := parseStrFlag(c, verbObjPrefixFlag)
-	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
-		return fmt.Errorf("conflict between embedded prefix (%q) and --prefix flag (%q): --prefix must start with the embedded prefix",
-			objName, prefix)
-	}
-	if prefix == "" {
-		prefix = objName
+	prefix, err := parseBckObjPrefix(c, objName)
+	if err != nil {
+		return err
 	}
 
 	msg := &apc.IndexShardMsg{

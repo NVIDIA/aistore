@@ -189,6 +189,18 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 	return bck, objName, nil
 }
 
+func parseBckObjPrefix(c *cli.Context, objName string) (string, error) {
+	prefix := parseStrFlag(c, verbObjPrefixFlag)
+	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
+		return "", fmt.Errorf("cannot handle embedded prefix ('%s') and --prefix flag ('%s') simultaneously - prefix flag must start with embedded prefix",
+			objName, prefix)
+	}
+	if prefix == "" {
+		prefix = objName
+	}
+	return prefix, nil
+}
+
 //
 // - handle (obj names) list, template (range), embedded prefix, and single object name
 // - possibly call list-objects (via `lsObjVsPref`) to disambiguate

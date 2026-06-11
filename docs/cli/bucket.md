@@ -50,6 +50,7 @@ rmb             bucket rm
 - [Show bucket properties](#show-bucket-properties)
 - [Set bucket properties](#set-bucket-properties)
 - [Archive multiple objects](#archive-multiple-objects)
+- [Build and summarize shard indexes](#build-and-summarize-shard-indexes)
 - [Show and set AWS-specific properties](#show-and-set-aws-specific-properties)
 - [Reset bucket properties to cluster defaults](#reset-bucket-properties-to-cluster-defaults)
 - [Show bucket metadata](#show-bucket-metadata)
@@ -1736,6 +1737,33 @@ OPTIONS:
 
 * [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets) below.
 * [Disambiguating multi-object operation](/docs/cli/object.md#disambiguating-multi-object-operation)
+
+## Build and summarize shard indexes
+
+`ais bucket shard-index` builds and summarizes TAR shard indexes. Indexes allow AIS to read archived files via direct lookup instead of scanning the TAR object.
+
+```console
+$ ais bucket shard-index build ais://mybucket --prefix shards/ --wait
+$ ais bucket shard-index summary ais://mybucket --prefix shards/
+BUCKET             TAR OBJECTS  TAR SIZE  SHARDS  SHARD SIZE  NOT INDEXED  ARCHIVED OBJECTS  STALE  INVALID
+ais://mybucket     100          600MiB    100     600MiB      0              409600            0      0
+```
+
+Use `--refresh` to print periodic progress while waiting:
+
+```console
+$ ais bucket shard-index summary ais://mybucket --refresh 1s
+ais://mybucket: 42/100 indexed (252MiB indexed, 600MiB total)
+```
+
+Use `--dont-wait` to start the summary job asynchronously, then poll with the returned job ID:
+
+```console
+$ ais bucket shard-index summary ais://mybucket --dont-wait
+Job summary-shard[abcDEF123] has started. To monitor, run 'ais bucket shard-index summary ais://mybucket abcDEF123 --dont-wait'
+
+$ ais bucket shard-index summary ais://mybucket abcDEF123 --dont-wait
+```
 
 ## Show and set AWS-specific properties
 

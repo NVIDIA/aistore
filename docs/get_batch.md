@@ -601,8 +601,7 @@ NAME:
    ais bucket shard-index - Manage TAR shard indexes for fast random access into archives.
      Subcommands:
      - build  - build a shard index for each TAR object in a bucket;
-     - rm     - remove existing shard indexes;
-     - show   - list/inspect existing shard indexes.
+     - summary - summarize TAR objects and their shard-index coverage.
 
 USAGE:
    ais bucket shard-index command [arguments...]  [command options]
@@ -616,6 +615,14 @@ COMMANDS:
      - 'ais bucket shard-index build ais://nnn --num-workers 16'  - run with 16 concurrent workers;
      - 'ais bucket shard-index build ais://nnn --skip-verify'     - fast re-run: trust existing indexes without re-verifying;
      - 'ais bucket shard-index build ais://nnn --wait'            - start and wait for the job to finish.
+
+   summary  Summarize TAR objects in a bucket and their shard-index coverage.
+            Only local in-cluster objects are summarized.
+   e.g.:
+     - 'ais bucket shard-index summary ais://nnn'                  - summarize all TAR shards in 'ais://nnn';
+     - 'ais bucket shard-index summary ais://nnn --prefix shards/' - summarize only TAR shards under 'shards/';
+     - 'ais bucket shard-index summary ais://nnn/shards/'          - same as above;
+     - 'ais bucket shard-index summary ais://nnn --refresh 1s'     - print periodic progress while summarizing.
 ```
 
 - New shards are indexed on first read or via the indexing xaction.
