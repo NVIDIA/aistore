@@ -1,6 +1,6 @@
 // Package kvdb provides a local key/value database server for AIS.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package kvdb
 
@@ -156,7 +156,7 @@ func (bd *BuntDriver) DeleteCollection(collection string) (int, error) {
 	}
 	err = bd.driver.Update(func(tx *buntdb.Tx) error {
 		for _, k := range keys {
-			_, err := tx.Delete(k)
+			_, err := tx.Delete(makePath(collection, k))
 			if err != nil && err != buntdb.ErrNotFound {
 				return err
 			}

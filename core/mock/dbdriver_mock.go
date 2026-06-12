@@ -1,6 +1,6 @@
 // Package mock provides a variety of mock implementations used for testing.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 
@@ -81,16 +81,19 @@ func (bd *DBDriver) Delete(collection, key string) (int, error) {
 func (bd *DBDriver) List(collection, pattern string) ([]string, int, error) {
 	var (
 		keys   = make([]string, 0)
-		filter string
+		prefix string
 	)
+	if !strings.Contains(pattern, "*") && !strings.Contains(pattern, "?") {
+		pattern += "*"
+	}
 	bd.mtx.RLock()
 	defer bd.mtx.RUnlock()
-	filter = bd.makePath(collection, pattern)
+	prefix = bd.makePath(collection, strings.TrimSuffix(pattern, "*"))
 	for k := range bd.values {
-		if strings.HasPrefix(k, filter) {
+		if strings.HasPrefix(k, prefix) {
 			_, key := kvdb.ParsePath(k)
 			if key != "" {
-				keys = append(keys, k)
+				keys = append(keys, key)
 			}
 		}
 	}
@@ -106,7 +109,7 @@ func (bd *DBDriver) DeleteCollection(collection string) (int, error) {
 		return code, err
 	}
 	for _, k := range keys {
-		delete(bd.values, k)
+		delete(bd.values, bd.makePath(collection, k))
 	}
 	return http.StatusOK, nil
 }
