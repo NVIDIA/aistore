@@ -843,7 +843,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		return
 	}
 
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateWname(objName); err != nil {
 		p.statsT.IncBck(stats.ErrGetCount, bck.Bucket())
 		p.writeErr(w, r, err)
 		return
@@ -945,7 +945,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		objName = apireq.items[1]
 		netPub  = cmn.NetPublic
 	)
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateWname(objName); err != nil {
 		p.statsT.IncWith(errcnt, vlabs)
 		p.writeErr(w, r, err)
 		return
@@ -994,7 +994,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateWname(objName); err != nil {
 		p.statsT.IncBck(stats.ErrDeleteCount, bck.Bucket())
 		p.writeErr(w, r, err)
 		return
@@ -2106,7 +2106,7 @@ func _checkObjMv(bck *meta.Bck, msg *apc.ActMsg, apireq *apiRequest) error {
 		return cmn.NewErrUnsuppErr(err)
 	}
 	objName, objNameTo := apireq.items[1], msg.Name
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateWname(objName); err != nil {
 		return err
 	}
 	if err := cos.ValidateOname(objNameTo); err != nil {
@@ -2394,7 +2394,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateWname(objName); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

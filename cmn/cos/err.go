@@ -399,19 +399,26 @@ const (
 	inv2 = "~/"
 )
 
-// validate an externally supplied object name (empty name is invalid)
+// object name; do not allow empty name
 func ValidateOname(name string) error {
 	if name == "" {
 		return &errInvalidObjName{name}
 	}
-	return ValidOname(name)
+	return ValidateWname(name)
 }
 
-// validates object-name syntax but allow empty names
-func ValidOname(name string) error {
+// object name; allow empty names
+func ValidateWname(name string) error {
 	if IsLastB(name, filepath.Separator) {
 		return &errInvalidObjName{name}
 	}
+	return ValidateRname(name)
+}
+
+// object or virtual dir/prefix; allow trailing separator
+// - common least-denominator for the 'Validate.*name' helpers
+// - e.g. HEAD(object) may probe a virtual directory prefix
+func ValidateRname(name string) error {
 	if strings.IndexByte(name, inv1[0]) < 0 && strings.IndexByte(name, inv2[0]) < 0 { // most of the time
 		return nil
 	}
@@ -443,7 +450,7 @@ func (e *errInvalidPrefix) Error() string {
 }
 
 func ValidateArchpath(path string) error {
-	if ValidOname(path) != nil {
+	if ValidateWname(path) != nil {
 		return &errInvalidArchpath{path}
 	}
 	return nil

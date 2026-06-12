@@ -767,13 +767,13 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 		if err := t.parseReq(w, r, apireq); err == nil {
 			objName := apireq.items[1]
-			if err := cos.ValidOname(objName); err != nil {
+			if err := cos.ValidateWname(objName); err != nil {
 				t.writeErr(w, r, err)
-				return
+			} else {
+				lom := core.AllocLOM(objName)
+				t.httpobjput(w, r, apireq, lom)
+				core.FreeLOM(lom)
 			}
-			lom := core.AllocLOM(objName)
-			t.httpobjput(w, r, apireq, lom)
-			core.FreeLOM(lom)
 		}
 		apiReqFree(apireq)
 	case http.MethodDelete:
@@ -825,7 +825,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 		}
 	}
 	objName := apireq.items[1]
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateWname(objName); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -1141,7 +1141,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		return
 	}
 	objName := apireq.items[1]
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateWname(objName); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -1347,7 +1347,7 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 	}
 	objName := apireq.items[1]
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateRname(objName); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -1537,7 +1537,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		return
 	}
 	objName := apireq.items[1]
-	if err := cos.ValidOname(objName); err != nil {
+	if err := cos.ValidateWname(objName); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
