@@ -88,6 +88,12 @@ etl = [
 mcp = [
     "mcp[cli]>=1.4.1",
 ]
+fsspec = [
+    "fsspec>=2024.2.0",
+]
+
+[project.entry-points."fsspec.specs"]
+ais = "aistore.fsspec:AISFileSystem"
 
 [project.urls]
 "Homepage" = "https://aistore.nvidia.com"

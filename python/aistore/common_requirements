@@ -17,6 +17,7 @@ pytest-xdist>=3.6.1
 typing-extensions>=4.12.2
 webdataset>=0.2.100
 tenacity>=9.0.0
+fsspec>=2024.2.0
 fastapi>=0.109.1
 httpx>=0.28.0
 aiofiles>=23.2.1
