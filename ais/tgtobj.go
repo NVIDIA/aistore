@@ -1793,6 +1793,9 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			}
 			coi.OAH = resp.OAH
 			r = resp.R
+			if resp.Remote && r != nil {
+				return coi.sendRemoteColdRead(t, lom, tsi, resp)
+			}
 		}
 		return coi.send(t, dm, lom, r, tsi) // lom is the source of reader if no reader specified
 	}
@@ -2018,6 +2021,42 @@ func (coi *coi) _chunk(t *target, lom, dst *core.LOM, dstChunkSize int64) (res x
 	return res
 }
 
+func (coi *coi) sendRemoteColdRead(t *target, lom *core.LOM, tsi *meta.Snode, resp core.ReadResp) (res xs.CoiRes) {
+	const attempts = 3
+
+	for attempt := 0; attempt < attempts; attempt++ {
+		if attempt > 0 {
+			resp = coi.GetROC(lom, coi.LatestVer, coi.Sync, coi.ETLArgs)
+			if resp.Err != nil {
+				return xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
+			}
+			if !resp.Remote || resp.R == nil {
+				coi.OAH = resp.OAH
+				return coi.send(t, nil, lom, resp.R, tsi)
+			}
+		}
+
+		coi.OAH = resp.OAH
+		res = coi.send(t, nil, lom, resp.R, tsi)
+		if res.Err == nil || attempt == attempts-1 || !isRemoteColdCopyRetryable(res.Err) {
+			return res
+		}
+	}
+	return res
+}
+
+func isRemoteColdCopyRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || cos.IsErrRetriableConn(err) {
+		return true
+	}
+	errmsg := err.Error()
+	return strings.Contains(errmsg, "unexpected EOF") ||
+		(strings.Contains(errmsg, "read") && strings.Contains(errmsg, "shorter than size"))
+}
+
 // send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
@@ -2069,6 +2108,9 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 		res.Err = coi._dm(lom /*for attrs*/, sargs)
 	} else {
 		res.Err = coi.put(t, sargs)
+	}
+	if res.Err == nil && sargs.objAttrs != nil {
+		res.Lsize = sargs.objAttrs.Lsize(true)
 	}
 	return res
 }
