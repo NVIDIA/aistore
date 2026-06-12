@@ -290,8 +290,13 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		evdMsg   = &apc.EvdMsg{}
 	)
 	for _, obj := range lst.Object {
+		if err := cos.ValidateOname(obj.Key); err != nil {
+			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+			return
+		}
 		objNames = append(objNames, obj.Key)
 	}
+
 	evdMsg.ObjNames = objNames
 	msg.Value = evdMsg
 
