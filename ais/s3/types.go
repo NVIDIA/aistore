@@ -128,6 +128,16 @@ type (
 
 func ObjName(items []string) string { return path.Join(items[1:]...) }
 
+// join S3 object-key path components and validate the resulting object name;
+// on failure: write an S3 error response
+func JoinValidateOname(w http.ResponseWriter, r *http.Request, items []string) (oname string, err error) {
+	oname = ObjName(items)
+	if err = cos.ValidateOname(oname); err != nil {
+		WriteErr(w, r, ErrInfo{Err: err})
+	}
+	return
+}
+
 func FillLsoMsg(query url.Values, msg *apc.LsoMsg) {
 	mxStr := query.Get(QparamMaxKeys)
 	if pageSize, err := strconv.Atoi(mxStr); err == nil && pageSize > 0 {

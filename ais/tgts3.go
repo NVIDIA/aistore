@@ -93,7 +93,10 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 		}
 		t.putPartMptS3(w, r, items, q, bck)
 	case r.Header.Get(cos.S3HdrObjSrc) == "":
-		objName := s3.ObjName(items)
+		objName, errN := s3.JoinValidateOname(w, r, items)
+		if errN != nil {
+			return
+		}
 		lom := core.AllocLOM(objName)
 		t.putObjS3(w, r, bck, config, lom)
 		core.FreeLOM(lom)
@@ -136,6 +139,10 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		return
 	}
 	objSrc := strings.Trim(parts[1], "/")
+	if err := cos.ValidateOname(objSrc); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+		return
+	}
 	if err := bckSrc.Init(t.owner.bmd); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
@@ -161,7 +168,12 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	}
 
 	// NOTE: lom will be safely loaded, locked, unlocked during the call
-	ecode, err = t.copyObject(lom, bckTo, s3.ObjName(items), nil /*dpq*/, config)
+	objNameTo, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
+		return
+	}
+
+	ecode, err = t.copyObject(lom, bckTo, objNameTo, nil /*dpq*/, config)
 	if err != nil {
 		if err == cmn.ErrSkip || ecode == http.StatusNotFound {
 			err := cos.NewErrNotFound(t, lom.Cname())
@@ -255,7 +267,10 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
-	objName := s3.ObjName(items)
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
+		return
+	}
 	if q.Has(s3.QparamMptPartNo) {
 		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("getMptPart", bck.String(), objName, q)
@@ -298,10 +313,15 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 // HEAD /s3/<bucket-name>/<object-name> (TODO: s3.HdrMptCnt)
 // See: https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
 func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bucket, objName := items[0], s3.ObjName(items)
+	bucket := items[0]
 	bck, ecode, err := meta.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
+		return
+	}
+
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
 		return
 	}
 	lom := core.AllocLOM(objName)
@@ -369,7 +389,10 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
-	objName := s3.ObjName(items)
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
+		return
+	}
 	lom := core.AllocLOM(objName)
 	defer core.FreeLOM(lom)
 	if err := lom.InitBck(bck); err != nil {

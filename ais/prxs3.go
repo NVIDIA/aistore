@@ -245,9 +245,8 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, items []
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
 	}
-	objName := s3.ObjName(items)
-	if err := cos.ValidateWname(objName); err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
 		return
 	}
 
@@ -557,9 +556,8 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		s3.WriteErr(w, r, s3.ErrInfo{Err: errS3Obj})
 		return
 	}
-	objName := s3.ObjName(items)
-	if err := cos.ValidateWname(objName); err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
 		return
 	}
 
@@ -597,9 +595,8 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		s3.WriteErr(w, r, s3.ErrInfo{Err: errS3Obj})
 		return
 	}
-	objName := s3.ObjName(items)
-	if err := cos.ValidateWname(objName); err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
 		return
 	}
 
@@ -680,11 +677,12 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
 	}
-	objName := s3.ObjName(items)
-	if err := cos.ValidateWname(objName); err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
 		return
 	}
+
 	smap := p.owner.smap.get()
 	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
@@ -719,9 +717,9 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
 	}
-	objName := s3.ObjName(items)
-	if err := cos.ValidateWname(objName); err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
 		return
 	}
 

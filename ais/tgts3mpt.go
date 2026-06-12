@@ -34,10 +34,12 @@ const emptyUploadID = "empty uploadId"
 // - Return the UUID to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
 func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
-	var (
-		objName = s3.ObjName(items)
-		lom     = &core.LOM{ObjName: objName}
-	)
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
+		return
+	}
+
+	lom := &core.LOM{ObjName: objName}
 	err := lom.InitBck(bck)
 	if err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
@@ -87,7 +89,10 @@ func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []st
 	}
 
 	// 2. init lom, load/create chunk manifest
-	objName := s3.ObjName(items)
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
+		return
+	}
 	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
@@ -140,6 +145,12 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []s
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest})
 		return
 	}
+
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
+		return
+	}
+
 	s3PartList, err := s3.DecodeXML[*s3.CompleteMptUpload](body)
 	if err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest})
@@ -150,7 +161,6 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []s
 		return
 	}
 
-	objName := s3.ObjName(items)
 	lom := &core.LOM{ObjName: objName} // TODO: use core.AllocLOM()
 	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
@@ -212,7 +222,10 @@ func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, items []stri
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
-	objName := s3.ObjName(items)
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
+		return
+	}
 	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
