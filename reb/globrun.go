@@ -50,7 +50,7 @@ const (
 	rebStageFin
 	rebStageFinStreams
 	rebStageDone
-	rebStageAbort // one of targets aborts the rebalancing (never set, only sent)
+	rebStageAbort // one target aborts the rebalancing and notifies all (wire-only stage: never set, only sent)
 )
 
 type (
@@ -140,7 +140,7 @@ const (
 	preemptRetries = 16 // poll <= 16 seconds
 )
 
-func (*Reb) _preempt(logHdr, oxid string) error {
+func (reb *Reb) _preempt(logHdr, oxid string) error {
 	const (
 		tag = "preempt"
 	)
@@ -149,19 +149,35 @@ func (*Reb) _preempt(logHdr, oxid string) error {
 		debug.AssertNoErr(err) // (can only be invalid xid)
 		return err
 	}
-	if oxreb == nil || !oxreb.EndTime().IsZero() {
+	if oxreb == nil {
 		return nil
 	}
-	oxreb.Abort(cmn.ErrXactRenewAbort)
-	nlog.Warningln(logHdr, "[", cmn.ErrXactRenewAbort, oxreb.String(), "]")
 
-	// reb.fini() always performs full cleanup, that's why we can just poll here
-	// for valid end-time (not a sentinel indicating "almost done")
+	if !oxreb.EndTime().IsZero() {
+		xreb := reb.xctn()
+		if xreb == nil || xreb.ID() != oxreb.ID() {
+			return nil
+		}
+	}
+
+	s := oxreb.String()
+	if oxreb.Abort(cmn.ErrXactRenewAbort) {
+		nlog.Warningln(logHdr, "[", cmn.ErrXactRenewAbort, s, "]")
+	} else {
+		nlog.Warningln(logHdr, "[ previously already aborted or finished:", s, "]")
+	}
+
+	// reb.fini() always performs full cleanup, that's why we can poll here until:
+	// - xreb.Finish() publishes valid end-time
+	// - reb.setXact(nil) uninstalls the old local rebalance
 	smap1 := core.T.Sowner().Get()
 	for i := range preemptRetries {
 		time.Sleep(time.Second)
 		if !oxreb.EndTime().IsZero() {
-			return nil
+			xreb := reb.xctn()
+			if xreb == nil || xreb.ID() != oxreb.ID() {
+				return nil
+			}
 		}
 
 		smap2 := core.T.Sowner().Get()
@@ -173,7 +189,8 @@ func (*Reb) _preempt(logHdr, oxid string) error {
 			nlog.Warningf("%s: %s polling for %s ...", tag, logHdr, oxreb.String())
 		}
 	}
-	return fmt.Errorf("%s: previous rebalance %q takes more than %v to finish", tag, oxreb.String(), preemptRetries*time.Second)
+
+	return fmt.Errorf("%s: previous rebalance %q takes more than %v to finish/cleanup", tag, oxreb.String(), preemptRetries*time.Second)
 }
 
 // Run() is the main method: serialized to execute one at a time (while possibly _preempting_
@@ -196,10 +213,9 @@ func (*Reb) _preempt(logHdr, oxid string) error {
 //
 // See also: README.md in this package.
 func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
-	if reb.rebID() == extArgs.NID {
+	if reb.skip(extArgs.NID, true /*allow equal*/) {
 		return
 	}
-
 	logHdr := reb.logHdr(extArgs.NID, smap, true /*initializing*/)
 	// preempt
 	if xact.IsValidRebID(extArgs.Oxid) {
@@ -234,7 +250,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	if !rargs.pingall() {
 		return
 	}
-	if reb.rebID() == extArgs.NID {
+	if reb.skip(extArgs.NID, true /*allow equal*/) {
 		return
 	}
 
@@ -256,7 +272,13 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 		reb.stages.stage.Store(rebStageDone)
 		fs.RemoveMarker(fname.RebalanceMarker, extArgs.Tstats, false /*stopping*/)
 		fs.RemoveMarker(fname.NodeRestartedPrev, extArgs.Tstats, false)
+		reb.mu.Lock()
 		rargs.xreb.Finish()
+		if reb.xctn() == rargs.xreb {
+			reb.setXact(nil) // (compare w/ fini())
+			reb.smap.Store(nil)
+		}
+		reb.mu.Unlock()
 		return
 	}
 
@@ -303,6 +325,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	} else {
 		nlog.Errorln(logHdr, "fail => stage-fin:", err)
 	}
+
 	reb.changeStage(rargs, rebStageFin)
 
 	reb.fini(rargs, err, extArgs.Tstats)
@@ -314,6 +337,21 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 		// rebalance can open EC streams; it has no authority, however, to close them - primary has
 		// that's why all we do here is decrement ref-count back to what it was before this run
 		ec.ECM.CloseStreams(true /*just refc*/)
+	}
+}
+
+func (reb *Reb) skip(nid int64, allowEq bool) bool {
+	// before _renew() commits successfully, reb.rebID() still reflects the previous generation
+	cur := reb.rebID()
+	switch {
+	case cur < nid:
+		return false
+	case cur > nid:
+		nlog.Warningf("skip rebalance g[%d] - already superseded by newer g[%d]", nid, cur)
+		return true
+	default:
+		debug.Assert(allowEq) // see rns.IsRunning() check
+		return true
 	}
 }
 
@@ -353,14 +391,29 @@ func (reb *Reb) initRenew(rargs *rargs, extArgs *ExtArgs, ctlMsg func(sb *cos.SB
 	if rns.Err != nil {
 		return false
 	}
-	if rns.IsRunning() {
+	if rns.IsRunning() { // this rargs.id is already running, nothing to do
 		return false
 	}
 	xctn := rns.Entry.Get()
 	xreb, ok := xctn.(*xs.Rebalance)
 	debug.Assert(ok)
+	if xreb.RebID() != rargs.id {
+		err := fmt.Errorf("reb-id mismatch: g[%d] != g[%d]", xreb.RebID(), rargs.id)
+		debug.AssertNoErr(err)
+		return false
+	}
 
 	reb.mu.Lock() // ----------------------------
+
+	if reb.skip(rargs.id, false /*allow equal*/) {
+		reb.mu.Unlock()
+		if xreb.RebID() < reb.rebID() {
+			xreb.Abort(cmn.ErrXactRenewAbort)
+			xreb.Finish()
+		}
+		return false
+	}
+
 	origSmap, origStage := reb.smap.Load(), reb.stages.stage.Load()
 	err := reb._renew(rargs, xreb, haveStreams)
 
@@ -373,15 +426,9 @@ func (reb *Reb) initRenew(rargs *rargs, extArgs *ExtArgs, ctlMsg func(sb *cos.SB
 	}
 
 	debug.Assert(reb.dm == nil)
-	if reb.dm != nil { // (defensive; remove later)
-		reb.dm.Close(err)
-		reb.dm.UnregRecv()
-		reb.dm = nil
-	}
-	if rargs.xreb == xreb {
-		xreb.Abort(err)
-		reb.setXact(nil)
-	}
+	debug.Assert(reb.xctn() != xreb)
+	xreb.Abort(err)
+	xreb.Finish()
 	reb.smap.Store(origSmap)
 	reb.stages.stage.Store(origStage)
 	reb.mu.Unlock() // fail ------
@@ -391,10 +438,6 @@ func (reb *Reb) initRenew(rargs *rargs, extArgs *ExtArgs, ctlMsg func(sb *cos.SB
 }
 
 func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error {
-	if xreb.RebID() != rargs.id {
-		return fmt.Errorf("reb-id mismatch: g[%d] != g[%d]", xreb.RebID(), rargs.id)
-	}
-
 	rargs.xreb = xreb
 
 	// prior to opening streams:

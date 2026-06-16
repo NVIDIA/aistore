@@ -187,6 +187,9 @@ func (xctn *Base) Abort(err error) bool {
 }
 
 func (xctn *Base) Finish() {
+	// - CAS 0 -> finishSentinel: running => finishing
+	// - CAS MSB int64 -> finishSentinel: stopping => finishing
+	// - otherwise, nothing to do
 	if !xctn.eutime.CAS(0, finishSentinel) && !xctn.eutime.CAS(cos.MSB64, finishSentinel) {
 		return
 	}

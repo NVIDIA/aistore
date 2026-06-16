@@ -78,23 +78,29 @@ func (reb *Reb) warnID(remoteID int64, tid string) (s string) {
 	return s
 }
 
-// Rebalance moves to the next stage:
-// - update internal stage
-// - send notification to all other targets that this one is in a new stage
+// update internal stage and (best-effort) notify other targets:
+// - bcast (my rebID, my stage) with two possible "aborting" causes:
+//   - a) local rebID < my rebID
+//   - b) my stage == rebStageAbort
 func (reb *Reb) changeStage(rargs *rargs, newStage uint32) {
 	rargs.stats.stage(newStage)
 
 	// set our own stage
 	reb.stages.stage.Store(newStage)
 
+	dm := reb.dm
+	if dm == nil {
+		return
+	}
+
 	// notify all
 	var (
-		ntfn = &stageNtfn{daemonID: core.T.SID(), stage: newStage, rebID: reb.rebID()}
+		ntfn = &stageNtfn{daemonID: core.T.SID(), stage: newStage, rebID: rargs.id}
 		hdr  = transport.ObjHdr{}
 	)
 	hdr.Opaque = ntfn.NewPack(rebMsgNtfn)
 
-	if err := reb.dm.Notif(&hdr); err != nil {
+	if err := dm.Notif(&hdr); err != nil {
 		nlog.Warningln("failed to bcast new-stage notif: [", ntfn.rebID, stages[newStage], err, "]")
 	}
 }
@@ -104,15 +110,19 @@ func (reb *Reb) abortAll(err error, xreb *xs.Rebalance) {
 	if xreb == nil || !xreb.Abort(err) {
 		return
 	}
-	nlog.InfoDepth(1, xreb.Name(), "abort-and-bcast", err)
+	dm := reb.dm
+	if dm == nil {
+		return
+	}
 
+	nlog.InfoDepth(1, xreb.Name(), "abort-and-bcast", err)
 	var (
-		ntfn = &stageNtfn{daemonID: core.T.SID(), rebID: reb.rebID(), stage: rebStageAbort}
+		ntfn = &stageNtfn{daemonID: core.T.SID(), rebID: xreb.RebID(), stage: rebStageAbort}
 		hdr  = transport.ObjHdr{}
 	)
 	hdr.Opaque = ntfn.NewPack(rebMsgNtfn)
 
-	if err := reb.dm.Notif(&hdr); err != nil {
+	if err := dm.Notif(&hdr); err != nil {
 		nlog.Errorln("failed to bcast abort notif: [", ntfn.rebID, err, "]")
 	}
 }
