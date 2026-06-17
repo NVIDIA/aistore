@@ -389,3 +389,24 @@ func TestRebalanceCleanupUsingScript(t *testing.T) {
 	}
 	tassert.CheckFatal(t, err)
 }
+
+// concurrent prefetch of overlapping object names, stressing the respective collision paths
+// tip: use a cloud bucket, optionally with a prefix, with up to 10K small objects
+func TestPrefetchCollisionsUsingScript(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Long:     true, // ROUNDS x PAR concurrent prefetch jobs
+		CloudBck: true,
+		Bck:      cliBck,
+	})
+	var (
+		bucketName = cliBck.Cname("")
+		cmd        = exec.Command("./scripts/prefetch-collisions-stress.sh",
+			"--bucket", bucketName, "--rounds", "5", "--par", "12", "--workers", "64")
+	)
+	tlog.Logfln("Running '%s'", cmd.String())
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
