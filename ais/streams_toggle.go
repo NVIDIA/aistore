@@ -40,9 +40,6 @@ type (
 	ecToggle struct {
 		streamsToggle
 	}
-	dmToggle struct {
-		streamsToggle
-	}
 )
 
 func (f *ecToggle) init() {
@@ -53,39 +50,10 @@ func (f *ecToggle) init() {
 
 func (*ecToggle) timeout() time.Duration { return cmn.Rom.EcStreams() }
 
-func (f *dmToggle) init() {
-	f.hdrActive = apc.HdrActiveDM
-	f.actOn = apc.ActOpenSDM
-	f.actOff = apc.ActCloseSDM
-}
-
-func (*dmToggle) timeout() time.Duration { return cmn.SharedStreamsDflt } // see also: sharedDM.getActive
-
 func (f *streamsToggle) isActive(h http.Header) bool { _, ok := h[f.hdrActive]; return ok }
 
 func (f *streamsToggle) setActive(now int64) {
 	f.last.Store(uint64(now))
-}
-
-// non-primary: executed user call requiring SDM
-func (f *streamsToggle) nonpSetActive(now int64) {
-	debug.Assert(now > 0, "invalid timestamp: ", now)
-	f.last.Store((uint64(now) & nonpMask) | nonpBit)
-}
-
-// non-primary: fast-keepalive => primary
-func (f *streamsToggle) nonpResetActive() (uint64, bool) {
-	last := f.last.Load()
-	if last&nonpBit == 0 {
-		return last, false
-	}
-	last = f.last.Swap(0)
-	return last, true
-}
-
-// non-primary: fast-keepalive => primary
-func (f *streamsToggle) nonpUndo(last uint64) {
-	_ = f.last.CAS(0, last)
 }
 
 // target => primary keep-alive

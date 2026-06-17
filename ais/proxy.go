@@ -57,7 +57,6 @@ type (
 		lstca      lstca
 		rproxy     reverseProxy
 		ec         ecToggle
-		dm         dmToggle
 
 		htrun // common w/ target
 
@@ -128,7 +127,6 @@ func (p *proxy) init(config *cmn.Config) {
 
 	// shared streams
 	p.ec.init()
-	p.dm.init()
 }
 
 func initPID(config *cmn.Config) string {

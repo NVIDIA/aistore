@@ -157,11 +157,6 @@ const (
 )
 
 const (
-	ActOpenSDM  = "open-shared-dm"
-	ActCloseSDM = "close-shared-dm"
-)
-
-const (
 	ActOpenEC    = "open-ec-streams"
 	ActCloseEC   = "close-ec-streams"
 	ActEcRecover = "recover" // check and recover missing or corrupted EC metadata and/or slices, if any

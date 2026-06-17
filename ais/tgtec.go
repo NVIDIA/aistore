@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -75,9 +74,8 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 
 func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 	const (
-		hknameEC  = apc.ActCloseEC + hk.NameSuffix
-		hknameSDM = apc.ActCloseSDM + hk.NameSuffix
-		postpone  = time.Minute
+		hknameEC = apc.ActCloseEC + hk.NameSuffix
+		postpone = time.Minute
 	)
 	items, err := t.parseURL(w, r, apc.URLPathEC.L, 1, false)
 	if err != nil {
@@ -136,8 +134,6 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			core.FreeLOM(lom)
 		}
 
-	// TODO [minor]: consider reusing ais/streams_toggle or otherwise reducing copy/paste
-
 	case apc.ActOpenEC:
 		hk.UnregIf(hknameEC, closeEc) // just in case, a no-op most of the time
 		ec.ECM.OpenStreams(false /*with refc*/)
@@ -152,23 +148,6 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		nlog.Infoln(t.String(), "hk-postpone", action)
 		hk.Reg(hknameEC, closeEc, postpone)
 
-	case apc.ActOpenSDM:
-		// NOTE:
-		// Unlike EC, SDM is opened on-demand by the GetBatch/x-moss 3-phase protocol.
-		// This action exists only to cancel a pending idle-close (HK) and to allow
-		// the primary to track cluster-wide SDM activity time.
-		hk.UnregIf(hknameSDM, closeSDM)
-	case apc.ActCloseSDM:
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
-			return
-		}
-		if bundle.SDM.IsActive() {
-			t.writeErr(w, r, _errOff(bundle.SDMName))
-			return
-		}
-		nlog.Infoln(t.String(), "hk-postpone", action)
-		hk.Reg(hknameSDM, closeSDM, postpone)
-
 	default:
 		t.writeErr(w, r, errActEc(action))
 	}
@@ -181,15 +160,6 @@ func closeEc(int64) time.Duration {
 		nlog.Warningln("hk-cb:", _errOff("EC"))
 	} else {
 		ec.ECM.CloseStreams(false /*with refc*/)
-	}
-	return hk.UnregInterval
-}
-
-func closeSDM(int64) time.Duration {
-	if bundle.SDM.IsActive() {
-		nlog.Warningln("hk-cb:", _errOff(bundle.SDMName))
-	} else if err := bundle.SDM.Close(); err != nil {
-		nlog.Errorln(err)
 	}
 	return hk.UnregInterval
 }

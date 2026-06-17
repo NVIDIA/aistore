@@ -6,8 +6,10 @@
 package bundle
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"sync"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -23,30 +26,39 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-// TODO: reconnect() must become common for all data-mover's xactions; add `transport.OpcReconnect`
+// SDM lifetime is request-driven. Get-batch/x-moss opens SDM explicitly
+// on the DT and on each sender before traffic starts. Unlike EC streams,
+// SDM expires locally after Rx/Tx inactivity.
+//
+// NOTE: Tx activity is tracked at SDM entry points, not at the transport
+// stream-completion boundary. This is intentional: SDM is kept alive by
+// a long idle window = sdmIdleTime, while receiver-side lifetime is
+// protected explicitly by registered demux receivers.
 
-const sbrWinMax = 15 * time.Second
+const (
+	sbrWinMax = 15 * time.Second
 
-const iniSdmCap = 16
+	sdmPruneIval = hk.Prune2mIval        // (2m)
+	sdmIdleTime  = cmn.SharedStreamsDflt // (10m)
 
-// in other words, "oldAge-rxent = cmn.SharedStreamsDflt"
-const oldAgeTickCount = int32((cmn.SharedStreamsDflt + hk.Prune2mIval - 1) / hk.Prune2mIval)
+	epochShift    = 34
+	epochDuration = time.Duration(1 << epochShift)                       // ~17.18s
+	idleEpochs    = int64((sdmIdleTime+epochDuration-1)>>epochShift) + 1 // ceil
 
-// constant (until and if multiple instances)
-const SDMName = "shared-dm"
+	iniSdmCap = 16
+)
+
+const nameSDM = "shared-dm"
 
 type (
 	rxent struct {
-		rx    transport.Receiver
-		ticks atomic.Int32 // idle tick count: inc every hk.Prune2mIval; reset upon recv() call
+		rx transport.Receiver
 	}
 	sharedDM struct {
 		receivers map[string]*rxent
 		dm        DM
-		ocmu      sync.Mutex
-		rxmu      sync.RWMutex
 
-		// per-sender ErrSBR windows (Rx side) // TODO: prevent on/off flapping :TODO
+		// per-sender ErrSBR windows (Rx side) // TODO: prevent on/off flapping
 		sbrs struct {
 			m   map[string]*transport.ErrSBR
 			mtx sync.RWMutex
@@ -57,41 +69,71 @@ type (
 			rxerr   atomic.Int64
 			lastSum int64 // hk-only
 		}
+		last atomic.Int64 // coarse mono-time in epochDuration units
+
+		ocmu sync.Mutex
+		rxmu sync.RWMutex
 	}
 )
 
 // global
 var SDM sharedDM
 
-func (*sharedDM) trname() string { return SDMName }
-
+func (*sharedDM) trname() string   { return nameSDM }
 func (sdm *sharedDM) isOpen() bool { return sdm.dm.stage.opened.Load() }
 
-func (sdm *sharedDM) IsActive() (active bool) {
-	sdm.rxmu.RLock()
-	active = sdm.getActive() != ""
-	sdm.rxmu.RUnlock()
-	return
+func nowEpochs() int64 {
+	return mono.NanoTime() >> epochShift
 }
 
-// is called under rlock or wlock
-func (sdm *sharedDM) getActive() string {
-	for xid, en := range sdm.receivers {
-		if en.ticks.Load() < oldAgeTickCount {
-			return xid
-		}
+func (sdm *sharedDM) touch() {
+	last := sdm.last.Load()
+	now := nowEpochs()
+	if now <= last {
+		return
 	}
-	return ""
+
+	// best-effort monotonic refresh
+	sdm.last.CAS(last, now)
+}
+
+func (sdm *sharedDM) active() bool {
+	sdm.rxmu.RLock()
+	active := len(sdm.receivers) > 0
+	sdm.rxmu.RUnlock()
+	if active {
+		return true
+	}
+
+	last := sdm.last.Load()
+	debug.Assert(last != 0) // set in sdm.Open()
+	return nowEpochs()-last < idleEpochs
+}
+
+// (same as above when rxmu locked)
+func (sdm *sharedDM) activeLocked() bool {
+	if len(sdm.receivers) > 0 {
+		return true
+	}
+
+	last := sdm.last.Load()
+	debug.Assert(last != 0) // ditto
+	return nowEpochs()-last < idleEpochs
+}
+
+func (sdm *sharedDM) String() string {
+	last := sdm.last.Load()
+	// consider including sdm.dm.String() when verbose
+	return sdm.trname() + "[approx. num-receivers: " + strconv.Itoa(len(sdm.receivers)) + ", idle approx.: " + mono.Since(last<<epochShift).String() + "]"
 }
 
 // called on-demand
 // note: config changes (via dm.init) won't take effect until SDM is closed and reopened
 func (sdm *sharedDM) Open(config *cmn.Config, selected *cmn.XactConf) error {
-	debug.Assert(oldAgeTickCount > 1)
+	debug.Assert(epochDuration >= time.Second)
+	debug.Assert(epochDuration < sdmIdleTime/2)
 
-	if sdm.isOpen() {
-		return nil
-	}
+	sdm.touch()
 
 	sdm.ocmu.Lock()
 	if sdm.isOpen() {
@@ -122,12 +164,14 @@ func (sdm *sharedDM) Open(config *cmn.Config, selected *cmn.XactConf) error {
 	sdm.dm.Open()
 	sdm.ocmu.Unlock()
 
-	hk.Reg(sdm.trname()+hk.NameSuffix, sdm.housekeep, hk.Prune2mIval)
+	debug.Assert(sdm.last.Load() != 0) // touched above
+	hk.Reg(sdm.trname()+hk.NameSuffix, sdm.housekeep, sdmPruneIval)
 
 	nlog.InfoDepth(1, core.T.String(), "open", sdm.trname())
 	return nil
 }
 
+// TODO: reconnect() must become common for all DM-based xactions
 func (sdm *sharedDM) reconnect(dstID string, err error) {
 	if !sdm.isOpen() {
 		return
@@ -137,8 +181,7 @@ func (sdm *sharedDM) reconnect(dstID string, err error) {
 		nlog.Errorln(core.T.String(), err, "- closing/aborting...")
 
 		// tear down entire SDM bundle
-		// safe to race with (primary => (idle timeout) => apc.ActCloseSDM)
-		// see dm.Close() and dm.UnregRecv()
+		// safe to race with local idle close, see dm.Close() and dm.UnregRecv()
 		sdm.Close(err)
 		return
 	}
@@ -188,36 +231,51 @@ func (sdm *sharedDM) housekeep(now int64) time.Duration {
 
 	sdm._stats()
 
-	sdm.rxmu.RLock()
-	for _, en := range sdm.receivers {
-		en.ticks.Inc()
+	if sdm.active() {
+		return hk.Jitter(sdmPruneIval, now)
 	}
-	sdm.rxmu.RUnlock()
-	return hk.Jitter(hk.Prune2mIval, now)
+	// tentatively (lock and check inside)
+	if err := sdm.Close(); err != nil {
+		if cmn.Rom.V(4, cos.ModTransport) {
+			nlog.Warningln(err)
+		}
+		return hk.Jitter(sdmPruneIval, now)
+	}
+	return hk.UnregInterval
 }
 
-// nothing running + cmn.SharedStreamsDflt (10m) inactivity
-func (sdm *sharedDM) Close(err ...error) error {
+// no registered receivers + sdmIdleTime inactivity
+func (sdm *sharedDM) Close(errs ...error) error {
 	sdm.ocmu.Lock()
+
+	if !sdm.isOpen() {
+		sdm.ocmu.Unlock()
+		return nil
+	}
+
 	sdm.rxmu.Lock()
 
-	xid := sdm.getActive()
-	if xid != "" {
-		msg := fmt.Sprintf("xid %s is still active (num: %d)", xid, len(sdm.receivers))
-		if len(err) == 0 {
+	var (
+		err error
+		l   = len(errs)
+	)
+	if l > 0 {
+		err = errs[0]
+	}
+	if sdm.activeLocked() {
+		if l == 0 {
 			sdm.rxmu.Unlock()
 			sdm.ocmu.Unlock()
-			debug.Assert(cos.IsValidUUID(xid), xid)
-			return fmt.Errorf("cannot close %s: %s", sdm.trname(), msg)
+			return errors.New("cannot close " + sdm.String())
 		}
-		nlog.Errorln(sdm.trname(), "closing despite", msg, "[", err[0], "]")
+		nlog.Errorln("closing", sdm.String(), "with errors", errs)
 	}
 
 	// release rxmu (intended only to protect sdm.receivers) before calling dm.Close()
 	sdm.receivers = nil
 	sdm.rxmu.Unlock()
 
-	sdm.dm.Close(nil)
+	sdm.dm.Close(err)
 	sdm.dm.UnregRecv()
 
 	sdm.ocmu.Unlock()
@@ -255,22 +313,22 @@ func (sdm *sharedDM) UseRecv(rx transport.Receiver) {
 	}
 
 	// slow and unlikely
+	sdm.touch()
 	sdm.RegRecv(rx)
 }
 
 // remove demux entry immediately
 func (sdm *sharedDM) UnregRecv(xid string) {
+	sdm.touch()
 	sdm.rxmu.Lock()
 	delete(sdm.receivers, xid)
 	sdm.rxmu.Unlock()
 }
 
-func (sdm *sharedDM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctn core.Xact) error {
-	return sdm.dm.Send(obj, roc, tsi, xctn)
-}
-
-func (sdm *sharedDM) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
-	return sdm.dm.Bcast(obj, roc)
+func (sdm *sharedDM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctn core.Xact) (err error) {
+	sdm.touch()
+	err = sdm.dm.Send(obj, roc, tsi, xctn)
+	return
 }
 
 func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
@@ -293,6 +351,7 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 		}
 		return err
 	}
+
 	if hdr.Opcode == transport.OpcReconnect {
 		sdm.sbrs.mtx.Lock()
 		delete(sdm.sbrs.m, hdr.SID)
@@ -329,24 +388,17 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 
 	// (unlikely)
 	if en.rx.ID() != xid {
-		err = fmt.Errorf("%s: xid mismatch [%q vs %q]", sdm.trname(), xid, en.rx.ID())
+		err := fmt.Errorf("%s: xid mismatch [%q vs %q]", sdm.trname(), xid, en.rx.ID())
 		debug.AssertNoErr(err)
 		return err
 	}
 
-	// note: not holding rxmu locked - race vs UnregRecv possible but benign
-	if err := en.rx.RecvObj(hdr, r, nil); err != nil {
+	// do receive
+	e := en.rx.RecvObj(hdr, r, nil) // not holding rxmu locked - race vs UnregRecv possible but benign
+	if e != nil {
 		n := sdm.stats.rxerr.Inc()
-		if n < 5 || n%100 == 0 || cmn.Rom.V(4, cos.ModTransport) {
-			nlog.Warningf("%s: xid %s recvObj [err: %v, oname: %s, rxerr: %d]",
-				sdm.trname(), xid, err, hdr.ObjName, n)
-		}
-		return err
-	}
-	ticks := en.ticks.Swap(0)
-	if ticks > 0 && cmn.Rom.V(4, cos.ModXs) {
-		nlog.Warningf("%s: xid %s has been idle for >= %v [oname: %s]", sdm.trname(),
-			xid, time.Duration(ticks)*hk.Prune2mIval, hdr.ObjName)
+		cmn.SparseWarn(cos.ModTransport, n, sdm.trname(), "Rx failure: [ xid:", xid, "err:", e, "oname:", hdr.ObjName, "num Rx errors:", n, "]")
+		return e
 	}
 	return nil
 }

@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
-	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
 const (
@@ -140,7 +139,7 @@ func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, _ int64, fast 
 	}
 	if fast {
 		debug.Assert(ec.ECM != nil)
-		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive(), bundle.SDM.IsActive())
+		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive())
 		return pid, 0, err
 	}
 	return t.slowKalive(smap, tkr.t, timeout)
@@ -198,18 +197,12 @@ func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fas
 	debug.Assert(!smap.isPrimary(pkr.p.si))
 
 	if fast {
-		last, dmActive := pkr.p.dm.nonpResetActive()
-		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false, dmActive /*shared streams*/)
+		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false)
 		if err == nil {
 			// (shared streams; EC streams)
 			if pkr.p.ec.isActive(hdr) {
 				pkr.p.ec.setActive(now)
 			}
-			if pkr.p.dm.isActive(hdr) {
-				pkr.p.dm.setActive(now)
-			}
-		} else if dmActive {
-			pkr.p.dm.nonpUndo(last) // (unlikely)
 		}
 		return pid, 0, err
 	}

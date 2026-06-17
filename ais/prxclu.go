@@ -674,11 +674,9 @@ func (p *proxy) fastKaliveRsp(w http.ResponseWriter, r *http.Request, smap *smap
 				if si.IsTarget() {
 					// (target kalive => primary)
 					p.ec.recvKalive(p, r.Header, now, p.ec.timeout())
-					p.dm.recvKalive(p, r.Header, now, p.dm.timeout())
 				} else {
 					// (primary kalive response => non-primary)
 					p.ec.respKalive(w.Header(), now, p.ec.timeout())
-					p.dm.respKalive(w.Header(), now, p.dm.timeout())
 				}
 				return
 			}

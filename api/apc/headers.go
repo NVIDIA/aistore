@@ -139,7 +139,6 @@ const (
 
 	// shared streams
 	HdrActiveEC = aisPrefix + "Ec"
-	HdrActiveDM = aisPrefix + "Dm"
 
 	// (ais/psetforce; advanced use)
 	HdrReadyToJoinClu = aisPrefix + "Ready-Join-Clu"

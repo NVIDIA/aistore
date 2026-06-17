@@ -45,7 +45,7 @@ const (
 	isRed = OOS | OOM | OOCPU | DiskFault | HighNumGoroutines | CertificateExpired | DiskOOS
 
 	isWarn = Rebalancing | RebalanceInterrupted | Resilvering | ResilverInterrupted | NodeRestarted | MaintenanceMode |
-		LowCapacity | LowMemory | LowCPU | CertWillSoonExpire | DiskLowCapacity | NumGoroutines
+		LowCapacity | LowMemory | LowCPU | KeepAliveErrors | CertWillSoonExpire | DiskLowCapacity | NumGoroutines
 )
 
 func (f NodeStateFlags) IsOK() bool   { return f == NodeStarted|ClusterStarted }

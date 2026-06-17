@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -215,11 +214,6 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	hreq.Path = path
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(p.String(), apc.Moss, "DT", tsi.String(), "xid", xid, "wid", wid, "[", hreq.Path, hreq.Method, "]")
-	}
-
-	// toggle SDM (fast-kalive => primary)
-	if !smap.isPrimary(p.si) {
-		p.dm.nonpSetActive(mono.NanoTime())
 	}
 
 	// phase 2: redirect user's GET => DT
