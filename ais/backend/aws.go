@@ -390,7 +390,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AWS)
 	oa.Size = *headOutput.ContentLength
 	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
-		lom.SetCustomKey(cmn.VersionObjMD, v)
+		oa.SetCustomKey(cmn.VersionObjMD, v)
 		oa.SetVersion(v)
 	}
 	if v, ok := h.EncodeETag(headOutput.ETag); ok {

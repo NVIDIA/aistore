@@ -782,28 +782,28 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*
 		return nil, ecode, err
 	}
 
-	objAttrs := &cmn.ObjAttrs{
+	oa := &cmn.ObjAttrs{
 		CustomMD: make(cos.StrKVs, 8),
 		Size:     resp.RawResponse.ContentLength,
 	}
-	objAttrs.CustomMD[cmn.SourceObjMD] = apc.OCI
+	oa.SetCustomKey(cmn.SourceObjMD, apc.OCI)
 	if v, ok := h.EncodeETag(resp.ETag); ok {
-		objAttrs.CustomMD[cmn.ETag] = v
+		oa.SetCustomKey(cmn.ETag, v)
 	}
 	if v, ok := h.EncodeCksum(resp.ContentMd5); ok {
-		objAttrs.CustomMD[cmn.MD5ObjMD] = v
+		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 
 	// AIS custom checksum from OCI user metadata (see also: PutObj, GetObjReader)
 	if resp.OpcMeta != nil {
 		if cksumType, ok := resp.OpcMeta[ociChecksumType]; ok {
 			if cksumValue, ok := resp.OpcMeta[ociChecksumVal]; ok {
-				objAttrs.SetCksum(cksumType, cksumValue)
+				oa.SetCksum(cksumType, cksumValue)
 			}
 		}
 	}
 
-	return objAttrs, 0, nil
+	return oa, 0, nil
 }
 
 func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {

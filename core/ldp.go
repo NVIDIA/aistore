@@ -121,7 +121,13 @@ func (lom *LOM) GetROC(latestVer, sync bool) (resp ReadResp) {
 	}
 
 remote:
-	// GetObjReader and return remote (object) reader and oah for object metadata
+	// this remote path returns remote reader lock-free
+	// it is the caller's responsibility to (w-lock) it, if need be
+	//
+	// uncache and drop custom MD map (as GetObjReader assigns into it)
+	lom.UncacheDel()
+
+	// GetObjReader and return remote (object) reader and the respective cmn.ObjAttrs
 	// (compare w/ T.GetCold)
 	res := T.Backend(bck).GetObjReader(context.Background(), lom, 0, 0)
 

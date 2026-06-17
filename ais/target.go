@@ -1549,7 +1549,10 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
+
+	lom.Lock(true)
+	if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {
+		lom.Unlock(true)
 		if cos.IsNotExist(err) {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
@@ -1565,7 +1568,12 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 			lom.SetCustomKey(key, val)
 		}
 	}
-	lom.Persist()
+
+	err = lom.Persist()
+	lom.Unlock(true)
+	if err != nil {
+		t.writeErr(w, r, err)
+	}
 }
 
 // called under lock

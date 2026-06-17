@@ -736,10 +736,13 @@ func (lom *LOM) Uncache() {
 	}
 }
 
-// upon: error; RemoveObj
+// upon: error; RemoveObj, not "latest"
+// remove this object's cached metadata and detach the LOM from custom metadata
+// (the latter may have been shallow-copied)
 func (lom *LOM) UncacheDel() {
 	lcache := lom.lcache()
 	lcache.Delete(lom.digest)
+	lom.SetCustomMD(nil)
 }
 
 // remove from cache unless dirty
