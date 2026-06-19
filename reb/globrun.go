@@ -299,7 +299,10 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	reb.lastrx.Store(0)
 
 	if rargs.ecUsed {
+		// rebalance can open EC streams; it has no authority, however, to close them - primary has
+		// that's why all we do here is decrement ref-count back to what it was before this run
 		ec.ECM.OpenStreams(true /*with refc*/)
+		defer ec.ECM.CloseStreams(true /*just refc*/)
 	}
 	onGFN()
 
@@ -333,11 +336,6 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	extArgs.Tstats.ClrFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	offGFN()
-	if rargs.ecUsed {
-		// rebalance can open EC streams; it has no authority, however, to close them - primary has
-		// that's why all we do here is decrement ref-count back to what it was before this run
-		ec.ECM.CloseStreams(true /*just refc*/)
-	}
 }
 
 func (reb *Reb) skip(nid int64, allowEq bool) bool {

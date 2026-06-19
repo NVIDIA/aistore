@@ -8,13 +8,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	ratomic "sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -24,6 +27,47 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+)
+
+// EC shared streams: lazy open, primary-gated close
+// =================================================
+//
+// One (singleton) Manager per target owns a single pair of transport-stream bundles (transport/bundle):
+// * reqBundle  (control)
+// * respBundle (slices/replicas/metadata)
+// The bundles are shared by every EC bucket and all three EC xaction kinds (Get, Put, Respond).
+// They are long-lived target <=> target connections, kept open only while EC is in use on this node.
+//
+// Opening is permissive and uncoordinated (fail-open). Two triggers, no gating:
+// - primary push: ActOpenEC, sent when EC gets enabled on a bucket;
+// - local pull:   incActive(), on every EC xaction's start, plus the global-rebalance pin
+//   (see reb/globrun for OpenStreams(true)).
+//
+// A write to an EC-enabled bucket MUST find streams open - that requirement is met
+// right here, on the data path, which is why the proxy does not pre-open per-PUT.
+//
+// Teardown is gated by two pieces of state; both must agree before streams go down:
+//
+// _refc - count of everything actively keeping streams up: in-flight EC xactions
+//         (incActive / notifyTerm) plus explicit pins (rebalance's OpenStreams(true)
+//         / CloseStreams(true)). _refc > 0 is a veto on closing. IsActive() ==
+//         (_refc != 0) is also the liveness bit piggy-backed onto keep-alives, so
+//         the primary can detect quiescence.
+//
+// _last - mono-time of the last activity edge: stamped on every _refc transition,
+//         up and down, and on every open. IdleTime() = now - _last is a soft
+//         hysteresis: even at _refc == 0, streams stay open until a full
+//         IdleStreamsTimeout has elapsed since the last edge - so a burst of short
+//         xactions, or the drain tail of a long one, is not reaped between ops.
+//
+// Closing abides by the same rule: primary-authority only. A target never closes
+// on its own initiative. The primary decides the cluster has gone EC-quiescent and sends
+// ActCloseEC; targets accept it only if not currently active (_refc == 0), then defer
+// teardown via housekeeping. Finally, closePending is cleared only on a completed close
+// and may be disarmed (i.e, removed from HK) by a later ActOpenEC).
+
+const (
+	IdleStreamsTimeout = time.Minute
 )
 
 type Manager struct {
@@ -36,10 +80,12 @@ type Manager struct {
 	reqBundle  ratomic.Pointer[bundle.Streams]
 	respBundle ratomic.Pointer[bundle.Streams]
 
-	// ref count
-	_refc atomic.Int32
-
-	bundleEnabled atomic.Bool // to disable and enable on the fly
+	// stream-bundle (atomic) state
+	_last         atomic.Int64
+	mu            sync.Mutex
+	closePending  atomic.Bool
+	_refc         atomic.Int32
+	bundleEnabled bool
 }
 
 var (
@@ -57,11 +103,18 @@ func initManager() error {
 	if err := transport.Handle(ReqStreamName, ECM.recvRequest); err != nil {
 		return err
 	}
-	return transport.Handle(RespStreamName, ECM.recvResponse)
+	ECM.setLast()
+	return transport.Handle(RespStreamName, ECM.recvResponse) // install EC handler => transport demux
 }
 
 func (mgr *Manager) req() *bundle.Streams  { return mgr.reqBundle.Load() }
 func (mgr *Manager) resp() *bundle.Streams { return mgr.respBundle.Load() }
+
+func (mgr *Manager) setLast()                         { mgr._last.Store(mono.NanoTime()) }
+func (mgr *Manager) IdleTime(now int64) time.Duration { return time.Duration(now - mgr._last.Load()) }
+
+func (mgr *Manager) BeginClosePending() bool { return mgr.closePending.CAS(false, true) }
+func (mgr *Manager) EndClosePending()        { mgr.closePending.Store(false) }
 
 func (mgr *Manager) IsActive() bool { return mgr._refc.Load() != 0 }
 
@@ -77,6 +130,7 @@ func (mgr *Manager) incActive(xctn core.Xact) {
 
 func (mgr *Manager) notifyTerm(core.Notif, error, bool) {
 	rc := mgr._refc.Dec()
+	mgr.setLast()
 	debug.Assert(rc >= 0, "rc: ", rc)
 }
 
@@ -90,10 +144,15 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 	if withRefc {
 		mgr._refc.Inc()
 	}
-	if !mgr.bundleEnabled.CAS(false, true) {
+	mgr.setLast()
+
+	mgr.mu.Lock()
+	if mgr.bundleEnabled {
+		mgr.mu.Unlock()
 		return
 	}
 	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActOpenEC)
+
 	var (
 		client      = transport.NewIntraDataClient()
 		config      = cmn.GCO.Get()
@@ -118,19 +177,40 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 
 	mgr.reqBundle.Store(bundle.New(client, reqSbArgs))
 	mgr.respBundle.Store(bundle.New(client, respSbArgs))
+
+	mgr.bundleEnabled = true
+	mgr.mu.Unlock()
 }
 
-func (mgr *Manager) CloseStreams(justRefc bool) {
+func (mgr *Manager) CloseStreams(justRefc bool) bool {
 	if justRefc {
-		mgr._refc.Dec()
-		return
+		rc := mgr._refc.Dec()
+		debug.Assert(rc >= 0, rc)
+		mgr.setLast()
+		return true
 	}
-	if !mgr.bundleEnabled.CAS(true, false) {
-		return
+
+	mgr.mu.Lock() // ----------------
+	if rc := mgr._refc.Load(); rc != 0 {
+		debug.Assert(rc > 0, rc)
+		mgr.mu.Unlock()
+		return false
 	}
+	if !mgr.bundleEnabled {
+		mgr.mu.Unlock()
+		return true
+	}
+
+	mgr.bundleEnabled = false
+	req, resp := mgr.req(), mgr.resp()
+	mgr.mu.Unlock() // ----------------
+
 	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActCloseEC)
-	mgr.req().Close(false)
-	mgr.resp().Close(false)
+	debug.Assert(req != nil)
+	debug.Assert(resp != nil)
+	req.Close(false)
+	resp.Close(false)
+	return true
 }
 
 func (mgr *Manager) NewGetXact(bck *cmn.Bck) *XactGet         { return newGetXact(bck, mgr) }

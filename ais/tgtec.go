@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -75,7 +75,6 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 	const (
 		hknameEC = apc.ActCloseEC + hk.NameSuffix
-		postpone = time.Minute
 	)
 	items, err := t.parseURL(w, r, apc.URLPathEC.L, 1, false)
 	if err != nil {
@@ -136,32 +135,44 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 
 	case apc.ActOpenEC:
 		hk.UnregIf(hknameEC, closeEc) // just in case, a no-op most of the time
+		ec.ECM.EndClosePending()
 		ec.ECM.OpenStreams(false /*with refc*/)
 	case apc.ActCloseEC:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
 		if ec.ECM.IsActive() {
-			t.writeErr(w, r, _errOff("EC"))
+			t.writeErr(w, r, errors.New("EC is active - not closing"))
 			return
 		}
-		nlog.Infoln(t.String(), "hk-postpone", action)
-		hk.Reg(hknameEC, closeEc, postpone)
-
+		if ec.ECM.BeginClosePending() {
+			nlog.Infoln(t.String(), "hk-postpone", action)
+			hk.Reg(hknameEC, closeEc, ec.IdleStreamsTimeout)
+		}
 	default:
 		t.writeErr(w, r, errActEc(action))
 	}
 }
 
-func _errOff(what string) error { return errors.New(what + " is active, cannot close") }
+// self-reschedule until CloseStreams _or_ hk.UnregIf (above) - whatever comes first
+func closeEc(now int64) time.Duration {
+	switch {
+	case ec.ECM.IsActive():
+		nlog.Warningln("hk-cb: EC is active - rescheduling")
+		return ec.IdleStreamsTimeout
 
-func closeEc(int64) time.Duration {
-	if ec.ECM.IsActive() {
-		nlog.Warningln("hk-cb:", _errOff("EC"))
-	} else {
-		ec.ECM.CloseStreams(false /*with refc*/)
+	case ec.ECM.IdleTime(now) < ec.IdleStreamsTimeout:
+		nlog.Warningln("hk-cb: EC was recently active - rescheduling")
+		return ec.IdleStreamsTimeout
+
+	default:
+		if !ec.ECM.CloseStreams(false) {
+			nlog.Warningln("hk-cb: EC close=>active race - rescheduling")
+			return ec.IdleStreamsTimeout
+		}
+		ec.ECM.EndClosePending()
+		return hk.UnregInterval
 	}
-	return hk.UnregInterval
 }
 
 func errActEc(act string) error {
