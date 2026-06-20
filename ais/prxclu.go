@@ -320,11 +320,15 @@ func (p *proxy) qcluStats(w http.ResponseWriter, r *http.Request, what string, q
 }
 
 func (p *proxy) qcluMountpaths(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	type clusterMountpathsRaw struct {
+		Targets cos.JSONRawMsgs `json:"targets"`
+	}
+
 	targetMountpaths, erred := p._queryTs(w, r, query)
 	if targetMountpaths == nil || erred {
 		return
 	}
-	out := &ClusterMountpathsRaw{}
+	out := &clusterMountpathsRaw{}
 	out.Targets = targetMountpaths
 	p.writeJSON(w, r, out, what)
 }
@@ -499,6 +503,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		p.writeErr(w, r, err)
 		return
 	}
+
 	// given node and operation, set msg.Action
 	switch apiOp {
 	case apc.AdminJoin:
@@ -604,6 +609,18 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		apiOp = apc.SelfJoin
 	}
 
+	var (
+		nodeVersion = r.Header.Get(apc.HdrNodeVersion)
+		nodeVer     cos.Version
+	)
+	if nodeVersion != "" {
+		var ok bool
+		if nodeVer, ok = cos.ParseVersion(nodeVersion); !ok {
+			p.writeErrf(w, r, "%s joining %s: failed to parse %s=%q", p, nsi, apc.HdrNodeVersion, nodeVersion)
+			return
+		}
+	}
+
 	msg := &apc.ActMsg{Action: action, Name: nsi.ID()}
 
 	p.owner.smap.mu.Lock()
@@ -613,6 +630,13 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		p.writeErr(w, r, err)
 		return
 	}
+
+	// primary may want to enforce min-version or same-version (brief rolling-upgrade interval excepted);
+	// track only on self-join/restart; skip keep-alive; admin-join a TODO
+	if apiOp == apc.SelfJoin {
+		p.noteNodeVersion(nsi, nodeVersion, nodeVer)
+	}
+
 	if !upd {
 		if apiOp == apc.AdminJoin {
 			// TODO: respond !updated (NOP)

@@ -320,7 +320,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 			actionNote(c, "virtual directory '"+en.Name+"' in 'list-objects' results (skipping)")
 			continue
 		}
-		if err := cos.ValidOname(en.Name); err != nil {
+		if err := cos.ValidateRname(en.Name); err != nil {
 			continue
 		}
 

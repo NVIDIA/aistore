@@ -2372,7 +2372,15 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 	cargs := allocCargs()
 	{
 		cargs.si = psi
-		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Body: cos.MustMarshal(cm)}
+		cargs.req = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Base:   url,
+			Path:   path,
+			Body:   cos.MustMarshal(cm),
+			Header: http.Header{
+				apc.HdrNodeVersion: []string{cmn.VersionAIStore}, // primary may want to enforce min-version or same-version
+			},
+		}
 		cargs.timeout = tout
 	}
 	smap := cm.Smap

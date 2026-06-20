@@ -45,9 +45,7 @@ const (
 )
 
 type (
-	ClusterMountpathsRaw struct {
-		Targets cos.JSONRawMsgs `json:"targets"`
-	}
+	nodeRegPool []cluMeta
 
 	// proxy runner
 	proxy struct {
@@ -61,9 +59,12 @@ type (
 		htrun // common w/ target
 
 		notifs notifs
-		reg    struct {
-			pool nodeRegPool
-			mu   sync.RWMutex
+
+		// TODO: make it a pointer and allocate only for `primary`
+		reg struct {
+			pool        nodeRegPool       // bootstrap (see ais/earlystart)
+			verMismatch map[string]string // nodeID -> version != primary's; absence means no mismatch; Smap remains the source of truth
+			mu          sync.RWMutex
 		}
 		remais struct {
 			old []*meta.RemAis // to facilitate a2u resolution (and, therefore, offline access)

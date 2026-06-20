@@ -138,8 +138,6 @@ type (
 		net netAccess        // handler's network access
 	}
 
-	nodeRegPool []cluMeta
-
 	// what data to omit when sending request/response (join-cluster, kalive)
 	cmetaFillOpt struct {
 		htext         htext

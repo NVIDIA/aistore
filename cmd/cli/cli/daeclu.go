@@ -26,6 +26,10 @@ import (
 	"github.com/urfave/cli"
 )
 
+// apc.MemCPUInfo was extended in v4.4 and v4.5 (added CPU stats); older nodes report Load Averages instead
+// (see api/apc/sys.go)
+var minVerSysCPUStats = cos.Version{Major: 4, Minor: 5}
+
 type (
 	cluWarnNodes struct {
 		alerts       []string
@@ -121,16 +125,18 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.No
 	// `ais show cluster` (two tables and Summary)
 	//
 	// Unified opts so both tables agree on SysCPU/Load columns during rolling upgrades
-	expVerOrLater := aisnodeVer{major: 4, minor: 4}
-	showSysCPU := supportsAllAtLeast(tstatusMap, expVerOrLater) && supportsAllAtLeast(pstatusMap, expVerOrLater)
-	opts := teb.ClusterTabOpts{
-		Units:      units,
-		Verbose:    verbose,
-		ShowSysCPU: showSysCPU,
-		ShowLoad:   verbose || !showSysCPU,
-	}
-	tableP := body.Stst.MakeTabP(smap, opts)
-	tableT := body.Stst.MakeTabT(smap, opts)
+	var (
+		showSysCPU = supportsAllAtLeast(tstatusMap, minVerSysCPUStats) &&
+			supportsAllAtLeast(pstatusMap, minVerSysCPUStats)
+		opts = teb.ClusterTabOpts{
+			Units:      units,
+			Verbose:    verbose,
+			ShowSysCPU: showSysCPU,
+			ShowLoad:   verbose || !showSysCPU,
+		}
+		tableP = body.Stst.MakeTabP(smap, opts)
+		tableT = body.Stst.MakeTabT(smap, opts)
+	)
 
 	// totals: num disks and capacity; software version and build time; backend detection
 	body.NumDisks, body.Capacity = _totals(body.Stst.Tmap, units, cfg)
@@ -197,8 +203,7 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.No
 // - SysCPU shown iff every live node supports it;
 // - LoadAvg - in verbose mode or as a fallback when SysCPU is hidden.
 func _clusterTabOpts(units string, verbose bool, m teb.NodeStatusMap) teb.ClusterTabOpts {
-	expVerOrLater := aisnodeVer{major: 4, minor: 4}
-	showSysCPU := supportsAllAtLeast(m, expVerOrLater)
+	showSysCPU := supportsAllAtLeast(m, minVerSysCPUStats)
 	return teb.ClusterTabOpts{
 		Units:      units,
 		Verbose:    verbose,

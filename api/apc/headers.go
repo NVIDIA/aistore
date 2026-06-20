@@ -82,6 +82,9 @@ const (
 
 	HdrNodeURL   = aisPrefix + "Node-Url"
 	HdrNodeFlags = aisPrefix + "Node-Flags"
+
+	// Software version (`aisnode --version`)
+	HdrNodeVersion = aisPrefix + "Node-Version"
 )
 
 // the value for cos.HdrUserAgent header (internal usage)

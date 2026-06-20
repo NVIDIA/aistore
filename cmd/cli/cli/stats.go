@@ -42,8 +42,6 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 // teb.NodeStatusMap
 //
 
-const versionSepa = "."
-
 func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.NodeStatusMap, err error) {
 	smap, tstatusMap, pstatusMap, err = fillStatusMapNoVersion(c, daeType)
 	checkNodeStatusVersion(c, tstatusMap, pstatusMap)

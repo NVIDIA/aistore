@@ -48,13 +48,6 @@ func showCluDetail(c *cli.Context, cpu bool) error {
 		}
 	}
 
-	// Capability check is structural (nil Proc/Mem), not version-based,
-	// because detailed per-process CPU and system memory stats are being added
-	// in v4.5, which is still in development.
-	//
-	// TODO: once 4.5 is released, switch to version-based check:
-	//   minVer := aisnodeVer{major: 4, minor: 5}
-	//   if !supportsAllAtLeast(tstatusMap, minVer) || !supportsAllAtLeast(pstatusMap, minVer) { ... }
 	const errCapability = "this command requires all cluster nodes to run AIS v4.5 or later"
 	if cpu {
 		if !supportsDetailedCPU(tstatusMap) || !supportsDetailedCPU(pstatusMap) {

@@ -7,8 +7,6 @@ package cli
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
@@ -23,36 +21,15 @@ import (
 
 // The CLI determines compatibility as follows:
 //
-// * different major-version always means: incompatible
+// * different Major-version always means: incompatible
 //
-// * minor-version distance:
+// * Minor-version distance:
 //   - gap == 0 => fully compatible
 //   - gap == 1 => warn: "may not be fully compatible"
 //   - gap >= 2 => incompatible
 
-type aisnodeVer struct {
-	major int
-	minor int
-}
-
-func parseAisnodeVersion(s string) (v aisnodeVer, ok bool) {
-	mm := strings.Split(s, versionSepa)
-	if len(mm) < 2 {
-		return v, false
-	}
-	major, err := strconv.Atoi(mm[0])
-	if err != nil {
-		return v, false
-	}
-	minor, err := strconv.Atoi(mm[1])
-	if err != nil {
-		return v, false
-	}
-	return aisnodeVer{major: major, minor: minor}, true
-}
-
-func parseAisnodeVersionOrWarn(c *cli.Context, s string) (v aisnodeVer, ok bool) {
-	v, ok = parseAisnodeVersion(s)
+func parseAisnodeVersionOrWarn(c *cli.Context, s string) (v cos.Version, ok bool) {
+	v, ok = cos.ParseVersion(s)
 	if ok {
 		return v, true
 	}
@@ -62,39 +39,16 @@ func parseAisnodeVersionOrWarn(c *cli.Context, s string) (v aisnodeVer, ok bool)
 	return v, false
 }
 
-func versionExpected(v aisnodeVer) string {
-	return strconv.Itoa(v.major) + versionSepa + strconv.Itoa(v.minor)
-}
-
-// NOTE: return absolute gap (CLI older than AIS, and vice versa)
-func versionGap(expected, actual aisnodeVer) (gap int, incompat bool) {
-	if expected.major != actual.major {
-		return 2, true
-	}
-	gap = expected.minor - actual.minor
-	if gap < 0 {
-		gap = -gap
-	}
-	return gap, gap > 1
-}
-
-func supportsAllAtLeast(statusMap teb.NodeStatusMap, version aisnodeVer) bool {
+func supportsAllAtLeast(statusMap teb.NodeStatusMap, version cos.Version) bool {
 	for _, ds := range statusMap {
 		if ds.Node.Snode.InMaintOrDecomm() {
 			continue
 		}
-		if !supportsAtLeast(ds.Version, version) {
+		if !cos.SupportsVersionAtLeast(ds.Version, version) {
 			return false
 		}
 	}
 	return true // default
-}
-func supportsAtLeast(raw string, version aisnodeVer) bool {
-	v, ok := parseAisnodeVersion(raw)
-	if !ok {
-		return false
-	}
-	return v.major > version.major || (v.major == version.major && v.minor >= version.minor)
 }
 
 func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool {
@@ -109,7 +63,7 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 	if !ok {
 		return false
 	}
-	expected := versionExpected(expectedVer)
+	expected := expectedVer.String()
 
 	for _, ds := range stmap {
 		if ds.Version == "" {
@@ -121,7 +75,7 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 			continue
 		}
 
-		actualVer, ok := parseAisnodeVersion(ds.Version)
+		actualVer, ok := cos.ParseVersion(ds.Version)
 		if !ok {
 			warn := fmt.Sprintf("%s: unexpected version format: %q", ds.Node.Snode.StringEx(), ds.Version)
 			fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
@@ -129,13 +83,13 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 			continue
 		}
 
-		gap, incompat := versionGap(expectedVer, actualVer)
+		gap, incompat := cos.VersionGap(expectedVer, actualVer)
 		if gap == 0 {
 			continue
 		}
 
-		cnt := countMismatch(stmap, ds, func(v aisnodeVer) bool {
-			gap2, _ := versionGap(expectedVer, v)
+		cnt := countMismatch(stmap, ds, func(v cos.Version) bool {
+			gap2, _ := cos.VersionGap(expectedVer, v)
 			return gap2 == gap
 		})
 		verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, incompat)
@@ -145,7 +99,7 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 }
 
 // countMismatch counts nodes (excluding ds itself) that match the mismatch condition.
-func countMismatch(stmap teb.NodeStatusMap, ds *stats.NodeStatus, matchFunc func(aisnodeVer) bool) int {
+func countMismatch(stmap teb.NodeStatusMap, ds *stats.NodeStatus, matchFunc func(cos.Version) bool) int {
 	var cnt int
 	for _, ds2 := range stmap {
 		if ds2.Node.Snode.InMaintOrDecomm() {
@@ -157,7 +111,7 @@ func countMismatch(stmap teb.NodeStatusMap, ds *stats.NodeStatus, matchFunc func
 		if ds2.Version == "" {
 			continue // empty versions already warned about in main loop
 		}
-		v, ok := parseAisnodeVersion(ds2.Version)
+		v, ok := cos.ParseVersion(ds2.Version)
 		if !ok {
 			continue
 		}
