@@ -490,9 +490,9 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		// NOTE: ditto
 		nsi = regReq.SI
 		if !p.ClusterStarted() {
-			p.reg.mu.Lock()
+			p.reg.mpl.Lock()
 			p.reg.pool = append(p.reg.pool, regReq)
-			p.reg.mu.Unlock()
+			p.reg.mpl.Unlock()
 		}
 	default:
 		p.writeErrURL(w, r)

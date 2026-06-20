@@ -595,10 +595,10 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 
 	// 12. clear regpool
-	p.reg.mu.Lock()
+	p.reg.mpl.Lock()
 	p.reg.pool = p.reg.pool[:0]
 	p.reg.pool = nil
-	p.reg.mu.Unlock()
+	p.reg.mpl.Unlock()
 
 	// 13. resume rebalance if needed
 	if config.Rebalance.Enabled {
@@ -1074,7 +1074,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 	)
 	*after = *before
 
-	p.reg.mu.RLock()
+	p.reg.mpl.RLock()
 
 	if len(p.reg.pool) == 0 {
 		goto ret
@@ -1147,7 +1147,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 	}
 
 ret:
-	p.reg.mu.RUnlock()
+	p.reg.mpl.RUnlock()
 
 	// not interfering with elections
 	if voteInProgress {
@@ -1162,11 +1162,11 @@ ret:
 	// - always update joining nodes' net-infos;
 	// - alternatively, narrow it down to only proxies (as targets always restart on the same K8s nodes)
 
-	p.reg.mu.RLock()
+	p.reg.mpl.RLock()
 	for _, regReq := range p.reg.pool {
 		after.Smap, cloned = _updNetInfo(after.Smap, regReq.SI, cloned)
 	}
-	p.reg.mu.RUnlock()
+	p.reg.mpl.RUnlock()
 
 	if after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
 		after.Smap.UUID, after.Smap.CreationTime = newClusterUUID()

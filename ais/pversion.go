@@ -24,45 +24,45 @@ import (
 
 func (p *proxy) noteNodeVersion(nsi *meta.Snode, version string, nodeVer cos.Version) {
 	if version == cmn.VersionAIStore { // exact match (including rc suffix, if exists)
-		p.reg.mu.Lock()
+		p.reg.mtv.Lock()
 		if p.reg.verMismatch != nil {
 			delete(p.reg.verMismatch, nsi.ID())
 			if len(p.reg.verMismatch) == 0 {
 				p.reg.verMismatch = nil
 			}
 		}
-		p.reg.mu.Unlock()
+		p.reg.mtv.Unlock()
 		return
 	}
 
 	// add and warn
-	p.reg.mu.Lock()
+	p.reg.mtv.Lock()
 	if p.reg.verMismatch == nil {
 		p.reg.verMismatch = make(map[string]string, 4)
 	}
 
 	old := p.reg.verMismatch[nsi.ID()]
 	p.reg.verMismatch[nsi.ID()] = version // keep pre-5.0 "" as-is
-	p.reg.mu.Unlock()
+	p.reg.mtv.Unlock()
 
 	if old != version && version != "" { // empty version tracked but not warned (temp transition)
-		p.warnNodeVersion(nsi, version, nodeVer)
+		_warnNodeVer(nsi, version, nodeVer)
 	}
 }
 
-// TODO: try to skip (expected) warnings during rolling upgrade
-func (p *proxy) warnNodeVersion(nsi *meta.Snode, version string, nodeVer cos.Version) {
+func _warnNodeVer(nsi *meta.Snode, version string, nodeVer cos.Version) {
 	primaryVer, ok := cos.ParseVersion(cmn.VersionAIStore)
 	debug.Assert(ok)
 
 	sname := nsi.StringEx()
 	switch {
 	case nodeVer.Major > primaryVer.Major || (nodeVer.Major == primaryVer.Major && nodeVer.Minor > primaryVer.Minor):
-		nlog.Errorf("%s: %s runs newer version %q than primary %q", p, sname, version, cmn.VersionAIStore)
+		// TODO: configurable option to fail the join
+		nlog.Errorln(sname, "runs newer version:", version, "[ have:", cmn.VersionAIStore, "]")
 	case nodeVer.Major < primaryVer.Major || (nodeVer.Major == primaryVer.Major && nodeVer.Minor < primaryVer.Minor):
-		nlog.Warningf("%s: %s runs older version %q than primary %q", p, sname, version, cmn.VersionAIStore)
+		// expected during rolling upgrade
+		nlog.Warningln(sname, "runs older version:", version)
 	default:
-		// different (release candidate) suffix
-		nlog.Warningf("%s: %s runs version %q, primary runs %q", p, sname, version, cmn.VersionAIStore)
+		nlog.Warningln(sname, "runs version:", version, "with a different (release candidate) suffix [ have:", cmn.VersionAIStore, "]")
 	}
 }

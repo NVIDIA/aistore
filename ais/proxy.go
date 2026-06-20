@@ -60,12 +60,14 @@ type (
 
 		notifs notifs
 
-		// TODO: make it a pointer and allocate only for `primary`
+		// primary-only
 		reg struct {
 			pool        nodeRegPool       // bootstrap (see ais/earlystart)
 			verMismatch map[string]string // nodeID -> version != primary's; absence means no mismatch; Smap remains the source of truth
-			mu          sync.RWMutex
+			mpl         sync.RWMutex
+			mtv         sync.Mutex
 		}
+
 		remais struct {
 			old []*meta.RemAis // to facilitate a2u resolution (and, therefore, offline access)
 			meta.RemAisVec
