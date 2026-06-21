@@ -295,17 +295,19 @@ When AuthN is disabled (i.e., not used), the respective `ais config` command wil
 
 ```console
 $ ais config cluster auth
-PROPERTY                         VALUE
-auth.signature.key               **********
-auth.signature.method            hmac
-auth.required_claims.aud         []
+PROPERTY                                         VALUE
+auth.signature.key                               **********
+auth.signature.method
+auth.required_claims.aud                         []
+auth.oidc.allowed_iss                            []
 auth.oidc.issuer_ca_bundle
-auth.oidc.allowed_iss            []
-auth.cluster_key.enabled         false
-auth.cluster_key.ttl             0s
-auth.cluster_key.nonce_window    1m
-auth.cluster_key.rotation_grace  1m
-auth.enabled                     false ## <<<< disabled
+auth.oidc.jwks_cache.min_rotation_refresh        0s
+auth.oidc.jwks_cache.min_background_refresh      0s
+auth.intra_cluster.enabled                       false
+auth.intra_cluster.ttl                           0s
+auth.intra_cluster.nonce_window                  0s
+auth.intra_cluster.rotation_grace                0s
+auth.enabled                                     false
 ```
 
 Notice: this command is executed on the AIStore cluster, not AuthN.

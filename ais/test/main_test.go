@@ -188,5 +188,5 @@ func setSignHMAC() error {
 	}
 	proxyURL := tools.GetPrimaryURL()
 	bp := tools.BaseAPIParams(proxyURL)
-	return api.SetClusterConfig(bp, cos.StrKVs{"auth.cluster_key.enabled": "true"}, false /*transient*/)
+	return api.SetClusterConfig(bp, cos.StrKVs{"auth.intra_cluster.enabled": "true"}, false /*transient*/)
 }

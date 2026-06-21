@@ -106,7 +106,7 @@ $ ais config cluster auth --json
             "issuer_ca_bundle": "-",
             "allowed_iss": null
         },
-        "cluster_key": {
+        "intra_cluster": {
             "enabled": false,
             "ttl": "0s",
             "nonce_window": "1m",

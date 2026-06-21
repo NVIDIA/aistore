@@ -649,7 +649,7 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		pairs = append(pairs, revsPair{config, msg})
 		nlog.Infoln("\t+", config.String())
 
-		if config.Auth.CSKEnabled() {
+		if config.Auth.SignVerifyEnabled() {
 			k := p.owner.csk.load()
 			if k.ver == 0 {
 				k = p.owner.csk.gen(clone.Version)

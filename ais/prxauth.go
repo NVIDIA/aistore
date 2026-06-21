@@ -250,7 +250,7 @@ func (t *tokenList) String() string    { return fmt.Sprintf("TokenList v%d", t.V
 //
 // - if the caller has a valid token under the current config, enabling auth is allowed unconditionally
 // - otherwise, we fail with one of the specific reasons (below)
-// - note that enabling cluster-key signing (auth.cluster_key.*) is handled separately
+// - note that enabling intra-cluster sign/verify (auth.intra_cluster.*) is handled separately
 
 func (p *proxy) validateEnableAuth(r *http.Request, clone *cmn.AuthConf, toUpdate *cmn.AuthConfToSet) (int, error) {
 	if clone.Enabled || toUpdate == nil || toUpdate.Enabled == nil || !*toUpdate.Enabled {
@@ -415,7 +415,7 @@ func (p *proxy) access(r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err
 	)
 	if isIntra {
 		// HMAC-verify
-		verifying := cmn.Rom.AuthEnabled() && cmn.Rom.CSKEnabled() && !g.netServ.pub.isSeparatePub
+		verifying := cmn.Rom.AuthEnabled() && cmn.Rom.SignVerifyEnabled() && !g.netServ.pub.isSeparatePub
 		if verifying {
 			return p.verifyIntra(r, sid, sname)
 		}

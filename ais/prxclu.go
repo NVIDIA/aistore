@@ -564,7 +564,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 	switch apiOp {
 	case apc.AdminJoin:
 		// call the node with cluster-metadata included
-		includeCSK := config.Auth.CSKEnabled()
+		includeCSK := config.Auth.SignVerifyEnabled()
 		if ecode, err := p.adminJoinHandshake(smap, nsi, apiOp, includeCSK); err != nil {
 			p.writeErr(w, r, err, ecode)
 			return
@@ -660,7 +660,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 
 	if apiOp == apc.SelfJoin {
 		// respond to the self-joining node with cluster-meta that does not include Smap
-		includeCSK := config.Auth.CSKEnabled()
+		includeCSK := config.Auth.SignVerifyEnabled()
 		md, err := p.cluMeta(cmetaFillOpt{skipSmap: true, includeCSK: includeCSK})
 		if err != nil {
 			p.writeErr(w, r, err)
@@ -979,7 +979,7 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		// proceed anyway
 	} else if config != nil {
 		pairs = append(pairs, revsPair{config, actMsgExt})
-		if config.Auth.CSKEnabled() {
+		if config.Auth.SignVerifyEnabled() {
 			k := p.owner.csk.load()
 			pairs = append(pairs, revsPair{k, actMsgExt})
 		}
@@ -1036,7 +1036,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	}
 
 	pairs = append(pairs, revsPair{config, actMsgExt})
-	if config.Auth.CSKEnabled() {
+	if config.Auth.SignVerifyEnabled() {
 		k := p.owner.csk.load()
 		pairs = append(pairs, revsPair{k, actMsgExt})
 	}
@@ -1263,10 +1263,11 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			whingeToUpdate("config.auth JWT/OIDC", strconv.FormatBool(config.Auth.Enabled), strconv.FormatBool(authEnabled))
 		}
 
-		if !config.Auth.CSKEnabled() && toUpdate.Auth.ClusterKey != nil {
-			cskEnabled := *toUpdate.Auth.ClusterKey.Enabled
-			if config.Auth.CSKEnabled() != cskEnabled {
-				whingeToUpdate("config.auth "+cskTag, strconv.FormatBool(config.Auth.CSKEnabled()), strconv.FormatBool(cskEnabled))
+		if !config.Auth.SignVerifyEnabled() && toUpdate.Auth.IntraCluster != nil && toUpdate.Auth.IntraCluster.Enabled != nil {
+			signVerifyEnabled := *toUpdate.Auth.IntraCluster.Enabled
+			if config.Auth.SignVerifyEnabled() != signVerifyEnabled {
+				// TODO -- FIXME: remove/replace cskTag = "csk" - here and elsewhere (ref Ed25519)
+				whingeToUpdate("config.auth "+cskTag, strconv.FormatBool(config.Auth.SignVerifyEnabled()), strconv.FormatBool(signVerifyEnabled))
 			}
 		}
 	}
@@ -1381,16 +1382,16 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 		msg = p.newAmsg(ctx.msg, nil)
 	)
 	switch {
-	case clone.Auth.CSKEnabled():
+	case clone.Auth.SignVerifyEnabled():
 		var k *clusterKey
-		if ctx.oldConfig == nil || !ctx.oldConfig.Auth.CSKEnabled() {
+		if ctx.oldConfig == nil || !ctx.oldConfig.Auth.SignVerifyEnabled() {
 			k = p.owner.csk.gen(p.owner.smap.get().Version)
 		} else {
 			k = p.owner.csk.load()
 		}
 		wg = p.metasyncer.sync(revsPair{clone, msg}, revsPair{k, msg})
-	case ctx.oldConfig != nil && ctx.oldConfig.Auth.CSKEnabled():
-		// clear locally; usage gated by Rom.CSKEnabled()
+	case ctx.oldConfig != nil && ctx.oldConfig.Auth.SignVerifyEnabled():
+		// clear locally; usage gated by Rom.SignVerifyEnabled()
 		p.owner.csk.reset()
 		fallthrough
 	default:

@@ -106,7 +106,7 @@ When authentication is enabled, incoming HTTP requests are validated before proc
 1. The proxy validates the token signature using either static credentials or OIDC lookup (see [Signature Verification](#signature-verification))
 1. Token claims (`subject`, `issuer`, `audience`, `expiration`) are verified according to [cluster configuration](#token-validation-configuration)
 1. Custom AIS claims (`admin`, `clusters`, `buckets`) are compared against the request to validate user access to the resource specified by the API call
-1. If `auth.cluster_key` is enabled, the redirect url is signed for targets to validate (see [Cluster Key](#cluster-key))
+1. If `auth.intra_cluster` is enabled, the redirect url is signed for targets to validate (see [Cluster Key](#cluster-key))
 
 ## Token Validation Configuration
 
@@ -154,17 +154,14 @@ See the diagram below for an example of how this flow works with the AuthN servi
 ## Cluster Key
 
 The cluster key adds an additional security layer for intra-cluster HTTP redirects by applying HMAC-SHA256 signatures.
-It is controlled separately from user authentication using the `auth.cluster_key.enabled` setting.
+It is controlled separately from user authentication using the `auth.intra_cluster.enabled` setting.
 
 Once enabled, the primary proxy creates a signing key, versioned and kept in memory, and propagates it cluster-wide through [metasync](/docs/ha.md).
 Proxies sign all redirect URLs after validating the caller's token, while receiving nodes verify those signatures before executing redirected operations.
 This ensures that only authorized, properly routed internal redirects are accepted by AIS targets.
 
-
 Configuration values:
-  - `auth.cluster_key.enabled`: Enable cluster key generation, signing, and target validation
-  - `auth.cluster_key.ttl`: TTL for the cluster key
-  - `auth.cluster_key.nonce_window`: How much clock skew to tolerate between nodes
-  - `auth.cluster_key.rotation_grace`: How long to accept old and new keys during rotation
-
-
+- `auth.intra_cluster.enabled`: Enable signing and verification of protected intra-cluster requests
+- `auth.intra_cluster.ttl`: TTL for request signatures; `0s` means no expiration
+- `auth.intra_cluster.nonce_window`: How much clock skew to tolerate between nodes
+- `auth.intra_cluster.rotation_grace`: How long to accept old and new signing keys during rotation

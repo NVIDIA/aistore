@@ -55,7 +55,7 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 
 	var (
 		sign    *signer
-		enabled = cmn.Rom.CSKEnabled()
+		enabled = cmn.Rom.SignVerifyEnabled()
 		special = cmn.HasSpecialSymbols(r.URL.Path)
 	)
 	switch {

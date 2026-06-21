@@ -748,8 +748,9 @@ type (
 		// Config for OIDC behavior such as issuer public key discovery
 		OIDC *OIDCConf `json:"oidc,omitempty"`
 
-		// Cluster key config
-		ClusterKey *ClusterKeyConf `json:"cluster_key,omitempty"`
+		// Config section for securing intra-cluster requests,
+		// including redirects and selected control-plane traffic.
+		IntraCluster *IntraClusterConf `json:"intra_cluster,omitempty"`
 
 		// Enable external user authentication via JWT/OIDC tokens
 		// (does not control internal cluster security - see ClusterConfig)
@@ -760,8 +761,9 @@ type (
 		Signature      *AuthSignatureConfToSet  `json:"signature,omitempty"`
 		RequiredClaims *RequiredClaimsConfToSet `json:"required_claims,omitempty"`
 		OIDC           *OIDCConfToSet           `json:"oidc,omitempty"`
-		ClusterKey     *ClusterKeyConfToSet     `json:"cluster_key,omitempty"`
+		IntraCluster   *IntraClusterConfToSet   `json:"intra_cluster,omitempty"`
 	}
+
 	Censored          string
 	AuthSignatureConf struct {
 		Key    Censored `json:"key"`
@@ -796,13 +798,17 @@ type (
 		MinBackgroundRefresh *cos.Duration `json:"min_background_refresh,omitempty" swaggertype:"primitive,string"`
 	}
 
-	ClusterKeyConf struct {
+	// IntraClusterConf controls authentication for protected intra-cluster requests.
+	// The feature name is mechanism-neutral: the pre-v5.0 implementation uses
+	// CSK/HMAC; the v5.x replacement is per-node Ed25519 signing.
+	// TTL, NonceWindow, and RotationGrace define request validation windows.
+	IntraClusterConf struct {
 		Enabled       bool         `json:"enabled"`
 		TTL           cos.Duration `json:"ttl"`            // default: 0 (never expire)
 		NonceWindow   cos.Duration `json:"nonce_window"`   // max clock skew for timestamp validation, default: 1m
 		RotationGrace cos.Duration `json:"rotation_grace"` // accept old+new key during rotation, default: 1m
 	}
-	ClusterKeyConfToSet struct {
+	IntraClusterConfToSet struct {
 		Enabled       *bool         `json:"enabled,omitempty"`
 		TTL           *cos.Duration `json:"ttl,omitempty"`
 		NonceWindow   *cos.Duration `json:"nonce_window,omitempty"`
@@ -2069,6 +2075,28 @@ func (c *FSHCConf) Validate() error {
 // AuthConf //
 //////////////
 
+// [backward compatibility] to support pre-5.0 => 5.x upgrades
+// TODO:
+// - remove after the config upgrade window closes
+// - (and remove ais/csk.go implementation as well)
+func (c *AuthConf) UnmarshalJSON(b []byte) error {
+	type alias AuthConf
+
+	aux := &struct {
+		LegacyCSK *IntraClusterConf `json:"cluster_key,omitempty"`
+		*alias
+	}{
+		alias: (*alias)(c),
+	}
+	if err := json.Unmarshal(b, aux); err != nil {
+		return err
+	}
+	if aux.LegacyCSK != nil && c.IntraCluster == nil {
+		c.IntraCluster = aux.LegacyCSK
+	}
+	return nil
+}
+
 // note: not cloning Auth.RequiredClaims.Aud etc. slices (low risk)
 func (c *AuthConf) CopyTo(dst *AuthConf) {
 	if c.Signature != nil {
@@ -2083,14 +2111,14 @@ func (c *AuthConf) CopyTo(dst *AuthConf) {
 		v := *c.RequiredClaims
 		dst.RequiredClaims = &v
 	}
-	if c.ClusterKey != nil {
-		v := *c.ClusterKey
-		dst.ClusterKey = &v
+	if c.IntraCluster != nil {
+		v := *c.IntraCluster
+		dst.IntraCluster = &v
 	}
 }
 
-func (c *AuthConf) CSKEnabled() bool {
-	return c.ClusterKey != nil && c.ClusterKey.Enabled
+func (c *AuthConf) SignVerifyEnabled() bool {
+	return c.IntraCluster != nil && c.IntraCluster.Enabled
 }
 
 func (c *AuthConf) Validate() error {
@@ -2115,8 +2143,8 @@ func (c *AuthConf) Validate() error {
 	if sigConfigured && oidcConfigured {
 		return errors.New("invalid auth config: only one of signature or OIDC config should be provided")
 	}
-	if c.CSKEnabled() {
-		return c.ClusterKey.validate()
+	if c.SignVerifyEnabled() {
+		return c.IntraCluster.validate()
 	}
 	return nil
 }
@@ -2228,13 +2256,13 @@ func ValidateIssuerURL(urlString string) error {
 	return nil
 }
 
-////////////////////
-// ClusterKeyConf //
-////////////////////
+//////////////////////
+// IntraClusterConf: intra-cluster communication security
+//////////////////////
 
 const (
-	dfltClusterKeyTTL = 0 // never expire
-	minClusterKeyTTL  = time.Hour
+	dfltIntraClusterTTL = 0 // never expire
+	minIntraClusterTTL  = time.Hour
 
 	dfltNonceWindow   = time.Minute
 	dfltRotationGrace = time.Minute
@@ -2243,18 +2271,18 @@ const (
 	maxRotationGrace = time.Hour
 )
 
-func (c *ClusterKeyConf) validate() error {
+func (c *IntraClusterConf) validate() error {
 	if !c.Enabled {
 		return nil
 	}
 
-	// TTL: 0 == never expire; otherwise must be >= minClusterKeyTTL
-	if d := c.TTL.D(); d != dfltClusterKeyTTL {
+	// TTL: 0 == never expire; otherwise must be >= minIntraClusterTTL
+	if d := c.TTL.D(); d != dfltIntraClusterTTL {
 		if d < 0 {
-			return fmt.Errorf("invalid cluster_key.ttl %v (expecting >= 0)", d)
+			return fmt.Errorf("invalid intra_cluster.ttl %v (expecting >= 0)", d)
 		}
-		if d < minClusterKeyTTL {
-			return fmt.Errorf("invalid cluster_key.ttl %v (expecting >= %v)", d, minClusterKeyTTL)
+		if d < minIntraClusterTTL {
+			return fmt.Errorf("invalid intra_cluster.ttl %v (expecting >= %v)", d, minIntraClusterTTL)
 		}
 	}
 	if c.NonceWindow == 0 {
@@ -2264,10 +2292,10 @@ func (c *ClusterKeyConf) validate() error {
 		c.RotationGrace = cos.Duration(dfltRotationGrace)
 	}
 	if nw := c.NonceWindow.D(); nw <= 0 || nw > maxNonceWindow {
-		return fmt.Errorf("invalid cluster_key.nonce_window %v (expecting > 0 and <= %v)", nw, maxNonceWindow)
+		return fmt.Errorf("invalid intra_cluster.nonce_window %v (expecting > 0 and <= %v)", nw, maxNonceWindow)
 	}
 	if rg := c.RotationGrace.D(); rg <= 0 || rg > maxRotationGrace {
-		return fmt.Errorf("invalid cluster_key.rotation_grace %v (expecting > 0 and <= %v)", rg, maxRotationGrace)
+		return fmt.Errorf("invalid intra_cluster.rotation_grace %v (expecting > 0 and <= %v)", rg, maxRotationGrace)
 	}
 
 	return nil

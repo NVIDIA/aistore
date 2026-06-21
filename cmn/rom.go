@@ -20,12 +20,12 @@ type readMostly struct {
 		keepalive time.Duration // MaxKeepalive
 		ecstreams time.Duration // EcStreams
 	}
-	features       feat.Flags
-	level, modules int
-	testingEnv     bool
-	authEnabled    bool
-	cskEnabled     bool
-	useHTTPS       bool
+	features          feat.Flags
+	level, modules    int
+	testingEnv        bool
+	authEnabled       bool
+	signVerifyEnabled bool
+	useHTTPS          bool
 }
 
 var Rom readMostly
@@ -45,7 +45,7 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 	rom.features = cfg.Features
 
 	rom.authEnabled = cfg.Auth.Enabled
-	rom.cskEnabled = cfg.Auth.CSKEnabled()
+	rom.signVerifyEnabled = cfg.Auth.SignVerifyEnabled()
 	rom.useHTTPS = cfg.Net.HTTP.UseHTTPS
 
 	// pre-parse for V (below)
@@ -58,7 +58,7 @@ func (rom *readMostly) EcStreams() time.Duration       { return rom.timeout.ecst
 func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
 func (rom *readMostly) AuthEnabled() bool              { return rom.authEnabled }
-func (rom *readMostly) CSKEnabled() bool               { return rom.cskEnabled }
+func (rom *readMostly) SignVerifyEnabled() bool        { return rom.signVerifyEnabled }
 func (rom *readMostly) UseHTTPS() bool                 { return rom.useHTTPS }
 
 func (rom *readMostly) V(verbosity, fl int) bool {

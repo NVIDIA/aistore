@@ -22,7 +22,7 @@ const (
 	testDstID   = "t1"
 )
 
-func newTestProxy(t *testing.T, cskEnabled bool) *proxy {
+func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 	t.Helper()
 
 	old := cmn.GCO.Get()
@@ -34,8 +34,8 @@ func newTestProxy(t *testing.T, cskEnabled bool) *proxy {
 	cos.InitShortID(0)
 
 	config := cmn.GCO.BeginUpdate()
-	config.Auth.ClusterKey = new(cmn.ClusterKeyConf)
-	config.Auth.ClusterKey.Enabled = cskEnabled
+	config.Auth.IntraCluster = new(cmn.IntraClusterConf)
+	config.Auth.IntraCluster.Enabled = signVerifyEnabled
 	cmn.GCO.CommitUpdate(config)
 	cmn.Rom.Set(&config.ClusterConfig)
 
@@ -91,10 +91,10 @@ func parseRedirect(t *testing.T, s string) *url.URL {
 	return u
 }
 
-func makeRedirect(t *testing.T, cskEnabled bool, method, path, rawQuery string, smapVer int64) (*proxy, *http.Request, *url.URL) {
+func makeRedirect(t *testing.T, signVerifyEnabled bool, method, path, rawQuery string, smapVer int64) (*proxy, *http.Request, *url.URL) {
 	t.Helper()
 
-	p := newTestProxy(t, cskEnabled)
+	p := newTestProxy(t, signVerifyEnabled)
 	dst := newTestSnode(t)
 	req := newReq(method, path, rawQuery)
 
@@ -128,7 +128,7 @@ func requireNoCSKParams(t *testing.T, q url.Values) {
 	t.Helper()
 
 	if q.Get(apc.QparamSmapVer) != "" || q.Get(apc.QparamNonce) != "" || q.Get(apc.QparamHMAC) != "" {
-		t.Fatalf("plain redirect must not contain CSK params, got %v", q)
+		t.Fatalf("plain redirect must not contain sign/verify params, got %v", q)
 	}
 }
 
@@ -139,7 +139,7 @@ func requireCSKParams(t *testing.T, q url.Values) {
 	nonce := q.Get(apc.QparamNonce)
 	sig := q.Get(apc.QparamHMAC)
 	if smapVer == "" || nonce == "" || sig == "" {
-		t.Fatalf("missing CSK params: %v", q)
+		t.Fatalf("missing sign/verify params: %v", q)
 	}
 	if len(sig) != cskSigLen {
 		t.Fatalf("expected HMAC len %d, got %d", cskSigLen, len(sig))
@@ -192,7 +192,7 @@ func TestRedurlPlain(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, req, u := makeRedirect(t, false /*cskEnabled*/, tc.method, tc.path, tc.query, tc.smapVer)
+			_, req, u := makeRedirect(t, false /*signVerifyEnabled*/, tc.method, tc.path, tc.query, tc.smapVer)
 			requireDstURL(t, u, req.URL.Path)
 
 			q := u.Query()
@@ -235,7 +235,7 @@ func TestRedurlSigned(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, req, u := makeRedirect(t, true /*cskEnabled*/, tc.method, tc.path, tc.query, tc.smapVer)
+			_, req, u := makeRedirect(t, true /*signVerifyEnabled*/, tc.method, tc.path, tc.query, tc.smapVer)
 			requireDstURL(t, u, req.URL.Path)
 
 			q := u.Query()
@@ -247,10 +247,10 @@ func TestRedurlSigned(t *testing.T) {
 }
 
 func TestSignerVerifyRoundTrip(t *testing.T) {
-	p, orig, u := makeRedirect(t, true /*cskEnabled*/, http.MethodGet, "/v1/signed-verify", "q=ok", 888)
+	p, orig, u := makeRedirect(t, true /*signVerifyEnabled*/, http.MethodGet, "/v1/signed-verify", "q=ok", 888)
 
-	if !cmn.Rom.CSKEnabled() {
-		t.Fatal("CSK must be enabled for verify test")
+	if !cmn.Rom.SignVerifyEnabled() {
+		t.Fatal("sign/verify must be enabled for verify test")
 	}
 
 	rOK := &http.Request{
@@ -264,10 +264,10 @@ func TestSignerVerifyRoundTrip(t *testing.T) {
 	pid := q.Get(apc.QparamPID)
 	cskgrp, err := cskFromQ(q)
 	if err != nil {
-		t.Fatalf("failed to parse CSK params: %v", err)
+		t.Fatalf("failed to parse sign/verify params: %v", err)
 	}
 	if cskgrp == nil {
-		t.Fatal("expected CSK params, got nil")
+		t.Fatal("expected sign/verify params, got nil")
 	}
 
 	sign := &signer{r: rOK, h: &p.htrun}
@@ -290,10 +290,10 @@ func TestSignerVerifyRoundTrip(t *testing.T) {
 	pid = q.Get(apc.QparamPID)
 	cskgrp, err = cskFromQ(q)
 	if err != nil {
-		t.Fatalf("failed to parse CSK params from tampered URL: %v", err)
+		t.Fatalf("failed to parse sign/verify params from tampered URL: %v", err)
 	}
 	if cskgrp == nil {
-		t.Fatal("expected CSK params from tampered URL, got nil")
+		t.Fatal("expected sign/verify params from tampered URL, got nil")
 	}
 
 	signBad := &signer{r: rBad, h: &p.htrun}

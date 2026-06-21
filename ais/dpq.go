@@ -55,7 +55,7 @@ type (
 	cskgrp struct {
 		nonce   uint64 // QparamNonce
 		smapVer int64  // QparamSmapVer
-		hmacSig string // QparamHMAC
+		hmacSig string // QparamHMAC (TODO -- FIXME ref Ed25519)
 	}
 	dpq struct {
 		m    cos.StrKVs // see groups 1 and 7 above
@@ -73,7 +73,7 @@ type (
 			owt     string // object write transaction { OwtPut, ... }
 			objto   string // uname of the destination object
 		}
-		csk cskgrp // csk envelope (group CSK/HMAC)
+		csk cskgrp // csk envelope (group CSK/HMAC) (TODO -- FIXME ref Ed25519)
 
 		// boolean fields
 		skipVC        bool // QparamSkipVC (skip loading existing object's metadata)

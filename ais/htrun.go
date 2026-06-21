@@ -129,6 +129,7 @@ func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	}
 }
 
+// TODO -- FIXME: pre-5.0 CSK/HMAC verification path (ref Ed25519)
 func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
 	debug.Assert(len(apireq.prefix) != 0)
 	apireq.items, err = h.parseURL(w, r, apireq.prefix, apireq.after, false)
@@ -147,13 +148,13 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 			h.writeErr(w, r, err)
 			return err
 		}
-		if cmn.Rom.CSKEnabled() && apireq.dpq.csk.hmacSig != "" {
+		if cmn.Rom.SignVerifyEnabled() && apireq.dpq.csk.hmacSig != "" {
 			csk = &apireq.dpq.csk
 			pid = apireq.dpq.sys.pid
 		}
 	} else {
 		apireq.query = r.URL.Query()
-		if cmn.Rom.CSKEnabled() {
+		if cmn.Rom.SignVerifyEnabled() {
 			if csk, err = cskFromQ(apireq.query); err != nil {
 				h.writeErr(w, r, err)
 				return err
@@ -517,9 +518,9 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 	// (another small reason to deploy 3 logical nets; both proxy and target)
 	g.netServ.pub.isSeparatePub = g.netServ.pub != g.netServ.control && g.netServ.pub != g.netServ.data
 
-	// in single-network deployments, caller headers are client-spoofable - HMAC required
-	if !g.netServ.pub.isSeparatePub && config.Auth.Enabled && !config.Auth.CSKEnabled() {
-		cos.ExitLog("invalid cluster configuration: single-network deployment requires auth.cluster_key.enabled")
+	// in single-network deployments, caller headers are client-spoofable - sign/verify must be enabled
+	if !g.netServ.pub.isSeparatePub && config.Auth.Enabled && !config.Auth.SignVerifyEnabled() {
+		cos.ExitLog("invalid cluster configuration: single-network deployment requires auth.intra_cluster.enabled (legacy: auth.cluster_key.enabled)")
 	}
 }
 
@@ -883,7 +884,7 @@ func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX) {
 	req.Header.Set(apc.HdrSenderID, h.SID())
 	req.Header.Set(apc.HdrSenderName, h.si.Name())
 
-	signing := cmn.Rom.CSKEnabled() && !g.netServ.pub.isSeparatePub && smap.vstr != ""
+	signing := cmn.Rom.SignVerifyEnabled() && !g.netServ.pub.isSeparatePub && smap.vstr != ""
 	if signing {
 		h.signIntra(req, smap)
 	}
@@ -907,6 +908,7 @@ func (h *htrun) signIntra(req *http.Request, smap *smapX) {
 	sbFree(sb)
 }
 
+// TODO -- FIXME: pre-5.0 CSK/HMAC verification path (ref Ed25519)
 // In single-network deployments, caller headers are client-spoofable.
 // When CSK is enabled, require HMAC before treating them as intra-cluster;
 // otherwise preserve legacy/bootstrap behavior.
@@ -2677,7 +2679,7 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) error {
 	}
 
 	// 3. TODO: enable HMAC-verify (see setIntraHdrs for "signing")
-	verifying := false && cmn.Rom.CSKEnabled() && !g.netServ.pub.isSeparatePub
+	verifying := false && cmn.Rom.SignVerifyEnabled() && !g.netServ.pub.isSeparatePub
 	if verifying {
 		if err := h.verifyIntra(r, sid, sname); err != nil {
 			return err

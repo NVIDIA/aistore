@@ -579,7 +579,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		actMsgExt = p.newAmsgStr(metaction2, bmd)
 		pairs     = []revsPair{{smap, actMsgExt}, {bmd, actMsgExt}, {cluConfig, actMsgExt}}
 	)
-	if cluConfig.Auth.CSKEnabled() {
+	if cluConfig.Auth.SignVerifyEnabled() {
 		k := p.owner.csk.gen(smap.Version)
 		pairs = append(pairs, revsPair{k, actMsgExt})
 	} // note: can do signed requests after this point
