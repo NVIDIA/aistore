@@ -6,6 +6,8 @@ DEPLOY_DIR = ./deploy/dev/local
 SCRIPTS_DIR = ./scripts
 BUILD_DIR = ./cmd
 BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
+GOPATH ?= $(shell go env GOPATH)
+GOBIN ?= $(shell go env GOBIN)
 
 ifeq ($(shell go env GOOS),linux)
 ifeq ($(strip $(GORACE)),)
@@ -24,14 +26,13 @@ MAKEFLAGS += --no-print-directory
 # CROSS_COMPILE = docker run --rm -v $(AISTORE_PATH):/go/src/n -w /go/src/n golang:1.26
 # CROSS_COMPILE_CLI = docker run -e $(CGO_DISABLE) --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.26
 
-# Build version, flags, and tags
+#
+# Build: version, flags, destination, and tags
+#
 VERSION ?= $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
 BUILD_FLAGS += $(if $(strip $(GORACE)),-race,)
-BUILD_DEST = $(GOPATH)/bin
-ifdef GOBIN
-	BUILD_DEST = $(GOBIN)
-endif
+BUILD_DEST = $(if $(GOBIN),$(GOBIN),$(GOPATH)/bin)
 ifdef TAGS
 	BUILD_TAGS = $(AIS_BACKEND_PROVIDERS) $(TAGS)
 else
