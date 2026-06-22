@@ -75,7 +75,6 @@ type (
 		apc.ActMsg
 		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 		BMDVersion int64  `json:"bmdversion,string"`
-		RMDVersion int64  `json:"rmdversion,string"`
 	}
 )
 
@@ -148,7 +147,7 @@ type (
 		skipEtlMD     bool
 		fillRebMarker bool
 		skipPrimeTime bool
-		includeCSK    bool
+		includeCSK    bool // TODO -- FIXME: deprecated (ref ed25519)
 	}
 
 	getMaxCii struct {

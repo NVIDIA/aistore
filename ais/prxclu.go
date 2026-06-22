@@ -610,21 +610,28 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 	}
 
 	var (
-		nodeVersion = r.Header.Get(apc.HdrNodeVersion)
-		nodeVer     cos.Version
+		okv         bool
+		nversParsed cos.Version
+		nversStr    = r.Header.Get(apc.HdrNodeVersion)
 	)
-	if nodeVersion != "" {
-		var ok bool
-		if nodeVer, ok = cos.ParseVersion(nodeVersion); !ok {
-			p.writeErrf(w, r, "%s joining %s: failed to parse %s=%q", p, nsi, apc.HdrNodeVersion, nodeVersion)
+	if nversStr != "" {
+		if nversParsed, okv = cos.ParseVersion(nversStr); !okv {
+			p.writeErrf(w, r, "%s joining %s: failed to parse '%s=%s'", p, nsi, apc.HdrNodeVersion, nversStr)
+			return
+		}
+	}
+	if apiOp == apc.SelfJoin {
+		if err := checkNodeVer(p.String(), nsi.StringEx(), nversStr); err != nil {
+			p.writeErr(w, r, err, http.StatusConflict)
 			return
 		}
 	}
 
 	msg := &apc.ActMsg{Action: action, Name: nsi.ID()}
 
+	// fast path: quick admission during cluster startup/restart // TODO: extra-checks for security
 	p.owner.smap.mu.Lock()
-	upd, err := p._joinKalive(nsi, regReq.Smap, apiOp, nsi.Flags, &regReq, msg)
+	upd, err := p._joinKalive(w, nsi, regReq.Smap, apiOp, nsi.Flags, &regReq, msg)
 	p.owner.smap.mu.Unlock()
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -634,7 +641,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 	// primary may want to enforce min-version or same-version (brief rolling-upgrade interval excepted);
 	// track only on self-join/restart; skip keep-alive; admin-join a TODO
 	if apiOp == apc.SelfJoin {
-		p.noteNodeVersion(nsi, nodeVersion, nodeVer)
+		p.noteNodeVersion(nsi, nversStr, nversParsed)
 	}
 
 	if !upd {
@@ -660,12 +667,13 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 
 	if apiOp == apc.SelfJoin {
 		// respond to the self-joining node with cluster-meta that does not include Smap
-		includeCSK := config.Auth.SignVerifyEnabled()
+		includeCSK := config.Auth.SignVerifyEnabled() // TODO: deprecated (ref Ed25519)
 		md, err := p.cluMeta(cmetaFillOpt{skipSmap: true, includeCSK: includeCSK})
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
+		w.Header().Set(apc.HdrNodeVersion, cmn.VersionAIStore) // primary => node version exchange (case #2)
 		p.writeJSON(w, r, md, path.Join(msg.Action, nsi.ID()))
 	}
 
@@ -734,14 +742,21 @@ func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string, i
 		} else {
 			err = res.errorf("%s: failed to %s %s: %v", p.si, apiOp, nsi.StringEx(), res.err)
 		}
+	} else {
+		nversStr := res.header.Get(apc.HdrNodeVersion)
+		if nversStr == "" {
+			nlog.Warningf("%s: admin-joining %s did not advertise %s (pre-5.0?)",
+				p, nsi.StringEx(), apc.HdrNodeVersion)
+		}
 	}
 	freeCargs(cargs)
 	freeCR(res)
 	return status, err
 }
 
-// executes under lock
-func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta, msg *apc.ActMsg) (upd bool, _ error) {
+// executes under p.owner.smap lock; may stamp response headers for accepted shortcut paths
+func (p *proxy) _joinKalive(w http.ResponseWriter, nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta,
+	msg *apc.ActMsg) (upd bool, _ error) {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		return false, newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
@@ -771,7 +786,8 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 			upd = p.rereg(nsi, osi)
 		}
 		if !upd {
-			return false, nil // ==> nothing to do
+			w.Header().Set(apc.HdrNodeVersion, cmn.VersionAIStore) // primary => node version exchange (case #1.a)
+			return false, nil                                      // ==> nothing to do
 		}
 	}
 	// check for cluster integrity errors (cie)
@@ -799,6 +815,7 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 			actMsgExt := p.newAmsg(msg, nil)
 			_ = p.metasyncer.sync(revsPair{clone, actMsgExt})
 		}
+		w.Header().Set(apc.HdrNodeVersion, cmn.VersionAIStore) // primary => node version exchange (case #1.b)
 		return false, nil
 	}
 
@@ -1231,7 +1248,7 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 	if toUpdate.Net != nil && toUpdate.Net.HTTP != nil {
 		from, _ := jsoniter.Marshal(config.Net.HTTP)
 		to, _ := jsoniter.Marshal(toUpdate.Net.HTTP)
-		whingeToUpdate("net.http", string(from), string(to))
+		_warnUpd("net.http", string(from), string(to))
 
 		// complementary
 		if toUpdate.Net.HTTP.UseHTTPS != nil {
@@ -1260,14 +1277,15 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			}
 		}
 		if config.Auth.Enabled != authEnabled {
-			whingeToUpdate("config.auth JWT/OIDC", strconv.FormatBool(config.Auth.Enabled), strconv.FormatBool(authEnabled))
+			_warnUpd("config.auth JWT/OIDC", strconv.FormatBool(config.Auth.Enabled), strconv.FormatBool(authEnabled))
 		}
 
-		if !config.Auth.SignVerifyEnabled() && toUpdate.Auth.IntraCluster != nil && toUpdate.Auth.IntraCluster.Enabled != nil {
-			signVerifyEnabled := *toUpdate.Auth.IntraCluster.Enabled
-			if config.Auth.SignVerifyEnabled() != signVerifyEnabled {
-				// TODO -- FIXME: remove/replace cskTag = "csk" - here and elsewhere (ref Ed25519)
-				whingeToUpdate("config.auth "+cskTag, strconv.FormatBool(config.Auth.SignVerifyEnabled()), strconv.FormatBool(signVerifyEnabled))
+		cur := config.Auth.SignVerifyEnabled()
+		if toUpdate.Auth.IntraCluster != nil && toUpdate.Auth.IntraCluster.Enabled != nil {
+			upd := *toUpdate.Auth.IntraCluster.Enabled
+			if cur != upd {
+				// TODO: remove/replace cskTag = "csk" - here and elsewhere (ref Ed25519)
+				_warnUpd("config.auth "+cskTag, strconv.FormatBool(cur), strconv.FormatBool(upd))
 			}
 		}
 	}
@@ -1275,17 +1293,17 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 	if toUpdate.Tracing != nil {
 		from, _ := jsoniter.Marshal(config.Tracing)
 		to, _ := jsoniter.Marshal(toUpdate.Tracing)
-		whingeToUpdate("config.tracing", string(from), string(to))
+		_warnUpd("config.tracing", string(from), string(to))
 	}
 	// 4. config.Timeout section
 	if toUpdate.Timeout != nil {
 		if toUpdate.Timeout.CplaneOperation != nil &&
 			*toUpdate.Timeout.CplaneOperation != config.Timeout.CplaneOperation {
-			whingeToUpdate("timeout.cplane_operation", config.Timeout.CplaneOperation.String(), toUpdate.Timeout.CplaneOperation.String())
+			_warnUpd("timeout.cplane_operation", config.Timeout.CplaneOperation.String(), toUpdate.Timeout.CplaneOperation.String())
 		}
 		if toUpdate.Timeout.MaxKeepalive != nil &&
 			*toUpdate.Timeout.MaxKeepalive != config.Timeout.MaxKeepalive {
-			whingeToUpdate("timeout.max_keepalive", config.Timeout.MaxKeepalive.String(), toUpdate.Timeout.MaxKeepalive.String())
+			_warnUpd("timeout.max_keepalive", config.Timeout.MaxKeepalive.String(), toUpdate.Timeout.MaxKeepalive.String())
 		}
 	}
 
@@ -1315,7 +1333,7 @@ func switchHTTPS(toCfg *cmn.ProxyConfToSet, fromCfg *cmn.ProxyConf, use bool) {
 	nlog.Errorln("Warning: _prior_ to restart make sure to remove all copies of cluster maps")
 }
 
-func whingeToUpdate(what, from, to string) {
+func _warnUpd(what, from, to string) {
 	nlog.Warningf("Updating cluster %s configuration: setting %s", what, to)
 	nlog.Warningf("Prior-to-update %s values: %s", what, from)
 	nlog.Errorln("Warning: this update MAY require cluster restart")

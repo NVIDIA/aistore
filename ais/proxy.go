@@ -2792,6 +2792,8 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		p.writeErrURL(w, r)
 		return
 	}
+
+	w.Header().Set(apc.HdrNodeVersion, cmn.VersionAIStore)
 	if !p.keepalive.paused() {
 		nlog.Warningf("%s: keepalive is already active - proceeding to resume (and reset) anyway", p)
 	}

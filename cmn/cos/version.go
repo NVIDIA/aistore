@@ -19,7 +19,7 @@ const versionSepa = "."
 type Version struct {
 	Major int
 	Minor int
-	Rc    string
+	Rc    string // optional suffix
 }
 
 func ParseVersion(s string) (v Version, ok bool) {

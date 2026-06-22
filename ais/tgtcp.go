@@ -515,6 +515,8 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) adminJoin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(apc.HdrNodeVersion, cmn.VersionAIStore)
+
 	// user request to join cluster (compare with `apc.SelfJoin`)
 	if !t.regstate.disabled.Load() {
 		if t.keepalive.paused() {

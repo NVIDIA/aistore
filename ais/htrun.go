@@ -129,7 +129,7 @@ func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	}
 }
 
-// TODO -- FIXME: pre-5.0 CSK/HMAC verification path (ref Ed25519)
+// TODO: remove pre-5.0 CSK/HMAC verification path (ref Ed25519)
 func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
 	debug.Assert(len(apireq.prefix) != 0)
 	apireq.items, err = h.parseURL(w, r, apireq.prefix, apireq.after, false)
@@ -908,7 +908,8 @@ func (h *htrun) signIntra(req *http.Request, smap *smapX) {
 	sbFree(sb)
 }
 
-// TODO -- FIXME: pre-5.0 CSK/HMAC verification path (ref Ed25519)
+// TODO: remove pre-5.0 CSK/HMAC verification path (ref Ed25519)
+//
 // In single-network deployments, caller headers are client-spoofable.
 // When CSK is enabled, require HMAC before treating them as intra-cluster;
 // otherwise preserve legacy/bootstrap behavior.
@@ -2198,20 +2199,24 @@ func (h *htrun) receiveCSK(nk *clusterKey, msg *actMsgExt, sender string) error 
 //
 // ================================== Background =========================================
 
-func (h *htrun) joinCluster(htext htext, primaryURLs []string) (cm *cluMeta, status int, err error) {
+func (h *htrun) joinCluster(htext htext, primaryURLs []string) (*cluMeta, int, error) {
 	res, err := h.join(htext, primaryURLs)
 	if err != nil {
-		return nil, status, err
+		return nil, 0, err
 	}
 	defer freeCR(res)
 	if res.err != nil {
 		return nil, res.status, res.err
 	}
+	if err := checkPrimVer(h.String(), res.header); err != nil {
+		return nil, 0, err
+	}
+
 	// not being sent at cluster startup and keepalive
 	if len(res.bytes) == 0 {
 		return nil, 0, nil
 	}
-	cm, err = h.recvCluMeta(res.bytes)
+	cm, err := h.recvCluMeta(res.bytes)
 	return cm, 0, err
 }
 
