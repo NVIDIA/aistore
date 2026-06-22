@@ -44,6 +44,7 @@ type (
 		// per-target runtime counters (for CtlMsg observability)
 		cntSkipNonTar     atomic.Int64 // non-TAR objects skipped (not indexable)
 		cntSkipHasIdx     atomic.Int64 // shards with existing up-to-date index, skipped
+		cntSkipBusy       atomic.Int64 // shards skipped this run: source object locked, could not acquire the write lock for the metadata commit
 		cntIndexed        atomic.Int64 // shards newly indexed in this run
 		cntReindexedStale atomic.Int64 // shards re-indexed due to stale index detection
 		lastLog           atomic.Int64 // last log timestamp (sparse)
@@ -130,6 +131,13 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 
 	// SaveShardIndex acquires its own write lock on archlom for the metadata commit.
 	if err := core.SaveShardIndex(lom, idx); err != nil {
+		if cmn.IsErrBusy(err) {
+			// benign and expected (concurrent reader/writer): count it, record the (named)
+			// busy error but log it only sparsely
+			r.cntSkipBusy.Inc()
+			r.AddErr(err, 4)
+			return nil
+		}
 		r.AddErr(err, 0)
 		return nil
 	}
@@ -255,6 +263,9 @@ func (r *xactShardIndex) CtlMsg() string {
 	}
 	if n := r.cntReindexedStale.Load(); n > 0 {
 		idxAppend(&sb, "re-stale", strconv.FormatInt(n, 10))
+	}
+	if n := r.cntSkipBusy.Load(); n > 0 {
+		idxAppend(&sb, "skip-busy", strconv.FormatInt(n, 10))
 	}
 	if n := r.ErrCnt(); n > 0 {
 		idxAppend(&sb, "errs", strconv.Itoa(n))

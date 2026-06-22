@@ -6,9 +6,11 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -48,19 +50,22 @@ const IdxSuffix = ".idx"
 // SaveShardIndex packs idx and writes it as an object in ais://.sys-shardidx,
 // then flips HasShardIdx on archlom. Two non-overlapping critical sections —
 // see locking protocol above.
+//
+// Best-effort: the Phase-2 flag flip uses a non-blocking write lock. If the source shard
+// is currently locked, SaveShardIndex returns cmn.IsErrBusy instead of blocking
 func SaveShardIndex(archlom *LOM, idx *archive.ShardIndex) error {
 	b, err := idx.Pack()
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", archlom.Cname(), err)
 	}
 	idxlom, err := newIdxLOM(archlom)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", archlom.Cname(), err)
 	}
 
 	// Phase 1: write idxlom — idxlom(W) only, archlom not held.
 	if err := writeIdxLOM(idxlom, b); err != nil {
-		return err
+		return fmt.Errorf("%s: %w", archlom.Cname(), err)
 	}
 
 	// Window between phases: idxlom is persisted but HasShardIdx is still false on archlom.
@@ -78,15 +83,21 @@ func SaveShardIndex(archlom *LOM, idx *archive.ShardIndex) error {
 	//   harmless; the next index-shard run overwrites it and completes Phase 2.
 
 	// Phase 2: flip HasShardIdx — archlom(W) only, idxlom fully released.
+	if !archlom.TryLock(true) {
+		// Best-effort: a single non-blocking TryLock. A busy shard must never stall indexing.
+		return cmn.NewErrBusy("shard", archlom.Cname())
+	}
+	defer archlom.Unlock(true)
 	// Reload before PersistMain: without reload, stale in-memory fields
 	// (e.g. old checksum) would overwrite the current xattr.
-	archlom.Lock(true)
-	defer archlom.Unlock(true)
 	if err := archlom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		return err
+		return fmt.Errorf("%s: %w", archlom.Cname(), err)
 	}
 	archlom.SetShardIdx(true)
-	return archlom.PersistMain(false /*not chunked*/)
+	if err := archlom.PersistMain(false /*not chunked*/); err != nil {
+		return fmt.Errorf("%s: %w", archlom.Cname(), err)
+	}
+	return nil
 }
 
 // writeIdxLOM writes packed index bytes to idxlom under idxlom(W).

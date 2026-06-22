@@ -538,6 +538,25 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		})
 	})
 
+	Describe("busy source (best-effort flip)", func() {
+		It("returns a busy error (cmn.IsErrBusy) when the source shard is read-locked", func() {
+			fh, sz, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
+			defer fh.Close()
+			idx, err := archive.BuildShardIndex(fh, sz)
+			Expect(err).NotTo(HaveOccurred())
+
+			archlom := siArchLOM(GinkgoT(), "save-busy.tar")
+
+			// Simulate a concurrent reader (e.g. get-batch streaming the shard): the Phase-2
+			// write lock must fail fast and leave HasShardIdx unset - never block.
+			archlom.Lock(false)
+			defer archlom.Unlock(false)
+			err = core.SaveShardIndex(archlom, idx)
+			Expect(cmn.IsErrBusy(err)).To(BeTrue())
+			Expect(archlom.HasShardIdx()).To(BeFalse())
+		})
+	})
+
 	Describe("corruption", func() {
 		DescribeTable("reports checksum error when index payload is corrupted",
 			func(format tar.Format) {

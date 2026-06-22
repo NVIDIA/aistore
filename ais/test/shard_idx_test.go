@@ -605,6 +605,75 @@ func TestIndexShardConcurrentRead(t *testing.T) {
 	}
 }
 
+func TestIndexShardConcurrentGetBatch(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+	const (
+		numShards = 1
+		numFiles  = 4096
+		fileSize  = 512 * cos.KiB // ~2GiB shard. The shard must exceed the target's stream buffer so
+		// it can't be buffered-and-released; the slow drainer then keeps it mid-transfer (lock held,
+		// bounded memory) for the whole index window. Smaller shards just buffer through and hold nothing.
+	)
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: "test-shard-idx-gb-" + trand.String(6), Provider: apc.AIS}
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+
+	tmpDir := t.TempDir()
+	names := idxUploadTarShards(t, baseParams, bck, tmpDir, "" /*prefix*/, numShards, numFiles, fileSize)
+	tlog.Logf("Uploaded %d TAR shards (%d files x %s)\n", numShards, numFiles, cos.ToSizeIEC(int64(fileSize), 0))
+
+	// get-batch: keeps the in-flight shards read-locked on their source targets until we drain
+	// so index-shard must skip at least those (busy) and complete, instead of blocking forever
+	in := make([]apc.MossIn, len(names))
+	for i, name := range names {
+		in[i] = apc.MossIn{ObjName: name}
+	}
+	rc, _, err := api.GetBatchStream(baseParams, bck, &apc.MossReq{In: in, StreamingGet: true})
+	tassert.CheckFatal(t, err)
+	defer rc.Close()
+
+	stopDrain := cos.NewStopCh()
+	var drainWG sync.WaitGroup
+	drainWG.Add(1)
+	go func() {
+		defer drainWG.Done()
+		buf := make([]byte, cos.MiB)
+		for {
+			select {
+			case <-stopDrain.Listen():
+				return
+			default:
+			}
+			if _, rerr := rc.Read(buf); rerr != nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond) // throttle => stream stays mid-transfer => lock held
+		}
+	}()
+	time.Sleep(2 * time.Second) // let the slow drain engage and the source read lock settle
+
+	tlog.Logf("Indexing while a slow-reading %d-shard get-batch holds read locks\n", numShards)
+	contended := idxRunAndWaitCounts(t, baseParams, bck, &apc.IndexShardMsg{})
+	tassert.Fatalf(t, contended < int64(numShards),
+		"expected >=1 shard left unindexed under the slow get-batch, but all %d were indexed", numShards)
+
+	stopDrain.Close()
+	drainWG.Wait()
+	cos.DrainReader(rc)
+
+	// Uncontended pass indexes exactly the shards skipped above. contended+clean == numShards
+	clean := idxRunAndWaitCounts(t, baseParams, bck, &apc.IndexShardMsg{})
+	tassert.Fatalf(t, contended+clean == int64(numShards),
+		"busy-skipped shards must index once the lock is released: contended=%d + clean=%d != %d",
+		contended, clean, numShards)
+	idxValidate(t, bck, names, "" /*nonTarName*/, numFiles)
+}
+
 // TestIndexShardStress indexes a large set of shards and validates all indices.
 // Scales with -short (reduced count) to fit in the regular test-short/test-long runs.
 func TestIndexShardStress(t *testing.T) {
