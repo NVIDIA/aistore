@@ -87,6 +87,8 @@ func TestMain(m *testing.M) {
 	t.owner.bmd.putPersist(bmd, nil)
 	fs.CreateBucket(bck.Bucket(), false /*nilbmd*/)
 
+	t.owner.smap.put(newSmap()) // Note: required by ais/txn_internal_test.go
+
 	m.Run()
 }
 

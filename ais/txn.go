@@ -26,10 +26,10 @@ import (
 
 // GC
 const (
-	gcTxnsNumKeep    = 16
-	gcTxnsTimeotMult = 10
+	gcTxnsNumKeep     = 16 // in-flight txns above 4x this count tighten the GC sweep cadence
+	gcTxnsTimeoutMult = 10 // commit -> done deadline = N * max_host_busy
 
-	TxnTimeoutMult = 2
+	txnTimeoutMult = 2 // begin -> start-commit deadline (and warn/slack) = N * max_host_busy
 )
 
 type (
@@ -37,6 +37,8 @@ type (
 		// accessors
 		uuid() string
 		started(phase string, tm ...time.Time) time.Time
+		// max duration of the begin -> start-commit (2PC) window before the GC reclaims the txn
+		commitTimeout(config *cmn.Config) time.Duration
 		isDone() (done bool, err error)
 		set(nlps []core.NLP)
 		// triggers
@@ -157,7 +159,9 @@ var (
 	_ txn = (*txnTCB)(nil)
 	_ txn = (*txnTCObjs)(nil)
 	_ txn = (*txnECEncode)(nil)
+	_ txn = (*txnArchMultiObj)(nil)
 	_ txn = (*txnPromote)(nil)
+	_ txn = (*txnCreateNBI)(nil)
 	_ txn = (*txnETLInit)(nil)
 )
 
@@ -397,15 +401,15 @@ func checkTimeout(txn txn, now time.Time, config *cmn.Config) (err, warn error) 
 	elapsed := now.Sub(txn.started(apc.Begin2PC))
 	if commitTimestamp := txn.started(apc.Commit2PC); !commitTimestamp.IsZero() {
 		elapsed = now.Sub(commitTimestamp)
-		if elapsed > gcTxnsTimeotMult*config.Timeout.MaxHostBusy.D() {
+		if elapsed > gcTxnsTimeoutMult*config.Timeout.MaxHostBusy.D() {
 			err = fmt.Errorf("gc %s: [commit - done] timeout", txn)
-		} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
+		} else if elapsed >= txnTimeoutMult*config.Timeout.MaxHostBusy.D() {
 			err = fmt.Errorf("gc %s: commit is taking too long", txn)
 		}
 	} else {
-		if elapsed > TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
+		if elapsed > txn.commitTimeout(config) {
 			err = fmt.Errorf("gc %s: [begin - start-commit] timeout", txn)
-		} else if elapsed >= TxnTimeoutMult*cmn.Rom.MaxKeepalive() {
+		} else if elapsed >= txnTimeoutMult*cmn.Rom.MaxKeepalive() {
 			warn = fmt.Errorf("gc %s: commit message is taking too long", txn)
 		}
 	}
@@ -433,7 +437,12 @@ func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
 	default:
 		debug.Assert(false)
 	}
-	return
+	return ts
+}
+
+// default: the begin -> start-commit window is bounded by max_host_busy
+func (*txnBase) commitTimeout(config *cmn.Config) time.Duration {
+	return txnTimeoutMult * config.Timeout.MaxHostBusy.D()
 }
 
 func (txn *txnBase) isDone() (done bool, err error) {
@@ -682,6 +691,17 @@ func newTxnETLInit(c *txnSrv, msg etl.InitMsg) (txn *txnETLInit) {
 func (txn *txnETLInit) abort(err error) {
 	nlog.Infof("transaction %s aborted for %s, err: %v\n", txn.String(), txn.msg.Cname(), err)
 	etl.StopByXid(txn.uuid(), err) // only stop the ETL created from this transaction
+}
+
+// ETL init's begin phase creates the K8s pod and blocks on its readiness, which is
+// bounded by the user-specified init_timeout (not max_host_busy). Allow init_timeout
+// plus the usual slack so the GC won't reclaim an init still making progress.
+func (txn *txnETLInit) commitTimeout(config *cmn.Config) time.Duration {
+	initTimeout, _ := txn.msg.Timeouts()
+	if initTimeout.D() <= 0 {
+		return txn.txnBase.commitTimeout(config)
+	}
+	return initTimeout.D() + txnTimeoutMult*config.Timeout.MaxHostBusy.D()
 }
 
 func (txn *txnETLInit) String() string { return txn.msg.String() }
