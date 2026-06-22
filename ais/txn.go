@@ -38,7 +38,7 @@ type (
 		uuid() string
 		started(phase string, tm ...time.Time) time.Time
 		// max duration of the begin -> start-commit (2PC) window before the GC reclaims the txn
-		commitTimeout(config *cmn.Config) time.Duration
+		beginTimeout(config *cmn.Config) time.Duration
 		isDone() (done bool, err error)
 		set(nlps []core.NLP)
 		// triggers
@@ -407,13 +407,16 @@ func checkTimeout(txn txn, now time.Time, config *cmn.Config) (err, warn error) 
 			err = fmt.Errorf("gc %s: commit is taking too long", txn)
 		}
 	} else {
-		if elapsed > txn.commitTimeout(config) {
+		deadline := txn.beginTimeout(config)
+		switch {
+		case elapsed > deadline:
 			err = fmt.Errorf("gc %s: [begin - start-commit] timeout", txn)
-		} else if elapsed >= txnTimeoutMult*cmn.Rom.MaxKeepalive() {
+		case elapsed >= deadline-txnTimeoutMult*cmn.Rom.MaxKeepalive():
+			// warn only as we approach the (per-txn) deadline
 			warn = fmt.Errorf("gc %s: commit message is taking too long", txn)
 		}
 	}
-	return
+	return err, warn
 }
 
 /////////////
@@ -441,7 +444,7 @@ func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
 }
 
 // default: the begin -> start-commit window is bounded by max_host_busy
-func (*txnBase) commitTimeout(config *cmn.Config) time.Duration {
+func (*txnBase) beginTimeout(config *cmn.Config) time.Duration {
 	return txnTimeoutMult * config.Timeout.MaxHostBusy.D()
 }
 
@@ -696,10 +699,10 @@ func (txn *txnETLInit) abort(err error) {
 // ETL init's begin phase creates the K8s pod and blocks on its readiness, which is
 // bounded by the user-specified init_timeout (not max_host_busy). Allow init_timeout
 // plus the usual slack so the GC won't reclaim an init still making progress.
-func (txn *txnETLInit) commitTimeout(config *cmn.Config) time.Duration {
+func (txn *txnETLInit) beginTimeout(config *cmn.Config) time.Duration {
 	initTimeout, _ := txn.msg.Timeouts()
 	if initTimeout.D() <= 0 {
-		return txn.txnBase.commitTimeout(config)
+		return txn.txnBase.beginTimeout(config)
 	}
 	return initTimeout.D() + txnTimeoutMult*config.Timeout.MaxHostBusy.D()
 }

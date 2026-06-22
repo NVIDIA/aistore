@@ -32,15 +32,15 @@ func newETLInitTxn(initTimeout time.Duration) txn {
 	return newTxnETLInit(c, msg)
 }
 
-// a representative non-ETL txn: inherits txnBase.commitTimeout unchanged.
+// a representative non-ETL txn: inherits txnBase.beginTimeout unchanged.
 func newCreateBucketTxn() txn {
 	bck := meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)
 	c := &txnSrv{t: t, bck: bck, uuid: "test-create-bck", msg: &actMsgExt{ActMsg: apc.ActMsg{Action: apc.ActCreateBck}}}
 	return newTxnCreateBucket(c)
 }
 
-// commitTimeout: ETL respects init_timeout (+ slack); everything else is generic.
-func TestCommitTimeout(t *testing.T) {
+// beginTimeout: ETL respects init_timeout (+ slack); everything else is generic.
+func TestBeginTimeout(t *testing.T) {
 	config := testTxnConfig()
 	slack := txnTimeoutMult * testMaxHostBusy // begin->commit slack added on top of init_timeout
 	generic := txnTimeoutMult * testMaxHostBusy
@@ -57,8 +57,8 @@ func TestCommitTimeout(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.txn.commitTimeout(config); got != tc.expect {
-				t.Fatalf("commitTimeout = %v, want %v", got, tc.expect)
+			if got := tc.txn.beginTimeout(config); got != tc.expect {
+				t.Fatalf("beginTimeout = %v, want %v", got, tc.expect)
 			}
 		})
 	}
@@ -108,13 +108,13 @@ func TestCheckTimeoutBeginPhaseETL(t *testing.T) {
 
 // checkTimeout (begin phase): non-ETL transactions keep the generic deadline (unchanged
 // behavior). Uses an ETL txn with init_timeout=0 as the stand-in for the default path,
-// since commitTimeout then returns exactly 2*max_host_busy like every txnBase-backed type.
+// since beginTimeout then returns exactly 2*max_host_busy like every txnBase-backed type.
 func TestCheckTimeoutBeginPhaseGeneric(t *testing.T) {
 	config := testTxnConfig()
 	begin := time.Now()
 	deadline := txnTimeoutMult * testMaxHostBusy // 40s
 
-	txn := newETLInitTxn(0) // init_timeout=0 -> generic commitTimeout (== txnBase default)
+	txn := newETLInitTxn(0) // init_timeout=0 -> generic beginTimeout (== txnBase default)
 	txn.started(apc.Begin2PC, begin)
 
 	if err, _ := checkTimeout(txn, begin.Add(deadline-time.Second), config); err != nil {
