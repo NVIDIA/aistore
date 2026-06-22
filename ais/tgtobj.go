@@ -1781,7 +1781,11 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			coi.ETLArgs.Pipeline = make(apc.ETLPipeline, 0, 1)
 		}
 		coi.ETLArgs.Pipeline.Join(daddr.String()) // attach direct put destination target to the pipeline
-		var r cos.ReadOpenCloser
+		var (
+			r         cos.ReadOpenCloser
+			remote    bool
+			remoteSrc *core.RemoteSource
+		)
 		if coi.PutWOC != nil {
 			_, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, nil, coi.ETLArgs)
 			return xs.CoiRes{Err: err, Ecode: ecode}
@@ -1789,12 +1793,17 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, coi.ETLArgs)
 			// skip t2t send if encounter error during GetROC, (etl direct put will return ErrSkip in this case)
 			if resp.Err != nil {
-				return xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
+				return xs.CoiRes{Err: resp.Err, RemoteSrc: resp.RemoteSrc, Ecode: resp.Ecode, RGET: resp.Remote}
 			}
 			coi.OAH = resp.OAH
 			r = resp.R
+			remote = resp.Remote
+			remoteSrc = resp.RemoteSrc
 		}
-		return coi.send(t, dm, lom, r, tsi) // lom is the source of reader if no reader specified
+		res := coi.send(t, dm, lom, r, tsi) // lom is the source of reader if no reader specified
+		res.RGET = remote
+		res.RemoteSrc = remoteSrc
+		return res
 	}
 
 	// dst is this target
@@ -1924,7 +1933,7 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core
 	debug.Assertf(coi.GetROC != nil, "coi.GetROC is nil in _reader, object name: %s", coi.ObjnameTo)
 	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, args)
 	if resp.Err != nil {
-		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
+		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err, RemoteSrc: resp.RemoteSrc, RGET: resp.Remote}
 	}
 	poi := allocPOI()
 	defer freePOI(poi)
@@ -1951,9 +1960,11 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core
 
 	ecode, err := poi.putObject()
 	if err != nil {
-		return xs.CoiRes{Ecode: ecode, Err: err}
+		return xs.CoiRes{Ecode: ecode, Err: err, RemoteSrc: resp.RemoteSrc, RGET: resp.Remote}
 	}
 	res.Lsize = poi.lom.Lsize()
+	res.RGET = resp.Remote
+	res.RemoteSrc = resp.RemoteSrc
 
 	return res
 }
