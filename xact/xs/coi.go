@@ -147,20 +147,21 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 		err = res.Err
 		tc.r.Abort(err)
 	default:
+		opErr := res.Err
 		if cmn.Rom.V(5, cos.ModXs) {
-			nlog.Warningln(tc.r.Name(), lom.Cname(), res.Err)
+			nlog.Warningln(tc.r.Name(), lom.Cname(), opErr)
 		}
 		if tc.xetl != nil {
 			tc.xetl.AddObjErr(tc.r.ID(), &etl.ObjErr{
 				ObjName: lom.Cname(),
-				Message: res.Err.Error(),
+				Message: opErr.Error(),
 				Ecode:   res.Ecode,
 			})
 		}
 		if contOnErr {
-			tc.r.AddErr(res.Err, 5, cos.ModXs)
+			tc.r.AddErr(opErr, 5, cos.ModXs)
 		} else {
-			err = res.Err
+			err = opErr
 			tc.r.Abort(err)
 		}
 	}

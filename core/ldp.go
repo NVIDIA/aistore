@@ -6,6 +6,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -123,10 +124,23 @@ func (lom *LOM) GetROC(latestVer, sync bool) (resp ReadResp) {
 remote:
 	// GetObjReader and return remote (object) reader and oah for object metadata
 	// (compare w/ T.GetCold)
-	res := T.Backend(bck).GetObjReader(context.Background(), lom, 0, 0)
+	backend := T.Backend(bck)
+	bucket := bck.String()
+	if remoteBck := bck.RemoteBck(); remoteBck != nil {
+		bucket = remoteBck.String()
+	}
+	res := backend.GetObjReader(context.Background(), lom, 0, 0)
+	resp.Remote = true
 
 	if res.Err != nil {
-		resp.Err, resp.Ecode = res.Err, res.ErrCode
+		if res.ErrCode != 0 {
+			resp.Err = fmt.Errorf("remote backend %s GetObjReader failed for %s/%s (status=%d): %w",
+				backend.Provider(), bucket, lom.ObjName, res.ErrCode, res.Err)
+		} else {
+			resp.Err = fmt.Errorf("remote backend %s GetObjReader failed for %s/%s: %w",
+				backend.Provider(), bucket, lom.ObjName, res.Err)
+		}
+		resp.Ecode = res.ErrCode
 		return resp
 	}
 
@@ -137,8 +151,6 @@ remote:
 		Size:     res.Size,
 	}
 	resp.OAH = oah
-	resp.Remote = true
-
 	// [NOTE] ref 6079834
 	// non-trivial limitation: this reader cannot be transmitted to
 	// multiple targets (where we actually rely on real re-opening);

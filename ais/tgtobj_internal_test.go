@@ -40,6 +40,9 @@ type (
 	discardRW struct {
 		w io.Writer
 	}
+	failingTestROC struct {
+		err error
+	}
 )
 
 func newDiscardRW() *discardRW {
@@ -51,6 +54,12 @@ func newDiscardRW() *discardRW {
 func (drw *discardRW) Write(p []byte) (int, error) { return drw.w.Write(p) }
 func (*discardRW) Header() http.Header             { return make(http.Header) }
 func (*discardRW) WriteHeader(int)                 {}
+
+func (r *failingTestROC) Read([]byte) (int, error) { return 0, r.err }
+func (*failingTestROC) Close() error               { return nil }
+func (r *failingTestROC) Open() (cos.ReadOpenCloser, error) {
+	return &failingTestROC{err: r.err}, nil
+}
 
 func TestMain(m *testing.M) {
 	flag.Parse()

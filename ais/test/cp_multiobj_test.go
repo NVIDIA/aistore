@@ -7,6 +7,7 @@ package integration_test
 import (
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -105,6 +106,64 @@ func TestCopyMultiObj(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		testCopyMobj(t, bck)
 	})
+}
+
+func TestCopyMultiObjRemoteReadErrorContext(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+
+	var (
+		proxyURL    = tools.RandomProxyURL(t)
+		baseParams  = tools.BaseAPIParams(proxyURL)
+		bckName     = "cp-remote-read-src-" + trand.String(8)
+		remoteBck   = cmn.Bck{Name: bckName, Provider: apc.AIS}
+		bckFrom     = cmn.Bck{Name: bckName, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
+		bckTo       = cmn.Bck{Name: "cp-remote-read-err-" + trand.String(8), Provider: apc.AIS}
+		objName     = "missing-remote-read-" + trand.String(16)
+		remoteProxy = tools.RemoteCluster.URL
+	)
+	tools.CreateBucket(t, remoteProxy, remoteBck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
+
+	msg := cmn.TCOMsg{
+		ToBck: bckTo,
+		TCOMsg: apc.TCOMsg{
+			ListRange: apc.ListRange{ObjNames: []string{objName}},
+		},
+	}
+	xid, err := api.CopyMultiObj(baseParams, bckFrom, &msg)
+	tassert.CheckFatal(t, err)
+
+	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects, Bck: bckFrom, Timeout: time.Minute}
+	var errMsg string
+	finishedWithErr := func(snaps xact.MultiSnap) (done, reset bool, err error) {
+		for _, targetSnaps := range snaps {
+			for _, snap := range targetSnaps {
+				if snap.ID != xid {
+					continue
+				}
+				switch {
+				case snap.AbortErr != "":
+					errMsg = snap.AbortErr
+				case snap.Err != "":
+					errMsg = snap.Err
+				}
+				if errMsg != "" {
+					return true, false, nil
+				}
+				if snap.IsFinished() || snap.IsAborted() {
+					return true, false, nil
+				}
+			}
+		}
+		return false, false, nil
+	}
+	_, err = api.WaitForSnaps(baseParams, args, finishedWithErr)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, errMsg != "", "expected copy error for missing remote object")
+
+	for _, want := range []string{"remote backend", bckFrom.Provider, "GetObjReader", bckName, objName} {
+		tassert.Fatalf(t, strings.Contains(errMsg, want), "expected %q in error %q", want, errMsg)
+	}
 }
 
 func testCopyMobj(t *testing.T, bck *meta.Bck) {
