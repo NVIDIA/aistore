@@ -683,10 +683,13 @@ type (
 		CertKey       string `json:"server_key"`    // HTTPS: X.509 key
 		ServerNameTLS string `json:"domain_tls"`    // #6410
 		ClientCA      string `json:"client_ca_tls"` // #6410
-		// clients "idle" config: intra-cluster and backend
-		IdleConnTimeout     cos.Duration `json:"idle_conn_time"`
-		MaxIdleConnsPerHost int          `json:"idle_conns_per_host"`
-		MaxIdleConns        int          `json:"idle_conns"`
+
+		// client-side idle connection timeouts: intra-cluster and backend/cloud
+		IdleConnTimeout        cos.Duration `json:"idle_conn_time"`
+		BackendIdleConnTimeout cos.Duration `json:"backend_idle_conn_time"` // added in v5.0; cloud backends (0 defaults to cmn.DefaultIdleConnTimeout)
+		MaxIdleConnsPerHost    int          `json:"idle_conns_per_host"`
+		MaxIdleConns           int          `json:"idle_conns"`
+
 		// cont-d
 		ClientAuthTLS   int  `json:"client_auth_tls"`   // #6410 tls.ClientAuthType enum
 		WriteBufferSize int  `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 64KB (`DefaultWriteBufferSize`)
@@ -696,14 +699,14 @@ type (
 		Chunked         bool `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
 	}
 	HTTPConfToSet struct {
-		Certificate   *string `json:"server_crt,omitempty"`
-		CertKey       *string `json:"server_key,omitempty"`
-		ServerNameTLS *string `json:"domain_tls,omitempty"`
-		ClientCA      *string `json:"client_ca_tls,omitempty"`
-		// added v3.26
-		IdleConnTimeout     *cos.Duration `json:"idle_conn_time,omitempty"`
-		MaxIdleConnsPerHost *int          `json:"idle_conns_per_host,omitempty"`
-		MaxIdleConns        *int          `json:"idle_conns,omitempty"`
+		Certificate            *string       `json:"server_crt,omitempty"`
+		CertKey                *string       `json:"server_key,omitempty"`
+		ServerNameTLS          *string       `json:"domain_tls,omitempty"`
+		ClientCA               *string       `json:"client_ca_tls,omitempty"`
+		IdleConnTimeout        *cos.Duration `json:"idle_conn_time,omitempty"`
+		BackendIdleConnTimeout *cos.Duration `json:"backend_idle_conn_time,omitempty"`
+		MaxIdleConnsPerHost    *int          `json:"idle_conns_per_host,omitempty"`
+		MaxIdleConns           *int          `json:"idle_conns,omitempty"`
 		// cont-d
 		WriteBufferSize *int  `json:"write_buffer_size,omitempty" list:"readonly"`
 		ReadBufferSize  *int  `json:"read_buffer_size,omitempty" list:"readonly"`
@@ -2009,9 +2012,19 @@ func (c *HTTPConf) Validate() error {
 	if c.ServerNameTLS != "" {
 		return fmt.Errorf("invalid domain_tls %q: expecting empty (domain names/SANs should be set in X.509 cert)", c.ServerNameTLS)
 	}
-	if d := c.IdleConnTimeout.D(); d < 0 || d > DfltMaxIdleTimeout {
-		return fmt.Errorf("invalid idle_conn_time %v (expecting range [0 - %v])", d, DfltMaxIdleTimeout)
+
+	// note: NewClient(TransportArgs{}) defaults to: DefaultIdleConnTimeout (6s)
+	if d := c.IdleConnTimeout.D(); d == 0 {
+		c.IdleConnTimeout = cos.Duration(DefaultIdleConnTimeout)
+	} else if d < 0 || d > DfltMaxIdleTimeout {
+		return fmt.Errorf("invalid idle_conn_time %v (expecting a positive value below max = %v, or 0 for system default %v)", d, DfltMaxIdleTimeout, DefaultIdleConnTimeout)
 	}
+	if d := c.BackendIdleConnTimeout.D(); d == 0 {
+		c.BackendIdleConnTimeout = cos.Duration(DefaultIdleConnTimeout)
+	} else if d < 0 {
+		return fmt.Errorf("invalid backend_idle_conn_time %v (expecting a positive value or 0 for system default %v)", d, DefaultIdleConnTimeout)
+	}
+
 	if n := c.MaxIdleConns; n < 0 || n > dfltMaxIdleConns {
 		return fmt.Errorf("invalid idle_conns %d (expecting range [0 - %d])", n, dfltMaxIdleConns)
 	}

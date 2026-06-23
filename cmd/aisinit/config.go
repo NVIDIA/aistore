@@ -58,11 +58,12 @@ var (
 			SndRcvBufSize: 131072,
 		},
 		HTTP: aiscmn.HTTPConf{
-			UseHTTPS:            false,
-			Chunked:             true,
-			IdleConnTimeout:     cos.Duration(30 * time.Second),
-			MaxIdleConnsPerHost: 128,
-			MaxIdleConns:        4096,
+			UseHTTPS:               false,
+			Chunked:                true,
+			IdleConnTimeout:        cos.Duration(30 * time.Second),
+			BackendIdleConnTimeout: cos.Duration(aiscmn.DefaultIdleConnTimeout), // default 6s; configurable since 5.0 w/ no upper limit
+			MaxIdleConnsPerHost:    128,
+			MaxIdleConns:           4096,
 		},
 	}
 

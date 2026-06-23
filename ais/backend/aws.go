@@ -679,7 +679,6 @@ func (*s3bp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error
 // From S3 SDK:
 // "S3 methods are safe to use concurrently. It is not safe to modify mutate
 // any of the struct's properties though."
-// TODO: use config.Net.HTTP.IdleConnTimeout and friends (https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/custom-http)
 func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	var (
 		endpoint = s3Endpoint
@@ -780,10 +779,15 @@ func awsLoadConfig(endpoint, profile string) (aws.Config, error) {
 	})
 	confFiles, credFiles := getS3ConfFiles()
 	nlog.Infoln("Loading config for profile:", profile, "config files:", confFiles, "credential files:", credFiles)
-	// NOTE: The AWS SDK for Go v2, uses lower case header maps by default.
+
+	// honor configured BackendIdleConnTimeout
+	// TODO: other transport limits remain cmn.NewClient defaults - can be added if there's explicit need
+	client := cmn.NewClient(cmn.TransportArgs{
+		IdleConnTimeout: cmn.GCO.Get().Net.HTTP.BackendIdleConnTimeout.D(),
+	})
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
-		config.WithHTTPClient(tracing.NewTraceableClient(cmn.NewClient(cmn.TransportArgs{}))),
+		config.WithHTTPClient(tracing.NewTraceableClient(client)),
 		config.WithSharedConfigFiles(confFiles),
 		config.WithSharedCredentialsFiles(credFiles),
 		config.WithSharedConfigProfile(profile),
