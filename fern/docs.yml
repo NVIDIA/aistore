@@ -12,7 +12,7 @@ logo:
   right-text: AIStore
 
 navbar-links:
-  - type: minimal
+  - type: outlined
     text: Blog
     href: /aistore/blog
   - type: github
