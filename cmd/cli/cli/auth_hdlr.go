@@ -172,8 +172,10 @@ var (
 						BashComplete: oneRoleCompletions,
 					},
 					{
-						Name:      cmdAuthToken,
-						Usage:     "Revoke AuthN token",
+						Name:  cmdAuthToken,
+						Usage: "Revoke AuthN token",
+						Description: "Revoke the given TOKEN. If no TOKEN is provided, revoke the token from --file, " +
+							"$AIS_AUTHN_TOKEN_FILE, or the default token file (~/.config/ais/cli/auth.token), in that order.",
 						Flags:     sortFlags(authFlags[flagsAuthRevokeToken]),
 						ArgsUsage: deleteAuthTokenArgument,
 						Action:    wrapAuthN(revokeTokenHandler),
@@ -715,21 +717,39 @@ func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {
 	return cluSpec, nil
 }
 
-func revokeTokenHandler(c *cli.Context) (err error) {
-	tokenFilePath, err := getTokenFilePath(c)
+func revokeTokenHandler(c *cli.Context) error {
+	token, err := tokenToRevoke(c)
 	if err != nil {
 		return err
 	}
+	return authn.RevokeToken(authParams, token)
+}
+
+// tokenToRevoke returns the TOKEN argument if given; otherwise the token loaded
+// from --file, $AIS_AUTHN_TOKEN_FILE, or the default token file.
+func tokenToRevoke(c *cli.Context) (string, error) {
+	if tkn := c.Args().Get(0); tkn != "" {
+		return tkn, nil
+	}
+	tokenFilePath, err := getTokenFilePath(c)
+	if err != nil {
+		return "", err
+	}
+	return readTokenFile(tokenFilePath)
+}
+
+func readTokenFile(tokenFilePath string) (string, error) {
 	b, err := os.ReadFile(tokenFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to read token %q: %v", tokenFilePath, err)
+		return "", fmt.Errorf("failed to read token %q: %v", tokenFilePath, err)
 	}
 	msg := &authn.TokenMsg{}
 	if err := jsoniter.Unmarshal(b, msg); err != nil {
-		return fmt.Errorf("invalid token %q format: %v", tokenFilePath, err)
+		return "", fmt.Errorf("invalid token %q format: %v", tokenFilePath, err)
 	}
-	return authn.RevokeToken(authParams, msg.Token)
+	return msg.Token, nil
 }
+
 func showAuthConfigHandler(c *cli.Context) (err error) {
 	conf, err := authn.GetConfig(authParams)
 	if err != nil {

@@ -443,7 +443,7 @@ const (
 	showAuthUserListArgument  = "[USER_NAME]"
 	addSetAuthRoleArgument    = "ROLE [PERMISSION ...]"
 	deleteAuthRoleArgument    = "ROLE"
-	deleteAuthTokenArgument   = "TOKEN | TOKEN_FILE" //nolint:gosec // false positive G101
+	deleteAuthTokenArgument   = "[TOKEN]"
 
 	// Alias
 	aliasURLPairArgument = "ALIAS=URL (or UUID=URL)"

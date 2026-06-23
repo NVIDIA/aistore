@@ -1,0 +1,28 @@
+// RUN authn
+echo "/tmp/auth-token.$RANDOM.adm1" > /tmp/e2e.admin1.rand
+admin_token_file_1=`cat /tmp/e2e.admin1.rand`; ais auth login admin -p admin -f $admin_token_file_1 // IGNORE
+
+# Revoke using TOKEN_FILE flag
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin1.rand` ais auth rm token --file `cat /tmp/e2e.admin1.rand` // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin1.rand` ais show cluster // FAIL "revoked"
+
+# Revoke using literal TOKEN (positional argument)
+echo "/tmp/auth-token.$RANDOM.adm2" > /tmp/e2e.admin2.rand
+admin_token_file_2=`cat /tmp/e2e.admin2.rand`; ais auth login admin -p admin -f $admin_token_file_2 // IGNORE
+admin_token_2=`grep -o '"token":"[^"]*"' \`cat /tmp/e2e.admin2.rand\` | cut -d'"' -f4`
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin2.rand` ais auth rm token "$admin_token_2" // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin2.rand` ais show cluster // FAIL "revoked"
+
+# Revoke with no TOKEN arg via AIS_AUTHN_TOKEN_FILE
+echo "/tmp/auth-token.$RANDOM.adm3" > /tmp/e2e.admin3.rand
+admin_token_file_3=`cat /tmp/e2e.admin3.rand`; ais auth login admin -p admin -f $admin_token_file_3 // IGNORE
+AIS_AUTHN_TOKEN_FILE=$admin_token_file_3 ais auth rm token // IGNORE
+AIS_AUTHN_TOKEN_FILE=$admin_token_file_3 ais show cluster // FAIL "revoked"
+
+# Revoke with no TOKEN arg via default token file
+ais auth login "$AIS_AUTHN_USERNAME" -p "$AIS_AUTHN_PASSWORD" // IGNORE
+env -u AIS_AUTHN_TOKEN_FILE ais auth rm token // IGNORE
+env -u AIS_AUTHN_TOKEN_FILE ais show cluster // FAIL "revoked"
+
+rm -f "$admin_token_file_1" "$admin_token_file_2" "$admin_token_file_3" /tmp/e2e.admin1.rand /tmp/e2e.admin2.rand /tmp/e2e.admin3.rand
+rm -f "$HOME/.config/ais/cli/auth.token"
