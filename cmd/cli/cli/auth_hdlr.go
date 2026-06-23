@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,7 +53,7 @@ var (
 		flagsAuthUserLogout:  {tokenFileFlag},
 		cmdAuthUser:          {passwordFlag},
 		flagsAuthRoleAddSet:  {descRoleFlag, clusterRoleFlag, bucketRoleFlag},
-		flagsAuthRevokeToken: {tokenFileFlag},
+		flagsAuthRevokeToken: {tokenFileFlag, yesFlag},
 		flagsAuthUserShow:    {nonverboseFlag, verboseFlag},
 		flagsAuthRoleShow:    {nonverboseFlag, verboseFlag, clusterFilterFlag},
 		flagsAuthConfShow:    {jsonFlag, noHeaderFlag},
@@ -414,7 +415,11 @@ func logoutUserHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot logout: %v", err)
 	}
-	if err := revokeTokenHandler(c); err != nil {
+	token, err := readTokenFile(tokenFilePath)
+	if err != nil {
+		return err
+	}
+	if err := authn.RevokeToken(authParams, token); err != nil {
 		return err
 	}
 	if err := cos.RemoveFile(tokenFilePath); err != nil {
@@ -718,24 +723,81 @@ func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {
 }
 
 func revokeTokenHandler(c *cli.Context) error {
-	token, err := tokenToRevoke(c)
+	token, source, err := tokenToRevoke(c)
 	if err != nil {
 		return err
+	}
+	// A token whose claims don't decode is corrupt or not an AuthN JWT.
+	claims, ok := decodeTokenClaims(token)
+	if !ok {
+		return fmt.Errorf("invalid token (%s): cannot decode claims", source)
+	}
+	if !flagIsSet(c, yesFlag) {
+		printTokenInfo(c, claims, source)
+		if !confirm(c, "Revoke this token?") {
+			return nil
+		}
 	}
 	return authn.RevokeToken(authParams, token)
 }
 
-// tokenToRevoke returns the TOKEN argument if given; otherwise the token loaded
-// from --file, $AIS_AUTHN_TOKEN_FILE, or the default token file.
-func tokenToRevoke(c *cli.Context) (string, error) {
+// tokenClaims is the subset of JWT claims shown before revoking a token.
+type tokenClaims struct {
+	Subject string `json:"sub"`
+	Admin   bool   `json:"admin"`
+	Issuer  string `json:"iss"`
+	Expires int64  `json:"exp"`
+}
+
+// decodeTokenClaims decodes a JWT payload for display only. Best-effort: the
+// signature is not verified (the CLI does not hold the AuthN signing key).
+func decodeTokenClaims(token string) (claims tokenClaims, ok bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return claims, false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return claims, false
+	}
+	return claims, jsoniter.Unmarshal(payload, &claims) == nil
+}
+
+// printTokenInfo prints the claims and source of the token to be revoked.
+func printTokenInfo(c *cli.Context, claims tokenClaims, source string) {
+	w := c.App.Writer
+	field := func(label, value string) {
+		if value != "" {
+			fmt.Fprintf(w, "    %-9s %s\n", label+":", value)
+		}
+	}
+	fmt.Fprintln(w, "Token to revoke:")
+	fmt.Fprintln(w)
+	field("User", claims.Subject)
+	field("Admin", teb.FmtBool(claims.Admin))
+	if claims.Expires != 0 {
+		field("Expires", time.Unix(claims.Expires, 0).UTC().Format(time.DateTime)+" UTC")
+	}
+	field("Issuer", claims.Issuer)
+	field("Source", source)
+	fmt.Fprintln(w)
+}
+
+// tokenToRevoke returns the token to revoke and its source: the positional TOKEN
+// argument, or a token file (--file, $AIS_AUTHN_TOKEN_FILE, or the default).
+func tokenToRevoke(c *cli.Context) (string, string, error) {
 	if tkn := c.Args().Get(0); tkn != "" {
-		return tkn, nil
+		return tkn, "command-line argument", nil
 	}
 	tokenFilePath, err := getTokenFilePath(c)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return readTokenFile(tokenFilePath)
+	token, err := readTokenFile(tokenFilePath)
+	if err != nil {
+		return "", "", err
+	}
+	return token, tokenFilePath, nil
 }
 
 func readTokenFile(tokenFilePath string) (string, error) {

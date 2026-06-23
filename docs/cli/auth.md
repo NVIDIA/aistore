@@ -93,6 +93,27 @@ $ # Read the token from a file created by AIS CLI
 $ ais auth rm token -f /home/user/user.token
 ```
 
+Before revoking, the CLI decodes the token and prints its claims (user, admin, expiration, issuer) and source, then prompts for confirmation:
+
+```console
+$ ais auth rm token -f /home/user/user.token
+Token to revoke:
+
+    User:     admin
+    Admin:    yes
+    Expires:  2026-06-24 19:53:11 UTC
+    Issuer:   https://ais-authn.ais.svc.cluster.local:52001
+    Source:   /home/user/user.token
+
+Revoke this token? [Y/N]:
+```
+
+Pass `-y` (`--yes`) to skip the confirmation prompt:
+
+```console
+$ ais auth rm token -y -f /home/user/user.token
+```
+
 ## Command List
 
 ### Register new user

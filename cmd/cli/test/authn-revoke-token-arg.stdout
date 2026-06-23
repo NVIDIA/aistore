@@ -1,1 +1,4 @@
-
+Token to revoke:
+    User:     admin
+    Admin:    yes
+    Source:   command-line argument
