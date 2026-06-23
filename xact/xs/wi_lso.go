@@ -27,23 +27,22 @@ type (
 	walkInfo struct {
 		smap         *meta.Smap
 		msg          *apc.LsoMsg
-		lomVisitedCb lomVisitedCb
+		lomVisitedCb lomVisitedCb // A-flow: xact.Base.ObjsAdd (via xact.Base.LomAdd); R-flow: n/a
 		custom       cos.StrKVs
 		markerDir    string
 		wanted       cos.BitFlags
 	}
 )
 
-func noopCb(*core.LOM) {}
-
 func isOK(status uint16) bool { return status == apc.LocOK }
 
-// TODO: `msg.StartAfter`
+// A-flow constructor
 func newWalkInfo(msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
+	debug.Assert(lomVisitedCb != nil)
 	wi = &walkInfo{
 		smap:         core.T.Sowner().Get(),
-		lomVisitedCb: lomVisitedCb,
 		msg:          msg,
+		lomVisitedCb: lomVisitedCb,
 		wanted:       wanted(msg),
 	}
 	if msg.ContinuationToken != "" { // marker is always a filename
@@ -117,7 +116,9 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (en *cmn.LsoEnt) {
 	// fill out even more of `en`
 	wi.setWanted(en, lom)
 
-	wi.lomVisitedCb(lom)
+	if wi.lomVisitedCb != nil {
+		wi.lomVisitedCb(lom)
+	}
 	return en
 }
 

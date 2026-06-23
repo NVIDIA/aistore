@@ -17,6 +17,14 @@ import (
 
 // core next-page and next-remote-page methods for object listing
 
+// TODO: x-lso R-flow stats: total(objects, bytes) vs in-cluster(objects, bytes)
+//
+// total:
+//   - per page from resp.Lst.Entries; count = len, bytes = sum(en.Size)
+// in-cluster: need a separate pair of counters
+//   - increment in filterAddLmeta
+//   - deliver via CtlMsg (generic Objs/InObjs/OutObjs unlikely)
+
 type npgCtx struct {
 	bp   core.Backend
 	bck  *meta.Bck
@@ -26,15 +34,15 @@ type npgCtx struct {
 	idx  int
 }
 
-func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, bp core.Backend) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, bp core.Backend) (npg *npgCtx) {
 	npg = &npgCtx{
 		bp:  bp,
 		bck: bck,
 		wi: walkInfo{
 			msg:          msg.Clone(),
-			lomVisitedCb: cb,
 			wanted:       wanted(msg),
 			smap:         core.T.Sowner().Get(),
+			lomVisitedCb: nil,
 		},
 	}
 	if msg.IsFlagSet(apc.LsDiff) {
@@ -117,10 +125,9 @@ func (npg *npgCtx) nextPageR(entries cmn.LsoEntries) (*cmn.LsoRes, error) {
 // - see also: cmn.ConcatLso
 func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 	var (
-		bck  = npg.bck
-		post = npg.wi.lomVisitedCb
-		msg  = npg.wi.msg
-		i    int
+		bck = npg.bck
+		msg = npg.wi.msg
+		i   int
 	)
 
 	for _, en := range lst.Entries {
@@ -167,10 +174,8 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 		if lom.IsChunked() {
 			en.SetFlag(apc.EntryIsChunked)
 		}
-		if post != nil {
-			post(lom)
-		}
 
+		debug.Assert(npg.wi.lomVisitedCb == nil) // not counting R-flow stats via this callback
 	keep:
 		core.FreeLOM(lom)
 		lst.Entries[i] = en

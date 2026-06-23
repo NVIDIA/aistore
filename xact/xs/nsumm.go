@@ -374,7 +374,7 @@ func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 	lsmsg.SetFlag(apc.LsNameSize | apc.LsNoDirs)
 
 	for !r.IsAborted() {
-		npg := newNpgCtx(bck, lsmsg, noopCb, bp)
+		npg := newNpgCtx(bck, lsmsg, bp)
 
 		if cap(page) > maxPageCap {
 			page = make(cmn.LsoEntries, 0, apc.MaxPageSizeGlobal)

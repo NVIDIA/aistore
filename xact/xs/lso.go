@@ -588,7 +588,7 @@ func (r *LsoXact) havePage(token string, cnt int64) bool {
 func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoRes
-		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.walk.bp)
+		npg  = newNpgCtx(r.p.Bck, r.msg, r.walk.bp)
 		tsi  = r.smap.GetActiveNode(r.msg.SID)
 	)
 	if tsi == nil {

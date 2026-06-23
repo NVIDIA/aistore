@@ -262,7 +262,7 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	var (
 		lst     *cmn.LsoRes
 		lsmsg   = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus, Flags: r.lsflags | apc.LsNoDirs}
-		npg     = newNpgCtx(r.bck, lsmsg, noopCb, nil /*bp: see below*/)
+		npg     = newNpgCtx(r.bck, lsmsg, nil /*bp: see below*/)
 		bremote = r.bck.IsRemote()
 	)
 	if err := r.bck.Init(core.T.Bowner()); err != nil {
