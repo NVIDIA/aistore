@@ -30,7 +30,7 @@ import (
 // Rules:
 // - fast keepalive returns before `clupost` is created;
 // - validation resolves node flags and the action for the current operation;
-// - resumeReb may promote a restarted keepalive to self-join (see TODO in re: updating the action);
+// - resumeReb may promote a restarted keepalive to self-join and update cluster action message;
 // - _joinKalive runs under the Smap lock and decides whether Smap mutation is needed;
 // - dispatch performs externally visible responses and metasync/rebalance work.
 
@@ -109,7 +109,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		return
 	}
 
-	// resume interrupted rebalance (see TODO inside)
+	// resume interrupted rebalance
 	c.resumeReb()
 
 	// parse joining node's version; (self-join) enforce the major-release boundary
@@ -352,11 +352,8 @@ func (c *clupost) resumeReb() {
 	if restarted && c.apiOp == apc.Keepalive {
 		c.apiOp = apc.SelfJoin
 
-		// TODO (follow-up):
-		// A promoted keepalive still carries ActKeepaliveUpdate, which skips the
-		// ActSelfJoinTarget case in rmdModifier.listen() => joining target omitted from the
-		// reb-finished notifier set.
-		// TODO: re-run setAction() and re-derive c.msg. See rmdModifier.listen before changing.
+		// see rmdModifier.listen: ActSelfJoinTarget adds the joining target to reb-notifiers
+		c.setAction()
 	}
 }
 
