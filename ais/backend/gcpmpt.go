@@ -7,9 +7,7 @@
 package backend
 
 import (
-	"context"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 )
@@ -54,11 +53,15 @@ type (
 	}
 )
 
-func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) {
-	cloudBck := lom.Bck().RemoteBck()
-	sess, e := gsbp.getSess(context.Background(), cloudBck)
+func (gsbp *gsbp) StartMpt(lom *core.LOM, r *http.Request) (string, int, error) {
+	debug.Assert(r != nil)
+	var (
+		ctx      = r.Context()
+		cloudBck = lom.Bck().RemoteBck()
+		sess, e  = gsbp.getSess(ctx, cloudBck)
+	)
 	if e != nil {
-		return "", 0, e
+		return "", http.StatusInternalServerError, e
 	}
 
 	reqArgs := cmn.AllocHra()
@@ -77,7 +80,7 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) 
 	req, err := reqArgs.Req()
 	if err != nil {
 		cmn.FreeHra(reqArgs)
-		return "", http.StatusInternalServerError, err
+		return "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to create request: %w", err)
 	}
 
 	resp, err := sess.httpClient.Do(req)
@@ -85,19 +88,22 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) 
 	cmn.HreqFree(req)
 
 	if err != nil {
-		return "", http.StatusInternalServerError, err
+		return "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			body = []byte(fmt.Sprintf("<failed to read error body: %v>", readErr))
+		}
 		err = fmt.Errorf("gcp: failed to initiate multipart upload: %s (status: %d)", string(body), resp.StatusCode)
 		return "", resp.StatusCode, err
 	}
 
 	var result initiateMptUploadResult
 	if err := xml.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", http.StatusInternalServerError, fmt.Errorf("failed to decode response: %w", err)
+		return "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to decode response: %w", err)
 	}
 
 	if cmn.Rom.V(5, cos.ModBackend) {
@@ -107,11 +113,16 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) 
 	return result.UploadID, 0, nil
 }
 
-func (gsbp *gsbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
-	cloudBck := lom.Bck().RemoteBck()
-	sess, e := gsbp.getSess(context.Background(), cloudBck)
+func (gsbp *gsbp) PutMptPart(lom *core.LOM, reader cos.ReadOpenCloser, hreq *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+	debug.Assert(hreq != nil)
+	var (
+		ctx      = hreq.Context()
+		cloudBck = lom.Bck().RemoteBck()
+		sess, e  = gsbp.getSess(ctx, cloudBck)
+	)
 	if e != nil {
-		return "", 0, e
+		cos.Close(reader)
+		return "", http.StatusInternalServerError, e
 	}
 
 	reqArgs := cmn.AllocHra()
@@ -119,7 +130,7 @@ func (gsbp *gsbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Reques
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = gcpXMLEndpoint
 		reqArgs.Path = cos.JoinPath(cloudBck.Name, lom.ObjName)
-		reqArgs.BodyR = r
+		reqArgs.BodyR = reader
 		reqArgs.Query = url.Values{
 			apc.QparamMptPartNo:   []string{strconv.FormatInt(int64(partNum), 10)},
 			apc.QparamMptUploadID: []string{uploadID},
@@ -132,30 +143,33 @@ func (gsbp *gsbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Reques
 	req, err := reqArgs.Req()
 	if err != nil {
 		cmn.FreeHra(reqArgs)
-		cos.Close(r)
-		return "", http.StatusInternalServerError, err
+		cos.Close(reader)
+		return "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to create request for part %d: %w", partNum, err)
 	}
 	req.ContentLength = size
 
 	resp, err := sess.httpClient.Do(req)
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
-	cos.Close(r)
+	cos.Close(reader)
 
 	if err != nil {
-		return "", http.StatusInternalServerError, err
+		return "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to upload part %d: %w", partNum, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		err = fmt.Errorf("gcp: failed to upload part: %s (status: %d)", string(body), resp.StatusCode)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			body = []byte(fmt.Sprintf("<failed to read error body: %v>", readErr))
+		}
+		err = fmt.Errorf("gcp: failed to upload part %d: %s (status: %d)", partNum, string(body), resp.StatusCode)
 		return "", resp.StatusCode, err
 	}
 
 	etag := resp.Header.Get("ETag")
 	if etag == "" {
-		return "", http.StatusInternalServerError, errors.New("gcp: no ETag in response")
+		return "", http.StatusInternalServerError, fmt.Errorf("gcp: no ETag in response for part %d", partNum)
 	}
 
 	if cmn.Rom.V(5, cos.ModBackend) {
@@ -165,11 +179,15 @@ func (gsbp *gsbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Reques
 	return etag, 0, nil
 }
 
-func (gsbp *gsbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
-	cloudBck := lom.Bck().RemoteBck()
-	sess, e := gsbp.getSess(context.Background(), cloudBck)
+func (gsbp *gsbp) CompleteMpt(lom *core.LOM, r *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
+	debug.Assert(r != nil)
+	var (
+		ctx      = r.Context()
+		cloudBck = lom.Bck().RemoteBck()
+		sess, e  = gsbp.getSess(ctx, cloudBck)
+	)
 	if e != nil {
-		return "", "", 0, e
+		return "", "", http.StatusInternalServerError, e
 	}
 
 	// Build XML body with completed parts
@@ -185,7 +203,7 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _
 
 	xmlBody, err := xml.Marshal(completeMpt)
 	if err != nil {
-		return "", "", http.StatusInternalServerError, fmt.Errorf("failed to marshal XML: %w", err)
+		return "", "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to marshal XML body: %w", err)
 	}
 
 	reqArgs := cmn.AllocHra()
@@ -206,7 +224,7 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _
 	req, err := reqArgs.Req()
 	if err != nil {
 		cmn.FreeHra(reqArgs)
-		return "", "", http.StatusInternalServerError, err
+		return "", "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to create request: %w", err)
 	}
 
 	resp, err := sess.httpClient.Do(req)
@@ -214,19 +232,22 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _
 	cmn.HreqFree(req)
 
 	if err != nil {
-		return "", "", http.StatusInternalServerError, err
+		return "", "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			body = []byte(fmt.Sprintf("<failed to read error body: %v>", readErr))
+		}
 		err = fmt.Errorf("gcp: failed to complete multipart upload: %s (status: %d)", string(body), resp.StatusCode)
 		return "", "", resp.StatusCode, err
 	}
 
 	var result completeMptUploadResult
 	if err := xml.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", "", http.StatusInternalServerError, fmt.Errorf("failed to decode response: %w", err)
+		return "", "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to decode response: %w", err)
 	}
 
 	// ETag
