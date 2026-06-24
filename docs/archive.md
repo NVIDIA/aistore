@@ -48,4 +48,5 @@ AIStore can natively **read**, **write**, **append**¹, and **list** archives. O
 * [aisloader: archive](/docs/aisloader.md#command-line-options)
 * [Initial Sharding Tool (`ishard`)](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
 * [Distributed Shuffle](/docs/cli/dsort.md)
+* [Shard Index](/docs/shard_index.md)
 * [Get-Batch](/docs/get_batch.md)

@@ -1740,7 +1740,9 @@ OPTIONS:
 
 ## Build and summarize shard indexes
 
-`ais bucket shard-index` builds and summarizes TAR shard indexes. Indexes allow AIS to read archived files via direct lookup instead of scanning the TAR object.
+`ais bucket shard-index` builds and summarizes shard indexes for TAR objects. Indexes allow AIS to read archived files via direct lookup instead of scanning the TAR object.
+
+For motivation, access semantics, and implementation details, see [Shard Index](/docs/shard_index.md).
 
 ```console
 $ ais bucket shard-index build ais://mybucket --prefix shards/ --wait
@@ -1760,7 +1762,7 @@ Use `--dont-wait` to start the summary job asynchronously, then poll with the re
 
 ```console
 $ ais bucket shard-index summary ais://mybucket --dont-wait
-Job summary-shard[abcDEF123] has started. To monitor, run 'ais bucket shard-index summary ais://mybucket abcDEF123 --dont-wait'
+Job shard-summary[abcDEF123] has started. To monitor, run 'ais bucket shard-index summary ais://mybucket abcDEF123 --dont-wait'
 
 $ ais bucket shard-index summary ais://mybucket abcDEF123 --dont-wait
 ```

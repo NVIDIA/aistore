@@ -560,7 +560,7 @@ Without direct access, retrieving a file from a large archive may require scanni
 
 With indexing and/or client-provided range metadata, GetBatch can seek much closer to the requested data and read only the required bytes.
 
-For large shards, especially when requested files are located deep inside the archive, this can improve retrieval latency by orders of magnitude.
+For large TAR objects, especially when requested files are located deep inside the archive, this can improve retrieval latency by orders of magnitude.
 
 
 ---
@@ -593,41 +593,16 @@ For large shards, especially when requested files are located deep inside the ar
 
 See [Direct Access to Archived Data](#direct-access-to-archived-data) for the access semantics.
 
-To prepare a bucket, use the common `ais start JOB` command or `ais bucket shard-index` - the latter with additional capabilities:
+For a complete feature overview, see [Shard Index](/docs/shard_index.md).
+
+To prepare TAR objects for direct `archpath` reads:
 
 ```console
-ais bucket shard-index --help
-NAME:
-   ais bucket shard-index - Manage TAR shard indexes for fast random access into archives.
-     Subcommands:
-     - build  - build a shard index for each TAR object in a bucket;
-     - summary - summarize TAR objects and their shard-index coverage.
-
-USAGE:
-   ais bucket shard-index command [arguments...]  [command options]
-
-COMMANDS:
-   build  Build a shard index for each TAR object in a bucket (for fast random access into archives).
-          Non-TAR objects are skipped; stale indexes (e.g., after re-upload) are automatically re-indexed.
-   e.g.:
-     - 'ais bucket shard-index build ais://nnn'                   - index all TAR shards in 'ais://nnn';
-     - 'ais bucket shard-index build ais://nnn --prefix shards/'  - only index TAR shards under 'shards/';
-     - 'ais bucket shard-index build ais://nnn --num-workers 16'  - run with 16 concurrent workers;
-     - 'ais bucket shard-index build ais://nnn --skip-verify'     - fast re-run: trust existing indexes without re-verifying;
-     - 'ais bucket shard-index build ais://nnn --wait'            - start and wait for the job to finish.
-
-   summary  Summarize TAR objects in a bucket and their shard-index coverage.
-            Only local in-cluster objects are summarized.
-   e.g.:
-     - 'ais bucket shard-index summary ais://nnn'                  - summarize all TAR shards in 'ais://nnn';
-     - 'ais bucket shard-index summary ais://nnn --prefix shards/' - summarize only TAR shards under 'shards/';
-     - 'ais bucket shard-index summary ais://nnn/shards/'          - same as above;
-     - 'ais bucket shard-index summary ais://nnn --refresh 1s'     - print periodic progress while summarizing.
+$ ais bucket shard-index build ais://nnn --prefix shards/ --wait
+$ ais bucket shard-index summary ais://nnn --prefix shards/
 ```
 
-- New shards are indexed on first read or via the indexing xaction.
-- Indexes live in the system bucket called `ais://.sys-shardidx`.
-- Indexes are removed automatically when the underlying shard object(s) are deleted or updated.
+Indexes live in the system bucket called `ais://.sys-shardidx`, are consulted transparently by GET and GetBatch, and are validated against the source TAR object's size and checksum.
 
 For batches that fan out across many archived files in different shards, this changes per-file extraction from O(archive size) to O(1) + read.
 
@@ -939,7 +914,7 @@ GetBatch works on **in-cluster data**: sharded (with shards of any kind — TAR,
 
 Per-entry **range reads** are supported for objects (chunked or monolithic) as well as for archived files: set `start`/`length` to retrieve a byte range instead of the whole object (see [Example 5](#example-5-range-reads-partial-object-retrieval)).
 
-For TAR shards, GetBatch reads files via the [shard index](https://docs.nvidia.com/aistore/relnotes/v4.5#shard-index) fast path when an index has been built for the shard — extracting an `archpath` entry becomes direct random access into the archive instead of a linear scan. The index is persisted in the `ais://.sys-shardidx` system bucket and is consulted transparently by both `GET` and GetBatch.
+For TAR objects with shard indexes, GetBatch reads files via the [shard index](/docs/shard_index.md) fast path — extracting an `archpath` entry becomes direct random access into the archive instead of a linear scan. The index is persisted in the `ais://.sys-shardidx` system bucket and is consulted transparently by both `GET` and GetBatch.
 
 ### Known limitations
 
@@ -956,7 +931,7 @@ Any event that mutates the cluster map (target restart, pod reschedule, scale-up
 Clients should retry GetBatch after a brief backoff once the rebalance completes. For long-running training pipelines, treat GetBatch failures during/after a membership event as expected and rely on the client-side retry path.
 
 **Shard extraction is sequential within each archive.**
-When multiple files are requested from the same shard, they are extracted in sequence rather than in parallel. This is a performance limitation, not a correctness issue — and is largely mitigated when the [shard index](https://docs.nvidia.com/aistore/relnotes/v4.5#shard-index) is enabled, which converts each per-file lookup from a linear scan into direct random access.
+When multiple files are requested from the same shard, they are extracted in sequence rather than in parallel. This is a performance limitation, not a correctness issue — and is largely mitigated when the [shard index](/docs/shard_index.md) is enabled, which converts each per-file lookup from a linear scan into direct random access.
 
 ### Roadmap
 
