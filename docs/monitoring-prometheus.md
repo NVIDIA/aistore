@@ -205,8 +205,13 @@ ais_target_disk_util{disk="nvme0n1"}
 
 ```promql
 sum(rate(ais_target_err_get_count[5m]))
-/ sum(rate(ais_target_get_count[5m])) * 100
+/ (
+    sum(rate(ais_target_get_count[5m]))
+    + sum(rate(ais_target_err_get_count[5m]))
+  ) * 100
 ```
+
+`ais_target_get_count` tracks successful GETs, so include `ais_target_err_get_count` in the denominator when calculating an error percentage. Object-not-found GETs are counted in `ais_target_err_get_count` only when the `Count-Object-NotFound-Stats` feature flag is enabled.
 
 ### Total cluster capacity usage
 
@@ -365,4 +370,3 @@ Separately, Prometheus references:
 * [Prometheus Exporters](https://prometheus.io/docs/instrumenting/writing_exporters/)
 * [Prometheus Data Model](https://prometheus.io/docs/concepts/data_model/)
 * [Prometheus Metric Types](https://prometheus.io/docs/concepts/metric_types/)
-

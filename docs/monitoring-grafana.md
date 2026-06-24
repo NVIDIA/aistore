@@ -278,8 +278,9 @@ Set up alerts based on the AIStore node state flags (refer to [Node Alerts in AI
    - Description: "GET operation latency exceeds 200ms"
 
 2. Error rate alert:
-   - Condition: `sum(rate(ais_target_err_get_count[5m])) / sum(rate(ais_target_get_count[5m])) * 100 > 1`
+   - Condition: `sum(rate(ais_target_err_get_count[5m])) / (sum(rate(ais_target_get_count[5m])) + sum(rate(ais_target_err_get_count[5m]))) * 100 > 1`
    - Description: "GET error rate exceeds 1%"
+   - Note: `ais_target_get_count` tracks successful GETs. Object-not-found GETs are counted in `ais_target_err_get_count` only when the `Count-Object-NotFound-Stats` feature flag is enabled.
 
 ### Resource Alerts
 
