@@ -409,6 +409,45 @@ class TestBucketOps(ParallelTestBase):
             obj_names.remove(obj.name)
         self.assertEqual(0, len(obj_names))
 
+    @unittest.skipIf(REMOTE_SET, "start_after is supported for AIS buckets only")
+    def test_list_objects_start_after(self):
+        self._create_objects()
+
+        # Listings come back in lexicographic order; capture the full set first.
+        all_names = [
+            entry.name for entry in self.bucket.list_all_objects(prefix=self.obj_prefix)
+        ]
+        self.assertGreater(len(all_names), 1)
+        self.assertEqual(all_names, sorted(all_names))
+
+        marker_idx = len(all_names) // 2
+        marker = all_names[marker_idx]
+        # `start_after` is exclusive: everything strictly after the marker.
+        expected = all_names[marker_idx + 1 :]
+
+        # Single-page listing honors start_after.
+        page = self.bucket.list_objects(prefix=self.obj_prefix, start_after=marker)
+        self.assertEqual(expected, [entry.name for entry in page.entries])
+
+        # Aggregated listing honors start_after.
+        after_names = [
+            entry.name
+            for entry in self.bucket.list_all_objects(
+                prefix=self.obj_prefix, start_after=marker
+            )
+        ]
+        self.assertEqual(expected, after_names)
+
+        # Paginated iterator with a small page size exercises the "first page only"
+        # handling of start_after (continuation pages resume via the token).
+        iter_names = [
+            obj.name
+            for obj in self.bucket.list_objects_iter(
+                prefix=self.obj_prefix, page_size=3, start_after=marker
+            )
+        ]
+        self.assertEqual(expected, iter_names)
+
     def test_list_object_flags_combined(self):
         self._create_objects()
         # Test a single flag

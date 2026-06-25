@@ -503,6 +503,92 @@ class TestBucket(unittest.TestCase):
         for expected in expected_calls:
             self.assertIn(expected, self.mock_client.request_deserialize.call_args_list)
 
+    def test_list_objects_start_after(self):
+        start_after = "obj-100"
+        expected_act_value = {
+            "prefix": "",
+            "pagesize": 0,
+            "uuid": "",
+            "props": "",
+            "continuation_token": "",
+            "flags": "0",
+            "target": "",
+            "start_after": start_after,
+        }
+        self._list_objects_exec_assert(expected_act_value, start_after=start_after)
+
+    def test_list_all_objects_start_after_first_page_only(self):
+        # `start_after` seeds the first page; continuation pages resume via the token.
+        list_1_id = "123"
+        list_1_cont = "cont"
+        start_after = "marker-obj"
+        expected_act_value_1 = {
+            "prefix": "",
+            "pagesize": 0,
+            "uuid": "",
+            "props": "",
+            "continuation_token": "",
+            "flags": "0",
+            "target": "",
+            "start_after": start_after,
+        }
+        expected_act_value_2 = {
+            "prefix": "",
+            "pagesize": 0,
+            "uuid": list_1_id,
+            "props": "",
+            "continuation_token": list_1_cont,
+            "flags": "0",
+            "target": "",
+            # `start_after` intentionally absent on the continuation page
+        }
+        self._list_all_objects_exec_assert(
+            list_1_id,
+            list_1_cont,
+            expected_act_value_1,
+            expected_act_value_2,
+            start_after=start_after,
+        )
+
+    def test_list_objects_iter_start_after_first_page_only(self):
+        start_after = "marker-obj"
+        list1 = BucketList(
+            UUID="uid",
+            ContinuationToken="tok",
+            Flags=0,
+            Entries=[BucketEntry(n="obj1"), BucketEntry(n="obj2")],
+        )
+        list2 = BucketList(
+            UUID="uid", ContinuationToken="", Flags=0, Entries=[BucketEntry(n="obj3")]
+        )
+        self.mock_client.request_deserialize.side_effect = [list1, list2]
+
+        it = self.ais_bck.list_objects_iter(page_size=2, start_after=start_after)
+        names = [entry.name for entry in it]
+        self.assertEqual(names, ["obj1", "obj2", "obj3"])
+
+        sent_values = [
+            c.kwargs["json"]["value"]
+            for c in self.mock_client.request_deserialize.call_args_list
+        ]
+        self.assertEqual(sent_values[0].get("start_after"), start_after)
+        self.assertNotIn("start_after", sent_values[1])
+
+    def test_start_after_remote_raises_not_implemented(self):
+        # `start_after` is AIS-only; remote buckets must fail fast on the client.
+        with self.assertRaises(NotImplementedError):
+            self.amz_bck.list_objects(start_after="obj-1")
+        with self.assertRaises(NotImplementedError):
+            self.amz_bck.list_objects_iter(start_after="obj-1")
+        with self.assertRaises(NotImplementedError):
+            self.amz_bck.list_all_objects(start_after="obj-1")
+        with self.assertRaises(NotImplementedError):
+            # guard fires eagerly at call time, before any iteration
+            self.amz_bck.list_all_objects_iter(start_after="obj-1")
+        # fail fast: no request reaches the cluster
+        self.mock_client.request.assert_not_called()
+        self.mock_client.request_deserialize.assert_not_called()
+
     def test_transform(self):
         prepend_val = PREFIX_NAME
         prefix_filter = "required-prefix-"

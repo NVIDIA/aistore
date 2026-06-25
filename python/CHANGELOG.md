@@ -8,6 +8,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- `start_after` parameter on `Bucket.list_objects()`, `list_objects_iter()`,
+  `list_all_objects()`, and `list_all_objects_iter()` (and `ListObjectsMsg`),
+  mirroring Go's `LsoMsg.StartAfter`: lists objects whose names are strictly
+  greater than the given marker — useful for sharding flat-bucket enumeration
+  across parallel listers. Applied to the first page only (subsequent pages
+  resume via the continuation token). AIS buckets only; raises
+  `NotImplementedError` for cloud buckets.
 - Get-Batch byte-range reads: `Batch.add()` now honors the `start`/`length`
   parameters to retrieve a byte range of an object (chunked or monolithic) or of
   a file extracted from an archive (when `archpath` is set).

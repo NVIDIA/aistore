@@ -160,7 +160,7 @@ class Bucket(AISSource):
             yield self.object(entry.name).get_url(etl=etl)
 
     def list_all_objects_iter(
-        self, prefix: str = "", props: str = "name,size"
+        self, prefix: str = "", props: str = "name,size", start_after: str = ""
     ) -> Iterable[Object]:
         """
         Implementation of the abstract method from AISSource that provides an iterator
@@ -170,12 +170,19 @@ class Bucket(AISSource):
             prefix (str, optional): Limit objects selected by a given string prefix
             props (str, optional): Comma-separated list of object properties to return. Default value is "name,size".
                 Properties: "name", "size", "atime", "version", "checksum", "target_url", "copies".
+            start_after (str, optional): List objects whose names are strictly greater than this
+                value (exclusive marker). Supported for AIS buckets only. See `list_objects`.
 
-        Yields:
-            Object: Objects matching the prefix with the specified properties.
+        Returns:
+            Iterable[Object]: Objects matching the prefix with the specified properties.
         """
-        for entry in self.list_objects_iter(prefix=prefix, props=props):
-            yield self.object(entry.name, entry.generate_object_props())
+        self._verify_start_after(start_after)
+        return (
+            self.object(entry.name, entry.generate_object_props())
+            for entry in self.list_objects_iter(
+                prefix=prefix, props=props, start_after=start_after
+            )
+        )
 
     def create(self, exist_ok=False):
         """
@@ -550,6 +557,7 @@ class Bucket(AISSource):
         flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
         inventory_name: str = "",
+        start_after: str = "",
     ) -> BucketList:
         """
         Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if
@@ -575,6 +583,10 @@ class Bucket(AISSource):
                 backend. Requires a previously created inventory (see `create_inventory`).
                 Alternatively, to list without specifying a name pass
                 `flags=[ListObjectFlag.NBI]` (valid only when exactly one inventory exists).
+            start_after (str, optional): List objects whose names are strictly greater than this
+                value (exclusive marker). Useful for sharding a flat bucket across parallel
+                listers. Applied to the first page only; subsequent pages continue via the
+                server-issued continuation token. Supported for AIS buckets only.
 
         Returns:
             BucketList: the page of objects in the bucket and the continuation token to get the next page
@@ -582,12 +594,14 @@ class Bucket(AISSource):
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
+            NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
+        self._verify_start_after(start_after)
         flags = list(flags) if flags else []
         headers = {HEADER_ACCEPT: MSGPACK_CONTENT_TYPE}
 
@@ -603,6 +617,7 @@ class Bucket(AISSource):
             continuation_token=continuation_token,
             flags=flags,
             target=target,
+            start_after=start_after,
         ).as_dict()
         action = ActionMsg(action=ACT_LIST, value=value).model_dump()
 
@@ -627,6 +642,7 @@ class Bucket(AISSource):
         flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
         inventory_name: str = "",
+        start_after: str = "",
     ) -> ObjectIterator:
         """
         Returns an iterator for all objects in bucket
@@ -646,18 +662,23 @@ class Bucket(AISSource):
             target (str, optional): Only list objects on this specific target node
             inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
                 See `list_objects` for details.
+            start_after (str, optional): List objects whose names are strictly greater than this
+                value (exclusive marker). Applied to the first page only. Supported for AIS
+                buckets only. See `list_objects` for details.
 
         Returns:
             ObjectIterator: object iterator
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
+            NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
+        self._verify_start_after(start_after)
 
         def fetch_objects(uuid, token):
             return self.list_objects(
@@ -669,6 +690,8 @@ class Bucket(AISSource):
                 flags=flags,
                 target=target,
                 inventory_name=inventory_name,
+                # `start_after` seeds the first page only; later pages resume via the token.
+                start_after=start_after if token == "" else "",
             )
 
         return ObjectIterator(fetch_objects)
@@ -681,6 +704,7 @@ class Bucket(AISSource):
         flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
         inventory_name: str = "",
+        start_after: str = "",
     ) -> List[BucketEntry]:
         """
         Returns a list of all objects in bucket
@@ -700,18 +724,23 @@ class Bucket(AISSource):
             target (str, optional): Only list objects on this specific target node
             inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
                 See `list_objects` for details.
+            start_after (str, optional): List objects whose names are strictly greater than this
+                value (exclusive marker). Applied to the first page only. Supported for AIS
+                buckets only. See `list_objects` for details.
 
         Returns:
             List[BucketEntry]: list of objects in bucket
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
+            NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
+        self._verify_start_after(start_after)
         uuid = ""
         continuation_token = ""
         obj_list = None
@@ -726,6 +755,8 @@ class Bucket(AISSource):
                 flags=flags,
                 target=target,
                 inventory_name=inventory_name,
+                # `start_after` seeds the first page only; later pages resume via the token.
+                start_after=start_after if continuation_token == "" else "",
             )
             if obj_list:
                 obj_list = obj_list + resp.entries
@@ -1082,6 +1113,21 @@ class Bucket(AISSource):
         """
         if self.provider.is_remote():
             raise InvalidBckProvider(self.provider)
+
+    def _verify_start_after(self, start_after: str):
+        """
+        `start_after` is supported for AIS buckets only. This client-side check
+        rejects cloud buckets (provider != AIS); remote-AIS buckets are not
+        caught here and fall through to the server-side rejection (ais/plstcx.go).
+
+        Raises:
+            NotImplementedError: If `start_after` is set on a cloud bucket
+        """
+        if start_after and self.provider.is_remote():
+            raise NotImplementedError(
+                f"'start_after' is not supported for remote bucket provider "
+                f"'{self.provider.value}'"
+            )
 
     def verify_cloud_bucket(self):
         """

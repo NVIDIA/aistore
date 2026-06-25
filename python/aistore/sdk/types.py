@@ -616,9 +616,10 @@ class ListObjectsMsg(BaseModel):
     continuation_token: str
     flags: List[ListObjectFlag]
     target: str
+    start_after: str = ""
 
     def as_dict(self):
-        return {
+        dict_rep = {
             "prefix": self.prefix,
             "pagesize": self.page_size,
             "uuid": self.uuid,
@@ -627,6 +628,10 @@ class ListObjectsMsg(BaseModel):
             "flags": str(ListObjectFlag.join_flags(self.flags)),
             "target": self.target,
         }
+        # Matches `json:"start_after,omitempty"` on the daemon side (api/apc/lsmsg.go).
+        if self.start_after:
+            dict_rep["start_after"] = self.start_after
+        return dict_rep
 
 
 class CreateNBIMsg(BaseModel):
