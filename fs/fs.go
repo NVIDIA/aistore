@@ -644,21 +644,6 @@ func New(fshc HC, num int) (blockDevs ios.BlockDevs) {
 	return blockDevs
 }
 
-// used only in tests (NOTE: mfs.hc remains nil)
-func TestNew(iostater ios.IOS) {
-	const num = 10
-	mfs = &MFS{fsIDs: make(map[cos.FsID]string, num)}
-	if iostater == nil {
-		mfs.ios, _ = ios.New(num)
-	} else {
-		mfs.ios = iostater
-	}
-	PutMPI(make(MPI, num), make(MPI, num))
-
-	// ditto
-	_once.Do(initCSM)
-}
-
 //
 // disk utilizations (helpers)
 //
@@ -726,19 +711,6 @@ func cloneMPI() (availableCopy, disabledCopy MPI) {
 	availableCopy = _cloneOne(avail)
 	disabledCopy = _cloneOne(disabled)
 	return availableCopy, disabledCopy
-}
-
-// used only in tests (compare with AddMpath below)
-func Add(mpath, tid string) (mi *Mountpath, err error) {
-	mi, err = NewMountpath(mpath, cos.TestMpathLabel)
-	if err != nil {
-		return nil, err
-	}
-	config := cmn.GCO.Get()
-	mfs.mu.Lock()
-	err = mi._cloneAddEnabled(tid, config)
-	mfs.mu.Unlock()
-	return mi, err
 }
 
 // (via attach-mpath)

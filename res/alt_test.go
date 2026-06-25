@@ -250,7 +250,7 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 	_ = mock.NewTarget(bowner)
 
 	tmpDir := t.TempDir()
-	targetID := "t1" // stable test id; fs.Add wants one
+	targetID := "t1" // stable test id; fs.AddTestMpath wants one
 
 	// prepare mountpaths
 	base := make([]string, 0, numBaseMpaths+numExtraMpaths)
@@ -290,7 +290,7 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 	tlog.Logln("1. Add an extra mountpath (volume B)")
 	extraMpath := base[numBaseMpaths]
 	tassert.CheckFatal(t, cos.CreateDir(extraMpath))
-	_, err := fs.Add(extraMpath, targetID)
+	_, err := fs.AddTestMpath(extraMpath, targetID)
 	tassert.CheckFatal(t, err)
 
 	// ensure we have enough names that changed location on volume B

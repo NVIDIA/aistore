@@ -64,9 +64,9 @@ var _ = Describe("LOM", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	for _, mpath := range mpaths {
-		_, _ = fs.Add(mpath, "daeID")
+		_, _ = fs.AddTestMpath(mpath, "daeID")
 	}
 
 	bmd := mock.NewBaseBownerMock(
@@ -103,7 +103,7 @@ var _ = Describe("LOM", func() {
 		cmn.GCO.CommitUpdate(config)
 
 		for _, mpath := range mpaths {
-			_, _ = fs.Add(mpath, "daeID")
+			_, _ = fs.AddTestMpath(mpath, "daeID")
 		}
 		_ = mock.NewTarget(bmd)
 	})

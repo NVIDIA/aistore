@@ -1,7 +1,7 @@
 //nolint:usetesting // need mkdir(dir = bdir)
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -166,14 +166,14 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	)
 
 	mios := mock.NewIOS()
-	fs.TestNew(mios)
+	fs.NewTestMFS(mios)
 
 	dir := t.TempDir()
 
 	for range desc.MountpathsCnt {
 		mpath, err := os.MkdirTemp(dir, "")
 		tassert.CheckFatal(t, err)
-		mp, err := fs.Add(mpath, "daeID")
+		mp, err := fs.AddTestMpath(mpath, "daeID")
 		tassert.CheckFatal(t, err)
 		mpathCnts[mp.Path] = 0
 	}
@@ -256,7 +256,7 @@ func AddMpath(t *testing.T, path string) {
 	t.Cleanup(func() {
 		fs.RemoveAll(path)
 	})
-	_, err = fs.Add(path, "daeID")
+	_, err = fs.AddTestMpath(path, "daeID")
 	tassert.Errorf(t, err == nil, "Failed adding mountpath %q, err: %v", path, err)
 }
 

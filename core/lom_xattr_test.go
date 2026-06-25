@@ -61,8 +61,8 @@ var _ = Describe("LOM Xattributes", func() {
 		_ = cos.CreateDir(xattrMpath)
 		_ = cos.CreateDir(copyMpath)
 
-		_, _ = fs.Add(xattrMpath, "daeID")
-		_, _ = fs.Add(copyMpath, "daeID")
+		_, _ = fs.AddTestMpath(xattrMpath, "daeID")
+		_, _ = fs.AddTestMpath(copyMpath, "daeID")
 
 		available := fs.GetAvail()
 		copyMpathInfo = available[copyMpath]

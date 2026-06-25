@@ -23,7 +23,7 @@ import (
 
 var _ = Describe("RequestSpec", func() {
 	BeforeEach(func() {
-		fs.TestNew(nil)
+		fs.NewTestMFS(nil)
 
 		config := cmn.GCO.BeginUpdate()
 		config.Dsort.DefaultMaxMemUsage = "90%"

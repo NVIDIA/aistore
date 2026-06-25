@@ -1,6 +1,6 @@
 // Package core_test provides tests for cluster package
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package core_test
 
@@ -66,9 +66,9 @@ var _ = Describe("MPU-UfestRead", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	for _, mpath := range mpaths {
-		_, _ = fs.Add(mpath, "daeID")
+		_, _ = fs.AddTestMpath(mpath, "daeID")
 	}
 
 	bmd := mock.NewBaseBownerMock(
@@ -105,7 +105,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		cmn.GCO.CommitUpdate(config)
 
 		for _, mpath := range mpaths {
-			_, _ = fs.Add(mpath, "daeID")
+			_, _ = fs.AddTestMpath(mpath, "daeID")
 		}
 		_ = mock.NewTarget(bmd)
 	})

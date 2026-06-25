@@ -179,7 +179,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		tmpDir = GinkgoT().TempDir()
 		mpath = filepath.Join(tmpDir, "mpath")
 		cos.CreateDir(mpath)
-		fs.Add(mpath, "daeID")
+		fs.AddTestMpath(mpath, "daeID")
 
 		sysBck := (*cmn.Bck)(meta.SysBckShardIdx())
 		for _, mi := range fs.GetAvail() {

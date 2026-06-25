@@ -65,8 +65,8 @@ var _ = Describe("CommunicatorTest", func() {
 		mpath := filepath.Join(tmpDir, "mpath")
 		err = cos.CreateDir(mpath)
 		Expect(err).NotTo(HaveOccurred())
-		fs.TestNew(nil)
-		_, err = fs.Add(mpath, "daeID")
+		fs.NewTestMFS(nil)
+		_, err = fs.AddTestMpath(mpath, "daeID")
 		Expect(err).NotTo(HaveOccurred())
 
 		_ = mock.NewTarget(bmdMock)

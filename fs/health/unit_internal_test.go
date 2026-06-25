@@ -1,6 +1,6 @@
 // Package health provides a basic mountpath health monitor.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package health
 
@@ -206,14 +206,14 @@ func initMountpaths(t *testing.T) {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	for i := 1; i <= 4; i++ {
 		mpath := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
 
 		err := cos.CreateDir(mpath)
 		tassert.CheckFatal(t, err)
 
-		_, err = fs.Add(mpath, "id")
+		_, err = fs.AddTestMpath(mpath, "id")
 		tassert.CheckFatal(t, err)
 	}
 

@@ -32,12 +32,12 @@ import (
 func initFS(t *testing.T, mpaths []string, targetID string) {
 	t.Helper()
 
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	for _, mpath := range mpaths {
 		err := cos.CreateDir(mpath)
 		tassert.CheckFatal(t, err)
 
-		_, err = fs.Add(mpath, targetID) // test helper from fs.go
+		_, err = fs.AddTestMpath(mpath, targetID)
 		tassert.CheckFatal(t, err)
 	}
 }

@@ -29,12 +29,12 @@ func newShardSummBucket(t *testing.T) *meta.Bck {
 	t.Helper()
 	xreg.Init()
 	xs.Tinit(nil)
-	fs.TestNew(mock.NewIOS())
+	fs.NewTestMFS(mock.NewIOS())
 
 	tmpDir := t.TempDir()
 	mpath := filepath.Join(tmpDir, "mpath")
 	tassert.CheckFatal(t, cos.CreateDir(mpath))
-	_, err := fs.Add(mpath, "daeID")
+	_, err := fs.AddTestMpath(mpath, "daeID")
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { fs.Remove(mpath) })
 

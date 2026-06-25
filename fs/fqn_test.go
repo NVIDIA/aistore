@@ -256,14 +256,14 @@ func TestParseFQN(t *testing.T) {
 		tt := tests[i]
 		t.Run(tt.testName, func(t *testing.T) {
 			mios := mock.NewIOS()
-			fs.TestNew(mios)
+			fs.NewTestMFS(mios)
 
 			for _, mpath := range tt.mpaths {
 				if err := cos.Stat(mpath); cos.IsNotExist(err) {
 					cos.CreateDir(mpath)
 					defer os.RemoveAll(mpath)
 				}
-				_, err := fs.Add(mpath, "daeID")
+				_, err := fs.AddTestMpath(mpath, "daeID")
 				if err != nil && !tt.wantAddErr {
 					tassert.CheckFatal(t, err)
 				}
@@ -351,13 +351,13 @@ func TestMakeAndParseFQN(t *testing.T) {
 		tt := tests[i]
 		t.Run(strings.Join([]string{tt.mpath, tt.bck.String(), tt.contentType, tt.objName}, "|"), func(t *testing.T) {
 			mios := mock.NewIOS()
-			fs.TestNew(mios)
+			fs.NewTestMFS(mios)
 
 			if err := cos.Stat(tt.mpath); cos.IsNotExist(err) {
 				cos.CreateDir(tt.mpath)
 				defer os.RemoveAll(tt.mpath)
 			}
-			_, err := fs.Add(tt.mpath, "daeID")
+			_, err := fs.AddTestMpath(tt.mpath, "daeID")
 			tassert.CheckFatal(t, err)
 
 			mpaths := fs.GetAvail()
@@ -395,8 +395,8 @@ func TestWorkfileFntlBorderline(t *testing.T) {
 	tmpMpath := t.TempDir()
 
 	mios := mock.NewIOS()
-	fs.TestNew(mios)
-	_, err := fs.Add(tmpMpath, "daeID")
+	fs.NewTestMFS(mios)
+	_, err := fs.AddTestMpath(tmpMpath, "daeID")
 	tassert.CheckFatal(t, err)
 
 	mpaths := fs.GetAvail()
@@ -427,8 +427,8 @@ func TestObjCTDeepPath(t *testing.T) {
 	tmpMpath := t.TempDir()
 
 	mios := mock.NewIOS()
-	fs.TestNew(mios)
-	_, err := fs.Add(tmpMpath, "daeID")
+	fs.NewTestMFS(mios)
+	_, err := fs.AddTestMpath(tmpMpath, "daeID")
 	tassert.CheckFatal(t, err)
 
 	mpaths := fs.GetAvail()
@@ -480,10 +480,10 @@ func BenchmarkParseFQN(b *testing.B) {
 		bck   = cmn.Bck{Name: "bucket", Provider: apc.AIS, Ns: cmn.NsGlobal}
 	)
 
-	fs.TestNew(mios)
+	fs.NewTestMFS(mios)
 	cos.CreateDir(mpath)
 	defer os.RemoveAll(mpath)
-	fs.Add(mpath, "daeID")
+	fs.AddTestMpath(mpath, "daeID")
 
 	mpaths := fs.GetAvail()
 	fqn := mpaths[mpath].MakePathFQN(&bck, fs.ObjCT, "super/long/name")

@@ -47,7 +47,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 	BeforeEach(func() {
 		_ = cos.CreateDir(oneMpath)
-		_, _ = fs.Add(oneMpath, "daeID")
+		_, _ = fs.AddTestMpath(oneMpath, "daeID")
 		_ = mock.NewTarget(bmdMock)
 	})
 

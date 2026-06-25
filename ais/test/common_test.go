@@ -985,7 +985,7 @@ func initMountpaths(t *testing.T, proxyURL string, disabledOk ...bool) {
 		return
 	}
 
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	_onceInit.Do(initOnce)
 
 	dok := len(disabledOk) > 0 && disabledOk[0]
@@ -999,7 +999,7 @@ func initMountpaths(t *testing.T, proxyURL string, disabledOk ...bool) {
 			ensureNoDisabledMountpaths(t, target, mpathList)
 		}
 		for _, mpath := range mpathList.Available {
-			fs.Add(mpath, target.ID())
+			fs.AddTestMpath(mpath, target.ID())
 		}
 	}
 }

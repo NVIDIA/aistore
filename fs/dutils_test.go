@@ -1,6 +1,6 @@
 // Package fs_test provides tests for fs package
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package fs_test
 
@@ -25,7 +25,7 @@ func path2Mpath(path string) (mi *fs.Mountpath, err error) {
 }
 
 func TestMountpathSearchValid(t *testing.T) {
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 
 	mpath := "/tmp/abc"
 	createDirs(mpath)
@@ -38,7 +38,7 @@ func TestMountpathSearchValid(t *testing.T) {
 }
 
 func TestMountpathSearchInvalid(t *testing.T) {
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 
 	mpath := "/tmp/abc"
 	createDirs(mpath)
@@ -51,7 +51,7 @@ func TestMountpathSearchInvalid(t *testing.T) {
 }
 
 func TestMountpathSearchWhenNoAvailable(t *testing.T) {
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	oldMPs := setAvailableMountPaths(t, "")
 	mi, err := path2Mpath("xabc")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "xabc", err)
@@ -63,7 +63,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 	config.TestFSP.Count = 2
 	cmn.GCO.CommitUpdate(config)
 
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	dirs := []string{"/tmp/x/z/abc", "/tmp/x/zabc", "/tmp/x/y/abc", "/tmp/x/yabc"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -84,7 +84,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 }
 
 func TestSimilarCases(t *testing.T) {
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	dirs := []string{"/tmp/abc", "/tmp/abx"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -101,14 +101,14 @@ func TestSimilarCases(t *testing.T) {
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	mpath := "/tmp/abc"
 	createDirs(mpath)
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(t)
 	// root is an invalid mountpath
-	_, err := fs.Add("/", "daeID")
+	_, err := fs.AddTestMpath("/", "daeID")
 	tassert.Errorf(t, err != nil, "Expected failure to add \"/\" mountpath")
 	setAvailableMountPaths(t, oldMPs...)
 }
@@ -130,7 +130,7 @@ func setAvailableMountPaths(t *testing.T, paths ...string) []string {
 		if path == "" {
 			continue
 		}
-		_, err := fs.Add(path, "daeID")
+		_, err := fs.AddTestMpath(path, "daeID")
 		if err != nil {
 			tassert.Errorf(t, err == nil, "%s (%v)", path, err)
 		}

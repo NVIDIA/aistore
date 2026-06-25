@@ -1,6 +1,6 @@
 // Package fs_test provides tests for fs package
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package fs_test
 
@@ -21,7 +21,7 @@ import (
 func TestMountpathAddNonExisting(t *testing.T) {
 	initFS()
 
-	_, err := fs.Add("/nonexistingpath", "")
+	_, err := fs.AddTestMpath("/nonexistingpath", "")
 	tassert.Errorf(t, err != nil, "adding non-existing mountpath succeeded")
 
 	tools.AssertMountpathCount(t, 0, 0)
@@ -54,7 +54,7 @@ func TestMountpathAddValid(t *testing.T) {
 func TestMountpathAddIncorrect(t *testing.T) {
 	initFS()
 
-	_, err := fs.Add("tmp/not/absolute/path", "")
+	_, err := fs.AddTestMpath("tmp/not/absolute/path", "")
 	tassert.Errorf(t, err != nil, "expected adding incorrect mountpath to fail")
 
 	tools.AssertMountpathCount(t, 0, 0)
@@ -67,7 +67,7 @@ func TestMountpathAddAlreadyAdded(t *testing.T) {
 	tools.AddMpath(t, mpath)
 	tools.AssertMountpathCount(t, 1, 0)
 
-	_, err := fs.Add(mpath, "daeID")
+	_, err := fs.AddTestMpath(mpath, "daeID")
 	tassert.Errorf(t, err != nil, "adding already added mountpath succeeded")
 
 	tools.AssertMountpathCount(t, 1, 0)
@@ -153,7 +153,7 @@ func TestMountpathDisableAlreadyDisabled(t *testing.T) {
 }
 
 func TestMountpathEnableNonExisting(t *testing.T) {
-	fs.TestNew(nil)
+	fs.NewTestMFS(nil)
 	_, err := fs.Enable("/tmp")
 	tassert.Errorf(t, err != nil, "enabling nonexisting mountpath should end with error")
 
@@ -213,12 +213,12 @@ func TestMountpathEnableAlreadyEnabled(t *testing.T) {
 }
 
 func TestMountpathsAddMultipleWithSameFSID(t *testing.T) {
-	fs.TestNew(mock.NewIOS())
+	fs.NewTestMFS(mock.NewIOS())
 
 	mpath := "/tmp/abc"
 	tools.AddMpath(t, mpath)
 
-	_, err := fs.Add("/", "")
+	_, err := fs.AddTestMpath("/", "")
 	tassert.Errorf(t, err != nil, "expected adding path with same FSID to be unsuccessful")
 
 	tools.AssertMountpathCount(t, 1, 0)
@@ -306,7 +306,7 @@ func TestMoveMarkers(t *testing.T) {
 }
 
 func initFS() {
-	fs.TestNew(mock.NewIOS())
+	fs.NewTestMFS(mock.NewIOS())
 }
 
 func createMountpath(t *testing.T) *fs.Mountpath {

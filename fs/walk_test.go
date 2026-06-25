@@ -1,6 +1,6 @@
 // Package fs_test provides tests for fs package
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package fs_test
 
@@ -36,7 +36,7 @@ func TestWalkBck(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fs.TestNew(mock.NewIOS())
+			fs.NewTestMFS(mock.NewIOS())
 
 			mpaths := make([]string, 0, test.mpathCnt)
 			defer func() {
@@ -51,7 +51,7 @@ func TestWalkBck(t *testing.T) {
 				err := cos.CreateDir(mpath)
 				tassert.CheckFatal(t, err)
 
-				_, err = fs.Add(mpath, "daeID")
+				_, err = fs.AddTestMpath(mpath, "daeID")
 				tassert.CheckFatal(t, err)
 
 				mpaths = append(mpaths, mpath)
@@ -121,7 +121,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		mpaths        = make(map[string]*mpathMeta)
 	)
 
-	fs.TestNew(mock.NewIOS())
+	fs.NewTestMFS(mock.NewIOS())
 
 	defer func() {
 		for mpath := range mpaths {
@@ -135,7 +135,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		err := cos.CreateDir(mpath)
 		tassert.CheckFatal(t, err)
 
-		_, err = fs.Add(mpath, "daeID")
+		_, err = fs.AddTestMpath(mpath, "daeID")
 		tassert.CheckFatal(t, err)
 		mpaths[mpath] = &mpathMeta{total: 0, done: false}
 	}

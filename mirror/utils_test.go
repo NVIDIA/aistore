@@ -42,9 +42,9 @@ var _ = Describe("Mirror", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.TestNew(nil)
-	_, _ = fs.Add(mpath, "daeID")
-	_, _ = fs.Add(mpath2, "daeID")
+	fs.NewTestMFS(nil)
+	_, _ = fs.AddTestMpath(mpath, "daeID")
+	_, _ = fs.AddTestMpath(mpath2, "daeID")
 
 	var (
 		props = &cmn.Bprops{

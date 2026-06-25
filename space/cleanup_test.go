@@ -64,9 +64,9 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		}
 
 		// init fs package
-		fs.TestNew(mock.NewIOS())
+		fs.NewTestMFS(mock.NewIOS())
 		for _, mpath := range mpaths {
-			_, err := fs.Add(mpath, "daeID")
+			_, err := fs.AddTestMpath(mpath, "daeID")
 			Expect(err).NotTo(HaveOccurred())
 		}
 
