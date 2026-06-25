@@ -72,14 +72,6 @@ func _warnNodeVer(nsi *meta.Snode, nverStr string, nversParsed cos.Version) {
 	}
 }
 
-//
-// 5.0 boundary enforcement - both ways
-//
-
-const (
-	uptip = "(tip: direct upgrade from 4.x to 5.x is not supported; upgrade the cluster to 5.0 first)"
-)
-
 // node 5.x (self) => primary 4.x
 func checkPrimVer(sname string, hdr http.Header) error {
 	primVer := hdr.Get(apc.HdrNodeVersion)
@@ -100,15 +92,22 @@ func checkNodeVer(pname, sname, nversStr string) error {
 	return nil
 }
 
-// 5.0 is the mandatory bridge: permissive both ways so a 4.x<=>5.0 rolling
-// upgrade can complete. From 5.1 on, a pre-5.0 peer is refused in both
-// directions.
-func enforceVerBoundary(otherVerStr string) (reject bool) {
-	selfVer, ok := cos.ParseVersion(cmn.VersionAIStore)
-	debug.Assert(ok)
-	debug.Assert(selfVer.Major >= 5)
+// TODO: remove the rest of this file after 4.x clusters will have fully phased out.
 
-	if selfVer.Major == 5 && selfVer.Minor == 0 {
+// v5.0 is a *bridge* version: it is the one and only release through which a
+// 4.x cluster may cross into 5.x. A 5.0 node is deliberately permissive in both
+// directions (see enforceVerBoundary) so that a 4.x <=> 5.0 rolling upgrade can
+// complete; every release from 5.1 on refuses pre-5.0 peers outright. The 5.0
+// boundary is therefore also the natural floor for 5.x-only machinery that must
+// not run mid-bridge - e.g. Ed25519 intra-cluster sign/verify, where every admitted
+// post-5.0 node must publish a VerifyingKey before it can appear in Smap.
+
+const (
+	uptip = "(tip: direct upgrade from 4.x to 5.x is not supported; upgrade the cluster to 5.0 first)"
+)
+
+func enforceVerBoundary(otherVerStr string) (reject bool) {
+	if cmn.IsV50Bridge() {
 		return false
 	}
 	if otherVerStr == "" {

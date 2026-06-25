@@ -95,7 +95,7 @@ func gatherPrimaryInfo(t *testing.T, reg *prometheus.Registry) (val float64, nod
 
 func primarySmap(primaryID string) *meta.Smap {
 	primary := &meta.Snode{}
-	primary.Init(primaryID, apc.Proxy)
+	primary.Init(primaryID, apc.Proxy, nil /*verifying key*/)
 	return &meta.Smap{Primary: primary}
 }
 

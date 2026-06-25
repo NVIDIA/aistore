@@ -50,14 +50,14 @@ func (t *TestCase) generateScenario() (err error) {
 		tname := cos.CryptoRandS(lenNodeID)
 		target := &meta.Snode{}
 		scenario.Smap.Tmap[tname] = target
-		target.Init(tname, apc.Target)
+		target.Init(tname, apc.Target, nil /*verifying key*/)
 	}
 
 	// 2. Initialize proxy in smap
 	pname := cos.CryptoRandS(lenNodeID)
 	proxy := &meta.Snode{}
 	scenario.Smap.Pmap[pname] = proxy
-	proxy.Init(pname, apc.Proxy)
+	proxy.Init(pname, apc.Proxy, nil /*verifying key*/)
 
 	scenario.Smap.Primary = proxy
 

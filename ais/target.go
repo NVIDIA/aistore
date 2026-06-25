@@ -307,7 +307,10 @@ func (t *target) init(config *cmn.Config) {
 		// TODO: generated == true will not sit well with loading a local copy of Smap
 		// later on during startup sequence - and not finding _this_ target in it
 	}
-	t.si.Init(tid, apc.Target)
+
+	t.htrun.nodeSigningKey, _ = initTargetSigningKey(tid, config) // TODO -- FIXME: similar recovery as above
+
+	t.si.Init(tid, apc.Target, t.htrun.nodeSigningKey.VerifyingKey)
 
 	debug.Assert(t.si.IDDigest != 0)
 	cos.InitShortID(t.si.IDDigest)
@@ -316,9 +319,10 @@ func (t *target) init(config *cmn.Config) {
 
 	// new fs, check and add mountpaths
 	vini := volume.IniCtx{
-		UseLoopbacks:  daemon.cli.target.useLoopbackDevs,
-		IgnoreMissing: daemon.cli.target.startWithLostMountpath,
-		RandomTID:     generated,
+		NodeSigningKey: t.htrun.nodeSigningKey,
+		UseLoopbacks:   daemon.cli.target.useLoopbackDevs,
+		IgnoreMissing:  daemon.cli.target.startWithLostMountpath,
+		RandomTID:      generated,
 	}
 	newVol := volume.Init(t, config, vini)
 	if err := fs.SetVolSizeMedia(); err != nil {
@@ -403,6 +407,33 @@ func initTID(config *cmn.Config) (tid string, generated bool) {
 		generated = true
 	}
 	return tid, generated
+}
+
+func initTargetSigningKey(tid string, config *cmn.Config) (pair *cos.NodeSigningKey, generated bool) {
+	err := cos.ValidateDaemonID(tid)
+	cos.AssertNoErr(err) // FATAL
+
+	pair, err = fs.LoadNodeSigningKey(config.FSP.Paths, tid)
+	switch {
+	case err != nil:
+		cos.ExitLog(err) // FATAL
+	case pair != nil:
+		fp, err := cos.NodeSigningKeyFingerprint(pair.VerifyingKey)
+		debug.AssertNoErr(err)
+		nlog.Infof("loaded node signing key for %s, verifying-key fp %s", meta.Tname(tid), fp)
+	default:
+		pub, priv, err := cos.GenerateNodeSigningKey()
+		if err != nil {
+			cos.ExitLog(fmt.Errorf("failed to generate node signing key for %s: %w", meta.Tname(tid), err))
+		}
+		pair = cos.NewNodeSigningKey(priv, pub)
+
+		fp, err := cos.NodeSigningKeyFingerprint(pair.VerifyingKey)
+		debug.AssertNoErr(err)
+		nlog.Infof("generated node signing key for %s, verifying-key fp %s", meta.Tname(tid), fp)
+		generated = true
+	}
+	return pair, generated
 }
 
 func regDiskMetrics(node *meta.Snode, tstats *stats.Trunner, mpi fs.MPI) {

@@ -74,7 +74,13 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 			smapVer: smapVer,
 			nonce:   p.owner.csk.nonce.Add(1),
 		}
-		sign.compute(p.SID())
+
+		if USE_SIGNVERIFY {
+			sign.svSign(p.SID())
+		} else {
+			sign.compute(p.SID()) // TODO -- FIXME: remove
+		}
+
 		if !special {
 			// fast signing path
 			out = sign.buildURL(nodeURL, now)

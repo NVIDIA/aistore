@@ -26,6 +26,8 @@ const (
 	XattrLOM    = xattrPrefix + "lom"
 	xattrNBI    = xattrPrefix + "nbi"
 
+	xattrNodeSigningKey = xattrPrefix + "signing_key"
+
 	maxszName = xattrPrefix + "probe" // (internal probe)
 )
 

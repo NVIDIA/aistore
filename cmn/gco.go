@@ -76,7 +76,7 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 // - update the corresponding <section>.Validate() to normalize zero/unset fields to their canonical defaults;
 // - review/skip fields where zero has an intentional user-visible meaning such as "disabled" or "" (for "none", etc).
 //
-// Release notes for the intervening TBD releases (v4.8 ...) must carry a disclaimer.
+// Release notes for the intervening TBD releases (v5.0, v5.1) must carry a disclaimer.
 //
 // Phase-2: remove ensureDefaults(); introduce instead normalizeToNil() that'd `nil` any
 // previously pointerized config section containing only the canonical defaults.

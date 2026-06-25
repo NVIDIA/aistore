@@ -430,7 +430,7 @@ func (c *clupost) setVerHdr() {
 // (the later gets finalized and metasync-ed upon success)
 func (c *clupost) adminJoinHandshake() (int, error) {
 	p, nsi := c.p, c.nsi
-	includeCSK := c.config.Auth.SignVerifyEnabled()
+	includeCSK := c.config.Auth.SignVerifyEnabled() // TODO: deprecated (ref Ed25519)
 
 	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true, includeCSK: includeCSK})
 	if err != nil {
@@ -531,6 +531,9 @@ func (c *clupost) _joinKalive() (upd bool, _ error) {
 	)
 	if osi == nil {
 		if keepalive {
+			if err := checkNodeVer(p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
+				return false, err
+			}
 			nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
 		}
 	} else {
@@ -684,6 +687,7 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 	} else if config != nil {
 		pairs = append(pairs, revsPair{config, actMsgExt})
 		if config.Auth.SignVerifyEnabled() {
+			// TODO -- FIXME: deprecated (ref Ed25519)
 			k := p.owner.csk.load()
 			pairs = append(pairs, revsPair{k, actMsgExt})
 		}

@@ -34,5 +34,8 @@ type (
 		PubExtra   []NetInfo    `json:"pub_extra,omitempty" msg:"e,omitempty"`
 		Flags      cos.BitFlags `json:"flags" msg:"f"` // enum { SnodeNonElectable, SnodeIC, SnodeMaint, ... }
 		IDDigest   uint64       `json:"id_digest" msg:"g"`
+
+		// added in v5.0
+		VerifyingKey []byte `json:"verifying_key,omitempty" msg:"v,omitempty"`
 	}
 )

@@ -61,7 +61,6 @@ const (
 	cskTag = "csk"
 
 	cskKeyLen      = 16               // len(secret)
-	cskSigLen      = 43               // = base64.RawURLEncoding.EncodedLen(sha256.Size)
 	cskSepa        = 0                // to separate strings in HMAC payload
 	cskBase        = 36               // base for all signed int64/uint64 fields
 	cskURLOverhead = 160              // pid+utm+vpams+x+u qparams (~145 worst-case)
@@ -143,7 +142,7 @@ func (csk *cskOwner) gen(smapVer int64) (nk *clusterKey) {
 
 func (sign *signer) bufsize(pid string) int {
 	r := sign.r
-	return len(r.Method) + 1 + len(r.URL.Path) + 1 + len(pid) + 1 + 3*cos.SizeofI64 + cskSigLen
+	return len(r.Method) + 1 + len(r.URL.Path) + 1 + len(pid) + 1 + 3*cos.SizeofI64 + sigLen()
 }
 
 func (sign *signer) compute(pid string) {
@@ -193,7 +192,7 @@ func (sign *signer) compute(pid string) {
 	hb.h.Sum(hb.buf[:0])
 
 	// encode and append => sb
-	sign.sig = sb.ReserveAppend(cskSigLen)
+	sign.sig = sb.ReserveAppend(sigLen())
 	base64.RawURLEncoding.Encode(sign.sig, hb.buf[:])
 
 	handFree(hb)
@@ -244,7 +243,7 @@ func (sign *signer) buildURL(nodeURL string, now int64) string {
 // receive-side HMAC validation
 // on failure return http.StatusUnauthorized or 0 (that is, 400), the latter for invalid request
 func (sign *signer) verify(pid string, cskgrp *cskgrp) (int, error) {
-	if len(cskgrp.hmacSig) != cskSigLen {
+	if len(cskgrp.hmacSig) != sigLen() {
 		return 0, fmt.Errorf("invalid signature length: %d", len(cskgrp.hmacSig))
 	}
 	sign.nonce = cskgrp.nonce
@@ -257,7 +256,7 @@ func (sign *signer) verify(pid string, cskgrp *cskgrp) (int, error) {
 	sign.compute(pid)
 
 	// sign.sig points into sign.sb - compare before
-	eq := hmac.Equal(sign.sig, cos.UnsafeB(cskgrp.hmacSig))
+	eq := cos.CryptoEqual(sign.sig, cos.UnsafeB(cskgrp.hmacSig))
 	sbFree(sign.sb)
 
 	if !eq {
@@ -335,7 +334,7 @@ func cskFromHdr(hdr http.Header) (*cskgrp, error) {
 	if sig == "" {
 		return nil, nil
 	}
-	if len(sig) != cskSigLen {
+	if len(sig) != sigLen() {
 		return nil, fmt.Errorf("invalid %s length: %d", apc.HdrSenderSig, len(sig))
 	}
 	nonce, err := strconv.ParseUint(hdr.Get(apc.HdrSenderNonce), 10, 64)

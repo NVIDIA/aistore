@@ -35,7 +35,7 @@ type (
 
 func newSnode(id, daeType string, publicNet, intraControlNet, intraDataNet meta.NetInfo) (snode *meta.Snode) {
 	snode = &meta.Snode{PubNet: publicNet, ControlNet: intraControlNet, DataNet: intraDataNet}
-	snode.Init(id, daeType)
+	snode.Init(id, daeType, nil /*verifying key*/)
 	return
 }
 

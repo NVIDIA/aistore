@@ -169,6 +169,10 @@ func demd(allmpi []MPI) (rerr error) {
 				debug.AssertNoErr(err)
 				rerr = err
 			}
+			if err := removeXattr(mi.Path, xattrNodeSigningKey); err != nil {
+				debug.AssertNoErr(err)
+				rerr = err
+			}
 		}
 	}
 	return rerr

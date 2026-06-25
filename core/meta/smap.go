@@ -88,10 +88,16 @@ type (
 ///////////
 
 // init self
-func (d *Snode) Init(id, daeType string) {
+func (d *Snode) Init(id, daeType string, verifyingKey []byte) {
 	debug.Assert(d.DaeID == "" && d.DaeType == "")
 	debug.Assert(id != "" && daeType != "")
+
 	d.DaeID, d.DaeType = id, daeType
+	if len(verifyingKey) > 0 {
+		debug.Assert(len(verifyingKey) == cos.NodeSigningPublicKeySize)
+		d.VerifyingKey = verifyingKey // NOTE: not cloning (is immutable)
+	}
+
 	d.SetName()
 	d.setDigest()
 }

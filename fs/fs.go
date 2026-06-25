@@ -62,11 +62,13 @@ const (
 //   (different mountpaths map onto different filesystems, and vise versa);
 // - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 
-// filesystem Health Check
-type HC interface {
-	FSHC(err error, mi *Mountpath, fqn string)
-	SoftFSHC()
-}
+type (
+	// filesystem Health Check
+	HC interface {
+		FSHC(err error, mi *Mountpath, fqn string)
+		SoftFSHC()
+	}
+)
 
 type (
 	Mountpath struct {
@@ -95,6 +97,9 @@ type (
 		// mountpaths
 		available ratomic.Pointer[MPI]
 		disabled  ratomic.Pointer[MPI]
+
+		// node sign/verify key pair (a copy of ais/htrun namesake - construction time)
+		nodeSigningKey *cos.NodeSigningKey
 
 		// capacity
 		cs        CapStatus
@@ -497,9 +502,15 @@ func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, bloc
 	if err != nil {
 		return err
 	}
-	if tid != "" && config.WritePolicy.MD != apc.WriteNever {
+	if tid != "" && // empty in unit tests
+		config.WritePolicy.MD != apc.WriteNever {
 		if err := mi.SetDaemonIDXattr(tid); err != nil {
 			return err
+		}
+		if mfs.nodeSigningKey != nil { // ditto, nil in unit tests
+			if err := mi.SetNodeSigningKeyXattr(tid, mfs.nodeSigningKey); err != nil {
+				return err
+			}
 		}
 	}
 	mi._setDisks(fsdisks)
@@ -634,8 +645,12 @@ func (mi *Mountpath) _alert(config *cmn.Config, c Capacity) string {
 // MFS global
 //
 
-func New(fshc HC, num int) (blockDevs ios.BlockDevs) {
-	mfs = &MFS{hc: fshc, fsIDs: make(map[cos.FsID]string, 10)}
+func New(fshc HC, num int, nodeSigningKey *cos.NodeSigningKey) (blockDevs ios.BlockDevs) {
+	mfs = &MFS{
+		hc:             fshc,
+		fsIDs:          make(map[cos.FsID]string, 12),
+		nodeSigningKey: nodeSigningKey,
+	}
 	mfs.ios, blockDevs = ios.New(num)
 
 	// init content spec mgr: reg content types and resolvers
@@ -831,6 +846,9 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 
 	// Clear target ID if set
 	if err := removeXattr(cleanMpath, xattrNodeID); err != nil {
+		return nil, err
+	}
+	if err := removeXattr(cleanMpath, xattrNodeSigningKey); err != nil {
 		return nil, err
 	}
 	avail, disabled := Get()

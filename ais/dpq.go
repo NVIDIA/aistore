@@ -327,7 +327,7 @@ func cskFromQ(q url.Values) (*cskgrp, error) {
 	if sig == "" {
 		return nil, nil
 	}
-	if len(sig) != cskSigLen {
+	if len(sig) != sigLen() {
 		return nil, fmt.Errorf("%s: invalid signature length: %d", tag, len(sig))
 	}
 

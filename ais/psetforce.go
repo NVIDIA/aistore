@@ -650,6 +650,7 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		nlog.Infoln("\t+", config.String())
 
 		if config.Auth.SignVerifyEnabled() {
+			// TODO -- FIXME: deprecated (ref Ed25519)
 			k := p.owner.csk.load()
 			if k.ver == 0 {
 				k = p.owner.csk.gen(clone.Version)

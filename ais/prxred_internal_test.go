@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 const (
@@ -48,10 +49,24 @@ func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 	})
 	p.owner.csk.nonce.Store(100)
 
+	pub, priv, err := cos.GenerateNodeSigningKey()
+	if err != nil {
+		t.Fatalf("failed to generate keys: %v", err)
+	}
+	p.htrun.nodeSigningKey = cos.NewNodeSigningKey(priv, pub)
+
 	p.si = &meta.Snode{}
-	p.si.Init(testProxyID, apc.Proxy)
+	p.si.Init(testProxyID, apc.Proxy, pub)
 	p.si.PubNet.URL = "http://proxy:8080"
 	p.si.ControlNet.URL = "http://proxy:8080"
+
+	smap := newSmap()
+	smap.Pmap = meta.NodeMap{p.si.ID(): p.si}
+	smap.Primary = p.si
+	smap.Version = 1
+
+	p.owner.smap = newSmapOwner(config)
+	p.owner.smap.put(smap) // populate the atomic.Pointer so get() works
 
 	return p
 }
@@ -60,7 +75,7 @@ func newTestSnode(t *testing.T) *meta.Snode {
 	t.Helper()
 
 	si := &meta.Snode{}
-	si.Init(testDstID, apc.Target)
+	si.Init(testDstID, apc.Target, nil /*verifying key*/)
 	si.PubNet.URL = "http://dst:8080"
 	si.ControlNet.URL = "http://dst:8080"
 	return si
@@ -141,8 +156,8 @@ func requireCSKParams(t *testing.T, q url.Values) {
 	if smapVer == "" || nonce == "" || sig == "" {
 		t.Fatalf("missing sign/verify params: %v", q)
 	}
-	if len(sig) != cskSigLen {
-		t.Fatalf("expected HMAC len %d, got %d", cskSigLen, len(sig))
+	if len(sig) != sigLen() {
+		t.Fatalf("expected HMAC len %d, got %d", sigLen(), len(sig))
 	}
 	if _, err := strconv.ParseInt(smapVer, cskBase, 64); err != nil {
 		t.Fatalf("%s=%q not valid base%d: %v", apc.QparamSmapVer, smapVer, cskBase, err)
@@ -204,6 +219,9 @@ func TestRedurlPlain(t *testing.T) {
 }
 
 func TestRedurlSigned(t *testing.T) {
+	if cmn.IsV50Bridge() {
+		t.Skip("v5.0 bridge disables intra-cluster sign/verify")
+	}
 	tests := []struct {
 		name    string
 		method  string
@@ -247,6 +265,9 @@ func TestRedurlSigned(t *testing.T) {
 }
 
 func TestSignerVerifyRoundTrip(t *testing.T) {
+	if cmn.IsV50Bridge() {
+		t.Skip("v5.0 bridge disables intra-cluster sign/verify")
+	}
 	p, orig, u := makeRedirect(t, true /*signVerifyEnabled*/, http.MethodGet, "/v1/signed-verify", "q=ok", 888)
 
 	if !cmn.Rom.SignVerifyEnabled() {
@@ -270,8 +291,16 @@ func TestSignerVerifyRoundTrip(t *testing.T) {
 		t.Fatal("expected sign/verify params, got nil")
 	}
 
-	sign := &signer{r: rOK, h: &p.htrun}
-	status, err := sign.verify(pid, cskgrp)
+	var (
+		status int
+		sign   = &signer{r: rOK, h: &p.htrun, smapVer: cskgrp.smapVer, nonce: cskgrp.nonce}
+	)
+	if USE_SIGNVERIFY {
+		status, err = sign.svVerify(pid, cskgrp.hmacSig)
+	} else {
+		status, err = sign.verify(pid, cskgrp) // TODO -- FIXME: remove
+	}
+
 	if err != nil || status != 0 {
 		t.Fatalf("verify() failed for valid signed URL: status=%d, err=%v, url=%q", status, err, u.String())
 	}
@@ -300,5 +329,32 @@ func TestSignerVerifyRoundTrip(t *testing.T) {
 	status, err = signBad.verify(pid, cskgrp)
 	if err == nil || status != http.StatusUnauthorized {
 		t.Fatalf("expected verify() to fail with 401 for tampered path, got status=%d, err=%v", status, err)
+	}
+}
+
+func TestRedurlSignVerifyDisabledOnV50Bridge(t *testing.T) {
+	if !cmn.IsV50Bridge() {
+		t.Skip("v5.0 bridge-specific test")
+	}
+
+	_, _, u := makeRedirect(
+		t,
+		true, /* signVerifyEnabled: raw config bit */
+		http.MethodGet,
+		"/v1/objects/ais/bck/obj",
+		"a=1",
+		1, /* smapVer */
+	)
+
+	q := u.Query()
+
+	// Existing redirect params remain.
+	tassert.Fatalf(t, q.Get(apc.QparamPID) == testProxyID, "missing pid: %v", q)
+	tassert.Fatalf(t, q.Get(apc.QparamUnixTime) != "", "missing utm: %v", q)
+	tassert.Fatalf(t, q.Get("a") == "1", "missing preserved query param: %v", q)
+
+	// But v5.0 bridge must not append sign/verify params even when raw config enables it.
+	if q.Get(apc.QparamSmapVer) != "" || q.Get(apc.QparamNonce) != "" || q.Get(apc.QparamHMAC) != "" {
+		t.Fatalf("v5.0 bridge must not sign redirects, got query: %v", q)
 	}
 }

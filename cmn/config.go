@@ -2130,8 +2130,14 @@ func (c *AuthConf) CopyTo(dst *AuthConf) {
 	}
 }
 
-func (c *AuthConf) SignVerifyEnabled() bool {
+func IsV50Bridge() bool { return strings.HasPrefix(VersionAIStore, "5.0") }
+
+func (c *AuthConf) IntraClusterConfigured() bool {
 	return c.IntraCluster != nil && c.IntraCluster.Enabled
+}
+
+func (c *AuthConf) SignVerifyEnabled() bool {
+	return c.IntraClusterConfigured() && !IsV50Bridge()
 }
 
 func (c *AuthConf) Validate() error {
@@ -3035,6 +3041,11 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	// initialize atomic part of the config including most often used timeouts and features
 	Rom.Set(&config.ClusterConfig)
 	Rom.testingEnv = config.TestingEnv()
+
+	if IsV50Bridge() && config.Auth.IntraClusterConfigured() {
+		debug.Assert(!config.Auth.SignVerifyEnabled())
+		nlog.Warningln("auth.intra_cluster.enabled: configured but disabled in v5.0 bridge")
+	}
 
 	// create dirs
 	if err := cos.CreateDir(config.LogDir); err != nil {

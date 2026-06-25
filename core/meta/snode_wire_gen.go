@@ -201,6 +201,12 @@ func (z *Snode) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "IDDigest")
 				return
 			}
+		case "v":
+			z.VerifyingKey, err = dc.ReadBytes(z.VerifyingKey)
+			if err != nil {
+				err = msgp.WrapError(err, "VerifyingKey")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -215,11 +221,15 @@ func (z *Snode) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *Snode) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(9)
-	var zb0001Mask uint16 /* 9 bits */
+	zb0001Len := uint32(10)
+	var zb0001Mask uint16 /* 10 bits */
 	if z.PubExtra == nil {
 		zb0001Len--
 		zb0001Mask |= 0x40
+	}
+	if z.VerifyingKey == nil {
+		zb0001Len--
+		zb0001Mask |= 0x200
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -328,6 +338,18 @@ func (z *Snode) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "IDDigest")
 		return
 	}
+	if (zb0001Mask & 0x200) == 0 { // if not empty
+		// write "v"
+		err = en.Append(0xa1, 0x76)
+		if err != nil {
+			return
+		}
+		err = en.WriteBytes(z.VerifyingKey)
+		if err != nil {
+			err = msgp.WrapError(err, "VerifyingKey")
+			return
+		}
+	}
 	return
 }
 
@@ -337,6 +359,6 @@ func (z *Snode) Msgsize() (s int) {
 	for za0001 := range z.PubExtra {
 		s += z.PubExtra[za0001].Msgsize()
 	}
-	s += 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	s += 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.BytesPrefixSize + len(z.VerifyingKey)
 	return
 }

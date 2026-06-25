@@ -479,6 +479,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 
 	pairs = append(pairs, revsPair{config, actMsgExt})
 	if config.Auth.SignVerifyEnabled() {
+		// TODO -- FIXME: deprecated (ref Ed25519)
 		k := p.owner.csk.load()
 		pairs = append(pairs, revsPair{k, actMsgExt})
 	}
@@ -705,9 +706,14 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			_warnUpd("config.auth JWT/OIDC", strconv.FormatBool(config.Auth.Enabled), strconv.FormatBool(authEnabled))
 		}
 
-		cur := config.Auth.SignVerifyEnabled()
-		if toUpdate.Auth.IntraCluster != nil && toUpdate.Auth.IntraCluster.Enabled != nil {
-			upd := *toUpdate.Auth.IntraCluster.Enabled
+		if ic := toUpdate.Auth.IntraCluster; ic != nil && ic.Enabled != nil {
+			cur := config.Auth.IntraClusterConfigured() // raw config bit (compare with SignVerifyEnabled() runtime)
+			upd := *ic.Enabled
+			if !cur && upd && cmn.IsV50Bridge() {
+				p.writeErr(w, r, errors.New("intra-cluster auth (Ed25519 sign/verify) cannot be enabled on a v5.0 bridge release"),
+					http.StatusPreconditionFailed)
+				return
+			}
 			if cur != upd {
 				// TODO: remove/replace cskTag = "csk" - here and elsewhere (ref Ed25519)
 				_warnUpd("config.auth "+cskTag, strconv.FormatBool(cur), strconv.FormatBool(upd))
@@ -826,6 +832,7 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 	)
 	switch {
 	case clone.Auth.SignVerifyEnabled():
+		// TODO -- FIXME: deprecated (ref Ed25519)
 		var k *clusterKey
 		if ctx.oldConfig == nil || !ctx.oldConfig.Auth.SignVerifyEnabled() {
 			k = p.owner.csk.gen(p.owner.smap.get().Version)
@@ -834,6 +841,7 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 		}
 		wg = p.metasyncer.sync(revsPair{clone, msg}, revsPair{k, msg})
 	case ctx.oldConfig != nil && ctx.oldConfig.Auth.SignVerifyEnabled():
+		// TODO -- FIXME: deprecated (ref Ed25519)
 		// clear locally; usage gated by Rom.SignVerifyEnabled()
 		p.owner.csk.reset()
 		fallthrough

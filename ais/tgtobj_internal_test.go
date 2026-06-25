@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 	t = newTarget(co)
 	t.initPhase1(config)
 	tid, _ := initTID(config)
-	t.si.Init(tid, apc.Target)
+	t.si.Init(tid, apc.Target, nil /*verifying key*/)
 
 	fs.AddTestMpath(testMountpath, t.SID())
 

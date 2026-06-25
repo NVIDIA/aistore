@@ -13,6 +13,8 @@ import (
 	"fmt"
 )
 
+// For alternative (public, private) key alg., see ed25519.go
+
 const (
 	RSAKeyMinBits     = 2048
 	RSAKeyDefaultBits = RSAKeyMinBits

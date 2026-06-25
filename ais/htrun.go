@@ -84,8 +84,13 @@ type htrun struct {
 		rmd    *rmdOwner
 		config *configOwner
 		etl    etlOwner
-		csk    cskOwner
+
+		// TODO -- FIXME: remove after node signing (below) replaces shared cluster key
+		csk cskOwner
 	}
+
+	nodeSigningKey *cos.NodeSigningKey
+
 	keepalive keepaliver
 	statsT    stats.Tracker
 	si        *meta.Snode
@@ -164,11 +169,16 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	}
 
 	if csk != nil {
-		sign := &signer{
-			r: r,
-			h: h,
+		var (
+			ecode int
+			err   error
+			sign  = &signer{r: r, h: h, smapVer: csk.smapVer, nonce: csk.nonce}
+		)
+		if USE_SIGNVERIFY {
+			ecode, err = sign.svVerify(pid, csk.hmacSig)
+		} else {
+			ecode, err = sign.verify(pid, csk) // TODO -- FIXME: remove
 		}
-		ecode, err := sign.verify(pid, csk)
 		if err != nil {
 			h.writeErr(w, r, err, ecode)
 			return err
