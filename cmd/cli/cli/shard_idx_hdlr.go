@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/urfave/cli"
 )
@@ -91,7 +92,8 @@ func shardIndexSummaryHandler(c *cli.Context) error {
 			return nil
 		}
 		if dontWait && status == http.StatusPartialContent {
-			msg := fmt.Sprintf("%s[%s] is still running - showing partial results:", apc.ActSummaryShard, ctx.msg.UUID)
+			_, xname := xact.GetKindName(apc.ActSummaryShard)
+			msg := fmt.Sprintf("%s[%s] is still running - showing partial results:", xname, ctx.msg.UUID)
 			actionNote(c, msg)
 			err = nil
 		}
@@ -108,8 +110,9 @@ func shardSummStartedMsg(xid, bucket string, isNew bool) string {
 	if !isNew {
 		verb = "is running"
 	}
+	_, xname := xact.GetKindName(apc.ActSummaryShard)
 	return fmt.Sprintf("Job %s[%s] %s. To monitor, run 'ais bucket shard-index summary %s %s %s'",
-		apc.ActSummaryShard, xid, verb, bucket, xid, flprn(dontWaitFlag))
+		xname, xid, verb, bucket, xid, flprn(dontWaitFlag))
 }
 
 func newShardSummCtxMsg(c *cli.Context, bck cmn.Bck, prefix string) (*shardSummCtx, error) {

@@ -67,7 +67,7 @@ var showJobUsage = "Show running and/or finished jobs:\n" +
 	indent1 + "\t- show job evict\t- show all running bucket and/or data evicting jobs;\n" +
 	indent1 + "\t- show job list (or: 'show job ls')\t- show all running list-objects jobs;\n" +
 	indent1 + "\t- show job rechunk\t- show all running rechunk jobs;\n" +
-	indent1 + "\t- show job index-shard\t- show all running shard-indexing jobs;\n" +
+	indent1 + "\t- show job shard-index\t- show all running shard-indexing jobs;\n" +
 	indent1 + "\t- show job tco-cysbohAGL\t- show a specific job by its unique ID;\n" +
 	indent1 + "  filtering and limiting:\n" +
 	indent1 + "\t- show job --all\t- include finished and aborted jobs (default: running only);\n" +

@@ -14,7 +14,7 @@ As of [4.5](https://github.com/NVIDIA/aistore/releases/tag/v1.4.5), AIS defines 
 archive              blob-download  cleanup      copy-bucket  copy-objects  create-inventory
 delete-objects       download       dsort        ec-bucket    ec-get        ec-put
 ec-resp              elect-primary  etl-bucket   etl-inline   etl-objects   evict-objects
-evict-remote-bucket  get-batch      index-shard  list         lru-eviction  mirror
+evict-remote-bucket  get-batch      shard-index  list         lru-eviction  mirror
 prefetch-objects     promote-files  put-copies   rebalance    rechunk       rename-bucket
 resilver             summary        warm-up-metadata
 ```

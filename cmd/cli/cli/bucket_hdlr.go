@@ -155,7 +155,7 @@ const rechunkUsage = "Re-chunk bucket objects based on size threshold.\n" +
 // ais bucket shard-index
 // Parent command groups the shard-index lifecycle.
 // TODO: add shard-index rm subcommand to remove existing shard indexes.
-const shardIndexUsage = "Manage TAR shard indexes for fast random access into archives.\n" +
+const shardIndexUsage = "Manage shard indexes for TAR objects and fast random access into archives.\n" +
 	indent1 + "\tSubcommands:\n" +
 	indent1 + "\t- build\t- build a shard index for each TAR object in a bucket;\n" +
 	indent1 + "\t- summary\t- summarize TAR objects and their shard-index coverage."
@@ -164,8 +164,8 @@ const shardIndexUsage = "Manage TAR shard indexes for fast random access into ar
 const shardIndexBuildUsage = "Build a shard index for each TAR object in a bucket (for fast random access into archives).\n" +
 	indent1 + "\tNon-TAR objects are skipped; stale indexes (e.g., after re-upload) are automatically re-indexed.\n" +
 	indent1 + "e.g.:\n" +
-	indent1 + "\t- 'ais bucket shard-index build ais://nnn'\t- index all TAR shards in 'ais://nnn';\n" +
-	indent1 + "\t- 'ais bucket shard-index build ais://nnn --prefix shards/'\t- only index TAR shards under 'shards/';\n" +
+	indent1 + "\t- 'ais bucket shard-index build ais://nnn'\t- index all TAR objects in 'ais://nnn';\n" +
+	indent1 + "\t- 'ais bucket shard-index build ais://nnn --prefix shards/'\t- only index TAR objects under 'shards/';\n" +
 	indent1 + "\t- 'ais bucket shard-index build ais://nnn --num-workers 16'\t- run with 16 concurrent workers;\n" +
 	indent1 + "\t- 'ais bucket shard-index build ais://nnn --skip-verify'\t- fast re-run: trust existing indexes without re-verifying;\n" +
 	indent1 + "\t- 'ais bucket shard-index build ais://nnn --wait'\t- start and wait for the job to finish."
@@ -174,8 +174,8 @@ const shardIndexBuildUsage = "Build a shard index for each TAR object in a bucke
 const shardIndexSummaryUsage = "Summarize TAR objects in a bucket and their shard-index coverage.\n" +
 	indent1 + "\tOnly local in-cluster objects are summarized.\n" +
 	indent1 + "e.g.:\n" +
-	indent1 + "\t- 'ais bucket shard-index summary ais://nnn'\t- summarize all TAR shards in 'ais://nnn';\n" +
-	indent1 + "\t- 'ais bucket shard-index summary ais://nnn --prefix shards/'\t- summarize only TAR shards under 'shards/';\n" +
+	indent1 + "\t- 'ais bucket shard-index summary ais://nnn'\t- summarize all TAR objects in 'ais://nnn';\n" +
+	indent1 + "\t- 'ais bucket shard-index summary ais://nnn --prefix shards/'\t- summarize only TAR objects under 'shards/';\n" +
 	indent1 + "\t- 'ais bucket shard-index summary ais://nnn/shards/'\t- same as above;\n" +
 	indent1 + "\t- 'ais bucket shard-index summary ais://nnn --refresh 1s'\t- print periodic progress while summarizing."
 

@@ -132,7 +132,15 @@ var Table = map[string]Descriptor{
 	// IndexShard is a best-effort build: stale entries are detected via LOM checksum
 	// and fall back to tar.Next() scan. A partial index remains useful, and resumed
 	// builds atomically skip already-indexed LOMs (lom.md.flags&Indexed + index object).
-	apc.ActIndexShard: {Scope: ScopeB, Startable: true, RefreshCap: false, ConflictRebRes: true, AbortByReb: false, ICMode: ICUponTerm},
+	apc.ActIndexShard: {
+		DisplayName:    "shard-index",
+		Scope:          ScopeB,
+		Startable:      false, // use `ais bucket shard-index build`
+		RefreshCap:     false,
+		ConflictRebRes: true,
+		AbortByReb:     false,
+		ICMode:         ICUponTerm,
+	},
 
 	// on-demand EC and n-way replication
 	// (non-startable, triggered by PUT => erasure-coded or mirrored bucket)
