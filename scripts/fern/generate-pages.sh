@@ -166,9 +166,9 @@ python3 "$SCRIPTS_DIR/mdx-escape.py" "$FERN_PAGES"
 
 echo "Fern pages generated: $(find "$FERN_PAGES" -name '*.md' | wc -l) files"
 
-# ── Optional: preview or build ───────────────────────────────────────────
+# ── Optional: preview, check, or build ───────────────────────────────────
 
-if [[ "${1:-}" == "--preview" || "${1:-}" == "--build" ]]; then
+if [[ "${1:-}" == "--preview" || "${1:-}" == "--check" || "${1:-}" == "--build" ]]; then
     if ! command -v fern &>/dev/null; then
         echo "ERROR: 'fern' CLI not found. Install with: npm install -g fern-api" >&2
         exit 1
@@ -208,7 +208,13 @@ EOF
 
     if [[ "${1:-}" == "--preview" ]]; then
         fern docs dev --port 3000
+    elif [[ "${1:-}" == "--check" ]]; then
+        fern check
     else
         fern generate --docs
     fi
+elif [[ -n "${1:-}" ]]; then
+    echo "ERROR: Unknown option: $1" >&2
+    echo "Usage: scripts/fern/generate-pages.sh [--preview|--check|--build]" >&2
+    exit 1
 fi
