@@ -96,7 +96,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 
 	c := &clupost{p: p, w: w, r: r, smap: smap, config: config, apiOp: apiOp}
 
-	// decode (per-op) and validate; resolve action and node flags
+	// decode (per-op) and validate; resolve action and node flags; check node version
 	if c.decode(isPub) {
 		return
 	}
@@ -110,10 +110,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 	}
 
 	// resume interrupted rebalance
-	c.resumeReb()
-
-	// parse joining node's version; (self-join) enforce the major-release boundary
-	if c.checkVer() {
+	if c.resumeReb() {
 		return
 	}
 
@@ -121,20 +118,23 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 
 	// fast path: quick admission during cluster startup/restart // TODO: extra-checks for security
 	p.owner.smap.mu.Lock()
-	upd, err := c._joinKalive()
+	msync, added, err := c._joinKalive()
 	p.owner.smap.mu.Unlock()
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-
-	// primary may want to enforce min-version or same-version (brief rolling-upgrade interval excepted);
-	// track only on self-join/restart; skip keep-alive; admin-join a TODO
-	if c.apiOp == apc.SelfJoin {
-		p.noteNodeVersion(c.nsi, c.nversStr, c.nversParsed)
+	if c.apiOp == apc.SelfJoin && (!p.ClusterStarted() || added) {
+		if !added {
+			// motivation: preserve peer metadata even when it is already in local Smap
+			nlog.Warningln(p.String(), "adding", c.nsi.StringEx(), "to startup reg.pool without local Smap add", c.smap.StringEx())
+		}
+		p.reg.mpl.Lock()
+		p.reg.pool = append(p.reg.pool, c.regReq)
+		p.reg.mpl.Unlock()
 	}
 
-	c.dispatch(upd)
+	c.dispatch(msync)
 }
 
 // respond to fastKalive from nodes
@@ -210,11 +210,6 @@ func (c *clupost) decode(isPub bool) (stop bool) {
 		}
 		// NOTE: ditto
 		c.nsi = c.regReq.SI
-		if !p.ClusterStarted() {
-			p.reg.mpl.Lock()
-			p.reg.pool = append(p.reg.pool, c.regReq)
-			p.reg.mpl.Unlock()
-		}
 	default:
 		p.writeErrURL(w, r)
 		return true
@@ -222,7 +217,7 @@ func (c *clupost) decode(isPub bool) (stop bool) {
 	return false
 }
 
-func (c *clupost) setAction() {
+func (c *clupost) setActionCheckVer() (stop bool) {
 	switch c.apiOp {
 	case apc.AdminJoin:
 		if c.nsi.IsProxy() {
@@ -231,6 +226,17 @@ func (c *clupost) setAction() {
 			c.action = apc.ActAdminJoinTarget
 		}
 	case apc.SelfJoin:
+		p, w, r := c.p, c.w, c.r
+		if err := checkNodeVer(p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
+			p.writeErr(w, r, err, http.StatusConflict)
+			return true
+		}
+		p.noteNodeVersion(c.nsi, c.nversStr, c.nversParsed)
+		debug.Assert(c.nsi.VerifyingKey == nil || cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 1}))
+		if cmn.IsV50Bridge() {
+			c.nsi.VerifyingKey = nil
+		}
+
 		if c.nsi.IsProxy() {
 			c.action = apc.ActSelfJoinProxy
 		} else {
@@ -241,7 +247,10 @@ func (c *clupost) setAction() {
 		c.action = apc.ActKeepaliveUpdate
 	default:
 		debug.Assert(false, "unexpected op: ", c.apiOp)
+		return true
 	}
+
+	return false
 }
 
 // validate the joining node; resolve msg.Action and node flags
@@ -253,7 +262,20 @@ func (c *clupost) validate() (stop bool) {
 		return true
 	}
 
-	c.setAction()
+	// parse the joining node's software version
+	c.nversStr = r.Header.Get(apc.HdrNodeVersion)
+	if c.nversStr != "" {
+		nversParsed, ok := cos.ParseVersion(c.nversStr)
+		if !ok {
+			p.writeErrf(w, r, "%s joining %s: failed to parse '%s=%s'", p, c.nsi, apc.HdrNodeVersion, c.nversStr)
+			return true
+		}
+		c.nversParsed = nversParsed
+	}
+
+	if c.setActionCheckVer() {
+		return true
+	}
 
 	// more validation && non-electability
 	if p.NodeStarted() {
@@ -333,13 +355,18 @@ func (c *clupost) handshake() (stop bool) {
 }
 
 // resume interrupted rebalance bookkeeping; promote a restarted keepalive to self-join
-func (c *clupost) resumeReb() {
-	p := c.p
+func (c *clupost) resumeReb() (stop bool) {
 	if !c.config.Rebalance.Enabled {
 		c.regReq.Flags = c.regReq.Flags.Clear(cos.RebalanceInterrupted)
 		c.regReq.Flags = c.regReq.Flags.Clear(cos.NodeRestarted)
 	}
-	interrupted, restarted := c.regReq.Flags.IsSet(cos.RebalanceInterrupted), c.regReq.Flags.IsSet(cos.NodeRestarted)
+
+	var (
+		p           = c.p
+		flags       = c.regReq.Flags
+		interrupted = flags.IsSet(cos.RebalanceInterrupted)
+		restarted   = flags.IsSet(cos.NodeRestarted)
+	)
 	if c.nsi.IsTarget() && (interrupted || restarted) {
 		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 			// handle via rmd.starting + resumeReb
@@ -353,35 +380,16 @@ func (c *clupost) resumeReb() {
 		c.apiOp = apc.SelfJoin
 
 		// see rmdModifier.listen: ActSelfJoinTarget adds the joining target to reb-notifiers
-		c.setAction()
+		stop = c.setActionCheckVer()
 	}
-}
 
-// parse the joining node's software version; (self-join) enforce the major-release boundary
-func (c *clupost) checkVer() (stop bool) {
-	p, w, r := c.p, c.w, c.r
-	c.nversStr = r.Header.Get(apc.HdrNodeVersion)
-	if c.nversStr != "" {
-		nversParsed, ok := cos.ParseVersion(c.nversStr)
-		if !ok {
-			p.writeErrf(w, r, "%s joining %s: failed to parse '%s=%s'", p, c.nsi, apc.HdrNodeVersion, c.nversStr)
-			return true
-		}
-		c.nversParsed = nversParsed
-	}
-	if c.apiOp == apc.SelfJoin {
-		if err := checkNodeVer(p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
-			p.writeErr(w, r, err, http.StatusConflict)
-			return true
-		}
-	}
-	return false
+	return stop
 }
 
 // respond to the admitted (or not-updated) node and, when joining, broadcast the new Smap
-func (c *clupost) dispatch(upd bool) {
+func (c *clupost) dispatch(msync bool) {
 	p, w, r := c.p, c.w, c.r
-	if !upd {
+	if !msync {
 		if c.apiOp == apc.AdminJoin {
 			// TODO: respond !updated (NOP)
 			p.writeJSON(w, r, apc.JoinNodeResult{DaemonID: c.nsi.ID()}, "")
@@ -511,7 +519,7 @@ func (c *clupost) rereg(osi *meta.Snode) bool {
 }
 
 // executes under p.owner.smap lock; may stamp response headers for accepted shortcut paths
-func (c *clupost) _joinKalive() (upd bool, _ error) {
+func (c *clupost) _joinKalive() (msync, added bool, _ error) {
 	var (
 		p      = c.p
 		nsi    = c.nsi
@@ -521,8 +529,9 @@ func (c *clupost) _joinKalive() (upd bool, _ error) {
 		msg    = c.msg
 		smap   = p.owner.smap.get()
 	)
+	c.smap = smap
 	if !smap.isPrimary(p.si) {
-		return false, newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
+		return false, false, newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
 	}
 
 	var (
@@ -532,7 +541,7 @@ func (c *clupost) _joinKalive() (upd bool, _ error) {
 	if osi == nil {
 		if keepalive {
 			if err := checkNodeVer(p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
-				return false, err
+				return false, false, err
 			}
 			nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
 		}
@@ -541,24 +550,24 @@ func (c *clupost) _joinKalive() (upd bool, _ error) {
 			err := fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)",
 				osi.StringEx(), nsi.StringEx(), smap.StringEx(), keepalive)
 			debug.AssertNoErr(err)
-			return false, err
+			return false, false, err
 		}
 		switch {
 		case keepalive:
-			upd = c.kalive(osi)
+			msync = c.kalive(osi)
 		case regReq.Flags.IsSet(cos.NodeRestarted):
-			upd = true
+			msync = true
 		default:
-			upd = c.rereg(osi)
+			msync = c.rereg(osi)
 		}
-		if !upd {
+		if !msync {
 			c.setVerHdr() // primary => node version exchange (case #1.a)
-			return false, nil
+			return false, false, nil
 		}
 	}
 	// check for cluster integrity errors (cie)
 	if err := smap.validateUUID(p.si, regReq.Smap, nsi.StringEx(), 80 /* ciError */); err != nil {
-		return false, err
+		return false, false, err
 	}
 
 	var err error
@@ -580,11 +589,11 @@ func (c *clupost) _joinKalive() (upd bool, _ error) {
 			_ = p.metasyncer.sync(revsPair{clone, actMsgExt})
 		}
 		c.setVerHdr() // primary => node version exchange (case #1.b)
-		return false, nil
+		return false, true /*added => local Smap*/, nil
 	}
 
-	upd = err == nil
-	return upd, err
+	msync = err == nil
+	return msync, false, err
 }
 
 func (c *clupost) mcastJoined() (string, error) {

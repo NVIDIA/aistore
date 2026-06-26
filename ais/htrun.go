@@ -2381,6 +2381,11 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 		return res
 	}
 
+	if cmn.IsV50Bridge() && cm.SI.VerifyingKey != nil {
+		si := *h.si
+		si.VerifyingKey = nil
+		cm.SI = &si
+	}
 	if keepalive {
 		path = apc.URLPathCluKalive.S
 	} else {
