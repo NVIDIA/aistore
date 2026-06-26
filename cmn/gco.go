@@ -82,8 +82,10 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 // previously pointerized config section containing only the canonical defaults.
 // =================================================================================================================
 
-// CopyStruct is a shallow copy. Pointer fields (Auth.*, Tracing) are deep-copied explicitly below to break aliasing.
-// Not cloning (read-only) FSPaths and BackendConf
+// CopyStruct is a shallow copy. Mutable pointer-backed sections are
+// deep-copied explicitly below; read-only FSPaths and BackendConf are shared.
+// NOTE:
+// every new pointer section in ClusterConfig must be added here
 func (gco *gco) Clone() *Config {
 	src := gco.Get()
 	dst := &Config{}
@@ -114,6 +116,10 @@ func (c *ClusterConfig) clonePtrs() {
 	if c.Arch != nil {
 		v := *c.Arch
 		c.Arch = &v
+	}
+	if pub := c.Net.HTTP.Pub; pub != nil {
+		v := *pub
+		c.Net.HTTP.Pub = &v
 	}
 }
 

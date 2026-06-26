@@ -677,12 +677,25 @@ type (
 		SndRcvBufSize int    `json:"sndrcv_buf_size"` // SO_RCVBUF and SO_SNDBUF
 	}
 
+	// TLSConf contains TLS-specific config options.
+	TLSConf struct {
+		Certificate   string `json:"server_crt"`      // HTTPS: X.509 certificate
+		CertKey       string `json:"server_key"`      // HTTPS: X.509 key
+		ClientCA      string `json:"client_ca_tls"`   // required when client_auth_tls >= VerifyClientCertIfGiven
+		ClientAuthTLS int    `json:"client_auth_tls"` // tls.ClientAuthType enum
+	}
+
+	TLSConfToSet struct {
+		Certificate   *string `json:"server_crt,omitempty"`
+		CertKey       *string `json:"server_key,omitempty"`
+		ClientCA      *string `json:"client_ca_tls,omitempty"`
+		ClientAuthTLS *int    `json:"client_auth_tls,omitempty"`
+	}
+
 	HTTPConf struct {
-		Proto         string `json:"-"`             // http or https (set depending on `UseHTTPS`)
-		Certificate   string `json:"server_crt"`    // HTTPS: X.509 certificate
-		CertKey       string `json:"server_key"`    // HTTPS: X.509 key
-		ServerNameTLS string `json:"domain_tls"`    // #6410
-		ClientCA      string `json:"client_ca_tls"` // #6410
+		Proto         string `json:"-"` // http or https (set depending on `UseHTTPS`)
+		TLSConf       `json:",inline"`
+		ServerNameTLS string `json:"domain_tls"` // #6410
 
 		// client-side idle connection timeouts: intra-cluster and backend/cloud
 		IdleConnTimeout        cos.Duration `json:"idle_conn_time"`
@@ -691,29 +704,30 @@ type (
 		MaxIdleConns           int          `json:"idle_conns"`
 
 		// cont-d
-		ClientAuthTLS   int  `json:"client_auth_tls"`   // #6410 tls.ClientAuthType enum
 		WriteBufferSize int  `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 64KB (`DefaultWriteBufferSize`)
 		ReadBufferSize  int  `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto (`DefaultReadBufferSize`)
 		UseHTTPS        bool `json:"use_https"`         // use HTTPS
 		SkipVerifyCrt   bool `json:"skip_verify"`       // skip X.509 cert verification (used with self-signed certs)
 		Chunked         bool `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
+
+		// Optional TLS overrides for public listeners;
+		// when nil or empty, public listeners use the common net.http TLS configuration.
+		Pub *TLSConf `json:"pub,omitempty"`
 	}
 	HTTPConfToSet struct {
-		Certificate            *string       `json:"server_crt,omitempty"`
-		CertKey                *string       `json:"server_key,omitempty"`
+		*TLSConfToSet          `json:",inline"`
 		ServerNameTLS          *string       `json:"domain_tls,omitempty"`
-		ClientCA               *string       `json:"client_ca_tls,omitempty"`
 		IdleConnTimeout        *cos.Duration `json:"idle_conn_time,omitempty"`
 		BackendIdleConnTimeout *cos.Duration `json:"backend_idle_conn_time,omitempty"`
 		MaxIdleConnsPerHost    *int          `json:"idle_conns_per_host,omitempty"`
 		MaxIdleConns           *int          `json:"idle_conns,omitempty"`
 		// cont-d
-		WriteBufferSize *int  `json:"write_buffer_size,omitempty" list:"readonly"`
-		ReadBufferSize  *int  `json:"read_buffer_size,omitempty" list:"readonly"`
-		ClientAuthTLS   *int  `json:"client_auth_tls,omitempty"`
-		UseHTTPS        *bool `json:"use_https,omitempty"`
-		SkipVerifyCrt   *bool `json:"skip_verify,omitempty"`
-		Chunked         *bool `json:"chunked_transfer,omitempty"`
+		WriteBufferSize *int          `json:"write_buffer_size,omitempty" list:"readonly"`
+		ReadBufferSize  *int          `json:"read_buffer_size,omitempty" list:"readonly"`
+		UseHTTPS        *bool         `json:"use_https,omitempty"`
+		SkipVerifyCrt   *bool         `json:"skip_verify,omitempty"`
+		Chunked         *bool         `json:"chunked_transfer,omitempty"`
+		Pub             *TLSConfToSet `json:"pub,omitempty"`
 	}
 
 	FSHCConf struct {
@@ -1995,10 +2009,6 @@ func (c *NetConf) Validate() (err error) {
 	if c.HTTP.UseHTTPS {
 		c.HTTP.Proto = "https"
 	}
-	if c.HTTP.ClientAuthTLS < int(tls.NoClientCert) || c.HTTP.ClientAuthTLS > int(tls.RequireAndVerifyClientCert) {
-		return fmt.Errorf("invalid client_auth_tls %d (expecting range [0 - %d])", c.HTTP.ClientAuthTLS,
-			tls.RequireAndVerifyClientCert)
-	}
 	return nil
 }
 
@@ -2036,7 +2046,23 @@ func (c *HTTPConf) Validate() error {
 	if n := min(c.MaxIdleConns, dfltMaxIdlePerHost); c.MaxIdleConnsPerHost != 0 && c.MaxIdleConnsPerHost > n {
 		return fmt.Errorf("invalid idle_conns_per_host: %d (expecting range [0 - %d])", c.MaxIdleConnsPerHost, n)
 	}
-	return nil
+
+	if err := c.TLSConf.Validate("net.http"); err != nil {
+		return err
+	}
+
+	if c.Pub == nil {
+		return nil
+	}
+
+	// pub TLS overrides: all-or-nothing section; when disabled, no stray settings
+	if c.Pub.Certificate == "" && c.Pub.CertKey == "" {
+		if c.Pub.ClientCA != "" || c.Pub.ClientAuthTLS != 0 {
+			return errors.New("net.http.pub: client_ca_tls and/or client_auth_tls require pub server_crt and server_key")
+		}
+		return nil
+	}
+	return c.Pub.Validate("net.http.pub")
 }
 
 // used intra-clients; see related: EnvToTLS()
@@ -2047,6 +2073,25 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 		ClientCA:    c.ClientCA,
 		SkipVerify:  c.SkipVerifyCrt,
 	}
+}
+
+/////////////
+// TLSConf //
+/////////////
+
+func (c *TLSConf) Validate(tag string) error {
+	if (c.Certificate == "") != (c.CertKey == "") {
+		return fmt.Errorf("%s: both server_crt and server_key must be set (or neither)", tag)
+	}
+	if c.ClientAuthTLS < int(tls.NoClientCert) || c.ClientAuthTLS > int(tls.RequireAndVerifyClientCert) {
+		return fmt.Errorf("%s: invalid client_auth_tls %d (expecting range [0 - %d])",
+			tag, c.ClientAuthTLS, tls.RequireAndVerifyClientCert)
+	}
+	if tls.ClientAuthType(c.ClientAuthTLS) >= tls.VerifyClientCertIfGiven && c.ClientCA == "" {
+		return fmt.Errorf("%s: client_ca_tls required when client_auth_tls >= %d (got %d)",
+			tag, int(tls.VerifyClientCertIfGiven), c.ClientAuthTLS)
+	}
+	return nil
 }
 
 //////////////
