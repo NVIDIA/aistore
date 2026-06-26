@@ -133,7 +133,7 @@ func NewTLS(sargs TLSArgs, intra bool) (tlsConf *tls.Config, err error) {
 
 	// intra-cluster client
 	if intra {
-		tlsConf.GetClientCertificate, err = certloader.GetClientCert()
+		tlsConf.GetClientCertificate, err = certloader.Default.GetClientCert()
 		return tlsConf, err
 	}
 

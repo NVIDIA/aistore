@@ -7,10 +7,12 @@ package certloader
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -24,7 +26,11 @@ import (
 // related sources: api/x509.go, ais/x509.go, and cmd/cli/cli/x509.go
 //
 
-const name = "tls-cert-loader"
+// Loader names. DfltCL is also the hk registration key - unchanged, do not rename.
+const (
+	DfltCL = "tls-cert-loader"     // intra-cluster server & client cert; default for the pub listeners
+	PubCL  = "tls-cert-loader-pub" // user-facing (net.http.pub) cert, when separately configured
+)
 
 const (
 	dfltTimeInvalid = time.Hour
@@ -33,20 +39,33 @@ const (
 
 const fmtErrExpired = "%s: %s expired (valid until %v)"
 
+// node-level flags for certs, shared by all loaders
+const certFlags = cos.CertificateExpired | cos.CertificateInvalid | cos.CertWillSoonExpire
+
 type (
 	xcert struct {
 		tls.Certificate
-		parent    *certLoader
+		parent    *CertLoader
 		modTime   time.Time
 		notBefore time.Time
 		notAfter  time.Time
 		size      int64
 	}
-	certLoader struct {
-		tstats   cos.StatsUpdater
+	CertLoader struct {
+		mgr      *Manager
 		xcert    atomic.Pointer[xcert]
 		certFile string
 		keyFile  string
+		name     string
+		prefix   string // Props key prefix; "" for the default loader
+		flags    atomic.Int64
+	}
+
+	// Manager owns the (fixed) set of loaders and the publishing of node flags
+	Manager struct {
+		tstats  cos.StatsUpdater
+		loaders []*CertLoader
+		mu      sync.Mutex
 	}
 
 	// tls.Config.GetCertificate
@@ -60,49 +79,163 @@ type (
 	}
 )
 
+// static construction - see Init
 var (
-	gcl *certLoader
+	Default *CertLoader
+	Pub     *CertLoader
+	Mgr     *Manager
 )
 
-// (htrun only)
-func Init(certFile, keyFile string, tstats cos.StatsUpdater) (err error) {
-	if certFile == "" && keyFile == "" {
+var ErrNoCerts = errors.New("no TLS certificate loaders configured")
+
+// when config USE_HTTPS: Init the package (and its default cert loader);
+// the pub loader, when separately configured, is initialized _after_ this call (see Pub.Init).
+func Init(tstats cos.StatsUpdater, certFile, keyFile string) error {
+	debug.Assert(tstats != nil)
+	debug.Assert(Mgr == nil, "certloader.Init called twice")
+
+	Default = &CertLoader{name: DfltCL}
+	Pub = &CertLoader{name: PubCL, prefix: "pub."}
+	Mgr = newManager(Default, Pub)
+	Mgr.tstats = tstats
+
+	return Default.Init(certFile, keyFile)
+}
+
+/////////////
+// Manager //
+/////////////
+
+func newManager(ls ...*CertLoader) *Manager {
+	m := &Manager{loaders: ls}
+	for i, cl := range ls {
+		debug.Assert(cl.name != "", "unnamed cert loader #", i)
+		for _, prev := range ls[:i] {
+			debug.Assert(prev.name != cl.name, "duplicate cert loader name: ", cl.name)
+		}
+		cl.mgr = m
+	}
+	return m
+}
+
+// (Re)load every configured loader (errors joined, if any)
+func (m *Manager) LoadAll() error {
+	if m == nil {
+		return ErrNoCerts
+	}
+	var (
+		errs []error
+		n    int
+	)
+	for _, cl := range m.loaders {
+		if !cl.configured() {
+			continue
+		}
+		n++
+		if err := cl.load(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if n == 0 {
+		return ErrNoCerts
+	}
+	return errors.Join(errs...)
+}
+
+// Props: aggregated `what=certificate` view.
+// The default loader's keys are unprefixed (back-compat with cmd/cli/cli/x509.go);
+// any additional loader contributes its keys under cl.prefix.
+// Nil receiver: `what=certificate` on a node that runs plain HTTP.
+func (m *Manager) Props() (out cos.StrKVs) {
+	if m == nil {
 		return nil
 	}
+	for _, cl := range m.loaders {
+		if !cl.configured() {
+			continue
+		}
+		props := cl.Props()
+		if len(props) == 0 {
+			continue
+		}
+		if out == nil {
+			out = make(cos.StrKVs, len(props))
+		}
+		for k, v := range props {
+			out[cl.prefix+k] = v
+		}
+	}
+	return out
+}
 
-	debug.Assert(gcl == nil)
-	gcl = &certLoader{certFile: certFile, keyFile: keyFile, tstats: tstats}
-	if err = Load(); err != nil {
+// union of all loader cert flags -> node-level state.flags, so a shared cert bit
+// is cleared only when no loader needs it
+func (m *Manager) publish() {
+	debug.Assert(m.tstats != nil, "certloader.Init not called")
+	m.mu.Lock()
+	union := cos.NodeStateFlags(0)
+	for _, cl := range m.loaders {
+		union |= cos.NodeStateFlags(cl.flags.Load())
+	}
+	m.tstats.SetClrFlag(cos.NodeAlerts, union&certFlags, certFlags&^union)
+	m.mu.Unlock()
+}
+
+////////////////
+// CertLoader //
+////////////////
+
+func (cl *CertLoader) Init(certFile, keyFile string) (err error) {
+	debug.Assert(cl.mgr != nil && cl.mgr.tstats != nil, cl.name, ": certloader.Init not called")
+	if certFile == "" || keyFile == "" {
+		return fmt.Errorf("%s: missing certificate or key (%q, %q)", cl.name, certFile, keyFile)
+	}
+	cl.certFile, cl.keyFile = certFile, keyFile
+	if err = cl.load(); err != nil {
 		nlog.Errorln("FATAL:", err)
 		return err
 	}
 
-	hk.Reg(name, gcl.hk, gcl.hktime())
+	hk.Reg(cl.name, cl.hk, cl.hktime())
 	return nil
 }
 
-// via (Init, API call)
-func Load() (err error) {
-	if err = gcl.do(false /*compare*/); err == nil {
+func (cl *CertLoader) configured() bool { return cl.certFile != "" }
+
+// load triggers certificate file read from disk
+func (cl *CertLoader) load() (err error) {
+	if err = cl.do(false /*compare*/); err == nil {
 		return nil
 	}
 	if isExpired(err) {
-		gcl.tstats.SetFlag(cos.NodeAlerts, cos.CertificateExpired)
+		cl.setFlags(cos.CertificateExpired)
 	} else {
-		gcl.tstats.SetFlag(cos.NodeAlerts, cos.CertificateInvalid)
+		cl.setFlags(cos.CertificateInvalid)
 	}
 	return err
 }
 
-func Props() (out cos.StrKVs) {
-	flags := cos.NodeStateFlags(gcl.tstats.Get(cos.NodeAlerts))
+// record this loader's own cert flags, defer stats publishing to manager
+func (cl *CertLoader) setFlags(flags cos.NodeStateFlags) {
+	cl.flags.Store(int64(flags & certFlags))
+	cl.mgr.publish()
+}
+
+func (cl *CertLoader) Props() (out cos.StrKVs) {
+	if cl == nil {
+		return nil
+	}
+	flags := cos.NodeStateFlags(cl.flags.Load())
 	if flags.IsAnySet(cos.CertificateInvalid | cos.CertificateExpired) {
 		out = make(cos.StrKVs, 1)
-		flags &= (cos.CertificateInvalid | cos.CertificateExpired)
+		flags &= cos.CertificateInvalid | cos.CertificateExpired
 		out["error"] = flags.Str()
 		return out
 	}
-	xcert := gcl.xcert.Load()
+	xcert := cl.xcert.Load()
+	if xcert == nil {
+		return nil
+	}
 
 	out = make(cos.StrKVs, 6)
 	leaf := xcert.Certificate.Leaf
@@ -125,31 +258,49 @@ func Props() (out cos.StrKVs) {
 	return out
 }
 
+func (cl *CertLoader) GetCert() (GetCertCB, error) {
+	if err := cl.ready(); err != nil {
+		return nil, err
+	}
+	return cl._hello, nil
+}
+
+func (cl *CertLoader) GetClientCert() (GetClientCertCB, error) {
+	if err := cl.ready(); err != nil {
+		return nil, err
+	}
+	return cl._info, nil
+}
+
 //
-// private methods
+// private
 //
 
-func (cl *certLoader) hk(int64) time.Duration {
+func (cl *CertLoader) hk(int64) time.Duration {
 	if err := cl.do(true /*compare*/); err != nil {
 		nlog.Errorln(err)
 	}
 	return cl.hktime()
 }
 
-func (cl *certLoader) hktime() (d time.Duration) {
-	flags := cos.NodeStateFlags(cl.tstats.Get(cos.NodeAlerts))
+func (cl *CertLoader) hktime() (d time.Duration) {
+	flags := cos.NodeStateFlags(cl.flags.Load())
 	if flags.IsAnySet(cos.CertificateExpired | cos.CertificateInvalid) {
+		return dfltTimeInvalid
+	}
+	xcert := cl.xcert.Load()
+	if xcert == nil {
 		return dfltTimeInvalid
 	}
 
 	// (still) valid
 	const warn = "X.509 will soon expire - remains:"
-	rem := time.Until(cl.xcert.Load().notAfter)
+	rem := time.Until(xcert.notAfter)
 	switch {
 	case rem > hk.DayInterval:
 		d = 6 * time.Hour
 		if rem < warnSoonExpire {
-			cl.tstats.SetFlag(cos.NodeAlerts, cos.CertWillSoonExpire)
+			cl.setFlags(cos.CertWillSoonExpire)
 		}
 	case rem > 6*time.Hour:
 		d = time.Hour
@@ -162,57 +313,55 @@ func (cl *certLoader) hktime() (d time.Duration) {
 		nlog.Errorln(cl.certFile, warn, rem)
 		d = time.Minute
 	default: // expired
-		cl.tstats.SetClrFlag(cos.NodeAlerts, cos.CertificateExpired, cos.CertWillSoonExpire)
+		cl.setFlags(cos.CertificateExpired)
 		d = dfltTimeInvalid
 	}
 	return d
 }
 
-func (cl *certLoader) errorf() error {
-	flags := cos.NodeStateFlags(cl.tstats.Get(cos.NodeAlerts))
+// nil-safe: a first-ever load of an already-expired cert sets the flag with
+// no xcert stored
+func (cl *CertLoader) errorf() error {
+	flags := cos.NodeStateFlags(cl.flags.Load())
 	switch {
 	case flags.IsSet(cos.CertificateInvalid):
-		return fmt.Errorf("%s: (%s, %s) is invalid", name, cl.certFile, cl.keyFile)
+		return fmt.Errorf("%s: (%s, %s) is invalid", cl.name, cl.certFile, cl.keyFile)
 	case flags.IsSet(cos.CertificateExpired):
-		xcert := cl.xcert.Load()
-		msg := fmt.Sprintf(fmtErrExpired, name, cl.certFile, xcert.notAfter)
+		var notAfter time.Time
+		if xcert := cl.xcert.Load(); xcert != nil {
+			notAfter = xcert.notAfter
+		}
+		msg := fmt.Sprintf(fmtErrExpired, cl.name, cl.certFile, notAfter)
 		return &errExpired{msg}
 	default:
 		return nil
 	}
 }
 
-func (cl *certLoader) _get() *tls.Certificate { return &cl.xcert.Load().Certificate }
-
-func (cl *certLoader) _hello(*tls.ClientHelloInfo) (*tls.Certificate, error) { return cl._get(), nil }
-
-func GetCert() (GetCertCB, error) {
-	if gcl == nil {
-		debug.Assert(false, name, " not initialized")
-		return nil, fmt.Errorf("%s: not initialized", name)
+// initialized and (currently) usable
+// (nil receiver covers both GetCert and GetClientCert)
+func (cl *CertLoader) ready() error {
+	if cl == nil {
+		return errors.New("cert loader not initialized")
 	}
-	if err := gcl.errorf(); err != nil {
-		return nil, err
+	if err := cl.errorf(); err != nil {
+		return err
 	}
-	return gcl._hello, nil
+	if cl.xcert.Load() == nil {
+		return fmt.Errorf("%s: not initialized", cl.name)
+	}
+	return nil
 }
 
-func (cl *certLoader) _info(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+func (cl *CertLoader) _get() *tls.Certificate { return &cl.xcert.Load().Certificate }
+
+func (cl *CertLoader) _hello(*tls.ClientHelloInfo) (*tls.Certificate, error) { return cl._get(), nil }
+
+func (cl *CertLoader) _info(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 	return cl._get(), nil
 }
 
-func GetClientCert() (GetClientCertCB, error) {
-	if gcl == nil {
-		debug.Assert(false, name, " not initialized")
-		return nil, fmt.Errorf("%s: not initialized", name)
-	}
-	if err := gcl.errorf(); err != nil {
-		return nil, err
-	}
-	return gcl._info, nil
-}
-
-func (cl *certLoader) do(compare bool) (err error) {
+func (cl *CertLoader) do(compare bool) (err error) {
 	var (
 		finfo os.FileInfo
 		xcert = xcert{parent: cl}
@@ -220,22 +369,22 @@ func (cl *certLoader) do(compare bool) (err error) {
 	// 1. fstat
 	finfo, err = os.Stat(cl.certFile)
 	if err != nil {
-		return fmt.Errorf("%s: failed to fstat %q, err: %w", name, cl.certFile, err)
+		return fmt.Errorf("%s: failed to fstat %q, err: %w", cl.name, cl.certFile, err)
 	}
 
-	// 2. updated?
+	// 2. updated? (nothing loaded yet compares as "updated")
 	if compare {
-		xcert := cl.xcert.Load()
-		debug.Assert(xcert != nil, "expecting X.509 loaded at startup: ", cl.certFile, ", ", cl.keyFile)
-		if mtime := finfo.ModTime(); mtime.Equal(xcert.modTime) && finfo.Size() == xcert.size {
-			return nil
+		if prev := cl.xcert.Load(); prev != nil {
+			if mtime := finfo.ModTime(); mtime.Equal(prev.modTime) && finfo.Size() == prev.size {
+				return nil
+			}
 		}
 	}
 
 	// 3. read and parse
 	xcert.Certificate, err = tls.LoadX509KeyPair(cl.certFile, cl.keyFile)
 	if err != nil {
-		return fmt.Errorf("%s: failed to load (%s, %s), err: %w", name, cl.certFile, cl.keyFile, err)
+		return fmt.Errorf("%s: failed to load (%s, %s), err: %w", cl.name, cl.certFile, cl.keyFile, err)
 	}
 	rem, err := xcert.ini(finfo)
 	if err != nil {
@@ -243,11 +392,12 @@ func (cl *certLoader) do(compare bool) (err error) {
 	}
 
 	// 4. ok
-	cl.tstats.ClrFlag(cos.NodeAlerts, cos.CertificateExpired|cos.CertificateInvalid|cos.CertWillSoonExpire)
 	cl.xcert.Store(&xcert)
+	var soon cos.NodeStateFlags
 	if rem < warnSoonExpire {
-		cl.tstats.SetFlag(cos.NodeAlerts, cos.CertWillSoonExpire)
+		soon = cos.CertWillSoonExpire
 	}
+	cl.setFlags(soon)
 
 	nlog.Infoln(xcert.String())
 	return nil
@@ -281,7 +431,7 @@ func (x *xcert) ini(finfo os.FileInfo) (rem time.Duration, err error) {
 	if x.Certificate.Leaf == nil {
 		x.Certificate.Leaf, err = x509.ParseCertificate(x.Certificate.Certificate[0])
 		if err != nil {
-			return 0, fmt.Errorf("%s: failed to parse %q, err: %w", name, x.parent.certFile, err)
+			return 0, fmt.Errorf("%s: failed to parse %q, err: %w", x.parent.name, x.parent.certFile, err)
 		}
 	}
 	{
@@ -293,10 +443,10 @@ func (x *xcert) ini(finfo os.FileInfo) (rem time.Duration, err error) {
 	now := time.Now()
 	switch {
 	case now.After(x.notAfter):
-		msg := fmt.Sprintf(fmtErrExpired, name, x.parent.certFile, x.notAfter)
+		msg := fmt.Sprintf(fmtErrExpired, x.parent.name, x.parent.certFile, x.notAfter)
 		err = &errExpired{msg}
 	case now.Before(x.notBefore):
-		err = fmt.Errorf("%s: %s not valid yet: (%v, %v)", name, x.parent.certFile, x.notBefore, x.notAfter)
+		err = fmt.Errorf("%s: %s not valid yet: (%v, %v)", x.parent.name, x.parent.certFile, x.notBefore, x.notAfter)
 	default:
 		rem = x.notAfter.Sub(now)
 	}

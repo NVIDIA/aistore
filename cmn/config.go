@@ -2090,6 +2090,10 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 // TLSConf //
 /////////////
 
+func (c *TLSConf) Enabled() bool {
+	return c != nil && c.Certificate != "" && c.CertKey != ""
+}
+
 func (c *TLSConf) Validate(tag string) error {
 	if (c.Certificate == "") != (c.CertKey == "") {
 		return fmt.Errorf("%s: both server_crt and server_key must be set (or neither)", tag)

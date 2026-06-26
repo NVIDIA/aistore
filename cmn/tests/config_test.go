@@ -405,6 +405,24 @@ func TestHTTPConfCopyPropsPubTLS(t *testing.T) {
 	}
 }
 
+func TestTLSConfEnabled(t *testing.T) {
+	tests := []struct {
+		name string
+		tls  *cmn.TLSConf
+		want bool
+	}{
+		{name: "empty", tls: &cmn.TLSConf{}, want: false},
+		{name: "cert only", tls: &cmn.TLSConf{Certificate: "crt.pem"}, want: false},
+		{name: "key only", tls: &cmn.TLSConf{CertKey: "key.pem"}, want: false},
+		{name: "cert and key", tls: &cmn.TLSConf{Certificate: "crt.pem", CertKey: "key.pem"}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tassert.Errorf(t, tt.tls.Enabled() == tt.want, "Enabled() = %v, want %v", tt.tls.Enabled(), tt.want)
+		})
+	}
+}
+
 // TestLocalNetConfigValidate_NoOverlap verifies that different hostnames pass validation
 func TestLocalNetConfigValidate_NoOverlap(t *testing.T) {
 	tests := []struct {

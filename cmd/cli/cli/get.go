@@ -764,7 +764,7 @@ func (ex *extractor) _write(filename string, size int64, wfh *os.File, reader io
 func mpdGet(c *cli.Context, bck cmn.Bck, objName string, wfh *os.File, quiet bool) error {
 	var (
 		mpdArgs   api.MultipartDownloadArgs
-		callAfter = 100 * time.Millisecond // default: update progress ~10x per second
+		callEvery = 100 * time.Millisecond // default: update progress ~10x per second
 	)
 	mpdArgs.Writer = wfh
 
@@ -779,7 +779,7 @@ func mpdGet(c *cli.Context, bck cmn.Bck, objName string, wfh *os.File, quiet boo
 		mpdArgs.NumWorkers = parseIntFlag(c, numBlobWorkersFlag)
 	}
 	if flagIsSet(c, refreshFlag) {
-		callAfter = parseDurationFlag(c, refreshFlag)
+		callEvery = parseDurationFlag(c, refreshFlag)
 	}
 
 	// progress bar
@@ -816,7 +816,7 @@ func mpdGet(c *cli.Context, bck cmn.Bck, objName string, wfh *os.File, quiet boo
 				bar.SetTotal(curr, true)
 			}
 		}
-		mpdArgs.CallAfter = callAfter
+		mpdArgs.CallEvery = callEvery
 	}
 
 	err := api.MultipartDownload(apiBP, bck, objName, &mpdArgs)

@@ -21,7 +21,11 @@ import (
 //
 
 func (h *htrun) daeLoadX509(w http.ResponseWriter, r *http.Request) {
-	if err := certloader.Load(); err != nil {
+	if certloader.Mgr == nil {
+		h.writeErr(w, r, certloader.ErrNoCerts, http.StatusNotFound)
+		return
+	}
+	if err := certloader.Mgr.LoadAll(); err != nil {
 		h.writeErr(w, r, err)
 	}
 }
@@ -75,7 +79,11 @@ func (p *proxy) _x509call(si *meta.Snode, smap *smapX, client *http.Client) erro
 // - otherwise keep going
 func (p *proxy) cluLoadX509(w http.ResponseWriter, r *http.Request) {
 	// 1. self
-	if err := certloader.Load(); err != nil {
+	if certloader.Mgr == nil {
+		p.writeErr(w, r, certloader.ErrNoCerts, http.StatusNotFound)
+		return
+	}
+	if err := certloader.Mgr.LoadAll(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

@@ -476,8 +476,13 @@ func (h *htrun) initPhase2(config *cmn.Config) {
 
 	// before newTLS() below & before intra-cluster clients
 	if config.Net.HTTP.UseHTTPS {
-		if err := certloader.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey, h.statsT); err != nil {
+		if err := certloader.Init(h.statsT, config.Net.HTTP.Certificate, config.Net.HTTP.CertKey); err != nil {
 			cos.ExitLog(err)
+		}
+		if config.Net.HTTP.Pub != nil && config.Net.HTTP.Pub.Enabled() {
+			if err := certloader.Pub.Init(config.Net.HTTP.Pub.Certificate, config.Net.HTTP.Pub.CertKey); err != nil {
+				cos.ExitLog(err)
+			}
 		}
 	}
 
@@ -612,25 +617,32 @@ func (h *htrun) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
 
 func (h *htrun) run(config *cmn.Config) error {
 	var (
-		tlsConf *tls.Config
-		logger  = log.New(&nlogWriter{}, "net/http err: ", 0) // a wrapper to log http.Server errors
+		tlsDflt, tlsPub *tls.Config
+		logger          = log.New(&nlogWriter{}, "net/http err: ", 0) // a wrapper to log http.Server errors
 	)
 	if config.Net.HTTP.UseHTTPS {
-		c, err := newTLS(&config.Net.HTTP)
+		c, err := newTLS(&config.Net.HTTP.TLSConf, certloader.Default)
 		if err != nil {
 			cos.ExitLog(err)
 		}
-		tlsConf = c
+		tlsDflt, tlsPub = c, c
+		if config.Net.HTTP.Pub != nil && config.Net.HTTP.Pub.Enabled() {
+			c2, err2 := newTLS(config.Net.HTTP.Pub, certloader.Pub)
+			if err2 != nil {
+				cos.ExitLog(err2)
+			}
+			tlsPub = c2
+		}
 	}
 
 	debug.Assert(config.HostNet.UseIntraControl, "see LocalConfig.Validate()")
 	go func() {
-		_ = g.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf, config)
+		_ = g.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsDflt, config)
 	}()
 
 	if config.HostNet.UseIntraData {
 		go func() {
-			_ = g.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsConf, config)
+			_ = g.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsDflt, config)
 		}()
 	}
 
@@ -640,11 +652,11 @@ func (h *htrun) run(config *cmn.Config) error {
 	} else if len(h.si.PubExtra) > 0 {
 		// multihome: listen on additional configured pub addr-s
 		for _, pubExtra := range h.si.PubExtra {
-			h._listen(pubExtra, logger, tlsConf, config, g.netServ.pub.useIPv6)
+			h._listen(pubExtra, logger, tlsPub, config, g.netServ.pub.useIPv6)
 		}
 	}
 
-	return g.netServ.pub.listen(ep, logger, tlsConf, config) // stay here
+	return g.netServ.pub.listen(ep, logger, tlsPub, config) // stay here
 }
 
 func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config, useIPv6 bool) {
@@ -1384,7 +1396,12 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 	case apc.WhatMetricNames:
 		body = h.statsT.GetMetricNames()
 	case apc.WhatCertificate: // (see also: daeLoadX509, cluLoadX509)
-		body = certloader.Props()
+		props := certloader.Mgr.Props()
+		if len(props) == 0 {
+			h.writeErr(w, r, certloader.ErrNoCerts, http.StatusNotFound)
+			return
+		}
+		body = props
 	default:
 		h.writeErrf(w, r, "invalid '%s' request: unrecognized 'what=%s' query", r.URL.Path, what)
 		return

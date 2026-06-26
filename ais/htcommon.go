@@ -441,7 +441,7 @@ retry:
 	if config.Net.HTTP.UseHTTPS {
 		tag = "HTTPS"
 		// Listen and Serve TLS; certificates provided via tlsConf.GetCertificate()
-		// (ie., via certloader.GetCert())
+		// (ie., via CertLoader.GetCert())
 		err = server.s.ListenAndServeTLS("" /*certFile*/, "" /*keyFile*/)
 	} else {
 		err = server.s.ListenAndServe()
@@ -461,7 +461,7 @@ retry:
 	return err
 }
 
-func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
+func newTLS(conf *cmn.TLSConf, cl *certloader.CertLoader) (tlsConf *tls.Config, err error) {
 	var (
 		pool       *x509.CertPool
 		caCert     []byte
@@ -470,7 +470,7 @@ func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
 	tlsConf = &tls.Config{
 		ClientAuth: clientAuth,
 	}
-	if clientAuth > tls.RequestClientCert {
+	if clientAuth >= tls.VerifyClientCertIfGiven {
 		if caCert, err = os.ReadFile(conf.ClientCA); err != nil {
 			return nil, fmt.Errorf("new-tls: failed to read PEM %q, err: %w", conf.ClientCA, err)
 		}
@@ -489,7 +489,7 @@ func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
 		}
 		tlsConf.ClientCAs = pool
 	}
-	tlsConf.GetCertificate, err = certloader.GetCert()
+	tlsConf.GetCertificate, err = cl.GetCert()
 	return tlsConf, err
 }
 
