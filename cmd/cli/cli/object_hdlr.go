@@ -204,6 +204,12 @@ var (
 			forceFlag,
 			encodeObjnameFlag,
 		},
+		commandSelect: {
+			objectSelectQueryFlag,
+			objectSelectInputFormatFlag,
+			objectSelectOutputFormatFlag,
+			encodeObjnameFlag,
+		},
 		cmdMptCreate: {
 			verboseFlag,
 		},
@@ -331,6 +337,14 @@ var (
 				ArgsUsage:    objectArgument,
 				Flags:        sortFlags(objectCmdsFlags[commandCat]),
 				Action:       catHandler,
+				BashComplete: bucketCompletions(bcmplop{separator: true}),
+			},
+			{
+				Name:         commandSelect,
+				Usage:        "Select rows and columns from a structured object on the target",
+				ArgsUsage:    selectObjectArgument,
+				Flags:        sortFlags(objectCmdsFlags[commandSelect]),
+				Action:       objectSelectHandler,
 				BashComplete: bucketCompletions(bcmplop{separator: true}),
 			},
 			// multipart upload commands

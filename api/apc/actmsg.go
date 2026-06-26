@@ -60,6 +60,7 @@ const (
 	ActNewPrimary     = "new-primary"
 	ActPromote        = "promote"
 	ActRenameObject   = "rename-obj"
+	ActSelectObject   = "select-obj"
 
 	// multipart upload
 	ActMptUpload   = "mpt-upload"   // create a new multipart upload
