@@ -489,9 +489,7 @@ func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
 		}
 		tlsConf.ClientCAs = pool
 	}
-	if conf.Certificate != "" && conf.CertKey != "" {
-		tlsConf.GetCertificate, err = certloader.GetCert()
-	}
+	tlsConf.GetCertificate, err = certloader.GetCert()
 	return tlsConf, err
 }
 

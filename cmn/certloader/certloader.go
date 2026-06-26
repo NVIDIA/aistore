@@ -187,7 +187,10 @@ func (cl *certLoader) _get() *tls.Certificate { return &cl.xcert.Load().Certific
 func (cl *certLoader) _hello(*tls.ClientHelloInfo) (*tls.Certificate, error) { return cl._get(), nil }
 
 func GetCert() (GetCertCB, error) {
-	debug.Assert(gcl != nil, name, " not initialized")
+	if gcl == nil {
+		debug.Assert(false, name, " not initialized")
+		return nil, fmt.Errorf("%s: not initialized", name)
+	}
 	if err := gcl.errorf(); err != nil {
 		return nil, err
 	}
@@ -199,7 +202,10 @@ func (cl *certLoader) _info(*tls.CertificateRequestInfo) (*tls.Certificate, erro
 }
 
 func GetClientCert() (GetClientCertCB, error) {
-	debug.Assert(gcl != nil, name, " not initialized")
+	if gcl == nil {
+		debug.Assert(false, name, " not initialized")
+		return nil, fmt.Errorf("%s: not initialized", name)
+	}
 	if err := gcl.errorf(); err != nil {
 		return nil, err
 	}

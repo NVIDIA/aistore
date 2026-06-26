@@ -145,7 +145,7 @@ In addition, all embedded (intra-cluster) clients in a cluster utilize the follo
 - [Testing with self-signed certificates](/docs/https.md#testing-with-self-signed-certificates)
 - [Observability: TLS related alerts](/docs/https.md#observability-tls-related-alerts)
 - [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
-- [Switching cluster between HTTP and HTTPS](/docs/https.md#switching-cluster-between-http-and-https)
+- [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
 
 ## Local Playground
 

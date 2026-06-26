@@ -682,10 +682,10 @@ There's a separate document that tackles HTTPS topics that, in part, include:
 
 - [Generating self-signed certificates](/docs/https.md#generating-self-signed-certificates)
 - [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](/docs/https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
-- [Accessing the cluster](/docs/https.md#accessing-the-cluster)
+- [Accessing HTTPS-based cluster](/docs/https.md#accessing-https-based-cluster)
 - [Testing with self-signed certificates](/docs/https.md#testing-with-self-signed-certificates)
 - [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
-- [Switching cluster between HTTP and HTTPS](/docs/https.md#switching-cluster-between-http-and-https)
+- [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
 
 ### Build, Make, and Development Tools
 

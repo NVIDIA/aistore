@@ -10,13 +10,12 @@ But first:
 This assumes that [X.509 certificate already exists](getting_started.md#setting-up-https-locally) and the (HTTP-based) cluster is up and running. All we need to do at this point is switch it to HTTPS.
 
 ```console
-# step 1: reconfigure cluster to use HTTPS
-$ ais config cluster net.http.use_https true
-
-# step 2: add information related to certs
+# step 1: configure certificate paths and verification
+$ ais config cluster net.http.server_key <path-to-cert>/cert.key net.http.server_crt <path-to-cert>/cert.crt
 $ ais config cluster net.http.skip_verify true
-$ ais config cluster net.http.server_key <path-to-cert>/cert.key
-$ ais config cluster net.http.server_crt <path-to-cert>/cert.crt
+
+# step 2: reconfigure cluster to use HTTPS
+$ ais config cluster net.http.use_https true
 
 # step 3: shutdown
 $ ais cluster shutdown
@@ -48,13 +47,15 @@ ais://abc      yes             999 0           5.86MiB 5.20MiB 0B               
 ...
 ```
 
-> **NOTE:** `localhost:8080` (above) can be replaced with any legitimate (http or https) address of any AIS gateway. The latter may - but not necessarily have to - be specified with the environment variable `AIS ENDPOINT`.
+> **NOTE:** `localhost:8080` (above) can be replaced with any legitimate (http or https) address of any AIS gateway. The latter may - but not necessarily have to - be specified with the environment variable `AIS_ENDPOINT`.
 
 ## From HTTPS back to HTTP
 
 ```console
 # step 1: disable HTTPS
 $ AIS_ENDPOINT=https://127.0.0.1:8080 ais config cluster net.http.use_https false
+
+# Note: certificate paths can only be cleared _after_ setting `use_https=false`
 
 # step 2: shutdown (notice that we are still using HTTPS endpoint)
 $ AIS_ENDPOINT=https://127.0.0.1:8080 ais cluster shutdown -y

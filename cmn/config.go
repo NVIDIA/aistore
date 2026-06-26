@@ -2048,6 +2048,16 @@ func (c *HTTPConf) Validate() error {
 		return fmt.Errorf("invalid idle_conns_per_host: %d (expecting range [0 - %d])", c.MaxIdleConnsPerHost, n)
 	}
 
+	// must be done before TLSConf.Validate (below)
+	if c.UseHTTPS {
+		const hint = " (set server_crt and server_key first, then enable use_https)"
+		if c.Certificate == "" {
+			return errors.New("net.http.server_crt required when use_https=true" + hint)
+		}
+		if c.CertKey == "" {
+			return errors.New("net.http.server_key required when use_https=true" + hint)
+		}
+	}
 	if err := c.TLSConf.Validate("net.http"); err != nil {
 		return err
 	}

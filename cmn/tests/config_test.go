@@ -264,13 +264,21 @@ func TestGCOClone_NoAuthTracingAlias(t *testing.T) {
 }
 
 func TestHTTPConfValidateTLS(t *testing.T) {
-	const crt = "crt.pem"
+	const (
+		crt = "crt.pem"
+		key = "key.pem"
+	)
 
 	tests := []struct {
 		name    string
 		http    cmn.HTTPConf
 		wantErr bool
 	}{
+		{name: "HTTPS without certs", http: cmn.HTTPConf{UseHTTPS: true}, wantErr: true},
+		{name: "HTTPS with certs", http: cmn.HTTPConf{UseHTTPS: true, TLSConf: cmn.TLSConf{Certificate: crt, CertKey: key}}},
+		{name: "HTTPS with crt only", http: cmn.HTTPConf{UseHTTPS: true, TLSConf: cmn.TLSConf{Certificate: crt}}, wantErr: true},
+		{name: "HTTPS with key only", http: cmn.HTTPConf{UseHTTPS: true, TLSConf: cmn.TLSConf{CertKey: key}}, wantErr: true},
+		{name: "not HTTPS (yet) with certs", http: cmn.HTTPConf{TLSConf: cmn.TLSConf{Certificate: crt, CertKey: key}}},
 		{name: "pub fully unset", http: cmn.HTTPConf{}},
 		{name: "pub auth knobs without certs", http: cmn.HTTPConf{Pub: &cmn.TLSConf{ClientAuthTLS: int(tls.RequireAndVerifyClientCert)}}, wantErr: true},
 		{name: "pub CA without certs", http: cmn.HTTPConf{Pub: &cmn.TLSConf{ClientCA: "ca.pem"}}, wantErr: true},
