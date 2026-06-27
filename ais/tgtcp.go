@@ -1228,7 +1228,6 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 		newBMD, msgBMD, errBMD       = t.extractBMD(payload, sender)
 		newRMD, msgRMD, errRMD       = t.extractRMD(payload, sender)
 		newEtlMD, msgEtlMD, errEtlMD = t.extractEtlMD(payload, sender)
-		newCSK, msgCSK, errCSK       = t.extractCSK(payload, sender)
 	)
 
 	// 2. apply
@@ -1249,16 +1248,13 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	if errEtlMD == nil && newEtlMD != nil {
 		errEtlMD = t.receiveEtlMD(newEtlMD, msgEtlMD, payload, sender, _stopETLs)
 	}
-	if errCSK == nil && newCSK != nil {
-		errCSK = t.receiveCSK(newCSK, msgCSK, sender)
-	}
 
 	// 3. respond
-	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errEtlMD == nil && errCSK == nil {
+	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errEtlMD == nil {
 		return
 	}
 	t.fillNsti(nsti)
-	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errCSK)
+	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD)
 	t.writeErr(w, r, retErr, http.StatusConflict)
 }
 

@@ -412,8 +412,7 @@ func (c *clupost) dispatch(msync bool) {
 
 	if c.apiOp == apc.SelfJoin {
 		// respond to the self-joining node with cluster-meta that does not include Smap
-		includeCSK := c.config.Auth.SignVerifyEnabled() // TODO: deprecated (ref Ed25519)
-		md, err := p.cluMeta(cmetaFillOpt{skipSmap: true, includeCSK: includeCSK})
+		md, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -438,9 +437,7 @@ func (c *clupost) setVerHdr() {
 // (the later gets finalized and metasync-ed upon success)
 func (c *clupost) adminJoinHandshake() (int, error) {
 	p, nsi := c.p, c.nsi
-	includeCSK := c.config.Auth.SignVerifyEnabled() // TODO: deprecated (ref Ed25519)
-
-	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true, includeCSK: includeCSK})
+	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -695,11 +692,6 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		// proceed anyway
 	} else if config != nil {
 		pairs = append(pairs, revsPair{config, actMsgExt})
-		if config.Auth.SignVerifyEnabled() {
-			// TODO -- FIXME: deprecated (ref Ed25519)
-			k := p.owner.csk.load()
-			pairs = append(pairs, revsPair{k, actMsgExt})
-		}
 	}
 
 	pairs = append(pairs, revsPair{clone, actMsgExt}, revsPair{bmd, actMsgExt})

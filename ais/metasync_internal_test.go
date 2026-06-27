@@ -109,8 +109,6 @@ func newPrimary(t *testing.T) *proxy {
 	p.owner.etl = e
 
 	p.gmm = memsys.PageMM()
-
-	p.owner.csk.init()
 	return p
 }
 
@@ -137,7 +135,6 @@ func newSecondary(name string) *proxy {
 	o := newBMDOwnerPrx(cmn.GCO.Get())
 	o.put(newBucketMD())
 	p.owner.bmd = o
-	p.owner.csk.init()
 	return p
 }
 

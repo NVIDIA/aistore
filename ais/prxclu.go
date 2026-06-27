@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -478,12 +477,6 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	}
 
 	pairs = append(pairs, revsPair{config, actMsgExt})
-	if config.Auth.SignVerifyEnabled() {
-		// TODO -- FIXME: deprecated (ref Ed25519)
-		k := p.owner.csk.load()
-		pairs = append(pairs, revsPair{k, actMsgExt})
-	}
-
 	wg := p.metasyncer.sync(pairs...)
 	if ctx.rmdCtx != nil && ctx.rmdCtx.wait {
 		wg.Wait()
@@ -715,8 +708,7 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 				return
 			}
 			if cur != upd {
-				// TODO: remove/replace cskTag = "csk" - here and elsewhere (ref Ed25519)
-				_warnUpd("config.auth "+cskTag, strconv.FormatBool(cur), strconv.FormatBool(upd))
+				_warnUpd("config.auth.intra_cluster", strconv.FormatBool(cur), strconv.FormatBool(upd))
 			}
 		}
 	}
@@ -826,29 +818,8 @@ func _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err er
 }
 
 func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
-	var (
-		wg  *sync.WaitGroup
-		msg = p.newAmsg(ctx.msg, nil)
-	)
-	switch {
-	case clone.Auth.SignVerifyEnabled():
-		// TODO -- FIXME: deprecated (ref Ed25519)
-		var k *clusterKey
-		if ctx.oldConfig == nil || !ctx.oldConfig.Auth.SignVerifyEnabled() {
-			k = p.owner.csk.gen(p.owner.smap.get().Version)
-		} else {
-			k = p.owner.csk.load()
-		}
-		wg = p.metasyncer.sync(revsPair{clone, msg}, revsPair{k, msg})
-	case ctx.oldConfig != nil && ctx.oldConfig.Auth.SignVerifyEnabled():
-		// TODO -- FIXME: deprecated (ref Ed25519)
-		// clear locally; usage gated by Rom.SignVerifyEnabled()
-		p.owner.csk.reset()
-		fallthrough
-	default:
-		wg = p.metasyncer.sync(revsPair{clone, msg})
-	}
-
+	msg := p.newAmsg(ctx.msg, nil)
+	wg := p.metasyncer.sync(revsPair{clone, msg})
 	if ctx.wait {
 		wg.Wait()
 	}

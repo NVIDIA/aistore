@@ -52,10 +52,10 @@ import (
 const dpqTag = "dpq"
 
 type (
-	cskgrp struct {
+	svgrp struct {
 		nonce   uint64 // QparamNonce
 		smapVer int64  // QparamSmapVer
-		hmacSig string // QparamHMAC (TODO: deprecated (ref Ed25519))
+		sig     string // QparamSig
 	}
 	dpq struct {
 		m    cos.StrKVs // see groups 1 and 7 above
@@ -73,7 +73,7 @@ type (
 			owt     string // object write transaction { OwtPut, ... }
 			objto   string // uname of the destination object
 		}
-		csk cskgrp // csk envelope (group CSK/HMAC) (TODO: ref Ed25519)
+		sv svgrp
 
 		// boolean fields
 		skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
@@ -208,13 +208,13 @@ func (dpq *dpq) parse(rawQuery string) error {
 		case apc.QparamObjTo:
 			dpq.sys.objto, err = _unescape(value)
 
-		// CSK/HMAC fields
+		// sign/verify fields
 		case apc.QparamNonce:
-			dpq.csk.nonce, err = strconv.ParseUint(value, cskBase, 64)
+			dpq.sv.nonce, err = strconv.ParseUint(value, svNumBase, 64)
 		case apc.QparamSmapVer:
-			dpq.csk.smapVer, err = strconv.ParseInt(value, cskBase, 64)
-		case apc.QparamHMAC:
-			dpq.csk.hmacSig = value // (base64.RawURLEncoding)
+			dpq.sv.smapVer, err = strconv.ParseInt(value, svNumBase, 64)
+		case apc.QparamSig:
+			dpq.sv.sig = value // (base64.RawURLEncoding)
 
 		// Parameters that don't need unescaping
 		case apc.QparamMptUploadID, apc.QparamMptPartNo, apc.QparamFltPresence, apc.QparamBinfoWithOrWithoutRemote,
@@ -317,13 +317,12 @@ func (dpq *dpq) _archstr() string {
 }
 
 //
-// url.Values => cskgrp
+// url.Values => svgrp
 //
 
-// (compare with cskFromHdr)
-func cskFromQ(q url.Values) (*cskgrp, error) {
+func svgrpFromQ(q url.Values) (*svgrp, error) {
 	const tag = "from-q"
-	sig := q.Get(apc.QparamHMAC)
+	sig := q.Get(apc.QparamSig)
 	if sig == "" {
 		return nil, nil
 	}
@@ -332,15 +331,15 @@ func cskFromQ(q url.Values) (*cskgrp, error) {
 	}
 
 	s := q.Get(apc.QparamNonce)
-	nonce, err := strconv.ParseUint(s, cskBase, 64)
+	nonce, err := strconv.ParseUint(s, svNumBase, 64)
 	if err != nil {
 		return nil, fmt.Errorf("%s: invalid nonce '%s=%s': %v", tag, apc.QparamNonce, s, err)
 	}
 
 	s = q.Get(apc.QparamSmapVer)
-	smapVer, err := strconv.ParseInt(s, cskBase, 64)
+	smapVer, err := strconv.ParseInt(s, svNumBase, 64)
 	if err != nil {
 		return nil, fmt.Errorf("%s: invalid Smap version %q: %v", tag, s, err)
 	}
-	return &cskgrp{nonce: nonce, smapVer: smapVer, hmacSig: sig}, nil
+	return &svgrp{nonce: nonce, smapVer: smapVer, sig: sig}, nil
 }

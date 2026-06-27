@@ -1241,7 +1241,6 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		newRMD, msgRMD, errRMD              = p.extractRMD(payload, sender)
 		newEtlMD, msgEtlMD, errEtlMD        = p.extractEtlMD(payload, sender)
 		revokedTokens, msgTokens, errTokens = p.extractRevokedTokenList(payload, sender)
-		newCSK, msgCSK, errCSK              = p.extractCSK(payload, sender)
 	)
 
 	// 2. apply
@@ -1265,16 +1264,13 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		nlog.Infoln("msync Rx token list from", sender, "msg:", msgTokens.String(), "num revoked:", len(revokedTokens.Tokens))
 		_ = p.authn.updateRevokedList(r.Context(), revokedTokens)
 	}
-	if errCSK == nil && newCSK != nil {
-		errCSK = p.receiveCSK(newCSK, msgCSK, sender)
-	}
 
 	// 3. respond
-	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil && errCSK == nil {
+	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil {
 		return
 	}
 	p.fillNsti(nsti)
-	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens, errCSK)
+	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens)
 	p.writeErr(w, r, retErr, http.StatusConflict)
 }
 

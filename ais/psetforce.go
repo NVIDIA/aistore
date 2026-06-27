@@ -648,17 +648,6 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	if config != nil {
 		pairs = append(pairs, revsPair{config, msg})
 		nlog.Infoln("\t+", config.String())
-
-		if config.Auth.SignVerifyEnabled() {
-			// TODO -- FIXME: deprecated (ref Ed25519)
-			k := p.owner.csk.load()
-			if k.ver == 0 {
-				k = p.owner.csk.gen(clone.Version)
-				nlog.Infoln("\tgenerate:", k.String())
-			}
-			pairs = append(pairs, revsPair{k, msg})
-			nlog.Infoln("\t+", k.String())
-		}
 	}
 	etl := p.owner.etl.get()
 	if etl != nil && etl.version() > 0 {

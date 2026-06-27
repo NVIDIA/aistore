@@ -239,7 +239,7 @@ const (
 	// added in v4.1
 	QparamSmapVer = "vpams"
 	QparamNonce   = "x"
-	QparamHMAC    = "u" // TODO: legacy CSK/HMAC path (ref Ed25519)
+	QparamSig     = "u"
 
 	// GetBatch
 	QparamTID   = "tid"   // designated target

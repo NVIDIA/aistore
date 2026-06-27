@@ -65,7 +65,6 @@ type (
 		EtlMD     *etlMD             `json:"etlMD,omitempty"`
 		Config    *globalConfig      `json:"config"`
 		SI        *meta.Snode        `json:"si"`
-		CSK       []byte             `json:"csk,omitempty"`
 		PrimeTime int64              `json:"prime_time"`
 		Flags     cos.NodeStateFlags `json:"flags"`
 	}
@@ -147,7 +146,6 @@ type (
 		skipEtlMD     bool
 		fillRebMarker bool
 		skipPrimeTime bool
-		includeCSK    bool // TODO -- FIXME: deprecated (ref ed25519)
 	}
 
 	getMaxCii struct {

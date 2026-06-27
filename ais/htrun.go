@@ -84,12 +84,14 @@ type htrun struct {
 		rmd    *rmdOwner
 		config *configOwner
 		etl    etlOwner
-
-		// TODO -- FIXME: remove after node signing (below) replaces shared cluster key
-		csk cskOwner
 	}
 
+	// sign/verify
 	nodeSigningKey *cos.NodeSigningKey
+	sv             struct {
+		state atomic.Int32  // svOn, svStrict (existing)
+		nonce atomic.Uint64 // per-node monotonic signing nonce
+	}
 
 	keepalive keepaliver
 	statsT    stats.Tracker
@@ -134,7 +136,6 @@ func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	}
 }
 
-// TODO: remove pre-5.0 CSK/HMAC verification path (ref Ed25519)
 func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
 	debug.Assert(len(apireq.prefix) != 0)
 	apireq.items, err = h.parseURL(w, r, apireq.prefix, apireq.after, false)
@@ -145,22 +146,22 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	bckName := apireq.items[apireq.bckIdx]
 
 	var (
-		csk *cskgrp
-		pid string
+		svgrp *svgrp
+		pid   string
 	)
 	if apireq.dpq != nil {
 		if err = apireq.dpq.parse(r.URL.RawQuery); err != nil {
 			h.writeErr(w, r, err)
 			return err
 		}
-		if cmn.Rom.SignVerifyEnabled() && apireq.dpq.csk.hmacSig != "" {
-			csk = &apireq.dpq.csk
+		if cmn.Rom.SignVerifyEnabled() && apireq.dpq.sv.sig != "" {
+			svgrp = &apireq.dpq.sv
 			pid = apireq.dpq.sys.pid
 		}
 	} else {
 		apireq.query = r.URL.Query()
 		if cmn.Rom.SignVerifyEnabled() {
-			if csk, err = cskFromQ(apireq.query); err != nil {
+			if svgrp, err = svgrpFromQ(apireq.query); err != nil {
 				h.writeErr(w, r, err)
 				return err
 			}
@@ -168,17 +169,13 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 		pid = apireq.query.Get(apc.QparamPID)
 	}
 
-	if csk != nil {
+	if svgrp != nil {
 		var (
 			ecode int
 			err   error
-			sign  = &signer{r: r, h: h, smapVer: csk.smapVer, nonce: csk.nonce}
+			sign  = &signer{r: r, h: h, smapVer: svgrp.smapVer, nonce: svgrp.nonce}
 		)
-		if USE_SIGNVERIFY {
-			ecode, err = sign.svVerify(pid, csk.hmacSig)
-		} else {
-			ecode, err = sign.verify(pid, csk) // TODO -- FIXME: remove
-		}
+		ecode, err = sign.verify(pid, svgrp.sig)
 		if err != nil {
 			h.writeErr(w, r, err, ecode)
 			return err
@@ -218,13 +215,6 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		cm.EtlMD = h.owner.etl.get()
 	}
 
-	if opts.includeCSK {
-		debug.Assert(smap.IsPrimary(h.si)) // only primary can be asked via opts.includeCSK
-		k := h.owner.csk.load()
-		debug.Assert(k.version() > 0 && len(k.secret) != 0) // must have a good key
-		cm.CSK = k.marshal()
-	}
-
 	if h.si.IsTarget() && opts.fillRebMarker {
 		rebInterrupted, restarted := opts.htext.interruptedRestarted()
 		if rebInterrupted {
@@ -244,26 +234,6 @@ func (h *htrun) recvCluMeta(body []byte) (*cluMeta, error) {
 	var cm cluMeta
 	if err := jsoniter.Unmarshal(body, &cm); err != nil {
 		return nil, fmt.Errorf(cmn.FmtErrUnmarshal, h, tagCM, cos.BHead(body), err)
-	}
-	if len(cm.CSK) == 0 {
-		return &cm, nil
-	}
-
-	var (
-		nk       clusterKey
-		ok       = h.owner.csk.load()
-		unpacker = cos.NewUnpacker(cm.CSK)
-	)
-	if err := nk.Unpack(unpacker); err != nil {
-		return nil, fmt.Errorf("%s: failed to unpack %s, err: %v", h, cskTag, err)
-	}
-	if nk.version() <= ok.version() {
-		if nk.version() < ok.version() {
-			return nil, newErrDowngrade(h.si, ok.String(), nk.String())
-		}
-	} else {
-		h.owner.csk.store(&nk)
-		nlog.Infoln(h.String(), "received", nk.String())
 	}
 	return &cm, nil
 }
@@ -566,7 +536,8 @@ func (h *htrun) initPhase2(config *cmn.Config) {
 	h.owner.smap = newSmapOwner(config)
 	h.owner.rmd = newRMDOwner(config)
 	h.owner.rmd.load()
-	h.owner.csk.init()
+
+	h.sv.nonce.Store(uint64(cos.CryptoRandI()))
 
 	h.gmm = memsys.PageMM()
 	h.gmm.RegWithHK()
@@ -900,7 +871,9 @@ func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX) {
 	}
 }
 
-// HMAC-sign the intra-cluster control-plane request (compare with p.redurl())
+// sign an intra-cluster control-plane request with this node's Ed25519 key.
+// Caller gates on SignVerifyEnabled() — symmetrically with verifyIntra().
+// (compare with p.redurl())
 func (h *htrun) signIntra(req *http.Request, smap *smapX) {
 	sb := sbAlloc()
 	sign := &signer{
@@ -908,34 +881,37 @@ func (h *htrun) signIntra(req *http.Request, smap *smapX) {
 		h:       h,
 		sb:      sb,
 		smapVer: smap.version(),
-		nonce:   h.owner.csk.nonce.Add(1),
+		nonce:   h.sv.nonce.Add(1),
 	}
-	sign.compute(h.SID())
-	if sign.sig != nil { // nil => key ver 0 (early startup)
-		req.Header.Set(apc.HdrSenderNonce, strconv.FormatUint(sign.nonce, 10))
-		req.Header.Set(apc.HdrSenderSig, string(sign.sig))
-	}
+	sign.sign(h.SID()) // sign.sig points into sb (recycled below)
+
+	// transmit everything the receiver can't derive from the request itself:
+	// - smap-ver and nonce are both in the signed payload (see svPayload)
+	// - smap-ver is already set above (by setIntraHdrs)
+	req.Header.Set(apc.HdrSenderNonce, strconv.FormatUint(sign.nonce, 10))
+	req.Header.Set(apc.HdrSenderSig, string(sign.sig)) // string() copies before sbFree
+
 	sbFree(sb)
 }
 
-// TODO: remove pre-5.0 CSK/HMAC verification path (ref Ed25519)
+// verify an intra-cluster control-plane request against the sender's
+// Smap-resident verifying key. Caller gates on SignVerifyEnabled().
 //
-// In single-network deployments, caller headers are client-spoofable.
-// When CSK is enabled, require HMAC before treating them as intra-cluster;
-// otherwise preserve legacy/bootstrap behavior.
+// In single-network deployments, caller-asserted intra-cluster headers are
+// client-spoofable; when sign/verify is enabled we require a valid signature
+// before trusting the request as intra-cluster.
 func (h *htrun) verifyIntra(r *http.Request, sid, sname string) error {
-	hdr := r.Header
-	cg, err := cskFromHdr(hdr)
+	cg, err := svgrpFromHdr(r.Header)
 	if err != nil {
 		return err
 	}
 	if cg == nil {
-		return fmt.Errorf("%s: missing CSK signature for intra-cluster request from %s", h, sname)
+		return fmt.Errorf("%s: missing signature for intra-cluster request from %s", h, sname)
 	}
-
-	sign := &signer{r: r, h: h}
-	if _, err := sign.verify(sid, cg); err != nil {
-		return fmt.Errorf("%s: invalid CSK signature for intra-cluster request from %s: %w", h, sname, err)
+	// seed smap-ver and nonce from the wire so svPayload reconstructs byte-identically
+	sign := &signer{r: r, h: h, smapVer: cg.smapVer, nonce: cg.nonce}
+	if _, err := sign.verify(sid, cg.sig); err != nil {
+		return fmt.Errorf("%s: invalid signature for intra-cluster request from %s: %w", h, sname, err)
 	}
 	return nil
 }
@@ -2137,47 +2113,6 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, sender string) (*toke
 	return tokenList, msg, nil
 }
 
-func (h *htrun) extractCSK(payload msPayload, sender string) (*clusterKey, *actMsgExt, error) {
-	var (
-		msg       = &actMsgExt{}
-		bytes, ok = payload[revsCSKTag]
-	)
-	if !ok {
-		return nil, nil, nil
-	}
-
-	if msgValue, ok := payload[revsCSKTag+revsActionTag]; ok {
-		if err := jsoniter.Unmarshal(msgValue, msg); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err)
-			return nil, nil, err
-		}
-	}
-	nk := &clusterKey{}
-	unpacker := cos.NewUnpacker(bytes)
-	if err := nk.Unpack(unpacker); err != nil {
-		err = fmt.Errorf("%s: failed to unpack %s, err: %v", h, cskTag, err)
-		return nil, nil, err
-	}
-	nlog.Infof("extract %s from %q (action: %q)", nk.String(), sender, msg.Action)
-
-	return nk, msg, nil
-}
-
-// (compare w/ h.cluMeta)
-func (h *htrun) receiveCSK(nk *clusterKey, msg *actMsgExt, sender string) error {
-	ok := h.owner.csk.load()
-	logmsync(ok.ver, nk, msg, sender, nk.String())
-
-	if nk.version() <= ok.version() {
-		if nk.version() < ok.version() {
-			return newErrDowngrade(h.si, ok.String(), nk.String())
-		}
-	} else {
-		h.owner.csk.store(nk)
-	}
-	return nil
-}
-
 // ================================== Background =========================================
 //
 // Generally, AIStore clusters can be deployed with an arbitrary numbers of proxies.
@@ -2698,7 +2633,7 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) error {
 		return fmt.Errorf(ferr, h, sname, sid)
 	}
 
-	// 3. TODO: enable HMAC-verify (see setIntraHdrs for "signing")
+	// 3. TODO -- FIXME: enable (see setIntraHdrs for "signing") (ref Ed25519)
 	verifying := false && cmn.Rom.SignVerifyEnabled() && !g.netServ.pub.isSeparatePub
 	if verifying {
 		if err := h.verifyIntra(r, sid, sname); err != nil {
@@ -2792,9 +2727,9 @@ func (h *htrun) qencode(q url.Values, now int64, sign *signer) string {
 	q.Set(apc.QparamUnixTime, unixNano2S(now))
 
 	if sign != nil {
-		q.Set(apc.QparamSmapVer, strconv.FormatInt(sign.smapVer, cskBase))
-		q.Set(apc.QparamNonce, strconv.FormatUint(sign.nonce, cskBase))
-		q.Set(apc.QparamHMAC, string(sign.sig))
+		q.Set(apc.QparamSmapVer, strconv.FormatInt(sign.smapVer, svNumBase))
+		q.Set(apc.QparamNonce, strconv.FormatUint(sign.nonce, svNumBase))
+		q.Set(apc.QparamSig, string(sign.sig))
 	}
 	return q.Encode()
 }
