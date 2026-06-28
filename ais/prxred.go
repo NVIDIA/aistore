@@ -54,37 +54,31 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 	}
 
 	var (
-		sign    *signer
-		enabled = cmn.Rom.SignVerifyEnabled()
+		sv      *svReq
+		signTo  = p.svs.signTo(si)
 		special = cmn.HasSpecialSymbols(r.URL.Path)
 	)
 	switch {
-	case enabled:
+	case signTo:
 		// sign the redirect
 
 		sb := sbAlloc()
-		defer sbFree(sb) // computed sign.sig points into sb (to be recycled) but buildURL (below) clones it
+		defer sbFree(sb) // computed sv.sig points into sb (to be recycled) but buildURL (below) clones it
 
 		size := len(nodeURL) + len(r.URL.Path) + len(r.URL.RawQuery) + svOverheadURL // !special size; not optimizing
 		sb.Reset(size, true)
-		sign = &signer{
-			r:       r,
-			h:       &p.htrun,
-			sb:      sb,
-			smapVer: smapVer,
-			nonce:   p.sv.nonce.Add(1),
-		}
-		sign.sign(p.SID())
+		sv = newSigner(r, &p.htrun, sb, &p.svs, smapVer)
+		sv.sign(p.SID())
 
 		if !special {
 			// fast signing path
-			out = sign.buildURL(nodeURL, now)
+			out = sv.buildURL(nodeURL, now)
 			break
 		}
 		fallthrough
-	case !enabled && special:
+	case !signTo && special:
 		scheme, host, q := _preparse(nodeURL, r)
-		raw := p.qencode(q, now, sign)
+		raw := p.qencode(q, now, sv)
 		u := url.URL{
 			Scheme:   scheme,
 			Host:     host,

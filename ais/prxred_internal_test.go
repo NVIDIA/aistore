@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -269,29 +268,8 @@ func TestSignerVerifyRoundTrip(t *testing.T) {
 		t.Fatal("sign/verify must be enabled for verify test")
 	}
 
-	// reconstruct the verifier from the request's own signed query params
-	// (pid, smap-ver, nonce, sig) — so the only variable across cases is the URL itself
-	verify := func(u *url.URL) (int, error) {
-		r := &http.Request{
-			Method:        orig.Method,
-			URL:           u,
-			Host:          u.Host,
-			ContentLength: orig.ContentLength,
-		}
-		q := r.URL.Query()
-		svgrp, err := svgrpFromQ(q)
-		if err != nil {
-			return 0, fmt.Errorf("parse sign/verify params: %w", err)
-		}
-		if svgrp == nil {
-			return 0, errors.New("expected sign/verify params, got nil")
-		}
-		sign := &signer{r: r, h: &p.htrun, smapVer: svgrp.smapVer, nonce: svgrp.nonce}
-		return sign.verify(q.Get(apc.QparamPID), svgrp.sig)
-	}
-
 	// 1. valid signed URL verifies
-	if status, err := verify(u); err != nil || status != 0 {
+	if status, err := p.verify(u, orig); err != nil || status != 0 {
 		t.Fatalf("verify failed for valid signed URL: status=%d, err=%v, url=%q", status, err, u.String())
 	}
 
@@ -300,9 +278,30 @@ func TestSignerVerifyRoundTrip(t *testing.T) {
 	// differing input into svPayload
 	uBad := *u
 	uBad.Path = u.Path + "-tampered"
-	if status, err := verify(&uBad); err == nil || status != http.StatusUnauthorized {
+	if status, err := p.verify(&uBad, orig); err == nil || status != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for tampered path, got status=%d, err=%v", status, err)
 	}
+}
+
+// reconstruct the verifier from the request's own signed query params
+// (pid, smap-ver, nonce, sig) — so the only variable across cases is the URL itself
+func (p *proxy) verify(u *url.URL, orig *http.Request) (int, error) {
+	r := &http.Request{
+		Method:        orig.Method,
+		URL:           u,
+		Host:          u.Host,
+		ContentLength: orig.ContentLength,
+	}
+	q := r.URL.Query()
+	svgrp, err := svgrpFromQ(q)
+	if err != nil {
+		return 0, fmt.Errorf("parse sign/verify params: %w", err)
+	}
+	smap := p.owner.smap.get()
+	pid := q.Get(apc.QparamPID)
+	psi := smap.GetNode(pid)
+	sv := newVerifier(r, &p.htrun, svgrp)
+	return sv.verify(pid, psi, smap)
 }
 
 func TestRedurlSignVerifyDisabledOnV50Bridge(t *testing.T) {

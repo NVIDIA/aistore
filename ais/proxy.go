@@ -307,9 +307,14 @@ func (p *proxy) initRecvHandlers() {
 		networkHandler{r: apc.Tokens, h: p.tokenHandler, net: accessNetPublic},
 
 		networkHandler{r: apc.Metasync, h: p.metasyncHandler, net: accessNetIntraControl},
-		networkHandler{r: apc.Health, h: p.healthHandler, net: accessNetPublicControl},
-		networkHandler{r: apc.Vote, h: p.voteHandler, net: accessNetIntraControl},
 
+		// TODO:
+		// - accessNetPublicControl is a union (pub) and (control);
+		// - to enforce intra-cluster headers and sign/verify (if enabled):
+		// - follow-up on 0cd8ff1078ee "access control: split public and intra-control handlers"
+		networkHandler{r: apc.Health, h: p.healthHandler, net: accessNetPublicControl},
+
+		networkHandler{r: apc.Vote, h: p.voteHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.Notifs, h: p.notifs.handler, net: accessNetIntraControl},
 		networkHandler{r: apc.EC, h: p.ecHandler, net: accessNetIntraControl},
 
@@ -1334,7 +1339,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 2. ordinary liveness/readiness probe
 	if !prr && !wantNsti {
-		if responded := p.externalWD(w, r); responded {
+		if responded := p.simpleHealth(w, r); responded {
 			return
 		}
 	}
@@ -3348,7 +3353,7 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 	if err != nil {
 		return
 	}
-	p.setIntraHdrs(req, smap)
+	p.setIntraHdrs(npsi, req, smap)
 	g.client.control.Do(req) //nolint:bodyclose // exiting
 	cmn.HreqFree(req)
 }

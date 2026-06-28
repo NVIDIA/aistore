@@ -88,10 +88,7 @@ type htrun struct {
 
 	// sign/verify
 	nodeSigningKey *cos.NodeSigningKey
-	sv             struct {
-		state atomic.Int32  // svOn, svStrict (existing)
-		nonce atomic.Uint64 // per-node monotonic signing nonce
-	}
+	svs            svState
 
 	keepalive keepaliver
 	statsT    stats.Tracker
@@ -154,31 +151,36 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 			h.writeErr(w, r, err)
 			return err
 		}
-		if cmn.Rom.SignVerifyEnabled() && apireq.dpq.sv.sig != "" {
+		if apireq.dpq.sv.sig != "" {
 			svgrp = &apireq.dpq.sv
 			pid = apireq.dpq.sys.pid
 		}
 	} else {
 		apireq.query = r.URL.Query()
-		if cmn.Rom.SignVerifyEnabled() {
-			if svgrp, err = svgrpFromQ(apireq.query); err != nil {
-				h.writeErr(w, r, err)
-				return err
-			}
+		if svgrp, err = svgrpFromQ(apireq.query); err != nil {
+			h.writeErr(w, r, err)
+			return err
 		}
 		pid = apireq.query.Get(apc.QparamPID)
 	}
 
-	if svgrp != nil {
-		var (
-			ecode int
-			err   error
-			sign  = &signer{r: r, h: h, smapVer: svgrp.smapVer, nonce: svgrp.nonce}
-		)
-		ecode, err = sign.verify(pid, svgrp.sig)
-		if err != nil {
-			h.writeErr(w, r, err, ecode)
-			return err
+	if !cmn.IsV50Bridge() && cmn.Rom.SignVerifyEnabled() {
+		smap := h.owner.smap.get()
+		if smap != nil && smap.isValid() && h.si.IsTarget() { // TODO -- FIXME: (p.httpobjput -> parseReq)
+			psi := smap.GetNode(pid)
+			if svgrp != nil || h.svs.strict() {
+				var (
+					ecode int
+					err   error
+					sv    = newVerifier(r, h, svgrp)
+				)
+				debug.Assert(len(h.si.VerifyingKey) == cos.NodeSigningPublicKeySize)
+				ecode, err = sv.verify(pid, psi, smap)
+				if err != nil {
+					h.writeErr(w, r, err, ecode)
+					return err
+				}
+			}
 		}
 	}
 
@@ -259,6 +261,9 @@ func (h *htrun) ClusterStarted() bool { return h.startup.cluster.Load() > 0 } //
 func (h *htrun) markClusterStarted() {
 	h.startup.cluster.Store(mono.NanoTime())
 	h.statsT.SetFlag(cos.NodeAlerts, cos.ClusterStarted)
+
+	// set sign/verify
+	h.svs.set(cmn.Rom.SignVerifyEnabled())
 }
 
 func (h *htrun) NodeStarted() bool { return h.startup.node.Load() > 0 }
@@ -537,7 +542,7 @@ func (h *htrun) initPhase2(config *cmn.Config) {
 	h.owner.rmd = newRMDOwner(config)
 	h.owner.rmd.load()
 
-	h.sv.nonce.Store(uint64(cos.CryptoRandI()))
+	h.svs.init()
 
 	h.gmm = memsys.PageMM()
 	h.gmm.RegWithHK()
@@ -656,11 +661,6 @@ func (h *htrun) run(config *cmn.Config) error {
 	}
 
 	return g.netServ.pub.listen(ep, logger, tlsConf, config) // stay here
-}
-
-func (h *htrun) toggleSignVerify(enabled bool) {
-	// h.svs.set(enabled)
-	nlog.Errorln(h.String(), ">>>>>> enabled", enabled) // DEBUG
 }
 
 func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config, useIPv6 bool) {
@@ -831,7 +831,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 
 	// stamp intra-cluster sender identity only on intra-control calls
 	if isIntraControl {
-		h.setIntraHdrs(req, smap)
+		h.setIntraHdrs(args.si, req, smap)
 	}
 	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
 
@@ -860,7 +860,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 
 // stamp intra-cluster sender headers
 // NOTE: caller must ensure the destination is on intra-net
-func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX) {
+func (h *htrun) setIntraHdrs(dst *meta.Snode, req *http.Request, smap *smapX) {
 	if smap.vstr != "" {
 		if smap.IsPrimary(h.si) {
 			req.Header.Set(apc.HdrSenderIsPrimary, "true")
@@ -870,55 +870,49 @@ func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX) {
 	req.Header.Set(apc.HdrSenderID, h.SID())
 	req.Header.Set(apc.HdrSenderName, h.si.Name())
 
-	signing := cmn.Rom.SignVerifyEnabled() && !g.netServ.pub.isSeparatePub && smap.vstr != ""
-	if signing {
+	if dst != nil && smap.vstr != "" && h.svs.signTo(dst) {
 		h.signIntra(req, smap)
 	}
 }
 
-// sign an intra-cluster control-plane request with this node's Ed25519 key.
-// Caller gates on SignVerifyEnabled() — symmetrically with verifyIntra().
-// (compare with p.redurl())
+// sign an intra-cluster control-plane request with this node's signing key
 func (h *htrun) signIntra(req *http.Request, smap *smapX) {
 	sb := sbAlloc()
-	sign := &signer{
-		r:       req,
-		h:       h,
-		sb:      sb,
-		smapVer: smap.version(),
-		nonce:   h.sv.nonce.Add(1),
-	}
-	sign.sign(h.SID()) // sign.sig points into sb (recycled below)
+	sv := newSigner(req, h, sb, &h.svs, smap.version())
+	sv.sign(h.SID()) // sv.sig points into sb (recycled below)
 
 	// transmit everything the receiver can't derive from the request itself:
 	// - smap-ver and nonce are both in the signed payload (see svPayload)
 	// - smap-ver is already set above (by setIntraHdrs)
-	req.Header.Set(apc.HdrSenderNonce, strconv.FormatUint(sign.nonce, 10))
-	req.Header.Set(apc.HdrSenderSig, string(sign.sig)) // string() copies before sbFree
+	req.Header.Set(apc.HdrSenderNonce, strconv.FormatUint(sv.nonce, 10))
+	req.Header.Set(apc.HdrSenderSig, string(sv.sig)) // string() copies before sbFree
 
 	sbFree(sb)
 }
 
 // verify an intra-cluster control-plane request against the sender's
 // Smap-resident verifying key. Caller gates on SignVerifyEnabled().
-//
-// In single-network deployments, caller-asserted intra-cluster headers are
-// client-spoofable; when sign/verify is enabled we require a valid signature
-// before trusting the request as intra-cluster.
-func (h *htrun) verifyIntra(r *http.Request, sid, sname string) error {
-	cg, err := svgrpFromHdr(r.Header)
+func (h *htrun) verifyIntra(r *http.Request, snode *meta.Snode, sid, sname string, smap *smapX) (int, error) {
+	if cmn.IsV50Bridge() || !cmn.Rom.SignVerifyEnabled() {
+		return 0, nil
+	}
+	debug.Assert(len(h.si.VerifyingKey) == cos.NodeSigningPublicKeySize)
+
+	// - a present signature is always verified
+	// - a missing one is rejected only once strict (grace elapsed)
+	svgrp, err := svgrpFromHdr(r.Header)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if cg == nil {
-		return fmt.Errorf("%s: missing signature for intra-cluster request from %s", h, sname)
+	if svgrp == nil && !h.svs.strict() {
+		return 0, nil
 	}
-	// seed smap-ver and nonce from the wire so svPayload reconstructs byte-identically
-	sign := &signer{r: r, h: h, smapVer: cg.smapVer, nonce: cg.nonce}
-	if _, err := sign.verify(sid, cg.sig); err != nil {
-		return fmt.Errorf("%s: invalid signature for intra-cluster request from %s: %w", h, sname, err)
+	sv := newVerifier(r, h, svgrp)
+	if ecode, err := sv.verify(sid, snode, smap); err != nil {
+		return ecode, fmt.Errorf("%s: invalid signature for intra-cluster request from %s: %w", h, sname, err)
 	}
-	return nil
+
+	return 0, nil
 }
 
 func _doResp(args *callArgs, req *http.Request, resp *http.Response, res *callResult) {
@@ -2088,10 +2082,13 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, msg *actMsgExt, payload msPayl
 		}
 		nlog.Warningln(err, "- proceeding with force")
 	}
-	if err := h.owner.config.persist(newConfig, payload); err != nil {
+
+	// the primary has already validated - staying in-sync memory-wise
+	if err := cmn.GCO.Update(&newConfig.ClusterConfig); err != nil {
+		debug.AssertNoErr(err)
 		return err
 	}
-	return cmn.GCO.Update(&newConfig.ClusterConfig)
+	return h.owner.config.persist(newConfig, payload)
 }
 
 func (h *htrun) extractRevokedTokenList(payload msPayload, sender string) (*tokenList, *actMsgExt, error) {
@@ -2322,6 +2319,7 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 	}
 
 	if cmn.IsV50Bridge() && cm.SI.VerifyingKey != nil {
+		// v5.0 bridge: do not publish this node's verifying key
 		si := *h.si
 		si.VerifyingKey = nil
 		cm.SI = &si
@@ -2531,15 +2529,21 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 	return err
 }
 
-// external watchdogs, e.g. K8s (via /v1/health handler)
+// simple intra-cluster ping OR an external watchdog (such as K8s via /v1/health handler)
 // - liveness: always 200 (process is alive)
 // - readiness: 200 when node and cluster started + not in maint/decomm, 503 otherwise
-// TODO: check receiving on PubNet
-func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) bool {
+func (h *htrun) simpleHealth(w http.ResponseWriter, r *http.Request) bool {
 	hdr := r.Header
-	if hdr.Get(apc.HdrSenderID) != "" || hdr.Get(apc.HdrSenderName) != "" {
-		if err := h.checkIntraCall(r, false /* from primary */); err != nil {
-			h.writeErr(w, r, err, http.StatusServiceUnavailable)
+
+	// TODO differentiate and enforce:
+	// in fact, intra-control must enforce both presence apc.HdrSenderID and all the checks
+	// inside h.checkIntraCall(), possibly including sign/verify; further comments in initRecvHandlers()
+	if hdr.Get(apc.HdrSenderID) != "" {
+		if ecode, err := h.checkIntraCall(r, false /* from primary */); err != nil {
+			if ecode == 0 {
+				ecode = http.StatusServiceUnavailable
+			}
+			h.writeErr(w, r, err, ecode)
 			return true
 		}
 		return false
@@ -2614,7 +2618,7 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 	return 0, nil
 }
 
-func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) error {
+func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
 	const ferr = "%s: invalid intra-cluster request from [name=%q, id=%q]"
 	var (
 		hdr   = r.Header
@@ -2623,42 +2627,40 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) error {
 	)
 	// 1. both headers must be present
 	if sid == "" && sname == "" {
-		return errIntraControl
+		return 0, errIntraControl
 	}
 	if sid == "" || sname == "" {
-		return fmt.Errorf(ferr, h, sname, sid)
+		return 0, fmt.Errorf(ferr, h, sname, sid)
 	}
 
 	// 2. name must be valid
 	before, after, ok := strings.Cut(sname, sid)
 	if !ok || after != meta.SnameSuffix {
-		return fmt.Errorf(ferr, h, sname, sid)
+		return 0, fmt.Errorf(ferr, h, sname, sid)
 	}
 	if before != meta.PnamePrefix && before != meta.TnamePrefix {
-		return fmt.Errorf(ferr, h, sname, sid)
+		return 0, fmt.Errorf(ferr, h, sname, sid)
 	}
 
-	// 3. TODO -- FIXME: enable (see setIntraHdrs for "signing") (ref Ed25519)
-	verifying := false && cmn.Rom.SignVerifyEnabled() && !g.netServ.pub.isSeparatePub
-	if verifying {
-		if err := h.verifyIntra(r, sid, sname); err != nil {
-			return err
-		}
-	}
-
-	// 4. look up sender in smap
+	// 3. lookup sender in smap
 	smap := h.owner.smap.get()
 	if smap == nil || !smap.isValid() {
-		return nil // smap not yet valid — inconclusive during startup
+		return 0, nil // smap not yet valid — inconclusive during startup
 	}
+
 	snode := smap.GetNode(sid)
+
+	// 4. verify signature
+	if ecode, err := h.verifyIntra(r, snode, sid, sname, smap); err != nil {
+		return ecode, err
+	}
 
 	// 5. unknown sender
 	if snode == nil {
 		if !fromPrimary {
-			return nil
+			return 0, nil
 		}
-		return fmt.Errorf("%s: expected %s from a valid node, %s", h, cmn.NetIntraControl, smap)
+		return 0, fmt.Errorf("%s: expected %s from a valid node, %s", h, cmn.NetIntraControl, smap)
 	}
 
 	// 6. sname prefix must match the role (completing check #2 above)
@@ -2667,17 +2669,17 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) error {
 		wantPrefix = meta.TnamePrefix
 	}
 	if before != wantPrefix {
-		return fmt.Errorf(ferr, h, sname, sid)
+		return 0, fmt.Errorf(ferr, h, sname, sid)
 	}
 
 	// 7. a known cluster member (the fact that it's known is enough)
 	if !fromPrimary {
-		return nil
+		return 0, nil
 	}
 
 	// 8. primary-only call: accept current primary immediately
 	if smap.isPrimary(snode) {
-		return nil
+		return 0, nil
 	}
 
 	// 9. primary's calling but my local Smap disagrees: still trust the caller if its Smap is strictly newer
@@ -2685,7 +2687,7 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) error {
 	if sver != "" && sver != smap.vstr {
 		ver, err := strconv.ParseInt(sver, 10, 64)
 		if err != nil || ver < 0 {
-			return fmt.Errorf("%s: invalid sender's Smap ver [%s, %q, %v], %s", h, sname, sver, err, smap)
+			return 0, fmt.Errorf("%s: invalid sender's Smap ver [%s, %q, %v], %s", h, sname, sver, err, smap)
 		}
 		if ver > smap.version() {
 			if h.ClusterStarted() {
@@ -2693,17 +2695,17 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) error {
 				nlog.ErrorDepth(1, warn, "- proceeding anyway...")
 			}
 			runtime.Gosched()
-			return nil
+			return 0, nil
 		}
 	}
 
-	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h, cmn.NetIntraControl, snode, smap)
+	return 0, fmt.Errorf("%s: expected %s from primary (and not %s), %s", h, cmn.NetIntraControl, snode, smap)
 }
 
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
-	err := h.checkIntraCall(r, onlyPrimary)
+	ecode, err := h.checkIntraCall(r, onlyPrimary)
 	if err != nil {
-		h.writeErr(w, r, err)
+		h.writeErr(w, r, err, ecode)
 		return
 	}
 	if !cmn.GCO.Get().HostNet.UseIntraControl {
@@ -2727,14 +2729,14 @@ func (h *htrun) uptime2hdr(hdr http.Header) {
 
 // populate redirect-specific query parameters (PID, timestamp, Smap version)
 // return encoded (raw) query string
-func (h *htrun) qencode(q url.Values, now int64, sign *signer) string {
+func (h *htrun) qencode(q url.Values, now int64, sv *svReq) string {
 	q.Set(apc.QparamPID, h.SID())
 	q.Set(apc.QparamUnixTime, unixNano2S(now))
 
-	if sign != nil {
-		q.Set(apc.QparamSmapVer, strconv.FormatInt(sign.smapVer, svNumBase))
-		q.Set(apc.QparamNonce, strconv.FormatUint(sign.nonce, svNumBase))
-		q.Set(apc.QparamSig, string(sign.sig))
+	if sv != nil {
+		q.Set(apc.QparamSmapVer, strconv.FormatInt(sv.smapVer, svNumBase))
+		q.Set(apc.QparamNonce, strconv.FormatUint(sv.nonce, svNumBase))
+		q.Set(apc.QparamSig, string(sv.sig))
 	}
 	return q.Encode()
 }

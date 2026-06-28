@@ -193,6 +193,7 @@ func setConfig(toUpdate *cmn.ConfigToSet, transient bool) error {
 	if err := setConfigInMem(toUpdate, clone, apc.Daemon, transient); err != nil {
 		return err
 	}
+
 	override := cmn.GCO.GetOverride()
 	if override == nil {
 		override = toUpdate

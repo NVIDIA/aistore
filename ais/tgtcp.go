@@ -1360,7 +1360,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if responded := t.externalWD(w, r); responded {
+	if responded := t.simpleHealth(w, r); responded {
 		return
 	}
 

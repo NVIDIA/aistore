@@ -413,17 +413,22 @@ func (p *proxy) access(r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err
 		sname   = hdr.Get(apc.HdrSenderName)
 		isIntra = sid != "" || sname != ""
 	)
+	// TODO -- FIXME: revisit --------------------------
 	if isIntra {
-		// HMAC-verify
-		verifying := cmn.Rom.AuthEnabled() && cmn.Rom.SignVerifyEnabled() && !g.netServ.pub.isSeparatePub
-		if verifying {
-			return p.verifyIntra(r, sid, sname)
-		}
 		smap := p.owner.smap.get()
-		if !smap.isValid() || smap.GetNode(sid) != nil {
+		if smap == nil || !smap.isValid() {
 			return nil
 		}
-	}
+		snode := smap.GetNode(sid)
+		if snode == nil {
+			return nil
+		}
+		if g.netServ.pub.isSeparatePub {
+			return nil
+		}
+		_, err := p.verifyIntra(r, snode, sid, sname, smap)
+		return err
+	} // -----------------------------------------------
 
 	// If auth is NOT enabled, only check bucket properties
 	if !cmn.Rom.AuthEnabled() {

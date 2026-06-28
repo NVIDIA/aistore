@@ -1664,9 +1664,9 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
 		return
 	}
 
-	if err := p.checkIntraCall(r, false /*from primary*/); err != nil {
+	if ecode, err := p.checkIntraCall(r, false /*from primary*/); err != nil {
 		err = fmt.Errorf("%w (action %q)", err, apc.ActSelfRemove)
-		p.writeErr(w, r, err)
+		p.writeErr(w, r, err, ecode)
 		return
 	}
 

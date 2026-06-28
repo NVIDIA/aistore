@@ -651,7 +651,14 @@ func (t *target) initRecvHandlers() {
 	networkHandlers = append(networkHandlers,
 		networkHandler{r: apc.Buckets, h: t.bucketHandler, net: accessNetAll},
 		networkHandler{r: apc.Objects, h: t.objectHandler, net: accessNetAll},
+
+		// TODO:
+		// - accessNetPublicControl is a union (pub) and (control);
+		// - to enforce intra-cluster headers and sign/verify (if enabled):
+		// - follow-up on 0cd8ff1078ee "access control: split public and intra-control handlers"
+		// - applies to: /daemon, /health, /ml
 		networkHandler{r: apc.Daemon, h: t.daemonHandler, net: accessNetPublicControl},
+
 		networkHandler{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.Health, h: t.healthHandler, net: accessNetPublicControl},
 		networkHandler{r: apc.Xactions, h: t.xactHandler, net: accessNetIntraControl},
@@ -829,6 +836,8 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 // httpobj* handlers
 //
 
+const fmtErrExpectRedirect = "%s: %s(obj) is expected to be redirected (remaddr: %s, err: %v)"
+
 // GET /v1/objects/<bucket-name>/<object-name>
 //
 // Initially validates if the request is internal request (either from proxy
@@ -849,10 +858,12 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
-		if apireq.dpq.sys.ptime == "" /*isRedirect*/ && t.checkIntraCall(r, false /*from primary*/) != nil {
-			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-				t.si, r.Method, r.RemoteAddr)
-			return
+		if apireq.dpq.sys.ptime == "" /*isRedirect*/ {
+			if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
+				e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
+				t.writeErr(w, r, e, ecode)
+				return
+			}
 		}
 	}
 	objName := apireq.items[1]
@@ -1371,10 +1382,12 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
 		// validates that the request is internal (by a node in the same cluster)
-		if apireq.dpq.isRedirect() == "" && t.checkIntraCall(r, false) != nil {
-			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-				t.si, r.Method, r.RemoteAddr)
-			return
+		if apireq.dpq.isRedirect() == "" {
+			if ecode, err := t.checkIntraCall(r, false); err != nil {
+				e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
+				t.writeErr(w, r, e, ecode)
+				return
+			}
 		}
 	}
 	objName := apireq.items[1]
@@ -1551,10 +1564,12 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		return
 	}
 	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
-		if isRedirect(apireq.query) == "" && t.checkIntraCall(r, false) != nil {
-			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-				t.si, r.Method, r.RemoteAddr)
-			return
+		if isRedirect(apireq.query) == "" {
+			if ecode, err := t.checkIntraCall(r, false); err != nil {
+				e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
+				t.writeErr(w, r, e, ecode)
+				return
+			}
 		}
 	}
 
