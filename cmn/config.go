@@ -3039,6 +3039,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	}
 
 	// initialize atomic part of the config including most often used timeouts and features
+	debug.Assert(onSignVerifyToggle == nil, "startup sequence: must not trigger runtime sign/verify hook")
 	Rom.Set(&config.ClusterConfig)
 	Rom.testingEnv = config.TestingEnv()
 

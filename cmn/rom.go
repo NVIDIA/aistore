@@ -36,6 +36,8 @@ func (rom *readMostly) init() {
 	rom.timeout.ecstreams = SharedStreamsDflt
 }
 
+// Rom.Set is the single install point for every GCO.Put: startup (LoadConfig => GCO.Put)
+// and metasync (_recvCfg => ... => GCO.Put)
 func (rom *readMostly) Set(cfg *ClusterConfig) {
 	rom.timeout.cplane = cfg.Timeout.CplaneOperation.D()
 	rom.timeout.keepalive = cfg.Timeout.MaxKeepalive.D()
@@ -45,7 +47,16 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 	rom.features = cfg.Features
 
 	rom.authEnabled = cfg.Auth.Enabled
+
+	// fire a local action upon actual transition:
+	// - runtime-only
+	// - if needed, other knobs can be wired later in a similar way
+	prev := rom.signVerifyEnabled
 	rom.signVerifyEnabled = cfg.Auth.SignVerifyEnabled()
+	if cur := rom.signVerifyEnabled; cur != prev && onSignVerifyToggle != nil {
+		onSignVerifyToggle(cur)
+	}
+
 	rom.useHTTPS = cfg.Net.HTTP.UseHTTPS
 
 	// pre-parse for V (below)

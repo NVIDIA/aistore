@@ -243,7 +243,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 		// aux plumbing
 		nlog.SetTitle(title)
-		cmn.Init(p.si.Name(), nil)
+		cmn.Init(p.si.Name(), nil, p.toggleSignVerify)
 
 		// init distributed tracing
 		tracing.Init(config.Tracing, p.si, nil, version)
@@ -266,7 +266,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	// aux plumbing
 	nlog.SetTitle(title)
-	cmn.Init(t.si.Name(), fs.CleanPathErr)
+	cmn.Init(t.si.Name(), fs.CleanPathErr, t.toggleSignVerify)
 
 	// init distributed tracing
 	tracing.Init(config.Tracing, t.si, nil, version)

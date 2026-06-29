@@ -658,6 +658,11 @@ func (h *htrun) run(config *cmn.Config) error {
 	return g.netServ.pub.listen(ep, logger, tlsConf, config) // stay here
 }
 
+func (h *htrun) toggleSignVerify(enabled bool) {
+	// h.svs.set(enabled)
+	nlog.Errorln(h.String(), ">>>>>> enabled", enabled) // DEBUG
+}
+
 func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config, useIPv6 bool) {
 	debug.Assert(pubExtra.Port == h.si.PubNet.Port, "expecting the same TCP port for all multi-home interfaces")
 	server := &netServer{
