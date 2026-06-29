@@ -1,0 +1,4 @@
+[oss.excluded]
+[[oss.excluded.directories]]
+paths = ['docs/']
+comment = 'Documentation directory, not part of core solution'
