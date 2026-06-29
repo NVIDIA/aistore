@@ -375,6 +375,38 @@ class ObjectGroup(AISSource):
             HTTP_METHOD_POST, ACT_TRANSFORM_OBJECTS, value=value
         ).text
 
+    def inspect(
+        self,
+        etl_name: str,
+        timeout: str = DEFAULT_ETL_TIMEOUT,
+        latest: bool = False,
+        num_workers: Optional[int] = None,
+        etl_pipeline: Optional[List[str]] = None,
+    ):
+        """
+        Apply ETL to source objects without writing transformed results.
+
+        Args:
+            etl_name (str): Name of the ETL to run.
+            timeout (str, optional): ETL request timeout.
+            latest (bool, optional): Use the latest remote object version.
+            num_workers (Optional[int], optional): Number of workers per target.
+            etl_pipeline (Optional[List[str]], optional): Ordered ETL pipeline.
+
+        Returns:
+            Job ID (as str) that can be used to check the status of the operation.
+        """
+        return self.transform(
+            to_bck=self.bck,
+            etl_name=etl_name,
+            timeout=timeout,
+            continue_on_error=True,
+            dry_run=True,
+            latest=latest,
+            num_workers=num_workers,
+            etl_pipeline=etl_pipeline,
+        )
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def archive(
         self,

@@ -251,6 +251,29 @@ class TestObjectGroup(unittest.TestCase):
 
         mock_logger.info.assert_called()
 
+    def test_inspect(self):
+        expected_value = self.expected_value.copy()
+        expected_value["prefix"] = ""
+        expected_value["prepend"] = ""
+        expected_value["dry_run"] = True
+        expected_value["force"] = False
+        expected_value["id"] = ETL_NAME
+        expected_value["pipeline"] = None
+        expected_value["request_timeout"] = DEFAULT_ETL_TIMEOUT
+        expected_value["coer"] = True
+        expected_value["tobck"] = self.mock_bck_model.model_dump()
+        expected_value["latest-ver"] = True
+        expected_value["synchronize"] = False
+
+        self.object_group_test_helper(
+            self.object_group.inspect,
+            HTTP_METHOD_POST,
+            ACT_TRANSFORM_OBJECTS,
+            expected_value,
+            etl_name=ETL_NAME,
+            latest=True,
+        )
+
     def test_list_names(self):
         self.assertEqual(self.obj_names, self.object_group.list_names())
 

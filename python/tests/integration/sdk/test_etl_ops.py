@@ -206,6 +206,67 @@ class TestETLOps(unittest.TestCase):
         self.assertEqual(obj, md5_obj)
 
     @pytest.mark.etl
+    def test_inspect(self):
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class()
+        class MD5Server(FastAPIServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                return hashlib.md5(data).hexdigest().encode()
+
+        original = self.bucket.object(self.obj_name).get_reader().read_all()
+
+        job_id = self.bucket.inspect(etl_name=etl.name)
+        result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
+        self.assertEqual(
+            original, self.bucket.object(self.obj_name).get_reader().read_all()
+        )
+
+        job_id = self.bucket.objects(obj_names=[self.obj_name]).inspect(
+            etl_name=etl.name
+        )
+        result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
+        self.assertEqual(
+            original, self.bucket.object(self.obj_name).get_reader().read_all()
+        )
+
+    @pytest.mark.etl
+    def test_inspect_reports_object_errors(self):
+        obj_names = [f"inspect-{i}" for i in range(10)]
+        for obj_name in obj_names:
+            create_and_put_object(
+                client=self.client,
+                bck=self.bucket.as_model(),
+                obj_name=obj_name,
+                obj_size=self.obj_size,
+            )
+        failed_names = set(obj_names[1::2])
+
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class()
+        class ValidationServer(FastAPIServer):
+            def transform(self, data: bytes, path: str, _etl_args: str) -> bytes:
+                if path.rsplit("/", 1)[-1] in failed_names:
+                    raise ValueError("validation failed")
+                return data
+
+        job_id = self.bucket.objects(obj_names=obj_names).inspect(etl_name=etl.name)
+        result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
+
+        etl_details = etl.view(job_id=job_id)
+        self.assertIsNotNone(etl_details.obj_errors)
+        error_names = sorted(e.obj_name for e in etl_details.obj_errors)
+        expected_errors = sorted(
+            f"{self.bucket.provider.value}://{self.bucket.name}/{obj_name}"
+            for obj_name in failed_names
+        )
+        self.assertEqual(error_names, expected_errors)
+
+    @pytest.mark.etl
     def test_init_spec_echo(self):
         # Start ETL with ECHO template
         template = ECHO.format(communication_type=ETL_COMM_HPUSH)

@@ -5,6 +5,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -218,6 +219,17 @@ func CopyBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, fltPrese
 func ETLBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, fltPresence ...int) (string, error) {
 	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActETLBck, Value: msg})
 	return tcb(bp, bckFrom, bckTo, jbody, fltPresence...)
+}
+
+// ETLInspectBucket applies ETL to source objects without writing transformed results.
+func ETLInspectBucket(bp BaseParams, bck cmn.Bck, msg *apc.TCBMsg, fltPresence ...int) (string, error) {
+	if msg == nil {
+		return "", fmt.Errorf("%s: nil msg", apc.ActETLBck)
+	}
+	cmsg := *msg
+	cmsg.DryRun = true
+	cmsg.ContinueOnError = true
+	return ETLBucket(bp, bck, bck, &cmsg, fltPresence...)
 }
 
 func tcb(bp BaseParams, bckFrom, bckTo cmn.Bck, jbody []byte, fltPresence ...int) (string, error) {

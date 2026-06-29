@@ -951,6 +951,41 @@ class Bucket(AISSource):
             HTTP_METHOD_POST, ACT_ETL_BCK, value=value, params=params
         ).text
 
+    def inspect(
+        self,
+        etl_name: str,
+        timeout: str = DEFAULT_ETL_TIMEOUT,
+        prefix_filter: str = "",
+        latest: bool = False,
+        num_workers: Optional[int] = None,
+        etl_pipeline: Optional[List[str]] = None,
+    ) -> str:
+        """
+        Apply ETL to source objects without writing transformed results.
+
+        Args:
+            etl_name (str): Name of the ETL to run.
+            timeout (str, optional): ETL request timeout.
+            prefix_filter (str, optional): Only inspect objects with this prefix.
+            latest (bool, optional): Use the latest remote object version.
+            num_workers (Optional[int], optional): Number of workers per target.
+            etl_pipeline (Optional[List[str]], optional): Ordered ETL pipeline.
+
+        Returns:
+            Job ID (as str) that can be used to check the status of the operation.
+        """
+        return self.transform(
+            etl_name=etl_name,
+            to_bck=self,
+            timeout=timeout,
+            prefix_filter=prefix_filter,
+            latest=latest,
+            dry_run=True,
+            num_workers=num_workers,
+            cont_on_err=True,
+            etl_pipeline=etl_pipeline,
+        )
+
     def put_files(
         self,
         path: Union[str, Path],

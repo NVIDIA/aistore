@@ -5,6 +5,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -56,6 +57,18 @@ func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ..
 	}
 	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActETLObjects, Value: msg})
 	return doBckAct(bp, bckFrom, jbody, q)
+}
+
+// ETLInspectMultiObj applies ETL to source objects without writing transformed results.
+func ETLInspectMultiObj(bp BaseParams, bck cmn.Bck, msg *cmn.TCOMsg, fltPresence ...int) (string, error) {
+	if msg == nil {
+		return "", fmt.Errorf("%s: nil msg", apc.ActETLObjects)
+	}
+	cmsg := *msg
+	cmsg.ToBck = bck
+	cmsg.DryRun = true
+	cmsg.ContinueOnError = true
+	return ETLMultiObj(bp, bck, &cmsg, fltPresence...)
 }
 
 func DeleteMultiObj(bp BaseParams, bck cmn.Bck, msg *apc.EvdMsg) (string, error) {

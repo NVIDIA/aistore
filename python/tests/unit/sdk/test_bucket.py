@@ -639,6 +639,35 @@ class TestBucket(unittest.TestCase):
 
         self._transform_exec_assert(ETL_NAME, action_value)
 
+    def test_inspect(self):
+        self.mock_client.request.return_value = Mock(text="job-id")
+        expected_params = self.ais_bck_params.copy()
+        expected_params[QPARAM_BCK_TO] = self.ais_bck.get_path()
+
+        result_id = self.ais_bck.inspect(ETL_NAME, latest=True)
+
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_POST,
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+            json=ActionMsg(
+                action=ACT_ETL_BCK,
+                value={
+                    "id": ETL_NAME,
+                    "pipeline": None,
+                    "prefix": "",
+                    "prepend": "",
+                    "force": False,
+                    "dry_run": True,
+                    "request_timeout": DEFAULT_ETL_TIMEOUT,
+                    "latest-ver": True,
+                    "synchronize": False,
+                    "coer": True,
+                },
+            ).model_dump(),
+            params=expected_params,
+        )
+        self.assertEqual("job-id", result_id)
+
     def _transform_exec_assert(self, etl_name, expected_act_value, **kwargs):
         to_bck = Bucket(client=self.mock_client, name="new-bucket")
         self.ais_bck_params[QPARAM_BCK_TO] = to_bck.get_path()

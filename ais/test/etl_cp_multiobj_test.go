@@ -65,6 +65,35 @@ func TestETLMultiObj(t *testing.T) {
 	}
 }
 
+func TestETLInspectMultiObj(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: "etl-inspect-objects-" + cos.GenUUID(), Provider: apc.AIS}
+		m          = ioContext{t: t, num: 10, fileSize: 512, fixedSize: true, bck: bck}
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	m.init(true /*cleanup*/)
+	m.puts()
+
+	initMsg := tetl.InitSpec(t, baseParams, tetl.MD5, etl.Hpush)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, initMsg.Name()) })
+
+	msg := &cmn.TCOMsg{}
+	msg.Transform.Name = initMsg.Name()
+	msg.ListRange.ObjNames = m.objNames
+	xid, err := api.ETLInspectMultiObj(baseParams, bck, msg)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, msg.ToBck.IsEmpty() && !msg.DryRun && !msg.ContinueOnError, "inspect must not mutate caller message")
+
+	err = api.WaitForSnapsIdle(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects})
+	tassert.CheckFatal(t, err)
+	checkObjectSizes(t, baseParams, bck, m.objNames, int64(m.fileSize))
+}
+
 func testETLMultiObj(t *testing.T, etlName, prefix string, bckFrom cmn.Bck, fileRange, opType string, bcktest testBucketConfig, transform transformFunc) {
 	pt, err := cos.ParseBashTemplate(fileRange)
 	tassert.CheckFatal(t, err)

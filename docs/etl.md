@@ -156,6 +156,39 @@ $ ais etl bucket ffmpeg-etl ais://libre-speech ais://libre-speech-transformed --
 $ ais ls ais://libre-speech-transformed | head -5
 ```
 
+### Object Inspection
+
+Object inspection applies an ETL to a bucket or object group without writing
+transformed results. It is useful for validation jobs where the ETL logic either
+accepts the object or raises an error. After the job completes, use ETL error
+reporting to see exactly which objects failed.
+
+Python SDK:
+
+```python
+from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
+
+etl = client.etl("validation-etl")
+
+@etl.init_class()
+class ValidationETL(FastAPIServer):
+    def transform(self, data: bytes, _path: str, _etl_args: str) -> bytes:
+        if data == b"invalid":
+            raise ValueError("validation failed")
+        return data
+
+job_id = bucket.objects(obj_names=["obj-1", "obj-2"]).inspect(etl_name=etl.name)
+errors = etl.view(job_id=job_id).obj_errors
+print(errors[0]) # obj_name='ais://test-bucket/obj-1' msg='ETL error: {"detail":"Processing error: validation failed"}'
+```
+
+Go API:
+
+```go
+xid, err := api.ETLInspectBucket(bp, bck, msg)
+xid, err := api.ETLInspectMultiObj(bp, bck, msg)
+```
+
 ### Single-Object Transformation
 
 Single-object Transformation allows you to transform one object at a time between any two buckets. It's similar to a regular copy operation, but with an ETL transformation applied in-flight. This is ideal for quick, ad-hoc conversions where creating an entire new bucket isn’t necessary.

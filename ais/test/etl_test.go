@@ -355,6 +355,15 @@ func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCn
 		bytes, outBytes, inBytes)
 }
 
+func checkObjectSizes(t *testing.T, bp api.BaseParams, bck cmn.Bck, objNames []string, size int64) {
+	t.Helper()
+	for _, objName := range objNames {
+		oah, err := api.GetObjectWithValidation(bp, bck, objName, nil)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, oah.Size() == size, "%s: expected size %d, got %d", bck.Cname(objName), size, oah.Size())
+	}
+}
+
 func TestETLObject(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
@@ -796,6 +805,34 @@ func TestETLBucketDryRun(t *testing.T) {
 	tassert.Errorf(t, exists == false, "[dry-run] expected destination bucket not to be created")
 
 	checkETLStats(t, xid, m.num, uint64(m.num*int(m.fileSize)), false)
+}
+
+func TestETLInspectBucket(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: "etl-inspect-" + trand.String(5), Provider: apc.AIS}
+		m          = ioContext{t: t, num: 10, fileSize: 512, fixedSize: true, bck: bck}
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	m.init(true /*cleanup*/)
+	m.puts()
+
+	initMsg := tetl.InitSpec(t, baseParams, tetl.MD5, etl.Hpush)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, initMsg.Name()) })
+
+	msg := &apc.TCBMsg{Transform: apc.Transform{Name: initMsg.Name()}}
+	xid, err := api.ETLInspectBucket(baseParams, bck, msg)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, !msg.DryRun && !msg.ContinueOnError, "inspect must not mutate caller message")
+
+	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: time.Minute})
+	tassert.CheckFatal(t, err)
+	checkObjectSizes(t, baseParams, bck, m.objNames, int64(m.fileSize))
 }
 
 func TestETLStopAndRestartETL(t *testing.T) {

@@ -24,6 +24,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `Job.abort()` mirroring Go's `api.AbortXaction`: stops a job scoped by its
   `id` and/or `kind`. After aborting, `wait()` returns a `WaitResult` with
   `success=False` and the abort error instead of blocking until timeout.
+- ETL inspection APIs: `Bucket.inspect()` and `ObjectGroup.inspect()` run ETL
+  in dry-run mode without writing transformed results, while preserving the
+  existing ETL object-error reporting path.
 
 ### Changed
 

@@ -1644,7 +1644,9 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 		tcbmsg.Prefix = cos.TrimPrefix(tcbmsg.Prefix)
-		if bckFrom.Equal(bckTo, true /*same BID*/, true) {
+		// Same-bucket dry-run is safe for copy and ETL: it exercises the TCB path
+		// without writing objects. ETL inspection uses this request shape.
+		if !tcbmsg.DryRun && bckFrom.Equal(bckTo, true /*same BID*/, true) {
 			if !bckFrom.IsRemote() {
 				p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bckFrom.Cname(""))
 				return
