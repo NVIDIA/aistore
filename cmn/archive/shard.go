@@ -54,6 +54,9 @@ const (
 
 	// ShardIdxMinLen: preamble + four single-byte uvarints (lower bound, not exact).
 	ShardIdxMinLen = shardIdxPrefLen + 4
+
+	// Bound memory usage when building or loading a shard index.
+	shardIdxMaxEntries = 1 << 20
 )
 
 type (
@@ -122,6 +125,9 @@ func BuildShardIndex(r io.ReaderAt, size int64) (*ShardIndex, error) {
 		}
 		if _, exists := idx.Entries[hdr.Name]; exists {
 			continue // first-wins: matches ReadOne semantics
+		}
+		if len(idx.Entries) >= shardIdxMaxEntries {
+			return nil, _emitErr("too many entries (max %d)", shardIdxMaxEntries)
 		}
 		// After tr.Next() the section reader is positioned at the data start.
 		// TAR guarantees all headers and data are aligned to TarBlockSize (512 bytes),
@@ -307,6 +313,9 @@ func (idx *ShardIndex) Unpack(b []byte) error {
 	count, err := d.readU64("entry count")
 	if err != nil {
 		return err
+	}
+	if count > shardIdxMaxEntries {
+		return _emitErr("entry count %d exceeds maximum %d", count, shardIdxMaxEntries)
 	}
 	entries := make(map[string]ShardIndexEntry, count)
 	for range count {

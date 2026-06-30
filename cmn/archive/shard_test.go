@@ -8,6 +8,7 @@ package archive_test
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	onexxh "github.com/OneOfOne/xxhash"
 
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -147,6 +150,20 @@ func TestShardUnpackChecksumCorruption(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestShardUnpackLargeEntryCount(t *testing.T) {
+	const prefLen = 11
+	payload := binary.AppendUvarint([]byte{0, 0, 0}, uint64(1)<<32)
+	b := make([]byte, prefLen+len(payload))
+	b[0], b[1], b[2] = 1, 0, 1
+	copy(b[prefLen:], payload)
+	binary.BigEndian.PutUint64(b[3:], onexxh.Checksum64S(payload, cos.MLCG32))
+
+	idx := &archive.ShardIndex{}
+	if err := idx.Unpack(b); err == nil {
+		t.Fatal("expected oversized entry count to fail")
 	}
 }
 
