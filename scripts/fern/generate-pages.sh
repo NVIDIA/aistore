@@ -48,7 +48,7 @@ rm -rf "$FERN_PAGES"
 
 # ── 1. Create directories ────────────────────────────────────────────────
 
-mkdir -p "$FERN_PAGES"/{cli,blog,relnotes,tutorials/etl,proposals,images,assets}
+mkdir -p "$FERN_PAGES"/{cli,blog,tutorials/etl,proposals,images,assets}
 
 # ── 2. Copy source files ────────────────────────────────────────────────
 
@@ -61,7 +61,6 @@ for f in "$DOCS_DIR"/*.md; do
 done
 
 cp "$DOCS_DIR"/cli/*.md "$FERN_PAGES/cli/"
-cp "$DOCS_DIR"/relnotes/*.md "$FERN_PAGES/relnotes/"
 cp "$DOCS_DIR"/tutorials/etl/*.md "$FERN_PAGES/tutorials/etl/" 2>/dev/null || true
 cp "$DOCS_DIR"/proposals/*.md "$FERN_PAGES/proposals/" 2>/dev/null || true
 
@@ -113,7 +112,7 @@ find "$FERN_PAGES" -maxdepth 1 -name '*.md' -exec perl -pi \
     {} +
 
 # Subdirectory pages: need ../ prefix
-for subdir in cli blog relnotes proposals; do
+for subdir in cli blog proposals; do
     find "$FERN_PAGES/$subdir" -name '*.md' -exec perl -pi \
         -e 's|\]\(/docs/images/|](../images/|g;' \
         -e 's|\]\(/docs/assets/|](../assets/|g;' \
@@ -147,7 +146,7 @@ GITHUB_BASE="https://github.com/NVIDIA/aistore/blob/main"
 # MUST come before the .md-stripping step below; otherwise paths like
 # /memsys/README.md lose their .md and GitHub 404s the resulting URL.
 find "$FERN_PAGES" -name '*.md' -exec perl -pi \
-    -e 's{\]\(/(?!docs/|blog/|cli/|relnotes/|tutorials/|proposals/|assets/|images/|README|[#])([^)]+)\)}{]('"$GITHUB_BASE"'/$1)}g;' \
+    -e 's{\]\(/(?!docs/|blog/|cli/|tutorials/|proposals/|assets/|images/|README|[#])([^)]+)\)}{]('"$GITHUB_BASE"'/$1)}g;' \
     {} +
 
 # Strip .md extensions from remaining internal links only (skip http/https URLs)

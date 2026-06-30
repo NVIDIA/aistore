@@ -52,6 +52,10 @@ navigation:
     path: ./pages/docs.md
     slug: docs
 
+  # Release notes: canonical release history lives in GitHub Releases
+  - link: Release Notes
+    href: "https://github.com/NVIDIA/aistore/releases"
+
   # AUTO_GENERATED_DOCS_ENTRIES
 
   # AUTO_GENERATED_BLOG_ENTRIES

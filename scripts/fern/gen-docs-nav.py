@@ -111,13 +111,7 @@ def _discover_all_pages(pages_dir: str) -> list:
         full_slug = os.path.splitext(rel)[0]
         # page_slug is filename-only (used in YAML inside a section with dir as slug)
         page_slug = name
-        # Prefix numeric-only slugs (e.g., release notes "3.30" -> "v3.30")
-        if page_slug and page_slug[0].isdigit():
-            page_slug = f"v{page_slug}"
         title = name.replace("_", " ").replace("-", " ").title()
-        # Prefix numeric titles too (YAML parses "3.30" as float)
-        if title and title[0].isdigit():
-            title = f"v{title}"
         pages.append(
             {
                 "title": title,
