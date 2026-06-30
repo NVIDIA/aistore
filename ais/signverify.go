@@ -33,8 +33,8 @@ import (
 //
 // TODO:
 // - keep local keypairs memory-only: regenerate on restart and advertise via joinCluster
-// - FIXME: p.access()
 // - FIXME: htrun.parseReq()
+// - tests: add TestSignVerifyToggleStress and run it in parallel w/ TestSmoke/prefetch/get-batch
 // - define replay protection and canonical query/body coverage
 // - add rotation, startup, and tampering tests
 
@@ -206,7 +206,8 @@ func (sv *svReq) verify(sid string, snode *meta.Snode, smap *smapX) (int, error)
 	}
 
 	if snode == nil {
-		return na, fmt.Errorf("sender %q not in Smap %s [smapVer %d]", sid, smap.String(), sv.smapVer)
+		e := fmt.Errorf(fmtNodeNotPresent, sid, smap)
+		return na, fmt.Errorf("cannot verify request: %v, smapVer=%d", e, sv.smapVer)
 	}
 	debug.Assert(snode.ID() == sid)
 

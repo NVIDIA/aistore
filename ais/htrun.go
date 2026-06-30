@@ -1911,7 +1911,7 @@ func (h *htrun) extractSmap(payload msPayload, sender string, skipValidation boo
 	}
 
 	if !newSmap.isPresent(h.si) {
-		err := &errSelfNotFound{act: act, si: h.si, tag: "new", smap: newSmap}
+		err := &errSelfNotFound{act: act, si: h.si, smap: newSmap}
 		if msg.Action != apc.ActPrimaryForce {
 			return newSmap, msg, err
 		}
@@ -2035,7 +2035,7 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *actMsgExt, payload msPayload, s
 	logmsync(smap.Version, newSmap, msg, sender, newSmap.StringEx(), smap.UUID)
 
 	if !newSmap.isPresent(h.si) {
-		return &errSelfNotFound{act: "receive-smap", si: h.si, tag: "new", smap: newSmap}
+		return &errSelfNotFound{act: "receive-smap", si: h.si, smap: newSmap}
 	}
 	return h.owner.smap.synchronize(h.si, newSmap, payload, cb)
 }
@@ -2462,7 +2462,8 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) *cos.Nod
 			// log
 			s := fmt.Sprintf("%s via primary health: cluster startup Ok, %s", h.si, smap.StringEx())
 			if self := smap.GetNode(h.si.ID()); self == nil {
-				nlog.Warningln(s + "; NOTE: not present in the cluster map")
+				e := fmt.Errorf(fmtSelfNotPresent, h, smap.StringEx())
+				nlog.Warningln(s, "\nNOTE:", e)
 			} else if self.Flags.IsSet(meta.SnodeMaint) {
 				h.si.Flags = self.Flags
 				nlog.Warningln(s + "; NOTE: starting in maintenance mode")
@@ -2602,7 +2603,7 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 		return http.StatusServiceUnavailable, errors.New("not ready yet")
 	}
 	if ok := senderID != "" && senderName != ""; !ok {
-		return 0, errIntraControl
+		return 0, errNotIntraControl
 	}
 	if err := smap.validate(); err != nil {
 		return 0, err
@@ -2619,30 +2620,12 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 }
 
 func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
-	const ferr = "%s: invalid intra-cluster request from [name=%q, id=%q]"
-	var (
-		hdr   = r.Header
-		sid   = hdr.Get(apc.HdrSenderID)
-		sname = hdr.Get(apc.HdrSenderName)
-	)
-	// 1. both headers must be present
-	if sid == "" && sname == "" {
-		return 0, errIntraControl
-	}
-	if sid == "" || sname == "" {
-		return 0, fmt.Errorf(ferr, h, sname, sid)
+	sid, sname, before, err := h.parseSenderHdrs(r.Header)
+	if err != nil {
+		return 0, err
 	}
 
-	// 2. name must be valid
-	before, after, ok := strings.Cut(sname, sid)
-	if !ok || after != meta.SnameSuffix {
-		return 0, fmt.Errorf(ferr, h, sname, sid)
-	}
-	if before != meta.PnamePrefix && before != meta.TnamePrefix {
-		return 0, fmt.Errorf(ferr, h, sname, sid)
-	}
-
-	// 3. lookup sender in smap
+	// lookup sender
 	smap := h.owner.smap.get()
 	if smap == nil || !smap.isValid() {
 		return 0, nil // smap not yet valid — inconclusive during startup
@@ -2650,26 +2633,27 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
 
 	snode := smap.GetNode(sid)
 
-	// 4. verify signature
+	// verify signature
 	if ecode, err := h.verifyIntra(r, snode, sid, sname, smap); err != nil {
 		return ecode, err
 	}
 
-	// 5. unknown sender
+	// unknown sender
 	if snode == nil {
 		if !fromPrimary {
 			return 0, nil
 		}
-		return 0, fmt.Errorf("%s: expected %s from a valid node, %s", h, cmn.NetIntraControl, smap)
+		e := fmt.Errorf(fmtNodeNotPresent, sname, smap)
+		return 0, fmt.Errorf("%s via %s: %v", h, cmn.NetIntraControl, e)
 	}
 
-	// 6. sname prefix must match the role (completing check #2 above)
+	// sname prefix must match the role (completing check #2 above)
 	wantPrefix := meta.PnamePrefix
 	if snode.IsTarget() {
 		wantPrefix = meta.TnamePrefix
 	}
 	if before != wantPrefix {
-		return 0, fmt.Errorf(ferr, h, sname, sid)
+		return 0, &errInvIntraControl{si: h.si, sname: sname, sid: sid}
 	}
 
 	// 7. a known cluster member (the fact that it's known is enough)
@@ -2683,7 +2667,7 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
 	}
 
 	// 9. primary's calling but my local Smap disagrees: still trust the caller if its Smap is strictly newer
-	sver := hdr.Get(apc.HdrSenderSmapVer)
+	sver := r.Header.Get(apc.HdrSenderSmapVer)
 	if sver != "" && sver != smap.vstr {
 		ver, err := strconv.ParseInt(sver, 10, 64)
 		if err != nil || ver < 0 {
@@ -2700,6 +2684,31 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
 	}
 
 	return 0, fmt.Errorf("%s: expected %s from primary (and not %s), %s", h, cmn.NetIntraControl, snode, smap)
+}
+
+// validate intra-cluster sender headers: presence and consistency of name formatting
+// - errNotIntraControl: when neither header is present (not an intra-cluster call)
+// - errInvIntraControl: when exactly one is present, or the name is malformed
+func (h *htrun) parseSenderHdrs(hdr http.Header) (sid, sname, before string, err error) {
+	sid = hdr.Get(apc.HdrSenderID)
+	sname = hdr.Get(apc.HdrSenderName)
+
+	if sid == "" && sname == "" {
+		return "", "", "", errNotIntraControl
+	}
+	if sid == "" || sname == "" {
+		return sid, sname, "", &errInvIntraControl{si: h.si, sname: sname, sid: sid}
+	}
+
+	var after string
+	var ok bool
+	if before, after, ok = strings.Cut(sname, sid); !ok || after != meta.SnameSuffix {
+		return sid, sname, "", &errInvIntraControl{si: h.si, sname: sname, sid: sid}
+	}
+	if before != meta.PnamePrefix && before != meta.TnamePrefix {
+		return sid, sname, "", &errInvIntraControl{si: h.si, sname: sname, sid: sid}
+	}
+	return sid, sname, before, nil
 }
 
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
