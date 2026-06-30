@@ -86,9 +86,6 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := p.checkAccess(w, r, nil, apc.AceGET); err != nil {
-		return
-	}
 	if len(items) > 2 || items[0] != apc.Moss {
 		p.writeErrURL(w, r)
 		return
@@ -140,36 +137,38 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// body
-	body, errB := cmn.ReadBytes(r) // read api.MossReq but not unmarshal it
+	body, errB := cmn.ReadBytes(r)
 	if errB != nil {
 		p.writeErr(w, r, errB)
 		return
 	}
 
-	// DT
+	// streaming pass over the request: collect the distinct referenced buckets
+	// and, when colocation is on, select the DT
 	var (
 		smap = p.owner.smap.get()
 		nat  = smap.CountActiveTs()
-		tsi  *meta.Snode
-		errT error
 	)
-	if coloc >= apc.ColocOne {
-		var req apc.MossReq
-		if err := jsoniter.Unmarshal(body, &req); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		if err := _checkMossEmpty(&req); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		tsi, errT = _selectDT(&req, bck, smap, nat)
-	} else {
-		tsi, errT = smap.HrwTargetTask(cos.GenTie())
-	}
-	if errT != nil {
-		p.writeErr(w, r, errT)
+	iter := jsoniter.ConfigFastest.BorrowIterator(body)
+	bcks, tsi, err := mossScan(iter, bck, smap, nat, coloc)
+	jsoniter.ConfigFastest.ReturnIterator(iter)
+
+	if err != nil {
+		p.writeErr(w, r, err)
 		return
+	}
+	// authorize: apc.AceGET on every referenced bucket
+	for _, b := range bcks {
+		if err := p.checkAccess(w, r, b, apc.AceGET); err != nil {
+			return
+		}
+	}
+	// no colocation: pick the DT at random
+	if coloc < apc.ColocOne {
+		if tsi, err = smap.HrwTargetTask(cos.GenTie()); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
 	}
 
 	raw := r.URL.RawQuery
@@ -245,59 +244,6 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		// see also ctx._startSend on the target side
 		go p._startSend(args, tsi)
 	}
-}
-
-// proxy: select DT when requested via apc.QparamColoc
-func _selectDT(req *apc.MossReq, dfltBck *meta.Bck, smap *smapX, nat int) (*meta.Snode, error) {
-	var (
-		m      map[string]int // the map of scores or hits: req.In entries => target
-		single string         // when all entries HRW => single target
-		dt     string         // designated target
-		score  int            // max running score
-	)
-	for i := range req.In {
-		var (
-			in  = &req.In[i]
-			err error
-			tsi *meta.Snode
-			bck *meta.Bck
-		)
-		if bck, err = meta.BckFromUBP(in.Uname, in.Bucket, in.Provider); err != nil {
-			return nil, err
-		}
-		if bck == nil {
-			bck = dfltBck
-		}
-		if bck == nil {
-			return nil, fmt.Errorf("missing bucket specification for object %q", in.ObjName)
-		}
-
-		if tsi, err = smap.HrwName2T(bck.MakeUname(in.ObjName)); err != nil {
-			return nil, err
-		}
-		tid := tsi.ID()
-
-		switch {
-		case single == "":
-			single = tid
-			dt = tid
-			score = 1
-		case single == tid && m == nil:
-			score++
-		default:
-			if m == nil {
-				m = make(map[string]int, min(nat, len(req.In)))
-				m[single] = score
-			}
-			m[tid]++
-			if score < m[tid] {
-				score = m[tid]
-				dt = tid
-			}
-		}
-	}
-
-	return smap.GetTarget(dt), nil
 }
 
 // proxy: phase 3 bcast to senders - async and after the phase-2 redirect

@@ -1,4 +1,4 @@
-// Package ais provides AIStore's proxy and target nodes.
+// Package ais: internal unit tests
 /*
  * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
