@@ -101,3 +101,44 @@ func TestMossScan_MissingBucket(t *testing.T) {
 
 	tassert.Fatalf(t, err != nil, "expected missing bucket error")
 }
+
+// the proxy must authorize the same bucket the target will read; both sides resolve
+// each entry through apc.MossIn, so a case-insensitive JSON key (e.g. "Bucket") maps identically
+func TestMossScan_DecodeMatchesTarget(t *testing.T) {
+	body := []byte(`{"in":[{"objname":"secret","Bucket":"private"}]}`)
+	dflt := &meta.Bck{Name: "public", Provider: apc.AIS}
+
+	// proxy side
+	iter := jsoniter.ConfigFastest.BorrowIterator(body)
+	bcks, _, err := mossScan(iter, dflt, newTestSmapForMossScan(1), 1, apc.ColocNone)
+	jsoniter.ConfigFastest.ReturnIterator(iter)
+	tassert.CheckFatal(t, err)
+
+	// target side: how the target actually decodes the same body
+	var req apc.MossReq
+	tassert.CheckFatal(t, jsoniter.Unmarshal(body, &req))
+	tgt, err := meta.BckFromUBP(req.In[0].Uname, req.In[0].Bucket, req.In[0].Provider)
+	tassert.CheckFatal(t, err)
+
+	// proxy must authorize the SAME bucket the target will read
+	tassert.Fatalf(t, len(bcks) == 1 && bcks[0].Name == tgt.Name,
+		"proxy authorized %q but target reads %q", bcks[0].Name, tgt.Name)
+}
+
+func TestMossScan_DecodeMatchesTargetTopLevelIn(t *testing.T) {
+	body := []byte(`{"In":[{"objname":"secret","bucket":"private"}]}`)
+	dflt := &meta.Bck{Name: "public", Provider: apc.AIS}
+
+	iter := jsoniter.ConfigFastest.BorrowIterator(body)
+	bcks, _, err := mossScan(iter, dflt, newTestSmapForMossScan(1), 1, apc.ColocNone)
+	jsoniter.ConfigFastest.ReturnIterator(iter)
+	tassert.CheckFatal(t, err)
+
+	var req apc.MossReq
+	tassert.CheckFatal(t, jsoniter.Unmarshal(body, &req))
+	tgt, err := meta.BckFromUBP(req.In[0].Uname, req.In[0].Bucket, req.In[0].Provider)
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatalf(t, len(bcks) == 1 && bcks[0].Name == tgt.Name,
+		"proxy authorized %q but target reads %q", bcks[0].Name, tgt.Name)
+}
