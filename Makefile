@@ -408,10 +408,13 @@ api-docs-website: ## Generate API docs from code annotations
 # Fern documentation
 #
 
-.PHONY: fern-generate fern-preview fern-build
+.PHONY: fern-generate fern-check fern-preview fern-build
 
 fern-generate: ## Generate Fern pages from docs/
 	@$(SHELL) $(SCRIPTS_DIR)/fern/generate-pages.sh
+
+fern-check: ## Generate Fern pages and validate Fern config (no publish)
+	@$(SHELL) $(SCRIPTS_DIR)/fern/generate-pages.sh --check
 
 fern-preview: ## Generate Fern pages and start local preview
 	@$(SHELL) $(SCRIPTS_DIR)/fern/generate-pages.sh --preview

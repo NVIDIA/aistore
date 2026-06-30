@@ -18,6 +18,26 @@ FERN_DIR="$REPO_ROOT/fern"
 FERN_PAGES="$FERN_DIR/pages"
 DOCS_DIR="$REPO_ROOT/docs"
 SCRIPTS_DIR="$REPO_ROOT/scripts/fern"
+MODE="${1:-}"
+
+case "$MODE" in
+    ""|"--preview"|"--check"|"--build") ;;
+    *)
+        echo "ERROR: Unknown option: $MODE" >&2
+        echo "Usage: scripts/fern/generate-pages.sh [--preview|--check|--build]" >&2
+        exit 1
+        ;;
+esac
+
+restore_docs_yml() {
+    if [ -f "$FERN_DIR/docs.yml.bak" ]; then
+        mv "$FERN_DIR/docs.yml.bak" "$FERN_DIR/docs.yml"
+    fi
+}
+
+if [[ "$MODE" == "--check" ]]; then
+    trap restore_docs_yml EXIT
+fi
 
 echo "Generating Fern pages from docs/..."
 
@@ -166,9 +186,9 @@ python3 "$SCRIPTS_DIR/mdx-escape.py" "$FERN_PAGES"
 
 echo "Fern pages generated: $(find "$FERN_PAGES" -name '*.md' | wc -l) files"
 
-# ── Optional: preview or build ───────────────────────────────────────────
+# ── Optional: preview, check, or build ───────────────────────────────────
 
-if [[ "${1:-}" == "--preview" || "${1:-}" == "--build" ]]; then
+if [[ "$MODE" == "--preview" || "$MODE" == "--check" || "$MODE" == "--build" ]]; then
     if ! command -v fern &>/dev/null; then
         echo "ERROR: 'fern' CLI not found. Install with: npm install -g fern-api" >&2
         exit 1
@@ -206,8 +226,10 @@ EOF
         echo "Created local-preview stub: $PYTHON_PAGES/index.mdx"
     fi
 
-    if [[ "${1:-}" == "--preview" ]]; then
+    if [[ "$MODE" == "--preview" ]]; then
         fern docs dev --port 3000
+    elif [[ "$MODE" == "--check" ]]; then
+        fern check
     else
         fern generate --docs
     fi

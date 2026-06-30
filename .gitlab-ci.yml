@@ -182,6 +182,32 @@ build:linux:
     - make cli
     - make aisloader
 
+build:fern-docs:
+  stage: build
+  image: node:22-bookworm
+  tags:
+    - $RUNNER_TAG
+  timeout: 10m
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - '.gitlab-ci.yml'
+        - '.github/workflows/fern-docs.yml'
+        - 'CONTRIBUTING.md'
+        - 'Makefile'
+        - 'docs/**/*'
+        - 'README.md'
+        - 'fern/**/*'
+        - 'scripts/fern/**/*'
+  script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends python3-yaml
+    - npm install -g fern-api@5.50.5
+    - bash scripts/fern/generate-pages.sh --check
+
 security:sonarqube:
   stage: build
   tags:

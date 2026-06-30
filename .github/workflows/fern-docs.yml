@@ -1,25 +1,45 @@
 name: Fern Docs
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/fern-docs.yml'
+      - 'CONTRIBUTING.md'
+      - 'Makefile'
+      - 'docs/**'
+      - 'README.md'
+      - 'fern/**'
+      - 'scripts/fern/**'
   push:
     branches: [main]
     paths:
+      - '.github/workflows/fern-docs.yml'
+      - 'CONTRIBUTING.md'
+      - 'Makefile'
       - 'docs/**'
       - 'README.md'
       - 'fern/**'
       - 'scripts/fern/**'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  FERN_API_VERSION: 5.50.5
+
 jobs:
-  publish:
-    name: Publish Fern docs
+  check:
+    name: Check Fern docs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6.3.0
         with:
           python-version: '3.12'
 
@@ -27,7 +47,32 @@ jobs:
         run: pip install pyyaml
 
       - name: Install Fern
-        run: npm install -g fern-api
+        run: npm install -g "fern-api@${FERN_API_VERSION}"
+
+      - name: Validate Fern docs without publishing
+        run: bash scripts/fern/generate-pages.sh --check
+
+  publish:
+    name: Publish Fern docs
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install pyyaml
+
+      - name: Install Fern
+        run: npm install -g "fern-api@${FERN_API_VERSION}"
 
       - name: Generate Fern pages
         run: bash scripts/fern/generate-pages.sh
