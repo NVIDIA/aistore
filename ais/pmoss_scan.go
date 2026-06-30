@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -72,7 +73,7 @@ func mossScan(iter *jsoniter.Iterator, dfltBck *meta.Bck, smap *smapX, nat int, 
 
 // jsoniter callback: top-level object - looking for "in" field
 func (ctx *mossScanCtx) onObject(iter *jsoniter.Iterator, key string) bool {
-	if key != "in" && key != "In" {
+	if key != "in" && !strings.EqualFold(key, "in") {
 		iter.Skip()
 		return true
 	}
