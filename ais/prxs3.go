@@ -304,9 +304,8 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	var (
 		msg2  apc.ActMsg
 		bt    = cos.MustMarshal(&msg)
-		query = make(url.Values, 1)
+		query = bck.AddToQuery(nil)
 	)
-	query.Set(apc.QparamProvider, apc.AIS)
 	if err := jsoniter.Unmarshal(bt, &msg2); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "list-range action message", cos.BHead(bt), err)
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
