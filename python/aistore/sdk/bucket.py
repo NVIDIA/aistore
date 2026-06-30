@@ -961,7 +961,8 @@ class Bucket(AISSource):
         etl_pipeline: Optional[List[str]] = None,
     ) -> str:
         """
-        Apply ETL to source objects without writing transformed results.
+        Inspect each object with the specified ETL transformation for validation
+        or other custom checks.
 
         Args:
             etl_name (str): Name of the ETL to run.

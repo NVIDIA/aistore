@@ -295,20 +295,25 @@ func etlBucketHandler(c *cli.Context) error {
 	return copyTransform(c, etlNameOrPipeline, objFrom, bckFrom, bckTo)
 }
 
-func etlBucket(c *cli.Context, etlNameOrPipeline string, bckFrom, bckTo cmn.Bck) error {
-	// Parse pipeline or single ETL name
-	var transform apc.Transform
+func parseETLTransform(etlNameOrPipeline string) (apc.Transform, error) {
 	etlNames, err := parseETLNames(etlNameOrPipeline)
 	if err != nil {
-		return err
+		return apc.Transform{}, err
 	}
-	transform = apc.Transform{
+	transform := apc.Transform{
 		Name: etlNames[0], // First ETL in the pipeline
 	}
 	if len(etlNames) > 1 {
 		transform.Pipeline = etlNames[1:] // Only populate pipeline if more than one ETL
 	}
+	return transform, nil
+}
 
+func etlBucket(c *cli.Context, etlNameOrPipeline string, bckFrom, bckTo cmn.Bck) error {
+	transform, err := parseETLTransform(etlNameOrPipeline)
+	if err != nil {
+		return err
+	}
 	var msg = apc.TCBMsg{
 		Transform: transform,
 	}
@@ -360,4 +365,103 @@ func etlBucket(c *cli.Context, etlNameOrPipeline string, bckFrom, bckTo cmn.Bck)
 	locBytes, outBytes, inBytes := snaps.ByteCounts(xid)
 	fmt.Fprintf(c.App.Writer, "ETL byte stats:\t transformed=%d, sent=%d, received=%d", locBytes, outBytes, inBytes)
 	return nil
+}
+
+func etlInspectHandler(c *cli.Context) error {
+	if c.NArg() < 2 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	if c.NArg() > 2 {
+		return incorrectUsageMsg(c, "too many arguments")
+	}
+	etlNameOrPipeline := c.Args().Get(0)
+	bckFrom, objNameOrTmpl, err := parseBckObjURI(c, c.Args().Get(1), true /*emptyObjnameOK*/)
+	if err != nil {
+		return err
+	}
+	return etlInspect(c, etlNameOrPipeline, objNameOrTmpl, bckFrom)
+}
+
+func etlInspect(c *cli.Context, etlNameOrPipeline, objNameOrTmpl string, bckFrom cmn.Bck) error {
+	// Resolve the user input into one of:
+	// - no object/list/template: inspect the entire bucket via x-tcb
+	// - object/list/template: inspect selected objects via x-tco
+	oltp, err := dopOLTP(c, bckFrom, objNameOrTmpl)
+	if err != nil {
+		return err
+	}
+	transform, err := parseETLTransform(etlNameOrPipeline)
+	if err != nil {
+		return err
+	}
+	fltPresence := cos.Ternary(flagIsSet(c, etlAllObjsFlag), apc.FltExists, apc.FltPresent)
+
+	//
+	// (1) inspect bucket (x-tcb)
+	//
+	if oltp.objName == "" && oltp.list == "" && oltp.tmpl == "" {
+		msg := apc.TCBMsg{Transform: transform}
+		if err := _iniTCBMsg(c, &msg); err != nil {
+			return err
+		}
+		xid, err := api.ETLInspectBucket(apiBP, bckFrom, &msg, fltPresence)
+		if errV := handleETLHTTPError(err, transform.Name); errV != nil {
+			return errV
+		}
+		return etlInspectDone(c, xid, apc.ActETLBck, transform.Name, bckFrom)
+	}
+
+	//
+	// (2) inspect selected objects (x-tco)
+	//
+	if oltp.list == "" && oltp.tmpl == "" {
+		oltp.list = oltp.objName
+	}
+	msg := cmn.TCOMsg{}
+	{
+		msg.Transform = transform
+		msg.LatestVer = flagIsSet(c, latestVerFlag)
+		if flagIsSet(c, numWorkersFlag) {
+			msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
+		}
+		if oltp.list != "" {
+			msg.ObjNames = splitCsv(oltp.list)
+		} else {
+			if _, err := cos.NewParsedTemplate(oltp.tmpl); err != nil && err != cos.ErrEmptyTemplate {
+				return err
+			}
+			msg.Template = oltp.tmpl
+		}
+	}
+	xid, err := api.ETLInspectMultiObj(apiBP, bckFrom, &msg, fltPresence)
+	if errV := handleETLHTTPError(err, transform.Name); errV != nil {
+		return errV
+	}
+	return etlInspectDone(c, xid, apc.ActETLObjects, transform.Name, bckFrom)
+}
+
+func etlInspectDone(c *cli.Context, xid, kind, etlName string, bckFrom cmn.Bck) error {
+	_, xname := xact.GetKindName(kind)
+	text := fmt.Sprintf("%s %s", xact.Cname(xname, xid), bckFrom.String())
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+		fmt.Fprintln(c.App.Writer, text)
+		fmt.Fprintln(c.App.Writer, etlInspectErrorsMsg(etlName, xid))
+		return nil
+	}
+
+	var timeout time.Duration
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
+	fmt.Fprintln(c.App.Writer, text+" ...")
+	if err := waitXact(&xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}); err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer, etlInspectErrorsMsg(etlName, xid))
+	return nil
+}
+
+func etlInspectErrorsMsg(etlName, xid string) string {
+	cmd := cliName + " " + commandETL + " " + commandShow + " " + cmdErrors
+	return fmt.Sprintf("To view failed objects, run '%s %s %s'", cmd, etlName, xid)
 }

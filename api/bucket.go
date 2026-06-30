@@ -221,7 +221,8 @@ func ETLBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, fltPresen
 	return tcb(bp, bckFrom, bckTo, jbody, fltPresence...)
 }
 
-// ETLInspectBucket applies ETL to source objects without writing transformed results.
+// ETLInspectBucket inspects each object with the specified ETL transformation
+// for validation or other custom checks.
 func ETLInspectBucket(bp BaseParams, bck cmn.Bck, msg *apc.TCBMsg, fltPresence ...int) (string, error) {
 	if msg == nil {
 		return "", fmt.Errorf("%s: nil msg", apc.ActETLBck)

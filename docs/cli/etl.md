@@ -9,7 +9,7 @@ In the `ais etl` namespace, the commands include:
 ```console
 $ ais etl <TAB-TAB>
 
-init     show      view-logs   start     stop      rm      object    bucket
+init     show      view-logs   start     stop      rm      object    bucket    inspect
 ```
 
 For background on AIS-ETL, getting started, working examples, and tutorials, please refer to:
@@ -44,6 +44,7 @@ For background on AIS-ETL, getting started, working examples, and tutorials, ple
 
 * [Inline Transformation](#inline-transformation)
 * [Offline Transformation](#offline-transformation)
+* [Object Inspection](#object-inspection)
 
 ---
 
@@ -131,6 +132,11 @@ Additional Info:
      - 'ais etl bucket my-etl ais://src ais://dst --dry-run'                             preview transformation without executing;
      - 'ais etl bucket my-etl ais://src ais://dst --num-workers 8'                       use 8 concurrent workers for transformation;
      - 'ais etl bucket my-etl ais://src ais://dst --prepend processed/'                  add prefix to transformed object names.
+   inspect  Inspect each object with the specified ETL transformation for validation or other custom checks.
+   Examples:
+     - 'ais etl inspect my-etl ais://src'                    inspect all objects in a bucket;
+     - 'ais etl inspect my-etl ais://src --prefix images/'   inspect objects with prefix 'images/';
+     - 'ais etl inspect my-etl ais://src --list obj-1,obj-2' inspect listed objects.
 
 OPTIONS:
    --help, -h  Show help
@@ -537,7 +543,7 @@ USAGE:
    ais etl bucket ETL_NAME SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET [command options]
 
 OPTIONS:
-   all          Transform all objects from a remote bucket including those that are not present (not cached) in cluster
+   all          Include all objects from a remote bucket including those that are not present (not cached) in cluster
    cont-on-err  Keep running archiving xaction (job) in presence of errors in any given multi-object transaction
    dry-run      Show total size of new objects without really creating them
    ext          Mapping from old to new extensions of transformed objects' names
@@ -621,3 +627,19 @@ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --dry-run --wai
 ```
 
 > Learn more: [Offline ETL Transformation](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#offline-etl-transformation)
+
+---
+
+## Object Inspection
+
+Use `ais etl inspect` to inspect each object with the specified ETL transformation. Common uses include validation, policy checks, and other custom checks. The command does not create transformed output objects.
+
+```bash
+ais etl inspect <ETL_NAME> <SRC_BUCKET> [--prefix PREFIX | --list OBJECTS | --template TEMPLATE]
+```
+
+For remote buckets, `--all` also includes objects that are not present in the cluster. To view failed objects after the job starts, run:
+
+```bash
+ais etl show errors <ETL_NAME> <JOB_ID>
+```

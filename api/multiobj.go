@@ -59,7 +59,8 @@ func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ..
 	return doBckAct(bp, bckFrom, jbody, q)
 }
 
-// ETLInspectMultiObj applies ETL to source objects without writing transformed results.
+// ETLInspectMultiObj inspects each object with the specified ETL transformation
+// for validation or other custom checks.
 func ETLInspectMultiObj(bp BaseParams, bck cmn.Bck, msg *cmn.TCOMsg, fltPresence ...int) (string, error) {
 	if msg == nil {
 		return "", fmt.Errorf("%s: nil msg", apc.ActETLObjects)

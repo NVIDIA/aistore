@@ -553,7 +553,7 @@ func TestCheckCertExpiration(t *testing.T) {
 	fcyan = fmt.Sprint
 
 	node := &meta.Snode{}
-	node.Init("test-node", "target")
+	node.Init("test-node", "target", nil)
 
 	app := cli.NewApp()
 	app.ErrWriter = io.Discard

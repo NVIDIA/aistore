@@ -45,6 +45,7 @@ ais etl rm $ETL_NAME-url
 
 ais etl show $ETL_NAME-3 | grep -m1 "communication_type"
 
+ais etl inspect $ETL_NAME-3 ais://$BUCKET_1 --list object_1.txt --wait
 
 # Test etl object cp (copy with transformation)
 ais bucket create ais://$BUCKET_2 // IGNORE

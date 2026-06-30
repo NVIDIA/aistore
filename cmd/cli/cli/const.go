@@ -211,9 +211,10 @@ const (
 	cmdK8sCluster = commandCluster
 
 	// ETL subcommands
-	cmdInit   = "init"
-	cmdSpec   = "spec"
-	cmdErrors = "errors"
+	cmdInit    = "init"
+	cmdInspect = "inspect"
+	cmdSpec    = "spec"
+	cmdErrors  = "errors"
 
 	// config subcommands
 	cmdCLI        = "cli"
@@ -492,7 +493,7 @@ var (
 	}
 	etlAllObjsFlag = cli.BoolFlag{
 		Name:  scopeAll,
-		Usage: "Transform all objects from a remote bucket including those that are not present (not cached) in cluster",
+		Usage: "Include all objects from a remote bucket including those that are not present (not cached) in cluster",
 	}
 
 	// obj props
@@ -879,7 +880,7 @@ var (
 			indent1 + "\t\t- 'ais bucket props set BUCKET versioning'\n" +
 			indent1 + "\t\t- 'ais ls --check-versions'\n" +
 			indent1 + "\tsupported commands include:\n" +
-			indent1 + "\t\t- 'ais cp', 'ais prefetch', 'ais get', 'ais start rebalance'",
+			indent1 + "\t\t- 'ais cp', 'ais prefetch', 'ais get', 'ais start rebalance', 'ais etl inspect'",
 	}
 	syncFlag = cli.BoolFlag{
 		Name: "sync",
