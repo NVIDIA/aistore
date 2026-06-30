@@ -320,5 +320,28 @@ var _ = Describe("Template", func() {
 				"prefix-0010-gap-1-suffix", "prefix-0012-gap-1-suffix",
 			),
 		)
+
+		DescribeTable("Count returns the exact expansion count",
+			func(template string, expected int64) {
+				pt, err := cos.ParseBashTemplate(template)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pt.Count()).To(Equal(expected))
+			},
+			Entry("single range", "{0..9}", int64(10)),
+			Entry("single range with step", "prefix-{0010..0013..2}-suffix", int64(2)),
+			Entry("multi-range product", "{0..9}{0..9}", int64(100)),
+			Entry("large single range (no overflow)", "{0..3000000000}", int64(3000000001)),
+			Entry("max int64 boundary (no overflow)", "{0..9223372036854775806}", int64(math.MaxInt64)),
+		)
+
+		DescribeTable("parsing rejects a template whose count overflows int64",
+			func(template string) {
+				_, err := cos.NewParsedTemplate(template)
+				Expect(err).To(HaveOccurred())
+			},
+			Entry("single range at int64 max", "{0..9223372036854775807}"),
+			Entry("multi-range product overflow", "{0..4000000000}{0..4000000000}{0..4000000000}"),
+			Entry("at-style product overflow", "@4000000000@4000000000@4000000000"),
+		)
 	})
 })

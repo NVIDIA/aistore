@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -158,12 +160,31 @@ func (pt *ParsedTemplate) Clone() *ParsedTemplate {
 }
 
 func (pt *ParsedTemplate) Count() int64 {
-	count := int64(1)
+	totalCount := int64(1)
 	for _, tr := range pt.Ranges {
-		step := (tr.End-tr.Start)/tr.Step + 1
-		count *= step
+		debug.Assert(tr.Step > 0, "parsing rejects non-positive step, see: nonPositiveStep")
+		rangeCount := (tr.End-tr.Start)/tr.Step + 1
+		totalCount *= rangeCount
 	}
-	return count
+	return totalCount
+}
+
+func validateCount(ranges []TemplateRange) error {
+	totalCount := int64(1)
+	for _, tr := range ranges {
+		debug.Assert(tr.Step > 0, "parsing rejects non-positive step, see: nonPositiveStep")
+		wholeSteps := (tr.End - tr.Start) / tr.Step
+		if wholeSteps == math.MaxInt64 {
+			return fmt.Errorf("range [%d..%d..%d] is too large to expand", tr.Start, tr.End, tr.Step)
+		}
+		rangeCount := wholeSteps + 1
+		debug.Assert(rangeCount > 0, "range must contain at least one value, see: startAfterEnd, nonPositiveStep")
+		if totalCount > math.MaxInt64/rangeCount {
+			return errors.New("combined ranges are too large to expand")
+		}
+		totalCount *= rangeCount
+	}
+	return nil
 }
 
 func (pt *ParsedTemplate) Expand(limit ...int) ([]string, error) {
@@ -281,6 +302,23 @@ func ParseFmtTemplate(template string) (pt ParsedTemplate, _ error) {
 	}, nil
 }
 
+func parseBashRangeNumbers(numbers []string) (start, end, step int64, digitCount int, err error) {
+	if start, err = strconv.ParseInt(numbers[0], 10, 64); err != nil {
+		return
+	}
+	if end, err = strconv.ParseInt(numbers[1], 10, 64); err != nil {
+		return
+	}
+	step = 1
+	if len(numbers) == 3 {
+		if step, err = strconv.ParseInt(numbers[2], 10, 64); err != nil {
+			return
+		}
+	}
+	digitCount = min(len(numbers[0]), len(numbers[1]))
+	return
+}
+
 // examples
 // - single-range: "prefix{0001..0010}suffix"
 // - multi-range:  "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
@@ -317,32 +355,12 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, _ error) {
 		inside := template[left+1 : right]
 
 		numbers := strings.Split(inside, "..")
-
-		switch {
-		case len(numbers) < 2 || len(numbers) > 3:
+		if len(numbers) < 2 || len(numbers) > 3 {
 			return pt, newErrTemplateInvalid(invalidBash, template)
-		case len(numbers) == 2: // {0001..0999} case
-			var err error
-			if tr.Start, err = strconv.ParseInt(numbers[0], 10, 64); err != nil {
-				return pt, err
-			}
-			if tr.End, err = strconv.ParseInt(numbers[1], 10, 64); err != nil {
-				return pt, err
-			}
-			tr.Step = 1
-			tr.DigitCount = min(len(numbers[0]), len(numbers[1]))
-		case len(numbers) == 3: // {0001..0999..2} case
-			var err error
-			if tr.Start, err = strconv.ParseInt(numbers[0], 10, 64); err != nil {
-				return pt, err
-			}
-			if tr.End, err = strconv.ParseInt(numbers[1], 10, 64); err != nil {
-				return pt, err
-			}
-			if tr.Step, err = strconv.ParseInt(numbers[2], 10, 64); err != nil {
-				return pt, err
-			}
-			tr.DigitCount = min(len(numbers[0]), len(numbers[1]))
+		}
+		var err error
+		if tr.Start, tr.End, tr.Step, tr.DigitCount, err = parseBashRangeNumbers(numbers); err != nil {
+			return pt, err
 		}
 
 		if err := validateBoundaries("bash", template, tr.Start, tr.End, tr.Step); err != nil {
@@ -361,6 +379,9 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, _ error) {
 		pt.Ranges = append(pt.Ranges, tr)
 	}
 
+	if err := validateCount(pt.Ranges); err != nil {
+		return pt, err
+	}
 	return pt, nil
 }
 
@@ -413,6 +434,9 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, _ error) {
 		pt.Ranges = append(pt.Ranges, tr)
 	}
 
+	if err := validateCount(pt.Ranges); err != nil {
+		return pt, err
+	}
 	return pt, nil
 }
 
