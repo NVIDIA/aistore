@@ -72,7 +72,7 @@ func mossScan(iter *jsoniter.Iterator, dfltBck *meta.Bck, smap *smapX, nat int, 
 
 // jsoniter callback: top-level object - looking for "in" field
 func (ctx *mossScanCtx) onObject(iter *jsoniter.Iterator, key string) bool {
-	if key != "in" {
+	if key != "in" && key != "In" {
 		iter.Skip()
 		return true
 	}
@@ -83,21 +83,11 @@ func (ctx *mossScanCtx) onObject(iter *jsoniter.Iterator, key string) bool {
 func (ctx *mossScanCtx) onEntry(iter *jsoniter.Iterator) bool {
 	var in apc.MossIn
 
-	iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
-		switch field {
-		case "objname":
-			in.ObjName = iter.ReadString()
-		case "bucket":
-			in.Bucket = iter.ReadString()
-		case "provider":
-			in.Provider = iter.ReadString()
-		case "uname":
-			in.Uname = iter.ReadString()
-		default:
-			iter.Skip()
-		}
-		return true
-	})
+	iter.ReadVal(&in)
+	if iter.Error != nil && iter.Error != io.EOF {
+		ctx.err = iter.Error
+		return false
+	}
 
 	ctx.num++
 
@@ -124,7 +114,6 @@ func (ctx *mossScanCtx) onEntry(iter *jsoniter.Iterator) bool {
 			return false
 		}
 	}
-
 	return true
 }
 
