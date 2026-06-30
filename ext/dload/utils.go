@@ -225,7 +225,12 @@ func parseGoogleCksumHeader(hdr []string) cos.StrKVs {
 	)
 	for _, v := range hdr {
 		entry := strings.SplitN(v, "=", 2)
-		debug.Assert(len(entry) == 2)
+		if len(entry) != 2 {
+			if cmn.Rom.V(4, cos.ModDload) {
+				nlog.Warningln("malformed", cos.GsCksumHeader, "entry:", v)
+			}
+			continue
+		}
 		if v, ok := h.EncodeCksum(entry[1]); ok {
 			cksums[entry[0]] = v
 		}
