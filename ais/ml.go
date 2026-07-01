@@ -157,9 +157,23 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	// authorize: apc.AceGET on every referenced bucket
+	// initialize and authorize (apc.AceGET) every referenced bucket
 	for _, b := range bcks {
-		if err := p.checkAccess(w, r, b, apc.AceGET); err != nil {
+		if b == bck {
+			continue // the path bucket (already initialized and authorized above)
+		}
+		bckArgs := allocBctx()
+		{
+			bckArgs.p = p
+			bckArgs.w = w
+			bckArgs.r = r
+			bckArgs.bck = b
+			bckArgs.perms = apc.AceGET
+			bckArgs.createAIS = false
+		}
+		_, err := bckArgs.initAndTry()
+		freeBctx(bckArgs)
+		if err != nil {
 			return
 		}
 	}
