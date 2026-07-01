@@ -319,8 +319,8 @@ func (m *mgr) updateRole(role string, updateReq *authn.Role) (int, error) {
 	if updateReq.Description != "" {
 		rInfo.Description = updateReq.Description
 	}
-	rInfo.ClusterACLs = mergeClusterACLs(rInfo.ClusterACLs, updateReq.ClusterACLs, "")
-	rInfo.BucketACLs = mergeBckACLs(rInfo.BucketACLs, updateReq.BucketACLs, "")
+	rInfo.ClusterACLs = mergeClusterACLs(rInfo.ClusterACLs, updateReq.ClusterACLs, "", false /*union*/)
+	rInfo.BucketACLs = mergeBckACLs(rInfo.BucketACLs, updateReq.BucketACLs, "", false /*union*/)
 
 	if code, err := m.db.Set(rolesCollection, role, rInfo); err != nil {
 		return code, err
@@ -520,7 +520,6 @@ func (m *mgr) delCluster(cluID string) (int, error) {
 func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, code int, err error) {
 	var (
 		uInfo   = &authn.User{}
-		cid     string
 		cluACLs []*authn.CluACL
 		bckACLs []*authn.BckACL
 	)
@@ -538,8 +537,8 @@ func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, co
 
 	// update ACLs with roles' ones
 	for _, role := range uInfo.Roles {
-		cluACLs = mergeClusterACLs(cluACLs, role.ClusterACLs, cid)
-		bckACLs = mergeBckACLs(bckACLs, role.BucketACLs, cid)
+		cluACLs = mergeClusterACLs(cluACLs, role.ClusterACLs, "", true /*union*/)
+		bckACLs = mergeBckACLs(bckACLs, role.BucketACLs, "", true /*union*/)
 	}
 
 	claims, err := m.buildClaims(msg, uInfo, cluACLs, bckACLs)
