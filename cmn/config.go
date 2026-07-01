@@ -2130,6 +2130,7 @@ func (c *AuthConf) CopyTo(dst *AuthConf) {
 	}
 }
 
+// TODO: [backward compatibility] remove in 5.1 along with all call sites
 func IsV50Bridge() bool { return strings.HasPrefix(VersionAIStore, "5.0") }
 
 func (c *AuthConf) IntraClusterConfigured() bool {

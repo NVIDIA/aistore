@@ -398,6 +398,8 @@ const (
 	maxCustomLen = 128
 )
 
+// TODO: remove in 5.1
+// [backward compatibility] ExtraPropsHDFS removed in v4.3
 func (c *ExtraProps) UnmarshalJSON(data []byte) error {
 	type Alias ExtraProps // not to recurs
 	var tmp Alias
@@ -407,7 +409,6 @@ func (c *ExtraProps) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// [backward compatibility] ExtraPropsHDFS removed in v4.3
 	type withHDFS struct {
 		Alias
 		HDFS jsoniter.RawMessage `json:"hdfs,omitempty"`

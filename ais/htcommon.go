@@ -157,7 +157,7 @@ type (
 		sync.Mutex
 		lowLatencyToS bool
 		useIPv6       bool
-		isSeparatePub bool // this netServer is facing users _and_ is not used for intra-cluster comm
+		isPub         bool // true for user-facing listener(s)
 	}
 
 	nlogWriter struct{}
@@ -368,35 +368,24 @@ func (*nlogWriter) Write(p []byte) (int, error) {
 // netServer //
 ///////////////
 
-// public handlers must reject intra-cluster sender headers;
-// bootstrap/public probes must stay intra-header free even when they are peer-to-peer calls within the same cluster
-func _yelp(hdr http.Header, name string) error {
-	if v := hdr.Get(name); v != "" {
-		return fmt.Errorf("unexpected intra-cluster header on pub: '%s=%s'", name, v)
-	}
-	return nil
-}
-
 // dispatch request to the handler with the closest matching URL
 func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case !server.isSeparatePub:
-		// just dispatch
+	case !server.isPub:
+		// intra-cluster listener
 		server.muxers._serveHTTP(w, r)
 
 	case r.Method == http.MethodPost && r.URL.Path == apc.URLPathCluAutoReg.S:
-		// self-join: remove intra-cluster headers, then dispatch
+		// self-join: remove intra-cluster headers
 		r.Header.Del(apc.HdrSenderID)
 		r.Header.Del(apc.HdrSenderName)
 		server.muxers._serveHTTP(w, r)
 
 	default:
-		// reject spoofed intra-cluster headers, if any
-		if err := _yelp(r.Header, apc.HdrSenderID); err != nil {
-			cmn.WriteErr(w, r, err, http.StatusForbidden)
-			return
-		}
-		if err := _yelp(r.Header, apc.HdrSenderName); err != nil {
+		// pub listener: reject spoofed intra-cluster header
+		// (and note: apc.HdrSenderName cannot stand alone)
+		if v := r.Header.Get(apc.HdrSenderID); v != "" {
+			err := fmt.Errorf("unexpected intra-cluster header on pub: '%s=%s'", apc.HdrSenderID, v)
 			cmn.WriteErr(w, r, err, http.StatusForbidden)
 			return
 		}
