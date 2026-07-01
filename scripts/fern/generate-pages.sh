@@ -2,7 +2,7 @@
 #
 # Generate Fern documentation pages from docs/ source files.
 #
-# Usage: scripts/fern/generate-pages.sh
+# Usage: scripts/fern/generate-pages.sh [--preview|--check|--build|--publish-preview]
 #
 # This script copies markdown from docs/ to fern/pages/, fixes image paths,
 # strips Jekyll frontmatter, escapes MDX-unsafe patterns, and auto-generates
@@ -21,10 +21,10 @@ SCRIPTS_DIR="$REPO_ROOT/scripts/fern"
 MODE="${1:-}"
 
 case "$MODE" in
-    ""|"--preview"|"--check"|"--build") ;;
+    ""|"--preview"|"--check"|"--build"|"--publish-preview") ;;
     *)
         echo "ERROR: Unknown option: $MODE" >&2
-        echo "Usage: scripts/fern/generate-pages.sh [--preview|--check|--build]" >&2
+        echo "Usage: scripts/fern/generate-pages.sh [--preview|--check|--build|--publish-preview]" >&2
         exit 1
         ;;
 esac
@@ -37,6 +37,11 @@ restore_docs_yml() {
 
 if [[ "$MODE" == "--check" ]]; then
     trap restore_docs_yml EXIT
+fi
+
+if [[ "$MODE" == "--publish-preview" && -z "${FERN_TOKEN:-}" ]]; then
+    echo "ERROR: FERN_TOKEN is required to publish a Fern preview link." >&2
+    exit 1
 fi
 
 echo "Generating Fern pages from docs/..."
@@ -185,15 +190,50 @@ python3 "$SCRIPTS_DIR/mdx-escape.py" "$FERN_PAGES"
 
 echo "Fern pages generated: $(find "$FERN_PAGES" -name '*.md' | wc -l) files"
 
-# ── Optional: preview, check, or build ───────────────────────────────────
+# ── Optional: preview, check, build, or publish branch preview ───────────
 
-if [[ "$MODE" == "--preview" || "$MODE" == "--check" || "$MODE" == "--build" ]]; then
+if [[ "$MODE" == "--preview" || "$MODE" == "--check" || "$MODE" == "--build" || "$MODE" == "--publish-preview" ]]; then
     if ! command -v fern &>/dev/null; then
         echo "ERROR: 'fern' CLI not found. Install with: npm install -g fern-api" >&2
         exit 1
     fi
 
     cd "$REPO_ROOT"
+
+    if [[ "$MODE" == "--publish-preview" ]]; then
+        echo "Generating Python API reference (fern docs md generate)..."
+        fern docs md generate
+
+        fern check
+
+        preview_id="${FERN_PREVIEW_ID:-${CI_COMMIT_REF_SLUG:-branch-preview}}"
+        preview_log_file="${FERN_PREVIEW_LOG_FILE:-}"
+        preview_dotenv_file="${FERN_PREVIEW_DOTENV_FILE:-}"
+        echo "Publishing Fern preview with id: ${preview_id}"
+        set +e
+        output=$(FERN_TOKEN="$FERN_TOKEN" fern generate --docs --preview --id "$preview_id" --force 2>&1)
+        status=$?
+        set -e
+        if [ -n "$preview_log_file" ]; then
+            printf '%s\n' "$output" | tee "$preview_log_file"
+        else
+            printf '%s\n' "$output"
+        fi
+        if [ "$status" -ne 0 ]; then
+            exit "$status"
+        fi
+
+        preview_url=$(printf '%s\n' "$output" | sed -n 's/.*Published docs to \(https:\/\/[^[:space:]()]*\).*/\1/p' | tail -n 1)
+        if [ -z "$preview_url" ]; then
+            echo "ERROR: Fern preview URL was not found in command output." >&2
+            exit 1
+        fi
+        if [ -n "$preview_dotenv_file" ]; then
+            printf 'FERN_PREVIEW_URL=%s\n' "$preview_url" > "$preview_dotenv_file"
+        fi
+        echo "Fern preview URL: ${preview_url}"
+        exit 0
+    fi
 
     # fern/pages/python/ is auto-generated from source docstrings by
     # `fern docs md generate` (requires FERN_TOKEN). Run it here so users get

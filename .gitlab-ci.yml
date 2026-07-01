@@ -26,6 +26,7 @@ image: $CI_IMAGE
 
 stages:
   - build
+  - preview
   - test-short
   - test-long
 
@@ -193,7 +194,7 @@ build:fern-docs:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
+      changes: &fern_docs_changes
         - '.gitlab-ci.yml'
         - '.github/workflows/fern-docs.yml'
         - 'CONTRIBUTING.md'
@@ -207,6 +208,42 @@ build:fern-docs:
     - apt-get install -y --no-install-recommends python3-yaml
     - npm install -g fern-api@5.50.5
     - bash scripts/fern/generate-pages.sh --check
+
+preview:fern-docs:
+  stage: preview
+  image: node:22-bookworm
+  tags:
+    - $RUNNER_TAG
+  timeout: 15m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /(^|,)(docs|website)(,|$)/'
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *fern_docs_changes
+      when: manual
+      allow_failure: true
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "main"'
+      changes: *fern_docs_changes
+      when: manual
+      allow_failure: true
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - fern-preview.log
+    reports:
+      dotenv: fern-preview.env
+  environment:
+    name: fern-preview/$CI_COMMIT_REF_SLUG
+    url: $FERN_PREVIEW_URL
+    auto_stop_in: 1 week
+  script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends python3-yaml
+    - npm install -g fern-api@5.50.5
+    - ': > fern-preview.env'
+    - ': > fern-preview.log'
+    - FERN_PREVIEW_ID="${CI_COMMIT_REF_SLUG:-branch-preview}" FERN_PREVIEW_DOTENV_FILE=fern-preview.env FERN_PREVIEW_LOG_FILE=fern-preview.log bash scripts/fern/generate-pages.sh --publish-preview
 
 security:sonarqube:
   stage: build
