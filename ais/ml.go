@@ -159,8 +159,9 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	}
 	// initialize and authorize (apc.AceGET) every referenced bucket
 	for _, b := range bcks {
-		if b == bck {
-			continue // the path bucket (already initialized and authorized above)
+		// skip the path bucket (already initialized and authorized above)
+		if b.Equal(bck, false /*sameID*/, false /*sameBackend*/) {
+			continue
 		}
 		bckArgs := allocBctx()
 		{
