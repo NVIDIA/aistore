@@ -308,23 +308,6 @@ var _ = Describe("Common file", func() {
 		})
 	})
 
-	Context("StrSlicesEqual", func() {
-		DescribeTable("parse quantity with error",
-			func(lhs, rhs []string, expected bool) {
-				Expect(cos.StrSlicesEqual(lhs, rhs)).To(Equal(expected))
-			},
-			Entry("empty slices", []string{}, []string{}, true),
-			Entry("single item", []string{"one"}, []string{"one"}, true),
-			Entry("multiple items", []string{"one", "two", "three"}, []string{"one", "two", "three"}, true),
-			Entry("multiple items in different order", []string{"two", "three", "one"}, []string{"one", "two", "three"}, true),
-
-			Entry("empty and single item", []string{"one"}, []string{}, false),
-			Entry("empty and single item (swapped)", []string{}, []string{"one"}, false),
-			Entry("same number of elements but different content", []string{"two", "three", "four"}, []string{"one", "two", "three"}, false),
-			Entry("same number of elements but different content (swapped)", []string{"two", "three", "one"}, []string{"four", "two", "three"}, false),
-		)
-	})
-
 	Context("ExpandPath", func() {
 		It("should expand short path with current home", func() {
 			shortPath := "~"

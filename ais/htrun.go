@@ -408,21 +408,21 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 		nlog.Infof("%s (user) access: %v%s", cmn.NetPublic, pubAddr, s)
 	}
 
-	// 2. intra-cluster
-	ctrlAddr = pubAddr
-	if config.HostNet.UseIntraControl {
-		icport := strconv.Itoa(config.HostNet.PortIntraControl)
-		err = initNetInfo(&ctrlAddr, addrList, proto, config.HostNet.HostnameIntraControl, icport, useIPv6)
-		if err != nil {
-			cos.ExitLogf("failed to select %s IP/hostname: %v", cmn.NetIntraControl, err)
-		}
-		var s string
-		if config.HostNet.HostnameIntraControl != "" {
-			s = " (config: " + config.HostNet.HostnameIntraControl + ")"
-		}
-		nlog.Infof("%s access: %v%s", cmn.NetIntraControl, ctrlAddr, s)
+	// 2. intra-cluster (NOTE 5.0 update: intra-net is always different from pub)
+	debug.Assert(config.HostNet.UseIntraControl)
+
+	icport := strconv.Itoa(config.HostNet.PortIntraControl)
+	err = initNetInfo(&ctrlAddr, addrList, proto, config.HostNet.HostnameIntraControl, icport, useIPv6)
+	if err != nil {
+		cos.ExitLogf("failed to select %s IP/hostname: %v", cmn.NetIntraControl, err)
 	}
-	dataAddr = pubAddr
+	var s string
+	if config.HostNet.HostnameIntraControl != "" {
+		s = " (config: " + config.HostNet.HostnameIntraControl + ")"
+	}
+	nlog.Infof("%s access: %v%s", cmn.NetIntraControl, ctrlAddr, s)
+
+	dataAddr = ctrlAddr
 	if config.HostNet.UseIntraData {
 		idport := strconv.Itoa(config.HostNet.PortIntraData)
 		err = initNetInfo(&dataAddr, addrList, proto, config.HostNet.HostnameIntraData, idport, useIPv6)
@@ -452,14 +452,6 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 		config.HostNet.PortIntraData,
 		config.HostNet.UseIntraData,
 		"pub/data",
-	)
-	mustDiffer(dataAddr,
-		config.HostNet.PortIntraData,
-		config.HostNet.UseIntraData,
-		ctrlAddr,
-		config.HostNet.PortIntraControl,
-		config.HostNet.UseIntraControl,
-		"ctl/data",
 	)
 
 	// 4. new Snode

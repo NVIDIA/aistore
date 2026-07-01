@@ -303,9 +303,11 @@ Similar to the AIS gateways, AIS storage targets can join and leave at any momen
 ## Networking
 
 Architecture-wise, AIS is built to support 3 (three) logical networks:
-* user-facing public and, possibly, **multi-home** network interface
+* user-facing public (supports **multi-homing**)
 * intra-cluster control, and
 * intra-cluster data
+
+> **Note (v5.0):** AIS enforces strict network separation between user-facing (Public) traffic and internal (Intra-cluster) traffic.
 
 The way the corresponding config may look in production (e.g.) follows:
 
@@ -324,11 +326,12 @@ $ ais config node t[nKfooBE] local host_net --json
         "port_intra_control": "51082",
         "port_intra_data": "51083"
     }
+
 ```
 
-The fact that there are 3 logical networks is not a limitation - i.e, not a requirement to have exactly 3 (networks).
+The fact that there are 3 logical networks does not necessarily mean you need 3 physical fabrics. While public traffic must be strictly isolated, the intra-cluster control and data networks can be collapsed into one.
 
-Using the example above, here's a small deployment-time change to run a single one:
+Using the example above, here's a small deployment-time change to run a minimal two-network configuration:
 
 ```console
     "host_net": {
@@ -336,14 +339,15 @@ Using the example above, here's a small deployment-time change to run a single o
         "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
         "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
         "port": "51081",
-        "port_intra_control": "51081,   # <<<<<< notice the same port
-        "port_intra_data": "51081"      # <<<<<< ditto
+        "port_intra_control": "51082",  # <<<<<< distinct from public
+        "port_intra_data": "51082"      # <<<<<< ditto (collapsed intra-cluster)
     }
+
 ```
 
 Ideally though, production clusters are deployed over 3 physically different and isolated networks, whereby intense data traffic, for instance, does not introduce additional latency for the control one, etc.
 
-Separately, there's a **multi-homing** capability motivated by the fact that today's server systems may often have, say, two 50Gbps network adapters. To deliver the entire 100Gbps _without_ LACP trunking and (static) teaming, we could simply have something like:
+Separately, there's a **multi-homing** capability for the public network, motivated by the fact that today's server systems may often have, say, two 50Gbps network adapters. To deliver the entire 100Gbps *without* LACP trunking and (static) teaming, we could simply have something like:
 
 ```console
     "host_net": {
@@ -356,7 +360,9 @@ Separately, there's a **multi-homing** capability motivated by the fact that tod
     }
 ```
 
-And that's all: add the second NIC (second IPv4 addr `10.50.56.206` above) with **no** other changes.
+And that's all: add the second NIC (second IPv4 addr `10.50.56.206` above) to the public interface with **no** other changes.
+
+> Note: multi-homing applies *only* to the public network; intra-cluster endpoints require a single IP/hostname.
 
 See also:
 

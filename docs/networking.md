@@ -1,5 +1,8 @@
 ## AIStore Networking Model
 
+> **v5.0 Update:** AIStore now enforces strict network separation between user-facing (Public) traffic and internal (Intra-cluster) traffic.
+> A single flat network for all three logical roles is no longer permitted. At minimum, a deployment must have a distinct public (user-facing) network and at least one configured intra-cluster network.
+
 AIStore (AIS) supports **three logical HTTP networks**, each with a distinct role, lifecycle, and performance profile:
 
 1. **Public** (user-facing) network
@@ -10,7 +13,7 @@ These are *logical* networks. They may map to:
 
 * three physically isolated fabrics (ideal production),
 * a subset of those, or
-* a single shared network (development / small deployments).
+* a single shared fabric (development / small deployments) with different TCP ports for public and intra-cluster communications
 
 > NOTE: It is strongly recommended to (a) configure three logical networks, and (b) provision each one with **separate, dedicated bandwidth** (for example, to avoid head-of-line blocking that can impact latency-sensitive control-plane traffic).
 
@@ -104,18 +107,18 @@ Having said all of the above - the presence of three logical networks **does not
 │   │    - membership, control     │   │    - HTTP object move paths    │   │
 │   └──────────────────────────────┘   └────────────────────────────────┘   │
 │ Notes:                                                                    │
-│ * "PubNet/CtlNet/DataNet" are logical networks - may alias to one fabric. │
-│ * Multi-homing applies to PubNet (multiple listen addresses).             │
+│ * "PubNet/CtlNet/DataNet" are logical networks - may share to one fabric. │
+│ * PubNet must not share the same endpoint with intra-cluster networking.  │
+│ * CtlNet and DataNet may collapse into a single intra-cluster network.    │
+│ * Multi-homing applies ONLY to PubNet (multiple listen addresses).        │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-If multiple logical networks resolve to the same address and port, AIS **aliases** them internally and operates correctly over a single interface.
-
-Example: single-network deployment
+Example: minimal two-network deployment (collapsed intra-cluster network)
 
 ```json
 "host_net": {
-    "hostname": "10.50.56.205",
+    "hostname": "10.50.56.200",
     "hostname_intra_control": "10.50.56.205",
     "hostname_intra_data": "10.50.56.205",
     "port": "51081",
@@ -126,8 +129,9 @@ Example: single-network deployment
 
 In this case:
 
-* public == control == data
-* one listener, one HTTP server, one set of muxers
+* control == data
+* the public network (.200) is cleanly separated from intra-cluster traffic (.205)
+* two listeners, two HTTP servers, two sets of muxers
 
 Compare with (preferred) configuration with 3 logical networks:
 

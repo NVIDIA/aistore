@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
@@ -60,10 +61,19 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(testMountpath)
 	fs.NewTestMFS(nil)
 
-	// target
-	config := cmn.GCO.Get()
+	// config
+	config := cmn.GCO.BeginUpdate()
+	config.HostNet.Hostname = "localhost"
+	config.HostNet.Port = 8080
+	config.HostNet.HostnameIntraControl = "localhost"
+	config.HostNet.PortIntraControl = 9080
 	config.Log.Level = "3"
+	debug.AssertNoErr(config.HostNet.Validate(config))
+	cmn.GCO.CommitUpdate(config)
+
 	co := newConfigOwner(config)
+
+	// target
 	t = newTarget(co)
 	t.initPhase1(config)
 	tid, _ := initTID(config)

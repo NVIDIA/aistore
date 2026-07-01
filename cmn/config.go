@@ -2326,62 +2326,132 @@ func (c *IntraClusterConf) validate() error {
 
 const HostnameListSepa = ","
 
-func (c *LocalNetConfig) Validate(contextConfig *Config) error {
+// NOTE 5.0 update:
+// - intra-net is mandatory and must be separate from pub-net
+// - control/data may collapse: when data is omitted, it uses control, and vice versa
+// - 3 physically-separate (bandwidth-isolated) networks are strongly recommended
+func (c *LocalNetConfig) Validate(_ *Config) error {
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
 	c.HostnameIntraControl = strings.ReplaceAll(c.HostnameIntraControl, " ", "")
 	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
 
-	if addr, over := ipsOverlap(c.Hostname, c.HostnameIntraControl); over {
-		if c.Port == c.PortIntraControl {
-			return fmt.Errorf("public (%s) and intra-cluster control (%s) share the same IP and port: %s:%d",
-				c.Hostname, c.HostnameIntraControl, addr, c.Port)
-		}
-		nlog.Warningf("public (%s) and intra-cluster control (%s) share the same IP: %q",
-			c.Hostname, c.HostnameIntraControl, addr)
-	}
-	if addr, over := ipsOverlap(c.Hostname, c.HostnameIntraData); over {
-		if c.Port == c.PortIntraData {
-			return fmt.Errorf("public (%s) and intra-cluster data (%s) share the same IP and port: %s:%d",
-				c.Hostname, c.HostnameIntraData, addr, c.Port)
-		}
-		nlog.Warningf("public (%s) and intra-cluster data (%s) share the same IP: %q",
-			c.Hostname, c.HostnameIntraData, addr)
-	}
-	if addr, over := ipsOverlap(c.HostnameIntraControl, c.HostnameIntraData); over {
-		if ipv4ListsEqual(c.HostnameIntraControl, c.HostnameIntraData) {
-			nlog.Warningln("control and data share the same intra-cluster network:", c.HostnameIntraData)
-		} else {
-			nlog.Warningf("intra-cluster control (%s) and data (%s) share the same: %q",
-				c.HostnameIntraControl, c.HostnameIntraData, addr)
-		}
-	}
-
-	// Parse ports
+	// 1. Validate public port.
 	if _, err := ValidatePort(c.Port); err != nil {
 		return fmt.Errorf("invalid %s port: %w", NetPublic, err)
 	}
-	if c.PortIntraControl != 0 {
-		if _, err := ValidatePort(c.PortIntraControl); err != nil {
-			return fmt.Errorf("invalid %s port: %w", NetIntraControl, err)
-		}
+
+	// 2. Reject intra-net multi-homing
+	const fmterr = "%s hostname must be a single IP/hostname, not a comma-separated list %q (multi-homing is only supported for %s)"
+	if strings.Contains(c.HostnameIntraControl, HostnameListSepa) {
+		return fmt.Errorf(fmterr, NetIntraControl, c.HostnameIntraControl, NetPublic)
 	}
-	if c.PortIntraData != 0 {
-		if _, err := ValidatePort(c.PortIntraData); err != nil {
-			return fmt.Errorf("invalid %s port: %w", NetIntraData, err)
-		}
+	if strings.Contains(c.HostnameIntraData, HostnameListSepa) {
+		return fmt.Errorf(fmterr, NetIntraData, c.HostnameIntraData, NetPublic)
 	}
 
-	// NOTE: intra-cluster networks
-	differentIPs := c.Hostname != c.HostnameIntraControl
-	differentPorts := c.Port != c.PortIntraControl
-	c.UseIntraControl = (contextConfig.TestingEnv() || c.HostnameIntraControl != "") &&
-		c.PortIntraControl != 0 && (differentIPs || differentPorts)
+	// 3. Intra-net is mandatory and must be separate from pub-net.
+	//    Control/data may collapse: when data is omitted, it uses control, and vice versa.
+	c.UseIntraControl, c.UseIntraData = true, false
+	collapsed := false
+	if c.PortIntraControl == 0 {
+		if c.HostnameIntraControl != "" {
+			return fmt.Errorf("%s hostname is configured but port is missing", NetIntraControl)
+		}
+		if c.PortIntraData == 0 {
+			return fmt.Errorf("at least one port - %s or %s - must be configured; intra-cluster network must be separate from %s",
+				NetIntraControl, NetIntraData, NetPublic)
+		}
+		c.HostnameIntraControl = c.HostnameIntraData
+		c.PortIntraControl = c.PortIntraData
+		collapsed = true
+		nlog.Warningln(NetIntraControl, "network is not configured; using", NetIntraData)
+	}
+	if c.PortIntraData == 0 {
+		if c.HostnameIntraData != "" {
+			return fmt.Errorf("%s hostname is configured but port is missing", NetIntraData)
+		}
+		c.HostnameIntraData = c.HostnameIntraControl
+		c.PortIntraData = c.PortIntraControl
+		collapsed = true
+		nlog.Warningln(NetIntraData, "network is not configured; using", NetIntraControl)
+	}
 
-	differentIPs = c.Hostname != c.HostnameIntraData
-	differentPorts = c.Port != c.PortIntraData
-	c.UseIntraData = (contextConfig.TestingEnv() || c.HostnameIntraData != "") &&
-		c.PortIntraData != 0 && (differentIPs || differentPorts)
+	// 4. Validate intra-nets vs pub-net.
+	if err := validatePubIntra(c.Hostname, c.Port, c.HostnameIntraControl, c.PortIntraControl, NetIntraControl); err != nil {
+		return err
+	}
+
+	if c.HostnameIntraData != c.HostnameIntraControl || c.PortIntraData != c.PortIntraControl {
+		if err := validatePubIntra(c.Hostname, c.Port, c.HostnameIntraData, c.PortIntraData, NetIntraData); err != nil {
+			return err
+		}
+		c.UseIntraData = true
+	}
+
+	if collapsed {
+		return nil
+	}
+
+	// 5. Warn intra-net sharing.
+	if c.HostnameIntraControl != "" && c.HostnameIntraControl == c.HostnameIntraData {
+		if c.PortIntraControl == c.PortIntraData {
+			debug.Assert(!c.UseIntraData)
+			c.UseIntraData = false
+			nlog.Warningf("%s (%s:%d) and %s (%s:%d) share the same endpoint; using %s network for both",
+				NetIntraControl, c.HostnameIntraControl, c.PortIntraControl,
+				NetIntraData, c.HostnameIntraData, c.PortIntraData,
+				NetIntraControl)
+			return nil
+		}
+		nlog.Warningf("%s and %s share the same network %q with distinct ports: %d and %d, respectively",
+			NetIntraControl, NetIntraData, c.HostnameIntraControl, c.PortIntraControl, c.PortIntraData)
+	}
 	return nil
+}
+
+//
+// LocalConfig.Validate helpers:
+//
+
+func validatePubIntra(pubHost string, pubPort int, intraHost string, intraPort int, intraNet string) error {
+	if _, err := ValidatePort(intraPort); err != nil {
+		return fmt.Errorf("invalid %s port: %w", intraNet, err)
+	}
+	if pubPort == intraPort {
+		if pubHost == intraHost {
+			return fmt.Errorf("%s must be separate from %s (%s:%d)", intraNet, NetPublic, pubHost, pubPort)
+		}
+		if addr := findOverlappingAddr(pubHost, intraHost); addr != "" {
+			return fmt.Errorf("%s must be separate from %s; both share %s:%d", intraNet, NetPublic, addr, pubPort)
+		}
+	}
+	if addr := findOverlappingAddr(pubHost, intraHost); addr != "" {
+		nlog.Warningf("%s (%s:%d) and %s (%s:%d) share the same IP/host: %q", NetPublic, pubHost, pubPort, intraNet, intraHost, intraPort, addr)
+	}
+
+	return nil
+}
+
+// check if the two comma-separated IP (or hostname) address lists contain at least
+// one common IP (or host)
+func findOverlappingAddr(alist, blist string) (addr string) {
+	if alist == "" || blist == "" {
+		return ""
+	}
+	bset := make(cos.StrSet)
+	for b := range strings.SplitSeq(blist, HostnameListSepa) {
+		b = strings.TrimSpace(b)
+		if b != "" {
+			bset.Set(b)
+		}
+	}
+	for a := range strings.SplitSeq(alist, HostnameListSepa) {
+		a = strings.TrimSpace(a)
+		if bset.Contains(a) {
+			return a
+		}
+	}
+	return ""
 }
 
 /////////////
@@ -2940,50 +3010,7 @@ func (c *GetBatchConf) Validate() error {
 	return nil
 }
 
-//
-// misc config utilities ---------------------------------------------------------
-//
-
-// checks if the two comma-separated IPv4 address lists contain at least one common IPv4
-func ipsOverlap(alist, blist string) (addr string, overlap bool) {
-	if alist == "" || blist == "" {
-		return
-	}
-	for a := range strings.SplitSeq(alist, HostnameListSepa) {
-		a = strings.TrimSpace(a)
-		if a == "" {
-			continue
-		}
-		if strings.Contains(blist, a) {
-			return a, true
-		}
-	}
-	return
-}
-
-func ipv4ListsEqual(alist, blist string) bool {
-	alistAddrs := strings.Split(alist, ",")
-	blistAddrs := strings.Split(blist, ",")
-	f := func(in []string) (out []string) {
-		out = make([]string, 0, len(in))
-		for _, i := range in {
-			i = strings.TrimSpace(i)
-			if i == "" {
-				continue
-			}
-			out = append(out, i)
-		}
-		return
-	}
-	al := f(alistAddrs)
-	bl := f(blistAddrs)
-	if len(al) == 0 || len(bl) == 0 || len(al) != len(bl) {
-		return false
-	}
-	return cos.StrSlicesEqual(al, bl)
-}
-
-// is called at startup
+// main function: is called at startup, just once
 func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) error {
 	debug.Assert(globalConfPath != "" && localConfPath != "")
 	GCO.SetInitialGconfPath(globalConfPath)
