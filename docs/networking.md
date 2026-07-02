@@ -1,120 +1,27 @@
-## AIStore Networking Model
+# AIStore Networking Model
 
-> **v5.0 Update:** AIStore now enforces strict network separation between user-facing (Public) traffic and internal (Intra-cluster) traffic.
-> A single flat network for all three logical roles is no longer permitted. At minimum, a deployment must have a distinct public (user-facing) network and at least one configured intra-cluster network.
+AIStore (AIS) separates traffic across three logical network roles:
 
-AIStore (AIS) supports **three logical HTTP networks**, each with a distinct role, lifecycle, and performance profile:
+* **Public network**: user-facing API, CLI/SDK traffic, metrics, and external tooling.
+* **Intra-cluster control network**: health, metasync, membership, xaction control, and internal control-plane broadcast.
+* **Intra-cluster data network**: object movement between AIS nodes, including target-to-target GET/PUT, global rebalance, resilver, get-batch streams, and other data-mover paths.
 
-1. **Public** (user-facing) network
-2. **Intra-cluster control** network
-3. **Intra-cluster data** network
+These are **logical roles**. They may map to separate physical networks, or they may share physical infrastructure, depending on deployment size and performance requirements. Starting with v5.0, however, AIS requires the public HTTP endpoint to be distinct from intra-cluster endpoints.
 
-These are *logical* networks. They may map to:
+## v5.0 Network-Separation Rule
 
-* three physically isolated fabrics (ideal production),
-* a subset of those, or
-* a single shared fabric (development / small deployments) with different TCP ports for public and intra-cluster communications
+Starting with v5.0, AIS requires the public network to be separated from intra-cluster networking at the HTTP listener level.
 
-> NOTE: It is strongly recommended to (a) configure three logical networks, and (b) provision each one with **separate, dedicated bandwidth** (for example, to avoid head-of-line blocking that can impact latency-sensitive control-plane traffic).
+In practical terms:
 
-Separately, AIS runs an additional distinct intra-cluster data plane:
+* the public endpoint must not be the same listener as intra-control or intra-data;
+* intra-control and intra-data may share the same listener;
+* public multi-homing is allowed, but all public addresses remain public-only;
+* physical network isolation is strongly recommended for production, but is not required by this rule.
 
-### Two distinct data planes
+The mandatory rule is about **HTTP endpoint separation**, not necessarily physical NIC separation. A deployment may use fewer physical networks than logical roles, as long as the public listener is distinct from the intra-cluster listener.
 
-(A) HTTP intra-data network (DataNet)
-    - request/response style
-    - used by target-to-target GET/PUT paths (related term: "GFN")
-    - configured via host_net.{hostname_intra_data,port_intra_data}
-
-```
-        Target A                         Target B
-     ┌───────────┐                    ┌───────────┐
-     │ net/http  │  HTTP DataNet      │ net/http  │
-     │ handlers  │◄──────────────────►│ handlers  │
-     └───────────┘                    └───────────┘
-```
-
-(B) Transport/bundle streams (data movers)
-    - high-volume streaming (rebalance, resilver, get-batch streams, etc.)
-    - uses AIStore transport subsystem (bundle/DM/shared-DM, fasthttp, PDUs, etc.)
-    - separate from net/http muxers and http.Clients
-
-```
-        Target A                          Target B
-     ┌───────────┐   transport streams  ┌───────────┐
-     │ transport │◄════════════════════►│ transport │
-     │ bundle/DM │   (PDU/streaming)    │ bundle/DM │
-     └───────────┘                      └───────────┘
-```
-
-See also: [transport package: README](https://github.com/NVIDIA/aistore/blob/main/transport/README.md)
-
-Rest of this document is structured as follows:
-
-**Table of Contents**
-
-* [Two distinct data planes](#two-distinct-data-planes)
-* [Logical vs Physical Networks](#logical-vs-physical-networks)
-* [Public Network](#public-network)
-* [Intra-Cluster Control Network](#intra-cluster-control-network)
-* [Intra-Cluster Data Network](#intra-cluster-data-network)
-* [Multi-Homing](#multi-homing)
-* [IPv6](#ipv6)
-  - [Enabling IPv6](#enabling-ipv6)
-  - [What "prefer IPv6" means](#what-prefer-ipv6-means)
-  - [Switching an existing cluster (IPv4-↔-IPv6)](#switching-an-existing-cluster-ipv4--ipv6)
-  - [URL format](#url-format)
-  - [Socket-level tuning](#socket-level-tuning)
-  - [Kubernetes](#kubernetes)
-* [Effective Networking and IP Family Selection](#effective-networking-and-ip-family-selection)
-* [Initialization Phases (Networking-Relevant)](#initialization-phases-networking-relevant)
-  - [Phase 1: Network Resolution and Server Construction](#phase-1-network-resolution-and-server-construction)
-  - [Phase 2: Client and Runtime Initialization](#phase-2-client-and-runtime-initialization)
-* [Summary](#summary)
-
-### Logical vs Physical Networks
-
-AIS separates traffic across **three logical networks**: a user-facing public network, and two intra-cluster networks for control and data. Each can be placed on a dedicated NIC or VLAN. The most impactful use is isolating the intra-cluster data network - which carries global rebalance, get-batch, and other bulk data movement - from the public network serving foreground I/O.
-
-In fact, on loaded clusters there's also a sufficiently high motivation to isolate latency-sensitive (small-bandwidth) control plane from all of the above. Logical network separation is a designed-in capability that pays off most at high drive counts and high utilization, and is worth configuring explicitly rather than relying on shared bandwidth of 100GbE links.
-
-Having said all of the above - the presence of three logical networks **does not** necessarily require three physical networks:
-
-```
-                     ┌───────────────────────────────────────┐
-                     │               Clients                 │
-                     │   ais CLI / SDK / notebooks / tools   │
-                     └───────────────────┬───────────────────┘
-                                         │ PubNet (user-facing)
-                                         ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                             AIStore Cluster                               │
-│   ┌───────────────────────────────────────────────────────────────────┐   │
-│   │                           Proxies (P)                             │   │
-│   │                                                                   │   │
-│   │   PubNet:     user-facing API, metrics, etc.                      │   │
-│   │   CtlNet:     intra-cluster control-plane HTTP                    │   │
-│   │   DataNet:    intra-cluster HTTP object paths (T2T GET/PUT)       │   │
-│   └───────────────┬───────────────────────────┬───────────────────────┘   │
-│                   │                           │                           │
-│                   │ Intra-control HTTP        │ Intra-data HTTP           │
-│                   ▼                           ▼                           │
-│   ┌──────────────────────────────┐   ┌────────────────────────────────┐   │
-│   │          Targets (T)         │   │           Targets (T)          │   │
-│   │                              │   │                                │   │
-│   │  CtlNet endpoint(s):         │   │  DataNet endpoint(s):          │   │
-│   │    - metasync, health        │   │    - HTTP T2T GET/PUT          │   │
-│   │    - membership, control     │   │    - HTTP object move paths    │   │
-│   └──────────────────────────────┘   └────────────────────────────────┘   │
-│ Notes:                                                                    │
-│ * "PubNet/CtlNet/DataNet" are logical networks - may share to one fabric. │
-│ * PubNet must not share the same endpoint with intra-cluster networking.  │
-│ * CtlNet and DataNet may collapse into a single intra-cluster network.    │
-│ * Multi-homing applies ONLY to PubNet (multiple listen addresses).        │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
-Example: minimal two-network deployment (collapsed intra-cluster network)
+### Valid minimal two-listener deployment
 
 ```json
 "host_net": {
@@ -127,81 +34,224 @@ Example: minimal two-network deployment (collapsed intra-cluster network)
 }
 ```
 
-In this case:
+In this configuration:
 
-* control == data
-* the public network (.200) is cleanly separated from intra-cluster traffic (.205)
-* two listeners, two HTTP servers, two sets of muxers
+* public traffic uses `10.50.56.200:51081`;
+* intra-control and intra-data share `10.50.56.205:51081`;
+* AIS runs two HTTP listeners and two HTTP servers: one public, one intra-cluster.
 
-Compare with (preferred) configuration with 3 logical networks:
+### Valid development-style deployment
 
-```console
-$ ais config node t[mSwroVjn] local host_net --json
-{
-    "host_net": {
-        "hostname": "10.50.56.208",
-        "hostname_intra_control": "ais-target-8.ais-target.ais.svc.cluster.local",
-        "hostname_intra_data": "ais-target-8.ais-target.ais.svc.cluster.local",
-        "port": "51081",
-        "port_intra_control": "51082",
-        "port_intra_data": "51083"
-    }
+This is also valid on a single host or shared physical fabric, because the public and intra-cluster endpoints are still distinct:
+
+```json
+"host_net": {
+    "hostname": "127.0.0.1",
+    "hostname_intra_control": "127.0.0.1",
+    "hostname_intra_data": "127.0.0.1",
+    "port": "8080",
+    "port_intra_control": "9080",
+    "port_intra_data": "9080"
 }
 ```
 
-> NOTE: It is strongly recommended to (a) configure three logical networks, and (b) provision each one with **separate, dedicated bandwidth**.
+Here, public and intra-cluster traffic use the same loopback interface, but different TCP endpoints.
 
-### Public Network
+### Invalid post-v5.0 deployment
 
-The **public network** is user-facing and client-oriented:
+The following is no longer valid:
 
-* CLI (`ais`), SDKs, notebooks, browsers
-* AuthN-enabled client requests
+```json
+"host_net": {
+    "hostname": "127.0.0.1",
+    "hostname_intra_control": "127.0.0.1",
+    "hostname_intra_data": "127.0.0.1",
+    "port": "8080",
+    "port_intra_control": "8080",
+    "port_intra_data": "8080"
+}
+```
+
+This configuration collapses public and intra-cluster traffic onto the same HTTP listener.
+
+## Logical vs Physical Networks
+
+The three AIS network roles may map to:
+
+1. three physically isolated fabrics with separate, non-shared bandwidth;
+2. two physical or logical endpoints, with control and data collapsed into one intra-cluster endpoint;
+3. a single shared physical fabric, provided that the public HTTP endpoint is still separate from the intra-cluster endpoint.
+
+For production clusters, option 1 is **strongly recommended**. The main reason is not only aggregate bandwidth, but isolation: bulk data movement can fill NIC, TCP, kernel, and application queues, causing head-of-line (HoL) blocking for small latency-sensitive control messages.
+
+Large object transfers, GFN requests, rebalance/resilver traffic, and get-batch streams must not be allowed to delay keepalives, health checks, metasync, or membership updates.
+
+The control plane itself is low-bandwidth. A modest but **dedicated** control path is often sufficient; what matters most is predictable latency and freedom from bulk-data queueing. By contrast, the data path benefits directly from high throughput and should be provisioned accordingly.
+
+| Topology                                               | Valid in v5.0? | Notes                                                               |
+| ------------------------------------------------------ | -------------- | ------------------------------------------------------------------- |
+| `public == control == data` endpoint                   | No             | One HTTP listener cannot serve both public and intra-cluster roles. |
+| `public` separate, `control == data`                   | Yes            | Minimal supported topology.                                         |
+| `public` separate, `control` separate, `data` separate | Yes            | Preferred production topology.                                      |
+| Same physical fabric, different public/intra endpoints | Yes            | Useful for development and small deployments.                       |
+| Public multi-homed, intra-cluster separate             | Yes            | Multi-homing applies only to PubNet.                                |
+
+## Network Layout
+
+```text
+                     ┌───────────────────────────────────────┐
+                     │               Clients                 │
+                     │   ais CLI / SDK / notebooks / tools   │
+                     └───────────────────┬───────────────────┘
+                                         │ PubNet (user-facing)
+                                         ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                             AIStore Cluster                               │
+│                                                                           │
+│   ┌───────────────────────────────────────────────────────────────────┐   │
+│   │                           Proxies (P)                             │   │
+│   │                                                                   │   │
+│   │   PubNet:     user-facing API, metrics, external clients          │   │
+│   │   CtlNet:     intra-cluster control-plane HTTP                    │   │
+│   │   DataNet:    intra-cluster data movement                         │   │
+│   └───────────────┬───────────────────────────┬───────────────────────┘   │
+│                   │                           │                           │
+│                   │ Intra-control             │ Intra-data                │
+│                   ▼                           ▼                           │
+│   ┌──────────────────────────────┐   ┌────────────────────────────────┐   │
+│   │          Targets (T)         │   │           Targets (T)          │   │
+│   │                              │   │                                │   │
+│   │  CtlNet endpoint(s):         │   │  DataNet endpoint(s):          │   │
+│   │    - health                  │   │    - HTTP T2T GET/PUT          │   │
+│   │    - metasync                │   │    - GFN                       │   │
+│   │    - membership              │   │    - transport/bundle streams  │   │
+│   │    - control fanout          │   │    - rebalance/resilver/etc.   │   │
+│   └──────────────────────────────┘   └────────────────────────────────┘   │
+│                                                                           │
+│ Notes:                                                                    │
+│ * PubNet/CtlNet/DataNet are logical roles.                                │
+│ * PubNet must not share an HTTP listener with intra-cluster networking.   │
+│ * CtlNet and DataNet may collapse into one intra-cluster endpoint.        │
+│ * Multi-homing applies only to PubNet.                                    │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+### Intra-Cluster Data Network Breakdown
+
+The intra-cluster data network carries more than one data-movement mechanism. Some paths use regular `net/http`; others use AIS transport streams, which use `fasthttp` by default. Both belong to the intra-cluster data path from an operator's perspective.
+
+| Attribute                    | **HTTP Intra-Data**                                                                    | **Transport Subsystem**                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Examples**                 | GFN, target-to-target HTTP GET/PUT, HTTP object relocation paths                       | Rebalance, resilver, get-batch streams, shared-DM/SDM, other data movers                            |
+| **Endpoint configuration**   | Uses `host_net.hostname_intra_data` / `port_intra_data` via the intra-data HTTP client | Uses the same intra-data network by default; current AIS transport data movers rely on this default |
+| **Library / protocol layer** | Standard Go `net/http`                                                                 | `fasthttp` by default, with AIS transport framing, PDUs, and demuxing                               |
+| **Mechanism**                | Request/response HTTP                                                                  | Long-lived streaming connections                                                                    |
+| **Traffic profile**          | Transactional, object/path-scoped, often latency-sensitive                             | High-volume, continuous or bursty bulk data movement                                                |
+| **Primary concern**          | Request latency, timeout behavior, and retry behavior                                  | Throughput, backpressure, queueing, and HoL impact                                                  |
+| **Implementation layer**     | HTTP server muxers and intra-data HTTP clients                                         | Transport subsystem, including bundle/DM/shared-DM mechanisms                                       |
+
+### HTTP intra-data
+
+HTTP intra-data paths are regular request/response operations over the intra-data endpoint.
+
+```text
+        Target A                         Target B
+     ┌───────────┐                    ┌───────────┐
+     │ net/http  │  HTTP DataNet      │ net/http  │
+     │ handlers  │◄──────────────────►│ handlers  │
+     └───────────┘                    └───────────┘
+```
+
+A representative example is GFN, where one target fetches an object or archive member from another target using the intra-data URL and the intra-data HTTP client.
+
+### Transport streams
+
+Transport streams are long-lived data-mover connections used by high-volume operations.
+
+```text
+        Target A                          Target B
+     ┌───────────┐   transport streams  ┌───────────┐
+     │ transport │◄════════════════════►│ transport │
+     │ bundle/DM │   PDU / streaming    │ bundle/DM │
+     └───────────┘                      └───────────┘
+```
+
+Transport streams do not use the regular Go `net/http` mux, handler, or `http.Client` path. They use the AIS transport subsystem, with [`fasthttp`](https://github.com/valyala/fasthttp) as the default library, and long-lived streaming connections with AIS-specific framing and demuxing.
+
+From an operator's perspective, however, these streams still belong to the intra-cluster data network. In current AIS data movers, the transport network defaults to `cmn.NetIntraData`.
+
+> See also: [transport package README](https://github.com/NVIDIA/aistore/blob/main/transport/README.md).
+
+## Public Network
+
+The **public network** is user-facing and client-oriented.
+
+Examples:
+
+* CLI (`ais`)
+* SDKs
+* notebooks
+* browsers
 * Prometheus metrics
-* External tooling
+* external tools
+* AuthN-enabled client requests
 
 Characteristics:
 
-* Lowest trust boundary
-* May be multi-homed
-* Tracing may be enabled
-* Often fronted by load balancers or ingress
+* lowest trust boundary;
+* may be multi-homed;
+* may be fronted by load balancers or ingress;
+* may use public-facing TLS identity and trust roots;
+* may have tracing enabled.
 
-### Intra-Cluster Control Network
+Because the public listener is distinct from intra-cluster listeners, deployments may use different TLS identities and trust roots for public and intra-cluster traffic. For example, the public listener may use a certificate issued by an organization-wide or public CA, while intra-cluster listeners may use certificates issued by an internal cluster CA.
 
-The **control network** carries cluster coordination traffic:
+## Intra-Cluster Control Network
 
-* metasync
+The **control network** carries cluster coordination traffic.
+
+Examples:
+
 * health checks
+* keepalives
+* metasync
 * membership changes
 * xaction control paths
 * internal API fanout
 
 Characteristics:
 
-* Low bandwidth
-* Latency-sensitive
-* Stable, predictable request volume
-* Prefer isolation from data traffic
+* low bandwidth;
+* latency-sensitive;
+* stable, predictable request volume;
+* should be isolated from bulk data traffic.
 
-### Intra-Cluster Data Network
+The control plane does not require high throughput. Its critical requirement is predictable low latency. Even a relatively small dedicated path is often sufficient, provided it is not blocked behind data-plane queues.
 
-The **data network** carries HTTP-based object movement between [targets](/docs/terminology.md#target):
+## Intra-Cluster Data Network
 
-* target <=> target GET
-* target <=> target PUT
-* HTTP-based object relocation paths
+The **data network** carries object movement between AIS nodes.
+
+Examples:
+
+* target-to-target GET;
+* target-to-target PUT;
+* GFN;
+* HTTP-based object relocation paths;
+* transport/bundle data movers, including rebalance, resilver, and get-batch streams.
+
+Characteristics:
+
+* high throughput;
+* bursty or continuous transfer patterns;
+* sensitive to backpressure and queue buildup;
+* should be provisioned for available storage and network bandwidth.
 
 Important distinction:
 
-> High-volume streaming operations such as rebalance, resilver, and get-batch
-> **do not use net/http** and are **not part of the intra-cluster data HTTP network**.
-> They use AIStore's transport/bundle subsystem (and fasthttp), which is a
-> separate data-mover layer.
+> The intra-cluster data network is the operator-visible data path. Within that path, AIS uses both regular HTTP request/response operations and the transport subsystem. The transport subsystem is separate from `net/http` muxers and `http.Client` paths, but it is not a fourth logical network role.
 
-Thus, "data network" here means **HTTP object paths**, not transport streams.
-
-### Multi-Homing
+## Multi-Homing
 
 Public networking supports **multi-homing** to utilize multiple NICs without LACP:
 
@@ -214,17 +264,17 @@ Public networking supports **multi-homing** to utilize multiple NICs without LAC
 
 Effect:
 
-* AIS listens on all listed addresses
-* Clients may connect via any
-* No additional configuration required
+* AIS listens on all listed public addresses;
+* clients may connect via any of them;
+* no additional configuration is required.
 
-Multi-homing currently applies to the **public network** only.
+Multi-homing currently applies to the **public network** only. All public multi-home addresses are equivalent public endpoints; they do not create additional intra-cluster listeners.
 
-### IPv6
+## IPv6
 
-AIStore supports IPv6 for all three logical networks and the transport streaming layer.
+AIStore supports IPv6 for all three logical network roles and for the transport streaming layer.
 
-#### Enabling IPv6
+### Enabling IPv6
 
 IPv6 is a cluster-wide setting:
 
@@ -232,65 +282,67 @@ IPv6 is a cluster-wide setting:
 $ ais config cluster net.use_ipv6 true
 ```
 
-To take effect, the change requires a cluster restart. On restart, each node discovers local IPv6 addresses and binds all listeners (public, control, data) using IPv6 addresses.
+To take effect, the change requires a cluster restart. On restart, each node discovers local IPv6 addresses and binds all listeners using IPv6 addresses when usable IPv6 addresses are available.
 
-> **Operational note**: As with any cluster-wide configuration change that rebuilds cluster metadata (e.g., cluster map (Smap)), it is good practice to periodically back up [cluster-level metadata](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md) (BMD, Smap, configuration). This is not specific to IPv6.
+> **Operational note:** As with any cluster-wide configuration change that rebuilds cluster metadata, such as the cluster map (Smap), it is good practice to periodically back up [cluster-level metadata](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md), including BMD, Smap, and configuration. This is not specific to IPv6.
 
-#### What "prefer IPv6" means
+### What "prefer IPv6" means
 
 The `use_ipv6` flag expresses **preference**, not a hard requirement. At startup, each node:
 
-1. Attempts to find usable IPv6 unicast addresses (excluding link-local `fe80::/10`)
-2. If none are found, **falls back to IPv4** with a warning
-3. Records the *effective* IP family for the lifetime of the process
+1. attempts to find usable IPv6 unicast addresses, excluding link-local `fe80::/10`;
+2. if none are found, falls back to IPv4 with a warning;
+3. records the effective IP family for the lifetime of the process.
 
-This means `use_ipv6: true` on a host with no routable IPv6 will not prevent the node from starting - it will run on IPv4.
+This means `use_ipv6: true` on a host with no routable IPv6 will not prevent the node from starting. The node will run on IPv4.
 
-#### Switching an existing cluster (IPv4 <=> IPv6)
+### Switching an existing cluster: IPv4 ↔ IPv6
 
-An existing cluster can switch address families without changing cluster identity or affecting stored data in any shape or form:
+An existing cluster can switch address families without changing cluster identity or affecting stored data:
 
 ```console
-# 1. set the flag (propagates to all nodes via metasync)
+# 1. set the flag; the update propagates to all nodes via metasync
 $ ais config cluster net.use_ipv6 true
 
 # 2. restart the cluster
 ```
 
-On restart, the primary builds a fresh Smap. Each node discovers its new addresses (e.g., `[::1]` instead of `127.0.0.1`) and joins with current net-info. Node IDs are persistent, so the cluster retains its identity - same UUID, same BMD, same data.
+On restart, the primary builds a fresh Smap. Each node discovers its new addresses, for example `[::1]` instead of `127.0.0.1`, and joins with current network information. Node IDs are persistent, so the cluster retains its identity: same UUID, same BMD, same data.
 
-The reverse switch (`true` => `false`) works the same way.
+The reverse switch, from `true` to `false`, works the same way.
 
-**Precondition:** the `primary_url` in each node's local config must be a **hostname** (e.g., `localhost`, an FQDN), not a literal IP address. This allows DNS resolution to return the appropriate address for the current IP family. With a hardcoded IP like `127.0.0.1`, nodes cannot find the primary after switching to IPv6.
+**Precondition:** the `primary_url` in each node's local config must be a hostname, such as `localhost` or an FQDN, not a literal IP address. This allows DNS resolution to return the appropriate address for the current IP family. With a hardcoded IP such as `127.0.0.1`, nodes cannot find the primary after switching to IPv6.
 
-#### URL format
+### URL format
 
-IPv6 addresses in URLs use bracket notation per RFC 2732:
+IPv6 addresses in URLs use bracket notation:
 
-```
+```text
 http://[::1]:8080
 http://[fd00::1]:51081
 ```
 
-This applies to all AIS-internal URLs (Smap entries, intra-cluster communication) and to the CLI endpoint:
+This applies to AIS-internal URLs, Smap entries, intra-cluster communication, and the CLI endpoint:
 
 ```console
 $ AIS_ENDPOINT=http://[::1]:8080 ais show cluster
 ```
 
-#### Socket-level tuning
+### Socket-level tuning
 
-AIS sets low-latency traffic class on control-plane sockets (`IP_TOS` for IPv4, `IPV6_TCLASS` for IPv6). The correct socket option is selected automatically based on the actual socket family - not the configuration flag. This handles edge cases where a dual-stack dialer creates an IPv4 socket despite an IPv6 preference.
+AIS sets low-latency traffic class on control-plane sockets: `IP_TOS` for IPv4 and `IPV6_TCLASS` for IPv6. The correct socket option is selected automatically based on the actual socket family, not the configuration flag.
+
+This handles edge cases where a dual-stack dialer creates an IPv4 socket despite an IPv6 preference.
 
 No operator action is required.
 
-#### Kubernetes
+### Kubernetes
 
-In Kubernetes deployments, the address family is determined by the CNI and cluster networking configuration - not by AIStore's `use_ipv6` flag. AIStore nodes accept whatever addresses the infrastructure assigns.
+In Kubernetes deployments, the address family is determined by the CNI and cluster networking configuration, not by AIStore's `use_ipv6` flag. AIStore nodes accept whatever addresses the infrastructure assigns.
 
-For K8s-specific network configuration (ports, CNI requirements, bandwidth tuning), see [ais-k8s network configuration](https://github.com/NVIDIA/ais-k8s/blob/main/docs/network_configuration.md).
+For Kubernetes-specific network configuration, including ports, CNI requirements, and bandwidth tuning, see [ais-k8s network configuration](https://github.com/NVIDIA/ais-k8s/blob/main/docs/network_configuration.md).
 
-### Effective Networking and IP Family Selection
+## Effective Networking and IP Family Selection
 
 The configuration option:
 
@@ -302,68 +354,72 @@ The configuration option:
 
 expresses **intent**, not a guarantee.
 
-At startup, each node performs **runtime network resolution**:
+At startup, each node performs runtime network resolution:
 
-1. Attempt to resolve usable IPv6 addresses
-2. If unsuccessful, **fall back to IPv4**
-3. Record the *effective* IP family for the node
+1. attempts to resolve usable IPv6 addresses;
+2. if unsuccessful, falls back to IPv4;
+3. records the effective IP family for the node.
 
-This decision is made **once**, early in initialization, and applies uniformly to:
+This decision is made once, early in initialization, and applies uniformly to:
 
-* all HTTP listeners (public / control / data)
-* all intra-cluster HTTP clients
-* control-plane auxiliary clients (e.g., AuthN, JWKS fetch)
-* socket options (`IP_TOS` vs `IPV6_TCLASS`)
+* all HTTP listeners: public, intra-control, and intra-data;
+* all intra-cluster HTTP clients;
+* control-plane auxiliary clients, such as AuthN and JWKS fetch;
+* socket options, including `IP_TOS` vs. `IPV6_TCLASS`;
+* transport streams.
 
-The original configuration is **not mutated**.
+The original configuration is not mutated. Instead, the resolved choice becomes part of the node's effective runtime networking state.
 
-Instead, the resolved choice becomes part of the node's effective runtime networking state.
-
-> Once a node determines that IPv6 is not usable, it must not attempt IPv6
-> connections elsewhere, even if the configuration requested it.
+> Once a node determines that IPv6 is not usable, it must not attempt IPv6 connections elsewhere, even if the configuration requested it.
 
 This avoids mixed-family failures where a node listens on IPv4 but dials IPv6.
 
-### Initialization Phases (Networking-Relevant)
+## Initialization Phases
 
-AIS initialization separates networking concerns into two phases:
+AIS initialization separates networking concerns into two phases.
 
-#### Phase 1: Network Resolution and Server Construction
+### Phase 1: Network Resolution and Server Construction
 
-* resolve local IPs
-* decide effective IP family
-* construct HTTP servers and muxers:
+During phase 1, AIS:
 
-  * public
-  * intra-control
-  * intra-data
-* build `Snode` network descriptors
+* resolves local IPs;
+* decides the effective IP family;
+* constructs HTTP servers and muxers:
+  - public;
+  - intra-control;
+  - intra-data;
+* builds `Snode` network descriptors.
 
 No sockets are opened yet.
 
-#### Phase 2: Client and Runtime Initialization
+### Phase 2: Client and Runtime Initialization
 
-* initialize TLS
-* create intra-cluster HTTP clients using the **effective** IP family
-* initialize owners, memory managers, housekeeping
-* register handlers
-* start listeners
+During phase 2, AIS:
 
-This split guarantees:
+* initializes TLS;
+* creates intra-cluster HTTP clients using the effective IP family;
+* initializes transport data movers;
+* initializes owners, memory managers, and housekeeping;
+* registers handlers;
+* starts listeners.
 
-* handlers always attach to existing muxers
-* clients never contradict server address families
+This split guarantees that:
 
-### Summary
+* handlers always attach to existing muxers;
+* clients never contradict server address families;
+* transport and HTTP paths use the same effective networking decision.
 
-* AIStore models **three logical HTTP networks** with additional intra-cluster data plane utilized by most [xactions](/docs/terminology.md#xaction).
-* They may map to fewer physical networks
-* IPv6 is supported cluster-wide via `net.use_ipv6`; switching between IPv4 and IPv6 requires only a config change and restart
-* IP family selection is resolved at runtime and applied consistently
+## Summary
 
-Further, it is generally recommended:
-
-* to provision each of the 3 logical networks with its separate, dedicated bandwidth;
-* when considering IPv6, making sure the addresses are routable
-* using fewer (or not using at all) hardcoded IP literals (DNS hostnames and K8s FQDNs are preferred);
-* periodically back up [cluster-level metadata](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md) (BMD, Smap, configuration).
+* AIS uses three logical network roles: public, intra-cluster control, and intra-cluster data.
+* Starting with v5.0, public traffic must not share an HTTP listener with intra-cluster traffic.
+* Intra-control and intra-data may collapse into one intra-cluster endpoint.
+* The three logical roles may map to fewer physical networks, provided the public endpoint remains separate.
+* Production deployments should provision separate, dedicated bandwidth for public, control, and data roles.
+* The control plane is low-bandwidth but latency-sensitive; it must be protected from bulk-data HoL blocking.
+* The data path includes both regular net/http operations (e.g., intra-cluster GFN) and transport/bundle streams (which use fasthttp by default and bypass standard muxers).
+* Public multi-homing is supported; intra-cluster multi-homing is not.
+* IPv6 is supported cluster-wide via `net.use_ipv6`; switching between IPv4 and IPv6 requires a config change and restart.
+* IP family selection is resolved at runtime and applied consistently.
+* DNS hostnames and Kubernetes FQDNs are preferred over hardcoded IP literals, especially for IPv4/IPv6 transitions.
+* Operators should periodically back up [cluster-level metadata](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md), including BMD, Smap, and configuration.
