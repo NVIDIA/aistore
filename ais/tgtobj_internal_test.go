@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"flag"
 	"io"
 	"net/http"
@@ -41,6 +42,9 @@ type (
 	discardRW struct {
 		w io.Writer
 	}
+	failingTestROC struct {
+		err error
+	}
 )
 
 func newDiscardRW() *discardRW {
@@ -52,6 +56,12 @@ func newDiscardRW() *discardRW {
 func (drw *discardRW) Write(p []byte) (int, error) { return drw.w.Write(p) }
 func (*discardRW) Header() http.Header             { return make(http.Header) }
 func (*discardRW) WriteHeader(int)                 {}
+
+func (r *failingTestROC) Read([]byte) (int, error) { return 0, r.err }
+func (*failingTestROC) Close() error               { return nil }
+func (r *failingTestROC) Open() (cos.ReadOpenCloser, error) {
+	return &failingTestROC{err: r.err}, nil
+}
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -184,6 +194,48 @@ func TestPutObjectChunks(tst *testing.T) {
 			actualChunks := manifest.Count()
 			tassert.Fatalf(test, actualChunks == tt.expectedParts, "chunk count mismatch: expected %d parts, got %d", tt.expectedParts, actualChunks)
 		})
+	}
+}
+
+func TestCopyReaderPreservesRemoteSourceContext(tst *testing.T) {
+	src := core.AllocLOM("copy-remote-source")
+	defer core.FreeLOM(src)
+	err := src.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(tst, err)
+
+	dst := core.AllocLOM("copy-remote-dst")
+	defer core.FreeLOM(dst)
+	err = dst.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(tst, err)
+	defer dst.RemoveMain()
+
+	remoteSrc := &core.RemoteSource{
+		Provider: "s3",
+		Bucket:   "s3://remote-bck",
+		Object:   src.ObjName,
+	}
+	c := &coi{
+		Config: cmn.GCO.Get(),
+		OWT:    cmn.OwtCopy,
+		GetROC: func(*core.LOM, bool, bool, *core.ETLArgs) core.ReadResp {
+			return core.ReadResp{
+				R:         &failingTestROC{err: io.ErrUnexpectedEOF},
+				OAH:       &cmn.ObjAttrs{Size: 1024, Atime: time.Now().UnixNano(), Cksum: cos.NewCksum(cos.ChecksumNone, "")},
+				RemoteSrc: remoteSrc,
+				Remote:    true,
+			}
+		},
+	}
+
+	res := c._reader(t, nil /*dm*/, src, dst, nil /*args*/)
+	if !errors.Is(res.Err, io.ErrUnexpectedEOF) {
+		tst.Fatalf("expected unexpected EOF cause, got %v", res.Err)
+	}
+	if res.RemoteSrc == nil {
+		tst.Fatal("expected remote source context")
+	}
+	if res.RemoteSrc.Provider != "s3" || res.RemoteSrc.Bucket != "s3://remote-bck" || res.RemoteSrc.Object != src.ObjName {
+		tst.Fatalf("unexpected remote source context: %+v", res.RemoteSrc)
 	}
 }
 

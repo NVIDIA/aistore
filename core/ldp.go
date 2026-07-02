@@ -23,11 +23,12 @@ type (
 	// - Ecode 204 (http.StatusNoContent): object has already been delivered directly to `daddr`, R is nil.
 	// 	- ref: https://www.rfc-editor.org/rfc/rfc9110.html#name-204-no-content
 	ReadResp struct {
-		R      cos.ReadOpenCloser // Reader for the object content, may be nil if already delivered
-		OAH    cos.OAH
-		Err    error
-		Ecode  int
-		Remote bool
+		R         cos.ReadOpenCloser // Reader for the object content, may be nil if already delivered
+		OAH       cos.OAH
+		Err       error
+		RemoteSrc *RemoteSource
+		Ecode     int
+		Remote    bool
 	}
 	// GetROC defines a function that retrieves an object based on the given `lom` and flags.
 	// If `Pipeline` are provided, the implementation may choose to deliver the object directly,
@@ -129,10 +130,23 @@ remote:
 
 	// GetObjReader and return remote (object) reader and the respective cmn.ObjAttrs
 	// (compare w/ T.GetCold)
-	res := T.Backend(bck).GetObjReader(context.Background(), lom, 0, 0)
+	backend := T.Backend(bck)
+	bucket := bck.String()
+	if remoteBck := bck.RemoteBck(); remoteBck != nil {
+		bucket = remoteBck.String()
+	}
+	remoteSrc := &RemoteSource{
+		Provider: backend.Provider(),
+		Bucket:   bucket,
+		Object:   lom.ObjName,
+	}
+	res := backend.GetObjReader(context.Background(), lom, 0, 0)
+	resp.Remote = true
+	resp.RemoteSrc = remoteSrc
 
 	if res.Err != nil {
-		resp.Err, resp.Ecode = res.Err, res.ErrCode
+		resp.Err = remoteSrc.WrapErr("GetObjReader", res.ErrCode, res.Err)
+		resp.Ecode = res.ErrCode
 		return resp
 	}
 
@@ -143,8 +157,6 @@ remote:
 		Size:     res.Size,
 	}
 	resp.OAH = oah
-	resp.Remote = true
-
 	// [NOTE] ref 6079834
 	// non-trivial limitation: this reader cannot be transmitted to
 	// multiple targets (where we actually rely on real re-opening);

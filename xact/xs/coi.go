@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"errors"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -38,10 +40,11 @@ type (
 		ContinueOnError bool // when false, a failure to copy triggers abort
 	}
 	CoiRes struct {
-		Err   error
-		Lsize int64
-		Ecode int
-		RGET  bool // when reading source via backend.GetObjReader
+		Err       error
+		RemoteSrc *core.RemoteSource
+		Lsize     int64
+		Ecode     int
+		RGET      bool // when reading source via backend.GetObjReader
 	}
 
 	COI interface {
@@ -147,20 +150,25 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 		err = res.Err
 		tc.r.Abort(err)
 	default:
+		opErr := res.Err
+		var remoteErr *core.RemoteSourceError
+		if res.RemoteSrc != nil && !errors.As(opErr, &remoteErr) {
+			opErr = res.RemoteSrc.WrapErr("copy", res.Ecode, opErr)
+		}
 		if cmn.Rom.V(5, cos.ModXs) {
-			nlog.Warningln(tc.r.Name(), lom.Cname(), res.Err)
+			nlog.Warningln(tc.r.Name(), lom.Cname(), opErr)
 		}
 		if tc.xetl != nil {
 			tc.xetl.AddObjErr(tc.r.ID(), &etl.ObjErr{
 				ObjName: lom.Cname(),
-				Message: res.Err.Error(),
+				Message: opErr.Error(),
 				Ecode:   res.Ecode,
 			})
 		}
 		if contOnErr {
-			tc.r.AddErr(res.Err, 5, cos.ModXs)
+			tc.r.AddErr(opErr, 5, cos.ModXs)
 		} else {
-			err = res.Err
+			err = opErr
 			tc.r.Abort(err)
 		}
 	}
