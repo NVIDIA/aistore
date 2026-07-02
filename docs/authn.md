@@ -349,10 +349,13 @@ Environment variables used by the AuthN server:
 | `AIS_AUTHN_SECRET_KEY`       | `""`                        | HMAC secret key used to sign tokens.                                                                                                                                  |    
 | `AIS_AUTHN_PRIVATE_KEY_FILE` | `""`                        | RSA private key file path (AuthN server)                                                                                                                              |
 | `AIS_AUTHN_PRIVATE_KEY_PASS` | `""`                        | RSA private key passphrase (AuthN server, optional)                                                                                                                   |
+| `AIS_AUTHN_KV_PASSWORD`      | `""`                        | External KV service password for AuthN database backends that use `auth.db.service`                                                                                   |
 | `AIS_AUTHN_EXTERNAL_URL`     | `http[s]://localhost:52001` | URL for AIS clusters to use when validating AuthN as allowed issuer. See [External URL](#external-url) section                                                        |
 
-All variables can be set at AIStore cluster deployment and will override values in the config.
+Variables can be set at AIStore cluster deployment and will override the corresponding values in the config when applicable.
 * More info on env vars: [api/env/authn.go](https://github.com/NVIDIA/aistore/blob/main/api/env/authn.go)
+
+AuthN defaults to local BuntDB storage. Set `auth.db.type` to `Redis` and configure `auth.db.service` to share AuthN state across replicas through an external Redis service. Use `AIS_AUTHN_KV_PASSWORD` to inject the Redis password at runtime without persisting it in the config file.
 
 Separately, configure the following AuthN environment variables for client access:
 
@@ -434,7 +437,18 @@ By default, the AIStore deployment does not launch the AuthN server. To start th
             }
         },
         "auth": {
-            "expiration_time": "24h"
+            "expiration_time": "24h",
+            "db": {
+                "type": "BuntDB",
+                "filepath": "/tmp/ais/authn/authn.db",
+                "service": {
+                    "host": "",
+                    "port": 0,
+                    "db_index": 0,
+                    "tls_enabled": false,
+                    "timeout": "0s"
+                }
+            }
         },
         "timeout": {
             "default_timeout": "30s"

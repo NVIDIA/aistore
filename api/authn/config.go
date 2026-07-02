@@ -35,6 +35,9 @@ const (
 	defaultPort             = 52001
 	defaultTokenExpiration  = cos.Duration(24 * time.Hour)
 	defaultMaxTokenAge      = cos.Duration(90 * 24 * time.Hour)
+	defaultKVServiceHost    = "localhost"
+	defaultKVServicePort    = 6379
+	defaultKVServiceTimeout = cos.Duration(5 * time.Second)
 )
 
 // Signing key management modes
@@ -45,7 +48,15 @@ const (
 	SigningKeyModeExternal = "external"
 )
 
+// AuthN database backends.
+const (
+	DBDriverBuntDB DBDriver = "BuntDB"
+	DBDriverRedis  DBDriver = "Redis"
+)
+
 type (
+	DBDriver string
+
 	Config struct {
 		Server  ServerConf  `json:"auth"`
 		Log     LogConf     `json:"log"`
@@ -89,8 +100,17 @@ type (
 		Mode string `json:"mode,omitempty"`
 	}
 	DatabaseConf struct {
-		DBType   string `json:"type"`
-		Filepath string `json:"filepath"`
+		DBType   DBDriver      `json:"type"`
+		Filepath string        `json:"filepath"`
+		Service  KVServiceConf `json:"service"`
+	}
+	KVServiceConf struct {
+		password   cmn.Censored `json:"-"`
+		Host       string       `json:"host,omitempty"`
+		Port       int          `json:"port,omitempty"`
+		DBIndex    int          `json:"db_index,omitempty"`
+		TLSEnabled bool         `json:"tls_enabled,omitempty"`
+		Timeout    cos.Duration `json:"timeout,omitempty"`
 	}
 
 	// TimeoutConf sets the default timeout for the HTTP client used by the auth manager
@@ -137,6 +157,14 @@ func (c *Config) Secret() cmn.Censored {
 	return cmn.Censored(*c.Server.psecret)
 }
 
+func (c *KVServiceConf) SetPassword(password string) {
+	c.password = cmn.Censored(password)
+}
+
+func (c *KVServiceConf) Password() string {
+	return string(c.password)
+}
+
 func (c *Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
 		return err
@@ -158,6 +186,9 @@ func (c *ServerConf) Validate() error {
 		c.SigningKey.Bits = c.RSAKeyBits
 	}
 	if err := c.SigningKey.validate(); err != nil {
+		return err
+	}
+	if err := c.DBConf.validate(); err != nil {
 		return err
 	}
 	if c.Expire == 0 {
@@ -184,6 +215,34 @@ func (c *SigningKeyConf) validate() error {
 	}
 	if c.Mode != "" && c.Mode != SigningKeyModeExternal {
 		return fmt.Errorf("invalid auth.signing_key.mode=%q (valid values: %q or empty)", c.Mode, SigningKeyModeExternal)
+	}
+	return nil
+}
+
+func (c *DatabaseConf) validate() error {
+	if c.DBType != "" && c.DBType != DBDriverBuntDB && c.DBType != DBDriverRedis {
+		return fmt.Errorf("invalid auth.db.type=%q (valid values: %q, %q, or empty)",
+			c.DBType, DBDriverBuntDB, DBDriverRedis)
+	}
+	if c.Service.DBIndex < 0 {
+		return fmt.Errorf("invalid auth.db.service.db_index=%d (must be >= 0)", c.Service.DBIndex)
+	}
+	if c.Service.Port != 0 && (c.Service.Port < minPort || c.Service.Port > maxPort) {
+		return fmt.Errorf("invalid auth.db.service.port=%d (expected %d-%d)", c.Service.Port, minPort, maxPort)
+	}
+	if c.Service.Timeout != 0 && c.Service.Timeout < minTimeout {
+		return fmt.Errorf("invalid auth.db.service.timeout=%s (expected >= %s)", c.Service.Timeout, minTimeout)
+	}
+	if c.DBType == DBDriverRedis {
+		if c.Service.Host == "" {
+			c.Service.Host = defaultKVServiceHost
+		}
+		if c.Service.Port == 0 {
+			c.Service.Port = defaultKVServicePort
+		}
+		if c.Service.Timeout == 0 {
+			c.Service.Timeout = defaultKVServiceTimeout
+		}
 	}
 	return nil
 }

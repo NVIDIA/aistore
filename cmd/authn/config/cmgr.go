@@ -254,7 +254,7 @@ func (*ConfManager) GetJWKSMaxAge() int {
 	return int(defaultJWKSMaxAge.Seconds())
 }
 
-func (cm *ConfManager) GetDBType() string {
+func (cm *ConfManager) GetDBType() authn.DBDriver {
 	return cm.conf.Load().Server.DBConf.DBType
 }
 
@@ -264,6 +264,14 @@ func (cm *ConfManager) GetDBPath() string {
 		return fp
 	}
 	return filepath.Join(filepath.Dir(cm.filePath), fname.AuthNDB)
+}
+
+func (cm *ConfManager) GetKVServiceConf() authn.KVServiceConf {
+	conf := cm.conf.Load().Server.DBConf.Service
+	if v := os.Getenv(env.AisAuthKVPassword); v != "" {
+		conf.SetPassword(v)
+	}
+	return conf
 }
 
 func (cm *ConfManager) GetExternalURL() *url.URL {

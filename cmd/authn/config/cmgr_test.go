@@ -171,7 +171,7 @@ func TestGetDBType(t *testing.T) {
 	cm.Init(path)
 	tassert.Errorf(t, cm.GetDBType() == "", "expected empty db type, got %s", cm.GetDBType())
 	// Test DB from config is loaded
-	expected := "customDB"
+	expected := authn.DBDriverRedis
 	base.Server.DBConf = authn.DatabaseConf{DBType: expected}
 	path = writeConfToDisk(t, base)
 	cm2 := config.NewConfManager()
@@ -196,6 +196,46 @@ func TestGetDBPath(t *testing.T) {
 	cm2.Init(path)
 	got = cm2.GetDBPath()
 	tassert.Errorf(t, got == expected, "expected %q, got %q", expected, got)
+}
+
+func TestGetKVServiceConf(t *testing.T) {
+	base := newBaseConfig()
+	base.Server.DBConf.Service = authn.KVServiceConf{
+		Host:       "kv.authn.svc",
+		Port:       6379,
+		DBIndex:    3,
+		TLSEnabled: true,
+		Timeout:    cos.Duration(2 * time.Second),
+	}
+	cm := newConfManagerWithConf(t, base)
+
+	got := cm.GetKVServiceConf()
+	tassert.Errorf(t, got.Host == "kv.authn.svc", "expected host from config, got %q", got.Host)
+	tassert.Errorf(t, got.Port == 6379, "expected port from config, got %d", got.Port)
+	tassert.Errorf(t, got.DBIndex == 3, "expected db index from config, got %d", got.DBIndex)
+	tassert.Errorf(t, got.TLSEnabled, "expected TLS from config")
+	tassert.Errorf(t, got.Timeout == cos.Duration(2*time.Second), "expected timeout from config, got %s", got.Timeout)
+}
+
+func TestGetKVServiceConfPasswordEnv(t *testing.T) {
+	base := newBaseConfig()
+	base.Server.DBConf.Service = authn.KVServiceConf{
+		Host:       "config",
+		Port:       6379,
+		DBIndex:    1,
+		TLSEnabled: false,
+		Timeout:    cos.Duration(2 * time.Second),
+	}
+	cm := newConfManagerWithConf(t, base)
+
+	t.Setenv(env.AisAuthKVPassword, "env-password")
+
+	got := cm.GetKVServiceConf()
+	tassert.Errorf(t, got.Host == "config", "expected host from config, got %q", got.Host)
+	tassert.Errorf(t, got.Port == 6379, "expected port from config, got %d", got.Port)
+	tassert.Errorf(t, got.Password() == "env-password", "expected password from env, got %q", got.Password())
+	tassert.Errorf(t, got.DBIndex == 1, "expected db index from config, got %d", got.DBIndex)
+	tassert.Errorf(t, !got.TLSEnabled, "expected TLS from config")
 }
 
 func TestGetLogFlushInterval(t *testing.T) {
