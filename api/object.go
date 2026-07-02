@@ -283,6 +283,26 @@ func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) 
 	return
 }
 
+// SelectObjectReader returns server-side object-select output as a response stream.
+// The target that owns the object reads the source object and applies the selection.
+func SelectObjectReader(bp BaseParams, bck cmn.Bck, objName string, msg *cmn.SelectObjectMsg) (r io.ReadCloser, size int64, err error) {
+	q := qalloc()
+	bp.Method = http.MethodPost
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActSelectObject, Value: msg})
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
+		bck.SetQuery(q)
+		reqParams.Query = q
+	}
+	r, size, err = reqParams.doReader()
+	FreeRp(reqParams)
+	qfree(q)
+	return
+}
+
 // PUT(object) ============================================================================================
 //
 // Uses the specified reader (`args.Reader`) to write a new object (or a new version of the object).

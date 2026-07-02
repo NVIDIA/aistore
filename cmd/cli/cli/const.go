@@ -69,6 +69,7 @@ const (
 	commandPut       = "put"
 	commandRemove    = "rm"
 	commandRename    = "mv"
+	commandSelect    = "select"
 	commandSet       = "set"
 
 	// multipart upload commands
@@ -364,7 +365,8 @@ const (
 	mptCompleteArgument = objectArgument + " UPLOAD_ID PART_NUMBERS"
 	mptAbortArgument    = objectArgument + " UPLOAD_ID"
 
-	getObjectArgument = "BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]"
+	getObjectArgument    = "BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]"
+	selectObjectArgument = objectArgument + " --query QUERY"
 
 	optionalPrefixArgument = "BUCKET[/OBJECT_NAME_or_PREFIX]"
 	putObjectArgument      = "[-|FILE|DIRECTORY[/PATTERN]] " + optionalPrefixArgument

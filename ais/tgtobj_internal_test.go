@@ -8,8 +8,10 @@ import (
 	"flag"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -184,6 +186,44 @@ func TestPutObjectChunks(tst *testing.T) {
 			actualChunks := manifest.Count()
 			tassert.Fatalf(test, actualChunks == tt.expectedParts, "chunk count mismatch: expected %d parts, got %d", tt.expectedParts, actualChunks)
 		})
+	}
+}
+
+func TestObjSelectRunsOnTarget(tst *testing.T) {
+	const (
+		objName = "select.csv"
+		csvBody = "name,kind,score\nalpha,a,7\nbeta,b,12\ngamma,b,3\n"
+	)
+	lom := core.AllocLOM(objName)
+	defer core.FreeLOM(lom)
+	err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(tst, err)
+	defer lom.RemoveMain()
+
+	poi := &putOI{
+		atime:   time.Now().UnixNano(),
+		t:       t,
+		lom:     lom,
+		r:       io.NopCloser(strings.NewReader(csvBody)),
+		oreq:    &http.Request{Header: make(http.Header)},
+		workFQN: path.Join(testMountpath, "select.csv.work"),
+		config:  cmn.GCO.Get(),
+		size:    int64(len(csvBody)),
+	}
+	_, err = poi.putObject()
+	tassert.CheckFatal(tst, err)
+
+	rec := httptest.NewRecorder()
+	ecode, err := t.objSelect(rec, nil, lom, &cmn.SelectObjectMsg{Query: "SELECT name,score WHERE score > 10"})
+	tassert.CheckFatal(tst, err)
+	tassert.Fatalf(tst, ecode == 0, "unexpected status code: %d", ecode)
+
+	const expected = "name,score\nbeta,12\n"
+	if got := rec.Body.String(); got != expected {
+		tst.Fatalf("unexpected select output:\nexpected: %q\ngot:      %q", expected, got)
+	}
+	if ctype := rec.Header().Get(cos.HdrContentType); ctype != "text/csv" {
+		tst.Fatalf("unexpected content type: %q", ctype)
 	}
 }
 

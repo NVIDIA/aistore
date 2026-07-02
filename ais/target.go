@@ -1253,6 +1253,19 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 			t.statsT.IncWith(stats.ErrRenameCount, vlabs)
 		}
+	case apc.ActSelectObject:
+		var (
+			selectMsg cmn.SelectObjectMsg
+			lom       = &core.LOM{ObjName: apireq.items[1]}
+		)
+		if err = lom.InitBck(apireq.bck); err != nil {
+			break
+		}
+		if err = cos.MorphMarshal(msg.Value, &selectMsg); err != nil {
+			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, msg.Action, msg.Value, err)
+			break
+		}
+		ecode, err = t.objSelect(w, r, lom, &selectMsg)
 	case apc.ActBlobDl:
 		var (
 			xid     string

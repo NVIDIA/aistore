@@ -2044,7 +2044,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 	switch msg.Action {
-	case apc.ActRenameObject, apc.ActCheckLock, apc.ActMptUpload, apc.ActMptAbort, apc.ActMptComplete:
+	case apc.ActRenameObject, apc.ActSelectObject, apc.ActCheckLock, apc.ActMptUpload, apc.ActMptAbort, apc.ActMptComplete:
 		apireq.after = 2
 	}
 	if err := p.parseReq(w, r, apireq); err != nil {
@@ -2138,6 +2138,11 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		}
 		objName := msg.Name
 		p.redirectAction(w, r, bck, objName, msg)
+	case apc.ActSelectObject:
+		if err := p.checkAccess(w, r, bck, apc.AccessRO); err != nil {
+			return
+		}
+		p.redirectAction(w, r, bck, apireq.items[1], msg)
 	case apc.ActMptUpload, apc.ActMptAbort, apc.ActMptComplete:
 		if err := p.checkAccess(w, r, bck, apc.AccessRW); err != nil {
 			return
