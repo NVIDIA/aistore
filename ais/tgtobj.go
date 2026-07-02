@@ -2119,6 +2119,13 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		return fmt.Errorf("unexpected failure to create request, err: %w", errN)
 	}
 
+	// intra-cluster call on the public handler: consistent policy involves:
+	// - setting respective system headers
+	// - possibly, signing the request
+	smap := t.owner.smap.get()
+	debug.Assert(smap.isValid())
+	t.setIntraHdrs(sargs.tsi, req, smap)
+
 	resp, err := g.client.data.Do(req)
 	if err != nil {
 		err = cmn.NewErrFailedTo(t, "coi.put "+sargs.bckTo.Cname(sargs.objNameTo), sargs.tsi, err)

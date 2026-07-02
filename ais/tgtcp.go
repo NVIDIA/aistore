@@ -1445,7 +1445,7 @@ func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX, reqProps [
 		}
 		cargs.timeout = cmn.Rom.CplaneOperation()
 	}
-	res := t.call(cargs, smap)
+	res := t.call(cargs, smap) // note canonical h.call => setIntraHdrs path
 	freeCargs(cargs)
 
 	if err = res.err; err == nil && parseProps != "" {

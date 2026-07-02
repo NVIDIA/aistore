@@ -857,13 +857,11 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 		t.writeErr(w, r, err)
 		return
 	}
-	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
-		if apireq.dpq.sys.ptime == "" /*isRedirect*/ {
-			if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
-				e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
-				t.writeErr(w, r, e, ecode)
-				return
-			}
+	if cmn.Rom.SignVerifyEnabled() && !hasRedirectMarker(nil /*query*/, apireq.dpq) {
+		if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
+			e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
+			t.writeErr(w, r, e, ecode)
+			return
 		}
 	}
 	objName := apireq.items[1]
@@ -1178,7 +1176,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	if isRedirect(apireq.query) == "" {
+	if !hasRedirectMarker(apireq.query, nil /*dpq*/) {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
 		return
 	}
@@ -1234,7 +1232,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	if t.parseReq(w, r, apireq) != nil {
 		return
 	}
-	if apireq.dpq.isRedirect() == "" {
+	if !hasRedirectMarker(nil /*query*/, apireq.dpq) {
 		t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
 		return
 	}
@@ -1380,14 +1378,12 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 		t.writeErr(w, r, err)
 		return
 	}
-	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
-		// validates that the request is internal (by a node in the same cluster)
-		if apireq.dpq.isRedirect() == "" {
-			if ecode, err := t.checkIntraCall(r, false); err != nil {
-				e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
-				t.writeErr(w, r, e, ecode)
-				return
-			}
+	// validates that the request is internal (by a node in the same cluster)
+	if cmn.Rom.SignVerifyEnabled() && !hasRedirectMarker(nil /*query*/, apireq.dpq) {
+		if ecode, err := t.checkIntraCall(r, false); err != nil {
+			e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
+			t.writeErr(w, r, e, ecode)
+			return
 		}
 	}
 	objName := apireq.items[1]
@@ -1563,13 +1559,11 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
-		if isRedirect(apireq.query) == "" {
-			if ecode, err := t.checkIntraCall(r, false); err != nil {
-				e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
-				t.writeErr(w, r, e, ecode)
-				return
-			}
+	if cmn.Rom.SignVerifyEnabled() && !hasRedirectMarker(apireq.query, nil /*dpq*/) {
+		if ecode, err := t.checkIntraCall(r, false); err != nil {
+			e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
+			t.writeErr(w, r, e, ecode)
+			return
 		}
 	}
 

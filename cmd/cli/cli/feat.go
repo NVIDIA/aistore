@@ -25,7 +25,7 @@ const (
 )
 
 var clusterFeatDesc = [...]string{
-	"enforce intra-cluster access",
+	"Deprecated: use auth.intra_cluster to secure intra-cluster communications",
 	"skip loading existing object's metadata, Version and Checksum (VC) in particular (advanced usage only)",
 	"do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS",
 	"handle s3 requests via `aistore-hostname/` (default: `aistore-hostname/s3`)",

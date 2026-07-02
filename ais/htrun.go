@@ -143,17 +143,19 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	bckName := apireq.items[apireq.bckIdx]
 
 	var (
-		svgrp *svgrp
-		pid   string
+		svgrp      *svgrp
+		pid        string
+		redirected bool
 	)
 	if apireq.dpq != nil {
 		if err = apireq.dpq.parse(r.URL.RawQuery); err != nil {
 			h.writeErr(w, r, err)
 			return err
 		}
+		pid = apireq.dpq.sys.pid
+		redirected = hasRedirectMarker(nil, apireq.dpq)
 		if apireq.dpq.sv.sig != "" {
 			svgrp = &apireq.dpq.sv
-			pid = apireq.dpq.sys.pid
 		}
 	} else {
 		apireq.query = r.URL.Query()
@@ -162,32 +164,40 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 			return err
 		}
 		pid = apireq.query.Get(apc.QparamPID)
+		redirected = hasRedirectMarker(apireq.query, nil)
 	}
-
-	if !cmn.IsV50Bridge() && cmn.Rom.SignVerifyEnabled() {
-		smap := h.owner.smap.get()
-		if smap != nil && smap.isValid() && h.si.IsTarget() { // TODO -- FIXME: (p.httpobjput -> parseReq)
-			psi := smap.GetNode(pid)
-			if svgrp != nil || h.svs.strict() {
-				var (
-					ecode int
-					err   error
-					sv    = newVerifier(r, h, svgrp)
-				)
-				debug.Assert(len(h.si.VerifyingKey) == cos.NodeSigningPublicKeySize)
-				ecode, err = sv.verify(pid, psi, smap)
-				if err != nil {
-					h.writeErr(w, r, err, ecode)
-					return err
-				}
-			}
-		}
+	if err = h.verifyReq(w, r, svgrp, pid, redirected); err != nil {
+		return err
 	}
-
 	if apireq.bck, err = newBckFromQ(bckName, apireq.query, apireq.dpq); err != nil {
 		h.writeErr(w, r, err)
 	}
 	return err
+}
+
+func (h *htrun) verifyReq(w http.ResponseWriter, r *http.Request, svgrp *svgrp, pid string, redirected bool) error {
+	if cmn.IsV50Bridge() || !cmn.Rom.SignVerifyEnabled() {
+		return nil
+	}
+	debug.Assert(len(h.si.VerifyingKey) == cos.NodeSigningPublicKeySize)
+
+	smap := h.owner.smap.get()
+	if smap == nil || !smap.isValid() {
+		return nil
+	}
+
+	// - a present (query-borne) signature is always verified
+	// - a target-bound redirect-marked unsigned request is rejected once strict
+	// - header-signed control-plane calls are verified in checkIntraCall
+	redirectedDataReq := redirected && h.si.IsTarget()
+	if svgrp != nil || (redirectedDataReq && h.svs.strict()) {
+		sv := newVerifier(r, h, svgrp)
+		if ecode, err := sv.verify(pid, smap.GetNode(pid), smap); err != nil {
+			h.writeErr(w, r, err, ecode)
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
@@ -1606,7 +1616,7 @@ func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action strin
 	cmn.FreeHterr(err)
 }
 
-// health client
+// health client: perform intra-cluster call on the public handler p/t.healthHandler
 func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap *smapX, retry bool) ([]byte, int, error) {
 	var (
 		path  = apc.URLPathHealth.S
@@ -1618,30 +1628,34 @@ func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap
 		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q}
 		cargs.timeout = tout
 	}
-	res := h.call(cargs, smap)
+	res := h.call(cargs, smap) // note canonical h.call => setIntraHdrs path
 	b, status, err := res.bytes, res.status, res.err
 	freeCR(res)
 
-	if err != nil {
-		ni, no := h.si.String(), si.StringEx()
-		if cmn.Rom.V(5, cos.ModKalive) {
-			nlog.Warningln(ni, "failed req-health:", no, "tout", tout, "err: [", err, status, "]")
-		}
-		if retry {
-			// - retrying when about to remove node 'si' from the cluster map, or
-			// - about to elect a new primary;
-			// - not checking `IsErrDNSLookup` and similar
-			// - ie., not trying to narrow down (compare w/ slow-keepalive)
-			if si.PubNet.Hostname != si.ControlNet.Hostname {
-				u := si.URL(cmn.NetPublic)
-				cargs.req.Base = u
-				res = h.call(cargs, smap)
-				b, status, err = res.bytes, res.status, res.err
-				freeCR(res)
-				if err != nil {
-					nlog.Warningln(ni, "failed req-health retry:", no, "via pub", u, "tout", tout, "err: [", err, status, "]")
-				}
-			}
+	if err == nil {
+		freeCargs(cargs)
+		return b, status, nil
+	}
+
+	ni, no := h.si.String(), si.StringEx()
+	if cmn.Rom.V(5, cos.ModKalive) {
+		nlog.Warningln(ni, "failed req-health:", no, "tout", tout, "err: [", err, status, "]")
+	}
+
+	// retry via public URL is a reachability fallback only - intentionally not including
+	// intra-cluster headers (and optionally - signature); scenarios:
+	// - retrying when about to remove node 'si' from the cluster map, or
+	// - about to elect a new primary;
+	// - not checking `IsErrDNSLookup` and similar
+	// - ie., not trying to narrow down (compare w/ slow-keepalive)
+	if retry && si.PubNet.Hostname != si.ControlNet.Hostname {
+		u := si.URL(cmn.NetPublic)
+		cargs.req.Base = u
+		res = h.call(cargs, smap)
+		b, status, err = res.bytes, res.status, res.err
+		freeCR(res)
+		if err != nil {
+			nlog.Warningln(ni, "failed req-health retry:", no, "via pub", u, "tout", tout, "err: [", err, status, "]")
 		}
 	}
 
@@ -2740,13 +2754,6 @@ func (h *htrun) qencode(q url.Values, now int64, sv *svReq) string {
 
 // NOTE: not checking vs Smap (yet)
 func isT2TPut(hdr http.Header) bool { return hdr != nil && hdr.Get(apc.HdrT2TPutterID) != "" }
-
-func isRedirect(q url.Values) (ptime string) {
-	if len(q) == 0 || q.Get(apc.QparamPID) == "" {
-		return
-	}
-	return q.Get(apc.QparamUnixTime)
-}
 
 func ptLatency(tts int64, ptime, isPrimary string) (dur int64) {
 	pts, err := s2UnixNano(ptime)

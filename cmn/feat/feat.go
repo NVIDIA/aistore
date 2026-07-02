@@ -25,7 +25,8 @@ const (
 )
 
 const (
-	EnforceIntraClusterAccess = Flags(1 << iota)
+	EnforceIntraClusterAccess = Flags(1 << iota) // Deprecated: use auth.intra_cluster to secure intra-cluster communications
+
 	SkipVC                    // skip loading existing object's metadata, Version and Checksum (VC) in particular (advanced usage only)
 	DontAutoDetectFshare      // do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS
 	S3APIviaRoot              // handle s3 requests via `aistore-hostname/` (default: `aistore-hostname/s3`)

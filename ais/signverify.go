@@ -32,8 +32,11 @@ import (
 // v5.1 will enable this implementation.
 //
 // TODO:
-// - keep local keypairs memory-only: regenerate on restart and advertise via joinCluster
-// - FIXME: htrun.parseReq()
+// - keep local (public, private) keypairs in memory-only: regen on restart and advertise via joinCluster
+// - secure target redirected-datapath: redirect-marked (pid+ptime) is not good enough
+// - verify T2T PUT receiver path via checkIntraCall (HdrT2TPutterID is only a marker)
+// -------
+// - replace marker-only bypasses with verified redirect or signed intra-call checks
 // - tests: add TestSignVerifyToggleStress and run it in parallel w/ TestSmoke/prefetch/get-batch
 // - define replay protection and canonical query/body coverage
 // - add rotation, startup, and tampering tests

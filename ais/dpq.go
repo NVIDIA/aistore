@@ -301,13 +301,6 @@ func (dpq *dpq) _arch(key, val string) (err error) {
 
 func (dpq *dpq) isArch() bool { return dpq.arch.path != "" || dpq.arch.mmode != "" }
 
-func (dpq *dpq) isRedirect() (ptime string) {
-	if dpq.sys.pid == "" || dpq.sys.ptime == "" {
-		return
-	}
-	return dpq.sys.ptime
-}
-
 // err & log
 func (dpq *dpq) _archstr() string {
 	if dpq.arch.path != "" {
