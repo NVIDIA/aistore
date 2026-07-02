@@ -267,6 +267,30 @@ func TestValidateToken_Expired(t *testing.T) {
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "An expired token is invalid")
 }
 
+// Test that validating a correctly signed token without exp is rejected
+func TestValidateToken_NoExpiration(t *testing.T) {
+	c := newAdminClaims()
+	c.ExpiresAt = nil
+	tokenStr, err := hmacSigner.SignToken(c)
+	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
+	_, err = newHMACParser(t).ValidateToken(t.Context(), tokenStr)
+	tassert.Fatalf(t, err != nil, "Expected validating token without exp to fail, got %v", err)
+	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected invalid token error for missing exp")
+	tassert.Fatal(t, errors.Is(err, jwt.ErrTokenInvalidClaims), "Expected invalid claims error for missing exp")
+
+	hmacKeyProvider, err := tok.NewStaticKeyProvider(&cmn.AuthConf{
+		Signature: &cmn.AuthSignatureConf{
+			Method: "hmac",
+			Key:    testHMACSigningSecret,
+		},
+	})
+	tassert.CheckFatal(t, err)
+	_, err = tok.NewTokenParser(hmacKeyProvider, nil).ValidateToken(t.Context(), tokenStr)
+	tassert.Fatalf(t, err != nil, "Expected nil-config parser to reject token without exp, got %v", err)
+	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected invalid token error for missing exp (nil config)")
+	tassert.Fatal(t, errors.Is(err, jwt.ErrTokenInvalidClaims), "Expected invalid claims error for missing exp (nil config)")
+}
+
 func TestValidateToken_AudienceMismatch(t *testing.T) {
 	c := &tok.AISClaims{
 		RegisteredClaims: jwt.RegisteredClaims{

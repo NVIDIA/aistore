@@ -123,21 +123,23 @@ func ExtractToken(hdr http.Header) (*TokenHdr, error) {
 
 // NewTokenParser creates a new instance of TokenParser given a key provider and an optional set of auth configs
 func NewTokenParser(keyProvider KeyProvider, conf *cmn.AuthConf) *TokenParser {
-	parser := &TokenParser{
+	return &TokenParser{
 		keyProvider: keyProvider,
+		parseOpts:   buildParseOptions(conf),
 	}
-	if conf != nil {
-		parser.parseOpts = buildParseOptions(conf.RequiredClaims)
-	}
-	return parser
 }
 
-func buildParseOptions(reqClaims *cmn.RequiredClaimsConf) []jwt.ParserOption {
+func buildParseOptions(conf *cmn.AuthConf) []jwt.ParserOption {
+	// Baseline options enforced for every token, regardless of (optional) config.
 	opts := []jwt.ParserOption{
 		jwt.WithValidMethods(supportedSigningMethods),
+		// Enforces the documented requirement that tokens carry a valid `exp` and that
+		// expired tokens are rejected (see "Token Requirements" section in docs/auth_validation.md).
+		jwt.WithExpirationRequired(),
 	}
-	if reqClaims != nil && len(reqClaims.Aud) > 0 {
-		opts = append(opts, jwt.WithAudience(reqClaims.Aud...))
+	// Config-driven claim requirements (e.g. audience) layered on when provided.
+	if conf != nil && conf.RequiredClaims != nil && len(conf.RequiredClaims.Aud) > 0 {
+		opts = append(opts, jwt.WithAudience(conf.RequiredClaims.Aud...))
 	}
 	return opts
 }
