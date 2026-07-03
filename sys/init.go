@@ -10,6 +10,7 @@ import (
 	"runtime"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
@@ -37,6 +38,7 @@ var (
 // num CPUs may get adjusted by Init() below
 func init() {
 	gcpu.num = runtime.NumCPU()
+	gcpu.last.Store(mono.NanoTime() - int64(maxIval)) // non-zero and already expired
 }
 
 func isContainerized() bool { return contDetected || contForced }

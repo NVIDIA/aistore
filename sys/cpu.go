@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
@@ -76,13 +77,20 @@ type (
 )
 
 func Refresh(now int64, periodic bool) (int64, int64, error) {
-	if last := gcpu.last.Load(); last > 0 {
-		elapsed := max(time.Duration(now-last), 0)
-		if elapsed < MinIvalShort || (elapsed < minIvalLong && !periodic) {
-			return gcpu.utilEMA.Load(), gcpu.throttled.Load(), nil
-		}
+	last := gcpu.last.Load()
+	since := max(time.Duration(now-last), 0)
+	if since < MinIvalShort || (since < minIvalLong && !periodic) {
+		return gcpu.utilEMA.Load(), gcpu.throttled.Load(), nil
 	}
 
+	gcpu.ring.mu.Lock()
+	defer gcpu.ring.mu.Unlock()
+
+	last = gcpu.last.Load()
+	since = max(time.Duration(now-last), 0)
+	if since < MinIvalShort || (since < minIvalLong && !periodic) {
+		return gcpu.utilEMA.Load(), gcpu.throttled.Load(), nil
+	}
 	cur, err := gcpu.read()
 	if err != nil {
 		return gcpu.utilEMA.Load(), gcpu.throttled.Load(), err
@@ -90,15 +98,15 @@ func Refresh(now int64, periodic bool) (int64, int64, error) {
 	cur.ts = now
 
 	// read and compute current
-	gcpu.ring.mu.Lock()
 	rawUtil, throttled, elapsed := gcpu.ring.sample(cur)
 	gcpu.throttled.Store(throttled)
 	gcpu.last.Store(now)
 
 	// compute and store moving average
+	// note: not differentiating the first reading (against 0 at alpha 20) from the rest -
+	// will converge fast
 	util := gcpu.compute(elapsed, rawUtil)
 	gcpu.utilEMA.Store(util)
-	gcpu.ring.mu.Unlock()
 
 	return util, throttled, nil
 }
@@ -128,11 +136,13 @@ func (r *ring) sample(cur sample) (util, throttled, elapsed int64) {
 	r.a[r.idx] = cur
 
 	if prev.ts == 0 {
-		return 0, 0, 0
+		return 0, 0, 0 // first refresh
 	}
 
 	// compute current
 	elapsed = cur.ts - prev.ts
+	debug.Assert(elapsed > 0)
+
 	if isContainerized() && cur.throttledUsec > 0 {
 		dtUsec := max(cur.throttledUsec-prev.throttledUsec, 0)
 		throttled = cos.DivRoundI64(dtUsec*100_000, elapsed)
@@ -167,7 +177,7 @@ func NumCPU() int { return gcpu.num }
 func MaxParallelism() int { return max(NumCPU(), 4) }
 
 // HighLoadWM: "high-load watermark" as a percentage.
-// For 8 CPUs: max(100 - 100/8, 1) = 88 - between HighLoad(82) and ExtremeLoad(92).
+// For 8 CPUs: max(100 - 100/8, 1) = 88 - between HighLoad(85) and ExtremeLoad(95).
 // see also: (ExtremeLoad, HighLoad) defaults
 func HighLoadWM() int64 {
 	ncpu := int64(NumCPU())
