@@ -288,55 +288,53 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 		path   string
 		config = cmn.GCO.Get()
 	)
-	// common, debug
+
+	// debug (n/a in production)
 	for r, nh := range debug.Handlers() {
 		handlePub(r, nh)
 	}
-	// node type specific
+
+	debug.Assert(config.HostNet.UseIntraControl, "see LocalConfig.Validate()")
 	for _, nh := range networkHandlers {
-		var reg bool
+		var (
+			reg     bool
+			hasCtrl = nh.net.isSet(accessNetIntraControl)
+			hasData = nh.net.isSet(accessNetIntraData)
+		)
+
 		if nh.r[0] == '/' { // absolute path
 			path = nh.r
 		} else {
 			path = cos.JoinW0(apc.Version, nh.r)
 		}
+
 		debug.Assert(nh.net != 0)
+
 		if nh.net.isSet(accessNetPublic) {
 			handlePub(path, nh.h)
 			reg = true
 		}
-		if config.HostNet.UseIntraControl && nh.net.isSet(accessNetIntraControl) {
+
+		if hasCtrl {
 			handleControl(path, nh.h)
 			reg = true
 		}
-		if config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraData) {
-			handleData(path, nh.h)
-			reg = true
-		}
-		if reg {
-			continue
-		}
 
-		// none of the above
-		switch {
-		case !config.HostNet.UseIntraControl && !config.HostNet.UseIntraData:
-			// when a _separate_ public handler is registered for the same endpoint
-			// (motivation: security)
-			if nh.net.isSet(accessNetNoPubFallback) {
-				continue
+		if hasData {
+			if config.HostNet.UseIntraData {
+				handleData(path, nh.h)
+				reg = true
+			} else if !hasCtrl {
+				// Intra-data collapses to intra-control when a separate
+				// intra-data listener is not configured.
+				handleControl(path, nh.h)
+				reg = true
 			}
-
-			// no intra-cluster networks: default to pub net
-			handlePub(path, nh.h)
-		case config.HostNet.UseIntraControl && nh.net.isSet(accessNetIntraData):
-			// (not configured) data defaults to (configured) control
-			handleControl(path, nh.h)
-		default:
-			debug.Assert(config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraControl))
-			// (not configured) control defaults to (configured) data
-			handleData(path, nh.h)
 		}
+
+		debug.Assert(reg, nh.r, nh.net)
 	}
+
 	// common Prometheus
 	if handler := h.statsT.PromHandler(); handler != nil {
 		nh := networkHandler{r: "/" + apc.Metrics, h: handler.ServeHTTP}
@@ -418,7 +416,7 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 		nlog.Infof("%s (user) access: %v%s", cmn.NetPublic, pubAddr, s)
 	}
 
-	// 2. intra-cluster (NOTE 5.0 update: intra-net is always different from pub)
+	// 2. intra-cluster (5.0 update: intra-net is always different from pub)
 	debug.Assert(config.HostNet.UseIntraControl)
 
 	icport := strconv.Itoa(config.HostNet.PortIntraControl)
@@ -476,34 +474,41 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 		nlog.Infof("%s (multihome) access: %v and %v", cmn.NetPublic, pubAddr, h.si.PubExtra)
 	}
 
-	tcpbuf := config.Net.L4.SndRcvBufSize
+	var (
+		ctlbuf int
+		tcpbuf = config.Net.L4.SndRcvBufSize
+	)
 	if h.si.IsProxy() {
 		tcpbuf = 0
-	} else if tcpbuf == 0 {
-		tcpbuf = cmn.DefaultSndRcvBufferSize // ditto: targets use AIS default when not configured
+	} else {
+		if tcpbuf == 0 {
+			tcpbuf = cmn.DefaultSndRcvBufferSize // ditto: targets use AIS default when not configured
+		}
+		if !config.HostNet.UseIntraData {
+			// collapsed mode: apply target data socket buffer sizing to the shared listener
+			ctlbuf = tcpbuf
+		}
 	}
 
-	// pub-net first
+	// pub-net
 	muxers := newMuxers(tracing.IsEnabled())
-	g.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: useIPv6}
+	g.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: useIPv6, reqNet: reqNetPub}
 
-	// intra-control and intra-data
-	// note: separate config and isolated bandwidth - strongly recommended
-	g.netServ.control = g.netServ.pub
-	if config.HostNet.UseIntraControl {
-		muxers = newMuxers(false /*enableTracing*/)
-		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0, lowLatencyToS: true, useIPv6: useIPv6}
-	}
-	g.netServ.data = g.netServ.control // if not configured, intra-data net is intra-control
+	// intra-control
+	debug.Assert(config.HostNet.UseIntraControl, "see LocalNetConfig.Validate")
+	muxers = newMuxers(false /*enableTracing*/)
+	g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: ctlbuf, lowLatencyToS: true, useIPv6: useIPv6, reqNet: reqNetCtrl}
+
+	// intra-data
+	g.netServ.data = g.netServ.control
 	if config.HostNet.UseIntraData {
+		// is separately configured
 		muxers = newMuxers(false /*enableTracing*/)
-		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: useIPv6}
+		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: useIPv6, reqNet: reqNetData}
 	}
 
-	// this netServer is facing users
-	// (therefore, it is _not_ used for intra-cluster comm)
+	// since v5.0
 	debug.Assert(g.netServ.pub != g.netServ.control && g.netServ.pub != g.netServ.data)
-	g.netServ.pub.isPub = true
 }
 
 func mustDiffer(ip1 meta.NetInfo, port1 int, use1 bool, ip2 meta.NetInfo, port2 int, use2 bool, tag string) {
@@ -636,11 +641,11 @@ func (h *htrun) run(config *cmn.Config) error {
 		tlsConf = c
 	}
 
-	if config.HostNet.UseIntraControl {
-		go func() {
-			_ = g.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf, config)
-		}()
-	}
+	debug.Assert(config.HostNet.UseIntraControl, "see LocalConfig.Validate()")
+	go func() {
+		_ = g.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf, config)
+	}()
+
 	if config.HostNet.UseIntraData {
 		go func() {
 			_ = g.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsConf, config)
@@ -662,12 +667,12 @@ func (h *htrun) run(config *cmn.Config) error {
 
 func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config, useIPv6 bool) {
 	debug.Assert(pubExtra.Port == h.si.PubNet.Port, "expecting the same TCP port for all multi-home interfaces")
-	debug.Assert(g.netServ.pub.isPub)
+	debug.Assert(g.netServ.pub.reqNet == reqNetPub)
 	server := &netServer{
 		muxers:        g.netServ.pub.muxers,
 		sndRcvBufSize: g.netServ.pub.sndRcvBufSize,
 		useIPv6:       useIPv6, // in fact, expecting the same TCP port _and_ the same IP family as PubNet
-		isPub:         true,
+		reqNet:        reqNetPub,
 	}
 	ep := pubExtra.TCPEndpoint()
 	go func() {
@@ -677,14 +682,15 @@ func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.
 }
 
 // return true to start listening on `INADDR_ANY:PubNet.Port`
-func (h *htrun) pubAddrAny(config *cmn.Config) (inaddrAny bool) {
+func (h *htrun) pubAddrAny(config *cmn.Config) bool {
 	switch {
-	case config.HostNet.UseIntraControl && h.si.ControlNet.Port == h.si.PubNet.Port:
+	case h.si.ControlNet.Port == h.si.PubNet.Port:
+		return false
 	case config.HostNet.UseIntraData && h.si.DataNet.Port == h.si.PubNet.Port:
+		return false
 	default:
-		inaddrAny = true
+		return true
 	}
-	return inaddrAny
 }
 
 // remove self from Smap (if required), terminate http, and wait (w/ timeout)
@@ -2713,23 +2719,18 @@ func (h *htrun) parseSenderHdrs(hdr http.Header) (sid, sname, before string, err
 	return sid, sname, before, nil
 }
 
-func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
+func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) bool {
+	if !reqIsIntraCtrl(r) {
+		h.writeErrf(w, r, "%s: expected %s request", h, cmn.NetIntraControl)
+		return false
+	}
+
 	ecode, err := h.checkIntraCall(r, onlyPrimary)
 	if err != nil {
 		h.writeErr(w, r, err, ecode)
-		return
+		return false
 	}
-	if !cmn.GCO.Get().HostNet.UseIntraControl {
-		return true // intra-control == pub
-	}
-	// NOTE: not checking r.RemoteAddr
-	intraAddr := h.si.ControlNet.TCPEndpoint()
-	srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
-	if srvAddr == intraAddr {
-		return true
-	}
-	h.writeErrf(w, r, "%s: expected %s request", h, cmn.NetIntraControl)
-	return
+	return true
 }
 
 func (h *htrun) uptime2hdr(hdr http.Header) {

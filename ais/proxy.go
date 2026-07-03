@@ -282,20 +282,23 @@ func (p *proxy) Run() error {
 }
 
 // register API handlers
+// NOTE explicit (apc.Reverse, apc.Cluster, apc.Daemon) split -
+// with added netServer's ConnContext() wiring the corresponding compile-time `isPub`
+// delineation can be simplified out (see reqIsPub asserts in the code)
 func (p *proxy) initRecvHandlers() {
 	networkHandlers := make([]networkHandler, 0, 28)
 	networkHandlers = append(networkHandlers,
 		// (pub + control): apc.Reverse
 		networkHandler{r: apc.Reverse, h: p.revPubHandler, net: accessNetPublic},
-		networkHandler{r: apc.Reverse, h: p.revHandler, net: accessNetIntraControl | accessNetNoPubFallback},
+		networkHandler{r: apc.Reverse, h: p.revHandler, net: accessNetIntraControl},
 
 		// (pub + control): apc.Cluster
 		networkHandler{r: apc.Cluster, h: p.cluPubHandler, net: accessNetPublic},
-		networkHandler{r: apc.Cluster, h: p.cluHandler, net: accessNetIntraControl | accessNetNoPubFallback},
+		networkHandler{r: apc.Cluster, h: p.cluHandler, net: accessNetIntraControl},
 
 		// (pub + control): apc.Daemon
 		networkHandler{r: apc.Daemon, h: p.daePubHandler, net: accessNetPublic},
-		networkHandler{r: apc.Daemon, h: p.daeHandler, net: accessNetIntraControl | accessNetNoPubFallback},
+		networkHandler{r: apc.Daemon, h: p.daeHandler, net: accessNetIntraControl},
 
 		// pub-net handlers: cluster must be started
 		networkHandler{r: apc.Buckets, h: p.bucketHandler, net: accessNetPublic},
@@ -2581,6 +2584,8 @@ func (p *proxy) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPost, http.MethodPut)
 		return
 	}
+
+	debug.Assert(reqIsPub(r) == isPub)
 	if isPub {
 		if err := p.checkAccess(w, r, nil, ace); err != nil {
 			return

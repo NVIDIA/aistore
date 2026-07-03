@@ -30,10 +30,6 @@ const (
 	accessNetIntraControl
 	accessNetIntraData
 
-	// do not fallback-register this handler on pub-net when requested intra network(s) are not configured
-	// (used when pub-net has a separate public entry point for the same route)
-	accessNetNoPubFallback
-
 	accessNetPublicControl = accessNetPublic | accessNetIntraControl
 	accessNetPublicData    = accessNetPublic | accessNetIntraData
 	accessControlData      = accessNetIntraControl | accessNetIntraData

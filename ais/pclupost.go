@@ -59,6 +59,8 @@ type clupost struct {
 // +gen:endpoint POST /v1/cluster/{operation}
 // Handle cluster join operations and node keepalives.
 func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) {
+	debug.Assert(reqIsPub(r) == isPub)
+
 	apiItems, err := p.parseURL(w, r, apc.URLPathClu.L, 1, true)
 	if err != nil {
 		return

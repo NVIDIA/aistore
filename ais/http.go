@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/tracing"
 )
 
@@ -58,6 +59,10 @@ func handleData(path string, handler func(http.ResponseWriter, *http.Request)) {
 		}
 	}
 }
+
+//
+// intra-clients
+//
 
 const (
 	defaultControlWriteBufferSize = 16 * cos.KiB
@@ -123,16 +128,45 @@ func initDataClient(config *cmn.Config, preferIPv6 bool) {
 	g.client.data = tracing.NewTraceableClient(g.client.data)
 }
 
+//
+// shutdown (via htrun.stop())
+//
+
 func shuthttp() {
 	config := cmn.GCO.Get()
 	g.netServ.pub.shutdown(config)
 	for _, server := range g.netServ.pubExtra {
 		server.shutdown(config)
 	}
-	if config.HostNet.UseIntraControl {
-		g.netServ.control.shutdown(config)
-	}
+	debug.Assert(config.HostNet.UseIntraControl)
+	g.netServ.control.shutdown(config)
 	if config.HostNet.UseIntraData {
 		g.netServ.data.shutdown(config)
 	}
 }
+
+//
+// server's identity => ConnContext() => each arriving request's context
+//
+
+type (
+	reqNet    byte
+	ctxReqNet struct{}
+)
+
+const (
+	reqNetPub reqNet = iota // missing/unset context => pub
+	reqNetCtrl
+	reqNetData
+)
+
+var keyReqNet ctxReqNet
+
+func _reqNet(r *http.Request) reqNet {
+	v, ok := r.Context().Value(keyReqNet).(reqNet)
+	debug.Assert(ok, "missing request network context")
+	return v
+}
+
+func reqIsIntraCtrl(r *http.Request) bool { return _reqNet(r) == reqNetCtrl }
+func reqIsPub(r *http.Request) bool       { return _reqNet(r) == reqNetPub }

@@ -157,7 +157,7 @@ type (
 		sync.Mutex
 		lowLatencyToS bool
 		useIPv6       bool
-		isPub         bool // true for user-facing listener(s)
+		reqNet        reqNet // enum { reqNetPub, ... }
 	}
 
 	nlogWriter struct{}
@@ -371,7 +371,7 @@ func (*nlogWriter) Write(p []byte) (int, error) {
 // dispatch request to the handler with the closest matching URL
 func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case !server.isPub:
+	case server.reqNet != reqNetPub:
 		// intra-cluster listener
 		server.muxers._serveHTTP(w, r)
 
@@ -405,6 +405,9 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 		ErrorLog:          logger,
 		ReadHeaderTimeout: apc.ReadHeaderTimeout,
 		IdleTimeout:       dfltIdleTimeout,
+		ConnContext: func(ctx context.Context, _ net.Conn) context.Context {
+			return context.WithValue(ctx, keyReqNet, server.reqNet)
+		},
 	}
 	if timeout, isSet := cmn.ParseReadHeaderTimeout(); isSet { // optional env var
 		server.s.ReadHeaderTimeout = timeout

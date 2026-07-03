@@ -374,12 +374,11 @@ func (t *target) initHostIP(config *cmn.Config) {
 
 	nlog.Infoln("AIS_HOST_IP:", hostIP, "pub:", t.si.URL(cmn.NetPublic))
 
-	// applies to intra-cluster networks unless separately defined
-	if !config.HostNet.UseIntraControl {
-		t.si.ControlNet = t.si.PubNet
-	}
+	debug.Assert(config.HostNet.UseIntraControl, "see LocalConfig.Validate()")
 	if !config.HostNet.UseIntraData {
-		t.si.DataNet = t.si.PubNet
+		// when intra-data is not separately configured, intra-data traffic uses
+		// the intra-control endpoint
+		t.si.DataNet = t.si.ControlNet
 	}
 }
 

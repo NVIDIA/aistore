@@ -78,7 +78,7 @@ type (
 		PortIntraControl     int    `json:"port_intra_control,string"` // --/-- for intra-cluster control
 		PortIntraData        int    `json:"port_intra_data,string"`    // --/-- for intra-cluster data
 		// omit
-		UseIntraControl bool `json:"-"`
+		UseIntraControl bool `json:"-"` // always true starting 5.0
 		UseIntraData    bool `json:"-"`
 	}
 
@@ -2393,19 +2393,24 @@ func (c *LocalNetConfig) Validate(_ *Config) error {
 		return nil
 	}
 
-	// 5. Warn intra-net sharing.
-	if c.HostnameIntraControl != "" && c.HostnameIntraControl == c.HostnameIntraData {
+	//  5. Warn intra-net sharing and note different requirements that are NOT getting met:
+	//     (low bandwidth/low contention, optimized latency) vs (high bandwidth, large Tx/Rx buffers, Jumbo), respectively.
+	if c.HostnameIntraControl == c.HostnameIntraData {
 		if c.PortIntraControl == c.PortIntraData {
-			debug.Assert(!c.UseIntraData)
-			c.UseIntraData = false
-			nlog.Warningf("%s (%s:%d) and %s (%s:%d) share the same endpoint; using %s network for both",
-				NetIntraControl, c.HostnameIntraControl, c.PortIntraControl,
-				NetIntraData, c.HostnameIntraData, c.PortIntraData,
-				NetIntraControl)
+			debug.Assert(!c.UseIntraData) // per step 4 above
+			if c.HostnameIntraControl != "" {
+				nlog.Warningf("%s and %s share the same endpoint (%s:%d); using a single (combined) intra-cluster network",
+					NetIntraControl, NetIntraData, c.HostnameIntraControl, c.PortIntraControl)
+			} else {
+				nlog.Warningf("%s and %s share the same endpoint on port %d; using a single (combined) intra-cluster network",
+					NetIntraControl, NetIntraData, c.PortIntraControl)
+			}
 			return nil
 		}
-		nlog.Warningf("%s and %s share the same network %q with distinct ports: %d and %d, respectively",
-			NetIntraControl, NetIntraData, c.HostnameIntraControl, c.PortIntraControl, c.PortIntraData)
+		if c.HostnameIntraControl != "" {
+			nlog.Warningf("%s and %s share the same network %q with distinct ports: %d and %d, respectively",
+				NetIntraControl, NetIntraData, c.HostnameIntraControl, c.PortIntraControl, c.PortIntraData)
+		}
 	}
 	return nil
 }

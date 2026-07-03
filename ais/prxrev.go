@@ -54,6 +54,7 @@ func (p *proxy) revPubHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) _reverse(w http.ResponseWriter, r *http.Request, isPub bool) {
+	debug.Assert(reqIsPub(r) == isPub)
 	apiItems, err := p.parseURL(w, r, apc.URLPathReverse.L, 1, false)
 	if err != nil {
 		return
@@ -156,7 +157,11 @@ func (p *proxy) _reverse(w http.ResponseWriter, r *http.Request, isPub bool) {
 	// 6. do
 	if si.ID() == p.SID() {
 		// forward to self: access control already enforced above
-		p.daeHandler(w, r) // (apiEndpoint above)
+		if isPub {
+			p.daePubHandler(w, r)
+		} else {
+			p.daeHandler(w, r)
+		}
 		return
 	}
 	p.reverseNodeRequest(w, r, si)
