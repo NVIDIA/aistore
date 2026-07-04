@@ -846,14 +846,7 @@ const fmtErrExpectRedirect = "%s: %s(obj) is expected to be redirected (remaddr:
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	err := t.parseReq(w, r, apireq)
-	if err != nil {
-		return
-	}
-	err = apireq.dpq.parse(r.URL.RawQuery)
-	if err != nil {
-		debug.AssertNoErr(err)
-		t.writeErr(w, r, err)
+	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
 	if cmn.Rom.SignVerifyEnabled() && !hasRedirectMarker(nil /*query*/, apireq.dpq) {
@@ -868,8 +861,11 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 		t.writeErr(w, r, err)
 		return
 	}
-	lom := core.AllocLOM(objName)
 
+	var (
+		lom = core.AllocLOM(objName)
+		err error
+	)
 	lom, err = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
 	if err != nil {
 		t._erris(w, r, err, 0, apireq.dpq.silent)
@@ -1364,20 +1360,10 @@ func (t *target) _checkLocked(w http.ResponseWriter, r *http.Request, bck *meta.
 // See also: target.objHeadV2()
 
 func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	var (
-		err   error
-		ecode int
-	)
-	if err = t.parseReq(w, r, apireq); err != nil {
+	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	err = apireq.dpq.parse(r.URL.RawQuery)
-	if err != nil {
-		debug.AssertNoErr(err)
-		t.writeErr(w, r, err)
-		return
-	}
-	// validates that the request is internal (by a node in the same cluster)
+	// TODO -- FIXME: hasRedirectMarker - here and elsewhere
 	if cmn.Rom.SignVerifyEnabled() && !hasRedirectMarker(nil /*query*/, apireq.dpq) {
 		if ecode, err := t.checkIntraCall(r, false); err != nil {
 			e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
@@ -1391,7 +1377,11 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 		return
 	}
 
-	lom := core.AllocLOM(objName)
+	var (
+		err   error
+		ecode int
+		lom   = core.AllocLOM(objName)
+	)
 	switch {
 	case apireq.dpq.get(apc.QparamProps) != "":
 		ecode, err = t.objHeadV2(r, w.Header(), apireq.dpq, apireq.bck, lom)
