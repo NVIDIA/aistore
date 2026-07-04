@@ -337,7 +337,7 @@ func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	ecode, err := t.putObject(w, r, dpq, lom, true /*t2t*/, config)
+	ecode, err := t.putObject(w, r, dpq, lom, config)
 	core.FreeLOM(lom)
 	dpqFree(dpq)
 

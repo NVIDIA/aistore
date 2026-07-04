@@ -219,6 +219,7 @@ func (dpq *dpq) parse(rawQuery string) error {
 		// Parameters that don't need unescaping
 		case apc.QparamMptUploadID, apc.QparamMptPartNo, apc.QparamFltPresence, apc.QparamBinfoWithOrWithoutRemote,
 			apc.QparamAppendType, apc.QparamETLName, apc.QparamETLTransformArgs,
+			apc.QparamNewCustom,
 			apc.QparamTID:
 			dpq.m[key] = value
 

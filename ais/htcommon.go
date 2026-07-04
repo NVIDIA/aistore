@@ -779,21 +779,6 @@ func _bckFromQ(bckName string, query url.Values, dpq *dpq) *meta.Bck {
 	return &meta.Bck{Name: bckName, Provider: provider, Ns: namespace}
 }
 
-// via query or dpq, whichever is present (compare w/ newBckFromQ)
-func hasRedirectMarker(query url.Values, dpq *dpq) bool {
-	if dpq != nil {
-		debug.Assert(query == nil)
-		if dpq.sys.pid == "" {
-			return false
-		}
-		return dpq.sys.ptime != ""
-	}
-	if query.Get(apc.QparamPID) == "" {
-		return false
-	}
-	return query.Get(apc.QparamUnixTime) != ""
-}
-
 func newBckFromQuname(query url.Values, required bool) (*meta.Bck, error) {
 	uname := query.Get(apc.QparamBckTo)
 	if uname == "" {

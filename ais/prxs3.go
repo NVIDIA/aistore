@@ -812,8 +812,10 @@ func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket st
 	return bck
 }
 
-// either reverse-proxy call _or_ HTTP-redirect to a designated node
-// see also: docs/s3compat.md
+// TODO: [strict sign-verify] s3Redirect is currently unsigned on both paths:
+// - 307: redurl carries no `svgrp` params; must sign (bind: pid, ptime, method, bck/obj, expiry).
+// - XML <Endpoint> strips query by construction (extractEndpoint):
+// - botocore rebuilds from <Endpoint>, dropping params; may require revisiting python/aistore/botocore_patch.
 func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, redurl, bucket string) {
 	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {
 		// [intra-cluster communications]

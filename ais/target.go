@@ -793,7 +793,7 @@ func (t *target) bucketHandler(w http.ResponseWriter, r *http.Request) {
 func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/) // dpq true here and elsewhere - further used in verifyObjVerb()
 		t.httpobjget(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodHead:
@@ -814,7 +814,7 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		apiReqFree(apireq)
 	case http.MethodDelete:
-		apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true)
 		t.httpobjdelete(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodPost:
@@ -822,7 +822,7 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpobjpost(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodPatch:
-		apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true)
 		t.httpobjpatch(w, r, apireq)
 		apiReqFree(apireq)
 	default:
@@ -831,11 +831,96 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// verify signature if auth.intra_control enabled
+// applies to object-level (httpobj*) verbs
+func (t *target) verifyObjVerb(w http.ResponseWriter, r *http.Request, dpq *dpq) bool /*ok*/ {
+	debug.Assert(dpq != nil)
+
+	// 1. unsigned
+	if cmn.IsV50Bridge() || !cmn.Rom.SignVerifyEnabled() {
+		return t._verifyUnsigned(w, r, dpq)
+	}
+
+	// 2, signed redirect
+	if reqIsPub(r) {
+		return t._verifySignedRedirect(w, r, dpq)
+	}
+
+	// 3. signed T2T
+	debug.Assert(reqIsIntraCtrl(r) || reqIsIntraData(r))
+	debug.Assert(!hasRedirectMarker(nil, dpq))
+
+	if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
+		e := fmt.Errorf(fmtErrExpRedirect, t.si, r.Method, r.RemoteAddr, err)
+		t.writeErr(w, r, e, ecode)
+		return false
+	}
+	return true
+}
+
+func (t *target) _verifyUnsigned(w http.ResponseWriter, r *http.Request, dpq *dpq) bool /*ok*/ {
+	if hasRedirectMarker(nil, dpq) {
+		if !reqIsPub(r) {
+			t.writeErrf(w, r, fmtErrExpPubNet, t.si, r.Method, r.RemoteAddr)
+			return false
+		}
+		return true
+	}
+	if reqIsPub(r) {
+		config := cmn.GCO.Get()
+		if config.Auth.Enabled || config.Auth.IntraClusterConfigured() {
+			t.writeErr(w, r, errDirectTargetAccess, http.StatusForbidden)
+			return false
+		}
+		switch r.Method {
+		case http.MethodPut, http.MethodDelete, http.MethodPost, http.MethodPatch:
+			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
+			return false
+		}
+		return true // legacy direct read access (GET, HEAD)
+	}
+	// intra arrival; v5.0 bridge: 4.x senders don't stamp sender headers
+	if cmn.IsV50Bridge() {
+		return true
+	}
+	if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
+		e := fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err)
+		t.writeErr(w, r, e, ecode)
+		return false
+	}
+	return true
+}
+
+func (t *target) _verifySignedRedirect(w http.ResponseWriter, r *http.Request, dpq *dpq) bool /*ok*/ {
+	var (
+		svgrp *svgrp
+		pid   = dpq.sys.pid
+		smap  = t.owner.smap.get()
+	)
+	// target's Smap is never nil; there _may_ be a very narrow startup window
+	// when it's invalid but then we just fail a signed request (unlikely)
+	debug.Assert(smap.isValid())
+
+	if !hasRedirectMarker(nil, dpq) {
+		t.writeErr(w, r, errInvPubRedirect)
+		return false
+	}
+	if dpq.sv.sig != "" {
+		svgrp = &dpq.sv
+	}
+	sv := newVerifier(r, &t.htrun, svgrp)
+	if svgrp != nil || t.svs.strict() {
+		if ecode, err := sv.verify(pid, smap.GetNode(pid), smap); err != nil {
+			t.writeErr(w, r, err, ecode)
+			return false
+		}
+	}
+	return true
+}
+
 //
 // httpobj* handlers
 //
-
-const fmtErrExpectRedirect = "%s: %s(obj) is expected to be redirected (remaddr: %s, err: %v)"
 
 // GET /v1/objects/<bucket-name>/<object-name>
 //
@@ -849,13 +934,10 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	if cmn.Rom.SignVerifyEnabled() && !hasRedirectMarker(nil /*query*/, apireq.dpq) {
-		if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
-			e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
-			t.writeErr(w, r, e, ecode)
-			return
-		}
+	if !t.verifyObjVerb(w, r, apireq.dpq) {
+		return
 	}
+
 	objName := apireq.items[1]
 	if err := cos.ValidateWname(objName); err != nil {
 		t.writeErr(w, r, err)
@@ -1021,10 +1103,8 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	var (
 		config  = cmn.GCO.Get()
 		started = time.Now().UnixNano()
-		t2tput  = isT2TPut(r.Header)
 	)
-	if apireq.dpq.sys.ptime == "" && !t2tput {
-		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
+	if !t.verifyObjVerb(w, r, apireq.dpq) {
 		return
 	}
 
@@ -1127,7 +1207,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 		t.statsT.IncWith(stats.ErrAppendCount, vlabs)
 	default:
-		ecode, err = t.putObject(w, r, dpq, lom, t2tput, config)
+		ecode, err = t.putObject(w, r, dpq, lom, config)
 	}
 	if err != nil {
 		t.FSHC(err, lom.Mountpath(), "") // TODO: removed from the place where happened, fqn missing...
@@ -1136,7 +1216,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 }
 
 // NOTE: lom bucket needs to be initialized before calling this method
-func (t *target) putObject(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM, t2t bool, config *cmn.Config) (ecode int, err error) {
+func (t *target) putObject(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM, config *cmn.Config) (ecode int, err error) {
 	skipVC := lom.IsFeatureSet(feat.SkipVC) || dpq.skipVC
 	if !skipVC {
 		_ = lom.Load(false, false)
@@ -1155,7 +1235,7 @@ func (t *target) putObject(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 		poi.config = config
 		poi.skipVC = skipVC // feat.SkipVC || apc.QparamSkipVC
 		poi.restful = true
-		poi.t2t = t2t
+		poi.t2t = reqIsIntraData(r)
 	}
 	ecode, err = poi.do(w.Header(), r, dpq)
 	freePOI(poi)
@@ -1171,10 +1251,10 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	if !hasRedirectMarker(apireq.query, nil /*dpq*/) {
-		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
+	if !t.verifyObjVerb(w, r, apireq.dpq) {
 		return
 	}
+
 	objName := apireq.items[1]
 	if err := cos.ValidateWname(objName); err != nil {
 		t.writeErr(w, r, err)
@@ -1187,7 +1267,8 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			t.writeErr(w, r, err)
 			return
 		}
-		if ecode, err := t.ups.abort(r, lom, apireq.query.Get(apc.QparamMptUploadID)); err != nil {
+		uploadID := apireq.dpq.get(apc.QparamMptUploadID)
+		if ecode, err := t.ups.abort(r, lom, uploadID); err != nil {
 			t.writeErr(w, r, err, ecode)
 		}
 		return
@@ -1227,8 +1308,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	if t.parseReq(w, r, apireq) != nil {
 		return
 	}
-	if !hasRedirectMarker(nil /*query*/, apireq.dpq) {
-		t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
+	if !t.verifyObjVerb(w, r, apireq.dpq) {
 		return
 	}
 
@@ -1363,14 +1443,10 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	// TODO -- FIXME: hasRedirectMarker - here and elsewhere
-	if cmn.Rom.SignVerifyEnabled() && !hasRedirectMarker(nil /*query*/, apireq.dpq) {
-		if ecode, err := t.checkIntraCall(r, false); err != nil {
-			e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
-			t.writeErr(w, r, e, ecode)
-			return
-		}
+	if !t.verifyObjVerb(w, r, apireq.dpq) {
+		return
 	}
+
 	objName := apireq.items[1]
 	if err := cos.ValidateRname(objName); err != nil {
 		t.writeErr(w, r, err)
@@ -1548,12 +1624,8 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	if cmn.Rom.SignVerifyEnabled() && !hasRedirectMarker(apireq.query, nil /*dpq*/) {
-		if ecode, err := t.checkIntraCall(r, false); err != nil {
-			e := fmt.Errorf(fmtErrExpectRedirect, t.si, r.Method, r.RemoteAddr, err)
-			t.writeErr(w, r, e, ecode)
-			return
-		}
+	if !t.verifyObjVerb(w, r, apireq.dpq) {
+		return
 	}
 
 	msg, err := t.readActionMsg(w, r)
@@ -1589,7 +1661,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		}
 		return
 	}
-	delOldSetNew := cos.IsParseBool(apireq.query.Get(apc.QparamNewCustom))
+	delOldSetNew := cos.IsParseBool(apireq.dpq.get(apc.QparamNewCustom))
 	if delOldSetNew {
 		lom.SetCustomMD(custom)
 	} else {

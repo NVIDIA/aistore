@@ -23,6 +23,10 @@ const (
 
 	fmtNodeNotPresent = "node %s not present in %s"   // compare w/ errNodeNotFound
 	fmtSelfNotPresent = "%s (self) not present in %s" // compare w/ errSelfNotFound
+
+	fmtErrExpRedirect = "%s: %s(obj) is expected to be redirected (remaddr: %s, err: %v)"
+	fmtErrExpPubNet   = "%s: %s(obj) is expected to arrive via pub-net (remaddr: %s)"
+	fmtErrInvIntraObj = "%s: intra-cluster %s(obj) failed sender validation (remaddr: %s, err: %v)"
 )
 
 // error types
@@ -72,6 +76,9 @@ var (
 
 	// sentinel - do not wrap; compare w/ errInvIntraControl
 	errNotIntraControl = errors.New("not an intra-control request")
+
+	errInvPubRedirect     = errors.New("invalid redirect over pub-net - missing query params")
+	errDirectTargetAccess = errors.New("direct target access denied - expecting proxy-redirected request")
 )
 
 // BMD uuid errs

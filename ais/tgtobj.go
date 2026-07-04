@@ -2099,8 +2099,14 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		size  = sargs.objAttrs.Lsize(true)
 	)
 	cmn.ToHeader(sargs.objAttrs, hdr, size)
-	hdr.Set(apc.HdrT2TPutterID, t.SID())
 	hdr.Set(cos.HdrContentType, cos.ContentBinary)
+
+	if cmn.IsV50Bridge() {
+		// pre-5.0 receivers reject T2T PUT without it
+		// ("expected to be redirected or replicated")
+		hdr.Set(apc.HdrT2TPutterID, t.SID())
+	}
+
 	query.Set(apc.QparamOWT, sargs.owt.ToS())
 	if coi.Xact != nil {
 		query.Set(apc.QparamUUID, coi.Xact.ID())

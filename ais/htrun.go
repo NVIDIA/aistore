@@ -142,62 +142,19 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	debug.Assert(len(apireq.items) > apireq.bckIdx)
 	bckName := apireq.items[apireq.bckIdx]
 
-	var (
-		svgrp      *svgrp
-		pid        string
-		redirected bool
-	)
 	if apireq.dpq != nil {
 		if err = apireq.dpq.parse(r.URL.RawQuery); err != nil {
 			h.writeErr(w, r, err)
 			return err
 		}
-		pid = apireq.dpq.sys.pid
-		redirected = hasRedirectMarker(nil, apireq.dpq)
-		if apireq.dpq.sv.sig != "" {
-			svgrp = &apireq.dpq.sv
-		}
 	} else {
 		apireq.query = r.URL.Query()
-		if svgrp, err = svgrpFromQ(apireq.query); err != nil {
-			h.writeErr(w, r, err)
-			return err
-		}
-		pid = apireq.query.Get(apc.QparamPID)
-		redirected = hasRedirectMarker(apireq.query, nil)
 	}
-	if err = h.verifyReq(w, r, svgrp, pid, redirected); err != nil {
-		return err
-	}
+
 	if apireq.bck, err = newBckFromQ(bckName, apireq.query, apireq.dpq); err != nil {
 		h.writeErr(w, r, err)
 	}
 	return err
-}
-
-func (h *htrun) verifyReq(w http.ResponseWriter, r *http.Request, svgrp *svgrp, pid string, redirected bool) error {
-	if cmn.IsV50Bridge() || !cmn.Rom.SignVerifyEnabled() {
-		return nil
-	}
-	debug.Assert(len(h.si.VerifyingKey) == cos.NodeSigningPublicKeySize)
-
-	smap := h.owner.smap.get()
-	if smap == nil || !smap.isValid() {
-		return nil
-	}
-
-	// - a present (query-borne) signature is always verified
-	// - a target-bound redirect-marked unsigned request is rejected once strict
-	// - header-signed control-plane calls are verified in checkIntraCall
-	redirectedDataReq := redirected && h.si.IsTarget()
-	if svgrp != nil || (redirectedDataReq && h.svs.strict()) {
-		sv := newVerifier(r, h, svgrp)
-		if ecode, err := sv.verify(pid, smap.GetNode(pid), smap); err != nil {
-			h.writeErr(w, r, err, ecode)
-			return err
-		}
-	}
-	return nil
 }
 
 func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
@@ -908,7 +865,7 @@ func (h *htrun) verifyIntra(r *http.Request, snode *meta.Snode, sid, sname strin
 	if err != nil {
 		return 0, err
 	}
-	if svgrp == nil && !h.svs.strict() {
+	if svgrp == nil && (!h.svs.strict() || _isPlainHealth(r)) {
 		return 0, nil
 	}
 	sv := newVerifier(r, h, svgrp)
@@ -917,6 +874,13 @@ func (h *htrun) verifyIntra(r *http.Request, snode *meta.Snode, sid, sname strin
 	}
 
 	return 0, nil
+}
+
+// NOTE:
+// even in the strict-verify mode, making an exception for pre-join/startup control plane -
+// namely, health ping
+func _isPlainHealth(r *http.Request) bool {
+	return r.Method == http.MethodGet && r.URL.Path == apc.URLPathHealth.S
 }
 
 func _doResp(args *callArgs, req *http.Request, resp *http.Response, res *callResult) {
@@ -2628,6 +2592,8 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 }
 
 func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
+	debug.Assert(reqIsIntraCtrl(r) || reqIsIntraData(r)) // TODO -- FIXME: consider to enforce and then remove ensureIntraControl() - as redundant
+
 	sid, sname, before, err := h.parseSenderHdrs(r.Header)
 	if err != nil {
 		return 0, err
@@ -2739,8 +2705,9 @@ func (h *htrun) uptime2hdr(hdr http.Header) {
 	hdr.Set(apc.HdrClusterUptime, strconv.FormatInt(now-h.startup.cluster.Load(), 10))
 }
 
-// populate redirect-specific query parameters (PID, timestamp, Smap version)
-// return encoded (raw) query string
+// Tx:
+// - populate redirect-specific query parameters (PID, timestamp, Smap version)
+// - return encoded (raw) query string
 func (h *htrun) qencode(q url.Values, now int64, sv *svReq) string {
 	q.Set(apc.QparamPID, h.SID())
 	q.Set(apc.QparamUnixTime, unixNano2S(now))
@@ -2753,8 +2720,22 @@ func (h *htrun) qencode(q url.Values, now int64, sv *svReq) string {
 	return q.Encode()
 }
 
-// NOTE: not checking vs Smap (yet)
-func isT2TPut(hdr http.Header) bool { return hdr != nil && hdr.Get(apc.HdrT2TPutterID) != "" }
+// Rx:
+// - check redirect-specific query (via url.Values or dpq, whichever is present)
+// - see Tx above
+func hasRedirectMarker(query url.Values, dpq *dpq) bool {
+	if dpq != nil {
+		debug.Assert(query == nil)
+		if dpq.sys.pid == "" {
+			return false
+		}
+		return dpq.sys.ptime != ""
+	}
+	if query.Get(apc.QparamPID) == "" {
+		return false
+	}
+	return query.Get(apc.QparamUnixTime) != ""
+}
 
 func ptLatency(tts int64, ptime, isPrimary string) (dur int64) {
 	pts, err := s2UnixNano(ptime)

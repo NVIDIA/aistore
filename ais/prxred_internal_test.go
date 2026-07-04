@@ -62,16 +62,27 @@ func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 	p.owner.smap = newSmapOwner(config)
 	p.owner.smap.put(smap) // populate the atomic.Pointer so get() works
 
+	// mirror node startup order: svs.init -> keypair -> config-driven toggle
+	p.htrun.svs.init()
+	p.htrun.toggleSignVerify(signVerifyEnabled) // as the cmn.Rom.Set callback would
+
 	return p
 }
 
 func newTestSnode(t *testing.T) *meta.Snode {
 	t.Helper()
 
+	pub, _, err := cos.GenerateNodeSigningKey()
+	if err != nil {
+		t.Fatalf("failed to generate dst keys: %v", err)
+	}
+
 	si := &meta.Snode{}
-	si.Init(testDstID, apc.Target, nil /*verifying key*/)
+	si.Init(testDstID, apc.Target, pub)
+
 	si.PubNet.URL = "http://dst:8080"
 	si.ControlNet.URL = "http://dst:8080"
+
 	return si
 }
 

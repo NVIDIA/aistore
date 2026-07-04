@@ -34,7 +34,7 @@ import (
 // TODO:
 // - keep local (public, private) keypairs in memory-only: regen on restart and advertise via joinCluster
 // - secure target redirected-datapath: redirect-marked (pid+ptime) is not good enough
-// - verify T2T PUT receiver path via checkIntraCall (HdrT2TPutterID is only a marker)
+// - sign s3Redirect (see comment in ais/prxs3.go)
 // -------
 // - replace marker-only bypasses with verified redirect or signed intra-call checks
 // - tests: add TestSignVerifyToggleStress and run it in parallel w/ TestSmoke/prefetch/get-batch

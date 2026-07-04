@@ -168,5 +168,6 @@ func _reqNet(r *http.Request) reqNet {
 	return v
 }
 
-func reqIsIntraCtrl(r *http.Request) bool { return _reqNet(r) == reqNetCtrl }
 func reqIsPub(r *http.Request) bool       { return _reqNet(r) == reqNetPub }
+func reqIsIntraCtrl(r *http.Request) bool { return _reqNet(r) == reqNetCtrl }
+func reqIsIntraData(r *http.Request) bool { return _reqNet(r) == reqNetData }
