@@ -6,6 +6,11 @@ namespace: ais
 resources:
 - ../../../base
 
+images:
+- name: aistorage/aisnode
+  newName: aistorage/aisnode
+  newTag: dev
+
 secretGenerator:
 - name: regcred
   type: kubernetes.io/dockerconfigjson

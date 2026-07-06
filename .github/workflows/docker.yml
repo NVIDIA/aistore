@@ -67,6 +67,12 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
+  python-etl:
+    if: ${{ github.event_name == 'push' }}
+    needs: aisnode
+    uses: ./.github/workflows/test-python-etl.yml
+    secrets: inherit
+
   aisnode-tracing:
     if: ${{ inputs.build_aisnode_image || github.event_name == 'push' }}
     uses: ./.github/workflows/docker-build.yml
