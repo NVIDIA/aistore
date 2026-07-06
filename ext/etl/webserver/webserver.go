@@ -269,32 +269,35 @@ func (base *etlServerBase) handleWebsocketPipeline(conn *websocket.Conn, transfo
 	firstURL, remainingPipeline := parsePipelineURL(pipeline)
 	dresp, err := base.directPut(firstURL, transformed, size, objPath, remainingPipeline, etlArgs)
 	if err != nil {
-		writer, _ := conn.NextWriter(websocket.TextMessage)
-		writer.Write([]byte(err.Error()))
-		writer.Close()
+		if writer, werr := conn.NextWriter(websocket.TextMessage); werr == nil {
+			writer.Write([]byte(err.Error()))
+			writer.Close()
+		}
 		return err
+	}
+	if dresp.Body != nil {
+		defer dresp.Body.Close()
 	}
 
 	if dresp.StatusCode == http.StatusOK {
 		// from other ETL server, forward the content back
-		writer, _ := conn.NextWriter(websocket.BinaryMessage)
-		if dresp.Size > 0 && dresp.Body != nil {
-			if _, err := io.Copy(writer, dresp.Body); err != nil {
-				return err
-			}
-			dresp.Body.Close()
-		}
-		writer.Close()
-	} else {
-		// from target, no content
-		writer, _ := conn.NextWriter(websocket.TextMessage)
-		_, err = writer.Write([]byte("direct put success"))
+		writer, err := conn.NextWriter(websocket.BinaryMessage)
 		if err != nil {
 			return err
 		}
-		writer.Close()
+		defer writer.Close()
+		_, err = io.Copy(writer, dresp.Body)
+		return err
 	}
-	return nil
+
+	// from target, no content
+	writer, err := conn.NextWriter(websocket.TextMessage)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+	_, err = writer.Write([]byte("direct put success"))
+	return err
 }
 
 func (base *etlServerBase) handleDirectPut(w http.ResponseWriter, transformedReader io.ReadCloser, size int64, objPath, directPutURL, etlArgs string) {
@@ -304,11 +307,15 @@ func (base *etlServerBase) handleDirectPut(w http.ResponseWriter, transformedRea
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	w.WriteHeader(dresp.StatusCode)
-	if dresp.Size > 0 && dresp.Body != nil {
+	if dresp.Body != nil {
 		setResponseHeaders(w.Header(), dresp.Size)
-		_, err := io.Copy(w, dresp.Body)
-		if err != nil {
+	}
+	if dresp.DirectPutLength > 0 {
+		w.Header().Set(apc.HdrDirectPutLength, strconv.FormatInt(dresp.DirectPutLength, 10))
+	}
+	w.WriteHeader(dresp.StatusCode)
+	if dresp.Body != nil {
+		if _, err := io.Copy(w, dresp.Body); err != nil {
 			nlog.Errorln("copy error", err)
 		}
 		dresp.Body.Close()
@@ -328,7 +335,7 @@ func (base *etlServerBase) handleETLObjectDownload(w http.ResponseWriter, r *htt
 		return
 	}
 
-	resp, err := wrapHTTPError(base.client.Do(req)) //nolint:bodyclose // closed below
+	resp, err := wrapHTTPError(base.client.Do(req))
 	if err != nil {
 		cmn.WriteErr(w, r, fmt.Errorf("failed to download from %s: %w", link, err))
 		return
@@ -429,12 +436,12 @@ func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size 
 	if remainingPipelineURL != "" {
 		req.Header.Set(apc.HdrNodeURL, remainingPipelineURL)
 	}
-	resp, err := wrapHTTPError(base.client.Do(req)) //nolint:bodyclose // closed below
+	resp, err := wrapHTTPError(base.client.Do(req))
 	if err != nil {
 		return nil, err
 	}
 
-	length := cos.ContentLengthUnknown
+	length := 0
 	directPutLength, err := strconv.Atoi(resp.Header.Get(apc.HdrDirectPutLength))
 	if err == nil {
 		length = directPutLength
@@ -442,6 +449,7 @@ func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size 
 
 	// delivered to target, no content
 	if resp.StatusCode == http.StatusNoContent {
+		resp.Body.Close()
 		return &directPutResponse{
 			StatusCode:      http.StatusNoContent,
 			DirectPutLength: int64(length),
@@ -450,21 +458,28 @@ func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size 
 	}
 
 	if resp.StatusCode == http.StatusOK {
-		// from other ETL server, forward the content back
-		if resp.ContentLength > 0 {
+		// NOTE: keyed on Content-Length, not the read body (contrast Python's
+		// handle_direct_put_response): a chunked 200 (ContentLength == -1) is
+		// always forwarded as content - an empty transform result is a valid
+		// object. Python currently maps any empty 200 body to 204/"delivered";
+		// to be aligned with this behavior in a separate PR.
+
+		// from target, no content
+		if resp.ContentLength == 0 {
+			resp.Body.Close()
 			return &directPutResponse{
-				StatusCode:      resp.StatusCode,
-				Size:            resp.ContentLength,
-				DirectPutLength: 0,
-				Body:            resp.Body,
+				StatusCode:      http.StatusNoContent,
+				Size:            0,
+				DirectPutLength: size,
+				Body:            nil,
 			}, nil
 		}
-		// from target, no content
+		// from other ETL server, forward the content back (ContentLength > 0 or unknown/chunked)
 		return &directPutResponse{
-			StatusCode:      http.StatusNoContent,
-			Size:            0,
-			DirectPutLength: size,
-			Body:            nil,
+			StatusCode:      resp.StatusCode,
+			Size:            resp.ContentLength,
+			DirectPutLength: 0,
+			Body:            resp.Body,
 		}, nil
 	}
 
