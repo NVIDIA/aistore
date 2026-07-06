@@ -8,27 +8,72 @@
 #      "extra.aws.max_pagesize"
 #      "extra.aws.multipart_size"
 
-# AIS configuration for JWT validation -- see authn_config.sh for authN service config
+# AIS auth configuration:
+# - JWT validation -- see authn_config.sh for AuthN service config
+# - intra-cluster request protection
+#
+# NOTE: auth.intra_cluster is **independent of** auth.enabled.
+# The two examples below separately enable one or the other:
+# Example #1: AIS_AUTHN_ENABLED=true AIS_AUTHN_ALLOWED_ISS='https://issuer-one.example, https://issuer-two.example' make deploy
+# Example #2: AIS_AUTH_INTRA_CLUSTER_ENABLED=true make deploy
+#
+make_auth_intra_cluster_conf() {
+        local enabled="${AIS_AUTH_INTRA_CLUSTER_ENABLED:-false}"
+        local ttl="${AIS_AUTH_INTRA_CLUSTER_TTL:-0s}"
+        local nonce_window="${AIS_AUTH_INTRA_CLUSTER_NONCE_WINDOW:-0s}"
+        local rotation_grace="${AIS_AUTH_INTRA_CLUSTER_ROTATION_GRACE:-0s}"
+
+        if [[ "$enabled" == "true" ]]; then
+                nonce_window="${AIS_AUTH_INTRA_CLUSTER_NONCE_WINDOW:-1m}"
+                rotation_grace="${AIS_AUTH_INTRA_CLUSTER_ROTATION_GRACE:-1m}"
+        fi
+
+        echo "{\"enabled\": ${enabled}, \"ttl\": \"${ttl}\", \"nonce_window\": \"${nonce_window}\", \"rotation_grace\": \"${rotation_grace}\"}"
+}
+
 make_auth_conf() {
-	local mode=""
-	if [[ -n "$AIS_AUTHN_SECRET_KEY" ]]; then
-		mode='"signature": {"method": "HMAC"},'
-	elif [[ -n "$AIS_AUTHN_PUBLIC_KEY" ]]; then
-		mode='"signature": {"method": "RSA"},'
+        local mode=""
+        local intra=""
+
+        if [[ -n "$AIS_AUTHN_SECRET_KEY" ]]; then
+                mode='"signature": {"method": "HMAC"},'
+        elif [[ -n "$AIS_AUTHN_PUBLIC_KEY" ]]; then
+                mode='"signature": {"method": "RSA"},'
 	elif [[ -n "$AIS_AUTHN_ALLOWED_ISS" ]]; then
 		local json_arr
-		json_arr=$(echo "$AIS_AUTHN_ALLOWED_ISS" | awk -F',' '{
+		json_arr=$(printf '%s\n' "$AIS_AUTHN_ALLOWED_ISS" | awk -F',' '{
 			printf "["
+			n = 0
 			for (i=1; i<=NF; i++) {
 				gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
+				if ($i == "") continue
+				gsub(/\\/, "\\\\", $i)
+				gsub(/"/, "\\\"", $i)
+				if (n++ > 0) printf ","
 				printf "\"%s\"", $i
-				if (i < NF) printf ","
 			}
 			printf "]"
 		}')
-		mode="\"oidc\": {\"allowed_iss\": ${json_arr}},"
+		if [[ "$json_arr" != "[]" ]]; then
+			mode="\"oidc\": {\"allowed_iss\": ${json_arr}},"
+		fi
 	fi
-	echo "{${mode} \"enabled\": ${AIS_AUTHN_ENABLED:-false}}"
+
+	if [[ "${AIS_AUTHN_ENABLED:-false}" == "true" && \
+	      -z "$AIS_AUTHN_SECRET_KEY" && \
+	      -z "$AIS_AUTHN_PUBLIC_KEY" && \
+	      -z "$AIS_AUTHN_ALLOWED_ISS" ]]; then
+		echo "Warning: AIS_AUTHN_ENABLED=true requires AIS_AUTHN_SECRET_KEY, AIS_AUTHN_PUBLIC_KEY, or AIS_AUTHN_ALLOWED_ISS" >&2
+	fi
+
+        if [[ -n "$AIS_AUTH_INTRA_CLUSTER_ENABLED" || \
+              -n "$AIS_AUTH_INTRA_CLUSTER_TTL" || \
+              -n "$AIS_AUTH_INTRA_CLUSTER_NONCE_WINDOW" || \
+              -n "$AIS_AUTH_INTRA_CLUSTER_ROTATION_GRACE" ]]; then
+                intra="\"intra_cluster\": $(make_auth_intra_cluster_conf),"
+        fi
+
+        echo "{${mode}${intra} \"enabled\": ${AIS_AUTHN_ENABLED:-false}}"
 }
 
 cat > "$AIS_CONF_FILE" <<EOL

@@ -6,6 +6,7 @@ AIStore can scale from a **single Linux machine** to a **rack-scale cluster** or
 * [Quick Start](#quick-start)
 * [Next Steps](#next-steps)
   * [Local Playground](#local-playground)
+  * [Local Playground environment variables](#local-playground-environment-variables)
   * [Make](#make)
   * [System environment variables](#system-environment-variables)
   * [Multiple deployment options](#multiple-deployment-options)
@@ -355,6 +356,59 @@ index e0b467d82..b18361155 100755                                               
  if $AIS_USE_HTTPS; then                                                                                                                         |
    AIS_PRIMARY_URL="https://localhost:$PORT"                                                                                                     |
 ```
+
+#### Local Playground environment variables
+
+The Local Playground deployment scripts generate AIStore configuration from a combination of defaults, interactive prompts, and optional environment variables.
+
+The generated configuration is primarily produced by:
+
+```console
+deploy/dev/local/aisnode_config.sh
+```
+
+Most users do not need to set any of these variables. They are intended for development, testing, CI, and quickly exercising selected configuration paths without editing JSON files by hand.
+
+For example:
+
+```console
+$ AIS_MIRROR_ENABLED=true TAGS="aws gcp debug" make kill clean cli deploy <<< $'3\n3\n4'
+```
+
+or:
+
+```console
+$ AIS_AUTHN_ENABLED=true AIS_AUTHN_SECRET_KEY=secret make kill clean cli authn deploy <<< $'1\n1\n4'
+```
+
+Commonly used variables include:
+
+| Area                            | Variables                                                                                                                                                                                                                                       | Notes                                                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Build/linkage                   | `TAGS`, `MODE`, `AIS_BACKEND_PROVIDERS`                                                                                                                                                                                                         | Select build tags, debug mode, and conditionally linked backend providers.                                                |
+| Authentication                  | `AIS_AUTHN_ENABLED`, `AIS_AUTHN_SECRET_KEY`, `AIS_AUTHN_PUBLIC_KEY`, `AIS_AUTHN_ALLOWED_ISS`                                                                                                                                                    | Configure JWT validation. When `AIS_AUTHN_ENABLED=true`, one of HMAC, RSA, or OIDC issuer configuration must be provided. |
+| Intra-cluster protection        | `AIS_AUTH_INTRA_CLUSTER_ENABLED`, `AIS_AUTH_INTRA_CLUSTER_TTL`, `AIS_AUTH_INTRA_CLUSTER_NONCE_WINDOW`, `AIS_AUTH_INTRA_CLUSTER_ROTATION_GRACE`                                                                                                  | Configure protection for selected intra-cluster requests. This is independent from `AIS_AUTHN_ENABLED`.                   |
+| HTTPS/TLS                       | `AIS_USE_HTTPS`, `AIS_SERVER_CRT`, `AIS_SERVER_KEY`, `AIS_CLIENT_CA_TLS`, `AIS_CLIENT_AUTH_TLS`, `AIS_SKIP_VERIFY_CRT`                                                                                                                          | Enable and configure local HTTPS. For details, see [HTTPS](https.md).                                                     |
+| Network/listeners               | `HOSTNAME_LIST`, `HOSTNAME_LIST_INTRA_CONTROL`, `HOSTNAME_LIST_INTRA_DATA`, `PORT`, `PORT_INTRA_CONTROL`, `PORT_INTRA_DATA`, `AIS_PRIMARY_URL`, `AIS_DISCOVERY_URL`, `AIS_USE_IPv6`                                                             | Configure public, intra-control, and intra-data addresses and ports.                                                      |
+| Local paths                     | `AIS_CONF_DIR`, `AIS_LOG_DIR`, `TEST_FSPATH_ROOT`, `TEST_FSPATH_COUNT`, `AIS_FS_PATHS`                                                                                                                                                          | Configure local config, logs, and mountpath layout.                                                                       |
+| Mirroring and erasure coding    | `AIS_MIRROR_ENABLED`, `AIS_EC_ENABLED`, `AIS_OBJ_SIZE_LIMIT`, `AIS_EC_COMPRESSION`, `AIS_EC_BUNDLE_MULTIPLIER`, `AIS_DATA_SLICES`, `AIS_PARITY_SLICES`                                                                                          | Enable and tune selected redundancy features at deployment time.                                                          |
+| Rebalance, transport, and dSort | `AIS_REBALANCE_COMPRESSION`, `AIS_REBALANCE_BUNDLE_MULTIPLIER`, `AIS_TRANSPORT_IDLE_TEARDOWN`, `AIS_TRANSPORT_QUIESCENT`, `AIS_TRANSPORT_LZ4_BLOCK`, `AIS_TRANSPORT_LZ4_FRAME_CHECKSUM`, `AIS_DSORT_COMPRESSION`, `AIS_DSORT_BUNDLE_MULTIPLIER` | Exercise selected data-movement configuration paths.                                                                      |
+| Space, disk, and logging        | `AIS_SPACE_LOWWM`, `AIS_SPACE_HIGHWM`, `AIS_SPACE_OOS`, `AIS_IOSTAT_TIME_LONG`, `AIS_IOSTAT_TIME_SHORT`, `AIS_LOG_LEVEL`                                                                                                                        | Override selected local thresholds and diagnostics.                                                                       |
+| HTTP client/server behavior     | `HTTP_WRITE_BUFFER_SIZE`, `HTTP_READ_BUFFER_SIZE`, `AIS_HTTP_CHUNKED_TRANSFER`, `SNDRCV_BUF_SIZE`                                                                                                                                               | Tune selected HTTP and socket settings.                                                                                   |
+
+The table above is intentionally not exhaustive. The source of truth is the script itself, and for developers the fastest way to discover the currently supported deployment-time knobs is still:
+
+```console
+$ grep -n '\${[A-Z_][A-Z0-9_]*' deploy/dev/local/aisnode_config.sh
+```
+
+and also:
+
+```console
+$ make help
+```
+
+> There is a separate set of runtime environment variables used by the CLI, SDKs, and deployed AIS processes, such as `AIS_ENDPOINT` and `AIS_AUTHN_TOKEN_FILE`. See [System environment variables](#system-environment-variables) below.
 
 ### Make
 
