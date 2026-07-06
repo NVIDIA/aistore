@@ -36,6 +36,7 @@ func wrapHTTPError(resp *http.Response, err error) (*http.Response, error) {
 			return resp, errors.New(resp.Status)
 		}
 		b, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			return resp, err
 		}

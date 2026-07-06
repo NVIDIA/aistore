@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -265,6 +266,133 @@ func TestETLServerDirectPutForwardsArgs(t *testing.T) {
 	})
 }
 
+func TestETLServerDirectPutResponseForwarding(t *testing.T) {
+	var (
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+
+		svr = &etlServerBase{
+			aisTargetURL: host + secretPrefix,
+			endpoint:     host + ":" + port,
+			client:       &http.Client{},
+			ETLServer:    &EchoServer{},
+		}
+
+		directPutPath = "ais@#test/obj"
+	)
+
+	t.Run("204 forwards Direct-Put-Length", func(t *testing.T) {
+		const directPutLength = 1234
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			w.Header().Set(apc.HdrDirectPutLength, strconv.Itoa(directPutLength))
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer directPutTargetServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		got := resp.Header.Get(apc.HdrDirectPutLength)
+		tassert.Fatalf(t, got == strconv.Itoa(directPutLength), "expected Direct-Put-Length %d, got %q", directPutLength, got)
+	})
+
+	t.Run("200 forward preserves headers", func(t *testing.T) {
+		nextStageContent := []byte("next stage content")
+		nextStageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			w.WriteHeader(http.StatusOK)
+			w.Write(nextStageContent)
+		}))
+		defer nextStageServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(nextStageServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		result, _ := io.ReadAll(resp.Body)
+
+		tassert.Fatalf(t, http.StatusOK == resp.StatusCode, "expected status code 200, got %d", resp.StatusCode)
+		tassert.Fatalf(t, bytes.Equal(result, nextStageContent), "expected body %s, got %s", nextStageContent, result)
+		tassert.Fatalf(t, resp.Header.Get(cos.HdrContentLength) == strconv.Itoa(len(nextStageContent)),
+			"expected Content-Length %d, got %q", len(nextStageContent), resp.Header.Get(cos.HdrContentLength))
+		tassert.Fatalf(t, resp.Header.Get(cos.HdrContentType) == GetContentType,
+			"expected Content-Type %q, got %q", GetContentType, resp.Header.Get(cos.HdrContentType))
+	})
+
+	t.Run("200 chunked body not dropped", func(t *testing.T) {
+		chunk1 := []byte("first chunk ")
+		chunk2 := []byte("second chunk")
+		nextStageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			w.WriteHeader(http.StatusOK)
+			w.Write(chunk1)
+			w.(http.Flusher).Flush() // force chunked transfer so ContentLength == -1 on the client side
+			w.Write(chunk2)
+		}))
+		defer nextStageServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(nextStageServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		result, _ := io.ReadAll(resp.Body)
+
+		tassert.Fatalf(t, http.StatusOK == resp.StatusCode, "expected status code 200, got %d", resp.StatusCode)
+		expected := append(append([]byte{}, chunk1...), chunk2...)
+		tassert.Fatalf(t, bytes.Equal(result, expected), "expected body %s, got %s", expected, result)
+	})
+
+	t.Run("200 empty body maps to 204", func(t *testing.T) {
+		nextStageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			w.WriteHeader(http.StatusOK) // no body; client sees ContentLength == 0
+		}))
+		defer nextStageServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(nextStageServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		got := resp.Header.Get(apc.HdrDirectPutLength)
+		tassert.Fatalf(t, got == strconv.Itoa(len(content)), "expected Direct-Put-Length %d, got %q", len(content), got)
+	})
+}
+
 func TestEchoServerGetHandler(t *testing.T) {
 	var (
 		secretPrefix = "/v1/_object/some_secret"
@@ -465,6 +593,62 @@ func TestWebSocketHandler(t *testing.T) {
 	err = conn3.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "bye"))
 	tassert.CheckFatal(t, err)
 	tassert.CheckFatal(t, conn3.Close())
+}
+
+func TestWebSocketDirectPutChunkedForward(t *testing.T) {
+	var (
+		originalData = []byte("hello")
+		directPutURL = "/ais/etl_dst/obj"
+
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+
+		chunk1 = []byte("first chunk ")
+		chunk2 = []byte("second chunk")
+	)
+
+	// Next pipeline stage: returns 200 with an unknown-length (chunked) body.
+	nextStageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		tassert.Fatalf(t, bytes.Equal(data, originalData), "direct PUT got unexpected data")
+		w.WriteHeader(http.StatusOK)
+		w.Write(chunk1)
+		w.(http.Flusher).Flush() // force chunked transfer so ContentLength == -1 on the client side
+		w.Write(chunk2)
+	}))
+	defer nextStageServer.Close()
+
+	wsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ws" {
+			base := &etlServerBase{
+				aisTargetURL: host + secretPrefix,
+				endpoint:     host + ":" + port,
+				client:       &http.Client{},
+				ETLServer:    &EchoServer{},
+			}
+			base.websocketHandler(w, r)
+		}
+	}))
+	defer wsSrv.Close()
+
+	u := "ws" + strings.TrimPrefix(wsSrv.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(u, nil) //nolint:bodyclose // closed below
+	tassert.Fatalf(t, err == nil, "WebSocket connection failed: %v", err)
+
+	err = conn.WriteJSON(etl.WebsocketCtrlMsg{Pipeline: nextStageServer.URL + directPutURL})
+	tassert.Fatalf(t, err == nil, "Write JSON failed")
+	err = conn.WriteMessage(websocket.BinaryMessage, originalData)
+	tassert.Fatalf(t, err == nil, "Write message failed")
+
+	mt, msg, err := conn.ReadMessage()
+	tassert.CheckError(t, err)
+	err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "bye"))
+	tassert.CheckError(t, err)
+	tassert.CheckError(t, conn.Close())
+	tassert.Fatalf(t, mt == websocket.BinaryMessage, "Expected BinaryMessage")
+	expected := append(append([]byte{}, chunk1...), chunk2...)
+	tassert.Fatalf(t, bytes.Equal(msg, expected), "expected content %s, got %s", expected, msg)
 }
 
 func createFQNFile(t *testing.T) (string, []byte) {
