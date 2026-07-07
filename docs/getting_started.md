@@ -3,9 +3,11 @@ AIStore can scale from a **single Linux machine** to a **rack-scale cluster** or
 ## Contents
 * [Deployment Considerations](#deployment-considerations)
 * [Prerequisites](#prerequisites)
+* [Choose an onboarding path](#choose-an-onboarding-path)
 * [Quick Start](#quick-start)
 * [Next Steps](#next-steps)
   * [Local Playground](#local-playground)
+  * [Minimal Compose deployment](#minimal-compose-deployment)
   * [Local Playground environment variables](#local-playground-environment-variables)
   * [Make](#make)
   * [System environment variables](#system-environment-variables)
@@ -84,11 +86,22 @@ $ find . -name "*darwin*"
 
 Benchmarking and stress-testing is done on Linux only - another reason to consider Linux (and only Linux) for production deployments.
 
+## Choose an onboarding path
+
+Use the path that matches what you want to do first:
+
+| Goal | Start here | Notes |
+| --- | --- | --- |
+| Try AIS locally from source | [Local Playground](#local-playground) | Most frequently used local path for first-time evaluation and development. Uses the top-level `Makefile`, `deploy/dev/local`, and optionally `scripts/clean_deploy.sh`. |
+| Develop with containerized AIS nodes | [Docker development scripts](/deploy/dev/docker/README.md) | Uses `deploy/dev/docker` and the top-level `make deploy-docker` target. |
+| Exercise AIS in local Kubernetes | [Local K8s deployment](/deploy/dev/k8s/README.md) | Uses `deploy/dev/k8s` for KinD or Minikube based development and testing. |
+| Plan a production Kubernetes deployment | [AIS/K8s repository](https://github.com/NVIDIA/ais-k8s) | Operator, Ansible playbooks, Helm charts, and monitoring live in the dedicated Kubernetes repository. |
+| Run a small container smoke test | [Minimal Compose deployment](#minimal-compose-deployment) | Validate this path against the current Compose README before relying on it; it is not the primary maintained onboarding path. |
+| Connect applications or secure a cluster | [Python SDK](https://docs.nvidia.com/aistore/python/aistore/sdk) and [AuthN](/docs/authn.md) | Use these after you have an AIS endpoint, for example `AIS_ENDPOINT=http://localhost:51080` or `AIS_ENDPOINT=http://localhost:8080`. |
+
 ## Quick Start
 
-This section provides the fastest way to get an AIStore cluster running on your local machine. For more detailed steps, see the [Local Playground](#local-playground) section.
-
-> **Docker shortcut**: If you already have Docker or Podman, you can skip everything below and get a running cluster in seconds with `make up` - see [Minimal Compose Deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/compose/README.md).
+This section provides the fastest maintained path to get an AIStore cluster running on your local machine. For more detailed steps, see the [Local Playground](#local-playground) section.
 
 ### Install Go (if not already installed)
 
@@ -321,6 +334,30 @@ See also:
 > [cluster and node configuration](configuration.md);
 > [supported deployments: summary table and links](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md).
 
+### Minimal Compose deployment
+
+For a compact container smoke test with one gateway and one target, you can use the Compose setup in `deploy/prod/docker/compose`. Treat this as a small validation path, not the primary onboarding path; check the current Compose README and run the smoke test before relying on it.
+
+```console
+$ cd deploy/prod/docker/compose
+$ make up
+$ export AIS_ENDPOINT="http://localhost:51080"
+$ ais show cluster
+```
+
+Useful follow-up commands from the same directory:
+
+```console
+$ make status
+$ make logs
+$ make down
+$ make clean
+```
+
+Use `make up-build` instead of `make up` when you need to build the image from the current source tree. The Compose Makefile auto-detects Podman or Docker Compose; override it with `COMPOSE="docker compose"` if needed.
+
+This path is intentionally small. For more nodes, development-only Docker scripts, or multiple containerized clusters, use [`deploy/dev/docker`](/deploy/dev/docker/README.md). For Kubernetes, use [`deploy/dev/k8s`](/deploy/dev/k8s/README.md) locally or the production [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository.
+
 #### Running Local Playground remotely
 
 AIStore (product and solution) is fully based on HTTP(S) utilizing the protocol both externally (to support both frontend interfaces and communications with remote backends) and internally, for [intra-cluster streaming](/transport).
@@ -536,7 +573,7 @@ For production deployments, we developed the [AIS/K8s Operator](https://github.c
 
 #### Minimal container-based Deployment
 
-This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/compose/README.md) for details.
+This option has the unmatched convenience of requiring an absolute minimum time and resources. See [Minimal Compose deployment](#minimal-compose-deployment) above and the Compose [README](/deploy/prod/docker/compose/README.md) for details.
 
 #### Testing your cluster
 
