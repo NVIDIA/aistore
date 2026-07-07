@@ -1,0 +1,2 @@
+ais auth rm user mallory
+rm -f `cat /tmp/e2e.revoke.rand` /tmp/e2e.revoke.rand

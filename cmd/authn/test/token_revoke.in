@@ -1,0 +1,16 @@
+// RUN authn
+echo "/tmp/auth-token.$RANDOM.rvk" > /tmp/e2e.revoke.rand
+tf=`cat /tmp/e2e.revoke.rand`; ais auth login $AIS_AUTHN_SU_NAME -p $AIS_AUTHN_SU_PASS -f $tf // IGNORE
+
+# active admin token authorizes AuthN administration
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.revoke.rand` ais auth show user // IGNORE
+
+# revoke the token (a.k.a. log out)
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.revoke.rand` ais auth rm token -y --file `cat /tmp/e2e.revoke.rand` // IGNORE
+
+# replaying the revoked token must be rejected by AuthN itself
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.revoke.rand` ais auth show user // FAIL "revoked"
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.revoke.rand` ais auth show config // FAIL "revoked"
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.revoke.rand` ais auth add user mallory -p badpass // FAIL "revoked"
+
+rm -f `cat /tmp/e2e.revoke.rand` /tmp/e2e.revoke.rand

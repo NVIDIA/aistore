@@ -102,6 +102,44 @@ func TestHMACSecretUpdate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
+// A revoked token must fail request authorization while remaining
+// signature-valid for the revoked-list bookkeeping
+func TestTokenRevocation(t *testing.T) {
+	const adminPass = "test-pass"
+
+	t.Setenv(env.AisAuthAdminPassword, adminPass)
+	conf := &authn.Config{
+		Server: authn.ServerConf{
+			Secret: "test-secret",
+			Expire: cos.Duration(time.Hour),
+		},
+	}
+	testMgr := newMgrWithConf(t, conf)
+
+	token, _, err := testMgr.issueToken(adminUserID, adminPass, &authn.LoginMsg{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, token != "", "expected non-empty token")
+
+	// Token must validate before revocation
+	_, err = testMgr.validateToken(t.Context(), token)
+	tassert.CheckFatal(t, err)
+
+	_, err = testMgr.revokeToken(token)
+	tassert.CheckFatal(t, err)
+
+	// Revoked token must no longer authorize requests
+	_, err = testMgr.validateToken(t.Context(), token)
+	tassert.Fatalf(t, errors.Is(err, tok.ErrTokenRevoked), "expected revoked-token error, got %v", err)
+
+	// Its signature must remain valid, so the revoked-list cleanup keeps it
+	_, err = testMgr.validateTokenSignature(t.Context(), token)
+	tassert.CheckFatal(t, err)
+	revoked, _, err := testMgr.generateRevokedTokenList(t.Context())
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(revoked) == 1 && revoked[0] == token,
+		"expected the revoked token to stay on the revoked list, got %v", revoked)
+}
+
 func TestBuildClaims(t *testing.T) {
 	const (
 		adminPass   = "admin-pass"

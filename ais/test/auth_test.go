@@ -128,6 +128,11 @@ func TestAuth(t *testing.T) {
 			bp.Token = tok.Token
 			_, err = api.HeadBucket(bp, bck, true)
 			expectStatus(t, err, http.StatusUnauthorized)
+
+			revokedBP := authBP
+			revokedBP.Token = tok.Token
+			_, err = authn.GetUser(revokedBP, uid)
+			expectStatus(t, err, http.StatusUnauthorized)
 		})
 	})
 }

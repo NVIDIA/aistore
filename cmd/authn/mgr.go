@@ -97,7 +97,8 @@ func (m *mgr) updateSignerBundle(signer tok.Signer) {
 	m.sb.Store(&signerBundle{signer: signer, parser: parser})
 }
 
-func (m *mgr) validateToken(ctx context.Context, token string) (*tok.AISClaims, error) {
+// Signature and claims only — does not consult the revoked-tokens list.
+func (m *mgr) validateTokenSignature(ctx context.Context, token string) (*tok.AISClaims, error) {
 	return m.getParser().ValidateToken(ctx, token)
 }
 
@@ -677,6 +678,31 @@ func (m *mgr) getAllClusterIDs() ([]string, error) {
 	return ids, nil
 }
 
+// Validates signature and that the token is not in the revoked list.
+func (m *mgr) validateToken(ctx context.Context, token string) (*tok.AISClaims, error) {
+	revoked, err := m.isTokenRevoked(token)
+	if err != nil {
+		return nil, err
+	}
+	if revoked {
+		return nil, fmt.Errorf("%w: %w", tok.ErrInvalidToken, tok.ErrTokenRevoked)
+	}
+	return m.validateTokenSignature(ctx, token)
+}
+
+// Reports whether the token was revoked.
+// Fails closed: a DB error other than "not found" denies authorization.
+func (m *mgr) isTokenRevoked(token string) (bool, error) {
+	_, _, err := m.db.GetString(revokedCollection, token)
+	if err == nil {
+		return true, nil
+	}
+	if cos.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
 // Add the given token to the revoked list within AuthN
 // In the background, attempt to delete the token from all clusters
 func (m *mgr) revokeToken(token string) (int, error) {
@@ -701,7 +727,7 @@ func (m *mgr) generateRevokedTokenList(ctx context.Context) ([]string, int, erro
 
 	revokeList := make([]string, 0, len(tokens))
 	for _, token := range tokens {
-		_, err = m.validateToken(ctx, token)
+		_, err = m.validateTokenSignature(ctx, token)
 		if err != nil {
 			nlog.Infof("removing invalid token %q due to validation error %v", token, err)
 			_, err = m.db.Delete(revokedCollection, token)
