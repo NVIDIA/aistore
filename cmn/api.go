@@ -217,9 +217,11 @@ type (
 		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"` // +gen:optional
 		// Provider-specific extras (S3, GCS, Azure, OCI, HTTP).
 		Extra *ExtraToSet `json:"extra,omitempty"` // +gen:optional
-		// Skip safety validations that would otherwise reject the
-		// update (e.g., changing EC settings while a bucket is
-		// non-empty).
+
+		// Skip safety validations that would otherwise reject the update.
+		// Currently, the flag is used exclusively for EC, for the following two distinct use cases:
+		// - change ec.objsize_limit while EC remains enabled;
+		// - accept not-enough-targets warning when enabling EC (ie., when D + P + 1 > num-targets).
 		Force bool `json:"force,omitempty" copy:"skip" list:"omit"` // +gen:optional
 	}
 

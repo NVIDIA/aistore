@@ -1783,6 +1783,10 @@ func (c *ECConf) ValidateAsProps(arg ...any) (err error) {
 
 	err = fmt.Errorf("%v: EC configuration (D = %d, P = %d) requires at least %d targets (have %d)",
 		ErrNotEnoughTargets, c.DataSlices, c.ParitySlices, required, targetCnt)
+
+	// TODO: this is the only existing ErrWarning usage that exists for subsequent override with BpropsToSet.Force
+	// (when enabling EC on a bucket); consider replacing ErrWarning with an explicit EC helper and keeping
+	// ValidateAsProps strict
 	if c.ObjSizeLimit == ObjSizeToAlwaysReplicate || c.ParitySlices > targetCnt {
 		return
 	}

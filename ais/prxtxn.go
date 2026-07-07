@@ -1112,20 +1112,23 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 			return nil, err
 		}
 	}
-	if bprops.EC.Enabled && nprops.EC.Enabled {
-		sameSlices := bprops.EC.DataSlices == nprops.EC.DataSlices && bprops.EC.ParitySlices == nprops.EC.ParitySlices
-		sameLimit := bprops.EC.ObjSizeLimit == nprops.EC.ObjSizeLimit
-		if !sameSlices || (!sameLimit && !propsToUpdate.Force) {
-			err := fmt.Errorf("%s: once enabled, EC configuration can be only disabled but cannot change", p.si)
-			return nil, err
+
+	oldEC, newEC := &bprops.EC, &nprops.EC
+	if oldEC.Enabled && newEC.Enabled {
+		if oldEC.DataSlices != newEC.DataSlices || oldEC.ParitySlices != newEC.ParitySlices {
+			return nil, fmt.Errorf("%s: once enabled, EC data/parity slices cannot change (old D=%d, P=%d; new D=%d, P=%d)",
+				bck.Cname(""), oldEC.DataSlices, oldEC.ParitySlices, newEC.DataSlices, newEC.ParitySlices)
 		}
-	} else if nprops.EC.Enabled {
-		if nprops.EC.DataSlices == 0 {
-			nprops.EC.DataSlices = 1
+		if oldEC.ObjSizeLimit != newEC.ObjSizeLimit {
+			what := fmt.Sprintf("%s: EC object-size limit (%d => %d) while EC is enabled", bck.Cname(""), oldEC.ObjSizeLimit, newEC.ObjSizeLimit)
+			if !propsToUpdate.Force {
+				return nil, errors.New("cannot change " + what + " (tip: consider using '--force')")
+			}
+			nlog.Warningln("changing", what, "- forced")
 		}
-		if nprops.EC.ParitySlices == 0 {
-			nprops.EC.ParitySlices = 1
-		}
+	} else if newEC.Enabled {
+		newEC.DataSlices = cos.NonZero(newEC.DataSlices, 1)
+		newEC.ParitySlices = cos.NonZero(newEC.ParitySlices, 1)
 	}
 
 	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {

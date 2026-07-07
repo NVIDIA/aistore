@@ -302,7 +302,6 @@ var (
 		),
 		cmdSetBprops: {
 			forceFlag,
-			dontHeadRemoteFlag,
 		},
 		cmdResetBprops: {},
 
@@ -845,17 +844,14 @@ func setPropsHandler(c *cli.Context) error {
 		currBprops *cmn.Bprops
 		nvs        cos.StrKVs       // user specified
 		newBprops  *cmn.BpropsToSet // API structure to set
-		bck, err   = parseBckURI(c, c.Args().Get(0), false)
 	)
+
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
 		return err
 	}
-
-	dontHeadRemote := flagIsSet(c, dontHeadRemoteFlag)
-	if !dontHeadRemote {
-		if currBprops, err = headBucket(bck, false /* don't add */); err != nil {
-			return err
-		}
+	if currBprops, err = headBucket(bck, false /* don't add */); err != nil {
+		return err
 	}
 	newBprops, nvs, err = _parseBprops(c)
 	if err == nil {
