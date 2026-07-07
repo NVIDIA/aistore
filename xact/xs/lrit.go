@@ -7,15 +7,18 @@ package xs
 
 import (
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
@@ -274,7 +277,9 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 		smap = nil // no need
 	}
 
-	page := make(cmn.LsoEntries, 0, iniPageCap)
+	var (
+		page = make(cmn.LsoEntries, 0, iniPageCap)
+	)
 	for !r.done() {
 		var (
 			err   error
@@ -288,14 +293,14 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 		if bremote {
 			lst = &cmn.LsoRes{Entries: page}
 			// TODO: this is the last remaining place where we list remote bucket by each and every target
-			ecode, err = npg.bp.ListObjects(r.bck, lsmsg, lst)
+			ecode, err = r.lsoPage(npg.bp, lsmsg, lst)
 		} else {
 			npg.page.Entries = page
 			err = npg.nextPageA()
 			lst = &npg.page
 		}
 		if err != nil {
-			nlog.Errorln(core.T.String(), "[", err, "ecode", ecode, "]")
+			nlog.Errorln(r.bck.Cname(""), "failed list-objects: [", err, ecode, "]")
 			return err
 		}
 
@@ -329,6 +334,45 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	}
 
 	return nil
+}
+
+// list remote page: self-throttle and retry on 429 (see also: ais/rlbackend)
+const (
+	remPageRetriesMax = 6
+	remPageSleepIni   = 2 * time.Second
+)
+
+func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+	ecode, err = bp.ListObjects(r.bck, lsmsg, lst)
+	if err == nil || !cmn.IsErrTooManyRequests(err) || r.parent.IsAborted() {
+		return ecode, err
+	}
+
+	var (
+		retries int
+		total   time.Duration
+		now     = mono.NanoTime()
+		sleep   = remPageSleepIni
+	)
+	for retries = 1; retries < remPageRetriesMax; retries++ {
+		sleep = hk.Jitter(sleep+sleep/2, now+int64(sleep))
+		time.Sleep(sleep)
+		total += sleep
+
+		ecode, err = bp.ListObjects(r.bck, lsmsg, lst)
+		if err == nil {
+			if cmn.Rom.V(4, cos.ModXs) {
+				nlog.Warningln(r.bck.Cname(""), "list-objects: recovered after", retries, "retries, waited", total)
+			}
+			return 0, nil
+		}
+		if !cmn.IsErrTooManyRequests(err) || r.parent.IsAborted() {
+			return ecode, err
+		}
+	}
+	nlog.Warningln(r.bck.Cname(""), "list-objects: giving up after", retries-1, "retries, waited", total, "[", err, ecode, "]")
+
+	return ecode, err
 }
 
 func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {
