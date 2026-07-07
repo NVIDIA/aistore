@@ -18,4 +18,6 @@ nonrec/file.txt
 ^prefetch-objects\[.*\]: prefetch "nested/" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
 nested/deep/file.txt
 ^\[DRY RUN\] with no modifications to the cluster$
-^PREFETCH ais://@remais/.*$ 
+^PREFETCH ais://@remais/.*$
+^prefetch-objects\[.*\]: \[single_obj\.txt\] prefetch from ais://@remais/.* \.\.\.$
+Done.

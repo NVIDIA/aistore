@@ -454,11 +454,11 @@ func etlInspectDone(c *cli.Context, xid, kind, etlName string, bckFrom cmn.Bck) 
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	fmt.Fprintln(c.App.Writer, text+" ...")
-	if err := waitXact(&xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}); err != nil {
-		return err
-	}
+	// print the failed-objects hint in both cases - it matters the most
+	// when the (validating) job finishes with errors
+	err := waitXact(&xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout})
 	fmt.Fprintln(c.App.Writer, etlInspectErrorsMsg(etlName, xid))
-	return nil
+	return err
 }
 
 func etlInspectErrorsMsg(etlName, xid string) string {

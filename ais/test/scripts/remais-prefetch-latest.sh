@@ -133,9 +133,13 @@ cnt4=$(ais show performance counters --regex REMOTE-DEL -H | awk '{sum+=$2;}END{
 ais bucket props set $bucket versioning.synchronize=true
 
 ## '--yes' ditto
+## note: 'prefetch --wait' now reports job errors; expecting it to fail here
+## as the job deletes the in-cluster replica and records the remotely-deleted
+## object as an error (the object is named explicitly in the list)
 echo "12. run 'prefetch --latest --yes' one last time, and make sure the object \"disappears\""
 ais prefetch "$bucket/lorem-duis" --latest --wait --yes 2>/dev/null
-[[ $? == 0 ]] || { echo "FAIL: expecting 'prefetch --wait' to return Ok, got $?"; exit 1; }
+[[ $? != 0 ]] || { echo "FAIL: expecting 'prefetch --wait' to fail on remotely-deleted object"; exit 1; }
+ais ls "$bucket/lorem-duis" --cached -H 1>/dev/null 2>&1 && { echo "FAIL: expecting 'lorem-duis' to disappear"; exit 1; }
 
 echo "13. 'remote-deleted' counter must increment"
 cnt5=$(ais show performance counters --regex REMOTE-DEL -H | awk '{sum+=$2;}END{print sum;}')

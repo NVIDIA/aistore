@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/urfave/cli"
@@ -29,6 +30,8 @@ import (
 const (
 	fmtXactFailed    = "Failed to %s (%q => %q)\n"
 	fmtXactSucceeded = "Done.\n"
+
+	maxDisplayJobErrs = 3 // checkXactErrs: max per-target errors to show inline (with `ais show job` for the rest)
 )
 
 type (
@@ -84,8 +87,18 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 	return ""
 }
 
-// Wait for the caller's started xaction to run until finished _or_ idle (NOTE),
-// warn if aborted
+// Wait for the caller's started xaction to run until finished _or_ idle;
+// having waited, report job errors and abort, if any (see checkXactErrs).
+// Waiting logic, by kind:
+//   - blob-download: no notification listener (see ais/prxclu) - poll target snaps
+//   - kinds that IdlesBeforeFinishing: wait for idle via target snaps
+//   - all other kinds: wait via IC (api.WaitForXactionIC)
+//
+// TODO:
+//   - simplify: replace the latter two calls with a single api.WaitForXaction; note:
+//     the latter discards IC status - kind-only (no job ID) waits lose abort reporting
+//   - not covered wrt finishing-with-errors: download and dsort (own wait handlers),
+//     blob-download (ditto), and the `--progress` (cpr) flows
 func waitXact(args *xact.ArgsMsg) error {
 	debug.Assert(args.ID == "" || xact.IsValidUUID(args.ID))
 
@@ -103,17 +116,76 @@ func waitXact(args *xact.ArgsMsg) error {
 	}
 
 	if xact.IdlesBeforeFinishing(kind) {
-		return api.WaitForSnapsIdle(apiBP, args)
+		err := api.WaitForSnapsIdle(apiBP, args)
+		return checkXactErrs(args, err)
 	}
 	// otherwise, IC
 	status, err := api.WaitForXactionIC(apiBP, args)
+	if err == nil && status.IsAborted() {
+		return fmt.Errorf("%s aborted", xact.Cname(xname, status.UUID))
+	}
+	err = V(err)
+	return checkXactErrs(args, err)
+}
+
+// report the way the job ended: per-target errors (first few), abort, or nothing;
+// `waitErr` == not-found is ok (job finished, no longer tracked) - proceed to check snaps;
+// return any other `waitErr` (e.g., timeout) as is
+func checkXactErrs(xargs *xact.ArgsMsg, waitErr error) error {
+	if waitErr != nil && !cmn.IsErrHTTPNotFound(waitErr) {
+		return waitErr
+	}
+	if xargs.ID == "" {
+		// cannot reliably attribute errors without the job ID
+		return nil
+	}
+	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return V(err)
 	}
-	if status.IsAborted() {
-		return fmt.Errorf("%s aborted", xact.Cname(xname, status.UUID))
+
+	// 1. collect per-target errors
+	var errs []string // nil on the common (no errors) path
+	for tid, snaps := range xs {
+		for _, snap := range snaps {
+			if snap.ID != xargs.ID || snap.Err == "" {
+				continue
+			}
+			e := snap.Err
+			if tname := meta.Tname(tid); !strings.HasPrefix(e, tname) {
+				e = tname + ": " + e
+			}
+			errs = append(errs, e)
+		}
 	}
-	return nil
+
+	// 2. check for job abort or unknown job
+	if len(errs) == 0 {
+		aborted, _, notstarted := xs.AggregateState(xargs.ID)
+		switch {
+		case aborted:
+			_, xname := xact.GetKindName(xargs.Kind)
+			return fmt.Errorf("%s aborted", xact.Cname(xname, xargs.ID))
+		case notstarted && waitErr != nil:
+			return waitErr // job unknown (or not tracked anymore)
+		}
+		return nil
+	}
+	sort.Strings(errs) // (deterministic order)
+
+	// 3. report the errors
+	_, xname := xact.GetKindName(xargs.Kind)
+	var sb strings.Builder
+	sb.WriteString(xact.Cname(xname, xargs.ID) + " finished with errors:\n")
+	num := min(len(errs), maxDisplayJobErrs)
+	for i := range num {
+		sb.WriteString("    " + errs[i] + "\n")
+	}
+	if len(errs) > num {
+		sb.WriteString("    ...\n")
+	}
+	fmt.Fprintf(&sb, "Use '%s %s %s %s' to view all errors.", cliName, commandShow, commandJob, xargs.ID)
+	return errors.New(sb.String())
 }
 
 // (x-blob doesn't do nofif listener - see ais/prxclu xstart)

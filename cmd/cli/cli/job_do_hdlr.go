@@ -1498,10 +1498,10 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 
 	msg := formatXactMsg(xargs.ID, xname, bck)
 	fmt.Fprintln(c.App.Writer, "Waiting for "+msg+" ...")
-	err := waitXact(&xargs)
-	if err == nil {
-		actionDone(c, "Done.")
+	if err := waitXact(&xargs); err != nil {
+		return err
 	}
+	actionDone(c, "Done.")
 	return nil
 }
 
@@ -1540,6 +1540,9 @@ func waitJobWithRefresh(c *cli.Context, xargs *xact.ArgsMsg, xname string, bck c
 		}
 	}
 
+	if err := checkXactErrs(xargs, nil); err != nil {
+		return err
+	}
 	actionDone(c, "Done.")
 	return nil
 }

@@ -14,3 +14,9 @@ ais ls ais://$BUCKET_1 --prefix prune | grep Listed
 
 ais cp "ais://$BUCKET_1/prune/shard-{001..500}.tar" ais://$BUCKET_2 --sync --wait // IGNORE
 ais ls ais://$BUCKET_2 --prefix prune | grep Listed
+
+# TCO error reporting: copy explicitly named nonexistent objects;
+# the job records per-object errors - the blocking wait must report them
+ais cp ais://$BUCKET_1 ais://$BUCKET_2 --list "no-such-1,no-such-2" --non-verbose // SAVE_RESULT
+sleep 2 // IGNORE
+ais job wait $RESULT // FAIL "finished with errors"
