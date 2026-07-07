@@ -1,0 +1,46 @@
+name: Docs Quality Report
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docs-quality-report.yml'
+      - 'CONTRIBUTING.md'
+      - 'README.md'
+      - 'docs/**'
+      - 'fern/**'
+      - 'python/README.md'
+      - 'scripts/docs_quality_report.py'
+      - 'scripts/fern/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Generate docs quality report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - name: Generate report
+        run: python3 scripts/docs_quality_report.py
+
+      - name: Add report to job summary
+        run: cat docs-quality-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: docs-quality-report
+          path: |
+            docs-quality-report.md
+            docs-quality-report.json
