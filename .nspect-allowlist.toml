@@ -1,4 +1,8 @@
+version = "1.0.0"
+
+[oss]
 [oss.excluded]
+
 [[oss.excluded.directories]]
 paths = ['docs/']
 comment = 'Documentation directory, not part of core solution'
