@@ -35,6 +35,7 @@ const (
 type (
 	ConfManager struct {
 		filePath    string
+		logDir      string
 		conf        atomic.Pointer[authn.Config]
 		mu          sync.Mutex
 		externalURL *url.URL
@@ -140,7 +141,8 @@ func (cm *ConfManager) Init(cfgPathArg string) {
 }
 
 func (cm *ConfManager) initLogs() error {
-	logDir := cos.GetEnvOrDefault(env.AisAuthLogDir, cm.conf.Load().Log.Dir)
+	cfg := cm.conf.Load()
+	logDir := cos.GetEnvOrDefault(env.AisAuthLogDir, cfg.Log.Dir)
 	// If not provided, use a subdirectory in the same directory as the config
 	if logDir == "" {
 		logDir = filepath.Join(filepath.Dir(cm.filePath), defaultLogDir)
@@ -148,7 +150,9 @@ func (cm *ConfManager) initLogs() error {
 	if err := cos.CreateDir(logDir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", logDir, err)
 	}
+	cm.logDir = logDir
 	nlog.SetPre(logDir, "auth")
+	nlog.SetPost(false /*to stderr*/, int64(cfg.Log.MaxSize))
 	nlog.Infoln("Logging to", logDir)
 	return nil
 }
@@ -192,6 +196,12 @@ func (cm *ConfManager) saveToDisk() error {
 
 func (cm *ConfManager) GetLogFlushInterval() time.Duration {
 	return cm.conf.Load().Log.FlushInterval.D()
+}
+
+func (cm *ConfManager) GetLogDir() string { return cm.logDir }
+
+func (cm *ConfManager) GetLogMaxTotal() int64 {
+	return int64(cm.conf.Load().Log.MaxTotal)
 }
 
 func (cm *ConfManager) getLocalHost() *url.URL {

@@ -26,11 +26,15 @@ const (
 	minTimeout          = cos.Duration(time.Second)
 	minLogFlushInterval = cos.Duration(10 * time.Second)
 	maxLogLevel         = 5
+	minLogMaxSize       = cos.SizeIEC(cos.KiB)
+	maxLogMaxSize       = cos.SizeIEC(cos.GiB)
 )
 
 // Defaults
 const (
 	defaultLogFlushInterval = cos.Duration(30 * time.Second)
+	defaultLogMaxSize       = cos.SizeIEC(4 * cos.MiB)
+	defaultLogMaxTotal      = cos.SizeIEC(64 * cos.MiB)
 	defaultTimeout          = cos.Duration(30 * time.Second)
 	defaultPort             = 52001
 	defaultTokenExpiration  = cos.Duration(24 * time.Hour)
@@ -55,6 +59,8 @@ type (
 	LogConf struct {
 		Dir           string       `json:"dir"`
 		Level         string       `json:"level"`
+		MaxSize       cos.SizeIEC  `json:"max_size"`
+		MaxTotal      cos.SizeIEC  `json:"max_total"`
 		FlushInterval cos.Duration `json:"flush_interval"`
 	}
 	NetConf struct {
@@ -203,6 +209,18 @@ func (c *LogConf) Validate() error {
 	}
 	if c.FlushInterval < minLogFlushInterval {
 		return fmt.Errorf("invalid log.flush_interval=%s (expected >= %s)", c.FlushInterval, minLogFlushInterval)
+	}
+	if c.MaxSize == 0 {
+		c.MaxSize = defaultLogMaxSize
+	}
+	if c.MaxSize < minLogMaxSize || c.MaxSize > maxLogMaxSize {
+		return fmt.Errorf("invalid log.max_size=%s (expected range [%s, %s])", c.MaxSize, minLogMaxSize, maxLogMaxSize)
+	}
+	if c.MaxTotal == 0 {
+		c.MaxTotal = defaultLogMaxTotal
+	}
+	if c.MaxSize > c.MaxTotal/2 {
+		return fmt.Errorf("invalid log.max_total=%s, must be >= 2*(log.max_size=%s)", c.MaxTotal, c.MaxSize)
 	}
 	return nil
 }

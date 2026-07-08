@@ -1,7 +1,9 @@
 {
     "log": {
         "dir": "/var/log/ais/authn/",
-        "level": "3"
+        "level": "3",
+        "max_size": "4mb",
+        "max_total": "64mb"
     },
     "net": {
         "http": {

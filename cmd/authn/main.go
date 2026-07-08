@@ -24,15 +24,25 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
+const logGCInterval = time.Hour
+
 var (
 	build     string
 	buildtime string
 )
 
-func logFlush(interval time.Duration) {
+// logMaintenance flushes logs and periodically caps total on-disk log size.
+func logMaintenance(cm *config.ConfManager) {
+	flush := time.NewTicker(cm.GetLogFlushInterval())
+	gc := time.NewTicker(logGCInterval)
+	logDir, maxLogTotal := cm.GetLogDir(), cm.GetLogMaxTotal()
 	for {
-		time.Sleep(interval)
-		nlog.Flush(nlog.ActNone)
+		select {
+		case <-flush.C:
+			nlog.Flush(nlog.ActNone)
+		case <-gc.C:
+			cos.GCLogs(logDir, maxLogTotal, false /*verbose*/)
+		}
 	}
 }
 
@@ -51,6 +61,7 @@ func main() {
 	installSignalHandler()
 	cm := config.NewConfManager()
 	cm.Init(*cfgPath)
+
 	driver := kvdb.CreateDriver(cm)
 	// Initialize the interface used to sign tokens and validate key signatures
 	signer := initSigner(cm, driver)
@@ -63,7 +74,7 @@ func main() {
 
 	// Flush all init logs immediately
 	nlog.Flush(nlog.ActNone)
-	go logFlush(cm.GetLogFlushInterval())
+	go logMaintenance(cm)
 
 	srv := newServer(mgr)
 	err = srv.Run()

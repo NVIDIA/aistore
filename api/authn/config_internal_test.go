@@ -43,6 +43,13 @@ func TestConfigValidateValid(t *testing.T) {
 	tassert.CheckFatal(t, c.Validate())
 	tassert.Errorf(t, c.Log.FlushInterval == defaultLogFlushInterval, "expected FlushInterval default, got %v", c.Log.FlushInterval)
 
+	// zero MaxSize/MaxTotal get defaults
+	c = validConfig()
+	c.Log.MaxSize, c.Log.MaxTotal = 0, 0
+	tassert.CheckFatal(t, c.Validate())
+	tassert.Errorf(t, c.Log.MaxSize == defaultLogMaxSize, "expected MaxSize default, got %v", c.Log.MaxSize)
+	tassert.Errorf(t, c.Log.MaxTotal == defaultLogMaxTotal, "expected MaxTotal default, got %v", c.Log.MaxTotal)
+
 	// zero SigningKey.Bits gets default
 	c = validConfig()
 	c.Server.SigningKey.Bits = 0
@@ -155,6 +162,9 @@ func TestConfigValidateInvalid(t *testing.T) {
 		{"log level too low", func(c *Config) { c.Log.Level = "-1" }},
 		{"log level too high", func(c *Config) { c.Log.Level = "6" }},
 		{"flush interval too short", func(c *Config) { c.Log.FlushInterval = minLogFlushInterval - 1 }},
+		{"log max_size too small", func(c *Config) { c.Log.MaxSize = minLogMaxSize - 1 }},
+		{"log max_size too large", func(c *Config) { c.Log.MaxSize = maxLogMaxSize + 1 }},
+		{"log max_total below 2x max_size", func(c *Config) { c.Log.MaxSize = 8 * cos.MiB; c.Log.MaxTotal = 12 * cos.MiB }},
 		{"external URL no scheme", func(c *Config) { c.Net.ExternalURL = "example.com:8443" }},
 		{"external URL bad scheme", func(c *Config) { c.Net.ExternalURL = "ftp://example.com" }},
 		{"external URL no host", func(c *Config) { c.Net.ExternalURL = "http://" }},
