@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"net/http"
 	"sync"
 	"time"
 
@@ -344,7 +345,7 @@ const (
 
 func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	ecode, err = bp.ListObjects(r.bck, lsmsg, lst)
-	if err == nil || !cmn.IsErrTooManyRequests(err) || r.parent.IsAborted() {
+	if err == nil || !tooManyReqs(ecode, err) || r.parent.IsAborted() {
 		return ecode, err
 	}
 
@@ -366,13 +367,17 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 			}
 			return 0, nil
 		}
-		if !cmn.IsErrTooManyRequests(err) || r.parent.IsAborted() {
+		if !tooManyReqs(ecode, err) || r.parent.IsAborted() {
 			return ecode, err
 		}
 	}
 	nlog.Warningln(r.bck.Cname(""), "list-objects: giving up after", retries-1, "retries, waited", total, "[", err, ecode, "]")
 
 	return ecode, err
+}
+
+func tooManyReqs(ecode int, err error) bool {
+	return ecode == http.StatusTooManyRequests || cmn.IsErrTooManyRequests(err)
 }
 
 func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {
