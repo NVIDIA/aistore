@@ -261,9 +261,9 @@ func TestMergeCluACLS(t *testing.T) {
 	tests := []struct {
 		title    string
 		cluFlt   string
-		toACLs   cluACLList
-		fromACLs cluACLList
-		resACLs  cluACLList
+		toACLs   []*authn.CluACL
+		fromACLs []*authn.CluACL
+		resACLs  []*authn.CluACL
 		union    bool
 	}{
 		{
@@ -499,7 +499,7 @@ func TestMergeCluACLS(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		res := mergeClusterACLs(test.toACLs, test.fromACLs, test.cluFlt, test.union)
+		res := authn.MergeClusterACLs(test.toACLs, test.fromACLs, test.cluFlt, test.union)
 		if len(res) != len(test.resACLs) {
 			t.Errorf("%s[filter: %s]: length %d != %d", test.title, test.cluFlt, len(res), len(test.resACLs))
 			continue
@@ -524,9 +524,9 @@ func TestMergeBckACLS(t *testing.T) {
 	tests := []struct {
 		title    string
 		cluFlt   string
-		toACLs   bckACLList
-		fromACLs bckACLList
-		resACLs  bckACLList
+		toACLs   []*authn.BckACL
+		fromACLs []*authn.BckACL
+		resACLs  []*authn.BckACL
 		union    bool
 	}{
 		{
@@ -735,7 +735,7 @@ func TestMergeBckACLS(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		res := mergeBckACLs(test.toACLs, test.fromACLs, test.cluFlt, test.union)
+		res := authn.MergeBckACLs(test.toACLs, test.fromACLs, test.cluFlt, test.union)
 		if len(res) != len(test.resACLs) {
 			t.Errorf("%s[filter: %s]: length %d != %d", test.title, test.cluFlt, len(res), len(test.resACLs))
 			continue
