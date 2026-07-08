@@ -2721,20 +2721,13 @@ func (h *htrun) qencode(q url.Values, now int64, sv *svReq) string {
 }
 
 // Rx:
-// - check redirect-specific query (via url.Values or dpq, whichever is present)
-// - see Tx above
-func hasRedirectMarker(query url.Values, dpq *dpq) bool {
-	if dpq != nil {
-		debug.Assert(query == nil)
-		if dpq.sys.pid == "" {
-			return false
-		}
-		return dpq.sys.ptime != ""
-	}
-	if query.Get(apc.QparamPID) == "" {
+// - check query params that indicate redirect
+// - see qencode Tx above
+func hasRedirectMarker(dpq *dpq) bool {
+	if dpq.sys.pid == "" {
 		return false
 	}
-	return query.Get(apc.QparamUnixTime) != ""
+	return dpq.sys.ptime != ""
 }
 
 func ptLatency(tts int64, ptime, isPrimary string) (dur int64) {

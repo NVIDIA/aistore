@@ -848,7 +848,7 @@ func (t *target) verifyObjVerb(w http.ResponseWriter, r *http.Request, dpq *dpq)
 
 	// 3. signed T2T
 	debug.Assert(reqIsIntraCtrl(r) || reqIsIntraData(r))
-	debug.Assert(!hasRedirectMarker(nil, dpq))
+	debug.Assert(!hasRedirectMarker(dpq))
 
 	if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
 		e := fmt.Errorf(fmtErrExpRedirect, t.si, r.Method, r.RemoteAddr, err)
@@ -859,7 +859,7 @@ func (t *target) verifyObjVerb(w http.ResponseWriter, r *http.Request, dpq *dpq)
 }
 
 func (t *target) _verifyUnsigned(w http.ResponseWriter, r *http.Request, dpq *dpq) bool /*ok*/ {
-	if hasRedirectMarker(nil, dpq) {
+	if hasRedirectMarker(dpq) {
 		if !reqIsPub(r) {
 			t.writeErrf(w, r, fmtErrExpPubNet, t.si, r.Method, r.RemoteAddr)
 			return false
@@ -903,7 +903,7 @@ func (t *target) _verifySignedRedirect(w http.ResponseWriter, r *http.Request, d
 	// when it's invalid but then we just fail a signed request (unlikely)
 	debug.Assert(smap.isValid())
 
-	if !hasRedirectMarker(nil, dpq) {
+	if !hasRedirectMarker(dpq) {
 		t.writeErr(w, r, errDirectTargetAccess, http.StatusUnauthorized)
 		return false
 	}
