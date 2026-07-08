@@ -567,7 +567,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	bck := apireq.bck
 	switch msg.Action {
 	case apc.ActEvictRemoteBck:
-		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
+		keepMD := cos.IsParseBool(apireq.dpq.get(apc.QparamKeepRemote))
 		if !keepMD {
 			t.writeErrAct(w, r, apc.ActEvictRemoteBck) // (instead, expecting updated BMD from primary)
 			return
@@ -577,7 +577,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		var (
 			wg  = &sync.WaitGroup{}
 			nlp = newBckNLP(bck)
-			xid = apireq.query.Get(apc.QparamUUID)
+			xid = apireq.dpq.sys.uuid // apc.QparamUUID
 		)
 		nlp.Lock()
 		defer nlp.Unlock()
@@ -787,7 +787,7 @@ func (t *target) _bckhead(w http.ResponseWriter, r *http.Request, apireq *apiReq
 		nlog.Warningf("%s: bucket %s is already in BMD; ignoring creation-time props (use bucket props API or CLI to update)", t, bck)
 	}
 	if cmn.Rom.V(5, cos.ModAIS) {
-		pid := apireq.query.Get(apc.QparamPID)
+		pid := apireq.dpq.sys.pid // apc.QparamPID
 		nlog.Infoln(r.Method, bck, "<=", pid)
 	}
 
@@ -795,7 +795,7 @@ func (t *target) _bckhead(w http.ResponseWriter, r *http.Request, apireq *apiReq
 
 	ctx := context.Background()
 	if bck.IsHT() {
-		originalURL := apireq.query.Get(apc.QparamOrigURL)
+		originalURL := apireq.dpq.sys.origURL // apc.QparamOrigURL
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
 			err := cmn.NewErrRemBckNotFound(bck.Bucket())
@@ -813,7 +813,7 @@ func (t *target) _bckhead(w http.ResponseWriter, r *http.Request, apireq *apiReq
 				t.writeErr(w, r, err, code, Silent)
 			} else {
 				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", bck, err, code)
-				t._erris(w, r, err, code, cos.IsParseBool(apireq.query.Get(apc.QparamSilent)))
+				t._erris(w, r, err, code, apireq.dpq.silent) // apc.QparamSilent
 			}
 			return
 		}

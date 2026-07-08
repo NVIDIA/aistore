@@ -773,15 +773,15 @@ func (t *target) bucketHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpbckget(w, r, dpq)
 		dpqFree(dpq)
 	case http.MethodDelete:
-		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, true)
 		t.httpbckdelete(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodPost:
-		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, true)
 		t.httpbckpost(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodHead:
-		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, true)
 		t.httpbckhead(w, r, apireq)
 		apiReqFree(apireq)
 	default:
