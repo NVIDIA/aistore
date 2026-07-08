@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -31,6 +32,9 @@ var (
 	_ cos.ReadOpenCloser = (*SGL)(nil)
 	_ cos.ReadOpenCloser = (*Reader)(nil)
 	_ io.ReadSeekCloser  = (*Reader)(nil)
+
+	_ cos.ReadOpenCloser = (*GuardReader)(nil)
+	_ io.ReadSeekCloser  = (*GuardReader)(nil)
 )
 
 type (
@@ -417,6 +421,70 @@ func (*Reader) Close() error                        { return nil }
 func (r *Reader) Read(b []byte) (n int, err error) {
 	n, r.roff, err = r.z._readAt(b, r.roff)
 	return n, err
+}
+
+/////////////////
+// GuardReader //
+/////////////////
+
+// GuardReader is a Reader to use when the underlying SGL may get freed while
+// readers are still around.
+//
+// Reads hold the guard shared; Free takes it exclusively - waiting out any
+// read in flight - marks, and frees the SGL; subsequent reads return io.EOF.
+type (
+	guard struct {
+		sync.RWMutex
+		freed bool // only ever accessed under the lock
+	}
+	GuardReader struct {
+		Reader
+		g *guard // shared by all Open-ed views (each view has its own read offset)
+	}
+)
+
+func NewGuardReader(z *SGL) *GuardReader { return &GuardReader{Reader{z, 0}, &guard{}} }
+
+func (r *GuardReader) Open() (cos.ReadOpenCloser, error) {
+	return &GuardReader{Reader{r.z, 0}, r.g}, nil
+}
+
+func (r *GuardReader) Read(b []byte) (n int, err error) {
+	r.g.RLock()
+	if r.g.freed {
+		r.g.RUnlock()
+		return 0, io.EOF
+	}
+	n, err = r.Reader.Read(b)
+	r.g.RUnlock()
+	return n, err
+}
+
+// guarded as well: SeekEnd reads SGL state
+func (r *GuardReader) Seek(from int64, whence int) (offset int64, err error) {
+	r.g.RLock()
+	if r.g.freed {
+		r.g.RUnlock()
+		return 0, fs.ErrClosed
+	}
+	offset, err = r.Reader.Seek(from, whence)
+	r.g.RUnlock()
+	return offset, err
+}
+
+// Close is a no-op: closing a view does not free the SGL - Free does
+func (*GuardReader) Close() error { return nil }
+
+// Free the underlying SGL; idempotent
+// (frees after Unlock - never holds two locks)
+func (r *GuardReader) Free() {
+	r.g.Lock()
+	freed := r.g.freed
+	r.g.freed = true
+	r.g.Unlock()
+	if !freed {
+		r.z.Free()
+	}
 }
 
 func (r *Reader) Seek(from int64, whence int) (offset int64, err error) {

@@ -358,16 +358,17 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		sgl := t.gmm.NewSGL(rsize)
 		mw.Append(sgl)
 		expectedSize, err = io.Copy(mw, reader)
+		// NOTE: memsys reader wrapper required:
+		// - Azure: seekable (io.ReadSeekCloser) for SDK's seek-based retry
+		// - remote AIS: retriable (cos.ReadOpenCloser) for DoWithRetry (reader.Open() on retry)
+		// - guarded: the transport may still be reading the body when PutMptPart returns
+		rdr := memsys.NewGuardReader(sgl)
 		if err == nil {
-			// NOTE: memsys.Reader wrapper required:
-			// - Azure: seekable (io.ReadSeekCloser) for SDK's seek-based retry
-			// - Remote AIS: retriable (cos.ReadOpenCloser) for DoWithRetry (reader.Open() on retry)
-			rdr := memsys.NewReader(sgl)
 			remoteStart := mono.NanoTime()
 			etag, ecode, err = backend.PutMptPart(lom, rdr, args.req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
-		sgl.Free()
+		rdr.Free() // not sgl.Free
 	default:
 		// high memory pressure
 		time.Sleep(cos.PollSleepLong) // throttle
@@ -383,13 +384,13 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		sgl := t.gmm.NewSGL(rsize)
 		mw.Append(sgl)
 		expectedSize, err = io.Copy(mw, reader)
+		rdr := memsys.NewGuardReader(sgl)
 		if err == nil {
-			rdr := memsys.NewReader(sgl)
 			remoteStart := mono.NanoTime()
 			etag, ecode, err = backend.PutMptPart(lom, rdr, args.req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
-		sgl.Free()
+		rdr.Free() // not sgl.Free (ditto)
 	}
 
 	// Release streaming checksum lock
