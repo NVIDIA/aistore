@@ -357,7 +357,13 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 	)
 	for retries = 1; retries < remPageRetriesMax; retries++ {
 		sleep = hk.Jitter(sleep+sleep/2, now+int64(sleep))
-		time.Sleep(sleep)
+		timer := time.NewTimer(sleep)
+		select {
+		case <-timer.C:
+		case <-r.parent.ChanAbort():
+			timer.Stop()
+			return ecode, err
+		}
 		total += sleep
 
 		ecode, err = bp.ListObjects(r.bck, lsmsg, lst)
