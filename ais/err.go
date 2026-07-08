@@ -77,8 +77,7 @@ var (
 	// sentinel - do not wrap; compare w/ errInvIntraControl
 	errNotIntraControl = errors.New("not an intra-control request")
 
-	errInvPubRedirect     = errors.New("invalid redirect over pub-net - missing query params")
-	errDirectTargetAccess = errors.New("direct target access denied - expecting proxy-redirected request")
+	errDirectTargetAccess = errors.New("direct target access denied") // expecting regular redirect
 )
 
 // BMD uuid errs

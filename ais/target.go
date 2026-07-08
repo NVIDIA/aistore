@@ -868,6 +868,8 @@ func (t *target) _verifyUnsigned(w http.ResponseWriter, r *http.Request, dpq *dp
 	}
 	if reqIsPub(r) {
 		config := cmn.GCO.Get()
+		// Starting with v5.0, direct target access is rejected when either AuthN
+		// or intra-cluster request signing is configured: both require proxy mediation.
 		if config.Auth.Enabled || config.Auth.IntraClusterConfigured() {
 			t.writeErr(w, r, errDirectTargetAccess, http.StatusForbidden)
 			return false
@@ -902,14 +904,14 @@ func (t *target) _verifySignedRedirect(w http.ResponseWriter, r *http.Request, d
 	debug.Assert(smap.isValid())
 
 	if !hasRedirectMarker(nil, dpq) {
-		t.writeErr(w, r, errInvPubRedirect)
+		t.writeErr(w, r, errDirectTargetAccess, http.StatusUnauthorized)
 		return false
 	}
 	if dpq.sv.sig != "" {
 		svgrp = &dpq.sv
 	}
-	sv := newVerifier(r, &t.htrun, svgrp)
 	if svgrp != nil || t.svs.strict() {
+		sv := newVerifier(r, &t.htrun, svgrp)
 		if ecode, err := sv.verify(pid, smap.GetNode(pid), smap); err != nil {
 			t.writeErr(w, r, err, ecode)
 			return false

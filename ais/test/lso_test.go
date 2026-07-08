@@ -936,6 +936,11 @@ func TestLsoLocalGetLocation(t *testing.T) {
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		smap       = tools.GetClusterMap(t, proxyURL)
+
+		// Starting v5.0, target locations are not directly accessible when
+		// AuthN or intra-cluster signing requires proxy mediation.
+		config                = tools.GetClusterConfig(t)
+		directAccessForbidden = config.Auth.Enabled || config.Auth.IntraClusterConfigured()
 	)
 	if testing.Short() {
 		m.num = 100
@@ -972,6 +977,11 @@ func TestLsoLocalGetLocation(t *testing.T) {
 		baseParams := tools.BaseAPIParams(url)
 
 		oah, err := api.GetObject(baseParams, m.bck, e.Name, nil)
+		if directAccessForbidden {
+			tassert.Fatalf(t, err != nil, "expected direct access to fail when (auth.enabled=%t, intra_cluster.enabled=%t)",
+				config.Auth.Enabled, config.Auth.IntraClusterConfigured())
+			continue
+		}
 		tassert.CheckFatal(t, err)
 		if uint64(oah.Size()) != m.fileSize {
 			t.Errorf("Expected filesize: %d, actual filesize: %d\n", m.fileSize, oah.Size())
@@ -1029,6 +1039,10 @@ func TestLsoCloudGetLocation(t *testing.T) {
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		smap       = tools.GetClusterMap(t, proxyURL)
+
+		// starting v5.0
+		config                = tools.GetClusterConfig(t)
+		directAccessForbidden = config.Auth.Enabled || config.Auth.IntraClusterConfigured()
 	)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
@@ -1061,6 +1075,11 @@ func TestLsoCloudGetLocation(t *testing.T) {
 		baseParams := tools.BaseAPIParams(url)
 
 		oah, err := api.GetObject(baseParams, bck, e.Name, nil)
+		if directAccessForbidden {
+			tassert.Fatalf(t, err != nil, "expected direct access to fail when (auth.enabled=%t, intra_cluster.enabled=%t)",
+				config.Auth.Enabled, config.Auth.IntraClusterConfigured())
+			continue
+		}
 		tassert.CheckFatal(t, err)
 		if uint64(oah.Size()) != m.fileSize {
 			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", m.fileSize, oah.Size())
