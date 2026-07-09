@@ -276,6 +276,7 @@ func (m *mgr) addRole(info *authn.Role) (int, error) {
 	if info.IsAdmin {
 		return http.StatusForbidden, fmt.Errorf("only built-in roles can have %q permissions", adminUserID)
 	}
+	sanitizeRoleACLs(info)
 
 	m.authzMu.Lock()
 	defer m.authzMu.Unlock()
@@ -353,6 +354,12 @@ func (m *mgr) roleList() ([]*authn.Role, int, error) {
 		roles = append(roles, role)
 	}
 	return roles, http.StatusOK, nil
+}
+
+// Drop nil entries from role ACLs
+func sanitizeRoleACLs(role *authn.Role) {
+	role.ClusterACLs = slices.DeleteFunc(role.ClusterACLs, func(acl *authn.CluACL) bool { return acl == nil })
+	role.BucketACLs = slices.DeleteFunc(role.BucketACLs, func(acl *authn.BckACL) bool { return acl == nil })
 }
 
 // Creates predefined roles for newly-added clusters

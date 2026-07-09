@@ -497,6 +497,33 @@ func TestMergeCluACLS(t *testing.T) {
 				},
 			},
 		},
+		{
+			title: "Drop nil entries",
+			union: true,
+			toACLs: []*authn.CluACL{
+				nil,
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 0b0100,
+				},
+			},
+			fromACLs: []*authn.CluACL{
+				nil,
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 0b0010,
+				},
+			},
+			resACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 0b0110,
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		res := authn.MergeClusterACLs(test.toACLs, test.fromACLs, test.cluFlt, test.union)
@@ -721,6 +748,30 @@ func TestMergeBckACLS(t *testing.T) {
 				},
 			},
 			fromACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 0b0010,
+				},
+			},
+			resACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 0b0110,
+				},
+			},
+		},
+		{
+			title: "Drop nil entries",
+			union: true,
+			toACLs: []*authn.BckACL{
+				nil,
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 0b0100,
+				},
+			},
+			fromACLs: []*authn.BckACL{
+				nil,
 				{
 					Bck:    newBck("bck", "ais", "1234"),
 					Access: 0b0010,

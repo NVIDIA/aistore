@@ -48,6 +48,15 @@ func TestMergeClusterACLsFilter(t *testing.T) {
 	}
 }
 
+func TestMergeClusterACLsNilEntries(t *testing.T) {
+	to := []*authn.CluACL{nil, {ID: "c1", Access: apc.AccessAttrs(0b0100)}}
+	from := []*authn.CluACL{nil, {ID: "c1", Access: apc.AccessAttrs(0b0010)}}
+	got := authn.MergeClusterACLs(to, from, "", true)
+	if len(got) != 1 || got[0] == nil || got[0].Access != 0b0110 {
+		t.Fatalf("nil entries: want [c1(0b0110)], got %v", got)
+	}
+}
+
 func TestMergeBckACLsUnion(t *testing.T) {
 	bck := cmn.Bck{Name: "b", Provider: "ais"}
 	to := []*authn.BckACL{{Bck: bck, Access: apc.AccessAttrs(0b0100)}}
@@ -72,5 +81,15 @@ func TestMergeBckACLsFilter(t *testing.T) {
 	got := authn.MergeBckACLs(to, from, "c1", false)
 	if len(got) != 1 || got[0].Bck.Name != "b1" {
 		t.Fatalf("filter: want [b1], got %v", got)
+	}
+}
+
+func TestMergeBckACLsNilEntries(t *testing.T) {
+	bck := cmn.Bck{Name: "b", Provider: "ais"}
+	to := []*authn.BckACL{nil, {Bck: bck, Access: apc.AccessAttrs(0b0100)}}
+	from := []*authn.BckACL{nil, {Bck: bck, Access: apc.AccessAttrs(0b0010)}}
+	got := authn.MergeBckACLs(to, from, "", true)
+	if len(got) != 1 || got[0] == nil || got[0].Access != 0b0110 {
+		t.Fatalf("nil entries: want [b(0b0110)], got %v", got)
 	}
 }

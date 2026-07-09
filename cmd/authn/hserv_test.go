@@ -111,3 +111,28 @@ func TestHttpSrvDelete(t *testing.T) {
 			"expected %d, got %d", http.StatusNotFound, w.Code)
 	})
 }
+
+func TestHttpRoleGetSkipsNilACLs(t *testing.T) {
+	srv, adminToken := newTestHserv(t)
+
+	const (
+		roleName = "nil-acl-role"
+		cluID    = "nil-acl-cluster"
+		cluAlias = "nil-acl-alias"
+	)
+	if _, err := srv.mgr.db.Set(clustersCollection, cluID, &authn.CluACL{ID: cluID, Alias: cluAlias}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.mgr.db.Set(rolesCollection, roleName, &authn.Role{
+		Name:        roleName,
+		ClusterACLs: []*authn.CluACL{nil, {ID: cluID, Access: apc.AccessRO}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, apc.URLPathRoles.Join(roleName), http.NoBody)
+	req.Header.Set(apc.HdrAuthorization, apc.AuthenticationTypeBearer+" "+adminToken)
+	w := httptest.NewRecorder()
+	srv.roleHandler(w, req)
+	tassert.Errorf(t, w.Code == http.StatusOK, "expected %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+}

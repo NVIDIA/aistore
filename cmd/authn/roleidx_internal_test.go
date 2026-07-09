@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -578,6 +579,59 @@ func TestPropagateRoleToUsers(t *testing.T) {
 	roleUsers, err := testMgr.loadRoleUsers(roleName)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, slices.Contains(roleUsers, userName), "expected %q in role index for %q", userName, roleName)
+}
+
+func TestRoleACLsDropNilEntries(t *testing.T) {
+	const adminPass = "admin-pass"
+	t.Setenv(env.AisAuthAdminPassword, adminPass)
+	testMgr := newMgrWithConf(t, &authn.Config{
+		Server: authn.ServerConf{Secret: "test-secret", Expire: cos.Duration(time.Hour)},
+	})
+
+	const (
+		createRole = "nil-acl-create-role"
+		updateRole = "nil-acl-update-role"
+		clusterID  = "nil-acl-cluster"
+	)
+	bck := cmn.Bck{Name: "bck", Provider: apc.AIS, Ns: cmn.Ns{UUID: clusterID}}
+
+	if _, err := testMgr.addRole(&authn.Role{
+		Name:        createRole,
+		ClusterACLs: []*authn.CluACL{nil, {ID: clusterID, Access: apc.AccessRO}},
+		BucketACLs:  []*authn.BckACL{nil, {Bck: bck, Access: apc.AccessRO}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rInfo, _, err := testMgr.lookupRole(createRole)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(rInfo.ClusterACLs) == 1 && rInfo.ClusterACLs[0] != nil,
+		"expected addRole to drop nil cluster ACLs, got %v", rInfo.ClusterACLs)
+	tassert.Errorf(t, len(rInfo.BucketACLs) == 1 && rInfo.BucketACLs[0] != nil,
+		"expected addRole to drop nil bucket ACLs, got %v", rInfo.BucketACLs)
+
+	if _, err := testMgr.db.Set(rolesCollection, updateRole, &authn.Role{
+		Name:        updateRole,
+		ClusterACLs: []*authn.CluACL{nil, {ID: clusterID, Access: apc.AccessRO}},
+		BucketACLs:  []*authn.BckACL{nil, {Bck: bck, Access: apc.AccessRO}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testMgr.updateRole(updateRole, &authn.Role{
+		ClusterACLs: []*authn.CluACL{nil, {ID: clusterID, Access: apc.AccessRW}},
+		BucketACLs:  []*authn.BckACL{nil, {Bck: bck, Access: apc.AccessRW}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rInfo, _, err = testMgr.lookupRole(updateRole)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(rInfo.ClusterACLs) == 1 && rInfo.ClusterACLs[0] != nil,
+		"expected updateRole to drop nil cluster ACLs, got %v", rInfo.ClusterACLs)
+	tassert.Fatalf(t, len(rInfo.BucketACLs) == 1 && rInfo.BucketACLs[0] != nil,
+		"expected updateRole to drop nil bucket ACLs, got %v", rInfo.BucketACLs)
+	tassert.Errorf(t, rInfo.ClusterACLs[0].Access == apc.AccessRW,
+		"expected cluster ACL access update, got %s", rInfo.ClusterACLs[0].Access)
+	tassert.Errorf(t, rInfo.BucketACLs[0].Access == apc.AccessRW,
+		"expected bucket ACL access update, got %s", rInfo.BucketACLs[0].Access)
 }
 
 func TestUpdateRoleBestEffortPartialPropagationFailure(t *testing.T) {

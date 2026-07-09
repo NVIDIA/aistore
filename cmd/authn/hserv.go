@@ -520,6 +520,9 @@ func (h *hserv) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, clu := range role.ClusterACLs {
+		if clu == nil {
+			continue
+		}
 		if cInfo, ok := clus[clu.ID]; ok {
 			clu.Alias = cInfo.Alias
 		}

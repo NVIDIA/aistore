@@ -69,7 +69,7 @@ type (
 // i.e. the user has full access to everything.
 func (u *User) IsAdmin() bool {
 	for _, r := range u.Roles {
-		if r.Name == AdminRole {
+		if r != nil && r.Name == AdminRole {
 			return true
 		}
 	}
