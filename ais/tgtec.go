@@ -24,6 +24,9 @@ import (
 )
 
 func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
+	if !t.ensureIntraControl(w, r, false /* from primary */) {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		t.httpecget(w, r)

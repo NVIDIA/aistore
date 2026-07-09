@@ -28,6 +28,9 @@ import (
 
 // verb /v1/xactions
 func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
+	if !t.ensureIntraControl(w, r, false /* from primary */) {
+		return
+	}
 	items, err := t.parseURL(w, r, apc.URLPathXactions.L, 0, true)
 	if err != nil {
 		return

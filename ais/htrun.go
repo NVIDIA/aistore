@@ -820,7 +820,8 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 }
 
 // stamp intra-cluster sender headers
-// NOTE: caller must ensure the destination is on intra-net
+// - caller must ensure the destination is on intra-net
+// - see also namesake t.setIntraHdrs - a helper for external packages to call their own in another target
 func (h *htrun) setIntraHdrs(dst *meta.Snode, req *http.Request, smap *smapX) {
 	if smap.vstr != "" {
 		if smap.IsPrimary(h.si) {
@@ -2510,12 +2511,9 @@ func (h *htrun) simpleHealth(w http.ResponseWriter, r *http.Request) bool {
 
 	// TODO differentiate and enforce:
 	// in fact, intra-control must enforce both presence apc.HdrSenderID and all the checks
-	// inside h.checkIntraCall(), possibly including sign/verify; further comments in initRecvHandlers()
+	// inside h.checkIntra(), possibly including sign/verify; further comments in initRecvHandlers()
 	if hdr.Get(apc.HdrSenderID) != "" {
-		if ecode, err := h.checkIntraCall(r, false /* from primary */); err != nil {
-			if ecode == 0 {
-				ecode = http.StatusServiceUnavailable
-			}
+		if ecode, err := h.checkIntra(r, false /* from primary */); err != nil {
 			h.writeErr(w, r, err, ecode)
 			return true
 		}
@@ -2591,8 +2589,39 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 	return 0, nil
 }
 
-func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
-	debug.Assert(reqIsIntraCtrl(r) || reqIsIntraData(r)) // TODO -- FIXME: consider to enforce and then remove ensureIntraControl() - as redundant
+// convenience helper to additionally write error => response writer
+func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) bool {
+	ecode, err := h.checkIntra(r, onlyPrimary)
+	if err != nil {
+		h.writeErr(w, r, err, ecode)
+		return false
+	}
+	return true
+}
+
+func _netEq(got, exp reqNet) bool {
+	if got == exp {
+		return true
+	}
+	config := cmn.GCO.Get()
+	// intra nets may collapse: data-expected verbs legitimately arrive on ctrl when
+	// intra-data is not separately configured
+	if exp == reqNetData && got == reqNetCtrl && !config.HostNet.UseIntraData {
+		return true
+	}
+	return false
+}
+
+func (h *htrun) checkIntra(r *http.Request, onlyPrimary bool, nets ...reqNet) (int, error) {
+	expNet := reqNetCtrl
+	if len(nets) > 0 {
+		expNet = nets[0]
+	}
+	if got := _reqNet(r); !_netEq(got, expNet) {
+		err := fmt.Errorf("%s: expected %s request", h, reqNetName(expNet))
+		debug.AssertNoErr(err)
+		return http.StatusForbidden, err
+	}
 
 	sid, sname, before, err := h.parseSenderHdrs(r.Header)
 	if err != nil {
@@ -2602,6 +2631,9 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
 	// lookup sender
 	smap := h.owner.smap.get()
 	if smap == nil || !smap.isValid() {
+		if h.ClusterStarted() {
+			return http.StatusServiceUnavailable, fmt.Errorf("%s: invalid %s post cluster startup", h, smap.StringEx())
+		}
 		return 0, nil // smap not yet valid — inconclusive during startup
 	}
 
@@ -2614,7 +2646,14 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
 
 	// unknown sender
 	if snode == nil {
-		if !fromPrimary {
+		// NOTE:
+		// - when intra-cluster signing is enforced, verifyIntra above rejects
+		//   unknown senders: not present in Smap => no verifying key;
+		// - during startup or grace/compat windows, this may still
+		//   be a transient Smap race.
+		// TODO: narrow this allowance to:
+		//   !h.ClusterStarted() || sender's Smap version > local Smap version
+		if !onlyPrimary {
 			return 0, nil
 		}
 		e := fmt.Errorf(fmtNodeNotPresent, sname, smap)
@@ -2631,7 +2670,7 @@ func (h *htrun) checkIntraCall(r *http.Request, fromPrimary bool) (int, error) {
 	}
 
 	// 7. a known cluster member (the fact that it's known is enough)
-	if !fromPrimary {
+	if !onlyPrimary {
 		return 0, nil
 	}
 
@@ -2683,20 +2722,6 @@ func (h *htrun) parseSenderHdrs(hdr http.Header) (sid, sname, before string, err
 		return sid, sname, "", &errInvIntraControl{si: h.si, sname: sname, sid: sid}
 	}
 	return sid, sname, before, nil
-}
-
-func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) bool {
-	if !reqIsIntraCtrl(r) {
-		h.writeErrf(w, r, "%s: expected %s request", h, cmn.NetIntraControl)
-		return false
-	}
-
-	ecode, err := h.checkIntraCall(r, onlyPrimary)
-	if err != nil {
-		h.writeErr(w, r, err, ecode)
-		return false
-	}
-	return true
 }
 
 func (h *htrun) uptime2hdr(hdr http.Header) {

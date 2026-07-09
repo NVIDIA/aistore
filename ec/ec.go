@@ -188,6 +188,8 @@ type global struct {
 	pmm      *memsys.MMSA // memory manager slab/SGL allocator (pages)
 	smm      *memsys.MMSA // ditto, bytes
 	emptyReq request
+
+	setIntraHdrs core.SetIntraHdrs
 }
 
 var g global
@@ -198,9 +200,10 @@ var (
 	ErrorNotFound   = errors.New("not found")
 )
 
-func Init() {
+func Init(setIntraHdrs core.SetIntraHdrs) {
 	g.pmm = core.T.PageMM()
 	g.smm = core.T.ByteMM()
+	g.setIntraHdrs = setIntraHdrs
 
 	xreg.RegBckXact(&getFactory{})
 	xreg.RegBckXact(&putFactory{})
@@ -385,6 +388,7 @@ func freeSlices(slices []*slice) {
 
 // RequestECMeta returns an EC metadata found on a remote target.
 func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Client) (*Metadata, error) {
+	// prep request
 	path := apc.URLPathEC.Join(URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = bck.AddToQuery(query)
@@ -394,11 +398,17 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 		return nil, err
 	}
 	rq.URL.RawQuery = query.Encode()
+	// finally
+	debug.Assert(g.setIntraHdrs != nil)
+	g.setIntraHdrs(si, rq)
+
+	// do
 	resp, err := client.Do(rq) //nolint:bodyclose // closed inside cos.Close
 	if err != nil {
 		return nil, err
 	}
 
+	// handle ret
 	defer cos.Close(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, cos.NewErrNotFound(core.T, bck.Cname(objName))

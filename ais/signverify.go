@@ -306,7 +306,7 @@ func sbAlloc() *cos.SB  { return sbPool.Get().(*cos.SB) }
 func sbFree(sb *cos.SB) { sbPool.Put(sb) }
 
 //
-// misc helper - via h.checkIntraCall (compare with svgrpFromQ())
+// misc helper - via h.checkIntra (compare with svgrpFromQ())
 //
 
 func svgrpFromHdr(hdr http.Header) (*svgrp, error) {

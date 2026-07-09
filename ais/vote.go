@@ -414,6 +414,9 @@ func (p *proxy) electPhase2(vr *VoteRecord) cos.StrSet {
 
 // [METHOD] /v1/vote
 func (t *target) voteHandler(w http.ResponseWriter, r *http.Request) {
+	if !t.ensureIntraControl(w, r, false /* from primary */) {
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPut {
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
 		return

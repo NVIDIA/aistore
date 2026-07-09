@@ -405,7 +405,7 @@ func aceErrToCode(err error) (status int) {
 // - PATCH cannot be forbidden
 //
 // NOTE:
-// - access() is reached  only from pub-net handlers; intra-cluster auth lives in htrun checkIntraCall/parseReq.
+// - access() is reached  only from pub-net handlers; intra-cluster auth lives in htrun checkIntra/parseReq.
 func (p *proxy) access(r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	// auth is not enabled: check bucket properties
 	if !cmn.Rom.AuthEnabled() {

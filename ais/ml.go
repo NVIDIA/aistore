@@ -289,6 +289,9 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	// phase 1: DT to initialize Rx (see `designated`)
 	// phase 3: senders to open SDM and start sending
 	case http.MethodPost:
+		if !t.ensureIntraControl(w, r, false) {
+			return
+		}
 		var ctx mossCtx
 		if err := t.mossparse(w, r, &ctx); err != nil {
 			return

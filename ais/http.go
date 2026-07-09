@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -171,3 +172,21 @@ func _reqNet(r *http.Request) reqNet {
 func reqIsPub(r *http.Request) bool       { return _reqNet(r) == reqNetPub }
 func reqIsIntraCtrl(r *http.Request) bool { return _reqNet(r) == reqNetCtrl }
 func reqIsIntraData(r *http.Request) bool { return _reqNet(r) == reqNetData }
+
+func reqIsIntra(r *http.Request) bool {
+	v := _reqNet(r)
+	return v == reqNetCtrl || v == reqNetData
+}
+
+func reqNetName(net reqNet) string {
+	switch net {
+	case reqNetPub:
+		return cmn.NetPublic
+	case reqNetCtrl:
+		return cmn.NetIntraControl
+	case reqNetData:
+		return cmn.NetIntraData
+	default:
+		return fmt.Sprintf("unknown net #%d", net)
+	}
+}

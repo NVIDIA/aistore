@@ -1185,6 +1185,9 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
+	if !t.ensureIntraControl(w, r, true /* from primary */) {
+		return
+	}
 	switch r.Method {
 	case http.MethodPut:
 		t.regstate.mu.Lock()

@@ -70,6 +70,15 @@ type (
 	}
 )
 
+// Intended for subsystems that construct direct intra-cluster requests outside
+// the regular htrun.call/bcast paths but still must satisfy target-side `checkIntra()`.
+// Caller must send over intra-net and call after (method, URL/path/query, and
+// relevant headers) are final. Destination matters because signing policy can
+// be peer-specific.
+type (
+	SetIntraHdrs func(dst *meta.Snode, req *http.Request)
+)
+
 type (
 	// a node that can also write objects
 	TargetPut interface {

@@ -241,7 +241,7 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 	}
 	smap := t.owner.smap.get()
 	debug.Assert(smap.isValid())
-	t.setIntraHdrs(params.Tsi, req, smap)
+	t.htrun.setIntraHdrs(params.Tsi, req, smap)
 
 	var (
 		tout   = params.Timeout

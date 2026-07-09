@@ -30,7 +30,7 @@ type (
 		recv    transport.RecvObj
 		streams *Streams
 		trname  string
-		net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
+		net     string // empty defaults to cmn.NetIntraData; use cmn.NetIntraControl for ACKs and similar
 	}
 	// additional (and optional) params for new data mover instance
 	Extra struct {
@@ -39,7 +39,7 @@ type (
 		// extra
 		RecvAck          transport.RecvObj
 		Config           *cmn.Config
-		Smap             *meta.Smap // TODO -- FIXME: xactions to pass
+		Smap             *meta.Smap // TODO: xactions to pass
 		SizePDU          int32
 		MaxHdrSize       int32
 		SkipGenericStats bool // if true, DM does not auto-increment In/OutObjs - caller does
@@ -74,21 +74,26 @@ func NewDM(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *D
 
 func (dm *DM) init(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) {
 	debug.Assert(extra.Config != nil)
+
 	dm.owt = owt
 	dm.Extra = extra
 	if dm.Compression == "" {
 		dm.Compression = apc.CompressNever
 	}
 
+	// data
 	dm.data.trname, dm.data.recv = trname, recvCB
 	if dm.data.net == "" {
 		dm.data.net = cmn.NetIntraData
 	}
+	debug.Assert(dm.data.net == cmn.NetIntraData || dm.data.net == cmn.NetIntraControl)
 	dm.data.client = transport.NewIntraDataClient()
+
 	// ack
 	if dm.ack.net == "" {
 		dm.ack.net = cmn.NetIntraControl
 	}
+	debug.Assert(dm.ack.net == cmn.NetIntraData || dm.ack.net == cmn.NetIntraControl)
 	dm.ack.recv = extra.RecvAck
 	if !dm.useACKs() {
 		return

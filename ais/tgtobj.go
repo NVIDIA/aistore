@@ -2130,7 +2130,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 	// - possibly, signing the request
 	smap := t.owner.smap.get()
 	debug.Assert(smap.isValid())
-	t.setIntraHdrs(sargs.tsi, req, smap)
+	t.htrun.setIntraHdrs(sargs.tsi, req, smap)
 
 	resp, err := g.client.data.Do(req)
 	if err != nil {

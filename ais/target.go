@@ -530,7 +530,7 @@ func (t *target) Run() error {
 	// register storage target's handler(s) and start listening
 	t.initRecvHandlers()
 
-	ec.Init()
+	ec.Init(t.setIntraHdrs)
 	mirror.Init()
 
 	xreg.RegWithHK()
@@ -553,6 +553,14 @@ func (t *target) Run() error {
 	fs.RemoveMarker(fname.NodeRestartedPrev, t.statsT, true)
 	fs.RemoveMarker(fname.NodeRestartedMarker, t.statsT, true)
 	return err
+}
+
+// stamp an already-constructed intra-cluster HTTP request with sender identity headers and,
+// when required, signature headers (currently, EC only)
+func (t *target) setIntraHdrs(dst *meta.Snode, req *http.Request) {
+	smap := t.owner.smap.get()
+	debug.Assert(smap.isValid())
+	t.htrun.setIntraHdrs(dst, req, smap)
 }
 
 // apart from minor (albeit subtle) differences between `t.joinCluster` vs `p.joinCluster`
@@ -664,7 +672,7 @@ func (t *target) initRecvHandlers() {
 		networkHandler{r: apc.EC, h: t.ecHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.Vote, h: t.voteHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.Txn, h: t.txnHandler, net: accessNetIntraControl},
-		networkHandler{r: apc.ObjStream, h: transport.RxAnyStream, net: accessControlData},
+		networkHandler{r: apc.ObjStream, h: rxAnyStream, net: accessControlData},
 
 		networkHandler{r: apc.Download, h: t.downloadHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.ETL, h: t.etlHandler, net: accessNetAll},
@@ -679,6 +687,15 @@ func (t *target) initRecvHandlers() {
 	)
 	networkHandlers = t.regDsort(networkHandlers)
 	t.regNetHandlers(networkHandlers)
+}
+
+func rxAnyStream(w http.ResponseWriter, r *http.Request) {
+	if !reqIsIntra(r) {
+		err := fmt.Errorf("invalid request over %s: %s %s from %s", reqNetName(_reqNet(r)), r.Method, r.URL.Path, r.RemoteAddr)
+		cmn.WriteErr(w, r, err, http.StatusForbidden)
+		return
+	}
+	transport.RxAnyStream(w, r)
 }
 
 func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
@@ -847,10 +864,12 @@ func (t *target) verifyObjVerb(w http.ResponseWriter, r *http.Request, dpq *dpq)
 	}
 
 	// 3. signed T2T
-	debug.Assert(reqIsIntraCtrl(r) || reqIsIntraData(r))
 	debug.Assert(!hasRedirectMarker(dpq))
 
-	if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
+	// GFN GET and T2T PUT are signed object data-plane requests.
+	net := cos.Ternary(dpq.isGFN || r.Method == http.MethodPut, reqNetData, reqNetCtrl)
+
+	if ecode, err := t.checkIntra(r, false /*from primary*/, net); err != nil {
 		e := fmt.Errorf(fmtErrExpRedirect, t.si, r.Method, r.RemoteAddr, err)
 		t.writeErr(w, r, e, ecode)
 		return false
@@ -885,7 +904,10 @@ func (t *target) _verifyUnsigned(w http.ResponseWriter, r *http.Request, dpq *dp
 	if cmn.IsV50Bridge() {
 		return true
 	}
-	if ecode, err := t.checkIntraCall(r, false /*from primary*/); err != nil {
+
+	// ditto (see above)
+	net := cos.Ternary(dpq.isGFN || r.Method == http.MethodPut, reqNetData, reqNetCtrl)
+	if ecode, err := t.checkIntra(r, false /*from primary*/, net); err != nil {
 		e := fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err)
 		t.writeErr(w, r, e, ecode)
 		return false
