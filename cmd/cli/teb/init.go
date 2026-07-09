@@ -14,17 +14,17 @@ import (
 var Writer io.Writer
 
 var (
-	fred, fcyan, fgreen, fblue func(format string, a ...any) string
+	fred, fcyan, fgreen, fblue func(a ...any) string
 )
 
 func Init(w io.Writer, noColor bool) {
 	Writer = w
 	if noColor {
-		fred, fcyan, fgreen, fblue = fmt.Sprintf, fmt.Sprintf, fmt.Sprintf, fmt.Sprintf
+		fred, fcyan, fgreen, fblue = fmt.Sprint, fmt.Sprint, fmt.Sprint, fmt.Sprint
 	} else {
-		fred = color.New(color.FgHiRed).Sprintf
-		fcyan = color.New(color.FgHiCyan).Sprintf
-		fgreen = color.New(color.FgHiGreen).Sprintf
-		fblue = color.New(color.FgHiBlue).Sprintf
+		fred = color.New(color.FgHiRed).Sprint
+		fcyan = color.New(color.FgHiCyan).Sprint
+		fgreen = color.New(color.FgHiGreen).Sprint
+		fblue = color.New(color.FgHiBlue).Sprint
 	}
 }
