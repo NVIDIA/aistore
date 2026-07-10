@@ -23,7 +23,13 @@ import requests
 from requests.exceptions import ChunkedEncodingError
 
 from aistore.sdk import Client, Object
-from aistore.sdk.const import UTF_ENCODING
+from aistore.sdk.const import (
+    HTTP_METHOD_GET,
+    QPARAM_WHAT,
+    URL_PATH_CLUSTER,
+    UTF_ENCODING,
+    WHAT_CLUSTER_CONFIG,
+)
 from aistore.sdk.obj.content_iterator import ContentIterProvider
 from aistore.sdk.response_handler import ResponseHandler
 from aistore.sdk.types import BucketModel
@@ -261,6 +267,21 @@ def has_targets(n: int = 2) -> bool:
         return len(DEFAULT_TEST_CLIENT.cluster().get_info().tmap) >= n
     except Exception:
         return False  # Assume failure means insufficient targets or unreachable cluster (AuthN)
+
+
+def direct_target_access_allowed() -> bool:
+    """Check if the cluster allows direct target access."""
+    try:
+        response = DEFAULT_TEST_CLIENT.cluster().client.request(
+            HTTP_METHOD_GET,
+            URL_PATH_CLUSTER,
+            params={QPARAM_WHAT: WHAT_CLUSTER_CONFIG},
+        )
+    except Exception:
+        return False
+
+    auth = response.json().get("auth", {})
+    return not (auth.get("enabled") or (auth.get("intra_cluster") or {}).get("enabled"))
 
 
 def handler_parse_and_assert(

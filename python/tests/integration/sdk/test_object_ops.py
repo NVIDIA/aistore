@@ -37,6 +37,7 @@ from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import (
     cases,
     create_archive,
+    direct_target_access_allowed,
     string_to_dict,
     has_targets,
     random_string,
@@ -426,6 +427,10 @@ class TestObjectOps(ParallelTestBase):
             self.assertEqual(content, fetched_content)
 
     @unittest.skipIf(not has_targets(2), "Test requires more than one target")
+    @unittest.skipUnless(
+        direct_target_access_allowed(),
+        "Direct target access requires AuthN and intra-cluster auth to be disabled",
+    )
     def test_get_object_direct(self):
         """
         Test fetching objects directly from the target node.
@@ -461,6 +466,10 @@ class TestObjectOps(ParallelTestBase):
             )
 
     @unittest.skipIf(not has_targets(2), "Test requires more than one target")
+    @unittest.skipUnless(
+        direct_target_access_allowed(),
+        "Direct target access requires AuthN and intra-cluster auth to be disabled",
+    )
     def test_get_object_direct_all_targets(self):
         """
         Test retrieving an object directly from all targets in the cluster.
