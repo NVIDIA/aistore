@@ -116,7 +116,7 @@ func TestWhoamiAccessStale(t *testing.T) {
 	user.Roles[0].ClusterACLs[0].Access = apc.AccessRW
 	tassert.Fatal(t, whoamiAccessStale(claims, user), "changed permission must be stale")
 
-	// AuthN unions permissions across roles for the same cluster (union=true in mergeClusterACLs).
+	// AuthN unions permissions across roles for the same cluster (union=true in authn.MergeClusterACLs).
 	user.Roles[0].ClusterACLs[0].Access = apc.AccessRO
 	tassert.Fatal(t, !whoamiAccessStale(claims, user), "union of matching permissions must be current")
 
@@ -127,6 +127,29 @@ func TestWhoamiAccessStale(t *testing.T) {
 	admin := &authn.User{Roles: []*authn.Role{{Name: authn.AdminRole}}}
 	tassert.Fatal(t, !whoamiAccessStale(adminClaims, admin), "matching admin access must be current")
 	tassert.Fatal(t, whoamiAccessStale(adminClaims, &authn.User{}), "removed admin access must be stale")
+}
+
+// whoamiAccessStale delegates aggregation to authn.MergeClusterACLs/MergeBckACLs.
+func TestWhoamiAccessStaleNilACLs(t *testing.T) {
+	bck := cmn.Bck{Name: "b1", Provider: apc.AIS, Ns: cmn.Ns{UUID: "cid1"}}
+	claims := &whoamiClaims{
+		ClusterACLs: []*authn.CluACL{{ID: "cid1", Alias: "test", Access: apc.AccessRO}},
+		BucketACLs:  []*authn.BckACL{{Bck: bck, Access: apc.AccessRW}},
+	}
+	// Interleave nil roles and nil cluster/bucket ACL entries with the real grants.
+	user := &authn.User{Roles: []*authn.Role{
+		nil,
+		{ClusterACLs: []*authn.CluACL{nil, {ID: "test", Access: apc.AccessRO}, nil}},
+		nil,
+		{BucketACLs: []*authn.BckACL{nil, {Bck: bck, Access: apc.AccessRW}}},
+	}}
+	tassert.Fatal(t, !whoamiAccessStale(claims, user),
+		"nil roles and nil ACL entries must be ignored, leaving a matching token current")
+
+	// A user whose grants are entirely nil is equivalent to no server-side access at all.
+	empty := &authn.User{Roles: []*authn.Role{nil, {ClusterACLs: []*authn.CluACL{nil}, BucketACLs: []*authn.BckACL{nil}}}}
+	tassert.Fatal(t, whoamiAccessStale(claims, empty), "token grants absent from server roles must be stale")
+	tassert.Fatal(t, !whoamiAccessStale(&whoamiClaims{}, empty), "no token access vs all-nil roles must be current")
 }
 
 func TestPrintWhoamiUsesTokenAccessAndWarnsWhenStale(t *testing.T) {

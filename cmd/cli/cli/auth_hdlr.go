@@ -653,24 +653,26 @@ func whoamiAccessStale(claims *whoamiClaims, uInfo *authn.User) bool {
 		}
 	}
 
-	// Mirrors cmd/authn/mgr.go issueToken + cmd/authn/utils.go mergeClusterACLs/mergeBckACLs
-	// (union=true path). If the server's ACL aggregation logic changes, this must change too.
-	serverClu := make(map[string]apc.AccessAttrs, len(tokenClu))
-	serverBck := make(map[whoamiBckKey]apc.AccessAttrs, len(tokenBck))
+	// Replicate cmd/authn/mgr.go issueToken's construction of server-side ACLs with the
+	// authn.MergeClusterACLs/MergeBckACLs (union=true) functions. Nil roles and nil ACL
+	// entries are quietly dropped.
+	var mergedClu []*authn.CluACL
+	var mergedBck []*authn.BckACL
 	for _, role := range uInfo.Roles {
 		if role == nil {
 			continue
 		}
-		for _, acl := range role.ClusterACLs {
-			if acl != nil {
-				serverClu[resolveClusterID(acl.ID)] |= acl.Access
-			}
-		}
-		for _, acl := range role.BucketACLs {
-			if acl != nil {
-				serverBck[whoamiBucketKey(acl.Bck, resolveClusterID)] |= acl.Access
-			}
-		}
+		mergedClu = authn.MergeClusterACLs(mergedClu, role.ClusterACLs, "", true /*union*/)
+		mergedBck = authn.MergeBckACLs(mergedBck, role.BucketACLs, "", true /*union*/)
+	}
+
+	serverClu := make(map[string]apc.AccessAttrs, len(mergedClu))
+	for _, acl := range mergedClu {
+		serverClu[resolveClusterID(acl.ID)] = acl.Access
+	}
+	serverBck := make(map[whoamiBckKey]apc.AccessAttrs, len(mergedBck))
+	for _, acl := range mergedBck {
+		serverBck[whoamiBucketKey(acl.Bck, resolveClusterID)] = acl.Access
 	}
 	return !maps.Equal(tokenClu, serverClu) || !maps.Equal(tokenBck, serverBck)
 }
