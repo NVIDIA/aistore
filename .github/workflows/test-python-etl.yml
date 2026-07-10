@@ -25,6 +25,8 @@ jobs:
 
       - name: Create KinD K8s Cluster
         uses: helm/kind-action@v1
+        with:
+          cluster_name: ais-ci
 
       - name: Install kapp
         run: |
@@ -32,10 +34,17 @@ jobs:
           chmod +x kapp-linux-amd64
           sudo mv kapp-linux-amd64 /usr/local/bin/kapp
 
+      # In PRs, build and load local images; otherwise use `dev` images from Docker Hub.
+      - name: Build and load images into KinD
+        if: github.event_name == 'pull_request'
+        run: |
+          cd $GITHUB_WORKSPACE/deploy/dev/k8s
+          IMAGE_TAG=github-ci CLUSTER_TYPE=kind CLUSTER_NAME=ais-ci ./utils/build_and_load.sh
+
       - name: Run AIStore in KinD
         run: |
           cd $GITHUB_WORKSPACE/deploy/dev/k8s
-          make github-ci
+          make github-ci AIS_IMAGE_TAG=${{ github.event_name == 'pull_request' && 'github-ci' || 'dev' }}
 
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6

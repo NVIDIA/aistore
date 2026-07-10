@@ -8,8 +8,9 @@ resources:
 
 images:
 - name: aistorage/aisnode
-  newName: aistorage/aisnode
-  newTag: dev
+  newTag: "${AIS_IMAGE_TAG}"
+- name: aistorage/ais-init
+  newTag: "${AIS_IMAGE_TAG}"
 
 secretGenerator:
 - name: regcred
