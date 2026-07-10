@@ -68,6 +68,7 @@ func newDiscoverServerPrimary() *proxy {
 	owner.put(newBucketMD())
 	p.owner.bmd = owner
 	p.keepalive = newPalive(p, tracker, atomic.NewBool(true))
+	p.htrun.svs.init()
 	return p
 }
 

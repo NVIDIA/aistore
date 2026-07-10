@@ -28,14 +28,14 @@ func testTxnConfig() *cmn.Config {
 // as production does - notably started(), which is interface-dispatched everywhere.
 func newETLInitTxn(initTimeout time.Duration) txn {
 	msg := &etl.InitSpecMsg{InitMsgBase: etl.InitMsgBase{InitTimeout: cos.Duration(initTimeout)}}
-	c := &txnSrv{t: t, uuid: "test-etl-init", msg: &actMsgExt{ActMsg: apc.ActMsg{Action: apc.ActETLInline}}}
+	c := &txnSrv{t: mockTarget, uuid: "test-etl-init", msg: &actMsgExt{ActMsg: apc.ActMsg{Action: apc.ActETLInline}}}
 	return newTxnETLInit(c, msg)
 }
 
 // a representative non-ETL txn: inherits txnBase.beginTimeout unchanged.
 func newCreateBucketTxn() txn {
 	bck := meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)
-	c := &txnSrv{t: t, bck: bck, uuid: "test-create-bck", msg: &actMsgExt{ActMsg: apc.ActMsg{Action: apc.ActCreateBck}}}
+	c := &txnSrv{t: mockTarget, bck: bck, uuid: "test-create-bck", msg: &actMsgExt{ActMsg: apc.ActMsg{Action: apc.ActCreateBck}}}
 	return newTxnCreateBucket(c)
 }
 

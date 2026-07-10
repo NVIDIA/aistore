@@ -11,8 +11,8 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
-func TestNodeSigningKeySignVerify(t *testing.T) {
-	pub, priv, err := cos.GenerateNodeSigningKey()
+func TestNodeKeyPairSignVerify(t *testing.T) {
+	pub, priv, err := cos.GenerateNodeKeyPair()
 	tassert.CheckFatal(t, err)
 
 	msg := []byte("hello intra-cluster request")
@@ -28,65 +28,13 @@ func TestNodeSigningKeySignVerify(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "expected verification failure")
 }
 
-func TestNodeSigningKeyBadSizes(t *testing.T) {
+func TestNodeKeyPairBadSizes(t *testing.T) {
 	err := cos.VerifyNodeSignature(nil, []byte("x"), make([]byte, cos.NodeSigningSignatureSize))
 	tassert.Fatalf(t, err != nil, "expected bad public key size")
 
 	_, err = cos.SignNodeMessage(nil, []byte("x"))
 	tassert.Fatalf(t, err != nil, "expected bad private key size")
 
-	_, err = cos.NodeSigningKeyFingerprint(nil)
+	_, err = cos.NodeVerifyingKeyFingerprint(nil)
 	tassert.Fatalf(t, err != nil, "expected bad public key size")
-}
-
-func TestNodeSigningKeyPackUnpack(t *testing.T) {
-	const tid = "t1234567"
-
-	pub, priv, err := cos.GenerateNodeSigningKey()
-	tassert.CheckFatal(t, err)
-
-	pair := cos.NewNodeSigningKey(priv, pub)
-	b := pair.Bytes(tid)
-
-	got, err := cos.UnpackNodeSigningKey(tid, b)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, got.Equal(pair), "unpacked key differs")
-}
-
-func TestNodeSigningKeyUnpackRejectsWrongDaemonID(t *testing.T) {
-	pub, priv, err := cos.GenerateNodeSigningKey()
-	tassert.CheckFatal(t, err)
-
-	pair := cos.NewNodeSigningKey(priv, pub)
-
-	_, err = cos.UnpackNodeSigningKey("otherid", pair.Bytes("t1234567"))
-	tassert.Fatalf(t, err != nil, "expected daemon ID mismatch")
-}
-
-func TestNodeSigningKeyUnpackRejectsTruncatedBlob(t *testing.T) {
-	const tid = "t1234567"
-
-	pub, priv, err := cos.GenerateNodeSigningKey()
-	tassert.CheckFatal(t, err)
-
-	pair := cos.NewNodeSigningKey(priv, pub)
-	b := pair.Bytes(tid)
-
-	for i := range b {
-		_, err := cos.UnpackNodeSigningKey(tid, b[:i])
-		tassert.Fatalf(t, err != nil, "expected failure for truncated blob len %d", i)
-	}
-}
-
-func TestNodeSigningKeyUnpackRejectsTrailingBytes(t *testing.T) {
-	const tid = "t1234567"
-
-	pub, priv, err := cos.GenerateNodeSigningKey()
-	tassert.CheckFatal(t, err)
-
-	pair := cos.NewNodeSigningKey(priv, pub)
-	b := append(pair.Bytes(tid), 0)
-
-	_, err = cos.UnpackNodeSigningKey(tid, b)
-	tassert.Fatalf(t, err != nil, "expected trailing-bytes failure")
 }

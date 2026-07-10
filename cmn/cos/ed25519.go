@@ -19,58 +19,20 @@ import (
 // For alternative (public, private) key alg., see rsa.go
 
 const (
-	NodeSigningKeyAlg = "ed25519"
+	NodeKeyPairAlg = "ed25519"
 
 	NodeSigningPublicKeySize  = ed25519.PublicKeySize
 	NodeSigningPrivateKeySize = ed25519.PrivateKeySize
 	NodeSigningSignatureSize  = ed25519.SignatureSize
 )
 
-func GenerateNodeSigningKey() (ed25519.PublicKey, ed25519.PrivateKey, error) {
-	return ed25519.GenerateKey(rand.Reader)
-}
-
-func NodeSigningKeyFingerprint(pub ed25519.PublicKey) (string, error) {
-	if len(pub) != ed25519.PublicKeySize {
-		return "", fmt.Errorf("invalid %s public key size %d", NodeSigningKeyAlg, len(pub))
-	}
-	sum := sha256.Sum256(pub)
-	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
-}
-
-func SignNodeMessage(priv ed25519.PrivateKey, msg []byte) ([]byte, error) {
-	if len(priv) != ed25519.PrivateKeySize {
-		return nil, fmt.Errorf("invalid %s private key size %d", NodeSigningKeyAlg, len(priv))
-	}
-	return ed25519.Sign(priv, msg), nil
-}
-
-func VerifyNodeSignature(pub ed25519.PublicKey, msg, sig []byte) error {
-	if len(pub) != ed25519.PublicKeySize {
-		return fmt.Errorf("invalid %s public key size %d", NodeSigningKeyAlg, len(pub))
-	}
-	if len(sig) != ed25519.SignatureSize {
-		return fmt.Errorf("invalid %s signature size %d", NodeSigningKeyAlg, len(sig))
-	}
-	if !ed25519.Verify(pub, msg, sig) {
-		return errors.New("node signature verification failed")
-	}
-	return nil
-}
-
-//
-// AIS node signing key: the type, pack/unpack, validation
-//
-
-const nodeSigningKeyMetaVer byte = 1
-
-type NodeSigningKey struct {
+type NodeKeyPair struct {
 	SigningKey   ed25519.PrivateKey
 	VerifyingKey ed25519.PublicKey
 }
 
-func NewNodeSigningKey(signingKey ed25519.PrivateKey, verifyingKey ed25519.PublicKey) *NodeSigningKey {
-	k := &NodeSigningKey{
+func NewNodeKeyPair(signingKey ed25519.PrivateKey, verifyingKey ed25519.PublicKey) *NodeKeyPair {
+	k := &NodeKeyPair{
 		SigningKey:   append(ed25519.PrivateKey(nil), signingKey...),
 		VerifyingKey: append(ed25519.PublicKey(nil), verifyingKey...),
 	}
@@ -78,35 +40,7 @@ func NewNodeSigningKey(signingKey ed25519.PrivateKey, verifyingKey ed25519.Publi
 	return k
 }
 
-func (k *NodeSigningKey) PackedSize(daeID string) int {
-	debug.Assert(daeID != "")
-	return 1 + PackedStrLen(daeID) + PackedBytesLen(k.SigningKey) + PackedBytesLen(k.VerifyingKey)
-}
-
-func (k *NodeSigningKey) Pack(p *BytePack, daeID string) {
-	debug.Assert(daeID != "")
-	p.WriteUint8(nodeSigningKeyMetaVer)
-	p.WriteString(daeID)
-	p.WriteBytes(k.SigningKey)
-	p.WriteBytes(k.VerifyingKey)
-}
-
-func (k *NodeSigningKey) Bytes(daeID string) []byte {
-	debug.Assert(daeID != "")
-	debug.AssertNoErr(k.validate())
-
-	p := NewPacker(nil, k.PackedSize(daeID))
-	k.Pack(p, daeID)
-	return p.Bytes()
-}
-
-func (k *NodeSigningKey) Equal(o *NodeSigningKey) bool {
-	return k != nil && o != nil &&
-		CryptoEqual(k.SigningKey, o.SigningKey) &&
-		CryptoEqual(k.VerifyingKey, o.VerifyingKey)
-}
-
-func (k *NodeSigningKey) validate() error {
+func (k *NodeKeyPair) validate() error {
 	if k == nil {
 		return errors.New("nil node signing key")
 	}
@@ -127,46 +61,39 @@ func (k *NodeSigningKey) validate() error {
 	return nil
 }
 
-func UnpackNodeSigningKey(expectedID string, b []byte) (*NodeSigningKey, error) {
-	u := NewUnpacker(b)
+//
+// utilities
+//
 
-	ver, err := u.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-	if ver != nodeSigningKeyMetaVer {
-		return nil, fmt.Errorf("unsupported node signing key version %d", ver)
-	}
+func GenerateNodeKeyPair() (ed25519.PublicKey, ed25519.PrivateKey, error) {
+	return ed25519.GenerateKey(rand.Reader)
+}
 
-	daeID, err := u.ReadString()
-	if err != nil {
-		return nil, err
+// TODO: currently used only in tests; consider to maybe validate a change upon restart, or remove
+func NodeVerifyingKeyFingerprint(pub ed25519.PublicKey) (string, error) {
+	if len(pub) != ed25519.PublicKeySize {
+		return "", fmt.Errorf("invalid %s public key size %d", NodeKeyPairAlg, len(pub))
 	}
-	if daeID == "" {
-		return nil, errors.New("missing daemon ID")
-	}
-	if expectedID != "" && daeID != expectedID {
-		return nil, fmt.Errorf("daemon ID mismatch: %q vs %q", expectedID, daeID)
-	}
+	sum := sha256.Sum256(pub)
+	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
+}
 
-	signingKey, err := u.ReadBytes()
-	if err != nil {
-		return nil, err
+func SignNodeMessage(priv ed25519.PrivateKey, msg []byte) ([]byte, error) {
+	if len(priv) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("invalid %s private key size %d", NodeKeyPairAlg, len(priv))
 	}
-	verifyingKey, err := u.ReadBytes()
-	if err != nil {
-		return nil, err
-	}
-	if u.Len() != 0 {
-		return nil, fmt.Errorf("unexpected trailing bytes: %d", u.Len())
-	}
+	return ed25519.Sign(priv, msg), nil
+}
 
-	k := &NodeSigningKey{
-		SigningKey:   append(ed25519.PrivateKey(nil), signingKey...),
-		VerifyingKey: append(ed25519.PublicKey(nil), verifyingKey...),
+func VerifyNodeSignature(pub ed25519.PublicKey, msg, sig []byte) error {
+	if len(pub) != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid %s public key size %d", NodeKeyPairAlg, len(pub))
 	}
-	if err := k.validate(); err != nil {
-		return nil, err
+	if len(sig) != ed25519.SignatureSize {
+		return fmt.Errorf("invalid %s signature size %d", NodeKeyPairAlg, len(sig))
 	}
-	return k, nil
+	if !ed25519.Verify(pub, msg, sig) {
+		return errors.New("node signature verification failed")
+	}
+	return nil
 }

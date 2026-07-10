@@ -19,10 +19,9 @@ import (
 )
 
 type IniCtx struct {
-	NodeSigningKey *cos.NodeSigningKey
-	UseLoopbacks   bool // using loopback dev-s
-	IgnoreMissing  bool // ignore missing mountpath(s)
-	RandomTID      bool // generated random target ID
+	UseLoopbacks  bool // using loopback dev-s
+	IgnoreMissing bool // ignore missing mountpath(s)
+	RandomTID     bool // generated random target ID
 }
 
 // bootstrap from local-config referenced locations
@@ -39,7 +38,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 		fspaths = config.FSP.Paths.Keys()
 	)
 	// new and empty
-	blockDevs := fs.New(t, len(config.FSP.Paths), ctx.NodeSigningKey)
+	blockDevs := fs.New(t, len(config.FSP.Paths))
 
 	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
 		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, err, fspaths)

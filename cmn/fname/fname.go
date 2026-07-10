@@ -23,8 +23,7 @@ const (
 	OverrideConfig = ".ais.override_config"
 
 	// proxy aisnode ID
-	ProxyID         = ".ais.proxy_id"
-	ProxySigningKey = ".ais.signing_key"
+	ProxyID = ".ais.proxy_id"
 
 	// metadata
 	Smap        = ".ais.smap"   // Smap persistent file basename

@@ -98,9 +98,6 @@ type (
 		available ratomic.Pointer[MPI]
 		disabled  ratomic.Pointer[MPI]
 
-		// node sign/verify key pair (a copy of ais/htrun namesake - construction time)
-		nodeSigningKey *cos.NodeSigningKey
-
 		// capacity
 		cs        CapStatus
 		csExpires atomic.Int64
@@ -507,11 +504,6 @@ func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, bloc
 		if err := mi.SetDaemonIDXattr(tid); err != nil {
 			return err
 		}
-		if mfs.nodeSigningKey != nil { // ditto, nil in unit tests
-			if err := mi.SetNodeSigningKeyXattr(tid, mfs.nodeSigningKey); err != nil {
-				return err
-			}
-		}
 	}
 	mi._setDisks(fsdisks)
 	avail[mi.Path] = mi
@@ -645,11 +637,10 @@ func (mi *Mountpath) _alert(config *cmn.Config, c Capacity) string {
 // MFS global
 //
 
-func New(fshc HC, num int, nodeSigningKey *cos.NodeSigningKey) (blockDevs ios.BlockDevs) {
+func New(fshc HC, num int) (blockDevs ios.BlockDevs) {
 	mfs = &MFS{
-		hc:             fshc,
-		fsIDs:          make(map[cos.FsID]string, 12),
-		nodeSigningKey: nodeSigningKey,
+		hc:    fshc,
+		fsIDs: make(map[cos.FsID]string, 12),
 	}
 	mfs.ios, blockDevs = ios.New(num)
 
@@ -846,9 +837,6 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 
 	// Clear target ID if set
 	if err := removeXattr(cleanMpath, xattrNodeID); err != nil {
-		return nil, err
-	}
-	if err := removeXattr(cleanMpath, xattrNodeSigningKey); err != nil {
 		return nil, err
 	}
 	avail, disabled := Get()

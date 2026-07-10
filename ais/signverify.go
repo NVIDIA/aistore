@@ -107,6 +107,11 @@ func (svs *svState) sign() bool {
 
 	on := cmn.Rom.SignVerifyEnabled()
 	cur := svs.cur.Load()
+
+	// A note on stateful (config <=> htrun.svs) redundancy:
+	// - the config.Auth.IntraCluster.Enabled expresses desired policy
+	// - htrun.svs.cur.on expresses whether and when that policy has been enacted locally
+
 	return (on && cur.on == on) || !svs.graceExpired(cur.last)
 }
 
@@ -157,12 +162,12 @@ func newSigner(r *http.Request, h *htrun, sb *cos.SB, svs *svState, smapVer int6
 
 // sv.sig ends up pointing into sb (buildURL/qencode clone it), same as compute().
 func (sv *svReq) sign(pid string) {
-	debug.Assert(sv.h.nodeSigningKey != nil)
+	debug.Assert(sv.h.nodeKeyPair != nil)
 
 	sv.sb.Reset(sv.bufsizeSV(pid), false /*allow shrink*/) // borrow redurl's sb
 
 	msg := sv.payload(pid)
-	raw, err := cos.SignNodeMessage(sv.h.nodeSigningKey.SigningKey, msg)
+	raw, err := cos.SignNodeMessage(sv.h.nodeKeyPair.SigningKey, msg)
 	debug.AssertNoErr(err)
 
 	// sv.sig points into redurl's sb, same as compute()

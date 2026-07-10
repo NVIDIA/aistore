@@ -15,7 +15,7 @@ import (
 )
 
 func TestSnodeInitVerifyingKey(t *testing.T) {
-	pub, _, err := cos.GenerateNodeSigningKey()
+	pub, _, err := cos.GenerateNodeKeyPair()
 	tassert.CheckFatal(t, err)
 
 	si := &meta.Snode{}

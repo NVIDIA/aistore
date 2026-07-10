@@ -40,6 +40,7 @@ func newHTRunWithSmap() (*htrun, string) {
 	smap.addProxy(h.si)
 	smap.Primary = h.si
 	h.owner.smap.put(smap)
+	h.svs.init()
 	return h, primaryID
 }
 
@@ -82,6 +83,7 @@ func TestIsClusterNode_InvalidSmap(t *testing.T) {
 
 	h.owner.smap = newSmapOwner(config)
 	h.owner.smap.put(newSmap())
+	h.svs.init()
 
 	hdr := http.Header{}
 	hdr.Set(apc.HdrSenderID, "p1")

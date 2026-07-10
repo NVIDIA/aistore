@@ -87,8 +87,8 @@ type htrun struct {
 	}
 
 	// sign/verify
-	nodeSigningKey *cos.NodeSigningKey
-	svs            svState
+	nodeKeyPair *cos.NodeKeyPair
+	svs         svState
 
 	keepalive keepaliver
 	statsT    stats.Tracker
@@ -509,6 +509,23 @@ func (h *htrun) initPhase2(config *cmn.Config) {
 	h.smm.RegWithHK()
 
 	hk.Reg("rate-limit"+hk.NameSuffix, h.ratelim.housekeep, hk.PruneRateLimiters)
+}
+
+// always generate upon restart and keep in memory only
+func (h *htrun) newKeyPair(sid, daeType string) *cos.NodeKeyPair {
+	err := cos.ValidateDaemonID(sid)
+	cos.AssertNoErr(err) // FATAL
+
+	pub, priv, err := cos.GenerateNodeKeyPair()
+	if err != nil {
+		sname := meta.Tname(sid)
+		if daeType == apc.Proxy {
+			sname = meta.Pname(sid)
+		}
+		cos.ExitLogf("failed to generate node key pair for %s: %v", sname, err)
+	}
+	h.nodeKeyPair = cos.NewNodeKeyPair(priv, pub)
+	return h.nodeKeyPair
 }
 
 // at startup, check this Snode vs locally stored Smap replica (NOTE: some errors are FATAL)

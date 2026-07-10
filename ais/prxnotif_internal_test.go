@@ -79,6 +79,7 @@ var _ = Describe("Notifications xaction test", func() {
 			palive := newPalive(p, tracker, atomic.NewBool(true))
 			palive.keepalive.hb = &nopHB{}
 			p.keepalive = palive
+			p.htrun.svs.init()
 			return p
 		}
 

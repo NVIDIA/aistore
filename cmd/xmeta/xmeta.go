@@ -357,7 +357,7 @@ func extractLOM() (err error) {
 		return errors.New("make sure to specify '-in=<fully qualified source filename>', run 'xmeta' for help and examples")
 	}
 	os.Setenv(core.DumpLomEnvVar, "1")
-	fs.New(nil /*core.Target*/, 2, nil /*cos.NodeSigningKey*/)
+	fs.New(nil /*core.Target*/, 2)
 
 	_ = mock.NewTarget(mock.NewBaseBownerMock()) // => cluster.Tinit
 

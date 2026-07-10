@@ -82,6 +82,8 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 			DontEvictTime: cos.Duration(time.Hour), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
 		}
 		cmn.GCO.CommitUpdate(config)
+		cmn.Rom.Set(&config.ClusterConfig)
+
 		cfg = cmn.GCO.Get()
 
 		etlMD = newEtlMD()

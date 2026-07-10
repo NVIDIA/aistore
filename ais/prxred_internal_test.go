@@ -43,11 +43,11 @@ func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 
 	p := &proxy{}
 
-	pub, priv, err := cos.GenerateNodeSigningKey()
+	pub, priv, err := cos.GenerateNodeKeyPair()
 	if err != nil {
 		t.Fatalf("failed to generate keys: %v", err)
 	}
-	p.htrun.nodeSigningKey = cos.NewNodeSigningKey(priv, pub)
+	p.htrun.nodeKeyPair = cos.NewNodeKeyPair(priv, pub)
 
 	p.si = &meta.Snode{}
 	p.si.Init(testProxyID, apc.Proxy, pub)
@@ -72,7 +72,7 @@ func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 func newTestSnode(t *testing.T) *meta.Snode {
 	t.Helper()
 
-	pub, _, err := cos.GenerateNodeSigningKey()
+	pub, _, err := cos.GenerateNodeKeyPair()
 	if err != nil {
 		t.Fatalf("failed to generate dst keys: %v", err)
 	}
