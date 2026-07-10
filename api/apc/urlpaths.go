@@ -125,8 +125,6 @@ const (
 	Query2PC = "query"
 )
 
-const SyncSmap = "syncsmap" // obsolete (keeping it)
-
 type URLPath struct {
 	S string
 	L []string

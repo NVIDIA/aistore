@@ -2810,20 +2810,6 @@ func (p *proxy) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []s
 	switch apiItems[0] {
 	case apc.Proxy:
 		p.daeSetPrimary(w, r)
-	case apc.SyncSmap:
-		newsmap := &smapX{}
-		if cmn.ReadJSON(w, r, newsmap) != nil {
-			return
-		}
-		if err := newsmap.validate(); err != nil {
-			p.writeErrf(w, r, "%s: invalid %s: %v", p.si, newsmap, err)
-			return
-		}
-		if err := p.owner.smap.synchronize(p.si, newsmap, nil /*ms payload*/, p.htrun.smapUpdatedCB); err != nil {
-			p.writeErr(w, r, cmn.NewErrFailedTo(p, "synchronize", newsmap, err))
-			return
-		}
-		nlog.Infof("%s: %s %s done", p, apc.SyncSmap, newsmap)
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		p.setDaemonConfigQuery(w, r)
 	case apc.LoadX509:

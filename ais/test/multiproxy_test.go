@@ -49,8 +49,6 @@ var (
 		{"CrashAndFastRestore", crashAndFastRestore},
 		{"TargetRejoin", targetRejoin},
 		{"JoinWhileVoteInProgress", joinWhileVoteInProgress},
-		{"MinorityTargetMapVersionMismatch", minorityTargetMapVersionMismatch},
-		{"MajorityTargetMapVersionMismatch", majorityTargetMapVersionMismatch},
 		{"ConcurrentPutGetDel", concurrentPutGetDel},
 		{"ProxyStress", proxyStress},
 		{"NetworkFailure", networkFailure},
@@ -623,52 +621,6 @@ func joinWhileVoteInProgress(t *testing.T) {
 	_, err = tools.WaitForClusterState(smap.Primary.URL(cmn.NetPublic),
 		"cluster to stabilize", smap.Version, oldProxyCnt, oldTargetCnt)
 	tassert.CheckFatal(t, err)
-}
-
-func minorityTargetMapVersionMismatch(t *testing.T) {
-	randProxyURL := tools.RandomProxyURL(t)
-	targetMapVersionMismatch(
-		func(i int) int {
-			return i/4 + 1
-		}, t, randProxyURL)
-}
-
-func majorityTargetMapVersionMismatch(t *testing.T) {
-	randProxyURL := tools.RandomProxyURL(t)
-	targetMapVersionMismatch(
-		func(i int) int {
-			return i/2 + 1
-		}, t, randProxyURL)
-}
-
-// targetMapVersionMismatch updates map version of a few targets, kill the primary proxy
-// wait for the new leader to come online
-func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL string) {
-	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logfln("targets: %d, proxies: %d", smap.CountActiveTs(), smap.CountActivePs())
-
-	smap.Version++
-	jsonMap, err := jsoniter.Marshal(smap)
-	tassert.CheckFatal(t, err)
-
-	n := getNum(smap.CountActiveTs() + smap.CountActivePs() - 1)
-	for _, v := range smap.Tmap {
-		if n == 0 {
-			break
-		}
-		baseParams := tools.BaseAPIParams(v.URL(cmn.NetPublic))
-		baseParams.Method = http.MethodPut
-		reqParams := &api.ReqParams{
-			BaseParams: baseParams,
-			Path:       apc.URLPathDae.Join(apc.SyncSmap),
-			Body:       jsonMap,
-			Header:     http.Header{cos.HdrContentType: []string{cos.ContentJSON}},
-		}
-		err = reqParams.DoRequest()
-		tassert.CheckFatal(t, err)
-		n--
-	}
-	killRestorePrimary(t, proxyURL, false, nil)
 }
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently

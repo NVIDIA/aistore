@@ -262,15 +262,6 @@ func (t *target) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []
 	case apc.Proxy:
 		// PUT /v1/daemon/proxy/newprimaryproxyid
 		t.daeSetPrimary(w, r, apiItems)
-	case apc.SyncSmap:
-		newsmap := &smapX{}
-		if cmn.ReadJSON(w, r, newsmap) != nil {
-			return
-		}
-		if err := t.owner.smap.synchronize(t.si, newsmap, nil /*ms payload*/, t.htrun.smapUpdatedCB); err != nil {
-			t.writeErr(w, r, cmn.NewErrFailedTo(t, "synchronize", newsmap, err))
-		}
-		nlog.Infof("%s: %s %s done", t, apc.SyncSmap, newsmap)
 	case apc.Mountpaths:
 		t.handleMpathReq(w, r)
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
