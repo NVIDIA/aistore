@@ -659,14 +659,18 @@ func (t *target) initRecvHandlers() {
 		networkHandler{r: apc.Buckets, h: t.bucketHandler, net: accessNetAll},
 		networkHandler{r: apc.Objects, h: t.objectHandler, net: accessNetAll},
 
+		// (pub + control): apc.Daemon
+		networkHandler{r: apc.Daemon, h: t.daePubHandler, net: accessNetPublic},
+		networkHandler{r: apc.Daemon, h: t.daemonHandler, net: accessNetIntraControl},
+
+		networkHandler{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
+
 		// TODO:
 		// - accessNetPublicControl is a union (pub) and (control);
 		// - to enforce intra-cluster headers and sign/verify (if enabled):
 		// - follow-up on 0cd8ff1078ee "access control: split public and intra-control handlers"
-		// - applies to: /daemon, /health, /ml
-		networkHandler{r: apc.Daemon, h: t.daemonHandler, net: accessNetPublicControl},
+		// - applies to: /health, /ml
 
-		networkHandler{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.Health, h: t.healthHandler, net: accessNetPublicControl},
 		networkHandler{r: apc.Xactions, h: t.xactHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.EC, h: t.ecHandler, net: accessNetIntraControl},

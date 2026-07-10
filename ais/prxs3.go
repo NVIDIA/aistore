@@ -777,6 +777,11 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	if bck == nil {
 		return
 	}
+	if err := p.access(r, bck, apc.AcePATCH); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
+		return
+	}
+
 	decoder := xml.NewDecoder(r.Body)
 	vconf := &s3.VersioningConfiguration{}
 	if err := decoder.Decode(vconf); err != nil {

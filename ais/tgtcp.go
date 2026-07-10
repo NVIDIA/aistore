@@ -120,8 +120,30 @@ func (t *target) recvCluMeta(cm *cluMeta, action, sender string) error {
 	}
 }
 
+//
 // [METHOD] /v1/daemon
+//
+
 func (t *target) daemonHandler(w http.ResponseWriter, r *http.Request) {
+	t._dae(w, r, false /*isPub*/)
+}
+
+func (t *target) daePubHandler(w http.ResponseWriter, r *http.Request) {
+	t._dae(w, r, true /*isPub*/)
+}
+
+func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
+	if isPub {
+		if r.Method != http.MethodGet {
+			t.writeErrStatusf(w, r, http.StatusForbidden, "%s: %s %s is read-only on %s", t, r.Method, r.URL.Path, cmn.NetPublic)
+			return
+		}
+	} else {
+		if !t.ensureIntraControl(w, r, false /* primary-only */) {
+			return
+		}
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		t.httpdaeget(w, r)

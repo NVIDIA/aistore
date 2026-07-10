@@ -24,6 +24,26 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+// This source implements reverse proxying: this proxy relays requests that it
+// does not execute locally. There are three distinct relay paths:
+//
+//  1. reverseNodeRequest: authorized request => designated cluster node over
+//     intra-control. The relay is stamped/signed via setIntraHdrs: the proxy
+//     vouches for the forwarding hop after caller access has been checked.
+//  2. forwardCP: client control-plane request => current primary over pub-net.
+//     The forwarded request remains indistinguishable from a direct client call.
+//     See TODO below.
+//  3. reverseRemAis: client request => remote AIS cluster. Public/remote relay,
+//     unstamped: different cluster, no shared node identity or signing keys.
+//
+// TODO (forwardCP => intra-control):
+//  - In production, pub-net routing may often entail going out of the server rack
+//    through an external switch, and then back again
+//  - Migration requires a distinct "forwarded public-control over intra"
+//    model: authorization at the forwarding proxy, stamped relay, maybe a separate
+//    primary-side intra-control handler (twin) that'd still honor the forwarded
+//    client token.
+
 type (
 	reverseProxy struct {
 		cloud   *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
@@ -164,7 +184,7 @@ func (p *proxy) _reverse(w http.ResponseWriter, r *http.Request, isPub bool) {
 		}
 		return
 	}
-	p.reverseNodeRequest(w, r, si)
+	p.reverseNodeRequest(w, r, smap, si)
 }
 
 func (p *proxy) _clremoved(sid string) {
@@ -285,11 +305,18 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 	w.WriteHeader(http.StatusBadGateway)
 }
 
-func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *meta.Snode) {
+func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, smap *smapX, si *meta.Snode) {
 	debug.Assert(si.ID() != p.SID(), "reversing to self")
 
 	parsedURL, err := url.Parse(si.URL(cmn.NetIntraControl))
 	debug.AssertNoErr(err)
+
+	// stamp/sign over intra-control net
+	debug.Assert(smap.isValid())
+
+	// caution: svReq.payload() currently does not include query, host, and scheme; if it ever changes
+	// the following will have to change as well
+	p.setIntraHdrs(si, r, smap)
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }
 

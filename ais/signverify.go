@@ -35,10 +35,9 @@ import (
 // - keep local (public, private) keypairs in memory-only: regen on restart and advertise via joinCluster
 // - secure target redirected-datapath: redirect-marked (pid+ptime) is not good enough
 // - sign s3Redirect (see comment in ais/prxs3.go)
+// - add canonical query/body coverage
 // -------
-// - replace marker-only bypasses with verified redirect or signed intra-call checks
 // - tests: add TestSignVerifyToggleStress and run it in parallel w/ TestSmoke/prefetch/get-batch
-// - define replay protection and canonical query/body coverage
 // - add rotation, startup, and tampering tests
 
 const (

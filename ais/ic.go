@@ -142,7 +142,7 @@ outer:
 		r.ContentLength = int64(len(body))
 		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
-	ic.p.reverseNodeRequest(w, r, psi)
+	ic.p.reverseNodeRequest(w, r, smap, psi)
 	return true
 }
 

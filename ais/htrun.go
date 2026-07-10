@@ -822,6 +822,9 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 // stamp intra-cluster sender headers
 // - caller must ensure the destination is on intra-net
 // - see also namesake t.setIntraHdrs - a helper for external packages to call their own in another target
+// callers must call setIntraHdrs after:
+// - r.URL.Path is done and won't change
+// - ditto, r.Body and ContentLength
 func (h *htrun) setIntraHdrs(dst *meta.Snode, req *http.Request, smap *smapX) {
 	if smap.vstr != "" {
 		if smap.IsPrimary(h.si) {
