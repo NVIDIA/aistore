@@ -81,9 +81,10 @@ func (h *htrun) toggleSignVerify(enabled bool) {
 
 func (svs *svState) init() {
 	svs.nonce.Store(uint64(cos.CryptoRandI()))
+	now := mono.NanoTime()
 	svs.cur.Store(&_sv{
-		on:   false,                              // off until cluster-started (at least until)
-		last: mono.NanoTime() - int64(time.Hour), // expired at init time
+		on:   false,                  // off until cluster-started (at least until)
+		last: now - int64(time.Hour), // expired at init time
 	})
 }
 
@@ -99,19 +100,13 @@ func (svs *svState) set(on bool) {
 	svs.cur.Store(upd)
 }
 
-func (svs *svState) signTo(si *meta.Snode) bool {
+func (svs *svState) sign() bool {
 	if cmn.IsV50Bridge() {
 		return false
 	}
-	l := len(si.VerifyingKey)
-	if l == 0 {
-		return false
-	}
-	debug.Assert(l == cos.NodeSigningPublicKeySize) // Ed25519
 
 	on := cmn.Rom.SignVerifyEnabled()
 	cur := svs.cur.Load()
-
 	return (on && cur.on == on) || !svs.graceExpired(cur.last)
 }
 

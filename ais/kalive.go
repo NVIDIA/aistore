@@ -123,11 +123,8 @@ func (*talive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
 	return &config.Keepalive.Target
 }
 
-func (tkr *talive) cluUptime(now int64) (elapsed time.Duration) {
-	if at := tkr.t.startup.cluster.Load(); at > 0 {
-		elapsed = time.Duration(now - at)
-	}
-	return
+func (tkr *talive) cluUptime(now int64) time.Duration {
+	return tkr.t.cluUptime(now)
 }
 
 func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, _ int64, fast bool) (pid string, status int, err error) {
@@ -186,11 +183,8 @@ func (*palive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
 	return &config.Keepalive.Proxy
 }
 
-func (pkr *palive) cluUptime(now int64) (elapsed time.Duration) {
-	if at := pkr.p.startup.cluster.Load(); at > 0 {
-		elapsed = time.Duration(now - at)
-	}
-	return
+func (pkr *palive) cluUptime(now int64) time.Duration {
+	return pkr.p.cluUptime(now)
 }
 
 func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fast bool) (string, int, error) {

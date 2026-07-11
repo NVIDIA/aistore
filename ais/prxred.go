@@ -55,11 +55,11 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 
 	var (
 		sv      *svReq
-		signTo  = p.svs.signTo(si)
+		sign    = p.svs.sign()
 		special = cmn.HasSpecialSymbols(r.URL.Path)
 	)
 	switch {
-	case signTo:
+	case sign:
 		// sign the redirect
 
 		sb := sbAlloc()
@@ -76,7 +76,7 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 			break
 		}
 		fallthrough
-	case !signTo && special:
+	case !sign && special:
 		scheme, host, q := _preparse(nodeURL, r)
 		raw := p.qencode(q, now, sv)
 		u := url.URL{

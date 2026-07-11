@@ -835,7 +835,7 @@ func (h *htrun) setIntraHdrs(dst *meta.Snode, req *http.Request, smap *smapX) {
 	req.Header.Set(apc.HdrSenderID, h.SID())
 	req.Header.Set(apc.HdrSenderName, h.si.Name())
 
-	if dst != nil && smap.vstr != "" && h.svs.signTo(dst) {
+	if dst != nil && h.svs.sign() {
 		h.signIntra(req, smap)
 	}
 }
@@ -870,8 +870,15 @@ func (h *htrun) verifyIntra(r *http.Request, snode *meta.Snode, sid, sname strin
 		return 0, err
 	}
 	if svgrp == nil {
-		// exception for not-signed
-		if !h.svs.strict() || _isPlainHealth(r) {
+		// with two specific exceptions for 'not-signed'
+		if _isPlainHealth(r) || !h.svs.strict() {
+			return 0, nil
+		}
+		var (
+			now    = mono.NanoTime()
+			config = cmn.GCO.Get()
+		)
+		if h.cluUptime(now) < config.Timeout.Startup.D() {
 			return 0, nil
 		}
 		return http.StatusUnauthorized,
@@ -2736,6 +2743,13 @@ func (h *htrun) uptime2hdr(hdr http.Header) {
 	now := mono.NanoTime()
 	hdr.Set(apc.HdrNodeUptime, strconv.FormatInt(now-h.startup.node.Load(), 10))
 	hdr.Set(apc.HdrClusterUptime, strconv.FormatInt(now-h.startup.cluster.Load(), 10))
+}
+
+func (h *htrun) cluUptime(now int64) (elapsed time.Duration) {
+	if at := h.startup.cluster.Load(); at > 0 {
+		elapsed = time.Duration(now - at)
+	}
+	return
 }
 
 // Tx:
