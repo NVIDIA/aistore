@@ -75,6 +75,7 @@ type (
 // Caller must send over intra-net and call after (method, URL/path/query, and
 // relevant headers) are final. Destination matters because signing policy can
 // be peer-specific.
+// See related: IntraCtrlPost
 type (
 	SetIntraHdrs func(dst *meta.Snode, req *http.Request)
 )
@@ -135,5 +136,10 @@ type (
 		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 
 		GetFromNeighbor(params *GfnParams) (*http.Response, error)
+
+		// Send a stamped/signed intra-control POST to the destination node.
+		// The default way for subsystems below `ais` to issue one-shot control-plane
+		// requests; see related: SetIntraHdrs (EC shared streams).
+		IntraCtrlPost(dst *meta.Snode, path string, body []byte) error
 	}
 )

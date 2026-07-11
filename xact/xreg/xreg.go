@@ -127,7 +127,7 @@ var dreg *registry
 
 func Init() {
 	dreg = newRegistry()
-	xact.IncFinished = dreg.incFinished
+	xact.Init(dreg.incFinished)
 }
 
 func TestReset() { dreg = newRegistry() } // tests only

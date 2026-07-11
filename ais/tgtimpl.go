@@ -284,3 +284,30 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 	}
 	return resp, nil
 }
+
+// send a signed intra-control POST to a peer; body is optional
+// (e.g., T2T control - see xact/t2tctrl.go)
+func (t *target) IntraCtrlPost(dst *meta.Snode, path string, body []byte) error {
+	cargs := allocCargs()
+	{
+		cargs.si = dst
+		cargs.timeout = cmn.Rom.MaxKeepalive()
+		cargs.req = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Path:   path,
+			Body:   body,
+		}
+		if len(body) > 0 {
+			cargs.req.Header = http.Header{
+				cos.HdrContentType: []string{cos.ContentBinary},
+			}
+		}
+	}
+
+	res := t.call(cargs, t.owner.smap.get())
+	err := res.err
+
+	freeCR(res)
+	freeCargs(cargs)
+	return err
+}

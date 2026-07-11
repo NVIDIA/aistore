@@ -56,8 +56,6 @@ type (
 	}
 )
 
-var IncFinished func()
-
 // common helper to go-run and wait until it actually starts running
 func GoRunW(xctn core.Xact) {
 	wg := &sync.WaitGroup{}
@@ -384,7 +382,7 @@ func (xctn *Base) onFinished(err error, aborted bool) {
 		fs.CapRefresh(cmn.GCO.Get(), nil /*tcdf*/)
 	}
 
-	IncFinished() // in re: HK cleanup long-time finished
+	g.incFinished() // in re: HK cleanup long-time finished
 }
 
 func (xctn *Base) AddNotif(n core.Notif) {

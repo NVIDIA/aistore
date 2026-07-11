@@ -7,10 +7,8 @@ package xact
 import (
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -54,35 +52,7 @@ func IsErrRecvAbortWI(err error) bool { return errors.Is(err, errRecvAbortWI) }
 
 func (xctn *Base) SendCtrl(tsi *meta.Snode, wid, opcode string, body []byte) error {
 	path := apc.URLPathXactions.Join(T2TCtrl, xctn.Kind(), xctn.ID(), cos.Left(wid, NoneWID), opcode)
-	reqArgs := cmn.HreqArgs{
-		Method: http.MethodPost,
-		Base:   tsi.URL(cmn.NetIntraControl),
-		Path:   path,
-		Body:   body,
-	}
-	req, _, cancel, errR := reqArgs.ReqWith(cmn.Rom.MaxKeepalive())
-	if errR != nil {
-		return errR
-	}
-	defer cancel()
-	req.Header.Set(apc.HdrSenderID, core.T.SID())
-	req.Header.Set(apc.HdrSenderName, core.T.Snode().Name())
-	// note: not setting apc.HdrSenderSmapVer
-	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
-	if len(body) > 0 {
-		req.Header.Set(cos.HdrContentType, cos.ContentBinary)
-	}
-	resp, err := core.T.ControlClient().Do(req)
-	if err == nil {
-		if code := resp.StatusCode; code >= http.StatusBadRequest {
-			err = &cmn.ErrHTTP{Message: http.StatusText(code), Status: code}
-		}
-	}
-	if resp != nil && resp.Body != nil {
-		cos.DrainReader(resp.Body)
-		resp.Body.Close()
-	}
-	return err
+	return core.T.IntraCtrlPost(tsi, path, body)
 }
 
 // asynchronous broadcast with bounded launch parallelism

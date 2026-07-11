@@ -864,13 +864,18 @@ func (h *htrun) verifyIntra(r *http.Request, snode *meta.Snode, sid, sname strin
 	debug.Assert(len(h.si.VerifyingKey) == cos.NodeSigningPublicKeySize)
 
 	// - a present signature is always verified
-	// - a missing one is rejected only once strict (grace elapsed)
+	// - a missing one is rejected only when _strict_ (ie., out of grace window)
 	svgrp, err := svgrpFromHdr(r.Header)
 	if err != nil {
 		return 0, err
 	}
-	if svgrp == nil && (!h.svs.strict() || _isPlainHealth(r)) {
-		return 0, nil
+	if svgrp == nil {
+		// exception for not-signed
+		if !h.svs.strict() || _isPlainHealth(r) {
+			return 0, nil
+		}
+		return http.StatusUnauthorized,
+			fmt.Errorf("%s: unsigned intra-cluster request from %s", h, sname)
 	}
 	sv := newVerifier(r, h, svgrp)
 	if ecode, err := sv.verify(sid, snode, smap); err != nil {

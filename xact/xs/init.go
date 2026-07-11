@@ -17,6 +17,8 @@ const (
 
 // for additional startup-time reg-s see lru, downloader, ec
 func Pinit() {
+	xreg.Init()
+
 	xreg.RegNonBckXact(&eleFactory{})
 }
 
@@ -30,6 +32,8 @@ var (
 )
 
 func Tinit(coi COI) {
+	xreg.Init()
+
 	// init static map
 	allLsoFlags = make(map[string]cos.BitFlags, len(apc.GetPropsAll))
 	for i, n := range apc.GetPropsAll {
