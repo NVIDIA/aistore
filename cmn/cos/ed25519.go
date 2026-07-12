@@ -42,7 +42,7 @@ func NewNodeKeyPair(signingKey ed25519.PrivateKey, verifyingKey ed25519.PublicKe
 
 func (k *NodeKeyPair) validate() error {
 	if k == nil {
-		return errors.New("nil node signing key")
+		return errors.New("nil node key pair")
 	}
 	if len(k.SigningKey) != ed25519.PrivateKeySize {
 		return fmt.Errorf("invalid signing key size %d", len(k.SigningKey))

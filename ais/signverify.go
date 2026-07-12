@@ -32,8 +32,6 @@ import (
 // v5.1 will enable this implementation.
 //
 // TODO:
-// - keep local (public, private) keypairs in memory-only: regen on restart and advertise via joinCluster
-// - secure target redirected-datapath: redirect-marked (pid+ptime) is not good enough
 // - sign s3Redirect (see comment in ais/prxs3.go)
 // - add canonical query/body coverage
 // -------
