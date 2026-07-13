@@ -182,6 +182,36 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(nl1.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
 		})
 
+		It("should preserve an error when a stats refresh wins the terminal race", func() {
+			const errMsg = "xaction failed before terminal notification"
+
+			snap := finishedXact(xid)
+			snap.Err = errMsg
+			targets := getNodeMap(target1ID)
+			nl1 = xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
+			Expect(n.add(nl1)).To(Succeed())
+
+			done := n.reconcilePulledStats(nl1, targets[target1ID], snap, true, false)
+			Expect(done).To(BeTrue())
+			n.done(nl1)
+
+			Expect(nl1.IsFinished()).To(BeTrue())
+			Expect(nl1.Err()).To(MatchError(errMsg))
+		})
+
+		It("should prefer an abort error from refreshed finished stats", func() {
+			const abortErr = "xaction aborted on target"
+
+			snap := abortedXact(xid)
+			snap.Err = "earlier xaction error"
+			snap.AbortErr = abortErr
+			done := n.reconcilePulledStats(nl1, targets[target1ID], snap, true, snap.AbortedX)
+
+			Expect(done).To(BeTrue())
+			Expect(nl1.Err()).To(MatchError(abortErr))
+			Expect(nl1.IsAborted()).To(BeTrue())
+		})
+
 		It("should finish when all the Notifiers finished", func() {
 			Expect(nl1.FinCount()).To(BeEquivalentTo(0))
 			n.add(nl1)

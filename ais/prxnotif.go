@@ -195,6 +195,35 @@ func (*notifs) _progress(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) {
 	}
 }
 
+// xactSnapErr recovers an xaction error from stats fetched directly from a
+// target. This pull path can observe completion before the asynchronous
+// terminal notification arrives; both paths must preserve the same error.
+func xactSnapErr(stats any) error {
+	snap, ok := stats.(*core.Snap)
+	if !ok {
+		return nil
+	}
+	if snap.AbortErr != "" {
+		return errors.New(snap.AbortErr)
+	}
+	if snap.Err != "" {
+		return errors.New(snap.Err)
+	}
+	return nil
+}
+
+// reconcilePulledStats reconciles a direct target response with the listener.
+// The caller finalizes a done listener after this function releases its lock.
+func (n *notifs) reconcilePulledStats(nl nl.Listener, tsi *meta.Snode, stats any, finished, aborted bool) (done bool) {
+	nl.Lock()
+	if finished {
+		done = n.markFinished(nl, tsi, xactSnapErr(stats), aborted)
+	}
+	nl.SetStats(tsi.ID(), stats)
+	nl.Unlock()
+	return
+}
+
 func (n *notifs) _finished(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) {
 	var (
 		srcErr  error
@@ -470,12 +499,8 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 				nlog.Errorf("%s: failed to parse stats from %s: %v", n.p, res.si.StringEx(), err)
 				continue
 			}
-			nl.Lock()
-			if finished {
-				done = done || n.markFinished(nl, res.si, nil, aborted)
-			}
-			nl.SetStats(res.si.ID(), stats)
-			nl.Unlock()
+			refreshedDone := n.reconcilePulledStats(nl, res.si, stats, finished, aborted)
+			done = done || refreshedDone
 			continue
 		}
 		// err
