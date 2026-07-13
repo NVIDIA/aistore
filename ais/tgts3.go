@@ -32,35 +32,36 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln("s3Handler", t.String(), r.Method, r.URL)
 	}
+
 	apiItems, err := t.parseURL(w, r, apc.URLPathS3.L, 0, true)
 	if err != nil {
+		return
+	}
+	dpq := dpqAlloc()
+	defer dpqFree(dpq)
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Code: s3.ErrCodeInvalidArgument})
+		return
+	}
+	dpq.isS3 = true
+
+	if ecode, err := t.checkObjVerb(r, dpq); err != nil {
+		code := s3.ErrCodeInvalidRequest
+		if ecode == http.StatusUnauthorized || ecode == http.StatusForbidden {
+			ecode = http.StatusForbidden // S3 uses 403 AccessDenied, not 401
+			code = s3.ErrCodeAccessDenied
+		}
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode, Code: code})
 		return
 	}
 
 	switch r.Method {
 	case http.MethodHead:
-		t.headObjS3(w, r, apiItems)
-		return
-	case http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPost:
-		// dpq parsed below
-	default:
-		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPost)
-		return
-	}
-
-	dpq := dpqAlloc()
-	defer dpqFree(dpq)
-	if err := dpq.parse(r.URL.RawQuery); err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
-		return
-	}
-	dpq.isS3 = true
-
-	switch r.Method {
+		t.headObjS3(w, r, apiItems) // (not using dpq when intra_control sign/verify disabled)
 	case http.MethodGet:
 		t.getObjS3(w, r, apiItems, dpq)
 	case http.MethodPut:
-		t.putCopyMpt(w, r, cmn.GCO.Get(), dpq, apiItems)
+		t.putCopyMpt(w, r, dpq, apiItems)
 	case http.MethodDelete:
 		if dpq.has(s3.QparamMptUploadID) {
 			t.abortMptS3(w, r, dpq, apiItems)
@@ -69,12 +70,15 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 		}
 	case http.MethodPost:
 		t.postObjS3(w, r, apiItems, dpq)
+	default:
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPost)
+		return
 	}
 }
 
 // PUT /s3/<bucket-name>/<object-name>
 // [switch] mpt | put | copy
-func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.Config, dpq *dpq, items []string) {
+func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, dpq *dpq, items []string) {
 	cs := fs.Cap()
 	if cs.IsOOS() {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: cs.Err(), Status: http.StatusInsufficientStorage})
@@ -110,10 +114,10 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 			return
 		}
 		lom := core.AllocLOM(objName)
-		t.putObjS3(w, r, bck, config, lom, dpq)
+		t.putObjS3(w, r, bck, lom, dpq)
 		core.FreeLOM(lom)
 	default:
-		t.copyObjS3(w, r, config, items)
+		t.copyObjS3(w, r, items)
 	}
 }
 
@@ -122,7 +126,7 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 // Note:
 // S3 copy object API use the "destination" bucket in the URL path, but AIStore target use "source" bucket
 // we need this extra `copyObjS3` handler at target to address the translation
-func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
+func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	src := r.Header.Get(cos.S3HdrObjSrc)
 
 	// [HACK]
@@ -185,6 +189,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		return
 	}
 
+	config := cmn.GCO.Get()
 	ecode, err = t.copyObject(lom, bckTo, objNameTo, nil /*dpq*/, config)
 	if err != nil {
 		if err == cmn.ErrSkip || ecode == http.StatusNotFound {
@@ -213,7 +218,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	sgl.Free()
 }
 
-func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, config *cmn.Config, lom *core.LOM, dpq *dpq) {
+func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM, dpq *dpq) {
 	if err := lom.InitBck(bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -232,7 +237,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		poi.atime = started.UnixNano()
 		poi.t = t
 		poi.lom = lom
-		poi.config = config
+		poi.config = cmn.GCO.Get()
 		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || dpq.skipVC // apc.QparamSkipVC
 		poi.restful = true
 	}

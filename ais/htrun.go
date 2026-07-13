@@ -2649,8 +2649,9 @@ func (h *htrun) checkIntra(r *http.Request, onlyPrimary bool, nets ...reqNet) (i
 	if len(nets) > 0 {
 		expNet = nets[0]
 	}
-	if got := _reqNet(r); !_netEq(got, expNet) {
-		err := fmt.Errorf("%s: expected %s request", h, reqNetName(expNet))
+	net := _reqNet(r)
+	if !_netEq(net, expNet) {
+		err := fmt.Errorf("%s: expected %s request (got %s)", h, reqNetName(expNet), reqNetName(net))
 		debug.AssertNoErr(err)
 		return http.StatusForbidden, err
 	}
@@ -2689,7 +2690,7 @@ func (h *htrun) checkIntra(r *http.Request, onlyPrimary bool, nets ...reqNet) (i
 			return 0, nil
 		}
 		e := fmt.Errorf(fmtNodeNotPresent, sname, smap)
-		return 0, fmt.Errorf("%s via %s: %v", h, cmn.NetIntraControl, e)
+		return 0, fmt.Errorf("%s via %s: %v", h, reqNetName(net), e)
 	}
 
 	// sname prefix must match the role (completing check #2 above)

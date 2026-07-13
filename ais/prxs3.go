@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 
 	jsoniter "github.com/json-iterator/go"
@@ -817,36 +818,49 @@ func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket st
 	return bck
 }
 
-// TODO: [strict sign-verify] s3Redirect is currently unsigned on both paths:
-// - 307: redurl carries no `svgrp` params; must sign (bind: pid, ptime, method, bck/obj, expiry).
-// - XML <Endpoint> strips query by construction (extractEndpoint):
-// - botocore rebuilds from <Endpoint>, dropping params; may require revisiting python/aistore/botocore_patch.
+// [strict sign-verify] both redirect channels carry the signed URL:
+// - 307 Location: redurl signed via p.redurl (`svgrp` params);
+// - XML <Endpoint>: full redurl, XML-escaped (`&` => `&amp;`).
+// NOTE:
+// included python/aistore/botocore_patch
+// follows the Location header verbatim (never parses <Endpoint>), so patched botocore/boto3
+// needs no change; the escaped <Endpoint> serves other XML-reading S3 clients.
 func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, redurl, bucket string) {
+	// Deprecated: reverse-proxy S3 API call to a designated target
 	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {
-		// [intra-cluster communications]
-		// instead of regular HTTP redirect (below) reverse-proxy S3 API call to a designated target
-		// forward using pub net
-		parsedURL, err := url.Parse(si.URL(cmn.NetPublic))
+		// forward using intra-data net (object payloads; see also reverseNodeRequest);
+		// stamp/sign via intra headers - svReq.payload() excludes query/host/scheme,
+		// so the URL rewrite below cannot invalidate the signature
+		if !p.ClusterStarted() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		smap := p.owner.smap.get()
+		debug.Assert(smap.isValid())
+		parsedURL, err := url.Parse(si.URL(cmn.NetIntraData))
 		debug.AssertNoErr(err)
+		p.setIntraHdrs(si, r, smap)
 		p.reverseRequest(w, r, si.ID(), parsedURL)
 		return
 	}
 
+	// redirect
 	h := w.Header()
 	h.Set(cos.HdrLocation, redurl)
 	h.Set(cos.HdrContentType, "text/xml; charset=utf-8")
 	h.Set(cos.HdrServer, s3.AISServer)
 
+	const xmlOverhead = 160 // XML literals below
 	var (
-		ep = extractEndpoint(redurl)
-		ll = max(256, 175+len(ep)+len(bucket)-27)
-		bb = bytes.NewBuffer(make([]byte, ll)) // TODO: consider using smm (small-size allocator) - here and elsewhere
+		ll        = max(256, xmlOverhead+len(redurl)+strings.Count(redurl, "&")*4+len(bucket))
+		size      = max(memsys.DefaultSmallBufSize, ll)
+		buf, slab = p.smm.AllocSize(int64(size))
+		bb        = bytes.NewBuffer(buf[:0])
 	)
-	bb.Reset()
 	bb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
 	bb.WriteString("<Error><Code>TemporaryRedirect</Code><Message>Redirect</Message>")
 	bb.WriteString("<Endpoint>")
-	bb.WriteString(ep)
+	xmlEscAmp(bb, redurl)
 	bb.WriteString("</Endpoint>")
 	bb.WriteString("<Bucket>")
 	bb.WriteString(bucket)
@@ -854,18 +868,20 @@ func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snod
 
 	w.WriteHeader(http.StatusTemporaryRedirect)
 	w.Write(bb.Bytes())
+
+	slab.Free(buf)
 }
 
-// extractEndpoint extracts an S3 endpoint from the full URL path.
-// Endpoint is a host name with port and root URL path (if exists).
-// E.g. for AIS `http://localhost:8080/s3/bck1/obj1` the endpoint
-// would be `localhost:8080/s3`
-func extractEndpoint(path string) string {
-	ep := path
-	if idx := strings.Index(ep, "/"+apc.S3); idx > 0 {
-		ep = ep[:idx+3]
+// escape `&` for XML content; signed redurl query separators
+func xmlEscAmp(bb *bytes.Buffer, s string) {
+	for {
+		i := strings.IndexByte(s, '&')
+		if i < 0 {
+			bb.WriteString(s)
+			return
+		}
+		bb.WriteString(s[:i])
+		bb.WriteString("&amp;")
+		s = s[i+1:]
 	}
-	ep = strings.TrimPrefix(ep, "http://")
-	ep = strings.TrimPrefix(ep, "https://")
-	return ep
 }

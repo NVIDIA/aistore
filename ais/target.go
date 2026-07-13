@@ -830,95 +830,102 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 // verify signature if auth.intra_control enabled
 // applies to object-level (httpobj*) verbs
 func (t *target) verifyObjVerb(w http.ResponseWriter, r *http.Request, dpq *dpq) bool /*ok*/ {
+	ecode, err := t.checkObjVerb(r, dpq)
+	if err == nil {
+		return true
+	}
+	t.writeErr(w, r, err, ecode)
+	return false
+}
+
+func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) {
 	debug.Assert(dpq != nil)
+
+	// arrived via one of the 3 nets
+	net := _reqNet(r)
 
 	// 1. unsigned
 	if cmn.IsV50Bridge() || !cmn.Rom.SignVerifyEnabled() {
-		return t._verifyUnsigned(w, r, dpq)
+		return t._verifyUnsigned(r, dpq, net)
 	}
 
-	// 2, signed redirect
-	if reqIsPub(r) {
-		return t._verifySignedRedirect(w, r, dpq)
+	// 2. signed redirect
+	if net == reqNetPub {
+		return t._verifySignedRedirect(r, dpq)
 	}
 
 	// 3. signed T2T
+	debug.Assert(net == reqNetCtrl || net == reqNetData)
 	debug.Assert(!hasRedirectMarker(dpq))
 
-	// GFN GET and T2T PUT are signed object data-plane requests.
-	net := cos.Ternary(dpq.isGFN || r.Method == http.MethodPut, reqNetData, reqNetCtrl)
-
-	if ecode, err := t.checkIntra(r, false /*from primary*/, net); err != nil {
-		e := fmt.Errorf(fmtErrExpRedirect, t.si, r.Method, r.RemoteAddr, err)
-		t.writeErr(w, r, e, ecode)
-		return false
+	if ecode, err = t.checkIntra(r, false /*from primary*/, net); err != nil {
+		err = fmt.Errorf(fmtErrExpRedirect, t.si, r.Method, r.RemoteAddr, err)
 	}
-	return true
+	return ecode, err
 }
 
-func (t *target) _verifyUnsigned(w http.ResponseWriter, r *http.Request, dpq *dpq) bool /*ok*/ {
+func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode int, err error) {
 	if hasRedirectMarker(dpq) {
-		if !reqIsPub(r) {
-			t.writeErrf(w, r, fmtErrExpPubNet, t.si, r.Method, r.RemoteAddr)
-			return false
+		if net != reqNetPub {
+			err = fmt.Errorf(fmtErrExpPubNet, t.si, r.Method, r.RemoteAddr)
+			return http.StatusBadRequest, err
 		}
-		return true
+		return 0, nil
 	}
-	if reqIsPub(r) {
+
+	if net == reqNetPub {
 		config := cmn.GCO.Get()
+
 		// Starting with v5.0, direct target access is rejected when either AuthN
 		// or intra-cluster request signing is configured: both require proxy mediation.
 		if config.Auth.Enabled || config.Auth.IntraClusterConfigured() {
-			t.writeErr(w, r, errDirectTargetAccess, http.StatusForbidden)
-			return false
+			return http.StatusForbidden, errDirectTargetAccess
 		}
+
 		switch r.Method {
 		case http.MethodPut, http.MethodDelete, http.MethodPost, http.MethodPatch:
-			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
-			return false
+			err = fmt.Errorf("%s: %s(obj) is expected to be redirected", t.si, r.Method)
+			return http.StatusBadRequest, err
 		}
-		return true // legacy direct read access (GET, HEAD)
+		return 0, nil // legacy direct read access (GET, HEAD)
 	}
+
 	// intra arrival; v5.0 bridge: 4.x senders don't stamp sender headers
 	if cmn.IsV50Bridge() {
-		return true
+		return 0, nil
 	}
 
 	// ditto (see above)
-	net := cos.Ternary(dpq.isGFN || r.Method == http.MethodPut, reqNetData, reqNetCtrl)
-	if ecode, err := t.checkIntra(r, false /*from primary*/, net); err != nil {
-		e := fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err)
-		t.writeErr(w, r, e, ecode)
-		return false
+	if ecode, err = t.checkIntra(r, false /*from primary*/, net); err != nil {
+		err = fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err)
 	}
-	return true
+	return ecode, err
 }
 
-func (t *target) _verifySignedRedirect(w http.ResponseWriter, r *http.Request, dpq *dpq) bool /*ok*/ {
+func (t *target) _verifySignedRedirect(r *http.Request, dpq *dpq) (ecode int, err error) {
 	var (
 		svgrp *svgrp
 		pid   = dpq.sys.pid
 		smap  = t.owner.smap.get()
 	)
+
 	// target's Smap is never nil; there _may_ be a very narrow startup window
 	// when it's invalid but then we just fail a signed request (unlikely)
 	debug.Assert(smap.isValid())
 
 	if !hasRedirectMarker(dpq) {
-		t.writeErr(w, r, errDirectTargetAccess, http.StatusUnauthorized)
-		return false
+		return http.StatusUnauthorized, errDirectTargetAccess
 	}
+
 	if dpq.sv.sig != "" {
 		svgrp = &dpq.sv
 	}
 	if svgrp != nil || t.svs.strict() {
 		sv := newVerifier(r, &t.htrun, svgrp)
-		if ecode, err := sv.verify(pid, smap.GetNode(pid), smap); err != nil {
-			t.writeErr(w, r, err, ecode)
-			return false
-		}
+		return sv.verify(pid, smap.GetNode(pid), smap)
 	}
-	return true
+
+	return 0, nil
 }
 
 //
