@@ -152,6 +152,8 @@ const (
 	// Request to restore an object
 	QparamECObject = "object"
 
+	// AIS native multipart APIs use
+	// canonical S3 constants
 	QparamMptUploads  = "uploads"    // Start multipart upload
 	QparamMptUploadID = "uploadId"   // Complete, abort, or list parts of specific multipart upload
 	QparamMptPartNo   = "partNumber" // Part number for multipart upload

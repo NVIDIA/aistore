@@ -1,10 +1,11 @@
 // Package s3 provides Amazon S3 compatibility layer
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package s3
 
 import (
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -23,10 +24,12 @@ const (
 	QparamStartAfter        = "start-after"        // Start listing after this object key
 	QparamDelimiter         = "delimiter"          // Delimiter for grouping object keys
 
-	// multipart
-	QparamMptUploads        = "uploads"    // Start multipart upload or list active uploads
-	QparamMptUploadID       = "uploadId"   // Complete, abort, or list parts of specific multipart upload
-	QparamMptPartNo         = "partNumber" // Part number for multipart upload
+	// AIS native multipart APIs use
+	// canonical S3 constants
+	QparamMptUploads  = apc.QparamMptUploads  // Start multipart upload or list active uploads
+	QparamMptUploadID = apc.QparamMptUploadID // Complete, abort, or list parts of specific multipart upload
+	QparamMptPartNo   = apc.QparamMptPartNo   // Part number for multipart upload
+
 	QparamMptMaxUploads     = "max-uploads"
 	QparamMptUploadIDMarker = "upload-id-marker"
 

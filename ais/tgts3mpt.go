@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 
@@ -33,7 +32,7 @@ const emptyUploadID = "empty uploadId"
 // - Generate UUID for the upload
 // - Return the UUID to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
-func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
+func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, items []string) {
 	objName, errN := s3.JoinValidateOname(w, r, items)
 	if errN != nil {
 		return
@@ -69,14 +68,14 @@ func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, items []stri
 // either not present (s3cmd) or cannot be trusted (aws s3api).
 //
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
-func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
+func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, items []string) {
 	// 1. parse/validate
-	uploadID := q.Get(s3.QparamMptUploadID)
+	uploadID := dpq.get(s3.QparamMptUploadID)
 	if uploadID == "" {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: errors.New(emptyUploadID)})
 		return
 	}
-	part := q.Get(s3.QparamMptPartNo)
+	part := dpq.get(s3.QparamMptPartNo)
 	if part == "" {
 		err := fmt.Errorf("upload %q: missing part number", uploadID)
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
@@ -131,9 +130,9 @@ func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []st
 // 2. Merge all parts into a single file and calculate its ETag
 // 3. Return ETag to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
-func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
+func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, items []string) {
 	// parse/validate
-	uploadID := q.Get(s3.QparamMptUploadID)
+	uploadID := dpq.get(s3.QparamMptUploadID)
 	if uploadID == "" {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: errors.New(emptyUploadID)})
 		return
@@ -216,7 +215,7 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []s
 // 2. Remove all temporary files
 // 3. Remove all info from in-memory structs
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html
-func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
+func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq, items []string) {
 	bck, ecode, err := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
@@ -232,7 +231,7 @@ func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, items []stri
 		return
 	}
 
-	uploadID := q.Get(s3.QparamMptUploadID)
+	uploadID := dpq.get(s3.QparamMptUploadID)
 	ecode, err = t.ups.abort(r, lom, uploadID)
 	if err != nil {
 		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
@@ -248,8 +247,8 @@ func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, items []stri
 // s3cmd is OK to receive an empty body in response with status=200. In this
 // case s3cmd sends all parts.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html
-func (t *target) listPartsMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, q url.Values) {
-	uploadID := q.Get(s3.QparamMptUploadID)
+func (t *target) listPartsMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, dpq *dpq) {
+	uploadID := dpq.get(s3.QparamMptUploadID)
 
 	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck); err != nil {
@@ -280,17 +279,17 @@ func (t *target) listPartsMptS3(w http.ResponseWriter, r *http.Request, bck *met
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
 // GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&
 // max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
-func (t *target) listUploadsMptS3(w http.ResponseWriter, bck *meta.Bck, q url.Values) {
+func (t *target) listUploadsMptS3(w http.ResponseWriter, bck *meta.Bck, dpq *dpq) {
 	var (
 		maxUploads int
 		idMarker   string
 	)
-	if s := q.Get(s3.QparamMptMaxUploads); s != "" {
+	if s := dpq.get(s3.QparamMptMaxUploads); s != "" {
 		if v, err := strconv.Atoi(s); err == nil {
 			maxUploads = v
 		}
 	}
-	idMarker = q.Get(s3.QparamMptUploadIDMarker)
+	idMarker = dpq.get(s3.QparamMptUploadIDMarker)
 	all := t.ups.toSlice()
 	result := s3.ListUploads(all, bck.Name, idMarker, maxUploads)
 	sgl := t.gmm.NewSGL(0)
@@ -305,13 +304,13 @@ func (t *target) listUploadsMptS3(w http.ResponseWriter, bck *meta.Bck, q url.Va
 // The object must have been multipart-uploaded beforehand.
 // See:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
-func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM, q url.Values) {
+func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM, dpq *dpq) {
 	startTime := mono.NanoTime()
 	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
-	partNum, err := t.ups.parsePartNum(q.Get(s3.QparamMptPartNo))
+	partNum, err := t.ups.parsePartNum(dpq.get(s3.QparamMptPartNo))
 	if err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
