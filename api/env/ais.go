@@ -57,6 +57,9 @@ const (
 	AisK8sPublicDNSMode        = "AIS_PUBLIC_DNS_MODE"
 	AisK8sEnableExternalAccess = "ENABLE_EXTERNAL_ACCESS"
 
+	// Cluster UUID to use on primary startup.
+	AisClusterUUID = "AIS_CLUSTER_UUID"
+
 	// AisK8sPublicDNSMode values
 	PubNetDNSModeIP   string = "IP"
 	PubNetDNSModeNode string = "Node"

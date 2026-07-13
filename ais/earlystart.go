@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime"
 	"time"
 
@@ -413,6 +414,25 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 // the cluster is fully started - e.g., a node restarts with a new IP while the
 // cluster is running.
 
+// _resolveCluUUID determines the cluster UUID to use when the primary bootstraps
+// a new or restarted cluster. Precedence:
+//  1. uuid from regpool joins: use the existing cluster's UUID if the node is joining an existing cluster.
+//  2. AIS_CLUSTER_UUID env var: provided by the Kubernetes operator.
+//  3. newClusterUUID: generate a new UUID when one isn't provided.
+func _resolveCluUUID(uuid, created string, p *proxy) (string, string) {
+	if uuid != "" {
+		return uuid, created
+	}
+
+	if envUUID := os.Getenv(env.AisClusterUUID); envUUID != "" && cos.IsValidUUID(envUUID) {
+		nlog.Infof("%s: reusing cluster UUID %q from %s env", p, envUUID, env.AisClusterUUID)
+		return envUUID, _formattedCluCreationTime()
+	} else if envUUID != "" {
+		cos.ExitLogf("invalid UUID in %s environment variable: %s", env.AisClusterUUID, envUUID)
+	}
+	return _newCluUUID()
+}
+
 func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int, prim primRes) {
 	var (
 		smap          = newSmap()
@@ -521,11 +541,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 			cos.ExitLog(p.String(), "cannot create cluster with no targets,", smap.StringEx())
 		}
 		clone := smap.clone()
-		if uuid == "" {
-			clone.UUID, clone.CreationTime = _newCluUUID()
-		} else {
-			clone.UUID, clone.CreationTime = uuid, created
-		}
+		clone.UUID, clone.CreationTime = _resolveCluUUID(uuid, created, p)
 		clone.Version++
 		p.owner.smap.put(clone)
 		smap = clone
@@ -606,8 +622,12 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 
 func _newCluUUID() (uuid, creationTime string) {
 	uuid = cos.GenUUID()
-	creationTime = time.Now().UTC().Format(cos.DateTimeSec)
+	creationTime = _formattedCluCreationTime()
 	return
+}
+
+func _formattedCluCreationTime() string {
+	return time.Now().UTC().Format(cos.DateTimeSec)
 }
 
 func (p *proxy) _cluConfig(smap *smapX) (config *globalConfig, err error) {
@@ -1172,8 +1192,8 @@ ret:
 	p.reg.mpl.RUnlock()
 
 	if after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
-		after.Smap.UUID, after.Smap.CreationTime = _newCluUUID()
-		nlog.Infoln(p.String(), "new cluster UUID:", after.Smap.UUID)
+		after.Smap.UUID, after.Smap.CreationTime = _resolveCluUUID("", "", p)
+		nlog.Infoln(p.String(), "cluster UUID:", after.Smap.UUID)
 		return after.Smap
 	}
 	if before.Smap == after.Smap {
