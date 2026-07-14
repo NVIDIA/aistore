@@ -32,7 +32,6 @@ import (
 // v5.1 will enable this implementation.
 //
 // TODO:
-// - native API: review remaining target handlers (likely, t.downloadHandler and t.etlHandler - that's all)
 // - add canonical query/body coverage
 // - tests: add TestSignVerifyToggleStress and run it in parallel w/ TestSmoke/prefetch/get-batch
 // - add rotation, startup, and tampering tests

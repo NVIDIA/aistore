@@ -25,45 +25,22 @@ import (
 
 // [METHOD] /v1/etl
 func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
+	if !t.ensureIntraControl(w, r, true /* only primary */) {
+		return
+	}
 	if !k8s.IsK8s() {
 		t.writeErr(w, r, k8s.ErrK8sRequired, 0, Silent)
 		return
 	}
 	switch r.Method {
-	case http.MethodPut:
-		t.handleETLPut(w, r) // TODO: move to proxy (control plane operation)
 	case http.MethodDelete:
-		t.handleETLDelete(w, r) // TODO: move to proxy (control plane operation)
+		t.handleETLDelete(w, r)
 	case http.MethodGet:
 		dpq := dpqAlloc()
 		t.handleETLGet(w, r, dpq)
 		dpqFree(dpq)
-	case http.MethodHead:
-		t.headObjectETL(w, r)
 	default:
-		cmn.WriteErr405(w, r, http.MethodGet, http.MethodHead, http.MethodPost)
-	}
-}
-
-// PUT /v1/etl
-// init ETL spec/code
-func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.parseURL(w, r, apc.URLPathETL.L, 0, true)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	// disallow to run when above high wm (let alone OOS)
-	cs := fs.Cap()
-	if err := cs.Err(); err != nil {
-		t.writeErr(w, r, err, http.StatusInsufficientStorage)
-		return
-	}
-
-	// /v1/etl/_object/<secret>/<uname>
-	if apiItems[0] == apc.ETLObject {
-		t.putObjectETL(w, r)
-		return
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet)
 	}
 }
 
@@ -81,12 +58,6 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request, dpq *dpq) 
 	// /v1/etl
 	if len(apiItems) == 0 {
 		t.writeJSON(w, r, etl.List(), "list-etl")
-		return
-	}
-
-	// /v1/etl/_object/<secret>/<uname>
-	if apiItems[0] == apc.ETLObject {
-		t.getObjectETL(w, r, dpq)
 		return
 	}
 
@@ -275,14 +246,36 @@ func etlParseObjectReq(r *http.Request) (etlName, secret string, bck *meta.Bck, 
 	return
 }
 
-// GET /v1/etl/_object/<etl-name>/<secret>/<uname>
-// Handles GET requests from ETL containers (K8s Pods).
-// Validates the secret that was injected into a Pod during its initialization
-// (see boot.go `_setPodEnv`).
+// [METHOD] /v1/etl/_object/<etl-name>/<secret>/<uname>
+// ETL object I/O does not require intra-cluster node validation.
+// This route is registered on intra-data only (never public).
+// Requests are authorized using the per-ETL secret in the URL.
 //
-// NOTE: this is an internal URL with "_object" in its path intended to avoid
-// conflicts with ETL name in `/v1/elt/<etl-name>/...`
-func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq) {
+// This intra-data endpoint is a deliberate exception to AIS node-level
+// Ed25519 authentication: its callers are ETL containers, not Smap members,
+// and therefore have no AIS node identity or signing key. During ETL startup,
+// the target injects AIS_TARGET_URL containing a per-ETL bearer secret into the
+// container (see ext/etl/boot.go, _setPodEnv). Possession of that secret
+// authorizes object I/O for the corresponding ETL.
+//
+// The secret is cluster-wide per ETL instance - deliberately: with direct
+// put, a Pod PUTs the transformed object to *another* target (the HRW
+// destination for the resulting name), which validates the same secret.
+// The secret lives and dies with its ETL.
+//
+// Pods cannot sign (not in Smap, no signing key) and carry no AuthN token;
+// requests here bypass both verifyObjVerb and checkIntra by design - the
+// secret is the sole gate.
+// Pods reach the target via its intra-cluster (NetIntraData) URL.
+//
+// TODO: review/improve the secret's lifecycle
+func (t *target) etlObjHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. K8s only
+	if !k8s.IsK8s() {
+		t.writeErr(w, r, k8s.ErrK8sRequired, 0, Silent)
+		return
+	}
+	// 2. parse the (fixed-shape) path; authorize via per-ETL secret
 	etlName, secret, bck, objName, err := etlParseObjectReq(r)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -292,11 +285,43 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq) 
 		t.writeErr(w, r, err)
 		return
 	}
+	// 3. dpq - parse once for all verbs
+	dpq := dpqAlloc()
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		dpqFree(dpq)
+		t.writeErr(w, r, err)
+		return
+	}
 
+	// 4. do
+	switch r.Method {
+	case http.MethodGet:
+		t.getObjectETL(w, r, dpq, bck, objName)
+	case http.MethodPut:
+		// disallow to run when above high wm (let alone OOS)
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
+			t.writeErr(w, r, err, http.StatusInsufficientStorage)
+			break
+		}
+		t.putObjectETL(w, r, dpq, bck, objName)
+	case http.MethodHead:
+		t.headObjectETL(w, r, dpq, bck, objName)
+	default:
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodHead, http.MethodPut)
+	}
+	dpqFree(dpq)
+}
+
+// GET /v1/etl/_object/<etl-name>/<secret>/<uname>
+// Handles GET requests from ETL containers (K8s Pods).
+//
+// This is an internal URL with "_object" in its path intended to avoid
+// conflicts with ETL name in `/v1/etl/<etl-name>/...`
+func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, objName string) {
 	lom := core.AllocLOM(objName)
-	lom, err = t.getObject(w, r, dpq, bck, lom)
+	lom, err := t.getObject(w, r, dpq, bck, lom)
 	core.FreeLOM(lom)
-
 	if err != nil {
 		t._erris(w, r, err, 0, dpq.silent)
 	}
@@ -304,21 +329,8 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq) 
 
 // PUT /v1/etl/_object/<etl-name>/<secret>/<uname>?uuid=<xid>
 // Handles PUT requests from ETL containers (K8s Pods).
-// Validates the secret that was injected into a Pod during its initialization
-// (see boot.go `_setPodEnv`).
-func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request) {
-	var config = cmn.GCO.Get()
-
-	etlName, secret, bck, objName, err := etlParseObjectReq(r)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if err := etl.ValidateSecret(etlName, secret); err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-
+func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, objName string) {
+	config := cmn.GCO.Get()
 	lom := core.AllocLOM(objName)
 	if err := lom.InitBck(bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
@@ -326,21 +338,13 @@ func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request) {
 			err = lom.InitBck(bck)
 		}
 		if err != nil {
+			core.FreeLOM(lom)
 			t.writeErr(w, r, err)
 			return
 		}
 	}
-
-	dpq := dpqAlloc() // xid should be included in the query
-	if err := dpq.parse(r.URL.RawQuery); err != nil {
-		dpqFree(dpq)
-		t.writeErr(w, r, err)
-		return
-	}
 	ecode, err := t.putObject(w, r, dpq, lom, config)
 	core.FreeLOM(lom)
-	dpqFree(dpq)
-
 	if err != nil {
 		t.writeErr(w, r, err, ecode)
 	}
@@ -349,28 +353,10 @@ func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/etl/_object/<etl-name>/<secret>/<uname>
 //
 // Handles HEAD requests from ETL containers (K8s Pods).
-// Validates the secret that was injected into a Pod during its initialization.
-func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
-	etlName, secret, bck, objName, err := etlParseObjectReq(r)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if err := etl.ValidateSecret(etlName, secret); err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	dpq := dpqAlloc()
-	if err := dpq.parse(r.URL.RawQuery); err != nil {
-		dpqFree(dpq)
-		t.writeErr(w, r, err)
-		return
-	}
-
+func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, objName string) {
 	lom := core.AllocLOM(objName)
 	ecode, err := t.objHead(r, w.Header(), dpq, bck, lom)
 	core.FreeLOM(lom)
-	dpqFree(dpq)
 	if err != nil {
 		// always silent (compare w/ httpobjhead)
 		t.writeErr(w, r, err, ecode, Silent)

@@ -654,7 +654,9 @@ func (t *target) initRecvHandlers() {
 		networkHandler{r: apc.ObjStream, h: rxAnyStream, net: accessControlData},
 
 		networkHandler{r: apc.Download, h: t.downloadHandler, net: accessNetIntraControl},
-		networkHandler{r: apc.ETL, h: t.etlHandler, net: accessNetAll},
+
+		networkHandler{r: apc.ETL, h: t.etlHandler, net: accessNetIntraControl},                // control-plane; management
+		networkHandler{r: apc.URLPathETLObject.S, h: t.etlObjHandler, net: accessNetIntraData}, // _object datapath
 
 		// machine learning
 		networkHandler{r: apc.ML, h: t.mlHandler, net: accessNetPublicControl},
