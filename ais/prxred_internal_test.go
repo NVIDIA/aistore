@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -118,7 +117,7 @@ func makeRedirect(t *testing.T, signVerifyEnabled bool, method, path, rawQuery s
 	dst := newTestSnode(t)
 	req := newReq(method, path, rawQuery)
 
-	out := p.redurl(req, dst, smapVer, time.Now().UnixNano(), cmn.NetIntraControl, "")
+	out := p.redurl(req, dst, smapVer, cmn.NetIntraControl, "")
 	return p, req, parseRedirect(t, out)
 }
 

@@ -24,8 +24,6 @@ const (
 	fmtNodeNotPresent = "node %s not present in %s"   // compare w/ errNodeNotFound
 	fmtSelfNotPresent = "%s (self) not present in %s" // compare w/ errSelfNotFound
 
-	fmtErrExpRedirect = "%s: %s(obj) is expected to be redirected (remaddr: %s, err: %v)"
-	fmtErrExpPubNet   = "%s: %s(obj) is expected to arrive via pub-net (remaddr: %s)"
 	fmtErrInvIntraObj = "%s: intra-cluster %s(obj) failed sender validation (remaddr: %s, err: %v)"
 )
 

@@ -31,6 +31,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
 * [Quick Start](#quick-start)
   * [aws CLI](#quick-start-with-aws-cli)
   * [s3cmd](#quick-start-with-s3cmd)
+* [S3 Clients: Two Distinct Types](#s3-clients-two-distinct-types)
 * [Configuring Clients](#configuring-clients)
   * [Finding the AIS endpoint](#finding-the-ais-endpoint)
   * [Checksum considerations](#checksum-considerations)
@@ -95,6 +96,52 @@ s3cmd put README.md s3://demo \
 > **Tip — use a cluster‑specific `.s3cfg`** so you can drop the `--host*` flags. See the [Example .s3cfg](#example-s3cfg) section below.
 
 ---
+
+## S3 Clients: Two Distinct Types
+
+Basic facts first:
+
+* AIS provides an S3-compatible API - there is no need for AIS-specific S3 clients.
+* All AIS clients are expected to follow standard HTTP semantics.
+* In particular, any client that implements standard HTTP redirect handling is fully supported.
+
+The last point drives the distinction between two kinds of S3 clients:
+
+1. those that follow `307 Temporary Redirect` by resending the original request - same method, URI taken verbatim from the `Location` header;
+2. and those that don't.
+
+For the first kind, everything just works. The redirected `Location` URI carries the proxy's signature and all query parameters the designated target needs to authenticate the request.
+
+Conforming redirect handling - see RFC 9110 [Location](https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.2), [Redirection 3xx](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.4), [307 Temporary Redirect](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.4.8) -
+preserves both the method and the URI as given. AIStore's signed redirects depend on exactly this behavior.
+
+Known-good clients include:
+
+* Python clients that drive the S3 API directly via [`urllib3`](https://pypi.org/project/urllib3) with redirect handling enabled;
+* [AWS SDK for Go v2](https://github.com/aws/aws-sdk-go-v2), which follows `307` responses to the `Location` URI verbatim;
+* Boto3 and other botocore-based applications using the AIStore [botocore redirect patch](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch).
+
+### Clients that reconstruct S3 endpoints
+
+The second kind does not follow `Location` verbatim. Following S3 service conventions rather than HTTP RFC, these clients treat the XML `<Endpoint>` element as a reusable service address and re-derive the request themselves; some additionally refuse to redirect specific methods (notably `HEAD`).
+
+A reconstructed request drops the signed query parameters. It may also arrive directly at a storage node's public endpoint, bypassing the proxy altogether.
+
+Either way, the receiving node cannot distinguish it from unsigned direct access. When the cluster requires proxy mediation—because AuthN or intra-cluster signing is configured—the node must reject it.
+With the feature described below disabled, such requests fail with `AccessDenied` (403) or `InvalidRequest` (400).
+
+The `S3-Redirect-Rebuild` cluster feature exists to support these clients anyway. It is a compatibility mode and an explicit security tradeoff - not an alternative signing mechanism.
+
+When `S3-Redirect-Rebuild` is enabled:
+
+* the XML `<Endpoint>` reverts to its legacy form - bare `host:port/s3` (otherwise, `<Endpoint>` carries the same full signed URI as `Location`);
+* `HEAD(object)` is reverse-proxied to the designated target instead of redirected - HEAD responses carry no body and, hence, no `<Endpoint>` to rebuild from;
+* storage nodes accept unsigned S3 requests on their public endpoints - which, accordingly, must be reachable from the clients;
+* proxy mediation, and any authorization enforced exclusively by the proxy, no longer protect those requests.
+
+Correspondingly, `S3-Redirect-Rebuild` cannot coexist with AuthN or `auth.intra_cluster`: configuration validation rejects the combination.
+
+The feature is disabled by default. Deployments that require strict proxy mediation and authenticated intra-cluster traffic must leave it disabled and use clients that follow the HTTP `Location` URI.
 
 ## Configuring Clients
 

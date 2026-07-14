@@ -861,8 +861,6 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		return
 	}
 
-	started := time.Now()
-
 	// 3. rate limit
 	smap := p.owner.smap.get()
 	if ecode, err := p.ratelimit(bck, http.MethodGet, smap); err != nil {
@@ -881,7 +879,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		nlog.Infoln("GET", bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
-	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraData, netPub)
+	redurl := p.redurl(r, tsi, smap.Version, cmn.NetIntraData, netPub)
 	http.Redirect(w, r, redurl, http.StatusMovedPermanently)
 
 	// 5. stats
@@ -953,7 +951,6 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	// 4. redirect
 	var (
 		tsi     *meta.Snode
-		started = time.Now()
 		objName = apireq.items[1]
 		netPub  = cmn.NetPublic
 	)
@@ -984,7 +981,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		nlog.Infoln(verb, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
-	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraData, netPub)
+	redurl := p.redurl(r, tsi, smap.Version, cmn.NetIntraData, netPub)
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 
 	// 5. stats
@@ -1028,8 +1025,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln("DELETE", bck.Cname(objName), "=>", tsi.StringEx())
 	}
-	started := time.Now()
-	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	redurl := p.redurl(r, tsi, smap.Version, cmn.NetIntraControl, "")
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 
 	p.statsT.IncBck(stats.DeleteCount, bck.Bucket())
@@ -2383,15 +2379,13 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 
-	started := time.Now()
-	redurl := p.redurl(r, si, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	redurl := p.redurl(r, si, smap.Version, cmn.NetIntraControl, "")
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 }
 
 // +gen:endpoint PATCH /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
 // Update object metadata and custom properties
 func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
-	started := time.Now()
 	bckArgs := allocBctx()
 	{
 		bckArgs.p = p
@@ -2417,7 +2411,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
-	redurl := p.redurl(r, si, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	redurl := p.redurl(r, si, smap.Version, cmn.NetIntraControl, "")
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 }
 

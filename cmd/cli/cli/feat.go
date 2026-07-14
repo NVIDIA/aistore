@@ -52,6 +52,7 @@ var clusterFeatDesc = [...]string{
 	"count GET(object) 404 as errors (default: don't)",
 	"publish selected Go runtime metrics via Prometheus",
 	"allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked",
+	"allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -85,6 +86,7 @@ var featTags = map[string]string{
 	"Count-Object-NotFound-Stats":          "telemetry,ops",
 	"Enable-Go-Runtime-Metrics":            "telemetry,ops,overhead",
 	"Dload-Allow-Private-Egress":           "security-",
+	"S3-Redirect-Rebuild":                  "s3,compat,security-",
 }
 
 // common (cluster, bucket) feature-flags (set, show) helper

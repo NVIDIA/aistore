@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -159,8 +158,7 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 			break
 		}
 	}
-	now := time.Now().UnixNano()
-	redurl := ic.p.redurl(r, node, smap.Version, now, cmn.NetIntraControl, "")
+	redurl := ic.p.redurl(r, node, smap.Version, cmn.NetIntraControl, "")
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 	return true
 }

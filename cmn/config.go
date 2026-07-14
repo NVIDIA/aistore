@@ -1223,7 +1223,8 @@ func (c *Config) Validate() error {
 	if err := c.LocalConfig.TestFSP.Validate(c); err != nil {
 		return err
 	}
-	if err := c.Features.Validate(); err != nil {
+	// a) features vs other features b) features and vs other config
+	if err := c.Features.ValidateAsProps(c.Auth.RequiresProxyMediation()); err != nil {
 		return err
 	}
 
@@ -2143,6 +2144,12 @@ func (c *AuthConf) IntraClusterConfigured() bool {
 
 func (c *AuthConf) SignVerifyEnabled() bool {
 	return c.IntraClusterConfigured() && !IsV50Bridge()
+}
+
+// Starting with v5.0, direct access to AIS targets is rejected when either AuthN
+// or intra-cluster request signing is configured: both require proxy mediation.
+func (c *AuthConf) RequiresProxyMediation() bool {
+	return c.Enabled || c.IntraClusterConfigured()
 }
 
 func (c *AuthConf) Validate() error {

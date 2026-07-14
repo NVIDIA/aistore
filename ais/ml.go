@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -232,8 +231,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 
 	// phase 2: redirect user's GET => DT
 	r.URL.Path = path
-	started := time.Now()
-	redirectURL := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	redirectURL := p.redurl(r, tsi, smap.Version, cmn.NetIntraControl, "")
 
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(r.Method, items, "=> redirect to", tsi.String(), "at", redirectURL)

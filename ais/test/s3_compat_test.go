@@ -147,23 +147,10 @@ func setupS3Compat(t *testing.T) {
 	config, err := api.GetClusterConfig(tools.BaseAPIParams())
 	tassert.CheckFatal(t, err)
 
-	if !config.Auth.Enabled {
-		// No auth - nothing to set up
-		return
+	if config.Auth.Enabled {
+		// Auth is enabled - ensure S3 reverse proxy is enabled
+		tools.EnableClusterFeatures(t, feat.S3ReverseProxy)
 	}
-
-	// Auth is enabled - ensure S3 reverse proxy is enabled
-	originalFeatures := config.Features.String()
-
-	tools.SetClusterConfig(t, cos.StrKVs{
-		"features": feat.S3ReverseProxy.String(),
-	})
-
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{
-			"features": originalFeatures,
-		})
-	})
 }
 
 func setBucketFeatures(t *testing.T, bck cmn.Bck, bprops *cmn.Bprops, nf feat.Flags) {

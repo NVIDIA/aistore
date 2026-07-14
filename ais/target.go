@@ -849,8 +849,8 @@ func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) 
 		return t._verifyUnsigned(r, dpq, net)
 	}
 
-	// 2. signed redirect
-	if net == reqNetPub {
+	// 2. redirect may arrive on all 3 nets - see p.redurl() (decides the appropriate destination network)
+	if hasRedirectMarker(dpq) {
 		return t._verifySignedRedirect(r, dpq)
 	}
 
@@ -858,18 +858,12 @@ func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) 
 	debug.Assert(net == reqNetCtrl || net == reqNetData)
 	debug.Assert(!hasRedirectMarker(dpq))
 
-	if ecode, err = t.checkIntra(r, false /*from primary*/, net); err != nil {
-		err = fmt.Errorf(fmtErrExpRedirect, t.si, r.Method, r.RemoteAddr, err)
-	}
-	return ecode, err
+	return t.checkIntra(r, false /*from primary*/, net)
 }
 
 func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode int, err error) {
+	// ditto - redirect may arrive on all 3 nets (comment above)
 	if hasRedirectMarker(dpq) {
-		if net != reqNetPub {
-			err = fmt.Errorf(fmtErrExpPubNet, t.si, r.Method, r.RemoteAddr)
-			return http.StatusBadRequest, err
-		}
 		return 0, nil
 	}
 
@@ -878,8 +872,15 @@ func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode i
 
 		// Starting with v5.0, direct target access is rejected when either AuthN
 		// or intra-cluster request signing is configured: both require proxy mediation.
-		if config.Auth.Enabled || config.Auth.IntraClusterConfigured() {
+		if config.Auth.RequiresProxyMediation() {
 			return http.StatusForbidden, errDirectTargetAccess
+		}
+
+		// Some S3 clients rebuild redirected requests from XML <Endpoint>,
+		// dropping AIS redirect query parameters. At the target, the resulting
+		// request is indistinguishable from direct public S3 access.
+		if dpq.isS3 && config.Features.IsSet(feat.S3RedirectRebuild) {
+			return 0, nil
 		}
 
 		switch r.Method {
