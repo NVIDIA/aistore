@@ -1,6 +1,6 @@
 // Package s3_integration provides tests of compatibility with AWS S3
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package s3_test
 
@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/tools"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -31,6 +32,13 @@ func TestE2ES3(t *testing.T) {
 	}
 
 	tools.InitLocalCluster()
+
+	config := tools.GetClusterConfig(t)
+	if config.Auth.RequiresProxyMediation() {
+		t.Skipf("cannot enable %v: configuration requires proxy mediation",
+			feat.S3RedirectRebuild.Names())
+	}
+	tools.EnableClusterFeatures(t, feat.S3RedirectRebuild)
 
 	RegisterFailHandler(Fail)
 	RunSpecs(t, t.Name())
