@@ -13,6 +13,7 @@ import pytest
 
 from aistore.sdk.const import (
     HEADER_NODE_URL,
+    HEADER_DIRECT_PUT_COMPLETE,
     HEADER_DIRECT_PUT_LENGTH,
     HEADER_CONTENT_LENGTH,
     ETL_WS_PIPELINE,
@@ -91,6 +92,18 @@ class MockFlaskServer(FlaskServer):
 
     def get_mime_type(self) -> str:
         return "application/flask"
+
+
+def make_target_ack(length: int, mock_cls=Mock):
+    """Mock of the target's delivered ack: 204 + Ais-Direct-Put-Complete + length."""
+    ack = mock_cls()
+    ack.status_code = 204
+    ack.content = b""
+    ack.headers = {
+        HEADER_DIRECT_PUT_COMPLETE: "true",
+        HEADER_DIRECT_PUT_LENGTH: str(length),
+    }
+    return ack
 
 
 class TestPipelineBase(unittest.TestCase):
@@ -353,29 +366,25 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         server1 = self._start_http_server(12001, "step1")
         server2 = self._start_http_server(12002, "step2")
 
-        # Create mock response for target server call
-        target_response = Mock()
-        target_response.status_code = 200  # Will be converted to 204 by server
-        target_response.content = b""
-        target_response.headers = {}
+        content = b"original"
+        result = server2.transform(server1.transform(content))
 
         server2.client_put = Mock()
-        server2.client_put.return_value = target_response
+        server2.client_put.return_value = make_target_ack(len(result))
 
         # Create pipeline header: server1 -> server2 -> target
         pipeline = "http://localhost:12002/transform,http://localhost:12003/target"
         headers = {HEADER_NODE_URL: pipeline}
-        content = b"original"
-        result = server2.transform(server1.transform(content))
 
         # Send request to first server with pipeline
         response = requests.put(
             "http://localhost:12001/test", data=content, headers=headers, timeout=5
         )
 
-        # Should get 204 (server converts target's 200 with empty content to 204)
+        # The target's marked 204 ack is propagated back through the pipeline
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.content, b"")
+        self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)
         self.assertEqual(
             response.headers.get(HEADER_DIRECT_PUT_LENGTH), str(len(result))
         )
@@ -420,29 +429,25 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         server1 = self._start_flask_server(19021, "step1")
         server2 = self._start_flask_server(19022, "step2")
 
-        # Create mock response for target server call
-        target_response = Mock()
-        target_response.status_code = 200  # Will be converted to 204 by server
-        target_response.content = b""
-        target_response.headers = {}
+        content = b"original"
+        result = server2.transform(server1.transform(content, "", ""), "", "")
 
         server2.client_put = Mock()
-        server2.client_put.return_value = target_response
+        server2.client_put.return_value = make_target_ack(len(result))
 
         # Create pipeline header: server1 -> server2 -> target
         pipeline = "http://localhost:19022/transform,http://localhost:19023/target"
         headers = {HEADER_NODE_URL: pipeline}
-        content = b"original"
-        result = server2.transform(server1.transform(content, "", ""), "", "")
 
         # Send request to first server with pipeline
         response = requests.put(
             "http://localhost:19021/test", data=content, headers=headers, timeout=5
         )
 
-        # Should get 204 (server converts target's 200 with empty content to 204)
+        # The target's marked 204 ack is propagated back through the pipeline
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.content, b"")
+        self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)
         self.assertEqual(
             response.headers.get(HEADER_DIRECT_PUT_LENGTH), str(len(result))
         )
@@ -487,30 +492,25 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         server1 = self._start_fastapi_server(19041, "step1")
         server2 = self._start_fastapi_server(19042, "step2")
 
-        # Create mock response for target server call
-        target_response = AsyncMock()
-        target_response.status_code = 200  # Will be converted to 204 by server
-        target_response.content = b""
-        target_response.headers = {}
+        content = b"original"
+        result = server2.transform(server1.transform(content, "", ""), "", "")
 
-        # Mock the direct delivery response (simulate 200 OK)
         server2.client.put = AsyncMock()
-        server2.client.put.return_value = target_response
+        server2.client.put.return_value = make_target_ack(len(result), AsyncMock)
 
         # Create pipeline header: server1 -> server2 -> target
         pipeline = "http://localhost:19042/transform,http://localhost:19043/target"
         headers = {HEADER_NODE_URL: pipeline}
-        content = b"original"
-        result = server2.transform(server1.transform(content, "", ""), "", "")
 
         # Send request to first server with pipeline
         response = requests.put(
             "http://localhost:19041/test", data=content, headers=headers, timeout=5
         )
 
-        # Should get 204 (server converts target's 200 with empty content to 204)
+        # The target's marked 204 ack is propagated back through the pipeline
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.content, b"")
+        self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)
         self.assertEqual(
             response.headers.get(HEADER_DIRECT_PUT_LENGTH), str(len(result))
         )
@@ -520,6 +520,95 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
             content=ANY,
             headers={HEADER_CONTENT_LENGTH: str(len(result))},
         )
+
+    @pytest.mark.etl
+    def test_http_to_legacy_target_pipeline_chain(self):
+        """A legacy target's bare 200 + Content-Length: 0 ack still reads as
+        delivered (fallback path), and the outgoing 204 gains NO marker."""
+
+        server1 = self._start_http_server(12011, "step1")
+        server2 = self._start_http_server(12012, "step2")
+
+        content = b"original"
+        result = server2.transform(server1.transform(content))
+
+        # Legacy target ack: bare 200 with Content-Length: 0, no marker
+        target_response = Mock()
+        target_response.status_code = 200
+        target_response.content = b""
+        target_response.headers = {HEADER_CONTENT_LENGTH: "0"}
+
+        server2.client_put = Mock()
+        server2.client_put.return_value = target_response
+
+        pipeline = "http://localhost:12012/transform,http://localhost:12013/target"
+        headers = {HEADER_NODE_URL: pipeline}
+
+        response = requests.put(
+            "http://localhost:12011/test", data=content, headers=headers, timeout=5
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.content, b"")
+        self.assertNotIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)
+        self.assertEqual(
+            response.headers.get(HEADER_DIRECT_PUT_LENGTH), str(len(result))
+        )
+
+    @pytest.mark.etl
+    def test_multi_stage_marked_ack_propagation(self):
+        """The target's marked 204 ack survives two intermediate ETL stages."""
+
+        server1 = self._start_http_server(12021, "step1")
+        server2 = self._start_http_server(12022, "step2")
+        server3 = self._start_http_server(12023, "step3")
+
+        content = b"original"
+        result = server3.transform(server2.transform(server1.transform(content)))
+
+        server3.client_put = Mock()
+        server3.client_put.return_value = make_target_ack(len(result))
+
+        pipeline = (
+            "http://localhost:12022/transform,"
+            "http://localhost:12023/transform,"
+            "http://localhost:12024/target"
+        )
+        headers = {HEADER_NODE_URL: pipeline}
+
+        response = requests.put(
+            "http://localhost:12021/test", data=content, headers=headers, timeout=5
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.content, b"")
+        self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)
+        self.assertEqual(
+            response.headers.get(HEADER_DIRECT_PUT_LENGTH), str(len(result))
+        )
+
+    @pytest.mark.etl
+    def test_target_zero_length_ack_propagation(self):
+        """A marked ack for an empty stored object propagates
+        Ais-Direct-Put-Length: 0 instead of dropping the header."""
+
+        self._start_http_server(12031, "step1")
+        server2 = self._start_http_server(12032, "step2")
+
+        server2.client_put = Mock()
+        server2.client_put.return_value = make_target_ack(0)
+
+        pipeline = "http://localhost:12032/transform,http://localhost:12033/target"
+        headers = {HEADER_NODE_URL: pipeline}
+
+        response = requests.put(
+            "http://localhost:12031/test", data=b"original", headers=headers, timeout=5
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.content, b"")
+        self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)
+        self.assertEqual(response.headers.get(HEADER_DIRECT_PUT_LENGTH), "0")
 
     @pytest.mark.etl
     def test_mixed_server_type_pipeline(self):
@@ -776,16 +865,15 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
         fastapi_server = self._start_fastapi_server(14031, "ws_target")
         client = TestClient(fastapi_server.app)
 
-        # Mock target response
+        test_data = b"websocket_target_data"
+        expected_len = len(fastapi_server.transform(test_data, "", ""))
+
+        # Mock the target's delivered ack (204 + Ais-Direct-Put-Complete)
         with patch.object(fastapi_server, "client", new=AsyncMock()) as mock_client:
-            mock_resp = AsyncMock()
-            mock_resp.status_code = 200
-            mock_resp.content = b""
-            mock_client.put.return_value = mock_resp
+            mock_client.put.return_value = make_target_ack(expected_len, AsyncMock)
 
             # Test direct pipeline to target
             with client.websocket_connect("/ws") as websocket:
-                test_data = b"websocket_target_data"
                 pipeline = "http://localhost:14032/target"
 
                 websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")

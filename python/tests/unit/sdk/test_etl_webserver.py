@@ -32,6 +32,7 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     ETL_WS_FQN,
     ETL_WS_PIPELINE,
+    HEADER_DIRECT_PUT_COMPLETE,
     HEADER_DIRECT_PUT_LENGTH,
     HEADER_ETL_RETRY_REASON,
     ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
@@ -190,16 +191,21 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         mock_get_resp.content = b"original"
         handler.server.etl_server.session.get.return_value = mock_get_resp
 
-        # Simulate direct put success (200)
+        # Simulate direct put success (204 + Ais-Direct-Put-Complete = delivered)
         mock_put_resp = MagicMock()
-        mock_put_resp.status_code = 200
+        mock_put_resp.status_code = 204
         mock_put_resp.content = b""
+        mock_put_resp.headers = {
+            HEADER_DIRECT_PUT_COMPLETE: "true",
+            HEADER_DIRECT_PUT_LENGTH: str(len(b"transformed")),
+        }
         handler.server.etl_server.client_put.return_value = mock_put_resp
         handler.do_GET()
         handler.server.etl_server.client_put.assert_called_with(
             direct_put_url, b"transformed", headers={}
         )
         handler.send_response.assert_called_with(204)
+        handler.send_header.assert_any_call(HEADER_DIRECT_PUT_COMPLETE, "true")
         handler.send_header.assert_called_with(
             HEADER_DIRECT_PUT_LENGTH, str(len(b"transformed"))
         )
@@ -222,16 +228,21 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         handler = DummyRequestHandler()
         handler.headers = {HEADER_NODE_URL: direct_put_url}
 
-        # Simulate direct put success (200)
+        # Simulate direct put success (204 + Ais-Direct-Put-Complete = delivered)
         mock_put_resp = MagicMock()
-        mock_put_resp.status_code = 200
+        mock_put_resp.status_code = 204
         mock_put_resp.content = b""
+        mock_put_resp.headers = {
+            HEADER_DIRECT_PUT_COMPLETE: "true",
+            HEADER_DIRECT_PUT_LENGTH: str(len(b"transformed")),
+        }
         handler.server.etl_server.client_put.return_value = mock_put_resp
         handler.do_PUT()
         handler.server.etl_server.client_put.assert_called_with(
             direct_put_url, b"transformed", headers={}
         )
         handler.send_response.assert_called_with(204)
+        handler.send_header.assert_any_call(HEADER_DIRECT_PUT_COMPLETE, "true")
         handler.send_header.assert_called_with(
             HEADER_DIRECT_PUT_LENGTH, str(len(b"transformed"))
         )
@@ -401,10 +412,14 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
         input_content = b"input data"
         transformed_content = self.etl_server.transform(input_content, path, "")
 
-        # Mock the direct delivery response (simulate 200 OK)
+        # Mock the direct delivery ack (204 + Ais-Direct-Put-Complete = delivered)
         mock_response_success = AsyncMock()
         mock_response_success.content = b""
-        mock_response_success.status_code = 200
+        mock_response_success.status_code = 204
+        mock_response_success.headers = {
+            HEADER_DIRECT_PUT_COMPLETE: "true",
+            HEADER_DIRECT_PUT_LENGTH: str(len(transformed_content)),
+        }
         self.etl_server.client = AsyncMock()
         self.etl_server.client.put.return_value = mock_response_success
 
@@ -413,6 +428,7 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.content, b"")  # No content returned
+        self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)  # propagated
         self.assertEqual(
             response.headers.get(HEADER_DIRECT_PUT_LENGTH),
             str(len(transformed_content)),
@@ -434,13 +450,36 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
         self.etl_server.client.put.assert_awaited_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_hpush_with_direct_put_empty_object(self):
+        """A zero-length ack (empty object stored) propagates the marker and
+        Ais-Direct-Put-Length: 0 instead of dropping the header."""
+        path = "test/object"
+
+        mock_response_success = AsyncMock()
+        mock_response_success.content = b""
+        mock_response_success.status_code = 204
+        mock_response_success.headers = {
+            HEADER_DIRECT_PUT_COMPLETE: "true",
+            HEADER_DIRECT_PUT_LENGTH: "0",
+        }
+        self.etl_server.client = AsyncMock()
+        self.etl_server.client.put.return_value = mock_response_success
+
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+        response = self.client.put(f"/{path}", content=b"input data", headers=headers)
+
+        self.assertEqual(response.status_code, 204)
+        self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)
+        self.assertEqual(response.headers.get(HEADER_DIRECT_PUT_LENGTH), "0")
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_hpush_with_direct_put_and_fqn(self):
         path = "test/object"
         fqn = "test@some%fqn"
         input_content = b"input data"
         transformed_content = self.etl_server.transform(input_content, path, "")
 
-        # Mock the direct put response (simulate 200 OK)
+        # Mock the direct put ack (204 + Ais-Direct-Put-Complete = delivered)
         with patch.object(
             self.etl_server,
             "_get_fqn_content",
@@ -448,7 +487,11 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
         ) as get_fqn_mock:
             mock_response_success = AsyncMock()
             mock_response_success.content = b""
-            mock_response_success.status_code = 200
+            mock_response_success.status_code = 204
+            mock_response_success.headers = {
+                HEADER_DIRECT_PUT_COMPLETE: "true",
+                HEADER_DIRECT_PUT_LENGTH: str(len(transformed_content)),
+            }
             self.etl_server.client = AsyncMock()
             self.etl_server.client.put.return_value = mock_response_success
 
@@ -462,6 +505,7 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
 
             self.assertEqual(response.status_code, 204)
             self.assertEqual(response.content, b"")  # No content returned
+            self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)  # propagated
             self.assertEqual(
                 response.headers.get(HEADER_DIRECT_PUT_LENGTH),
                 str(len(transformed_content)),
@@ -499,11 +543,15 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
         input_data = b"testdata"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
 
-        # Mock the direct put response (simulate 200 OK) => return length as ACK
+        # Mock the direct put ack (204 + marker) => return length as ACK
         with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
             mock_resp = AsyncMock()
-            mock_resp.status_code = 200
+            mock_resp.status_code = 204
             mock_resp.content = b""
+            mock_resp.headers = {
+                HEADER_DIRECT_PUT_COMPLETE: "true",
+                HEADER_DIRECT_PUT_LENGTH: str(len(input_data)),
+            }
             mock_client.put.return_value = mock_resp
 
             with self.client.websocket_connect("/ws") as websocket:
@@ -568,11 +616,15 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
         original_content = b"original data"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
         transformed_content = self.etl_server.transform(original_content, fqn, "")
-        # Mock the direct put response (simulate 200 OK)
+        # Mock the direct put ack (204 + Ais-Direct-Put-Complete = delivered)
         with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
             mock_resp = AsyncMock()
-            mock_resp.status_code = 200
+            mock_resp.status_code = 204
             mock_resp.content = b""
+            mock_resp.headers = {
+                HEADER_DIRECT_PUT_COMPLETE: "true",
+                HEADER_DIRECT_PUT_LENGTH: str(len(transformed_content)),
+            }
             mock_client.put.return_value = mock_resp
 
             with patch.object(
@@ -702,11 +754,19 @@ class TestFlaskServer(unittest.TestCase):
         headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
 
         with patch("requests.Session.put") as mock_put:
-            # Mock the direct delivery response (simulate 200 OK)
-            mock_put.return_value = MagicMock(status_code=200, content=b"")
+            # Mock the direct delivery ack (204 + Ais-Direct-Put-Complete)
+            mock_put.return_value = MagicMock(
+                status_code=204,
+                content=b"",
+                headers={
+                    HEADER_DIRECT_PUT_COMPLETE: "true",
+                    HEADER_DIRECT_PUT_LENGTH: str(len(transformed_content)),
+                },
+            )
             response = self.client.put(f"/{path}", data=input_content, headers=headers)
 
             self.assertEqual(response.status_code, 204)
+            self.assertIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)  # propagated
             self.assertEqual(
                 response.headers.get(HEADER_DIRECT_PUT_LENGTH),
                 str(len(transformed_content)),
@@ -720,6 +780,30 @@ class TestFlaskServer(unittest.TestCase):
 
             self.assertEqual(response.status_code, 500)
             self.assertEqual(response.data, b"error message")
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_direct_put_delivery_legacy_target(self):
+        """A legacy target's bare 200 + Content-Length: 0 ack is still read as
+        delivered, and the outgoing 204 must NOT gain the marker (the marker
+        is only echoed when received)."""
+        path = "test/object"
+        input_content = b"input data"
+        transformed_content = self.etl_server.transform(input_content, path, "")
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+
+        with patch("requests.Session.put") as mock_put:
+            mock_put.return_value = MagicMock(
+                status_code=200, content=b"", headers={HEADER_CONTENT_LENGTH: "0"}
+            )
+            response = self.client.put(f"/{path}", data=input_content, headers=headers)
+
+            self.assertEqual(response.status_code, 204)
+            self.assertNotIn(HEADER_DIRECT_PUT_COMPLETE, response.headers)
+            self.assertEqual(
+                response.headers.get(HEADER_DIRECT_PUT_LENGTH),
+                str(len(transformed_content)),
+            )
+            self.assertEqual(response.data, b"")
 
 
 class TestBaseEnforcement(unittest.TestCase):
@@ -1339,8 +1423,12 @@ class TestStreamingFastAPIServer(
             async for chunk in content:
                 received.extend(chunk)
             mock_resp = MagicMock()
-            mock_resp.status_code = 200
+            mock_resp.status_code = 204
             mock_resp.content = b""
+            mock_resp.headers = {
+                HEADER_DIRECT_PUT_COMPLETE: "true",
+                HEADER_DIRECT_PUT_LENGTH: str(len(received)),
+            }
             return mock_resp
 
         self.etl_server.client = AsyncMock()
@@ -1892,10 +1980,14 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         return req
 
     def _ok_response(self) -> MagicMock:
+        # target's delivered ack: 204 + Ais-Direct-Put-Complete + length
         resp = MagicMock()
-        resp.status_code = 200
+        resp.status_code = 204
         resp.content = b""
-        resp.headers = {}
+        resp.headers = {
+            HEADER_DIRECT_PUT_COMPLETE: "true",
+            HEADER_DIRECT_PUT_LENGTH: "4",
+        }
         return resp
 
     async def _call(self, req, retries=None, is_get=True, fqn=""):
@@ -1925,7 +2017,7 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         self.server.client.put.return_value = self._ok_response()
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             result = await self._call(self._make_request())
-        # 200 + empty content → handle_direct_put_response returns 204
+        # marked ack → handle_direct_put_response returns 204
         self.assertEqual(result[0], 204)
         self.server.client.put.assert_awaited_once()
         mock_sleep.assert_not_called()
@@ -1945,7 +2037,7 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         self.server.client.put.side_effect = mock_put
         with patch("asyncio.sleep", new_callable=AsyncMock):
             result = await self._call(self._make_request())
-        self.assertEqual(result[0], 204)  # 200 + empty content → 204
+        self.assertEqual(result[0], 204)  # marked ack → 204
         self.assertEqual(call_count, 3)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
@@ -2158,16 +2250,18 @@ class TestFlaskDirectPutRetry(unittest.TestCase):
 
     def test_succeeds_on_first_attempt(self):
         """No retry when first attempt succeeds."""
-        with patch.object(self.server, "_direct_put", return_value=(200, b"ok", 2)):
+        with patch.object(
+            self.server, "_direct_put", return_value=(200, b"ok", 2, False)
+        ):
             with patch("time.sleep") as mock_sleep:
                 result = self._retry()
-        self.assertEqual(result, (200, b"ok", 2))
+        self.assertEqual(result, (200, b"ok", 2, False))
         mock_sleep.assert_not_called()
 
     def test_retries_on_transient_error_then_succeeds(self):
         """Retries on ETLDirectPutTransientError and succeeds on second attempt."""
         self.server.direct_put_retries = 2
-        ok = (200, b"", 4)
+        ok = (200, b"", 4, False)
         side_effects = [
             ETLDirectPutTransientError("http://target/obj", requests.ConnectionError()),
             ok,
@@ -2208,7 +2302,9 @@ class TestFlaskDirectPutRetry(unittest.TestCase):
 
     def test_non_transient_error_returns_500(self):
         """Non-transient exceptions in _direct_put return 500 without retrying."""
-        with patch.object(self.server, "_direct_put", return_value=(500, b"err", 0)):
+        with patch.object(
+            self.server, "_direct_put", return_value=(500, b"err", 0, False)
+        ):
             with patch("time.sleep") as mock_sleep:
                 result = self._retry()
         self.assertEqual(result[0], 500)
@@ -2224,7 +2320,7 @@ class TestFlaskDirectPutRetry(unittest.TestCase):
             call_count += 1
             if call_count < 4:
                 raise ETLDirectPutTransientError("url", requests.ConnectionError())
-            return (200, b"", 0)
+            return (200, b"", 0, False)
 
         with patch.object(self.server, "_direct_put", side_effect=side_effect):
             with patch("time.sleep") as mock_sleep:
@@ -2274,16 +2370,18 @@ class TestHTTPDirectPutRetry(unittest.TestCase):
 
     def test_succeeds_on_first_attempt(self):
         """No retry when first attempt succeeds."""
-        with patch.object(self.handler, "_direct_put", return_value=(200, b"ok", 5)):
+        with patch.object(
+            self.handler, "_direct_put", return_value=(200, b"ok", 5, False)
+        ):
             with patch("time.sleep") as mock_sleep:
                 result = self._retry()
-        self.assertEqual(result, (200, b"ok", 5))
+        self.assertEqual(result, (200, b"ok", 5, False))
         mock_sleep.assert_not_called()
 
     def test_retries_on_transient_error_then_succeeds(self):
         """Retries on ETLDirectPutTransientError and succeeds on second attempt."""
         self.handler.server.etl_server.direct_put_retries = 2
-        ok = (200, b"ok", 3)
+        ok = (200, b"ok", 3, False)
         side_effects = [
             ETLDirectPutTransientError("url", requests.ConnectionError()),
             ok,
@@ -2320,7 +2418,9 @@ class TestHTTPDirectPutRetry(unittest.TestCase):
 
     def test_non_transient_error_returns_500(self):
         """Non-transient exceptions in _direct_put return 500 without retrying."""
-        with patch.object(self.handler, "_direct_put", return_value=(500, b"err", 0)):
+        with patch.object(
+            self.handler, "_direct_put", return_value=(500, b"err", 0, False)
+        ):
             with patch("time.sleep") as mock_sleep:
                 result = self._retry()
         self.assertEqual(result[0], 500)
@@ -2336,7 +2436,7 @@ class TestHTTPDirectPutRetry(unittest.TestCase):
             call_count += 1
             if call_count < 4:
                 raise ETLDirectPutTransientError("url", requests.ConnectionError())
-            return (200, b"", 0)
+            return (200, b"", 0, False)
 
         with patch.object(self.handler, "_direct_put", side_effect=side_effect):
             with patch("time.sleep") as mock_sleep:
@@ -2398,17 +2498,17 @@ class TestFlaskStreamingDirectPutRetry(unittest.TestCase):
             self.server, "_get_stream_reader", return_value=self._make_reader()
         ):
             with patch.object(
-                self.server, "_direct_put_stream", return_value=(204, b"", 5)
+                self.server, "_direct_put_stream", return_value=(204, b"", 5, True)
             ):
                 with patch("time.sleep") as mock_sleep:
                     result = self._call()
-        self.assertEqual(result, (204, b"", 5))
+        self.assertEqual(result, (204, b"", 5, True))
         mock_sleep.assert_not_called()
 
     def test_retries_on_transient_error_then_succeeds(self):
         """Retries on ETLDirectPutTransientError and succeeds on second attempt."""
         self.server.direct_put_retries = 2
-        ok = (204, b"", 4)
+        ok = (204, b"", 4, True)
         call_count = 0
 
         def put_side(*_args, **_kwargs):
@@ -2462,7 +2562,7 @@ class TestFlaskStreamingDirectPutRetry(unittest.TestCase):
                 raise ETLDirectPutTransientError(
                     self._DIRECT_PUT_URL, requests.ConnectionError()
                 )
-            return (204, b"", 0)
+            return (204, b"", 0, True)
 
         readers = [self._make_reader() for _ in range(3)]
         reader_iter = iter(readers)
@@ -2482,7 +2582,7 @@ class TestFlaskStreamingDirectPutRetry(unittest.TestCase):
         mock_reader = self._make_reader()
         with patch.object(self.server, "_get_stream_reader", return_value=mock_reader):
             with patch.object(
-                self.server, "_direct_put_stream", return_value=(204, b"", 0)
+                self.server, "_direct_put_stream", return_value=(204, b"", 0, True)
             ):
                 with patch.object(
                     self.server, "close_reader", wraps=self.server.close_reader
@@ -2530,7 +2630,7 @@ class TestFlaskStreamingDirectPutRetry(unittest.TestCase):
                 raise ETLDirectPutTransientError(
                     self._DIRECT_PUT_URL, requests.ConnectionError()
                 )
-            return (204, b"", 0)
+            return (204, b"", 0, True)
 
         readers = [self._make_reader() for _ in range(4)]
         reader_iter = iter(readers)
@@ -2655,17 +2755,17 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
             self.handler, "_get_stream_reader", return_value=self._make_reader()
         ):
             with patch.object(
-                self.handler, "_direct_put_stream", return_value=(204, b"", 5)
+                self.handler, "_direct_put_stream", return_value=(204, b"", 5, True)
             ):
                 with patch("time.sleep") as mock_sleep:
                     result = self._call()
-        self.assertEqual(result, (204, b"", 5))
+        self.assertEqual(result, (204, b"", 5, True))
         mock_sleep.assert_not_called()
 
     def test_retries_on_transient_error_then_succeeds(self):
         """Replayable GET path retries on transient error and succeeds on second attempt."""
         self.handler.server.etl_server.direct_put_retries = 2
-        ok = (204, b"", 4)
+        ok = (204, b"", 4, True)
         call_count = 0
 
         def put_side(*_args, **_kwargs):
@@ -2749,7 +2849,7 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
         mock_reader = self._make_reader()
         with patch.object(self.handler, "_get_stream_reader", return_value=mock_reader):
             with patch.object(
-                self.handler, "_direct_put_stream", return_value=(204, b"", 0)
+                self.handler, "_direct_put_stream", return_value=(204, b"", 0, True)
             ):
                 self._call()
         self.handler.server.etl_server.close_reader.assert_called_once_with(mock_reader)
@@ -2785,7 +2885,7 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
                 raise ETLDirectPutTransientError(
                     self._DIRECT_PUT_URL, requests.ConnectionError()
                 )
-            return (204, b"", 0)
+            return (204, b"", 0, True)
 
         readers = [self._make_reader() for _ in range(4)]
         reader_iter = iter(readers)
@@ -2848,7 +2948,7 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
     def test_fqn_put_still_retries(self):
         """FQN-backed PUT is replayable; retries proceed normally."""
         self.handler.server.etl_server.direct_put_retries = 2
-        ok = (204, b"", 4)
+        ok = (204, b"", 4, True)
         call_count = 0
 
         def put_side(*_args, **_kwargs):
@@ -2877,7 +2977,7 @@ class TestHTTPStreamingDirectPutRetry(unittest.TestCase):
     def test_get_path_still_retries(self):
         """GET path stays replayable; retries proceed normally (regression guard)."""
         self.handler.server.etl_server.direct_put_retries = 2
-        ok = (204, b"", 4)
+        ok = (204, b"", 4, True)
         call_count = 0
 
         def put_side(*_args, **_kwargs):
@@ -3060,7 +3160,7 @@ class TestFlaskConnectionRefusedGuard(unittest.TestCase):
         """_direct_put() returns (502, ...) for ConnectionRefused — not ETLDirectPutTransientError."""
         exc = _make_connection_refused_error()
         with patch.object(self.server, "client_put", side_effect=exc):
-            status, body, _ = self._put()
+            status, body, _, _ = self._put()
         self.assertEqual(status, 502)
         self.assertIn(b"ConnectionError", body)
         self.assertIn(b"/nonexistent", body)
@@ -3070,7 +3170,7 @@ class TestFlaskConnectionRefusedGuard(unittest.TestCase):
         exc = _make_connection_refused_error()
         with patch.object(self.server, "client_put", side_effect=exc):
             with patch("time.sleep") as mock_sleep:
-                status, _, _ = self._retry()
+                status, _, _, _ = self._retry()
         self.assertEqual(status, 502)
         mock_sleep.assert_not_called()
 
@@ -3132,7 +3232,7 @@ class TestHTTPConnectionRefusedGuard(unittest.TestCase):
         """_direct_put() returns (502, ...) for ConnectionRefused — not ETLDirectPutTransientError."""
         exc = _make_connection_refused_error()
         self.handler.server.etl_server.client_put = MagicMock(side_effect=exc)
-        status, body, _ = self._put()
+        status, body, _, _ = self._put()
         self.assertEqual(status, 502)
         self.assertIn(b"ConnectionError", body)
         self.assertIn(b"/nonexistent", body)
@@ -3142,7 +3242,7 @@ class TestHTTPConnectionRefusedGuard(unittest.TestCase):
         exc = _make_connection_refused_error()
         self.handler.server.etl_server.client_put = MagicMock(side_effect=exc)
         with patch("time.sleep") as mock_sleep:
-            status, _, _ = self._retry()
+            status, _, _, _ = self._retry()
         self.assertEqual(status, 502)
         mock_sleep.assert_not_called()
 
@@ -3216,7 +3316,14 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
         handler.path = "/test/object?etl_args=jpeg"
         handler.headers = {HEADER_NODE_URL: "http://some-target/put/object"}
 
-        mock_put_resp = MagicMock(status_code=200, content=b"")
+        mock_put_resp = MagicMock(
+            status_code=204,
+            content=b"",
+            headers={
+                HEADER_DIRECT_PUT_COMPLETE: "true",
+                HEADER_DIRECT_PUT_LENGTH: "10",
+            },
+        )
         handler.server.etl_server.client_put.return_value = mock_put_resp
 
         handler.do_PUT()
@@ -3232,7 +3339,14 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
         server = DummyFastAPIServer()
         client = TestClient(server.app)
         server.client = AsyncMock()
-        server.client.put.return_value = AsyncMock(status_code=200, content=b"")
+        server.client.put.return_value = AsyncMock(
+            status_code=204,
+            content=b"",
+            headers={
+                HEADER_DIRECT_PUT_COMPLETE: "true",
+                HEADER_DIRECT_PUT_LENGTH: "10",
+            },
+        )
 
         headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
         response = client.put(
@@ -3253,7 +3367,14 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
 
         with patch.object(server, "client", new=AsyncMock()) as mock_client:
-            mock_client.put.return_value = AsyncMock(status_code=200, content=b"")
+            mock_client.put.return_value = AsyncMock(
+                status_code=204,
+                content=b"",
+                headers={
+                    HEADER_DIRECT_PUT_COMPLETE: "true",
+                    HEADER_DIRECT_PUT_LENGTH: "8",
+                },
+            )
             with client.websocket_connect("/ws") as websocket:
                 websocket.send_json(
                     data={ETL_WS_PIPELINE: direct_put_url, QPARAM_ETL_ARGS: "jpeg"},
@@ -3275,7 +3396,14 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
         headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
 
         with patch("requests.Session.put") as mock_put:
-            mock_put.return_value = MagicMock(status_code=200, content=b"")
+            mock_put.return_value = MagicMock(
+                status_code=204,
+                content=b"",
+                headers={
+                    HEADER_DIRECT_PUT_COMPLETE: "true",
+                    HEADER_DIRECT_PUT_LENGTH: "10",
+                },
+            )
             response = client.put(
                 "/test/object?etl_args=jpeg", data=b"input data", headers=headers
             )
@@ -3290,7 +3418,14 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
         """FlaskServer forwards etl_args on the streaming direct-put hop."""
         server = DummyFlaskServer()
         server.session = MagicMock()
-        server.session.put.return_value = MagicMock(status_code=200, content=b"")
+        server.session.put.return_value = MagicMock(
+            status_code=204,
+            content=b"",
+            headers={
+                HEADER_DIRECT_PUT_COMPLETE: "true",
+                HEADER_DIRECT_PUT_LENGTH: "5",
+            },
+        )
 
         # pylint: disable=protected-access
         server._direct_put_stream(
@@ -3304,4 +3439,146 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
         called_url = server.session.put.call_args.args[0]
         self.assertEqual(
             parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
+        )
+
+
+class TestHandleDirectPutResponse(unittest.TestCase):
+    """Direct unit coverage of `ETLServer.handle_direct_put_response`.
+
+    Classification is marker-first: a response carrying
+    `HEADER_DIRECT_PUT_COMPLETE` (presence-based) is the target's delivered
+    ack and is propagated as 204 + marker + `HEADER_DIRECT_PUT_LENGTH`.
+    Markerless responses fall through to the legacy handling, unchanged:
+    the 200 classification keyed on `Content-Length` (`0` means delivered;
+    absent/non-zero means content, forwarded as-is), kept for targets that
+    predate the marker.
+    """
+
+    def setUp(self):
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
+        self.server = DummyFastAPIServer()
+
+    @staticmethod
+    def _resp(status_code, content=b"", headers=None):
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.content = content
+        resp.headers = {} if headers is None else headers
+        return resp
+
+    def test_204_with_marker_is_delivered(self):
+        resp = self._resp(
+            204,
+            b"",
+            {HEADER_DIRECT_PUT_COMPLETE: "true", HEADER_DIRECT_PUT_LENGTH: "1234"},
+        )
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b""),
+            (204, b"", 1234, True),
+        )
+
+    def test_marker_with_length_zero_is_delivered(self):
+        # empty object stored: the zero length is propagated, not dropped
+        resp = self._resp(
+            204,
+            b"",
+            {HEADER_DIRECT_PUT_COMPLETE: "true", HEADER_DIRECT_PUT_LENGTH: "0"},
+        )
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b""),
+            (204, b"", 0, True),
+        )
+
+    def test_marker_with_empty_value_is_delivered(self):
+        # presence-based: an empty header value still counts
+        resp = self._resp(
+            204,
+            b"",
+            {HEADER_DIRECT_PUT_COMPLETE: "", HEADER_DIRECT_PUT_LENGTH: "7"},
+        )
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b""),
+            (204, b"", 7, True),
+        )
+
+    def test_marker_missing_length_defaults_to_zero(self):
+        # matches the legacy 204 branch and Go's directPut: absent length
+        # header degrades to 0 rather than failing a stored object
+        resp = self._resp(204, b"", {HEADER_DIRECT_PUT_COMPLETE: "true"})
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b""),
+            (204, b"", 0, True),
+        )
+
+    def test_marker_on_200_is_normalized_to_204(self):
+        # defensive: the marker decides regardless of status
+        resp = self._resp(
+            200,
+            b"",
+            {HEADER_DIRECT_PUT_COMPLETE: "true", HEADER_DIRECT_PUT_LENGTH: "5"},
+        )
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b""),
+            (204, b"", 5, True),
+        )
+
+    def test_legacy_200_content_length_zero_is_delivered(self):
+        resp = self._resp(200, b"", {HEADER_CONTENT_LENGTH: "0"})
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b"payload"),
+            (204, b"", len(b"payload"), False),
+        )
+
+    def test_legacy_200_content_length_zero_uses_data_length_override(self):
+        resp = self._resp(200, b"", {HEADER_CONTENT_LENGTH: "0"})
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b"", data_length=42),
+            (204, b"", 42, False),
+        )
+
+    def test_legacy_200_chunked_empty_body_is_forwarded(self):
+        # No Content-Length (chunked): an empty body is a valid empty
+        # transform result and must be forwarded, not misreported as
+        # delivered with the original size.
+        resp = self._resp(200, b"")
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b"payload"),
+            (200, b"", 0, False),
+        )
+
+    def test_legacy_200_chunked_body_is_forwarded(self):
+        resp = self._resp(200, b"transformed")
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b"payload"),
+            (200, b"transformed", 0, False),
+        )
+
+    def test_legacy_200_with_content_length_is_forwarded(self):
+        resp = self._resp(200, b"transformed", {HEADER_CONTENT_LENGTH: "11"})
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b"payload"),
+            (200, b"transformed", 0, False),
+        )
+
+    def test_legacy_200_malformed_content_length_is_forwarded(self):
+        resp = self._resp(200, b"x", {HEADER_CONTENT_LENGTH: "abc"})
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b"payload"),
+            (200, b"x", 0, False),
+        )
+
+    def test_legacy_204_forwards_direct_put_length(self):
+        resp = self._resp(204, b"", {HEADER_DIRECT_PUT_LENGTH: "1234"})
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b""),
+            (204, b"", 1234, False),
+        )
+
+    def test_legacy_204_missing_direct_put_length_defaults_to_zero(self):
+        resp = self._resp(204, b"")
+        self.assertEqual(
+            self.server.handle_direct_put_response(resp, b""),
+            (204, b"", 0, False),
         )

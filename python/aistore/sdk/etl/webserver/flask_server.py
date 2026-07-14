@@ -35,7 +35,6 @@ from aistore.sdk.const import (
     STATUS_SERVICE_UNAVAILABLE,
     QPARAM_ETL_ARGS,
     QPARAM_ETL_FQN,
-    HEADER_DIRECT_PUT_LENGTH,
     HEADER_ETL_RETRY_REASON,
     ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
     STATUS_INTERNAL_SERVER_ERROR,
@@ -165,7 +164,7 @@ class FlaskServer(ETLServer):
         if pipeline_header:
             first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
             if first_url:
-                status_code, transformed, direct_put_length = (
+                status_code, transformed, direct_put_length, direct_put_complete = (
                     self._direct_put_with_retry(
                         first_url, transformed, remaining_pipeline, path, etl_args
                     )
@@ -173,10 +172,8 @@ class FlaskServer(ETLServer):
                 return Response(
                     response=transformed,
                     status=status_code,
-                    headers=(
-                        {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
-                        if direct_put_length != 0
-                        else {}
+                    headers=self.make_direct_put_headers(
+                        direct_put_length, direct_put_complete
                     ),
                 )
 
@@ -200,7 +197,7 @@ class FlaskServer(ETLServer):
                 return Response(
                     response=result[1],
                     status=result[0],
-                    headers=self.make_direct_put_headers(result[2]),
+                    headers=self.make_direct_put_headers(result[2], result[3]),
                 )
 
         # No pipeline: stream directly to client
@@ -247,7 +244,7 @@ class FlaskServer(ETLServer):
         remaining_pipeline: str = "",
         path: str = "",
         etl_args: str = "",
-    ) -> Tuple[int, bytes, int]:
+    ) -> Tuple[int, bytes, int, bool]:
         """Buffered direct-put with exponential-backoff retry on transient errors."""
         for attempt in range(self.direct_put_retries + 1):
             try:
@@ -275,7 +272,7 @@ class FlaskServer(ETLServer):
         path: str,
         remaining_pipeline: str = "",
         etl_args: str = "",
-    ) -> Tuple[int, bytes, int]:
+    ) -> Tuple[int, bytes, int, bool]:
         """
         Streaming direct-put with exponential-backoff retry on transient errors.
 
@@ -334,7 +331,7 @@ class FlaskServer(ETLServer):
         remaining_pipeline: str = "",
         path: str = "",
         etl_args: str = "",
-    ) -> Tuple[int, bytes, int]:
+    ) -> Tuple[int, bytes, int, bool]:
         """Stream transformed output directly to the next pipeline stage."""
         try:
             url = compose_etl_direct_put_url(
@@ -362,7 +359,7 @@ class FlaskServer(ETLServer):
                 root,
                 exc_info=True,
             )
-            return STATUS_INTERNAL_SERVER_ERROR, str(e).encode(), 0
+            return STATUS_INTERNAL_SERVER_ERROR, str(e).encode(), 0, False
 
     def _handle_get(self, path):
         etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
@@ -404,7 +401,7 @@ class FlaskServer(ETLServer):
         remaining_pipeline: str = "",
         path: str = "",
         etl_args: str = "",
-    ) -> Tuple[int, bytes, int]:
+    ) -> Tuple[int, bytes, int, bool]:
         """
         Sends the transformed object directly to the specified AIS node (`direct_put_url`),
         eliminating the additional network hop through the original target.
@@ -417,7 +414,8 @@ class FlaskServer(ETLServer):
             path: The path of the object.
             etl_args: Per-request transform arguments to forward to the next stage.
         Returns:
-            status code, transformed data, length of the transformed data (if any)
+            status code, transformed data, length of the transformed data (if any),
+            and whether the ack carried HEADER_DIRECT_PUT_COMPLETE
         """
         try:
             url = compose_etl_direct_put_url(
@@ -435,7 +433,7 @@ class FlaskServer(ETLServer):
         except Exception as e:
             error = str(e).encode()
             self.logger.error("Exception in direct put to %s: %s", direct_put_url, e)
-            return STATUS_INTERNAL_SERVER_ERROR, error, 0
+            return STATUS_INTERNAL_SERVER_ERROR, error, 0, False
 
     # Example Gunicorn command to run this server:
     # command: ["gunicorn", "your_module:flask_app", "--bind", "0.0.0.0:8000", "--workers", "4"]

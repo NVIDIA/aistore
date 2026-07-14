@@ -61,6 +61,11 @@ HEADER_OBJECT_BLOB_CHUNK_SIZE = HEADER_PREFIX + "Blob-Chunk"
 HEADER_OBJECT_BLOB_WORKERS = HEADER_PREFIX + "Blob-Workers"
 HEADER_OBJECT_APPEND_HANDLE = HEADER_PREFIX + "Append-Handle"
 HEADER_DIRECT_PUT_LENGTH = HEADER_PREFIX + "Direct-Put-Length"
+# Set by the AIS target (alongside a 204 and HEADER_DIRECT_PUT_LENGTH) after a
+# successful direct PUT to signal that the destination already stored the
+# object. Presence-based (value ignored); intermediate ETL webservers propagate
+# it back through the pipeline.
+HEADER_DIRECT_PUT_COMPLETE = HEADER_PREFIX + "Direct-Put-Complete"
 # ETL → AIS retry contract: emitted by the ETL webserver alongside a 503
 # response to signal that AIS should retry the whole PUT (the ETL bailed on
 # a transient direct-put failure and the request body was one-shot).

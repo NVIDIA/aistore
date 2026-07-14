@@ -16,6 +16,8 @@ from aistore.sdk.const import (
     STATUS_OK,
     STATUS_BAD_GATEWAY,
     HEADER_AUTHORIZATION,
+    HEADER_CONTENT_LENGTH,
+    HEADER_DIRECT_PUT_COMPLETE,
     HEADER_DIRECT_PUT_LENGTH,
     AIS_AUTHN_TOKEN,
     AIS_DIRECT_PUT_RETRIES,
@@ -64,13 +66,14 @@ def _is_connection_refused(exc: requests.ConnectionError) -> bool:
 
 def _handle_direct_put_transient_error(
     direct_put_url: str, exc: Exception, logger: logging.Logger
-) -> Tuple[int, bytes, int]:
+) -> Tuple[int, bytes, int, bool]:
     """
     Handle a caught SYNC_DIRECT_PUT_TRANSIENT_ERRORS exception.
 
-    Returns a ``(STATUS_BAD_GATEWAY, error_bytes, 0)`` tuple for permanent
-    ``ConnectionRefused`` errors.  Re-raises all other transient errors as
-    ``ETLDirectPutTransientError`` so the caller's retry loop can act on them.
+    Returns a ``(STATUS_BAD_GATEWAY, error_bytes, 0, False)`` tuple for
+    permanent ``ConnectionRefused`` errors.  Re-raises all other transient
+    errors as ``ETLDirectPutTransientError`` so the caller's retry loop can
+    act on them.
 
     Args:
         direct_put_url: The direct-put URL that was being contacted.
@@ -78,7 +81,8 @@ def _handle_direct_put_transient_error(
         logger: Logger used to emit the permanent-error message.
 
     Returns:
-        ``(STATUS_BAD_GATEWAY, encoded_error_message, 0)`` for permanent errors.
+        ``(STATUS_BAD_GATEWAY, encoded_error_message, 0, False)`` for
+        permanent errors.
 
     Raises:
         ETLDirectPutTransientError: For all other transient errors.
@@ -86,7 +90,7 @@ def _handle_direct_put_transient_error(
     if isinstance(exc, requests.ConnectionError) and _is_connection_refused(exc):
         error = f"direct_put to {direct_put_url!r} failed: {type(exc).__name__}: {exc}".encode()
         logger.error("Permanent connection error to %s: %s", direct_put_url, exc)
-        return STATUS_BAD_GATEWAY, error, 0
+        return STATUS_BAD_GATEWAY, error, 0, False
     raise ETLDirectPutTransientError(direct_put_url, exc) from exc
 
 
@@ -259,8 +263,17 @@ class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
             ETLServer.close_reader(reader)
 
     @staticmethod
-    def make_direct_put_headers(direct_put_length: int) -> dict:
-        """Build response headers for a direct-put result."""
+    def make_direct_put_headers(direct_put_length: int, complete: bool = False) -> dict:
+        """Build response headers for a direct-put result.
+
+        When `complete` (the delivered ack carried `HEADER_DIRECT_PUT_COMPLETE`),
+        propagate the marker and the length verbatim, including a length of 0.
+        """
+        if complete:
+            return {
+                HEADER_DIRECT_PUT_COMPLETE: "true",
+                HEADER_DIRECT_PUT_LENGTH: str(direct_put_length),
+            }
         if direct_put_length != 0:
             return {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
         return {}
@@ -293,31 +306,62 @@ class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
 
     def handle_direct_put_response(
         self, resp: requests.Response, data: bytes, data_length: int = -1
-    ) -> Tuple[int, bytes, int]:
+    ) -> Tuple[int, bytes, int, bool]:
         """Handle the response from a direct PUT request.
+
+        Returns a `(status, body, direct_put_length, direct_put_complete)`
+        tuple. `direct_put_complete` is True only when the response carried
+        `HEADER_DIRECT_PUT_COMPLETE` — the target's ack that it stored the
+        object — and must be propagated (see `make_direct_put_headers`).
 
         Args:
             resp: The HTTP response from the direct PUT.
             data: The original data bytes (used to compute length for the
-                200-OK-empty-content case). Can be `b""` for streaming.
+                legacy 200 + `Content-Length: 0` delivered case). Can be
+                `b""` for streaming.
             data_length: Explicit byte count override. When >= 0, used instead
                 of `len(data)`. Pass this from a `CountingIterator` for
                 streaming pipeline PUTs where `data` is empty.
         """
         size = data_length if data_length >= 0 else len(data)
 
+        # Delivered ack from the target (directly or propagated by a
+        # downstream stage). Presence-based: the value is ignored, and the
+        # marker decides regardless of status (the target pairs it with 204).
+        if HEADER_DIRECT_PUT_COMPLETE in resp.headers:
+            return (
+                STATUS_NO_CONTENT,
+                b"",
+                int(resp.headers.get(HEADER_DIRECT_PUT_LENGTH, "0")),
+                True,
+            )
+
+        # Legacy handling below, unchanged: kept for targets that predate
+        # HEADER_DIRECT_PUT_COMPLETE; to be phased out with them.
         if resp.status_code == STATUS_NO_CONTENT:
             return (
                 resp.status_code,
                 b"",
                 int(resp.headers.get(HEADER_DIRECT_PUT_LENGTH, "0")),
+                False,
             )
 
         if resp.status_code == STATUS_OK:
-            if resp.content:  # from other ETL server, forward the content back
-                return resp.status_code, resp.content, 0
+            # Keyed on the Content-Length header, mirroring the Go webserver's
+            # directPut (ext/etl/webserver/webserver.go): `0` means the next
+            # hop was the target — delivered, no content. Absent (chunked) or
+            # > 0 means transformed content from another ETL server; forward
+            # it as-is — an empty chunked body is a valid empty object.
+            content_length = resp.headers.get(HEADER_CONTENT_LENGTH)
+            try:
+                delivered = content_length is not None and int(content_length) == 0
+            except (TypeError, ValueError):
+                delivered = False  # malformed header: treat as content
+            if delivered:
+                return STATUS_NO_CONTENT, b"", size, False  # from target, no content
 
-            return STATUS_NO_CONTENT, b"", size  # from target, no content
+            # from other ETL server, forward the content back
+            return resp.status_code, resp.content, 0, False
 
         error = resp.content
         self.logger.error(
@@ -326,7 +370,7 @@ class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
             resp.status_code,
             error,
         )
-        return resp.status_code, error, 0
+        return resp.status_code, error, 0, False
 
 
 class CountingIterator:  # pylint: disable=too-few-public-methods
