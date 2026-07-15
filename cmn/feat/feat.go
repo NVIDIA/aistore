@@ -108,6 +108,9 @@ func (f *Flags) Validate() error {
 	if f.IsSet(DisableColdGET) && f.IsSet(StreamingColdGET) {
 		return fmt.Errorf("feature flags %q and %q are mutually exclusive", DisableColdGET.name(), StreamingColdGET.name())
 	}
+	if f.IsSet(S3ReverseProxy) && f.IsSet(S3RedirectRebuild) {
+		return fmt.Errorf("feature flags %q and %q are mutually exclusive", S3ReverseProxy.name(), S3RedirectRebuild.name())
+	}
 	return nil
 }
 

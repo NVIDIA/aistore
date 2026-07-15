@@ -6,7 +6,7 @@ AIS integrates with Amazon S3 on **three fronts**:
 
 1. **Backend storage** – via the [backend provider abstraction](/docs/terminology.md#backend-provider), AIStore can be utiized to access (and cache or reliably store in-cluster) a remote cloud bucket such as `s3://my-bucket` (`aws://` is accepted as an alias). This provides seamless access to existing S3 data.
 
-2. **Front‑end compatibility** – every gateway speaks the S3 REST API. The default endpoint is `http(s)://gw-host:port/s3`, but you can enable the `S3-API-via-Root` [feature flag](/docs/feature_flags.md) to serve requests at the cluster root (`http(s)://gw-host:port/`). The same API works uniformly across all bucket types—native `ais://`, cloud‑backed `s3://`, `gs://`, and more.
+2. **Front‑end compatibility** – every gateway speaks the S3 REST API. The default endpoint is `http(s)://gw-host:port/s3`, but you can enable the `S3-API-via-Root` [feature flag](/docs/feature_flags.md) to serve requests at the cluster root (`http(s)://gw-host:port/`). The same API works uniformly across all bucket types - native `ais://`, cloud‑backed `s3://`, `gs://`, and more.
 
 3. **Presigned request offload** – AIS can receive a presigned S3 URL, execute it, and store the resulting object in the cluster. This lets you leverage S3's authentication while using AIS for storage.
 
@@ -20,7 +20,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
 | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | Need drop‑in support for unmodified S3 tools & SDKs (`aws`, `boto3`, `s3cmd`, …)                                        | Want cluster‑wide batch jobs (`ais etl`, `ais prefetch`, `ais copy`, `ais archive`, …)                          |
 | Rely on an existing S3‑centric workflow or third‑party app                                                              | Need fine‑grained control‑plane ops (`ais cluster`, `ais bucket props set`, node lifecycle)                     |
-| Accept MD5‑based ETag semantics—even though MD5 is slower and not crypto‑secure                                         | Value AIS‑native features: virtual directories, adaptive rate‑limiting, WebSocket ETL, streaming cold‑GET, etc. |
+| Accept MD5‑based ETag semantics - even though MD5 is slower and not crypto‑secure                                         | Value AIS‑native features: virtual directories, adaptive rate‑limiting, WebSocket ETL, streaming cold‑GET, etc. |
 | Accept that some S3 features (CORS, Website hosting, CloudFront) are **not** yet implemented                            | Care about advanced list-objects options (to list [shards](/docs/terminology.md#shard)), working with [remote clusters](/docs/terminology.md#unified-namespace), non-S3 buckets)                              |
 | Are okay with slight performance overhead from the S3‑to‑AIS adaptation layer (MD5 hashing, XML marshaling/translation) | Want full [Prometheus](/docs/monitoring-prometheus.md) visibility with AIS‑rich metrics & labels                                                  |
 
@@ -32,6 +32,8 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
   * [aws CLI](#quick-start-with-aws-cli)
   * [s3cmd](#quick-start-with-s3cmd)
 * [S3 Clients: Two Distinct Types](#s3-clients-two-distinct-types)
+  * [Clients that reconstruct S3 endpoints](#clients-that-reconstruct-s3-endpoints)
+  * [Feature flags: S3-Redirect-Rebuild versus S3-Reverse-Proxy](#feature-flags-s3-redirect-rebuild-versus-s3-reverse-proxy)
 * [Configuring Clients](#configuring-clients)
   * [Finding the AIS endpoint](#finding-the-ais-endpoint)
   * [Checksum considerations](#checksum-considerations)
@@ -59,7 +61,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
 >
 > The CLI examples below use `localhost:8080`, which is the default endpoint when running AIS in the [Local Playground](/docs/getting_started.md#local-playground).
 >
-> For other deployment modes (including [Kubernetes Playground](/docs/getting_started.md#kubernetes-playground), Docker Compose, bare-metal cluster, or [Kubernetes for production deployments](https://github.com/NVIDIA/ais-k8s)) — replace the `host:port` with any **AIS gateway** endpoint.
+> For other deployment modes (including [Kubernetes Playground](/docs/getting_started.md#kubernetes-playground), Docker Compose, bare-metal cluster, or [Kubernetes for production deployments](https://github.com/NVIDIA/ais-k8s)) - replace the `host:port` with any **AIS gateway** endpoint.
 >
 > See [Deployment Options](/docs/getting_started.md#multiple-deployment-options) and the main project [Features](https://github.com/NVIDIA/aistore/tree/main?tab=readme-ov-file#features) list for a broader overview.
 
@@ -93,7 +95,7 @@ s3cmd put README.md s3://demo \
 # 10493 of 10493   100% in    0s     4.20 MB/s  done
 ```
 
-> **Tip — use a cluster‑specific `.s3cfg`** so you can drop the `--host*` flags. See the [Example .s3cfg](#example-s3cfg) section below.
+> **Tip - use a cluster‑specific `.s3cfg`** so you can drop the `--host*` flags. See the [Example .s3cfg](#example-s3cfg) section below.
 
 ---
 
@@ -127,7 +129,7 @@ The second kind does not follow `Location` verbatim. Following S3 service conven
 
 A reconstructed request drops the signed query parameters. It may also arrive directly at a storage node's public endpoint, bypassing the proxy altogether.
 
-Either way, the receiving node cannot distinguish it from unsigned direct access. When the cluster requires proxy mediation—because AuthN or intra-cluster signing is configured—the node must reject it.
+Either way, the receiving node cannot distinguish it from unsigned direct access. When the cluster requires proxy mediation - because AuthN or intra-cluster signing is configured - the node must reject it.
 With the feature described below disabled, such requests fail with `AccessDenied` (403) or `InvalidRequest` (400).
 
 The `S3-Redirect-Rebuild` cluster feature exists to support these clients anyway. It is a compatibility mode and an explicit security tradeoff - not an alternative signing mechanism.
@@ -142,6 +144,38 @@ When `S3-Redirect-Rebuild` is enabled:
 Correspondingly, `S3-Redirect-Rebuild` cannot coexist with AuthN or `auth.intra_cluster`: configuration validation rejects the combination.
 
 The feature is disabled by default. Deployments that require strict proxy mediation and authenticated intra-cluster traffic must leave it disabled and use clients that follow the HTTP `Location` URI.
+
+### Feature flags: `S3-Redirect-Rebuild` versus `S3-Reverse-Proxy`
+
+Another supported feature flag, `S3-Reverse-Proxy`, does exactly what its name implies: instead of redirecting an S3 request to the designated target, the AIS proxy forwards the request and relays the response.
+
+The two flags solve the same client-compatibility problem in fundamentally different ways:
+
+* **`S3-Redirect-Rebuild`** preserves the direct client-to-target data path, but permits reconstructed, unsigned S3 requests at target public endpoints. Proxy-enforced authentication and authorization cannot protect those requests.
+
+Consequently, this mode cannot coexist with AuthN or intra-cluster request signing.
+
+* **`S3-Reverse-Proxy`** preserves proxy mediation and is compatible with AuthN and intra-cluster signing.
+
+The proxy forwards each S3 request to the designated target, stamping and signing the internal request as configured. The tradeoff is that user data flows through the proxy, forfeiting the normal direct scale-out path.
+
+These modes have the following consequences:
+
+1. A client that reconstructs S3 endpoints cannot use redirects against a cluster protected by AuthN or intra-cluster signing. For such clients, `S3-Reverse-Proxy` is the compatible mode.
+2. When target endpoints are not reachable from S3 clients—for example, when targets are firewalled from the client network—redirect-based S3 access is unavailable. `S3-Reverse-Proxy` allows S3 clients to communicate exclusively with AIS proxies.
+3. `S3-Redirect-Rebuild` and `S3-Reverse-Proxy` are alternative compatibility modes and cannot be enabled together.
+
+| Mode                        | Supported S3 clients                       | Request path                                                | Proxy mediation                           | Client access to targets | AuthN and intra-cluster signing |
+| --------------------------- | ------------------------------------------ | ----------------------------------------------------------- | ----------------------------------------- | ------------------------ | ------------------------------- |
+| Standard redirect (default) | Clients that follow `Location` verbatim    | Proxy admission, then direct client <=> target              | Admission and redirect signing            | Required                 | Supported                       |
+| `S3-Redirect-Rebuild`       | Conforming and endpoint-rebuilding clients | Direct client <=> target; `HEAD(object)` is reverse-proxied | Not guaranteed for reconstructed requests | Required                 | Incompatible                    |
+| `S3-Reverse-Proxy`          | All supported S3 clients                   | Client <=> proxy <=> target                                 | Complete                                  | Not required             | Supported                       |
+
+In terms of tradeoffs:
+
+1. The default and recommended mode preserves the scalable direct data path, but requires clients that implement standard HTTP redirect semantics.
+2. `S3-Redirect-Rebuild` trades proxy-enforced security for compatibility with clients that reconstruct S3 endpoints.
+3. `S3-Reverse-Proxy` trades the direct scale-out data path for client compatibility, proxy mediation, and support for deployments where targets are not client-reachable.
 
 ## Configuring Clients
 
@@ -318,7 +352,7 @@ This would download only the first 100 bytes of the file.
 ### Multipart uploads with aws CLI
 
 ```console
-# 1 — initiate
+# 1 - initiate
 aws s3api create-multipart-upload --bucket demo --key big \
   --endpoint-url "$AWS_EP"
 # Output:
@@ -328,7 +362,7 @@ aws s3api create-multipart-upload --bucket demo --key big \
 #     "UploadId": "xu3DvVzJK"
 # }
 
-# 2 — upload parts individually
+# 2 - upload parts individually
 aws s3api upload-part --bucket demo --key big \
   --part-number 1 --body part1.bin \
   --upload-id "YOUR-UPLOAD-ID" \
@@ -339,7 +373,7 @@ aws s3api upload-part --bucket demo --key big \
 #     "ETag": "\"a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6\""
 # }
 
-# 3 — complete (requires a JSON file listing all parts)
+# 3 - complete (requires a JSON file listing all parts)
 aws s3api complete-multipart-upload --bucket demo --key big \
   --upload-id "YOUR-UPLOAD-ID" --multipart-upload file://parts.json \
   --endpoint-url "$AWS_EP"
@@ -414,16 +448,16 @@ object is an intentional semantic choice for consistency with the rest of AIS.
 
 ## Compatibility Matrix
 
-| S3 feature              | AIS         | s3cmd            | aws CLI                |
-| ----------------------- | ----------- | ---------------- | ---------------------- |
+| S3 feature              | AIS         | s3cmd              | aws CLI                 |
+| ----------------------- | ----------- | ------------------ | ----------------------- |
 | Create/Destroy bucket   | ✅           | ✅ `mb/rb`        | ✅ `mb/rb`              |
 | PUT / GET / HEAD object | ✅           | ✅ `put/get/info` | ✅ `cp/head`            |
-| Range reads             | ✅           | —                | ✅ `get-object --range` |
+| Range reads             | ✅           | —                 | ✅ `get-object --range` |
 | Multipart upload        | ✅           | ✅                | ✅                      |
-| Copy object             | S3 API only | partial          | ✅                      |
-| Inventory listing       | ✅           | —                | —                      |
-| Authentication          | JWT         | modified         | ✅                      |
-| Presigned URLs          | ✅           | —                | ✅                      |
+| Copy object             | S3 API only  | partial           | ✅                      |
+| Inventory listing       | ✅           | —                 | —                       |
+| Authentication          | JWT          | modified          | ✅                      |
+| Presigned URLs          | ✅           | —                 | ✅                      |
 
 > **Not yet supported**: Regions, CORS, Website hosting, CloudFront; full ACL parity (AIS uses its own ACL model).
 

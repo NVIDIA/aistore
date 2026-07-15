@@ -42,3 +42,20 @@ func EnableClusterFeatures(t *testing.T, flags feat.Flags) {
 		})
 	})
 }
+
+// PrepForS3RebuildClientOrSkip prepares the cluster for an S3 client that rebuilds
+// redirected requests. Existing reverse-proxy mode needs no change; otherwise,
+// the helper enables S3RedirectRebuild or skips when proxy mediation is required.
+func PrepForS3RebuildClientOrSkip(t *testing.T) {
+	t.Helper()
+
+	config := GetClusterConfig(t)
+	switch {
+	case config.Features.IsSet(feat.S3ReverseProxy):
+		// nothing to do
+	case config.Auth.RequiresProxyMediation():
+		t.Skipf("cannot enable %v: cluster configuration requires proxy mediation", feat.S3RedirectRebuild.Names())
+	default:
+		EnableClusterFeatures(t, feat.S3RedirectRebuild) // with t.Cleanup inside
+	}
+}

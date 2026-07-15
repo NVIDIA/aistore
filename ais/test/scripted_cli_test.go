@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -177,11 +176,8 @@ func TestMPU_2_UsingScript(t *testing.T) {
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 	cmd := exec.Command("./scripts/multipart-smoke.sh", "--bucket", bck.Cname(""))
 
-	config := tools.GetClusterConfig(t)
-	if config.Auth.RequiresProxyMediation() {
-		t.Skipf("cannot enable %v: cluster configuration requires proxy mediation", feat.S3RedirectRebuild.Names())
-	}
-	tools.EnableClusterFeatures(t, feat.S3RedirectRebuild)
+	// check feat.S3ReverseProxy and maybe set feat.S3RedirectRebuild
+	tools.PrepForS3RebuildClientOrSkip(t)
 
 	tlog.Logfln("Running '%s'...)", cmd.String())
 	out, err := cmd.CombinedOutput()
