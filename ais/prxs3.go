@@ -575,6 +575,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
+	// signed redirect (and NOTE: target /s3 listens on pub and intra-data)
 	redurl := p.redurl(r, tsi, smap.Version, cmn.NetIntraData, netPub)
 	p.s3Redirect(w, r, tsi, smap, redurl, bck.Name)
 }
@@ -831,9 +832,9 @@ func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket st
 // - 307 Location: redurl signed via p.redurl (`svgrp` params);
 // - XML <Endpoint>: full redurl, XML-escaped (`&` => `&amp;`).
 // NOTE:
-// included python/aistore/botocore_patch
-// follows the Location header verbatim (never parses <Endpoint>), so patched botocore/boto3
-// needs no change; the escaped <Endpoint> serves other XML-reading S3 clients.
+//   - included python/aistore/botocore_patch follows the Location header verbatim (never parses <Endpoint>),
+//     so patched botocore/boto3 needs no change; the escaped <Endpoint> serves other XML-reading S3 clients.
+//   - the helper MAY execute reverse-proxy if configured
 func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, smap *smapX, redurl, bucket string) {
 	// Deprecated: reverse-proxy S3 API call to a designated target
 	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {

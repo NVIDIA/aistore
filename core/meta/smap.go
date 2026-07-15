@@ -78,7 +78,7 @@ type (
 		Primary      *Snode  `json:"proxy_si"`
 		Tmap         NodeMap `json:"tmap"`          // [tid => Snode]
 		UUID         string  `json:"uuid"`          // is assigned once at creation time, never changes
-		CreationTime string  `json:"creation_time"` // creation timestamp
+		CreationTime string  `json:"creation_time"` // UTC creation timestamp, cos.DateTimeSec
 		Version      int64   `json:"version,string"`
 	}
 )

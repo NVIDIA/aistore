@@ -116,10 +116,6 @@ func newBucketMD() *bucketMD {
 	return &bucketMD{BMD: meta.BMD{Providers: providers, UUID: ""}}
 }
 
-func newClusterUUID() (uuid, created string) {
-	return cos.GenUUID(), time.Now().String()
-}
-
 //////////////
 // bucketMD //
 //////////////

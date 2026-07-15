@@ -427,6 +427,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	if loadedSmap != nil {
 		smap.UUID = loadedSmap.UUID
 		smap.Version = loadedSmap.Version
+		smap.CreationTime = loadedSmap.CreationTime
 	}
 	p.owner.smap.put(smap)
 	p.owner.smap.mu.Unlock()
@@ -521,7 +522,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		}
 		clone := smap.clone()
 		if uuid == "" {
-			clone.UUID, clone.CreationTime = newClusterUUID()
+			clone.UUID, clone.CreationTime = _newCluUUID()
 		} else {
 			clone.UUID, clone.CreationTime = uuid, created
 		}
@@ -601,6 +602,12 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		p.resumeReb(smap, config)
 	}
 	p.owner.rmd.starting.Store(false)
+}
+
+func _newCluUUID() (uuid, creationTime string) {
+	uuid = cos.GenUUID()
+	creationTime = time.Now().UTC().Format(cos.DateTimeSec)
+	return
 }
 
 func (p *proxy) _cluConfig(smap *smapX) (config *globalConfig, err error) {
@@ -1165,7 +1172,7 @@ ret:
 	p.reg.mpl.RUnlock()
 
 	if after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
-		after.Smap.UUID, after.Smap.CreationTime = newClusterUUID()
+		after.Smap.UUID, after.Smap.CreationTime = _newCluUUID()
 		nlog.Infoln(p.String(), "new cluster UUID:", after.Smap.UUID)
 		return after.Smap
 	}

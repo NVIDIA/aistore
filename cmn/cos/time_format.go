@@ -15,6 +15,8 @@ const (
 	StampSec   = "15:04:05"        // time.Stamp without a date
 	StampSec2  = "150405"          // HHMMSS (same as above but without ':')
 
+	DateTimeSec = "2006-01-02 15:04:05"
+
 	// S3 ListObjectsV2
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 	ISO8601 = "2006-01-02T15:04:05.000Z"
