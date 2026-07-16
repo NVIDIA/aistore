@@ -152,6 +152,9 @@ class TestObject(unittest.TestCase):
             direct=True, expected_uname=f"{self.bucket_details.path}{OBJ_NAME}"
         )
 
+    def test_get_parallel_uses_proxy(self):
+        self.get_exec_assert(num_workers=4)
+
     @patch("aistore.sdk.obj.object.ObjectReader")
     @patch("aistore.sdk.obj.object.ObjectClient")
     def get_exec_assert(self, mock_obj_client, mock_obj_reader, **kwargs):
@@ -164,6 +167,7 @@ class TestObject(unittest.TestCase):
             "expected_byte_range_tuple", (None, None)
         )
         expected_chunk_size = kwargs.get("chunk_size", None)
+        expected_num_workers = kwargs.get("num_workers", None)
         expected_uname = kwargs.pop("expected_uname", None)
 
         res = self.object.get_reader(**kwargs)
@@ -182,7 +186,7 @@ class TestObject(unittest.TestCase):
         mock_obj_reader.assert_called_with(
             object_client=mock_obj_client_instance,
             chunk_size=expected_chunk_size,
-            num_workers=None,
+            num_workers=expected_num_workers,
         )
         if "writer" in kwargs:
             self.mock_writer.writelines.assert_called_with(res)

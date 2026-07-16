@@ -333,9 +333,7 @@ class Object:
             params=params,
             headers=headers,
             byte_range=byte_range_tuple,
-            uname=(
-                self.uname if direct or (num_workers is not None) else None
-            ),  # Auto-enable direct mode for parallel downloads to skip proxy redirects
+            uname=self.uname if direct else None,
         )
 
         obj_reader = ObjectReader(

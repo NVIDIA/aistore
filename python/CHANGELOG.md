@@ -47,6 +47,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- Parallel downloads now route the initial HEAD and subsequent ranged GET
+  requests through the proxy, allowing redirects to be signed when
+  intra-cluster authentication is enabled.
 - ETL webservers now forward
   `etl_args` to the next stage on direct-put pipeline hops. Previously only the
   first pipeline stage received `etl_args`; stages 2..N saw an empty value.
