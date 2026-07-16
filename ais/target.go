@@ -853,7 +853,7 @@ func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) 
 
 	// 2. redirect may arrive on all 3 nets - see p.redurl() (decides the appropriate destination network)
 	if hasRedirectMarker(dpq) {
-		return t._verifySignedRedirect(r, dpq)
+		return t._verifySigned(r, dpq)
 	}
 
 	// 3. signed T2T
@@ -905,20 +905,22 @@ func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode i
 	return ecode, err
 }
 
-func (t *target) _verifySignedRedirect(r *http.Request, dpq *dpq) (ecode int, err error) {
+func (t *target) verifyRedirect(r *http.Request, dpq *dpq) (ecode int, err error) {
+	if !hasRedirectMarker(dpq) {
+		return http.StatusUnauthorized, errDirectTargetAccess
+	}
+	return t._verifySigned(r, dpq)
+}
+
+func (t *target) _verifySigned(r *http.Request, dpq *dpq) (ecode int, err error) {
 	var (
 		svgrp *svgrp
 		pid   = dpq.sys.pid
 		smap  = t.owner.smap.get()
 	)
-
 	// target's Smap is never nil; there _may_ be a very narrow startup window
 	// when it's invalid but then we just fail a signed request (unlikely)
 	debug.Assert(smap.isValid())
-
-	if !hasRedirectMarker(dpq) {
-		return http.StatusUnauthorized, errDirectTargetAccess
-	}
 
 	if dpq.sv.sig != "" {
 		svgrp = &dpq.sv
@@ -927,7 +929,6 @@ func (t *target) _verifySignedRedirect(r *http.Request, dpq *dpq) (ecode int, er
 		sv := newVerifier(r, &t.htrun, svgrp)
 		return sv.verify(pid, smap.GetNode(pid), smap)
 	}
-
 	return 0, nil
 }
 

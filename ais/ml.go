@@ -96,11 +96,11 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		coloc  apc.ColocLevel
 		dpq    = dpqAlloc()
 	)
+	defer dpqFree(dpq)
 	if err := dpq.parse(r.URL.RawQuery); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	defer dpqFree(dpq)
 
 	if dpq.coloc > 0 {
 		coloc = apc.ColocLevel(dpq.coloc)
@@ -282,16 +282,50 @@ type mossCtx struct {
 	nat  int
 }
 
+func (t *target) _mlVerify(w http.ResponseWriter, r *http.Request, dpq *dpq) bool {
+	switch r.Method {
+	case http.MethodPost:
+		if !t.ensureIntraControl(w, r, false) {
+			return false
+		}
+	case http.MethodGet:
+		// do nothing
+	default:
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPost)
+		return false
+	}
+
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		t.writeErr(w, r, err)
+		return false
+	}
+
+	if r.Method == http.MethodGet {
+		// phase 2 redirect over pub-net
+		if ecode, err := t.verifyRedirect(r, dpq); err != nil {
+			t.writeErr(w, r, err, ecode)
+			return false
+		}
+	}
+	return true
+}
+
 func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		ctx mossCtx
+		dpq = dpqAlloc()
+	)
+	defer dpqFree(dpq)
+
+	if !t._mlVerify(w, r, dpq) {
+		return
+	}
+
 	switch r.Method {
 	// phase 1: DT to initialize Rx (see `designated`)
 	// phase 3: senders to open SDM and start sending
 	case http.MethodPost:
-		if !t.ensureIntraControl(w, r, false) {
-			return
-		}
-		var ctx mossCtx
-		if err := t.mossparse(w, r, &ctx); err != nil {
+		if err := t.mossparse(w, r, &ctx, dpq); err != nil {
 			return
 		}
 		ctx.t = t
@@ -328,8 +362,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 
 	// phase 2: redirect - ready to start assembly, waiting for the phase 3
 	case http.MethodGet:
-		var ctx mossCtx
-		if err := t.mossparse(w, r, &ctx); err != nil {
+		if err := t.mossparse(w, r, &ctx, dpq); err != nil {
 			return
 		}
 		ctx.t = t
@@ -360,8 +393,6 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 				t.writeErr(w, r, err, 0, Silent)
 			}
 		}
-	default:
-		cmn.WriteErr405(w, r, http.MethodGet)
 	}
 }
 
@@ -500,11 +531,9 @@ func _checkMossEmpty(req *apc.MossReq) (err error) {
 }
 
 // parse tmosspath()
-func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx) (err error) {
-	var (
-		items []string
-	)
-	if items, err = t.parseURL(w, r, apc.URLPathML.L, 4, true); err != nil {
+func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx, dpq *dpq) error {
+	items, err := t.parseURL(w, r, apc.URLPathML.L, 4, true)
+	if err != nil {
 		return err
 	}
 	if cmn.Rom.V(5, cos.ModAIS) {
@@ -535,13 +564,6 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx)
 		return err
 	}
 	debug.Assert(ctx.nat > 0 && ctx.nat < 10_000, ctx.nat)
-
-	dpq := dpqAlloc()
-	defer dpqFree(dpq)
-	if err := dpq.parse(r.URL.RawQuery); err != nil {
-		t.writeErr(w, r, err)
-		return err
-	}
 
 	ctx.tid = dpq.get(apc.QparamTID)
 	if ctx.tid != "" {
