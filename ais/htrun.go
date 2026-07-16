@@ -785,19 +785,19 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 
 	debug.Assert(args.si != nil || args.req.Base != "") // either destination `si` or base
 
-	// intra-control routing:
+	// intra-cluster routing:
 	// - si == nil: raw/base-URL call with no trusted destination peer, e.g.:
 	//   bootstrap-phase join, health probe, force-join across clusters) =>
 	//   do not stamp sender headers
-	// - si != nil with empty Base: default to peer's control-net URL
-	// - si != nil with explicit Base: intra-control only if Base matches peer's control-net
-	var isIntraControl bool
+	// - si != nil with explicit Base: stamp only if Base matches the peer's
+	//   control- or data-net URL
+	var isIntra bool
 	if args.si != nil {
 		if args.req.Base == "" {
 			args.req.Base = args.si.ControlNet.URL
-			isIntraControl = true
+			isIntra = true
 		} else {
-			isIntraControl = args.req.Base == args.si.ControlNet.URL
+			isIntra = args.req.Base == args.si.ControlNet.URL || args.req.Base == args.si.DataNet.URL
 		}
 	}
 
@@ -823,7 +823,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	}
 
 	// stamp intra-cluster sender identity only on intra-control calls
-	if isIntraControl {
+	if isIntra {
 		h.setIntraHdrs(args.si, req, smap)
 	}
 	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)

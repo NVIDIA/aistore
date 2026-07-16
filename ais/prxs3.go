@@ -638,10 +638,11 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.
 	}
 
 	// bcast & aggregate
+
 	all := &s3.ListMptUploadsResult{}
 	for _, si := range smap.Tmap {
 		var (
-			url   = si.URL(cmn.NetIntraData)
+			url   = si.URL(cmn.NetIntraData) // see Note above
 			cargs = allocCargs()
 		)
 		cargs.si = si
