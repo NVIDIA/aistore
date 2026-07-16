@@ -5,7 +5,6 @@
 package cos
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -55,7 +54,7 @@ func (k *NodeKeyPair) validate() error {
 	if !ok {
 		return errors.New("failed to derive verifying key")
 	}
-	if !bytes.Equal(pub, k.VerifyingKey) {
+	if !CryptoEqual(pub, k.VerifyingKey) {
 		return errors.New("signing/verifying key mismatch")
 	}
 	return nil

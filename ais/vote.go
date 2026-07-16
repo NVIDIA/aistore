@@ -145,7 +145,7 @@ func (p *proxy) httpelect(w http.ResponseWriter, r *http.Request) {
 		if isErrDowngrade(err) {
 			psi := newSmap.GetProxy(msg.Request.Candidate)
 			psi2 := p.owner.smap.get().GetProxy(msg.Request.Candidate)
-			if psi2.Eq(psi) {
+			if psi2.EqNetID(psi) {
 				err = nil
 			}
 		}
@@ -549,7 +549,7 @@ func (h *htrun) httpgetvote(w http.ResponseWriter, r *http.Request) {
 		if isErrDowngrade(err) {
 			newSmap2 := h.owner.smap.get()
 			psi2 := newSmap2.GetProxy(candidate)
-			if psi2.Eq(psi) {
+			if psi2.EqNetID(psi) {
 				err = nil // not an error - can vote Yes
 			}
 		}

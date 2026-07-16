@@ -34,7 +34,7 @@ outer:
 			continue
 		}
 		for _, ignoreNode := range ignore {
-			if ignoreNode.Eq(tsi) {
+			if ignoreNode.EqNetID(tsi) {
 				continue outer
 			}
 		}

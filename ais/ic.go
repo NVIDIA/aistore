@@ -425,7 +425,7 @@ func (ic *ic) syncICBundle() error {
 		}
 	}
 
-	if si.Eq(ic.p.si) {
+	if si.EqNetID(ic.p.si) {
 		return nil
 	}
 	cargs := allocCargs()

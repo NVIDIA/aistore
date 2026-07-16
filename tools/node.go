@@ -762,7 +762,7 @@ retry:
 		}
 		node := smap.GetNode(cmd.Node.ID())
 		if node != nil {
-			tassert.Errorf(t, node.Eq(cmd.Node),
+			tassert.Errorf(t, node.EqNetID(cmd.Node),
 				"%s %s changed, before %+v, after %+v", cmd.Node.Type(), node.ID(), cmd.Node, node)
 		} else {
 			tassert.Errorf(t, false, "%s %s not found in %s", cmd.Node.Type(), cmd.Node.ID(), smap.StringEx())

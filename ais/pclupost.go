@@ -336,7 +336,7 @@ func (c *clupost) handshake() (stop bool) {
 		//
 		// check for: a) different node, duplicate node ID, or b) same node, net-info change
 		//
-		if osi := c.smap.GetNode(nsi.ID()); osi != nil && !osi.Eq(nsi) {
+		if osi := c.smap.GetNode(nsi.ID()); osi != nil && !osi.EqNetID(nsi) {
 			ok, err := c.confirmSnode(osi) // handshake (expecting nsi in response)
 			if err != nil {
 				if !cos.IsErrRetriableConn(err) {
@@ -479,12 +479,13 @@ func (c *clupost) confirmSnode(osi *meta.Snode) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return c.nsi.Eq(si), nil
+	return c.nsi.EqNetID(si), nil
 }
 
 func (c *clupost) kalive(osi *meta.Snode) bool {
 	p, nsi := c.p, c.nsi
-	if !osi.Eq(nsi) {
+
+	if !osi.EqNetID(nsi) {
 		ok, err := c.confirmSnode(osi)
 		if err != nil {
 			nlog.Errorf("%s: %s(%s) failed to obtain node info: %v", p, nsi.StringEx(), nsi.PubNet.URL, err)
@@ -498,23 +499,43 @@ func (c *clupost) kalive(osi *meta.Snode) bool {
 		return true // NOTE: update cluster map
 	}
 
+	debug.Func(func() {
+		if cos.CryptoEqual(osi.VerifyingKey, nsi.VerifyingKey) {
+			return
+		}
+		ofp, _ := cos.NodeVerifyingKeyFingerprint(osi.VerifyingKey)
+		nfp, _ := cos.NodeVerifyingKeyFingerprint(nsi.VerifyingKey)
+		debug.Assertf(false, "not expecting verifying key change: %s(flags %s, fp %q) => %s(flags %s, fp %q)",
+			osi.StringEx(), osi.Fl2S(), ofp, nsi.StringEx(), nsi.Fl2S(), nfp)
+	})
+
 	p.keepalive.heardFrom(nsi.ID())
 	return false
 }
 
 func (c *clupost) rereg(osi *meta.Snode) bool {
 	p, nsi := c.p, c.nsi
-	if !p.NodeStarted() {
+
+	switch {
+	case !p.NodeStarted():
+		// early-start: do not optimize this reg
 		return true
-	}
-	if osi.Eq(nsi) && osi.Flags == nsi.Flags {
+	case !cos.CryptoEqual(osi.VerifyingKey, nsi.VerifyingKey):
+		// keypairs are ephemeral: a restart must renew the Smap entry even when
+		// daemon ID, network identity, and flags are otherwise unchanged
+		ofp, _ := cos.NodeVerifyingKeyFingerprint(osi.VerifyingKey)
+		nfp, _ := cos.NodeVerifyingKeyFingerprint(nsi.VerifyingKey)
+		nlog.Warningf("%s: %s(flags %s, fp %q) => %s(flags %s, fp %q) - restarted with a new verifying key",
+			p, osi.StringEx(), osi.Fl2S(), ofp, nsi.StringEx(), nsi.Fl2S(), nfp)
+		return true
+	case !osi.EqNetID(nsi) || osi.Flags != nsi.Flags:
+		// also ref0417 (ais/earlystart)
+		nlog.Warningf("%s: renewing %s(flags %s) => %s(flags %s)", p, osi.StringEx(), osi.Fl2S(), nsi.StringEx(), nsi.Fl2S())
+		return true
+	default:
 		nlog.Infoln(p.String(), "node", nsi.StringEx(), "is already _in_ - nothing to do")
 		return false
 	}
-
-	// NOTE: also ref0417 (ais/earlystart)
-	nlog.Warningf("%s: renewing %s(flags %s) => %s(flags %s)", p, osi.StringEx(), osi.Fl2S(), nsi.StringEx(), nsi.Fl2S())
-	return true
 }
 
 // executes under p.owner.smap lock; may stamp response headers for accepted shortcut paths

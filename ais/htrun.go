@@ -511,7 +511,22 @@ func (h *htrun) initPhase2(config *cmn.Config) {
 	hk.Reg("rate-limit"+hk.NameSuffix, h.ratelim.housekeep, hk.PruneRateLimiters)
 }
 
-// always generate upon restart and keep in memory only
+// Node signing keypairs are ephemeral and regenerated on every `aisnode` restart.
+// Therefore, every restarted node must self-join and replace its Smap entry,
+// even when its daemon ID, network endpoints, and flags remain unchanged.
+//
+// A quick crash-restart sequence creates a narrow propagation window:
+//
+// 1. a node terminates without removing itself from Smap;
+// 2. it restarts with the same identity and endpoints but a new keypair;
+// 3. the primary accepts its self-join and updates the node's Smap entry;
+// 4. until that Smap version reaches all peers, they still verify the node
+//     using its previous key.
+//
+// During this window, the restarted node must not originate signed
+// intra-cluster requests to peers that may still hold the previous Smap.
+
+// always generate upon restart and keep in memory only (see extended comment above)
 func (h *htrun) newKeyPair(sid, daeType string) *cos.NodeKeyPair {
 	err := cos.ValidateDaemonID(sid)
 	cos.AssertNoErr(err) // FATAL

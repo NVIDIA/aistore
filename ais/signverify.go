@@ -33,6 +33,7 @@ import (
 //
 // TODO:
 // - add canonical query/body coverage
+// - enforce startup ordering: restarted node must not originate signed traffic before its new Smap entry gets propagated
 // - tests: add TestSignVerifyToggleStress and run it in parallel w/ TestSmoke/prefetch/get-batch
 // - add rotation, startup, and tampering tests
 

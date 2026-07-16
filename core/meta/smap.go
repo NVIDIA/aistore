@@ -169,7 +169,7 @@ func (d *Snode) URL(network string) (u string) {
 	return u
 }
 
-func (d *Snode) Eq(o *Snode) (eq bool) {
+func (d *Snode) EqNetID(o *Snode) (eq bool) {
 	if d == nil || o == nil {
 		return
 	}
@@ -673,7 +673,7 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 	if m.Version != other.Version {
 		sameVersion = false
 	}
-	if m.Primary == nil || other.Primary == nil || !m.Primary.Eq(other.Primary) {
+	if m.Primary == nil || other.Primary == nil || !m.Primary.EqNetID(other.Primary) {
 		return // eq == false
 	}
 	eq = mapsEq(m.Tmap, other.Tmap) && mapsEq(m.Pmap, other.Pmap)
@@ -795,7 +795,7 @@ func mapsEq(a, b NodeMap) bool {
 	for id, anode := range a {
 		if bnode, ok := b[id]; !ok {
 			return false
-		} else if !anode.Eq(bnode) {
+		} else if !anode.EqNetID(bnode) {
 			return false
 		}
 	}

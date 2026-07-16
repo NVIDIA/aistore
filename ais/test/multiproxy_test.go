@@ -1261,7 +1261,7 @@ func killRandNonPrimaryIC(t testing.TB, smap *meta.Smap) (tools.RestoreCmd, *met
 	primary := smap.Primary
 	var killNode *meta.Snode
 	for _, psi := range smap.Pmap {
-		if smap.IsIC(psi) && !psi.Eq(primary) {
+		if smap.IsIC(psi) && !psi.EqNetID(primary) {
 			killNode = psi
 			break
 		}
