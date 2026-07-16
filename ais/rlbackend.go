@@ -19,11 +19,20 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-// rate-limit 4 backend APIs:
+// rate-limit 5 backend APIs:
+// - HeadObj()
 // - GetObj()
 // - GetObjReader()
 // - PutObj()
 // - DeleteObj()
+
+// The remaining backend APIs can be added if needed - remote providers may
+// rate-limit them as well:
+// - CreateBucket()
+// - ListBuckets()
+// - ListObjects()
+// - HeadBucket()
+// - StartMpt(), PutMptPart(), CompleteMpt(), AbortMpt()
 
 // stats:
 // - not counting proactive delay    - only (reactive) retries
@@ -36,6 +45,23 @@ type (
 		t *target
 	}
 )
+
+// note: not counting stats
+func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+	// proactive
+	arl := bp.acquire(lom.Bck(), http.MethodHead)
+	oa, ecode, err = bp.Backend.HeadObj(ctx, lom, origReq)
+	if err == nil || arl == nil || !cmn.IsErrTooManyRequests(err) {
+		return
+	}
+
+	cb := func() (int, error) {
+		oa, ecode, err = bp.Backend.HeadObj(ctx, lom, origReq)
+		return ecode, err
+	}
+	_, ecode, err = bp.retry(ctx, arl, cb)
+	return
+}
 
 func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, origReq *http.Request) (int, error) {
 	// proactive
