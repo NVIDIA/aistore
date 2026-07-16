@@ -1286,11 +1286,24 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		mustBePrimary = askPrimary || pir
 	}
 
+	var admitted bool
+
 	// 2. ordinary liveness/readiness probe
 	if !prr && !wantNsti {
-		if responded := p.simpleHealth(w, r); responded {
+		plainPing := !mustBePrimary // i.e., !askPrimary
+		if responded := p._health(w, r, plainPing); responded {
 			return
 		}
+		// arrived via intra-control and checkIntra passed
+		admitted = true
+	}
+	// prr is public on pub-net, but must be admitted when received via intra-control
+	if prr && _reqNet(r) == reqNetCtrl {
+		if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
+			p.writeErr(w, r, err, ecode)
+			return
+		}
+		admitted = true
 	}
 
 	// 3. cluster-info from any node (no Smap validation required for the bare cii case)
@@ -1312,7 +1325,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	senderID = r.Header.Get(apc.HdrSenderID)
-	if senderID != "" && smap.GetProxy(senderID) != nil {
+	if senderID != "" && smap.GetProxy(senderID) != nil && admitted {
 		p.keepalive.heardFrom(senderID)
 	}
 
@@ -1360,6 +1373,42 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (p *proxy) _health(w http.ResponseWriter, r *http.Request, plainPing bool) bool {
+	if _reqNet(r) == reqNetCtrl {
+		if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
+			if plainPing {
+				if cmn.Rom.V(4, cos.ModAIS) {
+					nlog.Warningln("[health]", p.String(), "rejected intra-control request:", err)
+				}
+				w.WriteHeader(http.StatusOK) // liveness only
+			} else {
+				p.writeErr(w, r, err, ecode)
+			}
+			return true
+		}
+		return false
+	}
+
+	// substring match to avoid ParseQuery alloc on fast path
+	// (the apc constant includes "=true")
+	isReadiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
+	if cmn.Rom.V(5, cos.ModKalive) {
+		nlog.Infoln(p.String(), "external health-probe:", r.RemoteAddr, isReadiness, "[", r.URL.RawQuery, "]")
+	}
+
+	if !isReadiness {
+		w.WriteHeader(http.StatusOK)
+		return true
+	}
+
+	if p.isReady() {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+	return true
 }
 
 // +gen:endpoint PUT /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string] action=[apc.ActArchive=cmn.ArchiveBckMsg]

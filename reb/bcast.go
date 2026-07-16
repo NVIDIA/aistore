@@ -193,6 +193,13 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rargs, desiredStage uint32) (
 		return nil, false
 	}
 
+	// liveness-only 200 (no body): the peer is up but not admitting this sender (self)
+	if len(body) == 0 {
+		err := fmt.Errorf("%s: %s alive but not admitting - aborting", rargs.logHdr, tname)
+		reb.abortAll(err, rargs.xreb)
+		return nil, false
+	}
+
 	status = &Status{}
 	err = jsoniter.Unmarshal(body, status)
 	if err != nil {

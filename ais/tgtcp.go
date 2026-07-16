@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -1366,7 +1367,11 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+//
 // GET /v1/health (apc.Health)
+//
+
+// pub-net: external watchdog and bootstrap cluster-info
 func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
 		if cmn.Rom.V(4, cos.ModAIS) {
@@ -1376,50 +1381,100 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if responded := t.simpleHealth(w, r); responded {
+
+	// Bootstrap/join callers may have no verifiable identity.
+	if r.URL.RawQuery != "" && cos.IsParseBool(r.URL.Query().Get(apc.QparamClusterInfo)) {
+		t.uptime2hdr(w.Header())
+
+		nsti := &cos.NodeStateInfo{}
+		t.fillNsti(nsti)
+		t.writeJSON(w, r, nsti, "cluster-info")
+		return
+	}
+
+	// External watchdog:
+	// - liveness: process is alive
+	// - readiness: node and cluster started and not in maintenance/decommission
+	isReadiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
+	if cmn.Rom.V(5, cos.ModKalive) {
+		nlog.Infoln(t.String(), "external health-probe:", r.RemoteAddr,
+			isReadiness, "[", r.URL.RawQuery, "]")
+	}
+
+	if isReadiness && !t.isReady() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// intra-control: admission failure still reports target liveness;
+// only admitted peers may:
+// retrieve rebalance status, update heard-from, or trigger rebalance abort.
+//
+// note: periodic node-to-primary slow keepalive uses regTo => httpclupost
+// (not this endpoint)
+func (t *target) healthCtrlHandler(w http.ResponseWriter, r *http.Request) {
+	if t.regstate.disabled.Load() && daemon.cli.target.standby {
+		if cmn.Rom.V(4, cos.ModAIS) {
+			nlog.Warningln("[health]", t.String(), "standing by...")
+		}
+	} else if !t.NodeStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
 	t.uptime2hdr(w.Header())
 
-	var (
-		getCii, getRebStatus bool
-	)
+	var getCii, getRebStatus bool
 	if r.URL.RawQuery != "" {
 		query := r.URL.Query()
 		getCii = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
 		getRebStatus = cos.IsParseBool(query.Get(apc.QparamRebStatus))
 	}
 
-	// piggyback [cluster info]
+	// Bootstrap/join callers may have no verifiable identity.
 	if getCii {
 		nsti := &cos.NodeStateInfo{}
 		t.fillNsti(nsti)
 		t.writeJSON(w, r, nsti, "cluster-info")
 		return
 	}
-	// valid?
+
 	smap := t.owner.smap.get()
 	if !smap.isValid() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
-	// return ok plus optional reb info
+	if _, err := t.checkIntra(r, false /*only primary*/); err != nil {
+		if cmn.Rom.V(4, cos.ModAIS) {
+			nlog.Warningln("[health]", t.String(),
+				"rejected intra-control request:", err)
+		}
+		w.WriteHeader(http.StatusOK) // liveness only
+		return
+	}
+
 	var (
 		err              error
 		senderID         = r.Header.Get(apc.HdrSenderID)
 		senderName       = r.Header.Get(apc.HdrSenderName)
-		senderSmapVer, _ = strconv.ParseInt(r.Header.Get(apc.HdrSenderSmapVer), 10, 64)
+		senderSmapVer, _ = strconv.ParseInt(
+			r.Header.Get(apc.HdrSenderSmapVer), 10, 64,
+		)
 	)
+
 	if smap.version() != senderSmapVer {
 		s := "older"
 		if smap.version() < senderSmapVer {
 			s = "newer"
 		}
-		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", senderID, senderName, s, senderSmapVer)
+		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d",
+			senderID, senderName, s, senderSmapVer)
 		nlog.Warningf("%s[%s]: %v", t, smap.StringEx(), err)
 	}
+
 	if getRebStatus {
 		status := &reb.Status{}
 		t.reb.RebStatus(status)
@@ -1427,10 +1482,10 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if smap.version() < senderSmapVer && status.Running {
-			// NOTE: abort right away but don't broadcast
 			t.reb.AbortLocal(smap.version(), err)
 		}
 	}
+
 	if smap.GetProxy(senderID) != nil {
 		t.keepalive.heardFrom(senderID)
 	}

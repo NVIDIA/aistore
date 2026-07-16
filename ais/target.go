@@ -640,13 +640,9 @@ func (t *target) initRecvHandlers() {
 
 		networkHandler{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
 
-		// TODO:
-		// - accessNetPublicControl is a union (pub) and (control);
-		// - to enforce intra-cluster headers and sign/verify (if enabled):
-		// - follow-up on 0cd8ff1078ee "access control: split public and intra-control handlers"
-		// - applies to: /health, /ml
+		networkHandler{r: apc.Health, h: t.healthHandler, net: accessNetPublic},
+		networkHandler{r: apc.Health, h: t.healthCtrlHandler, net: accessNetIntraControl},
 
-		networkHandler{r: apc.Health, h: t.healthHandler, net: accessNetPublicControl},
 		networkHandler{r: apc.Xactions, h: t.xactHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.EC, h: t.ecHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.Vote, h: t.voteHandler, net: accessNetIntraControl},
@@ -866,7 +862,7 @@ func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) 
 	debug.Assert(net == reqNetCtrl || net == reqNetData)
 	debug.Assert(!hasRedirectMarker(dpq))
 
-	return t.checkIntra(r, false /*from primary*/, net)
+	return t.checkIntra(r, false /*only primary*/, net)
 }
 
 func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode int, err error) {
@@ -905,7 +901,7 @@ func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode i
 	}
 
 	// ditto (see above)
-	if ecode, err = t.checkIntra(r, false /*from primary*/, net); err != nil {
+	if ecode, err = t.checkIntra(r, false /*only primary*/, net); err != nil {
 		err = fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err)
 	}
 	return ecode, err

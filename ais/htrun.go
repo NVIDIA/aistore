@@ -2550,43 +2550,6 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 	return err
 }
 
-// simple intra-cluster ping OR an external watchdog (such as K8s via /v1/health handler)
-// - liveness: always 200 (process is alive)
-// - readiness: 200 when node and cluster started + not in maint/decomm, 503 otherwise
-func (h *htrun) simpleHealth(w http.ResponseWriter, r *http.Request) bool {
-	hdr := r.Header
-
-	// TODO differentiate and enforce:
-	// in fact, intra-control must enforce both presence apc.HdrSenderID and all the checks
-	// inside h.checkIntra(), possibly including sign/verify; further comments in initRecvHandlers()
-	if hdr.Get(apc.HdrSenderID) != "" {
-		if ecode, err := h.checkIntra(r, false /* from primary */); err != nil {
-			h.writeErr(w, r, err, ecode)
-			return true
-		}
-		return false
-	}
-
-	// substring match to avoid ParseQuery alloc on fast path
-	// (the apc constant includes "=true")
-	isReadiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
-	if cmn.Rom.V(5, cos.ModKalive) {
-		nlog.Infoln(h.String(), "external health-probe:", r.RemoteAddr, isReadiness, "[", r.URL.RawQuery, "]")
-	}
-
-	if !isReadiness {
-		w.WriteHeader(http.StatusOK)
-		return true
-	}
-
-	if h.isReady() {
-		w.WriteHeader(http.StatusOK)
-	} else {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}
-	return true
-}
-
 // ready when node started, not in maint/decomm, and cluster started
 // primary is ready even if cluster has not yet started (targets not yet registered or reachable)
 func (h *htrun) isReady() bool {
