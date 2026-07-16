@@ -105,10 +105,14 @@ type (
 	}
 	ConfigToUpdate struct {
 		Server *ServerConfToSet `json:"auth"`
+		Log    *LogConfToSet    `json:"log,omitempty"`
 	}
 	ServerConfToSet struct {
 		Secret *string       `json:"secret,omitempty"`
 		Expire *cos.Duration `json:"expiration_time,omitempty"`
+	}
+	LogConfToSet struct {
+		Level *string `json:"level,omitempty"`
 	}
 	// TokenList is a list of tokens pushed by authn
 	TokenList struct {
@@ -194,14 +198,21 @@ func (c *SigningKeyConf) validate() error {
 	return nil
 }
 
+func validateLogLevel(level string) error {
+	n, err := strconv.Atoi(level)
+	if err != nil {
+		return fmt.Errorf("invalid log.level=%q (expected integer string)", level)
+	}
+	if n < 0 || n > maxLogLevel {
+		return fmt.Errorf("invalid log.level=%d (expected value between 0 and %d)", n, maxLogLevel)
+	}
+	return nil
+}
+
 func (c *LogConf) Validate() error {
 	if c.Level != "" {
-		level, err := strconv.Atoi(c.Level)
-		if err != nil {
-			return fmt.Errorf("invalid log.level=%q (expected integer string)", c.Level)
-		}
-		if level < 0 || level > maxLogLevel {
-			return fmt.Errorf("invalid log.level=%d (expected value between 0 and %d)", level, maxLogLevel)
+		if err := validateLogLevel(c.Level); err != nil {
+			return err
 		}
 	}
 	if c.FlushInterval == 0 {
@@ -263,11 +274,16 @@ func (c *TimeoutConf) Validate() error {
 }
 
 func (cu *ConfigToUpdate) Validate() error {
-	if cu.Server == nil {
+	if cu.Server == nil && cu.Log == nil {
 		return errors.New("configuration is empty")
 	}
-	if cu.Server.Secret != nil && *cu.Server.Secret == "" {
+	if cu.Server != nil && cu.Server.Secret != nil && *cu.Server.Secret == "" {
 		return errors.New("secret defined but empty string")
+	}
+	if cu.Log != nil && cu.Log.Level != nil {
+		if err := validateLogLevel(*cu.Log.Level); err != nil {
+			return err
+		}
 	}
 	return nil
 }
