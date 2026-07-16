@@ -115,6 +115,16 @@ func TestUpdateConf(t *testing.T) {
 	tassert.Fatalf(t, err == nil, "UpdateConf failed: %v", err)
 	compareSecret(t, cm, newSecret)
 	compareExpiry(t, cm, 2*time.Hour)
+
+	// log level update
+	tassert.Errorf(t, cm.IsVerbose(), "expected verbose at baseline log level 4")
+	newLevel := "2"
+	err = cm.UpdateConf(&authn.ConfigToUpdate{
+		Log: &authn.LogConfToSet{Level: &newLevel},
+	})
+	tassert.Fatalf(t, err == nil, "UpdateConf failed: %v", err)
+	tassert.Errorf(t, cm.GetConf().Log.Level == newLevel, "expected log level %q, got %q", newLevel, cm.GetConf().Log.Level)
+	tassert.Errorf(t, !cm.IsVerbose(), "expected non-verbose after log level 2")
 }
 
 func TestUpdateConfNoExpiry(t *testing.T) {

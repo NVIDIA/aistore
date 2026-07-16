@@ -95,11 +95,16 @@ func (cm *ConfManager) UpdateConf(cu *authn.ConfigToUpdate) error {
 	defer cm.mu.Unlock()
 	old := cm.conf.Load()
 	next := *old // shallow copy
-	if cu.Server.Secret != nil {
-		next.Server.Secret = *cu.Server.Secret
+	if cu.Server != nil {
+		if cu.Server.Secret != nil {
+			next.Server.Secret = *cu.Server.Secret
+		}
+		if cu.Server.Expire != nil {
+			next.Server.Expire = *cu.Server.Expire
+		}
 	}
-	if cu.Server.Expire != nil {
-		next.Server.Expire = *cu.Server.Expire
+	if cu.Log != nil && cu.Log.Level != nil {
+		next.Log.Level = *cu.Log.Level
 	}
 	// Validate config after updates before storing
 	err := next.Validate()

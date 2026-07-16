@@ -180,3 +180,24 @@ func TestConfigValidateInvalid(t *testing.T) {
 		tassert.Errorf(t, c.Validate() != nil, "%s: expected error", tc.name)
 	}
 }
+
+func TestConfigToUpdateValidate(t *testing.T) {
+	str := func(s string) *string { return &s }
+
+	t.Run("LogLevelUpdate", func(t *testing.T) {
+		cu := &ConfigToUpdate{Log: &LogConfToSet{Level: str("4")}}
+		tassert.CheckFatal(t, cu.Validate())
+	})
+	t.Run("LogLevelNotInteger", func(t *testing.T) {
+		cu := &ConfigToUpdate{Log: &LogConfToSet{Level: str("verbose")}}
+		tassert.Errorf(t, cu.Validate() != nil, "expected error for non-integer log level")
+	})
+	t.Run("LogLevelOutOfRange", func(t *testing.T) {
+		cu := &ConfigToUpdate{Log: &LogConfToSet{Level: str("6")}}
+		tassert.Errorf(t, cu.Validate() != nil, "expected error for out-of-range log level")
+	})
+	t.Run("Empty", func(t *testing.T) {
+		cu := &ConfigToUpdate{}
+		tassert.Errorf(t, cu.Validate() != nil, "expected error for empty update")
+	})
+}
