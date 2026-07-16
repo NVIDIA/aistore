@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
@@ -19,8 +20,9 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-// rate-limit 5 backend APIs:
+// rate-limit 6 backend APIs:
 // - HeadObj()
+// - ListObjects()
 // - GetObj()
 // - GetObjReader()
 // - PutObj()
@@ -30,14 +32,13 @@ import (
 // rate-limit them as well:
 // - CreateBucket()
 // - ListBuckets()
-// - ListObjects()
 // - HeadBucket()
 // - StartMpt(), PutMptPart(), CompleteMpt(), AbortMpt()
 
 // stats:
 // - not counting proactive delay    - only (reactive) retries
 // - not counting individual retries - only totals (see "increment" comment below)
-// - not counting delete retries     - only get and put
+// - not counting list/delete retries - only get and put
 
 type (
 	rlbackend struct {
@@ -65,6 +66,31 @@ func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.R
 		return ecode, err
 	}
 	_, ecode, err = bp.retry(ctx, arl, cb)
+	return
+}
+
+// Direct callers (all via core.T.Backend):
+// - (*npgCtx).nextPageR (xact/xs/nextpage.go): remote LIST and bucket summary
+// - (*lrit).lsoPage (xact/xs/lrit.go): prefix prefetch, evict/delete, copy/transform, and archive
+// - (*XactNBI).Run (xact/xs/create_nbi.go): native bucket inventory
+// - (*backendDlJob).getNextObjs (ext/dload/job.go): backend download
+func (bp *rlbackend) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+	arl := bp.acquire(bck, apc.ActList)
+	// Keep msg.ContinuationToken (the page being requested), but clear the
+	// result's next-page token in case a previous attempt only partially filled it.
+	lst.ContinuationToken = ""
+	ecode, err = bp.Backend.ListObjects(bck, msg, lst)
+	if err == nil || arl == nil || !cmn.IsErrTooManyRequests(err) {
+		return
+	}
+
+	cb := func() (int, error) {
+		// Discard the next-page token left by the failed attempt.
+		lst.ContinuationToken = ""
+		return bp.Backend.ListObjects(bck, msg, lst)
+	}
+	// core.Backend.ListObjects has no request context.
+	_, ecode, err = bp.retry(context.Background(), arl, cb)
 	return
 }
 

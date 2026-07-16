@@ -179,3 +179,133 @@ func TestRLBackendRetryErrorDetails(t *testing.T) {
 	tassert.Fatalf(t, errors.Is(err, err429), "expected wrapped error %v, got %v", err429, err)
 	tassert.Fatalf(t, cmn.IsErrTooManyRequests(err), "expected throttling error, got %v", err)
 }
+
+type (
+	listResult struct {
+		err   error
+		ecode int
+	}
+	listBackend struct {
+		core.Backend
+		results []listResult
+		bcks    []*meta.Bck
+		msgs    []*apc.LsoMsg
+		lists   []*cmn.LsoRes
+		tokens  []string
+		calls   int
+	}
+)
+
+func (bp *listBackend) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+	bp.bcks = append(bp.bcks, bck)
+	bp.msgs = append(bp.msgs, msg)
+	bp.lists = append(bp.lists, lst)
+	bp.tokens = append(bp.tokens, msg.ContinuationToken)
+	result := bp.results[bp.calls]
+	bp.calls++
+	if result.err == nil {
+		msg.PageSize = 17
+		lst.Entries = append(lst.Entries[:0], &cmn.LsoEnt{Name: "listed-object"})
+		lst.ContinuationToken = "next-page"
+	}
+	return result.ecode, result.err
+}
+
+func TestRLBackendListObjects(t *testing.T) {
+	var (
+		errThrottle = errors.New("throttled")
+		err429      = cmn.NewErrTooManyRequests(errThrottle, http.StatusTooManyRequests)
+		err503      = cmn.NewErrTooManyRequests(errThrottle, http.StatusServiceUnavailable)
+		errFinal    = errors.New("retry failed")
+		tests       = []struct {
+			name      string
+			results   []listResult
+			enabled   bool
+			wantCode  int
+			wantErr   error
+			wantCalls int
+		}{
+			{
+				name:      "success",
+				results:   []listResult{{}},
+				enabled:   true,
+				wantCalls: 1,
+			},
+			{
+				name:      "status 429",
+				results:   []listResult{{ecode: http.StatusTooManyRequests, err: err429}, {}},
+				enabled:   true,
+				wantCalls: 2,
+			},
+			{
+				name:      "status 503",
+				results:   []listResult{{ecode: http.StatusServiceUnavailable, err: err503}, {}},
+				enabled:   true,
+				wantCalls: 2,
+			},
+			{
+				name: "final retry error",
+				results: []listResult{
+					{ecode: http.StatusTooManyRequests, err: err429},
+					{ecode: http.StatusBadGateway, err: errFinal},
+				},
+				enabled:   true,
+				wantCode:  http.StatusBadGateway,
+				wantErr:   errFinal,
+				wantCalls: 2,
+			},
+			{
+				name:      "non-throttle error",
+				results:   []listResult{{ecode: http.StatusBadRequest, err: errFinal}},
+				enabled:   true,
+				wantCode:  http.StatusBadRequest,
+				wantErr:   errFinal,
+				wantCalls: 1,
+			},
+			{
+				name:      "disabled",
+				results:   []listResult{{ecode: http.StatusTooManyRequests, err: err429}},
+				wantCode:  http.StatusTooManyRequests,
+				wantErr:   err429,
+				wantCalls: 1,
+			},
+		}
+	)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bck := meta.NewBck("rate-limit-list", apc.AIS, cmn.NsGlobal)
+			bck.Props = &cmn.Bprops{}
+			bck.Props.RateLimit.Backend.Enabled = test.enabled
+			if test.enabled {
+				arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
+				tassert.CheckFatal(t, err)
+				key := bck.HashUname(apc.ActList)
+				mockTarget.ratelim.Store(key, arl)
+				t.Cleanup(func() { mockTarget.ratelim.Delete(key) })
+			}
+
+			backend := &listBackend{results: test.results}
+			bp := &rlbackend{Backend: backend, t: mockTarget}
+			lst := &cmn.LsoRes{}
+			msg := &apc.LsoMsg{ContinuationToken: "current-page"}
+			ecode, err := bp.ListObjects(bck, msg, lst)
+			tassert.Fatalf(t, ecode == test.wantCode, "expected code %d, got %d", test.wantCode, ecode)
+			tassert.Fatalf(t, errors.Is(err, test.wantErr), "expected error %v, got %v", test.wantErr, err)
+			tassert.Fatalf(t, backend.calls == test.wantCalls, "expected %d calls, got %d", test.wantCalls, backend.calls)
+			for i := range backend.calls {
+				tassert.Fatalf(t, backend.bcks[i] == bck, "call %d: backend received a different bucket", i+1)
+				tassert.Fatalf(t, backend.msgs[i] == msg, "call %d: backend received a different list message", i+1)
+				tassert.Fatalf(t, backend.lists[i] == lst, "call %d: backend received a different list result", i+1)
+				tassert.Fatalf(t, backend.tokens[i] == "current-page", "call %d: continuation token changed to %q",
+					i+1, backend.tokens[i])
+			}
+			if test.wantErr == nil {
+				tassert.Fatalf(t, msg.PageSize == 17, "expected backend message update, got page size %d", msg.PageSize)
+				tassert.Fatalf(t, len(lst.Entries) == 1 && lst.Entries[0].Name == "listed-object",
+					"unexpected entries: %v", lst.Entries)
+				tassert.Fatalf(t, lst.ContinuationToken == "next-page", "unexpected continuation token %q", lst.ContinuationToken)
+			}
+		})
+	}
+}

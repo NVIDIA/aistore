@@ -338,6 +338,8 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 }
 
 // list remote page: self-throttle and retry on 429 (see also: ais/rlbackend)
+// TODO: absorb into ais/rlbackend or remove once ListObjects rate limiting is
+// confirmed to handle all remote backends.
 const (
 	remPageRetriesMax = 6
 	remPageSleepIni   = 2 * time.Second
