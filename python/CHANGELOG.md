@@ -47,6 +47,18 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- ETL webservers now classify direct-put responses by the new
+  `Ais-Direct-Put-Complete` marker header, which the AIS target returns
+  (alongside `204` and `Ais-Direct-Put-Length`) after storing an object via
+  the direct-PUT endpoint. A marked ack is passed back through the pipeline
+  as-is: the 204, the marker, and the length (even when the length is 0 for
+  an empty stored object). Markerless responses use a `Content-Length`-keyed
+  fallback — `0` means delivered, while absent (chunked) or non-zero means
+  transformed content, forwarded as-is, so a chunked 200 with an empty body
+  (a valid empty transform result) is no longer misreported as delivered.
+  The fallback exists for targets that predate the marker and will be phased
+  out with them. `ETLServer.handle_direct_put_response` now returns a
+  4-tuple `(status, body, direct_put_length, direct_put_complete)`.
 - ETL webservers now forward
   `etl_args` to the next stage on direct-put pipeline hops. Previously only the
   first pipeline stage received `etl_args`; stages 2..N saw an empty value.
