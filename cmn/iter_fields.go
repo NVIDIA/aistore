@@ -25,7 +25,12 @@ const (
 	tagOmitempty = "omitempty" // the field must be omitted when empty (only for read-only walk)
 	tagOmit      = "omit"      // the field must be omitted
 	tagReadonly  = "readonly"  // the field can be only read
-	tagInline    = "inline"    // the fields of a struct are embedded into parent field keys
+
+	// Explicit opt-in promotion => parent keys.
+	// Unlike encoding/json, IterFields does _not_ implicitly promote bare anonymous
+	// structs into the parent tag namespace. Some callers rely on this distinction;
+	// for example, ObjectProps.ObjAttrs must remain excluded from object-header tag matching.
+	tagInline = "inline"
 )
 
 type (
@@ -139,6 +144,7 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 			continue
 		}
 		if len(tags) > 1 {
+			// opt-in (instead of json default: srcTyField.Anonymous && fieldName == "")
 			isInline = tags[1] == tagInline
 		}
 

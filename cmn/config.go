@@ -55,7 +55,7 @@ type (
 	Config struct {
 		role          string `list:"omit"` // apc.Proxy | apc.Target
 		LocalConfig   `json:",inline"`
-		ClusterConfig `json:",inline"`
+		ClusterConfig `json:",inline"` // see IterFields `tagInline`
 	}
 )
 
@@ -693,9 +693,10 @@ type (
 	}
 
 	HTTPConf struct {
-		Proto         string `json:"-"` // http or https (set depending on `UseHTTPS`)
-		TLSConf       `json:",inline"`
-		ServerNameTLS string `json:"domain_tls"` // #6410
+		Proto string `json:"-"` // http or https (set depending on `UseHTTPS`)
+
+		TLSConf       `json:",inline"` // see IterFields `tagInline`
+		ServerNameTLS string           `json:"domain_tls"` // #6410
 
 		// client-side idle connection timeouts: intra-cluster and backend/cloud
 		IdleConnTimeout        cos.Duration `json:"idle_conn_time"`
