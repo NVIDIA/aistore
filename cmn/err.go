@@ -1032,7 +1032,7 @@ func IsErrXactNonIC(err error) bool {
 // ErrTooManyRequests (429, 503)
 
 func NewErrTooManyRequests(err error, status int) *ErrTooManyRequests {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.Assert(err != nil && !cos.IsTypedNil(err)) // Error() derefs it; IsTypedNil alone lets untyped nil through
 	return &ErrTooManyRequests{err, status}
 }
 

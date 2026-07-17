@@ -9,6 +9,8 @@ package backend
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -197,5 +199,31 @@ func TestOCIClientCreatesRegionClientOnce(t *testing.T) {
 		if first != client {
 			t.Fatal("expected all goroutines to receive the same cached client instance")
 		}
+	}
+}
+
+// Regression test: a 429 from OCI must yield an ErrTooManyRequests that carries
+// the SDK error. Previously the OCI backend passed nil to NewErrTooManyRequests,
+// so the first Error() call (e.g. xaction AddErr on the prefetch path) panicked
+// with a nil-pointer dereference and crashed the target.
+func TestOCIErrorToAISError429(t *testing.T) {
+	errSDK := errors.New("Error returned by ObjectStorage Service. Http Status Code: 429. Error Code: TooManyRequests.")
+	resp := ocios.GetObjectResponse{
+		RawResponse: &http.Response{StatusCode: http.StatusTooManyRequests},
+	}
+
+	ecode, err := ociErrorToAISError("GetObj", "test-bucket", "test/object", "", errSDK, resp)
+	if ecode != http.StatusTooManyRequests {
+		t.Fatalf("expected status %d, got %d", http.StatusTooManyRequests, ecode)
+	}
+	if err == nil {
+		t.Fatal("expected a non-nil error")
+	}
+	if !cmn.IsErrTooManyRequests(err) {
+		t.Fatalf("expected ErrTooManyRequests, got %T (%v)", err, err)
+	}
+	// must not panic, and must carry the SDK error text
+	if msg := err.Error(); !strings.Contains(msg, "429") {
+		t.Fatalf("error text should carry the SDK message, got %q", msg)
 	}
 }
