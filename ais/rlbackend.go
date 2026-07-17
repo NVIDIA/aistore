@@ -6,13 +6,13 @@ package ais
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
@@ -43,6 +43,11 @@ type (
 	rlbackend struct {
 		core.Backend
 		t *target
+	}
+	errBackendRetry struct {
+		err     error
+		retries int
+		total   time.Duration
 	}
 )
 
@@ -93,8 +98,8 @@ func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, le
 		res = bp.Backend.GetObjReader(ctx, lom, offset, length)
 		return res.ErrCode, res.Err
 	}
-	total, code, e := bp.retry(ctx, arl, cb)
-	debug.Assertf(res.ErrCode == code && res.Err == e, "(%d, %v) vs (%d, %v)", res.ErrCode, res.Err, code, e)
+	var total time.Duration
+	total, res.ErrCode, res.Err = bp.retry(ctx, arl, cb)
 
 	// ditto
 	bp.stats(ctx, lom.Bck(), stats.RatelimGetRetryCount, stats.RatelimGetRetryLatencyTotal, total)
@@ -159,6 +164,7 @@ func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim)
 }
 
 func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, cb func() (int, error)) (total time.Duration, ecode int, err error) {
+	var retries int
 	for total < cos.DfltRateMaxWait {
 		// reactive
 		sleep := arl.OnErr()
@@ -167,9 +173,13 @@ func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, cb func() (i
 			break
 		}
 		ecode, err = cb()
+		retries++
 		if err == nil || !cmn.IsErrTooManyRequests(err) {
 			break
 		}
+	}
+	if err != nil && cmn.IsErrTooManyRequests(err) {
+		err = &errBackendRetry{err: err, retries: retries, total: total}
 	}
 	return total, ecode, err
 }
@@ -187,3 +197,10 @@ func (bp *rlbackend) stats(ctx context.Context, bck *meta.Bck, count, latency st
 		cos.NamedVal64{Name: latency, Value: int64(total), VarLabs: vlabs},
 	)
 }
+
+func (e *errBackendRetry) Error() string {
+	return fmt.Sprintf("backend rate limiter: request still throttled after %d retry attempt%s and %v total backoff: %v",
+		e.retries, cos.Plural(e.retries), e.total, e.err)
+}
+
+func (e *errBackendRetry) Unwrap() error { return e.err }

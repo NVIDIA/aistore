@@ -24,6 +24,12 @@ type throttleBackend struct {
 	calls int
 }
 
+type throttleReaderBackend struct {
+	core.Backend
+	err   error
+	calls int
+}
+
 func (bp *throttleBackend) errOnce() error {
 	bp.calls++
 	if bp.calls == 1 {
@@ -46,6 +52,11 @@ func (bp *throttleBackend) GetObj(context.Context, *core.LOM, cmn.OWT, *http.Req
 		return http.StatusTooManyRequests, err
 	}
 	return 0, nil
+}
+
+func (bp *throttleReaderBackend) GetObjReader(context.Context, *core.LOM, int64, int64) core.GetReaderResult {
+	bp.calls++
+	return core.GetReaderResult{Err: bp.err, ErrCode: http.StatusTooManyRequests}
 }
 
 func TestRLBackendGetHead(t *testing.T) {
@@ -128,4 +139,43 @@ func TestRLBackendHeadReturnsRetryError(t *testing.T) {
 	tassert.Fatalf(t, ecode == 0, "expected retry code 0, got %d", ecode)
 	tassert.Fatalf(t, oa == nil, "expected no object attributes, got %v", oa)
 	tassert.Fatalf(t, backend.calls == 1, "expected no retry call, got %d calls", backend.calls)
+}
+
+func TestRLBackendGetObjReaderReturnsRetryError(t *testing.T) {
+	lom := core.AllocLOM("rate-limit-reader-retry-error")
+	defer core.FreeLOM(lom)
+	err := lom.InitBck(meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal))
+	tassert.CheckFatal(t, err)
+
+	conf := &lom.Bck().Props.RateLimit.Backend
+	oldEnabled := conf.Enabled
+	conf.Enabled = true
+	defer func() { conf.Enabled = oldEnabled }()
+
+	arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
+	tassert.CheckFatal(t, err)
+	key := lom.Bck().HashUname(http.MethodGet)
+	mockTarget.ratelim.Store(key, arl)
+	defer mockTarget.ratelim.Delete(key)
+
+	err429 := cmn.NewErrTooManyRequests(errors.New("throttled"), http.StatusTooManyRequests)
+	backend := &throttleReaderBackend{err: err429}
+	bp := &rlbackend{Backend: backend, t: mockTarget}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	res := bp.GetObjReader(ctx, lom, 0, 0)
+	tassert.Fatalf(t, errors.Is(res.Err, context.Canceled), "expected retry error %v, got %v", context.Canceled, res.Err)
+	tassert.Fatalf(t, res.ErrCode == 0, "expected retry code 0, got %d", res.ErrCode)
+	tassert.Fatalf(t, backend.calls == 1, "expected no retry call, got %d calls", backend.calls)
+}
+
+func TestRLBackendRetryErrorDetails(t *testing.T) {
+	err429 := cmn.NewErrTooManyRequests(errors.New("throttled"), http.StatusTooManyRequests)
+	var err error = &errBackendRetry{err: err429, retries: 3, total: 5 * time.Second}
+	var retryErr *errBackendRetry
+	tassert.Fatalf(t, errors.As(err, &retryErr), "expected backend retry error, got %T", err)
+	tassert.Fatalf(t, retryErr.retries == 3, "expected 3 retries, got %d", retryErr.retries)
+	tassert.Fatalf(t, retryErr.total == 5*time.Second, "expected 5s backoff, got %v", retryErr.total)
+	tassert.Fatalf(t, errors.Is(err, err429), "expected wrapped error %v, got %v", err429, err)
+	tassert.Fatalf(t, cmn.IsErrTooManyRequests(err), "expected throttling error, got %v", err)
 }
