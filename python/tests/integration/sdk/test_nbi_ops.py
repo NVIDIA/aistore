@@ -11,6 +11,7 @@ import pytest
 from tests.integration import REMOTE_SET, REMOTE_BUCKET
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.const import TEST_TIMEOUT
+from tests.utils import random_string
 
 from aistore.sdk import ListObjectFlag
 from aistore.sdk.types import NBIInfo
@@ -25,6 +26,7 @@ class TestNBIOps(unittest.TestCase):
         self.client = DEFAULT_TEST_CLIENT
         provider, bck_name = REMOTE_BUCKET.split("://")
         self.bck = self.client.bucket(bck_name, provider=provider)
+        self.prefix = f"python-sdk-nbi-{random_string()}/"
         # Clean slate
         try:
             self.bck.destroy_inventory()
@@ -39,7 +41,7 @@ class TestNBIOps(unittest.TestCase):
 
     def _create_and_wait(self, name="", force=False):
         """Helper to create an inventory and wait for completion."""
-        job_id = self.bck.create_inventory(name=name, force=force)
+        job_id = self.bck.create_inventory(name=name, prefix=self.prefix, force=force)
         self.assertTrue(job_id)
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
         return job_id
@@ -154,26 +156,34 @@ class TestNBIOps(unittest.TestCase):
     def test_list_objects_with_nbi_flag(self):
         """List objects using NBI flag (single inventory)."""
         self._create_and_wait()
-        result = self.bck.list_objects(flags=[ListObjectFlag.NBI], page_size=100)
+        result = self.bck.list_objects(
+            prefix=self.prefix, flags=[ListObjectFlag.NBI], page_size=100
+        )
         # Verify the call succeeds; entry count depends on bucket contents
         self.assertIsNotNone(result.entries)
 
     def test_list_objects_with_inventory_name(self):
         """List objects using a specific inventory name."""
         self._create_and_wait(name="list-test")
-        result = self.bck.list_objects(inventory_name="list-test", page_size=100)
+        result = self.bck.list_objects(
+            prefix=self.prefix, inventory_name="list-test", page_size=100
+        )
         self.assertIsNotNone(result.entries)
 
     def test_list_objects_iter_with_inventory_name(self):
         """Iterate objects using a specific inventory name."""
         self._create_and_wait(name="iter-test")
         entries = list(
-            self.bck.list_objects_iter(inventory_name="iter-test", page_size=100)
+            self.bck.list_objects_iter(
+                prefix=self.prefix, inventory_name="iter-test", page_size=100
+            )
         )
         self.assertIsNotNone(entries)
 
     def test_list_all_objects_with_inventory_name(self):
         """List all objects using a specific inventory name."""
         self._create_and_wait(name="all-test")
-        entries = self.bck.list_all_objects(inventory_name="all-test", page_size=100)
+        entries = self.bck.list_all_objects(
+            prefix=self.prefix, inventory_name="all-test", page_size=100
+        )
         self.assertIsNotNone(entries)
