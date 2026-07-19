@@ -2128,9 +2128,8 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 	// intra-cluster call on the public handler: consistent policy involves:
 	// - setting respective system headers
 	// - possibly, signing the request
-	smap := t.owner.smap.get()
-	debug.Assert(smap.isValid())
-	t.htrun.setIntraHdrs(sargs.tsi, req, smap)
+	debug.Assert(sargs.tsi != nil)
+	t.setIntraHdrs(req)
 
 	resp, err := g.client.data.Do(req)
 	if err != nil {

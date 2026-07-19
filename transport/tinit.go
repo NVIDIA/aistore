@@ -28,6 +28,8 @@ const (
 type global struct {
 	tstats     cos.StatsUpdater // strict subset of stats.Tracker interface (the minimum required)
 	mm         *memsys.MMSA
+	sign       SignFn
+	verify     VerifyFn
 	preferIPv6 bool
 }
 
@@ -35,9 +37,11 @@ var (
 	g global
 )
 
-func Init(tstats cos.StatsUpdater, preferIPv6 bool) *StreamCollector {
+func Init(tstats cos.StatsUpdater, sign SignFn, verify VerifyFn, preferIPv6 bool) *StreamCollector {
 	g.mm = memsys.PageMM()
 	g.tstats = tstats
+	g.sign = sign
+	g.verify = verify
 	g.preferIPv6 = preferIPv6
 
 	nextSessionID.Store(100)

@@ -22,6 +22,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// NOTE: legacy dSort is retained behind the `dsort` build tag.
+// This optional build is outside the v5.x intra-cluster authentication audit;
+// revisit and amend its handlers and internal calls to support auth.intra_cluster.
+
 //
 // proxy
 //

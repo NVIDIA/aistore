@@ -887,7 +887,7 @@ func (p *proxy) s3ReverseRequest(w http.ResponseWriter, r *http.Request, si *met
 	parsedURL, err := url.Parse(si.URL(cmn.NetIntraData))
 	debug.AssertNoErr(err)
 
-	p.setIntraHdrs(si, r, smap)
+	p.setIntraHdrs(r, smap, si != nil)
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }
 

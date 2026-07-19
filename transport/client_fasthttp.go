@@ -20,8 +20,6 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-const ua = "aisnode/streams"
-
 type Client interface {
 	Do(req *fasthttp.Request, resp *fasthttp.Response) error
 }
@@ -88,9 +86,14 @@ func (s *base) _do(body io.Reader, req *fasthttp.Request, resp *fasthttp.Respons
 	req.Header.SetMethod(http.MethodPut)
 	req.SetRequestURI(s.dstURL)
 	req.SetBodyStream(body, -1)
+
+	// header
 	req.Header.Set(apc.HdrSessID, strconv.FormatInt(s.sessID, 10))
 	req.Header.Set(apc.HdrSenderID, core.T.SID())
-	req.Header.Set(cos.HdrUserAgent, ua)
+	if g.sign != nil {
+		auth := g.sign(s.trname, s.sessID)
+		auth.stamp(&req.Header)
+	}
 
 	// do
 	err = s.client.Do(req, resp)

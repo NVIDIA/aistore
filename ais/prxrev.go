@@ -316,7 +316,7 @@ func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, smap 
 
 	// caution: svReq.payload() currently does not include query, host, and scheme; if it ever changes
 	// the following will have to change as well
-	p.setIntraHdrs(si, r, smap)
+	p.setIntraHdrs(r, smap, si != nil)
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }
 

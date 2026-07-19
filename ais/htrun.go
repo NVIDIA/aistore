@@ -824,7 +824,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 
 	// stamp intra-cluster sender identity only on intra-control calls
 	if isIntra {
-		h.setIntraHdrs(args.si, req, smap)
+		h.setIntraHdrs(req, smap, args.si != nil)
 	}
 	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
 
@@ -857,7 +857,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 // callers must call setIntraHdrs after:
 // - r.URL.Path is done and won't change
 // - ditto, r.Body and ContentLength
-func (h *htrun) setIntraHdrs(dst *meta.Snode, req *http.Request, smap *smapX) {
+func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX, peerPresent bool) {
 	if smap.vstr != "" {
 		if smap.IsPrimary(h.si) {
 			req.Header.Set(apc.HdrSenderIsPrimary, "true")
@@ -867,7 +867,7 @@ func (h *htrun) setIntraHdrs(dst *meta.Snode, req *http.Request, smap *smapX) {
 	req.Header.Set(apc.HdrSenderID, h.SID())
 	req.Header.Set(apc.HdrSenderName, h.si.Name())
 
-	if dst != nil && h.svs.sign() {
+	if peerPresent && h.svs.sign() {
 		h.signIntra(req, smap)
 	}
 }

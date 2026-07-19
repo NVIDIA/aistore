@@ -86,6 +86,21 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	// intra-cluster security
+	if g.verify != nil {
+		sessID, err := strconv.ParseInt(r.Header.Get(apc.HdrSessID), 10, 64)
+		if err != nil {
+			cmn.WriteErr(w, r, err, http.StatusBadRequest)
+			return
+		}
+		senderID := r.Header.Get(apc.HdrSenderID)
+		if err := g.verify(trname, sessID, senderID, r); err != nil {
+			cmn.WriteErr(w, r, err, http.StatusForbidden)
+			return
+		}
+	}
+
 	// compression
 	if compressionType := r.Header.Get(apc.HdrCompress); compressionType != "" {
 		debug.Assert(compressionType == apc.LZ4Compression)

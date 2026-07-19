@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/transport"
 )
 
 // Intra-cluster sign/verify using per-node Ed25519 keys.
@@ -77,7 +78,8 @@ func (h *htrun) toggleSignVerify(enabled bool) {
 }
 
 func (svs *svState) init() {
-	svs.nonce.Store(uint64(cos.CryptoRandI()))
+	svs.nonce.Store(uint64(cos.CryptoRandI())) // cryptorand.Read => uint16
+
 	now := mono.NanoTime()
 	svs.cur.Store(&_sv{
 		on:   false,                  // off until cluster-started (at least until)
@@ -324,4 +326,129 @@ func svgrpFromHdr(hdr http.Header) (*svgrp, error) {
 		}
 	}
 	return &svgrp{sig: sig, nonce: nonce, smapVer: smapVer}, nil
+}
+
+//
+// transport subsystem: sign/verify
+//
+
+// to separate transport authentication from signed HTTP requests and redirect URLs
+// (which use a different canonical payload - see above)
+const streamSigDomain = "ais-transport-v1"
+
+// Canonical payload:
+// | domain | 0 | trname | 0 | sender-ID | 0 | session-ID | Smap-version | nonce |
+// Strings are separated with NUL; integers are fixed-width big-endian.
+func _streamPayloadSize(trname, senderID string) int {
+	return len(streamSigDomain) + 1 + len(trname) + 1 + len(senderID) + 1 + 3*cos.SizeofI64
+}
+
+//
+// Tx: sign stream-connect (both stdlib and fasthttp clients)
+//
+
+func (t *target) streamSign(trname string, sessID int64) (auth transport.Auth) {
+	smap := t.owner.smap.get()
+	debug.Assert(smap.isValid())
+
+	smapVer := smap.version()
+	auth.SmapVer = smapVer
+	if !t.svs.sign() {
+		return
+	}
+
+	debug.Assert(t.nodeKeyPair != nil)
+	var (
+		senderID = t.SID()
+		nonce    = t.svs.nonce.Add(1)
+		sb       = sbAlloc()
+	)
+
+	sb.Reset(_streamPayloadSize(trname, senderID), false /*allow shrink*/)
+	msg := _streamPayload(sb, trname, senderID, sessID, smapVer, nonce)
+
+	raw, err := cos.SignNodeMessage(t.nodeKeyPair.SigningKey, msg)
+	debug.AssertNoErr(err)
+	sbFree(sb)
+
+	auth.Nonce = nonce
+	auth.Sig = base64.RawURLEncoding.EncodeToString(raw)
+	return
+}
+
+//
+// Rx: verify stream-connect
+//
+
+func (t *target) streamVerify(trname string, sessID int64, senderID string, r *http.Request) error {
+	if net := _reqNet(r); net != reqNetCtrl && net != reqNetData {
+		return fmt.Errorf("stream %s[%d] from %s: invalid arrival network %s", trname, sessID, senderID, reqNetName(net))
+	}
+
+	smap := t.owner.smap.get()
+	debug.Assert(smap.isValid())
+
+	// Sender identity and cluster membership are required even while unsigned
+	// traffic remains permitted during bridge/grace operation.
+	snode := smap.GetNode(senderID)
+	if snode == nil {
+		return fmt.Errorf(fmtNodeNotPresent, senderID, smap)
+	}
+	debug.Assert(snode.ID() == senderID)
+
+	svgrp, err := svgrpFromHdr(r.Header)
+	if err != nil {
+		return fmt.Errorf("stream %s[%d] from %s: %w", trname, sessID, senderID, err)
+	}
+
+	if svgrp == nil {
+		if t.svs.strict() {
+			return fmt.Errorf("stream %s[%d] from %s: missing signature (%s)", trname, sessID, senderID, smap.StringEx())
+		}
+		return nil
+	}
+
+	// a present signature is verified regardless
+	if len(snode.VerifyingKey) != cos.NodeSigningPublicKeySize {
+		return fmt.Errorf("stream sender %s: no verifying key", snode.StringEx())
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(svgrp.sig)
+	if err != nil {
+		return fmt.Errorf("stream %s[%d] from %s: invalid signature encoding: %w", trname, sessID, senderID, err)
+	}
+	debug.Assert(len(raw) == cos.NodeSigningSignatureSize)
+
+	sb := sbAlloc()
+	sb.Reset(_streamPayloadSize(trname, senderID), false /*allow shrink*/)
+	msg := _streamPayload(sb, trname, senderID, sessID, svgrp.smapVer, svgrp.nonce)
+	err = cos.VerifyNodeSignature(snode.VerifyingKey, msg, raw)
+	sbFree(sb)
+
+	if err != nil {
+		return fmt.Errorf("stream %s[%d] from %s: %w", trname, sessID, senderID, err)
+	}
+	return nil
+}
+
+func _streamPayload(sb *cos.SB, trname, senderID string, sessID, smapVer int64, nonce uint64) []byte {
+	const (
+		stringSepa = uint8(0)
+	)
+	sb.WriteString(streamSigDomain)
+	sb.WriteUint8(stringSepa)
+	sb.WriteString(trname)
+	sb.WriteUint8(stringSepa)
+	sb.WriteString(senderID)
+	sb.WriteUint8(stringSepa)
+
+	var b8 [8]byte
+	binary.BigEndian.PutUint64(b8[:], uint64(sessID))
+	sb.WriteBytes(b8[:])
+	binary.BigEndian.PutUint64(b8[:], uint64(smapVer))
+	sb.WriteBytes(b8[:])
+	binary.BigEndian.PutUint64(b8[:], nonce)
+	sb.WriteBytes(b8[:])
+
+	return sb.Bytes()[:sb.Len()]
 }

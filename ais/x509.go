@@ -53,7 +53,7 @@ func (p *proxy) _x509call(si *meta.Snode, smap *smapX, client *http.Client) erro
 	if errR != nil {
 		return errR
 	}
-	p.setIntraHdrs(si, req, smap)
+	p.setIntraHdrs(req, smap, true /*si != nil*/)
 	req.Header.Set(cos.HdrUserAgent, apc.HdrUA)
 
 	resp, err := client.Do(req)

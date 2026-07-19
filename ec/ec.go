@@ -399,8 +399,7 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 	}
 	rq.URL.RawQuery = query.Encode()
 	// finally
-	debug.Assert(g.setIntraHdrs != nil)
-	g.setIntraHdrs(si, rq)
+	g.setIntraHdrs(rq)
 
 	// do
 	resp, err := client.Do(rq) //nolint:bodyclose // closed inside cos.Close

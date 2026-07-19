@@ -341,8 +341,8 @@ func (t *target) init(config *cmn.Config) {
 
 	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
 
-	sc := transport.Init(ts, g.netServ.data.useIPv6) // init transport sub-system
-	daemon.rg.add(sc)                                // new stream collector
+	sc := transport.Init(ts, t.streamSign, t.streamVerify, g.netServ.data.useIPv6) // init transport sub-system
+	daemon.rg.add(sc)                                                              // new stream collector
 
 	t.fshc = health.NewFSHC(t)
 
@@ -530,14 +530,6 @@ func (t *target) Run() error {
 	return err
 }
 
-// stamp an already-constructed intra-cluster HTTP request with sender identity headers and,
-// when required, signature headers (currently, EC only)
-func (t *target) setIntraHdrs(dst *meta.Snode, req *http.Request) {
-	smap := t.owner.smap.get()
-	debug.Assert(smap.isValid())
-	t.htrun.setIntraHdrs(dst, req, smap)
-}
-
 // apart from minor (albeit subtle) differences between `t.joinCluster` vs `p.joinCluster`
 // this method is otherwise identical to t.gojoin (TODO: unify)
 func (t *target) gojoin(config *cmn.Config) {
@@ -647,7 +639,10 @@ func (t *target) initRecvHandlers() {
 		networkHandler{r: apc.EC, h: t.ecHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.Vote, h: t.voteHandler, net: accessNetIntraControl},
 		networkHandler{r: apc.Txn, h: t.txnHandler, net: accessNetIntraControl},
-		networkHandler{r: apc.ObjStream, h: rxAnyStream, net: accessControlData},
+
+		// (control + data): transport performs its own per-stream authentication
+		// based on (trname, session-ID)
+		networkHandler{r: apc.ObjStream, h: transport.RxAnyStream, net: accessControlData},
 
 		networkHandler{r: apc.Download, h: t.downloadHandler, net: accessNetIntraControl},
 
@@ -664,15 +659,6 @@ func (t *target) initRecvHandlers() {
 	)
 	networkHandlers = t.regDsort(networkHandlers)
 	t.regNetHandlers(networkHandlers)
-}
-
-func rxAnyStream(w http.ResponseWriter, r *http.Request) {
-	if !reqIsIntra(r) {
-		err := fmt.Errorf("invalid request over %s: %s %s from %s", reqNetName(_reqNet(r)), r.Method, r.URL.Path, r.RemoteAddr)
-		cmn.WriteErr(w, r, err, http.StatusForbidden)
-		return
-	}
-	transport.RxAnyStream(w, r)
 }
 
 func (t *target) checkStartupMarkers(config *cmn.Config) (fatalErr, writeErr error) {

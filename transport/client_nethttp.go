@@ -18,8 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 )
 
-const ua = "aisnode/streams"
-
 type Client interface {
 	Do(req *http.Request) (*http.Response, error)
 }
@@ -66,15 +64,22 @@ func (s *base) doCmpr(body io.Reader) error {
 }
 
 func (s *base) _do(req *http.Request) error {
+	// header
 	req.Header.Set(apc.HdrSessID, strconv.FormatInt(s.sessID, 10))
 	req.Header.Set(apc.HdrSenderID, core.T.SID())
-	req.Header.Set(cos.HdrUserAgent, ua)
+	if g.sign != nil {
+		auth := g.sign(s.trname, s.sessID)
+		auth.stamp(&req.Header)
+	}
 
+	// do
 	resp, err := s.client.Do(req)
 	if err != nil {
 		s.yelp(err)
 		return err
 	}
+
+	// drain response & cleanup
 	_, err = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	if err != nil {

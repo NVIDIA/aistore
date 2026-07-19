@@ -173,11 +173,6 @@ func reqIsPub(r *http.Request) bool       { return _reqNet(r) == reqNetPub }
 func reqIsIntraCtrl(r *http.Request) bool { return _reqNet(r) == reqNetCtrl }
 func reqIsIntraData(r *http.Request) bool { return _reqNet(r) == reqNetData }
 
-func reqIsIntra(r *http.Request) bool {
-	v := _reqNet(r)
-	return v == reqNetCtrl || v == reqNetData
-}
-
 func reqNetName(net reqNet) string {
 	switch net {
 	case reqNetPub:
