@@ -1,13 +1,13 @@
-// Package hk provides mechanism for registering cleanup
-// functions which are invoked at specified intervals.
+// Package hk_test provides unit tests for `hk`
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package hk_test
 
 import (
 	"math/rand/v2"
 	"strconv"
+	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -211,3 +211,37 @@ var _ = Describe("Housekeeper", func() {
 		}
 	})
 })
+
+func TestCallbackSendUnderPressure(t *testing.T) {
+	startHK(t)
+
+	fired := make(chan struct{})
+	hk.Reg("fini", func(int64) time.Duration {
+		hk.UnregIf("sibling-gone", func(int64) time.Duration { return 0 })
+		close(fired)
+		return hk.UnregInterval
+	}, 50*time.Millisecond)
+
+	// pile up pending ops
+	release := make(chan struct{})
+	hk.Reg("slow", func(int64) time.Duration { <-release; return time.Hour }, 0)
+	time.Sleep(20 * time.Millisecond)
+
+	start := time.Now()
+	for i := range 4_000 {
+		hk.Reg("fill-"+strconv.Itoa(i), func(int64) time.Duration { return time.Hour }, time.Hour)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("senders blocked: 4k Reg took %v", d)
+	}
+	close(release)
+
+	select {
+	case <-fired:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hk goroutine deadlocked enqueuing from its own callback")
+	}
+	for i := range 4_000 {
+		hk.Unreg("fill-" + strconv.Itoa(i))
+	}
+}
