@@ -5,7 +5,6 @@
 package transport
 
 import (
-	"container/heap"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -15,14 +14,17 @@ import (
 
 // internal tunables
 const (
-	dfltTickIdle = cmn.DfltTransportTick << 8 // (when there are no streams to _collect_)
+	dfltTickIdle = 256 * cmn.DfltTransportTick // ~4m (when there are no streams to _collect_)
 )
 
 const (
-	dfltCollectLog  = 10 * time.Minute
-	dfltCollectChan = 256
+	dfltCollectLog = 10 * time.Minute
 
 	iniCollectCap = 64
+
+	dfltCollectCap     = 256 // initial mailbox capacity
+	warnCollectPending = dfltCollectCap << 2
+	maxCollectRecycle  = warnCollectPending
 )
 
 type global struct {
@@ -51,12 +53,12 @@ func Init(tstats cos.StatsUpdater, sign SignFn, verify VerifyFn, preferIPv6 bool
 
 	// real stream collector
 	gc = &collector{
-		ctrlCh:  make(chan ctrl, dfltCollectChan),
+		workCh:  make(chan struct{}, 1),
+		pending: make([]ctrl, 0, dfltCollectCap),
+		free:    make([]ctrl, 0, dfltCollectCap),
 		streams: make(map[int64]*base, iniCollectCap),
-		heap:    make([]*base, 0, iniCollectCap), // min-heap sorted by stream.time.ticks
 	}
 	gc.stopCh.Init()
-	heap.Init(gc)
 
 	sc = &StreamCollector{}
 	return sc

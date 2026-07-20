@@ -67,6 +67,11 @@ type (
 		// Start constructs and initializes the xaction while holding the registry-wide renewMtx.
 		// It must not wait, sleep, perform blocking channel operations, or call xact.GoRunW.
 		// The renewal caller starts a newly constructed xaction after Renew returns.
+		//
+		// A successful renewal that creates a new entry returns before its Run goroutine is
+		// started. The renewal caller must start that entry (e.g., via xact.GoRunW). Existing entries
+		// returned by renewal must not be started again (see rns.IsRunning).
+
 		Start() error
 	}
 	// used in constructions

@@ -139,7 +139,7 @@ func (hk *hk) Run() error {
 	return err
 }
 
-// will never cause cos.ErrWorkChanFull ("work channel full")
+// enqueue (without blocking on chan cap or anything else; similar transport/collect pattern)
 func (hk *hk) enq(op op) {
 	hk.mtx.Lock()
 	hk.pending = append(hk.pending, op)

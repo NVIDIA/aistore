@@ -147,7 +147,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	go s.sendLoop(extra.Config, dryrun()) // handle SQ
 	go s.cmplLoop()                       // handle SCQ
 
-	gc.ctrlCh <- ctrl{&s.base, true /* collect */}
+	gc.add(&s.base)
 	return
 }
 
