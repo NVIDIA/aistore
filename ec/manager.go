@@ -240,7 +240,12 @@ func _renewXact(bck *meta.Bck, kind string) (core.Xact, error) {
 	if rns.Err != nil {
 		return nil, rns.Err
 	}
-	return rns.Entry.Get(), nil
+
+	xctn := rns.Entry.Get()
+	if !rns.IsRunning() {
+		xact.GoRunW(xctn)
+	}
+	return xctn, nil
 }
 
 // A function to process command requests from other targets

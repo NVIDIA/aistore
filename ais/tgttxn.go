@@ -749,6 +749,9 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 		xctn := rns.Entry.Get()
 		xid = xctn.ID()
 
+		if !rns.IsRunning() {
+			xact.GoRunW(xctn)
+		}
 		xtco := xctn.(*xs.XactTCO)
 
 		debug.Assert(msg.TxnUUID == "" || msg.TxnUUID == c.uuid) // (ref050724)
@@ -904,6 +907,10 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 		}
 		xctn := rns.Entry.Get()
 		xid = xctn.ID()
+
+		if !rns.IsRunning() {
+			xact.GoRunW(xctn)
+		}
 
 		xarch := xctn.(*xs.XactArch)
 		// finalize the message and begin local transaction

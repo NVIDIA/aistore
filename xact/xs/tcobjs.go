@@ -97,6 +97,8 @@ func (p *tcoFactory) New(args xreg.Args, bckFrom *meta.Bck) xreg.Renewable {
 	return np
 }
 
+// construct, initialize xact.Demand (and reg w/ HK), open streams
+// (the renewal caller does xact.GoRunW)
 func (p *tcoFactory) Start() error {
 	//
 	// target-local generation of a global UUID
@@ -174,8 +176,6 @@ func (p *tcoFactory) Start() error {
 		stats.VlabBucket: r.args.BckFrom.Cname(""),
 		stats.VlabXkind:  r.Kind(),
 	}
-
-	xact.GoRunW(r)
 	return nil
 }
 

@@ -56,13 +56,18 @@ const (
 
 type (
 	Renewable interface {
-		New(args Args, bck *meta.Bck) Renewable // new xaction stub that can be `Start`-ed; TODO ref: New(args, bck, kind)
-		Start() error                           // starts an xaction, will be called when entry is stored into registry
+		New(args Args, bck *meta.Bck) Renewable
 		Kind() string
 		Get() core.Xact
 		WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error)
 		Bucket() *meta.Bck
 		UUID() string
+
+		// NOTE:
+		// Start constructs and initializes the xaction while holding the registry-wide renewMtx.
+		// It must not wait, sleep, perform blocking channel operations, or call xact.GoRunW.
+		// The renewal caller starts a newly constructed xaction after Renew returns.
+		Start() error
 	}
 	// used in constructions
 	Args struct {

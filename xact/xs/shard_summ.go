@@ -54,6 +54,7 @@ func (*shardSummFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	}
 }
 
+// construction only (the renewal caller does xact.GoRunW)
 func (p *shardSummFactory) Start() error {
 	r := &XactShardSumm{p: p}
 	err := r.BckJogRunner.Init(p.UUID(), p.Kind(), p.Bck, xact.BckJogRunnerOpts{
@@ -65,7 +66,6 @@ func (p *shardSummFactory) Start() error {
 		return err
 	}
 	p.xctn = r
-	xact.GoRunW(r)
 	return nil
 }
 

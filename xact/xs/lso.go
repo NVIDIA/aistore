@@ -210,11 +210,6 @@ func (p *lsoFactory) Start() error {
 			RW: false,
 		},
 	)
-	// and maybe throttle right away
-	if r.adv.Sleep > 0 {
-		time.Sleep(r.adv.Sleep)
-	}
-
 	_ = r.CtlMsg()
 	r.vlabs = map[string]string{stats.VlabBucket: bck.Cname("")}
 	p.xctn = r
@@ -317,6 +312,9 @@ func (r *LsoXact) CtlMsg() string {
 }
 
 func (r *LsoXact) Run(wg *sync.WaitGroup) {
+	if r.adv.Sleep > 0 {
+		time.Sleep(r.adv.Sleep)
+	}
 	wg.Done()
 
 	if !r.walk.remote {

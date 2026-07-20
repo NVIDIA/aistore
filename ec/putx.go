@@ -65,12 +65,11 @@ func (*putFactory) New(_ xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
+// construct apc.ActECPut xaction (EC manager runs it via _renewXact => xact.GoRunW)
 func (p *putFactory) Start() error {
 	xec := ECM.NewPutXact(p.Bck.Bucket())
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xctn = xec
-
-	xact.GoRunW(xec)
 	return nil
 }
 

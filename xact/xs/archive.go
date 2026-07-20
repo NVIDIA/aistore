@@ -108,6 +108,8 @@ func (*archFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
+// construct, initialize xact.Demand (and reg w/ HK), open streams
+// (the renewal caller does xact.GoRunW)
 func (p *archFactory) Start() (err error) {
 	//
 	// target-local generation of a global UUID
@@ -150,8 +152,6 @@ func (p *archFactory) Start() (err error) {
 		}
 	}
 	r.sntl.init(r, r.p.dm, r.config, r.smap, nat)
-
-	xact.GoRunW(r)
 	return nil
 }
 

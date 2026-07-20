@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -97,11 +98,17 @@ func startShardSummary(t *testing.T, bck *meta.Bck, msg *apc.ShardSummMsg) *xs.X
 	if msg.UUID == "" {
 		msg.UUID = cos.GenUUID()
 	}
+
 	rns := xreg.RenewBckShardSumm(bck, msg)
 	tassert.CheckFatal(t, rns.Err)
-	xsumm, ok := rns.Entry.Get().(*xs.XactShardSumm)
+
+	xctn := rns.Entry.Get()
+	xsumm, ok := xctn.(*xs.XactShardSumm)
 	if !ok {
-		t.Fatalf("expected *xs.XactShardSumm, got %T", rns.Entry.Get())
+		t.Fatalf("expected *xs.XactShardSumm, got %T", xctn)
+	}
+	if !rns.IsRunning() {
+		xact.GoRunW(xsumm)
 	}
 	return xsumm
 }

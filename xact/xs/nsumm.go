@@ -64,11 +64,9 @@ func (*nsummFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
+// construction only (the renewal caller does xact.GoRunW)
 func (p *nsummFactory) Start() (err error) {
 	p.xctn, err = newSumm(p)
-	if err == nil {
-		xact.GoRunW(p.xctn)
-	}
 	return
 }
 

@@ -501,6 +501,11 @@ func (t *target) bckSumm(w http.ResponseWriter, r *http.Request, phase string, b
 			t.writeErr(w, r, rns.Err, http.StatusInternalServerError, Silent)
 			return
 		}
+
+		xctn := rns.Entry.Get()
+		if !rns.IsRunning() {
+			xact.GoRunW(xctn)
+		}
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
@@ -545,6 +550,11 @@ func (t *target) shardSumm(w http.ResponseWriter, r *http.Request, phase string,
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err, http.StatusInternalServerError, Silent)
 			return
+		}
+
+		xctn := rns.Entry.Get()
+		if !rns.IsRunning() {
+			xact.GoRunW(xctn)
 		}
 		w.WriteHeader(http.StatusAccepted)
 		return
