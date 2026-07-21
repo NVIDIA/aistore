@@ -51,8 +51,12 @@ type (
 		base
 	}
 	sessConf struct {
-		bck    *cmn.Bck
-		region string
+		bck *cmn.Bck
+
+		// selected S3 client (s3.Client) tuple
+		profile  string
+		region   string
+		endpoint string
 	}
 )
 
@@ -117,12 +121,12 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, erro
 		return nil, http.StatusInternalServerError, err
 	}
 	if cmn.Rom.V(5, cos.ModBackend) {
-		nlog.Infoln("[head_bucket]", cloudBck.Name)
+		nlog.Infoln("[head_bucket]", cloudBck.String(), sessConf.detail())
 	}
 	if sessConf.region == "" {
 		var region string
 		if region, err = _location(svc, cloudBck.Name); err != nil {
-			ecode, errV := awsErrorToAISError(err, cloudBck, "")
+			ecode, errV := awsErrorToAISError(err, cloudBck, "", sessConf.detail())
 			return nil, ecode, errV
 		}
 		if cmn.Rom.V(4, cos.ModBackend) {
@@ -146,7 +150,7 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, erro
 	}
 	versioned, errV := _versioning(svc, cloudBck)
 	if errV != nil {
-		ecode, err := awsErrorToAISError(errV, cloudBck, "")
+		ecode, err := awsErrorToAISError(errV, cloudBck, "", sessConf.detail())
 		return nil, ecode, err
 	}
 	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(versioned)
@@ -679,24 +683,23 @@ func (*s3bp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error
 // From S3 SDK:
 // "S3 methods are safe to use concurrently. It is not safe to modify mutate
 // any of the struct's properties though."
-func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
-	var (
-		endpoint = s3Endpoint
-		profile  = awsProfile
-	)
-	if sessConf.bck != nil && sessConf.bck.Props != nil {
-		if sessConf.region == "" {
-			sessConf.region = sessConf.bck.Props.Extra.AWS.CloudRegion
+func (sc *sessConf) s3client(tag string) (*s3.Client, error) {
+	sc.endpoint = s3Endpoint
+	sc.profile = awsProfile
+
+	if sc.bck != nil && sc.bck.Props != nil {
+		if sc.region == "" {
+			sc.region = sc.bck.Props.Extra.AWS.CloudRegion
 		}
-		if sessConf.bck.Props.Extra.AWS.Endpoint != "" {
-			endpoint = sessConf.bck.Props.Extra.AWS.Endpoint
+		if sc.bck.Props.Extra.AWS.Endpoint != "" {
+			sc.endpoint = sc.bck.Props.Extra.AWS.Endpoint
 		}
-		if sessConf.bck.Props.Extra.AWS.Profile != "" {
-			profile = sessConf.bck.Props.Extra.AWS.Profile
+		if sc.bck.Props.Extra.AWS.Profile != "" {
+			sc.profile = sc.bck.Props.Extra.AWS.Profile
 		}
 	}
 
-	cid := _cid(profile, sessConf.region, endpoint)
+	cid := sc._cid()
 	asvc, loaded := clients.Load(cid)
 	if loaded {
 		svc, ok := asvc.(*s3.Client)
@@ -705,18 +708,18 @@ func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	}
 
 	// slow path
-	cfg, err := awsLoadConfig(endpoint, profile)
+	cfg, err := sc.awsLoadConfig()
 	if err != nil {
 		// normalize s3 error
-		_, errV := awsErrorToAISError(err, sessConf.bck, "")
+		_, errV := awsErrorToAISError(err, sc.bck, "")
 		return nil, errV
 	}
 
-	svc := s3.NewFromConfig(cfg, sessConf.options)
+	svc := s3.NewFromConfig(cfg, sc.options)
 
-	if sessConf.region == "" {
+	if sc.region == "" {
 		if tag != "" && cmn.Rom.V(4, cos.ModBackend) {
-			nlog.Warningln(tag, "no region for bucket", sessConf.bck.Cname(""))
+			nlog.Warningln(tag, "no region for bucket", sc.bck.Cname(""))
 		}
 		return svc, nil
 	}
@@ -729,19 +732,19 @@ func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	return svc, nil
 }
 
-func (sessConf *sessConf) options(options *s3.Options) {
+func (sc *sessConf) options(options *s3.Options) {
 	switch {
-	case sessConf.region != "":
-		// 1. Set in sessConf (from bucket props or HEAD)
-		options.Region = sessConf.region
+	case sc.region != "":
+		// 1. Set in sc (from bucket props or HEAD)
+		options.Region = sc.region
 	case options.Region != "":
 		// 2. AWS config file (parsed by SDK into options)
-		sessConf.region = options.Region
+		sc.region = options.Region
 	default:
 		// 3. SDK uses "AWS_REGION" environment or global default
 		// (note ListBuckets() special case)
 	}
-	if bck := sessConf.bck; bck != nil {
+	if bck := sc.bck; bck != nil {
 		if bck.Props != nil {
 			options.UsePathStyle = bck.Props.Features.IsSet(feat.S3UsePathStyle)
 		} else {
@@ -751,34 +754,34 @@ func (sessConf *sessConf) options(options *s3.Options) {
 	options.DisableLogOutputChecksumValidationSkipped = true
 }
 
-func _cid(profile, region, endpoint string) string {
+func (sc *sessConf) _cid() string {
 	var (
 		sb cos.SB
-		l  = len(profile) + 1 + len(region) + 1 + len(endpoint)
+		l  = len(sc.profile) + 1 + len(sc.region) + 1 + len(sc.endpoint)
 	)
 	sb.Init(l)
-	if profile != "" {
-		sb.WriteString(profile)
+	if sc.profile != "" {
+		sb.WriteString(sc.profile)
 	}
 	sb.WriteUint8('#')
-	if region != "" {
-		sb.WriteString(region)
+	if sc.region != "" {
+		sb.WriteString(sc.region)
 	}
 	sb.WriteUint8('#')
-	if endpoint != "" {
-		sb.WriteString(endpoint)
+	if sc.endpoint != "" {
+		sb.WriteString(sc.endpoint)
 	}
 	return sb.String()
 }
 
 // awsLoadConfig create config using default creds from ~/.aws/credentials and environment variables.
-func awsLoadConfig(endpoint, profile string) (aws.Config, error) {
+func (sc *sessConf) awsLoadConfig() (aws.Config, error) {
 	// Disable SDK rate limiting to rely on configured backend.rate_limit
 	retryConfig := retry.NewStandard(func(o *retry.StandardOptions) {
 		o.RateLimiter = ratelimit.None
 	})
 	confFiles, credFiles := getS3ConfFiles()
-	nlog.Infoln("Loading config for profile:", profile, "config files:", confFiles, "credential files:", credFiles)
+	nlog.Infoln("Loading config for profile:", sc.profile, "config files:", confFiles, "credential files:", credFiles)
 
 	// honor configured BackendIdleConnTimeout
 	// TODO: other transport limits remain cmn.NewClient defaults - can be added if there's explicit need
@@ -790,7 +793,7 @@ func awsLoadConfig(endpoint, profile string) (aws.Config, error) {
 		config.WithHTTPClient(tracing.NewTraceableClient(client)),
 		config.WithSharedConfigFiles(confFiles),
 		config.WithSharedCredentialsFiles(credFiles),
-		config.WithSharedConfigProfile(profile),
+		config.WithSharedConfigProfile(sc.profile),
 		config.WithRetryer(func() aws.Retryer {
 			return retryConfig
 		}),
@@ -798,8 +801,8 @@ func awsLoadConfig(endpoint, profile string) (aws.Config, error) {
 	if err != nil {
 		return cfg, err
 	}
-	if endpoint != "" {
-		cfg.BaseEndpoint = aws.String(endpoint)
+	if sc.endpoint != "" {
+		cfg.BaseEndpoint = aws.String(sc.endpoint)
 	}
 	return cfg, nil
 }
@@ -835,8 +838,39 @@ func getS3ConfFiles() (confFiles, credFiles []string) {
 	return
 }
 
+func (sc *sessConf) detail() string {
+	if sc.profile == "" && sc.region == "" && sc.endpoint == "" {
+		return ""
+	}
+
+	var sb cos.SB
+	sb.Init(len(sc.profile) + len(sc.region) + len(sc.endpoint) + 48)
+
+	sep := ""
+	add := func(name, value string) {
+		if value == "" {
+			return
+		}
+		sb.WriteString(sep)
+		sb.WriteString(name)
+		sb.WriteUint8('=')
+		sb.WriteString(strconv.Quote(value))
+		sep = ", "
+	}
+
+	add("profile", sc.profile)
+	add("region", sc.region)
+	add("endpoint", sc.endpoint)
+	return sb.String()
+}
+
 // For reference see https://github.com/aws/aws-sdk-go-v2/issues/1110#issuecomment-1054643716.
-func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, error) {
+func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string, details ...string) (int, error) {
+	var detail string
+	if len(details) != 0 {
+		detail = details[0]
+	}
+
 	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.InfoDepth(1, "begin "+aiss3.ErrPrefix+" =========================")
 		nlog.InfoDepth(1, awsError)
@@ -845,7 +879,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 
 	var reqErr smithy.APIError
 	if !errors.As(awsError, &reqErr) {
-		return http.StatusInternalServerError, _awsErr(awsError, "")
+		return http.StatusInternalServerError, _awsErr(awsError, "", detail)
 	}
 
 	code := reqErr.ErrorCode()
@@ -858,13 +892,15 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 	default:
 		var rspErr *awshttp.ResponseError
 		if !errors.As(awsError, &rspErr) {
-			return http.StatusBadRequest, _awsErr(awsError, code)
+			return http.StatusBadRequest, _awsErr(awsError, code, detail)
 		}
+
 		// handle assorted status codes
 		switch status := rspErr.HTTPStatusCode(); status {
 		case http.StatusMovedPermanently:
 			// NOTE:
-			// - when bucket does not exist OR is not accessible AWS may return 301 ("MovedPermanently") with code == "PermanentRedirect" (which is 308)
+			// - when bucket does not exist OR is not accessible AWS may return 301
+			//   ("MovedPermanently") with code == "PermanentRedirect" (which is 308)
 			// - cmn.NewErrRemBckNotFound() carries a fixed brief message; add some context
 			err := cmn.NewErrRemBckNotFound(bck)
 			err.CannotCreate()
@@ -877,7 +913,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 			e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, code, bck.Cname(objName))
 			return status, cmn.NewErrTooManyRequests(e, status)
 		default:
-			return status, _awsErr(awsError, code)
+			return status, _awsErr(awsError, code, detail)
 		}
 	}
 }
@@ -886,7 +922,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 // See also:
 // * ais/s3/err.go WriteErr() that (NOTE) relies on the formatting below
 // * aws-sdk-go/aws/awserr/types.go
-func _awsErr(awsError error, code string) error {
+func _awsErr(awsError error, code, detail string) error {
 	var (
 		msg        = awsError.Error()
 		origErrMsg = awsError.Error()
@@ -905,7 +941,12 @@ func _awsErr(awsError error, code string) error {
 			msg = msg[i:]
 		}
 	}
-	return errors.New(aiss3.ErrPrefix + "[" + strings.TrimSuffix(msg, ".") + "]")
+
+	msg = strings.TrimSuffix(msg, ".")
+	if detail != "" {
+		msg += " (" + detail + ")"
+	}
+	return errors.New(aiss3.ErrPrefix + "[" + msg + "]")
 }
 
 func _awsPresignedStatus(resp *aiss3.PresignedResp) int {
