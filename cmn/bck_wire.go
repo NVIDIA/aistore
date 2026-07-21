@@ -14,10 +14,10 @@ type (
 		// provider). Multiple namespaces may share the same UUID, so
 		// UUID is effectively the parent of the namespace. Leave empty
 		// for the global namespace.
-		UUID string `json:"uuid" yaml:"uuid" msg:"u"` // +gen:optional
+		UUID string `json:"uuid" yaml:"uuid" list:"omitempty" msg:"u"` // +gen:optional
 		// Namespace name, unique under a given UUID. Used when building
 		// object FQNs. Leave empty for the global namespace.
-		Name string `json:"name" yaml:"name" msg:"n"` // +gen:optional
+		Name string `json:"name" yaml:"name" list:"omitempty" msg:"n"` // +gen:optional
 	}
 
 	// Bck uniquely identifies a bucket across providers and namespaces.

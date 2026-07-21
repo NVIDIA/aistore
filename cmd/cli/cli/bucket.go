@@ -240,6 +240,9 @@ func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) error {
 	}
 
 	nvs[cmn.PropBackendBckName] = originBck.Name
+	nvs[cmn.PropBackendBckNsUUID] = originBck.Ns.UUID
+	nvs[cmn.PropBackendBckNsName] = originBck.Ns.Name
+
 	if v, ok = nvs[cmn.PropBackendBckProvider]; ok && v != "" {
 		var err error
 		nvs[cmn.PropBackendBckProvider], err = cmn.NormalizeProvider(v)

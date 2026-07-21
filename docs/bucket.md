@@ -45,6 +45,7 @@ AIS does not treat a bucket as a passive container. A bucket is a *logical names
    - [Namespace encoding](#namespace-encoding)
 6. [Backend Buckets](#backend-buckets)
    - [Creating backend relationships](#creating-backend-relationships)
+     - [Namespaced backend buckets](#namespaced-backend-buckets)
    - [Use cases](#use-cases)
    - [Disconnecting](#disconnecting)
 7. [System Buckets](#system-buckets)
@@ -500,6 +501,8 @@ ais://@remais/bucket => Bck{Provider: "ais", Ns: Ns{UUID: "Cjl2Ht4gE"}, Name: "b
 
 Backend buckets represent **indirection** - an AIS bucket that proxies to a remote bucket. This is fundamentally different from namespaces.
 
+A backend-bucket [relationship](#creating-backend-relationships) can be established at creation time, changed or removed at runtime, and may reference a remote bucket in either the global or a named namespace.
+
 | Aspect | Namespace | Backend Bucket |
 |--------|-----------|----------------|
 | Purpose | Disambiguate identity | Proxy/cache |
@@ -517,6 +520,94 @@ ais bucket props set ais://cache backend_bck=s3://origin
 ```
 
 Now reads/writes to `ais://cache` transparently forward to `s3://origin`.
+
+#### Namespaced backend buckets
+
+The backend relationship preserves the remote bucket's complete identity: provider, namespace, and name. This allows different AIS buckets to front same-name remote buckets that use different credentials or endpoints.
+
+First, register the namespaced remote bucket with its provider-specific configuration:
+
+```console
+ais create s3://#prod/data --props="extra.aws.profile=prod-account"
+```
+
+The namespace and AWS profile are independent: `#prod` distinguishes the bucket in AIS metadata, while `extra.aws.profile=prod-account` selects the AWS credentials.
+
+A namespaced backend can be configured when creating the AIS bucket:
+
+```console
+ais create ais://prod-data --props="backend_bck=s3://#prod/data"
+```
+
+Or connected to an existing AIS bucket:
+
+```console
+ais create ais://cache
+ais bucket props set ais://cache backend_bck=s3://#prod/data
+```
+
+To verify the complete backend identity:
+
+```console
+$ ais show bucket ais://cache backend_bck
+PROPERTY                         VALUE
+backend_bck.name                 data
+backend_bck.namespace.name       prod
+backend_bck.provider             aws
+```
+
+For example, two same-name remote buckets can use separate namespaces and credentials:
+
+```console
+ais create s3://#prod/data --props="extra.aws.profile=prod-account"
+
+ais create s3://#dev/data --props="extra.aws.profile=dev-account"
+
+ais create ais://prod-data --props="backend_bck=s3://#prod/data"
+
+ais create ais://dev-data --props="backend_bck=s3://#dev/data"
+```
+
+The resulting AIS buckets can be accessed independently:
+
+```console
+ais ls ais://prod-data
+
+# GET and discard locally, with the side effect of cold-GETting from remote
+ais get ais://dev-data --prefix images/ /dev/null
+```
+
+The URI form replaces the complete backend bucket identity, including its namespace. The backend can therefore be moved between namespaces:
+
+```console
+ais bucket props set ais://cache backend_bck=s3://#third-party/data
+
+$ ais show bucket ais://cache backend_bck
+PROPERTY                         VALUE
+backend_bck.name                 data
+backend_bck.namespace.name       third-party
+backend_bck.provider             aws
+```
+
+Setting a backend URI without a namespace moves the relationship back to the global namespace:
+
+```console
+ais bucket props set ais://cache backend_bck=s3://data
+
+$ ais show bucket ais://cache backend_bck
+PROPERTY                 VALUE
+backend_bck.name         data
+backend_bck.provider     aws
+```
+
+To disconnect the remote backend entirely:
+
+```console
+ais bucket props set ais://cache backend_bck=none
+```
+
+In-cluster objects remain in the AIS bucket after the backend relationship is removed.
+
 
 ### Use cases
 

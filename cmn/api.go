@@ -49,6 +49,10 @@ const (
 	PropBackendBck         = "backend_bck"
 	PropBackendBckName     = PropBackendBck + ".name"
 	PropBackendBckProvider = PropBackendBck + ".provider"
+
+	// 5.0 add namespace
+	PropBackendBckNsUUID = PropBackendBck + ".namespace.uuid"
+	PropBackendBckNsName = PropBackendBck + ".namespace.name"
 )
 
 type (
@@ -234,6 +238,10 @@ type (
 		// Remote provider: one of `"aws"`, `"gcp"`, `"azure"`,
 		// `"oci"`, `"ht"`.
 		Provider *string `json:"provider"` // +gen:optional
+
+		// Remote bucket namespace. When specified, replaces the complete
+		// namespace; nil leaves the existing namespace unchanged.
+		Ns *Ns `json:"namespace,omitempty"` // +gen:optional
 	}
 )
 
@@ -363,6 +371,10 @@ func (bp *Bprops) Validate(targetCnt int) error {
 func (bp *Bprops) Apply(propsToSet *BpropsToSet) {
 	err := CopyProps(propsToSet, bp, apc.Daemon)
 	debug.AssertNoErr(err)
+
+	if propsToSet.BackendBck != nil {
+		bp.BackendBck.Props = nil
+	}
 }
 
 //
