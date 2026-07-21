@@ -50,6 +50,12 @@ type (
 		mm *memsys.MMSA
 		base
 	}
+	// sessConf resolves the (profile, region, endpoint) tuple used to build - or
+	// look up in the `clients` cache - an *s3.Client for a given bucket.
+	//
+	// It is intentionally short-lived and local: one instance per backend call
+	// (HeadBucket, GetObjReader, PutObj, and so on). Unlike `sessConf`, the resulting
+	// *s3.Client is cached and shared across goroutines (SDK: concurrent-safe).
 	sessConf struct {
 		bck *cmn.Bck
 
@@ -234,7 +240,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln(tag, cloudBck.Name, err)
 		}
-		ecode, err = awsErrorToAISError(err, cloudBck, "")
+		ecode, err = awsErrorToAISError(err, cloudBck, "", sessConf.detail())
 		return ecode, err
 	}
 
@@ -294,7 +300,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		verParams.Prefix = aws.String(en.Name)
 		verResp, err := svc.ListObjectVersions(context.Background(), verParams)
 		if err != nil {
-			return awsErrorToAISError(err, cloudBck, "")
+			return awsErrorToAISError(err, cloudBck, "", sessConf.detail())
 		}
 		for i := range verResp.Versions {
 			vers := &verResp.Versions[i]
@@ -385,7 +391,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 		return nil, ecode, err
 	}
 
@@ -491,7 +497,7 @@ func (*s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int
 		input.Range = aws.String(rng)
 		obj, err = svc.GetObject(ctx, &input)
 		if err != nil {
-			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 			if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
 				res.Err = cos.NewErrRangeNotSatisfiable(res.Err, nil, 0)
 			}
@@ -500,7 +506,7 @@ func (*s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int
 	} else {
 		obj, err = svc.GetObject(ctx, &input)
 		if err != nil {
-			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 			return res
 		}
 		// custom metadata
@@ -612,7 +618,7 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 	cos.Close(r)
 
 	if err != nil {
-		return awsErrorToAISError(err, cloudBck, lom.ObjName)
+		return awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 	}
 
 setmd:
@@ -665,7 +671,7 @@ func (*s3bp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 		return
 	}
 	if cmn.Rom.V(5, cos.ModBackend) {
@@ -711,7 +717,7 @@ func (sc *sessConf) s3client(tag string) (*s3.Client, error) {
 	cfg, err := sc.awsLoadConfig()
 	if err != nil {
 		// normalize s3 error
-		_, errV := awsErrorToAISError(err, sc.bck, "")
+		_, errV := awsErrorToAISError(err, sc.bck, "", sc.detail())
 		return nil, errV
 	}
 
@@ -885,9 +891,9 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string, details ..
 	code := reqErr.ErrorCode()
 	switch reqErr.(type) {
 	case *types.NoSuchBucket:
-		return http.StatusNotFound, cmn.NewErrRemBckNotFound(bck)
+		return http.StatusNotFound, cmn.NewErrRemBckNotFound(bck, detail)
 	case *types.NoSuchKey:
-		e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, reqErr.ErrorCode(), bck.Cname(objName))
+		e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, code, bck.Cname(objName))
 		return http.StatusNotFound, e
 	default:
 		var rspErr *awshttp.ResponseError
@@ -902,7 +908,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string, details ..
 			// - when bucket does not exist OR is not accessible AWS may return 301
 			//   ("MovedPermanently") with code == "PermanentRedirect" (which is 308)
 			// - cmn.NewErrRemBckNotFound() carries a fixed brief message; add some context
-			err := cmn.NewErrRemBckNotFound(bck)
+			err := cmn.NewErrRemBckNotFound(bck, detail)
 			err.CannotCreate()
 			return http.StatusNotFound, err
 		case http.StatusTooManyRequests, http.StatusServiceUnavailable:
@@ -924,8 +930,8 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string, details ..
 // * aws-sdk-go/aws/awserr/types.go
 func _awsErr(awsError error, code, detail string) error {
 	var (
-		msg        = awsError.Error()
 		origErrMsg = awsError.Error()
+		msg        = origErrMsg
 	)
 	// Strip extra information
 	if idx := strings.Index(msg, "\n\t"); idx > 0 {

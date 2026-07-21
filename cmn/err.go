@@ -76,8 +76,9 @@ type (
 	ErrRemoteBucketOffline struct{ bck Bck }
 	ErrBckNotFound         struct{ bck Bck }
 	ErrRemoteBckNotFound   struct {
-		bck Bck
-		ctx string
+		bck          Bck
+		detail       string
+		cannotCreate bool
 	}
 
 	ErrBckNameConflict struct {
@@ -390,8 +391,15 @@ func IsErrBucketAlreadyExists(err error) bool {
 
 // bucket--not--found -------------------------------
 
-func NewErrRemBckNotFound(bck *Bck) *ErrRemoteBckNotFound { return &ErrRemoteBckNotFound{bck: *bck} }
-func NewErrAisBckNotFound(bck *Bck) *ErrBckNotFound       { return &ErrBckNotFound{bck: *bck} }
+func NewErrRemBckNotFound(bck *Bck, detail ...string) *ErrRemoteBckNotFound {
+	e := &ErrRemoteBckNotFound{bck: *bck}
+	if len(detail) > 0 {
+		e.detail = detail[0]
+	}
+	return e
+}
+
+func NewErrAisBckNotFound(bck *Bck) *ErrBckNotFound { return &ErrBckNotFound{bck: *bck} }
 
 // [for convenience]
 func NewErrBckNotFound(bck *Bck) error {
@@ -401,16 +409,23 @@ func NewErrBckNotFound(bck *Bck) error {
 	return NewErrAisBckNotFound(bck)
 }
 
-func (e *ErrRemoteBckNotFound) CannotCreate() {
-	e.ctx = " (further details at " + GitHubHome + "/blob/main/docs/bucket.md#bucket-lifecycle)"
-}
+func (e *ErrRemoteBckNotFound) CannotCreate() { e.cannotCreate = true }
 
 func (e *ErrRemoteBckNotFound) Error() string {
+	var s string
 	if e.bck.IsCloud() {
 		np := apc.NormalizeProvider(e.bck.Provider)
-		return fmt.Sprintf("%s bucket %q does not exist%s", np, e.bck.Cname(""), e.ctx)
+		s = fmt.Sprintf("%s bucket %q does not exist", np, e.bck.Cname(""))
+	} else {
+		s = fmt.Sprintf("remote bucket %q does not exist", e.bck.String())
 	}
-	return fmt.Sprintf("remote bucket %q does not exist%s", e.bck.String(), e.ctx)
+	if e.detail != "" {
+		s += " (" + e.detail + ")"
+	}
+	if e.cannotCreate {
+		s += " (further details at " + GitHubHome + "/blob/main/docs/bucket.md#bucket-lifecycle)"
+	}
+	return s
 }
 
 func IsErrRemoteBckNotFound(err error) bool {
