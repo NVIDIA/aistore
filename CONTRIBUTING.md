@@ -82,7 +82,7 @@ To validate the Fern docs configuration without publishing:
 ```console
 cd aistore
 python3 -m pip install pyyaml
-npm install -g fern-api@5.50.5
+npm install -g fern-api@5.75.8
 bash scripts/fern/generate-pages.sh --check
 ```
 
