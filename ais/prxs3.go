@@ -223,12 +223,14 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	if err := p.destroyBucket(&msg, bck); err != nil {
 		ecode := http.StatusInternalServerError
 		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
-			// TODO: return http.StatusNoContent
 			nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck.String(), msg.Action)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
+		return
 	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // +gen:endpoint POST /s3/{bucket-name}/{object-name} [s3.QparamMptUploads=string,s3.QparamMptUploadID=string]

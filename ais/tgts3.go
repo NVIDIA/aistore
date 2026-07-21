@@ -398,19 +398,18 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	ecode, err = t.DeleteObject(lom, false)
 	if err != nil {
-		name := lom.Cname()
 		if ecode == http.StatusNotFound {
-			err := cos.NewErrNotFound(t, name)
-			ei := s3.ErrInfo{Err: err, Status: http.StatusNotFound, Code: s3.NoSuchKey}
-			s3.WriteErr(w, r, ei)
+			// S3 DeleteObject is idempotent: deleting a missing key succeeds.
+			w.WriteHeader(http.StatusNoContent)
 		} else {
-			err := fmt.Errorf("error deleting %s: %v", name, err)
+			err := fmt.Errorf("error deleting %s: %v", lom.Cname(), err)
 			s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		}
 		return
 	}
 	// EC cleanup if EC is enabled
 	ec.ECM.CleanupObject(lom)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /s3/<bucket-name>/<object-name>

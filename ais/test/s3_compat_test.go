@@ -45,8 +45,9 @@ import (
 )
 
 type customTransport struct {
-	pathStyle bool
-	rt        http.RoundTripper
+	pathStyle  bool
+	rt         http.RoundTripper
+	statusCode int
 }
 
 func (t *customTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -60,7 +61,12 @@ func (t *customTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			req.URL.Path = "/s3/" + bucket + req.URL.Path
 		}
 	}
-	return t.rt.RoundTrip(req)
+
+	resp, err := t.rt.RoundTrip(req)
+	if resp != nil {
+		t.statusCode = resp.StatusCode
+	}
+	return resp, err
 }
 
 type addGetBodyMiddleware struct{}
@@ -880,4 +886,86 @@ func TestS3JWTAuthFailures(t *testing.T) {
 	_, err = malformedClient.ListBuckets(context.Background(), &s3.ListBucketsInput{})
 	tassert.Fatalf(t, err != nil, "Expected request with malformed JWT to fail, but it succeeded")
 	tlog.Logfln("✓ Malformed JWT signature failed as expected: %v", err)
+}
+
+// TestS3DeleteStatusCodes validates several scenarios for deleting an object from a bucket and the bucket itself
+func TestS3DeleteStatusCodes(t *testing.T) {
+	setupS3Compat(t)
+
+	var (
+		proxyURL  = tools.GetPrimaryURL()
+		bck       = cmn.Bck{Name: "test-s3-delete-status-" + trand.String(6), Provider: apc.AIS}
+		objName   = "object.txt"
+		transport = newCustomTransport(true /*pathStyle*/)
+		s3Client  = s3.New(s3.Options{
+			HTTPClient:   &http.Client{Transport: transport},
+			Region:       env.AwsDefaultRegion(),
+			BaseEndpoint: aws.String(proxyURL),
+			UsePathStyle: true,
+			Credentials:  getS3Credentials(t),
+		})
+		s3Err smithy.APIError
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	_, err := api.PutObject(&api.PutArgs{
+		BaseParams: tools.BaseAPIParams(proxyURL),
+		Bck:        bck,
+		ObjName:    objName,
+		Reader:     readers.NewBytes([]byte("test")),
+	})
+	tassert.CheckFatal(t, err)
+
+	// Deleting an existing object must return 204.
+	_, err = s3Client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+		Bucket: aws.String(bck.Name),
+		Key:    aws.String(objName),
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, transport.statusCode == http.StatusNoContent,
+		"expected DeleteObject status %d for an existing object, got %d", http.StatusNoContent, transport.statusCode)
+
+	// DeleteObject is idempotent: deleting the same object again must return 204.
+	_, err = s3Client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+		Bucket: aws.String(bck.Name),
+		Key:    aws.String(objName),
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, transport.statusCode == http.StatusNoContent,
+		"expected DeleteObject status %d on a non-existent object, got %d", http.StatusNoContent, transport.statusCode)
+
+	// A key that never existed must likewise return 204.
+	_, err = s3Client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+		Bucket: aws.String(bck.Name),
+		Key:    aws.String("never-existed.txt"),
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, transport.statusCode == http.StatusNoContent,
+		"expected DeleteObject status %d on a never-existing object, got %d",
+		http.StatusNoContent, transport.statusCode)
+
+	// Deleting an existing bucket should return a 204
+	_, err = s3Client.DeleteBucket(t.Context(), &s3.DeleteBucketInput{Bucket: aws.String(bck.Name)})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, transport.statusCode == http.StatusNoContent,
+		"expected DeleteBucket status %d on an existing bucket, got %d", http.StatusNoContent, transport.statusCode)
+
+	// Deleting a non-existent bucket should return a 404
+	_, err = s3Client.DeleteBucket(t.Context(), &s3.DeleteBucketInput{Bucket: aws.String(bck.Name)})
+	tassert.Fatalf(t, err != nil, "Expected DeleteBucket on a non-existent bucket to fail, but it succeeded")
+	tassert.Errorf(t, transport.statusCode == http.StatusNotFound,
+		"expected DeleteBucket status %d on a non-existent bucket, got %d", http.StatusNotFound, transport.statusCode)
+	tassert.Errorf(t, errors.As(err, &s3Err) && s3Err.ErrorCode() == "NoSuchBucket",
+		"expected NoSuchBucket error, got: %v", err)
+
+	// Deleting any object on a non-existent bucket should return a 404.
+	_, err = s3Client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+		Bucket: aws.String(bck.Name),
+		Key:    aws.String(objName),
+	})
+	tassert.Fatalf(t, err != nil, "Expected DeleteObject on a non-existent bucket to fail, but it succeeded")
+	tassert.Errorf(t, transport.statusCode == http.StatusNotFound,
+		"expected DeleteObject status %d on a non-existent bucket, got %d", http.StatusNotFound, transport.statusCode)
+	tassert.Errorf(t, errors.As(err, &s3Err) && s3Err.ErrorCode() == "NoSuchBucket",
+		"expected NoSuchBucket error, got: %v", err)
 }
