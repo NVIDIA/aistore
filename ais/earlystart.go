@@ -374,42 +374,43 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 // Leader election and Smap assembly happen in stages. Understanding the sequence
 // is key to understanding how network address changes propagate:
 //
-//   1. Primary starts with a fresh Smap seeded with self. The loaded Smap, if any,
-//      contributes only UUID and Version - its Pmap/Tmap entries are intentionally
-//      discarded during this first phase. This eliminates stale-address conflicts and
-//      helps the primary determine whether it is truly the designated leader
-//      (with no prior joins, the chances of a "change-of-mind" are minimized).
+// 1. Primary starts with a fresh Smap seeded with self. The loaded Smap, if any,
+//    contributes only UUID and Version - its Pmap/Tmap entries are intentionally
+//    discarded during this first phase. This eliminates stale-address conflicts and
+//    helps the primary determine whether it is truly the designated leader
+//    (with no prior joins, the chances of a "change-of-mind" are minimized).
 //
-//   2. acceptRegistrations(): primary waits for nodes to self-join. Each joining
-//      node reports its CURRENT net-info (addresses discovered at startup using
-//      the effective IP family from config). Joins are handled by _joinKalive(),
-//      which during early startup (!ClusterStarted) takes a fast path: putNode()
-//      unconditionally inserts the node into the Smap. Since the working Smap
-//      has no prior entries for these nodes (step 1), this is always a "new join"
-//      (osi == nil from the current Smap's perspective) - no reconciliation needed.
+// 2. acceptRegistrations(): primary waits for nodes to self-join. Each joining
+//    node reports its current net-info (addresses discovered at startup using
+//    the effective IP family from config). Joins are handled by _joinKalive(),
+//    which during early startup (!ClusterStarted) takes a fast path: putNode()
+//    unconditionally inserts the node into the Smap. Since the working Smap
+//    has no prior entries for these nodes (step 1), this is always a "new join"
+//    (osi == nil from the current Smap's perspective) - no reconciliation needed.
 //
-//   3. regpoolMaxVer(): after registration closes, the primary reconciles metadata
-//      versions (Smap, BMD, RMD, Config) from the regpool - i.e., from what the
-//      joining nodes reported. _updNetInfo() iterates the regpool and compares
-//      each node's net-info against the CURRENT Smap (via NetEq). If addresses
-//      differ, putNode() overwrites the entry. In the typical restart scenario,
-//      nodes already have correct addresses from step 2, so _updNetInfo is a no-op.
+// 3. regpoolMaxVer(): after registration closes, the primary reconciles metadata
+//    versions (Smap, BMD, RMD, Config) from the regpool - i.e., from what the
+//    joining nodes reported. _updSnode() iterates the regpool and reconciles
+//    each node's net-info (via NetEq) and verifying key against the current Smap.
+//    If either differs, putNode() overwrites the entry (osi.Flags preserved).
+//    Because a restarted node generates a new keypair, its verifying key
+//    always changes (whereas net-info rarely does).
 //
-//      _updNetInfo matters in multi-proxy deployments where a joining node's regReq
-//      carries a stale Smap (from a previous run) with outdated addresses for OTHER
-//      nodes. In that case, regpoolMaxVer may adopt the higher-version Smap, and
-//      _updNetInfo corrects any stale entries using the freshly reported net-info.
+// 4. _updSnode() matters in multi-proxy deployments where a joining node's regReq
+//    carries a stale Smap (from a previous run) with outdated addresses for other
+//    nodes. In that case, regpoolMaxVer may adopt the higher-version Smap, and
+//    _updSnode() corrects any stale entries using the freshly reported node info.
 //
-//   4. discoverMeta(): final consistency check - primary broadcasts to all nodes,
-//      collects max-version metadata, and merges. At this point, all net-info
-//      is already current.
+// 5. discoverMeta(): final consistency check - primary broadcasts to all nodes,
+//    collects max-version metadata, and merges. At this point, all net-info
+//    is already current.
 //
 // In short: IP/hostname address changes propagate naturally
 // through the "new join" path at step 2. No special-case handling is required -
 // nodes discover their addresses at startup, report them on join, and the primary
 // builds the Smap from scratch with current information.
 //
-// The rereg() path (in httpclupost / _joinKalive) handles address changes AFTER
+// The rereg() path (in httpclupost / _joinKalive) handles address changes after
 // the cluster is fully started - e.g., a node restarts with a new IP while the
 // cluster is running.
 
@@ -1167,7 +1168,7 @@ ret:
 
 	p.reg.mpl.RLock()
 	for _, regReq := range p.reg.pool {
-		after.Smap, cloned = _updNetInfo(after.Smap, regReq.SI, cloned)
+		after.Smap, cloned = _updSnode(after.Smap, regReq.SI, cloned)
 	}
 	p.reg.mpl.RUnlock()
 
@@ -1210,7 +1211,7 @@ ret:
 	return after.Smap
 }
 
-func _updNetInfo(smap *smapX, nsi *meta.Snode, cloned bool) (*smapX, bool) {
+func _updSnode(smap *smapX, nsi *meta.Snode, cloned bool) (*smapX, bool) {
 	if nsi.Validate() != nil {
 		return smap, cloned
 	}
@@ -1218,13 +1219,25 @@ func _updNetInfo(smap *smapX, nsi *meta.Snode, cloned bool) (*smapX, bool) {
 	if osi == nil || osi.Type() != nsi.Type() {
 		return smap, cloned
 	}
+
+	var renew bool
 	if err := osi.NetEq(nsi); err != nil {
-		nlog.Warningln("Warning: reniewing", err)
-		if !cloned {
-			smap = smap.clone()
-			cloned = true
-		}
-		smap.putNode(nsi, osi.Flags, true /*silent*/)
+		nlog.Warningln("renewing", err)
+		renew = true
+	} else if !cos.CryptoEqual(osi.VerifyingKey, nsi.VerifyingKey) {
+		ofp, _ := cos.NodeVerifyingKeyFingerprint(osi.VerifyingKey)
+		nfp, _ := cos.NodeVerifyingKeyFingerprint(nsi.VerifyingKey)
+		nlog.Warningln("renewing", nsi.StringEx(), "[ verifying key changed:", ofp, "=>", nfp, "]")
+		renew = true
 	}
+
+	if !renew {
+		return smap, cloned
+	}
+	if !cloned {
+		smap = smap.clone()
+		cloned = true
+	}
+	smap.putNode(nsi, osi.Flags, true /*silent*/)
 	return smap, cloned
 }
