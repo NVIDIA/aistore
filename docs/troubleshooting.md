@@ -110,16 +110,17 @@ These errors usually indicate that a node:
 
 ### CIE Error Reference
 
-| Error    | When                  | Meaning                                         |
-| -------- | --------------------- | ----------------------------------------------- |
-| `cie#10` | Primary startup       | Primary’s local Smap conflicts with other nodes |
-| `cie#30` | Startup               | Targets disagree on cluster UUID                |
-| `cie#40` | Startup or BMD update | Local BMD conflicts with cluster                |
-| `cie#50` | Join / metasync       | Node is not permitted to join cluster           |
-| `cie#60` | Primary startup       | Conflicting incompatible BMD versions           |
-| `cie#70` | Primary startup       | Conflicting BMDs with simple majority           |
-| `cie#80` | Node join             | Node believes it belongs to a different cluster |
-| `cie#90` | Metasync              | Split-brain detected during metadata sync       |
+| Error     | When                  | Meaning                                         |
+| --------- | --------------------- | ----------------------------------------------- |
+| `cie#10`  | Primary startup       | Primary’s local Smap conflicts with other nodes |
+| `cie#30`  | Startup               | Targets disagree on cluster UUID                |
+| `cie#40`  | Startup or BMD update | Local BMD conflicts with cluster                |
+| `cie#50`  | Join / metasync       | Node is not permitted to join cluster           |
+| `cie#60`  | Primary startup       | Conflicting incompatible BMD versions           |
+| `cie#70`  | Primary startup       | Conflicting BMDs with simple majority           |
+| `cie#80`  | Node join             | Node believes it belongs to a different cluster |
+| `cie#90`  | Metasync              | Split-brain detected during metadata sync       |
+| `cie#100` | Target startup        | Mountpath Smap backups disagree on cluster UUID |
 
 ### Recovery (CIE)
 

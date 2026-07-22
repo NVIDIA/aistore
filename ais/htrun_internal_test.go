@@ -35,7 +35,7 @@ func newHTRunWithSmap() (*htrun, string) {
 	config := cmn.GCO.BeginUpdate()
 	cmn.GCO.CommitUpdate(config)
 
-	h.owner.smap = newSmapOwner(config)
+	h.owner.smap = newSmapOwner(config, false /*isTarget*/)
 	smap := newSmap()
 	smap.addProxy(h.si)
 	smap.Primary = h.si
@@ -81,7 +81,7 @@ func TestIsClusterNode_InvalidSmap(t *testing.T) {
 	config := cmn.GCO.BeginUpdate()
 	cmn.GCO.CommitUpdate(config)
 
-	h.owner.smap = newSmapOwner(config)
+	h.owner.smap = newSmapOwner(config, false /*isTarget*/)
 	h.owner.smap.put(newSmap())
 	h.svs.init()
 

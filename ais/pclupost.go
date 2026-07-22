@@ -500,7 +500,7 @@ func (c *clupost) kalive(osi *meta.Snode) bool {
 	}
 
 	debug.Func(func() {
-		if cos.CryptoEqual(osi.VerifyingKey, nsi.VerifyingKey) {
+		if len(osi.VerifyingKey) == 0 || len(nsi.VerifyingKey) == 0 || cos.CryptoEqual(osi.VerifyingKey, nsi.VerifyingKey) {
 			return
 		}
 		ofp, _ := cos.NodeVerifyingKeyFingerprint(osi.VerifyingKey)

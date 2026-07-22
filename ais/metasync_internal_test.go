@@ -73,7 +73,7 @@ func newPrimary(t *testing.T) *proxy {
 		smap    = newSmap()
 	)
 
-	p.owner.smap = newSmapOwner(cmn.GCO.Get())
+	p.owner.smap = newSmapOwner(cmn.GCO.Get(), false /*isTarget*/)
 	p.si = newSnode("primary", apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
 
 	smap.addProxy(p.si)
@@ -116,7 +116,7 @@ func newPrimary(t *testing.T) *proxy {
 func newSecondary(name string) *proxy {
 	p := &proxy{}
 	p.si = newSnode(name, apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
-	p.owner.smap = newSmapOwner(cmn.GCO.Get())
+	p.owner.smap = newSmapOwner(cmn.GCO.Get(), false /*isTarget*/)
 	p.owner.smap.put(newSmap())
 
 	g.client.data = &http.Client{}

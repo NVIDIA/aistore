@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 
 	jsoniter "github.com/json-iterator/go"
@@ -59,8 +60,11 @@ type (
 		smap    ratomic.Pointer[smapX]
 		sls     *sls
 		fpath   string
+		mpath   string // target's 2nd copy
 		immSize int64
 		mu      sync.Mutex
+		// ditto
+		isTarget bool
 	}
 	sls struct {
 		listeners map[string]meta.Slistener
@@ -506,25 +510,103 @@ func (m *smapX) mergeFlags(from *smapX) (clone *smapX) {
 // smapOwner //
 ///////////////
 
-func newSmapOwner(config *cmn.Config) *smapOwner {
+func newSmapOwner(config *cmn.Config, isTarget bool) *smapOwner {
 	return &smapOwner{
-		sls:   newSmapListeners(),
-		fpath: filepath.Join(config.ConfigDir, fname.Smap),
+		sls:      newSmapListeners(),
+		fpath:    filepath.Join(config.ConfigDir, fname.Smap),
+		isTarget: isTarget,
 	}
 }
 
-func (r *smapOwner) load(smap *smapX) (loaded bool, err error) {
+// Load the main (ConfigDir) replica.
+// NOTE:
+// - when the main replica loads we ignore the backup outright - not compared, not merged;
+// - this is intentional; compare with the respective BMD logic
+func (r *smapOwner) load(smap *smapX) (fromPath string, err error) {
 	_, err = jsp.LoadMeta(r.fpath, smap)
-	if err != nil {
-		if cos.IsNotExist(err) {
-			return false, nil
+	if err == nil {
+		if smap.version() != 0 && smap.isValid() && cos.IsValidUUID(smap.UUID) {
+			return r.fpath, nil
 		}
-		return false, err
+		err = fmt.Errorf("unexpected: persistent %s is invalid", smap)
 	}
-	if smap.version() == 0 || !smap.isValid() {
-		return false, fmt.Errorf("unexpected: persistent %s is invalid", smap)
+
+	// try backup
+	if fromPath = r.loadBackup(smap, err); fromPath != "" {
+		return fromPath, nil
 	}
-	return true, nil
+	if cos.IsNotExist(err) {
+		return "", nil // likely: keep starting up with no Smap
+	}
+	return "", err
+}
+
+// (target only) recover from the mountpath backup when the ConfigDir copy cannot be loaded:
+// - scan all available mountpaths: the HRW-selected location may have changed since the last write
+// - missing, unreadable, and invalid copies are tolerated
+// - among valid copies with the same cluster UUID, the highest version wins
+// - conflicting UUIDs constitute a fatal cluster-integrity error
+func (r *smapOwner) loadBackup(smap *smapX, prevErr error) (fromPath string) {
+	if !r.isTarget {
+		return ""
+	}
+	var (
+		maxv   *smapX
+		mpath  string
+		cnt    int
+		anyErr bool
+	)
+	for _, mi := range fs.GetAvail() {
+		fpath := filepath.Join(mi.Path, fname.Smap)
+		cand, err := _loadSmap(fpath)
+		if err != nil {
+			if !cos.IsNotExist(err) {
+				nlog.Errorln("failed to load Smap backup from", fpath, "err:", err)
+				anyErr = true
+			}
+			continue
+		}
+		cnt++
+		if maxv == nil {
+			maxv, mpath = cand, mi.Path
+			continue
+		}
+		if cand.UUID != maxv.UUID {
+			if cand.UUID != maxv.UUID {
+				cos.ExitLogf("%s: Smap backups have different UUIDs: [%s from %q] vs [%s from %q]",
+					ciError(100), maxv.StringEx(), filepath.Join(mpath, fname.Smap), cand.StringEx(), fpath)
+			}
+			return ""
+		}
+		if cand.version() > maxv.version() {
+			maxv, mpath = cand, mi.Path
+		}
+	}
+	if maxv == nil {
+		return ""
+	}
+	if cnt > 1 {
+		nlog.Warningln("multiple Smap backups:", cnt, "- taking", maxv.String(), "from", mpath)
+	} else if !anyErr {
+		// remember the location iff it is the sole copy;
+		// otherwise, leave r.mpath empty so the next store performs a full sweep
+		r.mpath = mpath
+	}
+	*smap = *maxv
+	nlog.Warningln("loaded Smap backup copy:", smap.StringEx(),
+		"from", mpath, "after failing to load it from", r.fpath, "[", prevErr, "]")
+	return filepath.Join(mpath, fname.Smap)
+}
+
+func _loadSmap(fpath string) (*smapX, error) {
+	smap := newSmap()
+	if _, err := jsp.LoadMeta(fpath, smap); err != nil {
+		return nil, err
+	}
+	if smap.version() == 0 || !smap.isValid() || !cos.IsValidUUID(smap.UUID) {
+		return nil, fmt.Errorf("invalid %s", smap)
+	}
+	return smap, nil
 }
 
 func (r *smapOwner) Get() *meta.Smap               { return &r.get().Smap }
@@ -591,6 +673,7 @@ func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayloa
 			return err
 		}
 	}
+	r.storeBackup(newSmap) // best-effort 2nd copy
 	r.put(newSmap)
 
 	r.mu.Unlock()
@@ -667,6 +750,44 @@ func (r *smapOwner) modify(ctx *smapModifier) error {
 		ctx.final(ctx, clone)
 	}
 	return nil
+}
+
+// (target only) second copy on a single HRW-selected mountpath
+// - best-effort: no error propagation, never fatal
+// - seed, not a replica: contributes UUID + peer URLs at startup, never authoritative
+// - caller must hold r.mu
+func (r *smapOwner) storeBackup(smap *smapX) {
+	if !r.isTarget {
+		return
+	}
+	mi, _, err := fs.Hrw(cos.UnsafeB(fname.Smap))
+	if err != nil {
+		return // no mountpaths
+	}
+	sgl := smap._sgl
+	if sgl == nil {
+		sgl = smap._encode(r.immSize)
+		r.immSize = max(r.immSize, sgl.Len())
+		defer sgl.Free()
+	}
+
+	if err := jsp.SaveMeta(filepath.Join(mi.Path, fname.Smap), smap, sgl); err != nil {
+		nlog.Errorln("failed to backup", smap.String(), "=>", mi.String(), "err:", err)
+		return
+	}
+
+	// track last-used mpath <= smap
+	if r.mpath == "" {
+		// first backup(?)
+		for _, omi := range fs.GetAvail() {
+			if omi.Path != mi.Path {
+				cos.RemoveFile(filepath.Join(omi.Path, fname.Smap))
+			}
+		}
+	} else if r.mpath != mi.Path { // moved
+		cos.RemoveFile(filepath.Join(r.mpath, fname.Smap))
+	}
+	r.mpath = mi.Path
 }
 
 /////////

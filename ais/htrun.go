@@ -50,22 +50,11 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-const ciePrefix = "cluster integrity error cie#"
-
-const notPresentInSmap = `
-%s: %s (self) is not present in the local copy of the %s
-
------------------
-To troubleshoot:
-1. first, make sure you are not trying to run two different %s on the same machine
-2. double check "fspaths" config (used to find ais target's volume metadata and load its node ID)
-3. if none of the above helps, remove possibly outdated cluster map from the %s (located at %s)
-4. restart %s
------------------`
-
-const dfltDetail = "[control-plane]"
-
-const tagCM = "recv-clumeta"
+const (
+	ciePrefix  = "cluster integrity error cie#"
+	dfltDetail = "[control-plane]"
+	tagCM      = "recv-clumeta"
+)
 
 // extra or extended state - currently, target only
 type htext interface {
@@ -497,7 +486,7 @@ func (h *htrun) initPhase2(config *cmn.Config) {
 
 	load.Init()
 
-	h.owner.smap = newSmapOwner(config)
+	h.owner.smap = newSmapOwner(config, h.si.IsTarget())
 	h.owner.rmd = newRMDOwner(config)
 	h.owner.rmd.load()
 
@@ -546,22 +535,26 @@ func (h *htrun) newKeyPair(sid, daeType string) *cos.NodeKeyPair {
 // at startup, check this Snode vs locally stored Smap replica (NOTE: some errors are FATAL)
 func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	smap = newSmap()
-	loaded, err := h.owner.smap.load(smap)
+	fromPath, err := h.owner.smap.load(smap)
 	if err != nil {
 		nlog.Errorln(h.String(), "failed to load Smap:", err, "- reinitializing")
 		return nil, false
 	}
-	if !loaded {
+	if fromPath == "" {
 		return nil, false // no local replica of a cluster map - bootstrapping (joining from scratch)
 	}
 
 	node := smap.GetNode(h.SID())
 	if node == nil {
-		ty := "targets"
-		if h.si.Type() == apc.Proxy {
-			ty = "proxies"
+		var (
+			config = cmn.GCO.Get()
+			s      string
+		)
+		if h.si.IsTarget() {
+			s = " and target mountpaths"
 		}
-		cos.ExitLogf(notPresentInSmap, cmn.BadSmapPrefix, h.si, smap.StringEx(), ty, h.si, h.owner.smap.fpath, h.si)
+		cos.ExitLogf("%s: %s (self) is not present in loaded %s at %s; check config dir %s%s; remove stale Smap copies before restarting",
+			cmn.BadSmapPrefix, h.si.String(), smap.StringEx(), fromPath, config.ConfigDir, s)
 	}
 	if node.Type() != h.si.Type() {
 		cos.ExitLogf("%s: %s is %q while the node in the loaded %s is %q", cmn.BadSmapPrefix,

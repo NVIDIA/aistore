@@ -62,7 +62,7 @@ func newDiscoverServerPrimary() *proxy {
 
 	cmn.Rom.Set(&config.ClusterConfig)
 
-	p.owner.smap = newSmapOwner(config)
+	p.owner.smap = newSmapOwner(config, false /*isTarget*/)
 	p.owner.smap.put(newSmap())
 	owner := newBMDOwnerPrx(config)
 	owner.put(newBucketMD())

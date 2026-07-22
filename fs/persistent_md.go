@@ -27,6 +27,7 @@ var mdFilesDirs = [...]string{
 	fname.Bmd,
 	fname.BmdPrevious,
 	fname.Vmd,
+	fname.Smap,
 }
 
 func MarkerExists(marker string) bool {

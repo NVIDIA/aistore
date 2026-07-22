@@ -58,7 +58,7 @@ func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 	smap.Primary = p.si
 	smap.Version = 1
 
-	p.owner.smap = newSmapOwner(config)
+	p.owner.smap = newSmapOwner(config, false /*isTarget*/)
 	p.owner.smap.put(smap) // populate the atomic.Pointer so get() works
 
 	// mirror node startup order: svs.init -> keypair -> config-driven toggle
