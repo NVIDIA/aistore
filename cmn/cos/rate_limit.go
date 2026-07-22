@@ -296,6 +296,8 @@ func (arl *AdaptRateLim) _str() string {
 		arl.origTokens, arl.maxTokens, arl.retries, arl.minBtwn)
 }
 
+func (arl *AdaptRateLim) NumRetries() int { return arl.retries }
+
 //////////////////
 // BurstRateLim //
 //////////////////

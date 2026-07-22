@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -263,6 +264,12 @@ type (
 	ErrMembershipChange struct {
 		tag      string
 		from, to string
+	}
+
+	ErrBackendRetry struct {
+		err     error
+		retries int
+		total   time.Duration
 	}
 )
 
@@ -1104,6 +1111,19 @@ func IsErrMembershipChange(err error) bool {
 	var wrapped *ErrMembershipChange
 	return errors.As(err, &wrapped)
 }
+
+// ErrBackendRetry
+
+func NewErrBackendRetry(err error, retries int, total time.Duration) *ErrBackendRetry {
+	return &ErrBackendRetry{err: err, retries: retries, total: total}
+}
+
+func (e *ErrBackendRetry) Error() string {
+	return fmt.Sprintf("backend rate limiter: request still throttled after %d retry attempt%s and %v total backoff: %v",
+		e.retries, cos.Plural(e.retries), e.total, e.err)
+}
+
+func (e *ErrBackendRetry) Unwrap() error { return e.err }
 
 //
 // more is-error helpers

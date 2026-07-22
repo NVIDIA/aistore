@@ -31,7 +31,13 @@ type (
 		CreateBucket(bck *meta.Bck) (ecode int, err error)
 		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error)
 
-		// list-objects
+		// list-objects: Cloud implementation
+		// - set and return lst.ContinuationToken on every successful call
+		// - return empty lst.ContinuationToken when the listing is exhausted
+		// - callers may reuse lst
+		// - callers do not need to worry about setting lst.ContinuationToken to ""
+		//
+		// (backend/ais satisfies this contract by copying the complete remote result)
 		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
 
 		PutObj(ctx context.Context, r io.ReadCloser, lom *LOM, origReq *http.Request) (ecode int, err error)

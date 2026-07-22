@@ -255,6 +255,8 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 		num      = int32(msg.PageSize)
 		opts     = container.ListBlobsFlatOptions{Prefix: apc.Ptr(msg.Prefix), MaxResults: &num}
 	)
+	lst.ContinuationToken = ""
+
 	client, err := container.NewClientWithSharedKeyCredential(cntURL, azbp.creds, nil)
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, "")

@@ -503,6 +503,8 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (i
 			Fields:        &fields,
 		}
 	)
+	lst.ContinuationToken = ""
+
 	client, _, err := bp.ociClient(cloudBck)
 	if err != nil {
 		return ociClientToAISError("ListObjects", cloudBck.Name, msg.Prefix, err)

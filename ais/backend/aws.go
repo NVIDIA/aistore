@@ -201,6 +201,8 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		sessConf   = sessConf{bck: cloudBck}
 		versioning bool
 	)
+	lst.ContinuationToken = ""
+
 	svc, err := sessConf.s3client(tag)
 	if err != nil {
 		return 0, err

@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -35,6 +34,11 @@ import (
 // - HeadBucket()
 // - StartMpt(), PutMptPart(), CompleteMpt(), AbortMpt()
 
+// retries:
+// - proactive: acquire (i.e., shape) before every call
+// - reactive:  on 429/503 only, and only where the call is safely repeatable;
+//   PutObj requires a replayable (re-openable) body
+
 // stats:
 // - not counting proactive delay    - only (reactive) retries
 // - not counting individual retries - only totals (see "increment" comment below)
@@ -44,11 +48,6 @@ type (
 	rlbackend struct {
 		core.Backend
 		t *target
-	}
-	errBackendRetry struct {
-		err     error
-		retries int
-		total   time.Duration
 	}
 )
 
@@ -65,7 +64,7 @@ func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.R
 		oa, ecode, err = bp.Backend.HeadObj(ctx, lom, origReq)
 		return ecode, err
 	}
-	_, ecode, err = bp.retry(ctx, arl, cb)
+	_, ecode, err = bp.retry(ctx, arl, ecode, err, cb)
 	return
 }
 
@@ -74,23 +73,21 @@ func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.R
 // - (*lrit).lsoPage (xact/xs/lrit.go): prefix prefetch, evict/delete, copy/transform, and archive
 // - (*XactNBI).Run (xact/xs/create_nbi.go): native bucket inventory
 // - (*backendDlJob).getNextObjs (ext/dload/job.go): backend download
+//
+// TODO -- FIXME: (*lrit).lsoPage has its own retry loop - unify
 func (bp *rlbackend) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	arl := bp.acquire(bck, apc.ActList)
-	// Keep msg.ContinuationToken (the page being requested), but clear the
-	// result's next-page token in case a previous attempt only partially filled it.
-	lst.ContinuationToken = ""
+
 	ecode, err = bp.Backend.ListObjects(bck, msg, lst)
 	if err == nil || arl == nil || !cmn.IsErrTooManyRequests(err) {
 		return
 	}
 
 	cb := func() (int, error) {
-		// Discard the next-page token left by the failed attempt.
-		lst.ContinuationToken = ""
 		return bp.Backend.ListObjects(bck, msg, lst)
 	}
-	// core.Backend.ListObjects has no request context.
-	_, ecode, err = bp.retry(context.Background(), arl, cb)
+	// core.Backend.ListObjects has no request context (TODO: plumb it through - abortable xactions)
+	_, ecode, err = bp.retry(context.Background(), arl, ecode, err, cb)
 	return
 }
 
@@ -105,7 +102,7 @@ func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, ori
 	cb := func() (int, error) {
 		return bp.Backend.GetObj(ctx, lom, owt, origReq)
 	}
-	total, code, e := bp.retry(ctx, arl, cb)
+	total, code, e := bp.retry(ctx, arl, ecode, err, cb)
 
 	// increment retry count by 1, retry latency by `total`
 	bp.stats(ctx, lom.Bck(), stats.RatelimGetRetryCount, stats.RatelimGetRetryLatencyTotal, total)
@@ -113,19 +110,29 @@ func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, ori
 }
 
 func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+	closeErrReader := func() {
+		if res.Err != nil && res.R != nil {
+			cos.Close(res.R)
+			res.R = nil
+		}
+	}
+
 	// proactive
 	arl := bp.acquire(lom.Bck(), http.MethodGet)
 	res = bp.Backend.GetObjReader(ctx, lom, offset, length)
 	if res.Err == nil || arl == nil || !cmn.IsErrTooManyRequests(res.Err) {
 		return res
 	}
+	closeErrReader()
 
 	cb := func() (int, error) {
 		res = bp.Backend.GetObjReader(ctx, lom, offset, length)
+		closeErrReader()
 		return res.ErrCode, res.Err
 	}
+
 	var total time.Duration
-	total, res.ErrCode, res.Err = bp.retry(ctx, arl, cb)
+	total, res.ErrCode, res.Err = bp.retry(ctx, arl, res.ErrCode, res.Err, cb)
 
 	// ditto
 	bp.stats(ctx, lom.Bck(), stats.RatelimGetRetryCount, stats.RatelimGetRetryLatencyTotal, total)
@@ -140,10 +147,35 @@ func (bp *rlbackend) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM,
 		return ecode, err
 	}
 
-	cb := func() (int, error) {
-		return bp.Backend.PutObj(ctx, r, lom, origReq)
+	// reactive: the first attempt drained `r` - retry only when the source
+	// can be re-opened from scratch (LomHandle, FileHandle, ByteReader)
+	// see also: lom.Open() and friends
+	opener, ok := r.(cos.ReadOpenCloser)
+	if !ok {
+		return ecode, err
 	}
-	total, code, e := bp.retry(ctx, arl, cb)
+
+	// TODO -- FIXME:
+	// typecast above is not ideal, strictly speaking
+	// nopOpener would be a no-op; ReaderWithArgs would panic (see cmn/cos/io.go)
+
+	var roc cos.ReadOpenCloser
+	cb := func() (int, error) {
+		if roc != nil {
+			cos.Close(roc)
+			roc = nil
+		}
+		next, errO := opener.Open()
+		if errO != nil {
+			return 0, errO
+		}
+		roc = next
+		return bp.Backend.PutObj(ctx, next, lom, origReq)
+	}
+	total, code, e := bp.retry(ctx, arl, ecode, err, cb)
+	if roc != nil {
+		cos.Close(roc)
+	}
 
 	bp.stats(ctx, lom.Bck(), stats.RatelimPutRetryCount, stats.RatelimPutRetryLatencyTotal, total)
 	return code, e
@@ -161,7 +193,7 @@ func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) 
 	cb := func() (int, error) {
 		return bp.Backend.DeleteObj(ctx, lom)
 	}
-	_, code, e := bp.retry(ctx, arl, cb)
+	_, code, e := bp.retry(ctx, arl, ecode, err, cb)
 	return code, e
 }
 
@@ -177,26 +209,28 @@ func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim)
 		uhash = bck.HashUname(verb) // see also (*RateLimitConf)verbs
 		v, ok = bp.t.ratelim.Load(uhash)
 	)
-	if ok {
-		arl = v.(*cos.AdaptRateLim)
-	} else {
+	if !ok {
 		smap := bp.t.owner.smap.get()
-		arl = bck.NewBackendRateLim(smap.CountActiveTs())
-		bp.t.ratelim.Store(uhash, arl)
+		// concurrent workers on the same (bucket, verb)
+		v, _ = bp.t.ratelim.LoadOrStore(uhash, bck.NewBackendRateLim(smap.CountActiveTs()))
 	}
+	arl = v.(*cos.AdaptRateLim)
 
 	arl.RetryAcquire(time.Second)
 	return arl
 }
 
-func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, cb func() (int, error)) (total time.Duration, ecode int, err error) {
+// reactive: back off and repeat `cb` while the remote keeps responding 429/503
+// - (ecode, err) on entry: the failed attempt that brought us here
+// - bounded by both `num_retries` and DfltRateMaxWait
+func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, ecode int, err error,
+	cb func() (int, error)) (total time.Duration, _ int, _ error) {
 	var retries int
-	for total < cos.DfltRateMaxWait {
-		// reactive
+	for retries < arl.NumRetries() && total < cos.DfltRateMaxWait {
 		sleep := arl.OnErr()
 		total += sleep
-		if err = ctx.Err(); err != nil {
-			break
+		if cerr := ctx.Err(); cerr != nil {
+			return total, 0, cerr
 		}
 		ecode, err = cb()
 		retries++
@@ -205,7 +239,8 @@ func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, cb func() (i
 		}
 	}
 	if err != nil && cmn.IsErrTooManyRequests(err) {
-		err = &errBackendRetry{err: err, retries: retries, total: total}
+		err = cmn.NewErrBackendRetry(err, retries, total)
+		ecode = 0 // not returning 429 when exhausted
 	}
 	return total, ecode, err
 }
@@ -223,10 +258,3 @@ func (bp *rlbackend) stats(ctx context.Context, bck *meta.Bck, count, latency st
 		cos.NamedVal64{Name: latency, Value: int64(total), VarLabs: vlabs},
 	)
 }
-
-func (e *errBackendRetry) Error() string {
-	return fmt.Sprintf("backend rate limiter: request still throttled after %d retry attempt%s and %v total backoff: %v",
-		e.retries, cos.Plural(e.retries), e.total, e.err)
-}
-
-func (e *errBackendRetry) Unwrap() error { return e.err }

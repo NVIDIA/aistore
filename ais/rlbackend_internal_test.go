@@ -169,17 +169,6 @@ func TestRLBackendGetObjReaderReturnsRetryError(t *testing.T) {
 	tassert.Fatalf(t, backend.calls == 1, "expected no retry call, got %d calls", backend.calls)
 }
 
-func TestRLBackendRetryErrorDetails(t *testing.T) {
-	err429 := cmn.NewErrTooManyRequests(errors.New("throttled"), http.StatusTooManyRequests)
-	var err error = &errBackendRetry{err: err429, retries: 3, total: 5 * time.Second}
-	var retryErr *errBackendRetry
-	tassert.Fatalf(t, errors.As(err, &retryErr), "expected backend retry error, got %T", err)
-	tassert.Fatalf(t, retryErr.retries == 3, "expected 3 retries, got %d", retryErr.retries)
-	tassert.Fatalf(t, retryErr.total == 5*time.Second, "expected 5s backoff, got %v", retryErr.total)
-	tassert.Fatalf(t, errors.Is(err, err429), "expected wrapped error %v, got %v", err429, err)
-	tassert.Fatalf(t, cmn.IsErrTooManyRequests(err), "expected throttling error, got %v", err)
-}
-
 type (
 	listResult struct {
 		err   error

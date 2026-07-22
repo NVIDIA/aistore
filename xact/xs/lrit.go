@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -348,6 +349,12 @@ const (
 func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	ecode, err = bp.ListObjects(r.bck, lsmsg, lst)
 	if err == nil || !tooManyReqs(ecode, err) || r.parent.IsAborted() {
+		return ecode, err
+	}
+
+	// already retried via configured rate-limiter
+	var ebr *cmn.ErrBackendRetry
+	if errors.As(err, &ebr) {
 		return ecode, err
 	}
 

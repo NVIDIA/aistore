@@ -172,6 +172,8 @@ func (gsbp *gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 		h        = cmn.BackendHelpers.Google
 		cloudBck = bck.RemoteBck()
 	)
+	lst.ContinuationToken = ""
+
 	client, e := gsbp.getClient(context.Background(), cloudBck)
 	if e != nil {
 		return 0, e
