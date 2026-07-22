@@ -7,6 +7,7 @@ package main
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,6 +139,61 @@ func TestTokenRevocation(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(revoked) == 1 && revoked[0] == token,
 		"expected the revoked token to stay on the revoked list, got %v", revoked)
+}
+
+// An altered spelling of a revoked token must stay rejected. Setting the
+// signature's unused padding bits keeps the signature bytes (so the token still
+// authenticates) but changes the token string, which evades the exact-match
+// revoked list. Strict Base64 decoding is what rejects the altered token.
+func TestTokenRevocationPadBits(t *testing.T) {
+	const adminPass = "test-pass"
+
+	t.Setenv(env.AisAuthAdminPassword, adminPass)
+	conf := &authn.Config{
+		Server: authn.ServerConf{
+			Secret: "test-secret",
+			Expire: cos.Duration(time.Hour),
+		},
+	}
+	testMgr := newMgrWithConf(t, conf)
+
+	token, _, err := testMgr.issueToken(adminUserID, adminPass, &authn.LoginMsg{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, token != "", "expected non-empty token")
+
+	_, err = testMgr.revokeToken(token)
+	tassert.CheckFatal(t, err)
+
+	altered := alterSignaturePadBits(t, token)
+	tassert.Fatalf(t, altered != token, "expected an altered token string")
+
+	// The exact-match revoked list does not catch the altered spelling.
+	revoked, err := testMgr.isTokenRevoked(altered)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, !revoked, "altered token unexpectedly matched the revoked list")
+
+	// Strict Base64 decoding rejects it.
+	_, err = testMgr.validateToken(t.Context(), altered)
+	tassert.Fatalf(t, errors.Is(err, tok.ErrInvalidToken), "expected altered token to be rejected, got %v", err)
+}
+
+// Set an unused Base64URL padding bit in the signature's final character to get a
+// different token string that decodes to identical signature bytes. HS256's
+// 32-byte signature encodes to a final character with 2 unused (zero) padding
+// bits, so incrementing that character sets a padding bit without altering the
+// signature.
+func alterSignaturePadBits(t *testing.T, token string) string {
+	t.Helper()
+	parts := strings.Split(token, ".")
+	tassert.Fatalf(t, len(parts) == 3 && parts[2] != "", "expected a JWT with a signature")
+	sig := parts[2]
+
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	idx := strings.IndexByte(alphabet, sig[len(sig)-1])
+	tassert.Fatalf(t, idx >= 0 && idx&0b11 == 0, "expected zeroed Base64URL signature padding bits")
+
+	parts[2] = sig[:len(sig)-1] + string(alphabet[idx+1])
+	return strings.Join(parts, ".")
 }
 
 func TestBuildClaims(t *testing.T) {

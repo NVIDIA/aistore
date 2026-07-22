@@ -133,6 +133,7 @@ func buildParseOptions(conf *cmn.AuthConf) []jwt.ParserOption {
 	// Baseline options enforced for every token, regardless of (optional) config.
 	opts := []jwt.ParserOption{
 		jwt.WithValidMethods(supportedSigningMethods),
+		jwt.WithStrictDecoding(),
 		// Enforces the documented requirement that tokens carry a valid `exp` and that
 		// expired tokens are rejected (see "Token Requirements" section in docs/auth_validation.md).
 		jwt.WithExpirationRequired(),
