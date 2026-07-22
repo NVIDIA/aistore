@@ -51,17 +51,32 @@ If the gateway determines during this sequence that another gateway is the prima
 
 ### Target Smap recovery
 
-Gateways have no data mountpaths, so their persistent cluster-level metadata resides under `ConfigDir`. Storage targets have both `ConfigDir` and data mountpaths.
+AIS gateways have no data mountpaths, so their persistent cluster-level metadata resides under `ConfigDir`. Storage targets have both `ConfigDir` and data mountpaths.
 
-A target normally loads and persists its Smap under `ConfigDir`. In addition, it keeps a best-effort backup copy on a single HRW-selected mountpath. The `ConfigDir` copy is always preferred: when it loads successfully, the mountpath backup is neither compared nor merged.
+A target normally loads and persists its cluster map (Smap) under `ConfigDir`.
+In addition, it maintains a backup copy on a single HRW-selected mountpath. Writing and maintaining this backup is best-effort: a backup failure does not prevent an Smap update from completing.
 
-If the `ConfigDir` copy is missing or invalid at startup, the target scans all available mountpaths for Smap backups.
+> Best-effort applies to persisting that backup, not to validating cluster identity during recovery.
 
-When multiple valid copies are found, the copy with the highest version is selected; the presence of multiple copies is reported (logged) but is not fatal.
+The `ConfigDir` copy is always preferred. When it loads successfully, mountpath backups are neither scanned nor compared.
 
-The recovered Smap serves as a bootstrap seed, not as a competing source of truth. When the target self-joins, it reports the recovered cluster UUID and last-known member endpoints. A starting primary can thereby preserve cluster identity while rebuilding current membership from node registrations.
+If the `ConfigDir` copy is missing or invalid at startup, the target scans all available mountpaths.
 
-This intentionally differs from bucket metadata (BMD). BMD contains critical bucket identity and properties and is stored redundantly, with consistency checks across target mountpaths. Smap is largely reconstructed from node self-joins, so a single best-effort recovery copy is sufficient.
+> The HRW-selected location may have changed since the last write.
+
+Missing, unreadable, and invalid backup copies are simply ignored, but NOTE:
+
+When multiple valid backups have the same cluster UUID, the copy with the highest Smap version is selected and the presence of multiple copies is logged.
+Valid backups with different cluster UUIDs constitute a fatal cluster-integrity error (`cie#100`): their versions are not comparable, and selecting either copy could associate the target with the wrong cluster.
+
+A recovered Smap seeds startup discovery and registration with the last-known cluster UUID and member endpoints.
+Normal startup reconciliation and subsequent Smap distribution replace this recovered view with current cluster membership.
+In particular, a starting primary can preserve cluster identity while reconstructing membership from node registrations.
+
+This intentionally differs from bucket metadata (BMD):
+
+- BMD contains critical bucket identity and properties and is stored redundantly across target mountpaths.
+- Smap is largely reconstructed from node self-joins, so maintaining a single mountpath backup is sufficient.
 
 ### Election
 
