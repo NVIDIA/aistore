@@ -160,7 +160,6 @@ COMMANDS:
    rebalance       show rebalance details
    remote-cluster  show attached AIS clusters
    alias           manage top-level aliases
-   kubectl         show kubernetes pods and services
    search          search ais commands
 
    ALIASES:

@@ -206,11 +206,6 @@ const (
 	cmdAuthPubKey    = apc.PubKey
 	cmdAuthRotateKey = apc.Rotate
 
-	// K8s subcommans
-	cmdK8s        = "kubectl"
-	cmdK8sSvc     = "svc"
-	cmdK8sCluster = commandCluster
-
 	// ETL subcommands
 	cmdInit    = "init"
 	cmdInspect = "inspect"
@@ -241,9 +236,6 @@ const (
 	refreshRateMinDur  = time.Second
 	countDefault       = 1
 	countUnlimited     = -1
-
-	execLinuxCommandTime     = 5 * time.Second
-	execLinuxCommandTimeLong = 30 * time.Second
 
 	logFlushTime = 10 * time.Second // as the name implies
 

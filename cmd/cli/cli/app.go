@@ -62,9 +62,8 @@ type (
 )
 
 var (
-	gcfg        *config.Config
-	buildTime   string
-	k8sDetected bool
+	gcfg      *config.Config
+	buildTime string
 )
 
 // color
@@ -245,10 +244,6 @@ func (a *acli) setupCommands(emptyCmdline bool) {
 		mlCmd,
 		nbiCmd,
 		a.getAliasCmd(),
-	}
-
-	if k8sDetected {
-		app.Commands = append(app.Commands, k8sCmd)
 	}
 
 	// not adding aliases - showing them as part of `ais [--help]`

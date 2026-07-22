@@ -5,10 +5,8 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/authn"
@@ -27,8 +25,6 @@ func Init(args []string) (err error) {
 	if err != nil {
 		return err
 	}
-	// kubernetes
-	k8sDetected = detectK8s()
 
 	// auth
 	token := os.Getenv(env.AisAuthToken)
@@ -130,12 +126,4 @@ func getClusterEndpoint(gcfg *config.Config) string {
 	}
 
 	return gcfg.Cluster.DefaultAISHost
-}
-
-func detectK8s() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), execLinuxCommandTime)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "which", "kubectl")
-	err := cmd.Run()
-	return err == nil
 }

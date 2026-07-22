@@ -86,7 +86,6 @@ COMMANDS:
    remote-cluster  Show attached AIS clusters
    ml              Machine learning operations: batch dataset operations, and ML-specific workflows
    alias           Manage top-level aliases
-   kubectl         Show Kubernetes pods and services
 
 GLOBAL OPTIONS:
    --help, -h     Show help
