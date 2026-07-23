@@ -2220,7 +2220,7 @@ func (c *AuthConf) Validate() error {
 	if sigConfigured && oidcConfigured {
 		return errors.New("invalid auth config: only one of signature or OIDC config should be provided")
 	}
-	if c.SignVerifyEnabled() {
+	if c.IntraCluster != nil {
 		return c.IntraCluster.validate()
 	}
 	return nil
