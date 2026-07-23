@@ -651,7 +651,7 @@ func (r *LsoXact) thisPageR(npg *npgCtx) (page *cmn.LsoRes, err error) {
 		aborted bool
 		entries = r.page[:0] // reusing the same (backing) slice between remote pages
 	)
-	page, err = npg.nextPageR(entries)
+	page, err = npg.nextPageR(r.Context(), entries)
 	if err != nil {
 		goto rerr
 	}

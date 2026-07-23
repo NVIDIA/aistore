@@ -5,6 +5,7 @@
 package core
 
 import (
+	"context"
 	"math"
 	"sync"
 	"time"
@@ -40,6 +41,7 @@ type (
 
 	Xact interface {
 		Run(*sync.WaitGroup)
+		Context() context.Context
 		ID() string
 		Kind() string
 		Bck() *meta.Bck

@@ -110,12 +110,11 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 
 // R-flow:
 // returns next page from the remote bucket's "list-objects" result set
-func (npg *npgCtx) nextPageR(entries cmn.LsoEntries) (*cmn.LsoRes, error) {
+func (npg *npgCtx) nextPageR(ctx context.Context, entries cmn.LsoEntries) (*cmn.LsoRes, error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsCached))
 	lst := &cmn.LsoRes{Entries: entries}
 
-	// TODO: plumb the owning xaction's context into npgCtx.
-	if _, err := npg.bp.ListObjects(context.Background(), npg.bck, npg.wi.msg, lst); err != nil {
+	if _, err := npg.bp.ListObjects(ctx, npg.bck, npg.wi.msg, lst); err != nil {
 		return nil, err
 	}
 	debug.Assert(lst.UUID == "" || lst.UUID == npg.wi.msg.UUID)

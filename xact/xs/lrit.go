@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"sync"
@@ -62,7 +61,7 @@ type (
 
 	// common multi-object operation context and list|range|prefix logic
 	lrit struct {
-		parent cos.Stopper
+		parent core.Xact
 		bck    *meta.Bck
 		msg    *apc.ListRange      // traverse: msg
 		pt     *cos.ParsedTemplate // traverse: template
@@ -83,7 +82,7 @@ type (
 // lrit //
 //////////
 
-func (r *lrit) init(xctn cos.Stopper, msg *apc.ListRange, bck *meta.Bck, lsflags uint64, numWorkers, confBurst int) error {
+func (r *lrit) init(xctn core.Xact, msg *apc.ListRange, bck *meta.Bck, lsflags uint64, numWorkers, confBurst int) error {
 	l := fs.NumAvail()
 	if l == 0 {
 		xctn.Abort(cmn.ErrNoMountpaths)
@@ -348,8 +347,7 @@ const (
 )
 
 func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
-	// TODO: use the parent xact.Base lifecycle context to cancel LIST calls and retry waits.
-	ctx := context.Background()
+	ctx := r.parent.Context()
 	ecode, err = bp.ListObjects(ctx, r.bck, lsmsg, lst)
 	if err == nil || !tooManyReqs(ecode, err) || r.parent.IsAborted() {
 		return ecode, err
@@ -369,7 +367,11 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 	)
 	for retries = 1; retries < remPageRetriesMax; retries++ {
 		sleep = hk.Jitter(sleep+sleep/2, now+int64(sleep))
-		time.Sleep(sleep)
+		select {
+		case <-ctx.Done():
+			return 0, r.parent.AbortErr()
+		case <-time.After(sleep):
+		}
 		total += sleep
 
 		ecode, err = bp.ListObjects(ctx, r.bck, lsmsg, lst)
