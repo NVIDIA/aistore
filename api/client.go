@@ -56,6 +56,8 @@ type (
 		// amsg, lsmsg etc.
 		Body []byte
 
+		ctx context.Context // list-objects only
+
 		// mem-pool (when cos.HdrContentType = cos.ContentMsgPack)
 		buf []byte
 	}
@@ -208,9 +210,13 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 	}
 
 	// http request
+	ctx := reqParams.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	var (
 		urlPath   = reqParams.BaseParams.URL + reqParams.Path
-		req, errR = http.NewRequestWithContext(context.Background(), reqParams.BaseParams.Method, urlPath, body)
+		req, errR = http.NewRequestWithContext(ctx, reqParams.BaseParams.Method, urlPath, body)
 	)
 	if errR != nil {
 		return nil, fmt.Errorf(cmn.FmtErrNewHTTPReq, reqParams.BaseParams.Method, urlPath, errR)

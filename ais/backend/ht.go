@@ -86,7 +86,7 @@ func (htbp *htbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, in
 	return bckProps, 0, nil
 }
 
-func (*htbp) ListObjects(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes) (ecode int, err error) {
+func (*htbp) ListObjects(context.Context, *meta.Bck, *apc.LsoMsg, *cmn.LsoRes) (ecode int, err error) {
 	debug.Assert(false)
 	return
 }

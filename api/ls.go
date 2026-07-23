@@ -5,6 +5,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -33,6 +34,7 @@ type (
 
 	// additional and optional list-objects args (compare with: GetArgs, PutArgs)
 	ListArgs struct {
+		Context   context.Context // optional; defaults to context.Background()
 		Callback  LsoCB
 		Header    http.Header // optional request headers, e.g.: http.Header{apc.HdrInvName: []string{createMsg.Name}}
 		CallAfter time.Duration
@@ -135,6 +137,7 @@ func lsoReq(bp BaseParams, bck cmn.Bck, args *ListArgs, q url.Values) *ReqParams
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
+		reqParams.ctx = args.Context
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
 		reqParams.Header = hdr

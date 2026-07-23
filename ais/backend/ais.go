@@ -465,7 +465,7 @@ func (m *AISbp) HeadBucket(_ context.Context, remoteBck *meta.Bck) (bckProps cos
 	return
 }
 
-func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+func (m *AISbp) ListObjects(ctx context.Context, remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	remAis, errN := m.getRemAis(remoteBck.Ns.UUID)
 	if errN != nil {
 		return 0, errN
@@ -484,7 +484,7 @@ func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRe
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
 
-	lstRes, err := api.ListObjectsPage(remAis.bpL, bck, remoteMsg, api.ListArgs{})
+	lstRes, err := api.ListObjectsPage(remAis.bpL, bck, remoteMsg, api.ListArgs{Context: ctx})
 	if err != nil {
 		return m.extractErrCode(err, remAis.uuid)
 	}

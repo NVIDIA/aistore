@@ -38,7 +38,7 @@ type (
 		// - callers do not need to worry about setting lst.ContinuationToken to ""
 		//
 		// (backend/ais satisfies this contract by copying the complete remote result)
-		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
+		ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
 
 		PutObj(ctx context.Context, r io.ReadCloser, lom *LOM, origReq *http.Request) (ecode int, err error)
 		DeleteObj(ctx context.Context, lom *LOM) (ecode int, err error)

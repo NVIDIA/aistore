@@ -484,7 +484,7 @@ func (bp *ocibp) ociClient(bck *cmn.Bck) (*ocios.ObjectStorageClient, string, er
 
 // as core.Backend --------------------------------------------------------------
 
-func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+func (bp *ocibp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	var (
 		cloudBck            = bck.RemoteBck()
 		continuationToken   string
@@ -555,7 +555,7 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (i
 			req.Start = &continuationToken
 		}
 
-		resp, err := client.ListObjects(context.Background(), req)
+		resp, err := client.ListObjects(ctx, req)
 		if err != nil {
 			return ociErrorToAISError("ListObjects", cloudBck.Name, msg.Prefix, "", err, resp)
 		}

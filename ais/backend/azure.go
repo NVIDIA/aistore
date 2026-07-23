@@ -246,7 +246,7 @@ func (azbp *azbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, in
 // $ az storage blob list -c abc --prefix sub/ --delimiter /
 // TODO: research "hierarchical namespaces"
 // See also: aws.go, gcp.go
-func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+func (azbp *azbp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	var (
 		h        = cmn.BackendHelpers.Azure
@@ -269,7 +269,7 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 	}
 
 	pager := client.NewListBlobsFlatPager(&opts)
-	resp, err := pager.NextPage(context.Background())
+	resp, err := pager.NextPage(ctx)
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, "")
 	}

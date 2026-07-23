@@ -41,7 +41,7 @@ func (*mockbp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, er
 	return cos.StrKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
-func (*mockbp) ListObjects(bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoRes) (int, error) {
+func (*mockbp) ListObjects(_ context.Context, bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoRes) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 

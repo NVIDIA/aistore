@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"sync"
@@ -347,7 +348,9 @@ const (
 )
 
 func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
-	ecode, err = bp.ListObjects(r.bck, lsmsg, lst)
+	// TODO: use the parent xact.Base lifecycle context to cancel LIST calls and retry waits.
+	ctx := context.Background()
+	ecode, err = bp.ListObjects(ctx, r.bck, lsmsg, lst)
 	if err == nil || !tooManyReqs(ecode, err) || r.parent.IsAborted() {
 		return ecode, err
 	}
@@ -369,7 +372,7 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 		time.Sleep(sleep)
 		total += sleep
 
-		ecode, err = bp.ListObjects(r.bck, lsmsg, lst)
+		ecode, err = bp.ListObjects(ctx, r.bck, lsmsg, lst)
 		if err == nil {
 			if cmn.Rom.V(4, cos.ModXs) {
 				nlog.Warningln(r.bck.Cname(""), "list-objects: recovered after", retries, "retries, waited", total)

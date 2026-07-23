@@ -178,6 +178,7 @@ type (
 		core.Backend
 		results []listResult
 		bcks    []*meta.Bck
+		ctxs    []context.Context
 		msgs    []*apc.LsoMsg
 		lists   []*cmn.LsoRes
 		tokens  []string
@@ -185,8 +186,9 @@ type (
 	}
 )
 
-func (bp *listBackend) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+func (bp *listBackend) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	bp.bcks = append(bp.bcks, bck)
+	bp.ctxs = append(bp.ctxs, ctx)
 	bp.msgs = append(bp.msgs, msg)
 	bp.lists = append(bp.lists, lst)
 	bp.tokens = append(bp.tokens, msg.ContinuationToken)
@@ -278,11 +280,13 @@ func TestRLBackendListObjects(t *testing.T) {
 			bp := &rlbackend{Backend: backend, t: mockTarget}
 			lst := &cmn.LsoRes{}
 			msg := &apc.LsoMsg{ContinuationToken: "current-page"}
-			ecode, err := bp.ListObjects(bck, msg, lst)
+			ctx := context.Background()
+			ecode, err := bp.ListObjects(ctx, bck, msg, lst)
 			tassert.Fatalf(t, ecode == test.wantCode, "expected code %d, got %d", test.wantCode, ecode)
 			tassert.Fatalf(t, errors.Is(err, test.wantErr), "expected error %v, got %v", test.wantErr, err)
 			tassert.Fatalf(t, backend.calls == test.wantCalls, "expected %d calls, got %d", test.wantCalls, backend.calls)
 			for i := range backend.calls {
+				tassert.Fatalf(t, backend.ctxs[i] == ctx, "call %d: backend received a different context", i+1)
 				tassert.Fatalf(t, backend.bcks[i] == bck, "call %d: backend received a different bucket", i+1)
 				tassert.Fatalf(t, backend.msgs[i] == msg, "call %d: backend received a different list message", i+1)
 				tassert.Fatalf(t, backend.lists[i] == lst, "call %d: backend received a different list result", i+1)
@@ -297,4 +301,26 @@ func TestRLBackendListObjects(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRLBackendListObjectsCanceled(t *testing.T) {
+	bck := meta.NewBck("rate-limit-list-canceled", apc.AIS, cmn.NsGlobal)
+	bck.Props = &cmn.Bprops{}
+	bck.Props.RateLimit.Backend.Enabled = true
+	arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
+	tassert.CheckFatal(t, err)
+	key := bck.HashUname(apc.ActList)
+	mockTarget.ratelim.Store(key, arl)
+	defer mockTarget.ratelim.Delete(key)
+
+	err429 := cmn.NewErrTooManyRequests(errors.New("throttled"), http.StatusTooManyRequests)
+	backend := &listBackend{results: []listResult{{ecode: http.StatusTooManyRequests, err: err429}}}
+	bp := &rlbackend{Backend: backend, t: mockTarget}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	ecode, err := bp.ListObjects(ctx, bck, &apc.LsoMsg{}, &cmn.LsoRes{})
+	tassert.Fatalf(t, errors.Is(err, context.Canceled), "expected %v, got %v", context.Canceled, err)
+	tassert.Fatalf(t, ecode == 0, "expected code 0, got %d", ecode)
+	tassert.Fatalf(t, backend.calls == 1, "expected no retry call, got %d calls", backend.calls)
 }

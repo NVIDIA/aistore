@@ -75,19 +75,18 @@ func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.R
 // - (*backendDlJob).getNextObjs (ext/dload/job.go): backend download
 //
 // TODO -- FIXME: (*lrit).lsoPage has its own retry loop - unify
-func (bp *rlbackend) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+func (bp *rlbackend) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	arl := bp.acquire(bck, apc.ActList)
 
-	ecode, err = bp.Backend.ListObjects(bck, msg, lst)
+	ecode, err = bp.Backend.ListObjects(ctx, bck, msg, lst)
 	if err == nil || arl == nil || !cmn.IsErrTooManyRequests(err) {
 		return
 	}
 
 	cb := func() (int, error) {
-		return bp.Backend.ListObjects(bck, msg, lst)
+		return bp.Backend.ListObjects(ctx, bck, msg, lst)
 	}
-	// core.Backend.ListObjects has no request context (TODO: plumb it through - abortable xactions)
-	_, ecode, err = bp.retry(context.Background(), arl, ecode, err, cb)
+	_, ecode, err = bp.retry(ctx, arl, ecode, err, cb)
 	return
 }
 

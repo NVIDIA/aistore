@@ -166,7 +166,7 @@ func (gsbp *gsbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, in
 // LIST OBJECTS
 //
 
-func (gsbp *gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+func (gsbp *gsbp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
@@ -174,7 +174,7 @@ func (gsbp *gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 	)
 	lst.ContinuationToken = ""
 
-	client, e := gsbp.getClient(context.Background(), cloudBck)
+	client, e := gsbp.getClient(ctx, cloudBck)
 	if e != nil {
 		return 0, e
 	}
@@ -194,7 +194,7 @@ func (gsbp *gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 	}
 
 	var (
-		it    = client.Bucket(cloudBck.Name).Objects(context.Background(), query)
+		it    = client.Bucket(cloudBck.Name).Objects(ctx, query)
 		pager = iterator.NewPager(it, int(msg.PageSize), msg.ContinuationToken)
 		objs  = make([]*storage.ObjectAttrs, 0, msg.PageSize)
 	)

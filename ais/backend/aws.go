@@ -193,7 +193,7 @@ func _versioning(svc *s3.Client, bck *cmn.Bck) (enabled bool, errV error) {
 // NOTE: obtaining versioning info is extremely slow - to avoid timeouts, imposing a hard limit on the page size
 const versionedPageSize = 20
 
-func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, _ error) {
+func (*s3bp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, _ error) {
 	const tag = "list_objects"
 	var (
 		h          = cmn.BackendHelpers.Amazon
@@ -237,7 +237,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	}
 	params.MaxKeys = aws.Int32(int32(msg.PageSize))
 
-	resp, err := svc.ListObjectsV2(context.Background(), params)
+	resp, err := svc.ListObjectsV2(ctx, params)
 	if err != nil {
 		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln(tag, cloudBck.Name, err)
@@ -300,7 +300,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	)
 	for _, en := range lst.Entries {
 		verParams.Prefix = aws.String(en.Name)
-		verResp, err := svc.ListObjectVersions(context.Background(), verParams)
+		verResp, err := svc.ListObjectVersions(ctx, verParams)
 		if err != nil {
 			return awsErrorToAISError(err, cloudBck, "", sessConf.detail())
 		}
