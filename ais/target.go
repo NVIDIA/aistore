@@ -991,7 +991,38 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
 			err = nil
 		}
-		return lom, err
+		if xid != "" || err != nil {
+			return lom, err
+		}
+		// xid == "" && err == nil: fall through to regular GET (object already cached
+		// or a concurrent blob download just completed)
+	// server-side multipart (blob) downloading: when enabled, route cold GETs from
+	// remote backends through the built-in blob-downloader (see docs/blob_downloader.md).
+	// Warm GETs (object already cached) fall through to the regular GET path below.
+	// Range reads and archive requests are excluded - the blob-downloader always
+	// fetches the full object.
+	case bck.IsRemote() && r.Header.Get(cos.HdrRange) == "" && !dpq.isArch() && cmn.GCO.Get().Multipart.Enabled:
+		config := cmn.GCO.Get()
+		msg := apc.BlobMsg{
+			ChunkSize:  int64(config.Multipart.PartMaxSize),
+			NumWorkers: config.Multipart.MaxThreads,
+			LatestVer:  _validateWarmGet(lom, dpq.latestVer),
+		}
+		args := &core.BlobParams{
+			RespWriter: w, // NOTE: make a blocking call
+			Lom:        lom,
+			Msg:        &msg,
+			Parent:     "GET",
+		}
+		xid, _, err := t.blobdl(args, nil /*oa*/, w.Header())
+		if err != nil && xid != "" {
+			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
+			err = nil
+		}
+		// xid == "" && err == nil: object is already cached - fall through to regular GET
+		if xid != "" || err != nil {
+			return lom, err
+		}
 	}
 
 	// GET: regular | archive | range
@@ -1982,6 +2013,12 @@ func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs
 	xid := cos.GenUUID()
 	rns := xs.RenewBlobDl(xid, params, oa)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
+		// a blob download for this object is already running — wait for it to
+		// complete, then fall through to the regular GET path (object now cached)
+		if cmn.IsErrXactUsePrev(rns.Err) {
+			<-rns.Entry.Get().ChanAbort()
+			return "", nil, nil
+		}
 		return "", nil, rns.Err
 	}
 

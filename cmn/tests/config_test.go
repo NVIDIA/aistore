@@ -545,3 +545,133 @@ func TestHTTPConfJSONFlat(t *testing.T) {
 	b, _ := jsoniter.Marshal(c)
 	tassert.Fatalf(t, !strings.Contains(string(b), `"tls"`), "unexpected nesting: %s", b)
 }
+
+func TestMultipartConfValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      cmn.MultipartConf
+		wantErr bool
+		// expected normalized values (only checked when wantErr is false)
+		wantSeg  cos.SizeIEC
+		wantThr  cos.SizeIEC
+		wantThrN int
+	}{
+		{
+			name:     "all zero backfilled with defaults",
+			in:       cmn.MultipartConf{},
+			wantSeg:  cos.SizeIEC(256 * cos.MiB),
+			wantThr:  cos.SizeIEC(512 * cos.MiB),
+			wantThrN: 16,
+		},
+		{
+			name: "enabled with explicit valid values preserved",
+			in: cmn.MultipartConf{
+				Enabled:     true,
+				PartMaxSize: cos.SizeIEC(64 * cos.MiB),
+				Threshold:   cos.SizeIEC(128 * cos.MiB),
+				MaxThreads:  8,
+			},
+			wantSeg:  cos.SizeIEC(64 * cos.MiB),
+			wantThr:  cos.SizeIEC(128 * cos.MiB),
+			wantThrN: 8,
+		},
+		{
+			name: "part_max_size below min rejected",
+			in: cmn.MultipartConf{
+				PartMaxSize: cos.SizeIEC(2 * cos.KiB),
+			},
+			wantErr: true,
+		},
+		{
+			name: "part_max_size above max rejected",
+			in: cmn.MultipartConf{
+				PartMaxSize: cos.SizeIEC(6 * cos.GiB),
+			},
+			wantErr: true,
+		},
+		{
+			name: "threshold below min rejected",
+			in: cmn.MultipartConf{
+				Threshold: cos.SizeIEC(2 * cos.KiB),
+			},
+			wantErr: true,
+		},
+		{
+			name: "threshold above max rejected",
+			in: cmn.MultipartConf{
+				Threshold: cos.SizeIEC(6 * cos.GiB),
+			},
+			wantErr: true,
+		},
+		{
+			name: "max_threads zero backfilled with default",
+			in: cmn.MultipartConf{
+				MaxThreads: 0,
+			},
+			wantSeg:  cos.SizeIEC(256 * cos.MiB),
+			wantThr:  cos.SizeIEC(512 * cos.MiB),
+			wantThrN: 16,
+		},
+		{
+			name: "max_threads above max rejected",
+			in: cmn.MultipartConf{
+				MaxThreads: 65,
+			},
+			wantErr: true,
+		},
+		{
+			name: "max_threads negative rejected",
+			in: cmn.MultipartConf{
+				MaxThreads: -1,
+			},
+			wantErr: true,
+		},
+		{
+			name: "boundary values accepted",
+			in: cmn.MultipartConf{
+				PartMaxSize: cos.SizeIEC(4 * cos.KiB),
+				Threshold:   cos.SizeIEC(5 * cos.GiB),
+				MaxThreads:  64,
+			},
+			wantSeg:  cos.SizeIEC(4 * cos.KiB),
+			wantThr:  cos.SizeIEC(5 * cos.GiB),
+			wantThrN: 64,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := tt.in
+			err := c.Validate()
+			if tt.wantErr {
+				tassert.Fatalf(t, err != nil, "expected error, got nil; result=%+v", c)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, c.PartMaxSize == tt.wantSeg,
+				"part_max_size: want %d, got %d", tt.wantSeg, c.PartMaxSize)
+			tassert.Fatalf(t, c.Threshold == tt.wantThr,
+				"threshold: want %d, got %d", tt.wantThr, c.Threshold)
+			tassert.Fatalf(t, c.MaxThreads == tt.wantThrN,
+				"max_threads: want %d, got %d", tt.wantThrN, c.MaxThreads)
+		})
+	}
+}
+
+func TestMultipartConfString(t *testing.T) {
+	// disabled
+	disabled := cmn.MultipartConf{Enabled: false}
+	tassert.Fatalf(t, disabled.String() == "Disabled",
+		"expected Disabled, got %q", disabled.String())
+
+	// enabled
+	enabled := cmn.MultipartConf{
+		Enabled:     true,
+		PartMaxSize: cos.SizeIEC(256 * cos.MiB),
+		Threshold:   cos.SizeIEC(512 * cos.MiB),
+		MaxThreads:  16,
+	}
+	s := enabled.String()
+	tassert.Fatalf(t, strings.Contains(s, "256MiB"), "expected part_max_size in string, got %q", s)
+	tassert.Fatalf(t, strings.Contains(s, "512MiB"), "expected threshold in string, got %q", s)
+	tassert.Fatalf(t, strings.Contains(s, "max_threads=16"), "expected max_threads in string, got %q", s)
+}
