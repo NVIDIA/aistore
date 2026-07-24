@@ -79,6 +79,13 @@ var (
 		Timeout: cos.Duration(time.Hour),
 	}
 
+	defaultMultipart = aiscmn.MultipartConf{
+		PartMaxSize: cos.SizeIEC(256 * cos.MiB),
+		Threshold:   cos.SizeIEC(512 * cos.MiB),
+		MaxThreads:  16,
+		Enabled:     false,
+	}
+
 	defaultEC = aiscmn.ECConf{
 		XactConf:     defaultXconf,
 		Enabled:      false,
@@ -230,6 +237,7 @@ func newDefaultConfig() *aiscmn.ClusterConfig {
 		Net:         defaultNet,
 		FSHC:        defaultFSHC,
 		Downloader:  defaultDownloader,
+		Multipart:   defaultMultipart,
 		EC:          defaultEC,
 		Chunks:      defaultChunks,
 		Keepalive:   defaultKeepalive,

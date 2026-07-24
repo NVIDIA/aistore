@@ -132,6 +132,7 @@ type (
 		Periodic    PeriodConf      `json:"periodic" allow:"cluster"`
 		Client      ClientConf      `json:"client"`
 		Downloader  DownloaderConf  `json:"downloader"`
+		Multipart   MultipartConf   `json:"multipart"`
 		Features    feat.Flags      `json:"features,string" allow:"cluster"` // to flip assorted global defaults (see cmn/feat/feat and docs/feat*)
 		Version     int64           `json:"config_version,string"`
 		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
@@ -161,6 +162,7 @@ type (
 		Auth        *AuthConfToSet        `json:"auth,omitempty"`
 		Keepalive   *KeepaliveConfToSet   `json:"keepalivetracker,omitempty"`
 		Downloader  *DownloaderConfToSet  `json:"downloader,omitempty"`
+		Multipart   *MultipartConfToSet   `json:"multipart,omitempty"`
 		Dsort       *DsortConfToSet       `json:"distributed_sort,omitempty"`
 		Transport   *TransportConfToSet   `json:"transport,omitempty"`
 		Memsys      *MemsysConfToSet      `json:"memsys,omitempty"`
@@ -864,6 +866,30 @@ type (
 		Timeout *cos.Duration `json:"timeout,omitempty"`
 	}
 
+	// MultipartConf configures server-side multipart (a.k.a. blob) downloading
+	// of large objects from remote backends. When enabled, GET requests for remote
+	// buckets are routed through the built-in blob-downloader (see apc.HdrBlobDownload),
+	// which concurrently fetches object data in chunks.
+	// The fields mirror the multipart-download tuning in the OCI backend implementation.
+	MultipartConf struct {
+		// PartMaxSize is the maximum size of a single downloaded part (a.k.a. chunk).
+		// It is passed to the blob-downloader as the chunk size.
+		PartMaxSize cos.SizeIEC `json:"part_max_size"`
+		// Threshold is the object-size threshold above which multipart downloading is used.
+		// Objects smaller than this value are downloaded via the regular (single-stream) path.
+		Threshold cos.SizeIEC `json:"threshold"`
+		// MaxThreads is the maximum number of concurrent download workers.
+		MaxThreads int `json:"max_threads"`
+		// Enabled toggles server-side multipart (blob) downloading.
+		Enabled bool `json:"enabled"`
+	}
+	MultipartConfToSet struct {
+		PartMaxSize *cos.SizeIEC `json:"part_max_size,omitempty"` // +gen:optional
+		Threshold   *cos.SizeIEC `json:"threshold,omitempty"`     // +gen:optional
+		MaxThreads  *int         `json:"max_threads,omitempty"`   // +gen:optional
+		Enabled     *bool        `json:"enabled,omitempty"`       // +gen:optional
+	}
+
 	DsortConf struct {
 		DuplicatedRecords   string `json:"duplicated_records"`
 		MissingShards       string `json:"missing_shards"` // cmn.SupportedReactions enum
@@ -1174,6 +1200,7 @@ var (
 	_ validator = (*AuthConf)(nil)
 	_ validator = (*HTTPConf)(nil)
 	_ validator = (*DownloaderConf)(nil)
+	_ validator = (*MultipartConf)(nil)
 	_ validator = (*TransportConf)(nil)
 	_ validator = (*MemsysConf)(nil)
 	_ validator = (*TCBConf)(nil)
@@ -2851,6 +2878,52 @@ func (c *DownloaderConf) Validate() error {
 		return fmt.Errorf("invalid downloader.timeout=%s (expected range [1s, 1h])", j)
 	}
 	return nil
+}
+
+//////////////////
+// MultipartConf //
+//////////////////
+
+const (
+	mpdPartMaxSizeMin     = 4 * cos.KiB
+	mpdPartMaxSizeMax     = 5 * cos.GiB
+	mpdPartMaxSizeDefault = 256 * cos.MiB
+	mpdThresholdMin       = 4 * cos.KiB
+	mpdThresholdMax       = 5 * cos.GiB
+	mpdThresholdDefault   = 512 * cos.MiB
+	mpdMaxThreadsMin      = 1
+	mpdMaxThreadsMax      = 64
+	mpdMaxThreadsDefault  = 16
+)
+
+func (c *MultipartConf) Validate() error {
+	if c.PartMaxSize == 0 {
+		c.PartMaxSize = cos.SizeIEC(mpdPartMaxSizeDefault)
+	} else if c.PartMaxSize < mpdPartMaxSizeMin || c.PartMaxSize > mpdPartMaxSizeMax {
+		return fmt.Errorf("invalid multipart.part_max_size=%s (expected range [%s, %s])",
+			c.PartMaxSize, cos.IEC(mpdPartMaxSizeMin, 0), cos.IEC(mpdPartMaxSizeMax, 0))
+	}
+	if c.Threshold == 0 {
+		c.Threshold = cos.SizeIEC(mpdThresholdDefault)
+	} else if c.Threshold < mpdThresholdMin || c.Threshold > mpdThresholdMax {
+		return fmt.Errorf("invalid multipart.threshold=%s (expected range [%s, %s])",
+			c.Threshold, cos.IEC(mpdThresholdMin, 0), cos.IEC(mpdThresholdMax, 0))
+	}
+	if c.MaxThreads == 0 {
+		c.MaxThreads = mpdMaxThreadsDefault
+	} else if c.MaxThreads < mpdMaxThreadsMin || c.MaxThreads > mpdMaxThreadsMax {
+		return fmt.Errorf("invalid multipart.max_threads=%d (expected range [%d, %d])",
+			c.MaxThreads, mpdMaxThreadsMin, mpdMaxThreadsMax)
+	}
+	return nil
+}
+
+func (c *MultipartConf) String() string {
+	if !c.Enabled {
+		return confDisabled
+	}
+	return fmt.Sprintf("part_max_size=%s, threshold=%s, max_threads=%d",
+		c.PartMaxSize, c.Threshold, c.MaxThreads)
 }
 
 ///////////////////

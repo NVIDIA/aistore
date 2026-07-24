@@ -251,6 +251,11 @@ func (p *blobFactory) Start() (err error) {
 
 	r.setChunkSize()
 
+	// single-part: run inline in the request goroutine (no worker goroutines)
+	if r.fullSize <= r.chunkSize {
+		r.numWorkers = xact.NwpNone
+	}
+
 	// Generate uploadID and initialize manifest
 	r.uploadID = cos.GenUUID()
 	r.manifest, err = core.NewUfest(r.uploadID, lom, false /*must-exist*/)
