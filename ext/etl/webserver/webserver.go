@@ -79,6 +79,7 @@ type (
 		StatusCode      int
 		Size            int64
 		DirectPutLength int64
+		Complete        bool // ack carried apc.HdrDirectPutComplete; propagate it
 		Body            io.ReadCloser
 	}
 )
@@ -310,7 +311,12 @@ func (base *etlServerBase) handleDirectPut(w http.ResponseWriter, transformedRea
 	if dresp.Body != nil {
 		setResponseHeaders(w.Header(), dresp.Size)
 	}
-	if dresp.DirectPutLength > 0 {
+	if dresp.Complete {
+		// delivered ack: propagate the marker and the length verbatim,
+		// including a length of 0 (empty object stored)
+		w.Header().Set(apc.HdrDirectPutComplete, "true")
+		w.Header().Set(apc.HdrDirectPutLength, strconv.FormatInt(dresp.DirectPutLength, 10))
+	} else if dresp.DirectPutLength > 0 {
 		w.Header().Set(apc.HdrDirectPutLength, strconv.FormatInt(dresp.DirectPutLength, 10))
 	}
 	w.WriteHeader(dresp.StatusCode)
@@ -447,6 +453,22 @@ func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size 
 		length = directPutLength
 	}
 
+	// delivered ack from the target (directly or propagated by a downstream
+	// stage). Presence-based: the value is ignored, and the marker decides
+	// regardless of status (the target pairs it with 204).
+	if _, ok := resp.Header[apc.HdrDirectPutComplete]; ok {
+		resp.Body.Close()
+		return &directPutResponse{
+			StatusCode:      http.StatusNoContent,
+			DirectPutLength: int64(length),
+			Complete:        true,
+			Body:            nil,
+		}, nil
+	}
+
+	// Legacy handling below, unchanged: kept for targets that predate
+	// apc.HdrDirectPutComplete; to be phased out with them.
+
 	// delivered to target, no content
 	if resp.StatusCode == http.StatusNoContent {
 		resp.Body.Close()
@@ -458,11 +480,9 @@ func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size 
 	}
 
 	if resp.StatusCode == http.StatusOK {
-		// NOTE: keyed on Content-Length, not the read body (contrast Python's
-		// handle_direct_put_response): a chunked 200 (ContentLength == -1) is
-		// always forwarded as content - an empty transform result is a valid
-		// object. Python currently maps any empty 200 body to 204/"delivered";
-		// to be aligned with this behavior in a separate PR.
+		// NOTE: keyed on Content-Length, not the read body: a chunked 200
+		// (ContentLength == -1) is always forwarded as content because an
+		// empty transform result is a valid object.
 
 		// from target, no content
 		if resp.ContentLength == 0 {

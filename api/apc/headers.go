@@ -131,6 +131,10 @@ const (
 	// ETL
 	HdrETLPodInfo      = aisPrefix + "ETL-Pod-Info" // serialized etl.Info
 	HdrDirectPutLength = aisPrefix + "Direct-Put-Length"
+	// Set by the target (alongside 204 and HdrDirectPutLength) after storing an
+	// object via the direct-put endpoint. Presence-based - the value is ignored;
+	// intermediate ETL webservers propagate it back through the pipeline.
+	HdrDirectPutComplete = aisPrefix + "Direct-Put-Complete"
 	// ETL → AIS retry contract: emitted by the ETL webserver alongside HTTP 503
 	// to signal that the ETL bailed on a transient direct-put failure without
 	// trying locally (one-shot body case). AIS retries the whole PUT against
