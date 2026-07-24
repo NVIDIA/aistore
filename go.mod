@@ -1,6 +1,6 @@
 module github.com/NVIDIA/aistore
 
-go 1.26.0
+go 1.26
 
 require (
 	cloud.google.com/go/storage v1.64.0
@@ -43,10 +43,10 @@ require (
 	google.golang.org/api v0.290.0
 	google.golang.org/grpc v1.82.1
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.36.3
-	k8s.io/apimachinery v0.36.3
-	k8s.io/client-go v0.36.3
-	k8s.io/metrics v0.36.3
+	k8s.io/api v0.35.3
+	k8s.io/apimachinery v0.35.3
+	k8s.io/client-go v0.35.3
+	k8s.io/metrics v0.35.3
 )
 
 require (
