@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"sync"
@@ -18,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
@@ -39,26 +39,31 @@ type (
 
 	// MultipartDownloadArgs configures concurrent range-based download
 	MultipartDownloadArgs struct {
-		// Writer to write the downloaded content (required)
+		// Writer receives non-overlapping ranges concurrently (required).
+		// It must support concurrent WriteAt calls.
 		Writer io.WriterAt
-		// optional progress callback
+		// Optional progress callback.
 		Callback MpdCB
+		// Minimum interval between progress callbacks; <= 0 disables intermediate
+		// callbacks. The final callback is always invoked.
+		CallEvery time.Duration
 		// Number of concurrent download workers (default: 16)
 		NumWorkers int
 		// Size of each chunk/range to download (default: 8 MiB)
 		ChunkSize int64
 		// ObjectSize can be set to skip the HEAD request (optional, 0 means auto-detect)
 		ObjectSize int64
-		CallAfter  time.Duration
 	}
 
 	MpdCounter struct {
 		callback  MpdCB
-		startTime int64
-		callAfter int64
+		callEvery int64
 		total     int64
-		current   atomic.Int64
-		done      bool
+
+		callbackMu sync.Mutex
+		nextCall   atomic.Int64
+		current    atomic.Int64
+		done       atomic.Bool
 	}
 	MpdCB func(*MpdCounter)
 
@@ -92,36 +97,45 @@ type (
 	}
 
 	// mpdReader is an io.ReadCloser backed by a fixed-size ring buffer.
-	//
 	// slot = chunkIndex % numSlots
 	// Per-slot token channels (buffered 1) coordinate the handoff:
-	//   slotFree[i]  — worker can write    slotReady[i] — reader can read
-	//
-	//  produce()        work() x N                mpdReader.Read() x 1
-	//  -------------------------------------------------------------------
-	//  chunk{0} ──┐     1. wait for slotFree[s]   1. wait for slotReady[s]
-	//  chunk{1} ──┼──>  2. fetchChunk(s)          2. copy(p, buf[s])
-	//  chunk{2} ──┘     3. signal slotReady[s]    3. signal slotFree[s]
-	//     ...   chunkCh                 ring buf
-	//                                  [s0|s1|..]
+	// slotFree[i]  - producer may dispatch chunk i into the slot
+	// slotReady[i] - reader can read
 	mpdReader struct {
-		chunkCh    chan mptDownloadChunk
-		client     *http.Client          // dedicated client for concurrent chunk downloads
-		err        atomic.Pointer[error] // stop err
-		stop       *cos.StopCh           // stop chan
-		bck        cmn.Bck
-		bp         BaseParams
-		objName    string
-		slotReady  []chan struct{}
-		slotFree   []chan struct{}
-		buf        []byte
-		numChunks  int
-		numWorkers int
-		numSlots   int
-		objectSize int64
-		chunkSize  int64
-		nextChunk  int   // reader: next chunk index to read
-		readOff    int64 // reader: bytes already read from current chunk
+		chunkCh      chan mptDownloadChunk
+		client       *http.Client          // client for concurrent chunk downloads
+		err          atomic.Pointer[error] // stop err
+		ctx          context.Context
+		cancel       context.CancelFunc
+		bck          cmn.Bck
+		bp           BaseParams
+		objName      string
+		slotReady    []chan struct{}
+		slotFree     []chan struct{}
+		buf          []byte
+		numChunks    int
+		numWorkers   int
+		numSlots     int
+		objectSize   int64
+		chunkSize    int64
+		nextChunk    int   // reader: next chunk index to read
+		readOff      int64 // reader: bytes already read from current chunk
+		ownTransport bool
+		closeOnce    sync.Once
+	}
+
+	// mpdRoundTripper adds multipart-download cancellation while retaining the
+	// caller's transport behavior.
+	mpdRoundTripper struct {
+		base http.RoundTripper
+		ctx  context.Context
+	}
+
+	mpdResponseBody struct {
+		io.ReadCloser
+		stop   func() bool
+		cancel context.CancelFunc
+		once   sync.Once
 	}
 )
 
@@ -168,7 +182,7 @@ func UploadPart(args *PutPartArgs) error {
 	return err
 }
 
-// CompleteMultipartUpload completes a multipart upload.
+// Complete multipart upload:
 // - uploadID: the ID of the multipart upload to complete
 // - partNumbers: the part numbers to complete
 func CompleteMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID string, partNumbers []int) error {
@@ -197,8 +211,8 @@ func CompleteMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID strin
 	return err
 }
 
-// AbortMultipartUpload aborts a multipart upload.
-// - uploadID: the ID of the multipart upload to abort
+// Abort multipart upload.
+// uploadID: the ID of the multipart upload to abort
 func AbortMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID string) error {
 	q := qalloc()
 	q.Set(apc.QparamMptUploadID, uploadID)
@@ -220,17 +234,13 @@ func AbortMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID string) 
 	return err
 }
 
-// MultipartDownload performs concurrent range-based download of an object.
-// It spawns multiple goroutines to download different byte ranges in parallel.
-//
-// The function:
-// 1. Issues a HEAD request to get object size
-// 2. Divides the object into chunks based on ChunkSize
-// 3. Spawns NumWorkers goroutines to download chunks concurrently
+// Perform concurrent range-based download:
+// 1. Issue a HEAD request when ObjectSize is not provided
+// 2. Divide the object into chunks based on ChunkSize
+// 3. Spawn NumWorkers goroutines to download chunks concurrently
 // 4. Each worker issues a GET request with Range header
 // 5. Results are written to the provided WriterAt at the correct offset
-//
-// Returns error if any chunk download fails.
+// Return error if any chunk download fails.
 func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *MultipartDownloadArgs) error {
 	if args == nil || args.Writer == nil {
 		return errors.New("MultipartDownload: Writer is required")
@@ -247,31 +257,32 @@ func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 		objectSize = args.ObjectSize
 	)
 
-	// Validate: either both must be provided (positive) or neither
+	// Validate optional values independently.
 	if chunkSize < 0 {
 		return fmt.Errorf("invalid chunk size: %d", chunkSize)
 	}
 	if objectSize < 0 {
 		return fmt.Errorf("invalid object size: %d", objectSize)
 	}
-	if chunkSize > 0 && objectSize == 0 {
-		return errors.New("ChunkSize is set but ObjectSize is missing")
-	}
-	if objectSize > 0 && chunkSize == 0 {
-		return errors.New("ObjectSize is set but ChunkSize is missing")
-	}
 
-	// Neither provided - do HEAD to get both
-	if chunkSize == 0 {
-		opV2, err := HeadObjectV2(bp, bck, objName, apc.GetPropsChunked, HeadArgs{})
+	// Resolve a missing size via HEAD. Request chunk metadata at the same time so
+	// it can supply the default chunk size.
+	var opV2 *cmn.ObjectPropsV2
+	if objectSize == 0 {
+		props := apc.JoinProps(apc.GetPropsSize, apc.GetPropsChunked)
+		var err error
+		opV2, err = HeadObjectV2(bp, bck, objName, props, HeadArgs{})
 		if err != nil {
 			return fmt.Errorf("failed to get object properties: %w", err)
 		}
 		objectSize = opV2.Size
-		if objectSize <= 0 {
+		if objectSize < 0 {
 			return fmt.Errorf("invalid object size: %d", objectSize)
 		}
-		if opV2.Chunks != nil && opV2.Chunks.MaxChunkSize > 0 {
+	}
+
+	if chunkSize == 0 {
+		if opV2 != nil && opV2.Chunks != nil && opV2.Chunks.MaxChunkSize > 0 {
 			chunkSize = opV2.Chunks.MaxChunkSize
 		} else {
 			chunkSize = defaultMptDownloadChunkSize
@@ -286,26 +297,47 @@ func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 	return multipartDownload(bp, bck, objName, args)
 }
 
-// multipartDownload performs the actual concurrent range-based download.
+// perform concurrent range-based download
 func multipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *MultipartDownloadArgs) error {
+	if args.ObjectSize == 0 {
+		if args.Callback != nil {
+			counter := &MpdCounter{callback: args.Callback}
+			counter.finish()
+		}
+		return nil
+	}
+
+	numChunks, err := mpdNumChunks(args.ObjectSize, args.ChunkSize)
+	if err != nil {
+		return err
+	}
+
 	var (
-		numChunks = (args.ObjectSize + args.ChunkSize - 1) / args.ChunkSize // ceiling division
-		chunkCh   = make(chan mptDownloadChunk, min(numChunks, int64(args.NumWorkers*2)))
-		errCh     = make(chan error, args.NumWorkers)
-		errs      = make([]error, 0, args.NumWorkers)
-		counter   *MpdCounter
+		numWorkers = min(args.NumWorkers, numChunks)
+		chunkCh    = make(chan mptDownloadChunk, mpdQueueCap(numChunks, numWorkers))
+		errCh      = make(chan error, numWorkers)
+		errs       = make([]error, 0, numWorkers)
+		counter    *MpdCounter
 	)
 	if args.Callback != nil {
 		counter = &MpdCounter{
 			callback:  args.Callback,
-			startTime: mono.NanoTime(),
+			callEvery: args.CallEvery.Nanoseconds(),
 			total:     args.ObjectSize,
 		}
-		counter.callAfter = counter.startTime + args.CallAfter.Nanoseconds()
+		if counter.callEvery > 0 {
+			counter.nextCall.Store(mono.NanoTime() + counter.callEvery)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	client, ownTransport := newMpdClient(ctx, bp.Client, numWorkers, false /*dedicated*/)
+	if ownTransport {
+		defer client.CloseIdleConnections()
+	}
+	bp.Client = client
 
 	w := &mpdWorker{
 		ctx:     ctx,
@@ -319,23 +351,32 @@ func multipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 		counter: counter,
 	}
 
-	// Start workers first so they can consume while we produce
+	// start workers
 	var wg sync.WaitGroup
-	for range args.NumWorkers {
+	for range numWorkers {
 		wg.Go(w.run)
 	}
 
-	// Produce chunks - workers consume concurrently
+	// produce chunks
+loop:
 	for i := range numChunks {
-		offset := i * args.ChunkSize
+		offset := int64(i) * args.ChunkSize
 		length := args.ChunkSize
 		if offset+length > args.ObjectSize {
 			length = args.ObjectSize - offset // last chunk may be smaller
 		}
-		chunkCh <- mptDownloadChunk{
-			index:  int(i),
+		chunk := mptDownloadChunk{
+			index:  i,
 			offset: offset,
 			length: length,
+		}
+		if ctx.Err() != nil {
+			break loop
+		}
+		select {
+		case chunkCh <- chunk:
+		case <-ctx.Done():
+			break loop
 		}
 	}
 	close(chunkCh)
@@ -351,7 +392,6 @@ func multipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 	// final callback
 	if counter != nil {
 		counter.finish()
-		counter.callback(counter)
 	}
 
 	if len(errs) == 0 {
@@ -375,16 +415,14 @@ func (w *mpdWorker) run() {
 		// progress callback
 		if w.counter != nil {
 			w.counter.current.Add(chunk.length)
-			if w.counter.mustCall() {
-				w.counter.callback(w.counter)
-			}
+			w.counter.maybeCall()
 		}
 	}
 }
 
-// mptDownloadChunkRange downloads a single chunk using HTTP Range request
+// Download a single chunk
 func mptDownloadChunkRange(bp BaseParams, bck cmn.Bck, objName string, writer io.WriterAt, chunk mptDownloadChunk) error {
-	reader, _, err := GetObjectReader(bp, bck, objName, &GetArgs{
+	reader, size, err := GetObjectReader(bp, bck, objName, &GetArgs{
 		Header: http.Header{cos.HdrRange: []string{cmn.MakeRangeHdr(chunk.offset, chunk.length)}},
 	})
 	if err != nil {
@@ -392,39 +430,170 @@ func mptDownloadChunkRange(bp BaseParams, bck cmn.Bck, objName string, writer io
 	}
 	defer reader.Close()
 
-	// Use SectionWriter to write at correct offset with bounded buffer
-	sw := cos.NewSectionWriter(writer, chunk.offset)
-	n, err := io.Copy(sw, reader)
-	if err != nil {
-		return fmt.Errorf("chunk %d: failed to copy: %w", chunk.index, err)
+	if size >= 0 && size != chunk.length {
+		return fmt.Errorf("chunk %d: invalid response length: expected %d bytes, got %d",
+			chunk.index, chunk.length, size)
 	}
-	if n != chunk.length {
-		return fmt.Errorf("chunk %d: failed to copy: expected %d bytes, got %d", chunk.index, chunk.length, n)
+
+	// write at correct offset with bounded buffer
+	sw := cos.NewSectionWriter(writer, chunk.offset)
+	n, err := io.CopyN(sw, reader, chunk.length)
+	if err != nil {
+		return fmt.Errorf("chunk %d: failed to copy: expected %d bytes, got %d: %w",
+			chunk.index, chunk.length, n, err)
+	}
+
+	// always read the trailing EOF
+	var one [1]byte
+	if n, err := io.ReadFull(reader, one[:]); n != 0 || err != io.EOF {
+		return fmt.Errorf("chunk %d: response exceeds expected length %d", chunk.index, chunk.length)
 	}
 
 	return nil
+}
+
+// requires objectSize >= 1 and chunkSize >= 1: objectSize == 0 silently yields 1
+func mpdNumChunks(objectSize, chunkSize int64) (int, error) {
+	n := (objectSize-1)/chunkSize + 1 // overflow-safe
+	if n > math.MaxInt {
+		return 0, fmt.Errorf("too many chunks: %d", n)
+	}
+	return int(n), nil
+}
+
+func mpdQueueCap(numChunks, numWorkers int) int {
+	if numWorkers <= numChunks/2 {
+		return numWorkers * 2
+	}
+	return numChunks
 }
 
 ////////////////
 // MpdCounter //
 ////////////////
 
-func (c *MpdCounter) IsFinished() bool { return c.done }
+func (c *MpdCounter) IsFinished() bool { return c.done.Load() }
 func (c *MpdCounter) Current() int64   { return c.current.Load() }
 func (c *MpdCounter) Total() int64     { return c.total }
 
-func (c *MpdCounter) mustCall() bool {
-	// Only call if callAfter was explicitly set (callAfter > startTime) and time has elapsed
-	return c.callAfter > c.startTime && mono.NanoTime() >= c.callAfter
+func (c *MpdCounter) maybeCall() {
+	if c.callEvery <= 0 {
+		return
+	}
+
+	now := mono.NanoTime()
+	if now < c.nextCall.Load() {
+		return
+	}
+
+	// serialize user callbacks and recheck the deadline
+	c.callbackMu.Lock()
+	defer c.callbackMu.Unlock()
+
+	now = mono.NanoTime()
+	if now < c.nextCall.Load() {
+		return
+	}
+	c.nextCall.Store(now + c.callEvery)
+	c.callback(c)
 }
 
-func (c *MpdCounter) finish() { c.done = true }
+func (c *MpdCounter) finish() {
+	c.callbackMu.Lock()
+	c.done.Store(true)
+	c.callback(c)
+	c.callbackMu.Unlock()
+}
 
-////////////////////////////
+// Derive a client from the caller's client and, when possible,
+// clones its transport to give the multipart download an independent connection
+// pool. The wrapper additionally links every request to ctx so cancellation
+// interrupts active response-body reads.
+func newMpdClient(ctx context.Context, base *http.Client, numWorkers int, dedicated bool) (client *http.Client, ownTransport bool) {
+	if base == nil {
+		base = http.DefaultClient
+	}
+
+	cloned := *base // preserve CheckRedirect, Jar, and all other client behavior
+	rt := base.Transport
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+
+	if tr, ok := rt.(*http.Transport); dedicated && ok {
+		tr = tr.Clone()
+		if tr.MaxIdleConnsPerHost < numWorkers {
+			tr.MaxIdleConnsPerHost = numWorkers
+		}
+		// Zero means unlimited; retain it.
+		if tr.MaxIdleConns > 0 && tr.MaxIdleConns < numWorkers {
+			tr.MaxIdleConns = numWorkers
+		}
+		rt = tr
+		ownTransport = true
+	}
+
+	cloned.Transport = &mpdRoundTripper{base: rt, ctx: ctx}
+	return &cloned, ownTransport
+}
+
+func (rt *mpdRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx, cancel := context.WithCancel(req.Context())
+	stop := context.AfterFunc(rt.ctx, cancel)
+
+	resp, err := rt.base.RoundTrip(req.Clone(ctx))
+	if err != nil {
+		stop()
+		cancel()
+		return nil, err
+	}
+	if resp.Body == nil {
+		stop()
+		cancel()
+		return resp, nil
+	}
+
+	resp.Body = &mpdResponseBody{
+		ReadCloser: resp.Body,
+		stop:       stop,
+		cancel:     cancel,
+	}
+	return resp, nil
+}
+
+func (rt *mpdRoundTripper) CloseIdleConnections() {
+	if ci, ok := rt.base.(interface{ CloseIdleConnections() }); ok {
+		ci.CloseIdleConnections()
+	}
+}
+
+func (body *mpdResponseBody) Read(p []byte) (n int, err error) {
+	n, err = body.ReadCloser.Read(p)
+	if err != nil {
+		body.finish()
+	}
+	return
+}
+
+func (body *mpdResponseBody) Close() error {
+	err := body.ReadCloser.Close()
+	body.finish()
+	return err
+}
+
+func (body *mpdResponseBody) finish() {
+	body.once.Do(func() {
+		body.stop()
+		body.cancel()
+	})
+}
+
+/////////////////////////////
 // MultipartDownloadStream //
-////////////////////////////
+/////////////////////////////
 
-// MultipartDownloadStream performs concurrent range-based download and returns an io.ReadCloser
+// MultipartDownloadStream performs concurrent range-based download and returns
+// an io.ReadCloser. Close cancels outstanding range requests.
 func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *MpdStreamArgs) (r io.ReadCloser, oah ObjAttrs, err error) {
 	if args == nil {
 		args = &MpdStreamArgs{}
@@ -437,12 +606,22 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 	var (
 		chunkSize  = args.ChunkSize
 		objectSize = args.ObjectSize
+		bufferSize = args.BufferSize
 	)
+	if chunkSize < 0 {
+		return nil, oah, fmt.Errorf("invalid chunk size: %d", chunkSize)
+	}
+	if objectSize < 0 {
+		return nil, oah, fmt.Errorf("invalid object size: %d", objectSize)
+	}
+	if bufferSize < 0 {
+		return nil, oah, fmt.Errorf("invalid buffer size: %d", bufferSize)
+	}
 	// TODO: consider using server-suggested chunk size (opV2.Chunks.MaxChunkSize)
-	if chunkSize <= 0 {
+	if chunkSize == 0 {
 		chunkSize = defaultMptDownloadChunkSize
 	}
-	if objectSize <= 0 {
+	if objectSize == 0 {
 		reqProps := apc.JoinProps(apc.GetPropsSize, apc.GetPropsChecksum)
 		opV2, err := HeadObjectV2(bp, bck, objName, reqProps, HeadArgs{})
 		if err != nil {
@@ -451,11 +630,14 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 		objectSize = opV2.Size
 		oah.wrespHeader = make(http.Header, 4)
 		cmn.ToHeaderV2(&opV2.ObjAttrs, oah.wrespHeader, true /*cksum*/, false, false, false)
-		if objectSize <= 0 {
+		if objectSize < 0 {
 			return nil, oah, fmt.Errorf("invalid object size: %d", objectSize)
 		}
 	}
 	oah.n = objectSize
+	if objectSize == 0 {
+		return http.NoBody, oah, nil
+	}
 
 	if chunkSize < minMpdChunkSize {
 		chunkSize = minMpdChunkSize
@@ -471,14 +653,16 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 		}
 		return reader, oah, nil
 	}
-	numChunks := int((objectSize + chunkSize - 1) / chunkSize)
+	numChunks, err := mpdNumChunks(objectSize, chunkSize)
+	if err != nil {
+		return nil, oah, err
+	}
 	if numWorkers > numChunks {
 		numWorkers = numChunks
 	}
 
 	// Buffer size defaults and validation
-	bufferSize := args.BufferSize
-	if bufferSize <= 0 {
+	if bufferSize == 0 {
 		bufferSize = int64(numWorkers) * chunkSize
 	}
 	if bufferSize < chunkSize {
@@ -489,40 +673,31 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 		numWorkers = numSlots
 	}
 
-	// derive from the caller's client;
-	// adjust conn pooling for the concurrent chunk workers
-	client := &http.Client{Timeout: bp.Client.Timeout}
-	if tr, ok := bp.Client.Transport.(*http.Transport); ok {
-		tr = tr.Clone()
-		tr.MaxIdleConnsPerHost = numWorkers
-		tr.MaxIdleConns = numWorkers
-		client.Transport = tr
-	} else {
-		debug.Assertf(false, "expecting *http.Transport, got %T", bp.Client.Transport)
-		client.Transport = bp.Client.Transport
-	}
-
+	ctx, cancel := context.WithCancel(context.Background())
+	client, ownTransport := newMpdClient(ctx, bp.Client, numWorkers, true /*dedicated*/)
 	bp.Client = client
 
 	reader := &mpdReader{
-		bp:         bp,
-		bck:        bck,
-		objName:    objName,
-		client:     client,
-		chunkSize:  chunkSize,
-		objectSize: objectSize,
-		numSlots:   numSlots,
-		numChunks:  numChunks,
-		numWorkers: numWorkers,
+		bp:           bp,
+		bck:          bck,
+		objName:      objName,
+		client:       client,
+		chunkSize:    chunkSize,
+		objectSize:   objectSize,
+		numSlots:     numSlots,
+		numChunks:    numChunks,
+		numWorkers:   numWorkers,
+		ctx:          ctx,
+		cancel:       cancel,
+		ownTransport: ownTransport,
 
 		// Ring buffer
 		buf: make([]byte, int64(numSlots)*chunkSize),
 
 		// Channels
-		chunkCh:   make(chan mptDownloadChunk, min(numChunks, numWorkers*2)),
+		chunkCh:   make(chan mptDownloadChunk, mpdQueueCap(numChunks, numWorkers)),
 		slotFree:  make([]chan struct{}, numSlots),
 		slotReady: make([]chan struct{}, numSlots),
-		stop:      cos.NewStopCh(),
 	}
 
 	for i := range numSlots {
@@ -541,6 +716,9 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 ///////////////
 
 func (r *mpdReader) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
 	if err := r.waitReady(); err != nil {
 		return 0, err
 	}
@@ -550,10 +728,10 @@ func (r *mpdReader) Read(p []byte) (int, error) {
 		clen = r.chunkLen(r.nextChunk)
 		off  = int64(slot)*r.chunkSize + r.readOff
 	)
-	n := copy(p, r.buf[off:off+clen-r.readOff]) // copy from ring buf to caller's buffer
+	n := copy(p, r.buf[off:off+clen-r.readOff]) // from ring buf to caller's buffer
 	r.readOff += int64(n)
 
-	// Chunk fully consumed — recycle slot
+	// recycle slot
 	if r.readOff >= clen {
 		r.slotFree[slot] <- struct{}{}
 		r.nextChunk++
@@ -562,19 +740,19 @@ func (r *mpdReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// waitReady blocks until the current chunk's slot is ready
-// Returns immediately if token already consumed or at EOF
+// block until the current chunk's slot is ready
 func (r *mpdReader) waitReady() error {
 	if r.nextChunk >= r.numChunks {
+		r.shutdown()
 		return io.EOF
 	}
 	if r.readOff > 0 {
-		return nil // already read some bytes from current chunk - continue
+		return nil // already read some bytes from current chunk
 	}
 	select {
 	case <-r.slotReady[r.nextChunk%r.numSlots]:
 		return nil
-	case <-r.stop.Listen():
+	case <-r.ctx.Done():
 		if p := r.err.Load(); p != nil {
 			return *p
 		}
@@ -582,7 +760,7 @@ func (r *mpdReader) waitReady() error {
 	}
 }
 
-// chunkLen returns the byte length of chunk at the given index.
+// return length of a chunk at the given index
 func (r *mpdReader) chunkLen(idx int) int64 {
 	if idx < r.numChunks-1 {
 		return r.chunkSize
@@ -591,17 +769,28 @@ func (r *mpdReader) chunkLen(idx int) int64 {
 }
 
 func (r *mpdReader) setError(err error) {
-	r.err.Store(&err)
-	r.stop.Close()
+	if r.ctx.Err() != nil {
+		return // either Close or another worker already stopped
+	}
+	r.err.CompareAndSwap(nil, &err) // retain the first error
+	r.shutdown()
 }
 
 func (r *mpdReader) Close() error {
-	r.stop.Close()
-	r.client.CloseIdleConnections()
+	r.shutdown()
 	return nil
 }
 
-// produce spawns workers and feeds them chunks in order.
+func (r *mpdReader) shutdown() {
+	r.closeOnce.Do(func() {
+		r.cancel()
+		if r.ownTransport {
+			r.client.CloseIdleConnections()
+		}
+	})
+}
+
+// start worker and feed them chunks in order
 func (r *mpdReader) produce() {
 	var wg sync.WaitGroup
 	for range r.numWorkers {
@@ -610,46 +799,59 @@ func (r *mpdReader) produce() {
 
 loop:
 	for i := range r.numChunks {
-		offset := int64(i) * r.chunkSize
-		length := min(r.chunkSize, r.objectSize-offset)
+		var (
+			offset = int64(i) * r.chunkSize
+			length = min(r.chunkSize, r.objectSize-offset)
+			slot   = i % r.numSlots
+		)
+
+		// reserve the slot before publishing the work
+		select {
+		case <-r.slotFree[slot]:
+		case <-r.ctx.Done():
+			break loop
+		}
 		select {
 		case r.chunkCh <- mptDownloadChunk{index: i, offset: offset, length: length}:
-		case <-r.stop.Listen():
+		case <-r.ctx.Done():
 			break loop
 		}
 	}
+
 	close(r.chunkCh)
 	wg.Wait()
 }
 
-// work is the per-worker loop: acquire slot, download, release slot.
+// work is the per-worker loop: download into a producer-reserved slot.
 func (r *mpdReader) work() {
 	for {
+		if r.ctx.Err() != nil {
+			return
+		}
 		select {
-		case <-r.stop.Listen():
+		case <-r.ctx.Done():
 			return
 		case chunk, ok := <-r.chunkCh:
 			if !ok {
 				return
 			}
 			slot := chunk.index % r.numSlots
-			select {
-			case <-r.slotFree[slot]: // acquire the slot
-			case <-r.stop.Listen():
-				return
-			}
 			if err := r.fetchChunk(slot, chunk); err != nil {
 				r.setError(err)
 				return
 			}
-			r.slotReady[slot] <- struct{}{} // release the slot
+			select {
+			case r.slotReady[slot] <- struct{}{}:
+			case <-r.ctx.Done():
+				return
+			}
 		}
 	}
 }
 
-// fetchChunk downloads a single chunk directly into the ring buffer slot.
+// download a single chunk directly into the ring buffer slot
 func (r *mpdReader) fetchChunk(slot int, chunk mptDownloadChunk) error {
-	reader, _, err := GetObjectReader(r.bp, r.bck, r.objName, &GetArgs{
+	reader, size, err := GetObjectReader(r.bp, r.bck, r.objName, &GetArgs{
 		Header: http.Header{cos.HdrRange: []string{cmn.MakeRangeHdr(chunk.offset, chunk.length)}},
 	})
 	if err != nil {
@@ -657,9 +859,20 @@ func (r *mpdReader) fetchChunk(slot int, chunk mptDownloadChunk) error {
 	}
 	defer reader.Close()
 
+	if size >= 0 && size != chunk.length {
+		return fmt.Errorf("chunk %d: invalid response length: expected %d bytes, got %d",
+			chunk.index, chunk.length, size)
+	}
+
 	off := int64(slot) * r.chunkSize
 	if _, err := io.ReadFull(reader, r.buf[off:off+chunk.length]); err != nil {
 		return fmt.Errorf("chunk %d: read: %w", chunk.index, err)
+	}
+
+	// compare w/ mptDownloadChunkRange
+	var one [1]byte
+	if n, err := io.ReadFull(reader, one[:]); n != 0 || err != io.EOF {
+		return fmt.Errorf("chunk %d: response exceeds expected length %d", chunk.index, chunk.length)
 	}
 	return nil
 }
