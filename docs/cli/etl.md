@@ -25,7 +25,7 @@ For background on AIS-ETL, getting started, working examples, and tutorials, ple
 ### Initializing an ETL
 
 * [Using a Runtime ETL Specification (Recommended)](#1-using-a-runtime-etl-specification-recommended)
-* [Using a Full Kubernetes Pod Spec (Advanced)](#2-using-a-full-kubernetes-pod-spec-advanced)
+* [Using a Full Kubernetes Pod Spec (Deprecated)](#2-using-a-full-kubernetes-pod-spec-deprecated)
 
 ### ETL Management
 
@@ -62,6 +62,7 @@ USAGE:
 
 COMMANDS:
    init  Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).
+   DEPRECATED: Kubernetes Pod spec initialization will be removed in v5.1; use an ETL runtime spec instead.
    Examples:
      - 'ais etl init -f my-etl.yaml'                      deploy ETL from a local YAML file;
      - 'ais etl init -f https://example.com/etl.yaml'     deploy ETL from a remote YAML file;
@@ -204,9 +205,11 @@ $ ais etl init -f <URL> \
 
 ---
 
-### 2. **Using a Full Kubernetes Pod Spec (Advanced)**
+### 2. **Using a Full Kubernetes Pod Spec (Deprecated)**
 
-Use this option if you need full control over the ETL container’s deployment—such as advanced init containers, health checks, or if you're not using the AIS ETL framework.
+> **DEPRECATED:** Full Kubernetes Pod spec initialization will be removed in AIStore v5.1. Migrate to the [runtime ETL specification](#1-using-a-runtime-etl-specification-recommended).
+
+This option remains available only for backward compatibility.
 
 #### Example Pod Spec
 

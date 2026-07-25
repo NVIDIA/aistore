@@ -468,6 +468,11 @@ func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
 	}
 }
 
+// SpecToInitMsg converts a Kubernetes Pod specification into an ETL init
+// message.
+//
+// Deprecated: Kubernetes Pod spec ETL initialization will be removed in v5.1.
+// Use etl.ETLSpecMsg instead.
 func SpecToInitMsg(spec []byte /*yaml*/) (*etl.InitSpecMsg, error) {
 	errCtx := &cmn.ETLErrCtx{}
 	msg := &etl.InitSpecMsg{Spec: spec}

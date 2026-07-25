@@ -34,7 +34,7 @@ It supports both **inline transformations** (real-time processing via GET reques
   * [Using `init`](#using-init)
     * [Prerequisites](#prerequisites)
     * [Runtime Specification (Recommended)](#1-runtime-specification-recommended)
-    * [Kubernetes Pod Spec (Advanced Use)](#2-kubernetes-pod-spec-advanced-use)
+    * [Kubernetes Pod Spec (Deprecated)](#2-kubernetes-pod-spec-deprecated)
   * [Using `init_class` (Python SDK Only)](#using-init_class-python-sdk-only)
 * [Configuration Options](#configuration-options)
   * [Communication Mechanisms](#communication-mechanisms)
@@ -247,7 +247,7 @@ These SDKs abstract the boilerplate and protocol handling, so you can focus pure
 
 ETL initialization in AIStore defines how your transformation logic is deployed, configured, and executed. This step launches a containerized ETL service that integrates with AIStore targets to handle object transformations.
 
-There are two primary ways to initialize an ETL using the `init` API—via a **runtime spec** or a **Kubernetes pod spec**. Additionally, for Python-only ETLs, a separate `init_class` approach is available through the Python SDK.
+The recommended way to initialize an ETL using the `init` API is via a **runtime spec**. Legacy **Kubernetes Pod spec** initialization remains available for backward compatibility but is deprecated. Additionally, for Python-only ETLs, a separate `init_class` approach is available through the Python SDK.
 
 ---
 
@@ -302,17 +302,17 @@ ais etl init --spec etl_spec.yaml
 
 ---
 
-#### 2. Kubernetes Pod Spec (Advanced Use)
+#### 2. Kubernetes Pod Spec (Deprecated)
 
-For advanced use cases, you can provide a full Kubernetes Pod specification. This method is useful if you need fine-grained control over pod behavior, health checks, init containers, or you’re not using the AIS ETL framework.
+> **DEPRECATED:** Full Kubernetes Pod spec initialization will be removed in AIStore v5.1. Migrate to the [runtime specification](#1-runtime-specification-recommended).
+
+Full Kubernetes Pod specs remain accepted only for backward compatibility with older AIS ETL transformers.
 
 ```bash
 curl -O https://raw.githubusercontent.com/NVIDIA/ais-etl/refs/heads/main/transformers/hello_world/pod.yaml
 # Review and edit the pod.yaml as needed
 ais etl init -f pod.yaml --name hello-world-etl
 ```
-
-This method is backward-compatible with old AIS ETL transformers and gives full control over deployment configuration.
 
 ---
 
@@ -354,7 +354,7 @@ print(obj.get_reader(etl=ETLConfig(etl_upper_case.name)).read_all())
 
 ## Configuration Options
 
-When initializing an ETL using the `init` API (via runtime spec or full Pod spec), several configuration parameters can be set to optimize behavior and performance. These options control how data is passed between AIStore targets and ETL containers, how responses are handled, and how the system reacts to delays or failures. Understanding and tuning these options allows users to better match ETL behavior to their specific workloads.
+When initializing an ETL using the `init` API, several configuration parameters can be set to optimize behavior and performance. These options control how data is passed between AIStore targets and ETL containers, how responses are handled, and how the system reacts to delays or failures. Understanding and tuning these options allows users to better match ETL behavior to their specific workloads.
 
 All the following options can be included in your ETL spec (YAML) during initialization.
 

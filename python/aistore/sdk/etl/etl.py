@@ -3,6 +3,7 @@
 #
 import sys
 import re
+import warnings
 
 import base64
 from typing import List, Union, Type
@@ -124,6 +125,11 @@ class Etl:
         """
         Initializes ETL based on Kubernetes pod spec template.
 
+        Deprecated:
+            Kubernetes Pod spec initialization will be removed in AIStore v5.1.
+            Use `init` for image-based ETLs or `init_class` for Python ETL
+            server classes instead.
+
         Args:
             template (str): Kubernetes pod spec template
                 Existing templates can be found at `sdk.etl_templates`
@@ -135,6 +141,14 @@ class Etl:
         Returns:
             str: Job ID string associated with this ETL
         """
+        warnings.warn(
+            "Kubernetes Pod spec ETL initialization via 'Etl.init_spec' is "
+            "deprecated and will be removed in AIStore v5.1. Use 'Etl.init' for "
+            "image-based ETLs or 'Etl.init_class' for Python ETL server classes "
+            "instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         _validate_comm_type(communication_type, ETL_COMM_OPTIONS)
 
         # spec

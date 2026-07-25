@@ -117,6 +117,10 @@ type (
 		SupportDirectPut bool            `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
 	}
 
+	// InitSpecMsg initializes an ETL from a full Kubernetes Pod specification.
+	//
+	// Deprecated: Kubernetes Pod spec ETL initialization will be removed in
+	// v5.1. Use ETLSpecMsg instead.
 	InitSpecMsg struct {
 		Spec        []byte `json:"spec"`
 		InitMsgBase `yaml:",inline"`
@@ -351,6 +355,9 @@ func (e *ETLSpecMsg) Validate() error {
 }
 
 // ParsePodSpec parses `m.Spec` into a Kubernetes Pod object.
+//
+// Deprecated: Kubernetes Pod spec ETL initialization will be removed in v5.1.
+// Use ETLSpecMsg for ETL initialization instead.
 func (m *InitSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(m.Spec, nil, nil)
 	if err != nil {

@@ -30,6 +30,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- Deprecated `Etl.init_spec()` with a `FutureWarning`; use `Etl.init()` or
+  `Etl.init_class()` instead. Pod spec initialization will be removed in v5.1.
 - `Job.wait()` is now descriptor-aware, mirroring Go's
   `api.WaitForXaction`: when `job_kind` is an idle kind (e.g. `download`,
   `get-batch`, `copy-listrange`, `etl-listrange`, `archive`, `list`,
