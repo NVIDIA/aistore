@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
@@ -488,11 +489,19 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 		numWorkers = numSlots
 	}
 
-	client := cmn.NewClient(cmn.TransportArgs{
-		ClientTimeout:    bp.Client.Timeout,
-		IdleConnsPerHost: numWorkers,
-		MaxIdleConns:     numWorkers,
-	})
+	// derive from the caller's client;
+	// adjust conn pooling for the concurrent chunk workers
+	client := &http.Client{Timeout: bp.Client.Timeout}
+	if tr, ok := bp.Client.Transport.(*http.Transport); ok {
+		tr = tr.Clone()
+		tr.MaxIdleConnsPerHost = numWorkers
+		tr.MaxIdleConns = numWorkers
+		client.Transport = tr
+	} else {
+		debug.Assertf(false, "expecting *http.Transport, got %T", bp.Client.Transport)
+		client.Transport = bp.Client.Transport
+	}
+
 	bp.Client = client
 
 	reader := &mpdReader{

@@ -7,6 +7,7 @@ package integration_test
 import (
 	"bytes"
 	"crypto/md5"
+	"errors"
 	"io"
 	"os"
 	"testing"
@@ -360,8 +361,7 @@ func TestMultipartDownloadStreamClose(t *testing.T) {
 				break
 			}
 		}
-		tassert.Fatalf(t, err == io.ErrClosedPipe || err == io.EOF,
-			"expected ErrClosedPipe or EOF, got: %v", err)
+		tassert.Fatalf(t, errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.EOF), "expected ErrClosedPipe or EOF, got: %v", err)
 		tlog.Logfln("  OK: got expected error: %v", err)
 	})
 }
