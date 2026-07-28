@@ -22,18 +22,28 @@ func TestNormalizeObjName(t *testing.T) {
 	normalizeObjTests := []struct {
 		objName  string
 		expected string
+		wantErr  bool
 	}{
-		{"?objname", "?objname"},
-		{"filename", "filename"},
-		{"dir/file", "dir/file"},
-		{"dir%2Ffile", "dir/file"},
-		{"path1/path2/path3%2Fpath4%2Ffile", "path1/path2/path3/path4/file"},
-		{"file?arg1=a&arg2=b", "file"},
-		{"imagenet%2Fimagenet_train-000000.tgz?alt=media", "imagenet/imagenet_train-000000.tgz"},
+		{"?objname", "?objname", false},
+		{"filename", "filename", false},
+		{"dir/file", "dir/file", false},
+		{"dir%2Ffile", "dir/file", false},
+		{"path1/path2/path3%2Fpath4%2Ffile", "path1/path2/path3/path4/file", false},
+		{"file?arg1=a&arg2=b", "file", false},
+		{"imagenet%2Fimagenet_train-000000.tgz?alt=media", "imagenet/imagenet_train-000000.tgz", false},
+		{"..%2Foutside", "", true},
+		{"dir/../outside", "", true},
+		{"bad%zz", "", true},
 	}
 
 	for _, test := range normalizeObjTests {
 		actual, err := dload.NormalizeObjName(test.objName)
+		if test.wantErr {
+			if err == nil {
+				t.Errorf("NormalizeObjName(%s) expected an error, got %q", test.objName, actual)
+			}
+			continue
+		}
 		if err != nil {
 			t.Errorf("Unexpected error while normalizing %s: %v", test.objName, err)
 		}

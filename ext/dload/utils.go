@@ -110,14 +110,17 @@ func makeDlObj(smap *meta.Smap, sid string, bck *meta.Bck, objName, link string)
 func NormalizeObjName(objName string) (string, error) {
 	u, err := url.Parse(objName)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
-	if u.Path == "" {
-		return objName, nil
+	name := objName
+	if u.Path != "" {
+		name, err = url.PathUnescape(u.Path)
+		if err != nil {
+			return "", err
+		}
 	}
-
-	return url.PathUnescape(u.Path)
+	return name, cos.ValidateOname(name)
 }
 
 func ParseStartRequest(bck *meta.Bck, id string, dlb Body, xdl *Xact) (jobif, error) {
