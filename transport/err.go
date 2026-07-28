@@ -25,6 +25,7 @@ const (
 	sbrProtoHdrTooLong = "sbr_proto_hdr_long" // header exceeds max size
 	sbrHdrChecksum     = "sbr_hdr_checksum"   // bad header checksum
 	sbrObjHdrTooShort  = "sbr_obj_hdr_short"  // object header too short
+	sbrObjHdrInvalid   = "sbr_obj_hdr_inval"  // object header structurally invalid
 	sbrObjData         = "sbr_obj_data"       // object data read failure
 	sbrObjDataEOF      = "sbr_obj_data_eof"   // premature EOF reading object
 	sbrObjDataSize     = "sbr_obj_data_size"  // size mismatch

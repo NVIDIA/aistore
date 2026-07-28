@@ -43,6 +43,7 @@ type (
 		hbuf    []byte
 		sid     string
 		loghdr  string
+		prev    ObjHdr // previous header on this stream; best-effort string-reuse source
 	}
 	objReader struct {
 		body   io.Reader
@@ -178,6 +179,12 @@ func (it *iterator) rxloop(mm *memsys.MMSA) (err error) {
 			}
 			break
 		}
+		if hlen <= 0 {
+			// object frames always carry a non-empty header; cf. zero-length
+			// last PDU, which never reaches here
+			err = it.newErr(nil, sbrObjHdrInvalid, "hlen="+strconv.Itoa(hlen))
+			break
+		}
 		if hlen > cap(it.hbuf) {
 			if hlen > cmn.MaxTransportHeader {
 				err = it.newErr(err, sbrProtoHdrTooLong, fmt.Sprintf("%d>%d", hlen, cmn.MaxTransportHeader))
@@ -281,10 +288,16 @@ func (it *iterator) nextObj(hlen int) (*objReader, error) {
 		return nil, it.newErr(err, sbrObjHdrTooShort, fmt.Sprintf("%d<%d", n, hlen))
 	}
 	debug.Assert(hlen > 0 && n == hlen, n, " vs ", hlen)
-	hdr := ExtObjHeader(it.hbuf, hlen)
+	hdr, errParse := extObjHeader(it.hbuf, hlen, &it.prev)
+	if errParse != nil {
+		return nil, it.newErr(errParse, sbrObjHdrInvalid, "hlen="+strconv.Itoa(hlen))
+	}
 	if hdr.isFin() {
 		return nil, io.EOF
 	}
+
+	it.prev = hdr
+	it.prev.Opaque = nil
 
 	obj := allocRecv()
 	obj.body, obj.hdr, obj.parent = it.body, hdr, it

@@ -5,9 +5,13 @@
 package transport
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"math"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -57,6 +61,17 @@ func ReservedOpcode(opc int) bool { return opc >= opcFin }
 
 // control-plane opcodes start at`OpcDone`
 func (hdr *ObjHdr) IsControl() bool { return hdr.Opcode >= OpcDone }
+
+// object-header decode failures (sentinels: use errors.Is)
+var (
+	// a field's declared length runs past the end of the header, or the
+	// header ends mid-field
+	ErrHdrMalformed = errors.New("malformed object header")
+
+	// every field decoded, but the consumed offset != the declared hlen -
+	// implies sender/receiver disagreement on the encoding, not truncation
+	ErrHdrLength = errors.New("object header length mismatch")
+)
 
 //
 // proto header: serialization
@@ -151,14 +166,118 @@ func insAttrs(off int, to []byte, attr *cmn.ObjAttrs) int {
 // proto header: deserialization
 //
 
+// zero-value interning source; keeps `prev` nil-free at every call site.
+// MUST remain read-only.
+var noPrevHdr ObjHdr
+
+type hdrDecoder struct {
+	b    []byte
+	prev *ObjHdr // previous header on this same stream
+	off  int
+	bad  bool
+}
+
+func (d *hdrDecoder) take(n int) []byte {
+	if d.bad {
+		return nil
+	}
+	if n < 0 || d.off > len(d.b) || n > len(d.b)-d.off {
+		d.bad = true
+		return nil
+	}
+	b := d.b[d.off : d.off+n]
+	d.off += n
+	return b
+}
+
+func (d *hdrDecoder) bytes() []byte {
+	b := d.take(cos.SizeofI16)
+	if d.bad {
+		return nil
+	}
+	return d.take(int(binary.BigEndian.Uint16(b)))
+}
+
+func (d *hdrDecoder) str() string {
+	return string(d.bytes())
+}
+
+func (d *hdrDecoder) strCached(prev string) string {
+	b := d.bytes()
+	if d.bad {
+		return ""
+	}
+	if len(b) == len(prev) && (len(b) == 0 || bytes.Equal(b, cos.UnsafeB(prev))) {
+		return prev
+	}
+	return string(b)
+}
+
+func (d *hdrDecoder) uint16() int {
+	b := d.take(cos.SizeofI16)
+	if d.bad {
+		return 0
+	}
+	return int(binary.BigEndian.Uint16(b))
+}
+
+func (d *hdrDecoder) uint64() uint64 {
+	b := d.take(cos.SizeofI64)
+	if d.bad {
+		return 0
+	}
+	return binary.BigEndian.Uint64(b)
+}
+
+func (d *hdrDecoder) int64() int64 {
+	return int64(d.uint64())
+}
+
+func (d *hdrDecoder) attrs(attr *cmn.ObjAttrs) {
+	pa := &d.prev.ObjAttrs
+	var prevCksumTyp string
+	if cksum := pa.Checksum(); cksum != nil {
+		prevCksumTyp = cksum.Ty()
+	}
+
+	attr.Size = d.int64()
+	attr.Atime = d.int64()
+	cksumTyp := d.strCached(prevCksumTyp)
+	cksumVal := d.str()
+	version := d.strCached(pa.Version())
+	if d.bad {
+		return
+	}
+
+	attr.SetCksum(cksumTyp, cksumVal)
+	attr.SetVersion(version)
+	for {
+		// custom-MD keys are never cached
+		k := d.str()
+		if d.bad || k == "" {
+			return
+		}
+		v := d.str()
+		if d.bad {
+			return
+		}
+		attr.SetCustomKey(k, v)
+	}
+}
+
 func (it *iterator) extProtoHdr(hbuf []byte) (hlen int, flags uint64, err error) {
-	off, word1 := extUint64(0, hbuf)
+	d := hdrDecoder{b: hbuf, prev: &noPrevHdr}
+	word1 := d.uint64()
+	checksum := d.uint64()
+	if d.bad {
+		return 0, 0, it.newErr(io.ErrUnexpectedEOF, sbrProtoHdr, "n="+strconv.Itoa(len(hbuf)))
+	}
+
 	hlen = int(word1 & ^allFlags)
 	flags = word1 & allFlags
 	//
 	// validate checksum
 	//
-	_, checksum := extUint64(0, hbuf[off:])
 	chc := xoshiro256.Hash(word1)
 	if checksum != chc {
 		err = it.newErr(nil, sbrHdrChecksum, fmt.Sprintf("%x != %x (hlen=%d)", checksum, chc, hlen))
@@ -166,68 +285,36 @@ func (it *iterator) extProtoHdr(hbuf []byte) (hlen int, flags uint64, err error)
 	return
 }
 
-func ExtObjHeader(body []byte, hlen int) (hdr ObjHdr) {
-	var off int
-	off, hdr.SID = extString(0, body)
-	off, hdr.Opcode = extUint16(off, body)
-	off, hdr.Bck.Name = extString(off, body)
-	off, hdr.Bck.Provider = extString(off, body)
-	off, hdr.Bck.Ns.Name = extString(off, body)
-	off, hdr.Bck.Ns.UUID = extString(off, body)
-	off, hdr.ObjName = extString(off, body)
-	off, hdr.Opaque = extBytes(off, body)
-	off, hdr.Demux = extString(off, body)
-	off, hdr.ObjAttrs = extAttrs(off, body)
-	debug.Assertf(off == hlen, "off %d, hlen %d", off, hlen)
-	return
+func ExtObjHeader(body []byte, hlen int) (ObjHdr, error) {
+	return extObjHeader(body, hlen, &noPrevHdr)
 }
 
-func extString(off int, from []byte) (int, string) {
-	off, bt := extBytes(off, from)
-	return off, string(bt)
-}
-
-func extBytes(off int, from []byte) (int, []byte) {
-	l := int(binary.BigEndian.Uint16(from[off:]))
-	off += cos.SizeofI16
-	return off + l, from[off : off+l]
-}
-
-func extUint16(off int, from []byte) (int, int) {
-	val := binary.BigEndian.Uint16(from[off:])
-	off += cos.SizeofI16
-	return off, int(val)
-}
-
-func extInt64(off int, from []byte) (int, int64) {
-	off, val := extUint64(off, from)
-	return off, int64(val)
-}
-
-func extUint64(off int, from []byte) (int, uint64) {
-	val := binary.BigEndian.Uint64(from[off:])
-	off += cos.SizeofI64
-	return off, val
-}
-
-func extAttrs(off int, from []byte) (n int, attr cmn.ObjAttrs) {
-	var cksumTyp, cksumVal, k, v string
-	off, attr.Size = extInt64(off, from)
-	off, attr.Atime = extInt64(off, from)
-	off, cksumTyp = extString(off, from)
-	off, cksumVal = extString(off, from)
-	attr.SetCksum(cksumTyp, cksumVal)
-	off, v = extString(off, from)
-	attr.SetVersion(v)
-	for {
-		off, k = extString(off, from)
-		if k == "" {
-			break
-		}
-		off, v = extString(off, from)
-		attr.SetCustomKey(k, v)
+// extObjHeader is ExtObjHeader with an interning source - `prev` being the
+// last header successfully decoded on this same stream (see iterator.prev).
+func extObjHeader(body []byte, hlen int, prev *ObjHdr) (hdr ObjHdr, err error) {
+	if hlen <= 0 || hlen > len(body) {
+		return hdr, fmt.Errorf("%w: declared %d, buffer %d", ErrHdrMalformed, hlen, len(body))
 	}
-	return off, attr
+
+	d := hdrDecoder{b: body[:hlen], prev: prev}
+	hdr.SID = d.strCached(prev.SID)
+	hdr.Opcode = d.uint16()
+	hdr.Bck.Name = d.strCached(prev.Bck.Name)
+	hdr.Bck.Provider = d.strCached(prev.Bck.Provider)
+	hdr.Bck.Ns.Name = d.strCached(prev.Bck.Ns.Name)
+	hdr.Bck.Ns.UUID = d.strCached(prev.Bck.Ns.UUID)
+	hdr.ObjName = d.str()
+	hdr.Opaque = d.bytes() // NOTE: aliases the receive buffer - see ObjHdr.Opaque
+	hdr.Demux = d.strCached(prev.Demux)
+	d.attrs(&hdr.ObjAttrs)
+
+	if d.bad {
+		return hdr, fmt.Errorf("%w: at offset %d: %w", ErrHdrMalformed, d.off, io.ErrUnexpectedEOF)
+	}
+	if d.off != hlen {
+		return hdr, fmt.Errorf("%w: decoded %d of %d bytes", ErrHdrLength, d.off, hlen)
+	}
+	return hdr, nil
 }
 
 ////////////////////
