@@ -54,6 +54,11 @@ type (
 		// - TODO: add `apc.QparamValidateCksum`
 		Query url.Values
 
+		// BlobThreshold enables server-side blob download for a remote object
+		// whose size is greater than or equal to the specified threshold (bytes).
+		// Zero (default) disables the optimization.
+		BlobThreshold int64
+
 		// The field is used to facilitate a) range read, and b) blob download
 		// E.g. range:
 		// * Header.Set(cos.HdrRange, fmt.Sprintf("bytes=%d-%d", fromOffset, toOffset))
@@ -169,6 +174,25 @@ func (args *GetArgs) ret() (w io.Writer, q url.Values, hdr http.Header) {
 	return
 }
 
+func (args *GetArgs) blobThresholdHeader(hdr http.Header) (http.Header, error) {
+	if args == nil || args.BlobThreshold == 0 {
+		return hdr, nil
+	}
+	if args.BlobThreshold < 0 {
+		return nil, fmt.Errorf("invalid blob threshold %d: expecting a non-negative value", args.BlobThreshold)
+	}
+	if _, ok := hdr[apc.HdrBlobThreshold]; ok {
+		return nil, fmt.Errorf("cannot use blob threshold argument with %q header", apc.HdrBlobThreshold)
+	}
+
+	hdr = hdr.Clone()
+	if hdr == nil {
+		hdr = make(http.Header, 2)
+	}
+	hdr.Set(apc.HdrBlobThreshold, strconv.FormatInt(args.BlobThreshold, 10))
+	return hdr, nil
+}
+
 func (oah *ObjAttrs) Size() int64 {
 	if oah.n == 0 { // unlikely
 		oah.n = oah.Attrs().Size
@@ -194,6 +218,10 @@ func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah O
 		w, q, hdr = args.ret()
 		qall      = qalloc()
 	)
+	if hdr, err = args.blobThresholdHeader(hdr); err != nil {
+		qfree(qall)
+		return oah, err
+	}
 
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -235,6 +263,10 @@ func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah O
 
 func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah ObjAttrs, err error) {
 	w, q, hdr := args.ret()
+	hdr, err = args.blobThresholdHeader(hdr)
+	if err != nil {
+		return oah, err
+	}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -250,7 +282,8 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 	)
 	resp, err = reqParams.do()
 	if err != nil {
-		return
+		FreeRp(reqParams)
+		return oah, err
 	}
 
 	wresp, err = reqParams.readValidate(resp, w)
@@ -262,13 +295,17 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 	} else if err.Error() == errNilCksum {
 		err = fmt.Errorf("%s is not checksummed, cannot validate", bck.Cname(objName))
 	}
-	return
+	return oah, err
 }
 
 // Returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
 func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (r io.ReadCloser, size int64, err error) {
 	_, q, hdr := args.ret()
+	hdr, err = args.blobThresholdHeader(hdr)
+	if err != nil {
+		return nil, 0, err
+	}
 	q = bck.AddToQuery(q)
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()

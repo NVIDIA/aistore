@@ -49,6 +49,8 @@ type (
 		Lom *LOM
 		Msg *apc.BlobMsg
 
+		BlobThreshold int64 // minimum remote object size (bytes); zero disables threshold selection
+
 		// caller/spawner for observability
 		// (e.g.: prefetch[abcdef], GET, api-blobdl, and x-start)
 		Parent string

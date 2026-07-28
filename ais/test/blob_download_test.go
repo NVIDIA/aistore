@@ -448,7 +448,54 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 	}
 }
 
-// TestBlobDownloadStreamGet tests blob download via cold GET with the apc.HdrBlobDownload header.
+func TestGetObjectBlobThreshold(t *testing.T) {
+	const objSize = 16 * cos.MiB
+	tests := []struct {
+		name         string
+		threshold    int64
+		blobDownload bool
+		chunks       int
+	}{
+		{name: "disabled", threshold: 0, chunks: 0},
+		{name: "object-below-threshold", threshold: objSize + 1, chunks: 0},
+		{name: "object-at-threshold", threshold: objSize, chunks: -1},
+		{name: "object-above-threshold", threshold: objSize - 1, chunks: -1},
+		{name: "flag-with-object-below-threshold", threshold: objSize + 1, blobDownload: true, chunks: 0},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := ioContext{
+				t:         t,
+				bck:       cliBck,
+				num:       1,
+				prefix:    t.Name() + "-",
+				fileSize:  objSize,
+				fixedSize: true,
+			}
+
+			tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+			m.init(true /*cleanup*/)
+			initMountpaths(t, m.proxyURL)
+			m.remotePuts(true /*evict*/)
+
+			buf := bytes.NewBuffer(nil)
+			args := &api.GetArgs{
+				Writer:        buf,
+				BlobThreshold: test.threshold,
+			}
+			if test.blobDownload {
+				args.Header = http.Header{apc.HdrBlobDownload: []string{"true"}}
+			}
+			oah, err := api.GetObject(tools.BaseAPIParams(m.proxyURL), m.bck, m.objNames[0], args)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, oah.Size() == objSize, "expected size %d, got %d", objSize, oah.Size())
+			tassert.Fatalf(t, int64(buf.Len()) == objSize, "expected %d bytes, got %d", objSize, buf.Len())
+			m.validateChunksOnDisk(m.bck, m.objNames[0], test.chunks)
+		})
+	}
+}
+
+// TestBlobDownloadStreamGet tests blob download via cold GET.
 // It validates:
 // 1. Cold GET with blob download returns correct bytes
 // 2. Object is cached after blob download
@@ -488,12 +535,13 @@ func TestBlobDownloadStreamGet(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Cold GET with blob download header
-	tlog.Logfln("Performing cold GET with blob download header")
+	tlog.Logfln("Performing cold GET with blob threshold")
 	coldGetBuf := &bytes.Buffer{}
 	getArgs := &api.GetArgs{
-		Writer: coldGetBuf,
-		Header: http.Header{apc.HdrBlobDownload: []string{"true"}},
+		Writer:        coldGetBuf,
+		BlobThreshold: objSize,
 	}
+
 	result, size, err := api.GetObjectReader(baseParams, bck, objName, getArgs)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)

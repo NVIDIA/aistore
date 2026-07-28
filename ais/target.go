@@ -968,28 +968,58 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 	}
 
+	var (
+		blobDownload = cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload))
+		thresholdStr = r.Header.Get(apc.HdrBlobThreshold)
+	)
+
 	// two special flows
 	switch {
 	case dpq.get(apc.QparamETLName) != "":
 		t.inlineETL(w, r, dpq, lom)
 		return lom, nil
-	case cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload)):
+	case blobDownload || thresholdStr != "":
+		var threshold int64
+		if thresholdStr != "" {
+			var err error
+			if threshold, err = strconv.ParseInt(thresholdStr, 10, 64); err != nil {
+				return lom, fmt.Errorf("blob-downloader: failed to parse %s=%s: %w",
+					apc.HdrBlobThreshold, thresholdStr, err)
+			}
+			if threshold < 0 {
+				return lom, fmt.Errorf("blob-downloader: invalid %s=%s: expecting a non-negative value",
+					apc.HdrBlobThreshold, thresholdStr)
+			}
+		}
+		if !blobDownload && threshold == 0 {
+			break
+		}
+		if !bck.IsRemote() {
+			return lom, fmt.Errorf("blob-downloader is not supported for local buckets: %s", bck.Cname(""))
+		}
+
 		var msg apc.BlobMsg
 		if err := msg.FromHeader(r.Header); err != nil {
 			return lom, err
 		}
 
 		args := &core.BlobParams{
-			RespWriter: w, // NOTE: make a blocking call
-			Lom:        lom,
-			Msg:        &msg,
-			Parent:     "GET",
+			RespWriter:    w, // NOTE: make a blocking call
+			Lom:           lom,
+			Msg:           &msg,
+			BlobThreshold: threshold,
+			Parent:        "GET",
 		}
 		xid, _, err := t.blobdl(args, nil /*oa*/, w.Header())
 		if err != nil && xid != "" {
 			// (for the same reason as cmn.ErrGetTxBenign)
 			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
 			err = nil
+		}
+		if threshold > 0 && xid == "" && err == nil {
+			// Blob download was not started (for example, warm or below threshold).
+			// Fall through to regular GET.
+			break
 		}
 		return lom, err
 	}
@@ -1933,6 +1963,9 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Hea
 	}
 
 	if oa != nil {
+		if params.BlobThreshold > 0 && oa.Size < params.BlobThreshold {
+			return "", nil, nil
+		}
 		// write HTTP headers before starting blob download
 		cmn.ToHeader(oa, whdr, oa.Size)
 		return t._blobdl(params, oa)
@@ -1970,6 +2003,10 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Hea
 		if err != nil {
 			return "", nil, err
 		}
+	}
+	if params.BlobThreshold > 0 && oa.Size < params.BlobThreshold {
+		// below threshold, not qualified for blob-download
+		return "", nil, nil
 	}
 	// write HTTP headers before starting blob download
 	cmn.ToHeader(oa, whdr, oa.Size)

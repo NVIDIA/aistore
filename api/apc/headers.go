@@ -32,6 +32,7 @@ const (
 	HdrBlobChunk       = aisPrefix + "Blob-Chunk"        // optional; e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
 	HdrBlobWorkers     = aisPrefix + "Blob-Workers"      // optional: num concurrent downloading readers (see also: xs/nwp.go, "media type", load.Advice)
 	HdrBlobReadTimeout = aisPrefix + "Blob-Read-Timeout" // per-attempt timeout for backend range read; zero selects default
+	HdrBlobThreshold   = aisPrefix + "Blob-Threshold"    // minimum remote object size (bytes) to use blob downloader
 
 	// Bucket props headers
 	HdrBucketProps      = aisPrefix + "Bucket-Props"       // => cmn.Bprops

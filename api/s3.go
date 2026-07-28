@@ -21,7 +21,12 @@ func GetObjectS3(bp BaseParams, bck cmn.Bck, objectName string, args ...GetArgs)
 		w   = io.Discard
 	)
 	if len(args) != 0 {
+		var err error
 		w, q, hdr = args[0].ret()
+		hdr, err = args[0].blobThresholdHeader(hdr)
+		if err != nil {
+			return 0, err
+		}
 	}
 	q = bck.AddToQuery(q)
 	bp.Method = http.MethodGet
