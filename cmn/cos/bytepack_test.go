@@ -114,4 +114,12 @@ var _ = Describe("BytePacker", func() {
 			}
 		}
 	})
+	It("rejects invalid MapStrU16 counts", func() {
+		for _, count := range []int32{-1, 1<<31 - 1} {
+			packer := cos.NewPacker(nil, cos.SizeofI32)
+			packer.WriteInt32(count)
+			_, err := cos.NewUnpacker(packer.Bytes()).ReadMapStrUint16()
+			Expect(err).To(HaveOccurred())
+		}
+	})
 })
