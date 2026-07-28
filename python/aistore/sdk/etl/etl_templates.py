@@ -182,7 +182,7 @@ kind: Pod
 metadata:
   name: transformer-compress
   annotations:
-    # Values `communication_type` can take are ["hpull://", "hpush://", "io://"].
+    # Values `communication_type` can take are ["hpull://", "hpush://"].
     # Visit https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms
     # for more details.
     communication_type: "{communication_type}://"
@@ -304,7 +304,7 @@ kind: Pod
 metadata:
   name: transformer-torchvision
   annotations:
-    # Values `communication_type` can take are ["hpull://", "hpush://", "io://"].
+    # Values `communication_type` can take are ["hpull://", "hpush://"].
     # Visit https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms
     communication_type: "{communication_type}://"
     wait_timeout: 10m

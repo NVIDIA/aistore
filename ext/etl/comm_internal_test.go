@@ -150,7 +150,7 @@ var _ = Describe("CommunicatorTest", func() {
 				xetl.InitBase(xid, apc.ActETLInline, nil)
 
 				switch msg.CommType() {
-				case Hpush, HpushStdin:
+				case Hpush:
 					pc := &pushComm{}
 					pc.msg, pc.podURI, pc.xctn = msg, transformerServer.URL, xetl
 					pc.client = &http.Client{}

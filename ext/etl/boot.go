@@ -44,7 +44,6 @@ type etlBootstrapper struct {
 	targetPodSpec   *corev1.PodSpec
 	targetPodName   string
 	originalPodName string
-	originalCommand []string
 }
 
 func (b *etlBootstrapper) createPodSpec() (err error) {
@@ -93,7 +92,6 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 		return err
 	}
 
-	b._updPodCommand()
 	b._updPodLabels()
 	b._updReady()
 
@@ -234,15 +232,6 @@ func initComm(msg InitMsg, xid, secret string, boot *etlBootstrapper) (comm Comm
 	}
 
 	return comm, nil
-}
-
-func (b *etlBootstrapper) _updPodCommand() {
-	if b.msg.CommType() != HpushStdin {
-		return
-	}
-
-	b.originalCommand = b.pod.Spec.Containers[0].Command
-	b.pod.Spec.Containers[0].Command = []string{"sh", "-c", "/server"}
 }
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.

@@ -509,10 +509,10 @@ and contain all necessary fields to start the Pod.
 | `metadata.annotations.support_direct_put` | `false` | Enable [direct put](#direct-put-optimization) optimization of an ETL. | - |
 | `spec.containers` | `true` | Containers running inside a Pod, exactly one required. | - |
 | `spec.containers[0].image` | `true` | Docker image of ETL container. | - |
-| `spec.containers[0].ports` | `true` (except `io://` communication type) | Ports exposed by a container, at least one expected. | - |
+| `spec.containers[0].ports` | `true` | Ports exposed by a container, at least one expected. | - |
 | `spec.containers[0].ports[0].Name` | `true` | Name of the first Pod should be `default`. | - |
 | `spec.containers[0].ports[0].containerPort` | `true` | Port which a cluster will contact containers on. | - |
-| `spec.containers[0].readinessProbe` | `true` (except `io://` communication type) | ReadinessProbe of a container. | - |
+| `spec.containers[0].readinessProbe` | `true` | ReadinessProbe of a container. | - |
 | `spec.containers[0].readinessProbe.timeoutSeconds` | `false` | Timeout for a readiness probe in seconds. | `5` |
 | `spec.containers[0].readinessProbe.periodSeconds` | `false` | Period between readiness probe requests in seconds. | `10` |
 | `spec.containers[0].readinessProbe.httpGet.Path` | `true` | Path for HTTP readiness probes. | - |

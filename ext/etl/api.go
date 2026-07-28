@@ -86,8 +86,6 @@ const (
 	// contacts the target via `AIS_TARGET_URL` env variable to get the data.
 	// The data is then transformed and returned to the client.
 	Hpull = "hpull://"
-	// Similar to redirection strategy but with usage of reverse proxy.
-	HpushStdin = "io://"
 	// WebSocket communication.
 	WebSocket = "ws://"
 )
@@ -204,7 +202,7 @@ type (
 	}
 )
 
-var commTypes = []string{Hpush, Hpull, HpushStdin, WebSocket} // NOTE: must contain all
+var commTypes = []string{Hpush, Hpull, WebSocket} // NOTE: must contain all
 
 ////////////////
 // InitMsg*** //

@@ -12,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -93,7 +92,6 @@ type (
 	}
 	pushComm struct {
 		baseComm
-		command []string
 	}
 	redirectComm struct {
 		baseComm
@@ -129,7 +127,7 @@ var (
 
 func newCommunicator(msg InitMsg, secret string, config *cmn.Config) (Communicator, error) {
 	switch msg.CommType() {
-	case Hpush, HpushStdin:
+	case Hpush:
 		pc := &pushComm{}
 		pc.msg, pc.secret, pc.config = msg, secret, config
 		return pc, nil
@@ -331,7 +329,7 @@ func (c *baseComm) doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc) (r 
 }
 
 //////////////
-// pushComm: implements (Hpush | HpushStdin)
+// pushComm: implements Hpush
 //////////////
 
 func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync bool) core.ReadResp {
@@ -359,10 +357,6 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 			return core.ReadResp{Err: err, Ecode: ecode}
 		}
 		query.Set(apc.QparamETLFQN, url.PathEscape(lom.FQN))
-	}
-
-	if len(pc.command) != 0 { // HpushStdin case
-		query = url.Values{"command": []string{"bash", "-c", strings.Join(pc.command, " ")}}
 	}
 
 	reqArgs := &cmn.HreqArgs{

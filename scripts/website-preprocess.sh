@@ -98,7 +98,6 @@ declare -A title_overrides=(
   # Tutorials (use tutorials/etl/ prefix)
   ["tutorials/etl/compute_md5"]="Tutorial: Computing MD5 with ETL"
   ["tutorials/etl/etl_imagenet_pytorch"]="Tutorial: ETL with ImageNet and PyTorch"
-  ["tutorials/etl/etl_webdataset"]="Tutorial: ETL with WebDataset"
 )
 
 # ── SEO descriptions ─────────────────────────────────────────────────
@@ -197,7 +196,6 @@ declare -A descriptions=(
   # Tutorials (use full path prefix)
   ["tutorials/etl/compute_md5"]="Tutorial: compute MD5 checksums using AIStore ETL inline transforms."
   ["tutorials/etl/etl_imagenet_pytorch"]="Tutorial: transform ImageNet data with AIStore ETL and PyTorch dataloaders."
-  ["tutorials/etl/etl_webdataset"]="Tutorial: process WebDataset shards with AIStore ETL pipelines."
   # Release notes (use relnotes/ prefix)
   ["relnotes/3.30"]="What's new in AIStore v3.30: features, improvements, and bug fixes."
   ["relnotes/4.0"]="What's new in AIStore v4.0: major release with new features and improvements."

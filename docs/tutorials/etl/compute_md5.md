@@ -23,7 +23,7 @@ Get ready!
 ## Prepare ETL
 
 To showcase ETL's capabilities, we will go over a simple ETL container that computes the MD5 checksum of the object.
-There are three ways of approaching this problem:
+There are two ways of approaching this problem:
 
 1. **Simplified flow**
 
@@ -47,27 +47,7 @@ There are three ways of approaching this problem:
     transformer-md5
     ```
 
-2. **Simplified flow with input/output**
-   Similar to the above example, we will be using the `python3.11v2` runtime.
-   However, the python code in this case expects data as standard input and writes the output bytes to standard output, as shown in the following `code.py`:
-
-   ```python
-    import hashlib
-    import sys
-
-    md5 = hashlib.md5()
-    for chunk in sys.stdin.buffer.read():
-        md5.update(chunk)
-    sys.stdout.buffer.write(md5.hexdigest().encode())
-   ```
-
-   We can now use the CLI to build and initialize ETL with `io://` communicator type:
-   ```console
-   $ ais etl init code --spec=code.py --runtime=python3.11v2 --comm-type="io://" --name="compute-md5"
-   compute-md5
-   ```
-
-3. **Regular flow**
+2. **Regular flow**
 
     First, we need to write a server.
     In this case, we will write a Python 3 HTTP server.
