@@ -61,7 +61,7 @@ python_sdk_unit_tests: common_deps
 .PHONY: mcp_deps
 mcp_deps:
 	@$(PYTHON) -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" 2>/dev/null && \
-		$(PIP) install "mcp[cli]>=1.4.1" --quiet || \
+		$(PIP) install "mcp[cli]>=1.4.1,<2" --quiet || \
 		echo "Skipping mcp install (requires Python >= 3.10)"
 
 .PHONY: python_mcp_unit_tests
