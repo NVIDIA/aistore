@@ -204,6 +204,36 @@ func TestAwsChunkedTooManyHexDigitsAllZeros(t *testing.T) {
 		"expected 'exceeds' in error, got: %v", err)
 }
 
+func TestAwsChunkedChunkSizeLimit(t *testing.T) {
+	const maxChunkSize = 50_000 * cos.GiB
+
+	body := fmt.Sprintf("%x;chunk-signature=sig\r\nX", maxChunkSize)
+	r := newChunkedRequest(body, "STREAMING-AWS4-HMAC-SHA256-PAYLOAD", "1")
+	s3.HandleAwsChunked(r)
+
+	buf := make([]byte, 1)
+	n, err := r.Body.Read(buf)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, n == 1 && buf[0] == 'X', "expected one byte at maximum chunk size")
+
+	for _, chunkSize := range []string{
+		strconv.FormatInt(maxChunkSize+1, 16),
+		"8000000000000000",
+		"ffffffffffffffff",
+	} {
+		t.Run(chunkSize, func(t *testing.T) {
+			body := chunkSize + ";chunk-signature=sig\r\n"
+			r := newChunkedRequest(body, "STREAMING-AWS4-HMAC-SHA256-PAYLOAD", "1")
+			s3.HandleAwsChunked(r)
+
+			_, err := io.ReadAll(r.Body)
+			tassert.Fatalf(t, err != nil, "expected error for chunk size %s", chunkSize)
+			tassert.Fatalf(t, strings.Contains(err.Error(), "exceeds maximum"),
+				"expected maximum-size error, got: %v", err)
+		})
+	}
+}
+
 func newChunkedRequest(body, contentSHA256, decodedLen string) *http.Request {
 	r := &http.Request{
 		Header: make(http.Header),

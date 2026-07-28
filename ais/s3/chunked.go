@@ -24,6 +24,10 @@ const (
 	S3StreamingPrefix = "STREAMING-"
 	AwsChunkBufSize   = 4 * cos.KiB
 
+	// Maximum S3 object size: 50,000 GiB (10,000 parts * 5 GiB).
+	// Ref: https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingObjects.html
+	maxChunkSize = 50_000 * cos.GiB
+
 	// A chunk size is a 64-bit value encoded in hex. 64 bits / 4 bits-per-hex-digit = 16 digits max.
 	maxHexDigits = 16
 )
@@ -99,7 +103,7 @@ func (r *awsChunkedReader) nextChunk() (int, error) {
 
 	// parse the header
 	var (
-		size    = 0     // accumulate hex digits into `size`, stop at '\n'
+		size    uint64  // accumulate hex digits into `size`, stop at '\n'
 		nDigits = 0     // number of hex digits parsed so far
 		hexDone = false // flips to true once we hit ';' or '\r' (past the hex portion)
 	)
@@ -111,7 +115,7 @@ func (r *awsChunkedReader) nextChunk() (int, error) {
 
 			if b == '\n' {
 				r.rpos++ // consume the '\n' itself
-				return size, nil
+				return int(size), nil
 			}
 			if hexDone || b == ';' || b == '\r' {
 				hexDone = true // everything from here to '\n' is signature — skip
@@ -126,7 +130,14 @@ func (r *awsChunkedReader) nextChunk() (int, error) {
 			if nDigits > maxHexDigits {
 				return 0, fmt.Errorf("aws-chunked: chunk size exceeds %d hex digits", maxHexDigits)
 			}
-			size = size*16 + d
+
+			if size > maxChunkSize/16 {
+				return 0, fmt.Errorf("aws-chunked: chunk size exceeds maximum %d", maxChunkSize)
+			}
+			if size == maxChunkSize/16 && uint64(d) > maxChunkSize%16 {
+				return 0, fmt.Errorf("aws-chunked: chunk size exceeds maximum %d", maxChunkSize)
+			}
+			size = size*16 + uint64(d)
 		}
 
 		// ran out of buffered bytes before finding '\n' — refill and resume
@@ -181,6 +192,7 @@ func IsAwsChunked(r *http.Request) bool {
 // HandleAwsChunked wraps r.Body with a decoder that strips AWS chunked
 // framing. Adjusts r.ContentLength and resets X-Amz-Content-Sha256.
 func HandleAwsChunked(r *http.Request) {
+	// TODO: validate this required header and ensure decoded payload length matches it.
 	if decLen := r.Header.Get(cos.S3HdrDecodedContentLength); decLen != "" {
 		if size, err := strconv.ParseInt(decLen, 10, 64); err == nil {
 			r.ContentLength = size
