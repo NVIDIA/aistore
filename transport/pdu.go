@@ -114,7 +114,7 @@ func (pdu *rpdu) readHdr() error {
 	if err != nil {
 		return err
 	}
-	if pdu.flags&pduFl == 0 || pdu.plen > maxSizePDU || pdu.plen < 0 {
+	if pdu.flags&pduFl == 0 || pdu.plen > len(pdu.buf)-sizeProtoHdr || pdu.plen < 0 {
 		detail := fmt.Sprintf(fmterr, pdu.plen, fl2s(pdu.flags))
 		return pdu.parent.newErr(nil, sbrPDUHdrInvalid, detail)
 	}
