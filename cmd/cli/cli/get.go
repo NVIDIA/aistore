@@ -704,7 +704,7 @@ var _ archive.ArchRCB = (*extractor)(nil)
 
 type extractor struct {
 	shardName string
-	mime      string
+	root      *os.Root
 }
 
 func doExtract(objName, outFile string, objLen int64) (mime string, err error) {
@@ -718,29 +718,47 @@ func doExtract(objName, outFile string, objLen int64) (mime string, err error) {
 	if rfh, err = os.Open(outFile); err != nil {
 		return
 	}
+	defer cos.Close(rfh)
 	if ar, err = archive.NewReader(mime, rfh, objLen); err != nil {
 		return
 	}
 
-	ex := &extractor{outFile, mime}
+	outDir := strings.TrimSuffix(outFile, mime)
+	if err = cos.CreateDir(outDir); err != nil {
+		return
+	}
+	root, err := os.OpenRoot(outDir) // all subsequent operations stay under outDir
+	if err != nil {
+		return
+	}
+	defer cos.Close(root)
+	ex := &extractor{outFile, root}
 	err = ar.ReadUntil(ex, cos.EmptyMatchAll, "")
-	rfh.Close()
 	return
 }
 
 func (ex *extractor) Call(filename string, reader cos.ReadCloseSizer, _ any) (bool /*stop*/, error) {
-	fqn := filepath.Join(strings.TrimSuffix(ex.shardName, ex.mime), filename)
+	if cos.ValidateArchpath(filename) != nil {
+		reader.Close()
+		return true, fmt.Errorf("invalid archive entry path %q", filename)
+	}
+	if err := ex.root.MkdirAll(filepath.Dir(filename), cos.PermRWXRX); err != nil { // create missing parents under root
+		reader.Close()
+		return true, err
+	}
 
-	wfh, err := cos.CreateFile(fqn)
+	wfh, err := ex.root.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, cos.PermRWR) // stay under root; no clobber
 	if err != nil {
 		reader.Close()
 		return true, err
 	}
 	stop, err := ex._write(filename, reader.Size(), wfh, reader)
 	reader.Close()
-	wfh.Close()
+	if errClose := wfh.Close(); err == nil {
+		err = errClose
+	}
 	if err != nil {
-		os.Remove(fqn)
+		ex.root.Remove(filename)
 	}
 	return stop, err
 }
