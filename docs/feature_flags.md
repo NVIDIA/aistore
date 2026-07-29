@@ -80,6 +80,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Enable-Go-Runtime-Metrics` | `telemetry,ops,overhead` | publish a low-cardinality subset of Go runtime metrics (goroutines, GC, heap) via Prometheus |
 | `Dload-Allow-Private-Egress` | `security-` | allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked |
 | `S3-Redirect-Rebuild` | `s3,compat,security-` | allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured) |
+| `Range-Cold-GET` | `perf,integrity-` | serve range read of a missing (not-cached) object directly from remote backend, do not store the object |
 
 ## Global features
 
@@ -94,8 +95,8 @@ Fsync-PUT                              S3-Use-Path-Style                      Co
 LZ4-Block-1MB                          Do-not-Delete-When-Rebalancing         Enable-Go-Runtime-Metrics
 LZ4-Frame-Checksum                     Do-not-Set-Control-Plane-ToS           Dload-Allow-Private-Egress
 Do-not-Allow-Passing-FQN-to-ETL        Trust-Crypto-Safe-Checksums            S3-Redirect-Rebuild
-Ignore-LimitedCoexistence-Conflicts    S3-ListObjectVersions                  none
-S3-Presigned-Request                   Enable-Detailed-Prom-Metrics
+Ignore-LimitedCoexistence-Conflicts    S3-ListObjectVersions                  Range-Cold-GET
+S3-Presigned-Request                   Enable-Detailed-Prom-Metrics           none
 ```
 
 For example:
@@ -137,6 +138,7 @@ Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 40
 Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go runtime metrics via Prometheus
 Dload-Allow-Private-Egress           security-              allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 S3-Redirect-Rebuild                  s3,compat,security-    allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
+Range-Cold-GET                       perf,integrity-        serve range read of a missing (not-cached) object directly from remote backend, do not store the object
 
 Cluster config updated
 ```
@@ -184,6 +186,7 @@ Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 40
 Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go runtime metrics via Prometheus
 Dload-Allow-Private-Egress           security-              allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 S3-Redirect-Rebuild                  s3,compat,security-    allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
+Range-Cold-GET                       perf,integrity-        serve range read of a missing (not-cached) object directly from remote backend, do not store the object
 ```
 
 The same in JSON:
@@ -222,8 +225,8 @@ Here's a brief 1-2-3 demonstration in re specifically: feature flags.
 $ ais bucket props set ais://nnn features <TAB-TAB>
 
 Skip-Loading-VersionChecksum-MD   Streaming-Cold-GET                Count-Object-NotFound-Stats
-Fsync-PUT                         S3-Use-Path-Style                 none
-S3-Presigned-Request              S3-ListObjectVersions
+Fsync-PUT                         S3-Use-Path-Style                 Range-Cold-GET
+S3-Presigned-Request              S3-ListObjectVersions             none
 Disable-Cold-GET                  Resume-Interrupted-MPU
 ```
 
@@ -246,6 +249,7 @@ S3-Use-Path-Style                s3,compat              use older path-style add
 Resume-Interrupted-MPU           mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 S3-ListObjectVersions            s3,overhead            when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 Count-Object-NotFound-Stats      telemetry,ops          count GET(object) 404 as errors
+Range-Cold-GET                   perf,integrity-        serve range read of a missing (not-cached) object directly from remote backend, do not store the object
 ```
 
 #### 3. reset feature flags back to zero (or 'none')
@@ -266,6 +270,7 @@ S3-Use-Path-Style                s3,compat              use older path-style add
 Resume-Interrupted-MPU           mpu,ops                resume interrupted multipart uploads from persisted partial manifests
 S3-ListObjectVersions            s3,overhead            when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 Count-Object-NotFound-Stats      telemetry,ops          count GET(object) 404 as errors
+Range-Cold-GET                   perf,integrity-        serve range read of a missing (not-cached) object directly from remote backend, do not store the object
 ```
 
 ### Validation errors

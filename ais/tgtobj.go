@@ -741,6 +741,12 @@ do: // retry uplock or ec-recovery, the latter only once
 		// TODO: utilize res.ObjAttrs
 	}
 
+	// feat.RangeColdGET (object is not in cluster): read the requested range
+	// directly from remote backend - do not run full-blown cold-GET, do not store
+	if cold && !goi.verchanged && goi.ranges.Range != "" && goi.lom.IsFeatureSet(feat.RangeColdGET) {
+		return goi.coldRange()
+	}
+
 	// validate checksums and recover (a.k.a. self-heal) if corrupted
 	if !cold && goi.lom.ValidateWarmGet() {
 		cold, ecode, err = goi.validateRecover()

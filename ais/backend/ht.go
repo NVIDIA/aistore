@@ -190,7 +190,8 @@ func (htbp *htbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	if res.Err != nil {
 		return res
 	}
-	if resp.StatusCode != http.StatusOK {
+	ok := resp.StatusCode == http.StatusOK || (length > 0 && resp.StatusCode == http.StatusPartialContent)
+	if !ok {
 		res.ErrCode = resp.StatusCode
 		res.Err = fmt.Errorf("error occurred: %v", resp.StatusCode)
 		return res

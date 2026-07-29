@@ -6,6 +6,8 @@ package ais
 
 import (
 	"io"
+	"net/http"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
@@ -85,6 +87,67 @@ func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *mems
 		s = "[client gone]" // EPIPE, et al.
 	}
 	nlog.InfoDepth(1, ftcg, tag, cname, "err:", s)
+}
+
+// feat.RangeColdGET: object is not in cluster - read the requested byte range directly
+// from the remote backend and transmit it to the user; do not write anything locally.
+// Compare w/ goi.coldStream (that reads and stores the entire object).
+// (under rlock)
+func (goi *getOI) coldRange() (ecode int, err error) {
+	var (
+		t, lom = goi.t, goi.lom
+		oa     *cmn.ObjAttrs
+	)
+	// HEAD remote object: need size to resolve the range and set Content-Range
+	oa, ecode, err = t.HeadCold(lom, goi.req)
+	if err != nil {
+		return ecode, err
+	}
+
+	whdr := goi.w.Header()
+	hrng, ecode, err := goi.rngToHeader(whdr, oa.Size)
+	if err != nil {
+		return ecode, err
+	}
+	if hrng == nil || hrng.Length <= 0 { // (empty range spec, zero-length suffix)
+		return http.StatusRequestedRangeNotSatisfiable, cos.NewErrRangeNotSatisfiable(nil, []string{goi.ranges.Range}, oa.Size)
+	}
+
+	goi.cold, goi.rget = true, true
+	res := t.Backend(lom.Bck()).GetObjReader(goi.ctx, lom, hrng.Start, hrng.Length)
+	if res.Err != nil {
+		if !cos.IsNotExist(res.Err, res.ErrCode) {
+			nlog.Infoln(ftcg, "(range read)", lom.Cname(), res.Err, res.ErrCode)
+		}
+		return res.ErrCode, res.Err
+	}
+
+	// response headers (compare w/ goi.setwhdr and t.headObjS3)
+	lom.SetCustomMD(oa.GetCustomMD())
+	whdr.Set(cos.HdrContentType, cos.ContentBinary)
+	if goi.dpq.isS3 {
+		whdr.Set(cos.HdrContentLength, strconv.FormatInt(hrng.Length, 10))
+		s3.SetS3Headers(whdr, lom)
+	} else {
+		cmn.ToHeader(oa, whdr, hrng.Length)
+	}
+	goi.w.WriteHeader(http.StatusPartialContent)
+
+	// transmit
+	buf, slab := t.gmm.AllocSize(_txsize(hrng.Length))
+	written, erw := cos.CopyBuffer(goi.w, res.R, buf)
+	slab.Free(buf)
+	cos.Close(res.R)
+
+	if erw != nil || written != hrng.Length {
+		if !cos.IsErrRetriableConn(erw) {
+			nlog.Infoln(ftcg, "(range tx)", lom.Cname(), "err:", erw, "written:", written, "expected:", hrng.Length)
+		}
+		return 0, cmn.ErrGetTxBenign // (already committed 206)
+	}
+
+	goi.stats(written)
+	return 0, nil
 }
 
 // NOTE:

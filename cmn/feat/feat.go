@@ -54,6 +54,7 @@ const (
 	EnableGoRuntimeMetrics    // publish selected Go runtime metrics via Prometheus
 	DloadAllowPrivateEgress   // allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 	S3RedirectRebuild         // allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
+	RangeColdGET              // serve range read of a missing (not-cached) object directly from remote backend, do not store the object
 )
 
 var Cluster = [...]string{
@@ -85,6 +86,7 @@ var Cluster = [...]string{
 	"Enable-Go-Runtime-Metrics",
 	"Dload-Allow-Private-Egress",
 	"S3-Redirect-Rebuild",
+	"Range-Cold-GET",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -99,6 +101,7 @@ var Bucket = [...]string{
 	"S3-ListObjectVersions",
 	"Resume-Interrupted-MPU",
 	"Count-Object-NotFound-Stats",
+	"Range-Cold-GET",
 
 	// apc.ResetToken ("none") ===========
 }
