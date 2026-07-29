@@ -53,7 +53,7 @@ var clusterFeatDesc = [...]string{
 	"publish selected Go runtime metrics via Prometheus",
 	"allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked",
 	"allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)",
-	"serve range read of a missing (not-cached) object directly from remote backend, do not store the object",
+	"serve range read of a missing (not-cached) object directly from remote backend, caching the accumulated ranges",
 
 	// apc.ResetToken ("none") ===========
 }
