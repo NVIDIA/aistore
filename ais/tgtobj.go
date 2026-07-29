@@ -741,8 +741,8 @@ do: // retry uplock or ec-recovery, the latter only once
 		// TODO: utilize res.ObjAttrs
 	}
 
-	// feat.RangeColdGET (object is not in cluster): read the requested range
-	// directly from remote backend - do not run full-blown cold-GET, do not store
+	// feat.RangeColdGET (object is not in cluster): read the requested range directly
+	// from remote backend (and cache it, chunk by chunk) - no full-blown cold-GET
 	if cold && !goi.verchanged && goi.ranges.Range != "" && goi.lom.IsFeatureSet(feat.RangeColdGET) {
 		return goi.coldRange()
 	}
