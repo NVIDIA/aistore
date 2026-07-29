@@ -669,6 +669,10 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 // (primary forceJoin() calling)
 // TODO: refactor as 2PC begin--abort|commit
 func (h *htrun) daeForceJoin(w http.ResponseWriter, r *http.Request) {
+	// Both force-join phases are internal requests from the current primary.
+	if !h.ensureIntraControl(w, r, true /* from primary */) {
+		return
+	}
 	// msg and query params
 	q := r.URL.Query()
 	prepare, err := cos.ParseBool(q.Get(apc.QparamPrepare))
