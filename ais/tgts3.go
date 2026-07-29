@@ -54,6 +54,11 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode, Code: code})
 		return
 	}
+	if len(apiItems) == 0 {
+		// GET /s3 ListBuckets is currently proxy-local (see p.s3Handler); target-side root requests are unsupported.
+		s3.WriteErr(w, r, s3.ErrInfo{Err: errS3Req, Code: s3.ErrCodeInvalidRequest})
+		return
+	}
 
 	switch r.Method {
 	case http.MethodHead:

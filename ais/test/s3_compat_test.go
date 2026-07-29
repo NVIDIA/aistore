@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -167,6 +168,52 @@ func setBucketFeatures(t *testing.T, bck cmn.Bck, bprops *cmn.Bprops, nf feat.Fl
 		_, err := api.SetBucketProps(baseParams, bck, props)
 		tassert.CheckFatal(t, err)
 	})
+}
+
+func TestS3TargetEmptyBucket(t *testing.T) {
+	smap := tools.GetClusterMap(t, tools.RandomProxyURL(t))
+	target, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+
+	expectedStatus := http.StatusBadRequest
+	expectedCode := aiss3.ErrCodeInvalidRequest
+	config := tools.GetClusterConfig(t)
+	requiresProxyMediation := config.Auth.Enabled || config.Auth.IntraClusterConfigured()
+	if requiresProxyMediation {
+		expectedStatus = http.StatusForbidden
+		expectedCode = aiss3.ErrCodeAccessDenied
+	}
+
+	targetURL := target.URL(cmn.NetPublic)
+	bp := tools.BaseAPIParams(targetURL)
+	for _, method := range []string{
+		http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+	} {
+		t.Run(method, func(t *testing.T) {
+			req, err := http.NewRequest(method, targetURL+apc.URLPathS3.S, http.NoBody)
+			tassert.CheckFatal(t, err)
+			resp, err := bp.Client.Do(req)
+			tassert.CheckFatal(t, err)
+			defer resp.Body.Close()
+
+			tassert.Fatalf(t, resp.StatusCode == expectedStatus,
+				"expected status %d, got %d", expectedStatus, resp.StatusCode)
+			if method != http.MethodGet {
+				return
+			}
+
+			var s3Err aiss3.Error
+			tassert.CheckFatal(t, xml.NewDecoder(resp.Body).Decode(&s3Err))
+			tassert.Errorf(t, s3Err.Code == expectedCode,
+				"expected S3 error code %q, got %q", expectedCode, s3Err.Code)
+			if !requiresProxyMediation {
+				tassert.Errorf(t, s3Err.Message == "invalid s3 request",
+					"unexpected S3 error message %q", s3Err.Message)
+			}
+		})
+	}
+
+	tassert.CheckFatal(t, api.Health(bp))
 }
 
 func loadCredentials(t *testing.T) (f func(*config.LoadOptions) error) {

@@ -63,6 +63,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		p.headObjS3(w, r, apiItems)
 	case http.MethodGet:
 		if len(apiItems) == 0 {
+			// Keep in sync with t.s3Handler; update its root-path handling if ListBuckets is delegated.
 			// list all buckets; NOTE: compare with `p.easyURLHandler` and see
 			// "list buckets for a given provider" comment there
 			// perms: apc.AceListBuckets
