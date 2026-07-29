@@ -54,10 +54,10 @@ var rcFilling sync.Map // lom.Uname() => struct{}
 
 type (
 	// a piece of the requested range: `size` bytes at `off`
-	// - path != "":  locally cached chunk
-	// - count > 0:   to read [coff, coff+clen) from the backend and store it as
-	//                chunks [num, num+count) - a single read for the entire run
-	// - otherwise:   to read [off, off+size) from the backend, not storing anything
+	// - path != "": to read from the locally cached chunk
+	// - count > 0:  to read [coff, coff+clen) from the backend and store it as
+	//               chunks [num, num+count) - a single read for the entire run
+	// - otherwise:  to read [off, off+size) from the backend, not storing anything
 	rcseg struct {
 		path       string
 		num, count int
@@ -131,21 +131,7 @@ func (goi *getOI) coldRange() (ecode int, err error) {
 	goi.w.WriteHeader(http.StatusPartialContent)
 
 	// transmit
-	var written int64
-	for i := range segs {
-		if i > 0 {
-			if src, _, err = rc.open(&segs[i]); err != nil {
-				break
-			}
-		}
-		var n int64
-		n, err = rc.tx(&segs[i], src)
-		written += n
-		if err != nil {
-			break
-		}
-	}
-
+	written, err := rc.txAll(segs, src)
 	if err != nil || written != hrng.Length {
 		if !cos.IsErrRetriableConn(err) {
 			nlog.Infoln(ftcg, "(range tx)", lom.Cname(), "err:", err, "written:", written, "expected:", hrng.Length)
@@ -275,6 +261,23 @@ func (rc *rcache) cached(num int, size int64) string {
 	return c.Path()
 }
 
+// transmit all segments (the first one's source is already resolved)
+func (rc *rcache) txAll(segs []rcseg, src rcsrc) (written int64, err error) {
+	for i := range segs {
+		if i > 0 {
+			if src, _, err = rc.open(&segs[i]); err != nil {
+				return written, err
+			}
+		}
+		n, errN := rc.tx(&segs[i], src)
+		written += n
+		if errN != nil {
+			return written, errN
+		}
+	}
+	return written, nil
+}
+
 // resolve the segment's byte source
 func (rc *rcache) open(s *rcseg) (src rcsrc, ecode int, err error) {
 	goi := rc.goi
@@ -283,9 +286,13 @@ func (rc *rcache) open(s *rcseg) (src rcsrc, ecode int, err error) {
 		if errN == nil {
 			return rcsrc{io.NewSectionReader(fh, s.off-s.coff, s.size), fh}, 0, nil
 		}
-		// gone (e.g., removed by space-cleanup) - fall back to the backend
+		// the recorded chunk is gone (e.g., removed by space-cleanup):
+		// read it from the backend and, if filling, store it again
 		nlog.Warningln(ftcg, "(range cache)", s.path, "err:", errN)
-		s.path, s.num = "", 0
+		s.path = ""
+		if rc.filling {
+			s.count = 1
+		}
 	}
 
 	off, size := s.off, s.size
@@ -320,7 +327,7 @@ func (rc *rcache) txStore(s *rcseg, src rcsrc) (int64, error) {
 		goi       = rc.goi
 		lom       = goi.lom
 		cksumType = lom.CksumConf().Type
-		sw        = &sectionWriter{w: goi.w, skip: s.off - s.coff, left: s.size}
+		sw        = &subrangeWriter{w: goi.w, skip: s.off - s.coff, left: s.size}
 		buf, slab = goi.t.gmm.AllocSize(_txsize(rc.chunkSize))
 	)
 	defer slab.Free(buf)
@@ -365,9 +372,9 @@ func (rc *rcache) txStore(s *rcseg, src rcsrc) (int64, error) {
 }
 
 // cannot store: transmit whatever is left of the run
-func (rc *rcache) drain(sw *sectionWriter, src rcsrc, buf []byte, err error) (int64, error) {
-	nlog.Warningln(ftcg, "(range cache)", rc.goi.lom.Cname(), "err:", err)
-	_, err = cos.CopyBuffer(sw, src.r, buf)
+func (rc *rcache) drain(sw *subrangeWriter, src rcsrc, buf []byte, reason error) (int64, error) {
+	nlog.Warningln(ftcg, "(range cache)", rc.goi.lom.Cname(), "err:", reason)
+	_, err := cos.CopyBuffer(sw, src.r, buf)
 	return sw.n, err
 }
 
@@ -400,15 +407,16 @@ func rcID(oa *cmn.ObjAttrs) string {
 	return fmt.Sprintf("%s%016x", rcIDprefix, onexxh.Checksum64S(cos.UnsafeB(s), cos.MLCG32))
 }
 
-// forwards only the [skip, skip+left) sub-range of the stream
-type sectionWriter struct {
+// forwards only the [skip, skip+left) sub-range of the stream, discarding the rest
+// (compare w/ cos.SectionWriter that is io.WriterAt based)
+type subrangeWriter struct {
 	w    io.Writer
 	skip int64
 	left int64
 	n    int64 // forwarded
 }
 
-func (sw *sectionWriter) Write(p []byte) (int, error) {
+func (sw *subrangeWriter) Write(p []byte) (int, error) {
 	l := len(p)
 	if sw.skip > 0 {
 		if int64(l) <= sw.skip {

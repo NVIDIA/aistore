@@ -24,14 +24,22 @@ func TestRcGrid(t *testing.T) {
 		{size: rcChunkSize, chunkSize: rcChunkSize, total: 1},
 		{size: rcChunkSize + 1, chunkSize: rcChunkSize, total: 2},
 		{size: 10 * cos.GiB, chunkSize: rcChunkSize, total: 1280},
-		// beyond core.MaxChunkCount chunks: granularity adjusted
+		{size: core.MaxChunkCount * rcChunkSize, chunkSize: rcChunkSize, total: core.MaxChunkCount},
+		// beyond core.MaxChunkCount chunks: granularity gets adjusted
+		{size: core.MaxChunkCount*rcChunkSize + 1, chunkSize: 2 * rcChunkSize, total: 5000},
 		{size: 1 * cos.TiB, chunkSize: 112 * cos.MiB, total: 9363},
 	}
 	for _, test := range tests {
 		chunkSize, total := rcGrid(test.size)
 		tassert.Errorf(t, chunkSize == test.chunkSize && total == test.total,
 			"size %d: expected (%d, %d), got (%d, %d)", test.size, test.chunkSize, test.total, chunkSize, total)
-		tassert.Errorf(t, total <= core.MaxChunkCount, "size %d: too many chunks (%d)", test.size, total)
+	}
+	// the grid must always fit MaxChunkCount and must always cover the object
+	for _, size := range []int64{1, 63, rcChunkSize - 1, 7 * cos.GiB, 977 * cos.GiB, 64 * cos.TiB, 1024 * cos.TiB} {
+		chunkSize, total := rcGrid(size)
+		tassert.Errorf(t, total > 0 && total <= core.MaxChunkCount, "size %d: invalid chunk count %d", size, total)
+		tassert.Errorf(t, int64(total-1)*chunkSize < size && int64(total)*chunkSize >= size,
+			"size %d: grid (%d, %d) does not cover the object", size, chunkSize, total)
 	}
 }
 
@@ -43,15 +51,20 @@ func TestRcID(t *testing.T) {
 	oa.SetVersion("1") // remote ais
 	id := rcID(&oa)
 	tassert.Fatalf(t, cos.ValidateManifestID(id) == nil, "invalid manifest ID %q", id)
+	tassert.Errorf(t, rcID(&oa) == id, "ID must be stable")
 	oa.SetVersion("2")
-	tassert.Errorf(t, rcID(&oa) != id, "ID must change when the remote object changes")
+	tassert.Errorf(t, rcID(&oa) != id, "ID must change when the remote version changes")
 
 	oa.SetVersion("")
 	oa.SetCustomKey(cmn.ETag, "abc")
 	id = rcID(&oa)
 	tassert.Fatalf(t, cos.ValidateManifestID(id) == nil, "invalid manifest ID %q", id)
 	oa.SetCustomKey(cmn.ETag, "xyz")
-	tassert.Errorf(t, rcID(&oa) != id, "ID must change when the remote object changes")
+	tassert.Errorf(t, rcID(&oa) != id, "ID must change when the remote ETag changes")
+
+	id = rcID(&oa)
+	oa.Size++
+	tassert.Errorf(t, rcID(&oa) != id, "ID must change when the remote size changes")
 }
 
 func TestRcPlan(t *testing.T) {
@@ -92,27 +105,35 @@ func TestRcPlan(t *testing.T) {
 	}
 }
 
-func TestSectionWriter(t *testing.T) {
-	const (
-		l    = 100
-		skip = 30
-		size = 50
-	)
+func TestSubrangeWriter(t *testing.T) {
+	const l = 100
 	src := make([]byte, l)
 	for i := range src {
 		src[i] = byte(i)
 	}
-	for _, chunk := range []int{1, 7, l} {
-		var (
-			w  bytes.Buffer
-			sw = &sectionWriter{w: &w, skip: skip, left: size}
-		)
-		for off := 0; off < l; off += chunk {
-			n, err := sw.Write(src[off:min(off+chunk, l)])
-			tassert.CheckFatal(t, err)
-			tassert.Fatalf(t, n == min(off+chunk, l)-off, "short write: %d", n)
+	tests := []struct{ skip, size int64 }{
+		{skip: 0, size: l},   // all of it
+		{skip: 0, size: 10},  // head
+		{skip: 90, size: 10}, // tail
+		{skip: 30, size: 50}, // middle
+		{skip: 99, size: 1},  // single byte
+		{skip: l, size: 0},   // nothing
+	}
+	for _, test := range tests {
+		for _, piece := range []int{1, 7, l} { // write in variable-size pieces
+			var (
+				w  bytes.Buffer
+				sw = &subrangeWriter{w: &w, skip: test.skip, left: test.size}
+			)
+			for off := 0; off < l; off += piece {
+				end := min(off+piece, l)
+				n, err := sw.Write(src[off:end])
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, n == end-off, "%+v: short write %d (expecting %d)", test, n, end-off)
+			}
+			tassert.Errorf(t, sw.n == test.size, "%+v: forwarded %d bytes", test, sw.n)
+			tassert.Errorf(t, bytes.Equal(w.Bytes(), src[test.skip:test.skip+test.size]),
+				"%+v: wrong sub-range (piece size %d)", test, piece)
 		}
-		tassert.Errorf(t, sw.n == size, "expected %d forwarded bytes, got %d", size, sw.n)
-		tassert.Errorf(t, bytes.Equal(w.Bytes(), src[skip:skip+size]), "wrong sub-range (piece size %d)", chunk)
 	}
 }
