@@ -113,6 +113,7 @@ type (
 		TCB         *TCBConf        `json:"tcb,omitempty" allow:"cluster"`
 		TCO         *TCOConf        `json:"tco,omitempty" allow:"cluster"`
 		Arch        *ArchConf       `json:"arch,omitempty" allow:"cluster"`
+		Lso         *LsoConf        `json:"lso,omitempty" allow:"cluster"`
 		RateLimit   RateLimitConf   `json:"rate_limit"`
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
@@ -167,6 +168,7 @@ type (
 		TCB         *TCBConfToSet         `json:"tcb,omitempty"`
 		TCO         *TCOConfToSet         `json:"tco,omitempty"`
 		Arch        *ArchConfToSet        `json:"arch,omitempty"`
+		Lso         *LsoConfToSet         `json:"lso,omitempty"`
 		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"`
 		Proxy       *ProxyConfToSet       `json:"proxy,omitempty"`
 		RateLimit   *RateLimitConfToSet   `json:"rate_limit,omitempty"`
@@ -970,6 +972,45 @@ type (
 	ArchConf      struct{ XactConf }
 	ArchConfToSet struct{ XactConfToSet }
 
+	// list-objects (x-lso)
+	LsoConf struct {
+		// stream bundle multiplier, et. al - the common knobs
+		// included by all xactions that generate intra-cluster traffic
+		//
+		// Unlike TCB/TCO/Arch, list-objects defaults to a *single*
+		// stream per destination (SbundleMult = 1): the traffic is control-plane-ish
+		// (msgp-packed commonly 1000-entries pages), not bulk data.
+		XactConf
+
+		// Capacity of the channel that buffers object entries produced by
+		// `fs.WalkBck` ahead of the caller reading the next page.
+		// Larger values smooth out bursty walks at the cost of memory;
+		// smaller values apply backpressure to the walker sooner.
+		// Note: counts entries, not pages.
+		// If 0, the system default (below) is used.
+		WalkBuffer int `json:"walk_buffer"`
+
+		// Idle timeout for the x-lso demand xaction: how long a listing
+		// session survives without a next-page request before it self-terminates.
+		// Must exceed the client's think-time between pages, or long-running
+		// paginated listings will hit `ErrGone` and restart from scratch.
+		// If 0, the system default (below) is used.
+		IdleTime cos.Duration `json:"idle_time"`
+
+		// Postponed-cleanup interval: when a listing that used remote paging
+		// finishes, `UnregRecv` is deferred by this duration to absorb in-flight
+		// pages from peer targets. Also the floor for `resetIdle`.
+		// If 0, the system default (below) is used.
+		QuiesceTime cos.Duration `json:"quiescent"`
+	}
+	// LsoConfToSet is the partial-update counterpart of LsoConf.
+	LsoConfToSet struct {
+		XactConfToSet
+		WalkBuffer  *int          `json:"walk_buffer,omitempty"` // +gen:optional
+		IdleTime    *cos.Duration `json:"idle_time,omitempty"`   // +gen:optional
+		QuiesceTime *cos.Duration `json:"quiescent,omitempty"`   // +gen:optional
+	}
+
 	WritePolicyConf struct {
 		Data apc.WritePolicy `json:"data"`
 		MD   apc.WritePolicy `json:"md"`
@@ -1179,6 +1220,7 @@ var (
 	_ validator = (*TCBConf)(nil)
 	_ validator = (*TCOConf)(nil)
 	_ validator = (*ArchConf)(nil)
+	_ validator = (*LsoConf)(nil)
 	_ validator = (*WritePolicyConf)(nil)
 	_ validator = (*TracingConf)(nil)
 	_ validator = (*GetBatchConf)(nil)
@@ -2389,6 +2431,62 @@ func (c *IntraClusterConf) validate() error {
 		return fmt.Errorf("invalid intra_cluster.rotation_grace %v (expecting > 0 and <= %v)", rg, maxRotationGrace)
 	}
 
+	return nil
+}
+
+/////////////
+// LsoConf //
+/////////////
+
+const (
+	lsoSbundleMultDflt = 1  // control-plane-ish: one stream per destination
+	lsoBurstDflt       = 32 // was xact/xs/lso.go remtPageChSize (16); raised to xactBurstMin
+
+	lsoWalkBufDflt = 128 // TODO remove xact/xs/lso.go pageChSize
+	lsoWalkBufMin  = 16
+	lsoWalkBufMax  = 4096
+
+	lsoIdleDflt = 20 * time.Second // TODO: remove/replace timeout.max_host_busy
+	lsoIdleMin  = 5 * time.Second
+	lsoIdleMax  = 10 * time.Minute
+
+	lsoQuiesceDflt = 5 * time.Second // TODO: remove timeout.max_keepalive
+	lsoQuiesceMin  = 2 * time.Second
+	lsoQuiesceMax  = time.Minute
+)
+
+// lso-specific zero->default substitution must precede the embedded
+// XactConf.Validate(), which would otherwise force SbundleMult to its own default.
+func (c *LsoConf) Validate() error {
+	debug.Assert(lsoQuiesceDflt < lsoIdleDflt)
+
+	c.SbundleMult = cos.NonZero(c.SbundleMult, lsoSbundleMultDflt)
+	c.Burst = cos.NonZero(c.Burst, lsoBurstDflt)
+
+	if err := c.XactConf.Validate(); err != nil {
+		return err
+	}
+	if c.WalkBuffer == 0 {
+		c.WalkBuffer = lsoWalkBufDflt
+	} else if c.WalkBuffer < lsoWalkBufMin || c.WalkBuffer > lsoWalkBufMax {
+		return fmt.Errorf("invalid lso.walk_buffer=%d (expecting 0 for default, or range [%d, %d])",
+			c.WalkBuffer, lsoWalkBufMin, lsoWalkBufMax)
+	}
+	if c.IdleTime == 0 {
+		c.IdleTime = cos.Duration(lsoIdleDflt)
+	} else if c.IdleTime.D() < lsoIdleMin || c.IdleTime.D() > lsoIdleMax {
+		return fmt.Errorf("invalid lso.idle_time=%s (expecting 0 for default, or range [%v, %v])",
+			c.IdleTime, lsoIdleMin, lsoIdleMax)
+	}
+	if c.QuiesceTime == 0 {
+		c.QuiesceTime = cos.Duration(lsoQuiesceDflt)
+	} else if c.QuiesceTime.D() < lsoQuiesceMin || c.QuiesceTime.D() > lsoQuiesceMax {
+		return fmt.Errorf("invalid lso.quiescent=%s (expecting 0 for default, or range [%v, %v])",
+			c.QuiesceTime, lsoQuiesceMin, lsoQuiesceMax)
+	}
+	if c.QuiesceTime >= c.IdleTime {
+		return fmt.Errorf("invalid lso.quiescent=%s: must be less than lso.idle_time=%s", c.QuiesceTime, c.IdleTime)
+	}
 	return nil
 }
 

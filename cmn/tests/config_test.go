@@ -243,6 +243,8 @@ func TestGCOClone_NoAuthTracingAlias(t *testing.T) {
 	}
 	config.ClusterConfig.Auth.Signature = &cmn.AuthSignatureConf{Key: "k"}
 	config.ClusterConfig.Tracing = &cmn.TracingConf{Enabled: true, ExporterEndpoint: "x"}
+	config.ClusterConfig.Lso = &cmn.LsoConf{WalkBuffer: 256}
+
 	cmn.GCO.CommitUpdate(config)
 
 	c := cmn.GCO.Get()
@@ -260,6 +262,9 @@ func TestGCOClone_NoAuthTracingAlias(t *testing.T) {
 	// v5.0
 	if c.Net.HTTP.Pub != nil {
 		tassert.Fatalf(t, clone.Net.HTTP.Pub != c.Net.HTTP.Pub, "cloned Pub aliases source")
+	}
+	if clone.Lso == c.Lso {
+		t.Fatal("Lso alias")
 	}
 }
 

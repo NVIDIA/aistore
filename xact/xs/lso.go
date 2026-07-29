@@ -105,11 +105,6 @@ type (
 
 const assertContProgress = "continuation token must make forward progress"
 
-const (
-	pageChSize     = 128
-	remtPageChSize = 16
-)
-
 var (
 	errLsoStopped = errors.New("stopped")
 	ErrGone       = errors.New("gone")
@@ -150,7 +145,7 @@ func (p *lsoFactory) Start() error {
 
 	// idle timeout vs delayed next-page request
 	// see also: resetIdle()
-	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Timeout.MaxHostBusy.D())
+	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Lso.IdleTime.D())
 
 	bck := r.Bck()
 
@@ -219,16 +214,13 @@ func (p *lsoFactory) Start() error {
 
 func (p *lsoFactory) beginStreams(r *LsoXact) error {
 	if !r.walk.this {
-		r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
+		r.remtCh = make(chan *LsoRsp, r.config.Lso.Burst) // <= by selected target (selected to page remote bucket)
 	}
-
-	// TODO -- FIXME: list-objects must have its own config section
 	extra := bundle.Extra{
-		XactConf:         cmn.XactConf{SbundleMult: 1, Compression: apc.CompressNever},
+		XactConf:         r.config.Lso.XactConf,
 		Config:           r.config,
 		SkipGenericStats: true,
 	}
-
 	trname := "lso-" + p.UUID()
 	p.dm = bundle.NewDM(trname, r.recv, cmn.OwtPut, extra)
 
@@ -380,7 +372,7 @@ func (r *LsoXact) stop() {
 					r.p.dm.UnregRecv()
 				} else if r.p.dm != nil {
 					// postpone unreg
-					hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, r.config.Timeout.MaxKeepalive.D())
+					hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, r.config.Lso.QuiesceTime.D())
 				}
 			}
 		}
@@ -413,12 +405,12 @@ func (r *LsoXact) lastmsg() {
 
 // upon listing last page
 func (r *LsoXact) resetIdle() {
-	r.DemandBase.Reset(max(r.config.Timeout.MaxKeepalive.D(), 2*time.Second))
+	r.DemandBase.Reset(r.config.Lso.QuiesceTime.D())
 }
 
 func (r *LsoXact) fcleanup(int64) (d time.Duration) {
 	if cnt := r.wiCnt.Load(); cnt > 0 {
-		d = max(cmn.Rom.MaxKeepalive(), 2*time.Second)
+		d = max(r.config.Lso.QuiesceTime.D(), 2*time.Second)
 	} else {
 		d = hk.UnregInterval
 		if r.remtCh != nil {
@@ -440,7 +432,7 @@ func (r *LsoXact) Abort(err error) (ok bool) {
 
 // Start `fs.WalkBck`, so that by the time we read the next page `r.pageCh` is already populated.
 func (r *LsoXact) initWalk() {
-	r.walk.pageCh = make(chan *cmn.LsoEnt, pageChSize)
+	r.walk.pageCh = make(chan *cmn.LsoEnt, r.config.Lso.WalkBuffer)
 	r.walk.done = false
 	r.walk.stopCh = cos.NewStopCh()
 	r.walk.lastDir = "" // reset directory dedup state

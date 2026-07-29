@@ -214,6 +214,16 @@ var (
 		MaxSoftErrs:      8,
 		MaxGFN:           5,
 	}
+	defaultLso = aiscmn.LsoConf{
+		XactConf: aiscmn.XactConf{
+			Compression: aisapc.CompressNever,
+			SbundleMult: 1,
+			Burst:       32,
+		},
+		WalkBuffer:  128,
+		IdleTime:    cos.Duration(20 * time.Second),
+		QuiesceTime: cos.Duration(5 * time.Second),
+	}
 )
 
 // [removed in 4.3] Dsort: defaultDsort
@@ -226,6 +236,7 @@ func newDefaultConfig() *aiscmn.ClusterConfig {
 		TCB:         &aiscmn.TCBConf{XactConf: defaultXconf},
 		TCO:         &aiscmn.TCOConf{XactConf: defaultXconf},
 		Arch:        &aiscmn.ArchConf{XactConf: defaultXconf},
+		Lso:         aisapc.Ptr(defaultLso),
 		Disk:        defaultDisk,
 		Net:         defaultNet,
 		FSHC:        defaultFSHC,

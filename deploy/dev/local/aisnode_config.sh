@@ -284,6 +284,14 @@ cat > "$AIS_CONF_FILE" <<EOL
 			"enabled":           false
 		}
 	},
+	"lso": {
+		"compression":		"never",
+		"bundle_multiplier":	1,
+		"burst_buffer":		32,
+		"walk_buffer":		128,
+		"idle_time":		"20s",
+		"quiescent":		"5s"
+	},
 	"get_batch": {
 		"compression":       "never",
 		"bundle_multiplier": 0,

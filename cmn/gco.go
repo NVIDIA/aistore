@@ -78,8 +78,13 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 //
 // Release notes for the intervening TBD releases (v5.0, v5.1) must carry a disclaimer.
 //
-// Phase-2: remove ensureDefaults(); introduce instead normalizeToNil() that'd `nil` any
-// previously pointerized config section containing only the canonical defaults.
+// Phase-2: keep ensureDefaults() (in-memory sections stay non-nil); add normalizeToNil()
+// to strip pointerized sections containing only canonical defaults at marshal time.
+// Caveats:
+// - `Config` embeds `ClusterConfig` inline, so a MarshalJSON on the latter gets promoted
+//   to the former and would truncate it - the strip belongs at the encode sites;
+// - the persisted/metasynced clone is *not* validated (ais/gconfig.go `_runPre` validates
+//   a separate copy), so "all-defaults" cannot be assumed of the value being marshaled.
 // =================================================================================================================
 
 // CopyStruct is a shallow copy. Mutable pointer-backed sections are
@@ -121,10 +126,17 @@ func (c *ClusterConfig) clonePtrs() {
 		v := *pub
 		c.Net.HTTP.Pub = &v
 	}
+	if c.Lso != nil {
+		v := *c.Lso
+		c.Lso = &v
+	}
 }
 
 // from `nil` to canonical defaults via subsequent config-section.Validate()
-// TODO: remove in phase-2, replace with normalizeToNil().
+// NOTE:
+// pointerized sections are always materialized in memory - consumers dereference
+// them unconditionally (e.g. config.Lso.WalkBuffer). Not *persisting* all-default
+// sections is a separate, marshal-time concern - see phase-2 below.
 func (c *ClusterConfig) ensureDefaults() {
 	if c.TCB == nil {
 		c.TCB = &TCBConf{}
@@ -134,6 +146,9 @@ func (c *ClusterConfig) ensureDefaults() {
 	}
 	if c.Arch == nil {
 		c.Arch = &ArchConf{}
+	}
+	if c.Lso == nil {
+		c.Lso = &LsoConf{}
 	}
 }
 
