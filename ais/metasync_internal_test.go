@@ -6,6 +6,7 @@ package ais
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -176,6 +177,23 @@ func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportDa
 	primary.owner.smap.put(clone)
 
 	return ts
+}
+
+func TestMetasyncProxyRejectsMissingIntraHeaders(t *testing.T) {
+	p := newSecondary("p1")
+	payload := make(msPayload).marshal(memsys.PageMM())
+	defer payload.Free()
+
+	req := httptest.NewRequest(http.MethodPut, apc.URLPathMetasync.S, bytes.NewReader(payload.Bytes()))
+	req = req.WithContext(context.WithValue(req.Context(), keyReqNet, reqNetCtrl))
+	w := httptest.NewRecorder()
+	p.metasyncHandler(w, req)
+
+	herr := &cmn.ErrHTTP{}
+	tassert.CheckFatal(t, jsoniter.Unmarshal(w.Body.Bytes(), herr))
+	tassert.Fatalf(t, w.Code == http.StatusBadRequest && herr.Message == errNotIntraControl.Error(),
+		"expected missing intra-control headers to fail with %q, got status %d and %q",
+		errNotIntraControl, w.Code, herr.Message)
 }
 
 func TestMetasyncDeepCopy(t *testing.T) {

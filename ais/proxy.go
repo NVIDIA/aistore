@@ -1179,6 +1179,10 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !p.ensureIntraControl(w, r, true /* from primary */) {
+		return
+	}
+
 	p.warnMsync(r, smap)
 
 	payload := make(msPayload)
