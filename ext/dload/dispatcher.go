@@ -50,7 +50,6 @@ type (
 		store *infoStore
 
 		// Downloader selects one of the two clients (below) by the destination URL.
-		// Certification check is disabled for now and does not depend on cluster settings.
 		clientH   *http.Client
 		clientTLS *http.Client
 

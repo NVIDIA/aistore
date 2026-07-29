@@ -27,6 +27,9 @@ Namely:
 Downloadable source can be both an Internet link (or links) or a remote bucket accessible via the corresponding backend implementation.
 You can, for instance, download a Google Cloud bucket via its Internet location that would look something like: `https://www.googleapis.com/storage/.../bucket-name/...`.
 
+> HTTPS sources are verified using each target node's system CA trust store.
+> Install private CA certificates on every target before downloading from internally signed endpoints.
+
 However.
 When downloading a remote bucket (**any** remote bucket), it is always **preferable** to have the corresponding SDK linked-in.
 Downloader will then detect the SDK "presence" at runtime and use a wider range of options available via this SDK.

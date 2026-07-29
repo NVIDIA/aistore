@@ -75,7 +75,7 @@ func newDloadClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
 	clientH = &http.Client{Transport: newDloadTransport(), Timeout: timeout}
 
 	tr := newDloadTransport()
-	tlsConf, err := cmn.NewTLS(cmn.TLSArgs{SkipVerify: true}, false /*intra*/)
+	tlsConf, err := cmn.NewTLS(cmn.TLSArgs{}, false /*intra*/)
 	if err != nil {
 		cos.ExitLog(err) // FATAL, same as cmn.NewClientTLS
 	}
