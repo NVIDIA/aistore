@@ -2,6 +2,7 @@ import unittest
 
 from requests.structures import CaseInsensitiveDict
 from aistore.sdk.obj.object_attributes import ObjectAttributes, ObjectAttributesV2
+from aistore.sdk.obj.object_props import ObjectProps
 
 
 class TestObjectAttributes(unittest.TestCase):
@@ -79,3 +80,20 @@ class TestObjectAttributesV2(unittest.TestCase):
         headers = CaseInsensitiveDict({"Content-Length": "1024"})
         attrs = ObjectAttributesV2(headers)
         self.assertIsNone(attrs.chunks)
+
+    def test_malformed_numeric_headers(self):
+        """Malformed server metadata falls back to zero instead of leaking ValueError."""
+        headers = CaseInsensitiveDict(
+            {
+                "Content-Length": "not-a-number",
+                "Ais-Chunks-Count": "0x10",
+                "Ais-Chunks-Max-Chunk-Size": "1e6",
+                "Ais-Mirror-Copies": "two",
+            }
+        )
+
+        attrs = ObjectAttributesV2(headers)
+        self.assertEqual(0, attrs.size)
+        self.assertEqual(0, attrs.chunks.chunk_count)
+        self.assertEqual(0, attrs.chunks.max_chunk_size)
+        self.assertEqual(0, ObjectProps(headers).mirror_copies)

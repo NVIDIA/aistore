@@ -64,7 +64,7 @@ class ObjectProps(ObjectAttributes):
         """
         Number of mirror copies.
         """
-        return int(self._response_headers.get(AIS_MIRROR_COPIES, 0))
+        return self._parse_int_header(AIS_MIRROR_COPIES)
 
     @property
     def present(self) -> bool:

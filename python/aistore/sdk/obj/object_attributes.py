@@ -32,12 +32,18 @@ class ObjectAttributes:
     def __init__(self, response_headers: CaseInsensitiveDict):
         self._response_headers = response_headers
 
+    def _parse_int_header(self, name: str) -> int:
+        try:
+            return int(self._response_headers.get(name, 0))
+        except (TypeError, ValueError):
+            return 0
+
     @property
     def size(self) -> int:
         """
         Size of object content.
         """
-        return int(self._response_headers.get(HEADER_CONTENT_LENGTH, 0))
+        return self._parse_int_header(HEADER_CONTENT_LENGTH)
 
     @property
     def checksum_type(self) -> str:
@@ -161,6 +167,6 @@ class ObjectAttributesV2(ObjectAttributes):
             return None
 
         return ChunksInfo(
-            chunk_count=int(count_str) if count_str else 0,
-            max_chunk_size=int(max_size_str) if max_size_str else 0,
+            chunk_count=self._parse_int_header(AIS_CHUNKS_COUNT),
+            max_chunk_size=self._parse_int_header(AIS_CHUNKS_MAX_CHUNK_SIZE),
         )
