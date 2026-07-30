@@ -1915,6 +1915,12 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 // rename obj
 // TODO: (copy, delete) under a single wlock
 func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) error {
+	if err := cos.ValidateWname(lom.ObjName); err != nil {
+		return err
+	}
+	if err := cos.ValidateOname(msg.Name); err != nil {
+		return err
+	}
 	if lom.Bck().IsRemote() {
 		return fmt.Errorf("%s: cannot rename object %s from remote bucket", t.si, lom)
 	}
