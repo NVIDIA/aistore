@@ -11,7 +11,7 @@ redirect_from:
 AIStore (AIS) is a lightweight distributed storage stack tailored for AI applications. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size. Built from scratch, AIS provides linear scale-out, consistent performance, and a flexible deployment model.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-v4.6-green.svg)
+![Version](https://img.shields.io/badge/version-v4.8-green.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
 AIS is a reliable storage cluster that can natively operate on both in-cluster and remote data, without treating either as a cache.
@@ -27,7 +27,7 @@ AIS consistently shows [balanced I/O distribution and linear scalability](https:
 * ✅ **Monitoring:** Comprehensive observability with integrated Prometheus metrics, Grafana dashboards, detailed logs with configurable verbosity, and CLI-based performance tracking for complete cluster visibility and troubleshooting. See [AIStore Observability](/docs/monitoring-overview.md) for details.
 * ✅ **Chunked Objects:** High-performance chunked object representation, with independently retrievable chunks, metadata v2, and checksum-protected manifests. Supports rechunking, parallel reads, and seamless integration with [Get-Batch](/docs/get_batch.md), [blob-downloader](/docs/blob_downloader.md), and multipart uploads to supported cloud backends.
 * ✅ **JWT Authentication and Authorization:** [Validates request JWTs](/docs/auth_validation.md) to provide cluster- and bucket-level access control using static keys or dynamic OIDC issuer JWKS lookup.
-* ✅ **Secure Redirects:** Configurable cryptographic signing of redirect URLs using HMAC-SHA256 with a versioned cluster key (distributed via metasync, stored in memory only).
+* ✅ **Intra-Cluster Request Signing:** Per-node Ed25519 identities sign and verify intra-cluster requests, signed redirects, and transport streams, with verifying keys distributed through the cluster map (enabled in v5.1, following the mandatory [v5.0 compatibility bridge](/docs/relnotes/5.0.md)).
 * ✅ **Load-Aware Throttling:** Dynamic request throttling based on a multi-dimensional load vector (CPU, memory, disk, file descriptors, goroutines) to protect AIS clusters under stress.
 * ✅ **Unified Namespace:** Attach AIS clusters together to provide unified access to datasets across independent clusters, allowing users to reference shared buckets with cluster-specific identifiers.
 * ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.
