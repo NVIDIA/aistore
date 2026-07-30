@@ -318,6 +318,35 @@ class TestTarStreamExtractor(unittest.TestCase):
         self.mock_response.close.assert_called_once()
 
     @patch("tarfile.open")
+    def test_rejects_extra_archive_members(self, mock_tar_open):
+        """Test archive members without corresponding metadata are rejected."""
+        mock_tar_file = MagicMock()
+        mock_tar_open.return_value.__enter__.return_value = mock_tar_file
+
+        members = [Mock(), Mock()]
+        for index, member in enumerate(members):
+            member.isfile.return_value = True
+            member.name = f"file{index}.txt"
+        mock_tar_file.__iter__.return_value = members
+
+        files = [MagicMock(), MagicMock()]
+        for file in files:
+            file.__enter__.return_value.read.return_value = b"content"
+        mock_tar_file.extractfile.side_effect = files
+
+        request = MossReq(
+            moss_in=[MossIn(obj_name="file0.txt", bck="test-bucket")],
+            output_format=".tar",
+            streaming_get=True,
+        )
+        with self.assertRaisesRegex(RuntimeError, "missing batch metadata"):
+            list(
+                self.tar_extractor.extract(
+                    self.mock_response, BytesIO(b"tar data"), request
+                )
+            )
+
+    @patch("tarfile.open")
     def test_extraction_with_archpath(self, mock_tar_open):
         """Test extraction with archpath in MossIn."""
         # Create MossReq with archpath

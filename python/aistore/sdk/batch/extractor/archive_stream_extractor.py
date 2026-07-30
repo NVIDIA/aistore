@@ -81,12 +81,19 @@ class ArchiveStreamExtractor(ABC):
         Returns:
             MossOut: Response metadata for this file
         """
-        if moss_resp:
+        metadata = moss_resp.out if moss_resp is not None else moss_req.moss_in
+        if index >= len(metadata):
+            raise RuntimeError(
+                f"missing batch metadata for archive member {index} "
+                f"(metadata length={len(metadata)})"
+            )
+
+        if moss_resp is not None:
             # Multipart mode: use actual response
-            return moss_resp.out[index]
+            return metadata[index]
 
         # Streaming mode: infer from request
-        moss_in = moss_req.moss_in[index]
+        moss_in = metadata[index]
         return MossOut(
             obj_name=moss_in.obj_name,
             archpath=moss_in.archpath or "",

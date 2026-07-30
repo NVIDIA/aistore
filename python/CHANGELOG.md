@@ -50,6 +50,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- Get-Batch TAR and ZIP extractors now reject archive members without matching
+  request or response metadata instead of raising an uncaught `IndexError`.
 - Parallel downloads now route the initial HEAD and subsequent ranged GET
   requests through the proxy, allowing redirects to be signed when
   intra-cluster authentication is enabled.

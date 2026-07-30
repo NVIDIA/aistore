@@ -260,6 +260,31 @@ class TestZipStreamExtractor(unittest.TestCase):
         self.mock_response.close.assert_called_once()
 
     @patch("zipfile.ZipFile")
+    def test_rejects_extra_archive_members(self, mock_zipfile):
+        """Test archive members without corresponding metadata are rejected."""
+        mock_zip_file = MagicMock()
+        mock_zipfile.return_value.__enter__.return_value = mock_zip_file
+
+        members = [Mock(), Mock()]
+        for index, member in enumerate(members):
+            member.is_dir.return_value = False
+            member.filename = f"file{index}.txt"
+        mock_zip_file.infolist.return_value = members
+        mock_zip_file.read.return_value = b"content"
+
+        request = MossReq(
+            moss_in=[MossIn(obj_name="file0.txt", bck="test-bucket")],
+            output_format=".zip",
+            streaming_get=True,
+        )
+        with self.assertRaisesRegex(RuntimeError, "missing batch metadata"):
+            list(
+                self.zip_extractor.extract(
+                    self.mock_response, BytesIO(b"zip data"), request
+                )
+            )
+
+    @patch("zipfile.ZipFile")
     def test_zip_read_error_handling(self, mock_zipfile):
         """Test handling of ZIP file read errors during extraction."""
         # Setup mock ZipFile
