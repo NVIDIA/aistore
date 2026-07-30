@@ -112,7 +112,7 @@ func (c *ClusterConfig) clonePtrs() {
 	}
 
 	// default-omittable sections
-	c.rangeDefaultOmittable(func(field reflect.Value) {
+	c.rangeDefaultOmittable(func(_ reflect.StructField, field reflect.Value) {
 		if field.IsNil() {
 			return
 		}
@@ -122,7 +122,7 @@ func (c *ClusterConfig) clonePtrs() {
 	})
 }
 
-func (c *ClusterConfig) rangeDefaultOmittable(visit func(reflect.Value)) {
+func (c *ClusterConfig) rangeDefaultOmittable(visit func(reflect.StructField, reflect.Value)) {
 	v := reflect.ValueOf(c).Elem()
 
 	for i := range v.NumField() {
@@ -131,7 +131,7 @@ func (c *ClusterConfig) rangeDefaultOmittable(visit func(reflect.Value)) {
 			continue
 		}
 		if _, ok := field.Interface().(defaultOmittable); ok {
-			visit(field)
+			visit(v.Type().Field(i), field)
 		}
 	}
 }
@@ -139,7 +139,7 @@ func (c *ClusterConfig) rangeDefaultOmittable(visit func(reflect.Value)) {
 // Materialize default-omittable sections before section validation.
 // Runtime consumers may therefore dereference them unconditionally.
 func (c *ClusterConfig) ensureDefaults() {
-	c.rangeDefaultOmittable(func(field reflect.Value) {
+	c.rangeDefaultOmittable(func(_ reflect.StructField, field reflect.Value) {
 		if field.IsNil() {
 			field.Set(reflect.New(field.Type().Elem()))
 		}
@@ -161,7 +161,7 @@ func (c *ClusterConfig) ensureDefaults() {
 // See also: ensureDefaults and clonePtrs; all three are driven by defaultOmittable
 // marker interface.
 func (c *ClusterConfig) PruneOmittables() {
-	c.rangeDefaultOmittable(func(field reflect.Value) {
+	c.rangeDefaultOmittable(func(_ reflect.StructField, field reflect.Value) {
 		if field.IsNil() {
 			return
 		}
