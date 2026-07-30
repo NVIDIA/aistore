@@ -140,7 +140,7 @@ func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 			return
 		}
 	} else {
-		if !t.ensureIntraControl(w, r, false /* primary-only */) {
+		if !t.ensureIntraControl(w, r, false /* from primary */) {
 			return
 		}
 	}

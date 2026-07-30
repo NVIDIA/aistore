@@ -3343,7 +3343,7 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 	if err != nil {
 		return
 	}
-	p.setIntraHdrs(req, smap, npsi != nil)
+	p.setIntraHdrs(req, smap, true)
 	g.client.control.Do(req) //nolint:bodyclose // exiting
 	cmn.HreqFree(req)
 }
