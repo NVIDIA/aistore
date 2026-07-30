@@ -37,6 +37,9 @@ const (
 
 type (
 	validator interface {
+		// validate _and_ mutate live section -
+		// populate zero (nil) fields with their system defaults
+		// (implementation must be idempotent)
 		Validate() error
 	}
 	contextValidator interface {
@@ -1025,6 +1028,21 @@ type (
 		MD *apc.WritePolicy `json:"md,omitempty"` // +gen:optional
 	}
 )
+
+// Default-omittable (`defaultOmittable`) sections:
+// - must contain only value types (no maps, slices, pointers)
+// - see PruneOmittables() and note: Validate() mutates live section
+type (
+	defaultOmittable interface {
+		validator
+		defaultOmittable()
+	}
+)
+
+func (*TCBConf) defaultOmittable()  {}
+func (*TCOConf) defaultOmittable()  {}
+func (*ArchConf) defaultOmittable() {}
+func (*LsoConf) defaultOmittable()  {}
 
 // global config that can be used to manage:
 // * adaptive rate limit vis-à-vis Cloud backend
@@ -2455,15 +2473,13 @@ const (
 	lsoQuiesceMax  = time.Minute
 )
 
-// lso-specific zero->default substitution must precede the embedded
-// XactConf.Validate(), which would otherwise force SbundleMult to its own default.
 func (c *LsoConf) Validate() error {
 	debug.Assert(lsoQuiesceDflt < lsoIdleDflt)
 
 	c.SbundleMult = cos.NonZero(c.SbundleMult, lsoSbundleMultDflt)
 	c.Burst = cos.NonZero(c.Burst, lsoBurstDflt)
 
-	if err := c.XactConf.Validate(); err != nil {
+	if err := c.XactConf.Validate(); err != nil { // note: calling explicitly and _after_ c.SbundleMult
 		return err
 	}
 	if c.WalkBuffer == 0 {

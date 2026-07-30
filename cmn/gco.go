@@ -6,11 +6,13 @@
 package cmn
 
 import (
+	"reflect"
 	"sync"
 	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // GCO (Global Config Owner) is responsible for updating and notifying
@@ -70,86 +72,117 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 	return
 }
 
-// NOTE [backward compatibility] and future steps: =================================================================
+// NOTE [backward compatibility] ==================================================================================
 //
 // When pointerizing additional sections:
 // - update the corresponding <section>.Validate() to normalize zero/unset fields to their canonical defaults;
 // - review/skip fields where zero has an intentional user-visible meaning such as "disabled" or "" (for "none", etc).
+// - implement `defaultOmittable()` interface
 //
 // Release notes for the intervening TBD releases (v5.0, v5.1) must carry a disclaimer.
 //
-// Phase-2: keep ensureDefaults() (in-memory sections stay non-nil); add normalizeToNil()
-// to strip pointerized sections containing only canonical defaults at marshal time.
-// Caveats:
-// - `Config` embeds `ClusterConfig` inline, so a MarshalJSON on the latter gets promoted
-//   to the former and would truncate it - the strip belongs at the encode sites;
-// - the persisted/metasynced clone is *not* validated (ais/gconfig.go `_runPre` validates
-//   a separate copy), so "all-defaults" cannot be assumed of the value being marshaled.
+// Note that ensureDefaults() keeps in-memory sections non-nil; PruneOmittables()
+// strips all-default sections at encode time - see ais/gconfig.go `_encode`.
+// Join/handshake `cluMeta` and apc.WhatNodeConfig/apc.WhatClusterConfig queries stay fully populated (not sparse).
 // =================================================================================================================
 
-// CopyStruct is a shallow copy. Mutable pointer-backed sections are
-// deep-copied explicitly below; read-only FSPaths and BackendConf are shared.
-// NOTE:
-// every new pointer section in ClusterConfig must be added here
 func (gco *gco) Clone() *Config {
 	src := gco.Get()
 	dst := &Config{}
-	cos.CopyStruct(dst, src) // shallow
+	cos.CopyStruct(dst, src) // shallow-copy
 
 	// clone assorted pointers to structs
 	src.Auth.CopyTo(&dst.Auth)
 
-	dst.clonePtrs()
+	dst.clonePtrs() // deep-copy
 
 	return dst
 }
 
 // deep-copy pointerized sections (to break aliasing)
 func (c *ClusterConfig) clonePtrs() {
+	// optional configuration
 	if c.Tracing != nil {
 		v := *c.Tracing
 		c.Tracing = &v
-	}
-	if c.TCB != nil {
-		v := *c.TCB
-		c.TCB = &v
-	}
-	if c.TCO != nil {
-		v := *c.TCO
-		c.TCO = &v
-	}
-	if c.Arch != nil {
-		v := *c.Arch
-		c.Arch = &v
 	}
 	if pub := c.Net.HTTP.Pub; pub != nil {
 		v := *pub
 		c.Net.HTTP.Pub = &v
 	}
-	if c.Lso != nil {
-		v := *c.Lso
-		c.Lso = &v
+
+	// default-omittable sections
+	c.rangeDefaultOmittable(func(field reflect.Value) {
+		if field.IsNil() {
+			return
+		}
+		clone := reflect.New(field.Type().Elem())
+		clone.Elem().Set(field.Elem())
+		field.Set(clone)
+	})
+}
+
+func (c *ClusterConfig) rangeDefaultOmittable(visit func(reflect.Value)) {
+	v := reflect.ValueOf(c).Elem()
+
+	for i := range v.NumField() {
+		field := v.Field(i)
+		if field.Kind() != reflect.Pointer || !field.CanInterface() {
+			continue
+		}
+		if _, ok := field.Interface().(defaultOmittable); ok {
+			visit(field)
+		}
 	}
 }
 
-// from `nil` to canonical defaults via subsequent config-section.Validate()
-// NOTE:
-// pointerized sections are always materialized in memory - consumers dereference
-// them unconditionally (e.g. config.Lso.WalkBuffer). Not *persisting* all-default
-// sections is a separate, marshal-time concern - see phase-2 below.
+// Materialize default-omittable sections before section validation.
+// Runtime consumers may therefore dereference them unconditionally.
 func (c *ClusterConfig) ensureDefaults() {
-	if c.TCB == nil {
-		c.TCB = &TCBConf{}
-	}
-	if c.TCO == nil {
-		c.TCO = &TCOConf{}
-	}
-	if c.Arch == nil {
-		c.Arch = &ArchConf{}
-	}
-	if c.Lso == nil {
-		c.Lso = &LsoConf{}
-	}
+	c.rangeDefaultOmittable(func(field reflect.Value) {
+		if field.IsNil() {
+			field.Set(reflect.New(field.Type().Elem()))
+		}
+	})
+}
+
+// PruneOmittables converts cluster config to its persistence/metasync sparse form.
+// The caller must invoke it only on a private copy (shallow is fine), never on the live config.
+//
+// A default-omittable section is removed when its validated value equals the
+// canonical defaults produced by validating a zero value. Any non-default
+// section remains unchanged, including its zero-valued fields.
+//
+// Configuration GET APIs (apc.WhatClusterConfig, apc.WhatNodeConfig)
+// deliberately return the fully materialized effective configuration, so
+// clients need not resolve server-side defaults. The asymmetry is intentional:
+// do not make those paths sparse.
+//
+// See also: ensureDefaults and clonePtrs; all three are driven by defaultOmittable
+// marker interface.
+func (c *ClusterConfig) PruneOmittables() {
+	c.rangeDefaultOmittable(func(field reflect.Value) {
+		if field.IsNil() {
+			return
+		}
+
+		curr := reflect.New(field.Type().Elem())
+		curr.Elem().Set(field.Elem())
+		if err := curr.Interface().(defaultOmittable).Validate(); err != nil {
+			debug.AssertNoErr(err)
+			return
+		}
+
+		dflt := reflect.New(field.Type().Elem())
+		if err := dflt.Interface().(defaultOmittable).Validate(); err != nil {
+			debug.AssertNoErr(err)
+			return
+		}
+
+		if reflect.DeepEqual(curr.Elem().Interface(), dflt.Elem().Interface()) {
+			field.SetZero()
+		}
+	})
 }
 
 // When updating we need to make sure that the update is transaction and no

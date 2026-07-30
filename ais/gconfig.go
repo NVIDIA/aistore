@@ -67,8 +67,11 @@ func (config *globalConfig) marshal() []byte {
 }
 
 func (config *globalConfig) _encode(immSize int64) (sgl *memsys.SGL) {
+	sparse := *config
+	sparse.ClusterConfig.PruneOmittables()
+
 	sgl = memsys.PageMM().NewSGL(immSize)
-	err := jsp.Encode(sgl, config, config.JspOpts())
+	err := jsp.Encode(sgl, &sparse, config.JspOpts())
 	debug.AssertNoErr(err)
 	return
 }
