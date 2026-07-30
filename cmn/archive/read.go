@@ -368,10 +368,10 @@ func (csf *cslFile) Close() error               { return csf.file.Close() }
 
 // in re `--absolute-names` (simplified)
 func namesEq(n1, n2 string) bool {
-	if n1[0] == filepath.Separator {
+	if n1 != "" && n1[0] == filepath.Separator {
 		n1 = n1[1:]
 	}
-	if n2[0] == filepath.Separator {
+	if n2 != "" && n2[0] == filepath.Separator {
 		n2 = n2[1:]
 	}
 	return n1 == n2
