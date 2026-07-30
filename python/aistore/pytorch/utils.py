@@ -78,7 +78,8 @@ def get_extension(name: str) -> str:
         str: File extension of the object
     """
 
-    return name.split(".")[1]
+    _, separator, extension = name.rsplit("/", 1)[-1].rpartition(".")
+    return extension if separator else ""
 
 
 def parse_url(url: str) -> Tuple[str, str, str]:

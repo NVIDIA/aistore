@@ -106,13 +106,17 @@ class AISShardReader(AISBaseIterDataset):
 
                 # Preprocess every key in the archive to ensure consistency in batch collation
                 self._observed_keys.update(
-                    [get_extension(name) for name in tar.getnames()]
+                    extension
+                    for name in tar.getnames()
+                    if (extension := get_extension(name))
                 )
 
                 for member in tar.getmembers():
                     if member.isfile():
                         file_basename = get_basename(member.name)
                         file_extension = get_extension(member.name)
+                        if not file_extension:
+                            continue
                         if file_basename not in sample_dict:
                             sample_dict[file_basename] = {}
                         sample_dict[file_basename][file_extension] = tar.extractfile(

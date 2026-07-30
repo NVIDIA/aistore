@@ -11,7 +11,7 @@ from aistore.pytorch.multishard_dataset import AISMultiShardStream
 from aistore.pytorch.shard_reader import AISShardReader
 from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
 from aistore.sdk import Bucket
-from tarfile import open, TarInfo
+from tarfile import open, TarInfo, DIRTYPE
 from io import BytesIO
 
 
@@ -111,6 +111,12 @@ class TestAISDataset(unittest.TestCase):
             tarinfo = TarInfo(name="sample_1.jpg")
             tarinfo.size = len(content)
             tar.addfile(tarinfo, BytesIO(content))
+            tarinfo = TarInfo(name="README")
+            tarinfo.size = len(content)
+            tar.addfile(tarinfo, BytesIO(content))
+            tarinfo = TarInfo(name="data/")
+            tarinfo.type = DIRTYPE
+            tar.addfile(tarinfo)
 
         tar_buffer.seek(0)
 
