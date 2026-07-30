@@ -19,6 +19,22 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
+// Two reflection walks over config (brief-summary and comparison)
+// - `IterFields` (below) is the public, tag-driven utility shared with CLI and tools, and used extensively to traverse config, bucket props, and more;
+// - `rangeDefaultOmittable` (cmn/gco) is an internal tiny utility driving clonePtrs(), ensureDefaults() and PruneOmittables().
+//
+//	                  | IterFields                       | omittables walk
+//	------------------+----------------------------------+------------------------------------
+//	traversal         | recursive; leaves by default,    | non-recursive by construction -
+//	                  | non-leaves via VisitAll          | never descends past the section
+//	dispatch          | json/list/allow tags (strings,   | defaultOmittable marker interface
+//	                  | resolved at runtime)             | (compile-time; yields Validate())
+//	names             | hierarchical, dot-joined, public | none - section identity is the unit
+//	pointer-to-struct | dereferences it and operates     | retains the parent slot: the
+//	                  | on the pointed struct            | pointer _is_ what gets assigned
+//	nil sections      | read mode allocates a temp       | must assign back to the parent
+//	role              | inspection and update            | persist/metasync lifecycle
+
 const IterFieldNameSepa = "."
 
 const (

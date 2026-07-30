@@ -72,7 +72,7 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 	return
 }
 
-// NOTE [backward compatibility] ==================================================================================
+// NOTE [backward compatibility] and pointerization of config sections =============================================
 //
 // When pointerizing additional sections:
 // - update the corresponding <section>.Validate() to normalize zero/unset fields to their canonical defaults;
@@ -112,7 +112,7 @@ func (c *ClusterConfig) clonePtrs() {
 	}
 
 	// default-omittable sections
-	c.rangeDefaultOmittable(func(_ reflect.StructField, field reflect.Value) {
+	c.rangeDefaultOmittable(func(_ *reflect.StructField, field reflect.Value) {
 		if field.IsNil() {
 			return
 		}
@@ -122,31 +122,17 @@ func (c *ClusterConfig) clonePtrs() {
 	})
 }
 
-func (c *ClusterConfig) rangeDefaultOmittable(visit func(reflect.StructField, reflect.Value)) {
-	v := reflect.ValueOf(c).Elem()
-
-	for i := range v.NumField() {
-		field := v.Field(i)
-		if field.Kind() != reflect.Pointer || !field.CanInterface() {
-			continue
-		}
-		if _, ok := field.Interface().(defaultOmittable); ok {
-			visit(v.Type().Field(i), field)
-		}
-	}
-}
-
 // Materialize default-omittable sections before section validation.
 // Runtime consumers may therefore dereference them unconditionally.
 func (c *ClusterConfig) ensureDefaults() {
-	c.rangeDefaultOmittable(func(_ reflect.StructField, field reflect.Value) {
+	c.rangeDefaultOmittable(func(_ *reflect.StructField, field reflect.Value) {
 		if field.IsNil() {
 			field.Set(reflect.New(field.Type().Elem()))
 		}
 	})
 }
 
-// PruneOmittables converts cluster config to its persistence/metasync sparse form.
+// Convert cluster config to its persistence/metasync sparse form.
 // The caller must invoke it only on a private copy (shallow is fine), never on the live config.
 //
 // A default-omittable section is removed when its validated value equals the
@@ -161,28 +147,47 @@ func (c *ClusterConfig) ensureDefaults() {
 // See also: ensureDefaults and clonePtrs; all three are driven by defaultOmittable
 // marker interface.
 func (c *ClusterConfig) PruneOmittables() {
-	c.rangeDefaultOmittable(func(_ reflect.StructField, field reflect.Value) {
-		if field.IsNil() {
-			return
-		}
+	c.rangeDefaultOmittable(c.prune)
+}
 
-		curr := reflect.New(field.Type().Elem())
-		curr.Elem().Set(field.Elem())
-		if err := curr.Interface().(defaultOmittable).Validate(); err != nil {
-			debug.AssertNoErr(err)
-			return
-		}
+func (*ClusterConfig) prune(_ *reflect.StructField, field reflect.Value) {
+	if field.IsNil() {
+		return
+	}
 
-		dflt := reflect.New(field.Type().Elem())
-		if err := dflt.Interface().(defaultOmittable).Validate(); err != nil {
-			debug.AssertNoErr(err)
-			return
-		}
+	curr := reflect.New(field.Type().Elem())
+	curr.Elem().Set(field.Elem())
+	if err := curr.Interface().(defaultOmittable).Validate(); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
 
-		if reflect.DeepEqual(curr.Elem().Interface(), dflt.Elem().Interface()) {
-			field.SetZero()
+	dflt := reflect.New(field.Type().Elem())
+	if err := dflt.Interface().(defaultOmittable).Validate(); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+
+	if reflect.DeepEqual(curr.Elem().Interface(), dflt.Elem().Interface()) {
+		field.SetZero()
+	}
+}
+
+// internal utility function driving clonePtrs(), ensureDefaults(), and PruneOmittables()
+// - see also cmn/iter_fields for "Two reflection walks over config (brief-summary and documentation)"
+func (c *ClusterConfig) rangeDefaultOmittable(visit func(*reflect.StructField, reflect.Value)) {
+	v := reflect.ValueOf(c).Elem()
+
+	for i := range v.NumField() {
+		field := v.Field(i)
+		if field.Kind() != reflect.Pointer || !field.CanInterface() {
+			continue
 		}
-	})
+		if _, ok := field.Interface().(defaultOmittable); ok {
+			sf := v.Type().Field(i)
+			visit(&sf, field)
+		}
+	}
 }
 
 // When updating we need to make sure that the update is transaction and no

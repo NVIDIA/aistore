@@ -20,7 +20,7 @@ var expectedOmittable = []string{"TCB", "TCO", "Arch", "Lso"}
 
 func omittableNames(c *ClusterConfig) []string {
 	var names []string
-	c.rangeDefaultOmittable(func(sf reflect.StructField, _ reflect.Value) {
+	c.rangeDefaultOmittable(func(sf *reflect.StructField, _ reflect.Value) {
 		names = append(names, sf.Name)
 	})
 	return names
@@ -52,7 +52,7 @@ func TestOmittableValueTypesOnly(t *testing.T) {
 	c := &ClusterConfig{}
 	c.ensureDefaults()
 
-	c.rangeDefaultOmittable(func(sf reflect.StructField, field reflect.Value) {
+	c.rangeDefaultOmittable(func(sf *reflect.StructField, field reflect.Value) {
 		var walk func(reflect.Type, string)
 		walk = func(typ reflect.Type, path string) {
 			switch typ.Kind() {
@@ -81,7 +81,7 @@ func TestPruneAllDefault(t *testing.T) {
 
 	c.PruneOmittables()
 
-	c.rangeDefaultOmittable(func(sf reflect.StructField, field reflect.Value) {
+	c.rangeDefaultOmittable(func(sf *reflect.StructField, field reflect.Value) {
 		if !field.IsNil() {
 			t.Errorf("%s: all-default section not stripped", sf.Name)
 		}
@@ -96,7 +96,7 @@ func TestPruneUnvalidated(t *testing.T) {
 
 	c.PruneOmittables()
 
-	c.rangeDefaultOmittable(func(sf reflect.StructField, field reflect.Value) {
+	c.rangeDefaultOmittable(func(sf *reflect.StructField, field reflect.Value) {
 		if !field.IsNil() {
 			t.Errorf("%s: zero-valued section not stripped", sf.Name)
 		}
@@ -160,7 +160,7 @@ func TestPruneRoundTrip(t *testing.T) {
 	loaded.ensureDefaults()
 	validateOmittable(t, loaded)
 
-	loaded.rangeDefaultOmittable(func(sf reflect.StructField, field reflect.Value) {
+	loaded.rangeDefaultOmittable(func(sf *reflect.StructField, field reflect.Value) {
 		want := reflect.ValueOf(orig).Elem().FieldByName(sf.Name)
 		if !reflect.DeepEqual(field.Elem().Interface(), want.Elem().Interface()) {
 			t.Errorf("%s: round-trip mismatch\n got: %+v\nwant: %+v",
@@ -195,7 +195,7 @@ func TestPruneRoundTrip(t *testing.T) {
 		}
 	}
 	// The source must remain fully materialized.
-	orig.rangeDefaultOmittable(func(sf reflect.StructField, field reflect.Value) {
+	orig.rangeDefaultOmittable(func(sf *reflect.StructField, field reflect.Value) {
 		if field.IsNil() {
 			t.Errorf("%s: PruneOmittables mutated the source config", sf.Name)
 		}
@@ -224,7 +224,7 @@ func TestPruneIdempotent(t *testing.T) {
 func validateOmittable(t *testing.T, c *ClusterConfig) {
 	t.Helper()
 
-	c.rangeDefaultOmittable(func(sf reflect.StructField, field reflect.Value) {
+	c.rangeDefaultOmittable(func(sf *reflect.StructField, field reflect.Value) {
 		if err := field.Interface().(defaultOmittable).Validate(); err != nil {
 			t.Fatalf("%s: %v", sf.Name, err)
 		}

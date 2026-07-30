@@ -1031,7 +1031,8 @@ type (
 
 // Default-omittable (`defaultOmittable`) sections:
 // - must contain only value types (no maps, slices, pointers)
-// - see PruneOmittables() and note: Validate() mutates live section
+// - see PruneOmittables() that validates a shallow scratch copy (and note: section.Validate() mutates the section)
+// - NOTE: when adding a new implementation below, add the section name to `expectedOmittable` in the cmn/prune_defaults_internal_test.go
 type (
 	defaultOmittable interface {
 		validator
