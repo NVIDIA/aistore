@@ -30,6 +30,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- **BREAKING**: AuthN cluster registration now verifies AIStore TLS
+  certificates by default. Deployments using untrusted certificates must
+  configure `ca_cert` or explicitly set `skip_verify=True`.
 - ETL pod spec templates no longer list the obsolete `io://` communication type.
 - Deprecated `Etl.init_spec()` with a `FutureWarning`; use `Etl.init()` or
   `Etl.init_class()` instead. Pod spec initialization will be removed in v5.1.
@@ -52,6 +55,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - Get-Batch TAR and ZIP extractors now reject archive members without matching
   request or response metadata instead of raising an uncaught `IndexError`.
+- AuthN cluster registration now honors configured TLS verification, CA, and
+  client certificate settings when discovering an AIStore cluster UUID.
 - Parallel downloads now route the initial HEAD and subsequent ranged GET
   requests through the proxy, allowing redirects to be signed when
   intra-cluster authentication is enabled.

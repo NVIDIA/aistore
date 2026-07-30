@@ -4,7 +4,7 @@
 
 from typing import List, Optional
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.client import Client as AISClient
+from aistore.sdk.response_handler import AISResponseHandler
 from aistore.sdk.authn.types import ClusterInfo, ClusterList
 from aistore.sdk.utils import get_logger
 from aistore.sdk.const import (
@@ -117,14 +117,17 @@ class ClusterManager:
         )
 
         try:
-            ais_client = AISClient(
-                endpoint=urls[0], token=self.client.token, skip_verify=True
+            # TODO: Accept a separate AIStore session when AuthN and AIStore
+            # require independent TLS trust or client identities.
+            ais_client = self.client.clone(
+                base_url=urls[0], response_handler=AISResponseHandler()
             )
-            uuid = ais_client.cluster().get_uuid()
+            uuid = ais_client.get_smap().uuid
         except Exception as err:
             raise ValueError(
-                f"Failed to retrieve UUID for the provided URL: {urls[0]}. "
-                f"Ensure the URL is correct and the endpoint is accessible."
+                f"Failed to retrieve UUID for the provided URL: {urls[0]} ({err}). "
+                f"Ensure the URL is correct and reachable, and that its TLS certificate "
+                f"is trusted or skipped (see AuthNClient's ca_cert / skip_verify)."
             ) from err
 
         if not uuid:

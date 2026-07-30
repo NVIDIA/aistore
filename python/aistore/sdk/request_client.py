@@ -126,12 +126,18 @@ class RequestClient:
             )
         return self._smap
 
-    def clone(self, base_url: Optional[str] = None) -> "RequestClient":
+    def clone(
+        self,
+        base_url: Optional[str] = None,
+        response_handler: Optional[ResponseHandler] = None,
+    ) -> "RequestClient":
         """
         Create a copy of the current RequestClient instance with an optional new base URL.
 
         Args:
             base_url (Optional[str]): New base URL for the cloned client. Defaults to the existing base URL.
+            response_handler (Optional[ResponseHandler]): Response handler for the cloned client.
+                Defaults to the existing response handler.
 
         Returns:
             RequestClient: A new instance with the same settings but an optional different base URL.
@@ -148,7 +154,11 @@ class RequestClient:
             session_manager=self.session_manager,
             timeout=self.timeout,
             token=self.token,
-            response_handler=self._response_handler,
+            response_handler=(
+                response_handler
+                if response_handler is not None
+                else self._response_handler
+            ),
             retry_config=self._retry_manager.retry_config,
         )
 

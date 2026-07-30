@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, Mock, call
+from unittest.mock import patch, Mock, MagicMock, call
 
 from requests import Response, Session
 
@@ -236,6 +236,8 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_clone_with_args(self):
         new_base = "http://new-base-url"
+        new_response_handler = MagicMock()
+        new_response_handler.__bool__.return_value = False
         retry_config = RetryConfig.default()
         # Set some non-default values in the initial client and ensure they are passed through
         retry_config.cold_get_conf.max_cold_wait = 300
@@ -252,14 +254,14 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         with patch(
             "aistore.sdk.request_client.RequestClient", autospec=True
         ) as mock_constructor:
-            new_client = initial_client.clone(new_base)
+            new_client = initial_client.clone(new_base, new_response_handler)
 
             mock_constructor.assert_called_once_with(
                 endpoint=new_base + "/v1",
                 session_manager=self.mock_session_manager,
                 timeout=timeout,
                 token=token,
-                response_handler=self.mock_response_handler,
+                response_handler=new_response_handler,
                 retry_config=retry_config,
             )
             self.assertEqual(new_client, mock_constructor.return_value)

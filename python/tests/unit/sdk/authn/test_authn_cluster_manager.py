@@ -65,8 +65,8 @@ class TestAuthNClusterManager(unittest.TestCase):
             res_model=ClusterList,
         )
 
-    @patch("aistore.sdk.authn.cluster_manager.AISClient")
-    def test_register_cluster(self, mock_ais_client):
+    @patch("aistore.sdk.authn.cluster_manager.AISResponseHandler")
+    def test_register_cluster(self, mock_response_handler):
         cluster_alias = "test-cluster"
         urls = ["http://ais-cluster-url"]
         uuid = "test-uuid"
@@ -75,15 +75,17 @@ class TestAuthNClusterManager(unittest.TestCase):
         mock_cluster_list = ClusterList(clusters={uuid: mock_cluster_info})
         self.mock_client.request_deserialize.return_value = mock_cluster_list
 
-        mock_ais_cluster = Mock()
-        mock_ais_cluster.get_uuid.return_value = uuid
-        # The client created by AISClient() calls cluster() which finally returns a mock cluster instance
-        mock_ais_client.return_value.cluster.return_value = mock_ais_cluster
+        mock_ais_client = self.mock_client.clone.return_value
+        mock_ais_client.get_smap.return_value.uuid = uuid
 
         cluster = self.cluster_manager.register(cluster_alias=cluster_alias, urls=urls)
 
         self.assertEqual(cluster, mock_cluster_info)
-        mock_ais_cluster.get_uuid.assert_called_once()
+        self.mock_client.clone.assert_called_once_with(
+            base_url=urls[0],
+            response_handler=mock_response_handler.return_value,
+        )
+        mock_ais_client.get_smap.assert_called_once_with()
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_POST,
             path=URL_PATH_AUTHN_CLUSTERS,
