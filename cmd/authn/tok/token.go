@@ -243,7 +243,7 @@ func (c *AISClaims) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.A
 	}
 	sub, _ := c.GetSubject()
 	cluPerms := perms & (apc.ClusterAccessRW | apc.AceAdmin)
-	objPerms := perms & (apc.AccessRW | apc.AccessBucketAdmin)
+	objPerms := perms & (apc.AccessRW | apc.AccessBucketAdmin | apc.AcePromote)
 	extra := perms &^ (cluPerms | objPerms)
 	if extra != 0 {
 		return fmt.Errorf("user `%s` has %w: invalid permissions %s", sub, ErrNoPermissions, extra.Describe(false))

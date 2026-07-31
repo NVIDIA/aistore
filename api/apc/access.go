@@ -78,7 +78,7 @@ const (
 	// read-only and read-write access to bucket
 	AccessRO             = AceGET | AceObjHEAD | AceBckHEAD | AceObjLIST
 	AllowReadOnlyAccess  = "ro"
-	AccessRW             = AccessRO | AcePUT | AceAPPEND | AceObjDELETE | AceObjMOVE | AcePromote
+	AccessRW             = AccessRO | AcePUT | AceAPPEND | AceObjDELETE | AceObjMOVE
 	AllowReadWriteAccess = "rw"
 
 	// bucket admin operations

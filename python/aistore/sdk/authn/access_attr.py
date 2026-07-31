@@ -33,11 +33,13 @@ class AccessAttr(IntFlag):
 
     # Derived Roles
     ACCESS_RO = GET | OBJ_HEAD | BCK_HEAD | OBJ_LIST
-    ACCESS_RW = ACCESS_RO | PUT | APPEND | OBJ_DELETE | OBJ_MOVE | PROMOTE
+    # NOTE: PROMOTE is deliberately not part of ACCESS_RW - promote reads target-local
+    # files (incl. anything mounted into the node) and additionally requires ADMIN
+    ACCESS_RW = ACCESS_RO | PUT | APPEND | OBJ_DELETE | OBJ_MOVE
     CLUSTER_ACCESS_RO = LIST_BUCKETS | SHOW_CLUSTER
     CLUSTER_ACCESS_RW = CLUSTER_ACCESS_RO | CREATE_BUCKET | DESTROY_BUCKET | MOVE_BUCKET
     ACCESS_BUCKET_ADMIN = PATCH | BCK_SET_ACL | OBJ_UPDATE
-    ACCESS_SU = ACCESS_RW | ACCESS_BUCKET_ADMIN | CLUSTER_ACCESS_RW | ADMIN
+    ACCESS_SU = ACCESS_RW | PROMOTE | ACCESS_BUCKET_ADMIN | CLUSTER_ACCESS_RW | ADMIN
 
     @staticmethod
     def describe(perms: int) -> str:

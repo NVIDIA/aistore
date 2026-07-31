@@ -44,7 +44,7 @@ class TestAuthNAccessAttr(unittest.TestCase):
         self.assertIn("APPEND", description)
         self.assertIn("OBJ_DELETE", description)
         self.assertIn("OBJ_MOVE", description)
-        self.assertIn("PROMOTE", description)
+        self.assertNotIn("PROMOTE", description)
         self.assertNotIn("ADMIN", description)
 
         description = AccessAttr.describe(AccessAttr.ACCESS_SU)
@@ -76,7 +76,7 @@ class TestAuthNAccessAttr(unittest.TestCase):
         self.assertTrue(AccessAttr.ACCESS_RW & AccessAttr.GET)
         self.assertTrue(AccessAttr.ACCESS_RW & AccessAttr.PUT)
         self.assertTrue(AccessAttr.ACCESS_RW & AccessAttr.OBJ_DELETE)
-        self.assertTrue(AccessAttr.ACCESS_RW & AccessAttr.PROMOTE)
+        self.assertFalse(AccessAttr.ACCESS_RW & AccessAttr.PROMOTE)
 
     def test_cluster_access_ro(self):
         self.assertTrue(AccessAttr.CLUSTER_ACCESS_RO & AccessAttr.LIST_BUCKETS)

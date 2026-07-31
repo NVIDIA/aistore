@@ -377,35 +377,52 @@ Separately, configure the following AuthN environment variables for client acces
 In AIStore, roles define the level of access by granting permissions to users.
 The available permissions are listed below: 
 
-| Permission        | Description                                                                           |
-|-------------------|---------------------------------------------------------------------------------------|
-| `GET`             | Read object contents.                                                                 |
-| `HEAD-OBJECT`     | Read object metadata (properties).                                                    |
-| `PUT`             | Write object.                                                                         |
-| `APPEND`          | Append to object.                                                                     |
-| `DELETE-OBJECT`   | Delete object.                                                                        |
-| `MOVE-OBJECT`     | Move/rename object.                                                                   |
-| `PROMOTE`         | Promote local files.                                                                  |
-| `UPDATE-OBJECT`   | Update object metadata.                                                               |
-| `HEAD-BUCKET`     | Read bucket metadata (properties).                                                    |
-| `LIST-OBJECTS`    | List objects in a bucket.                                                             |
-| `PATCH`           | Set bucket properties.                                                                |
-| `SET-BUCKET-ACL`  | Set bucket permissions.                                                               |
-| `LIST-BUCKETS`    | List all buckets in cluster.                                                          |
-| `SHOW-CLUSTER`    | View cluster information.                                                             |
-| `CREATE-BUCKET`   | Create new bucket.                                                                    |
-| `DESTROY-BUCKET`  | Destroy/delete bucket.                                                                |
-| `MOVE-BUCKET`     | Move/rename bucket.                                                                   |
-| `ADMIN`           | Full administrative access: all cluster operations.       <br/>                            |
+| Permission        | Description                                                                                 |
+|-------------------|---------------------------------------------------------------------------------------------|
+| `GET`             | Read object contents.                                                                       |
+| `HEAD-OBJECT`     | Read object metadata (properties).                                                          |
+| `PUT`             | Write object.                                                                               |
+| `APPEND`          | Append to object.                                                                           |
+| `DELETE-OBJECT`   | Delete object.                                                                              |
+| `MOVE-OBJECT`     | Move/rename object.                                                                         |
+| `PROMOTE`         | Promote local files. See the [Promote section](#promote) below for additional requirements. |
+| `UPDATE-OBJECT`   | Update object metadata.                                                                     |
+| `HEAD-BUCKET`     | Read bucket metadata (properties).                                                          |
+| `LIST-OBJECTS`    | List objects in a bucket.                                                                   |
+| `PATCH`           | Set bucket properties.                                                                      |
+| `SET-BUCKET-ACL`  | Set bucket permissions.                                                                     |
+| `LIST-BUCKETS`    | List all buckets in cluster.                                                                |
+| `SHOW-CLUSTER`    | View cluster information.                                                                   |
+| `CREATE-BUCKET`   | Create new bucket.                                                                          |
+| `DESTROY-BUCKET`  | Destroy/delete bucket.                                                                      |
+| `MOVE-BUCKET`     | Move/rename bucket.                                                                         |
+| `ADMIN`           | Full administrative access: all cluster operations.                                         |
 
 The following values are provided as convenient aliases for a list of permissions:
 
 | Alias | Permission list                                                                       |
 |-------|---------------------------------------------------------------------------------------|
 | `ro`  | Bucket read-only: `GET`, `HEAD-OBJECT`, `HEAD-BUCKET`, `LIST-OBJECTS`.                |
-| `rw`  | Bucket read-write: `ro` + `PUT`, `APPEND`, `DELETE-OBJECT`, `MOVE-OBJECT`, `PROMOTE`. |
+| `rw`  | Bucket read-write: `ro` + `PUT`, `APPEND`, `DELETE-OBJECT`, `MOVE-OBJECT`.            |
 | `su`  | Super-user: full access to all operations.                                            |
 
+### Promote
+
+Promote grants cluster admins effective read access to any path visible to an AIS target, including network mounts.
+
+Because of this extended access, promote requires the `ADMIN` permission in addition to `PROMOTE`.
+The following table illustrates each permission boundary for promote access.
+Promote requires both checks to pass:
+- **bucket-scoped** `PROMOTE` — from the bucket ACL, or from the cluster ACL when there is no bucket entry
+- **cluster-scoped** `ADMIN`
+
+| Principal                                             | Result                                        |
+|-------------------------------------------------------|-----------------------------------------------|
+| Superuser                                             | allowed — short-circuits both checks          |
+| Bucket ACL `PROMOTE`; Cluster ACL `ADMIN`             | allowed                                       |
+| No bucket ACL; Cluster ACL `ADMIN, PROMOTE`           | allowed                                       |
+| Bucket ACL without `PROMOTE`; Cluster ACL has `ADMIN` | **denied** by the bucket-scoped promote check |
+| Bucket ACL `PROMOTE` only                             | **denied** by the admin check                 |
 
 ## How to Enable AuthN Server After Deployment
 

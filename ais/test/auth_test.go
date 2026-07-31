@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -163,5 +164,84 @@ func TestAuth(t *testing.T) {
 			_, err = authn.GetUser(revokedBP, uid)
 			expectStatus(t, err, http.StatusUnauthorized)
 		})
+	})
+}
+
+// loginWithACLs creates a role/user with the given ACLs and returns AIS BaseParams for that user.
+func loginWithACLs(t *testing.T, authBP, aisBP api.BaseParams, cluID string, bckACLs []*authn.BckACL, cluAccess apc.AccessAttrs) api.BaseParams {
+	t.Helper()
+	var (
+		uid  = "user-" + trand.String(6)
+		pass = trand.String(12)
+		role = "role-" + trand.String(6)
+	)
+	tassert.CheckFatal(t, authn.AddRole(authBP, &authn.Role{
+		Name:        role,
+		BucketACLs:  bckACLs,
+		ClusterACLs: []*authn.CluACL{{ID: cluID, Access: cluAccess}},
+	}))
+	t.Cleanup(func() { authn.DeleteRole(authBP, role) })
+
+	r, err := authn.GetRole(authBP, role)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, authn.AddUser(authBP, &authn.User{ID: uid, Password: pass, Roles: []*authn.Role{r}}))
+	t.Cleanup(func() { authn.DeleteUser(authBP, uid) })
+
+	tok, err := authn.LoginUser(authBP, uid, pass, nil)
+	tassert.CheckFatal(t, err)
+	bp := aisBP
+	bp.Token = tok.Token
+	return bp
+}
+
+// promote reads target-local files: full read-write on the bucket must not be enough
+func TestAuthPromoteRequiresAdmin(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
+
+	var (
+		aisBP  = tools.BaseAPIParams()
+		authBP = authNBP()
+		bck    = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		srcFQN = filepath.Join(t.TempDir(), trand.String(12))
+	)
+	tassert.CheckFatal(t, os.WriteFile(srcFQN, []byte("promote"), 0o600))
+
+	smap, err := api.GetClusterMap(aisBP)
+	tassert.CheckFatal(t, err)
+	registerCluster(t, authBP, authn.CluACL{ID: smap.UUID, URLs: []string{aisBP.URL}})
+
+	tassert.CheckFatal(t, api.CreateBucket(aisBP, bck, nil))
+	t.Cleanup(func() { api.DestroyBucket(aisBP, bck) })
+
+	bckACL := cmn.Bck{Name: bck.Name, Provider: bck.Provider, Ns: cmn.Ns{UUID: smap.UUID}}
+
+	// AcePromote on the bucket, but no AceAdmin at cluster scope
+	t.Run("no-admin", func(t *testing.T) {
+		bp := loginWithACLs(t, authBP, aisBP, smap.UUID,
+			[]*authn.BckACL{{Bck: bckACL, Access: apc.AccessRW | apc.AcePromote}},
+			apc.ClusterAccessRW)
+		_, err := api.Promote(bp, bck, &apc.PromoteArgs{SrcFQN: srcFQN, ObjName: "promoted-no-admin"})
+		expectStatus(t, err, http.StatusForbidden)
+	})
+
+	// no bucket ACL: AcePromote falls through to cluster AccessAll
+	t.Run("fall-through", func(t *testing.T) {
+		bp := loginWithACLs(t, authBP, aisBP, smap.UUID, nil, apc.AccessAll)
+		_, err := api.Promote(bp, bck, &apc.PromoteArgs{SrcFQN: srcFQN, ObjName: "promoted-fall-through"})
+		tassert.CheckFatal(t, err)
+	})
+
+	// cluster AceAdmin, but a bucket ACL without AcePromote blocks fall-through
+	t.Run("restricted-bucket", func(t *testing.T) {
+		bp := loginWithACLs(t, authBP, aisBP, smap.UUID,
+			[]*authn.BckACL{{Bck: bckACL, Access: apc.AccessRW}},
+			apc.AceAdmin|apc.AcePromote)
+		_, err := api.Promote(bp, bck, &apc.PromoteArgs{SrcFQN: srcFQN, ObjName: "promoted-restricted"})
+		expectStatus(t, err, http.StatusForbidden)
+	})
+
+	t.Run("superuser", func(t *testing.T) {
+		_, err := api.Promote(aisBP, bck, &apc.PromoteArgs{SrcFQN: srcFQN, ObjName: "promoted-superuser"})
+		tassert.CheckFatal(t, err)
 	})
 }

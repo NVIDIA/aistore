@@ -33,6 +33,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - **BREAKING**: AuthN cluster registration now verifies AIStore TLS
   certificates by default. Deployments using untrusted certificates must
   configure `ca_cert` or explicitly set `skip_verify=True`.
+- **BREAKING**: `ACCESS_RW` no longer includes `PROMOTE`. Promote now additionally
+  requires `ADMIN`; grant `PROMOTE | ADMIN` (or `ACCESS_SU`).
 - ETL pod spec templates no longer list the obsolete `io://` communication type.
 - Deprecated `Etl.init_spec()` with a `FutureWarning`; use `Etl.init()` or
   `Etl.init_class()` instead. Pod spec initialization will be removed in v5.1.

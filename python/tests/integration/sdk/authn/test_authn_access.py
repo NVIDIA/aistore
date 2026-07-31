@@ -119,9 +119,7 @@ class TestAuthNAccess(AuthNTestBase):  # pylint: disable=too-many-public-methods
 
     @pytest.mark.authn
     def test_access_obj_promote(self):
-        """Test object promote permission."""
-        client = self._create_client_with_access(access_attrs=[AccessAttr.PROMOTE])
-
+        """Test object promote permission: PROMOTE alone is not sufficient, ADMIN is also required."""
         with tempfile.TemporaryDirectory() as dirname:
             tmpdir = Path(dirname)
             local_file_path = tmpdir.joinpath("test_promote_file.txt").absolute()
@@ -129,7 +127,14 @@ class TestAuthNAccess(AuthNTestBase):  # pylint: disable=too-many-public-methods
             with open(local_file_path, "w", encoding=UTF_ENCODING) as file:
                 file.write(local_file_content)
 
-            client.bucket(self.bck.name).object("promoted_test_file").promote(
+            client = self._create_client_with_access(access_attrs=[AccessAttr.PROMOTE])
+            obj = client.bucket(self.bck.name).object("promoted_test_file")
+            self._assert_forbidden(lambda: obj.promote(str(local_file_path)))
+
+            admin_client = self._create_client_with_access(
+                access_attrs=[AccessAttr.PROMOTE, AccessAttr.ADMIN], scoped=False
+            )
+            admin_client.bucket(self.bck.name).object("promoted_test_file").promote(
                 str(local_file_path)
             )
 

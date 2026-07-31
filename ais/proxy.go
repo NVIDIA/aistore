@@ -2095,8 +2095,10 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		p.redirectAction(w, r, bck, apireq.items[1], msg)
 		p.statsT.IncBck(stats.RenameCount, bck.Bucket())
 	case apc.ActPromote:
-		if err := p.checkAccess(w, r, bck, apc.AcePromote); err != nil {
-			p.statsT.IncBck(stats.ErrRenameCount, bck.Bucket())
+		// AcePromote already checked above - bctx.init defaults perms from xact.Table.
+		// Promote reads arbitrary target-local files, so also requires cluster-level admin.
+		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+			p.statsT.IncWith(stats.ErrPutCount, xvlabs(bck))
 			return
 		}
 		// ActionMsg.Name is the source
