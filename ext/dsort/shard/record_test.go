@@ -5,11 +5,9 @@
 /*
  * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
-package shard_test
+package shard
 
 import (
-	"github.com/NVIDIA/aistore/ext/dsort/shard"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -19,11 +17,11 @@ var _ = Describe("Records", func() {
 
 	Context("insert", func() {
 		It("should insert record", func() {
-			records := shard.NewRecords(0)
-			records.Insert(&shard.Record{
+			records := NewRecords(0)
+			records.Insert(&Record{
 				Key:  "some_key",
 				Name: "some_key",
-				Objects: []*shard.RecordObj{
+				Objects: []*RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -31,10 +29,10 @@ var _ = Describe("Records", func() {
 					},
 				},
 			})
-			records.Insert(&shard.Record{
+			records.Insert(&Record{
 				Key:  "some_key1",
 				Name: "some_key1",
-				Objects: []*shard.RecordObj{
+				Objects: []*RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -47,11 +45,11 @@ var _ = Describe("Records", func() {
 		})
 
 		It("should insert record but merge it", func() {
-			records := shard.NewRecords(0)
-			records.Insert(&shard.Record{
+			records := NewRecords(0)
+			records.Insert(&Record{
 				Key:  "some_key",
 				Name: "some_key",
-				Objects: []*shard.RecordObj{
+				Objects: []*RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -75,10 +73,10 @@ var _ = Describe("Records", func() {
 			r := records.All()[0]
 			Expect(r.TotalSize()).To(BeEquivalentTo(len(r.Objects) * objectSize))
 
-			records.Insert(&shard.Record{
+			records.Insert(&Record{
 				Key:  "some_key",
 				Name: "some_key",
-				Objects: []*shard.RecordObj{
+				Objects: []*RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -104,11 +102,11 @@ var _ = Describe("Records", func() {
 		})
 
 		It("should delete record obj", func() {
-			records := shard.NewRecords(0)
-			records.Insert(&shard.Record{
+			records := NewRecords(0)
+			records.Insert(&Record{
 				Key:  "some_key",
 				Name: "some_key",
-				Objects: []*shard.RecordObj{
+				Objects: []*RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -153,4 +151,17 @@ var _ = Describe("Records", func() {
 			Expect(records.All()[0].TotalSize()).To(BeEquivalentTo(objectSize))
 		})
 	})
+
+	DescribeTable("validation",
+		func(name string) {
+			recm := &RecordManager{}
+			_, err := recm.RecordWithBuffer(&extractRecordArgs{recordName: name})
+			Expect(err).To(HaveOccurred())
+		},
+		Entry("empty name", ""),
+		Entry("absolute name", "/tmp/escape"),
+		Entry("parent traversal", "../escape"),
+		Entry("nested parent traversal", "dir/../../escape"),
+		Entry("seeded ZIP traversal", "sub/../../../ais-zipslip-PWNED"),
+	)
 })

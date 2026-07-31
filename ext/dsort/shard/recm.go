@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -95,6 +96,10 @@ func NewRecordManager(bck cmn.Bck, extractCreator RW, keyExtractor KeyExtractor,
 }
 
 func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64, err error) {
+	if !filepath.IsLocal(args.recordName) {
+		return 0, fmt.Errorf("invalid archive record name %q", args.recordName)
+	}
+
 	var (
 		storeType        string
 		contentPath      string
