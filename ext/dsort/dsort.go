@@ -254,6 +254,13 @@ outer:
 }
 
 func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
+	if !filepath.IsLocal(s.Name) {
+		return fmt.Errorf("invalid output shard name %q", s.Name)
+	}
+	if err := cos.ValidateOname(s.Name); err != nil {
+		return err
+	}
+
 	var (
 		metrics   = m.Metrics.Creation
 		shardName = s.Name

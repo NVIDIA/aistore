@@ -98,3 +98,17 @@ var _ = Describe("SortRecords", func() {
 		Expect(err).To(HaveOccurred())
 	})
 })
+
+var _ = Describe("CreateShard", func() {
+	DescribeTable("validation",
+		func(name string) {
+			manager := &Manager{}
+			err := manager.createShard(&shard.Shard{Name: name}, nil)
+			Expect(err).To(HaveOccurred())
+		},
+		Entry("empty name", ""),
+		Entry("absolute name", "/tmp/escape.tar"),
+		Entry("parent traversal", "../escape.tar"),
+		Entry("nested parent traversal", "dir/../escape.tar"),
+	)
+})
