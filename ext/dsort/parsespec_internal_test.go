@@ -9,6 +9,9 @@ package dsort
 import (
 	"errors"
 	"math"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -492,6 +495,21 @@ var _ = Describe("RequestSpec", func() {
 			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 		})
+	})
+})
+
+var _ = Describe("External key map", func() {
+	It("should block private addresses", func() {
+		Expect(ekmBlockedEgress(net.ParseIP("10.0.0.1"))).To(BeTrue())
+	})
+
+	It("should block loopback requests", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		defer server.Close()
+
+		m := Manager{Pars: &parsedReqSpec{EKMFileURL: server.URL}, config: &cmn.Config{}}
+		_, err := m.parseEKMFile()
+		Expect(err).To(HaveOccurred())
 	})
 })
 

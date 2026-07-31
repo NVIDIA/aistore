@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -604,6 +606,43 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*shard.Shard, err
 	return shards, nil
 }
 
+func ekmDialControl(network, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("dsort: refusing to dial non-IP %q", address)
+	}
+	if ekmBlockedEgress(ip) {
+		return fmt.Errorf("dsort: egress blocked: %s (%s)", ip, network)
+	}
+	return nil
+}
+
+// see also: dload/client.go
+func ekmBlockedEgress(ip net.IP) bool {
+	// never legal
+	if ip.IsLoopback() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || // 169.254.0.0/16 (AWS/GCP/Azure IMDS), fe80::/10
+		ip.IsMulticast() {
+		return true
+	}
+	return ip.IsPrivate() // RFC1918 + RFC4193 ULA
+}
+
+func newEKMClient(timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{
+		Timeout:   cmn.DfltDialupTimeout,
+		KeepAlive: cmn.DfltKeepaliveTCP,
+		Control:   ekmDialControl,
+	}
+	transport := cmn.NewTransport(cmn.TransportArgs{})
+	transport.DialContext = dialer.DialContext
+	return &http.Client{Transport: transport, Timeout: timeout}
+}
+
 func (m *Manager) parseEKMFile() (shard.ExternalKeyMap, error) {
 	ekm := shard.NewExternalKeyMap(64)
 	parsedURL, err := url.Parse(m.Pars.EKMFileURL)
@@ -615,12 +654,8 @@ func (m *Manager) parseEKMFile() (shard.ExternalKeyMap, error) {
 	if err != nil {
 		return nil, err
 	}
-	// is intra-call
-	tsi := core.T.Snode()
-	req.Header.Set(apc.HdrSenderID, tsi.ID())
-	req.Header.Set(apc.HdrSenderName, tsi.String())
 
-	resp, err := m.client.Do(req) //nolint:bodyclose // closed by cos.Close below
+	resp, err := newEKMClient(m.config.Client.TimeoutLong.D()).Do(req) //nolint:bodyclose // closed by cos.Close below
 	if err != nil {
 		return nil, err
 	}
