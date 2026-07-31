@@ -279,6 +279,9 @@ func (ups *ups) _start(r *http.Request, lom *core.LOM, skipBackend bool) (upload
 		default:
 			metadata = lom.GetCustomMD()
 		}
+		if err := cmn.ValidateCustomMD(metadata); err != nil {
+			return "", nil, fmt.Errorf("%s: %w", lom.Cname(), err)
+		}
 		uploadID, _, err = ups.t.Backend(bck).StartMpt(lom, r)
 	} else {
 		uploadID = cos.GenUUID()

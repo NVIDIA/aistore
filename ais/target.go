@@ -1682,6 +1682,10 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		t.writeErr(w, r, err)
 		return
 	}
+	if err := cmn.ValidateCustomMD(custom); err != nil {
+		t.writeErrf(w, r, "%s: %v", lom.Cname(), err)
+		return
+	}
 
 	lom.Lock(true)
 	if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {

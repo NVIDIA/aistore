@@ -44,10 +44,6 @@ const (
 	OrigFntl = "orig_fntl"
 )
 
-const (
-	maxSizeCustomKVs = 2 * cos.KiB
-)
-
 type (
 	// NOTE: will be removed in the upcoming releases; use ObjectPropsV2 instead
 	ObjectProps struct {
@@ -430,7 +426,7 @@ func ToHeaderV2(attrs *ObjAttrs, hdr http.Header, withChecksum, withAtime, withV
 
 // return checksum separately for subsequent validation
 // parse and set custom metadata, if available
-func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, err error) {
+func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, _ error) {
 	if ty := hdr.Get(apc.HdrObjCksumType); ty != "" {
 		val := hdr.Get(apc.HdrObjCksumVal)
 		cksum = cos.NewCksum(ty, val)
@@ -438,19 +434,23 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, err error) {
 
 	if at := hdr.Get(apc.HdrObjAtime); at != "" {
 		atime, err := s2UnixNano(at)
-		debug.AssertNoErr(err)
+		if err != nil {
+			debug.AssertNoErr(err)
+			return nil, err
+		}
 		oa.Atime = atime
 	}
 	if sz := hdr.Get(cos.HdrContentLength); sz != "" {
 		size, err := strconv.ParseInt(sz, 10, 64)
-		debug.AssertNoErr(err)
+		debug.AssertNoErr(err) // Content-Length is already parsed and validated
 		oa.Size = size
 	}
 	if v := hdr.Get(apc.HdrObjVersion); v != "" {
 		oa.Ver = &v
 	}
 
-	// custom metadata: total size limited
+	// custom metadata: total size limited, reserved symbols prohibited
+	// (see ValidateCustomKV)
 	if custom, ok := hdr[apc.HdrObjCustomMD]; ok {
 		var (
 			size int
@@ -460,17 +460,20 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, err error) {
 			kv := strings.SplitN(kvs, "=", 2)
 			if len(kv) != 2 {
 				oa._undoCustom(keys)
-				return nil, fmt.Errorf("custom metadata: invalid format %q (expecting key=value)", kvs)
+				return nil, fmt.Errorf("%s: invalid format %q (expecting key=value)", tagCustom, kvs)
 			}
-			size += len(kv[0]) + len(kv[1])
-			if size > maxSizeCustomKVs {
+			k, v := kv[0], kv[1]
+			size += len(k) + len(v)
+			if err := ValidateCustomKV(k, v, size); err != nil {
 				oa._undoCustom(keys)
-				return nil, fmt.Errorf("custom metadata: total size exceeds %d bytes", maxSizeCustomKVs)
+				return nil, err
 			}
-			oa.SetCustomKey(kv[0], kv[1])
-			keys = append(keys, kv[0])
+
+			oa.SetCustomKey(k, v)
+			keys = append(keys, k)
 		}
 	}
+
 	return cksum, nil
 }
 
@@ -667,3 +670,58 @@ func _eqIgnoreQuotes(a, b string) bool {
 
 func unixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 10) }
 func s2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
+
+//
+// core.LOM packing format: separators
+//
+
+const (
+	StringSepa  = "\x00"
+	StringSepaB = '\x00'
+
+	CustomSepa  = "\x01"
+	CustomSepaB = '\x01'
+
+	RecordSepa = "\xe3/\xbd"
+
+	LenStrSepa = 1
+	LenRecSepa = len(RecordSepa)
+)
+
+// common helpers to validate custom metadata ----------------------------------------------------
+const tagCustom = "custom metadata"
+
+const (
+	maxSizeCustomKVs = 2 * cos.KiB
+)
+
+func newErrCustomReserved(k, v string) error {
+	return fmt.Errorf("%s '%q=%q': key or value contains reserved symbol", tagCustom, k, v)
+}
+
+func ValidateCustomKV(k, v string, size int) error {
+	if k == "" {
+		return fmt.Errorf("%s: empty key (value=%q)", tagCustom, v)
+	}
+	if strings.IndexByte(k, CustomSepaB) >= 0 || strings.Contains(k, RecordSepa) {
+		return newErrCustomReserved(k, v)
+	}
+	if strings.IndexByte(v, CustomSepaB) >= 0 || strings.Contains(v, RecordSepa) {
+		return newErrCustomReserved(k, v)
+	}
+	if size > maxSizeCustomKVs {
+		return fmt.Errorf("%s: total size %d exceeds max %d bytes", tagCustom, size, maxSizeCustomKVs)
+	}
+	return nil
+}
+
+func ValidateCustomMD(custom cos.StrKVs) error {
+	var size int
+	for k, v := range custom {
+		size += len(k) + len(v)
+		if err := ValidateCustomKV(k, v, size); err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -436,9 +436,88 @@ var _ = Describe("LOM Xattributes", func() {
 					Expect(err.Error()).To(ContainSubstring("BAD META CHECKSUM"))
 				})
 			})
+
 		})
 
 		Describe("MetaverLOM=2", func() {
+			It("rejects custom metadata reserved separators", func() {
+				Expect(cmn.ValidateCustomMD(cos.StrKVs{"key": "value"})).NotTo(HaveOccurred())
+
+				tests := []cos.StrKVs{
+					{"": "value"},
+					{"key": "value\x01dangling"},
+					{"key\xe3/\xbdrecord": "value"},
+				}
+				for _, custom := range tests {
+					Expect(cmn.ValidateCustomMD(custom)).To(HaveOccurred())
+				}
+			})
+
+			It("rejects malformed packed custom metadata without panicking", func() {
+				const (
+					prefLen         = 10
+					mdCksumTyXXHash = 1
+					recordSepa      = "\xe3/\xbd"
+					packedSize      = 3
+					packedCustom    = 5
+				)
+
+				obj := "lomv2/bad-custom-" + cos.GenTie()
+				fqn := mix.MakePathFQN(&localBck, fs.ObjCT, obj)
+				Expect(cos.CreateDir(filepath.Dir(fqn))).NotTo(HaveOccurred())
+				f, err := cos.CreateFile(fqn)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(f.Close()).To(Succeed())
+
+				var (
+					payload bytes.Buffer
+					b8      [8]byte
+					k       [2]byte
+				)
+				binary.BigEndian.PutUint16(k[:], packedSize)
+				payload.Write(k[:])
+				payload.Write(b8[:])
+				payload.WriteString(recordSepa)
+
+				binary.BigEndian.PutUint16(k[:], packedCustom)
+				payload.Write(k[:])
+				payload.WriteString("key\x01value\x01dangling")
+
+				raw := make([]byte, prefLen+payload.Len())
+				raw[0] = core.MetaverLOM
+				raw[1] = mdCksumTyXXHash
+				copy(raw[prefLen:], payload.Bytes())
+				sum := onexxh.Checksum64S(raw[prefLen:], cos.MLCG32)
+				binary.BigEndian.PutUint64(raw[2:], sum)
+				Expect(fs.SetXattr(fqn, fs.XattrLOM, raw)).To(Succeed())
+
+				lom := newBasicLom(fqn)
+				err = lom.LoadMetaFromFS()
+				Expect(err).To(MatchError(ContainSubstring("invalid custom metadata")))
+			})
+
+			It("discards invalid custom metadata when persisting", func() {
+				obj := "lomv2/discard-custom-" + cos.GenTie()
+				fqn := mix.MakePathFQN(&localBck, fs.ObjCT, obj)
+
+				Expect(cos.CreateDir(filepath.Dir(fqn))).NotTo(HaveOccurred())
+				f, err := cos.CreateFile(fqn)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(f.Close()).To(Succeed())
+
+				lom := newBasicLom(fqn)
+				lom.SetSize(12345)
+				lom.SetCustomMD(cos.StrKVs{"key": "value\x01dangling"})
+
+				Expect(persist(lom)).To(Succeed())
+				Expect(lom.GetCustomMD()).To(BeNil())
+
+				fresh := newBasicLom(fqn)
+				Expect(fresh.Load(false, false)).To(Succeed())
+				Expect(fresh.Lsize()).To(Equal(int64(12345)))
+				Expect(fresh.GetCustomMD()).To(BeNil())
+			})
+
 			It("persists MetaverLOM=2 and round-trips basic fields", func() {
 				obj := "lomv2/smoke-" + cos.GenTie()
 				fqn := mix.MakePathFQN(&localBck, fs.ObjCT, obj)

@@ -71,6 +71,9 @@ const (
 // * checksum-type - determines the metadata checksum type
 // * checksum-value - respectively, computed checksum
 // * metadata - object metadata payload
+//
+// for LOM packing separators (constants) see cmn/objattrs.go
+//
 
 const mdCksumTyXXHash = 1 // metadata checksum type: xxhash
 
@@ -111,20 +114,6 @@ const (
 	haveCustom
 	haveLid
 	haveFlags
-)
-
-// packing format: separators
-const (
-	stringSepa  = "\x00"
-	stringSepaB = '\x00'
-
-	customSepa  = "\x01"
-	customSepaB = '\x01'
-
-	recordSepa = "\xe3/\xbd"
-
-	lenStrSepa = 1
-	lenRecSepa = len(recordSepa)
 )
 
 const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
@@ -404,8 +393,11 @@ func (md *lmeta) unpack(buf []byte) error {
 		} else {
 			record = payload[off : off+i]
 		}
+		if len(record) < cos.SizeofI16 {
+			return errors.New(badLmeta + ": invalid record")
+		}
 		key := binary.BigEndian.Uint16(record)
-		off += i + lenRecSepa
+		off += i + cmn.LenRecSepa
 		switch key {
 		case packedCksumV:
 			if seen&haveCksumV != 0 {
@@ -429,6 +421,9 @@ func (md *lmeta) unpack(buf []byte) error {
 			if seen&haveSize != 0 {
 				return errors.New(badLmeta + " #4")
 			}
+			if len(record) != cos.SizeofI16+cos.SizeofI64 {
+				return errors.New(badLmeta + " #4.1")
+			}
 			md.Size = int64(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
 			seen |= haveSize
 		case packedCopies:
@@ -436,7 +431,7 @@ func (md *lmeta) unpack(buf []byte) error {
 				return errors.New(badLmeta + " #5")
 			}
 			val := string(record[cos.SizeofI16:])
-			copyFQNs := strings.Split(val, stringSepa)
+			copyFQNs := strings.Split(val, cmn.StringSepa)
 			seen |= haveCopies
 			md.copies = make(fs.MPI, len(copyFQNs))
 			for _, copyFQN := range copyFQNs {
@@ -459,26 +454,42 @@ func (md *lmeta) unpack(buf []byte) error {
 				md.copies[copyFQN] = mpathInfo
 			}
 		case packedCustom:
+			if seen&haveCustom != 0 {
+				return errors.New(badLmeta + ": duplicate custom metadata")
+			}
 			val := string(record[cos.SizeofI16:])
-			entries := strings.Split(val, customSepa)
+			entries := strings.Split(val, cmn.CustomSepa)
+			if len(entries)%2 != 0 {
+				return errors.New(badLmeta + ": invalid custom metadata")
+			}
 			custom := make(cos.StrKVs, len(entries)/2)
 			for i := 0; i < len(entries); i += 2 {
 				key := entries[i]
+				if key == "" {
+					return errors.New(badLmeta + ": empty custom metadata key")
+				}
 				custom[key] = entries[i+1]
 				if key == cmn.OrigFntl {
 					md.lid = md.lid.setlmfl(lmflFntl)
 				}
 			}
 			md.SetCustomMD(custom)
+			seen |= haveCustom
 		case packedLid:
 			if seen&haveLid != 0 {
 				return errors.New(badLmeta + " #6")
+			}
+			if len(record) != cos.SizeofI16+cos.SizeofI64 {
+				return errors.New(badLmeta + " #6.1")
 			}
 			md.lid = lomBID(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
 			seen |= haveLid
 		case packedFlags:
 			if seen&haveFlags != 0 {
 				return errors.New(badLmeta + " #7")
+			}
+			if len(record) != cos.SizeofI16+cos.SizeofI64 {
+				return errors.New(badLmeta + " #7.1")
 			}
 			flags := binary.BigEndian.Uint64(record[cos.SizeofI16:])
 			debug.Assert(flags&lmflHRW == 0, "unexpected persisted HRW bit")
@@ -547,9 +558,18 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 
 	// custom md
 	if custom := md.GetCustomMD(); len(custom) > 0 {
+		var (
+			err error
+			off = len(buf)
+		)
 		buf = g.smm.AppendBytes(buf, recdupSepa[:])
 		buf = _prso(buf, packedCustom)
-		buf = _pcustom(buf, custom)
+
+		if buf, err = _pcustom(buf, custom); err != nil {
+			nlog.Warningln(err, "- discarding custom metadata")
+			buf = buf[:off]
+			md.SetCustomMD(nil)
+		}
 	}
 
 	// checksum, prepend, and return
@@ -604,28 +624,33 @@ func _pcopies(buf []byte, copies fs.MPI) []byte {
 		i++
 		buf = g.smm.AppendString(buf, copyFQN)
 		if i < num {
-			buf = g.smm.AppendB(buf, stringSepaB)
+			buf = g.smm.AppendB(buf, cmn.StringSepaB)
 		}
 	}
 	return buf
 }
 
-func _pcustom(buf []byte, md cos.StrKVs) []byte {
+func _pcustom(buf []byte, md cos.StrKVs) ([]byte, error) {
 	var (
-		i   int
-		num = len(md)
+		i    int
+		size int
+		num  = len(md)
 	)
 	for k, v := range md {
-		debug.Assert(k != "")
+		size += len(k) + len(v)
+		if err := cmn.ValidateCustomKV(k, v, size); err != nil {
+			return buf, err
+		}
+
 		i++
 		buf = g.smm.AppendString(buf, k)
-		buf = g.smm.AppendB(buf, customSepaB)
+		buf = g.smm.AppendB(buf, cmn.CustomSepaB)
 		buf = g.smm.AppendString(buf, v)
 		if i < num {
-			buf = g.smm.AppendB(buf, customSepaB)
+			buf = g.smm.AppendB(buf, cmn.CustomSepaB)
 		}
 	}
-	return buf
+	return buf, nil
 }
 
 // copy atime _iff_ valid and more recent

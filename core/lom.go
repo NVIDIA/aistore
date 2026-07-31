@@ -84,7 +84,7 @@ var (
 	g global
 
 	// pack/unpack internals
-	recdupSepa [lenRecSepa]byte
+	recdupSepa [cmn.LenRecSepa]byte
 )
 
 // interface guard
@@ -107,8 +107,8 @@ func Tinit(t Target, config *cmn.Config, runHK bool) {
 	if runHK {
 		g.lchk.init(config)
 	}
-	for i := range recordSepa {
-		recdupSepa[i] = recordSepa[i]
+	for i := range cmn.RecordSepa {
+		recdupSepa[i] = cmn.RecordSepa[i]
 	}
 }
 
