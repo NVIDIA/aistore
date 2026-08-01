@@ -47,7 +47,7 @@ jobs:
           make github-ci AIS_IMAGE_TAG=${{ github.event_name == 'pull_request' && 'github-ci' || 'dev' }}
 
       - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
