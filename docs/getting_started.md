@@ -409,7 +409,15 @@ Most users do not need to set any of these variables. They are intended for deve
 For example:
 
 ```console
-$ AIS_MIRROR_ENABLED=true TAGS="aws gcp debug" make kill clean cli deploy <<< $'3\n3\n4'
+$ TAGS="aws gcp debug" make kill clean cli deploy <<< $'3\n3\n4'
+
+$ ais config cluster mirror.enabled true
+PROPERTY                 VALUE
+mirror.copies            2
+mirror.burst_buffer      512
+mirror.enabled           true
+
+Cluster config updated
 ```
 
 or:
@@ -428,7 +436,6 @@ Commonly used variables include:
 | HTTPS/TLS                       | `AIS_USE_HTTPS`, `AIS_SERVER_CRT`, `AIS_SERVER_KEY`, `AIS_CLIENT_CA_TLS`, `AIS_CLIENT_AUTH_TLS`, `AIS_SKIP_VERIFY_CRT`                                                                                                                          | Enable and configure local HTTPS. For details, see [HTTPS](https.md).                                                     |
 | Network/listeners               | `HOSTNAME_LIST`, `HOSTNAME_LIST_INTRA_CONTROL`, `HOSTNAME_LIST_INTRA_DATA`, `PORT`, `PORT_INTRA_CONTROL`, `PORT_INTRA_DATA`, `AIS_PRIMARY_URL`, `AIS_DISCOVERY_URL`, `AIS_USE_IPv6`                                                             | Configure public, intra-control, and intra-data addresses and ports.                                                      |
 | Local paths                     | `AIS_CONF_DIR`, `AIS_LOG_DIR`, `TEST_FSPATH_ROOT`, `TEST_FSPATH_COUNT`, `AIS_FS_PATHS`                                                                                                                                                          | Configure local config, logs, and mountpath layout.                                                                       |
-| Mirroring and erasure coding    | `AIS_MIRROR_ENABLED`, `AIS_EC_ENABLED`, `AIS_OBJ_SIZE_LIMIT`, `AIS_EC_COMPRESSION`, `AIS_EC_BUNDLE_MULTIPLIER`, `AIS_DATA_SLICES`, `AIS_PARITY_SLICES`                                                                                          | Enable and tune selected redundancy features at deployment time.                                                          |
 | Rebalance, transport, and dSort | `AIS_REBALANCE_COMPRESSION`, `AIS_REBALANCE_BUNDLE_MULTIPLIER`, `AIS_TRANSPORT_IDLE_TEARDOWN`, `AIS_TRANSPORT_QUIESCENT`, `AIS_TRANSPORT_LZ4_BLOCK`, `AIS_TRANSPORT_LZ4_FRAME_CHECKSUM`, `AIS_DSORT_COMPRESSION`, `AIS_DSORT_BUNDLE_MULTIPLIER` | Exercise selected data-movement configuration paths.                                                                      |
 | Space, disk, and logging        | `AIS_SPACE_LOWWM`, `AIS_SPACE_HIGHWM`, `AIS_SPACE_OOS`, `AIS_IOSTAT_TIME_LONG`, `AIS_IOSTAT_TIME_SHORT`, `AIS_LOG_LEVEL`                                                                                                                        | Override selected local thresholds and diagnostics.                                                                       |
 | HTTP client/server behavior     | `HTTP_WRITE_BUFFER_SIZE`, `HTTP_READ_BUFFER_SIZE`, `AIS_HTTP_CHUNKED_TRANSFER`, `SNDRCV_BUF_SIZE`                                                                                                                                               | Tune selected HTTP and socket settings.                                                                                   |

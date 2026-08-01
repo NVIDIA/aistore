@@ -79,28 +79,7 @@ make_auth_conf() {
 cat > "$AIS_CONF_FILE" <<EOL
 {
 	"backend": $(make_backend_conf),
-	"mirror": {
-		"copies":       2,
-		"burst_buffer": 512,
-		"enabled":      ${AIS_MIRROR_ENABLED:-false}
-	},
 	$(make_tracing_conf)
-	"ec": {
-		"objsize_limit":	${AIS_OBJ_SIZE_LIMIT:-262144},
-		"compression":		"${AIS_EC_COMPRESSION:-never}",
-		"bundle_multiplier":	${AIS_EC_BUNDLE_MULTIPLIER:-2},
-		"data_slices":		${AIS_DATA_SLICES:-1},
-		"parity_slices":	${AIS_PARITY_SLICES:-1},
-		"enabled":		${AIS_EC_ENABLED:-false},
-		"disk_only":		false
-	},
-	"chunks": {
-		"objsize_limit":        "0",
-		"chunk_size":           "1GiB",
-		"max_monolithic_size":  "1TiB",
-		"checkpoint_every":     0,
-		"flags":                0
-	},
 	"log": {
 		"level":      "${AIS_LOG_LEVEL:-3}",
 		"max_size":   "10mb",
@@ -252,18 +231,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"compression":           "${AIS_DSORT_COMPRESSION:-never}",
 		"bundle_multiplier":	 ${AIS_DSORT_BUNDLE_MULTIPLIER:-4}
 	},
-	"tcb": {
-		"compression":		"never",
-		"bundle_multiplier":	2
-	},
-	"tco": {
-		"compression":		"never",
-		"bundle_multiplier":	2
-	},
-	"arch": {
-		"compression":		"never",
-		"bundle_multiplier":	2
-	},
 	"write_policy": {
 		"data": "${WRITE_POLICY_DATA:-}",
 		"md": "${WRITE_POLICY_MD:-}"
@@ -283,23 +250,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 			"max_tokens":        1000,
 			"enabled":           false
 		}
-	},
-	"lso": {
-		"compression":		"never",
-		"bundle_multiplier":	1,
-		"burst_buffer":		32,
-		"walk_buffer":		128,
-		"idle_time":		"20s",
-		"quiescent":		"5s"
-	},
-	"get_batch": {
-		"compression":       "never",
-		"bundle_multiplier": 0,
-		"burst_buffer":      0,
-		"max_wait":          "10s",
-		"warmup_workers":    1,
-		"max_soft_errs":     8,
-		"max_gfn":           5
 	},
 	"features": "0"
 }

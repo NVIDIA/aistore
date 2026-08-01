@@ -257,11 +257,18 @@ type (
 // * Inherited defaults include checksum, LRU, etc. configurations - see below.
 // * By default, LRU is disabled for AIS (`ais://`) buckets.
 //
+// TODO: pointerize/sparsify BMD, similar to cluster config. Note, however:
+// DefaultProps is a one-time snapshot - once in BMD, each section belongs to
+// the bucket, and later cluster-config or code-default changes must not alter
+// its meaning.
+//
 // See also:
 //   - github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket-properties
 //   - BpropsToSet (above)
 //   - bckPropsArgs.inheritMerge()
 func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
+	debug.Assert(c.Mirror != nil && c.EC != nil && c.Chunks != nil)
+
 	lru := c.LRU
 	if bck.IsAIS() {
 		lru.Enabled = false
@@ -282,11 +289,11 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 	return &Bprops{
 		Cksum:       cksum,
 		LRU:         lru,
-		Mirror:      c.Mirror,
+		Mirror:      *c.Mirror,
 		Versioning:  c.Versioning,
 		Access:      apc.AccessAll,
-		EC:          c.EC,
-		Chunks:      c.Chunks,
+		EC:          *c.EC,
+		Chunks:      *c.Chunks,
 		WritePolicy: wp,
 		RateLimit:   c.RateLimit,
 		Features:    c.Features,

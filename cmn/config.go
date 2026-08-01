@@ -121,7 +121,7 @@ type (
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
 		Log         LogConf         `json:"log"`
-		EC          ECConf          `json:"ec" allow:"cluster"`
+		EC          *ECConf         `json:"ec,omitempty" allow:"cluster"`
 		GetBatch    GetBatchConf    `json:"get_batch" allow:"cluster"`
 		Net         NetConf         `json:"net" allow:"cluster"`
 		Timeout     TimeoutConf     `json:"timeout"`
@@ -130,9 +130,9 @@ type (
 		Memsys      MemsysConf      `json:"memsys"`
 		Disk        DiskConf        `json:"disk"`
 		FSHC        FSHCConf        `json:"fshc"`
-		Chunks      ChunksConf      `json:"chunks" allow:"cluster"`
+		Chunks      *ChunksConf     `json:"chunks,omitempty" allow:"cluster"`
 		LRU         LRUConf         `json:"lru"`
-		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
+		Mirror      *MirrorConf     `json:"mirror,omitempty" allow:"cluster"`
 		Periodic    PeriodConf      `json:"periodic" allow:"cluster"`
 		Client      ClientConf      `json:"client"`
 		Downloader  DownloaderConf  `json:"downloader"`
@@ -1040,10 +1040,13 @@ type (
 	}
 )
 
-func (*TCBConf) defaultOmittable()  {}
-func (*TCOConf) defaultOmittable()  {}
-func (*ArchConf) defaultOmittable() {}
-func (*LsoConf) defaultOmittable()  {}
+func (*TCBConf) defaultOmittable()    {}
+func (*TCOConf) defaultOmittable()    {}
+func (*ArchConf) defaultOmittable()   {}
+func (*LsoConf) defaultOmittable()    {}
+func (*ChunksConf) defaultOmittable() {}
+func (*ECConf) defaultOmittable()     {}
+func (*MirrorConf) defaultOmittable() {}
 
 // global config that can be used to manage:
 // * adaptive rate limit vis-à-vis Cloud backend
@@ -1148,7 +1151,7 @@ type (
 		// Helps reduce cold-read latency by pre-loading file data into memory.
 		// Always auto-disabled under extreme system load.
 		// - (-1): disabled
-		// - 0:    default (enabled w/ 2 workers)
+		// - 0:    default (currently disabled; resolves to -1)
 		// - >0:   enabled with N workers
 		NumWarmupWorkers int `json:"warmup_workers,omitempty"`
 
@@ -1786,12 +1789,20 @@ func (c *VersionConf) String() string {
 // MirrorConf //
 ////////////////
 
+const (
+	mirrorCopiesDflt = 2
+)
+
 func (c *MirrorConf) Validate() error {
-	if c.Burst < 0 {
-		return fmt.Errorf("invalid mirror.burst_buffer: %v (expected >0)", c.Burst)
+	if c.Copies == 0 {
+		c.Copies = mirrorCopiesDflt
+	} else if c.Copies < 2 || c.Copies > 32 {
+		return fmt.Errorf("invalid mirror.copies: %d (expected value in range [2, 32] or zero for default)", c.Copies)
 	}
-	if c.Copies < 2 || c.Copies > 32 {
-		return fmt.Errorf("invalid mirror.copies: %d (expected value in range [2, 32])", c.Copies)
+	if c.Burst == 0 {
+		c.Burst = XactBurstDflt
+	} else if c.Burst < 0 {
+		return fmt.Errorf("invalid mirror.burst_buffer: %v (expected a positive integer or zero for default)", c.Burst)
 	}
 	return nil
 }
@@ -1818,30 +1829,36 @@ func (c *MirrorConf) String() string {
 const (
 	ObjSizeToAlwaysReplicate = -1 // (that's when we have monolithic objects; see `ObjSizeLimit` comment above)
 
-	MinSliceCount = 1  // minimum number of data or parity slices
-	MaxSliceCount = 32 // maximum --/--
+	ecObjSizeLimitDflt = 256 * cos.KiB
+	ecDataSlicesDflt   = 2
+	ecParitySlicesDflt = 2
+
+	MinSliceCount = 1
+	MaxSliceCount = 32
 )
 
 func (c *ECConf) Validate() error {
+	// An empty section means production defaults. In a populated section,
+	// ObjSizeLimit == 0 retains its documented meaning: EC every object.
+	if *c == (ECConf{}) {
+		c.ObjSizeLimit = ecObjSizeLimitDflt
+	}
+
 	if c.ObjSizeLimit < 0 && c.ObjSizeLimit != ObjSizeToAlwaysReplicate {
 		return fmt.Errorf("invalid ec.objsize_limit: %d (expecting an integer greater than or equal to -1)", c.ObjSizeLimit)
 	}
-	if c.DataSlices < MinSliceCount || c.DataSlices > MaxSliceCount {
-		err := fmt.Errorf("invalid ec.data_slices: %d (expected value in range [%d, %d])",
-			c.DataSlices, MinSliceCount, MaxSliceCount)
-		return err
+	if c.DataSlices == 0 {
+		c.DataSlices = ecDataSlicesDflt
+	} else if c.DataSlices < MinSliceCount || c.DataSlices > MaxSliceCount {
+		return fmt.Errorf("invalid ec.data_slices: %d (expected value in range [%d, %d])", c.DataSlices, MinSliceCount, MaxSliceCount)
 	}
-	if c.ParitySlices < MinSliceCount || c.ParitySlices > MaxSliceCount {
-		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])",
-			c.ParitySlices, MinSliceCount, MaxSliceCount)
+	if c.ParitySlices == 0 {
+		c.ParitySlices = ecParitySlicesDflt
+	} else if c.ParitySlices < MinSliceCount || c.ParitySlices > MaxSliceCount {
+		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])", c.ParitySlices, MinSliceCount, MaxSliceCount)
 	}
-	if c.SbundleMult < 0 || c.SbundleMult > 16 {
-		return fmt.Errorf("invalid ec.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
-	}
-	if !apc.IsValidCompression(c.Compression) {
-		return fmt.Errorf("invalid ec.compression: %q (expecting one of: %v)", c.Compression, apc.SupportedCompression)
-	}
-	return nil
+
+	return c.XactConf.Validate()
 }
 
 func (c *ECConf) ValidateAsProps(arg ...any) (err error) {
@@ -2870,14 +2887,6 @@ const (
 	xactSbundleMultMax  = 16
 )
 
-func DefaultXactConf() XactConf {
-	return XactConf{
-		Compression: XactCompressionDflt,
-		SbundleMult: XactSbundleMultDflt,
-		Burst:       XactBurstDflt,
-	}
-}
-
 func (c *XactConf) Validate() error {
 	if c.Compression == "" {
 		c.Compression = XactCompressionDflt
@@ -3150,12 +3159,12 @@ func (c *RateLimitConf) ValidateAsProps(...any) error { return c.Validate() }
 //////////////////
 
 const (
-	getBatchWaitDflt = 30 * time.Second
+	getBatchWaitDflt = 20 * time.Second
 	GetBatchWaitMin  = time.Second
 	getBatchWaitMax  = time.Minute
 
 	numWarmupWorkersDisabled = -1
-	numWarmupWorkersDflt     = 2
+	numWarmupWorkersDflt     = numWarmupWorkersDisabled
 
 	getBatchSoftErrsDflt = 8
 	getBatchMaxGFN       = 5
@@ -3170,6 +3179,12 @@ func (c *GetBatchConf) IsDisabledGFN() bool { return c.MaxGFN == getBatchDisable
 
 func (c *GetBatchConf) Validate() error {
 	debug.Assert(numWarmupWorkersDisabled < 0 && getBatchWaitDflt > GetBatchWaitMin && GetBatchWaitMin < getBatchWaitMax)
+	debug.Assert(getBatchWaitDflt <= getBatchWaitMax)
+
+	if err := c.XactConf.Validate(); err != nil {
+		return err
+	}
+
 	if c.MaxWait == 0 {
 		c.MaxWait = cos.Duration(getBatchWaitDflt)
 	} else if c.MaxWait.D() < GetBatchWaitMin || c.MaxWait.D() > getBatchWaitMax {
@@ -3181,7 +3196,8 @@ func (c *GetBatchConf) Validate() error {
 		c.NumWarmupWorkers = numWarmupWorkersDflt
 	default:
 		if c.NumWarmupWorkers < 0 || c.NumWarmupWorkers > 10 {
-			return fmt.Errorf("invalid get_batch.warmup_workers=%d (expecting range [%d, %d])", c.NumWarmupWorkers, 0, 10)
+			return fmt.Errorf("invalid get_batch.warmup_workers=%d (expecting %d to disable, 0 for default, or range [1, 10])",
+				c.NumWarmupWorkers, numWarmupWorkersDisabled)
 		}
 	}
 	if c.MaxSoftErrs == 0 {
@@ -3202,7 +3218,10 @@ func (c *GetBatchConf) Validate() error {
 	return nil
 }
 
+//
 // main function: is called at startup, just once
+//
+
 func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) error {
 	debug.Assert(globalConfPath != "" && localConfPath != "")
 	GCO.SetInitialGconfPath(globalConfPath)

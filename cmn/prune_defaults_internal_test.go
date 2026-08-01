@@ -16,7 +16,12 @@ import (
 // The authoritative set of ClusterConfig sections participating in sparse
 // persistence. Adding a pointerized section does not implicitly join this set:
 // it must implement defaultOmittable and be listed here.
-var expectedOmittable = []string{"TCB", "TCO", "Arch", "Lso"}
+//
+// v5.0: ec and mirror joined the set. Their pre-v5.0 validators hard-error on a
+// zero section (ec.data_slices < 1, mirror.copies < 2), so a config persisted by
+// v5.0 cannot be read by a pre-v5.0 node - downgrade below v5.0 is unsupported.
+// Contrast tcb/tco/arch/lso, which pre-v5.0 hydrates via XactConf.Validate().
+var expectedOmittable = []string{"TCB", "TCO", "Arch", "Lso", "Chunks", "EC", "Mirror"}
 
 func omittableNames(c *ClusterConfig) []string {
 	var names []string

@@ -37,12 +37,6 @@ var (
 		LZ4FrameChecksum: false,
 	}
 
-	defaultXconf = aiscmn.XactConf{
-		Compression: aisapc.CompressNever,
-		SbundleMult: 2,
-		Burst:       512,
-	}
-
 	defaultDisk = aiscmn.DiskConf{
 		DiskUtilLowWM:    20,
 		DiskUtilHighWM:   80,
@@ -77,22 +71,6 @@ var (
 
 	defaultDownloader = aiscmn.DownloaderConf{
 		Timeout: cos.Duration(time.Hour),
-	}
-
-	defaultEC = aiscmn.ECConf{
-		XactConf:     defaultXconf,
-		Enabled:      false,
-		ObjSizeLimit: 262144,
-		DataSlices:   2,
-		ParitySlices: 2,
-	}
-
-	defaultChunks = aiscmn.ChunksConf{
-		ObjSizeLimit:      0,
-		ChunkSize:         cos.SizeIEC(cos.GiB),
-		MaxMonolithicSize: cos.SizeIEC(cos.TiB),
-		CheckpointEvery:   0,
-		Flags:             0,
 	}
 
 	defaultKeepalive = aiscmn.KeepaliveConf{
@@ -139,12 +117,6 @@ var (
 		DontEvictTime:   cos.Duration(120 * time.Minute),
 		CapacityUpdTime: cos.Duration(10 * time.Minute),
 		BatchSize:       32768,
-	}
-
-	defaultMirror = aiscmn.MirrorConf{
-		Enabled: false,
-		Copies:  2,
-		Burst:   512,
 	}
 
 	defaultPeriodic = aiscmn.PeriodConf{
@@ -206,49 +178,23 @@ var (
 			Size: 375,
 		},
 	}
-
-	defaultGetBatch = aiscmn.GetBatchConf{
-		XactConf:         defaultXconf,
-		MaxWait:          cos.Duration(10 * time.Second),
-		NumWarmupWorkers: 1,
-		MaxSoftErrs:      8,
-		MaxGFN:           5,
-	}
-	defaultLso = aiscmn.LsoConf{
-		XactConf: aiscmn.XactConf{
-			Compression: aisapc.CompressNever,
-			SbundleMult: 1,
-			Burst:       32,
-		},
-		WalkBuffer:  128,
-		IdleTime:    cos.Duration(20 * time.Second),
-		QuiesceTime: cos.Duration(5 * time.Second),
-	}
 )
 
-// [removed in 4.3] Dsort: defaultDsort
 func newDefaultConfig() *aiscmn.ClusterConfig {
 	return &aiscmn.ClusterConfig{
 		Auth:        defaultAuth,
 		Cksum:       defaultCksum,
 		Client:      defaultClientConf,
 		Transport:   defaultTransport,
-		TCB:         &aiscmn.TCBConf{XactConf: defaultXconf},
-		TCO:         &aiscmn.TCOConf{XactConf: defaultXconf},
-		Arch:        &aiscmn.ArchConf{XactConf: defaultXconf},
-		Lso:         aisapc.Ptr(defaultLso),
 		Disk:        defaultDisk,
 		Net:         defaultNet,
 		FSHC:        defaultFSHC,
 		Downloader:  defaultDownloader,
-		EC:          defaultEC,
-		Chunks:      defaultChunks,
 		Keepalive:   defaultKeepalive,
 		Log:         defaultLog,
 		Space:       defaultSpace,
 		Memsys:      defaultMemsys,
 		LRU:         defaultLRU,
-		Mirror:      defaultMirror,
 		Periodic:    defaultPeriodic,
 		Rebalance:   defaultRebalance,
 		Resilver:    defaultResilver,
@@ -256,6 +202,5 @@ func newDefaultConfig() *aiscmn.ClusterConfig {
 		Versioning:  defaultVersioning,
 		WritePolicy: defaultWritePolicy,
 		RateLimit:   defaultRateLimit,
-		GetBatch:    defaultGetBatch,
 	}
 }
