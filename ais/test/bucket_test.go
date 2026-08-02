@@ -698,11 +698,13 @@ func TestBucketSingleProp(t *testing.T) {
 	if !p.EC.Enabled {
 		t.Error("EC was not enabled")
 	}
-	if p.EC.DataSlices != 1 {
-		t.Errorf("Number of data slices is incorrect: %d (expected 1)", p.EC.DataSlices)
+	config := tools.GetClusterConfig(t)
+
+	if p.EC.DataSlices != config.EC.DataSlices {
+		t.Errorf("Number of data slices is incorrect: %d (expected %d)", p.EC.DataSlices, config.EC.DataSlices)
 	}
-	if p.EC.ParitySlices != 1 {
-		t.Errorf("Number of parity slices is incorrect: %d (expected 1)", p.EC.ParitySlices)
+	if p.EC.ParitySlices != config.EC.ParitySlices {
+		t.Errorf("Number of parity slices is incorrect: %d (expected %d)", p.EC.ParitySlices, config.EC.ParitySlices)
 	}
 
 	// Need to disable EC first
