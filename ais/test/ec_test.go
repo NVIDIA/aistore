@@ -818,7 +818,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 					})
 				}
 				if o.smap.CountActiveTs() <= test.parity+test.data {
-					t.Skip(cmn.ErrNotEnoughTargets)
+					t.Skip(cmn.NewErrNotEnoughTargets(""))
 				}
 				o.parityCnt = test.parity
 				o.dataCnt = test.data
@@ -903,7 +903,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 					})
 				}
 				if o.smap.CountActiveTs() <= test.parity+test.data {
-					t.Skip(cmn.ErrNotEnoughTargets)
+					t.Skip(cmn.NewErrNotEnoughTargets(""))
 				}
 				o.parityCnt = test.parity
 				o.dataCnt = test.data
@@ -1268,7 +1268,7 @@ func TestECStress(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.data+test.parity {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skip(cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -1385,7 +1385,7 @@ func TestECExtraStress(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.data+test.parity {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skip(cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -2088,7 +2088,7 @@ func TestECRebalance(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.parity+test.data+1 {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skip(cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -2121,7 +2121,7 @@ func TestECMountpaths(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.parity+test.data {
-				t.Skipf("%s: %v", t.Name(), cmn.ErrNotEnoughTargets)
+				t.Skipf("%s: %v", t.Name(), cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -2312,7 +2312,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.parity+test.data+1 {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skip(cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -2444,7 +2444,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.parity+test.data+1 {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skip(cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -2686,7 +2686,7 @@ func TestECGenerations(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.parity+test.data {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skip(cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -2796,7 +2796,7 @@ func TestECBckEncodeRecover(t *testing.T) {
 		testName := fmt.Sprintf("%s - %v", test.name, types)
 		t.Run(testName, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.parity+test.data {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skip(cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data

@@ -1861,30 +1861,23 @@ func (c *ECConf) Validate() error {
 	return c.XactConf.Validate()
 }
 
-func (c *ECConf) ValidateAsProps(arg ...any) (err error) {
+func (c *ECConf) ValidateAsProps(arg ...any) error {
 	if !c.Enabled {
-		return
+		return nil
 	}
-	if err = c.Validate(); err != nil {
-		return
+	if err := c.Validate(); err != nil {
+		return err
 	}
 	targetCnt, ok := arg[0].(int)
 	debug.Assert(ok)
 	required := c.numRequiredTargets()
 	if required <= targetCnt {
-		return
+		return nil
 	}
 
-	err = fmt.Errorf("%v: EC configuration (D = %d, P = %d) requires at least %d targets (have %d)",
-		ErrNotEnoughTargets, c.DataSlices, c.ParitySlices, required, targetCnt)
-
-	// TODO: this is the only existing ErrWarning usage that exists for subsequent override with BpropsToSet.Force
-	// (when enabling EC on a bucket); consider replacing ErrWarning with an explicit EC helper and keeping
-	// ValidateAsProps strict
-	if c.ObjSizeLimit == ObjSizeToAlwaysReplicate || c.ParitySlices > targetCnt {
-		return
-	}
-	return NewErrWarning(err.Error())
+	s := fmt.Sprintf("EC configuration (D = %d, P = %d) requires at least %d targets (have %d)",
+		c.DataSlices, c.ParitySlices, required, targetCnt)
+	return NewErrNotEnoughTargets(s)
 }
 
 func (c *ECConf) String() string {

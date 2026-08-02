@@ -350,7 +350,9 @@ func (bp *Bprops) Validate(targetCnt int) error {
 			err = pv.ValidateAsProps()
 		}
 		if err != nil {
-			if !IsErrWarning(err) {
+			// defer insufficient-target validation error;
+			// the caller may override it with --force
+			if !IsErrNotEnoughTargets(err) {
 				return err
 			}
 			softErr = err

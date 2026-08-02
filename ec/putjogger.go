@@ -226,8 +226,9 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 	}
 	targetCnt := smap.CountActiveTs()
 	if targetCnt < reqTargets {
-		return fmt.Errorf("%v: given EC config (d=%d, p=%d), %d targets required to encode %s (have %d, %s)",
-			cmn.ErrNotEnoughTargets, ecConf.DataSlices, ecConf.ParitySlices, reqTargets, lom, targetCnt, smap.StringEx())
+		s := fmt.Sprintf("given EC config (d=%d, p=%d), %d targets required to encode %s (have %d, %s)",
+			ecConf.DataSlices, ecConf.ParitySlices, reqTargets, lom, targetCnt, smap.StringEx())
+		return cmn.NewErrNotEnoughTargets(s)
 	}
 	targets, err := smap.HrwTargetList(lom.UnamePtr(), reqTargets)
 	if err != nil {

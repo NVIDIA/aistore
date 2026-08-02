@@ -155,11 +155,11 @@ type hrwList struct {
 // If count == length of Smap.Tmap, the function returns as many targets as possible.
 
 func (smap *Smap) HrwTargetList(uname *string, count int) (sis Nodes, err error) {
-	const fmterr = "%v: required %d, available %d, %s"
+	const fmterr = "required %d, available %d, %s"
 	cnt := smap.CountTargets()
 	if cnt < count {
-		err = fmt.Errorf(fmterr, cmn.ErrNotEnoughTargets, count, cnt, smap)
-		return
+		s := fmt.Sprintf(fmterr, count, cnt, smap)
+		return nil, cmn.NewErrNotEnoughTargets(s)
 	}
 	b := cos.UnsafeBptr(uname)
 	digest := onexxh.Checksum64S(*b, cos.MLCG32)
@@ -174,8 +174,8 @@ func (smap *Smap) HrwTargetList(uname *string, count int) (sis Nodes, err error)
 	}
 	sis = hlist.get()
 	if count != cnt && len(sis) < count {
-		err = fmt.Errorf(fmterr, cmn.ErrNotEnoughTargets, count, len(sis), smap)
-		return nil, err
+		s := fmt.Sprintf(fmterr, count, len(sis), smap)
+		return nil, cmn.NewErrNotEnoughTargets(s)
 	}
 	return sis, nil
 }

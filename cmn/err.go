@@ -213,10 +213,6 @@ type (
 		SvcName          string
 		k8s.PodStatus
 	}
-	ErrWarning struct {
-		what string
-	}
-
 	ErrLmetaCorrupted struct {
 		err error
 	}
@@ -271,14 +267,17 @@ type (
 		retries int
 		total   time.Duration
 	}
+
+	ErrNotEnoughTargets struct {
+		detail string
+	}
 )
 
 var (
-	ErrSkip             = errors.New("skip")
-	ErrStartupTimeout   = errors.New("startup timeout") // related StartupMayTimeout
-	ErrQuiesceTimeout   = errors.New("timed out waiting for quiescence")
-	ErrNotEnoughTargets = errors.New("not enough target nodes")
-	ErrNoMountpaths     = errors.New("no mountpaths")
+	ErrSkip           = errors.New("skip")
+	ErrStartupTimeout = errors.New("startup timeout") // related StartupMayTimeout
+	ErrQuiesceTimeout = errors.New("timed out waiting for quiescence")
+	ErrNoMountpaths   = errors.New("no mountpaths")
 
 	// aborts
 	ErrXactRenewAbort   = errors.New("renewal abort")
@@ -932,22 +931,6 @@ func (e *ErrETL) WithContext(ctx *ETLErrCtx) *ErrETL {
 		withPodStatus(ctx.PodStatus)
 }
 
-// ErrWarning
-// non-critical errors that can be ignored e.g, when `--force`-ed
-
-func NewErrWarning(what string) *ErrWarning {
-	return &ErrWarning{what}
-}
-
-func (e *ErrWarning) Error() string {
-	return e.what
-}
-
-func IsErrWarning(err error) bool {
-	var wrapped *ErrWarning
-	return errors.As(err, &wrapped)
-}
-
 // ErrLmetaCorrupted & ErrLmetaNotFound
 
 func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted {
@@ -1125,8 +1108,27 @@ func (e *ErrBackendRetry) Error() string {
 
 func (e *ErrBackendRetry) Unwrap() error { return e.err }
 
+// ErrNotEnoughTargets
+
+func NewErrNotEnoughTargets(detail string) *ErrNotEnoughTargets {
+	return &ErrNotEnoughTargets{detail}
+}
+
+func (e *ErrNotEnoughTargets) Error() string {
+	const msg = "not enough target nodes"
+	if e.detail == "" {
+		return msg
+	}
+	return msg + ": " + e.detail
+}
+
+func IsErrNotEnoughTargets(err error) bool {
+	var e *ErrNotEnoughTargets
+	return errors.As(err, &e)
+}
+
 //
-// more is-error helpers
+// more is-error helpers --------------------------------------
 //
 
 // nought: not a thing

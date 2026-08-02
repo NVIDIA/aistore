@@ -1170,8 +1170,8 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 		return nprops, nil // ok
 	}
 	// soft error w/ force
-	if cmn.IsErrWarning(err) && propsToUpdate.Force {
-		nlog.Warningln("Ignoring soft error:", err)
+	if cmn.IsErrNotEnoughTargets(err) && propsToUpdate.Force {
+		nlog.Warningln("Ignoring insufficient-target error:", err)
 		err = nil
 	}
 	return nprops, err

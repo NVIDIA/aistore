@@ -692,7 +692,11 @@ func TestBucketSingleProp(t *testing.T) {
 	_, err := api.SetBucketProps(bp, m.bck, &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(true)},
 	})
+	if herr := cmn.AsErrHTTP(err); herr != nil && herr.TypeCode == "ErrNotEnoughTargets" {
+		t.Skip(herr.Message)
+	}
 	tassert.CheckError(t, err)
+
 	p, err := api.HeadBucket(bp, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if !p.EC.Enabled {

@@ -908,7 +908,7 @@ func TestECResilver(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.parity+test.data {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skip(cmn.NewErrNotEnoughTargets(""))
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
