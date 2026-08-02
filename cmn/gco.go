@@ -32,7 +32,12 @@ var GCO *gco
 
 func _initGCO() {
 	GCO = &gco{}
-	GCO.c.Store(&Config{})
+
+	// bootstrap config: hydrate the default-omittable sections up front
+	config := &Config{}
+	err := config.ClusterConfig.hydrateOmittables()
+	debug.AssertNoErr(err)
+	GCO.c.Store(config)
 
 	Rom.init()
 }
@@ -81,7 +86,8 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 //
 // Release notes for the intervening TBD releases (v5.0, v5.1) must carry a disclaimer.
 //
-// Note that ensureDefaults() keeps in-memory sections non-nil; PruneOmittables()
+// Note that allocOmittables() keeps in-memory sections non-nil (zero-valued -
+// section defaults come from the subsequent Validate); PruneOmittables()
 // strips all-default sections at encode time - see ais/gconfig.go `_encode`.
 // Join/handshake `cluMeta` and apc.WhatNodeConfig/apc.WhatClusterConfig queries stay fully populated (not sparse).
 // =================================================================================================================
@@ -122,14 +128,30 @@ func (c *ClusterConfig) clonePtrs() {
 	})
 }
 
-// Materialize default-omittable sections before section validation.
-// Runtime consumers may therefore dereference them unconditionally.
-func (c *ClusterConfig) ensureDefaults() {
+// Allocate absent default-omittable sections. Their Validate methods run later
+// as part of Config.Validate.
+func (c *ClusterConfig) allocOmittables() {
 	c.rangeDefaultOmittable(func(_ *reflect.StructField, field reflect.Value) {
 		if field.IsNil() {
 			field.Set(reflect.New(field.Type().Elem()))
 		}
 	})
+}
+
+// Allocate absent default-omittable sections and validate every section,
+// including those already present. This canonicalizes defaults before merging
+// an override into the config.
+func (c *ClusterConfig) hydrateOmittables() (err error) {
+	c.rangeDefaultOmittable(func(_ *reflect.StructField, field reflect.Value) {
+		if err != nil {
+			return
+		}
+		if field.IsNil() {
+			field.Set(reflect.New(field.Type().Elem()))
+		}
+		err = field.Interface().(defaultOmittable).Validate()
+	})
+	return err
 }
 
 // Convert cluster config to its persistence/metasync sparse form.
@@ -144,8 +166,8 @@ func (c *ClusterConfig) ensureDefaults() {
 // clients need not resolve server-side defaults. The asymmetry is intentional:
 // do not make those paths sparse.
 //
-// See also: ensureDefaults and clonePtrs; all three are driven by defaultOmittable
-// marker interface.
+// See also: allocOmittables, hydrateOmittables, and clonePtrs - all driven by the
+// defaultOmittable marker interface.
 func (c *ClusterConfig) PruneOmittables() {
 	c.rangeDefaultOmittable(c.prune)
 }
@@ -173,7 +195,8 @@ func (*ClusterConfig) prune(_ *reflect.StructField, field reflect.Value) {
 	}
 }
 
-// internal utility function driving clonePtrs(), ensureDefaults(), and PruneOmittables()
+// internal utility function driving clonePtrs(), allocOmittables(),
+// hydrateOmittables(), and PruneOmittables()
 // - see also cmn/iter_fields for "Two reflection walks over config (brief-summary and documentation)"
 func (c *ClusterConfig) rangeDefaultOmittable(visit func(*reflect.StructField, reflect.Value)) {
 	v := reflect.ValueOf(c).Elem()

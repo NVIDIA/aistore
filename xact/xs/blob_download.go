@@ -229,7 +229,7 @@ func (p *blobFactory) Start() (err error) {
 	// Admission check: assess load to determine if we can start
 	r.config = cmn.GCO.Get()
 	r.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{
-		Cfg: &r.config.Disk,
+		Cfg: r.config.Disk,
 		RW:  true, // data I/O operation
 	})
 

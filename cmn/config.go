@@ -39,7 +39,7 @@ type (
 	validator interface {
 		// validate _and_ mutate live section -
 		// populate zero (nil) fields with their system defaults
-		// (implementation must be idempotent)
+		// NOTE: implementation must be idempotent
 		Validate() error
 	}
 	contextValidator interface {
@@ -103,43 +103,43 @@ type (
 // - is at your own risk otherwise; such changes may cause inconsistent behavior across the cluster.
 type (
 	ClusterConfig struct {
-		Ext         any             `json:"ext,omitempty"`              // reserved
-		Tracing     *TracingConf    `json:"tracing,omitempty"`          // see cmn/gco fixup; build tag
-		Dsort       *DsortConf      `json:"distributed_sort,omitempty"` // ditto; build tag
-		Auth        AuthConf        `json:"auth" allow:"cluster"`       // ditto
-		Backend     BackendConf     `json:"backend" allow:"cluster"`
-		WritePolicy WritePolicyConf `json:"write_policy"` // object metadata: (immediate | delayed | never)
-		UUID        string          `json:"uuid"`
-		LastUpdated string          `json:"lastupdate_time"`
-		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
-		Cksum       CksumConf       `json:"checksum" allow:"cluster"`
-		TCB         *TCBConf        `json:"tcb,omitempty" allow:"cluster"`
-		TCO         *TCOConf        `json:"tco,omitempty" allow:"cluster"`
-		Arch        *ArchConf       `json:"arch,omitempty" allow:"cluster"`
-		Lso         *LsoConf        `json:"lso,omitempty" allow:"cluster"`
-		RateLimit   RateLimitConf   `json:"rate_limit"`
-		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
-		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
-		Log         LogConf         `json:"log"`
-		EC          *ECConf         `json:"ec,omitempty" allow:"cluster"`
-		GetBatch    GetBatchConf    `json:"get_batch" allow:"cluster"`
-		Net         NetConf         `json:"net" allow:"cluster"`
-		Timeout     TimeoutConf     `json:"timeout"`
-		Space       SpaceConf       `json:"space"`
-		Transport   TransportConf   `json:"transport" allow:"cluster"`
-		Memsys      MemsysConf      `json:"memsys"`
-		Disk        DiskConf        `json:"disk"`
-		FSHC        FSHCConf        `json:"fshc"`
-		Chunks      *ChunksConf     `json:"chunks,omitempty" allow:"cluster"`
-		LRU         LRUConf         `json:"lru"`
-		Mirror      *MirrorConf     `json:"mirror,omitempty" allow:"cluster"`
-		Periodic    PeriodConf      `json:"periodic" allow:"cluster"`
-		Client      ClientConf      `json:"client"`
-		Downloader  DownloaderConf  `json:"downloader"`
-		Features    feat.Flags      `json:"features,string" allow:"cluster"` // to flip assorted global defaults (see cmn/feat/feat and docs/feat*)
-		Version     int64           `json:"config_version,string"`
-		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
-		Resilver    ResilverConf    `json:"resilver"`
+		Ext         any              `json:"ext,omitempty"`              // reserved
+		Tracing     *TracingConf     `json:"tracing,omitempty"`          // see cmn/gco fixup; build tag
+		Dsort       *DsortConf       `json:"distributed_sort,omitempty"` // ditto; build tag
+		Auth        AuthConf         `json:"auth" allow:"cluster"`       // ditto
+		Backend     BackendConf      `json:"backend" allow:"cluster"`
+		WritePolicy *WritePolicyConf `json:"write_policy,omitempty"` // object metadata: (immediate | delayed | never)
+		UUID        string           `json:"uuid"`
+		LastUpdated string           `json:"lastupdate_time"`
+		Proxy       ProxyConf        `json:"proxy" allow:"cluster"`
+		Cksum       *CksumConf       `json:"checksum,omitempty" allow:"cluster"`
+		TCB         *TCBConf         `json:"tcb,omitempty" allow:"cluster"`
+		TCO         *TCOConf         `json:"tco,omitempty" allow:"cluster"`
+		Arch        *ArchConf        `json:"arch,omitempty" allow:"cluster"`
+		Lso         *LsoConf         `json:"lso,omitempty" allow:"cluster"`
+		RateLimit   *RateLimitConf   `json:"rate_limit,omitempty"`
+		Keepalive   KeepaliveConf    `json:"keepalivetracker"`
+		Rebalance   RebalanceConf    `json:"rebalance" allow:"cluster"`
+		Log         LogConf          `json:"log"`
+		EC          *ECConf          `json:"ec,omitempty" allow:"cluster"`
+		GetBatch    GetBatchConf     `json:"get_batch" allow:"cluster"`
+		Net         NetConf          `json:"net" allow:"cluster"`
+		Timeout     TimeoutConf      `json:"timeout"`
+		Space       SpaceConf        `json:"space"`
+		Transport   TransportConf    `json:"transport" allow:"cluster"`
+		Memsys      MemsysConf       `json:"memsys"`
+		Disk        *DiskConf        `json:"disk,omitempty"`
+		FSHC        FSHCConf         `json:"fshc"`
+		Chunks      *ChunksConf      `json:"chunks,omitempty" allow:"cluster"`
+		LRU         LRUConf          `json:"lru"`
+		Mirror      *MirrorConf      `json:"mirror,omitempty" allow:"cluster"`
+		Periodic    *PeriodConf      `json:"periodic,omitempty" allow:"cluster"`
+		Client      ClientConf       `json:"client"`
+		Downloader  *DownloaderConf  `json:"downloader,omitempty"`
+		Features    feat.Flags       `json:"features,string" allow:"cluster"` // to flip assorted global defaults (see cmn/feat/feat and docs/feat*)
+		Version     int64            `json:"config_version,string"`
+		Versioning  VersionConf      `json:"versioning" allow:"cluster"`
+		Resilver    ResilverConf     `json:"resilver"`
 	}
 	// contains ClusterConfig and LocalConfig
 	ConfigToSet struct {
@@ -1029,25 +1029,6 @@ type (
 	}
 )
 
-// Default-omittable (`defaultOmittable`) sections:
-// - must contain only value types (no maps, slices, pointers)
-// - see PruneOmittables() that validates a shallow scratch copy (and note: section.Validate() mutates the section)
-// - NOTE: when adding a new implementation below, add the section name to `expectedOmittable` in the cmn/prune_defaults_internal_test.go
-type (
-	defaultOmittable interface {
-		validator
-		defaultOmittable()
-	}
-)
-
-func (*TCBConf) defaultOmittable()    {}
-func (*TCOConf) defaultOmittable()    {}
-func (*ArchConf) defaultOmittable()   {}
-func (*LsoConf) defaultOmittable()    {}
-func (*ChunksConf) defaultOmittable() {}
-func (*ECConf) defaultOmittable()     {}
-func (*MirrorConf) defaultOmittable() {}
-
 // global config that can be used to manage:
 // * adaptive rate limit vis-à-vis Cloud backend
 // * rate limiting (bursty) user workloads on the front
@@ -1190,6 +1171,32 @@ type (
 	}
 )
 
+// Default-omittable (`defaultOmittable`) sections:
+// - must contain only value types (no maps, slices, pointers)
+// - see PruneOmittables() that validates a shallow scratch copy (and note: section.Validate() mutates the section)
+// - NOTE: when adding a new implementation below, add the section name to `expectedOmittable` in the cmn/prune_defaults_internal_test.go
+type (
+	defaultOmittable interface {
+		validator
+		defaultOmittable()
+	}
+)
+
+func (*TCBConf) defaultOmittable()    {}
+func (*TCOConf) defaultOmittable()    {}
+func (*ArchConf) defaultOmittable()   {}
+func (*LsoConf) defaultOmittable()    {}
+func (*ChunksConf) defaultOmittable() {}
+func (*ECConf) defaultOmittable()     {}
+func (*MirrorConf) defaultOmittable() {}
+
+func (*CksumConf) defaultOmittable()       {}
+func (*DiskConf) defaultOmittable()        {}
+func (*PeriodConf) defaultOmittable()      {}
+func (*DownloaderConf) defaultOmittable()  {}
+func (*RateLimitConf) defaultOmittable()   {}
+func (*WritePolicyConf) defaultOmittable() {}
+
 // assorted named fields and prefixes that require (cluster | node) restart for
 // changes to take an effect; note:
 // - this is NOT a "read-only" list
@@ -1288,7 +1295,7 @@ func (c *Config) Validate() error {
 		return errors.New("invalid log dir value (must be non-empty)")
 	}
 
-	c.ClusterConfig.ensureDefaults()
+	c.ClusterConfig.allocOmittables()
 
 	//
 	// NOTE: the following validations perform cross-sections checks - call them explicitly
@@ -1306,6 +1313,10 @@ func (c *Config) Validate() error {
 	if err := c.Features.ValidateAsProps(c.Auth.RequiresProxyMediation()); err != nil {
 		return err
 	}
+
+	// NOTE: every Validate() must be idempotent. On the update path,
+	// default-omittable sections run twice: first in hydrateOmittables(),
+	// then through this Config.Validate() recursion.
 
 	opts := IterOpts{VisitAll: true}
 	return IterFields(c, c.validateFld, opts)
@@ -1327,6 +1338,13 @@ func (c *Config) SetRole(role string) {
 }
 
 func (c *Config) UpdateClusterConfig(updateConf *ConfigToSet, asType string, opts CopyPropsOpts) (err error) {
+	// must precede the merge below, and must hydrate (not merely allocate);
+	// callers - handleOverrideConfig (startup) and gco.Update (metasync receive) -
+	// operate on a freshly decoded, still-sparse cluster config
+	if err = c.ClusterConfig.hydrateOmittables(); err != nil {
+		return err
+	}
+
 	if err = CopyProps(updateConf, &c.ClusterConfig, asType, opts); err != nil {
 		return
 	}
@@ -1422,7 +1440,22 @@ func (c *LocalConfig) DelPath(mpath string) {
 // PeriodConf //
 ////////////////
 
+const (
+	periodStatsTimeDflt     = 10 * time.Second
+	periodRetrySyncTimeDflt = 2 * time.Second
+	periodNotifTimeDflt     = 30 * time.Second
+)
+
 func (c *PeriodConf) Validate() error {
+	if c.StatsTime == 0 {
+		c.StatsTime = cos.Duration(periodStatsTimeDflt)
+	}
+	if c.RetrySyncTime == 0 {
+		c.RetrySyncTime = cos.Duration(periodRetrySyncTimeDflt)
+	}
+	if c.NotifTime == 0 {
+		c.NotifTime = cos.Duration(periodNotifTimeDflt)
+	}
 	if c.StatsTime.D() < time.Second || c.StatsTime.D() > time.Minute {
 		return fmt.Errorf("invalid periodic.stats_time=%s (expected range [1s, 1m])",
 			c.StatsTime)
@@ -1610,9 +1643,32 @@ const (
 	iosTimeLongMax  = 60 * time.Second
 	iosTimeLongMin  = 2 * time.Second
 	iosTimeShortMin = time.Millisecond
+
+	iosTimeLongDflt  = 2 * time.Second
+	iosTimeShortDflt = 100 * time.Millisecond
+
+	diskUtilLowWMDflt  = 20
+	diskUtilHighWMDflt = 80
+	diskUtilMaxWMDflt  = 95
 )
 
 func (c *DiskConf) Validate() (err error) {
+	// all-zero watermarks mean production defaults; a partially populated
+	// triplet keeps failing validation below
+	if c.DiskUtilLowWM == 0 && c.DiskUtilHighWM == 0 && c.DiskUtilMaxWM == 0 {
+		c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM = diskUtilLowWMDflt, diskUtilHighWMDflt, diskUtilMaxWMDflt
+	}
+	if c.IostatTimeLong == 0 {
+		c.IostatTimeLong = cos.Duration(iosTimeLongDflt)
+	}
+	if c.IostatTimeShort == 0 {
+		c.IostatTimeShort = cos.Duration(iosTimeShortDflt)
+	}
+	// NOTE: IostatTimeSmooth == 0 keeps deriving from IostatTimeLong (below)
+	// on the config-update path this derivation runs pre-merge (see hydrateOmittables), i.e. off the *current* iostat_time_long.
+	// Updating iostat_time_long alone therefore leaves an already-derived smoothing window as-is;
+	// to re-derive, set iostat_time_smooth to zero in the same api.SetConfig update
+
 	lwm, hwm, maxwm := c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM
 	if lwm <= 0 || hwm <= lwm || maxwm <= hwm || maxwm > 100 {
 		return fmt.Errorf("invalid (disk_util_lwm, disk_util_hwm, disk_util_maxwm) config %+v", c)
@@ -1727,12 +1783,20 @@ func (c *LRUConf) ValidateAsProps(...any) error { return c.Validate() }
 // CksumConf //
 ///////////////
 
+const cksumTypeDflt = cos.ChecksumCesXxh
+
 func (c *CksumConf) Validate() (err error) {
+	if c.Type == "" {
+		c.Type = cksumTypeDflt
+	}
 	return cos.ValidateCksumType(c.Type)
 }
 
-func (c *CksumConf) ValidateAsProps(...any) (err error) {
-	return c.Validate()
+// NOTE: not delegating to Validate() above:
+// at the cluster level an empty `type` denotes an unset section and hydrates to
+// the system default; as a bucket-level override, the same empty value is a user error
+func (c *CksumConf) ValidateAsProps(...any) error {
+	return cos.ValidateCksumType(c.Type)
 }
 
 func (c *CksumConf) String() string {
@@ -1995,6 +2059,13 @@ func (c *ChunksConf) String() string {
 /////////////////////
 
 func (c *WritePolicyConf) Validate() (err error) {
+	// zero value denotes the canonical immediate policy
+	if c.Data == "" {
+		c.Data = apc.WriteImmediate
+	}
+	if c.MD == "" {
+		c.MD = apc.WriteImmediate
+	}
 	err = c.Data.Validate()
 	if err == nil {
 		if !c.Data.IsImmediate() {
@@ -2977,7 +3048,12 @@ func (c *TimeoutConf) Validate() error {
 // DownloaderConf //
 ////////////////////
 
+const dloadTimeoutDflt = time.Hour
+
 func (c *DownloaderConf) Validate() error {
+	if c.Timeout == 0 {
+		c.Timeout = cos.Duration(dloadTimeoutDflt)
+	}
 	if j := c.Timeout.D(); j < time.Second || j > time.Hour {
 		return fmt.Errorf("invalid downloader.timeout=%s (expected range [1s, 1h])", j)
 	}

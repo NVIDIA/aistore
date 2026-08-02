@@ -87,11 +87,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"flush_time": "60s",
 		"stats_time": "60s"
 	},
-	"periodic": {
-		"stats_time":        "10s",
-		"notif_time":        "30s",
-		"retry_sync_time":   "2s"
-	},
 	"timeout": {
 		"cplane_operation":     "2s",
 		"max_keepalive":        "5s",
@@ -128,14 +123,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"batch_size":        32768,
 		"enabled":           true
 	},
-	"disk":{
-	    "iostat_time_long":   "${AIS_IOSTAT_TIME_LONG:-2s}",
-	    "iostat_time_short":  "${AIS_IOSTAT_TIME_SHORT:-100ms}",
-	    "iostat_time_smooth": "8s",
-	    "disk_util_low_wm":   20,
-	    "disk_util_high_wm":  80,
-	    "disk_util_max_wm":   95
-	},
 	"rebalance": {
 		"dest_retry_time":	"2m",
 		"compression":     	"${AIS_REBALANCE_COMPRESSION:-never}",
@@ -145,13 +132,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 	},
 	"resilver": {
 		"enabled": true
-	},
-	"checksum": {
-		"type":			"xxhash2",
-		"validate_cold_get":	false,
-		"validate_warm_get":	false,
-		"validate_obj_move":	false,
-		"enable_read_range":	false
 	},
 	"transport": {
 		"max_header":		4096,
@@ -217,9 +197,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"num_retries":    3,
 		"retry_factor":   4
 	},
-	"downloader": {
-		"timeout": "1h"
-	},
 	"distributed_sort": {
 		"duplicated_records":    "ignore",
 		"missing_shards":        "ignore",
@@ -230,26 +207,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"dsorter_mem_threshold": "100GB",
 		"compression":           "${AIS_DSORT_COMPRESSION:-never}",
 		"bundle_multiplier":	 ${AIS_DSORT_BUNDLE_MULTIPLIER:-4}
-	},
-	"write_policy": {
-		"data": "${WRITE_POLICY_DATA:-}",
-		"md": "${WRITE_POLICY_MD:-}"
-	},
-	"rate_limit": {
-		"backend": {
-			"num_retries":       3,
-			"interval":          "1m",
-			"per_op_max_tokens": "",
-			"max_tokens":        1000,
-			"enabled":           false
-		},
-		"frontend": {
-			"burst_size":        375,
-			"interval":          "1m",
-			"per_op_max_tokens": "",
-			"max_tokens":        1000,
-			"enabled":           false
-		}
 	},
 	"features": "0"
 }

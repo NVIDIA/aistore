@@ -21,7 +21,7 @@ import (
 
 // Two reflection walks over config (brief-summary and comparison)
 // - `IterFields` (below) is the public, tag-driven utility shared with CLI and tools, and used extensively to traverse config, bucket props, and more;
-// - `rangeDefaultOmittable` (cmn/gco) is an internal tiny utility driving clonePtrs(), ensureDefaults() and PruneOmittables().
+// - `rangeDefaultOmittable` (cmn/gco) is an internal tiny utility driving clonePtrs(), allocOmittables(), hydrateOmittables() and PruneOmittables().
 //
 //	                  | IterFields                       | omittables walk
 //	------------------+----------------------------------+------------------------------------

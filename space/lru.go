@@ -169,7 +169,7 @@ func RunLRU(ini *IniLRU) {
 			p:      parent,
 		}
 		// init throttling context
-		j.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: &j.config.Disk, RW: false})
+		j.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: j.config.Disk, RW: false})
 
 		joggers[mpath] = j
 	}

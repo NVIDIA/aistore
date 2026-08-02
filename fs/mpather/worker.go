@@ -111,7 +111,7 @@ func newWorker(opts *WorkerGroupOpts, mi *fs.Mountpath, config *cmn.Config) (w *
 		load.FlMem|load.FlCla|load.FlDsk,
 		&load.Extra{
 			Mi:  mi,
-			Cfg: &config.Disk,
+			Cfg: config.Disk,
 			RW:  true, // this is a write-heavy workload
 		},
 	)

@@ -110,7 +110,7 @@ func (r *XactPut) newPutJogger(mi *fs.Mountpath) *putJogger {
 	}
 	j.adv.Init(
 		load.FlMem|load.FlCla|load.FlDsk,
-		&load.Extra{Mi: mi, Cfg: &r.config.Disk, RW: true /* heavy IO */},
+		&load.Extra{Mi: mi, Cfg: r.config.Disk, RW: true /* heavy IO */},
 	)
 	j.stopCh.Init()
 	return j

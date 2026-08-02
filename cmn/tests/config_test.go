@@ -232,42 +232,6 @@ func TestAuthSignatureConf_IsRSA(t *testing.T) {
 	}
 }
 
-func TestGCOClone_NoAuthTracingAlias(t *testing.T) {
-	config := cmn.GCO.BeginUpdate()
-	config.Cksum.Type = cos.ChecksumOneXxh
-	config.Space = cmn.SpaceConf{
-		LowWM: 75, HighWM: 90, OOS: 95,
-	}
-	config.LRU = cmn.LRUConf{
-		DontEvictTime: cos.Duration(time.Hour), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
-	}
-	config.ClusterConfig.Auth.Signature = &cmn.AuthSignatureConf{Key: "k"}
-	config.ClusterConfig.Tracing = &cmn.TracingConf{Enabled: true, ExporterEndpoint: "x"}
-	config.ClusterConfig.Lso = &cmn.LsoConf{WalkBuffer: 256}
-
-	cmn.GCO.CommitUpdate(config)
-
-	c := cmn.GCO.Get()
-	clone := cmn.GCO.Clone()
-
-	if &clone.Auth == &c.Auth {
-		t.Fatal("Auth alias")
-	}
-	if clone.Auth.Signature == c.Auth.Signature {
-		t.Fatal("Auth.Signature alias")
-	}
-	if clone.Tracing == c.Tracing {
-		t.Fatal("Tracing alias")
-	}
-	// v5.0
-	if c.Net.HTTP.Pub != nil {
-		tassert.Fatalf(t, clone.Net.HTTP.Pub != c.Net.HTTP.Pub, "cloned Pub aliases source")
-	}
-	if clone.Lso == c.Lso {
-		t.Fatal("Lso alias")
-	}
-}
-
 func TestHTTPConfValidateTLS(t *testing.T) {
 	const (
 		crt = "crt.pem"
@@ -575,4 +539,64 @@ func TestHTTPConfJSONFlat(t *testing.T) {
 		"promotion broken: %+v", c)
 	b, _ := jsoniter.Marshal(c)
 	tassert.Fatalf(t, !strings.Contains(string(b), `"tls"`), "unexpected nesting: %s", b)
+}
+
+func TestCksumConfValidateDefaults(t *testing.T) {
+	var cluster cmn.CksumConf
+	tassert.CheckFatal(t, cluster.Validate())
+	tassert.Fatalf(t, cluster.Type == cos.ChecksumCesXxh,
+		"cluster checksum type: got %q, expected %q",
+		cluster.Type, cos.ChecksumCesXxh)
+
+	var props cmn.CksumConf
+	tassert.Fatalf(t, props.ValidateAsProps() != nil,
+		"empty bucket-level checksum type must remain invalid")
+}
+
+func TestWritePolicyConfValidateDefaults(t *testing.T) {
+	var c cmn.WritePolicyConf
+	tassert.CheckFatal(t, c.Validate())
+
+	tassert.Fatalf(t, c.Data == apc.WriteImmediate,
+		"write_policy.data: got %q, expected %q", c.Data, apc.WriteImmediate)
+	tassert.Fatalf(t, c.MD == apc.WriteImmediate,
+		"write_policy.md: got %q, expected %q", c.MD, apc.WriteImmediate)
+}
+
+func TestUpdateClusterConfigSparseOverride(t *testing.T) {
+	oldConfig := cmn.GCO.Get()
+	defer func() {
+		cmn.GCO.BeginUpdate()
+		cmn.GCO.CommitUpdate(oldConfig)
+	}()
+
+	confPath := filepath.Join(thisFileDir(t), "configs", "config.json")
+	localConfPath := filepath.Join(thisFileDir(t), "configs", "confignet.json")
+
+	var config cmn.Config
+	err := cmn.LoadConfig(confPath, localConfPath, apc.Proxy, &config)
+	tassert.CheckFatal(t, err)
+
+	// Simulate a freshly decoded sparse cluster config.
+	config.Disk = nil
+
+	toUpdate := &cmn.ConfigToSet{
+		Disk: &cmn.DiskConfToSet{
+			DiskUtilHighWM: apc.Ptr[int64](85),
+		},
+	}
+	err = config.UpdateClusterConfig(
+		toUpdate,
+		apc.Daemon,
+		cmn.CopyPropsOpts{IgnoreScope: true},
+	)
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatalf(t, config.Disk != nil, "disk section remains nil")
+	tassert.Fatalf(t, config.Disk.DiskUtilLowWM == 20,
+		"disk low watermark: got %d, expected 20", config.Disk.DiskUtilLowWM)
+	tassert.Fatalf(t, config.Disk.DiskUtilHighWM == 85,
+		"disk high watermark: got %d, expected 85", config.Disk.DiskUtilHighWM)
+	tassert.Fatalf(t, config.Disk.DiskUtilMaxWM == 95,
+		"disk max watermark: got %d, expected 95", config.Disk.DiskUtilMaxWM)
 }

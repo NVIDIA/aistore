@@ -91,7 +91,7 @@ func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 
 	config := cmn.GCO.Get()
 	cpuLoad := load.CPU()
-	dskLoad := load.Dsk(nil /*all*/, &config.Disk)
+	dskLoad := load.Dsk(nil /*all*/, config.Disk)
 
 	// log
 	_log("uncache:", memLoad, cpuLoad, dskLoad)
@@ -270,7 +270,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 	}
 
 	cpuLoad := load.CPU()
-	dskLoad := load.Dsk(nil /*max util*/, &config.Disk)
+	dskLoad := load.Dsk(nil /*max util*/, config.Disk)
 	_log("hk:", memLoad, cpuLoad, dskLoad)
 
 	now := time.Now()

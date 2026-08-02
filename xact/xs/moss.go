@@ -2285,7 +2285,7 @@ func newErrAbandonedWI(wid string, age time.Duration) *errAbandonedWI {
 //
 
 func newAdvice(config *cmn.Config) (adv load.Advice) {
-	adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: &config.Disk, RW: true})
+	adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: config.Disk, RW: true})
 	adv.Refresh()
 	return
 }

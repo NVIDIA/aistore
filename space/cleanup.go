@@ -292,7 +292,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		j.name = j._str()
 
 		// init throttling context
-		j.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: &j.config.Disk, RW: false})
+		j.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: j.config.Disk, RW: false})
 
 		// add
 		joggers[mpath] = j

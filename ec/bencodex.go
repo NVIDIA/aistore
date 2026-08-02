@@ -142,7 +142,7 @@ func (r *XactBckEncode) init(uuid string) error {
 			}
 			j.adv.Init(
 				load.FlMem|load.FlCla|load.FlDsk,
-				&load.Extra{Mi: mi, Cfg: &r.config.Disk, RW: true /* heavy IO */},
+				&load.Extra{Mi: mi, Cfg: r.config.Disk, RW: true /* heavy IO */},
 			)
 			r.rcvyJG[mi.Path] = j
 		}

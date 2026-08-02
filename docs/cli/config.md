@@ -369,7 +369,7 @@ $ ais config cluster lru.enabled=false
 Cluster config updated
 ```
 
-### Set multiple config values
+### Set multiple config values: cluster level
 
 ```console
 $ ais config cluster periodic.stats_time=10s disk.disk_util_low_wm=40
@@ -388,11 +388,25 @@ Steps:
 
 > When updating inherited values, all previous overrides can be undone with `ais config reset`.
 
-### Set multiple config values
+### Set multiple config values: node level
+
+First, note that a **cluster-scoped knob** cannot be updated for a single node:
 
 ```console
-$ ais config node CMhHp8082 periodic.stats_time=10s disk.disk_util_low_wm=40
-Config has been updated successfully.
+$ ais config node t[UIWt8081] periodic.stats_time=10s disk.disk_util_low_wm=40
+Error: periodic configuration can only be globally updated
+```
+
+However:
+
+```console
+$ ais config node t[UIWt8081] disk.disk_util_low_wm=40 disk.disk_util_high_wm=90
+{
+    "disk.disk_util_low_wm": "40",
+    "disk.disk_util_high_wm": "90"
+}
+
+node t[UIWt8081] config updated
 ```
 
 ## Reset configuration

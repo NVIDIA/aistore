@@ -268,22 +268,14 @@ type (
 //   - bckPropsArgs.inheritMerge()
 func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 	debug.Assert(c.Mirror != nil && c.EC != nil && c.Chunks != nil)
+	debug.Assert(c.Cksum != nil && c.WritePolicy != nil && c.RateLimit != nil)
 
 	lru := c.LRU
 	if bck.IsAIS() {
 		lru.Enabled = false
 	}
-	cksum := c.Cksum
-	if cksum.Type == "" { // tests with empty cluster config
-		cksum.Type = cos.ChecksumCesXxh
-	}
-	wp := c.WritePolicy
-	if wp.MD.IsImmediate() {
-		wp.MD = apc.WriteImmediate
-	}
-	if wp.Data.IsImmediate() {
-		wp.Data = apc.WriteImmediate
-	}
+	cksum := *c.Cksum
+	wp := *c.WritePolicy
 
 	// inherit cluster defaults (w/ override via api.CreateBucket and api.SetBucketProps)
 	return &Bprops{
@@ -295,7 +287,7 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 		EC:          *c.EC,
 		Chunks:      *c.Chunks,
 		WritePolicy: wp,
-		RateLimit:   c.RateLimit,
+		RateLimit:   *c.RateLimit,
 		Features:    c.Features,
 	}
 }

@@ -17,11 +17,6 @@ var (
 		Enabled: false,
 	}
 
-	defaultCksum = aiscmn.CksumConf{
-		Type:            cos.ChecksumCesXxh,
-		ValidateColdGet: false,
-	}
-
 	defaultClientConf = aiscmn.ClientConf{
 		Timeout:        cos.Duration(10 * time.Second),
 		TimeoutLong:    cos.Duration(5 * time.Minute),
@@ -35,15 +30,6 @@ var (
 		QuiesceTime:      cos.Duration(10 * time.Second),
 		LZ4BlockMaxSize:  cos.SizeIEC(256 * cos.KiB),
 		LZ4FrameChecksum: false,
-	}
-
-	defaultDisk = aiscmn.DiskConf{
-		DiskUtilLowWM:    20,
-		DiskUtilHighWM:   80,
-		DiskUtilMaxWM:    95,
-		IostatTimeLong:   cos.Duration(2 * time.Second),
-		IostatTimeShort:  cos.Duration(100 * time.Millisecond),
-		IostatTimeSmooth: cos.Duration(8 * time.Second),
 	}
 
 	defaultNet = aiscmn.NetConf{
@@ -67,10 +53,6 @@ var (
 		IOErrs:        10,
 		IOErrTime:     cos.Duration(10 * time.Second),
 		Enabled:       true,
-	}
-
-	defaultDownloader = aiscmn.DownloaderConf{
-		Timeout: cos.Duration(time.Hour),
 	}
 
 	defaultKeepalive = aiscmn.KeepaliveConf{
@@ -119,12 +101,6 @@ var (
 		BatchSize:       32768,
 	}
 
-	defaultPeriodic = aiscmn.PeriodConf{
-		StatsTime:     cos.Duration(10 * time.Second),
-		NotifTime:     cos.Duration(30 * time.Second),
-		RetrySyncTime: cos.Duration(2 * time.Second),
-	}
-
 	defaultRebalance = aiscmn.RebalanceConf{
 		XactConf: aiscmn.XactConf{
 			Compression: aisapc.CompressNever,
@@ -154,53 +130,23 @@ var (
 		Enabled:         true,
 		ValidateWarmGet: false,
 	}
-
-	defaultWritePolicy = aiscmn.WritePolicyConf{
-		Data: "",
-		MD:   "",
-	}
-
-	defaultRateLimit = aiscmn.RateLimitConf{
-		Backend: aiscmn.Adaptive{
-			RateLimitBase: aiscmn.RateLimitBase{
-				Interval:  cos.Duration(time.Minute),
-				MaxTokens: 1000,
-				Enabled:   false,
-			},
-			NumRetries: 3,
-		},
-		Frontend: aiscmn.Bursty{
-			RateLimitBase: aiscmn.RateLimitBase{
-				Interval:  cos.Duration(time.Minute),
-				MaxTokens: 1000,
-				Enabled:   false,
-			},
-			Size: 375,
-		},
-	}
 )
 
 func newDefaultConfig() *aiscmn.ClusterConfig {
 	return &aiscmn.ClusterConfig{
-		Auth:        defaultAuth,
-		Cksum:       defaultCksum,
-		Client:      defaultClientConf,
-		Transport:   defaultTransport,
-		Disk:        defaultDisk,
-		Net:         defaultNet,
-		FSHC:        defaultFSHC,
-		Downloader:  defaultDownloader,
-		Keepalive:   defaultKeepalive,
-		Log:         defaultLog,
-		Space:       defaultSpace,
-		Memsys:      defaultMemsys,
-		LRU:         defaultLRU,
-		Periodic:    defaultPeriodic,
-		Rebalance:   defaultRebalance,
-		Resilver:    defaultResilver,
-		Timeout:     defaultTimeout,
-		Versioning:  defaultVersioning,
-		WritePolicy: defaultWritePolicy,
-		RateLimit:   defaultRateLimit,
+		Auth:       defaultAuth,
+		Client:     defaultClientConf,
+		Transport:  defaultTransport,
+		Net:        defaultNet,
+		FSHC:       defaultFSHC,
+		Keepalive:  defaultKeepalive,
+		Log:        defaultLog,
+		Space:      defaultSpace,
+		Memsys:     defaultMemsys,
+		LRU:        defaultLRU,
+		Rebalance:  defaultRebalance,
+		Resilver:   defaultResilver,
+		Timeout:    defaultTimeout,
+		Versioning: defaultVersioning,
 	}
 }

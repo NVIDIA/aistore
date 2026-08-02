@@ -185,7 +185,7 @@ func newJogger(opts *JgroupOpts, mi *fs.Mountpath, config *cmn.Config, stopCh *c
 		j.objPrefix = filepath.Join(j.bdir, opts.Prefix)
 	}
 	// throttling context
-	j.adv.Init(load.FlMem|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: &j.config.Disk, RW: j.opts.RW})
+	j.adv.Init(load.FlMem|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: j.config.Disk, RW: j.opts.RW})
 	return
 }
 

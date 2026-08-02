@@ -497,7 +497,7 @@ func TestConfigAuthSignature_IsRSA(t *testing.T) {
 
 func TestConfigClone_NoAuthTracingAlias(t *testing.T) {
 	config := cmn.GCO.BeginUpdate()
-	config.Cksum.Type = cos.ChecksumOneXxh
+	config.Cksum = &cmn.CksumConf{Type: cos.ChecksumOneXxh}
 	config.Space = cmn.SpaceConf{
 		LowWM: 75, HighWM: 90, OOS: 95,
 	}
@@ -528,6 +528,9 @@ func TestConfigClone_NoAuthTracingAlias(t *testing.T) {
 	}
 	if clone.Lso == c.Lso {
 		t.Fatal("Lso alias")
+	}
+	if clone.Cksum == c.Cksum {
+		t.Fatal("Cksum alias")
 	}
 }
 
