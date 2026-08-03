@@ -76,17 +76,13 @@ make_auth_conf() {
         echo "{${mode}${intra} \"enabled\": ${AIS_AUTHN_ENABLED:-false}}"
 }
 
+##
+## NOTE: AIS_SPACE_* environment variables are used by constrained GitHub/GitLab CI environments
+##
 cat > "$AIS_CONF_FILE" <<EOL
 {
 	"backend": $(make_backend_conf),
 	$(make_tracing_conf)
-	"log": {
-		"level":      "${AIS_LOG_LEVEL:-3}",
-		"max_size":   "10mb",
-		"max_total":  "256mb",
-		"flush_time": "60s",
-		"stats_time": "60s"
-	},
 	"timeout": {
 		"cplane_operation":     "2s",
 		"max_keepalive":        "5s",
@@ -97,11 +93,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"send_file_time":       "5m",
 		"ec_streams_time":	"10m",
 		"object_md":            "2h"
-	},
-	"client": {
-		"client_timeout":      "10s",
-		"client_long_timeout": "10m",
-		"list_timeout":        "1m"
 	},
 	"proxy": {
 		"primary_url":   "${AIS_PRIMARY_URL}",
@@ -132,14 +123,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 	},
 	"resilver": {
 		"enabled": true
-	},
-	"transport": {
-		"max_header":		4096,
-		"burst_buffer":		512,
-		"idle_teardown":	"${AIS_TRANSPORT_IDLE_TEARDOWN:-4s}",
-		"quiescent":		"${AIS_TRANSPORT_QUIESCENT:-10s}",
-		"lz4_block":		"${AIS_TRANSPORT_LZ4_BLOCK:-256kb}",
-		"lz4_frame_checksum":	${AIS_TRANSPORT_LZ4_FRAME_CHECKSUM:-false}
 	},
 	"memsys": {
 		"min_free":		"2gb",

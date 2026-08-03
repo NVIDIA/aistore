@@ -1840,7 +1840,7 @@ func (h *htrun) extractConfig(payload msPayload, sender string) (*globalConfig, 
 		msg       = &actMsgExt{}
 		reader    = bytes.NewBuffer(confValue)
 	)
-	if _, err1 := jsp.Decode(reader, newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
+	if err1 := newConfig._decode(reader, "extractConfig"); err1 != nil {
 		err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Config", cos.BHead(confValue), err1)
 		return nil, nil, err
 	}

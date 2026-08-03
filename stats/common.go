@@ -43,9 +43,7 @@ import (
 // defaults and tunables
 const (
 	dfltKaliveClearAlert  = 5 * time.Minute      // clear `cos.KeepAliveErrors` alert when `ErrKaliveCount` doesn't inc that much time
-	dfltPeriodicFlushTime = time.Minute          // when `config.Log.FlushTime` is 0 (zero)
 	dfltPeriodicTimeStamp = time.Hour            // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
-	dfltStatsLogInterval  = int64(time.Minute)   // stats logging interval when not idle; `config.Log.StatsTime` takes precedence if defined
 	dlftCapLogInterval    = int64(4 * time.Hour) // capacity logging interval
 	dlftFDsLogInterval    = dlftCapLogInterval   // size of FD table in the kernel
 )
@@ -397,11 +395,7 @@ func (r *runner) nodeStateFlags() cos.NodeStateFlags {
 }
 
 func (r *runner) _next(config *cmn.Config, now int64) {
-	if config.Log.StatsTime >= config.Periodic.StatsTime {
-		r.next = now + int64(config.Log.StatsTime)
-	} else {
-		r.next = now + dfltStatsLogInterval
-	}
+	r.next = now + int64(config.Log.StatsTime)
 }
 
 func (r *runner) _run(logger statsLogger) error {
@@ -489,7 +483,8 @@ waitStartup:
 			}
 
 			// 2. flush logs (NOTE: stats runner is solely responsible)
-			flushTime := cos.NonZero(config.Log.FlushTime.D(), dfltPeriodicFlushTime)
+			debug.Assert(config.Log.FlushTime > 0)
+			flushTime := config.Log.FlushTime.D()
 			if nlog.Since(now) > flushTime || nlog.OOB() {
 				nlog.Flush(nlog.ActNone)
 			}

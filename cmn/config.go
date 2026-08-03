@@ -102,6 +102,8 @@ type (
 // - will fail for (cluster-scoped) sections tagged with `allow:"cluster"`
 // - is at your own risk otherwise; such changes may cause inconsistent behavior across the cluster.
 type (
+	// TODO -- FIXME: move all pointers to the top _while_ satisfying IterFields sequence, dependencies-wise
+
 	ClusterConfig struct {
 		Ext         any              `json:"ext,omitempty"`              // reserved
 		Tracing     *TracingConf     `json:"tracing,omitempty"`          // see cmn/gco fixup; build tag
@@ -120,13 +122,13 @@ type (
 		RateLimit   *RateLimitConf   `json:"rate_limit,omitempty"`
 		Keepalive   KeepaliveConf    `json:"keepalivetracker"`
 		Rebalance   RebalanceConf    `json:"rebalance" allow:"cluster"`
-		Log         LogConf          `json:"log"`
+		Log         *LogConf         `json:"log,omitempty"`
 		EC          *ECConf          `json:"ec,omitempty" allow:"cluster"`
 		GetBatch    GetBatchConf     `json:"get_batch" allow:"cluster"`
 		Net         NetConf          `json:"net" allow:"cluster"`
 		Timeout     TimeoutConf      `json:"timeout"`
-		Space       SpaceConf        `json:"space"`
-		Transport   TransportConf    `json:"transport" allow:"cluster"`
+		Space       *SpaceConf       `json:"space,omitempty"`
+		Transport   *TransportConf   `json:"transport,omitempty" allow:"cluster"`
 		Memsys      MemsysConf       `json:"memsys"`
 		Disk        *DiskConf        `json:"disk,omitempty"`
 		FSHC        FSHCConf         `json:"fshc"`
@@ -134,7 +136,7 @@ type (
 		LRU         LRUConf          `json:"lru"`
 		Mirror      *MirrorConf      `json:"mirror,omitempty" allow:"cluster"`
 		Periodic    *PeriodConf      `json:"periodic,omitempty" allow:"cluster"`
-		Client      ClientConf       `json:"client"`
+		Client      *ClientConf      `json:"client,omitempty"`
 		Downloader  *DownloaderConf  `json:"downloader,omitempty"`
 		Features    feat.Flags       `json:"features,string" allow:"cluster"` // to flip assorted global defaults (see cmn/feat/feat and docs/feat*)
 		Version     int64            `json:"config_version,string"`
@@ -331,7 +333,7 @@ type (
 		MaxSize   cos.SizeIEC  `json:"max_size"`   // exceeding this size triggers log rotation
 		MaxTotal  cos.SizeIEC  `json:"max_total"`  // (sum individual log sizes); exceeding this number triggers cleanup
 		FlushTime cos.Duration `json:"flush_time"` // log flush interval
-		StatsTime cos.Duration `json:"stats_time"` // (not used)
+		StatsTime cos.Duration `json:"stats_time"` // periodic stats logging interval; see stats package for: runner._next
 		ToStderr  bool         `json:"to_stderr"`  // Log only to stderr instead of files.
 	}
 	LogConfToSet struct {
@@ -469,16 +471,12 @@ type (
 
 		// Specifies a unit of space-cleanup processing;
 		// Zero value _translates_ as a system default 32*1024 items
-		// See also:
-		// - SpaceConf.Validate()
 		BatchSize int64 `json:"batch_size,omitempty"`
 
 		// Sets the interval of time for cleanup and GC operations to skip (or ignore)
 		// any stored content with mtime or atime that fall within the interval;
-		// zero value _translates_ as a system default 1h (dontCleanupTimeDflt).
-		// TODO: redundant now that cleanup uses cluster-HRW + HeadObjT2T (see space/cleanup.go: migratedAway).
+		// zero value translates to the system default (dontCleanupTimeDflt).
 		// See also:
-		// - SpaceConf.Validate()
 		// - lru.dont_evict_time
 		DontCleanupTime cos.Duration `json:"dont_cleanup_time,omitempty"`
 	}
@@ -895,7 +893,6 @@ type (
 
 		// Burst controls transport send "burstiness" (SQ depth), i.e.
 		// how many objects a sender may enqueue per stream without back-pressure.
-		// This is the cluster-wide default and also a minimum.
 		//
 		// Xactions that use intra-cluster transport may increase burstiness for their own
 		// data movers by setting their XactConf.Burst (work channel cap). Stream bundles
@@ -1197,6 +1194,11 @@ func (*DownloaderConf) defaultOmittable()  {}
 func (*RateLimitConf) defaultOmittable()   {}
 func (*WritePolicyConf) defaultOmittable() {}
 
+func (*LogConf) defaultOmittable()       {}
+func (*SpaceConf) defaultOmittable()     {}
+func (*ClientConf) defaultOmittable()    {}
+func (*TransportConf) defaultOmittable() {}
+
 // assorted named fields and prefixes that require (cluster | node) restart for
 // changes to take an effect; note:
 // - this is NOT a "read-only" list
@@ -1315,10 +1317,11 @@ func (c *Config) Validate() error {
 	}
 
 	// NOTE: every Validate() must be idempotent. On the update path,
-	// default-omittable sections run twice: first in hydrateOmittables(),
+	// default-omittable sections run twice: first in HydrateOmittables(),
 	// then through this Config.Validate() recursion.
 
 	opts := IterOpts{VisitAll: true}
+
 	return IterFields(c, c.validateFld, opts)
 }
 
@@ -1341,7 +1344,7 @@ func (c *Config) UpdateClusterConfig(updateConf *ConfigToSet, asType string, opt
 	// must precede the merge below, and must hydrate (not merely allocate);
 	// callers - handleOverrideConfig (startup) and gco.Update (metasync receive) -
 	// operate on a freshly decoded, still-sparse cluster config
-	if err = c.ClusterConfig.hydrateOmittables(); err != nil {
+	if err = c.ClusterConfig.HydrateOmittables(); err != nil {
 		return err
 	}
 
@@ -1475,7 +1478,32 @@ func (c *PeriodConf) Validate() error {
 // LogConf //
 /////////////
 
+const (
+	logLevelDflt     = cos.LogLevel("3")
+	logMaxSizeDflt   = 64 * cos.MiB
+	logMaxTotalDflt  = 512 * cos.MiB
+	logFlushTimeDflt = time.Minute
+	logStatsTimeDflt = 3 * time.Minute
+	logStatsTimeMax  = 10 * time.Minute
+)
+
 func (c *LogConf) Validate() error {
+	if c.Level == "" {
+		c.Level = logLevelDflt
+	}
+	if c.MaxSize == 0 {
+		c.MaxSize = logMaxSizeDflt
+	}
+	if c.MaxTotal == 0 {
+		c.MaxTotal = logMaxTotalDflt
+	}
+	if c.FlushTime.D() == 0 {
+		c.FlushTime = cos.Duration(logFlushTimeDflt)
+	}
+	if c.StatsTime.D() == 0 {
+		c.StatsTime = cos.Duration(logStatsTimeDflt)
+	}
+
 	if err := c.Level.Validate(); err != nil {
 		return err
 	}
@@ -1488,11 +1516,11 @@ func (c *LogConf) Validate() error {
 	if c.MaxSize > c.MaxTotal/2 {
 		return fmt.Errorf("invalid log.max_total=%s, must be >= 2*(log.max_size=%s)", c.MaxTotal, c.MaxSize)
 	}
-	if c.FlushTime.D() > time.Hour {
-		return fmt.Errorf("invalid log.flush_time=%s (expected range [0, 1h)", c.FlushTime)
+	if d := c.FlushTime.D(); d < 0 || d > time.Hour {
+		return fmt.Errorf("invalid log.flush_time=%s (expected range (0, 1h] or zero for default)", c.FlushTime)
 	}
-	if c.StatsTime.D() > 10*time.Minute {
-		return fmt.Errorf("invalid log.stats_time=%s (expected range [periodic.stats_time, 10m])", c.StatsTime)
+	if d := c.StatsTime.D(); d < 0 || d > logStatsTimeMax {
+		return fmt.Errorf("invalid log.stats_time=%s (expected range (0, %v] or zero for default)", c.StatsTime, logStatsTimeMax)
 	}
 	return nil
 }
@@ -1505,20 +1533,38 @@ const (
 	minClientTimeout = time.Second
 	maxClientTimeout = 30 * time.Minute
 
-	errExpectedRange = "(expected range [1s, 30m] or zero)"
+	clientTimeoutDflt     = 10 * time.Second
+	clientTimeoutLongDflt = 5 * time.Minute
+	listObjTimeoutDflt    = 5 * time.Minute
 )
 
 func (c *ClientConf) Validate() error {
-	if j := c.Timeout.D(); j != 0 && (j < minClientTimeout || j > maxClientTimeout) {
+	const (
+		errExpectedRange = "(expected range [1s, 30m])"
+	)
+	// hydrate first: zero means no end-to-end timeout for http.Client
+	// (see ec/getx, reb/globrun, ext/dsort/manager, ais/backend/ht)
+	if c.Timeout == 0 {
+		c.Timeout = cos.Duration(clientTimeoutDflt)
+	}
+	if c.TimeoutLong == 0 {
+		c.TimeoutLong = cos.Duration(clientTimeoutLongDflt)
+	}
+	if c.ListObjTimeout == 0 {
+		c.ListObjTimeout = cos.Duration(listObjTimeoutDflt)
+	}
+
+	if j := c.Timeout.D(); j < minClientTimeout || j > maxClientTimeout {
 		return fmt.Errorf("invalid client_timeout=%s %s", j, errExpectedRange)
 	}
-	if j := c.TimeoutLong.D(); j != 0 && (j < minClientTimeout || j > maxClientTimeout) {
+	if j := c.TimeoutLong.D(); j < minClientTimeout || j > maxClientTimeout {
 		return fmt.Errorf("invalid client_long_timeout=%s %s", j, errExpectedRange)
 	}
-	if j := c.TimeoutLong.D(); j != 0 && j < c.Timeout.D() {
-		return fmt.Errorf("client_long_timeout=%s cannot be less than client_timeout=%s", j, c.Timeout.D())
+	if c.TimeoutLong < c.Timeout {
+		return fmt.Errorf("client_long_timeout=%s cannot be less than client_timeout=%s",
+			c.TimeoutLong, c.Timeout)
 	}
-	if j := c.ListObjTimeout.D(); j != 0 && (j < minClientTimeout || j > maxClientTimeout) {
+	if j := c.ListObjTimeout.D(); j < minClientTimeout || j > maxClientTimeout {
 		return fmt.Errorf("invalid list_timeout=%s %s", j, errExpectedRange)
 	}
 	return nil
@@ -1665,7 +1711,7 @@ func (c *DiskConf) Validate() (err error) {
 		c.IostatTimeShort = cos.Duration(iosTimeShortDflt)
 	}
 	// NOTE: IostatTimeSmooth == 0 keeps deriving from IostatTimeLong (below)
-	// on the config-update path this derivation runs pre-merge (see hydrateOmittables), i.e. off the *current* iostat_time_long.
+	// on the config-update path this derivation runs pre-merge (see HydrateOmittables), i.e. off the *current* iostat_time_long.
 	// Updating iostat_time_long alone therefore leaves an already-derived smoothing window as-is;
 	// to re-derive, set iostat_time_smooth to zero in the same api.SetConfig update
 
@@ -1711,7 +1757,12 @@ func (c *DiskConf) Validate() (err error) {
 ///////////////
 
 const (
-	dontCleanupTimeDflt = time.Hour
+	cleanupWMDflt = 65
+	lowWMDflt     = 75
+	highWMDflt    = 90
+	oosDflt       = 95
+
+	dontCleanupTimeDflt = 30 * time.Minute
 	dontCleanupTimeMin  = 15 * time.Minute
 )
 
@@ -1723,6 +1774,9 @@ const (
 )
 
 func (c *SpaceConf) Validate() error {
+	if c.CleanupWM == 0 && c.LowWM == 0 && c.HighWM == 0 && c.OOS == 0 {
+		c.CleanupWM, c.LowWM, c.HighWM, c.OOS = cleanupWMDflt, lowWMDflt, highWMDflt, oosDflt
+	}
 	if c.CleanupWM <= 0 || c.LowWM < c.CleanupWM || c.HighWM < c.LowWM || c.OOS < c.HighWM || c.OOS > 100 {
 		return fmt.Errorf("invalid %s (expecting: 0 < cleanup < low < high < OOS < 100)", c)
 	}
@@ -2892,39 +2946,54 @@ const (
 	DfltTransportHeader = 4 * cos.KiB   // memsys.PageSize
 	MaxTransportHeader  = 128 * cos.KiB // memsys.MaxPageSlabSize
 
-	TransportBurstMin = 256
-	TransportBurstMax = 4096
+	TransportBurstMin  = 256
+	TransportBurstDflt = 1024
+	TransportBurstMax  = 4096
 
 	DfltTransportTick         = time.Second
 	DfltTransportIdleTeardown = 4 * DfltTransportTick // note: request scope
+	DfltTransportQuiesce      = 10 * time.Second
+	DfltTransportLZ4Block     = 256 * cos.KiB
 )
 
-// NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
 func (c *TransportConf) Validate() (err error) {
+	if c.MaxHeaderSize == 0 {
+		c.MaxHeaderSize = DfltTransportHeader
+	}
+	if c.Burst == 0 {
+		c.Burst = TransportBurstDflt
+	}
+	if c.IdleTeardown == 0 {
+		c.IdleTeardown = cos.Duration(DfltTransportIdleTeardown)
+	}
+	if c.LZ4BlockMaxSize == 0 {
+		c.LZ4BlockMaxSize = DfltTransportLZ4Block
+	}
+	// derived default: use at least 10s and twice the configured teardown interval
+	// (cf. DiskConf.Validate: iostat_time_smooth off iostat_time_long)
+	if c.QuiesceTime == 0 {
+		c.QuiesceTime = cos.Duration(max(DfltTransportQuiesce, 2*c.IdleTeardown.D()))
+	}
+
+	// c.LZ4FrameChecksum is false by default
+
+	// uncompressed block sizes - see github.com/pierrec/lz4
 	if c.LZ4BlockMaxSize != 64*cos.KiB && c.LZ4BlockMaxSize != 256*cos.KiB &&
 		c.LZ4BlockMaxSize != cos.MiB && c.LZ4BlockMaxSize != 4*cos.MiB {
 		return fmt.Errorf("invalid transport.block_size %s, expecting one of: [64K, 256K, 1MB, 4MB]",
 			c.LZ4BlockMaxSize)
 	}
-	// this is the system-wide default and, simultaneously, the minimum;
-	// xactions that utilize intra-cluster transport may override this knob for themselves
-	// but only indirectly and only by increasing
+	// system-wide default; xactions that utilize intra-cluster transport may override
+	// this knob for themselves but only indirectly and only by increasing
 	// their respective (work channel) XactConf.Burst
-	if c.Burst == 0 {
-		c.Burst = TransportBurstMin
-	} else if c.Burst < TransportBurstMin || c.Burst > TransportBurstMax {
+	if c.Burst < TransportBurstMin || c.Burst > TransportBurstMax {
 		return fmt.Errorf("invalid transport.burst_buffer %d, expecting [%d, %d] range or 0 (default)",
 			c.Burst, TransportBurstMin, TransportBurstMax)
 	}
-
-	if c.MaxHeaderSize != 0 {
-		if c.MaxHeaderSize < 512 || c.MaxHeaderSize > MaxTransportHeader {
-			return fmt.Errorf("invalid transport.max_header %v, expecting (0, 128KiB] range or 0 (default)", c.MaxHeaderSize)
-		}
+	if c.MaxHeaderSize < 512 || c.MaxHeaderSize > MaxTransportHeader {
+		return fmt.Errorf("invalid transport.max_header %v, expecting (0, 128KiB] range or 0 (default)", c.MaxHeaderSize)
 	}
-	if c.IdleTeardown.D() == 0 {
-		c.IdleTeardown = cos.Duration(DfltTransportIdleTeardown)
-	} else if c.IdleTeardown.D() < DfltTransportTick {
+	if c.IdleTeardown.D() < DfltTransportTick {
 		return fmt.Errorf("invalid transport.idle_teardown %v (expecting >= 1s)", c.IdleTeardown)
 	}
 	if c.QuiesceTime.D() < max(8*time.Second, 2*DfltTransportIdleTeardown) {
@@ -3335,6 +3404,10 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 
 	dropDsortConfig(config) // 4.3 update: conditional linkage
 
+	// `log` is used before the override-merge and Config.Validate below
+	if err := config.ClusterConfig.HydrateOmittables(); err != nil {
+		return err
+	}
 	nlog.SetPost(config.Log.ToStderr, int64(config.Log.MaxSize))
 
 	// read-only

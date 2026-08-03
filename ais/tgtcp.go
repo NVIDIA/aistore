@@ -1305,7 +1305,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload 
 		return nil
 	}
 
-	if oldConfig.Space != newConfig.Space {
+	if *oldConfig.Space != *newConfig.Space {
 		fs.ExpireCapCache()
 	}
 

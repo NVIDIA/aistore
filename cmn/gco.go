@@ -35,7 +35,7 @@ func _initGCO() {
 
 	// bootstrap config: hydrate the default-omittable sections up front
 	config := &Config{}
-	err := config.ClusterConfig.hydrateOmittables()
+	err := config.ClusterConfig.HydrateOmittables()
 	debug.AssertNoErr(err)
 	GCO.c.Store(config)
 
@@ -141,7 +141,7 @@ func (c *ClusterConfig) allocOmittables() {
 // Allocate absent default-omittable sections and validate every section,
 // including those already present. This canonicalizes defaults before merging
 // an override into the config.
-func (c *ClusterConfig) hydrateOmittables() (err error) {
+func (c *ClusterConfig) HydrateOmittables() (err error) {
 	c.rangeDefaultOmittable(func(_ *reflect.StructField, field reflect.Value) {
 		if err != nil {
 			return
@@ -166,7 +166,7 @@ func (c *ClusterConfig) hydrateOmittables() (err error) {
 // clients need not resolve server-side defaults. The asymmetry is intentional:
 // do not make those paths sparse.
 //
-// See also: allocOmittables, hydrateOmittables, and clonePtrs - all driven by the
+// See also: allocOmittables, HydrateOmittables, and clonePtrs - all driven by the
 // defaultOmittable marker interface.
 func (c *ClusterConfig) PruneOmittables() {
 	c.rangeDefaultOmittable(c.prune)
@@ -196,7 +196,7 @@ func (*ClusterConfig) prune(_ *reflect.StructField, field reflect.Value) {
 }
 
 // internal utility function driving clonePtrs(), allocOmittables(),
-// hydrateOmittables(), and PruneOmittables()
+// HydrateOmittables(), and PruneOmittables()
 // - see also cmn/iter_fields for "Two reflection walks over config (brief-summary and documentation)"
 func (c *ClusterConfig) rangeDefaultOmittable(visit func(*reflect.StructField, reflect.Value)) {
 	v := reflect.ValueOf(c).Elem()

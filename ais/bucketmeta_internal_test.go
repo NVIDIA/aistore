@@ -35,7 +35,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		config := cmn.GCO.BeginUpdate()
 		config.ConfigDir = mpath
 		config.Cksum.Type = cos.ChecksumOneXxh
-		config.Space = cmn.SpaceConf{
+		config.Space = &cmn.SpaceConf{
 			LowWM: 75, HighWM: 90, OOS: 95,
 		}
 		config.LRU = cmn.LRUConf{

@@ -517,7 +517,7 @@ func (t *target) Run() error {
 
 	etl.Tinit()
 	t.initDsort(db, config) // note: conditional linkage
-	dload.Init(db, &config.Client)
+	dload.Init(db, config.Client)
 
 	err = t.htrun.run(config)
 

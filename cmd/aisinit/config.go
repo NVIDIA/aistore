@@ -17,21 +17,6 @@ var (
 		Enabled: false,
 	}
 
-	defaultClientConf = aiscmn.ClientConf{
-		Timeout:        cos.Duration(10 * time.Second),
-		TimeoutLong:    cos.Duration(5 * time.Minute),
-		ListObjTimeout: cos.Duration(5 * time.Minute),
-	}
-
-	defaultTransport = aiscmn.TransportConf{
-		MaxHeaderSize:    4096,
-		Burst:            1024,
-		IdleTeardown:     cos.Duration(4 * time.Second),
-		QuiesceTime:      cos.Duration(10 * time.Second),
-		LZ4BlockMaxSize:  cos.SizeIEC(256 * cos.KiB),
-		LZ4FrameChecksum: false,
-	}
-
 	defaultNet = aiscmn.NetConf{
 		L4: aiscmn.L4Conf{
 			Proto:         "tcp",
@@ -68,23 +53,6 @@ var (
 		},
 		RetryFactor: 4,
 		NumRetries:  3,
-	}
-
-	defaultLog = aiscmn.LogConf{
-		Level:     "3",
-		MaxSize:   cos.SizeIEC(64 * cos.MiB),
-		MaxTotal:  cos.SizeIEC(512 * cos.MiB),
-		FlushTime: cos.Duration(time.Minute),
-		StatsTime: cos.Duration(3 * time.Minute),
-	}
-
-	defaultSpace = aiscmn.SpaceConf{
-		CleanupWM:       65,
-		LowWM:           75,
-		HighWM:          90,
-		OOS:             95,
-		BatchSize:       32768,
-		DontCleanupTime: cos.Duration(60 * time.Minute),
 	}
 
 	defaultMemsys = aiscmn.MemsysConf{
@@ -135,13 +103,9 @@ var (
 func newDefaultConfig() *aiscmn.ClusterConfig {
 	return &aiscmn.ClusterConfig{
 		Auth:       defaultAuth,
-		Client:     defaultClientConf,
-		Transport:  defaultTransport,
 		Net:        defaultNet,
 		FSHC:       defaultFSHC,
 		Keepalive:  defaultKeepalive,
-		Log:        defaultLog,
-		Space:      defaultSpace,
 		Memsys:     defaultMemsys,
 		LRU:        defaultLRU,
 		Rebalance:  defaultRebalance,

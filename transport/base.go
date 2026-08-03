@@ -157,7 +157,8 @@ func _sizeHdr(config *cmn.Config, size int64) int64 {
 		debug.Assert(size <= cmn.MaxTransportHeader, size)
 		size = min(size, cmn.MaxTransportHeader)
 	} else {
-		size = cos.NonZero(int64(config.Transport.MaxHeaderSize), int64(cmn.DfltTransportHeader))
+		debug.Assert(config.Transport.MaxHeaderSize > 0)
+		size = int64(config.Transport.MaxHeaderSize)
 	}
 	return size
 }

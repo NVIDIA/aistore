@@ -338,9 +338,10 @@ func (sb *Streams) open() {
 	if sb.extra.XactBurst > 0 {
 		if numPeers := smap.CountActiveTs() - 1; numPeers > 0 {
 			xburst := cos.DivRound(sb.extra.XactBurst, numPeers)
+			debug.Assert(sb.extra.Config.Transport.Burst >= cmn.TransportBurstMin)
 			sb.extra.Burst = cos.ClampInt(
 				xburst,
-				max(sb.extra.Config.Transport.Burst, cmn.TransportBurstMin),
+				sb.extra.Config.Transport.Burst,
 				cmn.TransportBurstMax,
 			)
 		}

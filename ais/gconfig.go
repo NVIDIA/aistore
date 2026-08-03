@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -76,6 +77,33 @@ func (config *globalConfig) _encode(immSize int64) (sgl *memsys.SGL) {
 	return
 }
 
+// Invariant: cluster config is sparse at rest and on the wire (see PruneOmittables),
+// and fully materialized in memory. _decode, _loadMeta, and _loadPlain below are the
+// read-side counterparts of _encode above: every globalConfig handed to a caller must
+// pass through one of the three.
+// NOTE: _encode prunes a private copy; hydration, conversely, is in-place.
+
+func (config *globalConfig) _decode(r io.Reader, tag string) error {
+	if _, err := jsp.Decode(r, config, config.JspOpts(), tag); err != nil {
+		return err
+	}
+	return config.ClusterConfig.HydrateOmittables()
+}
+
+func (config *globalConfig) _loadMeta(fpath string) error {
+	if _, err := jsp.LoadMeta(fpath, config); err != nil {
+		return err
+	}
+	return config.ClusterConfig.HydrateOmittables()
+}
+
+func (config *globalConfig) _loadPlain(fpath string) error {
+	if _, err := jsp.Load(fpath, config, jsp.Plain()); err != nil {
+		return err
+	}
+	return config.ClusterConfig.HydrateOmittables()
+}
+
 /////////////////
 // configOwner //
 /////////////////
@@ -95,7 +123,7 @@ func newConfigOwner(config *cmn.Config) (co *configOwner) {
 // - apc.QparamTransient
 func (co *configOwner) get() (clone *globalConfig, err error) {
 	clone = &globalConfig{}
-	if _, err = jsp.LoadMeta(co.globalFpath, clone); err == nil {
+	if err = clone._loadMeta(co.globalFpath); err == nil {
 		return clone, nil
 	}
 	if cos.IsNotExist(err) {
@@ -117,8 +145,7 @@ func (co *configOwner) _runPre(ctx *configModifier) (clone *globalConfig, err er
 	if clone == nil {
 		// missing config - try to load initial plain-text
 		clone = &globalConfig{}
-		_, err = jsp.Load(cmn.GCO.GetInitialGconfPath(), clone, jsp.Plain()) // must exist
-		if err != nil {
+		if err = clone._loadPlain(cmn.GCO.GetInitialGconfPath()); err != nil { // must exist
 			return clone, err
 		}
 	}

@@ -498,7 +498,7 @@ func TestConfigAuthSignature_IsRSA(t *testing.T) {
 func TestConfigClone_NoAuthTracingAlias(t *testing.T) {
 	config := cmn.GCO.BeginUpdate()
 	config.Cksum = &cmn.CksumConf{Type: cos.ChecksumOneXxh}
-	config.Space = cmn.SpaceConf{
+	config.Space = &cmn.SpaceConf{
 		LowWM: 75, HighWM: 90, OOS: 95,
 	}
 	config.LRU = cmn.LRUConf{

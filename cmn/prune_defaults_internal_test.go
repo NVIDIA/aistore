@@ -20,17 +20,10 @@ import (
 // The authoritative set of ClusterConfig sections participating in sparse
 // persistence. Adding a pointerized section does not implicitly join this set:
 // it must implement defaultOmittable and be listed here.
-//
-// v5.0: ec, mirror, checksum, disk, periodic, and downloader joined the set.
-// Their pre-v5.0 validators hard-error on a zero section (ec.data_slices < 1,
-// mirror.copies < 2, empty checksum.type, zero watermarks, out-of-range periodic
-// and downloader durations), so a config persisted by v5.0 cannot be read by a
-// pre-v5.0 node - downgrade below v5.0 is unsupported.
-// Contrast tcb/tco/arch/lso, which pre-v5.0 hydrates via XactConf.Validate();
-// same for rate_limit and write_policy, whose zero sections have always validated.
 var expectedOmittable = []string{
 	"TCB", "TCO", "Arch", "Lso", "Chunks", "EC", "Mirror",
 	"Cksum", "Disk", "Periodic", "Downloader", "RateLimit", "WritePolicy",
+	"Transport", "Log", "Client", "Space",
 }
 
 func omittableNames(c *ClusterConfig) []string {
@@ -242,7 +235,7 @@ func TestOverrideOntoSparseSections(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := tt.c
-			if err := c.hydrateOmittables(); err != nil {
+			if err := c.HydrateOmittables(); err != nil {
 				t.Fatalf("hydrate: %v", err)
 			}
 
@@ -301,13 +294,13 @@ func TestOverrideOntoSparseSections(t *testing.T) {
 	}
 }
 
-// hydrateOmittables validates every omittable section, and Config.Validate
+// HydrateOmittables validates every omittable section, and Config.Validate
 // then does it again - so the section validators must be idempotent.
 // Note that ECConf.Validate keys off the section as a whole (`*c == ECConf{}`),
 // which makes this more than a formality.
 func TestOmittableValidateIdempotent(t *testing.T) {
 	c := &ClusterConfig{}
-	if err := c.hydrateOmittables(); err != nil {
+	if err := c.HydrateOmittables(); err != nil {
 		t.Fatalf("hydrate: %v", err)
 	}
 
@@ -331,7 +324,7 @@ func TestOmittableValidateIdempotent(t *testing.T) {
 // the final validation pass to derive it again.
 func TestOverridePreservesInheritedDerivedDefaults(t *testing.T) {
 	c := &ClusterConfig{}
-	if err := c.hydrateOmittables(); err != nil {
+	if err := c.HydrateOmittables(); err != nil {
 		t.Fatalf("hydrate: %v", err)
 	}
 

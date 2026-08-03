@@ -329,6 +329,10 @@ func Start(version, buildtime string) (err error) {
 	hk.WaitStarted()
 
 	config := &cmn.Config{}
+	// materialize default-omittable sections: a bare cmn.Config{} never goes through GCO
+	if err := config.ClusterConfig.HydrateOmittables(); err != nil {
+		return err
+	}
 	config.Log.Level = "3"
 	// memsys.Init(prefixC, prefixC, config) // TODO: revisit
 	gmm = memsys.PageMM()

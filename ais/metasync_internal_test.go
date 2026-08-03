@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/memsys"
@@ -914,4 +915,53 @@ func (m msgSortHelper) Less(i, j int) bool {
 	}
 
 	return m[i].cnt < m[j].cnt
+}
+
+func TestExtractConfigHydratesSparse(t *testing.T) {
+	current := cmn.GCO.Get()
+
+	src := &globalConfig{}
+	src.Version = current.Version + 1
+	src.UUID = current.UUID
+	tassert.CheckFatal(t, src.ClusterConfig.HydrateOmittables())
+
+	sgl := src._encode(0)
+	defer sgl.Free()
+
+	// Verify that _encode actually produced the representation that caused the
+	// regression: default-omittable sections are absent on the wire.
+	var sparse globalConfig
+	_, err := jsp.Decode(bytes.NewReader(sgl.Bytes()), &sparse, sparse.JspOpts(), "sparse config test")
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatalf(t,
+		sparse.Log == nil &&
+			sparse.Client == nil &&
+			sparse.Space == nil &&
+			sparse.Transport == nil,
+		"expected sparse config, got log=%v client=%v space=%v transport=%v",
+		sparse.Log, sparse.Client, sparse.Space, sparse.Transport)
+
+	// Exercise the real metasync receive boundary, not HydrateOmittables directly.
+	payload := msPayload{revsConfTag: sgl.Bytes()}
+	got, _, err := (&htrun{}).extractConfig(payload, "test")
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, got != nil, "extractConfig returned nil config")
+
+	tassert.Fatalf(t,
+		got.Log != nil &&
+			got.Client != nil &&
+			got.Space != nil &&
+			got.Transport != nil,
+		"decoded config not hydrated: log=%v client=%v space=%v transport=%v",
+		got.Log, got.Client, got.Space, got.Transport)
+
+	tassert.Fatalf(t, reflect.DeepEqual(got.Log, src.Log),
+		"log mismatch: got %+v, expected %+v", got.Log, src.Log)
+	tassert.Fatalf(t, reflect.DeepEqual(got.Client, src.Client),
+		"client mismatch: got %+v, expected %+v", got.Client, src.Client)
+	tassert.Fatalf(t, reflect.DeepEqual(got.Space, src.Space),
+		"space mismatch: got %+v, expected %+v", got.Space, src.Space)
+	tassert.Fatalf(t, reflect.DeepEqual(got.Transport, src.Transport),
+		"transport mismatch: got %+v, expected %+v", got.Transport, src.Transport)
 }

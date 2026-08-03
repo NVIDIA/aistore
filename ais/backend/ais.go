@@ -228,7 +228,7 @@ func (m *AISbp) GetInfoInternal() (res meta.RemAisVec) {
 func (m *AISbp) GetInfo(clusterConf cmn.BackendConfAIS) (res meta.RemAisVec) {
 	var (
 		cfg              = cmn.GCO.Get()
-		cliPlain, cliTLS = remaisClients(&cfg.Client)
+		cliPlain, cliTLS = remaisClients(cfg.Client)
 	)
 
 	m.mu.RLock()
@@ -290,7 +290,7 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 		url          string
 		remSmap      *meta.Smap
 		clientL      http.Client
-		cliH, cliTLS = remaisClients(&cfg.Client)
+		cliH, cliTLS = remaisClients(cfg.Client)
 	)
 
 	for _, u := range confURLs {
