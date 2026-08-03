@@ -90,6 +90,11 @@ type (
 )
 
 var (
+	// Issuer key material could not be obtained, leaving signature verification inconclusive
+	ErrKeyUnavailable = errors.New("signing key unavailable")
+	// Key ID absent from a key set that could not be refreshed, so its existence is unconfirmed
+	ErrStaleKeySet = fmt.Errorf("%w: key set may be stale", ErrKeyUnavailable)
+
 	ErrNoJWKSForIssuer           = errors.New("no JWKS entry exists for issuer")
 	ErrJWKSCacheNotInitialized   = errors.New("JWKS cache not initialized")
 	ErrJWKSCacheRefreshThrottled = errors.New("JWKS cache refresh throttled")
@@ -265,7 +270,7 @@ func (km *KeyCacheManager) registerIssWithCache(ctx context.Context, iss, discov
 
 func (km *KeyCacheManager) ResolveKey(ctx context.Context, tok *jwt.Token) (any, error) {
 	if !km.isInitialized() {
-		return nil, errors.New("cannot validate signature by issuer lookup: jwks cache not initialized")
+		return nil, fmt.Errorf("%w: cannot validate signature by issuer lookup: %v", ErrKeyUnavailable, ErrJWKSCacheNotInitialized)
 	}
 	if len(km.allowedIss) == 0 {
 		return nil, errors.New("no public key or allowed issuers configured to validate token")
@@ -286,6 +291,7 @@ func (km *KeyCacheManager) ResolveKey(ctx context.Context, tok *jwt.Token) (any,
 	// Allowed issuer check
 	_, ok = km.allowedIss[iss]
 	if !ok {
+		km.IncCounter(stats.AuthInvalidIssCount)
 		return nil, errors.New("provided 'iss' claim not in configured allowed list")
 	}
 
@@ -310,7 +316,7 @@ func (km *KeyCacheManager) ValidateKey(ctx context.Context, reqConf *authn.Serve
 		return http.StatusBadRequest, fmt.Errorf("invalid public key: %w", parseErr)
 	}
 	if !km.isInitialized() {
-		return http.StatusInternalServerError, errors.New("JWKS cache not initialized")
+		return http.StatusInternalServerError, ErrJWKSCacheNotInitialized
 	}
 	for iss := range km.allowedIss {
 		keySet, err := km.getKeySetFromCache(ctx, iss)
@@ -335,12 +341,15 @@ func (km *KeyCacheManager) ValidateKey(ctx context.Context, reqConf *authn.Serve
 func (km *KeyCacheManager) getPubKey(ctx context.Context, iss, kid string) (any, error) {
 	keySet, err := km.getKeySetFromCache(ctx, iss)
 	if err != nil {
-		km.IncCounter(stats.AuthInvalidIssCount)
-		return nil, fmt.Errorf("failed to get keyset for issuer %s: %v", iss, err)
+		return nil, fmt.Errorf("%w: failed to get keyset for issuer %s: %v", ErrKeyUnavailable, iss, err)
 	}
 	jwKey, err := km.lookupKey(ctx, keySet, iss, kid)
 	if err != nil {
-		return nil, fmt.Errorf("unrecognized key id %s for issuer %s: %v", kid, iss, err)
+		if errors.Is(err, ErrKeyUnavailable) {
+			return nil, fmt.Errorf("cannot resolve key id %s for issuer %s: %w", kid, iss, err)
+		}
+		km.IncCounter(stats.AuthInvalidKidCount)
+		return nil, fmt.Errorf("unrecognized key id %s for issuer %s: %w", kid, iss, err)
 	}
 	var pubKey any
 	if err = jwKey.Raw(&pubKey); err != nil {
@@ -355,30 +364,33 @@ func (km *KeyCacheManager) lookupKey(ctx context.Context, keySet jwk.Set, iss, k
 		return jwKey, nil
 	}
 	// Key not found — attempt to refresh the issuer's key set
-	jwKey, err := km.refreshAndLookup(ctx, iss, kid)
-	if err != nil {
-		km.IncCounter(stats.AuthInvalidKidCount)
-	}
-	return jwKey, err
+	return km.refreshAndLookup(ctx, iss, kid)
 }
 
 func (km *KeyCacheManager) refreshAndLookup(ctx context.Context, iss, kid string) (jwk.Key, error) {
-	lookupSet, err := km.keyCache.refreshKeySetForIss(ctx, iss)
-	if err != nil && !errors.Is(err, ErrJWKSCacheRefreshThrottled) {
-		return nil, err
-	}
-	// If throttled, retry get in case another routine refreshed between check and lock acquisition
-	if errors.Is(err, ErrJWKSCacheRefreshThrottled) {
+	lookupSet, refreshErr := km.keyCache.refreshKeySetForIss(ctx, iss)
+	if refreshErr != nil {
+		// Received a real error refreshing the KeySet, so unable to get public key
+		if !errors.Is(refreshErr, ErrJWKSCacheRefreshThrottled) {
+			return nil, fmt.Errorf("%w: %v", ErrKeyUnavailable, refreshErr)
+		}
+		// If throttled, retry get in case another routine refreshed between check and lock acquisition
 		var getErr error
 		lookupSet, getErr = km.getKeySetFromCache(ctx, iss)
 		if getErr != nil {
-			return nil, errors.Join(err, getErr)
+			return nil, fmt.Errorf("%w: %v", ErrKeyUnavailable, errors.Join(refreshErr, getErr))
 		}
 	}
 	if jwKey, found := lookupSet.LookupKeyID(kid); found {
 		return jwKey, nil
 	}
-	return nil, errors.Join(err, errors.New("kid not found after JWKS refresh attempt"))
+	// The public key did not exist for the given kid
+	// If we received an initial throttle error, our KeySet may be stale so it's not a definitive rejection
+	if errors.Is(refreshErr, ErrJWKSCacheRefreshThrottled) {
+		return nil, fmt.Errorf("%w: %w", ErrStaleKeySet, refreshErr)
+	}
+	// If we were not throttled, the above check refreshes and guarantees the kid is not in the KeySet
+	return nil, errors.New("kid not found after JWKS refresh attempt")
 }
 
 func (km *KeyCacheManager) getKeySetFromCache(ctx context.Context, iss string) (jwk.Set, error) {
@@ -563,5 +575,5 @@ func (kc *keyCache) refreshKeySetForIss(ctx context.Context, iss string) (jwk.Se
 		nlog.Warningf("JWKS refresh failed for issuer %s, err: %v", iss, err)
 		return nil, err
 	}
-	return keySet, err
+	return keySet, nil
 }

@@ -11,6 +11,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -278,13 +279,18 @@ func TestKeyCacheManager_ValidateKey(t *testing.T) {
 //
 
 type dynamicJWKSHandler struct {
-	mu       sync.RWMutex
-	jwksJSON string
-	reqCount atomic.Int64
+	mu         sync.RWMutex
+	jwksJSON   string
+	reqCount   atomic.Int64
+	failStatus atomic.Int64 // when set, served instead of the JWKS
 }
 
 func (h *dynamicJWKSHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	h.reqCount.Add(1)
+	if status := h.failStatus.Load(); status != 0 {
+		w.WriteHeader(int(status))
+		return
+	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	fmt.Fprint(w, h.jwksJSON)
@@ -293,6 +299,7 @@ func (h *dynamicJWKSHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 type dynamicTokenEnv struct {
 	keys        map[string]*rsa.PrivateKey
 	jwksHandler *dynamicJWKSHandler
+	jwksSrv     *httptest.Server
 	oidcSrv     *httptest.Server
 	tkParser    *tok.TokenParser
 }
@@ -341,6 +348,7 @@ func setupDynamicTokenEnv(t *testing.T, rotationRefresh time.Duration) *dynamicT
 	return &dynamicTokenEnv{
 		keys:        keys,
 		jwksHandler: handler,
+		jwksSrv:     jwksSrv,
 		oidcSrv:     oidcSrv,
 		tkParser:    tok.NewTokenParser(kcm, authConf),
 	}
@@ -372,7 +380,72 @@ func TestKeyCacheManager_UnknownKidAfterRefresh(t *testing.T) {
 	unknownKey := genRSAKey(t)
 	tk := createTokenWithKeyID(t, newAdminClaimsWithIssuer(env.oidcSrv.URL), unknownKey, "unknown-kid")
 	_, err := env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Error(t, err != nil, "Expected validation to fail for unknown kid even after refresh")
+	tassert.Fatal(t, err != nil, "Expected validation to fail for unknown kid even after refresh")
+	tassert.Errorf(t, !errors.Is(err, tok.ErrKeyUnavailable), "Expected an absent kid, got %v", err)
+}
+
+func TestKeyCacheManager_KeyUnavailable(t *testing.T) {
+	tests := []struct {
+		name string
+		fail func(env *dynamicTokenEnv)
+	}{
+		{
+			name: "IssuerError",
+			fail: func(env *dynamicTokenEnv) { env.jwksHandler.failStatus.Store(http.StatusServiceUnavailable) },
+		},
+		{
+			name: "IssuerUnreachable",
+			fail: func(env *dynamicTokenEnv) { env.jwksSrv.Close() },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := setupDynamicTokenEnv(t, 0)
+			// Served by the issuer but absent from the cache, so validation must refresh
+			env.addKey(t, "key-2")
+			tk := env.signToken(t, "key-2")
+			tt.fail(env)
+
+			_, err := env.tkParser.ValidateToken(t.Context(), tk)
+			tassert.Fatal(t, err != nil, "Expected validation to fail")
+			tassert.Errorf(t, errors.Is(err, tok.ErrKeyUnavailable), "Expected an unavailable key, got %v", err)
+		})
+	}
+}
+
+func TestKeyCacheManager_KeyUnavailable_Unregistered(t *testing.T) {
+	rsaKey := genRSAKey(t)
+	jwksSrv := createMockJWKSServer(generateTestJWKS(t, rsaKey, "key-1"))
+	oidcSrv := createMockOIDCServer(jwksSrv.URL)
+	t.Cleanup(func() {
+		jwksSrv.Close()
+		oidcSrv.Close()
+	})
+
+	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{oidcSrv.URL}}}
+	kcm := tok.NewKeyCacheManager(kcmConfNoRetry(authConf.OIDC), getKeyCacheClient(t, oidcSrv.Certificate()), nil)
+	// Cache is created but left unpopulated, so the issuer is only discovered on first use
+	kcm.Init(t.Context())
+	tk := createTokenWithKeyID(t, newAdminClaimsWithIssuer(oidcSrv.URL), rsaKey, "key-1")
+	oidcSrv.Close()
+
+	_, err := tok.NewTokenParser(kcm, authConf).ValidateToken(t.Context(), tk)
+	tassert.Fatal(t, err != nil, "Expected validation to fail")
+	tassert.Errorf(t, errors.Is(err, tok.ErrKeyUnavailable), "Expected an unavailable key, got %v", err)
+}
+
+func TestKeyCacheManager_KeyUnavailable_Throttled(t *testing.T) {
+	env := setupDynamicTokenEnv(t, 10*time.Minute)
+
+	env.addKey(t, "key-2")
+	_, err := env.tkParser.ValidateToken(t.Context(), env.signToken(t, "key-2"))
+	tassert.CheckFatal(t, err)
+
+	env.addKey(t, "key-3")
+	_, err = env.tkParser.ValidateToken(t.Context(), env.signToken(t, "key-3"))
+	tassert.Fatal(t, err != nil, "Expected validation to fail")
+	tassert.Errorf(t, errors.Is(err, tok.ErrStaleKeySet), "Expected a stale key set, got %v", err)
+	tassert.Errorf(t, errors.Is(err, tok.ErrKeyUnavailable), "Expected an unavailable key, got %v", err)
 }
 
 func TestKeyCacheManager_RefreshThrottle_CacheFallback(t *testing.T) {
