@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
@@ -280,6 +281,45 @@ func TestS3PresignedPutGet(t *testing.T) {
 	getOutput.Body.Close()
 
 	tassert.Errorf(t, *putOutput.ETag == *getOutput.ETag, "ETag does not match between PUT and GET operation (%s != %s)", *putOutput.ETag, *getOutput.ETag)
+}
+
+func TestS3PresignedHostHijack(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Bck: cliBck, RequiredCloudProvider: apc.AWS,
+		RequiredDeployment: tools.ClusterTypeLocal})
+	if !tools.GetClusterConfig(t).Net.HTTP.SkipVerifyCrt {
+		t.Skip("requires net.http.skip_verify for the attacker HTTPS endpoint")
+	}
+	bprops, err := api.HeadBucket(baseParams, cliBck, false)
+	tassert.CheckFatal(t, err)
+	setBucketFeatures(t, cliBck, bprops, feat.S3PresignedRequest)
+	tools.EnableClusterFeatures(t, feat.S3ReverseProxy)
+
+	intercepted := make(chan struct{}, 1)
+	attacker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		intercepted <- struct{}{}
+		w.Header().Set(cos.HdrETag, `"attacker"`)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer attacker.Close()
+
+	credential := "attacker/20260731/us-east-1@" + attacker.Listener.Addr().String() + "?/s3/aws4_request"
+	query := url.Values{aiss3.HeaderCredentials: {credential}}
+	reqURL := proxyURL + apc.URLPathS3.Join(cliBck.Name, "presigned-host-hijack") + "?" + query.Encode()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, reqURL, strings.NewReader("cache poison"))
+	tassert.CheckFatal(t, err)
+	api.SetAuxHeaders(req, &baseParams)
+	resp, err := baseParams.Client.Do(req)
+	tassert.CheckFatal(t, err)
+	cos.DrainReader(resp.Body)
+	resp.Body.Close()
+	tassert.Errorf(t, resp.StatusCode >= http.StatusBadRequest && resp.StatusCode < http.StatusInternalServerError,
+		"expected client-error rejection, got %d", resp.StatusCode)
+
+	select {
+	case <-intercepted:
+		t.Fatal("presigned request reached attacker endpoint")
+	default:
+	}
 }
 
 func TestS3PresignedMultipart(t *testing.T) {

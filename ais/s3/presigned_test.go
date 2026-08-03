@@ -6,12 +6,33 @@ package s3 //nolint:testpackage // We use private functions here...
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Presigned", func() {
+	It("rejects SigV4 without a region", func() {
+		q := url.Values{HeaderCredentials: {"key/20260803//s3/aws4_request"}}
+		_, err := NewPresignedReq(&http.Request{Header: http.Header{}}, nil, nil, q, "us-east-1")
+		Expect(err).To(HaveOccurred())
+	})
+
+	DescribeTable("NewPresignedReq", func(signed, configured string, shouldFail bool) {
+		q := url.Values{}
+		if signed != "" {
+			q.Set(HeaderCredentials, "key/20260803/"+signed+"/s3/aws4_request")
+		}
+		_, err := NewPresignedReq(&http.Request{Header: http.Header{}}, nil, nil, q, configured)
+		Expect(err != nil).To(Equal(shouldFail))
+	},
+		Entry("matching", "us-east-1", "us-east-1", false),
+		Entry("host hijack", "us-east-1@attacker.com?", "us-east-1", true),
+		Entry("unsigned fallback", "", "us-east-1", false),
+	)
+
 	Describe("makeS3URL", func() {
 		DescribeTable("virtualHostedRequestStyle", func(region, bucketName, objName, query string) {
 			got, err := makeS3URL(virtualHostedRequestStyle, region, bucketName, objName, query)
@@ -36,6 +57,17 @@ var _ = Describe("Presigned", func() {
 		It("should return error if request style is not recognized", func() {
 			_, err := makeS3URL("something", "us-west-1", "bucket", "object", "&key=value")
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("escapes object names", func() {
+			const objName = "dir/object?#100% done"
+			got, err := makeS3URL(virtualHostedRequestStyle, "us-west-1", "bucket", objName, "key=value")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(got).To(Equal("https://bucket.s3.us-west-1.amazonaws.com/dir/object%3F%23100%25%20done?key=value"))
+
+			got, err = makeS3URL(pathRequestStyle, "us-west-1", "bucket", objName, "key=value")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(got).To(Equal("https://s3.us-west-1.amazonaws.com/bucket/dir/object%3F%23100%25%20done?key=value"))
 		})
 	})
 })

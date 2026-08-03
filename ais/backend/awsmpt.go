@@ -27,7 +27,10 @@ import (
 
 func (*s3bp) StartMpt(lom *core.LOM, oreq *http.Request) (id string, ecode int, err error) {
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts := aiss3.NewPresignedReq(oreq, lom, nil, oreq.URL.Query())
+		pts, ecode, err := newPresignedReq(oreq, lom, nil)
+		if err != nil {
+			return "", ecode, err
+		}
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", resp.StatusCode, err
@@ -71,7 +74,10 @@ func (*s3bp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, oreq *http.Request,
 
 	// presigned
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts := aiss3.NewPresignedReq(oreq, lom, r, oreq.URL.Query())
+		pts, ecode, err := newPresignedReq(oreq, lom, r)
+		if err != nil {
+			return "", ecode, err
+		}
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", _awsPresignedStatus(resp), err
@@ -126,7 +132,10 @@ func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obo
 
 	// presigned
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)), oreq.URL.Query())
+		pts, ecode, err := newPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)))
+		if err != nil {
+			return "", "", ecode, err
+		}
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", "", _awsPresignedStatus(resp), err
@@ -182,7 +191,10 @@ func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obo
 
 func (*s3bp) AbortMpt(lom *core.LOM, oreq *http.Request, uploadID string) (ecode int, err error) {
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts := aiss3.NewPresignedReq(oreq, lom, oreq.Body, oreq.URL.Query())
+		pts, ecode, err := newPresignedReq(oreq, lom, oreq.Body)
+		if err != nil {
+			return ecode, err
+		}
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return _awsPresignedStatus(resp), err

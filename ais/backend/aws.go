@@ -372,8 +372,10 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 	)
 
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		q := oreq.URL.Query() // TODO: optimize-out
-		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
+		pts, ecode, err := newPresignedReq(oreq, lom, nil)
+		if err != nil {
+			return nil, ecode, err
+		}
 		resp, err := pts.DoHead(core.T.DataClient())
 		if err != nil {
 			return nil, _awsPresignedStatus(resp), err
@@ -447,8 +449,10 @@ func (s3bp *s3bp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, oreq *
 	var res core.GetReaderResult
 
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		q := oreq.URL.Query() // TODO: optimize-out
-		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
+		pts, ecode, err := newPresignedReq(oreq, lom, nil)
+		if err != nil {
+			return ecode, err
+		}
 		resp, err := pts.DoReader(core.T.DataClient())
 		if err != nil {
 			res = core.GetReaderResult{Err: err, ErrCode: _awsPresignedStatus(resp)}
@@ -573,8 +577,10 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 		md                    = make(map[string]string, 2)
 	)
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		q := oreq.URL.Query() // TODO: optimize-out
-		pts := aiss3.NewPresignedReq(oreq, lom, r, q)
+		pts, ecode, err := newPresignedReq(oreq, lom, r)
+		if err != nil {
+			return ecode, err
+		}
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return _awsPresignedStatus(resp), err
@@ -685,6 +691,18 @@ func (*s3bp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error
 //
 // static helpers
 //
+
+func newPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser) (*aiss3.PresignedReq, int, error) {
+	svc, err := getS3Svc(lom.Bck().RemoteBck(), "")
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	pts, err := aiss3.NewPresignedReq(oreq, lom, body, oreq.URL.Query(), svc.Options().Region)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+	return pts, 0, nil
+}
 
 // s3client creates or loads an existing S3 client for each triplet of profile/region/endpoint.
 // Note that each property is configurable per-bucket.

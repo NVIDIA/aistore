@@ -5,6 +5,7 @@
 package s3
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,10 +31,12 @@ const (
 
 type (
 	PresignedReq struct {
-		oreq  *http.Request
-		lom   *core.LOM
-		body  io.ReadCloser
-		query url.Values
+		oreq   *http.Request
+		lom    *core.LOM
+		body   io.ReadCloser
+		query  url.Values
+		region string
+		signed bool
 	}
 	PresignedResp struct {
 		BodyR      io.ReadCloser // Set when invoked `Do` with `async` option.
@@ -48,45 +51,37 @@ type (
 // PresignedReq //
 //////////////////
 
-func NewPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser, q url.Values) *PresignedReq {
-	return &PresignedReq{oreq, lom, body, q}
+func NewPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser, q url.Values, configuredRegion string) (*PresignedReq, error) {
+	region, signed := parseSignatureV4(q, oreq.Header)
+	switch {
+	case !signed:
+		// no client signature: DoReader falls back to the regular backend SDK path
+	case region == "":
+		return nil, errors.New("missing region in presigned S3 credentials")
+	case region != configuredRegion:
+		return nil, fmt.Errorf("presigned S3 region %q does not match configured region %q", region, configuredRegion)
+	}
+	return &PresignedReq{oreq, lom, body, q, region, signed}, nil
 }
 
 func makeS3URL(requestStyle, region, bucketName, objName, query string) (string, error) {
+	u := url.URL{Scheme: "https", Path: objName, RawQuery: query, ForceQuery: true}
 	requestStyle = strings.TrimSpace(strings.ToLower(requestStyle))
 	switch requestStyle {
 	// `virtual-hosted` style is used by default as this is default in S3.
 	case virtualHostedRequestStyle, "":
-		var sb cos.SB
-		sb.Init(8 + len(bucketName) + 4 + len(region) + 15 + len(objName) + 1 + len(query))
-		sb.WriteString("https://")
-		sb.WriteString(bucketName)
-		sb.WriteString(".s3.")
-		sb.WriteString(region)
-		sb.WriteString(".amazonaws.com/")
-		sb.WriteString(objName)
-		sb.WriteUint8('?')
-		sb.WriteString(query)
-		return sb.String(), nil
+		u.Host = bucketName + ".s3." + region + ".amazonaws.com"
 	case pathRequestStyle:
-		var sb cos.SB
-		sb.Init(11 + len(region) + 15 + len(bucketName) + 1 + len(objName) + 1 + len(query))
-		sb.WriteString("https://s3.")
-		sb.WriteString(region)
-		sb.WriteString(".amazonaws.com/")
-		sb.WriteString(bucketName)
-		sb.WriteUint8('/')
-		sb.WriteString(objName)
-		sb.WriteUint8('?')
-		sb.WriteString(query)
-		return sb.String(), nil
+		u.Host = "s3." + region + ".amazonaws.com"
+		u.Path = bucketName + "/" + objName
 	default:
 		return "", fmt.Errorf("unrecognized request style provided: %v", requestStyle)
 	}
+	return u.String(), nil
 }
 
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html
-func parseSignatureV4(query url.Values, header http.Header) (region string) {
+func parseSignatureV4(query url.Values, header http.Header) (region string, signed bool) {
 	if credentials := query.Get(HeaderCredentials); credentials != "" {
 		region = parseCredentialHeader(credentials)
 	} else if authorization := header.Get(apc.HdrAuthorization); strings.HasPrefix(authorization, signatureV4) {
@@ -94,8 +89,10 @@ func parseSignatureV4(query url.Values, header http.Header) (region string) {
 		authorization = strings.TrimSpace(authorization)
 		credentials := strings.Split(authorization, ", ")[0]
 		region = parseCredentialHeader(credentials)
+	} else {
+		return "", false
 	}
-	return region
+	return region, true
 }
 
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
@@ -168,8 +165,8 @@ func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 // NOTE: If error occurs `PresignedResp` with `StatusCode` will be set.
 // NOTE: `BodyR` will be set only if `err` is `nil`.
 func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
-	region := parseSignatureV4(pts.query, pts.oreq.Header)
-	if region == "" {
+	if !pts.signed {
+		// no client signature: fall back to the regular backend SDK path
 		return nil, nil
 	}
 
@@ -180,7 +177,7 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	queryEncoded := pts.query.Encode()
 
 	signedRequestStyle := pts.oreq.Header.Get(apc.HdrSignedRequestStyle)
-	s3url, err := makeS3URL(signedRequestStyle, region, pts.lom.Bck().Name, pts.lom.ObjName, queryEncoded)
+	s3url, err := makeS3URL(signedRequestStyle, pts.region, pts.lom.Bck().Name, pts.lom.ObjName, queryEncoded)
 	if err != nil {
 		return &PresignedResp{StatusCode: http.StatusBadRequest}, err
 	}
