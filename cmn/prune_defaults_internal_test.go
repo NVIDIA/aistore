@@ -24,6 +24,7 @@ var expectedOmittable = []string{
 	"TCB", "TCO", "Arch", "Lso", "Chunks", "EC", "Mirror",
 	"Cksum", "Disk", "Periodic", "Downloader", "RateLimit", "WritePolicy",
 	"Transport", "Log", "Client", "Space",
+	"GetBatch", "LRU", "FSHC", "Keepalive", "Rebalance",
 }
 
 func omittableNames(c *ClusterConfig) []string {
@@ -317,6 +318,156 @@ func TestOmittableValidateIdempotent(t *testing.T) {
 				sf.Name, first.Elem().Interface(), field.Elem().Interface())
 		}
 	})
+}
+
+func TestHydratedOmittableDefaults(t *testing.T) {
+	c := &ClusterConfig{}
+	if err := c.HydrateOmittables(); err != nil {
+		t.Fatalf("hydrate: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{
+			name: "GetBatch",
+			got:  c.GetBatch,
+			want: &GetBatchConf{
+				XactConf: XactConf{
+					Compression: apc.CompressNever,
+					SbundleMult: 2,
+					Burst:       512,
+				},
+				MaxWait:          cos.Duration(20 * time.Second),
+				NumWarmupWorkers: -1,
+				MaxSoftErrs:      8,
+				MaxGFN:           5,
+			},
+		},
+		{
+			name: "LRU",
+			got:  c.LRU,
+			want: &LRUConf{
+				DontEvictTime:   cos.Duration(2 * time.Hour),
+				CapacityUpdTime: cos.Duration(10 * time.Minute),
+				BatchSize:       32768,
+				Enabled:         false,
+			},
+		},
+		{
+			name: "FSHC",
+			got:  c.FSHC,
+			want: &FSHCConf{
+				TestFileCount: 4,
+				HardErrs:      2,
+				IOErrs:        10,
+				IOErrTime:     cos.Duration(10 * time.Second),
+				Enabled:       true,
+			},
+		},
+		{
+			name: "Keepalive",
+			got:  c.Keepalive,
+			want: &KeepaliveConf{
+				Proxy: KeepaliveTrackerConf{
+					Name:     "heartbeat",
+					Interval: cos.Duration(10 * time.Second),
+					Factor:   3,
+				},
+				Target: KeepaliveTrackerConf{
+					Name:     "heartbeat",
+					Interval: cos.Duration(10 * time.Second),
+					Factor:   3,
+				},
+				NumRetries:  3,
+				RetryFactor: 4,
+			},
+		},
+		{
+			name: "Rebalance",
+			got:  c.Rebalance,
+			want: &RebalanceConf{
+				XactConf: XactConf{
+					Compression: apc.CompressNever,
+					SbundleMult: 2,
+					Burst:       1024,
+				},
+				DestRetryTime: cos.Duration(2 * time.Minute),
+				Enabled:       true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !reflect.DeepEqual(tt.got, tt.want) {
+				t.Fatalf("got %+v, expected %+v", tt.got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultEnabledOmittablesPreserveDisable(t *testing.T) {
+	c := &ClusterConfig{}
+	if err := c.HydrateOmittables(); err != nil {
+		t.Fatalf("hydrate: %v", err)
+	}
+	c.FSHC.Enabled = false
+	c.Rebalance.Enabled = false
+
+	c.PruneOmittables()
+	if c.FSHC == nil || c.Rebalance == nil {
+		t.Fatalf("explicit disable pruned: fshc=%v rebalance=%v", c.FSHC, c.Rebalance)
+	}
+
+	b, err := jsoniter.Marshal(c)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	loaded := &ClusterConfig{}
+	if err := jsoniter.Unmarshal(b, loaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if err := loaded.HydrateOmittables(); err != nil {
+		t.Fatalf("rehydrate: %v", err)
+	}
+	if loaded.FSHC.Enabled || loaded.Rebalance.Enabled {
+		t.Fatalf("explicit disable lost: fshc=%t rebalance=%t",
+			loaded.FSHC.Enabled, loaded.Rebalance.Enabled)
+	}
+}
+
+func TestKeepaliveRetryFactorEffectiveRange(t *testing.T) {
+	c := &Config{}
+	if err := c.ClusterConfig.HydrateOmittables(); err != nil {
+		t.Fatalf("hydrate: %v", err)
+	}
+	c.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
+	c.Timeout.MaxKeepalive = cos.Duration(5 * time.Second)
+
+	c.Keepalive.RetryFactor = 1
+	if got := KeepaliveRetryDuration(c); got != 2*time.Second {
+		t.Fatalf("retry_factor=1: got %v, expected 2s", got)
+	}
+	c.Keepalive.RetryFactor = 4
+	if got := KeepaliveRetryDuration(c); got != 6*time.Second {
+		t.Fatalf("retry_factor=4: got %v, expected capped 6s", got)
+	}
+}
+
+func TestGetBatchDefaultGFNRespectsSoftLimit(t *testing.T) {
+	c := &GetBatchConf{MaxSoftErrs: 3}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if c.MaxGFN != 3 {
+		t.Fatalf("max_gfn: got %d, expected 3", c.MaxGFN)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("second validate: %v", err)
+	}
 }
 
 // Defaults materialized in the inherited configuration remain inherited values

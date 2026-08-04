@@ -120,20 +120,20 @@ type (
 		Arch        *ArchConf        `json:"arch,omitempty" allow:"cluster"`
 		Lso         *LsoConf         `json:"lso,omitempty" allow:"cluster"`
 		RateLimit   *RateLimitConf   `json:"rate_limit,omitempty"`
-		Keepalive   KeepaliveConf    `json:"keepalivetracker"`
-		Rebalance   RebalanceConf    `json:"rebalance" allow:"cluster"`
+		Keepalive   *KeepaliveConf   `json:"keepalivetracker,omitempty"`
+		Rebalance   *RebalanceConf   `json:"rebalance,omitempty" allow:"cluster"`
 		Log         *LogConf         `json:"log,omitempty"`
 		EC          *ECConf          `json:"ec,omitempty" allow:"cluster"`
-		GetBatch    GetBatchConf     `json:"get_batch" allow:"cluster"`
+		GetBatch    *GetBatchConf    `json:"get_batch,omitempty" allow:"cluster"`
 		Net         NetConf          `json:"net" allow:"cluster"`
 		Timeout     TimeoutConf      `json:"timeout"`
 		Space       *SpaceConf       `json:"space,omitempty"`
 		Transport   *TransportConf   `json:"transport,omitempty" allow:"cluster"`
 		Memsys      MemsysConf       `json:"memsys"`
 		Disk        *DiskConf        `json:"disk,omitempty"`
-		FSHC        FSHCConf         `json:"fshc"`
+		FSHC        *FSHCConf        `json:"fshc,omitempty"`
 		Chunks      *ChunksConf      `json:"chunks,omitempty" allow:"cluster"`
-		LRU         LRUConf          `json:"lru"`
+		LRU         *LRUConf         `json:"lru,omitempty"`
 		Mirror      *MirrorConf      `json:"mirror,omitempty" allow:"cluster"`
 		Periodic    *PeriodConf      `json:"periodic,omitempty" allow:"cluster"`
 		Client      *ClientConf      `json:"client,omitempty"`
@@ -838,16 +838,21 @@ type (
 
 	// keepalive
 	KeepaliveConf struct {
-		Proxy       KeepaliveTrackerConf `json:"proxy"`       // how proxy tracks target keepalives
-		Target      KeepaliveTrackerConf `json:"target"`      // how target tracks primary proxies keepalives
-		NumRetries  int                  `json:"num_retries"` // default: `kaNumRetries`
-		RetryFactor uint8                `json:"retry_factor"`
+		Proxy      KeepaliveTrackerConf `json:"proxy"`       // how proxy tracks target keepalives
+		Target     KeepaliveTrackerConf `json:"target"`      // how target tracks primary proxies keepalives
+		NumRetries int                  `json:"num_retries"` // default: `kaNumRetriesDflt`
+
+		// Deprecated: indirect cross-section multiplier used by KeepaliveRetryDuration.
+		// Its upper range is commonly saturated by the timeout.max_keepalive cap,
+		// while smaller values remain observable. Still accepted and validated.
+		RetryFactor uint8 `json:"retry_factor"`
 	}
 	KeepaliveConfToSet struct {
-		Proxy       *KeepaliveTrackerConfToSet `json:"proxy,omitempty"`
-		Target      *KeepaliveTrackerConfToSet `json:"target,omitempty"`
-		NumRetries  *int                       `json:"num_retries,omitempty"`
-		RetryFactor *uint8                     `json:"retry_factor,omitempty"`
+		Proxy      *KeepaliveTrackerConfToSet `json:"proxy,omitempty"`
+		Target     *KeepaliveTrackerConfToSet `json:"target,omitempty"`
+		NumRetries *int                       `json:"num_retries,omitempty"`
+		// Deprecated: see KeepaliveConf.RetryFactor
+		RetryFactor *uint8 `json:"retry_factor,omitempty"`
 	}
 	KeepaliveTrackerConf struct {
 		Name     string       `json:"name"`     // "heartbeat"
@@ -1199,6 +1204,12 @@ func (*SpaceConf) defaultOmittable()     {}
 func (*ClientConf) defaultOmittable()    {}
 func (*TransportConf) defaultOmittable() {}
 
+func (*GetBatchConf) defaultOmittable()  {}
+func (*LRUConf) defaultOmittable()       {}
+func (*FSHCConf) defaultOmittable()      {}
+func (*KeepaliveConf) defaultOmittable() {}
+func (*RebalanceConf) defaultOmittable() {}
+
 // assorted named fields and prefixes that require (cluster | node) restart for
 // changes to take an effect; note:
 // - this is NOT a "read-only" list
@@ -1258,7 +1269,7 @@ var (
 
 	_ validator = (*feat.Flags)(nil) // is called explicitly from main config validator
 
-	_ contextValidator = (*KeepaliveConf)(nil)
+	_ validator = (*KeepaliveConf)(nil)
 )
 
 // interface guard: bucket-level validators-as-props
@@ -1805,8 +1816,11 @@ func (c *SpaceConf) String() string {
 /////////////
 
 const (
-	capUpdTimeMin    = 10 * time.Second
-	dontEvictTimeMin = time.Hour
+	capUpdTimeDflt = 10 * time.Minute
+	capUpdTimeMin  = 10 * time.Second
+
+	dontEvictTimeDflt = 2 * time.Hour
+	dontEvictTimeMin  = time.Hour
 )
 
 func (c *LRUConf) String() string {
@@ -1816,19 +1830,27 @@ func (c *LRUConf) String() string {
 	return fmt.Sprintf("lru: dont_evict_time=%v, capacity_upd_time=%v, batch_size=%d", c.DontEvictTime, c.CapacityUpdTime, c.BatchSize)
 }
 
-func (c *LRUConf) Validate() (err error) {
-	if c.CapacityUpdTime.D() < capUpdTimeMin {
+// LRU is disabled by default
+func (c *LRUConf) Validate() error {
+	debug.Assert(capUpdTimeDflt >= capUpdTimeMin && dontEvictTimeDflt >= dontEvictTimeMin)
+	debug.Assert(GCBatchSizeDflt >= GCBatchSizeMin && GCBatchSizeDflt <= GCBatchSizeMax)
+
+	if c.CapacityUpdTime == 0 {
+		c.CapacityUpdTime = cos.Duration(capUpdTimeDflt)
+	} else if c.CapacityUpdTime.D() < capUpdTimeMin {
 		return fmt.Errorf("invalid %+v (expecting: lru.capacity_upd_time >= %v)", c, capUpdTimeMin)
+	}
+	if c.DontEvictTime == 0 {
+		c.DontEvictTime = cos.Duration(dontEvictTimeDflt)
+	} else if c.DontEvictTime.D() < dontEvictTimeMin {
+		return fmt.Errorf("invalid %+v (expecting: lru.dont_evict_time >= %v)", c, dontEvictTimeMin)
 	}
 	if c.BatchSize == 0 {
 		c.BatchSize = GCBatchSizeDflt
 	} else if n := c.BatchSize; n < GCBatchSizeMin || n > GCBatchSizeMax {
 		return fmt.Errorf("invalid lru.batch_size=%d (expecting range [%d - %d])", n, GCBatchSizeMin, GCBatchSizeMax)
 	}
-	if c.DontEvictTime.D() < dontEvictTimeMin {
-		err = fmt.Errorf("invalid %+v (expecting: lru.dont_evict_time >= %v)", c, dontEvictTimeMin)
-	}
-	return
+	return nil
 }
 
 func (c *LRUConf) ValidateAsProps(...any) error { return c.Validate() }
@@ -2136,60 +2158,90 @@ func (c *WritePolicyConf) ValidateAsProps(...any) error { return c.Validate() }
 // KeepaliveConf //
 ///////////////////
 
-// default number of keepalive retries
-// see palive.retry in re "total number of failures prior to removing"
-const kaNumRetries = 3
+const kaName = "heartbeat" // the one and only tracker
 
-// interval bounds
+// number of keepalive retries
+// see palive.retry in re "total number of failures prior to removing"
 const (
-	kaliveIvalMin = 1 * time.Second
-	kaliveIvalMax = 1 * time.Minute
+	kaNumRetriesDflt = 3
+	kaNumRetriesMin  = 1
+	kaNumRetriesMax  = 10
+)
+
+// Deprecated: multiplier on timeout.cplane_operation - see KeepaliveRetryDuration.
+const (
+	kaRetryFactorDflt = 4
+	kaRetryFactorMax  = 10
+)
+
+// interval bounds and the (interval * factor) detection window
+const (
+	kaliveIvalDflt = 10 * time.Second
+	kaliveIvalMin  = 1 * time.Second
+	kaliveIvalMax  = 1 * time.Minute
+
+	kaliveFactorDflt = 3
+	kaliveFactorMax  = 10
+
 	kaliveToutMax = 2 * time.Minute
 )
 
-func (c *KeepaliveConf) Validate(config *Config) error {
-	if c.Proxy.Name != "heartbeat" {
-		return fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
-	}
-	if c.Target.Name != "heartbeat" {
-		return fmt.Errorf("invalid keepalivetracker.target.name %s", c.Target.Name)
-	}
-	if c.RetryFactor < 1 || c.RetryFactor > 10 {
-		return fmt.Errorf("invalid keepalivetracker.retry_factor %d (expecting range [1, 10])", c.RetryFactor)
-	}
-	if c.NumRetries == 0 {
-		c.NumRetries = kaNumRetries
-	}
-	if c.NumRetries < 1 || c.NumRetries > 10 {
-		return fmt.Errorf("invalid keepalivetracker.num_retries %d (expecting range [1, 10])", c.NumRetries)
-	}
-
-	if err := c.Proxy.validate(&config.Timeout); err != nil {
+// for cross-section validation (keepalivetracker.*.interval >= timeout.max_keepalive)
+// see ais/prxclu _checkKalive
+func (c *KeepaliveConf) Validate() error {
+	if err := c.Proxy.validate("proxy"); err != nil {
 		return err
 	}
-	return c.Target.validate(&config.Timeout)
+	if err := c.Target.validate("target"); err != nil {
+		return err
+	}
+	if c.NumRetries == 0 {
+		c.NumRetries = kaNumRetriesDflt
+	} else if c.NumRetries < kaNumRetriesMin || c.NumRetries > kaNumRetriesMax {
+		return fmt.Errorf("invalid keepalivetracker.num_retries %d (expecting range [%d, %d] or zero for default)",
+			c.NumRetries, kaNumRetriesMin, kaNumRetriesMax)
+	}
+	if c.RetryFactor == 0 {
+		c.RetryFactor = kaRetryFactorDflt
+	} else if c.RetryFactor > kaRetryFactorMax {
+		return fmt.Errorf("invalid keepalivetracker.retry_factor %d (expecting range [1, %d] or zero for default)",
+			c.RetryFactor, kaRetryFactorMax)
+	}
+	return nil
 }
 
+// How long to sleep before re-probing a node that failed to respond.
+//
+// The result is capped at `timeout.max_keepalive + 1s`. With the stock 2s/5s
+// timeouts, retry factors 1, 2, and >= 3 produce 2s, 4s, and 6s respectively.
+// Thus smaller values remain observable, while the upper range is saturated.
 func KeepaliveRetryDuration(c *Config) time.Duration {
 	d := c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
 	return min(d, c.Timeout.MaxKeepalive.D()+time.Second)
 }
 
-func (c *KeepaliveTrackerConf) validate(timeoutConf *TimeoutConf) error {
-	if c.Interval.D() < kaliveIvalMin || c.Interval.D() > kaliveIvalMax {
-		return fmt.Errorf("invalid keepalivetracker.interval=%s (expected range [%v, %v])",
-			c.Interval, kaliveIvalMin, kaliveIvalMax)
+// `tag` is "proxy" | "target" - the two (and only two) trackers
+func (c *KeepaliveTrackerConf) validate(tag string) error {
+	if c.Name == "" {
+		c.Name = kaName
+	} else if c.Name != kaName {
+		return fmt.Errorf("invalid keepalivetracker.%s.name %q (expecting %q)", tag, c.Name, kaName)
 	}
-	//
-	// must be consistent w/ assorted timeout knobs
-	//
-	if c.Interval.D() < timeoutConf.MaxKeepalive.D() {
-		return fmt.Errorf("keepalivetracker.interval=%s should be >= timeout.max_keepalive=%s",
-			c.Interval, timeoutConf.MaxKeepalive)
+	if c.Interval == 0 {
+		c.Interval = cos.Duration(kaliveIvalDflt)
+	} else if j := c.Interval.D(); j < kaliveIvalMin || j > kaliveIvalMax {
+		return fmt.Errorf("invalid keepalivetracker.%s.interval=%s (expected range [%v, %v] or zero for default)",
+			tag, c.Interval, kaliveIvalMin, kaliveIvalMax)
 	}
-	kwin := c.Interval.D() * time.Duration(c.Factor)
-	if kwin > kaliveToutMax {
-		return fmt.Errorf("keepalive detection window=%v (interval * factor) exceeds %v", kwin, kaliveToutMax)
+	if c.Factor == 0 {
+		c.Factor = kaliveFactorDflt
+	} else if c.Factor > kaliveFactorMax {
+		return fmt.Errorf("invalid keepalivetracker.%s.factor=%d (expected range [1, %d] or zero for default)",
+			tag, c.Factor, kaliveFactorMax)
+	}
+	if kwin := c.Interval.D() * time.Duration(c.Factor); kwin > kaliveToutMax {
+		return fmt.Errorf("invalid keepalivetracker.%s: detection window=%v (interval * factor) exceeds %v",
+			tag, kwin, kaliveToutMax)
 	}
 	return nil
 }
@@ -2310,37 +2362,48 @@ func (c *TLSConf) Validate(tag string) error {
 //////////////
 
 const (
-	ioErrTimeDflt = 10 * time.Second
-	ioErrsLimit   = 10
+	// for test_files, error_limit, and io_err_limit the system default _is_ the
+	// minimum - there's no headroom below it
+	fshcTestFilesMin  = 4
+	fshcTestFilesDflt = fshcTestFilesMin
+
+	fshcHardErrsMin  = 2
+	fshcHardErrsDflt = fshcHardErrsMin
+
+	ioErrsMin  = 10
+	ioErrsDflt = ioErrsMin
+
+	ioErrTimeMin  = 10 * time.Second
+	ioErrTimeDflt = ioErrTimeMin
+	ioErrTimeMax  = time.Minute
 )
 
+// FSHC is enabled by default
+// (compare w/ RebalanceConf.Validate)
 func (c *FSHCConf) Validate() error {
-	if c.TestFileCount < 4 {
-		return fmt.Errorf("invalid fshc.test_files %d (expecting >= %d)", c.TestFileCount, 4)
-	}
-	if c.HardErrs < 2 {
-		return fmt.Errorf("invalid fshc.error_limit %d (expecting >= %d)", c.HardErrs, 2)
+	if *c == (FSHCConf{}) {
+		c.Enabled = true
 	}
 
-	if c.IOErrs == 0 && c.IOErrTime == 0 {
-		c.IOErrs = ioErrsLimit
-		c.IOErrTime = cos.Duration(ioErrTimeDflt)
+	if c.TestFileCount == 0 {
+		c.TestFileCount = fshcTestFilesDflt
+	} else if c.TestFileCount < fshcTestFilesMin {
+		return fmt.Errorf("invalid fshc.test_files %d (expecting >= %d)", c.TestFileCount, fshcTestFilesMin)
+	}
+	if c.HardErrs == 0 {
+		c.HardErrs = fshcHardErrsDflt
+	} else if c.HardErrs < fshcHardErrsMin {
+		return fmt.Errorf("invalid fshc.error_limit %d (expecting >= %d)", c.HardErrs, fshcHardErrsMin)
 	}
 	if c.IOErrs == 0 {
-		c.IOErrs = ioErrsLimit
+		c.IOErrs = ioErrsDflt
+	} else if c.IOErrs < ioErrsMin {
+		return fmt.Errorf("invalid fshc.io_err_limit %d (expecting >= %d)", c.IOErrs, ioErrsMin)
 	}
 	if c.IOErrTime == 0 {
 		c.IOErrTime = cos.Duration(ioErrTimeDflt)
-	}
-
-	if c.IOErrs < 10 {
-		return fmt.Errorf("invalid fshc.io_err_limit %d (expecting >= %d)", c.IOErrs, 10)
-	}
-	if c.IOErrTime < cos.Duration(10*time.Second) {
-		return fmt.Errorf("invalid fshc.io_err_time %d (expecting >= %v)", c.IOErrTime, 10*time.Second)
-	}
-	if c.IOErrTime > cos.Duration(60*time.Second) {
-		return fmt.Errorf("invalid fshc.io_err_time %d (expecting <= %v)", c.IOErrTime, 60*time.Second)
+	} else if j := c.IOErrTime.D(); j < ioErrTimeMin || j > ioErrTimeMax {
+		return fmt.Errorf("invalid fshc.io_err_time %v (expecting range [%v, %v])", j, ioErrTimeMin, ioErrTimeMax)
 	}
 	return nil
 }
@@ -2947,7 +3010,7 @@ const (
 	MaxTransportHeader  = 128 * cos.KiB // memsys.MaxPageSlabSize
 
 	TransportBurstMin  = 256
-	TransportBurstDflt = 1024
+	transportBurstDflt = 1024
 	TransportBurstMax  = 4096
 
 	DfltTransportTick         = time.Second
@@ -2961,7 +3024,7 @@ func (c *TransportConf) Validate() (err error) {
 		c.MaxHeaderSize = DfltTransportHeader
 	}
 	if c.Burst == 0 {
-		c.Burst = TransportBurstDflt
+		c.Burst = transportBurstDflt
 	}
 	if c.IdleTeardown == 0 {
 		c.IdleTeardown = cos.Duration(DfltTransportIdleTeardown)
@@ -3133,16 +3196,27 @@ func (c *DownloaderConf) Validate() error {
 // RebalanceConf //
 ///////////////////
 
+const (
+	rebalanceBurstDflt = transportBurstDflt
+	rebalanceRetryDflt = 2 * time.Minute
+	rebalanceRetryMax  = 10 * time.Minute
+)
+
 func (c *RebalanceConf) Validate() error {
-	if j := c.DestRetryTime.D(); j < time.Second || j > 10*time.Minute {
-		return fmt.Errorf("invalid rebalance.dest_retry_time=%s (expected range [1s, 10m])", j)
+	if *c == (RebalanceConf{}) {
+		c.Enabled = true
 	}
-	if c.SbundleMult < 0 || c.SbundleMult > 16 {
-		return fmt.Errorf("invalid rebalance.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
+	if c.Burst == 0 {
+		c.Burst = rebalanceBurstDflt
 	}
-	if !apc.IsValidCompression(c.Compression) {
-		return fmt.Errorf("invalid rebalance.compression: %q (expecting one of: %v)",
-			c.Compression, apc.SupportedCompression)
+	if err := c.XactConf.Validate(); err != nil {
+		return err
+	}
+	if c.DestRetryTime == 0 {
+		debug.Assert(rebalanceRetryDflt > time.Second && rebalanceRetryDflt < rebalanceRetryMax)
+		c.DestRetryTime = cos.Duration(rebalanceRetryDflt)
+	} else if j := c.DestRetryTime.D(); j < time.Second || j > rebalanceRetryMax {
+		return fmt.Errorf("invalid rebalance.dest_retry_time=%s (expected range [1s, %s])", j, rebalanceRetryMax)
 	}
 	return nil
 }
@@ -3346,7 +3420,9 @@ func (c *GetBatchConf) Validate() error {
 	switch c.MaxGFN {
 	case getBatchDisabledGFN:
 	case 0:
-		c.MaxGFN = getBatchMaxGFN
+		// GFN (a special-type retry) is only carried out when the error is soft in the first place;
+		// secondly, `min` here is required for idempotency
+		c.MaxGFN = min(getBatchMaxGFN, c.MaxSoftErrs)
 	default:
 		if c.MaxGFN < 0 || c.MaxGFN > c.MaxSoftErrs {
 			return fmt.Errorf("invalid get_batch.max_gfn=%d (expecting %d to disable, 0 for default, or range [1, %d])",

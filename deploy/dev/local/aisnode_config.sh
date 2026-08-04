@@ -108,19 +108,6 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"batch_size":        32768,
 		"dont_cleanup_time": "120m"
 	},
-	"lru": {
-		"dont_evict_time":   "120m",
-		"capacity_upd_time": "10m",
-		"batch_size":        32768,
-		"enabled":           true
-	},
-	"rebalance": {
-		"dest_retry_time":	"2m",
-		"compression":     	"${AIS_REBALANCE_COMPRESSION:-never}",
-		"bundle_multiplier":	${AIS_REBALANCE_BUNDLE_MULTIPLIER:-2},
-		"burst_buffer":         1024,
-		"enabled":         	true
-	},
 	"resilver": {
 		"enabled": true
 	},
@@ -158,28 +145,7 @@ cat > "$AIS_CONF_FILE" <<EOL
 		},
 		"use_ipv6":          ${AIS_USE_IPv6:-false}
 	},
-	"fshc": {
-		"test_files":     4,
-		"error_limit":    2,
-		"io_err_limit":   10,
-		"io_err_time":    "10s",
-		"enabled":        true
-	},
 	"auth": $(make_auth_conf),
-	"keepalivetracker": {
-		"proxy": {
-			"interval": "10s",
-			"name":     "heartbeat",
-			"factor":   3
-		},
-		"target": {
-			"interval": "10s",
-			"name":     "heartbeat",
-			"factor":   3
-		},
-		"num_retries":    3,
-		"retry_factor":   4
-	},
 	"distributed_sort": {
 		"duplicated_records":    "ignore",
 		"missing_shards":        "ignore",
@@ -190,8 +156,7 @@ cat > "$AIS_CONF_FILE" <<EOL
 		"dsorter_mem_threshold": "100GB",
 		"compression":           "${AIS_DSORT_COMPRESSION:-never}",
 		"bundle_multiplier":	 ${AIS_DSORT_BUNDLE_MULTIPLIER:-4}
-	},
-	"features": "0"
+	}
 }
 EOL
 

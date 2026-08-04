@@ -732,10 +732,46 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		}
 	}
 
+	// 5. cross-section: keepalivetracker.*.interval vs timeout.max_keepalive
+	if toUpdate.Keepalive != nil || (toUpdate.Timeout != nil && toUpdate.Timeout.MaxKeepalive != nil) {
+		if err := _checkKalive(config, toUpdate); err != nil {
+			p.writeErr(w, r, err, http.StatusBadRequest)
+			return
+		}
+	}
+
 	// do
 	if _, err := p.owner.config.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
+}
+
+// apply the (keepalivetracker.*.interval >= timeout.max_keepalive)
+// rule to the effective post-merge values
+func _checkKalive(config *cmn.Config, toUpdate *cmn.ConfigToSet) error {
+	kalive := *config.Keepalive
+	maxKeepalive := config.Timeout.MaxKeepalive
+
+	if toUpdate.Timeout != nil && toUpdate.Timeout.MaxKeepalive != nil {
+		maxKeepalive = *toUpdate.Timeout.MaxKeepalive
+	}
+	if ka := toUpdate.Keepalive; ka != nil {
+		if ka.Proxy != nil && ka.Proxy.Interval != nil {
+			kalive.Proxy.Interval = *ka.Proxy.Interval
+		}
+		if ka.Target != nil && ka.Target.Interval != nil {
+			kalive.Target.Interval = *ka.Target.Interval
+		}
+	}
+	if kalive.Proxy.Interval < maxKeepalive {
+		return fmt.Errorf("keepalivetracker.proxy.interval=%s should be >= timeout.max_keepalive=%s",
+			kalive.Proxy.Interval, maxKeepalive)
+	}
+	if kalive.Target.Interval < maxKeepalive {
+		return fmt.Errorf("keepalivetracker.target.interval=%s should be >= timeout.max_keepalive=%s",
+			kalive.Target.Interval, maxKeepalive)
+	}
+	return nil
 }
 
 // switch http => https, or vice versa

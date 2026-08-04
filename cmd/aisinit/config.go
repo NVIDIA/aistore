@@ -7,7 +7,6 @@ package main
 import (
 	"time"
 
-	aisapc "github.com/NVIDIA/aistore/api/apc"
 	aiscmn "github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -32,51 +31,11 @@ var (
 		},
 	}
 
-	defaultFSHC = aiscmn.FSHCConf{
-		TestFileCount: 4,
-		HardErrs:      2,
-		IOErrs:        10,
-		IOErrTime:     cos.Duration(10 * time.Second),
-		Enabled:       true,
-	}
-
-	defaultKeepalive = aiscmn.KeepaliveConf{
-		Proxy: aiscmn.KeepaliveTrackerConf{
-			Interval: cos.Duration(10 * time.Second),
-			Name:     "heartbeat",
-			Factor:   3,
-		},
-		Target: aiscmn.KeepaliveTrackerConf{
-			Interval: cos.Duration(10 * time.Second),
-			Name:     "heartbeat",
-			Factor:   3,
-		},
-		RetryFactor: 4,
-		NumRetries:  3,
-	}
-
 	defaultMemsys = aiscmn.MemsysConf{
 		MinFree:        cos.SizeIEC(6 * cos.GiB),
 		DefaultBufSize: cos.SizeIEC(64 * cos.KiB),
 		SizeToGC:       cos.SizeIEC(6 * cos.GiB),
 		HousekeepTime:  cos.Duration(120 * time.Second),
-	}
-
-	defaultLRU = aiscmn.LRUConf{
-		Enabled:         false,
-		DontEvictTime:   cos.Duration(120 * time.Minute),
-		CapacityUpdTime: cos.Duration(10 * time.Minute),
-		BatchSize:       32768,
-	}
-
-	defaultRebalance = aiscmn.RebalanceConf{
-		XactConf: aiscmn.XactConf{
-			Compression: aisapc.CompressNever,
-			SbundleMult: 2,
-			Burst:       2048,
-		},
-		Enabled:       true,
-		DestRetryTime: cos.Duration(2 * time.Minute),
 	}
 
 	defaultResilver = aiscmn.ResilverConf{
@@ -104,11 +63,7 @@ func newDefaultConfig() *aiscmn.ClusterConfig {
 	return &aiscmn.ClusterConfig{
 		Auth:       defaultAuth,
 		Net:        defaultNet,
-		FSHC:       defaultFSHC,
-		Keepalive:  defaultKeepalive,
 		Memsys:     defaultMemsys,
-		LRU:        defaultLRU,
-		Rebalance:  defaultRebalance,
 		Resilver:   defaultResilver,
 		Timeout:    defaultTimeout,
 		Versioning: defaultVersioning,

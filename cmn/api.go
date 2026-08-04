@@ -269,8 +269,10 @@ type (
 func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 	debug.Assert(c.Mirror != nil && c.EC != nil && c.Chunks != nil)
 	debug.Assert(c.Cksum != nil && c.WritePolicy != nil && c.RateLimit != nil)
+	debug.Assert(c.LRU != nil)
 
-	lru := c.LRU
+	// IsAIS() branch to (definitely) disable LRU
+	lru := *c.LRU
 	if bck.IsAIS() {
 		lru.Enabled = false
 	}

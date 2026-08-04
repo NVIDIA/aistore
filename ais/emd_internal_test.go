@@ -78,7 +78,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 		config.Space = &cmn.SpaceConf{
 			LowWM: 75, HighWM: 90, OOS: 95,
 		}
-		config.LRU = cmn.LRUConf{
+		config.LRU = &cmn.LRUConf{
 			DontEvictTime: cos.Duration(time.Hour), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
 		}
 		cmn.GCO.CommitUpdate(config)

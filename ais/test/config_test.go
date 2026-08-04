@@ -501,7 +501,7 @@ func TestConfigClone_NoAuthTracingAlias(t *testing.T) {
 	config.Space = &cmn.SpaceConf{
 		LowWM: 75, HighWM: 90, OOS: 95,
 	}
-	config.LRU = cmn.LRUConf{
+	config.LRU = &cmn.LRUConf{
 		DontEvictTime: cos.Duration(time.Hour), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
 	}
 	config.ClusterConfig.Auth.Signature = &cmn.AuthSignatureConf{Key: "k"}
