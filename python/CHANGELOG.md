@@ -53,6 +53,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- The Python SDK no longer logs bearer tokens before AuthN revocation requests.
 - Get-Batch TAR and ZIP extractors now reject archive members without matching
   request or response metadata instead of raising an uncaught `IndexError`.
 - AuthN cluster registration now honors configured TLS verification, CA, and

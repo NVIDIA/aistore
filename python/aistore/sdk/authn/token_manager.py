@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from aistore.sdk.request_client import RequestClient
@@ -46,7 +46,7 @@ class TokenManager:  # pylint: disable=duplicate-code
         if not token:
             raise ValueError("Token must be provided to revoke.")
 
-        logger.info("Revoking token: %s", token)
+        logger.info("Revoking token")
 
         self.client.request(
             method=HTTP_METHOD_DELETE,
