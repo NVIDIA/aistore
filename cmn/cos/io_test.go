@@ -6,9 +6,11 @@ package cos_test
 
 import (
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
+	"testing/iotest"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 
@@ -19,6 +21,13 @@ import (
 const testContent = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz"
 
 var _ = Describe("I/O utils", func() {
+	It("does not preallocate an advertised content length", func() {
+		reader := io.MultiReader(strings.NewReader("x"), iotest.ErrReader(io.ErrUnexpectedEOF))
+		body, err := cos.ReadAllN(reader, math.MaxInt64)
+		Expect(err).To(MatchError(io.ErrUnexpectedEOF))
+		Expect(body).To(Equal([]byte("x")))
+	})
+
 	Describe("FileSectionHandle", func() {
 		var tempFile string
 

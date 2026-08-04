@@ -26,7 +26,10 @@ import (
 // S3 multipart upload API impl.: all method names with "MptS3" suffix
 //
 
-const emptyUploadID = "empty uploadId"
+const (
+	emptyUploadID          = "empty uploadId"
+	maxCompleteMptBodySize = core.MaxChunkCount * cos.KiB // AIStore safety budget for completion XML
+)
 
 // Initialize multipart upload.
 // - Generate UUID for the upload
@@ -139,14 +142,14 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq,
 	}
 	nlog.Infoln("complete", uploadID)
 
-	body, err := cos.ReadAllN(r.Body, r.ContentLength)
-	if err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest})
+	objName, errN := s3.JoinValidateOname(w, r, items)
+	if errN != nil {
 		return
 	}
 
-	objName, errN := s3.JoinValidateOname(w, r, items)
-	if errN != nil {
+	body, ecode, err := readCompleteMptBody(r)
+	if err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
 
@@ -207,6 +210,20 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq,
 	s3.SetS3Headers(w.Header(), lom)
 	sgl.WriteTo2(w)
 	sgl.Free()
+}
+
+func readCompleteMptBody(r *http.Request) ([]byte, int, error) {
+	if r.ContentLength > maxCompleteMptBodySize {
+		return nil, http.StatusRequestEntityTooLarge, fmt.Errorf("multipart completion body exceeds %d bytes", maxCompleteMptBodySize)
+	}
+	body, err := cos.ReadAll(io.LimitReader(r.Body, maxCompleteMptBodySize+1))
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+	if len(body) > maxCompleteMptBodySize {
+		return nil, http.StatusRequestEntityTooLarge, fmt.Errorf("multipart completion body exceeds %d bytes", maxCompleteMptBodySize)
+	}
+	return body, 0, nil
 }
 
 // Abort an active multipart upload.
