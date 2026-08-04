@@ -762,6 +762,9 @@ func _checkKalive(config *cmn.Config, toUpdate *cmn.ConfigToSet) error {
 		if ka.Target != nil && ka.Target.Interval != nil {
 			kalive.Target.Interval = *ka.Target.Interval
 		}
+		if err := kalive.Validate(); err != nil {
+			return err
+		}
 	}
 	if kalive.Proxy.Interval < maxKeepalive {
 		return fmt.Errorf("keepalivetracker.proxy.interval=%s should be >= timeout.max_keepalive=%s",
@@ -825,6 +828,11 @@ func (p *proxy) rotateLogs(w http.ResponseWriter, r *http.Request, msg *apc.ActM
 }
 
 func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToSet, msg *apc.ActMsg) {
+	if err := _checkTransient(toUpdate); err != nil {
+		p.writeErr(w, r, err) // cmn.ErrUnsupp => 501
+		return
+	}
+
 	co := p.owner.config
 	co.Lock()
 	err := setConfig(toUpdate, true /* transient */)
@@ -845,6 +853,32 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 	args.to = core.AllNodes
 	p.bcastAndRespond(w, r, args)
 	freeBcArgs(args)
+}
+
+// Transient (in-memory, not persisted) updates do not go through setCluCfgPersistent
+// and therefore bypass its pre-flight validations. Hence, the limitations that entail:
+// - everything in cmn.ConfigRestartRequired (transient updates to restart-required knobs are meaningless)
+// - `auth` (gated enable-time validation)
+// - `keepalivetracker` (cross-section rule vs timeout.max_keepalive)
+func _checkTransient(toUpdate *cmn.ConfigToSet) error {
+	const action = "transiently update"
+	switch {
+	case toUpdate.Auth != nil:
+		return cmn.NewErrUnsupp(action, "config.auth")
+	case toUpdate.Net != nil:
+		return cmn.NewErrUnsupp(action, "config.net")
+	case toUpdate.Tracing != nil:
+		return cmn.NewErrUnsupp(action, "config.tracing")
+	case toUpdate.Memsys != nil:
+		return cmn.NewErrUnsupp(action, "config.memsys")
+	case toUpdate.Keepalive != nil:
+		return cmn.NewErrUnsupp(action, "config.keepalivetracker")
+	case toUpdate.Timeout != nil && toUpdate.Timeout.MaxKeepalive != nil:
+		return cmn.NewErrUnsupp(action, "timeout.max_keepalive")
+	case toUpdate.Timeout != nil && toUpdate.Timeout.CplaneOperation != nil:
+		return cmn.NewErrUnsupp(action, "timeout.cplane_operation")
+	}
+	return nil
 }
 
 func _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {

@@ -551,6 +551,10 @@ type (
 		IostatTimeSmooth *cos.Duration `json:"iostat_time_smooth,omitempty"`
 	}
 
+	// NOTE:
+	// In plain-text initial config, a partially specified section must
+	// explicitly include `enabled`. Otherwise the omitted bool decodes as false,
+	// silently disabling rebalance, which is enabled by default.
 	RebalanceConf struct {
 		XactConf
 		DestRetryTime cos.Duration `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
@@ -734,6 +738,10 @@ type (
 		Pub             *TLSConfToSet `json:"pub,omitempty"`
 	}
 
+	// NOTE:
+	// In plain-text initial config, a partially specified section must
+	// explicitly include `enabled`. Otherwise the omitted bool decodes as false,
+	// silently disabling FSHC, which is enabled by default.
 	FSHCConf struct {
 		TestFileCount int `json:"test_files"` // number of files to read/write
 		// critical and unexpected errors detected during FSHC run;
