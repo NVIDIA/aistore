@@ -208,7 +208,7 @@ $ make mod-tidy
 
 #### Step 2: Deploy cluster and verify the running status using `ais` cli
 
-> **NOTE**: For a local deployment, we do not need production filesystem paths. For more information, read about [configuration basics](/docs/configuration.md#rest-of-this-document-is-structured-as-follows). If you need a physical disk or virtual block device, you must add them to the fspaths config. See [running local playground with emulated disks](#running-local-playground-with-emulated-disks) for more information.
+> **NOTE**: For a local deployment, we do not need production filesystem paths. For more information, see [Managing mountpaths](/docs/configuration.md#managing-mountpaths). If you need a physical disk or virtual block device, you must add it to the `fspaths` config. See [running local playground with emulated disks](#running-local-playground-with-emulated-disks) for more information.
 
 Many useful commands are provided via top [Makefile](https://github.com/NVIDIA/aistore/blob/main/Makefile) (for details, see [Make](#make) section below).
 

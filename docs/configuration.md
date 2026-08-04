@@ -1,683 +1,693 @@
-AIS configuration comprises:
+# AIStore Configuration
 
-| Name | Scope | Comment |
-| --- | --- | --- |
-| [ClusterConfig](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go#L48) | Global | [Named sections](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/aisnode_config.sh#L13) containing name-value knobs |
-| [LocalConfig](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go#L49) | Local | Allows to override global defaults on a per-node basis |
+AIStore configuration is both an operator interface and a versioned part of cluster metadata. Operators inspect and change settings through the CLI. Developers additionally need to know how defaults are filled in, how partial updates are merged, and why what AIStore writes to disk is smaller than what it shows you.
 
-Cluster-wide (global) configuration is protected, namely: checksummed, versioned, and safely replicated. In effect, global config defines cluster-wide defaults inherited by each node joining the cluster.
+- [For users and operators](#for-users-and-operators) - how to see and change settings, what to expect in production, and what to do when a change doesn't behave.
+- [For developers](#for-developers) - the Go data model, validation and defaulting rules, sparse persistence, scope enforcement, and the checklist for adding configuration.
 
-Local config includes:
+For the complete CLI syntax, see [CLI: configuration](/docs/cli/config.md). This page explains the model behind those commands.
 
-1. node's own hostnames (or IP addresses) and [mountpaths](/docs/terminology.md#mountpath) (data drives);
-2. optionally, names-and-values that were changed for *this* specific node. For each node in the cluster, the corresponding capability (dubbed *config-override*) boils down to:
-   * **inheriting** cluster configuration, and optionally
-   * optionally, **locally overriding** assorted inherited defaults (see usage examples below).
+## Contents
 
-Majority of the configuration knobs can be changed at runtime (and at any time). A few read-only variables are explicitly [marked](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go) in the source; any attempt to modify those at runtime will return "read-only" error message.
+- [For users and operators](#for-users-and-operators)
+  - [Cluster and node configuration](#cluster-and-node-configuration)
+  - [Viewing configuration](#viewing-configuration)
+  - [Changing configuration](#changing-configuration)
+  - [Node overrides](#node-overrides)
+  - [Transient updates](#transient-updates)
+  - [Resetting configuration](#resetting-configuration)
+  - [Worked example: change a setting end to end](#worked-example-change-a-setting-end-to-end)
+  - [What AIStore stores on disk](#what-aistore-stores-on-disk)
+  - [Troubleshooting](#troubleshooting)
+  - [Deploying: initial and local configuration](#deploying-initial-and-local-configuration)
+  - [Startup overrides](#startup-overrides)
+  - [Managing mountpaths](#managing-mountpaths)
+  - [Reducing extended-attribute usage](#reducing-extended-attribute-usage)
+  - [Backup and upgrade](#backup-and-upgrade)
+  - [Production checklist](#production-checklist)
+- [For developers](#for-developers)
+  - [Data model and update paths](#data-model-and-update-paths)
+  - [Adding a field or section](#adding-a-field-or-section)
+  - [Defaults and validation](#defaults-and-validation)
+  - [Making a section default-omittable](#making-a-section-default-omittable)
+  - [Pointerizing an existing section](#pointerizing-an-existing-section)
+  - [Default-enabled sections](#default-enabled-sections)
+  - [Scope, transient updates, and cross-section checks](#scope-transient-updates-and-cross-section-checks)
+  - [Startup ordering and deployment generators](#startup-ordering-and-deployment-generators)
+  - [Compatibility and test checklist](#compatibility-and-test-checklist)
+- [Related documentation](#related-documentation)
 
-## CLI
+---
 
-For the most part, commands to view and update (CLI, cluster, node) configuration can be found [here](/docs/cli/config.md).
+## For users and operators
 
-The [same document](/docs/cli/config.md) also contains a brief theory of operation, command descriptions, numerous usage examples and more.
+### Cluster and node configuration
 
-> **Important:** as an input, CLI accepts both plain text and JSON-formatted values. For the latter, make sure to embed the (JSON value) argument into single quotes, e.g.:
+Every node in an AIStore cluster has two kinds of configuration:
 
-```console
-$ ais config cluster checksum.type='{"type":"md5"}'
+- **Cluster configuration** - shared by the whole cluster: checksums, timeouts, logging, capacity watermarks, transport, rebalance, erasure coding, and other named sections. The primary proxy owns it. Changing it changes every node.
+- **Local configuration** - belongs to one node and necessarily differs between nodes: its directories, its network listeners, and (on targets) its disks. Read from a plain-text file at startup; not changeable through the configuration CLI.
+
+Two smaller mechanisms sit on top:
+
+- **Node overrides** - one node running a different value for an otherwise cluster-wide setting. Useful for diagnostics; deliberately makes that node different.
+- **Transient updates** - a change applied in memory only, meant to be short-lived. Read [Transient updates](#transient-updates) before using one; the name promises slightly less than it sounds like.
+
+What a node actually runs:
+
+```text
+effective settings = cluster configuration + this node's overrides + this node's local configuration
 ```
 
-However, plain-text updating is more common, e.g.:
+Some sections are **cluster-only** and cannot be overridden per node: `auth`, `backend`, `proxy`, `checksum`, `tcb`, `tco`, `arch`, `lso`, `rebalance`, `ec`, `get_batch`, `net`, `transport`, `chunks`, `mirror`, `periodic`, `features`, `versioning`. Attempting a node override of one of these fails with a clear error.
+
+### Viewing configuration
+
+Whole cluster configuration, flat or JSON:
 
 ```console
-$ ais config cluster log.level 4
-
-$ ais config cluster log.modules <TAB-TAB>
-transport    memsys       fs           ec           ios          backend      mirror       downloader   s3
-ais          cluster      reb          stats        xs           space        dsort        etl          none
-
-$ ais config cluster log.modules space,s3
+$ ais config cluster
+$ ais config cluster --json
 ```
 
-To show the current cluster config in plain text and JSON:
+One section:
 
 ```console
 $ ais config cluster log
-PROPERTY         VALUE
-log.level        4 (modules: space,s3)
-log.max_size     4MiB
-log.max_total    128MiB
-log.flush_time   40s
-log.stats_time   1m
-log.to_stderr    false
+$ ais config cluster get_batch --json
 ```
 
-And the same in JSON:
+What one node is actually running, including its overrides:
 
 ```console
-$ ais config cluster log --json
-
-    "log": {
-        "level": "540676",
-        "max_size": "4MiB",
-        "max_total": "128MiB",
-        "flush_time": "40s",
-        "stats_time": "1m",
-        "to_stderr": false
-    }
+$ ais show config t[ABC123] inherited
+$ ais show config t[ABC123] inherited log
 ```
 
-**Note:** some config values are read-only or otherwise protected and can be only listed, e.g.:
+In the flat inherited output, the `DEFAULT` column shows the cluster value whenever a node override differs from it; `-` means the node is simply inheriting.
+
+That node's own local configuration - directories, listeners, disks:
 
 ```console
-$ ais config cluster backend --json
-    "backend": {"aws":{},"azure":{},"gcp":{},"oci":{}}
+$ ais show config t[ABC123] local
+$ ais show config t[ABC123] local host_net --json
 ```
 
-See also:
+Local configuration can be viewed but not set through the CLI. To change it, edit the node's plain-text local file and restart that node.
 
-* [Backend providers and supported backends](/docs/providers.md)
-* [Disable/Enable cloud backend at runtime](/docs/cli/advanced.md#disableenable-cloud-backend-at-runtime)
-* [Networking Model: three logical networks and additional intra-cluster data plane](/docs/networking.md)
+> Everything these commands print is the complete effective configuration. See [What AIStore stores on disk](#what-aistore-stores-on-disk) for why the files are smaller.
 
-## Configuring for production
+### Changing configuration
 
-Configuring AIS cluster for production requires a careful consideration. First and foremost, there are assorted [performance](performance.md) related recommendations.
-
-Optimal performance settings will always depend on your (hardware, network) environment. Speaking of networking, AIS supports 3 (**three**) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
-
-* user (aka public)
-* intra-cluster control
-* intra-cluster data
-
-with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respectively:
-
-* `hostname`
-* `hostname_intra_control`
-* `hostname_intra_data`
-
-### Example
+Cluster-wide, persistent (the default):
 
 ```console
-$ ais config node <TAB-TAB>
-
-p[ctfooJtb]   p[qGfooQSf]   p[KffoosQR]   p[ckfooUEX]   p[DlPmfooU]   t[MgHfooNG]   t[ufooIDPc]   t[tFUfooCO]   t[wSJfoonU]   t[WofooQEW]
-p[pbarqYtn]   p[JedbargG]   p[WMbargGF]   p[barwMoEU]   p[OUgbarGf]   t[tfNbarFk]   t[fbarswQP]   t[vAWbarPv]   t[Kopbarra]   t[fXbarenn]
-
-## in aistore, each node has "inherited" and "local" configuration
-## choose "local" to show the (selected) target's disks and network
-
-$ ais config node t[fbarswQP] local --json
-{
-    "confdir": "/etc/ais",
-    "log_dir": "/var/log/ais",
-    "host_net": {
-        "hostname": "10.51.156.130",
-        "hostname_intra_control": "ais-target-5.nvmetal.net",
-        "hostname_intra_data": "ais-target-5.nvmetal.net",
-        "port": "51081",
-        "port_intra_control": "51082",
-        "port_intra_data": "51083"
-    },
-    "fspaths": {"/ais/nvme0n1": "","/ais/nvme1n1": "","/ais/nvme2n1": ""},
-    "test_fspaths": {
-        "root": "",
-        "count": 0,
-        "instance": 0
-    }
-}
-```
-
-### Multi-homing
-
-All aistore nodes - both ais targets and ais gateways - can be deployed as multi-homed servers. But of course, the capability is mostly important and relevant for the targets that may be required (and expected) to move a lot of traffic, as fast as possible.
-
-Building up on the previous section's example, here's how it may look:
-
-```console
-$ ais config node t[fbarswQP] local host_net --json
-{
-    "host_net": {
-        "hostname": "10.51.156.130, 10.51.156.131, 10.51.156.132",
-        "hostname_intra_control": "ais-target-5.nvmetal.net",
-        "hostname_intra_data": "ais-target-5.nvmetal.net",
-        "port": "51081",
-        "port_intra_control": "51082",
-        "port_intra_data": "51083"
-    },
-}
-```
-
-**Note**: additional NICs can be added (or removed) transparently for users, i.e. without requiring (or causing) any other changes.
-
-The example above may serve as a simple illustration whereby `t[fbarswQP]` becomes a multi-homed device equally utilizing all 3 (three) IPv4 interfaces
-
-## References
-
-1. [Networking Model: three logical networks and additional intra-cluster data plane](/docs/networking.md)
-2. For Kubernetes deployment, please refer to a separate [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository that also contains:
-   * [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md) and its configuration-defining
-   * [resources](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/config.go).
-
-## Cluster and Node Configuration
-
-The first thing to keep in mind is that there are 3 (three) separate, and separately maintained, pieces:
-
-1. Cluster configuration that comprises global defaults
-2. Node (local) configuration
-3. Node's local overrides of global defaults
-
-Specifically:
-
-## Cluster Config
-
-To show and/or change global config, simply type one of:
-
-```console
-# 1. show cluster config
-$ ais show cluster config
-
-# 2. show cluster config in JSON format
-$ ais show cluster config --json
-
-# 3. show cluster-wide defaults for all variables prefixed with "time"
-$ ais show config cluster time
-# or, same:
-$ ais show cluster config time
-PROPERTY                         VALUE
-timeout.cplane_operation         2s
-timeout.max_keepalive            4s
-timeout.max_host_busy            20s
-timeout.startup_time             1m
-timeout.send_file_time           5m
-timeout.transport_idle_term      4s
-
-# 4. for all nodes in the cluster set startup timeout to 2 minutes
-$ ais config cluster timeout.startup_time=2m
-config successfully updated
-```
-
-Typically, when we deploy a new AIS cluster, we use configuration template that contains all the defaults - see, for example, [JSON template](/deploy/dev/local/aisnode_config.sh). Configuration sections in this template, and the knobs within those sections, must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values.
-
-## Node configuration
-
-As stated above, each node in the cluster inherits global configuration with the capability to override the latter locally.
-
-There are also node-specific settings, such as:
-
-* log directories
-* network configuration, including node's hostname(s) or IP addresses
-* node's [mountpaths](#managing-mountpaths)
-
-> Since AIS supports n-way mirroring and erasure coding, we typically recommend not using LVMs and hardware RAIDs.
-
-### Example: show node's configuration
-
-```console
-# ais show config t[CCDpt8088]
-PROPERTY                                 VALUE                                                           DEFAULT
-auth.enabled                             false                                                           -
-auth.secret                              **********                                                     -
-backend.conf                             map[aws:map[] gcp:map[]]                                        -
-checksum.enable_read_range               false                                                           -
-checksum.type                            xxhash                                                          -
-checksum.validate_cold_get               true                                                            -
-checksum.validate_obj_move               false                                                           -
-checksum.validate_warm_get               false                                                           -
-...
-...
-(Hint: use `--type` to select the node config's type to show: 'cluster', 'local', 'all'.)
-...
-...
-```
-
-### Example: same as above in JSON format:
-
-```console
-$ ais show config CCDpt8088 --json | tail -20
-    "lastupdate_time": "2021-03-20 18:00:20.393881867 -0700 PDT m=+2907.143584987",
-    "uuid": "ZzCknLkMi",
-    "config_version": "3",
-    "confdir": "/ais",
-    "log_dir": "/tmp/ais/log",
-    "host_net": {
-        "hostname": "",
-        "hostname_intra_control": "",
-        "hostname_intra_data": "",
-        "port": "51081",
-        "port_intra_control": "51082",
-        "port_intra_data": "51083"
-    },
-    "fspaths": {"/ais/mp1": "","/ais/mp2": "","/ais/mp3": "","/ais/mp4": ""},
-    "test_fspaths": {
-        "root": "/tmp/ais",
-        "count": 0,
-        "instance": 0
-    }
-```
-
-See also:
-*  [local playground with two data drives](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md)
-
-###Example: use `--type` option to show only local config
-
-```console
-# ais show config koLAt8081 --type local
-PROPERTY                         VALUE
-confdir                          /ais
-log_dir                          /tmp/ais/log
-host_net.hostname
-host_net.hostname_intra_control
-host_net.hostname_intra_data
-host_net.port                    51081
-host_net.port_intra_control      51082
-host_net.port_intra_data         51083
-fspaths.paths                    /ais/mp1,/ais/mp2,/ais/mp3,/ais/mp4
-test_fspaths.root                /tmp/ais
-test_fspaths.count               0
-test_fspaths.instance            0
-```
-
-### Local override (of global defaults)
-
-Example:
-
-```console
-$ ais show config t[CCDpt8088] timeout
-# or, same:
-$ ais config node t[CCDpt8088] timeout
-
-PROPERTY                         VALUE   DEFAULT
-timeout.cplane_operation         2s      -
-timeout.join_startup_time        3m      -
-timeout.max_host_busy            20s     -
-timeout.max_keepalive            4s      -
-timeout.send_file_time           5m      -
-timeout.startup_time             1m      -
-
-$ ais config node t[CCDpt8088] timeout.startup_time=90s
-config for node "CCDpt8088" successfully updated
-
-$ ais config node t[CCDpt8088] timeout
-
-PROPERTY                         VALUE   DEFAULT
-timeout.cplane_operation         2s      -
-timeout.join_startup_time        3m      -
-timeout.max_host_busy            20s     -
-timeout.max_keepalive            4s      -
-timeout.send_file_time           5m      -
-timeout.startup_time             1m30s   1m
-```
-
-In the `DEFAULT` column above hyphen (`-`) indicates that the corresponding value is inherited and, as far as the node `CCDpt8088`, remains unchanged.
-
-## Rest of this document is structured as follows
-
-- [Basics](#basics)
-- [Startup override](#startup-override)
-- [Managing mountpaths](#managing-mountpaths)
-- [Disabling extended attributes](#disabling-extended-attributes)
-- [Enabling HTTPS](#enabling-https)
-- [Filesystem Health Checker](#filesystem-health-checker)
-- [Networking](#networking)
-- [Curl examples](#curl-examples)
-- [CLI examples](#cli-examples)
-
-The picture illustrates one section of the configuration template that, in part, includes listening port:
-
-![Configuration: TCP port and URL](images/ais-config-1.png)
-
-Further, `test_fspaths` section (see below) corresponds to a **single local filesystem being partitioned** between both *local* and *Cloud* buckets. In other words, the `test_fspaths` configuration option is intended strictly for development.
-
-![Configuration: local filesystems](images/ais-config-2-commented.png)
-
-In production, we use an alternative configuration called `fspaths`: the section of the [config](/deploy/dev/local/aisnode_config.sh) that includes a number of local directories, whereby each directory is based on a _different_ local filesystem solely utilizing one or more _non_ shared disks.
-
-For `fspath` and `mountpath` terminology and details, please see section [Managing Mountpaths](#managing-mountpaths) in this document.
-
-An example of 12 fspaths (and 12 local filesystems) follows below:
-
-![Example: 12 fspaths](images/example-12-fspaths-config.png)
-
-### Example: 3 NVMe drives
-
-```console
-$ ais config node <TAB-TAB>
-
-p[ctfooJtb]   p[qGfooQSf]   p[KffoosQR]   p[ckfooUEX]   p[DlPmfooU]   t[MgHfooNG]   t[ufooIDPc]   t[tFUfooCO]   t[wSJfoonU]   t[WofooQEW]
-p[pbarqYtn]   p[JedbargG]   p[WMbargGF]   p[barwMoEU]   p[OUgbarGf]   t[tfNbarFk]   t[fbarswQP]   t[vAWbarPv]   t[Kopbarra]   t[fXbarenn]
-
-## in aistore, each node has "inherited" and "local" configuration
-## choose "local" to show the target's own disks and network
-
-$ ais config node t[fbarswQP] local --json
-{
-    "confdir": "/etc/ais",
-    "log_dir": "/var/log/ais",
-    "host_net": {
-        "hostname": "10.51.156.130",
-        "hostname_intra_control": "ais-target-5.nvmetal.net",
-        "hostname_intra_data": "ais-target-5.nvmetal.net",
-        "port": "51081",
-        "port_intra_control": "51082",
-        "port_intra_data": "51083"
-    },
-    "fspaths": {"/ais/nvme0n1": "","/ais/nvme1n1": "","/ais/nvme2n1": ""},
-    "test_fspaths": {
-        "root": "",
-        "count": 0,
-        "instance": 0
-    }
-}
-```
-
-See also:
-*  [local playground with two data drives](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md)
-
-## Basics
-
-First, some basic facts:
-
-* AIS cluster is a collection of nodes - members of the cluster.
-* A node can be an AIS proxy (aka gateway) or an AIS target.
-* In either case, HTTP request to read (get) or write (set) specific node's configuration will have `/v1/daemon` in its URL path.
-* The capability to carry out cluster-wide configuration updates is also supported. The corresponding HTTP URL will have `/v1/cluster` in its path.
-
-> Both `daemon` and `cluster` are the two RESTful resource abstractions supported by the API. Please see [AIS API](http_api.md) for naming conventions, RESTful resources, as well as API reference and details.
-
-* To get the node's up-to-date configuration, execute:
-```console
-$ ais show config <daemon-ID>
-```
-This will display all configuration sections and all the named *knobs* - i.e., configuration variables and their current values.
-
-Most configuration options can be updated either on an individual (target or proxy) daemon, or the entire cluster.
-Some configurations are "overridable" and can be configured on a per-daemon basis. Some of these are shown in the table below.
-
-For examples and alternative ways to format configuration-updating requests, please see the [examples below](#examples).
-
-Following is a table-summary that contains a *subset* of all *settable* knobs:
-
-> **NOTE (May 2022):** this table is somewhat **outdated** and must be revisited.
-
-| Option name | Overridable | Default value | Description |
-|---|---|---|---|
-| `ec.data_slices` | No | `2` | Represents the number of fragments an object is broken into (in the range [2, 100]) |
-| `ec.disk_only` | No | `false` | If true, EC uses local drives for all operations. If false, EC automatically chooses between memory and local drives depending on the current memory load |
-| `ec.enabled` | No | `false` | Enables or disables data protection |
-| `ec.objsize_limit` | No | `262144` | Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated |
-| `ec.parity_slices` | No | `2` | Represents the number of redundant fragments to provide protection from failures (in the range [2, 32]) |
-| `ec.compression` | No | `"never"` | LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
-| `mirror.burst_buffer` | No | `512` | the maximum queue size for the (pending) objects to be mirrored. When exceeded, target logs a warning. |
-| `mirror.copies` | No | `1` | the number of local copies of an object |
-| `mirror.enabled` | No | `false` | If true, for every object PUT a target creates object replica on another mountpath. Later, on object GET request, loadbalancer chooses a mountpath with lowest disk utilization and reads the object from it |
-| `rebalance.dest_retry_time` | No | `2m` | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
-| `rebalance.enabled` | No | `true` | Enables and disables automatic rebalance after a target receives the updated cluster map. If the (automated rebalancing) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "rebalance"}} v1/cluster`) to initiate cluster-wide rebalancing |
-| `rebalance.multiplier` | No | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
-| `transport.quiescent` | No | `20s` | Rebalance moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
-| `versioning.enabled` | No | `true` | Enables and disables versioning. For the supported 3rd party backends, versioning is _on_ only when it enabled for (and supported by) the specific backend |
-| `versioning.validate_warm_get` | No | `false` | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
-| `checksum.enable_read_range` | Yes | `false` | See [Supported Checksums and Brief Theory of Operations](checksum.md) |
-| `checksum.type` | Yes | `xxhash` | Checksum type. Please see [Supported Checksums and Brief Theory of Operations](checksum.md)  |
-| `checksum.validate_cold_get` | Yes | `true` | Please see [Supported Checksums and Brief Theory of Operations](checksum.md) |
-| `checksum.validate_warm_get` | Yes | `false` | See [Supported Checksums and Brief Theory of Operations](checksum.md) |
-| `client.client_long_timeout` | Yes | `30m` | Default _long_ client timeout |
-| `client.client_timeout` | Yes | `10s` | Default client timeout |
-| `client.list_timeout` | Yes | `2m` | Client list objects timeout |
-| `transport.block_size` | Yes | `262144` | Maximum data block size used by LZ4, greater values may increase compression ration but requires more memory. Value is one of 64KB, 256KB(AIS default), 1MB, and 4MB |
-| `disk.disk_util_high_wm` | Yes | `80` | Operations that implement self-throttling mechanism, e.g. LRU, turn on the maximum throttle if disk utilization is higher than `disk_util_high_wm` |
-| `disk.disk_util_low_wm` | Yes | `20` | Operations that implement self-throttling mechanism, e.g. LRU, do not throttle themselves if disk utilization is below `disk_util_low_wm` |
-| `disk.iostat_time_long` | Yes | `2s` | The interval that disk utilization is checked when disk utilization is below `disk_util_low_wm`. |
-| `disk.iostat_time_short` | Yes | `100ms` | Used instead of `iostat_time_long` when disk utilization reaches `disk_util_high_wm`. If disk utilization is between `disk_util_high_wm` and `disk_util_low_wm`, a proportional value between `iostat_time_short` and `iostat_time_long` is used. |
-| `distributed_sort.call_timeout` | Yes | `"10m"` | a maximum time a target waits for another target to respond |
-| `distributed_sort.compression` | Yes | `"never"` | LZ4 compression parameters used when dSort sends its shards over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
-| `distributed_sort.default_max_mem_usage` | Yes | `"80%"` | a maximum amount of memory used by running dSort. Can be set as a percent of total memory(e.g `80%`) or as the number of bytes(e.g, `12G`) |
-| `distributed_sort.dsorter_mem_threshold` | Yes | `"100GB"` | minimum free memory threshold which will activate specialized dsorter type which uses memory in creation phase - benchmarks shows that this type of dsorter behaves better than general type |
-| `distributed_sort.duplicated_records` | Yes | `"ignore"` | what to do when duplicated records are found: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
-| `distributed_sort.ekm_malformed_line` | Yes | `"abort"` | what to do when extraction key map notices a malformed line: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
-| `distributed_sort.ekm_missing_key` | Yes | `"abort"` | what to do when extraction key map have a missing key: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
-| `distributed_sort.missing_shards` | Yes | `"ignore"` | what to do when missing shards are detected: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
-| `fshc.enabled` | Yes | `true` | Enables and disables filesystem health checker (FSHC) |
-| `log.level` | Yes | `3` | Set global logging level. The greater number the more verbose log output |
-| `lru.capacity_upd_time` | Yes | `10m` | Determines how often AIStore updates filesystem usage |
-| `lru.dont_evict_time` | Yes | `120m` | LRU does not evict an object which was accessed less than dont_evict_time ago |
-| `lru.enabled` | Yes | `true` | Enables and disabled the LRU |
-| `space.highwm` | Yes | `90` | LRU starts immediately if a filesystem usage exceeds the value |
-| `space.lowwm` | Yes | `75` | If filesystem usage exceeds `highwm` LRU tries to evict objects so the filesystem usage drops to `lowwm` |
-| `periodic.notif_time` | Yes | `30s` | An interval of time to notify subscribers (IC members) of the status and statistics of a given asynchronous operation (such as Download, Copy Bucket, etc.)  |
-| `periodic.stats_time` | Yes | `10s` | A *housekeeping* time interval to periodically update and log internal statistics, remove/rotate old logs, check available space (and run LRU *xaction* if need be), etc. |
-| `resilver.enabled` | Yes | `true` | Enables and disables automatic reresilver after a mountpath has been added or removed. If the (automated resilvering) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "resilver", "node": targetID}} v1/cluster`) to initiate resilvering |
-| `timeout.max_host_busy` | Yes | `20s` | Maximum latency of control-plane operations that may involve receiving new bucket metadata and associated processing |
-| `timeout.send_file_time` | Yes | `5m` | Timeout for sending/receiving an object from another target in the same cluster |
-| `timeout.transport_idle_term` | Yes | `4s` | Max idle time to temporarily teardown long-lived intra-cluster connection |
-
-## Startup override
-
-AIS command-line allows to override configuration at AIS node's startup. For example:
-
-```console
-$ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -config_custom="client.timeout=13s,log.level=4"
-```
-
-As shown above, the CLI option in-question is: `confjson`.
-Its value is a JSON-formatted map of string names and string values.
-By default, the config provided in `config_custom` will be persisted on the disk.
-To make it transient either add `-transient=true` flag or add additional JSON entry:
-
-```console
-$ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -transient=true -config_custom="client.timeout=13s, transient=true"
-```
-
-Another example.
-To override locally-configured address of the primary proxy, run:
-
-```console
-$ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -config_custom="proxy.primary_url=http://G"
-# where G denotes the designated primary's hostname and port.
-```
-
-To achieve the same on temporary basis, add `-transient=true` as follows:
-
-```console
-$ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -config_custom="proxy.primary_url=http://G"
-```
-
-> Please see [AIS command-line](command_line.md) for other command-line options and details.
-
-## Managing mountpaths
-
-* [Mountpath](/docs/terminology.md#mountpath) - is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS can fully own and utilize (to store user data and system metadata). Note that any given disk (or RAID) can have (at most) one mountpath (meaning **no disk sharing**) and mountpath directories cannot be nested. Further:
-   - a mountpath can be temporarily disabled and (re)enabled;
-   - a mountpath can also be detached and (re)attached, thus effectively supporting growth and "shrinkage" of local capacity;
-   - it is safe to execute the 4 listed operations (enable, disable, attach, detach) at any point during runtime;
-   - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
-
-Configuration option `fspaths` specifies the list of local mountpath directories. Each configured `fspath` is, simply, a local directory that provides the basis for AIS `mountpath`.
-
-> In regards **non-sharing of disks** between mountpaths: for development we make an exception, such that multiple mountpaths are actually allowed to share a disk and coexist within a single filesystem. This is done strictly for development convenience, though.
-
-AIStore [REST API](http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](https://github.com/NVIDIA/aistore/blob/main/fs/health/README.md).
-
-## Disabling extended attributes
-
-To make sure that AIStore does not utilize xattrs, configure:
-* `checksum.type`=`none`
-* `versioning.enabled`=`true`, and
-* `write_policy.md`=`never`
-
-for all targets in AIStore cluster.
-
-Or, simply update global configuration (to have those cluster-wide defaults later inherited by all newly created buckets).
-
-This can be done via the [common configuration "part"](/deploy/dev/local/aisnode_config.sh) that'd be further used to deploy the cluster.
-
-Extended attributes can be disabled on per bucket basis. To do this, turn off saving metadata to disks (CLI):
-
-```console
-$ ais bucket props ais://mybucket write_policy.md=never
-Bucket props successfully updated
-"write_policy.md" set to: "never" (was: "")
-```
-
-Disable extended attributes only if you need fast and **temporary** storage.
-Without xattrs, a node loses its objects after the node reboots.
-If extended attributes are disabled globally when deploying a cluster, node IDs are not permanent and a node can change its ID after it restarts.
-
-## Enabling HTTPS
-
-To switch from HTTP protocol to an encrypted HTTPS, configure `net.http.use_https`=`true` and modify `net.http.server_crt` and `net.http.server_key` values so they point to your TLS certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
-
-The following HTTPS topics are also covered elsewhere:
-
-- [Generating self-signed certificates](/docs/https.md#generating-self-signed-certificates)
-- [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](/docs/https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
-- [Accessing HTTPS-based cluster](/docs/https.md#accessing-https-based-cluster)
-- [Testing with self-signed certificates](/docs/https.md#testing-with-self-signed-certificates)
-- [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
-- [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
-
-## Filesystem Health Checker
-
-Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](/deploy/dev/local/aisnode_config.sh).
-
-When enabled, FSHC gets notified on every I/O error upon which it performs extensive checks on the corresponding local filesystem. One possible outcome of this health-checking process is that FSHC disables the faulty filesystems leaving the target with one filesystem less to distribute incoming data.
-
-Please see [FSHC readme](https://github.com/NVIDIA/aistore/blob/main/fs/health/README.md) for further details.
-
-## Networking
-
-In addition to user-accessible public network, AIStore will optionally make use of the two other networks:
-
-* intra-cluster control
-* intra-cluster data
-
-The way the corresponding config may look in production (e.g.) follows:
-
-```console
-$ ais config node t[nKfooBE] local h... <TAB-TAB>
-host_net.hostname                 host_net.port_intra_control       host_net.hostname_intra_control
-host_net.port                     host_net.port_intra_data          host_net.hostname_intra_data
-
-$ ais config node t[nKfooBE] local host_net --json
-
-    "host_net": {
-        "hostname": "10.50.56.205",
-        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
-        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
-        "port": "51081",
-        "port_intra_control": "51082",
-        "port_intra_data": "51083"
-    }
-```
-
-The fact that there are 3 logical networks is not a "limitation" - not a requirement to specifically have 3. Using the example above, here's a small deployment-time change to run a single one:
-
-```console
-    "host_net": {
-        "hostname": "10.50.56.205",
-        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
-        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
-        "port": "51081",
-        "port_intra_control": "51081,   # <<<<<< notice the same port
-        "port_intra_data": "51081"      # <<<<<< ditto
-    }
-```
-
-Ideally though, production clusters are deployed over 3 physically different and isolated networks, whereby intense data traffic, for instance, does not introduce additional latency for the control one, etc.
-
-Separately, there's a **multi-homing** capability motivated by the fact that today's server systems may often have, say, two 50Gbps network adapters. To deliver the entire 100Gbps _without_ LACP trunking and (static) teaming, we could simply have something like:
-
-```console
-    "host_net": {
-        "hostname": "10.50.56.205, 10.50.56.206",
-        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
-        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
-        "port": "51081",
-        "port_intra_control": "51082",
-        "port_intra_data": "51083"
-    }
-```
-
-No other changes. Just add the second NIC - second IPv4 addr `10.50.56.206` above, and that's all.
-
-## Curl examples
-
-The following assumes that `G` and `T` are the (hostname:port) of one of the deployed gateways (in a given AIS cluster) and one of the targets, respectively.
-
-### Cluster-wide operation (all nodes)
-
-* Set the stats logging interval to 1 second
-
-```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "periodic.stats_time", "value": "1s"}' 'http://G/v1/cluster'
-```
-
-or, same:
-
-```console
-$ curl -i -X PUT 'http://G/v1/cluster/set-config?periodic.stats_time=1s'
-```
-
-> Notice the two alternative ways to form the requests.
-
-### Cluster-wide operation (all nodes)
-* Set the stats logging interval to 2 minutes
-
-```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "periodic.stats_time", "value": "2m"}' 'http://G/v1/cluster'
-```
-
-### Cluster-wide operation (all nodes)
-* Set the default number of n-way copies to 4 (can still be redefined on a per-bucket basis)
-
-```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "mirror.copies", "value": "4"}' 'http://G/v1/cluster'
-
-# or, same using CLI:
-$ ais config cluster mirror.copies 4
-```
-
-### Single-node operation (single node)
-* Set log level = 1
-
-```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "log.level", "value": "1"}' 'http://T/v1/daemon'
-# or, same:
-$ curl -i -X PUT 'http://T/v1/daemon/set-config?log.level=1'
-
-# or, same using CLI (assuming the node in question is t[tZktGpbM]):
-$ ais config node t[tZktGpbM] log.level 1
-```
-
-## CLI examples
-
-[AIS CLI](/docs/cli.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
-
-```console
-$ ais show config p[rZTp8080] --type all --json | jq '.timeout.list_timeout'
-"2m"
-
-$ ais config cluster timeout.list_timeout=5m
-Config has been updated successfully.
-
-$ ais show config p[rZTp8080] --type all --json | jq '.timeout.list_timeout'
-"5m"
-```
-
-The example above demonstrates cluster-wide configuration update but note: single-node updates are also supported.
-
-### Cluster-wide operation (all nodes)
-* Set `periodic.stats_time` = 1 minute, `periodic.iostat_time_long` = 4 seconds
-
-```console
+$ ais config cluster periodic.stats_time=1m
 $ ais config cluster periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
-### Single-node operation (single node)
-AIS configuration includes a section called `disk`. The `disk` in turn contains several knobs - one of those knobs is `disk.iostat_time_long`, another - `disk.disk_util_low_wm`. To update one or both of those named variables on all or one of the clustered nodes, you could:
-* Set `disk.iostat_time_long` = 3 seconds, `disk.disk_util_low_wm` = 40 percent on daemon with ID `target1`
+Multiple settings in one command are applied together as a single new configuration - either all of them take effect or none do. The primary validates the whole proposed configuration first, so a change can be rejected because of how it combines with another setting, not only because the value itself is out of range.
+
+Most changes take effect immediately. Five do not, and are applied only after a restart:
+
+```text
+memsys, net, tracing, timeout.cplane_operation, timeout.max_keepalive
+```
+
+The CLI warns you when your change touches one of them. Depending on scope, restart the affected node or the cluster.
+
+The CLI also accepts a whole section as JSON. Quote it so the shell leaves it alone:
 
 ```console
-$ ais config node target1 periodic.stats_time=1m disk.iostat_time_long=4s
+$ ais config cluster checksum.type=md5
+$ ais config cluster checksum='{"type":"md5","validate_warm_get":true}'
 ```
+
+Use the plain `name=value` form unless you are setting several fields of one section at once.
+
+### Node overrides
+
+To make one node differ:
+
+```console
+$ ais config node t[ABC123] log.level=4
+$ ais config node t[ABC123] disk.disk_util_low_wm=40 disk.disk_util_high_wm=90
+```
+
+The override is stored on that node and reapplied every time the node receives a new cluster configuration - so if the same setting later changes cluster-wide, this node keeps its own value until you reset it.
+
+Overriding a cluster-only section fails:
+
+```console
+$ ais config node t[ABC123] periodic.stats_time=1m
+Error: periodic configuration can only be globally updated
+```
+
+Node overrides are a diagnostic tool. A node running different watermarks or timeouts than its peers will behave differently under load, and that difference is invisible unless you go looking for it. Prefer a cluster-wide change.
+
+### Transient updates
+
+Both cluster and node commands accept `--transient`:
+
+```console
+$ ais config cluster log.level=4 --transient
+$ ais config node t[ABC123] log.level=4 --transient
+```
+
+A transient cluster update reaches every node that is currently running, but does not create a new cluster configuration version. A node that restarts or joins later will not have it.
+
+Some settings cannot be changed transiently at all, and the request is rejected: `auth`, `net`, `tracing`, `memsys`, `keepalivetracker`, `timeout.max_keepalive`, `timeout.cplane_operation`, and any cluster-only section.
+
+#### Transient values can become permanent
+
+`--transient` means the *current* command doesn't write to disk. It does not mean the value is quarantined. Transient values are merged into the same in-memory override set that a later persistent operation writes out.
+
+```console
+# 1. a quick experiment
+$ ais config node t[ABC123] log.level=5 --transient
+
+# 2. later, an unrelated persistent change to the same node
+$ ais config node t[ABC123] disk.iostat_time_long=4s
+
+# 3. the experiment is now permanent - it was written along with the disk change
+$ ais show config t[ABC123] inherited log
+PROPERTY         VALUE   DEFAULT
+log.level        5       3
+```
+
+The same thing happens if the node persists a runtime mountpath change while a transient value is live.
+
+So: use `--transient` for short experiments, and before making any persistent change to that node, either check its inherited configuration and clear what you don't want, or `ais config reset` the node first.
+
+### Resetting configuration
+
+Drop one node's overrides and return it to the cluster configuration:
+
+```console
+$ ais config reset t[ABC123]
+```
+
+Drop overrides on every currently active node:
+
+```console
+$ ais config reset cluster
+```
+
+Because the override file is per-node local metadata, the primary cannot clear it on a node that is unreachable at the time. A node that was down comes back with its overrides intact - re-run the reset, or reset that node individually, once it rejoins.
+
+Neither command resets the *cluster* configuration to AIStore's built-in defaults - they remove node-level divergence only.
+
+> **Mountpath note:** runtime `fspaths` changes are stored in the same per-node file as overrides, so a reset removes that record too. Active mountpaths are not detached immediately, but after a restart the target falls back to the `fspaths` in its plain-text local file. If runtime mountpath changes need to survive both, keep the deployment-managed local file in sync.
+
+### Worked example: change a setting end to end
+
+```console
+# 1. what is it now?
+$ ais config cluster space --json
+{
+    "cleanupwm": 65,
+    "lowwm": 75,
+    "highwm": 90,
+    "out_of_space": 95,
+    "batch_size": 32768,
+    "dont_cleanup_time": "30m"
+}
+
+# 2. change it
+$ ais config cluster space.highwm=88
+Config has been updated successfully.
+
+# 3. confirm - cluster-wide
+$ ais config cluster space.highwm
+PROPERTY        VALUE
+space.highwm    88
+
+# 4. confirm - what one target is actually running
+$ ais show config t[ABC123] inherited space
+PROPERTY                  VALUE     DEFAULT
+space.cleanupwm           65        -
+space.lowwm               75        -
+space.highwm              88        -
+space.out_of_space        95        -
+space.dont_cleanup_time   30m       -
+
+# 5. what got written to disk on that node
+#    (.ais.conf is protected metadata, not raw JSON - extract it first)
+$ xmeta -x -in=/etc/ais/.ais.conf -out=/tmp/ais-conf.json
+$ jq .space /tmp/ais-conf.json
+{
+  "cleanupwm": 65,
+  "lowwm": 75,
+  "highwm": 88,
+  "out_of_space": 95,
+  "batch_size": 32768,
+  "dont_cleanup_time": "30m"
+}
+```
+
+The `space` section is stored in full, because it no longer matches the built-in defaults. Look at the same file for a section you haven't touched - `periodic`, say - and it isn't there at all. That's the part that surprises people, and it's explained next.
+
+### What AIStore stores on disk
+
+**What you see in `ais config cluster` is the complete, effective configuration. What AIStore writes to disk is smaller: fully default-valued, default-omittable sections are not written out, and AIStore fills them back in when it loads.**
+
+That is the whole idea, and it exists for three reasons: persisted and metasynced configuration stays small, clusters pick up *current* defaults instead of carrying values that merely happened to be the default years ago, and there's exactly one place in AIStore that owns each default value.
+
+Pruning is all-or-nothing per section. A section is dropped only when *every* field in it matches the canonical default; change one field and the whole section is written out.
+
+Practical consequences:
+
+- **A section missing from `.ais.conf` is not off, and its values are not zero.** It's at defaults.
+- **Any section whose effective value differs from its canonical default is kept** - including an explicit disable of a default-enabled subsystem.
+- **Never read `.ais.conf` to find out what a setting is.** Use the CLI or the API. It is protected metadata rather than plain JSON, and it is an internal representation.
+- **Defaults can change between AIStore releases.** Either way, check the release notes and set the desired value again if it differs from the new default. A value equal to the current canonical default cannot be pinned by explicitly setting it; it may be pruned again.
+
+The sections AIStore can reconstruct this way, as of v5.0:
+
+```text
+arch          chunks        client        checksum      disk
+downloader    ec            fshc          get_batch     keepalivetracker
+log           lru           lso           mirror        periodic
+rate_limit    rebalance     space         tcb           tco
+transport     write_policy
+```
+
+Sections not on that list are not removed by default-pruning. In particular, `memsys` and the network and bootstrap settings remain explicit because their correct values depend on the machine and deployment. A 32 GiB development box and a target with terabytes of RAM should not share one `memsys` default.
+
+Independently, optional sections such as `tracing`, `distributed_sort`, and `ext` may be absent through their normal serialization rules. Their absence is unrelated to default pruning.
+
+The configuration APIs and the CLI always return the complete configuration, with sensitive values redacted.
+
+### Troubleshooting
+
+**"My node update returned success but nothing changed."**
+Check whether the section is cluster-only - those fail with `... can only be globally updated`. If the setting came from a persisted override file rather than the command line (for instance after an upgrade in which the section became cluster-only), it is skipped with a warning in the node log rather than an error. Grep the node log for `ignoring node override for cluster-scoped config`.
+
+**"My change didn't survive a restart."**
+It was transient. Transient changes are never written to disk by the command that makes them. Reapply it without `--transient`.
+
+**"A value I set transiently is still there, and I never made it permanent."**
+A later persistent operation on that node wrote the whole merged override set, including your transient value. See [Transient values can become permanent](#transient-values-can-become-permanent). `ais config reset NODE_ID` clears it.
+
+**"After upgrading, a setting reverted."**
+Two possibilities. The default for that setting changed in the new release and your cluster was sitting at the old default (which is not stored, so there was nothing to preserve). Or you had explicitly set the value that used to be the default, and it was pruned as such. Either way: check the release notes and re-set the value explicitly.
+
+**"`.ais.conf` doesn't contain the section I configured."**
+Expected - see [What AIStore stores on disk](#what-aistore-stores-on-disk). Verify with `ais config cluster SECTION --json`.
+
+**"One target behaves differently from the others."**
+Compare `ais show config t[ID] inherited` against `ais config cluster`. In the flat output, any row with a value in the `DEFAULT` column is an override on that node.
+
+### Deploying: initial and local configuration
+
+A node starts with two files:
+
+```console
+$ aisnode -config=/etc/ais/ais.json \
+    -local_config=/etc/ais/ais_local.json \
+    -role=target
+```
+
+- `-config` is the **initial** cluster configuration: bootstrap input, used only when this node has no persisted cluster configuration yet. It may be shared as a deployment template.
+- `-local_config` describes this node: its directories, its listeners, and on targets its `fspaths`.
+
+**The initial file is not the source of truth.** Once a node has a persisted cluster configuration, editing the initial file changes nothing - not the running cluster, and not later restarts of that node. New and restarting nodes get the current configuration from the cluster when they join. Use the CLI or API to change a deployed cluster; do not hand-edit `.ais.conf` or `.ais.override_config`.
+
+Starting with v5.0, the public listener must differ from both intra-cluster listeners; intra-control and intra-data may share one. See [Networking](/docs/networking.md).
+
+#### Sections you can leave out of the initial file
+
+Any section on the list in [What AIStore stores on disk](#what-aistore-stores-on-disk) can be omitted entirely, and AIStore will supply current defaults. Keep explicit: bootstrap-dependent settings, sections AIStore does not reconstruct, and every intentional non-default choice.
+
+#### Sections that are on by default need care
+
+`rebalance` and `fshc` are enabled by default. Omitting the section, or writing an empty one, gives you all defaults including `enabled: true`:
+
+```json
+{
+    "rebalance": {},
+    "fshc": {}
+}
+```
+
+But if you customize one field and don't mention `enabled`, JSON decoding supplies `false` - and AIStore cannot distinguish that from your deliberately turning the subsystem off. **This silently disables rebalance:**
+
+```json
+{
+    "rebalance": {"dest_retry_time": "3m"}
+}
+```
+
+Always spell out `enabled` when you customize either section:
+
+```json
+{
+    "rebalance": {"enabled": true, "dest_retry_time": "3m"},
+    "fshc": {"enabled": true, "error_limit": 3}
+}
+```
+
+This applies to hand-written initial configuration only. CLI and API updates track separately whether you supplied `enabled`, so `ais config cluster rebalance.dest_retry_time=3m` is safe.
+
+### Startup overrides
+
+`-config_custom` applies node overrides at startup:
+
+```console
+$ aisnode -config=/etc/ais/ais.json \
+    -local_config=/etc/ais/ais_local.json \
+    -role=target \
+    -config_custom="client.client_timeout=13s,log.level=4"
+```
+
+These are persistent. Add `-transient=true` to keep them in memory only - subject to the same caveat as any transient value ([above](#transient-values-can-become-permanent)).
+
+Avoid passing secrets on the command line, where local process inspection can read them. Use deployment-managed files or the environment's secret mechanism.
+
+Environment variables and other startup flags override specific behaviors; they are not a general substitute for cluster configuration. See [Environment variables](/docs/environment-vars.md) and [`aisnode` command-line arguments](/docs/command_line.md).
+
+### Managing mountpaths
+
+A target [mountpath](/docs/terminology.md#mountpath) is a formatted disk or RAID volume plus a directory AIStore owns for user data and system metadata. In production each mountpath should be a distinct local filesystem on a non-shared device. Mountpath directories cannot be nested.
+
+`fspaths` in the local file defines the startup list. `test_fspaths` partitions one shared filesystem and is for development only.
+
+Use the storage commands rather than editing configuration:
+
+```console
+$ ais storage mountpath show
+$ ais storage mountpath attach t[ABC123]=/data/nvme1
+$ ais storage mountpath disable t[ABC123]=/data/nvme1
+$ ais storage mountpath enable t[ABC123]=/data/nvme1
+$ ais storage mountpath detach t[ABC123]=/data/nvme1
+```
+
+Runtime changes are persisted on the node; the plain-text local file is not rewritten for you. Keep it in sync.
+
+See [CLI: storage and mountpaths](/docs/cli/storage.md#mountpath-and-disk-management) and [Filesystem Health Checker](/docs/fshc.md).
+
+### Reducing extended-attribute usage
+
+For fast, **temporary** storage, AIStore can be configured to skip persisting per-object metadata to extended attributes:
+
+```console
+$ ais config cluster checksum.type=none versioning.enabled=true write_policy.md=never
+```
+
+Or per bucket:
+
+```console
+$ ais bucket props set ais://mybucket write_policy.md=never
+```
+
+This does **not** make AIStore independent of extended attributes. Targets still probe for xattr support at startup and still use xattrs at mountpath roots - for the target ID, among other metadata. A filesystem without working xattr support is not a supported deployment.
+
+What it does change: in-memory (a.k.a. *dirty*) metadata does not survive a node reboot.
+
+### Backup and upgrade
+
+The files you pass with `-config` and `-local_config` are not a backup. The initial file doesn't track later changes, and either path may live outside the AIStore configuration directory.
+
+Back up all of the following before an upgrade or disruptive maintenance:
+
+- deployment-managed initial and local configuration files;
+- each node's complete AIStore configuration directory; and
+- the `.ais.*` metadata files at each target mountpath root - **not** whole mountpaths, which hold user data.
+
+Depending on node role this includes cluster maps, bucket metadata, rebalance state, and node identity. See [System files](/docs/sysfiles.md). Keep backups off-node and restore only with a compatible AIStore version.
+
+**Downgrade is not supported.** Configuration written by a newer release is not valid input to an older binary: starting with v5.0, an older version may refuse to start on a section it doesn't find, or reconstruct a different value for it. This has never been a supported operation in AIStore, but v5.0 makes the failure sharper. Restore a matching backup instead. See [v5.0 release notes](/docs/relnotes/5.0.md).
+
+### Production checklist
+
+| Area | Recommendation |
+| --- | --- |
+| **Networking** | Configure distinct public and intra-cluster listeners (required as of v5.0); use separate physical networks or VLANs where the workload justifies it. See [Networking](/docs/networking.md). |
+| **Storage** | Use one local filesystem per mountpath and verify extended-attribute support. See [Getting started: prerequisites](/docs/getting_started.md#prerequisites). |
+| **Filesystem health** | Keep FSHC enabled unless you have a specific reason not to; tune its thresholds for the storage environment. See [FSHC](/docs/fshc.md). |
+| **TLS and authentication** | Configure public and intra-cluster TLS deliberately; configure token validation when authentication is enabled. See [HTTPS](/docs/https.md) and [Token validation](/docs/auth_validation.md). |
+| **Backends** | Enable only the providers you need; manage credentials through the environment's secret mechanism. See [Backend providers](/docs/providers.md). |
+| **Memory** | Size `memsys` for the actual node. Never copy its settings between a development box and a production target. |
+| **Performance** | Size file-descriptor limits, networking, and filesystems for the intended workload. See [Performance](/docs/performance.md). |
+| **Templates** | Omit only reconstructible sections; keep bootstrap values and intentional choices explicit. |
+| **After every upgrade** | Review effective values with `ais config cluster --json` and compare them against the release notes. |
+| **Backups** | Back up deployment inputs, configuration directories, and mountpath metadata before upgrades and disruptive maintenance. |
+| **Kubernetes** | Use the [ais-k8s](https://github.com/NVIDIA/ais-k8s) operator. |
+
+---
+
+## For developers
+
+### Data model and update paths
+
+Core types live in [`cmn/config.go`](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go):
+
+| Type | Role |
+| --- | --- |
+| `Config` | One daemon's effective configuration: `LocalConfig` plus `ClusterConfig` |
+| `ClusterConfig` | Hydrated runtime cluster settings plus cluster metadata |
+| `LocalConfig` | Node directories, listeners, `fspaths`, development storage settings |
+| `ConfigToSet` | Presence-aware partial update; leaf fields are pointers, so omitted and explicit-zero stay distinct |
+| `<Section>Conf` | Runtime representation of one section |
+| `<Section>ConfToSet` | Partial-update representation of the same section |
+
+Property names come from JSON tags joined with a dot - `client.client_timeout`. [`IterFields`](https://github.com/NVIDIA/aistore/blob/main/cmn/iter_fields.go) is the tag-driven recursive traversal behind update, listing, and CLI paths.
+
+Principal paths:
+
+- **Startup:** `cmn.LoadConfig` loads local and persisted-or-initial cluster configuration, hydrates omittable sections, applies `.ais.override_config`, validates.
+- **Persistent cluster update:** `setCluCfgPersistent` runs primary-only pre-flight checks; `configOwner.modify` merges into a private copy, validates, versions, prunes, persists, metasyncs.
+- **Metasync receive:** decode, hydrate, then reapply node overrides via `GCO.Update`.
+- **Node update:** `setConfig` clones the effective config, merges a `ConfigToSet`, validates, updates the override set.
+- **Transient cluster update:** `setCluCfgTransient` - `_checkTransient` first, then a daemon-scope update broadcast to active nodes.
+- **GET:** always hydrated, never the sparse form.
+
+The invariant:
+
+```text
+persisted / metasynced ClusterConfig: sparse
+live / API ClusterConfig:             fully hydrated
+```
+
+Three functions maintain it, and they are **not** interchangeable:
+
+| Function | Does | Used by |
+| --- | --- | --- |
+| `allocOmittables()` | Allocates nil sections as zero values. Does **not** default them. | `Config.Validate`, ahead of the recursive validation traversal |
+| `HydrateOmittables()` | Allocates **and** validates *every* omittable section, returns error | Decode side, `LoadConfig`, `UpdateClusterConfig` |
+| `PruneOmittables()` | Drops sections equal to canonical defaults. In-place. | `globalConfig._encode` only |
+
+`HydrateOmittables` validates every omittable section, not only the absent ones - validators are idempotent, so repeated calls are safe; the additional validation also repairs partially populated sections as a side effect.
+
+`PruneOmittables` must run on a private copy at the persist/metasync boundary. **Never prune the live `GCO` configuration.**
+
+### Adding a field or section
+
+Decide first:
+
+1. Cluster-wide, node-overridable, or truly local?
+2. Does zero mean "use the default", or is zero itself a meaningful value?
+3. Can the default be derived identically on every node and in every deployment?
+4. Safe to change at runtime, or restart-required?
+5. Does validation depend on the section alone, the whole `Config`, or live cluster state?
+
+New field:
+
+1. Add it to `<Section>Conf` with the right JSON tag.
+2. Add the matching **pointer** field to `<Section>ConfToSet` - required to tell an omitted update from an explicit zero, empty string, or `false`.
+3. Put its defaulting and range checks in `Validate`; keep the method idempotent.
+4. Update runtime consumers, `String()` helpers, and any read-mostly (`Rom`) accessors.
+5. Add validation and update tests.
+
+New section, additionally:
+
+1. Add `<Section>Conf` to `ClusterConfig` and `<Section>ConfToSet` to `ConfigToSet`.
+2. Add `allow:"cluster"` if per-node overrides must be rejected.
+3. Add an interface guard for its validator.
+4. Decide whether it qualifies for default omission - pointerizing alone does not make it omittable. `Tracing` and `Dsort` are the standing examples: both are `*Conf` with `omitempty`, neither implements `defaultOmittable`.
+5. Audit clone, startup, persistence, metasync, CLI, deployment generators, and compatibility.
+
+Tags:
+
+| Tag | Effect |
+| --- | --- |
+| `json:"name"` | Public property name, for JSON and `IterFields` |
+| `json:",inline"` | Explicitly promotes an embedded struct during traversal |
+| `allow:"cluster"` | Rejects per-node overrides |
+| `list:"readonly"` | Visible, but rejects updates |
+| `list:"omit"` | Excluded from listing and update traversal |
+
+Never infer presence from a `ToSet` field's Go zero value. The pointer carries presence; the pointee carries the value.
+
+Deprecating a knob: mark it `// Deprecated:` on both the `Conf` and `ToSet` fields, and keep accepting, validating, and hydrating it. `keepalivetracker.retry_factor` is the current example - still functional, deprecated because of its indirect cross-section effect on failure detection, not because it is inert.
+
+### Defaults and validation
+
+`Validate` methods are mutating normalizers as well as validators: they fill in fields whose zero means "default", then range-check.
+
+Every validator must be **idempotent**:
+
+```go
+if err := section.Validate(); err != nil {
+    return err
+}
+if err := section.Validate(); err != nil { // must remain valid, and unchanged
+    return err
+}
+```
+
+Required, because an omittable section is validated during hydration and again in the `Config.Validate` traversal.
+
+Treat each zero deliberately. Zero may mean use-the-default, disabled, unlimited, empty, or an ordinary explicit value. Do not mechanically convert. Document sentinels such as `-1`, and make sure partial updates can express every supported value.
+
+**Hydration must precede the merge.** Otherwise, changing one field of an absent section leaves its siblings at Go zero and silently redefines the rest of the section. `Config.UpdateClusterConfig` calls `HydrateOmittables` before `CopyProps` for exactly this reason. This is not theoretical: a node-scoped `disk.disk_util_high_wm=85` replayed onto a still-sparse configuration produced `{0, 85, 0}` and killed the target at restart.
+
+Section-local checks go in `Validate`. Checks needing the whole configuration go in a `contextValidator` or `Config.Validate`. Checks needing live cluster state go in a primary pre-flight - for example the keepalive interval versus `timeout.max_keepalive` comparison in `_checkKalive`.
+
+### Making a section default-omittable
+
+All of the following must hold:
+
+1. `ClusterConfig` stores it as `*SectionConf` with `json:"section,omitempty"`.
+2. Validating a zero-valued section fully reconstructs one canonical default.
+3. `Validate` is idempotent and correct on already-materialized values.
+4. That default is independent of node role, hardware size, topology, environment, and startup order.
+5. The section holds only value-typed fields - no maps, slices, pointers, interfaces, functions, or channels.
+6. Every runtime path sees a non-nil section after hydration.
+7. It implements the private `defaultOmittable` marker and appears in `expectedOmittable` in `cmn/prune_defaults_internal_test.go`.
+8. Rolling-upgrade and downgrade behavior is reviewed and documented in the release notes.
+
+The value-type restriction exists because `PruneOmittables` validates a shallow scratch copy: reference fields could alias live state, and nil-versus-empty would defeat stable default comparison.
+
+The deciding question for (2) is **not** whether the section is mechanically simple. It is whether zero means "unset" or is itself a valid operator choice. A setting that is on by default fails this test unless it can be rescued - see [Default-enabled sections](#default-enabled-sections). `versioning` and `resilver` are ineligible under their current plain-bool representation: every field is a bool, so a wholly zero section is indistinguishable from a deliberately disabled one and the sentinel has nothing to key on.
+
+`memsys` is the canonical environmental counterexample: a developer laptop and a target with terabytes of RAM must not share bootstrap tuning, and no single default serves both.
+
+Do not add a section to deployment templates just to spell out canonical defaults. Conversely, do not remove it from `cmd/aisinit`, the local playground, Helm/Operator inputs, or production YAML until the validator reconstructs the exact intended value *for that environment*.
+
+### Pointerizing an existing section
+
+Converting `SectionConf` to `*SectionConf` breaks two things that compile cleanly.
+
+**1. Comparisons silently become pointer comparisons.** Any existing `oldConfig.X != newConfig.X` now compares addresses and is essentially always true. Grep for the section name in comparisons and add the deref:
+
+```go
+// ais/tgtcp.go, receiveConfig
+if *oldConfig.Space != *newConfig.Space {
+    fs.ExpireCapCache()
+}
+```
+
+Without the `*`, this fires on every configuration metasync.
+
+**2. Any `Config` built or decoded outside the standard paths is now a nil-deref.** A bare `&cmn.Config{}` no longer has usable sections. The decode side is symmetric by design - `_decode`, `_loadMeta`, and `_loadPlain` in `ais/gconfig.go` each end in `HydrateOmittables()`, so every `globalConfig` handed to a caller is complete. **Any other code that constructs or decodes a `Config` must hydrate it itself.** Both bugs of this shape found so far - `remaisClients(cfg.Client)` off a metasync-decoded config, and aisloader's bare `&cmn.Config{}` - were nil panics at runtime, not compile errors.
+
+Then search every startup consumer for the earliest dereference; see [Startup ordering](#startup-ordering-and-deployment-generators).
+
+### Default-enabled sections
+
+A plain Go `bool` cannot distinguish an omitted JSON field from explicit `false`. For a wholly zero section, a validator can establish the default:
+
+```go
+if *c == (RebalanceConf{}) {
+    c.Enabled = true
+}
+```
+
+This preserves the three meanings:
+
+- absent section or `{}` → all defaults, including `enabled: true`;
+- hydrated default section → prunable;
+- explicit `enabled: false` → differs from default, stays persisted.
+
+`ConfigToSet` has no such ambiguity - `Enabled *bool` separates absent, true, and false. Do not replace that pointer with a plain `bool`.
+
+A partially specified initial section is supported **only when `enabled` is explicit**. A customized `rebalance` or `fshc` section that omits `enabled` is unsupported, because omission is indistinguishable from explicit `false` - `{"rebalance":{"dest_retry_time":"3m"}}` is not wholly zero, so the sentinel above cannot rescue it. Documented on the `RebalanceConf` and `FSHCConf` struct definitions and in [the operator section above](#sections-that-are-on-by-default-need-care).
+
+Both sections clear the bar and are omittable. The full set as of v5.0 - 22 sections, with `expectedOmittable` in `cmn/prune_defaults_internal_test.go` as the authoritative list:
+
+```text
+arch          chunks        client        checksum      disk
+downloader    ec            fshc          get_batch     keepalivetracker
+log           lru           lso           mirror        periodic
+rate_limit    rebalance     space         tcb           tco
+transport     write_policy
+```
+
+### Scope, transient updates, and cross-section checks
+
+Scope is enforced from `ClusterConfig` tags inside `_copyProps`, with three distinct outcomes:
+
+| Situation | Outcome |
+| --- | --- |
+| Daemon-scope update of an `allow:"cluster"` section | Error: `X configuration can only be globally updated` |
+| Transient update of an `allow:"cluster"` section | Error: `X (cluster-scoped) configuration cannot be changed transiently` |
+| Same, but with `IgnoreScope: true` | Warning to the log, field skipped |
+
+`IgnoreScope: true` is passed only on the two override-*replay* paths - `handleOverrideConfig` at startup and `GCO.Update` on metasync receive - where a persisted override file may legitimately contain a section that has since become cluster-only. It is never set on a live user update. Consequence worth knowing: a section that gains `allow:"cluster"` in a release will have its existing per-node overrides silently dropped after upgrade, with only `ignoring node override for cluster-scoped config` in the log.
+
+When adding a restart-sensitive setting, update `cmn.ConfigRestartRequired`. That list drives a CLI warning; it does not itself reinitialize anything.
+
+Persistent cluster updates run primary-only pre-flight checks in `ais/prxclu.go`. Transient updates do not take that path. When you add a pre-flight check, decide explicitly what the transient path does - either perform the equivalent check on the merged values, or reject the update. `_checkTransient` currently refuses everything in `cmn.ConfigRestartRequired` plus `auth` and `keepalivetracker`, returning `cmn.NewErrUnsupp` (501). **Do not leave the transient path less validated than the persistent one.**
+
+Cross-section checks must compare **post-merge** values. `_checkKalive` is the model: it validates its private copy first - resolving zero-means-default and range-checking - and only then compares both intervals against the proposed `timeout.max_keepalive`. Comparing raw `ConfigToSet` zeroes instead would reject a legitimate `interval=0s` and accept an illegitimate `max_keepalive=0s`.
+
+Never mutate live `GCO` configuration during a pre-flight check.
+
+### Startup ordering and deployment generators
+
+Pointerizing creates an initialization-order obligation: the section must be hydrated before its first dereference.
+
+Most sections are consumed after `handleOverrideConfig` and full validation. `log` is the deliberate exception - startup calls `nlog.SetPost(config.Log.ToStderr, config.Log.MaxSize)` before override handling, which is why `LoadConfig` hydrates omittable sections first. When pointerizing or adding a section, search every startup consumer and verify the earliest safe hydration point.
+
+Once a section is fully default-hydrated:
+
+1. Remove duplicate canonical defaults from `cmd/aisinit`.
+2. Remove local-playground defaults only where local behavior is *meant* to match the canonical default.
+3. Preserve genuinely environment-specific settings.
+4. Update production manifests separately and deliberately - repository code cannot rewrite deployed YAML.
+
+The goal is one owner per default, not a minimal initial file at the cost of deployment intent.
+
+### Compatibility and test checklist
+
+Sparse persistence changes what older binaries receive. Before adding an omittable section, determine how every release in the supported upgrade window treats its absence. An older validator may hydrate the same values, hydrate different values, accept zeros and run with unintended behavior, or refuse to start.
+
+That last one is real and has been reproduced: deploying a pointerized branch and then rolling back to a binary without the corresponding `Validate` produced `FATAL ERROR: invalid ec.data_slices: 0` on every node, because the persisted sparse configuration outlives the binary. Document the outcome in the release notes; do not claim downgrade support.
+
+Coverage for any configuration change should include:
+
+- zero-value hydration into the expected defaults;
+- repeated-validation idempotence;
+- all-default pruning;
+- pruning of an unvalidated zero section;
+- survival of every non-default value, including zero-valued siblings;
+- sparse encode / decode / hydrate round trip;
+- partial override onto an absent or empty section;
+- preservation of explicit disable for default-enabled sections;
+- deep-clone alias safety for pointerized sections;
+- metasync receive-boundary hydration;
+- scope and read-only enforcement;
+- transient restrictions and pre-flight parity;
+- startup from both plain-text initial and persisted sparse configuration;
+- release-note updates whenever the omittable set changes.
+
+[`cmn/prune_defaults_internal_test.go`](https://github.com/NVIDIA/aistore/blob/main/cmn/prune_defaults_internal_test.go), the configuration tests under `cmn/tests`, and the metasync tests under `ais` encode these invariants. Extend `expectedOmittable` only as part of the same reviewed change.
+
+## Related documentation
+
+- [CLI: configuration](/docs/cli/config.md)
+- [AIStore HTTP API](/docs/http_api.md)
+- [AIStore Networking Model](/docs/networking.md)
+- [HTTPS and TLS](/docs/https.md)
+- [Authentication and token validation](/docs/auth_validation.md)
+- [Mountpaths and storage CLI](/docs/cli/storage.md#mountpath-and-disk-management)
+- [Filesystem Health Checker](/docs/fshc.md)
+- [Backend providers](/docs/providers.md)
+- [Performance recommendations](/docs/performance.md)
+- [Environment variables](/docs/environment-vars.md)
+- [`aisnode` command-line arguments](/docs/command_line.md)
+- [System files](/docs/sysfiles.md)
+- [v5.0 release notes](/docs/relnotes/5.0.md)
+
+> This page deliberately carries no per-knob reference table. Defaults, ranges, and scope live in the struct tags and `Validate` implementations in `cmn/config.go`; for effective values on a running cluster, use `ais config cluster --json`.
