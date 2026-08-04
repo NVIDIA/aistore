@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -141,9 +142,30 @@ func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	b := unpacker.Bytes()
 	calcCksum := onexxh.Checksum64S(b[:len(b)-cos.SizeofI64], cos.MLCG32)
 	if cksum != calcCksum {
-		err = cos.NewErrMetaCksum(cksum, calcCksum, "EC metadata")
+		return cos.NewErrMetaCksum(cksum, calcCksum, "EC metadata")
 	}
-	return err
+	return md.validate()
+}
+
+func (md *Metadata) validate() error {
+	switch {
+	case md.Generation <= 0:
+		return fmt.Errorf("invalid EC metadata generation %d", md.Generation)
+	case md.Size < 0 || md.Size > int64(cmn.MaxMonolithicSize):
+		return fmt.Errorf("invalid EC metadata size %d", md.Size)
+	case md.Data < cmn.MinSliceCount || md.Data > cmn.MaxSliceCount:
+		return fmt.Errorf("invalid EC metadata data slice count %d", md.Data)
+	case md.Parity < cmn.MinSliceCount || md.Parity > cmn.MaxSliceCount:
+		return fmt.Errorf("invalid EC metadata parity slice count %d", md.Parity)
+	case md.SliceID > md.Data+md.Parity:
+		return fmt.Errorf("invalid EC metadata slice ID %d", md.SliceID)
+	}
+	for daemonID, sliceID := range md.Daemons {
+		if int(sliceID) > md.Data+md.Parity {
+			return fmt.Errorf("invalid EC metadata slice ID %d for daemon %q", sliceID, daemonID)
+		}
+	}
+	return nil
 }
 
 func (md *Metadata) unpackLastVersion(unpacker *cos.ByteUnpack) (err error) {
