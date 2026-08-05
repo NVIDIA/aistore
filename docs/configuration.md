@@ -262,7 +262,7 @@ Practical consequences:
 - **Never read `.ais.conf` to find out what a setting is.** Use the CLI or the API. It is protected metadata rather than plain JSON, and it is an internal representation.
 - **Defaults can change between AIStore releases.** Either way, check the release notes and set the desired value again if it differs from the new default. A value equal to the current canonical default cannot be pinned by explicitly setting it; it may be pruned again.
 
-The sections AIStore can reconstruct this way, as of v5.0:
+The sections AIStore can reconstruct this way, as of v5.0 (22 in total; the same set is listed again under [Default-enabled sections](#default-enabled-sections), where `expectedOmittable` in `cmn/prune_defaults_internal_test.go` is the authoritative source):
 
 ```text
 arch          chunks        client        checksum      disk
