@@ -717,8 +717,7 @@ func createRemoteBaseParams(ra *meta.RemAis) api.BaseParams {
 		ClientTimeout: gcfg.Timeout.HTTPTimeout,
 	}
 	if cos.IsHTTPS(bp.URL) {
-		sargs := cmn.TLSArgs{SkipVerify: true}
-		bp.Client = cmn.NewClientTLS(cargs, sargs, false)
+		bp.Client = cmn.NewClientTLS(cargs, clientTLSArgs(), false)
 	} else {
 		if clientH == nil {
 			clientH = cmn.NewClient(cargs)
@@ -726,6 +725,12 @@ func createRemoteBaseParams(ra *meta.RemAis) api.BaseParams {
 		bp.Client = clientH
 	}
 	return bp
+}
+
+func remoteHealthUptime(bp api.BaseParams) (string, string, error) {
+	// Do not send the local cluster token to a remote health endpoint.
+	bp.Token = ""
+	return api.HealthUptime(bp)
 }
 
 // ais show remote cluster
@@ -750,7 +755,7 @@ For details and usage examples, see: docs/cli/config.md`
 		uptime := teb.UnknownStatusVal
 		bp := bpMap[ra.UUID]
 
-		if clutime, _, err := api.HealthUptime(bp); err == nil {
+		if clutime, _, err := remoteHealthUptime(bp); err == nil {
 			ns, _ := strconv.ParseInt(clutime, 10, 64)
 			uptime = time.Duration(ns).String()
 		}

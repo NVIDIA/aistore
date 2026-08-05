@@ -44,15 +44,8 @@ func Init(args []string) (err error) {
 			DialTimeout:   gcfg.Timeout.TCPTimeout,
 			ClientTimeout: gcfg.Timeout.HTTPTimeout,
 		}
-		sargs = cmn.TLSArgs{
-			ClientCA:    gcfg.Cluster.ClientCA,
-			Certificate: gcfg.Cluster.Certificate,
-			Key:         gcfg.Cluster.CertKey,
-			SkipVerify:  gcfg.Cluster.SkipVerifyCrt,
-		}
+		sargs = clientTLSArgs()
 	)
-
-	cmn.EnvToTLS(&sargs)
 
 	apiBP = api.BaseParams{
 		URL:   clusterURL,
@@ -88,6 +81,17 @@ func Init(args []string) (err error) {
 		}
 	}
 	return nil
+}
+
+func clientTLSArgs() (sargs cmn.TLSArgs) {
+	sargs = cmn.TLSArgs{
+		ClientCA:    gcfg.Cluster.ClientCA,
+		Certificate: gcfg.Cluster.Certificate,
+		Key:         gcfg.Cluster.CertKey,
+		SkipVerify:  gcfg.Cluster.SkipVerifyCrt,
+	}
+	cmn.EnvToTLS(&sargs)
+	return
 }
 
 // resolving order:
