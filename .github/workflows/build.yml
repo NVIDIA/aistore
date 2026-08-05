@@ -44,3 +44,5 @@ jobs:
           make aisloader
           # 8) dsort
           TAGS=dsort MODE=debug make node
+          # 9) ETL
+          TAGS=etl MODE=debug make node

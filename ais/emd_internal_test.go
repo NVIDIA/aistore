@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/tools/tassert"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -57,6 +58,21 @@ func TestEtlMDDeepCopy(t *testing.T) {
 		t.Log(s2)
 		t.Fatal("marshal(etlmd) != marshal(clone(etlmd))")
 	}
+}
+
+func TestEtlMDGet(t *testing.T) {
+	msg := &etl.ETLSpecMsg{InitMsgBase: etl.InitMsgBase{EtlName: "test-get", CommTypeX: etl.Hpush}}
+	etlMD := newEtlMD()
+	err := etlMD.add(msg, etl.Initializing, nil)
+	tassert.CheckFatal(t, err)
+
+	got, stage := etlMD.get(msg.Name())
+	tassert.Fatalf(t, got == msg, "expected %v, got %v", msg, got)
+	tassert.Fatalf(t, stage == etl.Initializing, "expected %s, got %s", etl.Initializing, stage)
+
+	got, stage = etlMD.get("missing")
+	tassert.Fatalf(t, got == nil, "expected no message, got %v", got)
+	tassert.Fatalf(t, stage == etl.Unknown, "expected %s, got %s", etl.Unknown, stage)
 }
 
 var _ = Describe("EtlMD marshal and unmarshal", func() {

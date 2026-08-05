@@ -34,17 +34,16 @@ jobs:
           chmod +x kapp-linux-amd64
           sudo mv kapp-linux-amd64 /usr/local/bin/kapp
 
-      # In PRs, build and load local images; otherwise use `dev` images from Docker Hub.
+      # Always build ETL-enabled images; the standard `dev` image excludes ETL.
       - name: Build and load images into KinD
-        if: github.event_name == 'pull_request'
         run: |
           cd $GITHUB_WORKSPACE/deploy/dev/k8s
-          IMAGE_TAG=github-ci CLUSTER_TYPE=kind CLUSTER_NAME=ais-ci ./utils/build_and_load.sh
+          BUILD_TAGS=etl IMAGE_TAG=github-ci CLUSTER_TYPE=kind CLUSTER_NAME=ais-ci ./utils/build_and_load.sh
 
       - name: Run AIStore in KinD
         run: |
           cd $GITHUB_WORKSPACE/deploy/dev/k8s
-          make github-ci AIS_IMAGE_TAG=${{ github.event_name == 'pull_request' && 'github-ci' || 'dev' }}
+          make github-ci AIS_IMAGE_TAG=github-ci
 
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v7
@@ -56,4 +55,3 @@ jobs:
           cd $GITHUB_WORKSPACE/python/
           source $GITHUB_WORKSPACE/deploy/dev/k8s/export_endpoint.sh
           make python_etl_tests
-

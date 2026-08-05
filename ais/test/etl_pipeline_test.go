@@ -1,3 +1,5 @@
+//go:build etl
+
 // Package integration_test.
 /*
  * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.

@@ -1,3 +1,5 @@
+//go:build etl
+
 // Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
@@ -33,15 +35,6 @@ type (
 	statefulCommunicator interface {
 		Communicator
 		createSession(xctn core.Xact, multiplier int) (Session, error)
-	}
-
-	// Session represents a per-xaction communication context created by the statefulCommunicator.
-	Session interface {
-		// Finish cleans up the job's communication channel, and aborts the undergoing xaction (`TCB`/`TCO`) if errCause is provided
-		Finish(errCause error) error
-		OfflineWrite(lom *core.LOM, latestVer, sync bool, writer io.WriteCloser, args *core.ETLArgs) (written int64, ecode int, err error)
-
-		transform(lom *core.LOM, latestVer, sync bool, writer io.WriteCloser, args *core.ETLArgs) (written int64, ecode int, err error)
 	}
 
 	//nolint:dupword // ASCII diagram contains repeated characters by design

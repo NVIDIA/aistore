@@ -6,6 +6,7 @@
 #   NUM_CHUNKS   - when >0, number of PUT chunks for io contexts
 #   SIGN_HMAC    - when "true", enables redirect HMAC signing
 #   RAND_NS      - when "true", generate buckets with random namespaces, e.g.: `ais://#ns123/bucket1`, `s3://#ns456/bucket2`, etc.
+#   TEST_TAGS    - additional Go build tags used by integration tests
 # See also:
 # * api/env/README.md
 # * docs/environment-vars.md
@@ -50,7 +51,7 @@ run_tests() {
   # ("Ginkgo detected configuration issues...")
   failed_tests=$(
     BUCKET="${BUCKET}" IOCTX_CHUNK_SIZE="${IOCTX_CHUNK_SIZE}" AIS_ENDPOINT="${AIS_ENDPOINT}" \
-      ${TEST_CMD} -v -p 1 -tags debug -count 1 ${timeout} ${short} ${shuffle} ${re} "${tests_dir}" 2>&1 \
+      ${TEST_CMD} -v -p 1 -tags "debug ${TEST_TAGS}" -count 1 ${timeout} ${short} ${shuffle} ${re} "${tests_dir}" 2>&1 \
     | tee "${LOG_FILE}" | tee -a /dev/stderr \
     | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$"; \
     exit ${PIPESTATUS[0]} # Exit with the status of the first command in the pipe(line).

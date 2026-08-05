@@ -1,3 +1,5 @@
+//go:build etl
+
 // Package ais provides AIStore's proxy and target nodes.
 /*
  * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.

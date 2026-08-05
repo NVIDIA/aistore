@@ -1,3 +1,5 @@
+//go:build etl
+
 // Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.

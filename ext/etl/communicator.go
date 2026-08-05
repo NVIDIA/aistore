@@ -1,3 +1,5 @@
+//go:build etl
+
 // Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
@@ -27,39 +29,6 @@ import (
 )
 
 type (
-	CommStats interface {
-		ObjCount() int64
-		InBytes() int64
-		OutBytes() int64
-	}
-
-	// Communicator is responsible for managing communications with local ETL pod.
-	Communicator interface {
-		ETLName() string
-		getInitMsg() InitMsg
-
-		String() string
-
-		setupConnection(schema, podAddr string) (ecode int, err error)
-		setupXaction(xid string) error
-		stop() error
-		GetSecret() string
-		Xact() *XactETL // underlying `apc.ActETLInline` xaction (see xact/xs/etl.go)
-		CommStats       // only stats for `apc.ActETLInline` inline transform
-
-		// InlineTransform uses one of the two ETL container endpoints:
-		//  - Method "PUT", Path "/"
-		//  - Method "GET", Path "/bucket/object"
-		//  - Returns:
-		//    - size: the size of transformed object
-		//    - ecode: error code
-		//    - err: error encountered during transformation
-		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, args *InlineTransArgs) (size int64, ecode int, err error)
-
-		// ProcessDownloadJob extracts objects from job and routes them to ETL pod
-		ProcessDownloadJob(ctx *ETLObjDownloadCtx) (cos.ReadCloseSizer, int, error)
-	}
-
 	// httpCommunicator manages stateless communication to ETL pod through HTTP requests
 	httpCommunicator interface {
 		Communicator
@@ -71,13 +40,6 @@ type (
 		// - revProxyComm
 		// See also, and separately: on-the-fly transformation as part of a user (e.g. training model) GET request handling
 		OfflineTransform(lom *core.LOM, latestVer, sync bool, args *core.ETLArgs) core.ReadResp
-	}
-
-	InlineTransArgs struct {
-		TransformArgs string
-		Pipeline      apc.ETLPipeline
-		LatestVer     bool
-		// TODO: add sync option
 	}
 
 	baseComm struct {

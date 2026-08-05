@@ -69,7 +69,6 @@ jobs:
 
   python-etl:
     if: ${{ github.event_name == 'push' }}
-    needs: [aisnode, ais-init]
     uses: ./.github/workflows/test-python-etl.yml
     secrets: inherit
 

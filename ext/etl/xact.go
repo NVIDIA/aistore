@@ -1,3 +1,5 @@
+//go:build etl
+
 // Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
@@ -5,8 +7,6 @@
 package etl
 
 import (
-	"sync"
-
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -23,27 +22,10 @@ type (
 		xctn *XactETL
 		xreg.RenewBase
 	}
-
-	// represents `apc.ActETLInline` kind of xaction (`apc.ActETLBck`/`apc.ActETLObject` kinds are managed by tcb/tcobjs)
-	// responsible for triggering global abort on error to ensure all related ETL resources are cleaned up across all targets.
-	XactETL struct {
-		msg            InitMsg
-		Vlabs          map[string]string
-		offlineObjErrs map[string]*cos.Errs // xid of TCB/TCB => errors encountered during offline transformation
-		InlineObjErrs  cos.Errs
-		xact.Base
-		ctlmsg string
-		m      sync.Mutex // protects offlineErrs
-	}
 )
-
-const MaxObjErr = 128
 
 // interface guard
-var (
-	_ core.Xact      = (*XactETL)(nil)
-	_ xreg.Renewable = (*factory)(nil)
-)
+var _ xreg.Renewable = (*factory)(nil)
 
 func (*factory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &factory{RenewBase: xreg.RenewBase{Args: args}}
@@ -82,16 +64,6 @@ func newETL(p *factory) *XactETL {
 	return xctn
 }
 
-func (r *XactETL) CtlMsg() string {
-	if r.ctlmsg != "" || r.msg == nil {
-		return r.ctlmsg
-	}
-	r.ctlmsg = r.msg.String()
-	return r.ctlmsg
-}
-
-func (*XactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
-
 func (r *XactETL) Abort(err error) (aborted bool) {
 	aborted = r.Base.Abort(err)
 	r.Base.Finish() // trigger proxy notification to abort on other targets
@@ -100,8 +72,6 @@ func (r *XactETL) Abort(err error) (aborted bool) {
 	}
 	return aborted
 }
-
-func (r *XactETL) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 func (r *XactETL) AddObjErr(xid string, err *ObjErr) {
 	debug.Assert(err != nil)
