@@ -468,9 +468,8 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) {
 		var (
 			err error
 			bck = bcks[i]
-			b   = meta.CloneBck(&bck)
+			b   = (*meta.Bck)(&bck)
 		)
-		j.bck = bck
 		err = b.Init(bowner)
 		if err != nil {
 			if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
@@ -488,6 +487,9 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) {
 			}
 			continue
 		}
+		debug.Assert(apc.IsProvider(bck.Provider), "expecting normalized provider, got: ", bck.Provider)
+		debug.Assert(bck.Props != nil)
+		j.bck = bck
 		j._jogBck()
 		if xcln.IsAborted() || j.done() {
 			return
@@ -1187,9 +1189,13 @@ func (j *clnJ) rmLeftovers(specifier int) {
 			if cos.Stat(metaFQN) == nil {
 				continue
 			}
-			if os.Remove(ct.FQN()) == nil {
+			fqn := ct.FQN()
+			finfo, ers := os.Lstat(fqn)
+			if os.Remove(fqn) == nil {
 				nfiles++
-				nbytes += ct.Lsize()
+				if ers == nil {
+					nbytes += finfo.Size()
+				}
 
 				j._throttle(nfiles)
 				if j.done() {
