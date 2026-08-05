@@ -101,12 +101,13 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   authn:
-    if: ${{ inputs.build_authn_image }}
+    if: ${{ inputs.build_authn_image || github.event_name == 'push' }}
     uses: ./.github/workflows/docker-build.yml
     with:
       image_name: aistorage/authn
-      image_tag: ${{ inputs.image_tag }}
+      image_tag: ${{ inputs.image_tag || 'dev' }}
       context_dir: deploy/prod/k8s/authn_container
+      commit_sha: ${{ github.sha }}
       multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
