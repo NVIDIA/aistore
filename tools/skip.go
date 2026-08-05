@@ -32,7 +32,6 @@ type SkipTestArgs struct {
 	CloudBck              bool
 	NotCloudBck           bool
 	K8s                   bool
-	Local                 bool
 }
 
 const fmtSkippingShort = "skipping %s in short mode"
