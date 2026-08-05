@@ -2882,3 +2882,103 @@ func TestECBckEncodeRecover(t *testing.T) {
 		})
 	}
 }
+
+func ecOrphanSlice(t *testing.T, parts map[string]ecSliceMD, mainObjPath string, age time.Duration) (string, string) {
+	t.Helper()
+
+	var orphan, orphanMeta string
+	old := time.Now().Add(-age)
+
+	for fqn := range parts {
+		if fqn == mainObjPath {
+			continue
+		}
+
+		ct, err := core.NewCTFromFQN(fqn, nil)
+		tassert.CheckFatal(t, err)
+
+		switch ct.ContentType() {
+		case fs.ECSliceCT:
+			if orphan == "" {
+				orphan = fqn
+				orphanMeta = ct.GenFQN(fs.ECMetaCT)
+			}
+		case fs.ECMetaCT:
+		default:
+			continue
+		}
+		tassert.CheckFatal(t, os.Chtimes(fqn, old, old))
+	}
+
+	tassert.Fatalf(t, orphan != "", "no EC slice among %d parts of %s", len(parts), mainObjPath)
+
+	tlog.Logfln("Orphaning slice %s [removing %s]", orphan, orphanMeta)
+	tassert.CheckFatal(t, cos.RemoveFile(orphanMeta))
+	return orphan, orphanMeta
+}
+
+// run global store cleanup over EC content and assert both directions:
+// - the orphaned slice (no metafile, aged past dont_cleanup_time) is removed;
+// - every other slice, metafile, and the full replica survive untouched.
+func TestECStoreCleanup(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 5, RequiredDeployment: tools.ClusterTypeLocal})
+
+	var (
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: testBucketName + "-ec-cleanup", Provider: apc.AIS}
+		o          = &ecOptions{minTargets: 5, dataCnt: 2, parityCnt: 2, objSizeLimit: ecObjLimit}
+	)
+	o.init(t, proxyURL)
+	initMountpaths(t, proxyURL)
+	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+
+	const objName = "store-cleanup"
+	objPath := ecTestDir + objName
+
+	// 2 (full replica + its metafile) + (dataCnt+parityCnt)*2
+	before, mainObjPath := createECFile(t, baseParams, bck, objName, o)
+
+	config := tools.GetClusterConfig(t)
+	orphan, orphanMeta := ecOrphanSlice(t, before, mainObjPath, config.Space.DontCleanupTime.D()+time.Minute)
+
+	tlog.Logln("Starting global store cleanup...")
+	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup}
+	xid, err := api.StartXaction(baseParams, &xargs, "")
+	tassert.CheckFatal(t, err)
+
+	xargs.ID = xid
+	xargs.Timeout = tools.RebalanceTimeout
+	_, err = api.WaitForXactionIC(baseParams, &xargs)
+	tassert.CheckFatal(t, err)
+
+	// on timing: rmAnyBatch(flagRmMisplacedEC) will not fire for a single
+	// orphan (len(misplaced.ec) < config.Space.BatchSize).
+	after, _ := ecGetAllSlices(t, bck, objPath)
+
+	// 1. positive: the orphan must be gone
+	_, ok := after[orphan]
+	tassert.Errorf(t, !ok, "orphaned slice %q survived store cleanup", orphan)
+
+	// 2. negative
+	tassert.Errorf(t, len(after) == len(before)-2,
+		"expected %d EC parts after store cleanup, got %d (before %d)",
+		len(before)-2, len(after), len(before))
+
+	for fqn, md := range before {
+		if fqn == orphan || fqn == orphanMeta {
+			continue
+		}
+		got, ok := after[fqn]
+		if !ok {
+			tassert.Errorf(t, false, "EC content %q removed by store cleanup", fqn)
+			continue
+		}
+		tassert.Errorf(t, got.size == md.size,
+			"EC content %q size changed: before %d, after %d", fqn, md.size, got.size)
+	}
+
+	// 3. 2d:2p tolerates one removed slice
+	_, err = api.GetObject(baseParams, bck, objPath, nil)
+	tassert.CheckFatal(t, err)
+}
