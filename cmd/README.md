@@ -17,7 +17,7 @@
 | `bench/tools/aisloader-composer` | `aisloader-composer` | Scripts and ansible playbooks to benchmark an AIS cluster using multiple hosts running [aisloader](https://github.com/NVIDIA/aistore/tree/main/bench/tools/aisloader), controlled by [ansible](https://github.com/ansible/ansible) | [aisloader-composer](https://github.com/NVIDIA/aistore/tree/main/bench/tools/aisloader-composer) |
 | `cmd/aisnode` | `aisnode` | AIS node (gateway or target) binary | |
 | `cmd/aisnodeprofile` | `aisnode` | ... with profiling enabled | |
-| `cmd/aisinit` | `aisinit` | Kubernetes init container: generates `aisnode` config from pod environment (DNS, hostnames, networking mode, external LB) | |
+| `cmd/aisinit` | `aisinit` | Kubernetes init container: generates `aisnode` config from pod environment (DNS, hostnames, networking mode) | [aisinit](https://github.com/NVIDIA/aistore/blob/main/cmd/aisinit/README.md) |
 | `cmd/authn` | `authn` | Standalone server providing token-based secure access to AIS clusters | [AuthN](/docs/authn.md) |
 | `cmd/xmeta` | `xmeta` | Utility to inspect, extract, format, and (in limited cases) edit internal AIS metadata structures (cluster map, bucket metadata, etc.) | [xmeta](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md) |
 | `cmd/ishard` | `ishard` | Utility to create well-formed shards from an original dataset | [ishard](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md) |
@@ -160,3 +160,6 @@ The DNS mode (`AIS_PUBLIC_DNS_MODE`) controls how the public-facing hostname is 
 | `Pod` | Pod DNS (`pod.service.namespace.svc.cluster.local`) | Host networking + TLS with wildcard certs |
 
 `aisinit` is not installed as a standalone binary. It is built into the `aisinit` container image and deployed via the [AIS Kubernetes operator](https://github.com/NVIDIA/ais-k8s).
+
+For the cluster-configuration side - what `config.go` holds, why, and how the generated file relates to the persisted one -
+see [cmd/aisinit/README.md](https://github.com/NVIDIA/aistore/blob/main/cmd/aisinit/README.md).

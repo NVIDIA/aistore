@@ -1,12 +1,11 @@
 // Package main contains logic for the aisinit container
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -121,7 +120,7 @@ func main() {
 
 	confBytes, err := os.ReadFile(aisLocalConfigTemplate)
 	failOnError(err)
-	err = json.Unmarshal(confBytes, &localConf)
+	err = jsoniter.Unmarshal(confBytes, &localConf)
 	failOnError(err)
 
 	namespace := getRequiredEnv(env.AisK8sNamespace)
@@ -198,24 +197,44 @@ func main() {
 	populateClusterConfig(aisClusterConfigOverride, outputClusterConfig)
 }
 
+// Generate the initial (bootstrap) cluster configuration: production defaults
+// from config.go plus the deployment's ConfigToSet override.
+//
+// The flow:
+// hydrate => partial override => validate/hydrate => sanitize => prune => write
+//
+// Read cmd/aisinit/README.md before changing this flow. The result is written
+// in the same sparse form that aisnode expects for v5.0 configuration.
 func populateClusterConfig(aisClusterConfigOverride, outputClusterConfig string) {
 	if outputClusterConfig == "" || aisClusterConfigOverride == "" {
 		return
 	}
+
 	confToWrite := newDefaultConfig()
+
+	// Materialize canonical section defaults before applying a partial ConfigToSet override.
+	err := confToWrite.HydrateOmittables()
+	failOnError(err)
+
 	data, err := os.ReadFile(aisClusterConfigOverride)
 	failOnError(err)
 
 	var configOverride aiscmn.ConfigToSet
-	err = json.Unmarshal(data, &configOverride)
+	err = jsoniter.Unmarshal(data, &configOverride)
 	failOnError(err)
 
-	err = aiscmn.CopyProps(configOverride, confToWrite, aisapc.Cluster)
+	err = aiscmn.CopyProps(&configOverride, confToWrite, aisapc.Cluster)
 	failOnError(err)
 
-	// Only write the public version of any auth config
-	// Any private secrets should be loaded through env variables
+	// Validate and re-canonicalize the merged default-omittable sections.
+	err = confToWrite.HydrateOmittables()
+	failOnError(err)
+
+	// Private secrets must be loaded through environment variables.
 	confToWrite.Auth = confToWrite.Auth.PublicClone()
+
+	// Drop sections that remain wholly default.
+	confToWrite.PruneOmittables()
 
 	data, err = jsoniter.Marshal(confToWrite)
 	failOnError(err)

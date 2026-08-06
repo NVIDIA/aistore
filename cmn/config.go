@@ -97,39 +97,33 @@ type (
 	}
 )
 
-// Global configuration
-// Note: updating any of these fields on a per-node basis:
-// - will fail for (cluster-scoped) sections tagged with `allow:"cluster"`
-// - is at your own risk otherwise; such changes may cause inconsistent behavior across the cluster.
+// Global (cluster) configuration (the three groups).
+// Updating any of the below on a per-node basis:
+// - fails for (cluster-scoped) sections tagged `allow:"cluster"`
+// - is at your own risk otherwise - may cause inconsistent behavior across the cluster
+// See also: docs/configuration.md: "Scope, transient updates, and cross-section checks"
 type (
-	// TODO -- FIXME: move all pointers to the top _while_ satisfying IterFields sequence, dependencies-wise
-
 	ClusterConfig struct {
-		Ext         any              `json:"ext,omitempty"`              // reserved
-		Tracing     *TracingConf     `json:"tracing,omitempty"`          // see cmn/gco fixup; build tag
-		Dsort       *DsortConf       `json:"distributed_sort,omitempty"` // ditto; build tag
-		Auth        AuthConf         `json:"auth" allow:"cluster"`       // ditto
-		Backend     BackendConf      `json:"backend" allow:"cluster"`
+		// optional sections: absent via ordinary serialization
+		Ext     any          `json:"ext,omitempty"`              // reserved
+		Tracing *TracingConf `json:"tracing,omitempty"`          // see cmn/gco fixup; build tag
+		Dsort   *DsortConf   `json:"distributed_sort,omitempty"` // ditto; build tag
+
+		// default-omittable sections: pruned at encode time when wholly default
 		WritePolicy *WritePolicyConf `json:"write_policy,omitempty"` // object metadata: (immediate | delayed | never)
-		UUID        string           `json:"uuid"`
-		LastUpdated string           `json:"lastupdate_time"`
-		Proxy       ProxyConf        `json:"proxy" allow:"cluster"`
 		Cksum       *CksumConf       `json:"checksum,omitempty" allow:"cluster"`
 		TCB         *TCBConf         `json:"tcb,omitempty" allow:"cluster"`
 		TCO         *TCOConf         `json:"tco,omitempty" allow:"cluster"`
 		Arch        *ArchConf        `json:"arch,omitempty" allow:"cluster"`
 		Lso         *LsoConf         `json:"lso,omitempty" allow:"cluster"`
 		RateLimit   *RateLimitConf   `json:"rate_limit,omitempty"`
-		Keepalive   *KeepaliveConf   `json:"keepalivetracker,omitempty"`
+		Keepalive   *KeepaliveConf   `json:"keepalivetracker,omitempty"` // interval vs timeout.max_keepalive: see prxclu _checkKalive
 		Rebalance   *RebalanceConf   `json:"rebalance,omitempty" allow:"cluster"`
 		Log         *LogConf         `json:"log,omitempty"`
 		EC          *ECConf          `json:"ec,omitempty" allow:"cluster"`
 		GetBatch    *GetBatchConf    `json:"get_batch,omitempty" allow:"cluster"`
-		Net         NetConf          `json:"net" allow:"cluster"`
-		Timeout     TimeoutConf      `json:"timeout"`
 		Space       *SpaceConf       `json:"space,omitempty"`
 		Transport   *TransportConf   `json:"transport,omitempty" allow:"cluster"`
-		Memsys      MemsysConf       `json:"memsys"`
 		Disk        *DiskConf        `json:"disk,omitempty"`
 		FSHC        *FSHCConf        `json:"fshc,omitempty"`
 		Chunks      *ChunksConf      `json:"chunks,omitempty" allow:"cluster"`
@@ -138,11 +132,22 @@ type (
 		Periodic    *PeriodConf      `json:"periodic,omitempty" allow:"cluster"`
 		Client      *ClientConf      `json:"client,omitempty"`
 		Downloader  *DownloaderConf  `json:"downloader,omitempty"`
-		Features    feat.Flags       `json:"features,string" allow:"cluster"` // to flip assorted global defaults (see cmn/feat/feat and docs/feat*)
-		Version     int64            `json:"config_version,string"`
-		Versioning  VersionConf      `json:"versioning" allow:"cluster"`
-		Resilver    ResilverConf     `json:"resilver"`
+
+		// non-omittable value sections and metadata
+		Auth        AuthConf     `json:"auth" allow:"cluster"` // see cmn/gco fixup
+		Backend     BackendConf  `json:"backend" allow:"cluster"`
+		UUID        string       `json:"uuid"`
+		LastUpdated string       `json:"lastupdate_time"`
+		Proxy       ProxyConf    `json:"proxy" allow:"cluster"`
+		Net         NetConf      `json:"net" allow:"cluster"`
+		Timeout     TimeoutConf  `json:"timeout"`
+		Memsys      MemsysConf   `json:"memsys"`
+		Features    feat.Flags   `json:"features,string" allow:"cluster"` // to flip assorted global defaults (see cmn/feat/feat and docs/feat*)
+		Version     int64        `json:"config_version,string"`
+		Versioning  VersionConf  `json:"versioning" allow:"cluster"`
+		Resilver    ResilverConf `json:"resilver"`
 	}
+
 	// contains ClusterConfig and LocalConfig
 	ConfigToSet struct {
 		// ClusterConfig

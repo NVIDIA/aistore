@@ -11,6 +11,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+// Production bootstrap defaults for a generated cluster configuration.
+//
+// Before changing this list or any value below, read cmd/aisinit/README.md.
+// In particular, do not duplicate defaults that aisnode reconstructs through
+// default-omittable section hydration, and do not replace environment-specific
+// production tuning with generic cmn defaults.
+//
+// Every section below is retained explicitly as production bootstrap policy:
+// - non-omittable value sections whose intended settings cannot all be reconstructed from zero values
+// or
+// - settings whose correct values depend on the deployment environment.
 var (
 	defaultAuth = aiscmn.AuthConf{
 		Enabled: false,
@@ -19,27 +30,34 @@ var (
 	defaultNet = aiscmn.NetConf{
 		L4: aiscmn.L4Conf{
 			Proto:         "tcp",
-			SndRcvBufSize: 131072,
+			SndRcvBufSize: 128 * cos.KiB, // socket send/receive buffers
 		},
 		HTTP: aiscmn.HTTPConf{
-			UseHTTPS:               false,
-			Chunked:                true,
-			IdleConnTimeout:        cos.Duration(30 * time.Second),
-			BackendIdleConnTimeout: cos.Duration(aiscmn.DefaultIdleConnTimeout), // default 6s; configurable since 5.0 w/ no upper limit
-			MaxIdleConnsPerHost:    128,
-			MaxIdleConns:           4096,
+			UseHTTPS:            false,
+			Chunked:             true,
+			IdleConnTimeout:     cos.Duration(20 * time.Second),
+			MaxIdleConnsPerHost: 128,
+			MaxIdleConns:        4096,
 		},
 	}
 
+	// Environment-specific: production nodes and developer machines require
+	// different memory tuning.
 	defaultMemsys = aiscmn.MemsysConf{
-		MinFree:        cos.SizeIEC(6 * cos.GiB),
+		MinFree:        cos.SizeIEC(8 * cos.GiB),
 		DefaultBufSize: cos.SizeIEC(64 * cos.KiB),
-		SizeToGC:       cos.SizeIEC(6 * cos.GiB),
-		HousekeepTime:  cos.Duration(120 * time.Second),
+		SizeToGC:       cos.SizeIEC(8 * cos.GiB),
+		HousekeepTime:  cos.Duration(3 * time.Minute),
 	}
 
+	// Enabled-by-default bool sections cannot reconstruct their intended value
+	// from an all-zero struct.
 	defaultResilver = aiscmn.ResilverConf{
 		Enabled: true,
+	}
+	defaultVersioning = aiscmn.VersionConf{
+		Enabled:         true,
+		ValidateWarmGet: false,
 	}
 
 	defaultTimeout = aiscmn.TimeoutConf{
@@ -49,13 +67,6 @@ var (
 		Startup:         cos.Duration(time.Minute),
 		JoinAtStartup:   cos.Duration(3 * time.Minute),
 		SendFile:        cos.Duration(5 * time.Minute),
-		EcStreams:       cos.Duration(10 * time.Minute),
-		ObjectMD:        cos.Duration(2 * time.Hour),
-		ColdGetConflict: cos.Duration(5 * time.Second),
-	}
-	defaultVersioning = aiscmn.VersionConf{
-		Enabled:         true,
-		ValidateWarmGet: false,
 	}
 )
 

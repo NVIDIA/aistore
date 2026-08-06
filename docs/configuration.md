@@ -649,6 +649,11 @@ Once a section is fully default-hydrated:
 
 The goal is one owner per default, not a minimal initial file at the cost of deployment intent.
 
+**NOTE:**
+
+> For Kubernetes deployments, always deploy `aisinit` and `aisnode` from the same AIStore release/image tag. See related:
+> [Kubernetes bootstrap configuration and default ownership (`aisinit`)](https://github.com/NVIDIA/aistore/blob/main/cmd/aisinit/README.md)
+
 ### Compatibility and test checklist
 
 Sparse persistence changes what older binaries receive. Before adding an omittable section, determine how every release in the supported upgrade window treats its absence. An older validator may hydrate the same values, hydrate different values, accept zeros and run with unintended behavior, or refuse to start.
@@ -676,6 +681,7 @@ Coverage for any configuration change should include:
 
 ## Related documentation
 
+- [Kubernetes bootstrap configuration and default ownership (`aisinit`)](https://github.com/NVIDIA/aistore/blob/main/cmd/aisinit/README.md)
 - [CLI: configuration](/docs/cli/config.md)
 - [AIStore HTTP API](/docs/http_api.md)
 - [AIStore Networking Model](/docs/networking.md)
