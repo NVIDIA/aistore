@@ -30,24 +30,24 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.Method {
+	case http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut:
+	default:
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
+		return
+	}
+	// require Admin access (a no-op if AuthN is not used)
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+		return
+	}
+	switch r.Method {
 	case http.MethodPut:
-		// require Admin access (a no-op if AuthN is not used, here and elsewhere)
-		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
-			return
-		}
 		p.httpetlput(w, r)
 	case http.MethodPost:
 		p.httpetlpost(w, r)
 	case http.MethodGet:
 		p.httpetlget(w, r)
 	case http.MethodDelete:
-		// ditto
-		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
-			return
-		}
 		p.httpetldel(w, r)
-	default:
-		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
 	}
 }
 

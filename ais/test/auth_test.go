@@ -48,6 +48,23 @@ func expectStatus(t *testing.T, err error, status int) {
 	tassert.Fatalf(t, herr.Status == status, "expected %d, got %d", status, herr.Status)
 }
 
+func expectETLAccessDenied(t *testing.T, bp api.BaseParams, status int) {
+	t.Helper()
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{"delete", func() error { return api.ETLDelete(bp, "missing-etl") }},
+		{"get", func() error { _, err := api.ETLList(bp); return err }},
+		{"post-start", func() error { return api.ETLStart(bp, "missing-etl") }},
+		{"post-stop", func() error { return api.ETLStop(bp, "missing-etl") }},
+		{"put", func() error { _, err := api.ETLInit(bp, nil); return err }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) { expectStatus(t, test.run(), status) })
+	}
+}
+
 func TestAuth(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
 
@@ -93,6 +110,10 @@ func TestAuth(t *testing.T) {
 			_, err := api.GetClusterMap(userBP)
 			tassert.CheckFatal(t, err)
 		})
+		t.Run("etl-admin", func(t *testing.T) {
+			err := api.ETLStart(aisBP, "missing-etl")
+			expectStatus(t, err, http.StatusNotFound)
+		})
 	})
 
 	t.Run("forbidden", func(t *testing.T) {
@@ -103,6 +124,9 @@ func TestAuth(t *testing.T) {
 		t.Run("cluster", func(t *testing.T) {
 			err := api.DestroyBucket(userBP, bck)
 			expectStatus(t, err, http.StatusForbidden)
+		})
+		t.Run("etl", func(t *testing.T) {
+			expectETLAccessDenied(t, userBP, http.StatusForbidden)
 		})
 	})
 
@@ -118,6 +142,11 @@ func TestAuth(t *testing.T) {
 			bp.Token = "invalid"
 			_, err := api.HeadBucket(bp, bck, true)
 			expectStatus(t, err, http.StatusUnauthorized)
+		})
+		t.Run("etl", func(t *testing.T) {
+			bp := aisBP
+			bp.Token = ""
+			expectETLAccessDenied(t, bp, http.StatusUnauthorized)
 		})
 		t.Run("revoked", func(t *testing.T) {
 			tok, err := authn.LoginUser(authBP, uid, pass, nil)
