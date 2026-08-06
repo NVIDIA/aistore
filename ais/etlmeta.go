@@ -40,19 +40,6 @@ type (
 		get() (etlMD *etlMD)
 		putPersist(etlMD *etlMD, payload msPayload) error
 		persist(clone *etlMD, payload msPayload) error
-		modify(*etlMDModifier) (*etlMD, error)
-	}
-
-	etlMDModifier struct {
-		msg etl.InitMsg // interface
-
-		pre   func(ctx *etlMDModifier, clone *etlMD) (err error)
-		final func(ctx *etlMDModifier, clone *etlMD)
-
-		podMap  etl.PodMap
-		etlName string
-		stage   etl.Stage
-		wait    bool
 	}
 
 	etlMDOwnerBase struct {
@@ -194,28 +181,6 @@ func (eo *etlMDOwnerPrx) putPersist(etlMD *etlMD, payload msPayload) (err error)
 
 func (*etlMDOwnerPrx) persist(_ *etlMD, _ msPayload) (err error) { debug.Assert(false); return }
 
-func (eo *etlMDOwnerPrx) _pre(ctx *etlMDModifier) (clone *etlMD, err error) {
-	eo.Lock()
-	defer eo.Unlock()
-	etlMD := eo.get()
-	clone = etlMD.clone()
-	if err = ctx.pre(ctx, clone); err != nil {
-		return
-	}
-	err = eo.putPersist(clone, nil)
-	return
-}
-
-func (eo *etlMDOwnerPrx) modify(ctx *etlMDModifier) (clone *etlMD, err error) {
-	if clone, err = eo._pre(ctx); err != nil {
-		return
-	}
-	if ctx.final != nil {
-		ctx.final(ctx, clone)
-	}
-	return
-}
-
 ///////////////////
 // etlMDOwnerTgt //
 ///////////////////
@@ -266,11 +231,6 @@ func (*etlMDOwnerTgt) persist(clone *etlMD, payload msPayload) (err error) {
 	err = fmt.Errorf("failed to store %s on any of the mountpaths (%d)", clone, availCnt)
 	nlog.Errorln(err)
 	return
-}
-
-func (*etlMDOwnerTgt) modify(_ *etlMDModifier) (*etlMD, error) {
-	debug.Assert(false)
-	return nil, nil
 }
 
 //nolint:dupl // EtlMD vs BMD: similar code, different types

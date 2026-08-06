@@ -22,6 +22,38 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
+// EtlMD mutations are proxy-only. Keep their context and helpers with the ETL
+// proxy handlers so the upcoming `etl` build tag excludes the entire path.
+type etlMDModifier struct {
+	msg etl.InitMsg // interface
+
+	pre   func(ctx *etlMDModifier, clone *etlMD) (err error)
+	final func(ctx *etlMDModifier, clone *etlMD)
+
+	podMap  etl.PodMap
+	etlName string
+	stage   etl.Stage
+	wait    bool
+}
+
+func (p *proxy) preModifyEtlMD(ctx *etlMDModifier) (clone *etlMD, err error) {
+	eo := p.owner.etl
+	eo.Lock()
+	defer eo.Unlock()
+	clone = eo.get().clone()
+	if err = ctx.pre(ctx, clone); err == nil {
+		err = eo.putPersist(clone, nil)
+	}
+	return
+}
+
+func (p *proxy) modifyEtlMD(ctx *etlMDModifier) (clone *etlMD, err error) {
+	if clone, err = p.preModifyEtlMD(ctx); err == nil && ctx.final != nil {
+		ctx.final(ctx, clone)
+	}
+	return
+}
+
 // [METHOD] /v1/etl
 // ETL handler router - dispatches to specific HTTP method handlers
 func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +243,7 @@ func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 		etlName: etlName,
 		wait:    true,
 	}
-	if _, err := p.owner.etl.modify(ctx); err != nil {
+	if _, err := p.modifyEtlMD(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
@@ -233,7 +265,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 		stage: etl.Initializing,
 		wait:  true,
 	}
-	if _, err := p.owner.etl.modify(ctx); err != nil {
+	if _, err := p.modifyEtlMD(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
 
@@ -245,7 +277,9 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 	rxid, podMap, err := p.etlInitTxn(msg, xid, secret)
 	if err != nil { // if transaction fails, put etlMD to Aborted stage
 		ctx.stage = etl.Aborted
-		p.owner.etl.modify(ctx)
+		if _, errMD := p.modifyEtlMD(ctx); errMD != nil {
+			nlog.Errorf("failed to update etlMD for %s after init failure: %v", msg.Name(), errMD)
+		}
 		p.writeErr(w, r, err)
 		return
 	}
@@ -253,7 +287,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 	// 3. update etlMD to Running stage
 	ctx.stage = etl.Running
 	ctx.podMap = podMap
-	if _, err := p.owner.etl.modify(ctx); err != nil {
+	if _, err := p.modifyEtlMD(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
 
@@ -499,7 +533,7 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 		stage: etl.Aborted,
 		wait:  true,
 	}
-	if _, err := p.owner.etl.modify(ctx); err != nil {
+	if _, err := p.modifyEtlMD(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
@@ -551,7 +585,7 @@ func (ef *_etlFinalizer) cb(nl nl.Listener) {
 		stage: etl.Aborted,
 		wait:  true,
 	}
-	_, err := ef.p.owner.etl.modify(ctx)
+	_, err := ef.p.modifyEtlMD(ctx)
 	if err != nil {
 		nlog.Errorf("failed to update etlMD for %s: %v", ef.msg.Name(), err)
 	}
