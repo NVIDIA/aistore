@@ -13,15 +13,15 @@ The container performs two related jobs:
    networking information from the Kubernetes environment, and writes the
    node's local configuration.
 2. **Initial cluster configuration:** it starts with the production bootstrap
-   values in [`config.go`](config.go), hydrates canonical default-omittable
+   values in [`config.go`](config.go), hydrates default-omittable
    sections, applies the deployment-provided `ConfigToSet` override, validates
-   and re-canonicalizes the merged default-omittable sections, removes private
+   and rehydrates the merged default-omittable sections, removes private
    authentication material, and prunes wholly default sections before writing
    the resulting sparse configuration.
 
 Hydration before the merge is essential: a partial override must inherit the
-remaining canonical values of its section. Pruning afterward avoids copying
-those canonical defaults into deployment configuration and lets the running
+remaining default values of its section. Pruning afterward avoids copying
+those defaults into deployment configuration and lets the running
 AIStore version supply its current defaults.
 
 The generated cluster configuration is bootstrap input, not the cluster's
@@ -33,10 +33,10 @@ update a running cluster.
 ## Maintaining the hardcoded defaults
 
 The values in `config.go` are production bootstrap defaults, not a duplicate of
-every canonical default in `cmn/config.go`. Maintain them by reconciling three
+every AIStore default in `cmn/config.go`. Maintain them by reconciling three
 sources:
 
-1. **Canonical in-memory defaults:** values reconstructed by the corresponding
+1. **Current AIStore defaults:** values reconstructed by the corresponding
    `cmn` section's `Validate` method.
 2. **Production bootstrap defaults:** environment-sensitive values that
    `aisinit` must put into a newly generated configuration.
@@ -44,7 +44,7 @@ sources:
    settings, including site policy such as authentication, TLS, backends, and
    feature flags.
 
-Do not add a section here merely to spell out canonical defaults. When a
+Do not add a section here merely to spell out AIStore defaults. When a
 `ClusterConfig` section is pointer-backed, implements `defaultOmittable`, and
 its zero value validates to the complete intended default, leave it absent:
 `aisnode` will hydrate it. This keeps a single owner for the default and avoids
@@ -60,7 +60,7 @@ When changing configuration defaults:
 
 - compare `config.go` with current production configuration and deployment
   overrides;
-- determine whether the value is canonical or environment-specific;
+- determine whether the value is an AIStore default or environment-specific;
 - verify that a generated configuration loads and validates in `aisnode`;
 - review upgrade and downgrade implications when a section becomes sparse.
 

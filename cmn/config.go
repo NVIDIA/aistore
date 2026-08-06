@@ -2148,7 +2148,7 @@ func (c *ChunksConf) String() string {
 /////////////////////
 
 func (c *WritePolicyConf) Validate() (err error) {
-	// zero value denotes the canonical immediate policy
+	// zero value denotes the default immediate policy
 	if c.Data == "" {
 		c.Data = apc.WriteImmediate
 	}

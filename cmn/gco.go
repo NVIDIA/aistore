@@ -80,7 +80,7 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 // NOTE [backward compatibility] and pointerization of config sections =============================================
 //
 // When pointerizing additional sections:
-// - update the corresponding <section>.Validate() to normalize zero/unset fields to their canonical defaults;
+// - update the corresponding <section>.Validate() to normalize zero/unset fields to their AIStore defaults;
 // - review/skip fields where zero has an intentional user-visible meaning such as "disabled" or "" (for "none", etc).
 // - implement `defaultOmittable()` interface
 //
@@ -139,7 +139,7 @@ func (c *ClusterConfig) allocOmittables() {
 }
 
 // Allocate absent default-omittable sections and validate every section,
-// including those already present. This canonicalizes defaults before merging
+// including those already present. This applies defaults before merging
 // an override into the config.
 func (c *ClusterConfig) HydrateOmittables() (err error) {
 	c.rangeDefaultOmittable(func(_ *reflect.StructField, field reflect.Value) {
@@ -158,7 +158,7 @@ func (c *ClusterConfig) HydrateOmittables() (err error) {
 // The caller must invoke it only on a private copy (shallow is fine), never on the live config.
 //
 // A default-omittable section is removed when its validated value equals the
-// canonical defaults produced by validating a zero value. Any non-default
+// current AIStore default produced by validating a zero value. Any non-default
 // section remains unchanged, including its zero-valued fields.
 //
 // Configuration GET APIs (apc.WhatClusterConfig, apc.WhatNodeConfig)
