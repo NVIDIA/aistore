@@ -26,6 +26,7 @@ type SkipTestArgs struct {
 	MaxTargets            int
 	RequiresRemoteCluster bool
 	RequiresAuth          bool
+	RequiresETL           bool
 	RequiresTLS           bool
 	Long                  bool
 	RemoteBck             bool
@@ -52,6 +53,9 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	}
 	if args.RequiresAuth && LoggedUserToken == "" {
 		tb.Skipf("%s requires authentication token", tb.Name())
+	}
+	if args.RequiresETL && !etlBuilt {
+		tb.Skipf("%s requires an ETL-enabled build", tb.Name())
 	}
 	if args.RequiresTLS && !cos.IsHTTPS(proxyURLReadOnly) {
 		tb.Skipf("%s requires TLS cluster deployment", tb.Name())

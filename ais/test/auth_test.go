@@ -112,6 +112,7 @@ func TestAuth(t *testing.T) {
 			tassert.CheckFatal(t, err)
 		})
 		t.Run("etl-admin", func(t *testing.T) {
+			tools.CheckSkip(t, &tools.SkipTestArgs{RequiresETL: true})
 			err := api.ETLStart(aisBP, "missing-etl")
 			expectStatus(t, err, http.StatusNotFound)
 		})
@@ -127,6 +128,7 @@ func TestAuth(t *testing.T) {
 			expectStatus(t, err, http.StatusForbidden)
 		})
 		t.Run("etl", func(t *testing.T) {
+			tools.CheckSkip(t, &tools.SkipTestArgs{RequiresETL: true})
 			expectETLAccessDenied(t, userBP, http.StatusForbidden)
 		})
 	})
@@ -145,6 +147,7 @@ func TestAuth(t *testing.T) {
 			expectStatus(t, err, http.StatusUnauthorized)
 		})
 		t.Run("etl", func(t *testing.T) {
+			tools.CheckSkip(t, &tools.SkipTestArgs{RequiresETL: true})
 			bp := aisBP
 			bp.Token = ""
 			expectETLAccessDenied(t, bp, http.StatusUnauthorized)
