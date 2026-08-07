@@ -856,15 +856,37 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (x
 	return strings.Join(all, xact.SepaID), nil
 }
 
-// via prxclu rmNode()
-func (p *proxy) beginRmTarget(si *meta.Snode, msg *apc.ActMsg) error {
-	debug.Assert(si.IsTarget(), si.StringEx())
-
+// distributed preflight before a node lifecycle action triggers global rebalance
+// (for stop-maintenance, returning targets must also be checked)
+func (p *proxy) checkRebCoexistence(msg *apc.ActMsg, returning meta.Nodes) error {
 	c := &txnCln{p: p}
 	c.init(msg, nil, "" /*uuid*/, false /*waitmsync*/)
+	if len(returning) > 0 {
+		selected := make(meta.Nodes, 0, c.smap.CountActiveTs()+len(returning))
+		for _, si := range c.smap.Tmap {
+			if !si.InMaintOrDecomm() {
+				selected = append(selected, si)
+			}
+		}
+		for _, node := range returning {
+			si := c.smap.GetTarget(node.ID())
+			if si != nil && si.InMaintOrDecomm() {
+				selected = append(selected, si)
+			}
+		}
+		if len(selected) > 0 {
+			c.selected = selected
+		}
+	}
 
-	// begin
-	return c.begin(si)
+	results := c.bcast(apc.Begin2PC, c.timeout.netw)
+	defer freeBcastRes(results)
+	for _, res := range results {
+		if res.err != nil {
+			return res.toErr()
+		}
+	}
+	return nil
 }
 
 // destroy bucket: { begin -- commit }

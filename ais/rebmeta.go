@@ -224,8 +224,8 @@ func rmdSync(m *rmdModifier, clone *rebMD) {
 // see `receiveRMD` (upon termination, notify IC)
 func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	var (
-		tsi  *meta.Snode // case: apc.ActStopMaintenance
-		tids []string    // case: apc.ActSelfJoinTarget
+		tsis meta.Nodes // case: apc.ActStopMaintenance
+		tids []string   // case: apc.ActSelfJoinTarget
 
 		nl        *xact.NotifXactListener
 		notifiers meta.NodeMap
@@ -245,17 +245,17 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 		notifiers[m.smapCtx.nsi.ID()] = m.smapCtx.nsi
 
 	case apc.ActStopMaintenance:
-		// manually add (maintenance => active) target to notifiers
-		debug.AssertNoErr(cos.ValidateDaemonID(m.smapCtx.sid))
-
-		si := m.smapCtx.smap.GetNode(m.smapCtx.sid)
-		debug.Assertf(si != nil, "%s: missing %s in %s", apc.ActStopMaintenance, m.smapCtx.sid, m.smapCtx.smap.StringEx())
-
+		// manually add (maintenance => active) targets to notifiers
 		notifiers = m.smapCtx.smap.Tmap.ActiveMap()
-		if si != nil && si.IsTarget() {
-			// as far as rebalancing, proxy stop-maintenance is inconsequential
-			tsi = si
-			notifiers[tsi.ID()] = tsi
+		for _, sid := range m.smapCtx.nodeIDs() {
+			debug.AssertNoErr(cos.ValidateDaemonID(sid))
+			si := m.smapCtx.smap.GetNode(sid)
+			debug.Assertf(si != nil, "%s: missing %s in %s", apc.ActStopMaintenance, sid, m.smapCtx.smap.StringEx())
+			if si != nil && si.IsTarget() {
+				// as far as rebalancing, proxy stop-maintenance is inconsequential
+				tsis = append(tsis, si)
+				notifiers[si.ID()] = si
+			}
 		}
 	}
 	//
@@ -270,13 +270,16 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 		nl.F = cb
 	}
 
-	if tsi != nil {
+	for _, tsi := range tsis {
 		// apc.ActStopMaintenance: the target is transitioning: maintenance => active
 		// - the target is excluded from nl.ActiveSrsc via NewNLB=>ActiveSrcs=>ActiveMap() construction
 		// - add it back
 		nl.ActiveSrcs[tsi.ID()] = tsi
 	}
-
+	if cmn.Rom.V(4, cos.ModAIS) {
+		nlog.Infoln("rmd.listen:", action, "nodes:", m.smapCtx.nodeIDs(),
+			"reb:", m.rebID, "notifiers:", len(nl.Notifiers()), "active:", nl.ActiveCount())
+	}
 	err := m.p.notifs.add(nl)
 	debug.AssertNoErr(err)
 }
@@ -284,24 +287,34 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 // deactivate or remove node from the cluster (as per msg.Action)
 // called when rebalance is done
 func (m *rmdModifier) postRm(nl nl.Listener) {
-	var (
-		p     = m.p
-		tsi   = m.smapCtx.smap.GetNode(m.smapCtx.sid)
-		sname = tsi.StringEx()
-		xname = "rebalance[" + nl.UUID() + "]"
-		smap  = p.owner.smap.get()
-		ntsi  = smap.GetNode(m.smapCtx.sid) // with updated flags
-		warn  = "remove " + sname + " from the current "
-	)
-	if ntsi != nil && (ntsi.Flags.IsSet(meta.SnodeMaint) || ntsi.Flags.IsSet(meta.SnodeMaintPostReb)) {
-		warn = "mark " + sname + " for maintenance mode in the current "
+	if cmn.Rom.V(4, cos.ModAIS) {
+		nlog.Infoln("rmd.postRm:", m.smapCtx.msg.Action, "nodes:", m.smapCtx.nodeIDs(), "reb:", nl.UUID(), "errors:", nl.ErrCnt())
 	}
-	warn += smap.StringEx()
-	debug.Assert(nl.UUID() == m.rebID && tsi.IsTarget())
+	var (
+		p      = m.p
+		smap   = p.owner.smap.get()
+		nodes  = make(meta.Nodes, 0, len(m.smapCtx.nodeIDs()))
+		xname  = "rebalance[" + nl.UUID() + "]"
+		prefix = "remove "
+	)
+	for _, sid := range m.smapCtx.nodeIDs() {
+		si := m.smapCtx.smap.GetNode(sid)
+		debug.Assertf(si != nil, "missing %s in %s", sid, m.smapCtx.smap.StringEx())
+		if si != nil {
+			nodes = append(nodes, si)
+		}
+	}
+	if m.smapCtx.msg.Action == apc.ActStartMaintenance || m.smapCtx.msg.Action == apc.ActShutdownNode {
+		prefix = "mark " + snodeNames(nodes) + " for maintenance mode in the current "
+	} else {
+		prefix += snodeNames(nodes) + " from the current "
+	}
+	warn := prefix + smap.StringEx()
+	debug.Assert(nl.UUID() == m.rebID)
 
 	if nl.ErrCnt() == 0 {
 		nlog.Infoln("post-rebalance commit:", warn)
-		if _, err := p.rmNodeFinal(m.smapCtx.msg, tsi, m.smapCtx); err != nil {
+		if _, err := p.rmNodesFinal(m.smapCtx.msg, nodes, m.smapCtx); err != nil {
 			nlog.Errorln(err)
 		}
 		return
@@ -322,7 +335,7 @@ func (m *rmdModifier) postRm(nl nl.Listener) {
 
 	// go ahead to decommission anyway
 	nlog.Errorf("given %q operation and despite [%v] - proceeding to %s", m.smapCtx.msg.Action, nlerr, warn)
-	if _, err := p.rmNodeFinal(m.smapCtx.msg, tsi, m.smapCtx); err != nil {
+	if _, err := p.rmNodesFinal(m.smapCtx.msg, nodes, m.smapCtx); err != nil {
 		nlog.Errorln(err)
 	}
 

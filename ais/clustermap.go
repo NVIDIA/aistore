@@ -85,6 +85,7 @@ type (
 		nsi         *meta.Snode  // new node to be added
 		nid         string       // node ID of the candidate primary
 		sid         string       // ID of the node to modify
+		sids        []string     // IDs of nodes to modify as one operation
 		flags       cos.BitFlags // enum cmn.Snode* to set or clear
 		nver        int64        // new Smap version (cloned and modified `smap` - see above)
 		status      int          // resulting http.Status*
@@ -103,6 +104,16 @@ var (
 	_ meta.Sowner        = (*smapOwner)(nil)
 	_ meta.SmapListeners = (*sls)(nil)
 )
+
+func (ctx *smapModifier) nodeIDs() []string {
+	if len(ctx.sids) > 0 {
+		return ctx.sids
+	}
+	if ctx.sid != "" {
+		return []string{ctx.sid}
+	}
+	return nil
+}
 
 // as revs
 func (*smapX) tag() string       { return revsSmapTag }

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1062,7 +1063,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 		}
 
 		var s string
-		if opts.DaemonID == t.SID() {
+		if slices.Contains(opts.Sids(), t.SID()) {
 			s = " (to subsequently deactivate or remove _this_ target)"
 		}
 		nlog.Infoln(tname, "starting", msg.String(), "-triggered", xname, s, opts)

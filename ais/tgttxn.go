@@ -197,8 +197,8 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		xid, err = t.ecEncode(c)
 	case apc.ActArchive:
 		xid, err = t.createArchMultiObj(c)
-	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode:
-		err = t.beginRm(c)
+	case apc.ActStartMaintenance, apc.ActStopMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode:
+		err = t.checkRebCoexistence(c)
 	case apc.ActDestroyBck, apc.ActEvictRemoteBck:
 		err = t.destroyBucket(c)
 	case apc.ActPromote:
@@ -955,16 +955,12 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 }
 
 //
-// begin (maintenance -- decommission -- shutdown) via p.beginRmTarget
+// distributed preflight before a node lifecycle action triggers global rebalance
 //
 
-func (t *target) beginRm(c *txnSrv) error {
-	var opts apc.ActValRmNode
+func (t *target) checkRebCoexistence(c *txnSrv) error {
 	if c.phase != apc.Begin2PC {
 		return fmt.Errorf("%s: expecting begin phase, got %q", t, c.phase)
-	}
-	if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
-		return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 	}
 	return xreg.LimitedCoexistence(t.si, nil, c.msg.Action)
 }

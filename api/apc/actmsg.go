@@ -170,13 +170,24 @@ type (
 		Name   string `json:"name"`   // action-specific info of any kind (not necessarily "name")
 	}
 	ActValRmNode struct {
-		DaemonID          string `json:"sid"`
-		SkipRebalance     bool   `json:"skip_rebalance"`
-		RmUserData        bool   `json:"rm_user_data"`        // decommission-only
-		KeepInitialConfig bool   `json:"keep_initial_config"` // ditto (to be able to restart a node from scratch)
-		NoShutdown        bool   `json:"no_shutdown"`
+		DaemonID          string   `json:"sid"`
+		DaemonIDs         []string `json:"sids,omitempty"`
+		SkipRebalance     bool     `json:"skip_rebalance"`
+		RmUserData        bool     `json:"rm_user_data"`        // decommission-only
+		KeepInitialConfig bool     `json:"keep_initial_config"` // ditto (to be able to restart a node from scratch)
+		NoShutdown        bool     `json:"no_shutdown"`
 	}
 )
+
+func (v *ActValRmNode) Sids() []string {
+	if len(v.DaemonIDs) > 0 {
+		return v.DaemonIDs
+	}
+	if v.DaemonID != "" {
+		return []string{v.DaemonID}
+	}
+	return nil
+}
 
 type (
 	JoinNodeResult struct {

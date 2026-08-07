@@ -209,15 +209,15 @@ var (
 					{
 						Name:         cmdStartMaint,
 						Usage:        "Put node in maintenance mode, temporarily suspend its operation",
-						ArgsUsage:    nodeIDArgument,
+						ArgsUsage:    nodeIDsArgument,
 						Flags:        sortFlags(clusterCmdsFlags[cmdStartMaint]),
 						Action:       nodeMaintShutDecommHandler,
-						BashComplete: suggestAllNodes,
+						BashComplete: suggestAllNodesMulti,
 					},
 					{
 						Name:         cmdStopMaint,
 						Usage:        "Take node out of maintenance mode - activate",
-						ArgsUsage:    nodeIDArgument,
+						ArgsUsage:    nodeIDsArgument,
 						Flags:        sortFlags(clusterCmdsFlags[cmdStopMaint]),
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestNodesInMaint,
@@ -225,18 +225,18 @@ var (
 					{
 						Name:         cmdNodeDecommission,
 						Usage:        "Safely and permanently remove node from the cluster",
-						ArgsUsage:    nodeIDArgument,
+						ArgsUsage:    nodeIDsArgument,
 						Flags:        sortFlags(clusterCmdsFlags[cmdNodeDecommission+".node"]),
 						Action:       nodeMaintShutDecommHandler,
-						BashComplete: suggestAllNodes,
+						BashComplete: suggestAllNodesMulti,
 					},
 					{
 						Name:         cmdShutdown,
 						Usage:        shutdownUsage,
-						ArgsUsage:    nodeIDArgument,
+						ArgsUsage:    nodeIDsArgument,
 						Flags:        sortFlags(clusterCmdsFlags[cmdShutdown+".node"]),
 						Action:       nodeMaintShutDecommHandler,
-						BashComplete: suggestAllNodes,
+						BashComplete: suggestAllNodesMulti,
 					},
 				},
 			},
@@ -438,27 +438,60 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	node, sname, err := getNode(c, c.Args().Get(0))
-	if err != nil {
-		return err
-	}
 	action := c.Command.Name
-	if smap.IsPrimary(node) {
-		return fmt.Errorf("%s is primary (cannot %s the primary node)", sname, action)
+	var (
+		nodeArgs  = make([]string, 0, c.NArg())
+		hasTarget bool
+	)
+	for _, arg := range c.Args() {
+		for _, nodeArg := range splitCsv(arg) {
+			if nodeArg != "" {
+				nodeArgs = append(nodeArgs, nodeArg)
+			}
+		}
+	}
+	if len(nodeArgs) == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	var (
+		snames    = make([]string, 0, len(nodeArgs))
+		daemonIDs = make([]string, 0, len(nodeArgs))
+		seen      = make(map[string]struct{}, len(nodeArgs))
+	)
+	for _, nodeArg := range nodeArgs {
+		node, sname, err := getNode(c, nodeArg)
+		if err != nil {
+			return err
+		}
+		if smap.IsPrimary(node) {
+			return fmt.Errorf("%s is primary (cannot %s the primary node)", sname, action)
+		}
+		if _, ok := seen[node.ID()]; ok {
+			return fmt.Errorf("%s is specified more than once", sname)
+		}
+		seen[node.ID()] = struct{}{}
+		snames = append(snames, sname)
+		daemonIDs = append(daemonIDs, node.ID())
+		hasTarget = hasTarget || node.IsTarget()
 	}
 	var (
 		xid               string
-		skipRebalance     = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
+		sname             = strings.Join(snames, ", ")
+		skipRebalance     = flagIsSet(c, noRebalanceFlag) || !hasTarget
 		noShutdown        = flagIsSet(c, noShutdownFlag)
 		rmUserData        = flagIsSet(c, rmUserDataFlag)
 		keepInitialConfig = flagIsSet(c, keepInitialConfigFlag)
 		actValue          = &apc.ActValRmNode{
-			DaemonID:      node.ID(),
 			SkipRebalance: skipRebalance,
 			NoShutdown:    noShutdown,
 		}
 	)
-	if skipRebalance && node.IsTarget() {
+	if len(daemonIDs) == 1 {
+		actValue.DaemonID = daemonIDs[0]
+	} else {
+		actValue.DaemonIDs = daemonIDs
+	}
+	if skipRebalance && hasTarget {
 		warn := fmt.Sprintf("executing %q _and_ not running global rebalance may lead to a loss of data!", action)
 		actionWarn(c, warn)
 		fmt.Fprintln(c.App.Writer,
@@ -517,27 +550,29 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if xid != "" {
 		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xid)
 	}
-	switch action {
-	case cmdStopMaint:
-		fmt.Fprintf(c.App.Writer, "%s is now active\n", sname)
-	case cmdNodeDecommission:
-		if skipRebalance || node.IsProxy() {
-			fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", sname)
-		} else {
-			fmt.Fprintf(c.App.Writer,
-				"%s is being decommissioned, please wait for cluster rebalancing to finish...\n", sname)
+	for _, sname := range snames {
+		switch action {
+		case cmdStopMaint:
+			fmt.Fprintf(c.App.Writer, "%s is now active\n", sname)
+		case cmdNodeDecommission:
+			if skipRebalance {
+				fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", sname)
+			} else {
+				fmt.Fprintf(c.App.Writer,
+					"%s is being decommissioned, please wait for cluster rebalancing to finish...\n", sname)
+			}
+		case cmdShutdown:
+			if skipRebalance {
+				fmt.Fprintf(c.App.Writer, "%s has been shut down\n", sname)
+			} else {
+				fmt.Fprintf(c.App.Writer,
+					"%s is shutting down, please wait for cluster rebalancing to finish\n", sname)
+			}
+			fmt.Fprintf(c.App.Writer, "\nNote: the node %s is _not_ decommissioned - it remains in the cluster map and can be manually\n", sname)
+			fmt.Fprintf(c.App.Writer, "restarted at any later time (and subsequently activated via '%s' operation).\n", cmdStopMaint)
+		case cmdStartMaint:
+			fmt.Fprintf(c.App.Writer, "%s is now in maintenance mode\n", sname)
 		}
-	case cmdShutdown:
-		if skipRebalance || node.IsProxy() {
-			fmt.Fprintf(c.App.Writer, "%s has been shut down\n", sname)
-		} else {
-			fmt.Fprintf(c.App.Writer,
-				"%s is shutting down, please wait for cluster rebalancing to finish\n", sname)
-		}
-		fmt.Fprintf(c.App.Writer, "\nNote: the node %s is _not_ decommissioned - it remains in the cluster map and can be manually\n", sname)
-		fmt.Fprintf(c.App.Writer, "restarted at any later time (and subsequently activated via '%s' operation).\n", cmdStopMaint)
-	case cmdStartMaint:
-		fmt.Fprintf(c.App.Writer, "%s is now in maintenance mode\n", sname)
 	}
 	return nil
 }

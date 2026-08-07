@@ -259,6 +259,8 @@ func suggestTargets(c *cli.Context)  { suggestNode(c, allTargets) }
 func suggestProxies(c *cli.Context)  { suggestNode(c, allProxies) }
 func suggestAllNodes(c *cli.Context) { suggestNode(c, allNodes) }
 
+func suggestAllNodesMulti(c *cli.Context) { suggestNodeMulti(c, allNodes, false /*inMaint*/) }
+
 func suggestNode(c *cli.Context, ty int) {
 	smap, err := getClusterMap(c)
 	if err != nil {
@@ -281,22 +283,42 @@ func suggestNode(c *cli.Context, ty int) {
 }
 
 func suggestNodesInMaint(c *cli.Context) {
+	suggestNodeMulti(c, allNodes, true /*inMaint*/)
+}
+
+func suggestNodeMulti(c *cli.Context, ty int, inMaint bool) {
 	smap, err := getClusterMap(c)
 	if err != nil {
 		completionErr(c, err)
 		return
 	}
-	if _, _, err = getNode(c, argLast(c)); err == nil {
-		return // node already selected
-	}
-	for _, psi := range smap.Pmap {
-		if psi.InMaint() {
-			fmt.Println(meta.Pname(psi.ID()))
+	selected := make(map[string]struct{}, c.NArg())
+	for _, arg := range c.Args() {
+		for _, nodeArg := range splitCsv(arg) {
+			if strings.HasPrefix(nodeArg, meta.TnamePrefix) || strings.HasPrefix(nodeArg, meta.PnamePrefix) {
+				nodeArg = meta.N2ID(nodeArg)
+			}
+			selected[nodeArg] = struct{}{}
 		}
 	}
-	for _, tsi := range smap.Tmap {
-		if tsi.InMaint() {
-			fmt.Println(meta.Tname(tsi.ID()))
+	var prefix string
+	if last := argLast(c); strings.Contains(last, ",") {
+		prefix = last[:strings.LastIndexByte(last, ',')+1]
+	}
+	printNode := func(si *meta.Snode) {
+		if _, ok := selected[si.ID()]; ok || (inMaint && !si.InMaint()) {
+			return
+		}
+		fmt.Println(prefix + si.StringEx())
+	}
+	if ty != allTargets {
+		for _, psi := range smap.Pmap {
+			printNode(psi)
+		}
+	}
+	if ty != allProxies {
+		for _, tsi := range smap.Tmap {
+			printNode(tsi)
 		}
 	}
 }

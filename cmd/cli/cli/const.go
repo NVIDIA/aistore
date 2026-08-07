@@ -374,6 +374,7 @@ const (
 
 	// nodes
 	nodeIDArgument            = "NODE_ID"
+	nodeIDsArgument           = "NODE_ID [NODE_ID...]"
 	optionalNodeIDArgument    = "[NODE_ID]"
 	targetIDArgument          = "TARGET_ID"
 	optionalTargetIDArgument  = "[TARGET_ID]"
