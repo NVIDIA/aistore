@@ -35,7 +35,7 @@ import (
 // - speed-up `ls` via multiple workers
 
 const (
-	logFname           = ".ais-scrub-%s.%x.log"
+	logFname           = ".ais-scrub-%s.*.log"
 	logTitleDflt       = "Name,Size"
 	logTitleVerChanged = "Name,Size,Custom"
 	logTitleMisplaced  = "Name,Size,Atime,Location"
@@ -79,7 +79,6 @@ type (
 		logs       [teb.ScrNumStats]_log
 		progLine   cos.SB
 		numBcks    int
-		pid        int
 		haveRemote atomic.Bool
 	}
 )
@@ -167,8 +166,6 @@ func scrubHandler(c *cli.Context) (err error) {
 	if errN != nil {
 		return V(err)
 	}
-
-	ctx.pid = os.Getpid()
 
 	ctx.iniLogs()
 
@@ -495,13 +492,12 @@ func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 }
 
 // NOTE: exit upon (unlikely) failure
-func (*scrBp) _create(log *_log, pid int) {
-	fn := fmt.Sprintf(logFname, log.tag, pid)
-	log.fn = filepath.Join(os.TempDir(), fn)
-	fh, err := cos.CreateFile(log.fn)
+func (*scrBp) _create(log *_log) {
+	fh, err := os.CreateTemp("", fmt.Sprintf(logFname, log.tag))
 	if err != nil {
 		exitln("failed to create scrub log:", err)
 	}
+	log.fn = fh.Name()
 	log.fh = fh
 }
 
@@ -512,7 +508,7 @@ func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 	}
 	if log.fh == nil {
 		log.tag = strings.ToLower(teb.ScrCols[i])
-		scr._create(log, parent.pid)
+		scr._create(log)
 		fmt.Fprintln(log.fh, log.title)
 		fmt.Fprintln(log.fh, strings.Repeat("=", len(log.title)))
 	}

@@ -158,7 +158,12 @@ func _getAllClusterLogs(c *cli.Context, sev, outFile string) error {
 	if outFile == stdInOut {
 		return errors.New("cannot download archived logs to standard output")
 	}
-	if outFile != "" {
+	if outFile == "" {
+		outFile, err = os.MkdirTemp("", "aislogs-")
+		if err != nil {
+			return fmt.Errorf("failed to create temporary log directory: %v", err)
+		}
+	} else {
 		finfo, err := os.Stat(outFile)
 		switch {
 		case err == nil:
@@ -208,8 +213,9 @@ func _getAllNodeLogs(c *cli.Context, node *meta.Snode, sev, outFile, sname strin
 	case stdInOut:
 		return errors.New("cannot download all node's .tar.gz log archives to standard output")
 	case "": // create temp dir
-		tempdir = filepath.Join(os.TempDir(), "aislogs")
-		if err := cos.CreateDir(tempdir); err != nil {
+		var err error
+		tempdir, err = os.MkdirTemp("", "aislogs-")
+		if err != nil {
 			return fmt.Errorf("failed to create temp dir %s: %v", tempdir, err)
 		}
 		fname = apc.Target + "-" + node.ID() + archive.ExtTarGz

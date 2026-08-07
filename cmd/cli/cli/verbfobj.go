@@ -194,14 +194,16 @@ func (p *uparams) do(c *cli.Context) error {
 		fmt.Fprint(c.App.Writer, u.errSb.String())
 	}
 	if numFailed := u.errCount.Load(); numFailed > 0 {
-		fn := fmt.Sprintf(".ais-%s-failures.%d.log", strings.ToLower(p.wop.verb()), os.Getpid())
-		fn = filepath.Join(os.TempDir(), fn)
-		fh, err := cos.CreateFile(fn)
-		if err == nil {
-			for failedPath := range u.errCh {
-				fmt.Fprintln(fh, failedPath)
-			}
-			fh.Close()
+		pattern := fmt.Sprintf(".ais-%s-failures.*.log", strings.ToLower(p.wop.verb()))
+		fh, err := os.CreateTemp("", pattern)
+		if err != nil {
+			return fmt.Errorf("failed to %s %d file%s (failed to create failure log: %v)",
+				p.wop.verb(), numFailed, cos.Plural(int(numFailed)), err)
+		}
+		fn := fh.Name()
+		if err := writeFailureLog(fh, u.errCh); err != nil {
+			return fmt.Errorf("failed to %s %d file%s (failure log %q: %w)",
+				p.wop.verb(), numFailed, cos.Plural(int(numFailed)), fn, err)
 		}
 		return fmt.Errorf("failed to %s %d file%s (%q)", p.wop.verb(), numFailed, cos.Plural(int(numFailed)), fn)
 	}
@@ -213,6 +215,16 @@ func (p *uparams) do(c *cli.Context) error {
 		}
 	}
 	return nil
+}
+
+func writeFailureLog(fh *os.File, failedPaths <-chan string) error {
+	for failedPath := range failedPaths {
+		if _, err := fmt.Fprintln(fh, failedPath); err != nil {
+			_ = fh.Close()
+			return err
+		}
+	}
+	return fh.Close()
 }
 
 func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, skipVC, isTout bool) (err error) {
