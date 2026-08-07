@@ -430,12 +430,7 @@ func (p *proxy) access(r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err
 	}
 	claims, err := p.validateToken(r.Context(), r.Header)
 	if err != nil {
-		// NOTE: making exception to allow 3rd party clients read remote ht://bucket
-		if errors.Is(err, tok.ErrNoToken) && bck != nil && bck.IsHT() {
-			err = nil
-		} else {
-			nlog.Warningln("token validation failed:", err)
-		}
+		nlog.Warningln("token validation failed:", err)
 		return err
 	}
 	return p.checkTokenAccess(claims, bck, ace)

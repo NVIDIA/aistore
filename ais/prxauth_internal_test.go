@@ -8,12 +8,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -53,6 +58,27 @@ func newMockTokenParser() *mockTokenParser {
 		validateMap: make(map[string]error),
 		claimsMap:   make(map[string]*tok.AISClaims),
 	}
+}
+
+func TestAuth_AccessHTRequiresToken(t *testing.T) {
+	old := cmn.GCO.Get()
+	t.Cleanup(func() {
+		cmn.GCO.Put(old)
+		cmn.Rom.Set(&old.ClusterConfig)
+	})
+
+	config := cmn.GCO.BeginUpdate()
+	config.Auth.Enabled = true
+	cmn.GCO.CommitUpdate(config)
+	cmn.Rom.Set(&config.ClusterConfig)
+
+	p := &proxy{htrun: htrun{statsT: mock.NewStatsTracker()}}
+	bck := meta.NewBck("example.com", apc.HT, cmn.NsGlobal)
+	req := &http.Request{Header: make(http.Header)}
+
+	err := p.access(req, bck, apc.AceGET)
+	tassert.Errorf(t, errors.Is(err, tok.ErrNoToken), "expected ErrNoToken, got %v", err)
+	tassert.Errorf(t, aceErrToCode(err) == http.StatusUnauthorized, "expected HTTP 401, got %d", aceErrToCode(err))
 }
 
 func TestAuth_Manager_UpdateRevokedList_AddsRevokedTokens(t *testing.T) {
