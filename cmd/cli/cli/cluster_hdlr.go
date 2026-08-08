@@ -34,9 +34,40 @@ const getCluLogsUsage = "Download log archives from all clustered nodes (one TAR
 	indent1 + "see related:\n" +
 	indent1 + "\t - 'ais log get --help'"
 
-const shutdownUsage = "Shutdown a node, gracefully or immediately.\n" +
+const membershipUsage = "Manage cluster membership: add nodes, remove them temporarily or permanently.\n" +
+	indent1 + "All lifecycle subcommands, with the single exception of 'join', accept 'NODE_ID [NODE_ID...]' - a batch of nodes,\n" +
+	indent1 + "comma- or space-separated - and execute it as one coordinated operation.\n" +
+	indent1 + "When required, the cluster runs one global rebalance for the whole batch."
+
+const startMaintUsage = "Put one or more nodes in maintenance mode, temporarily suspending their operation.\n" +
+	indent1 + "Nodes in maintenance remain in the cluster map; use 'stop-maintenance' to reactivate.\n" +
+	indent1 + "\te.g.:\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdStartMaint + " t[QrmZvKdN]'\t- single target;\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdStartMaint + " t[QrmZvKdN] t[HbjTwLpS]'\t- two targets, one rebalance for the batch;\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdStartMaint + " QrmZvKdN,HbjTwLpS'\t- same, comma-separated;\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdStartMaint + " <TAB-TAB>'\t- tab-complete remaining (not yet selected) nodes.\n" +
+	indent1 + "Note: the request is rejected while global rebalance is running; see 'ais show rebalance'."
+
+const stopMaintUsage = "Take one or more nodes out of maintenance mode - activate.\n" +
+	indent1 + "Runs at most one global rebalance for the entire batch.\n" +
+	indent1 + "\te.g.:\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdStopMaint + " t[QrmZvKdN] t[HbjTwLpS]'\t- reactivate both, one rebalance;\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdStopMaint + " <TAB-TAB>'\t- tab-complete remaining nodes currently in maintenance.\n" +
+	indent1 + "Note: if a node was shut down, restart it first and let it re-register with the primary."
+
+const decommissionNodeUsage = "Safely and permanently remove one or more nodes from the cluster.\n" +
+	indent1 + "The operation cannot be undone: a decommissioned node must be re-joined or redeployed.\n" +
+	indent1 + "\te.g.:\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdNodeDecommission + " t[QrmZvKdN] t[HbjTwLpS]'\t- both, one rebalance for the batch;\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdNodeDecommission + " QrmZvKdN,HbjTwLpS --rm-user-data --yes'\t- same, also remove user data.\n" +
+	indent1 + "Note: the request is rejected while global rebalance is running; see 'ais show rebalance'."
+
+const shutdownUsage = "Shutdown one or more nodes, gracefully or immediately.\n" +
 	indent1 + "\tNote: upon shutdown, the node won't be decommissioned - it'll remain in the cluster map\n" +
 	indent1 + "\tand can be manually restarted to rejoin the cluster at any later time;\n" +
+	indent1 + "\tAccepts a batch: 'NODE_ID [NODE_ID...]', comma- or space-separated - one rebalance for all.\n" +
+	indent1 + "\te.g.:\n" +
+	indent1 + "\t- 'ais cluster " + cmdMembership + " " + cmdShutdown + " t[QrmZvKdN] t[HbjTwLpS] --yes'\t- shut down both with one rebalance;\n" +
 	indent1 + "\tsee also: 'ais advanced " + cmdRmSmap + "'"
 
 const setPrimaryUsage = "Select a new primary proxy/gateway.\n" +
@@ -197,7 +228,7 @@ var (
 			// node level
 			{
 				Name:  cmdMembership,
-				Usage: "Manage cluster membership (add/remove nodes, temporarily or permanently)",
+				Usage: membershipUsage,
 				Subcommands: []cli.Command{
 					{
 						Name:      cmdJoin,
@@ -208,7 +239,7 @@ var (
 					},
 					{
 						Name:         cmdStartMaint,
-						Usage:        "Put node in maintenance mode, temporarily suspend its operation",
+						Usage:        startMaintUsage,
 						ArgsUsage:    nodeIDsArgument,
 						Flags:        sortFlags(clusterCmdsFlags[cmdStartMaint]),
 						Action:       nodeMaintShutDecommHandler,
@@ -216,7 +247,7 @@ var (
 					},
 					{
 						Name:         cmdStopMaint,
-						Usage:        "Take node out of maintenance mode - activate",
+						Usage:        stopMaintUsage,
 						ArgsUsage:    nodeIDsArgument,
 						Flags:        sortFlags(clusterCmdsFlags[cmdStopMaint]),
 						Action:       nodeMaintShutDecommHandler,
@@ -224,7 +255,7 @@ var (
 					},
 					{
 						Name:         cmdNodeDecommission,
-						Usage:        "Safely and permanently remove node from the cluster",
+						Usage:        decommissionNodeUsage,
 						ArgsUsage:    nodeIDsArgument,
 						Flags:        sortFlags(clusterCmdsFlags[cmdNodeDecommission+".node"]),
 						Action:       nodeMaintShutDecommHandler,

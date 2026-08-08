@@ -335,6 +335,73 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, join
 	return nil
 }
 
+// rebalance's `can`: factors not including cluster map
+func (p *proxy) canRebalance(smap *smapX, cleanup bool) error {
+	if nlog.Stopping() {
+		return p.errStopping()
+	}
+	if err := smap.validate(); err != nil {
+		return err
+	}
+	if !smap.IsPrimary(p.si) {
+		err := newErrNotPrimary(p.si, smap)
+		debug.AssertNoErr(err)
+		return err
+	}
+
+	// cluster startup handles rebalance elsewhere (see p.resumeReb), and so
+	// all rebalance-triggering events (shutdown, decommission, maintenance, etc.)
+	// are not permitted and will fail during startup.
+	if err := p.pready(smap, true); err != nil {
+		return err
+	}
+
+	// cleanup mode is an admin-requested local cleanup pass and intentionally
+	// bypasses config.Rebalance.Enabled; the knob only disables regular rebalance
+	if cleanup {
+		return nil
+	}
+	if !cmn.GCO.Get().Rebalance.Enabled {
+		return errRebalanceDisabled
+	}
+	return nil
+}
+
+// rebalance's `must`: compares previous and current (cloned, updated) Smap
+// TODO: bmd.num-buckets == 0 would be an easy one to check
+func mustRebalance(ctx *smapModifier, cur *smapX) bool {
+	if !cmn.GCO.Get().Rebalance.Enabled {
+		return false
+	}
+	if nlog.Stopping() {
+		return false
+	}
+	prev := ctx.smap
+	// no rebalance when no active targets (before or after this change)
+	if prev.CountActiveTs() == 0 || cur.CountActiveTs() == 0 {
+		return false
+	}
+	if ctx.interrupted || ctx.restarted {
+		return true
+	}
+
+	// active <=> inactive transition
+	debug.Assert(prev.version() < cur.version())
+	for _, tsi := range cur.Tmap {
+		// added an active one or activated previously inactive
+		if !tsi.InMaintOrDecomm() && prev.GetActiveNode(tsi.ID()) == nil {
+			return true
+		}
+	}
+	for _, tsi := range prev.Tmap {
+		// removed an active one or deactivated previously active
+		if !tsi.InMaintOrDecomm() && cur.GetActiveNode(tsi.ID()) == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		actMsgExt = p.newAmsg(ctx.msg, nil)
@@ -799,71 +866,4 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
 		v.m[node.ID()] = node
 		v.mu.Unlock()
 	}
-}
-
-// rebalance's `can`: factors not including cluster map
-func (p *proxy) canRebalance(smap *smapX, cleanup bool) error {
-	if nlog.Stopping() {
-		return p.errStopping()
-	}
-	if err := smap.validate(); err != nil {
-		return err
-	}
-	if !smap.IsPrimary(p.si) {
-		err := newErrNotPrimary(p.si, smap)
-		debug.AssertNoErr(err)
-		return err
-	}
-
-	// cluster startup handles rebalance elsewhere (see p.resumeReb), and so
-	// all rebalance-triggering events (shutdown, decommission, maintenance, etc.)
-	// are not permitted and will fail during startup.
-	if err := p.pready(smap, true); err != nil {
-		return err
-	}
-
-	// cleanup mode is an admin-requested local cleanup pass and intentionally
-	// bypasses config.Rebalance.Enabled; the knob only disables regular rebalance
-	if cleanup {
-		return nil
-	}
-	if !cmn.GCO.Get().Rebalance.Enabled {
-		return errRebalanceDisabled
-	}
-	return nil
-}
-
-// rebalance's `must`: compares previous and current (cloned, updated) Smap
-// TODO: bmd.num-buckets == 0 would be an easy one to check
-func mustRebalance(ctx *smapModifier, cur *smapX) bool {
-	if !cmn.GCO.Get().Rebalance.Enabled {
-		return false
-	}
-	if nlog.Stopping() {
-		return false
-	}
-	prev := ctx.smap
-	// no rebalance when no active targets (before or after this change)
-	if prev.CountActiveTs() == 0 || cur.CountActiveTs() == 0 {
-		return false
-	}
-	if ctx.interrupted || ctx.restarted {
-		return true
-	}
-
-	// active <=> inactive transition
-	debug.Assert(prev.version() < cur.version())
-	for _, tsi := range cur.Tmap {
-		// added an active one or activated previously inactive
-		if !tsi.InMaintOrDecomm() && prev.GetActiveNode(tsi.ID()) == nil {
-			return true
-		}
-	}
-	for _, tsi := range prev.Tmap {
-		// removed an active one or deactivated previously active
-		if !tsi.InMaintOrDecomm() && cur.GetActiveNode(tsi.ID()) == nil {
-			return true
-		}
-	}
-	return false
 }
