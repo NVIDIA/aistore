@@ -173,7 +173,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 func (p *proxy) rmTargets(nodes meta.Nodes, msg *apc.ActMsg, reb bool) (rebID string, err error) {
 	var ctx *smapModifier
-	if ctx, err = p.mcastMaint(msg, nodes, reb, false /*maintPostReb*/); err != nil {
+	if ctx, err = p.mcastMaint(msg, nodes, reb); err != nil {
 		return
 	}
 	if ctx.rmdCtx != nil {
@@ -194,19 +194,13 @@ func (p *proxy) rmTargets(nodes meta.Nodes, msg *apc.ActMsg, reb bool) (rebID st
 	return "", err
 }
 
-func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, reb, maintPostReb bool) (*smapModifier, error) {
+func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, reb bool) (*smapModifier, error) {
 	var flags cos.BitFlags
 	switch msg.Action {
 	case apc.ActDecommissionNode:
 		flags = meta.SnodeDecomm
 	case apc.ActShutdownNode, apc.ActStartMaintenance:
 		flags = meta.SnodeMaint
-		if maintPostReb {
-			for _, si := range nodes {
-				debug.Assert(si.IsTarget(), si.StringEx())
-			}
-			flags |= meta.SnodeMaintPostReb
-		}
 	default:
 		err := fmt.Errorf(fmtErrInvaldAction, msg.Action,
 			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
@@ -220,8 +214,8 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, reb, maintPostReb 
 	for _, si := range nodes {
 		sids = append(sids, si.ID())
 	}
-	nlog.Infof("%s mcast-maint: %s, %s reb=(%t, %t), nflags=%s",
-		p, msg, snodeNames(nodes), reb, maintPostReb, dummy.Fl2S())
+	nlog.Infof("%s mcast-maint: %s, %s reb=%t, nflags=%s", p, msg, snodeNames(nodes), reb, dummy.Fl2S())
+
 	ctx := &smapModifier{
 		pre:     p._markMaint,
 		post:    p._rebPostRm, // (rmdCtx.rmNode => p.rmNodeFinal when all done)
@@ -241,14 +235,14 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, reb, maintPostReb 
 		}
 	}
 	err := p.owner.smap.modify(ctx)
-	if err != nil {
-		nlog.Warningln("mcastMaint:", err)
-		if ctx.status != 0 {
-			err = cmn.NewErrFailedTo(p, msg.Action, snodeNames(nodes), err, ctx.status)
-		}
+	if err == nil {
+		return ctx, nil
 	}
-
-	return ctx, err
+	nlog.Warningln("mcast-maint:", err)
+	if ctx.status != 0 {
+		err = cmn.NewErrFailedTo(p, ctx.msg.Action, snodeNames(nodes), err, ctx.status)
+	}
+	return nil, err
 }
 
 func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
@@ -277,6 +271,50 @@ func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
 		nlog.Infoln("_markMaint:", ctx.msg.Action, "nodes:", ctx.sids, "flags:", ctx.flags)
 	}
 	clone.staffIC()
+	return nil
+}
+
+func (p *proxy) mcastMaintPostReb(msg *apc.ActMsg, nodes meta.Nodes) error {
+	const tag = "mcast-maint-post-reb:"
+	debug.Assert(msg.Action == apc.ActStartMaintenance || msg.Action == apc.ActShutdownNode, msg.Action)
+
+	sids := make([]string, 0, len(nodes))
+	for _, si := range nodes {
+		debug.Assert(si.IsTarget(), si.StringEx())
+		sids = append(sids, si.ID())
+	}
+	nlog.Infoln(p.String(), tag, msg.String(), snodeNames(nodes))
+
+	ctx := &smapModifier{
+		pre:   p._markMaintPostReb,
+		final: p._syncFinal,
+		sids:  sids,
+		flags: meta.SnodeMaint | meta.SnodeMaintPostReb,
+		msg:   msg,
+	}
+	err := p.owner.smap.modify(ctx)
+	if err == nil {
+		return nil
+	}
+	nlog.Warningln(tag, err)
+	if ctx.status != 0 {
+		err = cmn.NewErrFailedTo(p, ctx.msg.Action, snodeNames(nodes), err, ctx.status)
+	}
+	return err
+}
+
+func (p *proxy) _markMaintPostReb(ctx *smapModifier, clone *smapX) error {
+	debug.Assert(ctx.flags == meta.SnodeMaint|meta.SnodeMaintPostReb, ctx.flags)
+	if !clone.isPrimary(p.si) {
+		return newErrNotPrimary(p.si, clone, "cannot finalize maintenance for "+strings.Join(ctx.sids, ", "))
+	}
+	for _, sid := range ctx.sids {
+		if clone.GetTarget(sid) == nil {
+			nlog.Warningln(p.String(), ctx.msg.Action, meta.Tname(sid), "not present in", clone.StringEx(), "- skipping post-rebalance mark")
+			continue
+		}
+		clone.setNodeFlags(sid, ctx.flags)
+	}
 	return nil
 }
 
@@ -515,7 +553,7 @@ func (p *proxy) rmNodesFinal(msg *apc.ActMsg, nodes meta.Nodes, ctx *smapModifie
 				}
 			}
 			if len(targets) > 0 {
-				_, err = p.mcastMaint(msg, targets, false /*reb*/, true /*maintPostReb*/)
+				err = p.mcastMaintPostReb(msg, targets)
 			}
 		}
 	}
@@ -650,16 +688,14 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		if _, status, err := p.reqHealth(si, tout, nil, smap, false /*retry pub-addr*/); err != nil {
 			sleep, retries := tout/2, 4
 
+			// give a restarting node a full `tout` before the first retry
+			// (initial startup grace plus the first retry interval)
 			time.Sleep(sleep)
-			for i := range retries { // retry
+			for i := range retries {
 				time.Sleep(sleep)
 				_, status, err = p.reqHealth(si, tout, nil, smap, true /*retry pub-addr*/)
 				if err == nil {
-					if i == 1 {
-						nlog.Infoln(tag, pname, "=>", sname, "OK after 1 attempt [", msg.Action, opts, "]")
-					} else {
-						nlog.Infoln(tag, pname, "=>", sname, "OK after", i, "attempts [", msg.Action, opts, "]")
-					}
+					nlog.Infoln(tag, pname, "=>", sname, "OK after", i+1, "attempt"+cos.Plural(i+1), "[", msg.Action, opts, "]")
 					break
 				}
 				if status != http.StatusServiceUnavailable {
@@ -777,10 +813,18 @@ func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-func (p *proxy) _stopMaintRMD(ctx *smapModifier, _ *smapX) {
-	if ctx.skipReb {
+func (p *proxy) _stopMaintRMD(ctx *smapModifier, clone *smapX) {
+	if ctx.skipReb || !cmn.GCO.Get().Rebalance.Enabled || nlog.Stopping() {
 		return
 	}
+
+	// valid use case: bringing two or more targets back when all targets were in maintenance
+	prevActive := ctx.smap.CountActiveTs()
+	curActive := clone.CountActiveTs()
+	if curActive < 2 || curActive <= prevActive {
+		return
+	}
+
 	rmdCtx := &rmdModifier{
 		pre:     rmdInc,
 		smapCtx: ctx,
