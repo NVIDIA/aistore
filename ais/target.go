@@ -309,6 +309,10 @@ func (t *target) init(config *cmn.Config) {
 	keyPair := t.newKeyPair(tid, apc.Target)
 	t.si.Init(tid, apc.Target, keyPair.VerifyingKey)
 
+	// kTLS TX offload (sendfile over HTTPS)
+	g.netServ.pub.ktlsTx = ktlsTxPlatform &&
+		config.Net.HTTP.UseHTTPS && config.Features.IsSet(feat.SendfileOverHTTPS)
+
 	debug.Assert(t.si.IDDigest != 0)
 	cos.InitShortID(t.si.IDDigest)
 

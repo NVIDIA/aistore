@@ -674,6 +674,7 @@ func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.
 		sndRcvBufSize: g.netServ.pub.sndRcvBufSize,
 		useIPv6:       useIPv6, // in fact, expecting the same TCP port _and_ the same IP family as PubNet
 		reqNet:        reqNetPub,
+		ktlsTx:        g.netServ.pub.ktlsTx,
 	}
 	ep := pubExtra.TCPEndpoint()
 	go func() {

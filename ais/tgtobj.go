@@ -1319,6 +1319,9 @@ func (goi *getOI) setwhdr(whdr http.Header, cksum *cos.Cksum, size int64) {
 	} else {
 		cmn.ToHeader(goi.lom.ObjAttrs(), whdr, size, cksum)
 	}
+
+	// when applicable, retire the kTLS-armed connection _after_ this response
+	ktlsTxRetire(goi.req, whdr, size)
 }
 
 // in particular, setup reader and writer and set headers
@@ -1329,7 +1332,9 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 
 	// Tx
 	if goi.canSendfile(lmfh) {
-		err = goi.sendfile(lmfh, fqn, size, false /*committed*/)
+		// NOTE: net.sendFile unwraps io.LimitedReader before the syscall,
+		// so the wrap is free; ktlsTxConn.ReadFrom requires it (see ais/ktls)
+		err = goi.sendfile(&io.LimitedReader{R: lmfh, N: size}, fqn, size, false /*committed*/)
 	} else {
 		buf, slab := goi.t.gmm.AllocSize(min(size, memsys.MaxPageSlabSize))
 		err = goi.transmit(lmfh, buf, fqn, size, false /*committed*/)
@@ -1436,7 +1441,10 @@ func (goi *getOI) sendfile(r io.Reader, fqn string, size int64, committed bool) 
 
 // source must be monolithic file-backed (see assert)
 func (goi *getOI) canSendfile(lmfh cos.LomReader) bool {
-	if cmn.Rom.UseHTTPS() || goi.lom.IsChunked() {
+	if goi.lom.IsChunked() {
+		return false
+	}
+	if !canSendfileRequest(goi.req, cmn.Rom.UseHTTPS()) {
 		return false
 	}
 
@@ -1447,6 +1455,11 @@ func (goi *getOI) canSendfile(lmfh cos.LomReader) bool {
 
 	_, ok := goi.w.(io.ReaderFrom)
 	return ok
+}
+
+// TODO: keeping it separate only for unit tests
+func canSendfileRequest(r *http.Request, useHTTPS bool) bool {
+	return !useHTTPS || (r != nil && isKTLSTx(r.Context()))
 }
 
 func (goi *getOI) _txerr(err error, fqn string, written, size int64, committed bool) error {

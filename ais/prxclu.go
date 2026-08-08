@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -660,8 +661,14 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			_warnUpd("timeout.max_keepalive", config.Timeout.MaxKeepalive.String(), toUpdate.Timeout.MaxKeepalive.String())
 		}
 	}
+	// 5. feature flags: the restart-required subset
+	if toUpdate.Features != nil {
+		if changed := (config.Features ^ *toUpdate.Features) & feat.RestartRequired; changed != 0 {
+			_warnUpdFeat(config.Features, *toUpdate.Features, changed)
+		}
+	}
 
-	// 5. cross-section: keepalivetracker.*.interval vs timeout.max_keepalive
+	// 6. cross-section: keepalivetracker.*.interval vs timeout.max_keepalive
 	if toUpdate.Keepalive != nil || (toUpdate.Timeout != nil && toUpdate.Timeout.MaxKeepalive != nil) {
 		if err := _checkKalive(config, toUpdate); err != nil {
 			p.writeErr(w, r, err, http.StatusBadRequest)
@@ -753,6 +760,12 @@ func _warnUpd(what, from, to string) {
 	nlog.Errorln("Warning: this update MAY require cluster restart")
 }
 
+func _warnUpdFeat(from, to, changed feat.Flags) {
+	nlog.Warningf("Updating cluster features: setting %v", to.Names())
+	nlog.Warningf("Prior-to-update features: %v", from.Names())
+	nlog.Errorf("Warning: restart required for %v to take effect", changed.Names())
+}
+
 func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	if err := p.owner.config.resetDaemonConfig(); err != nil {
 		p.writeErr(w, r, err)
@@ -827,6 +840,10 @@ func _checkTransient(toUpdate *cmn.ConfigToSet) error {
 		return cmn.NewErrUnsupp(action, "timeout.max_keepalive")
 	case toUpdate.Timeout != nil && toUpdate.Timeout.CplaneOperation != nil:
 		return cmn.NewErrUnsupp(action, "timeout.cplane_operation")
+	case toUpdate.Features != nil:
+		return cmn.NewErrUnsupp(action, "config.features")
+	case toUpdate.FSP != nil:
+		return cmn.NewErrUnsupp(action, "fspaths")
 	}
 	return nil
 }

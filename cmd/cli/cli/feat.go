@@ -53,6 +53,7 @@ var clusterFeatDesc = [...]string{
 	"publish selected Go runtime metrics via Prometheus",
 	"allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked",
 	"allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)",
+	"offload TLS transmit path to the kernel and enable Linux sendfile(2)",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -87,6 +88,7 @@ var featTags = map[string]string{
 	"Enable-Go-Runtime-Metrics":            "telemetry,ops,overhead",
 	"Dload-Allow-Private-Egress":           "security-",
 	"S3-Redirect-Rebuild":                  "s3,compat,security-",
+	"Sendfile-Over-HTTPS":                  "perf,net,ops,compat",
 }
 
 // common (cluster, bucket) feature-flags (set, show) helper

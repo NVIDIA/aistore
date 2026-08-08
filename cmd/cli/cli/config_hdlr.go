@@ -166,11 +166,12 @@ var (
 // TODO: prune config.ClusterConfig - hide deprecated "non_electable"
 func setCluConfigHandler(c *cli.Context) error {
 	var (
-		nvs      cos.StrKVs
-		config   cmn.Config
-		propList = make([]string, 0, 48)
-		args     = c.Args()
-		kvs      = args.Tail()
+		nvs        cos.StrKVs
+		config     cmn.Config
+		propList   = make([]string, 0, 48)
+		args       = c.Args()
+		kvs        = args.Tail()
+		realConfig *cmn.ClusterConfig
 	)
 	err := cmn.IterFields(&config.ClusterConfig, func(tag string, _ cmn.IterField) (err error, b bool) {
 		propList = append(propList, tag)
@@ -214,17 +215,27 @@ func setCluConfigHandler(c *cli.Context) error {
 		}
 		goto show
 	}
+
 	for k, v := range nvs {
 		if k == feat.PropName {
+			if realConfig == nil {
+				realConfig, err = api.GetClusterConfig(apiBP)
+				if err != nil {
+					return V(err)
+				}
+			}
+
 			nf, _, err := parseFeatureFlags([]string{v}, 0)
 			if err != nil {
 				return fmt.Errorf("invalid feature flag %q, err: %v", v, err)
 			}
 
-			if cf := config.Features; nf != 0 {
-				if nf.IsSet(feat.S3ReverseProxy) && !cf.IsSet(feat.S3ReverseProxy) {
-					actionWarn(c, "reverse-proxy mode of operation _may_ (and likely will) degrade scalability and performance!\n")
-				}
+			cf := realConfig.Features
+			if nf.IsSet(feat.S3ReverseProxy) && !cf.IsSet(feat.S3ReverseProxy) {
+				actionWarn(c, "reverse-proxy mode of operation _may_ (and likely will) degrade scalability and performance!\n")
+			}
+			if changed := (cf ^ nf) & feat.RestartRequired; changed != 0 {
+				actionWarnf(c, "restart required for %v to take effect.\n", changed.Names())
 			}
 
 			nvs[k] = nf.String() // FormatUint
@@ -408,7 +419,9 @@ func setNodeConfigHandler(c *cli.Context) error {
 				return err
 			}
 			delete(nvs, confLogModules)
-			break
+		}
+		if k == feat.PropName {
+			return fmt.Errorf("feature flags have cluster scope - cannot change for %s\n(tip: use 'ais config cluster features')", sname)
 		}
 	}
 	for k := range nvs {

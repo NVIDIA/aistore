@@ -230,7 +230,7 @@ func CopyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err er
 
 // NOTE:
 // caller must guarantee that this path is eligible for the stdlib/net sendfile
-// fast path: plain HTTP, stdlib response writer, and file-backed source.
+// fast path: plain HTTP or armed kTLS TX, stdlib response writer, and file-backed source.
 func CopySendfile(dst io.Writer, src io.Reader) (written int64, err error) {
 	rf, ok := dst.(io.ReaderFrom)
 	if !ok {

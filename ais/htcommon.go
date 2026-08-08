@@ -159,6 +159,8 @@ type (
 		lowLatencyToS bool
 		useIPv6       bool
 		reqNet        reqNet // enum { reqNetPub, ... }
+
+		ktlsTx bool // Linux targets' public HTTPS listeners only
 	}
 
 	nlogWriter struct{}
@@ -406,9 +408,7 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 		ErrorLog:          logger,
 		ReadHeaderTimeout: apc.ReadHeaderTimeout,
 		IdleTimeout:       dfltIdleTimeout,
-		ConnContext: func(ctx context.Context, _ net.Conn) context.Context {
-			return context.WithValue(ctx, keyReqNet, server.reqNet)
-		},
+		ConnContext:       server.connContext,
 	}
 	if timeout, isSet := cmn.ParseReadHeaderTimeout(); isSet { // optional env var
 		server.s.ReadHeaderTimeout = timeout
@@ -422,6 +422,7 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 	//
 	// TODO: for HTTPS, consider moving the code to the Accept() path _or_ using
 	// net.ListenConfig.Control before TLS wrapping.
+	// (the kTLS-tx listener already does the former - see _listenAndServeKTLSTx)
 
 	if (server.sndRcvBufSize > 0 || server.lowLatencyToS) && !config.Net.HTTP.UseHTTPS {
 		server.s.ConnState = server.connStateListener
@@ -433,21 +434,38 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 	return server._listen(config)
 }
 
+// executes before the TLS handshake (later, the stored kTLS state is
+// updated when the connection is armed)
+func (server *netServer) connContext(ctx context.Context, conn net.Conn) context.Context {
+	ctx = context.WithValue(ctx, keyReqNet, server.reqNet)
+	if state, ok := conn.(ktlsTxState); ok {
+		ctx = context.WithValue(ctx, keyKTLSTx, state)
+	}
+	return ctx
+}
+
 func (server *netServer) _listen(config *cmn.Config) (err error) {
 	var (
-		tag     = "HTTP"
+		tag     string
 		retried bool
 	)
+
 retry:
-	if config.Net.HTTP.UseHTTPS {
+	switch {
+	case config.Net.HTTP.UseHTTPS && server.ktlsTx:
+		tag = "HTTPS(kTLS-tx)"
+		err = server._listenAndServeKTLSTx()
+
+	case config.Net.HTTP.UseHTTPS:
 		tag = "HTTPS"
-		// Listen and Serve TLS; certificates provided via tlsConf.GetCertificate()
-		// (ie., via CertLoader.GetCert())
-		err = server.s.ListenAndServeTLS("" /*certFile*/, "" /*keyFile*/)
-	} else {
+		err = server.s.ListenAndServeTLS("", "")
+
+	default:
+		tag = "HTTP"
 		err = server.s.ListenAndServe()
 	}
-	if err == http.ErrServerClosed { // ref: "ListenAndServe always returns a non-nil error"
+
+	if err == http.ErrServerClosed {
 		return nil
 	}
 
@@ -460,6 +478,46 @@ retry:
 
 	nlog.Errorf("%s terminated with error: %v", tag, err)
 	return err
+}
+
+func (server *netServer) _listenAndServeKTLSTx() error {
+	var (
+		lc           net.ListenConfig
+		configureTCP func(*net.TCPConn)
+	)
+	ln, err := lc.Listen(context.Background(), "tcp", server.s.Addr)
+	if err != nil {
+		return err
+	}
+
+	// unlike the non-kTLS HTTPS path, socket options are applied at Accept
+	// (see the note in (*netServer).listen)
+	if server.sndRcvBufSize > 0 || server.lowLatencyToS {
+		configureTCP = server.configureTCP
+	}
+
+	listener, err := newKTLSTxListener(ln, server.s.TLSConfig, server._timeout(), configureTCP)
+	if err != nil {
+		ln.Close()
+		return err
+	}
+
+	return server.s.Serve(listener)
+}
+
+// reuse server.connStateListener (see below)
+func (server *netServer) configureTCP(tcp *net.TCPConn) { server.connStateListener(tcp, http.StateNew) }
+
+// see http.Server.tlsHandshakeTimeout()
+// ref: https://github.com/golang/go/blob/master/src/net/http/server.go
+func (server *netServer) _timeout() (timeout time.Duration) {
+	s := server.s
+	for _, v := range []time.Duration{s.ReadHeaderTimeout, s.ReadTimeout, s.WriteTimeout} {
+		if v > 0 && (timeout == 0 || v < timeout) {
+			timeout = v
+		}
+	}
+	return
 }
 
 func newTLS(conf *cmn.TLSConf, cl *certloader.CertLoader) (tlsConf *tls.Config, err error) {
