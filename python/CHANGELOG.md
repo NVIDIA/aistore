@@ -66,6 +66,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - ETL webservers now forward
   `etl_args` to the next stage on direct-put pipeline hops. Previously only the
   first pipeline stage received `etl_args`; stages 2..N saw an empty value.
+- Fixed multiple correctness bugs in the streaming multipart decoder:
+  - Infinite spin when boundary or header terminator was absent at EOF and corrupted/truncated headers when header and body bytes arrived in the same chunk or near the buffer size limit.
+  - Body content misidentified as headers, stray newline prepended to headers on subsequent parts, epilogue bytes appended to the last part's body, and body bytes dropped under mixed line endings.
 
 ## [1.25.0] - 2026-05-20
 

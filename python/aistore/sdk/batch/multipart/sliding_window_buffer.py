@@ -88,6 +88,26 @@ class SlidingWindowBuffer:
         self.end_pos += data_len
         self.buffer[self.end_pos - data_len : self.end_pos] = data
 
+    def append_no_slide(self, data: bytes) -> None:
+        """
+        Append data to the buffer, expanding physical storage as needed but never
+        activating the sliding window. Use this when all buffered bytes must be
+        preserved (e.g. during header extraction).
+
+        Args:
+            data (bytes): Data to append to the buffer
+        """
+        data_len = len(data)
+        if self.end_pos + data_len > len(self.buffer):
+            self._compact_buffer()
+            if self.end_pos + data_len > len(self.buffer):
+                new_size = max(len(self.buffer) * 2, self.end_pos + data_len)
+                new_buffer = bytearray(new_size)
+                new_buffer[: self.end_pos] = memoryview(self.buffer)[: self.end_pos]
+                self.buffer = new_buffer
+        self.end_pos += data_len
+        self.buffer[self.end_pos - data_len : self.end_pos] = data
+
     def _compact_buffer(self) -> None:
         """Compact buffer by moving valid data to beginning and updating position tracking."""
         current_data_len = self.end_pos - self.start_pos
@@ -96,7 +116,9 @@ class SlidingWindowBuffer:
             source = memoryview(self.buffer)[self.start_pos : self.end_pos]
             self.buffer[:current_data_len] = source
 
-            self.total_processed += self.start_pos
+            # Do NOT add start_pos to total_processed here. Those bytes were
+            # already counted by consume() and the slide in append(). Adding
+            # them again would cause find() to return wrong absolute positions.
             self.start_pos = 0
             self.end_pos = current_data_len
 

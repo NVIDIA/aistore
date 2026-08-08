@@ -41,7 +41,14 @@ class MultipartStreamBuffer:
         self._boundary_safety_margin = len(self._boundary) + BOUNDARY_MARGIN
         self._whitespace_bytes = bytes(WHITESPACE_CHARS) + WIN_LINE_END + UNIX_LINE_END
 
-        self._buffer = SlidingWindowBuffer(self._max_buffer_size, len(self._boundary))
+        # Use _boundary_safety_margin (not just len(boundary)) so the sliding
+        # window's overlap = 2 * safety_margin. This prevents sliding from
+        # discarding boundary or early-header bytes when the buffer is smaller
+        # than 2 * safety_margin (e.g. right after the boundary is consumed and
+        # before _extract_headers issues its first no-slide read).
+        self._buffer = SlidingWindowBuffer(
+            self._max_buffer_size, self._boundary_safety_margin
+        )
 
     @property
     def boundary(self) -> bytes:
@@ -88,6 +95,7 @@ class MultipartStreamBuffer:
 
         try:
             chunk = next(self._content_iter)
+            # whether buffer slides is not relevant here
             self._buffer.append(chunk)
             return True
         except StopIteration:
@@ -108,12 +116,64 @@ class MultipartStreamBuffer:
         Ensure at least min_bytes are available in buffer.
 
         Args:
-            min_bytes (int): Minimum buffer size required. Defaults to 0.
+            min_bytes (int): Minimum buffer size required. Defaults to 0
 
         Returns:
             bool: True if sufficient buffer available, False if stream exhausted
         """
         return self._fill_buffer_safely(min_bytes)
+
+    def read_chunk(self) -> Optional[bytes]:
+        """
+        Pop the next non-empty chunk from the stream without appending it to the buffer.
+
+        Skips empty chunks — some servers emit b"" as valid iterator values;
+        only StopIteration signals true stream exhaustion.
+
+        Returns:
+            bytes: The next non-empty chunk, or None if the stream is exhausted
+        """
+        if self._exhausted:
+            return None
+        while True:
+            try:
+                chunk = next(self._content_iter)
+                if not chunk:
+                    continue
+                return chunk
+            except StopIteration:
+                self._exhausted = True
+                return None
+
+    def append_chunk(self, chunk: bytes, no_slide: bool = False) -> None:
+        """
+        Append a chunk to the buffer.
+
+        Args:
+            chunk (bytes): Data to append.
+            no_slide (bool): If True, the sliding window is never activated and all
+                previously buffered bytes are preserved. Use during header extraction
+                where losing buffered bytes would silently corrupt the returned header.
+                Defaults to False.
+        """
+        if no_slide:
+            self._buffer.append_no_slide(chunk)
+        else:
+            self._buffer.append(chunk)
+
+    def force_read_chunk(self) -> int:
+        """
+        Read one chunk and append it to the buffer regardless of current buffer size.
+        Used during preamble/boundary scanning where sliding is safe.
+
+        Returns:
+            int: Positive chunk size on success, 0 if the stream is exhausted
+        """
+        chunk = self.read_chunk()
+        if chunk is None:
+            return 0
+        self.append_chunk(chunk)
+        return len(chunk)
 
     def has_data(self) -> bool:
         """
@@ -239,6 +299,7 @@ class MultipartStreamBuffer:
         if self._boundary is None:
             raise ValueError("No boundary set for this content reader")
 
+        boundary_found = False
         while not self._exhausted:
             if not self._fill_buffer_safely():
                 break
@@ -246,16 +307,20 @@ class MultipartStreamBuffer:
             boundary_pos = self.find_boundary_position()
 
             if boundary_pos != -1:
-                # Found boundary - yield content before it and finish
-                if boundary_pos > 0:
-                    content = self.consume_before_pattern(
-                        boundary_pos, self._boundary, clean_endings=clean_endings
-                    )
-                    if content:
-                        yield content
+                # Found boundary so yield content before it and finish
+                boundary_found = True
+
+                # consume_before_pattern always consumes the boundary itself, even
+                # when boundary_pos == 0 (empty body), so the next part's headers
+                # are available from the front of the buffer on the next call
+                content = self.consume_before_pattern(
+                    boundary_pos, self._boundary, clean_endings=clean_endings
+                )
+                if content:
+                    yield content
                 break
 
-            # No boundary found - yield safe portion and continue
+            # No boundary found so yield safe portion and continue
             safe_size = self.get_safe_content_size()
             if safe_size > 0:
                 content = self.consume_data(safe_size)
@@ -265,14 +330,52 @@ class MultipartStreamBuffer:
                 if not self._read_next_chunk():
                     break
 
-        # Handle remaining data if stream is exhausted
-        if self._exhausted and self.get_buffer_size() > 0:
-            remaining = self.get_data_slice()
-            if clean_endings:
-                remaining = remaining.rstrip(self._whitespace_bytes)
-            self._buffer.consume(self.get_buffer_size())
-            if remaining:
-                yield remaining
+        remaining = self._flush_remaining_body(boundary_found, clean_endings)
+        if remaining:
+            yield remaining
+
+    def _flush_remaining_body(
+        self, boundary_found: bool, clean_endings: bool
+    ) -> Optional[bytes]:
+        """
+        Return any buffered bytes that are legitimate body content after the main
+        read loop exits, or None if nothing should be yielded.
+
+        When the boundary was already found and consumed in the loop, whatever
+        lingers in the buffer (e.g. "--" from "--boundary--") is epilogue and
+        must be discarded silently. When the loop exited due to stream exhaustion
+        without finding a boundary, the buffer may hold trailing body bytes or a
+        "body--boundary--epilogue" sequence (if _exhausted was set by a refill
+        inside consume_data before the loop even ran); in the latter case only
+        the bytes before the boundary are returned.
+
+        Args:
+            boundary_found (bool): Whether the read loop found and consumed a boundary
+            clean_endings (bool): Whether to strip whitespace and line endings
+                from remaining content
+
+        Returns:
+            Optional[bytes]: Remaining body bytes to yield, or None if nothing
+                should be yielded (stream not exhausted, no data, boundary already
+                found, or no content before boundary)
+        """
+        if not self._exhausted or self.get_buffer_size() == 0:
+            return None
+        if boundary_found:
+            # Leave the buffer untouched since the remaining bytes may be the next
+            # part's headers/body. Epilogue bytes  that follow the closing boundary
+            # are filtered upstream because get_next_part() discards any headers
+            # starting with "--"
+            return None
+        remaining = self.get_data_slice()
+        if self._boundary:
+            bpos = remaining.find(self._boundary)
+            if bpos != -1:
+                remaining = remaining[:bpos]
+        if clean_endings:
+            remaining = remaining.rstrip(self._whitespace_bytes)
+        self._buffer.consume(self.get_buffer_size())
+        return remaining if remaining else None
 
     def find_boundary_position(self) -> int:
         """

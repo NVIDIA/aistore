@@ -10,6 +10,7 @@ from aistore.sdk.batch.multipart.multipart_decoder import (
     MultipartDecoder,
     MultipartDecodeError,
 )
+from aistore.sdk.const import DEFAULT_MAX_BUFFER_SIZE
 
 
 # pylint: disable=too-many-public-methods
@@ -303,6 +304,146 @@ class TestMultipartDecoder(unittest.TestCase):
         self.assertEqual(data2, file_content + b"\r\n")
         self.assertNotEqual(headers1, b"")
         self.assertNotEqual(headers2, b"")
+
+    def test_streaming_preamble_slide_does_not_raise(self):
+        """Preamble bytes sliding out during boundary scan must not raise MultipartDecodeError."""
+        # With a small max_buffer_size, a preamble followed by a max-sized boundary chunk
+        # causes the sliding window to drop preamble bytes during force_read. This is safe
+        # since preamble is discarded anyway, and must not trigger the header overflow guard.
+        small_max = 64
+        boundary = "ZZ"
+        mock_response = Mock()
+        mock_response.headers = {
+            "Content-Type": f'multipart/mixed; boundary="{boundary}"'
+        }
+        preamble = b"X" * small_max
+        boundary_chunk = b"--ZZ\r\nContent-Type: text/plain\r\n\r\nbody"
+        mock_response.iter_content = lambda chunk_size=small_max: iter(
+            [preamble, boundary_chunk]
+        )
+
+        decoder = MultipartDecoder(parse_as_stream=True, max_buffer_size=small_max)
+        parts = list(decoder.decode(mock_response))
+
+        self.assertEqual(len(parts), 1)
+        headers, _ = parts[0]
+        self.assertIn(b"Content-Type: text/plain", headers)
+
+    def test_streaming_boundary_found_after_large_preamble(self):
+        """Streaming decoder must find boundary even when preamble exceeds initial buffer fill."""
+        boundary = "ZZ"
+        mock_response = Mock()
+        mock_response.headers = {
+            "Content-Type": f'multipart/mixed; boundary="{boundary}"'
+        }
+        # Preamble larger than the boundary safety margin (12 bytes) forces
+        # _locate_first_boundary to loop past the first fill before finding --ZZ.
+        preamble = b"X" * 100
+        mock_response.iter_content = lambda chunk_size=8192: iter(
+            [preamble, b"--ZZ\r\nContent-Type: text/plain\r\n\r\nbody content"]
+        )
+
+        decoder = MultipartDecoder(parse_as_stream=True)
+        parts = list(decoder.decode(mock_response))
+
+        self.assertEqual(len(parts), 1)
+        headers, _ = parts[0]
+        self.assertIn(b"Content-Type: text/plain", headers)
+
+    def test_streaming_no_boundary_exits_cleanly(self):
+        """Streaming decoder must exit cleanly when the boundary is never found."""
+        boundary = "ZZ"
+        mock_response = Mock()
+        mock_response.headers = {
+            "Content-Type": f'multipart/mixed; boundary="{boundary}"'
+        }
+        mock_response.iter_content = lambda chunk_size=8192: iter(
+            [b"no-boundary-anywhere"]
+        )
+
+        decoder = MultipartDecoder(parse_as_stream=True)
+        parts = list(decoder.decode(mock_response))
+
+        self.assertEqual(len(parts), 0)
+
+    def test_streaming_valid_header_with_large_body_chunk_does_not_raise(self):
+        """A valid header followed by a large body in the same chunk must not raise."""
+        boundary = "ZZ"
+        mock_response = Mock()
+        mock_response.headers = {
+            "Content-Type": f'multipart/mixed; boundary="{boundary}"'
+        }
+        # Chunk 1: boundary only — forces _extract_headers to call force_read
+        # Chunk 2: header ending + large body in one chunk, pushing buffer over max_buffer_size.
+        # bytes_to_remove will be 0 (buffer was small), so no data is actually lost.
+        large_body = b"Y" * (DEFAULT_MAX_BUFFER_SIZE + 1)
+        mock_response.iter_content = lambda chunk_size=8192: iter(
+            [b"--ZZ", b"Content-Type: text/plain\r\n\r\n" + large_body]
+        )
+
+        decoder = MultipartDecoder(parse_as_stream=True)
+        parts = [(h, body.read()) for h, body in decoder.decode(mock_response)]
+
+        self.assertEqual(len(parts), 1)
+        headers, body = parts[0]
+        self.assertEqual(body, large_body)
+        self.assertIn(b"Content-Type: text/plain", headers)
+
+    def test_streaming_oversized_header_error_message(self):
+        """MultipartDecodeError from an oversized header must name the buffer size limit."""
+        boundary = "ZZ"
+        mock_response = Mock()
+        mock_response.headers = {
+            "Content-Type": f'multipart/mixed; boundary="{boundary}"'
+        }
+        chunk = b"X" * (DEFAULT_MAX_BUFFER_SIZE // 8)
+        mock_response.iter_content = lambda chunk_size=8192: iter(
+            [b"--ZZ"] + [chunk] * 10
+        )
+
+        decoder = MultipartDecoder(parse_as_stream=True)
+        with self.assertRaises(MultipartDecodeError) as ctx:
+            list(decoder.decode(mock_response))
+
+        self.assertIn(str(DEFAULT_MAX_BUFFER_SIZE), str(ctx.exception))
+
+    def test_streaming_oversized_header_raises(self):
+        """Streaming decoder must raise MultipartDecodeError when a header exceeds max buffer size."""
+        boundary = "ZZ"
+        mock_response = Mock()
+        mock_response.headers = {
+            "Content-Type": f'multipart/mixed; boundary="{boundary}"'
+        }
+        # Deliver header data in 8KB chunks with no line ending
+        chunk = b"X" * (DEFAULT_MAX_BUFFER_SIZE // 8)
+        mock_response.iter_content = lambda chunk_size=8192: iter(
+            [b"--ZZ"] + [chunk] * 10
+        )
+
+        decoder = MultipartDecoder(parse_as_stream=True)
+        with self.assertRaises(MultipartDecodeError):
+            list(decoder.decode(mock_response))
+
+    def test_streaming_unterminated_headers_exits_cleanly(self):
+        """
+        Streaming decoder must not spin when part headers are
+        never terminated by CRLF/LF before EOF.
+        """
+        boundary = "ZZ"
+        mock_response = Mock()
+        mock_response.headers = {
+            "Content-Type": f'multipart/mixed; boundary="{boundary}"'
+        }
+        mock_response.iter_content = lambda chunk_size=8192: iter(
+            [b"--ZZ", b"Content-Type: text/plain no-terminator-EOF"]
+        )
+
+        decoder = MultipartDecoder(parse_as_stream=True)
+        parts = list(decoder.decode(mock_response))
+
+        self.assertEqual(
+            len(parts), 0, "Malformed stream with no line ending should yield no parts"
+        )
 
     @patch("requests.get")
     def test_integration_with_requests(self, mock_get):
