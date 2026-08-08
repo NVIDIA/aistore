@@ -349,18 +349,26 @@ func (d *Snode) Fl2S() string {
 		return "none"
 	}
 	var a = make([]string, 0, 2)
+
+	// non-electable proxy cannot be a member of the IC
 	switch {
 	case d.Flags&SnodeNonElectable != 0:
 		a = append(a, "non-elect")
 	case d.Flags&SnodeIC != 0:
 		a = append(a, "ic")
-	case d.Flags&SnodeMaint != 0:
+	}
+
+	// lifecycle-additive
+	if d.Flags&SnodeMaint != 0 {
 		a = append(a, "maintenance-mode")
-	case d.Flags&SnodeDecomm != 0:
+	}
+	if d.Flags&SnodeDecomm != 0 {
 		a = append(a, "decommission")
-	case d.Flags&SnodeMaintPostReb != 0:
+	}
+	if d.Flags&SnodeMaintPostReb != 0 {
 		a = append(a, "post-rebalance")
 	}
+
 	return strings.Join(a, ",")
 }
 
