@@ -19,73 +19,34 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
-func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, joining bool) error {
-	smap := p.owner.smap.get()
-	if !smap.isPrimary(p.si) {
-		return newErrNotPrimary(p.si, smap, "cannot "+action+" "+si.StringEx())
-	}
-	if si.IsProxy() {
-		return nil
-	}
-	if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {
-		if err == errRebalanceDisabled {
-			err = nil
-		}
-		return err
-	}
-
-	if smap.CountActiveTs() == 0 {
-		return nil
-	}
-	if !joining && smap.CountActiveTs() == 1 {
-		return nil
-	}
-
-	// early-GFN notification with an empty (version-only and not yet updated) Smap and
-	// message(new target's ID)
-	msg := p.newAmsgActVal(apc.ActStartGFN, nil)
-	msg.UUID = si.ID()
-	revs := revsPair{&smapX{Smap: meta.Smap{Version: smap.Version}}, msg}
-	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
-		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
-	}
-	ctx.gfn = true // to undo if need be
-	return nil
-}
-
-func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
-	var (
-		actMsgExt = p.newAmsg(ctx.msg, nil)
-		pairs     = make([]revsPair, 0, 4)
-		reb       = ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
-	)
-	pairs = append(pairs, revsPair{clone, actMsgExt})
-	if reb {
-		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
-		actMsgExt.UUID = ctx.rmdCtx.rebID
-		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
-	}
-	debug.Assert(clone._sgl != nil)
-
-	config, err := p.ensureConfigURLs()
-	if err != nil {
-		debug.Assert(nlog.Stopping(), err)
-		return
-	}
-	if config == nil /*not updated - including anyway*/ {
-		config, err = p.owner.config.get()
-		if err != nil {
-			debug.Assert(nlog.Stopping(), err)
-			return
-		}
-	}
-
-	pairs = append(pairs, revsPair{config, actMsgExt})
-	wg := p.metasyncer.sync(pairs...)
-	if ctx.rmdCtx != nil && ctx.rmdCtx.wait {
-		wg.Wait()
-	}
-}
+// ==================== Node lifecycle management (primary proxy) ============================
+//
+// Main flow:
+// * rmNode -> rmTargets -> mcastMaint -> [rebalance -> rmdModifier.postRm] -> rmNodesFinal.
+//
+// Unsafe removal enters directly at rmNodesFinal.
+// Stop-maintenance: stopMaintenance -> mcastStopMaint -> optional rebalance.
+//
+// Maintenance, shutdown, and decommission are batch operations. The primary
+// validates the entire batch before modifying Smap, then marks all requested
+// nodes in one Smap transaction. When required, that transaction increments
+// RMD once and starts one global rebalance.
+//
+// Rebalance completion resumes in rmdModifier.postRm (rebmeta.go), which
+// performs the final daemon action and then either removes the nodes from Smap
+// (decommission) or marks targets SnodeMaintPostReb (maintenance and shutdown).
+// Without rebalance, finalization runs synchronously. Unsafe removal bypasses
+// the marking and rebalance phase and proceeds directly to finalization.
+//
+// Stop-maintenance performs the reverse batch transition: it clears maintenance
+// flags in one Smap transaction and starts at most one rebalance. Self-initiated
+// DELETE /v1/cluster/daemon/{sid} also converges on the unregister path.
+//
+// Batch invariant: admission is all-or-nothing; each phase modifies Smap once
+// for the entire batch, and a rebalance-triggering transition creates one RMD
+// version and one global rebalance, regardless of the number of nodes.
+//
+// ===========================================================================================
 
 // gracefully remove node via apc.ActStartMaintenance, apc.ActDecommission, apc.ActShutdownNode
 // +gen:payload apc.ActStartMaintenance={"action": "start-maintenance", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false}}
@@ -101,7 +62,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
-	sids, err := rmNodeIDs(&opts)
+	sids, err := _rmNodeIDs(&opts)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -208,26 +169,6 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	if rebID != "" {
 		writeXid(w, rebID)
 	}
-}
-
-func rmNodeIDs(opts *apc.ActValRmNode) ([]string, error) {
-	sids := opts.Sids()
-	switch {
-	case len(sids) == 0:
-		return nil, errors.New("missing node ID")
-	case opts.DaemonID != "" && len(opts.DaemonIDs) != 0:
-		return nil, errors.New("cannot specify both sid and sids")
-	default:
-		return sids, nil
-	}
-}
-
-func snodeNames(nodes meta.Nodes) string {
-	names := make([]string, 0, len(nodes))
-	for _, si := range nodes {
-		names = append(names, si.StringEx())
-	}
-	return strings.Join(names, ", ")
 }
 
 func (p *proxy) rmTargets(nodes meta.Nodes, msg *apc.ActMsg, reb bool) (rebID string, err error) {
@@ -360,262 +301,79 @@ func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
 	ctx.rmdCtx = rmdCtx
 }
 
-// +gen:payload apc.ActStopMaintenance={"action": "stop-maintenance", "value": {"sids": ["target_id1", "target_id2"]}}
-func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	const tag = "stop-maintenance:"
-	var (
-		opts apc.ActValRmNode
-		smap = p.owner.smap.get()
-	)
-	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
-		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-		return
+func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, joining bool) error {
+	smap := p.owner.smap.get()
+	if !smap.isPrimary(p.si) {
+		return newErrNotPrimary(p.si, smap, "cannot "+action+" "+si.StringEx())
 	}
-	sids, err := rmNodeIDs(&opts)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
+	if si.IsProxy() {
+		return nil
 	}
-	var (
-		nodes       = make(meta.Nodes, 0, len(sids))
-		seen        = make(map[string]struct{}, len(sids))
-		targetCount int
-	)
-	for _, sid := range sids {
-		if _, ok := seen[sid]; ok {
-			p.writeErrf(w, r, "node %q is specified more than once", sid)
-			return
+	if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {
+		if err == errRebalanceDisabled {
+			err = nil
 		}
-		seen[sid] = struct{}{}
-		si := smap.GetNode(sid)
-		if si == nil {
-			err := cos.NewErrNotFound(p, "node "+sid)
-			p.writeErr(w, r, err, http.StatusNotFound)
-			return
-		}
-		if !smap.InMaint(si) {
-			p.writeErrf(w, r, "node %s is not in maintenance mode - nothing to do", si.StringEx())
-			return
-		}
-		nodes = append(nodes, si)
-		if si.IsTarget() {
-			targetCount++
-		}
-	}
-	if targetCount > 0 {
-		if running, xid := p.notifs.isRebRunning(); running {
-			p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later",
-				xid, msg.Action, snodeNames(nodes))
-			return
-		}
-	}
-	pname := p.String()
-	nlog.Infoln(tag, pname, "[", msg.Action, snodeNames(nodes), opts, "]")
-	for _, si := range nodes {
-		sname := si.StringEx()
-		tout := cmn.Rom.CplaneOperation()
-		if _, status, err := p.reqHealth(si, tout, nil, smap, false /*retry pub-addr*/); err != nil {
-			sleep, retries := tout/2, 4
-
-			time.Sleep(sleep)
-			for i := range retries { // retry
-				time.Sleep(sleep)
-				_, status, err = p.reqHealth(si, tout, nil, smap, true /*retry pub-addr*/)
-				if err == nil {
-					if i == 1 {
-						nlog.Infoln(tag, pname, "=>", sname, "OK after 1 attempt [", msg.Action, opts, "]")
-					} else {
-						nlog.Infoln(tag, pname, "=>", sname, "OK after", i, "attempts [", msg.Action, opts, "]")
-					}
-					break
-				}
-				if status != http.StatusServiceUnavailable {
-					p.writeErrf(w, r, "%s is unreachable: %v(%d)", sname, err, status)
-					return
-				}
-				sleep = min(sleep+time.Second, tout)
-			}
-			if err != nil {
-				debug.Assert(status == http.StatusServiceUnavailable)
-				nlog.Errorf("%s: node %s takes unusually long time to start: %v(%d) - proceeding anyway",
-					pname, sname, err, status)
-			}
-		}
-	}
-	smap = p.owner.smap.get() // health checks above may take a while
-	reb := targetCount > 0 && !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled &&
-		!nlog.Stopping() && smap.CountActiveTs()+targetCount >= 2
-	if reb {
-		if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		if err := p.checkRebCoexistence(msg, nodes); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
+		return err
 	}
 
-	rebID, err := p.mcastStopMaint(msg, nodes, reb)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
+	if smap.CountActiveTs() == 0 {
+		return nil
 	}
-	if rebID != "" {
-		writeXid(w, rebID)
+	if !joining && smap.CountActiveTs() == 1 {
+		return nil
 	}
-}
-func (p *proxy) mcastStopMaint(msg *apc.ActMsg, nodes meta.Nodes, reb bool) (rebID string, err error) {
-	sids := make([]string, 0, len(nodes))
-	for _, si := range nodes {
-		sids = append(sids, si.ID())
-	}
-	nlog.Infof("%s mcast-stopm: %s, %s, reb=%t", p, msg, snodeNames(nodes), reb)
-	ctx := &smapModifier{
-		pre:     p._stopMaintPre,
-		post:    p._stopMaintRMD,
-		final:   p._syncFinal,
-		sids:    sids,
-		skipReb: !reb,
-		msg:     msg,
-		flags:   meta.SnodeMaint | meta.SnodeMaintPostReb, // to clear node flags
-	}
-	err = p.owner.smap.modify(ctx)
-	if err != nil && ctx.status != 0 {
-		err = cmn.NewErrFailedTo(p, msg.Action, snodeNames(nodes), err, ctx.status)
-	}
-	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
-		debug.Assert(ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version() && ctx.rmdCtx.rebID != "")
-		rebID = ctx.rmdCtx.rebID
-	}
-	return
-}
 
-func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
-	const efmt = "cannot take %s out of maintenance:"
-	if !clone.isPrimary(p.si) {
-		return newErrNotPrimary(p.si, clone, fmt.Sprintf(efmt, strings.Join(ctx.sids, ", ")))
+	// early-GFN notification with an empty (version-only and not yet updated) Smap and
+	// message(new target's ID)
+	msg := p.newAmsgActVal(apc.ActStartGFN, nil)
+	msg.UUID = si.ID()
+	revs := revsPair{&smapX{Smap: meta.Smap{Version: smap.Version}}, msg}
+	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
+		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
 	}
-	var hasTarget bool
-	for _, sid := range ctx.sids {
-		si := clone.GetNode(sid)
-		if si == nil {
-			ctx.status = http.StatusNotFound
-			return &errNodeNotFound{p.si, clone, fmt.Sprintf(efmt, sid), sid}
-		}
-		hasTarget = hasTarget || si.IsTarget()
-	}
-	if hasTarget {
-		if running, xid := p.notifs.isRebRunning(); running {
-			return fmt.Errorf("rebalance[%s] is currently running, please try (%s %s) later",
-				xid, ctx.msg.Action, strings.Join(ctx.sids, ", "))
-		}
-	}
-	var activateProxy bool
-	for _, sid := range ctx.sids {
-		node := clone.GetNode(sid)
-		clone.clearNodeFlags(sid, ctx.flags)
-		activateProxy = activateProxy || node.IsProxy()
-	}
-	if activateProxy {
-		clone.staffIC()
-	}
+	ctx.gfn = true // to undo if need be
 	return nil
 }
 
-func (p *proxy) _stopMaintRMD(ctx *smapModifier, _ *smapX) {
-	if ctx.skipReb {
-		return
-	}
-	rmdCtx := &rmdModifier{
-		pre:     rmdInc,
-		smapCtx: ctx,
-		p:       p,
-		wait:    true,
-	}
-	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
-	rmdCtx.listen(nil)
-	ctx.rmdCtx = rmdCtx
-}
-
-//////////////////////////////////////////
-// DELETE /v1/cluster - self-unregister //
-//////////////////////////////////////////
-
-// +gen:endpoint DELETE /v1/cluster/daemon/{daemon-id}
-// Remove a node from the cluster by daemon ID.
-// Used for self-initiated node removal (e.g., when a node loses all mountpaths).
-func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
-	debug.Assert(reqIsPub(r) == isPub)
-	if isPub {
-		p.writeErrMsg(w, r, "not expecting DELETE /v1/cluster via pub-net", http.StatusForbidden)
-		return
-	}
-
-	apiItems, err := p.parseURL(w, r, apc.URLPathCluDaemon.L, 1, false)
-	if err != nil {
-		return
-	}
-
+func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
-		sid  = apiItems[0]
-		smap = p.owner.smap.get()
-		node = smap.GetNode(sid)
+		actMsgExt = p.newAmsg(ctx.msg, nil)
+		pairs     = make([]revsPair, 0, 4)
+		reb       = ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
 	)
-	if node == nil {
-		err = &errNodeNotFound{p.si, smap, "cannot remove", sid}
-		p.writeErr(w, r, err, http.StatusNotFound)
-		return
+	pairs = append(pairs, revsPair{clone, actMsgExt})
+	if reb {
+		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
+		actMsgExt.UUID = ctx.rmdCtx.rebID
+		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
 	}
-	if smap.IsPrimary(node) {
-		p.writeErrMsg(w, r, "cannot remove primary proxy", http.StatusBadRequest)
-		return
-	}
-	if p.forwardCP(w, r, nil, sid) {
-		return
-	}
-	if !p.NodeStarted() {
-		p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s is not ready yet (starting up)", p)
-		return
-	}
+	debug.Assert(clone._sgl != nil)
 
-	// primary (and cluster) to start and finalize rebalancing status _prior_ to removing individual nodes
-	if err := p.pready(smap, true); err != nil {
-		p.writeErr(w, r, err, http.StatusServiceUnavailable)
+	config, err := p.ensureConfigURLs()
+	if err != nil {
+		debug.Assert(nlog.Stopping(), err)
 		return
 	}
-
-	if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
-		err = fmt.Errorf("%w (action %q)", err, apc.ActSelfRemove)
-		p.writeErr(w, r, err, ecode)
-		return
-	}
-
-	senderID := r.Header.Get(apc.HdrSenderID)
-	if senderID != sid {
-		err = fmt.Errorf("expecting %s by %s, got a wrong node ID (%s != %s)", apc.ActSelfRemove, node.StringEx(), senderID, sid)
-		p.writeErr(w, r, err)
-		return
-	}
-
-	if ecode, err := p.mcastUnreg(&apc.ActMsg{Action: apc.ActSelfRemove}, meta.Nodes{node}); err != nil {
-		p.writeErr(w, r, err, ecode)
-	} else {
-		v := &p.rproxy.removed
-		v.mu.Lock()
-		if v.m == nil {
-			v.m = make(meta.NodeMap, 4)
+	if config == nil /*not updated - including anyway*/ {
+		config, err = p.owner.config.get()
+		if err != nil {
+			debug.Assert(nlog.Stopping(), err)
+			return
 		}
-		v.m[node.ID()] = node
-		v.mu.Unlock()
+	}
+
+	pairs = append(pairs, revsPair{config, actMsgExt})
+	wg := p.metasyncer.sync(pairs...)
+	if ctx.rmdCtx != nil && ctx.rmdCtx.wait {
+		wg.Wait()
 	}
 }
 
+//
 // post-rebalance or post no-rebalance - last step removing nodes
 // (with msg.Action defining semantics)
+//
+
 func (p *proxy) rmNodesFinal(msg *apc.ActMsg, nodes meta.Nodes, ctx *smapModifier) (int, error) {
 	var (
 		smap     = p.owner.smap.get()
@@ -766,6 +524,281 @@ func (p *proxy) _unregNodesPre(ctx *smapModifier, clone *smapX) error {
 		clone.staffIC()
 	}
 	return nil
+}
+
+// +gen:payload apc.ActStopMaintenance={"action": "stop-maintenance", "value": {"sids": ["target_id1", "target_id2"]}}
+func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+	const tag = "stop-maintenance:"
+	var (
+		opts apc.ActValRmNode
+		smap = p.owner.smap.get()
+	)
+	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+		return
+	}
+	sids, err := _rmNodeIDs(&opts)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	var (
+		nodes       = make(meta.Nodes, 0, len(sids))
+		seen        = make(map[string]struct{}, len(sids))
+		targetCount int
+	)
+	for _, sid := range sids {
+		if _, ok := seen[sid]; ok {
+			p.writeErrf(w, r, "node %q is specified more than once", sid)
+			return
+		}
+		seen[sid] = struct{}{}
+		si := smap.GetNode(sid)
+		if si == nil {
+			err := cos.NewErrNotFound(p, "node "+sid)
+			p.writeErr(w, r, err, http.StatusNotFound)
+			return
+		}
+		if !smap.InMaint(si) {
+			p.writeErrf(w, r, "node %s is not in maintenance mode - nothing to do", si.StringEx())
+			return
+		}
+		nodes = append(nodes, si)
+		if si.IsTarget() {
+			targetCount++
+		}
+	}
+	if targetCount > 0 {
+		if running, xid := p.notifs.isRebRunning(); running {
+			p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later",
+				xid, msg.Action, snodeNames(nodes))
+			return
+		}
+	}
+	pname := p.String()
+	nlog.Infoln(tag, pname, "[", msg.Action, snodeNames(nodes), opts, "]")
+	for _, si := range nodes {
+		sname := si.StringEx()
+		tout := cmn.Rom.CplaneOperation()
+		if _, status, err := p.reqHealth(si, tout, nil, smap, false /*retry pub-addr*/); err != nil {
+			sleep, retries := tout/2, 4
+
+			time.Sleep(sleep)
+			for i := range retries { // retry
+				time.Sleep(sleep)
+				_, status, err = p.reqHealth(si, tout, nil, smap, true /*retry pub-addr*/)
+				if err == nil {
+					if i == 1 {
+						nlog.Infoln(tag, pname, "=>", sname, "OK after 1 attempt [", msg.Action, opts, "]")
+					} else {
+						nlog.Infoln(tag, pname, "=>", sname, "OK after", i, "attempts [", msg.Action, opts, "]")
+					}
+					break
+				}
+				if status != http.StatusServiceUnavailable {
+					p.writeErrf(w, r, "%s is unreachable: %v(%d)", sname, err, status)
+					return
+				}
+				sleep = min(sleep+time.Second, tout)
+			}
+			if err != nil {
+				debug.Assert(status == http.StatusServiceUnavailable)
+				nlog.Errorf("%s: node %s takes unusually long time to start: %v(%d) - proceeding anyway",
+					pname, sname, err, status)
+			}
+		}
+	}
+	smap = p.owner.smap.get() // health checks above may take a while
+	reb := targetCount > 0 && !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled &&
+		!nlog.Stopping() && smap.CountActiveTs()+targetCount >= 2
+	if reb {
+		if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		if err := p.checkRebCoexistence(msg, nodes); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+	}
+
+	rebID, err := p.mcastStopMaint(msg, nodes, reb)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if rebID != "" {
+		writeXid(w, rebID)
+	}
+}
+
+func _rmNodeIDs(opts *apc.ActValRmNode) ([]string, error) {
+	sids := opts.Sids()
+	switch {
+	case len(sids) == 0:
+		return nil, errors.New("missing node ID")
+	case opts.DaemonID != "" && len(opts.DaemonIDs) != 0:
+		return nil, errors.New("cannot specify both sid and sids")
+	default:
+		return sids, nil
+	}
+}
+
+func snodeNames(nodes meta.Nodes) string {
+	names := make([]string, 0, len(nodes))
+	for _, si := range nodes {
+		names = append(names, si.StringEx())
+	}
+	return strings.Join(names, ", ")
+}
+
+func (p *proxy) mcastStopMaint(msg *apc.ActMsg, nodes meta.Nodes, reb bool) (rebID string, err error) {
+	sids := make([]string, 0, len(nodes))
+	for _, si := range nodes {
+		sids = append(sids, si.ID())
+	}
+	nlog.Infof("%s mcast-stopm: %s, %s, reb=%t", p, msg, snodeNames(nodes), reb)
+	ctx := &smapModifier{
+		pre:     p._stopMaintPre,
+		post:    p._stopMaintRMD,
+		final:   p._syncFinal,
+		sids:    sids,
+		skipReb: !reb,
+		msg:     msg,
+		flags:   meta.SnodeMaint | meta.SnodeMaintPostReb, // to clear node flags
+	}
+	err = p.owner.smap.modify(ctx)
+	if err != nil && ctx.status != 0 {
+		err = cmn.NewErrFailedTo(p, msg.Action, snodeNames(nodes), err, ctx.status)
+	}
+	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
+		debug.Assert(ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version() && ctx.rmdCtx.rebID != "")
+		rebID = ctx.rmdCtx.rebID
+	}
+	return
+}
+
+func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
+	const efmt = "cannot take %s out of maintenance:"
+	if !clone.isPrimary(p.si) {
+		return newErrNotPrimary(p.si, clone, fmt.Sprintf(efmt, strings.Join(ctx.sids, ", ")))
+	}
+	var hasTarget bool
+	for _, sid := range ctx.sids {
+		si := clone.GetNode(sid)
+		if si == nil {
+			ctx.status = http.StatusNotFound
+			return &errNodeNotFound{p.si, clone, fmt.Sprintf(efmt, sid), sid}
+		}
+		hasTarget = hasTarget || si.IsTarget()
+	}
+	if hasTarget {
+		if running, xid := p.notifs.isRebRunning(); running {
+			return fmt.Errorf("rebalance[%s] is currently running, please try (%s %s) later",
+				xid, ctx.msg.Action, strings.Join(ctx.sids, ", "))
+		}
+	}
+	var activateProxy bool
+	for _, sid := range ctx.sids {
+		node := clone.GetNode(sid)
+		clone.clearNodeFlags(sid, ctx.flags)
+		activateProxy = activateProxy || node.IsProxy()
+	}
+	if activateProxy {
+		clone.staffIC()
+	}
+	return nil
+}
+
+func (p *proxy) _stopMaintRMD(ctx *smapModifier, _ *smapX) {
+	if ctx.skipReb {
+		return
+	}
+	rmdCtx := &rmdModifier{
+		pre:     rmdInc,
+		smapCtx: ctx,
+		p:       p,
+		wait:    true,
+	}
+	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	rmdCtx.listen(nil)
+	ctx.rmdCtx = rmdCtx
+}
+
+//
+// DELETE /v1/cluster (apc.ActSelfRemove)
+//
+
+// +gen:endpoint DELETE /v1/cluster/daemon/{daemon-id}
+// Remove a node from the cluster by daemon ID.
+// Used for self-initiated node removal (e.g., when a node loses all mountpaths).
+func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
+	debug.Assert(reqIsPub(r) == isPub)
+	if isPub {
+		p.writeErrMsg(w, r, "not expecting DELETE /v1/cluster via pub-net", http.StatusForbidden)
+		return
+	}
+
+	apiItems, err := p.parseURL(w, r, apc.URLPathCluDaemon.L, 1, false)
+	if err != nil {
+		return
+	}
+
+	var (
+		sid  = apiItems[0]
+		smap = p.owner.smap.get()
+		node = smap.GetNode(sid)
+	)
+	if node == nil {
+		err = &errNodeNotFound{p.si, smap, "cannot remove", sid}
+		p.writeErr(w, r, err, http.StatusNotFound)
+		return
+	}
+	if smap.IsPrimary(node) {
+		p.writeErrMsg(w, r, "cannot remove primary proxy", http.StatusBadRequest)
+		return
+	}
+	if p.forwardCP(w, r, nil, sid) {
+		return
+	}
+	if !p.NodeStarted() {
+		p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s is not ready yet (starting up)", p)
+		return
+	}
+
+	// primary (and cluster) to start and finalize rebalancing status _prior_ to removing individual nodes
+	if err := p.pready(smap, true); err != nil {
+		p.writeErr(w, r, err, http.StatusServiceUnavailable)
+		return
+	}
+
+	if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
+		err = fmt.Errorf("%w (action %q)", err, apc.ActSelfRemove)
+		p.writeErr(w, r, err, ecode)
+		return
+	}
+
+	senderID := r.Header.Get(apc.HdrSenderID)
+	if senderID != sid {
+		err = fmt.Errorf("expecting %s by %s, got a wrong node ID (%s != %s)", apc.ActSelfRemove, node.StringEx(), senderID, sid)
+		p.writeErr(w, r, err)
+		return
+	}
+
+	if ecode, err := p.mcastUnreg(&apc.ActMsg{Action: apc.ActSelfRemove}, meta.Nodes{node}); err != nil {
+		p.writeErr(w, r, err, ecode)
+	} else {
+		v := &p.rproxy.removed
+		v.mu.Lock()
+		if v.m == nil {
+			v.m = make(meta.NodeMap, 4)
+		}
+		v.m[node.ID()] = node
+		v.mu.Unlock()
+	}
 }
 
 // rebalance's `can`: factors not including cluster map
