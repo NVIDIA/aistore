@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 // ==================== Node lifecycle management (primary proxy) ============================
@@ -48,6 +49,8 @@ import (
 //
 // ===========================================================================================
 
+var errSmapNoChange = errors.New("cluster membership: no change")
+
 // gracefully remove node via apc.ActStartMaintenance, apc.ActDecommission, apc.ActShutdownNode
 // +gen:payload apc.ActStartMaintenance={"action": "start-maintenance", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false}}
 // +gen:payload apc.ActDecommissionNode={"action": "decommission-node", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false, "rm_user_data": true}}
@@ -62,26 +65,21 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
-	sids, err := _rmNodeIDs(&opts)
-	if err != nil {
-		p.writeErr(w, r, err)
+	sids, errN := opts.GetIDs()
+	if errN != nil {
+		p.writeErr(w, r, errN)
 		return
 	}
 	var (
 		nodes           = make(meta.Nodes, 0, len(sids))
-		seen            = make(map[string]struct{}, len(sids))
+		snames          = make([]string, 0, len(sids))
 		hasTarget       bool
 		hasActiveTarget bool
 	)
 	for _, sid := range sids {
-		if _, ok := seen[sid]; ok {
-			p.writeErrf(w, r, "node %q is specified more than once", sid)
-			return
-		}
-		seen[sid] = struct{}{}
 		si := smap.GetNode(sid)
 		if si == nil {
-			err := cos.NewErrNotFound(p, "node "+sid)
+			err := &errNodeNotFound{si: p.si, smap: smap, msg: msg.Action, id: sid}
 			p.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}
@@ -98,8 +96,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			case apc.ActDecommissionNode, apc.ActDecommissionCluster, apc.ActShutdownNode,
 				apc.ActShutdownCluster, apc.ActRmNodeUnsafe:
 				if running, xid := p.notifs.isRebRunning(); running {
-					p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later",
-						xid, msg.Action, sname)
+					p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later", xid, msg.Action, sname)
 					return
 				}
 				if !smap.InMaint(si) {
@@ -107,12 +104,20 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 				}
 				// proceeding anyway
 			default:
-				if smap.InMaint(si) {
-					p.writeErrMsg(w, r, sname+" is already in maintenance mode")
-				} else {
+				debug.Assert(msg.Action == apc.ActStartMaintenance, msg.Action)
+				switch {
+				case si.Flags.IsSet(meta.SnodeDecomm):
 					p.writeErrMsg(w, r, sname+" is currently being decommissioned")
+					return
+				case si.IsProxy() || si.InMaintPostReb():
+					nlog.Warningln(p.String(), msg.Action, sname, "is already in maintenance mode - skipping")
+					continue
+				default:
+					// SnodeMaint w/out SnodeMaintPostReb: cannot tell a finished
+					// (--no-rebalance) operation from an interrupted one
+					p.writeErrMsg(w, r, sname+" is transitioning to maintenance mode (post-rebalance not confirmed)")
+					return
 				}
-				return
 			}
 		}
 		if si.IsTarget() {
@@ -122,14 +127,19 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			}
 		}
 		nodes = append(nodes, si)
+		snames = append(snames, si.StringEx())
 	}
 
-	sname := snodeNames(nodes)
-	nlog.Infof("%s: %s(%s) opts=%v", p, msg.Action, sname, opts)
+	if len(nodes) == 0 {
+		nlog.Warningln(p.String(), msg.Action, sids, "- all already in maintenance mode, nothing to do")
+		return
+	}
+
+	nlog.Infof("%s: %s(%v) opts=%v", p, msg.Action, snames, opts)
 	if hasTarget {
+		// TODO -- FIXME: membership-change vs other membership-change
 		if running, xid := p.notifs.isRebRunning(); running {
-			p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later",
-				xid, msg.Action, sname)
+			p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %v) later", xid, msg.Action, snames)
 			return
 		}
 	}
@@ -141,9 +151,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErr(w, r, err)
 			return
 		}
-		ecode, err := p.rmNodesFinal(msg, nodes, nil)
+		ecode, err := p.rmNodesFinal(msg, nodes, snames, nil)
 		if err != nil {
-			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, sname, err), ecode)
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, snames, err), ecode)
 		}
 		return
 	}
@@ -161,9 +171,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			return
 		}
 	}
-	rebID, err := p.rmTargets(nodes, msg, reb)
+	rebID, err := p.rmTargets(nodes, snames, msg, reb)
 	if err != nil {
-		p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, sname, err))
+		p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, snames, err))
 		return
 	}
 	if rebID != "" {
@@ -171,9 +181,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 }
 
-func (p *proxy) rmTargets(nodes meta.Nodes, msg *apc.ActMsg, reb bool) (rebID string, err error) {
+func (p *proxy) rmTargets(nodes meta.Nodes, snames []string, msg *apc.ActMsg, reb bool) (rebID string, err error) {
 	var ctx *smapModifier
-	if ctx, err = p.mcastMaint(msg, nodes, reb); err != nil {
+	if ctx, err = p.mcastMaint(msg, nodes, snames, reb); err != nil {
 		return
 	}
 	if ctx.rmdCtx != nil {
@@ -190,11 +200,11 @@ func (p *proxy) rmTargets(nodes meta.Nodes, msg *apc.ActMsg, reb bool) (rebID st
 		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, actMsgExt}
 		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
-	_, err = p.rmNodesFinal(msg, nodes, ctx)
+	_, err = p.rmNodesFinal(msg, nodes, snames, ctx)
 	return "", err
 }
 
-func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, reb bool) (*smapModifier, error) {
+func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, snames []string, reb bool) (*smapModifier, error) {
 	var flags cos.BitFlags
 	switch msg.Action {
 	case apc.ActDecommissionNode:
@@ -214,7 +224,7 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, reb bool) (*smapMo
 	for _, si := range nodes {
 		sids = append(sids, si.ID())
 	}
-	nlog.Infof("%s mcast-maint: %s, %s reb=%t, nflags=%s", p, msg, snodeNames(nodes), reb, dummy.Fl2S())
+	nlog.Infof("%s mcast-maint: %s, %v reb=%t, nflags=%s", p, msg, snames, reb, dummy.Fl2S())
 
 	ctx := &smapModifier{
 		pre:     p._markMaint,
@@ -240,7 +250,7 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, reb bool) (*smapMo
 	}
 	nlog.Warningln("mcast-maint:", err)
 	if ctx.status != 0 {
-		err = cmn.NewErrFailedTo(p, ctx.msg.Action, snodeNames(nodes), err, ctx.status)
+		err = cmn.NewErrFailedTo(p, ctx.msg.Action, snames, err, ctx.status)
 	}
 	return nil, err
 }
@@ -254,7 +264,7 @@ func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
 		si := clone.GetNode(sid)
 		if si == nil {
 			ctx.status = http.StatusNotFound
-			return &errNodeNotFound{p.si, clone, "cannot put node in maintenance", sid}
+			return &errNodeNotFound{si: p.si, smap: clone, msg: "cannot put node in maintenance", id: sid}
 		}
 		hasTarget = hasTarget || si.IsTarget()
 	}
@@ -274,7 +284,7 @@ func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-func (p *proxy) mcastMaintPostReb(msg *apc.ActMsg, nodes meta.Nodes) error {
+func (p *proxy) mcastMaintPostReb(msg *apc.ActMsg, nodes meta.Nodes, tnames []string) error {
 	const tag = "mcast-maint-post-reb:"
 	debug.Assert(msg.Action == apc.ActStartMaintenance || msg.Action == apc.ActShutdownNode, msg.Action)
 
@@ -283,7 +293,7 @@ func (p *proxy) mcastMaintPostReb(msg *apc.ActMsg, nodes meta.Nodes) error {
 		debug.Assert(si.IsTarget(), si.StringEx())
 		sids = append(sids, si.ID())
 	}
-	nlog.Infoln(p.String(), tag, msg.String(), snodeNames(nodes))
+	nlog.Infoln(p.String(), tag, msg.String(), tnames)
 
 	ctx := &smapModifier{
 		pre:   p._markMaintPostReb,
@@ -298,7 +308,7 @@ func (p *proxy) mcastMaintPostReb(msg *apc.ActMsg, nodes meta.Nodes) error {
 	}
 	nlog.Warningln(tag, err)
 	if ctx.status != 0 {
-		err = cmn.NewErrFailedTo(p, ctx.msg.Action, snodeNames(nodes), err, ctx.status)
+		err = cmn.NewErrFailedTo(p, ctx.msg.Action, tnames, err, ctx.status)
 	}
 	return err
 }
@@ -479,10 +489,11 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 // (with msg.Action defining semantics)
 //
 
-func (p *proxy) rmNodesFinal(msg *apc.ActMsg, nodes meta.Nodes, ctx *smapModifier) (int, error) {
+func (p *proxy) rmNodesFinal(msg *apc.ActMsg, nodes meta.Nodes, snames []string, ctx *smapModifier) (int, error) {
 	var (
-		smap     = p.owner.smap.get()
-		selected = make(meta.Nodes, 0, len(nodes))
+		smap          = p.owner.smap.get()
+		selected      = make(meta.Nodes, 0, len(nodes))
+		selectedNames = make([]string, 0, len(nodes))
 	)
 	switch msg.Action {
 	case apc.ActShutdownNode, apc.ActRmNodeUnsafe, apc.ActStartMaintenance, apc.ActDecommissionNode:
@@ -498,11 +509,13 @@ func (p *proxy) rmNodesFinal(msg *apc.ActMsg, nodes meta.Nodes, ctx *smapModifie
 			continue
 		}
 		selected = append(selected, node)
+		selectedNames = append(selectedNames, node.StringEx())
 	}
 	if len(selected) == 0 {
-		txt := "cannot \"" + msg.Action + "\""
-		return http.StatusNotFound, &errNodeNotFound{p.si, smap, txt, snodeNames(nodes)}
+		nlog.Warningf("cannot %s %v - none present in %s, nothing to do", msg.Action, snames, smap.StringEx())
+		return 0, nil
 	}
+
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
 	args.smap = smap
@@ -510,7 +523,7 @@ func (p *proxy) rmNodesFinal(msg *apc.ActMsg, nodes meta.Nodes, ctx *smapModifie
 	args.selected = selected
 	args.nodeCount = len(selected)
 	args.timeout = cmn.Rom.CplaneOperation()
-	nlog.InfoDepth(1, p.String(), msg.Action, snodeNames(selected))
+	nlog.InfoDepth(1, p.String(), msg.Action, selectedNames)
 	results := p.bcastSelected(args)
 	freeBcArgs(args)
 	for _, res := range results {
@@ -541,35 +554,38 @@ func (p *proxy) rmNodesFinal(msg *apc.ActMsg, nodes meta.Nodes, ctx *smapModifie
 	)
 	switch msg.Action {
 	case apc.ActDecommissionNode, apc.ActRmNodeUnsafe:
-		ecode, err = p.mcastUnreg(msg, selected)
+		ecode, err = p.mcastUnreg(msg, selected, selectedNames)
 	case apc.ActStartMaintenance, apc.ActShutdownNode:
 		if ctx != nil && ctx.rmdCtx != nil && ctx.rmdCtx.rebID != "" {
 			// final step executing shutdown and start-maintenance transaction:
 			// setting target flags |= cluster.SnodeMaintPostReb
-			var targets meta.Nodes
+			var (
+				targets = make(meta.Nodes, 0, len(selected))
+				tnames  = make([]string, 0, len(selected))
+			)
 			for _, si := range selected {
 				if si.IsTarget() {
 					targets = append(targets, si)
+					tnames = append(tnames, si.StringEx())
 				}
 			}
 			if len(targets) > 0 {
-				err = p.mcastMaintPostReb(msg, targets)
+				err = p.mcastMaintPostReb(msg, targets, tnames)
 			}
 		}
 	}
 	if err != nil {
-		nlog.Errorf("%s: (%s %s) FATAL: failed to update %s: %v",
-			p, msg, snodeNames(selected), p.owner.smap.get(), err)
+		nlog.Errorf("%s: (%s %v) FATAL: failed to update %s: %v", p, msg, selectedNames, p.owner.smap.get(), err)
 	}
 	return ecode, err
 }
 
-func (p *proxy) mcastUnreg(msg *apc.ActMsg, nodes meta.Nodes) (ecode int, err error) {
+func (p *proxy) mcastUnreg(msg *apc.ActMsg, nodes meta.Nodes, snames []string) (ecode int, err error) {
 	sids := make([]string, 0, len(nodes))
 	for _, si := range nodes {
 		sids = append(sids, si.ID())
 	}
-	nlog.Infof("%s mcast-unreg: %s, %s", p, msg, snodeNames(nodes))
+	nlog.Infof("%s mcast-unreg: %s, %v", p, msg, snames)
 	ctx := &smapModifier{
 		pre:     p._unregNodesPre,
 		final:   p._syncFinal,
@@ -578,13 +594,16 @@ func (p *proxy) mcastUnreg(msg *apc.ActMsg, nodes meta.Nodes) (ecode int, err er
 		skipReb: true,
 	}
 	err = p.owner.smap.modify(ctx)
+	if err != nil && errors.Is(err, errSmapNoChange) {
+		err = nil
+	}
 	return ctx.status, err
 }
 
 func (p *proxy) _unregNodesPre(ctx *smapModifier, clone *smapX) error {
 	const verb = "remove"
 	if !clone.isPrimary(p.si) {
-		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot %s %s", verb, strings.Join(ctx.sids, ", ")))
+		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot %s %v", verb, ctx.sids))
 	}
 	var (
 		hasTarget bool
@@ -600,13 +619,12 @@ func (p *proxy) _unregNodesPre(ctx *smapModifier, clone *smapX) error {
 		hasTarget = hasTarget || si.IsTarget()
 	}
 	if present == 0 {
-		ctx.status = http.StatusNotFound
-		return &errNodeNotFound{p.si, clone, "failed to " + verb, strings.Join(ctx.sids, ", ")}
+		nlog.Warningln(p.String(), ctx.msg.Action, ctx.sids, "already not present in", clone.StringEx(), "- nothing to do")
+		return errSmapNoChange
 	}
 	if ctx.msg.Action == apc.ActRmNodeUnsafe && hasTarget {
 		if running, xid := p.notifs.isRebRunning(); running {
-			return fmt.Errorf("rebalance[%s] is currently running, please try (%s %s) later",
-				xid, ctx.msg.Action, strings.Join(ctx.sids, ", "))
+			return fmt.Errorf("rebalance[%s] is currently running, please try (%s %v) later", xid, ctx.msg.Action, ctx.sids)
 		}
 	}
 	var removedProxy bool
@@ -631,6 +649,34 @@ func (p *proxy) _unregNodesPre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
+func (p *proxy) _reqHealthSelected(nodes meta.Nodes, smap *smapX, tout time.Duration, retry bool) sliceResults {
+	debug.Assert(len(nodes) > 0)
+	results := allocBcastRes(len(nodes))
+	results = results[:len(nodes)]
+
+	call := func(i int, si *meta.Snode) {
+		res := allocCR()
+		res.si = si
+		_, res.status, res.err = p.reqHealth(si, tout, nil, smap, retry)
+		results[i] = res
+	}
+	if len(nodes) == 1 {
+		call(0, nodes[0])
+		return results
+	}
+
+	wg := cos.NewClusterWaitGroup(sys.NumCPU(), len(nodes))
+	for i, si := range nodes {
+		wg.Add(1)
+		go func(i int, si *meta.Snode) {
+			call(i, si)
+			wg.Done()
+		}(i, si)
+	}
+	wg.Wait()
+	return results
+}
+
 // +gen:payload apc.ActStopMaintenance={"action": "stop-maintenance", "value": {"sids": ["target_id1", "target_id2"]}}
 func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	const tag = "stop-maintenance:"
@@ -642,75 +688,103 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
-	sids, err := _rmNodeIDs(&opts)
-	if err != nil {
-		p.writeErr(w, r, err)
+	sids, errN := opts.GetIDs()
+	if errN != nil {
+		p.writeErr(w, r, errN)
 		return
 	}
 	var (
 		nodes       = make(meta.Nodes, 0, len(sids))
-		seen        = make(map[string]struct{}, len(sids))
+		selectedIDs = make([]string, 0, len(sids))
+		snames      = make([]string, 0, len(sids))
 		targetCount int
 	)
 	for _, sid := range sids {
-		if _, ok := seen[sid]; ok {
-			p.writeErrf(w, r, "node %q is specified more than once", sid)
-			return
-		}
-		seen[sid] = struct{}{}
 		si := smap.GetNode(sid)
 		if si == nil {
-			err := cos.NewErrNotFound(p, "node "+sid)
+			err := &errNodeNotFound{si: p.si, smap: smap, msg: tag, id: sid}
 			p.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}
-		if !smap.InMaint(si) {
-			p.writeErrf(w, r, "node %s is not in maintenance mode - nothing to do", si.StringEx())
+
+		switch {
+		case si.Flags.IsSet(meta.SnodeDecomm):
+			p.writeErrf(w, r, "%s: node %s is currently being decommissioned", tag, si.StringEx())
 			return
+		case smap.InMaint(si):
+			// expected
+		default:
+			nlog.Warningln(tag, si.StringEx(), "is already active - skipping")
+			continue
 		}
+
 		nodes = append(nodes, si)
+		selectedIDs = append(selectedIDs, si.ID())
 		if si.IsTarget() {
 			targetCount++
 		}
+		snames = append(snames, si.StringEx())
 	}
+	if len(nodes) == 0 {
+		nlog.Warningln(tag, "all requested nodes:", sids, "are already active - nothing to do")
+		return
+	}
+
 	if targetCount > 0 {
 		if running, xid := p.notifs.isRebRunning(); running {
-			p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later",
-				xid, msg.Action, snodeNames(nodes))
+			p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later", xid, msg.Action, snames)
 			return
 		}
 	}
 	pname := p.String()
-	nlog.Infoln(tag, pname, "[", msg.Action, snodeNames(nodes), opts, "]")
-	for _, si := range nodes {
-		sname := si.StringEx()
-		tout := cmn.Rom.CplaneOperation()
-		if _, status, err := p.reqHealth(si, tout, nil, smap, false /*retry pub-addr*/); err != nil {
-			sleep, retries := tout/2, 4
-
-			// give a restarting node a full `tout` before the first retry
-			// (initial startup grace plus the first retry interval)
-			time.Sleep(sleep)
-			for i := range retries {
-				time.Sleep(sleep)
-				_, status, err = p.reqHealth(si, tout, nil, smap, true /*retry pub-addr*/)
-				if err == nil {
-					nlog.Infoln(tag, pname, "=>", sname, "OK after", i+1, "attempt"+cos.Plural(i+1), "[", msg.Action, opts, "]")
-					break
-				}
-				if status != http.StatusServiceUnavailable {
-					p.writeErrf(w, r, "%s is unreachable: %v(%d)", sname, err, status)
-					return
-				}
-				sleep = min(sleep+time.Second, tout)
-			}
-			if err != nil {
-				debug.Assert(status == http.StatusServiceUnavailable)
-				nlog.Errorf("%s: node %s takes unusually long time to start: %v(%d) - proceeding anyway",
-					pname, sname, err, status)
-			}
+	nlog.Infoln(tag, pname, "[", msg.Action, snames, opts, "]")
+	tout := cmn.Rom.CplaneOperation()
+	results := p._reqHealthSelected(nodes, smap, tout, false /*retry pub-addr*/)
+	retryNodes := make(meta.Nodes, 0, len(nodes))
+	for _, res := range results {
+		if res.err != nil {
+			retryNodes = append(retryNodes, res.si)
 		}
 	}
+	freeBcastRes(results)
+
+	if len(retryNodes) > 0 {
+		sleep, retries := tout/2, 4
+
+		// give restarting nodes a full `tout` before the first retry
+		// (initial startup grace plus the first retry interval)
+		time.Sleep(sleep)
+		for i := range retries {
+			time.Sleep(sleep)
+			results = p._reqHealthSelected(retryNodes, smap, tout, true /*retry pub-addr*/)
+			retryNodes = retryNodes[:0]
+			for _, res := range results {
+				sname := res.si.StringEx()
+				switch {
+				case res.err == nil:
+					nlog.Infoln(tag, pname, "=>", sname, "OK after", i+1, "attempt"+cos.Plural(i+1), "[", msg.Action, opts, "]")
+				case res.status != http.StatusServiceUnavailable:
+					p.writeErrf(w, r, "%s is unreachable: %v(%d)", sname, res.err, res.status)
+					freeBcastRes(results)
+					return
+				default:
+					retryNodes = append(retryNodes, res.si)
+				}
+			}
+			freeBcastRes(results)
+			l := len(retryNodes)
+			if l == 0 {
+				break
+			}
+			if i < retries-1 {
+				nlog.Warningln(tag, "retrying node"+cos.Plural(l), "that returned 503:", retryNodes)
+				sleep = min(sleep+time.Second, tout)
+				continue
+			}
+			nlog.Warningln(tag, "timed out waiting for node"+cos.Plural(l), retryNodes, "to start - proceeding anyway")
+		}
+	}
+
 	smap = p.owner.smap.get() // health checks above may take a while
 	reb := targetCount > 0 && !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled &&
 		!nlog.Stopping() && smap.CountActiveTs()+targetCount >= 2
@@ -725,7 +799,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		}
 	}
 
-	rebID, err := p.mcastStopMaint(msg, nodes, reb)
+	rebID, err := p.mcastStopMaint(msg, selectedIDs, snames, reb)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -735,32 +809,8 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 }
 
-func _rmNodeIDs(opts *apc.ActValRmNode) ([]string, error) {
-	sids := opts.Sids()
-	switch {
-	case len(sids) == 0:
-		return nil, errors.New("missing node ID")
-	case opts.DaemonID != "" && len(opts.DaemonIDs) != 0:
-		return nil, errors.New("cannot specify both sid and sids")
-	default:
-		return sids, nil
-	}
-}
-
-func snodeNames(nodes meta.Nodes) string {
-	names := make([]string, 0, len(nodes))
-	for _, si := range nodes {
-		names = append(names, si.StringEx())
-	}
-	return strings.Join(names, ", ")
-}
-
-func (p *proxy) mcastStopMaint(msg *apc.ActMsg, nodes meta.Nodes, reb bool) (rebID string, err error) {
-	sids := make([]string, 0, len(nodes))
-	for _, si := range nodes {
-		sids = append(sids, si.ID())
-	}
-	nlog.Infof("%s mcast-stopm: %s, %s, reb=%t", p, msg, snodeNames(nodes), reb)
+func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, reb bool) (rebID string, err error) {
+	nlog.Infof("%s mcast-stopm: %s, %s, reb=%t", p, msg, snames, reb)
 	ctx := &smapModifier{
 		pre:     p._stopMaintPre,
 		post:    p._stopMaintRMD,
@@ -772,7 +822,7 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, nodes meta.Nodes, reb bool) (reb
 	}
 	err = p.owner.smap.modify(ctx)
 	if err != nil && ctx.status != 0 {
-		err = cmn.NewErrFailedTo(p, msg.Action, snodeNames(nodes), err, ctx.status)
+		err = cmn.NewErrFailedTo(p, msg.Action, snames, err, ctx.status)
 	}
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
 		debug.Assert(ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version() && ctx.rmdCtx.rebID != "")
@@ -791,7 +841,7 @@ func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
 		si := clone.GetNode(sid)
 		if si == nil {
 			ctx.status = http.StatusNotFound
-			return &errNodeNotFound{p.si, clone, fmt.Sprintf(efmt, sid), sid}
+			return &errNodeNotFound{si: p.si, smap: clone, msg: fmt.Sprintf(efmt, sid), id: sid}
 		}
 		hasTarget = hasTarget || si.IsTarget()
 	}
@@ -864,7 +914,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
 		node = smap.GetNode(sid)
 	)
 	if node == nil {
-		err = &errNodeNotFound{p.si, smap, "cannot remove", sid}
+		err = &errNodeNotFound{si: p.si, smap: smap, msg: "cannot remove", id: sid}
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -899,7 +949,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
 		return
 	}
 
-	if ecode, err := p.mcastUnreg(&apc.ActMsg{Action: apc.ActSelfRemove}, meta.Nodes{node}); err != nil {
+	if ecode, err := p.mcastUnreg(&apc.ActMsg{Action: apc.ActSelfRemove}, meta.Nodes{node}, []string{node.StringEx()}); err != nil {
 		p.writeErr(w, r, err, ecode)
 	} else {
 		v := &p.rproxy.removed

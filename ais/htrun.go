@@ -995,7 +995,7 @@ func (h *htrun) _nfy(n core.Notif, err error, upon string, aborted bool) {
 			if si := smap.GetActiveNode(dst); si != nil {
 				nodes = append(nodes, si)
 			} else {
-				nlog.Errorln(&errNodeNotFound{h.si, smap, "failed to notify", dst})
+				nlog.Errorln(&errNodeNotFound{si: h.si, smap: smap, msg: "failed to notify", id: dst})
 			}
 		}
 	}
@@ -1774,7 +1774,7 @@ func (h *htrun) warnMsync(r *http.Request, smap *smapX) {
 	pid := r.Header.Get(apc.HdrSenderID)
 	psi := smap.GetNode(pid)
 	if psi == nil {
-		err := &errNodeNotFound{msg: tag + " warning:", id: pid, si: h.si, smap: smap}
+		err := &errNodeNotFound{si: h.si, smap: smap, msg: tag + " warning:", id: pid}
 		nlog.Warningln(err)
 	} else if !smap.isPrimary(psi) {
 		nlog.Warningln(h.String(), tag, "expecting primary, got", psi.StringEx(), smap.StringEx())

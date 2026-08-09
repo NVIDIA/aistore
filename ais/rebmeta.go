@@ -293,28 +293,30 @@ func (m *rmdModifier) postRm(nl nl.Listener) {
 	var (
 		p      = m.p
 		smap   = p.owner.smap.get()
-		nodes  = make(meta.Nodes, 0, len(m.smapCtx.nodeIDs()))
+		sids   = m.smapCtx.nodeIDs()
+		nodes  = make(meta.Nodes, 0, len(sids))
+		snames = make([]string, 0, len(sids))
 		xname  = "rebalance[" + nl.UUID() + "]"
-		prefix = "remove "
+		warn   string
 	)
 	for _, sid := range m.smapCtx.nodeIDs() {
 		si := m.smapCtx.smap.GetNode(sid)
 		debug.Assertf(si != nil, "missing %s in %s", sid, m.smapCtx.smap.StringEx())
 		if si != nil {
 			nodes = append(nodes, si)
+			snames = append(snames, si.StringEx())
 		}
 	}
 	if m.smapCtx.msg.Action == apc.ActStartMaintenance || m.smapCtx.msg.Action == apc.ActShutdownNode {
-		prefix = "mark " + snodeNames(nodes) + " for maintenance mode in the current "
+		warn = fmt.Sprintf("mark %v for maintenance mode in the current %s", snames, smap.StringEx())
 	} else {
-		prefix += snodeNames(nodes) + " from the current "
+		warn = fmt.Sprintf("remove %v from the current %s", snames, smap.StringEx())
 	}
-	warn := prefix + smap.StringEx()
 	debug.Assert(nl.UUID() == m.rebID)
 
 	if nl.ErrCnt() == 0 {
 		nlog.Infoln("post-rebalance commit:", warn)
-		if _, err := p.rmNodesFinal(m.smapCtx.msg, nodes, m.smapCtx); err != nil {
+		if _, err := p.rmNodesFinal(m.smapCtx.msg, nodes, snames, m.smapCtx); err != nil {
 			nlog.Errorln(err)
 		}
 		return
@@ -335,7 +337,7 @@ func (m *rmdModifier) postRm(nl nl.Listener) {
 
 	// go ahead to decommission anyway
 	nlog.Errorf("given %q operation and despite [%v] - proceeding to %s", m.smapCtx.msg.Action, nlerr, warn)
-	if _, err := p.rmNodesFinal(m.smapCtx.msg, nodes, m.smapCtx); err != nil {
+	if _, err := p.rmNodesFinal(m.smapCtx.msg, nodes, snames, m.smapCtx); err != nil {
 		nlog.Errorln(err)
 	}
 

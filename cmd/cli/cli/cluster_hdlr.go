@@ -487,7 +487,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	var (
 		snames    = make([]string, 0, len(nodeArgs))
 		daemonIDs = make([]string, 0, len(nodeArgs))
-		seen      = make(map[string]struct{}, len(nodeArgs))
+		seen      = make(cos.StrSet, len(nodeArgs))
 	)
 	for _, nodeArg := range nodeArgs {
 		node, sname, err := getNode(c, nodeArg)
@@ -505,6 +505,8 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		daemonIDs = append(daemonIDs, node.ID())
 		hasTarget = hasTarget || node.IsTarget()
 	}
+
+	// make apc.ActValRmNode
 	var (
 		xid               string
 		sname             = strings.Join(snames, ", ")
@@ -517,11 +519,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 			NoShutdown:    noShutdown,
 		}
 	)
-	if len(daemonIDs) == 1 {
-		actValue.DaemonID = daemonIDs[0]
-	} else {
-		actValue.DaemonIDs = daemonIDs
-	}
+	actValue.SetIDs(daemonIDs...)
 	if skipRebalance && hasTarget {
 		warn := fmt.Sprintf("executing %q _and_ not running global rebalance may lead to a loss of data!", action)
 		actionWarn(c, warn)
@@ -541,6 +539,8 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 			return fmt.Errorf(fmterr, qflprn(rmUserDataFlag))
 		}
 	}
+
+	// confirm and execute
 	switch action {
 	case cmdStartMaint:
 		if !flagIsSet(c, yesFlag) {
@@ -581,6 +581,8 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if xid != "" {
 		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xid)
 	}
+
+	// report
 	for _, sname := range snames {
 		switch action {
 		case cmdStopMaint:

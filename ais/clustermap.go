@@ -107,6 +107,7 @@ var (
 
 func (ctx *smapModifier) nodeIDs() []string {
 	if len(ctx.sids) > 0 {
+		debug.Assert(ctx.sid == "")
 		return ctx.sids
 	}
 	if ctx.sid != "" {

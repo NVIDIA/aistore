@@ -28,7 +28,7 @@ type (
 	syncCallback func(tsi *meta.Snode, rargs *rargs) (ok bool)
 
 	Status struct {
-		Targets     meta.Nodes `json:"targets"`             // targets I'm waiting for ACKs from
+		Targets     meta.Nodes `json:"targets,omitempty"`   // Deprecated: will be removed in 5.1
 		SmapVersion int64      `json:"smap_version,string"` // current Smap version (via smapOwner)
 		RebVersion  int64      `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		RebID       int64      `json:"reb_id,string"`       // rebalance ID

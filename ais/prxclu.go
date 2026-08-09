@@ -900,7 +900,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		tsi := args.smap.GetTarget(xargs.DaemonID)
 		if tsi == nil {
 			freeBcArgs(args)
-			err := &errNodeNotFound{p.si, args.smap, "cannot resilver", xargs.DaemonID}
+			err := &errNodeNotFound{si: p.si, smap: args.smap, msg: "cannot resilver", id: xargs.DaemonID}
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1143,7 +1143,7 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 			smap := p.owner.smap.get()
 			node := smap.GetNode(sid)
 			if node == nil {
-				err := &errNodeNotFound{p.si, smap, "X.509 load failure:", sid}
+				err := &errNodeNotFound{si: p.si, smap: smap, msg: "X.509 load failure:", id: sid}
 				p.writeErr(w, r, err, http.StatusNotFound)
 				return
 			}

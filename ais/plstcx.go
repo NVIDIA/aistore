@@ -211,7 +211,7 @@ func (p *proxy) _lsofcSID(lsmsg *apc.LsoMsg, smap *smapX, wantOnlyRemote bool) (
 	fc.wantOnlyRemote = wantOnlyRemote
 	fc.tsi = smap.GetTarget(lsmsg.SID)
 	if fc.tsi == nil || fc.tsi.InMaintOrDecomm() {
-		err = &errNodeNotFound{p.si, smap, lsotag + " failure:", lsmsg.SID}
+		err = &errNodeNotFound{si: p.si, smap: smap, msg: lsotag + " failure:", id: lsmsg.SID}
 		nlog.Errorln(err)
 		if smap.CountActiveTs() == 1 {
 			// (walk an extra mile)

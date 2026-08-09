@@ -970,7 +970,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	} else {
 		if tsi = smap.GetTarget(nodeID); tsi == nil {
 			p.statsT.IncWith(errcnt, vlabs)
-			err = &errNodeNotFound{p.si, smap, verb + " failure:", nodeID}
+			err = &errNodeNotFound{si: p.si, smap: smap, msg: verb + " failure:", id: nodeID}
 			p.writeErr(w, r, err)
 			return
 		}
@@ -2119,7 +2119,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		if args.DaemonID != "" {
 			smap := p.owner.smap.get()
 			if tsi = smap.GetTarget(args.DaemonID); tsi == nil {
-				err := &errNodeNotFound{p.si, smap, apc.ActPromote + " failure:", args.DaemonID}
+				err := &errNodeNotFound{si: p.si, smap: smap, msg: apc.ActPromote + " failure:", id: args.DaemonID}
 				p.writeErr(w, r, err)
 				return
 			}

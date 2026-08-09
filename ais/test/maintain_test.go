@@ -41,16 +41,28 @@ func TestMaintenanceOnOff(t *testing.T) {
 	msg.DaemonID = mntTarget.ID()
 	_, err = tools.StartMaintenance(bp, msg)
 	tassert.CheckFatal(t, err)
+
 	smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
 		smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
+
 	_, err = api.StopMaintenance(bp, msg)
 	tassert.CheckFatal(t, err)
-	_, err = tools.WaitForClusterState(proxyURL, "target is back",
+
+	smap, err = tools.WaitForClusterState(proxyURL, "target is back",
 		smap.Version, smap.CountActivePs(), smap.CountTargets())
 	tassert.CheckFatal(t, err)
-	_, err = api.StopMaintenance(bp, msg)
-	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
+
+	// Stop-maintenance is idempotent for an already active node.
+	rebID, err := api.StopMaintenance(bp, msg)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, rebID == "", "repeated stop-maintenance started rebalance %q", rebID)
+
+	curSmap := tools.GetClusterMap(t, proxyURL)
+	tassert.Fatalf(t, curSmap.Version == smap.Version,
+		"repeated stop-maintenance changed Smap v%d => v%d", smap.Version, curSmap.Version)
+	tassert.Fatalf(t, curSmap.GetActiveNode(mntTarget.ID()) != nil,
+		"%s is not active after repeated stop-maintenance", mntTarget.StringEx())
 }
 
 func TestMaintenanceListObjects(t *testing.T) {

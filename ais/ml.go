@@ -345,7 +345,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 
 		tsi := smap.GetTarget(ctx.tid)
 		if tsi == nil {
-			t.writeErr(w, r, &errNodeNotFound{t.si, smap, "x-moss", ctx.tid})
+			t.writeErr(w, r, &errNodeNotFound{si: t.si, smap: smap, msg: "x-moss", id: ctx.tid})
 			return
 		}
 

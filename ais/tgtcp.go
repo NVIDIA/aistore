@@ -400,7 +400,7 @@ func (t *target) _setPrim(ctx *smapModifier, clone *smapX) (err error) {
 	}
 	psi := clone.GetProxy(ctx.sid)
 	if psi == nil {
-		return &errNodeNotFound{t.si, clone, "cannot set new primary", ctx.sid}
+		return &errNodeNotFound{si: t.si, smap: clone, msg: "cannot set new primary", id: ctx.sid}
 	}
 	clone.Primary = psi
 	return
@@ -1020,7 +1020,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 		nlog.Warningln(tag, msg.UUID, "vs", nxid)
 	}
 
-	// 1. by user aka admin
+	// 1. by user aka admin ======================================
 	if msg.Action == apc.ActRebalance {
 		xname := tag + msg.UUID + "]"
 
@@ -1047,30 +1047,33 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 		return
 	}
 
-	// 2. by RMD
+	// 2. by RMD ======================================
 	xname := tag + nxid + "]"
 
 	debug.Assert(extArgs.Flags&xact.FlagRemoveMisplaced == 0,
 		"cleanup mode is user-initiated only; got it via RMD-driven action:", msg.Action)
 
 	switch msg.Action {
-	// 2.1. action => metasync(newRMD)
+	// 2.1. membership action => metasync(newRMD)
 	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode, apc.ActRmNodeUnsafe:
 		var opts apc.ActValRmNode
 		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 			debug.AssertNoErr(err) // unlikely
 			return
 		}
-
-		var s string
-		if slices.Contains(opts.Sids(), t.SID()) {
+		var (
+			s         string
+			sids, err = opts.GetIDs()
+		)
+		debug.AssertNoErr(err) // checked by primary (and api/cluster)
+		if slices.Contains(sids, t.SID()) {
 			s = " (to subsequently deactivate or remove _this_ target)"
 		}
 		nlog.Infoln(tname, "starting", msg.String(), "-triggered", xname, s, opts)
 		// (##b)
 		go t.reb.Run(&smap.Smap, &extArgs)
 
-	// 2.2. "pure" metasync(newRMD) w/ no action - double-check with cluster config
+	// 2.2. "pure" metasync(newRMD) w/ no action - double-check with cluster config ---------------------------------
 	default:
 		config := cmn.GCO.Get()
 		debug.Assert(config.Version > 0 && config.UUID == smap.UUID, config.String(), " vs ", smap.StringEx())

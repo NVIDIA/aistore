@@ -631,7 +631,7 @@ func (h *htrun) _votedPrimary(ctx *smapModifier, clone *smapX) error {
 	newPrimary, oldPrimary := ctx.nid, ctx.sid
 	psi := clone.GetProxy(newPrimary)
 	if psi == nil {
-		return &errNodeNotFound{h.si, clone, "cannot accept new primary election:", newPrimary}
+		return &errNodeNotFound{si: h.si, smap: clone, msg: "cannot accept new primary election:", id: newPrimary}
 	}
 	clone.Primary = psi
 	if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {

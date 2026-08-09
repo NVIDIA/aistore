@@ -5,9 +5,12 @@
 package apc
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -179,14 +182,41 @@ type (
 	}
 )
 
-func (v *ActValRmNode) Sids() []string {
+func (v *ActValRmNode) SetIDs(sids ...string) {
+	debug.Assert(len(sids) > 0)
+	v.DaemonID = ""
+	v.DaemonIDs = sids
+}
+
+// validate and return
+func (v *ActValRmNode) GetIDs() (sids []string, err error) {
+	const tag = "invalid membership-change operation:"
+	if v == nil {
+		return nil, errors.New(tag + " empty action-value")
+	}
+
+	if v.DaemonID != "" && len(v.DaemonIDs) != 0 {
+		return nil, fmt.Errorf("%s cannot specify both sid %q and sids %v", tag, v.DaemonID, v.DaemonIDs)
+	}
 	if len(v.DaemonIDs) > 0 {
-		return v.DaemonIDs
+		sids = v.DaemonIDs
+	} else if v.DaemonID != "" {
+		sids = []string{v.DaemonID}
 	}
-	if v.DaemonID != "" {
-		return []string{v.DaemonID}
+	if len(sids) == 0 {
+		return nil, errors.New(tag + " missing node IDs")
 	}
-	return nil
+	for i, sid := range sids {
+		if err := cos.ValidateDaemonID(sid); err != nil {
+			return nil, err
+		}
+		for j := range i {
+			if sids[j] == sid {
+				return nil, fmt.Errorf("%s duplicated node ID %q in %v", tag, sid, sids)
+			}
+		}
+	}
+	return sids, nil
 }
 
 type (

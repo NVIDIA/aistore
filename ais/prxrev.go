@@ -165,7 +165,7 @@ func (p *proxy) _reverse(w http.ResponseWriter, r *http.Request, isPub bool) {
 			if !smap.IsPrimary(p.si) {
 				s = "non-primary, "
 			}
-			err = &errNodeNotFound{p.si, smap, s + "cannot forward request to node", nodeID}
+			err = &errNodeNotFound{si: p.si, smap: smap, msg: s + "cannot forward request to node", id: nodeID}
 			p.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}

@@ -66,14 +66,14 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if !cos.IsParseBool(q.Get(apc.QparamForce)) {
 			msg := fmt.Sprintf("set-primary failure ('%s' query is false):", apc.QparamForce)
-			err := &errNodeNotFound{msg: msg, id: npid, si: p.si, smap: smap}
+			err := &errNodeNotFound{si: p.si, smap: smap, msg: msg, id: npid}
 			p.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}
 		newPrimaryURL := q.Get(apc.QparamPrimaryCandidate)
 		if newPrimaryURL == "" {
 			msg := fmt.Sprintf("set-primary failure ('%s' query is empty):", apc.QparamPrimaryCandidate)
-			err := &errNodeNotFound{msg: msg, id: npid, si: p.si, smap: smap}
+			err := &errNodeNotFound{si: p.si, smap: smap, msg: msg, id: npid}
 			p.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}
@@ -874,7 +874,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil {
-		err := &errNodeNotFound{p.si, smap, "cannot set new primary", proxyID}
+		err := &errNodeNotFound{si: p.si, smap: smap, msg: "cannot set new primary", id: proxyID}
 		p.writeErr(w, r, err)
 		return
 	}
