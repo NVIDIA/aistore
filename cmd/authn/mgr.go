@@ -70,12 +70,16 @@ var (
 
 // If user DB exists, loads the data from the file and decrypts passwords
 func newMgr(cm *config.ConfManager, signer tok.Signer, driver kvdb.Driver) (m *mgr, code int, err error) {
+	// TODO: add AuthN client CA config and wire its certificate mount in ais-k8s.
+	sargs := cmn.TLSArgs{
+		SkipVerify: cos.IsParseBool(os.Getenv(env.AisAuthSkipVerifyCrt)),
+	}
 	m = &mgr{
 		db: driver,
 		cm: cm,
 	}
 	m.updateSignerBundle(signer)
-	m.clientH, m.clientTLS = cmn.NewDefaultClients(cm.GetDefaultTimeout())
+	m.clientH, m.clientTLS = cmn.NewClientPair(cm.GetDefaultTimeout(), sargs)
 	code, err = initializeDB(driver)
 	if err != nil {
 		return

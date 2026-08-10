@@ -6,6 +6,7 @@ package main
 
 import (
 	"errors"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,6 +40,28 @@ func newMgrWithConf(t *testing.T, conf *authn.Config) *mgr {
 	testMgr, _, err := newMgr(cm, signer, driver)
 	tassert.CheckFatal(t, err)
 	return testMgr
+}
+
+func TestManagerTLSVerification(t *testing.T) {
+	tests := []struct {
+		name, authn, generic string
+		expected             bool
+	}{
+		{name: "default"},
+		{name: "authn", authn: "true", expected: true},
+		{name: "generic-ignored", generic: "true"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(env.AisAuthAdminPassword, "adminpass")
+			t.Setenv(env.AisAuthSkipVerifyCrt, tc.authn)
+			t.Setenv(env.AisSkipVerifyCrt, tc.generic)
+			m := newMgrWithConf(t, &authn.Config{})
+			transport := m.clientTLS.Transport.(*http.Transport)
+			tassert.Errorf(t, transport.TLSClientConfig.InsecureSkipVerify == tc.expected,
+				"expected skip-verify %t", tc.expected)
+		})
+	}
 }
 
 func validateCommonClaims(t *testing.T, claims *tok.AISClaims, sub, iss string, start time.Time) {

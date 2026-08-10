@@ -274,6 +274,8 @@ func TestIsHTTPS(t *testing.T) {
 }
 
 func TestGetServerCertAndKey(t *testing.T) {
+	t.Setenv(env.AisAuthServerCrt, "")
+	t.Setenv(env.AisAuthServerKey, "")
 	confCert := "/default/cert"
 	confKey := "/default/key"
 	base := newBaseConfig()

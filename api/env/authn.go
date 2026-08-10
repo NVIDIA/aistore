@@ -20,6 +20,7 @@ const (
 	AisAuthPort           = "AIS_AUTHN_PORT"
 	AisAuthTTL            = "AIS_AUTHN_TTL"
 	AisAuthUseHTTPS       = "AIS_AUTHN_USE_HTTPS"
+	AisAuthSkipVerifyCrt  = "AIS_AUTHN_SKIP_VERIFY_CRT"
 	AisAuthServerCrt      = "AIS_SERVER_CRT"
 	AisAuthServerKey      = "AIS_SERVER_KEY"
 	AisAuthSecretKey      = "AIS_AUTHN_SECRET_KEY"

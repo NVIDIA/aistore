@@ -154,8 +154,13 @@ func NewTLS(sargs TLSArgs, intra bool) (tlsConf *tls.Config, err error) {
 }
 
 func NewDefaultClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
+	return NewClientPair(timeout, TLSArgs{})
+}
+
+// NewClientPair returns HTTP and HTTPS clients, configuring the latter with sargs.
+func NewClientPair(timeout time.Duration, sargs TLSArgs) (clientH, clientTLS *http.Client) {
 	clientH = NewClient(TransportArgs{ClientTimeout: timeout})
-	clientTLS = NewClientTLS(TransportArgs{ClientTimeout: timeout}, TLSArgs{SkipVerify: true}, false /*intra-cluster*/)
+	clientTLS = NewClientTLS(TransportArgs{ClientTimeout: timeout}, sargs, false /*intra-cluster*/)
 	return
 }
 

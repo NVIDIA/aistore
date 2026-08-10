@@ -10,12 +10,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -278,7 +280,9 @@ func (m *AISbp) GetInfo(clusterConf cmn.BackendConfAIS) (res meta.RemAisVec) {
 }
 
 func remaisClients(clientConf *cmn.ClientConf) (client, clientTLS *http.Client) {
-	return cmn.NewDefaultClients(clientConf.Timeout.D())
+	// TODO: add a dedicated remAIS CA config or environment variable.
+	sargs := cmn.TLSArgs{SkipVerify: cos.IsParseBool(os.Getenv(env.AisSkipVerifyCrt))}
+	return cmn.NewClientPair(clientConf.Timeout.D(), sargs)
 }
 
 // A list of remote AIS URLs can contains both HTTP and HTTPS links at the
