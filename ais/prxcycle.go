@@ -371,15 +371,18 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, join
 		return nil
 	}
 
-	// early-GFN notification with an empty (version-only and not yet updated) Smap and
-	// message(new target's ID)
-	msg := p.newAmsgActVal(apc.ActStartGFN, nil)
-	msg.UUID = si.ID()
-	revs := revsPair{&smapX{Smap: meta.Smap{Version: smap.Version}}, msg}
+	return p._notifyEarlyGFN(ctx, smap, si)
+}
+
+func (p *proxy) _notifyEarlyGFN(ctx *smapModifier, smap *smapX, tsi *meta.Snode) error {
+	// Notify targets before publishing the updated Smap.
+	actMsgExt := p.newAmsgActVal(apc.ActStartGFN, nil)
+	actMsgExt.UUID = tsi.ID()
+	revs := revsPair{&smapX{Smap: meta.Smap{Version: smap.Version}}, actMsgExt}
 	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
 		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
 	}
-	ctx.gfn = true // to undo if need be
+	ctx.gfn = true
 	return nil
 }
 
@@ -698,6 +701,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		selectedIDs = make([]string, 0, len(sids))
 		snames      = make([]string, 0, len(sids))
 		targetCount int
+		tsi         *meta.Snode
 	)
 	for _, sid := range sids {
 		si := smap.GetNode(sid)
@@ -722,6 +726,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		selectedIDs = append(selectedIDs, si.ID())
 		if si.IsTarget() {
 			targetCount++
+			tsi = si
 		}
 		snames = append(snames, si.StringEx())
 	}
@@ -799,7 +804,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		}
 	}
 
-	rebID, err := p.mcastStopMaint(msg, selectedIDs, snames, reb)
+	rebID, err := p.mcastStopMaint(msg, selectedIDs, snames, tsi, reb)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -809,7 +814,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 }
 
-func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, reb bool) (rebID string, err error) {
+func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, tsi *meta.Snode, reb bool) (rebID string, err error) {
 	nlog.Infof("%s mcast-stopm: %s, %s, reb=%t", p, msg, snames, reb)
 	ctx := &smapModifier{
 		pre:     p._stopMaintPre,
@@ -820,15 +825,36 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, reb bool)
 		msg:     msg,
 		flags:   meta.SnodeMaint | meta.SnodeMaintPostReb, // to clear node flags
 	}
-	err = p.owner.smap.modify(ctx)
-	if err != nil && ctx.status != 0 {
-		err = cmn.NewErrFailedTo(p, msg.Action, snames, err, ctx.status)
+
+	if reb {
+		debug.Assert(tsi != nil)
+
+		smap := p.owner.smap.get()
+		if err := p._notifyEarlyGFN(ctx, smap, tsi); err != nil {
+			return "", err
+		}
 	}
+
+	err = p.owner.smap.modify(ctx)
+	if err != nil {
+		if ctx.status != 0 {
+			err = cmn.NewErrFailedTo(p, msg.Action, snames, err, ctx.status)
+		}
+		return "", err
+	}
+
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
 		debug.Assert(ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version() && ctx.rmdCtx.rebID != "")
-		rebID = ctx.rmdCtx.rebID
+		return ctx.rmdCtx.rebID, nil
 	}
-	return
+
+	if ctx.gfn { // stop timed GFN when no rebalance was started
+		actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
+		actMsgExt.UUID = tsi.ID()
+		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, actMsgExt}
+		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
+	}
+	return "", nil
 }
 
 func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
