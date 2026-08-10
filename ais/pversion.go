@@ -27,27 +27,28 @@ import (
 // First intended usage: transition 4.7 => 5.0
 
 func (p *proxy) noteNodeVersion(nsi *meta.Snode, nverStr string, nversParsed cos.Version) {
+	primary := p.primary()
 	if nverStr == cmn.VersionAIStore { // exact match (including rc suffix, if exists)
-		p.reg.mtv.Lock()
-		if p.reg.verMismatch != nil {
-			delete(p.reg.verMismatch, nsi.ID())
-			if len(p.reg.verMismatch) == 0 {
-				p.reg.verMismatch = nil
+		primary.reg.mtv.Lock()
+		if primary.reg.verMismatch != nil {
+			delete(primary.reg.verMismatch, nsi.ID())
+			if len(primary.reg.verMismatch) == 0 {
+				primary.reg.verMismatch = nil
 			}
 		}
-		p.reg.mtv.Unlock()
+		primary.reg.mtv.Unlock()
 		return
 	}
 
 	// add and warn
-	p.reg.mtv.Lock()
-	if p.reg.verMismatch == nil {
-		p.reg.verMismatch = make(map[string]string, 4)
+	primary.reg.mtv.Lock()
+	if primary.reg.verMismatch == nil {
+		primary.reg.verMismatch = make(map[string]string, 4)
 	}
 
-	old := p.reg.verMismatch[nsi.ID()]
-	p.reg.verMismatch[nsi.ID()] = nverStr // keep pre-5.0 "" as-is
-	p.reg.mtv.Unlock()
+	old := primary.reg.verMismatch[nsi.ID()]
+	primary.reg.verMismatch[nsi.ID()] = nverStr // keep pre-5.0 "" as-is
+	primary.reg.mtv.Unlock()
 
 	if old != nverStr && nverStr != "" { // empty nverStr tracked but not warned (4.x => 5.x transition)
 		_warnNodeVer(nsi, nverStr, nversParsed)

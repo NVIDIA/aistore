@@ -218,8 +218,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		return true // fail
 	}
 	if p.settingNewPrimary.Load() {
-		p.writeErrStatusf(w, r, http.StatusServiceUnavailable,
-			"%s is in transition, cannot process the request", p.si)
+		p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s is in transition, cannot process the request", p.si)
 		return true // fail
 	}
 	if smap.isPrimary(p.si) {
@@ -234,18 +233,20 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 			body = cos.MustMarshal(msg)
 		}
 	}
-	primary := &p.rproxy.primary
-	primary.mu.Lock()
-	if primary.url != smap.Primary.PubNet.URL {
-		primary.url = smap.Primary.PubNet.URL
+	rprimary := &p.rproxy.primary
+
+	rprimary.mu.Lock()
+	if rprimary.url != smap.Primary.PubNet.URL {
+		rprimary.url = smap.Primary.PubNet.URL
 		uparsed, err := url.Parse(smap.Primary.PubNet.URL)
 		cos.AssertNoErr(err)
 		config := cmn.GCO.Get()
-		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
-		primary.rp.Transport = rpTransport(config)
-		primary.rp.ErrorHandler = p.rpErrHandler
+		rprimary.rp = httputil.NewSingleHostReverseProxy(uparsed)
+		rprimary.rp.Transport = rpTransport(config)
+		rprimary.rp.ErrorHandler = p.rpErrHandler
 	}
-	primary.mu.Unlock()
+	rprimary.mu.Unlock()
+
 	if len(body) > 0 {
 		debug.AssertFunc(func() bool {
 			l, _ := io.Copy(io.Discard, r.Body)
@@ -263,7 +264,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 			nlog.Infoln(p.String(), "forwarding [", s, "] to the primary", pname)
 		}
 	}
-	primary.rp.ServeHTTP(w, r)
+	rprimary.rp.ServeHTTP(w, r)
 	return true // forwarded
 }
 

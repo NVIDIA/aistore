@@ -74,6 +74,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		p.writeErrURL(w, r)
 		return
 	}
+
 	if p.settingNewPrimary.Load() {
 		// ignore or fail
 		if apiOp != apc.Keepalive {
@@ -127,13 +128,15 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		return
 	}
 	if c.apiOp == apc.SelfJoin && (!p.ClusterStarted() || added) {
+		primary := p.primary()
 		if !added {
 			// motivation: preserve peer metadata even when it is already in local Smap
 			nlog.Warningln(p.String(), "adding", c.nsi.StringEx(), "to startup reg.pool without local Smap add", c.smap.StringEx())
 		}
-		p.reg.mpl.Lock()
-		p.reg.pool = append(p.reg.pool, c.regReq)
-		p.reg.mpl.Unlock()
+
+		primary.reg.mpl.Lock()
+		primary.reg.pool = append(primary.reg.pool, c.regReq)
+		primary.reg.mpl.Unlock()
 	}
 
 	c.dispatch(msync)
@@ -141,7 +144,10 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 
 // respond to fastKalive from nodes
 func (p *proxy) fastKaliveRsp(w http.ResponseWriter, r *http.Request, smap *smapX, config *cmn.Config, sid string) {
-	fast := p.readyToFastKalive.Load()
+	var (
+		primary = p.primary()
+		fast    = primary.fastKalive.Load()
+	)
 	if !fast {
 		var (
 			now       = mono.NanoTime()
@@ -149,7 +155,7 @@ func (p *proxy) fastKaliveRsp(w http.ResponseWriter, r *http.Request, smap *smap
 			minUptime = max(cfg.Target.Interval.D(), cfg.Proxy.Interval.D()) << 1
 		)
 		if fast = p.keepalive.cluUptime(now) > minUptime; fast {
-			p.readyToFastKalive.Store(true) // not resetting upon a change of primary
+			primary.fastKalive.Store(true) // not resetting upon a change of primary
 		}
 	}
 	if fast {

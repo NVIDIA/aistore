@@ -94,12 +94,14 @@ func (p *proxy) bootstrap() {
 			nlog.Infof("%s: assuming primary role as per: %+v", p, prim)
 		}
 		// go
+		p.iniPrimaryState()
 		go p.primaryStartup(smap, config, daemon.cli.primary.ntargets, prim)
 		return
 	}
 
 	// 5: otherwise, join as non-primary
 	nlog.Infoln(p.String() + ": starting up as non-primary")
+	debug.Assert(p.prim == nil)
 	err := p.secondaryStartup(smap, prim.url)
 	if err != nil {
 		if reliable {
@@ -593,10 +595,11 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 
 	// 12. clear regpool
-	p.reg.mpl.Lock()
-	p.reg.pool = p.reg.pool[:0]
-	p.reg.pool = nil
-	p.reg.mpl.Unlock()
+	primary := p.primary()
+	primary.reg.mpl.Lock()
+	primary.reg.pool = primary.reg.pool[:0]
+	primary.reg.pool = nil
+	primary.reg.mpl.Unlock()
 
 	// 13. resume rebalance if needed
 	if config.Rebalance.Enabled {
@@ -1078,12 +1081,13 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 	)
 	*after = *before
 
-	p.reg.mpl.RLock()
+	primary := p.primary()
+	primary.reg.mpl.RLock()
 
-	if len(p.reg.pool) == 0 {
+	if len(primary.reg.pool) == 0 {
 		goto ret
 	}
-	for _, regReq := range p.reg.pool {
+	for _, regReq := range primary.reg.pool {
 		nsi := regReq.SI
 		if err := nsi.Validate(); err != nil {
 			nlog.Errorln("Warning:", err)
@@ -1151,7 +1155,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 	}
 
 ret:
-	p.reg.mpl.RUnlock()
+	primary.reg.mpl.RUnlock()
 
 	// not interfering with elections
 	if voteInProgress {
@@ -1166,11 +1170,11 @@ ret:
 	// - always update joining nodes' net-infos;
 	// - alternatively, narrow it down to only proxies (as targets always restart on the same K8s nodes)
 
-	p.reg.mpl.RLock()
-	for _, regReq := range p.reg.pool {
+	primary.reg.mpl.RLock()
+	for _, regReq := range primary.reg.pool {
 		after.Smap, cloned = _updSnode(after.Smap, regReq.SI, cloned)
 	}
-	p.reg.mpl.RUnlock()
+	primary.reg.mpl.RUnlock()
 
 	if after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
 		after.Smap.UUID, after.Smap.CreationTime = _newCluUUID()

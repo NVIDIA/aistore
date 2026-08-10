@@ -541,8 +541,8 @@ func (t *target) gojoin(config *cmn.Config) {
 
 	if nsti != nil {
 		// (primary changed)
-		primary := nsti.Smap.Primary
-		if status, err := t.joinCluster(apc.ActSelfJoinTarget, primary.CtrlURL, primary.PubURL); err != nil {
+		nprimary := nsti.Smap.Primary
+		if status, err := t.joinCluster(apc.ActSelfJoinTarget, nprimary.CtrlURL, nprimary.PubURL); err != nil {
 			nlog.Errorf(fmtFailedRejoin, t, err, status)
 			return
 		}

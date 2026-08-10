@@ -627,6 +627,7 @@ func (p *proxy) _becomePre(ctx *smapModifier, clone *smapX) error {
 		p.rproxy.nodes.Delete(ctx.sid)
 	}
 
+	p.iniPrimaryState() // allocate _before_ publishing the clone that makes isPrimary(self) true
 	clone.Primary = clone.GetProxy(p.SID())
 	clone.Version += 100
 	clone.staffIC()

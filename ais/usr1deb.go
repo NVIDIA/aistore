@@ -103,6 +103,8 @@ func (h *htrun) usr1() bool /*split done*/ {
 func (p *proxy) usr1() {
 	smap := p.owner.smap.get()
 	opid := smap.Primary.ID()
+	p.iniPrimaryState()
+
 	if !p.htrun.usr1() {
 		return
 	}
