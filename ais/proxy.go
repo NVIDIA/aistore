@@ -213,7 +213,6 @@ func (p *proxy) pready(smap *smapX, withRR bool /* also check readiness to rebal
 func (p *proxy) Run() error {
 	config := cmn.GCO.Get()
 	p.htrun.initPhase2(config)
-	p.setusr1()
 	p.owner.bmd = newBMDOwnerPrx(config)
 	p.owner.etl = newEtlMDOwnerPrx(config)
 

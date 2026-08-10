@@ -6,9 +6,7 @@
 package hk
 
 import (
-	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -47,7 +45,6 @@ type (
 	}
 
 	hk struct {
-		sigCh    chan os.Signal
 		actions  *timedActions
 		timer    *time.Timer
 		nextWake int64
@@ -71,7 +68,6 @@ var _ cos.Runner = (*hk)(nil)
 func Init(mustRun bool) {
 	HK = &hk{
 		workCh:  make(chan struct{}, 1),
-		sigCh:   make(chan os.Signal, 1),
 		pending: make([]op, 0, initialCap),
 		free:    make([]op, 0, initialCap),
 		actions: &timedActions{
@@ -127,8 +123,6 @@ func (hk *hk) terminate() {
 func (*hk) Stop(error) { HK.stopCh.Close() }
 
 func (hk *hk) Run() error {
-	hk.setSignal() // SIGINT, et al. (see hk.handleSignal)
-
 	hk.timer = time.NewTimer(time.Hour)
 	hk.timer.Stop()
 	hk.running.Store(true)
@@ -170,13 +164,6 @@ func (hk *hk) _run() error {
 
 		case <-hk.workCh:
 			// doorbell: drain at the top of the loop
-
-		case s, ok := <-hk.sigCh:
-			if ok {
-				if err := hk.handleSignal(s.(syscall.Signal)); err != nil {
-					return err
-				}
-			}
 		}
 	}
 }

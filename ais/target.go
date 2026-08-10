@@ -420,7 +420,6 @@ func (t *target) Run() error {
 	}
 	config := cmn.GCO.Get()
 	t.htrun.initPhase2(config)
-	t.setusr1()
 
 	core.Tinit(t, config, true /*run hk*/)
 

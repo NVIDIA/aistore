@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
@@ -356,6 +358,8 @@ func checkUlimits(expectMax uint64, testingEnv bool) {
 
 // Run is the 'main' where everything gets started
 func Run(version, buildTime string) int {
+	signal.Ignore(syscall.SIGHUP) // see also runAll below
+
 	rmain := initDaemon(version, buildTime)
 	err := daemon.rg.runAll(rmain)
 
@@ -404,19 +408,35 @@ func (g *rungroup) run(r cos.Runner) {
 func (g *rungroup) runAll(mainRunner cos.Runner) error {
 	g.errCh = make(chan runRet, len(g.rs))
 
+	termCh := make(chan os.Signal, 1)
+	signal.Notify(termCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 	// run all, housekeeper first
 	go g.run(hk.HK)
 	runtime.Gosched()
 	hk.WaitStarted()
 	for _, r := range g.rs {
-		if r.Name() == hk.HK.Name() {
-			continue
+		if r.Name() != hk.HK.Name() {
+			go g.run(r)
 		}
-		go g.run(r)
 	}
 
+	var (
+		ret     runRet
+		pending = len(g.rs) // runner completions still to collect
+	)
+	select {
+	case ret = <-g.errCh:
+		pending--
+	case s := <-termCh:
+		ret = runRet{
+			err:  cos.NewSignalError(s.(syscall.Signal)),
+			name: "signal",
+		}
+	}
+	signal.Stop(termCh)
+
 	// Stop all runners, target (or proxy) first.
-	ret := <-g.errCh
 	nlog.SetStopping()
 	if ret.name != mainRunner.Name() {
 		mainRunner.Stop(ret.err)
@@ -426,8 +446,8 @@ func (g *rungroup) runAll(mainRunner cos.Runner) error {
 			r.Stop(ret.err)
 		}
 	}
-	// Wait for all terminations.
-	for range len(g.rs) - 1 {
+
+	for range pending {
 		<-g.errCh
 	}
 	return ret.err
