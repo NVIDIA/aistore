@@ -40,17 +40,7 @@ func dloadDialControl(network, address string, _ syscall.RawConn) error {
 }
 
 func dloadBlockedEgress(ip net.IP) bool {
-	// never legal
-	if ip.IsLoopback() || ip.IsUnspecified() ||
-		ip.IsLinkLocalUnicast() || // 169.254.0.0/16 (AWS/GCP/Azure IMDS), fe80::/10
-		ip.IsMulticast() {
-		return true
-	}
-	// feature-flag configurable: RFC1918 + RFC4193 ULA
-	if !cmn.Rom.Features().IsSet(feat.DloadAllowPrivateEgress) && ip.IsPrivate() {
-		return true
-	}
-	return false
+	return cmn.IsBlockedEgressIP(ip, cmn.Rom.Features().IsSet(feat.DloadAllowPrivateEgress))
 }
 
 func newDloadTransport() *http.Transport {

@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"time"
@@ -24,6 +25,15 @@ const (
 )
 
 var KnownNetworks = [...]string{NetPublic, NetIntraControl, NetIntraData}
+
+// Special address ranges not covered by netip's built-in classifications.
+var (
+	cgnatPrefix          = netip.MustParsePrefix("100.64.0.0/10")
+	wellKnownNAT64Prefix = netip.MustParsePrefix("64:ff9b::/96")   // RFC 6052
+	localUseNAT64Prefix  = netip.MustParsePrefix("64:ff9b:1::/48") // RFC 8215
+	sixTo4Prefix         = netip.MustParsePrefix("2002::/16")      // RFC 3056
+	teredoPrefix         = netip.MustParsePrefix("2001::/32")
+)
 
 func NetworkIsKnown(net string) bool {
 	return net == NetPublic || net == NetIntraControl || net == NetIntraData
@@ -140,6 +150,40 @@ func IsDialableHostIP(ip net.IP) bool {
 	}
 
 	return true
+}
+
+// IsBlockedEgressIP rejects addresses that must not be reached through user-supplied URLs.
+func IsBlockedEgressIP(ip net.IP, allowPrivate bool) bool {
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return true
+	}
+	// Treat IPv4-mapped IPv6 addresses as ordinary IPv4.
+	addr = addr.Unmap()
+	if addr.Is4() {
+		return isBlockedEgressAddr(addr, allowPrivate)
+	}
+
+	// Check the IPv4 destination carried by the well-known NAT64 prefix.
+	switch {
+	case wellKnownNAT64Prefix.Contains(addr):
+		// The well-known NAT64 prefix stores IPv4 in the last four bytes.
+		v6 := addr.As16()
+		return isBlockedEgressAddr(netip.AddrFrom4([4]byte{v6[12], v6[13], v6[14], v6[15]}), allowPrivate)
+	case localUseNAT64Prefix.Contains(addr), sixTo4Prefix.Contains(addr), teredoPrefix.Contains(addr):
+		// Their destination cannot be classified safely without network context.
+		return true
+	default:
+		return isBlockedEgressAddr(addr, allowPrivate)
+	}
+}
+
+func isBlockedEgressAddr(addr netip.Addr, allowPrivate bool) bool {
+	if addr.IsLoopback() || addr.IsUnspecified() || addr.IsLinkLocalUnicast() ||
+		addr.IsMulticast() || cgnatPrefix.Contains(addr) {
+		return true
+	}
+	return !allowPrivate && addr.IsPrivate()
 }
 
 func ParseHost2IP(host string, localTimeout, preferV6 bool) (net.IP, error) {

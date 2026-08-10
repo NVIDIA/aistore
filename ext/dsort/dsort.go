@@ -623,13 +623,7 @@ func ekmDialControl(network, address string, _ syscall.RawConn) error {
 
 // see also: dload/client.go
 func ekmBlockedEgress(ip net.IP) bool {
-	// never legal
-	if ip.IsLoopback() || ip.IsUnspecified() ||
-		ip.IsLinkLocalUnicast() || // 169.254.0.0/16 (AWS/GCP/Azure IMDS), fe80::/10
-		ip.IsMulticast() {
-		return true
-	}
-	return ip.IsPrivate() // RFC1918 + RFC4193 ULA
+	return cmn.IsBlockedEgressIP(ip, false)
 }
 
 func newEKMClient(timeout time.Duration) *http.Client {
