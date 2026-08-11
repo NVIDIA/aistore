@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -16,6 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 type PodStatus struct {
@@ -45,6 +48,14 @@ var (
 	ErrK8sRequired = errors.New("the operation requires Kubernetes")
 )
 
+// initial Pod query backoff: 1s doubling up to 30s cap, ~2.5 min total
+var podQueryBackoff = wait.Backoff{
+	Duration: time.Second,
+	Factor:   2,
+	Cap:      30 * time.Second,
+	Steps:    10,
+}
+
 func Init() {
 	_initClient()
 	client, err := GetClient()
@@ -72,8 +83,15 @@ func Init() {
 		return
 	}
 
-	// Check Pod.
-	pod, err = client.Pod(podName)
+	// Check Pod. Retry with backoff: a transient failure to reach the API server
+	// at startup (e.g., node-local networking not yet ready) must not turn into
+	// a fatal exit and a kubelet crash-loop.
+	err = retry.OnError(podQueryBackoff, func(error) bool { return true }, func() (e error) {
+		if pod, e = client.Pod(podName); e != nil {
+			nlog.Warningln("failed to get Pod", podName, "- will retry:", e)
+		}
+		return e
+	})
 	if err != nil {
 		cos.ExitLogf("Failed to get Pod %q, err: %v", podName, err)
 		return
