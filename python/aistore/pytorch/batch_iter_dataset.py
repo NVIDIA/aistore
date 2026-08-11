@@ -23,6 +23,10 @@ class AISBatchIterDataset(AISBaseIterDataset):
         streaming (bool, optional): Enable streaming mode. Defaults to True
         prefix_map (Dict, optional): Map of AISSource objects to prefixes
         show_progress (bool, optional): Show progress indicator. Defaults to False
+        partition_sources_by_worker (bool, optional): When True, distributes sources across
+            DataLoader workers so each worker only lists its share, avoiding duplicate paged
+            listing calls. Most effective when ais_source_list has at least as many sources
+            as workers. Defaults to False.
     """
 
     def __init__(
@@ -34,8 +38,9 @@ class AISBatchIterDataset(AISBaseIterDataset):
         max_batch_size: int = 32,
         output_format: str = ".tar",
         streaming: bool = True,
+        partition_sources_by_worker: bool = False,
     ):
-        super().__init__(ais_source_list, prefix_map)
+        super().__init__(ais_source_list, prefix_map, partition_sources_by_worker)
         self.client = client
         self.max_batch_size = max_batch_size
         self.output_format = output_format
@@ -47,10 +52,8 @@ class AISBatchIterDataset(AISBaseIterDataset):
         Memory-efficient iterator with multi-worker support using batch API.
         """
         self._reset_iterator()
-        # Get worker-specific iterator - this handles multi-worker partitioning
         worker_iter, worker_name = self._get_worker_iter_info()
 
-        # Create progress iterator if needed
         if self._show_progress:
             worker_iter = alive_it(
                 worker_iter,
@@ -59,21 +62,15 @@ class AISBatchIterDataset(AISBaseIterDataset):
                 force_tty=worker_name == "",
             )
 
-        # Accumulate objects in batches without storing entire iterator
-        batch = []
+        pending = []
         for obj in worker_iter:
-            batch.append(obj)
+            pending.append(obj)
+            if len(pending) == self.max_batch_size:
+                yield from self._process_batch(pending)
+                pending.clear()
 
-            # When batch is full, process it
-            if len(batch) == self.max_batch_size:
-                yield from self._process_batch(batch)
-
-                # Clear batch for next iteration
-                batch.clear()
-
-        # Process any remaining objects in the final batch
-        if batch:
-            yield from self._process_batch(batch)
+        if pending:
+            yield from self._process_batch(pending)
 
     def _process_batch(self, batch_objects: List) -> Iterator[Tuple[str, bytes]]:
         """
@@ -85,16 +82,10 @@ class AISBatchIterDataset(AISBaseIterDataset):
         Yields:
             Tuple[str, bytes]: Object name and content pairs
         """
-        # Create and execute batch request using the new Batch API
         batch = self.client.batch(
             objects=batch_objects,
             output_format=self.output_format,
             streaming_get=self.streaming,
         )
-
-        # Execute batch request and yield individual samples
-        batch_response = batch.get()
-
-        # Yield individual samples from batch response
-        for obj_info, data in batch_response:
+        for obj_info, data in batch.get():
             yield obj_info.obj_name, data

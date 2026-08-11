@@ -195,3 +195,62 @@ class TestAISDataset(unittest.TestCase):
         # Verify batch method was called
         mock_client.batch.assert_called()
         mock_batch.get.assert_called()
+
+    def test_iter_dataset_preload_flag_stored(self):
+        dataset = AISIterDataset(
+            ais_source_list=self.mock_bck, partition_sources_by_worker=True
+        )
+        self.assertTrue(dataset._partition_sources_by_worker)
+
+    def test_batch_iter_dataset_preload_flag_stored(self):
+        mock_client = Mock()
+        mock_client.batch.return_value = Mock()
+        dataset = AISBatchIterDataset(
+            ais_source_list=self.mock_bck,
+            client=mock_client,
+            partition_sources_by_worker=True,
+        )
+        self.assertTrue(dataset._partition_sources_by_worker)
+
+    @patch("aistore.pytorch.base_iter_dataset.torch_utils.get_worker_info")
+    def test_preload_calls_create_iter_with_source_slice(self, mock_worker_info):
+        """With partition_sources_by_worker=True, each worker's _get_worker_iter_info calls
+        _create_objects_iter with only that worker's assigned sources."""
+        source_a, source_b, source_c, source_d = Mock(), Mock(), Mock(), Mock()
+        dataset = AISIterDataset(
+            ais_source_list=[source_a, source_b, source_c, source_d],
+            partition_sources_by_worker=True,
+        )
+        mock_worker_info.return_value = Mock(id=1, num_workers=4)
+
+        with patch.object(
+            dataset, "_create_objects_iter", return_value=iter([])
+        ) as mock_create:
+            dataset._reset_iterator()
+            _, worker_name = dataset._get_worker_iter_info()
+
+            # Last call must be with sources[1::4] = [source_b]
+            mock_create.assert_called_with([source_b])
+            self.assertEqual(worker_name, " (Worker 1)")
+
+    @patch("aistore.pytorch.base_iter_dataset.torch_utils.get_worker_info")
+    def test_no_preload_does_not_call_create_iter_with_sources(self, mock_worker_info):
+        """With partition_sources_by_worker=False, _create_objects_iter is only called once
+        (by _reset_iterator) and _get_worker_iter_info uses islice on the object iterator.
+        """
+        dataset = AISIterDataset(
+            ais_source_list=self.mock_bck,
+            partition_sources_by_worker=False,
+        )
+        mock_worker_info.return_value = Mock(id=0, num_workers=2)
+
+        with patch.object(
+            dataset,
+            "_create_objects_iter",
+            side_effect=lambda sources=None: iter(self.mock_objects),
+        ) as mock_create:
+            dataset._reset_iterator()
+            dataset._get_worker_iter_info()
+
+            # Must only be called once (from _reset_iterator), never with a sources slice
+            mock_create.assert_called_once_with()

@@ -23,6 +23,10 @@ class AISIterDataset(AISBaseIterDataset):
         objects with the specified prefixes to be used from each source
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
         show_progress (bool, optional): Enables console dataset reading progress indicator
+        partition_sources_by_worker (bool, optional): When True, distributes sources across
+            DataLoader workers so each worker only lists its share, avoiding duplicate paged
+            listing calls. Most effective when ais_source_list has at least as many sources
+            as workers. Defaults to False.
 
     Yields:
         Tuple[str, bytes]: Each item is a tuple where the first element is the name of the object and the
@@ -35,8 +39,9 @@ class AISIterDataset(AISBaseIterDataset):
         prefix_map: Dict[AISSource, Union[str, List[str]]] = {},
         etl_name: str = None,
         show_progress: bool = False,
+        partition_sources_by_worker: bool = False,
     ):
-        super().__init__(ais_source_list, prefix_map)
+        super().__init__(ais_source_list, prefix_map, partition_sources_by_worker)
         self._etl_name = etl_name
         self._show_progress = show_progress
 

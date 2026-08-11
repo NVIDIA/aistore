@@ -301,6 +301,117 @@ class TestPytorchPlugin(unittest.TestCase):
 
         self.verify_dataset_output(results, content_dict)
 
+    def _create_multi_source_objects(self, num_sources: int, objects_per_source: int):
+        """Create num_sources extra buckets with objects_per_source objects each.
+        Returns (buckets, content_dict). Caller is responsible for cleanup.
+        Cleans up any partially-created buckets if setup fails."""
+        buckets = []
+        content_dict = {}
+        try:
+            for i in range(num_sources):
+                bck = self.client.bucket(f"{self.bck.name}-src{i}")
+                bck.create()
+                buckets.append(bck)
+                for j in range(objects_per_source):
+                    obj_name = f"src{i}_obj{j}"
+                    _, content = create_and_put_object(
+                        self.client, bck=bck.as_model(), obj_name=obj_name
+                    )
+                    content_dict[obj_name] = content
+        except Exception:
+            for bck in buckets:
+                bck.delete(missing_ok=True)
+            raise
+        return buckets, content_dict
+
+    def test_ais_iter_dataset_preload_multi_source(self):
+        buckets = []
+        try:
+            buckets, content_dict = self._create_multi_source_objects(
+                num_sources=2, objects_per_source=5
+            )
+            dataset = AISIterDataset(
+                ais_source_list=buckets,
+                partition_sources_by_worker=True,
+            )
+            results = {name: data for name, data in dataset}
+            self.verify_dataset_output(results, content_dict)
+        finally:
+            for bck in buckets:
+                bck.delete(missing_ok=True)
+
+    def test_ais_batch_iter_dataset_preload_multi_source(self):
+        buckets = []
+        try:
+            buckets, content_dict = self._create_multi_source_objects(
+                num_sources=2, objects_per_source=5
+            )
+            dataset = AISBatchIterDataset(
+                ais_source_list=buckets,
+                client=self.client,
+                partition_sources_by_worker=True,
+            )
+            results = {name: data for name, data in dataset}
+            self.verify_dataset_output(results, content_dict)
+        finally:
+            for bck in buckets:
+                bck.delete(missing_ok=True)
+
+    def test_ais_iter_dataloader_preload_multi_source(self):
+        num_workers = 4
+        buckets = []
+        try:
+            buckets, content_dict = self._create_multi_source_objects(
+                num_sources=num_workers, objects_per_source=5
+            )
+            dataset = AISIterDataset(
+                ais_source_list=buckets,
+                partition_sources_by_worker=True,
+            )
+            loader = DataLoader(
+                dataset,
+                num_workers=num_workers,
+                batch_size=None,
+            )
+            samples = list(loader)
+            names = [name for name, _ in samples]
+            self.assertEqual(
+                len(samples), len(content_dict), "wrong total sample count"
+            )
+            self.assertEqual(len(set(names)), len(names), "duplicate samples emitted")
+            self.verify_dataset_output(dict(samples), content_dict)
+        finally:
+            for bck in buckets:
+                bck.delete(missing_ok=True)
+
+    def test_ais_batch_iter_dataloader_preload_multi_source(self):
+        num_workers = 4
+        buckets = []
+        try:
+            buckets, content_dict = self._create_multi_source_objects(
+                num_sources=num_workers, objects_per_source=5
+            )
+            dataset = AISBatchIterDataset(
+                ais_source_list=buckets,
+                client=self.client,
+                partition_sources_by_worker=True,
+            )
+            loader = DataLoader(
+                dataset,
+                num_workers=num_workers,
+                batch_size=None,
+            )
+            samples = list(loader)
+            names = [name for name, _ in samples]
+            self.assertEqual(
+                len(samples), len(content_dict), "wrong total sample count"
+            )
+            self.assertEqual(len(set(names)), len(names), "duplicate samples emitted")
+            self.verify_dataset_output(dict(samples), content_dict)
+        finally:
+            for bck in buckets:
+                bck.delete(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()

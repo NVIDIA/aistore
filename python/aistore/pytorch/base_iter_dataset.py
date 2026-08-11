@@ -5,7 +5,7 @@ Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 from itertools import islice
-from typing import List, Union, Iterable, Dict, Iterator, Tuple
+from typing import List, Union, Iterable, Dict, Iterator, Tuple, Optional
 import torch.utils.data as torch_utils
 from abc import ABC, abstractmethod
 from aistore.sdk import AISSource
@@ -21,12 +21,17 @@ class AISBaseIterDataset(ABC, torch_utils.IterableDataset):
         ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
         prefix_map (Dict(AISSource, List[str]), optional): Map of AISSource objects to list of prefixes that only allows
             objects with the specified prefixes to be used from each source
+        partition_sources_by_worker (bool, optional): When True, distributes sources across
+            DataLoader workers so each worker only lists its share, avoiding duplicate paged
+            listing calls. Most effective when ais_source_list has at least as many sources
+            as workers. Defaults to False.
     """
 
     def __init__(
         self,
         ais_source_list: Union[AISSource, List[AISSource]],
         prefix_map: Dict[AISSource, Union[str, List[str]]] = {},
+        partition_sources_by_worker: bool = False,
     ) -> None:
         if not ais_source_list:
             raise ValueError(
@@ -39,15 +44,23 @@ class AISBaseIterDataset(ABC, torch_utils.IterableDataset):
         )
         self._prefix_map = prefix_map
         self._obj_iterator = None
+        self._partition_sources_by_worker = partition_sources_by_worker
 
-    def _create_objects_iter(self) -> Iterable:
+    def _create_objects_iter(
+        self, sources: Optional[List[AISSource]] = None
+    ) -> Iterable:
         """
         Create an iterable of objects given the AIS sources and associated prefixes.
+
+        Args:
+            sources: Sources to iterate over. Defaults to all sources in ais_source_list.
 
         Returns:
             Iterable: Iterable over the objects from the sources provided
         """
-        for source in self._ais_source_list:
+        if sources is None:
+            sources = self._ais_source_list
+        for source in sources:
             if source not in self._prefix_map or self._prefix_map[source] is None:
                 for sample in source.list_all_objects_iter(prefix=""):
                     yield sample
@@ -74,11 +87,16 @@ class AISBaseIterDataset(ABC, torch_utils.IterableDataset):
         if worker_info is None or worker_info.num_workers == 1:
             return self._obj_iterator, ""
 
-        worker_iter = islice(
-            self._obj_iterator, worker_info.id, None, worker_info.num_workers
-        )
-        worker_name = f" (Worker {worker_info.id})"
+        worker_id = worker_info.id
+        num_workers = worker_info.num_workers
+        worker_name = f" (Worker {worker_id})"
 
+        if self._partition_sources_by_worker:
+            # Each worker lists only its assigned sources — no duplicate listing across workers
+            worker_sources = self._ais_source_list[worker_id::num_workers]
+            return self._create_objects_iter(worker_sources), worker_name
+
+        worker_iter = islice(self._obj_iterator, worker_id, None, num_workers)
         return worker_iter, worker_name
 
     @abstractmethod

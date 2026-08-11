@@ -27,6 +27,10 @@ class AISShardReader(AISBaseIterDataset):
         objects with the specified prefixes to be used from each source
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
         show_progress (bool, optional): Enables console shard reading progress indicator
+        partition_sources_by_worker (bool, optional): When True, distributes buckets across
+            DataLoader workers so each worker only lists its share, avoiding duplicate paged
+            listing calls. Most effective when bucket_list has at least as many buckets
+            as workers. Defaults to False.
 
     Yields:
         Tuple[str, Dict(str, bytes)]: Each item is a tuple where the first element is the basename of the shard
@@ -39,8 +43,9 @@ class AISShardReader(AISBaseIterDataset):
         prefix_map: Dict[Bucket, Union[str, List[str]]] = {},
         etl_name: str = None,
         show_progress: bool = False,
+        partition_sources_by_worker: bool = False,
     ):
-        super().__init__(bucket_list, prefix_map)
+        super().__init__(bucket_list, prefix_map, partition_sources_by_worker)
         self._etl_name = etl_name
         self._show_progress = show_progress
         self._observed_keys = set()
