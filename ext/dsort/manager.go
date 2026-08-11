@@ -174,6 +174,15 @@ func (m *Manager) unlock()        { m.mu.Unlock() }
 // init initializes all necessary fields.
 // PRECONDITION: `m.mu` must be locked.
 func (m *Manager) init(pars *parsedReqSpec) error {
+	if pars == nil || pars.Pit == nil {
+		return errors.New("missing parsed input format")
+	}
+	if pars.Pit.Template.IsRange() {
+		if err := pars.Pit.Template.CheckCount(); err != nil {
+			return err
+		}
+	}
+
 	m.smap = core.T.Sowner().Get()
 
 	targetCount := m.smap.CountActiveTs()

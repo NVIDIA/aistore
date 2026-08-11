@@ -170,6 +170,9 @@ func (r *lrit) _inipr(msg *apc.ListRange) error {
 		return err
 	}
 	if pt.IsRange() {
+		if err := pt.CheckCount(); err != nil {
+			return err
+		}
 		r.pt = &pt
 		r.lrp = lrpRange
 		return nil

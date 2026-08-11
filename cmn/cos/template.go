@@ -21,9 +21,8 @@ const (
 	EmptyMatchAll    = ""
 )
 
-const (
-	maxTemplateExpansion = 10_000_000 // see Expand()
-)
+// Shared bound for in-memory expansion and exhaustive server-side iteration.
+const maxTemplateExpansion = 10_000_000
 
 func MatchAll(template string) bool { return template == EmptyMatchAll || template == WildcardMatchAll }
 
@@ -110,9 +109,9 @@ func (e *errTemplateInvalid) Error() string { return e.msg }
 //   • **Range templates**.
 //     Valid range syntax returns `(pt, nil)` with `pt.Ranges` populated.
 //
-// The function does **not** expand the template.  Call `pt.Expand()` (or
-// `pt.InitIter()` + `pt.Next()`) to enumerate concrete object names.  Expansion
-// is capped (`maxTemplateExpansion`) to prevent runaway memory use.
+// The function does **not** expand the template. Call pt.Expand() to enumerate
+// concrete object names with an automatic safety limit. Callers that iterate
+// directly via InitIter and Next must first call CheckCount.
 //
 // Example:
 //     pt, err := cos.NewParsedTemplate("img_{0001..0100}.jpg")
@@ -149,6 +148,22 @@ func (pt *ParsedTemplate) CheckIsRange() (err error) {
 		err = fmt.Errorf("prefix-only template not supported (prefix: %q)", pt.Prefix)
 	}
 	return
+}
+
+// CheckCount validates ranges and rejects full iteration beyond the expansion safety limit.
+func (pt *ParsedTemplate) CheckCount() error {
+	total := int64(1)
+	for _, tr := range pt.Ranges {
+		if tr.Start < 0 || tr.Start > tr.End || tr.Step <= 0 || tr.DigitCount < 0 {
+			return fmt.Errorf("parsed-template: invalid range {%d..%d..%d}", tr.Start, tr.End, tr.Step)
+		}
+		count := (tr.End-tr.Start)/tr.Step + 1
+		if count > maxTemplateExpansion || total > maxTemplateExpansion/count {
+			return fmt.Errorf("parsed-template: too many values (more than %d max)", maxTemplateExpansion)
+		}
+		total *= count
+	}
+	return nil
 }
 
 func (pt *ParsedTemplate) Clone() *ParsedTemplate {

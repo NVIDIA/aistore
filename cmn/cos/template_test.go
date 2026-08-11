@@ -293,6 +293,30 @@ var _ = Describe("Template", func() {
 	})
 
 	Context("ParsedTemplate", func() {
+		DescribeTable("full iteration count",
+			func(template string, valid bool) {
+				pt, err := cos.NewParsedTemplate(template)
+				Expect(err).NotTo(HaveOccurred())
+				if valid {
+					Expect(pt.CheckCount()).NotTo(HaveOccurred())
+				} else {
+					Expect(pt.CheckCount()).To(HaveOccurred())
+				}
+			},
+			Entry("at limit", "{0..9999999}", true),
+			Entry("above limit", "{0..10000000}", false),
+			Entry("combined ranges at limit", "{0..9999}-{0..999}", true),
+			Entry("combined ranges above limit", "{0..10000}-{0..999}", false),
+			Entry("at-style limit", "@9999999", true),
+			Entry("at-style above limit", "@10000000", false),
+			Entry("unbounded fmt range", "%0800000d", false),
+		)
+
+		It("should reject an invalid decoded range", func() {
+			pt := cos.ParsedTemplate{Ranges: []cos.TemplateRange{{Start: 0, End: 1, Step: 0}}}
+			Expect(pt.CheckCount()).To(HaveOccurred())
+		})
+
 		DescribeTable("iter method",
 			func(template string, expectedStrs ...string) {
 				pt, err := cos.ParseBashTemplate(template)

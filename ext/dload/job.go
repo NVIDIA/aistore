@@ -289,6 +289,9 @@ func newRangeDlJob(id string, bck *meta.Bck, payload *RangeBody, xdl *Xact) (rj 
 	if rj.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
 		return nil, err
 	}
+	if err = rj.pt.CheckCount(); err != nil {
+		return nil, err
+	}
 	rj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, payload.Headers, xdl, payload.ETLName, payload.ETLArgs)
 
 	if rj.count, err = countObjects(rj.pt, payload.Subdir, rj.bck); err != nil {

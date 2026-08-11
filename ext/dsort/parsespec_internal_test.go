@@ -498,6 +498,21 @@ var _ = Describe("RequestSpec", func() {
 	})
 })
 
+var _ = Describe("parseInputFormat", func() {
+	It("should reject an unbounded input format", func() {
+		_, err := parseInputFormat(newInputFormat("prefix-%06d-suffix"))
+		Expect(err).Should(HaveOccurred())
+	})
+
+	It("should recheck a decoded input format on the target", func() {
+		pt, err := cos.NewParsedTemplate("prefix-%06d-suffix")
+		Expect(err).NotTo(HaveOccurred())
+		m := &Manager{}
+		err = m.init(&parsedReqSpec{Pit: &parsedInputTemplate{Template: pt}})
+		Expect(err).Should(HaveOccurred())
+	})
+})
+
 var _ = Describe("External key map", func() {
 	It("should block private addresses", func() {
 		Expect(ekmBlockedEgress(net.ParseIP("10.0.0.1"))).To(BeTrue())
