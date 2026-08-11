@@ -22,12 +22,11 @@ class Provider(Enum):
     AMAZON = "aws"
     AZURE = "azure"
     GOOGLE = "gcp"
-    HTTP = "ht"
     OCI = "oci"
 
     def is_remote(self) -> bool:
         """
-        Check if the provider is remote (cloud or HTTP).
+        Check if the provider is remote.
         """
         return self != Provider.AIS
 

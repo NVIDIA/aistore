@@ -41,36 +41,6 @@ var (
 	}
 )
 
-func TestHTTPProviderBucket(t *testing.T) {
-	var (
-		bck = cmn.Bck{
-			Name:     t.Name() + "Bucket",
-			Provider: apc.HT,
-		}
-		proxyURL = tools.RandomProxyURL(t)
-		bp       = tools.BaseAPIParams(proxyURL)
-	)
-
-	err := api.CreateBucket(bp, bck, nil)
-	tassert.Fatalf(t, err != nil, "expected error")
-
-	_, err = api.GetObject(bp, bck, "nonexisting", nil)
-	tassert.Fatalf(t, err != nil, "expected error")
-
-	_, err = api.ListObjects(bp, bck, nil, api.ListArgs{})
-	tassert.Fatalf(t, err != nil, "expected error")
-
-	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
-	tassert.CheckError(t, err)
-	_, err = api.PutObject(&api.PutArgs{
-		BaseParams: bp,
-		Bck:        bck,
-		ObjName:    "something",
-		Reader:     reader,
-	})
-	tassert.Fatalf(t, err != nil, "expected error")
-}
-
 func TestListBuckets(t *testing.T) {
 	var (
 		bck      = cmn.Bck{Name: t.Name() + "Bucket", Provider: apc.AIS, Ns: genBucketNs()}

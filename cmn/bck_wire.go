@@ -26,7 +26,7 @@ type (
 		// Bucket name.
 		Name string `json:"name" yaml:"name" msg:"n"`
 		// Backend provider: one of `"ais"`, `"aws"`, `"gcp"`, `"azure"`,
-		// `"oci"`, `"ht"`. Defaults to `"ais"` when empty or omitted.
+		// `"oci"`. Defaults to `"ais"` when empty or omitted.
 		// See `api/apc/provider.go` for the supported enum.
 		Provider string `json:"provider" yaml:"provider" msg:"p"` // +gen:optional
 		// Namespace for scoping the bucket. Leave empty for the default

@@ -34,8 +34,6 @@ const (
 	MD5ObjMD     = cos.ChecksumMD5
 	ETag         = cos.HdrETag
 
-	OrigURLObjMD = "orig_url"
-
 	// LsoLastModified: RFC3339 (list-objects)
 	// see also, and separately, cos.HdrLastModified: RFC1123GMT / (HTTP header semantics)
 	LsoLastModified = "LastModified"

@@ -584,7 +584,7 @@ func concatHandler(c *cli.Context) (err error) {
 	if bck, objName, err = parseBckObjURI(c, fullObjName, false); err != nil {
 		return
 	}
-	if shouldHeadRemote(c, bck) {
+	if shouldHeadRemote(c) {
 		if _, err = headBucket(bck, false /* don't add */); err != nil {
 			return
 		}
@@ -613,7 +613,7 @@ func promoteHandler(c *cli.Context) (err error) {
 	if bck, objName, err = parseBckObjURI(c, fullObjName, true /*optObjName*/); err != nil {
 		return
 	}
-	if shouldHeadRemote(c, bck) {
+	if shouldHeadRemote(c) {
 		if _, err = headBucket(bck, false /* don't add */); err != nil {
 			return
 		}

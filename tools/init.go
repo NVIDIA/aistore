@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -100,26 +99,6 @@ func init() {
 		gctx.Client = cmn.NewClientTLS(transportArgs, tlsArgs, false /*intra-cluster*/)
 	} else {
 		gctx.Client = cmn.NewClient(transportArgs)
-	}
-}
-
-func NewClientWithProxy(proxyURL string) *http.Client {
-	var (
-		transport      = cmn.NewTransport(transportArgs)
-		parsedURL, err = url.Parse(proxyURL)
-	)
-	cos.AssertNoErr(err)
-	transport.Proxy = http.ProxyURL(parsedURL)
-
-	if parsedURL.Scheme == "https" {
-		cos.AssertMsg(cos.IsHTTPS(proxyURL), proxyURL)
-		tlsConfig, err := cmn.NewTLS(tlsArgs, false /*intra-cluster*/)
-		cos.AssertNoErr(err)
-		transport.TLSClientConfig = tlsConfig
-	}
-	return &http.Client{
-		Transport: transport,
-		Timeout:   transportArgs.ClientTimeout,
 	}
 }
 

@@ -838,9 +838,9 @@ func (p *proxy) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
 }
 
-// +gen:endpoint GET /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamOrigURL=string,apc.QparamLatestVer=bool]
+// +gen:endpoint GET /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamLatestVer=bool]
 // Retrieve the object content with the given uname
-func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
+func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request) {
 	// 1. request
 	apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 	if err := p.parseReq(w, r, apireq); err != nil {
@@ -858,9 +858,6 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		bckArgs.dpq = apireq.dpq
 		bckArgs.perms = apc.AceGET
 		bckArgs.createAIS = false
-	}
-	if len(origURLBck) > 0 {
-		bckArgs.origURLBck = origURLBck[0]
 	}
 	bck, err := bckArgs.initAndTry()
 	freeBctx(bckArgs)
@@ -1751,10 +1748,6 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			eq = true
 			nlog.Warningf("multi-object operation %q within the same bucket %q", msg.Action, bck)
 		}
-		if bckTo.IsHT() {
-			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo.Cname(""))
-			return
-		}
 		if !eq {
 			bckTo, ecode, err = p.initBckTo(w, r, query, bckTo)
 			if err != nil {
@@ -2421,7 +2414,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 
 // +gen:endpoint HEAD /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamSilent=bool]
 // Get object metadata and properties
-func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
+func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	bckArgs := allocBctx()
 	{
 		bckArgs.p = p
@@ -2429,9 +2422,6 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		bckArgs.r = r
 		bckArgs.perms = apc.AceObjHEAD
 		bckArgs.createAIS = false
-	}
-	if len(origURLBck) > 0 {
-		bckArgs.origURLBck = origURLBck[0]
 	}
 	bck, objName, err := p._parseReqTry(w, r, bckArgs)
 	if err != nil {
@@ -2491,7 +2481,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		bmd     = p.owner.bmd.get()
 		present bool
 	)
-	if qbck.IsAIS() || qbck.IsHT() {
+	if qbck.IsAIS() {
 		bcks := bmd.Select(qbck, dpq.system)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
@@ -2915,14 +2905,7 @@ func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {
 
 	// by default, s3 is serviced at `/s3`
 	if !cmn.Rom.Features().IsSet(feat.S3APIviaRoot) {
-		config := cmn.GCO.Get()
-		if config.Backend.Get(apc.HT) == nil {
-			p.writeErrURL(w, r)
-			return
-		}
-
-		// `/` root reserved for vanilla http locations via ht:// mechanism
-		p.htHandler(w, r)
+		p.writeErrURL(w, r)
 		return
 	}
 
@@ -2936,34 +2919,6 @@ func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = fs3 + "/" + r.URL.Path
 	}
 	p.s3Handler(w, r)
-}
-
-// GET | HEAD vanilla http(s) location via `ht://` bucket with the corresponding `OrigURLBck`
-func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Scheme == "" {
-		p.writeErrURL(w, r)
-		return
-	}
-	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if cmn.Rom.V(5, cos.ModAIS) {
-		nlog.Infoln("[HTTP CLOUD] RevProxy handler:", baseURL, "-->", r.URL.Path)
-	}
-	if r.Method == http.MethodGet || r.Method == http.MethodHead {
-		// bck.IsHT()
-		hbo := cmn.NewHTTPObj(r.URL)
-		q := r.URL.Query()
-		q.Set(apc.QparamOrigURL, r.URL.String())
-		q.Set(apc.QparamProvider, apc.HT)
-		r.URL.Path = apc.URLPathObjects.Join(hbo.Bck.Name, hbo.ObjName)
-		r.URL.RawQuery = q.Encode()
-		if r.Method == http.MethodGet {
-			p.httpobjget(w, r, hbo.OrigURLBck)
-		} else {
-			p.httpobjhead(w, r, hbo.OrigURLBck)
-		}
-		return
-	}
-	p.writeErrf(w, r, "%q provider doesn't support %q", apc.HT, r.Method)
 }
 
 //
@@ -3209,7 +3164,7 @@ func (p *proxy) _bhead(bck *cmn.Bck, hreq *cmn.HreqArgs) (http.Header, int, erro
 	if err != nil {
 		return nil, 0, err
 	}
-	if bck.IsBuiltTagged() {
+	if bck.IsCloud() {
 		config := cmn.GCO.Get()
 		if config.Backend.Get(bck.Provider) == nil {
 			err := &cmn.ErrMissingBackend{Provider: bck.Provider}

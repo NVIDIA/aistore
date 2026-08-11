@@ -32,7 +32,7 @@ func mptCreateHandler(c *cli.Context) error {
 		return missingArgumentsError(c, "object name")
 	}
 
-	if shouldHeadRemote(c, bck) {
+	if shouldHeadRemote(c) {
 		if _, err = headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}

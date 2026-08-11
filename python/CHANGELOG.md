@@ -35,6 +35,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- **BREAKING**: Removed the unsupported `Provider.HTTP` (`ht://`) backend.
 - **BREAKING**: AuthN cluster registration now verifies AIStore TLS
   certificates by default. Deployments using untrusted certificates must
   configure `ca_cert` or explicitly set `skip_verify=True`.

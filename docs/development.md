@@ -92,7 +92,6 @@ OPTIONS:
   --aws               Build with AWS S3 backend
   --gcp               Build with Google Cloud Storage backend
   --azure             Build with Azure Blob Storage backend
-  --ht                Build with ht:// backend (experimental)
   --loopback          Loopback device size, e.g. 10G, 100M (default: 0). Zero size means emulated mountpaths (with no loopback devices).
   --dir               The root directory of the aistore repository
   --https             Use HTTPS (note: X.509 certificates may be required)

@@ -553,8 +553,6 @@ func bpropsFilterExtra(c *cli.Context, tag string) bool {
 		return strings.HasPrefix(tag, "extra.aws")
 	case apc.OCIScheme, apc.OCI:
 		return strings.HasPrefix(tag, "extra.oci")
-	case apc.HT:
-		return strings.HasPrefix(tag, "extra.http")
 	}
 	return false
 }

@@ -334,7 +334,6 @@ Supported backend providers currently include:
 * `aws://` or `s3://` - Amazon Web Services
 * `azure://` or `az://` - Azure Blob Storage
 * `gcp://` or `gs://` - Google Cloud Storage
-* `ht://` - HTTP(S) datasets
 
 See also:
 

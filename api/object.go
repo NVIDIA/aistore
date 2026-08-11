@@ -42,7 +42,6 @@ type (
 
 		// Currently, this optional Query field can (optionally) carry:
 		// - `apc.QparamETLName`: named ETL to transform the object (i.e., perform "inline transformation")
-		// - `apc.QparamOrigURL`: GET from a vanilla http(s) location (`ht://` bucket with the corresponding `OrigURLBck`)
 		// - `apc.QparamSilent`: do not log errors
 		// - `apc.QparamLatestVer`: get latest version from the associated Cloud bucket; see also: `ValidateWarmGet`
 		// - and also a group of parameters used to read aistore-supported serialized archives ("shards"),

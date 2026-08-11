@@ -34,7 +34,7 @@ const (
 	QparamNewCustom = "set-new-custom"
 
 	// Main bucket query params.
-	QparamProvider  = "provider"  // Backend provider: one of "ais", "aws", "gcp", "azure", "oci", "ht". Defaults to "ais".
+	QparamProvider  = "provider"  // Backend provider: one of "ais", "aws", "gcp", "azure", "oci". Defaults to "ais".
 	QparamNamespace = "namespace" // Bucket namespace; used for remote buckets and cross-cluster operations. Leave empty for the default namespace.
 
 	// e.g., usage: copy bucket, copy object
@@ -75,8 +75,8 @@ const (
 	QparamAppendType   = "append_type"   // Type of append operation (append, flush)
 	QparamAppendHandle = "append_handle" // Handle for ongoing append operations
 
-	// HTTP bucket support.
-	QparamOrigURL = "original_url" // Original URL for HTTP bucket objects
+	// ETL webserver support.
+	QparamOrigURL = "original_url" // Original URL passed to ETL webservers
 
 	// Get logs
 	QparamLogSev  = "severity" // see { LogInfo, ...} enum

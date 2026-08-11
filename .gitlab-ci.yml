@@ -175,7 +175,7 @@ build:linux:
     - MODE="" make node # Build node without backends in production mode.
     - MODE="debug" make node # Build node without backends in debug mode.
     - AIS_BACKEND_PROVIDERS="aws azure gcp oci" MODE="" make node # Build with all Cloud backends (production mode).
-    - AIS_BACKEND_PROVIDERS="aws azure gcp oci ht" MODE="debug" make node # Build with all backends (debug mode).
+    - AIS_BACKEND_PROVIDERS="aws azure gcp oci" MODE="debug" make node # Build with all Cloud backends (debug mode).
     - MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
     - TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
     - TAGS="oteltracing" make node # Build with oteltracing (disabled by default).
@@ -688,7 +688,7 @@ test:long:
   variables:
     BUCKET: "ais://ais-ci"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --ht --deployment all
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - make test-long
 
 test:long:python-extended:
@@ -719,7 +719,7 @@ test:long:aws:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*aws.*/'
     - !reference [.test_long_skip_scheduled_template, rules]
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws --ht --deployment all
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws --deployment all
     - make test-long
 
 test:long:gcp:
@@ -733,7 +733,7 @@ test:long:gcp:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*gcp.*/'
     - !reference [.test_long_skip_scheduled_template, rules]
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --ht --deployment all
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --deployment all
     - make test-long
 
 test:long:azure:
@@ -747,7 +747,7 @@ test:long:azure:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*azure.*/'
     - !reference [.test_long_skip_scheduled_template, rules]
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure --ht --deployment all
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure --deployment all
     - make test-long
 
 test:long:oci:
@@ -761,7 +761,7 @@ test:long:oci:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*oci.*/'
     - !reference [.test_long_skip_scheduled_template, rules]
   script:
-    - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci --ht --deployment all
+    - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci --deployment all
     - . ais/test/oci/mp_tuning.env && make test-long
 
 test:long:aisloader:

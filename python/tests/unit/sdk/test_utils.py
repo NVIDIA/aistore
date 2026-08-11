@@ -260,7 +260,7 @@ class TestUtils(unittest.TestCase):
         ("bucket 'gcp://bucket' does not exist", ("gcp", "bucket", False)),
         ("object 'gs://bucket/obj' does not exist", ("gs", "bucket", True)),
         ("bucket 'azure://b' does not exist", ("azure", "b", False)),
-        ("object 'ht://b/o' does not exist", ("ht", "b", True)),
+        ("object 'ht://b/o' does not exist", None),
         ("object 'oci://bucket/obj' does not exist", ("oci", "bucket", True)),
         ("bucket 'abc://bucket' does not exist", None),
         ("object 'abc://bucket/obj' does not exist", None),

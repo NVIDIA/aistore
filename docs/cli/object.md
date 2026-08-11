@@ -207,7 +207,7 @@ $ ais get aws://imagenet/imagenet_train-000010.tgz -
 
 We say that "an object is _cached_" to indicate two separate things:
 
-* The object was originally downloaded from a remote (e.g., 3rd party Cloud) bucket, a bucket in a remote AIS cluster, or a HTTP(s) based dataset;
+* The object was originally downloaded from a remote (e.g., 3rd party Cloud) bucket or a bucket in a remote AIS cluster;
 * The object is stored in the AIS cluster.
 
 In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location.

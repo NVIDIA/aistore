@@ -5,7 +5,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -69,11 +68,6 @@ func parseFromToURIs(c *cli.Context, bckFromArg, bckToArg string, shift int, opt
 
 func parseBckURI(c *cli.Context, uri string, errorOnly bool) (cmn.Bck, error) {
 	const validNames = ": ais://mmm, s3://nnn or aws://nnn, gs://ppp, gcp://ppp, oc://ppp or oci://ppp"
-	if isWebURL(uri) {
-		bck := parseURLtoBck(uri)
-		return bck, nil
-	}
-
 	opts := cmn.ParseURIOpts{}
 	if !providerRequired {
 		opts.DefaultProvider = gcfg.DefaultProvider
@@ -124,18 +118,11 @@ func parseBckObjAux(c *cli.Context, uri string) (bck cmn.Bck, objnameOrPrefix st
 	if err != nil {
 		return bck, "", err
 	}
-	if bck.IsHT() {
-		return bck, "", errors.New("http bucket is not supported as destination")
-	}
 	return bck, strings.Trim(objnameOrPrefix, "/"), nil
 }
 
 func parseQueryBckURI(uri string) (cmn.QueryBcks, string, error) {
 	uri = preparseBckObjURI(uri)
-	if isWebURL(uri) {
-		bck := parseURLtoBck(uri)
-		return cmn.QueryBcks(bck), "", nil
-	}
 	bck, prefix, err := cmn.ParseBckObjectURI(uri, cmn.ParseURIOpts{IsQuery: true})
 	if prefix != "" && bck.IsQuery() {
 		return cmn.QueryBcks(bck), prefix,
@@ -145,31 +132,22 @@ func parseQueryBckURI(uri string) (cmn.QueryBcks, string, error) {
 }
 
 func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bck, objName string, err error) {
-	if isWebURL(uri) {
-		var hbo *cmn.HTTPBckObj
-		hbo, err = cmn.NewHTTPObjPath(uri)
-		if err != nil {
-			return bck, "", err
+	var opts cmn.ParseURIOpts
+	if !providerRequired {
+		opts.DefaultProvider = gcfg.DefaultProvider
+	}
+	bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
+	if err != nil {
+		if errV := errBucketNameInvalid(c, uri, err); errV != nil {
+			return bck, objName, errV
 		}
-		bck, objName = hbo.Bck, hbo.ObjName
-	} else {
-		var opts cmn.ParseURIOpts
-		if !providerRequired {
-			opts.DefaultProvider = gcfg.DefaultProvider
+		var msg string
+		if emptyObjnameOK {
+			msg = "Expecting " + optionalObjectsArgument + ", e.g.: ais://mmm, s3://nnn/obj2, gs://ppp/a/b/c, etc."
+		} else {
+			msg = "Expecting " + objectArgument + ", e.g.: ais://mmm/obj1, s3://nnn/obj2, gs://ppp/obj3, etc."
 		}
-		bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
-		if err != nil {
-			if errV := errBucketNameInvalid(c, uri, err); errV != nil {
-				return bck, objName, errV
-			}
-			var msg string
-			if emptyObjnameOK {
-				msg = "Expecting " + optionalObjectsArgument + ", e.g.: ais://mmm, s3://nnn/obj2, gs://ppp/a/b/c, etc."
-			} else {
-				msg = "Expecting " + objectArgument + ", e.g.: ais://mmm/obj1, s3://nnn/obj2, gs://ppp/obj3, etc."
-			}
-			return cmn.Bck{}, "", cannotExecuteError(c, err, msg)
-		}
+		return cmn.Bck{}, "", cannotExecuteError(c, err, msg)
 	}
 
 	if bck.Name == "" {

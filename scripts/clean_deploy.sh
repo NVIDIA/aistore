@@ -64,7 +64,6 @@ OPTIONS:
   --gcp               Build with Google Cloud Storage backend
   --azure             Build with Azure Blob Storage backend
   --oci               Build with OCI Object Storage backend
-  --ht                Build with ht:// backend (experimental)
   --loopback          Loopback device size, e.g. 10G, 100M (default: 0). Zero size means emulated mountpaths (with no loopback devices).
   --dir               The root directory of the aistore repository
   --https             Use HTTPS (note: X509 certificates may be required)
@@ -105,7 +104,6 @@ while (( "$#" )); do
     --azure) AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} azure"; shift;;
     --gcp)   AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} gcp"; shift;;
     --oci)   AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} oci"; shift;;
-    --ht)    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} ht"; shift;;
 
     --tracing)
       tracing="y\n${AIS_TRACING_ENDPOINT}\n${AIS_TRACING_AUTH_TOKEN_HEADER}\n${AIS_TRACING_AUTH_TOKEN_FILE}"

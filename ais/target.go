@@ -103,7 +103,7 @@ func (*target) interruptedRestarted() (i, r bool) {
 
 // Backend initialization and resolution ===============================================
 //
-// Each backend provider (aws, gcp, azure, oci, ht) goes through a 3-way classification
+// Each backend provider (aws, gcp, azure, oci) goes through a 3-way classification
 // at startup:
 //   - configured + built:          enabled, fully operational
 //   - configured + not built:      FATAL (ErrInitBackend/ErrMissingBackend)
@@ -217,8 +217,6 @@ func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
 			bp, err = backend.NewAzure(t, tstats, startingUp)
 		case apc.OCI:
 			bp, err = backend.NewOCI(t, tstats, startingUp)
-		case apc.HT:
-			bp, err = backend.NewHT(t, config, tstats, startingUp)
 		case apc.AIS:
 			continue
 		default:
@@ -1057,12 +1055,6 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 				}
 			}
 		}
-	}
-
-	// apc.QparamOrigURL
-	if bck.IsHT() {
-		originalURL := dpq.sys.origURL
-		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}
 
 	// do

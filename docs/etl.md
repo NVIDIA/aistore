@@ -4,7 +4,7 @@
 - **Transform** it into a unified format optimized for compute (e.g., deep learning)
 - **Load** the result into a new destination
 
-The AIStore ETL (**AIS ETL**) subsystem is designed from the ground up to execute all three stages of the ETL process *locally*. AIStore and any of its [supported backends](https://github.com/NVIDIA/aistore/blob/main/docs/images/supported-backends.png) can serve as both the source for extraction and the destination for loading. Unlike traditional ETL pipelines that extract data out of storage, transform it externally, and push it back, AIStore deploys custom transformation logic directly on the nodes that store the data. This drastically **reduces data movement**, **improves performance**, and **eliminates infrastructure overhead**.
+The AIStore ETL (**AIS ETL**) subsystem is designed from the ground up to execute all three stages of the ETL process *locally*. AIStore and any of its [supported backends](https://github.com/NVIDIA/aistore/blob/main/docs/providers.md) can serve as both the source for extraction and the destination for loading. Unlike traditional ETL pipelines that extract data out of storage, transform it externally, and push it back, AIStore deploys custom transformation logic directly on the nodes that store the data. This drastically **reduces data movement**, **improves performance**, and **eliminates infrastructure overhead**.
 
 ## Overview
 

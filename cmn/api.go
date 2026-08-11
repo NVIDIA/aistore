@@ -76,10 +76,9 @@ type (
 	}
 
 	ExtraProps struct {
-		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
-		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
-		GCP  ExtraPropsGCP  `json:"gcp,omitempty" list:"omitempty"`
-		OCI  ExtraPropsOCI  `json:"oci,omitempty" list:"omitempty"`
+		AWS ExtraPropsAWS `json:"aws,omitempty" list:"omitempty"`
+		GCP ExtraPropsGCP `json:"gcp,omitempty" list:"omitempty"`
+		OCI ExtraPropsOCI `json:"oci,omitempty" list:"omitempty"`
 		// e.g. "team=alpha;project=beta;id=123"
 		Custom string `json:"custom,omitempty"`
 	}
@@ -89,8 +88,6 @@ type (
 	ExtraToSet struct { // ref. bpropsFilterExtra
 		// AWS/S3 extras.
 		AWS *ExtraPropsAWSToSet `json:"aws,omitempty"` // +gen:optional
-		// HTTP backend extras.
-		HTTP *ExtraPropsHTTPToSet `json:"http,omitempty"` // +gen:optional
 		// Google Cloud Storage extras.
 		GCP *ExtraPropsGCPToSet `json:"gcp,omitempty"` // +gen:optional
 		// Oracle Cloud Infrastructure object storage extras.
@@ -172,18 +169,6 @@ type (
 		Region *string `json:"region,omitempty"` // +gen:optional
 	}
 
-	ExtraPropsHTTP struct {
-		// Original URL prior to hashing.
-		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
-	}
-	// ExtraPropsHTTPToSet is the partial-update counterpart of ExtraPropsHTTP.
-	ExtraPropsHTTPToSet struct {
-		// Original upstream URL (prior to hashing into the ht:// bucket
-		// name). Read-only; set by the system when the bucket is first
-		// materialized.
-		OrigURLBck *string `json:"original_url"` // +gen:optional
-	}
-
 	// BpropsToSet is the partial-update counterpart of Bprops - the
 	// request body for both ActCreateBck (create a new bucket with
 	// these non-default properties) and ActSetBprops (update an
@@ -219,7 +204,7 @@ type (
 		Features *feat.Flags `json:"features,string,omitempty"` // +gen:optional
 		// When to persist metadata and data writes.
 		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"` // +gen:optional
-		// Provider-specific extras (S3, GCS, Azure, OCI, HTTP).
+		// Provider-specific extras (S3, GCS, Azure, OCI).
 		Extra *ExtraToSet `json:"extra,omitempty"` // +gen:optional
 
 		// Skip safety validations that would otherwise reject the update.
@@ -235,8 +220,7 @@ type (
 	BackendBckToSet struct {
 		// Remote bucket name.
 		Name *string `json:"name"` // +gen:optional
-		// Remote provider: one of `"aws"`, `"gcp"`, `"azure"`,
-		// `"oci"`, `"ht"`.
+		// Remote provider: one of `"aws"`, `"gcp"`, `"azure"`, or `"oci"`.
 		Provider *string `json:"provider"` // +gen:optional
 
 		// Remote bucket namespace. When specified, replaces the complete
@@ -416,7 +400,7 @@ const (
 )
 
 // TODO: remove in 5.1
-// [backward compatibility] ExtraPropsHDFS removed in v4.3
+// [backward compatibility] provider extras removed with HDFS (v4.3) and HTTP (v5.0)
 func (c *ExtraProps) UnmarshalJSON(data []byte) error {
 	type Alias ExtraProps // not to recurs
 	var tmp Alias
@@ -426,15 +410,16 @@ func (c *ExtraProps) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	type withHDFS struct {
+	type legacy struct {
 		Alias
 		HDFS jsoniter.RawMessage `json:"hdfs,omitempty"`
+		HTTP jsoniter.RawMessage `json:"http,omitempty"`
 	}
-	var legacy withHDFS
-	if errLegacy := cos.JSON.Unmarshal(data, &legacy); errLegacy != nil {
-		return fmt.Errorf("failed to unmarshal bucket ExtraProps (current: %v; legacy-with-hdfs: %v)", errCurr, errLegacy)
+	var old legacy
+	if errLegacy := cos.JSON.Unmarshal(data, &old); errLegacy != nil {
+		return fmt.Errorf("failed to unmarshal bucket ExtraProps (current: %v; legacy: %v)", errCurr, errLegacy)
 	}
-	*c = ExtraProps(legacy.Alias)
+	*c = ExtraProps(old.Alias)
 	return nil
 }
 
@@ -455,11 +440,6 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	}
 
 	switch provider {
-	case apc.HT:
-		if c.HTTP.OrigURLBck == "" {
-			return errors.New("original bucket URL must be set for an HTTP provider bucket")
-		}
-
 	case apc.AWS:
 		return c.AWS.validate()
 	case apc.GCP:

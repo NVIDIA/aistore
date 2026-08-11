@@ -13,7 +13,6 @@ AIStore natively integrates with multiple backend providers:
 | `azure` | `azure://`, `az://` | [Azure Cloud Storage](#cloud-object-storage)|
 | `gcp` | `gcp://`, `gs://` | [Google Cloud Storage](#cloud-object-storage) |
 | `oci` | `oc://`, `oci://` | [Oracle Cloud Storage](#cloud-object-storage)[^1] |
-| `ht` | `ht://` | [HTTP(S) based dataset](#https-based-dataset) |
 
 **Native integration**, in turn, implies:
 * utilizing vendor's SDK libraries to operate on the respective remote backends;
@@ -45,7 +44,7 @@ And further:
 
 ## Remote AIS cluster
 
-In addition to the listed above 3rd party Cloud storages and non-Cloud HTTP(S) backend, any given pair of AIS clusters can be organized in a way where one cluster would be providing fully-accessible *backend* to another.
+In addition to the listed above 3rd party Cloud storages, any given pair of AIS clusters can be organized in a way where one cluster would be providing fully-accessible *backend* to another.
 
 Terminology:
 
@@ -230,19 +229,5 @@ bbb/111          16.26KiB
 ttt/hhh          16.26KiB
 ttt/qqq          16.26KiB
 ```
-
-## HTTP(S) based dataset
-
-AIS bucket may be implicitly defined by HTTP(S) based dataset, where files such as, for instance:
-
-* https://a/b/c/imagenet/train-000000.tar
-* https://a/b/c/imagenet/train-123456.tar
-* ...
-* https://a/b/c/imagenet/train-999999.tar
-
-would all be stored in a single AIS bucket that would have a protocol prefix `ht://` and a bucket name derived from the *directory* part of the URL Path ("a/b/c/imagenet", in this case).
-
-WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. `curl ... --noproxy=$(curl -s G/v1/cluster?what=target_ips)`).
-If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
 
 [^1]: **Note:** OCI support is currently experimental and may have limited functionality or stability.

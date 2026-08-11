@@ -48,9 +48,6 @@ const (
 	// including BucketProps.Extra.OCI
 	HdrOCIRegion = aisPrefix + "Oci-Region"
 
-	// including BucketProps.Extra.HTTP
-	HdrOrigURLBck = aisPrefix + "Original-Url"
-
 	// remote AIS
 	HdrRemAisUUID  = aisPrefix + "Remote-Ais-Uuid"
 	HdrRemAisAlias = aisPrefix + "Remote-Ais-Alias"

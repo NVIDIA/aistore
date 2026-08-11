@@ -40,6 +40,37 @@ func TestConfigTestEnv(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
+func TestBackendConfValidateProviders(t *testing.T) {
+	t.Run("legacy ht ignored", func(t *testing.T) {
+		conf := cmn.BackendConf{
+			Conf: map[string]any{
+				"ht":    map[string]any{},
+				apc.AWS: map[string]any{},
+			},
+			Providers: map[string]cmn.Ns{"ht": cmn.NsGlobal},
+		}
+		if err := conf.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := conf.Conf["ht"]; ok {
+			t.Error("legacy ht configuration was not removed")
+		}
+		if _, ok := conf.Providers["ht"]; ok {
+			t.Error("legacy ht provider was registered")
+		}
+		if ns, ok := conf.Providers[apc.AWS]; !ok || ns != cmn.NsGlobal {
+			t.Errorf("AWS provider not preserved: %+v", conf.Providers)
+		}
+	})
+
+	t.Run("unknown rejected", func(t *testing.T) {
+		conf := cmn.BackendConf{Conf: map[string]any{"unknown": map[string]any{}}}
+		if err := conf.Validate(); err == nil || !strings.Contains(err.Error(), "unknown backend provider") {
+			t.Fatalf("expected unknown-provider error, got %v", err)
+		}
+	})
+}
+
 func TestConfigFSPaths(t *testing.T) {
 	var (
 		oldConfig     = cmn.GCO.Get()

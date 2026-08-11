@@ -311,8 +311,6 @@ func TestParseQueryBckURI(t *testing.T) {
 		{uri: "ais://bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}, pref: ""},
 		{uri: "ais://#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}, pref: ""},
 		{uri: "ais://@uuid#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}, pref: ""},
-		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}, pref: ""},
-		{uri: "https://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}, pref: ""},
 		{uri: "ais://bucket/objname", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}, pref: "objname"},
 		{uri: "ais://bucket/aaa/bbb/objname", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}, pref: "aaa/bbb/objname"},
 	}
@@ -334,6 +332,8 @@ func TestParseQueryBckURI(t *testing.T) {
 		{uri: "aiss://bucket"},
 		{uri: "ais:///objectname"},
 		{uri: "ais:///aaa/bbb/objectname"},
+		{uri: "http://web.url/dataset"},
+		{uri: "https://web.url/dataset"},
 		{uri: "ftp://unsupported"},
 	}
 	for _, test := range negativeTests {
@@ -350,8 +350,6 @@ func TestParseBckURI(t *testing.T) {
 		{uri: "ais://bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket"}},
 		{uri: "ais://#ns/bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
 		{uri: "ais://@uuid#ns/bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
-		{uri: "http://web.url/dataset", bck: cmn.Bck{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
-		{uri: "https://web.url/dataset", bck: cmn.Bck{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
 	}
 	for _, test := range positiveTests {
 		bck, err := parseBckURI(&cli.Context{}, test.uri, true /*require provider*/)
@@ -375,6 +373,8 @@ func TestParseBckURI(t *testing.T) {
 		{uri: "ais://@uuid#ns"},
 		{uri: "ais://@uuid"},
 		{uri: "ais:///objectname"},
+		{uri: "http://web.url/dataset"},
+		{uri: "https://web.url/dataset"},
 		{uri: "ftp://unsupported"},
 	}
 	for _, test := range negativeTests {
@@ -419,16 +419,6 @@ func TestParseBckObjectURI(t *testing.T) {
 			bck:     cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}},
 			objName: "object",
 		},
-		{
-			uri:     "http://web.url/dataset/object_name",
-			bck:     cmn.Bck{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
-			objName: "object_name",
-		},
-		{
-			uri:     "https://web.url/dataset/object_name",
-			bck:     cmn.Bck{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
-			objName: "object_name",
-		},
 	}
 	for _, test := range positiveTests {
 		bck, objName, err := parseBckObjURI(&cli.Context{}, test.uri, test.optObjName)
@@ -461,6 +451,8 @@ func TestParseBckObjectURI(t *testing.T) {
 		{uri: "ais://@uuid"},
 		{uri: "ais://@uuid#ns"},
 		{uri: "ais://@uuid#ns/bucket"},
+		{uri: "http://web.url/dataset/object_name"},
+		{uri: "https://web.url/dataset/object_name"},
 		{uri: "ftp://unsupported"},
 	}
 	for _, test := range negativeTests {

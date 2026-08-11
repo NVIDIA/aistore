@@ -268,8 +268,6 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 		cloudProps, present := bmd.Get(backend)
 		debug.Assert(present)
 		bprops.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
-	case bck.IsHT():
-		return cmn.NewErrNotImpl("create", "bucket for HTTP provider")
 	case bck.IsCloud():
 		debug.Assert(len(skipLookup) > 0 && skipLookup[0])
 		fallthrough

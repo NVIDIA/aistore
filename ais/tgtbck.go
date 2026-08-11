@@ -284,7 +284,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 		code   int
 	)
 	if qbck.Provider != "" {
-		if qbck.IsAIS() || qbck.IsHT() { // built-in providers
+		if qbck.IsAIS() {
 			bcks = bmd.Select(qbck, dpq.system)
 		} else {
 			bcks, code, err = t.blist(qbck, config)
@@ -300,7 +300,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 		for provider := range apc.Providers {
 			var buckets cmn.Bcks
 			qbck.Provider = provider
-			if qbck.IsAIS() || qbck.IsHT() {
+			if qbck.IsAIS() {
 				buckets = bmd.Select(qbck, dpq.system)
 			} else {
 				buckets, code, err = t.blist(qbck, config)
@@ -864,20 +864,9 @@ func (t *target) _bckhead(w http.ResponseWriter, r *http.Request, apireq *apiReq
 
 	debug.Assert(!bck.IsAIS())
 
-	ctx := context.Background()
-	if bck.IsHT() {
-		originalURL := apireq.dpq.sys.origURL // apc.QparamOrigURL
-		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
-		if !inBMD && originalURL == "" {
-			err := cmn.NewErrRemBckNotFound(bck.Bucket())
-			t.writeErr(w, r, err, http.StatusNotFound, Silent)
-			return
-		}
-	}
-
 	// + cloud
 	bp := t.Backend(bck)
-	bpropsKV, code, err := bp.HeadBucket(ctx, bck)
+	bpropsKV, code, err := bp.HeadBucket(context.Background(), bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {

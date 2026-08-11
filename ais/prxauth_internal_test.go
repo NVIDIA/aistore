@@ -60,7 +60,7 @@ func newMockTokenParser() *mockTokenParser {
 	}
 }
 
-func TestAuth_AccessHTRequiresToken(t *testing.T) {
+func TestAuth_AccessRequiresToken(t *testing.T) {
 	old := cmn.GCO.Get()
 	t.Cleanup(func() {
 		cmn.GCO.Put(old)
@@ -73,7 +73,7 @@ func TestAuth_AccessHTRequiresToken(t *testing.T) {
 	cmn.Rom.Set(&config.ClusterConfig)
 
 	p := &proxy{htrun: htrun{statsT: mock.NewStatsTracker()}}
-	bck := meta.NewBck("example.com", apc.HT, cmn.NsGlobal)
+	bck := meta.NewBck("bucket", apc.AWS, cmn.NsGlobal)
 	req := &http.Request{Header: make(http.Header)}
 
 	err := p.access(req, bck, apc.AceGET)

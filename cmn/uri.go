@@ -6,15 +6,10 @@
 package cmn
 
 import (
-	"encoding/base64"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn/cos"
-
-	onexxh "github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -50,14 +45,6 @@ func ParseURLScheme(url string) (scheme, address string) {
 		return "", s[0]
 	}
 	return s[0], s[1]
-}
-
-func OrigURLBck2Name(origURLBck string) (bckName string) {
-	_, b := ParseURLScheme(origURLBck)
-	b1 := onexxh.Checksum64S(cos.UnsafeB(b), cos.MLCG32)
-	b2 := strconv.FormatUint(b1, 16)
-	bckName = base64.RawURLEncoding.EncodeToString([]byte(b2))
-	return
 }
 
 func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, err error) {

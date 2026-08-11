@@ -292,7 +292,7 @@ Keeping automatic rebalance enabled is strongly recommended, but there are cases
 
 * all buckets are empty;
 * maintenance was started with `--no-rebalance` and no objects were added or updated during maintenance;
-* all objects can be refetched from remote backends such as remote AIS, HTTP, or cloud buckets, understanding that this may incur extra cloud traffic charges; or
+* all objects can be refetched from remote backends such as remote AIS or cloud buckets, understanding that this may incur extra cloud traffic charges; or
 * multiple nodes are being returned from maintenance, in which case name them all in a single `stop-maintenance` command - see [Batch Operations](#batch-operations) - rather than sequencing them with `--no-rebalance`.
 
 The `--no-rebalance` flag is available for `start-maintenance`, `shutdown`, `stop-maintenance`, and `decommission`.

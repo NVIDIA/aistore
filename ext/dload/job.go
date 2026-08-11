@@ -352,8 +352,6 @@ func (j *rangeDlJob) getNextObjs() error {
 func newBackendDlJob(id string, bck *meta.Bck, payload *BackendBody, xdl *Xact) (bj *backendDlJob, err error) {
 	if !bck.IsRemote() {
 		return nil, errors.New("bucket download requires a remote bucket")
-	} else if bck.IsHT() {
-		return nil, errors.New("bucket download does not support HTTP buckets")
 	}
 	bj = &backendDlJob{}
 	bj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, nil, xdl, payload.ETLName, payload.ETLArgs)

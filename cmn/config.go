@@ -1567,7 +1567,7 @@ func (c *ClientConf) Validate() error {
 		errExpectedRange = "(expected range [1s, 30m])"
 	)
 	// hydrate first: zero means no end-to-end timeout for http.Client
-	// (see ec/getx, reb/globrun, ext/dsort/manager, ais/backend/ht)
+	// (see ec/getx, reb/globrun, ext/dsort/manager)
 	if c.Timeout == 0 {
 		c.Timeout = cos.Duration(clientTimeoutDflt)
 	}
@@ -1630,25 +1630,25 @@ func (c *BackendConf) Validate() (err error) {
 			c.Conf[provider] = aisConf
 		case "":
 			continue
-		default:
+		case apc.AWS, apc.Azure, apc.GCP, apc.OCI:
 			c.setProvider(provider)
+		case "ht":
+			// TODO: remove in 5.1
+			delete(c.Conf, provider)
+			delete(c.Providers, provider)
+		default:
+			return fmt.Errorf("unknown backend provider %q", provider)
 		}
 	}
 	return nil
 }
 
 func (c *BackendConf) setProvider(provider string) {
-	var ns Ns
-	switch provider {
-	case apc.AWS, apc.Azure, apc.GCP, apc.OCI, apc.HT:
-		ns = NsGlobal
-	default:
-		debug.Assert(false, "unknown backend provider "+provider)
-	}
+	debug.Assert(apc.IsCloudProvider(provider), provider)
 	if c.Providers == nil {
 		c.Providers = map[string]Ns{}
 	}
-	c.Providers[provider] = ns
+	c.Providers[provider] = NsGlobal
 }
 
 func (c *BackendConf) Get(provider string) (conf any) {

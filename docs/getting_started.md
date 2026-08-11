@@ -494,7 +494,7 @@ $ TAGS="aws gcp" make kill clean cli deploy <<< $'7\n2'
 
 > Use `TAGS` environment to specify any/all supported build tags that also include conditionally linked remote backends (see next).
 
-> Use `AIS_BACKEND_PROVIDERS` environment to select remote backends that include 3 (three) Cloud providers and `ht://` - namely: (`aws`, `gcp`, `azure`, `ht`)
+> Use `AIS_BACKEND_PROVIDERS` environment to select remote Cloud backends: `aws`, `gcp`, `azure`, and `oci`.
 
 > For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
 

@@ -73,7 +73,6 @@ var BackendHelpers = struct {
 	Azure  backendFuncs
 	Google backendFuncs
 	OCI    backendFuncs
-	HTTP   backendFuncs
 }{
 	Amazon: backendFuncs{
 		EncodeVersion:  awsEncodeVersion,
@@ -97,9 +96,6 @@ var BackendHelpers = struct {
 		EncodeCksum:    ociEncodeCksum,
 		EncodeMetadata: ociEncodeMetadata,
 		DecodeMetadata: ociDecodeMetadata,
-	},
-	HTTP: backendFuncs{
-		EncodeETag: httpEncodeETag,
 	},
 }
 
@@ -300,10 +296,4 @@ func ociEncodeMetadata(metadata map[string]string) map[string]string {
 
 func ociDecodeMetadata(header http.Header) map[string]string {
 	return _decMeta(header, OCIHeaderMetaPrefix)
-}
-
-// HTTP
-
-func httpEncodeETag(v any) (string, bool) {
-	return _encStrUnquote(v)
 }

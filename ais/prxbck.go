@@ -35,8 +35,6 @@ type bctx struct {
 	query url.Values
 	dpq   *dpq
 
-	origURLBck string
-
 	reqBody []byte          // request body of original request
 	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
 
@@ -210,11 +208,6 @@ func (bctx *bctx) accessSupported() error {
 		op = "rename/move remote bucket"
 		goto rerr
 	}
-	// HTTP buckets are not writeable
-	if bctx.bck.IsHT() && bctx._perm(apc.AcePUT) {
-		op = "write to HTTP bucket"
-		goto rerr
-	}
 	// Cloud bucket: destroy op. not allowed, and not supported yet
 	// (have no separate perm for eviction, that's why an extra check)
 	if rmb := bctx.bck.IsCloud() && bctx._perm(apc.AceDestroyBucket) && bctx.msg.Action == apc.ActDestroyBck; !rmb {
@@ -373,25 +366,6 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 		}
 	}
 
-	// orig-url for the ht:// bucket
-	if bck.IsHT() {
-		if bctx.origURLBck != "" {
-			remoteHdr.Set(apc.HdrOrigURLBck, bctx.origURLBck)
-		} else {
-			var (
-				origURL = bctx.getOrigURL()
-			)
-			if origURL == "" {
-				return bck, 0, cmn.NewErrFailedTo(p, "initialize", bctx.bck, errors.New("missing HTTP URL"))
-			}
-			hbo, err := cmn.NewHTTPObjPath(origURL)
-			if err != nil {
-				return nil, 0, err
-			}
-			remoteHdr.Set(apc.HdrOrigURLBck, hbo.OrigURLBck)
-		}
-	}
-
 	// when explicitly asked _not to_
 	bctx.exists = true
 	if bctx.dontAddRemote {
@@ -438,25 +412,11 @@ func (bctx *bctx) _creadd(bck *meta.Bck, remoteHdr http.Header, action string) (
 	return bctx.bck, 0, err // original
 }
 
-func (bctx *bctx) getOrigURL() (ourl string) {
-	if bctx.query != nil {
-		debug.Assert(bctx.dpq == nil)
-		ourl = bctx.query.Get(apc.QparamOrigURL)
-	} else {
-		ourl = bctx.dpq.sys.origURL
-	}
-	return
-}
-
 func (bctx *bctx) lookup(bck *meta.Bck) (hdr http.Header, code int, err error) {
 	var (
 		q       = url.Values{}
 		retried bool
 	)
-	if bck.IsHT() {
-		origURL := bctx.getOrigURL()
-		q.Set(apc.QparamOrigURL, origURL)
-	}
 	if bctx.probeHeadRemote {
 		q.Set(apc.QparamSilent, "true")
 	}

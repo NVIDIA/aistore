@@ -1182,22 +1182,6 @@ func corruptSingleBitInFile(m *ioContext, objName string, eced bool) {
 	file.Close()
 }
 
-func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {
-	for _, nbck := range newList {
-		found := false
-		for _, obck := range oldList {
-			if obck.Name == nbck.Name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nbck, nil
-		}
-	}
-	return cmn.Bck{}, fmt.Errorf("new bucket is not found (old: %v, new: %v)", oldList, newList)
-}
-
 // randomize buckets' namespaces
 func genBucketNs() cmn.Ns {
 	s := os.Getenv(env.TestRandNs)

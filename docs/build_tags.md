@@ -11,7 +11,6 @@ Here's the current list, grouped by category.
 | `aws`| Include support for AWS S3 |
 | `azure`| Include support for Azure Blob Storage |
 | `gcp`| Include support for Google Cloud Platform |
-| `ht`| Include support for a custom `ht://` backend |
 | `oci`| Include support for Oracle Cloud Infrastructure (OCI) |
 
 ## Debug & development

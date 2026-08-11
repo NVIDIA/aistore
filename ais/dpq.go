@@ -32,7 +32,7 @@ import (
 // 3. Bucket (provider, namespace) - receive special handling due to their
 //    fundamental role. Provider stays as-is, namespace gets URL-unescaped.
 //
-// 4. Special system fields (ptime, pid, uuid, owt, origURL, objto) - system
+// 4. Special system fields (ptime, pid, uuid, owt, objto) - system
 //    parameters that are used throughout the codebase. Some require URL unescaping.
 //
 // 5. CSK/HMAC signature verification fields.
@@ -66,12 +66,11 @@ type (
 			provider, namespace string // bucket
 		}
 		sys struct {
-			pid     string // QparamPID
-			ptime   string // req timestamp at calling/redirecting proxy (QparamUnixTime)
-			uuid    string // xaction
-			origURL string // ht://url->
-			owt     string // object write transaction { OwtPut, ... }
-			objto   string // uname of the destination object
+			pid   string // QparamPID
+			ptime string // req timestamp at calling/redirecting proxy (QparamUnixTime)
+			uuid  string // xaction
+			owt   string // object write transaction { OwtPut, ... }
+			objto string // uname of the destination object
 		}
 		sv svgrp
 
@@ -202,8 +201,6 @@ func (dpq *dpq) parse(rawQuery string) error {
 			dpq.sys.uuid = value
 		case apc.QparamOWT:
 			dpq.sys.owt = value
-		case apc.QparamOrigURL:
-			dpq.sys.origURL, err = _unescape(value)
 		case apc.QparamObjTo:
 			dpq.sys.objto, err = _unescape(value)
 

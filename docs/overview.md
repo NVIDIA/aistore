@@ -180,8 +180,7 @@ Overall, some of the ways to _get_ an existing dataset _into_ an AIS cluster inc
 4. [Copy multiple remote objects](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
 5. [Download very large objects (BLOBs)](/docs/cli/blob-downloader.md)
 6. [Downloader](#existing-datasets-downloader)
-7. [HTTP(S) Datasets](#existing-datasets-https-datasets)
-8. [Promote local or shared files](#promote-local-or-shared-files)
+7. [Promote local or shared files](#promote-local-or-shared-files)
 
 > Note: The terms **in-cluster** and **cached** are used interchangeably in this documentation. However, it's important to note that AIS is not primarily a caching solution, although it can function as one when the LRU feature is enabled. AIS is designed for reliable storage, offering a comprehensive set of data protection features and configurable redundancy options on a per-bucket basis.
 

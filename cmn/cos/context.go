@@ -19,5 +19,4 @@ type (
 const (
 	CtxReadWrapper contextID = "readWrapper" // context key for ReadWrapperFunc
 	CtxSetSize     contextID = "setSize"     // context key for SetSizeFunc
-	CtxOriginalURL contextID = "origURL"     // context key for OriginalURL for HTTP cloud
 )

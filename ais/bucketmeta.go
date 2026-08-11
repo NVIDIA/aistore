@@ -529,8 +529,6 @@ func (*bckPropsArgs) merge(props *cmn.Bprops, header http.Header) *cmn.Bprops {
 		props.Extra.AWS.Profile = header.Get(apc.HdrS3Profile)
 	case apc.OCI:
 		props.Extra.OCI.Region = header.Get(apc.HdrOCIRegion)
-	case apc.HT:
-		props.Extra.HTTP.OrigURLBck = header.Get(apc.HdrOrigURLBck)
 	}
 
 	if verStr := header.Get(apc.HdrBucketVerEnabled); verStr != "" {

@@ -476,8 +476,8 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 	return
 }
 
-func shouldHeadRemote(c *cli.Context, bck cmn.Bck) bool {
-	return !bck.IsHT() && !flagIsSet(c, dontHeadRemoteFlag)
+func shouldHeadRemote(c *cli.Context) bool {
+	return !flagIsSet(c, dontHeadRemoteFlag)
 }
 
 // Prints multiple lines of fmtStr to writer w.
@@ -536,12 +536,6 @@ func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 			{"chunks", props.Chunks.String()},
 			{"lru", props.LRU.String()},
 			{"versioning", props.Versioning.String()},
-		}
-		if props.Provider == apc.HT {
-			origURL := props.Extra.HTTP.OrigURLBck
-			if origURL != "" {
-				propList = append(propList, nvpair{Name: "original-url", Value: origURL})
-			}
 		}
 	} else {
 		err := cmn.IterFields(props, func(tag string, field cmn.IterField) (error, bool) {
@@ -683,15 +677,6 @@ func ensureRemoteProvider(bck cmn.Bck) error {
 		}
 	}
 	return fmt.Errorf("invalid bucket %q: expecting remote backend", bck.String())
-}
-
-func parseURLtoBck(strURL string) (bck cmn.Bck) {
-	if !cos.IsLastB(strURL, '/') {
-		strURL += "/"
-	}
-	bck.Provider = apc.HT
-	bck.Name = cmn.OrigURLBck2Name(strURL)
-	return
 }
 
 // see also authNConfPairs
@@ -842,7 +827,7 @@ func _extractRootSections(config any) []string {
 
 // _extractChildSections returns immediate children under the requested prefix
 // e.g.:
-// - prefix "extra"     => ["extra.aws", "extra.gcp", "extra.http"]
+// - prefix "extra"     => ["extra.aws", "extra.gcp"]
 // - prefix "extra.gcp" => ["extra.gcp.application_creds"]
 func _extractChildSections(config any, prefix string) []string {
 	seen := make(map[string]bool, 32)

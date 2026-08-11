@@ -201,7 +201,7 @@ func _evictOne(c *cli.Context, shift int) error {
 		const msg = "evicting objects from AIS buckets (ie., buckets with no remote backends) is not allowed."
 		return errors.New(msg + "\n(Tip:  consider 'ais object rm' or 'ais rmb', see --help for details)")
 	}
-	if shouldHeadRemote(c, bck) {
+	if shouldHeadRemote(c) {
 		if _, err := headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}
@@ -392,7 +392,7 @@ func _rmOne(c *cli.Context, shift int, warned *bool) error {
 		return err
 	}
 
-	if shouldHeadRemote(c, bck) {
+	if shouldHeadRemote(c) {
 		bprops, err := headBucket(bck, false /* don't add */)
 		if err != nil {
 			return err
@@ -475,7 +475,7 @@ func _prefetchOne(c *cli.Context, shift int) error {
 	if err != nil {
 		return err
 	}
-	if shouldHeadRemote(c, bck) {
+	if shouldHeadRemote(c) {
 		if bck.Props, err = headBucket(bck, true /* add */); err != nil {
 			return err
 		}

@@ -45,7 +45,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	// default props & flags => user-provided message
 	lsmsg.NormalizeNameSizeDflt()
 
-	if bck.IsHT() || lsmsg.IsFlagSet(apc.LsArchDir) {
+	if lsmsg.IsFlagSet(apc.LsArchDir) {
 		lsmsg.SetFlag(apc.LsCached)
 	}
 

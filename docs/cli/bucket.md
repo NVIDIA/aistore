@@ -161,7 +161,7 @@ $ ais create ais://@Bghort1l/bucket_name --props='{"versioning": {"enabled": tru
 
 ```console
 $ ais create aws://bucket_name
-Create bucket "aws://bucket_name" failed: creating a bucket for any of the cloud or HTTP providers is not supported
+Create bucket "aws://bucket_name" failed: creating a bucket for a cloud provider is not supported
 ```
 
 ### See also
