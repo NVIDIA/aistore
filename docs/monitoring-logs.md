@@ -233,10 +233,7 @@ I 18:06:18.785011 {aws.head.n:114227,aws.head.ns.total:16799090100532,del.n:109,
 In Kubernetes deployments, AIS logs include pod and cluster-specific details:
 
 ```
-I 19:28:24.786264 k8s:93 Pod info: name ais-proxy-15 ,namespace ais ,node 10.49.41.55 ,hostname ais-proxy-15 ,host_network false
-I 19:28:24.786281 k8s:101   ais-ais-state (&PersistentVolumeClaimVolumeSource{ClaimName:ais-ais-state-ais-proxy-15,ReadOnly:false,})
-I 19:28:24.786304 k8s:103   config-template
-I 19:28:24.786306 k8s:103   config-mount
+I 19:28:24.786264 k8s:58 Pod info: name ais-proxy-15 ,namespace ais ,node 10.49.41.55
 ```
 
 ## Key Performance Metrics

@@ -169,7 +169,7 @@ See also:
 | name | comment |
 | ---- | ------- |
 | `MY_POD` and `HOSTNAME` | Kubernetes POD name. `MY_POD` is used in [production](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go); `HOSTNAME`, on the other hand, is usually considered a Kubernetes default |
-| `MY_NODE` | Kubernetes node name |
+| `MY_NODE` | Kubernetes node name; injected via the downward API in both [production](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go) and development, and required in Kubernetes deployments - aisnode exits at startup when it is not set |
 | `K8S_NS` and `POD_NAMESPACE` | Kubernetes namespace. `K8S_NS` is used in [production](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go), while `POD_NAMESPACE` - development |
 
 Kubernetes POD name is also reported via `ais show cluster` CLI - when it is a Kubernetes deployment, e.g.:
