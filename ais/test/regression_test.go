@@ -350,6 +350,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		selected      = m.smap.Tmap.ActiveNodes()[:targetsToUnregister]
 		sids          = make([]string, 0, targetsToUnregister)
 		snames        = make([]string, 0, targetsToUnregister)
+		rebID         string
 		inMaintenance bool
 		getsRunning   bool
 	)
@@ -363,17 +364,21 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		if getsRunning {
 			m.stopGets()
 		}
-		if !inMaintenance {
-			return
+		if inMaintenance {
+			tlog.Logfln("Cleanup: take %v out of maintenance", snames)
+			args := &apc.ActValRmNode{}
+			args.SetIDs(sids...)
+
+			id, err := api.StopMaintenance(bp, args)
+			tassert.CheckError(t, err)
+			rebID = id
 		}
 
-		tlog.Logfln("Cleanup: take %v out of maintenance", snames)
-		args := &apc.ActValRmNode{}
-		args.SetIDs(sids...)
-
-		rebID, err := api.StopMaintenance(bp, args)
-		tassert.CheckFatal(t, err)
-		tools.WaitForRebalanceByID(t, bp, rebID)
+		// never leave a batch rebalance in flight - the next test's
+		// membership change would be rejected by the coexistence check
+		if rebID != "" {
+			tools.WaitForRebalanceByID(t, bp, rebID)
+		}
 	}()
 
 	// Step 1: Batch start-maintenance (no rebalance)
@@ -408,11 +413,12 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	args = &apc.ActValRmNode{}
 	args.SetIDs(sids...)
 
-	rebID, err := api.StopMaintenance(bp, args)
+	rebID, err = api.StopMaintenance(bp, args)
 	tassert.CheckFatal(t, err)
 
 	// The request was accepted and committed. Do not issue the same transition
-	// again from deferred cleanup if a later assertion fails.
+	// again from deferred cleanup if a later assertion fails - but `rebID` stays
+	// set so that cleanup still waits for the rebalance it started.
 	inMaintenance = false
 
 	smap, err = tools.WaitForClusterState(
@@ -430,6 +436,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	getsRunning = false
 
 	tools.WaitForRebalanceByID(t, bp, rebID)
+	rebID = "" // drained
 
 	clusterStats = tools.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {

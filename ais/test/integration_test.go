@@ -468,26 +468,49 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Put some files
 	m.puts()
 
-	// Register target 0 in parallel
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		tlog.Logfln("Take %s out of maintenance mode ...", target0.StringEx())
-		args := &apc.ActValRmNode{DaemonID: target0.ID()}
-		_, err = api.StopMaintenance(bp, args)
-		tassert.CheckFatal(t, err)
-	}()
+	// [NOTE] membership changes are serialized cluster-wide: the two transitions
+	// below used to run concurrently, which made the test race the rebalance that
+	// the first one starts.
 
-	// Unregister target 1 in parallel
-	go func() {
-		defer wg.Done()
-		err = tools.RemoveNodeUnsafe(m.proxyURL, target1.ID())
-		tassert.CheckFatal(t, err)
-	}()
+	tlog.Logfln("Take %s out of maintenance mode ...", target0.StringEx())
+	rebID0, err := api.StopMaintenance(bp, &apc.ActValRmNode{DaemonID: target0.ID()})
+	tassert.CheckFatal(t, err)
 
-	// Wait for everything to end
-	wg.Wait()
+	// While that rebalance is running, a competing membership change must be
+	// rejected - assert it when the rebalance is confirmed to be still in flight.
+	if rebID0 != "" {
+		xargs := xact.ArgsMsg{ID: rebID0, Kind: apc.ActRebalance, OnlyRunning: true}
+		status, errX := api.GetOneXactionStatus(bp, &xargs)
+		switch {
+		case errX != nil && !cmn.IsStatusNotFound(errX):
+			tassert.CheckError(t, errX)
+		case errX != nil:
+			tlog.Logfln("Skip rejection check: rebalance[%s] not found (already reaped)", rebID0)
+		case status.IsFinished():
+			tlog.Logfln("Skip rejection check: rebalance[%s] already finished", rebID0)
+		default:
+			errU := tools.RemoveNodeUnsafe(m.proxyURL, target1.ID())
+			tassert.Errorf(t, errU != nil, "expected %s removal to be rejected while rebalance[%s] is running", target1.StringEx(), rebID0)
+			if errU != nil {
+				tlog.Logfln("Expected rejection: %v", errU)
+			}
+		}
+	}
+
+	tools.WaitForRebalanceByID(t, bp, rebID0)
+
+	_, err = tools.WaitForClusterState(
+		m.proxyURL,
+		"target out of maintenance",
+		m.smap.Version,
+		m.originalProxyCount,
+		m.originalTargetCount,
+	)
+	tassert.CheckFatal(m.t, err)
+
+	tlog.Logfln("Remove %s (unsafe)", target1.StringEx())
+	err = tools.RemoveNodeUnsafe(m.proxyURL, target1.ID())
+	tassert.CheckFatal(t, err)
 
 	// Register target 1 to bring cluster to original state
 	sleep := time.Duration(rand.IntN(5))*time.Second + time.Millisecond

@@ -106,13 +106,17 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		rebID, err = api.StopMaintenance(bp, actVal)
-		tassert.CheckFatal(t, err)
+		rebID, err := api.StopMaintenance(bp, actVal)
+		if err != nil {
+			tassert.CheckError(t, err)
+			return
+		}
 		_, err = tools.WaitForClusterState(proxyURL, "target is back",
 			m.smap.Version, m.smap.CountActivePs(), m.smap.CountTargets())
-		args := xact.ArgsMsg{ID: rebID, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(bp, &args)
-		tassert.CheckFatal(t, err)
+		tassert.CheckError(t, err)
+
+		// rebID is empty when the transition started no rebalance
+		tools.WaitForRebalanceByID(t, bp, rebID)
 	}()
 
 	m.smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
@@ -284,6 +288,11 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		args := xact.ArgsMsg{Kind: apc.ActRebalance}
 		err = api.AbortXaction(bp, &args)
 		tassert.CheckError(t, err)
+
+		// abort is asynchronous: a membership change issued right here would be
+		// rejected for as long as the rebalance is still (aborting but) running
+		tools.WaitForRebalAndResil(t, bp)
+
 		val := &apc.ActValRmNode{DaemonID: dcm.ID()}
 		rebID, err = api.StopMaintenance(bp, val)
 		tassert.CheckError(t, err)
@@ -451,10 +460,10 @@ func stopMaintenance(t *testing.T, bp api.BaseParams, actVal *apc.ActValRmNode, 
 	if err != nil {
 		return "", err
 	}
-	_, err = tools.WaitForClusterState(proxyURL, "target joined (cleanup)", smapVersion, origProxyCnt, origTargetCount)
-	if err == nil {
-		tools.WaitForRebalanceByID(t, bp, rebID)
+	if _, err := tools.WaitForClusterState(proxyURL, "target joined (cleanup)", smapVersion, origProxyCnt, origTargetCount); err != nil {
+		return rebID, err
 	}
+	tools.WaitForRebalanceByID(t, bp, rebID)
 	return rebID, nil
 }
 
@@ -469,7 +478,9 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 			fixedSize:       true,
 			bck:             bck,
 			numGetsEachFile: 1,
-			proxyURL:        proxyURL,
+			// GETs run across both membership transitions - do not log
+			// a progress line every 10K requests
+			silent: true,
 		}
 		actVal   = &apc.ActValRmNode{}
 		proxyURL = tools.RandomProxyURL(t)
@@ -517,9 +528,8 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	m.smap = smap
 
-	m.stopGets()
-	stopped = true
-	m.ensureNoGetErrors()
+	// [NOTE] GETs keep running across the reactivation as well: without early-GFN
+	// the proxy would redirect by HRW to a target that does not have the object yet
 
 	rebID, err = api.StopMaintenance(bp, actVal)
 	tassert.CheckFatal(t, err)
@@ -532,6 +542,10 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	m.smap = smap
 	tools.WaitForRebalanceByID(t, bp, rebID)
+
+	m.stopGets()
+	stopped = true
+	m.ensureNoGetErrors()
 }
 
 func TestNodeShutdown(t *testing.T) {

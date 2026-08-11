@@ -374,6 +374,8 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, join
 	return p._notifyEarlyGFN(ctx, smap, si)
 }
 
+// keeping separate from _earlyGFN: stop-maintenance can rebalance while reactivating
+// multiple targets when there are currently zero active targets
 func (p *proxy) _notifyEarlyGFN(ctx *smapModifier, smap *smapX, tsi *meta.Snode) error {
 	// Notify targets before publishing the updated Smap.
 	actMsgExt := p.newAmsgActVal(apc.ActStartGFN, nil)
