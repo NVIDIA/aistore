@@ -58,9 +58,9 @@ func (p *proxy) beginMembership(action string) error {
 	if !inflight.CAS(false, true) {
 		return cmn.NewErrBusy(membershipTag, action)
 	}
-	if running, xid := p.notifs.isRebRunning(); running {
+	if err := p.notifs.errRebRunning(action); err != nil {
 		inflight.Store(false)
-		return cmn.NewErrBusy(membershipTag, action, "rebalance["+xid+"] is running")
+		return err
 	}
 	return nil
 }
@@ -118,8 +118,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			switch msg.Action {
 			case apc.ActDecommissionNode, apc.ActDecommissionCluster, apc.ActShutdownNode,
 				apc.ActShutdownCluster, apc.ActRmNodeUnsafe:
-				if running, xid := p.notifs.isRebRunning(); running {
-					p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later", xid, msg.Action, sname)
+				// defensive: admission is held, but self-join is not gated
+				if err := p.notifs.errRebRunning(msg.Action + " " + sname); err != nil {
+					p.writeErr(w, r, err)
 					return
 				}
 				if !smap.InMaint(si) {
@@ -160,9 +161,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 	nlog.Infof("%s: %s(%v) opts=%v", p, msg.Action, snames, opts)
 	if hasTarget {
-		// TODO -- FIXME: membership-change vs other membership-change
-		if running, xid := p.notifs.isRebRunning(); running {
-			p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %v) later", xid, msg.Action, snames)
+		// defensive: admission is held, but self-join is not gated
+		if err := p.notifs.errRebRunning(msg.Action + " " + strings.Join(snames, ", ")); err != nil {
+			p.writeErr(w, r, err)
 			return
 		}
 	}
@@ -176,6 +177,10 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		}
 		ecode, err := p.rmNodesFinal(msg, nodes, snames, nil)
 		if err != nil {
+			if cmn.IsErrBusy(err) {
+				p.writeErr(w, r, err)
+				return
+			}
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, snames, err), ecode)
 		}
 		return
@@ -196,6 +201,10 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 	rebID, err := p.rmTargets(nodes, snames, msg, reb)
 	if err != nil {
+		if cmn.IsErrBusy(err) {
+			p.writeErr(w, r, err)
+			return
+		}
 		p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, snames, err))
 		return
 	}
@@ -292,9 +301,8 @@ func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
 		hasTarget = hasTarget || si.IsTarget()
 	}
 	if hasTarget {
-		if running, xid := p.notifs.isRebRunning(); running {
-			return fmt.Errorf("rebalance[%s] is currently running, please try (%s %s) later",
-				xid, ctx.msg.Action, strings.Join(ctx.sids, ", "))
+		if err := p.notifs.errRebRunning(ctx.msg.Action + " " + strings.Join(ctx.sids, ", ")); err != nil {
+			return err
 		}
 	}
 	for _, sid := range ctx.sids {
@@ -651,8 +659,8 @@ func (p *proxy) _unregNodesPre(ctx *smapModifier, clone *smapX) error {
 		return errSmapNoChange
 	}
 	if ctx.msg.Action == apc.ActRmNodeUnsafe && hasTarget {
-		if running, xid := p.notifs.isRebRunning(); running {
-			return fmt.Errorf("rebalance[%s] is currently running, please try (%s %v) later", xid, ctx.msg.Action, ctx.sids)
+		if err := p.notifs.errRebRunning(ctx.msg.Action + " " + strings.Join(ctx.sids, ", ")); err != nil {
+			return err
 		}
 	}
 	var removedProxy bool
@@ -766,8 +774,9 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 
 	if targetCount > 0 {
-		if running, xid := p.notifs.isRebRunning(); running {
-			p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later", xid, msg.Action, snames)
+		// defensive: admission is held, but self-join is not gated
+		if err := p.notifs.errRebRunning(msg.Action + " " + strings.Join(snames, ", ")); err != nil {
+			p.writeErr(w, r, err)
 			return
 		}
 	}
@@ -902,9 +911,8 @@ func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
 		hasTarget = hasTarget || si.IsTarget()
 	}
 	if hasTarget {
-		if running, xid := p.notifs.isRebRunning(); running {
-			return fmt.Errorf("rebalance[%s] is currently running, please try (%s %s) later",
-				xid, ctx.msg.Action, strings.Join(ctx.sids, ", "))
+		if err := p.notifs.errRebRunning(ctx.msg.Action + " " + strings.Join(ctx.sids, ", ")); err != nil {
+			return err
 		}
 	}
 	var activateProxy bool

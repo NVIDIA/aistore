@@ -109,6 +109,16 @@ func TestMembershipBusy(t *testing.T) {
 			name: "explicit rebalance",
 			call: func() (string, error) { return lcStartRebalance(bp) },
 		},
+		{
+			name: "explicit rebalance --cleanup",
+			call: func() (string, error) {
+				args := &xact.ArgsMsg{
+					Kind:  apc.ActRebalance,
+					Flags: xact.FlagRemoveMisplaced,
+				}
+				return api.StartXaction(bp, args, "")
+			},
+		},
 	}
 
 	for _, tc := range rejects {
@@ -207,7 +217,7 @@ func lcStartRebalance(bp api.BaseParams) (string, error) {
 	return api.StartXaction(bp, &xact.ArgsMsg{Kind: apc.ActRebalance}, "")
 }
 
-// armStartMaint puts nodes in maintenance and returns the causal rebalance ID.
+// put nodes in maintenance and returns the causal rebalance ID.
 func armStartMaint(t *testing.T, bp api.BaseParams, sids ...string) string {
 	t.Helper()
 	rebID, err := lcStartMaint(bp, sids...)
@@ -217,7 +227,7 @@ func armStartMaint(t *testing.T, bp api.BaseParams, sids ...string) string {
 	return rebID
 }
 
-// stillArmed reports whether the causal rebalance listener remains running.
+// check whether the rebalance listener remains running
 func stillArmed(t *testing.T, bp api.BaseParams, rebID string) bool {
 	t.Helper()
 	if rebID == "" {
@@ -226,13 +236,14 @@ func stillArmed(t *testing.T, bp api.BaseParams, rebID string) bool {
 	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, OnlyRunning: true}
 	status, err := api.GetOneXactionStatus(bp, &xargs)
 	if err != nil {
-		return false
+		tassert.Fatalf(t, cmn.IsStatusNotFound(err), "rebalance[%s] status: %v", rebID, err)
+		return false // reaped
 	}
 	return !status.IsFinished()
 }
 
-// ensureMembershipAdmits uses a no-op stop-maintenance request to verify that
-// neither the short admission bit nor a running rebalance remains.
+// use a no-op stop-maintenance request to verify that
+// neither the short admission bit nor a running rebalance remains
 func ensureMembershipAdmits(t *testing.T, bp api.BaseParams) {
 	t.Helper()
 	smap := tools.GetClusterMap(t, proxyURL)

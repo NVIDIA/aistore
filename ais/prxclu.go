@@ -860,10 +860,6 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 		var cleanup bool
 		if xargs.Flags&xact.FlagRemoveMisplaced != 0 {
-			if running, xid := p.notifs.isRebRunning(); running {
-				p.writeErrf(w, r, "cannot start rebalance in cleanup mode: rebalance[%s] is currently running", xid)
-				return
-			}
 			// special cleanup mode:
 			// piggy-back on the rebalance lifecycle (xreg, abort, status, rebID) to walk
 			// mountpaths and remove local copies of objects upon checking their respective
@@ -1063,7 +1059,11 @@ func (p *proxy) reloadCreds(w http.ResponseWriter, r *http.Request, msg *apc.Act
 // admin call
 func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, cleanup bool) {
 	// disallow admin-initiated rebalance when membership change is in progress, and vice versa
-	if err := p.beginMembership(msg.Action); err != nil {
+	action := apc.ActRebalance
+	if cleanup {
+		action += " --cleanup"
+	}
+	if err := p.beginMembership(action); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
