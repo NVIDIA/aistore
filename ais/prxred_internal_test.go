@@ -36,7 +36,7 @@ func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 
 	config := cmn.GCO.BeginUpdate()
 	config.Auth.IntraCluster = new(cmn.IntraClusterConf)
-	config.Auth.IntraCluster.Enabled = signVerifyEnabled
+	config.Auth.IntraCluster.RequestAuth = signVerifyEnabled
 	cmn.GCO.CommitUpdate(config)
 	cmn.Rom.Set(&config.ClusterConfig)
 

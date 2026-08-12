@@ -22,7 +22,7 @@ func TestAuthE2E(t *testing.T) {
 		t.Skipf("skipping %s: 'ais' binary not found", t.Name())
 	}
 	cluConfig := tools.GetClusterConfig(t)
-	if !cluConfig.Auth.Enabled {
+	if !cluConfig.Auth.ClientAuthRequired {
 		t.Skipf("skipping %s: AuthN is not enabled", t.Name())
 	}
 

@@ -126,7 +126,7 @@
 			"key":    "aBitLongSecretKey",
 			"method": "HMAC"
 		},
-		"enabled": false
+		"client_auth_required": false
 	},
 	"keepalivetracker": {
 		"proxy": {

@@ -940,7 +940,7 @@ func TestLsoLocalGetLocation(t *testing.T) {
 		// Starting v5.0, target locations are not directly accessible when
 		// AuthN or intra-cluster signing requires proxy mediation.
 		config                = tools.GetClusterConfig(t)
-		directAccessForbidden = config.Auth.Enabled || config.Auth.IntraClusterConfigured()
+		directAccessForbidden = config.Auth.ClientAuthRequired || config.Auth.IntraRequestAuthConfigured()
 	)
 	if testing.Short() {
 		m.num = 100
@@ -978,8 +978,8 @@ func TestLsoLocalGetLocation(t *testing.T) {
 
 		oah, err := api.GetObject(baseParams, m.bck, e.Name, nil)
 		if directAccessForbidden {
-			tassert.Fatalf(t, err != nil, "expected direct access to fail when (auth.enabled=%t, intra_cluster.enabled=%t)",
-				config.Auth.Enabled, config.Auth.IntraClusterConfigured())
+			tassert.Fatalf(t, err != nil, "expected direct access to fail when (auth.client_auth_required=%t, intra_cluster.request_auth=%t)",
+				config.Auth.ClientAuthRequired, config.Auth.IntraRequestAuthConfigured())
 			continue
 		}
 		tassert.CheckFatal(t, err)
@@ -1042,7 +1042,7 @@ func TestLsoCloudGetLocation(t *testing.T) {
 
 		// starting v5.0
 		config                = tools.GetClusterConfig(t)
-		directAccessForbidden = config.Auth.Enabled || config.Auth.IntraClusterConfigured()
+		directAccessForbidden = config.Auth.ClientAuthRequired || config.Auth.IntraRequestAuthConfigured()
 	)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
@@ -1076,8 +1076,8 @@ func TestLsoCloudGetLocation(t *testing.T) {
 
 		oah, err := api.GetObject(baseParams, bck, e.Name, nil)
 		if directAccessForbidden {
-			tassert.Fatalf(t, err != nil, "expected direct access to fail when (auth.enabled=%t, intra_cluster.enabled=%t)",
-				config.Auth.Enabled, config.Auth.IntraClusterConfigured())
+			tassert.Fatalf(t, err != nil, "expected direct access to fail when (auth.client_auth_required=%t, intra_cluster.request_auth=%t)",
+				config.Auth.ClientAuthRequired, config.Auth.IntraRequestAuthConfigured())
 			continue
 		}
 		tassert.CheckFatal(t, err)

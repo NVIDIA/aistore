@@ -154,7 +154,7 @@ cat > ${NODE_CONFIG_DIR}/proxy/ais.json << PROXYEOF
     "versioning": {"enabled": true, "validate_warm_get": false},
     "net": {"l4": {"proto": "tcp", "sndrcv_buf_size": 131072}, "http": {"use_https": false, "server_crt": "server.crt", "server_key": "server.key", "domain_tls": "", "client_ca_tls": "", "client_auth_tls": 0, "idle_conn_time": "6s", "idle_conns_per_host": 32, "idle_conns": 256, "write_buffer_size": 65536, "read_buffer_size": 65536, "chunked_transfer": true, "skip_verify": false}},
     "fshc": {"test_files": 4, "error_limit": 2, "io_err_limit": 10, "io_err_time": "10s", "enabled": true},
-    "auth": {"signature": {"key": "", "method": "HMAC"}, "enabled": false},
+    "auth": {"signature": {"key": "", "method": "HMAC"}, "client_auth_required": false},
     "keepalivetracker": {"proxy": {"interval": "10s", "name": "heartbeat", "factor": 3}, "target": {"interval": "10s", "name": "heartbeat", "factor": 3}, "num_retries": 3, "retry_factor": 4},
     "distributed_sort": {"duplicated_records": "ignore", "missing_shards": "ignore", "ekm_malformed_line": "abort", "ekm_missing_key": "abort", "default_max_mem_usage": "80%", "call_timeout": "10m", "dsorter_mem_threshold": "100GB", "compression": "never", "bundle_multiplier": 4},
     "features": "0"

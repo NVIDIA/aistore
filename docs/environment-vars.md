@@ -303,11 +303,12 @@ auth.oidc.allowed_iss                            []
 auth.oidc.issuer_ca_bundle
 auth.oidc.jwks_cache.min_rotation_refresh        0s
 auth.oidc.jwks_cache.min_background_refresh      0s
-auth.intra_cluster.enabled                       false ## (intra-cluster requests and redirects _not_ signed)
+auth.intra_cluster.request_auth                  false ## (intra-cluster requests and redirects _not_ signed)
+auth.intra_cluster.self_join_auth                false ## (self-join authentication not required; no-op in v5.0)
 auth.intra_cluster.ttl                           0s
 auth.intra_cluster.nonce_window                  0s
 auth.intra_cluster.rotation_grace                0s
-auth.enabled                                     false ## (authentication disabled)
+auth.client_auth_required                        false ## (client authentication not required)
 ```
 
 Notice: this command is executed on the AIStore cluster, not AuthN.

@@ -109,15 +109,18 @@ $ ais config cluster auth --json
             "allowed_iss": null
         },
         "intra_cluster": {
-            "enabled": false,
+            "request_auth": false,
+            "self_join_auth": false,
             "ttl": "0s",
             "nonce_window": "1m",
             "rotation_grace": "1m"
         },
-        "enabled": false ### <<<<< authentication disabled
+        "client_auth_required": false
     }
 }
 ```
+
+Here, `client_auth_required: false` means protected client requests do not require authentication.
 
 * use the integrated `AuthN` server, which provides OAuth 2.0-compliant JWTs and a set of [CLI auth commands](/docs/cli/auth.md) to manage users, roles, and permissions; or
 * outsource authorization to a separate centralized system, often LDAP-integrated, that manages existing users, groups, and mappings.

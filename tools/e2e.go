@@ -141,7 +141,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			case "authn":
 				// Skip running AuthN e2e tests if the former is not enabled
 				// (compare w/ `SkipTestArgs.RequiresAuth`)
-				if config, err := getClusterConfig(); err == nil && config.Auth.Enabled {
+				if config, err := getClusterConfig(); err == nil && config.Auth.ClientAuthRequired {
 					continue
 				}
 				tlog.Logfln("SKIPPING %q: AuthN not enabled", fileName)

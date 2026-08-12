@@ -202,7 +202,7 @@ To view existing or reload new TLS certificates, see the following CLI reference
 
 When AIS is deployed with authentication enabled, the API (and CLI) to reload certificates will require administrative permissions.
 
-> See `ais config cluster` command and related `auth.enabled` knob.
+> See `ais config cluster` command and related `auth.client_auth_required` knob.
 
 ## Public and intra-cluster TLS configuration
 

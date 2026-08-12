@@ -468,7 +468,7 @@ By default, the AIStore deployment does not launch the AuthN server. To start th
 
 4. **Configure AIStore Cluster to Enable Token-Based Access:**
     ```sh
-    ais config cluster auth.enabled true
+    ais config cluster auth.client_auth_required true
     ```
 
 5. **Verify Access:**

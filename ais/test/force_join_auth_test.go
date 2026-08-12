@@ -80,7 +80,7 @@ func testForceJoinAttack(t *testing.T, victim *meta.Snode, hdr http.Header) {
 	attack.Smap.Primary = attackerPrimary
 	attack.Smap.Pmap[pid] = attackerPrimary
 	attack.Smap.Version += 100
-	attack.Config.Auth.Enabled = false
+	attack.Config.Auth.ClientAuthRequired = false
 
 	t.Cleanup(func() {
 		smap, err := api.GetClusterMap(tools.BaseAPIParams(victim.PubNet.URL))

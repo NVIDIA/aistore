@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"sync"
 	"testing"
@@ -68,7 +69,7 @@ func TestAuth_AccessRequiresToken(t *testing.T) {
 	})
 
 	config := cmn.GCO.BeginUpdate()
-	config.Auth.Enabled = true
+	config.Auth.ClientAuthRequired = true
 	cmn.GCO.CommitUpdate(config)
 	cmn.Rom.Set(&config.ClusterConfig)
 
@@ -79,6 +80,52 @@ func TestAuth_AccessRequiresToken(t *testing.T) {
 	err := p.access(req, bck, apc.AceGET)
 	tassert.Errorf(t, errors.Is(err, tok.ErrNoToken), "expected ErrNoToken, got %v", err)
 	tassert.Errorf(t, aceErrToCode(err) == http.StatusUnauthorized, "expected HTTP 401, got %d", aceErrToCode(err))
+}
+
+func TestAuth_V50RejectsRequestAuthUpdate(t *testing.T) {
+	if !cmn.IsV50Bridge() {
+		t.Skip("v5.0 bridge-specific test")
+	}
+	old := cmn.GCO.Get()
+	t.Cleanup(func() {
+		cmn.GCO.Put(old)
+		cmn.Rom.Set(&old.ClusterConfig)
+	})
+	config := cmn.GCO.BeginUpdate()
+	config.Auth.IntraCluster = &cmn.IntraClusterConf{}
+	cmn.GCO.CommitUpdate(config)
+	cmn.Rom.Set(&config.ClusterConfig)
+
+	tests := []struct {
+		name       string
+		clientAuth *bool
+		selfJoin   *bool
+	}{
+		{name: "client auth omitted"},
+		{name: "client auth unchanged", clientAuth: apc.Ptr(false)},
+		{name: "self-join auth included", selfJoin: apc.Ptr(true)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &proxy{}
+			p.owner.config = &configOwner{globalFpath: t.TempDir()}
+			toUpdate := &cmn.ConfigToSet{Auth: &cmn.AuthConfToSet{
+				ClientAuthRequired: tc.clientAuth,
+				IntraCluster: &cmn.IntraClusterConfToSet{
+					RequestAuth:  apc.Ptr(true),
+					SelfJoinAuth: tc.selfJoin,
+				},
+			}}
+			req := httptest.NewRequest(http.MethodPut, apc.URLPathClu.S, http.NoBody)
+			w := httptest.NewRecorder()
+
+			p.setCluCfgPersistent(w, req, toUpdate, &apc.ActMsg{Action: apc.ActSetConfig})
+
+			tassert.Fatalf(t, w.Code == http.StatusPreconditionFailed,
+				"expected status %d, got %d: %s", http.StatusPreconditionFailed, w.Code, w.Body.String())
+			tassert.Fatalf(t, !cmn.GCO.Get().Auth.IntraRequestAuthConfigured(), "rejected update changed request_auth")
+		})
+	}
 }
 
 func TestAuth_Manager_UpdateRevokedList_AddsRevokedTokens(t *testing.T) {

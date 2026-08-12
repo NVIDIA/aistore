@@ -310,7 +310,7 @@ test_fspaths.instance            8
 ```console
 $ ais show config CASGt8088 inherited
 PROPERTY                                 VALUE                                                           DEFAULT
-auth.enabled                             false                                                           -
+auth.client_auth_required                false                                                           -
 auth.secret                              **********                                                      -
 backend.conf                             map[]                                                           -
 checksum.enable_read_range               false                                                           -

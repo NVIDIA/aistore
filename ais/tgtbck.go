@@ -53,7 +53,7 @@ func (t *target) verifyBckVerb(w http.ResponseWriter, r *http.Request, dpq *dpq)
 	if reqIsPub(r) {
 		config := cmn.GCO.Get()
 		// consistent with verifyObjVerb
-		if config.Auth.Enabled || config.Auth.IntraClusterConfigured() {
+		if config.Auth.ClientAuthRequired || config.Auth.IntraRequestAuthConfigured() {
 			t.writeErr(w, r, errDirectTargetAccess, http.StatusForbidden)
 			return false
 		}

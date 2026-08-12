@@ -24,7 +24,7 @@ import (
 // - settings whose correct values depend on the deployment environment.
 var (
 	defaultAuth = aiscmn.AuthConf{
-		Enabled: false,
+		ClientAuthRequired: false,
 	}
 
 	defaultNet = aiscmn.NetConf{

@@ -16,7 +16,7 @@ For an end-to-end example of setting up Keycloak with AIS in K8s, see the [auth 
   - [Signature Verification](#signature-verification)
     - [Static Credentials](#static-credentials)
     - [OIDC Lookup](#oidc-lookup)
-- [Cluster Key](#cluster-key)
+- [Authentication Boundaries](#authentication-boundaries)
 
 ## General Purpose Auth Support
 
@@ -106,12 +106,12 @@ When authentication is enabled, incoming HTTP requests are validated before proc
 1. The proxy validates the token signature using either static credentials or OIDC lookup (see [Signature Verification](#signature-verification))
 1. Token claims (`subject`, `issuer`, `audience`, `expiration`) are verified according to [cluster configuration](#token-validation-configuration)
 1. Custom AIS claims (`admin`, `clusters`, `buckets`) are compared against the request to validate user access to the resource specified by the API call
-1. If `auth.intra_cluster` is enabled, the redirect url is signed for targets to validate (see [Cluster Key](#cluster-key))
+1. Starting in v5.1, if `auth.intra_cluster.request_auth` is set, the redirect URL is signed for targets to validate (see [Authentication Boundaries](#authentication-boundaries))
 
 ## Token Validation Configuration
 
 Authentication is controlled via the `auth` section of the cluster configuration.
-To enable authentication, set `auth.enabled` to `true`.
+To require authentication for protected client requests, set `auth.client_auth_required` to `true`.
 
 ### Required Claims
 
@@ -151,17 +151,26 @@ See the diagram below for an example of how this flow works with the AuthN servi
 
 ![OIDC Issuer flow](images/auth/OIDC_issuer.png)
 
-## Cluster Key
+## Authentication Boundaries
 
-The cluster key adds an additional security layer for intra-cluster HTTP redirects by applying HMAC-SHA256 signatures.
-It is controlled separately from user authentication using the `auth.intra_cluster.enabled` setting.
+The `auth` section controls three separate security boundaries:
 
-Once enabled, the primary proxy creates a signing key, versioned and kept in memory, and propagates it cluster-wide through [metasync](/docs/ha.md).
-Proxies sign all redirect URLs after validating the caller's token, while receiving nodes verify those signatures before executing redirected operations.
-This ensures that only authorized, properly routed internal redirects are accepted by AIS targets.
+| Setting | Boundary | v5.0 behavior |
+|---|---|---|
+| `auth.client_auth_required` | Client requests reaching AIS proxies | Requires JWT/OIDC authentication and authorization when true |
+| `auth.intra_cluster.request_auth` | Protected node-to-node requests and redirects | Accepted and persisted, but signing and verification remain inactive until v5.1; direct client access to targets is rejected |
+| `auth.intra_cluster.self_join_auth` | A node's startup self-join request to the primary proxy | Accepted and persisted, but has no runtime effect until v5.1 |
 
-Configuration values:
-- `auth.intra_cluster.enabled`: Enable signing and verification of protected intra-cluster requests
+These settings are independent. For example, an operator can pre-stage either
+intra-cluster policy without requiring JWT/OIDC authentication from clients.
+
+The request-authentication window settings apply only to
+`auth.intra_cluster.request_auth`:
+
 - `auth.intra_cluster.ttl`: TTL for request signatures; `0s` means no expiration
-- `auth.intra_cluster.nonce_window`: How much clock skew to tolerate between nodes
-- `auth.intra_cluster.rotation_grace`: How long to accept old and new signing keys during rotation
+- `auth.intra_cluster.nonce_window`: tolerated clock skew between nodes
+- `auth.intra_cluster.rotation_grace`: time to accept old and new signing keys during rotation
+
+In v5.1, nodes use per-node Ed25519 keys distributed through cluster metadata to
+sign and verify protected intra-cluster requests. Self-join authentication is
+also enforced only when `auth.intra_cluster.self_join_auth` is true.

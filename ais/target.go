@@ -422,7 +422,7 @@ func (t *target) Run() error {
 	core.Tinit(t, config, true /*run hk*/)
 
 	// NOTE 5.1+ invariant:
-	// When `auth.intra_cluster.enabled`, restarted node must _not_ originate signed traffic to a peer
+	// When `auth.intra_cluster.request_auth`, restarted node must _not_ originate signed traffic to a peer
 	// until that peer has received an (updated version of) Smap containing the node's (current)
 	// verifying key.
 	fatalErr, writeErr := t.checkStartupMarkers(config)

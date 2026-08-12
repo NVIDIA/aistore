@@ -244,26 +244,26 @@ func (t *tokenList) String() string    { return fmt.Sprintf("TokenList v%d", t.V
 // proxy cont-ed
 //
 
-// is called when authentication is being enabled at runtime to guard the transition
+// is called when client authentication is being required at runtime to guard the transition
 //
-//	auth.enabled: false -> true
+//	auth.client_auth_required: false -> true
 //
-// - if the caller has a valid token under the current config, enabling auth is allowed unconditionally
+// - if the caller has a valid token under the current config, requiring client auth is allowed unconditionally
 // - otherwise, we fail with one of the specific reasons (below)
 // - note that enabling intra-cluster sign/verify (auth.intra_cluster.*) is handled separately
 
-func (p *proxy) validateEnableAuth(r *http.Request, clone *cmn.AuthConf, toUpdate *cmn.AuthConfToSet) (int, error) {
-	if clone.Enabled || toUpdate == nil || toUpdate.Enabled == nil || !*toUpdate.Enabled {
-		debug.Assertf(false, "%v %+v", clone.Enabled, toUpdate)
+func (p *proxy) validateRequireClientAuth(r *http.Request, clone *cmn.AuthConf, toUpdate *cmn.AuthConfToSet) (int, error) {
+	if clone.ClientAuthRequired || toUpdate == nil || toUpdate.ClientAuthRequired == nil || !*toUpdate.ClientAuthRequired {
+		debug.Assertf(false, "%v %+v", clone.ClientAuthRequired, toUpdate)
 		return 0, nil
 	}
 
 	claims, err := p.validateToken(r.Context(), r.Header)
 	if err != nil {
-		return http.StatusUnauthorized, fmt.Errorf("enabling JWT/OIDC auth requires a valid token [err: %v]", err)
+		return http.StatusUnauthorized, fmt.Errorf("enabling client authentication requires a valid token [err: %v]", err)
 	}
 	if !claims.IsAdmin {
-		return http.StatusUnauthorized, errors.New("enabling JWT/OIDC auth requires a token with an 'admin' claim")
+		return http.StatusUnauthorized, errors.New("enabling client authentication requires a token with an 'admin' claim")
 	}
 
 	// apply and check
@@ -410,7 +410,7 @@ func aceErrToCode(err error) (status int) {
 // - access() is reached  only from pub-net handlers; intra-cluster auth lives in htrun checkIntra/parseReq.
 func (p *proxy) access(r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	// auth is not enabled: check bucket properties
-	if !cmn.Rom.AuthEnabled() {
+	if !cmn.Rom.ClientAuthRequired() {
 		if bck == nil || bck.Props == nil {
 			return nil
 		}

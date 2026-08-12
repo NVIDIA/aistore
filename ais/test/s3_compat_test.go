@@ -126,7 +126,7 @@ func getS3Credentials(t *testing.T) aws.CredentialsProvider {
 	config, err := api.GetClusterConfig(tools.BaseAPIParams())
 	tassert.CheckFatal(t, err)
 
-	if config.Auth.Enabled {
+	if config.Auth.ClientAuthRequired {
 		authBP := tools.BaseAPIParams()
 		if authBP.Token == "" {
 			t.Fatal("Auth is enabled but no token available")
@@ -149,7 +149,7 @@ func setupS3Compat(t *testing.T) {
 	config, err := api.GetClusterConfig(tools.BaseAPIParams())
 	tassert.CheckFatal(t, err)
 
-	if config.Auth.Enabled {
+	if config.Auth.ClientAuthRequired {
 		// Auth is enabled - ensure S3 reverse proxy is enabled
 		tools.EnableClusterFeatures(t, feat.S3ReverseProxy)
 	}
@@ -179,7 +179,7 @@ func TestS3TargetEmptyBucket(t *testing.T) {
 	expectedStatus := http.StatusBadRequest
 	expectedCode := aiss3.ErrCodeInvalidRequest
 	config := tools.GetClusterConfig(t)
-	requiresProxyMediation := config.Auth.Enabled || config.Auth.IntraClusterConfigured()
+	requiresProxyMediation := config.Auth.ClientAuthRequired || config.Auth.IntraRequestAuthConfigured()
 	if requiresProxyMediation {
 		expectedStatus = http.StatusForbidden
 		expectedCode = aiss3.ErrCodeAccessDenied

@@ -10,7 +10,7 @@ var (
 	thisNodeName string
 	cleanPathErr func(error)
 
-	// is called at *runtime* - via Rom.Set() upon auth.intra_cluster.enabled transition (off<->on);
+	// is called at *runtime* - via Rom.Set() upon auth.intra_cluster.request_auth transition (off<->on);
 	// note that the startup (LoadConfig => GCO.Put) path intentionally does not call this callback
 	onSignVerifyToggle func(enabled bool)
 )

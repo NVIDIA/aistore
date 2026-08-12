@@ -786,16 +786,15 @@ type (
 		// including redirects and selected control-plane traffic.
 		IntraCluster *IntraClusterConf `json:"intra_cluster,omitempty"`
 
-		// Enable external user authentication via JWT/OIDC tokens
-		// (does not control internal cluster security - see ClusterConfig)
-		Enabled bool `json:"enabled"`
+		// Require authentication and authorization for protected client requests.
+		ClientAuthRequired bool `json:"client_auth_required"`
 	}
 	AuthConfToSet struct {
-		Enabled        *bool                    `json:"enabled,omitempty"`
-		Signature      *AuthSignatureConfToSet  `json:"signature,omitempty"`
-		RequiredClaims *RequiredClaimsConfToSet `json:"required_claims,omitempty"`
-		OIDC           *OIDCConfToSet           `json:"oidc,omitempty"`
-		IntraCluster   *IntraClusterConfToSet   `json:"intra_cluster,omitempty"`
+		ClientAuthRequired *bool                    `json:"client_auth_required,omitempty"`
+		Signature          *AuthSignatureConfToSet  `json:"signature,omitempty"`
+		RequiredClaims     *RequiredClaimsConfToSet `json:"required_claims,omitempty"`
+		OIDC               *OIDCConfToSet           `json:"oidc,omitempty"`
+		IntraCluster       *IntraClusterConfToSet   `json:"intra_cluster,omitempty"`
 	}
 
 	Censored          string
@@ -837,13 +836,15 @@ type (
 	// CSK/HMAC; the v5.x replacement is per-node Ed25519 signing.
 	// TTL, NonceWindow, and RotationGrace define request validation windows.
 	IntraClusterConf struct {
-		Enabled       bool         `json:"enabled"`
+		RequestAuth   bool         `json:"request_auth"`
+		SelfJoinAuth  bool         `json:"self_join_auth"`
 		TTL           cos.Duration `json:"ttl"`            // default: 0 (never expire)
 		NonceWindow   cos.Duration `json:"nonce_window"`   // max clock skew for timestamp validation, default: 1m
 		RotationGrace cos.Duration `json:"rotation_grace"` // accept old+new key during rotation, default: 1m
 	}
 	IntraClusterConfToSet struct {
-		Enabled       *bool         `json:"enabled,omitempty"`
+		RequestAuth   *bool         `json:"request_auth,omitempty"`
+		SelfJoinAuth  *bool         `json:"self_join_auth,omitempty"`
 		TTL           *cos.Duration `json:"ttl,omitempty"`
 		NonceWindow   *cos.Duration `json:"nonce_window,omitempty"`
 		RotationGrace *cos.Duration `json:"rotation_grace,omitempty"`
@@ -2425,15 +2426,15 @@ func (c *FSHCConf) Validate() error {
 // AuthConf //
 //////////////
 
-// [backward compatibility] to support pre-5.0 => 5.x upgrades
-// TODO:
-// - remove after the config upgrade window closes
-// - (and remove ais/csk.go implementation as well)
+// [backward compatibility] to support pre-5.0 => 5.x upgrades and legacy "enabled" fields
+// TODO: remove after the config upgrade window closes (along with ais/csk.go).
 func (c *AuthConf) UnmarshalJSON(b []byte) error {
 	type alias AuthConf
 
 	aux := &struct {
-		LegacyCSK *IntraClusterConf `json:"cluster_key,omitempty"`
+		ClientAuthRequired *bool             `json:"client_auth_required,omitempty"`
+		LegacyEnabled      *bool             `json:"enabled,omitempty"`
+		LegacyCSK          *IntraClusterConf `json:"cluster_key,omitempty"`
 		*alias
 	}{
 		alias: (*alias)(c),
@@ -2441,8 +2442,33 @@ func (c *AuthConf) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, aux); err != nil {
 		return err
 	}
+	if aux.ClientAuthRequired != nil {
+		c.ClientAuthRequired = *aux.ClientAuthRequired
+	} else if aux.LegacyEnabled != nil {
+		c.ClientAuthRequired = *aux.LegacyEnabled
+	}
 	if aux.LegacyCSK != nil && c.IntraCluster == nil {
 		c.IntraCluster = aux.LegacyCSK
+	}
+	return nil
+}
+
+// TODO: remove after the config upgrade window closes.
+func (c *IntraClusterConf) UnmarshalJSON(b []byte) error {
+	type alias IntraClusterConf
+
+	aux := &struct {
+		RequestAuth   *bool `json:"request_auth,omitempty"`
+		LegacyEnabled *bool `json:"enabled,omitempty"`
+		*alias
+	}{alias: (*alias)(c)}
+	if err := json.Unmarshal(b, aux); err != nil {
+		return err
+	}
+	if aux.RequestAuth != nil {
+		c.RequestAuth = *aux.RequestAuth
+	} else if aux.LegacyEnabled != nil {
+		c.RequestAuth = *aux.LegacyEnabled
 	}
 	return nil
 }
@@ -2470,18 +2496,18 @@ func (c *AuthConf) CopyTo(dst *AuthConf) {
 // TODO: [backward compatibility] remove in 5.1 along with all call sites
 func IsV50Bridge() bool { return strings.HasPrefix(VersionAIStore, "5.0") }
 
-func (c *AuthConf) IntraClusterConfigured() bool {
-	return c.IntraCluster != nil && c.IntraCluster.Enabled
+func (c *AuthConf) IntraRequestAuthConfigured() bool {
+	return c.IntraCluster != nil && c.IntraCluster.RequestAuth
 }
 
 func (c *AuthConf) SignVerifyEnabled() bool {
-	return c.IntraClusterConfigured() && !IsV50Bridge()
+	return c.IntraRequestAuthConfigured() && !IsV50Bridge()
 }
 
 // Starting with v5.0, direct access to AIS targets is rejected when either AuthN
 // or intra-cluster request signing is configured: both require proxy mediation.
 func (c *AuthConf) RequiresProxyMediation() bool {
-	return c.Enabled || c.IntraClusterConfigured()
+	return c.ClientAuthRequired || c.IntraRequestAuthConfigured()
 }
 
 func (c *AuthConf) Validate() error {
@@ -2500,8 +2526,8 @@ func (c *AuthConf) Validate() error {
 	sigConfigured := c.Signature != nil && c.Signature.Method != ""
 	// Only consider OIDC configured if it has allowed issuer URLs, validated above
 	oidcConfigured := c.OIDC != nil && c.OIDC.AllowedIssConfigured()
-	if c.Enabled && !sigConfigured && !oidcConfigured {
-		return errors.New("invalid auth config: must provide one of signature or OIDC config if enabled")
+	if c.ClientAuthRequired && !sigConfigured && !oidcConfigured {
+		return errors.New("invalid auth config: must provide one of signature or OIDC config when client authentication is required")
 	}
 	if sigConfigured && oidcConfigured {
 		return errors.New("invalid auth config: only one of signature or OIDC config should be provided")
@@ -2635,10 +2661,13 @@ const (
 )
 
 func (c *IntraClusterConf) validate() error {
-	if !c.Enabled {
-		return nil
+	if c.RequestAuth {
+		return c.validateRequestAuth()
 	}
+	return nil
+}
 
+func (c *IntraClusterConf) validateRequestAuth() error {
 	// TTL: 0 == never expire; otherwise must be >= minIntraClusterTTL
 	if d := c.TTL.D(); d != dfltIntraClusterTTL {
 		if d < 0 {
@@ -3512,9 +3541,9 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	Rom.Set(&config.ClusterConfig)
 	Rom.testingEnv = config.TestingEnv()
 
-	if IsV50Bridge() && config.Auth.IntraClusterConfigured() {
+	if IsV50Bridge() && config.Auth.IntraRequestAuthConfigured() {
 		debug.Assert(!config.Auth.SignVerifyEnabled())
-		nlog.Warningln("auth.intra_cluster.enabled: configured but disabled in v5.0 bridge")
+		nlog.Warningln("auth.intra_cluster.request_auth: configured but disabled in v5.0 bridge")
 	}
 
 	// create dirs
@@ -3534,7 +3563,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	nlog.Infof("log.dir: %q; l4.proto: %s; pub port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level.String())
 	nlog.Infof("config: %q; stats_time: %v; authentication: %t; backends: %v",
-		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled, config.Backend.keys())
+		globalFpath, config.Periodic.StatsTime, config.Auth.ClientAuthRequired, config.Backend.keys())
 	return nil
 }
 

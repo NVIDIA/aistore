@@ -20,12 +20,12 @@ type readMostly struct {
 		keepalive time.Duration // MaxKeepalive
 		ecstreams time.Duration // EcStreams
 	}
-	features          feat.Flags
-	level, modules    int
-	testingEnv        bool
-	authEnabled       bool
-	signVerifyEnabled bool
-	useHTTPS          bool
+	features           feat.Flags
+	level, modules     int
+	testingEnv         bool
+	clientAuthRequired bool
+	signVerifyEnabled  bool
+	useHTTPS           bool
 }
 
 var Rom readMostly
@@ -46,7 +46,7 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 	}
 	rom.features = cfg.Features
 
-	rom.authEnabled = cfg.Auth.Enabled
+	rom.clientAuthRequired = cfg.Auth.ClientAuthRequired
 
 	// fire a local action upon actual transition:
 	// - runtime-only
@@ -68,7 +68,7 @@ func (rom *readMostly) MaxKeepalive() time.Duration    { return rom.timeout.keep
 func (rom *readMostly) EcStreams() time.Duration       { return rom.timeout.ecstreams }
 func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
-func (rom *readMostly) AuthEnabled() bool              { return rom.authEnabled }
+func (rom *readMostly) ClientAuthRequired() bool       { return rom.clientAuthRequired }
 func (rom *readMostly) SignVerifyEnabled() bool        { return rom.signVerifyEnabled }
 func (rom *readMostly) UseHTTPS() bool                 { return rom.useHTTPS }
 

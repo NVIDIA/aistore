@@ -61,7 +61,7 @@ type (
 type (
 	_sv struct {
 		on   bool
-		last int64 // last `config.auth.intra_cluster.enabled` toggle
+		last int64 // last `config.auth.intra_cluster.request_auth` toggle
 	}
 	svState struct {
 		cur   atomic.Pointer[_sv]
@@ -108,7 +108,7 @@ func (svs *svState) sign() bool {
 	cur := svs.cur.Load()
 
 	// A note on stateful (config <=> htrun.svs) redundancy:
-	// - the config.Auth.IntraCluster.Enabled expresses desired policy
+	// - the config.Auth.IntraCluster.RequestAuth expresses desired policy
 	// - htrun.svs.cur.on expresses whether and when that policy has been enacted locally
 
 	return (on && cur.on == on) || !svs.graceExpired(cur.last)

@@ -615,35 +615,35 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		}
 	}
 	// 2. AuthN
-	if toUpdate.Auth != nil && toUpdate.Auth.Enabled != nil {
-		authEnabled := *toUpdate.Auth.Enabled
+	if toUpdate.Auth != nil && toUpdate.Auth.ClientAuthRequired != nil {
+		clientAuthRequired := *toUpdate.Auth.ClientAuthRequired
 
-		if !config.Auth.Enabled && authEnabled {
-			// enabling auth - always validate
+		if !config.Auth.ClientAuthRequired && clientAuthRequired {
+			// requiring client authentication - always validate
 			clone := new(cmn.AuthConf)
 			cos.CopyStruct(clone, &config.Auth)
 			config.Auth.CopyTo(clone)
 
-			if ecode, err := p.validateEnableAuth(r, clone, toUpdate.Auth); err != nil {
+			if ecode, err := p.validateRequireClientAuth(r, clone, toUpdate.Auth); err != nil {
 				p.writeErr(w, r, err, ecode)
 				return
 			}
 		}
-		if config.Auth.Enabled != authEnabled {
-			_warnUpd("config.auth JWT/OIDC", strconv.FormatBool(config.Auth.Enabled), strconv.FormatBool(authEnabled))
+		if config.Auth.ClientAuthRequired != clientAuthRequired {
+			_warnUpd("config.auth.client_auth_required", strconv.FormatBool(config.Auth.ClientAuthRequired), strconv.FormatBool(clientAuthRequired))
 		}
-
-		if ic := toUpdate.Auth.IntraCluster; ic != nil && ic.Enabled != nil {
-			cur := config.Auth.IntraClusterConfigured() // raw config bit (compare with SignVerifyEnabled() runtime)
-			upd := *ic.Enabled
-			if !cur && upd && cmn.IsV50Bridge() {
-				p.writeErr(w, r, errors.New("intra-cluster auth (Ed25519 sign/verify) cannot be enabled on a v5.0 bridge release"),
-					http.StatusPreconditionFailed)
-				return
-			}
-			if cur != upd {
-				_warnUpd("config.auth.intra_cluster", strconv.FormatBool(cur), strconv.FormatBool(upd))
-			}
+	}
+	if toUpdate.Auth != nil && toUpdate.Auth.IntraCluster != nil &&
+		toUpdate.Auth.IntraCluster.RequestAuth != nil {
+		cur := config.Auth.IntraRequestAuthConfigured() // raw config bit (compare with SignVerifyEnabled() runtime)
+		upd := *toUpdate.Auth.IntraCluster.RequestAuth
+		if !cur && upd && cmn.IsV50Bridge() {
+			p.writeErr(w, r, errors.New("intra-cluster auth (Ed25519 sign/verify) cannot be enabled on a v5.0 bridge release"),
+				http.StatusPreconditionFailed)
+			return
+		}
+		if cur != upd {
+			_warnUpd("config.auth.intra_cluster.request_auth", strconv.FormatBool(cur), strconv.FormatBool(upd))
 		}
 	}
 	// 3. Tracing
