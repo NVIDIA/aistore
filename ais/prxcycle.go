@@ -100,6 +100,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		smap            = p.owner.smap.get()
 		nodes           = make(meta.Nodes, 0, len(sids))
 		snames          = make([]string, 0, len(sids))
+		unconfirmed     int
 		hasTarget       bool
 		hasActiveTarget bool
 	)
@@ -146,6 +147,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 					// another target left (SIGTERM => rmSelf) the cluster. Either way, keep the node in maintenance.
 					// See section "Unconfirmed Maintenance State" in docs/lifecycle_node.md.
 					nlog.Warningln(p.String(), msg.Action, sname, "- post-rebalance not confirmed, proceeding anyway")
+					unconfirmed++
 				}
 			}
 		}
@@ -171,6 +173,15 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErr(w, r, err)
 			return
 		}
+	}
+
+	if unconfirmed == len(nodes) {
+		debug.Assert(msg.Action == apc.ActStartMaintenance)
+		ecode, err := p.rmNodesFinal(msg, nodes, snames, nil)
+		if err != nil {
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, snames, err), ecode)
+		}
+		return
 	}
 
 	if msg.Action == apc.ActRmNodeUnsafe {

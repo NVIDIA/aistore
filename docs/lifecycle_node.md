@@ -209,7 +209,7 @@ If the node is a target, the cluster will rebalance after a short preparation ph
 
 The batch executes as one coordinated operation. Each lifecycle phase updates the cluster map once for
 the entire batch. When rebalance is required, the cluster performs one RMD increment and starts
-one global rebalance, regardless of how many nodes you name:
+one global rebalance, regardless of how many nodes you specify:
 
 ```console
 $ ais cluster add-remove-nodes start-maintenance <TAB-TAB>
@@ -235,35 +235,44 @@ Waiting for rebalance[g1] ...
 Done.
 ```
 
-Admission is all-or-nothing: if any named node is unknown or is the current primary, the entire request
+Admission is all-or-nothing: if any specified node is unknown or is the current primary, the entire request
 is rejected and no node is touched. Conversely, once the transaction is underway, a node that
 disappears - keepalive-removed, for instance - does not abort it; the remaining nodes complete
 normally.
 
 Operation-specific state checks also apply. `start-maintenance` skips a node that has already completed
-the same transition, and `stop-maintenance` skips a node that is already active. If every named node is
+the same transition, and `stop-maintenance` skips a node that is already active. If every specified node is
 skipped, the command reports "nothing to do" and leaves the cluster map untouched. A node in
 maintenance can be advanced to `shutdown` or `decommission`; `stop-maintenance` refuses a node that
 is being decommissioned.
 
 ### Unconfirmed Maintenance State
 
-A target is marked (and stays in) `maintenance` before its post-rebalance transition is confirmed. This is the
-normal final state of `start-maintenance --no-rebalance`, but it can also mean that the associated global rebalance
-transaction was interrupted or renewed by a concurrent self-join. These cases are indistinguishable from the
-primary's perspective.
+A target is marked (and stays in) `maintenance` before its post-rebalance transition is confirmed. This is
+the normal final state of `start-maintenance --no-rebalance`, but it can also mean that the associated
+global rebalance transaction was interrupted, renewed by a concurrent self-join, or aborted because
+another target left the cluster (e.g., via K8s delete-pod => SIGTERM => `rmSelf`).
 
-Repeating `start-maintenance` keeps the target out of service and reapplies maintenance on the node when
-reachable. It does not, by itself, confirm the missing post-rebalance step or start another rebalance
-for a target that is already inactive.
+These cases are indistinguishable from the primary's perspective.
 
-The operator can then choose an explicit transition:
+Given unconfirmed maintenance state, the operator can proceed in one of several ways:
 
+* repeat `start-maintenance`. This is accepted rather than rejected, so a retry - or a rolling-upgrade
+  script that reissues one - does not fail. It keeps the target out of service and reapplies maintenance
+  on the node when reachable. If no active target is specified alongside, that is all it does;
 * run `stop-maintenance` to clear maintenance and return the target to service, with rebalance as
   required;
 * advance the target to `shutdown` or `decommission`; or
 * leave it in maintenance. An explicit `ais start rebalance` can restore global data placement, but
   does not itself change the target's unconfirmed maintenance flag.
+
+> An unconfirmed target specified together with an active one follows the normal batch path. With
+> automatic rebalance enabled and without `--no-rebalance`, that batch rebalances, and its
+> post-rebalance step confirms both.
+>
+> Specifying it together with a target whose maintenance is already confirmed changes nothing: the
+> confirmed target is left as it is (e.g., for `{unconfirmed A, confirmed B}` - B is skipped), and the
+> command behaves as if only the unconfirmed one had been specified.
 
 ### Skipping Rebalance
 
@@ -321,7 +330,7 @@ rollback transactions: aborting rebalance does not restore the preceding Smap, c
 or shutdown post-rebalance state unconfirmed, and does not necessarily prevent decommission
 finalization.
 
-To transition several nodes together, name them in one command - see
+To transition several nodes together, specify them in one command - see
 [Batch Operations](#batch-operations) - rather than issuing requests one after another.
 
 ## Clearing Maintenance State
