@@ -33,6 +33,10 @@ import (
 // nodes in one Smap transaction. When required, that transaction increments
 // RMD once and starts one global rebalance.
 //
+// Two important helpers below, beginMembership/endMembership, admit exactly one
+// administrative membership change at a time (to track it, note the
+// post beginMembership flow: smap.modify => _rebPostRm => rmdModifier.listen).
+//
 // Rebalance completion resumes in rmdModifier.postRm (rebmeta.go), which
 // performs the final daemon action and then either removes the nodes from Smap
 // (decommission) or marks targets SnodeMaintPostReb (maintenance and shutdown).

@@ -221,7 +221,27 @@ func rmdSync(m *rmdModifier, clone *rebMD) {
 	}
 }
 
-// see `receiveRMD` (upon termination, notify IC)
+// Admin-initiated membership-change serialization is based on two markers
+// that are intended to overlap:
+// - [ beginMembership .. endMembership ]
+//   - [ listen() ............... notifs.done ] => postRm
+//
+// The flow:
+// - with a single exception of self-join,
+//   listen() is called strictly from inside (beginMembership, endMembership) bracket
+// - it installs notification listener, that in turn
+// - will fail errRebRunning() when there's an attempt to start concurrent membership change
+// - with postRm() below - the final closing bracket
+//
+// See also:
+// - `receiveRMD` (upon termination, notify IC)
+//
+// TODO: listen() must gracefully terminate in two cases:
+// - a participating target removes itself (rmSelf, e.g. pod deletion), so its
+//   final rebalance notification may never arrive;
+// - a target self-joins (via restart or new start) while a membership change is in progress
+//   (leading to new Smap still carrying unresolved maintenance/decommission state)
+
 func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	var (
 		tsis meta.Nodes // case: apc.ActStopMaintenance
@@ -284,8 +304,8 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	debug.AssertNoErr(err)
 }
 
+// called when rebalance is done:
 // deactivate or remove node from the cluster (as per msg.Action)
-// called when rebalance is done
 func (m *rmdModifier) postRm(nl nl.Listener) {
 	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infoln("rmd.postRm:", m.smapCtx.msg.Action, "nodes:", m.smapCtx.nodeIDs(), "reb:", nl.UUID(), "errors:", nl.ErrCnt())
