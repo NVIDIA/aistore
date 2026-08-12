@@ -141,10 +141,11 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 					nlog.Warningln(p.String(), msg.Action, sname, "is already in maintenance mode - skipping")
 					continue
 				default:
-					// SnodeMaint w/out SnodeMaintPostReb: cannot tell a finished
-					// (--no-rebalance) operation from an interrupted one
-					p.writeErrMsg(w, r, sname+" is transitioning to maintenance mode (post-rebalance not confirmed)")
-					return
+					// SnodeMaint w/out SnodeMaintPostReb: cannot tell a finished (--no-rebalance) operation
+					// from rebalance renewed by a concurrent self-join, or its listener aborted because
+					// another target left (SIGTERM => rmSelf) the cluster. Either way, keep the node in maintenance.
+					// See section "Unconfirmed Maintenance State" in docs/lifecycle_node.md.
+					nlog.Warningln(p.String(), msg.Action, sname, "- post-rebalance not confirmed, proceeding anyway")
 				}
 			}
 		}

@@ -35,6 +35,7 @@ Needless to say, there's no simple way back out of `decommission` - the proverbi
   - [Quick Example](#quick-example)
 - [Putting a Node in Maintenance](#putting-a-node-in-maintenance)
   - [Batch Operations](#batch-operations)
+  - [Unconfirmed Maintenance State](#unconfirmed-maintenance-state)
   - [Skipping Rebalance](#skipping-rebalance)
 - [One Membership Change at a Time](#one-membership-change-at-a-time)
 - [Clearing Maintenance State](#clearing-maintenance-state)
@@ -241,11 +242,28 @@ normally.
 
 Operation-specific state checks also apply. `start-maintenance` skips a node that has already completed
 the same transition, and `stop-maintenance` skips a node that is already active. If every named node is
-skipped, the command reports "nothing to do" and leaves the cluster map untouched. Repeating
-`start-maintenance` while its post-rebalance state remains unconfirmed is rejected because that state
-cannot be distinguished from an interrupted operation. A completed maintenance state can instead be
-advanced to `shutdown` or `decommission`; `stop-maintenance` refuses a node that is being
-decommissioned.
+skipped, the command reports "nothing to do" and leaves the cluster map untouched. A node in
+maintenance can be advanced to `shutdown` or `decommission`; `stop-maintenance` refuses a node that
+is being decommissioned.
+
+### Unconfirmed Maintenance State
+
+A target is marked (and stays in) `maintenance` before its post-rebalance transition is confirmed. This is the
+normal final state of `start-maintenance --no-rebalance`, but it can also mean that the associated global rebalance
+transaction was interrupted or renewed by a concurrent self-join. These cases are indistinguishable from the
+primary's perspective.
+
+Repeating `start-maintenance` keeps the target out of service and reapplies maintenance on the node when
+reachable. It does not, by itself, confirm the missing post-rebalance step or start another rebalance
+for a target that is already inactive.
+
+The operator can then choose an explicit transition:
+
+* run `stop-maintenance` to clear maintenance and return the target to service, with rebalance as
+  required;
+* advance the target to `shutdown` or `decommission`; or
+* leave it in maintenance. An explicit `ais start rebalance` can restore global data placement, but
+  does not itself change the target's unconfirmed maintenance flag.
 
 ### Skipping Rebalance
 

@@ -578,8 +578,9 @@ func (n *notifs) ListenSmapChanged() {
 repeat:
 	for uuid, nl := range remnl {
 		sid := remid[uuid]
-		if nl.Kind() == apc.ActRebalance && nl.Cause() != "" { // for the cause, see ais/rebmeta
-			nlog.Infof("Warning: %s: %s is out, ignore 'smap-changed'", nl.String(), sid)
+		// use case: admin-driven membership change whereby this `sid` is legally inactive
+		if nl.Kind() == apc.ActRebalance && nl.Cause() != "" && smap.GetNode(sid) != nil { // for the cause, see ais/rebmeta
+			nlog.Infof("Warning: %s: %s is inactive, ignore 'smap-changed'", nl.String(), sid)
 			delete(remnl, uuid)
 			goto repeat
 		}
