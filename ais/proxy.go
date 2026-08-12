@@ -56,7 +56,8 @@ type (
 			mtv         sync.Mutex
 		}
 
-		fastKalive atomic.Bool // can accept fast keepalives
+		fastKalive    atomic.Bool // can accept fast keepalives
+		membershipTxn atomic.Bool // admin-initiated membership change
 	}
 	proxy struct {
 		ic         ic

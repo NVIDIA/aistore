@@ -49,7 +49,25 @@ import (
 //
 // ===========================================================================================
 
-var errSmapNoChange = errors.New("cluster membership: no change")
+const membershipTag = "cluster membership"
+
+var errSmapNoChange = errors.New(membershipTag + ": no change") // mcastUnreg sentinel
+
+func (p *proxy) beginMembership(action string) error {
+	inflight := &p.primary().membershipTxn
+	if !inflight.CAS(false, true) {
+		return cmn.NewErrBusy(membershipTag, action)
+	}
+	if running, xid := p.notifs.isRebRunning(); running {
+		inflight.Store(false)
+		return cmn.NewErrBusy(membershipTag, action, "rebalance["+xid+"] is running")
+	}
+	return nil
+}
+
+func (p *proxy) endMembership() {
+	p.primary().membershipTxn.Store(false)
+}
 
 // gracefully remove node via apc.ActStartMaintenance, apc.ActDecommission, apc.ActShutdownNode
 // +gen:payload apc.ActStartMaintenance={"action": "start-maintenance", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false}}
@@ -57,10 +75,7 @@ var errSmapNoChange = errors.New("cluster membership: no change")
 // +gen:payload apc.ActShutdownNode={"action": "shutdown-node", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false}}
 // +gen:payload apc.ActRmNodeUnsafe={"action": "remove-node-unsafe", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false}}
 func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	var (
-		opts apc.ActValRmNode
-		smap = p.owner.smap.get()
-	)
+	var opts apc.ActValRmNode
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
@@ -70,7 +85,15 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		p.writeErr(w, r, errN)
 		return
 	}
+
+	if err := p.beginMembership(msg.Action); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	defer p.endMembership()
+
 	var (
+		smap            = p.owner.smap.get()
 		nodes           = make(meta.Nodes, 0, len(sids))
 		snames          = make([]string, 0, len(sids))
 		hasTarget       bool
@@ -685,10 +708,7 @@ func (p *proxy) _reqHealthSelected(nodes meta.Nodes, smap *smapX, tout time.Dura
 // +gen:payload apc.ActStopMaintenance={"action": "stop-maintenance", "value": {"sids": ["target_id1", "target_id2"]}}
 func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	const tag = "stop-maintenance:"
-	var (
-		opts apc.ActValRmNode
-		smap = p.owner.smap.get()
-	)
+	var opts apc.ActValRmNode
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
@@ -698,12 +718,20 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		p.writeErr(w, r, errN)
 		return
 	}
+
+	if err := p.beginMembership(msg.Action); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	defer p.endMembership()
+
 	var (
+		tsi         *meta.Snode
+		targetCount int
+		smap        = p.owner.smap.get()
 		nodes       = make(meta.Nodes, 0, len(sids))
 		selectedIDs = make([]string, 0, len(sids))
 		snames      = make([]string, 0, len(sids))
-		targetCount int
-		tsi         *meta.Snode
 	)
 	for _, sid := range sids {
 		si := smap.GetNode(sid)

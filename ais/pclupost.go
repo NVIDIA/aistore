@@ -413,6 +413,13 @@ func (c *clupost) dispatch(msync bool) {
 	nlog.Infof("%s: %s(%q) %s (%s)", p, c.apiOp, c.action, c.nsi.StringEx(), c.regReq.Smap)
 
 	if c.apiOp == apc.AdminJoin {
+		// disallow admin-join when membership change is in progress, and vice versa
+		if err := p.beginMembership(c.msg.Action); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		defer p.endMembership()
+
 		rebID, err := c.mcastJoined()
 		if err != nil {
 			p.writeErr(w, r, err)

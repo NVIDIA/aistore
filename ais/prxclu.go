@@ -1062,6 +1062,13 @@ func (p *proxy) reloadCreds(w http.ResponseWriter, r *http.Request, msg *apc.Act
 
 // admin call
 func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, cleanup bool) {
+	// disallow admin-initiated rebalance when membership change is in progress, and vice versa
+	if err := p.beginMembership(msg.Action); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	defer p.endMembership()
+
 	smap := p.owner.smap.get()
 	if err := p.canRebalance(smap, cleanup); err != nil {
 		p.writeErr(w, r, err)
@@ -1078,6 +1085,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *ap
 		}
 		nlog.Warningf("%s: not enough active targets (%d) - proceeding to rebalance cluster anyway", p, nat)
 	}
+
 	rmdCtx := &rmdModifier{
 		pre:     rmdInc,
 		final:   rmdSync,
