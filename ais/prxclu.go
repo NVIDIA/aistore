@@ -637,12 +637,11 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		toUpdate.Auth.IntraCluster.RequestAuth != nil {
 		cur := config.Auth.IntraRequestAuthConfigured() // raw config bit (compare with SignVerifyEnabled() runtime)
 		upd := *toUpdate.Auth.IntraCluster.RequestAuth
-		if !cur && upd && cmn.IsV50Bridge() {
-			p.writeErr(w, r, errors.New("intra-cluster auth (Ed25519 sign/verify) cannot be enabled on a v5.0 bridge release"),
-				http.StatusPreconditionFailed)
-			return
-		}
-		if cur != upd {
+		if cmn.IsV50Bridge() {
+			if !cur && upd {
+				nlog.Warningln("intra-cluster auth (Ed25519 sign/verify) is a no-op on a v5.0 bridge release")
+			}
+		} else if cur != upd {
 			_warnUpd("config.auth.intra_cluster.request_auth", strconv.FormatBool(cur), strconv.FormatBool(upd))
 		}
 	}

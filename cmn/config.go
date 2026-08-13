@@ -2427,7 +2427,7 @@ func (c *FSHCConf) Validate() error {
 //////////////
 
 // [backward compatibility] to support pre-5.0 => 5.x upgrades and legacy "enabled" fields
-// TODO: remove after the config upgrade window closes (along with ais/csk.go).
+// TODO: [backward compatibility] remove in 5.1
 func (c *AuthConf) UnmarshalJSON(b []byte) error {
 	type alias AuthConf
 
@@ -2453,7 +2453,7 @@ func (c *AuthConf) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// TODO: remove after the config upgrade window closes.
+// TODO: [backward compatibility] remove in 5.1
 func (c *IntraClusterConf) UnmarshalJSON(b []byte) error {
 	type alias IntraClusterConf
 
@@ -2493,7 +2493,7 @@ func (c *AuthConf) CopyTo(dst *AuthConf) {
 	}
 }
 
-// TODO: [backward compatibility] remove in 5.1 along with all call sites
+// TODO: [backward compatibility] remove in 5.1, along with all call sites
 func IsV50Bridge() bool { return strings.HasPrefix(VersionAIStore, "5.0") }
 
 func (c *AuthConf) IntraRequestAuthConfigured() bool {
