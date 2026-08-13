@@ -289,6 +289,7 @@ func newRangeDlJob(id string, bck *meta.Bck, payload *RangeBody, xdl *Xact) (rj 
 	if rj.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
 		return nil, err
 	}
+	// NOTE: keep the expansion limit for the legacy downloader, which is no longer actively maintained.
 	if err = rj.pt.CheckCount(); err != nil {
 		return nil, err
 	}
