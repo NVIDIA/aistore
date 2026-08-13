@@ -320,13 +320,15 @@ func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, nil, "revoke token") {
 		return
 	}
-	tokenList := &tokenList{}
-	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
+	revokeList := &tokenList{}
+	if err := cmn.ReadJSON(w, r, revokeList); err != nil {
 		return
 	}
-	allRevoked := p.authn.updateRevokedList(r.Context(), tokenList)
+	// Ignore client-supplied version
+	revokeList.Version = 0
+	allRevoked := p.authn.updateRevokedList(r.Context(), revokeList)
 	if allRevoked != nil && p.owner.smap.get().isPrimary(p.si) {
-		msg := p.newAmsgStr(apc.ActNewPrimary, nil)
+		msg := p.newAmsgStr(apc.ActRevokeToken, nil)
 		_ = p.metasyncer.sync(revsPair{allRevoked, msg})
 	}
 }
@@ -587,12 +589,9 @@ func (r *RevokedTokensMap) updateVersion(newRevoked *tokenList) error {
 	case newRevoked.Version > currentVersion:
 		r.version = newRevoked.Version
 		return nil
-	case newRevoked.Version == currentVersion:
-		nlog.Warningf("received token list v%d equal to current token list v%d, ignoring", newRevoked.Version, currentVersion)
 	default:
-		nlog.Errorf("received token list v%d less than current token list v%d", newRevoked.Version, currentVersion)
+		return fmt.Errorf("token list v%d is not newer than the current v%d", newRevoked.Version, currentVersion)
 	}
-	return fmt.Errorf("received invalid token list version v%d compared to current token list v%d", newRevoked.Version, currentVersion)
 }
 
 func (r *RevokedTokensMap) cleanup(ctx context.Context, tkParser tok.Parser) (allRevoked *tokenList) {

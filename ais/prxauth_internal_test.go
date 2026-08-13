@@ -118,6 +118,22 @@ func TestAuth_Manager_UpdateRevokedList_CleansExpiredTokens(t *testing.T) {
 	tassert.Error(t, allRevoked == nil, "Expected allRevoked to be nil after cleanup of expired tokens")
 }
 
+// A caller cannot choose the revoked-list version, which would let it reject later updates
+func TestAuth_Manager_UpdateRevokedList_AssignsVersion(t *testing.T) {
+	am := &authManager{
+		tokenMap:      newShardedTokenMap(2),
+		revokedTokens: newRevokedTokensMap(),
+		tokenParser:   newMockTokenParser(),
+	}
+	version := am.revokedTokens.version
+
+	res := am.updateRevokedList(t.Context(), &tokenList{Tokens: []string{"tok1"}})
+
+	tassert.Fatal(t, res != nil, "Expect a non-nil result from revocation call")
+	tassert.Errorf(t, res.Version == version+1, "expected version %d, got %d", version+1, res.Version)
+	tassert.Error(t, am.revokedTokens.contains("tok1"), "expected 'tok1' to be revoked")
+}
+
 func TestAuth_Manager_RevokedTokenList(t *testing.T) {
 	am := &authManager{
 		tokenMap:      newShardedTokenMap(2),
