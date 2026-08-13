@@ -343,8 +343,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 			}
 			if shardName == "" {
 				// should not be happening
-				warn := fmt.Sprintf("archived file %q: cannot find parent shard in the listed results", en.Name)
-				actionWarn(c, warn)
+				actionWarnf(c, "archived file %q: cannot find parent shard in the listed results", en.Name)
 				continue
 			}
 		}

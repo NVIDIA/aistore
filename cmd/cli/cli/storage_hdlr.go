@@ -346,9 +346,8 @@ func cleanupStorageHandler(c *cli.Context) error {
 	}
 
 	if force {
-		warn := fmt.Sprintf("running with %s: will remove misplaced objects despite (possibly) ongoing or interrupted rebalance/resilver...\n",
+		actionWarnf(c, "running with %s: will remove misplaced objects despite (possibly) ongoing or interrupted rebalance/resilver...\n",
 			qflprn(forceClnFlag))
-		actionWarn(c, warn)
 	}
 
 	xargs.ID = xid

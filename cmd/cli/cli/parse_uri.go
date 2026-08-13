@@ -267,9 +267,8 @@ func dopOLTP(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (oltp oltp, err 
 
 	case flagIsSet(c, nonRecursFlag) && !cos.IsLastB(objNameOrTmpl, '/'):
 		// ambiguity #1
-		warn := fmt.Sprintf("ambiguity resolving %q as an object name or embedded prefix - use %s to disambiguate",
+		actionWarnf(c, "ambiguity resolving %q as an object name or embedded prefix - use %s to disambiguate",
 			objNameOrTmpl, qflprn(verbObjPrefixFlag))
-		actionWarn(c, warn)
 		briefPause(1)
 		oltp.objName = objNameOrTmpl
 

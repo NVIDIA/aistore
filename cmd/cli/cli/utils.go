@@ -1306,8 +1306,7 @@ func warnEscapeObjName(c *cli.Context, s string, warned *bool) string {
 		return s
 	}
 	if cmn.HasSpecialSymbols(s) {
-		warn := fmt.Sprintf(fmtWarnSpecial, s, flprn(encodeObjnameFlag))
-		actionWarn(c, warn)
+		actionWarnf(c, fmtWarnSpecial, s, flprn(encodeObjnameFlag))
 		*warned = true
 	}
 	return s

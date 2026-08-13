@@ -228,8 +228,7 @@ func (w *walkCtx) do(fqn string, dent iofs.DirEntry, err error) error {
 		parent := filepath.Dir(fqn)
 		if errors.Is(err, iofs.ErrPermission) {
 			if cliConfVerbose() {
-				warn := fmt.Sprintf("%s(%s) access denied: %v", tag, parent, err)
-				actionWarn(w.c, warn)
+				actionWarnf(w.c, "%s(%s) access denied: %v", tag, parent, err)
 			}
 			return iofs.SkipDir // NOTE: always skip nested os.ReadDir permissions
 		}

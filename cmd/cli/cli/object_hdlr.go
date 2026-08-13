@@ -520,9 +520,8 @@ func warnMultiSrcDstPrefix(c *cli.Context, a *putargs, from string) bool {
 		a.dst.oname, from)
 	actionWarn(c, warn)
 	if _, err := archive.Mime(a.dst.oname, ""); err == nil {
-		warn := fmt.Sprintf("did you want to use 'archive put' instead, with %q as the destination shard?",
+		actionWarnf(c, "did you want to use 'archive put' instead, with %q as the destination shard?",
 			a.dst.oname)
-		actionWarn(c, warn)
 	}
 	if !flagIsSet(c, yesFlag) {
 		if ok := confirm(c, "Proceed anyway?"); !ok {

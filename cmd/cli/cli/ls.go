@@ -167,8 +167,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 			if !partial {
 				continue
 			}
-			warn := fmt.Sprintf("%s[%s] %s - still running, showing partial results", cmdSummary, xid, bck.Cname(""))
-			actionWarn(c, warn)
+			actionWarnf(c, "%s[%s] %s - still running, showing partial results", cmdSummary, xid, bck.Cname(""))
 		}
 		footer.nb++
 		if info.IsBckPresent {
@@ -437,8 +436,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 
 	if catOnly && flagIsSet(c, noFooterFlag) {
-		warn := fmt.Sprintf(errFmtExclusive, qflprn(countAndTimeFlag), qflprn(noFooterFlag))
-		actionWarn(c, warn)
+		actionWarnf(c, errFmtExclusive, qflprn(countAndTimeFlag), qflprn(noFooterFlag))
 	}
 
 	// list (and immediately show) pages, one page at a time

@@ -463,9 +463,8 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 		return err
 	}
 	if xid == "" {
-		warn := fmt.Sprintf("The operation returned an empty UUID (a no-op?). %s\n",
+		actionWarnf(c, "The operation returned an empty UUID (a no-op?). %s\n",
 			toShowMsg(c, "", "To investigate", false))
-		actionWarn(c, warn)
 		return nil
 	}
 
@@ -588,9 +587,8 @@ func parseDownloadRequest(c *cli.Context) (*downloadRequest, error) {
 		if !cmn.IsStatusNotFound(err) {
 			return nil, err
 		}
-		warn := fmt.Sprintf("destination bucket %s doesn't exist. Bucket with default properties will be created.",
+		actionWarnf(c, "destination bucket %s doesn't exist. Bucket with default properties will be created.",
 			basePayload.Bck.Cname(""))
-		actionWarn(c, warn)
 	}
 
 	return &downloadRequest{
@@ -864,9 +862,8 @@ func createBackendDownloadJobDefinition(c *cli.Context, req *downloadRequest) (J
 			return nil, V(err)
 		}
 		if !p.BackendBck.Equal(&req.source.backend.bck) {
-			warn := fmt.Sprintf("%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
+			actionWarnf(c, "%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
 				req.basePayload.Bck.String(), req.source.backend.bck.String())
-			actionWarn(c, warn)
 			return newSingleDownloadJobDef(req), nil
 		}
 		return newBackendDownloadJobDef(c, req), nil
@@ -1059,8 +1056,7 @@ func wtDownload(c *cli.Context, id string) error {
 	}
 	if resp.ErrorCnt != 0 {
 		msg := toShowMsg(c, id, "For details", true)
-		warn := fmt.Sprintf("%d of %d download jobs failed. %s", resp.ErrorCnt, resp.ScheduledCnt, msg)
-		actionWarn(c, warn)
+		actionWarnf(c, "%d of %d download jobs failed. %s", resp.ErrorCnt, resp.ScheduledCnt, msg)
 	} else {
 		actionDownloaded(c, resp.FinishedCnt)
 	}
@@ -1098,8 +1094,7 @@ func bgDownload(c *cli.Context, id string) (err error) {
 	switch {
 	case resp.ErrorCnt != 0:
 		msg := toShowMsg(c, id, "For details", true)
-		warn := fmt.Sprintf("%d of %d download jobs failed. %s", resp.ErrorCnt, resp.ScheduledCnt, msg)
-		actionWarn(c, warn)
+		actionWarnf(c, "%d of %d download jobs failed. %s", resp.ErrorCnt, resp.ScheduledCnt, msg)
 	case resp.FinishedTime.UnixNano() != 0:
 		actionDownloaded(c, resp.FinishedCnt)
 	default:
@@ -1492,8 +1487,7 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 	if flagIsSet(c, refreshFlag) {
 		return waitJobWithRefresh(c, &xargs, xname, bck)
 	} else if flagIsSet(c, progressFlag) {
-		warn := fmt.Sprintf("ignoring flag %s  - not fully implemented yet", qflprn(progressFlag))
-		actionWarn(c, warn)
+		actionWarnf(c, "ignoring flag %s  - not fully implemented yet", qflprn(progressFlag))
 	}
 
 	msg := formatXactMsg(xargs.ID, xname, bck)

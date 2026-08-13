@@ -358,8 +358,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 			// reformat
 			size, err := cos.ParseSize(v, "")
 			if err != nil {
-				warn := fmt.Sprintf("failed to parse 'size': %v", err)
-				actionWarn(c, warn)
+				actionWarnf(c, "failed to parse 'size': %v", err)
 			} else {
 				v = teb.FmtSize(size, units, 2)
 			}
@@ -495,8 +494,7 @@ func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 
 	debug.Assert(errCnt64 > 0)
 	firstErr := <-errCh
-	warn := fmt.Sprintf("failed to delete %d object%s from %s: (%d deleted, %d error%s)\n", l-cnt, cos.Plural(l-cnt),
+	actionWarnf(c, "failed to delete %d object%s from %s: (%d deleted, %d error%s)\n", l-cnt, cos.Plural(l-cnt),
 		bck.String(), cnt, errCnt64, cos.Plural(int(errCnt64)))
-	actionWarn(c, warn)
 	return firstErr
 }

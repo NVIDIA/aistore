@@ -292,9 +292,8 @@ func (ctx *mossReqCtx) load(c *cli.Context) error {
 		if len(ctx.req.In) == 0 {
 			ctx.req.In = make([]apc.MossIn, 0, len(ctx.names))
 		} else {
-			warn := fmt.Sprintf("adding %d command-line defined name%s to the %d spec-defined",
+			actionWarnf(c, "adding %d command-line defined name%s to the %d spec-defined",
 				len(ctx.names), cos.Plural(len(ctx.names)), len(ctx.req.In))
-			actionWarn(c, warn)
 		}
 		for _, o := range ctx.names {
 			in := apc.MossIn{

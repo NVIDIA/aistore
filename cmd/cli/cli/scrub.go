@@ -286,8 +286,7 @@ func (ctx *scrCtx) gols(bck cmn.Bck, wg cos.WG, mu *sync.Mutex) {
 	defer wg.Done()
 	scr, err := ctx.ls(bck)
 	if err != nil {
-		warn := fmt.Sprintf("cannot validate %s: %v", bck.Cname(ctx.pref), err)
-		actionWarn(ctx.c, warn)
+		actionWarnf(ctx.c, "cannot validate %s: %v", bck.Cname(ctx.pref), err)
 		return
 	}
 	mu.Lock()

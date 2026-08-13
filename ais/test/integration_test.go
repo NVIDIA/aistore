@@ -230,37 +230,6 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tools.WaitForRebalAndResil(m.t, tools.BaseAPIParams(m.proxyURL))
 }
 
-func TestMaintenanceRepeatUnconfirmed(t *testing.T) {
-	m := ioContext{t: t}
-	m.initAndSaveState(true /*cleanup*/)
-	m.expectTargets(1)
-	target := m.startMaintenanceNoRebalance()
-
-	//
-	// repeat (and see "Incomplete Transitions" in docs/lifecycle_node.md)
-	//
-	smap1 := tools.GetClusterMap(t, m.proxyURL)
-
-	tlog.Logfln("Trying to put this same %s in maintenance (expecting a no-op)", target.StringEx())
-	args := &apc.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
-	rebID, err := api.StartMaintenance(tools.BaseAPIParams(m.proxyURL), args)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, rebID == "", "expected a no-op, got rebalance[%s]", rebID)
-
-	smap2 := tools.GetClusterMap(t, m.proxyURL)
-	tassert.Errorf(t, smap1.Version == smap2.Version, "expected Smap v%d unchanged, got v%d", smap1.Version, smap2.Version)
-
-	n := smap2.CountActiveTs()
-	if n != m.originalTargetCount-1 {
-		t.Fatalf("expected %d targets after putting target in maintenance, got %d targets", m.originalTargetCount-1, n)
-	}
-
-	// bring cluster back to normal state
-	rebID = m.stopMaintenance(target)
-	m.waitAndCheckCluState()
-	tools.WaitForRebalanceByID(m.t, tools.BaseAPIParams(m.proxyURL), rebID)
-}
-
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 

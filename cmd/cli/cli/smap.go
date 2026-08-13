@@ -6,7 +6,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -43,8 +42,7 @@ func getClusterMap(c *cli.Context) (*meta.Smap, error) {
 			if os.Getenv(env.AisEndpoint) == "" {
 				what = "CLI config URL"
 			}
-			warn := fmt.Sprintf("changing %s from %q to %q", what, apiBP.URL, smap.Primary.PubNet.URL)
-			actionWarn(c, warn)
+			actionWarnf(c, "changing %s from %q to %q", what, apiBP.URL, smap.Primary.PubNet.URL)
 		}
 		apiBP.URL = smap.Primary.PubNet.URL
 	}

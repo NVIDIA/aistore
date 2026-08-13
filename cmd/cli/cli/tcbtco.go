@@ -228,8 +228,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 
 	if flagIsSet(c, copyAllObjsFlag) && (bckFrom.Provider != apc.AIS || !bckFrom.Ns.IsGlobal()) {
 		const s = "copying remote (ie, not in-cluster) objects may take considerable time"
-		warn := fmt.Sprintf("%s (tip: use %s to show progress, '--help' for details)", s, qflprn(progressFlag))
-		actionWarn(c, warn)
+		actionWarnf(c, "%s (tip: use %s to show progress, '--help' for details)", s, qflprn(progressFlag))
 	}
 
 	xid, err := api.CopyBucket(apiBP, bckFrom, bckTo, &msg, fltPresence)

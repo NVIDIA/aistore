@@ -301,8 +301,7 @@ func _checkLockMany(c *cli.Context, bck cmn.Bck, prefix, uri string) error {
 		for _, entry := range out {
 			lockState, err := _checkLockOne(bck, entry.Name)
 			if err != nil {
-				warn := fmt.Sprintf("%s: %v", bck.Cname(entry.Name), err)
-				actionWarn(c, warn)
+				actionWarnf(c, "%s: %v", bck.Cname(entry.Name), err)
 				continue
 			}
 			results = append(results, res{Name: bck.Cname(entry.Name), Status: lockState})

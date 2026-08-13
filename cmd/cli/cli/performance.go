@@ -180,8 +180,7 @@ func _warnThruLatIters(c *cli.Context) {
 	if flagIsSet(c, refreshFlag) || flagIsSet(c, nonverboseFlag) {
 		return
 	}
-	warn := fmt.Sprintf("for better results, use %s option and/or run several iterations\n", qflprn(refreshFlag))
-	actionWarn(c, warn)
+	actionWarnf(c, "for better results, use %s option and/or run several iterations\n", qflprn(refreshFlag))
 }
 
 func perfCptn(c *cli.Context, tab string) {
@@ -291,8 +290,7 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.NodeSt
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
 		if end == nil {
-			warn := fmt.Sprintf("missing %s in the get-stats-and-status results\n", meta.Tname(tid))
-			actionWarn(c, warn)
+			actionWarnf(c, "missing %s in the get-stats-and-status results\n", meta.Tname(tid))
 			continue
 		}
 		for name, v := range begin.Tracker {
@@ -400,8 +398,7 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.NodeStatu
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
 		if end == nil {
-			warn := fmt.Sprintf("missing %s in the get-stats-and-status results\n", meta.Tname(tid))
-			actionWarn(c, warn)
+			actionWarnf(c, "missing %s in the get-stats-and-status results\n", meta.Tname(tid))
 			continue
 		}
 		for name, v := range begin.Tracker {

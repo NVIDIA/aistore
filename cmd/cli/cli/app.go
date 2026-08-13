@@ -340,9 +340,8 @@ func (p *longRun) init(c *cli.Context, runOnce bool) {
 		p.count = parseIntFlag(c, countFlag)
 		if p.count <= 0 {
 			n := flprn(countFlag)
-			warn := fmt.Sprintf("option '%s=%d' is invalid (must be >= 1). Proceeding with '%s=%d' (default).",
+			actionWarnf(c, "option '%s=%d' is invalid (must be >= 1). Proceeding with '%s=%d' (default).",
 				n, p.count, n, countDefault)
-			actionWarn(c, warn)
 			briefPause(2)
 			p.count = countDefault
 		}

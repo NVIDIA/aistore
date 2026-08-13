@@ -300,9 +300,8 @@ func _currentLog(c *cli.Context) error {
 			if err := api.SetDaemonConfig(apiBP, node.ID(), nvs, true /*transient*/); err != nil {
 				return V(err)
 			}
-			warn := fmt.Sprintf("run 'ais config node %s inherited %s %s' to change it back",
+			actionWarnf(c, "run 'ais config node %s inherited %s %s' to change it back",
 				sname, nodeLogFlushName, config.Log.FlushTime)
-			actionWarn(c, warn)
 			briefPause(2)
 			fmt.Fprintln(c.App.Writer)
 		}

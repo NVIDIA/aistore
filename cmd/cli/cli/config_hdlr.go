@@ -233,8 +233,7 @@ func setCluConfigHandler(c *cli.Context) error {
 	// assorted named fields that require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired[:]); name != "" {
-		warn := fmt.Sprintf("cluster restart required for the change '%s=%s' to take effect.", name, nvs[name])
-		actionWarn(c, warn)
+		actionWarnf(c, "cluster restart required for the change '%s=%s' to take effect.", name, nvs[name])
 	}
 	if err := api.SetClusterConfig(apiBP, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return V(err)
@@ -381,9 +380,8 @@ func setNodeConfigHandler(c *cli.Context) error {
 	// assorted named fields that'll require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired[:]); name != "" {
-		warn := fmt.Sprintf("for the change '%s=%s' to take an effect node %q must be restarted.",
+		actionWarnf(c, "for the change '%s=%s' to take an effect node %q must be restarted.",
 			name, nvs[name], sname)
-		actionWarn(c, warn)
 	}
 
 	jsonval, useMsg, err := isFmtJSON(nvs)
