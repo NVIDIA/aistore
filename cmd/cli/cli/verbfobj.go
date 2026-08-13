@@ -386,7 +386,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 		err = p._a2aOne(c, fobj, countReader, skipVC)
 	default:
 		debug.Assert(false, p.wop.verb()) // "ARCHIVE"
-		actionWarn(c, fmt.Sprintf("%q "+NIY, p.wop.verb()))
+		actionWarnf(c, "%q "+NIY, p.wop.verb())
 		return
 	}
 	if err != nil {

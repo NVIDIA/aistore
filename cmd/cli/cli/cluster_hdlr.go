@@ -471,8 +471,9 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	action := c.Command.Name
 	var (
-		nodeArgs  = make([]string, 0, c.NArg())
-		hasTarget bool
+		nodeArgs     = make([]string, 0, c.NArg())
+		outOfService []string
+		hasTarget    bool
 	)
 	for _, arg := range c.Args() {
 		for _, nodeArg := range splitCsv(arg) {
@@ -504,6 +505,10 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		snames = append(snames, sname)
 		daemonIDs = append(daemonIDs, node.ID())
 		hasTarget = hasTarget || node.IsTarget()
+		if node.IsTarget() && node.InMaintOrDecomm() {
+			// inactive and will not rebalance - see warning below
+			outOfService = append(outOfService, sname)
+		}
 	}
 
 	// make apc.ActValRmNode
@@ -526,6 +531,19 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		fmt.Fprintln(c.App.Writer,
 			"To rebalance the cluster manually at a later time, run: `ais start rebalance`")
 	}
+	// removing (or shutting down) a node that is already out of service never rebalances:
+	// the cluster has no active target to migrate from. If the node went out of service
+	// with no rebalance, its data was never migrated and leaves with it.
+	if len(outOfService) > 0 && (action == cmdNodeDecommission || action == cmdShutdown) {
+		verb := "shut down"
+		if action == cmdNodeDecommission {
+			verb = "removed"
+		}
+		actionWarnf(c, "%s: already out of service - will be %s without migrating data; if %s was used "+
+			"to take it out, run `ais start rebalance` first (and wait for it to finish)",
+			strings.Join(outOfService, ", "), verb, qflprn(noRebalanceFlag))
+	}
+
 	if action == cmdNodeDecommission {
 		actValue.NoShutdown = noShutdown
 		actValue.RmUserData = rmUserData

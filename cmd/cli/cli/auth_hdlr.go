@@ -511,7 +511,7 @@ func whoamiHandler(c *cli.Context) (err error) {
 	}
 	uInfo, err := authn.GetUser(authParams, claims.Subject)
 	if err != nil {
-		actionWarn(c, fmt.Sprintf("cannot reach AuthN server to verify server-side roles (%v); showing token-derived identity and access only", err))
+		actionWarnf(c, "cannot reach AuthN server to verify server-side roles (%v); showing token-derived identity and access only", err)
 		return printWhoami(c, claims, nil)
 	}
 	return printWhoami(c, claims, uInfo)

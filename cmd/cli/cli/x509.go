@@ -165,7 +165,7 @@ func validateCertHandler(c *cli.Context) error {
 		sid[0] = pid
 		i, err = api.GetX509Info(apiBP, sid...)
 		if err != nil {
-			actionWarn(c, fmt.Sprintf("%s returned error: %v", snode, V(err)))
+			actionWarnf(c, "%s returned error: %v", snode, V(err))
 			continue
 		}
 		cnt += checkCertExpiration(c, i, snode)
@@ -175,7 +175,7 @@ func validateCertHandler(c *cli.Context) error {
 		sid[0] = tid
 		i, err = api.GetX509Info(apiBP, sid...)
 		if err != nil {
-			actionWarn(c, fmt.Sprintf("%s returned error: %v", snode, V(err)))
+			actionWarnf(c, "%s returned error: %v", snode, V(err))
 			continue
 		}
 		cnt += checkCertExpiration(c, i, snode)

@@ -23,7 +23,7 @@ The third and final special state is **decommission**. Loosely synonymous with c
 * partial or complete cleanup of the node itself; and
 * removing AIS metadata, configuration files, and, optionally, user data in its entirety.
 
-Needless to say, there's no simple way back out of `decommission` - the proverbial point of no return. To rejoin the cluster after a completed decommission, the node must be rejoined or redeployed, depending on how far the cleanup progressed and whether local AIS metadata and data were removed.
+Needless to say, there's no simple way back out of `decommission` - the proverbial point of no return. A decommissioned node does not come back by restarting it: depending on how far the cleanup progressed, it must be re-added with an explicit `join` or redeployed from scratch.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ Needless to say, there's no simple way back out of `decommission` - the proverbi
   - [Quick Example](#quick-example)
 - [Putting a Node in Maintenance](#putting-a-node-in-maintenance)
   - [Batch Operations](#batch-operations)
-  - [Unconfirmed Maintenance State](#unconfirmed-maintenance-state)
+  - [Incomplete Transitions](#incomplete-transitions)
   - [Skipping Rebalance](#skipping-rebalance)
 - [One Membership Change at a Time](#one-membership-change-at-a-time)
 - [Clearing Maintenance State](#clearing-maintenance-state)
@@ -246,16 +246,30 @@ skipped, the command reports "nothing to do" and leaves the cluster map untouche
 maintenance can be advanced to `shutdown` or `decommission`; `stop-maintenance` refuses a node that
 is being decommissioned.
 
-### Unconfirmed Maintenance State
+Note that advancing a node that is already in maintenance does not rebalance: its data was migrated
+when it entered maintenance, and the batch contains no active target to migrate from. If it entered
+maintenance with `--no-rebalance`, that migration never happened - run `ais start rebalance` first, or
+the data stored **only on that target may become unavailable** when it is shut down or removed.
 
-A target is marked (and stays in) `maintenance` before its post-rebalance transition is confirmed. This is
-the normal final state of `start-maintenance --no-rebalance`, but it can also mean that the associated
-global rebalance transaction was interrupted, renewed by a concurrent self-join, or aborted because
-another target left the cluster (e.g., via K8s delete-pod => SIGTERM => `rmSelf`).
 
-These cases are indistinguishable from the primary's perspective.
+### Incomplete Transitions
 
-Given unconfirmed maintenance state, the operator can proceed in one of several ways:
+Each of the three removal operations is a three-phase transition:
+
+```console
+`start-maintenance` | `shutdown-node` | `decommission`  =>  global rebalance  =>  post-rebalance step
+```
+
+The first phase marks the node in the cluster map. The second migrates its data. The third records
+completion: for `start-maintenance` and `shutdown`, the target is marked post-rebalance; for
+`decommission`, the node is removed from the cluster map altogether.
+
+The middle phase can abort - renewed by a concurrent self-join, or aborted because another target left
+the cluster (e.g., via K8s delete-pod => SIGTERM => `rmSelf`). When it does, the third phase never runs
+and the target simply stays in `maintenance`. `--no-rebalance` reaches the same place by skipping the
+middle phase outright, and the two are indistinguishable from the primary's perspective.
+
+Either way, the target is in maintenance and out of service. The operator can:
 
 * repeat `start-maintenance`. This is accepted rather than rejected, so a retry - or a rolling-upgrade
   script that reissues one - does not fail. It keeps the target out of service and reapplies maintenance
@@ -263,16 +277,16 @@ Given unconfirmed maintenance state, the operator can proceed in one of several 
 * run `stop-maintenance` to clear maintenance and return the target to service, with rebalance as
   required;
 * advance the target to `shutdown` or `decommission`; or
-* leave it in maintenance. An explicit `ais start rebalance` can restore global data placement, but
-  does not itself change the target's unconfirmed maintenance flag.
+* leave it in maintenance. An explicit `ais start rebalance` can restore global data placement, but does
+  not itself complete the transition.
 
-> An unconfirmed target specified together with an active one follows the normal batch path. With
-> automatic rebalance enabled and without `--no-rebalance`, that batch rebalances, and its
-> post-rebalance step confirms both.
+> Such a target specified together with an active one follows the normal batch path. With automatic
+> rebalance enabled and without `--no-rebalance`, that batch rebalances, and its post-rebalance step
+> completes the transition for both.
 >
-> Specifying it together with a target whose maintenance is already confirmed changes nothing: the
-> confirmed target is left as it is (e.g., for `{unconfirmed A, confirmed B}` - B is skipped), and the
-> command behaves as if only the unconfirmed one had been specified.
+> Specifying it together with a target that has already completed the transition changes nothing: the
+> completed target is skipped, and the command behaves as if only the incomplete one had been
+> specified.
 
 ### Skipping Rebalance
 
@@ -327,8 +341,7 @@ There are two deliberate qualifications:
 
 Do not abort a lifecycle-triggered rebalance merely to issue its inverse. Lifecycle operations are not
 rollback transactions: aborting rebalance does not restore the preceding Smap, can leave maintenance
-or shutdown post-rebalance state unconfirmed, and does not necessarily prevent decommission
-finalization.
+or shutdown transitions incomplete, and does not necessarily prevent decommission finalization.
 
 To transition several nodes together, specify them in one command - see
 [Batch Operations](#batch-operations) - rather than issuing requests one after another.
@@ -345,7 +358,7 @@ Started rebalance "g3" (to monitor, run 'ais show rebalance').
 t[QrmZvKdN] is now active
 ```
 
-To skip automatic rebalance, provide `--no-rebalance` (advanced usage only; see [Skipping Rebalance](#skipping-rebalance).
+To skip automatic rebalance, provide `--no-rebalance` (advanced usage only; see [Skipping Rebalance](#skipping-rebalance)).
 
 > In general, automatic rebalance should remain enabled. The same considerations listed under [Skipping Rebalance](#skipping-rebalance) apply here as well.
 

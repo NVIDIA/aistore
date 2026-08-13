@@ -97,12 +97,12 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	defer p.endMembership()
 
 	var (
-		smap            = p.owner.smap.get()
-		nodes           = make(meta.Nodes, 0, len(sids))
-		snames          = make([]string, 0, len(sids))
-		unconfirmed     int
-		hasTarget       bool
-		hasActiveTarget bool
+		smap           = p.owner.smap.get()
+		nodes          = make(meta.Nodes, 0, len(sids))
+		snames         = make([]string, 0, len(sids))
+		noPostReb      int
+		activeSelected int // selected targets that are currently active
+		hasTarget      bool
 	)
 	for _, sid := range sids {
 		si := smap.GetNode(sid)
@@ -145,16 +145,16 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 					// SnodeMaint w/out SnodeMaintPostReb: cannot tell a finished (--no-rebalance) operation
 					// from rebalance renewed by a concurrent self-join, or its listener aborted because
 					// another target left (SIGTERM => rmSelf) the cluster. Either way, keep the node in maintenance.
-					// See section "Unconfirmed Maintenance State" in docs/lifecycle_node.md.
+					// See section "Incomplete Transitions" in docs/lifecycle_node.md.
 					nlog.Warningln(p.String(), msg.Action, sname, "- post-rebalance not confirmed, proceeding anyway")
-					unconfirmed++
+					noPostReb++
 				}
 			}
 		}
 		if si.IsTarget() {
 			hasTarget = true
 			if !inMaint {
-				hasActiveTarget = true
+				activeSelected++
 			}
 		}
 		nodes = append(nodes, si)
@@ -175,7 +175,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		}
 	}
 
-	if unconfirmed == len(nodes) {
+	if noPostReb == len(nodes) {
 		debug.Assert(msg.Action == apc.ActStartMaintenance)
 		ecode, err := p.rmNodesFinal(msg, nodes, snames, nil)
 		if err != nil {
@@ -202,8 +202,20 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 
-	reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled && hasActiveTarget
-	nlog.Infof("%s: %s reb=%t %v", p, msg.Action, reb, sids)
+	var (
+		skipReb = opts.SkipRebalance || !cmn.GCO.Get().Rebalance.Enabled
+		needReb = activeSelected > 0 && smap.CountActiveTs() > activeSelected
+		reb     = !skipReb && activeSelected > 0
+	)
+	if skipReb && needReb {
+		// migration could run but is suppressed by policy: the selected target(s) hold data
+		// that will _not_ be migrated, and there are active targets to migrate it to
+		nlog.Warningf("%s: %s reb=%t %v - executing %q _and_ not running global rebalance may lead to "+
+			"a loss of data; to rebalance manually at a later time, run: `ais start rebalance`",
+			p, msg.Action, reb, sids, msg.Action)
+	} else {
+		nlog.Infof("%s: %s reb=%t %v", p, msg.Action, reb, sids)
+	}
 
 	if reb {
 		if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {

@@ -237,7 +237,7 @@ func TestMaintenanceRepeatUnconfirmed(t *testing.T) {
 	target := m.startMaintenanceNoRebalance()
 
 	//
-	// repeat (and see "Unconfirmed Maintenance State" in docs/lifecycle_node.md)
+	// repeat (and see "Incomplete Transitions" in docs/lifecycle_node.md)
 	//
 	smap1 := tools.GetClusterMap(t, m.proxyURL)
 
