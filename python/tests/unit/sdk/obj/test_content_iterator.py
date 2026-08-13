@@ -18,7 +18,7 @@ class TestContentIterProvider(unittest.TestCase):
     @cases(None, 1234)
     def test_iter(self, chunk_size):
         mock_stream = Mock()
-        mock_stream.iter_content.return_value = byte_chunks
+        mock_stream.iter_content = Mock(return_value=byte_chunks)
         self.mock_client.get.return_value = mock_stream
 
         if chunk_size:
