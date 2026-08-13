@@ -6,6 +6,7 @@ Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 
 from aistore.pytorch import AISBaseIterDataset
 from aistore.sdk import Client, AISSource
+from aistore.sdk.enums import Colocation
 from typing import Iterator, Tuple, List, Dict, Union
 from alive_progress import alive_it
 
@@ -23,6 +24,13 @@ class AISBatchIterDataset(AISBaseIterDataset):
         streaming (bool, optional): Enable streaming mode. Defaults to True
         prefix_map (Dict, optional): Map of AISSource objects to prefixes
         show_progress (bool, optional): Show progress indicator. Defaults to False
+        colocation (Colocation, optional): Colocation hint passed to the MOSS batch API.
+            Defaults to Colocation.NONE.
+            - Colocation.NONE: no optimization; suitable for uniformly distributed data
+            - Colocation.TARGET_AWARE: objects in each batch are collocated on few targets;
+              proxy selects the optimal designated target to minimize cross-cluster movement
+            - Colocation.TARGET_AND_SHARD_AWARE: implies TARGET_AWARE; also enables archive handle
+              reuse when multiple archpaths come from the same shard (not yet implemented)
         partition_sources_by_worker (bool, optional): When True, distributes sources across
             DataLoader workers so each worker only lists its share, avoiding duplicate paged
             listing calls. Most effective when ais_source_list has at least as many sources
@@ -38,6 +46,7 @@ class AISBatchIterDataset(AISBaseIterDataset):
         max_batch_size: int = 32,
         output_format: str = ".tar",
         streaming: bool = True,
+        colocation: Colocation = Colocation.NONE,
         partition_sources_by_worker: bool = False,
     ):
         super().__init__(ais_source_list, prefix_map, partition_sources_by_worker)
@@ -46,6 +55,7 @@ class AISBatchIterDataset(AISBaseIterDataset):
         self.output_format = output_format
         self.streaming = streaming
         self._show_progress = show_progress
+        self.colocation = colocation
 
     def __iter__(self) -> Iterator[Tuple[str, bytes]]:
         """
@@ -86,6 +96,7 @@ class AISBatchIterDataset(AISBaseIterDataset):
             objects=batch_objects,
             output_format=self.output_format,
             streaming_get=self.streaming,
+            colocation=self.colocation,
         )
         for obj_info, data in batch.get():
             yield obj_info.obj_name, data

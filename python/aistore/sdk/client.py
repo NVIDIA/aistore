@@ -354,7 +354,11 @@ class Client:
             colocation (Colocation): Colocation hint for optimization. Defaults to Colocation.NONE.
                 - Colocation.NONE: no optimization - suitable for uniformly distributed data
                 - Colocation.TARGET_AWARE: target-aware - objects are collocated on few targets
-                - Colocation.TARGET_AND_SHARD_AWARE: target and shard-aware - enables archive handle reuse
+                - Colocation.TARGET_AND_SHARD_AWARE: implies TARGET_AWARE; also enables archive handle
+                  reuse when multiple archpaths come from the same shard (not yet implemented)
+
+        Raises:
+            NotImplementedError: If colocation is Colocation.TARGET_AND_SHARD_AWARE.
 
         Returns:
             Batch: Batch object for building and executing Get-Batch requests

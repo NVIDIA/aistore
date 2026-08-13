@@ -15,11 +15,11 @@ class Colocation(IntEnum):
     TARGET_AWARE - indicates that objects in this batch are collocated on few targets;
            proxy will compute HRW distribution and select the optimal distributed
            target (DT) to minimize cross-cluster data movement
-    TARGET_AND_SHARD_AWARE - implies TARGET_AWARE, plus indicates that archpaths are
-           collocated in few shards; enables additional optimization for archive handle reuse
+    TARGET_AND_SHARD_AWARE - (not yet implemented; raises NotImplementedError)
+           implies TARGET_AWARE, plus indicates that archpaths are collocated in few shards;
+           intended to enable archive handle reuse — server-side support is pending.
 
-    E.g., use TARGET_AWARE or TARGET_AND_SHARD_AWARE when input TARs were constructed
-    to match requested batches.
+    E.g., use TARGET_AWARE when input TARs were constructed to match requested batches.
     """
 
     NONE = 0

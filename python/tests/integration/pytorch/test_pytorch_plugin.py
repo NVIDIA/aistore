@@ -26,6 +26,7 @@ from aistore.pytorch import (
     AISShardReader,
 )
 from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
+from aistore.sdk.enums import Colocation
 
 
 # Module-level subclasses for the multiprocessing dataloader tests. Local
@@ -294,12 +295,35 @@ class TestPytorchPlugin(unittest.TestCase):
             client=self.client,
         )
 
-        # Test iteration
         results = {}
         for name, content in dataset:
             results[name] = content
 
         self.verify_dataset_output(results, content_dict)
+
+    def test_ais_batch_iter_dataset_colocation(self):
+        """Implemented colocation levels return correct data; unimplemented raises."""
+        content_dict = self.create_test_objects(10)
+
+        for coloc in (Colocation.NONE, Colocation.TARGET_AWARE):
+            with self.subTest(colocation=coloc.name):
+                dataset = AISBatchIterDataset(
+                    ais_source_list=self.bck,
+                    client=self.client,
+                    colocation=coloc,
+                )
+                results = {name: data for name, data in dataset}
+                self.verify_dataset_output(results, content_dict)
+
+        with self.subTest(colocation="TARGET_AND_SHARD_AWARE"):
+            with self.assertRaises(NotImplementedError):
+                list(
+                    AISBatchIterDataset(
+                        ais_source_list=self.bck,
+                        client=self.client,
+                        colocation=Colocation.TARGET_AND_SHARD_AWARE,
+                    )
+                )
 
     def _create_multi_source_objects(self, num_sources: int, objects_per_source: int):
         """Create num_sources extra buckets with objects_per_source objects each.

@@ -1320,15 +1320,14 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(batch.request.colocation, Colocation.TARGET_AWARE)
 
     def test_batch_init_with_colocation_target_and_shard_aware(self):
-        """Test Batch initialization with Colocation.TARGET_AND_SHARD_AWARE."""
-        batch = Batch(
-            self.mock_request_client,
-            objects=["file.txt"],
-            bucket=self.mock_bucket,
-            colocation=Colocation.TARGET_AND_SHARD_AWARE,
-        )
-
-        self.assertEqual(batch.request.colocation, Colocation.TARGET_AND_SHARD_AWARE)
+        """TARGET_AND_SHARD_AWARE raises NotImplementedError (not yet on server side)."""
+        with self.assertRaises(NotImplementedError):
+            Batch(
+                self.mock_request_client,
+                objects=["file.txt"],
+                bucket=self.mock_bucket,
+                colocation=Colocation.TARGET_AND_SHARD_AWARE,
+            )
 
     def test_batch_init_with_invalid_colocation_raises_error(self):
         """Test Batch initialization with invalid colocation value raises ValueError."""
@@ -1341,7 +1340,6 @@ class TestBatch(unittest.TestCase):
             )
 
         self.assertIn("Invalid colocation value: 4", str(context.exception))
-        self.assertIn("Must be 0, 1, or 2", str(context.exception))
 
     def test_batch_init_with_negative_colocation_raises_error(self):
         """Test Batch initialization with negative colocation value raises ValueError."""
@@ -1422,47 +1420,16 @@ class TestBatch(unittest.TestCase):
         self.assertIn(QPARAM_COLOC, params)
         self.assertEqual(params[QPARAM_COLOC], str(Colocation.TARGET_AWARE.value))
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_get_batch_with_colocation_target_and_shard_aware_query_param(
-        self, mock_extractor_manager_cls
-    ):
-        """Test that Colocation.TARGET_AND_SHARD_AWARE is passed as query parameter."""
-        # Setup extractor manager mock
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
-        mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
-
-        batch = Batch(
-            self.mock_request_client,
-            objects=["file.txt"],
-            bucket=self.mock_bucket,
-            colocation=Colocation.TARGET_AND_SHARD_AWARE,
-            streaming_get=True,
-        )
-
-        mock_response = Mock()
-        mock_response.raw = BytesIO(self._create_test_tar())
-        self.mock_request_client.request.return_value = mock_response
-
-        mock_extractor.extract.return_value = iter(
-            [
-                (
-                    MossOut(obj_name="file.txt", bucket="test-bucket", provider="ais"),
-                    b"content",
-                ),
-            ]
-        )
-
-        list(batch.get())
-
-        # Verify request was called with coloc query param
-        call_args = self.mock_request_client.request.call_args
-        params = call_args.kwargs.get("params", {})
-
-        self.assertIn(QPARAM_COLOC, params)
-        self.assertEqual(
-            params[QPARAM_COLOC], str(Colocation.TARGET_AND_SHARD_AWARE.value)
-        )
+    def test_get_batch_with_colocation_target_and_shard_aware_query_param(self):
+        """TARGET_AND_SHARD_AWARE raises NotImplementedError before any request is made."""
+        with self.assertRaises(NotImplementedError):
+            Batch(
+                self.mock_request_client,
+                objects=["file.txt"],
+                bucket=self.mock_bucket,
+                colocation=Colocation.TARGET_AND_SHARD_AWARE,
+                streaming_get=True,
+            )
 
     @patch("aistore.sdk.batch.batch.ExtractorManager")
     def test_get_batch_without_colocation_no_query_param(
@@ -1509,17 +1476,14 @@ class TestBatch(unittest.TestCase):
             self.mock_request_client,
             objects=["file.txt"],
             bucket=self.mock_bucket,
-            colocation=Colocation.TARGET_AND_SHARD_AWARE,
+            colocation=Colocation.TARGET_AWARE,
         )
 
-        # Verify colocation is set
-        self.assertEqual(batch.request.colocation, Colocation.TARGET_AND_SHARD_AWARE)
+        self.assertEqual(batch.request.colocation, Colocation.TARGET_AWARE)
 
-        # Clear the batch
         batch.clear()
 
-        # Colocation should be preserved
-        self.assertEqual(batch.request.colocation, Colocation.TARGET_AND_SHARD_AWARE)
+        self.assertEqual(batch.request.colocation, Colocation.TARGET_AWARE)
 
     @staticmethod
     def _create_test_tar() -> bytes:

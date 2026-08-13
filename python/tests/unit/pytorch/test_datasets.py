@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch, Mock, MagicMock
 from aistore.pytorch.map_dataset import AISMapDataset
 from aistore.pytorch.iter_dataset import AISIterDataset
+from aistore.sdk.enums import Colocation
 from aistore.pytorch.multishard_dataset import AISMultiShardStream
 from aistore.pytorch.shard_reader import AISShardReader
 from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
@@ -195,6 +196,58 @@ class TestAISDataset(unittest.TestCase):
         # Verify batch method was called
         mock_client.batch.assert_called()
         mock_batch.get.assert_called()
+
+    def test_batch_iter_dataset_colocation_default(self):
+        """colocation defaults to Colocation.NONE."""
+        mock_client = Mock()
+        mock_client.batch.return_value = Mock()
+        dataset = AISBatchIterDataset(
+            ais_source_list=self.mock_bck,
+            client=mock_client,
+        )
+        self.assertEqual(dataset.colocation, Colocation.NONE)
+
+    def test_batch_iter_dataset_colocation_stored(self):
+        """colocation value is stored on the dataset."""
+        mock_client = Mock()
+        mock_client.batch.return_value = Mock()
+        for coloc in (Colocation.NONE, Colocation.TARGET_AWARE):
+            dataset = AISBatchIterDataset(
+                ais_source_list=self.mock_bck,
+                client=mock_client,
+                colocation=coloc,
+            )
+            self.assertEqual(dataset.colocation, coloc)
+
+    def test_batch_iter_dataset_colocation_target_and_shard_aware_raises(self):
+        """TARGET_AND_SHARD_AWARE raises NotImplementedError when client.batch() is called."""
+        from aistore.sdk.batch.batch import Batch
+
+        mock_request_client = Mock()
+        with self.assertRaises(NotImplementedError):
+            Batch(
+                request_client=mock_request_client,
+                colocation=Colocation.TARGET_AND_SHARD_AWARE,
+            )
+
+    def test_batch_iter_dataset_colocation_passthrough(self):
+        """colocation is forwarded to client.batch() on each _process_batch call."""
+        mock_client = Mock()
+        mock_batch = Mock()
+        mock_batch.get.return_value = iter([])
+        mock_client.batch.return_value = mock_batch
+
+        for coloc in (Colocation.NONE, Colocation.TARGET_AWARE):
+            mock_client.reset_mock()
+            mock_batch.get.return_value = iter([])
+            dataset = AISBatchIterDataset(
+                ais_source_list=self.mock_bck,
+                client=mock_client,
+                colocation=coloc,
+            )
+            list(dataset)
+            _, kwargs = mock_client.batch.call_args
+            self.assertEqual(kwargs["colocation"], coloc)
 
     def test_iter_dataset_preload_flag_stored(self):
         dataset = AISIterDataset(

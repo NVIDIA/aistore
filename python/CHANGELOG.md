@@ -32,6 +32,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   `ais_source_list` across DataLoader workers so each worker only lists its
   assigned sources, avoiding duplicate paged listing calls that otherwise
   multiply by `num_workers`.
+- `colocation` parameter on `AISBatchIterDataset`, forwarded to the MOSS
+  batch API to enable target-aware and shard-aware optimizations.
 
 ### Changed
 

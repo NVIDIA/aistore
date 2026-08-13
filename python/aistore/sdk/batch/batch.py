@@ -72,7 +72,11 @@ class Batch:
             colocation (Colocation): Colocation hint for optimization. Defaults to Colocation.NONE.
                 - Colocation.NONE: no optimization - suitable for uniformly distributed data
                 - Colocation.TARGET_AWARE: target-aware - objects are collocated on few targets
-                - Colocation.TARGET_AND_SHARD_AWARE: target and shard-aware - enables archive handle reuse
+                - Colocation.TARGET_AND_SHARD_AWARE: implies TARGET_AWARE; also enables archive handle
+                  reuse when multiple archpaths come from the same shard (not yet implemented)
+
+        Raises:
+            NotImplementedError: If colocation is Colocation.TARGET_AND_SHARD_AWARE.
 
         Example:
             # Quick batch with string names
@@ -94,10 +98,11 @@ class Batch:
             or colocation > Colocation.TARGET_AND_SHARD_AWARE
         ):
             raise ValueError(
-                f"Invalid colocation value: {colocation}. Must be 0, 1, or 2:\n"
-                "  - 0 (Colocation.NONE): no optimization - suitable for uniformly distributed data\n"
-                "  - 1 (Colocation.TARGET_AWARE): target-aware - objects are collocated on few targets\n"
-                "  - 2 (Colocation.TARGET_AND_SHARD_AWARE): target and shard-aware - enables archive handle reuse"
+                f"Invalid colocation value: {colocation}. Must be a Colocation enum member."
+            )
+        if colocation == Colocation.TARGET_AND_SHARD_AWARE:
+            raise NotImplementedError(
+                "Colocation.TARGET_AND_SHARD_AWARE is not yet implemented on the server side."
             )
 
         # Initialize MossReq
