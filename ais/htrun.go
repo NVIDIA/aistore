@@ -1071,9 +1071,14 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewClusterWaitGroup(sys.NumCPU(), bargs.nodeCount)
-		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
+		wg      cos.WG
 	)
+	if bargs.allAtOnce {
+		wg = &sync.WaitGroup{}
+	} else {
+		wg = cos.NewClusterWaitGroup(sys.NumCPU(), bargs.nodeCount)
+	}
+	f := func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	debug.Assert(len(bargs.selected) == 0)
 	if !bargs.noResults {
 		results.s = allocBcastRes(bargs.nodeCount)

@@ -114,6 +114,7 @@ type (
 		timeout           time.Duration  // call timeout
 		to                int            // (all targets, all proxies, all nodes) enum
 		nodeCount         int            // m.b. greater or equal destination count
+		allAtOnce         bool           // launch every destination without the intra-cluster broadcast limit
 		ignoreMaintenance bool           // do not skip nodes in maintenance mode
 		noResults         bool           // ignore results
 	}
