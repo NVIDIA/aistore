@@ -179,8 +179,8 @@ func searchCmdHdlr(c *cli.Context) (err error) {
 				}
 				for _, word2 := range similar {
 					if slices.Contains(c.Args(), word2) {
-						warn := fmt.Sprintf("%q and %q are \"similar\"", word, word2)
-						actionWarn(c, warn+" (search results may include either/or combinations)")
+						actionWarnf(c, "%q and %q are \"similar\" (search results may include either/or combinations)",
+							word, word2)
 					}
 				}
 			}

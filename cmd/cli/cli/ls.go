@@ -357,8 +357,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 			return fmt.Errorf(errFmtExclusive, qflprn(diffFlag), qflprn(nameOnlyFlag))
 		}
 		if len(props) > 2 {
-			warn := fmt.Sprintf("flag %s is incompatible with the value of %s", qflprn(nameOnlyFlag), qflprn(objPropsFlag))
-			actionWarn(c, warn)
+			actionWarnf(c, "flag %s is incompatible with the value of %s", qflprn(nameOnlyFlag), qflprn(objPropsFlag))
 		}
 		msg.SetFlag(apc.LsNameOnly)
 		msg.Props = apc.GetPropsName

@@ -131,9 +131,8 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {
 			return err
 		}
-		warn := fmt.Sprintf("destination %s doesn't exist and will be created with configuration copied from the source (%s))",
+		actionWarnf(c, "destination %s doesn't exist and will be created with configuration copied from the source (%s)",
 			bckTo.Cname(""), bckFrom.Cname(""))
-		actionWarn(c, warn)
 	}
 
 	dryRun := flagIsSet(c, copyDryRunFlag)
@@ -207,8 +206,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 		from, to     = bckFrom.Cname(""), bckTo.Cname("")
 	)
 	if showProgress && flagIsSet(c, copyDryRunFlag) {
-		warn := fmt.Sprintf("dry-run option is incompatible with %s - "+NIY, qflprn(progressFlag))
-		actionWarn(c, warn)
+		actionWarnf(c, "dry-run option is incompatible with %s - "+NIY, qflprn(progressFlag))
 		showProgress = false
 	}
 	// copy: with/wo progress/wait

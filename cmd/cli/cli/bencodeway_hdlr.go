@@ -144,13 +144,13 @@ func ecEncodeHandler(c *cli.Context) error {
 			return err
 		}
 		if !checkAndRecover {
-			var warn string
 			if bprops.EC.ObjSizeLimit == cmn.ObjSizeToAlwaysReplicate {
-				warn = fmt.Sprintf("%s is already configured for (P + 1 = %d copies)", bck.Cname(""), bprops.EC.ParitySlices+1)
+				actionWarnf(c, "%s is already configured for (P + 1 = %d copies) - proceeding to run anyway",
+					bck.Cname(""), bprops.EC.ParitySlices+1)
 			} else {
-				warn = fmt.Sprintf("%s is already erasure-coded for (D=%d, P=%d)", bck.Cname(""), numd, nump)
+				actionWarnf(c, "%s is already erasure-coded for (D=%d, P=%d) - proceeding to run anyway",
+					bck.Cname(""), numd, nump)
 			}
-			actionWarn(c, warn+" - proceeding to run anyway")
 			warned = true
 		}
 	}

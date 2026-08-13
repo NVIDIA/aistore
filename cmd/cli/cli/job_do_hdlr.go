@@ -1156,9 +1156,7 @@ func stopJobHandler(c *cli.Context) error {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if daemonID != "" {
-		warn := fmt.Sprintf("node ID %q will be ignored (stopping job on a given node not supported)\n",
-			daemonID)
-		actionWarn(c, warn)
+		actionWarnf(c, "node ID %q will be ignored (stopping job on a given node not supported)\n", daemonID)
 	}
 
 	// warn

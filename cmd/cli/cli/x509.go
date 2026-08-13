@@ -6,7 +6,6 @@
 package cli
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
@@ -185,8 +184,7 @@ func validateCertHandler(c *cli.Context) error {
 	if cnt == 0 {
 		actionDone(c, "Done: all TLS certificates are identical and valid")
 	} else if cnt > 1 {
-		warn := fmt.Sprintf("\n==== %d differences overall ====", cnt)
-		actionWarn(c, warn)
+		actionWarnf(c, "\n==== %d differences overall ====", cnt)
 	}
 	return nil
 }
@@ -199,9 +197,8 @@ func compareCerts(c *cli.Context, info, i cos.StrKVs, pnode, snode *meta.Snode) 
 		if ok1 && ok2 && v1 == v2 {
 			continue
 		}
-		warn := fmt.Sprintf("primary %s and node %s have different TLS certificates: (%s, %q) != (%s, %q)",
+		actionWarnf(c, "primary %s and node %s have different TLS certificates: (%s, %q) != (%s, %q)",
 			pnode, snode, k, v1, k, v2)
-		actionWarn(c, warn)
 		return 1
 	}
 	return 0
@@ -213,12 +210,10 @@ func checkCertExpiration(c *cli.Context, info cos.StrKVs, snode *meta.Snode) (cn
 	for _, k := range certKeys(info) {
 		switch {
 		case isCertKey(k, certKeyError):
-			warn := fmt.Sprintf("node %s certificate issue (%s): %s", snode, k, info[k])
-			actionWarn(c, warn)
+			actionWarnf(c, "node %s certificate issue (%s): %s", snode, k, info[k])
 			cnt++
 		case isCertKey(k, certKeyWarning):
-			warn := fmt.Sprintf("node %s certificate warning (%s): %s", snode, k, info[k])
-			actionWarn(c, warn)
+			actionWarnf(c, "node %s certificate warning (%s): %s", snode, k, info[k])
 		}
 	}
 	return cnt

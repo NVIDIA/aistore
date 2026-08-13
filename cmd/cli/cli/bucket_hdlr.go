@@ -1020,11 +1020,8 @@ func listAnyHandler(c *cli.Context) error {
 		// (e.g. 'ais ls object ais://blah ...')
 		if cmn.IsErrEmptyProvider(err) {
 			uri = c.Args().Get(1)
-			var (
-				err2 error
-				warn = fmt.Sprintf("word %q is misplaced, see 'ais ls --help' for details", c.Args().Get(0))
-			)
-			actionWarn(c, warn)
+			var err2 error
+			actionWarnf(c, "word %q is misplaced, see 'ais ls --help' for details", c.Args().Get(0))
 			bck, objName, err2 = cmn.ParseBckObjectURI(uri, opts)
 			if err2 == nil {
 				goto proceed

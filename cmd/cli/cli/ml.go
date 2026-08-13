@@ -253,9 +253,8 @@ func (ctx *mossReqCtx) load(c *cli.Context) error {
 		// warn
 		if ctx.req.OutputFormat != "" && outputFormat != "" && ctx.req.OutputFormat != outputFormat {
 			if !flagIsSet(c, nonverboseFlag) {
-				warn := fmt.Sprintf("output format %s in the command line takes precedence (over %s specified %s)",
+				actionWarnf(c, "output format %s in the command line takes precedence (over %s specified %s)",
 					outputFormat, qflprn(specFlag), ctx.req.OutputFormat)
-				actionWarn(c, warn)
 			}
 		}
 	}
@@ -270,8 +269,7 @@ func (ctx *mossReqCtx) load(c *cli.Context) error {
 		if ctx.batchSize > 0 {
 			// note: early return to generate multiple apc.MossReq requests and batches
 			if ctx.outFile != "" {
-				warn := fmt.Sprintf("output file %s is ignored in multi-batch mode (batch size %d)", ctx.outFile, ctx.batchSize)
-				actionWarn(c, warn)
+				actionWarnf(c, "output file %s is ignored in multi-batch mode (batch size %d)", ctx.outFile, ctx.batchSize)
 			}
 			return nil
 		}

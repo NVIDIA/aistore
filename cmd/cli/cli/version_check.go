@@ -70,8 +70,7 @@ func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool
 			if ds.Node.Snode.InMaintOrDecomm() {
 				continue
 			}
-			warn := fmt.Sprintf(fmtEmptyVer, ds.Node.Snode.StringEx())
-			actionWarn(c, warn)
+			actionWarnf(c, fmtEmptyVer, ds.Node.Snode.StringEx())
 			continue
 		}
 
@@ -124,7 +123,7 @@ func countMismatch(stmap teb.NodeStatusMap, ds *stats.NodeStatus, matchFunc func
 
 func verWarn(c *cli.Context, snode *meta.Snode, role, version, expected string, cnt int, incompat bool) {
 	var (
-		sname, warn, s1, s2 string
+		sname, format, s1, s2 string
 	)
 	if role == apc.Proxy {
 		sname = meta.Pname(snode.ID())
@@ -137,15 +136,13 @@ func verWarn(c *cli.Context, snode *meta.Snode, role, version, expected string, 
 		s1 = fmt.Sprintf(" and %d other %s node%s", cnt, role, cos.Plural(cnt))
 	}
 	if incompat {
-		warn = fmt.Sprintf("node %s%s run%s aistore software version %s, which is not compatible with the CLI (expecting v%s)",
-			sname, s1, s2, version, expected)
+		format = "node %s%s run%s aistore software version %s, which is not compatible with the CLI (expecting v%s)"
 	} else {
 		if flagIsSet(c, nonverboseFlag) {
 			return
 		}
-		warn = fmt.Sprintf("node %s%s run%s aistore software version %s, which may not be fully compatible with the CLI (expecting v%s)",
-			sname, s1, s2, version, expected)
+		format = "node %s%s run%s aistore software version %s, which may not be fully compatible with the CLI (expecting v%s)"
 	}
 
-	actionWarn(c, warn+"\n")
+	actionWarnf(c, format+"\n", sname, s1, s2, version, expected)
 }
