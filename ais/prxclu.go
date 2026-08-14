@@ -630,26 +630,22 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			}
 		}
 		if config.Auth.ClientAuthRequired != clientAuthRequired {
-			_warnUpd("config.auth.client_auth_required", strconv.FormatBool(config.Auth.ClientAuthRequired), strconv.FormatBool(clientAuthRequired))
+			_warnUpd("auth.client_auth_required", strconv.FormatBool(config.Auth.ClientAuthRequired), strconv.FormatBool(clientAuthRequired))
 		}
 	}
-	if toUpdate.Auth != nil && toUpdate.Auth.IntraCluster != nil &&
-		toUpdate.Auth.IntraCluster.RequestAuth != nil {
-		cur := config.Auth.IntraRequestAuthConfigured() // raw config bit (compare with SignVerifyEnabled() runtime)
-		upd := *toUpdate.Auth.IntraCluster.RequestAuth
-		if cmn.IsV50Bridge() {
-			if !cur && upd {
-				nlog.Warningln("intra-cluster auth (Ed25519 sign/verify) is a no-op on a v5.0 bridge release")
-			}
-		} else if cur != upd {
-			_warnUpd("config.auth.intra_cluster.request_auth", strconv.FormatBool(cur), strconv.FormatBool(upd))
+	if toUpdate.Auth != nil && toUpdate.Auth.IntraCluster != nil {
+		if upd := toUpdate.Auth.IntraCluster.RequestAuth; upd != nil {
+			_warnIntraUpd("auth.intra_cluster.request_auth", config.Auth.IntraRequestAuthConfigured(), *upd)
+		}
+		if upd := toUpdate.Auth.IntraCluster.SelfJoinAuth; upd != nil {
+			_warnIntraUpd("auth.intra_cluster.self_join_auth", config.Auth.SelfJoinAuthConfigured(), *upd)
 		}
 	}
 	// 3. Tracing
 	if toUpdate.Tracing != nil {
 		from, _ := jsoniter.Marshal(config.Tracing)
 		to, _ := jsoniter.Marshal(toUpdate.Tracing)
-		_warnUpd("config.tracing", string(from), string(to))
+		_warnUpd("tracing", string(from), string(to))
 	}
 	// 4. config.Timeout section
 	if toUpdate.Timeout != nil {
@@ -726,6 +722,19 @@ func switchHTTPS(toCfg *cmn.ProxyConfToSet, fromCfg *cmn.ProxyConf, use bool) {
 	toCfg.DiscoveryURL = f(toCfg.DiscoveryURL, fromCfg.DiscoveryURL)
 
 	nlog.Errorln("Warning: _prior_ to restart make sure to remove all copies of cluster maps")
+}
+
+// v5.0 bridge: warn a no-op; otherwise warn of change
+func _warnIntraUpd(knob string, cur, upd bool) {
+	if cmn.IsV50Bridge() {
+		if !cur && upd {
+			nlog.Warningln(knob + " is a no-op on a v5.0 bridge release")
+		}
+		return
+	}
+	if cur != upd {
+		_warnUpd(knob, strconv.FormatBool(cur), strconv.FormatBool(upd))
+	}
 }
 
 func _warnUpd(what, from, to string) {

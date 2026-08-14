@@ -48,11 +48,11 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 
 	rom.clientAuthRequired = cfg.Auth.ClientAuthRequired
 
-	// fire a local action upon actual transition:
-	// - runtime-only
-	// - if needed, other knobs can be wired later in a similar way
+	// NOTE:
+	// - the v5.0 bridge gate lives inside signVerifyEnabled()
+	// - callers of Rom.SignVerifyEnabled() must not re-check IsV50Bridge()
 	prev := rom.signVerifyEnabled
-	rom.signVerifyEnabled = cfg.Auth.SignVerifyEnabled()
+	rom.signVerifyEnabled = cfg.Auth.signVerifyEnabled()
 	if cur := rom.signVerifyEnabled; cur != prev && onSignVerifyToggle != nil {
 		onSignVerifyToggle(cur)
 	}

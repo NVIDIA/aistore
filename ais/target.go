@@ -832,7 +832,7 @@ func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) 
 	net := _reqNet(r)
 
 	// 1. unsigned
-	if cmn.IsV50Bridge() || !cmn.Rom.SignVerifyEnabled() {
+	if !cmn.Rom.SignVerifyEnabled() {
 		return t._verifyUnsigned(r, dpq, net)
 	}
 

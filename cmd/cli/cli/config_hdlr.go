@@ -91,6 +91,13 @@ updated via CLI. To update local config, lookup it's location, edit the file
 (it's a plain text), and restart the node.
 `
 
+const (
+	confIntraRequestAuth = "auth.intra_cluster.request_auth"
+	confSelfJoinAuth     = "auth.intra_cluster.self_join_auth"
+)
+
+var minVerIntraClusterAuth = cos.Version{Major: 5, Minor: 1}
+
 var (
 	configCmd = cli.Command{
 		Name:  commandConfig,
@@ -240,6 +247,8 @@ func setCluConfigHandler(c *cli.Context) error {
 	}
 
 show:
+	warnIntraClusterAuthPrestage(c, nvs)
+
 	var listed = make(cos.StrKVs)
 	for what := range nvs {
 		section := strings.Split(what, cmn.IterFieldNameSepa)[0]
@@ -253,6 +262,39 @@ show:
 	}
 	actionDone(c, "\nCluster config updated")
 	return nil
+}
+
+func warnIntraClusterAuthPrestage(c *cli.Context, nvs cos.StrKVs) {
+	const fmtwarn = "'%s' is accepted and persisted, but has no effect until all nodes are running v5.1 or later"
+	var (
+		requestAuth, selfJoinAuth string
+	)
+	if v, ok := nvs[confIntraRequestAuth]; ok {
+		if cos.IsParseBool(v) {
+			requestAuth = confIntraRequestAuth
+		}
+	}
+	if v, ok := nvs[confSelfJoinAuth]; ok {
+		if cos.IsParseBool(v) {
+			selfJoinAuth = confSelfJoinAuth
+		}
+	}
+	if requestAuth == "" && selfJoinAuth == "" {
+		return
+	}
+
+	_, tstatusMap, pstatusMap, err := fillStatusMapNoVersion(c, "")
+	if err == nil && supportsAllAtLeast(tstatusMap, minVerIntraClusterAuth) &&
+		supportsAllAtLeast(pstatusMap, minVerIntraClusterAuth) {
+		return
+	}
+
+	if requestAuth != "" {
+		actionWarnf(c, fmtwarn+"; proxy mediation takes effect immediately", requestAuth)
+	}
+	if selfJoinAuth != "" {
+		actionWarnf(c, fmtwarn, selfJoinAuth)
+	}
 }
 
 // an extra call to get the current (ref 836)

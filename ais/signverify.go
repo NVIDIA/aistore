@@ -88,6 +88,8 @@ func (svs *svState) init() {
 }
 
 func (svs *svState) set(on bool) {
+	debug.Assert(on == cmn.Rom.SignVerifyEnabled())
+
 	cur := svs.cur.Load()
 	if cur.on == on {
 		return
@@ -100,11 +102,7 @@ func (svs *svState) set(on bool) {
 }
 
 func (svs *svState) sign() bool {
-	if cmn.IsV50Bridge() {
-		return false
-	}
-
-	on := cmn.Rom.SignVerifyEnabled()
+	on := cmn.Rom.SignVerifyEnabled() // false on a v5.0 bridge (see cmn.signVerifyEnabled)
 	cur := svs.cur.Load()
 
 	// A note on stateful (config <=> htrun.svs) redundancy:
@@ -122,10 +120,7 @@ func (*svState) graceExpired(last int64) bool {
 }
 
 func (svs *svState) strict() bool {
-	if cmn.IsV50Bridge() {
-		return false
-	}
-	on := cmn.Rom.SignVerifyEnabled()
+	on := cmn.Rom.SignVerifyEnabled() // ditto
 	cur := svs.cur.Load()
 
 	if !on || cur.on != on {

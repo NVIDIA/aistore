@@ -940,7 +940,7 @@ func TestLsoLocalGetLocation(t *testing.T) {
 		// Starting v5.0, target locations are not directly accessible when
 		// AuthN or intra-cluster signing requires proxy mediation.
 		config                = tools.GetClusterConfig(t)
-		directAccessForbidden = config.Auth.ClientAuthRequired || config.Auth.IntraRequestAuthConfigured()
+		directAccessForbidden = config.Auth.RequiresProxyMediation()
 	)
 	if testing.Short() {
 		m.num = 100
@@ -1042,7 +1042,7 @@ func TestLsoCloudGetLocation(t *testing.T) {
 
 		// starting v5.0
 		config                = tools.GetClusterConfig(t)
-		directAccessForbidden = config.Auth.ClientAuthRequired || config.Auth.IntraRequestAuthConfigured()
+		directAccessForbidden = config.Auth.RequiresProxyMediation()
 	)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})

@@ -23,7 +23,7 @@ const (
 	testDstID   = "t1"
 )
 
-func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
+func newTestProxy(t *testing.T, requestAuthConfigured bool) *proxy {
 	t.Helper()
 
 	old := cmn.GCO.Get()
@@ -36,7 +36,7 @@ func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 
 	config := cmn.GCO.BeginUpdate()
 	config.Auth.IntraCluster = new(cmn.IntraClusterConf)
-	config.Auth.IntraCluster.RequestAuth = signVerifyEnabled
+	config.Auth.IntraCluster.RequestAuth = requestAuthConfigured
 	cmn.GCO.CommitUpdate(config)
 	cmn.Rom.Set(&config.ClusterConfig)
 
@@ -63,7 +63,9 @@ func newTestProxy(t *testing.T, signVerifyEnabled bool) *proxy {
 
 	// mirror node startup order: svs.init -> keypair -> config-driven toggle
 	p.htrun.svs.init()
-	p.htrun.toggleSignVerify(signVerifyEnabled) // as the cmn.Rom.Set callback would
+
+	// (is false on a v5.0 bridge)
+	p.htrun.toggleSignVerify(cmn.Rom.SignVerifyEnabled())
 
 	return p
 }
@@ -110,10 +112,10 @@ func parseRedirect(t *testing.T, s string) *url.URL {
 	return u
 }
 
-func makeRedirect(t *testing.T, signVerifyEnabled bool, method, path, rawQuery string, smapVer int64) (*proxy, *http.Request, *url.URL) {
+func makeRedirect(t *testing.T, requestAuthConfigured bool, method, path, rawQuery string, smapVer int64) (*proxy, *http.Request, *url.URL) {
 	t.Helper()
 
-	p := newTestProxy(t, signVerifyEnabled)
+	p := newTestProxy(t, requestAuthConfigured)
 	dst := newTestSnode(t)
 	req := newReq(method, path, rawQuery)
 

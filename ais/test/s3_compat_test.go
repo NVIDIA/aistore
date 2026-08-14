@@ -179,7 +179,7 @@ func TestS3TargetEmptyBucket(t *testing.T) {
 	expectedStatus := http.StatusBadRequest
 	expectedCode := aiss3.ErrCodeInvalidRequest
 	config := tools.GetClusterConfig(t)
-	requiresProxyMediation := config.Auth.ClientAuthRequired || config.Auth.IntraRequestAuthConfigured()
+	requiresProxyMediation := config.Auth.RequiresProxyMediation()
 	if requiresProxyMediation {
 		expectedStatus = http.StatusForbidden
 		expectedCode = aiss3.ErrCodeAccessDenied

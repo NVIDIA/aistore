@@ -893,9 +893,9 @@ func (h *htrun) signIntra(req *http.Request, smap *smapX) {
 }
 
 // verify an intra-cluster control-plane request against the sender's
-// Smap-resident verifying key. Caller gates on SignVerifyEnabled().
+// Smap-resident verifying key. Caller gates on cmn.Rom.SignVerifyEnabled().
 func (h *htrun) verifyIntra(r *http.Request, snode *meta.Snode, sid, sname string, smap *smapX) (int, error) {
-	if cmn.IsV50Bridge() || !cmn.Rom.SignVerifyEnabled() {
+	if !cmn.Rom.SignVerifyEnabled() {
 		return 0, nil
 	}
 	debug.Assert(len(h.si.VerifyingKey) == cos.NodeSigningPublicKeySize)

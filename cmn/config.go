@@ -2493,19 +2493,31 @@ func (c *AuthConf) CopyTo(dst *AuthConf) {
 	}
 }
 
+// v5.0 is the bridge release between the v4.x symmetric CSK/HMAC mechanism and
+// v5.1+ per-node Ed25519 signing and node-join security.
+
 // TODO: [backward compatibility] remove in 5.1, along with all call sites
 func IsV50Bridge() bool { return strings.HasPrefix(VersionAIStore, "5.0") }
+
+// Two predicates, two distinct questions. Do not conflate:
+//   - IntraRequestAuthConfigured: what the operator asked for (raw config bit)
+//   - signVerifyEnabled:          what this binary will actually do
 
 func (c *AuthConf) IntraRequestAuthConfigured() bool {
 	return c.IntraCluster != nil && c.IntraCluster.RequestAuth
 }
 
-func (c *AuthConf) SignVerifyEnabled() bool {
+func (c *AuthConf) signVerifyEnabled() bool {
 	return c.IntraRequestAuthConfigured() && !IsV50Bridge()
+}
+
+func (c *AuthConf) SelfJoinAuthConfigured() bool {
+	return c.IntraCluster != nil && c.IntraCluster.SelfJoinAuth
 }
 
 // Starting with v5.0, direct access to AIS targets is rejected when either AuthN
 // or intra-cluster request signing is configured: both require proxy mediation.
+// Note that auth.intra_cluster.self_join_auth is deliberately NOT part of this.
 func (c *AuthConf) RequiresProxyMediation() bool {
 	return c.ClientAuthRequired || c.IntraRequestAuthConfigured()
 }
@@ -3541,8 +3553,9 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	Rom.Set(&config.ClusterConfig)
 	Rom.testingEnv = config.TestingEnv()
 
+	// operator messaging (see IsV50Bridge)
 	if IsV50Bridge() && config.Auth.IntraRequestAuthConfigured() {
-		debug.Assert(!config.Auth.SignVerifyEnabled())
+		debug.Assert(!Rom.SignVerifyEnabled())
 		nlog.Warningln("auth.intra_cluster.request_auth: configured but disabled in v5.0 bridge")
 	}
 
