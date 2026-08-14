@@ -567,6 +567,20 @@ func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, co
 	return token, http.StatusOK, nil
 }
 
+// Generates a short-lived admin token for AuthN's own requests to a cluster.
+// Audience is the target cluster, which at registration time is not yet in the DB.
+func (m *mgr) selfToken(cluID string) (string, error) {
+	now := time.Now().UTC()
+	regClaims := &jwt.RegisteredClaims{
+		Issuer:    m.cm.GetExternalURL().String(),
+		Subject:   config.ServiceName,
+		Audience:  []string{cluID},
+		ExpiresAt: jwt.NewNumericDate(now.Add(selfTokenTTL)),
+		IssuedAt:  jwt.NewNumericDate(now),
+	}
+	return m.getSigner().SignToken(tok.AdminClaims(regClaims))
+}
+
 func (m *mgr) buildClaims(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) (*tok.AISClaims, error) {
 	now := time.Now().UTC()
 	exp, expErr := m.getExp(now, msg)

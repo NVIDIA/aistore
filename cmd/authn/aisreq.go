@@ -22,21 +22,14 @@ import (
 const (
 	retrySleep     = 3 * time.Second
 	softErrTimeout = time.Minute
+	selfTokenTTL   = 5 * time.Minute
 )
 
 // Send request to the defined cluster to validate that the cluster will allow tokens issued by this AuthN service
-func (m *mgr) validateCluster(ctx context.Context, clu *authn.CluACL) (code int, err error) {
+func (m *mgr) validateCluster(ctx context.Context, clu *authn.CluACL) (int, error) {
 	conf := m.getSigner().ValidationConf()
 	body := cos.MustMarshal(conf)
-	tag := "validate-signer"
-
-	for _, u := range clu.URLs {
-		if code, err = m.call(ctx, http.MethodPost, u, apc.Tokens, body, tag); err == nil {
-			return
-		}
-		err = fmt.Errorf("failed to %s with %s: %v", tag, clu, err)
-	}
-	return
+	return m.call(ctx, http.MethodPost, clu, apc.Tokens, body, "validate-signer")
 }
 
 // update list of revoked tokens on all clusters
@@ -58,16 +51,10 @@ func (m *mgr) broadcast(ctx context.Context, method, path string, body []byte, t
 	for _, clu := range clus {
 		wg.Add(1)
 		go func(clu *authn.CluACL) {
-			var err error
-			for _, u := range clu.URLs {
-				if _, err = m.call(ctx, method, u, path, body, tag); err == nil {
-					break
-				}
+			defer wg.Done()
+			if _, err := m.call(ctx, method, clu, path, body, tag); err != nil {
+				nlog.Errorln(err)
 			}
-			if err != nil {
-				nlog.Errorf("failed to %s with %s: %v", tag, clu, err)
-			}
-			wg.Done()
 		}(clu)
 	}
 	wg.Wait()
@@ -84,18 +71,25 @@ func (m *mgr) syncRevokedTokens(ctx context.Context, clu *authn.CluACL) (int, er
 		return code, nil
 	}
 	body := cos.MustMarshal(authn.TokenList{Tokens: tokenList})
+	return m.call(ctx, http.MethodDelete, clu, apc.Tokens, body, tag)
+}
+
+// Send to the cluster's URLs in order, stopping at the first that responds
+func (m *mgr) call(ctx context.Context, method string, clu *authn.CluACL, path string, body []byte, tag string) (code int, err error) {
 	for _, u := range clu.URLs {
-		code, err = m.call(ctx, http.MethodDelete, u, apc.Tokens, body, tag)
-		if err == nil {
+		if code, err = m.callURL(ctx, method, u, path, body, clu.ID, tag); err == nil {
 			return code, nil
 		}
 		err = fmt.Errorf("failed to %s with %s: %v", tag, clu, err)
-		nlog.Errorln(err)
 	}
 	return code, err
 }
 
-func (m *mgr) call(ctx context.Context, method, proxyURL, path string, injson []byte, tag string) (int, error) {
+func (m *mgr) callURL(ctx context.Context, method, proxyURL, path string, injson []byte, cluID, tag string) (int, error) {
+	token, err := m.selfToken(cluID)
+	if err != nil {
+		return 0, err
+	}
 	client := m.clientH
 	if cos.IsHTTPS(proxyURL) {
 		client = m.clientTLS
@@ -121,6 +115,7 @@ func (m *mgr) call(ctx context.Context, method, proxyURL, path string, injson []
 			cleanupResp() // (cleanup prev. response)
 
 			req.Header.Set(cos.HdrContentType, cos.ContentJSON)
+			req.Header.Set(apc.HdrAuthorization, apc.AuthenticationTypeBearer+" "+token)
 			resp, err = client.Do(req) //nolint:bodyclose // closed after args.Do() returns
 
 			if resp == nil {

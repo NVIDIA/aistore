@@ -7,8 +7,11 @@ package main
 import (
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -308,6 +311,150 @@ func TestGetExp(t *testing.T) {
 			tassert.Errorf(t, exp.Time.Equal(tt.expected), "expected expiration %v, got %v", tt.expected, exp.Time)
 		})
 	}
+}
+
+func TestSelfToken(t *testing.T) {
+	const (
+		adminPass   = "admin-pass"
+		externalURL = "https://auth.example.com"
+		target      = "clu-target"
+		registered  = "clu-registered"
+	)
+	t.Setenv(env.AisAuthAdminPassword, adminPass)
+	conf := &authn.Config{
+		Server: authn.ServerConf{Secret: "test-secret", Expire: cos.Duration(time.Hour)},
+		Net:    authn.NetConf{ExternalURL: externalURL},
+	}
+	testMgr := newMgrWithConf(t, conf)
+
+	// a cluster already in the DB must not widen the audience
+	_, err := testMgr.db.Set(clustersCollection, registered, &authn.CluACL{ID: registered})
+	tassert.CheckFatal(t, err)
+
+	before := time.Now().UTC().Truncate(time.Second)
+	token, err := testMgr.selfToken(target)
+	tassert.CheckFatal(t, err)
+
+	claims, err := testMgr.validateTokenSignature(t.Context(), token)
+	tassert.CheckFatal(t, err)
+	tassert.Error(t, claims.IsAdmin, "Expected admin claims")
+	validateCommonClaims(t, claims, config.ServiceName, externalURL, before)
+	tassert.Errorf(t, len(claims.Audience) == 1 && claims.Audience[0] == target,
+		"Expected audience [%s], got %v", target, claims.Audience)
+}
+
+// Stands in for a cluster's /v1/tokens endpoint, recording the tokens AuthN presents
+type mockCluster struct {
+	*httptest.Server
+	tokens []string
+	status int
+	mu     sync.Mutex
+}
+
+func newMockCluster(t *testing.T, status int) *mockCluster {
+	mc := &mockCluster{status: status}
+	mc.Server = httptest.NewServer(http.HandlerFunc(mc.handle))
+	t.Cleanup(mc.Close)
+	return mc
+}
+
+func (mc *mockCluster) handle(w http.ResponseWriter, r *http.Request) {
+	token, ok := strings.CutPrefix(r.Header.Get(apc.HdrAuthorization), apc.AuthenticationTypeBearer+" ")
+	if !ok || token == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	mc.mu.Lock()
+	mc.tokens = append(mc.tokens, token)
+	mc.mu.Unlock()
+	w.WriteHeader(mc.status)
+}
+
+// Tokens presented so far, in request order
+func (mc *mockCluster) presented() []string {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return slices.Clone(mc.tokens)
+}
+
+func validateHandshakeClaims(t *testing.T, m *mgr, token, cluID string) {
+	claims, err := m.validateTokenSignature(t.Context(), token)
+	tassert.CheckFatal(t, err)
+	tassert.Error(t, claims.IsAdmin, "Expected admin claims")
+	tassert.Errorf(t, len(claims.Audience) == 1 && claims.Audience[0] == cluID,
+		"Expected audience [%s], got %v", cluID, claims.Audience)
+}
+
+func newHandshakeMgr(t *testing.T) *mgr {
+	t.Setenv(env.AisAuthAdminPassword, "admin-pass")
+	return newMgrWithConf(t, &authn.Config{
+		Server: authn.ServerConf{Secret: "test-secret", Expire: cos.Duration(time.Hour)},
+		Net:    authn.NetConf{ExternalURL: "https://auth.example.com"},
+	})
+}
+
+// Registering a cluster must present an admin token that cluster can verify
+func TestRegisterClusterHandshake(t *testing.T) {
+	const (
+		newID   = "clu-new"
+		otherID = "clu-other"
+	)
+	newACL := func(mc *mockCluster) *authn.CluACL {
+		return &authn.CluACL{ID: newID, Alias: "newclu", URLs: []string{mc.URL}}
+	}
+
+	// Audience is the cluster being registered, which is not yet in the DB
+	t.Run("FirstCluster", func(t *testing.T) {
+		testMgr, mc := newHandshakeMgr(t), newMockCluster(t, http.StatusOK)
+
+		_, err := testMgr.registerCluster(t.Context(), newACL(mc))
+		tassert.CheckFatal(t, err)
+
+		presented := mc.presented()
+		tassert.Fatalf(t, len(presented) == 1, "Expected a single request, got %d", len(presented))
+		validateHandshakeClaims(t, testMgr, presented[0], newID)
+		_, _, err = testMgr.getCluster(newID)
+		tassert.CheckFatal(t, err)
+	})
+
+	// An already-registered cluster must not widen the audience
+	t.Run("ExistingClusters", func(t *testing.T) {
+		testMgr, mc := newHandshakeMgr(t), newMockCluster(t, http.StatusOK)
+		_, err := testMgr.db.Set(clustersCollection, otherID, &authn.CluACL{ID: otherID})
+		tassert.CheckFatal(t, err)
+
+		_, err = testMgr.registerCluster(t.Context(), newACL(mc))
+		tassert.CheckFatal(t, err)
+
+		presented := mc.presented()
+		tassert.Fatalf(t, len(presented) == 1, "Expected a single request, got %d", len(presented))
+		validateHandshakeClaims(t, testMgr, presented[0], newID)
+	})
+
+	// A rejected handshake must leave no half-registered cluster behind
+	t.Run("Rejected", func(t *testing.T) {
+		testMgr, mc := newHandshakeMgr(t), newMockCluster(t, http.StatusUnauthorized)
+
+		_, err := testMgr.registerCluster(t.Context(), newACL(mc))
+		tassert.Fatal(t, err != nil, "Expected registration to fail")
+
+		_, _, err = testMgr.getCluster(newID)
+		tassert.Error(t, err != nil, "Expected no cluster to be stored")
+	})
+
+	// Updating a cluster re-runs the same handshake
+	t.Run("Update", func(t *testing.T) {
+		testMgr, mc := newHandshakeMgr(t), newMockCluster(t, http.StatusOK)
+		_, err := testMgr.registerCluster(t.Context(), newACL(mc))
+		tassert.CheckFatal(t, err)
+
+		_, err = testMgr.updateCluster(t.Context(), newID, &authn.CluACL{ID: newID, Alias: "renamed"})
+		tassert.CheckFatal(t, err)
+
+		presented := mc.presented()
+		tassert.Fatalf(t, len(presented) == 2, "Expected register and update requests, got %d", len(presented))
+		validateHandshakeClaims(t, testMgr, presented[1], newID)
+	})
 }
 
 func TestGetAud(t *testing.T) {
