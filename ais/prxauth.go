@@ -31,8 +31,6 @@ type (
 	authManager struct {
 		// used for parsing and validating claims from token strings
 		tokenParser tok.Parser
-		// provides the configured keys for validating client key config and tokens
-		keyProvider tok.ServerKeyProvider
 		// provides thread-safe access to a cache of decrypted token claims
 		tokenMap *shardedTokenMap
 		// provides thread-safe access to an underlying map of tokens
@@ -97,7 +95,6 @@ func newAuthManager(config *cmn.Config, statsT stats.Tracker) *authManager {
 	}
 	return &authManager{
 		tokenParser:   tok.NewTokenParser(keyProvider, &config.Auth),
-		keyProvider:   keyProvider,
 		tokenMap:      newShardedTokenMap(TokenMapShardExponent),
 		revokedTokens: newRevokedTokensMap(),
 		cancelCtx:     rootCancel,
@@ -105,7 +102,7 @@ func newAuthManager(config *cmn.Config, statsT stats.Tracker) *authManager {
 }
 
 // Build a server key provider to fetch the key to use for JWT validation from config or OIDC issuers
-func newKeyProvider(ctx context.Context, config *cmn.Config, statsT stats.Tracker) (tok.ServerKeyProvider, error) {
+func newKeyProvider(ctx context.Context, config *cmn.Config, statsT stats.Tracker) (tok.KeyProvider, error) {
 	// If we have a key directly configured, use that
 	prov, err := tok.NewStaticKeyProvider(&config.Auth)
 	if prov != nil || (err != nil && !errors.Is(err, tok.ErrNoStaticKey)) {
@@ -291,25 +288,13 @@ func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Given a secret key or a public key, validate if that key is valid for requests to this cluster
+// Confirm this cluster accepts tokens issued by the caller
 func (p *proxy) validateKey(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathTokens.L, 0, false); err != nil {
 		return
 	}
-
-	reqConf := &authn.ServerConf{}
-	if err := cmn.ReadJSON(w, r, reqConf); err != nil {
-		return
-	}
-
-	if reqConf.Secret == "" && reqConf.PubKey == nil {
-		p.writeErrf(w, r, "no secret or public key provided to validate")
-		return
-	}
-	code, err := p.authn.keyProvider.ValidateKey(r.Context(), reqConf)
-	if err != nil {
-		p.writeErr(w, r, err, code)
-		return
+	if _, err := p.validateToken(r.Context(), r.Header); err != nil {
+		p.writeErr(w, r, err, http.StatusUnauthorized)
 	}
 }
 

@@ -13,14 +13,11 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
-	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -29,13 +26,6 @@ type (
 	KeyProvider interface {
 		// ResolveKey returns a key that should be used to validate the given token
 		ResolveKey(ctx context.Context, tok *jwt.Token) (any, error)
-	}
-
-	// ServerKeyProvider extends KeyProvider with functionality only used on the AIS server side (not authN service)
-	ServerKeyProvider interface {
-		KeyProvider
-		// ValidateKey checks a given public key or secret checksum and returns an error iff it is invalid
-		ValidateKey(ctx context.Context, conf *authn.ServerConf) (int, error)
 	}
 
 	StaticKeyProvider struct {
@@ -125,34 +115,4 @@ func (s *StaticKeyProvider) ResolveKey(_ context.Context, t *jwt.Token) (any, er
 	default:
 		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", t.Method, t.Header["alg"])
 	}
-}
-
-// ValidateKey checks if the request struct contains a key or checksum consistent with our current config
-func (s *StaticKeyProvider) ValidateKey(_ context.Context, reqConf *authn.ServerConf) (int, error) {
-	// If RSA public key is provided
-	if reqConf.PubKey != nil {
-		if s.rsaPublicKey == nil {
-			return http.StatusBadRequest, errors.New("cannot validate public key: AIS not configured with RSA")
-		}
-		reqKey, err := parsePubKey(*reqConf.PubKey)
-		if err != nil {
-			return http.StatusBadRequest, fmt.Errorf("invalid public key (%q)", cos.SHead(*reqConf.PubKey))
-		}
-		if !reqKey.Equal(s.rsaPublicKey) {
-			return http.StatusForbidden, fmt.Errorf("provided public key (%q) does not match cluster's public key", cos.SHead(*reqConf.PubKey))
-		}
-	}
-
-	// If HMAC secret checksum is provided
-	if reqConf.Secret != "" {
-		secStr := string(s.hmacSecret)
-		if secStr == "" {
-			return http.StatusBadRequest, errors.New("cannot validate secret checksum: AIS not configured with HMAC secret")
-		}
-		currentHash := cos.ChecksumB2S(cos.UnsafeB(secStr), cos.ChecksumSHA256)
-		if currentHash != reqConf.Secret {
-			return http.StatusForbidden, fmt.Errorf("invalid secret sha256(%q)", cos.SHead(reqConf.Secret))
-		}
-	}
-	return 0, nil
 }

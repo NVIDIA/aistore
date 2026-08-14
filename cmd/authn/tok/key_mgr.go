@@ -7,7 +7,6 @@ package tok
 
 import (
 	"context"
-	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -301,41 +299,6 @@ func (km *KeyCacheManager) ResolveKey(ctx context.Context, tok *jwt.Token) (any,
 		return nil, fmt.Errorf("invalid 'kid' header -- required for fetching public key from issuer: %w", err)
 	}
 	return km.getPubKey(ctx, iss, kid)
-}
-
-// ValidateKey checks if the public key provided in the request struct exists with any configured issuers
-func (km *KeyCacheManager) ValidateKey(ctx context.Context, reqConf *authn.ServerConf) (int, error) {
-	if reqConf.Secret != "" {
-		return http.StatusBadRequest, errors.New("cannot validate provided HMAC secret checksum: AIS cluster is configured for OIDC issuer-based key validation")
-	}
-	if reqConf.PubKey == nil {
-		return http.StatusBadRequest, errors.New("no public key provided to validate")
-	}
-	reqKey, parseErr := parsePubKey(*reqConf.PubKey)
-	if parseErr != nil {
-		return http.StatusBadRequest, fmt.Errorf("invalid public key: %w", parseErr)
-	}
-	if !km.isInitialized() {
-		return http.StatusInternalServerError, ErrJWKSCacheNotInitialized
-	}
-	for iss := range km.allowedIss {
-		keySet, err := km.getKeySetFromCache(ctx, iss)
-		if err != nil {
-			nlog.Warningf("OIDC public key validation skipping issuer %s: %v", iss, err)
-			continue
-		}
-		for it := keySet.Keys(ctx); it.Next(ctx); {
-			key := it.Pair().Value.(jwk.Key)
-			var rawKey any
-			if keyErr := key.Raw(&rawKey); keyErr != nil {
-				continue
-			}
-			if rsaPub, ok := rawKey.(*rsa.PublicKey); ok && rsaPub.Equal(reqKey) {
-				return 0, nil
-			}
-		}
-	}
-	return http.StatusForbidden, errors.New("provided public key not found in any allowed issuer's JWKS")
 }
 
 func (km *KeyCacheManager) getPubKey(ctx context.Context, iss, kid string) (any, error) {

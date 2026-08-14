@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -220,58 +219,6 @@ func TestKeyCacheManager_Population_UnresponsiveDiscovery(t *testing.T) {
 		t, err == nil,
 		"Key Cache Manager population should not raise error for valid unresponsive discovery URL, got %v", err,
 	)
-}
-
-func rsaPubKeyPEM(t *testing.T, key *rsa.PrivateKey) string {
-	pubBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	tassert.CheckFatal(t, err)
-	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))
-}
-
-func TestKeyCacheManager_ValidateKey(t *testing.T) {
-	env := setupTokenTestEnv(t, true)
-
-	t.Run("MatchingKey", func(t *testing.T) {
-		pemStr := rsaPubKeyPEM(t, env.rsaKey)
-		code, err := env.keyCache.ValidateKey(t.Context(), &authn.ServerConf{PubKey: &pemStr})
-		tassert.Errorf(t, err == nil, "Expected matching key to validate, got: %v", err)
-		tassert.Errorf(t, code == 0, "Expected status 0, got %d", code)
-	})
-
-	t.Run("NonMatchingKey", func(t *testing.T) {
-		pemStr := rsaPubKeyPEM(t, genRSAKey(t))
-		code, err := env.keyCache.ValidateKey(t.Context(), &authn.ServerConf{PubKey: &pemStr})
-		tassert.Error(t, err != nil, "Expected non-matching key to be rejected")
-		tassert.Errorf(t, code == http.StatusForbidden, "Expected 403, got %d", code)
-	})
-
-	t.Run("HMACSecretRejected", func(t *testing.T) {
-		code, err := env.keyCache.ValidateKey(t.Context(), &authn.ServerConf{Secret: "some-checksum"})
-		tassert.Error(t, err != nil, "Expected HMAC secret to be rejected by OIDC-based provider")
-		tassert.Errorf(t, code == http.StatusBadRequest, "Expected 400, got %d", code)
-	})
-
-	t.Run("NilPubKey", func(t *testing.T) {
-		code, err := env.keyCache.ValidateKey(t.Context(), &authn.ServerConf{})
-		tassert.Error(t, err != nil, "Expected nil pubkey to be rejected")
-		tassert.Errorf(t, code == http.StatusBadRequest, "Expected 400, got %d", code)
-	})
-
-	t.Run("InvalidPEM", func(t *testing.T) {
-		bad := "not-a-valid-pem"
-		code, err := env.keyCache.ValidateKey(t.Context(), &authn.ServerConf{PubKey: &bad})
-		tassert.Error(t, err != nil, "Expected invalid PEM to be rejected")
-		tassert.Errorf(t, code == http.StatusBadRequest, "Expected 400, got %d", code)
-	})
-
-	t.Run("UninitializedCache", func(t *testing.T) {
-		authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{"https://example.com"}}}
-		kcm := tok.NewKeyCacheManager(kcmConf(authConf.OIDC), nil, nil)
-		pemStr := rsaPubKeyPEM(t, env.rsaKey)
-		code, err := kcm.ValidateKey(t.Context(), &authn.ServerConf{PubKey: apc.Ptr(pemStr)})
-		tassert.Error(t, err != nil, "Expected validation to fail with uninitialized cache")
-		tassert.Errorf(t, code == http.StatusInternalServerError, "Expected 500, got %d", code)
-	})
 }
 
 //
