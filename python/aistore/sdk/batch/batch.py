@@ -7,7 +7,7 @@ from io import BytesIO
 from typing import Generator, List, Tuple, Union, Optional
 from urllib3.response import HTTPResponse
 
-from aistore.sdk.batch.extractor.extractor_manager import ExtractorManager
+from aistore.sdk.batch.extractor.extractor_registry import get_extractor
 from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
 from aistore.sdk.batch.types import MossIn, MossOut, MossReq, MossResp
 from aistore.sdk.bucket import Bucket
@@ -119,7 +119,7 @@ class Batch:
         if objects is not None:
             self._add_objects(objects)
 
-        self.extractor = ExtractorManager().get_extractor(output_format)
+        self.extractor = get_extractor(output_format)
 
     @property
     def requests_list(self) -> List[MossIn]:

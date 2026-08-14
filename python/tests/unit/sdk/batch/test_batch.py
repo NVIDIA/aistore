@@ -229,13 +229,12 @@ class TestBatch(unittest.TestCase):
             list(batch.get())
         self.assertIn("No objects added to batch", str(context.exception))
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_get_batch_streaming(self, mock_extractor_manager_cls):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_get_batch_streaming(self, mock_get_extractor):
         """Test Batch get() in streaming mode."""
         # Setup extractor manager mock before creating batch
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -274,16 +273,13 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(result[1][0].obj_name, "file2.txt")
         self.assertEqual(result[1][1], b"content2")
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    @patch("aistore.sdk.batch.batch.get_extractor")
     @patch("aistore.sdk.batch.batch.MultipartDecoder")
-    def test_get_batch_non_streaming(
-        self, mock_decoder_class, mock_extractor_manager_cls
-    ):
+    def test_get_batch_non_streaming(self, mock_decoder_class, mock_get_extractor):
         """Test Batch get() in non-streaming mode."""
         # Setup extractor manager mock before creating batch
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -381,13 +377,12 @@ class TestBatch(unittest.TestCase):
             )
         self.assertIn("Unsupported object type", str(context.exception))
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_moss_out_with_error_message(self, mock_extractor_manager_cls):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_moss_out_with_error_message(self, mock_get_extractor):
         """Test handling of MossOut with error message."""
         # Setup extractor manager mock before creating batch
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -552,16 +547,13 @@ class TestBatch(unittest.TestCase):
         batch.add("file3.txt")
         self.assertEqual(len(batch), 3)
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    @patch("aistore.sdk.batch.batch.get_extractor")
     @patch("aistore.sdk.batch.batch.MultipartDecoder")
-    def test_batch_decode_as_stream(
-        self, mock_decoder_class, mock_extractor_manager_cls
-    ):
+    def test_batch_decode_as_stream(self, mock_decoder_class, mock_get_extractor):
         """Test Batch get() with decode_as_stream=True."""
         # Setup extractor manager mock before creating batch
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -941,13 +933,12 @@ class TestBatch(unittest.TestCase):
         # Only objects should be cleared
         self.assertEqual(len(batch), 0)
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_get_with_clear_batch_false(self, mock_extractor_manager_cls):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_get_with_clear_batch_false(self, mock_get_extractor):
         """Test that get(clear_batch=False) preserves batch objects."""
         # Setup extractor manager mock
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -991,15 +982,12 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(batch.request.moss_in[0].obj_name, "file1.txt")
         self.assertEqual(batch.request.moss_in[1].obj_name, "file2.txt")
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_get_clear_batch_false_allows_accumulation(
-        self, mock_extractor_manager_cls
-    ):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_get_clear_batch_false_allows_accumulation(self, mock_get_extractor):
         """Test that clear_batch=False allows adding more objects after get()."""
         # Setup extractor manager mock
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -1033,13 +1021,12 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(batch.request.moss_in[0].obj_name, "file1.txt")
         self.assertEqual(batch.request.moss_in[1].obj_name, "file2.txt")
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_batch_reset_after_get(self, mock_extractor_manager_cls):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_batch_reset_after_get(self, mock_get_extractor):
         """Test that batch request is reset after get() execution."""
         # Setup extractor manager mock before creating batch
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -1079,13 +1066,12 @@ class TestBatch(unittest.TestCase):
             len(batch.request.moss_in), 0, "moss_in list should be cleared after get()"
         )
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_batch_reuse_after_get(self, mock_extractor_manager_cls):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_batch_reuse_after_get(self, mock_get_extractor):
         """Test that batch can be reused after get() is executed."""
         # Setup extractor manager mock before creating batch
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -1210,11 +1196,11 @@ class TestBatch(unittest.TestCase):
         # Verify error message contains 429
         self.assertIn("429", str(context.exception))
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_batch_429_with_multiple_requests(self, mock_extractor_mgr):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_batch_429_with_multiple_requests(self, mock_get_extractor):
         """Test that 429 handling works correctly across multiple batch requests."""
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_mgr.return_value.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -1382,13 +1368,12 @@ class TestBatch(unittest.TestCase):
         # Should NOT have 'coloc' in serialized dict when colocation is None
         self.assertNotIn("coloc", req_dict)
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_get_batch_with_colocation_query_param(self, mock_extractor_manager_cls):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_get_batch_with_colocation_query_param(self, mock_get_extractor):
         """Test that colocation is passed as query parameter when > Colocation.NONE."""
         # Setup extractor manager mock
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,
@@ -1431,15 +1416,12 @@ class TestBatch(unittest.TestCase):
                 streaming_get=True,
             )
 
-    @patch("aistore.sdk.batch.batch.ExtractorManager")
-    def test_get_batch_without_colocation_no_query_param(
-        self, mock_extractor_manager_cls
-    ):
+    @patch("aistore.sdk.batch.batch.get_extractor")
+    def test_get_batch_without_colocation_no_query_param(self, mock_get_extractor):
         """Test that coloc query param is NOT set when colocation is Colocation.NONE."""
         # Setup extractor manager mock
-        mock_extractor_manager = mock_extractor_manager_cls.return_value
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor_manager.get_extractor.return_value = mock_extractor
+        mock_get_extractor.return_value = mock_extractor
 
         batch = Batch(
             self.mock_request_client,

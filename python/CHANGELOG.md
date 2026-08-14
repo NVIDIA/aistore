@@ -77,6 +77,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Fixed multiple correctness bugs in the streaming multipart decoder:
   - Infinite spin when boundary or header terminator was absent at EOF and corrupted/truncated headers when header and body bytes arrived in the same chunk or near the buffer size limit.
   - Body content misidentified as headers, stray newline prepended to headers on subsequent parts, epilogue bytes appended to the last part's body, and body bytes dropped under mixed line endings.
+- Fixed data race in ExtractorManager by replacing the singleton pattern with a module-level format map; 
+  get_extractor() is now a plain dict lookup, thread-safe via Python's import system.
 
 ## [1.25.0] - 2026-05-20
 
