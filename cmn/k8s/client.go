@@ -1,11 +1,12 @@
 // Package k8s: initialization, client, and misc. helpers
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package k8s
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -46,30 +47,30 @@ type (
 		client    kubernetes.Interface
 		config    *rest.Config
 		namespace string
-		err       error
 	}
 )
 
 var (
 	_defaultK8sClient *defaultClient
+	// Returned by GetClient when the client was never set — unexpected if IsK8s() is true
+	errClientNotInit = errors.New("k8s client failed to initialize")
 )
 
-func _initClient() {
+func _initClient() error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		_defaultK8sClient = &defaultClient{err: err}
-		return
+		return err
 	}
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		_defaultK8sClient = &defaultClient{err: err}
-		return
+		return err
 	}
 	_defaultK8sClient = &defaultClient{
 		namespace: _namespace(),
 		client:    client,
 		config:    config,
 	}
+	return nil
 }
 
 // Retrieve pod namespace
@@ -79,17 +80,9 @@ func _initClient() {
 func _namespace() (namespace string) {
 	// production
 	if namespace = os.Getenv(env.AisK8sNamespace); namespace != "" {
-		debug.Func(func() {
-			ns := os.Getenv(defaultNamespaceEnv)
-			debug.Assertf(ns == "" || ns == namespace, "%q vs %q", ns, namespace)
-		})
 		return
 	}
-	// otherwise, try default env var
-	if namespace = os.Getenv(defaultNamespaceEnv); namespace != "" {
-		return
-	}
-	// finally, last resort kludge
+	// parse from service account
 	if ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
 		if namespace = strings.TrimSpace(string(ns)); namespace != "" {
 			return
@@ -99,8 +92,8 @@ func _namespace() (namespace string) {
 }
 
 func GetClient() (Client, error) {
-	if _defaultK8sClient.err != nil {
-		return nil, _defaultK8sClient.err
+	if _defaultK8sClient == nil {
+		return nil, errClientNotInit
 	}
 	return _defaultK8sClient, nil
 }

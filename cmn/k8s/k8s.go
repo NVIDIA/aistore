@@ -14,6 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+
+	"k8s.io/client-go/rest"
 )
 
 type PodStatus struct {
@@ -24,10 +26,7 @@ type PodStatus struct {
 	ExitCode int32
 }
 
-const (
-	defaultPodNameEnv   = "HOSTNAME"
-	defaultNamespaceEnv = "POD_NAMESPACE"
-)
+const defaultPodNameEnv = "HOSTNAME"
 
 const (
 	Default = "default"
@@ -35,7 +34,10 @@ const (
 	Svc     = "svc"
 )
 
-const nonK8s = "non-Kubernetes deployment"
+const (
+	nonK8s        = "non-Kubernetes deployment"
+	missingK8sEnv = "K8s environment variable not found"
+)
 
 var (
 	NodeName string // assign upon successful initialization
@@ -44,29 +46,36 @@ var (
 )
 
 func Init() {
-	_initClient()
-	if _, err := GetClient(); err != nil {
-		nlog.Infoln(nonK8s, "(init k8s-client returned: '"+_short(err)+"')")
+	if err := _initClient(); err != nil {
+		// Non-K8s deployment
+		if softNonK8s(err) {
+			nlog.Infoln(nonK8s, "(init k8s-client returned: '"+_short(err)+"')")
+			return
+		}
+		cos.ExitLogf("k8s client initialization failed: %v", err)
 		return
 	}
-	podName := _podName()
+	// in-cluster: both the node name and the pod name are required
+	nodeName := os.Getenv(env.AisK8sNode)
+	if nodeName == "" {
+		cos.ExitLogf("%s: %q", missingK8sEnv, env.AisK8sNode)
+	}
+	podName := resolvePodName()
 	if podName == "" {
-		nlog.Infof("Env %q is not set => %s", env.AisK8sPod, nonK8s)
-		return
+		cos.ExitLogf("%s: %q (or %q)", missingK8sEnv, env.AisK8sPod, defaultPodNameEnv)
 	}
-	_initNode()
-	nlog.Infoln("Pod info:", "name", podName, ",namespace", _namespace(), ",node", NodeName)
+	nlog.Infof("Pod info: name: %q, namespace: %q, node: %q", podName, _namespace(), nodeName)
+
+	NodeName = nodeName // last: IsK8s() implies an initialized client
 }
 
-// Resolve this node's name from the environment.
-func _initNode() {
-	if NodeName = os.Getenv(env.AisK8sNode); NodeName == "" {
-		cos.ExitLogf("Failed to get K8s node name: env %q is not set", env.AisK8sNode)
-	}
+// softNonK8s is true when client init failed because we are not in a cluster.
+// Any other init error is a hard failure (misconfigured in-cluster deploy).
+func softNonK8s(err error) bool {
+	return errors.Is(err, rest.ErrNotInCluster)
 }
 
-// Resolve this pod's name from the environment (empty when not in a pod).
-func _podName() string {
+func resolvePodName() string {
 	podName := os.Getenv(env.AisK8sPod)
 	if podName == "" {
 		return os.Getenv(defaultPodNameEnv)
