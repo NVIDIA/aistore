@@ -101,6 +101,12 @@ func GetStatsAndStatus(bp BaseParams, node *meta.Snode) (ds *stats.NodeStatus, e
 	return ds, err
 }
 
+// GetSoftwareVersion returns the software version reported by a specific node.
+func GetSoftwareVersion(bp BaseParams, node *meta.Snode) (version string, err error) {
+	err = getNodeReverseStr(bp, node, apc.WhatSoftwareVersion, &version)
+	return
+}
+
 func GetDiskRWUtilCap(bp BaseParams, tid string) (out *fs.TcdfExt, err error) {
 	out = &fs.TcdfExt{}
 	err = _nodeStats(bp, tid, apc.WhatDiskRWUtilCap, out)

@@ -267,6 +267,7 @@ const (
 	// stats and status
 	WhatNodeStats          = "node_stats"  // redundant
 	WhatNodeStatsAndStatus = "node_status" // current
+	WhatSoftwareVersion    = "software_version"
 
 	WhatDiskRWUtilCap = "disk" // read/write stats, disk utilization, capacity
 

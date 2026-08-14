@@ -474,6 +474,28 @@ func TestGetNodeStats(t *testing.T) {
 	tlog.Logfln("%+v", stats)
 }
 
+func TestGetSoftwareVersion(t *testing.T) {
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
+	target, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	expected, ok := cos.ParseVersion(cmn.VersionAIStore)
+	tassert.Fatalf(t, ok, "failed to parse expected version %q", cmn.VersionAIStore)
+
+	for _, node := range []*meta.Snode{smap.Primary, target} {
+		version, err := api.GetSoftwareVersion(bp, node)
+		tassert.CheckFatal(t, err)
+		parsed, ok := cos.ParseVersion(version)
+		tassert.Fatalf(t, ok, "%s: failed to parse version %q", node, version)
+		// aisnode appends its build ID to cmn.VersionAIStore (for example, "5.0.rc2.<git-sha>").
+		tassert.Errorf(t, strings.HasPrefix(parsed.String(), expected.String()+"."),
+			"%s: expected version %q, got %q", node, expected, parsed)
+		tassert.Errorf(t, parsed.String() == version,
+			"%s: version round-trip: expected %q, got %q", node, version, parsed.String())
+	}
+}
+
 func TestGetClusterStats(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)

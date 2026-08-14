@@ -1400,6 +1400,9 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		body = statsNode
 	case apc.WhatMetricNames:
 		body = h.statsT.GetMetricNames()
+	case apc.WhatSoftwareVersion:
+		writeXid(w, daemon.version)
+		return
 	case apc.WhatCertificate: // (see also: daeLoadX509, cluLoadX509)
 		props := certloader.Mgr.Props()
 		if len(props) == 0 {

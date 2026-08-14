@@ -92,6 +92,20 @@ func getNodeReverse(bp BaseParams, node *meta.Snode, what string, out any) (err 
 	return err
 }
 
+func getNodeReverseStr(bp BaseParams, node *meta.Snode, what string, out *string) (err error) {
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathReverseDae.S
+		reqParams.Query = url.Values{apc.QparamWhat: []string{what}}
+		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
+	}
+	_, err = reqParams.doReqStr(out)
+	FreeRp(reqParams)
+	return err
+}
+
 func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, label ...cos.MountpathLabel) error {
 	var q url.Values
 	if len(label) > 0 {
