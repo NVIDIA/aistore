@@ -201,21 +201,70 @@ func TestAuthConfValidateFailure(t *testing.T) {
 }
 
 func TestAuthConfValidateSuccess(t *testing.T) {
+	const joinSecretPath = "/var/run/secrets/ais/node-join"
+
 	tests := []struct {
 		auth cmn.AuthConf
 		desc string
 	}{
-		{auth: cmn.AuthConf{ClientAuthRequired: true, Signature: &cmn.AuthSignatureConf{Key: "key", Method: "HS256"}}, desc: "valid signature"},
-		{auth: cmn.AuthConf{ClientAuthRequired: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls}}, desc: "valid OIDC"},
-		{auth: cmn.AuthConf{ClientAuthRequired: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls, JWKSCacheConf: &cmn.JWKSCacheConf{MinBackgroundRefresh: cos.Duration(10 * time.Minute)}}}, desc: "valid OIDC with custom background refresh"},
-		{auth: cmn.AuthConf{ClientAuthRequired: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls, JWKSCacheConf: &cmn.JWKSCacheConf{MinRotationRefresh: cos.Duration(5 * time.Second)}}}, desc: "valid OIDC with custom rotation refresh"},
-		{auth: cmn.AuthConf{ClientAuthRequired: false, Signature: nil, OIDC: nil}, desc: "not required"},
-		{auth: cmn.AuthConf{IntraCluster: &cmn.IntraClusterConf{SelfJoinAuth: true}}, desc: "self-join auth pre-staged"},
+		{
+			auth: cmn.AuthConf{
+				ClientAuthRequired: true,
+				Signature:          &cmn.AuthSignatureConf{Key: "key", Method: "HS256"},
+			},
+			desc: "valid signature",
+		},
+		{
+			auth: cmn.AuthConf{
+				ClientAuthRequired: true,
+				OIDC:               &cmn.OIDCConf{AllowedIssuers: validIssUrls},
+			},
+			desc: "valid OIDC",
+		},
+		{
+			auth: cmn.AuthConf{
+				ClientAuthRequired: true,
+				OIDC: &cmn.OIDCConf{
+					AllowedIssuers: validIssUrls,
+					JWKSCacheConf: &cmn.JWKSCacheConf{
+						MinBackgroundRefresh: cos.Duration(10 * time.Minute),
+					},
+				},
+			},
+			desc: "valid OIDC with custom background refresh",
+		},
+		{
+			auth: cmn.AuthConf{
+				ClientAuthRequired: true,
+				OIDC: &cmn.OIDCConf{
+					AllowedIssuers: validIssUrls,
+					JWKSCacheConf: &cmn.JWKSCacheConf{
+						MinRotationRefresh: cos.Duration(5 * time.Second),
+					},
+				},
+			},
+			desc: "valid OIDC with custom rotation refresh",
+		},
+		{
+			auth: cmn.AuthConf{},
+			desc: "not required",
+		},
+		{
+			auth: cmn.AuthConf{
+				IntraCluster: &cmn.IntraClusterConf{
+					NodeJoinSecretPath: joinSecretPath,
+				},
+			},
+			desc: "node-join secret path configured",
+		},
 	}
+
 	for _, tt := range tests {
-		if err := tt.auth.Validate(); err != nil {
-			t.Errorf("AuthConf.Validate() for case [%s] with %#v raised unexpected error: %v", tt.desc, tt.auth, err)
-		}
+		t.Run(tt.desc, func(t *testing.T) {
+			if err := tt.auth.Validate(); err != nil {
+				t.Errorf("AuthConf.Validate() for %#v raised unexpected error: %v", tt.auth, err)
+			}
+		})
 	}
 }
 
@@ -237,22 +286,27 @@ func TestAuthConfFieldRename(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, intra.IntraCluster.RequestAuth, "failed to decode legacy intra-cluster config: %+v", intra)
 
-	err = jsoniter.Unmarshal([]byte(`{"enabled":true,"client_auth_required":false,"intra_cluster":{"enabled":true,"request_auth":false,"self_join_auth":true}}`), &auth)
+	err = jsoniter.Unmarshal([]byte(`{"enabled":true,"client_auth_required":false,"intra_cluster":{"enabled":true,"request_auth":false,"node_join_secret_path":"/etc/ais/join-secret"}}`), &auth)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, !auth.ClientAuthRequired && !auth.IntraCluster.RequestAuth && auth.IntraCluster.SelfJoinAuth,
+	tassert.Fatalf(t, !auth.ClientAuthRequired && !auth.IntraCluster.RequestAuth && auth.IntraCluster.NodeJoinSecretPath == "/etc/ais/join-secret",
 		"explicit auth fields must take precedence: %+v", auth)
 
 	var update cmn.ConfigToSet
-	err = update.FillFromKVS([]string{"auth.client_auth_required=true", "auth.intra_cluster.request_auth=true", "auth.intra_cluster.self_join_auth=true"})
+	err = update.FillFromKVS([]string{"auth.client_auth_required=true", "auth.intra_cluster.request_auth=true", "auth.intra_cluster.node_join_secret_path=/etc/ais/join-secret"})
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, *update.Auth.ClientAuthRequired && *update.Auth.IntraCluster.RequestAuth && *update.Auth.IntraCluster.SelfJoinAuth,
+	tassert.Fatalf(t, *update.Auth.ClientAuthRequired && *update.Auth.IntraCluster.RequestAuth && *update.Auth.IntraCluster.NodeJoinSecretPath == "/etc/ais/join-secret",
 		"failed to parse renamed auth fields: %+v", update.Auth)
 	err = update.FillFromKVS([]string{"auth.enabled=true"})
 	tassert.Fatalf(t, err != nil, "legacy dotted auth field must be rejected")
 	err = update.FillFromKVS([]string{"auth.intra_cluster.enabled=true"})
 	tassert.Fatalf(t, err != nil, "legacy dotted intra-cluster field must be rejected")
-	err = jsoniter.Unmarshal([]byte(`{"intra_cluster":{"self_join_auth":"true"}}`), &auth)
-	tassert.Fatalf(t, err != nil, "non-boolean self-join requirement must be rejected")
+	// self_join_auth never shipped in a tagged release: no legacy alias is owed,
+	// and a stray occurrence must not fail the load
+	auth = cmn.AuthConf{}
+	err = jsoniter.Unmarshal([]byte(`{"intra_cluster":{"self_join_auth":true,"node_join_secret_path":"/etc/ais/join-secret"}}`), &auth)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, auth.NodeJoinSecretPath() == "/etc/ais/join-secret",
+		"the never-released self_join_auth must be ignored, not aliased: %+v", auth.IntraCluster)
 }
 
 func TestAuthSignatureConf_ValidMethods(t *testing.T) {

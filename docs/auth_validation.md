@@ -159,7 +159,7 @@ The `auth` section controls three separate security boundaries:
 |---|---|---|
 | `auth.client_auth_required` | Client requests reaching AIS proxies | Requires JWT/OIDC authentication and authorization when true |
 | `auth.intra_cluster.request_auth` | Protected node-to-node requests and redirects | Accepted and persisted, but signing and verification remain inactive until v5.1; direct client access to targets is rejected |
-| `auth.intra_cluster.self_join_auth` | A node's startup self-join request to the primary proxy | Accepted and persisted, but has no runtime effect until v5.1 |
+| `auth.intra_cluster.node_join_secret_path` | Node admission, including self-join and administrative join (see [Node-Join Authentication](/docs/auth_node_join.md)) | Accepted and persisted, but has no runtime effect until v5.1 |
 
 These settings are independent. For example, an operator can pre-stage either
 intra-cluster policy without requiring JWT/OIDC authentication from clients.
@@ -172,5 +172,5 @@ The request-authentication window settings apply only to
 - `auth.intra_cluster.rotation_grace`: time to accept old and new signing keys during rotation
 
 In v5.1, nodes use per-node Ed25519 keys distributed through cluster metadata to
-sign and verify protected intra-cluster requests. Self-join authentication is
-also enforced only when `auth.intra_cluster.self_join_auth` is true.
+sign and verify protected intra-cluster requests. Node-join authentication is
+also enforced only when `auth.intra_cluster.node_join_secret_path` is nonempty.

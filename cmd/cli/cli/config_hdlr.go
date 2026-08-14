@@ -92,8 +92,8 @@ updated via CLI. To update local config, lookup it's location, edit the file
 `
 
 const (
-	confIntraRequestAuth = "auth.intra_cluster.request_auth"
-	confSelfJoinAuth     = "auth.intra_cluster.self_join_auth"
+	confIntraRequestAuth   = "auth.intra_cluster.request_auth"
+	confNodeJoinSecretPath = "auth.intra_cluster.node_join_secret_path"
 )
 
 var minVerIntraClusterAuth = cos.Version{Major: 5, Minor: 1}
@@ -267,19 +267,19 @@ show:
 func warnIntraClusterAuthPrestage(c *cli.Context, nvs cos.StrKVs) {
 	const fmtwarn = "'%s' is accepted and persisted, but has no effect until all nodes are running v5.1 or later"
 	var (
-		requestAuth, selfJoinAuth string
+		requestAuth, nodeJoinSecretPath string
 	)
 	if v, ok := nvs[confIntraRequestAuth]; ok {
 		if cos.IsParseBool(v) {
 			requestAuth = confIntraRequestAuth
 		}
 	}
-	if v, ok := nvs[confSelfJoinAuth]; ok {
-		if cos.IsParseBool(v) {
-			selfJoinAuth = confSelfJoinAuth
+	if v, ok := nvs[confNodeJoinSecretPath]; ok {
+		if v != "" {
+			nodeJoinSecretPath = confNodeJoinSecretPath
 		}
 	}
-	if requestAuth == "" && selfJoinAuth == "" {
+	if requestAuth == "" && nodeJoinSecretPath == "" {
 		return
 	}
 
@@ -292,8 +292,8 @@ func warnIntraClusterAuthPrestage(c *cli.Context, nvs cos.StrKVs) {
 	if requestAuth != "" {
 		actionWarnf(c, fmtwarn+"; proxy mediation takes effect immediately", requestAuth)
 	}
-	if selfJoinAuth != "" {
-		actionWarnf(c, fmtwarn, selfJoinAuth)
+	if nodeJoinSecretPath != "" {
+		actionWarnf(c, fmtwarn, nodeJoinSecretPath)
 	}
 }
 

@@ -110,7 +110,7 @@ $ ais config cluster auth --json
         },
         "intra_cluster": {
             "request_auth": false,
-            "self_join_auth": false,
+            "node_join_secret_path": "",
             "ttl": "0s",
             "nonce_window": "1m",
             "rotation_grace": "1m"

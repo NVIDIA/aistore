@@ -61,7 +61,6 @@ var (
 		"distributed_sort.missing_shards":     dsortSupportedReactions,
 		"auth.client_auth_required":           supportedBool,
 		"auth.intra_cluster.request_auth":     supportedBool,
-		"auth.intra_cluster.self_join_auth":   supportedBool,
 		"checksum.enabl_read_range":           supportedBool,
 		"checksum.validate_cold_get":          supportedBool,
 		"checksum.validate_warm_get":          supportedBool,
