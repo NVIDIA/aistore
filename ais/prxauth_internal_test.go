@@ -118,6 +118,27 @@ func TestAuth_Manager_UpdateRevokedList_CleansExpiredTokens(t *testing.T) {
 	tassert.Error(t, allRevoked == nil, "Expected allRevoked to be nil after cleanup of expired tokens")
 }
 
+// A list that is not newer leaves both the revoked list and the token cache untouched
+func TestAuth_Manager_UpdateRevokedList_StaleVersion(t *testing.T) {
+	mockParser := newMockTokenParser()
+	mockParser.claimsMap["tok1"] = validClaim
+	tkMap := newShardedTokenMap(2)
+	tkMap.set("tok1", validClaim)
+	am := &authManager{
+		tokenMap:      tkMap,
+		revokedTokens: newRevokedTokensMap(),
+		tokenParser:   mockParser,
+	}
+	am.revokedTokens.version = 5
+
+	res := am.updateRevokedList(t.Context(), &tokenList{Tokens: []string{"tok1"}, Version: 3})
+
+	tassert.Error(t, res == nil, "expected a nil result for a stale list")
+	tassert.Error(t, !am.revokedTokens.contains("tok1"), "expected nothing to be revoked")
+	_, ok := am.tokenMap.getClaims("tok1")
+	tassert.Error(t, ok, "expected the token cache to be left alone")
+}
+
 // A caller cannot choose the revoked-list version, which would let it reject later updates
 func TestAuth_Manager_UpdateRevokedList_AssignsVersion(t *testing.T) {
 	am := &authManager{
@@ -140,8 +161,7 @@ func TestAuth_Manager_RevokedTokenList(t *testing.T) {
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   newMockTokenParser(),
 	}
-	err := am.revokedTokens.update(&tokenList{Tokens: []string{"tok1"}})
-	tassert.Error(t, err == nil, "expected manual token update to succeed")
+	am.revokedTokens.update(&tokenList{Tokens: []string{"tok1"}})
 	list := am.revokedTokenList()
 	tassert.Error(t, len(list.Tokens) == 1, "Expected only 1 entry after update")
 	tassert.Error(t, list.Tokens[0] == "tok1", "Expected 'tok1' to be revoked after update")
@@ -198,8 +218,7 @@ func TestAuth_RevokedTokensMap_UpdateAndContains(t *testing.T) {
 	r := newRevokedTokensMap()
 	tl := &tokenList{Tokens: []string{"a", "b"}}
 
-	err := r.update(tl)
-	tassert.Error(t, err == nil, "expected manual token update to succeed")
+	r.update(tl)
 	tassert.Error(t, r.contains("a"), "expected token 'a' in revokedTokens map")
 	tassert.Error(t, r.contains("b"), "expected token 'b' in revokedTokens map")
 	tassert.Error(t, !r.contains("c"), "unexpected token 'c' found in revokedTokens map")
@@ -208,37 +227,32 @@ func TestAuth_RevokedTokensMap_UpdateAndContains(t *testing.T) {
 func TestAuth_RevokedTokensMap_GetAll(t *testing.T) {
 	r := newRevokedTokensMap()
 	tassert.Error(t, r.getAll() == nil, "expected nil for empty map from getAll()")
-	err := r.update(&tokenList{Tokens: []string{"tok1", "tok2"}})
-	tassert.Error(t, err == nil, "expected manual token update to succeed")
+	r.update(&tokenList{Tokens: []string{"tok1", "tok2"}})
 	tl := r.getAll()
 	tassert.Error(t, tl != nil && len(tl.Tokens) == 2, "expected two tokens returned from getAll")
 }
 
 func TestAuth_RevokedTokensMap_Update_ManualRevoke(t *testing.T) {
 	r := newRevokedTokensMap()
-	err := r.update(&tokenList{Version: 0})
-	tassert.Error(t, err == nil, "expected nil error for manual revoke")
+	r.update(&tokenList{Version: 0})
 	tassert.Error(t, r.version == 2, "expected version to increment to 2 after manual revoke")
 }
 
 func TestAuth_RevokedTokensMap_CheckVersion(t *testing.T) {
 	r := newRevokedTokensMap()
 	r.version = 5
-	err := r.update(&tokenList{Version: 6})
-	tassert.Errorf(t, err == nil, "expected success with higher version, got: %v", err)
+	r.update(&tokenList{Version: 6})
 	tassert.Errorf(t, r.version == 6, "expected version updated to 6, got %d", r.version)
 
 	r.version = 10
-	err = r.update(&tokenList{Version: 8})
-	tassert.Error(t, err != nil, "expected error for lower version")
-	tassert.Errorf(t, r.version == 10, "version should remain 10 after error, received %d", r.version)
+	r.update(&tokenList{Version: 8})
+	tassert.Errorf(t, r.version == 10, "version should remain 10, received %d", r.version)
 }
 
 func TestAuth_RevokedTokensMap_Cleanup(t *testing.T) {
 	// Currently only removing revoked tokens that have expired
 	r := newRevokedTokensMap()
-	err := r.update(&tokenList{Tokens: []string{"good", "expired", "bad"}})
-	tassert.Error(t, err == nil, "expected manual token update to succeed")
+	r.update(&tokenList{Tokens: []string{"good", "expired", "bad"}})
 	tassert.Fatalf(t, len(r.revokedTokens) == 3, "expected only the 3 new entries in the revoked list")
 	parser := &mockTokenParser{
 		validateMap: map[string]error{
@@ -252,14 +266,13 @@ func TestAuth_RevokedTokensMap_Cleanup(t *testing.T) {
 	tassert.Error(t, !r.contains("expired"), "expired token should have been removed")
 }
 
-func TestAuth_RevokedTokensMap_Concurrency(t *testing.T) {
+func TestAuth_RevokedTokensMap_Concurrency(_ *testing.T) {
 	r := newRevokedTokensMap()
 	wg := sync.WaitGroup{}
 
 	wg.Go(func() {
 		for i := range 100 {
-			err := r.update(&tokenList{Tokens: []string{fmt.Sprintf("tok-%d", i)}})
-			tassert.Error(t, err == nil, "expected manual token update to succeed")
+			r.update(&tokenList{Tokens: []string{fmt.Sprintf("tok-%d", i)}})
 		}
 	})
 	wg.Go(func() {

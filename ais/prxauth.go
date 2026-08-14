@@ -169,9 +169,7 @@ func (a *authManager) stop() {
 
 // Add tokens to the list of invalid ones and clean up the list from expired tokens.
 func (a *authManager) updateRevokedList(ctx context.Context, newRevoked *tokenList) (allRevoked *tokenList) {
-	// Add new revoked tokens -- error if invalid version
-	err := a.revokedTokens.update(newRevoked)
-	if err != nil {
+	if !a.revokedTokens.update(newRevoked) {
 		return nil
 	}
 	// Remove revoked tokens from the token cache
@@ -300,6 +298,9 @@ func (p *proxy) validateKey(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathTokens.L, 0, false); err != nil {
+		return
+	}
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 	if p.forwardCP(w, r, nil, "revoke token") {
@@ -550,18 +551,19 @@ func newRevokedTokensMap() *RevokedTokensMap {
 	}
 }
 
-func (r *RevokedTokensMap) update(newRevoked *tokenList) error {
+// Returns false if the given list is not newer than the current one
+func (r *RevokedTokensMap) update(newRevoked *tokenList) bool {
 	// Lock over the whole operation as we must verify the final updated version matches the version number
 	r.Lock()
 	defer r.Unlock()
-	err := r.updateVersion(newRevoked)
-	if err != nil {
-		return err
+	// the only error here is that the given version is the same or older
+	if err := r.updateVersion(newRevoked); err != nil {
+		return false
 	}
 	for _, token := range newRevoked.Tokens {
 		r.revokedTokens[token] = true
 	}
-	return nil
+	return true
 }
 
 // Must be called under lock
