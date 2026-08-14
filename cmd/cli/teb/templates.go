@@ -45,7 +45,7 @@ const (
 		indent1 + "Deployment:\t{{ ( Deployments .Stst) }}\n" +
 		indent1 + "Status:\t{{ ( OnlineStatus .Stst) }}\n" +
 		indent1 + "Rebalance:\t{{FormatRebalance .Stst .CluConfig}}\n" +
-		indent1 + "Authentication:\t{{if .CluConfig.Auth.Enabled}}enabled{{else}}disabled{{end}}\n" +
+		indent1 + "Authentication:\t{{if .CluConfig.Auth.ClientAuthRequired}}enabled{{else}}disabled{{end}}\n" +
 		indent1 + "Version:\t{{ ( Versions .Stst) }}\n" +
 		indent1 + "Build:\t{{ ( BuildTimes .Stst) }}\n"
 
