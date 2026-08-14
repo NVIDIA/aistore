@@ -280,6 +280,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	nlog.Warningln(act, "entire cluster [", p.String(), smap.StringEx(), "] to", what, "\n\t[", npname, nsmap.StringEx(), "]")
 
 	// 4. get destination cluMeta from npsi
+	// TODO: authenticate destination metadata and preflight every source node's credential before applying it.
 	cargs := allocCargs()
 	{
 		cargs.si = npsi

@@ -361,6 +361,18 @@ test:short:
     - make test-short
     - make test-tracing-unit
 
+test:short:v5.1:
+  extends: test:short
+  variables:
+    AIS_AUTH_INTRA_CLUSTER_NODE_JOIN_SECRET_PATH: "$CI_PROJECT_DIR/.ais-node-join-secret"
+  rules:
+    - when: manual
+      allow_failure: true
+  before_script:
+    - sed -i 's/VersionAIStore = "[^"]*"/VersionAIStore = "5.1.rc1"/' cmn/ver_const.go
+    - head -c 32 /dev/urandom | base64 > "$AIS_AUTH_INTRA_CLUSTER_NODE_JOIN_SECRET_PATH"
+    - chmod 0400 "$AIS_AUTH_INTRA_CLUSTER_NODE_JOIN_SECRET_PATH"
+
 test:short:aisloader:
   <<: *test_short_def
   timeout: 20m

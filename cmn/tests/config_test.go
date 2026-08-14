@@ -266,6 +266,12 @@ func TestAuthConfValidateSuccess(t *testing.T) {
 			}
 		})
 	}
+
+	intra := &cmn.IntraClusterConf{NodeJoinSecretPath: joinSecretPath}
+	tassert.CheckFatal(t, (&cmn.AuthConf{IntraCluster: intra}).Validate())
+	tassert.Fatalf(t, intra.NonceWindow.D() == time.Minute, "unexpected node-join nonce window %v", intra.NonceWindow)
+	intra.NonceWindow = cos.Duration(11 * time.Minute)
+	tassert.Errorf(t, (&cmn.AuthConf{IntraCluster: intra}).Validate() != nil, "expected invalid node-join nonce window")
 }
 
 func TestAuthConfFieldRename(t *testing.T) {

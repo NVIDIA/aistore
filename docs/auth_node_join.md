@@ -204,9 +204,9 @@ other.
 Never write a secret to logs, error responses, cluster metadata, or command
 output.
 
-The file must be readable by the AIS process and by nobody else: typically,
+The file must be accessible by the AIS process and by nobody else: typically,
 K8s default mode `0400` owned by the account the node runs as. A credential that is
-group- or world-readable is rejected rather than used - a permissive mode is
+group- or world-accessible is rejected rather than used - a permissive mode is
 far more often an accident of provisioning than a deliberate choice.
 
 ## Version Behavior

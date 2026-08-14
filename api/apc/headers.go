@@ -145,6 +145,10 @@ const (
 	// cluster key (csk)
 	HdrSenderSig   = aisPrefix + "Caller-Sig"   // base64 RawURL HMAC-SHA256 over the intra request
 	HdrSenderNonce = aisPrefix + "Caller-Nonce" // monotonic nonce bound into the signature
+
+	// node-join shared secret (request and response)
+	HdrJoinTime = aisPrefix + "Join-Time"
+	HdrJoinSig  = aisPrefix + "Join-Sig"
 )
 
 const lais = len(aisPrefix)

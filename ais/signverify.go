@@ -5,10 +5,14 @@
 package ais
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -446,4 +450,75 @@ func _streamPayload(sb *cos.SB, trname, senderID string, sessID, smapVer int64, 
 	sb.WriteBytes(b8[:])
 
 	return sb.Bytes()[:sb.Len()]
+}
+
+// node-join secret
+
+// Initialized by initPhase2 before concurrent use and immutable thereafter.
+var nodeJoinSecret []byte
+
+func loadNodeJoinSecret(secretPath string) ([]byte, error) {
+	finfo, err := os.Stat(secretPath) // follows projected K8s Secret symlinks
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat node-join secret %q: %w", secretPath, err)
+	}
+
+	// See "Credential File" in docs/auth_node_join.md.
+	if mode := finfo.Mode().Perm(); mode&0o077 != 0 {
+		return nil, fmt.Errorf("node-join secret %q permissions %04o allow group or other access", secretPath, mode)
+	}
+
+	// TODO: load ordered rotation secrets (first signs, all verify)
+	secret, err := cos.ReadOneLine(secretPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read node-join secret %q: %w", secretPath, err)
+	}
+	if secret == "" {
+		return nil, fmt.Errorf("node-join secret %q is empty", secretPath)
+	}
+	return []byte(secret), nil
+}
+
+// node-join authentication
+//
+// An empty node_join_secret_path preserves legacy self-join. When configured,
+// the secret must load and self-join admission must be mutually authenticated.
+
+const (
+	nodeJoinRequestHMACDomain  = "ais-self-join-v1"
+	nodeJoinResponseHMACDomain = "ais-self-join-response-v1"
+)
+
+func nodeJoinSignature(domain string, secret, body []byte, timestamp string) string {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(domain))
+	mac.Write([]byte{0})
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte{0})
+	mac.Write(body)
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func signNodeJoin(domain string, secret, body []byte, hdr http.Header) {
+	debug.Assert(len(secret) > 0)
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	hdr.Set(apc.HdrJoinTime, timestamp)
+	hdr.Set(apc.HdrJoinSig, nodeJoinSignature(domain, secret, body, timestamp))
+}
+
+// TODO: add nonce (see docs/auth_node_join.md)
+func verifyNodeJoin(domain string, secret, body []byte, hdr http.Header, maxSkew time.Duration) error {
+	timestamp := hdr.Get(apc.HdrJoinTime)
+	unix, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return errors.New("invalid node-join timestamp")
+	}
+	if time.Since(time.Unix(unix, 0)).Abs() > maxSkew {
+		return errors.New("expired node-join timestamp")
+	}
+	expected := nodeJoinSignature(domain, secret, body, timestamp)
+	if !hmac.Equal([]byte(hdr.Get(apc.HdrJoinSig)), []byte(expected)) {
+		return errors.New("invalid node-join signature")
+	}
+	return nil
 }

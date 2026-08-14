@@ -543,6 +543,7 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 // (see: https://groups.google.com/forum/#!topic/golang-nuts/shST-SDqIp4)
 func startNode(cmd *RestoreCmd, asPrimary bool) (int, error) {
 	ncmd := exec.Command(cmd.Cmd, cmd.Args...) //nolint:gosec // used only in tests
+	ncmd.Dir = cmd.Dir
 	ncmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}

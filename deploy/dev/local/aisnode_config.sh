@@ -32,6 +32,9 @@ make_auth_intra_cluster_conf() {
 	if [[ -n "$AIS_AUTH_INTRA_CLUSTER_ROTATION_GRACE" ]]; then
 		conf="${conf:+${conf}, }\"rotation_grace\": \"${AIS_AUTH_INTRA_CLUSTER_ROTATION_GRACE}\""
 	fi
+	if [[ -n "$AIS_AUTH_INTRA_CLUSTER_NODE_JOIN_SECRET_PATH" ]]; then
+		conf="${conf:+${conf}, }\"node_join_secret_path\": \"${AIS_AUTH_INTRA_CLUSTER_NODE_JOIN_SECRET_PATH}\""
+	fi
 
 	echo "{${conf}}"
 }
@@ -73,7 +76,8 @@ make_auth_conf() {
 	if [[ -n "$AIS_AUTH_INTRA_CLUSTER_REQUEST_AUTH" || \
 	      -n "$AIS_AUTH_INTRA_CLUSTER_TTL" || \
 	      -n "$AIS_AUTH_INTRA_CLUSTER_NONCE_WINDOW" || \
-	      -n "$AIS_AUTH_INTRA_CLUSTER_ROTATION_GRACE" ]]; then
+	      -n "$AIS_AUTH_INTRA_CLUSTER_ROTATION_GRACE" || \
+	      -n "$AIS_AUTH_INTRA_CLUSTER_NODE_JOIN_SECRET_PATH" ]]; then
 		conf="${conf:+${conf}, }\"intra_cluster\": $(make_auth_intra_cluster_conf)"
 	fi
 	if [[ "${AIS_AUTHN_ENABLED:-false}" == "true" ]]; then

@@ -2685,6 +2685,9 @@ func (c *IntraClusterConf) validate() error {
 	if c.RequestAuth {
 		return c.validateRequestAuth()
 	}
+	if c.NodeJoinSecretPath != "" {
+		return c.validateNonceWindow()
+	}
 	return nil
 }
 
@@ -2698,19 +2701,26 @@ func (c *IntraClusterConf) validateRequestAuth() error {
 			return fmt.Errorf("invalid intra_cluster.ttl %v (expecting >= %v)", d, minIntraClusterTTL)
 		}
 	}
-	if c.NonceWindow == 0 {
-		c.NonceWindow = cos.Duration(dfltNonceWindow)
+	if err := c.validateNonceWindow(); err != nil {
+		return err
 	}
 	if c.RotationGrace == 0 {
 		c.RotationGrace = cos.Duration(dfltRotationGrace)
-	}
-	if nw := c.NonceWindow.D(); nw <= 0 || nw > maxNonceWindow {
-		return fmt.Errorf("invalid intra_cluster.nonce_window %v (expecting > 0 and <= %v)", nw, maxNonceWindow)
 	}
 	if rg := c.RotationGrace.D(); rg <= 0 || rg > maxRotationGrace {
 		return fmt.Errorf("invalid intra_cluster.rotation_grace %v (expecting > 0 and <= %v)", rg, maxRotationGrace)
 	}
 
+	return nil
+}
+
+func (c *IntraClusterConf) validateNonceWindow() error {
+	if c.NonceWindow == 0 {
+		c.NonceWindow = cos.Duration(dfltNonceWindow)
+	}
+	if nw := c.NonceWindow.D(); nw <= 0 || nw > maxNonceWindow {
+		return fmt.Errorf("invalid intra_cluster.nonce_window %v (expecting > 0 and <= %v)", nw, maxNonceWindow)
+	}
 	return nil
 }
 

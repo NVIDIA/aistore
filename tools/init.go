@@ -38,6 +38,7 @@ type (
 		Node *meta.Snode
 		Cmd  string
 		Args []string
+		Dir  string
 		PID  int
 	}
 	ClusterType string
