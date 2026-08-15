@@ -2056,6 +2056,10 @@ func (wi *basewi) flushRx() error {
 		case entry.mopaque.missing:
 			debug.Assert(strings.HasPrefix(entry.nameInArch, apc.MossMissingDir+"/"), entry.nameInArch)
 			err = wi.aw.Write(entry.nameInArch, cos.SimpleOAH{Size: 0}, nopROC{})
+		case entry.sgl == nil:
+			// zero-size objects are transmitted header-only
+			debug.Assert(entry.mopaque.emsg == "", entry.mopaque.emsg)
+			err = wi.aw.Write(entry.nameInArch, cos.SimpleOAH{Size: 0}, nopROC{})
 		default:
 			debug.Assert(entry.mopaque.emsg == "", entry.mopaque.emsg)
 			size = entry.sgl.Len()

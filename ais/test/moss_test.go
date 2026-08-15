@@ -1202,3 +1202,122 @@ func TestMossRangeReadSmoke(t *testing.T) {
 		})
 	}
 }
+
+const mossZeroPrefix = "zerosize-"
+
+// PUT body. cos.NopReader for the zero-size case - nothing to allocate or fill client-side.
+func _mossBody(size int, seed byte) cos.ReadOpenCloser {
+	if size == 0 {
+		return cos.NopOpener(io.NopCloser(cos.NopReader(0)))
+	}
+	return readers.NewBytes(_rngBytes(size, seed))
+}
+
+// retrieve N plain objects, every other one zero-size, once per response mode.
+func TestMossZeroSizePlainObjects(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+
+	bp := tools.BaseAPIParams()
+	t.Cleanup(stopMossJobs)
+
+	numObjs := 1000
+	if testing.Short() {
+		numObjs = 100
+	}
+	const objSize = 4 * cos.KiB
+
+	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	tools.CreateBucket(t, bp.URL, bck, nil, true /*cleanup*/)
+
+	var (
+		in       = make([]apc.MossIn, 0, numObjs)
+		names    = make([]string, 0, numObjs)
+		sizes    = make([]int, 0, numObjs)
+		zeroName string
+		numZero  int
+	)
+	for j := range numObjs {
+		var size int
+		if j%2 == 1 {
+			size = objSize
+		} else {
+			numZero++
+		}
+		objName := fmt.Sprintf("%s%05d.bin", mossZeroPrefix, j)
+		_, err := api.PutObject(&api.PutArgs{
+			BaseParams: bp,
+			Bck:        bck,
+			ObjName:    objName,
+			Reader:     _mossBody(size, byte(j+1)),
+			Size:       uint64(size),
+		})
+		tassert.CheckFatal(t, err)
+
+		if size == 0 && zeroName == "" {
+			zeroName = objName
+		}
+		in = append(in, apc.MossIn{ObjName: objName})
+		names = append(names, bck.Name+"/"+objName)
+		sizes = append(sizes, size)
+	}
+
+	// double-check: PUT must have actually produced a zero-size object
+	op, err := api.HeadObject(bp, bck, zeroName, api.HeadArgs{FltPresence: apc.FltPresent})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, op.Size == 0, "%s: expected zero-size object, got %d", zeroName, op.Size)
+
+	for _, streaming := range []bool{false, true} {
+		desc := "multipart"
+		if streaming {
+			desc = "streaming"
+		}
+		t.Run(desc, func(t *testing.T) {
+			tlog.Logfln("get-batch/%s: %d objects, %d zero-size", desc, numObjs, numZero)
+
+			req := &apc.MossReq{In: in, StreamingGet: streaming}
+
+			var (
+				tarData []byte
+				resp    apc.MossResp
+			)
+			if streaming {
+				rc, _, err := api.GetBatchStream(bp, bck, req)
+				tassert.CheckFatal(t, err)
+				tarData, err = io.ReadAll(rc)
+				_ = rc.Close()
+				tassert.CheckFatal(t, err)
+			} else {
+				var buf bytes.Buffer
+				var err error
+				resp, err = api.GetBatch(bp, bck, req, &buf)
+				tassert.CheckFatal(t, err)
+				tarData = buf.Bytes()
+				tassert.Fatalf(t, len(resp.Out) == numObjs,
+					"%s: MossResp entries=%d, want %d", desc, len(resp.Out), numObjs)
+			}
+
+			got := _rngEntries(t, archive.ExtTar, tarData)
+			tassert.Fatalf(t, len(got) == numObjs, "%s: tar entries=%d, want %d", desc, len(got), numObjs)
+
+			for j := range in {
+				// strict input order preserved across the empty/non-empty alternation
+				tassert.Errorf(t, got[j].name == names[j], "[%s] pos %d: name=%q, want %q", desc, j, got[j].name, names[j])
+
+				// a zero-size object is not a missing one
+				tassert.Errorf(t, !strings.HasPrefix(got[j].name, apc.MossMissingDir+"/"),
+					"[%s] pos %d: zero-size entry misfiled as missing: %q", desc, j, got[j].name)
+
+				tassert.Errorf(t, int(got[j].size) == sizes[j],
+					"[%s] pos %d: tar size=%d, want %d", desc, j, got[j].size, sizes[j])
+				tassert.Errorf(t, len(got[j].data) == sizes[j],
+					"[%s] pos %d: tar payload=%d bytes, want %d", desc, j, len(got[j].data), sizes[j])
+
+				if !streaming {
+					tassert.Errorf(t, resp.Out[j].Size == int64(sizes[j]),
+						"[%s] pos %d: MossOut.Size=%d, want %d", desc, j, resp.Out[j].Size, sizes[j])
+					tassert.Errorf(t, resp.Out[j].ErrMsg == "", "[%s] pos %d: unexpected ErrMsg %q", desc, j, resp.Out[j].ErrMsg)
+				}
+			}
+		})
+	}
+}
