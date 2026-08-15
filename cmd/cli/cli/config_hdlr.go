@@ -283,9 +283,7 @@ func warnIntraClusterAuthPrestage(c *cli.Context, nvs cos.StrKVs) {
 		return
 	}
 
-	_, tstatusMap, pstatusMap, err := fillStatusMapNoVersion(c, "")
-	if err == nil && supportsAllAtLeast(tstatusMap, minVerIntraClusterAuth) &&
-		supportsAllAtLeast(pstatusMap, minVerIntraClusterAuth) {
+	if clusterSupportsAtLeast(c, minVerIntraClusterAuth) {
 		return
 	}
 

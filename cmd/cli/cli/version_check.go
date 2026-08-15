@@ -8,6 +8,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
@@ -49,6 +50,25 @@ func supportsAllAtLeast(statusMap teb.NodeStatusMap, version cos.Version) bool {
 		}
 	}
 	return true // default
+}
+
+func clusterSupportsAtLeast(c *cli.Context, version cos.Version) bool {
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return false
+	}
+	for _, nodeMap := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
+		for _, node := range nodeMap {
+			if node.InMaintOrDecomm() {
+				continue
+			}
+			actual, err := api.GetSoftwareVersion(apiBP, node)
+			if err != nil || !cos.SupportsVersionAtLeast(actual, version) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool {
