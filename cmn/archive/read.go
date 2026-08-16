@@ -192,7 +192,7 @@ func (tr *tarReader) ReadUntil(rcb ArchRCB, regex, mmode string) error {
 		if !matcher.do(hdr.Name) {
 			continue
 		}
-		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}
+		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}, size: hdr.Size}
 		if stop, err := rcb.Call(hdr.Name, csl, hdr); stop || err != nil {
 			return err
 		}
@@ -210,7 +210,7 @@ func (tr *tarReader) ReadOne(filename string) (cos.ReadCloseSizer, error) {
 			return nil, err
 		}
 		if hdr.Name == filename || namesEq(hdr.Name, filename) {
-			return &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}, nil
+			return &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}, size: hdr.Size}, nil
 		}
 	}
 }
@@ -334,6 +334,7 @@ func (lzr *lz4Reader) ReadOne(filename string) (cos.ReadCloseSizer, error) {
 type (
 	cslLimited struct {
 		io.LimitedReader
+		size int64
 	}
 	cslClose struct {
 		gzr io.ReadCloser
@@ -355,8 +356,14 @@ type (
 // assorted 'limited' readers
 //
 
-func (csl *cslLimited) Size() int64 { return csl.N }
-func (*cslLimited) Close() error    { return nil } // NopCloser, unlike the other two (below)
+// total size, fixed at construction
+func (csl *cslLimited) Size() int64 { return csl.size }
+
+// number of bytes still unread - decremented by the embedded io.LimitedReader
+// (currently unused)
+func (csl *cslLimited) Len() int64 { return csl.N }
+
+func (*cslLimited) Close() error { return nil } // NopCloser, unlike the other two (below)
 
 func (csc *cslClose) Read(b []byte) (int, error) { return csc.R.Read(b) }
 func (csc *cslClose) Size() int64                { return csc.N }
@@ -418,6 +425,7 @@ func (drain *Drain) Totals() (size, num int64) { return drain.size, drain.num }
 //////////////
 
 func (csr *cslRange) Size() int64  { return csr.size }
+func (csr *cslRange) Len() int64   { return csr.N }
 func (csr *cslRange) Close() error { return csr.r.Close() }
 
 // return a reader for [off, off+length) over an already-open archived-file reader:

@@ -34,6 +34,11 @@ const PathSeparator = string(filepath.Separator)
 // - writers
 
 // readers: interfaces
+//
+// [NOTE convention]
+// Optional Size() is the total number of bytes the reader represents - fixed at construction time.
+// Implementations may expose the unread remainder via Len()
+// (compare memsys.SGL.Size vs memsys.SGL.Len, and archive.cslLimited).
 type (
 	ReadOpenCloser interface {
 		io.ReadCloser

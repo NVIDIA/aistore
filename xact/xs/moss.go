@@ -71,7 +71,10 @@ import (
 // Per-request max-number-soft-errors and GFN are separately
 // configurable (https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md)
 // -----------------------------------------------------------------------
-// TODO: range read; throttle senders
+// TODO:
+// - throttle senders
+// - count successfully retrieved zero-size objects/files; current generic and
+//   per-WI counters use size > 0 to exclude missing header-only entries
 // -----------------------------------------------------------------------
 
 // hardcoded tunables

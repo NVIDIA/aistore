@@ -1213,8 +1213,8 @@ func _mossBody(size int, seed byte) cos.ReadOpenCloser {
 	return readers.NewBytes(_rngBytes(size, seed))
 }
 
-// retrieve N plain objects, every other one zero-size, once per response mode.
-func TestMossZeroSizePlainObjects(t *testing.T) {
+// retrieve N plain objects, every other one zero-size, once per response mode
+func TestMossZeroSizeObjects(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
 
 	bp := tools.BaseAPIParams()
@@ -1315,6 +1315,145 @@ func TestMossZeroSizePlainObjects(t *testing.T) {
 				if !streaming {
 					tassert.Errorf(t, resp.Out[j].Size == int64(sizes[j]),
 						"[%s] pos %d: MossOut.Size=%d, want %d", desc, j, resp.Out[j].Size, sizes[j])
+					tassert.Errorf(t, resp.Out[j].ErrMsg == "", "[%s] pos %d: unexpected ErrMsg %q", desc, j, resp.Out[j].ErrMsg)
+				}
+			}
+		})
+	}
+}
+
+// retrieve N archived files from TAR shards, every other one zero-size, once per response mode
+func TestMossZeroSizeArchivedFiles(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+
+	bp := tools.BaseAPIParams()
+	t.Cleanup(stopMossJobs)
+
+	numShards := 1000
+	if testing.Short() {
+		numShards = 100
+	}
+	const (
+		prefixName = "data/prefix.bin"
+		fileName   = "data/archived-file.bin"
+		fileSize   = cos.KiB
+	)
+
+	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	tools.CreateBucket(t, bp.URL, bck, nil, true /*cleanup*/)
+
+	var (
+		in      = make([]apc.MossIn, 0, numShards)
+		names   = make([]string, 0, numShards)
+		want    = make([][]byte, 0, numShards)
+		numZero int
+	)
+	for j := range numShards {
+		var prefix, data []byte
+		if j%2 == 1 {
+			// Empty prefix followed by the requested non-empty member.
+			data = _rngBytes(fileSize, byte(j+1))
+		} else {
+			// Non-empty prefix followed by the requested empty member.
+			prefix = _rngBytes(fileSize, byte(j+1))
+			numZero++
+		}
+
+		var shard bytes.Buffer
+		aw := archive.NewWriter(
+			archive.ExtTar,
+			&shard,
+			nil,
+			&archive.Opts{TarFormat: tar.FormatUnknown},
+		)
+
+		// Keep the requested member second. Across the shards, ReadOne must
+		// advance past both empty and non-empty preceding members.
+		err := aw.Write(
+			prefixName,
+			cos.SimpleOAH{Size: int64(len(prefix))},
+			bytes.NewReader(prefix),
+		)
+		tassert.CheckFatal(t, err)
+
+		err = aw.Write(
+			fileName,
+			cos.SimpleOAH{Size: int64(len(data))},
+			bytes.NewReader(data),
+		)
+		tassert.CheckFatal(t, err)
+		tassert.CheckFatal(t, aw.Fini())
+
+		shardName := fmt.Sprintf("%sarch-%05d%s", mossZeroPrefix, j, archive.ExtTar)
+		_, err = api.PutObject(&api.PutArgs{
+			BaseParams: bp,
+			Bck:        bck,
+			ObjName:    shardName,
+			Reader:     readers.NewBytes(shard.Bytes()),
+			Size:       uint64(shard.Len()),
+		})
+		tassert.CheckFatal(t, err)
+
+		in = append(in, apc.MossIn{ObjName: shardName, ArchPath: fileName})
+		names = append(names, bck.Name+"/"+shardName+"/"+fileName)
+		want = append(want, data)
+	}
+
+	for _, streaming := range []bool{false, true} {
+		desc := "multipart"
+		if streaming {
+			desc = "streaming"
+		}
+		t.Run(desc, func(t *testing.T) {
+			tlog.Logfln("get-batch/%s: %d archived files, %d zero-size", desc, numShards, numZero)
+			var (
+				req     = &apc.MossReq{In: in, StreamingGet: streaming}
+				tarData []byte
+				resp    apc.MossResp
+			)
+			if streaming {
+				rc, _, err := api.GetBatchStream(bp, bck, req)
+				tassert.CheckFatal(t, err)
+				tarData, err = io.ReadAll(rc)
+				_ = rc.Close()
+				tassert.CheckFatal(t, err)
+			} else {
+				var (
+					buf bytes.Buffer
+					err error
+				)
+				resp, err = api.GetBatch(bp, bck, req, &buf)
+				tassert.CheckFatal(t, err)
+				tarData = buf.Bytes()
+				tassert.Fatalf(t, len(resp.Out) == numShards, "%s: MossResp entries=%d, want %d", desc, len(resp.Out), numShards)
+			}
+
+			got := _rngEntries(t, archive.ExtTar, tarData)
+			tassert.Fatalf(t, len(got) == numShards, "%s: tar entries=%d, want %d", desc, len(got), numShards)
+
+			for j := range in {
+				tassert.Errorf(t, got[j].name == names[j], "[%s] pos %d: name=%q, want %q", desc, j, got[j].name, names[j])
+				tassert.Errorf(
+					t,
+					!strings.HasPrefix(got[j].name, apc.MossMissingDir+"/"),
+					"[%s] pos %d: zero-size entry misfiled as missing: %q",
+					desc, j, got[j].name,
+				)
+				tassert.Errorf(
+					t,
+					got[j].size == int64(len(want[j])),
+					"[%s] pos %d: tar size=%d, want %d",
+					desc, j, got[j].size, len(want[j]),
+				)
+				tassert.Errorf(t, bytes.Equal(got[j].data, want[j]), "[%s] pos %d: archived-file payload mismatch", desc, j)
+
+				if !streaming {
+					tassert.Errorf(
+						t,
+						resp.Out[j].Size == int64(len(want[j])),
+						"[%s] pos %d: MossOut.Size=%d, want %d",
+						desc, j, resp.Out[j].Size, len(want[j]),
+					)
 					tassert.Errorf(t, resp.Out[j].ErrMsg == "", "[%s] pos %d: unexpected ErrMsg %q", desc, j, resp.Out[j].ErrMsg)
 				}
 			}

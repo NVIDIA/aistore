@@ -172,7 +172,10 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 	}
 
 	if obj.IsHeaderOnly() {
-		roc = nil
+		if roc != nil {
+			cos.Close(roc)
+			roc = nil
+		}
 	}
 
 	if nodes == nil {
