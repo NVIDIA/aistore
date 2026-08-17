@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -214,7 +213,7 @@ var _ = Describe("Notifications xaction test", func() {
 
 		It("should finish when all the Notifiers finished", func() {
 			Expect(nl1.FinCount()).To(BeEquivalentTo(0))
-			n.add(nl1)
+			Expect(n.add(nl1)).To(Succeed())
 			snap := finishedXact(xid)
 			msg := &core.NotifMsg{Data: cos.MustMarshal(snap)}
 			n._finished(nl1, targets[target1ID], msg)
@@ -269,7 +268,7 @@ var _ = Describe("Notifications xaction test", func() {
 			notifiers := getNodeMap(target1ID, target2ID)
 			nl1 = xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, notifiers)
 			n = testNotifs()
-			n.add(nl1)
+			Expect(n.add(nl1)).To(Succeed())
 
 			// Update smap, remove a target
 			smap := n.p.owner.smap.get()
@@ -286,7 +285,7 @@ var _ = Describe("Notifications xaction test", func() {
 	Describe("handler", func() {
 		It("should mark xaction finished when done", func() {
 			stats := finishedXact(xid)
-			n.add(nl1)
+			Expect(n.add(nl1)).To(Succeed())
 
 			request := notifRequest(target1ID, xid, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
@@ -303,28 +302,25 @@ var _ = Describe("Notifications xaction test", func() {
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished
-			runtime.Gosched()
 			Expect(nl1.IsFinished()).To(BeTrue())
 		})
 
 		It("should accept finished notifications after target aborts", func() {
 			stats := finishedXact(xid)
 			abortStats := abortedXact(xid)
-			n.add(nl1)
+			Expect(n.add(nl1)).To(Succeed())
 
 			// First target aborts an xaction
 			request := notifRequest(target1ID, xid, apc.Finished, abortStats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished when an xaction aborts
-			runtime.Gosched()
 			Expect(nl1.IsFinished()).To(BeTrue())
 			Expect(nl1.FinCount()).To(BeEquivalentTo(1))
 
 			// Second target sends finished stats
 			request = notifRequest(target2ID, xid, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
-			runtime.Gosched()
 			Expect(nl1.IsFinished()).To(BeTrue())
 			Expect(nl1.FinCount()).To(BeEquivalentTo(2))
 		})
@@ -341,7 +337,7 @@ var _ = Describe("Notifications xaction test", func() {
 				xid := cos.GenUUID()
 				targets := getNodeMap(target1ID)
 				listeners[i] = xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
-				n.add(listeners[i])
+				Expect(n.add(listeners[i])).To(Succeed())
 			}
 
 			// Verify distribution across shards
@@ -379,8 +375,8 @@ var _ = Describe("Notifications xaction test", func() {
 			nl2 := xact.NewXactNL(xid2, apc.ActECEncode, &smap.Smap, targets)
 
 			// Add both
-			n.add(nl1)
-			n.add(nl2)
+			Expect(n.add(nl1)).To(Succeed())
+			Expect(n.add(nl2)).To(Succeed())
 
 			// Verify they're in correct shards
 			idx1 := n.nls.index(xid1)
@@ -422,8 +418,7 @@ var _ = Describe("Notifications xaction test", func() {
 						nl := xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
 
 						// add
-						err := n.add(nl)
-						Expect(err).To(BeNil())
+						Expect(n.add(nl)).To(Succeed())
 
 						// lookup
 						entry, exists := n.nls.entry(xid)
@@ -462,7 +457,7 @@ var _ = Describe("Notifications xaction test", func() {
 				xid := cos.GenUUID()
 				targets := getNodeMap(target1ID)
 				nl := xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
-				n.add(nl)
+				Expect(n.add(nl)).To(Succeed())
 				seedListeners[xid] = nl
 			}
 
@@ -509,7 +504,7 @@ var _ = Describe("Notifications xaction test", func() {
 							xid := cos.GenUUID()
 							targets := getNodeMap(target1ID)
 							nl := xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
-							n.add(nl)
+							Expect(n.add(nl)).To(Succeed())
 
 							// delete it
 							n.del(nl, false)

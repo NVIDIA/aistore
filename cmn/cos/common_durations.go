@@ -12,6 +12,7 @@ import (
 
 // Common sleep intervals for polling loops and retry-style backoffs.
 // Not intended for high-frequency spinning or network-level timeouts.
+// TODO: may need to amend for deployments with cplane_iteration below 100ms
 // See also: hk/common_durations
 const (
 	PollSleepShort  = 100 * time.Millisecond

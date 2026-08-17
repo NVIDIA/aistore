@@ -927,9 +927,10 @@ func (nf *nlFilter) match(nl nl.Listener) bool {
 	return false
 }
 
-// yet another call-retrying utility (TODO: unify)
-
+// the floor below is cos.ProbingFrequency's own floor (cos.PollSleepShort) -
+// a shorter timeout would yield exactly one attempt followed by a full PollSleepShort sleep
 func withRetry(timeout time.Duration, cond func() bool) (ok bool) {
+	debug.Assert(timeout >= cos.PollSleepShort, "withRetry: timeout too short: ", timeout)
 	sleep := cos.ProbingFrequency(timeout)
 	for elapsed := time.Duration(0); elapsed < timeout; elapsed += sleep {
 		if ok = cond(); ok {

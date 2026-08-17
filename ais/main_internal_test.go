@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -41,6 +42,8 @@ func TestMain(m *testing.M) {
 	config.HostNet.Port = 8080
 	config.HostNet.HostnameIntraControl = "localhost"
 	config.HostNet.PortIntraControl = 9080
+	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
+	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
 	config.Log.Level = "3"
 	debug.AssertNoErr(config.HostNet.Validate(config))
 	cmn.GCO.CommitUpdate(config)
