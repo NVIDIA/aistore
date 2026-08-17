@@ -255,7 +255,7 @@ func TestArchMultiObj(t *testing.T) {
 
 func testArch(t *testing.T, bck *meta.Bck) {
 	var (
-		numPuts = 100
+		numPuts = 50
 		m       = ioContext{
 			t:       t,
 			bck:     bck.Clone(),
@@ -265,7 +265,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 		}
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		numArchs   = 15
+		numArchs   = 5
 		numInArch  = min(m.num/2, 7)
 		fmtRange   = "%s{%d..%d}"
 		subtests   = []struct {

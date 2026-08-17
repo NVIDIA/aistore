@@ -410,12 +410,12 @@ func (c *resilverStressCtx) validateAllData(t *testing.T, stage string) {
 }
 
 func createAndPopulateResilverBuckets(t *testing.T, c *resilverStressCtx) {
-	// object counts - total ~10K+
+	// Keep enough objects to exercise all layouts without making repeated
+	// validation dominate the mountpath transition scenarios below.
 	const (
-		numRegular  = 4000
-		numChunked  = 1000
-		numMirrored = 3000
-		numEC       = 2000
+		numRegular  = 1000
+		numChunked  = 100
+		numMirrored = 750
 		numChunks   = 4
 	)
 

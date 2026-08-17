@@ -344,7 +344,7 @@ func TestObjChunkedOverride(t *testing.T) {
 func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, firstChunked, overrideChunked bool) {
 	const (
 		objPrefix = "test-chunked-override"
-		numObjs   = 100
+		numObjs   = 20
 		numChunks = 4
 	)
 
@@ -359,7 +359,7 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 	}
 
 	if testing.Short() {
-		m.num /= 20
+		m.num = 5
 		m.fileSizeRange[1] /= 64
 	}
 

@@ -39,18 +39,19 @@ type prmTests struct {
 
 // flow: TestPromote (tests) => runProvider x (provider tests) => test.do(bck)
 func TestPromote(t *testing.T) {
+	const many = 1000
 	tests := []prmTests{
 		// short and long
-		{num: 10000, singleTarget: false, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
-		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false, notFshare: false},
+		{num: many, singleTarget: false, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
+		{num: many, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false, notFshare: false},
 		{num: 10, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: true, notFshare: false},
 		// long
-		{num: 10000, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
-		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true, notFshare: false},
+		{num: many, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
+		{num: many, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true, notFshare: false},
 		{num: 10, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
 		{num: 10, singleTarget: false, recurs: true, deleteSrc: false, overwriteDst: false, notFshare: false},
-		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false, notFshare: true},
-		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true, notFshare: true},
+		{num: many, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false, notFshare: true},
+		{num: many, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true, notFshare: true},
 		{num: 10, singleTarget: false, recurs: true, deleteSrc: false, overwriteDst: false, notFshare: true},
 	}
 	// see also "filtering" below

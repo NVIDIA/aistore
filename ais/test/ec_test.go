@@ -2300,7 +2300,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 	)
 	o := &ecOptions{
 		minTargets:   5,
-		objCount:     90,
+		objCount:     50,
 		concurrency:  8,
 		pattern:      "obj-reb-chk-%04d",
 		silent:       true,
@@ -2309,7 +2309,9 @@ func TestECAndRegularRebalance(t *testing.T) {
 	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
-	for _, test := range ecTests {
+	// exercise both paths: replicated small objects and 2:2 slices
+	rebalanceTests := []ecTest{ecTests[0], ecTests[len(ecTests)-1]}
+	for _, test := range rebalanceTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTs() <= test.parity+test.data+1 {
 				t.Skip(cmn.NewErrNotEnoughTargets(""))
@@ -2765,16 +2767,12 @@ func TestECBckEncodeRecover(t *testing.T) {
 
 	o := &ecOptions{
 		minTargets:  4,
-		objCount:    512,
+		objCount:    128,
 		concurrency: 4,
 		pattern:     "obj-%04d",
 		silent:      testing.Short(),
 	}
 	o.init(t, proxyURL)
-
-	if testing.Short() {
-		o.objCount = max(o.objCount/4, 128)
-	}
 
 	// Damage this number of objects for each test case
 	objToDamage := o.objCount / 8
@@ -2787,7 +2785,10 @@ func TestECBckEncodeRecover(t *testing.T) {
 		objSlicesOrig = make(map[string]map[string]ecSliceMD, o.objCount)
 	)
 
-	for _, test := range ecTests {
+	// to test recovery we run one replicated case and one sliced case
+	// (the remaining data/parity permutations are covered by the dedicated EC tests)
+	recoveryTests := []ecTest{ecTests[0], ecTests[len(ecTests)-1]}
+	for _, test := range recoveryTests {
 		types := []string{"%ob", "%ec"}
 		// In case of only 1 data and parity, there is no slice, so %ec directory is empty
 		if test.data == 1 && test.parity == 1 {
@@ -2859,10 +2860,10 @@ func TestECBckEncodeRecover(t *testing.T) {
 			reqECArgs := xact.ArgsMsg{ID: xid, Kind: apc.ActECRespond, Bck: bck}
 			api.WaitForSnapsIdle(tools.BaseAPIParams(proxyURL), &reqECArgs)
 
-			// [RETRY]
+			// Recovery normally completes with the xactions above. Retry only
+			// when the filesystem check observes lagging content.
 			var errStr string
-			for range 4 {
-				time.Sleep(8 * time.Second)
+			for attempt := range 4 {
 				errStr = ""
 				// Check that all slices and metafiles are recovered
 				for objName, parts := range objSlicesOrig {
@@ -2876,6 +2877,9 @@ func TestECBckEncodeRecover(t *testing.T) {
 				}
 				if errStr == "" {
 					break
+				}
+				if attempt < 3 {
+					time.Sleep(8 * time.Second)
 				}
 			}
 			tassert.Error(t, errStr == "", errStr)

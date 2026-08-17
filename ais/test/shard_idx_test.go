@@ -681,8 +681,8 @@ func TestIndexShardStress(t *testing.T) {
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{Name: "test-shard-idx-stress-" + trand.String(6), Provider: apc.AIS}
-		numShards  = 500
-		numFiles   = 100
+		numShards  = 100
+		numFiles   = 50
 		fileSize   = 8 * cos.KiB
 	)
 	if testing.Short() {

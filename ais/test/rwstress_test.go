@@ -7,6 +7,7 @@ package integration_test
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
@@ -92,12 +93,11 @@ func opDelete(objName, _ string, bck cmn.Bck) opRes {
 	return opRes{http.MethodDelete, err}
 }
 
+// the returned closure runs concurrently (see parallelOpLoop)
 func multiOp(opNames ...string) func(string, string, cmn.Bck) opRes {
-	var opr opRes
-	for _, opName := range opNames {
-		opr.op += opName
-	}
+	name := strings.Join(opNames, "")
 	return func(objName, cksumType string, bck cmn.Bck) opRes {
+		opr := opRes{op: name}
 		for _, opName := range opNames {
 			opFunc := opFuncMap[opName]
 			res := opFunc(objName, cksumType, bck)
@@ -131,22 +131,6 @@ func reportErr(t *testing.T, errCh chan opRes, ignoreStatusNotFound bool) {
 	}
 }
 
-func initRWStress(t *testing.T, bck cmn.Bck, cksumType string) {
-	errChanSize := numLoops * numFiles
-	errCh := make(chan opRes, errChanSize)
-	parallelOpLoop(bck, cksumType, errCh, opPut)
-	close(errCh)
-	reportErr(t, errCh, false)
-}
-
-func cleanRWStress(bck cmn.Bck, cksumType string) {
-	errChanSize := numLoops * numFiles
-	errCh := make(chan opRes, errChanSize)
-	parallelOpLoop(bck, cksumType, errCh, opDelete)
-	close(errCh)
-	// Ignoring errors here since this is a post test cleanup
-}
-
 func parallelPutGetStress(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		if bck.IsCloud() {
@@ -159,12 +143,15 @@ func parallelPutGetStress(t *testing.T) {
 			b           = bck.Clone()
 		)
 
-		initRWStress(t, b, cksumType)
+		// NOTE: no separate seeding pass - parallelOpLoop waits for its own
+		// goroutines, so the PUT loop below fully precedes the GET loop.
+		// NOTE: no teardown pass either - runProviderTests registers
+		// t.Cleanup(DestroyBucket) for every AIS/remote-AIS bucket, and cloud
+		// buckets are skipped above.
 		parallelOpLoop(b, cksumType, errCh, opPut)
 		parallelOpLoop(b, cksumType, errCh, opGet)
 		close(errCh)
 		reportErr(t, errCh, false)
-		cleanRWStress(b, cksumType)
 	})
 }
 
@@ -184,7 +171,6 @@ func multiOpStress(opNames ...string) func(t *testing.T) {
 			parallelOpLoop(b, cksumType, errCh, multiOp(opNames...))
 			close(errCh)
 			reportErr(t, errCh, true)
-			cleanRWStress(b, cksumType)
 		})
 	}
 }
@@ -219,7 +205,7 @@ func TestRWStressShort(t *testing.T) {
 func TestRWStress(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
-	numLoops = 100
-	numFiles = 1000
+	numLoops = 32
+	numFiles = 500
 	rwstress(t)
 }

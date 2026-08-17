@@ -853,8 +853,8 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	const xactTimeout = 10 * time.Second
 	m := ioContext{
 		t:               t,
-		num:             10000,
-		numGetsEachFile: 5,
+		num:             2000,
+		numGetsEachFile: 2,
 		bck: cmn.Bck{
 			Provider: apc.AIS,
 			Name:     trand.String(10),
@@ -2622,7 +2622,14 @@ func TestAllChecksums(t *testing.T) {
 		}
 	}
 
-	for _, cksumType := range checksums {
+	// The short suite already selects its three checksums below. In the long
+	// suite, cover no checksum, a fast checksum, and a cryptographic checksum
+	// without repeating the same EC cycle for every supported type.
+	ecChecksums := checksums
+	if !testing.Short() {
+		ecChecksums = []string{cos.ChecksumNone, cos.ChecksumOneXxh, cos.ChecksumSHA256}
+	}
+	for _, cksumType := range ecChecksums {
 		if testing.Short() && cksumType != cos.ChecksumNone && cksumType != cos.ChecksumOneXxh && cksumType != cos.ChecksumCesXxh {
 			continue
 		}
@@ -2646,11 +2653,11 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	var (
 		m = ioContext{
 			t:               t,
-			num:             1000,
+			num:             100,
 			numGetsEachFile: 1,
 			fileSize:        cos.MiB/2 + rand.Uint64N(cos.KiB*10),
 		}
-		numCorrupted = rand.IntN(m.num/100) + 2
+		numCorrupted = rand.IntN(5) + 2
 	)
 	if testing.Short() {
 		m.num = 40

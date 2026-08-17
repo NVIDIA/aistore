@@ -368,11 +368,6 @@ func TestMembershipBusy(t *testing.T) {
 	ensureNoRunningReb(t, bp)
 }
 
-func isMembershipBusy(err error) bool {
-	herr := cmn.AsErrHTTP(err)
-	return herr != nil && herr.TypeCode == "ErrBusy"
-}
-
 // lcRestore brings nodes back and drains the resulting rebalance.
 func lcRestore(t *testing.T, bp api.BaseParams, sids []string) bool {
 	t.Helper()

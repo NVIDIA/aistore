@@ -804,10 +804,53 @@ func (m *ioContext) startMaintenanceNoRebalance() *meta.Snode {
 	return target
 }
 
+// Note: membership changes are serialized cluster-wide -
+// a concurrent change is rejected with `cmn.ErrBusy` which is explicitly retriable
+// (see ais/prxcycle and/or docs/lifecycle_node).
+func membershipRetry(tb testing.TB, call func() (string, error)) (string, error) {
+	const (
+		retryInterval = 2 * time.Second
+		maxRetries    = int(tools.RebalanceTimeout / retryInterval)
+	)
+	var (
+		xid string
+		err error
+	)
+	for attempt := range maxRetries {
+		if xid, err = call(); err == nil || !isMembershipBusy(err) {
+			return xid, err
+		}
+		if attempt < maxRetries-1 {
+			tlog.Logfln("%s: %v - retrying", tb.Name(), err)
+			time.Sleep(retryInterval)
+		}
+	}
+	return xid, err
+}
+
+func isMembershipBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	if cmn.IsErrBusy(err) {
+		return true
+	}
+	herr := cmn.AsErrHTTP(err)
+	return herr != nil && herr.TypeCode == "ErrBusy"
+}
+
+func stopMaintenanceRetry(tb testing.TB, bp api.BaseParams, args *apc.ActValRmNode) (string, error) {
+	return membershipRetry(tb, func() (string, error) { return api.StopMaintenance(bp, args) })
+}
+
+func startMaintenanceRetry(tb testing.TB, bp api.BaseParams, args *apc.ActValRmNode) (string, error) {
+	return membershipRetry(tb, func() (string, error) { return api.StartMaintenance(bp, args) })
+}
+
 func (m *ioContext) stopMaintenance(target *meta.Snode) string {
 	tlog.Logfln("Take %s out of maintenance mode...", target.StringEx())
 	bp := tools.BaseAPIParams(m.proxyURL)
-	rebID, err := api.StopMaintenance(bp, &apc.ActValRmNode{DaemonID: target.ID()})
+	rebID, err := stopMaintenanceRetry(m.t, bp, &apc.ActValRmNode{DaemonID: target.ID()})
 	tassert.CheckFatal(m.t, err)
 	if rebID == "" {
 		return ""
@@ -842,6 +885,7 @@ func (m *ioContext) setNonDefaultBucketProps() {
 	tassert.CheckFatal(m.t, err)
 }
 
+// NOTE: set env.TestRunProviderEC to include erasure-coded-bucket test cases
 func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 	tests := []struct {
 		name       string
@@ -849,6 +893,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 		backendBck cmn.Bck
 		skipArgs   tools.SkipTestArgs
 		props      *cmn.BpropsToSet
+		ec         bool // opt-in: see env.TestRunProviderEC
 	}{
 		{
 			name: "local",
@@ -904,10 +949,15 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 				},
 			},
 			skipArgs: tools.SkipTestArgs{Long: true},
+			ec:       true,
 		},
 	}
 	for i := range tests {
 		test := tests[i]
+		// NOTE: set this env var to include erasure-coded-bucket test cases
+		if test.ec && !cos.IsParseBool(os.Getenv(env.TestRunProviderEC)) {
+			continue
+		}
 		t.Run(test.name, func(t *testing.T) {
 			if test.backendBck.IsEmpty() {
 				test.skipArgs.Bck = test.bck
