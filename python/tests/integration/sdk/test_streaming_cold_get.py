@@ -17,6 +17,7 @@ from tests.const import MIB, GIB, TEST_TIMEOUT
 
 from aistore.sdk import Bucket, Object, Client
 from aistore.sdk.const import HTTP_METHOD_PATCH
+from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -67,15 +68,14 @@ class TestStreamingColdGet(unittest.TestCase):
 
         provider, bucket_name = REMOTE_BUCKET.split("://")
         cls.bucket = cls.client.bucket(bucket_name, provider=provider)
-        cls.object = cls.bucket.object(cls.OBJECT_NAME)
-
-        # Change client's timeout to None for the initial upload to avoid timeout
-        # issues on large objects
-        Client(CLUSTER_ENDPOINT, timeout=None).bucket(
-            bucket_name, provider=provider
-        ).object(cls.OBJECT_NAME).get_writer().put_content(
-            content=b"0" * cls.OBJECT_SIZE
+        cls.object = (
+            Client(CLUSTER_ENDPOINT, timeout=0)
+            .bucket(bucket_name, provider=provider)
+            .object(cls.OBJECT_NAME)
         )
+
+        # Disable timeouts for intentional 1 GiB remote transfers.
+        cls.object.get_writer().put_content(content=b"0" * cls.OBJECT_SIZE)
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -84,10 +84,11 @@ class TestStreamingColdGet(unittest.TestCase):
         cls.object.delete()
 
     def setUp(self) -> None:
-        # Evict the object before each test
-        eviction_job = self.bucket.objects(obj_names=[self.OBJECT_NAME]).evict()
-        result = self.client.job(job_id=eviction_job).wait(timeout=TEST_TIMEOUT)
-        self.assertTrue(result.success)
+        # Evict the object before each test if it is cached
+        if self.object.props.present:
+            eviction_job = self.bucket.objects(obj_names=[self.OBJECT_NAME]).evict()
+            result = self.client.job(job_id=eviction_job).wait(timeout=TEST_TIMEOUT)
+            self.assertTrue(result.success)
 
         self.bucket_uri = f"{self.bucket.provider.value}://{self.bucket.name}"
 
@@ -143,11 +144,11 @@ class TestStreamingColdGet(unittest.TestCase):
         Test that the object content size matches the expected size
         when reading with Streaming-Cold-GET enabled.
         """
-        chunk = (
-            self.object.get_reader()
-            .raw()
-            .raw.read(MIB)  # Read the first 1 MB chunk directly using raw
-        )
+        stream = self.object.get_reader().raw()
+        try:
+            chunk = stream.read(MIB)
+        finally:
+            stream.close()
         self.assertEqual(len(chunk), MIB, "No initial chunk received.")
 
     @unittest.skipUnless(REMOTE_SET, "Remote bucket is not set")
@@ -193,8 +194,8 @@ class TestStreamingColdGet(unittest.TestCase):
             .object(self.OBJECT_NAME)
         )
 
-        with self.assertRaises((RequestsConnectionError, Timeout)):
-            obj.get_reader().as_file().read()
+        with self.assertRaises(ObjectFileReaderMaxResumeError):
+            obj.get_reader().as_file(max_resume=0).read()
 
         # Verify that the object is not cached
         assert (
@@ -250,11 +251,14 @@ class TestStreamingColdGet(unittest.TestCase):
         stream = self.object.get_reader().raw()
         mid_stream_reader = MidStreamDropper(stream, fail_after_bytes=100 * MIB)
 
-        with self.assertRaises(ConnectionResetError):
-            while True:
-                data = mid_stream_reader.read(128 * 1024)  # 128 KiB chunks
-                if not data:
-                    break
+        try:
+            with self.assertRaises(ConnectionResetError):
+                while True:
+                    data = mid_stream_reader.read(128 * 1024)  # 128 KiB chunks
+                    if not data:
+                        break
+        finally:
+            stream.close()
         # Verify that the object is not cached after a mid-stream disconnect
         assert (
             not self.object.props.present

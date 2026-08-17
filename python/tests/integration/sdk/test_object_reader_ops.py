@@ -379,7 +379,7 @@ class TestParallelObjectReaderOps(unittest.TestCase):
         obj.get_writer().put_content(large_data)
 
         # Parallel download
-        reader = obj.get_reader(chunk_size=chunk_size, num_workers=8)
+        reader = obj.get_reader(chunk_size=chunk_size, num_workers=4)
         downloaded = b"".join(reader)
 
         self.assertEqual(len(downloaded), large_size)
