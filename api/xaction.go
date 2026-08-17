@@ -384,9 +384,12 @@ func WaitForXaction(bp BaseParams, args *xact.ArgsMsg) error {
 	if args.Kind == "" {
 		return errors.New("WaitForXaction: missing xaction kind (required)")
 	}
+	err := xact.CheckValidKindIC(args.Kind)
+	if err != nil && !cmn.IsErrXactNonIC(err) {
+		return err
+	}
 	idles := xact.IdlesBeforeFinishing(args.Kind)
 
-	err := xact.CheckValidKindIC(args.Kind)
 	if err == nil {
 		// TODO:
 		// Wire nl.Status.IsIdleX from NotifMsg.IsIdleX (currently always false)
@@ -396,9 +399,6 @@ func WaitForXaction(bp BaseParams, args *xact.ArgsMsg) error {
 			return err
 		}
 		_, err = WaitForXactionIC(bp, args)
-		return err
-	}
-	if !cmn.IsErrXactNonIC(err) {
 		return err
 	}
 	var cond xact.SnapsCond

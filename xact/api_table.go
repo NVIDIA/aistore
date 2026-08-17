@@ -356,7 +356,10 @@ func GetSimilar(kindOrName string) (simKind, simName string) {
 
 func IdlesBeforeFinishing(kindOrName string) bool {
 	_, dtor := getDtor(kindOrName)
-	debug.Assert(dtor != nil)
+	debug.Assert(dtor != nil, kindOrName)
+	if dtor == nil {
+		return false
+	}
 	return dtor.Idles
 }
 
@@ -387,6 +390,9 @@ func IsSameScope(kindOrName string, scs ...int) bool {
 }
 
 func getDtor(kindOrName string) (string, *Descriptor) {
+	if kindOrName == "" {
+		return "", nil
+	}
 	if dtor, ok := Table[kindOrName]; ok {
 		return kindOrName, &dtor
 	}
