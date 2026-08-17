@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,6 +74,61 @@ func TestIndexShard(t *testing.T) {
 			idxValidate(t, bck, tarNames, nonTarName, numFiles)
 		})
 	}
+}
+
+func TestIndexShardZeroSizeFile(t *testing.T) {
+	const (
+		objName    = "zero-size.tar"
+		prefixName = "data/prefix.bin"
+		fileName   = "data/empty.bin"
+	)
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: "test-shard-idx-zero-" + trand.String(6), Provider: apc.AIS}
+		shard      bytes.Buffer
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+
+	tw := tar.NewWriter(&shard)
+
+	// non-empty member
+	tassert.CheckFatal(t, tw.WriteHeader(&tar.Header{Name: prefixName, Mode: 0o644, Size: 1, Typeflag: tar.TypeReg}))
+	_, err := tw.Write([]byte{1})
+	tassert.CheckFatal(t, err)
+
+	// zero-size member: size is explicitly zero and it has no body Write
+	tassert.CheckFatal(t, tw.WriteHeader(&tar.Header{Name: fileName, Mode: 0o644, Size: 0, Typeflag: tar.TypeReg}))
+	tassert.CheckFatal(t, tw.Close())
+
+	// upload the TAR and build its persisted shard index.
+	tools.PutObject(t, bck, objName, readers.NewBytes(shard.Bytes()), uint64(shard.Len()))
+	processed := idxRunAndWaitCounts(t, baseParams, bck, &apc.IndexShardMsg{})
+	tassert.Fatalf(t, processed == 1, "expected one indexed shard, got %d", processed)
+
+	// inspect the stored index directly so a sequential-scan fallback cannot mask
+	// a missing entry: the empty member must be present with Size=0.
+	idxPath := idxFindFile(bck, objName)
+	tassert.Fatalf(t, idxPath != "", "index for %q not found", objName)
+	data, err := os.ReadFile(idxPath)
+	tassert.CheckFatal(t, err)
+	idx := &archive.ShardIndex{}
+	tassert.CheckFatal(t, idx.Unpack(data))
+	entry, ok := idx.Entries[fileName]
+	tassert.Fatalf(t, ok && entry.Size == 0, "zero-size index entry: present=%t, size=%d", ok, entry.Size)
+
+	// the valid stored index makes this archived-file GET use the indexed fast path;
+	// the resulting zero-length section must return an empty response successfully.
+	var got bytes.Buffer
+	oah, err := api.GetObject(baseParams, bck, objName, &api.GetArgs{
+		Writer: &got,
+		Query:  url.Values{apc.QparamArchpath: []string{fileName}},
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, oah.Size() == 0 && got.Len() == 0,
+		"indexed zero-size GET: size/body=%d/%d, want 0/0", oah.Size(), got.Len())
 }
 
 func TestIndexShardDeleteObjectCleanup(t *testing.T) {
