@@ -2332,13 +2332,20 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
-	tgtList := o.smap.Tmap.ActiveNodes()
+	smap := tools.GetClusterMap(t, proxyURL)
+	tgtList := smap.Tmap.ActiveNodes()
+
 	tgtLost := tgtList[0]
 
 	tlog.Logfln("Put %s in maintenance (no rebalance)", tgtLost.StringEx())
 	args := &apc.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
+
+	_, err = tools.WaitForClusterState(proxyURL, "target removed",
+		smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
+	tassert.CheckFatal(t, err)
+
 	registered := false
 	defer func() {
 		if !registered {

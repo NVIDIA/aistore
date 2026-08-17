@@ -298,6 +298,12 @@ func (p *proxy) _createBucketWithProps(msg *apc.ActMsg, bck *meta.Bck, bprops *c
 		return cmn.NewErrBckAlreadyExists(bck.Bucket())
 	}
 
+	if bprops.EC.Enabled && cmn.Rom.EcStreams() > 0 {
+		if err := p.ec.on(p, p.ec.timeout()); err != nil {
+			return err
+		}
+	}
+
 	// 2. begin
 	var (
 		waitmsync = true // commit blocks behind metasync

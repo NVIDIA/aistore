@@ -140,6 +140,11 @@ func cbReq(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	}
 }
 
+// TODO -- FIXME:
+// - mgr.bundleEnabled gate (below) - is a simplification
+// - peer-to-peer streams must be refreshed upon target-membership changes - restarts/rejoins in particular
+// - note that stream-bundles retain their construction-time Smap
+// - use existing helper: smap.CheckSameTargets(current Smap versus Smap from the bundle)
 func (mgr *Manager) OpenStreams(withRefc bool) {
 	if withRefc {
 		mgr._refc.Inc()
@@ -148,6 +153,7 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 
 	mgr.mu.Lock()
 	if mgr.bundleEnabled {
+		// TODO: note above
 		mgr.mu.Unlock()
 		return
 	}

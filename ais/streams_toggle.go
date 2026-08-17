@@ -88,25 +88,15 @@ func (f *streamsToggle) on(p *proxy, tout time.Duration) error {
 	if tout < 0 /* cmn.SharedStreamsEver */ {
 		return nil
 	}
-	now := mono.NanoTime()
-	if last := f.last.Load(); last != 0 && time.Duration(now-last) < cmn.SharedStreamsNack {
-		return nil
-	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
-
-	// recheck after serializing with an in-flight close/open
-	now = mono.NanoTime()
-	if last := f.last.Load(); last != 0 && time.Duration(now-last) < cmn.SharedStreamsNack {
-		return nil
+	if err := p._toggleStreams(f.actOn); err != nil {
+		return err
 	}
 
-	err := p._toggleStreams(f.actOn)
-	if err == nil {
-		f.setActive(mono.NanoTime())
-	}
-	return err
+	f.setActive(mono.NanoTime())
+	return nil
 }
 
 func (f *streamsToggle) offAsync(p *proxy, last int64, tout time.Duration) {
