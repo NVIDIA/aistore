@@ -45,15 +45,10 @@ type (
 )
 
 type (
-	errInvalidObjName struct {
-		name string
-	}
-	errInvalidPrefix struct {
-		tag    string
-		prefix string
-	}
-	errInvalidArchpath struct {
+	errInvalidPath struct {
+		what string
 		path string
+		emsg string
 	}
 )
 
@@ -392,71 +387,85 @@ func (e *ErrMv) Error() string {
 	return "destination exists and is a virtual directory"
 }
 
-// errInvalidObjName, errInvalidPrefix
+// errInvalidPath
 
-const (
-	inv1 = "../"
-	inv2 = "~/"
-)
+func (e *errInvalidPath) Error() string {
+	if e.emsg == "" {
+		return fmt.Sprintf("invalid %s %q", e.what, e.path)
+	}
+	return fmt.Sprintf("%s: invalid %s %q", e.emsg, e.what, e.path)
+}
+
+//
+// common validation helpers: (object name | prefix | archpath)
+//
 
 // object name; do not allow empty name
 func ValidateOname(name string) error {
 	if name == "" {
-		return &errInvalidObjName{name}
+		return &errInvalidPath{what: "object name", path: name}
 	}
 	return ValidateWname(name)
 }
 
 // object name; allow empty names
 func ValidateWname(name string) error {
-	if IsLastB(name, filepath.Separator) {
-		return &errInvalidObjName{name}
-	}
-	return ValidateRname(name)
+	return _validateNoTrail("object name", name)
 }
 
-// object or virtual dir/prefix; allow trailing separator
-// - common least-denominator for the 'Validate.*name' helpers
+// object name or virtual dir/prefix; allow trailing separator
 // - e.g. HEAD(object) may probe a virtual directory prefix
 func ValidateRname(name string) error {
-	if strings.IndexByte(name, inv1[0]) < 0 && strings.IndexByte(name, inv2[0]) < 0 { // most of the time
-		return nil
-	}
-	if strings.Contains(name, inv1) || strings.Contains(name, inv2) {
-		return &errInvalidObjName{name}
-	}
-	return nil
+	return _validatePath("object name", name, "")
 }
 
-func (e *errInvalidObjName) Error() string {
-	return fmt.Sprintf("invalid object name %q", e.name)
+// same as ValidateRname (above) but with the trailing separator disallowed
+func _validateNoTrail(what, path string) error {
+	if IsLastB(path, filepath.Separator) {
+		return &errInvalidPath{what: what, path: path}
+	}
+	return _validatePath(what, path, "")
 }
 
-func ValidatePrefix(tag, prefix string) error {
+// common least-denominator for all path validators: reject "." and ".." path components
+// and a leading "~/";
+// ultimately, prevent illegal mountpath traversal
+func _validatePath(what, path, emsg string) error {
+	if strings.HasPrefix(path, "~/") {
+		return &errInvalidPath{what: what, path: path, emsg: emsg}
+	}
+
+	var off int
+	for {
+		i := strings.IndexByte(path[off:], '.')
+		if i < 0 {
+			return nil
+		}
+		i += off
+		if i == 0 || path[i-1] == '/' {
+			rest := path[i+1:]
+			if rest == "" || rest[0] == '/' {
+				return &errInvalidPath{what: what, path: path, emsg: emsg}
+			}
+			if rest[0] == '.' && (len(rest) == 1 || rest[1] == '/') {
+				return &errInvalidPath{what: what, path: path, emsg: emsg}
+			}
+		}
+		off = i + 1
+	}
+}
+
+// e.g. usage: cos.ValidatePrefix("bad list-objects request", lsmsg.Prefix)
+func ValidatePrefix(emsg, prefix string) error {
 	if prefix == "" {
 		return nil
 	}
-	if strings.IndexByte(prefix, inv1[0]) < 0 && strings.IndexByte(prefix, inv2[0]) < 0 { // ditto
-		return nil
-	}
-	if strings.Contains(prefix, inv1) || strings.Contains(prefix, inv2) {
-		return &errInvalidPrefix{tag, prefix}
-	}
-	return nil
-}
-
-func (e *errInvalidPrefix) Error() string {
-	return fmt.Sprintf("%s: invalid prefix %q", e.tag, e.prefix)
+	return _validatePath("prefix", prefix, emsg)
 }
 
 func ValidateArchpath(path string) error {
-	if ValidateWname(path) != nil {
-		return &errInvalidArchpath{path}
-	}
-	return nil
+	return _validateNoTrail("archpath", path)
 }
-
-func (e *errInvalidArchpath) Error() string { return "invalid archpath \"" + e.path + "\"" }
 
 // ErrRangeNotSatisfiable
 // http.StatusRequestedRangeNotSatisfiable = 416 // RFC 9110, 15.5.17

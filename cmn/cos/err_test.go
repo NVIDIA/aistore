@@ -7,6 +7,7 @@ package cos_test
 import (
 	"errors"
 	"fmt"
+	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -48,3 +49,69 @@ var _ = Describe("Errs Unwrap", func() {
 		})
 	})
 })
+
+func TestValidatePath(t *testing.T) {
+	valid := []string{
+		"",
+		"a",
+		"a.b",
+		".git",
+		"..foo",
+		"foo..",
+		"a../b",
+		"a/~/b",
+		"a/.../b",
+		"a/",
+	}
+	for _, path := range valid {
+		if err := cos.ValidateRname(path); err != nil {
+			t.Errorf("ValidateRname(%q): unexpected error: %v", path, err)
+		}
+	}
+
+	invalid := []string{
+		".",
+		"..",
+		"./a",
+		"../a",
+		"a/.",
+		"a/..",
+		"a/./b",
+		"a/../b",
+		"~/a",
+	}
+	for _, path := range invalid {
+		if err := cos.ValidateRname(path); err == nil {
+			t.Errorf("ValidateRname(%q): expected error", path)
+		}
+	}
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"empty-object", cos.ValidateOname(""), `invalid object name ""`},
+		{"trailing-object", cos.ValidateWname("a/"), `invalid object name "a/"`},
+		{"trailing-archpath", cos.ValidateArchpath("a/"), `invalid archpath "a/"`},
+		{
+			"prefix-context",
+			cos.ValidatePrefix("bad list-objects request", "a/.."),
+			`bad list-objects request: invalid prefix "a/.."`,
+		},
+	}
+	for _, tc := range tests {
+		if tc.err == nil {
+			t.Errorf("%s: expected error", tc.name)
+		} else if got := tc.err.Error(); got != tc.want {
+			t.Errorf("%s: expected %q, got %q", tc.name, tc.want, got)
+		}
+	}
+
+	if err := cos.ValidateWname(""); err != nil {
+		t.Errorf("ValidateWname(empty): unexpected error: %v", err)
+	}
+	if err := cos.ValidateArchpath(""); err != nil {
+		t.Errorf("ValidateArchpath(empty): unexpected error: %v", err)
+	}
+}

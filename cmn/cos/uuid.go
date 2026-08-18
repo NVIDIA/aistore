@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -170,9 +169,6 @@ func ValidateManifestID(id string) error {
 	}
 	if l > lmax {
 		return fmt.Errorf("%s %q is too long (expecting <= %d chars)", utag, id, lmax)
-	}
-	if strings.Contains(id, inv1) || strings.Contains(id, inv2) {
-		return fmt.Errorf("%s %q contains invalid substring %q or %q", utag, id, inv1, inv2)
 	}
 	for i := range l {
 		c := id[i]

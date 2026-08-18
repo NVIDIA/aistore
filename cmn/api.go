@@ -513,7 +513,7 @@ func (conf *ExtraPropsGCP) validate() error {
 	if path == "" {
 		return nil
 	}
-	if err := cos.ValidatePrefix(etag, path); err != nil { // disallow "../" and "~/"
+	if err := cos.ValidatePrefix(etag, path); err != nil { // no "." or ".." components
 		return err
 	}
 	if !filepath.IsAbs(path) {
