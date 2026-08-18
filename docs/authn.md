@@ -409,10 +409,18 @@ The following values are provided as convenient aliases for a list of permission
 
 ### Promote
 
-Promote sources must be under the hard-coded path `/var/lib/ais/promote` on the target.
-Symlinks are allowed -- AIStore ACLs protect only against the API surface.
-System admins with the ability to create symlinks may pre-create them and API requests can then promote from those paths. 
-However, API users are not granted access to create symlinks or promote any data directly from outside `/var/lib/ais/promote`, regardless of AIStore role.
+Every promote source must be named by an absolute path under the hard-coded
+`/var/lib/ais/promote` root on the target. A system administrator can place
+local files and directories there or mount a file share beneath the root.
+Symbolic links are not supported as promote sources.
+
+`PROMOTE` permits reading supported sources beneath this administrator-managed
+root. With `--delete-src`, it also permits deleting source files selected by the
+request. Use read-only mounts when deletion must not be possible, and do not
+allow untrusted local users to modify the root or create entries beneath it.
+
+The AIStore API does not create mounts. Regardless of AIStore role, an API
+request must name a path under `/var/lib/ais/promote`.
 
 AuthN requires a single `PROMOTE` check — from the bucket ACL, or from the cluster ACL when there is no bucket entry.
 `PROMOTE` is a standalone permission, granted separately from `rw`.
@@ -423,7 +431,7 @@ AuthN requires a single `PROMOTE` check — from the bucket ACL, or from the clu
 | Bucket ACL `PROMOTE`                                  | allowed                                       |
 | No bucket ACL; Cluster ACL includes `PROMOTE`         | allowed (cluster fall-through)                |
 | Bucket ACL without `PROMOTE`                          | **denied**                                    |
-| Source path outside `/var/lib/ais/promote`            | **denied** (independent of ACL)               |
+| Named source path outside `/var/lib/ais/promote`      | **denied** (independent of ACL)               |
 
 ## How to Enable AuthN Server After Deployment
 

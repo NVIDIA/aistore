@@ -330,7 +330,7 @@ $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"ec-encode"}
 $ curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename-obj", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mybucket/dir1/CCCCCC'
 
 # Promote files from target filesystem
-$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote", "name":"/user/dir", "value": {"target": "234ed78", "trim_prefix": "/user/", "recurs": true, "keep": true}}' 'http://G/v1/buckets/abc'
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote","name":"/var/lib/ais/promote/dataset","value":{"src":"/var/lib/ais/promote/dataset","tid":"234ed78","obj":"dataset/","rcr":true}}' 'http://G/v1/objects/abc'
 ```
 
 ## Querying information

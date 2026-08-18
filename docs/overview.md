@@ -217,7 +217,9 @@ See the [authn documentation](/docs/authn.md#promote) for more details on access
 The operation entails synchronous or asynchronous massively-parallel copying from:
 
 - a local directory under that path on any target node (or nodes);
-- a file share mounted or symlinked under `/var/lib/ais/promote` on one or several (or all) targets.
+- a file share mounted under `/var/lib/ais/promote` on one or several (or all) targets.
+
+Symbolic links are not supported as promote sources.
 
 You can now use `promote` ([CLI](/docs/cli/object.md#promote-files-and-directories), API) to populate AIS datasets from those allowed sources.
 

@@ -971,7 +971,7 @@ func (p *proxy) evictRemoteKeepMD(am actMsgRaw, bck *meta.Bck) error {
 // promote synchronously if the number of files (to promote) is less or equal
 const promoteNumSync = 16
 
-// +gen:payload apc.ActPromote={"action": "promote", "name": "/user/dir", "value": {"target": "234ed78", "trim_prefix": "/user/", "recurs": true, "keep": true}}
+// +gen:payload apc.ActPromote={"action":"promote","name":"/var/lib/ais/promote/dataset","value":{"src":"/var/lib/ais/promote/dataset","tid":"234ed78","obj":"dataset/","rcr":true}}
 func (p *proxy) promote(bck *meta.Bck, msg *apc.ActMsg, tsi *meta.Snode) (string /*xid*/, error) {
 	var (
 		waitmsync bool

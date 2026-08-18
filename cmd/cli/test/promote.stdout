@@ -1,15 +1,15 @@
-^.*promoted.*"/tmp/prm/obj".*=>.*$
+^.*promoted.*"/var/lib/ais/promote/prm/obj".*=>.*$
 
-/tmp/prm/obj
-^.*promoted.*"/tmp/prm/discard".*=>.*$
+/var/lib/ais/promote/prm/obj
+^.*promoted.*"/var/lib/ais/promote/prm/discard".*=>.*$
 
-^.*promoted.*"/tmp/prm/".*=>.*$
+^.*promoted.*"/var/lib/ais/promote/prm/".*=>.*$
 
-^.*promoted.*"/tmp/prm".*=>.*$
+^.*promoted.*"/var/lib/ais/promote/prm".*=>.*$
 
-^.*promoted.*"/tmp/prm".*=>.*$
+^.*promoted.*"/var/lib/ais/promote/prm".*=>.*$
 
-^.*promoted.*"/tmp/prm/".*=>.*$
+^.*promoted.*"/var/lib/ais/promote/prm/".*=>.*$
 
 NAME             SIZE
 fifth/obj        7B
@@ -18,7 +18,7 @@ one/one          7B
 sixth/obj        7B
 three/obj        7B
 two/discard      7B
-^promoted.*/tmp/prm.*=>.*ais://$BUCKET.*$
+^promoted.*/var/lib/ais/promote/prm.*=>.*ais://$BUCKET.*$
 
 11.txt
 12.txt
@@ -26,7 +26,7 @@ two/discard      7B
 14.txt
 15.txt
 ^No objects in ais://\w+$
-^recursively promoted.*/tmp/prm.*=>.*ais://$BUCKET.*$
+^recursively promoted.*/var/lib/ais/promote/prm.*=>.*ais://$BUCKET.*$
 
 subdir/11.txt
 subdir/12.txt
@@ -38,5 +38,5 @@ qq  13B
 qq  1B
 qq  1B
 qq  13B
-/tmp/prm/qq
+/var/lib/ais/promote/prm/qq
 qq  13B

@@ -42,7 +42,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   certificates by default. Deployments using untrusted certificates must
   configure `ca_cert` or explicitly set `skip_verify=True`.
 - **BREAKING**: `ACCESS_RW` no longer includes `PROMOTE`. Grant `PROMOTE`
-  explicitly (or `ACCESS_SU`). Promote sources are restricted to `/var/lib/ais/promote`.
+  explicitly (or `ACCESS_SU`). Promote sources are restricted to
+  `/var/lib/ais/promote`; symbolic links are not supported.
 - ETL pod spec templates no longer list the obsolete `io://` communication type.
 - Deprecated `Etl.init_spec()` with a `FutureWarning`; use `Etl.init()` or
   `Etl.init_class()` instead. Pod spec initialization will be removed in v5.1.

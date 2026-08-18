@@ -815,7 +815,7 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 }
 
 // Promote =========================================================================================
-// promote POSIX files and/or directories to (become) in-cluster objects.
+// Promote POSIX files and/or directories under apc.PromoteRoot to (become) in-cluster objects.
 
 func Promote(bp BaseParams, bck cmn.Bck, args *apc.PromoteArgs) (xid string, err error) {
 	var (

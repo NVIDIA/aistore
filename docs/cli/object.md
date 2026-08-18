@@ -1304,16 +1304,16 @@ Inline help follows below:
 ```console
 $ ais object promote --help
 NAME:
-   ais object promote - PROMOTE target-accessible files and directories.
-   The operation is intended for copying NFS and SMB shares mounted on any/all targets
-   but can be also used to copy local files (again, on any/all targets in the cluster).
+   ais object promote - PROMOTE files and directories under /var/lib/ais/promote.
+   A system administrator can place local files there or mount NFS and SMB shares beneath this root.
+   Symbolic links are not supported as promote sources.
    Copied files and directories become regular stored objects that can be further listed and operated upon.
    Destination naming is consistent with 'ais put' command, e.g.:
-     - 'promote /tmp/subdir/f1 ais://nnn'        - ais://nnn/f1
-     - 'promote /tmp/subdir/f2 ais://nnn/aaa'    - ais://nnn/aaa
-     - 'promote /tmp/subdir/f3 ais://nnn/aaa/'   - ais://nnn/aaa/f3
-     - 'promote /tmp/subdir ais://nnn'           - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3
-     - 'promote /tmp/subdir ais://nnn/aaa/'      - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3
+     - 'promote /var/lib/ais/promote/subdir/f1 ais://nnn'        - ais://nnn/f1
+     - 'promote /var/lib/ais/promote/subdir/f2 ais://nnn/aaa'    - ais://nnn/aaa
+     - 'promote /var/lib/ais/promote/subdir/f3 ais://nnn/aaa/'   - ais://nnn/aaa/f3
+     - 'promote /var/lib/ais/promote/subdir ais://nnn'           - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3
+     - 'promote /var/lib/ais/promote/subdir ais://nnn/aaa/'      - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3
    Other supported options follow below.
 
 USAGE:
@@ -1323,7 +1323,7 @@ OPTIONS:
    --recursive, -r      recursive operation
    --overwrite-dst, -o  overwrite destination, if exists
    --not-file-share     each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from the target)
-   --delete-src         delete successfully promoted source
+   --delete-src         delete source files after successful processing
    --target-id value    ais target designated to carry out the entire operation
    --verbose, -v        verbose output
    --help, -h           show help
@@ -1335,23 +1335,23 @@ OPTIONS:
 $ ais object promote --help
 
 NAME:
-   ais object promote - PROMOTE target-accessible files and directories.
-   The operation is intended for copying NFS and SMB shares mounted on any/all targets
-   but can be also used to copy local files (again, on any/all targets in the cluster).
+   ais object promote - PROMOTE files and directories under /var/lib/ais/promote.
+   A system administrator can place local files there or mount NFS and SMB shares beneath this root.
+   Symbolic links are not supported as promote sources.
    Copied files and directories become regular stored objects that can be further listed and operated upon.
    Destination naming is consistent with 'ais put' command, e.g.:
-     - 'promote /tmp/subdir/f1 ais://nnn'        - ais://nnn/f1
-     - 'promote /tmp/subdir/f2 ais://nnn/aaa'    - ais://nnn/aaa
-     - 'promote /tmp/subdir/f3 ais://nnn/aaa/'   - ais://nnn/aaa/f3
-     - 'promote /tmp/subdir ais://nnn'           - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3
-     - 'promote /tmp/subdir ais://nnn/aaa/'      - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3
+     - 'promote /var/lib/ais/promote/subdir/f1 ais://nnn'        - ais://nnn/f1
+     - 'promote /var/lib/ais/promote/subdir/f2 ais://nnn/aaa'    - ais://nnn/aaa
+     - 'promote /var/lib/ais/promote/subdir/f3 ais://nnn/aaa/'   - ais://nnn/aaa/f3
+     - 'promote /var/lib/ais/promote/subdir ais://nnn'           - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3
+     - 'promote /var/lib/ais/promote/subdir ais://nnn/aaa/'      - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3
    Other supported options follow below.
 
 USAGE:
    ais object promote FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME_or_PREFIX] [command options]
 
 OPTIONS:
-   --delete-src         Delete successfully promoted source
+   --delete-src         Delete source files after successful processing
    --not-file-share     Each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from the target)
    --overwrite-dst, -o  Overwrite destination, if exists
    --recursive, -r      Recursive operation
@@ -1370,37 +1370,38 @@ See above.
 
 ## Promote a single file
 
-Promote `/tmp/examples/example1.txt` without specified object name.
+Promote `/var/lib/ais/promote/examples/example1.txt` without specifying an object name.
 
 ```console
-$ ais object promote /tmp/examples/example1.txt ais://mybucket --keep=true
-# PROMOTE /tmp/examples/example1.txt => ais://mybucket/example1.txt
+$ ais object promote /var/lib/ais/promote/examples/example1.txt ais://mybucket
+# PROMOTE /var/lib/ais/promote/examples/example1.txt => ais://mybucket/example1.txt
 ```
 
 ## Promote file while specifying custom (resulting) name
 
-Promote /tmp/examples/example1.txt as object with name `example1.txt`.
+Promote `/var/lib/ais/promote/examples/example1.txt` as object `example1.txt`.
 
 ```console
-$ ais object promote /tmp/examples/example1.txt ais://mybucket/example1.txt --keep=true
-# PROMOTE /tmp/examples/example1.txt => ais://mybucket/example1.txt
+$ ais object promote /var/lib/ais/promote/examples/example1.txt ais://mybucket/example1.txt
+# PROMOTE /var/lib/ais/promote/examples/example1.txt => ais://mybucket/example1.txt
 ```
 
 ## Promote a directory
 
-Make AIS objects out of `/tmp/examples` files (**one file = one object**).
-`/tmp/examples` is a directory present on some (or all) of the deployed storage nodes.
+Make AIS objects out of `/var/lib/ais/promote/examples` files (**one file = one object**).
+The directory is present on some (or all) of the deployed storage nodes.
 
 ```console
-$ ais object promote /tmp/examples ais://mybucket/ -r --keep=true
+$ ais object promote /var/lib/ais/promote/examples ais://mybucket/ -r
 ```
 
 ## Promote directory with custom prefix
 
-Promote `/tmp/examples` files to AIS objects. Object names will have `examples/` prefix.
+Promote `/var/lib/ais/promote/examples` files to AIS objects, delete the source files
+after processing, and prepend `examples/` to the resulting object names.
 
 ```console
-$ ais object promote /tmp/examples ais://mybucket/examples/ -r --keep=false
+$ ais object promote /var/lib/ais/promote/examples ais://mybucket/examples/ -r --delete-src
 ```
 
 ## Promote invalid path
@@ -1414,8 +1415,8 @@ $ ais show cluster
 TARGET          MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBALANCE
 1014646t8081    0.00%	    4.00GiB	59%         375.026GiB  0.00%	    finished
 ...
-$ ais object promote /target/1014646t8081/nonexistent/dir/ ais://testbucket --target 1014646t8081 --keep=false
-(...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
+$ ais object promote /var/lib/ais/promote/nonexistent/dir ais://testbucket --target-id 1014646t8081
+(...) Bad Request: stat /var/lib/ais/promote/nonexistent/dir: no such file or directory
 ```
 
 # Multipart upload

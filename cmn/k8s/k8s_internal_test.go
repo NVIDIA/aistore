@@ -16,6 +16,9 @@ import (
 
 func resetInitState(t *testing.T) {
 	t.Helper()
+	// HOSTNAME is always set in a container: neutralize it, or resolvePodName's
+	// MY_POD-vs-HOSTNAME debug assert fires on the ambient CI-runner hostname
+	t.Setenv(defaultPodNameEnv, "")
 	NodeName = ""
 	_defaultK8sClient = nil
 	t.Cleanup(func() {

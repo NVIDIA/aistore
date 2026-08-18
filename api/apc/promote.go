@@ -47,10 +47,8 @@ type PromoteArgs struct {
 	SrcIsNotFshare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
 }
 
-// ValidatePromoteSource checks that src is an absolute path under PromoteRoot.
-// Existing symlinks under PromoteRoot are allowed and resolved by the OS when
-// the target reads the source.
-func ValidatePromoteSource(src string) error {
+// validatePromoteSource checks the lexical pathname requirements for a promote source.
+func validatePromoteSource(src string) error {
 	if src == "" {
 		return &errInvalidPromoteSource{detail: "pathname is empty"}
 	}
@@ -80,7 +78,7 @@ func ValidatePromote(name string, args *PromoteArgs) (string, error) {
 			src = args.SrcFQN
 		}
 	}
-	if err := ValidatePromoteSource(src); err != nil {
+	if err := validatePromoteSource(src); err != nil {
 		return "", err
 	}
 	if err := cos.ValidatePrefix("object name or prefix", args.ObjName); err != nil {

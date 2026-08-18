@@ -413,7 +413,7 @@ class Object:
         """
         Promotes a file or folder under /var/lib/ais/promote to a bucket in AIS storage.
         That path is the only source tree promote accepts; a host administrator may place
-        local directories, file shares, or symlinks there.
+        local directories there or mount file shares beneath it. Symbolic links are not supported.
         See more info here: https://aiatscale.org/blog/2022/03/17/promote
 
         Args:
@@ -421,7 +421,7 @@ class Object:
             target_id (str, optional): Promote files from a specific target node
             recursive (bool, optional): Recursively promote objects from files in directories inside the path
             overwrite_dest (bool, optional): Overwrite objects already on AIS
-            delete_source (bool, optional): Delete the source files when done promoting
+            delete_source (bool, optional): Delete source files after successful processing
             src_not_file_share (bool, optional): Optimize if the source is guaranteed to not be on a file share
 
         Returns:

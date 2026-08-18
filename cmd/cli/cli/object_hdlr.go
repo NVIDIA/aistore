@@ -48,16 +48,16 @@ const objPutUsage = "PUT or append one file, one directory, or multiple files an
 	indent1 + "\tNotes:\n" +
 	indent1 + "\t- to write or add files to " + archExts + "-formatted objects (\"shards\"), use 'ais archive'"
 
-const objPromoteUsage = "PROMOTE target-accessible files and directories.\n" +
-	indent1 + "The operation is intended for copying NFS and SMB shares mounted on any/all targets\n" +
-	indent1 + "but can be also used to copy local files (again, on any/all targets in the cluster).\n" +
+const objPromoteUsage = "PROMOTE files and directories under /var/lib/ais/promote.\n" +
+	indent1 + "A system administrator can place local files there or mount NFS and SMB shares beneath this root.\n" +
+	indent1 + "Symbolic links are not supported as promote sources.\n" +
 	indent1 + "Copied files and directories become regular stored objects that can be further listed and operated upon.\n" +
 	indent1 + "Destination naming is consistent with 'ais put' command, e.g.:\n" +
-	indent1 + "\t- 'promote /tmp/subdir/f1 ais://nnn'\t - ais://nnn/f1\n" +
-	indent1 + "\t- 'promote /tmp/subdir/f2 ais://nnn/aaa'\t - ais://nnn/aaa\n" +
-	indent1 + "\t- 'promote /tmp/subdir/f3 ais://nnn/aaa/'\t - ais://nnn/aaa/f3\n" +
-	indent1 + "\t- 'promote /tmp/subdir ais://nnn'\t - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3\n" +
-	indent1 + "\t- 'promote /tmp/subdir ais://nnn/aaa/'\t - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3\n" +
+	indent1 + "\t- 'promote /var/lib/ais/promote/subdir/f1 ais://nnn'\t - ais://nnn/f1\n" +
+	indent1 + "\t- 'promote /var/lib/ais/promote/subdir/f2 ais://nnn/aaa'\t - ais://nnn/aaa\n" +
+	indent1 + "\t- 'promote /var/lib/ais/promote/subdir/f3 ais://nnn/aaa/'\t - ais://nnn/aaa/f3\n" +
+	indent1 + "\t- 'promote /var/lib/ais/promote/subdir ais://nnn'\t - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3\n" +
+	indent1 + "\t- 'promote /var/lib/ais/promote/subdir ais://nnn/aaa/'\t - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3\n" +
 	indent1 + "Other supported options follow below."
 
 const objRmUsage = "Remove object or selected objects from the specified bucket, or buckets - e.g.:\n" +

@@ -1067,7 +1067,7 @@ var (
 	noDirsFlag = cli.BoolFlag{Name: "no-dirs", Usage: "Do not return virtual subdirectories (applies to remote buckets only)"}
 
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "Overwrite destination, if exists"}
-	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "Delete successfully promoted source"}
+	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "Delete source files after successful processing"}
 	targetIDFlag  = cli.StringFlag{Name: "target-id", Usage: "AIS target designated to carry out the entire operation"}
 
 	notFshareFlag = cli.BoolFlag{

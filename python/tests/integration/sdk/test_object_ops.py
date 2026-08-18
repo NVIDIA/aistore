@@ -327,11 +327,7 @@ class TestObjectOps(ParallelTestBase):
         ).get_reader()
         self.assertEqual(inner_item_contents, inner_obj.read_all().decode(UTF_ENCODING))
         # Check source deleted
-        top_level_files = [
-            f
-            for f in local_files_path.glob("*")
-            if local_files_path.joinpath(f).is_file()
-        ]
+        top_level_files = [f for f in local_files_path.glob("*") if f.is_file()]
         self.assertEqual(0, len(top_level_files))
         self.assertEqual(0, len(list(inner_folder.glob("*"))))
 
