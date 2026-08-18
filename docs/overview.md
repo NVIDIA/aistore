@@ -210,12 +210,16 @@ For these and similar use cases we have [AIS Downloader](/docs/downloader.md) - 
 
 ### Promote local or shared files
 
-AIS can also `promote` files and directories to objects. The operation entails synchronous or asynchronous massively-parallel downloading of any accessible file source, including:
+AIS can also `promote` files and directories to objects.
+Sources must be under `/var/lib/ais/promote` on the target.
+See the [authn documentation](/docs/authn.md#promote) for more details on access restrictions.
 
-- a local directory (or directories) of any target node (or nodes);
-- a file share mounted on one or several (or all) target nodes in the cluster.
+The operation entails synchronous or asynchronous massively-parallel copying from:
 
-You can now use `promote` ([CLI](/docs/cli/object.md#promote-files-and-directories), API) to populate AIS datasets with **any external file source**.
+- a local directory under that path on any target node (or nodes);
+- a file share mounted or symlinked under `/var/lib/ais/promote` on one or several (or all) targets.
+
+You can now use `promote` ([CLI](/docs/cli/object.md#promote-files-and-directories), API) to populate AIS datasets from those allowed sources.
 
 Originally (experimentally) introduced in the v3.0 to handle "files and directories colocated within AIS storage target machines", `promote` has been redefined, extended (in terms of supported options and permutations), and completely reworked in the v3.9.
 

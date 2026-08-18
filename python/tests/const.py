@@ -33,3 +33,6 @@ TEST_TIMEOUT_LONG = 120
 # Names
 PREFIX_NAME = "prefix-"
 SUFFIX_NAME = "-suffix.ext"
+
+# Promote: the only source tree accepted by the cluster (Go: apc.PromoteRoot)
+PROMOTE_ROOT = "/var/lib/ais/promote"

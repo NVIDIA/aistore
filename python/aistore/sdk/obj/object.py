@@ -411,13 +411,13 @@ class Object:
         src_not_file_share: bool = False,
     ) -> str:
         """
-        Promotes a file or folder an AIS target can access to a bucket in AIS storage.
-        These files can be either on the physical disk of an AIS target itself or on a network file system
-        the cluster can access.
+        Promotes a file or folder under /var/lib/ais/promote to a bucket in AIS storage.
+        That path is the only source tree promote accepts; a host administrator may place
+        local directories, file shares, or symlinks there.
         See more info here: https://aiatscale.org/blog/2022/03/17/promote
 
         Args:
-            path (str): Path to file or folder the AIS cluster can reach
+            path (str): Path to file or folder under /var/lib/ais/promote on the target
             target_id (str, optional): Promote files from a specific target node
             recursive (bool, optional): Recursively promote objects from files in directories inside the path
             overwrite_dest (bool, optional): Overwrite objects already on AIS

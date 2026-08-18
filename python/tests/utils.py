@@ -3,6 +3,7 @@ import random
 import shutil
 import string
 import tarfile
+import tempfile
 import io
 import unittest
 import warnings
@@ -34,7 +35,7 @@ from aistore.sdk.obj.content_iterator import ContentIterProvider
 from aistore.sdk.response_handler import ResponseHandler
 from aistore.sdk.types import BucketModel
 from aistore.sdk.errors import AISError
-from tests.const import KB
+from tests.const import KB, PROMOTE_ROOT
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
 
 
@@ -137,6 +138,19 @@ def cleanup_local(path: str):
         shutil.rmtree(path)
     except FileNotFoundError:
         pass
+
+
+def promote_test_dir(prefix: str = "prm-") -> Path:
+    """
+    Create a directory under the promote root (apc.PromoteRoot), the only source tree
+    promote accepts. Skips the calling test when the root is not writable.
+    """
+    root = Path(PROMOTE_ROOT)
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        return Path(tempfile.mkdtemp(prefix=prefix, dir=str(root)))
+    except OSError as err:
+        raise unittest.SkipTest(f"cannot create under {root}: {err}") from err
 
 
 def cases(*args):

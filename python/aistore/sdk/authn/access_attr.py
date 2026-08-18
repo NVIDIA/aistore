@@ -33,8 +33,7 @@ class AccessAttr(IntFlag):
 
     # Derived Roles
     ACCESS_RO = GET | OBJ_HEAD | BCK_HEAD | OBJ_LIST
-    # NOTE: PROMOTE is deliberately not part of ACCESS_RW - promote reads target-local
-    # files (incl. anything mounted into the node) and additionally requires ADMIN
+    # NOTE: PROMOTE is deliberately not part of ACCESS_RW; grant it explicitly when needed.
     ACCESS_RW = ACCESS_RO | PUT | APPEND | OBJ_DELETE | OBJ_MOVE
     CLUSTER_ACCESS_RO = LIST_BUCKETS | SHOW_CLUSTER
     CLUSTER_ACCESS_RW = CLUSTER_ACCESS_RO | CREATE_BUCKET | DESTROY_BUCKET | MOVE_BUCKET

@@ -1,16 +1,14 @@
 #
 # Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
-import tempfile
 from typing import List
-from pathlib import Path
 
 import pytest
 
 from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.authn.types import AccessAttr
 from tests.integration.sdk.authn.authn_test_base import AuthNTestBase
-from tests.utils import random_string
+from tests.utils import cleanup_local, promote_test_dir, random_string
 
 
 class TestAuthNAccess(AuthNTestBase):  # pylint: disable=too-many-public-methods
@@ -119,24 +117,27 @@ class TestAuthNAccess(AuthNTestBase):  # pylint: disable=too-many-public-methods
 
     @pytest.mark.authn
     def test_access_obj_promote(self):
-        """Test object promote permission: PROMOTE alone is not sufficient, ADMIN is also required."""
-        with tempfile.TemporaryDirectory() as dirname:
-            tmpdir = Path(dirname)
-            local_file_path = tmpdir.joinpath("test_promote_file.txt").absolute()
-            local_file_content = "Test content for promotion"
-            with open(local_file_path, "w", encoding=UTF_ENCODING) as file:
-                file.write(local_file_content)
+        """Test object promote permission: PROMOTE is required; sources under the promote root."""
+        tmpdir = promote_test_dir()
+        self.addCleanup(cleanup_local, str(tmpdir))
 
-            client = self._create_client_with_access(access_attrs=[AccessAttr.PROMOTE])
-            obj = client.bucket(self.bck.name).object("promoted_test_file")
-            self._assert_forbidden(lambda: obj.promote(str(local_file_path)))
+        local_file_path = tmpdir.joinpath("test_promote_file.txt").absolute()
+        local_file_content = "Test content for promotion"
+        with open(local_file_path, "w", encoding=UTF_ENCODING) as file:
+            file.write(local_file_content)
 
-            admin_client = self._create_client_with_access(
-                access_attrs=[AccessAttr.PROMOTE, AccessAttr.ADMIN], scoped=False
-            )
-            admin_client.bucket(self.bck.name).object("promoted_test_file").promote(
-                str(local_file_path)
-            )
+        # ACCESS_RW alone is not enough
+        rw_client = self._create_client_with_access(access_attrs=[AccessAttr.ACCESS_RW])
+        self._assert_forbidden(
+            lambda: rw_client.bucket(self.bck.name)
+            .object("promoted_rw")
+            .promote(str(local_file_path))
+        )
+
+        client = self._create_client_with_access(access_attrs=[AccessAttr.PROMOTE])
+        client.bucket(self.bck.name).object("promoted_test_file").promote(
+            str(local_file_path)
+        )
 
     @pytest.mark.authn
     def test_access_move_bucket(self):

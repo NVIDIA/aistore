@@ -129,7 +129,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	)
 	m.saveCluState(m.proxyURL)
 
-	tempdir := t.TempDir()
+	tempdir := promoteTestDir(t)
 	subdirFQN := filepath.Join(tempdir, subdir)
 	err := cos.CreateDir(subdirFQN)
 	tassert.CheckFatal(t, err)

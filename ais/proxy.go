@@ -2104,26 +2104,22 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		p.redirectAction(w, r, bck, apireq.items[1], msg)
 		p.statsT.IncBck(stats.RenameCount, bck.Bucket())
 	case apc.ActPromote:
-		// AcePromote already checked above - bctx.init defaults perms from xact.Table.
-		// Promote reads arbitrary target-local files, so also requires cluster-level admin.
-		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
-			p.statsT.IncWith(stats.ErrPutCount, xvlabs(bck))
-			return
-		}
-		// ActionMsg.Name is the source
-		if !filepath.IsAbs(msg.Name) {
-			if msg.Name == "" {
-				p.writeErrMsg(w, r, "promoted source pathname is empty")
-			} else {
-				p.writeErrf(w, r, "promoted source must be an absolute path (got %q)", msg.Name)
-			}
-			return
-		}
+		// AcePromote already checked above - bctx.init defaults perms from xact.Table
+		// (bucket ACL, with cluster fall-through when there is no bucket entry).
 		args := &apc.PromoteArgs{}
 		if err := cos.MorphMarshal(msg.Value, args); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
+		// Ensure name == args.SrcFQN and SrcFQN is valid
+		srcFQN, err := apc.ValidatePromote(msg.Name, args)
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		args.SrcFQN = srcFQN
+		msg.Name = srcFQN
+		msg.Value = args
 		var tsi *meta.Snode
 		if args.DaemonID != "" {
 			smap := p.owner.smap.get()

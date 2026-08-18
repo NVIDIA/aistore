@@ -49,6 +49,20 @@ func expectStatus(t *testing.T, err error, status int) {
 	tassert.Fatalf(t, herr.Status == status, "expected %d, got %d", status, herr.Status)
 }
 
+// promoteTestDir returns a writable directory under the hard-coded promote root.
+func promoteTestDir(t *testing.T) string {
+	t.Helper()
+	if err := os.MkdirAll(apc.PromoteRoot, 0o755); err != nil {
+		t.Skipf("cannot create %s: %v", apc.PromoteRoot, err)
+	}
+	dir, err := os.MkdirTemp(apc.PromoteRoot, "prm-") //nolint:usetesting // t.TempDir is rooted at $TMPDIR; promote requires apc.PromoteRoot
+	if err != nil {
+		t.Skipf("cannot create under %s: %v", apc.PromoteRoot, err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func expectETLAccessDenied(t *testing.T, bp api.BaseParams, status int) {
 	t.Helper()
 	tests := []struct {
@@ -197,15 +211,16 @@ func loginWithACLs(t *testing.T, authBP, aisBP api.BaseParams, cluID string, bck
 	return bp
 }
 
-// promote reads target-local files: full read-write on the bucket must not be enough
-func TestAuthPromoteRequiresAdmin(t *testing.T) {
+// promote is gated by AcePromote alone; source must be under the hard-coded promote root
+func TestAuthPromoteRequiresPromotePerm(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
 
 	var (
 		aisBP  = tools.BaseAPIParams()
 		authBP = authNBP()
 		bck    = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-		srcFQN = filepath.Join(t.TempDir(), trand.String(12))
+		srcDir = promoteTestDir(t)
+		srcFQN = filepath.Join(srcDir, trand.String(12))
 	)
 	tassert.CheckFatal(t, os.WriteFile(srcFQN, []byte("promote"), 0o600))
 
@@ -218,13 +233,13 @@ func TestAuthPromoteRequiresAdmin(t *testing.T) {
 
 	bckACL := cmn.Bck{Name: bck.Name, Provider: bck.Provider, Ns: cmn.Ns{UUID: smap.UUID}}
 
-	// AcePromote on the bucket, but no AceAdmin at cluster scope
-	t.Run("no-admin", func(t *testing.T) {
+	// AcePromote on the bucket grants promote
+	t.Run("promote-perm", func(t *testing.T) {
 		bp := loginWithACLs(t, authBP, aisBP, smap.UUID,
 			[]*authn.BckACL{{Bck: bckACL, Access: apc.AccessRW | apc.AcePromote}},
 			apc.ClusterAccessRW)
-		_, err := api.Promote(bp, bck, &apc.PromoteArgs{SrcFQN: srcFQN, ObjName: "promoted-no-admin"})
-		expectStatus(t, err, http.StatusForbidden)
+		_, err := api.Promote(bp, bck, &apc.PromoteArgs{SrcFQN: srcFQN, ObjName: "promoted-with-perm"})
+		tassert.CheckFatal(t, err)
 	})
 
 	// no bucket ACL: AcePromote falls through to cluster AccessAll
@@ -234,13 +249,20 @@ func TestAuthPromoteRequiresAdmin(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	})
 
-	// cluster AceAdmin, but a bucket ACL without AcePromote blocks fall-through
+	// cluster AcePromote, but a bucket ACL without AcePromote blocks fall-through
 	t.Run("restricted-bucket", func(t *testing.T) {
 		bp := loginWithACLs(t, authBP, aisBP, smap.UUID,
 			[]*authn.BckACL{{Bck: bckACL, Access: apc.AccessRW}},
-			apc.AceAdmin|apc.AcePromote)
+			apc.AcePromote)
 		_, err := api.Promote(bp, bck, &apc.PromoteArgs{SrcFQN: srcFQN, ObjName: "promoted-restricted"})
 		expectStatus(t, err, http.StatusForbidden)
+	})
+
+	t.Run("outside-root", func(t *testing.T) {
+		outside := filepath.Join(t.TempDir(), "outside")
+		tassert.CheckFatal(t, os.WriteFile(outside, []byte("x"), 0o600))
+		_, err := api.Promote(aisBP, bck, &apc.PromoteArgs{SrcFQN: outside, ObjName: "promoted-outside"})
+		expectStatus(t, err, http.StatusBadRequest)
 	})
 
 	t.Run("superuser", func(t *testing.T) {

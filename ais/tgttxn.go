@@ -1010,11 +1010,12 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 			return "", err
 		}
-		if strings.Contains(prmMsg.ObjName, "../") || strings.Contains(prmMsg.ObjName, "~/") {
-			return "", fmt.Errorf("invalid object name or prefix %q", prmMsg.ObjName)
+		srcFQN, err := apc.ValidatePromote(c.msg.Name, prmMsg)
+		if err != nil {
+			return "", err
 		}
-		srcFQN := c.msg.Name
-		finfo, err := os.Stat(srcFQN)
+		prmMsg.SrcFQN = srcFQN
+		finfo, err := t.statPromoteSource(srcFQN)
 		if err != nil {
 			return "", err
 		}
@@ -1028,7 +1029,7 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 		}
 
 		// directory
-		fqns, totalN, cksumVal, err := prmScan(srcFQN, prmMsg)
+		fqns, totalN, cksumVal, err := prmScan(prmMsg)
 		if totalN == 0 {
 			if err != nil {
 				return "", err
@@ -1086,8 +1087,23 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 	return "", nil
 }
 
+func (t *target) statPromoteSource(srcFQN string) (os.FileInfo, error) {
+	finfo, err := os.Stat(srcFQN)
+	if err == nil {
+		return finfo, nil
+	}
+
+	if _, errRoot := os.Stat(apc.PromoteRoot); errRoot != nil {
+		if cos.IsNotExist(errRoot) {
+			return nil, fmt.Errorf("%s: promote root %q does not exist", t, apc.PromoteRoot)
+		}
+		return nil, fmt.Errorf("%s: cannot access promote root %q: %v (source: %w)", t, apc.PromoteRoot, errRoot, err)
+	}
+	return nil, err
+}
+
 // scan and, optionally, auto-detect file-share
-func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int, _ string, err error) {
+func prmScan(prmMsg *apc.PromoteArgs) (fqns []string, totalN int, _ string, err error) {
 	var (
 		cksum      *cos.CksumHash
 		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Rom.Features().IsSet(feat.DontAutoDetectFshare)
@@ -1112,10 +1128,10 @@ func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int,
 		cksum = cos.NewCksumHash(cos.ChecksumCesXxh)
 	}
 	if prmMsg.Recursive {
-		opts := &fs.WalkOpts{Dir: dirFQN, Callback: cb, Sorted: true}
+		opts := &fs.WalkOpts{Dir: prmMsg.SrcFQN, Callback: cb, Sorted: true}
 		err = fs.Walk(opts)
 	} else {
-		err = fs.WalkDir(dirFQN, cb)
+		err = fs.WalkDir(prmMsg.SrcFQN, cb)
 	}
 
 	if err != nil || totalN == 0 || !autoDetect {
