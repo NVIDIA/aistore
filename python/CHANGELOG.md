@@ -60,6 +60,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `Job.wait()` / `wait_for_idle()` require an idle-kind job to report idle on
   2 consecutive polls before completing (mirrors Go's
   `xact.numConsecutiveIdle`); an abort on any target still returns immediately.
+- `Batch.get()` uses a shallow copy instead of deep copy when snapshotting the 
+  request before clearing, making the snapshot O(1) regardless of batch size.
+  - `MossIn` is now a frozen Pydantic class, reflecting its immutability.
 
 ### Fixed
 

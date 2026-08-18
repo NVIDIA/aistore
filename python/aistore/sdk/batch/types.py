@@ -58,7 +58,7 @@ class MossIn(BaseModel):
         default=None, alias=GB_LENGTH
     )  # length of the data to be extracted
 
-    model_config = {"populate_by_name": True}
+    model_config = {"populate_by_name": True, "frozen": True}
 
     def dict(self, *_args, **_kwargs) -> Dict:
         return self.model_dump(by_alias=True, exclude_defaults=True)

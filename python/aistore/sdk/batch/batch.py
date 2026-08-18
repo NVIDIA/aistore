@@ -237,30 +237,34 @@ class Batch:
                 "(use -1 to read to the end)"
             )
 
-        # Build MossIn
+        # Build MossIn (frozen, so optional fields must be passed at construction time)
+        extra = {}
+        if opaque:
+            extra["opaque"] = base64.urlsafe_b64encode(opaque).decode("utf-8")
+        if archpath:
+            extra["archpath"] = archpath
+        if start:
+            extra["start"] = start
+        if length:
+            extra["length"] = length
+
         if isinstance(obj, Object):
             moss_in = MossIn(
                 obj_name=obj.name,
                 bck=obj.bucket_name,
                 provider=obj.bucket_provider.value,
+                **extra,
             )
         else:
             if not self.bucket:
                 logger.error("Cannot add string object '%s': no bucket provided", obj)
                 raise ValueError(_BUCKET_REQUIRED_MSG)
             moss_in = MossIn(
-                obj_name=obj, bck=self.bucket.name, provider=self.bucket.provider.value
+                obj_name=obj,
+                bck=self.bucket.name,
+                provider=self.bucket.provider.value,
+                **extra,
             )
-
-        # Add optional parameters
-        if opaque:
-            moss_in.opaque = base64.urlsafe_b64encode(opaque).decode("utf-8")
-        if archpath:
-            moss_in.archpath = archpath
-        if start:
-            moss_in.start = start
-        if length:
-            moss_in.length = length
 
         self.request.add(moss_in)
         return self  # Allow chaining
@@ -348,10 +352,9 @@ class Batch:
         )
 
         if clear_batch:
-            # Create a deep copy of the request for the extractor to use.
-            # This allows us to clear the batch immediately while the generator
-            # (which may be consumed later) still has access to the request data.
-            request_snapshot = self.request.model_copy(deep=True)
+            # A shallow copy of the MossReq shell is sufficient since MossIn objects
+            # are never mutated by clear() or the generator
+            request_snapshot = self.request.model_copy()
             self.clear()
         else:
             request_snapshot = self.request
@@ -361,7 +364,7 @@ class Batch:
             return response.raw
 
         # TODO: Handle error response, create customized errors
-        if self.request.streaming_get:
+        if request_snapshot.streaming_get:
             return self._extract_streaming(response, request_snapshot)
         return self._extract_multipart(response, decode_as_stream, request_snapshot)
 
