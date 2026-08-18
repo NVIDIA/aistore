@@ -14,8 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-
-	"k8s.io/client-go/rest"
 )
 
 type PodStatus struct {
@@ -55,24 +53,26 @@ func Init() {
 		cos.ExitLogf("k8s client initialization failed: %v", err)
 		return
 	}
-	// in-cluster: both the node name and the pod name are required
+	if err := _initInCluster(); err != nil {
+		cos.ExitLog(err)
+	}
+}
+
+// in-cluster: both the node name and the pod name are required
+// (separated out from Init to be unit-testable without a cluster)
+func _initInCluster() error {
 	nodeName := os.Getenv(env.AisK8sNode)
 	if nodeName == "" {
-		cos.ExitLogf("%s: %q", missingK8sEnv, env.AisK8sNode)
+		return fmt.Errorf("%s: %q", missingK8sEnv, env.AisK8sNode)
 	}
 	podName := resolvePodName()
 	if podName == "" {
-		cos.ExitLogf("%s: %q (or %q)", missingK8sEnv, env.AisK8sPod, defaultPodNameEnv)
+		return fmt.Errorf("%s: %q (or %q)", missingK8sEnv, env.AisK8sPod, defaultPodNameEnv)
 	}
-	nlog.Infof("Pod info: name: %q, namespace: %q, node: %q", podName, _namespace(), nodeName)
+	nlog.Infof("Pod info: name: %q, namespace: %q, node: %q", podName, _clientNamespace(), nodeName)
 
 	NodeName = nodeName // last: IsK8s() implies an initialized client
-}
-
-// softNonK8s is true when client init failed because we are not in a cluster.
-// Any other init error is a hard failure (misconfigured in-cluster deploy).
-func softNonK8s(err error) bool {
-	return errors.Is(err, rest.ErrNotInCluster)
+	return nil
 }
 
 func resolvePodName() string {

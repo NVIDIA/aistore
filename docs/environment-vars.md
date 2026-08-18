@@ -168,9 +168,9 @@ See also:
 
 | name                    | comment                                                                                                                                                                                                   |
 |-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `MY_POD` and `HOSTNAME` | Kubernetes POD name. `MY_POD` is used in [production](https://github.com/NVIDIA/ais-k8s/); `HOSTNAME`, on the other hand, is usually considered a Kubernetes default. Required in Kubernetes deployments. |
+| `MY_POD` and `HOSTNAME` | Kubernetes POD name. `MY_POD` is used in [production](https://github.com/NVIDIA/ais-k8s); `HOSTNAME`, on the other hand, is usually considered a Kubernetes default. Required in Kubernetes deployments. |
 | `MY_NODE`               | Kubernetes node name; injected via the downward API in both [production](https://github.com/NVIDIA/ais-k8s) and development, and required in Kubernetes deployments.                                      |
-| `K8S_NS`                | Kubernetes namespace. `K8S_NS` is used in [production](https://github.com/NVIDIA/ais-k8s), used to define the internal K8s client namespace.                                                              |
+| `K8S_NS`                | Kubernetes namespace for the in-cluster client; set in [production](https://github.com/NVIDIA/ais-k8s) and development. When unset, the namespace is read from `/var/run/secrets/kubernetes.io/serviceaccount/namespace`, falling back to `default`. |
 
 Kubernetes POD name is also reported via `ais show cluster` CLI - when it is a Kubernetes deployment, e.g.:
 
@@ -182,6 +182,7 @@ t[fXbarEnn]    3.08%         367.66GiB     51%           8.414TiB      [0.9 1.1 
 
 See related:
 * [AIS K8s Operator: environment variables](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go)
+* [AIS K8s Operator](https://github.com/NVIDIA/ais-k8s)
 
 ## AWS S3
 

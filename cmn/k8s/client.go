@@ -52,8 +52,10 @@ type (
 
 var (
 	_defaultK8sClient *defaultClient
-	// Returned by GetClient when the client was never set — unexpected if IsK8s() is true
-	errClientNotInit = errors.New("k8s client failed to initialize")
+
+	// Returned by GetClient when the client was never set. A hard init failure exits
+	// the process (see Init), so reaching this means: not in a cluster.
+	errClientNotInit = errors.New("k8s client is not initialized (" + nonK8s + "?)")
 )
 
 func _initClient() error {
@@ -73,6 +75,12 @@ func _initClient() error {
 	return nil
 }
 
+// return true when client init failed because we are not in a cluster
+// (any other init error is a cos.Exit)
+func softNonK8s(err error) bool {
+	return errors.Is(err, rest.ErrNotInCluster)
+}
+
 // Retrieve pod namespace
 // See:
 //   - topic: "how to get current namespace of an in-cluster go Kubernetes client"
@@ -88,7 +96,15 @@ func _namespace() (namespace string) {
 			return
 		}
 	}
-	return "default"
+	return Default
+}
+
+// namespace the initialized client is actually using (empty when not initialized)
+func _clientNamespace() string {
+	if _defaultK8sClient == nil {
+		return ""
+	}
+	return _defaultK8sClient.namespace
 }
 
 func GetClient() (Client, error) {
@@ -234,7 +250,7 @@ func InitTestClient(namespace ...string) (Client, error) {
 	ns := "default"
 	if len(namespace) > 0 && namespace[0] != "" {
 		ns = namespace[0]
-	} else if envNs := os.Getenv("KUBERNETES_NAMESPACE"); envNs != "" {
+	} else if envNs := os.Getenv("KUBERNETES_NAMESPACE"); envNs != "" { // TODO: undocumented env var, usage unclear
 		ns = envNs
 	}
 

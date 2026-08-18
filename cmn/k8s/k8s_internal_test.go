@@ -68,6 +68,38 @@ func TestInitNonK8s(t *testing.T) {
 func TestSoftNonK8s(t *testing.T) {
 	tassert.Fatal(t, softNonK8s(rest.ErrNotInCluster), "ErrNotInCluster should be soft")
 	tassert.Fatal(t, softNonK8s(errors.Join(rest.ErrNotInCluster, errors.New("wrap"))), "wrapped ErrNotInCluster should be soft")
-	tassert.Fatal(t, !softNonK8s(errors.New("open /var/run/secrets/kubernetes.io/serviceaccount/token: no such file or directory")), "token read error should be hard")
-	tassert.Fatal(t, !softNonK8s(errors.New("invalid configuration: no configuration has been provided")), "NewForConfig-style error should be hard")
+	tassert.Fatal(t, !softNonK8s(errors.New("open /var/run/secrets/kubernetes.io/serviceaccount/token: no such file or directory")),
+		"a token read error must be hard - it is the only non-ErrNotInCluster error InClusterConfig returns")
+}
+
+// restores the coverage previously provided by TestInitNodeFromEnv
+func TestInitInCluster(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		resetInitState(t)
+		t.Setenv(env.AisK8sNode, "env-node")
+		t.Setenv(env.AisK8sPod, "ais-target-0")
+
+		tassert.CheckFatal(t, _initInCluster())
+		tassert.Fatalf(t, NodeName == "env-node", "expected NodeName %q, got %q", "env-node", NodeName)
+		tassert.Fatal(t, IsK8s(), "expected IsK8s() to be true")
+	})
+	t.Run("no_node_name", func(t *testing.T) {
+		resetInitState(t)
+		t.Setenv(env.AisK8sNode, "")
+		t.Setenv(env.AisK8sPod, "ais-target-0")
+
+		err := _initInCluster()
+		tassert.Fatalf(t, err != nil, "expected an error when %q is unset", env.AisK8sNode)
+		tassert.Fatal(t, !IsK8s(), "expected IsK8s() to remain false")
+	})
+	t.Run("no_pod_name", func(t *testing.T) {
+		resetInitState(t)
+		t.Setenv(env.AisK8sNode, "env-node")
+		t.Setenv(env.AisK8sPod, "")
+		t.Setenv(defaultPodNameEnv, "")
+
+		err := _initInCluster()
+		tassert.Fatalf(t, err != nil, "expected an error when neither %q nor %q is set", env.AisK8sPod, defaultPodNameEnv)
+		tassert.Fatal(t, !IsK8s(), "expected IsK8s() to remain false - NodeName is assigned last")
+	})
 }
