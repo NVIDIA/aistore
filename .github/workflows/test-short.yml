@@ -75,6 +75,10 @@ jobs:
           echo "== after =="
           df -kh
 
+      # Promote sources are restricted to /var/lib/ais/promote (see apc.PromoteRoot).
+      - name: Create promote source root
+        run: sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" /var/lib/ais/promote
+
       - name: Run and test AIStore
         run: |
           export GOPATH="$(go env GOPATH)"

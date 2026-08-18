@@ -99,6 +99,14 @@ APP_CONF_DIR="$HOME/.config/ais"
 mkdir -p $AIS_CONF_DIR
 mkdir -p $APP_CONF_DIR
 
+# the only source root 'promote' accepts (see `apc.PromoteRoot`)
+PROMOTE_ROOT="/var/lib/ais/promote"
+mkdir -p $PROMOTE_ROOT 2>/dev/null
+if [ ! -w "$PROMOTE_ROOT" ]; then
+  echo "Warning: cannot write to $PROMOTE_ROOT - promote tests will not work; to enable them, run:"
+  echo "         sudo mkdir -p $PROMOTE_ROOT && sudo chown $(id -un) $PROMOTE_ROOT"
+fi
+
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
   exit_error "TCP port $PORT is not open (check if AIStore is already running)"
 fi

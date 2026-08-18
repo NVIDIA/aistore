@@ -1,4 +1,5 @@
 // RUN local-deployment
+// RUN promote-root
 
 ais bucket create ais://$BUCKET // IGNORE
 rm -rf /var/lib/ais/promote/prm // IGNORE

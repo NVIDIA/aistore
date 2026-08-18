@@ -1368,6 +1368,12 @@ OPTIONS:
 
 See above.
 
+## Source location
+
+Promote reads only from the `/var/lib/ais/promote` directory on targets.
+A system administrator populates that directory.
+See [AuthN documentation](/docs/authn.md#promote) for the associated ACLs.
+
 ## Promote a single file
 
 Promote `/var/lib/ais/promote/examples/example1.txt` without specifying an object name.
@@ -1379,7 +1385,7 @@ $ ais object promote /var/lib/ais/promote/examples/example1.txt ais://mybucket
 
 ## Promote file while specifying custom (resulting) name
 
-Promote `/var/lib/ais/promote/examples/example1.txt` as object `example1.txt`.
+Promote `/var/lib/ais/promote/examples/example1.txt` as an object named `example1.txt`.
 
 ```console
 $ ais object promote /var/lib/ais/promote/examples/example1.txt ais://mybucket/example1.txt
@@ -1406,7 +1412,7 @@ $ ais object promote /var/lib/ais/promote/examples ais://mybucket/examples/ -r -
 
 ## Promote invalid path
 
-Try to promote a file that does not exist.
+A path under the promote root that does not exist fails on the target.
 
 ```console
 $ ais create ais://testbucket
