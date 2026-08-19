@@ -90,13 +90,13 @@ func TestBlobDownload(t *testing.T) {
 	}
 
 	// Wait for all blob download xactions to complete
-	// Note: blob download is a single-target xaction that doesn't report to IC,
-	// so we query the target's registry directly instead of IC
+	// Note: blob download's direct-target start path does not register an IC listener,
+	// so the generic wait queries the target's registry directly instead.
 	tlog.Logfln("Waiting for blob download xactions to complete")
 
 	for _, xid := range xids {
 		args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout}
-		_, err := api.WaitForSnaps(baseParams, &args, args.Finished())
+		err := api.WaitForXaction(baseParams, &args)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -224,7 +224,7 @@ func TestBlobDownloadAbort(t *testing.T) {
 
 			// Wait for the xaction to finish aborting
 			tlog.Logfln("Waiting for blob download to finish aborting")
-			_, err = api.WaitForSnaps(baseParams, &args, args.Finished())
+			err = api.WaitForXaction(baseParams, &args)
 			tassert.CheckFatal(t, err)
 			tlog.Logfln("Blob download aborted and finished")
 
@@ -295,7 +295,7 @@ func TestBlobDownloadAbortByKind(t *testing.T) {
 	for _, xid := range xids {
 		args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
 
-		_, err = api.WaitForSnaps(baseParams, &args, args.Finished())
+		err = api.WaitForXaction(baseParams, &args)
 		tassert.CheckFatal(t, err)
 	}
 	tlog.Logfln("All blob downloads aborted or finished")
@@ -659,7 +659,7 @@ func TestBlobDownloadSingleThreaded(t *testing.T) {
 				// Wait for blob download to complete
 				tlog.Logfln("Waiting for single-threaded blob download to complete")
 				args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout}
-				_, err = api.WaitForSnaps(baseParams, &args, args.Finished())
+				err = api.WaitForXaction(baseParams, &args)
 				tassert.CheckFatal(t, err)
 
 				// Verify content via GET

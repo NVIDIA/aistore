@@ -31,7 +31,11 @@ from aistore.sdk.types import (
     AggregatedJobSnap,
 )
 from aistore.sdk.utils import probing_frequency, get_logger
-from aistore.sdk.xact_const import idles_before_finishing, is_valid_kind
+from aistore.sdk.xact_const import (
+    XACT_KIND_BLOB_DL,
+    idles_before_finishing,
+    is_valid_kind,
+)
 
 logger = get_logger(__name__)
 
@@ -129,8 +133,9 @@ class Job:
             `copy-listrange`, `etl-listrange`, `archive`, `list`,
             `put-copies`, `ec-get`/`ec-put`/`ec-resp`), wait for the job to
             reach an idle state across all targets (see `wait_for_idle`).
-          - otherwise (including unknown or empty kind), wait for the job to
-            reach a terminal state (its `end_time` becomes set).
+          - blob downloads use target snapshots because their direct-target
+            start path does not register an IC listener.
+          - otherwise, wait for the IC status to reach a terminal state.
 
         If `job_kind` is empty but `job_id` is set, the kind is first
         resolved from the cluster so the job dispatches correctly (raising
@@ -167,6 +172,8 @@ class Job:
                 verbose,
                 "reached idle state",
             )
+        if kind == XACT_KIND_BLOB_DL:
+            return self.wait_single_node(timeout, verbose)
         if kind and not is_valid_kind(kind):
             # not an error: SDK kind table may lag server; default to terminal
             logger.debug("unknown xaction kind %r; defaulting to terminal wait", kind)

@@ -87,44 +87,21 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 	return ""
 }
 
-// Wait for the caller's started xaction to run until finished _or_ idle;
-// having waited, report job errors and abort, if any (see checkXactErrs).
-// Waiting logic, by kind:
-//   - blob-download: no notification listener (see ais/prxclu) - poll target snaps
-//   - kinds that IdlesBeforeFinishing: wait for idle via target snaps
-//   - all other kinds: wait via IC (api.WaitForXactionIC)
-//
-// TODO:
-//   - simplify: replace the latter two calls with a single api.WaitForXaction; note:
-//     the latter discards IC status - kind-only (no job ID) waits lose abort reporting
-//   - not covered wrt finishing-with-errors: download and dsort (own wait handlers),
-//     blob-download (ditto), and the `--progress` (cpr) flows
+// Wait for the started xaction using the generic dispatcher, then report
+// per-target errors or aborts that the generic wait result does not return.
 func waitXact(args *xact.ArgsMsg) error {
 	debug.Assert(args.ID == "" || xact.IsValidUUID(args.ID))
 
-	// NOTE: relying on the Kind to decide between waiting APIs
+	// Kind is required by the generic wait.
 	debug.Assert(args.Kind != "")
-	kind, xname := xact.GetKindName(args.Kind)
+	kind, _ := xact.GetKindName(args.Kind)
 	debug.Assert(kind != "")
 
 	// normalize: args.Kind may be display-name
 	// (for usability, CLI must support kind and display-name interchangeably)
 	args.Kind = kind
 
-	if kind == apc.ActBlobDl {
-		return waitXactBlob(args)
-	}
-
-	if xact.IdlesBeforeFinishing(kind) {
-		err := api.WaitForSnapsIdle(apiBP, args)
-		return checkXactErrs(args, err)
-	}
-	// otherwise, IC
-	status, err := api.WaitForXactionIC(apiBP, args)
-	if err == nil && status.IsAborted() {
-		return fmt.Errorf("%s aborted", xact.Cname(xname, status.UUID))
-	}
-	err = V(err)
+	err := api.WaitForXaction(apiBP, args)
 	return checkXactErrs(args, err)
 }
 
@@ -216,7 +193,7 @@ func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr
 		return
 	}
 	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-		// 2nd attempt assuming xaction in question `IdlesBeforeFinishing`
+		// 2nd attempt via target snapshots
 		briefPause(1)
 		xs, _, err := queryXactions(&xargs, false /*summarize*/)
 		if err != nil {

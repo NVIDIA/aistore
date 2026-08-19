@@ -359,9 +359,7 @@ class TestObjectOps(ParallelTestBase):
 
         blob_download_job_id = obj.blob_download()
         self.assertNotEqual(blob_download_job_id, "")
-        result = self.client.job(job_id=blob_download_job_id).wait_single_node(
-            timeout=TEST_TIMEOUT
-        )
+        result = self.client.job(job_id=blob_download_job_id).wait(timeout=TEST_TIMEOUT)
         self.assertTrue(result.success)
         self.assertTrue(obj.props.present)
 
