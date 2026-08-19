@@ -168,6 +168,16 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 					return
 				}
 				continue
+			case "promote-root":
+				// Skip if promote's hard-coded source root is not writable
+				tmpDir, errV := os.MkdirTemp(apc.PromoteRoot, "e2e-")
+				if errV != nil {
+					tlog.Logfln("SKIPPING %q: cannot write to %s: %v", fileName, apc.PromoteRoot, errV)
+					ginkgo.Skip("promote root " + apc.PromoteRoot + " is not writable")
+					return
+				}
+				_ = os.RemoveAll(tmpDir)
+				continue
 			case "clean-cluster":
 				// Skip if there are pre-existing buckets in the cluster
 				if hasExistingBuckets() {
