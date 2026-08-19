@@ -96,18 +96,22 @@ func signNodeJoin(domain string, secret, body []byte, hdr http.Header) {
 	hdr.Set(apc.HdrJoinSig, nodeJoinSignature(domain, secret, body, timestamp))
 }
 
-// TODO: add nonce (see docs/auth_node_join.md)
+// TODO: support anti-replay nonce (for details, see docs/auth_node_join.md)
 func verifyNodeJoin(domain string, secret, body []byte, hdr http.Header, maxSkew time.Duration) error {
-	timestamp := hdr.Get(apc.HdrJoinTime)
-	unix, err := strconv.ParseInt(timestamp, 10, 64)
+	var (
+		timestamp = hdr.Get(apc.HdrJoinTime)
+		ts, err   = strconv.ParseInt(timestamp, 10, 64)
+	)
 	if err != nil {
 		return errJoinTimestamp
 	}
-	if time.Since(time.Unix(unix, 0)).Abs() > maxSkew {
-		return errJoinExpired
+	if since := time.Since(time.Unix(ts, 0)); since.Abs() > maxSkew {
+		return fmt.Errorf("%w (elapsed: %v, max time window %v)", errJoinExpired, since, maxSkew)
 	}
-	expected := nodeJoinSignature(domain, secret, body, timestamp)
-	if !cos.CryptoEqual([]byte(hdr.Get(apc.HdrJoinSig)), []byte(expected)) {
+
+	exp := nodeJoinSignature(domain, secret, body, timestamp)
+	got := hdr.Get(apc.HdrJoinSig)
+	if !cos.CryptoEqual(cos.UnsafeB(got), cos.UnsafeB(exp)) {
 		return errJoinSignature
 	}
 	return nil
