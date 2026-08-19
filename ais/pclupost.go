@@ -243,11 +243,11 @@ func (c *clupost) decode(isPub bool) (stop bool) {
 }
 
 func (c *clupost) authenticateJoin() error {
-	if len(nodeJoinSecret) == 0 {
+	if len(c.p.joinSecret) == 0 {
 		return nil
 	}
 	maxSkew := c.config.Auth.IntraCluster.NonceWindow.D()
-	if err := verifyNodeJoin(nodeJoinRequestHMACDomain, nodeJoinSecret, c.body, c.r.Header, maxSkew); err != nil {
+	if err := verifyNodeJoin(nodeJoinRequestHMACDomain, c.p.joinSecret, c.body, c.r.Header, maxSkew); err != nil {
 		return cmn.NewErrHTTP(c.r, err, http.StatusUnauthorized)
 	}
 	return nil
@@ -433,7 +433,7 @@ func (c *clupost) dispatch(msync bool) {
 	if !msync {
 		switch c.apiOp {
 		case apc.SelfJoin:
-			if len(nodeJoinSecret) > 0 {
+			if len(c.p.joinSecret) > 0 {
 				c.signJoinResponse(nil)
 			}
 		case apc.AdminJoin:
@@ -471,7 +471,7 @@ func (c *clupost) dispatch(msync bool) {
 			return
 		}
 		c.setVerHdr() // primary => node: software-version exchange (case #2)
-		p.writeSignedJSON(w, r, md, path.Join(c.msg.Action, c.nsi.ID()), nodeJoinResponseHMACDomain, nodeJoinSecret)
+		p.writeJoinJSON(w, r, md, path.Join(c.msg.Action, c.nsi.ID()), nodeJoinResponseHMACDomain)
 	}
 
 	go func() {
@@ -482,11 +482,11 @@ func (c *clupost) dispatch(msync bool) {
 }
 
 func (c *clupost) signJoinResponse(body []byte) {
-	debug.Assert(len(nodeJoinSecret) > 0) // bootstrap loaded the configured secret
+	debug.Assert(len(c.p.joinSecret) > 0) // bootstrap loaded the configured secret
 	debug.Assert(c.apiOp == apc.SelfJoin) // only self-join responses use this proof
 
 	// An empty body authenticates a successful no-op self-join response.
-	signNodeJoin(nodeJoinResponseHMACDomain, nodeJoinSecret, body, c.w.Header())
+	signNodeJoin(nodeJoinResponseHMACDomain, c.p.joinSecret, body, c.w.Header())
 }
 
 // primary => node: stamp the response with our software version (see version-boundary enforcement)

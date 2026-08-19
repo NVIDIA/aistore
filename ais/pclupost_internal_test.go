@@ -72,18 +72,21 @@ func TestSelfJoinAuthentication(t *testing.T) {
 	tassert.Errorf(t, err != nil && err.Error() == "invalid node-join signature", "expected reflected signature to fail, got %v", err)
 	signNodeJoin(nodeJoinResponseHMACDomain, secret, body, hdr)
 	tassert.CheckFatal(t, verifyNodeJoin(nodeJoinResponseHMACDomain, secret, body, hdr, maxSkew))
-	nodeJoinSecret = secret
-	t.Cleanup(func() { nodeJoinSecret = nil })
+	p := &proxy{}
+	p.joinSecret = secret
+
 	rec := httptest.NewRecorder()
-	(&clupost{w: rec, apiOp: apc.SelfJoin}).dispatch(false)
+	(&clupost{p: p, w: rec, apiOp: apc.SelfJoin}).dispatch(false)
 	tassert.CheckFatal(t, verifyNodeJoin(nodeJoinResponseHMACDomain, secret, rec.Body.Bytes(), rec.Header(), maxSkew))
 	rec = httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	(&htrun{}).writeSignedJSON(rec, req, map[string]any{"config": map[string]string{"key": "value"}}, "test",
-		nodeJoinResponseHMACDomain, secret)
+	p.writeJoinJSON(rec, req, map[string]any{"config": map[string]string{"key": "value"}}, "test",
+		nodeJoinResponseHMACDomain)
 	tassert.CheckFatal(t, verifyNodeJoin(nodeJoinResponseHMACDomain, secret, rec.Body.Bytes(), rec.Header(), maxSkew))
+
+	h := &htrun{}
 	rec = httptest.NewRecorder()
-	(&htrun{}).writeSignedJSON(rec, req, body, "test", nodeJoinResponseHMACDomain, nil)
+	h.writeJoinJSON(rec, req, body, "test", nodeJoinResponseHMACDomain) // no secret => unsigned
 	tassert.Errorf(t, rec.Body.Len() > 0 && rec.Header().Get(apc.HdrJoinSig) == "", "unexpected unsigned response")
 
 	timestamp := strconv.FormatInt(time.Now().Add(-2*time.Minute).Unix(), 10)

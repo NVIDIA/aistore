@@ -453,9 +453,7 @@ func _streamPayload(sb *cos.SB, trname, senderID string, sessID, smapVer int64, 
 }
 
 // node-join secret
-
-// Initialized by initPhase2 before concurrent use and immutable thereafter.
-var nodeJoinSecret []byte
+// (the secret itself lives in htrun.joinSecret - loaded by initPhase2, immutable thereafter)
 
 func loadNodeJoinSecret(secretPath string) ([]byte, error) {
 	finfo, err := os.Stat(secretPath) // follows projected K8s Secret symlinks

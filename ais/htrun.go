@@ -78,6 +78,7 @@ type htrun struct {
 	// sign/verify
 	nodeKeyPair *cos.NodeKeyPair
 	svs         svState
+	joinSecret  []byte // node-join shared secret; loaded once by initPhase2; TODO: support explicit runtime reload
 
 	keepalive keepaliver
 	statsT    stats.Tracker
@@ -475,7 +476,7 @@ func (h *htrun) initPhase2(config *cmn.Config) {
 	debug.Assert(g.netServ.control != nil && g.netServ.data != nil && g.netServ.pub != nil) // (phase1 above)
 	if secretPath := config.Auth.NodeJoinSecretPath(); !cmn.IsV50Bridge() && secretPath != "" {
 		var err error
-		if nodeJoinSecret, err = loadNodeJoinSecret(secretPath); err != nil {
+		if h.joinSecret, err = loadNodeJoinSecret(secretPath); err != nil {
 			cos.ExitLog(err)
 		}
 	}
@@ -1239,8 +1240,8 @@ func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v any, tag str
 	}
 }
 
-func (h *htrun) writeSignedJSON(w http.ResponseWriter, r *http.Request, v any, tag, domain string, secret []byte) {
-	if secret == nil {
+func (h *htrun) writeJoinJSON(w http.ResponseWriter, r *http.Request, v any, tag, domain string) {
+	if len(h.joinSecret) == 0 {
 		h.writeJSON(w, r, v, tag)
 		return
 	}
@@ -1249,7 +1250,7 @@ func (h *htrun) writeSignedJSON(w http.ResponseWriter, r *http.Request, v any, t
 		hdr := w.Header()
 		hdr.Set(cos.HdrContentType, cos.ContentJSONCharsetUTF)
 		hdr.Set(cos.HdrContentLength, strconv.Itoa(len(body)))
-		signNodeJoin(domain, secret, body, hdr)
+		signNodeJoin(domain, h.joinSecret, body, hdr)
 		_, err = w.Write(body)
 	}
 	if err != nil {
@@ -2277,13 +2278,7 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 				resPrev = nil //nolint:ineffassign,wastedassign // readability
 			}
 			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
-			if res.err == nil {
-				if len(nodeJoinSecret) > 0 {
-					// Authenticate candidate response before accepting its cluster metadata.
-					maxSkew := config.Auth.IntraCluster.NonceWindow.D()
-					res.err = verifyNodeJoin(nodeJoinResponseHMACDomain, nodeJoinSecret, res.bytes, res.header, maxSkew)
-				}
-			}
+			h.verifyJoinResponse(res, config)
 			if res.err == nil {
 				if candidateURL == primaryURL || (psi != nil && candidateURL == psi.URL(cmn.NetPublic)) {
 					nlog.Infoln(h.String()+": primary responded Ok via", candidateURL)
@@ -2322,12 +2317,7 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 	}
 
 	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
-	if res.err == nil {
-		if len(nodeJoinSecret) > 0 {
-			maxSkew := config.Auth.IntraCluster.NonceWindow.D()
-			res.err = verifyNodeJoin(nodeJoinResponseHMACDomain, nodeJoinSecret, res.bytes, res.header, maxSkew)
-		}
-	}
+	h.verifyJoinResponse(res, config)
 	if res.err == nil {
 		nlog.Infoln(h.String()+": joined cluster via", primaryURL)
 		return res, nil
@@ -2370,6 +2360,16 @@ func _isLocalhost(h string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// authenticate the responding node (primary or candidate) before accepting its cluster metadata;
+// no-op when the node-join secret is not configured
+func (h *htrun) verifyJoinResponse(res *callResult, config *cmn.Config) {
+	if res.err != nil || len(h.joinSecret) == 0 {
+		return
+	}
+	maxSkew := config.Auth.IntraCluster.NonceWindow.D()
+	res.err = verifyNodeJoin(nodeJoinResponseHMACDomain, h.joinSecret, res.bytes, res.header, maxSkew)
+}
+
 func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext htext, keepalive bool) *callResult {
 	var (
 		path          string
@@ -2408,8 +2408,8 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 	header := http.Header{apc.HdrNodeVersion: []string{cmn.VersionAIStore}} // primary may want to enforce min-version or same-version
 
 	// Self-join, force-join registration, and slow keepalive require request authentication when configured.
-	if len(nodeJoinSecret) > 0 {
-		signNodeJoin(nodeJoinRequestHMACDomain, nodeJoinSecret, body, header)
+	if len(h.joinSecret) > 0 {
+		signNodeJoin(nodeJoinRequestHMACDomain, h.joinSecret, body, header)
 	}
 
 	cargs := allocCargs()
