@@ -35,6 +35,15 @@ jobs:
             image_tag: latest-oteltracing
             context_dir: deploy/prod/k8s/aisnode_container
             build_tags: oteltracing
+          # aisnode ETL
+          - image_name: aistorage/aisnode
+            image_tag: ${{ needs.release-tag.outputs.image_tag }}-etl
+            context_dir: deploy/prod/k8s/aisnode_container
+            build_tags: etl
+          - image_name: aistorage/aisnode
+            image_tag: latest-etl
+            context_dir: deploy/prod/k8s/aisnode_container
+            build_tags: etl
           # ais-init
           - image_name: aistorage/ais-init
             image_tag: ${{ needs.release-tag.outputs.image_tag }}

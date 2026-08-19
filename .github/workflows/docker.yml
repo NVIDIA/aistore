@@ -17,6 +17,12 @@ on:
         type: boolean
         default: false
 
+      build_aisnode_etl_image:
+        description: 'Build ETL aisnode image (aistorage/aisnode:<tag>-etl)'
+        required: true
+        type: boolean
+        default: false
+
       build_aisinit_image:
         description: 'Build aisinit image (aistorage/ais-init)'
         required: true
@@ -80,6 +86,22 @@ jobs:
       image_tag: ${{ inputs.image_tag && format('{0}-oteltracing', inputs.image_tag) || 'dev-oteltracing' }}
       context_dir: deploy/prod/k8s/aisnode_container
       build_tags: oteltracing
+      commit_sha: ${{ github.sha }}
+      multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  aisnode-etl:
+    if: ${{ inputs.build_aisnode_etl_image }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: aistorage/aisnode
+      image_tag: ${{ inputs.image_tag && format('{0}-etl', inputs.image_tag) || 'dev-etl' }}
+      context_dir: deploy/prod/k8s/aisnode_container
+      build_tags: etl
       commit_sha: ${{ github.sha }}
       multiarch: ${{ github.event_name == 'workflow_dispatch' && inputs.multiarch || false }}
     secrets:
