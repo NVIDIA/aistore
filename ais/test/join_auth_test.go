@@ -31,6 +31,9 @@ type joinTestBody struct {
 
 const invalidNodeJoinSecret = "invalid-node-join-secret"
 
+// NOTE: mirrors ais.nodeJoinSignature (unexported). The canonicalization is pinned
+// package-side by TestNodeJoinSignatureKAT; if the two ever diverge, the positive cases
+// below start failing with 401.
 func nodeJoinHeader(body []byte, secret string) http.Header {
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	mac := hmac.New(sha256.New, []byte(secret))

@@ -2524,6 +2524,15 @@ func (c *AuthConf) NodeJoinSecretPath() string {
 	return c.IntraCluster.NodeJoinSecretPath
 }
 
+// max clock skew tolerated when verifying a node-join proof; nil-safe for the same reason
+// as above - `intra_cluster` is optional and normalizes to nil when omitted
+func (c *AuthConf) NodeJoinNonceWindow() time.Duration {
+	if c.IntraCluster == nil || c.IntraCluster.NonceWindow == 0 {
+		return dfltNonceWindow
+	}
+	return c.IntraCluster.NonceWindow.D()
+}
+
 // Starting with v5.0, direct access to AIS targets is rejected when either AuthN
 // or intra-cluster request signing is configured: both require proxy mediation.
 // Note that auth.intra_cluster.node_join_secret_path is deliberately NOT part of this.

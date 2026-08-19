@@ -728,3 +728,14 @@ func TestUpdateClusterConfigSparseOverride(t *testing.T) {
 	tassert.Fatalf(t, config.Disk.DiskUtilMaxWM == 95,
 		"disk max watermark: got %d, expected 95", config.Disk.DiskUtilMaxWM)
 }
+
+func TestNodeJoinNonceWindow(t *testing.T) {
+	var auth cmn.AuthConf
+	tassert.Fatalf(t, auth.NodeJoinNonceWindow() == time.Minute, "unexpected default %v", auth.NodeJoinNonceWindow())
+
+	auth.IntraCluster = &cmn.IntraClusterConf{}
+	tassert.Fatalf(t, auth.NodeJoinNonceWindow() == time.Minute, "unexpected zero-value default %v", auth.NodeJoinNonceWindow())
+
+	auth.IntraCluster.NonceWindow = cos.Duration(2 * time.Minute)
+	tassert.Fatalf(t, auth.NodeJoinNonceWindow() == 2*time.Minute, "unexpected configured value %v", auth.NodeJoinNonceWindow())
+}

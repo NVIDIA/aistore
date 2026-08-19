@@ -2366,7 +2366,7 @@ func (h *htrun) verifyJoinResponse(res *callResult, config *cmn.Config) {
 	if res.err != nil || len(h.joinSecret) == 0 {
 		return
 	}
-	maxSkew := config.Auth.IntraCluster.NonceWindow.D()
+	maxSkew := config.Auth.NodeJoinNonceWindow()
 	res.err = verifyNodeJoin(nodeJoinResponseHMACDomain, h.joinSecret, res.bytes, res.header, maxSkew)
 }
 

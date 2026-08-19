@@ -246,7 +246,7 @@ func (c *clupost) authenticateJoin() error {
 	if len(c.p.joinSecret) == 0 {
 		return nil
 	}
-	maxSkew := c.config.Auth.IntraCluster.NonceWindow.D()
+	maxSkew := c.config.Auth.NodeJoinNonceWindow()
 	if err := verifyNodeJoin(nodeJoinRequestHMACDomain, c.p.joinSecret, c.body, c.r.Header, maxSkew); err != nil {
 		return cmn.NewErrHTTP(c.r, err, http.StatusUnauthorized)
 	}
