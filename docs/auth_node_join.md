@@ -19,10 +19,9 @@ requirements:
    metadata and completing the join.
 
 `auth.intra_cluster.node_join_secret_path` provides the out-of-band trust used
-for this mutual authentication. The configured file contains one or more
-opaque shared secrets. A secret is not annotated with the cluster UUID in the
-file; instead, each proof binds it to the UUID as part of the authenticated
-input. The secret itself is never transmitted.
+for this mutual authentication. The configured file contains an opaque shared
+secret, which is never transmitted: each side proves possession of it over the
+exchanged message rather than sending it.
 
 The credential is used only to establish cluster membership. Once a node is
 admitted and its verifying key is distributed through the Smap, ordinary
@@ -36,6 +35,7 @@ per-node signing protects subsequent intra-cluster requests.
 
 **Table of Contents**
 
+- [Implementation Status](#implementation-status)
 - [Mutual Bootstrap Authentication](#mutual-bootstrap-authentication)
   - [The primary authenticates the joining node](#the-primary-authenticates-the-joining-node)
   - [The joining node authenticates the primary](#the-joining-node-authenticates-the-primary)
@@ -47,10 +47,32 @@ per-node signing protects subsequent intra-cluster requests.
 - [Enabling Protection on an Existing Cluster](#enabling-protection-on-an-existing-cluster)
 - [Adding, Restarting, and Administratively Joining Nodes](#adding-restarting-and-administratively-joining-nodes)
 - [Kubernetes Provisioning](#kubernetes-provisioning)
-- [Secret Rotation](#secret-rotation)
 - [Force-Joining Distinct Clusters](#force-joining-distinct-clusters)
 - [Failure and Recovery](#failure-and-recovery)
+- [Future Development](#future-development)
 - [References](#references)
+
+## Implementation Status
+
+This document describes both the design and what is currently enforced. They are
+not yet the same. Read this table before relying on any section below.
+
+| Capability | Status |
+|---|---|
+| Startup self-join: node proves possession to the primary | Enforced |
+| Startup self-join: primary proves possession to the node | Enforced |
+| Slow keepalive that would admit an absent or restarted node | Enforced |
+| Credential permission and non-empty checks; fail-closed at startup | Enforced |
+| Timestamp binding, bounded by `auth.intra_cluster.nonce_window` | Enforced |
+| Administrative join | **Not enforced** - see [Future Development](#future-development) |
+| Force-join (single node or whole cluster) | **Not enforced** - registration is signed, destination metadata is not authenticated |
+| Cluster UUID bound into the proof | **Not implemented** |
+| Nonce / replay cache | **Not implemented** - see [Future Development](#future-development) |
+| Multiple secrets per file; online rotation | **Not implemented** - the file's first line is the only secret |
+| Reloading the credential without a restart | **Not implemented** |
+
+All of the above is additionally gated on the release: see
+[Version Behavior](#version-behavior).
 
 ## Mutual Bootstrap Authentication
 
@@ -60,10 +82,15 @@ Possession of a provisioned secret means that a node has been authorized
 out of band and is authorized to join that cluster. Before adding an unknown
 node to the Smap, the primary requires proof of possession bound to:
 
-- the destination cluster UUID;
-- the joining node's identity;
+- the joining node's identity and the metadata it reports (both are carried in
+  the signed registration body);
 - the join direction; and
 - the proof format and version.
+
+The destination cluster UUID is *not* currently bound into the proof. Until it
+is, a secret shared between two clusters authorizes joins in both directions -
+see [Future Development](#future-development). Generate a distinct secret per
+cluster; with no UUID binding this is a requirement, not defense in depth.
 
 The Ed25519 verifying key supplied by a joining node cannot authenticate its
 own admission. An untrusted node can generate a key pair as easily as a
@@ -74,13 +101,13 @@ bootstrap proof succeeds.
 
 The reverse check is equally important. A joining node does not accept an Smap,
 cluster configuration, or other cluster metadata solely because an endpoint
-identifies itself as the primary. The primary must prove possession of one of
-the secrets provisioned on the joining node, with the advertised cluster UUID
-included in the proof.
+identifies itself as the primary. The primary must prove possession of the
+secret provisioned on the joining node, over the exact response body it sends.
 
 Only after that proof succeeds does the node accept the destination metadata
-and complete the join. This requirement applies to startup self-join,
-administrative join, and force-join workflows.
+and complete the join. This requirement is enforced for startup self-join. It
+is stated but *not yet enforced* for administrative join and force-join; see
+[Implementation Status](#implementation-status).
 
 The exact HTTP headers, canonical encoding, and retry sequence are
 implementation details. They are intentionally outside the configuration and
@@ -91,15 +118,15 @@ operational contract described here.
 The protected event is an unknown node ID becoming a member of the Smap. It
 is broader than the `/v1/cluster/autoreg` endpoint or any one join opcode.
 
-| Operation | Node-join authentication |
-|---|---|
-| Startup self-join | Required before admission |
-| Administrative join | Required in addition to administrative authorization |
-| Slow keepalive from a restarted or unknown node | Required - such a keepalive MAY (in a certain scenario) be promoted to self-join |
-| Keepalive from an established, already-admitted member | Not a new admission |
-| Split-branch or whole-cluster force-join | Required by the destination cluster |
-| Ordinary intra-cluster request | Controlled by `auth.intra_cluster.request_auth` |
-| Client request and ACL check | Controlled by `auth.client_auth_required` |
+| Operation | Node-join authentication | Enforced today |
+|---|---|---|
+| Startup self-join | Required before admission | Yes |
+| Administrative join | Required in addition to administrative authorization | No |
+| Slow keepalive from a restarted or unknown node | Required - such a keepalive MAY (in a certain scenario) be promoted to self-join | Yes |
+| Keepalive from an established, already-admitted member | Not a new admission | n/a |
+| Split-branch or whole-cluster force-join | Required by the destination cluster | No |
+| Ordinary intra-cluster request | Controlled by `auth.intra_cluster.request_auth` | n/a |
+| Client request and ACL check | Controlled by `auth.client_auth_required` | n/a |
 
 Node-join authentication does not require proxy mediation for client traffic
 and is deliberately not part of `AuthConf.RequiresProxyMediation()`.
@@ -162,44 +189,44 @@ Use a cryptographically random secret. A generated hexadecimal or base64url
 value representing at least 256 random bits is recommended. Do not use a
 password, cluster name, Kubernetes namespace, or other predictable value.
 
-A credential file may contain more than one secret, one per line. The first is
-the active secret used to produce new proofs; all listed secrets are accepted
-when verifying proofs. This overlap supports secret rotation and preparation
-for a force-join. An optional final newline is allowed, but empty records are
-not. Whitespace is not trimmed.
+Only the first line is currently read. Its trailing newline is removed without
+other trimming; any subsequent lines are ignored.
 
-The UUID binding is part of the proof rather than the file format:
+The proof is a keyed MAC over the message being authenticated:
 
 ```text
-invite = HMAC(secret, "ais-join-invite-v1" | clusterUUID | nodeID)
-accept = HMAC(secret, "ais-join-accept-v1" | clusterUUID | nodeID)
+sig = base64url( HMAC-SHA256(secret, domain | 0x00 | unixTimestamp | 0x00 | body) )
 ```
 
-The primary creates the invite with its active secret. The joining node finds
-the matching locally provisioned secret and uses it to create the accept proof.
-Distinct domain strings prevent either directional proof from being reflected
-as the other. The fields are encoded unambiguously; the vertical bars above are
-notation, not literal separators.
+carried in two headers:
 
-The v1 proofs deliberately contain neither a nonce nor a timestamp. A deployment
-that must prevent replay of an observed proof must protect the join exchange
-with TLS.
+```text
+Ais-Join-Time: <unix seconds>
+Ais-Join-Sig:  <base64url, unpadded>
+```
 
-<!--
-TODO(implementation): the two usual anti-replay items are deliberately absent
-from the v1 proof above (and the very first deliverable).
+with the direction fixed by the domain string:
 
-That's:
-- timestamp: bind into both HMACs; reject outside auth.intra_cluster.nonce_window
-  - the knob already exists and already means exactly this;
-- nonce: verifier-chosen where the round trip allows it, plus a short-lived
-  seen-nonce cache on the verifier.
--->
+```text
+request  (node => primary)  "ais-self-join-v1"
+response (primary => node)  "ais-self-join-response-v1"
+```
 
-Generate a different secret for every cluster. Including `clusterUUID` in the
-HMAC input binds a proof to the advertised UUID, but reusing the underlying
-secret across clusters would authorize each cluster to produce proofs for the
-other.
+Distinct domains prevent either directional proof from being reflected as the
+other. Fields are NUL-separated in fixed order so that no two distinct inputs
+produce the same MAC input; the vertical bars above are notation, the `0x00` is
+literal. `body` is the exact registration or response payload, byte for byte -
+the proof therefore covers the joining node's identity and everything else it
+reports.
+
+The timestamp is bound into the MAC and verified against
+`auth.intra_cluster.nonce_window` (default 1m, max 10m), tolerating skew in
+either direction. There is no nonce and no replay cache: an observed proof can
+be replayed within the window, so protect the join exchange with TLS.
+
+Generate a different secret for every cluster. Because the cluster UUID is not
+currently bound into the proof, a secret shared between two clusters authorizes
+each to produce proofs the other will accept.
 
 Never write a secret to logs, error responses, cluster metadata, or command
 output.
@@ -215,32 +242,41 @@ far more often an accident of provisioning than a deliberate choice.
 |---|---|
 | Path empty | Admission authentication is not configured |
 | Path nonempty on v5.0 | Setting is accepted and persisted, but the file is not used |
-| Mixed v5.0/v5.1 cluster | Enforcement has no effect until all nodes are running v5.1 |
 | All nodes v5.1 or later | When configured, node admission is mutually authenticated |
 
 The v5.0 staging window allows operators to provision and persist the setting
 before upgrading. The CLI warns when the setting is updated while one or more
 nodes do not support v5.1 behavior.
 
+Note that this warning is about the *release*, not about the restart. On v5.1
+and later the warning goes silent, but the credential is still read only at node
+startup - so an update to `node_join_secret_path` remains inert until every node
+restarts. See [Future Development](#future-development).
+
 ## Creating a New Cluster
 
 Do not configure `node_join_secret_path` in the initial configuration of a
 brand-new cluster.
 
-AIS generates the cluster UUID during primary startup, after collecting
-initial node registrations. There is therefore no established UUID to include
-in a proof during the initial registration phase. Initial formation must take
-place on a trusted or isolated network.
+Initial formation must take place on a trusted or isolated network.
 
-The secret file itself may be generated and mounted before cluster formation:
-its contents do not depend on the UUID. Leave `node_join_secret_path` empty
-until the cluster has formed.
+Historically the reason was that AIS generates the cluster UUID during primary
+startup, after collecting initial node registrations, leaving no UUID to bind
+into a proof. Since the UUID is not currently bound into the proof at all, that
+particular obstacle does not apply - but initial formation remains the least
+exercised path for this feature, and the admission decisions taken during
+early-start registration are not covered by the node-join tests. Treat
+enforcement during formation as unvalidated.
+
+The secret file itself may be generated and mounted before cluster formation.
+Leave `node_join_secret_path` empty until the cluster has formed.
 
 After the cluster has formed:
 
 1. Wait for initial registration to complete and verify that the cluster is
    stable.
-2. Obtain the established UUID, for example with:
+2. Obtain the established UUID - not used by the proof today, but worth
+   recording so that per-cluster secrets stay distinguishable:
 
 ```console
 $ ais show cluster smap --json | grep uuid
@@ -259,9 +295,7 @@ $ ais show cluster | grep "Cluster Map"
    completed everywhere.
 
 This protects subsequent admissions. It does not retroactively authenticate
-the nodes admitted during initial cluster formation. Protection from the very
-first registration would require a separate pre-UUID bootstrap mechanism and
-is not provided by this setting.
+the nodes admitted during initial cluster formation.
 
 Note that this section is about forming a *brand-new cluster*. A new *node*
 joining an already-formed cluster is the opposite case: it must be provisioned
@@ -275,8 +309,9 @@ no-op. It can be performed in advance of the all-node v5.1 upgrade.
 
 Use the following order for an existing cluster:
 
-1. Obtain and verify the cluster UUID.
-2. Generate a cryptographically random shared secret.
+1. Identify the cluster and record its UUID for your own bookkeeping.
+2. Generate a cryptographically random shared secret, distinct from every other
+   cluster's.
 3. Create a credential file containing the secret.
 4. Provision the credential file on every proxy and target, including standby
    or temporarily offline nodes that are expected to return.
@@ -331,8 +366,7 @@ Two Kubernetes specifics are easy to miss and both are load-bearing:
   `defaultMode: 0400` explicitly; a default mount produces a credential that
   fails the permission check.
 - **Do not use `subPath`.** A `subPath`-mounted file is copied once at pod
-  start and never refreshed, which makes [secret rotation](#secret-rotation)
-  silently impossible. Mount the directory instead.
+  start and never refreshed.
 
 Kubernetes projected Secret files commonly use symlinks internally. File
 validation must follow those symlinks rather than rejecting the projected file
@@ -342,35 +376,20 @@ The [AIS Kubernetes operator](https://github.com/NVIDIA/ais-k8s/tree/main/operat
 the Secret, update pod mounts, confirm availability, and only then update the
 AIS cluster configuration.
 
-## Secret Rotation
-
-Rotation must preserve an overlap during which primaries can verify proofs made
-with either secret. With the ordered secrets in the credential file, use three
-rollout stages:
-
-1. **Introduce:** keep the old secret first and append the new secret. Complete
-   this update on every node.
-2. **Switch:** place the new secret first and retain the old secret second.
-   Complete this update on every node.
-3. **Retire:** remove the old secret after every node is known to use and accept
-   the new secret.
-
-Do not begin a stage until the preceding stage has completed on every node.
-The reload mechanism and observability for a specific release must be checked
-before rotation. If live credential reload is not supported, perform each stage
-with a controlled node rollout.
-
-`auth.intra_cluster.rotation_grace` belongs to per-node request-signing key
-rotation. It does not provide an overlap window for the node-join shared secret.
-
 ## Force-Joining Distinct Clusters
+
+> **Not yet enforced.** Force-join registrations are signed like any other
+> registration, but the destination's cluster metadata is not authenticated by
+> the source nodes, and the prepare phase does not preflight source credentials.
+> The requirements below are the intended contract; do not rely on them as a
+> control today.
 
 When an entire source cluster joins a destination cluster with a different
 UUID, every source node must be provisioned with the destination credential
-before force-join begins. A file containing both clusters' secrets allows the
-source cluster to remain recoverable while its nodes prepare to authenticate to
-the destination. The destination primary's invite identifies which locally
-provisioned secret must be used for the accept proof.
+before force-join begins. A file containing both clusters' secrets would allow
+the source cluster to remain recoverable while its nodes prepare to authenticate
+to the destination - this depends on multi-secret files, which are not yet
+implemented.
 
 The destination cluster's requirements are authoritative:
 
@@ -394,16 +413,11 @@ Smap, BMD and cluster configuration.
 ## Failure and Recovery
 
 When node-join authentication is configured, admission fails closed if the
-credential file is missing, unreadable, malformed, or contains no secret that
-matches the proof for the advertised UUID. Error messages may identify the
+credential file is missing, unreadable, malformed, or holds a secret that does
+not match the presented proof. Error messages may identify the
 pathname, UUID, or failure category, but must never include secret material.
 
-A node whose configured path is unusable at startup fails to start, loudly,
-rather than starting and quietly never becoming a member. The two outcomes are
-operationally very different: a node that will not start is immediately visible
-in any orchestrator, while a node that is up but unadmitted looks healthy and is
-not. This is also why the check belongs to node startup rather than to
-cluster-configuration validation, which runs wherever the update is applied.
+A node with misconfigured path (inaccessible, too permissive, or empty content) - will fail to start.
 
 An already running member does not use this credential for ordinary client or
 intra-cluster traffic. Losing the file therefore does not by itself evict that
@@ -417,6 +431,38 @@ administrative decision. An authorized administrator may clear
 mode, then provision a new credential and re-enable it. Perform this recovery
 on an isolated network and audit it as a security-sensitive configuration
 change. Join and force-join requests themselves never provide a hidden bypass.
+
+## Future Development
+
+Ordered roughly by how much each one closes a gap between this document and the
+implementation. See also [Implementation Status](#implementation-status).
+
+**Credential reload API.** The secret is read once, at node startup, and held
+for the process lifetime. Changing `node_join_secret_path` through
+`ais config cluster ...` persists the new pathname but has no effect until every
+node restarts.
+
+**Ordered multi-secret credential files.** First secret signs, all secrets
+verify. Required for any rotation that does not stop admission, and for staging
+a force-join between clusters with different secrets.
+
+**Cluster UUID binding.** Include the destination UUID in the MAC input so that
+a proof is valid only against the cluster it was made for. This restores the
+property that most of this document was originally written around, and it
+removes secret reuse across clusters as a cross-authorization hazard.
+
+**Nonce and replay cache.** The timestamp bounds replay to
+`auth.intra_cluster.nonce_window`; it does not prevent it. Add a verifier-chosen
+nonce where the round trip allows it, plus a short-lived seen-nonce cache.
+
+**Administrative join.** Authenticate the candidate node and the destination
+primary to each other, in addition to the administrative authorization that
+already gates the operation.
+
+**Force-join.** Authenticate destination metadata before a source node applies
+it, and preflight every source node's credential during the prepare phase, so
+that a missing credential is detected before local cluster map or configuration
+changes.
 
 ## References
 
