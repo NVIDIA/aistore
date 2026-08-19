@@ -832,7 +832,7 @@ func TestETLInspectBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, !msg.DryRun && !msg.ContinueOnError, "inspect must not mutate caller message")
 
-	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: time.Minute})
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: time.Minute})
 	tassert.CheckFatal(t, err)
 	checkObjectSizes(t, baseParams, bck, m.objNames, int64(m.fileSize))
 }

@@ -429,7 +429,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		tassert.Fatalf(t, xid != "", "rechunk xaction ID should not be empty")
 
 		// Wait for rechunk to complete
-		_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: 2 * time.Minute})
+		err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: 2 * time.Minute})
 		tassert.CheckFatal(t, err)
 
 		// Use HeadObjectV2 with "chunked" property

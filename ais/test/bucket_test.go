@@ -907,7 +907,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	bp := tools.BaseAPIParams(m.proxyURL)
 
 	xargs := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
-	api.WaitForSnaps(bp, &xargs, xargs.Idle())
+	api.WaitForXaction(bp, &xargs)
 
 	for _, copies := range numCopies {
 		makeNCopies(t, bp, m.bck, copies)
@@ -926,11 +926,11 @@ func makeNCopies(t *testing.T, bp api.BaseParams, bck cmn.Bck, ncopies int) {
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMakeNCopies}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	args = xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: bck}
-	api.WaitForSnapsIdle(bp, &args)
+	api.WaitForXaction(bp, &args)
 }
 
 func TestRemoteBucketMirror(t *testing.T) {
@@ -1124,7 +1124,7 @@ func TestRenameBucketWithRandomMirrorEnable(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// Gets on renamed ais bucket
@@ -1259,7 +1259,7 @@ func TestRenameBucketTwice(t *testing.T) {
 
 	// Wait for rename to complete
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
@@ -2004,7 +2004,7 @@ func TestCopyBucketSync(t *testing.T) {
 		tools.DestroyBucket(t, proxyURL, dstBck)
 	})
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logfln("list destination %s objects", dstBck.Cname(""))
@@ -2040,7 +2040,7 @@ func TestCopyBucketSync(t *testing.T) {
 	xid, err = api.CopyBucket(bp, m.bck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Sync: true}})
 	tassert.CheckFatal(t, err)
 	args.ID = xid
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logfln("list post-sync destination %s", dstBck.Cname(""))
@@ -2110,7 +2110,7 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	})
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
@@ -2146,7 +2146,7 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	tlog.Logfln("Waiting for x-%s[%s] %s => %s", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(bp, dstBck, nil, api.ListArgs{})
@@ -2173,7 +2173,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected i
 
 	tlog.Logfln("Waiting for x-%s[%s] %s => %s", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(bp, dstBck, nil, api.ListArgs{})
@@ -2253,7 +2253,7 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	tlog.Logfln("Waiting for x-%s[%s]", apc.ActCopyBck, xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
@@ -2299,7 +2299,7 @@ func testCopyBucketMultiWorker(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 			tlog.Logfln("Waiting for x-%s[%s] %s => %s", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
-			_, err = api.WaitForXactionIC(bp, &args)
+			err = api.WaitForXaction(bp, &args)
 			tassert.CheckFatal(t, err)
 
 			snaps, err := api.QueryXactionSnaps(bp, &args)
@@ -2375,7 +2375,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	tlog.Logfln("Waiting for x-%s[%s] to finish", apc.ActMoveBck, xid)
 	time.Sleep(2 * time.Second)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	time.Sleep(time.Second)
@@ -2732,7 +2732,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	// wait for mirroring
 	if mirrored {
 		args := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
-		api.WaitForSnapsIdle(bp, &args)
+		api.WaitForXaction(bp, &args)
 		// NOTE: ref 1377
 		m.ensureNumCopies(bp, copyCnt, false /*greaterOk*/)
 	}

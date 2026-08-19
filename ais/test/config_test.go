@@ -162,7 +162,7 @@ func TestConfigSetGlobal(t *testing.T) {
 
 	// wait for ec
 	flt := xact.ArgsMsg{Kind: apc.ActECEncode}
-	_, _ = api.WaitForXactionIC(baseParams, &flt)
+	api.WaitForXaction(baseParams, &flt)
 }
 
 func checkConfig(t *testing.T, smap *meta.Smap, check func(*meta.Snode, *cmn.Config)) {
@@ -196,7 +196,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 
 	// wait for ec
 	flt := xact.ArgsMsg{Kind: apc.ActECEncode}
-	_, _ = api.WaitForXactionIC(baseParams, &flt)
+	api.WaitForXaction(baseParams, &flt)
 }
 
 const errWMConfigNotExpected = "expected 'disk.disk_util_low_wm' to be %d, got: %d"

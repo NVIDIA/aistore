@@ -382,7 +382,7 @@ func TestSameBucketName(t *testing.T) {
 		prefetchListID, err := api.Prefetch(baseParams, bckRemote, &msg)
 		tassert.CheckFatal(t, err)
 		args := xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		err = api.WaitForXaction(baseParams, &args)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -393,7 +393,7 @@ func TestSameBucketName(t *testing.T) {
 		prefetchRangeID, err := api.Prefetch(baseParams, bckRemote, &msg)
 		tassert.CheckFatal(t, err)
 		args := xact.ArgsMsg{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		err = api.WaitForXaction(baseParams, &args)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -445,7 +445,7 @@ func TestSameBucketName(t *testing.T) {
 	evictRangeID, err := api.EvictMultiObj(baseParams, bckRemote, evdRangeMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictRangeID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
@@ -480,14 +480,14 @@ func TestSameBucketName(t *testing.T) {
 		prefetchListID, err := api.Prefetch(baseParams, bckRemote, &msg)
 		tassert.CheckFatal(t, err)
 		args = xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		err = api.WaitForXaction(baseParams, &args)
 		tassert.CheckFatal(t, err)
 	}
 
 	evictListID, err = api.EvictMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// Delete from cloud bucket
@@ -495,7 +495,7 @@ func TestSameBucketName(t *testing.T) {
 	deleteID, err := api.DeleteMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// Delete from ais bucket
@@ -503,7 +503,7 @@ func TestSameBucketName(t *testing.T) {
 	deleteID, err = api.DeleteMultiObj(baseParams, bckLocal, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1, hargs)
@@ -1347,7 +1347,7 @@ func testEvictMultiObject(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
 	args := xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	for _, objName := range []string{"obj1.txt", "obj2.txt"} {
@@ -1362,7 +1362,7 @@ func testEvictMultiObject(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
 	args = xact.ArgsMsg{ID: evictPrefixID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	for _, objName := range []string{"test_prefix_1.txt", "test_prefix_2.txt"} {
@@ -1377,7 +1377,7 @@ func testEvictMultiObject(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
 	args = xact.ArgsMsg{ID: evictSingleID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	exists := tools.CheckObjIsPresent(proxyURL, bck, "keepmd_test.txt")
@@ -1390,7 +1390,7 @@ func testEvictMultiObject(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
 	args = xact.ArgsMsg{ID: evictTemplateID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	for _, objName := range []string{"template_001.txt", "template_002.txt"} {
@@ -1407,7 +1407,7 @@ func testEvictMultiObject(t *testing.T) {
 	evictNonRecID, err := api.EvictMultiObj(baseParams, bck, evdNonRecMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictNonRecID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
 
@@ -1423,7 +1423,7 @@ func testEvictMultiObject(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
 	args = xact.ArgsMsg{ID: evictRecID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	exists = tools.CheckObjIsPresent(proxyURL, bck, "nested/deep/file.txt")
@@ -2460,7 +2460,7 @@ func TestMultipartUploadAndCopyBucket(t *testing.T) {
 
 	// Wait for copy to complete
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: 3 * time.Minute}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// Step 3: Verify all objects were copied correctly
@@ -2600,7 +2600,7 @@ func TestOperationsWithRanges(t *testing.T) {
 
 					time.Sleep(time.Second)
 					args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: waitTimeout}
-					_, err = api.WaitForXactionIC(baseParams, &args)
+					err = api.WaitForXaction(baseParams, &args)
 					tassert.CheckFatal(t, err)
 
 					totalFiles -= test.delta

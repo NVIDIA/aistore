@@ -230,7 +230,7 @@ func testRechunkScenario(t *testing.T, bckMeta *meta.Bck, smallSize, largeSize, 
 
 	// Wait for rechunk to complete
 	tlog.Logfln("Waiting for rechunk xaction %s to complete...", xid)
-	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: 2 * time.Minute})
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: 2 * time.Minute})
 	tassert.CheckFatal(t, err)
 
 	// Verify final state after rechunk
@@ -442,7 +442,7 @@ func testRechunkTwiceScenario(t *testing.T, firstProps, secondProps chunkProps, 
 
 	// Wait for first rechunk to complete
 	tlog.Logfln("Waiting for first rechunk xaction %s to complete...", xid1)
-	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid1, Kind: apc.ActRechunk, Bck: bck, Timeout: 5 * time.Minute})
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid1, Kind: apc.ActRechunk, Bck: bck, Timeout: 5 * time.Minute})
 	tassert.CheckFatal(t, err)
 	tlog.Logln("First rechunk xaction completed successfully")
 
@@ -537,7 +537,7 @@ func TestRechunkWhenRebRes(t *testing.T) {
 	defer func() {
 		// Wait for rebalance to complete
 		args := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		_, _ = api.WaitForXactionIC(baseParams, &args)
+		api.WaitForXaction(baseParams, &args)
 	}()
 
 	// Try to start rechunk while rebalance is running - should fail immediately
@@ -625,7 +625,7 @@ func TestRechunkPrefix(t *testing.T) {
 
 	// Wait for rechunk to complete
 	tlog.Logln("Waiting for rechunk to complete...")
-	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: 5 * time.Minute})
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: 5 * time.Minute})
 	tassert.CheckFatal(t, err)
 	tlog.Logln("Rechunk completed")
 
@@ -753,7 +753,7 @@ func TestRechunkIdempotent(t *testing.T) {
 
 	// Wait for first rechunk to complete
 	tlog.Logln("Waiting for first rechunk to complete...")
-	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid1, Kind: apc.ActRechunk, Bck: bck, Timeout: 5 * time.Minute})
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid1, Kind: apc.ActRechunk, Bck: bck, Timeout: 5 * time.Minute})
 	tassert.CheckFatal(t, err)
 	tlog.Logln("First rechunk completed")
 
@@ -782,7 +782,7 @@ func TestRechunkIdempotent(t *testing.T) {
 
 	// Wait for second rechunk to complete
 	tlog.Logln("Waiting for second rechunk to complete...")
-	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid2, Kind: apc.ActRechunk, Bck: bck, Timeout: 5 * time.Minute})
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid2, Kind: apc.ActRechunk, Bck: bck, Timeout: 5 * time.Minute})
 	tassert.CheckFatal(t, err)
 	tlog.Logln("Second rechunk completed")
 
@@ -997,7 +997,7 @@ func testRechunkSyncRemote(t *testing.T, bck *meta.Bck) {
 	tassert.CheckFatal(t, err)
 
 	// Wait for rechunk to complete
-	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck.Clone(), Timeout: 2 * time.Minute})
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck.Clone(), Timeout: 2 * time.Minute})
 	tassert.CheckFatal(t, err)
 
 	// Verify object is chunked locally

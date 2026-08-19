@@ -453,7 +453,7 @@ func TestIndexShardConflict(t *testing.T) {
 			"expected %q in error, got: %v", expectedErrMsg, err)
 		tlog.Logf("Same-prefix correctly blocked: %v\n", err)
 
-		_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
+		err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
 		tassert.CheckFatal(t, err)
 	})
 
@@ -471,9 +471,9 @@ func TestIndexShardConflict(t *testing.T) {
 		tassert.Fatalf(t, xidA != xidB, "parallel xactions must have distinct IDs")
 		tlog.Logf("Non-overlapping prefixes running in parallel: xidA=%s xidB=%s\n", xidA, xidB)
 
-		_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xidA, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
+		err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xidA, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
 		tassert.CheckFatal(t, err)
-		_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xidB, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
+		err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xidB, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
 		tassert.CheckFatal(t, err)
 	})
 
@@ -492,7 +492,7 @@ func TestIndexShardConflict(t *testing.T) {
 			"expected %q in error, got: %v", expectedErrMsg, err)
 		tlog.Logf("Child prefix correctly blocked by running parent: %v\n", err)
 
-		_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
+		err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
 		tassert.CheckFatal(t, err)
 	})
 
@@ -511,7 +511,7 @@ func TestIndexShardConflict(t *testing.T) {
 			"expected %q in error, got: %v", expectedErrMsg, err)
 		tlog.Logf("Parent prefix correctly blocked by running child: %v\n", err)
 
-		_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
+		err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute})
 		tassert.CheckFatal(t, err)
 	})
 }
@@ -967,7 +967,7 @@ func idxRunAndWait(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, msg *ap
 	t.Helper()
 	xid, err := api.IndexBucketShards(baseParams, bck, msg)
 	tassert.CheckFatal(t, err)
-	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{
 		ID:      xid,
 		Kind:    apc.ActIndexShard,
 		Bck:     bck,
@@ -984,7 +984,7 @@ func idxRunAndWaitCounts(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, m
 	xid, err := api.IndexBucketShards(baseParams, bck, msg)
 	tassert.CheckFatal(t, err)
 	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActIndexShard, Bck: bck, Timeout: 2 * time.Minute}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 	snaps, err := api.QueryXactionSnaps(baseParams, args)
 	tassert.CheckFatal(t, err)

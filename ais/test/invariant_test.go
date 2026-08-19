@@ -37,7 +37,7 @@ func (m *ioContext) ensureNumCopies(bp api.BaseParams, expectedCopies int, great
 	m.t.Helper()
 	time.Sleep(time.Second)
 	xargs := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: tools.RebalanceTimeout}
-	_, err := api.WaitForXactionIC(bp, &xargs)
+	err := api.WaitForXaction(bp, &xargs)
 
 	if err != nil && isErrNotFound(err) {
 		tlog.Logfln("Warning: (kind %s, bucket %s), err: %v", apc.ActMakeNCopies, m.bck.Cname(""), err)
@@ -144,7 +144,7 @@ func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.Mountpath
 		xargs.Timeout = resilLongTimeout
 		xargs.OnlyRunning = true // redundant - xargs.Finished() always sets it
 
-		if _, errRec = api.WaitForSnaps(bp, &xargs, xargs.Finished()); errRec != nil {
+		if errRec = api.WaitForXaction(bp, &xargs); errRec != nil {
 			tlog.Logfln("Warning: %v", errRec)
 		}
 	} else if len(mpl.Disabled) != len(mpList.Disabled) || len(mpl.WaitingDD) != len(mpList.WaitingDD) {
@@ -212,7 +212,7 @@ func ensurePrevRebalanceIsFinished(bp api.BaseParams, err error) bool {
 	tools.PromptWaitOnHerr(herr)
 
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &args)
+	api.WaitForXaction(bp, &args)
 	time.Sleep(5 * time.Second)
 	return true
 }

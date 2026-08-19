@@ -388,7 +388,7 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 			xid, err := api.Prefetch(baseParams, mSmall.bck, msg)
 			tassert.CheckFatal(t, err)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
-			_, err = api.WaitForXactionIC(baseParams, &args)
+			err = api.WaitForXaction(baseParams, &args)
 			tassert.CheckFatal(t, err)
 
 			// Validate xaction stats
@@ -758,7 +758,7 @@ func TestPrefetchBlobChunkSize(t *testing.T) {
 			xid, err := api.Prefetch(baseParams, bck, msg)
 			tassert.CheckFatal(t, err)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
-			_, err = api.WaitForXactionIC(baseParams, &args)
+			err = api.WaitForXaction(baseParams, &args)
 			tassert.CheckFatal(t, err)
 
 			// Byte-equality check.
@@ -835,7 +835,7 @@ func TestPrefetchBlobNumWorkers(t *testing.T) {
 			xid, err := api.Prefetch(baseParams, bck, msg)
 			tassert.CheckFatal(t, err)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
-			_, err = api.WaitForXactionIC(baseParams, &args)
+			err = api.WaitForXaction(baseParams, &args)
 			tassert.CheckFatal(t, err)
 
 			// Byte-equality check: result must be identical across all valid BlobNumWorkers values.

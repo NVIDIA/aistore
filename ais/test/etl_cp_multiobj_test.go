@@ -91,7 +91,7 @@ func TestETLInspectMultiObj(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, msg.ToBck.IsEmpty() && !msg.DryRun && !msg.ContinueOnError, "inspect must not mutate caller message")
 
-	err = api.WaitForSnapsIdle(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects})
+	err = api.WaitForXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects})
 	tassert.CheckFatal(t, err)
 	checkObjectSizes(t, baseParams, bck, m.objNames, int64(m.fileSize))
 }
@@ -136,7 +136,7 @@ func testETLMultiObj(t *testing.T, etlName, prefix string, bckFrom cmn.Bck, file
 	tlog.Logfln("Running x-etl[%s]: %s => %s ...", xid, bckFrom.Cname(""), bckTo.Cname(""))
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects}
-	err = api.WaitForSnapsIdle(baseParams, &wargs)
+	err = api.WaitForXaction(baseParams, &wargs)
 	tassert.CheckFatal(t, err)
 
 	err = tetl.ListObjectsWithRetry(baseParams, bckTo, prefix, objCnt, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})

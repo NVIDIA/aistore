@@ -60,7 +60,7 @@ func TestCreateInventorySimple(t *testing.T) {
 	tlog.Logfln("%s[%s] started", apc.ActCreateNBI, xid)
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 }
 
@@ -175,7 +175,7 @@ func TestListInventory(t *testing.T) {
 				tc.namesPerChunk, tc.listPageSize, tc.props)
 
 			wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
-			_, err = api.WaitForXactionIC(bp, &wargs)
+			err = api.WaitForXaction(bp, &wargs)
 			tassert.CheckFatal(t, err)
 
 			// 2. list inventory (paginated)
@@ -285,7 +285,7 @@ func TestListInventoryPrefix(t *testing.T) {
 	xid, err := api.CreateNBI(bp, m1.bck, createMsg)
 	tassert.CheckFatal(t, err)
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
-	_, err = api.WaitForXactionIC(bp, &wargs)
+	err = api.WaitForXaction(bp, &wargs)
 	tassert.CheckFatal(t, err)
 
 	// list with each sub-prefix
@@ -361,7 +361,7 @@ func _runNBIPrefixPermCase(t *testing.T, bck cmn.Bck, bp api.BaseParams, parent 
 	tassert.CheckFatal(t, err)
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
-	_, err = api.WaitForXactionIC(bp, &wargs)
+	err = api.WaitForXaction(bp, &wargs)
 	tassert.CheckFatal(t, err)
 
 	var args api.ListArgs
@@ -608,7 +608,7 @@ func TestListInventoryNoRecursion(t *testing.T) {
 	tlog.Logfln("%s[%s] started (9 objects, hierarchical)", apc.ActCreateNBI, xid)
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
-	_, err = api.WaitForXactionIC(bp, &wargs)
+	err = api.WaitForXaction(bp, &wargs)
 	tassert.CheckFatal(t, err)
 
 	largs := api.ListArgs{
@@ -831,7 +831,7 @@ func TestListInventoryNoRecursionPagination(t *testing.T) {
 	tlog.Logfln("%s[%s] started (31 objects, edge-case layout)", apc.ActCreateNBI, xid)
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
-	_, err = api.WaitForXactionIC(bp, &wargs)
+	err = api.WaitForXaction(bp, &wargs)
 	tassert.CheckFatal(t, err)
 
 	largs := api.ListArgs{

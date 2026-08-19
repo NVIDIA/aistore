@@ -235,7 +235,7 @@ func (c *resilverStressCtx) waitResilverFinishAny(t *testing.T, bp api.BaseParam
 		Timeout:     resilLongTimeout,
 	}
 	// resilver does NOT notify IC; must use snaps-based wait
-	_, err := api.WaitForSnaps(bp, &xargs, nil)
+	err := api.WaitForXaction(bp, &xargs)
 	tassert.CheckFatal(t, err)
 }
 
@@ -490,7 +490,7 @@ func createAndPopulateResilverBuckets(t *testing.T, c *resilverStressCtx) {
 
 	// wait for mirroring
 	xargs := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: bckMirrored, Timeout: resilLongTimeout}
-	api.WaitForSnapsIdle(tools.BaseAPIParams(purl), &xargs)
+	api.WaitForXaction(tools.BaseAPIParams(purl), &xargs)
 
 	totalObjects := numRegular + numChunked + numMirrored
 	tlog.Logfln("All %d objects created across 3 buckets", totalObjects)
@@ -719,7 +719,7 @@ func TestSingleResilver(t *testing.T) {
 
 	// Wait for specific resilvering x[id]
 	args = xact.ArgsMsg{ID: id, Kind: apc.ActResilver, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForSnaps(bp, &args, nil)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// Make sure other nodes were not resilvered
@@ -799,7 +799,7 @@ func testGetDuringResilver(t *testing.T, num int, chunked bool) {
 
 	tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)", target.StringEx())
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &args)
+	api.WaitForXaction(bp, &args)
 
 	for _, mp := range mpaths {
 		err = api.EnableMountpath(bp, target, mp)

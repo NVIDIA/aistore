@@ -555,7 +555,7 @@ func TestDownloadRemote(t *testing.T) {
 			xid, err := api.EvictMultiObj(baseParams, test.srcBck, evdMsg)
 			tassert.CheckFatal(t, err)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-			_, err = api.WaitForXactionIC(baseParams, &args)
+			err = api.WaitForXaction(baseParams, &args)
 			tassert.CheckFatal(t, err)
 
 			if test.dstBck.IsAIS() {

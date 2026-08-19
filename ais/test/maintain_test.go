@@ -159,7 +159,7 @@ func TestMaintenanceMD(t *testing.T) {
 
 	t.Cleanup(func() {
 		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		api.WaitForXactionIC(bp, &args)
+		api.WaitForXaction(bp, &args)
 	})
 
 	tlog.Logfln("Decommission %s", dcmTarget.StringEx())
@@ -299,7 +299,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tools.WaitForRebalanceByID(t, bp, rebID)
 	} else {
 		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(bp, &args)
+		err = api.WaitForXaction(bp, &args)
 		tassert.CheckError(t, err)
 	}
 

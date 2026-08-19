@@ -160,7 +160,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	bp := tools.BaseAPIParams(proxyURL)
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &xargs)
+	api.WaitForXaction(bp, &xargs)
 
 	// Step 5.
 	m.ensureNoGetErrors()
@@ -768,7 +768,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	time.Sleep(time.Second)
 	tlog.Logfln("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)", tname)
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &args)
+	api.WaitForXaction(bp, &args)
 
 	// Check if mountpaths were actually removed
 	mountpaths, err := api.GetMountpaths(bp, target)
@@ -790,7 +790,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)", target.StringEx())
 	args = xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &args)
+	api.WaitForXaction(bp, &args)
 
 	tools.WaitForResilvering(t, bp, target)
 
@@ -912,7 +912,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	ensureNoDisabledMountpaths(t, target, origMountpaths)
 
 	rebargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &rebargs)
+	api.WaitForXaction(bp, &rebargs)
 
 	if len(origMountpaths.WaitingDD) != 0 || len(origMountpaths.Disabled) != 0 {
 		tlog.Logfln("Warning %s: orig mountpaths (avail=%d, dd=%d, disabled=%d)", tname,
@@ -937,7 +937,7 @@ func TestMountpathDisableAll(t *testing.T) {
 			tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)",
 				tname)
 			args := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
-			_, _ = api.WaitForXactionIC(bp, &args)
+			api.WaitForXaction(bp, &args)
 
 			tools.WaitForResilvering(t, bp, nil)
 		}
@@ -951,7 +951,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	tlog.Logfln("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)", tname)
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &xargs)
+	api.WaitForXaction(bp, &xargs)
 
 	// Check if mountpaths were actually disabled
 	time.Sleep(time.Second)
@@ -979,7 +979,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)", target.StringEx())
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &args)
+	api.WaitForXaction(bp, &args)
 
 	tools.WaitForResilvering(t, bp, target)
 
@@ -1275,7 +1275,7 @@ func TestAtimePrefetch(t *testing.T) {
 		xid, err = api.Prefetch(bp, bck, &msg)
 		tassert.CheckFatal(t, err)
 		args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(bp, &args)
+		err = api.WaitForXaction(bp, &args)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -1464,7 +1464,7 @@ func TestRenewRebalance(t *testing.T) {
 
 	wg.Wait()
 	args := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(bp, &args)
+	err = api.WaitForXaction(bp, &args)
 	tassert.CheckError(t, err)
 
 	m.ensureNoGetErrors()
@@ -1592,7 +1592,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 
 	// Wait for async mirroring to finish
 	flt := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck}
-	api.WaitForSnapsIdle(bp, &flt)
+	api.WaitForXaction(bp, &flt)
 	time.Sleep(time.Second) // pending writes
 
 	// GET
@@ -1734,7 +1734,7 @@ func TestICRebalance(t *testing.T) {
 
 	tlog.Logfln("Wait for rebalance: %s", rebID)
 	args := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(bp, &args)
+	api.WaitForXaction(bp, &args)
 
 	m.waitAndCheckCluState()
 }
