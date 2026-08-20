@@ -27,11 +27,8 @@ The credential is used only to establish cluster membership. Once a node is
 admitted and its verifying key is distributed through the Smap, ordinary
 per-node signing protects subsequent intra-cluster requests.
 
-> **Version note:** AIS v5.0 accepts and persists
-> `node_join_secret_path`, but does not read the file or enforce node-join
-> authentication. Enforcement is intended for v5.1 and requires every node in
-> the cluster to support it. Do not rely on this setting during a mixed-version
-> rollout.
+> **Version note:** [v5.0 bridge](/docs/relnotes/5.0.md) accepts and persists `node_join_secret_path`, but does not enforce node-join authentication.
+> Enforcement, along with the rest `auth.intra_cluster` capabilities, is enabled in post-5.0 versions.
 
 **Table of Contents**
 
@@ -42,7 +39,6 @@ per-node signing protects subsequent intra-cluster requests.
 - [Protected Boundary](#protected-boundary)
 - [Configuration](#configuration)
 - [Credential File](#credential-file)
-- [Version Behavior](#version-behavior)
 - [Creating a New Cluster](#creating-a-new-cluster)
 - [Enabling Protection on an Existing Cluster](#enabling-protection-on-an-existing-cluster)
 - [Adding, Restarting, and Administratively Joining Nodes](#adding-restarting-and-administratively-joining-nodes)
@@ -54,25 +50,21 @@ per-node signing protects subsequent intra-cluster requests.
 
 ## Implementation Status
 
-This document describes both the design and what is currently enforced. They are
-not yet the same. Read this table before relying on any section below.
+This document describes both the design, the capabilities, and the current implementation status.
 
 | Capability | Status |
 |---|---|
-| Startup self-join: node proves possession to the primary | Enforced |
-| Startup self-join: primary proves possession to the node | Enforced |
-| Slow keepalive that would admit an absent or restarted node | Enforced |
-| Credential permission and non-empty checks; fail-closed at startup | Enforced |
-| Timestamp binding, bounded by `auth.intra_cluster.nonce_window` | Enforced |
-| Administrative join | **Not enforced** - see [Future Development](#future-development) |
-| Force-join (single node or whole cluster) | **Not enforced** - registration is signed, destination metadata is not authenticated |
-| Cluster UUID bound into the proof | **Not implemented** |
-| Nonce / replay cache | **Not implemented** - see [Future Development](#future-development) |
-| Multiple secrets per file; online rotation | **Not implemented** - the file's first line is the only secret |
-| Reloading the credential without a restart | **Not implemented** |
-
-All of the above is additionally gated on the release: see
-[Version Behavior](#version-behavior).
+| Startup self-join: node proves possession to the primary | Supported |
+| Startup self-join: primary proves possession to the node | Supported |
+| Slow keepalive that would admit an absent or restarted node | Supported |
+| Credential permission and non-empty checks; fail-closed at startup | Supported |
+| Timestamp binding, bounded by `auth.intra_cluster.nonce_window` | Supported |
+| Administrative join | Not implemented yet - see [Future Development](#future-development) |
+| Force-join (single node or whole cluster) | Not implemented yet - registration is signed, destination metadata is not authenticated |
+| Cluster UUID bound into the proof | Not implemented yet |
+| Nonce / replay cache | Not implemented yet - see [Future Development](#future-development) |
+| Multiple secrets per file; online rotation | Not implemented yet - the file's first line is the only secret |
+| Reloading the credential without a restart | Not implemented yet |
 
 ## Mutual Bootstrap Authentication
 
@@ -105,8 +97,8 @@ identifies itself as the primary. The primary must prove possession of the
 secret provisioned on the joining node, over the exact response body it sends.
 
 Only after that proof succeeds does the node accept the destination metadata
-and complete the join. This requirement is enforced for startup self-join. It
-is stated but *not yet enforced* for administrative join and force-join; see
+and complete the join. This check is implemented for startup self-join. It is
+not yet implemented for administrative join and force-join; see
 [Implementation Status](#implementation-status).
 
 The exact HTTP headers, canonical encoding, and retry sequence are
@@ -114,19 +106,6 @@ implementation details. They are intentionally outside the configuration and
 operational contract described here.
 
 ## Protected Boundary
-
-The protected event is an unknown node ID becoming a member of the Smap. It
-is broader than the `/v1/cluster/autoreg` endpoint or any one join opcode.
-
-| Operation | Node-join authentication | Enforced today |
-|---|---|---|
-| Startup self-join | Required before admission | Yes |
-| Administrative join | Required in addition to administrative authorization | No |
-| Slow keepalive from a restarted or unknown node | Required - such a keepalive MAY (in a certain scenario) be promoted to self-join | Yes |
-| Keepalive from an established, already-admitted member | Not a new admission | n/a |
-| Split-branch or whole-cluster force-join | Required by the destination cluster | No |
-| Ordinary intra-cluster request | Controlled by `auth.intra_cluster.request_auth` | n/a |
-| Client request and ACL check | Controlled by `auth.client_auth_required` | n/a |
 
 Node-join authentication does not require proxy mediation for client traffic
 and is deliberately not part of `AuthConf.RequiresProxyMediation()`.
@@ -156,8 +135,8 @@ The semantics are:
 - An empty path means node-join authentication is not configured.
 - A nonempty path identifies a credential file that must be locally accessible
   to the AIS node.
-- The pathname is replicated as cluster configuration; the file contents are
-  never replicated through AIS metadata.
+- The pathname is replicated as cluster configuration; the file contents remain
+  local, are never persisted, sent, or replicated through AIS metadata.
 - Every proxy and target resolves the configured pathname locally. The same
   pathname may refer to separately mounted copies of the same credential.
 - All proxies require the credential because any eligible proxy may become the
@@ -236,23 +215,6 @@ K8s default mode `0400` owned by the account the node runs as. A credential that
 group- or world-accessible is rejected rather than used - a permissive mode is
 far more often an accident of provisioning than a deliberate choice.
 
-## Version Behavior
-
-| Cluster state | Behavior |
-|---|---|
-| Path empty | Admission authentication is not configured |
-| Path nonempty on v5.0 | Setting is accepted and persisted, but the file is not used |
-| All nodes v5.1 or later | When configured, node admission is mutually authenticated |
-
-The v5.0 staging window allows operators to provision and persist the setting
-before upgrading. The CLI warns when the setting is updated while one or more
-nodes do not support v5.1 behavior.
-
-Note that this warning is about the *release*, not about the restart. On v5.1
-and later the warning goes silent, but the credential is still read only at node
-startup - so an update to `node_join_secret_path` remains inert until every node
-restarts. See [Future Development](#future-development).
-
 ## Creating a New Cluster
 
 Do not configure `node_join_secret_path` in the initial configuration of a
@@ -301,9 +263,6 @@ Note that this section is about forming a *brand-new cluster*. A new *node*
 joining an already-formed cluster is the opposite case: it must be provisioned
 with the credential before it starts - see
 [Adding, Restarting, and Administratively Joining Nodes](#adding-restarting-and-administratively-joining-nodes).
-
-On v5.0, the final configuration update is persisted but remains a runtime
-no-op. It can be performed in advance of the all-node v5.1 upgrade.
 
 ## Enabling Protection on an Existing Cluster
 
