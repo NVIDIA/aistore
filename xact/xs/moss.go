@@ -73,8 +73,6 @@ import (
 // -----------------------------------------------------------------------
 // TODO:
 // - throttle senders
-// - count successfully retrieved zero-size objects/files; current generic and
-//   per-WI counters use size > 0 to exclude missing header-only entries
 // -----------------------------------------------------------------------
 
 // hardcoded tunables
@@ -808,10 +806,12 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 }
 
 type (
+	// anySentCmpl: SentCB completion arg for moss sends
 	anySentCmpl struct {
 		lom    *core.LOM
 		lh     *core.LomHandle
 		opaque []byte
+		ok     bool // = mopaque.ok()
 	}
 )
 
@@ -865,7 +865,7 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 
 	// roc owns lh (closed via transport.Stream completion); sent-callback unlocks + frees
 	o.SentCB = r.anySent
-	o.CmplArg = &anySentCmpl{lom: lom, opaque: opaque}
+	o.CmplArg = &anySentCmpl{lom: lom, opaque: opaque, ok: mopaque.ok()}
 
 	return true /*handedOff*/, bundle.SDM.Send(o, roc, tsi, r)
 }
@@ -881,7 +881,9 @@ func (r *XactMoss) anySent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err 
 	ctx.lom.Unlock(false)
 	r.smm.Free(ctx.opaque)
 
-	if err == nil && hdr.ObjAttrs.Size > 0 {
+	// count send: gated by ctx.ok (see mossOpaque.missing)
+	if err == nil && ctx.ok {
+		debug.AssertFunc(func() bool { return hdr.ObjAttrs.Size >= 0 }, hdr.ObjName, " size: ", hdr.ObjAttrs.Size)
 		// generic (xaction-level) counters do not contain file and range stats -
 		// using `OutObjs` to count num transmissions
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
@@ -948,7 +950,7 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch str
 		hdr.Opaque = opaque
 	}
 	o.SentCB = r.anySent
-	o.CmplArg = &anySentCmpl{lom: lom, lh: lh, opaque: opaque}
+	o.CmplArg = &anySentCmpl{lom: lom, lh: lh, opaque: opaque, ok: mopaque.ok()}
 
 	return true /*handedOff*/, bundle.SDM.Send(o, roc, tsi, r)
 }
@@ -998,9 +1000,6 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		r.Abort(err)
 		return err
 	}
-	if hdr.ObjAttrs.Size > 0 {
-		r.InObjsAdd(1, hdr.ObjAttrs.Size)
-	}
 	return nil
 }
 
@@ -1041,12 +1040,23 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader) error {
 
 	wi := r._pinwi(mopaque.wid, hdr.SID, false /*warn*/)
 	if wi == nil {
-		return nil
+		return nil // stale or unknown wid: dropped, not received (not counted)
 	}
 	defer wi.unpin()
 
 	debug.AssertFunc(func() bool { return wi.receiving() })
-	return wi.recvObj(int(mopaque.index), hdr, reader, mopaque)
+	added, err := wi.recvObj(int(mopaque.index), hdr, reader, mopaque)
+	if err != nil {
+		return err
+	}
+
+	// count receive: gated by `added` (dropped duplicates and out-of-bounds
+	// do not count) and by mopaque.ok() (see mossOpaque.missing)
+	if added && mopaque.ok() {
+		debug.AssertFunc(func() bool { return hdr.ObjAttrs.Size >= 0 }, hdr.ObjName, " size: ", hdr.ObjAttrs.Size)
+		r.InObjsAdd(1, hdr.ObjAttrs.Size)
+	}
+	return nil
 }
 
 func (*mossFactory) Kind() string     { return apc.ActGetBatch }
@@ -1391,7 +1401,9 @@ func (wi *basewi) _quiesce(brief bool) bool {
 
 // receive work item at [index]
 // (note: ObjHdr and its fields must be consumed synchronously)
-func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mopaque *mossOpaque) (err error) {
+// returns `added` to tell an accepted entry from a benign drop (duplicate, out-of-bounds,
+// or already-local via gfn)
+func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mopaque *mossOpaque) (added bool, err error) {
 	var (
 		sgl  *memsys.SGL
 		size int64
@@ -1409,12 +1421,12 @@ func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mo
 		sgl.Free()
 		err = fmt.Errorf("%s %s failed to receive %s from %s: %w", r.Name(), core.T.String(), hdr.ObjName, meta.Tname(hdr.SID), err)
 		nlog.Warningln(err)
-		return err
+		return false, err
 	}
 	debug.Assert(size == sgl.Len(), size, " vs ", sgl.Len())
 
 add:
-	var added, freegl bool
+	var freegl bool
 
 	wi.recv.mtx.Lock()
 	added, freegl, err = wi._recvObj(index, hdr, mopaque, sgl)
@@ -1430,13 +1442,13 @@ add:
 		if cmn.Rom.SuperV(5, cos.ModXs) {
 			nlog.Infoln(r.Cname(), core.T.String(), "Rx [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "size:", size, "]")
 		}
-		return nil
+		return added, nil
 	}
 
 	if cmn.Rom.V(4, cos.ModXs) {
 		nlog.Warningln(r.Name(), core.T.String(), "Rx error [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "err:", err, "]")
 	}
-	return err
+	return added, err
 }
 
 // under receive mutex
@@ -1728,6 +1740,7 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 	}
 
 	defer cos.Close(resp.Body)
+	debug.AssertFunc(func() bool { return resp.ContentLength >= 0 }, "GFN: negative Content-Length for ", lom.Cname(), " ", in.ArchPath)
 
 	if cmn.Rom.V(4, cos.ModXs) {
 		nlog.Infoln(wi.r.Cname(), wi.wid, "GFN ok:", nameInArch)
@@ -1736,9 +1749,6 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 		oah := cos.SimpleOAH{Size: resp.ContentLength}
 		err = wi._txreg(oah, resp.Body, out, nameInArch)
 	} else {
-		debug.Func(func() {
-			debug.Assert(resp.ContentLength >= 0, "GFN(arch): negative Content-Length for ", lom.Cname()+"/"+in.ArchPath)
-		})
 		nameInArch = _withArchpath(nameInArch, in.ArchPath)
 		err = wi._txarch(resp.Body, out, nameInArch, resp.ContentLength)
 	}
@@ -1747,9 +1757,7 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 		return err
 	}
 
-	if resp.ContentLength > 0 {
-		wi.updStats(in, resp.ContentLength)
-	}
+	wi.updStats(in, resp.ContentLength)
 	return nil
 }
 
@@ -1786,7 +1794,8 @@ func (wi *basewi) write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInA
 		cos.Close(lh)
 	}
 
-	if err == nil && size > 0 {
+	// count on success (zero-size included)
+	if err == nil && out.ErrMsg == "" {
 		wi.updStats(in, size)
 	}
 	return err
@@ -2100,8 +2109,8 @@ func (wi *basewi) flushRx() error {
 
 		// this "hole" is plugged
 		wi.recv.next++
-		if size > 0 {
-			wi.updStats(in, size)
+		if entry.mopaque.ok() {
+			wi.updStats(in, size) // count on success (zero-size included)
 		}
 	}
 	return nil
@@ -2215,11 +2224,24 @@ func (nopROC) Close() error                      { return nil }
 /////////////////
 
 type mossOpaque struct {
-	wid     string
-	oname   string
-	emsg    string
-	index   int32
+	wid   string
+	oname string
+	emsg  string
+	index int32
+
+	// missing marks a header-only entry that could not be retrieved (404, etc.).
+	//
+	// Determines whether this entry contributes to retrieved object and byte counters (OutObjs/InObjs):
+	//   - content, size > 0    - payload transmitted; counted
+	//   - content, size == 0   - header-only on the wire (zero-size object or archived file); NOT missing; counted
+	//   - missing              - header-only on the wire, `__404__/` prefixed,
+	//                            mossOpaque.emsg set, soft error; NOT counted
 	missing bool
+}
+
+func (o *mossOpaque) ok() bool {
+	debug.AssertFunc(func() bool { return o != nil })
+	return o != nil && !o.missing
 }
 
 // interface guard

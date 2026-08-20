@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tarch"
@@ -1457,6 +1458,176 @@ func TestMossZeroSizeArchivedFiles(t *testing.T) {
 					tassert.Errorf(t, resp.Out[j].ErrMsg == "", "[%s] pos %d: unexpected ErrMsg %q", desc, j, resp.Out[j].ErrMsg)
 				}
 			}
+		})
+	}
+}
+
+// x-moss (cumulative) Tx/Rx object counters for `bck`
+func _mossSnapObjs(t *testing.T, bck cmn.Bck) (inObjs, outObjs int64) {
+	t.Helper()
+	snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{Kind: apc.ActGetBatch, Bck: bck})
+	if err != nil {
+		if isErrNotFound(err) {
+			return 0, 0 // not running yet
+		}
+		tassert.CheckFatal(t, err)
+	}
+	for _, tsnaps := range snaps {
+		for _, snap := range tsnaps {
+			if !snap.Bck.Equal(&bck) {
+				continue
+			}
+			inObjs += snap.Stats.InObjs
+			outObjs += snap.Stats.OutObjs
+		}
+	}
+	return inObjs, outObjs
+}
+
+// get-batch target metrics, summed cluster-wide
+func _mossCounters(t *testing.T) map[string]int64 {
+	t.Helper()
+	names := [...]string{
+		stats.GetBatchObjCount, stats.GetBatchObjSize,
+		stats.GetBatchFileCount, stats.GetBatchFileSize,
+		stats.GetBatchSoftErrCount,
+	}
+	m := make(map[string]int64, len(names))
+	cluStats := tools.GetClusterStats(t, proxyURL)
+	for _, tstats := range cluStats.Target {
+		for _, name := range names {
+			m[name] += tools.GetNamedStatsVal(tstats, name)
+		}
+	}
+	return m
+}
+
+// wait for the above to flush
+func _mossWaitCounters(t *testing.T, base map[string]int64, name string, want int64) (delta map[string]int64) {
+	t.Helper()
+	for range 20 {
+		delta = _mossCounters(t)
+		for k, v := range base {
+			delta[k] -= v
+		}
+		if delta[name] >= want {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return delta
+}
+
+func _mossGetBatch(t *testing.T, bck cmn.Bck, in []apc.MossIn, streaming, continueOnErr bool) {
+	t.Helper()
+	req := &apc.MossReq{In: in, StreamingGet: streaming, ContinueOnErr: continueOnErr}
+	if streaming {
+		rc, _, err := api.GetBatchStream(baseParams, bck, req)
+		tassert.CheckFatal(t, err)
+		_, err = io.Copy(io.Discard, rc)
+		_ = rc.Close()
+		tassert.CheckFatal(t, err)
+		return
+	}
+	var buf bytes.Buffer
+	resp, err := api.GetBatch(baseParams, bck, req, &buf)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(resp.Out) == len(in), "MossResp entries=%d, want %d", len(resp.Out), len(in))
+}
+
+// fresh bucket: zero-size objects, single-member zero-size shards, and missing names
+func _mossZeroSetup(t *testing.T, bp api.BaseParams, numObjs, numMissing int) (cmn.Bck, []apc.MossIn) {
+	t.Helper()
+	const emptyMember = "data/empty.bin"
+	var (
+		bck     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		in      = make([]apc.MossIn, 0, 2*numObjs+numMissing)
+		emptyAr bytes.Buffer
+	)
+	tools.CreateBucket(t, bp.URL, bck, nil, true /*cleanup*/)
+
+	// 1. zero-size objects
+	for j := range numObjs {
+		objName := fmt.Sprintf("%szero-%02d.bin", mossZeroPrefix, j)
+		_, err := api.PutObject(&api.PutArgs{
+			BaseParams: bp, Bck: bck, ObjName: objName, Reader: _mossBody(0, byte(j+1)), Size: 0,
+		})
+		tassert.CheckFatal(t, err)
+		in = append(in, apc.MossIn{ObjName: objName})
+	}
+
+	// 2. shards, each with a single zero-size member
+	aw := archive.NewWriter(archive.ExtTar, &emptyAr, nil, &archive.Opts{TarFormat: tar.FormatUnknown})
+	tassert.CheckFatal(t, aw.Write(emptyMember, cos.SimpleOAH{Size: 0}, bytes.NewReader(nil)))
+	tassert.CheckFatal(t, aw.Fini())
+
+	for j := range numObjs {
+		shardName := fmt.Sprintf("%szero-arch-%02d%s", mossZeroPrefix, j, archive.ExtTar)
+		_, err := api.PutObject(&api.PutArgs{
+			BaseParams: bp, Bck: bck, ObjName: shardName,
+			Reader: readers.NewBytes(emptyAr.Bytes()), Size: uint64(emptyAr.Len()),
+		})
+		tassert.CheckFatal(t, err)
+		in = append(in, apc.MossIn{ObjName: shardName, ArchPath: emptyMember})
+	}
+
+	// 3. missing: header-only on the wire as well
+	for j := range numMissing {
+		in = append(in, apc.MossIn{ObjName: fmt.Sprintf("%s%02d%s", mossMissingPrefix, j, mossMissingSuffix)})
+	}
+
+	// PUT must have actually produced a zero-size object
+	op, err := api.HeadObject(bp, bck, in[0].ObjName, api.HeadArgs{FltPresence: apc.FltPresent})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, op.Size == 0, "expected zero-size object, got %d", op.Size)
+
+	return bck, in
+}
+
+func TestMossZeroSizeCounters(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+
+	const (
+		numObjs    = 20
+		numMissing = 3
+	)
+	bp := tools.BaseAPIParams()
+	t.Cleanup(stopMossJobs)
+
+	for _, streaming := range []bool{false, true} {
+		desc := "multipart"
+		if streaming {
+			desc = "streaming"
+		}
+		t.Run(desc, func(t *testing.T) {
+			bck, in := _mossZeroSetup(t, bp, numObjs, numMissing)
+
+			base := _mossCounters(t)
+
+			_mossGetBatch(t, bck, in, streaming, true /*continueOnErr*/)
+
+			// per-work-item counters
+			delta := _mossWaitCounters(t, base, stats.GetBatchObjCount, numObjs)
+
+			tassert.Errorf(t, delta[stats.GetBatchObjCount] == numObjs,
+				"[%s] %s delta=%d, want %d (zero-size objects must count)",
+				desc, stats.GetBatchObjCount, delta[stats.GetBatchObjCount], numObjs)
+			tassert.Errorf(t, delta[stats.GetBatchFileCount] == numObjs,
+				"[%s] %s delta=%d, want %d (zero-size archived files must count)",
+				desc, stats.GetBatchFileCount, delta[stats.GetBatchFileCount], numObjs)
+			tassert.Errorf(t, delta[stats.GetBatchSoftErrCount] == numMissing,
+				"[%s] %s delta=%d, want %d",
+				desc, stats.GetBatchSoftErrCount, delta[stats.GetBatchSoftErrCount], numMissing)
+
+			tassert.Errorf(t, delta[stats.GetBatchObjSize] == 0, "[%s] %s delta=%d, want 0",
+				desc, stats.GetBatchObjSize, delta[stats.GetBatchObjSize])
+			tassert.Errorf(t, delta[stats.GetBatchFileSize] == 0, "[%s] %s delta=%d, want 0",
+				desc, stats.GetBatchFileSize, delta[stats.GetBatchFileSize])
+
+			// generic (xaction-level) counters
+			inObjs, outObjs := _mossSnapObjs(t, bck)
+			tassert.Errorf(t, inObjs > 0, "[%s] x-moss InObjs=%d, want > 0 (zero-size Rx must count)", desc, inObjs)
+			tassert.Errorf(t, outObjs > 0, "[%s] x-moss OutObjs=%d, want > 0 (zero-size Tx must count)", desc, outObjs)
 		})
 	}
 }
