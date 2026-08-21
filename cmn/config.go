@@ -1395,6 +1395,24 @@ func (c *Config) TestingEnv() bool {
 // ConfigToSet //
 /////////////////
 
+// [backward compatibility] translate pre-5.0 dotted names
+// (see also: the 4 UnmarshalJSON methods under "AuthConf" below)
+// TODO: remove in 5.1
+func _fromLegacyConfName(name string) string {
+	const (
+		oldPrefix = "auth.cluster_key."
+		newPrefix = "auth.intra_cluster."
+	)
+	if name == "auth.enabled" {
+		name = "auth.client_auth_required"
+	} else if name == oldPrefix+"enabled" {
+		name = newPrefix + "request_auth"
+	} else if after, ok := strings.CutPrefix(name, oldPrefix); ok {
+		name = newPrefix + after
+	}
+	return name
+}
+
 // FillFromQuery populates ConfigToSet from URL query values
 func (ctu *ConfigToSet) FillFromQuery(query url.Values) error {
 	var anyExists bool
@@ -1404,7 +1422,7 @@ func (ctu *ConfigToSet) FillFromQuery(query url.Values) error {
 		}
 		anyExists = true
 		name, value := strings.ToLower(key), query.Get(key)
-		if err := UpdateFieldValue(ctu, name, value); err != nil {
+		if err := UpdateFieldValue(ctu, _fromLegacyConfName(name), value); err != nil {
 			return err
 		}
 	}
@@ -1428,7 +1446,7 @@ func (ctu *ConfigToSet) FillFromKVS(kvs []string) (err error) {
 			return fmt.Errorf(format, kv)
 		}
 		name, value := entry[0], entry[1]
-		if err := UpdateFieldValue(ctu, name, value); err != nil {
+		if err := UpdateFieldValue(ctu, _fromLegacyConfName(name), value); err != nil {
 			return fmt.Errorf(format, kv)
 		}
 	}
@@ -2430,8 +2448,14 @@ func (c *FSHCConf) Validate() error {
 // AuthConf //
 //////////////
 
-// [backward compatibility] to support pre-5.0 => 5.x upgrades and legacy "enabled" fields
-// TODO: [backward compatibility] remove in 5.1
+// [backward compatibility] to support pre-5.0 => 5.0 upgrades; includes the following 4 methods:
+// * AuthConf.UnmarshalJSON
+// * AuthConfToSet.UnmarshalJSON (e.g., 4.x Operator during rolling upgrade)
+// * IntraClusterConf.UnmarshalJSON
+// * IntraClusterConfToSet.UnmarshalJSON (ditto)
+// See related: _fromLegacyConfName()
+// TODO: remove in 5.1
+
 func (c *AuthConf) UnmarshalJSON(b []byte) error {
 	type alias AuthConf
 
@@ -2457,7 +2481,31 @@ func (c *AuthConf) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// TODO: [backward compatibility] remove in 5.1
+func (c *AuthConfToSet) UnmarshalJSON(b []byte) error {
+	type alias AuthConfToSet
+
+	aux := &struct {
+		ClientAuthRequired *bool                  `json:"client_auth_required,omitempty"`
+		LegacyEnabled      *bool                  `json:"enabled,omitempty"`
+		LegacyCSK          *IntraClusterConfToSet `json:"cluster_key,omitempty"`
+		*alias
+	}{
+		alias: (*alias)(c),
+	}
+	if err := json.Unmarshal(b, aux); err != nil {
+		return err
+	}
+	if aux.ClientAuthRequired != nil {
+		c.ClientAuthRequired = aux.ClientAuthRequired
+	} else if aux.LegacyEnabled != nil {
+		c.ClientAuthRequired = aux.LegacyEnabled
+	}
+	if aux.LegacyCSK != nil && c.IntraCluster == nil {
+		c.IntraCluster = aux.LegacyCSK
+	}
+	return nil
+}
+
 func (c *IntraClusterConf) UnmarshalJSON(b []byte) error {
 	type alias IntraClusterConf
 
@@ -2473,6 +2521,25 @@ func (c *IntraClusterConf) UnmarshalJSON(b []byte) error {
 		c.RequestAuth = *aux.RequestAuth
 	} else if aux.LegacyEnabled != nil {
 		c.RequestAuth = *aux.LegacyEnabled
+	}
+	return nil
+}
+
+func (c *IntraClusterConfToSet) UnmarshalJSON(b []byte) error {
+	type alias IntraClusterConfToSet
+
+	aux := &struct {
+		RequestAuth   *bool `json:"request_auth,omitempty"`
+		LegacyEnabled *bool `json:"enabled,omitempty"`
+		*alias
+	}{alias: (*alias)(c)}
+	if err := json.Unmarshal(b, aux); err != nil {
+		return err
+	}
+	if aux.RequestAuth != nil {
+		c.RequestAuth = aux.RequestAuth
+	} else if aux.LegacyEnabled != nil {
+		c.RequestAuth = aux.LegacyEnabled
 	}
 	return nil
 }

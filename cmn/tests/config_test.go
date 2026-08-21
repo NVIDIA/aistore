@@ -6,6 +6,7 @@ package tests_test
 
 import (
 	"crypto/tls"
+	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -302,12 +303,33 @@ func TestAuthConfFieldRename(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, *update.Auth.ClientAuthRequired && *update.Auth.IntraCluster.RequestAuth && *update.Auth.IntraCluster.NodeJoinSecretPath == "/etc/ais/join-secret",
 		"failed to parse renamed auth fields: %+v", update.Auth)
-	err = update.FillFromKVS([]string{"auth.enabled=true"})
-	tassert.Fatalf(t, err != nil, "legacy dotted auth field must be rejected")
-	err = update.FillFromKVS([]string{"auth.intra_cluster.enabled=true"})
-	tassert.Fatalf(t, err != nil, "legacy dotted intra-cluster field must be rejected")
-	// self_join_auth never shipped in a tagged release: no legacy alias is owed,
-	// and a stray occurrence must not fail the load
+	// [backward compatibility] pre-5.0 dotted names, key-value flavor
+	legacy := cmn.ConfigToSet{}
+	err = legacy.FillFromKVS([]string{
+		"auth.enabled=false", "auth.cluster_key.enabled=true", "auth.cluster_key.nonce_window=2m",
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, legacy.Auth.ClientAuthRequired != nil && !*legacy.Auth.ClientAuthRequired,
+		"legacy auth.enabled must map to client_auth_required: %+v", legacy.Auth)
+	tassert.Fatalf(t, legacy.Auth.IntraCluster.RequestAuth != nil && *legacy.Auth.IntraCluster.RequestAuth,
+		"legacy auth.cluster_key.enabled must map to request_auth: %+v", legacy.Auth.IntraCluster)
+	tassert.Fatalf(t, legacy.Auth.IntraCluster.NonceWindow.D() == 2*time.Minute,
+		"legacy auth.cluster_key.nonce_window must map through: %+v", legacy.Auth.IntraCluster)
+
+	// ditto, query flavor (api.SetClusterConfig; e.g. a v4.x CLI)
+	legacyQ := cmn.ConfigToSet{}
+	err = legacyQ.FillFromQuery(url.Values{
+		"auth.cluster_key.enabled":      []string{"true"},
+		"auth.cluster_key.nonce_window": []string{"2m"},
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, *legacyQ.Auth.IntraCluster.RequestAuth && legacyQ.Auth.IntraCluster.NonceWindow.D() == 2*time.Minute,
+		"query flavor must resolve legacy names: %+v", legacyQ.Auth.IntraCluster)
+
+	// (unlike the JSON flavor, where IntraClusterConf.UnmarshalJSON does accept it)
+	err = (&cmn.ConfigToSet{}).FillFromKVS([]string{"auth.intra_cluster.enabled=true"})
+	tassert.Fatalf(t, err != nil, "the never-released intra_cluster.enabled must not be aliased")
+
 	auth = cmn.AuthConf{}
 	err = jsoniter.Unmarshal([]byte(`{"intra_cluster":{"self_join_auth":true,"node_join_secret_path":"/etc/ais/join-secret"}}`), &auth)
 	tassert.CheckFatal(t, err)
