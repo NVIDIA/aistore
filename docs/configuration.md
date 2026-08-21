@@ -23,7 +23,7 @@ For the complete CLI syntax, see [CLI: configuration](/docs/cli/config.md). This
   - [Startup overrides](#startup-overrides)
   - [Managing mountpaths](#managing-mountpaths)
   - [Reducing extended-attribute usage](#reducing-extended-attribute-usage)
-  - [Backup and upgrade](#backup-and-upgrade)
+  - [Upgrades and metadata backup](#upgrades-and-metadata-backup)
   - [Production checklist](#production-checklist)
 - [For developers](#for-developers)
   - [Data model and update paths](#data-model-and-update-paths)
@@ -404,7 +404,14 @@ This does **not** make AIStore independent of extended attributes. Targets still
 
 What it does change: in-memory (a.k.a. *dirty*) metadata does not survive a node reboot.
 
-### Backup and upgrade
+### Upgrades and metadata backup
+
+Configuration compatibility during a rolling upgrade is directional. A newer release may accept
+configuration updates produced by an older CLI, SDK, or Operator when required by a supported
+upgrade path. The reverse path is not supported: a primary running a newer AIStore version may
+propagate its cluster configuration to nodes still running an older version, but those nodes are not
+required to accept it. Follow the upgrade order documented for the release, and avoid unrelated
+configuration changes while the cluster contains mixed versions.
 
 The files you pass with `-config` and `-local_config` are not a backup. The initial file doesn't track later changes, and either path may live outside the AIStore configuration directory.
 
@@ -414,9 +421,9 @@ Back up all of the following before an upgrade or disruptive maintenance:
 - each node's complete AIStore configuration directory; and
 - the `.ais.*` metadata files at each target mountpath root - **not** whole mountpaths, which hold user data.
 
-Depending on node role this includes cluster maps, bucket metadata, rebalance state, and node identity. See [System files](/docs/sysfiles.md). Keep backups off-node and restore only with a compatible AIStore version.
+Depending on node role this includes cluster maps, bucket metadata, rebalance state, and node identity. Metadata replication is not a substitute for backup. Keep the archive off-node and record the AIStore version that produced it. See [System files](/docs/sysfiles.md) for the layout and [`xmeta`](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md) for low-level inspection and recovery tooling.
 
-**Downgrade is not supported.** Configuration written by a newer release is not valid input to an older binary: starting with v5.0, an older version may refuse to start on a section it doesn't find, or reconstruct a different value for it. This has never been a supported operation in AIStore, but v5.0 makes the failure sharper. Restore a matching backup instead. See [v5.0 release notes](/docs/relnotes/5.0.md).
+**Downgrade is not supported.** Configuration written by a newer release is not valid input to an older binary: starting with v5.0, an older version may refuse to start on a section it doesn't find, or reconstruct a different value for it. This has never been a supported operation in AIStore, but v5.0 makes the failure sharper. To return to the previous release, restore its matching metadata backup together with its binaries. See [v5.0 release notes](/docs/relnotes/5.0.md).
 
 ### Production checklist
 

@@ -284,7 +284,10 @@ $ ais config cluster net.use_ipv6 true
 
 To take effect, the change requires a cluster restart. On restart, each node discovers local IPv6 addresses and binds all listeners using IPv6 addresses when usable IPv6 addresses are available.
 
-> **Operational note:** As with any cluster-wide configuration change that rebuilds cluster metadata, such as the cluster map (Smap), it is good practice to periodically back up [cluster-level metadata](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md), including BMD, Smap, and configuration. This is not specific to IPv6.
+> **Operational note:**
+> As with any cluster-wide configuration change that rebuilds cluster metadata (such as the cluster map (Smap)) - back up BMD, Smap, and cluster configuration
+> as described in [Upgrades and metadata backup](/docs/configuration.md#upgrades-and-metadata-backup).
+> This is not specific to IPv6.
 
 ### What "prefer IPv6" means
 
@@ -422,4 +425,4 @@ This split guarantees that:
 * IPv6 is supported cluster-wide via `net.use_ipv6`; switching between IPv4 and IPv6 requires a config change and restart.
 * IP family selection is resolved at runtime and applied consistently.
 * DNS hostnames and Kubernetes FQDNs are preferred over hardcoded IP literals, especially for IPv4/IPv6 transitions.
-* Operators should periodically back up [cluster-level metadata](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md), including BMD, Smap, and configuration.
+* Operators should back up BMD, Smap, and configuration as described in [Upgrades and metadata backup](/docs/configuration.md#upgrades-and-metadata-backup).
