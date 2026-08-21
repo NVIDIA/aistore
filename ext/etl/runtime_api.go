@@ -23,7 +23,9 @@ import (
 const MaxObjErr = 128
 
 // ErrNotBuilt indicates that ETL runtime support was excluded at build time.
-var ErrNotBuilt = cmn.NewErrUnsupp("use ETL", "in a build without ETL support")
+// Keep it interface-typed to avoid build-specific nilness propagation into shared callers
+// (and also avoid lint staticcheck SA4023).
+var ErrNotBuilt error = cmn.NewErrUnsupp("use ETL", "in a build without ETL support")
 
 var _ core.Xact = (*XactETL)(nil)
 
