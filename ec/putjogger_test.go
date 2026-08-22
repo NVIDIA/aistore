@@ -1,0 +1,153 @@
+// Package ec provides erasure coding (EC) based data protection for AIStore.
+/*
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
+ */
+package ec //nolint:testpackage // Tests unexported EC encoding helpers.
+
+import (
+	"bytes"
+	"io"
+	"testing"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+)
+
+func TestFinalizeSlicesChecksumsPaddedData(t *testing.T) {
+	for _, cksumType := range []string{cos.ChecksumCesXxh, cos.ChecksumSHA256} {
+		t.Run(cksumType, func(t *testing.T) {
+			ctx := newInitializedTestCtx([]byte("abcde"), 2, 1)
+			writers, parity := newParityTestWriters(ctx)
+
+			if err := finalizeSlices(ctx, writers, cksumType); err != nil {
+				t.Fatal(err)
+			}
+
+			assertSliceChecksum(t, ctx.slices[0].cksum, []byte("abc"), cksumType)
+			assertSliceChecksum(t, ctx.slices[1].cksum, []byte{'d', 'e', 0}, cksumType)
+			assertSliceChecksum(t, ctx.slices[2].cksum, parity[0].Bytes(), cksumType)
+		})
+	}
+}
+
+func TestFinalizeSlicesChecksumsUnpaddedData(t *testing.T) {
+	const cksumType = cos.ChecksumCesXxh
+
+	ctx := newInitializedTestCtx([]byte("abcdef"), 2, 1)
+	writers, parity := newParityTestWriters(ctx)
+
+	if err := finalizeSlices(ctx, writers, cksumType); err != nil {
+		t.Fatal(err)
+	}
+
+	assertSliceChecksum(t, ctx.slices[0].cksum, []byte("abc"), cksumType)
+	assertSliceChecksum(t, ctx.slices[1].cksum, []byte("def"), cksumType)
+	assertSliceChecksum(t, ctx.slices[2].cksum, parity[0].Bytes(), cksumType)
+}
+
+func TestFinalizeSlicesChecksumsMultipleParity(t *testing.T) {
+	const cksumType = cos.ChecksumCesXxh
+
+	ctx := newInitializedTestCtx([]byte("abcdef"), 2, 2)
+	writers, parity := newParityTestWriters(ctx)
+
+	if err := finalizeSlices(ctx, writers, cksumType); err != nil {
+		t.Fatal(err)
+	}
+
+	assertSliceChecksum(t, ctx.slices[2].cksum, parity[0].Bytes(), cksumType)
+	assertSliceChecksum(t, ctx.slices[3].cksum, parity[1].Bytes(), cksumType)
+}
+
+func TestInitializeSlices(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want [][]byte
+	}{
+		{name: "padded", data: []byte("abcde"), want: [][]byte{[]byte("abc"), {'d', 'e', 0}}},
+		{name: "unpadded", data: []byte("abcdef"), want: [][]byte{[]byte("abc"), []byte("def")}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := newInitializedTestCtx(test.data, len(test.want), 1)
+			for i, want := range test.want {
+				got, err := io.ReadAll(ctx.slices[i].reader)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(got, want) {
+					t.Fatalf("slice %d: got %v, expected %v", i, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestFinalizeSlicesDoesNotPublishPartialChecksums(t *testing.T) {
+	const cksumType = cos.ChecksumCesXxh
+
+	ctx := &encodeCtx{
+		dataSlices:   2,
+		paritySlices: 1,
+		slices:       make([]*slice, 3),
+	}
+	ctx.slices[0] = &slice{reader: cos.NewByteReader([]byte("abcd"))}
+	ctx.slices[1] = &slice{reader: cos.NewByteReader([]byte("abc"))}
+	writers, _ := newParityTestWriters(ctx)
+
+	if err := finalizeSlices(ctx, writers, cksumType); err == nil {
+		t.Fatal("expected unequal data slice lengths to fail encoding")
+	}
+	for i, sl := range ctx.slices {
+		if sl.cksum != nil {
+			t.Fatalf("slice %d published a checksum after failed encoding", i)
+		}
+	}
+}
+
+func TestFinalizeSlicesWithoutChecksums(t *testing.T) {
+	ctx := newInitializedTestCtx([]byte("abcdef"), 2, 1)
+	writers, _ := newParityTestWriters(ctx)
+
+	if err := finalizeSlices(ctx, writers, cos.ChecksumNone); err != nil {
+		t.Fatal(err)
+	}
+	for i, sl := range ctx.slices {
+		if sl.cksum != nil {
+			t.Fatalf("slice %d unexpectedly has a checksum", i)
+		}
+	}
+}
+
+func newInitializedTestCtx(data []byte, dataSlices, paritySlices int) *encodeCtx {
+	ctx := &encodeCtx{
+		lh:           &core.LomHandle{LomReader: cos.NewByteReader(data)},
+		dataSlices:   dataSlices,
+		paritySlices: paritySlices,
+	}
+	initializeSlices(ctx, int64(len(data)))
+	return ctx
+}
+
+func newParityTestWriters(ctx *encodeCtx) ([]io.Writer, []*bytes.Buffer) {
+	writers := make([]io.Writer, ctx.paritySlices)
+	parity := make([]*bytes.Buffer, ctx.paritySlices)
+	for i := range ctx.paritySlices {
+		parity[i] = &bytes.Buffer{}
+		ctx.slices[i+ctx.dataSlices] = &slice{}
+		writers[i] = parity[i]
+	}
+	return writers, parity
+}
+
+func assertSliceChecksum(t *testing.T, actual *cos.Cksum, data []byte, cksumType string) {
+	t.Helper()
+	expected, err := cos.ChecksumBytes(data, cksumType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !actual.Equal(expected) {
+		t.Fatalf("checksum mismatch: got %s, expected %s", actual, expected)
+	}
+}
