@@ -33,6 +33,7 @@ from aistore.sdk.types import (
 from aistore.sdk.utils import probing_frequency, get_logger
 from aistore.sdk.xact_const import (
     XACT_KIND_BLOB_DL,
+    XACT_KIND_RESILVER,
     idles_before_finishing,
     is_valid_kind,
 )
@@ -133,8 +134,8 @@ class Job:
             `copy-listrange`, `etl-listrange`, `archive`, `list`,
             `put-copies`, `ec-get`/`ec-put`/`ec-resp`), wait for the job to
             reach an idle state across all targets (see `wait_for_idle`).
-          - blob downloads use target snapshots because their direct-target
-            start path does not register an IC listener.
+          - single-target non-IC jobs (`blob-download` and `resilver`) wait
+            for terminal target snapshots.
           - otherwise, wait for the IC status to reach a terminal state.
 
         If `job_kind` is empty but `job_id` is set, the kind is first
@@ -172,7 +173,7 @@ class Job:
                 verbose,
                 "reached idle state",
             )
-        if kind == XACT_KIND_BLOB_DL:
+        if kind in (XACT_KIND_BLOB_DL, XACT_KIND_RESILVER):
             return self.wait_single_node(timeout, verbose)
         if kind and not is_valid_kind(kind):
             # not an error: SDK kind table may lag server; default to terminal

@@ -30,6 +30,7 @@ from aistore.sdk.xact_const import (
     XACT_KIND_DELETE_OBJECTS,
     XACT_KIND_DOWNLOAD,
     XACT_KIND_LRU,
+    XACT_KIND_RESILVER,
 )
 
 
@@ -164,28 +165,33 @@ class TestJob(unittest.TestCase):
         mock_sleep.assert_called()
 
     @patch("aistore.sdk.job.Job.status")
-    def test_wait_dispatch_blob_download_uses_snapshots(self, mock_status):
-        job = Job(self.mock_client, job_id=self.job_id, job_kind=XACT_KIND_BLOB_DL)
-        self.mock_client.request_deserialize.return_value = (
-            AggregatedJobSnap.model_validate(
-                {
-                    "target": [
-                        JobSnap(
-                            id=self.job_id,
-                            end_time="2024-01-01T00:00:00Z",
-                        )
-                    ]
-                }
-            )
-        )
+    def test_wait_dispatch_single_target_non_ic_kinds_use_snapshots(self, mock_status):
+        for kind in (XACT_KIND_BLOB_DL, XACT_KIND_RESILVER):
+            with self.subTest(kind=kind):
+                job = Job(self.mock_client, job_id=self.job_id, job_kind=kind)
+                self.mock_client.request_deserialize.return_value = (
+                    AggregatedJobSnap.model_validate(
+                        {
+                            "target": [
+                                JobSnap(
+                                    id=self.job_id,
+                                    end_time="2024-01-01T00:00:00Z",
+                                )
+                            ]
+                        }
+                    )
+                )
 
-        result = job.wait(timeout=20)
+                result = job.wait(timeout=20)
 
-        self.assertTrue(result.success)
-        mock_status.assert_not_called()
-        called_kwargs = self.mock_client.request_deserialize.call_args.kwargs
-        self.assertEqual(called_kwargs["params"], {QPARAM_WHAT: WHAT_QUERY_XACT_STATS})
-        self.assertEqual(called_kwargs["res_model"], AggregatedJobSnap)
+                self.assertTrue(result.success)
+                mock_status.assert_not_called()
+                called_kwargs = self.mock_client.request_deserialize.call_args.kwargs
+                self.assertEqual(
+                    called_kwargs["params"], {QPARAM_WHAT: WHAT_QUERY_XACT_STATS}
+                )
+                self.assertEqual(called_kwargs["res_model"], AggregatedJobSnap)
+                self.mock_client.reset_mock()
 
     @patch("aistore.sdk.job.time.sleep", Mock())
     def test_wait_idle_requires_two_consecutive(self):

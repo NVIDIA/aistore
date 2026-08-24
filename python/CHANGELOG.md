@@ -51,10 +51,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   `api.WaitForXaction`: when `job_kind` is an idle kind (e.g. `download`,
   `get-batch`, `copy-listrange`, `etl-listrange`, `archive`, `list`,
   `put-copies`, `ec-get`/`ec-put`/`ec-resp`) it waits for cluster-wide idle;
-  blob downloads wait for terminal target snapshots; otherwise — including
-  empty or unknown kinds — it waits for terminal IC status (preserving the
-  pre-convergence behavior). `wait_for_idle` and `wait_single_node` remain
-  available as explicit overrides.
+  single-target non-IC jobs (`blob-download` and `resilver`) wait for terminal
+  target snapshots; otherwise — including empty or unknown kinds — it waits
+  for terminal IC status (preserving the pre-convergence behavior).
+  `wait_for_idle` and `wait_single_node` remain available as explicit overrides.
 - `Job.wait()` resolves the job kind from the cluster when only a job id is
   given (raising `JobInfoNotFound` if the id is unknown), so a job created
   with just an id still dispatches correctly.

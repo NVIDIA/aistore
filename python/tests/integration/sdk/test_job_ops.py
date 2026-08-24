@@ -59,7 +59,7 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         not REMOTE_SET,
         "Remote bucket is not set",
     )
-    def test_job_wait_single_node(self):
+    def test_job_wait_blob_download(self):
         obj, _ = self._create_object_with_content()
 
         evict_job_id = self.bucket.objects(obj_names=[obj.name]).evict()
@@ -69,7 +69,7 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
 
         job_id = obj.blob_download()
         self.assertNotEqual(job_id, "")
-        result = self.client.job(job_id=job_id).wait_single_node(timeout=TEST_TIMEOUT)
+        result = self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT)
         self.assertTrue(result.success)
 
         self.assertTrue(obj.props.present)

@@ -40,6 +40,7 @@ EXPECTED_KNOWN_KINDS = frozenset(
         "lru",
         "cleanup-store",
         "summary-bck",
+        "summary-shard",
         "rechunk",
         "index-shard",
         "ec-get",
