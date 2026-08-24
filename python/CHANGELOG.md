@@ -64,6 +64,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `Batch.get()` uses a shallow copy instead of deep copy when snapshotting the 
   request before clearing, making the snapshot O(1) regardless of batch size.
   - `MossIn` is now a frozen Pydantic class, reflecting its immutability.
+- `Batch.add()` now accepts optional `bck`/`provider` for string object names,
+  letting batches with per-object buckets skip building an `Object` wrapper for
+  every item, improving performance.
 
 ### Fixed
 

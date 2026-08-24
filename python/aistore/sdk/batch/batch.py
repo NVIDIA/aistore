@@ -63,7 +63,12 @@ class Batch:
                 - Single Object instance
                 - List of Object instances
                 - None (add objects later via add())
-                Note: if objects are specified as raw names (str or list of str), bucket must be provided
+            Note:
+                - If objects are specified as raw names (str or list of str), bucket must be provided
+                - This is a convenience path for the common case of a flat list of names/Objects
+                    sharing the default bucket. It does not carry per-item metadata: archpath, byte
+                    ranges (start/length), opaque data, or a per-item bck/provider override. For any of
+                    that, use add() per object instead.
             bucket (Bucket): Default bucket for all objects
             output_format (str): Archive format (tar, tgz, zip)
             cont_on_err (bool): Continue on errors (missing files under __404__/). Defaults to True
@@ -117,7 +122,12 @@ class Batch:
 
         # Process initial objects if provided
         if objects is not None:
-            self._add_objects(objects)
+            for obj in objects if isinstance(objects, list) else [objects]:
+                if isinstance(obj, (Object, str)):
+                    self.add(obj)
+                else:
+                    logger.error("Unsupported object type: %s", type(obj))
+                    raise ValueError(f"Unsupported object type: {type(obj)}")
 
         self.extractor = get_extractor(output_format)
 
@@ -128,59 +138,7 @@ class Batch:
         """
         return self.request.moss_in
 
-    def _add_objects(self, objects: Union[List[Object], Object, str, List[str]]):
-        """
-        Internal helper to add objects in bulk.
-        Supports strings, Object instances, or lists of either.
-        """
-        if isinstance(objects, list):
-            for obj in objects:
-                if isinstance(obj, Object):
-                    self.request.add(
-                        MossIn(
-                            obj_name=obj.name,
-                            bck=obj.bucket_name,
-                            provider=obj.bucket_provider.value,
-                        )
-                    )
-                elif isinstance(obj, str):
-                    if not self.bucket:
-                        logger.error(
-                            "Cannot add string object '%s': no bucket provided", obj
-                        )
-                        raise ValueError(_BUCKET_REQUIRED_MSG)
-                    self.request.add(
-                        MossIn(
-                            obj_name=obj,
-                            bck=self.bucket.name,
-                            provider=self.bucket.provider.value,
-                        )
-                    )
-                else:
-                    logger.error("Unsupported object type: %s", type(obj))
-                    raise ValueError(f"Unsupported object type: {type(obj)}")
-        elif isinstance(objects, Object):
-            self.request.add(
-                MossIn(
-                    obj_name=objects.name,
-                    bck=objects.bucket_name,
-                    provider=objects.bucket_provider.value,
-                )
-            )
-        elif isinstance(objects, str):
-            if not self.bucket:
-                logger.error(
-                    "Cannot add string object '%s': no bucket provided", objects
-                )
-                raise ValueError(_BUCKET_REQUIRED_MSG)
-            self.request.add(
-                MossIn(
-                    obj_name=objects,
-                    bck=self.bucket.name,
-                    provider=self.bucket.provider.value,
-                )
-            )
-
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def add(
         self,
         obj: Union[Object, str],
@@ -188,13 +146,16 @@ class Batch:
         archpath: Optional[str] = None,
         start: Optional[int] = None,
         length: Optional[int] = None,
+        bck: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> "Batch":
         """
         Add object with advanced parameters (archpath, byte ranges, opaque data).
 
         For simple objects, prefer passing them to __init__ instead.
 
-        Note: if objects are specified as raw names (str), default bucket must be provided in __init__
+        Note: if objects are specified as raw names (str), a bucket must be resolved either
+        from the default bucket provided in __init__, or per-call via bck/provider.
 
         Args:
             obj (Union[Object, str]): Object or object name string
@@ -206,13 +167,21 @@ class Batch:
             length (Optional[int]): Number of bytes to read starting at start. Pass -1 to read
                 from start to the end of the object (open-ended); a positive value reads exactly
                 that many bytes (and the corresponding MossOut.size equals length).
+            bck (Optional[str]): Bucket name for this object, overriding the default bucket.
+                Only valid when obj is a string, and must be paired with provider (both or
+                neither). Use this (instead of bucket.object(obj_name)) for batches spanning
+                multiple buckets/providers, since it skips constructing an Object/BucketDetails
+                wrapper per call.
+            provider (Optional[str]): Provider for this object (e.g. "s3", "ais"). Only valid
+                when obj is a string; must be paired with bck (both or neither).
 
         Returns:
             Batch: Self for method chaining
 
         Raises:
             ValueError: If the byte range is invalid (negative start, length < -1, or a
-                non-zero start without a length)
+                non-zero start without a length), if bck/provider is combined with an
+                Object instance, or if exactly one of bck/provider is set without the other.
 
         Example:
             batch = Batch(client, ["simple1.txt", "simple2.txt"])
@@ -221,21 +190,15 @@ class Batch:
             batch.add("large.bin", start=1024, length=2048)  # Byte range read
             batch.add("large.bin", start=1024, length=-1)  # Open-ended range: offset 1024 to EOF
             batch.add("shard.tar", archpath="data/file.json", start=128, length=512)  # Range within an archived file
+            batch.add("other.txt", bck="other-bucket", provider="s3")  # Object in a different bucket
         """
-        # Validate the byte range (mirrors server-side apc.MossIn checks): start must be >= 0;
-        # length is either > 0 (bounded) or -1 to read from start to the end of the object.
-        # A non-zero start requires an explicit length (use length=-1 to read to the end).
-        if start and start < 0:
-            raise ValueError(f"Invalid byte range: start={start} must be >= 0")
-        if length is not None and length < -1:
-            raise ValueError(
-                f"Invalid byte range: length={length} must be > 0, or -1 to read to the end"
-            )
-        if start and (length is None or length == 0):
-            raise ValueError(
-                f"Invalid byte range: start={start} requires length > 0 or -1 "
-                "(use -1 to read to the end)"
-            )
+        # Skip when there's nothing to validate since we requires
+        # start or length to be nonzero (negative numbers are truthy)
+        if start or length:
+            self._validate_byte_range(start, length)
+
+        if (bck is None) != (provider is None):
+            raise ValueError("bck and provider must be set together, or not at all")
 
         # Build MossIn (frozen, so optional fields must be passed at construction time)
         extra = {}
@@ -249,6 +212,10 @@ class Batch:
             extra["length"] = length
 
         if isinstance(obj, Object):
+            if bck is not None or provider is not None:
+                raise ValueError(
+                    "bck/provider cannot be combined with an Object instance"
+                )
             moss_in = MossIn(
                 obj_name=obj.name,
                 bck=obj.bucket_name,
@@ -256,18 +223,43 @@ class Batch:
                 **extra,
             )
         else:
-            if not self.bucket:
-                logger.error("Cannot add string object '%s': no bucket provided", obj)
-                raise ValueError(_BUCKET_REQUIRED_MSG)
+            # Per-call bck/provider let callers with heterogeneous buckets skip building an
+            # Object/BucketDetails wrapper (bucket.object(obj_name)) for every add() call
+            if bck is None:
+                if not self.bucket:
+                    logger.error(
+                        "Cannot add string object '%s': no bucket provided", obj
+                    )
+                    raise ValueError(_BUCKET_REQUIRED_MSG)
+                bck = self.bucket.name
+                provider = self.bucket.provider.value
             moss_in = MossIn(
                 obj_name=obj,
-                bck=self.bucket.name,
-                provider=self.bucket.provider.value,
+                bck=bck,
+                provider=provider,
                 **extra,
             )
 
         self.request.add(moss_in)
         return self  # Allow chaining
+
+    @staticmethod
+    def _validate_byte_range(start: Optional[int], length: Optional[int]) -> None:
+        """Mirrors server-side apc.MossIn checks: start must be >= 0; length is
+        either > 0 (bounded) or -1 to read from start to the end of the object.
+        A non-zero start requires an explicit length (use length=-1 to read to
+        the end)."""
+        if start and start < 0:
+            raise ValueError(f"Invalid byte range: start={start} must be >= 0")
+        if length is not None and length < -1:
+            raise ValueError(
+                f"Invalid byte range: length={length} must be > 0, or -1 to read to the end"
+            )
+        if start and (length is None or length == 0):
+            raise ValueError(
+                f"Invalid byte range: start={start} requires length > 0 or -1 "
+                "(use -1 to read to the end)"
+            )
 
     def clear(self) -> "Batch":
         """

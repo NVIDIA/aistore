@@ -2,6 +2,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 # pylint: disable=too-many-lines
+import base64
 import tarfile
 import unittest
 from io import BytesIO
@@ -15,11 +16,11 @@ from urllib3.util.retry import Retry
 from aistore.sdk.batch.batch import Batch
 from aistore.sdk.batch.extractor.archive_stream_extractor import ArchiveStreamExtractor
 from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
-from aistore.sdk.batch.types import MossOut, MossResp
+from aistore.sdk.batch.types import MossIn, MossOut, MossResp
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import QPARAM_COLOC
 from aistore.sdk.enums import Colocation
-from aistore.sdk.errors import AISError
+from aistore.sdk.errors import AISError, ErrBckNotFound
 from aistore.sdk.obj.object import Object
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.retry_config import NETWORK_RETRY_EXCEPTIONS, RetryConfig
@@ -204,6 +205,104 @@ class TestBatch(unittest.TestCase):
         batch.add("file1.txt").add("file2.txt").add("file3.txt")
 
         self.assertEqual(len(batch), 3)
+
+    def test_batch_add_with_bck_provider_override(self):
+        """Test that add() accepts a per-call bck/provider for string object
+        names, so callers with heterogeneous buckets don't need to build an
+        Object/BucketDetails wrapper (bucket.object(obj_name)) per call."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        batch.add("other.txt", bck="other-bucket", provider="s3")
+
+        self.assertEqual(len(batch), 1)
+        moss_in = batch.request.moss_in[0]
+        self.assertEqual(moss_in.obj_name, "other.txt")
+        self.assertEqual(moss_in.bck, "other-bucket")
+        self.assertEqual(moss_in.provider, "s3")
+        # The default bucket must be untouched.
+        self.assertEqual(self.mock_bucket.name, "test-bucket")
+
+    def test_batch_add_with_bck_provider_no_default_bucket(self):
+        """Test that bck/provider works even without a default bucket set."""
+        batch = Batch(self.mock_request_client)
+        batch.add("other.txt", bck="other-bucket", provider="s3")
+
+        moss_in = batch.request.moss_in[0]
+        self.assertEqual(moss_in.bck, "other-bucket")
+        self.assertEqual(moss_in.provider, "s3")
+
+    def test_batch_add_provider_without_bck_raises_error(self):
+        """Test that provider alone (without bck) raises ValueError, rather than
+        silently falling back to the default bucket's name with the override's
+        provider (a mismatched bucket/provider pair)."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        with self.assertRaises(ValueError) as context:
+            batch.add("file.txt", provider="s3")
+        self.assertIn("bck and provider must be set together", str(context.exception))
+
+    def test_batch_add_bck_without_provider_raises_error(self):
+        """Test that bck alone (without provider) raises ValueError, rather than
+        silently producing a MossIn with bck set but provider=None (which would
+        drop the default bucket's provider instead of inheriting or requiring it)."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        with self.assertRaises(ValueError) as context:
+            batch.add("file.txt", bck="other-bucket")
+        self.assertIn("bck and provider must be set together", str(context.exception))
+
+    def test_batch_add_bck_with_object_raises_error(self):
+        """Test that combining bck/provider with an Object instance raises."""
+        mock_obj = Mock(spec=Object)
+        mock_obj.name = "test.txt"
+        mock_obj.bucket_name = "test-bucket"
+        mock_obj.bucket_provider.value = "ais"
+
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        with self.assertRaises(ValueError) as context:
+            batch.add(mock_obj, bck="other-bucket", provider="s3")
+        self.assertIn("cannot be combined with an Object", str(context.exception))
+
+    def test_batch_add_moss_in_matches_validating_constructor(self):
+        """Guard that add() produces the same MossIn as constructing it directly,
+        for every parameter combination add() supports (including the bck/provider
+        override), so behavior stays consistent as the method evolves."""
+        cases = [
+            {"obj": "file.txt"},
+            {"obj": "shard.tar", "archpath": "images/photo.jpg"},
+            {"obj": "large.bin", "start": 1024, "length": 2048},
+            {"obj": "large.bin", "start": 0, "length": 512},
+            {"obj": "large.bin", "start": 1024, "length": -1},
+            {"obj": "tracked.txt", "opaque": b"user-id-123"},
+            {"obj": "other.txt", "bck": "other-bucket", "provider": "s3"},
+            {
+                "obj": "shard.tar",
+                "archpath": "data/file.bin",
+                "start": 10,
+                "length": 20,
+                "opaque": b"tag",
+            },
+        ]
+        for kwargs in cases:
+            with self.subTest(kwargs=kwargs):
+                batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+                batch.add(**kwargs)
+                constructed = batch.request.moss_in[0]
+
+                opaque = kwargs.get("opaque")
+                expected = MossIn(
+                    obj_name=kwargs["obj"],
+                    bck=kwargs.get("bck") or self.mock_bucket.name,
+                    provider=kwargs.get("provider") or self.mock_bucket.provider.value,
+                    opaque=(
+                        base64.urlsafe_b64encode(opaque).decode("utf-8")
+                        if opaque
+                        else None
+                    ),
+                    archpath=kwargs.get("archpath") or None,
+                    start=kwargs.get("start") or None,
+                    length=kwargs.get("length") or None,
+                )
+
+                self.assertEqual(constructed.model_dump(), expected.model_dump())
+                self.assertEqual(constructed.dict(), expected.dict())
 
     def test_batch_init_with_options(self):
         """Test Batch initialization with various options."""
@@ -1266,6 +1365,30 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(self.mock_request_client.request.call_count, 2)
         self.assertEqual(len(result2), 1)
         self.assertEqual(result2[0][0].obj_name, "file2.txt")
+
+    def test_get_batch_bucket_not_found_raises_error(self):
+        """Test that a nonexistent bucket surfaces as ErrBckNotFound (a
+        subclass of AISError) from get(). Neither Batch.add() nor __init__
+        validate that a bucket actually exists - bck/provider are just
+        strings until the request is sent - so this only surfaces once the
+        server responds to the real GetBatch request; get() doesn't catch or
+        reinterpret it, it just propagates like any other AISError."""
+        batch = Batch(
+            self.mock_request_client, objects=["file.txt"], bucket=self.mock_bucket
+        )
+
+        self.mock_request_client.request.side_effect = ErrBckNotFound(
+            status_code=404,
+            message='bucket "test-bucket" does not exist',
+            req_url="http://localhost:8080/v1/gb/test-bucket",
+            req=Mock(),
+        )
+
+        with self.assertRaises(AISError) as context:
+            list(batch.get())
+
+        self.assertIsInstance(context.exception, ErrBckNotFound)
+        self.assertIn("does not exist", str(context.exception))
 
     # ===========================================
     # Colocation Tests
