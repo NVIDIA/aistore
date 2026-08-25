@@ -297,7 +297,7 @@ lint-update:
 ## See also: .github/workflows/lint.yml
 lint-update-ci:
 	@rm -f $(GOPATH)/bin/golangci-lint
-	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1
 
 lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
