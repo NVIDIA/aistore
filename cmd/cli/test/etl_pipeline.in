@@ -1,8 +1,8 @@
 // RUN k8s
 # Test ETL Pipeline functionality with >> operator
 # Initialize individual ETLs
-ais etl init -f https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml --name=hello-etl --comm-type hpush:// // IGNORE
-ais etl init -f https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/pod.yaml --name=md5-etl --comm-type hpush:// // IGNORE
+ais etl init -f https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/etl_spec.yaml --name=hello-etl --comm-type hpush:// // IGNORE
+ais etl init -f https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/etl_spec.yaml --name=md5-etl --comm-type hpush:// // IGNORE
 
 # Verify ETLs are initialized
 ais etl show | grep hello-etl | awk '{print $2}'

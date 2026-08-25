@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -30,16 +29,13 @@ const etlShowErrorsUsage = "Show ETL job errors.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME>': display errors for inline object transformation failures.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME> <JOB-ID>': display errors for a specific offline (bucket-to-bucket) transform job."
 
-const etlPodSpecDeprecationWarning = "Kubernetes Pod spec ETL initialization is deprecated and will be removed in v5.1; use an ETL runtime spec instead"
-
-const etlInitUsage = "Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).\n" +
-	indent1 + "DEPRECATED: Kubernetes Pod spec initialization will be removed in v5.1; use an ETL runtime spec instead.\n" +
+const etlInitUsage = "Initialize ETL using a runtime spec YAML file (local or remote).\n" +
 	indent1 + "Examples:\n" +
 	indent1 + "\t- 'ais etl init -f my-etl.yaml'\t deploy ETL from a local YAML file;\n" +
 	indent1 + "\t- 'ais etl init -f https://example.com/etl.yaml'\t deploy ETL from a remote YAML file;\n" +
 	indent1 + "\t- 'ais etl init -f multi-etl.yaml'\t deploy multiple ETLs from a single file (separated by '---');\n" +
 	indent1 + "\t- 'ais etl init -f spec.yaml --name my-custom-etl'\t override ETL name from command line;\n" +
-	indent1 + "\t- 'ais etl init -f spec.yaml --comm-type hpull'\t override communication type;\n" +
+	indent1 + "\t- 'ais etl init -f spec.yaml --comm-type hpull://'\t override communication type;\n" +
 	indent1 + "\t- 'ais etl init -f spec.yaml --object-timeout 30s'\t set custom object transformation timeout.\n" +
 	indent1 + "\t- 'ais etl init --spec <file|URL>'\t deploy ETL jobs from a local spec file, remote URL, or multi-ETL YAML.\n" +
 	indent1 + "\nAdditional Info:\n" +
@@ -120,7 +116,7 @@ const etlLogsUsage = "View ETL logs.\n" +
 var (
 	// flags
 	etlSubFlags = map[string][]cli.Flag{
-		cmdSpec: {
+		cmdInit: {
 			specFlag,
 			etlNameFlag,
 			commTypeFlag,
@@ -216,15 +212,7 @@ var (
 		Name:   cmdInit,
 		Usage:  etlInitUsage,
 		Action: etlInitSpecHandler,
-		Flags:  sortFlags(etlSubFlags[cmdSpec]),
-		Subcommands: []cli.Command{
-			{
-				Name:   cmdSpec,
-				Usage:  "Start ETL from YAML; full Kubernetes Pod specs are DEPRECATED and will be removed in v5.1",
-				Flags:  sortFlags(etlSubFlags[cmdSpec]),
-				Action: etlInitSpecHandler,
-			},
-		},
+		Flags:  sortFlags(etlSubFlags[cmdInit]),
 	}
 	objCmdETL = cli.Command{
 		Name:         cmdObject,
@@ -358,6 +346,9 @@ func checkOverrideFlags(c *cli.Context, nodes []*yaml.Node) error {
 }
 
 func etlInitSpecHandler(c *cli.Context) error {
+	if c.NArg() != 0 {
+		return incorrectUsageMsg(c, "unexpected argument %q", c.Args().Get(0))
+	}
 	fromFile := parseStrFlag(c, specFlag)
 	if fromFile == "" {
 		return fmt.Errorf("flag %s must be specified", qflprn(specFlag))
@@ -403,37 +394,19 @@ func etlInitSpecHandler(c *cli.Context) error {
 		}
 		first = false
 	}
+	if first {
+		return errors.New("failed to initialize any ETLs")
+	}
 	return nil
 }
 
-// parseSpecNode only decodes into the correct InitMsg type.
+// parseSpecNode decodes an ETL runtime specification.
 func parseSpecNode(node *yaml.Node) (etl.InitMsg, error) {
-	specInf := make(map[string]any)
-	if err := node.Decode(&specInf); err != nil {
-		return nil, fmt.Errorf("failed to decode spec metadata: %w", err)
+	var msg etl.ETLSpecMsg
+	if err := node.Decode(&msg); err != nil {
+		return nil, fmt.Errorf("failed to decode ETLSpecMsg: %w", err)
 	}
-
-	// ETL runtime spec
-	if specInf[etl.Runtime] != nil {
-		var msg etl.ETLSpecMsg
-		if err := node.Decode(&msg); err != nil {
-			return nil, fmt.Errorf("failed to decode ETLSpecMsg: %w", err)
-		}
-		return &msg, nil
-	}
-
-	// Full Kubernetes Pod spec
-	if specInf[etl.Spec] != nil {
-		var initSpec etl.InitSpecMsg
-		raw, err := yaml.Marshal(node)
-		if err != nil {
-			return nil, fmt.Errorf("marshal to raw bytes: %w", err)
-		}
-		initSpec.Spec = raw
-		return &initSpec, nil
-	}
-
-	return nil, errors.New("unknown document (missing '" + etl.Runtime + "' or '" + etl.Spec + "')")
+	return &msg, nil
 }
 
 // processSpecNode now handles common-fields population right after parsing,
@@ -444,10 +417,6 @@ func processSpecNode(c *cli.Context, node *yaml.Node) error {
 	if err != nil {
 		return fmt.Errorf("parse spec node: %w", err)
 	}
-	if _, ok := msg.(*etl.InitSpecMsg); ok {
-		actionWarn(c, etlPodSpecDeprecationWarning)
-	}
-
 	// 2) Populate CLI flags / common fields
 	if err := populateCommonFields(c, msg); err != nil {
 		return fmt.Errorf("populate common fields: %w", err)
@@ -607,24 +576,19 @@ func printETLDetailsFromMsg(c *cli.Context, msg etl.InitMsg) error {
 	fmt.Fprintln(c.App.Writer, fblue(etl.Name+": "), msg.Name())
 	fmt.Fprintln(c.App.Writer, fblue(etl.CommunicationType+": "), msg.CommType())
 
-	switch initMsg := msg.(type) {
-	case *etl.InitSpecMsg:
-		fmt.Fprintln(c.App.Writer, fblue(etl.Spec+": "))
-		fmt.Fprintln(c.App.Writer, string(initMsg.Spec))
-		return nil
-	case *etl.ETLSpecMsg:
-		fmt.Fprintln(c.App.Writer, fblue(etl.Runtime+": "))
-		fmt.Fprintln(c.App.Writer, indent1+fblue(etl.Image+": "), initMsg.Runtime.Image)
-		if len(initMsg.Runtime.Command) > 0 {
-			fmt.Fprintf(c.App.Writer, indent1+"%s %v\n", fblue(etl.Command+": "), initMsg.Runtime.Command)
-		}
-		if len(initMsg.Runtime.Env) > 0 {
-			fmt.Fprintln(c.App.Writer, indent1+fblue(etl.Env+": "), initMsg.FormatEnv())
-		}
-	default:
+	initMsg, ok := msg.(*etl.ETLSpecMsg)
+	if !ok {
 		err := fmt.Errorf("invalid response [%+v, %T]", msg, msg)
 		debug.AssertNoErr(err)
 		return err
+	}
+	fmt.Fprintln(c.App.Writer, fblue(etl.Runtime+": "))
+	fmt.Fprintln(c.App.Writer, indent1+fblue(etl.Image+": "), initMsg.Runtime.Image)
+	if len(initMsg.Runtime.Command) > 0 {
+		fmt.Fprintf(c.App.Writer, indent1+"%s %v\n", fblue(etl.Command+": "), initMsg.Runtime.Command)
+	}
+	if len(initMsg.Runtime.Env) > 0 {
+		fmt.Fprintln(c.App.Writer, indent1+fblue(etl.Env+": "), initMsg.FormatEnv())
 	}
 
 	return nil
@@ -764,7 +728,13 @@ func getETLNamesFromFile(c *cli.Context) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := msg.Validate(); err != nil {
+			return nil, err
+		}
 		etlNames = append(etlNames, msg.Name())
+	}
+	if len(etlNames) == 0 {
+		return nil, errors.New("empty YAML spec")
 	}
 	return etlNames, nil
 }
@@ -933,35 +903,11 @@ func etlObjectCopyHandler(c *cli.Context) error {
 
 // populate `EtlName` and then call `_populate()`
 func populateCommonFields(c *cli.Context, initMsg etl.InitMsg) error {
-	switch msg := initMsg.(type) {
-	case *etl.ETLSpecMsg: // ETL runtime spec
-		_populate(c, &msg.InitMsgBase)
-	case *etl.InitSpecMsg: // full Kubernetes Pod spec
-		pod, err := msg.ParsePodSpec()
-		if err != nil {
-			return err
-		}
-		if pod.ObjectMeta.Name != "" && msg.Name() == "" {
-			msg.EtlName = pod.ObjectMeta.Name
-		}
-		if pod.ObjectMeta.Annotations[etl.CommTypeAnnotation] != "" && msg.CommType() == "" {
-			msg.CommTypeX = pod.ObjectMeta.Annotations[etl.CommTypeAnnotation]
-		}
-		if pod.ObjectMeta.Annotations[etl.SupportDirectPutAnnotation] != "" {
-			msg.SupportDirectPut, err = cos.ParseBool(pod.ObjectMeta.Annotations[etl.SupportDirectPutAnnotation])
-			if err != nil {
-				return err
-			}
-		}
-		if pod.ObjectMeta.Annotations[etl.WaitTimeoutAnnotation] != "" {
-			t, err := time.ParseDuration(pod.ObjectMeta.Annotations[etl.WaitTimeoutAnnotation])
-			if err != nil {
-				return err
-			}
-			msg.InitTimeout = cos.Duration(t)
-		}
-		_populate(c, &msg.InitMsgBase)
+	msg, ok := initMsg.(*etl.ETLSpecMsg)
+	if !ok {
+		return fmt.Errorf("invalid ETL init message %T", initMsg)
 	}
+	_populate(c, &msg.InitMsgBase)
 	return nil
 }
 

@@ -22,22 +22,18 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes/scheme"
 )
 
 const (
 	// init message types
-	SpecType    = "spec"
 	CodeType    = "code"
+	SpecType    = "spec" // persisted InitSpecMsg discriminator (removed in v5.1)
 	ETLSpecType = "etl-spec"
 
 	// common fields
 	Name              = "name"
 	CommunicationType = "communication_type"
 	DirectPut         = "direct_put"
-
-	// `InitSpecMsg` fields
-	Spec = "spec"
 
 	// `ETLSpecMsg` fields
 	Runtime = "runtime"
@@ -52,12 +48,6 @@ const (
 
 // consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
 const CommTypeSeparator = "://"
-
-const (
-	CommTypeAnnotation         = "communication_type" // communication type to use if not explicitly set in the init message
-	SupportDirectPutAnnotation = "support_direct_put" // indicates whether the ETL supports direct PUT; affects how the target interacts with it
-	WaitTimeoutAnnotation      = "wait_timeout"       // timeout duration to wait for the ETL pod to become ready
-)
 
 const (
 	DefaultInitTimeout   = 45 * time.Second
@@ -115,16 +105,7 @@ type (
 		SupportDirectPut bool            `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
 	}
 
-	// InitSpecMsg initializes an ETL from a full Kubernetes Pod specification.
-	//
-	// Deprecated: Kubernetes Pod spec ETL initialization will be removed in
-	// v5.1. Use ETLSpecMsg instead.
-	InitSpecMsg struct {
-		Spec        []byte `json:"spec"`
-		InitMsgBase `yaml:",inline"`
-	}
-
-	// ETLSpecMsg is a YAML representation of the ETL pod spec.
+	// ETLSpecMsg describes the runtime used to build an ETL pod.
 	ETLSpecMsg struct {
 		InitMsgBase `yaml:",inline"`            // included all optional fields from InitMsgBase
 		Runtime     RuntimeSpec                 `json:"runtime" yaml:"runtime"`
@@ -210,7 +191,6 @@ var commTypes = []string{Hpush, Hpull, WebSocket} // NOTE: must contain all
 
 // interface guard
 var (
-	_ InitMsg = (*InitSpecMsg)(nil)
 	_ InitMsg = (*ETLSpecMsg)(nil)
 )
 
@@ -225,36 +205,21 @@ func (m *InitMsgBase) Timeouts() (initTimeout, objTimeout cos.Duration) {
 	return m.InitTimeout, m.ObjTimeout
 }
 
-func (*InitSpecMsg) MsgType() string { return SpecType }
-func (*ETLSpecMsg) MsgType() string  { return ETLSpecType }
-
-func (m *InitSpecMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s], timeout=(%v, %v)", SpecType, m.Name(), m.CommType(), m.InitTimeout.D(), m.ObjTimeout.D())
-}
+func (*ETLSpecMsg) MsgType() string { return ETLSpecType }
 
 func (e *ETLSpecMsg) String() string {
 	return fmt.Sprintf("init-%s[%s-%s], env=%s, timeout=(%v, %v)", ETLSpecType, e.Name(), e.CommType(), e.FormatEnv(), e.InitTimeout.D(), e.ObjTimeout.D())
 }
 
 func UnmarshalInitMsg(b []byte) (InitMsg, error) {
-	var err1, err2 error
-	// try parsing it as ETLSpecMsg first
 	var etlSpec ETLSpecMsg
-	if err1 = jsoniter.Unmarshal(b, &etlSpec); err1 == nil {
-		if err1 = etlSpec.Validate(); err1 == nil {
-			return &etlSpec, nil
-		}
+	if err := jsoniter.Unmarshal(b, &etlSpec); err != nil {
+		return nil, fmt.Errorf("invalid etl.InitMsg: %w", err)
 	}
-
-	// if fail, try parsing it as InitSpecMsg
-	var podSpec InitSpecMsg
-	if err2 = jsoniter.Unmarshal(b, &podSpec); err2 == nil {
-		if err2 = podSpec.Validate(); err2 == nil {
-			return &podSpec, nil
-		}
+	if err := etlSpec.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid etl.InitMsg: %w", err)
 	}
-
-	return nil, fmt.Errorf("invalid etl.InitMsg: ETLSpecMsg error: %v; InitSpecMsg error: %v", err1, err2)
+	return &etlSpec, nil
 }
 
 func (m *InitMsgBase) Validate(detail string) error {
@@ -277,7 +242,7 @@ func (m *InitMsgBase) Validate(detail string) error {
 	}
 	if m.CommType() == WebSocket && !m.IsDirectPut() {
 		err := errors.New("WebSocket without direct put is not supported yet. " +
-			"Ensure that the `metadata.annotations.support_direct_put` annotation is set to `true` " +
+			"Ensure that `support_direct_put` is set to `true` " +
 			"and that your ETL server properly implements the direct put mechanism")
 		return cmn.NewErrUnsuppErr(err)
 	}
@@ -296,77 +261,12 @@ func (m *InitMsgBase) Validate(detail string) error {
 	return nil
 }
 
-func (m *InitSpecMsg) Validate() error {
-	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
-
-	// Check pod specification constraints.
-	pod, err := m.ParsePodSpec()
-	if err != nil {
-		return cmn.NewErrETLf(errCtx, "failed to parse pod spec: %v\n%q", err, string(m.Spec))
-	}
-	if len(pod.Spec.Containers) != 1 {
-		return cmn.NewErrETLf(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
-	}
-	container := pod.Spec.Containers[0]
-	if len(container.Ports) != 1 {
-		return cmn.NewErrETLf(errCtx, "unsupported number of container ports (%d), expected: 1", len(container.Ports))
-	}
-	if container.Ports[0].Name != k8s.Default {
-		return cmn.NewErrETLf(errCtx, "expected port name: %q, got: %q", k8s.Default, container.Ports[0].Name)
-	}
-
-	// Validate that user container supports health check.
-	// Currently we need the `default` port (on which the application runs) to
-	// be same as the `readiness` probe port.
-	if container.ReadinessProbe == nil {
-		return cmn.NewErrETL(errCtx, "readinessProbe section is required in a container spec")
-	}
-	// TODO: Add support for other health checks.
-	if container.ReadinessProbe.HTTPGet == nil {
-		return cmn.NewErrETL(errCtx, "httpGet missing in the readinessProbe")
-	}
-	if container.ReadinessProbe.HTTPGet.Path == "" {
-		return cmn.NewErrETL(errCtx, "expected non-empty path for readinessProbe")
-	}
-	// Currently we need the `default` port (on which the application runs)
-	// to be same as the `readiness` probe port in the pod spec.
-	if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
-		return cmn.NewErrETLf(errCtx, "readinessProbe port must be the %q port", k8s.Default)
-	}
-
-	if dp, found := pod.ObjectMeta.Annotations[SupportDirectPutAnnotation]; found {
-		m.SupportDirectPut, err = cos.ParseBool(dp)
-		if err != nil {
-			return err
-		}
-	}
-
-	return m.InitMsgBase.Validate(m.String())
-}
-
 func (e *ETLSpecMsg) Validate() error {
 	errCtx := &cmn.ETLErrCtx{ETLName: e.Name()}
 	if e.Runtime.Image == "" {
 		return cmn.NewErrETLf(errCtx, "runtime.image must be specified")
 	}
 	return e.InitMsgBase.Validate(e.String())
-}
-
-// ParsePodSpec parses `m.Spec` into a Kubernetes Pod object.
-//
-// Deprecated: Kubernetes Pod spec ETL initialization will be removed in v5.1.
-// Use ETLSpecMsg for ETL initialization instead.
-func (m *InitSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
-	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(m.Spec, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		kind := obj.GetObjectKind().GroupVersionKind().Kind
-		return nil, errors.New("expected pod spec, got: " + kind)
-	}
-	return pod, nil
 }
 
 func (e *ETLSpecMsg) ParsePodSpec() (*corev1.Pod, error) {

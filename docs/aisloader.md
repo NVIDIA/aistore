@@ -96,7 +96,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -duration | `duration` | Benchmark duration (0 - run forever or until Ctrl-C). If not specified and totalputsize > 0, runs until totalputsize reached | `1m` |
 | -epochs | `int` | Number of "epochs" to run whereby each epoch entails full pass through the entire listed bucket | `0` |
 | -etl | `string` | Built-in ETL, one of: `tar2tf`, `md5`, or `echo`. Each object that aisloader GETs undergoes the selected transformation | `""` |
-| -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification | `""` |
+| -etl-spec | `string` | Custom ETL runtime specification (pathname) | `""` |
 | -evict-batchsize | `int` | Batch size to list and evict the next batch of remote objects | `1000` |
 | -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
 | -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
@@ -258,7 +258,7 @@ For the most recently updated command-line options and examples, please run `ais
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
 | -etl | `string` | Built-in ETL, one of: `tar2tf`, `md5`, or `echo`. Each object that aisloader GETs undergoes the selected transformation | `""` |
-| -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification | `""` |
+| -etl-spec | `string` | Custom ETL runtime specification (pathname) | `""` |
 
 #### Fleet Coordination (`loaderParams`)
 

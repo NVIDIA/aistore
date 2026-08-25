@@ -33,8 +33,7 @@ It supports both **inline transformations** (real-time processing via GET reques
 * [Initializing an ETL](#initializing-an-etl)
   * [Using `init`](#using-init)
     * [Prerequisites](#prerequisites)
-    * [Runtime Specification (Recommended)](#1-runtime-specification-recommended)
-    * [Kubernetes Pod Spec (Deprecated)](#2-kubernetes-pod-spec-deprecated)
+    * [Runtime Specification](#runtime-specification)
   * [Using `init_class` (Python SDK Only)](#using-init_class-python-sdk-only)
 * [Configuration Options](#configuration-options)
   * [Communication Mechanisms](#communication-mechanisms)
@@ -247,7 +246,7 @@ These SDKs abstract the boilerplate and protocol handling, so you can focus pure
 
 ETL initialization in AIStore defines how your transformation logic is deployed, configured, and executed. This step launches a containerized ETL service that integrates with AIStore targets to handle object transformations.
 
-The recommended way to initialize an ETL using the `init` API is via a **runtime spec**. Legacy **Kubernetes Pod spec** initialization remains available for backward compatibility but is deprecated. Additionally, for Python-only ETLs, a separate `init_class` approach is available through the Python SDK.
+Initialize an ETL using a **runtime spec**. For Python-only ETLs, a separate `init_class` approach is available through the Python SDK.
 
 ---
 
@@ -266,9 +265,13 @@ You can build this server using the [AIS ETL Webserver Framework](#ais-etl-webse
 
 ---
 
-#### 1. Runtime Specification (Recommended)
+#### Runtime Specification
 
-The preferred method of initialization is through a runtime YAML spec, which defines the ETL's configuration, including [communication method](#communication-mechanisms), [timeouts](#timeouts), [support for direct writes](#direct-put-optimization), and [resource limit](#resource-limits).
+The `init` API uses a runtime YAML specification to define the ETL's configuration, including [communication method](#communication-mechanisms), [timeouts](#timeouts), [support for direct writes](#direct-put-optimization), and [resource limits](#resource-limits). AIStore validates the complete specification before initialization. A valid specification must:
+
+* identify the ETL with a valid name, either in the specification or via the CLI `--name` override;
+* select the container image that runs the ETL service; and
+* use a supported communication method; WebSocket communication also requires direct put support.
 
 Example `etl_spec.yaml`:
 
@@ -281,7 +284,6 @@ runtime:
   # command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000"]
 # --Optional Values--
 communication: hpush://      # Options: hpush:// (default), hpull://, ws://
-argument: fqn                # "" (default) or "fqn" to mount host volumes
 init_timeout: 5m             # Max time to initialize ETL container (default: 5m)
 obj_timeout: 45s             # Max time to process a single object (default: 45s)
 support_direct_put: true     # Enable zero-copy bucket-to-bucket optimization (default: false)
@@ -299,22 +301,6 @@ Initialize the ETL:
 ```bash
 ais etl init --spec etl_spec.yaml
 ```
-
----
-
-#### 2. Kubernetes Pod Spec (Deprecated)
-
-> **DEPRECATED:** Full Kubernetes Pod spec initialization will be removed in AIStore v5.1. Migrate to the [runtime specification](#1-runtime-specification-recommended).
-
-Full Kubernetes Pod specs remain accepted only for backward compatibility with older AIS ETL transformers.
-
-```bash
-curl -O https://raw.githubusercontent.com/NVIDIA/ais-etl/refs/heads/main/transformers/hello_world/pod.yaml
-# Review and edit the pod.yaml as needed
-ais etl init -f pod.yaml --name hello-world-etl
-```
-
----
 
 ### Using `init_class` (Python SDK Only)
 
@@ -494,38 +480,6 @@ The quickstart guide walks through:
 * Deploying it in a Kubernetes environment
 * Initializing the ETL via the AIS CLI or Python SDK
 
-### Specification YAML
-
-Specification of an ETL should be in the form of a YAML file.
-It is required to follow the Kubernetes [Pod template format](https://kubernetes.io/docs/concepts/workloads/pods/#pod-templates)
-and contain all necessary fields to start the Pod.
-
-#### Required or additional fields
-
-| Path | Required | Description | Default |
-| --- | --- | --- | --- |
-| `metadata.annotations.communication_type` | `false` | [Communication type](#communication-mechanisms) of an ETL. | `hpush://` |
-| `metadata.annotations.wait_timeout` | `false` | Timeout on ETL Pods starting on target machines. See [annotations](#annotations) | infinity |
-| `metadata.annotations.support_direct_put` | `false` | Enable [direct put](#direct-put-optimization) optimization of an ETL. | - |
-| `spec.containers` | `true` | Containers running inside a Pod, exactly one required. | - |
-| `spec.containers[0].image` | `true` | Docker image of ETL container. | - |
-| `spec.containers[0].ports` | `true` | Ports exposed by a container, at least one expected. | - |
-| `spec.containers[0].ports[0].Name` | `true` | Name of the first Pod should be `default`. | - |
-| `spec.containers[0].ports[0].containerPort` | `true` | Port which a cluster will contact containers on. | - |
-| `spec.containers[0].readinessProbe` | `true` | ReadinessProbe of a container. | - |
-| `spec.containers[0].readinessProbe.timeoutSeconds` | `false` | Timeout for a readiness probe in seconds. | `5` |
-| `spec.containers[0].readinessProbe.periodSeconds` | `false` | Period between readiness probe requests in seconds. | `10` |
-| `spec.containers[0].readinessProbe.httpGet.Path` | `true` | Path for HTTP readiness probes. | - |
-| `spec.containers[0].readinessProbe.httpGet.Port` | `true` | Port for HTTP readiness probes. Required `default`. | - |
-
-#### Forbidden fields
-
-| Path | Reason |
-| --- | --- |
-| `spec.affinity.nodeAffinity` | Used by AIStore to colocate ETL containers with targets. |
-
-
-
 ## API Reference
 
 This section describes how to interact with ETLs via RESTful API.
@@ -534,34 +488,26 @@ This section describes how to interact with ETLs via RESTful API.
 
 | Operation | Description | HTTP action | Example |
 | --- | --- | --- | --- |
-| Init spec ETL | Initializes ETL based on POD `spec` template. Returns `ETL_NAME`. | PUT /v1/etl | `curl -X PUT 'http://G/v1/etl' '{"spec": "...", "id": "..."}'` |
+| Init ETL | Initializes ETL from a runtime specification. Returns its xaction ID. | PUT /v1/etl | `curl -X PUT 'http://G/v1/etl' -d '{"name":"my-etl","runtime":{"image":"repo/transformer:latest"}}'` |
 | List ETLs | Lists all running ETLs. | GET /v1/etl | `curl -L -X GET 'http://G/v1/etl'` |
-| View ETLs | View code/spec of ETL by `ETL_NAME` | GET /v1/etl/ETL_NAME | `curl -L -X GET 'http://G/v1/etl/ETL_NAME'` |
+| View ETLs | View ETL details by `ETL_NAME` | GET /v1/etl/ETL_NAME | `curl -L -X GET 'http://G/v1/etl/ETL_NAME'` |
 | Transform an object | Transforms an object based on ETL with `ETL_NAME`. | GET /v1/objects/<bucket>/<objname>?etl_name=ETL_NAME | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?etl_name=ETL_NAME' -o transformed_shard01.tar` |
 | Transform bucket | Transforms all objects in a bucket and puts them to destination bucket. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "ext":{"SRC_EXT": "DEST_EXT"}, "prefix":"PREFIX_FILTER", "prepend":"PREPEND_NAME"}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
 | Transform and synchronize bucket | Synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "synchronize": true}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
 | Dry run transform bucket | Accumulates in xaction stats how many objects and bytes would be created, without actually doing it. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "dry_run": true}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
 | Stop ETL | Stops ETL with given `ETL_NAME`. | POST /v1/etl/ETL_NAME/stop | `curl -X POST 'http://G/v1/etl/ETL_NAME/stop'` |
 | Restart ETL | Restarts ETL with given `ETL_NAME`. | POST /v1/etl/ETL_NAME/start | `curl -X POST 'http://G/v1/etl/ETL_NAME/start'` |
-| Delete ETL | Delete ETL spec/code with given `ETL_NAME` | DELETE /v1/etl/ETL_NAME | `curl -X DELETE 'http://G/v1/etl/ETL_NAME'` |
+| Delete ETL | Delete the ETL with the given `ETL_NAME` | DELETE /v1/etl/ETL_NAME | `curl -X DELETE 'http://G/v1/etl/ETL_NAME'` |
 
 
 ## ETL name specifications
 
 Every initialized ETL has a unique user-defined `ETL_NAME` associated with it, used for running transforms/computation on data or stopping the ETL.
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: compute-md5
-(...)
-```
-
-When initializing ETL from spec/code, a valid and unique user-defined `ETL_NAME` should be assigned using the `--name` CLI parameter as shown below.
+When initializing an ETL, assign a valid and unique user-defined `ETL_NAME` in the runtime specification or with the `--name` CLI parameter.
 
 ```console
-$ ais etl init --name=etl-md5 --spec=spec.yaml --comm-type hpull
+$ ais etl init --name=etl-md5 --spec=spec.yaml --comm-type hpull://
 ```
 
 Below are specifications for a valid `ETL_NAME`:
@@ -577,8 +523,6 @@ Below are specifications for a valid `ETL_NAME`:
   - [AIStore SDK & ETL: Transform an image dataset with AIS SDK and load into PyTorch](https://aistore.nvidia.com/blog/2023/04/03/transform-images-with-python-sdk)
   - [Single-Object Copy/Transformation Capability](https://aistore.nvidia.com/blog/2025/07/25/single-object-copy-transformation-capability)
   - [ETL: Using WebDataset to train on a sharded dataset ](https://aistore.nvidia.com/blog/2021/10/29/ais-etl-3)
-* For step-by-step tutorials, see:
-  - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
 * For a quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
 * For initializing ETLs with AIStore Python SDK, see:
   - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#etls)

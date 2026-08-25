@@ -24,7 +24,7 @@ func (*EchoServer) Transform(input io.ReadCloser, _, _ string) (io.ReadCloser, e
 
 func main() {
 	svr := &EchoServer{}
-	if err := webserver.Run(svr, "0.0.0.0", 8080); err != nil {
+	if err := webserver.Run(svr, "0.0.0.0", 8000); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
@@ -44,7 +44,7 @@ RUN go build -ldflags="-s -w" -o echo
 FROM alpine:3.19
 WORKDIR /app
 COPY --from=builder /app/echo .
-EXPOSE 80
+EXPOSE 8000
 ENTRYPOINT ["./echo"]
 ```
 
@@ -53,30 +53,20 @@ docker build -t <myrepo>/echo-etl:latest .
 docker push <myrepo>/echo-etl:latest
 ```
 
-### 3. Deploy with Kubernetes
+### 3. Create a Runtime Specification
 
 ```yaml
-# init_spec.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: etl-echo
-  annotations:
-    communication_type: "hpush://"
-spec:
-  containers:
-    - name: server
-      image: <myrepo>/echo-etl:latest
-      ports: [{ name: default, containerPort: 8000 }]
-      command: ["./echo", "-l", "0.0.0.0", "-p", "8000"]
-      readinessProbe:
-        httpGet: { path: /health, port: default }
+# etl_spec.yaml
+name: my-echo
+runtime:
+  image: <myrepo>/echo-etl:latest
+communication: hpush://
 ```
 
 ### 4. Initialize and Run
 
 ```bash
-ais etl init spec --name my-echo --from-file init_spec.yaml
+ais etl init -f etl_spec.yaml
 ais etl bucket my-echo ais://<src-bucket> ais://<dst-bucket>
 ```
 

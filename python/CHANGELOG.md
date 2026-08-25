@@ -4,6 +4,11 @@ All notable changes to the AIStore Python SDK project are documented in this fil
 
 We structure this changelog in accordance with [Keep a Changelog](https://keepachangelog.com/) guidelines, and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+- **BREAKING**: Removed `Etl.init_spec()` and the Kubernetes Pod-spec templates.
+  Use `Etl.init()` or `Etl.init_class()` instead.
+
 ## [1.26.0] - 2026-08-25
 
 This release adds finer-grained batch reads, safer job lifecycle handling, ETL

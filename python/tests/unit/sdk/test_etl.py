@@ -16,7 +16,6 @@ from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     URL_PATH_ETL,
     URL_PATH_ETL_LOGS,
-    UTF_ENCODING,
     QPARAM_UUID,
     QPARAM_ETL_FQN,
 )
@@ -45,60 +44,6 @@ class TestEtl(
         self.mock_client = Mock()
         self.etl_name = ETL_NAME
         self.etl = Etl(self.mock_client, self.etl_name)
-
-    def test_init_spec_default_params(self):
-        expected_action = {
-            "communication": "hpush://",
-            "init_timeout": DEFAULT_ETL_TIMEOUT,
-            "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
-        }
-        self.init_spec_exec_assert(expected_action)
-
-    def test_init_spec_invalid_comm(self):
-        with self.assertRaises(ValueError):
-            self.etl.init_spec("template", communication_type="invalid")
-
-    def test_init_spec(self):
-        communication_type = ETL_COMM_HPUSH
-        init_timeout = "6m"
-        obj_timeout = "20s"
-        expected_action = {
-            "communication": f"{communication_type}://",
-            "init_timeout": init_timeout,
-            "obj_timeout": obj_timeout,
-        }
-        self.init_spec_exec_assert(
-            expected_action, init_timeout=init_timeout, obj_timeout=obj_timeout
-        )
-
-    def init_spec_exec_assert(self, expected_action, **kwargs):
-        template = "pod spec template"
-        expected_action["spec"] = base64.b64encode(
-            template.encode(UTF_ENCODING)
-        ).decode(UTF_ENCODING)
-        expected_action["name"] = self.etl_name
-
-        expected_response_text = self.etl_name
-        mock_response = Mock()
-        mock_response.text = expected_response_text
-        self.mock_client.request.return_value = mock_response
-
-        response = self.etl.init_spec(template, **kwargs)
-
-        self.assertEqual(expected_response_text, response)
-
-        # All ETL messages are called with timeout
-        if "init_timeout" not in kwargs:
-            kwargs["init_timeout"] = DEFAULT_ETL_TIMEOUT
-
-        req_timeout = convert_to_seconds(kwargs.pop("init_timeout"))
-
-        self.mock_client.request.assert_called_with(
-            HTTP_METHOD_PUT,
-            path=URL_PATH_ETL,
-            timeout=req_timeout,
-            json=expected_action,
-        )
 
     def test_default_runtime(self):
         version_to_runtime = {

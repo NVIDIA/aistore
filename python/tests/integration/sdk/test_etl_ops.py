@@ -16,7 +16,6 @@ from requests.exceptions import ConnectionError as RequestConnectionError
 from aistore.sdk import Bucket
 from aistore.sdk.etl import ETLConfig
 from aistore.sdk.errors import AISError, ETLDirectPutTransientError
-from aistore.sdk.etl.etl_templates import MD5, ECHO, HASH
 from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPUSH,
     ETL_COMM_HPULL,
@@ -172,11 +171,9 @@ class TestETLOps(unittest.TestCase):
         )
 
     @pytest.mark.etl
-    def test_init_spec_md5(self):
-        # spec
-        template = MD5.format(communication_type=ETL_COMM_HPUSH)
+    def test_init_md5(self):
         spec_etl = self.client.etl(self.etl_name)
-        spec_etl.init_spec(template=template)
+        spec_etl.init(image="aistorage/transformer_md5:latest")
 
         obj = (
             self.bucket.object(self.obj_name)
@@ -190,7 +187,7 @@ class TestETLOps(unittest.TestCase):
 
         temp_bck1 = self.client.bucket(random_string()).create()
 
-        # Transform Bucket with MD5 Template
+        # Transform bucket with MD5
         job_id = self.bucket.transform(etl_name=spec_etl.name, to_bck=temp_bck1)
         result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
         self.assertTrue(result.success)
@@ -267,15 +264,13 @@ class TestETLOps(unittest.TestCase):
         self.assertEqual(error_names, expected_errors)
 
     @pytest.mark.etl
-    def test_init_spec_echo(self):
-        # Start ETL with ECHO template
-        template = ECHO.format(communication_type=ETL_COMM_HPUSH)
+    def test_init_echo(self):
         echo_spec_etl = self.client.etl(self.etl_name)
-        echo_spec_etl.init_spec(template=template)
+        echo_spec_etl.init(image="aistorage/transformer_echo:latest")
 
         temp_bck2 = self.client.bucket(random_string()).create()
 
-        # Transform bucket with ECHO template
+        # Transform bucket with echo
         job_id = self.bucket.transform(
             etl_name=self.etl_name,
             to_bck=temp_bck2,
@@ -373,9 +368,12 @@ class TestETLOps(unittest.TestCase):
         """
         Test ETL with different communication types: HPUSH, HPULL.
         """
-        template = HASH.format(communication_type=communication_type)
         spec_etl = self.client.etl(self.etl_name)
-        spec_etl.init_spec(template=template)
+        spec_etl.init(
+            image="aistorage/transformer_hash_with_args:latest",
+            comm_type=communication_type,
+            SEED_DEFAULT="0",
+        )
 
         # Function to calculate xxhash
         def calculate_xxhash(data, seed):
@@ -408,7 +406,13 @@ class TestETLOps(unittest.TestCase):
         spec_etl_details = spec_etl.view()
         self.assertIsNotNone(spec_etl_details)
         self.assertEqual(spec_etl_details.init_msg.name, self.etl_name)
-        self.assertIsNotNone(spec_etl_details.init_msg.spec)
+        self.assertEqual(
+            spec_etl_details.init_msg.communication, f"{communication_type}://"
+        )
+        self.assertEqual(
+            spec_etl_details.init_msg.runtime.image,
+            "aistorage/transformer_hash_with_args:latest",
+        )
 
         # Need to add this because of @cases decorator
         try:

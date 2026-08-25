@@ -382,23 +382,6 @@ class ETLSpecMsg(InitETLArgs):
         }
 
 
-class InitSpecETLArgs(InitETLArgs):
-    """
-    Represents the set of args the sdk will pass to AIStore when making a request to initialize an ETL with a spec
-    """
-
-    spec: str
-
-    def as_dict(self):
-        return {
-            "name": self.name,
-            "init_timeout": self.init_timeout,
-            "obj_timeout": self.obj_timeout,
-            "communication": f"{self.comm_type}://",
-            "spec": self.spec,
-        }
-
-
 class ETLInitMsg(BaseModel):
     """
     Represents the API message structure for initializing an ETL
@@ -409,7 +392,6 @@ class ETLInitMsg(BaseModel):
     init_timeout: Optional[str] = None
     obj_timeout: Optional[str] = None
     code: Optional[bytes] = None
-    spec: Optional[bytes] = None
     dependencies: Optional[bytes] = None
     chunk_size: int = 0
     runtime: Optional[Union[str, ETLRuntimeSpec]] = None
@@ -419,12 +401,6 @@ class ETLInitMsg(BaseModel):
         if code is not None:
             code = base64.b64decode(code)
         return code
-
-    @field_validator("spec")
-    def set_spec(cls, spec):  # pylint: disable=no-self-argument
-        if spec is not None:
-            spec = base64.b64decode(spec)
-        return spec
 
 
 class ETLObjError(BaseModel):

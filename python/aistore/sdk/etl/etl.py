@@ -3,7 +3,6 @@
 #
 import sys
 import re
-import warnings
 
 import base64
 from typing import List, Union, Type
@@ -15,7 +14,6 @@ from aistore.sdk.const import (
     HTTP_METHOD_PUT,
     URL_PATH_ETL,
     URL_PATH_ETL_LOGS,
-    UTF_ENCODING,
     QPARAM_UUID,
 )
 from aistore.sdk.etl.etl_const import (
@@ -29,7 +27,6 @@ from aistore.sdk.etl.etl_const import (
 from aistore.sdk.types import (
     ETLDetails,
     ETLNodeLogs,
-    InitSpecETLArgs,
     ETLSpecMsg,
     EnvVar,
     ETLRuntimeSpec,
@@ -115,62 +112,6 @@ class Etl:
         return self._name
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def init_spec(
-        self,
-        template: str,
-        communication_type: str = DEFAULT_ETL_COMM,
-        init_timeout: str = DEFAULT_ETL_TIMEOUT,
-        obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
-    ) -> str:
-        """
-        Initializes ETL based on Kubernetes pod spec template.
-
-        Deprecated:
-            Kubernetes Pod spec initialization will be removed in AIStore v5.1.
-            Use `init` for image-based ETLs or `init_class` for Python ETL
-            server classes instead.
-
-        Args:
-            template (str): Kubernetes pod spec template
-                Existing templates can be found at `sdk.etl_templates`
-                For more information visit: https://github.com/NVIDIA/ais-etl/tree/main/transformers
-            communication_type (str): Communication type of the ETL (options: hpull, hpush)
-            init_timeout (str, optional): Timeout of the ETL job (e.g., "5m" for 5 minutes). Default is "5m".
-            obj_timeout (str, optional): Timeout for transforming a single object (e.g., "45s"). Default is "45s".
-
-        Returns:
-            str: Job ID string associated with this ETL
-        """
-        warnings.warn(
-            "Kubernetes Pod spec ETL initialization via 'Etl.init_spec' is "
-            "deprecated and will be removed in AIStore v5.1. Use 'Etl.init' for "
-            "image-based ETLs or 'Etl.init_class' for Python ETL server classes "
-            "instead.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        _validate_comm_type(communication_type, ETL_COMM_OPTIONS)
-
-        # spec
-        spec_encoded = base64.b64encode(template.encode(UTF_ENCODING)).decode(
-            UTF_ENCODING
-        )
-
-        value = InitSpecETLArgs(
-            spec=spec_encoded,
-            name=self._name,
-            comm_type=communication_type,
-            init_timeout=init_timeout,
-            obj_timeout=obj_timeout,
-        ).as_dict()
-
-        return self._client.request(
-            HTTP_METHOD_PUT,
-            path=URL_PATH_ETL,
-            timeout=convert_to_seconds(init_timeout),
-            json=value,
-        ).text
-
     def init(
         self,
         image: str,

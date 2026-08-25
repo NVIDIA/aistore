@@ -27,7 +27,7 @@ func testTxnConfig() *cmn.Config {
 // returns the txn interface (not the concrete type) so callers exercise it exactly
 // as production does - notably started(), which is interface-dispatched everywhere.
 func newETLInitTxn(initTimeout time.Duration) txn {
-	msg := &etl.InitSpecMsg{InitMsgBase: etl.InitMsgBase{InitTimeout: cos.Duration(initTimeout)}}
+	msg := &etl.ETLSpecMsg{InitMsgBase: etl.InitMsgBase{InitTimeout: cos.Duration(initTimeout)}}
 	c := &txnSrv{t: mockTarget, uuid: "test-etl-init", msg: &actMsgExt{ActMsg: apc.ActMsg{Action: apc.ActETLInline}}}
 	return newTxnETLInit(c, msg)
 }

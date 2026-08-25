@@ -1097,7 +1097,8 @@ func TestETLPodWithResourcesConstraint(t *testing.T) {
 	tassert.Fatalf(t, pod.Spec.Containers[0].Resources.Limits.Memory().Value() == 512*cos.MiB, "expected memory limit to be 512Mi, got %d", pod.Spec.Containers[0].Resources.Limits.Memory().Value())
 	tassert.Fatalf(t, pod.Spec.Containers[0].Resources.Limits.Cpu().Value() == 1, "expected CPU limit to be 1, got %d", pod.Spec.Containers[0].Resources.Limits.Cpu().Value())
 }
-func TestETLPodInitSpecFailure(t *testing.T) {
+
+func TestETLRuntimeInitFailure(t *testing.T) {
 	var (
 		proxyURL           = tools.RandomProxyURL(t)
 		baseParams         = tools.BaseAPIParams(proxyURL)
@@ -1109,34 +1110,28 @@ func TestETLPodInitSpecFailure(t *testing.T) {
 
 	tests := []struct {
 		etlName      string
-		commType     string
+		image        string
 		cleanup      bool
 		expectedErrs []string
 	}{
-		{etlName: tetl.InvalidYaml, commType: etl.Hpull, cleanup: false, expectedErrs: []string{"could not find expected ':'"}},
-		{etlName: tetl.NonExistImage, commType: etl.Hpull, cleanup: true, expectedErrs: []string{"ErrImagePull", "ImagePullBackOff", "context deadline exceeded"}},
+		{etlName: "invalid-runtime", expectedErrs: []string{"runtime.image must be specified"}},
+		{etlName: "non-exist-image", image: "aistorage/non-exist-image:latest", cleanup: true, expectedErrs: []string{"ErrImagePull", "ImagePullBackOff", "context deadline exceeded"}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.etlName, func(t *testing.T) {
-			spec, err := tetl.GetTransformYaml(test.etlName)
-			tassert.CheckFatal(t, err)
-
-			msg := &etl.InitSpecMsg{
+			msg := &etl.ETLSpecMsg{
 				InitMsgBase: etl.InitMsgBase{
 					EtlName:     test.etlName,
-					CommTypeX:   test.commType,
+					CommTypeX:   etl.Hpull,
 					InitTimeout: failureTestTimeout,
 				},
-				Spec: spec,
+				Runtime: etl.RuntimeSpec{Image: test.image},
 			}
-			tassert.Fatalf(t, msg.Name() == test.etlName, "%q vs %q", msg.Name(), test.etlName)
-
-			_, err = api.ETLInit(baseParams, msg)
+			_, err := api.ETLInit(baseParams, msg)
 			if test.cleanup {
 				t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
 			}
-
 			testETLAnyErrors(t, err, test.expectedErrs...)
 		})
 	}

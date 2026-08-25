@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -32,8 +31,6 @@ import (
 )
 
 const (
-	NonExistImage              = "non-exist-image"
-	InvalidYaml                = "invalid-yaml"
 	PodWithResourcesConstraint = "resources-constraint"
 
 	Tar2TF        = "tar2tf"
@@ -57,43 +54,7 @@ const (
 `
 )
 
-// invalid pod specs
 const (
-	nonExistImageSpec = `
-apiVersion: v1
-kind: Pod
-metadata:
-  name: non-exist-image
-  annotations:
-    communication_type: ${COMMUNICATION_TYPE:-"\"hpull://\""}
-    wait_timeout: 5m
-spec:
-  containers:
-    - name: server
-      image: aistorage/non-exist-image:latest
-      imagePullPolicy: IfNotPresent
-      ports:
-        - name: default
-          containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
-      readinessProbe:
-        httpGet:
-          path: /health
-          port: default
-`
-	invalidYamlSpec = `
-apiVersion: v1
-kind: Pod
-metadata
-  name: invalid-syntax
-spec:
-  containers:
-    - name: server
-      image: aistorage/runtime_python:latest
-      ports
-        - name: default
-          containerPort: 80
-`
 	podWithResourcesConstraintSpec = `
 name: md5-transformer-etl
 runtime:
@@ -106,23 +67,33 @@ resources:
     memory: "%s"
     cpu: "%s"
 `
+	tar2TFSpec = `
+name: tar2tf
+runtime:
+  image: aistorage/transformer_tar2tf:latest
+  command: ["./tar2tf", "-l", "0.0.0.0", "-p", "8000"]
+`
+	tar2TFFiltersSpec = `
+name: tar2tf-filters
+runtime:
+  image: aistorage/transformer_tar2tf:latest
+  command: ["./tar2tf", "-l", "0.0.0.0", "-p", "8000", "--spec", '%s']
+`
 )
 
 var (
 	links = map[string]string{
 		MD5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/etl_spec.yaml",
 		HashWithArgs:  "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/etl_spec.yaml",
-		Tar2TF:        "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/tar2tf/pod.yaml",
-		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/tar2tf/pod.yaml",
 		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/echo/etl_spec.yaml",
-		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/go_echo/pod.yaml",
+		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/go_echo/etl_spec.yaml",
 		ParquetParser: "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/parquet-parser/etl_spec.yaml",
 	}
 
 	testSpecs = map[string]string{
-		NonExistImage:              nonExistImageSpec,
-		InvalidYaml:                invalidYamlSpec,
 		PodWithResourcesConstraint: podWithResourcesConstraintSpec,
+		Tar2TF:                     tar2TFSpec,
+		Tar2tfFilters:              fmt.Sprintf(tar2TFFiltersSpec, strings.Join(strings.Fields(tar2tfFilter), " ")),
 	}
 
 	client = &http.Client{}
@@ -196,27 +167,7 @@ func GetTransformYaml(etlName string, replaceArgs ...string) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %s", resp.Status, string(b))
 	}
 
-	specStr := os.Expand(string(b), func(v string) string {
-		// Hack: Neither os.Expand, nor os.ExpandEnv supports bash env variable default-value
-		// syntax. The whole ${VAR:-default} is matched as v.
-		if strings.Contains(v, "COMMUNICATION_TYPE") {
-			return etl.Hpull
-		}
-		if strings.Contains(v, "DOCKER_REGISTRY_URL") {
-			return "aistore"
-		}
-		if etlName == Tar2tfFilters {
-			if strings.Contains(v, "OPTION_KEY") {
-				return "--spec"
-			}
-			if strings.Contains(v, "OPTION_VALUE") {
-				return tar2tfFilter
-			}
-		}
-		return ""
-	})
-
-	return []byte(specStr), nil
+	return b, nil
 }
 
 func StopAndDeleteETL(t *testing.T, bp api.BaseParams, etlName string) {
@@ -366,23 +317,14 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType string, replace
 	spec, err := GetTransformYaml(etlName, replaceArgs...)
 	tassert.CheckFatal(t, err)
 
-	var (
-		etlSpec  etl.ETLSpecMsg
-		initSpec etl.InitSpecMsg
-	)
+	etlSpec := &etl.ETLSpecMsg{}
 	etlName += strings.ReplaceAll(strings.ToLower(cos.GenUUID()), "_", "-") // add random suffix to avoid conflicts
-	if err := yaml.Unmarshal(spec, &etlSpec); err == nil && etlSpec.Validate() == nil {
-		etlSpec.EtlName = etlName
-		etlSpec.CommTypeX = commType
-		etlSpec.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
-		msg = &etlSpec
-	} else {
-		initSpec.EtlName = etlName
-		initSpec.CommTypeX = commType
-		initSpec.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
-		initSpec.Spec = spec
-		msg = &initSpec
-	}
+	tassert.CheckFatal(t, yaml.Unmarshal(spec, etlSpec))
+	etlSpec.EtlName = etlName
+	etlSpec.CommTypeX = commType
+	etlSpec.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
+	tassert.CheckFatal(t, etlSpec.Validate())
+	msg = etlSpec
 
 	tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName) // assert
 
@@ -400,10 +342,6 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType string, replace
 
 	tassert.Errorf(t, details.InitMsg.Name() == etlName, "expected etlName %s, got %s", etlName, details.InitMsg.Name())
 	tassert.Errorf(t, details.InitMsg.CommType() == commType, "expected communicator type %s, got %s", commType, details.InitMsg.CommType())
-
-	if initSpec, ok := details.InitMsg.(*etl.InitSpecMsg); ok {
-		tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ, expected %s, got %s", string(spec), string(initSpec.Spec))
-	}
 
 	return msg
 }
@@ -468,52 +406,13 @@ func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
 	}
 }
 
-// SpecToInitMsg converts a Kubernetes Pod specification into an ETL init
-// message.
-//
-// Deprecated: Kubernetes Pod spec ETL initialization will be removed in v5.1.
-// Use etl.ETLSpecMsg instead.
-func SpecToInitMsg(spec []byte /*yaml*/) (*etl.InitSpecMsg, error) {
-	errCtx := &cmn.ETLErrCtx{}
-	msg := &etl.InitSpecMsg{Spec: spec}
-	pod, err := msg.ParsePodSpec()
-	if err != nil {
-		return msg, cmn.NewErrETLf(errCtx, "failed to parse pod spec: %v\n%q", err, string(msg.Spec))
-	}
-	errCtx.ETLName = pod.GetName()
-	msg.EtlName = pod.GetName()
-
-	if err := k8s.ValidateEtlName(msg.EtlName); err != nil {
+// SpecToInitMsg converts an ETL runtime specification into an init message.
+func SpecToInitMsg(spec []byte /*yaml*/) (*etl.ETLSpecMsg, error) {
+	msg := &etl.ETLSpecMsg{}
+	if err := yaml.Unmarshal(spec, msg); err != nil {
 		return msg, err
 	}
-	// Check annotations.
-	msg.CommTypeX = podTransformCommType(pod)
-	if msg.InitTimeout, err = podTransformTimeout(errCtx, pod); err != nil {
-		return msg, err
-	}
-
-	err = msg.Validate()
-	return msg, err
-}
-
-func podTransformCommType(pod *corev1.Pod) string {
-	if pod.Annotations == nil || pod.Annotations[etl.CommTypeAnnotation] == "" {
-		// By default assume `Hpush`.
-		return etl.Hpush
-	}
-	return pod.Annotations[etl.CommTypeAnnotation]
-}
-
-func podTransformTimeout(errCtx *cmn.ETLErrCtx, pod *corev1.Pod) (cos.Duration, error) {
-	if pod.Annotations == nil || pod.Annotations[etl.WaitTimeoutAnnotation] == "" {
-		return 0, nil
-	}
-
-	v, err := time.ParseDuration(pod.Annotations[etl.WaitTimeoutAnnotation])
-	if err != nil {
-		return cos.Duration(v), cmn.NewErrETL(errCtx, err.Error()).WithPodName(pod.Name)
-	}
-	return cos.Duration(v), nil
+	return msg, msg.Validate()
 }
 
 func ListObjectsWithRetry(bp api.BaseParams, bckTo cmn.Bck, prefix string, expectedCount int, opts tools.WaitRetryOpts) (err error) {

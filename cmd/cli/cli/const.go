@@ -209,7 +209,6 @@ const (
 	// ETL subcommands
 	cmdInit    = "init"
 	cmdInspect = "inspect"
-	cmdSpec    = "spec"
 	cmdErrors  = "errors"
 
 	// config subcommands
@@ -1302,7 +1301,7 @@ var (
 	etlExtFlag  = cli.StringFlag{Name: "ext", Usage: "Mapping from old to new extensions of transformed objects' names"}
 	etlNameFlag = cli.StringFlag{
 		Name:  "name",
-		Usage: "unique ETL name (leaving this field empty will have unique ID auto-generated)",
+		Usage: "override ETL name from the runtime specification",
 	}
 	etlObjectRequestTimeout = DurationFlag{
 		Name: "object-timeout",

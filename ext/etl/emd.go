@@ -119,8 +119,9 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 		en := ETLEntity{}
 		switch v.Type {
 		case CodeType: // do nothing
-		case SpecType:
-			en.InitMsg = &InitSpecMsg{}
+		case SpecType: // discard persisted legacy ETLs during upgrade
+			nlog.Warningf("ignoring removed Pod-spec ETL %q", k)
+			continue
 		case ETLSpecType:
 			en.InitMsg = &ETLSpecMsg{}
 		default:

@@ -21,11 +21,7 @@ For background on AIS-ETL, getting started, working examples, and tutorials, ple
 ### Getting Started
 
 * [Commands](#commands)
-
-### Initializing an ETL
-
-* [Using a Runtime ETL Specification (Recommended)](#1-using-a-runtime-etl-specification-recommended)
-* [Using a Full Kubernetes Pod Spec (Deprecated)](#2-using-a-full-kubernetes-pod-spec-deprecated)
+* [Initializing an ETL](#initializing-an-etl)
 
 ### ETL Management
 
@@ -61,14 +57,13 @@ USAGE:
    ais etl command [arguments...]  [command options]
 
 COMMANDS:
-   init  Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).
-   DEPRECATED: Kubernetes Pod spec initialization will be removed in v5.1; use an ETL runtime spec instead.
+   init Initialize ETL using a runtime spec YAML file (local or remote).
    Examples:
      - 'ais etl init -f my-etl.yaml'                      deploy ETL from a local YAML file;
      - 'ais etl init -f https://example.com/etl.yaml'     deploy ETL from a remote YAML file;
      - 'ais etl init -f multi-etl.yaml'                   deploy multiple ETLs from a single file (separated by '---');
      - 'ais etl init -f spec.yaml --name my-custom-etl'   override ETL name from command line;
-     - 'ais etl init -f spec.yaml --comm-type hpull'      override communication type;
+     - 'ais etl init -f spec.yaml --comm-type hpull://'   override communication type;
      - 'ais etl init -f spec.yaml --object-timeout 30s'   set custom object transformation timeout.
      - 'ais etl init --spec <file|URL>'                   deploy ETL jobs from a local spec file, remote URL, or multi-ETL YAML.
 
@@ -147,44 +142,23 @@ Additionally, use `--help` to display any specific command.
 
 ## Initializing an ETL
 
-AIStore provides two ways to initialize an ETL using the CLI:
+The CLI provides one initialization command: `ais etl init`. It accepts one or
+more [ETL runtime specifications](/docs/etl.md#runtime-specification)
+from a local YAML file or an HTTP(S) URL.
 
----
-
-### 1. **Using a Runtime ETL Specification (Recommended)**
-
-This method uses a YAML file that defines how your ETL should be initialized and run.
-
-#### Key Fields in the Spec
-
-| Field                | Description                                                                                                                                           | Default      |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `name`               | Unique name for the ETL. [See naming rules](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#etl-name-specifications)                          | **Required** |
-| `runtime.image`      | Docker image for the ETL container                                                                                                                    | **Required** |
-| `runtime.command`    | (Optional) Override the container's default `ENTRYPOINT` with custom command and arguments                                                            | `None`       |
-| `communication`      | (Optional) [Communication method](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms) between AIS and the ETL container | `hpush://`   |
-| `argument`           | (Optional) Argument passing method: `""` (default) or `"fqn"` (mounts host filesystem)                                                                | `""`         |
-| `init_timeout`       | (Optional) Max time to wait for ETL to become ready                                                                                                   | `5m`         |
-| `obj_timeout`        | (Optional) Max time to process a single object                                                                                                        | `45s`        |
-| `support_direct_put` | (Optional) Enable [direct put optimization](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#direct-put-optimization) for offline transforms   | `false`      |
-
-#### Sample ETL Spec
+### Example
 
 ```yaml
 name: hello-world-etl
 runtime:
   image: aistorage/transformer_hello_world:latest
-  # Optional: Override the container entrypoint
-  # command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
-
 communication: hpush://
-argument: fqn
 init_timeout: 5m
 obj_timeout: 45s
 support_direct_put: true
 ```
 
-#### CLI Usage
+### Usage
 
 ```bash
 # From a local file
@@ -193,76 +167,29 @@ $ ais etl init -f spec.yaml
 # From a remote URL
 $ ais etl init -f <URL>
 
-# Override values from the spec
-$ ais etl init -f <URL> \
-  --name=ETL_NAME \
-  --comm-type=COMMUNICATION_TYPE \
-  --init-timeout=TIMEOUT \
-  --obj-timeout=TIMEOUT
+# Override selected values from the file
+$ ais etl init -f spec.yaml --name=my-etl --comm-type=hpull://
 ```
 
-> **Note:** CLI parameters take precedence over the spec file.
+The `--name`, `--comm-type`, `--init-timeout`, and `--object-timeout` flags override
+the corresponding values in a single-document specification.
 
----
+### Multiple ETLs in One File
 
-### 2. **Using a Full Kubernetes Pod Spec (Deprecated)**
-
-> **DEPRECATED:** Full Kubernetes Pod spec initialization will be removed in AIStore v5.1. Migrate to the [runtime ETL specification](#1-using-a-runtime-etl-specification-recommended).
-
-This option remains available only for backward compatibility.
-
-#### Example Pod Spec
+Separate runtime specifications with the YAML document separator `---`:
 
 ```yaml
-# pod_spec.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: etl-echo
-  annotations:
-    communication_type: "hpush://"
-    wait_timeout: "5m"
-spec:
-  containers:
-    - name: server
-      image: aistorage/transformer_md5:latest
-      ports: [{ name: default, containerPort: 8000 }]
-      command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info", "--ws-max-size", "17179869184", "--ws-ping-interval", "0", "--ws-ping-timeout", "86400"]
-      readinessProbe:
-        httpGet: { path: /health, port: default }
+name: hello-world-etl
+runtime:
+  image: aistorage/transformer_hello_world:latest
+---
+name: md5-etl
+runtime:
+  image: aistorage/transformer_md5:latest
 ```
 
-#### CLI Usage
-
-```bash
-# Initialize ETL from a Pod spec
-$ ais etl init -f pod_spec.yaml --name transformer-md5
-```
-
-### Additional Notes
-
-* You can define **multiple ETLs in a single YAML file** by separating them with the standard YAML document separator `---`.
-
-  **Example:**
-
-  ```yaml
-  name: hello-world-etl
-  runtime:
-    image: aistorage/transformer_hello_world:latest
-  ---
-  name: md5-etl
-  runtime:
-    image: aistorage/transformer_md5:latest
-  ```
-
-* You may override fields in the spec using CLI flags such as `--name`, `--comm-type`, etc.
-
-  **However**, if your YAML file contains multiple ETL definitions, override flags **cannot** be used and will result in an error.
-
-  In such cases, you should either:
-
-  * Remove the override flags and apply the full multi-ETL spec as-is, or
-  * Split the YAML file into individual files and initialize each ETL separately:
+Override flags cannot be used with a multi-document file. Put the desired
+values in each document or initialize the ETLs from separate files.
 
 ---
 
@@ -300,7 +227,6 @@ This command displays detailed attributes of each ETL, including:
   * Container image
   * Command
   * Environment variables
-* **ETL Source** (Full Pod specification, if applicable)
 
 > **Note:** You can also use the alias `ais show etl <ETL_NAME> [<ETL_NAME> ...]` for the same functionality.
 

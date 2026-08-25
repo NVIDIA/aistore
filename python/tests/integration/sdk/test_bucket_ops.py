@@ -17,8 +17,6 @@ from aistore.sdk.const import (
     DUIS,
     UTF_ENCODING,
 )
-from aistore.sdk.etl.etl_templates import ECHO
-from aistore.sdk.etl.etl_const import ETL_COMM_HPUSH
 from aistore.sdk.dataset.data_attribute import DataAttribute
 from aistore.sdk.dataset.dataset_config import DatasetConfig
 from aistore.sdk.dataset.label_attribute import LabelAttribute
@@ -674,8 +672,7 @@ class TestBucketOps(ParallelTestBase):
         src_bck.object(obj_name).get_writer().put_content(b"dummy")
         etl_name = f"etl-dry-{random_string(5)}"
         etl = self.client.etl(etl_name)
-        echo_template = ECHO.format(communication_type=ETL_COMM_HPUSH)
-        etl.init_spec(template=echo_template)
+        etl.init(image="aistorage/transformer_echo:latest")
         job_id = src_bck.transform(
             etl_name=etl.name,
             to_bck=dst_bck,

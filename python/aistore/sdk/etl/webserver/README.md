@@ -113,31 +113,22 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
     docker push <myrepo>/echo-etl:latest
     ```
 
-3. **Deploy in Kubernetes**
+3. **Create a runtime specification**
 
     ```yaml
-    # init_spec.yaml
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: etl-echo
-      annotations:
-        communication_type: "hpush://"
-        wait_timeout: "5m"
-    spec:
-      containers:
-        - name: server
-          image: <myrepo>/echo-etl:latest
-          ports: [{ name: default, containerPort: 8000 }]
-          command: ["uvicorn", "echo_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info", "--ws-max-size", "17179869184", "--ws-ping-interval", "0", "--ws-ping-timeout", "86400"]
-          readinessProbe:
-            httpGet: { path: /health, port: default }
-      ```
+    # etl_spec.yaml
+    name: my-echo
+    runtime:
+      image: <myrepo>/echo-etl:latest
+      command: ["uvicorn", "echo_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+    communication: hpush://
+    init_timeout: 5m
+    ```
 
 4. **Initialize & run**
 
     ```bash
-    ais etl init spec --name my-echo --spec init_spec.yaml
+    ais etl init --spec etl_spec.yaml
     ais etl bucket my-echo ais://<src-bucket> ais://<dst-bucket>
     ```
 
@@ -157,10 +148,11 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
      flask_app = flask_server.app
      ```
 
-     In your `init_spec.yaml`:
+     In your `etl_spec.yaml`, set `runtime.command`:
 
      ```yaml
-     command: ["gunicorn", "echo_server:flask_app", "--bind", "0.0.0.0:8000", "--workers", "4", "--log-level", "debug"]
+     runtime:
+       command: ["gunicorn", "echo_server:flask_app", "--bind", "0.0.0.0:8000", "--workers", "4", "--log-level", "debug"]
      ```
    * **HTTP-based**
 
@@ -176,10 +168,11 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
          EchoServer(port=8000).start()
      ```
 
-     In your `init_spec.yaml`:
+     In your `etl_spec.yaml`, set `runtime.command`:
 
      ```yaml
-     command: ["python", "echo_server.py"]
+     runtime:
+       command: ["python", "echo_server.py"]
      ```
   > **Note:**
   > To switch to a different webserver type, rebuild your container image and re-initialize the ETL with the new configuration.

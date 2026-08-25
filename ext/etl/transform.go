@@ -46,8 +46,8 @@ const (
 //
 // ETL:
 //     Refers to Extract-Transform-Load, which allows a user to do transformation
-//     of the objects. Transformation is defined by an ETL spec, which is a K8s
-//     yaml spec file. The operations of an ETL are executed on the ETL container.
+//     of the objects. Transformation is defined by an ETL runtime spec. The
+//     operations of an ETL are executed on the ETL container.
 //
 // ETL container:
 //     The user's K8s pod which runs the container doing the transformation of
@@ -82,7 +82,7 @@ const (
 // * Recreating an ETL container with the same name will delete all running
 //   containers with the same name.
 
-// (common for both `InitSpec` and `ETLSpec` flows)
+// Init initializes the ETL runtime on this target.
 func Init(msg InitMsg, xid, secret string) (core.Xact, PodInfo, error) {
 	config := cmn.GCO.Get()
 	podInfo, xctn, err := start(msg, xid, secret, config)

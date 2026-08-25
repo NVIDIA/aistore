@@ -141,7 +141,7 @@ var _ = Describe("CommunicatorTest", func() {
 	for _, testType := range []string{"inline", "offline"} {
 		for _, commType := range tests {
 			It("should perform "+testType+" transformation "+commType, func() {
-				msg := &InitSpecMsg{
+				msg := &ETLSpecMsg{
 					InitMsgBase: InitMsgBase{
 						CommTypeX:   commType,
 						InitTimeout: cos.Duration(DefaultInitTimeout),
@@ -224,7 +224,7 @@ var _ = Describe("CommunicatorTest", func() {
 		}))
 		defer etlServer.Close()
 
-		msg := &InitSpecMsg{
+		msg := &ETLSpecMsg{
 			InitMsgBase: InitMsgBase{
 				CommTypeX:   Hpush,
 				InitTimeout: cos.Duration(DefaultInitTimeout),

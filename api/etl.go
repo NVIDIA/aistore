@@ -43,8 +43,7 @@ func (e *ETL) Chain(other *ETL) *ETL {
 	return &ETL{ETLName: e.ETLName, TransformArgs: e.TransformArgs, pipeline: pipeline}
 }
 
-// Initiate custom ETL workload by executing one of the documented `etl.InitMsg`
-// message types.
+// Initiate custom ETL workload from the provided runtime specification.
 // The API call results in deploying multiple ETL containers (K8s pods):
 // one container per storage target.
 // Returns xaction ID if successful, an error otherwise.

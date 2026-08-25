@@ -35,12 +35,10 @@ func startTar2TfTransformer(t *testing.T) (etlName string) {
 	spec, err := tetl.GetTransformYaml(etlName)
 	tassert.CheckError(t, err)
 
-	msg := &etl.InitSpecMsg{}
-	{
-		msg.EtlName = etlName
-		msg.CommTypeX = etl.Hpull
-		msg.Spec = spec
-	}
+	msg, err := tetl.SpecToInitMsg(spec)
+	tassert.CheckError(t, err)
+	msg.EtlName = etlName
+	msg.CommTypeX = etl.Hpull
 	tassert.CheckError(t, msg.Validate())
 	tassert.Fatalf(t, msg.Name() == tetl.Tar2TF, "%q vs %q", msg.Name(), tetl.Tar2TF)
 

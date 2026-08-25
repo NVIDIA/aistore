@@ -122,7 +122,7 @@ var (
 	flagVersion bool
 	flagQuiet   bool
 
-	etlInitSpec *etl.InitSpecMsg
+	etlInitSpec *etl.ETLSpecMsg
 	etlName     string
 
 	useRandomObjName bool
