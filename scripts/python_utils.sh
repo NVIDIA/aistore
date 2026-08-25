@@ -4,6 +4,8 @@ PYLINT_STYLE="${AISTORE_PATH}/scripts/config/.pylintrc"
 PYTHON_SDK_DIR="${AISTORE_PATH}/python"
 
 function lint_python_outside_sdk {
+    python3 -m pip install -r "${PYTHON_SDK_DIR}/aistore/lint_requirements" --quiet
+
     local fail_count=0
     files=$(find . -type f -name "*.py" ! -name "__init__.py" ! -regex "$EXTERNAL_SRC_REGEX" \
             ! -path "*/venv/*" \

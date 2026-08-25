@@ -287,10 +287,11 @@ class TestBatch(unittest.TestCase):
                 constructed = batch.request.moss_in[0]
 
                 opaque = kwargs.get("opaque")
+                default_provider = self.mock_bucket.provider.value
                 expected = MossIn(
                     obj_name=kwargs["obj"],
                     bck=kwargs.get("bck") or self.mock_bucket.name,
-                    provider=kwargs.get("provider") or self.mock_bucket.provider.value,
+                    provider=kwargs.get("provider") or default_provider,
                     opaque=(
                         base64.urlsafe_b64encode(opaque).decode("utf-8")
                         if opaque
