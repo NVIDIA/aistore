@@ -376,6 +376,7 @@ func generateSlicesToMemory(ctx *encodeCtx) error {
 	return finalizeSlices(ctx, writers, cksumType)
 }
 
+// `size` is always ctx.lom.Lsize(); parameter here only for unit tests
 func initializeSlices(ctx *encodeCtx, size int64) {
 	ctx.sliceSize = SliceSize(size, ctx.dataSlices)
 	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - size
@@ -409,11 +410,16 @@ func finalizeSlices(ctx *encodeCtx, writers []io.Writer, cksumType string) error
 	// Keep wrappers local so the disk path can close its original files.
 	var (
 		readers      = make([]io.Reader, ctx.dataSlices)
-		dataCksums   []*cos.CksumHashSize
+		dataCksums   = make([]*cos.CksumHashSize, ctx.dataSlices)
 		parityCksums []*cos.CksumHash
 	)
+	for i := range ctx.dataSlices {
+		readers[i] = ctx.slices[i].reader
+		dataCksums[i] = &cos.CksumHashSize{}
+		dataCksums[i].Init(cksumType)
+		readers[i] = io.TeeReader(readers[i], dataCksums[i])
+	}
 	if cksumType != cos.ChecksumNone {
-		dataCksums = make([]*cos.CksumHashSize, ctx.dataSlices)
 		parityCksums = make([]*cos.CksumHash, len(writers))
 		wrapped := make([]io.Writer, len(writers))
 		for i, w := range writers {
@@ -422,24 +428,25 @@ func finalizeSlices(ctx *encodeCtx, writers []io.Writer, cksumType string) error
 		}
 		writers = wrapped
 	}
-	for i := range ctx.dataSlices {
-		readers[i] = ctx.slices[i].reader
-		if cksumType != cos.ChecksumNone {
-			dataCksums[i] = &cos.CksumHashSize{}
-			dataCksums[i].Init(cksumType)
-			readers[i] = io.TeeReader(readers[i], dataCksums[i])
-		}
-	}
 	if err := stream.Encode(readers, writers); err != nil {
 		return err
+	}
+
+	// reedsolomon only cross-checks shard sizes against each other (ErrShardSize);
+	// with ctx.dataSlices == 1 there is nothing to compare against,
+	// and a short read (io.ErrUnexpectedEOF) would otherwise yield a corruption
+	for i, cksum := range dataCksums {
+		if cksum.Size != ctx.sliceSize {
+			return fmt.Errorf("%w: data slice %d hashed %d bytes, expected %d",
+				io.ErrUnexpectedEOF, i, cksum.Size, ctx.sliceSize)
+		}
 	}
 
 	if cksumType == cos.ChecksumNone {
 		return nil
 	}
+
 	for i, cksum := range dataCksums {
-		debug.Assertf(cksum.Size == ctx.sliceSize, "data slice %d: hashed %d bytes, expected %d",
-			i, cksum.Size, ctx.sliceSize)
 		cksum.Finalize()
 		ctx.slices[i].cksum = cksum.Clone()
 	}

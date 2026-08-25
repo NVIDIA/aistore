@@ -6,6 +6,7 @@ package ec //nolint:testpackage // Tests unexported EC encoding helpers.
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"testing"
 
@@ -106,6 +107,46 @@ func TestFinalizeSlicesDoesNotPublishPartialChecksums(t *testing.T) {
 	}
 }
 
+// make sure short reads get rejected (see finalizeSlices() for details)
+func TestFinalizeSlicesRejectsShortDataSlices(t *testing.T) {
+	tests := []struct {
+		name       string
+		dataSlices int
+		data       [][]byte
+	}{
+		{name: "single data slice", dataSlices: 1, data: [][]byte{[]byte("abcd")}},
+		{name: "uniformly short", dataSlices: 2, data: [][]byte{[]byte("abcd"), []byte("efgh")}},
+	}
+	for _, cksumType := range []string{cos.ChecksumCesXxh, cos.ChecksumNone} {
+		t.Run(cksumType, func(t *testing.T) {
+			for _, test := range tests {
+				t.Run(test.name, func(t *testing.T) {
+					ctx := &encodeCtx{
+						dataSlices:   test.dataSlices,
+						paritySlices: 1,
+						sliceSize:    8, // deliberately larger than what the readers hold
+						slices:       make([]*slice, test.dataSlices+1),
+					}
+					for i, data := range test.data {
+						ctx.slices[i] = &slice{reader: cos.NewByteReader(data)}
+					}
+					writers, _ := newParityTestWriters(ctx)
+
+					err := finalizeSlices(ctx, writers, cksumType)
+					if !errors.Is(err, io.ErrUnexpectedEOF) {
+						t.Fatalf("expected io.ErrUnexpectedEOF, got %v", err)
+					}
+					for i, sl := range ctx.slices {
+						if sl.cksum != nil {
+							t.Fatalf("slice %d published a checksum after a short encode", i)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestFinalizeSlicesWithoutChecksums(t *testing.T) {
 	ctx := newInitializedTestCtx([]byte("abcdef"), 2, 1)
 	writers, _ := newParityTestWriters(ctx)
@@ -122,7 +163,10 @@ func TestFinalizeSlicesWithoutChecksums(t *testing.T) {
 
 func newInitializedTestCtx(data []byte, dataSlices, paritySlices int) *encodeCtx {
 	ctx := &encodeCtx{
-		lh:           &core.LomHandle{LomReader: cos.NewByteReader(data)},
+		// this LomHandle carries no LOM - only enough for reading and slicing (and unit testing)
+		lh: &core.LomHandle{
+			LomReader: cos.NewByteReader(data),
+		},
 		dataSlices:   dataSlices,
 		paritySlices: paritySlices,
 	}
