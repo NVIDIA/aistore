@@ -4,88 +4,101 @@ All notable changes to the AIStore Python SDK project are documented in this fil
 
 We structure this changelog in accordance with [Keep a Changelog](https://keepachangelog.com/) guidelines, and this project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.26.0] - 2026-08-25
 
-### Added
+This release adds finer-grained batch reads, safer job lifecycle handling, ETL
+inspection, and better multi-worker dataset behavior. It also includes
+compatibility changes in backend support, TLS verification, and permissions;
+review them before upgrading.
 
-- `start_after` parameter on `Bucket.list_objects()`, `list_objects_iter()`,
-  `list_all_objects()`, and `list_all_objects_iter()` (and `ListObjectsMsg`),
-  mirroring Go's `LsoMsg.StartAfter`: lists objects whose names are strictly
-  greater than the given marker — useful for sharding flat-bucket enumeration
-  across parallel listers. Applied to the first page only (subsequent pages
-  resume via the continuation token). AIS buckets only; raises
-  `NotImplementedError` for cloud buckets.
-- Get-Batch byte-range reads: `Batch.add()` now honors the `start`/`length`
-  parameters to retrieve a byte range of an object (chunked or monolithic) or of
-  a file extracted from an archive (when `archpath` is set).
-- `aistore.sdk.xact_const` mirroring Go's `xact/api_table.go`: `XACT_KIND_*`
-  string constants, `IDLE_KINDS` / `KNOWN_KINDS` frozensets, and the
-  `idles_before_finishing()` / `is_valid_kind()` predicates.
-- `Job.abort()` mirroring Go's `api.AbortXaction`: stops a job scoped by its
-  `id` and/or `kind`. After aborting, `wait()` returns a `WaitResult` with
-  `success=False` and the abort error instead of blocking until timeout.
-- ETL inspection APIs: `Bucket.inspect()` and `ObjectGroup.inspect()` run ETL
-  in dry-run mode without writing transformed results, while preserving the
-  existing ETL object-error reporting path.
-- `partition_sources_by_worker` flag on `AISBaseIterDataset` (inherited by
-  `AISIterDataset`, `AISBatchIterDataset`, `AISShardReader`) distributes
-  `ais_source_list` across DataLoader workers so each worker only lists its
-  assigned sources, avoiding duplicate paged listing calls that otherwise
-  multiply by `num_workers`.
-- `colocation` parameter on `AISBatchIterDataset`, forwarded to the MOSS
-  batch API to enable target-aware and shard-aware optimizations.
+### Compatibility changes
 
-### Changed
+- Removed the unsupported `Provider.HTTP` (`ht://`) backend.
+- AuthN cluster registration now verifies AIStore TLS certificates by default.
+  Deployments using self-signed or privately issued certificates must configure
+  `ca_cert` or explicitly set `skip_verify=True`.
+- `ACCESS_RW` no longer includes `PROMOTE`; grant `PROMOTE` or
+  `ACCESS_SU` explicitly. Promote sources are restricted to
+  `/var/lib/ais/promote`, without symbolic-link support.
 
-- **BREAKING**: Removed the unsupported `Provider.HTTP` (`ht://`) backend.
-- **BREAKING**: AuthN cluster registration now verifies AIStore TLS
-  certificates by default. Deployments using untrusted certificates must
-  configure `ca_cert` or explicitly set `skip_verify=True`.
-- **BREAKING**: `ACCESS_RW` no longer includes `PROMOTE`. Grant `PROMOTE`
-  explicitly (or `ACCESS_SU`). Promote sources are restricted to
-  `/var/lib/ais/promote`; symbolic links are not supported.
-- ETL pod spec templates no longer list the obsolete `io://` communication type.
-- Deprecated `Etl.init_spec()` with a `FutureWarning`; use `Etl.init()` or
-  `Etl.init_class()` instead. Pod spec initialization will be removed in v5.1.
-- `Job.wait()` is now descriptor-aware, mirroring Go's
-  `api.WaitForXaction`: when `job_kind` is an idle kind (e.g. `download`,
-  `get-batch`, `copy-listrange`, `etl-listrange`, `archive`, `list`,
-  `put-copies`, `ec-get`/`ec-put`/`ec-resp`) it waits for cluster-wide idle;
-  single-target non-IC jobs (`blob-download` and `resilver`) wait for terminal
-  target snapshots; otherwise — including empty or unknown kinds — it waits
-  for terminal IC status (preserving the pre-convergence behavior).
-  `wait_for_idle` and `wait_single_node` remain available as explicit overrides.
-- `Job.wait()` resolves the job kind from the cluster when only a job id is
-  given (raising `JobInfoNotFound` if the id is unknown), so a job created
-  with just an id still dispatches correctly.
-- `Job.wait()` / `wait_for_idle()` require an idle-kind job to report idle on
-  2 consecutive polls before completing (mirrors Go's
-  `xact.numConsecutiveIdle`); an abort on any target still returns immediately.
-- `Batch.get()` uses a shallow copy instead of deep copy when snapshotting the 
-  request before clearing, making the snapshot O(1) regardless of batch size.
-  - `MossIn` is now a frozen Pydantic class, reflecting its immutability.
-- `Batch.add()` now accepts optional `bck`/`provider` for string object names,
-  letting batches with per-object buckets skip building an `Object` wrapper for
-  every item, improving performance.
+### Get-Batch
 
-### Fixed
+- `Batch.add()` now honors `start` and `length`, allowing a batch request to
+  retrieve a byte range from a regular or chunked object, or from a file inside
+  an archive when `archpath` is set.
+- String object names can supply per-item `bck` and `provider` values. Batches
+  spanning multiple buckets no longer need to construct an `Object` wrapper for
+  every item.
+- `Batch.get()` now uses a shallow copy when snapshotting the request before
+  clearing it, reducing overhead for large batches. `MossIn` request entries
+  are immutable; create a new entry instead of mutating an existing one.
+- TAR and ZIP extraction now rejects members whose request or response metadata
+  is missing, returning a controlled error instead of leaking `IndexError`.
+- The streaming multipart decoder now handles truncated input, split headers,
+  mixed line endings, and response epilogues without spinning, corrupting, or
+  dropping data.
+- The extractor format registry is initialized once at import time, removing a
+  race when batches are processed from multiple threads.
 
-- The Python SDK no longer logs bearer tokens before AuthN revocation requests.
-- Get-Batch TAR and ZIP extractors now reject archive members without matching
-  request or response metadata instead of raising an uncaught `IndexError`.
-- AuthN cluster registration now honors configured TLS verification, CA, and
-  client certificate settings when discovering an AIStore cluster UUID.
-- Parallel downloads now route the initial HEAD and subsequent ranged GET
-  requests through the proxy, allowing redirects to be signed when
-  intra-cluster authentication is enabled.
-- ETL webservers now forward
-  `etl_args` to the next stage on direct-put pipeline hops. Previously only the
-  first pipeline stage received `etl_args`; stages 2..N saw an empty value.
-- Fixed multiple correctness bugs in the streaming multipart decoder:
-  - Infinite spin when boundary or header terminator was absent at EOF and corrupted/truncated headers when header and body bytes arrived in the same chunk or near the buffer size limit.
-  - Body content misidentified as headers, stray newline prepended to headers on subsequent parts, epilogue bytes appended to the last part's body, and body bytes dropped under mixed line endings.
-- Fixed data race in ExtractorManager by replacing the singleton pattern with a module-level format map; 
-  get_extractor() is now a plain dict lookup, thread-safe via Python's import system.
+### Jobs
+
+- Added `Job.abort()` for jobs selected by ID, kind, or both. Waiting on an
+  aborted job returns `WaitResult(success=False)` with the abort error instead
+  of blocking until timeout.
+- Added `aistore.sdk.xact_const` with job-kind constants and helpers shared by
+  job waiting logic.
+- `Job.wait()` now selects the correct polling strategy for each job kind:
+  cluster-wide idle for idle jobs, target snapshots for `blob-download` and
+  `resilver`, and information-center status for other jobs. When only an ID is
+  supplied, the SDK first resolves its kind; unknown IDs raise
+  `JobInfoNotFound`.
+- Idle jobs must report idle on two consecutive polls before completing, which
+  avoids returning during a brief gap between work. Aborted jobs still return
+  immediately, and `wait_for_idle()` and `wait_single_node()` remain available
+  as explicit overrides.
+
+### Bucket listing
+
+- Added `start_after` to `Bucket.list_objects()`, `list_objects_iter()`,
+  `list_all_objects()`, and `list_all_objects_iter()`. It starts the first page
+  strictly after the supplied object name, enabling flat bucket listings to be
+  resumed or divided among workers; later pages use the continuation token.
+  This option supports AIS buckets only and raises `NotImplementedError` for
+  cloud buckets.
+
+### ETL
+
+- Added `Bucket.inspect()` and `ObjectGroup.inspect()` to run an ETL transform
+  in dry-run mode without writing output objects. Object-level failures use the
+  same reporting path as normal ETL operations.
+- ETL webservers now forward `etl_args` through every direct-put pipeline stage;
+  previously only the first stage received them.
+- `Etl.init_spec()` now emits `FutureWarning` and will be removed in AIStore
+  v5.1. Use `Etl.init()` for image-based ETLs or `Etl.init_class()` for Python
+  ETL server classes.
+- Removed the obsolete `io://` communication type from ETL pod spec templates.
+
+### PyTorch datasets
+
+- Added `partition_sources_by_worker` to the iterable datasets. When enabled,
+  each DataLoader worker lists only its assigned AIS sources instead of every
+  worker repeating the same paginated listings.
+- Added `colocation` to `AISBatchIterDataset`; the value is forwarded to the
+  Multi-Object Streaming Service (MOSS) Get-Batch API for target-aware and
+  shard-aware placement.
+- `AISShardReader` now ignores extensionless files and directories when
+  collating archive samples.
+
+### Security and reliability
+
+- Bearer tokens are no longer logged before AuthN revocation requests.
+- AuthN cluster discovery now honors the configured TLS verification, CA, and
+  client certificate settings when resolving the cluster UUID.
+- Parallel downloads route the initial HEAD and ranged GET requests through the
+  proxy, allowing redirects to be signed when intra-cluster authentication is
+  enabled.
+- Malformed numeric object metadata headers now produce a zero value instead of
+  raising `ValueError`.
 
 ## [1.25.0] - 2026-05-20
 
