@@ -240,6 +240,12 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		lsmsg.PageSize = apc.MaxPageSizeAIS
 	}
 
+	// TODO: an exact page-size boundary (returned entries == PageSize) is reported as
+	// truncated even when there's nothing left to list. Proper fix: have each target
+	// report whether it has more to list (a separate response field/flag) instead of
+	// the proxy inferring it client-side from entry counts. This touches the target-side
+	// listing API, left for a follow-up commit.
+
 	actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{

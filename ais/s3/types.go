@@ -6,6 +6,7 @@ package s3
 
 import (
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -138,17 +139,26 @@ func JoinValidateOname(w http.ResponseWriter, r *http.Request, items []string) (
 	return
 }
 
-func FillLsoMsg(query url.Values, msg *apc.LsoMsg) {
-	mxStr := query.Get(QparamMaxKeys)
-	if pageSize, err := strconv.Atoi(mxStr); err == nil && pageSize > 0 {
-		msg.PageSize = int64(pageSize)
+// Parse s3 list-objects query params.
+//
+// TODO: The continuation token carries only the raw AIS-side marker (the object
+// name). Without the listing UUID, the target must restart the bucket walk on
+// each page (an O(n) rescan instead of an O(1) resume for AIS-native buckets).
+// Fix: encode the UUID in the token and, for remote buckets, the designated
+// target's SID, so subsequent pages continue on the same target across Smap
+// changes.
+func FillLsoMsg(query url.Values, msg *apc.LsoMsg, maxPageSize int64) (int64, error) {
+	maxKeys, err := parseMaxKeys(query, maxPageSize)
+	if err != nil {
+		return 0, err
 	}
+	msg.PageSize = maxKeys
+
 	if prefix := query.Get(QparamPrefix); prefix != "" {
 		msg.Prefix = prefix
 	}
 	var token string
 	if token = query.Get(QparamContinuationToken); token != "" {
-		// base64 encoded, as in: base64.StdEncoding.DecodeString(token)
 		msg.ContinuationToken = token
 	}
 	// `start-after` is used only when starting to list pages, subsequent next-page calls
@@ -160,14 +170,34 @@ func FillLsoMsg(query url.Values, msg *apc.LsoMsg) {
 	if delimiter := query.Get(QparamDelimiter); delimiter != "" {
 		msg.SetFlag(apc.LsNoRecursion)
 	}
+	return maxKeys, nil
 }
 
-func NewListObjectResult(bucket string) *ListObjectResult {
+// `max-keys` is the effective page size, following S3 (ListObjectsV2) convention:
+//   - absent: default to the max (AWS: 1000)
+//   - greater than the max: silently capped without an error
+//   - negative or non-numeric: 400 InvalidArgument
+//
+// ref: https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+func parseMaxKeys(query url.Values, maxPageSize int64) (int64, error) {
+	maxPageSize = min(maxPageSize, apc.MaxPageSizeAWS)
+
+	mxStr := query.Get(QparamMaxKeys)
+	if mxStr == "" {
+		return maxPageSize, nil
+	}
+	maxKeys, err := strconv.ParseInt(mxStr, 10, 64)
+	if err != nil || maxKeys < 0 {
+		return 0, fmt.Errorf("invalid %q=%q: expecting a non-negative integer", QparamMaxKeys, mxStr)
+	}
+	return min(maxKeys, maxPageSize), nil
+}
+
+func NewListObjectResult(bucket string, maxKeys int64) *ListObjectResult {
 	return &ListObjectResult{
-		Name:     bucket,
-		Ns:       s3Namespace,
-		MaxKeys:  apc.MaxPageSizeAWS,
-		Contents: make([]*ObjInfo, 0, apc.MaxPageSizeAWS),
+		Name:    bucket,
+		Ns:      s3Namespace,
+		MaxKeys: int(maxKeys),
 	}
 }
 
@@ -207,10 +237,15 @@ func entryToS3(entry *cmn.LsoEnt) (oi *ObjInfo) {
 	return oi
 }
 
-func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes) {
+func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, token string) {
+	r.ContinuationToken = token
+	if lst == nil {
+		return
+	}
 	r.KeyCount = len(lst.Entries)
 	r.IsTruncated = lst.ContinuationToken != ""
 	r.NextContinuationToken = lst.ContinuationToken
+	r.Contents = make([]*ObjInfo, 0, len(lst.Entries)) // upper bound: some entries are dirs
 	for _, e := range lst.Entries {
 		r.add(e)
 	}

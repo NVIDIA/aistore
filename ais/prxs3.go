@@ -389,11 +389,16 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	// - "prefix"
 	// - "start-after"
 	// - "delimiter" (TODO: limited support: no recursion)
-	// - "continuation-token" (NOTE: base64 encoded, as in: base64.StdEncoding.DecodeString(token)
+	// - "continuation-token"
 	// TODO:
 	// - "fetch-owner"
 	// - "encoding-type"
-	s3.FillLsoMsg(q, lsmsg)
+	// - ListObjects "v1" ("marker"/"NextMarker")
+	maxKeys, err := s3.FillLsoMsg(q, lsmsg, bck.MaxPageSize())
+	if err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest, Code: s3.ErrCodeInvalidArgument})
+		return
+	}
 
 	// via NBI
 	if err := _setupNBI(r.Header, lsmsg); err != nil {
@@ -401,13 +406,16 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		return
 	}
 
-	lst, err := p.lsAllPagesS3(bck, amsg, lsmsg, r.Header)
-	if cmn.Rom.V(5, cos.ModS3) {
-		nlog.Infoln("lsoS3", bck.Cname(""), len(lst.Entries), err)
-	}
-	if err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
-		return
+	// "max-keys=0" is valid (list nothing)
+	var lst *cmn.LsoRes
+	if maxKeys > 0 {
+		if lst, err = p.lsPageS3(bck, amsg, lsmsg, r.Header); err != nil {
+			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+			return
+		}
+		if cmn.Rom.V(5, cos.ModS3) {
+			nlog.Infoln("lsoS3", bck.Cname(""), len(lst.Entries), lst.ContinuationToken)
+		}
 	}
 
 	// NOTE:
@@ -418,9 +426,8 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	// - the implication: if, when working with very large remote datasets, list-objects performance
 	//   becomes an issue - consider using native API.
 
-	resp := s3.NewListObjectResult(bucket)
-	resp.ContinuationToken = lsmsg.ContinuationToken
-	resp.FromLsoResult(lst)
+	resp := s3.NewListObjectResult(bucket, maxKeys)
+	resp.FromLsoResult(lst, lsmsg.ContinuationToken)
 	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
@@ -428,9 +435,10 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	sgl.Free()
 
 	// GC
-	clear(lst.Entries)
-	lst.Entries = lst.Entries[:0]
-	lst.Entries = nil
+	if lst != nil {
+		clear(lst.Entries)
+		lst.Entries = nil
+	}
 }
 
 func _setupNBI(hdr http.Header, lsmsg *apc.LsoMsg) error {
@@ -459,37 +467,31 @@ func _setupNBI(hdr http.Header, lsmsg *apc.LsoMsg) error {
 	return nil
 }
 
-func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header) (lst *cmn.LsoRes, _ error) {
-	smap := p.owner.smap.get()
-	for pageNum := 1; ; pageNum++ {
-		beg := mono.NanoTime()
-		page, err := p.lsPage(bck, amsg, lsmsg, hdr, smap)
-		if err != nil {
-			return lst, err
-		}
-
-		vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
-		p.statsT.IncWith(stats.ListCount, vlabs)
-		p.statsT.AddWith(
-			cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},
-		)
-		if pageNum == 1 {
-			lst = page
-			lsmsg.UUID = page.UUID
-			debug.AssertFunc(func() bool { return cos.IsValidUUID(lst.UUID) }, lst.UUID)
-		} else {
-			lst.Entries = append(lst.Entries, page.Entries...)
-			lst.ContinuationToken = page.ContinuationToken
-			debug.Assert(lst.UUID == page.UUID, lst.UUID, page.UUID)
-			lst.Flags |= page.Flags
-		}
-		if page.ContinuationToken == "" { // listed all pages
-			break
-		}
-		lsmsg.ContinuationToken = page.ContinuationToken
-		amsg.Value = lsmsg
+func (p *proxy) lsPageS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header) (*cmn.LsoRes, error) {
+	beg := mono.NanoTime()
+	page, err := p.lsPage(bck, amsg, lsmsg, hdr, p.owner.smap.get())
+	if err != nil {
+		return nil, err
 	}
-	return lst, nil
+
+	// NBI (native bucket inventory) is the only flow that can overshoot the requested page size:
+	// per the `apc.LsNBI` note, each target delivers an approximate share of `PageSize` (local
+	// chunking, minimum bounds, slight overfetch) and `finLsoNBI` merges those shares as-is.
+	if n := int(lsmsg.PageSize); len(page.Entries) > n {
+		debug.Assert(lsmsg.IsFlagSet(apc.LsNBI), len(page.Entries), n)
+		if lsmsg.IsFlagSet(apc.LsNBI) {
+			clear(page.Entries[n:])
+			page.Entries = page.Entries[:n]
+			page.ContinuationToken = page.Entries[n-1].Name
+		}
+	}
+
+	vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
+	p.statsT.IncWith(stats.ListCount, vlabs)
+	p.statsT.AddWith(
+		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},
+	)
+	return page, nil
 }
 
 // +gen:endpoint PUT /s3/{bucket-name}/{object-name}

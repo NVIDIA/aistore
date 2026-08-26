@@ -17,6 +17,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -215,6 +217,81 @@ func TestS3TargetEmptyBucket(t *testing.T) {
 	}
 
 	tassert.CheckFatal(t, api.Health(bp))
+}
+
+// regression (see finLsoA / lsObjsA): lists 5 objects via the real S3
+// ListObjectsV2 endpoint with max-keys=2, and uses each page's
+// NextContinuationToken to fetch the following page.
+func TestS3ListObjectsMaxKeysNextPage(t *testing.T) {
+	setupS3Compat(t) // Enable S3 JWT compat if auth is enabled
+
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bck      = cmn.Bck{Name: "test-s3-maxkeys-" + trand.String(6), Provider: apc.AIS}
+		objNames = []string{"obj-0", "obj-1", "obj-2", "obj-3", "obj-4"}
+	)
+
+	baseParams := tools.BaseAPIParams(proxyURL)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	for _, nm := range objNames {
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: 16, CksumType: cos.ChecksumNone})
+		tassert.CheckFatal(t, err)
+		_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: nm, Reader: reader})
+		tassert.CheckFatal(t, err)
+	}
+
+	cfg, err := config.LoadDefaultConfig(
+		t.Context(),
+		config.WithCredentialsProvider(getS3Credentials(t)),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	cfg.HTTPClient = newS3Client(false /*pathStyle*/)
+	cfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	s3Client := s3.NewFromConfig(cfg)
+
+	var seen []string
+
+	// page 1: first 2 objects, must be truncated (3 more remain)
+	out, err := s3Client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(bck.Name), MaxKeys: aws.Int32(2),
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(out.Contents) == 2, "page 1: expected 2 entries, got %d", len(out.Contents))
+	tassert.Fatalf(t, out.IsTruncated != nil && *out.IsTruncated, "page 1: expected IsTruncated=true")
+	tassert.Fatalf(t, out.NextContinuationToken != nil && *out.NextContinuationToken != "",
+		"page 1: expected a next-continuation-token")
+	for _, o := range out.Contents {
+		seen = append(seen, *o.Key)
+	}
+
+	// page 2: next 2 objects, using the token page 1 returned
+	out, err = s3Client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(bck.Name), MaxKeys: aws.Int32(2), ContinuationToken: out.NextContinuationToken,
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(out.Contents) == 2, "page 2: expected 2 entries, got %d", len(out.Contents))
+	tassert.Fatalf(t, out.IsTruncated != nil && *out.IsTruncated, "page 2: expected IsTruncated=true (1 more object remains)")
+	for _, o := range out.Contents {
+		tassert.Fatalf(t, !slices.Contains(seen, *o.Key), "page 2: entry %q duplicates page 1", *o.Key)
+		seen = append(seen, *o.Key)
+	}
+
+	// page 3: the last (5th) object
+	out, err = s3Client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(bck.Name), MaxKeys: aws.Int32(2), ContinuationToken: out.NextContinuationToken,
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(out.Contents) == 1, "page 3: expected 1 entry, got %d", len(out.Contents))
+	tassert.Fatalf(t, out.IsTruncated == nil || !*out.IsTruncated,
+		"page 3: expected IsTruncated=false, got %v", out.IsTruncated)
+	seen = append(seen, *out.Contents[0].Key)
+
+	sort.Strings(seen)
+	tassert.Fatalf(t, len(seen) == len(objNames), "expected %d distinct objects across pages, got %d", len(objNames), len(seen))
+	for i, nm := range objNames {
+		tassert.Fatalf(t, seen[i] == nm, "expected %q at position %d, got %q", nm, i, seen[i])
+	}
 }
 
 func loadCredentials(t *testing.T) (f func(*config.LoadOptions) error) {
