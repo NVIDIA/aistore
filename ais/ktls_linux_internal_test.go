@@ -279,25 +279,35 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 // the deterministic tests above.
 func TestKTLSTxLinuxUnsupported(t *testing.T) {
 	tests := []struct {
-		name string
-		err  error
-		want bool
+		name  string
+		stage string
+		err   error
+		want  bool
 	}{
-		{"ENOENT", unix.ENOENT, true},
-		{"ENOPROTOOPT", unix.ENOPROTOOPT, true},
-		{"EPROTONOSUPPORT", unix.EPROTONOSUPPORT, true},
-		{"EOPNOTSUPP", unix.EOPNOTSUPP, true},
-		{"ENOSYS", unix.ENOSYS, true},
-		{"EINVAL", unix.EINVAL, false},
-		{"EBADF", unix.EBADF, false},
-		{"EACCES", unix.EACCES, false},
-		{"nil", nil, false},
+		// stage-independent: unavailable protocol, syscall, or crypto implementation
+		{"ENOENT-ULP", ktlsStageULP, unix.ENOENT, true}, // TLS ULP unavailable
+		{"ENOENT-TX", ktlsStageTX, unix.ENOENT, true},   // no gcm(aes) implementation
+
+		// stage-independent (cont-d)
+		{"ENOPROTOOPT", ktlsStageULP, unix.ENOPROTOOPT, true},
+		{"EPROTONOSUPPORT", ktlsStageTX, unix.EPROTONOSUPPORT, true},
+		{"EOPNOTSUPP", ktlsStageTX, unix.EOPNOTSUPP, true},
+		{"ENOSYS", ktlsStageULP, unix.ENOSYS, true},
+
+		// EINVAL only: ambiguous at TLS_TX between unsupported and defective crypto-info
+		{"EINVAL-ULP", ktlsStageULP, unix.EINVAL, true},
+		{"EINVAL-TX", ktlsStageTX, unix.EINVAL, false},
+
+		// neither
+		{"EBADF", ktlsStageTX, unix.EBADF, false},
+		{"EACCES", ktlsStageULP, unix.EACCES, false},
+		{"nil", ktlsStageTX, nil, false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := isKTLSTxUnsupported(test.err)
+			got := isKTLSTxUnsupported(test.stage, test.err)
 			tassert.Errorf(t, got == test.want,
-				"isKTLSTxUnsupported(%v) = %v, wanted %v", test.err, got, test.want)
+				"isKTLSTxUnsupported(%s, %v) = %v, wanted %v", test.stage, test.err, got, test.want)
 		})
 	}
 }

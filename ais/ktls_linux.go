@@ -80,7 +80,7 @@ func installKTLSTx(tcp *net.TCPConn, params *ktlsTxParams) (bool, error) {
 	if controlErr != nil {
 		return false, fmt.Errorf("ktls-tx: raw control: %w", controlErr)
 	}
-	if isKTLSTxUnsupported(sockErr) {
+	if isKTLSTxUnsupported(stage, sockErr) {
 		return false, nil
 	}
 	if sockErr == nil {
@@ -231,11 +231,14 @@ func setsockoptBytes(fd uintptr, level, opt int, value []byte) error {
 }
 
 // Whether a setsockopt failure means that this host cannot perform the
-// requested offload. EINVAL is deliberately excluded: at TLS_TX it is
-// ambiguous between unsupported input and a kernel-side or crypto-info defect,
-// and must surface through the sparse failed-install logging.
-func isKTLSTxUnsupported(err error) bool {
-	return errors.Is(err, unix.ENOENT) || // TLS ULP is unavailable
+// requested offload. EINVAL is considered unsupported only while attaching
+// the fixed TLS ULP. At TLS_TX it may instead indicate defective crypto-info
+// input and must surface through the sparse failed-install logging.
+func isKTLSTxUnsupported(stage string, err error) bool {
+	if stage == ktlsStageULP && errors.Is(err, unix.EINVAL) {
+		return true
+	}
+	return errors.Is(err, unix.ENOENT) || // TLS ULP unavailable; at TLS_TX: no gcm(aes) implementation
 		errors.Is(err, unix.ENOPROTOOPT) ||
 		errors.Is(err, unix.EPROTONOSUPPORT) ||
 		errors.Is(err, unix.EOPNOTSUPP) ||
