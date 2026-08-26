@@ -119,13 +119,19 @@ python_pytorch_unit_tests: common_deps dev_deps
 python_pytorch_integration_tests: common_deps dev_deps
 	$(PYTEST) -v tests/integration/pytorch
 
+# Optional override for pylint's `jobs` setting (see .pylintrc / .pylintrc-tests
+# for why auto-detect via jobs=0 can misbehave on some CI runners). Leave unset
+# to use the rcfile's own auto-detection.
+PYLINT_JOBS ?=
+PYLINT_JOBS_FLAG = $(if $(PYLINT_JOBS),--jobs=$(PYLINT_JOBS),)
+
 .PHONY: lint
 lint: common_deps botocore_deps mcp_deps lint_deps
-	pylint --rcfile=.pylintrc --recursive=y aistore
+	pylint --rcfile=.pylintrc --recursive=y $(PYLINT_JOBS_FLAG) aistore
 
 .PHONY: lint-tests
 lint-tests: common_deps botocore_deps lint_deps
-	pylint --rcfile=.pylintrc-tests --recursive=y tests
+	pylint --rcfile=.pylintrc-tests --recursive=y $(PYLINT_JOBS_FLAG) tests
 
 # Coverage targets (unit, integration, combined)
 COV_PKG := aistore

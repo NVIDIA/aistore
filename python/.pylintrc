@@ -37,6 +37,11 @@ ignore-patterns=^\.#
 
 # Use multiple processes to speed up Pylint. Specifying 0 will auto-detect the
 # number of processors available to use.
+#
+# NOTE: auto-detect reads the container's cgroup CPU quota, which can resolve
+# to 1 (single-process) on some CI runners; single-process runs have been
+# observed to produce spurious astroid inference errors
+# GitHub CI overrides this via PYLINT_JOBS (see python/Makefile).
 jobs=0
 
 # Control the amount of potential inferred values when inferring a single

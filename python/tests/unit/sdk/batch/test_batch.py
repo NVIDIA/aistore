@@ -18,6 +18,7 @@ from aistore.sdk.batch.extractor.archive_stream_extractor import ArchiveStreamEx
 from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
 from aistore.sdk.batch.types import MossIn, MossOut, MossResp
 from aistore.sdk.bucket import Bucket
+from aistore.sdk.provider import Provider
 from aistore.sdk.const import QPARAM_COLOC
 from aistore.sdk.enums import Colocation
 from aistore.sdk.errors import AISError, ErrBckNotFound
@@ -41,7 +42,7 @@ class TestBatch(unittest.TestCase):
         # Setup mock bucket
         self.mock_bucket = Mock(spec=Bucket)
         self.mock_bucket.name = "test-bucket"
-        self.mock_bucket.provider.value = "ais"
+        self.mock_bucket.provider = Provider.AIS
 
     def test_batch_init_empty(self):
         """Test Batch initialization with no objects."""
