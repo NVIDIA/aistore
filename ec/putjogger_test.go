@@ -10,9 +10,15 @@ import (
 	"io"
 	"testing"
 
+	"github.com/klauspost/reedsolomon"
+
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 )
+
+type errorWriter struct{ err error }
+
+func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
 
 func TestFinalizeSlicesChecksumsPaddedData(t *testing.T) {
 	for _, cksumType := range []string{cos.ChecksumCesXxh, cos.ChecksumSHA256} {
@@ -104,6 +110,43 @@ func TestFinalizeSlicesDoesNotPublishPartialChecksums(t *testing.T) {
 		if sl.cksum != nil {
 			t.Fatalf("slice %d published a checksum after failed encoding", i)
 		}
+	}
+}
+
+func TestFinalizeSlicesFailsOnParityWriteError(t *testing.T) {
+	const cksumType = cos.ChecksumCesXxh
+
+	errInjected := errors.New("injected parity write error")
+	tests := []struct {
+		name      string
+		failIndex int
+	}{
+		{name: "first parity writer", failIndex: 0},
+		{name: "second parity writer", failIndex: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := newInitializedTestCtx([]byte("abcdef"), 2, 2)
+			writers, _ := newParityTestWriters(ctx)
+			writers[test.failIndex] = errorWriter{err: errInjected}
+
+			err := finalizeSlices(ctx, writers, cksumType)
+			var writeErr reedsolomon.StreamWriteError
+			if !errors.As(err, &writeErr) {
+				t.Fatalf("expected reedsolomon.StreamWriteError, got %v", err)
+			}
+			if writeErr.Stream != test.failIndex {
+				t.Fatalf("error reported for parity writer %d, expected %d", writeErr.Stream, test.failIndex)
+			}
+			if !errors.Is(writeErr.Err, errInjected) {
+				t.Fatalf("expected injected write error, got %v", writeErr.Err)
+			}
+			for i, sl := range ctx.slices {
+				if sl.cksum != nil {
+					t.Fatalf("slice %d published a checksum after failed encoding", i)
+				}
+			}
+		})
 	}
 }
 
