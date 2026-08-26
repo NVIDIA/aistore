@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -29,7 +30,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 // Private Key encryption constants
@@ -338,7 +338,10 @@ func (r *RSAKeyManager) decryptPrivateKey(encrypted []byte) ([]byte, error) {
 
 func createGCM(pass cmn.Censored, salt []byte) (cipher.AEAD, error) {
 	// Derive a key from the passphrase using PBKDF2
-	key := pbkdf2.Key([]byte(pass), salt, pbkdf2Iterations, keyLength, sha256.New)
+	key, err := pbkdf2.Key(sha256.New, string(pass), salt, pbkdf2Iterations, keyLength)
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive encryption key: %w", err)
+	}
 
 	// Create AES cipher
 	block, err := aes.NewCipher(key)
