@@ -240,6 +240,66 @@ func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 
 func (sb *Streams) Smap() *meta.Smap { return sb.smap }
 
+// Stale answers a single question: would `_open` against `curr` produce a different
+// set of peer streams than the one this bundle is holding?
+// Three ways for that to happen:
+//   - membership: a peer appeared, left, or crossed the InMaintPostReb boundary
+//     that `_open` itself uses to decide whether to connect;
+//   - incarnation: a peer is still here, under the same ID, but restarted - its
+//     streams are dead even though the cluster map still "looks" the same.
+//   - endpoint: the URL used by this bundle's network changed.
+//
+// NOTE: not a membership predicate in the `Smap.CheckSameTargets` sense - that one
+// answers a rebalance question and deliberately ignores restarts (see its comment).
+func (sb *Streams) Stale(curr *meta.Smap) bool {
+	if curr == nil || sb.smap == nil {
+		return false
+	}
+	if curr.Version == sb.smap.Version {
+		return false // fast path: same epoch, nothing to walk
+	}
+
+	self := core.T.SID()
+
+	// 1) every peer this bundle holds must still be a peer, and the same one
+	for id, osi := range sb.smap.Tmap {
+		if id == self {
+			continue
+		}
+		nsi := curr.Tmap[id]
+		was, is := !osi.InMaintPostReb(), nsi != nil && !nsi.InMaintPostReb()
+		if was != is {
+			return true // gone, or (un)rebalanced-out
+		}
+		if was && !sameIncarnation(osi, nsi) {
+			return true // restarted
+		}
+		if was && osi.URL(sb.network) != nsi.URL(sb.network) {
+			return true // destination changed
+		}
+	}
+
+	// 2) and no new peer may have appeared
+	for id, nsi := range curr.Tmap {
+		if id == self || nsi.InMaintPostReb() {
+			continue
+		}
+		if _, ok := sb.smap.Tmap[id]; !ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Node signing keypairs are ephemeral (regenerated on every restart, in memory only -
+// see ais/htrun newKeyPair), which makes a changed verifying key the definitive
+// restart signal. This includes an empty => non-empty transition when a pre-5.1 peer
+// restarts into 5.1 during a rolling upgrade (compare w/ clupost.rereg).
+func sameIncarnation(osi, nsi *meta.Snode) bool {
+	return cos.CryptoEqual(osi.VerifyingKey, nsi.VerifyingKey)
+}
+
 // renew stream (or streams) to a given peer in the same Smap "epoch"
 func (sb *Streams) ReopenPeerStream(dstID string) error {
 	sb.reopenMu.Lock()

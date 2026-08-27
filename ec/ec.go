@@ -213,6 +213,10 @@ func Init(setIntraHdrs core.SetIntraHdrs) {
 	if err := initManager(); err != nil {
 		cos.ExitLog("Failed to initialize EC manager:", err)
 	}
+
+	// listen to Smap updates
+	sowner := core.T.Sowner()
+	sowner.Listeners().Reg(ECM)
 }
 
 ///////////

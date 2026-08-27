@@ -38,10 +38,13 @@ import (
 // The bundles are shared by every EC bucket and all three EC xaction kinds (Get, Put, Respond).
 // They are long-lived target <=> target connections, kept open only while EC is in use on this node.
 //
-// Opening is permissive and uncoordinated (fail-open). Two triggers, no gating:
+// Opening is permissive and uncoordinated (fail-open). Two external triggers, no gating:
 // - primary push: ActOpenEC, sent when EC gets enabled on a bucket;
 // - local pull:   incActive(), on every EC xaction's start, plus the global-rebalance pin
 //   (see reb/globrun for OpenStreams(true)).
+// In addition, installing a Smap that changes this node's EC peer set - membership, or a
+// peer's incarnation (see bundle.Streams.Stale) - aborts the stale bundles and immediately
+// reopens them when there are active users (ListenSmapChanged).
 //
 // A write to an EC-enabled bucket MUST find streams open - that requirement is met
 // right here, on the data path, which is why the proxy does not pre-open per-PUT.
@@ -60,11 +63,12 @@ import (
 //         IdleStreamsTimeout has elapsed since the last edge - so a burst of short
 //         xactions, or the drain tail of a long one, is not reaped between ops.
 //
-// Closing abides by the same rule: primary-authority only. A target never closes
-// on its own initiative. The primary decides the cluster has gone EC-quiescent and sends
-// ActCloseEC; targets accept it only if not currently active (_refc == 0), then defer
-// teardown via housekeeping. Finally, closePending is cleared only on a completed close
-// and may be disarmed (i.e, removed from HK) by a later ActOpenEC).
+// Idle closing abides by the same rule: primary-authority only. The primary decides the
+// cluster has gone EC-quiescent and sends ActCloseEC; targets accept it only if not currently
+// active (_refc == 0), then defer teardown via housekeeping. Finally, closePending is cleared
+// only on a completed close and may be disarmed (i.e, removed from HK) by a later ActOpenEC).
+// This idle policy does not apply to a changed peer set: stale streams are aborted
+// immediately as a correctness fence, regardless of _refc.
 
 const (
 	IdleStreamsTimeout = time.Minute
@@ -85,6 +89,7 @@ type Manager struct {
 	mu            sync.Mutex
 	closePending  atomic.Bool
 	_refc         atomic.Int32
+	smapVer       int64 // last Smap checked for the current stream bundle
 	bundleEnabled bool
 }
 
@@ -92,6 +97,9 @@ var (
 	ECM        *Manager
 	errSkipped = errors.New("skipped") // CT is skipped due to EC unsupported for the content type
 )
+
+// interface guard
+var _ meta.Slistener = (*Manager)(nil)
 
 func initManager() error {
 	ECM = &Manager{
@@ -109,6 +117,8 @@ func initManager() error {
 
 func (mgr *Manager) req() *bundle.Streams  { return mgr.reqBundle.Load() }
 func (mgr *Manager) resp() *bundle.Streams { return mgr.respBundle.Load() }
+
+func (*Manager) String() string { return "ec-manager" }
 
 func (mgr *Manager) setLast()                         { mgr._last.Store(mono.NanoTime()) }
 func (mgr *Manager) IdleTime(now int64) time.Duration { return time.Duration(now - mgr._last.Load()) }
@@ -140,22 +150,65 @@ func cbReq(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	}
 }
 
-// TODO -- FIXME:
-// - mgr.bundleEnabled gate (below) - is a simplification
-// - peer-to-peer streams must be refreshed upon target-membership changes - restarts/rejoins in particular
-// - note that stream-bundles retain their construction-time Smap
-// - use existing helper: smap.CheckSameTargets(current Smap versus Smap from the bundle)
+func (mgr *Manager) ListenSmapChanged() {
+	mgr.mu.Lock() // ----------------
+	if !mgr.bundleEnabled {
+		mgr.mu.Unlock()
+		return
+	}
+
+	smap := core.T.Sowner().Get()
+	if mgr.smapVer == smap.Version {
+		mgr.mu.Unlock()
+		return
+	}
+	req, resp, stale := mgr.bundlesStale(smap)
+	if !stale {
+		mgr.smapVer = smap.Version
+		mgr.mu.Unlock()
+		return
+	}
+
+	mgr.bundleEnabled = false
+	reopen := mgr._refc.Load() != 0
+	mgr.mu.Unlock() // ----------------
+
+	mgr.abortStale(req, resp, smap)
+
+	// Long-lived EC demand xactions survive membership changes. Keep their
+	// shared streams available, now using the already-installed current Smap.
+	if reopen {
+		mgr.OpenStreams(false /*with refc*/)
+	}
+}
+
 func (mgr *Manager) OpenStreams(withRefc bool) {
 	if withRefc {
 		mgr._refc.Inc()
 	}
 	mgr.setLast()
 
+retry:
 	mgr.mu.Lock()
+	smap := core.T.Sowner().Get()
 	if mgr.bundleEnabled {
-		// TODO: note above
+		if mgr.smapVer == smap.Version {
+			mgr.mu.Unlock()
+			return
+		}
+		req, resp, stale := mgr.bundlesStale(smap)
+		if !stale {
+			mgr.smapVer = smap.Version
+			mgr.mu.Unlock()
+			return
+		}
+
+		// Listener delivery is asynchronous. An EC operation can get here after
+		// Smap installation but before ListenSmapChanged; repair synchronously.
+		mgr.bundleEnabled = false
 		mgr.mu.Unlock()
-		return
+		mgr.abortStale(req, resp, smap)
+		goto retry
 	}
 	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActOpenEC)
 
@@ -168,6 +221,7 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 			Compression: compression,
 			SbundleMult: config.EC.SbundleMult,
 			Config:      config,
+			Smap:        smap,
 		}
 	)
 	reqSbArgs := bundle.Args{
@@ -178,14 +232,37 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 	respSbArgs := bundle.Args{
 		Trname: RespStreamName,
 		Net:    mgr.netResp,
-		Extra:  &transport.Extra{Compression: compression, SbundleMult: config.EC.SbundleMult, Config: config},
+		Extra: &transport.Extra{
+			Compression: compression,
+			SbundleMult: config.EC.SbundleMult,
+			Config:      config,
+			Smap:        smap,
+		},
 	}
 
 	mgr.reqBundle.Store(bundle.New(client, reqSbArgs))
 	mgr.respBundle.Store(bundle.New(client, respSbArgs))
 
 	mgr.bundleEnabled = true
+	mgr.smapVer = smap.Version
 	mgr.mu.Unlock()
+}
+
+// both bundles are constructed from the same Smap, but their network endpoints differ
+func (mgr *Manager) bundlesStale(current *meta.Smap) (req, resp *bundle.Streams, stale bool) {
+	req, resp = mgr.req(), mgr.resp()
+	debug.Assert(req != nil)
+	debug.Assert(resp != nil)
+	debug.Assert(req.Smap().Version == resp.Smap().Version, req.Smap().Version, " vs ", resp.Smap().Version)
+	stale = req.Stale(current) || resp.Stale(current)
+	return
+}
+
+func (*Manager) abortStale(req, resp *bundle.Streams, current *meta.Smap) {
+	nlog.Infof("%s ECM: EC peer set changed - aborting stale streams (Smap v%d => v%d)",
+		core.T, req.Smap().Version, current.Version)
+	req.Close(false)
+	resp.Close(false)
 }
 
 func (mgr *Manager) CloseStreams(justRefc bool) bool {
