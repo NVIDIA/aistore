@@ -1365,6 +1365,9 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 		whdr.Set(cos.HdrContentType, cos.ContentBinary)
 		whdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 
+		// see also: goi.setwhdr()
+		ktlsTxRetire(goi.req, whdr, size)
+
 		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
 		err = goi.transmit(csl, buf, fqn, size, false /*committed*/)
 		slab.Free(buf)
@@ -1384,6 +1387,10 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 	if err != nil {
 		return fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
 	}
+
+	// (compare w/ goi.setwhdr) - size is not known until ReadUntil completes
+	// TODO: might be too conservative for .tar; might be not enough for .tgz et al. compressed
+	ktlsTxRetire(goi.req, whdr, lom.Lsize())
 
 	rcb := _newRcb(goi.w)
 	whdr.Set(cos.HdrContentType, cos.ContentTar)

@@ -94,9 +94,6 @@ type (
 // public
 //
 
-func (sb *Streams) UsePDU() bool   { return sb.extra.UsePDU() }
-func (sb *Streams) Trname() string { return sb.trname }
-
 func New(cl transport.Client, args Args) (sb *Streams) {
 	if args.Net == "" {
 		args.Net = cmn.NetIntraData // default net
@@ -240,11 +237,67 @@ func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	}
 }
 
-func (sb *Streams) Smap() *meta.Smap { return sb.smap } // TODO -- FIXME: start using
+func (sb *Streams) Smap() *meta.Smap { return sb.smap }
+
+// renew stream (or streams) to a given peer in the same Smap "epoch"
+func (sb *Streams) ReopenPeerStream(dstID string) error {
+	// 1) validate
+	old := sb.get()
+	orobin, ok := old[dstID]
+	if !ok {
+		return &ErrDestinationMissing{sb.String(), dstID, sb.smap.String()}
+	}
+	if len(orobin.stsdest) == 0 {
+		debug.Assert(false) // not expecting
+		return nil
+	}
+	smap := core.T.Sowner().Get()
+	if smap.Version != sb.smap.Version {
+		// to err on the side of caution
+		return fmt.Errorf("%s: reopening individual streams when cluster map changes is not supported yet (%s vs %s)",
+			sb, smap.StringEx(), sb.smap.StringEx())
+	}
+	si := sb.smap.GetNode(dstID)
+	if si == nil {
+		// (unlikely - checked above)
+		return cos.NewErrNotFoundFmt(sb, "destination %q (%s)", dstID, sb.smap.StringEx())
+	}
+	dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname)
+
+	// 2) build new `robin` (same multiplier; consider setting nrobin.i)
+	nrobin := &robin{stsdest: make(stsdest, len(orobin.stsdest))}
+	config := cmn.GCO.Get()
+	for k := range nrobin.stsdest {
+		extra := sb.extra // by value
+		extra.Config = config
+		ns := transport.NewObjStream(sb.client, dstURL, dstID, &extra)
+		nrobin.stsdest[k] = ns
+	}
+	nbundle := maps.Clone(old)
+	if nbundle == nil {
+		nbundle = make(bundle)
+	}
+	nbundle[dstID] = nrobin
+
+	// 3) switch over
+	sb.streams.Store(&nbundle)
+
+	// 4) stop old streams async
+	for _, os := range orobin.stsdest {
+		if !os.IsTerminated() {
+			os.Stop() // via stopCh
+		}
+	}
+
+	nlog.Infoln(sb.String(), "successfully restablished connectivity to", dstID)
+	return nil
+}
 
 //
 // private methods
 //
+
+func (sb *Streams) usePDU() bool { return sb.extra.UsePDU() }
 
 func (sb *Streams) get() (bun bundle) {
 	optr := sb.streams.Load()
@@ -375,60 +428,6 @@ func (sb *Streams) _open(nbundle bundle, nm meta.NodeMap, smap *meta.Smap) {
 		}
 		nbundle[id] = nrobin
 	}
-}
-
-// renew stream (or streams) to a given peer in the same Smap "epoch"
-func (sb *Streams) ReopenPeerStream(dstID string) error {
-	// 1) validate
-	old := sb.get()
-	orobin, ok := old[dstID]
-	if !ok {
-		return &ErrDestinationMissing{sb.String(), dstID, sb.smap.String()}
-	}
-	if len(orobin.stsdest) == 0 {
-		debug.Assert(false) // not expecting
-		return nil
-	}
-	smap := core.T.Sowner().Get()
-	if smap.Version != sb.smap.Version {
-		// to err on the side of caution
-		return fmt.Errorf("%s: reopening individual streams when cluster map changes is not supported yet (%s vs %s)",
-			sb, smap.StringEx(), sb.smap.StringEx())
-	}
-	si := sb.smap.GetNode(dstID)
-	if si == nil {
-		// (unlikely - checked above)
-		return cos.NewErrNotFoundFmt(sb, "destination %q (%s)", dstID, sb.smap.StringEx())
-	}
-	dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname)
-
-	// 2) build new `robin` (same multiplier; consider setting nrobin.i)
-	nrobin := &robin{stsdest: make(stsdest, len(orobin.stsdest))}
-	config := cmn.GCO.Get()
-	for k := range nrobin.stsdest {
-		extra := sb.extra // by value
-		extra.Config = config
-		ns := transport.NewObjStream(sb.client, dstURL, dstID, &extra)
-		nrobin.stsdest[k] = ns
-	}
-	nbundle := maps.Clone(old)
-	if nbundle == nil {
-		nbundle = make(bundle)
-	}
-	nbundle[dstID] = nrobin
-
-	// 3) switch over
-	sb.streams.Store(&nbundle)
-
-	// 4) stop old streams async
-	for _, os := range orobin.stsdest {
-		if !os.IsTerminated() {
-			os.Stop() // via stopCh
-		}
-	}
-
-	nlog.Infoln(sb.String(), "successfully restablished connectivity to", dstID)
-	return nil
 }
 
 ///////////////////////////

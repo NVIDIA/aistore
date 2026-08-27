@@ -251,10 +251,10 @@ func (dm *DM) String() string {
 	if dm.data.streams == nil {
 		return "dm-" + s + "no-streams"
 	}
-	if dm.data.streams.UsePDU() {
-		return "dm-pdu-" + s + dm.data.streams.Trname()
+	if dm.data.streams.usePDU() {
+		return "dm-pdu-" + s + dm.data.streams.trname
 	}
-	return "dm-" + s + dm.data.streams.Trname()
+	return "dm-" + s + dm.data.streams.trname
 }
 
 // quiesce *local* Rx

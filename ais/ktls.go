@@ -41,18 +41,19 @@ import (
 // on userspace crypto/tls.
 
 // TODO:
-// - opt-in config/feature-flags knob; must remain experimental until it is not
-//   - restart required
 // - benches - ranging from plain HTTP to (HTTPS + kTLS + sendfile)
-// - The problem: one TLS key has a usage limit. Specifically, with TLS 1.3,
-//   an application traffic key is not meant to encrypt unlimited data.
-//   With RFC-specified ktlsTxMaxBytes budget approx. 2^38 bytes, we conservatively
-//   should impose a maximum single monolithic object size = 100GiB
-//   The current implementation checks for retirement at HTTP response boundaries.
-//   That only works when there are those "boundaries" - which is why
-//   one super-large object is a separate task.
+//
+// - one response may be larger than the amount of data we are allowed to encrypt
+//   with the current TLS key (re: AE bound or "cryptographic usage limit").
+//   We retire the connection at response boundaries, and a single response has
+//   none; truncating mid-body would be worse, so that one response is allowed
+//   to exceed the budget - and the connection closes right after it.
+//   The proper fix is to send a TLS 1.3 KeyUpdate, switch to a freshly derived key,
+//   and restart the record sequence number at zero.
+//
 // - lazy arming: install TLS_TX on the first response that would use sendfile,
 //   not at handshake. Ideally, must only be used for large payloads.
+//
 // - classify errKTLSTxExhausted/errKTLSTxPoisoned as connection-lifecycle
 //   events: they are neither object-transmit errors nor FSHC input (tgtfshc)
 

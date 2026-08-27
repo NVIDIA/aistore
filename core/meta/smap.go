@@ -496,6 +496,10 @@ func (m *Smap) HasActiveTs(except string) bool {
 	return false
 }
 
+// NOTE:
+// - this check intentionally does not detect a same-ID target restart;
+// - when present, a changed ephemeral Snode.VerifyingKey is the definitive restart signal;
+// - (incarnation, as opposed to membership, belongs to whoever holds a long-lived Smap snapshot - e.g., transport/bundle).
 func (m *Smap) CheckSameTargets(curr *Smap, tag string) error {
 	if m == nil || m.Version == 0 || curr == nil || curr.Version == 0 || m.Primary == nil || curr.Primary == nil {
 		err := errors.New("check-same-targets: expecting valid Smap(s)")
