@@ -75,6 +75,7 @@ type (
 		lid        string
 		extra      transport.Extra
 		multiplier int // optionally: multiple streams per destination (round-robin a.k.a. `robin`)
+		reopenMu   sync.Mutex
 	}
 
 	Args struct {
@@ -241,6 +242,9 @@ func (sb *Streams) Smap() *meta.Smap { return sb.smap }
 
 // renew stream (or streams) to a given peer in the same Smap "epoch"
 func (sb *Streams) ReopenPeerStream(dstID string) error {
+	sb.reopenMu.Lock()
+	defer sb.reopenMu.Unlock()
+
 	// 1) validate
 	old := sb.get()
 	orobin, ok := old[dstID]
@@ -262,6 +266,7 @@ func (sb *Streams) ReopenPeerStream(dstID string) error {
 		// (unlikely - checked above)
 		return cos.NewErrNotFoundFmt(sb, "destination %q (%s)", dstID, sb.smap.StringEx())
 	}
+
 	dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname)
 
 	// 2) build new `robin` (same multiplier; consider setting nrobin.i)
