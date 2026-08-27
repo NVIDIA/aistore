@@ -8,6 +8,7 @@ package space
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"math"
 	"sort"
@@ -125,7 +126,7 @@ func (*lruFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 
 func (p *lruFactory) Start() error {
 	p.xctn = &XactLRU{p: p}
-	p.xctn.InitBase(p.UUID(), apc.ActLRU, nil)
+	p.xctn.InitBase(context.Background(), p.UUID(), apc.ActLRU, nil)
 	return nil
 }
 

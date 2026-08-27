@@ -8,6 +8,7 @@ package etl
 
 import (
 	"bytes"
+	"context"
 	cryptorand "crypto/rand"
 	"fmt"
 	"io"
@@ -149,7 +150,7 @@ var _ = Describe("CommunicatorTest", func() {
 				}
 				xetl := &XactETL{}
 				xid := cos.GenUUID()
-				xetl.InitBase(xid, apc.ActETLInline, nil)
+				xetl.InitBase(context.Background(), xid, apc.ActETLInline, nil)
 
 				switch msg.CommType() {
 				case Hpush:

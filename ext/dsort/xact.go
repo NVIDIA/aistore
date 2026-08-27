@@ -7,6 +7,7 @@
 package dsort
 
 import (
+	"context"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -42,7 +43,7 @@ func (p *factory) Start() error {
 	args, ok := custom.(*xreg.DsortArgs)
 	debug.Assert(ok)
 	p.xctn = &xaction{args: args}
-	p.xctn.InitBase(p.UUID(), apc.ActDsort, args.BckTo /*compare w/ tcb and tco*/)
+	p.xctn.InitBase(context.Background(), p.UUID(), apc.ActDsort, args.BckTo /*compare w/ tcb and tco*/)
 
 	g.once.Do(func() {
 		hk.Reg(apc.ActDsort+hk.NameSuffix, g.mg.housekeep, hk.DayInterval)

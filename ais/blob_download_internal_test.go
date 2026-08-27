@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestBlobdlTermErr(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			xblob := &xs.XactBlobDl{}
-			xblob.InitBase(cos.GenUUID(), apc.ActBlobDl, nil)
+			xblob.InitBase(context.Background(), cos.GenUUID(), apc.ActBlobDl, nil)
 			if tc.runtimeErr != nil {
 				xblob.AddErr(tc.runtimeErr)
 			}

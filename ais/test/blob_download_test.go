@@ -289,6 +289,82 @@ func TestBlobDownloadRuntimeError(t *testing.T) {
 	tassert.Fatalf(t, !tools.CheckObjIsPresent(m.proxyURL, m.bck, m.objNames[0]), "partial object remains cached")
 }
 
+func TestBlobDownloadParentCancellation(t *testing.T) {
+	const (
+		objSize    = 8 * cos.MiB
+		chunkSize  = 2 * cos.MiB
+		numWorkers = 2
+	)
+	var (
+		bp  = tools.BaseAPIParams()
+		bck = cliBck
+		m   = ioContext{
+			t: t, bck: bck, num: 1, fileSize: objSize, fixedSize: true,
+			prefix: t.Name() + "/" + trand.String(5),
+		}
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, CloudBck: true, Bck: bck})
+	m.init(true /*cleanup*/)
+	initMountpaths(t, bp.URL)
+	m.remotePuts(true /*evict*/)
+	objName := m.objNames[0]
+
+	t.Run("streaming-get", func(t *testing.T) {
+		getArgs := &api.GetArgs{Header: http.Header{
+			apc.HdrBlobDownload: []string{"true"},
+			apc.HdrBlobChunk:    []string{strconv.FormatInt(chunkSize, 10)},
+			apc.HdrBlobWorkers:  []string{strconv.Itoa(numWorkers)},
+		}}
+		body, size, err := api.GetObjectReader(bp, bck, objName, getArgs)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+		xargs := &xact.ArgsMsg{Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+		snaps, err := api.WaitForSnaps(bp, xargs, xargs.Started())
+		tassert.CheckFatal(t, err)
+		tid, snap, err := snaps.RunningTarget("")
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, snap != nil, "expected blob download to be running")
+
+		tassert.CheckFatal(t, body.Close())
+		xargs.ID = snap.ID
+		snaps, err = api.WaitForSnaps(bp, xargs, xargs.Finished())
+		tassert.CheckFatal(t, err)
+		errText := snaps[tid][0].Err
+		// TODO: client disconnect may surface as a transport write error first instead of the expected context cancellation.
+		tassert.Fatalf(t, errText != "", "expected client disconnect to fail the blob download")
+		m.validateChunksOnDisk(bck, objName, 0)
+	})
+
+	t.Run("prefetch", func(t *testing.T) {
+		msg := &apc.PrefetchMsg{
+			ListRange:      apc.ListRange{ObjNames: []string{objName}},
+			BlobThreshold:  cos.MiB,
+			BlobChunkSize:  cmn.ChunkSizeMin,
+			BlobNumWorkers: numWorkers,
+		}
+		prefetchXID, err := api.Prefetch(bp, bck, msg)
+		tassert.CheckFatal(t, err)
+		xargs := &xact.ArgsMsg{Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+		snaps, err := api.WaitForSnaps(bp, xargs, xargs.Started())
+		tassert.CheckFatal(t, err)
+		tid, snap, err := snaps.RunningTarget("")
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, snap != nil, "expected blob download to be running")
+
+		err = api.AbortXaction(bp, &xact.ArgsMsg{ID: prefetchXID, Kind: apc.ActPrefetchObjects})
+		tassert.CheckFatal(t, err)
+		xargs.ID = snap.ID
+		snaps, err = api.WaitForSnaps(bp, xargs, xargs.Finished())
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(snaps[tid]) == 1, "expected blob download %s on %s", xargs.ID, tid)
+		tassert.Fatalf(t, strings.Contains(snaps[tid][0].Err, context.Canceled.Error()),
+			"expected context cancellation, got %q", snaps[tid][0].Err)
+		args := xact.ArgsMsg{ID: prefetchXID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
+		tassert.CheckFatal(t, api.WaitForXaction(bp, &args))
+		m.validateChunksOnDisk(bck, objName, 0)
+	})
+}
+
 func TestBlobDownloadAbortByKind(t *testing.T) {
 	const (
 		objSize    = 32 * cos.MiB

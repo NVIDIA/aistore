@@ -5,6 +5,7 @@
 package space_test
 
 import (
+	"context"
 	"io"
 	"math/rand/v2"
 	"os"
@@ -109,7 +110,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 		// x-cleanup
 		xcln := &space.XactCln{}
-		xcln.InitBase(cos.GenUUID(), apc.ActStoreCleanup, nil)
+		xcln.InitBase(context.Background(), cos.GenUUID(), apc.ActStoreCleanup, nil)
 		ini = &space.IniCln{
 			Xaction: xcln,
 			StatsT:  mock.NewStatsTracker(),

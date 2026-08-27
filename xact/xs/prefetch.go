@@ -134,7 +134,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	if err != nil {
 		return nil, err
 	}
-	r.InitBase(xargs.UUID, kind, bck)
+	r.InitBase(context.Background(), xargs.UUID, kind, bck)
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
 
 	r.bp = core.T.Backend(bck)
@@ -298,7 +298,8 @@ func (r *prefetch) Snap() (snap *core.Snap) {
 func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 	// pass user preferences through; blobFactory.Start tunes them once
 	params := &core.BlobParams{
-		Lom: core.AllocLOM(lom.ObjName),
+		Lom:     core.AllocLOM(lom.ObjName),
+		Context: r.Context(),
 		Msg: &apc.BlobMsg{
 			ChunkSize:  r.msg.BlobChunkSize,
 			NumWorkers: r.msg.BlobNumWorkers,

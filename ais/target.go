@@ -998,6 +998,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 
 		args := &core.BlobParams{
+			Context:       r.Context(),
 			RespWriter:    w, // NOTE: make a blocking call
 			Lom:           lom,
 			Msg:           &msg,

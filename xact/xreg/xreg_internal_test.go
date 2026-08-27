@@ -5,6 +5,8 @@
 package xreg
 
 import (
+	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -18,13 +20,13 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-// minimal Renewable implementation wrapping a mock.XactMock which is never actually
-// renewed via the normal Start/renewLocked path -- entries are inserted
-// directly into the registry to control `e.all` size precisely
+// Minimal Renewable implementation wrapping a mock.XactMock. Most tests insert
+// entries directly into the registry to control `e.all` size precisely.
 type fakeRenewable struct {
 	RenewBase
-	xctn *mock.XactMock
-	kind string
+	xctn     *mock.XactMock
+	kind     string
+	startErr error
 }
 
 func newFakeEntry(kind string) Renewable {
@@ -37,7 +39,26 @@ func (p *fakeRenewable) Get() core.Xact                         { return p.xctn 
 func (*fakeRenewable) WhenPrevIsRunning(Renewable) (WPR, error) { return WprKeepAndStartNew, nil }
 func (p *fakeRenewable) Bucket() *meta.Bck                      { return p.RenewBase.Bck }
 func (p *fakeRenewable) UUID() string                           { return p.xctn.ID() }
-func (*fakeRenewable) Start() error                             { return nil }
+func (p *fakeRenewable) Start() error                           { return p.startErr }
+
+func TestRenewStartFailureCancelsContext(t *testing.T) {
+	TestReset()
+	startErr := errors.New("start failed")
+	entry := newFakeEntry(apc.ActLRU).(*fakeRenewable)
+	entry.startErr = startErr
+	rns := dreg.renew(entry, nil)
+	tassert.Fatalf(t, errors.Is(rns.Err, startErr), "expected %v, got %v", startErr, rns.Err)
+	tassert.Fatalf(t, errors.Is(entry.xctn.Context().Err(), context.Canceled),
+		"expected canceled context, got %v", entry.xctn.Context().Err())
+}
+
+func TestRenewStartFailureWithTypedNilXact(t *testing.T) {
+	TestReset()
+	startErr := errors.New("start failed")
+	entry := &fakeRenewable{kind: apc.ActLRU, startErr: startErr}
+	rns := dreg.renew(entry, nil)
+	tassert.Fatalf(t, errors.Is(rns.Err, startErr), "expected %v, got %v", startErr, rns.Err)
+}
 
 // TestLiveQuietBriefXactQueryableAcrossHistoryCap is a regression test for a bug
 // where a currently-running "quiet, brief" xaction (e.g. get-batch, list-objects
@@ -166,7 +187,7 @@ func TestSameIDDistinctEntries(t *testing.T) {
 	prev.xctn.SetStopping() // done, awaiting hkPruneActive
 
 	next := newFakeEntry(apc.ActGetBatch).(*fakeRenewable)
-	next.xctn.InitBase(uuid, apc.ActGetBatch, nil) // same UUID, live
+	next.xctn.InitBase(context.Background(), uuid, apc.ActGetBatch, nil) // same UUID, live
 
 	dreg.entries.mtx.Lock()
 	dreg.entries._add(prev)
@@ -194,7 +215,7 @@ func TestDelExactEntryPreservesOrder(t *testing.T) {
 
 	middle := newFakeEntry(apc.ActLRU)
 	next := newFakeEntry(apc.ActLRU).(*fakeRenewable)
-	next.xctn.InitBase(uuid, apc.ActLRU, nil) // same UUID, live
+	next.xctn.InitBase(context.Background(), uuid, apc.ActLRU, nil) // same UUID, live
 
 	dreg.entries.mtx.Lock()
 	dreg.entries._add(prev)

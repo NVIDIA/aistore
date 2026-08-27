@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
@@ -120,7 +121,7 @@ func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 	debug.Assert(xreb.Args != nil)
 
 	// init
-	xreb.InitBase(p.Args.UUID, p.Kind(), nil)
+	xreb.InitBase(context.Background(), p.Args.UUID, p.Kind(), nil)
 
 	// ID
 	id, err := xact.S2RebID(p.Args.UUID)
@@ -269,7 +270,7 @@ func (*resFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return 
 
 func newResilver(p *resFactory) (xres *Resilver) {
 	xres = &Resilver{}
-	xres.InitBase(p.UUID(), p.Kind(), nil /*bck*/)
+	xres.InitBase(context.Background(), p.UUID(), p.Kind(), nil /*bck*/)
 
 	xres.Args = p.Args.Custom.(*xreg.ResArgs)
 	debug.Assert(xres.Args != nil)

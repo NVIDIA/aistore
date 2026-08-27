@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"context"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -69,7 +70,7 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.EvdMsg) (*evictDelete, error) {
 	r := &evictDelete{config: cmn.GCO.Get(), msg: msg}
 	if kind == apc.ActEvictRemoteBck {
-		r.InitBase(xargs.UUID, kind, bck)
+		r.InitBase(context.Background(), xargs.UUID, kind, bck)
 		r.Finish()
 		return r, nil
 	}
@@ -81,7 +82,7 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.EvdMs
 	if err := r.lrit.init(r, &msg.ListRange, bck, lsflags, msg.NumWorkers, 0 /*burst*/); err != nil {
 		return nil, err
 	}
-	r.InitBase(xargs.UUID, kind, bck)
+	r.InitBase(context.Background(), xargs.UUID, kind, bck)
 	_ = r.CtlMsg()
 
 	return r, nil

@@ -618,6 +618,8 @@ func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Re
 	return m.extractErrCode(err, remAis.uuid)
 }
 
+// TODO: propagate the supplied context to api.GetObjectReader so blob-download
+// cancellation interrupts active remote-AIS range reads.
 func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		remAis    *remAis

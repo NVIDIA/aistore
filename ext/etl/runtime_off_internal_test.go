@@ -7,6 +7,7 @@
 package etl
 
 import (
+	"context"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -32,7 +33,7 @@ func TestRuntimeOff(t *testing.T) {
 	tassert.Fatalf(t, len(list) == 0, "expected no ETL instances, got %d", len(list))
 
 	xetl = &XactETL{}
-	xetl.InitBase("runtime-off-test", apc.ActETLInline, nil)
+	xetl.InitBase(context.Background(), "runtime-off-test", apc.ActETLInline, nil)
 	tassert.Fatalf(t, xetl.CtlMsg() == "", "expected an empty control message")
 	tassert.Fatalf(t, xetl.Snap() != nil, "expected a valid xaction snapshot")
 	objErr := &ObjErr{ObjName: "object", Message: "failed", Ecode: 500}

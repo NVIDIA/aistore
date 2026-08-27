@@ -7,6 +7,8 @@
 package etl
 
 import (
+	"context"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -59,7 +61,7 @@ func newETL(p *factory) *XactETL {
 			stats.VlabBucket: "",
 		},
 	}
-	xctn.InitBase(p.Args.UUID, p.Kind(), nil)
+	xctn.InitBase(context.Background(), p.Args.UUID, p.Kind(), nil)
 	_ = xctn.CtlMsg()
 	return xctn
 }

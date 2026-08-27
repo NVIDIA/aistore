@@ -7,6 +7,7 @@
 package space
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -240,7 +241,7 @@ func (*clnFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 
 func (p *clnFactory) Start() error {
 	p.xctn = &XactCln{p: p}
-	p.xctn.InitBase(p.UUID(), apc.ActStoreCleanup, nil)
+	p.xctn.InitBase(context.Background(), p.UUID(), apc.ActStoreCleanup, nil)
 	return nil
 }
 

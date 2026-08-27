@@ -18,7 +18,7 @@ import (
 
 func TestBaseContextAbort(t *testing.T) {
 	var base xact.Base
-	base.InitBase(cos.GenUUID(), apc.ActSummaryBck, nil)
+	base.InitBase(context.Background(), cos.GenUUID(), apc.ActSummaryBck, nil)
 
 	abortErr := errors.New("test abort")
 	tassert.Fatalf(t, base.Abort(abortErr), "failed to abort xaction")
@@ -28,10 +28,20 @@ func TestBaseContextAbort(t *testing.T) {
 		"expected abort error %v, got %v", abortErr, base.AbortErr())
 }
 
+func TestBaseContextParent(t *testing.T) {
+	parent, cancel := context.WithCancel(context.Background())
+	var base xact.Base
+	base.InitBase(parent, cos.GenUUID(), apc.ActSummaryBck, nil)
+
+	cancel()
+	tassert.Fatalf(t, errors.Is(base.Context().Err(), context.Canceled),
+		"expected canceled context, got %v", base.Context().Err())
+}
+
 func TestBaseContextFinish(t *testing.T) {
 	xreg.Init()
 	var base xact.Base
-	base.InitBase(cos.GenUUID(), apc.ActSummaryBck, nil)
+	base.InitBase(context.Background(), cos.GenUUID(), apc.ActSummaryBck, nil)
 
 	tassert.Fatalf(t, base.Context().Err() == nil,
 		"expected live context, got %v", base.Context().Err())

@@ -72,13 +72,16 @@ func GoRunW(xctn core.Xact) {
 // Base - partially implements `core.Xact` interface
 //////////////
 
-func (xctn *Base) InitBase(id, kind string, bck *meta.Bck) {
+func (xctn *Base) InitBase(parent context.Context, id, kind string, bck *meta.Bck) {
 	debug.AssertFunc(func() bool { return kind == apc.ActETLInline || IsValidUUID(id) }, id)
 	debug.AssertFunc(func() bool { return IsValidKind(kind) }, kind)
 
 	xctn.id, xctn.kind = id, kind
 
-	xctn.ctx, xctn.cancel = context.WithCancel(context.Background())
+	if parent == nil {
+		parent = context.Background()
+	}
+	xctn.ctx, xctn.cancel = context.WithCancel(parent)
 	xctn.err = cos.NewErrs()
 	xctn.abort.ch = make(chan error, 1)
 	if bck != nil {
@@ -98,8 +101,16 @@ func (xctn *Base) Kind() string { return xctn.kind }
 
 func (xctn *Base) Bck() *meta.Bck { return &xctn.bck }
 
-// Context spans the xaction lifetime and is canceled when it aborts or finishes.
+// Context returns the xaction lifecycle context. It is created during init,
+// canceled if startup fails, and otherwise remains active until finish or abort.
+// The lifecycle is managed internally, but xactions may cancel it earlier when needed
 func (xctn *Base) Context() context.Context { return xctn.ctx }
+
+func (xctn *Base) CancelContext() {
+	if xctn.cancel != nil {
+		xctn.cancel()
+	}
+}
 
 // return true if 'stopping' OR 'finished'
 func (xctn *Base) IsDone() bool { return xctn.eutime.Load() != 0 }

@@ -46,8 +46,9 @@ type (
 	}
 
 	BlobParams struct {
-		Lom *LOM
-		Msg *apc.BlobMsg
+		Lom     *LOM
+		Msg     *apc.BlobMsg
+		Context context.Context // optional; defaults to context.Background()
 
 		BlobThreshold int64 // minimum remote object size (bytes); zero disables threshold selection
 

@@ -5,6 +5,7 @@
 package ec
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -115,7 +116,7 @@ func (r *XactBckEncode) init(uuid string) error {
 	r.wg = &sync.WaitGroup{}
 	r.smap = core.T.Sowner().Get()
 
-	r.InitBase(uuid, apc.ActECEncode, r.bck)
+	r.InitBase(context.Background(), uuid, apc.ActECEncode, r.bck)
 
 	if err := r.bck.Init(core.T.Bowner()); err != nil {
 		return err

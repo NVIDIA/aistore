@@ -5,6 +5,7 @@
 package mock
 
 import (
+	"context"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -30,7 +31,7 @@ func (*XactMock) Run(*sync.WaitGroup) {
 
 func NewXact(kind string) *XactMock {
 	xctn := &XactMock{}
-	xctn.InitBase(cos.GenUUID(), kind, nil)
+	xctn.InitBase(context.Background(), cos.GenUUID(), kind, nil)
 	return xctn
 }
 

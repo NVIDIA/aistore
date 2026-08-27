@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
@@ -88,7 +89,7 @@ func (p *nbiFactory) Start() error {
 	bck := p.Bucket()
 	msg := p.Args.Custom.(*apc.CreateNBIMsg)
 	r := &XactNBI{msg: msg}
-	r.InitBase(p.UUID(), p.Kind(), bck)
+	r.InitBase(context.Background(), p.UUID(), p.Kind(), bck)
 
 	// inv. name for a given bucket
 	invName := r.msg.Name

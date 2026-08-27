@@ -5,6 +5,7 @@
 package xact
 
 import (
+	"context"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -74,7 +75,7 @@ func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duratio
 		r.parentCB = hkcb[0]
 		debug.Assert(r.parentCB != nil)
 	}
-	r.InitBase(uuid, kind, bck)
+	r.InitBase(context.Background(), uuid, kind, bck)
 
 	r.idle.last.Store(mono.NanoTime())
 

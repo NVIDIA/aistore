@@ -82,8 +82,6 @@ type (
 
 	XactBlobDl struct {
 		bp       core.Backend
-		ctx      context.Context
-		cancel   context.CancelFunc
 		pending  blobPending      // map[roff => work item]
 		args     *core.BlobParams // including the resulting LOM and control message (apc.BlobMsg)
 		config   *cmn.Config
@@ -236,11 +234,12 @@ func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *blobFactory) Start() (err error) {
 	// reuse the same args-carrying structure and keep initializing
 	r := p.pre
+	p.xctn = r
 
 	lom := r.args.Lom
 	r.cname = lom.Cname()
 	bck := lom.Bck()
-	r.InitBase(p.Args.UUID, p.Kind(), bck)
+	r.InitBase(r.args.Context, p.Args.UUID, p.Kind(), bck)
 
 	r.bp = core.T.Backend(bck)
 
@@ -322,15 +321,9 @@ func (p *blobFactory) Start() (err error) {
 	}
 
 	r.setChunkReadTimeout()
-	r.ctx, r.cancel = context.WithCancel(context.Background())
 
 	// 7. claim last, after all checks and validations above
-	if err := r.claimMem(&mem, sglCost, bufCost); err != nil {
-		return err
-	}
-
-	p.xctn = r
-	return nil
+	return r.claimMem(&mem, sglCost, bufCost)
 }
 
 func (*blobFactory) Kind() string     { return apc.ActBlobDl }
@@ -379,20 +372,11 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 		err = r.runWorkers()
 	}
 
-	if r.cancel != nil {
-		r.cancel()
-	}
 	r.finalize(err, lom, now)
 }
 
 func (r *XactBlobDl) Abort(err error) bool {
-	if !r.Base.Abort(err) {
-		return false
-	}
-	if r.cancel != nil {
-		r.cancel()
-	}
-	return true
+	return r.Base.Abort(err)
 }
 
 func (r *XactBlobDl) estMemCost() (sglCost, bufCost int64) {
@@ -644,9 +628,8 @@ cleanup:
 		if done != nil {
 			done.cleanup()
 		}
-		if r.cancel != nil {
-			r.cancel()
-		}
+		// Cancel sibling range reads before waiting; Finish cannot run yet.
+		r.CancelContext()
 	}
 
 	close(r.workCh)
@@ -932,7 +915,7 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 	}
 
 	// 2. Get object range reader. The context covers both reader acquisition and response-body copy.
-	parentCtx := w.parent.ctx
+	parentCtx := w.parent.Context()
 	debug.Assert(parentCtx != nil)
 
 	ctx, cancel := context.WithTimeout(parentCtx, w.parent.timeout)

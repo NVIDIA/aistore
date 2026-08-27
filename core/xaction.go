@@ -42,6 +42,7 @@ type (
 	Xact interface {
 		Run(*sync.WaitGroup)
 		Context() context.Context
+		CancelContext()
 		ID() string
 		Kind() string
 		Bck() *meta.Bck
