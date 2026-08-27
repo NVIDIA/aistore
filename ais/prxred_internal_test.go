@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 const (
@@ -64,7 +63,6 @@ func newTestProxy(t *testing.T, requestAuthConfigured bool) *proxy {
 	// mirror node startup order: svs.init -> keypair -> config-driven toggle
 	p.htrun.svs.init()
 
-	// (is false on a v5.0 bridge)
 	p.htrun.toggleSignVerify(cmn.Rom.SignVerifyEnabled())
 
 	return p
@@ -225,9 +223,6 @@ func TestRedurlPlain(t *testing.T) {
 }
 
 func TestRedurlSigned(t *testing.T) {
-	if cmn.IsV50Bridge() {
-		t.Skip("v5.0 bridge disables intra-cluster sign/verify")
-	}
 	tests := []struct {
 		name    string
 		method  string
@@ -271,9 +266,6 @@ func TestRedurlSigned(t *testing.T) {
 }
 
 func TestSignerVerifyRoundTrip(t *testing.T) {
-	if cmn.IsV50Bridge() {
-		t.Skip("v5.0 bridge disables intra-cluster sign/verify")
-	}
 	p, orig, u := makeRedirect(t, true /*signVerifyEnabled*/, http.MethodGet, "/v1/signed-verify", "q=ok", 888)
 
 	if !cmn.Rom.SignVerifyEnabled() {
@@ -296,7 +288,8 @@ func TestSignerVerifyRoundTrip(t *testing.T) {
 }
 
 // reconstruct the verifier from the request's own signed query params
-// (pid, smap-ver, nonce, sig) — so the only variable across cases is the URL itself
+// (pid, smap-ver, nonce, sig) -
+// so the only variable across cases is the URL itself
 func (p *proxy) verify(u *url.URL, orig *http.Request) (int, error) {
 	r := &http.Request{
 		Method:        orig.Method,
@@ -314,31 +307,4 @@ func (p *proxy) verify(u *url.URL, orig *http.Request) (int, error) {
 	psi := smap.GetNode(pid)
 	sv := newVerifier(r, &p.htrun, svgrp)
 	return sv.verify(pid, psi, smap)
-}
-
-func TestRedurlSignVerifyDisabledOnV50Bridge(t *testing.T) {
-	if !cmn.IsV50Bridge() {
-		t.Skip("v5.0 bridge-specific test")
-	}
-
-	_, _, u := makeRedirect(
-		t,
-		true, /* signVerifyEnabled: raw config bit */
-		http.MethodGet,
-		"/v1/objects/ais/bck/obj",
-		"a=1",
-		1, /* smapVer */
-	)
-
-	q := u.Query()
-
-	// Existing redirect params remain.
-	tassert.Fatalf(t, q.Get(apc.QparamPID) == testProxyID, "missing pid: %v", q)
-	tassert.Fatalf(t, q.Get(apc.QparamUnixTime) != "", "missing utm: %v", q)
-	tassert.Fatalf(t, q.Get("a") == "1", "missing preserved query param: %v", q)
-
-	// But v5.0 bridge must not append sign/verify params even when raw config enables it.
-	if q.Get(apc.QparamSmapVer) != "" || q.Get(apc.QparamNonce) != "" || q.Get(apc.QparamSig) != "" {
-		t.Fatalf("v5.0 bridge must not sign redirects, got query: %v", q)
-	}
 }

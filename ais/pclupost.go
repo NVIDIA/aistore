@@ -286,10 +286,6 @@ func (c *clupost) setActionCheckVer() (stop bool) {
 		}
 		p.noteNodeVersion(c.nsi, c.nversStr, c.nversParsed)
 		debug.Assert(c.nsi.VerifyingKey == nil || cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 1}))
-		// v5.0 bridge: do not accept (nor store in Smap) the joining node's verifying key
-		if cmn.IsV50Bridge() {
-			c.nsi.VerifyingKey = nil
-		}
 
 		if c.nsi.IsProxy() {
 			c.action = apc.ActSelfJoinProxy

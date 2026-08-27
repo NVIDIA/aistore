@@ -66,8 +66,6 @@ func (t *target) verifyBckVerb(w http.ResponseWriter, r *http.Request, dpq *dpq)
 		}
 	}
 
-	// no IsV50Bridge exemption here (compare w/ _verifyUnsigned) -
-	// bucket verbs arrive exclusively proxy=>target over intra-control via call()
 	if !reqIsIntraCtrl(r) {
 		t.writeErrf(w, r, "invalid bucket request over intra-data network: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 		return false

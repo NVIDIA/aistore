@@ -474,7 +474,7 @@ func mustDiffer(ip1 meta.NetInfo, port1 int, use1 bool, ip2 meta.NetInfo, port2 
 // - housekeep: memsys; rate-limit-prune
 func (h *htrun) initPhase2(config *cmn.Config) {
 	debug.Assert(g.netServ.control != nil && g.netServ.data != nil && g.netServ.pub != nil) // (phase1 above)
-	if secretPath := config.Auth.NodeJoinSecretPath(); !cmn.IsV50Bridge() && secretPath != "" {
+	if secretPath := config.Auth.NodeJoinSecretPath(); secretPath != "" {
 		var err error
 		if h.joinSecret, err = loadNodeJoinSecret(secretPath); err != nil {
 			cos.ExitLog(err)
@@ -2394,12 +2394,6 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 		return res
 	}
 
-	if cmn.IsV50Bridge() && cm.SI.VerifyingKey != nil {
-		// v5.0 bridge: do not publish this node's verifying key
-		si := *h.si
-		si.VerifyingKey = nil
-		cm.SI = &si
-	}
 	if keepalive {
 		path = apc.URLPathCluKalive.S
 	} else {

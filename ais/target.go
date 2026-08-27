@@ -882,11 +882,6 @@ func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode i
 		return 0, nil // legacy direct read access (GET, HEAD)
 	}
 
-	// intra arrival; v5.0 bridge: 4.x senders don't stamp sender headers
-	if cmn.IsV50Bridge() {
-		return 0, nil
-	}
-
 	// ditto (see above)
 	if ecode, err = t.checkIntra(r, false /*only primary*/, net); err != nil {
 		err = fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err)

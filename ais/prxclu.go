@@ -636,12 +636,10 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 	}
 	if toUpdate.Auth != nil && toUpdate.Auth.IntraCluster != nil {
 		if upd := toUpdate.Auth.IntraCluster.RequestAuth; upd != nil {
-			_warnIntraUpd("auth.intra_cluster.request_auth", config.Auth.IntraRequestAuthConfigured(), *upd,
-				"Ed25519 sign/verify stays inactive on a v5.0 bridge release; proxy mediation takes effect now")
+			_warnIntraUpd("auth.intra_cluster.request_auth", config.Auth.IntraRequestAuthConfigured(), *upd)
 		}
 		if upd := toUpdate.Auth.IntraCluster.NodeJoinSecretPath; upd != nil {
-			_warnIntraUpdVal("auth.intra_cluster.node_join_secret_path", config.Auth.NodeJoinSecretPath(), *upd,
-				"node-join authentication is a no-op on a v5.0 bridge release")
+			_warnIntraUpdVal("auth.intra_cluster.node_join_secret_path", config.Auth.NodeJoinSecretPath(), *upd)
 		}
 	}
 	// 3. Tracing
@@ -733,25 +731,19 @@ func switchHTTPS(toCfg *cmn.ProxyConfToSet, fromCfg *cmn.ProxyConf, use bool) {
 	nlog.Errorln("Warning: _prior_ to restart make sure to remove all copies of cluster maps")
 }
 
-func _warnIntraUpd(knob string, cur, upd bool, v50note string) {
-	if cur || !upd { // only when enabling
-		v50note = ""
-	}
-	_warnIntra(knob, strconv.FormatBool(cur), strconv.FormatBool(upd), v50note)
+func _warnIntraUpd(knob string, cur, upd bool) {
+	_warnIntra(knob, strconv.FormatBool(cur), strconv.FormatBool(upd))
 }
 
-func _warnIntraUpdVal(knob, cur, upd, v50note string) {
-	_warnIntra(knob, "'"+cur+"'", "'"+upd+"'", v50note)
+func _warnIntraUpdVal(knob, cur, upd string) {
+	_warnIntra(knob, "'"+cur+"'", "'"+upd+"'")
 }
 
-func _warnIntra(knob, cur, upd, v50note string) {
+func _warnIntra(knob, cur, upd string) {
 	if cur == upd {
 		return
 	}
 	_warnUpd(knob, cur, upd)
-	if v50note != "" && cmn.IsV50Bridge() {
-		nlog.Warningln(knob + ": " + v50note)
-	}
 }
 
 func _warnUpd(what, from, to string) {

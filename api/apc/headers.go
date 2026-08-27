@@ -113,9 +113,6 @@ const (
 	HdrSenderIsPrimary = aisPrefix + "Caller-Is-Primary"
 	HdrSenderSmapVer   = aisPrefix + "Caller-Smap-Ver"
 
-	// TODO: remove in v5.1
-	HdrT2TPutterID = aisPrefix + "Putter-Id"
-
 	HdrXactionID = aisPrefix + "Xaction-Id"
 
 	// intra-cluster streams

@@ -29,9 +29,6 @@ import (
 // via redirect query parameters or control-plane headers. The canonical payload
 // additionally covers the HTTP method, path, and content length.
 //
-// The v5.0 bridge disables sign/verify during rolling upgrades from 4.x;
-// v5.1 will enable this implementation.
-//
 // TODO:
 // - add canonical query/body coverage
 // - enforce startup ordering: restarted node must not originate signed traffic before its new Smap entry gets propagated
@@ -102,7 +99,7 @@ func (svs *svState) set(on bool) {
 }
 
 func (svs *svState) sign() bool {
-	on := cmn.Rom.SignVerifyEnabled() // false on a v5.0 bridge (see cmn.signVerifyEnabled)
+	on := cmn.Rom.SignVerifyEnabled()
 	cur := svs.cur.Load()
 
 	// A note on stateful (config <=> htrun.svs) redundancy:
@@ -383,8 +380,8 @@ func (t *target) streamVerify(trname string, sessID int64, senderID string, r *h
 	smap := t.owner.smap.get()
 	debug.Assert(smap.isValid())
 
-	// Sender identity and cluster membership are required even while unsigned
-	// traffic remains permitted during bridge/grace operation.
+	// sender identity and cluster membership are required even while unsigned
+	// traffic remains permitted
 	snode := smap.GetNode(senderID)
 	if snode == nil {
 		return fmt.Errorf(fmtNodeNotPresent, senderID, smap)

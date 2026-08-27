@@ -399,7 +399,7 @@ const (
 	maxCustomLen = 128
 )
 
-// TODO: remove in 5.1
+// TODO: remove in 5.2 or later
 // [backward compatibility] provider extras removed with HDFS (v4.3) and HTTP (v5.0)
 func (c *ExtraProps) UnmarshalJSON(data []byte) error {
 	type Alias ExtraProps // not to recurs

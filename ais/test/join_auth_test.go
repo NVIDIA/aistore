@@ -56,9 +56,6 @@ func writeNodeJoinSecret(t *testing.T, secretPath, secret string) {
 }
 
 func TestSelfJoinSecret(t *testing.T) {
-	if cmn.IsV50Bridge() {
-		t.Skip("node-join authentication is staged but inactive in v5.0")
-	}
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 
 	var (

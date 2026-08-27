@@ -48,11 +48,8 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 
 	rom.clientAuthRequired = cfg.Auth.ClientAuthRequired
 
-	// NOTE:
-	// - the v5.0 bridge gate lives inside signVerifyEnabled()
-	// - callers of Rom.SignVerifyEnabled() must not re-check IsV50Bridge()
 	prev := rom.signVerifyEnabled
-	rom.signVerifyEnabled = cfg.Auth.signVerifyEnabled()
+	rom.signVerifyEnabled = cfg.Auth.IntraRequestAuthConfigured()
 	if cur := rom.signVerifyEnabled; cur != prev && onSignVerifyToggle != nil {
 		onSignVerifyToggle(cur)
 	}

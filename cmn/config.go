@@ -1397,7 +1397,7 @@ func (c *Config) TestingEnv() bool {
 
 // [backward compatibility] translate pre-5.0 dotted names
 // (see also: the 4 UnmarshalJSON methods under "AuthConf" below)
-// TODO: remove in 5.1
+// TODO: remove in 5.2 or later
 func _fromLegacyConfName(name string) string {
 	const (
 		oldPrefix = "auth.cluster_key."
@@ -1656,7 +1656,7 @@ func (c *BackendConf) Validate() (err error) {
 		case apc.AWS, apc.Azure, apc.GCP, apc.OCI:
 			c.setProvider(provider)
 		case "ht":
-			// TODO: remove in 5.1
+			// TODO: remove in 5.2 or later
 			delete(c.Conf, provider)
 			delete(c.Providers, provider)
 		default:
@@ -2454,7 +2454,7 @@ func (c *FSHCConf) Validate() error {
 // * IntraClusterConf.UnmarshalJSON
 // * IntraClusterConfToSet.UnmarshalJSON (ditto)
 // See related: _fromLegacyConfName()
-// TODO: remove in 5.1
+// TODO: remove in 5.2 or later
 
 func (c *AuthConf) UnmarshalJSON(b []byte) error {
 	type alias AuthConf
@@ -2564,22 +2564,8 @@ func (c *AuthConf) CopyTo(dst *AuthConf) {
 	}
 }
 
-// v5.0 is the bridge release between the v4.x symmetric CSK/HMAC mechanism and
-// v5.1+ per-node Ed25519 signing and node-join security.
-
-// TODO: [backward compatibility] remove in 5.1, along with all call sites
-func IsV50Bridge() bool { return strings.HasPrefix(VersionAIStore, "5.0") }
-
-// Two predicates, two distinct questions. Do not conflate:
-//   - IntraRequestAuthConfigured: what the operator asked for (raw config bit)
-//   - signVerifyEnabled:          what this binary will actually do
-
 func (c *AuthConf) IntraRequestAuthConfigured() bool {
 	return c.IntraCluster != nil && c.IntraCluster.RequestAuth
-}
-
-func (c *AuthConf) signVerifyEnabled() bool {
-	return c.IntraRequestAuthConfigured() && !IsV50Bridge()
 }
 
 // "" implies node-join authentication is not configured; the path is local to
@@ -3647,12 +3633,6 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	debug.Assert(onSignVerifyToggle == nil, "startup sequence: must not trigger runtime sign/verify hook")
 	Rom.Set(&config.ClusterConfig)
 	Rom.testingEnv = config.TestingEnv()
-
-	// operator messaging (see IsV50Bridge)
-	if IsV50Bridge() && config.Auth.IntraRequestAuthConfigured() {
-		debug.Assert(!Rom.SignVerifyEnabled())
-		nlog.Warningln("auth.intra_cluster.request_auth: configured but disabled in v5.0 bridge")
-	}
 
 	// create dirs
 	if err := cos.CreateDir(config.LogDir); err != nil {
