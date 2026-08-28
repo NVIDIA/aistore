@@ -1004,9 +1004,12 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			Lom:           lom,
 			Msg:           &msg,
 			BlobThreshold: threshold,
-			Parent:        "GET",
+			Parent:        xs.BlobParentGET,
 		}
 		xid, _, err := t.blobdl(args, nil /*oa*/, w.Header())
+		if xs.IsErrBlobDlAdmission(err) {
+			err = cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+		}
 		if err != nil && xid != "" {
 			// (for the same reason as cmn.ErrGetTxBenign)
 			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
@@ -1364,7 +1367,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		args := &core.BlobParams{
 			Lom:    lom, // eventually freed by x-blob
 			Msg:    &blobMsg,
-			Parent: "api-blobdl", // directly via the dedicated object API
+			Parent: xs.BlobParentAPI, // directly via the dedicated object API
 		}
 		if xid, _, err = t.blobdl(args, nil /*oa*/, nil /*object headers*/); xid != "" {
 			debug.AssertNoErr(err)
@@ -1966,9 +1969,7 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Hea
 		if params.BlobThreshold > 0 && oa.Size < params.BlobThreshold {
 			return "", nil, nil
 		}
-		// write HTTP headers before starting blob download
-		cmn.ToHeader(oa, whdr, oa.Size)
-		return t._blobdl(params, oa)
+		return t._blobdl(params, oa, whdr)
 	}
 
 	// - try-lock (above) to load, check availability
@@ -2008,14 +2009,12 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Hea
 		// below threshold, not qualified for blob-download
 		return "", nil, nil
 	}
-	// write HTTP headers before starting blob download
-	cmn.ToHeader(oa, whdr, oa.Size)
 	// handle: (not-present || latest-not-eq)
-	return t._blobdl(params, oa)
+	return t._blobdl(params, oa, whdr)
 }
 
 // returns an empty xid ("") if nothing to do
-func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
+func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Header) (string, *xs.XactBlobDl, error) {
 	xid := cos.GenUUID()
 	rns := xs.RenewBlobDl(xid, params, oa)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
@@ -2034,6 +2033,9 @@ func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs
 		return xblob.ID(), xblob, nil
 	}
 	// b) via GET (blocking w/ simultaneous transmission)
+	debug.Func(func() { debug.Assert(whdr != nil) })
+	// Admission succeeded: object size is known and can now be published in response headers.
+	cmn.ToHeader(oa, whdr, oa.Size)
 	xblob.Run(nil)
 	return xblob.ID(), nil, xblob.AbortErr()
 }

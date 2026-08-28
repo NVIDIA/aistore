@@ -7,6 +7,7 @@ package xs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,11 +41,18 @@ import (
 // 4. track each chunk reader with 'started' timestamp; abort/retry individual chunks; timeout
 // 5. validate `expCksum`
 
+const (
+	BlobParentGET      = "GET"
+	BlobParentAPI      = "api-blobdl"
+	BlobParentXStart   = "x-start"
+	BlobParentPrefetch = "prefetch"
+)
+
 // default tunables (can override via apc.BlobMsg)
 const (
 	dfltChunkSize = 4 * cos.MiB
-	minChunkSize  = memsys.DefaultBufSize // 32KiB
-	maxChunkSize  = 16 * cos.MiB
+	minChunkSize  = memsys.DefaultBufSize // ~312MiB maximum object size
+	maxChunkSize  = 64 * cos.MiB          // ~625GiB maximum object size; up to 2GiB streaming SGLs
 
 	dfltChunkReadTimeout = time.Minute // default for apc.BlobMsg.ChunkReadTimeout
 
@@ -138,6 +146,11 @@ var (
 	_ xreg.Renewable = (*blobFactory)(nil)
 )
 
+var errBlobDlAdmission = errors.New("blob download admission rejected")
+
+// IsErrBlobDlAdmission reports whether blob download was rejected before starting.
+func IsErrBlobDlAdmission(err error) bool { return errors.Is(err, errBlobDlAdmission) }
+
 // Blob Download Flow =================================================================
 //
 // Main goroutine coordinates reusable blobWI instances over workCh/doneCh.
@@ -226,31 +239,48 @@ func (p *blobFactory) Start() (err error) {
 		errBlob: bdMetric{stats.ErrGetBlobCount, vlabs},
 	}
 
-	// Admission check: assess load to determine if we can start
 	r.config = cmn.GCO.Get()
 	r.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{
 		Cfg: r.config.Disk,
 		RW:  true, // data I/O operation
 	})
 
-	if r.adv.MemLoad() == load.Critical {
-		err := fmt.Errorf("%s: rejected due to resource pressure (%s) - not starting", r.Name(), r.adv.String())
-		return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+	// 1. adjust chunk size and apply default
+	r.setChunkSize()
+
+	// 2. reject objects that cannot fit in a manifest
+	if numChunks := cos.DivCeil(r.fullSize, r.chunkSize); numChunks > core.MaxChunkCount {
+		return fmt.Errorf("%s: size %s with chunk size %s requires %d chunks, exceeds maximum %d",
+			r.Name(), cos.IEC(r.fullSize, 0), cos.IEC(r.chunkSize, 0), numChunks, core.MaxChunkCount)
 	}
+
+	// 3. adjust num-workers parallelism (nwp)
+	l := fs.NumAvail()
+	numWorkers, err := TuneBlobDlWorkers(r.Name(), r.numWorkers, l, r.fullSize)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errBlobDlAdmission, err)
+	}
+	r.numWorkers = numWorkers
+
+	// 4. memory pressure admission
+	memLoad := r.adv.MemLoad()
+	if memLoad == load.High {
+		sglCost, bufCost := r.estMemCost()
+		if r.args.RespWriter != nil {
+			return fmt.Errorf("%w: %s: streaming downloads rejected under %s memory pressure (estimated SGL/copy-buffer cost: %s/%s)",
+				errBlobDlAdmission, r.Name(), load.Text[memLoad], cos.IEC(sglCost, 0), cos.IEC(bufCost, 0))
+		}
+		nlog.Warningf("%s: proceeding background downloads under %s memory pressure (estimated copy-buffer cost: %s)",
+			r.Name(), load.Text[memLoad], cos.IEC(bufCost, 0))
+		debug.Func(func() { debug.Assert(sglCost == 0) }) // background downloads do not buffer object data in SGLs
+	}
+
+	// 5. sleep if advised
 	if r.adv.Sleep > 0 {
 		time.Sleep(r.adv.Sleep)
 	}
 
-	// num-workers parallelism (nwp)
-	l := fs.NumAvail()
-	numWorkers, err := TuneBlobDlWorkers(r.Name(), r.numWorkers, l, r.fullSize)
-	if err != nil {
-		return err
-	}
-	r.numWorkers = numWorkers
-
-	r.setChunkSize()
-
+	// 6. start downloading
 	// Generate uploadID and initialize manifest
 	r.uploadID = cos.GenUUID()
 	r.manifest, err = core.NewUfest(r.uploadID, lom, false /*must-exist*/)
@@ -336,27 +366,28 @@ func (r *XactBlobDl) Abort(err error) bool {
 	return true
 }
 
-// setChunkSize determines the effective chunk size based on memory pressure
-// and user preference.
+func (r *XactBlobDl) estMemCost() (sglCost, bufCost int64) {
+	n := int64(max(1, r.numWorkers))
+	bufCost = n * memsys.DefaultBufSize
+	if r.args.RespWriter != nil {
+		sglCost = n * r.chunkSize
+	}
+	debug.Func(func() { debug.Assert(r.args.RespWriter != nil || sglCost == 0) })
+	return
+}
+
+// setChunkSize applies the default and clamps the requested size to supported bounds.
+// Start validates manifest fit and memory-pressure admission for the effective size.
 func (r *XactBlobDl) setChunkSize() {
-	switch r.adv.MemLoad() {
-	case load.Critical:
+	switch {
+	case r.chunkSize == 0:
+		r.chunkSize = dfltChunkSize
+	case r.chunkSize < minChunkSize:
+		nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "is below permitted minimum", cos.IEC(minChunkSize, 0))
 		r.chunkSize = minChunkSize
-		nlog.Warningf("%s: critical memory load, using minimum chunk size: %s", r.Name(), cos.IEC(r.chunkSize, 0))
-	case load.High:
-		r.chunkSize = 2 * minChunkSize
-		nlog.Warningf("%s: high memory load, reducing chunk size to %s", r.Name(), cos.IEC(r.chunkSize, 0))
-	default:
-		switch {
-		case r.chunkSize == 0:
-			r.chunkSize = dfltChunkSize
-		case r.chunkSize < minChunkSize:
-			nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "is below permitted minimum", cos.IEC(minChunkSize, 0))
-			r.chunkSize = minChunkSize
-		case r.chunkSize > maxChunkSize:
-			nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "exceeds permitted maximum", cos.IEC(maxChunkSize, 0))
-			r.chunkSize = maxChunkSize
-		}
+	case r.chunkSize > maxChunkSize:
+		nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "exceeds permitted maximum", cos.IEC(maxChunkSize, 0))
+		r.chunkSize = maxChunkSize
 	}
 }
 
@@ -367,7 +398,7 @@ func (r *XactBlobDl) runSerial() error {
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infof("running serial download: %s, chunk size: %s", r.Name(), cos.IEC(r.chunkSize, 0))
 	}
-	buf, slab := core.T.PageMM().AllocSize(r.chunkSize)
+	buf, slab := core.T.PageMM().AllocSize(memsys.DefaultBufSize)
 	defer slab.Free(buf)
 
 	var (
@@ -381,6 +412,7 @@ func (r *XactBlobDl) runSerial() error {
 		debug.IncCounter(wi.name)
 		wi.sgl = core.T.PageMM().NewSGL(r.chunkSize)
 	}
+	debug.Func(func() { debug.Assert(r.args.RespWriter != nil || wi.sgl == nil) })
 
 	for r.nextRoff < r.fullSize {
 		if r.IsAborted() {
@@ -524,6 +556,7 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 
 		r.ObjsAdd(1, 0)
 	} else {
+		r.AddErr(err)
 		r._errStats()
 
 		// cleanup the manifest for both user abort and runtime error abort
@@ -575,12 +608,14 @@ func (r *XactBlobDl) startWorkers() {
 			wi.sgl = core.T.PageMM().NewSGL(r.chunkSize)
 			debug.IncCounter(wi.name)
 		}
+		debug.Func(func() { debug.Assert(r.args.RespWriter != nil || wi.sgl == nil) })
 		r.workCh <- wi
 		r.nextRoff += r.chunkSize
 	}
 }
 
 func (r *XactBlobDl) scheduleNextChunk(wi *blobWI) {
+	debug.Func(func() { debug.Assert(r.args.RespWriter != nil || wi.sgl == nil) })
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln("scheduling next chunk:", wi.name, r.nextRoff, r.fullSize)
 	}
@@ -594,6 +629,7 @@ func (r *XactBlobDl) scheduleNextChunk(wi *blobWI) {
 }
 
 func (r *XactBlobDl) write(sgl *memsys.SGL, size int64) (err error) {
+	debug.Func(func() { debug.Assert(r.args.RespWriter != nil || sgl == nil) })
 	r.woff += size
 
 	// Write to RespWriter (streaming GET)
@@ -638,10 +674,11 @@ func (r *XactBlobDl) drainPendingChunks() error {
 }
 
 func (r *XactBlobDl) cleanup() {
-	_drainWich(r.workCh)
-	_drainWich(r.doneCh)
+	r.drainWich(r.workCh)
+	r.drainWich(r.doneCh)
 
 	for roff := range r.pending {
+		debug.Func(func() { debug.Assert(r.args.RespWriter != nil || r.pending[roff].sgl == nil) })
 		r.pending[roff].cleanup()
 	}
 
@@ -654,13 +691,14 @@ func (r *XactBlobDl) cleanup() {
 	})
 }
 
-func _drainWich(ch chan *blobWI) {
+func (r *XactBlobDl) drainWich(ch chan *blobWI) {
 	for {
 		select {
 		case wi, ok := <-ch:
 			if !ok {
 				return
 			}
+			debug.Func(func() { debug.Assert(r.args.RespWriter != nil || wi.sgl == nil) })
 			wi.cleanup()
 		default:
 			return
@@ -742,12 +780,13 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		manifest   = w.parent.manifest
 		respWriter = w.parent.args.RespWriter
 	)
+	debug.Func(func() { debug.Assert(w.parent.args.RespWriter != nil || wi.sgl == nil) })
 
 	partNum := wi.roff/chunkSize + 1
 
 	// 1. Throttle under high disk pressure; reject under critical resource pressure.
 	if err := w.throttle(); err != nil {
-		return http.StatusTooManyRequests, err
+		return 0, err
 	}
 
 	// 2. Get object range reader. The context covers both reader acquisition and response-body copy.
@@ -834,8 +873,7 @@ func (w *blobWorker) throttle() error {
 	dskLoad := w.adv.DskLoad()
 
 	if memLoad == load.Critical || (dskLoad == load.Critical && !cmn.Rom.TestingEnv()) {
-		err := fmt.Errorf("%s: rejected due to resource pressure (%s)", w.parent.Name(), w.adv.String())
-		return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+		return fmt.Errorf("%s: resource pressure (%s)", w.parent.Name(), w.adv.String())
 	}
 
 	// Note: disk load checks utilization across all mountpaths.
@@ -848,7 +886,6 @@ func (w *blobWorker) throttle() error {
 
 func (w *blobWorker) run() {
 	var (
-		chunkSize      = w.parent.chunkSize
 		workCh, doneCh = w.parent.workCh, w.parent.doneCh
 		err            error
 		ecode          int
@@ -856,8 +893,7 @@ func (w *blobWorker) run() {
 
 	defer w.parent.wg.Done()
 
-	// Allocate buffer for copying
-	buf, slab := core.T.PageMM().AllocSize(chunkSize)
+	buf, slab := core.T.PageMM().AllocSize(memsys.DefaultBufSize)
 	defer slab.Free(buf)
 
 loop:
@@ -869,6 +905,7 @@ loop:
 			}
 
 			ecode, err = w.do(wi, buf)
+			debug.Func(func() { debug.Assert(w.parent.args.RespWriter != nil || wi.sgl == nil) })
 
 			wi.err, wi.code = err, ecode
 			doneCh <- wi

@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -43,7 +44,7 @@ type (
 	pebl struct {
 		parent  *prefetch
 		pending []core.Xact
-		load    atomic.Int64
+		cpuLoad atomic.Int64
 		n       atomic.Int32
 		mu      sync.Mutex
 	}
@@ -54,7 +55,7 @@ type (
 		// pending
 		blobN    atomic.Int64 // blob-downloader children accepted/spawned
 		blobSize atomic.Int64 // bytes --/--
-		blobRej  atomic.Int64 // // blob-downloader admission rejects (TooManyRequests)
+		blobRej  atomic.Int64 // blob-start errors with cold-GET fallback
 		// pending
 		peblSize atomic.Int64 // sum of oa.Size for currently pending blob-downloader children
 	}
@@ -302,25 +303,20 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 			ChunkSize:  r.msg.BlobChunkSize,
 			NumWorkers: r.msg.BlobNumWorkers,
 		},
-		Parent: xact.Cname("prefetch", r.ID()),
+		Parent: xact.Cname(BlobParentPrefetch, r.ID()),
 	}
 	if err := params.Lom.InitBck(lom.Bck()); err != nil {
 		return 0, err
 	}
 	xctn, err := core.T.GetColdBlob(params, oa)
+	if err != nil {
+		// No range request has started; 429 here would be an internal protocol leak.
+		debug.Func(func() { debug.Assert(!cmn.IsErrTooManyRequests(err)) })
 
-	// error handling
-	switch {
-	case err == nil:
-		// do nothing
-	case cmn.IsErrTooManyRequests(err):
-		// fall back to regular cold GET if blob download is rejected due to resource pressure
 		r.stats.blobRej.Inc()
 		r.blobRejStats()
-		nlog.Warningln(r.Name(), ": blob download rejected due to resource pressure, falling back to regular cold GET, error: ", err)
+		nlog.Warningln(r.Name(), ": blob download failed to start, falling back to regular cold GET: ", err)
 		return r.getCold(lom)
-	default:
-		return 0, err
 	}
 
 	// account for the spawn
@@ -400,11 +396,11 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 
 	pebl.mu.Unlock()
 
-	load, isExtreme := sys.CPU(false /*periodic*/)
+	cpuLoad, isExtreme := sys.CPU(false /*periodic*/)
 	if isExtreme {
-		load = 100
+		cpuLoad = 100
 	}
-	pebl.load.Store(load) // pebl.busy()
+	pebl.cpuLoad.Store(cpuLoad) // pebl.busy()
 
 	if xblob == nil {
 		return
@@ -474,7 +470,7 @@ func (pebl *pebl) abort(err error) {
 func (pebl *pebl) num() int32 { return pebl.n.Load() }
 
 func (pebl *pebl) busy() bool {
-	return pebl.n.Load() > maxPebls || pebl.load.Load() >= sys.HighLoadWM()
+	return pebl.n.Load() > maxPebls || pebl.cpuLoad.Load() >= sys.HighLoadWM() || load.Mem() == load.Critical
 }
 
 func (pebl *pebl) str() string {

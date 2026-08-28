@@ -55,10 +55,13 @@ type (
 		// (e.g.: prefetch[abcdef], GET, api-blobdl, and x-start)
 		Parent string
 
-		// When `RespWriter` is set, `XactBlobDl` not only downloads chunks into the cluster,
-		// but also stitches them together and sequentially writes to `RespWriter`.
-		// This makes the blob downloading job synchronous and blocking until all chunks are written.
-		// Only set this if you need to simultaneously download and write to the response writer (e.g., for streaming blob GET).
+		// RespWriter selects one of two modes:
+		//   - nil: background/cache-only download; no object-data SGL is allocated;
+		//   - non-nil: synchronous streaming; each active worker owns one reusable,
+		//     chunk-sized object-data SGL (one SGL in serial mode).
+		// High memory pressure rejects streaming mode; critical pressure rejects both modes.
+		// Client-facing streaming admission failures return ErrTooManyRequests (HTTP 429)
+		// before the xaction starts or writes a response; background failures remain ordinary errors.
 		RespWriter io.Writer
 	}
 

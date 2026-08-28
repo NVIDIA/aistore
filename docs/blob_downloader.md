@@ -13,6 +13,8 @@ The result is that, beyond a certain object size, blob downloader can deliver **
 
 Blob downloader is also **load‑aware**: it consults AIStore's internal load advisors to avoid overcommitting memory or disks, backing off when the node is under pressure and running at full speed when the system has headroom.
 
+At critical memory pressure, prefetch uses regular cold GET instead of starting blob downloader. If blob downloader otherwise fails to start, prefetch falls back to regular cold GET for any returned error. A client-facing streaming admission rejected for resource pressure returns HTTP 429 before object headers or body are written; pressure detected after a job starts is reported as an xaction error.
+
 For a deeper dive into the internals and detailed benchmarks, see the [blog post](https://aistore.nvidia.com/blog/2025/11/26/blob-downloader).
 
 ---
