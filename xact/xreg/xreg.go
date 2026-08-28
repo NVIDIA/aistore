@@ -422,14 +422,37 @@ func (args *abortArgs) do(entry Renewable) bool {
 }
 
 func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.Snap {
-	matchingEntries := make([]Renewable, 0, 20)
+	var (
+		matchingEntries = make([]Renewable, 0, 20)
+		seen            = make(cos.StrSet, cap(matchingEntries))
+	)
 	r.entries.forEach(func(entry Renewable) bool {
 		if !match(entry.Get()) {
 			return true
 		}
 		matchingEntries = append(matchingEntries, entry)
+		seen.Set(entry.Get().ID())
 		return true
 	})
+
+	// `e.all` can silently omit a currently-running "quiet, brief" xaction
+	r.entries.mtx.RLock()
+	for _, entry := range r.entries.active {
+		xctn := entry.Get()
+		if xctn == nil || !xact.Table[xctn.Kind()].QuietBrief {
+			continue
+		}
+		if !match(xctn) {
+			continue
+		}
+		if _, ok := seen[xctn.ID()]; ok {
+			continue
+		}
+		matchingEntries = append(matchingEntries, entry)
+		seen.Set(xctn.ID())
+	}
+	r.entries.mtx.RUnlock()
+
 	// TODO: we cannot do this inside `forEach` because - nested locks
 	sts := make([]*core.Snap, 0, len(matchingEntries))
 	for _, entry := range matchingEntries {
