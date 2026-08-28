@@ -421,16 +421,9 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 		nlog.Infof("%s (multihome) access: %v and %v", cmn.NetPublic, pubAddr, h.si.PubExtra)
 	}
 
-	var (
-		ctlbuf int
-		tcpbuf = config.Net.L4.SndRcvBufSize
-	)
-	if h.si.IsProxy() {
-		tcpbuf = 0
-	} else {
-		if tcpbuf == 0 {
-			tcpbuf = cmn.DefaultSndRcvBufferSize // ditto: targets use AIS default when not configured
-		}
+	var ctlbuf, tcpbuf int
+	if !h.si.IsProxy() { // proxies retain OS defaults, regardless of L4 config
+		tcpbuf = config.Net.L4.BufSize()
 		if !config.HostNet.UseIntraData {
 			// collapsed mode: apply target data socket buffer sizing to the shared listener
 			ctlbuf = tcpbuf

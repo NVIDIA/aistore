@@ -415,6 +415,33 @@ func TestHTTPConfValidateTLS(t *testing.T) {
 	}
 }
 
+func TestL4ConfBufSize(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int
+		want    int
+		wantErr bool
+	}{
+		{name: "OS autotuning", size: cmn.SndRcvBufAuto},
+		{name: "AIS default", want: cmn.DefaultSndRcvBufferSize},
+		{name: "explicit", size: 64 * cos.MiB, want: 64 * cos.MiB},
+		{name: "invalid negative", size: -2, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf := cmn.NetConf{L4: cmn.L4Conf{Proto: "tcp", SndRcvBufSize: tt.size}}
+			err := conf.Validate()
+			if tt.wantErr {
+				tassert.Fatalf(t, err != nil, "expected error, got nil; size=%d", tt.size)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			got := conf.L4.BufSize()
+			tassert.Errorf(t, got == tt.want, "BufSize: got %d, expected %d", got, tt.want)
+		})
+	}
+}
+
 func TestTLSConfValidate(t *testing.T) {
 	const (
 		crt = "crt.pem"

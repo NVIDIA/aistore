@@ -83,21 +83,8 @@ func (args *TransportArgs) setSockSndRcvToS(_, _ string, c syscall.RawConn) erro
 }
 
 func (args *TransportArgs) _sndrcvtos(fd uintptr) {
-	err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, args.SndRcvBufSize)
-	_croak(err)
-
-	err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, args.SndRcvBufSize)
-	_croak(err)
-
-	if args.PreferIPv6 {
-		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, lowDelayToS)
-		if err == nil {
-			return
-		}
-		// dual-stack dialer (ditto)
-	}
-	err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
-	_croak(err)
+	args._sndrcv(fd)
+	args._tos(fd)
 }
 
 func _croak(err error) {

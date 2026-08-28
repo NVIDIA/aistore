@@ -686,7 +686,7 @@ type (
 	// Applies to both IPv4 and IPv6.
 	L4Conf struct {
 		Proto         string `json:"proto"`           // tcp, udp
-		SndRcvBufSize int    `json:"sndrcv_buf_size"` // SO_RCVBUF and SO_SNDBUF
+		SndRcvBufSize int    `json:"sndrcv_buf_size"` // SO_RCVBUF and SO_SNDBUF; see BufSize
 	}
 
 	// TLSConf contains TLS-specific config options.
@@ -2286,9 +2286,27 @@ func (c *KeepaliveTrackerConf) validate(tag string) error {
 // NetConf and NetConf.HTTPConf
 /////////////
 
+const SndRcvBufAuto = -1
+
+// kernel connection buffer sizing (via setsockopt)
+func (c *L4Conf) BufSize() int {
+	switch c.SndRcvBufSize {
+	case SndRcvBufAuto:
+		return 0 // kernel auto-tuning
+	case 0:
+		return DefaultSndRcvBufferSize // 128K
+	default:
+		return c.SndRcvBufSize
+	}
+}
+
 func (c *NetConf) Validate() (err error) {
 	if c.L4.Proto != "tcp" {
-		return fmt.Errorf("l4 proto %q is not recognized (expecting %s)", c.L4.Proto, "tcp")
+		return fmt.Errorf("l4.proto %q is not recognized (expecting %s)", c.L4.Proto, "tcp")
+	}
+	if size := c.L4.SndRcvBufSize; size < SndRcvBufAuto {
+		return fmt.Errorf("invalid l4.sndrcv_buf_size %d (expecting %d for OS defaults and autotuning, 0 for AIS default, or a positive size)",
+			size, SndRcvBufAuto)
 	}
 	c.HTTP.Proto = "http" // not validating: read-only, and can take only two values
 	if c.HTTP.UseHTTPS {

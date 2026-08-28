@@ -31,7 +31,7 @@ func NewIntraDataClient() (client *http.Client) {
 
 	// (compare with cmn/client.go)
 	cargs := cmn.TransportArgs{
-		SndRcvBufSize:   cos.NonZero(config.Net.L4.SndRcvBufSize, int(cmn.DefaultSndRcvBufferSize)),
+		SndRcvBufSize:   config.Net.L4.BufSize(),
 		WriteBufferSize: cos.NonZero(httcfg.WriteBufferSize, int(cmn.DefaultWriteBufferSize)),
 		ReadBufferSize:  cos.NonZero(httcfg.ReadBufferSize, int(cmn.DefaultReadBufferSize)),
 		IdleConnTimeout: cmn.DfltMaxIdleTimeout,
