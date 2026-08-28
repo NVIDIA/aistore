@@ -251,7 +251,7 @@ func setCluConfigHandler(c *cli.Context) error {
 	// assorted named fields that require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired[:]); name != "" {
-		actionWarnf(c, "cluster restart required for the change '%s=%s' to take effect.", name, nvs[name])
+		actionWarnf(c, "cluster restart required for the change '%s=%s' to take effect.\n", name, nvs[name])
 	}
 	if err := api.SetClusterConfig(apiBP, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return V(err)

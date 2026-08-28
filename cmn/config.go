@@ -661,7 +661,7 @@ type (
 	// Note: restart required for changes (see ConfigRestartRequired)
 	// ref: docs/networking.md
 	NetConf struct {
-		// layer 4 (read-only)
+		// layer 4
 		L4 L4Conf `json:"l4"`
 
 		HTTP HTTPConf `json:"http"`
@@ -677,16 +677,19 @@ type (
 		UseIPv6 bool `json:"use_ipv6"`
 	}
 	NetConfToSet struct {
+		L4      *L4ConfToSet   `json:"l4,omitempty"`
 		HTTP    *HTTPConfToSet `json:"http,omitempty"`
 		UseIPv6 *bool          `json:"use_ipv6,omitempty"`
 	}
 
 	// L4Conf: transport layer (level 4 in ISO/OSI) configuration.
-	// Read-only.
 	// Applies to both IPv4 and IPv6.
 	L4Conf struct {
-		Proto         string `json:"proto"`           // tcp, udp
-		SndRcvBufSize int    `json:"sndrcv_buf_size"` // SO_RCVBUF and SO_SNDBUF; see BufSize
+		Proto         string `json:"proto"`           // read-only (tcp)
+		SndRcvBufSize int    `json:"sndrcv_buf_size"` // SO_RCVBUF and SO_SNDBUF; see L4Conf.BufSize()
+	}
+	L4ConfToSet struct {
+		SndRcvBufSize *int `json:"sndrcv_buf_size,omitempty"`
 	}
 
 	// TLSConf contains TLS-specific config options.
