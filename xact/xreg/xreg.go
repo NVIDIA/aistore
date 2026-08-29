@@ -6,6 +6,7 @@ package xreg
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -113,7 +114,8 @@ type (
 	entries struct {
 		active   []Renewable // running entries - finished entries are gradually removed
 		roActive []Renewable // read-only copy
-		all      []Renewable
+		all      []Renewable // history
+		skipped  []Renewable // subset of `active`, disjoint from `all` (history cap)
 		mtx      sync.RWMutex
 	}
 	// All entries in the registry. The entries are periodically cleaned up
@@ -422,40 +424,27 @@ func (args *abortArgs) do(entry Renewable) bool {
 }
 
 func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.Snap {
-	var (
-		matchingEntries = make([]Renewable, 0, 20)
-		seen            = make(cos.StrSet, cap(matchingEntries))
-	)
-	r.entries.forEach(func(entry Renewable) bool {
-		if !match(entry.Get()) {
-			return true
-		}
-		matchingEntries = append(matchingEntries, entry)
-		seen.Set(entry.Get().ID())
-		return true
-	})
+	e := &r.entries
 
-	// `e.all` can silently omit a currently-running "quiet, brief" xaction
-	r.entries.mtx.RLock()
-	for _, entry := range r.entries.active {
-		xctn := entry.Get()
-		if xctn == nil || !xact.Table[xctn.Kind()].QuietBrief {
-			continue
+	e.mtx.RLock()
+	matching := make([]Renewable, 0, 32)
+	for _, entry := range e.all {
+		if xctn := entry.Get(); xctn != nil && match(xctn) {
+			matching = append(matching, entry)
 		}
-		if !match(xctn) {
-			continue
-		}
-		if _, ok := seen[xctn.ID()]; ok {
-			continue
-		}
-		matchingEntries = append(matchingEntries, entry)
-		seen.Set(xctn.ID())
 	}
-	r.entries.mtx.RUnlock()
+	// `e.all` omits currently-running "quiet, brief" xactions once history hits the cap
+	// (see `_add`); `e.skipped` is disjoint from `e.all`, so no deduplication is required
+	for _, entry := range e.skipped {
+		if xctn := entry.Get(); xctn != nil && match(xctn) {
+			matching = append(matching, entry)
+		}
+	}
+	e.mtx.RUnlock()
 
-	// TODO: we cannot do this inside `forEach` because - nested locks
-	sts := make([]*core.Snap, 0, len(matchingEntries))
-	for _, entry := range matchingEntries {
+	// NOTE: Snap() takes locks of its own - must be called with the registry unlocked
+	sts := make([]*core.Snap, 0, len(matching))
+	for _, entry := range matching {
 		if xctn := entry.Get(); xctn != nil {
 			sts = append(sts, xctn.Snap())
 		}
@@ -471,17 +460,8 @@ func (r *registry) hkPruneActive(now int64) time.Duration {
 	}
 	e := &r.entries
 	e.mtx.Lock()
-	l := len(e.active)
-	for i := 0; i < l; i++ {
-		entry := e.active[i]
-		if !entry.Get().IsDone() {
-			continue
-		}
-		copy(e.active[i:], e.active[i+1:])
-		i--
-		l--
-		e.active = e.active[:l]
-	}
+	e.active = slices.DeleteFunc(e.active, func(entry Renewable) bool { return entry.Get().IsDone() })
+	e.skipped = slices.DeleteFunc(e.skipped, func(entry Renewable) bool { return entry.Get().IsDone() })
 	e.mtx.Unlock()
 	return hk.Jitter(hk.Prune2mIval, now)
 }
@@ -664,7 +644,7 @@ func (e *entries) del(id string) {
 // is called under lock
 // history control for QuietBrief kinds (x-lso, x-moss)
 // – keep up to 1 024 finished records
-// – anything beyond is silently dropped
+// – anything beyond is excluded from `all` and tracked via `skipped` until completion
 func (e *entries) _add(entry Renewable) {
 	e.active = append(e.active, entry)
 
@@ -673,6 +653,7 @@ func (e *entries) _add(entry Renewable) {
 			nlog.Warningln("num entries in xreg history:", l, "exceeds the cap:", keepOldThreshold,
 				"- not adding:", xact.Cname(entry.Kind(), entry.UUID()))
 		}
+		e.skipped = append(e.skipped, entry)
 		return
 	}
 	e.all = append(e.all, entry)

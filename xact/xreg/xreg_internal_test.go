@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
@@ -95,4 +96,89 @@ func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 	}
 	tassert.Fatalf(t, found,
 		"live get-batch xaction %q not found in GetSnap() result past the history cap", live.UUID())
+}
+
+// simulate `hkDelOld` reaping the (short-lived) x-lso history and shrinking `e.all`
+// well below the cap while a skipped xaction is still running
+func TestSkippedXactSurvivesHistoryShrink(t *testing.T) {
+	TestReset()
+
+	dreg.entries.mtx.Lock()
+	for range keepOldThreshold >> 1 {
+		dreg.entries._add(newFakeEntry(apc.ActLRU))
+	}
+	for range keepOldThreshold - keepOldThreshold>>1 {
+		dreg.entries._add(newFakeEntry(apc.ActList)) // QuietBrief history
+	}
+	live := newFakeEntry(apc.ActGetBatch)
+	dreg.entries._add(live) // at the cap => skipped
+	dreg.entries.mtx.Unlock()
+
+	tassert.Fatalf(t, len(dreg.entries.skipped) == 1, "expected 1 skipped, got %d", len(dreg.entries.skipped))
+
+	// simulate x-lso entries aging out at hk.OldAgeXshort
+	dreg.entries.mtx.Lock()
+	dreg.entries.all = dreg.entries.all[:keepOldThreshold>>1]
+	dreg.entries.mtx.Unlock()
+
+	snaps, err := GetSnap(&Flt{Kind: apc.ActGetBatch})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(snaps) == 1 && snaps[0].ID == live.UUID(),
+		"live get-batch lost once history fell to %d: got %d snaps", len(dreg.entries.all), len(snaps))
+}
+
+// `e.skipped` is a subset of `e.active` and is reclaimed on the same terms
+func TestSkippedReclaimedByHousekeeper(t *testing.T) {
+	TestReset()
+
+	dreg.entries.mtx.Lock()
+	for range keepOldThreshold {
+		dreg.entries._add(newFakeEntry(apc.ActLRU))
+	}
+	live := newFakeEntry(apc.ActGetBatch)
+	dreg.entries._add(live)
+	dreg.entries.mtx.Unlock()
+	tassert.Fatalf(t, len(dreg.entries.skipped) == 1, "expected 1 skipped, got %d", len(dreg.entries.skipped))
+
+	live.Get().(*mock.XactMock).SetStopping()
+	dreg.finDelta.Inc()
+	dreg.hkPruneActive(mono.NanoTime())
+
+	tassert.Fatalf(t, len(dreg.entries.skipped) == 0,
+		"skipped entry not reclaimed: %d", len(dreg.entries.skipped))
+}
+
+// two distinct entries can carry the same xaction ID: a stopped-but-unreaped one and a
+// live one renewed under the same client-supplied UUID (x-lso, x-moss)
+func TestSameIDDistinctEntries(t *testing.T) {
+	TestReset()
+
+	dreg.entries.mtx.Lock()
+	for range keepOldThreshold {
+		dreg.entries._add(newFakeEntry(apc.ActLRU))
+	}
+	dreg.entries.mtx.Unlock()
+
+	prev := newFakeEntry(apc.ActGetBatch).(*fakeRenewable)
+	uuid := prev.xctn.ID()
+	prev.xctn.SetStopping() // done, awaiting hkPruneActive
+
+	next := newFakeEntry(apc.ActGetBatch).(*fakeRenewable)
+	next.xctn.InitBase(uuid, apc.ActGetBatch, nil) // same UUID, live
+
+	dreg.entries.mtx.Lock()
+	dreg.entries._add(prev)
+	dreg.entries._add(next)
+	dreg.entries.mtx.Unlock()
+
+	snaps, err := GetSnap(&Flt{Kind: apc.ActGetBatch})
+	tassert.CheckFatal(t, err)
+
+	var n int
+	for _, snap := range snaps {
+		if snap.ID == uuid {
+			n++
+		}
+	}
+	tassert.Fatalf(t, n == 2, "expected both entries w/ uuid %q, got %d", uuid, n)
 }
