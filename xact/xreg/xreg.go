@@ -71,7 +71,7 @@ type (
 		//
 		// A successful renewal that creates a new entry returns before its Run goroutine is
 		// started. The renewal caller must start that entry (e.g., via xact.GoRunW). Existing entries
-		// returned by renewal must not be started again (see rns.IsRunning).
+		// returned by renewal must not be started again (see rns.IsNew).
 
 		Start() error
 	}
@@ -172,8 +172,8 @@ func (r *registry) getXact(uuid string) (xctn core.Xact, _ error) {
 	e.mtx.RLock()
 outer:
 	for _, entries := range [][]Renewable{e.active, e.all} { // tradeoff: fewer active, higher priority
-		for _, entry := range entries {
-			x := entry.Get()
+		for i := len(entries) - 1; i >= 0; i-- {
+			x := entries[i].Get()
 			if x != nil && x.ID() == uuid {
 				xctn = x
 				break outer
@@ -193,8 +193,8 @@ func GetActiveXact(uuid string) (xctn core.Xact) {
 }
 
 func (e *entries) getActiveXact(uuid string) core.Xact {
-	for _, entry := range e.active {
-		if x := entry.Get(); x.ID() == uuid {
+	for i := len(e.active) - 1; i >= 0; i-- {
+		if x := e.active[i].Get(); x.ID() == uuid {
 			return x
 		}
 	}
@@ -468,7 +468,7 @@ func (r *registry) hkPruneActive(now int64) time.Duration {
 
 func (r *registry) hkDelOld(int64) time.Duration {
 	var (
-		toRemove    []string
+		toRemove    []Renewable
 		numKeepMore int
 		now         = time.Now() // need calendar time
 	)
@@ -478,14 +478,15 @@ func (r *registry) hkDelOld(int64) time.Duration {
 
 	// first, cleanup (x-lso, x-moss): walk older to newer while counting the other kinds
 	for i := range l {
-		xctn := r.entries.all[i].Get()
+		entry := r.entries.all[i]
+		xctn := entry.Get()
 		if !xact.Table[xctn.Kind()].QuietBrief {
 			numKeepMore++
 			continue
 		}
 		if xctn.IsDone() {
 			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeXshort {
-				toRemove = append(toRemove, xctn.ID())
+				toRemove = append(toRemove, entry)
 			}
 		}
 	}
@@ -494,13 +495,14 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	if numKeepMore > keepOldThreshold {
 		var cnt int
 		for i := range l {
-			xctn := r.entries.all[i].Get()
+			entry := r.entries.all[i]
+			xctn := entry.Get()
 			if xact.Table[xctn.Kind()].QuietBrief {
 				continue
 			}
 			if xctn.IsDone() {
 				if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeX {
-					toRemove = append(toRemove, xctn.ID())
+					toRemove = append(toRemove, entry)
 					cnt++
 					if numKeepMore-cnt <= keepOldThreshold {
 						break
@@ -530,8 +532,8 @@ func (r *registry) hkDelOld(int64) time.Duration {
 
 	// cleanup
 	r.entries.mtx.Lock()
-	for _, id := range toRemove {
-		r.entries.del(id)
+	for _, entry := range toRemove {
+		r.entries.del(entry)
 	}
 	r.entries.mtx.Unlock()
 
@@ -614,28 +616,24 @@ func (e *entries) forEach(matcher func(entry Renewable) bool) {
 	}
 }
 
-// NOTE: is called under lock
-func (e *entries) del(id string) {
+// NOTE: removes an exact entry selected from `all`; called under lock
+func (e *entries) del(toDel Renewable) {
+	xdel := toDel.Get()
+	if !xdel.IsDone() {
+		nlog.Errorln("Warning: premature HK call to del-old", xdel.String())
+		debug.Assert(false, xdel.String(), " aborted: ", xdel.IsAborted())
+		return
+	}
+
 	for idx, entry := range e.all {
-		xctn := entry.Get()
-		if xctn.ID() == id {
-			debug.Assert(xctn.IsDone(), xctn.String(), " aborted: ", xctn.IsAborted())
-			nlen := len(e.all) - 1
-			e.all[idx] = e.all[nlen]
-			e.all = e.all[:nlen]
+		if entry == toDel {
+			e.all = slices.Delete(e.all, idx, idx+1)
 			break
 		}
 	}
 	for idx, entry := range e.active {
-		xctn := entry.Get()
-		if xctn.ID() == id {
-			if !xctn.IsDone() {
-				nlog.Errorln("Warning: premature HK call to del-old", xctn.String())
-				break
-			}
-			nlen := len(e.active) - 1
-			e.active[idx] = e.active[nlen]
-			e.active = e.active[:nlen]
+		if entry == toDel {
+			e.active = slices.Delete(e.active, idx, idx+1)
 			break
 		}
 	}
@@ -798,6 +796,11 @@ func (rns *RenewRes) IsRunning() bool {
 		return false
 	}
 	return rns.Entry.Get().IsRunning()
+}
+
+// IsNew reports whether renewal successfully registered a new entry.
+func (rns *RenewRes) IsNew() bool {
+	return rns.Err == nil && rns.Entry != nil && rns.UUID == ""
 }
 
 // make sure existing on-demand is active to prevent it from (idle) expiration

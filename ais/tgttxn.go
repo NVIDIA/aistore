@@ -749,7 +749,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 		xctn := rns.Entry.Get()
 		xid = xctn.ID()
 
-		if !rns.IsRunning() {
+		if rns.IsNew() {
 			xact.GoRunW(xctn)
 		}
 		xtco := xctn.(*xs.XactTCO)
@@ -908,7 +908,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 		xctn := rns.Entry.Get()
 		xid = xctn.ID()
 
-		if !rns.IsRunning() {
+		if rns.IsNew() {
 			xact.GoRunW(xctn)
 		}
 

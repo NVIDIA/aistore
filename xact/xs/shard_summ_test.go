@@ -107,7 +107,7 @@ func startShardSummary(t *testing.T, bck *meta.Bck, msg *apc.ShardSummMsg) *xs.X
 	if !ok {
 		t.Fatalf("expected *xs.XactShardSumm, got %T", xctn)
 	}
-	if !rns.IsRunning() {
+	if rns.IsNew() {
 		xact.GoRunW(xsumm)
 	}
 	return xsumm

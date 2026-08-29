@@ -325,7 +325,7 @@ func _renewXact(bck *meta.Bck, kind string) (core.Xact, error) {
 	}
 
 	xctn := rns.Entry.Get()
-	if !rns.IsRunning() {
+	if rns.IsNew() {
 		xact.GoRunW(xctn)
 	}
 	return xctn, nil

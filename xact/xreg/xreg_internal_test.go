@@ -182,3 +182,32 @@ func TestSameIDDistinctEntries(t *testing.T) {
 	}
 	tassert.Fatalf(t, n == 2, "expected both entries w/ uuid %q, got %d", uuid, n)
 }
+
+func TestDelExactEntryPreservesOrder(t *testing.T) {
+	TestReset()
+
+	prev := newFakeEntry(apc.ActLRU).(*fakeRenewable)
+	uuid := prev.xctn.ID()
+	prev.xctn.SetStopping()
+
+	middle := newFakeEntry(apc.ActLRU)
+	next := newFakeEntry(apc.ActLRU).(*fakeRenewable)
+	next.xctn.InitBase(uuid, apc.ActLRU, nil) // same UUID, live
+
+	dreg.entries.mtx.Lock()
+	dreg.entries._add(prev)
+	dreg.entries._add(middle)
+	dreg.entries._add(next)
+	dreg.entries.del(prev)
+	dreg.entries.mtx.Unlock()
+
+	tassert.Fatalf(t, len(dreg.entries.all) == 2 && dreg.entries.all[0] == middle && dreg.entries.all[1] == next,
+		"history order not preserved after deleting %q", uuid)
+	tassert.Fatalf(t, len(dreg.entries.active) == 2 && dreg.entries.active[0] == middle && dreg.entries.active[1] == next,
+		"active order not preserved after deleting %q", uuid)
+
+	xctn, err := GetXact(uuid)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, xctn == next.Get(), "expected newest xaction %q, got %v", uuid, xctn)
+	tassert.Fatalf(t, GetActiveXact(uuid) == next.Get(), "expected newest active xaction %q", uuid)
+}

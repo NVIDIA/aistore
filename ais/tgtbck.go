@@ -420,7 +420,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 			return false
 		}
 		xctn := rns.Entry.Get()
-		if !rns.IsRunning() {
+		if rns.IsNew() {
 			xact.GoRunW(xctn)
 		}
 		xls = xctn.(*xs.LsoXact)
@@ -501,7 +501,7 @@ func (t *target) bckSumm(w http.ResponseWriter, r *http.Request, phase string, b
 		}
 
 		xctn := rns.Entry.Get()
-		if !rns.IsRunning() {
+		if rns.IsNew() {
 			xact.GoRunW(xctn)
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -551,7 +551,7 @@ func (t *target) shardSumm(w http.ResponseWriter, r *http.Request, phase string,
 		}
 
 		xctn := rns.Entry.Get()
-		if !rns.IsRunning() {
+		if rns.IsNew() {
 			xact.GoRunW(xctn)
 		}
 		w.WriteHeader(http.StatusAccepted)
