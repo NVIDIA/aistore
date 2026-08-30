@@ -83,7 +83,7 @@ func _allocSGL(isPage bool) (z *SGL) {
 }
 
 const (
-	clipSGL = 1024
+	maxPooledSGLCap = 1024
 )
 
 func _freeSGL(z *SGL, isPage bool) {
@@ -96,7 +96,11 @@ func _freeSGL(z *SGL, isPage bool) {
 		pool = &smPools[idx]
 	}
 	sgl := z.sgl[:0]
-	sgl = cos.ResetSliceCap(sgl, clipSGL) // clip cap
+
+	if cap(sgl) > maxPooledSGLCap {
+		sgl = nil
+	}
+
 	*z = sgl0
 	z.sgl = sgl
 	pool.Put(z)

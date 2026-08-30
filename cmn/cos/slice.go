@@ -8,20 +8,20 @@ import (
 	"strings"
 )
 
+// return the same slice if its capacity is within maxCap; otherwise,
+// copy at most maxCap elements so that the oversized one can be reclaimed
 func ResetSliceCap[T any](s []T, maxCap int) []T {
-	var (
-		l = len(s)
-		c = cap(s)
-	)
-	switch {
-	case maxCap <= 0:
-		return s[:0:0]
-	case c <= maxCap:
-		return s
-	default:
-		l = min(l, maxCap)
-		return s[:l:maxCap]
+	if maxCap <= 0 {
+		return nil
 	}
+	if cap(s) <= maxCap {
+		return s
+	}
+
+	l := min(len(s), maxCap)
+	clipped := make([]T, l, maxCap)
+	copy(clipped, s[:l])
+	return clipped
 }
 
 func AnyHasPrefixInSlice(prefix string, arr []string) bool {
