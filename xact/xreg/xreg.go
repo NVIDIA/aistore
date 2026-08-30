@@ -38,8 +38,10 @@ import (
 */
 
 const (
-	initialCap       = 256  // initial capacity
-	keepOldThreshold = 1024 // keep so many
+	initialCap         = 256  // initial capacity ('all')
+	initialCapActive   = 128  // ditto ('active')
+	initialCapROActive = 192  // ditto ('roActive')
+	keepOldThreshold   = 1024 // keep so many
 
 	waitPrevAborted = 2 * time.Second
 	waitLimitedCoex = 5 * time.Second
@@ -113,7 +115,7 @@ type (
 
 	entries struct {
 		active   []Renewable // running entries - finished entries are gradually removed
-		roActive []Renewable // read-only copy
+		roActive []Renewable // read-only copy; reused by the single `periodic` caller (see getAllRunning)
 		all      []Renewable // history
 		skipped  []Renewable // subset of `active`, disjoint from `all` (history cap)
 		mtx      sync.RWMutex
@@ -148,8 +150,8 @@ func newRegistry() (r *registry) {
 	return &registry{
 		entries: entries{
 			all:      make([]Renewable, 0, initialCap),
-			active:   make([]Renewable, 0, 128),
-			roActive: make([]Renewable, 0, 192),
+			active:   make([]Renewable, 0, initialCapActive),
+			roActive: make([]Renewable, 0, initialCapROActive),
 		},
 		bckXacts:    make(map[string]Renewable, 32),
 		nonbckXacts: make(map[string]Renewable, 32),
@@ -219,9 +221,9 @@ func (e *entries) getAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	if periodic && cap(e.roActive) >= l { // reuse existing
 		roActive = e.roActive
 		roActive = roActive[:l]
-	} else { // allocate
+	} else {
+		// (private here - `e.roActive` is written under the write lock only: see `_add` and `shrinkAll`)
 		roActive = make([]Renewable, l)
-		e.roActive = roActive // reuse later
 	}
 	copy(roActive, e.active)
 	e.mtx.RUnlock()
@@ -511,6 +513,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 			}
 		}
 	}
+	shrink := r.entries.shrinkable()
 	r.entries.mtx.RUnlock()
 
 	// adaptive HK cadence based on finished-registry backlog
@@ -526,17 +529,19 @@ func (r *registry) hkDelOld(int64) time.Duration {
 		d = max(d>>1, hk.OldAgeXshort)
 	}
 
-	if ll == 0 {
+	if ll == 0 && !shrink {
 		return d
 	}
 
 	// cleanup
 	r.entries.mtx.Lock()
-	for _, entry := range toRemove {
-		r.entries.del(entry)
-	}
+	r.entries.del(toRemove)
+	r.entries.shrinkAll()
 	r.entries.mtx.Unlock()
 
+	if ll == 0 {
+		return d // shrink-only pass
+	}
 	return hk.Jitter(d, now.UnixNano())
 }
 
@@ -616,35 +621,71 @@ func (e *entries) forEach(matcher func(entry Renewable) bool) {
 	}
 }
 
-// NOTE: removes an exact entry selected from `all`; called under lock
-func (e *entries) del(toDel Renewable) {
-	xdel := toDel.Get()
-	if !xdel.IsDone() {
-		nlog.Errorln("Warning: premature HK call to del-old", xdel.String())
-		debug.Assert(false, xdel.String(), " aborted: ", xdel.IsAborted())
+// remove the specified entries from `all` and `active`; called under lock
+func (e *entries) del(toRemove []Renewable) {
+	if len(toRemove) == 0 {
 		return
 	}
 
-	for idx, entry := range e.all {
-		if entry == toDel {
-			e.all = slices.Delete(e.all, idx, idx+1)
-			break
+	tmp := make(map[Renewable]struct{}, len(toRemove))
+	for _, entry := range toRemove {
+		if debug.ON() {
+			xdel := entry.Get()
+			debug.Assert(xdel.IsDone(), "expected ", xdel.String(), " finished or aborted: ", xdel.IsAborted())
 		}
+		tmp[entry] = struct{}{}
 	}
-	for idx, entry := range e.active {
-		if entry == toDel {
-			e.active = slices.Delete(e.active, idx, idx+1)
-			break
-		}
-	}
+
+	// (`slices.DeleteFunc` is order-preserving and zeroes the vacated tail)
+	matches := func(entry Renewable) bool { _, ok := tmp[entry]; return ok }
+	e.all = slices.DeleteFunc(e.all, matches)
+	e.active = slices.DeleteFunc(e.active, matches)
 }
 
-// is called under lock
-// history control for QuietBrief kinds (x-lso, x-moss)
+// shrink only when the excess is large, so that steady-state churn does not re-allocate
+func (e *entries) shrinkAll() {
+	e.all = _shrink(e.all, initialCap)
+
+	e.active = _shrink(e.active, initialCapActive)
+
+	// cached scratch: size against current active, discard stale contents
+	l := len(e.active)
+	if _shrinkable(cap(e.roActive), l, initialCapROActive) {
+		e.roActive = cos.ResetSliceCap(e.roActive[:0], max(initialCapROActive, l+l>>1))
+	}
+
+	e.skipped = _shrink(e.skipped, 0) // no nominal: steady state is empty
+}
+
+// `skipped` and `active` are drained elsewhere and may have nothing left for hkDelOld
+// to remove - ask separately whether there's capacity to hand back; called under rlock
+func (e *entries) shrinkable() bool {
+	return _shrinkable(cap(e.all), len(e.all), initialCap) ||
+		_shrinkable(cap(e.active), len(e.active), initialCapActive) ||
+		_shrinkable(cap(e.roActive), len(e.active), initialCapROActive) ||
+		_shrinkable(cap(e.skipped), len(e.skipped), 0)
+}
+
+func _shrink(s []Renewable, dflt int) []Renewable {
+	if !_shrinkable(cap(s), len(s), dflt) {
+		return s // nothing to reclaim, or still mostly in use
+	}
+	// leave 50% headroom
+	return cos.ResetSliceCap(s, max(dflt, len(s)+len(s)>>1))
+}
+
+func _shrinkable(c, l, dflt int) bool { return c > dflt && c > l<<1 }
+
+// history control for QuietBrief kinds (x-lso, x-moss); called under lock
 // – keep up to 1 024 finished records
 // – anything beyond is excluded from `all` and tracked via `skipped` until completion
 func (e *entries) _add(entry Renewable) {
 	e.active = append(e.active, entry)
+
+	// grow
+	if cap(e.roActive) < len(e.active) {
+		e.roActive = make([]Renewable, 0, len(e.active)+len(e.active)>>1)
+	}
 
 	if l := len(e.all); xact.Table[entry.Kind()].QuietBrief && l >= keepOldThreshold {
 		if n := skipXregHst.Inc(); n%skipXregHstCnt == 1 {
@@ -655,11 +696,6 @@ func (e *entries) _add(entry Renewable) {
 		return
 	}
 	e.all = append(e.all, entry)
-
-	// grow
-	if cap(e.roActive) < len(e.active) {
-		e.roActive = make([]Renewable, 0, len(e.active)+len(e.active)>>1)
-	}
 }
 
 // LimitedCoexistence checks whether a given xaction that is about to start can, in fact, "coexist"
@@ -829,7 +865,10 @@ func (flt *Flt) String() string {
 }
 
 func (flt *Flt) Matches(xctn core.Xact) (yes bool) {
-	debug.Assert(xact.IsValidKind(xctn.Kind()), xctn.String())
+	kind := xctn.Kind()
+	if debug.ON() {
+		debug.Assert(xact.IsValidKind(kind), xctn.String())
+	}
 	// running?
 	if flt.OnlyRunning != nil {
 		onl := *flt.OnlyRunning
@@ -839,26 +878,33 @@ func (flt *Flt) Matches(xctn core.Xact) (yes bool) {
 	}
 	// same ID?
 	if flt.ID != "" {
-		debug.Assert(cos.IsValidUUID(flt.ID) || xact.IsValidRebID(flt.ID), flt.ID)
+		if debug.ON() {
+			debug.Assert(xact.IsValidUUID(flt.ID), flt.ID)
+		}
 		if yes = xctn.ID() == flt.ID; yes {
-			debug.Assert(xctn.Kind() == flt.Kind, xctn.String()+" vs same ID "+flt.String())
+			if debug.ON() {
+				debug.Assert(flt.Kind == "" || kind == flt.Kind, xctn.String()+" vs same ID "+flt.String())
+			}
 		}
 		return yes
 	}
 	// kind?
 	if flt.Kind != "" {
-		debug.Assert(xact.IsValidKind(flt.Kind), flt.Kind)
-		if xctn.Kind() != flt.Kind {
+		if debug.ON() {
+			debug.Assert(xact.IsValidKind(flt.Kind), flt.Kind)
+		}
+		if kind != flt.Kind {
 			return false
 		}
 	}
 	// bucket?
-	if xact.Table[xctn.Kind()].Scope != xact.ScopeB {
-		return true // non single-bucket x
-	}
+	// (when the filter carries no bucket return early)
 	if flt.Bck == nil {
 		debug.Assert(len(flt.Buckets) == 0)
 		return true // the filter's not filtering out
+	}
+	if xact.Table[kind].Scope != xact.ScopeB {
+		return true // non single-bucket x
 	}
 	if len(flt.Buckets) > 0 {
 		debug.Assert(len(flt.Buckets) == 2)

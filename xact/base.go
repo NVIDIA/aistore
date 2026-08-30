@@ -73,7 +73,7 @@ func GoRunW(xctn core.Xact) {
 //////////////
 
 func (xctn *Base) InitBase(id, kind string, bck *meta.Bck) {
-	debug.Assert(kind == apc.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
+	debug.Assert(kind == apc.ActETLInline || IsValidUUID(id), id)
 	debug.Assert(IsValidKind(kind), kind)
 
 	xctn.id, xctn.kind = id, kind

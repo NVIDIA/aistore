@@ -8,9 +8,13 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 )
+
+// To run: go test -bench=. -benchmem
 
 // registry:
 // - "nominal": history well below the cap, nothing skipped (`e.skipped` empty)
@@ -57,8 +61,6 @@ func BenchmarkMatchingXactsStats(b *testing.B) {
 	})
 }
 
-// `match` runs once per registry entry, so its cost is multiplied by `len(e.all)`
-// on every `GetSnap` - and `GetSnap` is polled (`ais show job`, api.WaitForXaction)
 func BenchmarkFltMatches(b *testing.B) {
 	TestReset()
 	entry := newFakeEntry(apc.ActLRU)
@@ -88,5 +90,33 @@ func BenchmarkActiveScan(b *testing.B) {
 		}
 		dreg.entries.mtx.RUnlock()
 		_ = n
+	}
+}
+
+func BenchmarkMatchesShapes(b *testing.B) {
+	TestReset()
+	var (
+		lru = newFakeEntry(apc.ActLRU).Get()   // ScopeGB
+		ecg = newFakeEntry(apc.ActECGet).Get() // ScopeB
+		bck = meta.NewBck("bench", apc.AIS, cmn.NsGlobal)
+	)
+	for _, tc := range []struct {
+		name string
+		flt  Flt
+		xctn core.Xact
+	}{
+		{"unfiltered", Flt{}, lru},
+		{"kind/miss", Flt{Kind: apc.ActGetBatch}, lru},
+		{"kind/hit", Flt{Kind: apc.ActLRU}, lru},
+		{"kind+bck/scopeGB", Flt{Kind: apc.ActLRU, Bck: bck}, lru},
+		{"kind+bck/scopeB", Flt{Kind: apc.ActECGet, Bck: bck}, ecg},
+		{"byid", Flt{ID: lru.ID(), Kind: apc.ActLRU}, lru},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				tc.flt.Matches(tc.xctn)
+			}
+		})
 	}
 }
