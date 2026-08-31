@@ -59,7 +59,7 @@ var _ streamer = (*Stream)(nil)
 // and returns the effective error after considering any prior termination.
 func (s *Stream) terminate(err error) (actErr error) {
 	ok := s.term.done.CAS(false, true)
-	debug.Assert(ok, s.String())
+	debug.Func(func() { debug.Assert(ok, s.String()) })
 
 	s.term.mu.Lock()
 	if s.term.err == nil {

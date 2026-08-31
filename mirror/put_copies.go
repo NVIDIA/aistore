@@ -119,7 +119,7 @@ func (*putFactory) Kind() string     { return apc.ActPutCopies }
 func (p *putFactory) Get() core.Xact { return p.xctn }
 
 func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
-	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
+	debug.Func(func() { debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) }) // xreg.usePrev() must've returned true
 	return xreg.WprUse, nil
 }
 
@@ -184,7 +184,7 @@ loop:
 
 // main method
 func (r *XactPut) Repl(lom *core.LOM) {
-	debug.Assert(!r.IsDone(), r.String())
+	debug.Func(func() { debug.Assert(!r.IsDone(), r.String()) })
 
 	// ref-count on-demand, decrement via worker.Callback = r.do
 	r.IncPending()

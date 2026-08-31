@@ -127,7 +127,7 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			}
 		case !xctn.IsDone() && !xctn.IsAborted():
 			xbenc, ok := xctn.(*ec.XactBckEncode)
-			debug.Assert(ok, xctn.String())
+			debug.Func(func() { debug.Assert(ok, xctn.String()) })
 
 			// async, via j.workCh
 			xbenc.RecvRecover(lom)

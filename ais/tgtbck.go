@@ -462,7 +462,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 // resolve NBI (native bucket inventory) name: locate-and-set when not provided,
 // validate when provided
 func (t *target) _resolveInvName(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) bool /*ok*/ {
-	debug.AssertNoErr(lsmsg.ValidateNBI()) // checked by proxy
+	debug.Func(func() { debug.AssertNoErr(lsmsg.ValidateNBI()) }) // checked by proxy
 
 	if invName := r.Header.Get(apc.HdrInvName); invName == "" {
 		// must exist and be single
@@ -572,7 +572,7 @@ func (t *target) shardSumm(w http.ResponseWriter, r *http.Request, phase string,
 
 	xsumm, ok := xctn.(*xs.XactShardSumm)
 	if !ok {
-		debug.Assert(false, "expected xs.XactShardSumm, got", xctn.String())
+		debug.Func(func() { debug.Assert(false, "expected xs.XactShardSumm, got", xctn.String()) })
 		err := cos.NewErrNotFound(t, apc.ActSummaryShard+" job "+msg.UUID)
 		t._erris(w, r, err, http.StatusNotFound, dpq.silent)
 		return

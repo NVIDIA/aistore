@@ -148,7 +148,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 		// other cold-get use cases include:
 		// - cmn.OwtGet, goi.getCold
 		// - cmn.OwtGetPrefetchLock, xs/prefetch
-		debug.Assert(false, owt.String())
+		debug.Func(func() { debug.Assert(false, owt.String()) })
 		return http.StatusInternalServerError, errors.New("cold-get: invalid " + owt.String())
 	}
 

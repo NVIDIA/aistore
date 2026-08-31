@@ -1574,7 +1574,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, dpq *dpq, bck *meta.
 		if err != nil {
 			switch {
 			case ecode == http.StatusTooManyRequests || ecode == http.StatusServiceUnavailable:
-				debug.Assertf(cmn.IsErrTooManyRequests(err), "expecting err-remote-retriable, got %T", err)
+				debug.Func(func() { debug.Assertf(cmn.IsErrTooManyRequests(err), "expecting err-remote-retriable, got %T", err) })
 			case ecode != http.StatusNotFound:
 				err = cmn.NewErrFailedTo(t, "HEAD", lom.Cname(), err)
 			case latest:

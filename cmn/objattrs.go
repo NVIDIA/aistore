@@ -120,7 +120,7 @@ func validateToHeaderCoverage(v headerSerializer, prefix string) {
 
 	// 2. Verify FromHeader parses all fields (round-trip test)
 	if err := v.FromHeader(hdr); err != nil {
-		debug.Assert(false, "FromHeader failed: ", err.Error(), " - update ", prefix, ".FromHeader()")
+		debug.Func(func() { debug.Assert(false, "FromHeader failed: ", err.Error(), " - update ", prefix, ".FromHeader()") })
 	}
 }
 

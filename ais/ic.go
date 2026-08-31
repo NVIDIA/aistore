@@ -130,7 +130,7 @@ outer:
 				return true
 			}
 		}
-		debug.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si))
+		debug.Func(func() { debug.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si)) })
 	}
 	if owner == ic.p.SID() {
 		return false
@@ -446,7 +446,9 @@ func (ic *ic) syncICBundle() error {
 	}
 
 	bundle := res.v.(*icBundle)
-	debug.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
+	debug.Func(func() {
+		debug.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
+	})
 
 	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/, ic.p.htrun.smapUpdatedCB); err != nil {
 		if !isErrDowngrade(err) {

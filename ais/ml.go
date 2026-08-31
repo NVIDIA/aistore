@@ -378,7 +378,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		xmoss, ok := xctn.(*xs.XactMoss)
-		debug.Assert(ok, xctn.Name())
+		debug.Func(func() { debug.Assert(ok, xctn.Name()) })
 
 		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
 			// NOTE: not aborting x-moss on a single wid failure
@@ -440,7 +440,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 		nlog.Infoln(t.String(), "designated = true, renewed:", xctn.Name(), "was running:", rns.IsRunning())
 	}
 	xmoss, ok := xctn.(*xs.XactMoss)
-	debug.Assert(ok, xctn.Name())
+	debug.Func(func() { debug.Assert(ok, xctn.Name()) })
 
 	if nat > 1 { // multi-target cluster: setup Rx
 		// open SDM
@@ -499,7 +499,7 @@ func (ctx *mossCtx) phase3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	}
 
 	xmoss, ok := xctn.(*xs.XactMoss)
-	debug.Assert(ok, xctn.Name())
+	debug.Func(func() { debug.Assert(ok, xctn.Name()) })
 
 	// open SDM and start sending
 	if err := bundle.SDM.Open(config, &config.GetBatch.XactConf); err != nil {

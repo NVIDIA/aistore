@@ -35,7 +35,7 @@ func NewNodeKeyPair(signingKey ed25519.PrivateKey, verifyingKey ed25519.PublicKe
 		SigningKey:   append(ed25519.PrivateKey(nil), signingKey...),
 		VerifyingKey: append(ed25519.PublicKey(nil), verifyingKey...),
 	}
-	debug.AssertNoErr(k.validate())
+	debug.Func(func() { debug.AssertNoErr(k.validate()) })
 	return k
 }
 

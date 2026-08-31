@@ -224,7 +224,7 @@ func (s *base) TermInfo() error {
 	}
 	// (unlikely)
 	err = errors.New("terminated without term.err")
-	debug.Assert(false, s.String(), " err: ", err)
+	debug.Func(func() { debug.Assert(false, s.String(), " err: ", err) })
 	nlog.Errorln(s.String(), "err:", err)
 	return err
 }

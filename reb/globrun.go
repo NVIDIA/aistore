@@ -825,7 +825,7 @@ func getROC(lom *core.LOM) (cos.ReadOpenCloser, error) {
 			return nil, err
 		}
 	}
-	debug.Assert(lom.Checksum() != nil, lom.String())
+	debug.Func(func() { debug.Assert(lom.Checksum() != nil, lom.String()) })
 	return lom.NewDeferROC(true /*loaded*/)
 }
 

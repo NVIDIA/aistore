@@ -99,7 +99,7 @@ var _ cos.Runner = (*proxy)(nil)
 func (*proxy) Name() string { return apc.Proxy } // as cos.Runner
 
 func (p *proxy) primary() *primary {
-	debug.Assert(p.prim != nil, p.String())
+	debug.Func(func() { debug.Assert(p.prim != nil, p.String()) })
 	return p.prim
 }
 
@@ -1827,7 +1827,9 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		return
 	}
 
-	debug.Assertf(xact.IsValidUUID(xid) || strings.IndexByte(xid, ',') > 0, "%q: %q", msg.Action, xid)
+	debug.Func(func() {
+		debug.Assertf(xact.IsValidUUID(xid) || strings.IndexByte(xid, ',') > 0, "%q: %q", msg.Action, xid)
+	})
 	writeXid(w, xid)
 }
 
@@ -2268,7 +2270,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	// 2. bucket is remote and does exist
-	debug.Assert(bck.IsRemote(), bck.String())
+	debug.Func(func() { debug.Assert(bck.IsRemote(), bck.String()) })
 	debug.Assert(exists)
 
 	// [filtering] when the bucket that must be present is not

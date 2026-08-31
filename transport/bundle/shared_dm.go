@@ -294,7 +294,7 @@ func (sdm *sharedDM) RegRecv(rx transport.Receiver) {
 	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
 
-	debug.Assert(sdm.isOpen(), sdm.trname(), ": RegRecv while closed: ", rx.ID())
+	debug.Func(func() { debug.Assert(sdm.isOpen(), sdm.trname(), ": RegRecv while closed: ", rx.ID()) })
 	if sdm.isOpen() {
 		en := &rxent{rx: rx}
 		sdm.receivers[rx.ID()] = en

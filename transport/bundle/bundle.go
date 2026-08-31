@@ -444,7 +444,7 @@ func (sb *Streams) open() {
 
 	node := smap.GetNode(core.T.SID())
 	if node == nil {
-		debug.Assert(false, core.T.SID())
+		debug.Func(func() { debug.Assert(false, core.T.SID()) })
 		// keep the post-open invariant: sb.streams is non-nil
 		sb.streams.Store(&bundle{})
 		sb.smap = smap

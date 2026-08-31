@@ -40,12 +40,12 @@ func (reb *Reb) RebStatus(status *Status) {
 		if status.Running {
 			if marked.Xact != nil && marked.Xact.ID() != xreb.ID() {
 				id, _ := xact.S2RebID(marked.Xact.ID())
-				debug.Assert(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String())
+				debug.Func(func() { debug.Assert(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String()) })
 				nlog.Warningf("%s: must be transitioning (renewing) from %s (stage %s) to %s",
 					core.T, xreb, stages[status.Stage], marked.Xact)
 				status.Running = false // not yet
 			} else {
-				debug.Assertf(reb.rebID() == xreb.RebID(), "rebID[%d] vs %s", reb.rebID(), xreb)
+				debug.Func(func() { debug.Assertf(reb.rebID() == xreb.RebID(), "rebID[%d] vs %s", reb.rebID(), xreb) })
 			}
 		}
 	} else if status.Running {

@@ -41,7 +41,7 @@ type prune struct {
 }
 
 func (rp *prune) init(config *cmn.Config) {
-	debug.Assert(rp.bckFrom.IsAIS() || rp.bckFrom.HasVersioningMD(), rp.bckFrom.String())
+	debug.Func(func() { debug.Assert(rp.bckFrom.IsAIS() || rp.bckFrom.HasVersioningMD(), rp.bckFrom.String()) })
 	rmopts := &mpather.JgroupOpts{
 		Parent:   rp.r,
 		CTs:      []string{fs.ObjCT},

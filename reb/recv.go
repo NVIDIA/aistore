@@ -145,7 +145,7 @@ func (reb *Reb) recvAckNtfn(hdr *transport.ObjHdr, _ io.Reader, err error) error
 
 func (reb *Reb) _handleNtfn(ntfn *stageNtfn, xreb *xs.Rebalance, smap *meta.Smap) {
 	rebID := reb.rebID()
-	debug.Assertf(xreb.RebID() == rebID, "xreb=%s rebID=%d", xreb, rebID) // checked by the caller
+	debug.Func(func() { debug.Assertf(xreb.RebID() == rebID, "xreb=%s rebID=%d", xreb, rebID) }) // checked by the caller
 
 	switch {
 	case rebID == ntfn.rebID: // same stage

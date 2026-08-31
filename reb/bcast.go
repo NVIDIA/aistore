@@ -139,7 +139,9 @@ func (reb *Reb) waitPostTraverse(tsi *meta.Snode, rargs *rargs) (ok bool) {
 		maxwt = rargs.config.Rebalance.DestRetryTime.D()
 		xreb  = rargs.xreb
 	)
-	debug.Assertf(reb.rebID() == xreb.RebID(), "%s (rebID=%d) vs %s", rargs.logHdr, reb.rebID(), xreb)
+	debug.Func(func() {
+		debug.Assertf(reb.rebID() == xreb.RebID(), "%s (rebID=%d) vs %s", rargs.logHdr, reb.rebID(), xreb)
+	})
 
 	for curwt < maxwt {
 		if err := xreb.AbortedAfter(sleep); err != nil {
@@ -177,7 +179,9 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rargs, desiredStage uint32) (
 	if xreb == nil || xreb.IsAborted() {
 		return nil, false
 	}
-	debug.Assertf(reb.rebID() == xreb.RebID(), "%s (rebID=%d) vs %s", rargs.logHdr, reb.rebID(), xreb)
+	debug.Func(func() {
+		debug.Assertf(reb.rebID() == xreb.RebID(), "%s (rebID=%d) vs %s", rargs.logHdr, reb.rebID(), xreb)
+	})
 	body, code, err := core.T.Health(tsi, apc.DefaultTimeout, query)
 	if err != nil {
 		if errAborted := xreb.AbortedAfter(sleepRetry); errAborted != nil {

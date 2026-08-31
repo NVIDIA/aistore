@@ -72,7 +72,7 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) error {
 
 func (lom *LOM) InitCT(ct *CT) {
 	debug.Assert(ct.contentType == fs.ObjCT)
-	debug.Assert(ct.bck.Props != nil, ct.bck.String()+" must be initialized")
+	debug.Func(func() { debug.Assert(ct.bck.Props != nil, ct.bck.String()+" must be initialized") })
 	lom.FQN = ct.fqn
 	lom.setHRW(ct.isHRW)
 	lom.mi = ct.mi

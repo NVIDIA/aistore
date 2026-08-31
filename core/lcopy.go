@@ -212,7 +212,7 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 // (compare with lom.Copy2FQN below)
 // TODO: add T.FSHC() calls _after_ having disambiguated source vs destination (to blame)
 func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
-	debug.Assert(lom.bid() != 0, lom.String())
+	debug.Func(func() { debug.Assert(lom.bid() != 0, lom.String()) })
 	if err := lom._checkBucket(); err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ add:
 // - RestoreToLocation()
 // compare w/ Ufest.Relocate(lom)
 func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
-	debug.Assert(lom.IsLocked() >= apc.LockRead, lom.Cname(), " source not locked")
+	debug.Func(func() { debug.Assert(lom.IsLocked() >= apc.LockRead, lom.Cname(), " source not locked") })
 
 	dst = lom.CloneTo(dstFQN)
 	if err = dst.InitFQN(dstFQN, nil); err == nil {
@@ -468,7 +468,7 @@ func (lom *LOM) _copy2fqn(dst *LOM, buf []byte, sameBucket bool) (err, nested er
 // - picks least-utilized mountpath
 // - returns (open reader + its FQN) or (nil, "")
 func (lom *LOM) OpenCopy() (cos.LomReader, string) {
-	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
+	debug.Func(func() { debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked") })
 	debug.AssertFunc(func() bool { return !lom.IsChunked() })
 
 	if !lom.HasCopies() {

@@ -408,7 +408,9 @@ ret:
 
 // 'mi' here is HRW mountpath (and the copying destination) under current (avail) volume
 func (*jogger) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, _ error) {
-	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
+	debug.Func(func() {
+		debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
+	})
 
 	if lom.IsChunked() {
 		u, err := core.NewUfest("", lom, true)

@@ -135,7 +135,7 @@ func (lom *LOM) CopyAttrs(oah cos.OAH, skipCksum bool) {
 
 // special a) when a new version is being created b) for usage in unit tests
 func (lom *LOM) Lsize(special ...bool) int64 {
-	debug.Assert(len(special) > 0 || lom.loaded(), lom.String())
+	debug.Func(func() { debug.Assert(len(special) > 0 || lom.loaded(), lom.String()) })
 	return lom.md.Size
 }
 
@@ -225,7 +225,7 @@ func (lom *LOM) EqCksum(cksum *cos.Cksum) bool {
 
 func (lom *LOM) SetCksum(cksum *cos.Cksum) {
 	if !cos.NoneC(cksum) {
-		debug.AssertNoErr(cksum.Validate())
+		debug.Func(func() { debug.AssertNoErr(cksum.Validate()) })
 	}
 	lom.md.Cksum = cksum
 }
@@ -396,7 +396,7 @@ func (lom *LOM) setlmfl(fl lomFlags)     { lom.md.lid = lom.md.lid.setlmfl(fl) }
 func (lom *LOM) clrlmfl(fl lomFlags)     { lom.md.lid = lom.md.lid.clrlmfl(fl) }
 
 func (lom *LOM) IsChunked(special ...bool) bool { // same convention as Lsize
-	debug.Assert(len(special) > 0 || lom.loaded(), lom.String())
+	debug.Func(func() { debug.Assert(len(special) > 0 || lom.loaded(), lom.String()) })
 	return lom.md.lid.haslmfl(lmflChunk)
 }
 

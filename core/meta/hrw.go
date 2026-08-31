@@ -34,7 +34,7 @@ func (smap *Smap) HrwMultiHome(uname []byte) (si *Snode, netName string, err err
 		return nil, cmn.NetPublic, err
 	}
 
-	debug.Assert(si.nmr != nil, si.StringEx(), " in ", smap.StringEx()) // see related: smapOwner.put
+	debug.Func(func() { debug.Assert(si.nmr != nil, si.StringEx(), " in ", smap.StringEx()) }) // see related: smapOwner.put
 	return si, si.nmr.name(), nil
 }
 

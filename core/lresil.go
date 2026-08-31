@@ -18,7 +18,7 @@ import (
 
 // return expected (HRW) mountpath and whether the object is properly located (ie, not misplaced)
 func (lom *LOM) Hrw(avail fs.MPI) (*fs.Mountpath, bool /*ok*/) {
-	debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname(), "expecting w-locked")
+	debug.Func(func() { debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname(), "expecting w-locked") })
 
 	hrwMi, _, err := avail.Hrw(cos.UnsafeB(*lom.md.uname))
 	if err != nil {
@@ -46,7 +46,7 @@ func (lom *LOM) HrwWithChunks(avail fs.MPI) (*fs.Mountpath, bool /*ok*/) {
 	//
 	// chunks require additional checking
 	//
-	debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname(), "expecting w-locked")
+	debug.Func(func() { debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname(), "expecting w-locked") })
 
 	u, err := NewUfest("", lom, true /*must-exist*/)
 	if err != nil {

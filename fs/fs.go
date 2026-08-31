@@ -988,13 +988,13 @@ func _moveMarkers(avail MPI, from *Mountpath) {
 
 	// `from` path must no longer be in _available_
 	_, ok := avail[from.Path]
-	debug.Assert(!ok, from.String())
+	debug.Func(func() { debug.Assert(!ok, from.String()) })
 
 	// copy + delete
 	for _, mi := range avail {
 		ok = true
 		for _, fi := range finfos {
-			debug.Assert(!fi.IsDir(), fname.MarkersDir+cos.PathSeparator+fi.Name()) // marker is a file
+			debug.Func(func() { debug.Assert(!fi.IsDir(), fname.MarkersDir+cos.PathSeparator+fi.Name()) }) // marker is a file
 			var (
 				fromPath = filepath.Join(from.Path, fname.MarkersDir, fi.Name())
 				toPath   = filepath.Join(mi.Path, fname.MarkersDir, fi.Name())

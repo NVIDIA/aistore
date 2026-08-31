@@ -287,7 +287,7 @@ func (reb *Reb) renameLocalCT(req *stageNtfn, ct *core.CT, md *ec.Metadata) (
 func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	xreb := reb.xctn()
 	debug.Assert(xreb != nil)
-	debug.Assertf(xreb.RebID() == reb.rebID(), "xreb mismatch: %s vs %d", xreb, reb.rebID())
+	debug.Func(func() { debug.Assertf(xreb.RebID() == reb.rebID(), "xreb mismatch: %s vs %d", xreb, reb.rebID()) })
 
 	if err := xreb.AbortErr(); err != nil {
 		// notify `dir.Walk` to stop iterations

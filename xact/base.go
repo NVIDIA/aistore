@@ -113,7 +113,7 @@ func (xctn *Base) SetStopping() bool {
 
 func (xctn *Base) IsRunning() (yes bool) {
 	yes = xctn.sutime.Load() != 0 && !xctn.IsDone() && !xctn.IsAborted()
-	debug.Assert(!yes || xctn.ID() != "", xctn.String())
+	debug.Func(func() { debug.Assert(!yes || xctn.ID() != "", xctn.String()) })
 	return
 }
 
@@ -178,8 +178,8 @@ func (xctn *Base) Abort(err error) bool {
 		}
 	}
 	perr := xctn.abort.err.Swap(&err)
-	debug.Assert(perr == nil, xctn.String())
-	debug.Assert(len(xctn.abort.ch) == 0, xctn.String()) // CAS above
+	debug.Func(func() { debug.Assert(perr == nil, xctn.String()) })
+	debug.Func(func() { debug.Assert(len(xctn.abort.ch) == 0, xctn.String()) }) // CAS above
 	xctn.cancel()
 
 	if xctn.abort.closed.CAS(false, true) {

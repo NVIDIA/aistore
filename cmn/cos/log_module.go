@@ -98,7 +98,7 @@ func (l LogLevel) String() (s string) {
 		}
 	}
 
-	debug.Assert(n > 0, fmt.Sprintf(ferl, string(l), level, modules))
+	debug.Func(func() { debug.Assert(n > 0, fmt.Sprintf(ferl, string(l), level, modules)) })
 	s += " (module" + Plural(n) + ": " + sb.String()[1:] + ")"
 	return
 }

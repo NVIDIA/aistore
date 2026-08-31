@@ -325,7 +325,7 @@ loop:
 
 			// cannot change
 			debug.Assert(r.msg.SID == msg.SID, r.msg.SID, " vs ", msg.SID)
-			debug.Assert(r.walk.wor == msg.WantOnlyRemoteProps(), r.CtlMsg())
+			debug.Func(func() { debug.Assert(r.walk.wor == msg.WantOnlyRemoteProps(), r.CtlMsg()) })
 
 			r.IncPending()
 			resp := r.doPage()
@@ -761,7 +761,7 @@ func (r *LsoXact) nextPageA() {
 		// see also: j.opts.IncludeDirs
 		debug.Func(func() {
 			ok := entry.IsAnyFlagSet(apc.EntryIsDir)
-			debug.AssertFunc(func() bool { return ok == cos.IsLastB(entry.Name, '/') }, entry.Name)
+			debug.Assert(ok == cos.IsLastB(entry.Name, '/'), entry.Name)
 		})
 
 		// skip until requested continuation token

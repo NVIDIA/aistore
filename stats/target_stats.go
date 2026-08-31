@@ -863,7 +863,7 @@ func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr co
 		r.t.OOS(pcs, config, &r.Tcdf)
 		flags = r.nodeStateFlags()
 	} else if cs.PctMax > int32(config.Space.CleanupWM) { // remove deleted, other cleanup
-		debug.Assert(!cs.IsOOS(), cs.String())
+		debug.Func(func() { debug.Assert(!cs.IsOOS(), cs.String()) })
 		errCap = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, false)
 		r.t.OOS(pcs, config, &r.Tcdf)
 		flags = r.nodeStateFlags()

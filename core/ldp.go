@@ -88,7 +88,7 @@ func (lom *LOM) GetROC(latestVer, sync bool) (resp ReadResp) {
 	// loaded: check ver
 	if loadErr == nil {
 		if latestVer || sync {
-			debug.Assert(bck.IsRemote(), bck.String()) // caller's responsibility
+			debug.Func(func() { debug.Assert(bck.IsRemote(), bck.String()) }) // caller's responsibility
 			crmd := lom.CheckRemoteMD(true /* rlocked*/, sync, nil /*origReq*/)
 			if crmd.Err != nil {
 				lom.Unlock(false)
@@ -211,7 +211,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 
 // NOTE: Sync is false (ie., not deleting)
 func (lom *LOM) LoadLatest(latest bool) (oa *cmn.ObjAttrs, deleted bool, err error) {
-	debug.Assert(lom.IsLocked() > apc.LockNone, "must be locked: ", lom.Cname())
+	debug.Func(func() { debug.Assert(lom.IsLocked() > apc.LockNone, "must be locked: ", lom.Cname()) })
 
 	err = lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {

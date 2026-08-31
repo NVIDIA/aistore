@@ -185,7 +185,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		uploadID string
 	)
 
-	debug.Assertf(poi.size > 0, "poi.size is required in chunk, object name: %s", poi.lom.Cname())
+	debug.Func(func() { debug.Assertf(poi.size > 0, "poi.size is required in chunk, object name: %s", poi.lom.Cname()) })
 	if uploadID, err = poi.t.ups.start(poi.oreq, lom, poi.skipBackend); err != nil {
 		poi.t.ups.abort(poi.oreq, lom, uploadID)
 		return http.StatusInternalServerError, err
@@ -461,7 +461,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	switch poi.owt {
 	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet, cmn.OwtChunks:
 		// do nothing: lom is already wlocked
-		debug.Assertf(lom.IsLocked() == apc.LockWrite, "lom %s is not write-locked", lom.Cname())
+		debug.Func(func() { debug.Assertf(lom.IsLocked() == apc.LockWrite, "lom %s is not write-locked", lom.Cname()) })
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
 			nlog.Warningln(poi.loghdr(), "is busy")
@@ -1360,7 +1360,7 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 		var (
 			size = csl.Size()
 		)
-		debug.Assert(size >= 0, "negative archive entry size for", lom.Cname(), "/", dpq.arch.path)
+		debug.Func(func() { debug.Assert(size >= 0, "negative archive entry size for", lom.Cname(), "/", dpq.arch.path) })
 		// (compare w/ goi.setwhdr)
 		whdr.Set(cos.HdrContentType, cos.ContentBinary)
 		whdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))

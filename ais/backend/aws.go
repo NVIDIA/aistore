@@ -933,7 +933,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string, details ..
 			return http.StatusNotFound, err
 		case http.StatusTooManyRequests, http.StatusServiceUnavailable:
 			if code == "" {
-				debug.Assert(false, "empty error code in ", awsError.Error()) // (unlikely)
+				debug.Func(func() { debug.Assert(false, "empty error code in ", awsError.Error()) }) // (unlikely)
 				code = strconv.Itoa(status)
 			}
 			e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, code, bck.Cname(objName))

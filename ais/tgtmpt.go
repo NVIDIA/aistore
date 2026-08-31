@@ -126,7 +126,7 @@ func (ups *ups) get(id string, lom *core.LOM) (manifest *core.Ufest, remoteMeta 
 
 // NOTE: must be called with ups and lom both unlocked
 func (ups *ups) loadPartial(id string, lom *core.LOM, add bool) (manifest *core.Ufest, err error) {
-	debug.Assert(lom.IsLocked() == apc.LockNone, "expecting not locked: ", lom.Cname())
+	debug.Func(func() { debug.Assert(lom.IsLocked() == apc.LockNone, "expecting not locked: ", lom.Cname()) })
 
 	manifest, err = core.NewUfest(id, lom, true /*must-exist*/)
 	if err != nil {

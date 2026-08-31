@@ -46,7 +46,7 @@ func (p *streamingF) Kind() string   { return p.kind }
 func (p *streamingF) Get() core.Xact { return p.xctn }
 
 func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
-	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
+	debug.Func(func() { debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) }) // xreg.usePrev() must've returned true
 	return xreg.WprUse, nil
 }
 

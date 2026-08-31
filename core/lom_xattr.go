@@ -230,7 +230,9 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 
 func (lom *LOM) PersistMain(isChunked bool) error {
 	debug.Assertf(lom.bid() == lom.Bprops().BID || lom.bid() == 0, "defunct %s: %x vs %x", lom, lom.bid(), lom.Bprops().BID)
-	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be wlocked (have %d)", lom.String(), lom.IsLocked())
+	debug.Func(func() {
+		debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be wlocked (have %d)", lom.String(), lom.IsLocked())
+	})
 
 	// cleanup when transitioning from 'chunked' to 'monolithic'
 	if !isChunked && lom.IsChunked(true /*special: skipVC or not exist*/) {

@@ -274,7 +274,7 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 			return nil, err
 		}
 	default:
-		debug.Assertf(false, "%q: unexpected %v(%d)", bctx.bck.String(), err, ecode)
+		debug.Func(func() { debug.Assertf(false, "%q: unexpected %v(%d)", bctx.bck.String(), err, ecode) })
 		p.writeErr(bctx.w, bctx.r, err, ecode)
 		return nil, err
 	}

@@ -302,7 +302,9 @@ func DoAbort(flt *Flt, err error) {
 		if xctn == nil || errV != nil {
 			return
 		}
-		debug.Assertf(flt.Kind == "" || xctn.Kind() == flt.Kind, "wrong xaction kind: %s vs %q", xctn.Cname(), flt.Kind)
+		debug.Func(func() {
+			debug.Assertf(flt.Kind == "" || xctn.Kind() == flt.Kind, "wrong xaction kind: %s vs %q", xctn.Cname(), flt.Kind)
+		})
 		xctn.Abort(err)
 	case flt.Kind != "" && flt.Bck != nil:
 		dreg.abort(&abortArgs{kind: flt.Kind, bcks: []*meta.Bck{flt.Bck}, err: err})
@@ -779,7 +781,7 @@ func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck
 			continue
 		}
 		d, ok := xact.Table[xctn.Kind()]
-		debug.Assert(ok, xctn.Kind())
+		debug.Func(func() { debug.Assert(ok, xctn.Kind()) })
 		if !d.ConflictRebRes {
 			continue
 		}
@@ -879,7 +881,7 @@ func (flt *Flt) Matches(xctn core.Xact) (yes bool) {
 	// same ID?
 	if flt.ID != "" {
 		if debug.ON() {
-			debug.AssertFunc(func() bool { return xact.IsValidUUID(flt.ID) }, flt.ID)
+			debug.Assert(xact.IsValidUUID(flt.ID), flt.ID)
 		}
 		if yes = xctn.ID() == flt.ID; yes {
 			if debug.ON() {
@@ -891,7 +893,7 @@ func (flt *Flt) Matches(xctn core.Xact) (yes bool) {
 	// kind?
 	if flt.Kind != "" {
 		if debug.ON() {
-			debug.AssertFunc(func() bool { return xact.IsValidKind(flt.Kind) }, flt.Kind)
+			debug.Assert(xact.IsValidKind(flt.Kind), flt.Kind)
 		}
 		if kind != flt.Kind {
 			return false

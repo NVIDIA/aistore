@@ -55,7 +55,7 @@ func (*rspFactory) Kind() string     { return apc.ActECRespond }
 func (p *rspFactory) Get() core.Xact { return p.xctn }
 
 func (p *rspFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
-	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
+	debug.Func(func() { debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) }) // xreg.usePrev() must've returned true
 	return xreg.WprUse, nil
 }
 

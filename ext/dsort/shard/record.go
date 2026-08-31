@@ -175,7 +175,7 @@ func (r *Records) Insert(records ...*Record) {
 }
 
 func (r *Records) DeleteDup(name, ext string) {
-	debug.Assert(r.Exists(name, ext), "record: "+name+", "+ext)
+	debug.AssertFunc(func() bool { return r.Exists(name, ext) }, "record: ", name, ", ", ext)
 	r.Lock()
 	if record, ok := r.m[name]; ok {
 		if record.delete(ext) {

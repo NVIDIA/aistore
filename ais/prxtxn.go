@@ -1263,7 +1263,7 @@ func (r *_tcbfin) cb(nl nl.Listener) {
 	)
 	switch {
 	case err == nil:
-		debug.Assert(!aborted, nl.String())
+		debug.Func(func() { debug.Assert(!aborted, nl.String()) })
 		return
 	case !aborted:
 		nlog.Infoln("Warning:", err)

@@ -1076,7 +1076,9 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 	// 2.2. "pure" metasync(newRMD) w/ no action - double-check with cluster config ---------------------------------
 	default:
 		config := cmn.GCO.Get()
-		debug.Assert(config.Version > 0 && config.UUID == smap.UUID, config.String(), " vs ", smap.StringEx())
+		debug.Func(func() {
+			debug.Assert(config.Version > 0 && config.UUID == smap.UUID, config.String(), " vs ", smap.StringEx())
+		})
 
 		if config.Rebalance.Enabled {
 			nlog.Infoln(tname, "starting", xname)
@@ -1366,7 +1368,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 		detail := meta.Tname(ntid) + " " + newSmap.String()
 		reb.OffTimedGFN(detail)
 	default:
-		debug.Assert(false, msg.String())
+		debug.Func(func() { debug.Assert(false, msg.String()) })
 		t.writeErrAct(w, r, msg.Action)
 	}
 }

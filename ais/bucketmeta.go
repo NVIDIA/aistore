@@ -152,7 +152,7 @@ func (m *bucketMD) set(bck *meta.Bck, p *cmn.Bprops) {
 	debug.AssertFunc(func() bool { return apc.IsProvider(bck.Provider) })
 	prevProps, present := m.Get(bck)
 	if !present {
-		debug.Assertf(false, "%s: not present", bck.String())
+		debug.Func(func() { debug.Assertf(false, "%s: not present", bck.String()) })
 	}
 	debug.Assert(prevProps.BID != 0)
 

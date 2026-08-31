@@ -313,7 +313,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		return
 	}
 	if ncm.Smap.Version != nsmap.Version {
-		debug.Assert(ncm.Smap.Version > nsmap.Version, ncm.Smap.String(), " vs ", nsmap.String())
+		debug.Func(func() { debug.Assert(ncm.Smap.Version > nsmap.Version, ncm.Smap.String(), " vs ", nsmap.String()) })
 		p.writeErrf(w, r, "cannot %s %s(self, primary) -> %s: detected version change (%s vs %s) at the destination",
 			act, p, npname, ncm.Smap.String(), nsmap.String())
 	}

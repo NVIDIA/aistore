@@ -1708,7 +1708,7 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 		Timeout: wi.config.GetBatch.MaxWait.D() << 1,
 	}
 
-	resp, err := core.T.GetFromNeighbor(params) //nolint:bodyclose // closed below
+	resp, err := core.T.GetFromNeighbor(params)
 
 	if err != nil {
 		if cmn.Rom.V(4, cos.ModXs) {
@@ -1736,7 +1736,9 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 		oah := cos.SimpleOAH{Size: resp.ContentLength}
 		err = wi._txreg(oah, resp.Body, out, nameInArch)
 	} else {
-		debug.Assert(resp.ContentLength >= 0, "GFN(arch): negative Content-Length for ", lom.Cname()+"/"+in.ArchPath)
+		debug.Func(func() {
+			debug.Assert(resp.ContentLength >= 0, "GFN(arch): negative Content-Length for ", lom.Cname()+"/"+in.ArchPath)
+		})
 		nameInArch = _withArchpath(nameInArch, in.ArchPath)
 		err = wi._txarch(resp.Body, out, nameInArch, resp.ContentLength)
 	}

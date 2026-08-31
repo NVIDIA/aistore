@@ -122,7 +122,7 @@ func (p *proxy) bsummHead(bck *meta.Bck, msg *apc.BsummCtrlMsg) (info *cmn.Bsumm
 	}
 	summaries, status, err = p.bsummCollect(ctx)
 	if err == nil && (status == http.StatusOK || status == http.StatusPartialContent) {
-		debug.Assert(len(summaries) != 0, bck.Cname(msg.Prefix))
+		debug.Func(func() { debug.Assert(len(summaries) != 0, bck.Cname(msg.Prefix)) })
 		if len(summaries) != 0 {
 			info = summaries[0]
 		}

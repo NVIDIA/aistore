@@ -250,7 +250,7 @@ func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
-	debug.AssertNoErr(k8s.ValidateEtlName(ctx.etlName))
+	debug.Func(func() { debug.AssertNoErr(k8s.ValidateEtlName(ctx.etlName)) })
 	if exists := clone.del(ctx.etlName); !exists {
 		err = cos.NewErrNotFound(p, "etl job "+ctx.etlName)
 	}

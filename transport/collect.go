@@ -179,7 +179,7 @@ func (gc *collector) apply(c *ctrl) {
 	_, exists := gc.streams[s.sessID]
 
 	if c.add {
-		debug.Assert(!exists, s.String())
+		debug.Func(func() { debug.Assert(!exists, s.String()) })
 		gc.streams[s.sessID] = s
 
 		if gc.none.CAS(true, false) {

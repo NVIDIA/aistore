@@ -124,7 +124,7 @@ func (csm *contentSpecMgr) _reg(cttype string, cr contentRes) {
 		panic(fmt.Errorf("%s: %s %q must have length %d", csmtag, cttag, cttype, contentTypeLen))
 	}
 	if _, ok := csm.m[cttype]; ok {
-		debug.AssertNoErr(fmt.Errorf("%s: %s %q is already registered", csmtag, cttag, cttype))
+		debug.Func(func() { debug.AssertNoErr(fmt.Errorf("%s: %s %q is already registered", csmtag, cttag, cttype)) })
 	}
 	csm.m[cttype] = cr
 }

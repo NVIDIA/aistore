@@ -88,7 +88,7 @@ func (xctn *Base) InObjs() int64  { return ratomic.LoadInt64(&xctn.stats.InObjs)
 func (xctn *Base) InBytes() int64 { return ratomic.LoadInt64(&xctn.stats.InBytes) }
 
 func (xctn *Base) InObjsAdd(cnt int, size int64) {
-	debug.Assert(size >= 0, xctn.String()) // "unsized" is caller's responsibility
+	debug.Func(func() { debug.Assert(size >= 0, xctn.String()) }) // "unsized" is caller's responsibility
 	ratomic.AddInt64(&xctn.stats.InObjs, int64(cnt))
 	ratomic.AddInt64(&xctn.stats.InBytes, size)
 }

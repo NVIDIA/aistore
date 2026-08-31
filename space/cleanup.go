@@ -588,7 +588,9 @@ func (j *clnJ) visitSysBck(parsed *fs.ParsedFQN, fqn string) {
 			j.rmAnyBatch(flagRmSysBck)
 		}
 	default:
-		debug.Assertf(false, "unexpected content type: %q in system bucket: %q", parsed.ContentType, j.bck.String())
+		debug.Func(func() {
+			debug.Assertf(false, "unexpected content type: %q in system bucket: %q", parsed.ContentType, j.bck.String())
+		})
 		nlog.Warningln(j.String(), "unexpected content type: "+parsed.ContentType+" in system bucket: "+j.bck.String())
 	}
 }
