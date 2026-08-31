@@ -110,7 +110,7 @@ func newBucketMD() *bucketMD {
 	namespaces := make(meta.Namespaces, 1)
 	providers[apc.AIS] = namespaces
 	buckets := make(meta.Buckets, 16)
-	debug.Assert(cmn.NsGlobalUname == cmn.NsGlobal.Uname())
+	debug.AssertFunc(func() bool { return cmn.NsGlobalUname == cmn.NsGlobal.Uname() })
 	namespaces[cmn.NsGlobalUname] = buckets
 
 	return &bucketMD{BMD: meta.BMD{Providers: providers, UUID: ""}}
@@ -121,7 +121,7 @@ func newBucketMD() *bucketMD {
 //////////////
 
 func (m *bucketMD) add(bck *meta.Bck, p *cmn.Bprops) bool {
-	debug.Assert(apc.IsProvider(bck.Provider))
+	debug.AssertFunc(func() bool { return apc.IsProvider(bck.Provider) })
 	if _, present := m.Get(bck); present {
 		return false
 	}
@@ -149,7 +149,7 @@ func (m *bucketMD) del(bck *meta.Bck) (deleted bool) {
 }
 
 func (m *bucketMD) set(bck *meta.Bck, p *cmn.Bprops) {
-	debug.Assert(apc.IsProvider(bck.Provider))
+	debug.AssertFunc(func() bool { return apc.IsProvider(bck.Provider) })
 	prevProps, present := m.Get(bck)
 	if !present {
 		debug.Assertf(false, "%s: not present", bck.String())

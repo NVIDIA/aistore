@@ -134,7 +134,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	if extra.Compressed() {
 		s.initCompression(extra)
 	}
-	debug.Assert(s.usePDU() == extra.UsePDU())
+	debug.AssertFunc(func() bool { return s.usePDU() == extra.UsePDU() })
 
 	burst := cos.NonZero(extra.Burst, extra.Config.Transport.Burst)
 	if burst <= 0 {

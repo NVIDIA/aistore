@@ -155,7 +155,7 @@ const lais = len(aisPrefix)
 // - target InitObjProps2Hdr
 // - api/object
 func PropToHeader(prop string) string {
-	debug.Assert(!strings.HasPrefix(prop, aisPrefix), "already converted: ", prop)
+	debug.AssertFunc(func() bool { return !strings.HasPrefix(prop, aisPrefix) }, "already converted: ", prop)
 	if prop[0] == '.' || prop[0] == '_' {
 		prop = prop[1:]
 	}

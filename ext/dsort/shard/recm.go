@@ -121,7 +121,7 @@ func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64
 		// react: ignore or warn
 	}
 
-	debug.Assert(!args.extractMethod.Has(ExtractToWriter) || args.w != nil)
+	debug.AssertFunc(func() bool { return !args.extractMethod.Has(ExtractToWriter) || args.w != nil })
 
 	r, ske, needRead := recm.keyExtractor.PrepareExtractor(args.recordName, args.r, ext)
 	switch {

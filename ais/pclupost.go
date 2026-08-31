@@ -62,7 +62,7 @@ type clupost struct {
 // +gen:endpoint POST /v1/cluster/{operation}
 // Handle cluster join operations and node keepalives.
 func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) {
-	debug.Assert(reqIsPub(r) == isPub)
+	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
 
 	apiItems, err := p.parseURL(w, r, apc.URLPathClu.L, 1, true)
 	if err != nil {
@@ -285,7 +285,9 @@ func (c *clupost) setActionCheckVer() (stop bool) {
 			return true
 		}
 		p.noteNodeVersion(c.nsi, c.nversStr, c.nversParsed)
-		debug.Assert(c.nsi.VerifyingKey == nil || cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 1}))
+		debug.AssertFunc(func() bool {
+			return c.nsi.VerifyingKey == nil || cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 1})
+		})
 
 		if c.nsi.IsProxy() {
 			c.action = apc.ActSelfJoinProxy
@@ -811,7 +813,7 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		rmd := p.owner.rmd.get()
 		pairs = append(pairs, revsPair{rmd, actMsgExt})
 	} else {
-		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
+		debug.AssertFunc(func() bool { return ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version() })
 		actMsgExt.UUID = ctx.rmdCtx.rebID
 		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
 	}

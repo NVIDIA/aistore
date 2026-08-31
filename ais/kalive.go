@@ -188,7 +188,7 @@ func (pkr *palive) cluUptime(now int64) time.Duration {
 }
 
 func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fast bool) (string, int, error) {
-	debug.Assert(!smap.isPrimary(pkr.p.si))
+	debug.AssertFunc(func() bool { return !smap.isPrimary(pkr.p.si) })
 
 	if fast {
 		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false)
@@ -586,7 +586,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 
 	k.statsT.Inc(stats.ErrKaliveCount)
 
-	debug.Assert(cpid == pid && cpid != si.ID())
+	debug.AssertFunc(func() bool { return cpid == pid && cpid != si.ID() })
 	nlog.Warningln(sname, "=>", pname, "failure - retrying: [", fast, tout, err, status, "]")
 
 	//

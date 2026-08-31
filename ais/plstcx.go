@@ -174,15 +174,15 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (lsofcRes,
 }
 
 func (p *proxy) _lsofcRemote(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (fc lsofcRes, err error) {
-	debug.Assert(bck.IsRemote())
-	debug.Assert(!lsmsg.IsFlagSet(apc.LsCached))
+	debug.AssertFunc(func() bool { return bck.IsRemote() })
+	debug.AssertFunc(func() bool { return !lsmsg.IsFlagSet(apc.LsCached) })
 
 	fc.listRemote = true
 
 	// remote bucket outside cluster (not in BMD) that hasn't been added ("on the fly") by the caller
 	// (lsmsg flag below)
 	if bck.Props.BID == 0 {
-		debug.Assert(lsmsg.IsFlagSet(apc.LsDontAddRemote))
+		debug.AssertFunc(func() bool { return lsmsg.IsFlagSet(apc.LsDontAddRemote) })
 		fc.wantOnlyRemote = true
 		if !lsmsg.WantOnlyRemoteProps() {
 			err := fmt.Errorf("cannot list remote and not-in-cluster bucket %s for not-only-remote object properties: %q",

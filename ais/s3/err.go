@@ -105,6 +105,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, errInfo ErrInfo) {
 		err       = errInfo.Err // in error
 		out       Error         // out error
 		in        *cmn.ErrHTTP
+		errName   *cmn.ErrBckNameConflict
 		ok        bool
 		allocated bool
 	)
@@ -122,10 +123,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, errInfo ErrInfo) {
 		out.Code = "BucketAlreadyExists"
 	case cmn.IsErrBckNotFound(err):
 		out.Code = NoSuchBucket
-	case cmn.IsErrBckNameConflict(err):
-		var e *cmn.ErrBckNameConflict
-		debug.Assert(errors.As(err, &e))
-		if e.Creating {
+	case errors.As(err, &errName): // see also: cmn.IsErrBckNameConflict(err)
+		if errName.Creating {
 			out.Code = "BucketAlreadyExists"
 			in.Status = http.StatusConflict
 		} else {

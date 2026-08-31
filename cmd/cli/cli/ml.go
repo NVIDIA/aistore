@@ -119,7 +119,7 @@ func getBatchHandler(c *cli.Context) error {
 	}
 
 	if ctx.batchSize > 0 {
-		debug.Assert(flagIsSet(c, lhotseManifestFlag), "native (non-lhotse) batching not implemented yet")
+		debug.AssertFunc(func() bool { return flagIsSet(c, lhotseManifestFlag) }, "native (non-lhotse) batching not implemented yet")
 		return lhotseMultiBatch(c, ctx)
 	}
 	outFile, bck := ctx.outFile, ctx.bck

@@ -91,7 +91,7 @@ func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
 }
 
 func (ups *ups) _add(id string, manifest *core.Ufest, rmd map[string]string) (err error) {
-	debug.Assert(manifest.Lom() != nil)
+	debug.AssertFunc(func() bool { return manifest.Lom() != nil })
 	if _, ok := ups.m[id]; ok {
 		err = fmt.Errorf("duplicated upload ID: %q", id)
 		debug.AssertNoErr(err)
@@ -114,7 +114,7 @@ func (ups *ups) get(id string, lom *core.LOM) (manifest *core.Ufest, remoteMeta 
 	if ok {
 		manifest = up.u
 		remoteMeta = up.rmd
-		debug.Assert(id == manifest.ID())
+		debug.AssertFunc(func() bool { return id == manifest.ID() })
 		return
 	}
 	if !lom.IsFeatureSet(feat.ResumeInterruptedMPU) {

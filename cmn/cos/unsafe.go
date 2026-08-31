@@ -51,7 +51,7 @@ func UnsafeBptr(s *string) *[]byte {
 // (see cmn/gco.Clone() for special handling)
 func CopyStruct(dst, src any) {
 	x := reflect.ValueOf(src)
-	debug.Assert(x.Kind() == reflect.Pointer)
+	debug.AssertFunc(func() bool { return x.Kind() == reflect.Pointer })
 	starX := x.Elem()
 	y := reflect.New(starX.Type())
 	starY := y.Elem()

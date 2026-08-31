@@ -41,7 +41,7 @@ func (s *Slab) Alloc() (buf []byte) {
 
 func (s *Slab) Free(buf []byte) {
 	s.muput.Lock()
-	debug.Assert(int64(cap(buf)) == s.Size())
+	debug.AssertFunc(func() bool { return int64(cap(buf)) == s.Size() })
 	debug.DeadBeefLarge(buf[:cap(buf)])
 	s.put = append(s.put, buf[:cap(buf)]) // always freeing the original size
 	s.muput.Unlock()

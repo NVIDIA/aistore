@@ -313,8 +313,8 @@ func formatCnum(num int) string {
 
 // check whether completed chunks are properly located
 func (u *Ufest) IsHRW(avail fs.MPI) (bool, error) {
-	debug.Assert(u.lom.IsHRW(), "must be already checked by the caller")
-	debug.Assert(u.Completed(), "ditto (don't call with partial)")
+	debug.AssertFunc(func() bool { return u.lom.IsHRW() }, "must be already checked by the caller")
+	debug.AssertFunc(func() bool { return u.Completed() }, "ditto (don't call with partial)")
 	for i := range u.chunks {
 		c := &u.chunks[i]
 		switch c.num {
@@ -606,7 +606,7 @@ func (u *Ufest) _decompress(compressedReader io.Reader) error {
 		return fmt.Errorf("failed to decompress: %w", err)
 	}
 
-	debug.Assert(sgl.Size() > 0, "decompressed manifest is empty")
+	debug.AssertFunc(func() bool { return sgl.Size() > 0 }, "decompressed manifest is empty")
 
 	if err := u.unpack(sgl); err != nil {
 		return fmt.Errorf("failed to unpack: %w", err)
@@ -783,7 +783,7 @@ func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) error {
 	u.pack(zw)
 	zw.Close()
 
-	debug.Assert(sgl.Size() > 0, "compressed manifest is empty")
+	debug.AssertFunc(func() bool { return sgl.Size() > 0 }, "compressed manifest is empty")
 
 	// Write trailing checksum
 	checksum := h.Sum64()
@@ -913,7 +913,7 @@ func (u *Ufest) fread(sgl *memsys.SGL, completed bool) error {
 	if err != nil {
 		return err
 	}
-	debug.Assert(n == sgl.Len())
+	debug.AssertFunc(func() bool { return n == sgl.Len() })
 	return nil
 }
 
@@ -921,7 +921,7 @@ func (u *Ufest) fread(sgl *memsys.SGL, completed bool) error {
 // - there's always manifest mutex
 // - if the caller is completing this manifest there must be LOM wlock
 func (u *Ufest) fwrite(lom *LOM, sgl *memsys.SGL, completed bool) error {
-	debug.Assert(u.Completed() == completed)
+	debug.AssertFunc(func() bool { return u.Completed() == completed })
 	debug.Assert(!completed || lom.IsLocked() == apc.LockWrite, "expecting w-locked", lom.Cname())
 
 	fqn := u._fqns(lom, completed)
@@ -1325,7 +1325,7 @@ func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 	)
 	if prevUfest != nil {
 		completedFQN = prevLom.GenFQN(fs.ChunkMetaCT)
-		debug.Assert(completedFQN == lom.GenFQN(fs.ChunkMetaCT))
+		debug.AssertFunc(func() bool { return completedFQN == lom.GenFQN(fs.ChunkMetaCT) })
 
 		wfqnMeta = prevLom.GenFQN(fs.ChunkMetaCT, u.id)
 		if _renameWarn(completedFQN, wfqnMeta) == nil {
@@ -1345,7 +1345,7 @@ func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 	lom.SetAtimeUnix(u.created.UnixNano())
 
 	lom.setlmfl(lmflChunk)
-	debug.Assert(lom.md.lid.haslmfl(lmflChunk))
+	debug.AssertFunc(func() bool { return lom.md.lid.haslmfl(lmflChunk) })
 
 	if err := lom.PersistMain(true /*isChunked*/); err != nil {
 		if prevUfest == nil {
@@ -1626,7 +1626,7 @@ func (u *Ufest) Relocate(hrwMi *fs.Mountpath, buf []byte) (*LOM, error) {
 	lom := u.lom
 
 	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
-	debug.Assert(lom.IsChunked())
+	debug.AssertFunc(func() bool { return lom.IsChunked() })
 
 	if err := u.Check(true /*completed*/); err != nil {
 		return nil, err

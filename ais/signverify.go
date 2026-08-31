@@ -85,7 +85,7 @@ func (svs *svState) init() {
 }
 
 func (svs *svState) set(on bool) {
-	debug.Assert(on == cmn.Rom.SignVerifyEnabled())
+	debug.AssertFunc(func() bool { return on == cmn.Rom.SignVerifyEnabled() })
 
 	cur := svs.cur.Load()
 	if cur.on == on {
@@ -131,7 +131,7 @@ func (svs *svState) strict() bool {
 ///////////
 
 func sigLen() int {
-	debug.Assert(base64.RawURLEncoding.EncodedLen(cos.NodeSigningSignatureSize) == 86)
+	debug.AssertFunc(func() bool { return base64.RawURLEncoding.EncodedLen(cos.NodeSigningSignatureSize) == 86 })
 	return 86
 }
 
@@ -202,7 +202,7 @@ func (sv *svReq) verify(sid string, snode *meta.Snode, smap *smapX) (int, error)
 		e := fmt.Errorf(fmtNodeNotPresent, sid, smap)
 		return na, fmt.Errorf("cannot verify request: %v, smapVer=%d", e, sv.smapVer)
 	}
-	debug.Assert(snode.ID() == sid)
+	debug.AssertFunc(func() bool { return snode.ID() == sid })
 
 	if len(snode.VerifyingKey) != cos.NodeSigningPublicKeySize {
 		return na, fmt.Errorf("sender %s: no verifying key", snode.StringEx())
@@ -341,7 +341,7 @@ func _streamPayloadSize(trname, senderID string) int {
 
 func (t *target) streamSign(trname string, sessID int64) (auth transport.Auth) {
 	smap := t.owner.smap.get()
-	debug.Assert(smap.isValid())
+	debug.AssertFunc(func() bool { return smap.isValid() })
 
 	smapVer := smap.version()
 	auth.SmapVer = smapVer
@@ -378,7 +378,7 @@ func (t *target) streamVerify(trname string, sessID int64, senderID string, r *h
 	}
 
 	smap := t.owner.smap.get()
-	debug.Assert(smap.isValid())
+	debug.AssertFunc(func() bool { return smap.isValid() })
 
 	// sender identity and cluster membership are required even while unsigned
 	// traffic remains permitted
@@ -386,7 +386,7 @@ func (t *target) streamVerify(trname string, sessID int64, senderID string, r *h
 	if snode == nil {
 		return fmt.Errorf(fmtNodeNotPresent, senderID, smap)
 	}
-	debug.Assert(snode.ID() == senderID)
+	debug.AssertFunc(func() bool { return snode.ID() == senderID })
 
 	svgrp, err := svgrpFromHdr(r.Header)
 	if err != nil {

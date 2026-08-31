@@ -319,7 +319,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 
 func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config) (bcks cmn.Bcks, ecode int, err error) {
 	// validate
-	debug.Assert(!qbck.IsAIS())
+	debug.AssertFunc(func() bool { return !qbck.IsAIS() })
 	if qbck.IsCloud() { // must be configured
 		if config.Backend.Get(qbck.Provider) == nil {
 			return nil, 0, &cmn.ErrMissingBackend{Provider: qbck.Provider}
@@ -648,7 +648,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 
 		// start and immdiately finish xaction with a singular purpose:
 		// to have a record in xreg (via `ais show job`): name and timestamp only
-		debug.Assert(strings.HasPrefix(xid, xact.PrefixEvictKeepID), xid)
+		debug.AssertFunc(func() bool { return strings.HasPrefix(xid, xact.PrefixEvictKeepID) }, xid)
 		_ = xreg.RenewEvictDelete(xid, apc.ActEvictRemoteBck, bck, nil)
 
 		core.LcacheClearBcks(wg, bck)
@@ -860,7 +860,7 @@ func (t *target) _bckhead(w http.ResponseWriter, r *http.Request, apireq *apiReq
 		nlog.Infoln(r.Method, bck, "<=", pid)
 	}
 
-	debug.Assert(!bck.IsAIS())
+	debug.AssertFunc(func() bool { return !bck.IsAIS() })
 
 	// + cloud
 	bp := t.Backend(bck)

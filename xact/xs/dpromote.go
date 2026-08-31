@@ -111,7 +111,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
 	}
-	debug.Assert(filepath.IsAbs(fqn))
+	debug.AssertFunc(func() bool { return filepath.IsAbs(fqn) })
 	bck := r.Bck()
 
 	// promote

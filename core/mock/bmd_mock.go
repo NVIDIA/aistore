@@ -28,7 +28,7 @@ func NewBaseBownerMock(bcks ...*meta.Bck) *BownerMock {
 		buckets    = make(meta.Buckets)
 	)
 	providers[apc.AIS] = namespaces
-	debug.Assert(cmn.NsGlobalUname == cmn.NsGlobal.Uname())
+	debug.AssertFunc(func() bool { return cmn.NsGlobalUname == cmn.NsGlobal.Uname() })
 	namespaces[cmn.NsGlobalUname] = buckets
 
 	owner := &BownerMock{BMD: meta.BMD{Version: 1, Providers: providers}}

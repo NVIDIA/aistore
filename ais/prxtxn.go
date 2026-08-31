@@ -256,7 +256,7 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 		if bck.IsRemoteAIS() {
 			// remais alias => uuid
 			bck.Ns.UUID = remoteHdr.Get(apc.HdrRemAisUUID)
-			debug.Assert(cos.IsValidUUID(bck.Ns.UUID))
+			debug.AssertFunc(func() bool { return cos.IsValidUUID(bck.Ns.UUID) })
 			debug.Assert(bck.Ns.UUID != "remais", "cannot have remote AIS alias in BMD") // TODO: remove
 		}
 	case backend != nil: // remote backend exists
@@ -533,7 +533,7 @@ func (p *proxy) bmodSetProps(ctx *bmdModifier, clone *bucketMD) (err error) {
 	}
 	ctx.needReMirror = _reMirror(bprops, ctx.setProps)
 	targetCnt, ctx.needReEC = _reEC(bprops, ctx.setProps, bck, p.owner.smap.get())
-	debug.Assert(!ctx.needReEC || ctx.setProps.Validate(targetCnt) == nil)
+	debug.AssertFunc(func() bool { return !ctx.needReEC || ctx.setProps.Validate(targetCnt) == nil })
 	clone.set(bck, ctx.setProps)
 	return nil
 }
@@ -621,7 +621,7 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (str
 		return "", cmn.NewErrAisBckNotFound(bckFrom.Bucket())
 	}
 	_, existsTo := bmd.Get(bckTo)
-	debug.Assert(existsTo || bckTo.IsAIS())
+	debug.AssertFunc(func() bool { return existsTo || bckTo.IsAIS() })
 
 	// 2. begin
 	var (
@@ -1042,7 +1042,7 @@ func prmBegin(c *txnCln, bck *meta.Bck, singleT bool) (num int64, allAgree bool,
 		} else if val := res.header.Get(apc.HdrPromoteNamesHash); val == "" || val != cksumVal {
 			allAgree = false
 		} else if allAgree {
-			debug.Assert(totalN == res.header.Get(apc.HdrPromoteNamesNum))
+			debug.AssertFunc(func() bool { return totalN == res.header.Get(apc.HdrPromoteNamesNum) })
 		}
 	}
 	if err == nil {
@@ -1070,7 +1070,7 @@ func bmodCpProps(ctx *bmdModifier, clone *bucketMD) error {
 		return nil
 	}
 
-	debug.Assert(bckTo.IsAIS())
+	debug.AssertFunc(func() bool { return bckTo.IsAIS() })
 	bckFrom.Props = bprops.Clone()
 	// replicate bucket props - but only if the source is ais as well
 	if bckFrom.IsAIS() || bckFrom.IsRemoteAIS() {

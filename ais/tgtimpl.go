@@ -40,7 +40,7 @@ func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values)
 }
 
 func (t *target) PutObject(lom *core.LOM, params *core.PutParams) (err error) {
-	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
+	debug.AssertFunc(func() bool { return params.WorkTag != "" && !params.Atime.IsZero() })
 	workFQN := lom.GenFQN(fs.WorkCT, params.WorkTag)
 
 	poi := allocPOI()
@@ -315,6 +315,6 @@ func (t *target) IntraCtrlPost(dst *meta.Snode, path string, body []byte) error 
 // sender identity and, when enabled, signature headers.
 func (t *target) setIntraHdrs(req *http.Request) {
 	smap := t.owner.smap.get()
-	debug.Assert(smap.isValid())
+	debug.AssertFunc(func() bool { return smap.isValid() })
 	t.htrun.setIntraHdrs(req, smap, true /*peer is present in my Smap*/)
 }

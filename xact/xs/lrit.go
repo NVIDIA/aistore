@@ -176,7 +176,7 @@ func (r *lrit) _inipr(msg *apc.ListRange) error {
 		return nil
 	}
 pref:
-	debug.Assert(pt.IsPrefixOnly())
+	debug.AssertFunc(pt.IsPrefixOnly)
 	r.prefix = pt.Prefix
 	r.lrp = lrpPrefix
 	return nil

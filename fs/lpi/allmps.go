@@ -90,7 +90,7 @@ func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, l
 		num      = len(lastPage) // num entries
 		wg       = &sync.WaitGroup{}
 	)
-	debug.Assert(lpis.Enabled())
+	debug.AssertFunc(func() bool { return lpis.Enabled() })
 	if num == 0 {
 		debug.Assert(false)
 		return

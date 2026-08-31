@@ -54,7 +54,7 @@ func QuoteETag(v string) string {
 	if v == "" || v[0] == '"' {
 		return v
 	}
-	debug.Assert(!strings.HasPrefix(v, "W/"), v) // weak is not expected
+	debug.AssertFunc(func() bool { return !strings.HasPrefix(v, "W/") }, v) // weak is not expected
 	return `"` + v + `"`
 }
 

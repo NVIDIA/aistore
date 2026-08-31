@@ -171,7 +171,7 @@ func (j *Job) JobFinished() bool {
 	if _isRunning(j.FinishedTime) {
 		return false
 	}
-	debug.Assert(j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.DoneCnt()))
+	debug.AssertFunc(func() bool { return j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.DoneCnt()) })
 	return true
 }
 

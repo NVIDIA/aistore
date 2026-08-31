@@ -542,7 +542,7 @@ func (lr *lrCtx) do(c *cli.Context) error {
 	if errV != nil {
 		return V(errV)
 	}
-	debug.Assert(xact.IsValidKind(kind))
+	debug.AssertFunc(func() bool { return xact.IsValidKind(kind) })
 
 	// 4. format
 	var (

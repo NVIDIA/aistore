@@ -454,7 +454,7 @@ func showPerfTab(c *cli.Context, ctx *teb.PerfTabCtx, cb perfcb, tag string, tot
 		return err
 	}
 	if node != nil {
-		debug.Assert(node.IsTarget())
+		debug.AssertFunc(func() bool { return node.IsTarget() })
 		tid = node.ID()
 	}
 	if regexStr != "" {

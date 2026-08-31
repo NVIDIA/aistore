@@ -469,7 +469,7 @@ func (lom *LOM) _copy2fqn(dst *LOM, buf []byte, sameBucket bool) (err, nested er
 // - returns (open reader + its FQN) or (nil, "")
 func (lom *LOM) OpenCopy() (cos.LomReader, string) {
 	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
-	debug.Assert(!lom.IsChunked())
+	debug.AssertFunc(func() bool { return !lom.IsChunked() })
 
 	if !lom.HasCopies() {
 		return nil, ""

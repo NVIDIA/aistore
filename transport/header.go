@@ -78,7 +78,7 @@ var (
 //
 
 func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
-	debug.Assert(usePDU || !hdr.IsUnsized())
+	debug.AssertFunc(func() bool { return usePDU || !hdr.IsUnsized() })
 	off = sizeProtoHdr
 	off = insString(off, hbuf, hdr.SID)
 	off = insUint16(off, hbuf, hdr.Opcode)

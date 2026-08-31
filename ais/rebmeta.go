@@ -185,7 +185,7 @@ func (r *rmdOwner) do(ctx *rmdModifier) (clone *rebMD, err error) {
 	clone = ctx.prev.clone()
 	clone.TargetIDs = nil
 	clone.CluID = r.cluID
-	debug.Assert(cos.IsValidUUID(clone.CluID), clone.CluID)
+	debug.AssertFunc(func() bool { return cos.IsValidUUID(clone.CluID) }, clone.CluID)
 	ctx.pre(ctx, clone) // `pre` callback
 
 	if err = r.persist(clone); err == nil {
@@ -332,7 +332,7 @@ func (m *rmdModifier) postRm(nl nl.Listener) {
 	} else {
 		warn = fmt.Sprintf("remove %v from the current %s", snames, smap.StringEx())
 	}
-	debug.Assert(nl.UUID() == m.rebID)
+	debug.AssertFunc(func() bool { return nl.UUID() == m.rebID })
 
 	if nl.ErrCnt() == 0 {
 		nlog.Infoln("post-rebalance commit:", warn)
@@ -367,7 +367,7 @@ func (m *rmdModifier) postRm(nl nl.Listener) {
 }
 
 func (m *rmdModifier) log(nl nl.Listener) {
-	debug.Assert(nl.UUID() == m.rebID)
+	debug.AssertFunc(func() bool { return nl.UUID() == m.rebID })
 	var (
 		err  = nl.Err()
 		abrt = nl.IsAborted()

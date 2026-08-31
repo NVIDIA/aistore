@@ -118,7 +118,7 @@ func usePrev(xprev core.Xact, nentry Renewable, flt *Flt) bool {
 		return true
 	}
 	bck := flt.Bck
-	debug.Assert(!bck.IsEmpty())
+	debug.AssertFunc(func() bool { return !bck.IsEmpty() })
 	if !bck.Equal(xprev.Bck(), true /*same BID*/, true) {
 		return false
 	}

@@ -687,7 +687,7 @@ func (r *runner) write(sgl *memsys.SGL, target, idle bool) {
 		if v.Value == 0 || n == Uptime { // always skip zeros and uptime
 			continue
 		}
-		debug.Assert((isDiskMetric(n) && target) || !isDiskMetric(n))
+		debug.AssertFunc(func() bool { return (isDiskMetric(n) && target) || !isDiskMetric(n) })
 		if target && isDiskMetric(n) {
 			continue
 		}

@@ -54,7 +54,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 	npid := apiItems[0]
 	if npid == p.SID() {
-		debug.Assert(p.SID() == smap.Primary.ID())
+		debug.AssertFunc(func() bool { return p.SID() == smap.Primary.ID() })
 		nlog.Warningln(p.String(), "(self) is already primary, nothing to do")
 		return
 	}

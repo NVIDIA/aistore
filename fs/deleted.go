@@ -179,7 +179,7 @@ func deworld(allmpi []MPI) (rerr error) {
 	for _, mpi := range allmpi {
 		for _, mi := range mpi {
 			if err := os.RemoveAll(mi.Path); err != nil {
-				debug.Assert(!cos.IsNotExist(err))
+				debug.AssertFunc(func() bool { return !cos.IsNotExist(err) })
 				// retry ENOTEMPTY in place
 				if errors.Is(err, syscall.ENOTEMPTY) {
 					time.Sleep(desleep)
@@ -202,7 +202,7 @@ func RemoveAll(dir string) (err error) {
 		if err == nil {
 			break
 		}
-		debug.Assert(!cos.IsNotExist(err), err)
+		debug.AssertFunc(func() bool { return !cos.IsNotExist(err) }, err)
 		nlog.ErrorDepth(1, err)
 		if !errors.Is(err, syscall.ENOTEMPTY) {
 			break

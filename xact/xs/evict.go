@@ -50,7 +50,7 @@ func (p *evdFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 		return &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind}
 	}
 	msg := args.Custom.(*apc.EvdMsg)
-	debug.Assert(!msg.IsList() || !msg.HasTemplate())
+	debug.AssertFunc(func() bool { return !msg.IsList() || !msg.HasTemplate() })
 	return &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, msg: msg}
 }
 

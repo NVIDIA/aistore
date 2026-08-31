@@ -73,8 +73,8 @@ func GoRunW(xctn core.Xact) {
 //////////////
 
 func (xctn *Base) InitBase(id, kind string, bck *meta.Bck) {
-	debug.Assert(kind == apc.ActETLInline || IsValidUUID(id), id)
-	debug.Assert(IsValidKind(kind), kind)
+	debug.AssertFunc(func() bool { return kind == apc.ActETLInline || IsValidUUID(id) }, id)
+	debug.AssertFunc(func() bool { return IsValidKind(kind) }, kind)
 
 	xctn.id, xctn.kind = id, kind
 
@@ -397,8 +397,8 @@ func (xctn *Base) onFinished(err error, aborted bool) {
 
 func (xctn *Base) AddNotif(n core.Notif) {
 	xctn.notif = n.(*NotifXact)
-	debug.Assert(xctn.notif.Xact != nil && xctn.notif.F != nil)     // always fin-notif and points to self
-	debug.Assert(!n.Upon(core.UponProgress) || xctn.notif.P != nil) // progress notification is optional
+	debug.Assert(xctn.notif.Xact != nil && xctn.notif.F != nil)                                // always fin-notif and points to self
+	debug.AssertFunc(func() bool { return !n.Upon(core.UponProgress) || xctn.notif.P != nil }) // progress notification is optional
 }
 
 //

@@ -388,7 +388,7 @@ func (z *SGL) Free() {
 	s.muput.Lock()
 	for _, buf := range z.sgl {
 		size := cap(buf)
-		debug.Assert(int64(size) == s.Size())
+		debug.AssertFunc(func() bool { return int64(size) == s.Size() })
 		b := buf[:size] // always freeing original (fixed buffer) size
 		debug.DeadBeefLarge(b)
 		s.put = append(s.put, b)

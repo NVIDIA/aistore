@@ -52,14 +52,14 @@ func (lid lomBID) setbid(bid uint64) lomBID {
 }
 
 func (lid lomBID) setlmfl(fl lomFlags) lomBID {
-	debug.Assert(fl <= lomFlags(flagsV1>>bitshift), fl)
+	debug.AssertFunc(func() bool { return fl <= lomFlags(flagsV1>>bitshift) }, fl)
 	return lomBID(uint64(lid) | (uint64(fl) << bitshift))
 }
 
 func (lid lomBID) haslmfl(fl lomFlags) bool { return uint64(lid)&(uint64(fl)<<bitshift) != 0 }
 
 func (lid lomBID) clrlmfl(fl lomFlags) lomBID {
-	debug.Assert(fl <= lomFlags(flagsV1>>bitshift))
+	debug.AssertFunc(func() bool { return fl <= lomFlags(flagsV1>>bitshift) })
 	return lomBID(uint64(lid) & ^(uint64(fl) << bitshift))
 }
 

@@ -111,7 +111,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 // R-flow:
 // returns next page from the remote bucket's "list-objects" result set
 func (npg *npgCtx) nextPageR(ctx context.Context, entries cmn.LsoEntries) (*cmn.LsoRes, error) {
-	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsCached))
+	debug.AssertFunc(func() bool { return !npg.wi.msg.IsFlagSet(apc.LsCached) })
 	lst := &cmn.LsoRes{Entries: entries}
 
 	if _, err := npg.bp.ListObjects(ctx, npg.bck, npg.wi.msg, lst); err != nil {

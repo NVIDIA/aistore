@@ -294,7 +294,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		}
 	} else if !poi.t2t && poi.owt == cmn.OwtPut && poi.restful {
 		// user PUT
-		debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
+		debug.AssertFunc(func() bool { return cos.IsValidAtime(poi.atime) }, poi.atime)
 		poi.stats()
 		// response header
 		if poi.resphdr != nil {
@@ -350,7 +350,7 @@ func (poi *putOI) stats() {
 		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta, VarLabs: vlabs},
 	)
 	if poi.rltime > 0 {
-		debug.Assert(bck.IsRemote())
+		debug.AssertFunc(func() bool { return bck.IsRemote() })
 		bp := poi.t.Backend(bck)
 		poi.t.statsT.IncWith(bp.MetricName(stats.PutCount), vlabs)
 		poi.t.statsT.AddWith(
@@ -469,7 +469,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 		}
 		defer lom.Unlock(true)
 	default:
-		debug.Assert(cos.IsValidAtime(poi.atime), poi.atime) // expecting valid atime
+		debug.AssertFunc(func() bool { return cos.IsValidAtime(poi.atime) }, poi.atime) // expecting valid atime
 		lom.Lock(true)
 		defer lom.Unlock(true)
 		lom.SetAtimeUnix(poi.atime)
@@ -1158,7 +1158,7 @@ func (goi *getOI) txfini() (fqn string, ecode int, err error) {
 	// transmit (range, arch, regular)
 	switch {
 	case goi.ranges.Range != "":
-		debug.Assert(!dpq.isArch())
+		debug.AssertFunc(func() bool { return !dpq.isArch() })
 		rsize := lom.Lsize()
 		if goi.ranges.Size > 0 {
 			rsize = goi.ranges.Size
@@ -2096,7 +2096,7 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 // use data mover to transmit objects to other targets
 // (compare with coi.put())
 func (*coi) _dm(lom *core.LOM, sargs *sendArgs) error {
-	debug.Assert(sargs.dm.OWT() == sargs.owt)
+	debug.AssertFunc(func() bool { return sargs.dm.OWT() == sargs.owt })
 	o := transport.AllocSend()
 	hdr, oa := &o.Hdr, sargs.objAttrs
 	{

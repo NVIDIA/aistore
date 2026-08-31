@@ -369,7 +369,7 @@ func (n *notifs) done(nl nl.Listener) {
 		// TODO: confirm & load-balance
 		doSend := true
 		if smap.Primary != nil { // nil in unit tests
-			debug.Assert(n.p.SID() != smap.Primary.ID() || smap.IsPrimary(n.p.si))
+			debug.AssertFunc(func() bool { return n.p.SID() != smap.Primary.ID() || smap.IsPrimary(n.p.si) })
 			doSend = smap.IsPrimary(n.p.si) ||
 				!smap.IsIC(smap.Primary) // never happens but ok
 		}
@@ -597,7 +597,7 @@ repeat:
 	// cleanup and callback w/ nl.Err
 	n.fin.wlockAll()
 	for uuid, nl := range remnl {
-		debug.Assert(nl.UUID() == uuid)
+		debug.AssertFunc(func() bool { return nl.UUID() == uuid })
 		n.fin.add(nl, true /*locked*/)
 	}
 	n.fin.wunlockAll()
@@ -849,7 +849,7 @@ func (l *listeners) find(flt nlFilter) (nl nl.Listener) {
 			}
 			et := listener.EndTime()
 			if ftime != 0 && et < ftime {
-				debug.Assert(listener.IsFinished())
+				debug.AssertFunc(func() bool { return listener.IsFinished() })
 				continue
 			}
 			nl = listener

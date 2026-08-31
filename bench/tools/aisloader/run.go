@@ -512,7 +512,7 @@ Done:
 }
 
 func isDirectS3() bool {
-	debug.Assert(flag.Parsed())
+	debug.AssertFunc(flag.Parsed)
 	return s3Endpoint != ""
 }
 

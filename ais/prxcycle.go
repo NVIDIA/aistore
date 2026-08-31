@@ -498,7 +498,7 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 	}
 
 	// active <=> inactive transition
-	debug.Assert(prev.version() < cur.version())
+	debug.AssertFunc(func() bool { return prev.version() < cur.version() })
 	for _, tsi := range cur.Tmap {
 		// added an active one or activated previously inactive
 		if !tsi.InMaintOrDecomm() && prev.GetActiveNode(tsi.ID()) == nil {
@@ -522,7 +522,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	)
 	pairs = append(pairs, revsPair{clone, actMsgExt})
 	if reb {
-		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
+		debug.AssertFunc(func() bool { return ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version() })
 		actMsgExt.UUID = ctx.rmdCtx.rebID
 		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
 	}
@@ -530,13 +530,13 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 
 	config, err := p.ensureConfigURLs()
 	if err != nil {
-		debug.Assert(nlog.Stopping(), err)
+		debug.AssertFunc(nlog.Stopping, err)
 		return
 	}
 	if config == nil /*not updated - including anyway*/ {
 		config, err = p.owner.config.get()
 		if err != nil {
-			debug.Assert(nlog.Stopping(), err)
+			debug.AssertFunc(nlog.Stopping, err)
 			return
 		}
 	}
@@ -911,7 +911,7 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, tsi *meta
 	}
 
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
-		debug.Assert(ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version() && ctx.rmdCtx.rebID != "")
+		debug.AssertFunc(func() bool { return ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version() && ctx.rmdCtx.rebID != "" })
 		return ctx.rmdCtx.rebID, nil
 	}
 
@@ -989,7 +989,7 @@ func (p *proxy) _stopMaintRMD(ctx *smapModifier, clone *smapX) {
 // Remove a node from the cluster by daemon ID.
 // Used for self-initiated node removal (e.g., when a node loses all mountpaths).
 func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
-	debug.Assert(reqIsPub(r) == isPub)
+	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
 	if isPub {
 		p.writeErrMsg(w, r, "not expecting DELETE /v1/cluster via pub-net", http.StatusForbidden)
 		return

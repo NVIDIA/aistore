@@ -62,8 +62,8 @@ type (
 
 func (e *errStreamTerm) Error() string {
 	debug.Assert(e.err != nil)
-	debug.Assert(!cos.IsTypedNil(e.err))
-	debug.Assert(strings.Contains(e.loghdr, e.dst), e.loghdr, " vs ", e.dst)
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(e.err) })
+	debug.AssertFunc(func() bool { return strings.Contains(e.loghdr, e.dst) }, e.loghdr, " vs ", e.dst)
 
 	var sb cos.SB
 	sb.Init(256)
@@ -87,7 +87,7 @@ func (e *errStreamTerm) Unwrap() error { return e.err }
 ////////////
 
 func (e *ErrSBR) Error() string {
-	debug.Assert(strings.Contains(e.loghdr, e.sid), e.loghdr, " vs ", e.sid)
+	debug.AssertFunc(func() bool { return strings.Contains(e.loghdr, e.sid) }, e.loghdr, " vs ", e.sid)
 	var sb cos.SB
 	sb.Init(256)
 	sb.WriteString(e.loghdr)

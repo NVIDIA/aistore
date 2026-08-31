@@ -25,7 +25,7 @@ func (lom *LOM) Hrw(avail fs.MPI) (*fs.Mountpath, bool /*ok*/) {
 		nlog.Warningln(err)
 		return nil, false
 	}
-	debug.Assert(!hrwMi.IsAnySet(fs.FlagWaitingDD))
+	debug.AssertFunc(func() bool { return !hrwMi.IsAnySet(fs.FlagWaitingDD) })
 
 	return hrwMi, lom.mi.Path == hrwMi.Path
 }

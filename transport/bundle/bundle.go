@@ -157,7 +157,7 @@ func (sb *Streams) Close(gracefully bool) {
 // when (nodes == nil) transmit via all established streams in a bundle
 // otherwise, restrict to the specified subset (nodes)
 func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*meta.Snode) error {
-	debug.Assert(!transport.ReservedOpcode(obj.Hdr.Opcode))
+	debug.AssertFunc(func() bool { return !transport.ReservedOpcode(obj.Hdr.Opcode) })
 	streams := sb.get()
 
 	if err := sb._validate(obj, streams, nodes); err != nil {

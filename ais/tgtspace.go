@@ -105,7 +105,7 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 	}
 	rns := xreg.RenewLRU(id, ctlmsg)
 	if rns.Err != nil || rns.IsRunning() {
-		debug.Assert(rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err))
+		debug.AssertFunc(func() bool { return rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err) })
 		if wg != nil {
 			wg.Done()
 		}
@@ -147,7 +147,7 @@ func (t *target) runSpaceCleanup(xargs *xact.ArgsMsg, wg *sync.WaitGroup) fs.Cap
 	}
 	rns := xreg.RenewStoreCleanup(xargs.ID, ctlmsg)
 	if rns.Err != nil || rns.IsRunning() {
-		debug.Assert(rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err))
+		debug.AssertFunc(func() bool { return rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err) })
 		if wg != nil {
 			wg.Done()
 		}

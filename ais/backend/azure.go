@@ -286,7 +286,7 @@ func (azbp *azbp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMs
 		en := cmn.LsoEnt{Name: *blob.Name, Size: *blob.Properties.ContentLength}
 
 		// not expecting directories
-		debug.Assert(en.Name != "" && !cos.IsLastB(en.Name, '/'), en.Name)
+		debug.AssertFunc(func() bool { return en.Name != "" && !cos.IsLastB(en.Name, '/') }, en.Name)
 
 		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
 			lst.Entries = append(lst.Entries, &en)

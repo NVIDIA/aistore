@@ -1476,12 +1476,12 @@ func (c *LocalConfig) TestingEnv() bool {
 }
 
 func (c *LocalConfig) AddPath(mpath string) {
-	debug.Assert(!c.TestingEnv())
+	debug.AssertFunc(func() bool { return !c.TestingEnv() })
 	c.FSP.Paths[mpath] = ""
 }
 
 func (c *LocalConfig) DelPath(mpath string) {
-	debug.Assert(!c.TestingEnv())
+	debug.AssertFunc(func() bool { return !c.TestingEnv() })
 	c.FSP.Paths.Delete(mpath)
 }
 
@@ -1670,7 +1670,7 @@ func (c *BackendConf) Validate() (err error) {
 }
 
 func (c *BackendConf) setProvider(provider string) {
-	debug.Assert(apc.IsCloudProvider(provider), provider)
+	debug.AssertFunc(func() bool { return apc.IsCloudProvider(provider) }, provider)
 	if c.Providers == nil {
 		c.Providers = map[string]Ns{}
 	}

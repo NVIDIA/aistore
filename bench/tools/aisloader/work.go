@@ -309,7 +309,7 @@ func doPut(wo *workOrder) {
 			wo.err = put(url, runParams.bck, wo.objName, r.Cksum(), r)
 		}
 	} else {
-		debug.Assert(!isDirectS3())
+		debug.AssertFunc(func() bool { return !isDirectS3() })
 		wo.latencies = new(httpLatencies)
 		wo.err = putWithTrace(url, runParams.bck, wo.objName, wo.latencies, r.Cksum(), r)
 	}
@@ -333,7 +333,7 @@ func doGet(wo *workOrder) {
 			wo.size, wo.err = getDiscard(url, wo, runParams)
 		}
 	} else {
-		debug.Assert(!isDirectS3())
+		debug.AssertFunc(func() bool { return !isDirectS3() })
 		wo.latencies = new(httpLatencies)
 		wo.size, wo.err = getTraceDiscard(url, wo, runParams)
 	}
@@ -529,7 +529,7 @@ func newMpdStreamWorkOrder() (*workOrder, error) {
 func getProxyURL(opLabel, woStr string) string {
 	url := runParams.proxyURL
 	if runParams.randomProxy {
-		debug.Assert(!isDirectS3())
+		debug.AssertFunc(func() bool { return !isDirectS3() })
 		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, opLabel+"(wo) err:", err, woStr)
@@ -593,8 +593,8 @@ func encodeArchName(objName, archpath string) string {
 	if archpath == "" {
 		return objName
 	}
-	debug.Assert(!strings.ContainsRune(objName, archSepB))
-	debug.Assert(!strings.ContainsRune(archpath, archSepB))
+	debug.AssertFunc(func() bool { return !strings.ContainsRune(objName, archSepB) })
+	debug.AssertFunc(func() bool { return !strings.ContainsRune(archpath, archSepB) })
 	return objName + archSepS + archpath
 }
 

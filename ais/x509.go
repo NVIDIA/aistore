@@ -97,7 +97,7 @@ func (p *proxy) cluLoadX509(w http.ResponseWriter, r *http.Request) {
 		smap = p.owner.smap.get()
 		err  error
 	)
-	debug.Assert(smap.IsPrimary(p.si))
+	debug.AssertFunc(func() bool { return smap.IsPrimary(p.si) })
 
 	var first = true
 	for _, nodeMap := range []meta.NodeMap{smap.Pmap, smap.Tmap} {

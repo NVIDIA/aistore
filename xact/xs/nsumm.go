@@ -321,7 +321,9 @@ func (r *XactNsumm) cloneRes(dst, src *cmn.BsummResult) {
 	if dst.ObjCount.Present > 0 {
 		dst.ObjSize.Avg = int64(cos.DivRoundU64(dst.TotalSize.PresentObjs, dst.ObjCount.Present))
 	}
-	debug.Assert(r.volSize == src.TotalSize.Disks || (src.TotalSize.Disks == 0 && cmn.Rom.TestingEnv()),
+	debug.AssertFunc(func() bool {
+		return r.volSize == src.TotalSize.Disks || (src.TotalSize.Disks == 0 && cmn.Rom.TestingEnv())
+	},
 		r.volSize, " vs ", src.TotalSize.Disks)
 	dst.TotalSize.Disks = r.volSize
 	dst.UsedPct = cos.DivRoundU64(dst.TotalSize.OnDisk*100, r.volSize)

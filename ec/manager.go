@@ -448,7 +448,7 @@ func (mgr *Manager) CleanupObject(lom *core.LOM) {
 	if !lom.ECEnabled() {
 		return
 	}
-	debug.Assert(lom.FQN != "" && lom.Mountpath().Path != "")
+	debug.AssertFunc(func() bool { return lom.FQN != "" && lom.Mountpath().Path != "" })
 	req := allocateReq(ActDelete, lom.LIF())
 	mgr.RestoreBckPutXact(lom.Bck()).cleanup(req, lom)
 }

@@ -487,7 +487,7 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) {
 			}
 			continue
 		}
-		debug.Assert(apc.IsProvider(bck.Provider), "expecting normalized provider, got: ", bck.Provider)
+		debug.AssertFunc(func() bool { return apc.IsProvider(bck.Provider) }, "expecting normalized provider, got: ", bck.Provider)
 		debug.Assert(bck.Props != nil)
 		j.bck = bck
 		j._jogBck()

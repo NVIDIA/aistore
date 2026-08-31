@@ -22,7 +22,7 @@ import (
 func RegBckXact(entry Renewable) { dreg.regBckXact(entry) }
 
 func (r *registry) regBckXact(entry Renewable) {
-	debug.Assert(xact.IsSameScope(entry.Kind(), xact.ScopeB, xact.ScopeGB))
+	debug.AssertFunc(func() bool { return xact.IsSameScope(entry.Kind(), xact.ScopeB, xact.ScopeGB) })
 	r.bckXacts[entry.Kind()] = entry // no locking: all reg-s are done at init time
 }
 

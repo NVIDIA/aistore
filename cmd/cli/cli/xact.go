@@ -90,7 +90,7 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 // Wait for the started xaction using the generic dispatcher, then report
 // per-target errors or aborts that the generic wait result does not return.
 func waitXact(args *xact.ArgsMsg) error {
-	debug.Assert(args.ID == "" || xact.IsValidUUID(args.ID))
+	debug.AssertFunc(func() bool { return args.ID == "" || xact.IsValidUUID(args.ID) })
 
 	// Kind is required by the generic wait.
 	debug.Assert(args.Kind != "")
@@ -343,7 +343,7 @@ func queryXactions(xargs *xact.ArgsMsg, summarize bool) (xs xact.MultiSnap, cms 
 				cms.aborted, cms.running = snap.IsAborted(), snap.IsRunning()
 				if cms.bck.IsEmpty() {
 					notBck = true
-					debug.Assert(xargs.Bck.IsEmpty())
+					debug.AssertFunc(func() bool { return xargs.Bck.IsEmpty() })
 				}
 				if cms.xid == "" {
 					notID = true

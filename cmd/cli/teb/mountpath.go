@@ -126,7 +126,7 @@ func NewMpathCapTab(st NodeStatusMap, c *PerfTabCtx, showMpaths bool) *Table {
 
 func mpathRow(c *PerfTabCtx, cols []*header, mpath string, cdf *fs.CDF, row []string) []string {
 	if _idx(cols, colMountpath) >= 0 {
-		debug.Assert(_idx(cols, colNumMpaths) < 0)
+		debug.AssertFunc(func() bool { return _idx(cols, colNumMpaths) < 0 })
 		row = append(row, mpath)
 	}
 	if _idx(cols, colCapUsed) >= 0 {
@@ -154,7 +154,7 @@ func mpathRow(c *PerfTabCtx, cols []*header, mpath string, cdf *fs.CDF, row []st
 func numMpathsRow(ds *stats.NodeStatus, c *PerfTabCtx, cols []*header, row []string) []string {
 	tcdf := ds.Tcdf
 	if _idx(cols, colNumMpaths) >= 0 {
-		debug.Assert(_idx(cols, colMountpath) < 0)
+		debug.AssertFunc(func() bool { return _idx(cols, colMountpath) < 0 })
 		row = append(row, strconv.Itoa(len(tcdf.Mountpaths)))
 	}
 	if _idx(cols, colUsedAvgMax) >= 0 {

@@ -199,7 +199,7 @@ func readProxyID(config *cmn.Config) (pid string) {
 
 func (p *proxy) pready(smap *smapX, withRR bool /* also check readiness to rebalance */) error {
 	const msg = "%s primary: not ready yet "
-	debug.Assert(smap == nil || smap.IsPrimary(p.si))
+	debug.AssertFunc(func() bool { return smap == nil || smap.IsPrimary(p.si) })
 
 	if !p.ClusterStarted() {
 		return fmt.Errorf(msg+"(cluster is starting up)", p)
@@ -2586,7 +2586,7 @@ func (p *proxy) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 		return
 	}
 
-	debug.Assert(reqIsPub(r) == isPub)
+	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
 	if isPub {
 		if err := p.checkAccess(w, r, nil, ace); err != nil {
 			return
@@ -2874,7 +2874,7 @@ func (p *proxy) ensureConfigURLs() (config *globalConfig, err error) {
 // using cmn.NetIntraControl network for all three: PrimaryURL, OriginalURL, and DiscoveryURL
 func (p *proxy) _configURLs(_ *configModifier, clone *globalConfig) (updated bool, _ error) {
 	smap := p.owner.smap.get()
-	debug.Assert(smap.isPrimary(p.si))
+	debug.AssertFunc(func() bool { return smap.isPrimary(p.si) })
 
 	if prim := smap.Primary.URL(cmn.NetIntraControl); clone.Proxy.PrimaryURL != prim {
 		clone.Proxy.PrimaryURL = prim

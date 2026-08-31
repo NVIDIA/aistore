@@ -26,7 +26,7 @@ type (
 func (xs MultiSnap) checkEmptyID(xid string) error {
 	var kind, uuid string
 	if xid != "" {
-		debug.Assert(IsValidUUID(xid), xid)
+		debug.AssertFunc(func() bool { return IsValidUUID(xid) }, xid)
 		return nil
 	}
 	for _, snaps := range xs {
@@ -105,7 +105,7 @@ func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *core.Snap, error
 // - xid == "": all UUIDs present in this MultiSnap (all targets)
 func (xs MultiSnap) AggregateState(xid string) (aborted, running, notstarted bool) {
 	if xid != "" {
-		debug.Assert(IsValidUUID(xid), xid)
+		debug.AssertFunc(func() bool { return IsValidUUID(xid) }, xid)
 		return xs._get(xid)
 	}
 	uuids := xs.GetUUIDs()
@@ -182,7 +182,7 @@ func (xs MultiSnap) ByteCounts(xid string) (locBytes, outBytes, inBytes int64) {
 }
 
 func (xs MultiSnap) TotalRunningTime(xid string) (time.Duration, error) {
-	debug.Assert(IsValidUUID(xid), xid)
+	debug.AssertFunc(func() bool { return IsValidUUID(xid) }, xid)
 	var (
 		start, end     time.Time
 		found, running bool

@@ -136,7 +136,7 @@ func (r *XactNBI) init() error {
 	r.buf, r.slab = core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
 
 	r.cksum = cos.NewCksumHash(cos.ChecksumCRC32C)
-	debug.Assert(r.cksum.H.Size() == cos.SizeofI32)
+	debug.AssertFunc(func() bool { return r.cksum.H.Size() == cos.SizeofI32 })
 
 	return nil
 }
@@ -421,7 +421,7 @@ func (r *XactNBI) writeChunk(num int, entries cmn.LsoEntries) error {
 	binary.BigEndian.PutUint32(frame[:], uint32(len(hdrBuf)))
 
 	// checksum
-	debug.Assert(r.cksum != nil && r.cksum.Ty() == cos.ChecksumCRC32C, "must have CRC32c")
+	debug.AssertFunc(func() bool { return r.cksum != nil && r.cksum.Ty() == cos.ChecksumCRC32C }, "must have CRC32c")
 	r.cksum.H.Reset()
 	r.cksum.H.Write(hdrBuf)
 	crc := r.cksum.SumTo()

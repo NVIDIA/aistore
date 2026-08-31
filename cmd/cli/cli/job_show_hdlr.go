@@ -502,7 +502,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		}
 		snap := snaps[0]
 		if !snap.SrcBck.IsEmpty() {
-			debug.Assert(!snap.DstBck.IsEmpty())
+			debug.AssertFunc(func() bool { return !snap.DstBck.IsEmpty() })
 			fromToBck = true
 		} else if bck := snap.Bck; !bck.IsEmpty() {
 			haveBck = true

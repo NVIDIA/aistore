@@ -390,7 +390,7 @@ func Run(version, buildTime string) int {
 //////////////
 
 func (g *rungroup) add(r cos.Runner) {
-	debug.Assert(r.Name() != "")
+	debug.AssertFunc(func() bool { return r.Name() != "" })
 	_, exists := g.rs[r.Name()]
 	debug.Assert(!exists)
 

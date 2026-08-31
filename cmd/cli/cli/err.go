@@ -296,7 +296,7 @@ func incorrectUsageMsg(c *cli.Context, fmtMsg string, args ...any) *errUsage {
 		fmtMsg = dfltMsg
 	}
 	if len(args) == 0 {
-		debug.Assert(!strings.Contains(fmtMsg, "%"))
+		debug.AssertFunc(func() bool { return !strings.Contains(fmtMsg, "%") })
 		return _errUsage(c, fmtMsg)
 	}
 	return _errUsage(c, fmt.Sprintf(fmtMsg, args...))

@@ -1034,7 +1034,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 	if args.network == "" {
 		args.network = cmn.NetIntraControl
 	}
-	debug.Assert(cmn.NetworkIsKnown(args.network))
+	debug.AssertFunc(func() bool { return cmn.NetworkIsKnown(args.network) })
 	if args.timeout == 0 {
 		args.timeout = cmn.Rom.MaxKeepalive()
 	}
@@ -1114,7 +1114,7 @@ func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 		}
 	}
 	for _, si := range bargs.selected {
-		debug.Assert(si.ID() != h.si.ID())
+		debug.AssertFunc(func() bool { return si.ID() != h.si.ID() })
 		wg.Add(1)
 		go f(si)
 	}
@@ -2230,7 +2230,7 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 		_, primaryURL, psi = h._primus(nil, config)
 	)
 	if psi != nil && psi.ID() == h.SID() {
-		debug.Assert(h.si.IsProxy())
+		debug.AssertFunc(func() bool { return h.si.IsProxy() })
 		return nil, fmt.Errorf("%s (self) - not joining, am primary [%q]", h, primaryURL) // (unlikely)
 	}
 
@@ -2426,7 +2426,7 @@ func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (s
 	if nlog.Stopping() {
 		return "", http.Header{}, h.errStopping()
 	}
-	debug.Assert(h.ClusterStarted())
+	debug.AssertFunc(func() bool { return h.ClusterStarted() })
 
 	pid, primaryURL, psi := h._primus(smap, nil)
 

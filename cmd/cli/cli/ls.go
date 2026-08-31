@@ -829,7 +829,7 @@ func _sortDirsFirst(lst cmn.LsoEntries) {
 	out := make(cmn.LsoEntries, 0, l)
 	for _, en := range lst {
 		if en.IsAnyFlagSet(apc.EntryIsDir) {
-			debug.Assert(cos.IsLastB(en.Name, '/'), en.Name)
+			debug.AssertFunc(func() bool { return cos.IsLastB(en.Name, '/') }, en.Name)
 			out = append(out, en)
 		}
 	}

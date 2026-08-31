@@ -468,7 +468,7 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 		return nil
 	}
 
-	debug.Assert(xact.IsValidUUID(xid), xid)
+	debug.AssertFunc(func() bool { return xact.IsValidUUID(xid) }, xid)
 
 	switch xargs.Kind {
 	case apc.ActRebalance:

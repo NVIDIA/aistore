@@ -87,7 +87,7 @@ func isRebCleanupGroup(group []*targetRebSnap) bool {
 
 	debug.Func(func() {
 		for _, sts := range group[1:] {
-			debug.Assert(cleanup == _isRebCleanup(sts.snap))
+			debug.AssertFunc(func() bool { return cleanup == _isRebCleanup(sts.snap) })
 		}
 	})
 	return cleanup

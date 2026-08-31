@@ -86,13 +86,13 @@ func WaitStarted() {
 }
 
 func Reg(name string, f HKCB, interval time.Duration) {
-	debug.Assert(nlog.Stopping() || HK.running.Load())
+	debug.AssertFunc(func() bool { return nlog.Stopping() || HK.running.Load() })
 	debug.Assert(interval != UnregInterval)
 	HK.enq(op{name: name, f: f, interval: interval})
 }
 
 func Unreg(name string) {
-	debug.Assert(nlog.Stopping() || HK.running.Load())
+	debug.AssertFunc(func() bool { return nlog.Stopping() || HK.running.Load() })
 	HK.enq(op{name: name, interval: UnregInterval})
 }
 

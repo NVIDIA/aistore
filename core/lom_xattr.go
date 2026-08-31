@@ -244,7 +244,7 @@ func (lom *LOM) PersistMain(isChunked bool) error {
 	}
 
 	atime := lom.AtimeUnix()
-	debug.Assert(cos.IsValidAtime(atime))
+	debug.AssertFunc(func() bool { return cos.IsValidAtime(atime) })
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never, write-delayed*/ {
 		lom.md.makeDirty()
 		lom.Recache()
@@ -271,7 +271,7 @@ func (lom *LOM) PersistMain(isChunked bool) error {
 func (lom *LOM) Persist() error {
 	atime := lom.AtimeUnix()
 	bprops := lom.Bprops()
-	debug.Assert(cos.IsValidAtime(atime), atime)
+	debug.AssertFunc(func() bool { return cos.IsValidAtime(atime) }, atime)
 
 	if atime < 0 || !lom.WritePolicy().IsImmediate() {
 		lom.md.makeDirty()

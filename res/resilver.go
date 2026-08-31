@@ -445,7 +445,7 @@ func _loadHlom(lom *core.LOM, mi *fs.Mountpath) (hlom *core.LOM, err error) {
 	if err = hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
 		return nil, err
 	}
-	debug.Assert(hlom.Mountpath().Path == mi.Path)
+	debug.AssertFunc(func() bool { return hlom.Mountpath().Path == mi.Path })
 
 	// reload; cache iff write-policy != immediate
 	err = hlom.Load(false, true /*locked*/)
@@ -468,7 +468,7 @@ func (j *jogger) visitCopy(lom *core.LOM, buf []byte) error {
 		j.xres.AddErr(err)
 		return err
 	}
-	debug.Assert(hlom.Mountpath().Path == mi.Path)
+	debug.AssertFunc(func() bool { return hlom.Mountpath().Path == mi.Path })
 	j.xres.ObjsAdd(1, lom.Lsize())
 
 	// this same designated jogger goes ahead to restore copies
@@ -505,7 +505,7 @@ func (j *jogger) fixCopies(hlom *core.LOM, buf []byte) (abortErr error) {
 }
 
 func (j *jogger) visitECSlice(ct *core.CT, buf []byte) (err error) {
-	debug.Assert(ct.ContentType() == fs.ECSliceCT)
+	debug.AssertFunc(func() bool { return ct.ContentType() == fs.ECSliceCT })
 	if !ct.Bck().Props.EC.Enabled {
 		return filepath.SkipDir
 	}

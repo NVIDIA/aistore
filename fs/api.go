@@ -105,8 +105,8 @@ func HasAlert(disks []string) (alert string, idx int) {
 				return disk[idx:], idx
 			}
 			// expecting Tcdf to contain only _available_ mountpaths
-			debug.Assert(!strings.Contains(disk, DiskDisabled), disk)
-			debug.Assert(!strings.Contains(disk, DiskDetached), disk)
+			debug.AssertFunc(func() bool { return !strings.Contains(disk, DiskDisabled) }, disk)
+			debug.AssertFunc(func() bool { return !strings.Contains(disk, DiskDetached) }, disk)
 		}
 	}
 	return "", -1

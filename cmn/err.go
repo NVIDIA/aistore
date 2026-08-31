@@ -325,7 +325,7 @@ func IsErrFailedTo(err error) bool {
 // ErrStreamTerminated
 
 func NewErrStreamTerminated(stream string, err error, reason, detail string) *ErrStreamTerminated {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(err) })
 	return &ErrStreamTerminated{stream: stream, err: err, reason: reason, detail: detail}
 }
 
@@ -345,7 +345,7 @@ func IsErrStreamTerminated(err error) bool {
 func NewErrUnsupp(action, what string) *ErrUnsupp { return &ErrUnsupp{action: action, what: what} }
 
 func NewErrUnsuppErr(err error) *ErrUnsupp {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(err) })
 	return &ErrUnsupp{err: err}
 }
 
@@ -599,7 +599,7 @@ func IsErrCapExceeded(err error) bool {
 // ErrGetCap
 
 func NewErrGetCap(err error) *ErrGetCap {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(err) })
 	return &ErrGetCap{err: err}
 }
 
@@ -666,7 +666,7 @@ func NewErrInvalidMountpath(mpath, cause string) *ErrInvalidMountpath {
 // ErrMpathNoDisks
 
 func NewErrMpathNoDisks(mpath, fsname string, err error) *ErrMpathNoDisks {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(err) })
 	return &ErrMpathNoDisks{mpath: mpath, fs: fsname, err: err}
 }
 
@@ -704,7 +704,7 @@ func IsErrMpathNewDisk(err error) bool {
 // ErrMpathCheck
 
 func NewErrMpathCheck(err error) *ErrMpathCheck {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(err) })
 	return &ErrMpathCheck{err: err}
 }
 
@@ -720,7 +720,7 @@ func IsErrMpathCheck(err error) bool {
 // ErrInvalidFSPathsConf
 
 func NewErrInvalidFSPathsConf(err error) *ErrInvalidFSPathsConf {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(err) })
 	return &ErrInvalidFSPathsConf{err}
 }
 
@@ -934,7 +934,7 @@ func (e *ErrETL) WithContext(ctx *ETLErrCtx) *ErrETL {
 // ErrLmetaCorrupted & ErrLmetaNotFound
 
 func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(err) })
 	return &ErrLmetaCorrupted{err}
 }
 
@@ -947,7 +947,7 @@ func IsErrLmetaCorrupted(err error) bool {
 }
 
 func NewErrLmetaNotFound(name string, err error) *ErrLmetaNotFound {
-	debug.Assert(!cos.IsTypedNil(err))
+	debug.AssertFunc(func() bool { return !cos.IsTypedNil(err) })
 	return &ErrLmetaNotFound{name: name, err: err}
 }
 
@@ -1037,7 +1037,7 @@ func IsErrXactNonIC(err error) bool {
 // ErrTooManyRequests (429, 503)
 
 func NewErrTooManyRequests(err error, status int) *ErrTooManyRequests {
-	debug.Assert(err != nil && !cos.IsTypedNil(err)) // Error() derefs it; IsTypedNil alone lets untyped nil through
+	debug.AssertFunc(func() bool { return err != nil && !cos.IsTypedNil(err) }) // Error() derefs it; IsTypedNil alone lets untyped nil through
 	return &ErrTooManyRequests{err, status}
 }
 

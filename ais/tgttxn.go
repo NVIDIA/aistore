@@ -276,7 +276,7 @@ func (t *target) _commitCreateDestroy(c *txnSrv) (err error) {
 	// (compare with httpbckdelete/ActEvictRemoteBck)
 	if c.msg.Action == apc.ActEvictRemoteBck {
 		xid := c.uuid
-		debug.Assert(strings.HasPrefix(xid, xact.PrefixEvictRemoveID), xid)
+		debug.AssertFunc(func() bool { return strings.HasPrefix(xid, xact.PrefixEvictRemoveID) }, xid)
 		_ = xreg.RenewEvictDelete(xid, apc.ActEvictRemoteBck, c.bck, nil)
 	}
 
@@ -541,7 +541,7 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 			return "", rns.Err // must not happen at commit time
 		}
 		xctn := rns.Entry.Get()
-		debug.Assert(xctn.ID() == txnRenB.xbmv.ID())
+		debug.AssertFunc(func() bool { return xctn.ID() == txnRenB.xbmv.ID() })
 
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
@@ -655,7 +655,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (string, error)
 		}
 		xctn := rns.Entry.Get()
 		xid := xctn.ID()
-		debug.Assert(xid == txnTcb.xtcb.ID())
+		debug.AssertFunc(func() bool { return xid == txnTcb.xtcb.ID() })
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
 		return xid, nil

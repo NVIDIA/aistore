@@ -187,16 +187,16 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 		// when not explicitly specified: generate prometheus metric name
 		switch kind {
 		case KindCounter:
-			debug.Assert(strings.HasSuffix(name, ".n"), name)
+			debug.AssertFunc(func() bool { return strings.HasSuffix(name, ".n") }, name)
 			metricName = strings.TrimSuffix(name, ".n") + "_count"
 		case KindSize:
-			debug.Assert(strings.HasSuffix(name, ".size"), name)
+			debug.AssertFunc(func() bool { return strings.HasSuffix(name, ".size") }, name)
 			metricName = strings.TrimSuffix(name, ".size") + "_bytes"
 		case KindLatency:
-			debug.Assert(strings.HasSuffix(name, ".ns"), name)
+			debug.AssertFunc(func() bool { return strings.HasSuffix(name, ".ns") }, name)
 			metricName = strings.TrimSuffix(name, ".ns") + "_ms"
 		case KindThroughput, KindComputedThroughput:
-			debug.Assert(strings.HasSuffix(name, ".bps"), name)
+			debug.AssertFunc(func() bool { return strings.HasSuffix(name, ".bps") }, name)
 			metricName = strings.TrimSuffix(name, ".bps") + "_bps"
 		default:
 			metricName = name

@@ -74,7 +74,7 @@ func (p *proxy) revPubHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) _reverse(w http.ResponseWriter, r *http.Request, isPub bool) {
-	debug.Assert(reqIsPub(r) == isPub)
+	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
 	apiItems, err := p.parseURL(w, r, apc.URLPathReverse.L, 1, false)
 	if err != nil {
 		return
@@ -307,13 +307,13 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 }
 
 func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, smap *smapX, si *meta.Snode) {
-	debug.Assert(si.ID() != p.SID(), "reversing to self")
+	debug.AssertFunc(func() bool { return si.ID() != p.SID() }, "reversing to self")
 
 	parsedURL, err := url.Parse(si.URL(cmn.NetIntraControl))
 	debug.AssertNoErr(err)
 
 	// stamp/sign over intra-control net
-	debug.Assert(smap.isValid())
+	debug.AssertFunc(func() bool { return smap.isValid() })
 
 	// caution: svReq.payload() currently does not include query, host, and scheme; if it ever changes
 	// the following will have to change as well

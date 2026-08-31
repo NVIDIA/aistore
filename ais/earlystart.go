@@ -672,7 +672,7 @@ until:
 			return
 		}
 		if smap.version() != ver {
-			debug.Assert(smap.version() > ver)
+			debug.AssertFunc(func() bool { return smap.version() > ver })
 			elapsed = 0
 			nojoins = min(nojoins+sleep, config.Timeout.Startup.D())
 			if p.owner.rmd.interrupted.Load() {
@@ -1186,7 +1186,7 @@ ret:
 			return after.Smap
 		}
 	} else {
-		debug.Assert(before.Smap.version() < after.Smap.version())
+		debug.AssertFunc(func() bool { return before.Smap.version() < after.Smap.version() })
 		nlog.Warningln("before:", before.Smap.StringEx(), "after:", after.Smap.StringEx())
 	}
 

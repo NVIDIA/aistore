@@ -129,7 +129,7 @@ func (reb *Reb) RunCleanup(smap *meta.Smap, extArgs *ExtArgs, force bool) {
 		force: force,
 	}
 	if clnArgs.bck != nil {
-		debug.Assert(!clnArgs.bck.IsEmpty(), extArgs.Bck)
+		debug.AssertFunc(func() bool { return !clnArgs.bck.IsEmpty() }, extArgs.Bck)
 		clnArgs.logHdr += "::" + clnArgs.bck.Cname(clnArgs.prefix)
 	}
 	if !clnArgs.pingall() {
@@ -234,7 +234,7 @@ func (reb *Reb) finiCleanup(clnArgs *clnArgs, tstats cos.StatsUpdater) {
 	reb.mu.Lock()
 
 	xctn := reb.xctn()
-	debug.Assert(xctn != nil && xctn.ID() == xreb.ID())
+	debug.AssertFunc(func() bool { return xctn != nil && xctn.ID() == xreb.ID() })
 
 	xreb.Finish()
 	xname := xreb.String()

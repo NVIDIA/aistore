@@ -468,7 +468,7 @@ func tinitHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 	} else {
 		// setup xaction
-		debug.Assert(!pars.OutputBck.IsEmpty())
+		debug.AssertFunc(func() bool { return !pars.OutputBck.IsEmpty() })
 		custom := &xreg.DsortArgs{BckFrom: meta.CloneBck(&pars.InputBck), BckTo: meta.CloneBck(&pars.OutputBck)}
 		rns := xreg.RenewDsort(managerUUID, custom)
 		debug.AssertNoErr(rns.Err)

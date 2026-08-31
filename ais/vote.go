@@ -151,7 +151,7 @@ func (p *proxy) httpelect(w http.ResponseWriter, r *http.Request) {
 		p.writeErrf(w, r, "%s %s: not present in the Vote Request, %s", tag, pname, newSmap)
 		return
 	}
-	debug.Assert(!newSmap.isPrimary(p.si))
+	debug.AssertFunc(func() bool { return !newSmap.isPrimary(p.si) })
 	if newSmap.isPrimary(p.si) {
 		p.writeErrf(w, r, "%s %s: self is primary in the Vote Request, %s", tag, pname, newSmap)
 		return
@@ -487,8 +487,8 @@ func (h *htrun) onPrimaryDown(self *proxy, senderID string) {
 
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
 		if nextPrimaryProxy.ID() == h.si.ID() {
-			debug.Assert(h.si.IsProxy())
-			debug.Assert(h.SID() == self.SID())
+			debug.AssertFunc(func() bool { return h.si.IsProxy() })
+			debug.AssertFunc(func() bool { return h.SID() == self.SID() })
 			nlog.Infof("%s: starting election (candidate = self)", h)
 			vr := &VoteRecord{
 				Candidate: nextPrimaryProxy.ID(),
@@ -555,7 +555,7 @@ func (h *htrun) httpgetvote(w http.ResponseWriter, r *http.Request) {
 		h.writeErrf(w, r, "%s: no %s in the VoteRecord [%v]", h, clusterMap, msg.Record)
 		return
 	}
-	debug.Assert(cos.IsValidUUID(newSmap.UUID))
+	debug.AssertFunc(func() bool { return cos.IsValidUUID(newSmap.UUID) })
 	if newSmap.UUID != smap.UUID {
 		h.writeErrf(w, r, "%s: %s UUID mismatch in the VoteRecord (%q vs %q)", h, clusterMap, newSmap.UUID, smap.UUID)
 		return

@@ -90,7 +90,7 @@ func (nbi *nbiCtx) init(invName string) error {
 	}
 
 	nbi.cksum = cos.NewCksumHash(cos.ChecksumCRC32C)
-	debug.Assert(nbi.cksum.H.Size() == cos.SizeofI32)
+	debug.AssertFunc(func() bool { return nbi.cksum.H.Size() == cos.SizeofI32 })
 
 	nbi.buf, nbi.slab = core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
 	nbi.nidx = 0
@@ -239,7 +239,7 @@ func (nbi *nbiCtx) readChunk() error {
 	}
 
 	// 2.1. checksum
-	debug.Assert(nbi.cksum != nil && nbi.cksum.Ty() == cos.ChecksumCRC32C, "must have CRC32c")
+	debug.AssertFunc(func() bool { return nbi.cksum != nil && nbi.cksum.Ty() == cos.ChecksumCRC32C }, "must have CRC32c")
 	nbi.cksum.H.Reset()
 	nbi.cksum.H.Write(hdrBuf)
 	crc := nbi.cksum.SumTo()

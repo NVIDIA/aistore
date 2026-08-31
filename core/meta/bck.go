@@ -222,7 +222,7 @@ func (b *Bck) InitFast(bowner Bowner) (err error) {
 		return
 	}
 	if backend := b.Backend(); backend != nil && backend.Props == nil {
-		debug.Assert(apc.IsRemoteProvider(backend.Provider))
+		debug.AssertFunc(func() bool { return apc.IsRemoteProvider(backend.Provider) })
 		err = backend.init(bmd)
 	}
 	return
@@ -262,7 +262,7 @@ func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, ecode int, err err
 			err = cmn.NewErrAisBckNotFound(bck.Bucket())
 			ecode = http.StatusNotFound
 		} else if backend := bck.Backend(); backend != nil && backend.Props == nil {
-			debug.Assert(apc.IsRemoteProvider(backend.Provider))
+			debug.AssertFunc(func() bool { return apc.IsRemoteProvider(backend.Provider) })
 			err = backend.init(bmd)
 		}
 	default:

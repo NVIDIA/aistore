@@ -847,7 +847,7 @@ func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) 
 
 	// 3. signed T2T
 	debug.Assert(net == reqNetCtrl || net == reqNetData)
-	debug.Assert(!hasRedirectMarker(dpq))
+	debug.AssertFunc(func() bool { return !hasRedirectMarker(dpq) })
 
 	return t.checkIntra(r, false /*only primary*/, net)
 }
@@ -904,7 +904,7 @@ func (t *target) _verifySigned(r *http.Request, dpq *dpq) (ecode int, err error)
 	)
 	// target's Smap is never nil; there _may_ be a very narrow startup window
 	// when it's invalid but then we just fail a signed request (unlikely)
-	debug.Assert(smap.isValid())
+	debug.AssertFunc(func() bool { return smap.isValid() })
 
 	if dpq.sv.sig != "" {
 		svgrp = &dpq.sv
@@ -1895,7 +1895,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 			}
 			debug.Assert(aisErr == nil) // expecting lom.RemoveObj() to return nil when IsNotExist
 		} else if evict {
-			debug.Assert(lom.Bck().IsRemote())
+			debug.AssertFunc(func() bool { return lom.Bck().IsRemote() })
 			t.statsT.Inc(stats.LruEvictCount)
 			t.statsT.Add(stats.LruEvictSize, size)
 		}

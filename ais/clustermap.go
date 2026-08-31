@@ -358,7 +358,7 @@ func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
 			nlog.Warningln(nsi.String(), "won't be electable")
 		}
 	} else {
-		debug.Assert(nsi.IsTarget())
+		debug.AssertFunc(func() bool { return nsi.IsTarget() })
 		if old = m.GetTarget(id); old != nil { // ditto
 			m.delTarget(id)
 		}

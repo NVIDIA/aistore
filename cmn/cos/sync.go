@@ -154,7 +154,7 @@ func NewStopCh() *StopCh {
 }
 
 func (sch *StopCh) Init() {
-	debug.Assert(sch.ch == nil && !sch.stopped.Load())
+	debug.AssertFunc(func() bool { return sch.ch == nil && !sch.stopped.Load() })
 	sch.ch = make(chan struct{}, 1)
 }
 

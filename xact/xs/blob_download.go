@@ -194,7 +194,7 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 //
 
 func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	debug.Assert(bck.IsRemote())
+	debug.AssertFunc(func() bool { return bck.IsRemote() })
 	p := &blobFactory{
 		RenewBase: xreg.RenewBase{Args: args, Bck: bck},
 		pre:       args.Custom.(*XactBlobDl),
@@ -517,7 +517,7 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 		r.bdm.getCnt.inc(tstats)
 		r.bdm.getLat.add(tstats, mono.SinceNano(startTime))
 
-		debug.Assert(lom.Lsize() == r.woff)
+		debug.AssertFunc(func() bool { return lom.Lsize() == r.woff })
 		r.bdm.blobCnt.inc(tstats)
 		r.bdm.blobSz.add(tstats, lom.Lsize())
 

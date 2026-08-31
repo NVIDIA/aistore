@@ -138,7 +138,7 @@ func (m *matcher) init() (err error) {
 	}
 	switch m.mmode {
 	case MatchMode[_regexp]:
-		debug.Assert(!cos.MatchAll(m.regex)) // match-all("", "*") must use mmode == prefix
+		debug.AssertFunc(func() bool { return !cos.MatchAll(m.regex) }) // match-all("", "*") must use mmode == prefix
 		m.re, err = regexp.Compile(m.regex)
 	case MatchMode[_prefix], MatchMode[_suffix], MatchMode[_substr], MatchMode[_wdskey]:
 		// do nothing

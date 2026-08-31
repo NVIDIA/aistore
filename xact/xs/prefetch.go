@@ -82,7 +82,7 @@ var (
 
 func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	msg := args.Custom.(*apc.PrefetchMsg)
-	debug.Assert(!msg.IsList() || !msg.HasTemplate())
+	debug.AssertFunc(func() bool { return !msg.IsList() || !msg.HasTemplate() })
 	np := &prfFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: msg}
 	return np
 }

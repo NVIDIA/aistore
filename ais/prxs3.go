@@ -476,7 +476,7 @@ func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg,
 		if pageNum == 1 {
 			lst = page
 			lsmsg.UUID = page.UUID
-			debug.Assert(cos.IsValidUUID(lst.UUID), lst.UUID)
+			debug.AssertFunc(func() bool { return cos.IsValidUUID(lst.UUID) }, lst.UUID)
 		} else {
 			lst.Entries = append(lst.Entries, page.Entries...)
 			lst.ContinuationToken = page.ContinuationToken

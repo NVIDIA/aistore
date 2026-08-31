@@ -323,7 +323,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	if obj.pdu != nil {
 		return obj.readPDU(b)
 	}
-	debug.Assert(obj.Size() >= 0)
+	debug.AssertFunc(func() bool { return obj.Size() >= 0 })
 
 	rem := obj.Size() - obj.off
 	if rem < int64(len(b)) && rem >= 0 {

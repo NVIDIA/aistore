@@ -124,7 +124,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		if msg.ID != "" {
 			xid := r.URL.Query().Get(apc.QparamUUID)
-			debug.Assert(cos.IsValidUUID(xid))
+			debug.AssertFunc(func() bool { return cos.IsValidUUID(xid) })
 			xdl, err := renewdl(xid, nil)
 			if err != nil {
 				t.writeErr(w, r, err, http.StatusInternalServerError)

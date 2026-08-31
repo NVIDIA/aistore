@@ -145,7 +145,7 @@ func (r *MMSA) freeIdle() (total int64) {
 			freed int64
 			idle  = r.idleDur[i]
 		)
-		debug.Assert(s.ringIdx() == i)
+		debug.AssertFunc(func() bool { return s.ringIdx() == i })
 		switch {
 		case idle > freeIdleZero:
 			freed = s.cleanup()

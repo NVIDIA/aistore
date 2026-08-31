@@ -520,7 +520,7 @@ func (txn *txnBase) commitAfter(sender string, msg *actMsgExt, err error, args .
 	found = true
 	debug.Func(func() {
 		bmd, _ := args[0].(*bucketMD)
-		debug.Assert(bmd.version() >= txn.bmdVer)
+		debug.AssertFunc(func() bool { return bmd.version() >= txn.bmdVer })
 	})
 	if txnErr := txn.err.Swap(&txnError{err: err}); txnErr != nil {
 		errDone = fmt.Errorf("%s: already done with err=%v (%v)", txn.uuid(), txnErr.err, err)

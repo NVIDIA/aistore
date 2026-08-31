@@ -320,7 +320,7 @@ func fmtStatusSID(id string, smap *meta.Smap, daeStatus string) (snamePlus, stat
 		return
 	}
 	if smap.NonElectable(si) {
-		debug.Assert(si.IsProxy())
+		debug.AssertFunc(func() bool { return si.IsProxy() })
 		snamePlus += nonElectableSuffix
 		return
 	}
@@ -498,7 +498,7 @@ func fmtEntryNameDAC(val string, flags uint16) string {
 		// see related fmtIsChunked() below
 		return val
 	case flags&apc.EntryIsDir == apc.EntryIsDir:
-		debug.Assert(cos.IsLastB(val, '/'), val)
+		debug.AssertFunc(func() bool { return cos.IsLastB(val, '/') }, val)
 		return fgreen(val)
 	default:
 		return val

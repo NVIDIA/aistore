@@ -231,7 +231,7 @@ func (m *BMD) initBckGlob(bck *Bck) bool {
 	}
 	p, present := buckets[bck.Name]
 	if present {
-		debug.Assert(bck.Ns.IsGlobal())
+		debug.AssertFunc(func() bool { return bck.Ns.IsGlobal() })
 		bck.Props = p
 	}
 	return present

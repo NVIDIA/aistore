@@ -192,7 +192,7 @@ func (m *Manager) extractLocalShards() (err error) {
 	case m.Pars.Pit.isList():
 		err = m.iterList(ctx, group)
 	default:
-		debug.Assert(m.Pars.Pit.isPrefix())
+		debug.AssertFunc(func() bool { return m.Pars.Pit.isPrefix() })
 		debug.Assert(false, "not implemented yet") // TODO -- FIXME
 	}
 

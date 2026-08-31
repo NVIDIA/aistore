@@ -189,7 +189,7 @@ func (lom *LOM) Fstat(getAtime bool) (size, atimefs int64, mtime time.Time, _ er
 }
 
 func (lom *LOM) Version(special ...bool) string {
-	debug.Assert(len(special) > 0 || lom.loaded())
+	debug.AssertFunc(func() bool { return len(special) > 0 || lom.loaded() })
 	return lom.md.Version()
 }
 
@@ -198,7 +198,7 @@ func (lom *LOM) SetVersion(ver string)   { lom.md.SetVersion(ver) }
 func (lom *LOM) CopyVersion(oah cos.OAH) { lom.md.CopyVersion(oah) }
 
 func (lom *LOM) IncVersion() error {
-	debug.Assert(lom.Bck().IsAIS())
+	debug.AssertFunc(func() bool { return lom.Bck().IsAIS() })
 	v := lom.md.Version()
 	if v == "" {
 		lom.SetVersion(lomInitialVersion)
@@ -366,7 +366,7 @@ func (lom *LOM) ETag(mtime time.Time, allowSyscall bool) string {
 			if !allowSyscall {
 				return ""
 			}
-			debug.Assert(lom.bck.RemoteBck() == nil, "must consistently use remote mtime")
+			debug.AssertFunc(func() bool { return lom.bck.RemoteBck() == nil }, "must consistently use remote mtime")
 			t, err := fs.MtimeUTC(lom.FQN)
 			if err != nil {
 				return ""
@@ -663,7 +663,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		return err
 	}
 	if cacheit {
-		debug.Assert(lom.bid() != 0)
+		debug.AssertFunc(func() bool { return lom.bid() != 0 })
 		md := lom.md
 		lcache.Store(lom.digest, &md)
 	}
@@ -696,7 +696,7 @@ func (lom *LOM) _checkBucket() error {
 
 // store new or refresh existing
 func (lom *LOM) Recache() {
-	debug.Assert(!lom.IsCopy())
+	debug.AssertFunc(func() bool { return !lom.IsCopy() })
 	lom.setbid(lom.Bprops().BID)
 
 	md := lom.md
@@ -799,7 +799,7 @@ func (lom *LOM) FromFS() error {
 		}
 
 		lom.PopFntl(saved)
-		debug.Assert(!cos.IsErrFntl(err))
+		debug.AssertFunc(func() bool { return !cos.IsErrFntl(err) })
 		if cos.IsNotExist(err) {
 			// ditto
 			return cos.NewErrNotFound(T, lom.Cname())
@@ -885,7 +885,7 @@ func (lom *LOM) Unlock(exclusive bool) {
 
 // (compare with fs/content Gen())
 func (lom *LOM) ShortenFntl() []string {
-	debug.Assert(fs.IsFntl(lom.ObjName), lom.FQN)
+	debug.AssertFunc(func() bool { return fs.IsFntl(lom.ObjName) }, lom.FQN)
 
 	noname := fs.ShortenFntl(lom.FQN)
 	nfqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, noname)
@@ -904,7 +904,7 @@ func (lom *LOM) fixupFntl() {
 }
 
 func (lom *LOM) OrigFntl() []string {
-	debug.Assert(lom.IsFntl())
+	debug.AssertFunc(func() bool { return lom.IsFntl() })
 	ofqn, ok := lom.GetCustomKey(cmn.OrigFntl)
 	if !ok {
 		debug.Assert(false)

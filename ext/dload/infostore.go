@@ -147,7 +147,7 @@ func (is *infoStore) housekeep(int64) time.Duration {
 func (is *infoStore) checkExists(req *request) (dljob *dljob, err error) {
 	dljob, err = is.getJob(req.id)
 	if err != nil {
-		debug.Assert(errors.Is(err, errJobNotFound))
+		debug.AssertFunc(func() bool { return errors.Is(err, errJobNotFound) })
 		err = cos.NewErrNotFound(core.T, "download job "+req.id)
 		req.errRsp(err, http.StatusNotFound)
 	}

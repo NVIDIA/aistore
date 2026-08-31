@@ -236,7 +236,7 @@ func (dm *DM) Open() {
 // return the version of Smap used to establish this data mover's streams
 // (callers can use it to send xaction control messages to the same set of peers)
 func (dm *DM) Smap() *meta.Smap {
-	debug.Assert(dm.stage.opened.Load(), "must be open")
+	debug.AssertFunc(func() bool { return dm.stage.opened.Load() }, "must be open")
 	return dm.data.streams.Smap()
 }
 

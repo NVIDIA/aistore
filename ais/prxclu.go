@@ -73,7 +73,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request, isPub bool) {
 		query = r.URL.Query()
 		what  = query.Get(apc.QparamWhat)
 	)
-	debug.Assert(reqIsPub(r) == isPub)
+	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
 	if isPub {
 		if err := p.checkAccess(w, r, nil, apc.AceShowCluster); err != nil {
 			return
@@ -435,7 +435,7 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request, isPub bool) {
 	}
 
 	// admin access via pub net - all actions
-	debug.Assert(reqIsPub(r) == isPub)
+	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
 	if isPub {
 		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 			return

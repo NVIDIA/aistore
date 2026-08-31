@@ -226,7 +226,7 @@ func (r *XactTCO) ContMsg(msg *cmn.TCOMsg) {
 }
 
 func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
-	debug.Assert(cos.IsValidUUID(msg.TxnUUID), msg.TxnUUID) // (ref050724: in re: ais/plstcx)
+	debug.AssertFunc(func() bool { return cos.IsValidUUID(msg.TxnUUID) }, msg.TxnUUID) // (ref050724: in re: ais/plstcx)
 
 	r.pend.mtx.Lock()
 	wi, ok := r.pend.m[msg.TxnUUID]

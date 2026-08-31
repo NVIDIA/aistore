@@ -255,7 +255,7 @@ func (gc *collector) do() {
 				delete(gc.streams, sessID)
 				if len(gc.streams) == 0 {
 					gc.ticker.Reset(dfltTickIdle)
-					debug.Assert(!gc.none.Load())
+					debug.AssertFunc(func() bool { return !gc.none.Load() })
 					gc.none.Store(true)
 					nlog.Infoln("none")
 				}

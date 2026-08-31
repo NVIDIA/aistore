@@ -48,7 +48,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.T
 		objCached  = !flagIsSet(c, copyAllObjsFlag)
 		bckPresent = apc.IsFltPresent(fltPresence)
 	)
-	debug.Assert(parseStrFlag(c, verbObjPrefixFlag) == msg.Prefix)
+	debug.AssertFunc(func() bool { return parseStrFlag(c, verbObjPrefixFlag) == msg.Prefix })
 	ctx, err := newBsummCtxMsg(c, qbck, msg.Prefix, objCached, bckPresent)
 	if err != nil {
 		return err
@@ -174,7 +174,7 @@ func (cpr *cprCtx) do(c *cli.Context) {
 					objs += xsnap.Stats.Objs
 					if xsnap.IsRunning() {
 						if xsnap.IsIdle() {
-							debug.Assert(xact.IdlesBeforeFinishing(cpr.xname))
+							debug.AssertFunc(func() bool { return xact.IdlesBeforeFinishing(cpr.xname) })
 						} else {
 							nrun++
 						}

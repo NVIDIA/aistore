@@ -211,7 +211,7 @@ func (j *jogger) run() error {
 	var err error
 	switch {
 	case len(j.opts.Buckets) > 0:
-		debug.Assert(j.opts.Bck.IsEmpty())
+		debug.AssertFunc(func() bool { return j.opts.Bck.IsEmpty() })
 		err = j.runSelected()
 	case j.opts.Bck.IsQuery():
 		err = j.runQbck(cmn.QueryBcks(j.opts.Bck))

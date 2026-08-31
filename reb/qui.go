@@ -49,7 +49,7 @@ func (q *qui) quicb(total time.Duration) core.QuiRes {
 	// b) secondly and separately, all other targets must finish sending
 	//
 	locStage := q.reb.stages.stage.Load()
-	debug.Assert(locStage >= rebStageFin || xreb.IsAborted(), locStage, " vs ", rebStageFin)
+	debug.AssertFunc(func() bool { return locStage >= rebStageFin || xreb.IsAborted() }, locStage, " vs ", rebStageFin)
 	for _, tsi := range q.rargs.smap.Tmap {
 		status, _ := q.reb.checkStage(tsi, q.rargs, locStage)
 		if status != nil && status.Running && status.Stage < rebStageFin {

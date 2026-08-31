@@ -238,7 +238,7 @@ func (*mossFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *mossFactory) Start() error {
-	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
+	debug.AssertFunc(func() bool { return cos.IsValidUUID(p.Args.UUID) }, p.Args.UUID)
 
 	p.xctn = newMoss(p)
 
@@ -644,7 +644,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 			return err
 		}
 		err := cos.NewErrNotFoundFmt(r, "wid=%q (prep-rx not done?)", wid)
-		debug.Assert(r.IsDone() || r.IsAborted() || err == nil)
+		debug.AssertFunc(func() bool { return r.IsDone() || r.IsAborted() || err == nil })
 		return err
 	}
 	wi := a.(*basewi)
@@ -692,7 +692,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 
 	ok := wi.cleanup(false /*xdone*/)
-	debug.Assert(wi.owned.Load() == wiownAsm)
+	debug.AssertFunc(func() bool { return wi.owned.Load() == wiownAsm })
 
 	if ok {
 		freeMossWi(wi)
@@ -873,7 +873,7 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 func (r *XactMoss) anySent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	ctx, ok := arg.(*anySentCmpl)
 	debug.Assert(ok)
-	debug.Assert(ctx.lom.IsLocked() == apc.LockRead)
+	debug.AssertFunc(func() bool { return ctx.lom.IsLocked() == apc.LockRead })
 
 	if ctx.lh != nil {
 		cos.Close(ctx.lh)
@@ -1045,7 +1045,7 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader) error {
 	}
 	defer wi.unpin()
 
-	debug.Assert(wi.receiving())
+	debug.AssertFunc(func() bool { return wi.receiving() })
 	return wi.recvObj(int(mopaque.index), hdr, reader, mopaque)
 }
 
@@ -2057,7 +2057,7 @@ func (wi *basewi) flushRx() error {
 
 		switch {
 		case entry.mopaque.missing:
-			debug.Assert(strings.HasPrefix(entry.nameInArch, apc.MossMissingDir+"/"), entry.nameInArch)
+			debug.AssertFunc(func() bool { return strings.HasPrefix(entry.nameInArch, apc.MossMissingDir+"/") }, entry.nameInArch)
 			err = wi.aw.Write(entry.nameInArch, cos.SimpleOAH{Size: 0}, nopROC{})
 		case entry.sgl == nil:
 			// zero-size objects are transmitted header-only

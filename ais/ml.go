@@ -367,7 +367,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx.t = t
 
-		debug.Assert(cos.IsValidUUID(ctx.xid), ctx.xid)
+		debug.AssertFunc(func() bool { return cos.IsValidUUID(ctx.xid) }, ctx.xid)
 		xctn := xreg.GetActiveXact(ctx.xid)
 		if xctn == nil {
 			ecode := http.StatusConflict

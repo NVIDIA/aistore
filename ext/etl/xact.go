@@ -32,7 +32,7 @@ func (*factory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 }
 
 func (p *factory) Start() error {
-	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
+	debug.AssertFunc(func() bool { return cos.IsValidUUID(p.Args.UUID) }, p.Args.UUID)
 	p.xctn = newETL(p)
 	return nil
 }

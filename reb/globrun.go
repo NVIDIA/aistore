@@ -244,7 +244,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 		}
 	)
 	if rargs.bck != nil {
-		debug.Assert(!rargs.bck.IsEmpty(), extArgs.Bck)
+		debug.AssertFunc(func() bool { return !rargs.bck.IsEmpty() }, extArgs.Bck)
 		rargs.logHdr += "::" + rargs.bck.Cname(rargs.prefix)
 	}
 	if !rargs.pingall() {
@@ -283,7 +283,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	}
 
 	debug.Assert(reb.dm != nil)
-	debug.Assert(reb.dm.IsOpen())
+	debug.AssertFunc(func() bool { return reb.dm.IsOpen() })
 	if extArgs.Bck == nil {
 		nlog.Infoln(logHdr, "initializing")
 	} else {
@@ -426,7 +426,7 @@ func (reb *Reb) initRenew(rargs *rargs, extArgs *ExtArgs, ctlMsg func(sb *cos.SB
 	}
 
 	debug.Assert(reb.dm == nil)
-	debug.Assert(reb.xctn() != xreb)
+	debug.AssertFunc(func() bool { return reb.xctn() != xreb })
 	xreb.Abort(err)
 	xreb.Finish()
 	reb.smap.Store(origSmap)
@@ -633,7 +633,7 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 	reb.dm = nil
 
 	xctn := reb.xctn()
-	debug.Assert(xctn != nil && xctn.ID() == xreb.ID())
+	debug.AssertFunc(func() bool { return xctn != nil && xctn.ID() == xreb.ID() })
 
 	reb.filterGFN.Reset()
 
@@ -846,7 +846,7 @@ func (rargs *rargs) pingall() bool {
 }
 
 func (rargs *rargs) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenCloser) error {
-	debug.Assert(tsi.ID() != core.T.SID(), "unexpected local destination")
+	debug.AssertFunc(func() bool { return tsi.ID() != core.T.SID() }, "unexpected local destination")
 	var (
 		m = rargs.m
 		o = transport.AllocSend()

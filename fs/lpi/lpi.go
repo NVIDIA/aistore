@@ -60,7 +60,7 @@ var (
 
 func New(root, prefix string, smap *meta.Smap) (*Iter, error) {
 	// validate root
-	debug.Assert(!cos.IsLastB(root, filepath.Separator), root)
+	debug.AssertFunc(func() bool { return !cos.IsLastB(root, filepath.Separator) }, root)
 	finfo, err := os.Lstat(root)
 	if err != nil {
 		return nil, fmt.Errorf("root fstat: %w", err)
@@ -92,7 +92,7 @@ func (lpi *Iter) Next(msg Msg, out Page) error {
 		lpi.msg = msg
 		lpi.current, lpi.next = lpi.next, ""
 	}
-	debug.Assert(strings.HasPrefix(lpi.current, lpi.root), lpi.current, " vs ", lpi.root)
+	debug.AssertFunc(func() bool { return strings.HasPrefix(lpi.current, lpi.root) }, lpi.current, " vs ", lpi.root)
 
 	if lpi.msg.EOP != AllPages {
 		if lpi.current > lpi.msg.EOP {
@@ -117,7 +117,7 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 	switch {
 	case de.IsDir():
 		// skip or SkipDir
-		debug.Assert(!cos.IsLastB(pathname, filepath.Separator), pathname)
+		debug.AssertFunc(func() bool { return !cos.IsLastB(pathname, filepath.Separator) }, pathname)
 		if pathname == lpi.root {
 			break
 		}

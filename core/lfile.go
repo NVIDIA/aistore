@@ -141,7 +141,7 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 			lom.setlmfl(lmflFntl)
 			lom.SetCustomKey(cmn.OrigFntl, saved[0])
 		} else {
-			debug.Assert(!cos.IsErrFntl(err))
+			debug.AssertFunc(func() bool { return !cos.IsErrFntl(err) })
 			lom.PopFntl(saved)
 			lom.DelCustomKey(cmn.OrigFntl)
 		}
@@ -259,7 +259,7 @@ func (lom *LOM) RenameToMain(wfqn string) error {
 		return nil
 	}
 	if errors.Is(err, syscall.ENOTDIR) && lom.Bck().IsRemote() {
-		debug.Assert(cos.IsErrMv(err), err) // cos.Rename() returned cos.ErrMv of the type 2
+		debug.AssertFunc(func() bool { return cos.IsErrMv(err) }, err) // cos.Rename() returned cos.ErrMv of the type 2
 		fdir := filepath.Dir(lom.FQN)
 		found, errV := lom._enotdir(fdir, err)
 		if errV == nil {
@@ -341,7 +341,7 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 		}
 		return nil
 	}
-	debug.Assert(!cos.IsErrFntl(err))
+	debug.AssertFunc(func() bool { return !cos.IsErrFntl(err) })
 	if len(saved) > 0 {
 		lom.PopFntl(saved) // undo
 	}

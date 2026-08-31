@@ -12,7 +12,7 @@ import (
 )
 
 func RegNonBckXact(entry Renewable) {
-	debug.Assert(!xact.IsSameScope(entry.Kind(), xact.ScopeB))
+	debug.AssertFunc(func() bool { return !xact.IsSameScope(entry.Kind(), xact.ScopeB) })
 	dreg.nonbckXacts[entry.Kind()] = entry // no locking: all reg-s are done at init time
 }
 

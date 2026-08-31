@@ -164,7 +164,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		r.AddErr(err, 4, cos.ModXs)
 		return err
 	}
-	debug.Assert(archlom.Cname() == msg.Cname()) // relying on it
+	debug.AssertFunc(func() bool { return archlom.Cname() == msg.Cname() }) // relying on it
 
 	wi := &archwi{r: r, msg: msg, archlom: archlom, tarFormat: tar.FormatUnknown}
 	wi.fqn = wi.archlom.GenFQN(fs.WorkCT, fs.WorkfileCreateArch)
@@ -270,7 +270,7 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 	r.pending.mtx.Unlock()
 	if !ok || wi == nil {
 		// NOTE: unexpected and unlikely - aborting
-		debug.Assert(r.ErrCnt() > 0) // see cleanup
+		debug.AssertFunc(func() bool { return r.ErrCnt() > 0 }) // see cleanup
 		r.Abort(r.Err())
 		r.DecPending()
 		r.cleanup()
@@ -485,7 +485,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		}
 		return err
 	}
-	debug.Assert(wi.tsi.ID() == core.T.SID() && wi.msg.TxnUUID == cos.UnsafeS(hdr.Opaque))
+	debug.AssertFunc(func() bool { return wi.tsi.ID() == core.T.SID() && wi.msg.TxnUUID == cos.UnsafeS(hdr.Opaque) })
 
 	err := wi.writer.Write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
 	if err == nil {

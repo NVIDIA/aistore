@@ -42,7 +42,7 @@ func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 		nlog.InfoDepth(1, ftcg, "(load)", lom, err) // (unlikely)
 		return cmn.ErrGetTxBenign
 	}
-	debug.Assert(lom.Lsize() == fullSize)
+	debug.AssertFunc(func() bool { return lom.Lsize() == fullSize })
 	goi.lom.Unlock(true)
 
 	// regular get stats
@@ -137,7 +137,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	}
 	if written != res.Size {
 		errTx := goi._txerr(nil, lom.FQN, written, res.Size, true /*committed*/)
-		debug.Assert(isErrGetTxSevere(errTx), errTx)
+		debug.AssertFunc(func() bool { return isErrGetTxSevere(errTx) }, errTx)
 		goi._cleanup(revert, lmfh, buf, slab, errTx, "(rr/wl)")
 		return errTx
 	}

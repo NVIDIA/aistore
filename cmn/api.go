@@ -279,13 +279,13 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 }
 
 func (bp *Bprops) SetProvider(provider string) {
-	debug.Assert(apc.IsProvider(provider))
+	debug.AssertFunc(func() bool { return apc.IsProvider(provider) })
 	bp.Provider = provider
 }
 
 func (bp *Bprops) Clone() *Bprops {
 	to := *bp
-	debug.Assert(bp.Equal(&to))
+	debug.AssertFunc(func() bool { return bp.Equal(&to) })
 	return &to
 }
 
@@ -298,7 +298,7 @@ func (bp *Bprops) Equal(other *Bprops) (eq bool) {
 }
 
 func (bp *Bprops) Validate(targetCnt int) error {
-	debug.Assert(apc.IsProvider(bp.Provider))
+	debug.AssertFunc(func() bool { return apc.IsProvider(bp.Provider) })
 	if !bp.BackendBck.IsEmpty() {
 		if bp.Provider != apc.AIS {
 			return fmt.Errorf("invalid provider %q: only ais:// buckets can have remote backend (%q)", bp.Provider, bp.BackendBck.String())

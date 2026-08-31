@@ -512,7 +512,7 @@ func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, bloc
 
 // under lock: clones and adds self to available
 func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error) {
-	debug.Assert(!mi.IsAnySet(FlagWaitingDD)) // m.b. new
+	debug.AssertFunc(func() bool { return !mi.IsAnySet(FlagWaitingDD) }) // m.b. new
 	avail, disabled := Get()
 	if _, ok := disabled[mi.Path]; ok {
 		return fmt.Errorf("%s exists and is currently disabled (hint: did you want to enable it?)", mi)
@@ -884,7 +884,7 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 // begin (disable | detach) transaction: CoW-mark the corresponding mountpath
 func BeginDD(action string, flags uint64, mpath string) (mi *Mountpath, numAvail int, alreadyDD bool, err error) {
 	var cleanMpath string
-	debug.Assert(cos.BitFlags(flags).IsAnySet(cos.BitFlags(FlagWaitingDD)))
+	debug.AssertFunc(func() bool { return cos.BitFlags(flags).IsAnySet(cos.BitFlags(FlagWaitingDD)) })
 	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
 		return
 	}
