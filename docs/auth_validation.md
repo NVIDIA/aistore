@@ -164,6 +164,13 @@ The `auth` section controls three separate security boundaries:
 These settings are independent. For example, an operator can pre-stage either
 intra-cluster policy without requiring JWT/OIDC authentication from clients.
 
+Targets do not validate client tokens as only proxies do. Consequently, whenever either
+`auth.client_auth_required` or `auth.intra_cluster.request_auth` is set, a target rejects
+direct public-listener access to buckets, objects, and the node-control API
+(`GET /v1/daemon`) with 403. Node control reaches a target through the proxy's
+`/v1/reverse/daemon` endpoint, which enforces `SHOW-CLUSTER` for GET and `ADMIN` for
+PUT/POST/DELETE before relaying the request over intra-control.
+
 The request-authentication window settings apply only to
 `auth.intra_cluster.request_auth`:
 

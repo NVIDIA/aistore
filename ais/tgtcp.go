@@ -135,15 +135,19 @@ func (t *target) daePubHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
+	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
+
 	if isPub {
 		if r.Method != http.MethodGet {
 			t.writeErrStatusf(w, r, http.StatusForbidden, "%s: %s %s is read-only on %s", t, r.Method, r.URL.Path, cmn.NetPublic)
 			return
 		}
-	} else {
-		if !t.ensureIntraControl(w, r, false /* from primary */) {
+		if cmn.GCO.Get().Auth.RequiresProxyMediation() {
+			t.writeErr(w, r, errDirectTargetAccess, http.StatusForbidden)
 			return
 		}
+	} else if !t.ensureIntraControl(w, r, false /* from primary */) {
+		return
 	}
 
 	switch r.Method {

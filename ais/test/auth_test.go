@@ -7,6 +7,7 @@ package integration_test
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -269,4 +270,36 @@ func TestAuthPromoteRequiresPromotePerm(t *testing.T) {
 		_, err := api.Promote(aisBP, bck, &apc.PromoteArgs{SrcFQN: srcFQN, ObjName: "promoted-superuser"})
 		tassert.CheckFatal(t, err)
 	})
+}
+
+// targets don't validate client tokens: when AuthN is on, the node-control API
+// must not be readable on a target's public listener
+func TestAuthDirectTargetDaemon(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
+
+	smap, err := api.GetClusterMap(tools.BaseAPIParams())
+	tassert.CheckFatal(t, err)
+	tsi, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+
+	bp := tools.BaseAPIParams(tsi.URL(cmn.NetPublic))
+	bp.Token = ""
+
+	for _, what := range []string{apc.WhatSmap, apc.WhatBMD, apc.WhatNodeConfig, apc.WhatSnode, apc.WhatLog} {
+		t.Run(what, func(t *testing.T) {
+			expectStatus(t, daeGetWhat(bp, what), http.StatusForbidden)
+		})
+	}
+}
+
+func daeGetWhat(bp api.BaseParams, what string) error {
+	bp.Method = http.MethodGet
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathDae.S
+		reqParams.Query = url.Values{apc.QparamWhat: []string{what}}
+	}
+	return reqParams.DoRequest()
 }
