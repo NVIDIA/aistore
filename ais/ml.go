@@ -380,6 +380,9 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		xmoss, ok := xctn.(*xs.XactMoss)
 		debug.Func(func() { debug.Assert(ok, xctn.Name()) })
 
+		// return xid via response header, which is consistent across codebase
+		w.Header().Set(apc.HdrXactionID, xmoss.ID())
+
 		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
 			// NOTE: not aborting x-moss on a single wid failure
 			switch {

@@ -5,12 +5,14 @@
 # pylint: disable=duplicate-code
 
 from datetime import datetime, timedelta, timezone
+import tarfile
 import threading
 import time
 import unittest
 
 import pytest
 
+from aistore.sdk.const import HEADER_XACTION_ID
 from aistore.sdk.xact_const import (
     XACT_KIND_COPY_OBJECTS,
     XACT_KIND_GET_BATCH,
@@ -110,39 +112,37 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
     # wait() against a real running job, including the aborted case raised
     # in review ("does this handle aborted idle-type jobs cleanly?").
     #
+    # NOTE: a single get-batch xaction can service multiple
+    # requests/work items, so a fresh request is not guaranteed to produce
+    # a distinguishable new id even when it succeeds, so
+    # validate the response header xaction ID
+    #
 
-    def _get_batch_job_ids(self) -> set:
-        """Return the set of get-batch xaction ids currently known to the cluster."""
-        details = self.client.job(job_kind=XACT_KIND_GET_BATCH).get_details()
-        return {snap.id for snap in details.list_snapshots() if snap.id}
-
-    def _await_new_get_batch_id(self, before: set, timeout: int = TEST_TIMEOUT) -> str:
-        """Discover the id of the get-batch xaction that started after `before`
-        was captured. Scoping the subsequent wait()/abort() to a specific id
-        keeps them robust against lingering (idle or aborted) get-batch
-        snapshots left behind by other jobs."""
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            new_ids = self._get_batch_job_ids() - before
-            if new_ids:
-                return next(iter(new_ids))
-            time.sleep(0.1)
-        raise AssertionError("did not observe a new get-batch job id")
+    @staticmethod
+    def _batch_job_id(stream) -> str:
+        job_id = stream.headers.get(HEADER_XACTION_ID, "").strip('"')
+        assert job_id, "get-batch response missing xaction id header"
+        return job_id
 
     @pytest.mark.nonparallel("get-batch wait/abort dispatch")
     def test_job_wait_get_batch_finishes(self):
         """`wait()` on a get-batch (idle kind) converges via the snaps/idle
         path once the batch completes, returning success."""
         obj_names = list(self._create_objects().keys())
-        before = self._get_batch_job_ids()
 
         batch = self.client.batch(
             objects=obj_names, bucket=self.bucket, streaming_get=True
         )
-        results = list(batch.get())  # consume fully -> xaction goes idle
-        self.assertEqual(len(obj_names), len(results))
+        stream = batch.get(raw=True)
+        job_id = self._batch_job_id(stream)
+        try:
+            # consume fully (via tar, the default output format) -> xaction goes idle
+            with tarfile.open(fileobj=stream, mode="r|*") as tar:
+                count = sum(member.isfile() for member in tar)
+            self.assertEqual(len(obj_names), count)
+        finally:
+            stream.close()
 
-        job_id = self._await_new_get_batch_id(before)
         result = self.client.job(job_id=job_id, job_kind=XACT_KIND_GET_BATCH).wait(
             timeout=TEST_TIMEOUT
         )
@@ -153,13 +153,18 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         """An aborted get-batch (idle kind) must make `wait()` return promptly
         with a failed result -- not block until timeout."""
         obj_names = list(self._create_objects().keys())
-        before = self._get_batch_job_ids()
 
         batch = self.client.batch(
             objects=obj_names, bucket=self.bucket, streaming_get=True
         )
-        list(batch.get())  # drain so the streaming target is not blocked on write
-        job_id = self._await_new_get_batch_id(before)
+        stream = batch.get(raw=True)
+        job_id = self._batch_job_id(stream)
+        try:
+            # drain so the streaming target is not blocked on write
+            while stream.read(128 * 1024):
+                pass
+        finally:
+            stream.close()
 
         self.client.job(job_id=job_id, job_kind=XACT_KIND_GET_BATCH).abort()
 
@@ -178,12 +183,12 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         obj_names = list(
             self._create_objects(num_obj=12, obj_size=MEDIUM_FILE_SIZE).keys()
         )
-        before = self._get_batch_job_ids()
 
         batch = self.client.batch(
             objects=obj_names, bucket=self.bucket, streaming_get=True
         )
         stream = batch.get(raw=True)
+        job_id = self._batch_job_id(stream)
         stop = threading.Event()
 
         def _drain():
@@ -199,7 +204,6 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         drainer = threading.Thread(target=_drain, daemon=True)
         drainer.start()
         try:
-            job_id = self._await_new_get_batch_id(before)
             self.client.job(job_id=job_id, job_kind=XACT_KIND_GET_BATCH).abort()
             result = self.client.job(job_id=job_id, job_kind=XACT_KIND_GET_BATCH).wait(
                 timeout=TEST_TIMEOUT
