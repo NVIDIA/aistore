@@ -859,18 +859,16 @@ func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode i
 	}
 
 	if net == reqNetPub {
-		config := cmn.GCO.Get()
-
 		// Starting with v5.0, direct target access is rejected when either AuthN
 		// or intra-cluster request signing is configured: both require proxy mediation.
-		if config.Auth.RequiresProxyMediation() {
+		if cmn.Rom.RequiresProxyMediation() {
 			return http.StatusForbidden, errDirectTargetAccess
 		}
 
 		// Some S3 clients rebuild redirected requests from XML <Endpoint>,
 		// dropping AIS redirect query parameters. At the target, the resulting
 		// request is indistinguishable from direct public S3 access.
-		if dpq.isS3 && config.Features.IsSet(feat.S3RedirectRebuild) {
+		if dpq.isS3 && cmn.Rom.Features().IsSet(feat.S3RedirectRebuild) {
 			return 0, nil
 		}
 

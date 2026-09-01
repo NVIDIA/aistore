@@ -70,6 +70,7 @@ func _setAuth(auth *cmn.AuthConf) {
 	config := cmn.GCO.BeginUpdate()
 	config.Auth = *auth
 	cmn.GCO.CommitUpdate(config)
+	cmn.Rom.Set(&config.ClusterConfig)
 }
 
 func _daePub(method, what string) *httptest.ResponseRecorder {

@@ -51,9 +51,8 @@ func (t *target) verifyBckVerb(w http.ResponseWriter, r *http.Request, dpq *dpq)
 	}
 
 	if reqIsPub(r) {
-		config := cmn.GCO.Get()
 		// consistent with verifyObjVerb
-		if config.Auth.RequiresProxyMediation() {
+		if cmn.Rom.RequiresProxyMediation() {
 			t.writeErr(w, r, errDirectTargetAccess, http.StatusForbidden)
 			return false
 		}

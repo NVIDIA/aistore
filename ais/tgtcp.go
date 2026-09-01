@@ -142,7 +142,7 @@ func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 			t.writeErrStatusf(w, r, http.StatusForbidden, "%s: %s %s is read-only on %s", t, r.Method, r.URL.Path, cmn.NetPublic)
 			return
 		}
-		if cmn.GCO.Get().Auth.RequiresProxyMediation() {
+		if cmn.Rom.RequiresProxyMediation() {
 			t.writeErr(w, r, errDirectTargetAccess, http.StatusForbidden)
 			return
 		}

@@ -25,6 +25,7 @@ type readMostly struct {
 	testingEnv         bool
 	clientAuthRequired bool
 	signVerifyEnabled  bool
+	proxyMediation     bool // derived: clientAuthRequired || signVerifyEnabled
 	useHTTPS           bool
 }
 
@@ -54,6 +55,9 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 		onSignVerifyToggle(cur)
 	}
 
+	// derived from the two above; still - stored rather than OR-ed
+	rom.proxyMediation = cfg.Auth.RequiresProxyMediation()
+
 	rom.useHTTPS = cfg.Net.HTTP.UseHTTPS
 
 	// pre-parse for V (below)
@@ -67,6 +71,7 @@ func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
 func (rom *readMostly) ClientAuthRequired() bool       { return rom.clientAuthRequired }
 func (rom *readMostly) SignVerifyEnabled() bool        { return rom.signVerifyEnabled }
+func (rom *readMostly) RequiresProxyMediation() bool   { return rom.proxyMediation }
 func (rom *readMostly) UseHTTPS() bool                 { return rom.useHTTPS }
 
 func (rom *readMostly) V(verbosity, fl int) bool {
