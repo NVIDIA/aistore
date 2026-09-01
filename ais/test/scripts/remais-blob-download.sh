@@ -123,8 +123,8 @@ echo
 echo "2. Run blob-download jobs"
 numworkers=$numworkers_initial
 for f in $files; do
-  xid=$(ais blob-download $bucket/$f --chunk-size $chunksize --num-workers $numworkers --nv || exit $?)
-  ais wait $xid >/dev/null || exit $?
+  xid=$(ais blob-download "$bucket/$f" --chunk-size $chunksize --num-workers $numworkers --nv) || exit $?
+  [[ -z "$xid" ]] || ais wait "$xid" >/dev/null || exit $?
   count=`expr $count + 1`
   if [ $count -ge $max_num_downloads ]; then
      break
@@ -168,14 +168,12 @@ done
 ## uncomment if need be
 ## ais show job blob-download | grep Running
 
-echo "3.a. Wait for all blob-downloads (do not run concurrently with other blob-download tests!)"
-ais wait blob-download || exit $?
-
-echo "3.b. All downloads must finish -----------------------------------------"
+## each GET blocks until its blob-download finishes
+echo "3.a. All downloads must finish -----------------------------------------"
 ais show job blob-download
 
 ## ditto
-echo "3.c. Show some tails -----------------------------------------"
+echo "3.b. Show some tails -----------------------------------------"
 echo "..."
 ais show job blob-download --all | tail
 echo "..."

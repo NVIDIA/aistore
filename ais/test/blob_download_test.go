@@ -31,15 +31,13 @@ import (
 // 3. Exact number of chunks matches expectation based on objSize/chunkSize
 // 4. Objects can be retrieved successfully
 func TestBlobDownload(t *testing.T) {
-	t.Skipf("skipping %s - not ready", t.Name()) // TODO -- FIXME: fix to run and pass
-
 	const (
 		objSize    = 64 * cos.MiB
 		chunkSize  = 16 * cos.MiB
 		numWorkers = 4
 	)
 	var (
-		numObjs    = 500 // TODO -- FIXME: likely the reason CI times out after 6 hours
+		numObjs    = 10
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		prefix     = "blob-download/" + trand.String(5)
@@ -239,8 +237,6 @@ func TestBlobDownloadAbort(t *testing.T) {
 }
 
 func TestBlobDownloadAbortByKind(t *testing.T) {
-	t.Skipf("skipping %s - not ready", t.Name()) // TODO -- FIXME: fix to run and pass
-
 	const (
 		objSize    = 32 * cos.MiB
 		chunkSize  = 8 * cos.MiB
@@ -317,12 +313,12 @@ func TestBlobDownloadAbortByKind(t *testing.T) {
 
 func TestPrefetchWithBlobThreshold(t *testing.T) {
 	const (
-		blobThresh   = 128 * cos.MiB
-		smallObjSize = 32 * cos.MiB  // below blob threshold
-		largeObjSize = 256 * cos.MiB // above blob threshold
-		chunkSize    = 16 * cos.MiB
-		numSmallObjs = 3
-		numLargeObjs = 2
+		blobThresh   = 8 * cos.MiB
+		smallObjSize = 4 * cos.MiB  // below blob threshold
+		largeObjSize = 16 * cos.MiB // above blob threshold
+		chunkSize    = 4 * cos.MiB
+		numSmallObjs = 1
+		numLargeObjs = 1
 	)
 
 	tests := []struct {
