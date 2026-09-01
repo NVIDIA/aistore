@@ -161,6 +161,10 @@ type (
 // MMSA //
 //////////
 
+// low watermark: the PressureLow boundary
+// (compare with MinFree - the PressureExtreme floor)
+func (r *MMSA) LowWM() uint64 { return r.lowWM }
+
 func (r *MMSA) String() string {
 	var (
 		mem sys.MemStat

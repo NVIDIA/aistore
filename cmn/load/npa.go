@@ -83,10 +83,11 @@ func Gor(ngr int) Load {
 	}
 }
 
+// Optionally, grade a caller-provided sample - for callers that must grade and
+// size against one and the same /proc/meminfo reading.
 // NOTE: may trigger free-to-OS
-func Mem() Load {
-	mm := memsys.PageMM()
-	switch mm.Pressure() {
+func Mem(mems ...*sys.MemStat) Load {
+	switch memsys.PageMM().Pressure(mems...) {
 	case memsys.OOM, memsys.PressureExtreme:
 		oom.FreeToOS(true /*force*/)
 		return Critical

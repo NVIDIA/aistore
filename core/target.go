@@ -60,6 +60,8 @@ type (
 		//   - non-nil: synchronous streaming; each active worker owns one reusable,
 		//     chunk-sized object-data SGL (one SGL in serial mode).
 		// High memory pressure rejects streaming mode; critical pressure rejects both modes.
+		// Streaming is also rejected when estimated SGL and copy-buffer memory exceeds
+		// the allocator's available headroom above its configured minimum-free reserve.
 		// Client-facing streaming admission failures return ErrTooManyRequests (HTTP 429)
 		// before the xaction starts or writes a response; background failures remain ordinary errors.
 		RespWriter io.Writer

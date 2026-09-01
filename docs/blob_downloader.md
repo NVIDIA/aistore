@@ -1,6 +1,6 @@
 ## Blob Downloader
 
-Blob downloader is AIStore's facility for **downloading large remote objects (BLOBs)** using **concurrent range-reads**.  
+Blob downloader is AIStore's facility for **downloading large remote objects (BLOBs)** using **concurrent range-reads**.
 Instead of pulling a 10–100+ GiB object with a single sequential stream, blob downloader:
 
 - **splits the object into chunks** (configurable chunk size),
@@ -13,7 +13,11 @@ The result is that, beyond a certain object size, blob downloader can deliver **
 
 Blob downloader is also **load‑aware**: it consults AIStore's internal load advisors to avoid overcommitting memory or disks, backing off when the node is under pressure and running at full speed when the system has headroom.
 
-At critical memory pressure, prefetch uses regular cold GET instead of starting blob downloader. If blob downloader otherwise fails to start, prefetch falls back to regular cold GET for any returned error. A client-facing streaming admission rejected for resource pressure returns HTTP 429 before object headers or body are written; pressure detected after a job starts is reported as an xaction error.
+For objects above a certain threshold, blob downloader can be transparently used by [prefetch](/docs/bucket.md#prefetch-and-evict) - as a performance-optimized alternative to a regular remote ("cold") GET.
+At critical memory pressure, [prefetch](/docs/bucket.md#prefetch-and-evict) uses regular cold GET instead of starting blob downloader.
+Prefetch also falls back when resource admission rejects blob downloader or the object cannot fit within the manifest chunk limit; other start failures are reported.
+
+A client-facing streaming admission rejected for resource pressure or insufficient memory budget returns HTTP 429 (too many requests) before object headers or body are written; pressure detected after a job starts is reported as an xaction error.
 
 For a deeper dive into the internals and detailed benchmarks, see the [blog post](https://aistore.nvidia.com/blog/2025/11/26/blob-downloader).
 

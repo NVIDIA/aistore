@@ -306,12 +306,17 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 		Parent: xact.Cname(BlobParentPrefetch, r.ID()),
 	}
 	if err := params.Lom.InitBck(lom.Bck()); err != nil {
+		core.FreeLOM(params.Lom)
 		return 0, err
 	}
 	xctn, err := core.T.GetColdBlob(params, oa)
 	if err != nil {
+		core.FreeLOM(params.Lom) // xaction was not registered and did not take ownership
 		// No range request has started; 429 here would be an internal protocol leak.
 		debug.Func(func() { debug.Assert(!cmn.IsErrTooManyRequests(err)) })
+		if !isErrBlobDlColdFallback(err) {
+			return 0, err
+		}
 
 		r.stats.blobRej.Inc()
 		r.blobRejStats()

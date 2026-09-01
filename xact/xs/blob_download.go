@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -95,14 +96,15 @@ type (
 		workers  []*blobWorker
 		adv      load.Advice
 		xact.Base
-		bdm        bdMetrics // resolved once in factory.Start
-		wg         sync.WaitGroup
-		nextRoff   int64
-		fullSize   int64
-		chunkSize  int64         // not necessarily user-provided values (chunk size & num workers might be adjusted based on resources)
-		timeout    time.Duration // chunk read timeout
-		woff       int64
-		numWorkers int
+		bdm         bdMetrics // resolved once in factory.Start
+		wg          sync.WaitGroup
+		nextRoff    int64
+		fullSize    int64
+		chunkSize   int64         // not necessarily user-provided values (chunk size & num workers might be adjusted based on resources)
+		timeout     time.Duration // chunk read timeout
+		woff        int64
+		memInflight int64 // admitted-but-unallocated streaming memory; see blobMemInflight
+		numWorkers  int
 	}
 )
 
@@ -140,16 +142,32 @@ type (
 	}
 )
 
+// Streaming (SGL + copy-buffer) memory that has been admitted but not yet allocated.
+//
+// A per-job cost estimate bounds nothing on its own: N concurrent streaming GETs on
+// distinct objects each read the same "free" and each conclude they fit. The claim
+// covers exactly that window - from sampling free memory to touching the SGLs.
+var (
+	blobMemInflight atomic.Int64
+)
+
 // interface guard
 var (
 	_ core.Xact      = (*XactBlobDl)(nil)
 	_ xreg.Renewable = (*blobFactory)(nil)
 )
 
-var errBlobDlAdmission = errors.New("blob download admission rejected")
+var (
+	errBlobDlAdmission  = errors.New("blob download admission rejected")
+	errBlobDlChunkLimit = errors.New("blob download exceeds manifest chunk limit")
+)
 
 // IsErrBlobDlAdmission reports whether blob download was rejected before starting.
 func IsErrBlobDlAdmission(err error) bool { return errors.Is(err, errBlobDlAdmission) }
+
+func isErrBlobDlColdFallback(err error) bool {
+	return IsErrBlobDlAdmission(err) || errors.Is(err, errBlobDlChunkLimit)
+}
 
 // Blob Download Flow =================================================================
 //
@@ -249,12 +267,18 @@ func (p *blobFactory) Start() (err error) {
 	r.setChunkSize()
 
 	// 2. reject objects that cannot fit in a manifest
-	if numChunks := cos.DivCeil(r.fullSize, r.chunkSize); numChunks > core.MaxChunkCount {
-		return fmt.Errorf("%s: size %s with chunk size %s requires %d chunks, exceeds maximum %d",
-			r.Name(), cos.IEC(r.fullSize, 0), cos.IEC(r.chunkSize, 0), numChunks, core.MaxChunkCount)
+	if err := r.validateChunkCount(); err != nil {
+		return err
 	}
 
-	// 3. adjust num-workers parallelism (nwp)
+	streaming := r.args.RespWriter != nil
+
+	// 3. when memory pressure is critical - reject up front, before any further work
+	if memLoad := r.adv.MemLoad(); memLoad == load.Critical {
+		return r.memErr(memLoad, streaming, 0, 0)
+	}
+
+	// 4. adjust num-workers parallelism (nwp)
 	l := fs.NumAvail()
 	numWorkers, err := TuneBlobDlWorkers(r.Name(), r.numWorkers, l, r.fullSize)
 	if err != nil {
@@ -262,22 +286,19 @@ func (p *blobFactory) Start() (err error) {
 	}
 	r.numWorkers = numWorkers
 
-	// 4. memory pressure admission
-	memLoad := r.adv.MemLoad()
+	// 5. memory admission: one sample grades pressure and makes the reservation
+	var mem sys.MemStat
+	if e := mem.Get(); e != nil {
+		return fmt.Errorf("%w: %s: cannot assess memory: %w", errBlobDlAdmission, r.Name(), e)
+	}
+	memLoad := load.Mem(&mem)
+	sglCost, bufCost := r.estMemCost()
+	if err := r.memErr(memLoad, streaming, sglCost, bufCost); err != nil {
+		return err
+	}
 	if memLoad == load.High {
-		sglCost, bufCost := r.estMemCost()
-		if r.args.RespWriter != nil {
-			return fmt.Errorf("%w: %s: streaming downloads rejected under %s memory pressure (estimated SGL/copy-buffer cost: %s/%s)",
-				errBlobDlAdmission, r.Name(), load.Text[memLoad], cos.IEC(sglCost, 0), cos.IEC(bufCost, 0))
-		}
 		nlog.Warningf("%s: proceeding background downloads under %s memory pressure (estimated copy-buffer cost: %s)",
 			r.Name(), load.Text[memLoad], cos.IEC(bufCost, 0))
-		debug.Func(func() { debug.Assert(sglCost == 0) }) // background downloads do not buffer object data in SGLs
-	}
-
-	// 5. sleep if advised
-	if r.adv.Sleep > 0 {
-		time.Sleep(r.adv.Sleep)
 	}
 
 	// 6. start downloading
@@ -303,6 +324,11 @@ func (p *blobFactory) Start() (err error) {
 	tout := r.args.Msg.ChunkReadTimeout.D()
 	r.timeout = cos.Ternary(tout > 0, tout, dfltChunkReadTimeout)
 	r.ctx, r.cancel = context.WithCancel(context.Background())
+
+	// 7. claim last, after all checks and validations above
+	if err := r.claimMem(&mem, sglCost, bufCost); err != nil {
+		return err
+	}
 
 	p.xctn = r
 	return nil
@@ -337,10 +363,14 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 		lom = r.args.Lom
 		now = mono.NanoTime()
 	)
-
 	nlog.Infoln(r.String())
 	if wg != nil {
 		wg.Done() // signal that xaction has started
+	}
+
+	// throttle
+	if r.adv.Sleep > 0 {
+		time.Sleep(r.adv.Sleep)
 	}
 
 	switch r.numWorkers {
@@ -372,8 +402,80 @@ func (r *XactBlobDl) estMemCost() (sglCost, bufCost int64) {
 	if r.args.RespWriter != nil {
 		sglCost = n * r.chunkSize
 	}
-	debug.Func(func() { debug.Assert(r.args.RespWriter != nil || sglCost == 0) })
+	debug.Assert(r.args.RespWriter != nil || sglCost == 0)
 	return
+}
+
+func (r *XactBlobDl) validateChunkCount() error {
+	n := cos.DivCeil(r.fullSize, r.chunkSize)
+	if n <= core.MaxChunkCount {
+		return nil
+	}
+	return fmt.Errorf("%w: %s: size %s with chunk size %s requires %d chunks, exceeds maximum %d",
+		errBlobDlChunkLimit, r.Name(), cos.IEC(r.fullSize, 0), cos.IEC(r.chunkSize, 0), n, core.MaxChunkCount)
+}
+
+func (r *XactBlobDl) memErr(memLoad load.Load, streaming bool, sglCost, bufCost int64) error {
+	switch {
+	case memLoad == load.Critical:
+		return fmt.Errorf("%w: %s: all downloads rejected under %s memory pressure",
+			errBlobDlAdmission, r.Name(), load.Text[memLoad])
+	case memLoad == load.High && streaming:
+		return fmt.Errorf("%w: %s: streaming downloads rejected under %s memory pressure (estimated SGL/copy-buffer cost: %s/%s)",
+			errBlobDlAdmission, r.Name(), load.Text[memLoad], cos.IEC(sglCost, 0), cos.IEC(bufCost, 0))
+	default:
+		return nil
+	}
+}
+
+// same view of "free" that memsys grades pressure against (cf. memsys.memFree):
+// the more conservative of (free + buff/cache) and actual-free
+func blobMemFree(mem *sys.MemStat) uint64 {
+	return min(mem.Free+mem.BuffCache, mem.ActualFree)
+}
+
+// claim this job's streaming cost against the node-wide in-flight total,
+// or reject
+func (r *XactBlobDl) claimMem(mem *sys.MemStat, sglCost, bufCost int64) error {
+	if sglCost == 0 {
+		debug.Assert(r.args.RespWriter == nil)
+		return nil
+	}
+	var (
+		cost     = sglCost + bufCost
+		headroom = _headroom(mem)
+	)
+	for {
+		inflight := blobMemInflight.Load()
+		if inflight+cost > headroom {
+			err := fmt.Errorf("%w: %s: streaming memory cost %s exceeds headroom %s (%s in flight)",
+				errBlobDlAdmission, r.Name(), cos.IEC(cost, 0), cos.IEC(headroom, 0), cos.IEC(inflight, 0))
+			return err
+		}
+		if blobMemInflight.CompareAndSwap(inflight, inflight+cost) {
+			r.memInflight = cost
+			return nil
+		}
+	}
+}
+
+func _headroom(mem *sys.MemStat) int64 {
+	var (
+		free  = blobMemFree(mem)
+		lowWM = core.T.PageMM().LowWM()
+	)
+	if free <= lowWM {
+		return 0
+	}
+	return int64(free - lowWM)
+}
+
+// drop the claim
+func (r *XactBlobDl) releaseMem() {
+	if cost := r.memInflight; cost > 0 {
+		r.memInflight = 0
+		blobMemInflight.Add(-cost)
+	}
 }
 
 // setChunkSize applies the default and clamps the requested size to supported bounds.
@@ -403,16 +505,12 @@ func (r *XactBlobDl) runSerial() error {
 
 	var (
 		worker = r.newWorker()
-		wi     = &blobWI{name: r.Name() + blwipref, roff: r.nextRoff}
+		// serial case: a single work item and a single SGL for the entire download;
+		// written to RespWriter and freed upon completion
+		wi = r.newWI(r.Name()+blwipref, r.nextRoff)
 	)
 	defer wi.cleanup()
-	if r.args.RespWriter != nil {
-		// in the serial case, we use a single blobWI and a single SGL for the entire download
-		// this SGL will be used to write the data to the RespWriter, and it will be freed upon completion
-		debug.IncCounter(wi.name)
-		wi.sgl = core.T.PageMM().NewSGL(r.chunkSize)
-	}
-	debug.Func(func() { debug.Assert(r.args.RespWriter != nil || wi.sgl == nil) })
+	r.releaseMem() // object-data SGL is allocated: `sys.MemStat` accounts for it now
 
 	for r.nextRoff < r.fullSize {
 		if r.IsAborted() {
@@ -590,6 +688,17 @@ func (r *XactBlobDl) _fini(lom *core.LOM) (err error) {
 	return err
 }
 
+// work item and, when streaming, its reusable object-data SGL
+func (r *XactBlobDl) newWI(name string, roff int64) *blobWI {
+	wi := &blobWI{name: name, roff: roff}
+	if r.args.RespWriter != nil {
+		wi.sgl = core.T.PageMM().NewSGL(r.chunkSize)
+		debug.IncCounter(wi.name)
+	}
+	debug.Assert(r.args.RespWriter != nil || wi.sgl == nil)
+	return wi
+}
+
 func (r *XactBlobDl) newWorker() *blobWorker {
 	return &blobWorker{parent: r, adv: r.adv} // note: load-advice is copied by value
 }
@@ -603,19 +712,14 @@ func (r *XactBlobDl) startWorkers() {
 		go r.workers[i].run()
 
 		// Seed initial work items (chunks) to workCh (one per worker)
-		wi := &blobWI{name: r.Name() + blwipref + strconv.Itoa(i), roff: r.nextRoff}
-		if r.args.RespWriter != nil {
-			wi.sgl = core.T.PageMM().NewSGL(r.chunkSize)
-			debug.IncCounter(wi.name)
-		}
-		debug.Func(func() { debug.Assert(r.args.RespWriter != nil || wi.sgl == nil) })
-		r.workCh <- wi
+		r.workCh <- r.newWI(r.Name()+blwipref+strconv.Itoa(i), r.nextRoff)
 		r.nextRoff += r.chunkSize
 	}
+	r.releaseMem() // object-data SGLs are allocated: `sys.MemStat` accounts for them now
 }
 
 func (r *XactBlobDl) scheduleNextChunk(wi *blobWI) {
-	debug.Func(func() { debug.Assert(r.args.RespWriter != nil || wi.sgl == nil) })
+	debug.Assert(r.args.RespWriter != nil || wi.sgl == nil)
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln("scheduling next chunk:", wi.name, r.nextRoff, r.fullSize)
 	}
@@ -629,7 +733,7 @@ func (r *XactBlobDl) scheduleNextChunk(wi *blobWI) {
 }
 
 func (r *XactBlobDl) write(sgl *memsys.SGL, size int64) (err error) {
-	debug.Func(func() { debug.Assert(r.args.RespWriter != nil || sgl == nil) })
+	debug.Assert(r.args.RespWriter != nil || sgl == nil)
 	r.woff += size
 
 	// Write to RespWriter (streaming GET)
@@ -674,11 +778,13 @@ func (r *XactBlobDl) drainPendingChunks() error {
 }
 
 func (r *XactBlobDl) cleanup() {
+	r.releaseMem()
+
 	r.drainWich(r.workCh)
 	r.drainWich(r.doneCh)
 
 	for roff := range r.pending {
-		debug.Func(func() { debug.Assert(r.args.RespWriter != nil || r.pending[roff].sgl == nil) })
+		debug.Assert(r.args.RespWriter != nil || r.pending[roff].sgl == nil)
 		r.pending[roff].cleanup()
 	}
 
@@ -698,7 +804,7 @@ func (r *XactBlobDl) drainWich(ch chan *blobWI) {
 			if !ok {
 				return
 			}
-			debug.Func(func() { debug.Assert(r.args.RespWriter != nil || wi.sgl == nil) })
+			debug.Assert(r.args.RespWriter != nil || wi.sgl == nil)
 			wi.cleanup()
 		default:
 			return
@@ -780,7 +886,7 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		manifest   = w.parent.manifest
 		respWriter = w.parent.args.RespWriter
 	)
-	debug.Func(func() { debug.Assert(w.parent.args.RespWriter != nil || wi.sgl == nil) })
+	debug.Assert(w.parent.args.RespWriter != nil || wi.sgl == nil)
 
 	partNum := wi.roff/chunkSize + 1
 
@@ -905,7 +1011,7 @@ loop:
 			}
 
 			ecode, err = w.do(wi, buf)
-			debug.Func(func() { debug.Assert(w.parent.args.RespWriter != nil || wi.sgl == nil) })
+			debug.Assert(w.parent.args.RespWriter != nil || wi.sgl == nil)
 
 			wi.err, wi.code = err, ecode
 			doneCh <- wi
