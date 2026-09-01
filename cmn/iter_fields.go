@@ -224,7 +224,7 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 			dirtyField = field.dirty
 		case srcValField.Kind() != reflect.Struct:
 			// We require that not-omitted fields have JSON tag.
-			debug.Assert(jsonTagPresent, prefix+"["+fieldName+"]")
+			debug.Func(func() { debug.Assert(jsonTagPresent, prefix+"["+fieldName+"]") })
 
 			// Set value for the field
 			name := prefix + fieldName

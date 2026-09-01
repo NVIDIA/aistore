@@ -560,7 +560,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 	for mpath, disks := range ios.mpath2disks {
 		num := int64(len(disks))
 		if num == 0 {
-			debug.Assert(ncache.mpathUtil[mpath] == 0)
+			debug.AssertFunc(func() bool { return ncache.mpathUtil[mpath] == 0 })
 			continue
 		}
 		u := cos.DivRoundI64(ncache.mpathUtil[mpath], num)

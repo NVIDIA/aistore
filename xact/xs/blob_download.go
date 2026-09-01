@@ -445,7 +445,8 @@ func (r *XactBlobDl) runWorkers() error {
 				debug.Assertf((done.roff-r.woff)%r.chunkSize == 0, "out-of-order chunk's offset should be a multiple of chunk size: %d, %d",
 					done.roff-r.woff, r.chunkSize)
 
-				debug.Assert(r.pending[done.roff] == nil, "out-of-order chunk should not be already in the pending map")
+				debug.AssertFunc(func() bool { return r.pending[done.roff] == nil },
+					"out-of-order chunk should not be already in the pending map")
 				r.pending[done.roff] = done
 
 				continue
@@ -644,11 +645,13 @@ func (r *XactBlobDl) cleanup() {
 		r.pending[roff].cleanup()
 	}
 
-	// make sure all chunk tasks are cleaned up
-	for i := range r.workers {
-		debug.AssertCounterEquals(r.Name()+blwipref+strconv.Itoa(i), 0)
-	}
-	debug.AssertCounterEquals(r.Name()+blwipref, 0)
+	debug.Func(func() {
+		// make sure all chunk tasks are cleaned up
+		for i := range r.workers {
+			debug.AssertCounterEquals(r.Name()+blwipref+strconv.Itoa(i), 0)
+		}
+		debug.AssertCounterEquals(r.Name()+blwipref, 0)
+	})
 }
 
 func _drainWich(ch chan *blobWI) {

@@ -22,9 +22,10 @@
 # Example usage:
 # ./check-debug-assert-calls.sh /tmp/debug-off/aisnode ~/gocode/src/github.com/NVIDIA/aistore
 #
-# By default runtime.* calls are omitted: they are usually compiler-generated
-# allocation, conversion, panic, or stack-growth details rather than explicit
-# argument calls. Use --include-runtime for the lower-level audit.
+# Selected runtime.* helpers representing actual argument work are always
+# included. Use --include-runtime to retain all runtime.* calls.
+#
+# TODO: Inlining - see Step 2 comment below.
 
 set -euo pipefail
 export LC_ALL=C # join and sort must agree on collation
@@ -39,7 +40,7 @@ Git worktree containing the current directory.
 
 Options:
   --asm FILE             Reuse or create this exact disassembly file
-  --include-runtime      Include runtime.* callees in the results
+  --include-runtime      Include all runtime.* callees
   --allow-mismatch       Warn instead of failing on a VCS revision mismatch
   --findings FILE        Write matched CALL records to FILE
   --unmatched FILE       Write rejected basename/line collisions to FILE
@@ -141,8 +142,7 @@ TAB=$(printf '\t')
 [[ $INCLUDE_RUNTIME == 0 || $INCLUDE_RUNTIME == 1 ]] || die "INCLUDE_RUNTIME must be 0 or 1"
 [[ $ALLOW_MISMATCH == 0 || $ALLOW_MISMATCH == 1 ]] || die "ALLOW_MISMATCH must be 0 or 1"
 
-# Content identity is cheap compared with a full objdump and cannot collide
-# merely because a same-size binary was rebuilt within one timestamp tick.
+# Content identity vs full objdump
 _key=$(sha256sum "$BIN" | awk '{print $1}')
 ASM=${ASM:-/tmp/debug-assert-calls.$_key.asm}
 FINDINGS=${FINDINGS:-/tmp/debug-assert-calls.$_key.txt}
@@ -167,10 +167,7 @@ if [[ -n $_newest ]]; then
 	exit 2
 fi
 
-# When VCS metadata is embedded, reject a revision mismatch. Build-source
-# changes make exact identity unprovable, so report that limitation. Deliberate
-# build-only edits (for example, removing linker stripping flags in Makefile)
-# do not trigger this warning.
+# When VCS metadata is embedded, reject a revision mismatch.
 if command -v go >/dev/null 2>&1 && command -v git >/dev/null 2>&1 && git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 	_meta=$(go version -m "$BIN" 2>/dev/null || true)
 	_bin_rev=$(awk '/vcs\.revision=/ { sub(/^.*vcs\.revision=/, ""); print; exit }' <<<"$_meta")
@@ -198,7 +195,17 @@ fi
 if [[ ! -s $ASM ]]; then
 	command -v go >/dev/null 2>&1 || { echo "ERROR: go is required to create $ASM" >&2; exit 2; }
 	echo "disassembling $BIN -> $ASM (slow, large)" >&2
-	go tool objdump "$BIN" > "$WORKDIR/objdump"
+
+	if ! go tool objdump "$BIN" > "$WORKDIR/objdump" 2> "$WORKDIR/objdump.err"; then
+	       if grep -q 'no symbol section' "$WORKDIR/objdump.err"; then
+		       echo "ERROR: $BIN is stripped - no symbol table to disassemble" >&2
+		       echo "       rebuild without the production linker flags \"-w -s\"" >&2
+		       exit 2
+	       fi
+	       cat -- "$WORKDIR/objdump.err" >&2
+	       die "go tool objdump failed"
+	fi
+
 	mv -- "$WORKDIR/objdump" "$ASM"
 else
 	echo "reusing cached disassembly $ASM" >&2
@@ -206,10 +213,8 @@ else
 fi
 
 # 1. CALLs -> basename:line <TAB> pkgdir <TAB> owner-symbol <TAB> callee
-#
-# pkgdir comes from the owning TEXT symbol and is relative to the module root.
-# runtime.* is excluded by default to preserve the original signal level. Use
-# INCLUDE_RUNTIME=1 to expose generated allocation, conversion, and concat calls.
+# Use INCLUDE_RUNTIME=1 to include all runtime helpers
+# (concatstring and few selected are always included)
 awk -v mod="$MOD" -v include_runtime="$INCLUDE_RUNTIME" '
 	/^TEXT / {
 		sym = $2
@@ -227,18 +232,21 @@ awk -v mod="$MOD" -v include_runtime="$INCLUDE_RUNTIME" '
 	}
 	$4 == "CALL" {
 		callee = $5
-		if (!include_runtime && callee ~ /^runtime\./)
+		# always include assorted certain runtime helpers
+		if (!include_runtime && callee ~ /^runtime\./ &&
+		   callee !~ /^runtime\.(concatstring|concatbyte|mapaccess|slicebytetostring|slicerunetostring|stringtoslicebyte|stringtoslicerune)/)
 			next
 		if ($1 ~ /^[^ \t]+\.go:[0-9]+$/)
 			print $1 "\t" pkg "\t" sym "\t" callee
 	}
 ' "$ASM" | sort -u > "$CALLS"
 
+# TODO: Handle inlining. For example, see api/client.go line 429 -
+# api.readMultipart calls multipart.Part.FormName() in debug.Assert arguments where
+# emitted calls evade the join below.
+
 # 2. Assertion sites -> basename:line <TAB> pkgdir <TAB> fullpath:line
-# This deliberately remains a textual site inventory; the binary side decides
-# whether a CALL was actually emitted. Comments/strings, if ever matched, cannot
-# produce a binary CALL at the same package-owned source position.
-grep -rnE 'debug\.(Assert|AssertNoErr|Assertf|AssertFunc)\(' \
+grep -rnE 'debug\.(Assert[A-Za-z]*|FailTypeCast)\(' \
 	--include='*.go' "$SRC" > "$RAW_ASSERTS" || true
 
 awk -F: -v src="$SRC" '
