@@ -112,6 +112,51 @@ class TestJob(unittest.TestCase):
         with self.assertRaises(Timeout):
             self.job.wait()
 
+    def test_wait_verbose_does_not_mutate_shared_logger(self):
+        """Verify terminal waits gate logs without changing global logger state."""
+        job = Job(self.mock_client, self.job_id, XACT_KIND_LRU)
+        status = JobStatus(uuid=self.job_id, end_time=1)
+
+        with patch.object(job, "status", return_value=status), patch(
+            "aistore.sdk.job.logger"
+        ) as mock_logger:
+            original_disabled = object()
+            mock_logger.disabled = original_disabled
+
+            job.wait(verbose=False)
+
+            self.assertIs(mock_logger.disabled, original_disabled)
+            mock_logger.info.assert_not_called()
+            mock_logger.error.assert_not_called()
+
+            job.wait(verbose=True)
+
+            self.assertIs(mock_logger.disabled, original_disabled)
+            mock_logger.info.assert_called_once_with(
+                "Job '%s' finished successfully", self.job_id
+            )
+
+    def test_wait_for_idle_verbose_does_not_mutate_shared_logger(self):
+        """Verify idle waits gate logs without changing global logger state."""
+        details = AggregatedJobSnap.model_validate(
+            {"target": [JobSnap(id=self.job_id, is_idle=True)]}
+        )
+
+        with patch.object(
+            self.job, "get_details", side_effect=[details, details]
+        ), patch("aistore.sdk.job.time.sleep"), patch(
+            "aistore.sdk.job.logger"
+        ) as mock_logger:
+            original_disabled = object()
+            mock_logger.disabled = original_disabled
+
+            result = self.job.wait_for_idle(verbose=False)
+
+            self.assertTrue(result.success)
+            self.assertIs(mock_logger.disabled, original_disabled)
+            mock_logger.info.assert_not_called()
+            mock_logger.error.assert_not_called()
+
     #
     # Descriptor-aware wait() dispatch (mirrors Go `api.WaitForXaction`).
     #

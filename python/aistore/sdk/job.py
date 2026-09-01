@@ -201,7 +201,6 @@ class Job:
         verbose: bool,
     ) -> WaitResult:
         """Poll `status()` until the job reaches a terminal state."""
-        logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
 
@@ -209,18 +208,20 @@ class Job:
             status = self.status()
 
             if passed > timeout:
-                logger.error(
-                    "Timeout waiting for job '%s' after %ds. Job status: %s",
-                    status.uuid,
-                    timeout,
-                    status,
-                )
+                if verbose:
+                    logger.error(
+                        "Timeout waiting for job '%s' after %ds. Job status: %s",
+                        status.uuid,
+                        timeout,
+                        status,
+                    )
                 raise Timeout(f"job '{status.uuid}'", f"after {timeout}s")
 
             if status.end_time == 0:
                 time.sleep(sleep_time)
                 passed += sleep_time
-                logger.info("Waiting on job '%s'...", status.uuid)
+                if verbose:
+                    logger.info("Waiting on job '%s'...", status.uuid)
                 continue
 
             end_time = (
@@ -237,10 +238,11 @@ class Job:
                 end_time=end_time,
             )
 
-            if success:
-                logger.info("Job '%s' finished successfully", status.uuid)
-            else:
-                logger.error("Job '%s' failed: %s", status.uuid, result.error)
+            if verbose:
+                if success:
+                    logger.info("Job '%s' finished successfully", status.uuid)
+                else:
+                    logger.error("Job '%s' failed: %s", status.uuid, result.error)
 
             return result
 
@@ -460,7 +462,6 @@ class Job:
     def _wait_for_condition(
         self, condition_fn, timeout: int, verbose: bool, state: str
     ) -> WaitResult:
-        logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
 
@@ -469,26 +470,32 @@ class Job:
             snaps = details.list_snapshots()
 
             if passed > timeout:
-                logger.error(
-                    "Timeout waiting for job '%s' after %ds. Job snapshots: %s",
-                    self._job_id,
-                    timeout,
-                    snaps,
-                )
+                if verbose:
+                    logger.error(
+                        "Timeout waiting for job '%s' after %ds. Job snapshots: %s",
+                        self._job_id,
+                        timeout,
+                        snaps,
+                    )
                 raise Timeout(f"job '{self._job_id}'", f"after {timeout}s")
 
             if not snaps:
-                logger.info("No info for job '%s', retrying", self._job_id)
+                if verbose:
+                    logger.info("No info for job '%s', retrying", self._job_id)
             else:
                 if condition_fn(details):
                     result = WaitResult.from_snapshots(self._job_id, snaps)
-                    if result.success:
-                        logger.info("Job '%s' %s", self._job_id, state)
-                    else:
-                        logger.error("Job '%s' failed: %s", self._job_id, result.error)
+                    if verbose:
+                        if result.success:
+                            logger.info("Job '%s' %s", self._job_id, state)
+                        else:
+                            logger.error(
+                                "Job '%s' failed: %s", self._job_id, result.error
+                            )
                     return result
 
-                logger.info("Waiting on job '%s'...", self._job_id)
+                if verbose:
+                    logger.info("Waiting on job '%s'...", self._job_id)
 
             time.sleep(sleep_time)
             passed += sleep_time

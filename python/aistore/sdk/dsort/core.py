@@ -125,7 +125,6 @@ class Dsort:
             errors.Timeout: Timeout while waiting for the job to finish
         """
         logger = logging.getLogger(f"{__name__}.wait")
-        logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
 
@@ -133,12 +132,13 @@ class Dsort:
             job_info_dict = self.get_job_info()
 
             if passed > timeout:
-                logger.error(
-                    "Timeout waiting for dsort job '%s' after %ds. Job info: %s",
-                    self._dsort_id,
-                    timeout,
-                    job_info_dict,
-                )
+                if verbose:
+                    logger.error(
+                        "Timeout waiting for dsort job '%s' after %ds. Job info: %s",
+                        self._dsort_id,
+                        timeout,
+                        job_info_dict,
+                    )
                 raise Timeout(f"dsort job '{self._dsort_id}'", f"after {timeout}s")
 
             if not job_info_dict:

@@ -59,7 +59,7 @@ output_shard_size: 10MB
 """
 
 
-class TestDsort(unittest.TestCase):
+class TestDsort(unittest.TestCase):  # pylint: disable=too-many-public-methods
 
     def setUp(self) -> None:
         self.mock_client = Mock()
@@ -283,6 +283,23 @@ class TestDsort(unittest.TestCase):
         mock_get_job_info.return_value = job_info_dict
         with self.assertRaises(Timeout):
             self.dsort.wait()
+
+    @patch("aistore.sdk.dsort.core.Dsort.get_job_info")
+    def test_wait_verbose_does_not_mutate_shared_logger(self, mock_get_job_info):
+        """Verify dSort waits do not mutate shared logger state."""
+        mock_get_job_info.return_value = {"key": self._get_mock_job_info(finished=True)}
+
+        with patch("aistore.sdk.dsort.core.logging.getLogger") as mock_get_logger:
+            mock_logger = Mock()
+            original_disabled = object()
+            mock_logger.disabled = original_disabled
+            mock_get_logger.return_value = mock_logger
+
+            result = self.dsort.wait(verbose=False)
+
+            self.assertTrue(result.success)
+            self.assertIs(mock_logger.disabled, original_disabled)
+            mock_logger.error.assert_not_called()
 
     @patch("aistore.sdk.dsort.core.time.sleep")
     @patch("aistore.sdk.dsort.core.Dsort.get_job_info")

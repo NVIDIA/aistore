@@ -1199,20 +1199,44 @@ class TestBucket(unittest.TestCase):
         self.mock_client.request.assert_not_called()
 
     @patch("aistore.sdk.bucket.validate_directory")
-    @patch("logging.getLogger")
-    @cases((True, False), (False, True))
+    @patch("aistore.sdk.bucket.logging.getLogger")
+    @cases((True, 1), (False, 0))
     def test_put_files_verbose(self, test_case, mock_get_logger, _mock_validate_dir):
-        verbose, expected_disabled = test_case
+        """Verify verbosity is local and does not mutate shared logger state."""
+        verbose, expected_log_calls = test_case
 
         mock_logger = Mock()
+        original_disabled = object()
+        mock_logger.disabled = original_disabled
+        mock_logger.isEnabledFor.return_value = True
         mock_get_logger.return_value = mock_logger
 
         # Mock an empty directory to avoid file processing
         with patch("pathlib.Path.glob", return_value=[]):
             self.ais_bck.put_files("/path", verbose=verbose)
 
-        # Verify logger disabled state matches expectation
-        self.assertEqual(mock_logger.disabled, expected_disabled)
+        self.assertIs(mock_logger.disabled, original_disabled)
+        self.assertEqual(expected_log_calls, mock_logger.info.call_count)
+
+    @patch("aistore.sdk.bucket.get_file_size")
+    @patch("aistore.sdk.bucket.validate_directory")
+    @patch("pathlib.Path.glob")
+    def test_put_files_non_verbose_skips_file_size(
+        self, mock_glob, _mock_validate_dir, mock_get_file_size
+    ):
+        """Verify suppressed upload logging avoids file-size lookups."""
+        mock_glob.return_value = [
+            Mock(
+                is_file=Mock(return_value=True),
+                relative_to=Mock(return_value="f.txt"),
+                name="f.txt",
+            )
+        ]
+
+        result = self.ais_bck.put_files("/path", dry_run=True, verbose=False)
+
+        self.assertEqual(["f.txt"], result)
+        mock_get_file_size.assert_not_called()
 
     # ======================== NBI (Native Bucket Inventory) ========================
 

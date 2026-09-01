@@ -242,7 +242,7 @@ def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):
         logging.Logger: Configured logger instance.
     """
     logger = logging.getLogger(name)
-    if not logger.hasHandlers():
+    if not logger.handlers:
         handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter(log_format))
         logger.addHandler(handler)

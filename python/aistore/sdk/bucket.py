@@ -1030,27 +1030,29 @@ class Bucket(AISSource):
         dry_run_prefix = "Dry-run enabled. Proposed action:" if dry_run else ""
 
         logger = logging.getLogger(f"{__name__}.put_files")
-        logger.disabled = not verbose
+        log_uploads = verbose and logger.isEnabledFor(logging.INFO)
         for file in file_iterator:
             if not file.is_file() or not str(file.name).startswith(prefix_filter):
                 continue
             obj_name = self._get_uploaded_obj_name(file, path, basename, prepend)
             if not dry_run:
                 self.object(obj_name).get_writer().put_file(str(file))
-            logger.info(
-                "%s File '%s' uploaded as object '%s' with size %s",
-                dry_run_prefix,
-                file,
-                obj_name,
-                get_file_size(file),
-            )
+            if log_uploads:
+                logger.info(
+                    "%s File '%s' uploaded as object '%s' with size %s",
+                    dry_run_prefix,
+                    file,
+                    obj_name,
+                    get_file_size(file),
+                )
             obj_names.append(obj_name)
-        logger.info(
-            "%s Specified files from %s uploaded to bucket %s",
-            dry_run_prefix,
-            path,
-            f"{self.provider}://{self.name}",
-        )
+        if log_uploads:
+            logger.info(
+                "%s Specified files from %s uploaded to bucket %s",
+                dry_run_prefix,
+                path,
+                f"{self.provider}://{self.name}",
+            )
         return obj_names
 
     @staticmethod

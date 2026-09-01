@@ -22,6 +22,7 @@ from aistore.sdk.utils import (
     decode_response,
     expand_braces,
     get_file_size,
+    get_logger,
     get_object_url_components,
     probing_frequency,
     read_file_bytes,
@@ -79,6 +80,23 @@ class TestUtils(unittest.TestCase):
         mock_file = Mock()
         mock_file.stat.return_value = Mock(st_size=test_case[0])
         self.assertEqual(test_case[1], get_file_size(mock_file))
+
+    @patch("aistore.sdk.utils.logging.getLogger")
+    def test_get_logger_adds_local_handler_when_only_ancestor_has_one(
+        self, mock_get_logger
+    ):
+        """Verify inherited handlers do not suppress the SDK's local handler."""
+        mock_logger = Mock()
+        mock_logger.handlers = []
+        mock_logger.hasHandlers.return_value = True
+        mock_get_logger.return_value = mock_logger
+
+        result = get_logger("test.logger")
+
+        self.assertIs(result, mock_logger)
+        mock_logger.addHandler.assert_called_once()
+        mock_logger.hasHandlers.assert_not_called()
+        self.assertFalse(mock_logger.propagate)
 
     @cases(
         (PREFIX_NAME, [PREFIX_NAME], None),
