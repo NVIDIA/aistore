@@ -35,12 +35,14 @@ import (
 
 // TODO:
 // 1. check that caller always checks remote non-existence (target does - via t.blobdl)
-// 2. general error handling:
-//    - support io-errors (higher severity)
-//    - pass http status from backend => finalize
-// 3. load, latest-ver, checksum, write, finalize
-// 4. track each chunk reader with 'started' timestamp; abort/retry individual chunks; timeout
-// 5. validate `expCksum`
+// 2. support io-errors (higher severity)
+// 3. track each chunk reader with 'started' timestamp; abort/retry individual chunks
+//    (chunk read timeout is done - see `apc.BlobMsg.ChunkReadTimeout`)
+// 4. validate `res.ExpCksum`: blob-downloaded objects bypass `validate_cold_get`
+//    (compare with regular cold GET)
+// 5. used-memory accounting: a work item releases the whole per-worker share
+//    (chunk SGL + one copy buffer), but the buffer belongs to a worker and workers
+//    are not pinned to items
 
 const (
 	BlobParentGET      = "GET"
@@ -124,12 +126,13 @@ type (
 		nchunks int64 // per-worker sequential counter for ShouldCheck
 	}
 	blobWI struct {
-		err     error
-		sgl     *memsys.SGL
-		name    string // for logging and debug assertions
-		roff    int64
-		written int64
-		code    int
+		err         error
+		sgl         *memsys.SGL
+		name        string // for logging and debug assertions
+		roff        int64
+		written     int64
+		memInflight int64 // streaming: released after the first successful write into the SGL
+		code        int
 	}
 	blobPending map[int64]*blobWI // map[roff => work item]
 )
@@ -470,11 +473,26 @@ func _headroom(mem *sys.MemStat) int64 {
 	return int64(free - lowWM)
 }
 
-// drop the claim
+// drop whatever is left, if anything
 func (r *XactBlobDl) releaseMem() {
 	if cost := r.memInflight; cost > 0 {
 		r.memInflight = 0
-		blobMemInflight.Add(-cost)
+		remaining := blobMemInflight.Add(-cost)
+		debug.Assert(remaining >= 0)
+	}
+}
+
+// a chunk has been copied into the SGL - now reflected in sys.MemStat,
+// so this work item's claim can be dropped
+func (r *XactBlobDl) releaseWIMem(wi *blobWI) {
+	if wi.written == 0 {
+		return
+	}
+	if cost := wi.memInflight; cost > 0 {
+		wi.memInflight = 0
+		r.memInflight -= cost
+		remaining := blobMemInflight.Add(-cost)
+		debug.Assert(r.memInflight >= 0 && remaining >= 0)
 	}
 }
 
@@ -510,7 +528,6 @@ func (r *XactBlobDl) runSerial() error {
 		wi = r.newWI(r.Name()+blwipref, r.nextRoff)
 	)
 	defer wi.cleanup()
-	r.releaseMem() // object-data SGL is allocated: `sys.MemStat` accounts for it now
 
 	for r.nextRoff < r.fullSize {
 		if r.IsAborted() {
@@ -523,6 +540,7 @@ func (r *XactBlobDl) runSerial() error {
 		if ecode == http.StatusRequestedRangeNotSatisfiable && r.fullSize > r.nextRoff {
 			return fmt.Errorf("%s: premature eof: expected size %d, have %d", r.Name(), r.fullSize, r.nextRoff)
 		}
+		r.releaseWIMem(wi)
 
 		if err = r.write(wi.sgl, wi.written); err != nil {
 			return err
@@ -567,6 +585,7 @@ func (r *XactBlobDl) runWorkers() error {
 			}
 			eof := r.fullSize <= done.roff+written
 			debug.Assert(written > 0 || eof)
+			r.releaseWIMem(done)
 
 			// out-of-order chunks: temporarily store in map and wait for the next sequential chunk
 			if done.roff != r.woff {
@@ -653,6 +672,9 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 		r.bdm.blobSz.add(tstats, lom.Lsize())
 
 		r.ObjsAdd(1, 0)
+
+		// every work item wrote at least one chunk, so each released its share
+		debug.Assertf(r.memInflight == 0, "%s: leftover claim %d", r.cname, r.memInflight)
 	} else {
 		r.AddErr(err)
 		r._errStats()
@@ -693,6 +715,7 @@ func (r *XactBlobDl) newWI(name string, roff int64) *blobWI {
 	wi := &blobWI{name: name, roff: roff}
 	if r.args.RespWriter != nil {
 		wi.sgl = core.T.PageMM().NewSGL(r.chunkSize)
+		wi.memInflight = r.chunkSize + memsys.DefaultBufSize // per-worker share of estMemCost
 		debug.IncCounter(wi.name)
 	}
 	debug.Assert(r.args.RespWriter != nil || wi.sgl == nil)
@@ -715,7 +738,6 @@ func (r *XactBlobDl) startWorkers() {
 		r.workCh <- r.newWI(r.Name()+blwipref+strconv.Itoa(i), r.nextRoff)
 		r.nextRoff += r.chunkSize
 	}
-	r.releaseMem() // object-data SGLs are allocated: `sys.MemStat` accounts for them now
 }
 
 func (r *XactBlobDl) scheduleNextChunk(wi *blobWI) {
