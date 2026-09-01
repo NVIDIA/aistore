@@ -130,3 +130,44 @@ class TestAISSampler(unittest.TestCase):
                 self.assertTrue(data == self.data or data == large_data)
 
         self.assertEqual(num_batches, 4)
+
+    @patch("aistore.pytorch.dynamic_sampler.torch.randperm")
+    def test_dynamic_sampler_shuffle_materializes_python_ints(self, mock_randperm):
+        """Verify shuffled indices are materialized as Python integers."""
+        permutation = Mock()
+        permutation.tolist.return_value = list(range(len(self.mock_objects)))
+        mock_randperm.return_value = permutation
+        sampler = DynamicBatchSampler(
+            data_source=self.ais_dataset,
+            max_batch_size=2000,
+            shuffle=True,
+        )
+
+        first_batch = next(iter(sampler))
+
+        mock_randperm.assert_called_once_with(len(self.mock_objects))
+        permutation.tolist.assert_called_once_with()
+        self.assertEqual([9, 8], first_batch)
+        self.assertTrue(all(isinstance(index, int) for index in sampler._indices))
+
+    def test_dynamic_sampler_reads_each_sample_size_once(self):
+        """Verify each sample's cached size is read only once."""
+
+        class CountingSample:
+            def __init__(self, name):
+                self.name = name
+                self._props = Mock(size=1000)
+                self.props_reads = 0
+
+            @property
+            def props_cached(self):
+                self.props_reads += 1
+                return self._props
+
+        samples = [CountingSample("first"), CountingSample("second")]
+        data_source = Mock()
+        data_source.get_obj_list.return_value = samples
+        sampler = DynamicBatchSampler(data_source, max_batch_size=2000)
+
+        self.assertEqual([[0, 1]], list(sampler))
+        self.assertEqual([1, 1], [sample.props_reads for sample in samples])

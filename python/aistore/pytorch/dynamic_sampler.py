@@ -70,17 +70,16 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
         batch = []
 
         if self._shuffle:
-            self._indices = list(
-                torch.randperm(len(self))
-            )  # randomized list of indices
+            self._indices = torch.randperm(len(self)).tolist()
 
         # Get sample size for each index, check if there is space in the batch, and yield batches whenever full
         # Calculate spaces in batch non-preemptively
         index = self._get_next_index(-1)
         while index < len(self._samples_list):
             sample = self._samples_list[index]
+            sample_size = sample.props_cached.size
 
-            if sample.props_cached.size == 0:
+            if sample_size == 0:
                 logger.warning(
                     "Sample %s cannot be processed as it has a size of 0 bytes",
                     sample.name,
@@ -88,27 +87,27 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
                 index = self._get_next_index(index)
                 continue
 
-            if sample.props_cached.size > self._max_batch_size:
+            if sample_size > self._max_batch_size:
                 if self._allow_oversized_samples is True:
                     yield [index]
                 else:
                     logger.warning(
                         "Sample %s cannot be processed as it is larger than the max batch size: %d bytes > %d bytes",
                         sample.name,
-                        sample.props_cached.size,
+                        sample_size,
                         self._max_batch_size,
                     )
 
                 index = self._get_next_index(index)
                 continue
 
-            if total_mem + sample.props_cached.size < self._max_batch_size:
+            if total_mem + sample_size < self._max_batch_size:
                 batch.append(index)
                 index = self._get_next_index(index)
-                total_mem += sample.props_cached.size
+                total_mem += sample_size
             else:
 
-                if total_mem + sample.props_cached.size == self._max_batch_size:
+                if total_mem + sample_size == self._max_batch_size:
                     batch.append(index)
                     index = self._get_next_index(index)
 
