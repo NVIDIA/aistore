@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import logging
 from typing import Dict, List, Iterable, Optional
@@ -111,7 +111,7 @@ class ObjectGroup(AISSource):
             yield self.bck.object(obj_name).get_url(etl=etl)
 
     def list_all_objects_iter(
-        self, prefix: str = "", props: str = "name,size"
+        self, prefix: str = "", props: Optional[str] = "name,size"
     ) -> Iterable[Object]:
         """
         Implementation of the abstract method from AISSource that provides an iterator
@@ -119,8 +119,8 @@ class ObjectGroup(AISSource):
 
         Args:
             prefix (str, optional): Limit objects selected by a given string prefix
-            props (str, optional): By default, will include all object properties.
-                Pass in None to skip and avoid the extra API call.
+            props (str, optional): Comma-separated properties to retrieve.
+                Pass None to skip the HEAD request.
 
         Yields:
             Object: Objects in the group matching the specified prefix.
@@ -134,7 +134,7 @@ class ObjectGroup(AISSource):
             obj = self.bck.object(obj_name)
 
             if props is not None:
-                obj.head()  # Updates the objects props as well
+                obj.head(props)
 
             yield obj
 

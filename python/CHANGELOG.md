@@ -6,8 +6,24 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
-- **BREAKING**: Removed `Etl.init_spec()` and the Kubernetes Pod-spec templates.
-  Use `Etl.init()` or `Etl.init_class()` instead.
+### Changed
+
+- **BREAKING**: `Object.head(props="")` now uses the selective object HEAD API,
+  returns `ObjectAttributes` instead of a header mapping, and continues to
+  refresh `Object.props_cached`. Request non-default fields explicitly and
+  access values through attributes such as `.size` and `.checksum_value`.
+- `ObjectAttributes` now exposes selected chunk, last-modified, ETag, location,
+  mirror, and erasure-coding metadata through one type.
+- `ObjectClient.head()` now accepts optional property selectors while preserving
+  its previous default attribute set.
+
+### Removed
+
+- **BREAKING**: Removed legacy object HEAD v1 behavior and the experimental
+  `Object.head_v2()` and `ObjectAttributesV2` names. Use `Object.head()` and
+  `ObjectAttributes`.
+- **BREAKING**: Removed deprecated `Etl.init_spec()` and the Kubernetes Pod-spec
+  templates. Use `Etl.init()` or `Etl.init_class()`.
 
 ## [1.26.0] - 2026-08-25
 

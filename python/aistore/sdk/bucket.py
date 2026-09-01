@@ -1073,7 +1073,7 @@ class Bucket(AISSource):
 
         Args:
             obj_name (str): Name of object
-            props (ObjectProps, optional): Properties of the object, as updated by head(), optionally pre-initialized.
+            props (ObjectProps, optional): Properties of the object, optionally pre-initialized.
 
         Returns:
             The object created.

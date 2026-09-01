@@ -149,6 +149,28 @@ class TestBucketTools(unittest.TestCase):
         self.assertEqual(result["objects"][0]["name"], "obj1.txt")
         self.assertEqual(result["objects"][0]["size"], 1024)
 
+    def test_object_info(self):
+        obj = self.client.bucket.return_value.object.return_value
+        props = obj.head.return_value
+        props.size = 1024
+        props.checksum_type = "xxhash"
+        props.checksum_value = "abc123"
+        props.obj_version = "1"
+        props.present = True
+        props.custom_metadata = {"key": "value"}
+
+        result = json.loads(
+            self.tools["ais_object_info"].fn(bucket_name="test", object_name="obj1.txt")
+        )
+
+        obj.head.assert_called_once_with("checksum,version,custom")
+        self.assertEqual(result["properties"]["size"], 1024)
+        self.assertEqual(result["properties"]["checksum_type"], "xxhash")
+        self.assertEqual(result["properties"]["checksum_value"], "abc123")
+        self.assertEqual(result["properties"]["version"], "1")
+        self.assertTrue(result["properties"]["present"])
+        self.assertEqual(result["properties"]["custom_metadata"], {"key": "value"})
+
 
 class TestJobTools(unittest.TestCase):
     """Test job and ETL-related MCP tools."""

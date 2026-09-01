@@ -39,7 +39,7 @@ create_iter() → resp.iter_content(chunk_size)   → Generator[bytes]
 
 ```python
 def __init__(self, client, chunk_size, num_workers):
-    attrs = client.head_v2(...)        # get object size + server chunk size
+    attrs = client.head(...)        # get object size + server chunk size
     self._chunk_ranges = ...           # [(start, end), ...] per chunk
 ```
 

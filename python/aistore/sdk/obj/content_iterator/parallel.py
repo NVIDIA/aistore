@@ -125,7 +125,7 @@ class ParallelContentIterProvider(BaseContentIterProvider):
     Args:
         client (ObjectClient): Client for accessing contents of an individual object.
         chunk_size (Optional[int]): Size of each chunk of data yielded. If None,
-            will attempt to use optimal chunk size from HeadObjectV2 response.
+            will attempt to use the optimal chunk size from the HEAD response.
         num_workers (int): Number of concurrent workers for fetching chunks.
     """
 
@@ -135,7 +135,7 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         chunk_size: Optional[int],
         num_workers: int,
     ):
-        attrs = client.head_v2(PROPS_CHUNKED)
+        attrs = client.head(PROPS_CHUNKED)
         self._object_size = attrs.size
 
         if self._object_size <= 0:

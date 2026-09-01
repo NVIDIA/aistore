@@ -105,43 +105,28 @@ class TestObjectClient(
         )
 
     @patch("aistore.sdk.obj.object_client.ObjectAttributes", autospec=True)
-    def test_head(self, mock_attr):
+    def test_head_with_props(self, mock_attributes):
         mock_response = Mock(spec=requests.Response, headers=self.response_headers)
         self.request_client.request.return_value = mock_response
 
-        res = self.object_client.head()
+        res = self.object_client.head(props="chunked")
 
-        self.assertEqual(mock_attr.return_value, res)
-        self.request_client.request.assert_called_once_with(
-            HTTP_METHOD_HEAD, path=self.path, params=self.params
-        )
-        mock_attr.assert_called_with(self.response_headers)
-
-    @patch("aistore.sdk.obj.object_client.ObjectAttributesV2", autospec=True)
-    def test_head_v2_with_props(self, mock_attr_v2):
-        """Test head_v2() with props parameter."""
-        mock_response = Mock(spec=requests.Response, headers=self.response_headers)
-        self.request_client.request.return_value = mock_response
-
-        res = self.object_client.head_v2(props="chunked")
-
-        self.assertEqual(mock_attr_v2.return_value, res)
+        self.assertEqual(mock_attributes.return_value, res)
         expected_params = self.params.copy()
         expected_params["props"] = "chunked"
         self.request_client.request.assert_called_once_with(
             HTTP_METHOD_HEAD, path=self.path, params=expected_params
         )
-        mock_attr_v2.assert_called_with(self.response_headers)
+        mock_attributes.assert_called_with(self.response_headers)
 
-    def test_head_v2_default_props(self):
-        """Test head_v2() defaults to 'name,size' to trigger V2 endpoint."""
+    def test_head_default_props(self):
         mock_response = Mock(spec=requests.Response, headers=self.response_headers)
         self.request_client.request.return_value = mock_response
 
-        self.object_client.head_v2()
+        self.object_client.head()
 
         expected_params = self.params.copy()
-        expected_params["props"] = "name,size"
+        expected_params["props"] = "checksum,atime,version,custom"
         self.request_client.request.assert_called_once_with(
             HTTP_METHOD_HEAD, path=self.path, params=expected_params
         )

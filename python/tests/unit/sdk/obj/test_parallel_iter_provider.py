@@ -32,23 +32,23 @@ class TestParallelContentIterProvider(unittest.TestCase):
         self.num_workers = 4
         self.object_size = 350  # Will create 4 chunks: 0-99, 100-199, 200-299, 300-349
 
-        # Mock head_v2() to return object size and chunk info
+        # Mock head() to return object size and chunk info
         mock_attrs = Mock()
         mock_attrs.size = self.object_size
         mock_attrs.chunks = None  # Monolithic object by default
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
 
-    def test_init_fetches_object_size_via_head_v2(self):
-        """Test that __init__ calls head_v2() to get object size and chunk info."""
+    def test_init_fetches_object_size_via_head(self):
+        """Test that __init__ calls head() to get object size and chunk info."""
         ParallelContentIterProvider(self.mock_client, self.chunk_size, self.num_workers)
-        self.mock_client.head_v2.assert_called_once_with(PROPS_CHUNKED)
+        self.mock_client.head.assert_called_once_with(PROPS_CHUNKED)
 
     def test_empty_object_raises_on_construction(self):
         """Constructing a provider for a zero-size object raises ValueError."""
         mock_attrs = Mock()
         mock_attrs.size = 0
         mock_attrs.chunks = None
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
 
         with self.assertRaises(ValueError):
             ParallelContentIterProvider(
@@ -94,7 +94,7 @@ class TestParallelContentIterProvider(unittest.TestCase):
         mock_attrs = Mock()
         mock_attrs.size = 50
         mock_attrs.chunks = None
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
 
         self.mock_client.get_chunk.return_value = _make_resp(b"small")
 
@@ -208,13 +208,13 @@ class TestParallelContentIterProvider(unittest.TestCase):
         self.assertEqual(mp.active_children(), [])
 
     def test_uses_server_chunk_size_when_not_specified(self):
-        """Test that chunk_size from head_v2() is used when chunk_size=None."""
+        """Test that chunk_size from head() is used when chunk_size=None."""
         mock_attrs = Mock()
         mock_attrs.size = 800
         mock_chunks = Mock()
         mock_chunks.max_chunk_size = 200
         mock_attrs.chunks = mock_chunks
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
         self.mock_client.get_chunk.return_value = _make_resp(b"x" * 200)
 
         provider = ParallelContentIterProvider(
@@ -233,7 +233,7 @@ class TestParallelContentIterProvider(unittest.TestCase):
         mock_attrs = Mock()
         mock_attrs.size = 16 * 1024 * 1024  # 16 MiB
         mock_attrs.chunks = None
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
         self.mock_client.get_chunk.return_value = _make_resp(b"x" * (8 * 1024 * 1024))
 
         provider = ParallelContentIterProvider(
@@ -307,7 +307,7 @@ class TestParallelContentIterProviderReadAll(unittest.TestCase):
         mock_attrs = Mock()
         mock_attrs.size = self.object_size
         mock_attrs.chunks = None
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
 
         range_data = {
             (0, 100): b"A" * 100,
@@ -355,7 +355,7 @@ class TestParallelContentIterProviderReadAll(unittest.TestCase):
         mock_attrs = Mock()
         mock_attrs.size = 50
         mock_attrs.chunks = None
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
         self.mock_client.get_chunk.side_effect = None
         self.mock_client.get_chunk.return_value = _make_resp(b"Z" * 50)
 
@@ -407,7 +407,7 @@ class TestParallelContentIterProviderReadAll(unittest.TestCase):
         mock_attrs = Mock()
         mock_attrs.size = 0
         mock_attrs.chunks = None
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
 
         with self.assertRaises(ValueError):
             ParallelContentIterProvider(
@@ -419,7 +419,7 @@ class TestParallelContentIterProviderReadAll(unittest.TestCase):
         mock_attrs = Mock()
         mock_attrs.size = 1
         mock_attrs.chunks = None
-        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.head.return_value = mock_attrs
         self.mock_client.get_chunk.side_effect = None
         self.mock_client.get_chunk.return_value = _make_resp(b"X")
 

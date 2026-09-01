@@ -27,7 +27,7 @@ class TestObjectReader(unittest.TestCase):
         # Attributes should be returned and the property updated
         self.assertEqual(res, mock_attr)
         self.assertEqual(mock_attr, self.object_reader.attributes)
-        self.object_client.head.assert_called_once()
+        self.object_client.head.assert_called_once_with()
 
     def test_attributes_property(self):
         mock_attr = Mock()
@@ -40,7 +40,7 @@ class TestObjectReader(unittest.TestCase):
         # If we access attributes again, no new call to the client
         attr = self.object_reader.attributes
         self.assertEqual(attr, mock_attr)
-        self.object_client.head.assert_called_once()
+        self.object_client.head.assert_called_once_with()
 
     def test_read_all(self):
         # read_all() delegates to the provider; verify content is returned correctly
@@ -129,7 +129,7 @@ class TestObjectReader(unittest.TestCase):
         mock_attrs = Mock()
         mock_attrs.size = 1000
         mock_attrs.chunks = None  # Monolithic object
-        self.object_client.head_v2.return_value = mock_attrs
+        self.object_client.head.return_value = mock_attrs
 
         reader = ObjectReader(self.object_client, self.chunk_size, num_workers=4)
 
@@ -143,13 +143,13 @@ class TestObjectReader(unittest.TestCase):
         # pylint: disable=protected-access
         self.assertIsInstance(reader._content_provider, ContentIterProvider)
 
-    def test_num_workers_calls_head_v2(self):
-        """Test that num_workers triggers a HEAD V2 request for object size."""
+    def test_num_workers_calls_head(self):
+        """Test that num_workers triggers a selective HEAD request."""
         mock_attrs = Mock()
         mock_attrs.size = 1000
         mock_attrs.chunks = None
-        self.object_client.head_v2.return_value = mock_attrs
+        self.object_client.head.return_value = mock_attrs
 
         ObjectReader(self.object_client, self.chunk_size, num_workers=4)
 
-        self.object_client.head_v2.assert_called_once()
+        self.object_client.head.assert_called_once_with("chunked")

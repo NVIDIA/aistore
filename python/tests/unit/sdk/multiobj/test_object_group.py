@@ -341,6 +341,13 @@ class TestObjectGroup(unittest.TestCase):
     def test_list_all_objects_iter(self):
         res = self.object_group.list_all_objects_iter(props=None)
         self.assertEqual(len(list(res)), len(self.obj_names))
+        self.mock_bck.object.return_value.head.assert_not_called()
+
+        res = self.object_group.list_all_objects_iter(props="checksum")
+        self.assertEqual(len(list(res)), len(self.obj_names))
+        self.mock_bck.object.return_value.head.assert_has_calls(
+            [call("checksum"), call("checksum")]
+        )
 
     def test_prefixes(self):
         objs = list(self.object_group.list_all_objects_iter(prefix="obj"))

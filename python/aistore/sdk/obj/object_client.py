@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from typing import Optional, Tuple, Dict
@@ -12,7 +12,7 @@ from aistore.sdk.const import (
     HEADER_RANGE,
     QPARAM_PROPS,
 )
-from aistore.sdk.obj.object_attributes import ObjectAttributes, ObjectAttributesV2
+from aistore.sdk.obj.object_attributes import ObjectAttributes
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.errors import ErrObjNotFound
 
@@ -177,44 +177,25 @@ class ObjectClient:
         headers[HEADER_RANGE] = f"bytes={start}-{end - 1}"
         return self._make_get_request(headers, stream=True)
 
-    def head(self) -> ObjectAttributes:
+    def head(self, props: str = "checksum,atime,version,custom") -> ObjectAttributes:
         """
-        Make a head request to AIS to update and return only object attributes.
+        Make a selective HEAD request and return object attributes.
+
+        Args:
+            props: Comma-separated properties to retrieve. Supported values are
+                name, size, version, checksum, atime, copies, ec, custom,
+                location, chunked, last-modified, and etag. Presence is returned
+                automatically. Defaults to the attributes returned by the
+                previous `ObjectClient.head()` implementation.
 
         Returns:
             `ObjectAttributes` containing metadata for this object.
 
         """
-        resp = self._request_client.request(
-            HTTP_METHOD_HEAD, path=self._request_path, params=self._request_params
-        )
-        return ObjectAttributes(resp.headers)
-
-    def head_v2(self, props: str = "") -> ObjectAttributesV2:
-        """
-        Make a HEAD request with selective property retrieval (V2 API).
-
-        EXPERIMENTAL: This API is experimental and may change in future releases.
-
-        This method allows requesting specific object properties, reducing
-        response size and processing overhead when only certain attributes
-        are needed.
-
-        Args:
-            props: Comma-separated list of properties to retrieve.
-                   Available values: name, size, version, checksum, atime, present,
-                   copies, ec, custom, location, chunked, last-modified, etag.
-                   See: https://github.com/NVIDIA/aistore/blob/main/api/apc/lsmsg.go
-                   If empty, returns default properties (name, size).
-
-        Returns:
-            `ObjectAttributesV2` containing the requested metadata.
-        """
         params = self._request_params.copy()
-        # Always set props to trigger V2 endpoint; default to "name,size"
         params[QPARAM_PROPS] = props if props else "name,size"
 
         resp = self._request_client.request(
             HTTP_METHOD_HEAD, path=self._request_path, params=params
         )
-        return ObjectAttributesV2(resp.headers)
+        return ObjectAttributes(resp.headers)

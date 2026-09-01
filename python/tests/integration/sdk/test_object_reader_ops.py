@@ -10,7 +10,7 @@ import pytest
 
 from aistore.sdk import Bucket, Object
 from aistore.sdk.client import Client
-from aistore.sdk.const import DEFAULT_CHUNK_SIZE, AIS_CHECKSUM_VALUE, MIB
+from aistore.sdk.const import DEFAULT_CHUNK_SIZE, MIB
 from aistore.sdk.etl.etl_config import ETLConfig
 from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer
 from tests.integration import AWS_BUCKET
@@ -47,7 +47,7 @@ class TestObjectReaderOps(unittest.TestCase):
         attributes = self.object_reader.head()
         self.assertEqual(attributes.size, self.object_size)
         self.assertEqual(
-            self.object.head()[AIS_CHECKSUM_VALUE],
+            self.object.head("checksum").checksum_value,
             attributes.checksum_value,
         )
 

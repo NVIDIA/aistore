@@ -15,12 +15,7 @@ import xxhash
 from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.etl import ETLConfig
 from aistore.sdk.errors import AISError
-from aistore.sdk.const import (
-    AIS_CUSTOM_MD,
-    AIS_VERSION,
-    HEADER_CONTENT_LENGTH,
-    UTF_ENCODING,
-)
+from aistore.sdk.const import UTF_ENCODING
 from aistore import Client
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
@@ -39,7 +34,6 @@ from tests.utils import (
     create_archive,
     direct_target_access_allowed,
     promote_test_dir,
-    string_to_dict,
     has_targets,
     random_string,
 )
@@ -101,10 +95,10 @@ class TestObjectOps(ParallelTestBase):
     def test_put_head_get(self):
         objects = self._put_objects(5)
         for obj_name, content in objects.items():
-            properties = self.bucket.object(obj_name).head()
+            properties = self.bucket.object(obj_name).head("version")
             if not REMOTE_SET:
-                self.assertEqual(properties[AIS_VERSION], "1")
-            self.assertEqual(properties[HEADER_CONTENT_LENGTH], str(len(content)))
+                self.assertEqual(properties.obj_version, "1")
+            self.assertEqual(properties.size, len(content))
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
                 self._test_get_obj(option, obj_name, content)
 
@@ -163,7 +157,7 @@ class TestObjectOps(ParallelTestBase):
         )
         self.assertTrue(
             {"testkey1": "testval1", "testkey2": "testval2"}.items()
-            <= string_to_dict(obj.head()[AIS_CUSTOM_MD]).items()
+            <= obj.head("custom").custom_metadata.items()
         )
 
         obj.get_writer().set_custom_props(custom_metadata={"testkey3": "testval3"})
@@ -173,7 +167,7 @@ class TestObjectOps(ParallelTestBase):
                 "testkey2": "testval2",
                 "testkey3": "testval3",
             }.items()
-            <= string_to_dict(obj.head()[AIS_CUSTOM_MD]).items()
+            <= obj.head("custom").custom_metadata.items()
         )
 
         obj.get_writer().set_custom_props(
@@ -181,9 +175,9 @@ class TestObjectOps(ParallelTestBase):
         )
         self.assertTrue(
             {"testkey4": "testval4"}.items()
-            <= string_to_dict(obj.head()[AIS_CUSTOM_MD]).items()
+            <= obj.head("custom").custom_metadata.items()
         )
-        current_metadata = string_to_dict(obj.head()[AIS_CUSTOM_MD])
+        current_metadata = obj.head("custom").custom_metadata
         self.assertNotIn("testkey1", current_metadata)
         self.assertNotIn("testkey2", current_metadata)
         self.assertNotIn("testkey3", current_metadata)
@@ -767,52 +761,51 @@ class TestObjectOps(ParallelTestBase):
         self.assertIn("bucket", context.exception.message.lower())
         self.assertIn("does not exist", context.exception.message.lower())
 
-    def test_head_v2_basic(self):
-        """Test head_v2() returns V2 attributes with basic properties."""
+    def test_head_basic(self):
+        """Test head() returns selected basic properties."""
         obj, content = self._create_object_with_content()
 
-        attrs = obj.head_v2("checksum")
+        attrs = obj.head("checksum")
 
-        # V2 should return size and standard attributes
+        # HEAD always returns size and includes requested attributes.
         self.assertEqual(len(content), attrs.size)
         self.assertNotEqual("", attrs.checksum_type)
         self.assertNotEqual("", attrs.checksum_value)
 
-    def test_head_v2_chunked_props(self):
-        """Test head_v2() with 'chunked' props returns chunk info or None."""
+    def test_head_chunked_props(self):
+        """Test head() with 'chunked' props returns chunk info or None."""
         obj, _ = self._create_object_with_content()
 
-        attrs = obj.head_v2(props="chunked")
+        attrs = obj.head(props="chunked")
 
         # For regular (non-chunked) objects, chunks should be None
-        # This test ensures the API path works correctly
-        self.assertTrue(hasattr(attrs, "chunks"))
+        self.assertIsNone(attrs.chunks)
 
-    def test_head_v2_last_modified_and_etag(self):
-        """Test head_v2() returns last_modified and etag only when requested."""
+    def test_head_last_modified_and_etag(self):
+        """Test head() returns last_modified and etag only when requested."""
         obj, _ = self._create_object_with_content()
 
         # Without requesting, should be empty
-        attrs_default = obj.head_v2()
+        attrs_default = obj.head()
         self.assertEqual("", attrs_default.last_modified)
         self.assertEqual("", attrs_default.etag)
 
         # With last-modified requested
-        attrs_lm = obj.head_v2(props="last-modified")
+        attrs_lm = obj.head(props="last-modified")
         self.assertNotEqual("", attrs_lm.last_modified)
 
         # With etag requested
-        attrs_etag = obj.head_v2(props="etag")
+        attrs_etag = obj.head(props="etag")
         self.assertNotEqual("", attrs_etag.etag)
         self.assertNotIn('"', attrs_etag.etag)  # quotes should be stripped
 
         # With both requested
-        attrs_both = obj.head_v2(props="last-modified,etag")
+        attrs_both = obj.head(props="last-modified,etag")
         self.assertNotEqual("", attrs_both.last_modified)
         self.assertNotEqual("", attrs_both.etag)
 
-    def test_head_v2_multipart_chunk_info(self):
-        """Test head_v2() returns correct chunk info for multipart uploaded objects."""
+    def test_head_multipart_chunk_info(self):
+        """Test head() returns correct chunk info for multipart uploaded objects."""
         obj = self._create_object()
 
         # Create multipart upload with known part sizes
@@ -826,8 +819,8 @@ class TestObjectOps(ParallelTestBase):
 
         mpu.complete()
 
-        # Verify head_v2 returns correct chunk info
-        attrs = obj.head_v2(props="chunked")
+        # Verify head returns correct chunk info
+        attrs = obj.head(props="chunked")
 
         self.assertIsNotNone(attrs.chunks)
         self.assertEqual(num_parts, attrs.chunks.chunk_count)

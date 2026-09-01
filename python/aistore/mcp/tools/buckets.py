@@ -92,12 +92,19 @@ def register_bucket_tools(mcp: FastMCP, get_client: Callable):
         """
         client = get_client()
         obj = client.bucket(bucket_name, provider=provider).object(object_name)
-        props = obj.head()
+        props = obj.head("checksum,version,custom")
         return json.dumps(
             {
                 "bucket": bucket_name,
                 "object": object_name,
-                "properties": dict(props.headers),
+                "properties": {
+                    "size": props.size,
+                    "checksum_type": props.checksum_type,
+                    "checksum_value": props.checksum_value,
+                    "version": props.obj_version,
+                    "present": props.present,
+                    "custom_metadata": props.custom_metadata,
+                },
             },
             indent=2,
         )

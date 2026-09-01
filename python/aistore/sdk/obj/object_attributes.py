@@ -1,32 +1,58 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
+
 from requests.structures import CaseInsensitiveDict
+
 from aistore.sdk.const import (
-    HEADER_CONTENT_LENGTH,
+    AIS_ACCESS_TIME,
     AIS_CHECKSUM_TYPE,
     AIS_CHECKSUM_VALUE,
-    AIS_ACCESS_TIME,
-    AIS_VERSION,
-    AIS_CUSTOM_MD,
-    AIS_PRESENT,
     AIS_CHUNKS_COUNT,
     AIS_CHUNKS_MAX_CHUNK_SIZE,
-    HEADER_LAST_MODIFIED,
+    AIS_CUSTOM_MD,
+    AIS_EC_DATA,
+    AIS_EC_GENERATION,
+    AIS_EC_PARITY,
+    AIS_EC_REPLICATED,
+    AIS_LOCATION,
+    AIS_MIRROR_COPIES,
+    AIS_MIRROR_PATHS,
+    AIS_PRESENT,
+    AIS_VERSION,
+    HEADER_CONTENT_LENGTH,
     HEADER_ETAG,
+    HEADER_LAST_MODIFIED,
 )
+
+
+@dataclass
+class ECInfo:
+    """Erasure-coding metadata for an object."""
+
+    generation: int = 0
+    data_slices: int = 0
+    parity_slices: int = 0
+    is_ec_copy: bool = False
+
+
+@dataclass
+class ChunksInfo:
+    """Chunk metadata for an object."""
+
+    chunk_count: int = 0
+    max_chunk_size: int = 0
 
 
 # pylint: disable=too-few-public-methods
 class ObjectAttributes:
-    """
-    Represents the attributes parsed from the response headers returned from an API call to get an object.
+    """Information about an object returned by AIS.
 
-    Args:
-        response_headers (CaseInsensitiveDict): Response header dict containing object attributes
+    This includes values such as size, checksum, version, presence, and storage
+    location. The `Object` stores the object's name, bucket, and provider.
     """
 
     def __init__(self, response_headers: CaseInsensitiveDict):
@@ -40,133 +66,101 @@ class ObjectAttributes:
 
     @property
     def size(self) -> int:
-        """
-        Size of object content.
-        """
+        """Size of the object content."""
         return self._parse_int_header(HEADER_CONTENT_LENGTH)
 
     @property
     def checksum_type(self) -> str:
-        """
-        Type of checksum, e.g. xxhash or md5.
-        """
+        """Checksum type, such as xxhash or md5."""
         return self._response_headers.get(AIS_CHECKSUM_TYPE, "")
 
     @property
     def checksum_value(self) -> str:
-        """
-        Checksum value.
-        """
+        """Checksum value."""
         return self._response_headers.get(AIS_CHECKSUM_VALUE, "")
 
     @property
     def access_time(self) -> str:
-        """
-        Time this object was accessed.
-        """
+        """Object access time."""
         return self._response_headers.get(AIS_ACCESS_TIME, "")
 
     @property
     def obj_version(self) -> str:
-        """
-        Object version.
-        """
+        """Object version."""
         return self._response_headers.get(AIS_VERSION, "")
 
     @property
     def custom_metadata(self) -> Dict[str, str]:
-        """
-        Dictionary of custom metadata.
-        """
+        """Custom object metadata."""
         custom_md_header = self._response_headers.get(AIS_CUSTOM_MD, "")
-        if len(custom_md_header) > 0:
-            return self._parse_custom(custom_md_header)
-        return {}
+        return self._parse_custom(custom_md_header) if custom_md_header else {}
 
     @property
     def present(self) -> bool:
-        """
-        Whether the object is present/cached.
-        """
+        """Whether the object is present in the cluster."""
         return self._response_headers.get(AIS_PRESENT, "") == "true"
 
-    @staticmethod
-    def _parse_custom(custom_md_header) -> Dict[str, str]:
-        """
-        Parse the comma-separated list of optional custom metadata from the custom metadata header.
+    @property
+    def location(self) -> str:
+        """Location of the object on its target."""
+        return self._response_headers.get(AIS_LOCATION, "")
 
-        Args:
-            custom_md_header: Header containing metadata csv
+    @property
+    def mirror_paths(self) -> List[str]:
+        """Filesystem paths containing mirrored copies of the object."""
+        value = self._response_headers.get(AIS_MIRROR_PATHS, "").strip("[]")
+        return value.split(",") if value else []
 
-        Returns:
-            Dictionary of custom metadata
-        """
-        custom_metadata = {}
-        for entry in custom_md_header.split(","):
-            try:
-                assert isinstance(entry, str)
-                entry_list = entry.strip().split("=")
-                assert len(entry_list) == 2
-                custom_metadata[entry_list[0]] = entry_list[1]
-            except AssertionError:
-                continue
-        return custom_metadata
+    @property
+    def mirror_copies(self) -> int:
+        """Number of mirrored copies of the object."""
+        return self._parse_int_header(AIS_MIRROR_COPIES)
 
-
-@dataclass
-class ChunksInfo:
-    """
-    Information about chunked object storage.
-
-    Attributes:
-        chunk_count: Number of chunks the object is split into.
-        max_chunk_size: Size of the largest chunk in bytes.
-    """
-
-    chunk_count: int = 0
-    max_chunk_size: int = 0
-
-
-class ObjectAttributesV2(ObjectAttributes):
-    """
-    Extended object attributes returned from HeadObjectV2 API.
-
-    This class extends ObjectAttributes with V2-specific fields like
-    chunk information, last modified time, and ETag.
-
-    Args:
-        response_headers (CaseInsensitiveDict): Response header dict containing object attributes
-    """
+    @property
+    def ec(self) -> Optional[ECInfo]:
+        """Erasure-coding metadata, or None when unavailable."""
+        headers = (
+            AIS_EC_GENERATION,
+            AIS_EC_DATA,
+            AIS_EC_PARITY,
+            AIS_EC_REPLICATED,
+        )
+        if not any(self._response_headers.get(header, "") for header in headers):
+            return None
+        return ECInfo(
+            generation=self._parse_int_header(AIS_EC_GENERATION),
+            data_slices=self._parse_int_header(AIS_EC_DATA),
+            parity_slices=self._parse_int_header(AIS_EC_PARITY),
+            is_ec_copy=self._response_headers.get(AIS_EC_REPLICATED, "") == "true",
+        )
 
     @property
     def last_modified(self) -> str:
-        """
-        Last modification time of the object (RFC1123 format).
-        """
+        """Last modification time in RFC 1123 format."""
         return self._response_headers.get(HEADER_LAST_MODIFIED, "")
 
     @property
     def etag(self) -> str:
-        """
-        Entity tag (ETag) of the object.
-        """
+        """Entity tag with surrounding quotes removed."""
         return self._response_headers.get(HEADER_ETAG, "").strip('"')
 
     @property
     def chunks(self) -> Optional[ChunksInfo]:
-        """
-        Chunk information for chunked objects.
-
-        Returns:
-            ChunksInfo if object is chunked, None otherwise.
-        """
-        count_str = self._response_headers.get(AIS_CHUNKS_COUNT, "")
-        max_size_str = self._response_headers.get(AIS_CHUNKS_MAX_CHUNK_SIZE, "")
-
-        if not count_str and not max_size_str:
+        """Chunk metadata, or None for a monolithic object."""
+        count = self._response_headers.get(AIS_CHUNKS_COUNT, "")
+        max_size = self._response_headers.get(AIS_CHUNKS_MAX_CHUNK_SIZE, "")
+        if not count and not max_size:
             return None
-
         return ChunksInfo(
             chunk_count=self._parse_int_header(AIS_CHUNKS_COUNT),
             max_chunk_size=self._parse_int_header(AIS_CHUNKS_MAX_CHUNK_SIZE),
         )
+
+    @staticmethod
+    def _parse_custom(custom_md_header: str) -> Dict[str, str]:
+        custom_metadata = {}
+        for entry in custom_md_header.split(","):
+            parts = entry.strip().split("=", 1)
+            if len(parts) == 2:
+                custom_metadata[parts[0]] = parts[1]
+        return custom_metadata

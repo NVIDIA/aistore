@@ -14,6 +14,9 @@ from aistore.sdk.archive_config import ArchiveConfig
 from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.etl import ETLConfig
 from aistore.sdk.const import (
+    AIS_BCK_NAME,
+    AIS_BCK_PROVIDER,
+    AIS_OBJ_NAME,
     BYTE_RANGE_PREFIX_LENGTH,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_HEAD,
@@ -48,7 +51,7 @@ from aistore.sdk.types import (
     BlobMsg,
 )
 from aistore.sdk.obj.object_props import ObjectProps
-from aistore.sdk.obj.object_attributes import ObjectAttributesV2
+from aistore.sdk.obj.object_attributes import ObjectAttributes
 
 
 @dataclass
@@ -66,13 +69,14 @@ class BucketDetails:
 # pylint: disable=too-many-public-methods
 class Object:
     """
-    Provides methods for interacting with an object in AIS.
+    Represents an object in AIS and provides operations for interacting with it.
 
     Args:
         client (RequestClient): Client used for all http requests.
         bck_details (BucketDetails): Metadata about the bucket to which this object belongs.
         name (str): Name of the object.
-        props (ObjectProps, optional): Properties of the object, as updated by head(), optionally pre-initialized.
+        props (ObjectProps, optional): Properties of the object, as updated by
+            `head()` or the `props` property, optionally pre-initialized.
     """
 
     def __init__(
@@ -122,17 +126,17 @@ class Object:
     @property
     def props(self) -> ObjectProps:
         """
-        Get the latest properties of the object.
+        Get the latest object metadata from AIS.
 
         This will make a HEAD request to the AIStore cluster to fetch up-to-date object headers
         and refresh the internal `_props` cache. Use this when you want to ensure you're accessing
         the most recent metadata for the object.
 
         Returns:
-            ObjectProps: The latest object properties from the server.
+            ObjectProps: The latest object metadata from the server. The
+                `Object` stores the name, bucket, and provider.
         """
-        self.head()
-        # Head must always set _props
+        self.head("checksum,atime,version,copies,custom,location")
         assert self._props is not None
         return self._props
 
@@ -143,71 +147,50 @@ class Object:
 
         This is useful when:
         - You want to avoid a network request.
-        - You're sure the cached `_props` was already set via a previous call to `head()` or during object construction.
+        - You're sure the cached `_props` was already set via `head()`, the
+          `props` property, or during object construction.
 
         Returns:
             ObjectProps or None: Cached object properties, or None if not set.
         """
         return self._props
 
-    def head(self) -> CaseInsensitiveDict:
+    def head(self, props: str = "") -> ObjectAttributes:
         """
-        Requests object properties and returns headers. Updates props.
-
-        Deprecation notice:
-            This is the legacy HEAD(object) v1 call. It remains supported in AIS 4.2,
-            but new development should target Object HEAD v2 when available in the SDK.
-            The v1 path is planned for removal in a future major release.
-
-        Returns:
-            Response header with the object properties.
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-            requests.exceptions.HTTPError(404): The object does not exist
-        """
-        headers = self._client.request(
-            HTTP_METHOD_HEAD,
-            path=self._object_path,
-            params=self.query_params,
-        ).headers
-        self._props = ObjectProps(headers)
-        return headers
-
-    def head_v2(self, props: str = "") -> ObjectAttributesV2:
-        """
-        Make a HEAD request with selective property retrieval (V2 API).
-
-        EXPERIMENTAL: This API is experimental and may change in future releases.
-
-        This method allows requesting specific object properties, reducing
-        response size and processing overhead when only certain attributes
-        are needed.
+        Fetch selected object attributes and refresh the internal properties cache.
 
         Args:
             props: Comma-separated list of properties to retrieve.
-                   Available values: name, size, version, checksum, atime, present,
-                   copies, ec, custom, location, chunked, last-modified, etag.
+                   Available values: name, size, version, checksum, atime, copies,
+                   ec, custom, location, chunked, last-modified, etag. Object
+                   presence is returned automatically.
                    See: https://github.com/NVIDIA/aistore/blob/main/api/apc/lsmsg.go
                    If empty, returns default properties (name, size).
 
 
         Returns:
-            ObjectAttributesV2: Parsed V2 object attributes (includes chunk info, last-modified, etag).
+            ObjectAttributes: Parsed object attributes.
         """
-        params = self.query_params.copy()
-        # Always set props to trigger V2 endpoint; default to "name,size"
-        params[QPARAM_PROPS] = props if props else "name,size"
+        headers = self._head_headers(props)
+        headers.setdefault(AIS_BCK_NAME, self.bucket_name)
+        headers.setdefault(
+            AIS_BCK_PROVIDER,
+            getattr(self.bucket_provider, "value", self.bucket_provider),
+        )
+        headers.setdefault(AIS_OBJ_NAME, self.name)
+        self._props = ObjectProps(headers)
+        return self._props
 
-        headers = self._client.request(
-            HTTP_METHOD_HEAD,
-            path=self._object_path,
-            params=params,
-        ).headers
-        return ObjectAttributesV2(headers)
+    def _head_headers(self, props: str) -> CaseInsensitiveDict:
+        params = self.query_params.copy()
+        params[QPARAM_PROPS] = props if props else "name,size"
+        return CaseInsensitiveDict(
+            self._client.request(
+                HTTP_METHOD_HEAD,
+                path=self._object_path,
+                params=params,
+            ).headers
+        )
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals, too-many-branches
     # TODO: consolidate validation rules to reduce branch count
