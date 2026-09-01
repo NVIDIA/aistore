@@ -52,7 +52,7 @@ dependencies = [
     "humanize>=4.9.0",
     "braceexpand>=0.1.7",
     "msgspec>=0.18.5",
-    "xxhash==3.5.0",
+    "xxhash==4.0.1",
     "tenacity>=9.0.0",
 ]
 
