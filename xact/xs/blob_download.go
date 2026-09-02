@@ -805,9 +805,9 @@ func (r *XactBlobDl) cleanup() {
 	r.drainWich(r.workCh)
 	r.drainWich(r.doneCh)
 
-	for roff := range r.pending {
-		debug.Assert(r.args.RespWriter != nil || r.pending[roff].sgl == nil)
-		r.pending[roff].cleanup()
+	for _, wi := range r.pending {
+		debug.Assert(r.args.RespWriter != nil || wi.sgl == nil)
+		wi.cleanup()
 	}
 
 	debug.Func(func() {
