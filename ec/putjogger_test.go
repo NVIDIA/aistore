@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"slices"
 	"testing"
 
 	"github.com/klauspost/reedsolomon"
@@ -118,25 +119,28 @@ func TestFinalizeSlicesFailsOnParityWriteError(t *testing.T) {
 
 	errInjected := errors.New("injected parity write error")
 	tests := []struct {
-		name      string
-		failIndex int
+		name        string
+		failIndices []int
 	}{
-		{name: "first parity writer", failIndex: 0},
-		{name: "second parity writer", failIndex: 1},
+		{name: "first parity writer", failIndices: []int{0}},
+		{name: "second parity writer", failIndices: []int{1}},
+		{name: "all parity writers", failIndices: []int{0, 1}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := newInitializedTestCtx([]byte("abcdef"), 2, 2)
 			writers, _ := newParityTestWriters(ctx)
-			writers[test.failIndex] = errorWriter{err: errInjected}
+			for _, i := range test.failIndices {
+				writers[i] = errorWriter{err: errInjected}
+			}
 
 			err := finalizeSlices(ctx, writers, cksumType)
 			var writeErr reedsolomon.StreamWriteError
 			if !errors.As(err, &writeErr) {
 				t.Fatalf("expected reedsolomon.StreamWriteError, got %v", err)
 			}
-			if writeErr.Stream != test.failIndex {
-				t.Fatalf("error reported for parity writer %d, expected %d", writeErr.Stream, test.failIndex)
+			if !slices.Contains(test.failIndices, writeErr.Stream) {
+				t.Fatalf("error reported for parity writer %d, expected one of %v", writeErr.Stream, test.failIndices)
 			}
 			if !errors.Is(writeErr.Err, errInjected) {
 				t.Fatalf("expected injected write error, got %v", writeErr.Err)
