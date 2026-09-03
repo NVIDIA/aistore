@@ -300,18 +300,20 @@ func (dm *DM) Abort() {
 }
 
 func (dm *DM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctns ...core.Xact) (err error) {
+	var (
+		isControl = obj.Hdr.IsControl()
+		size      = obj.Size() // -1 when unsized (ie., PDU mode)
+	)
 	err = dm.data.streams.Send(obj, roc, tsi)
 
 	// xaction Tx stats: data only
-	if err == nil && !obj.Hdr.IsControl() && !dm.SkipGenericStats {
+	if err == nil && !isControl && !dm.SkipGenericStats && size >= 0 {
 		xctn := dm.xctn()
 		if len(xctns) > 0 {
 			xctn = xctns[0]
 		}
 		if xctn != nil {
-			if size := obj.Size(); size >= 0 { // known size (ie., non-PDU mode)
-				xctn.OutObjsAdd(1, size)
-			}
+			xctn.OutObjsAdd(1, size)
 		}
 	}
 	return

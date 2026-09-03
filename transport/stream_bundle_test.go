@@ -1,11 +1,13 @@
 // Package transport provides long-lived http/tcp connections for intra-cluster communications
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package transport_test
 
 import (
+	"bytes"
 	cryptorand "crypto/rand"
+	"errors"
 	"io"
 	"net/http/httptest"
 	"strconv"
@@ -28,9 +30,31 @@ import (
 )
 
 type (
-	sowner     struct{}
-	slisteners struct{}
+	sowner           struct{}
+	slisteners       struct{}
+	failingOpenState struct {
+		opens  atomic.Int64
+		closes atomic.Int64
+	}
+	failingOpenReader struct {
+		*bytes.Reader
+		state *failingOpenState
+	}
 )
+
+var errTestReopen = errors.New("reopen failed")
+
+func (r *failingOpenReader) Open() (cos.ReadOpenCloser, error) {
+	if r.state.opens.Inc() == 2 {
+		return nil, errTestReopen
+	}
+	return &failingOpenReader{Reader: bytes.NewReader([]byte{1}), state: r.state}, nil
+}
+
+func (r *failingOpenReader) Close() error {
+	r.state.closes.Inc()
+	return nil
+}
 
 var (
 	smap      meta.Smap
@@ -103,6 +127,94 @@ func TestBundle(t *testing.T) {
 			time.Sleep(time.Second)
 		})
 	}
+}
+
+func TestBundleReopenFailure(t *testing.T) {
+	var (
+		state  failingOpenState
+		tss    = make([]*httptest.Server, 0, 4)
+		cmplCh = make(chan error, 2)
+	)
+
+	tMock := mock.NewTarget(nil)
+	tMock.SO = &sowner{}
+	core.T = tMock
+	lsnode := tMock.Snode()
+
+	smap.Tmap = make(meta.NodeMap, 5)
+	smap.Tmap[lsnode.ID()] = lsnode
+	for i := range 4 {
+		ts := httptest.NewServer(objmux)
+		tss = append(tss, ts)
+		addTarget(&smap, ts, i)
+	}
+	smap.Version++
+	t.Cleanup(func() {
+		for _, ts := range tss {
+			ts.Close()
+		}
+	})
+
+	const trname = "bundle-reopen-failure"
+	receive := func(_ *transport.ObjHdr, objReader io.Reader, err error) error {
+		if err != nil && !cos.IsOkEOF(err) {
+			return err
+		}
+		_, err = io.Copy(io.Discard, objReader)
+		return err
+	}
+	tassert.CheckFatal(t, transport.Handle(trname, receive))
+	t.Cleanup(func() { _ = transport.Unhandle(trname) })
+
+	extra := &transport.Extra{
+		Config: cmn.GCO.Get(),
+		Parent: &transport.Parent{SentCB: func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
+			cmplCh <- err
+		}},
+	}
+	sb := bundle.New(transport.NewIntraDataClient(), bundle.Args{Trname: trname, Extra: extra})
+	closed := false
+	t.Cleanup(func() {
+		if !closed {
+			sb.Close(false /*gracefully*/)
+		}
+	})
+
+	reader := &failingOpenReader{Reader: bytes.NewReader([]byte{1}), state: &state}
+	obj := &transport.Obj{Hdr: transport.ObjHdr{ObjAttrs: cmn.ObjAttrs{Size: 1}}}
+	if err := sb.Send(obj, reader); !errors.Is(err, errTestReopen) {
+		t.Fatalf("expected reopen failure, got %v", err)
+	}
+	select {
+	case err := <-cmplCh:
+		if !errors.Is(err, errTestReopen) {
+			t.Errorf("completion error %v, expected reopen failure", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for failed send completion")
+	}
+	if got := state.opens.Load(); got != 2 {
+		t.Errorf("open count %d, expected 2", got)
+	}
+	if got := state.closes.Load(); got != 2 {
+		t.Errorf("close count %d, expected 2", got)
+	}
+
+	// The failed object must not prevent subsequent use of the bundle.
+	if err := sb.Send(&transport.Obj{}, nil); err != nil {
+		t.Fatalf("subsequent send failed: %v", err)
+	}
+	select {
+	case err := <-cmplCh:
+		if err != nil {
+			t.Errorf("subsequent completion failed: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for subsequent send completion")
+	}
+
+	sb.Close(true /*gracefully*/)
+	closed = true
 }
 
 func testBundle(t *testing.T, nvs cos.StrKVs) {

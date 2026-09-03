@@ -155,7 +155,12 @@ func (sb *Streams) Close(gracefully bool) {
 }
 
 // when (nodes == nil) transmit via all established streams in a bundle
-// otherwise, restrict to the specified subset (nodes)
+// otherwise, restrict to the specified subset (nodes);
+// rules:
+// - validation and reader-reopen failures complete locally, before SetPrc
+// - once the refcount is initialized, attempt every destination even after an error
+// - transport completes every attempt and invokes the shared callback exactly once
+// - return the first immediate send error.
 func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*meta.Snode) error {
 	debug.AssertFunc(func() bool { return !transport.ReservedOpcode(obj.Hdr.Opcode) })
 	streams := sb.get()
@@ -165,7 +170,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 			nlog.Warningln(err)
 		}
 		// compare w/ transport doCmpl()
-		_doCmpl(obj, roc, err)
+		sb._doCmpl(obj, roc, err)
 		return err
 	}
 
@@ -176,45 +181,85 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 		}
 	}
 
+	// 1) count destinations
+	var cnt int
 	if nodes == nil {
-		idx, cnt := 0, len(streams)
-		obj.SetPrc(cnt)
-		// Reader-reopening logic: since the streams in a bundle are mutually independent
-		// and asynchronous, reader.Open() (aka reopen) is skipped for the 1st replica
-		// that we put on the wire and is done for the 2nd, 3rd, etc. replicas.
-		// In other words, for the N object replicas over the N bundled streams, the
-		// original reader will get reopened (N-1) times.
-		for sid, robin := range streams {
-			if core.T.SID() == sid {
-				continue
-			}
-			if err := sb.sendOne(obj, roc, robin, idx, cnt); err != nil {
-				return err
-			}
-			idx++
-		}
+		cnt = len(streams)
+		debug.Func(func() {
+			_, ok := streams[core.T.SID()]
+			debug.Assert(!ok, sb.String(), ": self in bundle") // (see _open)
+		})
 	} else {
-		// first, check streams vs destinations
+		// check streams vs destinations
 		for _, di := range nodes {
 			if _, ok := streams[di.ID()]; ok {
 				continue
 			}
 			err := &ErrDestinationMissing{sb.String(), di.StringEx(), sb.smap.String()}
-			_doCmpl(obj, roc, err) // ditto
+			sb._doCmpl(obj, roc, err) // ditto
 			return err
 		}
-		// second, do send. Same comment wrt reopening.
-		cnt := len(nodes)
-		obj.SetPrc(cnt)
+		cnt = len(nodes)
+	}
+
+	// 2) one reader per destination
+	// Reopen (cnt-1) readers before SetPrc and before transferring ownership to
+	// asynchronous streams. On failure, complete locally without a hanging refcount.
+	readers, err := _reopen(roc, cnt)
+	if err != nil {
+		err = fmt.Errorf("%s failed to reopen %q reader: %w", sb, obj, err)
+		sb._doCmpl(obj, roc, err)
+		return err
+	}
+
+	// 3) send
+	obj.SetPrc(cnt)
+	if nodes == nil {
+		idx := 0
+		for _, robin := range streams {
+			if e := sb.sendOne(obj, _reader(readers, roc, idx), robin, idx, cnt); e != nil && err == nil {
+				err = e
+			}
+			idx++
+		}
+	} else {
 		for idx, di := range nodes {
 			robin := streams[di.ID()]
-			if err := sb.sendOne(obj, roc, robin, idx, cnt); err != nil {
-				return err
+			if e := sb.sendOne(obj, _reader(readers, roc, idx), robin, idx, cnt); e != nil && err == nil {
+				err = e
 			}
 		}
 	}
 
-	return nil
+	return err
+}
+
+// Open (cnt-1) additional readers, one per destination except the first.
+// On error, close all successfully reopened readers; the caller closes the original.
+func _reopen(roc cos.ReadOpenCloser, cnt int) ([]cos.ReadOpenCloser, error) {
+	if roc == nil || cnt < 2 {
+		return nil, nil
+	}
+	readers := make([]cos.ReadOpenCloser, cnt)
+	readers[0] = roc
+	for i := 1; i < cnt; i++ {
+		reader, err := roc.Open()
+		if err != nil {
+			for j := 1; j < i; j++ {
+				cos.Close(readers[j])
+			}
+			return nil, err
+		}
+		readers[i] = reader
+	}
+	return readers, nil
+}
+
+func _reader(readers []cos.ReadOpenCloser, roc cos.ReadOpenCloser, idx int) cos.ReadOpenCloser {
+	if readers == nil {
+		return roc // header-only (nil), or a single destination
+	}
+	return readers[idx]
 }
 
 func (sb *Streams) _validate(obj *transport.Obj, bun bundle, nodes []*meta.Snode) error {
@@ -229,12 +274,17 @@ func (sb *Streams) _validate(obj *transport.Obj, bun bundle, nodes []*meta.Snode
 	return nil
 }
 
-func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
+// compare with transport.Stream.doCmpl
+// (the object's callback, when defined, overrides the parent callback from transport.Extra)
+func (sb *Streams) _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	if roc != nil {
 		cos.Close(roc)
 	}
-	if obj.SentCB != nil {
+	switch {
+	case obj.SentCB != nil:
 		obj.SentCB(&obj.Hdr, roc, obj.CmplArg, err)
+	case sb.extra.Parent != nil && sb.extra.Parent.SentCB != nil:
+		sb.extra.Parent.SentCB(&obj.Hdr, roc, obj.CmplArg, err)
 	}
 }
 
@@ -373,25 +423,17 @@ func (sb *Streams) get() (bun bundle) {
 }
 
 // one obj, one stream
-func (sb *Streams) sendOne(obj *transport.Obj, roc cos.ReadOpenCloser, robin *robin, idx, cnt int) error {
+func (sb *Streams) sendOne(obj *transport.Obj, reader cos.ReadOpenCloser, robin *robin, idx, cnt int) error {
 	obj.Hdr.SID = core.T.SID()
 	one := obj
-	one.Reader = roc
-	if cnt == 1 {
-		goto snd
+	// Keep obj as the stable template until the final send. Earlier destinations
+	// get clones; the final destination takes ownership of obj itself.
+	if idx < cnt-1 {
+		one = transport.AllocSend()
+		*one = *obj
 	}
-	one = transport.AllocSend()
-	*one = *obj
-	if idx > 0 && roc != nil {
-		reader, err := roc.Open()
-		if err != nil { // reopen for every destination
-			err := fmt.Errorf("%s failed to reopen %q reader: %v", sb, obj, err)
-			debug.AssertNoErr(err) // must never happen
-			return err
-		}
-		one.Reader = reader
-	}
-snd:
+	one.Reader = reader
+
 	i := 0
 	if sb.multiplier > 1 {
 		i = int(robin.i.Inc()) % len(robin.stsdest)
