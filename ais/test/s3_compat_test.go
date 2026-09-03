@@ -292,6 +292,18 @@ func TestS3ListObjectsMaxKeysNextPage(t *testing.T) {
 	for i, nm := range objNames {
 		tassert.Fatalf(t, seen[i] == nm, "expected %q at position %d, got %q", nm, i, seen[i])
 	}
+
+	// exact page-size boundary: a full page with nothing left to list is not truncated
+	out, err = s3Client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(bck.Name), MaxKeys: aws.Int32(int32(len(objNames))),
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(out.Contents) == len(objNames),
+		"single page: expected %d entries, got %d", len(objNames), len(out.Contents))
+	tassert.Fatalf(t, out.IsTruncated == nil || !*out.IsTruncated,
+		"single page: expected IsTruncated=false, got %v", out.IsTruncated)
+	tassert.Fatalf(t, out.NextContinuationToken == nil || *out.NextContinuationToken == "",
+		"single page: expected no next-continuation-token, got %q", aws.ToString(out.NextContinuationToken))
 }
 
 func loadCredentials(t *testing.T) (f func(*config.LoadOptions) error) {

@@ -240,12 +240,6 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		lsmsg.PageSize = apc.MaxPageSizeAIS
 	}
 
-	// TODO: an exact page-size boundary (returned entries == PageSize) is reported as
-	// truncated even when there's nothing left to list. Proper fix: have each target
-	// report whether it has more to list (a separate response field/flag) instead of
-	// the proxy inferring it client-side from entry counts. This touches the target-side
-	// listing API, left for a follow-up commit.
-
 	actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{
@@ -262,7 +256,10 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	// Combine the results.
 	results = p.bcastGroup(args)
 	freeBcArgs(args)
-	lists := make([]*cmn.LsoRes, 0, len(results))
+	var (
+		lists   = make([]*cmn.LsoRes, 0, len(results))
+		hasMore bool
+	)
 	for _, res := range results {
 		if res.err != nil {
 			if res.details == "" || res.details == dfltDetail {
@@ -273,6 +270,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 			return nil, err
 		}
 		lst := res.v.(*cmn.LsoRes)
+		hasMore = hasMore || lst.ContinuationToken != ""
 		if len(lst.Entries) > 0 || (isNBI && lst.ContinuationToken != "") {
 			lists = append(lists, lst)
 		}
@@ -285,7 +283,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	}
 
 	page := concatLso(lists, lsmsg)
-	finLsoA(page, lsmsg)
+	finLsoA(page, lsmsg, hasMore)
 	return page, nil
 }
 
@@ -464,23 +462,29 @@ func concatLso(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) (objs *cmn.LsoRes) {
 	return objs
 }
 
-func finLsoA(objs *cmn.LsoRes, lsmsg *apc.LsoMsg) {
+// Trim the merged page to the requested size and set the continuation token, if any.
+func finLsoA(objs *cmn.LsoRes, lsmsg *apc.LsoMsg, hasMore bool) {
 	maxSize := int(lsmsg.PageSize)
 	// when recursion is disabled (apc.LsNoRecursion)
 	// the result _may_ include duplicated names of the virtual subdirectories
+	// (dedup all of them: truncating here would drop distinct names past `maxSize`
+	// without leaving anything to resume from)
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
-		objs.Entries = dedupLso(objs.Entries, maxSize)
+		objs.Entries = dedupLso(objs.Entries)
 	}
-	if l := len(objs.Entries); l >= maxSize {
+	switch l := len(objs.Entries); {
+	case l > maxSize:
+		// dropping the tail: truncated regardless of what the targets reported
 		clear(objs.Entries[maxSize:])
 		objs.Entries = objs.Entries[:maxSize]
 		objs.ContinuationToken = objs.Entries[maxSize-1].Name
+	case hasMore && l > 0:
+		objs.ContinuationToken = objs.Entries[l-1].Name
 	}
 }
 
-// - remove adjacent entries with the same Name (the input must already be sorted by Name)
-// - stop after producing maxSize entries
-func dedupLso(entries cmn.LsoEntries, maxSize int) cmn.LsoEntries {
+// remove adjacent entries with the same Name (the input must already be sorted by Name)
+func dedupLso(entries cmn.LsoEntries) cmn.LsoEntries {
 	var j int
 	for _, en := range entries {
 		if j > 0 && entries[j-1].Name == en.Name {
@@ -489,10 +493,6 @@ func dedupLso(entries cmn.LsoEntries, maxSize int) cmn.LsoEntries {
 
 		entries[j] = en
 		j++
-
-		if maxSize > 0 && j == maxSize {
-			break
-		}
 	}
 	clear(entries[j:])
 	return entries[:j]
@@ -532,7 +532,7 @@ func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
 	}
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
 		cmn.SortLsoLex(entries)
-		entries = dedupLso(entries, 0)
+		entries = dedupLso(entries)
 	} else {
 		cmn.SortLso(entries)
 	}

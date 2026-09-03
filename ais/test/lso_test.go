@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 func TestLso(t *testing.T) {
@@ -382,6 +383,192 @@ func TestLsoRerequestPage(t *testing.T) {
 			"unexpected total number of objects (got: %d, expected: %d)", totalCnt, m.num,
 		)
 	})
+}
+
+func checkLsoPages(t *testing.T, bp api.BaseParams, bck cmn.Bck, expCnt int, flags uint64, pageSizes []int64) {
+	t.Helper()
+	for _, pageSize := range pageSizes {
+		var (
+			numPages int
+			names    = make(cos.StrSet, expCnt)
+			msg      = &apc.LsoMsg{PageSize: pageSize, Flags: flags}
+		)
+		for {
+			lst, err := api.ListObjectsPage(bp, bck, msg, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			numPages++
+			for _, en := range lst.Entries {
+				tassert.Fatalf(t, !names.Contains(en.Name), "page-size %d: %q listed twice", pageSize, en.Name)
+				names.Set(en.Name)
+			}
+			if lst.ContinuationToken == "" {
+				break
+			}
+		}
+		expPages := max(1, (expCnt+int(pageSize)-1)/int(pageSize))
+		tassert.Errorf(t, numPages == expPages,
+			"page-size %d: unexpected number of pages (got: %d, expected: %d)", pageSize, numPages, expPages)
+		tassert.Errorf(t, len(names) == expCnt,
+			"page-size %d: unexpected total number of objects (got: %d, expected: %d)", pageSize, len(names), expCnt)
+	}
+}
+
+func TestLsoExactPageBoundary(t *testing.T) {
+	var (
+		bp = tools.BaseAPIParams()
+		m  = ioContext{
+			t:        t,
+			num:      120,
+			fileSize: 128,
+		}
+	)
+
+	m.init(true /*cleanup*/)
+
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+	m.puts()
+
+	// 120, 60, 30 divide the total evenly - the last page is full _and_ final;
+	// 50 and 7 leave a partial last page (20 and 1 entries respectively)
+	checkLsoPages(t, bp, m.bck, m.num, 0, []int64{int64(m.num), int64(m.num) / 2, int64(m.num) / 4, 50, 7})
+}
+
+// n-way mirrored bucket: the copies live on other mountpaths of the same target.
+func TestLsoExactPageBoundaryMirrored(t *testing.T) {
+	const copies = 3
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinMountpaths: copies})
+
+	var (
+		bp = tools.BaseAPIParams()
+		m  = ioContext{
+			t:        t,
+			num:      120,
+			fileSize: 128,
+		}
+		props = &cmn.BpropsToSet{
+			Mirror: &cmn.MirrorConfToSet{
+				Enabled: apc.Ptr(true),
+				Copies:  apc.Ptr[int64](copies),
+			},
+		}
+	)
+
+	m.init(true /*cleanup*/)
+
+	tools.CreateBucket(t, m.proxyURL, m.bck, props, true /*cleanup*/)
+	m.puts()
+
+	xargs := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: tools.RebalanceTimeout}
+	api.WaitForXaction(bp, &xargs)
+	m.ensureNumCopies(bp, copies, false /*greaterOk*/)
+
+	checkLsoPages(t, bp, m.bck, m.num, 0, []int64{int64(m.num), int64(m.num) / 2, int64(m.num) / 4})
+}
+
+// The proxy merges what every target reports.
+func TestLsoPageBoundaryDistribution(t *testing.T) {
+	var (
+		bp   = tools.BaseAPIParams()
+		smap = tools.GetClusterMap(t, tools.GetPrimaryURL())
+		nat  = smap.CountActiveTs()
+	)
+
+	tests := []struct {
+		name      string
+		num       int
+		pageSizes []int64
+	}{
+		{name: "empty_bucket", num: 0, pageSizes: []int64{1, 10}},
+		{name: "single_object", num: 1, pageSizes: []int64{1, 2, 10}},
+		{name: "fewer_objects_than_targets", num: max(1, nat-1), pageSizes: []int64{1, 2}},
+		{name: "one_object_per_target", num: nat, pageSizes: []int64{1, int64(nat)}},
+		{name: "page_size_one", num: 20, pageSizes: []int64{1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := ioContext{t: t, num: test.num, fileSize: 128}
+			m.init(true /*cleanup*/)
+
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+			if test.num > 0 {
+				m.puts()
+			}
+
+			checkLsoPages(t, bp, m.bck, test.num, 0, test.pageSizes)
+		})
+	}
+}
+
+// Objects that were PUT while a target was in maintenance become misplaced when it rejoins.
+func TestLsoMisplacedPagination(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 3})
+
+	var (
+		bp = tools.BaseAPIParams()
+		m  = ioContext{
+			t:        t,
+			num:      120,
+			fileSize: 128,
+		}
+		pageSizes = []int64{120, 60, 30}
+	)
+
+	m.initAndSaveState(true /*cleanup*/)
+
+	config := tools.GetClusterConfig(t)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": strconv.FormatBool(config.Rebalance.Enabled)})
+	})
+	tools.DisableRebalance(t)
+
+	target := m.startMaintenanceNoRebalance()
+	t.Cleanup(func() {
+		smap := tools.GetClusterMap(t, m.proxyURL)
+		if tsi := smap.GetNode(target.ID()); tsi != nil && tsi.InMaintOrDecomm() {
+			_, err := stopMaintenanceRetry(t, bp, &apc.ActValRmNode{DaemonID: target.ID()})
+			tassert.CheckError(t, err)
+		}
+	})
+
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+	m.puts()
+
+	rebID := m.stopMaintenance(target)
+	tassert.Fatalf(t, rebID == "", "rebalance %q started - misplaced objects would be repaired mid-listing", rebID)
+	m.waitAndCheckCluState()
+
+	// apc.LsMissing: misplaced objects included, so the count is known exactly
+	checkLsoPages(t, bp, m.bck, m.num, apc.LsMissing, pageSizes)
+
+	// default: misplaced objects are filtered out
+	placed := -1
+	for _, pageSize := range pageSizes {
+		var (
+			cnt   int
+			names = make(cos.StrSet, m.num)
+			msg   = &apc.LsoMsg{PageSize: pageSize}
+		)
+		for {
+			lst, err := api.ListObjectsPage(bp, m.bck, msg, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			for _, en := range lst.Entries {
+				tassert.Fatalf(t, !names.Contains(en.Name), "page-size %d: %q listed twice", pageSize, en.Name)
+				names.Set(en.Name)
+			}
+			cnt = len(names)
+			if lst.ContinuationToken == "" {
+				break
+			}
+		}
+		tassert.Fatalf(t, cnt <= m.num, "page-size %d: listed %d objects, bucket has %d", pageSize, cnt, m.num)
+		if placed < 0 {
+			placed = cnt
+			tlog.Logfln("%s: %d of %d objects properly placed", m.bck.Cname(""), placed, m.num)
+		}
+		tassert.Errorf(t, cnt == placed,
+			"page-size %d: unexpected total number of objects (got: %d, expected: %d)", pageSize, cnt, placed)
+	}
 }
 
 func TestLsoStartAfter(t *testing.T) {
@@ -2007,6 +2194,10 @@ func TestLsoNoRecursion_PageSizesUpTo1000(t *testing.T) {
 				"pageSize=%d: expected %d entries, got %d (pages=%d)",
 				ps, expectedTotal, len(allEntries), pageCount)
 
+			expPages := max(1, (expectedTotal+int(ps)-1)/int(ps))
+			tassert.Fatalf(t, pageCount == expPages,
+				"pageSize=%d: expected %d page(s), got %d", ps, expPages, pageCount)
+
 			seen := make(map[string]bool, expectedTotal)
 			var dirCount, fileCount int
 			for _, e := range allEntries {
@@ -2031,6 +2222,55 @@ func TestLsoNoRecursion_PageSizesUpTo1000(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLsoNoRecursionExactPageBoundary(t *testing.T) {
+	const (
+		numDirs       = 15
+		perDir        = 4
+		numFiles      = 45
+		expectedTotal = numDirs + numFiles
+	)
+
+	var (
+		bck      = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	put := func(nm string) {
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: 16, CksumType: cos.ChecksumNone})
+		tassert.CheckFatal(t, err)
+		_, err = api.PutObject(&api.PutArgs{BaseParams: bp, Bck: bck, ObjName: nm, Reader: reader})
+		tassert.CheckFatal(t, err)
+	}
+	for i := range numDirs {
+		for j := range perDir {
+			put(fmt.Sprintf("d%03d/f%02d", i, j))
+		}
+	}
+	for i := range numFiles {
+		put(fmt.Sprintf("f%03d", i))
+	}
+
+	checkLsoPages(t, bp, bck, expectedTotal, apc.LsNoRecursion, []int64{60, 30, 20, 15, 12, 10, 5, 3, 2, 1})
+
+	msg := &apc.LsoMsg{Flags: apc.LsNoRecursion, PageSize: 7}
+	lst, err := api.ListObjects(bp, bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+
+	var dirCount, fileCount int
+	for _, en := range lst.Entries {
+		if en.IsAnyFlagSet(apc.EntryIsDir) {
+			dirCount++
+		} else {
+			fileCount++
+		}
+	}
+	tassert.Errorf(t, dirCount == numDirs, "expected %d dirs, got %d", numDirs, dirCount)
+	tassert.Errorf(t, fileCount == numFiles, "expected %d files, got %d", numFiles, fileCount)
 }
 
 func TestLsoNoRecursion_NonExistingAndPartialPrefixes(t *testing.T) {

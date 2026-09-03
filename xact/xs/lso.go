@@ -528,8 +528,9 @@ func (r *LsoXact) doPageA() *LsoRsp {
 		lst  = r.page[idx:]
 		page *cmn.LsoRes
 	)
-	debug.Assert(int64(len(lst)) >= cnt || r.walk.done)
-	if int64(len(lst)) >= cnt {
+	// if the lookahead entry (nextPageA) is present then this target has more to list
+	debug.Assert(int64(len(lst)) > cnt || r.walk.done)
+	if int64(len(lst)) > cnt {
 		entries := lst[:cnt]
 		page = &cmn.LsoRes{UUID: r.msg.UUID, Entries: entries, ContinuationToken: entries[cnt-1].Name}
 	} else {
@@ -745,12 +746,18 @@ func (r *LsoXact) nextPageA() {
 
 	r.token = r.msg.ContinuationToken
 
+	// read one entry more than requested to check if this target has more to list
+	lookahead := r.msg.PageSize + 1
+
 	// if (a) done walking or (b) already have enough, stop
-	if r.walk.done || r.havePage(r.token, r.msg.PageSize) {
+	if r.walk.done || r.havePage(r.token, lookahead) {
 		return
 	}
+	// r.page may retain entries past the token (incl. previous lookahead):
+	// count them, and read only what's still needed to reach lookahead
+	cached := int64(len(r.page) - r.findToken(r.token))
 
-	for cnt := int64(0); cnt < r.msg.PageSize; {
+	for cnt := cached; cnt < lookahead; {
 		entry, ok := <-r.walk.pageCh
 		if !ok {
 			r.walk.done = true
