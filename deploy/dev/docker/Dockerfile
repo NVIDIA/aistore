@@ -33,11 +33,13 @@ ENV GOPATH /go
 ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 
-# Installing go
+# Installing go (resolve the latest patch of ${GOLANG_VERSION} at build time)
 RUN mkdir -p "$GOPATH/bin" && chmod -R 777 "$GOPATH"
-RUN curl -LO https://go.dev/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
-  tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
-  rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
+RUN GO_VER=$(curl -sfL "https://go.dev/dl/?mode=json&include=all" | grep -oE "go${GOLANG_VERSION}\.[0-9]+" | sort -V | tail -1) &&\
+  test -n "${GO_VER}" &&\
+  curl -LO "https://go.dev/dl/${GO_VER}.linux-amd64.tar.gz" &&\
+  tar -C /usr/local -xvzf "${GO_VER}.linux-amd64.tar.gz" > /dev/null 2>&1 &&\
+  rm -rf "${GO_VER}.linux-amd64.tar.gz"
 
 ENV AIS_CONF_DIR /tmp/.conf
 ENV AIS_CONF_FILE ${AIS_CONF_DIR}/ais.json
