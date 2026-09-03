@@ -421,20 +421,21 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 
 	o := transport.AllocSend()
 	o.Hdr = hdr
+	o.SentCB = func(hdr *transport.ObjHdr, reader io.ReadCloser, arg any, err error) {
+		g.smm.Free(hdr.Opaque)
+		cbReq(hdr, reader, arg, err)
+	}
 
 	// Broadcast slice request and wait for targets to respond
 	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Requesting daemons %v for slices of %s", daemons, ctx.lom)
 	}
 	if err := c.parent.sendByDaemonID(daemons, o, nil, true); err != nil {
-		freeSlices(ctx.slices)
-		g.smm.Free(request)
 		return err
 	}
 	if wgSlices.WaitTimeout(c.parent.config.Timeout.SendFile.D()) {
 		nlog.Errorf("%s timed out waiting for %s slices", core.T, ctx.lom)
 	}
-	g.smm.Free(request)
 	return nil
 }
 
