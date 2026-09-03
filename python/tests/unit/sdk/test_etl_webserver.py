@@ -1,7 +1,6 @@
 # pylint: disable=too-many-lines
 
 import os
-import sys
 import io
 import unittest
 from urllib.parse import quote as url_quote, urlparse, parse_qs
@@ -11,18 +10,6 @@ from unittest.mock import MagicMock, patch, AsyncMock
 import anyio
 import requests
 import httpx
-
-# Force eager import of pydantic.v1 before FastAPI registers any routes.
-# FastAPI's `is_pydantic_v1_model_class` (in fastapi/_compat/shared.py) lazily
-# does `from pydantic import v1` per route parameter, and Python 3.9's
-# importlib has a `_ModuleLock` race (cpython#87863, fixed in 3.10) that can
-# raise `KeyError` in `_blocking_on[tid]` when this lazy import runs while
-# another thread (e.g. starlette TestClient's ASGI thread from a prior test)
-# is finalizing.
-try:
-    from pydantic import v1 as _pydantic_v1  # pylint: disable=unused-import
-except ImportError:
-    pass
 
 from fastapi.testclient import TestClient
 from flask.testing import FlaskClient
@@ -270,7 +257,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content, b"Running")
 
     # pylint: disable=protected-access
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_get_network_content(self):
         path = "test/path?etl_args=arg"
         fake_content = b"fake data"
@@ -287,7 +273,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result, fake_content)
             mock_client.get.assert_called_once()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_handle_get_request(self):
         path = "test/object?etl_args=arg"
         original_content = b"original data"
@@ -303,7 +288,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.content, transformed_content)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_handle_put_request(self):
         path = "test/object"
         input_content = b"input data"
@@ -314,7 +298,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, transformed_content)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_websocket(self):
         with self.client.websocket_connect("/ws") as websocket:
             original_data = b"abcdef"
@@ -323,7 +306,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
             result = websocket.receive_bytes()
             self.assertEqual(result, original_data[::-1])
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_startup_event_default_retries(self):
         """startup_event() defaults to 3 transport retries when AIS_DIRECT_PUT_RETRIES is not set."""
         with mock.patch.dict(os.environ, {}, clear=False):
@@ -338,7 +320,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
                     await self.etl_server.startup_event()
                     self.assertEqual(mock_transport_cls.call_args.kwargs["retries"], 3)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_startup_event_custom_retries(self):
         """startup_event() passes AIS_DIRECT_PUT_RETRIES value to AsyncHTTPTransport."""
         with mock.patch.dict(os.environ, {AIS_DIRECT_PUT_RETRIES: "7"}):
@@ -363,7 +344,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         with mock.patch.dict(os.environ, {AIS_DIRECT_PUT_RETRIES: "7"}):
             self.assertEqual(DummyFastAPIServer().direct_put_retries, 7)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_direct_put_raises_transient_error_on_connect_error(self):
         """_direct_put() raises ETLDirectPutTransientError on ConnectError for caller retry."""
         # setUp already sets AIS_TARGET_URL; override DIRECT_PUT for this test only.
@@ -395,7 +375,6 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
         self.etl_server = DummyFastAPIServer()
         self.client = TestClient(self.etl_server.app)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_hpush_with_direct_put(self):
         path = "test/object"
         input_content = b"input data"
@@ -433,7 +412,6 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
         self.assertEqual(response.content, b"error message")
         self.etl_server.client.put.assert_awaited_once()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_hpush_with_direct_put_and_fqn(self):
         path = "test/object"
         fqn = "test@some%fqn"
@@ -494,7 +472,6 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
             self.etl_server.client.put.assert_awaited_once()
             get_fqn_mock.assert_called_once_with(fqn)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_websocket_with_direct_put(self):
         input_data = b"testdata"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
@@ -562,7 +539,6 @@ class TestFastAPIServerWithDirectPut(unittest.TestCase):
                 self.assertEqual(result, input_data[::-1])
             mock_client.put.assert_not_called()  # direct put shouldn't be called
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_websocket_with_direct_put_and_fqn(self):
         fqn = "test/object"
         original_content = b"original data"
@@ -694,7 +670,6 @@ class TestFlaskServer(unittest.TestCase):
             assert "Content-Length" in response.headers
             assert int(response.headers["Content-Length"]) == len(response.data)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_direct_put_delivery(self):
         path = "test/object"
         input_content = b"input data"
@@ -834,7 +809,6 @@ class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result, b"arg")
             mock_client.get.assert_called_once()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_put_with_etl_args(self):
         path = "test/object?etl_args=arg"
         input_content = b"input data"
@@ -886,7 +860,6 @@ class TestFastAPIDirectFQN(unittest.TestCase):
         self.etl_server = CapturingFastAPIServer()
         self.client = TestClient(self.etl_server.app)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_put_with_fqn_receives_path_string(self):
         """ETL_DIRECT_FQN=true: transform() receives the sanitized file path as str."""
         fqn = "/local/data/object.bin"
@@ -894,7 +867,6 @@ class TestFastAPIDirectFQN(unittest.TestCase):
         self.assertIsInstance(CapturingFastAPIServer.last_data, str)
         self.assertEqual(CapturingFastAPIServer.last_data, os.path.normpath(fqn))
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_put_without_fqn_receives_bytes(self):
         """ETL_DIRECT_FQN=true but no FQN (pipeline stage): transform() receives bytes."""
         input_data = b"pipeline bytes"
@@ -902,7 +874,6 @@ class TestFastAPIDirectFQN(unittest.TestCase):
         self.assertIsInstance(CapturingFastAPIServer.last_data, bytes)
         self.assertEqual(CapturingFastAPIServer.last_data, input_data)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_websocket_with_fqn_receives_path_string(self):
         """ETL_DIRECT_FQN=true via WebSocket: transform() receives the file path as str."""
         fqn = "/local/data/object.bin"
@@ -912,7 +883,6 @@ class TestFastAPIDirectFQN(unittest.TestCase):
         self.assertIsInstance(CapturingFastAPIServer.last_data, str)
         self.assertEqual(CapturingFastAPIServer.last_data, os.path.normpath(fqn))
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_websocket_without_fqn_receives_bytes(self):
         """ETL_DIRECT_FQN=true via WebSocket but no FQN: transform() receives bytes."""
         input_data = b"ws bytes"
@@ -1085,7 +1055,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"Running")
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_put(self):
         input_content = b"input data"
         response = self.client.put("/test/object", content=input_content)
@@ -1105,7 +1074,6 @@ class TestStreamingFastAPIServer(
             mock_resp.raise_for_status = MagicMock()
         return mock_resp
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_get(self):
         """No-FQN GET streams via the shared sync session; output is transformed."""
         input_data = b"streaming get data"
@@ -1122,7 +1090,6 @@ class TestStreamingFastAPIServer(
             "http://localhost:8080/test%2Fobject", stream=True, timeout=None
         )
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_get_does_not_buffer(self):
         """Streaming GET must not use _get_network_content (the buffering path)."""
         mock_resp = self._make_mock_session_get(raw_data=b"data")
@@ -1134,7 +1101,6 @@ class TestStreamingFastAPIServer(
                 self.client.get("/test/object")
                 mock_net.assert_not_called()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_get_forwards_upstream_error_status(self):
         """Upstream HTTP errors must be forwarded, not collapsed into 502."""
         mock_requests_resp = MagicMock()
@@ -1147,7 +1113,6 @@ class TestStreamingFastAPIServer(
 
         self.assertEqual(response.status_code, 404)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_get_network_error_returns_502(self):
         """Network-level failures on GET must return 502 Bad Gateway."""
         with patch.object(
@@ -1159,7 +1124,6 @@ class TestStreamingFastAPIServer(
 
         self.assertEqual(response.status_code, 502)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_put_bail_returns_503_with_reason(self):
         """One-shot bail (bail_without_local_retry=True) returns 503 + reason header."""
 
@@ -1187,7 +1151,6 @@ class TestStreamingFastAPIServer(
             ETL_RETRY_REASON_DIRECT_PUT_TRANSIENT,
         )
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_put_exhausted_retries_returns_502(self):
         """Replayable-exhausted (bail_without_local_retry=False) keeps emitting 502."""
 
@@ -1209,7 +1172,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(response.status_code, 502)
         self.assertNotIn(HEADER_ETL_RETRY_REASON, response.headers)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_get_closes_response_on_upstream_error(self):
         """Upstream errors must close the response to release the connection."""
         mock_requests_resp = MagicMock()
@@ -1223,7 +1185,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(response.status_code, 404)
         mock_resp.close.assert_called_once()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_get_upstream_500_forwarded_and_closes(self):
         """Upstream 500 is forwarded as-is and the response is closed to avoid leaks."""
         mock_requests_resp = MagicMock()
@@ -1237,7 +1198,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(response.status_code, 500)
         mock_resp.close.assert_called_once()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_get_uname_path_preserved(self):
         """Uname path with @, slashes, spaces, and non-ASCII is forwarded byte-exact.
 
@@ -1263,7 +1223,6 @@ class TestStreamingFastAPIServer(
         # No SDK-style path rewriting should occur.
         self.assertNotIn("/v1/objects/", mock_get.call_args[0][0])
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_get_reader_returns_binary_io(self):
         """_get_stream_reader returns a sync BinaryIO whose read() yields upstream bytes."""
         upstream_bytes = b"hello from upstream"
@@ -1281,7 +1240,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(reader.read(), upstream_bytes)
         reader.close()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_get_reader_close_releases_connection_pool(self):
         """reader.close() must call resp.close(), not just resp.raw.close().
 
@@ -1301,7 +1259,6 @@ class TestStreamingFastAPIServer(
         mock_resp.close.assert_called_once()
         mock_resp.raw.close.assert_not_called()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_put_no_pipeline_round_trip(self):
         """Non-pipeline streaming PUT round-trips correctly."""
         input_content = b"streaming put no-pipeline"
@@ -1309,7 +1266,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.content, input_content[::-1])
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_put_chunked_round_trip(self):
         """Multi-chunk PUT round-trips through transform_stream byte-exact."""
         input_content = (
@@ -1319,7 +1275,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.content, input_content[::-1])
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_streaming_put_with_direct_put_consumes_request_stream(self):
         """Streaming no-FQN PUT + direct-put: real `_RequestStreamReader` bytes
         must reach the next-stage httpx PUT body.
@@ -1361,7 +1316,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(bytes(received), expected)
         self.etl_server.client.put.assert_awaited_once()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_put_reader_does_not_buffer_request_body(self):
         """Streaming no-FQN PUT must not call request.body() (buffering path)."""
         req = MagicMock()
@@ -1395,7 +1349,6 @@ class TestStreamingFastAPIServer(
         req.stream.return_value = _stream()
         return req
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_request_stream_reader_full_read(self):
         """read() with no size returns the concatenation of all chunks."""
         req = self._make_streaming_request(b"abc", b"def", b"ghi")
@@ -1407,7 +1360,6 @@ class TestStreamingFastAPIServer(
         result_eof = await anyio.to_thread.run_sync(reader.read)
         self.assertEqual(result_eof, b"")
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_request_stream_reader_partial_read_across_chunks(self):
         """read(n) slices across chunk boundaries with leftover preserved."""
         req = self._make_streaming_request(b"abc", b"de", b"fghij")
@@ -1419,7 +1371,6 @@ class TestStreamingFastAPIServer(
         parts = await anyio.to_thread.run_sync(_consume)
         self.assertEqual(parts, [b"ab", b"cdef", b"ghi", b"j"])
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_request_stream_reader_propagates_stream_error(self):
         """An exception from request.stream() surfaces from read()."""
         req = MagicMock()
@@ -1443,7 +1394,6 @@ class TestStreamingFastAPIServer(
         self.assertEqual(first, b"first")
         self.assertEqual(err, "client disconnect mid-stream")
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_websocket_raises_for_streaming_server(self):
         """WebSocket should fail for streaming-only servers."""
         with self.assertRaises(Exception):
@@ -1919,7 +1869,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
                 fqn, "test/obj", req, is_get, "", self._DIRECT_PUT_URL, ""
             )
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_succeeds_on_first_attempt(self):
         """No retry when first attempt succeeds."""
         self.server.client.put.return_value = self._ok_response()
@@ -1930,7 +1879,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         self.server.client.put.assert_awaited_once()
         mock_sleep.assert_not_called()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_retries_on_read_error_then_succeeds(self):
         """Retries on ReadError and succeeds on the third attempt."""
         call_count = 0
@@ -1948,7 +1896,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0], 204)  # 200 + empty content → 204
         self.assertEqual(call_count, 3)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_raises_after_exhausting_retries(self):
         """ETLDirectPutTransientError is raised after all retries are exhausted."""
         self.server.client.put.side_effect = httpx.ConnectError("refused")
@@ -1958,7 +1905,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         # initial attempt + 2 retries = 3 total
         self.assertEqual(self.server.client.put.await_count, 3)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_non_transient_error_not_retried(self):
         """A non-transient exception in client.put returns 500 without retrying."""
         self.server.client.put.side_effect = ValueError("unexpected")
@@ -1968,7 +1914,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         self.server.client.put.assert_awaited_once()
         mock_sleep.assert_not_called()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_get_reader_reopened_on_each_retry(self):
         """For GET (non-replayable), _get_stream_reader is called once per attempt."""
         call_count = 0
@@ -2007,7 +1952,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         # initial + 2 retries = 3 readers opened
         self.assertEqual(len(get_reader_calls), 3)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_reader_always_closed_on_success(self):
         """close_reader is called exactly once (via finally) after success."""
         self.server.client.put.return_value = self._ok_response()
@@ -2018,7 +1962,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
                 await self._call(self._make_request())
         mc.assert_called_once()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_reader_always_closed_on_exhausted_retries(self):
         """Reader is closed after each failed attempt and again by the finally block."""
         self.server.client.put.side_effect = httpx.ReadError("dropped")
@@ -2038,7 +1981,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         # 2 retries -> 2 mid-loop closes + 1 finally close = 3 total
         self.assertEqual(len(close_calls), 3)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_exponential_backoff_delays(self):
         """asyncio.sleep is called with exponentially increasing delays."""
         call_count = 0
@@ -2057,7 +1999,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         delays = [call.args[0] for call in mock_sleep.call_args_list]
         self.assertEqual(delays, [1.0, 2.0, 4.0])  # 2**0, 2**1, 2**2
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_no_fqn_put_skips_local_retries(self):
         """Streaming no-FQN PUT is one-shot: no local retry; AIS retries the PUT.
 
@@ -2076,7 +2017,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
         mock_sleep.assert_not_called()
         self.assertTrue(ctx.exception.bail_without_local_retry)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_replayable_exhausted_does_not_set_bail_flag(self):
         """Replayable-exhausted PUTs raise with bail_without_local_retry=False.
 
@@ -2091,7 +2031,6 @@ class TestStreamingDirectPutRetry(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(ctx.exception.bail_without_local_retry)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_fqn_put_still_retries(self):
         """FQN-backed PUT is replayable (file can be reopened); retries proceed."""
         self.server.direct_put_retries = 3
@@ -2998,7 +2937,7 @@ def _make_connection_refused_error():
 def _make_connection_refused_error_context_only():
     """Build a ConnectionError where ConnectionRefusedError is only on __context__.
 
-    Mirrors urllib3 v1.x / Python 3.9 behavior: NewConnectionError is raised
+    Mirrors urllib3 v1.x behavior: NewConnectionError is raised
     inside an ``except ConnectionRefusedError`` block without an explicit ``from``,
     so __cause__ is None and the root cause is only reachable via __context__.
     """
@@ -3027,7 +2966,7 @@ class TestIsConnectionRefused(unittest.TestCase):
         self.assertTrue(_is_connection_refused(exc))
 
     def test_context_only_chain_returns_true(self):
-        """__context__-only chain (urllib3 v1.x / Python 3.9) is detected as ConnectionRefused."""
+        """__context__-only chain (urllib3 v1.x) is detected as ConnectionRefused."""
         exc = _make_connection_refused_error_context_only()
         self.assertTrue(_is_connection_refused(exc))
 
@@ -3226,7 +3165,6 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
             parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
         )
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_fastapi_buffered_forwards_etl_args(self):
         """FastAPIServer forwards etl_args on the buffered direct-put hop."""
         server = DummyFastAPIServer()
@@ -3245,7 +3183,6 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
             parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
         )
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_fastapi_websocket_forwards_etl_args(self):
         """FastAPIServer forwards etl_args on the WebSocket direct-put hop."""
         server = DummyFastAPIServer()
@@ -3267,7 +3204,6 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
                 parse_qs(urlparse(called_url).query)[QPARAM_ETL_ARGS], ["jpeg"]
             )
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_flask_buffered_forwards_etl_args(self):
         """FlaskServer forwards etl_args on the buffered direct-put hop."""
         server = DummyFlaskServer()

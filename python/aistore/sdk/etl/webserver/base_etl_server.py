@@ -48,7 +48,8 @@ def _is_connection_refused(exc: requests.ConnectionError) -> bool:
 
     Returns False for bare ConnectionError("lost") and other non-refused connection errors.
 
-    Note: urllib3 v1.x (Python 3.9) raises NewConnectionError without explicit ``from``
+    Note: urllib3 v1.x (still permitted by our ``urllib3>=1.26.18`` floor) raises
+    NewConnectionError without explicit ``from``
     chaining, so ``__cause__`` is None and the ConnectionRefusedError is only reachable
     via ``__context__``.  Both are checked for cross-version compatibility.
     """

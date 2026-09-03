@@ -1,4 +1,5 @@
-# Requires Python >= 3.10 (see python/Makefile:lint_deps). CI pins its Python
-# version accordingly in .github/workflows/lint-python.yml and .gitlab-ci.yml's lint:python job.
+# Lint-only dependencies, kept out of common_requirements (see python/Makefile:lint_deps).
+# CI pins the Python version used for linting in .github/workflows/lint-python.yml
+# and .gitlab-ci.yml's lint:python job.
 pylint==4.0.7
 astroid==4.0.4  # pin exactly; pylint's own constraint (astroid>=4.0.2,<=4.1.dev0) still allows drift

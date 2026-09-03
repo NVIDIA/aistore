@@ -304,7 +304,7 @@ ais etl init --spec etl_spec.yaml
 
 ### Using `init_class` (Python SDK Only)
 
-`init_class` is a simplified method to initialize pure Python-based ETLs—no need for container images. It is only available through the Python SDK and is supported on Python 3.9 through 3.13.
+`init_class` is a simplified method to initialize pure Python-based ETLs—no need for container images. It is only available through the Python SDK and is supported on Python 3.10 through 3.13.
 
 This approach is ideal when:
 

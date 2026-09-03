@@ -1,5 +1,4 @@
 import os
-import sys
 import unittest
 import time
 import threading
@@ -301,7 +300,6 @@ class TestPipelineParsing(TestPipelineBase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Invalid pipeline", response.text)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_fastapi_server_invalid_pipeline_validation(self):
         """Test FastAPI server properly validates malformed pipeline headers."""
@@ -451,7 +449,6 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
             "http://localhost:19023/target", result, headers={}
         )
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_fastapi_to_fastapi_pipeline_chain(self):
         """Test pipeline forwarding between multiple FastAPI servers."""
@@ -478,7 +475,6 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.content, result)
         self.assertEqual(response.headers.get(HEADER_CONTENT_LENGTH), str(len(result)))
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_fastapi_to_target_pipeline_chain(self):
         """Test pipeline forwarding between FastAPI servers ending with a target server."""
@@ -546,7 +542,6 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, result)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_three_way_mixed_pipeline(self):
         """Test HTTP -> Flask -> FastAPI pipeline."""
@@ -593,7 +588,6 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertIn(b"/nonexistent", response.content)
         self.assertIn(b"ConnectionError", response.content)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_long_pipeline_chain(self):
         """Test a longer pipeline with 5 servers."""
@@ -689,7 +683,6 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
 class TestWebSocketPipelineIntegration(TestPipelineBase):
     """Test WebSocket ETL pipeline integration with various server types."""
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_websocket_to_http_pipeline(self):
         """Test WebSocket client connecting to FastAPI server with HTTP pipeline."""
@@ -715,7 +708,6 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             )
             self.assertEqual(result, expected)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_websocket_to_flask_pipeline(self):
         """Test WebSocket client connecting to FastAPI server with Flask pipeline."""
@@ -741,7 +733,6 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             )
             self.assertEqual(result, expected)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_websocket_to_fastapi_pipeline(self):
         """Test WebSocket client connecting to FastAPI server with FastAPI pipeline."""
@@ -767,7 +758,6 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             )
             self.assertEqual(result, expected)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_websocket_to_target_direct_pipeline(self):
         """Test WebSocket client connecting to FastAPI server with direct target pipeline."""
@@ -803,7 +793,6 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
                     headers={HEADER_CONTENT_LENGTH: str(len(expected_data))},
                 )
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_websocket_multi_stage_pipeline(self):
         """Test WebSocket with multi-stage pipeline (HTTP->Flask->FastAPI)."""
@@ -833,7 +822,6 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
 
             self.assertEqual(result, expected)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_websocket_pipeline_error_handling(self):
         """Test WebSocket error handling when pipeline target fails."""
@@ -854,7 +842,6 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             # Should receive error message
             self.assertIn("0", result)  # Error indicated by 0 length
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_websocket_invalid_pipeline_format(self):
         """Test WebSocket with invalid pipeline format."""
@@ -875,7 +862,6 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             # Should receive error message about invalid pipeline
             self.assertIn("Invalid pipeline", result)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     @pytest.mark.etl
     def test_websocket_no_pipeline_fallback(self):
         """Test WebSocket behavior without pipeline (fallback to direct response)."""

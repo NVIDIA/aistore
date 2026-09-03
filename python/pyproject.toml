@@ -27,7 +27,7 @@ authors = [
 ]
 description = "Client-side APIs to access and utilize clusters, buckets, and objects on AIStore."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = "MIT"
 
 classifiers = [

@@ -6,7 +6,7 @@ The project is, essentially, a Python port of the [AIS Go APIs](https://aistore.
 
 The SDK also includes the `authn` sub-package for managing authentication, users, roles, clusters, and tokens. For more details, refer to the [AuthN sub-package README](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/authn/README.md).
 
-> Support is currently limited to Python 3.x, with a minimum requirement of version 3.8 or later.
+> Support is currently limited to Python 3.x, with a minimum requirement of version 3.10 or later.
 
 ---
 

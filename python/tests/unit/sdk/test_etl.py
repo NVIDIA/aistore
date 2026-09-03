@@ -47,7 +47,6 @@ class TestEtl(
 
     def test_default_runtime(self):
         version_to_runtime = {
-            (3, 9): "3.9",
             (3, 10): "3.10",
             (3, 11): "3.11",
             (3, 12): "3.12",
@@ -55,7 +54,7 @@ class TestEtl(
         }
 
         failed_versions = [
-            (3, 8),  # Too old, not supported
+            (3, 9),  # Too old, not supported
             (3, 14),  # TODO: Not supported yet
             (4, 0),  # Future version
         ]
@@ -72,10 +71,7 @@ class TestEtl(
                 with self.assertRaises(ValueError):
                     _get_runtime()
 
-    @unittest.skipIf(
-        sys.version_info < (3, 9) or sys.version_info >= (3, 14),
-        "requires Python 3.9 to 3.13 inclusive",
-    )
+    @unittest.skipIf(sys.version_info >= (3, 14), "requires Python 3.13 or lower")
     def test_init_etl_class_with_defaults(self):
         # Define a minimal ETLServer subclass
         class MyETL(HTTPMultiThreadedServer):
@@ -109,10 +105,7 @@ class TestEtl(
         # No dependencies given => empty PACKAGES
         self.assertNotIn("PACKAGES", init_kwargs)
 
-    @unittest.skipIf(
-        sys.version_info < (3, 9) or sys.version_info >= (3, 14),
-        "requires Python 3.9 to 3.13 inclusive",
-    )
+    @unittest.skipIf(sys.version_info >= (3, 14), "requires Python 3.13 or lower")
     def test_init_etl_class_with_args(self):
         class AnotherETL(HTTPMultiThreadedServer):
             def transform(self, data: bytes, *_args) -> bytes:
@@ -148,10 +141,7 @@ class TestEtl(
         expected_payload = serialize_class(AnotherETL)
         self.assertEqual(init_kwargs["ETL_CLASS_PAYLOAD"], expected_payload)
 
-    @unittest.skipIf(
-        sys.version_info < (3, 9) or sys.version_info >= (3, 14),
-        "requires Python 3.9 to 3.13 inclusive",
-    )
+    @unittest.skipIf(sys.version_info >= (3, 14), "requires Python 3.13 or lower")
     def test_init_class_direct_file_access(self):
         class DFAServer(HTTPMultiThreadedServer):
             def transform(self, data, *_args) -> bytes:
@@ -451,7 +441,6 @@ class TestDirectFileAccessEndToEnd(unittest.TestCase):
         os.environ.pop("ETL_DIRECT_FQN", None)
         os.environ.pop("AIS_TARGET_URL", None)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_direct_file_access_arg_causes_transform_to_receive_str(self):
         """
         Calling init(direct_file_access=True) injects ETL_DIRECT_FQN=true into the
@@ -495,7 +484,6 @@ class TestDirectFileAccessEndToEnd(unittest.TestCase):
         )
         self.assertEqual(received[0], os.path.normpath(fqn))
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_without_direct_file_access_transform_receives_bytes(self):
         """
         Without direct_file_access, ETL_DIRECT_FQN is never set, so transform()

@@ -8,6 +8,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- **BREAKING**: The minimum supported Python version is now 3.10. Python 3.8 and
+  3.9 have both reached end-of-life and are no longer tested or supported.
+- **BREAKING**: `Etl.init_class()` no longer supports Python 3.9, since the SDK
+  itself now requires 3.10 or later. Supported runtimes are 3.10 through 3.13.
 - **BREAKING**: `Object.head(props="")` now uses the selective object HEAD API,
   returns `ObjectAttributes` instead of a header mapping, and continues to
   refresh `Object.props_cached`. Request non-default fields explicitly and
