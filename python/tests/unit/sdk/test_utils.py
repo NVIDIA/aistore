@@ -80,6 +80,7 @@ class TestUtils(unittest.TestCase):
         mock_file = Mock()
         mock_file.stat.return_value = Mock(st_size=test_case[0])
         self.assertEqual(test_case[1], get_file_size(mock_file))
+        mock_file.stat.assert_called_once()
 
     @patch("aistore.sdk.utils.logging.getLogger")
     def test_get_logger_adds_local_handler_when_only_ancestor_has_one(

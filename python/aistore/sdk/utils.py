@@ -124,8 +124,6 @@ def validate_file(path: Union[str, Path]) -> None:
     if isinstance(path, str):
         path = Path(path)
     _check_path_exists(path)
-    if not path.exists():
-        raise ValueError(f"Path: {path} does not exist")
     if not path.is_file():
         raise ValueError(f"Path: {path} is a directory, not a file")
 
@@ -155,9 +153,8 @@ def get_file_size(file: Path) -> str:
         Size of file as human-readable string
 
     """
-    return (
-        humanize.naturalsize(file.stat().st_size) if file.stat().st_size else "unknown"
-    )
+    size = file.stat().st_size
+    return humanize.naturalsize(size) if size else "unknown"
 
 
 def expand_braces(template: str) -> Iterator[str]:
