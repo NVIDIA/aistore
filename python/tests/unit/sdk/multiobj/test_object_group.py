@@ -79,7 +79,7 @@ class TestObjectGroup(unittest.TestCase):
         action,
         expected_value,
         expect_list=False,
-        **kwargs
+        **kwargs,
     ):
         resp = object_group_function(**kwargs)
         if expect_list:
@@ -184,12 +184,39 @@ class TestObjectGroup(unittest.TestCase):
 
     @patch("aistore.sdk.multiobj.object_group.logging")
     def test_copy_dry_run(self, mock_logging):
+        """Verify copy dry-run logs the compact object selection."""
         mock_logger = Mock()
         mock_logging.getLogger.return_value = mock_logger
 
         self.object_group.copy(to_bck=self.dest_bucket, dry_run=True)
 
-        mock_logger.info.assert_called()
+        mock_logger.info.assert_called_once()
+        self.assertEqual(
+            {"objnames": self.obj_names}, mock_logger.info.call_args.args[-1]
+        )
+
+    @patch("aistore.sdk.multiobj.object_group.logging")
+    def test_range_dry_run_does_not_expand_selection(self, mock_logging):
+        """Verify range dry-runs log their template without enumerating names."""
+        mock_logger = Mock()
+        mock_logging.getLogger.return_value = mock_logger
+        obj_range = ObjectRange(prefix="obj-", min_index=0, max_index=1_000_000)
+        object_group = ObjectGroup(self.mock_bck, obj_range=obj_range)
+        expected_selection = {"template": "obj-{0..1000000..1}"}
+
+        with patch.object(
+            ObjectRange,
+            "__iter__",
+            side_effect=AssertionError("dry-run expanded the object range"),
+        ):
+            object_group.copy(to_bck=self.dest_bucket, dry_run=True)
+            object_group.transform(
+                to_bck=self.dest_bucket, etl_name=ETL_NAME, dry_run=True
+            )
+
+        self.assertEqual(2, mock_logger.info.call_count)
+        for log_call in mock_logger.info.call_args_list:
+            self.assertEqual(expected_selection, log_call.args[-1])
 
     def test_transform(self):
         self.expected_value["prefix"] = ""
@@ -242,6 +269,7 @@ class TestObjectGroup(unittest.TestCase):
 
     @patch("aistore.sdk.multiobj.object_group.logging")
     def test_transform_dry_run(self, mock_logging):
+        """Verify transform dry-run logs the compact object selection."""
         mock_logger = Mock()
         mock_logging.getLogger.return_value = mock_logger
 
@@ -249,7 +277,10 @@ class TestObjectGroup(unittest.TestCase):
             to_bck=self.dest_bucket, etl_name=ETL_NAME, dry_run=True
         )
 
-        mock_logger.info.assert_called()
+        mock_logger.info.assert_called_once()
+        self.assertEqual(
+            {"objnames": self.obj_names}, mock_logger.info.call_args.args[-1]
+        )
 
     def test_inspect(self):
         expected_value = self.expected_value.copy()

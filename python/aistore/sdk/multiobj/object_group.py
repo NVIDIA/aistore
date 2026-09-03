@@ -273,13 +273,14 @@ class ObjectGroup(AISSource):
             List[str]: List of job IDs that can be used to check the status of the operation
 
         """
+        object_selection = self._obj_collection.get_value()
         if dry_run:
             logger = logging.getLogger(f"{__name__}.copy")
             logger.info(
                 "Copy dry-run. Running with dry_run=False will copy the following objects from bucket '%s' to '%s': %s",
                 f"{self.bck.get_path()}",
                 f"{to_bck.get_path()}",
-                list(self._obj_collection),
+                object_selection,
             )
         copy_msg = CopyBckMsg(
             prepend=prepend, dry_run=dry_run, force=force, latest=latest, sync=sync
@@ -288,7 +289,7 @@ class ObjectGroup(AISSource):
         value = TCMultiObj(
             to_bck=to_bck.as_model(),
             tc_msg=TCBckMsg(copy_msg=copy_msg),
-            object_selection=self._obj_collection.get_value(),
+            object_selection=object_selection,
             continue_on_err=continue_on_error,
             num_workers=num_workers,
         ).as_dict()
@@ -350,12 +351,13 @@ class ObjectGroup(AISSource):
             Job ID (as str) that can be used to check the status of the operation
 
         """
+        object_selection = self._obj_collection.get_value()
         if dry_run:
             logger = logging.getLogger(f"{__name__}.transform")
             logger.info(
                 "Transform dry-run. Running with dry_run=False will apply ETL '%s' to objects %s",
                 etl_name,
-                list(self._obj_collection),
+                object_selection,
             )
 
         copy_msg = CopyBckMsg(
@@ -367,7 +369,7 @@ class ObjectGroup(AISSource):
         value = TCMultiObj(
             to_bck=to_bck.as_model(),
             tc_msg=TCBckMsg(ext=ext, transform_msg=transform_msg, copy_msg=copy_msg),
-            object_selection=self._obj_collection.get_value(),
+            object_selection=object_selection,
             continue_on_err=continue_on_error,
             num_workers=num_workers,
         ).as_dict()
