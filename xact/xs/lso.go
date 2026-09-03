@@ -132,7 +132,7 @@ func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *lsoFactory) Start() error {
-	if err := cos.ValidatePrefix("bad list-objects request", p.msg.Prefix); err != nil {
+	if err := cos.ValidatePrefix(apc.BadLsoRequest, p.msg.Prefix); err != nil {
 		return err
 	}
 	r := &LsoXact{

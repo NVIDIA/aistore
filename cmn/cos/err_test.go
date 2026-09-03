@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/etl"
 
@@ -96,8 +97,8 @@ func TestValidatePath(t *testing.T) {
 		{"trailing-archpath", cos.ValidateArchpath("a/"), `invalid archpath "a/"`},
 		{
 			"prefix-context",
-			cos.ValidatePrefix("bad list-objects request", "a/.."),
-			`bad list-objects request: invalid prefix "a/.."`,
+			cos.ValidatePrefix(apc.BadLsoRequest, "a/.."),
+			apc.BadLsoRequest + ": invalid prefix \"a/..\"",
 		},
 	}
 	for _, tc := range tests {

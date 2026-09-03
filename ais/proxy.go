@@ -789,7 +789,7 @@ func (p *proxy) bgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 func (p *proxy) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
 	// NOTE -- TODO: currently, always forwarding
 	if !qbck.IsBucket() {
-		p.writeErrf(w, r, "bad list-objects request: %q is not a bucket (is a bucket query?)", qbck.String())
+		p.writeErrf(w, r, "%s: %q is not a bucket (is a bucket query?)", apc.BadLsoRequest, qbck.String())
 		return
 	}
 	if p.forwardCP(w, r, msg, lsotag+" "+qbck.String()) {
@@ -805,9 +805,14 @@ func (p *proxy) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		return
 	}
 	lsmsg.Prefix = cos.TrimPrefix(lsmsg.Prefix)
-	if err := cos.ValidatePrefix("bad list-objects request", lsmsg.Prefix); err != nil {
+	if err := cos.ValidatePrefix(apc.BadLsoRequest, lsmsg.Prefix); err != nil {
 		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 		p.writeErr(w, r, err)
+		return
+	}
+	if lsmsg.PageSize < 0 {
+		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
+		p.writeErrf(w, r, "%s: negative page size %d", apc.BadLsoRequest, lsmsg.PageSize)
 		return
 	}
 

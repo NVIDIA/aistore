@@ -192,14 +192,14 @@ func JoinProps(props ...string) string {
 	return strings.Join(props, LsPropsSepa)
 }
 
+// LsoMsg is the list-objects control message. It carries paging state (`uuid`, `continuation_token`)\
+// plus filters and presentation options that select which objects to return and which properties to include.
+// For multi-page listings, the server echoes an opaque `continuation_token` that the client passes back
+// on the next request; `uuid` ties all pages of the same listing together.
+
+const BadLsoRequest = "bad list-objects request"
+
 type (
-	// LsoMsg is the list-objects control message. It carries paging
-	// state (`uuid`, `continuation_token`) plus filters and
-	// presentation options that select which objects to return and
-	// which properties to include. For multi-page listings, the server
-	// echoes an opaque `continuation_token` that the client passes back
-	// on the next request; `uuid` ties all pages of the same listing
-	// together.
 	LsoMsg struct {
 		// Request headers forwarded to the backend (remote buckets only).
 		Header http.Header `json:"hdr,omitempty"` // +gen:optional
