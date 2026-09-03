@@ -339,7 +339,7 @@ func (lom *LOM) LastModifiedLso() (string, time.Time) {
 func (lom *LOM) ETag(mtime time.Time, allowSyscall bool) string {
 	// 1. ETag via custom
 	if etag, ok := lom.GetCustomKey(cmn.ETag); ok {
-		debug.Assert(etag != "" && etag[0] != '"')
+		debug.AssertFunc(func() bool { return etag != "" && etag[0] != '"' })
 		return etag
 	}
 
@@ -350,7 +350,7 @@ func (lom *LOM) ETag(mtime time.Time, allowSyscall bool) string {
 
 	// 2. MD5
 	if !lom.IsChunked() && cksum.Ty() == cos.ChecksumMD5 {
-		debug.Assert(cksum.Val()[0] != '"', cksum.Val())
+		debug.Func(func() { debug.Assert(cksum.Val()[0] != '"', cksum.Val()) })
 		return cksum.Val()
 	}
 
@@ -632,7 +632,7 @@ func (lom *LOM) ComputeCksum(cksumType string, locked bool) (cksum *cos.CksumHas
 //
 // (compare w/ LoadUnsafe() below)
 func (lom *LOM) Load(cacheit, locked bool) error {
-	debug.Assert(lom.Bprops() != nil, lom.Cname()) // must be InitBck/InitFQN'ed
+	debug.Func(func() { debug.Assert(lom.Bprops() != nil, lom.Cname()) }) // must be InitBck/InitFQN'ed
 	var (
 		lcache, lmd = lom.fromCache()
 	)

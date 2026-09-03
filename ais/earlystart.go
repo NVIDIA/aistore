@@ -668,7 +668,7 @@ until:
 		elapsed += sleep
 		smap = p.owner.smap.get()
 		if !smap.IsPrimary(p.si) {
-			debug.AssertNoErr(newErrNotPrimary(p.si, smap))
+			debug.Func(func() { debug.AssertNoErr(newErrNotPrimary(p.si, smap)) })
 			return
 		}
 		if smap.version() != ver {

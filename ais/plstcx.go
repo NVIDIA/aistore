@@ -513,7 +513,7 @@ func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
 		n := len(l.Entries)
 		ncap += n
 		if l.ContinuationToken != "" {
-			debug.Assert(n == 0 || l.ContinuationToken == l.Entries[n-1].Name)
+			debug.AssertFunc(func() bool { return n == 0 || l.ContinuationToken == l.Entries[n-1].Name })
 			if minToken == "" || l.ContinuationToken < minToken {
 				minToken = l.ContinuationToken
 			}

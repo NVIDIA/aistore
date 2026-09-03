@@ -233,7 +233,7 @@ func (db Body) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	debug.Assert(b[0] == '{' && b[len(b)-1] == '}')
+	debug.AssertFunc(func() bool { return b[0] == '{' && b[len(b)-1] == '}' })
 	s := fmt.Sprintf(`{"type": %q, %s}`, db.Type, string(b[1:len(b)-1]))
 	return []byte(s), nil
 }

@@ -591,8 +591,10 @@ func (r *XactBlobDl) runWorkers() error {
 			if done.roff != r.woff {
 				debug.Assertf(done.roff > r.woff, "out-of-order chunk's offset should be greater than the current write offset: %d vs %d",
 					done.roff, r.woff)
-				debug.Assertf((done.roff-r.woff)%r.chunkSize == 0, "out-of-order chunk's offset should be a multiple of chunk size: %d, %d",
-					done.roff-r.woff, r.chunkSize)
+				debug.Func(func() {
+					debug.Assertf((done.roff-r.woff)%r.chunkSize == 0, "out-of-order chunk's offset should be a multiple of chunk size: %d, %d",
+						done.roff-r.woff, r.chunkSize)
+				})
 
 				debug.AssertFunc(func() bool { return r.pending[done.roff] == nil },
 					"out-of-order chunk should not be already in the pending map")
@@ -653,7 +655,9 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 			err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.fullSize, r.woff)
 			debug.AssertNoErr(err)
 		} else {
-			debug.Assertf(len(r.pending) == 0, "%s: pending work-items should be all drained, got %d", r.Name(), len(r.pending))
+			debug.Func(func() {
+				debug.Assertf(len(r.pending) == 0, "%s: pending work-items should be all drained, got %d", r.Name(), len(r.pending))
+			})
 
 			lom.Lock(true)
 			err = r._fini(lom)
@@ -768,7 +772,9 @@ func (r *XactBlobDl) write(sgl *memsys.SGL, size int64) (err error) {
 			}
 			return err
 		}
-		debug.Assertf(written == size, "%s: expected written size=%d, got %d (at woff %d)", r.Name(), size, written, r.woff)
+		debug.Func(func() {
+			debug.Assertf(written == size, "%s: expected written size=%d, got %d (at woff %d)", r.Name(), size, written, r.woff)
+		})
 	}
 
 	// stats

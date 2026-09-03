@@ -229,7 +229,9 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 }
 
 func (lom *LOM) PersistMain(isChunked bool) error {
-	debug.Assertf(lom.bid() == lom.Bprops().BID || lom.bid() == 0, "defunct %s: %x vs %x", lom, lom.bid(), lom.Bprops().BID)
+	debug.Func(func() {
+		debug.Assertf(lom.bid() == lom.Bprops().BID || lom.bid() == 0, "defunct %s: %x vs %x", lom, lom.bid(), lom.Bprops().BID)
+	})
 	debug.Func(func() {
 		debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be wlocked (have %d)", lom.String(), lom.IsLocked())
 	})
@@ -242,7 +244,7 @@ func (lom *LOM) PersistMain(isChunked bool) error {
 		if err := u.removeCompleted(true /*except first*/); err != nil {
 			nlog.Errorln("failed to remove", u._utag(lom.Cname()), "err:", err) // proceeding anyway
 		}
-		debug.Assert(u.flags&flCompleted != 0, u._utag(lom.Cname()), " not marked 'completed'")
+		debug.Func(func() { debug.Assert(u.flags&flCompleted != 0, u._utag(lom.Cname()), " not marked 'completed'") })
 	}
 
 	atime := lom.AtimeUnix()
@@ -307,7 +309,9 @@ func (lom *LOM) Persist() error {
 }
 
 func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
-	debug.Assertf(lom.bid() == lom.Bprops().BID || lom.bid() == 0, "defunct %s: %x vs %x", lom, lom.bid(), lom.Bprops().BID)
+	debug.Func(func() {
+		debug.Assertf(lom.bid() == lom.Bprops().BID || lom.bid() == 0, "defunct %s: %x vs %x", lom, lom.bid(), lom.Bprops().BID)
+	})
 	buf := lom.pack()
 	// replicate across copies
 	for copyFQN = range lom.md.copies {

@@ -268,7 +268,7 @@ func (sv *svReq) buildURL(nodeURL string, now int64) string {
 
 	// 2) reuse sb for final URL
 	size := len(nodeURL) + len(r.URL.Path) + len(r.URL.RawQuery) + len(raw) + 2
-	debug.Assert(sb.Cap() >= size, sb.Cap(), " vs ", size)
+	debug.Func(func() { debug.Assert(sb.Cap() >= size, sb.Cap(), " vs ", size) })
 	sb.Reset(size, false)
 
 	sb.WriteString(nodeURL)

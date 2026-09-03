@@ -351,7 +351,7 @@ func (m *Manager) cleanup() {
 		nlog.Infof("[dsort] %s finished cleanup in %v", m.ManagerUUID, time.Since(now))
 	}()
 
-	debug.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
+	debug.Func(func() { debug.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID) })
 
 	m.shardRW = nil
 	m.client = nil

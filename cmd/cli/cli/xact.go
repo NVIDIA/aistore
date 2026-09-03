@@ -202,7 +202,7 @@ func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr
 		}
 		for _, snaps := range xs {
 			if len(snaps) > 0 {
-				debug.Assert(snaps[0].ID == xid)
+				debug.AssertFunc(func() bool { return snaps[0].ID == xid })
 				kind = snaps[0].Kind
 				_, xname = xact.GetKindName(kind)
 				return

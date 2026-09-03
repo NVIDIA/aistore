@@ -221,8 +221,10 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 	query.Set(apc.QparamIsGFNRequest, "true")
 	if params.ArchPath != "" {
 		// (compare w/ t.getObject)
-		debug.Assertf(!strings.HasPrefix(params.ArchPath, lom.ObjName),
-			"expecting archpath _in_ archive, got (%q, %q)", params.ArchPath, lom.ObjName)
+		debug.Func(func() {
+			debug.Assertf(!strings.HasPrefix(params.ArchPath, lom.ObjName),
+				"expecting archpath _in_ archive, got (%q, %q)", params.ArchPath, lom.ObjName)
+		})
 		query.Set(apc.QparamArchpath, params.ArchPath)
 	}
 

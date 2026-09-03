@@ -958,8 +958,10 @@ func (u *Ufest) ETagS3() (string, error) {
 			h.Write(c.MD5)
 			if c.ETag != "" {
 				if bin, err := cmn.ETagToMD5(c.ETag); err == nil {
-					debug.Assert(bytes.Equal(bin, c.MD5),
-						"ETag/md5 mismatch: ", c.ETag, " vs ", cmn.MD5ToQuotedETag(c.MD5))
+					debug.Func(func() {
+						debug.Assert(bytes.Equal(bin, c.MD5),
+							"ETag/md5 mismatch: ", c.ETag, " vs ", cmn.MD5ToQuotedETag(c.MD5))
+					})
 				}
 			}
 		case c.ETag != "":
@@ -1663,7 +1665,7 @@ func (u *Ufest) Relocate(hrwMi *fs.Mountpath, buf []byte) (*LOM, error) {
 	if err := hlom.InitFQN(dstObjFQN, lom.Bucket()); err != nil {
 		return nil, err
 	}
-	debug.Assert(hlom.Mountpath().Path == hrwMi.Path, hlom.Mountpath().Path, " vs ", hrwMi.Path)
+	debug.Func(func() { debug.Assert(hlom.Mountpath().Path == hrwMi.Path, hlom.Mountpath().Path, " vs ", hrwMi.Path) })
 	hlom.CopyAttrs(lom, false /*skip checksum*/)
 
 	// persist completed manifest at new location

@@ -104,7 +104,7 @@ func newCommunicator(msg InitMsg, secret string, config *cmn.Config) (Communicat
 		return ws, nil
 	}
 
-	debug.Assert(false, "unknown comm-type '"+msg.CommType()+"'")
+	debug.Func(func() { debug.Assert(false, "unknown comm-type '"+msg.CommType()+"'") })
 	return nil, fmt.Errorf("unknown comm-type %s", msg.CommType())
 }
 
@@ -124,7 +124,7 @@ func (c *baseComm) setupXaction(xid string) error {
 	}
 	xctn := rns.Entry.Get()
 	c.xctn = xctn.(*XactETL)
-	debug.Assertf(c.xctn.ID() == xid, "%s vs %s", c.xctn.ID(), xid)
+	debug.Func(func() { debug.Assertf(c.xctn.ID() == xid, "%s vs %s", c.xctn.ID(), xid) })
 	return nil
 }
 
@@ -311,7 +311,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 		// [TODO] to remove the following assert (and the corresponding limitation):
 		// - container must be ready to receive complete bucket name including namespace
 		// - see `bck.AddToQuery` and api/bucket.go for numerous examples
-		debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname(""), " - bucket with namespace")
+		debug.Func(func() { debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname(""), " - bucket with namespace") })
 		getBody = func() core.ReadResp { return lom.GetROC(latestVer, sync) }
 	default:
 		// default to FQN

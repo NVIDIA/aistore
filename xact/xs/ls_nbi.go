@@ -272,8 +272,8 @@ func (nbi *nbiCtx) readChunk() error {
 	// TODO: remove eventually
 	debug.Assert(len(nbi.entries) == int(nbi.hdr.entryCount))
 	debug.Assert(len(nbi.entries) > 0)
-	debug.Assert(nbi.hdr.first == nbi.entries[0].Name)
-	debug.Assert(nbi.hdr.last == nbi.entries[len(nbi.entries)-1].Name)
+	debug.AssertFunc(func() bool { return nbi.hdr.first == nbi.entries[0].Name })
+	debug.AssertFunc(func() bool { return nbi.hdr.last == nbi.entries[len(nbi.entries)-1].Name })
 
 	return nil
 }
@@ -372,8 +372,12 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 				return err
 			}
 		}
-		debug.Assert(nbi.nidx == 0 || nbi.nidx == len(nbi.entries) || nbi.entries[nbi.nidx].Name > nbi.entries[nbi.nidx-1].Name)
-		debug.Assert(nbi.nidx == 0 || nbi.nidx == len(nbi.entries) || nbi.entries[nbi.nidx].Name > nbi.hdr.first)
+		debug.AssertFunc(func() bool {
+			return nbi.nidx == 0 || nbi.nidx == len(nbi.entries) || nbi.entries[nbi.nidx].Name > nbi.entries[nbi.nidx-1].Name
+		})
+		debug.AssertFunc(func() bool {
+			return nbi.nidx == 0 || nbi.nidx == len(nbi.entries) || nbi.entries[nbi.nidx].Name > nbi.hdr.first
+		})
 
 		// non-recursive: skip entries under a previously collapsed virtual directory
 		if skipDir != "" {
@@ -459,7 +463,7 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 		})
 		if i < len(nbi.entries) {
 			nbi.nidx = i
-			debug.Assert(nbi.entries[i].Name > token, "seekAfter: ", token, " -> ", nbi.entries[i].Name)
+			debug.Func(func() { debug.Assert(nbi.entries[i].Name > token, "seekAfter: ", token, " -> ", nbi.entries[i].Name) })
 			return nil
 		}
 	}
@@ -481,14 +485,14 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 		i := sort.Search(len(nbi.entries), func(i int) bool { return nbi.entries[i].Name > token })
 		if i < len(nbi.entries) {
 			nbi.nidx = i
-			debug.Assert(nbi.entries[i].Name > token, "seekAfter: ", token, " -> ", nbi.entries[i].Name)
+			debug.Func(func() { debug.Assert(nbi.entries[i].Name > token, "seekAfter: ", token, " -> ", nbi.entries[i].Name) })
 			return nil
 		}
 	}
 }
 
 func (nbi *nbiCtx) rewind(token string) error {
-	debug.Assert(nbi.chunkNum <= nbi.ufest.Count()+1, nbi.chunkNum, " vs ", nbi.ufest.Count())
+	debug.Func(func() { debug.Assert(nbi.chunkNum <= nbi.ufest.Count()+1, nbi.chunkNum, " vs ", nbi.ufest.Count()) })
 	nbi.chunkNum = min(nbi.chunkNum, nbi.ufest.Count())
 	for nbi.chunkNum > 1 {
 		nbi.chunkNum--

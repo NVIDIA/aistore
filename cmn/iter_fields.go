@@ -183,8 +183,10 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 					srcValField = tmp.Elem()
 				} else {
 					// write mode: the field must be settable
-					debug.Assertf(srcValField.CanSet(), "write-mode: %q (type=%s) is not settable",
-						prefix+fieldName, srcValField.Type())
+					debug.Func(func() {
+						debug.Assertf(srcValField.CanSet(), "write-mode: %q (type=%s) is not settable",
+							prefix+fieldName, srcValField.Type())
+					})
 					allocatedStruct = true
 					srcValField.Set(reflect.New(srcValField.Type().Elem()))
 					srcValField = srcValField.Elem()
@@ -283,7 +285,9 @@ func CopyProps(src, dst any, asType string, copts ...CopyPropsOpts) error {
 	if len(copts) > 0 {
 		opts = copts[0]
 	}
-	debug.Assertf(slices.Contains([]string{apc.Daemon, apc.Cluster}, asType), "unexpected config level: %s", asType)
+	debug.Func(func() {
+		debug.Assertf(slices.Contains([]string{apc.Daemon, apc.Cluster}, asType), "unexpected config level: %s", asType)
+	})
 	if srcVal.Kind() == reflect.Pointer {
 		srcVal = srcVal.Elem()
 	}
@@ -338,7 +342,9 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts)
 		}
 
 		// expect to be able to set the leaf
-		debug.Assertf(!dstVal.IsValid() || dstVal.CanSet(), "copyProps: destination leaf not settable: %v", dstVal)
+		debug.Func(func() {
+			debug.Assertf(!dstVal.IsValid() || dstVal.CanSet(), "copyProps: destination leaf not settable: %v", dstVal)
+		})
 
 		if !dstVal.IsValid() || !dstVal.CanSet() {
 			return nil
@@ -656,7 +662,7 @@ reflectDst:
 		case reflect.Map:
 			// do nothing (e.g. ObjAttrs.CustomMD)
 		default:
-			debug.Assertf(false, "field.name: %s, field.type: %s", f.listTag, dst.Kind())
+			debug.Func(func() { debug.Assertf(false, "field.name: %s, field.type: %s", f.listTag, dst.Kind()) })
 		}
 	default:
 		if !srcVal.IsValid() {

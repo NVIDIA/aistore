@@ -385,7 +385,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 		// TODO: retry as well
 		err = p._a2aOne(c, fobj, countReader, skipVC)
 	default:
-		debug.Assert(false, p.wop.verb()) // "ARCHIVE"
+		debug.Func(func() { debug.Assert(false, p.wop.verb()) }) // "ARCHIVE"
 		actionWarnf(c, "%q "+NIY, p.wop.verb())
 		return
 	}

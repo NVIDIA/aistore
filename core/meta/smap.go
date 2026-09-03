@@ -163,7 +163,7 @@ func (d *Snode) URL(network string) (u string) {
 	case cmn.NetIntraData:
 		u = d.DataNet.URL
 	default: // (exclusively via HrwMultiHome)
-		debug.Assert(strings.Contains(network, "://"), network, " node: ", d.String()) // "is URI" per rfc2396.txt
+		debug.Func(func() { debug.Assert(strings.Contains(network, "://"), network, " node: ", d.String()) }) // "is URI" per rfc2396.txt
 		u = network
 	}
 	return u

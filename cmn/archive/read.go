@@ -114,7 +114,7 @@ func NewReader(mime string, fh io.Reader, size ...int64) (ar Reader, err error) 
 	case ExtTgz, ExtTarGz:
 		ar = &tgzReader{}
 	case ExtZip:
-		debug.Assert(len(size) > 0 && size[0] > 0, "size required")
+		debug.AssertFunc(func() bool { return len(size) > 0 && size[0] > 0 }, "size required")
 		ar = &zipReader{size: size[0]}
 	case ExtTarLz4:
 		ar = &lz4Reader{}
@@ -163,7 +163,7 @@ func (m *matcher) do(filename string) bool {
 	case MatchMode[_substr]:
 		return strings.Contains(filename, m.regex)
 	default:
-		debug.Assert(m.mmode == MatchMode[_wdskey], m.mmode)
+		debug.AssertFunc(func() bool { return m.mmode == MatchMode[_wdskey] }, m.mmode)
 		return m.regex == cos.WdsKey(filename)
 	}
 }
@@ -271,8 +271,10 @@ func (zr *zipReader) ReadUntil(rcb ArchRCB, regex, mmode string) error {
 		if finfo.IsDir() {
 			continue
 		}
-		debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
-			"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
+		debug.Func(func() {
+			debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
+				"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
+		})
 
 		if !matcher.do(f.FileHeader.Name) {
 			continue
@@ -298,8 +300,10 @@ func (zr *zipReader) ReadOne(filename string) (reader cos.ReadCloseSizer, err er
 		if finfo.IsDir() {
 			continue
 		}
-		debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
-			"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
+		debug.Func(func() {
+			debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
+				"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
+		})
 
 		if f.FileHeader.Name == filename || namesEq(f.FileHeader.Name, filename) {
 			csf := &cslFile{size: finfo.Size()}

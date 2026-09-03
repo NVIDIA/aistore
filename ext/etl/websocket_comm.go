@@ -310,8 +310,8 @@ func (wss *wsSession) Finish(errCause error) error {
 		wsConn.finish(errCause)
 	}
 	drainTaskCh(wss.workCh, errCause)
-	debug.AssertCounterEquals(wss.txctn.ID()+"-task", 0) // all tasks should be done
-	debug.AssertCounterEquals(wss.txctn.ID()+"-conn", 0) // all connections should be closed
+	debug.Func(func() { debug.AssertCounterEquals(wss.txctn.ID()+"-task", 0) }) // all tasks should be done
+	debug.Func(func() { debug.AssertCounterEquals(wss.txctn.ID()+"-conn", 0) }) // all connections should be closed
 	return nil
 }
 

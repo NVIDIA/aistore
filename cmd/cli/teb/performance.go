@@ -56,7 +56,7 @@ func (c *PerfTabCtx) MakeTab(st NodeStatusMap) (*Table, int, error) {
 	// 1. columns
 	cols := make([]*header, 0, 32)
 	for tid, ds := range st {
-		debug.Assert(ds.Status != "", tid+" has no status")
+		debug.Func(func() { debug.Assert(ds.Status != "", tid+" has no status") })
 		// skip
 		if ds.Status != NodeOnline {
 			continue // maintenance mode et al. (see `cli._status`)

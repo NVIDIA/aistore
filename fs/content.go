@@ -175,7 +175,7 @@ func (*objCR) parseUbase(base string) ContentInfo {
 
 func (*workCR) makeUbase(base string, extras ...string) string {
 	debug.Assert(len(extras) == 1, extras)
-	debug.Assert(extras[0] != "", "work prefix cannot be empty")
+	debug.AssertFunc(func() bool { return extras[0] != "" }, "work prefix cannot be empty")
 	var (
 		dir, fname = filepath.Split(base)
 		tieBreaker = cos.GenTie()
@@ -230,7 +230,7 @@ func (*workCR) parseUbase(base string) (ci ContentInfo) {
 func (*objChunkCR) makeUbase(base string, extras ...string) string {
 	debug.Assert(len(extras) == 2, "expecting uploadID and chunk number, got: ", extras)
 	debug.AssertFunc(func() bool { return cos.ValidateManifestID(extras[0]) == nil }, "uploadID must be valid")
-	debug.Assert(extras[1] != "", "chunk number must be non-empty")
+	debug.AssertFunc(func() bool { return extras[1] != "" }, "chunk number must be non-empty")
 	return base + ssepa + extras[0] + ssepa + extras[1]
 }
 

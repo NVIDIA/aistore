@@ -698,7 +698,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 			_, name = xact.GetKindName(di.XactSnaps[0].Kind)
 			err     error
 		)
-		debug.Assert(name != "", di.XactSnaps[0].Kind)
+		debug.Func(func() { debug.Assert(name != "", di.XactSnaps[0].Kind) })
 		actionCptn(c, meta.Tname(di.DaemonID)+":", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
 
 		if hideHeader {

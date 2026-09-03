@@ -3014,8 +3014,10 @@ func (c *FSPConf) MarshalJSON() ([]byte, error) {
 }
 
 func (c *FSPConf) Validate(contextConfig *Config) error {
-	debug.Assertf(slices.Contains([]string{apc.Proxy, apc.Target}, contextConfig.role),
-		"unexpected node type: %q", contextConfig.role)
+	debug.Func(func() {
+		debug.Assertf(slices.Contains([]string{apc.Proxy, apc.Target}, contextConfig.role),
+			"unexpected node type: %q", contextConfig.role)
+	})
 
 	// Don't validate in testing environment.
 	if contextConfig.TestingEnv() || contextConfig.role != apc.Target {

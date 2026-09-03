@@ -408,7 +408,7 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 		return 0, fmt.Errorf("missing metadata part: %w", err)
 	}
 
-	debug.Assert(part1.FormName() == apc.MossMetaPart, part1.FormName(), " vs ", apc.MossMetaPart)
+	debug.Func(func() { debug.Assert(part1.FormName() == apc.MossMetaPart, part1.FormName(), " vs ", apc.MossMetaPart) })
 
 	err = jsoniter.NewDecoder(part1).Decode(out)
 	if err != nil {
@@ -426,7 +426,7 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 	// the part's filename is also available via part2.Header.Get("Content-Disposition")
 	// and may look as follows (e.g.):
 	// form-data; name="archive"; filename="get-batch[YhwQiOpRb]"
-	debug.Assert(part2.FormName() == apc.MossDataPart, part2.FormName(), " vs ", apc.MossDataPart)
+	debug.Func(func() { debug.Assert(part2.FormName() == apc.MossDataPart, part2.FormName(), " vs ", apc.MossDataPart) })
 
 	n, err := io.Copy(writer, part2)
 	part2.Close()

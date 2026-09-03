@@ -46,7 +46,7 @@ func (ct *CT) Digest() uint64           { return ct.digest }
 func (ct *CT) Cname() string            { return ct.bck.Cname(ct.objName) }
 
 func (ct *CT) LoadSliceFromFS() error {
-	debug.Assert(ct.ContentType() == fs.ECSliceCT, "unexpected content type: ", ct.ContentType())
+	debug.Func(func() { debug.Assert(ct.ContentType() == fs.ECSliceCT, "unexpected content type: ", ct.ContentType()) })
 	st, err := os.Lstat(ct.FQN())
 	if err != nil {
 		return err

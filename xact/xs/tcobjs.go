@@ -412,7 +412,7 @@ func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 			}
 		case transport.OpcAbort:
 			uuid := cos.UnsafeS(hdr.Opaque)
-			debug.Assert(uuid == r.ID(), uuid, " vs ", r.ID())
+			debug.Func(func() { debug.Assert(uuid == r.ID(), uuid, " vs ", r.ID()) })
 			r.sntl.rxAbort(hdr, &r.Base)
 		case transport.OpcRequest:
 			// progress request during quiesce - respond with current count

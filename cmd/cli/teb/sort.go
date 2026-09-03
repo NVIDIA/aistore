@@ -43,7 +43,7 @@ func (psts NodeStatusMap) sortPODs(smap *meta.Smap, proxies bool) (ids []string)
 
 	ids = make([]string, 0, len(psts))
 	for sid, ds := range psts {
-		debug.Assert(sid == ds.Node.Snode.ID(), sid, " vs ", ds.Node.Snode.ID()) // unlikely
+		debug.Func(func() { debug.Assert(sid == ds.Node.Snode.ID(), sid, " vs ", ds.Node.Snode.ID()) }) // unlikely
 		ids = append(ids, sid)
 
 		if allPods {

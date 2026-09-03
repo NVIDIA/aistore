@@ -86,7 +86,7 @@ func (p *proxy) _reverse(w http.ResponseWriter, r *http.Request, isPub bool) {
 		p.writeErrURL(w, r)
 		return
 	}
-	debug.Assert(len(apiEndpoint) == len(apc.Daemon) || apiEndpoint[len(apc.Daemon)] == '/', apiEndpoint)
+	debug.AssertFunc(func() bool { return len(apiEndpoint) == len(apc.Daemon) || apiEndpoint[len(apc.Daemon)] == '/' }, apiEndpoint)
 
 	// 2. update URL path: remove `apc.Reverse`
 	r.URL.Path = cos.JoinW0(apc.Version, apiEndpoint)

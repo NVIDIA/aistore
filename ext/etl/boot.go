@@ -116,7 +116,9 @@ func (b *etlBootstrapper) _setVol() (err error) {
 		})
 	}
 
-	debug.Assertf(len(mounts) > 0, "target pod %q has no volume mounts for container %q", b.targetPodName, b.targetPodSpec.Containers[0].Name)
+	debug.Func(func() {
+		debug.Assertf(len(mounts) > 0, "target pod %q has no volume mounts for container %q", b.targetPodName, b.targetPodSpec.Containers[0].Name)
+	})
 	debug.Assertf(len(b.targetPodSpec.Volumes) > 0, "target pod %q has no volumes with PVCs", b.targetPodName)
 
 	for i := range b.pod.Spec.Containers {

@@ -74,7 +74,7 @@ func ReparseQuery(r *http.Request) {
 
 // join an absolute path (must start with '/') with additional optional segments
 func JoinWP(path string, words ...string) string {
-	debug.Assert(path != "" && path[0] == '/', path)
+	debug.AssertFunc(func() bool { return path != "" && path[0] == '/' }, path)
 	var l = len(path)
 	for _, w := range words {
 		l += 1 + len(w)
@@ -90,7 +90,7 @@ func JoinWP(path string, words ...string) string {
 
 // join a first segment (that must NOT start with '/') with additional optional segments
 func JoinW0(w0 string, words ...string) string {
-	debug.Assert(w0 != "" && w0[0] != '/', w0)
+	debug.AssertFunc(func() bool { return w0 != "" && w0[0] != '/' }, w0)
 	var l = len(w0) + 1
 	for _, w := range words {
 		l += 1 + len(w)

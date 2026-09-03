@@ -257,8 +257,10 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 		debug.Assert(m.smapCtx.nsi != nil) // ('n' for "new")
 		tids = m.cur.TargetIDs
 
-		debug.Assertf(len(tids) > 0 && slices.Contains(tids, m.smapCtx.nsi.ID()),
-			"expecting RMD/Smap consistency, got %v vs %q", tids, m.smapCtx.nsi.ID())
+		debug.Func(func() {
+			debug.Assertf(len(tids) > 0 && slices.Contains(tids, m.smapCtx.nsi.ID()),
+				"expecting RMD/Smap consistency, got %v vs %q", tids, m.smapCtx.nsi.ID())
+		})
 
 		// expecting 'rebalanced-finished' notification from the joining target as well
 		notifiers = m.smapCtx.smap.Tmap.ActiveMap()

@@ -68,7 +68,7 @@ func (lom *LOM) HrwWithChunks(avail fs.MPI) (*fs.Mountpath, bool /*ok*/) {
 // must be called under w-lock
 // (usage: resilvering)
 func (lom *LOM) IsPrimaryCopy(avail fs.MPI, hmi *fs.Mountpath, sentinel string) (isPrimary, mainExists bool) {
-	debug.Assert(lom.IsCopy(), lom.Cname(), "must be a copy")
+	debug.Func(func() { debug.Assert(lom.IsCopy(), lom.Cname(), "must be a copy") })
 	selected := sentinel
 	for fqn, mi := range lom.md.copies {
 		if _, ok := avail[mi.Path]; !ok { // not skipping fs.FlagWaitingDD mountpaths

@@ -473,7 +473,7 @@ func tinitHandler(w http.ResponseWriter, r *http.Request) {
 		rns := xreg.RenewDsort(managerUUID, custom)
 		debug.AssertNoErr(rns.Err)
 		xctn := rns.Entry.Get()
-		debug.Assert(xctn.ID() == managerUUID, xctn.ID()+" vs "+managerUUID)
+		debug.Func(func() { debug.Assert(xctn.ID() == managerUUID, xctn.ID()+" vs "+managerUUID) })
 
 		m.xctn = xctn.(*xaction)
 	}

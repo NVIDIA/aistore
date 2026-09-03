@@ -121,7 +121,7 @@ func (pdu *rpdu) readHdr() error {
 
 	pdu.woff = sizeProtoHdr
 	pdu.last = pdu.flags&pduLastFl != 0
-	debug.Assertf(pdu.plen > 0 || (pdu.plen == 0 && pdu.last), fmterr, pdu.plen, fl2s(pdu.flags))
+	debug.Func(func() { debug.Assertf(pdu.plen > 0 || (pdu.plen == 0 && pdu.last), fmterr, pdu.plen, fl2s(pdu.flags)) })
 	return nil
 }
 

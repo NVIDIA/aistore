@@ -203,7 +203,7 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.startETL(w, r, etlMsg)
 	default:
-		debug.Assert(false, "invalid operation: "+op)
+		debug.Func(func() { debug.Assert(false, "invalid operation: "+op) })
 		p.writeErrAct(w, r, "invalid operation: "+op)
 	}
 }
@@ -651,7 +651,9 @@ func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) 
 			err = res.toErr()
 			break
 		}
-		debug.Assert(c.uuid == res.header.Get(apc.HdrXactionID), "expected xid", c.uuid, "got", res.header.Get(apc.HdrXactionID))
+		debug.Func(func() {
+			debug.Assert(c.uuid == res.header.Get(apc.HdrXactionID), "expected xid", c.uuid, "got", res.header.Get(apc.HdrXactionID))
+		})
 		cos.MustMarshalFromString(res.header.Get(apc.HdrETLPodInfo), &podInfo)
 		podMap[res.si.ID()] = podInfo
 	}

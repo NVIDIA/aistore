@@ -199,7 +199,7 @@ func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool /*prev*/ {
 
 	// (unlikely)
 	time.Sleep(sleep)
-	debug.Assert(xres.IsAborted() || xres.IsDone(), xres.String())
+	debug.Func(func() { debug.Assert(xres.IsAborted() || xres.IsDone(), xres.String()) })
 	return true
 }
 

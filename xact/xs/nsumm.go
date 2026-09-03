@@ -189,7 +189,7 @@ func (r *XactNsumm) Run(started *sync.WaitGroup) {
 			rwg = cos.NewLimitedWaitGroup(sys.NumCPU(), len(r.buckets))
 			for _, bck := range r.buckets {
 				res, ok := r.mapRes[bck.Props.BID]
-				debug.Assert(ok, r.Name(), bck.Cname(""))
+				debug.Func(func() { debug.Assert(ok, r.Name(), bck.Cname("")) })
 				rwg.Add(1)
 				go func(bck *meta.Bck, res *cmn.BsummResult, wg cos.WG) {
 					r.runCloudBck(bck, res)
@@ -212,7 +212,7 @@ func (r *XactNsumm) Run(started *sync.WaitGroup) {
 		lwg = cos.NewLimitedWaitGroup(sys.NumCPU(), len(r.buckets))
 		for _, bck := range r.buckets {
 			res, ok := r.mapRes[bck.Props.BID]
-			debug.Assert(ok, r.Name(), bck.Cname(""))
+			debug.Func(func() { debug.Assert(ok, r.Name(), bck.Cname("")) })
 			lwg.Add(1)
 			go func(bck *meta.Bck, res *cmn.BsummResult, wg cos.WG) {
 				res.TotalSize.OnDisk = fs.OnDiskSize(bck.Bucket(), r.p.msg.Prefix)
@@ -341,7 +341,7 @@ func (r *XactNsumm) visitObj(lom *core.LOM, _ []byte) error {
 		res = &r.oneRes
 	} else {
 		s, ok := r.mapRes[lom.Bprops().BID]
-		debug.Assert(ok, r.Name(), lom.Cname()) // j.opts.Buckets above
+		debug.Func(func() { debug.Assert(ok, r.Name(), lom.Cname()) }) // j.opts.Buckets above
 		res = s
 	}
 	if !lom.IsCopy() {

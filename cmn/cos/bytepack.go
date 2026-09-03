@@ -304,10 +304,12 @@ func (bw *BytePack) WriteMapStrUint16(mp MapStrUint16) {
 func (bw *BytePack) WriteAny(st Packer) {
 	prev := bw.off
 	st.Pack(bw)
-	debug.Assertf(
-		bw.off-prev == st.PackedSize(),
-		"%T declared %d, saved %d: %+v", st, st.PackedSize(), bw.off-prev, st,
-	)
+	debug.Func(func() {
+		debug.Assertf(
+			bw.off-prev == st.PackedSize(),
+			"%T declared %d, saved %d: %+v", st, st.PackedSize(), bw.off-prev, st,
+		)
+	})
 }
 
 func (bw *BytePack) Bytes() []byte {

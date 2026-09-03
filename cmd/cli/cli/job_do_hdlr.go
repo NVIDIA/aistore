@@ -320,7 +320,7 @@ var (
 )
 
 func appendJobSub(jobcmd *cli.Command) {
-	debug.Assert(jobcmd.Subcommands[0].Name == commandStart)
+	debug.AssertFunc(func() bool { return jobcmd.Subcommands[0].Name == commandStart })
 
 	// append to `jobStartSub`, add to `ais start` (== `ais job start`)
 	cmds := jobcmd.Subcommands[0].Subcommands

@@ -253,7 +253,9 @@ func (mgr *Manager) bundlesStale(current *meta.Smap) (req, resp *bundle.Streams,
 	req, resp = mgr.req(), mgr.resp()
 	debug.Assert(req != nil)
 	debug.Assert(resp != nil)
-	debug.Assert(req.Smap().Version == resp.Smap().Version, req.Smap().Version, " vs ", resp.Smap().Version)
+	debug.Func(func() {
+		debug.Assert(req.Smap().Version == resp.Smap().Version, req.Smap().Version, " vs ", resp.Smap().Version)
+	})
 	stale = req.Stale(current) || resp.Stale(current)
 	return
 }

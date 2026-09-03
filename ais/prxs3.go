@@ -478,7 +478,7 @@ func (p *proxy) lsPageS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr
 	// per the `apc.LsNBI` note, each target delivers an approximate share of `PageSize` (local
 	// chunking, minimum bounds, slight overfetch) and `finLsoNBI` merges those shares as-is.
 	if n := int(lsmsg.PageSize); len(page.Entries) > n {
-		debug.Assert(lsmsg.IsFlagSet(apc.LsNBI), len(page.Entries), n)
+		debug.AssertFunc(func() bool { return lsmsg.IsFlagSet(apc.LsNBI) }, len(page.Entries), n)
 		if lsmsg.IsFlagSet(apc.LsNBI) {
 			clear(page.Entries[n:])
 			page.Entries = page.Entries[:n]

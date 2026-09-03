@@ -60,7 +60,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.T
 	// 2. got bucket summary(ies)
 	summaries := ctx.res
 	for _, res := range summaries {
-		debug.Assertf(res.Bck.Equal(&bckFrom), "%s != %s", res.Bck.String(), bckFrom.String())
+		debug.Func(func() { debug.Assertf(res.Bck.Equal(&bckFrom), "%s != %s", res.Bck.String(), bckFrom.String()) })
 		cpr.totals.size += int64(res.TotalSize.PresentObjs + res.TotalSize.RemoteObjs)
 		cpr.totals.objs += int64(res.ObjCount.Present + res.ObjCount.Remote)
 	}

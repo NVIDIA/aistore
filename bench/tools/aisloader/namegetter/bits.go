@@ -88,7 +88,7 @@ func (s *bitSet) set(i int) {
 	w := i >> bitsShift
 	b := uint64(1) << (i & bitsMask)
 
-	debug.Assert(s.bits[w]&b == 0)
+	debug.AssertFunc(func() bool { return s.bits[w]&b == 0 })
 	s.bits[w] |= b
 }
 

@@ -766,7 +766,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 		}
 		if e, ok := r.abortedWIDs.LoadAndDelete(wid); ok {
 			err := e.(error)
-			debug.Assertf(xact.IsErrRecvAbortWI(err), "%v (%T)", e, e)
+			debug.Func(func() { debug.Assertf(xact.IsErrRecvAbortWI(err), "%v (%T)", e, e) })
 			return err
 		}
 		in := &req.In[i]
@@ -1423,7 +1423,7 @@ func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mo
 		nlog.Warningln(err)
 		return false, err
 	}
-	debug.Assert(size == sgl.Len(), size, " vs ", sgl.Len())
+	debug.Func(func() { debug.Assert(size == sgl.Len(), size, " vs ", sgl.Len()) })
 
 add:
 	var freegl bool
@@ -1609,8 +1609,10 @@ func (wi *basewi) next(i int) (int, error) {
 	}
 
 	if tsi != nil {
-		debug.Assertf(wi.receiving(),
-			"%s: unexpected non-local %s when _not_ receiving [%s, %s]", r.Name(), lom.Cname(), wi.wid, wi.smap)
+		debug.Func(func() {
+			debug.Assertf(wi.receiving(),
+				"%s: unexpected non-local %s when _not_ receiving [%s, %s]", r.Name(), lom.Cname(), wi.wid, wi.smap)
+		})
 
 		// set current sender
 		wi.sid = tsi.ID()
@@ -1740,7 +1742,9 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 	}
 
 	defer cos.Close(resp.Body)
-	debug.AssertFunc(func() bool { return resp.ContentLength >= 0 }, "GFN: negative Content-Length for ", lom.Cname(), " ", in.ArchPath)
+	debug.Func(func() {
+		debug.AssertFunc(func() bool { return resp.ContentLength >= 0 }, "GFN: negative Content-Length for ", lom.Cname(), " ", in.ArchPath)
+	})
 
 	if cmn.Rom.V(4, cos.ModXs) {
 		nlog.Infoln(wi.r.Cname(), wi.wid, "GFN ok:", nameInArch)

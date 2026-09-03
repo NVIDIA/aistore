@@ -412,7 +412,7 @@ outer:
 }
 
 func (ds *dsorterMem) connectOrSend(rec *shard.Record, obj *shard.RecordObj, tsi *meta.Snode) error {
-	debug.Assert(core.T.SID() == rec.DaemonID, core.T.SID()+" vs "+rec.DaemonID)
+	debug.Func(func() { debug.Assert(core.T.SID() == rec.DaemonID, core.T.SID()+" vs "+rec.DaemonID) })
 	var (
 		resp = &dsmCS{
 			ds:  ds,

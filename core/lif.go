@@ -42,7 +42,7 @@ func (lom *LOM) LIF() (lif LIF) {
 	if lid == 0 {
 		lid = lomBID(bprops.BID)
 	}
-	debug.Assert(lid.bid() == bprops.BID, lid.bid(), " vs ", bprops.BID)
+	debug.Func(func() { debug.Assert(lid.bid() == bprops.BID, lid.bid(), " vs ", bprops.BID) })
 	return LIF{
 		Uname:  *lom.md.uname,
 		BID:    lid.bid(),

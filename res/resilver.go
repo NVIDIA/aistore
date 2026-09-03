@@ -199,7 +199,7 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 func (res *Res) initRenew(args *Args) *xs.Resilver {
 	rns := xreg.RenewResilver(args.UUID, &args.Custom)
 	if rns.Err != nil {
-		debug.Assertf(!cmn.IsErrXactUsePrev(rns.Err), "not expecting %v(%T)", rns.Err, rns.Err)
+		debug.Func(func() { debug.Assertf(!cmn.IsErrXactUsePrev(rns.Err), "not expecting %v(%T)", rns.Err, rns.Err) })
 		nlog.Errorln("failed to start", args.Action, "renewal err:", rns.Err)
 		return nil
 	}
@@ -215,7 +215,7 @@ func (res *Res) initRenew(args *Args) *xs.Resilver {
 			debug.Assertf(r.IsDone() || r.IsAborted(), "%s: (done=%t, aborted=%t)", r, r.IsDone(), r.IsAborted())
 		}
 	})
-	debug.Assertf(xres.ID() == args.UUID, "res-id mismatch: %q vs %q", xres.Name(), args.UUID)
+	debug.Func(func() { debug.Assertf(xres.ID() == args.UUID, "res-id mismatch: %q vs %q", xres.Name(), args.UUID) })
 
 	res.mu.Lock() // 1st --------------------------------------
 

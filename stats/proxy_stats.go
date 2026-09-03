@@ -154,7 +154,7 @@ func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		r.write(s.sgl, false /*target*/, idle)
 		if l := s.sgl.Len(); l > 3 { // skip '{}'
 			line := string(s.sgl.Bytes())
-			debug.Assert(l < s.sgl.Slab().Size(), l, " vs slab ", s.sgl.Slab().Size())
+			debug.Func(func() { debug.Assert(l < s.sgl.Slab().Size(), l, " vs slab ", s.sgl.Slab().Size()) })
 			if line != r.prev {
 				nlog.Infoln(line)
 				r.prev = line

@@ -92,7 +92,7 @@ type (
 // same Name. Since records should only differ on objects this is the thing that
 // is actually merged.
 func (r *Record) mergeObjects(other *Record) {
-	debug.Assert(r.Name == other.Name, r.Name+" vs "+other.Name)
+	debug.Func(func() { debug.Assert(r.Name == other.Name, r.Name+" vs "+other.Name) })
 	if r.Key == nil && other.Key != nil {
 		r.Key = other.Key
 	}
@@ -260,7 +260,7 @@ func (r *Records) Less(i, j int, keyType string) (bool, error) {
 		return slhs < srhs, nil
 	}
 
-	debug.Assertf(false, "lhs: %v, rhs: %v, arr[i]: %v, arr[j]: %v", lhs, rhs, r.arr[i], r.arr[j])
+	debug.Func(func() { debug.Assertf(false, "lhs: %v, rhs: %v, arr[i]: %v, arr[j]: %v", lhs, rhs, r.arr[i], r.arr[j]) })
 	return false, nil
 }
 

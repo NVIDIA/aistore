@@ -135,8 +135,10 @@ func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	if opts != nil {
 		tw.format = opts.TarFormat
 	}
-	debug.Assert(tw.format == tar.FormatUnknown || tw.format == tar.FormatUSTAR ||
-		tw.format == tar.FormatPAX || tw.format == tar.FormatGNU, tw.format.String())
+	debug.Func(func() {
+		debug.Assert(tw.format == tar.FormatUnknown || tw.format == tar.FormatUSTAR ||
+			tw.format == tar.FormatPAX || tw.format == tar.FormatGNU, tw.format.String())
+	})
 
 	tw.tw = tar.NewWriter(tw.wmul)
 }

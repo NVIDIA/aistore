@@ -612,7 +612,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 			continue
 		}
 
-		debug.Assert(restored[i] != nil)
+		debug.AssertFunc(func() bool { return restored[i] != nil })
 		if version == "" {
 			version = restored[i].version
 		}

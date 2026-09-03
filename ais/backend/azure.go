@@ -373,7 +373,8 @@ func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 		return nil, status, err
 	}
 
-	debug.Assert(resp.IsCurrentVersion == nil || *resp.IsCurrentVersion, "expecting current/latest/the-only ver")
+	debug.AssertFunc(func() bool { return resp.IsCurrentVersion == nil || *resp.IsCurrentVersion },
+		"expecting current/latest/the-only ver")
 
 	oa := &cmn.ObjAttrs{}
 	oa.CustomMD = make(cos.StrKVs, 6)
@@ -453,7 +454,8 @@ func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		return res
 	}
 
-	debug.Assert(resp.IsCurrentVersion == nil || *resp.IsCurrentVersion, "expecting current/latest/the-only ver")
+	debug.AssertFunc(func() bool { return resp.IsCurrentVersion == nil || *resp.IsCurrentVersion },
+		"expecting current/latest/the-only ver")
 	res.Size = *resp.ContentLength
 
 	if length == 0 {

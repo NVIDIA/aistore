@@ -143,7 +143,7 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *
 		if err != nil {
 			return xid, p, info, err // unlikely
 		}
-		debug.Assertf(hdr.Get(apc.HdrXactionID) == xid, "%q vs %q", hdr.Get(apc.HdrXactionID), xid)
+		debug.Func(func() { debug.Assertf(hdr.Get(apc.HdrXactionID) == xid, "%q vs %q", hdr.Get(apc.HdrXactionID), xid) })
 
 		// callback w/ partial results
 		if args.Callback != nil && (status == http.StatusPartialContent || status == http.StatusOK) {

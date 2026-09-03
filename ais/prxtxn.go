@@ -269,7 +269,7 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 		debug.Assert(present)
 		bprops.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
 	case bck.IsCloud():
-		debug.Assert(len(skipLookup) > 0 && skipLookup[0])
+		debug.AssertFunc(func() bool { return len(skipLookup) > 0 && skipLookup[0] })
 		fallthrough
 	default:
 		// three distinct cases here:

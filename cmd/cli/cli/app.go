@@ -79,7 +79,9 @@ func Run(version, buildtime string, args []string) error {
 	buildTime = buildtime
 
 	// empty command line or 'ais help'
-	debug.Assert(filepath.Base(args[0]) == cliName, "expecting basename(arg0) '"+cliName+"'")
+	debug.Func(func() {
+		debug.Assert(filepath.Base(args[0]) == cliName, "expecting basename(arg0) '"+cliName+"'")
+	})
 
 	emptyCmdline := len(args) == 1 ||
 		strings.Contains(args[1], "help") ||

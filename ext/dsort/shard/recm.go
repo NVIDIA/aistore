@@ -309,7 +309,7 @@ func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value a
 	}
 	obj := record.Objects[idx]
 
-	debug.Assert(obj.StoreType == SGLStoreType, obj.StoreType+" vs "+SGLStoreType) // only SGLs are supported
+	debug.Func(func() { debug.Assert(obj.StoreType == SGLStoreType, obj.StoreType+" vs "+SGLStoreType) }) // only SGLs are supported
 
 	switch newStoreType {
 	case OffsetStoreType:

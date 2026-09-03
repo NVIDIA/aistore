@@ -116,8 +116,10 @@ func (m *Manager) start() (err error) {
 		if cmn.Rom.V(4, cos.ModDsort) {
 			nlog.Infof("%s [dsort] %s phase3: ratio=%f", core.T, m.ManagerUUID, ratio)
 		}
-		debug.Assertf(shard.IsCompressed(m.Pars.InputExtension) || ratio == 1, "tar ratio=%f, ext=%q",
-			ratio, m.Pars.InputExtension)
+		debug.Func(func() {
+			debug.Assertf(shard.IsCompressed(m.Pars.InputExtension) || ratio == 1, "tar ratio=%f, ext=%q",
+				ratio, m.Pars.InputExtension)
+		})
 
 		shardSize := int64(float64(m.Pars.OutputShardSize) / ratio)
 		nlog.Infof("%s: [dsort] %s started phase 3: ratio=%f, shard size (%d, %d)",

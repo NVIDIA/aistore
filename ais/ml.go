@@ -546,7 +546,7 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx,
 		t.writeErrURL(w, r)
 		return cmn.ErrSkip // merely a non-nil bail signal
 	}
-	debug.Assert(items[0] == apc.Moss, items[0])
+	debug.Func(func() { debug.Assert(items[0] == apc.Moss, items[0]) })
 
 	// tmosspathNumItems = 5 items with bucket via api.GetBatch(), 4 otherwise
 	var (
