@@ -643,7 +643,7 @@ func TestBlobDownloadCacheOnlyMaxChunkSize(t *testing.T) {
 			})
 			tassert.CheckFatal(t, err)
 			err = api.WaitForXaction(bp, &xact.ArgsMsg{
-				ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout,
+				ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout * 5,
 			})
 			tassert.CheckFatal(t, err)
 			m.validateChunksOnDisk(m.bck, objName, 2)

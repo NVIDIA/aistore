@@ -56,8 +56,6 @@ const (
 	dfltChunkSize         = 4 * cos.MiB
 	maxStreamingChunkSize = 64 * cos.MiB // ~625GiB maximum object size; up to 2GiB streaming SGLs
 
-	dfltChunkReadTimeout = time.Minute // default for apc.BlobMsg.ChunkReadTimeout
-
 	minBlobDlPrefetch = cos.MiB // size threshold for x-prefetch
 
 	blobMinBytesPerWorker = 256 * cos.MiB // one blob worker should get at least this much object data
@@ -323,8 +321,7 @@ func (p *blobFactory) Start() (err error) {
 		r.pending = make(blobPending, r.numWorkers)
 	}
 
-	tout := r.args.Msg.ChunkReadTimeout.D()
-	r.timeout = cos.Ternary(tout > 0, tout, dfltChunkReadTimeout)
+	r.setChunkReadTimeout()
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 
 	// 7. claim last, after all checks and validations above
@@ -498,7 +495,6 @@ func (r *XactBlobDl) releaseWIMem(wi *blobWI) {
 // setChunkSize applies the default and clamps the requested size to supported bounds.
 // Start validates manifest fit and memory-pressure admission for the effective size.
 func (r *XactBlobDl) setChunkSize() {
-	// TODO - FIXME: per-chunk timeout still defaults to 1 minute. not enough for the 5GiB max chunk size.
 	maxChunkSize := int64(cmn.ChunkSizeMax) // cache-only: no chunk-sized SGL
 	if r.args.RespWriter != nil {
 		maxChunkSize = maxStreamingChunkSize
@@ -512,6 +508,14 @@ func (r *XactBlobDl) setChunkSize() {
 	case r.chunkSize > maxChunkSize:
 		nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "exceeds permitted maximum", cos.IEC(maxChunkSize, 0))
 		r.chunkSize = maxChunkSize
+	}
+}
+
+func (r *XactBlobDl) setChunkReadTimeout() {
+	r.timeout = r.args.Msg.ChunkReadTimeout.D()
+	// SendFile is both the default and the global maximum for a chunk read.
+	if limit := r.config.Timeout.SendFile.D(); r.timeout <= 0 || r.timeout > limit {
+		r.timeout = limit
 	}
 }
 

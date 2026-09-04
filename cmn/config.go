@@ -413,7 +413,7 @@ type (
 		MaxHostBusy   cos.Duration `json:"max_host_busy"`     // 2-phase transactions and more
 		Startup       cos.Duration `json:"startup_time"`      // primary wait for joins at (primary's) startup; indirectly, cluster startup
 		JoinAtStartup cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout; (2 * Startup) when zero
-		SendFile      cos.Duration `json:"send_file_time"`    // large file or blob and/or slow network
+		SendFile      cos.Duration `json:"send_file_time"`    // global maximum for large-size data flows, including blob chunk reads
 		// intra-cluster EC streams; default SharedStreamsDflt; never timeout when negative
 		EcStreams cos.Duration `json:"ec_streams_time,omitempty"`
 		// object metadata timeout; for training apps an approx. duration of 2 (two) epochs
