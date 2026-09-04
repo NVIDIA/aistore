@@ -189,7 +189,6 @@ func (c *putJogger) ec(req *request, lom *core.LOM) (err error) {
 func (c *putJogger) replicate(ctx *encodeCtx) error {
 	err := c.createCopies(ctx)
 	if err != nil {
-		ctx.freeReplica()
 		c.cleanup(ctx.lom)
 	}
 	return err
@@ -199,8 +198,10 @@ func (c *putJogger) splitAndDistribute(ctx *encodeCtx) error {
 	initializeSlices(ctx, ctx.lom.Lsize())
 	err := c.sendSlices(ctx)
 	if err != nil {
-		ctx.freeReplica()
+		// on errSliceSendFailed, the slices were dispatched and the transport owns
+		// both `ctx.lh` and the slices (see sendSlices)
 		if err != errSliceSendFailed {
+			ctx.freeReplica()
 			freeSlices(ctx.slices)
 		}
 		c.cleanup(ctx.lom)
@@ -395,7 +396,7 @@ func initializeSlices(ctx *encodeCtx, size int64) {
 		} else {
 			reader = cos.NewSectionHandle(ctx.lh, offset, ctx.sliceSize, 0)
 		}
-		ctx.slices[i] = &slice{obj: ctx.lh, reader: reader}
+		ctx.slices[i] = &slice{reader: reader}
 		sizeLeft -= ctx.sliceSize
 	}
 }
