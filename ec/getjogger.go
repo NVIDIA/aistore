@@ -151,15 +151,17 @@ func (c *getJogger) ec(req *request) {
 // The final step of replica restoration process: the main target detects which
 // nodes do not have replicas and then runs respective replications.
 // * reader - replica content to send to remote targets
-// Returns true if reader was freed before returning.
-func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenCloser) (bool /*readerFreed*/, error) {
+// Callers must not free the reader, this function owns (and frees) the reader.
+func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenCloser) error {
 	if err := ctx.lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		return false, err
+		freeObject(reader)
+		return err
 	}
 	smap := core.T.Sowner().Get()
 	targets, err := smap.HrwTargetList(ctx.lom.UnamePtr(), ctx.meta.Parity+1)
 	if err != nil {
-		return false, err
+		freeObject(reader)
+		return err
 	}
 
 	// Fill the list of daemonIDs that do not have replica
@@ -178,7 +180,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	// memory on completion. Otherwise free allocated memory and return immediately
 	if len(daemons) == 0 {
 		freeObject(reader)
-		return true, nil
+		return nil
 	}
 
 	var srcReader cos.ReadOpenCloser
@@ -193,18 +195,17 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	}
 
 	if err != nil {
-		return false, err
+		freeObject(reader)
+		return err
 	}
 
 	// _ io.ReadCloser: pass copyMisssingReplicas reader argument(memsys.SGL type)
 	// instead of callback's reader argument(memsys.Reader type) to freeObject
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
-	var freed bool
 	cb := func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 		if err != nil {
 			nlog.Errorf("%s failed to send %s to %v: %v", core.T, ctx.lom, daemons, err)
 		}
-		freed = true
 		freeObject(reader)
 		srcReader.Close()
 	}
@@ -214,8 +215,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 		metadata: ctx.meta,
 		reqType:  reqPut,
 	}
-	err = c.parent.writeRemote(daemons, ctx.lom, src, cb)
-	return freed, err
+	return c.parent.writeRemote(daemons, ctx.lom, src, cb)
 }
 
 func (c *getJogger) restoreReplicaFromMem(ctx *restoreCtx) error {
@@ -264,11 +264,7 @@ func (c *getJogger) restoreReplicaFromMem(ctx *restoreCtx) error {
 		return err
 	}
 
-	readerFreed, err := c.copyMissingReplicas(ctx, writer)
-	if err != nil && !readerFreed {
-		writer.Free()
-	}
-	return err
+	return c.copyMissingReplicas(ctx, writer)
 }
 
 func (c *getJogger) restoreReplicaFromDsk(ctx *restoreCtx) error {
@@ -353,11 +349,8 @@ loop: //nolint:gocritic // keeping label for readability
 		ctx.lom.Unlock(false)
 		return err
 	}
-	readerFreed, err := c.copyMissingReplicas(ctx, reader)
+	err = c.copyMissingReplicas(ctx, reader)
 	ctx.lom.Unlock(false)
-	if err != nil && !readerFreed {
-		freeObject(reader)
-	}
 	return err
 }
 
