@@ -156,11 +156,12 @@ func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, x
 	}
 
 	o.Hdr.Opaque = ntfn.NewPack(rebMsgEC)
+	size := o.Hdr.ObjAttrs.Size
 	if err := dm.Send(o, roc, target); err != nil {
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
 
-	xreb.OutObjsAdd(1, o.Hdr.ObjAttrs.Size)
+	xreb.OutObjsAdd(1, size)
 	return nil
 }
 

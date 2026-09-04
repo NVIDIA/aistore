@@ -202,12 +202,12 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	// _ io.ReadCloser: pass copyMisssingReplicas reader argument(memsys.SGL type)
 	// instead of callback's reader argument(memsys.Reader type) to freeObject
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
-	cb := func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
-		if err != nil {
-			nlog.Errorf("%s failed to send %s to %v: %v", core.T, ctx.lom, daemons, err)
+	cname := ctx.lom.Cname()
+	cb := func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, sendErr error) {
+		if sendErr != nil {
+			nlog.Errorf("%s failed to send %s to %v: %v", core.T, cname, daemons, sendErr)
 		}
 		freeObject(reader)
-		srcReader.Close()
 	}
 	src := &dataSource{
 		reader:   srcReader,
