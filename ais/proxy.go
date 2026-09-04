@@ -42,6 +42,8 @@ import (
 
 const (
 	lsotag = "list-objects"
+
+	badArchRequest = "bad archive request"
 )
 
 type (
@@ -1490,6 +1492,10 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 			if bckTo, err = bckToArgs.initAndTry(); err != nil {
 				return
 			}
+		}
+		if err := cos.ValidateOname(archMsg.ArchName); err != nil {
+			p.writeErr(w, r, fmt.Errorf("%s: %w", badArchRequest, err))
+			return
 		}
 		//
 		// NOTE: strict enforcement of the standard & supported file extensions

@@ -253,6 +253,40 @@ func TestArchMultiObj(t *testing.T) {
 	})
 }
 
+func TestArchMultiObjInvalidArchName(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		objName    = "arch-source"
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
+	tassert.CheckFatal(t, err)
+	_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objName, Reader: reader})
+	tassert.CheckFatal(t, err)
+
+	for _, archName := range []string{
+		"",
+		"./shard.tar",
+		"../shard.tar",
+		"a/../../shard.tar",
+		"~/shard.tar",
+		"../../../../../../../../tmp/pwned.tar",
+	} {
+		msg := cmn.ArchiveBckMsg{
+			ToBck: bck,
+			ArchiveMsg: apc.ArchiveMsg{
+				ArchName:  archName,
+				ListRange: apc.ListRange{ObjNames: []string{objName}},
+			},
+		}
+		_, err := api.ArchiveMultiObj(baseParams, bck, &msg)
+		tassert.Errorf(t, err != nil, "expected error to occur (archname: %q)", archName)
+	}
+}
+
 func testArch(t *testing.T, bck *meta.Bck) {
 	var (
 		numPuts = 50

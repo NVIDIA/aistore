@@ -53,6 +53,8 @@ const dbName = "ais.db"
 
 const clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
 
+const badBlobRequest = "bad blob-download request"
+
 type (
 	regstate struct {
 		mu       sync.Mutex  // serialize metasync Rx, shutdown, transition to standby; enable/disable backend
@@ -1966,6 +1968,10 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) error {
 // compare running the same via (generic) t.xstart
 // the caller owns retry/fallback policy for this terminal outcome.
 func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Header) (string, *xs.XactBlobDl, error) {
+	// destination is concatenated onto a mountpath (reject traversal)
+	if err := cos.ValidateOname(params.Lom.ObjName); err != nil {
+		return "", nil, fmt.Errorf("%s: %w", badBlobRequest, err)
+	}
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {

@@ -7,6 +7,7 @@ package xs
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -42,6 +43,9 @@ const (
 	lrpRange
 	lrpPrefix
 )
+
+// error context for all list-range name/prefix validation
+const badLrRequest = "bad list-range request"
 
 // common for all list-range
 type (
@@ -165,7 +169,7 @@ func (r *lrit) _inipr(msg *apc.ListRange) error {
 		}
 		return err
 	}
-	if err := cos.ValidatePrefix("bad list-range request", pt.Prefix); err != nil {
+	if err := cos.ValidatePrefix(badLrRequest, pt.Prefix); err != nil {
 		nlog.Errorln(err)
 		return err
 	}
@@ -396,6 +400,9 @@ func tooManyReqs(ecode int, err error) bool {
 }
 
 func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {
+	if err := cos.ValidateOname(lom.ObjName); err != nil {
+		return false, fmt.Errorf("%s: %w", badLrRequest, err)
+	}
 	if err := lom.InitBck(r.bck); err != nil {
 		return false, err
 	}

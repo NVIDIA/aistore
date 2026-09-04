@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 const (
@@ -312,5 +314,41 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 
 			lom.RemoveMain()
 		})
+	}
+}
+
+func TestTargetBlobDlValidatesObjName(tst *testing.T) {
+	target := &target{}
+	for _, objName := range []string{
+		"",
+		"../escape",
+		"dir/../../escape",
+		"~/escape",
+		"../../../../../../../../tmp/pwned_32114.txt",
+	} {
+		params := &core.BlobParams{Lom: &core.LOM{ObjName: objName}}
+		_, _, err := target.blobdl(params, nil /*oa*/, nil /*whdr*/)
+		expErr := fmt.Sprintf("%s: invalid object name %q", badBlobRequest, objName)
+		if err == nil || err.Error() != expErr {
+			tst.Fatalf("expected blob-download of %q to fail with %q, got: %v", objName, expErr, err)
+		}
+	}
+}
+
+func TestTargetCopyValidatesDestination(tst *testing.T) {
+	target := &target{}
+	for _, objnameTo := range []string{
+		"",
+		"../escape",
+		"dir/../../escape",
+		"~/escape",
+		"../../../../../../../../tmp/pwned_32114.txt",
+	} {
+		params := &xs.CoiParams{ObjnameTo: objnameTo}
+		res := target.CopyObject(&core.LOM{ObjName: "source"}, nil /*dm*/, params)
+		expErr := fmt.Sprintf("%s: invalid object name %q", badTcRequest, objnameTo)
+		if res.Err == nil || res.Err.Error() != expErr {
+			tst.Fatalf("expected copy to %q to fail with %q, got: %v", objnameTo, expErr, res.Err)
+		}
 	}
 }

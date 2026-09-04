@@ -1761,8 +1761,15 @@ func (a *apndOI) pack(workFQN string) string {
 // COPY (object | reader)
 //
 
+// error context for copy/transform (TCB, TCO) destination name validation
+const badTcRequest = "bad copy/transform request"
+
 // main method
 func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
+	// destination is concatenated onto a mountpath (reject traversal)
+	if err := cos.ValidateOname(coi.ObjnameTo); err != nil {
+		return xs.CoiRes{Err: fmt.Errorf("%s: %w", badTcRequest, err)}
+	}
 	if coi.ETLArgs == nil {
 		coi.ETLArgs = &core.ETLArgs{}
 	}

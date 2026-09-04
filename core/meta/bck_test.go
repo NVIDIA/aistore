@@ -1,6 +1,6 @@
 // Package meta_test: unit tests for the package
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package meta_test
 
@@ -60,6 +60,42 @@ var _ = Describe("Bck", func() {
 				"bck", apc.GCP, cmn.NsGlobal, "obj",
 			),
 		)
+	})
+
+	Describe("ParseUname", func() {
+		DescribeTable("should reject a traversing object name",
+			func(uname string) {
+				_, _, err := meta.ParseUname(uname, true /*withObjname*/)
+				Expect(err).To(HaveOccurred())
+			},
+			Entry("copy destination", "ais/@#/bck/../../../../../../../../../tmp/proof"),
+			Entry("leading dotdot", "ais/@#/bck/../etc/passwd"),
+			Entry("embedded dotdot", "ais/@#/bck/a/../../../etc/passwd"),
+			Entry("trailing dotdot", "ais/@#/bck/a/.."),
+			Entry("single dot component", "ais/@#/bck/a/./b"),
+			Entry("home relative", "ais/@#/bck/~/.ssh/authorized_keys"),
+			Entry("trailing separator", "ais/@#/bck/a/b/"),
+		)
+
+		DescribeTable("should accept a legitimate object name",
+			func(uname, expObjName string) {
+				_, objName, err := meta.ParseUname(uname, true /*withObjname*/)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(objName).To(Equal(expObjName))
+			},
+			Entry("plain name", "ais/@#/bck/obj", "obj"),
+			Entry("nested name", "ais/@#/bck/a/b/c.txt", "a/b/c.txt"),
+			Entry("dotted name", "ais/@#/bck/archive.tar.gz", "archive.tar.gz"),
+			Entry("dotfile", "ais/@#/bck/.hidden", ".hidden"),
+			Entry("dotdot in basename", "ais/@#/bck/weird..name", "weird..name"),
+		)
+
+		It("should accept an empty object name when not required", func() {
+			bck, objName, err := meta.ParseUname("ais/@#/bck/", false /*withObjname*/)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(objName).To(BeEmpty())
+			Expect(bck.Name).To(Equal("bck"))
+		})
 	})
 
 	Describe("Equal", func() {

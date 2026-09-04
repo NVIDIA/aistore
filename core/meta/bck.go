@@ -395,6 +395,9 @@ func ParseUname(uname string, withObjname bool) (*Bck, string, error) {
 	case objName == "" && withObjname:
 		return nil, "", fmt.Errorf("parse-uname %q: missing object name in %q", uname, bck.Cname(""))
 	default:
+		if err := cos.ValidateWname(objName); err != nil {
+			return nil, "", err
+		}
 		return CloneBck(&bck), objName, nil
 	}
 }

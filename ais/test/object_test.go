@@ -37,8 +37,9 @@ import (
 )
 
 const (
-	getOP = "GET"
-	putOP = "PUT"
+	getOP  = "GET"
+	putOP  = "PUT"
+	copyOP = "COPY"
 )
 
 func TestObjectInvalidName(t *testing.T) {
@@ -74,9 +75,27 @@ func TestObjectInvalidName(t *testing.T) {
 		{op: getOP, objName: "\\../\\../\\../\\../log/aisnode.INFO"},
 		{op: getOP, objName: "/../../../../log/aisnode.INFO"},
 		{op: getOP, objName: "/././../../../../log/aisnode.INFO"},
+
+		{op: copyOP, objName: "."},
+		{op: copyOP, objName: ".."},
+		{op: copyOP, objName: "../smth.txt"},
+		{op: copyOP, objName: "a/../../../../tmp/aisnode.INFO"},
+		{op: copyOP, objName: "../../../../../../../../../tmp/aisnode.INFO"},
+		{op: copyOP, objName: "~/.ssh/authorized_keys"},
 	}
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	const copySrc = "copy-source"
+	srcReader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
+	tassert.CheckFatal(t, err)
+	_, err = api.PutObject(&api.PutArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		ObjName:    copySrc,
+		Reader:     srcReader,
+	})
+	tassert.CheckFatal(t, err)
 
 	for _, test := range tests {
 		t.Run(test.op, func(t *testing.T) {
@@ -93,6 +112,14 @@ func TestObjectInvalidName(t *testing.T) {
 				tassert.Errorf(t, err != nil, "expected error to occur (object name: %q)", test.objName)
 			case getOP:
 				_, err := api.GetObjectWithValidation(baseParams, bck, test.objName, nil)
+				tassert.Errorf(t, err != nil, "expected error to occur (object name: %q)", test.objName)
+			case copyOP:
+				err := api.CopyObject(baseParams, &api.CopyArgs{
+					FromBck:     bck,
+					FromObjName: copySrc,
+					ToBck:       bck,
+					ToObjName:   test.objName,
+				})
 				tassert.Errorf(t, err != nil, "expected error to occur (object name: %q)", test.objName)
 			default:
 				panic(test.op)
