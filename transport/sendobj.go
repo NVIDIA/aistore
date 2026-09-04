@@ -133,9 +133,18 @@ func (s *Stream) abortPending(err error, completions bool) {
 // and *always* close the reader (sic!)
 func (s *Stream) doCmpl(obj *Obj, err error) {
 	var rc int64
-	if obj.prc != nil {
-		rc = obj.prc.Dec()
+	cbErr := err
+	if obj.cmpl != nil {
+		if err != nil {
+			obj.cmpl.err.CompareAndSwap(nil, &err) // retain the first destination error
+		}
+		rc = obj.cmpl.refs.Dec()
 		debug.Assert(rc >= 0)
+		if rc == 0 {
+			if perr := obj.cmpl.err.Load(); perr != nil {
+				cbErr = *perr
+			}
+		}
 	}
 	if obj.Reader != nil {
 		if err != nil && cmn.IsFileAlreadyClosed(err) {
@@ -147,9 +156,9 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 	// SCQ completion callback
 	if rc == 0 {
 		if obj.SentCB != nil {
-			obj.SentCB(&obj.Hdr, obj.Reader, obj.CmplArg, err)
+			obj.SentCB(&obj.Hdr, obj.Reader, obj.CmplArg, cbErr)
 		} else if s.sentCB != nil {
-			s.sentCB(&obj.Hdr, obj.Reader, obj.CmplArg, err)
+			s.sentCB(&obj.Hdr, obj.Reader, obj.CmplArg, cbErr)
 		}
 	}
 	freeSend(obj)

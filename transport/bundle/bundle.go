@@ -213,7 +213,9 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 	}
 
 	// 3) send
-	obj.SetPrc(cnt)
+	if cnt > 1 {
+		obj.SetPrc(cnt)
+	}
 	if nodes == nil {
 		idx := 0
 		for _, robin := range streams {
@@ -245,6 +247,7 @@ func _reopen(roc cos.ReadOpenCloser, cnt int) ([]cos.ReadOpenCloser, error) {
 	for i := 1; i < cnt; i++ {
 		reader, err := roc.Open()
 		if err != nil {
+			debug.Assert(reader == nil)
 			for j := 1; j < i; j++ {
 				cos.Close(readers[j])
 			}

@@ -14,7 +14,6 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
@@ -335,7 +334,8 @@ func (obj *Obj) String() string {
 }
 
 func (obj *Obj) SetPrc(n int) {
-	obj.prc = atomic.NewInt64(int64(n))
+	obj.cmpl = &sendCmpl{}
+	obj.cmpl.refs.Store(int64(n))
 }
 
 func (hdr *ObjHdr) Cname() string { return hdr.Bck.Cname(hdr.ObjName) } // see also: lom.Cname()

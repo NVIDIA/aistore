@@ -6,6 +6,7 @@ package transport
 
 import (
 	"io"
+	ratomic "sync/atomic"
 	"time"
 	"unsafe"
 
@@ -96,8 +97,12 @@ type (
 		Reader  io.ReadCloser // reader (to read the object, and close when done)
 		CmplArg any           // optional context passed to the SentCB callback
 		SentCB  SentCB        // called when the last byte is sent _or_ when the stream terminates (see term.reason)
-		prc     *atomic.Int64 // private; if present, ref-counts so that we call SentCB only once
+		cmpl    *sendCmpl     // shared send-completion state for multi-destination sends
 		Hdr     ObjHdr
+	}
+	sendCmpl struct {
+		refs atomic.Int64
+		err  ratomic.Pointer[error]
 	}
 
 	// stream collector
