@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -566,6 +567,88 @@ func TestBlobDownloadStreamGet(t *testing.T) {
 	readerDup, err = reader.Open()
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, tools.ReaderEqual(readerDup, result), "warm GET: data mismatch")
+}
+
+func TestBlobDownloadChunkSizeBounds(t *testing.T) {
+	const objSize = 65 * cos.MiB // just above blob downloader's 64MiB streaming limit
+	tests := []struct {
+		name      string
+		streaming bool
+		chunks    int
+	}{
+		{name: "cache-only", chunks: 1},
+		{name: "streaming", streaming: true, chunks: 2},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := ioContext{
+				t: t, bck: cliBck, num: 1, fileSize: objSize, fixedSize: true,
+				prefix: t.Name() + "/" + trand.String(5),
+			}
+			tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+			m.init(true /*cleanup*/)
+			initMountpaths(t, m.proxyURL)
+			m.remotePuts(true /*evict*/)
+			bp, objName := tools.BaseAPIParams(m.proxyURL), m.objNames[0]
+
+			if tc.streaming {
+				_, err := api.GetObject(bp, m.bck, objName, &api.GetArgs{
+					Writer: io.Discard,
+					Header: http.Header{
+						apc.HdrBlobDownload: []string{"true"},
+						apc.HdrBlobChunk:    []string{cos.ToSizeIEC(cmn.ChunkSizeMax, 0)},
+					},
+				})
+				tassert.CheckFatal(t, err)
+			} else {
+				xid, err := api.BlobDownload(bp, m.bck, objName, &apc.BlobMsg{
+					ChunkSize: cmn.ChunkSizeMax, FullSize: objSize,
+				})
+				tassert.CheckFatal(t, err)
+				err = api.WaitForXaction(bp, &xact.ArgsMsg{
+					ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout,
+				})
+				tassert.CheckFatal(t, err)
+			}
+			m.validateChunksOnDisk(m.bck, objName, tc.chunks)
+		})
+	}
+}
+
+func TestBlobDownloadCacheOnlyMaxChunkSize(t *testing.T) {
+	const objSize = cmn.ChunkSizeMax + 1
+	m := ioContext{
+		t: t, bck: cliBck, num: 1, fileSize: objSize, fixedSize: true,
+		prefix: t.Name() + "/" + trand.String(5),
+	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
+	m.init(true /*cleanup*/)
+	initMountpaths(t, m.proxyURL)
+	m.remotePuts(false /*evict*/)
+	bp, objName := tools.BaseAPIParams(m.proxyURL), m.objNames[0]
+
+	tests := []struct {
+		name      string
+		chunkSize int64
+	}{
+		{name: "at-max", chunkSize: cmn.ChunkSizeMax},
+		{name: "above-max", chunkSize: objSize},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tassert.CheckFatal(t, api.EvictObject(bp, m.bck, objName))
+			xid, err := api.BlobDownload(bp, m.bck, objName, &apc.BlobMsg{
+				ChunkSize: tc.chunkSize, ChunkReadTimeout: cos.Duration(10 * time.Minute),
+			})
+			tassert.CheckFatal(t, err)
+			err = api.WaitForXaction(bp, &xact.ArgsMsg{
+				ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout,
+			})
+			tassert.CheckFatal(t, err)
+			m.validateChunksOnDisk(m.bck, objName, 2)
+		})
+	}
 }
 
 // TestBlobDownloadSingleThreaded tests single-threaded blob download (numWorkers = -1).

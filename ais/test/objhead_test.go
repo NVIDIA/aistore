@@ -397,9 +397,9 @@ func TestObjHeadV2Selective(t *testing.T) {
 	t.Run("WithChunks", func(t *testing.T) {
 		var (
 			chunkedObjName = "test-chunked-obj"
-			chunkSize      = int64(4 * cos.KiB)
-			objSizeLimit   = int64(8 * cos.KiB)
-			largeObjSize   = int64(20 * cos.KiB) // larger than objSizeLimit to trigger chunking
+			chunkSize      = int64(cmn.ChunkSizeMin)
+			objSizeLimit   = 2 * chunkSize
+			largeObjSize   = 5 * chunkSize // larger than objSizeLimit to trigger chunking
 		)
 
 		// Set bucket chunk properties

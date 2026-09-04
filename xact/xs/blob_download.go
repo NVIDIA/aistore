@@ -53,9 +53,8 @@ const (
 
 // default tunables (can override via apc.BlobMsg)
 const (
-	dfltChunkSize = 4 * cos.MiB
-	minChunkSize  = memsys.DefaultBufSize // ~312MiB maximum object size
-	maxChunkSize  = 64 * cos.MiB          // ~625GiB maximum object size; up to 2GiB streaming SGLs
+	dfltChunkSize         = 4 * cos.MiB
+	maxStreamingChunkSize = 64 * cos.MiB // ~625GiB maximum object size; up to 2GiB streaming SGLs
 
 	dfltChunkReadTimeout = time.Minute // default for apc.BlobMsg.ChunkReadTimeout
 
@@ -499,12 +498,17 @@ func (r *XactBlobDl) releaseWIMem(wi *blobWI) {
 // setChunkSize applies the default and clamps the requested size to supported bounds.
 // Start validates manifest fit and memory-pressure admission for the effective size.
 func (r *XactBlobDl) setChunkSize() {
+	// TODO - FIXME: per-chunk timeout still defaults to 1 minute. not enough for the 5GiB max chunk size.
+	maxChunkSize := int64(cmn.ChunkSizeMax) // cache-only: no chunk-sized SGL
+	if r.args.RespWriter != nil {
+		maxChunkSize = maxStreamingChunkSize
+	}
 	switch {
 	case r.chunkSize == 0:
 		r.chunkSize = dfltChunkSize
-	case r.chunkSize < minChunkSize:
-		nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "is below permitted minimum", cos.IEC(minChunkSize, 0))
-		r.chunkSize = minChunkSize
+	case r.chunkSize < cmn.ChunkSizeMin:
+		nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "is below permitted minimum", cos.IEC(cmn.ChunkSizeMin, 0))
+		r.chunkSize = cmn.ChunkSizeMin
 	case r.chunkSize > maxChunkSize:
 		nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "exceeds permitted maximum", cos.IEC(maxChunkSize, 0))
 		r.chunkSize = maxChunkSize

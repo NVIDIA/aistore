@@ -2090,7 +2090,7 @@ const (
 	MaxMonolithicSize    = cos.TiB
 	minMaxMonolithicSize = cos.GiB
 
-	ChunkSizeMin  = cos.KiB
+	ChunkSizeMin  = 32 * cos.KiB
 	ChunkSizeDflt = cos.GiB
 	ChunkSizeMax  = 5 * cos.GiB
 

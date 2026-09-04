@@ -48,7 +48,7 @@ func testRechunk(t *testing.T, bck *meta.Bck) {
 			name:         "disabled-to-chunked",
 			initialLimit: 0,
 			finalLimit:   50 * cos.KiB,
-			chunkSize:    16 * cos.KiB,
+			chunkSize:    cmn.ChunkSizeMin,
 			smallSize:    10 * cos.KiB,  // monolithic => monolithic
 			largeSize:    100 * cos.KiB, // monolithic => chunked
 		},
@@ -56,7 +56,7 @@ func testRechunk(t *testing.T, bck *meta.Bck) {
 			name:         "chunked-to-disabled",
 			initialLimit: 50 * cos.KiB,
 			finalLimit:   0, // change to no chunking (all monolithic)
-			chunkSize:    16 * cos.KiB,
+			chunkSize:    cmn.ChunkSizeMin,
 			smallSize:    10 * cos.KiB,  // monolithic => monolithic
 			largeSize:    100 * cos.KiB, // chunked => monolithic
 		},
@@ -64,7 +64,7 @@ func testRechunk(t *testing.T, bck *meta.Bck) {
 			name:         "monolithic-to-chunked",
 			initialLimit: 1 * cos.MiB,
 			finalLimit:   50 * cos.KiB,
-			chunkSize:    16 * cos.KiB,
+			chunkSize:    cmn.ChunkSizeMin,
 			smallSize:    10 * cos.KiB,  // monolithic => monolithic
 			largeSize:    100 * cos.KiB, // monolithic => chunked
 		},
@@ -72,7 +72,7 @@ func testRechunk(t *testing.T, bck *meta.Bck) {
 			name:         "chunked-to-monolithic",
 			initialLimit: 50 * cos.KiB,
 			finalLimit:   1 * cos.MiB,
-			chunkSize:    16 * cos.KiB,
+			chunkSize:    cmn.ChunkSizeMin,
 			smallSize:    10 * cos.KiB,  // monolithic => monolithic
 			largeSize:    100 * cos.KiB, // chunked => monolithic
 		},
@@ -80,7 +80,7 @@ func testRechunk(t *testing.T, bck *meta.Bck) {
 			name:         "rechunk-smaller-chunks",
 			initialLimit: 50 * cos.KiB,
 			finalLimit:   60 * cos.KiB,
-			chunkSize:    8 * cos.KiB,
+			chunkSize:    cmn.ChunkSizeMin,
 			smallSize:    10 * cos.KiB,  // monolithic => monolithic
 			largeSize:    100 * cos.KiB, // chunked => chunked
 		},
@@ -244,7 +244,7 @@ func TestRechunkAbort(t *testing.T) {
 	var (
 		numObjs    = 10000         // large enough to ensure rechunk takes time
 		objSize    = 100 * cos.KiB // objects that will be chunked
-		chunkSize  = 16 * cos.KiB
+		chunkSize  = cmn.ChunkSizeMin
 		sizeLimit  = 50 * cos.KiB // chunk objects > 50KiB
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -344,14 +344,14 @@ func TestRechunkTwice(t *testing.T) {
 	}{
 		{
 			name:                 "same-args",
-			firstProps:           chunkProps{sizeLimit: 50 * cos.KiB, chunkSize: 16 * cos.KiB},
-			secondProps:          chunkProps{sizeLimit: 50 * cos.KiB, chunkSize: 16 * cos.KiB},
+			firstProps:           chunkProps{sizeLimit: 50 * cos.KiB, chunkSize: cmn.ChunkSizeMin},
+			secondProps:          chunkProps{sizeLimit: 50 * cos.KiB, chunkSize: cmn.ChunkSizeMin},
 			expectedErrorMessage: "is already running - not starting",
 		},
 		{
 			name:                 "different-args",
-			firstProps:           chunkProps{sizeLimit: 50 * cos.KiB, chunkSize: 16 * cos.KiB},
-			secondProps:          chunkProps{sizeLimit: 30 * cos.KiB, chunkSize: 8 * cos.KiB},
+			firstProps:           chunkProps{sizeLimit: 50 * cos.KiB, chunkSize: cmn.ChunkSizeMin},
+			secondProps:          chunkProps{sizeLimit: 30 * cos.KiB, chunkSize: cmn.ChunkSizeMin},
 			expectedErrorMessage: "rechunk with different objsize_limit",
 		},
 	}
@@ -480,7 +480,7 @@ func TestRechunkWhenRebRes(t *testing.T) {
 	var (
 		numObjs   = 20000 // large enough to ensure rebalance takes time
 		objSize   = 200 * cos.KiB
-		chunkSize = 16 * cos.KiB
+		chunkSize = cmn.ChunkSizeMin
 		sizeLimit = 50 * cos.KiB
 		m         = ioContext{
 			t:             t,
@@ -556,7 +556,7 @@ func TestRechunkPrefix(t *testing.T) {
 		numPrefixed    = 50
 		numNonPrefixed = 50
 		objSize        = 100 * cos.KiB
-		chunkSize      = 16 * cos.KiB
+		chunkSize      = cmn.ChunkSizeMin
 		sizeLimit      = 50 * cos.KiB
 		targetPrefix   = "prefixed-"
 		otherPrefix    = "other-"
@@ -689,7 +689,7 @@ func TestRechunkIdempotent(t *testing.T) {
 		numLarge  = 50
 		smallSize = 30 * cos.KiB
 		largeSize = 100 * cos.KiB
-		chunkSize = 16 * cos.KiB
+		chunkSize = cmn.ChunkSizeMin
 		sizeLimit = 50 * cos.KiB // between small and large
 		proxyURL  = tools.RandomProxyURL(t)
 		bck       = cmn.Bck{
@@ -944,7 +944,7 @@ func testRechunkSyncRemote(t *testing.T, bck *meta.Bck) {
 		objName    = testPrefix + trand.String(10)
 		// Default sizes for remais (local AIS remote)
 		objSize   = int64(100 * cos.KiB)
-		chunkSize = int64(16 * cos.KiB)
+		chunkSize = int64(cmn.ChunkSizeMin)
 		sizeLimit = int64(50 * cos.KiB)
 	)
 
