@@ -32,6 +32,7 @@ while (( "$#" )); do
   esac
 done
 
+pkill "-${signal}" -f "dlv exec .*aisnode" 2>/dev/null
 pkill "-${signal}" aisnode
 wait_for aisnode
 

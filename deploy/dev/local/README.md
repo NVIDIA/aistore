@@ -27,3 +27,7 @@ Yes, all of the above, and respectively: `$GOPATH/src`, `$GOPATH/pkg`, and `$GOP
 
 And so, since you'd likely want to run binaries produced out of Go sources, you need to add the path, etc.
 
+## Debugging
+
+For (experimental) [Delve](https://github.com/go-delve/delve) debugging support, see [debugging.md](/deploy/dev/local/debugging.md).
+

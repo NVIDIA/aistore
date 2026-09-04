@@ -376,6 +376,7 @@ help:
 		"TAGS=\"aws gcp\" make kill deploy <<< $$'7\n2\n'"  "Same as above (see docs/getting_started.md for many more examples)" \
 		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster with race detector, write reports to /tmp/race.<PID>" \
 		"MODE=debug make deploy" "Deploy cluster with 'aisnode' (AIS target and proxy) executable built with debug symbols and debug asserts enabled" \
+		"AIS_USE_DLV=true make deploy" "(experimental) Deploy cluster with every daemon running headless under Delve (dlv); attach via 'dlv connect 127.0.0.1:<port>', starting at DLV_PORT (default 56268); see deploy/dev/local/debugging.md" \
 		"BUCKET=tmp make test-short" "Run all short tests" \
 		"BUCKET=<existing-cloud-bucket> make test-long" "Run all tests" \
 		"BUCKET=tmp make ci" "Run style, lint, and spell checks, as well as all short tests" \

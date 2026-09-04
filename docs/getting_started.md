@@ -767,6 +767,8 @@ In addition, to build [AuthN](/docs/authn.md), [CLI](/docs/cli.md), and/or [aisl
 
 respectively. With each of these `make`s, you can also use `MODE=debug` - debug mode is universally supported.
 
+> For **(experimental)** [Delve](https://github.com/go-delve/delve) debugging of a local playground cluster, see [deploy/dev/local/debugging.md](/deploy/dev/local/debugging.md).
+
 ### Containerized Deployments: Host Resource Sharing
 
 The following **applies to all containerized deployments**:

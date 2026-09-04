@@ -66,6 +66,40 @@ AIS_HTTP_CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
 HTTP_READ_BUFFER_SIZE=65536
 
+# (experimental) Delve (dlv) debugging: set AIS_USE_DLV=true to run every daemon headless under
+# 'dlv exec', each listening on its own TCP port starting at DLV_PORT (default 56268), so it can
+# be attached to at any time, e.g.: dlv connect 127.0.0.1:56268
+# Daemons continue running immediately (--continue) - dlv only pauses execution once a
+# breakpoint is set after attaching.
+# See deploy/dev/local/debugging.md for usage and known limitations.
+AIS_USE_DLV=${AIS_USE_DLV:-false}
+DLV_PORT=${DLV_PORT:-56268}
+if [[ "$AIS_USE_DLV" == "true" ]]; then
+  if ! command -v dlv &> /dev/null; then
+    echo "dlv not found - installing (go install github.com/go-delve/delve/cmd/dlv@latest)..."
+    GOOS="" go install github.com/go-delve/delve/cmd/dlv@latest
+  fi
+  # Redeploying on top of already-running daemons (e.g. after 'make clean' without 'make kill',
+  # or reusing preconfigured, non-tmp mountpaths that 'make clean' intentionally never touches)
+  # leaves stale in-memory/on-disk cluster state around and can surface as a confusing
+  # cluster-integrity/split-brain crash. Fail fast with an actionable message instead.
+  if pgrep -x aisnode >/dev/null || pgrep -f "dlv exec .*aisnode" >/dev/null; then
+    exit_error "found already-running 'aisnode'/'dlv' process(es) - run 'make kill' (and 'make clean' if reusing test mountpaths) before deploying with AIS_USE_DLV=true"
+  fi
+  # A daemon paused at a breakpoint stops responding to keepalive/join for as long as it's
+  # paused, which can trip AIS's own startup/join timeouts and make a peer self-terminate.
+  # Give debugging sessions a lot more headroom than production defaults (1m/3m), unless the
+  # caller already set these.
+  AIS_STARTUP_TIME=${AIS_STARTUP_TIME:-30m}
+  AIS_JOIN_STARTUP_TIME=${AIS_JOIN_STARTUP_TIME:-60m}
+  export AIS_STARTUP_TIME AIS_JOIN_STARTUP_TIME
+  if [[ -z "$MODE" ]]; then
+    export MODE=debug
+    echo "AIS_USE_DLV=true: forcing MODE=debug (disables compiler optimizations/inlining) for accurate debugging"
+  fi
+  echo "AIS_USE_DLV=true: (experimental) running daemons headless under dlv, see deploy/dev/local/debugging.md"
+fi
+
 if [[ -z $DEPLOY_AS_NEXT_TIER ]]; then
   PORT=${PORT:-8080}
   PORT_INTRA_CONTROL=${PORT_INTRA_CONTROL:-9080}
@@ -233,17 +267,25 @@ for (( c=START; c<=END; c++ )); do
 
   pub_port=$(grep "\"port\":" ${AIS_LOCAL_CONF_FILE} | awk '{ print $2 }')
   pub_port=${pub_port:1:$((${#pub_port} - 3))}
+
+  NODE_CMD="${CMD}"
+  if [[ "$AIS_USE_DLV" == "true" ]]; then
+    dlv_port=$((DLV_PORT + c))
+    NODE_CMD="dlv exec --headless --continue --accept-multiclient --api-version=2 --listen=127.0.0.1:${dlv_port} -- ${CMD}"
+    echo "  daemon $c: dlv listening on 127.0.0.1:${dlv_port} (attach with: dlv connect 127.0.0.1:${dlv_port})"
+  fi
+
   if [[ $c -eq 0 && $PROXY_CNT -gt 0 ]]; then
-    run_cmd "${CMD} ${PROXY_PARAM}"
+    run_cmd "${NODE_CMD} ${PROXY_PARAM}"
     listening_on+=${pub_port}
 
     # Wait for the proxy to start up
     sleep 2
   elif [[ $c -lt ${PROXY_CNT} ]]; then
-    run_cmd "${CMD} ${PROXY_PARAM}"
+    run_cmd "${NODE_CMD} ${PROXY_PARAM}"
     listening_on+=", ${pub_port}"
   else
-    run_cmd "${CMD} ${TARGET_PARAM}"
+    run_cmd "${NODE_CMD} ${TARGET_PARAM}"
   fi
 done
 
@@ -254,7 +296,7 @@ if [[ $AIS_AUTHN_DEPLOY == "true" ]]; then
   run_authn
 fi
 
-if [[ $MODE == "debug" ]]; then
+if [[ "$AIS_USE_DLV" == "true" || $MODE == "debug" ]]; then
    sleep 1.5
 else
    sleep 0.1
