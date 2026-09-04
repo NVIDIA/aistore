@@ -168,13 +168,16 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 //   - object reader is *always* closed irrespectively of whether the Send() succeeds
 //     or fails. On success, if send-completion (SentCB) callback is provided
 //     (i.e., non-nil), the closing is done by doCmpl().
-//   - Optional reference counting is also done by (and in) the doCmpl, so that the
+//   - optional reference counting is also done by (and in) the doCmpl, so that the
 //     SentCB gets called if and only when the refcount (if provided i.e., non-nil)
 //     reaches zero.
-//   - For every transmission of every object there's always an doCmpl() completion
+//   - for every transmission of every object there's always an doCmpl() completion
 //     (with its refcounting and reader-closing). This holds true in all cases including
 //     network errors that may cause sudden and instant termination of the underlying
 //     stream(s).
+//   - transport takes ownership of `obj` itself - not just of its reader.
+//
+// Callers must not access `obj` after calling Send, including when Send returns an error.
 func (s *Stream) Send(obj *Obj) (err error) {
 	debug.Assertf(len(obj.Hdr.Opaque) < len(s.maxhdr)-sizeofh, "(%d, %d)", len(obj.Hdr.Opaque), len(s.maxhdr))
 	if err = s.startSend(obj); err != nil {

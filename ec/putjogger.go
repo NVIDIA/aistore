@@ -537,6 +537,9 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) (err error) {
 		return err
 	}
 
+	// `ctx.lh` is owned by the shared dataSlice and released once per data slice
+	debug.Assert(len(ctx.targets) >= ctx.dataSlices, "targets ", len(ctx.targets), " < data slices ", ctx.dataSlices)
+
 	dataSlice := &slice{refCnt: *atomic.NewInt32(int32(ctx.dataSlices)), obj: ctx.lh}
 	// If the slice is data one - no immediate cleanup is required because this
 	// slice is just a section reader of the entire file.

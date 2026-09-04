@@ -71,15 +71,16 @@ func (s *sentinel) cleanup() {
 
 // TODO -- FIXME: transition to T2T (off streams) control path
 func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
+	if abortErr != nil && xact.IsErrRecvAbortXact(abortErr) {
+		return // do nothing
+	}
+
 	o := transport.AllocSend()
 	o.Hdr.Opcode = transport.OpcDone
 	if uuid != "" {
 		o.Hdr.Opaque = cos.UnsafeB(uuid)
 	}
 	if abortErr != nil {
-		if xact.IsErrRecvAbortXact(abortErr) {
-			return // do nothing
-		}
 		o.Hdr.Opcode = transport.OpcAbort
 		o.Hdr.ObjName = abortErr.Error() // (compare w/ sendTerm)
 	}

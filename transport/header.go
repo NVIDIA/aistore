@@ -333,7 +333,9 @@ func (obj *Obj) String() string {
 	return fmt.Sprintf("%s(size=%d)", s, obj.Hdr.ObjAttrs.Size)
 }
 
-func (obj *Obj) SetPrc(n int) {
+// initialize shared send-completion state for a multi-destination (bundled) send
+func (obj *Obj) SetCmpl(n int) {
+	debug.Assert(n > 1, "expecting multiple destinations, got ", n)
 	obj.cmpl = &sendCmpl{}
 	obj.cmpl.refs.Store(int64(n))
 }

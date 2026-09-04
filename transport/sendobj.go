@@ -140,7 +140,9 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 		obj.cmpl.err.CompareAndSwap(nil, &err)
 	}
 
-	// close before completing: rc == 0 implies that every destination reader has been closed
+	// Close before decrementing the shared refcount: since each destination closes
+	// its own reader _before_ its Dec, rc == 0 implies that every destination reader
+	// has been released. (The one exception below is a reader that was already closed.)
 	if obj.Reader != nil {
 		if err != nil && cmn.IsFileAlreadyClosed(err) {
 			nlog.Errorf("%s %s: %v", s, obj, err)
@@ -153,7 +155,8 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 		rc = obj.cmpl.refs.Dec()
 		debug.Assert(rc >= 0)
 		if rc == 0 {
-			// every destination reader is now closed
+			// last destination: every other one has already stored its error
+			// (CAS strictly precedes Dec) - the load below must observe any stored error
 			if perr := obj.cmpl.err.Load(); perr != nil {
 				cbErr = *perr
 			}

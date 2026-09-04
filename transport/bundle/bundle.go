@@ -157,10 +157,11 @@ func (sb *Streams) Close(gracefully bool) {
 // when (nodes == nil) transmit via all established streams in a bundle
 // otherwise, restrict to the specified subset (nodes);
 // rules:
-// - validation and reader-reopen failures complete locally, before SetPrc
+// - validation and reader-reopen failures complete locally, before SetCmpl
 // - once the refcount is initialized, attempt every destination even after an error
 // - transport completes every attempt and invokes the shared callback exactly once
 // - return the first immediate send error.
+// - transport consumes `obj` and `roc`, including on validation and reader-reopen failures.
 func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*meta.Snode) error {
 	debug.AssertFunc(func() bool { return !transport.ReservedOpcode(obj.Hdr.Opcode) })
 	streams := sb.get()
@@ -203,7 +204,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 	}
 
 	// 2) one reader per destination
-	// Reopen (cnt-1) readers before SetPrc and before transferring ownership to
+	// Reopen (cnt-1) readers before SetCmpl and before transferring ownership to
 	// asynchronous streams. On failure, complete locally without a hanging refcount.
 	readers, err := _reopen(roc, cnt)
 	if err != nil {
@@ -214,7 +215,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 
 	// 3) send
 	if cnt > 1 {
-		obj.SetPrc(cnt)
+		obj.SetCmpl(cnt)
 	}
 	if nodes == nil {
 		idx := 0
@@ -247,7 +248,10 @@ func _reopen(roc cos.ReadOpenCloser, cnt int) ([]cos.ReadOpenCloser, error) {
 	for i := 1; i < cnt; i++ {
 		reader, err := roc.Open()
 		if err != nil {
-			debug.Assert(reader == nil)
+			if reader != nil {
+				debug.Assert(false)
+				cos.Close(reader)
+			}
 			for j := 1; j < i; j++ {
 				cos.Close(readers[j])
 			}

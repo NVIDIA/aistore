@@ -195,6 +195,10 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	}
 
 	if err != nil {
+		if srcReader != nil {
+			debug.Assert(false)
+			cos.Close(srcReader)
+		}
 		freeObject(reader)
 		return err
 	}

@@ -22,7 +22,7 @@ func TestDoCmplRetainsNonFinalError(t *testing.T) {
 		called++
 		gotErr = err
 	}
-	objs[0].SetPrc(len(objs))
+	objs[0].SetCmpl(len(objs))
 	*objs[1], *objs[2] = *objs[0], *objs[0]
 
 	s := &Stream{}
