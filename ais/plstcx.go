@@ -465,12 +465,11 @@ func concatLso(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) (objs *cmn.LsoRes) {
 // Trim the merged page to the requested size and set the continuation token, if any.
 func finLsoA(objs *cmn.LsoRes, lsmsg *apc.LsoMsg, hasMore bool) {
 	maxSize := int(lsmsg.PageSize)
-	// when recursion is disabled (apc.LsNoRecursion)
-	// the result _may_ include duplicated names of the virtual subdirectories
-	// (dedup all of them: truncating here would drop distinct names past `maxSize`
-	// without leaving anything to resume from)
+	// when recursion is disabled (apc.LsNoRecursion), the result _may_ include
+	// duplicated names of virtual subdirectories - retain one extra to detect
+	// the overflow
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
-		objs.Entries = dedupLso(objs.Entries)
+		objs.Entries = dedupLso(objs.Entries, maxSize+1)
 	}
 	switch l := len(objs.Entries); {
 	case l > maxSize:
@@ -483,8 +482,9 @@ func finLsoA(objs *cmn.LsoRes, lsmsg *apc.LsoMsg, hasMore bool) {
 	}
 }
 
-// remove adjacent entries with the same Name (the input must already be sorted by Name)
-func dedupLso(entries cmn.LsoEntries) cmn.LsoEntries {
+// - remove adjacent entries with the same Name (the input must already be sorted by Name)
+// - stop after producing maxSize entries; maxSize <= 0 means unbounded
+func dedupLso(entries cmn.LsoEntries, maxSize int) cmn.LsoEntries {
 	var j int
 	for _, en := range entries {
 		if j > 0 && entries[j-1].Name == en.Name {
@@ -493,6 +493,9 @@ func dedupLso(entries cmn.LsoEntries) cmn.LsoEntries {
 
 		entries[j] = en
 		j++
+		if maxSize > 0 && j >= maxSize {
+			break
+		}
 	}
 	clear(entries[j:])
 	return entries[:j]
@@ -532,7 +535,7 @@ func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
 	}
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
 		cmn.SortLsoLex(entries)
-		entries = dedupLso(entries)
+		entries = dedupLso(entries, 0)
 	} else {
 		cmn.SortLso(entries)
 	}

@@ -76,6 +76,7 @@ type (
 		smap      *meta.Smap
 		walk      struct {
 			bp           core.Backend     // t.Backend(bck)
+			err          error            // remember failed-walk error
 			pageCh       chan *cmn.LsoEnt // channel to accumulate listed object entries
 			stopCh       *cos.StopCh      // to abort bucket walk
 			wi           *walkInfo        // walking context and state
@@ -434,6 +435,7 @@ func (r *LsoXact) Abort(err error) (ok bool) {
 func (r *LsoXact) initWalk() {
 	r.walk.pageCh = make(chan *cmn.LsoEnt, r.config.Lso.WalkBuffer)
 	r.walk.done = false
+	r.walk.err = nil
 	r.walk.stopCh = cos.NewStopCh()
 	r.walk.lastDir = "" // reset directory dedup state
 	r.walk.wg.Add(1)
@@ -484,8 +486,10 @@ func (r *LsoXact) doPage() *LsoRsp {
 
 	// repeated request for same page
 	if r.msg.ContinuationToken != "" && r.msg.ContinuationToken == r.token {
-		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.page, ContinuationToken: r.nextToken}
-		return &LsoRsp{Lst: page, Status: http.StatusOK}
+		if !r.walk.done || r.walk.err == nil {
+			page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.page, ContinuationToken: r.nextToken}
+			return &LsoRsp{Lst: page, Status: http.StatusOK}
+		}
 	}
 
 	debug.Assert(!r.walk.remote || r.nbi == nil)
@@ -521,6 +525,10 @@ func (r *LsoXact) doPageR() *LsoRsp {
 
 func (r *LsoXact) doPageA() *LsoRsp {
 	r.nextPageA()
+
+	if r.walk.done && r.walk.err != nil {
+		return &LsoRsp{Status: http.StatusInternalServerError, Err: r.walk.err}
+	}
 
 	var (
 		cnt  = r.msg.PageSize
@@ -733,7 +741,7 @@ func (r *LsoXact) _clrPage(from, to int) {
 
 func (r *LsoXact) nextPageA() {
 	if r.token > r.msg.ContinuationToken {
-		// restart traversing the bucket (TODO: cache more and try to scroll back)
+		// restart traversing the bucket to scroll back (TODO: cache more history)
 		r.walk.stopCh.Close()
 		r.walk.wg.Wait()
 		r.initWalk()
@@ -823,6 +831,8 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	if err := fs.WalkBck(opts); err != nil {
 		if err != filepath.SkipDir && err != errLsoStopped {
 			r.AddErr(err, 0)
+			// remember failed-walk error
+			r.walk.err = err
 		}
 	}
 	close(r.walk.pageCh)
