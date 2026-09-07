@@ -272,6 +272,10 @@ func TestS3ListObjectsMaxKeysNextPage(t *testing.T) {
 	tassert.Fatalf(t, out.IsTruncated != nil && *out.IsTruncated, "page 1: expected IsTruncated=true")
 	tassert.Fatalf(t, out.NextContinuationToken != nil && *out.NextContinuationToken != "",
 		"page 1: expected a next-continuation-token")
+	token := aws.ToString(out.NextContinuationToken)
+	uuid, marker := aiss3.DecodeToken(token)
+	tassert.Fatalf(t, cos.IsValidUUID(uuid) && marker == objNames[1],
+		"page 1: unexpected compound token: uuid=%q, marker=%q", uuid, marker)
 	for _, o := range out.Contents {
 		seen = append(seen, *o.Key)
 	}
@@ -283,6 +287,11 @@ func TestS3ListObjectsMaxKeysNextPage(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(out.Contents) == 2, "page 2: expected 2 entries, got %d", len(out.Contents))
 	tassert.Fatalf(t, out.IsTruncated != nil && *out.IsTruncated, "page 2: expected IsTruncated=true (1 more object remains)")
+	tassert.Fatalf(t, aws.ToString(out.ContinuationToken) == token, "page 2: must echo the incoming wire token")
+	token = aws.ToString(out.NextContinuationToken)
+	nextUUID, marker := aiss3.DecodeToken(token)
+	tassert.Fatalf(t, nextUUID == uuid && marker == objNames[3],
+		"page 2: expected uuid=%q and marker=%q, got %q and %q", uuid, objNames[3], nextUUID, marker)
 	for _, o := range out.Contents {
 		tassert.Fatalf(t, !slices.Contains(seen, *o.Key), "page 2: entry %q duplicates page 1", *o.Key)
 		seen = append(seen, *o.Key)
@@ -296,6 +305,8 @@ func TestS3ListObjectsMaxKeysNextPage(t *testing.T) {
 	tassert.Fatalf(t, len(out.Contents) == 1, "page 3: expected 1 entry, got %d", len(out.Contents))
 	tassert.Fatalf(t, out.IsTruncated == nil || !*out.IsTruncated,
 		"page 3: expected IsTruncated=false, got %v", out.IsTruncated)
+	tassert.Fatalf(t, aws.ToString(out.ContinuationToken) == token, "page 3: must echo the incoming wire token")
+	tassert.Fatalf(t, aws.ToString(out.NextContinuationToken) == "", "page 3: expected no next-continuation-token")
 	seen = append(seen, *out.Contents[0].Key)
 
 	sort.Strings(seen)
@@ -315,6 +326,92 @@ func TestS3ListObjectsMaxKeysNextPage(t *testing.T) {
 		"single page: expected IsTruncated=false, got %v", out.IsTruncated)
 	tassert.Fatalf(t, out.NextContinuationToken == nil || *out.NextContinuationToken == "",
 		"single page: expected no next-continuation-token, got %q", aws.ToString(out.NextContinuationToken))
+
+	// A zero-size request echoes the wire token without fetching another page.
+	out, err = s3Client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(bck.Name), MaxKeys: aws.Int32(0), ContinuationToken: aws.String(token),
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, aws.ToString(out.ContinuationToken) == token, "max-keys=0: must echo the incoming wire token")
+	tassert.Fatalf(t, len(out.Contents) == 0 && !aws.ToBool(out.IsTruncated) && aws.ToString(out.NextContinuationToken) == "",
+		"max-keys=0: expected an empty, non-truncated response")
+}
+
+// Companion to TestS3ListObjectsMaxKeysNextPage, but against a Cloud bucket -
+// i.e. the R-flow, where the continuation token underneath the compound one is the backend's own opaque string.
+func TestS3ListObjectsRemotePages(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Bck: cliBck, CloudBck: true})
+
+	m := ioContext{
+		t:                   t,
+		bck:                 cliBck,
+		num:                 20,
+		fileSize:            128,
+		prefix:              "test-s3-rflow-" + trand.String(6) + "/",
+		ordered:             true,
+		deleteRemoteBckObjs: true,
+	}
+	m.init(true /*cleanup*/)
+	m.puts()
+	defer m.del()
+
+	cfg, err := config.LoadDefaultConfig(
+		t.Context(),
+		config.WithCredentialsProvider(getS3Credentials(t)),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	cfg.HTTPClient = newS3Client(false /*pathStyle*/)
+	cfg.BaseEndpoint = aws.String(m.proxyURL + "/s3")
+	s3Client := s3.NewFromConfig(cfg)
+
+	var (
+		seen  []string
+		uuid  string
+		token string
+	)
+	for page := 1; page <= m.num; page++ {
+		in := &s3.ListObjectsV2Input{
+			Bucket: aws.String(m.bck.Name), Prefix: aws.String(m.prefix), MaxKeys: aws.Int32(7),
+		}
+		if token != "" {
+			in.ContinuationToken = aws.String(token)
+		}
+		out, err := s3Client.ListObjectsV2(t.Context(), in)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, aws.ToString(out.ContinuationToken) == token,
+			"page %d: must echo the incoming wire token", page)
+
+		for _, o := range out.Contents {
+			key := aws.ToString(o.Key)
+			tassert.Fatalf(t, !slices.Contains(seen, key), "page %d: entry %q duplicates an earlier page", page, key)
+			seen = append(seen, key)
+		}
+		if !aws.ToBool(out.IsTruncated) {
+			tassert.Fatalf(t, aws.ToString(out.NextContinuationToken) == "",
+				"page %d: last page must carry no next-continuation-token", page)
+			break
+		}
+
+		token = aws.ToString(out.NextContinuationToken)
+		nextUUID, orig := aiss3.DecodeToken(token)
+		tassert.Fatalf(t, cos.IsValidUUID(nextUUID), "page %d: expected a compound token, got uuid=%q", page, nextUUID)
+		if uuid == "" {
+			uuid = nextUUID
+		}
+		tassert.Fatalf(t, nextUUID == uuid, "page %d: x-lso UUID changed mid-listing: %q => %q", page, uuid, nextUUID)
+
+		// R-flow: `orig` is the backend's own token - opaque, and therefore never one of
+		// the listed names
+		tassert.Fatalf(t, !slices.Contains(m.objNames, orig),
+			"page %d: token %q is one of the listed names - A-flow?", page, orig)
+
+		tlog.Logfln("page %d: %d entries, uuid=%s, remote token=%.24s...", page, len(out.Contents), nextUUID, orig)
+	}
+
+	sort.Strings(seen)
+	sort.Strings(m.objNames)
+	tassert.Fatalf(t, slices.Equal(seen, m.objNames), "expected %v, got %v", m.objNames, seen)
 }
 
 func loadCredentials(t *testing.T) (f func(*config.LoadOptions) error) {

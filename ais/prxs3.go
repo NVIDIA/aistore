@@ -401,6 +401,11 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		return
 	}
 
+	// decode x-lso UUID and original continuation token, while keeping the client-sent token
+	// for the response (see below)
+	token := lsmsg.ContinuationToken
+	lsmsg.UUID, lsmsg.ContinuationToken = s3.DecodeToken(token)
+
 	// via NBI
 	if err := _setupNBI(r.Header, lsmsg); err != nil {
 		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
@@ -421,16 +426,20 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		}
 	}
 
-	// NOTE:
-	// - the following few lines of code translate (using additional memory) list-objects
+	// Note:
+	// - resp.FromLsoResult translates (using additional memory) list-objects
 	//   results into S3 format, and then use xml encoding to serialize the entire thing;
-	// - compare with native Go-based API that utilizes message pack encoding with
-	//   (certainly) no translations;
+	// - compare with native Go-based API that optimally utilizes message pack encoding with
+	//   no translations;
 	// - the implication: if, when working with very large remote datasets, list-objects performance
-	//   becomes an issue - consider using native API.
+	//   may become an issue - consider using native API.
 
 	resp := s3.NewListObjectResult(bucket, maxKeys)
-	resp.FromLsoResult(lst, lsmsg.ContinuationToken)
+	resp.FromLsoResult(lst, token)
+
+	// encode x-lso UUID and next continuation token
+	resp.NextContinuationToken = s3.EncodeToken(lsmsg.UUID, resp.NextContinuationToken)
+
 	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
@@ -836,9 +845,9 @@ func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket st
 }
 
 // NOTE:
-// 1. AuthN and intra-cluster signing do NOT require feat.S3ReverseProxy (see below)
-//    signed redirects let targets verify proxy admission while object payloads flow directly between client and AIS target.
-//    Clients must preserve redirected Location;  body-carrying requests (e.g. PUT(object))
+// 1. AuthN and intra-cluster signing do NOT require feat.S3ReverseProxy (see below) -
+//    signed redirects let AIS targets verify proxy admission (while data flows directly client <=> target).
+//    Clients must preserve redirected Location;  body-carrying requests (e.g., PUT(object))
 //    also require replay support (net/http.GetBody).
 //    Enable reverse proxy IFF the client or deployment requires it.
 //
