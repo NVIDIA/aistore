@@ -887,11 +887,8 @@ func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snod
 // stamp/sign via intra headers - svReq.payload() excludes query/host/scheme,
 // so the URL rewrite below cannot invalidate the signature
 func (p *proxy) s3ReverseRequest(w http.ResponseWriter, r *http.Request, si *meta.Snode, smap *smapX) {
-	parsedURL, err := url.Parse(si.URL(cmn.NetIntraData))
-	debug.AssertNoErr(err)
-
 	p.setIntraHdrs(r, smap, si != nil)
-	p.reverseRequest(w, r, si.ID(), parsedURL)
+	p.reverseRequest(w, r, si.ID(), si.URL(cmn.NetIntraData))
 }
 
 // escape `&` for XML content; signed redurl query separators

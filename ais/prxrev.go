@@ -60,7 +60,7 @@ type (
 	}
 	singleRProxy struct {
 		rp *httputil.ReverseProxy
-		u  *url.URL
+		u  string
 	}
 )
 
@@ -288,7 +288,13 @@ func rpTransport(config *cmn.Config) *http.Transport {
 	return transport
 }
 
-// Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.
+type (
+	stdlibErrHdlr func(http.ResponseWriter, *http.Request, error)
+)
+
+// ref: stdlib httputil/reverseproxy.go
+// - type: stdlibErrHdlr
+// - impl: similar to defaultErrorHandler
 func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) {
 	var (
 		smap = p.owner.smap.get()
@@ -309,23 +315,20 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, smap *smapX, si *meta.Snode) {
 	debug.AssertFunc(func() bool { return si.ID() != p.SID() }, "reversing to self")
 
-	parsedURL, err := url.Parse(si.URL(cmn.NetIntraControl))
-	debug.AssertNoErr(err)
-
 	// stamp/sign over intra-control net
 	debug.AssertFunc(func() bool { return smap.isValid() })
 
 	// caution: svReq.payload() currently does not include query, host, and scheme; if it ever changes
 	// the following will have to change as well
 	p.setIntraHdrs(r, smap, si != nil)
-	p.reverseRequest(w, r, si.ID(), parsedURL)
+	p.reverseRequest(w, r, si.ID(), si.URL(cmn.NetIntraControl))
 }
 
 // usage:
 // 1. primary => node in the cluster
 // 2. primary => remais
-func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID string, parsedURL *url.URL) {
-	rproxy := p.rproxy.loadOrStore(nodeID, parsedURL, p.rpErrHandler)
+func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID, rawURL string) {
+	rproxy := p.rproxy.loadOrStore(nodeID, rawURL, p.rpErrHandler)
 	rproxy.ServeHTTP(w, r)
 }
 
@@ -372,8 +375,7 @@ func (p *proxy) reverseRemAis(w http.ResponseWriter, r *http.Request, msg *apc.A
 	}
 
 	debug.Assert(len(urls) > 0)
-	u, err := url.Parse(urls[0])
-	if err != nil {
+	if _, err := url.Parse(urls[0]); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -387,7 +389,7 @@ func (p *proxy) reverseRemAis(w http.ResponseWriter, r *http.Request, msg *apc.A
 	query = cmn.DelBckFromQuery(query)
 	query = bck.AddToQuery(query)
 	r.URL.RawQuery = query.Encode()
-	p.reverseRequest(w, r, aliasOrUUID, u)
+	p.reverseRequest(w, r, aliasOrUUID, urls[0])
 }
 
 //////////////////
@@ -401,22 +403,23 @@ func (rp *reverseProxy) init() {
 	}
 }
 
-func (rp *reverseProxy) loadOrStore(uuid string, u *url.URL,
-	errHdlr func(w http.ResponseWriter, r *http.Request, err error),
-) *httputil.ReverseProxy {
+func (rp *reverseProxy) loadOrStore(uuid, rawURL string, errHdlr stdlibErrHdlr) *httputil.ReverseProxy {
 	revProxyIf, exists := rp.nodes.Load(uuid)
 	if exists {
 		shrp := revProxyIf.(*singleRProxy)
-		if shrp.u.Host == u.Host {
+		if shrp.u == rawURL { // compare URL strings as is
 			return shrp.rp
 		}
 	}
+	u, err := url.Parse(rawURL)
+	debug.AssertNoErr(err)
+
 	rproxy := httputil.NewSingleHostReverseProxy(u)
 	rproxy.Transport = rpTransport(cmn.GCO.Get())
 	rproxy.ErrorHandler = errHdlr
 
 	// NOTE: races are rare probably happen only when storing an entry for the first time or when URL changes.
 	// Also, races don't impact the correctness as we always have latest entry for `uuid`, `URL` pair (see: L3917).
-	rp.nodes.Store(uuid, &singleRProxy{rproxy, u})
+	rp.nodes.Store(uuid, &singleRProxy{rproxy, rawURL})
 	return rproxy
 }
