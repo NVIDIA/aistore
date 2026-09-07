@@ -116,25 +116,41 @@ func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 	return pi, err
 }
 
-// Returns a target for a given task. E.g. usage: list objects in a cloud bucket
-// (we want only one target to do it).
-func (smap *Smap) HrwTargetTask(uuid string) (si *Snode, err error) {
+// HRW over a given node map; skips unavailable nodes; returns nil when none qualifies.
+// NOTE: the (uuid => node) mapping must be identical cluster-wide - do not change
+// the digest, the hash, or the `>=` tie-breaking below.
+func hrwOver(nodes NodeMap, uuid string) (si *Snode) {
 	var (
 		maxH   uint64
 		digest = onexxh.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
 	)
-	for _, tsi := range smap.Tmap {
-		if tsi.InMaintOrDecomm() {
+	for _, nsi := range nodes {
+		if nsi.InMaintOrDecomm() {
 			continue
 		}
-		cs := xoshiro256.Hash(tsi.digest() ^ digest)
+		cs := xoshiro256.Hash(nsi.digest() ^ digest)
 		if cs >= maxH {
 			maxH = cs
-			si = tsi
+			si = nsi
 		}
 	}
-	if si == nil {
+	return si
+}
+
+// return a (designated) target for a given task
+// (e.g. usage: list objects in a cloud bucket - we want one DT to do it)
+func (smap *Smap) HrwTargetTask(uuid string) (si *Snode, err error) {
+	if si = hrwOver(smap.Tmap, uuid); si == nil {
 		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
+	}
+	return si, err
+}
+
+// return a proxy for a given task - e.g., the proxy to own a given list-objects
+// pagination (compare with HrwIC above: the latter selects from the IC members only)
+func (smap *Smap) HrwProxyTask(uuid string) (si *Snode, err error) {
+	if si = hrwOver(smap.Pmap, uuid); si == nil {
+		err = cmn.NewErrNoNodes(apc.Proxy, len(smap.Pmap))
 	}
 	return si, err
 }

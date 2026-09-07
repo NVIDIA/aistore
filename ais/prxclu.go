@@ -33,7 +33,7 @@ import (
 // v1/cluster handlers
 //
 
-func (p *proxy) cluHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) cluCtrlHandler(w http.ResponseWriter, r *http.Request) {
 	p._clu(w, r, false /*isPub*/)
 }
 

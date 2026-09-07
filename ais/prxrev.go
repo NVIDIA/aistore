@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -65,7 +66,7 @@ type (
 )
 
 // [METHOD] /v1/reverse
-func (p *proxy) revHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) revCtrlHandler(w http.ResponseWriter, r *http.Request) {
 	p._reverse(w, r, false /*isPub*/)
 }
 
@@ -180,7 +181,7 @@ func (p *proxy) _reverse(w http.ResponseWriter, r *http.Request, isPub bool) {
 		if isPub {
 			p.daePubHandler(w, r)
 		} else {
-			p.daeHandler(w, r)
+			p.daeCtrlHandler(w, r)
 		}
 		return
 	}
@@ -312,6 +313,10 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 	w.WriteHeader(http.StatusBadGateway)
 }
 
+func rpErrHandlerS3(w http.ResponseWriter, r *http.Request, err error) {
+	s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadGateway})
+}
+
 func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, smap *smapX, si *meta.Snode) {
 	debug.AssertFunc(func() bool { return si.ID() != p.SID() }, "reversing to self")
 
@@ -324,11 +329,16 @@ func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, smap 
 	p.reverseRequest(w, r, si.ID(), si.URL(cmn.NetIntraControl))
 }
 
-// usage:
-// 1. primary => node in the cluster
-// 2. primary => remais
-func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID, rawURL string) {
+// Relay to a cluster node or remote AIS. An optional error handler applies only
+// to this request; nil retains the cached handler.
+func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID, rawURL string, errHdlr ...stdlibErrHdlr) {
 	rproxy := p.rproxy.loadOrStore(nodeID, rawURL, p.rpErrHandler)
+	if len(errHdlr) > 0 && errHdlr[0] != nil {
+		// Keep the cached instance and its shared connection pool intact.
+		copyRP := *rproxy
+		copyRP.ErrorHandler = errHdlr[0]
+		rproxy = &copyRP
+	}
 	rproxy.ServeHTTP(w, r)
 }
 

@@ -629,11 +629,11 @@ func (t *target) initRecvHandlers() {
 
 		// (pub + control): apc.Daemon
 		networkHandler{r: apc.Daemon, h: t.daePubHandler, net: accessNetPublic},
-		networkHandler{r: apc.Daemon, h: t.daemonHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Daemon, h: t.daeCtrlHandler, net: accessNetIntraControl},
 
 		networkHandler{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
 
-		networkHandler{r: apc.Health, h: t.healthHandler, net: accessNetPublic},
+		networkHandler{r: apc.Health, h: t.healthPubHandler, net: accessNetPublic},
 		networkHandler{r: apc.Health, h: t.healthCtrlHandler, net: accessNetIntraControl},
 
 		networkHandler{r: apc.Xactions, h: t.xactHandler, net: accessNetIntraControl},

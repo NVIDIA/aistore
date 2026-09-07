@@ -256,18 +256,19 @@ func (p *proxy) initRecvHandlers() {
 	networkHandlers = append(networkHandlers,
 		// (pub + control): apc.Reverse
 		networkHandler{r: apc.Reverse, h: p.revPubHandler, net: accessNetPublic},
-		networkHandler{r: apc.Reverse, h: p.revHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Reverse, h: p.revCtrlHandler, net: accessNetIntraControl},
 
 		// (pub + control): apc.Cluster
 		networkHandler{r: apc.Cluster, h: p.cluPubHandler, net: accessNetPublic},
-		networkHandler{r: apc.Cluster, h: p.cluHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Cluster, h: p.cluCtrlHandler, net: accessNetIntraControl},
 
 		// (pub + control): apc.Daemon
 		networkHandler{r: apc.Daemon, h: p.daePubHandler, net: accessNetPublic},
-		networkHandler{r: apc.Daemon, h: p.daeHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Daemon, h: p.daeCtrlHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Buckets, h: p.bckPubHandler, net: accessNetPublic},
+		networkHandler{r: apc.Buckets, h: p.bckCtrlHandler, net: accessNetIntraControl},
 
-		// pub-net handlers: cluster must be started
-		networkHandler{r: apc.Buckets, h: p.bucketHandler, net: accessNetPublic},
+		// pub-net handlers
 		networkHandler{r: apc.Objects, h: p.objectHandler, net: accessNetPublic},
 		networkHandler{r: apc.Download, h: p.dloadHandler, net: accessNetPublic},
 		networkHandler{r: apc.ETL, h: p.etlHandler, net: accessNetPublic},
@@ -475,7 +476,8 @@ func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bc
 }
 
 // verb /v1/buckets/
-func (p *proxy) bucketHandler(w http.ResponseWriter, r *http.Request) {
+
+func (p *proxy) bckPubHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.cluStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -586,7 +588,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 		} else if !strings.Contains(r.URL.RawQuery, apc.QparamProvider) {
 			r.URL.RawQuery += "&" + apc.QparamProvider + "=" + provider
 		}
-		p.bucketHandler(w, r)
+		p.bckPubHandler(w, r)
 		return
 	}
 	// num items: 2
@@ -622,7 +624,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 	if objName != "" {
 		p.objectHandler(w, r)
 	} else {
-		p.bucketHandler(w, r)
+		p.bckPubHandler(w, r)
 	}
 }
 
@@ -787,12 +789,8 @@ func (p *proxy) bgetBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 }
 
 func (p *proxy) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
-	// NOTE -- TODO: currently, always forwarding
 	if !qbck.IsBucket() {
 		p.writeErrf(w, r, "%s: %q is not a bucket (is a bucket query?)", apc.BadLsoRequest, qbck.String())
-		return
-	}
-	if p.forwardCP(w, r, msg, lsotag+" "+qbck.String()) {
 		return
 	}
 
@@ -840,7 +838,7 @@ func (p *proxy) bgetObjects(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		return
 	}
 
-	p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
+	p.listObjects(w, r, bck, &lsmsg)
 }
 
 // +gen:endpoint GET /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamLatestVer=bool]
@@ -2573,7 +2571,7 @@ func (p *proxy) bcastBckAction(method, bucket string, msg *apc.ActMsg, query url
 //
 
 // [METHOD] /v1/daemon
-func (p *proxy) daeHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) daeCtrlHandler(w http.ResponseWriter, r *http.Request) {
 	p._dae(w, r, false /*isPub*/)
 }
 

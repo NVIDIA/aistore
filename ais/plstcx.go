@@ -5,13 +5,16 @@
 package ais
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -25,14 +28,46 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-type lsofcRes struct {
-	tsi            *meta.Snode // designated target for R-flow; nil for A-flow
-	listRemote     bool        // R-flow vs A-flow
-	wantOnlyRemote bool        // when listRemote: do not populate with AIS metadata
-}
+// List-objects call flow:
+//
+// Native: bgetObjects => initAndTry => listObjects => lsOwner
+// S3:     listObjectsS3 => lsOwner
+//
+// lsOwner: assign/validate UUID => HRW-select proxy
+//   self:  execute page directly
+//   peer:  forwardLSO => reverseRequest => owner.bckCtrlHandler => execute page
+//
+// Execute page:
+//   Native: lsNativePage => lsPage
+//   S3:     lsS3Page => lsPageS3 => lsPage
+//
+// Owner formats the response; forwarding proxy relays it unchanged.
+// Subsequent pages retain UUID and repeat the same owner selection.
+//
+// Special case:
+// - when remote bucket is not in the BMD - forwardCP as usual
+//   (an extra hop is a MUST, but only once)
+
+type (
+	// list-objects flow control
+	lsofcRes struct {
+		tsi            *meta.Snode // designated target for R-flow; nil for A-flow
+		listRemote     bool        // R-flow vs A-flow
+		wantOnlyRemote bool        // when listRemote: do not populate with AIS metadata
+	}
+
+	// (forwardLSO machinery)
+	lsoReq struct {
+		Bck     cmn.Bck     `json:"bck"`
+		LsoMsg  *apc.LsoMsg `json:"lso"`
+		Props   *cmn.Bprops `json:"props,omitempty"`
+		S3Token *string     `json:"s3_token,omitempty"` // nil for native; original S3 token otherwise
+		New     bool        `json:"new,omitempty"`      // first request, even though UUID is now assigned
+	}
+)
 
 // one page => msgpack rsp
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) {
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) {
 	// LsVerChanged a.k.a. '--check-versions' limitations
 	if lsmsg.IsFlagSet(apc.LsDiff) {
 		if err := _checkVerChanged(bck, lsmsg); err != nil {
@@ -49,9 +84,25 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		lsmsg.SetFlag(apc.LsCached)
 	}
 
-	// do page
+	smap := p.owner.smap.get()
+	psi, newls, err := p.lsOwner(lsmsg, smap)
+	if err != nil {
+		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
+		p.writeErr(w, r, err)
+		return
+	}
+	if psi != nil {
+		p.forwardLSO(w, r, bck, lsmsg, psi, smap, newls, nil)
+		return
+	}
+	p.lsNativePage(w, r, bck, lsmsg, smap, newls)
+}
+
+// native API: execute p.lsPage locally or on behalf of a peer
+func (p *proxy) lsNativePage(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg,
+	smap *smapX, newls bool) {
 	beg := mono.NanoTime()
-	lst, err := p.lsPage(bck, amsg, lsmsg, r.Header, p.owner.smap.get())
+	lst, err := p.lsPage(bck, lsmsg, r.Header, smap, newls)
 	if err != nil {
 		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 		p.writeErr(w, r, err)
@@ -96,16 +147,10 @@ func _checkVerChanged(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
 	return nil
 }
 
-// one page; common code (native, s3 api)
-func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX) (*cmn.LsoRes, error) {
-	var (
-		lst   *cmn.LsoRes
-		newls bool
-	)
-	if lsmsg.UUID == "" {
-		lsmsg.UUID = cos.GenUUID()
-		newls = true
-	}
+// next page: common execution code (native and s3 API, both) - post-routing
+func (p *proxy) lsPage(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header,
+	smap *smapX, newls bool) (*cmn.LsoRes, error) {
+	var lst *cmn.LsoRes
 	fc, err := p._lsofc(bck, lsmsg, smap)
 	if err != nil {
 		return nil, err
@@ -127,7 +172,7 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 			if lsmsg.SID != "" {
 				s += " via " + fc.tsi.StringEx()
 			}
-			nlog.Infoln(amsg.Action, "[", lsmsg.UUID, "]", bck.Cname(""), s)
+			nlog.Infoln(apc.ActList, "[", lsmsg.UUID, "]", bck.Cname(""), s)
 		}
 
 		config := cmn.GCO.Get()
@@ -143,6 +188,121 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 	}
 
 	return lst, err
+}
+
+// new request: assign x-lso UUID; otherwise use existing
+// map to `psi` owner
+// return nil owner for local execution
+func (p *proxy) lsOwner(lsmsg *apc.LsoMsg, smap *smapX) (psi *meta.Snode, newls bool, err error) {
+	if lsmsg.UUID == "" {
+		lsmsg.UUID = cos.GenUUID()
+		newls = true
+	} else if !cos.IsValidUUID(lsmsg.UUID) {
+		return nil, false, fmt.Errorf("%s: invalid UUID %q", apc.BadLsoRequest, lsmsg.UUID)
+	}
+	if smap == nil || !smap.isValid() {
+		return nil, newls, &cmn.ErrHTTP{Status: http.StatusServiceUnavailable, Message: "cannot route list-objects: invalid Smap"}
+	}
+	psi, err = smap.HrwProxyTask(lsmsg.UUID)
+	if err == nil && psi.ID() == p.SID() {
+		psi = nil
+	}
+	return psi, newls, err
+}
+
+// forward x-lso next-page request to x-lso owner
+func (p *proxy) forwardLSO(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg,
+	psi *meta.Snode, smap *smapX, newls bool, token *string) {
+	debug.AssertFunc(func() bool { return psi.ID() != p.SID() }, "reversing to self")
+
+	msg := lsoReq{Bck: bck.Clone(), LsoMsg: lsmsg, New: newls, S3Token: token}
+	if bck.Props.BID == 0 {
+		msg.Props = bck.Props
+	}
+	body := cos.MustMarshal(&msg)
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.ContentLength = int64(len(body))
+	r.Header.Set(cos.HdrContentType, cos.ContentJSON)
+	r.URL.Path = apc.URLPathBuckets.Join(bck.Name)
+	r.URL.RawPath = ""
+	r.URL.RawQuery = ""
+	r.URL.ForceQuery = false
+	p.setIntraHdrs(r, smap, true /*peer present*/)
+
+	if cmn.Rom.V(4, cos.ModAIS) {
+		nlog.Infoln(p.String(), lsotag, "[", lsmsg.UUID, "] =>", psi.StringEx())
+	}
+
+	var errHdlr stdlibErrHdlr
+	if token != nil {
+		errHdlr = rpErrHandlerS3
+	}
+	p.reverseRequest(w, r, psi.ID(), psi.URL(cmn.NetIntraControl), errHdlr)
+}
+
+// Only forwardLSO enters here. The sending proxy has initialized the bucket and
+// checked client access; do not re-enter public dispatch or route the page again.
+func (p *proxy) bckCtrlHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.cluStartedWithRetry() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	if r.Method != http.MethodGet {
+		cmn.WriteErr405(w, r, http.MethodGet)
+		return
+	}
+	if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
+		p.writeErr(w, r, err, ecode)
+		return
+	}
+
+	smap := p.owner.smap.get()
+	if smap == nil || smap.GetProxy(r.Header.Get(apc.HdrSenderID)) == nil {
+		p.writeErrMsg(w, r, "list-objects: expected proxy sender", http.StatusForbidden)
+		return
+	}
+	items, err := p.parseURL(w, r, apc.URLPathBuckets.L, 1, false)
+	if err != nil {
+		return
+	}
+
+	var msg lsoReq
+	if cmn.ReadJSON(w, r, &msg) != nil {
+		return
+	}
+	if msg.LsoMsg == nil || !cos.IsValidUUID(msg.LsoMsg.UUID) || msg.LsoMsg.PageSize < 0 || msg.Bck.Name != items[0] {
+		p.writeErrMsg(w, r, "invalid forwarded list-objects request", http.StatusBadRequest)
+		return
+	}
+
+	// Preserve prepared prefixes and first-request state. Only unregistered remote
+	// buckets carry properties; all registered buckets use the receiving proxy's BMD.
+	bck := (*meta.Bck)(&msg.Bck)
+	if err = bck.Validate(); err == nil {
+		switch {
+		case msg.Props == nil:
+			err = bck.Init(p.owner.bmd)
+		case !bck.IsRemote() || msg.Props.BID != 0 || !msg.LsoMsg.IsFlagSet(apc.LsDontAddRemote):
+			err = errors.New("invalid properties in forwarded list-objects request")
+		default:
+			bck.Props = msg.Props
+		}
+	}
+	if err != nil {
+		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
+		if msg.S3Token != nil {
+			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+		} else {
+			p.writeErr(w, r, err)
+		}
+		return
+	}
+
+	if msg.S3Token != nil {
+		p.lsS3Page(w, r, bck, msg.LsoMsg, smap, msg.New, *msg.S3Token)
+	} else {
+		p.lsNativePage(w, r, bck, msg.LsoMsg, smap, msg.New)
+	}
 }
 
 // list-objects: flow control helper

@@ -368,13 +368,6 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
 	}
-	amsg := &apc.ActMsg{Action: apc.ActList}
-
-	// currently, always forwarding
-	if p.forwardCP(w, r, amsg, lsotag+" "+bck.String()) {
-		return
-	}
-
 	// e.g. <LastModified>2009-10-12T17:50:30.000Z</LastModified>
 	lsmsg := &apc.LsoMsg{TimeFormat: time.RFC3339, Flags: apc.LsIsS3}
 
@@ -382,7 +375,6 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	// NOTE (s3 api limitation): hard-coded props w/ apc.GetPropsCustom always included
 	//
 	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsCustom)
-	amsg.Value = lsmsg
 
 	// as per API_ListObjectsV2.html, optional:
 	// - "max-keys"
@@ -413,10 +405,36 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		return
 	}
 
-	// "max-keys=0" is valid (list nothing)
-	var lst *cmn.LsoRes
+	smap := p.owner.smap.get()
+	// Zero-size S3 requests echo the wire token without starting a listing.
+	var newls bool
 	if maxKeys > 0 {
-		if lst, err = p.lsPageS3(bck, amsg, lsmsg, r.Header); err != nil {
+		var psi *meta.Snode
+		psi, newls, err = p.lsOwner(lsmsg, smap)
+		if err != nil {
+			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
+			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+			return
+		}
+		if psi != nil {
+			p.forwardLSO(w, r, bck, lsmsg, psi, smap, newls, &token)
+			return
+		}
+	}
+	p.lsS3Page(w, r, bck, lsmsg, smap, newls, token)
+}
+
+// execute p.lsPageS3 locally or on behalf of a peer (compare with p.lsNativePage)
+func (p *proxy) lsS3Page(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, newls bool, token string) {
+	var (
+		maxKeys = lsmsg.PageSize
+		lst     *cmn.LsoRes
+	)
+	// when max-keys is omitted, s3.FillLsoMsg defaults it to min(bck.MaxPageSize(), 1000);
+	// when max-keys is present and is 0 (zero) - skip this next-page block, but still return ListBucketResult w/ bucket name, etc.
+	if maxKeys > 0 {
+		var err error
+		if lst, err = p.lsPageS3(bck, lsmsg, r.Header, smap, newls); err != nil {
 			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 			return
@@ -434,7 +452,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	// - the implication: if, when working with very large remote datasets, list-objects performance
 	//   may become an issue - consider using native API.
 
-	resp := s3.NewListObjectResult(bucket, maxKeys)
+	resp := s3.NewListObjectResult(bck.Name, maxKeys)
 	resp.FromLsoResult(lst, token)
 
 	// encode x-lso UUID and next continuation token
@@ -479,9 +497,9 @@ func _setupNBI(hdr http.Header, lsmsg *apc.LsoMsg) error {
 	return nil
 }
 
-func (p *proxy) lsPageS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header) (*cmn.LsoRes, error) {
+func (p *proxy) lsPageS3(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, newls bool) (*cmn.LsoRes, error) {
 	beg := mono.NanoTime()
-	page, err := p.lsPage(bck, amsg, lsmsg, hdr, p.owner.smap.get())
+	page, err := p.lsPage(bck, lsmsg, hdr, smap, newls)
 	if err != nil {
 		return nil, err
 	}

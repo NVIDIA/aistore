@@ -126,7 +126,7 @@ func (t *target) recvCluMeta(cm *cluMeta, action, sender string) error {
 // [METHOD] /v1/daemon
 //
 
-func (t *target) daemonHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) daeCtrlHandler(w http.ResponseWriter, r *http.Request) {
 	t._dae(w, r, false /*isPub*/)
 }
 
@@ -1382,7 +1382,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 //
 
 // pub-net: external watchdog and bootstrap cluster-info
-func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) healthPubHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
 		if cmn.Rom.V(4, cos.ModAIS) {
 			nlog.Warningln("[health]", t.String(), "standing by...")
