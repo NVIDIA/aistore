@@ -396,12 +396,14 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	// - ListObjects "v1" ("marker"/"NextMarker")
 	maxKeys, err := s3.FillLsoMsg(q, lsmsg, bck.MaxPageSize())
 	if err != nil {
+		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest, Code: s3.ErrCodeInvalidArgument})
 		return
 	}
 
 	// via NBI
 	if err := _setupNBI(r.Header, lsmsg); err != nil {
+		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
@@ -410,6 +412,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	var lst *cmn.LsoRes
 	if maxKeys > 0 {
 		if lst, err = p.lsPageS3(bck, amsg, lsmsg, r.Header); err != nil {
+			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 			return
 		}
@@ -477,7 +480,7 @@ func (p *proxy) lsPageS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr
 	// NBI (native bucket inventory) is the only flow that can overshoot the requested page size:
 	// per the `apc.LsNBI` note, each target delivers an approximate share of `PageSize` (local
 	// chunking, minimum bounds, slight overfetch) and `finLsoNBI` merges those shares as-is.
-	if n := int(lsmsg.PageSize); len(page.Entries) > n {
+	if n := int(lsmsg.PageSize); n > 0 && len(page.Entries) > n {
 		debug.AssertFunc(func() bool { return lsmsg.IsFlagSet(apc.LsNBI) }, len(page.Entries), n)
 		if lsmsg.IsFlagSet(apc.LsNBI) {
 			clear(page.Entries[n:])
@@ -832,13 +835,21 @@ func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket st
 	return bck
 }
 
-// [strict sign-verify] both redirect channels carry the signed URL:
-// - 307 Location: redurl signed via p.redurl (`svgrp` params);
-// - XML <Endpoint>: full redurl, XML-escaped (`&` => `&amp;`).
 // NOTE:
-//   - included python/aistore/botocore_patch follows the Location header verbatim (never parses <Endpoint>),
-//     so patched botocore/boto3 needs no change; the escaped <Endpoint> serves other XML-reading S3 clients.
-//   - the helper MAY execute reverse-proxy if configured
+// 1. AuthN and intra-cluster signing do NOT require feat.S3ReverseProxy (see below)
+//    signed redirects let targets verify proxy admission while object payloads flow directly between client and AIS target.
+//    Clients must preserve redirected Location;  body-carrying requests (e.g. PUT(object))
+//    also require replay support (net/http.GetBody).
+//    Enable reverse proxy IFF the client or deployment requires it.
+//
+// 2. python/aistore/botocore_patch follows the Location header verbatim (never parses <Endpoint>)
+//    so patched botocore/boto3 needs no change; the escaped <Endpoint> serves other XML-reading S3 clients.
+//
+// 3. when intra-cluster sign/verify enabled the proxy returns the signed target URL in both the HTTP Location header
+//    and the XML <Endpoint> field. Both include the signature needed by the target to verify the redirected request.
+//
+// See docs/s3compat.md for redirect compatibility and feature flags.
+
 func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, smap *smapX, redurl, bucket string) {
 	// Deprecated: reverse-proxy S3 API call to a designated target
 	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {

@@ -48,6 +48,29 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
+// When a test here needs `feat.S3ReverseProxy` - and when it does NOT.
+//
+// By default the proxy answers an object-scoped S3 request with a signed 307; the client
+// re-sends to the designated target and the data flows client <=> target. AuthN and
+// intra-cluster signing do NOT change this: the signature travels in the redirect URL
+// (`svgrp` params), so the target can authenticate a redirected request on its own.
+// Enabling reverse proxy "because auth is on" or "intra-cluster signing is enabled" -
+// is therefore not required.
+// Moreover, it is wrong as it converts AIS proxy/gateway into a data-processing machine.
+//
+// See docs/s3compat.md, "S3 Clients: Two Distinct Types".
+//
+// Two things that do make redirects unusable - both are properties of the client:
+//
+//  1. Presigned requests (feat.S3PresignedRequest). SigV4 signs the host, so a redirect to
+//     a target - a different host - cannot verify at the destination.
+//  2. Body-carrying requests without GetBody. Standard net/http cannot replay a request body across a
+//     307, and aws-sdk-go-v2 does not set GetBody by default. PUT / UploadPart therefore fail
+//     on redirect unless the client installs `addGetBodyMiddleware` (see TestS3ETag).
+//
+// Listing (ListObjects, ListBuckets) never redirects at all - the proxy serves it end to
+// end - so listing tests need none of the above.
+
 type customTransport struct {
 	pathStyle bool
 	rt        http.RoundTripper
@@ -144,19 +167,6 @@ func getS3Credentials(t *testing.T) aws.CredentialsProvider {
 	return aws.AnonymousCredentials{}
 }
 
-// setupS3Compat configures the cluster for S3 compatibility tests
-// If auth is enabled, it enables S3 reverse proxy feature.
-// S3 JWT authentication (via X-Amz-Security-Token) will be checked as a fallback if no Authorization header is present.
-func setupS3Compat(t *testing.T) {
-	config, err := api.GetClusterConfig(tools.BaseAPIParams())
-	tassert.CheckFatal(t, err)
-
-	if config.Auth.ClientAuthRequired {
-		// Auth is enabled - ensure S3 reverse proxy is enabled
-		tools.EnableClusterFeatures(t, feat.S3ReverseProxy)
-	}
-}
-
 func setBucketFeatures(t *testing.T, bck cmn.Bck, bprops *cmn.Bprops, nf feat.Flags) {
 	if bprops.Features.IsSet(nf) {
 		return // nothing to do
@@ -223,7 +233,8 @@ func TestS3TargetEmptyBucket(t *testing.T) {
 // ListObjectsV2 endpoint with max-keys=2, and uses each page's
 // NextContinuationToken to fetch the following page.
 func TestS3ListObjectsMaxKeysNextPage(t *testing.T) {
-	setupS3Compat(t) // Enable S3 JWT compat if auth is enabled
+	// NOTE: no reverse proxy - aws-sdk-go-v2 follows `Location` verbatim, and signed
+	// redirects are supported under AuthN and intra-cluster signing (docs/s3compat.md)
 
 	var (
 		proxyURL = tools.GetPrimaryURL()
@@ -712,8 +723,6 @@ func TestS3ObjMetadata(t *testing.T) {
 // This test specifically targets the rlock implementation in tgts3mpt.go
 // We will create large object (forces multipart storage) + concurrent S3 range requests
 func TestS3MultipartPartOperations(t *testing.T) {
-	setupS3Compat(t) // Enable S3 JWT compat if auth is enabled
-
 	var (
 		proxyURL = tools.GetPrimaryURL()
 		bck      = cmn.Bck{Name: "test-mpt-rlock-" + trand.String(6), Provider: apc.AIS}
@@ -812,7 +821,8 @@ func TestS3MultipartPartOperations(t *testing.T) {
 }
 
 func TestS3MultipartErrorHandling(t *testing.T) {
-	setupS3Compat(t) // Enable S3 JWT compat if auth is enabled
+	// NOTE: reverse proxy is set unconditionally below - see also docs/s3compat.md
+	// ("Feature flags: S3-Redirect-Rebuild versus S3-Reverse-Proxy")
 
 	var (
 		proxyURL = tools.GetPrimaryURL()
@@ -858,7 +868,6 @@ func TestS3MultipartErrorHandling(t *testing.T) {
 
 func TestS3JWTAuth(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
-	setupS3Compat(t) // Enable S3 JWT compat mode
 
 	var (
 		proxyURL = tools.GetPrimaryURL()
@@ -887,7 +896,14 @@ func TestS3JWTAuth(t *testing.T) {
 
 	cfg.HTTPClient = newS3Client(false /*pathStyle*/)
 	cfg.BaseEndpoint = aws.String(proxyURL + "/s3")
-	s3Client := s3.NewFromConfig(cfg)
+
+	// NOTE: PutObject below carries a body; without GetBody net/http cannot replay it
+	// when following the proxy's 307 - hence the middleware (compare with TestS3ETag)
+	s3Client := s3.NewFromConfig(cfg, func(options *s3.Options) {
+		options.APIOptions = append(options.APIOptions, func(stack *middleware.Stack) error {
+			return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
+		})
+	})
 
 	// Test 1: List buckets
 	// This request will have:
@@ -962,7 +978,7 @@ func TestS3JWTAuth(t *testing.T) {
 // is enabled but invalid or missing credentials are provided
 func TestS3JWTAuthFailures(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
-	setupS3Compat(t) // Enable S3 JWT compat mode
+	// NOTE: no reverse proxy - every request below is expected to be rejected on auth
 
 	var (
 		proxyURL = tools.GetPrimaryURL()

@@ -155,6 +155,12 @@ func FillLsoMsg(query url.Values, msg *apc.LsoMsg, maxPageSize int64) (int64, er
 	msg.PageSize = maxKeys
 
 	if prefix := query.Get(QparamPrefix); prefix != "" {
+		// validate but do not normalize - compare with the native flow (ais/proxy.go),
+		// which additionally calls cos.TrimPrefix (trailing '*' is AIS wildcard with
+		// no S3 counterpart: on the S3 wire '*' is an ordinary prefix character and must stay literal)
+		if err := cos.ValidatePrefix(apc.BadLsoRequest, prefix); err != nil {
+			return 0, err
+		}
 		msg.Prefix = prefix
 	}
 	var token string
