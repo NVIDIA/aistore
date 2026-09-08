@@ -380,8 +380,8 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	case r.Method == http.MethodPost && r.URL.Path == apc.URLPathCluAutoReg.S:
 		// self-join: remove intra-cluster headers
-		r.Header.Del(apc.HdrSenderID)
-		r.Header.Del(apc.HdrSenderName)
+		delete(r.Header, apc.HdrSenderID)
+		delete(r.Header, apc.HdrSenderName)
 		server.muxers._serveHTTP(w, r)
 
 	default:

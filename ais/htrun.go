@@ -857,6 +857,9 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	return res
 }
 
+// clear intra-cluster headers
+// - this caller's identity must fully replace the orig. sender's, if any
+// - case in point: relay via forwardLSO (+ general protection)
 // stamp intra-cluster sender headers
 // - caller must ensure the destination is on intra-net
 // - see also namesake t.setIntraHdrs - a helper for external packages to call their own in another target
@@ -864,6 +867,20 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 // - r.URL.Path is done and won't change
 // - ditto, r.Body and ContentLength
 func (h *htrun) setIntraHdrs(req *http.Request, smap *smapX, peerPresent bool) {
+	if len(req.Header) > 0 {
+		// skip stdlib textproto.CanonicalMIMEHeaderKey overhead
+		delete(req.Header, apc.HdrSenderNonce)
+		delete(req.Header, apc.HdrSenderSig)
+
+		if smap.vstr == "" {
+			delete(req.Header, apc.HdrSenderIsPrimary)
+			delete(req.Header, apc.HdrSenderSmapVer)
+		} else if !smap.IsPrimary(h.si) {
+			delete(req.Header, apc.HdrSenderIsPrimary)
+		}
+	}
+
+	// apc.HdrSenderID and apc.HdrSenderName are always set (below)
 	if smap.vstr != "" {
 		if smap.IsPrimary(h.si) {
 			req.Header.Set(apc.HdrSenderIsPrimary, "true")
