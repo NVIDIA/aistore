@@ -6,6 +6,8 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -235,6 +237,56 @@ func TestBlobDownloadAbort(t *testing.T) {
 			tlog.Logfln("Blob download abort test completed successfully")
 		})
 	}
+}
+
+func TestBlobDownloadRuntimeError(t *testing.T) {
+	const (
+		objSize   = 4 * cos.MiB
+		chunkSize = cos.MiB
+	)
+	m := ioContext{
+		t: t, bck: cliBck, num: 1, prefix: t.Name() + "-", fileSize: objSize, fixedSize: true,
+	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	m.init(true /*cleanup*/)
+	initMountpaths(t, m.proxyURL)
+	m.remotePuts(true /*evict*/)
+
+	bp := tools.BaseAPIParams(m.proxyURL)
+	snaps, err := api.GetSnaps(bp, &xact.ArgsMsg{Kind: apc.ActBlobDl})
+	tassert.CheckFatal(t, err)
+	before := cos.NewStrSet(snaps.GetUUIDs()...)
+	var buf bytes.Buffer
+
+	_, err = api.GetObject(bp, m.bck, m.objNames[0], &api.GetArgs{
+		Writer: &buf,
+		Header: http.Header{
+			apc.HdrBlobDownload:    []string{"true"},
+			apc.HdrBlobChunk:       []string{cos.ToSizeIEC(chunkSize, 0)},
+			apc.HdrBlobReadTimeout: []string{time.Nanosecond.String()}, // intentionally trigger runtime error with short timeout
+		},
+	})
+	tassert.Fatalf(t, errors.Is(err, io.ErrUnexpectedEOF), "expected incomplete response, got %v", err)
+	tassert.Fatalf(t, buf.Len() == 0, "unexpected error response appended to object stream: %q", buf.String())
+
+	snaps, err = api.GetSnaps(bp, &xact.ArgsMsg{Kind: apc.ActBlobDl})
+	tassert.CheckFatal(t, err)
+	var found int
+	for _, targetSnaps := range snaps {
+		for _, snap := range targetSnaps {
+			if before.Contains(snap.ID) {
+				continue
+			}
+			found++
+			tassert.Fatalf(t, snap.IsFinished(), "expected finished blob download, got %+v", snap)
+			tassert.Fatalf(t, !snap.AbortedX, "expected ordinary runtime error, got %+v", snap)
+			tassert.Fatalf(t, strings.Contains(snap.Err, context.DeadlineExceeded.Error()),
+				"expected timeout error, got %+v", snap)
+		}
+	}
+	tassert.Fatalf(t, found == 1, "expected one failed blob download, got %d", found)
+	m.validateChunksOnDisk(m.bck, m.objNames[0], 0)
+	tassert.Fatalf(t, !tools.CheckObjIsPresent(m.proxyURL, m.bck, m.objNames[0]), "partial object remains cached")
 }
 
 func TestBlobDownloadAbortByKind(t *testing.T) {

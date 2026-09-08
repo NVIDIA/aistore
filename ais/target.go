@@ -1009,7 +1009,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			err = cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
 		}
 		if err != nil && xid != "" {
-			// (for the same reason as cmn.ErrGetTxBenign)
+			// The xaction retains this failure; streaming may have already committed
+			// object bytes, so do not write another HTTP response.
 			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
 			err = nil
 		}
@@ -1953,6 +1954,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) error {
 }
 
 // compare running the same via (generic) t.xstart
+// the caller owns retry/fallback policy for this terminal outcome.
 func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Header) (string, *xs.XactBlobDl, error) {
 	// cap
 	cs := fs.Cap()
@@ -2012,6 +2014,7 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Hea
 }
 
 // returns an empty xid ("") if nothing to do
+// the caller owns retry/fallback policy for this terminal outcome.
 func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Header) (string, *xs.XactBlobDl, error) {
 	xid := cos.GenUUID()
 	rns := xs.RenewBlobDl(xid, params, oa)
@@ -2035,5 +2038,12 @@ func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.He
 	// Admission succeeded: object size is known and can now be published in response headers.
 	cmn.ToHeader(oa, whdr, oa.Size)
 	xblob.Run(nil)
-	return xblob.ID(), nil, xblob.AbortErr()
+	return xblob.ID(), nil, blobdlTermErr(xblob)
+}
+
+func blobdlTermErr(xblob *xs.XactBlobDl) error {
+	if err := xblob.AbortErr(); err != nil {
+		return err
+	}
+	return xblob.Err()
 }
