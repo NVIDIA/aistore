@@ -37,6 +37,11 @@ var (
 
 // [METHOD] /s3
 func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
+	if !p.cluStartedWithRetry() {
+		err := errors.New(http.StatusText(http.StatusServiceUnavailable))
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusServiceUnavailable})
+		return
+	}
 	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln("s3Handler", p.String(), r.Method, r.URL)
 	}
@@ -364,6 +369,11 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	if bck == nil {
 		return
 	}
+	smap := p.owner.smap.get()
+	if err := smap.validate(); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusServiceUnavailable})
+		return
+	}
 	if err := p.access(r, bck, apc.AceObjLIST); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
@@ -405,12 +415,11 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		return
 	}
 
-	smap := p.owner.smap.get()
 	// Zero-size S3 requests echo the wire token without starting a listing.
 	var newls bool
 	if maxKeys > 0 {
 		var psi *meta.Snode
-		psi, newls, err = p.lsOwner(lsmsg, smap)
+		psi, newls, err = p.lsOwner(bck, lsmsg, smap)
 		if err != nil {
 			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 			s3.WriteErr(w, r, s3.ErrInfo{Err: err})

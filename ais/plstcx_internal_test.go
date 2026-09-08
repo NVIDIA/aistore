@@ -169,24 +169,36 @@ func lsoTestNodes() (*proxy, *meta.Snode, *smapX) {
 func TestLsoMappedOwner(t *testing.T) {
 	cos.InitShortID(0)
 	p, peer, smap := lsoTestNodes()
+	bck := meta.NewBck("bucket", apc.AWS, cmn.NsGlobal, &cmn.Bprops{BID: 1})
 	msg := &apc.LsoMsg{}
-	owner, first, err := p.lsOwner(msg, smap)
+	owner, first, err := p.lsOwner(bck, msg, smap)
 	tassert.Fatalf(t, err == nil && first && cos.IsValidUUID(msg.UUID), "first request: owner=%v, new=%t, uuid=%q, err=%v", owner, first, msg.UUID, err)
 	uuid := msg.UUID
-	next, first, err := p.lsOwner(msg, smap)
+	next, first, err := p.lsOwner(bck, msg, smap)
 	tassert.Fatalf(t, err == nil && !first && next == owner && msg.UUID == uuid, "next page changed ownership or identity: owner=%v, new=%t, err=%v", next, first, err)
 	selected, err := smap.HrwProxyTask(uuid)
 	tassert.CheckFatal(t, err)
 	local := &proxy{}
 	local.si = selected
-	dst, _, err := local.lsOwner(msg, smap)
+	dst, _, err := local.lsOwner(bck, msg, smap)
 	tassert.Fatalf(t, err == nil && dst == nil, "owner must execute locally: dst=%v, err=%v", dst, err)
 
+	// with no BMD entry, both the first page and continuations stay on primary
+	bck.Props.BID = 0
+	msg = &apc.LsoMsg{Flags: apc.LsDontAddRemote}
+	for _, wantNew := range []bool{true, false} {
+		dst, first, err = p.lsOwner(bck, msg, smap)
+		tassert.Fatalf(t, err == nil && dst == nil && first == wantNew,
+			"unregistered remote: dst=%v, new=%t, err=%v", dst, first, err)
+	}
+
+	// when bucket is present in BMD we always map lsmsg.UUID => proxy-owner (even with LsDontAddRemote)
+	bck.Props.BID = 1
 	p.si.Flags |= meta.SnodeMaint
-	dst, _, err = p.lsOwner(msg, smap)
+	dst, _, err = p.lsOwner(bck, msg, smap)
 	tassert.Fatalf(t, err == nil && dst == peer, "inactive ingress must route to the sole active peer: dst=%v, err=%v", dst, err)
 	peer.Flags |= meta.SnodeMaint
-	_, _, err = p.lsOwner(msg, smap)
+	_, _, err = p.lsOwner(bck, msg, smap)
 	tassert.Fatal(t, err != nil, "expected no active proxies error")
 }
 
@@ -198,12 +210,12 @@ func TestLsoMappedForward(t *testing.T) {
 		lsoTestSigner(t, p)
 		bck := meta.NewBck("bucket", apc.AWS, cmn.NsGlobal, &cmn.Bprops{BID: 1})
 		msg := &apc.LsoMsg{UUID: "Xk3nZq4i1", Prefix: "foo*", PageSize: 2}
-		want := lsoReq{Bck: bck.Clone(), LsoMsg: msg, New: true}
+		wantBck := *bck
+		want := lsoReq{Bck: &wantBck, LsoMsg: msg, New: true}
 		want.Bck.Props = nil
 		if unregistered {
 			bck.Props.BID = 0
 			msg.SetFlag(apc.LsDontAddRemote)
-			want.Props = bck.Props
 		}
 		u, err := url.Parse(peer.ControlNet.URL)
 		tassert.CheckFatal(t, err)

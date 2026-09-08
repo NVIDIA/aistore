@@ -6,12 +6,13 @@ package integration_test
 
 import (
 	"context"
-	"crypto/rand"
+	crand "crypto/rand"
 	"crypto/tls"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -30,7 +31,9 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -460,7 +463,7 @@ func TestS3PresignedPutGet(t *testing.T) {
 	putOutput, err := s3Client.PutObject(t.Context(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
-		Body:   io.LimitReader(rand.Reader, fileSize),
+		Body:   io.LimitReader(crand.Reader, fileSize),
 	})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, putOutput.ETag != nil, "ETag for PUT operation was not set")
@@ -553,7 +556,7 @@ func TestS3PresignedMultipart(t *testing.T) {
 			Key:           aws.String(objName),
 			PartNumber:    aws.Int32(int32(i)),
 			UploadId:      createMultipartUploadOutput.UploadId,
-			Body:          io.LimitReader(rand.Reader, 5*cos.MiB),
+			Body:          io.LimitReader(crand.Reader, 5*cos.MiB),
 			ContentLength: aws.Int64(5 * cos.MiB),
 		})
 		tassert.CheckFatal(t, err)
@@ -617,7 +620,7 @@ func TestDisableColdGet(t *testing.T) {
 	putOutput, err := s3Client.PutObject(t.Context(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
-		Body:   io.LimitReader(rand.Reader, fileSize),
+		Body:   io.LimitReader(crand.Reader, fileSize),
 	})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, putOutput.ETag != nil, "ETag for PUT operation was not set")
@@ -1169,4 +1172,109 @@ func TestS3JWTAuthFailures(t *testing.T) {
 	_, err = malformedClient.ListBuckets(context.Background(), &s3.ListBucketsInput{})
 	tassert.Fatalf(t, err != nil, "Expected request with malformed JWT to fail, but it succeeded")
 	tlog.Logfln("✓ Malformed JWT signature failed as expected: %v", err)
+}
+
+// Cross-proxy S3 pagination:
+// make sure each page (size = 3) lands on a different proxy: the owner (local execution) or non-owner (forwardLSO path).
+func TestS3ListObjectsCrossProxyPages(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinProxies: 2})
+
+	m := ioContext{
+		t:        t,
+		bck:      cmn.Bck{Name: "test-s3-xproxy-" + trand.String(6), Provider: apc.AIS},
+		num:      110,
+		fileSize: 16,
+		prefix:   "xp/",
+		ordered:  true,
+	}
+	debug.Assert(m.num > 50) // (page sizing below)
+
+	m.init(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
+	m.puts()
+
+	expected := make([]string, len(m.objNames))
+	copy(expected, m.objNames)
+	sort.Strings(expected)
+
+	newClient := func(url string) *s3.Client {
+		cfg, err := config.LoadDefaultConfig(
+			t.Context(),
+			config.WithCredentialsProvider(getS3Credentials(t)),
+			config.WithRegion(env.AwsDefaultRegion()),
+		)
+		tassert.CheckFatal(t, err)
+		cfg.HTTPClient = newS3Client(false /*pathStyle*/)
+		cfg.BaseEndpoint = aws.String(url + "/s3")
+		return s3.NewFromConfig(cfg)
+	}
+
+	// page 1 - wherever the client happens to land
+	pageSize := int32(1 + rand.IntN(m.num/10))
+	out, err := newClient(proxyURL).ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(m.bck.Name), MaxKeys: aws.Int32(pageSize),
+	})
+	tassert.CheckFatal(t, err)
+	token := aws.ToString(out.NextContinuationToken)
+	uuid, _ := aiss3.DecodeToken(token)
+	tassert.Fatalf(t, cos.IsValidUUID(uuid), "page 1: bad compound token %q", token)
+
+	// the listing is owned by HRW(uuid) over the proxy map - the same selection every
+	// proxy makes independently; alternate owner / non-owner from here on
+	smap := tools.GetClusterMap(t, proxyURL)
+	owner, err := smap.HrwProxyTask(uuid)
+	tassert.CheckFatal(t, err)
+	var other *meta.Snode
+	for _, psi := range smap.Pmap {
+		if psi.ID() != owner.ID() && !psi.InMaintOrDecomm() {
+			other = psi
+			break
+		}
+	}
+	tassert.Fatalf(t, other != nil, "expecting a second active proxy")
+	tlog.Logf("x-lso[%s]: owner %s, non-owner %s\n", uuid, owner.StringEx(), other.StringEx())
+
+	seen := make([]string, 0, m.num)
+	for _, o := range out.Contents {
+		seen = append(seen, *o.Key)
+	}
+
+	for page := 2; token != ""; page++ {
+		// even pages => owner (local execution), odd pages => non-owner (forwardLSO)
+		via := owner
+		if page%2 == 1 {
+			via = other
+		}
+
+		// new s3 client: next-page(random-page-size)
+		pageSize = int32(1 + rand.IntN(m.num/10))
+		out, err = newClient(via.URL(cmn.NetPublic)).ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+			Bucket: aws.String(m.bck.Name), MaxKeys: aws.Int32(pageSize),
+			ContinuationToken: aws.String(token),
+		})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, aws.ToString(out.ContinuationToken) == token,
+			"page %d via %s: must echo the incoming wire token", page, via.StringEx())
+
+		next := aws.ToString(out.NextContinuationToken)
+		if next != "" {
+			nextUUID, _ := aiss3.DecodeToken(next)
+			tassert.Fatalf(t, nextUUID == uuid,
+				"page %d via %s: x-lso UUID changed %q => %q", page, via.StringEx(), uuid, nextUUID)
+		}
+		for _, o := range out.Contents {
+			tassert.Fatalf(t, !slices.Contains(seen, *o.Key),
+				"page %d via %s: duplicate entry %q", page, via.StringEx(), *o.Key)
+			tassert.Fatalf(t, len(seen) == 0 || seen[len(seen)-1] < *o.Key,
+				"page %d via %s: out of order: %q after %q", page, via.StringEx(), *o.Key, seen[len(seen)-1])
+			seen = append(seen, *o.Key)
+		}
+		token = next
+		tassert.Fatalf(t, page < 2*m.num, "runaway pagination")
+	}
+
+	tassert.Fatalf(t, len(seen) == len(expected), "expected %d objects across pages, got %d", len(expected), len(seen))
+	for i := range expected {
+		tassert.Fatalf(t, seen[i] == expected[i], "position %d: expected %q, got %q", i, expected[i], seen[i])
+	}
 }
