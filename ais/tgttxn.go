@@ -739,9 +739,13 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 		if _, present := bmd.Get(bckFrom); !present {
 			return xid, cmn.NewErrAisBckNotFound(bckFrom.Bucket())
 		}
+		ptime, err := c.ptime()
+		if err != nil {
+			return xid, err
+		}
 		// begin
 		custom := &xreg.TCOArgs{BckFrom: bckFrom, BckTo: bckTo, Msg: &msg.TCOMsg, DisableDM: disableDM}
-		rns := xreg.RenewTCObjs(c.msg.Action /*kind*/, custom)
+		rns := xreg.RenewTCObjs(c.msg.Action /*kind*/, custom, ptime)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
 			return xid, rns.Err
@@ -900,7 +904,12 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 			return xid, err
 		}
 
-		rns := xreg.RenewPutArchive(bckFrom, bckTo)
+		ptime, err := c.ptime()
+		if err != nil {
+			return xid, err
+		}
+
+		rns := xreg.RenewPutArchive(bckFrom, bckTo, ptime)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, archMsg, rns.Err)
 			return xid, rns.Err
@@ -1408,6 +1417,24 @@ func (c *txnSrv) init(r *http.Request, bucket string) (err error) {
 	}
 	c.query = query // operation-specific values, if any
 	return err
+}
+
+// the proxy's ptime (QparamUnixTime) is same value for all targets in one bcast
+// tco and archive derive their xid from it (see xreg.GenBEID)
+// NOTE: txnCln.bcast always sets it (except Abort2PC) - missing or bad value is a bug
+func (c *txnSrv) ptime() (uint64, error) {
+	s := c.query.Get(apc.QparamUnixTime)
+	if s == "" {
+		return 0, fmt.Errorf("missing %q", apc.QparamUnixTime)
+	}
+	ns, err := s2UnixNano(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %q %q: %v", apc.QparamUnixTime, s, err)
+	}
+	if ns <= 0 {
+		return 0, fmt.Errorf("invalid %q %q: non-positive", apc.QparamUnixTime, s)
+	}
+	return uint64(ns), nil
 }
 
 func (c *txnSrv) addNotif(xctn core.Xact) {

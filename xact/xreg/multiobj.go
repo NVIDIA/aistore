@@ -9,8 +9,8 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
-func RenewPutArchive(bckFrom, bckTo *meta.Bck) RenewRes {
-	return RenewBucketXact(apc.ActArchive, bckFrom, Args{Custom: bckTo}, bckFrom, bckTo)
+func RenewPutArchive(bckFrom, bckTo *meta.Bck, ptime uint64) RenewRes {
+	return RenewBucketXact(apc.ActArchive, bckFrom, Args{Custom: bckTo, PTime: ptime}, bckFrom, bckTo)
 }
 
 func RenewEvictDelete(uuid, kind string, bck *meta.Bck, msg *apc.EvdMsg) RenewRes {
@@ -22,6 +22,6 @@ func RenewPrefetch(uuid string, bck *meta.Bck, msg *apc.PrefetchMsg) RenewRes {
 }
 
 // kind: (apc.ActCopyObjects | apc.ActETLObjects)
-func RenewTCObjs(kind string, custom *TCOArgs) RenewRes {
-	return RenewBucketXact(kind, custom.BckFrom, Args{Custom: custom}, custom.BckFrom, custom.BckTo)
+func RenewTCObjs(kind string, custom *TCOArgs, ptime uint64) RenewRes {
+	return RenewBucketXact(kind, custom.BckFrom, Args{Custom: custom, PTime: ptime}, custom.BckFrom, custom.BckTo)
 }

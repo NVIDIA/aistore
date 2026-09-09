@@ -81,6 +81,8 @@ type (
 	Args struct {
 		Custom any // Additional arguments that are specific for a given xact.
 		UUID   string
+		// proxy's ptime (QparamUnixTime), shared across all targets, see GenBEID
+		PTime uint64
 	}
 	RenewBase struct {
 		Bck *meta.Bck

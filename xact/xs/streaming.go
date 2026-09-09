@@ -56,6 +56,15 @@ func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 // independently on (by) all targets and using the latter as both xaction ID and receive endpoint (trname)
 // for target=>target streams.
 
+// TODO: assign the xid, don't derive it (protocol change)
+// - deriving is coordination-free but not race-free
+// - two concurrent requests (same from, to) can arrive via different proxies
+// - targets see them in different order, adopt whichever came first (see xreg.usePrev),
+//   disagree, and the proxy fails the op with ErrBusy
+// - sharing the proxy's ptime only fixes divergence within a single request
+// - compare w/ get-batch (ais/ml.go): designated target mints the xid,
+//   proxy hands it to the rest before anyone registers a transport endpoint
+
 func (p *streamingF) _tag(fromBck, toBck *meta.Bck) (tag []byte) {
 	var (
 		from = fromBck.MakeUname("")
@@ -83,7 +92,7 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 		tag = p._tag(fromBck, toBck)
 	)
 	smap := core.T.Sowner().Get()
-	beid, prev, err := xreg.GenBEID(div, smap.Version, tag)
+	beid, prev, err := xreg.GenBEID(div, smap.Version, tag, p.Args.PTime)
 	if beid != "" {
 		debug.Assert(err == nil && prev == nil)
 		return beid, nil

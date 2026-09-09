@@ -19,11 +19,20 @@ import (
 // retry attempts when collision is detected in registry
 const beidMaxRetry = 2
 
-func GenBEID(div uint64, smapVer int64, tag []byte) (beid string, prev core.Xact, err error) {
+// this node's clock, corrected for its offset from the primary; use only
+// when there's no cluster-wide "now" to share (e.g. mirroring, single-node)
+func EffectiveNow() uint64 {
+	return uint64(time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load())
+}
+
+// derives a "best-effort UUID" from (bucket, smapVer, tag), bucket = now/div.
+// multi-target callers (copy-listrange, archive) must pass the proxy's ptime
+// (Args.PTime) here, not a locally-read clock, otherwise targets straddling
+// a bucket boundary a few ms apart end up disagreeing on the xid
+func GenBEID(div uint64, smapVer int64, tag []byte, now uint64) (beid string, prev core.Xact, err error) {
 	debug.Assert(div > 0)
 	div = max(1, div)
 
-	now := uint64(time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load())
 	bucket := now / div
 	th := onexxh.Checksum64(tag)
 	sv := uint64(smapVer)

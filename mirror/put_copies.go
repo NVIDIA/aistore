@@ -92,7 +92,7 @@ func (p *putFactory) Start() error {
 	//
 	div := uint64(xact.IdleDefault)
 	smap := core.T.Sowner().Get()
-	beid, _, _ := xreg.GenBEID(div, smap.Version, p._tag(bck))
+	beid, _, _ := xreg.GenBEID(div, smap.Version, p._tag(bck), xreg.EffectiveNow())
 	if beid == "" {
 		// is Ok (compare with x-archive, x-tco)
 		beid = cos.GenUUID()
