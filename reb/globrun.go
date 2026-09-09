@@ -704,10 +704,12 @@ func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 	}
 	if xreb.IsAborted() {
 		nlog.Infoln(xreb.Name(), "aborting traversal")
-	} else {
-		nlog.Errorln(core.T.String(), xreb.Name(), "failed to traverse", err)
+		return true
 	}
-	return true
+	// fs.Walk halted this bucket: record the failure and resume with the remaining ones
+	nlog.Errorln(core.T.String(), xreb.Name(), "failed to traverse", bck.Cname(""), err)
+	xreb.AddErr(err)
+	return false
 }
 
 func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) error {
@@ -768,6 +770,7 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) (bool /*handedOff*/, erro
 
 	tsi, err := rargs.smap.HrwHash2T(lom.Digest())
 	if err != nil {
+		rargs.xreb.Abort(err) // smap unusable (abort the whole xaction)
 		return false, err
 	}
 	if tsi.ID() == core.T.SID() {
@@ -795,7 +798,8 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) (bool /*handedOff*/, erro
 	// no workers: jogger does everything
 	var roc cos.ReadOpenCloser
 	if roc, err = getROC(lom); err != nil { // rlock, load, new roc
-		return false, err
+		rargs.addErrRead(lom, err)
+		return false, cmn.ErrSkip
 	}
 
 	// transmit (unlock via transport completion => roc.Close)
@@ -805,6 +809,16 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) (bool /*handedOff*/, erro
 	}
 
 	return true, nil
+}
+
+// getROC error: count and record all but benign object-level races
+func (rargs *rargs) addErrRead(lom *core.LOM, err error) {
+	if err == cmn.ErrSkip || cmn.IsErrObjLevel(err) {
+		return
+	}
+	rargs.stats.errRead.Inc()
+	// cname: cos.Errs dedups by message and lom.Load errors carry none
+	rargs.xreb.AddErr(fmt.Errorf("%s: %w", lom.Cname(), err), 5, cos.ModReb)
 }
 
 // upon success: take rlock and keep it until Close()

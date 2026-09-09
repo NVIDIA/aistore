@@ -27,6 +27,8 @@ import (
 type rebStats struct {
 	curStage atomic.Uint32
 
+	errRead atomic.Int64
+
 	travBegin, travEnd           atomic.Int64
 	postTravBegin, postTravEnd   atomic.Int64
 	finBegin, finEnd             atomic.Int64
@@ -109,6 +111,10 @@ func (rargs *rargs) ctlMsg(sb *cos.SB) {
 	if ecnt := xreb.ErrCnt(); ecnt > 0 {
 		sb.WriteString(" errs:")
 		sb.WriteString(strconv.Itoa(ecnt))
+	}
+	if v := s.errRead.Load(); v > 0 {
+		sb.WriteString(" err-read:")
+		sb.WriteString(strconv.FormatInt(v, 10))
 	}
 }
 

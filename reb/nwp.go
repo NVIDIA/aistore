@@ -7,7 +7,6 @@ package reb
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -82,22 +81,18 @@ func (worker *rebWorker) run() {
 }
 
 func (worker *rebWorker) do(wi wi) {
-	var (
-		rargs = worker.rargs
-		xreb  = rargs.xreb
-	)
+	rargs := worker.rargs
+
 	// _getReader: rlock, load, checksum, new roc
 	roc, err := getROC(wi.lom)
 	if err != nil {
+		rargs.addErrRead(wi.lom, err)
 		core.FreeLOM(wi.lom)
-		if err != cmn.ErrSkip {
-			xreb.AddErr(err)
-		}
 		return
 	}
 
 	// transmit
 	if err := rargs.doSend(wi.lom, wi.tsi, roc); err != nil {
-		xreb.Abort(err) // NOTE: failure to send == abort
+		rargs.xreb.Abort(err) // NOTE: failure to send == abort
 	}
 }
