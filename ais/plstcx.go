@@ -198,15 +198,19 @@ func (p *proxy) lsOwner(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (psi *met
 	} else if !cos.IsValidUUID(lsmsg.UUID) {
 		return nil, false, fmt.Errorf("%s: invalid UUID %q", apc.BadLsoRequest, lsmsg.UUID)
 	}
-	if bck.Props.BID == 0 && lsmsg.IsFlagSet(apc.LsDontAddRemote) {
+	if bck.Props.BID == 0 {
 		// special case:
 		// - remote bucket is not present and we are not adding it on-the-fly
-		// - bctx._try has already forwarded initialization to primary (== self)
-		debug.AssertFunc(func() bool { return smap.IsPrimary(p.si) })
-		psi = smap.Primary
-	} else {
-		psi, err = smap.HrwProxyTask(lsmsg.UUID)
+		// - bctx._try (see bctx.dontAddRemote) has already forwarded initialization to primary (self)
+		debug.AssertFunc(func() bool { return lsmsg.IsFlagSet(apc.LsDontAddRemote) })
+		if !smap.isPrimary(p.si) {
+			debug.Assert(false, lsotag, " (new primary elected?) ", bck.Cname(""))
+			return nil, newls, newErrNotPrimary(p.si, smap, lsotag+" "+bck.Cname(""))
+		}
+		return nil, newls, nil
 	}
+
+	psi, err = smap.HrwProxyTask(lsmsg.UUID)
 	if err == nil && psi.ID() == p.SID() {
 		psi = nil
 	}

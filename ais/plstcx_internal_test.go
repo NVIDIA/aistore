@@ -376,3 +376,155 @@ func TestLsoMappedS3Receiver(t *testing.T) {
 	}
 	tassert.Fatalf(t, begins.Load() == 2 && commits.Load() == 2 && pages.Load() == 4, "phased startup must run only on the first page: begin=%d commit=%d pages=%d", begins.Load(), commits.Load(), pages.Load())
 }
+
+// R-flow abort coverage
+func TestLsoRflowAbort(t *testing.T) {
+	newOwner := func(t *testing.T, smap *smapX, bck *meta.Bck) *proxy {
+		t.Helper()
+		p := &proxy{}
+		p.si = &meta.Snode{}
+		p.si.Init("owner", apc.Proxy, nil)
+		p.statsT = mock.NewStatsTracker()
+		p.gmm = memsys.PageMM()
+		p.startup.cluster.Store(mono.NanoTime())
+		p.svs.init() // signing disabled; grace already expired
+		p.owner.smap = &smapOwner{}
+		p.owner.smap.smap.Store(smap)
+		bmd := newBucketMD()
+		bmd.add(bck, bck.Props)
+		bo := newBMDOwnerPrx(cmn.GCO.Get())
+		bo.put(bmd)
+		p.owner.bmd = bo
+		return p
+	}
+	newSmapTs := func(nts int) (*smapX, *meta.Bck) {
+		smap := newSmap()
+		smap.Version, smap.vstr = 1, "1"
+		// keep the owner distinct from primary: this flow must not require primary
+		pi := &meta.Snode{}
+		pi.Init("primary", apc.Proxy, nil)
+		smap.Primary, smap.Pmap[pi.ID()] = pi, pi
+		oi := &meta.Snode{}
+		oi.Init("owner", apc.Proxy, nil)
+		smap.Pmap[oi.ID()] = oi
+		for i := range nts {
+			si := &meta.Snode{}
+			id := fmt.Sprintf("target-%d", i)
+			si.Init(id, apc.Target, nil)
+			si.ControlNet.Init("http", id, "9080")
+			smap.Tmap[id] = si
+		}
+		smap.InitDigests()
+		return smap, meta.NewBck("bucket", apc.AWS, cmn.NsGlobal, &cmn.Bprops{BID: 0xa5})
+	}
+	newLsmsg := func() *apc.LsoMsg {
+		lsmsg := &apc.LsoMsg{UUID: "Xk3nZq4i1", PageSize: 2}
+		lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsCustom)
+		return lsmsg
+	}
+	// count 2PC phases; `failBegin` fails Begin2PC on exactly one target
+	install := func(t *testing.T, failBegin bool, onBegin func(int32), begins, aborts, commits, pages *atomic.Int32) {
+		t.Helper()
+		var failed atomic.Bool
+		tr := lsoRoundTrip(func(r *http.Request) (*http.Response, error) {
+			resp := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: http.NoBody}
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/"+apc.Begin2PC):
+				n := begins.Add(1)
+				if onBegin != nil {
+					onBegin(n)
+				}
+				if failBegin && failed.CAS(false, true) {
+					resp.StatusCode = http.StatusInternalServerError
+					resp.Body = io.NopCloser(strings.NewReader("begin refused"))
+				}
+				return resp, nil
+			case strings.HasSuffix(r.URL.Path, "/"+apc.Abort2PC):
+				aborts.Add(1)
+				return resp, nil
+			case strings.HasSuffix(r.URL.Path, "/"+apc.Commit2PC):
+				commits.Add(1)
+			}
+			pages.Add(1)
+			lst := &cmn.LsoRes{UUID: "Xk3nZq4i1"}
+			var body bytes.Buffer
+			w := msgp.NewWriter(&body)
+			if err := lst.EncodeMsg(w); err != nil {
+				return nil, err
+			}
+			err := w.Flush()
+			resp.Body = io.NopCloser(&body)
+			return resp, err
+		})
+		prev := g.client
+		t.Cleanup(func() { g.client = prev })
+		client := &http.Client{Transport: tr, Timeout: time.Minute}
+		g.client.control, g.client.cplane, g.client.maxkalive, g.client.data = client, client, client, client
+	}
+
+	t.Run("single-target-no-2pc", func(t *testing.T) {
+		var begins, aborts, commits, pages atomic.Int32
+		install(t, false, nil, &begins, &aborts, &commits, &pages)
+		smap, bck := newSmapTs(1)
+		p := newOwner(t, smap, bck)
+		_, err := p.lsPage(bck, newLsmsg(), http.Header{}, smap, true /*newls*/)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, begins.Load() == 0 && aborts.Load() == 0 && commits.Load() == 0 && pages.Load() == 1,
+			"CountActiveTs()==1 must skip phased startup: begins=%d aborts=%d commits=%d pages=%d",
+			begins.Load(), aborts.Load(), commits.Load(), pages.Load())
+	})
+
+	// Only-remote properties use one designated target and require no phased startup,
+	// even for a remote bucket with multiple targets.
+	t.Run("want-only-remote-no-2pc", func(t *testing.T) {
+		var begins, aborts, commits, pages atomic.Int32
+		install(t, false, nil, &begins, &aborts, &commits, &pages)
+		smap, bck := newSmapTs(3)
+		p := newOwner(t, smap, bck)
+		lsmsg := &apc.LsoMsg{UUID: "Xk3nZq4i1", PageSize: 2}
+		lsmsg.SetFlag(apc.LsNameOnly)
+		_, err := p.lsPage(bck, lsmsg, http.Header{}, smap, true /*newls*/)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, begins.Load() == 0 && aborts.Load() == 0 && commits.Load() == 0 && pages.Load() == 1,
+			"wantOnlyRemote must skip phased startup: begins=%d aborts=%d commits=%d pages=%d",
+			begins.Load(), aborts.Load(), commits.Load(), pages.Load())
+	})
+
+	t.Run("begin-fails", func(t *testing.T) {
+		var begins, aborts, commits, pages atomic.Int32
+		install(t, true /*failBegin*/, nil, &begins, &aborts, &commits, &pages)
+		smap, bck := newSmapTs(3)
+		p := newOwner(t, smap, bck)
+		_, err := p.lsPage(bck, newLsmsg(), http.Header{}, smap, true /*newls*/)
+		tassert.Fatalf(t, err != nil, "expecting Begin2PC failure to propagate")
+		tassert.Errorf(t, begins.Load() == 3 && aborts.Load() == 3 && commits.Load() == 0 && pages.Load() == 0,
+			"begins=%d aborts=%d commits=%d pages=%d", begins.Load(), aborts.Load(), commits.Load(), pages.Load())
+	})
+
+	t.Run("membership-change", func(t *testing.T) {
+		var begins, aborts, commits, pages atomic.Int32
+		smap, bck := newSmapTs(3)
+		p := newOwner(t, smap, bck)
+
+		curr := smap.clone()
+		curr.Version++
+		si := &meta.Snode{}
+		si.Init("target-joined", apc.Target, nil)
+		si.ControlNet.Init("http", "target-joined", "9080")
+		curr.Tmap[si.ID()] = si
+		curr.InitDigests()
+
+		// Once all Begin2PC requests have reached the transport, advance the
+		// owner's current Smap before the CheckSameTargets barrier.
+		install(t, false, func(n int32) {
+			if n == int32(smap.CountActiveTs()) {
+				p.owner.smap.smap.Store(curr)
+			}
+		}, &begins, &aborts, &commits, &pages)
+
+		_, err := p.lsPage(bck, newLsmsg(), http.Header{}, smap, true /*newls*/)
+		tassert.Fatalf(t, err != nil, "expecting membership change to propagate")
+		tassert.Errorf(t, begins.Load() == 3 && aborts.Load() == 3 && commits.Load() == 0 && pages.Load() == 0,
+			"begins=%d aborts=%d commits=%d pages=%d", begins.Load(), aborts.Load(), commits.Load(), pages.Load())
+	})
+}
