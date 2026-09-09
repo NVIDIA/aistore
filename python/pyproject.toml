@@ -37,6 +37,11 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
 ]
 
@@ -52,7 +57,7 @@ dependencies = [
     "humanize>=4.9.0",
     "braceexpand>=0.1.7",
     "msgspec>=0.18.5",
-    "xxhash==4.0.1",
+    "xxhash>=3.6.0,<5",
     "tenacity>=9.0.0",
 ]
 

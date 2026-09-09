@@ -272,7 +272,7 @@ def get_digest(name: str) -> int:
     """
     Get the xxhash digest of a given string.
     """
-    return xxhash.xxh64(seed=XX_HASH_SEED, input=name.encode("utf-8")).intdigest()
+    return xxhash.xxh64(name.encode("utf-8"), seed=XX_HASH_SEED).intdigest()
 
 
 def convert_to_seconds(time_val: Union[str, int]) -> int:

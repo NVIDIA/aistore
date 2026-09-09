@@ -175,9 +175,7 @@ class TestUtils(unittest.TestCase):
         mock_xxhash.return_value.intdigest.return_value = 987654321
         name = "test_object"
         result = get_digest(name)
-        mock_xxhash.assert_called_once_with(
-            seed=XX_HASH_SEED, input=name.encode("utf-8")
-        )
+        mock_xxhash.assert_called_once_with(name.encode("utf-8"), seed=XX_HASH_SEED)
         self.assertEqual(result, 987654321)
 
     def test_get_provider_from_request(self):

@@ -927,7 +927,7 @@ test:short:python-etl:
     PIP: "uv pip"
   script:
     - cd python
-    - uv venv --python 3.13 .venv
+    - uv venv --python 3.14 .venv
     - source .venv/bin/activate
     - make python_etl_tests
     - deactivate || true
