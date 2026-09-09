@@ -2668,8 +2668,8 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 }
 
 // convenience helper to additionally write error => response writer
-func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) bool {
-	ecode, err := h.checkIntra(r, nil /*smap*/, onlyPrimary)
+func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, smap *smapX, onlyPrimary bool) bool {
+	ecode, err := h.checkIntra(r, smap, onlyPrimary)
 	if err != nil {
 		h.writeErr(w, r, err, ecode)
 		return false

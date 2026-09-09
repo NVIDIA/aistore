@@ -118,7 +118,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	xactRecord := xact.Table[msg.Action]
 	onlyPrimary := xactRecord.Metasync
-	if !t.ensureIntraControl(w, r, onlyPrimary) {
+	if !t.ensureIntraControl(w, r, nil /*smap*/, onlyPrimary) {
 		return
 	}
 	apiItems, err := t.parseURL(w, r, apc.URLPathTxn.L, 0, true)

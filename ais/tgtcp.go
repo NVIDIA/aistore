@@ -137,6 +137,7 @@ func (t *target) daePubHandler(w http.ResponseWriter, r *http.Request) {
 func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
 
+	var smap *smapX
 	if isPub {
 		if r.Method != http.MethodGet {
 			t.writeErrStatusf(w, r, http.StatusForbidden, "%s: %s %s is read-only on %s", t, r.Method, r.URL.Path, cmn.NetPublic)
@@ -146,15 +147,21 @@ func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 			t.writeErr(w, r, errDirectTargetAccess, http.StatusForbidden)
 			return
 		}
-	} else if !t.ensureIntraControl(w, r, false /* from primary */) {
-		return
+	} else {
+		smap = t.owner.smap.get()
+		if !t.ensureIntraControl(w, r, smap, false /* from primary */) {
+			return
+		}
 	}
 
 	switch r.Method {
 	case http.MethodGet:
 		t.httpdaeget(w, r)
 	case http.MethodPut:
-		t.httpdaeput(w, r)
+		if smap == nil {
+			smap = t.owner.smap.get()
+		}
+		t.httpdaeput(w, r, smap)
 	case http.MethodPost:
 		t.httpdaepost(w, r)
 	case http.MethodDelete:
@@ -164,19 +171,19 @@ func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 	}
 }
 
-func (t *target) httpdaeput(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpdaeput(w http.ResponseWriter, r *http.Request, smap *smapX) {
 	apiItems, err := t.parseURL(w, r, apc.URLPathDae.L, 0, true)
 	if err != nil {
 		return
 	}
 	if len(apiItems) == 0 {
-		t.daeputMsg(w, r)
+		t.daeputMsg(w, r, smap)
 	} else {
 		t.daeputItems(w, r, apiItems)
 	}
 }
 
-func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
+func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request, smap *smapX) {
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
 		return
@@ -230,25 +237,25 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 		t.bps[provider] = bp
 		t.rlbps[provider] = &rlbackend{Backend: bp, t: t}
 	case apc.ActStartMaintenance:
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
+		if !t.ensureIntraControl(w, r, smap, true /* from primary */) {
 			return
 		}
 		t.statsT.SetFlag(cos.NodeAlerts, cos.MaintenanceMode)
 		t.termKaliveX(msg.Action, true)
 	case apc.ActShutdownCluster, apc.ActShutdownNode:
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
+		if !t.ensureIntraControl(w, r, smap, true /* from primary */) {
 			return
 		}
 		t.statsT.SetFlag(cos.NodeAlerts, cos.MaintenanceMode)
 		t.termKaliveX(msg.Action, false)
 		t.shutdown(msg.Action)
 	case apc.ActRmNodeUnsafe:
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
+		if !t.ensureIntraControl(w, r, smap, true /* from primary */) {
 			return
 		}
 		t.termKaliveX(msg.Action, true)
 	case apc.ActDecommissionCluster, apc.ActDecommissionNode:
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
+		if !t.ensureIntraControl(w, r, smap, true /* from primary */) {
 			return
 		}
 		var opts apc.ActValRmNode
@@ -1209,7 +1216,8 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if !t.ensureIntraControl(w, r, true /* from primary */) {
+	smap := t.owner.smap.get()
+	if !t.ensureIntraControl(w, r, smap, true /* from primary */) {
 		return
 	}
 	switch r.Method {
@@ -1218,7 +1226,7 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		if nlog.Stopping() || !t.NodeStarted() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
-			t.metasyncPut(w, r)
+			t.metasyncPut(w, r, smap)
 		}
 		t.regstate.mu.Unlock()
 	case http.MethodPost:
@@ -1230,7 +1238,7 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/metasync
 // compare w/ p.metasyncHandler (NOTE: executes under regstate lock)
-func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
+func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request, smap *smapX) {
 	var (
 		err  = &errMsync{}
 		nsti = &err.Cii
@@ -1245,7 +1253,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.warnMsync(r, t.owner.smap.get())
+	t.warnMsync(r, smap)
 
 	// 1. extract
 	var (

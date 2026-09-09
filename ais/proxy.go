@@ -1195,7 +1195,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !p.ensureIntraControl(w, r, true /* from primary */) {
+	if !p.ensureIntraControl(w, r, smap, true /* from primary */) {
 		return
 	}
 
@@ -2733,6 +2733,7 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		p.daeputItems(w, r, apiItems)
 		return
 	}
+
 	// action-message
 	query := r.URL.Query()
 	msg, err := p.readActionMsg(w, r)
@@ -2740,26 +2741,49 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// primary?
+	// (I) node/cluster lifecycle
 	switch msg.Action {
 	case apc.ActStartMaintenance, apc.ActDecommissionCluster, apc.ActDecommissionNode, apc.ActShutdownNode, apc.ActShutdownCluster:
 		smap := p.owner.smap.get()
-		if !smap.isPrimary(p.si) {
-			break
-		}
-		if msg.Action == apc.ActShutdownCluster {
-			force := cos.IsParseBool(query.Get(apc.QparamForce))
-			if force {
-				break
+		isPrimary := smap.isPrimary(p.si)
+		if isPrimary {
+			if msg.Action != apc.ActShutdownCluster || !cos.IsParseBool(query.Get(apc.QparamForce)) {
+				err = fmt.Errorf("primary %s: invalid action %q (node-level operation on primary?), %s",
+					p, msg.Action, smap.StringEx())
+				p.writeErr(w, r, err)
+				return
 			}
+		} else if !p.ensureIntraControl(w, r, smap, true /* from primary */) {
+			return
 		}
-		err = fmt.Errorf("primary %s: invalid action %q (node-level operation on primary?), %s", p, msg.Action, smap.StringEx())
-		p.writeErr(w, r, err)
+
+		switch msg.Action {
+		case apc.ActStartMaintenance:
+			p.termKalive(msg.Action)
+		case apc.ActDecommissionCluster, apc.ActDecommissionNode:
+			var opts apc.ActValRmNode
+			if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+			p.termKalive(msg.Action)
+			p.decommission(msg.Action, &opts)
+		case apc.ActShutdownNode:
+			p.termKalive(msg.Action)
+			p.shutdown(msg.Action)
+		case apc.ActShutdownCluster:
+			if !isPrimary {
+				p.Stop(&errNoUnregister{msg.Action})
+				return
+			}
+			_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		}
 		return
 	}
 
+	// (II) miscellaneous
 	switch msg.Action {
-	case apc.ActSetConfig: // set-config #2 - via action message
+	case apc.ActSetConfig:
 		p.setDaemonConfigMsg(w, r, msg, query)
 	case apc.ActResetConfig:
 		if err := p.owner.config.resetDaemonConfig(); err != nil {
@@ -2770,41 +2794,6 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		p.statsT.ResetStats(errorsOnly)
-
-	case apc.ActStartMaintenance:
-		if !p.ensureIntraControl(w, r, true /* from primary */) {
-			return
-		}
-		p.termKalive(msg.Action)
-	case apc.ActDecommissionCluster, apc.ActDecommissionNode:
-		if !p.ensureIntraControl(w, r, true /* from primary */) {
-			return
-		}
-		var opts apc.ActValRmNode
-		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		p.termKalive(msg.Action)
-		p.decommission(msg.Action, &opts)
-	case apc.ActShutdownNode:
-		if !p.ensureIntraControl(w, r, true /* from primary */) {
-			return
-		}
-		p.termKalive(msg.Action)
-		p.shutdown(msg.Action)
-	case apc.ActShutdownCluster:
-		smap := p.owner.smap.get()
-		isPrimary := smap.isPrimary(p.si)
-		if !isPrimary {
-			if !p.ensureIntraControl(w, r, true /* from primary */) {
-				return
-			}
-			p.Stop(&errNoUnregister{msg.Action})
-			return
-		}
-		// (see "force" above)
-		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case apc.LoadX509:
 		p.daeLoadX509(w, r)
 	default:

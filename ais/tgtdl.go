@@ -33,7 +33,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		respErr    error
 		statusCode int
 	)
-	if !t.ensureIntraControl(w, r, false /* from primary */) {
+	if !t.ensureIntraControl(w, r, nil /*smap*/, false /* from primary */) {
 		return
 	}
 

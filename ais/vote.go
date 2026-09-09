@@ -75,7 +75,8 @@ func voteInProgress() (xele core.Xact) {
 
 // [METHOD] /v1/vote
 func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ensureIntraControl(w, r, false /* from primary */) {
+	smap := p.owner.smap.get()
+	if !p.ensureIntraControl(w, r, smap, false /* from primary */) {
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPut {
@@ -97,7 +98,7 @@ func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
 			p.writeErrURL(w, r)
 			return
 		}
-		p.httpgetvote(w, r)
+		p.httpgetvote(w, r, smap)
 		return
 	}
 	// MethodPut
@@ -430,7 +431,8 @@ func (p *proxy) electPhase2(vr *VoteRecord) cos.StrSet {
 
 // [METHOD] /v1/vote
 func (t *target) voteHandler(w http.ResponseWriter, r *http.Request) {
-	if !t.ensureIntraControl(w, r, false /* from primary */) {
+	smap := t.owner.smap.get()
+	if !t.ensureIntraControl(w, r, smap, false /* from primary */) {
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPut {
@@ -443,7 +445,7 @@ func (t *target) voteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodGet && apiItems[0] == apc.Proxy:
-		t.httpgetvote(w, r)
+		t.httpgetvote(w, r, smap)
 	case r.Method == http.MethodPut && apiItems[0] == apc.Voteres:
 		t.httpsetprimary(w, r)
 	default:
@@ -526,7 +528,7 @@ func (h *htrun) onPrimaryDown(self *proxy, senderID string) {
 }
 
 // GET /v1/vote/proxy
-func (h *htrun) httpgetvote(w http.ResponseWriter, r *http.Request) {
+func (h *htrun) httpgetvote(w http.ResponseWriter, r *http.Request, smap *smapX) {
 	if _, err := h.parseURL(w, r, apc.URLPathVoteProxy.L, 0, false); err != nil {
 		return
 	}
@@ -539,7 +541,6 @@ func (h *htrun) httpgetvote(w http.ResponseWriter, r *http.Request) {
 		h.writeErrf(w, r, "%s: unexpected: empty candidate field [%v]", h, msg.Record)
 		return
 	}
-	smap := h.owner.smap.get()
 	if smap.Primary == nil {
 		h.writeErrf(w, r, "%s: current primary undefined, %s", h, smap)
 		return

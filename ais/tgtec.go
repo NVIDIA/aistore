@@ -24,14 +24,15 @@ import (
 )
 
 func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
-	if !t.ensureIntraControl(w, r, false /* from primary */) {
+	smap := t.owner.smap.get()
+	if !t.ensureIntraControl(w, r, smap, false /* from primary */) {
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
 		t.httpecget(w, r)
 	case http.MethodPost:
-		t.httpecpost(w, r)
+		t.httpecpost(w, r, smap)
 	default:
 		cmn.WriteErr405(w, r, http.MethodPost, http.MethodGet)
 	}
@@ -75,7 +76,7 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 	w.Write(b)
 }
 
-func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpecpost(w http.ResponseWriter, r *http.Request, smap *smapX) {
 	const (
 		hknameEC = apc.ActCloseEC + hk.NameSuffix
 	)
@@ -141,7 +142,7 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		ec.ECM.EndClosePending()
 		ec.ECM.OpenStreams(false /*with refc*/)
 	case apc.ActCloseEC:
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
+		if !t.ensureIntraControl(w, r, smap, true /* from primary */) {
 			return
 		}
 		if ec.ECM.IsActive() {

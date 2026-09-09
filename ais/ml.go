@@ -282,10 +282,10 @@ type mossCtx struct {
 	nat  int
 }
 
-func (t *target) _mlVerify(w http.ResponseWriter, r *http.Request, dpq *dpq) bool {
+func (t *target) _mlVerify(w http.ResponseWriter, r *http.Request, dpq *dpq, smap *smapX) bool {
 	switch r.Method {
 	case http.MethodPost:
-		if !t.ensureIntraControl(w, r, false) {
+		if !t.ensureIntraControl(w, r, smap, false) {
 			return false
 		}
 	case http.MethodGet:
@@ -312,12 +312,16 @@ func (t *target) _mlVerify(w http.ResponseWriter, r *http.Request, dpq *dpq) boo
 
 func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		ctx mossCtx
-		dpq = dpqAlloc()
+		ctx  mossCtx
+		dpq  = dpqAlloc()
+		smap *smapX
 	)
 	defer dpqFree(dpq)
 
-	if !t._mlVerify(w, r, dpq) {
+	if r.Method == http.MethodPost {
+		smap = t.owner.smap.get()
+	}
+	if !t._mlVerify(w, r, dpq, smap) {
 		return
 	}
 
@@ -330,10 +334,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx.t = t
 
-		var (
-			smap = t.owner.smap.get()
-			nat  = smap.CountActiveTs()
-		)
+		nat := smap.CountActiveTs()
 		if ecode, err := t.ensureSameSmap(r.Header, smap); err != nil {
 			t.writeErr(w, r, err, ecode)
 			return
@@ -362,6 +363,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 
 	// phase 2: redirect - ready to start assembly, waiting for the phase 3
 	case http.MethodGet:
+		debug.Assert(smap == nil, "not used in this path")
 		if err := t.mossparse(w, r, &ctx, dpq); err != nil {
 			return
 		}

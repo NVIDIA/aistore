@@ -27,7 +27,7 @@ import (
 
 // [METHOD] /v1/etl
 func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
-	if !t.ensureIntraControl(w, r, true /* from primary */) {
+	if !t.ensureIntraControl(w, r, nil /*smap*/, true /* from primary */) {
 		return
 	}
 	if !k8s.IsK8s() {

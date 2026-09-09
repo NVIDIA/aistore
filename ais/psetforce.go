@@ -672,7 +672,8 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 // TODO: refactor as 2PC begin--abort|commit
 func (h *htrun) daeForceJoin(w http.ResponseWriter, r *http.Request) {
 	// Both force-join phases are internal requests from the current primary.
-	if !h.ensureIntraControl(w, r, true /* from primary */) {
+	smap := h.owner.smap.get()
+	if !h.ensureIntraControl(w, r, smap, true /* from primary */) {
 		return
 	}
 	// msg and query params
@@ -690,17 +691,16 @@ func (h *htrun) daeForceJoin(w http.ResponseWriter, r *http.Request) {
 
 	// TODO -- FIXME: refactor two methods
 	if prepare {
-		h._prepForceJoin(w, r, msg)
+		h._prepForceJoin(w, r, msg, smap)
 	} else {
 		h._commitForceJoin(w, r, msg)
 	}
 }
 
-func (h *htrun) _prepForceJoin(w http.ResponseWriter, r *http.Request, msg *actMsgExt) {
+func (h *htrun) _prepForceJoin(w http.ResponseWriter, r *http.Request, msg *actMsgExt, smap *smapX) {
 	const tag = "prep-force-join:"
 	var (
 		senderID = r.Header.Get(apc.HdrSenderID)
-		smap     = h.owner.smap.get()
 		psi      = smap.GetNode(senderID)
 	)
 	if !smap.IsPrimary(psi) {
