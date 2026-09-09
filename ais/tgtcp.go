@@ -1457,7 +1457,7 @@ func (t *target) healthCtrlHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := t.checkIntra(r, false /*only primary*/); err != nil {
+	if _, err := t.checkIntra(r, smap, false /*only primary*/); err != nil {
 		if cmn.Rom.V(4, cos.ModAIS) {
 			nlog.Warningln("[health]", t.String(),
 				"rejected intra-control request:", err)

@@ -849,7 +849,7 @@ func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) 
 	debug.Assert(net == reqNetCtrl || net == reqNetData)
 	debug.AssertFunc(func() bool { return !hasRedirectMarker(dpq) })
 
-	return t.checkIntra(r, false /*only primary*/, net)
+	return t.checkIntra(r, nil /*smap*/, false /*only primary*/, net)
 }
 
 func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode int, err error) {
@@ -881,7 +881,7 @@ func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode i
 	}
 
 	// ditto (see above)
-	if ecode, err = t.checkIntra(r, false /*only primary*/, net); err != nil {
+	if ecode, err = t.checkIntra(r, nil /*smap*/, false /*only primary*/, net); err != nil {
 		err = fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err)
 	}
 	return ecode, err

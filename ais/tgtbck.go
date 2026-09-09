@@ -70,7 +70,7 @@ func (t *target) verifyBckVerb(w http.ResponseWriter, r *http.Request, dpq *dpq)
 		return false
 	}
 
-	if ecode, err := t.checkIntra(r, false /*only primary*/); err != nil {
+	if ecode, err := t.checkIntra(r, smap, false /*only primary*/); err != nil {
 		t.writeErr(w, r, err, ecode)
 		return false
 	}

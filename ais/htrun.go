@@ -2669,7 +2669,7 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 
 // convenience helper to additionally write error => response writer
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) bool {
-	ecode, err := h.checkIntra(r, onlyPrimary)
+	ecode, err := h.checkIntra(r, nil /*smap*/, onlyPrimary)
 	if err != nil {
 		h.writeErr(w, r, err, ecode)
 		return false
@@ -2690,7 +2690,8 @@ func _netEq(got, exp reqNet) bool {
 	return false
 }
 
-func (h *htrun) checkIntra(r *http.Request, onlyPrimary bool, nets ...reqNet) (int, error) {
+// `smap` is optional: when nil, get it from the owner
+func (h *htrun) checkIntra(r *http.Request, smap *smapX, onlyPrimary bool, nets ...reqNet) (int, error) {
 	expNet := reqNetCtrl
 	if len(nets) > 0 {
 		expNet = nets[0]
@@ -2708,8 +2709,10 @@ func (h *htrun) checkIntra(r *http.Request, onlyPrimary bool, nets ...reqNet) (i
 	}
 
 	// lookup sender
-	smap := h.owner.smap.get()
-	if smap == nil || !smap.isValid() {
+	if smap == nil {
+		smap = h.owner.smap.get()
+	}
+	if !smap.isValid() {
 		if h.ClusterStarted() {
 			return http.StatusServiceUnavailable, fmt.Errorf("%s: invalid %s post cluster startup", h, smap.StringEx())
 		}

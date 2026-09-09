@@ -30,16 +30,16 @@ import (
 
 // List-objects call flow:
 //
-// Native: bgetObjects => initAndTry => listObjects => lsOwner
-// S3:     listObjectsS3 => lsOwner
+// Native: bgetObjects => initAndTry => listObjects => lsoCtx.lso => lsoCtx.owner
+// S3:     listObjectsS3 => lsoCtx.owner
 //
-// lsOwner: assign/validate UUID => HRW-select proxy
+// lsoCtx.owner: assign/validate UUID => HRW-select proxy
 //   self:  execute page directly
 //   peer:  forwardLSO => reverseRequest => owner.bckCtrlHandler => execute page
 //
 // Execute page:
-//   Native: lsNativePage => lsPage
-//   S3:     lsS3Page => lsPageS3 => lsPage
+//   Native: lsoCtx.nativePage => lsPage
+//   S3:     lsoCtx.s3Page => lsPageS3 => lsPage
 //
 // Owner formats the response; forwarding proxy relays it unchanged.
 // Subsequent pages retain UUID and repeat the same owner selection.
@@ -56,6 +56,23 @@ type (
 		wantOnlyRemote bool        // when listRemote: do not populate with AIS metadata
 	}
 
+	// list-objects context: one per request, i.e. one page
+	// (constructed early; populated incrementally)
+	lsoCtx struct {
+		w http.ResponseWriter
+		r *http.Request
+		p *proxy
+		// arg
+		bck   *meta.Bck
+		lsmsg *apc.LsoMsg
+		smap  *smapX
+		s3tok *string // nil => native API; original S3 continuation token otherwise
+		// work
+		lsofcRes // valid for this page only - never carry over
+		config   *cmn.Config
+		newls    bool
+	}
+
 	// (forwardLSO machinery)
 	lsoReq struct {
 		Bck     *meta.Bck   `json:"bck"`
@@ -65,13 +82,29 @@ type (
 	}
 )
 
-// one page => msgpack rsp
+func (c *lsoCtx) writeErr(err error) {
+	c.p.statsT.IncBck(stats.ErrListCount, c.bck.Bucket())
+	if c.s3tok != nil {
+		s3.WriteErr(c.w, c.r, s3.ErrInfo{Err: err})
+	} else {
+		c.p.writeErr(c.w, c.r, err)
+	}
+}
+
+// native API entry point
 func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) {
+	c := &lsoCtx{w: w, r: r, p: p, bck: bck, lsmsg: lsmsg, smap: p.owner.smap.get()}
+	c.lso()
+}
+
+// one page => msgpack rsp
+func (c *lsoCtx) lso() {
+	bck, lsmsg := c.bck, c.lsmsg
+
 	// LsVerChanged a.k.a. '--check-versions' limitations
 	if lsmsg.IsFlagSet(apc.LsDiff) {
 		if err := _checkVerChanged(bck, lsmsg); err != nil {
-			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-			p.writeErr(w, r, err)
+			c.writeErr(err)
 			return
 		}
 	}
@@ -83,28 +116,25 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		lsmsg.SetFlag(apc.LsCached)
 	}
 
-	smap := p.owner.smap.get()
-	psi, newls, err := p.lsOwner(bck, lsmsg, smap)
+	psi, err := c.owner()
 	if err != nil {
-		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-		p.writeErr(w, r, err)
+		c.writeErr(err)
 		return
 	}
 	if psi != nil {
-		p.forwardLSO(w, r, bck, lsmsg, psi, smap, newls, nil) // ----> owner
+		c.forwardLSO(psi) // ----> owner
 		return
 	}
-	p.lsNativePage(w, r, bck, lsmsg, smap, newls)
+	c.nativePage()
 }
 
 // native API: execute p.lsPage locally or on behalf of a peer
-func (p *proxy) lsNativePage(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg,
-	smap *smapX, newls bool) {
+func (c *lsoCtx) nativePage() {
+	p, bck := c.p, c.bck
 	beg := mono.NanoTime()
-	lst, err := p.lsPage(bck, lsmsg, r.Header, smap, newls)
+	lst, err := c.lsPage()
 	if err != nil {
-		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-		p.writeErr(w, r, err)
+		c.writeErr(err)
 		return
 	}
 
@@ -115,10 +145,10 @@ func (p *proxy) lsNativePage(w http.ResponseWriter, r *http.Request, bck *meta.B
 	)
 
 	var ok bool
-	if cos.AcceptsMsgPack(r.Header) {
-		ok = p.writeMsgPack(w, lst, lsotag)
+	if cos.AcceptsMsgPack(c.r.Header) {
+		ok = p.writeMsgPack(c.w, lst, lsotag)
 	} else {
-		ok = p.writeJS(w, r, lst, lsotag)
+		ok = p.writeJS(c.w, c.r, lst, lsotag)
 	}
 	if !ok && cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Errorln("failed to transmit list-objects page (TCP RST?)")
@@ -147,14 +177,18 @@ func _checkVerChanged(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
 }
 
 // next page: common execution code (native and s3 API, both) - post-routing
-func (p *proxy) lsPage(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, newls bool) (*cmn.LsoRes, error) {
-	var lst *cmn.LsoRes
-	fc, err := p._lsofc(bck, lsmsg, smap)
+func (c *lsoCtx) lsPage() (*cmn.LsoRes, error) {
+	var (
+		lst   *cmn.LsoRes
+		bck   = c.bck
+		lsmsg = c.lsmsg
+	)
+	err := c.lsofc()
 	if err != nil {
 		return nil, err
 	}
 
-	if fc.listRemote {
+	if c.listRemote {
 		// R-flow
 		if lsmsg.StartAfter != "" {
 			// TODO: remote AIS first, then Cloud
@@ -168,13 +202,13 @@ func (p *proxy) lsPage(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *
 				s = " cont=" + lsmsg.ContinuationToken
 			}
 			if lsmsg.SID != "" {
-				s += " via " + fc.tsi.StringEx()
+				s += " via " + c.tsi.StringEx()
 			}
 			nlog.Infoln(apc.ActList, "[", lsmsg.UUID, "]", bck.Cname(""), s)
 		}
 
-		config := cmn.GCO.Get()
-		lst, err = p.lsObjsR(bck, lsmsg, hdr, smap, fc.tsi, config, fc.wantOnlyRemote, newls)
+		c.config = cmn.GCO.Get()
+		lst, err = c.lsObjsR()
 
 		// TODO `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
@@ -182,7 +216,7 @@ func (p *proxy) lsPage(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *
 		// xaction and return a new `UUID`.
 	} else {
 		// A-flow
-		lst, err = p.lsObjsA(bck, lsmsg, hdr, smap)
+		lst, err = c.lsObjsA()
 	}
 
 	return lst, err
@@ -191,12 +225,13 @@ func (p *proxy) lsPage(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *
 // new request: assign x-lso UUID; otherwise use existing
 // map to `psi` owner
 // return nil owner for local execution
-func (p *proxy) lsOwner(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (psi *meta.Snode, newls bool, err error) {
-	if lsmsg.UUID == "" {
+func (c *lsoCtx) owner() (psi *meta.Snode, err error) {
+	p, bck, lsmsg, smap := c.p, c.bck, c.lsmsg, c.smap
+	c.newls = lsmsg.UUID == ""
+	if c.newls {
 		lsmsg.UUID = cos.GenUUID()
-		newls = true
 	} else if !cos.IsValidUUID(lsmsg.UUID) {
-		return nil, false, fmt.Errorf("%s: invalid UUID %q", apc.BadLsoRequest, lsmsg.UUID)
+		return nil, fmt.Errorf("%s: invalid UUID %q", apc.BadLsoRequest, lsmsg.UUID)
 	}
 	if bck.Props.BID == 0 {
 		// special case:
@@ -205,43 +240,43 @@ func (p *proxy) lsOwner(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (psi *met
 		debug.AssertFunc(func() bool { return lsmsg.IsFlagSet(apc.LsDontAddRemote) })
 		if !smap.isPrimary(p.si) {
 			debug.Assert(false, lsotag, " (new primary elected?) ", bck.Cname(""))
-			return nil, newls, newErrNotPrimary(p.si, smap, lsotag+" "+bck.Cname(""))
+			return nil, newErrNotPrimary(p.si, smap, lsotag+" "+bck.Cname(""))
 		}
-		return nil, newls, nil
+		return nil, nil
 	}
 
 	psi, err = smap.HrwProxyTask(lsmsg.UUID)
 	if err == nil && psi.ID() == p.SID() {
 		psi = nil
 	}
-	return psi, newls, err
+	return psi, err
 }
 
 // forward x-lso next-page request to x-lso owner
-func (p *proxy) forwardLSO(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg,
-	psi *meta.Snode, smap *smapX, newls bool, token *string) {
+func (c *lsoCtx) forwardLSO(psi *meta.Snode) {
+	p, r, lsmsg := c.p, c.r, c.lsmsg
 	debug.AssertFunc(func() bool { return psi.ID() != p.SID() }, "reversing to self")
 
-	msg := lsoReq{Bck: bck, LsoMsg: lsmsg, New: newls, S3Token: token}
+	msg := lsoReq{Bck: c.bck, LsoMsg: lsmsg, New: c.newls, S3Token: c.s3tok}
 	body := cos.MustMarshal(&msg)
 	r.Body = io.NopCloser(bytes.NewReader(body))
 	r.ContentLength = int64(len(body))
 	r.Header.Set(cos.HdrContentType, cos.ContentJSON)
-	r.URL.Path = apc.URLPathBuckets.Join(bck.Name)
+	r.URL.Path = apc.URLPathBuckets.Join(c.bck.Name)
 	r.URL.RawPath = ""
 	r.URL.RawQuery = ""
 	r.URL.ForceQuery = false
-	p.setIntraHdrs(r, smap, true /*peer present*/)
+	p.setIntraHdrs(r, c.smap, true /*peer present*/)
 
 	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infoln(p.String(), lsotag, "[", lsmsg.UUID, "] =>", psi.StringEx())
 	}
 
 	var errHdlr stdlibErrHdlr
-	if token != nil {
+	if c.s3tok != nil {
 		errHdlr = rpErrHandlerS3
 	}
-	p.reverseRequest(w, r, psi.ID(), psi.URL(cmn.NetIntraControl), errHdlr)
+	p.reverseRequest(c.w, r, psi.ID(), psi.URL(cmn.NetIntraControl), errHdlr)
 }
 
 // intra-cluster forwardLSO path:
@@ -253,7 +288,8 @@ func (p *proxy) bckCtrlHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet)
 		return
 	}
-	if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
+	smap := p.owner.smap.get()
+	if ecode, err := p.checkIntra(r, smap, false /*only primary*/); err != nil {
 		p.writeErr(w, r, err, ecode)
 		return
 	}
@@ -273,114 +309,112 @@ func (p *proxy) bckCtrlHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 2. bucket
 	bck := msg.Bck
+	c := &lsoCtx{
+		w: w, r: r, p: p, bck: bck, lsmsg: msg.LsoMsg,
+		smap: smap, s3tok: msg.S3Token, newls: msg.New,
+	}
 	if err := bck.Init(p.owner.bmd); err != nil {
-		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-		if msg.S3Token != nil {
-			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
-		} else {
-			p.writeErr(w, r, err)
-		}
+		c.writeErr(err)
 		return
 	}
 
 	// 3. do
-	// TODO refactor:
-	// - p.checkIntra must return one
-	// - introduce local context and reduce num-args downstream
-	smap := p.owner.smap.get()
-	if msg.S3Token != nil {
-		p.lsS3Page(w, r, bck, msg.LsoMsg, smap, msg.New, *msg.S3Token)
+	if c.s3tok != nil {
+		c.s3Page()
 	} else {
-		p.lsNativePage(w, r, bck, msg.LsoMsg, smap, msg.New)
+		c.nativePage()
 	}
 }
 
 // list-objects: flow control helper
 // - decide: R-flow or A-flow
 // - designate target for R-flow, etc.
-func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (lsofcRes, error) {
+// (fills in the embedded lsofcRes)
+func (c *lsoCtx) lsofc() error {
+	bck, lsmsg := c.bck, c.lsmsg
 	switch {
 	case lsmsg.IsFlagSet(apc.LsNBI):
-		var fc lsofcRes
 		if err := lsmsg.ValidateNBI(); err != nil {
-			e := fmt.Errorf("%s: the request to list via native bucket inventory has invalid or unsupported flags: %v", bck.Cname(""), err)
-			return fc, e
+			return fmt.Errorf("%s: the request to list via native bucket inventory has invalid or unsupported flags: %v", bck.Cname(""), err)
 		}
 		// listing native bucket inventory is always A-flow:
 		// - each target enumerates its local inventory chunks
 		// - proxy merges and paginates the result
-		return fc, nil
+		return nil
 
 	case !bck.IsRemote() || lsmsg.IsFlagSet(apc.LsCached):
-		var fc lsofcRes
 		if lsmsg.IsFlagSet(apc.LsNotCached) {
-			return fc, fmt.Errorf("%s is not a remote bucket - cannot list 'not cached' objects", bck.Cname(""))
+			return fmt.Errorf("%s is not a remote bucket - cannot list 'not cached' objects", bck.Cname(""))
 		}
-		return fc, nil
+		return nil
 
 	default:
-		return p._lsofcRemote(bck, lsmsg, smap)
+		return c.lsofcRemote()
 	}
 }
 
-func (p *proxy) _lsofcRemote(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (fc lsofcRes, err error) {
+func (c *lsoCtx) lsofcRemote() (err error) {
+	bck, lsmsg := c.bck, c.lsmsg
 	debug.AssertFunc(func() bool { return bck.IsRemote() })
 	debug.AssertFunc(func() bool { return !lsmsg.IsFlagSet(apc.LsCached) })
 
-	fc.listRemote = true
+	c.listRemote = true
 
 	// remote bucket outside cluster (not in BMD) that hasn't been added ("on the fly") by the caller
 	// (lsmsg flag below)
 	if bck.Props.BID == 0 {
 		debug.AssertFunc(func() bool { return lsmsg.IsFlagSet(apc.LsDontAddRemote) })
-		fc.wantOnlyRemote = true
+		c.wantOnlyRemote = true
 		if !lsmsg.WantOnlyRemoteProps() {
-			err := fmt.Errorf("cannot list remote and not-in-cluster bucket %s for not-only-remote object properties: %q",
+			return fmt.Errorf("cannot list remote and not-in-cluster bucket %s for not-only-remote object properties: %q",
 				bck.Cname(""), lsmsg.Props)
-			return fc, err
 		}
 	} else {
-		fc.wantOnlyRemote = lsmsg.WantOnlyRemoteProps()
+		c.wantOnlyRemote = lsmsg.WantOnlyRemoteProps()
 	}
 
 	// check previously designated target vs Smap
 	if lsmsg.SID != "" {
-		return p._lsofcSID(lsmsg, smap, fc.wantOnlyRemote)
+		return c.lsofcSID()
 	}
 
 	// designate one target to carry-out backend.list-objects
-	fc.tsi, err = smap.HrwTargetTask(lsmsg.UUID)
+	c.tsi, err = c.smap.HrwTargetTask(lsmsg.UUID)
 	if err == nil {
-		lsmsg.SID = fc.tsi.ID()
+		lsmsg.SID = c.tsi.ID()
 	}
-	return fc, err
+	return err
 }
 
-func (p *proxy) _lsofcSID(lsmsg *apc.LsoMsg, smap *smapX, wantOnlyRemote bool) (fc lsofcRes, err error) {
-	fc.listRemote = true
-	fc.wantOnlyRemote = wantOnlyRemote
-	fc.tsi = smap.GetTarget(lsmsg.SID)
-	if fc.tsi == nil || fc.tsi.InMaintOrDecomm() {
+// (listRemote and wantOnlyRemote are already set by the caller)
+func (c *lsoCtx) lsofcSID() (err error) {
+	p, lsmsg, smap := c.p, c.lsmsg, c.smap
+	c.tsi = smap.GetTarget(lsmsg.SID)
+	if c.tsi == nil || c.tsi.InMaintOrDecomm() {
 		err = &errNodeNotFound{si: p.si, smap: smap, msg: lsotag + " failure:", id: lsmsg.SID}
 		nlog.Errorln(err)
 		if smap.CountActiveTs() == 1 {
 			// (walk an extra mile)
 			orig := err
-			fc.tsi, err = smap.HrwTargetTask(lsmsg.UUID)
+			c.tsi, err = smap.HrwTargetTask(lsmsg.UUID)
 			if err == nil {
-				nlog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, fc.tsi)
-				lsmsg.SID = fc.tsi.ID()
+				nlog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, c.tsi)
+				lsmsg.SID = c.tsi.ID()
 			}
 		}
 	}
-	return fc, err
+	return err
 }
 
 // A-flow:
 // - bcast list-objects to all targets;
 // - combine, sort and return a merged and sorted result
-func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX) (allEntries *cmn.LsoRes, err error) {
+func (c *lsoCtx) lsObjsA() (allEntries *cmn.LsoRes, err error) {
 	var (
+		p         = c.p
+		bck       = c.bck
+		lsmsg     = c.lsmsg
+		smap      = c.smap
 		actMsgExt *actMsgExt
 		args      *bcastArgs
 		results   sliceResults
@@ -395,7 +429,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Header: hdr,
+		Header: c.r.Header,
 		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(actMsgExt),
 	}
@@ -442,13 +476,16 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 //   - when wantOnlyRemote: just return the next page
 //   - otherwise, use intra-cluster streams to share the latter
 //     for subsequent local filtering and adding local metadata (`filterAddLmeta`)
-func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, dt *meta.Snode, config *cmn.Config,
-	wantOnlyRemote, newls bool) (*cmn.LsoRes, error) {
+func (c *lsoCtx) lsObjsR() (*cmn.LsoRes, error) {
 	var (
+		p             = c.p
+		bck           = c.bck
+		lsmsg         = c.lsmsg
+		smap          = c.smap
 		nat           int
 		phasedStartup bool
 	)
-	if newls && !wantOnlyRemote {
+	if c.newls && !c.wantOnlyRemote {
 		nat = smap.CountActiveTs()
 		if nat > 1 {
 			// R-flow startup: in multi-target clusters, initialize all non-DT
@@ -462,12 +499,12 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		results   sliceResults
 		actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
 		bargs     = allocBcArgs()
-		timeout   = config.Client.ListObjTimeout.D()
+		timeout   = c.config.Client.ListObjTimeout.D()
 	)
 	bargs.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Header: hdr,
+		Header: c.r.Header,
 		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(actMsgExt),
 	}
@@ -478,10 +515,10 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	bargs.allAtOnce = true
 
 	switch {
-	case wantOnlyRemote:
+	case c.wantOnlyRemote:
 		cargs := allocCargs()
 		{
-			cargs.si = dt
+			cargs.si = c.tsi
 			cargs.req = bargs.req
 			cargs.cresv = bargs.cresv
 			cargs.timeout = timeout // config.Client default
@@ -710,11 +747,11 @@ func finLsoNBI(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) *cmn.LsoRes {
 ///////////
 
 type (
-	lstca struct {
-		a  map[string]*lstcx
+	lstcoReg struct {
+		a  map[string]*lstcoCtx
 		mu sync.Mutex
 	}
-	lstcx struct {
+	lstcoCtx struct {
 		hdr http.Header // arg
 		p   *proxy
 		// arg
@@ -734,22 +771,22 @@ type (
 	}
 )
 
-func (a *lstca) add(c *lstcx) {
+func (a *lstcoReg) add(c *lstcoCtx) {
 	a.mu.Lock()
 	if a.a == nil {
-		a.a = make(map[string]*lstcx, 4)
+		a.a = make(map[string]*lstcoCtx, 4)
 	}
 	a.a[c.xid] = c
 	a.mu.Unlock()
 }
 
-func (a *lstca) del(c *lstcx) {
+func (a *lstcoReg) del(c *lstcoCtx) {
 	a.mu.Lock()
 	delete(a.a, c.xid)
 	a.mu.Unlock()
 }
 
-func (a *lstca) abort(xargs *xact.ArgsMsg) {
+func (a *lstcoReg) abort(xargs *xact.ArgsMsg) {
 	switch {
 	case xargs.ID != "":
 		if !strings.HasPrefix(xargs.ID, xact.PrefixTcoID) {
@@ -776,7 +813,7 @@ func (a *lstca) abort(xargs *xact.ArgsMsg) {
 	}
 }
 
-func (c *lstcx) do() (string, error) {
+func (c *lstcoCtx) do() (string, error) {
 	// 1. lsmsg
 	c.lsmsg = apc.LsoMsg{
 		UUID:     cos.GenUUID(),
@@ -798,7 +835,7 @@ func (c *lstcx) do() (string, error) {
 
 	// 2. ls 1st page
 	var lst *cmn.LsoRes
-	lst, err = c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, tsi /*designated target*/, c.config, true /*wantOnlyRemote*/, true /*newls*/)
+	lst, err = c.page(true /*newls*/)
 	if err != nil {
 		return "", err
 	}
@@ -850,9 +887,18 @@ func (c *lstcx) do() (string, error) {
 	return c.xid, nil
 }
 
-func (c *lstcx) pages(s string, cnt int) {
+func (c *lstcoCtx) page(newls bool) (*cmn.LsoRes, error) {
+	lso := &lsoCtx{
+		p: c.p, r: &http.Request{Header: c.hdr}, bck: c.bckFrom, lsmsg: &c.lsmsg,
+		smap: c.smap, config: c.config, newls: newls,
+		lsofcRes: lsofcRes{tsi: c.tsi, listRemote: true, wantOnlyRemote: true},
+	}
+	return lso.lsObjsR()
+}
+
+func (c *lstcoCtx) pages(s string, cnt int) {
 	c.cnt = cnt
-	c.p.lstca.add(c)
+	c.p.lstcoReg.add(c)
 
 	// pages 2, 3, ...
 	var err error
@@ -862,13 +908,13 @@ func (c *lstcx) pages(s string, cnt int) {
 		}
 		c.cnt += cnt
 	}
-	c.p.lstca.del(c)
+	c.p.lstcoReg.del(c)
 	nlog.Infoln(s, "count", c.cnt, "stopped", c.stopped.Load(), "c-token", c.lsmsg.ContinuationToken, "err", err)
 }
 
 // next page
-func (c *lstcx) _page() (int, error) {
-	lst, err := c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, c.tsi, c.config, true /*wantOnlyRemote*/, false /*newls*/)
+func (c *lstcoCtx) _page() (int, error) {
+	lst, err := c.page(false /*newls*/)
 	if err != nil {
 		return 0, err
 	}
@@ -903,7 +949,7 @@ const (
 	proxyToContTCO = "continueTCO" // see also: xact.T2TCtrl
 )
 
-func (c *lstcx) bcast() (err error) {
+func (c *lstcoCtx) bcast() (err error) {
 	body := cos.MustMarshal(c.altmsg)
 	args := allocBcArgs()
 	path := apc.URLPathXactions.Join(proxyToContTCO)

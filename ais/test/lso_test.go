@@ -42,7 +42,7 @@ func TestLso(t *testing.T) {
 		dirLen      = 10
 
 		bck = cmn.Bck{
-			Name:     t.Name() + "Bucket",
+			Name:     t.Name() + "Bucket-" + cos.GenTie(),
 			Provider: apc.AIS,
 			Ns:       genBucketNs(),
 		}
@@ -914,7 +914,7 @@ func TestLsoPrefix(t *testing.T) {
 					tassert.CheckFatal(t, err)
 				}
 			} else {
-				bck = cmn.Bck{Name: testBucketName, Provider: provider}
+				bck = cmn.Bck{Name: testBucketName + "-" + cos.GenTie(), Provider: provider}
 				tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 			}
 
@@ -1319,7 +1319,7 @@ func TestLsoNoRecursion(t *testing.T) {
 	}
 	var (
 		bck = cmn.Bck{
-			Name:     t.Name() + "Bucket",
+			Name:     t.Name() + "Bucket-" + cos.GenTie(),
 			Provider: apc.AIS,
 		}
 		proxyURL   = tools.RandomProxyURL(t)
@@ -1381,7 +1381,7 @@ func TestLsoNoRecursionPagination(t *testing.T) {
 
 	t.Run("MoreSubdirsThanPageSize", func(t *testing.T) {
 		bck := cmn.Bck{
-			Name:     "NonRecurs_" + path.Base(t.Name()) + cos.GenTie(),
+			Name:     "NonRecurs_" + path.Base(t.Name()) + "-" + cos.GenTie(),
 			Provider: apc.AIS,
 		}
 		tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
@@ -1460,7 +1460,7 @@ func TestLsoNoRecursionPagination(t *testing.T) {
 		// Expected: Page1=[subdir,file1,file2], token=file2, Page2=[]
 		// This tests that when token is from a file, directories don't reappear
 		bck := cmn.Bck{
-			Name:     "NonRecurs_" + path.Base(t.Name()) + cos.GenTie(),
+			Name:     "NonRecurs_" + path.Base(t.Name()) + "-" + cos.GenTie(),
 			Provider: apc.AIS,
 		}
 		tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
@@ -1528,7 +1528,7 @@ func TestLsoNoRecursionPagination(t *testing.T) {
 		// Scenario: Deeply nested structure with small page size
 		// Tests that nested directories are properly skipped and direct children shown
 		bck := cmn.Bck{
-			Name:     "NonRecurs_" + path.Base(t.Name()) + cos.GenTie(),
+			Name:     "NonRecurs_" + path.Base(t.Name()) + "-" + cos.GenTie(),
 			Provider: apc.AIS,
 		}
 		tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
@@ -1605,7 +1605,7 @@ func TestLsoNoRecursionPagination(t *testing.T) {
 	// virtual directory when both land on the same mountpath
 	t.Run("DirNameIsPrefixOfFileName", func(t *testing.T) {
 		bck := cmn.Bck{
-			Name:     "NonRecurs_" + path.Base(t.Name()) + cos.GenTie(),
+			Name:     "NonRecurs_" + path.Base(t.Name()) + "-" + cos.GenTie(),
 			Provider: apc.AIS,
 		}
 		tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)

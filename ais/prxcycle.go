@@ -1028,7 +1028,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request, isPub bool) {
 		return
 	}
 
-	if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
+	if ecode, err := p.checkIntra(r, smap, false /*only primary*/); err != nil {
 		err = fmt.Errorf("%w (action %q)", err, apc.ActSelfRemove)
 		p.writeErr(w, r, err, ecode)
 		return

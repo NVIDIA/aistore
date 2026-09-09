@@ -171,34 +171,37 @@ func TestLsoMappedOwner(t *testing.T) {
 	p, peer, smap := lsoTestNodes()
 	bck := meta.NewBck("bucket", apc.AWS, cmn.NsGlobal, &cmn.Bprops{BID: 1})
 	msg := &apc.LsoMsg{}
-	owner, first, err := p.lsOwner(bck, msg, smap)
-	tassert.Fatalf(t, err == nil && first && cos.IsValidUUID(msg.UUID), "first request: owner=%v, new=%t, uuid=%q, err=%v", owner, first, msg.UUID, err)
+	c := &lsoCtx{p: p, bck: bck, lsmsg: msg, smap: smap}
+	owner, err := c.owner()
+	tassert.Fatalf(t, err == nil && c.newls && cos.IsValidUUID(msg.UUID), "first request: owner=%v, new=%t, uuid=%q, err=%v", owner, c.newls, msg.UUID, err)
 	uuid := msg.UUID
-	next, first, err := p.lsOwner(bck, msg, smap)
-	tassert.Fatalf(t, err == nil && !first && next == owner && msg.UUID == uuid, "next page changed ownership or identity: owner=%v, new=%t, err=%v", next, first, err)
+	next, err := c.owner()
+	tassert.Fatalf(t, err == nil && !c.newls && next == owner && msg.UUID == uuid, "next page changed ownership or identity: owner=%v, new=%t, err=%v", next, c.newls, err)
 	selected, err := smap.HrwProxyTask(uuid)
 	tassert.CheckFatal(t, err)
 	local := &proxy{}
 	local.si = selected
-	dst, _, err := local.lsOwner(bck, msg, smap)
+	c.p = local
+	dst, err := c.owner()
 	tassert.Fatalf(t, err == nil && dst == nil, "owner must execute locally: dst=%v, err=%v", dst, err)
 
 	// with no BMD entry, both the first page and continuations stay on primary
 	bck.Props.BID = 0
 	msg = &apc.LsoMsg{Flags: apc.LsDontAddRemote}
+	c.p, c.lsmsg = p, msg
 	for _, wantNew := range []bool{true, false} {
-		dst, first, err = p.lsOwner(bck, msg, smap)
-		tassert.Fatalf(t, err == nil && dst == nil && first == wantNew,
-			"unregistered remote: dst=%v, new=%t, err=%v", dst, first, err)
+		dst, err = c.owner()
+		tassert.Fatalf(t, err == nil && dst == nil && c.newls == wantNew,
+			"unregistered remote: dst=%v, new=%t, err=%v", dst, c.newls, err)
 	}
 
 	// when bucket is present in BMD we always map lsmsg.UUID => proxy-owner (even with LsDontAddRemote)
 	bck.Props.BID = 1
 	p.si.Flags |= meta.SnodeMaint
-	dst, _, err = p.lsOwner(bck, msg, smap)
+	dst, err = c.owner()
 	tassert.Fatalf(t, err == nil && dst == peer, "inactive ingress must route to the sole active peer: dst=%v, err=%v", dst, err)
 	peer.Flags |= meta.SnodeMaint
-	_, _, err = p.lsOwner(bck, msg, smap)
+	_, err = c.owner()
 	tassert.Fatal(t, err != nil, "expected no active proxies error")
 }
 
@@ -229,7 +232,8 @@ func TestLsoMappedForward(t *testing.T) {
 		p.rproxy.nodes.Store(peer.ID(), &singleRProxy{rp: rp, u: u.String()})
 		r := httptest.NewRequest(http.MethodGet, "/v1/buckets/bucket", http.NoBody)
 		w := httptest.NewRecorder()
-		p.forwardLSO(w, r, bck, msg, peer, smap, true, nil)
+		c := &lsoCtx{w: w, r: r, p: p, bck: bck, lsmsg: msg, smap: smap, newls: true}
+		c.forwardLSO(peer)
 		tassert.Fatalf(t, w.Code == http.StatusOK && w.Body.String() == "page", "relay: %d %q", w.Code, w.Body.String())
 	}
 }
@@ -361,7 +365,11 @@ func TestLsoMappedS3Receiver(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "http://public/s3/bucket?prefix=foo*", http.NoBody)
 		w := httptest.NewRecorder()
 		before := pages.Load()
-		sender.forwardLSO(w, r, bck, msg, peer, smap, page == 0, &token)
+		c := &lsoCtx{
+			w: w, r: r, p: sender, bck: bck, lsmsg: msg,
+			smap: smap, s3tok: &token, newls: page == 0,
+		}
+		c.forwardLSO(peer)
 		tassert.Fatalf(t, w.Code == http.StatusOK && w.Header().Get(cos.HdrContentType) == cos.ContentXML, "S3 relay: %d %s", w.Code, w.Body.String())
 		var out s3.ListObjectResult
 		tassert.CheckFatal(t, xml.Unmarshal(w.Body.Bytes(), &out))
@@ -467,7 +475,8 @@ func TestLsoRflowAbort(t *testing.T) {
 		install(t, false, nil, &begins, &aborts, &commits, &pages)
 		smap, bck := newSmapTs(1)
 		p := newOwner(t, smap, bck)
-		_, err := p.lsPage(bck, newLsmsg(), http.Header{}, smap, true /*newls*/)
+		c := &lsoCtx{p: p, r: &http.Request{Header: http.Header{}}, bck: bck, lsmsg: newLsmsg(), smap: smap, newls: true}
+		_, err := c.lsPage()
 		tassert.CheckFatal(t, err)
 		tassert.Errorf(t, begins.Load() == 0 && aborts.Load() == 0 && commits.Load() == 0 && pages.Load() == 1,
 			"CountActiveTs()==1 must skip phased startup: begins=%d aborts=%d commits=%d pages=%d",
@@ -483,7 +492,8 @@ func TestLsoRflowAbort(t *testing.T) {
 		p := newOwner(t, smap, bck)
 		lsmsg := &apc.LsoMsg{UUID: "Xk3nZq4i1", PageSize: 2}
 		lsmsg.SetFlag(apc.LsNameOnly)
-		_, err := p.lsPage(bck, lsmsg, http.Header{}, smap, true /*newls*/)
+		c := &lsoCtx{p: p, r: &http.Request{Header: http.Header{}}, bck: bck, lsmsg: lsmsg, smap: smap, newls: true}
+		_, err := c.lsPage()
 		tassert.CheckFatal(t, err)
 		tassert.Errorf(t, begins.Load() == 0 && aborts.Load() == 0 && commits.Load() == 0 && pages.Load() == 1,
 			"wantOnlyRemote must skip phased startup: begins=%d aborts=%d commits=%d pages=%d",
@@ -495,7 +505,8 @@ func TestLsoRflowAbort(t *testing.T) {
 		install(t, true /*failBegin*/, nil, &begins, &aborts, &commits, &pages)
 		smap, bck := newSmapTs(3)
 		p := newOwner(t, smap, bck)
-		_, err := p.lsPage(bck, newLsmsg(), http.Header{}, smap, true /*newls*/)
+		c := &lsoCtx{p: p, r: &http.Request{Header: http.Header{}}, bck: bck, lsmsg: newLsmsg(), smap: smap, newls: true}
+		_, err := c.lsPage()
 		tassert.Fatalf(t, err != nil, "expecting Begin2PC failure to propagate")
 		tassert.Errorf(t, begins.Load() == 3 && aborts.Load() == 3 && commits.Load() == 0 && pages.Load() == 0,
 			"begins=%d aborts=%d commits=%d pages=%d", begins.Load(), aborts.Load(), commits.Load(), pages.Load())
@@ -522,7 +533,8 @@ func TestLsoRflowAbort(t *testing.T) {
 			}
 		}, &begins, &aborts, &commits, &pages)
 
-		_, err := p.lsPage(bck, newLsmsg(), http.Header{}, smap, true /*newls*/)
+		c := &lsoCtx{p: p, r: &http.Request{Header: http.Header{}}, bck: bck, lsmsg: newLsmsg(), smap: smap, newls: true}
+		_, err := c.lsPage()
 		tassert.Fatalf(t, err != nil, "expecting membership change to propagate")
 		tassert.Errorf(t, begins.Load() == 3 && aborts.Load() == 3 && commits.Load() == 0 && pages.Load() == 0,
 			"begins=%d aborts=%d commits=%d pages=%d", begins.Load(), aborts.Load(), commits.Load(), pages.Load())

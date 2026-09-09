@@ -374,6 +374,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusServiceUnavailable})
 		return
 	}
+	c := &lsoCtx{w: w, r: r, p: p, bck: bck, smap: smap}
 	if err := p.access(r, bck, apc.AceObjLIST); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
@@ -407,35 +408,37 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	// for the response (see below)
 	token := lsmsg.ContinuationToken
 	lsmsg.UUID, lsmsg.ContinuationToken = s3.DecodeToken(token)
+	c.lsmsg, c.s3tok = lsmsg, &token
 
 	// via NBI
 	if err := _setupNBI(r.Header, lsmsg); err != nil {
-		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+		c.writeErr(err)
 		return
 	}
 
 	// Zero-size S3 requests echo the wire token without starting a listing.
-	var newls bool
 	if maxKeys > 0 {
 		var psi *meta.Snode
-		psi, newls, err = p.lsOwner(bck, lsmsg, smap)
+		psi, err = c.owner()
 		if err != nil {
-			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+			c.writeErr(err)
 			return
 		}
 		if psi != nil {
-			p.forwardLSO(w, r, bck, lsmsg, psi, smap, newls, &token)
+			c.forwardLSO(psi)
 			return
 		}
 	}
-	p.lsS3Page(w, r, bck, lsmsg, smap, newls, token)
+	c.s3Page()
 }
 
-// execute p.lsPageS3 locally or on behalf of a peer (compare with p.lsNativePage)
-func (p *proxy) lsS3Page(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, newls bool, token string) {
+// execute lsPageS3 locally or on behalf of a peer (compare with lsoCtx.nativePage)
+func (c *lsoCtx) s3Page() {
 	var (
+		p       = c.p
+		bck     = c.bck
+		lsmsg   = c.lsmsg
+		token   = *c.s3tok
 		maxKeys = lsmsg.PageSize
 		lst     *cmn.LsoRes
 	)
@@ -443,9 +446,8 @@ func (p *proxy) lsS3Page(w http.ResponseWriter, r *http.Request, bck *meta.Bck, 
 	// when max-keys is present and is 0 (zero) - skip this next-page block, but still return ListBucketResult w/ bucket name, etc.
 	if maxKeys > 0 {
 		var err error
-		if lst, err = p.lsPageS3(bck, lsmsg, r.Header, smap, newls); err != nil {
-			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-			s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+		if lst, err = c.lsPageS3(); err != nil {
+			c.writeErr(err)
 			return
 		}
 		if cmn.Rom.V(5, cos.ModS3) {
@@ -469,8 +471,8 @@ func (p *proxy) lsS3Page(w http.ResponseWriter, r *http.Request, bck *meta.Bck, 
 
 	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
-	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo2(w)
+	c.w.Header().Set(cos.HdrContentType, cos.ContentXML)
+	sgl.WriteTo2(c.w)
 	sgl.Free()
 
 	// GC
@@ -506,9 +508,10 @@ func _setupNBI(hdr http.Header, lsmsg *apc.LsoMsg) error {
 	return nil
 }
 
-func (p *proxy) lsPageS3(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, newls bool) (*cmn.LsoRes, error) {
+func (c *lsoCtx) lsPageS3() (*cmn.LsoRes, error) {
+	p, bck, lsmsg := c.p, c.bck, c.lsmsg
 	beg := mono.NanoTime()
-	page, err := p.lsPage(bck, lsmsg, hdr, smap, newls)
+	page, err := c.lsPage()
 	if err != nil {
 		return nil, err
 	}

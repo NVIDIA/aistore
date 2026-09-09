@@ -1007,7 +1007,7 @@ func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	}
 
 	// (lso + tco) special
-	p.lstca.abort(&xargs)
+	p.lstcoReg.abort(&xargs)
 
 	if xargs.Kind == apc.ActRebalance {
 		// unless forced:

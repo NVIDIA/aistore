@@ -63,7 +63,7 @@ type (
 		ic         ic
 		authn      *authManager
 		metasyncer *metasyncer
-		lstca      lstca
+		lstcoReg   lstcoReg
 		rproxy     reverseProxy
 		ec         ecToggle
 
@@ -1318,8 +1318,9 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		admitted = true
 	}
 	// prr is public on pub-net, but must be admitted when received via intra-control
+	smap := p.owner.smap.get()
 	if prr && _reqNet(r) == reqNetCtrl {
-		if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
+		if ecode, err := p.checkIntra(r, smap, false /*only primary*/); err != nil {
 			p.writeErr(w, r, err, ecode)
 			return
 		}
@@ -1334,7 +1335,6 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	smap := p.owner.smap.get()
 	if err := smap.validate(); err != nil {
 		if !p.ClusterStarted() {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -1397,7 +1397,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) _health(w http.ResponseWriter, r *http.Request, plainPing bool) bool {
 	if _reqNet(r) == reqNetCtrl {
-		if ecode, err := p.checkIntra(r, false /*only primary*/); err != nil {
+		if ecode, err := p.checkIntra(r, nil /*smap*/, false /*only primary*/); err != nil {
 			if plainPing {
 				if cmn.Rom.V(4, cos.ModAIS) {
 					nlog.Warningln("[health]", p.String(), "rejected intra-control request:", err)
@@ -1699,16 +1699,16 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		//         this one does not
 
 		if !apc.IsFltPresent(fltPresence) && (bckFrom.IsCloud() || bckFrom.IsRemoteAIS()) {
-			lstcx := &lstcx{
+			c := &lstcoCtx{
 				p:       p,
 				bckFrom: bckFrom,
 				bckTo:   bckTo,
 				amsg:    msg,
 				config:  cmn.GCO.Get(),
 			}
-			lstcx.tcomsg.TCBMsg = *tcbmsg
+			c.tcomsg.TCBMsg = *tcbmsg
 			nlog.Infoln("x-tco:", bckFrom.String(), "=>", bckTo.String(), "[", tcbmsg.Prefix, tcbmsg.LatestVer, tcbmsg.Sync, "]")
-			xid, err = lstcx.do()
+			xid, err = c.do()
 		} else {
 			nlog.Infoln("x-tcb:", bckFrom.String(), "=>", bckTo.String(), "[", tcbmsg.Prefix, tcbmsg.LatestVer, tcbmsg.Sync, "]")
 			xid, err = p.tcb(bckFrom, bckTo, msg, tcbmsg.DryRun)
