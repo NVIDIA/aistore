@@ -137,7 +137,7 @@ func (t *target) daePubHandler(w http.ResponseWriter, r *http.Request) {
 func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 	debug.AssertFunc(func() bool { return reqIsPub(r) == isPub })
 
-	var smap *smapX
+	var smap *smapX // intra-control only; nil on the public (GET-only) path
 	if isPub {
 		if r.Method != http.MethodGet {
 			t.writeErrStatusf(w, r, http.StatusForbidden, "%s: %s %s is read-only on %s", t, r.Method, r.URL.Path, cmn.NetPublic)
@@ -158,9 +158,7 @@ func (t *target) _dae(w http.ResponseWriter, r *http.Request, isPub bool) {
 	case http.MethodGet:
 		t.httpdaeget(w, r)
 	case http.MethodPut:
-		if smap == nil {
-			smap = t.owner.smap.get()
-		}
+		debug.Assert(!isPub && smap != nil) // (isPub is GET-only - above)
 		t.httpdaeput(w, r, smap)
 	case http.MethodPost:
 		t.httpdaepost(w, r)
@@ -1226,7 +1224,7 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		if nlog.Stopping() || !t.NodeStarted() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
-			t.metasyncPut(w, r, smap)
+			t.metasyncPut(w, r)
 		}
 		t.regstate.mu.Unlock()
 	case http.MethodPost:
@@ -1238,7 +1236,7 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/metasync
 // compare w/ p.metasyncHandler (NOTE: executes under regstate lock)
-func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request, smap *smapX) {
+func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	var (
 		err  = &errMsync{}
 		nsti = &err.Cii
@@ -1253,7 +1251,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request, smap *smapX
 		return
 	}
 
-	t.warnMsync(r, smap)
+	t.warnMsync(r, t.owner.smap.get()) // (the latest: executes under regstate lock)
 
 	// 1. extract
 	var (
