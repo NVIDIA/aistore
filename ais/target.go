@@ -996,6 +996,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		if err := msg.FromHeader(r.Header); err != nil {
 			return lom, err
 		}
+		// apc.QparamLatestVer via api.GetArgs or bck.VersionConf().ValidateWarmGet
+		msg.LatestVer = _validateWarmGet(lom, dpq.latestVer)
 
 		args := &core.BlobParams{
 			Context:       r.Context(),

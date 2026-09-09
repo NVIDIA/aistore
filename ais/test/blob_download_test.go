@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -616,6 +617,92 @@ func TestGetObjectBlobThreshold(t *testing.T) {
 			tassert.Fatalf(t, oah.Size() == objSize, "expected size %d, got %d", objSize, oah.Size())
 			tassert.Fatalf(t, int64(buf.Len()) == objSize, "expected %d bytes, got %d", objSize, buf.Len())
 			m.validateChunksOnDisk(m.bck, m.objNames[0], test.chunks)
+		})
+	}
+}
+
+func TestGetObjectBlobLatestVersion(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+	var (
+		proxyURL  = tools.RandomProxyURL(t)
+		bp        = tools.BaseAPIParams(proxyURL)
+		remoteBP  = tools.BaseAPIParams(tools.RemoteCluster.URL)
+		remoteBck = cmn.Bck{
+			Name: trand.String(10), Provider: apc.AIS,
+		}
+		bck = cmn.Bck{
+			Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.Alias},
+		}
+		v1 = bytes.Repeat([]byte{'1'}, 8*cos.MiB)
+		v2 = bytes.Repeat([]byte{'2'}, len(v1))
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	p, err := api.HeadBucket(bp, bck, false)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Versioning: &cmn.VersionConfToSet{
+			Enabled:         apc.Ptr(p.Versioning.Enabled),
+			ValidateWarmGet: apc.Ptr(p.Versioning.ValidateWarmGet),
+			Sync:            apc.Ptr(p.Versioning.Sync),
+		}})
+		tassert.CheckError(t, err)
+	})
+
+	tests := []struct {
+		name     string
+		query    url.Values
+		validate bool
+		sync     bool
+	}{
+		{name: "query", query: url.Values{apc.QparamLatestVer: []string{"true"}}},
+		{name: "validate-warm-get", validate: true},
+		{name: "synchronize", sync: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Versioning: &cmn.VersionConfToSet{
+				Enabled: apc.Ptr(true), ValidateWarmGet: apc.Ptr(test.validate), Sync: apc.Ptr(test.sync),
+			}})
+			tassert.CheckFatal(t, err)
+
+			objName := t.Name() + "-" + trand.String(5)
+			_, err = api.PutObject(&api.PutArgs{
+				BaseParams: remoteBP, Bck: remoteBck, ObjName: objName,
+				Reader: readers.NewBytes(v1), Size: uint64(len(v1)),
+			})
+			tassert.CheckFatal(t, err)
+
+			var buf bytes.Buffer
+			_, err = api.GetObject(bp, bck, objName, &api.GetArgs{Writer: &buf})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, bytes.Equal(buf.Bytes(), v1), "failed to cache initial object version")
+
+			// out-of-band overwrite leaves the cached version stale
+			_, err = api.PutObject(&api.PutArgs{
+				BaseParams: remoteBP, Bck: remoteBck, ObjName: objName,
+				Reader: readers.NewBytes(v2), Size: uint64(len(v2)),
+			})
+			tassert.CheckFatal(t, err)
+
+			buf.Reset()
+			oah, err := api.GetObject(bp, bck, objName, &api.GetArgs{
+				Writer: &buf,
+				Query:  test.query,
+				Header: http.Header{apc.HdrBlobDownload: []string{"true"}},
+			})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, oah.Size() == int64(len(v2)), "expected size %d, got %d", len(v2), oah.Size())
+			tassert.Fatalf(t, bytes.Equal(buf.Bytes(), v2), "blob GET returned stale object version")
+			tassert.Fatalf(t, tools.CheckObjIsPresent(proxyURL, bck, objName), "latest object version is not cached")
+
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Versioning: &cmn.VersionConfToSet{
+				ValidateWarmGet: apc.Ptr(false), Sync: apc.Ptr(false),
+			}})
+			tassert.CheckFatal(t, err)
+			buf.Reset()
+			_, err = api.GetObject(bp, bck, objName, &api.GetArgs{Writer: &buf})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, bytes.Equal(buf.Bytes(), v2), "warm GET returned stale object version")
 		})
 	}
 }
