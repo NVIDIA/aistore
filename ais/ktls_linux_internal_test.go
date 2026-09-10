@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"golang.org/x/sys/unix"
@@ -419,6 +420,11 @@ func BenchmarkKTLSTxSendfile(b *testing.B) {
 
 			benchKtlsVariants(b, func(b *testing.B, conn *ktlsConn) {
 				armed := conn.isArmed()
+				var buf []byte
+				if !armed {
+					// match the regular (slab-pooled) GET path - allocate once outside the timed loop
+					buf = make([]byte, min(size, memsys.MaxPageSlabSize))
+				}
 				b.SetBytes(size)
 				b.ReportAllocs()
 				b.ResetTimer()
@@ -431,7 +437,13 @@ func BenchmarkKTLSTxSendfile(b *testing.B) {
 						// fail loudly if ReadFrom silently falls back to a copy
 						src = &testktlsSendfileOnly{file}
 					}
-					n, err := conn.ReadFrom(&io.LimitedReader{R: src, N: size})
+					lr := &io.LimitedReader{R: src, N: size}
+					var n int64
+					if armed {
+						n, err = conn.ReadFrom(lr)
+					} else {
+						n, err = cos.CopyBuffer(conn, lr, buf)
+					}
 					if err != nil {
 						b.Fatal(err)
 					}
