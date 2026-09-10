@@ -1573,6 +1573,9 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 
 	// PUT
 	m.puts()
+	xargs := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: tools.RebalanceTimeout}
+	err = api.WaitForXaction(bp, &xargs)
+	tassert.CheckFatal(t, err)
 	m.ensureNumCopies(bp, mpathCount, false /*greaterOk*/)
 
 	// Remove all mountpaths except one
