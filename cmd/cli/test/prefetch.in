@@ -35,9 +35,8 @@ echo "nonrecursive content" | ais object put - ais://@remais/$BUCKET/nonrec/file
 echo "deeper content" | ais object put - ais://@remais/$BUCKET/nonrec/deep/file.txt // IGNORE
 echo "dryrun content" | ais object put - ais://@remais/$BUCKET/dryrun_test.txt // IGNORE
 
-# Evict all objects first to test prefetch
-ais evict ais://@remais/$BUCKET --keep-md // IGNORE
-ais wait job evict-objects // IGNORE
+# Use a match-all template so --wait tracks the evict-objects xaction.
+ais evict ais://@remais/$BUCKET --template "*" --wait // IGNORE
 
 # Verify objects are not cached before prefetch
 ais ls ais://@remais/$BUCKET --cached | grep -E "^(obj1|obj2)\.txt" // FAIL
@@ -93,11 +92,11 @@ ais ls ais://@remais/$BUCKET --cached | grep "^dryrun_test.txt" // FAIL
 
 # Batch 4: Test blocking --wait behavior
 # Evict a cached object and prefetch it back with --wait
-ais evict ais://@remais/$BUCKET/single_obj.txt // IGNORE
+ais evict ais://@remais/$BUCKET/single_obj.txt --wait // IGNORE
 ais prefetch ais://@remais/$BUCKET/single_obj.txt --wait
 
 # Prefetch nonexistent objects with --wait: the job finishes with errors
 ais prefetch ais://@remais/$BUCKET --list "no-such-1,no-such-2" --wait // FAIL "finished with errors"
 
 # Clean up remote bucket
-ais bucket rm --yes ais://@remais/$BUCKET // IGNORE 
+ais bucket rm --yes ais://@remais/$BUCKET // IGNORE

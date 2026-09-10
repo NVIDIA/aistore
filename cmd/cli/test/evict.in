@@ -39,68 +39,47 @@ ais ls ais://@remais/$BUCKET --cached | grep "^obj1.txt" | awk '{print $1}'
 ais ls ais://@remais/$BUCKET --cached | grep "^obj2.txt" | awk '{print $1}'
 
 # Evict specific objects using --list flag
-ais evict ais://@remais/$BUCKET --list "obj1.txt,obj2.txt"
-
-# Wait for eviction job to complete
-ais wait job evict-objects // IGNORE
+ais evict ais://@remais/$BUCKET --list "obj1.txt,obj2.txt" --wait
 
 # Verify objects are no longer cached
 ais ls ais://@remais/$BUCKET --cached | grep "^obj1.txt" // FAIL
 ais ls ais://@remais/$BUCKET --cached | grep "^obj2.txt" // FAIL
 
 # Test explicit --prefix flag
-ais evict ais://@remais/$BUCKET --prefix test_prefix_
-
-# Wait for eviction job to complete
-ais wait job evict-objects // IGNORE
+ais evict ais://@remais/$BUCKET --prefix test_prefix_ --wait
 
 # Verify prefix objects are no longer cached
 ais ls ais://@remais/$BUCKET --cached | grep "^test_prefix_1.txt" // FAIL
 ais ls ais://@remais/$BUCKET --cached | grep "^test_prefix_2.txt" // FAIL
 
 # Test single object eviction with --keep-md flag
-ais evict ais://@remais/$BUCKET/keepmd_test.txt --keep-md
-
-# Wait for eviction job to complete
-ais wait job evict-objects // IGNORE
+ais evict ais://@remais/$BUCKET/keepmd_test.txt --keep-md --wait
 
 # Verify object is no longer cached but bucket metadata preserved
 ais ls ais://@remais/$BUCKET --cached | grep "^keepmd_test.txt" // FAIL
 
 # Test single object eviction
-ais evict ais://@remais/$BUCKET/single_obj.txt
-
-# Wait for eviction job to complete
-ais wait job evict-objects // IGNORE
+ais evict ais://@remais/$BUCKET/single_obj.txt --wait
 
 # Verify single object is no longer cached
 ais ls ais://@remais/$BUCKET --cached | grep "^single_obj.txt" // FAIL
 
 # Test template-based eviction with brace expansion
-ais evict ais://@remais/$BUCKET --template "template_{001..002}.txt"
-
-# Wait for eviction job to complete
-ais wait job evict-objects // IGNORE
+ais evict ais://@remais/$BUCKET --template "template_{001..002}.txt" --wait
 
 # Verify template objects are no longer cached
 ais ls ais://@remais/$BUCKET --cached | grep "^template_001.txt" // FAIL
 ais ls ais://@remais/$BUCKET --cached | grep "^template_002.txt" // FAIL
 
 # Test non-recursive prefix eviction
-ais evict ais://@remais/$BUCKET/nonrec/ --nr
-
-# Wait for eviction job to complete
-ais wait job evict-objects // IGNORE
+ais evict ais://@remais/$BUCKET/nonrec/ --nr --wait
 
 # Verify non-recursive: direct file evicted but deeper file remains
 ais ls ais://@remais/$BUCKET --cached | grep "^nonrec/file.txt" // FAIL
 ais ls ais://@remais/$BUCKET --cached | grep "^nonrec/deep/file.txt" | awk '{print $1}'
 
 # Test nested/embedded prefix eviction (recursive by default)
-ais evict ais://@remais/$BUCKET --prefix nested/
-
-# Wait for eviction job to complete
-ais wait job evict-objects // IGNORE
+ais evict ais://@remais/$BUCKET --prefix nested/ --wait
 
 # Verify nested object is no longer cached
 ais ls ais://@remais/$BUCKET --cached | grep "^nested/deep/file.txt" // FAIL

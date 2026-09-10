@@ -1,5 +1,6 @@
-ais archive gen-shards "ais://$BUCKET_1/shard-{0..2}.tar" --fcount 1 --fsize 1KB --cleanup // IGNORE
-ais archive gen-shards "ais://$BUCKET_2/subdir/shard-{0..2}.tar" --fcount 1 --fsize 1KB --cleanup // IGNORE
+# Use GNU tar so archive sizes match the expected 2.50 KiB; other formats can add metadata.
+ais archive gen-shards "ais://$BUCKET_1/shard-{0..2}.tar" --fcount 1 --fsize 1KB --tform GNU --cleanup // IGNORE
+ais archive gen-shards "ais://$BUCKET_2/subdir/shard-{0..2}.tar" --fcount 1 --fsize 1KB --tform GNU --cleanup // IGNORE
 
 # Add plain content with simple nesting
 ais put /dev/null ais://$BUCKET_1/file1.txt --yes // IGNORE
