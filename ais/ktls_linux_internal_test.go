@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -20,6 +21,12 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+type testktlsSendfileOnly struct{ *os.File }
+
+func (*testktlsSendfileOnly) Read([]byte) (int, error) {
+	return 0, errors.New("buffered read fallback in kTLS sendfile test")
+}
 
 func TestKTLSTxLinuxRecordTypeCmsg(t *testing.T) {
 	oob := kRecordTypeCmsg(kRecordTypeAlert)
@@ -257,9 +264,11 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 			_, err = file.Seek(0, io.SeekStart)
 			tassert.CheckFatal(t, err)
 
-			n, err := srv.conn.ReadFrom(file)
+			lr := &io.LimitedReader{R: &testktlsSendfileOnly{file}, N: int64(len(filePayload))}
+			n, err := srv.conn.ReadFrom(lr)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, n == int64(len(filePayload)), "expected sendfile size %d, got %d", len(filePayload), n)
+			tassert.Errorf(t, lr.N == 0, "sendfile left %d bytes unread", lr.N)
 			buf = make([]byte, len(filePayload))
 			_, err = io.ReadFull(cc, buf)
 			tassert.CheckFatal(t, err)

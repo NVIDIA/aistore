@@ -76,6 +76,7 @@ type (
 		req        *http.Request
 		w          http.ResponseWriter
 		ctx        context.Context // context used when getting object from remote backend (access creds)
+		ktls       ktlsState       // connection-scoped TX state, if any
 		t          *target         // this
 		lom        *core.LOM       // obj
 		dpq        *dpq
@@ -1321,7 +1322,7 @@ func (goi *getOI) setwhdr(whdr http.Header, cksum *cos.Cksum, size int64) {
 	}
 
 	// when applicable, retire the kTLS-armed connection _after_ this response
-	ktlsRetire(goi.req, whdr, size)
+	ktlsRetire(goi.ktls, whdr, size)
 }
 
 // in particular, setup reader and writer and set headers
@@ -1366,7 +1367,7 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 		whdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 
 		// see also: goi.setwhdr()
-		ktlsRetire(goi.req, whdr, size)
+		ktlsRetire(goi.ktls, whdr, size)
 
 		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
 		err = goi.transmit(csl, buf, fqn, size, false /*committed*/)
@@ -1390,7 +1391,7 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 
 	// (compare w/ goi.setwhdr) - size is not known until ReadUntil completes
 	// TODO: might be too conservative for .tar; might be not enough for .tgz et al. compressed
-	ktlsRetire(goi.req, whdr, lom.Lsize())
+	ktlsRetire(goi.ktls, whdr, lom.Lsize())
 
 	rcb := _newRcb(goi.w)
 	whdr.Set(cos.HdrContentType, cos.ContentTar)
@@ -1451,7 +1452,7 @@ func (goi *getOI) canSendfile(lmfh cos.LomReader) bool {
 	if goi.lom.IsChunked() {
 		return false
 	}
-	if !canSendfileRequest(goi.req, cmn.Rom.UseHTTPS()) {
+	if !canSendfileConn(goi.ktls, cmn.Rom.UseHTTPS()) {
 		return false
 	}
 
@@ -1465,8 +1466,8 @@ func (goi *getOI) canSendfile(lmfh cos.LomReader) bool {
 }
 
 // TODO: keeping it separate only for unit tests
-func canSendfileRequest(r *http.Request, useHTTPS bool) bool {
-	return !useHTTPS || (r != nil && isKTLS(r.Context()))
+func canSendfileConn(state ktlsState, useHTTPS bool) bool {
+	return !useHTTPS || (state != nil && state.isArmed())
 }
 
 func (goi *getOI) _txerr(err error, fqn string, written, size int64, committed bool) error {

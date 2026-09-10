@@ -6,7 +6,6 @@ package ais
 
 import (
 	"bytes"
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
@@ -652,21 +651,11 @@ func TestKTLSTxReadHeaderTimeout(t *testing.T) {
 		"ReadHeaderTimeout was cleared by lazy kTLS initialization: %v", err)
 }
 
-func TestKTLSTxSendfileRequest(t *testing.T) {
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://localhost/v1/objects/bck/obj", http.NoBody)
-	tassert.CheckFatal(t, err)
-
-	tassert.Errorf(t, canSendfileRequest(req, false), "plain HTTP request rejected")
-	tassert.Errorf(t, !canSendfileRequest(nil, true), "nil HTTPS request accepted")
-	tassert.Errorf(t, !canSendfileRequest(req, true), "unarmed HTTPS request accepted")
-
-	ctx := context.WithValue(req.Context(), keyKtls, testktlsState(true))
-	armed := req.WithContext(ctx)
-	tassert.Errorf(t, canSendfileRequest(armed, true), "armed kTLS HTTPS request rejected")
-
-	ctx = context.WithValue(req.Context(), keyKtls, testktlsState(false))
-	fallback := req.WithContext(ctx)
-	tassert.Errorf(t, !canSendfileRequest(fallback, true), "kTLS fallback request accepted")
+func TestKTLSTxSendfileEligibility(t *testing.T) {
+	tassert.Errorf(t, canSendfileConn(nil, false), "plain HTTP connection rejected")
+	tassert.Errorf(t, !canSendfileConn(nil, true), "unarmed HTTPS connection accepted")
+	tassert.Errorf(t, canSendfileConn(testktlsState(true), true), "armed kTLS HTTPS connection rejected")
+	tassert.Errorf(t, !canSendfileConn(testktlsState(false), true), "kTLS fallback connection accepted")
 }
 
 func TestKTLSTxListenerRejects(t *testing.T) {
@@ -1497,15 +1486,11 @@ func TestKTLSTxBudget(t *testing.T) {
 		conn := testktlsHandshake(t, arm)
 		conn.txMaxBytes = ktlsHeadroom + 10
 
-		ctx := context.WithValue(t.Context(), keyKtls, ktlsState(conn))
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://127.0.0.1/v1/objects/nnn/o", http.NoBody)
-		tassert.CheckFatal(t, err)
-
 		whdr := http.Header{}
-		ktlsRetire(req, whdr, 9)
+		ktlsRetire(conn, whdr, 9)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == "", "retired early: %q", whdr.Get(hdrConnection))
 
-		ktlsRetire(req, whdr, 10)
+		ktlsRetire(conn, whdr, 10)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == hdrConnectionClose,
 			"%q, wanted %q", whdr.Get(hdrConnection), hdrConnectionClose)
 		tassert.Errorf(t, conn.txRetiring.Load(), "connection was not marked retiring")
@@ -1529,7 +1514,7 @@ func TestKTLSTxBudget(t *testing.T) {
 		unarmed := testktlsHandshake(t, func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil })
 		tassert.Errorf(t, unarmed.remaining() == 0, "unarmed remaining %d", unarmed.remaining())
 		whdr = http.Header{}
-		ktlsRetire(req.WithContext(context.WithValue(t.Context(), keyKtls, ktlsState(unarmed))), whdr, 1<<40)
+		ktlsRetire(unarmed, whdr, 1<<40)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == "", "unarmed conn retired: %q", whdr.Get(hdrConnection))
 	})
 
@@ -1767,6 +1752,7 @@ func testktlsHandshakeConf(t testing.TB, conf *tls.Config, install ktlsInstaller
 
 //
 // micro-benchmarks
+// run: go test -run '^$' -bench '^BenchmarkKTLS' -benchmem
 //
 
 // Armed transmit costs one uncontended txOut acquisition plus budget

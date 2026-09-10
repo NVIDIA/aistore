@@ -3,7 +3,7 @@ module github.com/NVIDIA/aistore/cmd/ishard
 go 1.26
 
 require (
-	github.com/NVIDIA/aistore v1.5.0
+	github.com/NVIDIA/aistore v1.5.1-0.20260910210500-a7efcc29cf25
 	github.com/json-iterator/go v1.1.12
 	github.com/vbauerster/mpb/v4 v4.12.2
 )
@@ -73,7 +73,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/mod v0.38.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect

@@ -959,8 +959,13 @@ func (l *ktlsListener) Accept() (net.Conn, error) {
 }
 
 func isKTLS(ctx context.Context) bool {
-	state, _ := ctx.Value(keyKtls).(ktlsState)
+	state := ktlsFrom(ctx)
 	return state != nil && state.isArmed()
+}
+
+func ktlsFrom(ctx context.Context) ktlsState {
+	state, _ := ctx.Value(keyKtls).(ktlsState)
+	return state
 }
 
 // Retire an armed connection at the _end_ of the current response, when transmitting
@@ -971,12 +976,8 @@ func isKTLS(ctx context.Context) bool {
 // the connection is done, and reconnects for the next one.
 //
 // Ineffective for a single object larger than the entire budget - see TODO above.
-func ktlsRetire(r *http.Request, whdr http.Header, size int64) {
-	if r == nil || size < 0 {
-		return
-	}
-	state, _ := r.Context().Value(keyKtls).(ktlsState)
-	if state == nil {
+func ktlsRetire(state ktlsState, whdr http.Header, size int64) {
+	if state == nil || size < 0 {
 		return
 	}
 	if state.retire(size) {

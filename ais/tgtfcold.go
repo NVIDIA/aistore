@@ -127,7 +127,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 		// (expecting user to set bucket checksum = md5)
 		s3.SetS3Headers(whdr, goi.lom)
 	}
-	ktlsRetire(goi.req, whdr, res.Size)
+	ktlsRetire(goi.ktls, whdr, res.Size)
 
 	written, err = cos.CopyBuffer(mw, res.R, buf)
 	cos.Close(res.R)

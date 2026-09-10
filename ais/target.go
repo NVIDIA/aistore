@@ -1048,6 +1048,9 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.req = r
 		goi.w = w
 		goi.ctx = context.Background()
+		if g.netServ.pub.ktlsTx {
+			goi.ktls = ktlsFrom(r.Context()) // live connection state; cache the context lookup
+		}
 		goi.ranges = byteRanges{Range: r.Header.Get(cos.HdrRange), Size: 0}
 		goi.latestVer = _validateWarmGet(goi.lom, dpq.latestVer) // apc.QparamLatestVer || versioning.*_warm_get
 	}
