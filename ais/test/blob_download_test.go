@@ -366,6 +366,50 @@ func TestBlobDownloadParentCancellation(t *testing.T) {
 	})
 }
 
+func TestBlobDownloadRemoteAISReadTimeout(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+	const objSize = cmn.ChunkSizeMin
+	var (
+		proxyURL  = tools.RandomProxyURL(t)
+		bp        = tools.BaseAPIParams(proxyURL)
+		remoteBP  = tools.BaseAPIParams(tools.RemoteCluster.URL)
+		remoteBck = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		bck       = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.Alias}}
+		objName   = t.Name() + "-object"
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+
+	_, err := api.PutObject(&api.PutArgs{
+		BaseParams: remoteBP, Bck: remoteBck, ObjName: objName,
+		Reader: readers.NewBytes(bytes.Repeat([]byte{'x'}, objSize)), Size: objSize,
+	})
+	tassert.CheckFatal(t, err)
+
+	xid, err := api.BlobDownload(bp, bck, objName, &apc.BlobMsg{
+		ChunkSize: cmn.ChunkSizeMin, NumWorkers: 1, ChunkReadTimeout: cos.Duration(time.Nanosecond),
+	})
+	tassert.CheckFatal(t, err)
+
+	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+	snaps, err := api.WaitForSnaps(bp, args, args.Finished())
+	tassert.CheckFatal(t, err)
+
+	var errText string
+	for _, targetSnaps := range snaps {
+		for _, snap := range targetSnaps {
+			if snap.ID == xid {
+				errText = snap.Err
+			}
+		}
+	}
+	tassert.Fatalf(t, strings.Contains(errText, context.DeadlineExceeded.Error()),
+		"expected context deadline, got %q", errText)
+
+	m := ioContext{t: t, bck: bck}
+	m.validateChunksOnDisk(bck, objName, 0)
+}
+
 func TestBlobDownloadAbortByKind(t *testing.T) {
 	const (
 		objSize    = 32 * cos.MiB

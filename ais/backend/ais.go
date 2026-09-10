@@ -588,7 +588,7 @@ func (m *AISbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *
 }
 
 // TODO: retry
-func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (ecode int, err error) {
+func (m *AISbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (ecode int, err error) {
 	var (
 		remAis    *remAis
 		r         io.ReadCloser
@@ -599,7 +599,7 @@ func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Re
 		return
 	}
 	unsetUUID(&remoteBck)
-	if r, size, err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, nil /*api.GetArgs*/); err != nil {
+	if r, size, err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, &api.GetArgs{Context: ctx}); err != nil {
 		return m.extractErrCode(err, remAis.uuid)
 	}
 	params := core.AllocPutParams()
@@ -618,9 +618,7 @@ func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Re
 	return m.extractErrCode(err, remAis.uuid)
 }
 
-// TODO: propagate the supplied context to api.GetObjectReader so blob-download
-// cancellation interrupts active remote-AIS range reads.
-func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		remAis    *remAis
 		args      *api.GetArgs
@@ -632,12 +630,10 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 	unsetUUID(&remoteBck)
 
 	// reader
+	args = &api.GetArgs{Context: ctx}
 	if length > 0 {
-		rng := cmn.MakeRangeHdr(offset, length)
-		args = &api.GetArgs{
-			Header: http.Header{cos.HdrRange: []string{rng}},
-			Query:  url.Values{apc.QparamSilent: []string{"true"}},
-		}
+		args.Header = http.Header{cos.HdrRange: []string{cmn.MakeRangeHdr(offset, length)}}
+		args.Query = url.Values{apc.QparamSilent: []string{"true"}}
 	} else {
 		hargs := api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}
 		var op *cmn.ObjectPropsV2

@@ -56,7 +56,7 @@ type (
 		// amsg, lsmsg etc.
 		Body []byte
 
-		ctx context.Context // list-objects only
+		ctx context.Context
 
 		// mem-pool (when cos.HdrContentType = cos.ContentMsgPack)
 		buf []byte

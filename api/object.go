@@ -5,6 +5,7 @@
 package api
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -36,6 +37,8 @@ const (
 // GET(object)
 type (
 	GetArgs struct {
+		Context context.Context // optional; defaults to context.Background()
+
 		// If not specified (or same: if `nil`), Writer defaults to `io.Discard`
 		// (in other words, with no writer the object that is being read will be discarded)
 		Writer io.Writer
@@ -212,6 +215,9 @@ func (oah *ObjAttrs) RespHeader() http.Header {
 }
 
 func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah ObjAttrs, err error) {
+	if args == nil {
+		args = &GetArgs{}
+	}
 	var (
 		wresp     *wrappedResp
 		w, q, hdr = args.ret()
@@ -230,6 +236,7 @@ func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah O
 		bck.SetQuery(qall)
 		reqParams.Query = qall
 		reqParams.Header = hdr
+		reqParams.ctx = args.Context
 	}
 	// copy qparams over, if any
 	for k, vs := range q {
@@ -261,6 +268,9 @@ func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah O
 //   with `cmn.ErrInvalidCksum`.
 
 func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah ObjAttrs, err error) {
+	if args == nil {
+		args = &GetArgs{}
+	}
 	w, q, hdr := args.ret()
 	hdr, err = args.blobThresholdHeader(hdr)
 	if err != nil {
@@ -273,6 +283,7 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Query = bck.AddToQuery(q)
 		reqParams.Header = hdr
+		reqParams.ctx = args.Context
 	}
 
 	var (
@@ -300,6 +311,9 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 // Returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
 func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (r io.ReadCloser, size int64, err error) {
+	if args == nil {
+		args = &GetArgs{}
+	}
 	_, q, hdr := args.ret()
 	hdr, err = args.blobThresholdHeader(hdr)
 	if err != nil {
@@ -313,6 +327,7 @@ func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) 
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Query = q
 		reqParams.Header = hdr
+		reqParams.ctx = args.Context
 	}
 	r, size, err = reqParams.doReader()
 	FreeRp(reqParams)
