@@ -420,6 +420,12 @@ func BenchmarkKTLSTxSendfile(b *testing.B) {
 
 			benchKtlsVariants(b, func(b *testing.B, conn *ktlsConn) {
 				armed := conn.isArmed()
+				var src io.Reader = file
+				if armed {
+					// fail loudly if ReadFrom silently falls back to a copy
+					src = &testktlsSendfileOnly{file}
+				}
+				lr := &io.LimitedReader{R: src}
 				var buf []byte
 				if !armed {
 					// match the regular (slab-pooled) GET path - allocate once outside the timed loop
@@ -432,13 +438,11 @@ func BenchmarkKTLSTxSendfile(b *testing.B) {
 					if _, err := file.Seek(0, io.SeekStart); err != nil {
 						b.Fatal(err)
 					}
-					var src io.Reader = file
-					if armed {
-						// fail loudly if ReadFrom silently falls back to a copy
-						src = &testktlsSendfileOnly{file}
-					}
-					lr := &io.LimitedReader{R: src, N: size}
-					var n int64
+					lr.N = size
+					var (
+						n   int64
+						err error
+					)
 					if armed {
 						n, err = conn.ReadFrom(lr)
 					} else {
