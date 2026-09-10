@@ -17,6 +17,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"golang.org/x/sys/unix"
@@ -316,6 +317,129 @@ func TestKTLSTxLinuxUnsupported(t *testing.T) {
 			got := ktlsUnsupported(test.stage, test.err)
 			tassert.Errorf(t, got == test.want,
 				"ktlsUnsupported(%s, %v) = %v, wanted %v", test.stage, test.err, got, test.want)
+		})
+	}
+}
+
+//
+// transmit benchmarks
+// run: go test -run '^$' -bench '^BenchmarkKTLSTx' -benchmem
+//
+// Two variants over one harness, differing only in who encrypts:
+//   ktls       - the real installer; the kernel encrypts. Skipped when the host
+//                has no TLS ULP (`modprobe tls`; /proc/sys/net/ipv4/tcp_available_ulp)
+//   crypto-tls - the installer declines; Go's userspace TLS encrypts
+//
+// The peer decrypts one probe record (proving the crypto_info we installed is
+// the key the client agreed on), then drains the raw socket without decrypting -
+// otherwise the client's own crypto becomes the bottleneck and flattens both
+// variants into the same number.
+
+const benchKtlsProbe = "aistore-ktls-probe"
+
+// one armed-or-not server connection with a draining peer
+func benchKtlsConn(b *testing.B, install ktlsInstaller) *ktlsConn {
+	b.Helper()
+
+	conn, client := testktlsConnPair(b, install)
+	testktlsWaitHandshake(b, testktlsStartHandshake(b, conn, client))
+
+	// probe: the peer must be able to decrypt what we just wrote
+	if _, err := conn.Write([]byte(benchKtlsProbe)); err != nil {
+		b.Fatal(err)
+	}
+	got := make([]byte, len(benchKtlsProbe))
+	if _, err := io.ReadFull(client, got); err != nil {
+		b.Fatal(err)
+	}
+	if string(got) != benchKtlsProbe {
+		b.Fatalf("probe mismatch: %q", got)
+	}
+
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		_, _ = io.Copy(io.Discard, client.NetConn())
+	}()
+	b.Cleanup(func() { _ = client.NetConn().Close(); <-drained })
+
+	return conn
+}
+
+func benchKtlsVariants(b *testing.B, run func(b *testing.B, conn *ktlsConn)) {
+	b.Helper()
+
+	b.Run("crypto-tls", func(b *testing.B) {
+		conn := benchKtlsConn(b, func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil })
+		if conn.isArmed() {
+			b.Fatal("declining installer armed the connection")
+		}
+		run(b, conn)
+	})
+
+	b.Run("ktls", func(b *testing.B) {
+		conn := benchKtlsConn(b, ktlsInstall)
+		if !conn.isArmed() {
+			b.Skip("kTLS TX is unsupported by this kernel")
+		}
+		run(b, conn)
+	})
+}
+
+// buffered transmit: crypto/tls Write vs plaintext into an armed socket
+func BenchmarkKTLSTxWrite(b *testing.B) {
+	for _, size := range []int64{4 * cos.KiB, 64 * cos.KiB, cos.MiB} {
+		b.Run(cos.IEC(size, 0), func(b *testing.B) {
+			benchKtlsVariants(b, func(b *testing.B, conn *ktlsConn) {
+				p := make([]byte, size)
+				b.SetBytes(size)
+				b.ReportAllocs()
+				b.ResetTimer()
+				for b.Loop() {
+					if _, err := conn.Write(p); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		})
+	}
+}
+
+// the question the feature exists for: sendfile(2) into an armed socket vs
+// crypto/tls reading the file into userspace to encrypt it
+func BenchmarkKTLSTxSendfile(b *testing.B) {
+	for _, size := range []int64{64 * cos.KiB, cos.MiB, 4 * cos.MiB} {
+		b.Run(cos.IEC(size, 0), func(b *testing.B) {
+			file, err := os.CreateTemp(b.TempDir(), "ktls-sendfile")
+			tassert.CheckFatal(b, err)
+			b.Cleanup(func() { _ = file.Close() })
+			if _, err := file.Write(make([]byte, size)); err != nil {
+				b.Fatal(err)
+			}
+
+			benchKtlsVariants(b, func(b *testing.B, conn *ktlsConn) {
+				armed := conn.isArmed()
+				b.SetBytes(size)
+				b.ReportAllocs()
+				b.ResetTimer()
+				for b.Loop() {
+					if _, err := file.Seek(0, io.SeekStart); err != nil {
+						b.Fatal(err)
+					}
+					var src io.Reader = file
+					if armed {
+						// fail loudly if ReadFrom silently falls back to a copy
+						src = &testktlsSendfileOnly{file}
+					}
+					n, err := conn.ReadFrom(&io.LimitedReader{R: src, N: size})
+					if err != nil {
+						b.Fatal(err)
+					}
+					if n != size {
+						b.Fatalf("transmitted %d of %d", n, size)
+					}
+				}
+			})
 		})
 	}
 }

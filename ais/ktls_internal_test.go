@@ -1752,100 +1752,31 @@ func testktlsHandshakeConf(t testing.TB, conf *tls.Config, install ktlsInstaller
 
 //
 // micro-benchmarks
-// run: go test -run '^$' -bench '^BenchmarkKTLS' -benchmem
+// screen 1: go test -run="^$" -bench=KTLS -benchmem
+// screen 2: while :; do ss -tin | grep -o 'tcp-ulp-tls.*txconf: [a-z-]*'; sleep 0.2; done
+//     tcp-ulp-tls version: 1.3 cipher: aes-gcm-128 rxconf: none txconf: sw
 //
 
-// Armed transmit costs one uncontended txOut acquisition plus budget
-// bookkeeping per write. Compare against the same write(2) with no kTLS
-// wrapper: if the two are indistinguishable, the bookkeeping is free relative
-// to the syscall - which is the only question worth asking of it.
-//
-// Both benchmarks drive the ordinary entry points (net.Conn methods, the
-// listener's handshake path). Nothing here reaches into ktlsConn state.
+// The transmit benchmarks live in ktls_linux_internal_test.go: they need the
+// real installer, and a fake one measures nothing - "armed" would put plaintext
+// on a plain socket, so both sides of the comparison would be an ordinary
+// write(2) and the difference would be a few ns of bookkeeping.
 
-const benchWriteSize = 512 // net/http copies sniffLen before switching to ReadFrom
-
-// loopback TCP with a draining peer
-func benchTCPConn(b *testing.B) *net.TCPConn {
-	b.Helper()
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+// per-connection cost at Accept: tls.Config.Clone (KeyLogWriter is
+// per-connection) plus tls.Server
+func BenchmarkKTLSTxNewConn(b *testing.B) {
+	tmpl := testktlsServerConf(b)
+	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		b.Fatal(err)
 	}
-	b.Cleanup(func() { _ = ln.Close() })
-
-	drained := make(chan struct{})
-	go func() {
-		defer close(drained)
-		sc, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		_, _ = io.Copy(io.Discard, sc)
-		_ = sc.Close()
-	}()
-
-	cc, err := net.Dial("tcp", ln.Addr().String())
+	b.Cleanup(func() { _ = raw.Close() })
+	cc, err := net.Dial("tcp", raw.Addr().String())
 	if err != nil {
 		b.Fatal(err)
 	}
 	tcp := cc.(*net.TCPConn)
-	b.Cleanup(func() { _ = tcp.Close(); <-drained })
-	return tcp
-}
-
-// (1) armed write through (*ktlsConn).Write; the installer is faked because the
-// host kernel may not implement kTLS - everything else is the production path.
-// NOTE: the peer must keep draining, or this measures TCP backpressure.
-func BenchmarkKTLSTxWriteArmed(b *testing.B) {
-	conn, client := testktlsConnPair(b, func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil })
-	testktlsWaitHandshake(b, testktlsStartHandshake(b, conn, client))
-	if !conn.isArmed() {
-		b.Fatal("not armed")
-	}
-
-	// Once armed, the server hands plaintext to the socket, so read the raw
-	// connection underneath crypto/tls rather than through it.
-	drained := make(chan struct{})
-	go func() {
-		defer close(drained)
-		_, _ = io.Copy(io.Discard, client.NetConn())
-	}()
-	b.Cleanup(func() { _ = client.NetConn().Close(); <-drained })
-
-	p := make([]byte, benchWriteSize)
-
-	b.SetBytes(benchWriteSize)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for b.Loop() {
-		if _, err := conn.Write(p); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// (2) baseline: identical syscall, no kTLS wrapper
-func BenchmarkKTLSTxWriteBare(b *testing.B) {
-	tcp := benchTCPConn(b)
-	p := make([]byte, benchWriteSize)
-
-	b.SetBytes(benchWriteSize)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for b.Loop() {
-		if _, err := tcp.Write(p); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// (3) per-connection cost at Accept: tls.Config.Clone (KeyLogWriter is
-// per-connection) plus tls.Server
-func BenchmarkKTLSTxNewConn(b *testing.B) {
-	tmpl := testktlsServerConf(b)
-	tcp := benchTCPConn(b)
+	b.Cleanup(func() { _ = tcp.Close() })
 	install := func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil }
 
 	b.ReportAllocs()
