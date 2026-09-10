@@ -32,6 +32,8 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	// file system
+	// (idempotent: a previously panicking run may have skipped the cleanup below)
+	os.RemoveAll(testMountpath)
 	cos.CreateDir(testMountpath)
 	defer os.RemoveAll(testMountpath)
 	fs.NewTestMFS(nil)
@@ -57,7 +59,11 @@ func TestMain(m *testing.M) {
 	tid, _ := initTID(config)
 	t.si.Init(tid, apc.Target, nil /*verifying key*/)
 
-	fs.AddTestMpath(testMountpath, t.SID())
+	// NOTE: without this mountpath nothing downstream works - BMD cannot be
+	// persisted, and every fs-dependent test then fails far away from the cause
+	if _, err := fs.AddTestMpath(testMountpath, t.SID()); err != nil {
+		cos.ExitLog("failed to add test mountpath", testMountpath, err)
+	}
 
 	t.htrun.initPhase2(config)
 	t.ups.t = t

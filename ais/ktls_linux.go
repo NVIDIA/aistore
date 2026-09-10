@@ -18,26 +18,26 @@ import (
 )
 
 const (
-	ktlsTxPlatform          = true
-	ktlsStageULP            = "TCP_ULP"
-	ktlsStageTX             = "TLS_TX"
-	linuxTLSVersion12       = 0x0303
-	linuxTLSVersion13       = 0x0304
-	linuxTLSCipherAESGCM128 = 51
-	linuxTLSCipherAESGCM256 = 52
-	linuxTLSCryptoInfoSize  = 4
-	linuxTLSIVSize          = 8
-	linuxTLSSaltSize        = 4
-	linuxTLSRecordSeqSize   = 8
-	linuxTLSSetTX           = 1
-	linuxTLSSetRecordType   = 1
-	linuxTLSRecordTypeAlert = 21
-	tlsAlertLevelWarning    = 1
-	tlsAlertCloseNotify     = 0
+	ktlsPlatform         = true
+	kStageULP            = "TCP_ULP"
+	kStageTX             = "TLS_TX"
+	kVersion12           = 0x0303
+	kVersion13           = 0x0304
+	kCipherAESGCM128     = 51
+	kCipherAESGCM256     = 52
+	kCryptoInfoSize      = 4
+	kIVSize              = 8
+	kSaltSize            = 4
+	kRecordSeqSize       = 8
+	kSetTX               = 1
+	kSetRecordType       = 1
+	kRecordTypeAlert     = 21
+	tlsAlertLevelWarning = 1
+	tlsAlertCloseNotify  = 0
 )
 
-func installKTLSTx(tcp *net.TCPConn, params *ktlsTxParams) (bool, error) {
-	cryptoInfo, supported, err := linuxTLSCryptoInfo(params)
+func ktlsInstall(tcp *net.TCPConn, params *ktlsParams) (bool, error) {
+	cryptoInfo, supported, err := kCryptoInfo(params)
 	if !supported || err != nil {
 		return false, err
 	}
@@ -57,7 +57,7 @@ func installKTLSTx(tcp *net.TCPConn, params *ktlsTxParams) (bool, error) {
 		installed bool
 	)
 	controlErr := raw.Control(func(fd uintptr) {
-		stage = ktlsStageULP
+		stage = kStageULP
 		sockErr = unix.SetsockoptString(int(fd), unix.IPPROTO_TCP, unix.TCP_ULP, "tls")
 		if sockErr != nil {
 			return
@@ -65,8 +65,8 @@ func installKTLSTx(tcp *net.TCPConn, params *ktlsTxParams) (bool, error) {
 
 		// TLS_TX is intentionally the last fallible operation: once it succeeds,
 		// crypto/tls cannot safely resume ownership of the transmit path.
-		stage = ktlsStageTX
-		sockErr = setsockoptBytes(fd, unix.SOL_TLS, linuxTLSSetTX, cryptoInfo)
+		stage = kStageTX
+		sockErr = setsockoptBytes(fd, unix.SOL_TLS, kSetTX, cryptoInfo)
 		if sockErr != nil {
 			return
 		}
@@ -80,7 +80,7 @@ func installKTLSTx(tcp *net.TCPConn, params *ktlsTxParams) (bool, error) {
 	if controlErr != nil {
 		return false, fmt.Errorf("ktls-tx: raw control: %w", controlErr)
 	}
-	if isKTLSTxUnsupported(stage, sockErr) {
+	if ktlsUnsupported(stage, sockErr) {
 		return false, nil
 	}
 	if sockErr == nil {
@@ -89,7 +89,7 @@ func installKTLSTx(tcp *net.TCPConn, params *ktlsTxParams) (bool, error) {
 	return false, fmt.Errorf("ktls-tx: setsockopt %s: %w", stage, sockErr)
 }
 
-func sendKTLSTxCloseNotify(tcp *net.TCPConn) error {
+func ktlsCloseNotify(tcp *net.TCPConn) error {
 	if tcp == nil {
 		return errors.New("ktls-tx: nil TCP connection")
 	}
@@ -98,7 +98,7 @@ func sendKTLSTxCloseNotify(tcp *net.TCPConn) error {
 		return fmt.Errorf("ktls-tx: close_notify syscall connection: %w", err)
 	}
 
-	oob := linuxTLSRecordTypeCmsg(linuxTLSRecordTypeAlert)
+	oob := kRecordTypeCmsg(kRecordTypeAlert)
 	alert := [...]byte{tlsAlertLevelWarning, tlsAlertCloseNotify}
 	var (
 		n       int
@@ -125,19 +125,19 @@ func sendKTLSTxCloseNotify(tcp *net.TCPConn) error {
 	return nil
 }
 
-func linuxTLSRecordTypeCmsg(recordType byte) []byte {
+func kRecordTypeCmsg(recordType byte) []byte {
 	oob := make([]byte, unix.CmsgSpace(1))
 	hdr := (*unix.Cmsghdr)(unsafe.Pointer(&oob[0]))
 	hdr.Level = unix.SOL_TLS
-	hdr.Type = linuxTLSSetRecordType
+	hdr.Type = kSetRecordType
 	hdr.SetLen(unix.CmsgLen(1))
 	oob[unix.CmsgLen(0)] = recordType
 	return oob
 }
 
 // derive and marshal one of the Linux tls12_crypto_info_aes_gcm_* structures
-func linuxTLSCryptoInfo(params *ktlsTxParams) ([]byte, bool, error) {
-	cipherType, keyLen, supported := linuxTLSCipher(params.version, params.cipherSuite)
+func kCryptoInfo(params *ktlsParams) ([]byte, bool, error) {
+	cipherType, keyLen, supported := kCipher(params.version, params.cipherSuite)
 	if !supported {
 		return nil, false, nil
 	}
@@ -161,8 +161,8 @@ func linuxTLSCryptoInfo(params *ktlsTxParams) ([]byte, bool, error) {
 			clear(derivedIV)
 			return nil, true, errors.New("ktls-tx: invalid TLS 1.3 IV size")
 		}
-		iv, salt = derivedIV[linuxTLSSaltSize:], derivedIV[:linuxTLSSaltSize]
-		version = linuxTLSVersion13
+		iv, salt = derivedIV[kSaltSize:], derivedIV[:kSaltSize]
+		version = kVersion13
 
 	case tls.VersionTLS12:
 		key, salt, supported, err = deriveTLS12KeyIV(params.cipherSuite, params.secret,
@@ -171,38 +171,38 @@ func linuxTLSCryptoInfo(params *ktlsTxParams) ([]byte, bool, error) {
 			return nil, supported, err
 		}
 		iv = append(iv, params.recordSeq[:]...)
-		version = linuxTLSVersion12
+		version = kVersion12
 	}
 	defer clear(key)
 	defer clear(iv)
 	defer clear(salt)
-	if len(key) != keyLen || len(iv) != linuxTLSIVSize || len(salt) != linuxTLSSaltSize {
+	if len(key) != keyLen || len(iv) != kIVSize || len(salt) != kSaltSize {
 		return nil, true, fmt.Errorf("ktls-tx: invalid key/IV/salt sizes %d/%d/%d for cipher %#x",
 			len(key), len(iv), len(salt), params.cipherSuite)
 	}
 
-	const keyOffset = linuxTLSCryptoInfoSize + linuxTLSIVSize
+	const keyOffset = kCryptoInfoSize + kIVSize
 	saltOffset := keyOffset + keyLen
-	recordSeqOffset := saltOffset + linuxTLSSaltSize
-	cryptoInfo := make([]byte, recordSeqOffset+linuxTLSRecordSeqSize)
+	recordSeqOffset := saltOffset + kSaltSize
+	cryptoInfo := make([]byte, recordSeqOffset+kRecordSeqSize)
 
 	binary.NativeEndian.PutUint16(cryptoInfo[0:2], version)
 	binary.NativeEndian.PutUint16(cryptoInfo[2:4], cipherType)
-	copy(cryptoInfo[linuxTLSCryptoInfoSize:keyOffset], iv)
+	copy(cryptoInfo[kCryptoInfoSize:keyOffset], iv)
 	copy(cryptoInfo[keyOffset:saltOffset], key)
 	copy(cryptoInfo[saltOffset:recordSeqOffset], salt)
 	copy(cryptoInfo[recordSeqOffset:], params.recordSeq[:])
 	return cryptoInfo, true, nil
 }
 
-func linuxTLSCipher(version, cipherSuite uint16) (cipherType uint16, keyLen int, supported bool) {
+func kCipher(version, cipherSuite uint16) (cipherType uint16, keyLen int, supported bool) {
 	switch version {
 	case tls.VersionTLS13:
 		switch cipherSuite {
 		case tls.TLS_AES_128_GCM_SHA256:
-			return linuxTLSCipherAESGCM128, 16, true
+			return kCipherAESGCM128, 16, true
 		case tls.TLS_AES_256_GCM_SHA384:
-			return linuxTLSCipherAESGCM256, 32, true
+			return kCipherAESGCM256, 32, true
 		}
 
 	case tls.VersionTLS12:
@@ -210,11 +210,11 @@ func linuxTLSCipher(version, cipherSuite uint16) (cipherType uint16, keyLen int,
 		case tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_RSA_WITH_AES_128_GCM_SHA256:
-			return linuxTLSCipherAESGCM128, 16, true
+			return kCipherAESGCM128, 16, true
 		case tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384:
-			return linuxTLSCipherAESGCM256, 32, true
+			return kCipherAESGCM256, 32, true
 		}
 	}
 	return 0, 0, false
@@ -234,8 +234,8 @@ func setsockoptBytes(fd uintptr, level, opt int, value []byte) error {
 // requested offload. EINVAL is considered unsupported only while attaching
 // the fixed TLS ULP. At TLS_TX it may instead indicate defective crypto-info
 // input and must surface through the sparse failed-install logging.
-func isKTLSTxUnsupported(stage string, err error) bool {
-	if stage == ktlsStageULP && errors.Is(err, unix.EINVAL) {
+func ktlsUnsupported(stage string, err error) bool {
+	if stage == kStageULP && errors.Is(err, unix.EINVAL) {
 		return true
 	}
 	return errors.Is(err, unix.ENOENT) || // TLS ULP unavailable; at TLS_TX: no gcm(aes) implementation

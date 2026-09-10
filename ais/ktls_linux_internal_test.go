@@ -22,7 +22,7 @@ import (
 )
 
 func TestKTLSTxLinuxRecordTypeCmsg(t *testing.T) {
-	oob := linuxTLSRecordTypeCmsg(linuxTLSRecordTypeAlert)
+	oob := kRecordTypeCmsg(kRecordTypeAlert)
 	msgs, err := unix.ParseSocketControlMessage(oob)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(msgs) == 1, "expected one control message, got %d", len(msgs))
@@ -31,8 +31,8 @@ func TestKTLSTxLinuxRecordTypeCmsg(t *testing.T) {
 	}
 	msg := msgs[0]
 	tassert.Errorf(t, msg.Header.Level == unix.SOL_TLS, "unexpected cmsg level %d", msg.Header.Level)
-	tassert.Errorf(t, msg.Header.Type == linuxTLSSetRecordType, "unexpected cmsg type %d", msg.Header.Type)
-	tassert.Errorf(t, bytes.Equal(msg.Data, []byte{linuxTLSRecordTypeAlert}), "unexpected cmsg data %v", msg.Data)
+	tassert.Errorf(t, msg.Header.Type == kSetRecordType, "unexpected cmsg type %d", msg.Header.Type)
+	tassert.Errorf(t, bytes.Equal(msg.Data, []byte{kRecordTypeAlert}), "unexpected cmsg data %v", msg.Data)
 }
 
 func TestKTLSTxLinuxCryptoInfo(t *testing.T) {
@@ -48,7 +48,7 @@ func TestKTLSTxLinuxCryptoInfo(t *testing.T) {
 		{
 			name:         "aes-128-gcm",
 			cipherSuite:  tls.TLS_AES_128_GCM_SHA256,
-			cipherType:   linuxTLSCipherAESGCM128,
+			cipherType:   kCipherAESGCM128,
 			cryptoInfoSz: 40,
 			secret:       "a11af9f05531f856ad47116b45a950328204b4f44bfb6b3a4b4f1f3fcb631643",
 			key:          "9f02283b6c9c07efc26bb9f2ac92e356",
@@ -57,7 +57,7 @@ func TestKTLSTxLinuxCryptoInfo(t *testing.T) {
 		{
 			name:         "aes-256-gcm",
 			cipherSuite:  tls.TLS_AES_256_GCM_SHA384,
-			cipherType:   linuxTLSCipherAESGCM256,
+			cipherType:   kCipherAESGCM256,
 			cryptoInfoSz: 56,
 			secret: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" +
 				"202122232425262728292a2b2c2d2e2f",
@@ -65,7 +65,7 @@ func TestKTLSTxLinuxCryptoInfo(t *testing.T) {
 			iv:  "42822531a0fe88648fc09e9f",
 		},
 	}
-	recordSeq := [linuxTLSRecordSeqSize]byte{0, 1, 2, 3, 4, 5, 6, 7}
+	recordSeq := [kRecordSeqSize]byte{0, 1, 2, 3, 4, 5, 6, 7}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			secret, err := hex.DecodeString(test.secret)
@@ -75,29 +75,29 @@ func TestKTLSTxLinuxCryptoInfo(t *testing.T) {
 			iv, err := hex.DecodeString(test.iv)
 			tassert.CheckFatal(t, err)
 
-			params := ktlsTxParams{
+			params := ktlsParams{
 				version:     tls.VersionTLS13,
 				cipherSuite: test.cipherSuite,
 				secret:      secret,
 				recordSeq:   recordSeq,
 			}
-			info, supported, err := linuxTLSCryptoInfo(&params)
+			info, supported, err := kCryptoInfo(&params)
 			tassert.CheckFatal(t, err)
 			defer clear(info)
 			tassert.Errorf(t, supported, "cipher suite %#x is not supported", test.cipherSuite)
 			tassert.Errorf(t, len(info) == test.cryptoInfoSz, "expected crypto_info size %d, got %d", test.cryptoInfoSz, len(info))
-			tassert.Errorf(t, binary.NativeEndian.Uint16(info[0:2]) == linuxTLSVersion13,
+			tassert.Errorf(t, binary.NativeEndian.Uint16(info[0:2]) == kVersion13,
 				"unexpected TLS version %#x", binary.NativeEndian.Uint16(info[0:2]))
 			tassert.Errorf(t, binary.NativeEndian.Uint16(info[2:4]) == test.cipherType,
 				"unexpected Linux cipher type %d", binary.NativeEndian.Uint16(info[2:4]))
 
-			keyOffset := linuxTLSCryptoInfoSize + linuxTLSIVSize
+			keyOffset := kCryptoInfoSize + kIVSize
 			saltOffset := keyOffset + len(key)
-			recordSeqOffset := saltOffset + linuxTLSSaltSize
-			tassert.Errorf(t, bytes.Equal(info[linuxTLSCryptoInfoSize:keyOffset], iv[linuxTLSSaltSize:]),
+			recordSeqOffset := saltOffset + kSaltSize
+			tassert.Errorf(t, bytes.Equal(info[kCryptoInfoSize:keyOffset], iv[kSaltSize:]),
 				"unexpected Linux IV")
 			tassert.Errorf(t, bytes.Equal(info[keyOffset:saltOffset], key), "unexpected Linux key")
-			tassert.Errorf(t, bytes.Equal(info[saltOffset:recordSeqOffset], iv[:linuxTLSSaltSize]),
+			tassert.Errorf(t, bytes.Equal(info[saltOffset:recordSeqOffset], iv[:kSaltSize]),
 				"unexpected Linux salt")
 			tassert.Errorf(t, bytes.Equal(info[recordSeqOffset:], recordSeq[:]), "unexpected record sequence")
 		})
@@ -115,7 +115,7 @@ func TestKTLSTxLinuxTLS12CryptoInfo(t *testing.T) {
 	clientRandom, serverRandom := [32]byte{}, [32]byte{}
 	copy(clientRandom[:], clientBytes)
 	copy(serverRandom[:], serverBytes)
-	recordSeq := [linuxTLSRecordSeqSize]byte{7: 2}
+	recordSeq := [kRecordSeqSize]byte{7: 2}
 
 	tests := []struct {
 		name         string
@@ -128,7 +128,7 @@ func TestKTLSTxLinuxTLS12CryptoInfo(t *testing.T) {
 		{
 			name:         "aes-128-gcm/sha256",
 			cipherSuite:  tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			cipherType:   linuxTLSCipherAESGCM128,
+			cipherType:   kCipherAESGCM128,
 			cryptoInfoSz: 40,
 			key:          "617bfc73135fe88287599ae2278f1202",
 			salt:         "3ffdfdf2",
@@ -136,7 +136,7 @@ func TestKTLSTxLinuxTLS12CryptoInfo(t *testing.T) {
 		{
 			name:         "aes-256-gcm/sha384",
 			cipherSuite:  tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			cipherType:   linuxTLSCipherAESGCM256,
+			cipherType:   kCipherAESGCM256,
 			cryptoInfoSz: 56,
 			key:          "2beee8b9885b18471b6d987d01c2e7fb36b5c2cdb42fd5a1ba07e906aeef53cf",
 			salt:         "9e7af7e8",
@@ -148,7 +148,7 @@ func TestKTLSTxLinuxTLS12CryptoInfo(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			salt, err := hex.DecodeString(test.salt)
 			tassert.CheckFatal(t, err)
-			params := ktlsTxParams{
+			params := ktlsParams{
 				version:      tls.VersionTLS12,
 				cipherSuite:  test.cipherSuite,
 				secret:       master,
@@ -157,21 +157,21 @@ func TestKTLSTxLinuxTLS12CryptoInfo(t *testing.T) {
 				recordSeq:    recordSeq,
 			}
 
-			info, supported, err := linuxTLSCryptoInfo(&params)
+			info, supported, err := kCryptoInfo(&params)
 			tassert.CheckFatal(t, err)
 			defer clear(info)
 			tassert.Errorf(t, supported, "cipher suite %#x is not supported", test.cipherSuite)
 			tassert.Errorf(t, len(info) == test.cryptoInfoSz, "expected crypto_info size %d, got %d",
 				test.cryptoInfoSz, len(info))
-			tassert.Errorf(t, binary.NativeEndian.Uint16(info[0:2]) == linuxTLSVersion12,
+			tassert.Errorf(t, binary.NativeEndian.Uint16(info[0:2]) == kVersion12,
 				"unexpected TLS version %#x", binary.NativeEndian.Uint16(info[0:2]))
 			tassert.Errorf(t, binary.NativeEndian.Uint16(info[2:4]) == test.cipherType,
 				"unexpected Linux cipher type %d", binary.NativeEndian.Uint16(info[2:4]))
 
-			keyOffset := linuxTLSCryptoInfoSize + linuxTLSIVSize
+			keyOffset := kCryptoInfoSize + kIVSize
 			saltOffset := keyOffset + len(key)
-			recordSeqOffset := saltOffset + linuxTLSSaltSize
-			tassert.Errorf(t, bytes.Equal(info[linuxTLSCryptoInfoSize:keyOffset], recordSeq[:]),
+			recordSeqOffset := saltOffset + kSaltSize
+			tassert.Errorf(t, bytes.Equal(info[kCryptoInfoSize:keyOffset], recordSeq[:]),
 				"unexpected TLS 1.2 explicit IV")
 			tassert.Errorf(t, bytes.Equal(info[keyOffset:saltOffset], key), "unexpected Linux key")
 			tassert.Errorf(t, bytes.Equal(info[saltOffset:recordSeqOffset], salt), "unexpected Linux salt")
@@ -183,12 +183,12 @@ func TestKTLSTxLinuxTLS12CryptoInfo(t *testing.T) {
 
 func TestKTLSTxLinuxInstaller(t *testing.T) {
 	// Unsupported suites must fall back before touching the socket.
-	params := ktlsTxParams{
+	params := ktlsParams{
 		version:     tls.VersionTLS13,
 		cipherSuite: tls.TLS_CHACHA20_POLY1305_SHA256,
 		secret:      make([]byte, 32),
 	}
-	enabled, err := installKTLSTx(nil, &params)
+	enabled, err := ktlsInstall(nil, &params)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !enabled, "unsupported cipher installed kTLS")
 
@@ -208,7 +208,7 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			defer raw.Close()
 
-			l, err := newKTLSTxListener(raw, serverConf, testktlsTimeout, nil)
+			l, err := newKtlsListener(raw, serverConf, testktlsTimeout, nil)
 			tassert.CheckFatal(t, err)
 			type result struct {
 				err     error
@@ -216,7 +216,7 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 			}
 			installed := make(chan result, 1)
 			realInstall := l.install
-			l.install = func(tcp *net.TCPConn, params *ktlsTxParams) (bool, error) {
+			l.install = func(tcp *net.TCPConn, params *ktlsParams) (bool, error) {
 				enabled, err := realInstall(tcp, params)
 				installed <- result{err: err, enabled: enabled}
 				return enabled, err
@@ -237,7 +237,7 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 			if !res.enabled {
 				t.Skip("kTLS TX is unsupported by this kernel")
 			}
-			tassert.Errorf(t, srv.conn.KTLSTxEnabled(), "installer succeeded but connection is not armed")
+			tassert.Errorf(t, srv.conn.isArmed(), "installer succeeded but connection is not armed")
 
 			const payload = "aistore-ktls"
 			_, err = srv.conn.Write([]byte(payload))
@@ -273,10 +273,9 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 	}
 }
 
-// Expected host limitations fall back silently. EINVAL is necessarily in this
-// set: at TLS_TX it can mean either malformed crypto_info or a TLS version or
-// cipher that the kernel does not implement. Crypto-info layout is covered by
-// the deterministic tests above.
+// Expected host limitations fall back silently. EINVAL is unsupported while
+// attaching the TLS ULP, but remains reportable at TLS_TX because it can expose
+// malformed crypto_info.
 func TestKTLSTxLinuxUnsupported(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -285,29 +284,29 @@ func TestKTLSTxLinuxUnsupported(t *testing.T) {
 		want  bool
 	}{
 		// stage-independent: unavailable protocol, syscall, or crypto implementation
-		{"ENOENT-ULP", ktlsStageULP, unix.ENOENT, true}, // TLS ULP unavailable
-		{"ENOENT-TX", ktlsStageTX, unix.ENOENT, true},   // no gcm(aes) implementation
+		{"ENOENT-ULP", kStageULP, unix.ENOENT, true}, // TLS ULP unavailable
+		{"ENOENT-TX", kStageTX, unix.ENOENT, true},   // no gcm(aes) implementation
 
 		// stage-independent (cont-d)
-		{"ENOPROTOOPT", ktlsStageULP, unix.ENOPROTOOPT, true},
-		{"EPROTONOSUPPORT", ktlsStageTX, unix.EPROTONOSUPPORT, true},
-		{"EOPNOTSUPP", ktlsStageTX, unix.EOPNOTSUPP, true},
-		{"ENOSYS", ktlsStageULP, unix.ENOSYS, true},
+		{"ENOPROTOOPT", kStageULP, unix.ENOPROTOOPT, true},
+		{"EPROTONOSUPPORT", kStageTX, unix.EPROTONOSUPPORT, true},
+		{"EOPNOTSUPP", kStageTX, unix.EOPNOTSUPP, true},
+		{"ENOSYS", kStageULP, unix.ENOSYS, true},
 
 		// EINVAL only: ambiguous at TLS_TX between unsupported and defective crypto-info
-		{"EINVAL-ULP", ktlsStageULP, unix.EINVAL, true},
-		{"EINVAL-TX", ktlsStageTX, unix.EINVAL, false},
+		{"EINVAL-ULP", kStageULP, unix.EINVAL, true},
+		{"EINVAL-TX", kStageTX, unix.EINVAL, false},
 
 		// neither
-		{"EBADF", ktlsStageTX, unix.EBADF, false},
-		{"EACCES", ktlsStageULP, unix.EACCES, false},
-		{"nil", ktlsStageTX, nil, false},
+		{"EBADF", kStageTX, unix.EBADF, false},
+		{"EACCES", kStageULP, unix.EACCES, false},
+		{"nil", kStageTX, nil, false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := isKTLSTxUnsupported(test.stage, test.err)
+			got := ktlsUnsupported(test.stage, test.err)
 			tassert.Errorf(t, got == test.want,
-				"isKTLSTxUnsupported(%s, %v) = %v, wanted %v", test.stage, test.err, got, test.want)
+				"ktlsUnsupported(%s, %v) = %v, wanted %v", test.stage, test.err, got, test.want)
 		})
 	}
 }

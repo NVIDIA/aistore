@@ -7,6 +7,7 @@ In this document:
 - [Observability: TLS related alerts](#observability-tls-related-alerts)
 - [Updating and reloading X.509 certificates](#updating-and-reloading-x509-certificates)
 - [Public and intra-cluster TLS configuration](#public-and-intra-cluster-tls-configuration)
+- [kTLS transmit offload](#ktls-transmit-offload)
 - [Further references](#further-references)
 
 ## Generating self-signed certificates
@@ -250,6 +251,28 @@ When `net.http.pub` is configured:
 In particular, `RequireAnyClientCert` requires a client certificate but does not verify its chain. AIS therefore loads `client_ca_tls` only for `VerifyClientCertIfGiven` and `RequireAndVerifyClientCert`.
 
 Certificate status and reload operations are described in [TLS certificate management](/docs/cli/x509.md).
+
+## kTLS transmit offload
+
+On Linux targets, AIS has experimental support for best-effort kernel TLS transmit (`kTLS_TX`) on public HTTPS listeners. Once a connection is armed, AIS gives plaintext response bytes to the TCP socket and the kernel emits encrypted TLS records. Eligible warm, monolithic object GETs can then use `sendfile(2)` without copying the object through userspace.
+
+In the initial preview this capability is off by default and temporarily gated by the system-reserved feature bit. Enable it only in controlled test clusters:
+
+```console
+$ ais config cluster features System-Reserved-KTLS
+```
+
+Feature configuration is a complete list: include any other enabled feature names in the same command. Changing this bit requires restarting the targets. Its name, meaning, and polarity may change in a later release; do not depend on it in deployment automation.
+
+The current scope and compatibility constraints are:
+
+- Linux target public listeners only; proxies and intra-cluster listeners are unchanged.
+- TLS 1.2 and TLS 1.3 AES-GCM cipher suites are supported. Unsupported kernels, TLS versions, and cipher suites continue with Go userspace TLS.
+- Public target connections use HTTP/1.1 and have TLS session tickets disabled while the feature is configured. These constraints apply even when a particular connection cannot arm kTLS and falls back to userspace TLS.
+- kTLS applies to the entire transmit side of an armed connection. `sendfile(2)` remains limited to eligible local-file object responses; transformed, chunked, and other generated responses keep their normal userspace read path.
+- AIS retires long-lived connections near the per-key transmit limit; clients must tolerate normal HTTP connection closure and reconnection.
+
+As a quick host check, `/proc/sys/net/ipv4/tcp_available_ulp` should list `tls`. This is necessary but not sufficient: the kernel must also support the negotiated TLS version and AES-GCM cipher. At AIS verbosity level 5, target logs report whether connections were armed, unsupported, skipped, or failed.
 
 ## Further references
 

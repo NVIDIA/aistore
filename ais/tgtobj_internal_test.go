@@ -195,9 +195,17 @@ func BenchmarkObjAppend(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			var hdl aoHdl
+			var (
+				hdl      aoHdl
+				prevWork string
+			)
 			for b.Loop() {
 				b.StopTimer()
+				// work FQNs carry a per-call tiebreaker (see fs.workCR.makeUbase),
+				// so each iteration leaves its own workfile behind
+				if prevWork != "" {
+					os.Remove(prevWork)
+				}
 				r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: bench.fileSize, CksumType: cos.ChecksumNone})
 				aoi := &apndOI{
 					started: time.Now().UnixNano(),
@@ -207,7 +215,10 @@ func BenchmarkObjAppend(b *testing.B) {
 					op:      apc.AppendOp,
 					hdl:     hdl,
 				}
+				// NOTE: RemoveMain unlinks the main replica but leaves the cached md;
+				// apnd would then Load() it and open an FQN that is no longer there
 				lom.RemoveMain()
+				lom.UncacheDel()
 				b.StartTimer()
 
 				newHandle, err := aoi.apnd(buf)
@@ -218,9 +229,11 @@ func BenchmarkObjAppend(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
+				prevWork = aoi.hdl.workFQN
 			}
 			lom.RemoveMain()
-			os.Remove(hdl.workFQN)
+			lom.UncacheDel()
+			os.Remove(prevWork)
 		})
 	}
 }
@@ -277,11 +290,16 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			}
 
 			w := newDiscardRW()
+			// dpq is not optional: the transmit path dereferences it
+			// unconditionally (see getOI.txfini -> dpq.isArch)
+			d := dpqAlloc()
+			defer dpqFree(d)
 			goi := &getOI{
 				atime:   time.Now().UnixNano(),
 				t:       mockTarget,
 				lom:     lom,
 				w:       w,
+				dpq:     d,
 				chunked: bench.chunked,
 			}
 

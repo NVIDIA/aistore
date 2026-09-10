@@ -369,6 +369,7 @@ func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.
 	buf, slab := t.gmm.AllocSize(chunk.Size())
 	defer slab.Free(buf)
 
+	ktlsRetire(r, w.Header(), chunk.Size())
 	if _, err := io.CopyBuffer(w, fh, buf); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 	}

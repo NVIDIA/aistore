@@ -6,20 +6,20 @@ package ais
 
 import "net"
 
-const ktlsTxPlatform = false
+const ktlsPlatform = false
 
-func installKTLSTx(*net.TCPConn, *ktlsTxParams) (bool, error) {
+func ktlsInstall(*net.TCPConn, *ktlsParams) (bool, error) {
 	return false, nil
 }
 
-func sendKTLSTxCloseNotify(*net.TCPConn) error { return nil }
+func ktlsCloseNotify(*net.TCPConn) error { return nil }
 
-func linuxTLSRecordTypeCmsg(byte) []byte { return nil }
+func kRecordTypeCmsg(byte) []byte { return nil }
 
-func linuxTLSCryptoInfo(*ktlsTxParams) ([]byte, bool, error) { return nil, false, nil }
+func kCryptoInfo(*ktlsParams) ([]byte, bool, error) { return nil, false, nil }
 
-func linuxTLSCipher(uint16, uint16) (uint16, int, bool) { return 0, 0, false }
+func kCipher(uint16, uint16) (uint16, int, bool) { return 0, 0, false }
 
 func setsockoptBytes(uintptr, int, int, []byte) error { return nil }
 
-func isKTLSTxUnsupported(error) bool { return true }
+func ktlsUnsupported(string, error) bool { return true }

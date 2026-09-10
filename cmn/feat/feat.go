@@ -24,7 +24,7 @@ const (
 	PropName = "features"
 )
 
-const RestartRequired = ForceContainerCPUMem | SendfileOverHTTPS
+const RestartRequired = ForceContainerCPUMem | SystemReservedKTLS
 
 const (
 	EnforceIntraClusterAccess = Flags(1 << iota) // Deprecated: use auth.intra_cluster to secure intra-cluster communications
@@ -56,7 +56,7 @@ const (
 	EnableGoRuntimeMetrics    // publish selected Go runtime metrics via Prometheus
 	DloadAllowPrivateEgress   // allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 	S3RedirectRebuild         // allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
-	SendfileOverHTTPS         // offload TLS transmit path to the kernel and enable Linux sendfile(2)
+	SystemReservedKTLS        // offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)
 )
 
 var Cluster = [...]string{
@@ -88,7 +88,7 @@ var Cluster = [...]string{
 	"Enable-Go-Runtime-Metrics",
 	"Dload-Allow-Private-Egress",
 	"S3-Redirect-Rebuild",
-	"Sendfile-Over-HTTPS",
+	"System-Reserved-KTLS",
 
 	// apc.ResetToken ("none") ===========
 }

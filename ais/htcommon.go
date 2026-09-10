@@ -422,7 +422,7 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 	//
 	// TODO: for HTTPS, consider moving the code to the Accept() path _or_ using
 	// net.ListenConfig.Control before TLS wrapping.
-	// (the kTLS-tx listener already does the former - see _listenAndServeKTLSTx)
+	// (the kTLS-tx listener already does the former - see _listenAndServeKtls)
 
 	if (server.sndRcvBufSize > 0 || server.lowLatencyToS) && !config.Net.HTTP.UseHTTPS {
 		server.s.ConnState = server.connStateListener
@@ -438,8 +438,8 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 // updated when the connection is armed)
 func (server *netServer) connContext(ctx context.Context, conn net.Conn) context.Context {
 	ctx = context.WithValue(ctx, keyReqNet, server.reqNet)
-	if state, ok := conn.(ktlsTxState); ok {
-		ctx = context.WithValue(ctx, keyKTLSTx, state)
+	if state, ok := conn.(ktlsState); ok {
+		ctx = context.WithValue(ctx, keyKtls, state)
 	}
 	return ctx
 }
@@ -454,7 +454,7 @@ retry:
 	switch {
 	case config.Net.HTTP.UseHTTPS && server.ktlsTx:
 		tag = "HTTPS(kTLS-tx)"
-		err = server._listenAndServeKTLSTx()
+		err = server._listenAndServeKtls()
 
 	case config.Net.HTTP.UseHTTPS:
 		tag = "HTTPS"
@@ -480,7 +480,7 @@ retry:
 	return err
 }
 
-func (server *netServer) _listenAndServeKTLSTx() error {
+func (server *netServer) _listenAndServeKtls() error {
 	var (
 		lc           net.ListenConfig
 		configureTCP func(*net.TCPConn)
@@ -496,7 +496,7 @@ func (server *netServer) _listenAndServeKTLSTx() error {
 		configureTCP = server.configureTCP
 	}
 
-	listener, err := newKTLSTxListener(ln, server.s.TLSConfig, server._timeout(), configureTCP)
+	listener, err := newKtlsListener(ln, server.s.TLSConfig, server._timeout(), configureTCP)
 	if err != nil {
 		ln.Close()
 		return err

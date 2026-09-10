@@ -49,14 +49,14 @@ type (
 	}
 	// server side of one accepted connection
 	testktlsServer struct {
-		conn *ktlsTxConn
+		conn *ktlsConn
 		err  error
 	}
 	testktlsState bool
 )
 
-func (state testktlsState) KTLSTxEnabled() bool { return bool(state) }
-func (testktlsState) KTLSTxRetire(int64) bool   { return false }
+func (state testktlsState) isArmed() bool { return bool(state) }
+func (testktlsState) retire(int64) bool   { return false }
 
 func (tc *ticketCounter) Put(_ string, _ *tls.ClientSessionState) {
 	tc.mu.Lock()
@@ -72,7 +72,7 @@ func (tc *ticketCounter) count() int {
 	return tc.put
 }
 
-func testktlsCert(t *testing.T) tls.Certificate {
+func testktlsCert(t testing.TB) tls.Certificate {
 	t.Helper()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -91,7 +91,7 @@ func testktlsCert(t *testing.T) tls.Certificate {
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
 }
 
-func testktlsServerConf(t *testing.T) *tls.Config {
+func testktlsServerConf(t testing.TB) *tls.Config {
 	return &tls.Config{Certificates: []tls.Certificate{testktlsCert(t)}}
 }
 
@@ -105,20 +105,20 @@ func testktlsClientConf(cache tls.ClientSessionCache) *tls.Config {
 	}
 }
 
-func testktlsNewListener(t *testing.T, raw net.Listener) *ktlsTxListener {
+func testktlsNewListener(t *testing.T, raw net.Listener) *ktlsListener {
 	t.Helper()
 
-	l, err := newKTLSTxListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
 	tassert.CheckFatal(t, err)
 
 	// Unit tests must remain independent of the host kernel and of the real
 	// installer's implementation status.
-	l.install = func(*net.TCPConn, *ktlsTxParams) (bool, error) { return false, nil }
+	l.install = func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil }
 	return l
 }
 
 // listener + one accept in the background
-func testktlsListen(t *testing.T, l net.Listener) <-chan testktlsServer {
+func testktlsListen(t testing.TB, l net.Listener) <-chan testktlsServer {
 	t.Helper()
 
 	ch := make(chan testktlsServer, 1)
@@ -128,13 +128,13 @@ func testktlsListen(t *testing.T, l net.Listener) <-chan testktlsServer {
 			ch <- testktlsServer{err: err}
 			return
 		}
-		c, ok := nc.(*ktlsTxConn)
+		c, ok := nc.(*ktlsConn)
 		if !ok {
 			nc.Close()
-			ch <- testktlsServer{err: errKTLSTxActive} // any non-nil; type is the failure
+			ch <- testktlsServer{err: errKtlsActive} // any non-nil; type is the failure
 			return
 		}
-		// net/http through Go 1.26 arms via ConnectionState (see (*ktlsTxConn).init)
+		// net/http through Go 1.26 arms via ConnectionState (see (*ktlsConn).init)
 		c.ConnectionState()
 		if c.initErr != nil {
 			c.Close()
@@ -255,7 +255,7 @@ func TestKTLSTxHandshake(t *testing.T) {
 	tassert.Errorf(t, state.NegotiatedProtocol == "http/1.1", "expected http/1.1, got %q", state.NegotiatedProtocol)
 
 	// the injected installer is a no-op: every connection stays on crypto/tls
-	tassert.Errorf(t, !srv.conn.KTLSTxEnabled(), "armed with a no-op installer")
+	tassert.Errorf(t, !srv.conn.isArmed(), "armed with a no-op installer")
 	tassert.Errorf(t, srv.conn.wire.nwritten.Load() > 0, "crypto/tls wrote nothing to the wire")
 
 	// the effective per-connection config keeps the ticket prerequisite without
@@ -277,7 +277,7 @@ func TestKTLSTxConcurrentInit(t *testing.T) {
 	var installs atomic.Int32
 	installing := make(chan struct{})
 	release := make(chan struct{})
-	l.install = func(*net.TCPConn, *ktlsTxParams) (bool, error) {
+	l.install = func(*net.TCPConn, *ktlsParams) (bool, error) {
 		if installs.Add(1) == 1 {
 			close(installing)
 		}
@@ -286,7 +286,7 @@ func TestKTLSTxConcurrentInit(t *testing.T) {
 	}
 
 	type serverResult struct {
-		conn *ktlsTxConn
+		conn *ktlsConn
 		err  error
 	}
 	serverCh := make(chan serverResult, 1)
@@ -296,10 +296,10 @@ func TestKTLSTxConcurrentInit(t *testing.T) {
 			serverCh <- serverResult{err: err}
 			return
 		}
-		conn, ok := nc.(*ktlsTxConn)
+		conn, ok := nc.(*ktlsConn)
 		if !ok {
 			nc.Close()
-			serverCh <- serverResult{err: fmt.Errorf("expected *ktlsTxConn, got %T", nc)}
+			serverCh <- serverResult{err: fmt.Errorf("expected *ktlsConn, got %T", nc)}
 			return
 		}
 		serverCh <- serverResult{conn: conn}
@@ -370,10 +370,10 @@ func TestKTLSTxTLS12Handshake(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer raw.Close()
 
-	l, err := newKTLSTxListener(raw, serverConf, testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, serverConf, testktlsTimeout, nil)
 	tassert.CheckFatal(t, err)
-	observed := make(chan ktlsTxParams, 1)
-	l.install = func(_ *net.TCPConn, params *ktlsTxParams) (bool, error) {
+	observed := make(chan ktlsParams, 1)
+	l.install = func(_ *net.TCPConn, params *ktlsParams) (bool, error) {
 		clone := *params
 		clone.secret = bytes.Clone(params.secret)
 		observed <- clone
@@ -418,7 +418,7 @@ func TestKTLSTxTLS12Handshake(t *testing.T) {
 	_, err = io.ReadFull(cc, buf)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, string(buf) == payload, "expected %q, got %q", payload, buf)
-	tassert.Errorf(t, !srv.conn.KTLSTxEnabled(), "armed with a no-op installer")
+	tassert.Errorf(t, !srv.conn.isArmed(), "armed with a no-op installer")
 
 	master, _, ok := srv.conn.secrets.takeTLS12()
 	clear(master)
@@ -535,7 +535,8 @@ func TestKTLSTxTLS12KeyDerivation(t *testing.T) {
 }
 
 // Exercises the actual net/http integration rather than driving the wrapped
-// connection directly: Serve -> ConnContext -> ConnectionState -> request.
+// connection directly. Go 1.26 initializes through ConnectionState; Go 1.27+
+// calls HandshakeContext first.
 func TestKTLSTxHTTPServerFallback(t *testing.T) {
 	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	tassert.CheckFatal(t, err)
@@ -567,7 +568,7 @@ func TestKTLSTxHTTPServerFallback(t *testing.T) {
 				err:   err,
 				tls:   r.TLS != nil,
 				pub:   reqIsPub(r),
-				ktls:  isKTLSTx(r.Context()),
+				ktls:  isKTLS(r.Context()),
 			}
 		}),
 	}
@@ -659,11 +660,11 @@ func TestKTLSTxSendfileRequest(t *testing.T) {
 	tassert.Errorf(t, !canSendfileRequest(nil, true), "nil HTTPS request accepted")
 	tassert.Errorf(t, !canSendfileRequest(req, true), "unarmed HTTPS request accepted")
 
-	ctx := context.WithValue(req.Context(), keyKTLSTx, testktlsState(true))
+	ctx := context.WithValue(req.Context(), keyKtls, testktlsState(true))
 	armed := req.WithContext(ctx)
 	tassert.Errorf(t, canSendfileRequest(armed, true), "armed kTLS HTTPS request rejected")
 
-	ctx = context.WithValue(req.Context(), keyKTLSTx, testktlsState(false))
+	ctx = context.WithValue(req.Context(), keyKtls, testktlsState(false))
 	fallback := req.WithContext(ctx)
 	tassert.Errorf(t, !canSendfileRequest(fallback, true), "kTLS fallback request accepted")
 }
@@ -673,14 +674,14 @@ func TestKTLSTxListenerRejects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer raw.Close()
 
-	_, err = newKTLSTxListener(raw, nil, testktlsTimeout, nil)
+	_, err = newKtlsListener(raw, nil, testktlsTimeout, nil)
 	tassert.Errorf(t, err != nil, "nil TLS config accepted")
 
 	// crypto/tls swaps the entire per-connection config, dropping KeyLogWriter
 	conf := testktlsServerConf(t)
 	conf.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) { return nil, nil }
 
-	_, err = newKTLSTxListener(raw, conf, testktlsTimeout, nil)
+	_, err = newKtlsListener(raw, conf, testktlsTimeout, nil)
 	tassert.Errorf(t, err != nil, "GetConfigForClient accepted")
 	if err != nil {
 		tassert.Errorf(t, strings.Contains(err.Error(), "GetConfigForClient"),
@@ -689,9 +690,9 @@ func TestKTLSTxListenerRejects(t *testing.T) {
 
 	// the caller's config must not be mutated
 	conf.GetConfigForClient = nil
-	l, err := newKTLSTxListener(raw, conf, testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, conf, testktlsTimeout, nil)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, !conf.SessionTicketsDisabled, "newKTLSTxListener mutated the caller's config")
+	tassert.Errorf(t, !conf.SessionTicketsDisabled, "newKtlsListener mutated the caller's config")
 	tassert.Errorf(t, l.tlsConfig.SessionTicketsDisabled, "template does not disable session tickets")
 	tassert.Errorf(t, len(l.tlsConfig.NextProtos) == 1 && l.tlsConfig.NextProtos[0] == "http/1.1",
 		"unexpected template NextProtos %v", l.tlsConfig.NextProtos)
@@ -871,6 +872,11 @@ func TestTrafficSecrets(t *testing.T) {
 			"zero() did not wipe the decoded server secret")
 		tassert.Errorf(t, bytes.Equal(pending, make([]byte, len(pending))),
 			"zero() did not wipe the consumed keylog line")
+
+		s.Write([]byte("SERVER_TRAFFIC_SECRET_0 abcd " + hexSecret + "\n"))
+		tassert.Errorf(t, s.takeTLS13() == nil, "zero() did not disable later key-log writes")
+		tassert.Errorf(t, len(s.pending) == 0 && cap(s.pending) == 0,
+			"disabled collector retained a later key-log line")
 	})
 
 	t.Run("last-write-wins", func(t *testing.T) {
@@ -909,11 +915,11 @@ func TestKTLSTxOpenSSLCipherSuites(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			t.Cleanup(func() { _ = raw.Close() })
 
-			l, err := newKTLSTxListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+			l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
 			tassert.CheckFatal(t, err)
 
-			captured := make(chan ktlsTxParams, 1)
-			l.install = func(_ *net.TCPConn, params *ktlsTxParams) (bool, error) {
+			captured := make(chan ktlsParams, 1)
+			l.install = func(_ *net.TCPConn, params *ktlsParams) (bool, error) {
 				clone := *params
 				clone.secret = append([]byte(nil), params.secret...)
 				captured <- clone
@@ -925,7 +931,7 @@ func TestKTLSTxOpenSSLCipherSuites(t *testing.T) {
 				if err != nil {
 					return
 				}
-				conn := nc.(*ktlsTxConn)
+				conn := nc.(*ktlsConn)
 				conn.ConnectionState()
 				_, _ = conn.Write([]byte(payload))
 				time.Sleep(100 * time.Millisecond)
@@ -934,7 +940,7 @@ func TestKTLSTxOpenSSLCipherSuites(t *testing.T) {
 
 			out := testktlsOpenSSLClient(t, raw.Addr().String(), test.ossl, payload)
 
-			var params ktlsTxParams
+			var params ktlsParams
 			select {
 			case params = <-captured:
 			case <-time.After(testktlsTimeout):
@@ -1011,12 +1017,12 @@ func TestKTLSTxPeerKeyUpdate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = raw.Close() })
 
-	l, err := newKTLSTxListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
 	tassert.CheckFatal(t, err)
-	l.install = func(*net.TCPConn, *ktlsTxParams) (bool, error) { return true, nil }
+	l.install = func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil }
 
 	type readyResult struct {
-		conn *ktlsTxConn
+		conn *ktlsConn
 		err  error
 	}
 	ready := make(chan readyResult, 1)
@@ -1027,7 +1033,7 @@ func TestKTLSTxPeerKeyUpdate(t *testing.T) {
 			ready <- readyResult{err: err}
 			return
 		}
-		conn := nc.(*ktlsTxConn)
+		conn := nc.(*ktlsConn)
 		if err := conn.HandshakeContext(t.Context()); err != nil {
 			ready <- readyResult{err: err}
 			_ = conn.tcp.Close()
@@ -1056,7 +1062,7 @@ func TestKTLSTxPeerKeyUpdate(t *testing.T) {
 	}()
 
 	before := testktlsCounterSnapshot()
-	var conn *ktlsTxConn
+	var conn *ktlsConn
 	select {
 	case result := <-ready:
 		tassert.CheckFatal(t, result.err)
@@ -1064,7 +1070,7 @@ func TestKTLSTxPeerKeyUpdate(t *testing.T) {
 	case <-time.After(testktlsTimeout):
 		t.Fatal("timed out waiting for OpenSSL handshake")
 	}
-	tassert.Fatalf(t, conn.KTLSTxEnabled(), "not armed")
+	tassert.Fatalf(t, conn.isArmed(), "not armed")
 
 	_, err = io.WriteString(stdin, "K\n")
 	tassert.CheckFatal(t, err)
@@ -1075,9 +1081,18 @@ func TestKTLSTxPeerKeyUpdate(t *testing.T) {
 		t.Fatal("peer-requested KeyUpdate did not terminate the connection")
 	}
 
-	tassert.Errorf(t, bytes.Contains(out.bytes(), []byte("KEYUPDATE")),
+	// s_client prints KEYUPDATE to bio_c_out asynchronously; the server-side
+	// Read can fail first, so poll instead of sampling once
+	sawKeyUpdate := false
+	for deadline := time.Now().Add(testktlsTimeout); time.Now().Before(deadline); {
+		if sawKeyUpdate = bytes.Contains(out.bytes(), []byte("KEYUPDATE")); sawKeyUpdate {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	tassert.Errorf(t, sawKeyUpdate,
 		"OpenSSL did not recognize the KeyUpdate command: %s", out.bytes())
-	tassert.Errorf(t, conn.txState.Load() == ktlsTxPoisoned,
+	tassert.Errorf(t, conn.txState.Load() == ktlsPoisoned,
 		"state %d, wanted poisoned", conn.txState.Load())
 	got := testktlsCounterSnapshot().sub(before)
 	tassert.Errorf(t, got.poisoned == 1, "poisoned %d, wanted 1 (%s)", got.poisoned, got)
@@ -1115,11 +1130,11 @@ labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitatio
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = raw.Close() })
 
-	l, err := newKTLSTxListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
 	tassert.CheckFatal(t, err)
 
-	captured := make(chan ktlsTxParams, 1)
-	l.install = func(_ *net.TCPConn, params *ktlsTxParams) (bool, error) {
+	captured := make(chan ktlsParams, 1)
+	l.install = func(_ *net.TCPConn, params *ktlsParams) (bool, error) {
 		clone := *params
 		clone.secret = append([]byte(nil), params.secret...)
 		captured <- clone
@@ -1243,7 +1258,7 @@ func testktlsSplitRecords(t *testing.T, stream []byte) [][]byte {
 
 func TestKTLSTxCounters(t *testing.T) {
 	t.Run("string", func(t *testing.T) {
-		var counters ktlsTxCounters
+		var counters ktlsCounters
 		counters.armed.Store(3)
 		counters.failed.Store(1)
 		want := "ktls-tx[attempted=4 armed=3 skipped=0 unsupported=0 failed=1 poisoned=0 exhausted=0]"
@@ -1253,24 +1268,24 @@ func TestKTLSTxCounters(t *testing.T) {
 	// each installer outcome lands in exactly one bucket
 	tests := []struct {
 		name    string
-		install ktlsTxInstaller
+		install ktlsInstaller
 		armed   int64
 		unsup   int64
 		failed  int64
 	}{
 		{
 			name:    "armed",
-			install: func(*net.TCPConn, *ktlsTxParams) (bool, error) { return true, nil },
+			install: func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil },
 			armed:   1,
 		},
 		{
 			name:    "unsupported",
-			install: func(*net.TCPConn, *ktlsTxParams) (bool, error) { return false, nil },
+			install: func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil },
 			unsup:   1,
 		},
 		{
 			name:    "failed",
-			install: func(*net.TCPConn, *ktlsTxParams) (bool, error) { return false, errors.New("boom") },
+			install: func(*net.TCPConn, *ktlsParams) (bool, error) { return false, errors.New("boom") },
 			failed:  1,
 		},
 	}
@@ -1279,8 +1294,8 @@ func TestKTLSTxCounters(t *testing.T) {
 			before := testktlsCounterSnapshot()
 
 			conn := testktlsHandshake(t, test.install)
-			tassert.Errorf(t, conn.KTLSTxEnabled() == (test.armed == 1),
-				"armed state %v, wanted %v", conn.KTLSTxEnabled(), test.armed == 1)
+			tassert.Errorf(t, conn.isArmed() == (test.armed == 1),
+				"armed state %v, wanted %v", conn.isArmed(), test.armed == 1)
 
 			got := testktlsCounterSnapshot().sub(before)
 			tassert.Errorf(t, got.armed == test.armed, "armed %d, wanted %d (%s)", got.armed, test.armed, got)
@@ -1291,7 +1306,7 @@ func TestKTLSTxCounters(t *testing.T) {
 			tassert.Errorf(t, got.exhausted == 0, "exhausted %d, wanted 0 (%s)", got.exhausted, got)
 			tassert.Errorf(t, got.total() == 1, "expected exactly one outcome, got %s", got)
 
-			t.Logf("delta: %s; cumulative: %+v", got, &ktlsTxCnt)
+			t.Logf("delta: %s; cumulative: %+v", got, &ktlsCnt)
 		})
 	}
 
@@ -1302,14 +1317,14 @@ func TestKTLSTxCounters(t *testing.T) {
 
 		tmpl := testktlsServerConf(t)
 		tmpl.NextProtos = []string{"http/1.1"}
-		tmpl.SessionTicketsDisabled = false // bypasses newKTLSTxListener on purpose
+		tmpl.SessionTicketsDisabled = false // bypasses newKtlsListener on purpose
 
 		conn := testktlsHandshakeConf(t, tmpl,
-			func(*net.TCPConn, *ktlsTxParams) (bool, error) {
+			func(*net.TCPConn, *ktlsParams) (bool, error) {
 				t.Error("installer reached with session tickets enabled")
 				return false, nil
 			})
-		tassert.Errorf(t, !conn.KTLSTxEnabled(), "armed with session tickets enabled")
+		tassert.Errorf(t, !conn.isArmed(), "armed with session tickets enabled")
 
 		got := testktlsCounterSnapshot().sub(before)
 		tassert.Errorf(t, got.skipped == 1, "skipped %d, wanted 1 (%s)", got.skipped, got)
@@ -1318,7 +1333,7 @@ func TestKTLSTxCounters(t *testing.T) {
 		tassert.Errorf(t, got.exhausted == 0, "exhausted %d, wanted 0 (%s)", got.exhausted, got)
 		tassert.Errorf(t, got.total() == 1, "expected exactly one outcome, got %s", got)
 
-		t.Logf("delta: %s; cumulative: %+v", got, &ktlsTxCnt)
+		t.Logf("delta: %s; cumulative: %+v", got, &ktlsCnt)
 	})
 }
 
@@ -1333,12 +1348,12 @@ type testktlsCounterValues struct {
 
 func testktlsCounterSnapshot() testktlsCounterValues {
 	return testktlsCounterValues{
-		armed:       ktlsTxCnt.armed.Load(),
-		skipped:     ktlsTxCnt.skipped.Load(),
-		unsupported: ktlsTxCnt.unsupported.Load(),
-		failed:      ktlsTxCnt.failed.Load(),
-		poisoned:    ktlsTxCnt.poisoned.Load(),
-		exhausted:   ktlsTxCnt.exhausted.Load(),
+		armed:       ktlsCnt.armed.Load(),
+		skipped:     ktlsCnt.skipped.Load(),
+		unsupported: ktlsCnt.unsupported.Load(),
+		failed:      ktlsCnt.failed.Load(),
+		poisoned:    ktlsCnt.poisoned.Load(),
+		exhausted:   ktlsCnt.exhausted.Load(),
 	}
 }
 
@@ -1364,37 +1379,37 @@ func (c testktlsCounterValues) String() string {
 // Post-arm the kernel owns transmit, so any crypto/tls write - a TLS 1.3
 // KeyUpdate response, an alert - must end the connection.
 func TestKTLSTxPoisoned(t *testing.T) {
-	arm := func(*net.TCPConn, *ktlsTxParams) (bool, error) { return true, nil }
+	arm := func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil }
 
 	t.Run("crypto-tls-write-poisons", func(t *testing.T) {
 		before := testktlsCounterSnapshot()
 		conn := testktlsHandshake(t, arm)
-		tassert.Fatalf(t, conn.KTLSTxEnabled(), "not armed")
+		tassert.Fatalf(t, conn.isArmed(), "not armed")
 
 		// stands in for crypto/tls writing on the read path
 		n, err := conn.wire.Write([]byte("keyupdate"))
 		tassert.Errorf(t, n == 0, "wire write returned %d bytes", n)
-		tassert.Errorf(t, errors.Is(err, errKTLSTxActive), "wire write returned %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsActive), "wire write returned %v", err)
 
 		// fatal on purpose: an unpoisoned connection makes the reads below block
-		tassert.Fatalf(t, conn.txState.Load() == ktlsTxPoisoned, "state %d, wanted poisoned", conn.txState.Load())
-		tassert.Errorf(t, !conn.KTLSTxEnabled(), "a poisoned connection still reports kTLS enabled")
+		tassert.Fatalf(t, conn.txState.Load() == ktlsPoisoned, "state %d, wanted poisoned", conn.txState.Load())
+		tassert.Errorf(t, !conn.isArmed(), "a poisoned connection still reports kTLS enabled")
 		got := testktlsCounterSnapshot().sub(before)
 		tassert.Errorf(t, got.poisoned == 1, "poisoned %d, wanted 1 (%s)", got.poisoned, got)
 
 		// ...and every subsequent application operation refuses
 		_, err = conn.Read(make([]byte, 1))
-		tassert.Errorf(t, errors.Is(err, errKTLSTxPoisoned), "Read returned %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Read returned %v", err)
 		_, err = conn.Write([]byte("x"))
-		tassert.Errorf(t, errors.Is(err, errKTLSTxPoisoned), "Write returned %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Write returned %v", err)
 		_, err = conn.ReadFrom(strings.NewReader("x"))
-		tassert.Errorf(t, errors.Is(err, errKTLSTxPoisoned), "ReadFrom returned %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "ReadFrom returned %v", err)
 		_, err = conn.wire.ReadFrom(strings.NewReader("x"))
-		tassert.Errorf(t, errors.Is(err, errKTLSTxActive), "wire ReadFrom returned %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsActive), "wire ReadFrom returned %v", err)
 		err = conn.CloseWrite()
-		tassert.Errorf(t, errors.Is(err, errKTLSTxPoisoned), "CloseWrite returned %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "CloseWrite returned %v", err)
 		err = conn.Close()
-		tassert.Errorf(t, errors.Is(err, errKTLSTxPoisoned), "Close returned %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Close returned %v", err)
 	})
 
 	t.Run("poison-is-counted-once-per-conn", func(t *testing.T) {
@@ -1409,8 +1424,8 @@ func TestKTLSTxPoisoned(t *testing.T) {
 	})
 
 	t.Run("unarmed-writes-pass-through", func(t *testing.T) {
-		conn := testktlsHandshake(t, func(*net.TCPConn, *ktlsTxParams) (bool, error) { return false, nil })
-		tassert.Errorf(t, conn.txState.Load() == ktlsTxUnarmed, "state %d, wanted unarmed", conn.txState.Load())
+		conn := testktlsHandshake(t, func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil })
+		tassert.Errorf(t, conn.txState.Load() == ktlsUnarmed, "state %d, wanted unarmed", conn.txState.Load())
 
 		before := conn.wire.nwritten.Load()
 		n, err := conn.Write([]byte("hello"))
@@ -1421,7 +1436,7 @@ func TestKTLSTxPoisoned(t *testing.T) {
 }
 
 func TestKTLSTxBudget(t *testing.T) {
-	arm := func(*net.TCPConn, *ktlsTxParams) (bool, error) { return true, nil }
+	arm := func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil }
 
 	t.Run("write", func(t *testing.T) {
 		before := testktlsCounterSnapshot()
@@ -1439,14 +1454,14 @@ func TestKTLSTxBudget(t *testing.T) {
 		tassert.CheckError(t, err)
 		tassert.Errorf(t, n == 5, "wrote %d bytes, wanted 5", n)
 		tassert.Errorf(t, conn.txBytes.Load() == 10, "counted %d bytes, wanted 10", conn.txBytes.Load())
-		tassert.Errorf(t, conn.txState.Load() == ktlsTxArmed, "state %d, wanted armed", conn.txState.Load())
+		tassert.Errorf(t, conn.txState.Load() == ktlsArmed, "state %d, wanted armed", conn.txState.Load())
 
 		n, err = conn.Write([]byte("!"))
 		tassert.Errorf(t, n == 0, "wrote %d bytes past the budget", n)
-		tassert.Errorf(t, errors.Is(err, errKTLSTxExhausted), "expected exhausted error, got %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsExhausted), "expected exhausted error, got %v", err)
 		tassert.Errorf(t, conn.txBytes.Load() == 10, "count changed to %d after rejected write", conn.txBytes.Load())
-		tassert.Errorf(t, conn.txState.Load() == ktlsTxExhausted, "state %d, wanted exhausted", conn.txState.Load())
-		tassert.Errorf(t, !conn.KTLSTxEnabled(), "exhausted connection still reports kTLS enabled")
+		tassert.Errorf(t, conn.txState.Load() == ktlsExhausted, "state %d, wanted exhausted", conn.txState.Load())
+		tassert.Errorf(t, !conn.isArmed(), "exhausted connection still reports kTLS enabled")
 
 		got := testktlsCounterSnapshot().sub(before)
 		tassert.Errorf(t, got.exhausted == 1, "exhausted %d, wanted 1 (%s)", got.exhausted, got)
@@ -1464,13 +1479,13 @@ func TestKTLSTxBudget(t *testing.T) {
 		tassert.CheckError(t, err)
 		tassert.Errorf(t, n == 11, "wrote %d bytes, wanted 11 (must not truncate)", n)
 		tassert.Errorf(t, conn.txBytes.Load() == 11, "counted %d bytes, wanted 11", conn.txBytes.Load())
-		tassert.Errorf(t, conn.txState.Load() == ktlsTxArmed, "state %d, wanted armed", conn.txState.Load())
-		tassert.Errorf(t, conn.KTLSTxRemaining() == 0, "remaining %d, wanted 0", conn.KTLSTxRemaining())
+		tassert.Errorf(t, conn.txState.Load() == ktlsArmed, "state %d, wanted armed", conn.txState.Load())
+		tassert.Errorf(t, conn.remaining() == 0, "remaining %d, wanted 0", conn.remaining())
 
 		n, err = conn.Write([]byte("!"))
 		tassert.Errorf(t, n == 0, "wrote %d bytes past the budget", n)
-		tassert.Errorf(t, errors.Is(err, errKTLSTxExhausted), "expected exhausted error, got %v", err)
-		tassert.Errorf(t, conn.txState.Load() == ktlsTxExhausted, "state %d, wanted exhausted", conn.txState.Load())
+		tassert.Errorf(t, errors.Is(err, errKtlsExhausted), "expected exhausted error, got %v", err)
+		tassert.Errorf(t, conn.txState.Load() == ktlsExhausted, "state %d, wanted exhausted", conn.txState.Load())
 
 		got := testktlsCounterSnapshot().sub(before)
 		tassert.Errorf(t, got.exhausted == 1, "exhausted %d, wanted 1 (%s)", got.exhausted, got)
@@ -1480,17 +1495,17 @@ func TestKTLSTxBudget(t *testing.T) {
 	t.Run("retire-before-crossing", func(t *testing.T) {
 		before := testktlsCounterSnapshot()
 		conn := testktlsHandshake(t, arm)
-		conn.txMaxBytes = ktlsTxHeadroom + 10
+		conn.txMaxBytes = ktlsHeadroom + 10
 
-		ctx := context.WithValue(t.Context(), keyKTLSTx, ktlsTxState(conn))
+		ctx := context.WithValue(t.Context(), keyKtls, ktlsState(conn))
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://127.0.0.1/v1/objects/nnn/o", http.NoBody)
 		tassert.CheckFatal(t, err)
 
 		whdr := http.Header{}
-		ktlsTxRetire(req, whdr, 9)
+		ktlsRetire(req, whdr, 9)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == "", "retired early: %q", whdr.Get(hdrConnection))
 
-		ktlsTxRetire(req, whdr, 10)
+		ktlsRetire(req, whdr, 10)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == hdrConnectionClose,
 			"%q, wanted %q", whdr.Get(hdrConnection), hdrConnectionClose)
 		tassert.Errorf(t, conn.txRetiring.Load(), "connection was not marked retiring")
@@ -1505,16 +1520,16 @@ func TestKTLSTxBudget(t *testing.T) {
 		n64, err := conn.ReadFrom(body)
 		tassert.CheckError(t, err)
 		tassert.Errorf(t, n64 == 7, "response body wrote %d bytes, wanted 7", n64)
-		tassert.Errorf(t, conn.KTLSTxRemaining() == 0, "remaining %d, wanted 0", conn.KTLSTxRemaining())
+		tassert.Errorf(t, conn.remaining() == 0, "remaining %d, wanted 0", conn.remaining())
 
 		got := testktlsCounterSnapshot().sub(before)
 		tassert.Errorf(t, got.exhausted == 0, "retiring response exhausted the connection (%s)", got)
 
 		// unarmed: no hint, no budget
-		unarmed := testktlsHandshake(t, func(*net.TCPConn, *ktlsTxParams) (bool, error) { return false, nil })
-		tassert.Errorf(t, unarmed.KTLSTxRemaining() == 0, "unarmed remaining %d", unarmed.KTLSTxRemaining())
+		unarmed := testktlsHandshake(t, func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil })
+		tassert.Errorf(t, unarmed.remaining() == 0, "unarmed remaining %d", unarmed.remaining())
 		whdr = http.Header{}
-		ktlsTxRetire(req.WithContext(context.WithValue(t.Context(), keyKTLSTx, ktlsTxState(unarmed))), whdr, 1<<40)
+		ktlsRetire(req.WithContext(context.WithValue(t.Context(), keyKtls, ktlsState(unarmed))), whdr, 1<<40)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == "", "unarmed conn retired: %q", whdr.Get(hdrConnection))
 	})
 
@@ -1528,12 +1543,12 @@ func TestKTLSTxBudget(t *testing.T) {
 		tassert.CheckError(t, err)
 		tassert.Errorf(t, n == 7, "ReadFrom wrote %d bytes, wanted 7", n)
 		tassert.Errorf(t, conn.txBytes.Load() == 7, "counted %d bytes, wanted 7", conn.txBytes.Load())
-		tassert.Errorf(t, conn.txState.Load() == ktlsTxArmed, "state %d, wanted armed", conn.txState.Load())
+		tassert.Errorf(t, conn.txState.Load() == ktlsArmed, "state %d, wanted armed", conn.txState.Load())
 
 		second := &io.LimitedReader{R: strings.NewReader("ktls"), N: 4}
 		n, err = conn.ReadFrom(second)
 		tassert.Errorf(t, n == 0, "ReadFrom wrote %d bytes past the budget", n)
-		tassert.Errorf(t, errors.Is(err, errKTLSTxExhausted), "expected exhausted error, got %v", err)
+		tassert.Errorf(t, errors.Is(err, errKtlsExhausted), "expected exhausted error, got %v", err)
 		tassert.Errorf(t, second.N == 4, "rejected ReadFrom consumed %d bytes", 4-second.N)
 
 		got := testktlsCounterSnapshot().sub(before)
@@ -1543,6 +1558,26 @@ func TestKTLSTxBudget(t *testing.T) {
 }
 
 func TestKTLSTxArmCloseSerialized(t *testing.T) {
+	t.Run("writes-after-close-write", func(t *testing.T) {
+		arm := func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil }
+		conn := testktlsHandshake(t, arm)
+
+		// Avoid sending a real kTLS control record with the fake installer. The
+		// transmit-close latch is the part under test.
+		state := conn.beginClose()
+		tassert.Errorf(t, state == ktlsArmed, "close observed state %d, wanted armed", state)
+
+		n, err := conn.Write([]byte("after close_notify"))
+		tassert.Errorf(t, n == 0, "Write returned %d bytes after transmit close", n)
+		tassert.Errorf(t, errors.Is(err, net.ErrClosed), "Write returned %v, wanted net.ErrClosed", err)
+
+		body := &io.LimitedReader{R: strings.NewReader("after close_notify"), N: 18}
+		n64, err := conn.ReadFrom(body)
+		tassert.Errorf(t, n64 == 0, "ReadFrom returned %d bytes after transmit close", n64)
+		tassert.Errorf(t, errors.Is(err, net.ErrClosed), "ReadFrom returned %v, wanted net.ErrClosed", err)
+		tassert.Errorf(t, body.N == 18, "ReadFrom consumed %d bytes after transmit close", 18-body.N)
+	})
+
 	t.Run("arm-first", func(t *testing.T) {
 		before := testktlsCounterSnapshot()
 		installing := make(chan struct{})
@@ -1554,7 +1589,7 @@ func TestKTLSTxArmCloseSerialized(t *testing.T) {
 		releaseInstall := func() { releaseOnce.Do(func() { close(release) }) }
 		defer releaseInstall()
 
-		conn, client := testktlsConnPair(t, func(*net.TCPConn, *ktlsTxParams) (bool, error) {
+		conn, client := testktlsConnPair(t, func(*net.TCPConn, *ktlsParams) (bool, error) {
 			installs.Add(1)
 			close(installing)
 			<-release
@@ -1593,8 +1628,8 @@ func TestKTLSTxArmCloseSerialized(t *testing.T) {
 		testktlsWaitHandshake(t, handshake)
 
 		tassert.Errorf(t, installs.Load() == 1, "installer called %d times", installs.Load())
-		tassert.Errorf(t, conn.txClosed, "transmit close was not recorded")
-		tassert.Errorf(t, conn.txState.Load() == ktlsTxArmed, "state %d, wanted armed", conn.txState.Load())
+		tassert.Errorf(t, conn.txClosed.Load(), "transmit close was not recorded")
+		tassert.Errorf(t, conn.txState.Load() == ktlsArmed, "state %d, wanted armed", conn.txState.Load())
 		got := testktlsCounterSnapshot().sub(before)
 		tassert.Errorf(t, got.armed == 1, "armed %d, wanted 1 (%s)", got.armed, got)
 		tassert.Errorf(t, got.skipped == 0, "skipped %d, wanted 0 (%s)", got.skipped, got)
@@ -1606,20 +1641,20 @@ func TestKTLSTxArmCloseSerialized(t *testing.T) {
 	t.Run("close-first", func(t *testing.T) {
 		before := testktlsCounterSnapshot()
 		var installs atomic.Int32
-		conn, client := testktlsConnPair(t, func(*net.TCPConn, *ktlsTxParams) (bool, error) {
+		conn, client := testktlsConnPair(t, func(*net.TCPConn, *ktlsParams) (bool, error) {
 			installs.Add(1)
 			return true, nil
 		})
 
 		// Claim transmit shutdown without closing the test socket: a real Close
 		// would abort the handshake before arm() can exercise the latch.
-		state := conn.beginTxClose()
-		tassert.Errorf(t, state == ktlsTxUnarmed, "close observed state %d, wanted unarmed", state)
+		state := conn.beginClose()
+		tassert.Errorf(t, state == ktlsUnarmed, "close observed state %d, wanted unarmed", state)
 		testktlsWaitHandshake(t, testktlsStartHandshake(t, conn, client))
 
 		tassert.Errorf(t, installs.Load() == 0, "installer called %d times after transmit close", installs.Load())
-		tassert.Errorf(t, conn.txClosed, "transmit close was not recorded")
-		tassert.Errorf(t, conn.txState.Load() == ktlsTxUnarmed, "state %d, wanted unarmed", conn.txState.Load())
+		tassert.Errorf(t, conn.txClosed.Load(), "transmit close was not recorded")
+		tassert.Errorf(t, conn.txState.Load() == ktlsUnarmed, "state %d, wanted unarmed", conn.txState.Load())
 		got := testktlsCounterSnapshot().sub(before)
 		tassert.Errorf(t, got.skipped == 1, "skipped %d, wanted 1 (%s)", got.skipped, got)
 		tassert.Errorf(t, got.armed == 0, "armed %d, wanted 0 (%s)", got.armed, got)
@@ -1629,22 +1664,22 @@ func TestKTLSTxArmCloseSerialized(t *testing.T) {
 	})
 }
 
-// one handshake through a ktlsTxListener with the given installer
-func testktlsHandshake(t *testing.T, install ktlsTxInstaller) *ktlsTxConn {
+// one handshake through a ktlsListener with the given installer
+func testktlsHandshake(t testing.TB, install ktlsInstaller) *ktlsConn {
 	t.Helper()
 	return testktlsHandshakeConf(t, nil, install)
 }
 
 // Construct both ends without starting the TLS handshake, so lifecycle tests
 // can establish the ordering between arm and transmit close.
-func testktlsConnPair(t *testing.T, install ktlsTxInstaller) (*ktlsTxConn, *tls.Conn) {
+func testktlsConnPair(t testing.TB, install ktlsInstaller) (*ktlsConn, *tls.Conn) {
 	t.Helper()
 
 	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = raw.Close() })
 
-	l, err := newKTLSTxListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
 	tassert.CheckFatal(t, err)
 	l.install = install
 
@@ -1655,10 +1690,10 @@ func testktlsConnPair(t *testing.T, install ktlsTxInstaller) (*ktlsTxConn, *tls.
 			accepted <- testktlsServer{err: err}
 			return
 		}
-		conn, ok := nc.(*ktlsTxConn)
+		conn, ok := nc.(*ktlsConn)
 		if !ok {
 			_ = nc.Close()
-			accepted <- testktlsServer{err: fmt.Errorf("expected *ktlsTxConn, got %T", nc)}
+			accepted <- testktlsServer{err: fmt.Errorf("expected *ktlsConn, got %T", nc)}
 			return
 		}
 		accepted <- testktlsServer{conn: conn}
@@ -1677,7 +1712,7 @@ func testktlsConnPair(t *testing.T, install ktlsTxInstaller) (*ktlsTxConn, *tls.
 	return server.conn, client
 }
 
-func testktlsStartHandshake(t *testing.T, server *ktlsTxConn, client *tls.Conn) <-chan error {
+func testktlsStartHandshake(t testing.TB, server *ktlsConn, client *tls.Conn) <-chan error {
 	t.Helper()
 	ctx := t.Context()
 	errCh := make(chan error, 2)
@@ -1686,7 +1721,7 @@ func testktlsStartHandshake(t *testing.T, server *ktlsTxConn, client *tls.Conn) 
 	return errCh
 }
 
-func testktlsWaitHandshake(t *testing.T, errCh <-chan error) {
+func testktlsWaitHandshake(t testing.TB, errCh <-chan error) {
 	t.Helper()
 	for range 2 {
 		select {
@@ -1698,17 +1733,17 @@ func testktlsWaitHandshake(t *testing.T, errCh <-chan error) {
 	}
 }
 
-// ditto, with an explicit template - conf==nil goes through newKTLSTxListener,
+// ditto, with an explicit template - conf==nil goes through newKtlsListener,
 // otherwise the listener's template is replaced (to reach states the
 // constructor deliberately makes unreachable)
-func testktlsHandshakeConf(t *testing.T, conf *tls.Config, install ktlsTxInstaller) *ktlsTxConn {
+func testktlsHandshakeConf(t testing.TB, conf *tls.Config, install ktlsInstaller) *ktlsConn {
 	t.Helper()
 
 	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = raw.Close() })
 
-	l, err := newKTLSTxListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
 	tassert.CheckFatal(t, err)
 	l.install = install
 	if conf != nil {
@@ -1728,4 +1763,108 @@ func testktlsHandshakeConf(t *testing.T, conf *tls.Config, install ktlsTxInstall
 	// would sendmsg an alert on a socket the kernel is not actually driving
 	t.Cleanup(func() { _ = srv.conn.tcp.Close() })
 	return srv.conn
+}
+
+//
+// micro-benchmarks
+//
+
+// Armed transmit costs one uncontended txOut acquisition plus budget
+// bookkeeping per write. Compare against the same write(2) with no kTLS
+// wrapper: if the two are indistinguishable, the bookkeeping is free relative
+// to the syscall - which is the only question worth asking of it.
+//
+// Both benchmarks drive the ordinary entry points (net.Conn methods, the
+// listener's handshake path). Nothing here reaches into ktlsConn state.
+
+const benchWriteSize = 512 // net/http copies sniffLen before switching to ReadFrom
+
+// loopback TCP with a draining peer
+func benchTCPConn(b *testing.B) *net.TCPConn {
+	b.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = ln.Close() })
+
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		sc, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		_, _ = io.Copy(io.Discard, sc)
+		_ = sc.Close()
+	}()
+
+	cc, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		b.Fatal(err)
+	}
+	tcp := cc.(*net.TCPConn)
+	b.Cleanup(func() { _ = tcp.Close(); <-drained })
+	return tcp
+}
+
+// (1) armed write through (*ktlsConn).Write; the installer is faked because the
+// host kernel may not implement kTLS - everything else is the production path.
+// NOTE: the peer must keep draining, or this measures TCP backpressure.
+func BenchmarkKTLSTxWriteArmed(b *testing.B) {
+	conn, client := testktlsConnPair(b, func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil })
+	testktlsWaitHandshake(b, testktlsStartHandshake(b, conn, client))
+	if !conn.isArmed() {
+		b.Fatal("not armed")
+	}
+
+	// Once armed, the server hands plaintext to the socket, so read the raw
+	// connection underneath crypto/tls rather than through it.
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		_, _ = io.Copy(io.Discard, client.NetConn())
+	}()
+	b.Cleanup(func() { _ = client.NetConn().Close(); <-drained })
+
+	p := make([]byte, benchWriteSize)
+
+	b.SetBytes(benchWriteSize)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := conn.Write(p); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// (2) baseline: identical syscall, no kTLS wrapper
+func BenchmarkKTLSTxWriteBare(b *testing.B) {
+	tcp := benchTCPConn(b)
+	p := make([]byte, benchWriteSize)
+
+	b.SetBytes(benchWriteSize)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := tcp.Write(p); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// (3) per-connection cost at Accept: tls.Config.Clone (KeyLogWriter is
+// per-connection) plus tls.Server
+func BenchmarkKTLSTxNewConn(b *testing.B) {
+	tmpl := testktlsServerConf(b)
+	tcp := benchTCPConn(b)
+	install := func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil }
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = newKtlsConn(tcp, tmpl, install, testktlsTimeout)
+	}
 }

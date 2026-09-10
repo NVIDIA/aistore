@@ -1321,7 +1321,7 @@ func (goi *getOI) setwhdr(whdr http.Header, cksum *cos.Cksum, size int64) {
 	}
 
 	// when applicable, retire the kTLS-armed connection _after_ this response
-	ktlsTxRetire(goi.req, whdr, size)
+	ktlsRetire(goi.req, whdr, size)
 }
 
 // in particular, setup reader and writer and set headers
@@ -1333,7 +1333,7 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 	// Tx
 	if goi.canSendfile(lmfh) {
 		// NOTE: net.sendFile unwraps io.LimitedReader before the syscall,
-		// so the wrap is free; ktlsTxConn.ReadFrom requires it (see ais/ktls)
+		// so the wrap is free; ktlsConn.ReadFrom requires it (see ais/ktls)
 		err = goi.sendfile(&io.LimitedReader{R: lmfh, N: size}, fqn, size, false /*committed*/)
 	} else {
 		buf, slab := goi.t.gmm.AllocSize(min(size, memsys.MaxPageSlabSize))
@@ -1366,7 +1366,7 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 		whdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 
 		// see also: goi.setwhdr()
-		ktlsTxRetire(goi.req, whdr, size)
+		ktlsRetire(goi.req, whdr, size)
 
 		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
 		err = goi.transmit(csl, buf, fqn, size, false /*committed*/)
@@ -1390,7 +1390,7 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 
 	// (compare w/ goi.setwhdr) - size is not known until ReadUntil completes
 	// TODO: might be too conservative for .tar; might be not enough for .tgz et al. compressed
-	ktlsTxRetire(goi.req, whdr, lom.Lsize())
+	ktlsRetire(goi.req, whdr, lom.Lsize())
 
 	rcb := _newRcb(goi.w)
 	whdr.Set(cos.HdrContentType, cos.ContentTar)
@@ -1466,7 +1466,7 @@ func (goi *getOI) canSendfile(lmfh cos.LomReader) bool {
 
 // TODO: keeping it separate only for unit tests
 func canSendfileRequest(r *http.Request, useHTTPS bool) bool {
-	return !useHTTPS || (r != nil && isKTLSTx(r.Context()))
+	return !useHTTPS || (r != nil && isKTLS(r.Context()))
 }
 
 func (goi *getOI) _txerr(err error, fqn string, written, size int64, committed bool) error {
