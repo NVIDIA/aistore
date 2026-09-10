@@ -93,9 +93,13 @@ def _apply_patches(module):  # pylint: disable=unused-variable
         pass
 
     for redirector in redirectors:
-        assert inspect.signature(redirector.redirect_from_error) == inspect.signature(
-            _expected_sig
-        )
+        actual_sig = inspect.signature(redirector.redirect_from_error)
+        if actual_sig != inspect.signature(_expected_sig):
+            raise RuntimeError(
+                f"aistore.botocore_patch: cannot patch {module.__name__}."
+                f"{redirector.__name__}.redirect_from_error - unexpected signature "
+                f"{actual_sig}; this botocore version is not supported"
+            )
         wrapt.wrap_function_wrapper(
             module, redirector.__name__ + ".redirect_from_error", _ais_redirect_wrapper
         )

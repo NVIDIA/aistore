@@ -137,7 +137,6 @@ class Object:
                 `Object` stores the name, bucket, and provider.
         """
         self.head("checksum,atime,version,copies,custom,location")
-        assert self._props is not None
         return self._props
 
     @property
@@ -166,7 +165,6 @@ class Object:
                    presence is returned automatically.
                    See: https://github.com/NVIDIA/aistore/blob/main/api/apc/lsmsg.go
                    If empty, returns default properties (name, size).
-
 
         Returns:
             ObjectAttributes: Parsed object attributes.
