@@ -2607,8 +2607,14 @@ func (c *AuthConf) NodeJoinNonceWindow() time.Duration {
 	return c.IntraCluster.NonceWindow.D()
 }
 
-// Starting with v5.0, direct access to AIS targets is rejected when either AuthN
-// or intra-cluster request signing is configured: both require proxy mediation.
+// Starting with v5.0, RequiresProxyMediation reports whether unmarked requests arriving
+// directly on a target's public listener must be rejected. It returns true when either
+// client authentication or intra-cluster request signing is configured.
+//
+// This narrows the scope of an unsafe legacy capability; it is not data-plane
+// authentication. client_auth_required and intra_cluster.request_auth protect distinct
+// boundaries, neither implies the other, and all four combinations are valid.
+//
 // Note that auth.intra_cluster.node_join_secret_path is deliberately NOT part of this.
 func (c *AuthConf) RequiresProxyMediation() bool {
 	return c.ClientAuthRequired || c.IntraRequestAuthConfigured()

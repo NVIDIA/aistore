@@ -25,7 +25,7 @@ type readMostly struct {
 	testingEnv         bool
 	clientAuthRequired bool
 	signVerifyEnabled  bool
-	proxyMediation     bool // derived: clientAuthRequired || signVerifyEnabled
+	proxyMediation     bool // AuthConf.RequiresProxyMediation(): clientAuthRequired || intra_cluster.request_auth
 	useHTTPS           bool
 }
 

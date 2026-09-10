@@ -853,7 +853,10 @@ func (t *target) checkObjVerb(r *http.Request, dpq *dpq) (ecode int, err error) 
 }
 
 func (t *target) _verifyUnsigned(r *http.Request, dpq *dpq, net reqNet) (ecode int, err error) {
-	// ditto - redirect may arrive on all 3 nets (comment above)
+	// An unsigned redirect marker (pid + utm) is a routing hint, not a credential:
+	// it consists entirely of query parameters that any client can set.
+	// RequiresProxyMediation rejects unmarked direct requests; it cannot authenticate
+	// the marker itself. See AuthConf.RequiresProxyMediation and docs/auth_validation.md.
 	if hasRedirectMarker(dpq) {
 		return 0, nil
 	}

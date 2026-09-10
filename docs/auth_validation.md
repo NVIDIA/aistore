@@ -17,6 +17,7 @@ For an end-to-end example of setting up Keycloak with AIS in K8s, see the [auth 
     - [Static Credentials](#static-credentials)
     - [OIDC Lookup](#oidc-lookup)
 - [Authentication Boundaries](#authentication-boundaries)
+  - [Proxy mediation is not data-plane authentication](#proxy-mediation-is-not-data-plane-authentication)
 
 ## General Purpose Auth Support
 
@@ -170,6 +171,40 @@ direct public-listener access to buckets, objects, and the node-control API
 (`GET /v1/daemon`) with 403. Node control reaches a target through the proxy's
 `/v1/reverse/daemon` endpoint, which enforces `SHOW-CLUSTER` for GET and `ADMIN` for
 PUT/POST/DELETE before relaying the request over intra-control.
+
+### Proxy mediation is not data-plane authentication
+
+Requiring proxy mediation narrows the scope of direct target access; it does not
+authenticate a redirected request. A proxy stamps each redirect with a marker - the
+`pid` and `utm` query parameters - and, without intra-cluster request signing, a target
+cannot distinguish that marker from one supplied by a client.
+
+The two settings protect distinct boundaries. Their four combinations have the
+following steady-state behavior:
+
+| `client_auth_required` | `intra_cluster.request_auth` | At the proxy | At the target in v5.0 | At the target in v5.1 and later |
+|---|---|---|---|---|
+| `false` | `false` | Client authentication is not required | Unmarked GET/HEAD allowed[^s3-redirect-rebuild]; unsigned marker accepted | Same as v5.0 |
+| `true` | `false` | Client requests are authenticated and authorized | Unmarked access rejected; unsigned marker accepted | Same as v5.0 |
+| `false` | `true` | Client authentication is not required | Unmarked access rejected; marker remains unsigned during the bridge | Unmarked access rejected; signed marker verified |
+| `true` | `true` | Client requests are authenticated and authorized | Unmarked access rejected; marker remains unsigned during the bridge | Unmarked access rejected; signed marker verified |
+
+[^s3-redirect-rebuild]: With [`S3-Redirect-Rebuild`](/docs/s3compat.md#feature-flags-s3-redirect-rebuild-versus-s3-reverse-proxy), an unmarked public S3 request is accepted for any verb. Configuration validation rejects this feature whenever either setting requires proxy mediation.
+
+A brief transition window follows both a change to `intra_cluster.request_auth` and a
+node's completion of cluster startup. During this window - bounded by a few multiples
+of the control-plane operation timeout - an unsigned marker is still accepted. This
+allows the setting to be toggled without any downtime.
+
+An unsigned marker is forgeable and, once present, admits object reads and mutations.
+Thus, with `client_auth_required` enabled and `intra_cluster.request_auth` disabled,
+authentication and authorization are enforced at the proxy, including for object
+requests, but are not independently enforced at the target.
+
+Deployments that require authenticated client access to remain enforced across
+proxy-to-target redirects must enable both settings. During the v5.0 bridge, or when
+intra-cluster signing cannot be enabled, target public listeners must not be exposed to
+untrusted client networks.
 
 The request-authentication window settings apply only to
 `auth.intra_cluster.request_auth`:
