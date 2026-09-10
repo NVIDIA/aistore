@@ -39,7 +39,7 @@ const (
 	// 	1. local instance (no docker) 	- works
 	//	2. local docker instance		- works
 	// 	3. AWS-deployed cluster 		- not tested (but runs mainly with Ansible)
-	MockDaemonID = "MOCK"
+	MockDaemonID = "MOCKNODE"
 )
 
 // times and timeouts

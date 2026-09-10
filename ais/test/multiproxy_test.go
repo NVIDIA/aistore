@@ -1656,7 +1656,10 @@ func registerMockTarget(proxyURL string, smap *meta.Smap) error {
 		BaseParams: baseParams,
 		Path:       apc.URLPathCluAutoReg.S,
 		Body:       jsonDaemonInfo,
-		Header:     http.Header{cos.HdrContentType: []string{cos.ContentJSON}},
+		Header: http.Header{
+			cos.HdrContentType: []string{cos.ContentJSON},
+			apc.HdrNodeVersion: []string{cmn.VersionAIStore},
+		},
 	}
 	return reqParams.DoRequest()
 }
