@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -35,6 +36,40 @@ func TestBlobDlChunkReadTimeout(t *testing.T) {
 			}
 			r.setChunkReadTimeout()
 			tassert.Fatalf(t, r.timeout == tc.want, "expected %v, got %v", tc.want, r.timeout)
+		})
+	}
+}
+
+// NOTE: unit tests do not LoadConfig, so cmn.Rom.testingEnv is left false - which is
+// what keeps the `load.High && streaming` rejection reachable here (and only here).
+func TestBlobDlMemErr(t *testing.T) {
+	tassert.Fatalf(t, !cmn.Rom.TestingEnv(), "expecting unset cmn.Rom: this test covers the non-testing-env branch")
+
+	const (
+		sglCost = 4 * cos.MiB
+		bufCost = 32 * cos.KiB
+	)
+	tests := []struct {
+		name      string
+		memLoad   load.Load
+		streaming bool
+		wantErr   bool
+	}{
+		{"critical-streaming", load.Critical, true, true},
+		{"critical-background", load.Critical, false, true},
+		{"high-streaming", load.High, true, true},
+		{"high-background", load.High, false, false},
+		{"moderate-streaming", load.Moderate, true, false},
+		{"low-streaming", load.Low, true, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := XactBlobDl{cname: "blob-dl[" + tc.name + "]"}
+			err := r.memErr(tc.memLoad, tc.streaming, sglCost, bufCost)
+			tassert.Fatalf(t, (err != nil) == tc.wantErr, "expected err=%t, got %v", tc.wantErr, err)
+			if err != nil {
+				tassert.Fatalf(t, IsErrBlobDlAdmission(err), "expected admission error, got %v", err)
+			}
 		})
 	}
 }

@@ -156,8 +156,8 @@ var (
 )
 
 var (
-	errBlobDlAdmission  = errors.New("blob download admission rejected")
-	errBlobDlChunkLimit = errors.New("blob download exceeds manifest chunk limit")
+	errBlobDlAdmission  = errors.New(apc.ActBlobDl + " admission rejected")
+	errBlobDlChunkLimit = errors.New(apc.ActBlobDl + " exceeds manifest chunk limit")
 )
 
 // IsErrBlobDlAdmission reports whether blob download was rejected before starting.
@@ -404,11 +404,14 @@ func (r *XactBlobDl) memErr(memLoad load.Load, streaming bool, sglCost, bufCost 
 		return fmt.Errorf("%w: %s: all downloads rejected under %s memory pressure",
 			errBlobDlAdmission, r.Name(), load.Text[memLoad])
 	case memLoad == load.High && streaming:
-		return fmt.Errorf("%w: %s: streaming downloads rejected under %s memory pressure (estimated SGL/copy-buffer cost: %s/%s)",
-			errBlobDlAdmission, r.Name(), load.Text[memLoad], cos.IEC(sglCost, 0), cos.IEC(bufCost, 0))
-	default:
-		return nil
+		warn := fmt.Sprintf("streaming download under %s memory pressure (estimated SGL/copy-buffer cost: %s/%s)",
+			load.Text[memLoad], cos.IEC(sglCost, 0), cos.IEC(bufCost, 0))
+		if !cmn.Rom.TestingEnv() {
+			return fmt.Errorf("%w: %s: %s", errBlobDlAdmission, r.Name(), warn)
+		}
+		nlog.Warningln(warn, "- proceeding anyway")
 	}
+	return nil
 }
 
 // same view of "free" that memsys grades pressure against (cf. memsys.memFree):
