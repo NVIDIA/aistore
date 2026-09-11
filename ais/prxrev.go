@@ -236,6 +236,11 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 	}
 	rprimary := &p.rproxy.primary
 
+	// TODO:
+	// Three S3 endpoints forward here - putBckS3, delBckS3, and putBckVersioningS3.
+	// Select the S3 error handler for those requests so that an _unreachable_ primary
+	// produces an XML error response instead of a bare 502 (can wait; unlikely; benign).
+
 	rprimary.mu.Lock()
 	if rprimary.url != smap.Primary.PubNet.URL {
 		rprimary.url = smap.Primary.PubNet.URL
@@ -246,6 +251,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		rprimary.rp.Transport = rpTransport(config)
 		rprimary.rp.ErrorHandler = p.rpErrHandler
 	}
+	rp := rprimary.rp
 	rprimary.mu.Unlock()
 
 	if len(body) > 0 {
@@ -265,7 +271,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 			nlog.Infoln(p.String(), "forwarding [", s, "] to the primary", pname)
 		}
 	}
-	rprimary.rp.ServeHTTP(w, r)
+	rp.ServeHTTP(w, r)
 	return true // forwarded
 }
 
@@ -297,6 +303,18 @@ type (
 // - type: stdlibErrHdlr
 // - impl: similar to defaultErrorHandler
 func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) {
+	p._rpErrLog(r, err)
+	w.WriteHeader(http.StatusBadGateway)
+}
+
+// (ditto) when client speaks S3: return an XML error response
+// instead of leaving the SDK to synthesize one from a bare status
+func (p *proxy) rpErrHandlerS3(w http.ResponseWriter, r *http.Request, err error) {
+	p._rpErrLog(r, err)
+	s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadGateway})
+}
+
+func (p *proxy) _rpErrLog(r *http.Request, err error) {
 	var (
 		smap = p.owner.smap.get()
 		si   = smap.PubNet2Node(r.URL.Host) // assuming pub
@@ -310,11 +328,6 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 	} else {
 		nlog.Errorf("%s rproxy to %s (%s %s): %v", p, dst, r.Method, r.URL.Path, err)
 	}
-	w.WriteHeader(http.StatusBadGateway)
-}
-
-func rpErrHandlerS3(w http.ResponseWriter, r *http.Request, err error) {
-	s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadGateway})
 }
 
 func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, smap *smapX, si *meta.Snode) {

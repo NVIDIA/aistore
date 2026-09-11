@@ -274,7 +274,7 @@ func (c *lsoCtx) forwardLSO(psi *meta.Snode) {
 
 	var errHdlr stdlibErrHdlr
 	if c.s3tok != nil {
-		errHdlr = rpErrHandlerS3
+		errHdlr = p.rpErrHandlerS3
 	}
 	p.reverseRequest(c.w, r, psi.ID(), psi.URL(cmn.NetIntraControl), errHdlr)
 }

@@ -938,7 +938,7 @@ func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snod
 // so the URL rewrite below cannot invalidate the signature
 func (p *proxy) s3ReverseRequest(w http.ResponseWriter, r *http.Request, si *meta.Snode, smap *smapX) {
 	p.setIntraHdrs(r, smap, si != nil)
-	p.reverseRequest(w, r, si.ID(), si.URL(cmn.NetIntraData))
+	p.reverseRequest(w, r, si.ID(), si.URL(cmn.NetIntraData), p.rpErrHandlerS3)
 }
 
 // escape `&` for XML content; signed redurl query separators
