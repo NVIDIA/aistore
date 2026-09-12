@@ -10,62 +10,50 @@ import (
 	"io"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
-// Locking protocol for shard indexes
-// ====================================
+// Two distinct LOMs participate throughout this file:
+//   archlom - the source TAR object being indexed
+//   idxlom  - the object in ais://.sys-shardidx holding its packed ShardIndex
 //
-// Four lock sequences exist; archlom and idxlom are never held simultaneously
-// except when the caller already holds archlom and then briefly locks idxlom:
+// The exported operations are methods on the archlom. Per repo convention (and
+// revive's receiver-naming rule) the receiver is spelled `lom`, but everywhere
+// below `lom` IS the archlom; `idxlom` is always named explicitly.
 //
-//   SaveShardIndex — two sequential, non-overlapping critical sections:
-//     Phase 1:  idxlom(W) only  — write the index file to ais://.sys-shardidx
-//     Phase 2:  archlom(W) only — flip HasShardIdx on the source shard
+// Load and removal take archlom before idxlom. Save writes and unlocks idxlom
+// before trying to lock archlom, so it never holds the two at once.
 //
-//   LoadShardIndex — always called with archlom already locked by the caller:
-//     archlom(R) [held by caller] --> idxlom(R)
-//
-//   lom.rmShardIdx — called with archlom already write-locked by the caller:
-//     archlom(W) [held by caller] --> idxlom(W)
-//
-//   External TAR operations (GET, PUT, ...):
-//     archlom(R or W) only — idxlom reached only via LoadShardIndex above
-//
-// No-deadlock proof:
-//   Every simultaneous pair follows the same global order: archlom --> idxlom.
-//   SaveShardIndex never holds both at once: idxlom(W) is fully released before
-//   archlom(W) is acquired.  The lock graph therefore has exactly one directed
-//   edge (archlom --> idxlom) and no cycle exists, making deadlock impossible
-//   under any interleaving.
+// clearShardIdx is the one exception: it runs from inside LoadShardIndex with idxlom(R)
+// still held.
 
-// IdxSuffix is appended to the source object name when forming the index object
-const IdxSuffix = ".idx"
+const IdxSuffix = ".idx" // is appended to the source object name when forming the index object
 
-// SaveShardIndex packs idx and writes it as an object in ais://.sys-shardidx,
-// then flips HasShardIdx on archlom. Two non-overlapping critical sections —
-// see locking protocol above.
+// Packs idx and writes it as an object in ais://.sys-shardidx,
+// then flips HasShardIdx on the receiving archlom. Two non-overlapping critical
+// sections - see the locking note above.
 //
 // Best-effort: the Phase-2 flag flip uses a non-blocking write lock. If the source shard
 // is currently locked, SaveShardIndex returns cmn.IsErrBusy instead of blocking
-func SaveShardIndex(archlom *LOM, idx *archive.ShardIndex) error {
+func (lom *LOM) SaveShardIndex(idx *archive.ShardIndex) error {
 	b, err := idx.Pack()
 	if err != nil {
-		return fmt.Errorf("%s: %w", archlom.Cname(), err)
+		return fmt.Errorf("%s: %w", lom.Cname(), err)
 	}
-	idxlom, err := newIdxLOM(archlom)
+	idxlom, err := lom.newIdxLOM()
 	if err != nil {
-		return fmt.Errorf("%s: %w", archlom.Cname(), err)
+		return fmt.Errorf("%s: %w", lom.Cname(), err)
 	}
 
-	// Phase 1: write idxlom — idxlom(W) only, archlom not held.
+	// Phase 1: write idxlom - idxlom(W) only, archlom not held.
 	if err := writeIdxLOM(idxlom, b); err != nil {
-		return fmt.Errorf("%s: %w", archlom.Cname(), err)
+		return fmt.Errorf("%s: %w", lom.Cname(), err)
 	}
 
 	// Window between phases: idxlom is persisted but HasShardIdx is still false on archlom.
@@ -82,20 +70,20 @@ func SaveShardIndex(archlom *LOM, idx *archive.ShardIndex) error {
 	//   Crash: idxlom exists on disk but HasShardIdx stays false. The orphaned file is
 	//   harmless; the next index-shard run overwrites it and completes Phase 2.
 
-	// Phase 2: flip HasShardIdx — archlom(W) only, idxlom fully released.
-	if !archlom.TryLock(true) {
+	// Phase 2: flip HasShardIdx - archlom(W) only, idxlom fully released.
+	if !lom.TryLock(true) {
 		// Best-effort: a single non-blocking TryLock. A busy shard must never stall indexing.
-		return cmn.NewErrBusy("shard", archlom.Cname())
+		return cmn.NewErrBusy("shard", lom.Cname())
 	}
-	defer archlom.Unlock(true)
+	defer lom.Unlock(true)
 	// Reload before PersistMain: without reload, stale in-memory fields
 	// (e.g. old checksum) would overwrite the current xattr.
-	if err := archlom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		return fmt.Errorf("%s: %w", archlom.Cname(), err)
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		return fmt.Errorf("%s: %w", lom.Cname(), err)
 	}
-	archlom.SetShardIdx(true)
-	if err := archlom.PersistMain(false /*not chunked*/); err != nil {
-		return fmt.Errorf("%s: %w", archlom.Cname(), err)
+	lom.SetShardIdx(true)
+	if err := lom.PersistMain(lom.IsChunked()); err != nil {
+		return fmt.Errorf("%s: %w", lom.Cname(), err)
 	}
 	return nil
 }
@@ -133,15 +121,23 @@ func writeIdxLOM(idxlom *LOM, b []byte) error {
 	return idxlom.PersistMain(false /*not chunked*/)
 }
 
-// LoadShardIndex reads and unpacks the shard index for archlom from ais://.sys-shardidx.
-// Returns (nil, nil) if absent or unreadable, (nil, ErrShardIdxStale) if stale.
-// Caller must hold archlom locked (read or write); see locking protocol above.
-// On error, HasShardIdx is cleared best-effort (no-op when archlom is already locked).
-func LoadShardIndex(archlom *LOM) (*archive.ShardIndex, error) {
-	if !archlom.HasShardIdx() {
+// Read and unpack the shard index for archlom from ais://.sys-shardidx
+// Return:
+// - (nil, nil)                - absent: no index recorded, or the index object is gone
+// - (nil, ErrShardIdxStale)   - present but built from a prior version of the shard
+// - (nil, ErrShardIdxCorrupt) - present but undecodable; re-indexing will fix it
+// - (nil, <other>)            - transient: I/O failure; the index may still be good
+// - (idx, nil)                - usable
+//
+// The receiver is the archlom; the caller must hold it locked (read or write) and loaded.
+// Both matter: clearShardIdx branches on which lock is held and calls IsChunked, while the
+// size and staleness checks read Lsize and Checksum.
+func (lom *LOM) LoadShardIndex() (*archive.ShardIndex, error) {
+	debug.Func(func() { debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked") })
+	if !lom.HasShardIdx() {
 		return nil, nil
 	}
-	idxlom, err := newIdxLOM(archlom)
+	idxlom, err := lom.newIdxLOM()
 	if err != nil {
 		return nil, err
 	}
@@ -149,47 +145,52 @@ func LoadShardIndex(archlom *LOM) (*archive.ShardIndex, error) {
 	defer idxlom.Unlock(false)
 
 	if err := idxlom.Load(true /*cache it*/, true /*locked*/); err != nil {
-		clearShardIdx(archlom)
-		if cos.IsNotExist(err) {
+		switch {
+		case cos.IsNotExist(err):
+			lom.clearShardIdx()
 			return nil, nil
+		case cmn.IsErrLmetaNotFound(err), cmn.IsErrLmetaCorrupted(err), cmn.IsErrObjDefunct(err):
+			lom.clearShardIdx()
+			return nil, fmt.Errorf("%w: %w", archive.ErrShardIdxCorrupt, err)
 		}
-		return nil, err
+		return nil, err // transient: keep the flag
 	}
 
 	fh, err := idxlom.Open()
 	if err != nil {
 		if cos.IsNotExist(err) {
-			clearShardIdx(archlom)
+			lom.clearShardIdx()
 			return nil, nil
 		}
-		return nil, err
+		return nil, err // transient: keep the flag
 	}
 
 	size := idxlom.Lsize()
-	if size < archive.ShardIdxMinLen {
-		clearShardIdx(archlom)
+	if err := shardIdxLenOk(size, lom.Lsize()); err != nil {
+		lom.clearShardIdx()
 		cos.Close(fh)
-		return nil, nil
+		return nil, err
 	}
-	sgl := memsys.PageMM().NewSGL(size)
-	defer sgl.Free()
 
-	_, err = io.CopyN(sgl, fh, size) // use the known size as an explicit bound
+	buf := make([]byte, size)
+	_, err = io.ReadFull(fh, buf)
 	cos.Close(fh)
 	if err != nil {
 		if cos.IsAnyEOF(err) {
-			clearShardIdx(archlom)
+			// short read against a size we just stat'ed: the object is truncated
+			lom.clearShardIdx()
+			return nil, fmt.Errorf("%w: %s truncated below %d bytes", archive.ErrShardIdxCorrupt, idxlom.Cname(), size)
 		}
-		return nil, err
+		return nil, err // transient: keep the flag
 	}
 	idx := &archive.ShardIndex{}
-	if err = idx.Unpack(sgl.ReadAll()); err != nil {
-		clearShardIdx(archlom)
+	if err = idx.Unpack(buf); err != nil {
+		lom.clearShardIdx()
 		return nil, err
 	}
 	// Staleness check: if the shard was re-uploaded, the stored cksum/size will differ.
-	if idx.IsStale(archlom.Checksum(), archlom.Lsize()) {
-		clearShardIdx(archlom)
+	if idx.IsStale(lom.Checksum(), lom.Lsize()) {
+		lom.clearShardIdx()
 		return nil, archive.ErrShardIdxStale
 	}
 	return idx, nil
@@ -198,7 +199,7 @@ func LoadShardIndex(archlom *LOM) (*archive.ShardIndex, error) {
 // rmShardIdx removes the shard index object associated with lom.
 // Caller holds lom write-locked for removal; idxlom is write-locked only here.
 func (lom *LOM) rmShardIdx() error {
-	idxlom, err := newIdxLOM(lom)
+	idxlom, err := lom.newIdxLOM()
 	if err != nil {
 		return err
 	}
@@ -215,20 +216,60 @@ func (lom *LOM) rmShardIdx() error {
 	return idxlom.RemoveObj()
 }
 
-// clearShardIdx clears the HasShardIdx flag on archlom.
-// Best-effort: no-op if archlom is already locked (see locking protocol above).
-func clearShardIdx(archlom *LOM) {
-	if !archlom.TryLock(true) {
-		return
+// Clear the HasShardIdx flag on the archlom, so that the next read
+// skips the index entirely instead of re-loading and re-rejecting it every time.
+//
+// LockWrite - caller is already exclusive; persist directly
+// LockRead  - non-blocking upgrade (rlock => wlock) in place (never releases the read lock on failure)
+// LockNone  - no caller lock; fall back to a non-blocking TryLock
+func (lom *LOM) clearShardIdx() {
+	switch lom.IsLocked() {
+	case apc.LockWrite:
+		// caller holds it exclusively - nothing to acquire
+	case apc.LockRead:
+		if !lom.UpgradeLock() {
+			return // concurrent readers - leave the flag to the next index-shard run
+		}
+		defer lom.DowngradeLock()
+	default:
+		if !lom.TryLock(true) {
+			return
+		}
+		defer lom.Unlock(true)
 	}
-	archlom.SetShardIdx(false)
-	_ = archlom.PersistMain(false)
-	archlom.Unlock(true)
+	lom.SetShardIdx(false)
+	_ = lom.PersistMain(lom.IsChunked())
 }
 
-// newIdxLOM constructs and initializes the LOM for the shard index object.
-func newIdxLOM(archlom *LOM) (*LOM, error) {
-	idxlom := &LOM{ObjName: archlom.Bck().SysObjName(archlom.ObjName + IdxSuffix)}
+// Floor below which the shard-size bound (see shardIdxLenOk) is not applied:
+// - below this floor the allocation it guards is harmless
+// - above it a normal TAR still has ample margin: every indexed entry requires at least one 512-byte header block,
+// plus any name-extension and data blocks.
+const shardIdxSaneAlloc = cos.MiB
+
+// sanity-check the on-disk index size before allocating a buffer for it.
+//
+// The upper bound is the shard's own size.
+// Every indexed TAR member costs at least one 512-byte header block in the shard, while its
+// index entry costs len(name) plus ~8 bytes of varint framing. Long names don't invert
+// this - a PAX/GNU long name is itself stored as an extra 512-aligned record in the shard.
+func shardIdxLenOk(size, shardSize int64) error {
+	switch {
+	case size < archive.ShardIdxMinLen:
+		// too small to hold even a preamble - not a valid index, whatever produced it
+		return fmt.Errorf("%w: %d bytes, below the %d-byte minimum", archive.ErrShardIdxCorrupt, size, archive.ShardIdxMinLen)
+	case size <= shardIdxSaneAlloc:
+		// too small to be worth second-guessing - see shardIdxSaneAlloc
+	case shardSize > 0 && size > shardSize:
+		// the index cannot belong to this shard - report stale, not corrupt
+		return fmt.Errorf("%w: %d-byte index against a %d-byte shard", archive.ErrShardIdxStale, size, shardSize)
+	}
+	return nil
+}
+
+// construct and initialize the LOM for the shard index object
+func (lom *LOM) newIdxLOM() (*LOM, error) {
+	idxlom := &LOM{ObjName: lom.Bck().SysObjName(lom.ObjName + IdxSuffix)}
 	err := idxlom.InitBck(meta.SysBckShardIdx())
 	return idxlom, err
 }

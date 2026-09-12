@@ -82,7 +82,7 @@ func saveIndexedShard(t *testing.T, bck *meta.Bck, objName string, size int64, a
 	for i := range archivedObjs {
 		idx.Entries[fmt.Sprintf("obj-%03d", i)] = archive.ShardIndexEntry{Offset: int64(i) * archive.TarBlockSize, Size: 1}
 	}
-	tassert.CheckFatal(t, core.SaveShardIndex(lom, idx))
+	tassert.CheckFatal(t, lom.SaveShardIndex(idx))
 	return lom
 }
 

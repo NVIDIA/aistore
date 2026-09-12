@@ -111,12 +111,16 @@ func (r *XactShardSumm) visit(lom *core.LOM, _ []byte) error {
 		return nil
 	}
 
-	idx, err := core.LoadShardIndex(lom)
+	idx, err := lom.LoadShardIndex()
 	if err != nil {
-		if errors.Is(err, archive.ErrShardIdxStale) {
+		switch {
+		case errors.Is(err, archive.ErrShardIdxStale):
 			r.nStale.Inc()
-		} else {
+		case errors.Is(err, archive.ErrShardIdxCorrupt):
 			r.nInvalid.Inc()
+		default:
+			// transient (I/O): not an index defect - do not report it as one
+			r.AddErr(err, 4)
 		}
 		return nil
 	}

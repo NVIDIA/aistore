@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -25,7 +26,6 @@ import (
 )
 
 // TODOs:
-// - integrate shard index into GET datapath (GetBatch, GET with archpath
 // - inline shard index in PUT datapath (cold-GET, PUT) (no xaction)
 // - bckjogrunner: support `NonRecurs` mode
 // - add self-healing mechanism: detect the corrupted index on the fly and repair it
@@ -84,7 +84,7 @@ func (p *shardIndexFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (xreg.WP
 	prevMsg := prev.Args.Custom.(*apc.IndexShardMsg)
 	currMsg := p.Args.Custom.(*apc.IndexShardMsg)
 
-	// empty prefix means "all objects" — always overlaps with everything
+	// empty prefix means "all objects" - always overlaps with everything
 	if currMsg.Prefix != "" && prevMsg.Prefix != "" {
 		// allow parallel jobs on strictly non-overlapping prefixes
 		if !cmn.DirHasOrIsPrefix(currMsg.Prefix, prevMsg.Prefix) {
@@ -129,8 +129,7 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 		return nil
 	}
 
-	// SaveShardIndex acquires its own write lock on archlom for the metadata commit.
-	if err := core.SaveShardIndex(lom, idx); err != nil {
+	if err := lom.SaveShardIndex(idx); err != nil {
 		if cmn.IsErrBusy(err) {
 			// benign and expected (concurrent reader/writer): count it, record the (named)
 			// busy error but log it only sparsely
@@ -159,13 +158,13 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 // scan through the TAR, and returns the resulting ShardIndex.
 // Returns (nil, false) if the object is already indexed (up-to-date) or an error occurred.
 // Returns (idx, true) when re-indexing a stale entry (shard re-uploaded; PUT preserves HasShardIdx,
-// so staleness is detected via the embedded SrcCksum/SrcSize — see LoadShardIndex and IsStale).
+// so staleness is detected via the embedded SrcCksum/SrcSize - see LoadShardIndex and IsStale).
 // The read lock is released before returning.
 func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, bool) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
-	// jogger does not pre-load — load under our own lock.
+	// jogger does not pre-load - load under our own lock.
 	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
 		if cos.IsNotExist(err) {
 			return nil, false
@@ -177,21 +176,23 @@ func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, bool) {
 		return nil, false
 	}
 
-	// SkipVerify=true  — trust HasShardIdx; skip without loading the index.
-	// SkipVerify=true  — skip loading and verifying the index.
-	// NOTE: stale indexes remain until next non-SkipVerify run or individual read (ErrShardIdxStale).
+	// SkipVerify=true:
+	// - trust HasShardIdx; skip without loading or verifying the index
+	// - stale indexes remain until next non-SkipVerify run or individual read (ErrShardIdxStale)
 	stale := false
 	if lom.HasShardIdx() {
 		if r.msg.SkipVerify {
 			r.cntSkipHasIdx.Inc()
 			return nil, false
 		}
-		existing, err := core.LoadShardIndex(lom)
+		existing, err := lom.LoadShardIndex()
 		switch {
+		case errors.Is(err, archive.ErrShardIdxStale), errors.Is(err, archive.ErrShardIdxCorrupt):
+			stale = true // re-index
 		case err != nil:
-			stale = true // stale or corrupt — re-index
+			r.AddErr(err, 4)
+			return nil, false
 		case existing != nil:
-			// verified up-to-date
 			r.cntSkipHasIdx.Inc()
 			return nil, false
 		}
@@ -199,7 +200,7 @@ func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, bool) {
 	}
 
 	// start to index/re-index the shard
-	srcCksum := lom.Checksum() // capture under read lock for IsStale on next load
+	srcCksum := lom.Checksum() // capture under the read lock, for IsStale on the next load
 	srcSize := lom.Lsize()
 
 	fh, err := lom.Open()

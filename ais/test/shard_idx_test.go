@@ -33,7 +33,9 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-func TestIndexShard(t *testing.T) {
+// all tests in this source must have "TestIndexShard" prefix
+
+func TestIndexShardSmoke(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -237,7 +239,7 @@ func TestIndexShardPrefix(t *testing.T) {
 	tlog.Logf("Full-bucket index OK: all %d shards indexed\n", numShards*2)
 }
 
-func TestShardSummaryCallback(t *testing.T) {
+func TestIndexShardSummaryCallback(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -284,7 +286,7 @@ func TestShardSummaryCallback(t *testing.T) {
 	}
 }
 
-func TestShardSummaryDontWait(t *testing.T) {
+func TestIndexShardSummaryDontWait(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)

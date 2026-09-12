@@ -9,8 +9,10 @@ import (
 	"archive/tar"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand/v2"
 	"os"
 	"strings"
@@ -29,9 +31,9 @@ var (
 	tarFormats = []tar.Format{tar.FormatUSTAR, tar.FormatGNU, tar.FormatPAX}
 )
 
-// TestShardPackUnpackRoundTrip verifies the Pack → Unpack round-trip:
-// Build an index from a real TAR, pack it to bytes, unpack back, and assert
-// every entry's Offset and Size survive the serialization unchanged.
+// verify the Pack => Unpack round-trip:
+// - build an index from a real TAR, pack it to bytes, unpack back
+// - assert that every entry's Offset and Size survive the serialization unchanged
 func TestShardPackUnpackRoundTrip(t *testing.T) {
 	rng := cos.NowRand()
 	counts := []int{0, 1, 100}
@@ -88,7 +90,62 @@ func TestShardPackUnpackRoundTrip(t *testing.T) {
 	}
 }
 
-// TestShardPackNegativeValues verifies that Pack rejects entries with negative Offset or Size.
+// verify that map insertion and iteration order do not affect the packed representation
+func TestShardPackIsDeterministic(t *testing.T) {
+	const (
+		nEntries = 512
+		nRepeats = 16
+	)
+	mkIndex := func() *archive.ShardIndex {
+		return &archive.ShardIndex{
+			Entries: make(map[string]archive.ShardIndexEntry, nEntries),
+			SrcSize: 1 << 20,
+		}
+	}
+
+	names := make([]string, nEntries)
+	for i := range names {
+		names[i] = fmt.Sprintf("dir_%02d/file_%06d.bin", i%7, i)
+	}
+
+	idx := mkIndex()
+	for i, name := range names {
+		idx.Entries[name] = archive.ShardIndexEntry{
+			Offset: int64(i) * archive.TarBlockSize * 3,
+			Size:   int64(i) * 17,
+		}
+	}
+	want, err := idx.Pack()
+	if err != nil {
+		t.Fatal("Pack:", err)
+	}
+
+	// must be idempotent
+	for i := range nRepeats {
+		b, err := idx.Pack()
+		if err != nil {
+			t.Fatal("Pack:", err)
+		}
+		if !bytes.Equal(b, want) {
+			t.Fatalf("repeat %d: Pack output differs (%d vs %d bytes)", i, len(b), len(want))
+		}
+	}
+
+	// same entries in a distinct map, built in reverse insertion order
+	other := mkIndex()
+	for i := nEntries - 1; i >= 0; i-- {
+		other.Entries[names[i]] = idx.Entries[names[i]]
+	}
+	b, err := other.Pack()
+	if err != nil {
+		t.Fatal("Pack:", err)
+	}
+	if !bytes.Equal(b, want) {
+		t.Fatal("Pack output differs for an identical index built in a different order")
+	}
+}
+
+// Pack() must reject entries with negative Offset or Size
 func TestShardPackNegativeValues(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -110,9 +167,24 @@ func TestShardPackNegativeValues(t *testing.T) {
 	}
 }
 
-// TestShardUnpackChecksumCorruption verifies that a single flipped bit anywhere in
-// the packed payload is caught by the xxhash integrity check on Unpack,
-// across all supported TAR formats.
+// checksum-valid, oversized string length must be rejected
+func TestShardUnpackLengthOverflow(t *testing.T) {
+	const prefLen = 11
+	payload := binary.AppendUvarint(nil, uint64(math.MaxInt))
+	b := make([]byte, prefLen+len(payload))
+	b[0], b[1], b[2] = 1, 0, 1
+	copy(b[prefLen:], payload)
+	binary.BigEndian.PutUint64(b[3:], onexxh.Checksum64S(payload, cos.MLCG32))
+
+	idx := &archive.ShardIndex{}
+	err := idx.Unpack(b)
+	if !errors.Is(err, archive.ErrShardIdxCorrupt) {
+		t.Fatalf("expected ErrShardIdxCorrupt, got %v", err)
+	}
+}
+
+// corrupt a single bit anywhere in the packed payload;
+// check all supported TAR formats
 func TestShardUnpackChecksumCorruption(t *testing.T) {
 	for _, f := range tarFormats {
 		t.Run(f.String(), func(t *testing.T) {
@@ -185,7 +257,7 @@ var scenarios = []string{
 	"SkipsNonRegular",
 }
 
-// every scenario × every format.
+// every scenario × every format
 func TestShardBuildIndex(t *testing.T) {
 	for _, sc := range scenarios {
 		for _, f := range tarFormats {
@@ -233,7 +305,7 @@ func TestShardBuildIndex_Empty(t *testing.T) {
 	}
 }
 
-// TestShardBuildIndex_GNUSparse verifies that a TypeGNUSparse entry is skipped.
+// Verify that a TypeGNUSparse entry is skipped.
 // A GNU sparse file's logical Size exceeds its physical data, so the recorded
 // Offset would not point to contiguous content.  The regular file that follows
 // must still be correctly indexed.
@@ -243,7 +315,7 @@ func TestShardBuildIndex_Empty(t *testing.T) {
 func TestShardBuildIndex_GNUSparse(t *testing.T) {
 	var buf bytes.Buffer
 
-	// TypeGNUSparse header, size=0 — no data blocks follow.
+	// TypeGNUSparse header, size=0 - no data blocks follow.
 	hdrBlk := gnuSparseHeader("sparse.bin")
 	buf.Write(hdrBlk[:])
 
@@ -277,7 +349,7 @@ func TestShardBuildIndex_GNUSparse(t *testing.T) {
 	checkEntry(t, fh, "regular.txt", entry, r)
 }
 
-// TestShardBuildIndex_GNULongName verifies that a GNU long-name auxiliary entry
+// Verify that a GNU long-name auxiliary entry
 // (TypeGNULongName, emitted before the real header for names > 100 bytes) is
 // fully consumed before Offset is recorded.
 func TestShardBuildIndex_GNULongName(t *testing.T) {
@@ -305,8 +377,8 @@ func TestShardBuildIndex_GNULongName(t *testing.T) {
 	checkEntry(t, fh, longName, entry, r)
 }
 
-// TestShardBuildIndex_PAXLongName verifies PAX-format long filenames (> 100 chars).
-// PAX encodes the name as a path= attribute in the extension block — a different
+// Verify PAX-format long filenames (> 100 chars).
+// PAX encodes the name as a path= attribute in the extension block - a different
 // mechanism than GNU TypeGNULongName, but likewise adds an extra block before data.
 func TestShardBuildIndex_PAXLongName(t *testing.T) {
 	// 531 chars: forces the PAX path= attribute to spill across multiple 512-byte
@@ -452,7 +524,7 @@ func buildSingleFile(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
 }
 
 // buildZeroSizeFile interleaves zero-size and regular files.
-// Zero-size files write no data blocks; the next header must follow immediately —
+// Zero-size files write no data blocks; the next header must follow immediately -
 // any off-by-one in padding shifts every subsequent entry's Offset.
 func buildZeroSizeFile(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
 	t.Helper()
@@ -481,7 +553,7 @@ func buildZeroSizeFile(t *testing.T, tw *tar.Writer, format tar.Format) fileMap 
 // TAR allows duplicate names (it is a plain sequential stream with no uniqueness
 // constraint).  ReadOne returns the first match and stops, so the index must agree:
 // first-wins, not last-wins.  This keeps the O(1) index path a drop-in replacement
-// for the sequential scan — callers see identical bytes either way.
+// for the sequential scan - callers see identical bytes either way.
 func buildDuplicateNames(t *testing.T, tw *tar.Writer, format tar.Format) fileMap {
 	t.Helper()
 	rng := cos.NowRand()
@@ -494,8 +566,8 @@ func buildDuplicateNames(t *testing.T, tw *tar.Writer, format tar.Format) fileMa
 		name := fmt.Sprintf("dup_%06d.txt", i)
 		sz1 := randFileSize(rng)
 		sz2 := randFileSize(rng)
-		r1 := randReader(t, sz1) // first occurrence — index must point here
-		r2 := randReader(t, sz2) // second occurrence — must NOT be returned
+		r1 := randReader(t, sz1) // first occurrence - index must point here
+		r2 := randReader(t, sz2) // second occurrence - must NOT be returned
 		writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: format}, sz1, r1)
 		writeTAREntry(t, tw, &tar.Header{Name: name, Mode: 0o644, ModTime: modTime, Format: format}, sz2, r2)
 		m[name] = r1
@@ -635,7 +707,7 @@ func writeTAREntry(t *testing.T, tw *tar.Writer, hdr *tar.Header, size int64, r 
 // the hash of the bytes at [Offset, Offset+Size) in the TAR file.
 func checkEntry(t *testing.T, raw io.ReaderAt, name string, entry archive.ShardIndexEntry, r readers.Reader) {
 	t.Helper()
-	// Offset points to the file's TAR header block — must be non-negative and 512-aligned.
+	// Offset points to the file's TAR header block - must be non-negative and 512-aligned.
 	if entry.Offset < 0 {
 		t.Fatalf("entry %q: negative offset %d", name, entry.Offset)
 	}
@@ -661,8 +733,8 @@ func checkEntry(t *testing.T, raw io.ReaderAt, name string, entry archive.ShardI
 	}
 }
 
-// TestShardSrcMetadataRoundTrip verifies that SrcCksum and SrcSize survive
-// a Pack → Unpack round-trip, and that IsStale returns the correct answer
+// Verify that SrcCksum and SrcSize survive
+// a Pack => Unpack round-trip, and that IsStale returns the correct answer
 // when compared against the original values.
 func TestShardSrcMetadataRoundTrip(t *testing.T) {
 	cases := []struct {
@@ -721,7 +793,7 @@ func TestShardSrcMetadataRoundTrip(t *testing.T) {
 	}
 }
 
-// TestShardIsStale verifies IsStale using a realistic re-upload scenario:
+// Verify IsStale using a realistic re-upload scenario:
 // build a real shard, stamp the index with its cksum/size, then "re-upload"
 // (a new shard with different content) and confirm IsStale fires.
 func TestShardIsStale(t *testing.T) {
@@ -750,12 +822,12 @@ func TestShardIsStale(t *testing.T) {
 		t.Fatal("Unpack:", err)
 	}
 
-	// Same shard — index is fresh.
+	// Same shard - index is fresh.
 	if loaded.IsStale(ck1, size1) {
 		t.Fatal("IsStale: expected false for unchanged shard")
 	}
 
-	// Re-upload: a new shard with different content → different cksum and size.
+	// Re-upload: a new shard with different content => different cksum and size.
 	fh2 := tempFile(t)
 	defer fh2.Close()
 	tw2 := tar.NewWriter(fh2)
@@ -763,7 +835,7 @@ func TestShardIsStale(t *testing.T) {
 	size2 := sealTAR(t, fh2, tw2)
 	ck2 := shardCksum(t, fh2, size2)
 
-	// Re-uploaded shard → index is stale.
+	// Re-uploaded shard => index is stale.
 	if !loaded.IsStale(ck2, size2) {
 		t.Fatal("IsStale: expected true after shard re-upload")
 	}
@@ -782,8 +854,8 @@ func shardCksum(t *testing.T, fh *os.File, size int64) *cos.Cksum {
 	return ckh.Clone()
 }
 
-// gnuSparseHeader returns a minimal valid 512-byte TAR header block with
-// Typeflag=TypeGNUSparse and Size=0 (no data blocks follow).
+// Return a minimal valid 512-byte TAR header block with Typeflag=TypeGNUSparse and Size=0
+// (no data blocks follow).
 //
 // Ref: https://www.gnu.org/software/tar/manual/html_node/Standard.html
 //
@@ -791,13 +863,13 @@ func shardCksum(t *testing.T, fh *os.File, size int64) *cos.Cksum {
 //
 // A USTAR/GNU header block is exactly 512 bytes.  The layout used here:
 //
-//	[  0.. 99]  name       — filename, null-padded
-//	[100..107]  mode       — octal string, e.g. "0000644\0"
-//	[124..135]  size       — octal string, 11 digits + null; 0 here (no data)
-//	[136..147]  mtime      — octal string, 11 digits + null
-//	[148..155]  checksum   — sum of all header bytes (checksum field as spaces)
-//	[156]       typeflag   — 'S' = TypeGNUSparse
-//	[257..262]  magic      — "ustar  \0" (GNU variant: two spaces, not "00")
+//	[  0.. 99]  name       - filename, null-padded
+//	[100..107]  mode       - octal string, e.g. "0000644\0"
+//	[124..135]  size       - octal string, 11 digits + null; 0 here (no data)
+//	[136..147]  mtime      - octal string, 11 digits + null
+//	[148..155]  checksum   - sum of all header bytes (checksum field as spaces)
+//	[156]       typeflag   - 'S' = TypeGNUSparse
+//	[257..262]  magic      - "ustar  \0" (GNU variant: two spaces, not "00")
 //
 // All fields not listed above remain zero, which is valid for a size=0 entry.
 func gnuSparseHeader(name string) [512]byte {
@@ -813,7 +885,7 @@ func gnuSparseHeader(name string) [512]byte {
 	// Checksum: arithmetic sum of every byte in the 512-byte block,
 	// with the 8-byte checksum field itself treated as all spaces (0x20).
 	// The result is written back as a 6-digit octal string followed by
-	// null and space — the standard GNU/POSIX checksum encoding.
+	// null and space - the standard GNU/POSIX checksum encoding.
 	var chk int
 	for i, b := range &blk {
 		if i >= 148 && i < 156 {
