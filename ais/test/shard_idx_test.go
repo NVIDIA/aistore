@@ -668,9 +668,8 @@ func TestIndexShardConcurrentGetBatch(t *testing.T) {
 	const (
 		numShards = 1
 		numFiles  = 4096
-		fileSize  = 512 * cos.KiB // ~2GiB shard. The shard must exceed the target's stream buffer so
-		// it can't be buffered-and-released; the slow drainer then keeps it mid-transfer (lock held,
-		// bounded memory) for the whole index window. Smaller shards just buffer through and hold nothing.
+		fileSize  = 512 * cos.KiB // ~2GiB shard. It must exceed the response buffering so that, with the
+		// DT colocated below, the slow drainer keeps local assembly mid-transfer and the shard read-locked.
 	)
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
@@ -685,13 +684,14 @@ func TestIndexShardConcurrentGetBatch(t *testing.T) {
 	names := idxUploadTarShards(t, baseParams, bck, tmpDir, "" /*prefix*/, numShards, numFiles, fileSize)
 	tlog.Logf("Uploaded %d TAR shards (%d files x %s)\n", numShards, numFiles, cos.ToSizeIEC(int64(fileSize), 0))
 
-	// get-batch: keeps the in-flight shards read-locked on their source targets until we drain
-	// so index-shard must skip at least those (busy) and complete, instead of blocking forever
+	// ColocOne pins the DT to the sole shard's HRW owner. Local assembly then keeps the shard
+	// read-locked until we drain, so index-shard must skip it (busy) instead of blocking forever.
 	in := make([]apc.MossIn, len(names))
 	for i, name := range names {
 		in[i] = apc.MossIn{ObjName: name}
 	}
-	rc, _, err := api.GetBatchStream(baseParams, bck, &apc.MossReq{In: in, StreamingGet: true})
+	req := &apc.MossReq{In: in, StreamingGet: true, Colocation: apc.ColocOne}
+	rc, _, err := api.GetBatchStream(baseParams, bck, req)
 	tassert.CheckFatal(t, err)
 	defer rc.Close()
 

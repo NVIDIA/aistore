@@ -374,13 +374,11 @@ func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl 
 		// TODO: IsStale degrades to size-only when archlom cksum is None - see
 		// "checksum" TODOs in ais/tgtobj.go and xact/xs/archive.go (fast-append).
 		idx, err := lom.LoadShardIndex()
-		if err != nil {
+		if err != nil && cmn.Rom.V(4, cos.ModCore) {
 			switch {
 			case errors.Is(err, archive.ErrShardIdxStale), errors.Is(err, archive.ErrShardIdxCorrupt):
-				// bounded: LoadShardIndex has just cleared the flag, so this cannot repeat per read
 				nlog.Warningln(lom.Cname(), "shard index unusable, falling back to scan:", err)
-			case cmn.Rom.V(4, cos.ModCore):
-				// transient: the index is retained and the next read will retry - keep it gated
+			default:
 				nlog.Warningln(lom.Cname(), "shard index read failed, falling back to scan:", err)
 			}
 		}

@@ -32,6 +32,15 @@ import (
 
 const idxLogInterval = 30 * time.Second
 
+type idxStatus uint8
+
+const (
+	idxNone idxStatus = iota
+	idxNew
+	idxStale
+	idxCorrupt
+)
+
 type (
 	shardIndexFactory struct {
 		xreg.RenewBase
@@ -41,13 +50,15 @@ type (
 	xactShardIndex struct {
 		msg *apc.IndexShardMsg
 		xact.BckJogRunner
-		// per-target runtime counters (for CtlMsg observability)
-		cntSkipNonTar     atomic.Int64 // non-TAR objects skipped (not indexable)
-		cntSkipHasIdx     atomic.Int64 // shards with existing up-to-date index, skipped
-		cntSkipBusy       atomic.Int64 // shards skipped this run: source object locked, could not acquire the write lock for the metadata commit
-		cntIndexed        atomic.Int64 // shards newly indexed in this run
-		cntReindexedStale atomic.Int64 // shards re-indexed due to stale index detection
-		lastLog           atomic.Int64 // last log timestamp (sparse)
+		stats struct { // per-target runtime counters (for CtlMsg observability)
+			skipNonTar atomic.Int64 // non-TAR objects skipped (not indexable)
+			skipHasIdx atomic.Int64 // shards with existing up-to-date index, skipped
+			skipBusy   atomic.Int64 // source locked during metadata commit
+			indexed    atomic.Int64 // newly indexed shards
+			stale      atomic.Int64 // stale indexes successfully rebuilt
+			corrupt    atomic.Int64 // corrupt indexes successfully rebuilt
+		}
+		lastLog atomic.Int64 // last log timestamp (sparse)
 	}
 )
 
@@ -119,12 +130,12 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 	// Only plain-TAR objects are indexable by BuildShardIndex.
 	mime, err := archive.Mime("", lom.ObjName)
 	if err != nil || mime != archive.ExtTar {
-		r.cntSkipNonTar.Inc()
+		r.stats.skipNonTar.Inc()
 		return nil
 	}
 
 	// buildIdx holds the read lock only while streaming the TAR; releases before returning.
-	idx, stale := r.buildIdx(lom)
+	idx, status := r.buildIdx(lom)
 	if idx == nil {
 		return nil
 	}
@@ -133,17 +144,20 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 		if cmn.IsErrBusy(err) {
 			// benign and expected (concurrent reader/writer): count it, record the (named)
 			// busy error but log it only sparsely
-			r.cntSkipBusy.Inc()
+			r.stats.skipBusy.Inc()
 			r.AddErr(err, 4)
 			return nil
 		}
 		r.AddErr(err, 0)
 		return nil
 	}
-	if stale {
-		r.cntReindexedStale.Inc()
-	} else {
-		r.cntIndexed.Inc()
+	switch status {
+	case idxNew:
+		r.stats.indexed.Inc()
+	case idxStale:
+		r.stats.stale.Inc()
+	case idxCorrupt:
+		r.stats.corrupt.Inc()
 	}
 	r.ObjsAdd(1, idx.SrcSize) // the amount of data indexed
 
@@ -154,47 +168,47 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 	return nil
 }
 
-// buildIdx acquires a read lock, loads the LOM, checks whether indexing is needed,
-// scan through the TAR, and returns the resulting ShardIndex.
-// Returns (nil, false) if the object is already indexed (up-to-date) or an error occurred.
-// Returns (idx, true) when re-indexing a stale entry (shard re-uploaded; PUT preserves HasShardIdx,
-// so staleness is detected via the embedded SrcCksum/SrcSize - see LoadShardIndex and IsStale).
-// The read lock is released before returning.
-func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, bool) {
+// Take rlock, load the LOM, check whether indexing is needed, scan the TAR, and
+// return the resulting ShardIndex.
+// Return (nil, idxNone) if the object is already indexed (up-to-date) or an error occurred.
+// Otherwise, the status indicates whether the index is new or replaces a stale/corrupt one.
+func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, idxStatus) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
 	// jogger does not pre-load - load under our own lock.
 	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
 		if cos.IsNotExist(err) {
-			return nil, false
+			return nil, idxNone
 		}
 		r.AddErr(err, 0)
-		return nil, false
+		return nil, idxNone
 	}
 	if lom.IsCopy() {
-		return nil, false
+		return nil, idxNone
 	}
 
 	// SkipVerify=true:
 	// - trust HasShardIdx; skip without loading or verifying the index
 	// - stale indexes remain until next non-SkipVerify run or individual read (ErrShardIdxStale)
-	stale := false
+	status := idxNew
 	if lom.HasShardIdx() {
 		if r.msg.SkipVerify {
-			r.cntSkipHasIdx.Inc()
-			return nil, false
+			r.stats.skipHasIdx.Inc()
+			return nil, idxNone
 		}
 		existing, err := lom.LoadShardIndex()
 		switch {
-		case errors.Is(err, archive.ErrShardIdxStale), errors.Is(err, archive.ErrShardIdxCorrupt):
-			stale = true // re-index
+		case errors.Is(err, archive.ErrShardIdxStale):
+			status = idxStale
+		case errors.Is(err, archive.ErrShardIdxCorrupt):
+			status = idxCorrupt
 		case err != nil:
 			r.AddErr(err, 4)
-			return nil, false
+			return nil, idxNone
 		case existing != nil:
-			r.cntSkipHasIdx.Inc()
-			return nil, false
+			r.stats.skipHasIdx.Inc()
+			return nil, idxNone
 		}
 		// existing == nil: index absent or unreadable; fall through to re-index
 	}
@@ -206,18 +220,18 @@ func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, bool) {
 	fh, err := lom.Open()
 	if err != nil {
 		r.AddErr(err, 0)
-		return nil, false
+		return nil, idxNone
 	}
 
 	idx, err := archive.BuildShardIndex(fh, srcSize)
 	cos.Close(fh)
 	if err != nil {
 		r.AddErr(err, 0)
-		return nil, false
+		return nil, idxNone
 	}
 	idx.SrcCksum = srcCksum
 	idx.SrcSize = srcSize
-	return idx, stale
+	return idx, status
 }
 
 func (r *xactShardIndex) Run(wg *sync.WaitGroup) {
@@ -253,19 +267,22 @@ func (r *xactShardIndex) CtlMsg() string {
 	if r.msg.SkipVerify {
 		idxAppend(&sb, "skip-verify", "true")
 	}
-	if n := r.cntSkipNonTar.Load(); n > 0 {
+	if n := r.stats.skipNonTar.Load(); n > 0 {
 		idxAppend(&sb, "skip-nontar", strconv.FormatInt(n, 10))
 	}
-	if n := r.cntSkipHasIdx.Load(); n > 0 {
+	if n := r.stats.skipHasIdx.Load(); n > 0 {
 		idxAppend(&sb, "skip-indexed", strconv.FormatInt(n, 10))
 	}
-	if n := r.cntIndexed.Load(); n > 0 {
+	if n := r.stats.indexed.Load(); n > 0 {
 		idxAppend(&sb, "index", strconv.FormatInt(n, 10))
 	}
-	if n := r.cntReindexedStale.Load(); n > 0 {
+	if n := r.stats.stale.Load(); n > 0 {
 		idxAppend(&sb, "re-stale", strconv.FormatInt(n, 10))
 	}
-	if n := r.cntSkipBusy.Load(); n > 0 {
+	if n := r.stats.corrupt.Load(); n > 0 {
+		idxAppend(&sb, "re-corrupt", strconv.FormatInt(n, 10))
+	}
+	if n := r.stats.skipBusy.Load(); n > 0 {
 		idxAppend(&sb, "skip-busy", strconv.FormatInt(n, 10))
 	}
 	if n := r.ErrCnt(); n > 0 {
