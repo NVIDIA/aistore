@@ -6,8 +6,8 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -124,10 +124,13 @@ func writeIdxLOM(idxlom *LOM, b []byte) error {
 // Read and unpack the shard index for archlom from ais://.sys-shardidx
 // Return:
 // - (nil, nil)                - absent: no index recorded, or the index object is gone
-// - (nil, ErrShardIdxStale)   - present but built from a prior version of the shard
+// - (nil, ErrShardIdxStale)   - present but needs rebuilding (source or index version changed)
 // - (nil, ErrShardIdxCorrupt) - present but undecodable; re-indexing will fix it
 // - (nil, <other>)            - transient: I/O failure; the index may still be good
 // - (idx, nil)                - usable
+//
+// The caller owns a non-nil idx and must call Free after its last lookup (until the
+// shard-index cache introduced by a later change takes over that ownership).
 //
 // The receiver is the archlom; the caller must hold it locked (read or write) and loaded.
 // Both matter: clearShardIdx branches on which lock is held and calls IsChunked, while the
@@ -172,8 +175,7 @@ func (lom *LOM) LoadShardIndex() (*archive.ShardIndex, error) {
 		return nil, err
 	}
 
-	buf := make([]byte, size)
-	_, err = io.ReadFull(fh, buf)
+	idx, err := archive.ReadShardIndex(fh, size, T.PageMM())
 	cos.Close(fh)
 	if err != nil {
 		if cos.IsAnyEOF(err) {
@@ -181,15 +183,16 @@ func (lom *LOM) LoadShardIndex() (*archive.ShardIndex, error) {
 			lom.clearShardIdx()
 			return nil, fmt.Errorf("%w: %s truncated below %d bytes", archive.ErrShardIdxCorrupt, idxlom.Cname(), size)
 		}
+		// clear the flag so that the next read goes straight to the sequential scan
+		if errors.Is(err, archive.ErrShardIdxCorrupt) || errors.Is(err, archive.ErrShardIdxStale) {
+			lom.clearShardIdx()
+			return nil, err
+		}
 		return nil, err // transient: keep the flag
-	}
-	idx := &archive.ShardIndex{}
-	if err = idx.Unpack(buf); err != nil {
-		lom.clearShardIdx()
-		return nil, err
 	}
 	// Staleness check: if the shard was re-uploaded, the stored cksum/size will differ.
 	if idx.IsStale(lom.Checksum(), lom.Lsize()) {
+		idx.Free()
 		lom.clearShardIdx()
 		return nil, archive.ErrShardIdxStale
 	}

@@ -116,9 +116,10 @@ func TestIndexShardZeroSizeFile(t *testing.T) {
 	tassert.Fatalf(t, idxPath != "", "index for %q not found", objName)
 	data, err := os.ReadFile(idxPath)
 	tassert.CheckFatal(t, err)
-	idx := &archive.ShardIndex{}
-	tassert.CheckFatal(t, idx.Unpack(data))
-	entry, ok := idx.Entries[fileName]
+	idx, err := archive.ReadShardIndex(bytes.NewReader(data), int64(len(data)), nil)
+	tassert.CheckFatal(t, err)
+	defer idx.Free()
+	entry, ok := idx.Lookup(fileName)
 	tassert.Fatalf(t, ok && entry.Size == 0, "zero-size index entry: present=%t, size=%d", ok, entry.Size)
 
 	// the valid stored index makes this archived-file GET use the indexed fast path;
@@ -952,10 +953,11 @@ func idxValidate(t *testing.T, bck cmn.Bck, tarNames []string, nonTarName string
 		data, err := os.ReadFile(idxPath)
 		tassert.CheckFatal(t, err)
 
-		idx := &archive.ShardIndex{}
-		tassert.CheckFatal(t, idx.Unpack(data))
-		tassert.Fatalf(t, len(idx.Entries) == numFiles,
-			"TAR object %q: expected %d index entries, got %d", name, numFiles, len(idx.Entries))
+		idx, err := archive.ReadShardIndex(bytes.NewReader(data), int64(len(data)), nil)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, idx.Len() == numFiles,
+			"TAR object %q: expected %d index entries, got %d", name, numFiles, idx.Len())
+		idx.Free()
 	}
 	tlog.Logf("Validated %d shard indices (%d entries each)\n", len(tarNames), numFiles)
 	if nonTarName != "" {

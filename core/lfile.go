@@ -383,7 +383,9 @@ func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl 
 			}
 		}
 		if err == nil && idx != nil {
-			if entry, ok := idx.Entries[archpath]; ok {
+			entry, ok := idx.Lookup(archpath)
+			idx.Free()
+			if ok {
 				return cos.NewSectionHandle(lh, entry.DataOffset(), entry.Size, 0), nil
 			}
 		}

@@ -7,10 +7,10 @@ package archive_test
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/archive"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 var (
@@ -29,7 +29,10 @@ func benchShardIndex(b *testing.B, count int) (*archive.ShardIndex, []byte, []st
 		names[i] = name
 		entries[name] = archive.ShardIndexEntry{Offset: int64(i) * archive.TarBlockSize * 3, Size: 1024}
 	}
-	idx := &archive.ShardIndex{Entries: entries, SrcSize: 1 << 30}
+	idx, err := archive.NewShardIndexTestOnly(nil, 1<<30, entries)
+	if err != nil {
+		b.Fatal(err)
+	}
 	packed, err := idx.Pack()
 	if err != nil {
 		b.Fatal(err)
@@ -38,65 +41,64 @@ func benchShardIndex(b *testing.B, count int) (*archive.ShardIndex, []byte, []st
 }
 
 func BenchmarkShardIndex(b *testing.B) {
+	mm := memsys.PageMM()
 	for _, count := range []int{1_000, 10_000, 100_000} {
 		idx, packed, names, entries := benchShardIndex(b, count)
 		b.Run(fmt.Sprintf("new-pack/%d", count), func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(packed)))
 			for b.Loop() {
-				got := &archive.ShardIndex{Entries: entries, SrcSize: 1 << 30}
-				var err error
+				got, err := archive.NewShardIndexTestOnly(nil, 1<<30, entries)
+				if err != nil {
+					b.Fatal(err)
+				}
 				if benchBytes, err = got.Pack(); err != nil {
 					b.Fatal(err)
 				}
+				got.Free()
 			}
 		})
 		b.Run(fmt.Sprintf("pack/%d", count), func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(packed)))
 			for b.Loop() {
-				if _, err := idx.Pack(); err != nil {
-					b.Fatal(err)
-				}
+				benchBytes, _ = idx.Pack()
 			}
 		})
-		b.Run(fmt.Sprintf("unpack/%d", count), func(b *testing.B) {
+		b.Run(fmt.Sprintf("read-unpack-heap/%d", count), func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(packed)))
 			for b.Loop() {
-				got := &archive.ShardIndex{}
-				if err := got.Unpack(packed); err != nil {
+				got, err := archive.ReadShardIndex(bytes.NewReader(packed), int64(len(packed)), nil)
+				if err != nil {
 					b.Fatal(err)
 				}
 				benchIdx = got
 			}
 		})
-		b.Run(fmt.Sprintf("read-unpack/%d", count), func(b *testing.B) {
+		b.Run(fmt.Sprintf("read-unpack-mmsa/%d", count), func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(packed)))
 			for b.Loop() {
-				buf := make([]byte, len(packed))
-				if _, err := io.ReadFull(bytes.NewReader(packed), buf); err != nil {
+				got, err := archive.ReadShardIndex(bytes.NewReader(packed), int64(len(packed)), mm)
+				if err != nil {
 					b.Fatal(err)
 				}
-				got := &archive.ShardIndex{}
-				if err := got.Unpack(buf); err != nil {
-					b.Fatal(err)
-				}
-				benchIdx = got
+				got.Free()
 			}
 		})
 		b.Run(fmt.Sprintf("lookup-hit/%d", count), func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; b.Loop(); i++ {
-				benchEntry, benchOK = idx.Entries[names[i%count]]
+				benchEntry, benchOK = idx.Lookup(names[i%count])
 			}
 		})
 		b.Run(fmt.Sprintf("lookup-miss/%d", count), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				benchEntry, benchOK = idx.Entries["dataset/shard/member-99999999.jpeg"]
+				benchEntry, benchOK = idx.Lookup("dataset/shard/member-99999999.jpeg")
 			}
 		})
+		idx.Free()
 	}
 }

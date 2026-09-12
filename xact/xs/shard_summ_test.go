@@ -74,14 +74,12 @@ func saveObject(t *testing.T, bck *meta.Bck, objName string, size int64) *core.L
 func saveIndexedShard(t *testing.T, bck *meta.Bck, objName string, size int64, archivedObjs int) *core.LOM {
 	t.Helper()
 	lom := saveObject(t, bck, objName, size)
-	idx := &archive.ShardIndex{
-		Entries:  make(map[string]archive.ShardIndexEntry, archivedObjs),
-		SrcCksum: cos.NoneCksum,
-		SrcSize:  size,
-	}
+	entries := make(map[string]archive.ShardIndexEntry, archivedObjs)
 	for i := range archivedObjs {
-		idx.Entries[fmt.Sprintf("obj-%03d", i)] = archive.ShardIndexEntry{Offset: int64(i) * archive.TarBlockSize, Size: 1}
+		entries[fmt.Sprintf("obj-%03d", i)] = archive.ShardIndexEntry{Offset: int64(i) * archive.TarBlockSize, Size: 1}
 	}
+	idx, err := archive.NewShardIndexTestOnly(cos.NoneCksum, size, entries)
+	tassert.CheckFatal(t, err)
 	tassert.CheckFatal(t, lom.SaveShardIndex(idx))
 	return lom
 }

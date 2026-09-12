@@ -13,6 +13,7 @@ The same client request works with or without an index; the difference is the ta
 - [Motivation](#motivation)
 - [Quick start](#quick-start)
 - [How it works](#how-it-works)
+- [Shard Index V2](#shard-index-v2)
 - [Build indexes](#build-indexes)
 - [Read indexed shards](#read-indexed-shards)
 - [Summarize coverage](#summarize-coverage)
@@ -77,6 +78,78 @@ The read path is transparent:
 4. If no valid index is available, AIS falls back to the normal archive traversal path.
 
 The client request does not change when an index exists. The index is a performance feature, not a separate data-access API.
+
+## Shard Index V2
+
+In v5.1, AIS introduced the second version of shard-index on-disk and in-memory representation. The feature works exactly the same from the outside - the same APIs work transparently and CLI requests do not change. But indexes are faster to load and in-memory footprint is an order-of-magnitude smaller.
+
+### Motivation
+
+Version 1 retained the packed index and also decoded every entry into a hash map. Archived-file names already referenced the packed payload without copying, but the map still stored one key and one offset/size value per archived file.
+
+That (design) is suboptimal for the common workload. A given GetBatch request typically selects only a few members from a shard. Yet there's a high cost to materialize the entire shard index map - only to discard it shortly thereafter. Across concurrent reads and large datasets, that proportional memory churn creates avoidable garbage-collection pressure.
+
+### What changed
+
+| | v1 | v2 |
+|---|---|---|
+| On-disk entry order | not guaranteed | strictly ordered by archived-file name |
+| In-memory form | packed payload plus decoded map | packed payload plus `uint32` offset table |
+| Work per load | decode every entry and build the map | validate entries and record their locations |
+| Lookup | hash-map probe | binary search over packed names |
+| Serialization | rebuild the packed bytes | return the immutable packed bytes |
+| Metadata version | 1 | 2 |
+
+Version 2 keeps each archived-file name, TAR offset, and size in the packed payload. On load, AIS validates the payload and builds only the offset table. A lookup binary-searches names in place and decodes the offset and size only for the matching entry.
+
+The logarithmic lookup is a deliberate tradeoff. The read path normally performs one lookup per requested `archpath`, while replacing the decoded map with one four-byte offset per archived file substantially reduces the loaded index's auxiliary memory.
+
+Two implementation details reinforce the same design:
+
+- AIS computes the exact encoded length and writes the packed representation once, without append growth. Repeated saves return the immutable bytes without rebuilding the index.
+- Eligible packed and offset buffers are recycled through size-classed pools. This reduces steady-state allocation and GC work after indexes are released; pooling does not change their logical size or lifetime.
+
+### Upgrading
+
+Indexes written by v4.5 through v5.0 carry metadata version 1. A v5.1 target classifies an intact v1 index as **stale**, not corrupted, and falls back to normal archive traversal. Reads continue to work, but they are not accelerated until the index is rebuilt.
+
+**NOTE:**
+
+> As of the time of this writing, we are working to provide on-demand rebuild - scenarios including: any new write (PUT, cold GET, copy, etc.) into a given indexed bucket and old v1 index, both.
+
+Rebuild existing indexes in the usual way:
+
+```console
+$ ais bucket shard-index build ais://dataset --prefix shards/ --wait
+```
+
+Use the normal verification path for this upgrade. Do not specify `--skip-verify`: that option trusts an existing index marker without loading the index, and can therefore skip a v1 index that still needs rebuilding.
+
+A summary that is the first operation to verify a v1 index reports it in the `STALE` column:
+
+```console
+$ ais bucket shard-index summary ais://dataset --prefix shards/
+```
+
+Once a read has already detected the old version and cleared its index marker, a subsequent summary reports that shard as `NOT INDEXED` instead. Both states mean that the shard needs rebuilding.
+
+### Micro-benchmarks
+
+The following unit-level results were measured on an Intel Core i7-11850H. They exercise index load and lookup only, not end-to-end GET or GetBatch:
+
+| Measurement | Result |
+|---|---:|
+| Load 10K entries | 424 µs/op -> 215 µs/op (2.0x faster) |
+| Heap allocated per 10K-entry load | 410 KiB/op -> 338 B/op (about 1,200x lower) |
+| Lookup hit | 5-9% faster |
+| Lookup miss | 15-19% faster |
+
+The allocation result measures steady-state allocation traffic, not the resident size of a loaded index: v2 still retains the packed bytes and a four-byte offset per entry. The reduction comes from eliminating the map and reusing eligible buffers, directly reducing GC work under repeated concurrent loads.
+
+For this benchmark's entry sizes, the 10K case was large enough for size-class pooling to matter. This is not a fixed entry-count boundary; pool selection depends on requested buffer size. Smaller indexes already fit the existing page-sized memory slabs.
+
+Lookup improvements are deliberately modest. Binary search over packed names replaces a map probe; the principal gain comes from never constructing the map. Misses improve somewhat more because no offset/size entry needs to be decoded.
+
 
 ## Build indexes
 

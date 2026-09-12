@@ -52,18 +52,6 @@ func ReadAll(r io.Reader) ([]byte, error) {
 	return buf.Bytes(), err
 }
 
-// including "unexpecting EOF" to accommodate unsized streaming and
-// early termination of the other side (prior to sending the first byte)
-func IsAnyEOF(err error) bool {
-	return err == io.EOF || err == io.ErrUnexpectedEOF ||
-		errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
-}
-
-// graceful
-func IsOkEOF(err error) bool {
-	return err == io.EOF || errors.Is(err, io.EOF)
-}
-
 // ExpandPath replaces common abbreviations in file path (eg. `~` with absolute
 // path to the current user home directory) and cleans the path.
 func ExpandPath(path string) string {

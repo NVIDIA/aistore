@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -298,6 +299,16 @@ func IsErrClientTimeout(err error) bool {
 //
 // misc. Is* helpers
 //
+
+func IsAnyEOF(err error) bool {
+	return err == io.EOF || err == io.ErrUnexpectedEOF ||
+		errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
+}
+
+// graceful
+func IsOkEOF(err error) bool {
+	return err == io.EOF || errors.Is(err, io.EOF)
+}
 
 func IsErrOOS(err error) bool {
 	return errors.Is(err, syscall.ENOSPC)

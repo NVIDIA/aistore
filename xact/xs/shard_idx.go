@@ -139,6 +139,7 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 	if idx == nil {
 		return nil
 	}
+	defer idx.Free()
 
 	if err := lom.SaveShardIndex(idx); err != nil {
 		if cmn.IsErrBusy(err) {
@@ -159,7 +160,7 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 	case idxCorrupt:
 		r.stats.corrupt.Inc()
 	}
-	r.ObjsAdd(1, idx.SrcSize) // the amount of data indexed
+	r.ObjsAdd(1, idx.SrcSize()) // the amount of data indexed
 
 	if now := mono.NanoTime(); time.Duration(now-r.lastLog.Load()) > idxLogInterval {
 		r.lastLog.Store(now)
@@ -207,6 +208,7 @@ func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, idxStatus
 			r.AddErr(err, 4)
 			return nil, idxNone
 		case existing != nil:
+			existing.Free()
 			r.stats.skipHasIdx.Inc()
 			return nil, idxNone
 		}
@@ -223,14 +225,12 @@ func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, idxStatus
 		return nil, idxNone
 	}
 
-	idx, err := archive.BuildShardIndex(fh, srcSize)
+	idx, err := archive.BuildShardIndex(fh, srcSize, srcCksum)
 	cos.Close(fh)
 	if err != nil {
 		r.AddErr(err, 0)
 		return nil, idxNone
 	}
-	idx.SrcCksum = srcCksum
-	idx.SrcSize = srcSize
 	return idx, status
 }
 

@@ -16,6 +16,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/readers"
 )
 
@@ -31,8 +33,63 @@ var (
 	tarFormats = []tar.Format{tar.FormatUSTAR, tar.FormatGNU, tar.FormatPAX}
 )
 
-// verify the Pack => Unpack round-trip:
-// - build an index from a real TAR, pack it to bytes, unpack back
+type captureReader struct {
+	b   []byte
+	dst []byte
+}
+
+func (r *captureReader) Read(p []byte) (int, error) {
+	if len(r.b) == 0 {
+		return 0, io.EOF
+	}
+	if r.dst == nil {
+		r.dst = p
+	}
+	n := copy(p, r.b)
+	r.b = r.b[n:]
+	return n, nil
+}
+
+func shardIdxHash(metaver, format, cksumType byte, payload []byte) uint64 {
+	if metaver == 1 {
+		return onexxh.Checksum64S(payload, cos.MLCG32)
+	}
+	seed := uint64(cos.MLCG32) |
+		uint64(metaver)<<32 |
+		uint64(format)<<40 |
+		uint64(cksumType)<<48
+	return onexxh.Checksum64S(payload, seed)
+}
+
+func readShardIndex(t testing.TB, b []byte) *archive.ShardIndex {
+	t.Helper()
+	idx, err := archive.ReadShardIndex(bytes.NewReader(b), int64(len(b)), nil)
+	if err != nil {
+		t.Fatal("ReadShardIndex:", err)
+	}
+	t.Cleanup(idx.Free)
+	return idx
+}
+
+func packShardIndex(t testing.TB, idx *archive.ShardIndex) []byte {
+	t.Helper()
+	b, err := idx.Pack()
+	if err != nil {
+		t.Fatal("Pack:", err)
+	}
+	return b
+}
+
+func readShardIndexErr(b []byte) error {
+	idx, err := archive.ReadShardIndex(bytes.NewReader(b), int64(len(b)), nil)
+	if idx != nil {
+		idx.Free()
+	}
+	return err
+}
+
+// verify the Pack => ReadShardIndex round-trip:
+// - build an index from a real TAR, pack it to bytes, read it back
 // - assert that every entry's Offset and Size survive the serialization unchanged
 func TestShardPackUnpackRoundTrip(t *testing.T) {
 	rng := cos.NowRand()
@@ -55,28 +112,22 @@ func TestShardPackUnpackRoundTrip(t *testing.T) {
 				}
 				size := sealTAR(t, fh, tw)
 
-				orig, err := archive.BuildShardIndex(fh, size)
+				orig, err := archive.BuildShardIndex(fh, size, nil)
 				if err != nil {
 					t.Fatal("BuildShardIndex:", err)
 				}
 
-				b, err := orig.Pack()
-				if err != nil {
-					t.Fatal("Pack:", err)
-				}
+				b := packShardIndex(t, orig)
 
-				got := &archive.ShardIndex{}
-				if err := got.Unpack(b); err != nil {
-					t.Fatal("Unpack:", err)
-				}
+				got := readShardIndex(t, b)
 
-				if len(got.Entries) != len(orig.Entries) {
-					t.Fatalf("entry count: got %d, want %d", len(got.Entries), len(orig.Entries))
+				if got.Len() != orig.Len() {
+					t.Fatalf("entry count: got %d, want %d", got.Len(), orig.Len())
 				}
-				for name, want := range orig.Entries {
-					have, ok := got.Entries[name]
+				for name, want := range orig.AllTestOnly() {
+					have, ok := got.Lookup(name)
 					if !ok {
-						t.Fatalf("entry %q: missing after Unpack", name)
+						t.Fatalf("entry %q: missing after ReadShardIndex", name)
 					}
 					if have.Offset != want.Offset {
 						t.Fatalf("entry %q: Offset got %d, want %d", name, have.Offset, want.Offset)
@@ -90,58 +141,121 @@ func TestShardPackUnpackRoundTrip(t *testing.T) {
 	}
 }
 
+func TestShardReadOwnsBuffer(t *testing.T) {
+	orig, err := archive.NewShardIndexTestOnly(nil, 4096, map[string]archive.ShardIndexEntry{
+		"a.txt": {Offset: 0, Size: 1},
+	})
+	if err != nil {
+		t.Fatal("NewShardIndexTestOnly:", err)
+	}
+	t.Cleanup(orig.Free)
+	packed := packShardIndex(t, orig)
+	src := bytes.Clone(packed)
+
+	got := readShardIndex(t, src)
+	clear(src)
+	entry, ok := got.Lookup("a.txt")
+	if !ok || entry != (archive.ShardIndexEntry{Offset: 0, Size: 1}) {
+		t.Fatalf("lookup after clearing source: got %+v, %t", entry, ok)
+	}
+}
+
 // verify that map insertion and iteration order do not affect the packed representation
 func TestShardPackIsDeterministic(t *testing.T) {
 	const (
 		nEntries = 512
 		nRepeats = 16
 	)
-	mkIndex := func() *archive.ShardIndex {
-		return &archive.ShardIndex{
-			Entries: make(map[string]archive.ShardIndexEntry, nEntries),
-			SrcSize: 1 << 20,
-		}
-	}
-
 	names := make([]string, nEntries)
 	for i := range names {
 		names[i] = fmt.Sprintf("dir_%02d/file_%06d.bin", i%7, i)
 	}
-
-	idx := mkIndex()
+	entries := make(map[string]archive.ShardIndexEntry, nEntries)
 	for i, name := range names {
-		idx.Entries[name] = archive.ShardIndexEntry{
+		entries[name] = archive.ShardIndexEntry{
 			Offset: int64(i) * archive.TarBlockSize * 3,
 			Size:   int64(i) * 17,
 		}
 	}
-	want, err := idx.Pack()
+
+	idx, err := archive.NewShardIndexTestOnly(nil, 1<<20, entries)
 	if err != nil {
-		t.Fatal("Pack:", err)
+		t.Fatal("NewShardIndexTestOnly:", err)
+	}
+	want := packShardIndex(t, idx)
+	if want[0] != 2 {
+		t.Fatalf("metaver: got %d, want 2", want[0])
 	}
 
 	// must be idempotent
 	for i := range nRepeats {
-		b, err := idx.Pack()
-		if err != nil {
-			t.Fatal("Pack:", err)
-		}
+		b := packShardIndex(t, idx)
 		if !bytes.Equal(b, want) {
 			t.Fatalf("repeat %d: Pack output differs (%d vs %d bytes)", i, len(b), len(want))
 		}
 	}
 
 	// same entries in a distinct map, built in reverse insertion order
-	other := mkIndex()
+	reversed := make(map[string]archive.ShardIndexEntry, nEntries)
 	for i := nEntries - 1; i >= 0; i-- {
-		other.Entries[names[i]] = idx.Entries[names[i]]
+		reversed[names[i]] = entries[names[i]]
 	}
-	b, err := other.Pack()
+	other, err := archive.NewShardIndexTestOnly(nil, 1<<20, reversed)
 	if err != nil {
-		t.Fatal("Pack:", err)
+		t.Fatal("NewShardIndexTestOnly:", err)
 	}
+	b := packShardIndex(t, other)
 	if !bytes.Equal(b, want) {
 		t.Fatal("Pack output differs for an identical index built in a different order")
+	}
+}
+
+func TestShardPackConcurrent(t *testing.T) {
+	idx, err := archive.NewShardIndexTestOnly(nil, 1<<20, map[string]archive.ShardIndexEntry{
+		"a": {Offset: 0, Size: 1},
+		"b": {Offset: archive.TarBlockSize, Size: 2},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := packShardIndex(t, idx)
+	want = bytes.Clone(want)
+
+	const (
+		nworkers = 16
+		nloops   = 100
+	)
+	var wg sync.WaitGroup
+	wg.Add(nworkers)
+	for range nworkers {
+		go func() {
+			defer wg.Done()
+			for range nloops {
+				got, err := idx.Pack()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if !bytes.Equal(got, want) {
+					t.Error("concurrent Pack changed the packed representation")
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestShardPackAfterFree(t *testing.T) {
+	idx, err := archive.NewShardIndexTestOnly(nil, 1<<20,
+		map[string]archive.ShardIndexEntry{"a": {Offset: 0, Size: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx.Free()
+
+	if packed, err := idx.Pack(); err == nil || packed != nil {
+		t.Fatalf("Pack after Free: got %d bytes, err %v", len(packed), err)
 	}
 }
 
@@ -157,13 +271,158 @@ func TestShardPackNegativeValues(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			idx := &archive.ShardIndex{
-				Entries: map[string]archive.ShardIndexEntry{"f": tc.entry},
-			}
-			if _, err := idx.Pack(); err == nil {
-				t.Fatalf("%s: expected Pack to return error, got nil", tc.name)
+			if _, err := archive.NewShardIndexTestOnly(nil, 0,
+				map[string]archive.ShardIndexEntry{"f": tc.entry}); err == nil {
+				t.Fatalf("%s: expected NewShardIndexTestOnly to return error, got nil", tc.name)
 			}
 		})
+	}
+}
+
+// Metaver 2 makes strict name ordering a format invariant. Metaver 1 is
+// intentionally rebuild-only.
+func TestShardUnpackOrderInvariant(t *testing.T) {
+	const prefLen = 11
+
+	mk := func(metaver byte, names ...string) []byte {
+		var payload []byte
+		payload = binary.AppendUvarint(payload, uint64(len("none"))) // src cksum type
+		payload = append(payload, "none"...)
+		payload = binary.AppendUvarint(payload, 0)    // src cksum value
+		payload = binary.AppendUvarint(payload, 4096) // src size
+		payload = binary.AppendUvarint(payload, uint64(len(names)))
+		for i, name := range names {
+			payload = binary.AppendUvarint(payload, uint64(len(name)))
+			payload = append(payload, name...)
+			payload = binary.AppendUvarint(payload, uint64(i)*archive.TarBlockSize)
+			payload = binary.AppendUvarint(payload, 1)
+		}
+		b := make([]byte, prefLen+len(payload))
+		b[0], b[1], b[2] = metaver, 0, 1
+		copy(b[prefLen:], payload)
+		binary.BigEndian.PutUint64(b[3:], shardIdxHash(metaver, b[1], b[2], payload))
+		return b
+	}
+
+	for _, names := range [][]string{{"a.txt", "b.txt", "c.txt"}, {"only.txt"}, nil} {
+		idx := readShardIndex(t, mk(2, names...))
+		if idx.Len() != len(names) {
+			t.Fatalf("Len: got %d, want %d", idx.Len(), len(names))
+		}
+	}
+
+	// metaver 1 is intact-but-unusable, not damaged - see TestShardUnpackOlderMetaver
+	if err := readShardIndexErr(mk(1, "a.txt")); !errors.Is(err, archive.ErrShardIdxStale) {
+		t.Fatalf("metaver 1: expected ErrShardIdxStale, got %v", err)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		names []string
+	}{
+		{"descending", []string{"c.txt", "b.txt", "a.txt"}},
+		{"one-swap", []string{"a.txt", "c.txt", "b.txt"}},
+		{"duplicate", []string{"a.txt", "a.txt"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := readShardIndexErr(mk(2, tc.names...)); !errors.Is(err, archive.ErrShardIdxCorrupt) {
+				t.Fatalf("expected ErrShardIdxCorrupt, got %v", err)
+			}
+		})
+	}
+}
+
+// metaver-1 index (v1.4.5 .. v5.0) is intact but emitted its entries in map iteration order -
+// it cannot be binary-searched
+func TestShardUnpackOlderMetaver(t *testing.T) {
+	const prefLen = 11
+
+	var payload []byte
+	payload = binary.AppendUvarint(payload, uint64(len("none")))
+	payload = append(payload, "none"...)
+	payload = binary.AppendUvarint(payload, 0)
+	payload = binary.AppendUvarint(payload, 4096)
+	payload = binary.AppendUvarint(payload, 2)
+	for i, name := range []string{"z.txt", "a.txt"} {
+		payload = binary.AppendUvarint(payload, uint64(len(name)))
+		payload = append(payload, name...)
+		payload = binary.AppendUvarint(payload, uint64(i)*archive.TarBlockSize)
+		payload = binary.AppendUvarint(payload, 1)
+	}
+	mk := func(metaver byte) []byte {
+		b := make([]byte, prefLen+len(payload))
+		b[0], b[1], b[2] = metaver, 0, 1
+		copy(b[prefLen:], payload)
+		binary.BigEndian.PutUint64(b[3:], shardIdxHash(metaver, b[1], b[2], payload))
+		return b
+	}
+
+	for _, tc := range []struct {
+		name    string
+		metaver byte
+		want    error
+	}{
+		{"v1-is-stale", 1, archive.ErrShardIdxStale},
+		{"zero-is-corrupt", 0, archive.ErrShardIdxCorrupt},
+		{"future-is-corrupt", 3, archive.ErrShardIdxCorrupt},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := readShardIndexErr(mk(tc.metaver))
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("metaver %d: got %v, want %v", tc.metaver, err, tc.want)
+			}
+		})
+	}
+
+	// a corrupted payload must stay corrupt even when byte 0 reads as a valid old version
+	bad := mk(1)
+	bad[len(bad)-1] ^= 0xff
+	if err := readShardIndexErr(bad); !errors.Is(err, archive.ErrShardIdxCorrupt) {
+		t.Fatalf("damaged v1 payload: got %v, want ErrShardIdxCorrupt", err)
+	}
+
+	// the version byte itself was not covered by the v1 checksum
+	for _, tc := range []struct {
+		name string
+		b    []byte
+		to   byte
+	}{
+		{"v1-as-v2", mk(1), 2},
+		{"v2-as-v1", mk(2), 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.b[0] = tc.to
+			if err := readShardIndexErr(tc.b); !errors.Is(err, archive.ErrShardIdxCorrupt) {
+				t.Fatalf("changed version byte: got %v, want ErrShardIdxCorrupt", err)
+			}
+		})
+	}
+}
+
+// the source checksum must survive Free: it may be cloned out and persisted, and Free
+// can return the packed buffer to a slab where the bytes get reused
+func TestShardSrcCksumSurvivesFree(t *testing.T) {
+	orig, err := archive.NewShardIndexTestOnly(cos.NewCksum(cos.ChecksumOneXxh, "0123456789abcdef"), 4096,
+		map[string]archive.ShardIndexEntry{"a.txt": {Offset: 0, Size: 512}})
+	if err != nil {
+		t.Fatal("NewShardIndexTestOnly:", err)
+	}
+	b := packShardIndex(t, orig)
+	r := &captureReader{b: b}
+	loaded, err := archive.ReadShardIndex(r, int64(len(b)), nil)
+	if err != nil {
+		t.Fatal("ReadShardIndex:", err)
+	}
+	clone := loaded.SrcCksum().Clone()
+	want := clone.String()
+
+	loaded.Free()
+	// scribble over the buffer the index was decoded from
+	for i := range r.dst {
+		r.dst[i] = 0xff
+	}
+	if got := clone.String(); got != want {
+		t.Fatalf("cloned src cksum aliased the packed buffer: got %q, want %q", got, want)
 	}
 }
 
@@ -172,13 +431,53 @@ func TestShardUnpackLengthOverflow(t *testing.T) {
 	const prefLen = 11
 	payload := binary.AppendUvarint(nil, uint64(math.MaxInt))
 	b := make([]byte, prefLen+len(payload))
-	b[0], b[1], b[2] = 1, 0, 1
+	b[0], b[1], b[2] = 2, 0, 1
 	copy(b[prefLen:], payload)
-	binary.BigEndian.PutUint64(b[3:], onexxh.Checksum64S(payload, cos.MLCG32))
+	binary.BigEndian.PutUint64(b[3:], shardIdxHash(b[0], b[1], b[2], payload))
 
-	idx := &archive.ShardIndex{}
-	err := idx.Unpack(b)
+	err := readShardIndexErr(b)
 	if !errors.Is(err, archive.ErrShardIdxCorrupt) {
+		t.Fatalf("expected ErrShardIdxCorrupt, got %v", err)
+	}
+}
+
+// ownership and cleanup of both slab-backed buffers
+func TestShardReadUnpackPooled(t *testing.T) {
+	entries := make(map[string]archive.ShardIndexEntry, 100)
+	for i := range 100 {
+		entries[fmt.Sprintf("file-%03d", i)] = archive.ShardIndexEntry{Offset: int64(i) * archive.TarBlockSize, Size: 1}
+	}
+	orig, err := archive.NewShardIndexTestOnly(nil, 1<<20, entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packed := packShardIndex(t, orig)
+
+	mm := memsys.PageMM()
+	got, err := archive.ReadShardIndex(bytes.NewReader(packed), int64(len(packed)), mm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry, ok := got.Lookup("file-050"); !ok || entry.Offset != 50*archive.TarBlockSize {
+		t.Fatalf("lookup after pooled read: got %+v, %t", entry, ok)
+	}
+	got.Free()
+	got.Free() // idempotent
+
+	const prefLen = 11
+	payload := binary.AppendUvarint(nil, uint64(len("none")))
+	payload = append(payload, "none"...)
+	payload = binary.AppendUvarint(payload, 0) // cksum value
+	payload = binary.AppendUvarint(payload, 1) // source size
+	payload = binary.AppendUvarint(payload, 1) // count
+	payload = binary.AppendUvarint(payload, 1) // name length
+	payload = append(payload, 'x')             // name
+	payload = binary.AppendUvarint(payload, 0) // offset; size is missing
+	malformed := make([]byte, prefLen+len(payload))
+	malformed[0], malformed[1], malformed[2] = 2, 0, 1
+	copy(malformed[prefLen:], payload)
+	binary.BigEndian.PutUint64(malformed[3:], shardIdxHash(malformed[0], malformed[1], malformed[2], payload))
+	if _, err := archive.ReadShardIndex(bytes.NewReader(malformed), int64(len(malformed)), mm); !errors.Is(err, archive.ErrShardIdxCorrupt) {
 		t.Fatalf("expected ErrShardIdxCorrupt, got %v", err)
 	}
 }
@@ -199,14 +498,11 @@ func TestShardUnpackChecksumCorruption(t *testing.T) {
 			}
 			size := sealTAR(t, fh, tw)
 
-			idx, err := archive.BuildShardIndex(fh, size)
+			idx, err := archive.BuildShardIndex(fh, size, nil)
 			if err != nil {
 				t.Fatal("BuildShardIndex:", err)
 			}
-			b, err := idx.Pack()
-			if err != nil {
-				t.Fatal("Pack:", err)
-			}
+			b := packShardIndex(t, idx)
 
 			// flip one bit at each byte position in the payload (everything after the preamble)
 			// and confirm Unpack rejects it every time
@@ -216,8 +512,7 @@ func TestShardUnpackChecksumCorruption(t *testing.T) {
 				copy(corrupted, b)
 				corrupted[i] ^= 0x01
 
-				got := &archive.ShardIndex{}
-				if err := got.Unpack(corrupted); err == nil {
+				if err := readShardIndexErr(corrupted); err == nil {
 					t.Fatalf("byte %d: expected checksum error, got nil", i)
 				}
 			}
@@ -229,12 +524,11 @@ func TestShardUnpackLargeEntryCount(t *testing.T) {
 	const prefLen = 11
 	payload := binary.AppendUvarint([]byte{0, 0, 0}, uint64(1)<<32)
 	b := make([]byte, prefLen+len(payload))
-	b[0], b[1], b[2] = 1, 0, 1
+	b[0], b[1], b[2] = 2, 0, 1
 	copy(b[prefLen:], payload)
-	binary.BigEndian.PutUint64(b[3:], onexxh.Checksum64S(payload, cos.MLCG32))
+	binary.BigEndian.PutUint64(b[3:], shardIdxHash(b[0], b[1], b[2], payload))
 
-	idx := &archive.ShardIndex{}
-	if err := idx.Unpack(b); err == nil {
+	if err := readShardIndexErr(b); err == nil {
 		t.Fatal("expected oversized entry count to fail")
 	}
 }
@@ -269,15 +563,15 @@ func TestShardBuildIndex(t *testing.T) {
 				expected := buildScenario(t, sc, tw, f)
 				size := sealTAR(t, fh, tw)
 
-				idx, err := archive.BuildShardIndex(fh, size)
+				idx, err := archive.BuildShardIndex(fh, size, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(idx.Entries) != len(expected) {
-					t.Fatalf("entry count: got %d, want %d", len(idx.Entries), len(expected))
+				if idx.Len() != len(expected) {
+					t.Fatalf("entry count: got %d, want %d", idx.Len(), len(expected))
 				}
 				for name, r := range expected {
-					entry, ok := idx.Entries[name]
+					entry, ok := idx.Lookup(name)
 					if !ok {
 						t.Fatalf("entry %q: missing from index", name)
 					}
@@ -288,20 +582,19 @@ func TestShardBuildIndex(t *testing.T) {
 	}
 }
 
-// TestShardBuildIndex_Empty verifies no error and an empty Entries map for an
-// empty TAR (format-independent).
+// verify no error and an empty Entries map for an empty TAR (format-independent)
 func TestShardBuildIndex_Empty(t *testing.T) {
 	fh := tempFile(t)
 	defer fh.Close()
 
 	size := sealTAR(t, fh, tar.NewWriter(fh))
 
-	idx, err := archive.BuildShardIndex(fh, size)
+	idx, err := archive.BuildShardIndex(fh, size, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(idx.Entries) != 0 {
-		t.Fatalf("expected empty index, got %d entries", len(idx.Entries))
+	if idx.Len() != 0 {
+		t.Fatalf("expected empty index, got %d entries", idx.Len())
 	}
 }
 
@@ -335,14 +628,14 @@ func TestShardBuildIndex_GNUSparse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	idx, err := archive.BuildShardIndex(fh, int64(buf.Len()))
+	idx, err := archive.BuildShardIndex(fh, int64(buf.Len()), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := idx.Entries["sparse.bin"]; ok {
+	if _, ok := idx.Lookup("sparse.bin"); ok {
 		t.Error(`"sparse.bin" must not be indexed (TypeGNUSparse)`)
 	}
-	entry, ok := idx.Entries["regular.txt"]
+	entry, ok := idx.Lookup("regular.txt")
 	if !ok {
 		t.Fatal(`entry "regular.txt": missing from index`)
 	}
@@ -366,11 +659,11 @@ func TestShardBuildIndex_GNULongName(t *testing.T) {
 	writeTAREntry(t, tw, &tar.Header{Name: longName, Mode: 0o644, ModTime: modTime, Format: tar.FormatGNU}, 64, r)
 	size := sealTAR(t, fh, tw)
 
-	idx, err := archive.BuildShardIndex(fh, size)
+	idx, err := archive.BuildShardIndex(fh, size, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, ok := idx.Entries[longName]
+	entry, ok := idx.Lookup(longName)
 	if !ok {
 		t.Fatalf("entry %q: missing from index", longName)
 	}
@@ -393,20 +686,19 @@ func TestShardBuildIndex_PAXLongName(t *testing.T) {
 	writeTAREntry(t, tw, &tar.Header{Name: longName, Mode: 0o644, ModTime: modTime, Format: tar.FormatPAX}, 64, r)
 	size := sealTAR(t, fh, tw)
 
-	idx, err := archive.BuildShardIndex(fh, size)
+	idx, err := archive.BuildShardIndex(fh, size, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, ok := idx.Entries[longName]
+	entry, ok := idx.Lookup(longName)
 	if !ok {
 		t.Fatalf("entry %q: missing from index", longName)
 	}
 	checkEntry(t, fh, longName, entry, r)
 }
 
-// TestShardBuildIndex_PAXExplicitExtension verifies that an explicit PAXRecords
-// entry (independent of filename length) still forces an extension block, and the
-// resulting Offset correctly skips it.
+// Verify that an explicit PAXRecords entry (independent of filename length)
+// still forces an extension block, and the resulting Offset correctly skips it.
 func TestShardBuildIndex_PAXExplicitExtension(t *testing.T) {
 	const (
 		name = "pax_explicit.txt"
@@ -424,20 +716,20 @@ func TestShardBuildIndex_PAXExplicitExtension(t *testing.T) {
 	}, size, r)
 	sz := sealTAR(t, fh, tw)
 
-	idx, err := archive.BuildShardIndex(fh, sz)
+	idx, err := archive.BuildShardIndex(fh, sz, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, ok := idx.Entries[name]
+	entry, ok := idx.Lookup(name)
 	if !ok {
 		t.Fatalf("entry %q: missing from index", name)
 	}
 	checkEntry(t, fh, name, entry, r)
 }
 
-// TestShardBuildIndex_PAXLargeExtension verifies that PAX extension headers spanning
-// four or more 512-byte blocks are fully consumed before the data Offset is recorded.
-// A 4096-byte comment encodes to ~8 extension blocks; the data must follow them.
+// Verify that PAX extension headers spanning four or more 512-byte blocks are
+// fully consumed before the data Offset is recorded.
+// A 4096-byte comment encodes to ~8 extension blocks; the data must follow.
 func TestShardBuildIndex_PAXLargeExtension(t *testing.T) {
 	const (
 		name = "pax_large.bin"
@@ -455,11 +747,11 @@ func TestShardBuildIndex_PAXLargeExtension(t *testing.T) {
 	}, size, r)
 	sz := sealTAR(t, fh, tw)
 
-	idx, err := archive.BuildShardIndex(fh, sz)
+	idx, err := archive.BuildShardIndex(fh, sz, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, ok := idx.Entries[name]
+	entry, ok := idx.Lookup(name)
 	// Header must be past 8 extension blocks (8 × 512 = 4096 bytes).
 	if !ok || entry.Offset < 8*archive.TarBlockSize {
 		t.Fatalf("entry %q: expected Offset >= %d (large PAX extension), got %v", name, 8*archive.TarBlockSize, entry)
@@ -467,7 +759,7 @@ func TestShardBuildIndex_PAXLargeExtension(t *testing.T) {
 	checkEntry(t, fh, name, entry, r)
 }
 
-// buildScenario writes TAR entries for the named scenario into tw and returns
+// Write TAR entries for the named scenario into tw and returns
 // a fileMap.  Each reader in the map was used to write the corresponding entry;
 // Open() on it yields a fresh reader at position 0 for byte-exact comparison.
 func buildScenario(t *testing.T, name string, tw *tar.Writer, format tar.Format) fileMap {
@@ -749,39 +1041,33 @@ func TestShardSrcMetadataRoundTrip(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			orig := &archive.ShardIndex{
-				Entries:  map[string]archive.ShardIndexEntry{"a.txt": {Offset: 0, Size: 512}},
-				SrcCksum: tc.srcCksum,
-				SrcSize:  tc.srcSize,
-			}
-			b, err := orig.Pack()
+			orig, err := archive.NewShardIndexTestOnly(tc.srcCksum, tc.srcSize,
+				map[string]archive.ShardIndexEntry{"a.txt": {Offset: 0, Size: 512}})
 			if err != nil {
-				t.Fatal("Pack:", err)
+				t.Fatal("NewShardIndexTestOnly:", err)
 			}
+			b := packShardIndex(t, orig)
 
-			got := &archive.ShardIndex{}
-			if err := got.Unpack(b); err != nil {
-				t.Fatal("Unpack:", err)
-			}
+			got := readShardIndex(t, b)
 
 			// Entry must survive.
-			if len(got.Entries) != 1 {
-				t.Fatalf("expected 1 entry, got %d", len(got.Entries))
+			if got.Len() != 1 {
+				t.Fatalf("expected 1 entry, got %d", got.Len())
 			}
 
 			// SrcSize must match.
-			if got.SrcSize != tc.srcSize {
-				t.Fatalf("SrcSize: got %d, want %d", got.SrcSize, tc.srcSize)
+			if got.SrcSize() != tc.srcSize {
+				t.Fatalf("SrcSize: got %d, want %d", got.SrcSize(), tc.srcSize)
 			}
 
 			// SrcCksum must match (nil/none inputs both serialize as "none").
 			if tc.srcCksum == nil || cos.NoneC(tc.srcCksum) {
-				if !cos.NoneC(got.SrcCksum) {
-					t.Fatalf("SrcCksum: got %v, want none", got.SrcCksum)
+				if !cos.NoneC(got.SrcCksum()) {
+					t.Fatalf("SrcCksum: got %v, want none", got.SrcCksum())
 				}
 			} else {
-				if !got.SrcCksum.Equal(tc.srcCksum) {
-					t.Fatalf("SrcCksum: got %v, want %v", got.SrcCksum, tc.srcCksum)
+				if !got.SrcCksum().Equal(tc.srcCksum) {
+					t.Fatalf("SrcCksum: got %v, want %v", got.SrcCksum(), tc.srcCksum)
 				}
 			}
 
@@ -805,22 +1091,14 @@ func TestShardIsStale(t *testing.T) {
 	size1 := sealTAR(t, fh1, tw)
 	ck1 := shardCksum(t, fh1, size1)
 
-	// Build the index, stamp it with the original shard's metadata.
-	idx, err := archive.BuildShardIndex(fh1, size1)
+	// Build the index, stamped with the original shard's metadata.
+	idx, err := archive.BuildShardIndex(fh1, size1, ck1)
 	if err != nil {
 		t.Fatal("BuildShardIndex:", err)
 	}
-	idx.SrcCksum = ck1
-	idx.SrcSize = size1
 
-	b, err := idx.Pack()
-	if err != nil {
-		t.Fatal("Pack:", err)
-	}
-	loaded := &archive.ShardIndex{}
-	if err := loaded.Unpack(b); err != nil {
-		t.Fatal("Unpack:", err)
-	}
+	b := packShardIndex(t, idx)
+	loaded := readShardIndex(t, b)
 
 	// Same shard - index is fresh.
 	if loaded.IsStale(ck1, size1) {

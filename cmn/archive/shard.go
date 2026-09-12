@@ -7,57 +7,62 @@ package archive
 
 import (
 	"archive/tar"
+	"cmp"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"math"
+	"math/bits"
 	"slices"
+	"strings"
 
 	onexxh "github.com/OneOfOne/xxhash"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // Binary layout of a packed ShardIndex:
 //
-//	┌─────────────────────────────────────────────────────────────────────────┐
-//	│  PREAMBLE (11 bytes, fixed)                                             │
-//	│  [0]      meta-version uint8   — shardIdxMetaver                        │
-//	│  [1]      format       uint8   — 0 = TAR (shardIdxFmtTAR)               │
-//	│  [2]      cksum type   uint8   — 1 = onexxh (shardIdxCksumXXH)          │
-//	│  [3..10]  xxhash64     uint64  — onexxh.Checksum64S(payload, MLCG32)    │
-//	├─────────────────────────────────────────────────────────────────────────┤
-//	│  PAYLOAD (variable, covered by xxhash)                                  │
-//	│  src_cksum_type_len  uvarint — byte length of LOM cksum type            │
-//	│  src_cksum_type      []byte  — e.g. "xxhash" (UTF-8)                    │
-//	│  src_cksum_val_len   uvarint — byte length of LOM cksum value           │
-//	│  src_cksum_val       []byte  — hex-encoded value                        │
-//	│  src_size            uvarint — LOM size in bytes                        │
-//	│  count    uvarint              — number of entries                      │
-//	│  for each entry:                                                        │
-//	│    name_len  uvarint           — byte length of the name string         │
-//	│    name      []byte            — UTF-8 file path                        │
-//	│    offset    uvarint           — byte offset of the TAR header block    │
-//	│    size      uvarint           — logical file size in bytes             │
-//	└─────────────────────────────────────────────────────────────────────────┘
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │  PREAMBLE (11 bytes, fixed)                                             │
+// │  [0]      meta-version uint8   - shardIdxMetaver                        │
+// │  [1]      format       uint8   - 0 = TAR (shardIdxFmtTAR)               │
+// │  [2]      cksum type   uint8   - 1 = onexxh (shardIdxCksumXXH)          │
+// │  [3..10]  xxhash64     uint64  - checksum of preamble kind + payload    │
+// ├─────────────────────────────────────────────────────────────────────────┤
+// │  PAYLOAD (variable, covered by xxhash)                                  │
+// │  src_cksum_type_len  uvarint - byte length of LOM cksum type            │
+// │  src_cksum_type      []byte  - e.g. "xxhash" (UTF-8)                    │
+// │  src_cksum_val_len   uvarint - byte length of LOM cksum value           │
+// │  src_cksum_val       []byte  - hex-encoded value                        │
+// │  src_size            uvarint - LOM size in bytes                        │
+// │  count    uvarint              - number of entries                      │
+// │  for each entry (sorted by name - see Lookup):                          │
+// │    name_len  uvarint           - byte length of the name string         │
+// │    name      []byte            - UTF-8 file path                        │
+// │    offset    uvarint           - byte offset of the TAR header block    │
+// │    size      uvarint           - logical file size in bytes             │
+// └─────────────────────────────────────────────────────────────────────────┘
 //
 // This indexer supports regular-file members from the common TAR variants handled by Go's stdlib,
 // including long-name PAX/GNU cases. We intentionally skip sparse (tar.TypeGNUSparse)
 // and non-regular entries (directories, links, device nodes, FIFOs).
 
 const (
-	shardIdxMetaver  = 1  // current meta-version
+	shardIdxMetaver   = 2 // current meta-version
+	shardIdxMetaverV1 = 1 // [backward compatibility] previous supported meta-version
+)
+const (
 	shardIdxFmtTAR   = 0  // format: TAR
 	shardIdxCksumXXH = 1  // checksum: onexxh.Checksum64S with cos.MLCG32 seed
 	shardIdxPrefLen  = 11 // [1:ver | 1:fmt | 1:cksum-type | 8:xxhash64]
 
-	// ShardIdxMinLen: preamble + four single-byte uvarints (lower bound, not exact).
-	ShardIdxMinLen = shardIdxPrefLen + 4
-
-	// Bound memory usage when building or loading a shard index.
-	shardIdxMaxEntries = 1 << 20
+	ShardIdxMinLen     = shardIdxPrefLen + 4 // preamble + four single-byte uvarints (lower bound)
+	shardIdxMaxEntries = 1 << 20             // the cap to bound memory
 )
 
 type (
@@ -73,152 +78,292 @@ type (
 		Size int64
 	}
 	ShardIndex struct {
-		Entries map[string]ShardIndexEntry
+		// The shard's checksum and size as of index-build time.
+		srcCksum cos.Cksum
+		srcSize  int64
 
-		// LOM's checksum and size captured at index-build time
-		SrcCksum *cos.Cksum
-		SrcSize  int64
-		raw      []byte // (GC)
+		// The index is held in its packed (on-disk) form and read in place:
+		// * buf  - preamble + payload
+		// * offs - byte offset of each entry within buf, strictly ordered by entry name
+		buf  []byte
+		offs []uint32
+
+		bufSlab, offsSlab     *memsys.Slab
+		bufPooled, offsPooled *shardIdxBuf
 	}
-	// cursor for sequential decoding of the shard-index payload
+)
+
+// private
+type (
+	// scan-time (name, entry) pair; exists only between BuildShardIndex and pack
+	_shentry struct {
+		name string
+		e    ShardIndexEntry
+	}
+	// cursor for sequential decoding
 	idxDecoder struct {
 		b   []byte
 		off int
 	}
 )
 
-// ErrShardIdxStale is returned by (*core.LOM).LoadShardIndex when the stored index was built
-// from a prior version of the shard (checksum or size mismatch). The caller should rebuild.
-var ErrShardIdxStale = errors.New("shard index: stale")
+var (
+	ErrShardIdxStale   = errors.New("shard index: stale")
+	ErrShardIdxCorrupt = errors.New("shard index: corrupted")
+)
 
-// ErrShardIdxCorrupt is returned when a *stored* index cannot be decoded: bad preamble,
-// checksum mismatch, or truncated/overrunning payload. Distinguishes unusable content
-// from a transient read failure - the former is re-indexable, the latter must be retried.
-var ErrShardIdxCorrupt = errors.New("shard index: corrupted")
-
-func _emitErr(format string, a ...any) error { return fmt.Errorf("shard index: "+format, a...) }
-
-// as above, for decode-side failures only (see Unpack and idxDecoder)
+func _emitErr(format string, a ...any) error {
+	return fmt.Errorf("shard index: "+format, a...)
+}
 func _corruptErr(format string, a ...any) error {
 	return fmt.Errorf("%w: "+format, append([]any{ErrShardIdxCorrupt}, a...)...)
 }
+func _staleErr(format string, a ...any) error {
+	return fmt.Errorf("%w: "+format, append([]any{ErrShardIdxStale}, a...)...)
+}
 
-// perform one sequential scan of a TAR and returns an index
-// mapping each regular file's name to its exact byte location within the archive
-func BuildShardIndex(r io.ReaderAt, size int64) (*ShardIndex, error) {
-	// initial capacity: upper bound is size/TarBlockSize (all zero-size files, one header each);
-	// lower bound of 8 avoids degenerate near-zero estimates for tiny archives.
+// BuildShardIndex builds an in-memory index; the caller must call Free when done.
+func BuildShardIndex(r io.ReaderAt, srcSize int64, srcCksum *cos.Cksum) (*ShardIndex, error) {
 	const (
 		minCap = 8
-		maxCap = 8 * 1024
+		maxCap = 64 * 1024
 	)
-	initCap := cos.ClampInt(int(size/TarBlockSize), minCap, maxCap)
-
 	var (
-		sr  = io.NewSectionReader(r, 0, size)
-		tr  = tar.NewReader(sr)
-		idx = &ShardIndex{Entries: make(map[string]ShardIndexEntry, initCap)}
+		sr   = io.NewSectionReader(r, 0, srcSize)
+		tr   = tar.NewReader(sr)
+		ents = make([]_shentry, 0, cos.ClampInt(int(srcSize/TarBlockSize), minCap, maxCap))
 	)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
 			if err == io.EOF {
-				return idx, nil
+				break
 			}
 			return nil, _emitErr("tar reader failure: %w", err)
 		}
 		switch hdr.Typeflag {
 		case tar.TypeReg, tar.TypeRegA:
-			// regular file — index below
+			// regular file - index below
 		case tar.TypeGNUSparse:
 			continue // not indexed: logical size != physical; caller falls back to sequential scan
 		default:
 			continue // skip directories, symlinks, devices, etc.
 		}
-		if _, exists := idx.Entries[hdr.Name]; exists {
-			continue // first-wins: matches ReadOne semantics
-		}
-		if len(idx.Entries) >= shardIdxMaxEntries {
+		if len(ents) >= shardIdxMaxEntries {
 			return nil, _emitErr("too many entries (max %d)", shardIdxMaxEntries)
 		}
-		// After tr.Next() the section reader is positioned at the data start.
-		// TAR guarantees all headers and data are aligned to TarBlockSize (512 bytes),
-		// so dataOffset is always an exact multiple.
 		dataOffset, _ := sr.Seek(0, io.SeekCurrent)
 		debug.Assert(dataOffset&(TarBlockSize-1) == 0, dataOffset)
 
-		idx.Entries[hdr.Name] = ShardIndexEntry{
-			Offset: dataOffset - TarBlockSize, // points to the 512-byte file header, not the data
-			Size:   hdr.Size,
+		ents = append(ents, _shentry{
+			name: hdr.Name,
+			e: ShardIndexEntry{
+				Offset: dataOffset - TarBlockSize, // the 512-byte file header, not the data
+				Size:   hdr.Size,
+			},
+		})
+	}
+
+	// offset order
+	slices.SortFunc(ents, func(a, b _shentry) int {
+		if c := strings.Compare(a.name, b.name); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.e.Offset, b.e.Offset)
+	})
+
+	if srcCksum == nil {
+		srcCksum = cos.NoneCksum
+	}
+	idx := &ShardIndex{srcCksum: *srcCksum, srcSize: srcSize}
+	if err := idx.pack(ents); err != nil {
+		return nil, err
+	}
+	return idx, nil
+}
+
+// TODO: move it out of prod.
+func NewShardIndexTestOnly(srcCksum *cos.Cksum, srcSize int64, entries map[string]ShardIndexEntry) (*ShardIndex, error) {
+	ents := make([]_shentry, 0, len(entries))
+	for name, e := range entries {
+		ents = append(ents, _shentry{name: name, e: e})
+	}
+	// map keys are unique - no need for a stable sort here
+	slices.SortFunc(ents, func(a, b _shentry) int { return strings.Compare(a.name, b.name) })
+
+	if srcCksum == nil {
+		srcCksum = cos.NoneCksum
+	}
+	idx := &ShardIndex{srcCksum: *srcCksum, srcSize: srcSize}
+	if err := idx.pack(ents); err != nil {
+		return nil, err
+	}
+	return idx, nil
+}
+
+// TODO: ditto
+func (idx *ShardIndex) AllTestOnly() iter.Seq2[string, ShardIndexEntry] {
+	return func(yield func(string, ShardIndexEntry) bool) {
+		for _, off := range idx.offs {
+			name, e := idx.at(off)
+			if !yield(name, e) {
+				return
+			}
 		}
 	}
+}
+
+// number of bytes binary.PutUvarint writes for x
+func uvarintLen(x uint64) int { return (bits.Len64(x|1) + 6) / 7 }
+
+// Metaver 2:
+// - fold the three preamble bytes into otherwise-unused high bits of the seed
+func shardIdxHash(b []byte) uint64 {
+	seed := uint64(cos.MLCG32) |
+		uint64(b[0])<<32 |
+		uint64(b[1])<<40 |
+		uint64(b[2])<<48
+	return onexxh.Checksum64S(b[shardIdxPrefLen:], seed)
 }
 
 ////////////////
 // ShardIndex //
 ////////////////
 
-// serialize the index into a compact binary format
-// (entries are emitted in sorted name order to produce byte-identical output)
-func (idx *ShardIndex) Pack() ([]byte, error) {
-	if idx.SrcSize < 0 {
-		return nil, _emitErr("negative src size %d", idx.SrcSize)
+// serialize into the packed form and record each entry's byte offset
+func (idx *ShardIndex) pack(ents []_shentry) error {
+	if idx.srcSize < 0 {
+		return _emitErr("negative src size %d", idx.srcSize)
 	}
-	cksumTy, cksumVal := idx.SrcCksum.Get() // nil-safe; returns ("none", "") when nil
+	cksumTy, cksumVal := idx.srcCksum.Get()
 
-	names := make([]string, 0, len(idx.Entries))
-	for name := range idx.Entries {
-		names = append(names, name)
-	}
-	slices.Sort(names)
+	// first-wins on duplicates (if any)
+	ents = slices.CompactFunc(ents, func(a, b _shentry) bool { return a.name == b.name })
 
+	n := len(ents)
 	total := shardIdxPrefLen +
-		2*binary.MaxVarintLen64 + len(cksumTy) + len(cksumVal) + // src cksum type + value
-		binary.MaxVarintLen64 + // src size
-		binary.MaxVarintLen64 // entry count
-	for _, name := range names {
-		// one uvarint for name length + the name itself + two uvarints for offset and size
-		total += 3*binary.MaxVarintLen64 + len(name)
+		uvarintLen(uint64(len(cksumTy))) + len(cksumTy) +
+		uvarintLen(uint64(len(cksumVal))) + len(cksumVal) +
+		uvarintLen(uint64(idx.srcSize)) +
+		uvarintLen(uint64(n))
+	for i := range ents {
+		e := &ents[i]
+		if e.e.Offset < 0 {
+			return _emitErr("entry %q has negative offset %d", e.name, e.e.Offset)
+		}
+		if e.e.Size < 0 {
+			return _emitErr("entry %q has negative size %d", e.name, e.e.Size)
+		}
+		total += uvarintLen(uint64(len(e.name))) + len(e.name) +
+			uvarintLen(uint64(e.e.Offset)) + uvarintLen(uint64(e.e.Size))
 	}
-	buf := make([]byte, shardIdxPrefLen, total)
+	// entry offsets are uint32; see the ShardIndex comment
+	if total > math.MaxUint32 {
+		return _emitErr("packed index too large (%d bytes)", total)
+	}
 
+	mm := memsys.PageMM()
+
+	buf, bufSlab, bufPooled := allocBytes(total, mm)
+	buf = buf[:shardIdxPrefLen]
 	buf = binary.AppendUvarint(buf, uint64(len(cksumTy)))
 	buf = append(buf, cksumTy...)
 	buf = binary.AppendUvarint(buf, uint64(len(cksumVal)))
 	buf = append(buf, cksumVal...)
-	buf = binary.AppendUvarint(buf, uint64(idx.SrcSize))
+	buf = binary.AppendUvarint(buf, uint64(idx.srcSize))
+	buf = binary.AppendUvarint(buf, uint64(n))
 
-	buf = binary.AppendUvarint(buf, uint64(len(names)))
-	for _, name := range names {
-		e := idx.Entries[name]
-		if e.Offset < 0 {
-			return nil, _emitErr("entry %q has negative offset %d", name, e.Offset)
-		}
-		if e.Size < 0 {
-			return nil, _emitErr("entry %q has negative size %d", name, e.Size)
-		}
-		buf = binary.AppendUvarint(buf, uint64(len(name)))
-		buf = append(buf, name...)
-		buf = binary.AppendUvarint(buf, uint64(e.Offset))
-		buf = binary.AppendUvarint(buf, uint64(e.Size))
+	offs, offsSlab, offsPooled := allocOffsets(n, mm)
+	for i := range ents {
+		e := &ents[i]
+		offs[i] = uint32(len(buf))
+		buf = binary.AppendUvarint(buf, uint64(len(e.name)))
+		buf = append(buf, e.name...)
+		buf = binary.AppendUvarint(buf, uint64(e.e.Offset))
+		buf = binary.AppendUvarint(buf, uint64(e.e.Size))
 	}
+	debug.Assert(len(buf) == total, len(buf), " vs ", total)
 
-	// checksum the payload, then fill in the preamble
-	h := onexxh.Checksum64S(buf[shardIdxPrefLen:], cos.MLCG32)
 	buf[0] = shardIdxMetaver
 	buf[1] = shardIdxFmtTAR
 	buf[2] = shardIdxCksumXXH
+	h := shardIdxHash(buf)
 	binary.BigEndian.PutUint64(buf[3:], h)
 
-	return buf, nil
+	idx.buf, idx.offs = buf, offs
+	idx.bufSlab, idx.offsSlab = bufSlab, offsSlab
+	idx.bufPooled, idx.offsPooled = bufPooled, offsPooled
+	return nil
+}
+
+// Pack returns the read-only packed representation, valid until Free is called.
+func (idx *ShardIndex) Pack() ([]byte, error) {
+	if len(idx.buf) < shardIdxPrefLen {
+		return nil, _emitErr("index is not built")
+	}
+	return idx.buf, nil
+}
+
+func (idx *ShardIndex) Free() {
+	freeBytes(idx.buf, idx.bufSlab, idx.bufPooled)
+	freeOffsets(idx.offs, idx.offsSlab, idx.offsPooled)
+	idx.srcCksum = cos.Cksum{}
+	idx.srcSize = 0
+	idx.buf, idx.offs = nil, nil
+	idx.bufSlab, idx.offsSlab = nil, nil
+	idx.bufPooled, idx.offsPooled = nil, nil
+}
+
+func (idx *ShardIndex) Len() int { return len(idx.offs) }
+
+// binary search directly over the packed payload; ordering is guaranteed by metaver 2
+func (idx *ShardIndex) Lookup(name string) (ShardIndexEntry, bool) {
+	lo, hi := 0, len(idx.offs)
+	for lo < hi {
+		mid := int(uint(lo+hi) >> 1)
+		b := idx.buf[idx.offs[mid]:]
+
+		// single-byte length covers every name shorter than 128 bytes
+		beg, nlen := 1, int(b[0])
+		if b[0] >= 0x80 {
+			v, n := binary.Uvarint(b)
+			beg, nlen = n, int(v)
+		}
+		end := beg + nlen
+
+		switch cmp := strings.Compare(cos.UnsafeS(b[beg:end]), name); {
+		case cmp == 0:
+			offset, n := binary.Uvarint(b[end:])
+			size, _ := binary.Uvarint(b[end+n:])
+			return ShardIndexEntry{Offset: int64(offset), Size: int64(size)}, true
+		case cmp < 0:
+			lo = mid + 1
+		default:
+			hi = mid
+		}
+	}
+	return ShardIndexEntry{}, false
+}
+
+// decode the complete entry at the given offset (name included) - used by All
+func (idx *ShardIndex) at(off uint32) (string, ShardIndexEntry) {
+	nlen, n := binary.Uvarint(idx.buf[off:])
+	beg := int(off) + n
+	end := beg + int(nlen)
+	name := cos.UnsafeS(idx.buf[beg:end])
+
+	offset, n := binary.Uvarint(idx.buf[end:])
+	end += n
+	size, _ := binary.Uvarint(idx.buf[end:])
+
+	return name, ShardIndexEntry{Offset: int64(offset), Size: int64(size)}
 }
 
 /////////////////////
 // ShardIndexEntry //
 /////////////////////
 
-// return the byte offset of the file's data within the archive;
-// use this for direct random access: io.NewSectionReader(r, entry.DataOffset(), entry.Size)
+// byte offset of the file's data within the archive
 func (e ShardIndexEntry) DataOffset() int64 { return e.Offset + TarBlockSize }
 
 ////////////////
@@ -246,7 +391,7 @@ func (d *idxDecoder) readI64(field string) (int64, error) {
 	return int64(v), nil
 }
 
-// read a length-prefixed (uvarint) string, copying bytes from the payload
+// read a length-prefixed (uvarint) string and copy it out of the immutable payload
 func (d *idxDecoder) readStr(field string) (string, error) {
 	slen, err := d.readU64(field + " length")
 	if err != nil {
@@ -258,13 +403,15 @@ func (d *idxDecoder) readStr(field string) (string, error) {
 		return "", _corruptErr("%s overruns buffer", field)
 	}
 	end := d.off + int(slen)
+	// must copy the strings - become idx.srcCksum, and SrcCksum().Clone()
 	s := string(d.b[d.off:end])
 	d.off = end
 	return s, nil
 }
 
-// read a length-prefixed entry name via cos.UnsafeS (zero-copy)
-func (d *idxDecoder) readName() (string, error) {
+// advance past one entry, validate its framing, and return its name
+// (which aliases the packed buffer (see ShardIndex))
+func (d *idxDecoder) nextEntry() (string, error) {
 	nlen, err := d.readU64("name length")
 	if err != nil {
 		return "", err
@@ -272,36 +419,85 @@ func (d *idxDecoder) readName() (string, error) {
 	if nlen > uint64(len(d.b)-d.off) {
 		return "", _corruptErr("name overruns buffer")
 	}
-	end := d.off + int(nlen)
-	name := cos.UnsafeS(d.b[d.off:end]) // --->
-	d.off = end
+	beg := d.off
+	d.off += int(nlen)
+	name := cos.UnsafeS(d.b[beg:d.off])
+
+	if _, err := d.readI64("offset"); err != nil {
+		return "", err
+	}
+	if _, err := d.readI64("size"); err != nil {
+		return "", err
+	}
 	return name, nil
 }
 
-// the opposite of Pack()
-func (idx *ShardIndex) Unpack(b []byte) error {
+// read and unpack an index into owned storage; the caller must call Free;
+// a nil memsys instance allocates the index on the heap
+func ReadShardIndex(r io.Reader, size int64, mm *memsys.MMSA) (*ShardIndex, error) {
+	if size < 0 || size > math.MaxUint32 {
+		return nil, _corruptErr("invalid buffer size %d", size)
+	}
+
+	buf, slab, pooled := allocBytes(int(size), mm)
+	n, err := io.ReadFull(r, buf)
+	if err != nil {
+		freeBytes(buf, slab, pooled)
+		if cos.IsAnyEOF(err) {
+			return nil, _corruptErr("truncated index payload: got %d of %d", n, size)
+		}
+		return nil, err
+	}
+
+	idx := &ShardIndex{buf: buf, bufSlab: slab, bufPooled: pooled}
+	if err := idx.unpack(buf, mm); err != nil {
+		idx.Free()
+		return nil, err
+	}
+	return idx, nil
+}
+
+func (idx *ShardIndex) unpack(b []byte, mm *memsys.MMSA) error {
 	if len(b) < shardIdxPrefLen {
 		return _corruptErr("buffer underrun (%d bytes)", len(b))
 	}
-	if b[0] != shardIdxMetaver {
-		return _corruptErr("unsupported meta-version %d", b[0])
+	if len(b) > math.MaxUint32 {
+		return _corruptErr("buffer too large (%d bytes)", len(b))
 	}
-	if b[1] != shardIdxFmtTAR {
-		return _corruptErr("unsupported format %d", b[1])
-	}
+
+	// The checksum type is part of the fixed preamble shared by both versions.
 	if b[2] != shardIdxCksumXXH {
 		return _corruptErr("unsupported checksum type %d", b[2])
 	}
 
+	// incl. [backward compatibility]
+	var h uint64
+	switch b[0] {
+	case shardIdxMetaver:
+		h = shardIdxHash(b)
+	case shardIdxMetaverV1:
+		h = onexxh.Checksum64S(b[shardIdxPrefLen:], cos.MLCG32)
+	case 0:
+		return _corruptErr("invalid meta-version %d", b[0])
+	default:
+		return _corruptErr("meta-version %d is newer than supported %d", b[0], shardIdxMetaver)
+	}
 	storedHash := binary.BigEndian.Uint64(b[3:])
-	payload := b[shardIdxPrefLen:]
-	if h := onexxh.Checksum64S(payload, cos.MLCG32); h != storedHash {
+	if h != storedHash {
 		return _corruptErr("checksum mismatch (stored %016x, computed %016x)", storedHash, h)
 	}
+	if b[1] != shardIdxFmtTAR {
+		return _corruptErr("unsupported format %d", b[1])
+	}
 
-	d := idxDecoder{b: payload}
+	// TODO -- FIXME: something like XactDemandShardIndex.Do(...)
+	if b[0] == shardIdxMetaverV1 {
+		return _staleErr("meta-version %d predates %d - rebuild required", b[0], shardIdxMetaver)
+	}
 
-	// Source metadata: cksum type, cksum value, size.
+	// decode over the whole buffer, so recorded entry offsets are absolute within it
+	d := idxDecoder{b: b, off: shardIdxPrefLen}
+
 	cksumTy, err := d.readStr("src cksum type")
 	if err != nil {
 		return err
@@ -314,10 +510,6 @@ func (idx *ShardIndex) Unpack(b []byte) error {
 	if err != nil {
 		return err
 	}
-	idx.SrcCksum = cos.NewCksum(cksumTy, cksumVal)
-	idx.SrcSize = srcSize
-
-	// Entry count and entries.
 	count, err := d.readU64("entry count")
 	if err != nil {
 		return err
@@ -325,32 +517,43 @@ func (idx *ShardIndex) Unpack(b []byte) error {
 	if count > shardIdxMaxEntries {
 		return _corruptErr("entry count %d exceeds maximum %d", count, shardIdxMaxEntries)
 	}
-	entries := make(map[string]ShardIndexEntry, count)
-	for range count {
-		name, err := d.readName()
-		if err != nil {
-			return err
-		}
-		offset, err := d.readI64("offset")
-		if err != nil {
-			return err
-		}
-		size, err := d.readI64("size")
-		if err != nil {
-			return err
-		}
-		entries[name] = ShardIndexEntry{Offset: offset, Size: size}
+
+	if count > uint64((len(b)-d.off)/3) {
+		return _corruptErr("entry count %d exceeds remaining payload", count)
 	}
 
-	idx.Entries = entries
-	idx.raw = d.b // retain for entry names
+	// metaver 2 guarantees strict name order
+	offs, offsSlab, offsPooled := allocOffsets(int(count), mm)
+	idx.offs, idx.offsSlab, idx.offsPooled = offs, offsSlab, offsPooled
+	var prev string
+	for i := range count {
+		offs[i] = uint32(d.off)
+		name, err := d.nextEntry()
+		if err != nil {
+			return err
+		}
+		if i > 0 && name <= prev {
+			return _corruptErr("entries out of order at %d", i)
+		}
+		prev = name
+	}
+	if d.off != len(b) {
+		return _corruptErr("trailing data (%d bytes)", len(b)-d.off)
+	}
+
+	idx.srcCksum = *cos.NewCksum(cksumTy, cksumVal)
+	idx.srcSize = srcSize
+	idx.buf = b
 	return nil
 }
 
+func (idx *ShardIndex) SrcSize() int64       { return idx.srcSize }
+func (idx *ShardIndex) SrcCksum() *cos.Cksum { return &idx.srcCksum }
+
 // whether the index was built from a different version of the shard
 func (idx *ShardIndex) IsStale(cksum *cos.Cksum, size int64) bool {
-	if !cos.NoneC(idx.SrcCksum) && !idx.SrcCksum.Equal(cksum) {
+	if !cos.NoneC(&idx.srcCksum) && !idx.srcCksum.Equal(cksum) {
 		return true
 	}
-	return idx.SrcSize != size
+	return idx.srcSize != size
 }

@@ -127,9 +127,10 @@ func (r *XactShardSumm) visit(lom *core.LOM, _ []byte) error {
 	if idx == nil {
 		return nil
 	}
+	defer idx.Free()
 	r.nShards.Inc()
 	r.nShardSize.Add(uint64(size))
-	r.nArchivedObjs.Add(uint64(len(idx.Entries)))
+	r.nArchivedObjs.Add(uint64(idx.Len()))
 	return nil
 }
 
