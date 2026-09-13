@@ -15,11 +15,12 @@ import (
 
 var (
 	benchIdx   *archive.ShardIndex
+	benchBytes []byte
 	benchEntry archive.ShardIndexEntry
 	benchOK    bool
 )
 
-func benchShardIndex(b *testing.B, count int) (*archive.ShardIndex, []byte, []string) {
+func benchShardIndex(b *testing.B, count int) (*archive.ShardIndex, []byte, []string, map[string]archive.ShardIndexEntry) {
 	b.Helper()
 	entries := make(map[string]archive.ShardIndexEntry, count)
 	names := make([]string, count)
@@ -33,12 +34,23 @@ func benchShardIndex(b *testing.B, count int) (*archive.ShardIndex, []byte, []st
 	if err != nil {
 		b.Fatal(err)
 	}
-	return idx, packed, names
+	return idx, packed, names, entries
 }
 
 func BenchmarkShardIndex(b *testing.B) {
 	for _, count := range []int{1_000, 10_000, 100_000} {
-		idx, packed, names := benchShardIndex(b, count)
+		idx, packed, names, entries := benchShardIndex(b, count)
+		b.Run(fmt.Sprintf("new-pack/%d", count), func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(len(packed)))
+			for b.Loop() {
+				got := &archive.ShardIndex{Entries: entries, SrcSize: 1 << 30}
+				var err error
+				if benchBytes, err = got.Pack(); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 		b.Run(fmt.Sprintf("pack/%d", count), func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(packed)))
