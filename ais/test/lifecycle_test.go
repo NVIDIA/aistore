@@ -22,6 +22,8 @@ const (
 	lcNumObjs  = 10000
 	lcObjSize  = 1024
 	lcProbeTag = "membership-probe:"
+
+	lcMaxCleanupPasses = 6
 )
 
 func TestMaintenanceRepeatNoPostReb(t *testing.T) {
@@ -366,6 +368,85 @@ func TestMembershipBusy(t *testing.T) {
 	}
 
 	ensureNoRunningReb(t, bp)
+}
+
+// Cleanup mode reclaims the source-side copies that a completed rebalance leaves behind.
+func TestRebalanceCleanupReclaims(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 3})
+
+	var (
+		bck = cmn.Bck{Name: "lc-cleanup", Provider: apc.AIS}
+		m   = &ioContext{
+			t:         t,
+			num:       lcNumObjs,
+			fileSize:  lcObjSize,
+			fixedSize: true,
+			bck:       bck,
+			silent:    true,
+		}
+		bp = tools.BaseAPIParams(proxyURL)
+	)
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	m.puts()
+
+	target := lcSelectTargets(t, 1)[0]
+	sids := lcIDs([]*meta.Snode{target})
+	restored := false
+	defer func() {
+		if !restored {
+			lcRestore(t, bp, sids)
+		}
+		ensureMembershipAdmits(t, bp)
+	}()
+
+	rebID := armStartMaint(t, bp, sids...)
+	tools.WaitForRebalanceByID(t, bp, rebID)
+
+	restored = lcRestore(t, bp, sids)
+	tassert.Fatalf(t, restored, "failed to restore %s", target.StringEx())
+	m.waitAndCheckCluState()
+
+	// cleanup converges over repeated passes
+	var (
+		total     int64
+		converged bool
+	)
+	for range lcMaxCleanupPasses {
+		n := lcRunCleanup(t, bp)
+		if n == 0 {
+			converged = true
+			break
+		}
+		total += n
+	}
+	tassert.Errorf(t, total > 0,
+		"cleanup reclaimed nothing, expecting source-side copies after rebalance[%s]", rebID)
+	tassert.Errorf(t, converged,
+		"cleanup did not reach a fixed point in %d passes (reclaimed %d)", lcMaxCleanupPasses, total)
+
+	m.gets(nil, false /*withValidation*/)
+
+	ensureNoRunningReb(t, bp)
+}
+
+// lcRunCleanup runs rebalance in cleanup mode to completion.
+// Returns the number of misplaced copies removed cluster-wide.
+func lcRunCleanup(t *testing.T, bp api.BaseParams) int64 {
+	t.Helper()
+
+	args := &xact.ArgsMsg{Kind: apc.ActRebalance, Flags: xact.FlagRemoveMisplaced}
+	xid, err := api.StartXaction(bp, args, "" /*extra*/)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, xid != "", "cleanup did not start")
+
+	tools.WaitForRebalanceByID(t, bp, xid)
+
+	snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActRebalance})
+	tassert.CheckFatal(t, err)
+	locObjs, _, _ := snaps.ObjCounts(xid)
+	tlog.Logfln("Cleanup[%s] reclaimed %d misplaced copies", xid, locObjs)
+	return locObjs
 }
 
 // lcRestore brings nodes back and drains the resulting rebalance.

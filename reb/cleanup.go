@@ -317,6 +317,18 @@ func (j *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 		return cmn.ErrSkip
 	}
 
+	return j.clnArgs.verifyRemove(lom, tsi)
+}
+
+/////////////
+// clnArgs //
+/////////////
+
+// verify a misplaced object against its HRW owner, and remove the local copy
+// returns nil (removed) or cmn.ErrSkip (kept)
+func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
+	stats := &clnArgs.stats
+
 	// lock
 	if !lom.TryLock(true) {
 		stats.skipBusy.Inc()
@@ -349,13 +361,13 @@ func (j *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 
 	// identical?
 	if eqErr := lom.ObjAttrs().CheckEq(op); eqErr != nil {
-		if !j.clnArgs.force {
+		if !clnArgs.force {
 			cnt := stats.keepDiverged.Inc()
-			cmn.SparseWarn(cos.ModReb, cnt, j.rargs.logHdr, "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
+			cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
 			return cmn.ErrSkip
 		}
 		cnt := stats.removeDiverged.Inc()
-		cmn.SparseWarn(cos.ModReb, cnt, j.rargs.logHdr, "force-removing diverged:", lom.Cname(), eqErr, "[ forced:", cnt, "]")
+		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "force-removing diverged:", lom.Cname(), eqErr, "[ forced:", cnt, "]")
 	}
 
 	// remove
@@ -364,18 +376,14 @@ func (j *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 
 	if errRm != nil {
 		cnt := stats.errRemove.Inc()
-		cmn.SparseWarn(cos.ModReb, cnt, j.rargs.logHdr, "remove failed:", lom.Cname(), errRm, "[ failures:", cnt, "]")
+		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "remove failed:", lom.Cname(), errRm, "[ failures:", cnt, "]")
 		return cmn.ErrSkip
 	}
 
-	rargs.xreb.ObjsAdd(1, size)
+	clnArgs.xreb.ObjsAdd(1, size)
 	stats.removeMisplaced.Inc()
 	return nil
 }
-
-/////////////
-// clnArgs //
-/////////////
 
 // xreb.CtlMsg() callback (set via xreg.RebArgs; compare with reb/ctlmsg.go)
 func (clnArgs *clnArgs) ctlMsg(sb *cos.SB) {

@@ -146,10 +146,17 @@ func tstInitMpath(t *testing.T) (*fs.Mountpath, cmn.Bck) {
 	return mi, bck
 }
 
-// object whose persisted lmeta size != on-disk size (corruption or tampering)
-func tstCorruptedObj(t *testing.T, bck cmn.Bck, objName string) {
+const tstObjSize = 1024
+
+type tstObjSpec struct {
+	cksum    string // persist this xxhash value
+	truncate bool   // on-disk size != persisted lmeta size (corruption or tampering)
+	uncache  bool   // drop the lcache entry (force lom.Load to go to disk)
+}
+
+// create and persist one object; return its FQN
+func tstPutObj(t *testing.T, bck cmn.Bck, objName string, spec tstObjSpec) string {
 	t.Helper()
-	const size = 1024
 
 	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitCmnBck(&bck); err != nil {
@@ -159,12 +166,15 @@ func tstCorruptedObj(t *testing.T, bck cmn.Bck, objName string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fh.Write(make([]byte, size)); err != nil {
+	if _, err := fh.Write(make([]byte, tstObjSize)); err != nil {
 		t.Fatal(err)
 	}
 	cos.Close(fh)
 
-	lom.SetSize(size)
+	lom.SetSize(tstObjSize)
+	if spec.cksum != "" {
+		lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, spec.cksum))
+	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
 	lom.Lock(true)
 	err = lom.Persist()
@@ -172,11 +182,20 @@ func tstCorruptedObj(t *testing.T, bck cmn.Bck, objName string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lom.Uncache() // force lom.Load to go to disk
-
-	if err := os.Truncate(lom.FQN, size+1); err != nil {
-		t.Fatal(err)
+	if spec.uncache {
+		lom.Uncache()
 	}
+	if spec.truncate {
+		if err := os.Truncate(lom.FQN, tstObjSize+1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return lom.FQN
+}
+
+func tstCorruptedObj(t *testing.T, bck cmn.Bck, objName string) {
+	t.Helper()
+	tstPutObj(t, bck, objName, tstObjSpec{truncate: true, uncache: true})
 }
 
 func tstRargs(t *testing.T) *rargs {
