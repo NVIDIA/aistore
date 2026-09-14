@@ -13,6 +13,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -194,6 +195,41 @@ func siVerifyContent(fh *os.File, loaded *archive.ShardIndex, content siContent)
 		Expect(n).To(Equal(entry.Size), "entry %q: read byte count mismatch", name)
 		Expect(actual.Equal(content[name].Cksum())).To(BeTrue(), "entry %q: xxhash mismatch at DataOffset %d", name, entry.DataOffset())
 	}
+}
+
+// copy the TAR into the stub archlom, then save its index
+func siSaveTAR(archlom *core.LOM, fh *os.File, size int64) {
+	orig, err := archive.BuildShardIndex(fh, size, siShardCksum(GinkgoT(), fh, size))
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(orig.Free)
+	dst, err := os.OpenFile(archlom.FQN, os.O_WRONLY|os.O_TRUNC, 0)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = io.Copy(dst, io.NewSectionReader(fh, 0, size))
+	cos.Close(dst)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(siSave(archlom, orig)).To(Succeed())
+}
+
+// read archpath the way GET does; report whether the index (fast path) served it
+func siRead(archlom *core.LOM, archpath string) (fast bool) { //nolint:unparam // pass it for possible future ext-s
+	fh, err := os.Open(archlom.FQN)
+	Expect(err).NotTo(HaveOccurred())
+	defer fh.Close()
+	archlom.Lock(false)
+	defer archlom.Unlock(false)
+	csl, err := archlom.NewArchpathReader(fh, archpath, archive.ExtTar)
+	Expect(err).NotTo(HaveOccurred())
+	defer csl.Close()
+	_, fast = csl.(*cos.SectionHandle)
+	_, err = io.Copy(io.Discard, csl)
+	Expect(err).NotTo(HaveOccurred())
+	return fast
+}
+
+func siRmIdx(archlom *core.LOM) {
+	idxlom := siIdxLOM(GinkgoT(), archlom)
+	idxlom.UncacheDel()
+	Expect(os.Remove(idxlom.FQN)).To(Succeed())
 }
 
 var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
@@ -837,6 +873,87 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			Expect(loaded).To(BeNil())
 			Expect(errors.Is(err, archive.ErrShardIdxStale)).To(BeTrue(),
 				"an index bigger than its shard is a mispairing, not corruption, got %v", err)
+			Expect(archlom.HasShardIdx()).To(BeFalse())
+		})
+	})
+
+	Describe("cache", func() {
+		const archpath = "file_0003.bin"
+		var (
+			archlom *core.LOM
+			fh      *os.File
+			size    int64
+		)
+
+		BeforeEach(func() {
+			fh, size, _ = siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 8)
+			DeferCleanup(fh.Close)
+			archlom = siArchLOM(GinkgoT(), fmt.Sprintf("cached-%d.tar", rand.Int64()))
+			siSaveTAR(archlom, fh, size)
+		})
+
+		It("serves hits from memory", func() {
+			Expect(siRead(archlom, archpath)).To(BeTrue())
+			siRmIdx(archlom)
+			Expect(siRead(archlom, archpath)).To(BeTrue(), "expected a cache hit")
+			Expect(archlom.HasShardIdx()).To(BeTrue())
+		})
+
+		It("handles concurrent cold reads", func() {
+			const n = 16
+			var wg sync.WaitGroup
+			fast := make([]bool, n)
+			for i := range n {
+				wg.Go(func() {
+					defer GinkgoRecover()
+					fast[i] = siRead(archlom, archpath)
+				})
+			}
+			wg.Wait()
+			Expect(fast).To(ContainElement(true), "expected the winning loader to use the index")
+			siRmIdx(archlom)
+			Expect(siRead(archlom, archpath)).To(BeTrue(), "expected a cache hit")
+		})
+
+		It("is not populated by SaveShardIndex", func() {
+			siRmIdx(archlom)
+			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
+			Expect(archlom.HasShardIdx()).To(BeFalse())
+		})
+
+		It("is invalidated by SaveShardIndex", func() {
+			Expect(siRead(archlom, archpath)).To(BeTrue())
+			siSaveTAR(archlom, fh, size) // same content: cached index stays valid unless invalidated
+			siRmIdx(archlom)
+			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
+			Expect(archlom.HasShardIdx()).To(BeFalse())
+		})
+
+		It("evicts idle entries", func() {
+			Expect(siRead(archlom, archpath)).To(BeTrue())
+			siRmIdx(archlom)
+			core.SidxEvictIdle(0)
+			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
+		})
+
+		It("keeps entries not yet idle", func() {
+			Expect(siRead(archlom, archpath)).To(BeTrue())
+			siRmIdx(archlom)
+			core.SidxEvictIdle(time.Hour)
+			Expect(siRead(archlom, archpath)).To(BeTrue(), "expected a cache hit")
+		})
+
+		It("clears all under critical pressure", func() {
+			Expect(siRead(archlom, archpath)).To(BeTrue())
+			siRmIdx(archlom)
+			core.SidxClearAll()
+			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
+		})
+
+		It("detects stale cached index", func() {
+			Expect(siRead(archlom, archpath)).To(BeTrue())
+			archlom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "0123456789abcdef"))
+			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
 			Expect(archlom.HasShardIdx()).To(BeFalse())
 		})
 	})

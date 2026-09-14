@@ -73,6 +73,7 @@ type (
 type (
 	Mountpath struct {
 		LomCaches  cos.MultiHashMap // LOM caches
+		SidxCaches cos.MultiHashMap // shard-index caches (core.sidxEntry)
 		info       string
 		Path       string             // clean path
 		Label      cos.MountpathLabel // (disk sharing; storage class; user-defined grouping)
