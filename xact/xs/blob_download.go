@@ -43,6 +43,9 @@ import (
 // 5. used-memory accounting: a work item releases the whole per-worker share
 //    (chunk SGL + one copy buffer), but the buffer belongs to a worker and workers
 //    are not pinned to items
+// 6. write starvation: blob-downloader currently take the write-lock across the entire xaction lifetime;
+//    this can starve other write operations
+// 7. `target.blobdlLocked` currently duplicate the lock upgrade logic with `GOI` - refactor and consolidate
 
 const (
 	BlobParentGET      = "GET"
@@ -186,9 +189,16 @@ func isErrBlobDlColdFallback(err error) bool {
 //   - finalize() runs only after range-read I/O has stopped;
 //   - on success it completes the manifest; on error/abort it aborts it.
 //
+// Lock ownership contract: the caller must hold the LOM write lock and transfers
+// ownership with this call. A registered xaction releases the lock exactly once
+// after success, runtime failure, or abort; if none is registered, RenewBlobDl
+// releases it before returning.
 // =====================================================================================
 func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.RenewRes {
-	debug.Assert(oa != nil)
+	debug.Func(func() {
+		debug.Assert(params.Lom.IsLocked() == apc.LockWrite)
+		debug.Assert(oa != nil)
+	})
 	var (
 		lom = params.Lom
 		pre = &XactBlobDl{args: params} // preliminary ("keep filling" below)
@@ -206,6 +216,7 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	if params.Msg.FullSize > 0 && params.Msg.FullSize != pre.fullSize {
 		name := xact.Cname(apc.ActBlobDl, xid) + "/" + lom.Cname()
 		err := fmt.Errorf("%s: user-specified size %d, have %d", name, params.Msg.FullSize, pre.fullSize)
+		lom.Unlock(true)
 		return xreg.RenewRes{Err: err}
 	}
 
@@ -215,7 +226,12 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 		pre.chunkSize = dfltChunkSize
 	}
 
-	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: xid, Custom: pre})
+	rns := xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: xid, Custom: pre})
+	if !rns.IsNew() {
+		// This candidate will never run: renewal either failed or reused another xaction.
+		lom.Unlock(true)
+	}
+	return rns
 }
 
 //
@@ -237,6 +253,7 @@ func (p *blobFactory) Start() (err error) {
 	p.xctn = r
 
 	lom := r.args.Lom
+	debug.Func(func() { debug.Assert(lom.IsLocked() == apc.LockWrite) })
 	r.cname = lom.Cname()
 	bck := lom.Bck()
 	r.InitBase(r.args.Context, p.Args.UUID, p.Kind(), bck)
@@ -355,7 +372,13 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 		lom = r.args.Lom
 		now = mono.NanoTime()
 	)
-	nlog.Infoln(r.String())
+	debug.Func(func() {
+		debug.Assertf(lom.IsLocked() == apc.LockWrite,
+			"%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
+	})
+	if cmn.Rom.V(5, cos.ModXs) {
+		nlog.Infoln(r.String())
+	}
 	if wg != nil {
 		wg.Done() // signal that xaction has started
 	}
@@ -644,6 +667,10 @@ cleanup:
 
 // finalize handles post-download work-items: checksum, stats, cleanup
 func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
+	debug.Func(func() {
+		debug.Assertf(lom.IsLocked() == apc.LockWrite,
+			"%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
+	})
 	if err == nil {
 		if r.fullSize != r.woff {
 			err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.fullSize, r.woff)
@@ -653,9 +680,7 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 				debug.Assertf(len(r.pending) == 0, "%s: pending work-items should be all drained, got %d", r.Name(), len(r.pending))
 			})
 
-			lom.Lock(true)
 			err = r._fini(lom)
-			lom.Unlock(true)
 		}
 	}
 
@@ -684,6 +709,7 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 	}
 
 	r.cleanup()
+	lom.Unlock(true)
 	r.Finish()
 }
 
@@ -908,7 +934,11 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		manifest   = w.parent.manifest
 		respWriter = w.parent.args.RespWriter
 	)
-	debug.Assert(w.parent.args.RespWriter != nil || wi.sgl == nil)
+	debug.Func(func() {
+		debug.Assert(w.parent.args.RespWriter != nil || wi.sgl == nil)
+		debug.Assertf(lom.IsLocked() == apc.LockWrite,
+			"%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
+	})
 
 	partNum := wi.roff/chunkSize + 1
 

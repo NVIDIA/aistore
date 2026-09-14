@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	iofs "io/fs"
+	"maps"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -690,7 +691,14 @@ func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEnt, errCnt, 
 	tassert.CheckError(m.t, err)
 }
 
-func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *api.GetArgs, validate bool) {
+func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *api.GetArgs, validate bool) error {
+	if getArgs != nil {
+		// gets shares arguments across goroutines; API request setup adds auxiliary headers.
+		args := *getArgs
+		args.Header = getArgs.Header.Clone()
+		args.Query = maps.Clone(getArgs.Query)
+		getArgs = &args
+	}
 	var (
 		err     error
 		objName = m.objNames[idx%len(m.objNames)]
@@ -707,7 +715,7 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *
 		m.numGetErrs.Inc()
 	}
 	if m.getErrIsFatal && m.numGetErrs.Load() > 0 {
-		return
+		return err
 	}
 	if idx > 0 && idx%10_000 == 0 && !m.silent {
 		if totalGets > 0 {
@@ -723,6 +731,7 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *
 			m.controlCh <- struct{}{}
 		}
 	}
+	return err
 }
 
 func (m *ioContext) gets(getArgs *api.GetArgs, withValidation bool) {

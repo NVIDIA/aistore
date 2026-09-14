@@ -1013,7 +1013,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			BlobThreshold: threshold,
 			Parent:        xs.BlobParentGET,
 		}
-		xid, _, err := t.blobdl(args, nil /*oa*/, w.Header())
+		xid, _, err := t.blobdlLocked(args, w.Header())
 		if xs.IsErrBlobDlAdmission(err) {
 			err = cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
 		}
@@ -1023,7 +1023,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
 			err = nil
 		}
-		if threshold > 0 && xid == "" && err == nil {
+		if xid == "" && err == nil {
 			// Blob download was not started (for example, warm or below threshold).
 			// Fall through to regular GET.
 			break
@@ -1380,7 +1380,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			Msg:    &blobMsg,
 			Parent: xs.BlobParentAPI, // directly via the dedicated object API
 		}
-		if xid, _, err = t.blobdl(args, nil /*oa*/, nil /*object headers*/); xid != "" {
+		if xid, _, err = t.blobdlBackground(args, nil /*oa*/); xid != "" {
 			debug.AssertNoErr(err)
 			writeXid(w, xid)
 		}
@@ -1967,31 +1967,30 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) error {
 
 // compare running the same via (generic) t.xstart
 // the caller owns retry/fallback policy for this terminal outcome.
-func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Header) (string, *xs.XactBlobDl, error) {
+func (t *target) blobdlBackground(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
+	debug.Func(func() { debug.Assert(params.RespWriter == nil) })
 	// destination is concatenated onto a mountpath (reject traversal)
 	if err := cos.ValidateOname(params.Lom.ObjName); err != nil {
 		return "", nil, fmt.Errorf("%s: %w", badBlobRequest, err)
 	}
-	// cap
-	cs := fs.Cap()
-	if errCap := cs.Err(); errCap != nil {
-		cs = t.oos(cmn.GCO.Get())
-		if err := cs.Err(); err != nil {
-			return "", nil, err
-		}
+	if err := t.checkBlobdlCap(); err != nil {
+		return "", nil, err
 	}
 
 	if oa != nil {
 		if params.BlobThreshold > 0 && oa.Size < params.BlobThreshold {
 			return "", nil, nil
 		}
-		return t._blobdl(params, oa, whdr)
+		if !params.Lom.TryLock(true) {
+			return "", nil, cmn.NewErrBusy("blob", params.Lom.Cname())
+		}
+		return t._blobdl(params, oa, nil)
 	}
 
-	// - try-lock (above) to load, check availability
-	// - unlock right away
-	// - subsequently, use cmn.OwtGetPrefetchLock to finalize
-	// - there's a single x-blob-download per object (see WhenPrevIsRunning)
+	// TODO: Intentionally keep this background rlock -> unlock -> wlock sequence
+	// isolated from blobdlLocked's GET-path lock upgrade. Consider converging the
+	// two once the upgrade-based behavior stabilizes.
+	// There is a single x-blob-download per object (see WhenPrevIsRunning).
 	lom, latestVer := params.Lom, params.Msg.LatestVer
 	if !lom.TryLock(false) {
 		return "", nil, cmn.NewErrBusy("blob", lom.Cname())
@@ -2021,20 +2020,88 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Hea
 			return "", nil, err
 		}
 	}
+
 	if params.BlobThreshold > 0 && oa.Size < params.BlobThreshold {
 		// below threshold, not qualified for blob-download
 		return "", nil, nil
 	}
-	// handle: (not-present || latest-not-eq)
+	if !lom.TryLock(true) {
+		return "", nil, cmn.NewErrBusy("blob", lom.Cname())
+	}
+	return t._blobdl(params, oa, nil)
+}
+
+// blobdlLocked mirrors cold GET's cold-PUT locking: qualify under rlock,
+// upgrade, and hold wlock through the synchronous xaction.
+func (t *target) blobdlLocked(params *core.BlobParams, whdr http.Header) (string, *xs.XactBlobDl, error) {
+	debug.Func(func() { debug.Assert(params.RespWriter != nil && whdr != nil) })
+	if err := t.checkBlobdlCap(); err != nil {
+		return "", nil, err
+	}
+	var uplock *_uplock
+	lom := params.Lom
+	// An explicit blob GET fails fast while another writer owns the object.
+	if !lom.TryLock(false) {
+		return "", nil, cmn.NewErrBusy("blob", lom.Cname())
+	}
+	debug.Func(func() { debug.Assert(lom.IsLocked() == apc.LockRead) })
+
+do:
+	oa, deleted, err := lom.LoadLatest(params.Msg.LatestVer)
+	switch {
+	case deleted: // remotely
+		debug.Func(func() { debug.Assert(params.Msg.LatestVer && err != nil) })
+		lom.Unlock(false)
+		return "", nil, err
+	case oa != nil:
+		debug.Func(func() { debug.Assert(params.Msg.LatestVer && err == nil) })
+		// remotely newer
+	case err == nil:
+		lom.Unlock(false)
+		return "", nil, nil // the object is already warm and can be served directly
+	case !cmn.IsErrObjNought(err):
+		lom.Unlock(false)
+		return "", nil, err
+	default:
+		oa, _, err = t.HeadCold(lom, nil /*origReq*/)
+		if err != nil {
+			lom.Unlock(false)
+			return "", nil, err
+		}
+	}
+	if params.BlobThreshold > 0 && oa.Size < params.BlobThreshold {
+		lom.Unlock(false)
+		return "", nil, nil
+	}
+
+	// see the `goi.lom.UpgradeLock()` path in tgtobj.go
+	if !lom.UpgradeLock() {
+		if uplock == nil {
+			uplock = newUplock(cmn.GCO.Get(), mono.NanoTime())
+			nlog.Warningln(uplockWarn, lom.String())
+		}
+		if err = uplock.do(lom); err != nil {
+			lom.Unlock(false)
+			return "", nil, err
+		}
+		goto do
+	}
 	return t._blobdl(params, oa, whdr)
 }
 
 // returns an empty xid ("") if nothing to do
 // the caller owns retry/fallback policy for this terminal outcome.
 func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Header) (string, *xs.XactBlobDl, error) {
+	debug.Func(func() {
+		debug.Assertf(params.Lom.IsLocked() == apc.LockWrite,
+			"%s must be w-locked (have %d)", params.Lom.Cname(), params.Lom.IsLocked())
+	})
 	xid := cos.GenUUID()
 	rns := xs.RenewBlobDl(xid, params, oa)
-	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
+	if !rns.IsNew() { // only a newly registered xaction may be started below
+		if cmn.IsErrXactUsePrev(rns.Err) {
+			rns.Err = cmn.NewErrBusy("blob", params.Lom.Cname())
+		}
 		return "", nil, rns.Err
 	}
 
@@ -2055,6 +2122,14 @@ func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.He
 	cmn.ToHeader(oa, whdr, oa.Size)
 	xblob.Run(nil)
 	return xblob.ID(), nil, blobdlTermErr(xblob)
+}
+
+func (t *target) checkBlobdlCap() error {
+	cs := fs.Cap()
+	if cs.Err() != nil {
+		cs = t.oos(cmn.GCO.Get())
+	}
+	return cs.Err()
 }
 
 func blobdlTermErr(xblob *xs.XactBlobDl) error {

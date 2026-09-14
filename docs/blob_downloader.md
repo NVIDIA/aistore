@@ -13,6 +13,12 @@ The result is that, beyond a certain object size, blob downloader can deliver **
 
 Blob downloader is also **load‑aware**: it consults AIStore's internal load advisors to avoid overcommitting memory or disks, backing off when the node is under pressure and running at full speed when the system has headroom.
 
+Blob downloader uses **pessimistic, per-object concurrency control**. The caller must
+hold the object's exclusive write lock before renewal and transfers ownership with the
+call. A registered xaction holds the lock for its entire lifecycle and releases it
+exactly once after successful finalization, runtime-error cleanup, or abort cleanup. If
+renewal does not register an xaction, renewal releases the lock before returning.
+
 For objects above a certain threshold, blob downloader can be transparently used by [prefetch](/docs/bucket.md#prefetch-and-evict) - as a performance-optimized alternative to a regular remote ("cold") GET.
 At critical memory pressure, [prefetch](/docs/bucket.md#prefetch-and-evict) uses regular cold GET instead of starting blob downloader.
 Prefetch also falls back when resource admission rejects blob downloader or the object cannot fit within the manifest chunk limit; other start failures are reported.

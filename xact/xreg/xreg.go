@@ -838,7 +838,9 @@ func (rns *RenewRes) IsRunning() bool {
 	return rns.Entry.Get().IsRunning()
 }
 
-// IsNew reports whether renewal successfully registered a new entry.
+// IsNew reports whether the candidate's Start succeeded and renewal registered
+// it as a new entry. Only this outcome may be passed to Run. Otherwise, the
+// candidate was not registered and will never run (Entry may reference xprev).
 func (rns *RenewRes) IsNew() bool {
 	return rns.Err == nil && rns.Entry != nil && rns.UUID == ""
 }

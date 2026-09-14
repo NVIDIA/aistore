@@ -490,7 +490,7 @@ func TestTargetBlobDlValidatesObjName(tst *testing.T) {
 		"../../../../../../../../tmp/pwned_32114.txt",
 	} {
 		params := &core.BlobParams{Lom: &core.LOM{ObjName: objName}}
-		_, _, err := target.blobdl(params, nil /*oa*/, nil /*whdr*/)
+		_, _, err := target.blobdlBackground(params, nil /*oa*/)
 		expErr := fmt.Sprintf("%s: invalid object name %q", badBlobRequest, objName)
 		if err == nil || err.Error() != expErr {
 			tst.Fatalf("expected blob-download of %q to fail with %q, got: %v", objName, expErr, err)

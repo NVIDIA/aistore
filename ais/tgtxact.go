@@ -316,7 +316,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 				Msg:    &apc.BlobMsg{},      // default tunables when executing via x-start API
 				Parent: xs.BlobParentXStart, // generic start-xaction path (compare with dedicated api.BlobDownload)
 			}
-			xid, _, err = t.blobdl(params, nil /*oa*/, nil /*object headers*/)
+			xid, _, err = t.blobdlBackground(params, nil /*oa*/)
 		}
 		if err != nil {
 			core.FreeLOM(lom)

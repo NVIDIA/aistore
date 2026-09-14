@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -27,6 +28,17 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 )
+
+func blobdlFinished(snaps xact.MultiSnap) (bool, bool, error) {
+	for _, targetSnaps := range snaps {
+		for _, snap := range targetSnaps {
+			if snap.IsFinished() {
+				return true, false, nil
+			}
+		}
+	}
+	return false, false, nil
+}
 
 // TestBlobDownload tests the api.BlobDownload API for multiple objects.
 // It validates:
@@ -118,6 +130,10 @@ func TestBlobDownload(t *testing.T) {
 	// Verify all objects can be retrieved successfully
 	tlog.Logfln("Verifying all objects are GETable")
 	m.gets(nil, true)
+	// Explicit blob GET must fall through and serve an object that is already warm.
+	m.gets(&api.GetArgs{Header: http.Header{
+		apc.HdrBlobDownload: []string{"true"},
+	}}, true)
 
 	tlog.Logfln("Blob download test completed successfully")
 }
@@ -152,6 +168,8 @@ func TestBlobDownloadAbort(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var (
+				body    io.ReadCloser
+				size    int64
 				objName = "blob-abort-test-" + trand.String(5)
 				xid     string
 			)
@@ -179,27 +197,24 @@ func TestBlobDownloadAbort(t *testing.T) {
 				tlog.Logfln("Starting blob download via streaming GET for %s", objName)
 
 				getArgs := &api.GetArgs{
-					Writer: io.Discard, // Discard the data, we're testing abort
 					Header: http.Header{
 						apc.HdrBlobDownload: []string{"true"},
 						apc.HdrBlobChunk:    []string{cos.ToSizeIEC(chunkSize, 0)},
 						apc.HdrBlobWorkers:  []string{strconv.FormatInt(numWorkers, 10)},
 					},
 				}
-				_, size, _ := api.GetObjectReader(baseParams, bck, objName, getArgs)
+				body, size, err = api.GetObjectReader(baseParams, bck, objName, getArgs)
+				tassert.CheckFatal(t, err)
 				tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
 
-				// Give it a moment to start downloading and retrieve the xid
-				time.Sleep(500 * time.Millisecond)
-
-				// Query for the running blob download xaction to get its xid
-				args := xact.ArgsMsg{Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
-				snaps, err := api.QueryXactionSnaps(baseParams, &args)
+				// Wait for the streaming blob download and retrieve its xid.
+				args := xact.ArgsMsg{Kind: apc.ActBlobDl, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
+				snaps, err := api.WaitForSnaps(baseParams, &args, args.Started())
 				tassert.CheckFatal(t, err)
-				tid, _, err := snaps.RunningTarget("")
+				_, snap, err := snaps.RunningTarget("")
 				tassert.CheckFatal(t, err)
-				tassert.Fatalf(t, tid != "", "expected blob download to be running")
-				xid = snaps[tid][0].ID
+				tassert.Fatalf(t, snap != nil, "expected blob download to be running")
+				xid = snap.ID
 				tlog.Logfln("Blob download started with xid=%s", xid)
 			} else {
 				// Start blob download via API
@@ -213,22 +228,31 @@ func TestBlobDownloadAbort(t *testing.T) {
 				xid, err = api.BlobDownload(baseParams, bck, objName, blobMsg)
 				tassert.CheckFatal(t, err)
 				tlog.Logfln("Blob download started with xid=%s", xid)
-
-				// Give it a moment to start downloading
-				time.Sleep(500 * time.Millisecond)
+				args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
+				_, err = api.WaitForSnaps(baseParams, &args, args.Started())
+				tassert.CheckFatal(t, err)
 			}
+			lock, err := api.CheckObjectLock(baseParams, bck, objName)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, lock == apc.LockWrite, "expected write lock, got %d", lock)
 
 			// Abort the xaction
 			tlog.Logfln("Aborting blob download xid=%s", xid)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
 			err = api.AbortXaction(baseParams, &args)
 			tassert.CheckFatal(t, err)
+			if body != nil {
+				cos.Close(body) // unblock the streaming handler after server-side abort
+			}
 
 			// Wait for the xaction to finish aborting
 			tlog.Logfln("Waiting for blob download to finish aborting")
-			err = api.WaitForXaction(baseParams, &args)
+			_, err = api.WaitForSnaps(baseParams, &args, blobdlFinished)
 			tassert.CheckFatal(t, err)
 			tlog.Logfln("Blob download aborted and finished")
+			lock, err = api.CheckObjectLock(baseParams, bck, objName)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, lock == apc.LockNone, "expected released lock, got %d", lock)
 
 			// Cleanup: delete the remote object
 			tlog.Logfln("Cleaning up remote object")
@@ -288,6 +312,37 @@ func TestBlobDownloadRuntimeError(t *testing.T) {
 	tassert.Fatalf(t, found == 1, "expected one failed blob download, got %d", found)
 	m.validateChunksOnDisk(m.bck, m.objNames[0], 0)
 	tassert.Fatalf(t, !tools.CheckObjIsPresent(m.proxyURL, m.bck, m.objNames[0]), "partial object remains cached")
+	lock, err := api.CheckObjectLock(bp, m.bck, m.objNames[0])
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, lock == apc.LockNone, "expected released lock, got %d", lock)
+}
+
+func TestBlobDownloadRenewFailureUnlocks(t *testing.T) {
+	const objSize = 4 * cos.MiB
+	m := ioContext{
+		t: t, bck: cliBck, num: 1, prefix: t.Name() + "-", fileSize: objSize, fixedSize: true,
+	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	m.init(true /*cleanup*/)
+	m.remotePuts(true /*evict*/)
+	bp, objName := tools.BaseAPIParams(m.proxyURL), m.objNames[0]
+
+	_, err := api.BlobDownload(bp, m.bck, objName, &apc.BlobMsg{FullSize: objSize + 1})
+	tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "user-specified size "+strconv.FormatInt(objSize+1, 10)+
+		", have "+strconv.FormatInt(objSize, 10)), "expected full-size mismatch, got %v", err)
+	lock, err := api.CheckObjectLock(bp, m.bck, objName)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, lock == apc.LockNone, "expected released lock, got %d", lock)
+
+	// The failed candidate did not retain ownership: a valid retry can run to completion.
+	xid, err := api.BlobDownload(bp, m.bck, objName, &apc.BlobMsg{FullSize: objSize})
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, api.WaitForXaction(bp, &xact.ArgsMsg{
+		ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout,
+	}))
+	lock, err = api.CheckObjectLock(bp, m.bck, objName)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, lock == apc.LockNone, "expected released lock, got %d", lock)
 }
 
 func TestBlobDownloadParentCancellation(t *testing.T) {
@@ -304,7 +359,7 @@ func TestBlobDownloadParentCancellation(t *testing.T) {
 			prefix: t.Name() + "/" + trand.String(5),
 		}
 	)
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, CloudBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: bck})
 	m.init(true /*cleanup*/)
 	initMountpaths(t, bp.URL)
 	m.remotePuts(true /*evict*/)
@@ -325,15 +380,20 @@ func TestBlobDownloadParentCancellation(t *testing.T) {
 		tid, snap, err := snaps.RunningTarget("")
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, snap != nil, "expected blob download to be running")
-
+		lock, err := api.CheckObjectLock(bp, bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, lock == apc.LockWrite, "expected write lock, got %d", lock)
 		tassert.CheckFatal(t, body.Close())
 		xargs.ID = snap.ID
-		snaps, err = api.WaitForSnaps(bp, xargs, xargs.Finished())
+		snaps, err = api.WaitForSnaps(bp, xargs, blobdlFinished)
 		tassert.CheckFatal(t, err)
 		errText := snaps[tid][0].Err
 		// TODO: client disconnect may surface as a transport write error first instead of the expected context cancellation.
 		tassert.Fatalf(t, errText != "", "expected client disconnect to fail the blob download")
 		m.validateChunksOnDisk(bck, objName, 0)
+		lock, err = api.CheckObjectLock(bp, bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, lock == apc.LockNone, "expected released lock, got %d", lock)
 	})
 
 	t.Run("prefetch", func(t *testing.T) {
@@ -351,11 +411,14 @@ func TestBlobDownloadParentCancellation(t *testing.T) {
 		tid, snap, err := snaps.RunningTarget("")
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, snap != nil, "expected blob download to be running")
+		lock, err := api.CheckObjectLock(bp, bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, lock == apc.LockWrite, "expected write lock, got %d", lock)
 
 		err = api.AbortXaction(bp, &xact.ArgsMsg{ID: prefetchXID, Kind: apc.ActPrefetchObjects})
 		tassert.CheckFatal(t, err)
 		xargs.ID = snap.ID
-		snaps, err = api.WaitForSnaps(bp, xargs, xargs.Finished())
+		snaps, err = api.WaitForSnaps(bp, xargs, blobdlFinished)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, len(snaps[tid]) == 1, "expected blob download %s on %s", xargs.ID, tid)
 		tassert.Fatalf(t, strings.Contains(snaps[tid][0].Err, context.Canceled.Error()),
@@ -363,7 +426,386 @@ func TestBlobDownloadParentCancellation(t *testing.T) {
 		args := xact.ArgsMsg{ID: prefetchXID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 		tassert.CheckFatal(t, api.WaitForXaction(bp, &args))
 		m.validateChunksOnDisk(bck, objName, 0)
+		lock, err = api.CheckObjectLock(bp, bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, lock == apc.LockNone, "expected released lock, got %d", lock)
 	})
+}
+
+func TestBlobDownloadLockContention(t *testing.T) {
+	var (
+		numObjs       = 10
+		regularGets   = 2
+		blobGets      = 4
+		objSize       = int64(16 * cos.MiB)
+		baseChunkSize = int64(cos.MiB)
+	)
+	if !testing.Short() {
+		objSize, baseChunkSize = 256*cos.MiB, 8*cos.MiB
+		regularGets, blobGets = 4, 8
+	}
+	m := ioContext{
+		t: t, bck: cliBck, num: numObjs, prefix: t.Name() + "/" + trand.String(5),
+		fileSize: uint64(objSize), fixedSize: true,
+	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	m.init(true /*cleanup*/)
+	initMountpaths(t, m.proxyURL)
+	bp := tools.BaseAPIParams(m.proxyURL)
+	sources := make([]readers.Reader, numObjs)
+	for i := range numObjs {
+		objName := m.prefix + "-" + strconv.Itoa(i)
+		m.objNames = append(m.objNames, objName)
+		sources[i], _ = m.update(objName, cos.ChecksumNone)
+	}
+	for _, objName := range m.objNames {
+		tassert.CheckFatal(t, api.EvictObject(bp, m.bck, objName))
+	}
+
+	// Start one blob-download leader per object and leave every response unread.
+	bodies := make([]io.ReadCloser, numObjs)
+	chunkSizes := make([]int64, numObjs)
+	for i, objName := range m.objNames {
+		chunkSize := int64(1<<uint(i%4)) * baseChunkSize
+		body, size, err := api.GetObjectReader(bp, m.bck, objName, &api.GetArgs{Header: http.Header{
+			apc.HdrBlobDownload: []string{"true"},
+			apc.HdrBlobChunk:    []string{strconv.FormatInt(chunkSize, 10)},
+			apc.HdrBlobWorkers:  []string{"2"},
+		}})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, size == objSize, "%s: expected size %d, got %d", objName, objSize, size)
+		bodies[i], chunkSizes[i] = body, chunkSize
+	}
+
+	// Confirm that all leaders hold their object locks concurrently.
+	for _, objName := range m.objNames {
+		lock, err := api.CheckObjectLock(bp, m.bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, lock == apc.LockWrite, "%s: expected write lock, got %d", objName, lock)
+	}
+
+	// Mix fail-fast blob GETs and regular GETs that wait for each leader.
+	var (
+		blobErrCh       = make(chan error, numObjs*blobGets)
+		backgroundErrCh = make(chan error, numObjs*blobGets)
+		regularErrCh    = make(chan error, numObjs*regularGets)
+	)
+	for i := range m.objNames {
+		for j := range blobGets {
+			args := &api.GetArgs{Header: http.Header{
+				apc.HdrBlobDownload: []string{"true"},
+				apc.HdrBlobChunk:    []string{strconv.FormatInt(int64(1<<uint(j%5))*cos.MiB, 10)},
+				apc.HdrBlobWorkers:  []string{"2"},
+			}}
+			go func() { blobErrCh <- m.get(bp, i, 0, args, true /*validate*/) }()
+		}
+		for range regularGets {
+			go func() { regularErrCh <- m.get(bp, i, 0, nil, true /*validate*/) }()
+		}
+	}
+	// Stress the same locks with background writers randomly distributed over the limited name set.
+	for range numObjs * blobGets {
+		objName := m.objNames[rand.IntN(numObjs)]
+		go func() {
+			_, err := api.BlobDownload(bp, m.bck, objName, &apc.BlobMsg{})
+			backgroundErrCh <- err
+		}()
+	}
+	for range numObjs * blobGets {
+		for _, errCh := range []<-chan error{blobErrCh, backgroundErrCh} {
+			err := <-errCh
+			herr := cmn.AsErrHTTP(err)
+			tassert.Fatalf(t, herr != nil && herr.TypeCode == "ErrBusy", "expected ErrBusy, got %v", err)
+		}
+	}
+	tassert.Fatalf(t, len(regularErrCh) == 0,
+		"%d regular GETs completed before the leaders released their locks", len(regularErrCh))
+
+	// Drain and validate every leader, releasing its lock for all waiting GETs.
+	for i, objName := range m.objNames {
+		expected, err := sources[i].Open()
+		tassert.CheckFatal(t, err)
+		equal := tools.ReaderEqual(expected, bodies[i])
+		cos.Close(expected)
+		cos.Close(bodies[i])
+		tassert.Fatalf(t, equal, "%s: blob GET returned invalid content", objName)
+	}
+	for range numObjs * regularGets {
+		tassert.CheckFatal(t, <-regularErrCh)
+	}
+	for i, objName := range m.objNames {
+		m.validateChunksOnDisk(m.bck, objName, int(objSize/chunkSizes[i]))
+	}
+	for _, objName := range m.objNames {
+		lock, err := api.CheckObjectLock(bp, m.bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, lock == apc.LockNone, "%s: expected released lock, got %d", objName, lock)
+	}
+}
+
+// TestBlobDownloadRWStress follows TestRWStress: mixed operations randomly
+// collide over a bounded set of object names.
+func TestBlobDownloadRWStress(t *testing.T) {
+	var (
+		numObjs = 6
+		numOps  = 96
+		objSize = int64(4 * cos.MiB)
+	)
+	if !testing.Short() {
+		numObjs, numOps, objSize = 10, 400, 32*cos.MiB
+	}
+	m := ioContext{
+		t: t, bck: cliBck, num: numObjs, prefix: t.Name() + "/" + trand.String(5),
+		fileSize: uint64(objSize), fixedSize: true,
+	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	m.init(true /*cleanup*/)
+	initMountpaths(t, m.proxyURL)
+	bp := tools.BaseAPIParams(m.proxyURL)
+	m.remotePuts(true /*evict*/)
+
+	// Mix readers, streaming and cache-only blob writers, and evictions.
+	ops := [...]string{http.MethodGet, "blob-get", apc.ActBlobDl, apc.ActEvictObjects}
+	results := make(chan opRes, numOps)
+	wg := cos.NewLimitedWaitGroup(40, 0)
+	for i := range numOps {
+		idx, op := rand.IntN(numObjs), ops[i%len(ops)]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var err error
+			switch op {
+			case http.MethodGet:
+				err = m.get(bp, idx, 0, nil, true /*validate*/)
+			case "blob-get":
+				args := &api.GetArgs{Header: http.Header{
+					apc.HdrBlobDownload: []string{"true"},
+					apc.HdrBlobChunk:    []string{strconv.FormatInt(int64(1<<uint(i%4))*cos.MiB, 10)},
+				}}
+				err = m.get(bp, idx, 0, args, true /*validate*/)
+			case apc.ActBlobDl:
+				var xid string
+				xid, err = api.BlobDownload(bp, m.bck, m.objNames[idx], &apc.BlobMsg{})
+				if err == nil && xid != "" {
+					args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+					err = api.WaitForXaction(bp, &args)
+				}
+			default:
+				err = api.EvictObject(bp, m.bck, m.objNames[idx])
+			}
+			results <- opRes{op: op, err: err}
+		}()
+	}
+	wg.Wait()
+	close(results)
+	var success, busy, benign int
+	for result := range results {
+		if result.err == nil {
+			success++
+			continue
+		}
+		if result.op == apc.ActEvictObjects && api.HTTPStatus(result.err) == http.StatusNotFound {
+			benign++
+			continue // another concurrent eviction already made it cold
+		}
+		herr := cmn.AsErrHTTP(result.err)
+		if herr != nil && herr.TypeCode == "ErrBusy" {
+			busy++
+			continue
+		}
+		t.Fatalf("%s failed: %v", result.op, result.err)
+	}
+	tassert.Fatalf(t, success+busy+benign == numOps,
+		"expected %d operations, got success=%d, busy=%d, benign=%d", numOps, success, busy, benign)
+	tlog.Logfln("Completed %d operations: success=%d, busy=%d, benign=%d", numOps, success, busy, benign)
+
+	for i := range numObjs {
+		tassert.CheckFatal(t, m.get(bp, i, 0, nil, true /*validate*/))
+	}
+	for _, objName := range m.objNames {
+		lock, err := api.CheckObjectLock(bp, m.bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, lock == apc.LockNone, "%s: expected released lock, got %d", objName, lock)
+	}
+}
+
+func TestBlobDownloadColdGetContention(t *testing.T) {
+	var (
+		regularGets = 4
+		blobGets    = 12
+		objSize     = int64(32 * cos.MiB)
+	)
+	if !testing.Short() {
+		objSize = 256 * cos.MiB
+		regularGets, blobGets = 8, 16
+	}
+	m := ioContext{
+		t: t, bck: cliBck, num: 1, prefix: t.Name() + "/" + trand.String(5),
+		fileSize: uint64(objSize), fixedSize: true,
+	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	m.init(true /*cleanup*/)
+	initMountpaths(t, m.proxyURL)
+	bp := tools.BaseAPIParams(m.proxyURL)
+	objName := m.prefix + "-0"
+	m.objNames = append(m.objNames, objName)
+	source, _ := m.update(objName, cos.ChecksumNone)
+	tassert.CheckFatal(t, api.EvictObject(bp, m.bck, objName))
+	leaderErrCh := make(chan error, 1)
+	go func() {
+		body, size, err := api.GetObjectReader(bp, m.bck, objName, nil)
+		if err == nil && size != objSize {
+			err = errors.New("cold GET returned unexpected size")
+		}
+		if err == nil {
+			expected, openErr := source.Open()
+			if openErr != nil {
+				err = openErr
+			} else {
+				if !tools.ReaderEqual(expected, body) {
+					err = errors.New("cold GET returned invalid content")
+				}
+				cos.Close(expected)
+			}
+		}
+		if body != nil {
+			cos.Close(body)
+		}
+		leaderErrCh <- err
+	}()
+
+	deadline := time.Now().Add(tools.RebalanceStartTimeout)
+	for {
+		lock, err := api.CheckObjectLock(bp, m.bck, objName)
+		tassert.CheckFatal(t, err)
+		if lock == apc.LockWrite {
+			break
+		}
+		tassert.Fatalf(t, time.Now().Before(deadline), "timed out waiting for cold GET to acquire the write lock")
+		time.Sleep(cos.PollSleepShort)
+	}
+
+	blobErrCh := make(chan error, blobGets)
+	regularErrCh := make(chan error, regularGets)
+	for i := range blobGets {
+		args := &api.GetArgs{Header: http.Header{
+			apc.HdrBlobDownload: []string{"true"},
+			apc.HdrBlobChunk:    []string{strconv.FormatInt(int64(1<<uint(i%5))*cos.MiB, 10)},
+			apc.HdrBlobWorkers:  []string{"2"},
+		}}
+		go func() { blobErrCh <- m.get(bp, 0, 0, args, true /*validate*/) }()
+	}
+	for range regularGets {
+		go func() { regularErrCh <- m.get(bp, 0, 0, nil, true /*validate*/) }()
+	}
+
+	for range blobGets {
+		err := <-blobErrCh
+		herr := cmn.AsErrHTTP(err)
+		tassert.Fatalf(t, herr != nil && herr.TypeCode == "ErrBusy", "expected ErrBusy, got %v", err)
+	}
+	tassert.CheckFatal(t, <-leaderErrCh)
+	for range regularGets {
+		tassert.CheckFatal(t, <-regularErrCh)
+	}
+	m.validateChunksOnDisk(m.bck, objName, 0)
+}
+
+func TestBlobDownloadLockContentionLatestVersion(t *testing.T) {
+	var (
+		regularGets = 4
+		blobGets    = 8
+		objSize     = int64(8 * cos.MiB)
+		chunkSize   = int64(2 * cos.MiB)
+	)
+	if !testing.Short() {
+		objSize, chunkSize = 64*cos.MiB, 4*cos.MiB
+		regularGets, blobGets = 16, 32
+	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+	var (
+		proxyURL  = tools.RandomProxyURL(t)
+		bp        = tools.BaseAPIParams(proxyURL)
+		remoteBP  = tools.BaseAPIParams(tools.RemoteCluster.URL)
+		remoteBck = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		bck       = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
+		objName   = t.Name() + "-" + trand.String(5)
+	)
+	m := ioContext{t: t, bck: bck, proxyURL: proxyURL, objNames: []string{objName}}
+	// Create a remote AIS bucket and enable versioning on its local namespace.
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+	_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Versioning: &cmn.VersionConfToSet{Enabled: apc.Ptr(true)}})
+	tassert.CheckFatal(t, err)
+
+	// Put version 1 on the remote cluster and cache it through the local cluster.
+	oldReader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
+	tassert.CheckFatal(t, err)
+	putArgs := &api.PutArgs{BaseParams: remoteBP, Bck: remoteBck, ObjName: objName, Reader: oldReader, Size: uint64(objSize)}
+	_, err = api.PutObject(putArgs)
+	tassert.CheckFatal(t, err)
+	cached, size, err := api.GetObjectReader(bp, bck, objName, nil)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+	expected, err := oldReader.Open()
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, tools.ReaderEqual(expected, cached), "failed to cache initial object version")
+	cos.Close(expected)
+	cos.Close(cached)
+
+	// Replace version 1 directly on the remote cluster, leaving the local copy stale.
+	newReader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
+	tassert.CheckFatal(t, err)
+	putArgs.Reader = newReader // out-of-band update on the remote cluster
+	_, err = api.PutObject(putArgs)
+	tassert.CheckFatal(t, err)
+	// Start a latest-version blob GET that must replace the stale cached version.
+	leader, size, err := api.GetObjectReader(bp, bck, objName, &api.GetArgs{
+		Query: url.Values{apc.QparamLatestVer: []string{"true"}},
+		Header: http.Header{
+			apc.HdrBlobDownload: []string{"true"},
+			apc.HdrBlobChunk:    []string{strconv.FormatInt(chunkSize, 10)},
+			apc.HdrBlobWorkers:  []string{"2"},
+		},
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+
+	// Race explicit blob GETs and regular GETs against the in-flight replacement.
+	blobErrCh := make(chan error, blobGets)
+	regularErrCh := make(chan error, regularGets)
+	for i := range blobGets {
+		args := &api.GetArgs{
+			Query: url.Values{apc.QparamLatestVer: []string{"true"}},
+			Header: http.Header{
+				apc.HdrBlobDownload: []string{"true"},
+				apc.HdrBlobChunk:    []string{strconv.FormatInt(int64(1<<uint(i%4))*cos.MiB, 10)},
+				apc.HdrBlobWorkers:  []string{"2"},
+			},
+		}
+		go func() { blobErrCh <- m.get(bp, 0, 0, args, true /*validate*/) }()
+	}
+	for range regularGets {
+		args := &api.GetArgs{Query: url.Values{apc.QparamLatestVer: []string{"true"}}}
+		go func() { regularErrCh <- m.get(bp, 0, 0, args, true /*validate*/) }()
+	}
+	for range blobGets {
+		err := <-blobErrCh
+		herr := cmn.AsErrHTTP(err)
+		tassert.Fatalf(t, herr != nil && herr.TypeCode == "ErrBusy", "expected ErrBusy, got %v", err)
+	}
+
+	// The leader returns version 2 and releases its lock for all waiting GETs.
+	expected, err = newReader.Open()
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, tools.ReaderEqual(expected, leader), "blob GET returned stale object version")
+	cos.Close(expected)
+	cos.Close(leader)
+	// Regular latest-version GETs wait for the leader, then read version 2.
+	for range regularGets {
+		tassert.CheckFatal(t, <-regularErrCh)
+	}
+	m.validateChunksOnDisk(bck, objName, int(objSize/chunkSize))
 }
 
 func TestBlobDownloadRemoteAISReadTimeout(t *testing.T) {
@@ -876,7 +1318,10 @@ func TestBlobDownloadChunkSizeBounds(t *testing.T) {
 }
 
 func TestBlobDownloadCacheOnlyMaxChunkSize(t *testing.T) {
-	const objSize = cmn.ChunkSizeMax + 1
+	const (
+		objSize     = cmn.ChunkSizeMax + 1
+		readTimeout = 10 * time.Minute
+	)
 	m := ioContext{
 		t: t, bck: cliBck, num: 1, fileSize: objSize, fixedSize: true,
 		prefix: t.Name() + "/" + trand.String(5),
@@ -886,6 +1331,11 @@ func TestBlobDownloadCacheOnlyMaxChunkSize(t *testing.T) {
 	initMountpaths(t, m.proxyURL)
 	m.remotePuts(false /*evict*/)
 	bp, objName := tools.BaseAPIParams(m.proxyURL), m.objNames[0]
+	config := tools.GetClusterConfig(t)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"timeout.send_file_time": config.Timeout.SendFile.String()})
+	})
+	tools.SetClusterConfig(t, cos.StrKVs{"timeout.send_file_time": readTimeout.String()})
 
 	tests := []struct {
 		name      string
@@ -898,7 +1348,7 @@ func TestBlobDownloadCacheOnlyMaxChunkSize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tassert.CheckFatal(t, api.EvictObject(bp, m.bck, objName))
 			xid, err := api.BlobDownload(bp, m.bck, objName, &apc.BlobMsg{
-				ChunkSize: tc.chunkSize, ChunkReadTimeout: cos.Duration(10 * time.Minute),
+				ChunkSize: tc.chunkSize, ChunkReadTimeout: cos.Duration(readTimeout),
 			})
 			tassert.CheckFatal(t, err)
 			err = api.WaitForXaction(bp, &xact.ArgsMsg{

@@ -768,7 +768,7 @@ do: // retry uplock or ec-recovery, the latter only once
 		// try upgrading rlock => wlock
 		if !goi.lom.UpgradeLock() {
 			if uplock == nil {
-				uplock = goi.uplock(cmn.GCO.Get())
+				uplock = newUplock(cmn.GCO.Get(), goi.ltime)
 				nlog.Warningln(uplockWarn, goi.lom.String())
 			}
 			if err := uplock.do(goi.lom); err != nil {
@@ -2380,11 +2380,11 @@ func (t *target) putMirror(lom *core.LOM) {
 
 const uplockWarn = "conflict getting remote"
 
-func (goi *getOI) uplock(c *cmn.Config) (u *_uplock) {
+func newUplock(c *cmn.Config, ltime int64) (u *_uplock) {
 	u = &_uplock{sleep: cmn.ColdGetConflictMin}
 
 	// jitter
-	j := (goi.ltime & 0x7) - 3
+	j := (ltime & 0x7) - 3
 	jitter := time.Millisecond * time.Duration(j<<1)
 	u.sleep += jitter
 
