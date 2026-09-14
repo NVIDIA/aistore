@@ -178,17 +178,11 @@ func (lom *LOM) LoadShardIndex() (*archive.ShardIndex, error) {
 	idx, err := archive.ReadShardIndex(fh, size, T.PageMM())
 	cos.Close(fh)
 	if err != nil {
-		if cos.IsAnyEOF(err) {
-			// short read against a size we just stat'ed: the object is truncated
-			lom.clearShardIdx()
-			return nil, fmt.Errorf("%w: %s truncated below %d bytes", archive.ErrShardIdxCorrupt, idxlom.Cname(), size)
-		}
 		// clear the flag so that the next read goes straight to the sequential scan
 		if errors.Is(err, archive.ErrShardIdxCorrupt) || errors.Is(err, archive.ErrShardIdxStale) {
 			lom.clearShardIdx()
-			return nil, err
 		}
-		return nil, err // transient: keep the flag
+		return nil, fmt.Errorf("%s: %w", idxlom.Cname(), err)
 	}
 	// Staleness check: if the shard was re-uploaded, the stored cksum/size will differ.
 	if idx.IsStale(lom.Checksum(), lom.Lsize()) {

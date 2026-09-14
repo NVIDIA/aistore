@@ -62,6 +62,9 @@ func allocOffsets(n int, mm *memsys.MMSA) ([]uint32, *memsys.Slab, *shardIdxBuf)
 		return nil, nil, nil
 	}
 	buf, slab, pooled := allocBytes(n*cos.SizeofI32, mm)
+	// freeOffsets reconstructs the byte slice as cap(offs)*SizeofI32; a capacity that is
+	// not a multiple of SizeofI32 would hand the slab (or the pool) a short buffer.
+	debug.Func(func() { debug.Assert(cap(buf)%cos.SizeofI32 == 0, "offsets capacity ", cap(buf)) })
 	offs := unsafe.Slice((*uint32)(unsafe.Pointer(unsafe.SliceData(buf))), cap(buf)/cos.SizeofI32)
 	return offs[:n], slab, pooled
 }

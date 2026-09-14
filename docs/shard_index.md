@@ -100,6 +100,10 @@ That (design) is suboptimal for the common workload. A given GetBatch request ty
 | Serialization | rebuild the packed bytes | return the immutable packed bytes |
 | Metadata version | 1 | 2 |
 
+> **On-disk format:** The v2 payload layout is byte-identical to v1: same fields, same order, and same uvarint encoding.
+> Apart from the version byte, the only format change is that the xxHash64 at `[3..10]` covers the preamble kind plus payload, rather than the payload alone.
+> A v2 target can validate an intact v1 index, but cannot binary-search it because v1 did not guarantee entry order; it therefore reports the index stale and rebuilds it.
+
 Version 2 keeps each archived-file name, TAR offset, and size in the packed payload. On load, AIS validates the payload and builds only the offset table. A lookup binary-searches names in place and decodes the offset and size only for the matching entry.
 
 The logarithmic lookup is a deliberate tradeoff. The read path normally performs one lookup per requested `archpath`, while replacing the decoded map with one four-byte offset per archived file substantially reduces the loaded index's auxiliary memory.

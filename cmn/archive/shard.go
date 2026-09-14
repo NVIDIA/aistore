@@ -153,7 +153,7 @@ func BuildShardIndex(r io.ReaderAt, srcSize int64, srcCksum *cos.Cksum) (*ShardI
 			return nil, _emitErr("too many entries (max %d)", shardIdxMaxEntries)
 		}
 		dataOffset, _ := sr.Seek(0, io.SeekCurrent)
-		debug.Assert(dataOffset&(TarBlockSize-1) == 0, dataOffset)
+		debug.Func(func() { debug.Assert(dataOffset&(TarBlockSize-1) == 0, dataOffset) })
 
 		ents = append(ents, _shentry{
 			name: hdr.Name,
@@ -235,6 +235,7 @@ func (idx *ShardIndex) pack(ents []_shentry) error {
 	if idx.srcSize < 0 {
 		return _emitErr("negative src size %d", idx.srcSize)
 	}
+	debug.Func(func() { err := idx.srcCksum.Validate(); debug.AssertNoErr(err) })
 	cksumTy, cksumVal := idx.srcCksum.Get()
 
 	// first-wins on duplicates (if any)
@@ -282,7 +283,7 @@ func (idx *ShardIndex) pack(ents []_shentry) error {
 		buf = binary.AppendUvarint(buf, uint64(e.e.Offset))
 		buf = binary.AppendUvarint(buf, uint64(e.e.Size))
 	}
-	debug.Assert(len(buf) == total, len(buf), " vs ", total)
+	debug.Func(func() { debug.Assert(len(buf) == total, len(buf), " vs ", total) })
 
 	buf[0] = shardIdxMetaver
 	buf[1] = shardIdxFmtTAR
@@ -506,6 +507,9 @@ func (idx *ShardIndex) unpack(b []byte, mm *memsys.MMSA) error {
 	if err != nil {
 		return err
 	}
+	cksum := cos.NewCksum(cksumTy, cksumVal)
+	debug.Func(func() { err := cksum.Validate(); debug.AssertNoErr(err) })
+
 	srcSize, err := d.readI64("src size")
 	if err != nil {
 		return err
@@ -541,7 +545,7 @@ func (idx *ShardIndex) unpack(b []byte, mm *memsys.MMSA) error {
 		return _corruptErr("trailing data (%d bytes)", len(b)-d.off)
 	}
 
-	idx.srcCksum = *cos.NewCksum(cksumTy, cksumVal)
+	idx.srcCksum = *cksum
 	idx.srcSize = srcSize
 	idx.buf = b
 	return nil

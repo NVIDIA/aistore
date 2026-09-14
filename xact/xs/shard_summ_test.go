@@ -80,6 +80,7 @@ func saveIndexedShard(t *testing.T, bck *meta.Bck, objName string, size int64, a
 	}
 	idx, err := archive.NewShardIndexTestOnly(cos.NoneCksum, size, entries)
 	tassert.CheckFatal(t, err)
+	t.Cleanup(idx.Free)
 	tassert.CheckFatal(t, lom.SaveShardIndex(idx))
 	return lom
 }

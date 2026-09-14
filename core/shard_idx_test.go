@@ -6,6 +6,7 @@ package core_test
 
 import (
 	"archive/tar"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	onexxh "github.com/OneOfOne/xxhash"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -256,6 +259,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 
 				orig, err := archive.BuildShardIndex(fh, size, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(orig.Free)
 				Expect(orig.Len()).To(Equal(nFiles))
 
 				archlom := siArchLOM(GinkgoT(), fmt.Sprintf("shard_%s.tar", format))
@@ -286,6 +290,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 
 				orig, err := archive.BuildShardIndex(fh, size, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(orig.Free)
 				Expect(orig.Len()).To(BeZero())
 
 				archlom := siArchLOM(GinkgoT(), fmt.Sprintf("empty_%s.tar", format))
@@ -308,6 +313,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				defer fh.Close()
 				idx, err := archive.BuildShardIndex(fh, sz, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(idx.Free)
 
 				archlom := siArchLOM(GinkgoT(), fmt.Sprintf("flagged_%s.tar", format))
 				Expect(archlom.HasShardIdx()).To(BeFalse())
@@ -332,12 +338,14 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				defer fh1.Close()
 				first, err := archive.BuildShardIndex(fh1, size1, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(first.Free)
 				Expect(siSave(archlom, first)).To(Succeed())
 
 				fh2, size2, content2 := siMakeTAR(GinkgoT(), tmpDir, format, 15)
 				defer fh2.Close()
 				second, err := archive.BuildShardIndex(fh2, size2, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(second.Free)
 				Expect(siSave(archlom, second)).To(Succeed())
 
 				loaded, err := siLoad(archlom)
@@ -360,11 +368,13 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				defer fhA.Close()
 				idxA, err := archive.BuildShardIndex(fhA, szA, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(idxA.Free)
 
 				fhB, szB, contentB := siMakeTAR(GinkgoT(), tmpDir, format, 7)
 				defer fhB.Close()
 				idxB, err := archive.BuildShardIndex(fhB, szB, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(idxB.Free)
 
 				Expect(siSave(archlomA, idxA)).To(Succeed())
 				Expect(siSave(archlomB, idxB)).To(Succeed())
@@ -395,11 +405,13 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				defer fhA.Close()
 				idxA, err := archive.BuildShardIndex(fhA, szA, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(idxA.Free)
 
 				fhB, szB, contentB := siMakeTAR(GinkgoT(), tmpDir, format, 9)
 				defer fhB.Close()
 				idxB, err := archive.BuildShardIndex(fhB, szB, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(idxB.Free)
 
 				Expect(siSave(archlomA, idxA)).To(Succeed())
 				Expect(siSave(archlomB, idxB)).To(Succeed())
@@ -427,6 +439,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				defer fh.Close()
 				orig, err := archive.BuildShardIndex(fh, sz, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(orig.Free)
 
 				archlom := siArchLOM(GinkgoT(), fmt.Sprintf("a/b/c/shard_%s.tar", format))
 				Expect(siSave(archlom, orig)).To(Succeed())
@@ -453,6 +466,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				defer fh.Close()
 				orig, err := archive.BuildShardIndex(fh, sz, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(orig.Free)
 				Expect(orig.Len()).To(Equal(nFiles))
 
 				archlom := siArchLOM(GinkgoT(), fmt.Sprintf("large_%s.tar", format))
@@ -486,6 +500,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 
 			orig, err := archive.BuildShardIndex(fh1, size1, ck1)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(orig.Free)
 
 			archlom := siArchLOM(GinkgoT(), "reupload.tar")
 			archlom.SetCksum(ck1)
@@ -520,6 +535,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			defer fh.Close()
 			idx, err := archive.BuildShardIndex(fh, sz, nil)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 
 			archlom := siArchLOM(GinkgoT(), "remove-index.tar")
 			Expect(siSave(archlom, idx)).To(Succeed())
@@ -539,6 +555,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			defer fh.Close()
 			idx, err := archive.BuildShardIndex(fh, sz, nil)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 
 			archlom := siArchLOM(GinkgoT(), "remove-missing-index.tar")
 			Expect(siSave(archlom, idx)).To(Succeed())
@@ -557,6 +574,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			defer fh.Close()
 			idx, err := archive.BuildShardIndex(fh, sz, nil)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 
 			archlom := siArchLOM(GinkgoT(), "remove-main-fails.tar")
 			Expect(siSave(archlom, idx)).To(Succeed())
@@ -586,6 +604,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			defer fh.Close()
 			idx, err := archive.BuildShardIndex(fh, sz, nil)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 
 			archlom := siArchLOM(GinkgoT(), "save-busy.tar")
 
@@ -620,6 +639,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			idx, err := archive.NewShardIndexTestOnly(archlom.Checksum(), archlom.Lsize(),
 				map[string]archive.ShardIndexEntry{"file": {Offset: 0, Size: 1}})
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 			Expect(archlom.SaveShardIndex(idx)).To(Succeed())
 			Expect(archlom.IsChunked()).To(BeTrue(), "setting HasShardIdx changed the source layout")
 			Expect(chunkPaths[1]).To(BeAnExistingFile(), "setting HasShardIdx removed a chunk")
@@ -654,6 +674,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				defer fh.Close()
 				idx, err := archive.BuildShardIndex(fh, sz, nil)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(idx.Free)
 
 				archlom := siArchLOM(GinkgoT(), shardName)
 				Expect(siSave(archlom, idx)).To(Succeed())
@@ -684,6 +705,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			defer fh.Close()
 			idx, err := archive.BuildShardIndex(fh, sz, nil)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 
 			archlom := siArchLOM(GinkgoT(), "corrupt-lmeta.tar")
 			Expect(siSave(archlom, idx)).To(Succeed())
@@ -700,12 +722,48 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		})
 	})
 
+	// The upgrade path: every pre-v5.1 deployment has metaver-1 indexes on disk.
+	Describe("meta-version compatibility", func() {
+		It("reports a metaver-1 index as stale and clears the flag", func() {
+			fh, sz, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 10)
+			defer fh.Close()
+			idx, err := archive.BuildShardIndex(fh, sz, nil)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
+
+			archlom := siArchLOM(GinkgoT(), "metaver1.tar")
+			Expect(siSave(archlom, idx)).To(Succeed())
+			Expect(archlom.HasShardIdx()).To(BeTrue())
+
+			// Rewrite the stored index in place as metaver 1. The v2 payload layout is
+			// byte-identical to v1; only the version byte and the checksum domain differ
+			// (v1 covers the payload alone, v2 the preamble kind plus payload). Same
+			// length, so the index LOM's recorded size still matches.
+			const prefLen = 11 // shardIdxPrefLen
+			idxPath := siIdxPath(GinkgoT(), archlom)
+			b, err := os.ReadFile(idxPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(b)).To(BeNumerically(">", prefLen))
+			b[0] = 1
+			binary.BigEndian.PutUint64(b[3:], onexxh.Checksum64S(b[prefLen:], cos.MLCG32))
+			Expect(os.WriteFile(idxPath, b, cos.PermRWR)).To(Succeed())
+
+			loaded, err := siLoad(archlom)
+			Expect(loaded).To(BeNil())
+			Expect(errors.Is(err, archive.ErrShardIdxStale)).To(BeTrue(),
+				"metaver 1 must be stale (rebuildable), not corrupt, got %v", err)
+			Expect(archlom.HasShardIdx()).To(BeFalse(),
+				"a stale index must clear the flag so the next read falls back to the sequential scan")
+		})
+	})
+
 	Describe("implausible index size", func() {
 		It("classifies a below-minimum index as corrupt", func() {
 			fh, sz, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
 			defer fh.Close()
 			idx, err := archive.BuildShardIndex(fh, sz, nil)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 
 			archlom := siArchLOM(GinkgoT(), "runt-index.tar")
 			Expect(siSave(archlom, idx)).To(Succeed())
@@ -739,6 +797,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			}
 			idx, err := archive.NewShardIndexTestOnly(cos.NoneCksum, shardSize, entries)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 			Expect(siSave(archlom, idx)).To(Succeed())
 
 			loaded, err := siLoad(archlom)
@@ -767,6 +826,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			}
 			idx, err := archive.NewShardIndexTestOnly(cos.NoneCksum, shardSize, entries)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(idx.Free)
 			Expect(siSave(archlom, idx)).To(Succeed())
 
 			packed, err := os.Stat(siIdxPath(GinkgoT(), archlom))

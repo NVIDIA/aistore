@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	benchIdx   *archive.ShardIndex
 	benchBytes []byte
 	benchEntry archive.ShardIndexEntry
 	benchOK    bool
@@ -52,7 +51,7 @@ func BenchmarkShardIndex(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				if benchBytes, err = got.Pack(); err != nil {
+				if _, err := got.Pack(); err != nil {
 					b.Fatal(err)
 				}
 				got.Free()
@@ -73,7 +72,7 @@ func BenchmarkShardIndex(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				benchIdx = got
+				got.Free()
 			}
 		})
 		b.Run(fmt.Sprintf("read-unpack-mmsa/%d", count), func(b *testing.B) {

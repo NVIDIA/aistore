@@ -118,7 +118,7 @@ func TestIndexShardZeroSizeFile(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	idx, err := archive.ReadShardIndex(bytes.NewReader(data), int64(len(data)), nil)
 	tassert.CheckFatal(t, err)
-	defer idx.Free()
+	t.Cleanup(idx.Free)
 	entry, ok := idx.Lookup(fileName)
 	tassert.Fatalf(t, ok && entry.Size == 0, "zero-size index entry: present=%t, size=%d", ok, entry.Size)
 

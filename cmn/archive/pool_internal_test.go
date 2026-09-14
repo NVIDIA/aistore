@@ -22,10 +22,14 @@ func TestShardIdxPoolSizing(t *testing.T) {
 		wantSlab   bool
 		wantPooled bool
 	}{
+		{"zero", 0, mm, 0, false, false},
 		{"slab", memsys.MaxPageSlabSize, mm, memsys.MaxPageSlabSize, true, false},
 		{"pool-256k", memsys.MaxPageSlabSize + 1, mm, 256 * cos.KiB, false, true},
+		{"pool-256k-max", 256 * cos.KiB, mm, 256 * cos.KiB, false, true},
 		{"pool-512k", 256*cos.KiB + 1, mm, 512 * cos.KiB, false, true},
+		{"pool-512k-max", 512 * cos.KiB, mm, 512 * cos.KiB, false, true},
 		{"pool-1m", 512*cos.KiB + 1, mm, cos.MiB, false, true},
+		{"pool-1m-max", cos.MiB, mm, cos.MiB, false, true},
 		{"heap-large", cos.MiB + 1, mm, cos.MiB + 1, false, false},
 		{"heap-explicit", 512 * cos.KiB, nil, 512 * cos.KiB, false, false},
 	} {
@@ -40,21 +44,53 @@ func TestShardIdxPoolSizing(t *testing.T) {
 			if (pooled != nil) != tc.wantPooled {
 				t.Fatalf("pool ownership: got %t, want %t", pooled != nil, tc.wantPooled)
 			}
-			buf[0], buf[len(buf)-1] = 1, 2
+			if len(buf) > 0 {
+				buf[0], buf[len(buf)-1] = 1, 2
+			}
 			freeBytes(buf, slab, pooled)
 		})
 	}
 }
 
-func TestShardIdxOffsetsPool(t *testing.T) {
-	const n = memsys.MaxPageSlabSize/cos.SizeofI32 + 1
-	offs, slab, pooled := allocOffsets(n, memsys.PageMM())
-	if slab != nil || pooled == nil {
-		t.Fatalf("expected pooled offsets: slab=%t, pooled=%t", slab != nil, pooled != nil)
+// every allocOffsets class must survive the freeOffsets round-trip: the byte slice is
+// reconstructed from cap(offs), so a mismatch shows up here (or as a memsys assert)
+func TestShardIdxOffsetsRoundTrip(t *testing.T) {
+	mm := memsys.PageMM()
+	for _, tc := range []struct {
+		name       string
+		n          int
+		mm         *memsys.MMSA
+		capacity   int
+		wantSlab   bool
+		wantPooled bool
+	}{
+		{"zero", 0, mm, 0, false, false},
+		{"slab", 1024, mm, 0, true, false},
+		{"slab-max", memsys.MaxPageSlabSize / cos.SizeofI32, mm, 0, true, false},
+		{"pool-256k", memsys.MaxPageSlabSize/cos.SizeofI32 + 1, mm, 256 * cos.KiB / cos.SizeofI32, false, true},
+		{"pool-512k", 256*cos.KiB/cos.SizeofI32 + 1, mm, 512 * cos.KiB / cos.SizeofI32, false, true},
+		{"pool-1m", 512*cos.KiB/cos.SizeofI32 + 1, mm, cos.MiB / cos.SizeofI32, false, true},
+		{"heap-explicit", 1024, nil, 1024, false, false},
+		{"heap-large", cos.MiB/cos.SizeofI32 + 1, mm, cos.MiB/cos.SizeofI32 + 1, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			offs, slab, pooled := allocOffsets(tc.n, tc.mm)
+			if len(offs) != tc.n {
+				t.Fatalf("offsets len: got %d, want %d", len(offs), tc.n)
+			}
+			if tc.capacity > 0 && cap(offs) != tc.capacity {
+				t.Fatalf("offsets capacity: got %d, want %d", cap(offs), tc.capacity)
+			}
+			if (slab != nil) != tc.wantSlab {
+				t.Fatalf("slab ownership: got %t, want %t", slab != nil, tc.wantSlab)
+			}
+			if (pooled != nil) != tc.wantPooled {
+				t.Fatalf("pool ownership: got %t, want %t", pooled != nil, tc.wantPooled)
+			}
+			if tc.n > 0 {
+				offs[0], offs[tc.n-1] = 1, 2
+			}
+			freeOffsets(offs, slab, pooled)
+		})
 	}
-	if cap(offs) != 256*cos.KiB/cos.SizeofI32 {
-		t.Fatalf("offsets capacity: got %d, want %d", cap(offs), 256*cos.KiB/cos.SizeofI32)
-	}
-	offs[0], offs[len(offs)-1] = 1, 2
-	freeOffsets(offs, slab, pooled)
 }
