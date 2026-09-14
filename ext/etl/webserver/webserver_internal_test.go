@@ -282,6 +282,117 @@ func TestETLServerDirectPutResponseForwarding(t *testing.T) {
 		directPutPath = "ais@#test/obj"
 	)
 
+	t.Run("204 with Direct-Put-Complete propagates marker and length", func(t *testing.T) {
+		const directPutLength = 1234
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			w.Header().Set(apc.HdrDirectPutComplete, "true")
+			w.Header().Set(apc.HdrDirectPutLength, strconv.Itoa(directPutLength))
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer directPutTargetServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		_, marked := resp.Header[apc.HdrDirectPutComplete]
+		tassert.Fatalf(t, marked, "expected Direct-Put-Complete to be propagated")
+		got := resp.Header.Get(apc.HdrDirectPutLength)
+		tassert.Fatalf(t, got == strconv.Itoa(directPutLength), "expected Direct-Put-Length %d, got %q", directPutLength, got)
+	})
+
+	t.Run("Direct-Put-Complete with length 0 propagates 0", func(t *testing.T) {
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			w.Header().Set(apc.HdrDirectPutComplete, "true")
+			w.Header().Set(apc.HdrDirectPutLength, "0") // empty object stored
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer directPutTargetServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		_, marked := resp.Header[apc.HdrDirectPutComplete]
+		tassert.Fatalf(t, marked, "expected Direct-Put-Complete to be propagated")
+		got := resp.Header.Get(apc.HdrDirectPutLength)
+		tassert.Fatalf(t, got == "0", "expected Direct-Put-Length 0, got %q", got)
+	})
+
+	t.Run("Direct-Put-Complete with empty value still delivered", func(t *testing.T) {
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			w.Header().Set(apc.HdrDirectPutComplete, "") // presence-based: value is ignored
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer directPutTargetServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		_, marked := resp.Header[apc.HdrDirectPutComplete]
+		tassert.Fatalf(t, marked, "expected Direct-Put-Complete to be propagated")
+	})
+
+	t.Run("marked 200 normalized to 204", func(t *testing.T) {
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			w.Header().Set(apc.HdrDirectPutComplete, "true")
+			w.Header().Set(apc.HdrDirectPutLength, "5")
+			w.WriteHeader(http.StatusOK) // the marker decides regardless of status
+		}))
+		defer directPutTargetServer.Close()
+
+		var (
+			content = []byte("test bytes")
+			req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+			w       = httptest.NewRecorder()
+		)
+		req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+		svr.putHandler(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		_, marked := resp.Header[apc.HdrDirectPutComplete]
+		tassert.Fatalf(t, marked, "expected Direct-Put-Complete to be propagated")
+		got := resp.Header.Get(apc.HdrDirectPutLength)
+		tassert.Fatalf(t, got == "5", "expected Direct-Put-Length 5, got %q", got)
+	})
+
+	// legacy path: bare 204 ack from a target that predates Direct-Put-Complete
 	t.Run("204 forwards Direct-Put-Length", func(t *testing.T) {
 		const directPutLength = 1234
 		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -304,6 +415,8 @@ func TestETLServerDirectPutResponseForwarding(t *testing.T) {
 		defer resp.Body.Close()
 
 		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		_, marked := resp.Header[apc.HdrDirectPutComplete]
+		tassert.Fatalf(t, !marked, "legacy delivery must not gain Direct-Put-Complete")
 		got := resp.Header.Get(apc.HdrDirectPutLength)
 		tassert.Fatalf(t, got == strconv.Itoa(directPutLength), "expected Direct-Put-Length %d, got %q", directPutLength, got)
 	})
@@ -368,6 +481,7 @@ func TestETLServerDirectPutResponseForwarding(t *testing.T) {
 		tassert.Fatalf(t, bytes.Equal(result, expected), "expected body %s, got %s", expected, result)
 	})
 
+	// legacy path: bare 200 ack from a target that predates Direct-Put-Complete
 	t.Run("200 empty body maps to 204", func(t *testing.T) {
 		nextStageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
@@ -388,6 +502,8 @@ func TestETLServerDirectPutResponseForwarding(t *testing.T) {
 		defer resp.Body.Close()
 
 		tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+		_, marked := resp.Header[apc.HdrDirectPutComplete]
+		tassert.Fatalf(t, !marked, "legacy delivery must not gain Direct-Put-Complete")
 		got := resp.Header.Get(apc.HdrDirectPutLength)
 		tassert.Fatalf(t, got == strconv.Itoa(len(content)), "expected Direct-Put-Length %d, got %q", len(content), got)
 	})

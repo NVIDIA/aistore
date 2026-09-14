@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -331,6 +332,9 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq, 
 
 // PUT /v1/etl/_object/<etl-name>/<secret>/<uname>?uuid=<xid>
 // Handles PUT requests from ETL containers (K8s Pods).
+// Acknowledges a successful direct put with 204 (No Content) and the
+// (apc.HdrDirectPutComplete, apc.HdrDirectPutLength) response headers;
+// ETL webservers propagate this ack back through the pipeline.
 func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, objName string) {
 	config := cmn.GCO.Get()
 	lom := core.AllocLOM(objName)
@@ -346,10 +350,17 @@ func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq, 
 		}
 	}
 	ecode, err := t.putObject(w, r, dpq, lom, config)
-	core.FreeLOM(lom)
 	if err != nil {
+		core.FreeLOM(lom)
 		t.writeErr(w, r, err, ecode)
+		return
 	}
+	size := lom.Lsize()
+	core.FreeLOM(lom)
+
+	w.Header().Set(apc.HdrDirectPutComplete, "true")
+	w.Header().Set(apc.HdrDirectPutLength, strconv.FormatInt(size, 10))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // HEAD /v1/etl/_object/<etl-name>/<secret>/<uname>
