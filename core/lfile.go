@@ -366,14 +366,11 @@ func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl 
 	}
 	debug.Func(func() { debug.Assert(mime != "", "unknown MIME for", lom.Cname(), "/", archpath) })
 
-	// Fast path: TAR with a stored shard index — seek directly to the file's
-	// data offset instead of a sequential TAR scan.
-	// Any miss (no index, stale, unreadable, or entry not indexed) falls through
-	// to the sequential scan below, which is the authoritative source.
+	// fast path
+	// any miss (no index, stale, unreadable, or entry not indexed) falls through
 	if mime == archive.ExtTar {
-		// TODO: IsStale degrades to size-only when archlom cksum is None - see
-		// "checksum" TODOs in ais/tgtobj.go and xact/xs/archive.go (fast-append).
-		idx, err := lom.LoadShardIndex()
+		entry, ok, err := lom.lookupShardIndex(archpath)
+		// verbose log
 		if err != nil && cmn.Rom.V(4, cos.ModCore) {
 			switch {
 			case errors.Is(err, archive.ErrShardIdxStale), errors.Is(err, archive.ErrShardIdxCorrupt):
@@ -382,15 +379,12 @@ func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl 
 				nlog.Warningln(lom.Cname(), "shard index read failed, falling back to scan:", err)
 			}
 		}
-		if err == nil && idx != nil {
-			entry, ok := idx.Lookup(archpath)
-			idx.Free()
-			if ok {
-				return cos.NewSectionHandle(lh, entry.DataOffset(), entry.Size, 0), nil
-			}
+		if err == nil && ok {
+			return cos.NewSectionHandle(lh, entry.DataOffset(), entry.Size, 0), nil
 		}
 	}
 
+	// slow path
 	var ar archive.Reader
 	ar, err = archive.NewReader(mime, lh, lom.Lsize())
 	if err != nil {

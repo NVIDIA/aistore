@@ -79,8 +79,8 @@ func (a *Advice) Throttle(n int64) bool {
 }
 
 // - refresh the recommendation (a.k.a. load advice)
-// - then sleeps if recommended
-// - return true if slept
+// - then sleep if recommended and return true
+// - otheriwse call runtime.Gosched (NOTE) and return false
 // (compare with Throttle() above)
 func (a *Advice) Pace() bool {
 	a.Refresh()

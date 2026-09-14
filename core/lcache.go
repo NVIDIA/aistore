@@ -31,7 +31,7 @@ type (
 	}
 	// HK flush & evict
 	evct struct {
-		now     time.Time // vs atime
+		now     time.Time // vs LOM atime
 		parent  *lchk
 		mi      *fs.Mountpath
 		wg      *sync.WaitGroup
@@ -73,19 +73,18 @@ func LcacheClear() {
 
 func LcacheClearMpath(mi *fs.Mountpath) {
 	for idx := range cos.MultiHashMapCount {
-		cache := mi.LomCaches.Get(idx)
-		cache.Clear()
+		mi.LomCaches.Get(idx).Clear()
+		mi.SidxCaches.Get(idx).Clear()
 	}
 }
 
-func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
+func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) {
 	g.lchk.rc.Inc()
 	defer g.lchk.rc.Dec()
 
 	memLoad := load.Mem() // may trigger free-to-OS
 	if memLoad == load.Critical {
 		g.lchk.dropAll()
-		return true // dropped all caches, nothing more to do
 	}
 
 	config := cmn.GCO.Get()
@@ -117,7 +116,6 @@ func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 		)
 		go u.do()
 	}
-	return false
 }
 
 //
@@ -135,18 +133,24 @@ func (lchk *lchk) init(config *cmn.Config) {
 
 func (u *rmbcks) do() {
 	defer u.wg.Done()
+	if u.walk(&u.mi.LomCaches, u.f) {
+		u.walk(&u.mi.SidxCaches, u.shardIdxF)
+	}
+}
 
+func (u *rmbcks) walk(caches *cos.MultiHashMap, f func(hkey, value any) bool) bool {
 	for idx := range cos.MultiHashMapCount {
 		if !u.mi.IsAvail() {
-			return
+			return false
 		}
-		u.cache = u.mi.LomCaches.Get(idx)
-		u.cache.Range(u.f)
+		u.cache = caches.Get(idx)
+		u.cache.Range(f)
 		// stop throttling at half-timeout (see metasync)
 		if u.throttle && mono.Since(u.begin) > cmn.Rom.MaxKeepalive()>>1 {
 			u.throttle = false
 		}
 	}
+	return true
 }
 
 func (u *rmbcks) f(hkey, value any) bool {
@@ -163,12 +167,29 @@ func (u *rmbcks) f(hkey, value any) bool {
 		if lmd2 == lmd {
 			*lmd = lom0.md
 		}
-		// throttle
-		u.nd++
-		if u.throttle {
-			u.adv.Throttle(u.nd)
-		}
+		u.pace()
 		break
+	}
+	return true
+}
+
+func (u *rmbcks) pace() {
+	u.nd++
+	if u.throttle {
+		u.adv.Throttle(u.nd)
+	}
+}
+
+func (u *rmbcks) shardIdxF(hkey, value any) bool {
+	key := hkey.(sidxKey)
+	b, _ := cmn.ParseUname(key.uname)
+	for _, rmb := range u.bcks {
+		if rmb.Eq(&b) {
+			if u.cache.CompareAndDelete(hkey, value) {
+				u.pace()
+			}
+			break
+		}
 	}
 	return true
 }
@@ -235,8 +256,12 @@ func (*term) f(_, value any) bool {
 //
 
 func (lchk *lchk) dropAll() {
-	nlog.WarningDepth(1, "dropping all caches")
-	LcacheClear()
+	nlog.WarningDepth(1, "dropping LOM cache")
+	for _, mi := range fs.GetAvail() {
+		for idx := range cos.MultiHashMapCount {
+			mi.LomCaches.Get(idx).Clear()
+		}
+	}
 	lchk.last = time.Now()
 }
 

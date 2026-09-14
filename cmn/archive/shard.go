@@ -315,6 +315,18 @@ func (idx *ShardIndex) Free() {
 	idx.bufPooled, idx.offsPooled = nil, nil
 }
 
+func (idx *ShardIndex) String() string {
+	if idx == nil {
+		return "shard-index <nil>"
+	}
+	var metaver byte
+	if len(idx.buf) > 0 {
+		metaver = idx.buf[0]
+	}
+	return fmt.Sprintf("shard-index[v%d, entries=%d, packed=%s, source=%s, %s]",
+		metaver, len(idx.offs), cos.IEC(len(idx.buf), 1), cos.IEC(idx.srcSize, 1), &idx.srcCksum)
+}
+
 func (idx *ShardIndex) Len() int { return len(idx.offs) }
 
 // binary search directly over the packed payload; ordering is guaranteed by metaver 2

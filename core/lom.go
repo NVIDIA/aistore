@@ -72,6 +72,7 @@ type (
 		smm      *memsys.MMSA
 		locker   nameLocker
 		lchk     lchk
+		sidx     sidx
 		maxLmeta atomic.Int64
 	}
 )
@@ -103,6 +104,7 @@ func Tinit(t Target, config *cmn.Config, runHK bool) {
 		g.locker = newNameLocker()
 		g.pmm = t.PageMM()
 		g.smm = t.ByteMM()
+		g.sidx.init(runHK)
 	}
 	if runHK {
 		g.lchk.init(config)
@@ -148,20 +150,6 @@ func (lom *LOM) setHRW(v bool) {
 		lom.md.flags |= lmflHRW
 	} else {
 		lom.md.flags &^= lmflHRW
-	}
-}
-
-// HasShardIdx reports whether the LOM has an associated shard index persisted
-// in ais://.sys-shardidx.
-func (lom *LOM) HasShardIdx() bool { return lom.md.flags&lmflShardIdx != 0 }
-
-// SetShardIdx sets or clears the lmflShardIdx flag. The flag is persisted with
-// the next Persist/PersistMain call on this LOM.
-func (lom *LOM) SetShardIdx(v bool) {
-	if v {
-		lom.md.flags |= lmflShardIdx
-	} else {
-		lom.md.flags &^= lmflShardIdx
 	}
 }
 
