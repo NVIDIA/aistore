@@ -99,3 +99,14 @@ Cleanup mode is therefore out-of-band. It performs a separate local walk,
 recomputes the expected HRW owner for each object, verifies the object at that
 expected location, and removes the local misplaced copy only when it is safe to
 do so.
+
+### Per-object sequence
+
+Cleanup releases the object lock before it calls the HRW peer:
+
+1. Take the read lock, load the object, copy its attributes, release the lock.
+2. HEAD the peer. No lock is held.
+3. Take the write lock, reload, compare against the copy from step 1, remove.
+
+Step 3 covers the window that step 2 opens. If the object changed locally while
+the lock was free, cleanup keeps it and counts it as `skip-changed`.

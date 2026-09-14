@@ -5,8 +5,10 @@
 package reb
 
 import (
+	"errors"
 	"os"
 	"sync"
+	ratomic "sync/atomic"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -18,7 +20,11 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-const tstCksum = "0123456789abcdef"
+const (
+	tstCksum    = "0123456789abcdef" // the local object
+	tstCksumAlt = "fedcba9876543210" // different content
+	tstCksumNew = "2233445566778899" // local overwrite during the unlocked window
+)
 
 // the HRW peer decides: identical copy => remove; different content => keep
 func TestCleanupVerifyRemove(t *testing.T) {
@@ -28,7 +34,7 @@ func TestCleanupVerifyRemove(t *testing.T) {
 		remove    bool
 	}{
 		{"identical", tstCksum, true},
-		{"diverged", "fedcba9876543210", false},
+		{"diverged", tstCksumAlt, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -49,6 +55,65 @@ func TestCleanupVerifyRemove(t *testing.T) {
 				}
 			} else if cnt := clnArgs.stats.keepDiverged.Load(); cnt != 1 || statErr != nil {
 				t.Errorf("expecting keep: kept-diverged=%d on-disk=%v (%s)", cnt, statErr, tstClnStats(clnArgs))
+			}
+		})
+	}
+}
+
+// overwrite from inside the peer-HEAD callback
+func TestCleanupKeepsChangedWhileUnlocked(t *testing.T) {
+	const objName = "changed.bin"
+
+	mi, bck := tstInitMpath(t)
+	fqn := tstPutObj(t, bck, objName, tstObjSpec{cksum: tstCksum})
+
+	var rewriteErr ratomic.Pointer[error]
+	clnArgs := tstClnArgs(t)
+	tstHeadT2T(t, func(*core.LOM, *meta.Snode, ...string) (*cmn.ObjectPropsV2, error) {
+		if err := tstRewriteCksum(bck, objName, tstCksumNew); err != nil {
+			rewriteErr.Store(&err)
+		}
+		return tstPeerProps(tstCksum), nil
+	})
+
+	tstWalkCleanup(t, clnArgs, mi, bck)
+
+	if errp := rewriteErr.Load(); errp != nil {
+		t.Fatal(*errp)
+	}
+	if cnt := clnArgs.stats.skipChanged.Load(); cnt != 1 {
+		t.Errorf("skip-changed %d objects, expecting 1 (%s)", cnt, tstClnStats(clnArgs))
+	}
+	if _, err := os.Stat(fqn); err != nil {
+		t.Errorf("removed an object that changed while unlocked: %v", err)
+	}
+}
+
+func TestSameObj(t *testing.T) {
+	attrs := func(size int64, ver, cksum string) *cmn.ObjAttrs {
+		oa := &cmn.ObjAttrs{Size: size}
+		oa.SetVersion(ver)
+		if cksum != "" {
+			oa.SetCksum(cos.ChecksumOneXxh, cksum)
+		}
+		return oa
+	}
+	tests := []struct {
+		name string
+		a, b *cmn.ObjAttrs
+		same bool
+	}{
+		{"identical", attrs(1024, "1", tstCksum), attrs(1024, "1", tstCksum), true},
+		{"atime-only", &cmn.ObjAttrs{Size: 1024, Atime: 1}, &cmn.ObjAttrs{Size: 1024, Atime: 2}, true},
+		{"size", attrs(1024, "1", tstCksum), attrs(2048, "1", tstCksum), false},
+		{"version", attrs(1024, "1", tstCksum), attrs(1024, "2", tstCksum), false},
+		{"checksum", attrs(1024, "1", tstCksum), attrs(1024, "1", tstCksumAlt), false},
+		{"no-checksum", attrs(1024, "1", ""), attrs(1024, "1", tstCksum), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sameObj(tc.a, tc.b); got != tc.same {
+				t.Errorf("sameObj(%s, %s) = %v, expecting %v", tc.a, tc.b, got, tc.same)
 			}
 		})
 	}
@@ -119,4 +184,21 @@ func tstClnStats(clnArgs *clnArgs) string {
 	sb.Init(128)
 	clnArgs.ctlMsg(&sb)
 	return sb.String()
+}
+
+func tstRewriteCksum(bck cmn.Bck, objName, cksumVal string) error {
+	lom := &core.LOM{ObjName: objName}
+	if err := lom.InitCmnBck(&bck); err != nil {
+		return err
+	}
+	if !lom.TryLock(true) {
+		return errors.New("cleanup still holds the object lock across the peer HEAD")
+	}
+	defer lom.Unlock(true)
+
+	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
+		return err
+	}
+	lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, cksumVal))
+	return lom.Persist()
 }
