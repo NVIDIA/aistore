@@ -103,6 +103,7 @@ type (
 		partialCksum *cos.CksumHash
 		nodeID       string
 		workFQN      string
+		tie          string
 	}
 	apndOI struct {
 		r       io.ReadCloser // content reader
@@ -1656,7 +1657,8 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, err error) {
 		workFQN = a.hdl.workFQN
 	)
 	if workFQN == "" {
-		workFQN = a.lom.GenFQN(fs.WorkCT, fs.WorkfileAppend)
+		a.hdl.tie = cos.GenTie()
+		workFQN = a.lom.GenFQN(fs.WorkCT, fs.WorkfileAppend, a.hdl.tie)
 		a.lom.Lock(false)
 		if a.lom.Load(false /*cache it*/, false /*locked*/) == nil {
 			_, a.hdl.partialCksum, err = cos.CopyFile(a.lom.FQN, workFQN, buf, a.lom.CksumType())
@@ -1685,7 +1687,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, err error) {
 		return "", err
 	}
 
-	packedHdl = a.pack(workFQN)
+	packedHdl = a.pack()
 
 	// stats (TODO: add `stats.FlushCount` for symmetry)
 	lat := time.Now().UnixNano() - a.started
@@ -1704,7 +1706,6 @@ func (a *apndOI) flush() (int, error) {
 	if a.hdl.workFQN == "" {
 		return 0, fmt.Errorf("failed to finalize append-file operation: empty source in the %+v handle", a.hdl)
 	}
-
 	// finalize checksum
 	debug.Assert(a.hdl.partialCksum != nil)
 	a.hdl.partialCksum.Finalize()
@@ -1723,6 +1724,7 @@ func (a *apndOI) flush() (int, error) {
 			OverwriteDst: true,
 			DeleteSrc:    true, // NOTE: always overwrite and remove
 		},
+		SrcMustExist: true,
 	}
 	return a.t.Promote(&params)
 }
@@ -1735,26 +1737,42 @@ func (a *apndOI) parse(packedHdl string) error {
 	if err != nil {
 		return err
 	}
-	a.hdl.partialCksum = cos.NewCksumHash(items[2])
+	if items[0] != a.t.SID() {
+		return fmt.Errorf("invalid APPEND handle: %q is not %s", items[0], a.t.SID())
+	}
+	if !cos.ValidTie(items[1]) {
+		return fmt.Errorf("invalid APPEND handle: bad work tie-breaker %q", items[1])
+	}
+	if err := cos.ValidateCksumType(items[2]); err != nil {
+		return fmt.Errorf("invalid APPEND handle: %w", err)
+	}
 	buf, err := base64.StdEncoding.DecodeString(items[3])
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid APPEND handle: %w", err)
 	}
-	if err := a.hdl.partialCksum.H.(encoding.BinaryUnmarshaler).UnmarshalBinary(buf); err != nil {
-		return err
+	partialCksum := cos.NewCksumHash(items[2])
+	unmarshaler, ok := partialCksum.H.(encoding.BinaryUnmarshaler)
+	if !ok {
+		return fmt.Errorf("invalid APPEND handle: cannot resume %q", items[2])
+	}
+	if err := unmarshaler.UnmarshalBinary(buf); err != nil {
+		return fmt.Errorf("invalid APPEND handle: %w", err)
 	}
 
+	a.hdl.partialCksum = partialCksum
 	a.hdl.nodeID = items[0]
-	a.hdl.workFQN = items[1]
+	a.hdl.tie = items[1]
+	a.hdl.workFQN = a.lom.GenFQN(fs.WorkCT, fs.WorkfileAppend, a.hdl.tie)
 	return nil
 }
 
-func (a *apndOI) pack(workFQN string) string {
+func (a *apndOI) pack() string {
 	buf, err := a.hdl.partialCksum.H.(encoding.BinaryMarshaler).MarshalBinary()
 	debug.AssertNoErr(err)
 	cksumTy := a.hdl.partialCksum.Type()
 	cksumBinary := base64.StdEncoding.EncodeToString(buf)
-	return a.t.SID() + appendHandleSepa + workFQN + appendHandleSepa + cksumTy + appendHandleSepa + cksumBinary
+	return a.t.SID() + appendHandleSepa + a.hdl.tie + appendHandleSepa + cksumTy +
+		appendHandleSepa + cksumBinary
 }
 
 //

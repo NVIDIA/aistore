@@ -42,6 +42,7 @@ type (
 		Cksum           *cos.Cksum  // checksum to validate
 		Config          *cmn.Config // during xaction
 		Xact            Xact        // responsible xaction
+		SrcMustExist    bool        // when true, a missing SrcFQN is an error and not a no-op
 		apc.PromoteArgs             // all of the above
 	}
 

@@ -173,17 +173,24 @@ func (*objCR) parseUbase(base string) ContentInfo {
 	return ContentInfo{Base: base, Ok: true}
 }
 
+// `extras[0]` is the work prefix (WorkfilePut, WorkfileAppend, ...)
+// `extras[1]`, when present, is the tie-breaker to reuse (see cos.GenTie)
 func (*workCR) makeUbase(base string, extras ...string) string {
-	debug.Assert(len(extras) == 1, extras)
+	debug.Assert(len(extras) == 1 || len(extras) == 2, extras)
 	debug.AssertFunc(func() bool { return extras[0] != "" }, "work prefix cannot be empty")
 	var (
 		dir, fname = filepath.Split(base)
-		tieBreaker = cos.GenTie()
+		tie        string
 	)
-	debug.Assert(len(extras) > 0)
+	if len(extras) == 2 {
+		debug.AssertFunc(func() bool { return cos.ValidTie(extras[1]) }, extras[1])
+		tie = extras[1]
+	} else {
+		tie = cos.GenTie()
+	}
 	fname = extras[0] + ssepa + fname
 	base = filepath.Join(dir, fname)
-	return base + ssepa + tieBreaker + ssepa + spid
+	return base + ssepa + tie + ssepa + spid
 }
 
 func (*workCR) parseUbase(base string) (ci ContentInfo) {

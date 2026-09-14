@@ -423,6 +423,30 @@ func TestWorkfileFntlBorderline(t *testing.T) {
 	}
 }
 
+func TestWorkTie(t *testing.T) {
+	tmpMpath := t.TempDir()
+
+	mios := mock.NewIOS()
+	fs.NewTestMFS(mios)
+	_, err := fs.AddTestMpath(tmpMpath, "daeID")
+	tassert.CheckFatal(t, err)
+
+	mpaths := fs.GetAvail()
+	mi := mpaths[tmpMpath]
+	bck := &cmn.Bck{Name: "bucket", Provider: apc.AIS, Ns: cmn.NsGlobal}
+
+	gen := func(tie string) string {
+		return fs.CSM.Gen("a/b/objname", fs.WorkCT, bck, mi, fs.WorkfileAppend, tie)
+	}
+	for _, tie := range []string{cos.GenTie(), "zzz", "a-_", "0Z9"} {
+		first := gen(tie)
+		tassert.Errorf(t, gen(tie) == first, "CSM.Gen is not stable for tie-breaker %q: %q", tie, first)
+
+		ci := fs.CSM.ParseUbase(filepath.Base(first), fs.WorkCT)
+		tassert.Errorf(t, ci.Ok, "ParseUbase rejected %q (tie-breaker %q)", filepath.Base(first), tie)
+	}
+}
+
 func TestObjCTDeepPath(t *testing.T) {
 	tmpMpath := t.TempDir()
 

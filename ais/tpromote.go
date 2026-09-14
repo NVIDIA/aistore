@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"net/http"
 	"os"
 	"time"
 
@@ -89,6 +90,9 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 		fi, err := os.Stat(params.SrcFQN)
 		if err != nil {
 			if cos.IsNotExist(err) {
+				if params.SrcMustExist {
+					return -1, http.StatusNotFound, err
+				}
 				err = nil
 			}
 			return -1, 0, err

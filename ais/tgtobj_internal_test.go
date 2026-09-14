@@ -10,6 +10,9 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/xact/xs"
@@ -127,6 +131,165 @@ func TestPutObjectChunks(tst *testing.T) {
 			tassert.Fatalf(test, actualChunks == tt.expectedParts, "chunk count mismatch: expected %d parts, got %d", tt.expectedParts, actualChunks)
 		})
 	}
+}
+
+func TestApndParseHandle(t *testing.T) {
+	initLom := func(objName string) *core.LOM {
+		lom := core.AllocLOM(objName)
+		t.Cleanup(func() { core.FreeLOM(lom) })
+		err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+		tassert.CheckFatal(t, err)
+		return lom
+	}
+	// the one handle this target produces for `lom`
+	mint := func(lom *core.LOM) (packedHdl, workFQN string) {
+		a := &apndOI{t: mockTarget, lom: lom, op: apc.AppendOp}
+		a.hdl.partialCksum = cos.NewCksumHash(cos.ChecksumOneXxh)
+		a.hdl.tie = cos.GenTie()
+		return a.pack(), lom.GenFQN(fs.WorkCT, fs.WorkfileAppend, a.hdl.tie)
+	}
+
+	var (
+		lom     = initLom("apnd/handle/objname")
+		sibLom  = initLom("apnd/handle/objname.sibling")
+		fntlLom = initLom(strings.Repeat("a", 252))
+	)
+
+	packedHdl, workFQN := mint(lom)
+	_, sibWorkFQN := mint(sibLom)
+	fntlHdl, fntlWorkFQN := mint(fntlLom)
+
+	tassert.Fatalf(t, !strings.Contains(packedHdl, cos.PathSeparator), "handle carries a path: %q", packedHdl)
+	tassert.Fatalf(t, filepath.Dir(workFQN) == filepath.Dir(sibWorkFQN),
+		"test assumes a shared work directory, got %q vs %q", workFQN, sibWorkFQN)
+	tassert.Fatalf(t, fs.HasPrefixFntl(filepath.Base(fntlWorkFQN)),
+		"test assumes an fntl-shortened work basename, got %q", filepath.Base(fntlWorkFQN))
+
+	items, err := preParse(packedHdl)
+	tassert.CheckFatal(t, err)
+
+	repack := func(idx int, val string) string {
+		clone := make([]string, len(items))
+		copy(clone, items)
+		clone[idx] = val
+		return strings.Join(clone, appendHandleSepa)
+	}
+
+	var (
+		tie      = items[1]
+		otherTie = "zzz"
+	)
+	tests := []struct {
+		lom     *core.LOM
+		name    string
+		hdl     string
+		wantTie string
+	}{
+		{lom, "as-is", packedHdl, tie},
+		{lom, "another tie-breaker", repack(1, otherTie), otherTie},
+		{fntlLom, "fntl object", fntlHdl, ""}, // (tie filled in below)
+
+		// the handle names no file: the same bytes follow the request's own object
+		{sibLom, "replayed against a sibling object", packedHdl, tie},
+		{fntlLom, "replayed against an fntl object", packedHdl, tie},
+
+		// a name or a path in the tie-breaker field
+		{lom, "sibling object work basename", repack(1, filepath.Base(sibWorkFQN)), ""},
+		{fntlLom, "forged fntl work basename", repack(1, ".x"+strings.Repeat("0", 64)), ""},
+		{lom, "own work basename (pre-fix format)", repack(1, filepath.Base(workFQN)), ""},
+		{lom, "full work fqn (pre-fix format)", repack(1, workFQN), ""},
+		{lom, "absolute path", repack(1, "/etc/hostname"), ""},
+		{lom, "parent traversal", repack(1, "../../../../etc/hostname"), ""},
+
+		// malformed tie-breaker
+		{lom, "empty tie-breaker", repack(1, ""), ""},
+		{lom, "too short", repack(1, "zz"), ""},
+		{lom, "too long", repack(1, strings.Repeat("z", 64)), ""},
+		{lom, "pid does not travel", repack(1, "zzz."+strconv.FormatInt(int64(os.Getpid()), 16)), ""},
+
+		// the remaining fields
+		{lom, "another node", repack(0, "not-"+mockTarget.SID()), ""},
+		{lom, "invalid checksum type", repack(2, "no-such-cksum"), ""},
+		{lom, "invalid checksum state", repack(3, "!not-base64!"), ""},
+		{lom, "oversized handle", repack(3, strings.Repeat("A", maxLenAppendHandle)), ""},
+	}
+	fntlItems, err := preParse(fntlHdl)
+	tassert.CheckFatal(t, err)
+	tests[2].wantTie = fntlItems[1]
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			a := &apndOI{t: mockTarget, lom: test.lom, op: apc.AppendOp}
+			err := a.parse(test.hdl)
+			if test.wantTie == "" {
+				tassert.Fatalf(t, err != nil, "expected an error, got workFQN %q", a.hdl.workFQN)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			expected := test.lom.GenFQN(fs.WorkCT, fs.WorkfileAppend, test.wantTie)
+			tassert.Fatalf(t, a.hdl.workFQN == expected, "expected %q, got %q", expected, a.hdl.workFQN)
+		})
+	}
+}
+
+// validate maxLenAppendHandle (largest serializable hash state) so a change
+// in the checksum implementation would not silently invalidate the bound
+func TestApndPackHandleLen(t *testing.T) {
+	lom := core.AllocLOM("apnd/pack/objname")
+	defer core.FreeLOM(lom)
+	err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+
+	const maxLenSID = 32 // a node ID is "less than 32 characters" (see cos.OnlyNice)
+
+	var maxLen int
+	for _, cksumType := range cos.SupportedChecksums() {
+		t.Run(cksumType, func(t *testing.T) {
+			a := &apndOI{t: mockTarget, lom: lom, op: apc.AppendOp}
+			a.hdl.partialCksum = cos.NewCksumHash(cksumType)
+			a.hdl.tie = cos.GenTie()
+
+			// the longest handle this target could mint for `cksumType`
+			l := len(a.pack()) - len(mockTarget.SID()) + maxLenSID
+			maxLen = max(maxLen, l)
+			tassert.Errorf(t, l <= maxLenAppendHandle, "packed handle %dB > %dB", l, maxLenAppendHandle)
+		})
+	}
+	t.Logf("worst case %dB (bound %d)", maxLen, maxLenAppendHandle)
+}
+
+// a well-formed APPEND handle can name a work file that does not exist
+func TestPromoteSrcMustExist(t *testing.T) {
+	lom := core.AllocLOM("apnd/flush/objname")
+	defer core.FreeLOM(lom)
+	err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+
+	workFQN := lom.GenFQN(fs.WorkCT, fs.WorkfileAppend, cos.GenTie())
+	tassert.Fatalf(t, cos.Stat(workFQN) != nil, "test assumes %q does not exist", workFQN)
+
+	params := &core.PromoteParams{
+		Bck:    lom.Bck(),
+		Config: cmn.GCO.Get(),
+		PromoteArgs: apc.PromoteArgs{
+			SrcFQN:       workFQN,
+			ObjName:      lom.ObjName,
+			OverwriteDst: true,
+			DeleteSrc:    true,
+		},
+	}
+
+	// promote(directory): the source may be gone by now - not an error
+	size, ecode, err := mockTarget._promLocal(params, lom)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, size == -1 && ecode == 0, "expected (-1, 0), got (%d, %d)", size, ecode)
+
+	// append(flush): the caller owns the source
+	params.SrcMustExist = true
+	_, ecode, err = mockTarget._promLocal(params, lom)
+	tassert.Fatalf(t, err != nil, "expected an error for a missing work file %q", workFQN)
+	tassert.Errorf(t, cos.IsNotExist(err), "expected a not-exist error, got %v", err)
+	tassert.Errorf(t, ecode == http.StatusNotFound, "expected %d, got %d", http.StatusNotFound, ecode)
 }
 
 func BenchmarkObjPut(b *testing.B) {

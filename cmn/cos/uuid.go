@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -256,16 +257,30 @@ func isHexN(s string, n int) bool {
 // see also:
 // - bench/micro/uuid/genid_test.go
 // - cmn/xoshiro256
+const lenTie = 3
+
 func GenTie() string {
 	tie := rtie.Add(1)
 	tie *= GoldenRatio
 
-	b := [3]byte{
+	b := [lenTie]byte{
 		uuidABC[tie&0x3f],
 		uuidABC[(tie>>6)&0x3f],
 		uuidABC[(tie>>12)&0x3f],
 	}
 	return UnsafeS(b[:])
+}
+
+func ValidTie(tie string) bool {
+	if len(tie) != lenTie {
+		return false
+	}
+	for i := range lenTie {
+		if strings.IndexByte(uuidABC, tie[i]) < 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // GenYAID - yet another unique ID:

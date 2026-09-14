@@ -539,9 +539,19 @@ func cleanupConfigDir(name string, keepInitialConfig bool) {
 // common APPEND(file(s)) pre-parser
 //
 
-const appendHandleSepa = "|"
+const (
+	appendHandleSepa = "|"
+
+	// Target-generated handles contain a SID, tie-breaker, checksum type, and
+	// base64-encoded hash state (see apndOI.pack). Their maximum size is 316 bytes
+	// (TestApndPackHandleLen), so handles exceeding the limit are invalid.
+	maxLenAppendHandle = 1024
+)
 
 func preParse(packedHdl string) (items []string, err error) {
+	if l := len(packedHdl); l > maxLenAppendHandle {
+		return nil, fmt.Errorf("invalid APPEND handle: too long (%d > %d)", l, maxLenAppendHandle)
+	}
 	items = strings.SplitN(packedHdl, appendHandleSepa, 4)
 	if len(items) != 4 {
 		err = fmt.Errorf("invalid APPEND handle: %q", packedHdl)

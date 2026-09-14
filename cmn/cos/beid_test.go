@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 // copy-paste xreg.beidSeed (unexported)
@@ -22,6 +23,29 @@ func beidSeed(bucket, smapv, tagh, attempt uint64) uint64 {
 		seed ^= attempt * c
 	}
 	return seed
+}
+
+func TestValidTie(t *testing.T) {
+	tie := cos.GenTie()
+	tassert.Fatalf(t, cos.ValidTie(tie), "GenTie produced a rejected tie-breaker %q", tie)
+
+	accept := []string{tie, "zzz", "a-_", "0Z9"}
+	reject := []string{
+		"",       // empty
+		"zz",     // too short
+		"zzzz",   // too long
+		"z.z",    // separator
+		"z/z",    // path separator
+		"...",    // parent traversal
+		"z z",    // space
+		"z\x00z", // NUL
+	}
+	for _, s := range accept {
+		tassert.Errorf(t, cos.ValidTie(s), "expected %q to be accepted", s)
+	}
+	for _, s := range reject {
+		tassert.Errorf(t, !cos.ValidTie(s), "expected %q to be rejected", s)
+	}
 }
 
 // -------- benchmarks --------
