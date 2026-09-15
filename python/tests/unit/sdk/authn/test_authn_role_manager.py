@@ -1,10 +1,11 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 # pylint: disable=duplicate-code
 
 import unittest
+from itertools import product
 from unittest.mock import patch, Mock
 
 from aistore.sdk.provider import Provider
@@ -178,3 +179,29 @@ class TestAuthNRoleManager(unittest.TestCase):
             path=f"{URL_PATH_AUTHN_ROLES}/{role_name}",
             json=expected_updated_role_info.model_dump(),
         )
+
+    @patch("aistore.sdk.authn.cluster_manager.ClusterManager.get")
+    def test_role_permission_flags(self, mock_cluster_manager_get):
+        mock_cluster_manager_get.return_value = ClusterInfo(id="cluster-id")
+        cases = (
+            ([AccessAttr.ACCESS_RO, AccessAttr.OBJ_LIST], 771),
+            ([AccessAttr.GET, AccessAttr.GET], 1),
+            ([AccessAttr.GET, AccessAttr.PUT], 5),
+        )
+        for operation, bucket_name, (perms, expected) in product(
+            ("create", "update"), (None, "test-bucket"), cases
+        ):
+            with self.subTest(operation=operation, bucket=bucket_name, perms=perms):
+                self.mock_client.request_deserialize.return_value = RoleInfo(
+                    name="test-role", desc="Test Description"
+                )
+                getattr(self.role_manager, operation)(
+                    name="test-role",
+                    desc="Test Description",
+                    cluster_alias="test-cluster",
+                    perms=perms,
+                    bucket_name=bucket_name,
+                )
+                payload = self.mock_client.request.call_args.kwargs["json"]
+                permissions = payload["buckets" if bucket_name else "clusters"]
+                self.assertEqual(permissions[0]["perm"], str(expected))

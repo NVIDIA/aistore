@@ -1,6 +1,8 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
+from functools import reduce
+from operator import or_
 from typing import List, Optional
 
 from aistore.sdk.provider import Provider
@@ -113,7 +115,7 @@ class RoleManager:
             requests.RequestException: If the HTTP request fails.
         """
         # Convert the list of AccessAttr to an integer representing the permissions
-        perm_value = str(sum(perm.value for perm in perms))
+        perm_value = str(reduce(or_, (perm.value for perm in perms), 0))
 
         cluster_uuid = ClusterManager(self.client).get(cluster_alias=cluster_alias).id
         role_info = RoleInfo(name=name, desc=desc)
@@ -194,7 +196,9 @@ class RoleManager:
                 ClusterManager(self.client).get(cluster_alias=cluster_alias).id
             )
             perm_value = (
-                str(sum(perm.value for perm in perms)) if perms else str(AccessAttr)
+                str(reduce(or_, (perm.value for perm in perms), 0))
+                if perms
+                else str(AccessAttr)
             )
 
             if bucket_name:

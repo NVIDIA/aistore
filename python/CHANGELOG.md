@@ -6,6 +6,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Fixed
+
+- AuthN role creation and updates now combine permission flags with bitwise OR,
+  preventing overlapping or repeated flags from granting unintended permissions.
+
 ### Changed
 
 - **BREAKING**: The minimum supported Python version is now 3.10. Python 3.8 and
