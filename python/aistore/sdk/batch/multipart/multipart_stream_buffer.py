@@ -274,7 +274,7 @@ class MultipartStreamBuffer:
             content = content.rstrip(self._whitespace_bytes)
 
         # Consume content + pattern
-        self._buffer.consume(pos + len(pattern))
+        self._buffer.discard(pos + len(pattern))
 
         # Maintain boundary safety margin after consumption
         if self._boundary and not self._exhausted:
@@ -374,7 +374,7 @@ class MultipartStreamBuffer:
                 remaining = remaining[:bpos]
         if clean_endings:
             remaining = remaining.rstrip(self._whitespace_bytes)
-        self._buffer.consume(self.get_buffer_size())
+        self._buffer.discard(self.get_buffer_size())
         return remaining if remaining else None
 
     def find_boundary_position(self) -> int:

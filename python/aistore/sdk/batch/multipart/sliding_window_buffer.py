@@ -231,6 +231,15 @@ class SlidingWindowBuffer:
             self.start_pos - actual_length : self.start_pos
         ].tobytes()
 
+    def discard(self, length: int) -> None:
+        """Advance the window by up to length bytes without copying data."""
+        if length <= 0:
+            return
+
+        actual_length = min(length, self.end_pos - self.start_pos)
+        self.start_pos += actual_length
+        self.total_processed += actual_length
+
     def skip_leading_whitespace(self) -> int:
         """
         Skip leading whitespace characters and return count of bytes skipped.
@@ -248,7 +257,7 @@ class SlidingWindowBuffer:
                 break
 
         if skip_count > 0:
-            self.consume(skip_count)
+            self.discard(skip_count)
 
         return skip_count
 

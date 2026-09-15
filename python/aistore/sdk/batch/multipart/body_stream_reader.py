@@ -93,7 +93,8 @@ class BodyStreamReader(BufferedIOBase):
             return result
 
         # Return partial content
-        result = bytes(self._cached_content[:size])
+        with memoryview(self._cached_content)[:size] as view:
+            result = view.tobytes()
         # More efficient than slicing assignment
         del self._cached_content[:size]
         return result
