@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import hashlib
 import io
@@ -95,7 +95,7 @@ class TestObjectGroupOps(ParallelTestBase):
     def test_evict_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=Provider.AIS)
         with self.assertRaises(InvalidBckProvider):
-            local_bucket.objects(obj_names=[]).evict()
+            local_bucket.objects(obj_names=["test-object"]).evict()
 
     def _prefetch_objects_test_helper(self, num_workers=None):
         obj_group = self._create_small_objects()
@@ -182,7 +182,7 @@ class TestObjectGroupOps(ParallelTestBase):
     def test_prefetch_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=Provider.AIS)
         with self.assertRaises(InvalidBckProvider):
-            local_bucket.objects(obj_names=[]).prefetch()
+            local_bucket.objects(obj_names=["test-object"]).prefetch()
 
     def _copy_objects_test_helper(self, num_workers=None):
         self._create_small_objects()

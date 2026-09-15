@@ -43,6 +43,9 @@ class ObjectGroup(AISSource):
         obj_names (list[str], optional): List of object names to include in this collection
         obj_range (ObjectRange, optional): Range defining which object names in the bucket should be included
         obj_template (str, optional): String argument to pass as template value directly to api
+
+    Raises:
+        ValueError: If the selection is empty or more than one selection is provided.
     """
 
     def __init__(
@@ -60,6 +63,8 @@ class ObjectGroup(AISSource):
             raise ValueError(
                 "ObjectGroup accepts one and only one of: obj_names, obj_range, or obj_template"
             )
+        if (obj_names is not None and not obj_names) or obj_template == "":
+            raise ValueError("Object selection must not be empty")
         if obj_range and not isinstance(obj_range, ObjectRange):
             raise TypeError("obj_range must be of type ObjectRange")
 

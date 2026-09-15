@@ -49,6 +49,12 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["objnames"] = self.obj_names
 
     def test_object_group_parameters(self):
+        for selection in ({"obj_names": []}, {"obj_template": ""}):
+            with self.subTest(selection=selection):
+                with self.assertRaisesRegex(ValueError, "selection must not be empty"):
+                    ObjectGroup(self.mock_bck, **selection)
+        self.mock_bck.make_request.assert_not_called()
+
         obj_names = ["list", "of", "names"]
         obj_range = ObjectRange(prefix=PREFIX_NAME)
         obj_template = "prefix-{0..3}"
