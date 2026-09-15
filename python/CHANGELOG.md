@@ -10,6 +10,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - AuthN role creation and updates now combine permission flags with bitwise OR,
   preventing overlapping or repeated flags from granting unintended permissions.
+- dSort file-based starts preserve all JSON/YAML settings, including `dry_run`
+  and `max_mem_usage`; framework serialization uses the server's `ekm_file_sep` key.
 
 ### Changed
 

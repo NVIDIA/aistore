@@ -126,7 +126,10 @@ class DsortFramework:
     @classmethod
     def from_file(cls, spec):
         """
-        Class method to create a DsortFramework instance from a JSON or YAML file
+        Class method to create a DsortFramework instance from a JSON or YAML file.
+
+        Only fields represented by this class are loaded. Pass the file path directly
+        to Dsort.start() to preserve all server settings, including dry_run and max_mem_usage.
 
         Args:
             spec (str or Path): The path to the JSON or YAML file containing the specification
@@ -190,7 +193,7 @@ class DsortFramework:
             )
 
             framework.ekm_file = spec_data.get("ekm_file", "")
-            framework.ekm_sep = spec_data.get("ekm_sep", "")
+            framework.ekm_sep = spec_data.get("ekm_file_sep", "")
 
             return framework
 
@@ -209,6 +212,6 @@ class DsortFramework:
 
         if self.ekm_file:
             spec["ekm_file"] = self.ekm_file
-            spec["ekm_sep"] = self.ekm_sep
+            spec["ekm_file_sep"] = self.ekm_sep
 
         return spec

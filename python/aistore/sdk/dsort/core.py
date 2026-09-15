@@ -4,6 +4,7 @@ import json
 from typing import Dict, Union
 from pathlib import Path
 from dateutil.parser import isoparse
+import yaml
 
 from aistore.sdk.const import (
     HTTP_METHOD_POST,
@@ -42,18 +43,33 @@ class Dsort:
 
     def start(self, spec: Union[str, Path, DsortFramework]) -> str:
         """
-        Start a dSort job with a provided spec file location or defined framework
+        Start a dSort job with a provided spec file location or defined framework.
+
+        JSON and YAML file settings are sent unchanged for server-side validation.
 
         Args:
             spec (Union[str, Path, DsortFramework]): Path to the spec file or a DsortFramework instance
 
         Returns:
-            dSort job ID
+            str: dSort job ID
+
+        Raises:
+            ValueError: If the input is invalid, the file is missing, the extension is unsupported,
+                or the file does not contain a mapping.
+            json.JSONDecodeError: If the JSON file cannot be parsed.
+            yaml.YAMLError: If the YAML file cannot be parsed.
+            OSError: If the file cannot be read.
         """
         if isinstance(spec, (Path, str)):
-            validate_file(spec)
-            dsort_framework = DsortFramework.from_file(spec)
-            spec = dsort_framework.to_spec()
+            spec_path = Path(spec)
+            validate_file(spec_path)
+            ext = spec_path.suffix.lower()
+            if ext not in (".json", ".yaml", ".yml"):
+                raise ValueError("Specification must be a JSON or YAML file")
+            with open(spec_path, "r", encoding="utf-8") as stream:
+                spec = json.load(stream) if ext == ".json" else yaml.safe_load(stream)
+            if not isinstance(spec, dict):
+                raise ValueError("Specification must contain a mapping")
         elif isinstance(spec, DsortFramework):
             dsort_framework = spec
             spec = dsort_framework.to_spec()

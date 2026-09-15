@@ -6,17 +6,18 @@ The `DsortFramework` class in the Python SDK enables you to define and manage dS
 
 ### Example Usage
 
-1. **Creating a DsortFramework from a JSON/YAML Specification File:**
+1. **Starting from a JSON/YAML Specification File:**
 
    ```python
-   from aistore.sdk.dsort import DsortFramework
+   from aistore.sdk import Client
 
-   # Create a DsortFramework instance from a specification file
-   dsort_framework = DsortFramework.from_file("path/to/spec.json")
-
-   # Start the dSort job
-   client.dsort().start(dsort_framework)
+   client = Client("http://your-aistore-url:8080")
+   client.dsort().start("path/to/spec.json")
    ```
+
+   Passing the path preserves all file settings, including `dry_run`, `max_mem_usage`,
+   and `ekm_file_sep`. `DsortFramework.from_file()` loads only fields represented by
+   that class.
 
 2. **Creating a DsortFramework Directly:**
 

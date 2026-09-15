@@ -1,6 +1,7 @@
 import unittest
 from typing import Dict
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch, mock_open, call
 
 import json
@@ -113,6 +114,61 @@ class TestDsort(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST, path=URL_PATH_DSORT, json=json.loads(VALID_JSON_SPEC)
         )
+
+    def test_start_preserves_file_settings(self):
+        spec = json.loads(VALID_JSON_SPEC)
+        spec.update(
+            dry_run=True,
+            max_mem_usage="25%",
+            description="Preserve these settings",
+            ekm_file="http://example.com/keys.txt",
+            ekm_file_sep=";",
+            extract_concurrency_max_limit=2,
+        )
+        with TemporaryDirectory() as directory:
+            for suffix in (".json", ".yaml", ".yml", ".JSON"):
+                with self.subTest(suffix=suffix):
+                    path = Path(directory) / f"spec{suffix}"
+                    content = (
+                        json.dumps(spec)
+                        if suffix.lower() == ".json"
+                        else yaml.safe_dump(spec)
+                    )
+                    path.write_text(content, encoding="utf-8")
+                    self.mock_client.request.reset_mock()
+                    self.dsort.start(path)
+                    self.mock_client.request.assert_called_once_with(
+                        HTTP_METHOD_POST, path=URL_PATH_DSORT, json=spec
+                    )
+
+    def test_start_rejects_invalid_spec_files(self):
+        cases = (
+            (".json", "[]", ValueError),
+            (".json", "null", ValueError),
+            (".yaml", "", ValueError),
+            (".yaml", "- item", ValueError),
+            (".json", "{", json.JSONDecodeError),
+            (".yaml", "key: [", yaml.YAMLError),
+            (".txt", "{}", ValueError),
+        )
+        with TemporaryDirectory() as directory:
+            for suffix, content, error in cases:
+                with self.subTest(suffix=suffix, content=content):
+                    path = Path(directory) / f"spec{suffix}"
+                    path.write_text(content, encoding="utf-8")
+                    with self.assertRaises(error):
+                        self.dsort.start(path)
+                    self.mock_client.request.assert_not_called()
+
+    def test_framework_uses_server_separator_key(self):
+        spec = json.loads(VALID_JSON_SPEC)
+        spec.update(ekm_file="http://example.com/keys.txt", ekm_file_sep=";")
+        with patch("builtins.open", mock_open(read_data=json.dumps(spec))):
+            framework = DsortFramework.from_file("spec.json")
+        self.assertEqual(framework.ekm_sep, ";")
+        wire_spec = framework.to_spec()
+        self.assertEqual(wire_spec["ekm_file_sep"], ";")
+        self.assertNotIn("ekm_sep", wire_spec)
 
     def test_start_from_framework(self):
         new_id = "789"
