@@ -8,6 +8,7 @@ import time
 from dateutil.parser import isoparse
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
+    GO_ZERO_TIME,
     HTTP_METHOD_GET,
     HTTP_METHOD_PUT,
     QPARAM_WHAT,
@@ -416,7 +417,7 @@ class Job:
     def get_total_time(self) -> Optional[timedelta]:
         """
         Calculates the total job duration as the difference between the earliest start time
-        and the latest end time among all job snapshots. If any snapshot is missing an end_time,
+        and the latest end time among all job snapshots. If any snapshot has a missing or zero end_time,
         returns None to indicate the job is incomplete.
 
         Returns:
@@ -433,7 +434,7 @@ class Job:
 
             for s in snapshots:
                 # First check for incomplete jobs
-                if s.end_time is None:
+                if not s.end_time or s.end_time == GO_ZERO_TIME:
                     return None
 
                 current_end = isoparse(s.end_time)

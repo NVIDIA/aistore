@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from dataclasses import dataclass
@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from dateutil.parser import isoparse
 
+from aistore.sdk.const import GO_ZERO_TIME
 from aistore.sdk.types import JobSnap
 
 
@@ -54,7 +55,7 @@ class WaitResult:
                 aborted = True
             if s.abort_err and error_msg is None:
                 error_msg = s.abort_err
-            if not (s.end_time and s.end_time != "0001-01-01T00:00:00Z"):
+            if not (s.end_time and s.end_time != GO_ZERO_TIME):
                 all_ended = False
             elif s.end_time:
                 end_times.append(isoparse(s.end_time))

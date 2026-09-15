@@ -251,6 +251,7 @@ DUIS = (
 AWS_DEFAULT_REGION = "us-east-1"
 
 # Time constants
+GO_ZERO_TIME = "0001-01-01T00:00:00Z"
 NANOSECONDS_IN_SECOND = 1_000_000_000
 
 DEFAULT_LOG_FORMAT = "%(asctime)s %(levelname)s: %(message)s"

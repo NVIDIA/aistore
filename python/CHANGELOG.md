@@ -8,6 +8,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- Job duration returns `None` for running jobs with Go zero end timestamps.
 - AuthN role creation and updates now combine permission flags with bitwise OR,
   preventing overlapping or repeated flags from granting unintended permissions.
 - dSort file-based starts preserve all JSON/YAML settings, including `dry_run`

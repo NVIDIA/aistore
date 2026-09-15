@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch, call
 from aistore.sdk import Bucket
 from aistore.sdk.const import (
+    GO_ZERO_TIME,
     QPARAM_WHAT,
     QPARAM_FORCE,
     HTTP_METHOD_GET,
@@ -606,7 +607,7 @@ class TestJob(unittest.TestCase):
                     JobSnap(
                         id=self.job_id,
                         is_idle=False,
-                        end_time="0001-01-01T00:00:00Z",
+                        end_time=GO_ZERO_TIME,
                         aborted=False,
                     )
                 ]
@@ -708,12 +709,12 @@ class TestJob(unittest.TestCase):
             start_time="2025-03-10T00:00:00.000000000Z",
             # end_time is not set, job is still running
         )
-        self.mock_client.request_deserialize.return_value = (
-            AggregatedJobSnap.model_validate(
-                {"target1": [snapshot1], "target2": [snapshot2]}
-            )
-        )
-
-        total_time = self.job.get_total_time()
-
-        self.assertEqual(total_time, None)
+        for end_time in ("", GO_ZERO_TIME):
+            with self.subTest(end_time=end_time):
+                snapshot2.end_time = end_time
+                self.mock_client.request_deserialize.return_value = (
+                    AggregatedJobSnap.model_validate(
+                        {"target1": [snapshot1], "target2": [snapshot2]}
+                    )
+                )
+                self.assertIsNone(self.job.get_total_time())

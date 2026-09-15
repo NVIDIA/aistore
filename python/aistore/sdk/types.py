@@ -13,6 +13,7 @@ from aistore.sdk.namespace import Namespace
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.obj.object_props import ObjectProps
 from aistore.sdk.const import (
+    GO_ZERO_TIME,
     HEADER_CONTENT_LENGTH,
     AIS_CHECKSUM_VALUE,
     AIS_ACCESS_TIME,
@@ -550,9 +551,7 @@ class AggregatedJobSnap(RootModel[Dict[str, List[JobSnap]]]):
         Check if any snapshot is finished (aborted, errored, or has valid end_time).
         """
         return any(
-            s.aborted
-            or s.abort_err
-            or (s.end_time and s.end_time != "0001-01-01T00:00:00Z")
+            s.aborted or s.abort_err or (s.end_time and s.end_time != GO_ZERO_TIME)
             for s in self.list_snapshots()
         )
 
