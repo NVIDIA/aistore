@@ -306,6 +306,26 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
             result = websocket.receive_bytes()
             self.assertEqual(result, original_data[::-1])
 
+    # pylint: disable=protected-access
+    async def test_startup_event_connection_limits(self):
+        limits = httpx.Limits(
+            max_connections=7, max_keepalive_connections=3, keepalive_expiry=11
+        )
+        with patch(
+            "aistore.sdk.etl.webserver.fastapi_server.HTTP_LIMITS", limits
+        ), patch(
+            "aistore.sdk.etl.webserver.fastapi_server.resolve_ssl_config",
+            return_value=(True, None),
+        ):
+            await self.etl_server.startup_event()
+        try:
+            pool = self.etl_server.client._transport._pool
+            self.assertEqual(pool._max_connections, 7)
+            self.assertEqual(pool._max_keepalive_connections, 3)
+            self.assertEqual(pool._keepalive_expiry, 11)
+        finally:
+            await self.etl_server.shutdown_event()
+
     async def test_startup_event_default_retries(self):
         """startup_event() defaults to 3 transport retries when AIS_DIRECT_PUT_RETRIES is not set."""
         with mock.patch.dict(os.environ, {}, clear=False):

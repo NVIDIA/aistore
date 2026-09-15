@@ -152,9 +152,10 @@ class FastAPIServer(ETLServer):
             retries=int(os.getenv(AIS_DIRECT_PUT_RETRIES, "3")),
             verify=verify,
             cert=cert,
+            limits=HTTP_LIMITS,
         )
         self.client = httpx.AsyncClient(
-            timeout=None, limits=HTTP_LIMITS, transport=transport, headers=headers
+            timeout=None, transport=transport, headers=headers
         )
         self.logger.info("Server starting up")
 

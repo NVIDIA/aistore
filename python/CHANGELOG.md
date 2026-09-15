@@ -15,6 +15,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - ETL pipelines preserve object names containing `#`, `?`, `%`, spaces, or
   Unicode characters when forwarding buffered or streaming output to the next
   stage. Existing encoded destination paths and signed query values are retained.
+- FastAPI ETL servers apply configured connection limits to the active HTTP transport.
 
 ### Changed
 
