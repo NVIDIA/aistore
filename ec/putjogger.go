@@ -151,11 +151,8 @@ func (c *putJogger) _do(req *request, lom *core.LOM) {
 		c.parent.AddErr(err, 0)
 	}
 	c.ntotal++
-	if err == nil && c.adv.ShouldCheck(c.ntotal) {
-		c.adv.Refresh()
-		if c.adv.Sleep > 0 {
-			time.Sleep(c.adv.Sleep)
-		}
+	if err == nil {
+		c.adv.Throttle(c.ntotal)
 	}
 }
 

@@ -476,13 +476,7 @@ func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 
 func (r *LsoXact) doPage() *LsoRsp {
 	// throttle
-	nreq := r.stats.nreq.Inc()
-	if r.adv.ShouldCheck(nreq) {
-		r.adv.Refresh()
-		if r.adv.Sleep > 0 {
-			time.Sleep(r.adv.Sleep)
-		}
-	}
+	r.adv.Throttle(r.stats.nreq.Inc())
 
 	// repeated request for same page
 	if r.msg.ContinuationToken != "" && r.msg.ContinuationToken == r.token {

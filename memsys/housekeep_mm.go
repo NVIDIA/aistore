@@ -110,16 +110,20 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 	return r.hkIval(p, now)
 }
 
-func (r *MMSA) hkIval(pressure int, now int64) (d time.Duration) {
+// return housekeeping interval for a given memory pressure (sans jitter)
+func (r *MMSA) HKIval(pressure int) time.Duration {
 	switch pressure {
 	case PressureLow:
-		d = r.TimeIval * 2
+		return r.TimeIval << 1
 	case PressureModerate:
-		d = r.TimeIval
+		return r.TimeIval
 	default:
-		d = r.TimeIval / 2
+		return r.TimeIval >> 1 // TODO: differentiate between high and critical(?)
 	}
-	return hk.Jitter(d, now)
+}
+
+func (r *MMSA) hkIval(pressure int, now int64) time.Duration {
+	return hk.Jitter(r.HKIval(pressure), now)
 }
 
 // refresh and clone internal hits/idle stats

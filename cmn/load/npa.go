@@ -6,6 +6,7 @@ package load
 
 import (
 	"runtime"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/oom"
@@ -98,6 +99,20 @@ func Mem(mems ...*sys.MemStat) Load {
 	default:
 		return Low
 	}
+}
+
+// return `mm` housekeeping interval for a given memory grade (see memsys.HKIval)
+func Ival(mm *memsys.MMSA, l Load) time.Duration {
+	p := memsys.PressureLow
+	switch l {
+	case Moderate:
+		p = memsys.PressureModerate
+	case High:
+		p = memsys.PressureHigh
+	case Critical:
+		p = memsys.PressureExtreme
+	}
+	return mm.HKIval(p)
 }
 
 func CPU() Load {

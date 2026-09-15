@@ -5,7 +5,6 @@
 package core
 
 import (
-	"runtime"
 	"sync"
 	"time"
 
@@ -166,13 +165,8 @@ func (u *rmbcks) f(hkey, value any) bool {
 		}
 		// throttle
 		u.nd++
-		if u.throttle && u.adv.ShouldCheck(u.nd) {
-			u.adv.Refresh()
-			if u.adv.Sleep > 0 {
-				time.Sleep(u.adv.Sleep)
-			} else {
-				runtime.Gosched()
-			}
+		if u.throttle {
+			u.adv.Throttle(u.nd)
 		}
 		break
 	}
@@ -378,14 +372,7 @@ func (evct *evct) f(hkey, value any) bool {
 
 	// throttle
 	evct.evicted++
-	if evct.adv.ShouldCheck(evct.evicted) {
-		evct.adv.Refresh()
-		if evct.adv.Sleep > 0 {
-			time.Sleep(evct.adv.Sleep)
-		} else {
-			runtime.Gosched()
-		}
-	}
+	evct.adv.Throttle(evct.evicted)
 	return evct.parent.rc.Load() == 0
 }
 

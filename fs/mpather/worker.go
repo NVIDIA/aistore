@@ -6,7 +6,6 @@ package mpather
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -135,12 +134,7 @@ func (w *worker) do() error {
 			}
 			if err = lom.Load(false /*cache it*/, false); err == nil {
 				w.ntotal++
-				if w.adv.ShouldCheck(w.ntotal) {
-					w.adv.Refresh()
-					if w.adv.Sleep > 0 {
-						time.Sleep(w.adv.Sleep)
-					}
-				}
+				w.adv.Throttle(w.ntotal)
 				w.opts.Callback(lom, buf)
 			} else {
 				core.FreeLOM(lom)

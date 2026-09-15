@@ -5,6 +5,7 @@
 package load
 
 import (
+	"runtime"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -69,6 +70,26 @@ func (a *Advice) Init(flags uint64, extra *Extra) {
 func (a *Advice) ShouldCheck(n int64) bool {
 	debug.Assert(a.Batch > 0, "must check every so often")
 	return n&a.Batch == a.Batch
+}
+
+// throttle the caller once per batch; return true if slept
+// (compare with Pace() below)
+func (a *Advice) Throttle(n int64) bool {
+	return a.ShouldCheck(n) && a.Pace()
+}
+
+// - refresh the recommendation (a.k.a. load advice)
+// - then sleeps if recommended
+// - return true if slept
+// (compare with Throttle() above)
+func (a *Advice) Pace() bool {
+	a.Refresh()
+	if a.Sleep > 0 {
+		time.Sleep(a.Sleep)
+		return true
+	}
+	runtime.Gosched()
+	return false
 }
 
 // recompute throttling recommendation; note:

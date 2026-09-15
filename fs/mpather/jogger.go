@@ -7,10 +7,8 @@ package mpather
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -310,13 +308,8 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 	}
 
 	n := j.numvis.Inc()
-	if j.opts.RW && j.adv.ShouldCheck(n) {
-		j.adv.Refresh()
-		if j.adv.Sleep > 0 {
-			time.Sleep(j.adv.Sleep)
-		} else {
-			runtime.Gosched()
-		}
+	if j.opts.RW {
+		j.adv.Throttle(n)
 	}
 	return nil
 }

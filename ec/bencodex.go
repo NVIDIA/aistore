@@ -378,11 +378,8 @@ func (j *rcvyJogger) run() {
 		core.FreeLOM(lom)
 
 		n++
-		if err == nil && j.adv.ShouldCheck(n) {
-			j.adv.Refresh()
-			if j.adv.Sleep > 0 {
-				time.Sleep(j.adv.Sleep)
-			}
+		if err == nil {
+			j.adv.Throttle(n)
 		}
 	}
 }
