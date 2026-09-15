@@ -743,7 +743,7 @@ class Bucket(AISSource):
         self._verify_start_after(start_after)
         uuid = ""
         continuation_token = ""
-        obj_list = None
+        obj_list = []
 
         while True:
             resp = self.list_objects(
@@ -758,9 +758,7 @@ class Bucket(AISSource):
                 # `start_after` seeds the first page only; later pages resume via the token.
                 start_after=start_after if continuation_token == "" else "",
             )
-            if obj_list:
-                obj_list = obj_list + resp.entries
-            obj_list = obj_list or resp.entries
+            obj_list.extend(resp.entries)
             if resp.continuation_token == "":
                 break
             continuation_token = resp.continuation_token

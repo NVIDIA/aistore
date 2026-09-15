@@ -16,6 +16,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   Unicode characters when forwarding buffered or streaming output to the next
   stage. Existing encoded destination paths and signed query values are retained.
 - FastAPI ETL servers apply configured connection limits to the active HTTP transport.
+- Object listing collects pages without repeatedly copying all prior entries.
 
 ### Changed
 
