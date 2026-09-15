@@ -209,6 +209,12 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
 | **WebSocket** | Supported | Not supported (use HTTP transport) |
 | **Pipeline / direct-put** | Supported | Supported (uses `CountingIterator` for size tracking) |
 
+`HTTPMultiThreadedServer` requires `Content-Length` for PUT request bodies.
+It returns HTTP 501 and closes the connection when `Transfer-Encoding` is
+present, before either transform method runs. It does not decode chunked input.
+Use FastAPI or Flask behind a server that supports chunked requests when a
+pipeline stage sends streaming output to the next stage.
+
 **When to use streaming:**
 - Output is significantly larger than input (e.g., small manifest -> multi-GB TAR)
 - Output is composed of independent pieces that can be emitted incrementally

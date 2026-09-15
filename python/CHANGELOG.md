@@ -17,6 +17,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   stage. Existing encoded destination paths and signed query values are retained.
 - FastAPI ETL servers apply configured connection limits to the active HTTP transport.
 - Object listing collects pages without repeatedly copying all prior entries.
+- `HTTPMultiThreadedServer` rejects PUT requests with `Transfer-Encoding`
+  with HTTP 501 before transformation. Chunked input is not supported; this
+  prevents an unsupported request body from being transformed as empty data.
 
 ### Changed
 

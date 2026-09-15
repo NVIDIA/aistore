@@ -4,6 +4,7 @@
 
 import io
 import time
+from http import HTTPStatus
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from typing import BinaryIO, Iterator, Type, Tuple
@@ -31,6 +32,7 @@ from aistore.sdk.etl.webserver.utils import (
 from aistore.sdk.errors import InvalidPipelineError, ETLDirectPutTransientError
 from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
+    HEADER_TRANSFER_ENCODING,
     HEADER_CONTENT_TYPE,
     HEADER_NODE_URL,
     HEADER_DIRECT_PUT_LENGTH,
@@ -566,7 +568,14 @@ class HTTPMultiThreadedServer(ETLServer):
         def do_PUT(self):
             """
             Handle PUT requests by transforming the incoming data and responding with the transformed data.
+
+            Transfer-Encoding is unsupported and returns HTTP 501 before transformation.
             """
+            if HEADER_TRANSFER_ENCODING in self.headers:
+                self.send_error(
+                    HTTPStatus.NOT_IMPLEMENTED, "Transfer-Encoding is not supported"
+                )
+                return
             logger = self.server.etl_server.logger
             parsed = urlparse(self.path)
             raw_path = parsed.path

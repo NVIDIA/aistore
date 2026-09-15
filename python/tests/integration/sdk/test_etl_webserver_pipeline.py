@@ -14,6 +14,8 @@ from aistore.sdk.const import (
     HEADER_NODE_URL,
     HEADER_DIRECT_PUT_LENGTH,
     HEADER_CONTENT_LENGTH,
+    HEADER_CONNECTION,
+    HEADER_TRANSFER_ENCODING,
     ETL_WS_PIPELINE,
 )
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
@@ -21,6 +23,7 @@ from aistore.sdk.etl.webserver.flask_server import FlaskServer
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 from aistore.sdk.etl.webserver.utils import parse_etl_pipeline
 from aistore.sdk.errors import InvalidPipelineError
+from tests.const import TEST_TIMEOUT
 
 CLEANUP_DELAY = 0.1  # Minimal delay for cleanup operations
 
@@ -316,6 +319,44 @@ class TestPipelineParsing(TestPipelineBase):
 
 class TestMultiServerPipelineIntegration(TestPipelineBase):
     """Integration tests with actual servers running on different ports."""
+
+    @pytest.mark.etl
+    def test_http_chunked_put_rejected(self):
+        """Reject a real chunked upload before transformation."""
+        etl = MockHTTPETLServer()
+        self.addCleanup(etl.session.close)
+        with HTTPServer(("127.0.0.1", 0), etl.RequestHandler) as server:
+            server.etl_server = etl
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/test"
+                with requests.Session() as client:
+                    client.trust_env = False
+                    with patch.object(
+                        etl, "transform", wraps=etl.transform
+                    ) as transform:
+                        with client.put(
+                            url, data=iter([b"hello"]), timeout=TEST_TIMEOUT
+                        ) as response:
+                            self.assertEqual(
+                                response.request.headers[HEADER_TRANSFER_ENCODING],
+                                "chunked",
+                            )
+                            self.assertEqual(response.status_code, 501)
+                            self.assertEqual(
+                                response.headers[HEADER_CONNECTION], "close"
+                            )
+                        transform.assert_not_called()
+                    with client.put(
+                        url, data=b"hello", timeout=TEST_TIMEOUT
+                    ) as response:
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(response.content, b"HELLO")
+            finally:
+                server.shutdown()
+                thread.join(timeout=TEST_TIMEOUT)
+                self.assertFalse(thread.is_alive())
 
     @pytest.mark.etl
     def test_http_to_http_pipeline_chain(self):

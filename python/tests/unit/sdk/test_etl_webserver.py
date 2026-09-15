@@ -167,6 +167,53 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         )
         self.assertIn(b"transformed", handler.wfile.getvalue())
 
+    def test_put_wire_framing(self):
+        """Parse real HTTP bytes without opening a network connection."""
+        cases = (
+            (b"Content-Length: 5\r\n", b"hello", 200),
+            (b"Transfer-Encoding: chunked\r\n", b"5\r\nhello\r\n0\r\n\r\n", 501),
+            (
+                b"Transfer-Encoding: chunked\r\nContent-Length: 5\r\n",
+                b"5\r\nhello\r\n0\r\n\r\n",
+                501,
+            ),
+            (b"Transfer-Encoding: gzip\r\n", b"encoded", 501),
+            (b"Transfer-Encoding:\r\n", b"", 501),
+        )
+        for streaming in (False, True):
+            for headers, body, status in cases:
+                with self.subTest(streaming=streaming, headers=headers):
+                    request = io.BytesIO(
+                        b"PUT /test/object HTTP/1.1\r\nHost: test\r\n"
+                        + headers
+                        + b"\r\n"
+                        + body
+                    )
+                    output = io.BytesIO()
+                    connection = MagicMock()
+                    connection.makefile.side_effect = (request, output)
+                    server = MagicMock()
+                    etl = server.etl_server
+                    etl.use_streaming = streaming
+                    etl.transform.side_effect = lambda data, *_: data.upper()
+                    etl.transform_stream.side_effect = lambda reader, *_: (
+                        reader.read().upper(),
+                    )
+                    handler_class = HTTPMultiThreadedServer.RequestHandler
+                    with (
+                        patch.object(handler_class, "wbufsize", -1),
+                        patch.object(output, "close"),
+                    ):
+                        handler_class(connection, ("127.0.0.1", 0), server)
+                    response = output.getvalue()
+                    self.assertIn(f" {status} ".encode(), response.split(b"\r\n", 1)[0])
+                    if status == 501:
+                        self.assertIn(b"Connection: close\r\n", response)
+                        etl.transform.assert_not_called()
+                        etl.transform_stream.assert_not_called()
+                    else:
+                        self.assertTrue(response.endswith(b"HELLO"))
+
     def test_transform_get_with_direct_put(self):
         direct_put_url = "http://some-target/put/object"
         handler = DummyRequestHandler()
