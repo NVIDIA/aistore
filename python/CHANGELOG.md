@@ -12,6 +12,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   preventing overlapping or repeated flags from granting unintended permissions.
 - dSort file-based starts preserve all JSON/YAML settings, including `dry_run`
   and `max_mem_usage`; framework serialization uses the server's `ekm_file_sep` key.
+- ETL pipelines preserve object names containing `#`, `?`, `%`, spaces, or
+  Unicode characters when forwarding buffered or streaming output to the next
+  stage. Existing encoded destination paths and signed query values are retained.
 
 ### Changed
 

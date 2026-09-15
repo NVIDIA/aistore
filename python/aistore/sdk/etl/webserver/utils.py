@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import base64
 from typing import Type, Tuple
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+from urllib.parse import quote, urlparse, urlunparse, parse_qsl, urlencode
 
 import cloudpickle
 import requests
@@ -72,7 +72,7 @@ def compose_etl_direct_put_url(
     Args:
         direct_put_url (str): Destination node's direct PUT URL, possibly with path/query.
         host_target (str): Base AIS target URL used for scheme and base path.
-        obj_path (str): Path of the object to PUT.
+        obj_path (str): Decoded path of the object to PUT.
         etl_args (str): Per-request transform arguments to forward to the next
             pipeline stage (the receiving ETL server reads them from the incoming
             query). Empty string forwards nothing.
@@ -87,7 +87,7 @@ def compose_etl_direct_put_url(
         final_path = host.path + direct.path
     else:
         # Case 1: pipeline stage → append object path
-        final_path = obj_path
+        final_path = quote(obj_path, safe="/@")
 
     # Keep xid/stats query params from the destination, then replace any existing
     # etl_args so downstream stages receive the same per-request args without

@@ -3,7 +3,7 @@
 import os
 import io
 import unittest
-from urllib.parse import quote as url_quote, urlparse, parse_qs
+from urllib.parse import quote as url_quote, unquote, urlparse, parse_qs
 from unittest import mock
 from unittest.mock import MagicMock, patch, AsyncMock
 
@@ -3135,6 +3135,21 @@ class TestComposeETLDirectPutURL(unittest.TestCase):
         self.assertEqual(query["uuid"], ["xyz"])
         self.assertEqual(query[QPARAM_ETL_ARGS], ["jpeg"])
 
+    def test_encoded_destination_preserved(self):
+        """An existing target path and signed query are not encoded again."""
+        destination = (
+            "http://target:8080/bucket/a%23b%3Fc%252F%E9%9B%AA"
+            "?hmac=a%2Bb%2F%3D&uuid=job&empty="
+        )
+        url = compose_etl_direct_put_url(destination, self.host, "ignored#path")
+        expected = (
+            "http://target:8080/v1/etl/_object/etl-name/secret"
+            "/bucket/a%23b%3Fc%252F%E9%9B%AA"
+            "?hmac=a%2Bb%2F%3D&uuid=job&empty="
+        )
+        self.assertEqual(url, expected)
+        self.assertEqual(requests.Request("PUT", url).prepare().url, expected)
+
 
 class TestETLArgsPipelineForwarding(unittest.TestCase):
     """Each server forwards the incoming etl_args onto the direct-put hop so that
@@ -3148,6 +3163,69 @@ class TestETLArgsPipelineForwarding(unittest.TestCase):
         )
         env.start()
         self.addCleanup(env.stop)
+
+    def test_direct_put_object_paths(self):
+        """All three servers preserve decoded object names on both PUT paths."""
+        etl_args = "resize?size=10#test%"
+        handler = DummyRequestHandler()
+        flask = DummyFlaskServer()
+        fastapi = DummyFastAPIServer()
+        fastapi.client = AsyncMock()
+        response = MagicMock(status_code=200, content=b"")
+        handler.server.etl_server.client_put.return_value = response
+        handler.server.etl_server.session.put.return_value = response
+        flask.client_put = MagicMock(return_value=response)
+        flask.session.put = MagicMock(return_value=response)
+        fastapi.client.put.return_value = response
+
+        for streaming in (False, True):
+            for path in (
+                "bucket/a#b?c.txt",
+                "bucket/literal%2F.txt",
+                "bucket/雪 %@.txt",
+            ):
+                for server in (handler, flask, fastapi):
+                    with self.subTest(
+                        server=type(server).__name__, streaming=streaming, path=path
+                    ):
+                        # Flask and FastAPI routes supply decoded paths. The
+                        # threaded handler passes the escaped request path.
+                        incoming = (
+                            url_quote("/" + path, safe="/@")
+                            if server is handler
+                            else path
+                        )
+                        args = (
+                            "http://next-stage:8000",
+                            iter([b"data"]) if streaming else b"data",
+                            "",
+                            incoming,
+                            etl_args,
+                        )
+                        method = getattr(
+                            server, "_direct_put_stream" if streaming else "_direct_put"
+                        )
+                        if server is fastapi:
+                            anyio.run(method, *args)
+                            call = fastapi.client.put.call_args
+                        else:
+                            method(*args)
+                            etl = (
+                                handler.server.etl_server
+                                if server is handler
+                                else flask
+                            )
+                            call = (
+                                etl.session.put if streaming else etl.client_put
+                            ).call_args
+                        parsed = urlparse(
+                            requests.Request("PUT", call.args[0]).prepare().url
+                        )
+                        self.assertEqual(unquote(parsed.path), "/" + path)
+                        self.assertEqual(parsed.fragment, "")
+                        self.assertEqual(
+                            parse_qs(parsed.query)[QPARAM_ETL_ARGS], [etl_args]
+                        )
 
     def test_http_buffered_forwards_etl_args(self):
         """HTTPMultiThreadedServer forwards etl_args on the buffered direct-put hop."""

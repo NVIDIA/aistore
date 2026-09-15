@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import io
@@ -9,7 +9,7 @@ from socketserver import ThreadingMixIn
 from typing import BinaryIO, Iterator, Type, Tuple
 import signal
 import threading
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import unquote, urlparse, parse_qs
 
 import requests
 
@@ -189,7 +189,10 @@ class HTTPMultiThreadedServer(ETLServer):
             """
             try:
                 url = compose_etl_direct_put_url(
-                    direct_put_url, self.server.etl_server.host_target, path, etl_args
+                    direct_put_url,
+                    self.server.etl_server.host_target,
+                    unquote(path),
+                    etl_args,
                 )
                 headers = {}
                 if remaining_pipeline:
@@ -356,7 +359,10 @@ class HTTPMultiThreadedServer(ETLServer):
             """Stream transformed output directly to the next pipeline stage."""
             try:
                 url = compose_etl_direct_put_url(
-                    direct_put_url, self.server.etl_server.host_target, path, etl_args
+                    direct_put_url,
+                    self.server.etl_server.host_target,
+                    unquote(path),
+                    etl_args,
                 )
                 headers = {}
                 if remaining_pipeline:
