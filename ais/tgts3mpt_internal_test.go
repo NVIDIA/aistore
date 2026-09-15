@@ -10,14 +10,37 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
+
+func TestSetS3UserMetadata(t *testing.T) {
+	lom := &core.LOM{ObjName: "object"}
+	hdr := make(http.Header)
+	hdr.Set("X-Amz-Meta-Valid", "value")
+	if err := setS3UserMetadata(lom, hdr); err != nil {
+		t.Fatal(err)
+	}
+	if value, ok := lom.GetCustomKey("X-Amz-Meta-Valid"); !ok || value != "value" {
+		t.Fatalf("unexpected metadata: %q, %t", value, ok)
+	}
+
+	lom = &core.LOM{ObjName: "object"}
+	hdr.Set("X-Amz-Meta-Too-Large", strings.Repeat("x", 3*cos.KiB))
+	if err := setS3UserMetadata(lom, hdr); err == nil {
+		t.Fatal("expected oversized metadata to fail validation")
+	}
+	if metadata := lom.GetCustomMD(); metadata != nil {
+		t.Fatalf("metadata changed after validation failed: %v", metadata)
+	}
+}
 
 func TestReadCompleteMptBody(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {

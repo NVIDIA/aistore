@@ -33,8 +33,8 @@ const (
 
 type (
 	up struct {
-		u   *core.Ufest
-		rmd map[string]string
+		u        *core.Ufest
+		metadata map[string]string
 	}
 	ups struct {
 		t *target
@@ -74,7 +74,7 @@ type (
 	}
 )
 
-func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
+func (ups *ups) init(id string, lom *core.LOM, metadata map[string]string) error {
 	manifest, err := core.NewUfest(id, lom, false /*must-exist*/)
 	if err != nil {
 		return err
@@ -85,35 +85,34 @@ func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
 	if ups.m == nil {
 		ups.m = make(map[string]up, iniCapUploads)
 	}
-	err = ups._add(id, manifest, rmd)
+	err = ups._add(id, manifest, metadata)
 	ups.Unlock()
 	return err
 }
 
-func (ups *ups) _add(id string, manifest *core.Ufest, rmd map[string]string) (err error) {
+func (ups *ups) _add(id string, manifest *core.Ufest, metadata map[string]string) (err error) {
 	debug.AssertFunc(func() bool { return manifest.Lom() != nil })
 	if _, ok := ups.m[id]; ok {
 		err = fmt.Errorf("duplicated upload ID: %q", id)
 		debug.AssertNoErr(err)
 		return
 	}
-	ups.m[id] = up{manifest, rmd}
+	ups.m[id] = up{manifest, metadata}
 	return
 }
 
 // NOTE:
 // - if not in memory may try to load from persistence given feat.ResumeInterruptedMPU
-// - and, if successful, will return remoteMeta = nil
+// - and, if successful, will return metadata = nil
 // TODO:
-// - consider deriving remoteMeta from lom.GetCustomMD() vs the risk of getting out of sync with remote
 // - consider adding stats counter mpu.resume_partial_count
-func (ups *ups) get(id string, lom *core.LOM) (manifest *core.Ufest, remoteMeta map[string]string) {
+func (ups *ups) get(id string, lom *core.LOM) (manifest *core.Ufest, metadata map[string]string) {
 	ups.RLock()
 	up, ok := ups.m[id]
 	ups.RUnlock()
 	if ok {
 		manifest = up.u
-		remoteMeta = up.rmd
+		metadata = up.metadata
 		debug.AssertFunc(func() bool { return id == manifest.ID() })
 		return
 	}
@@ -142,7 +141,7 @@ func (ups *ups) loadPartial(id string, lom *core.LOM, add bool) (manifest *core.
 	if add {
 		ups.Lock()
 		if _, ok := ups.m[id]; !ok {
-			ups._add(id, manifest, nil /*remote metadata*/)
+			ups._add(id, manifest, nil /*initiation metadata*/)
 		}
 		ups.Unlock()
 	}
@@ -268,9 +267,6 @@ func (ups *ups) start(r *http.Request, lom *core.LOM, skipBackend bool) (uploadI
 func (ups *ups) _start(r *http.Request, lom *core.LOM, skipBackend bool) (uploadID string, metadata map[string]string, err error) {
 	bck := lom.Bck()
 	if bck.IsRemote() && !skipBackend {
-		// Extract metadata:
-		// - from HTTP request headers if available (normal upload path)
-		// - from LOM's existing custom metadata if no request (e.g., rechunk SyncRemote)
 		switch {
 		case r != nil && bck.IsRemoteS3():
 			metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
@@ -282,9 +278,14 @@ func (ups *ups) _start(r *http.Request, lom *core.LOM, skipBackend bool) (upload
 		if err := cmn.ValidateCustomMD(metadata); err != nil {
 			return "", nil, fmt.Errorf("%s: %w", lom.Cname(), err)
 		}
+
 		uploadID, _, err = ups.t.Backend(bck).StartMpt(lom, r)
 	} else {
 		uploadID = cos.GenUUID()
+		if r != nil {
+			// S3 completion does not repeat user metadata sent at initiation.
+			metadata = lom.GetCustomMD()
+		}
 	}
 
 	return uploadID, metadata, err
@@ -453,7 +454,7 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		uploadID = args.uploadID
 		t        = ups.t
 	)
-	manifest, remoteMeta := ups.get(uploadID, lom)
+	manifest, metadata := ups.get(uploadID, lom)
 	if manifest == nil {
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
 	}
@@ -487,8 +488,11 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		etag = tag
 	}
 
-	if remote && remoteMeta != nil {
-		md := ups.encodeRemoteMetadata(lom, remoteMeta)
+	if metadata != nil {
+		md := metadata
+		if remote {
+			md = ups.encodeRemoteMetadata(lom, metadata)
+		}
 		for k, v := range md {
 			lom.SetCustomKey(k, v)
 		}

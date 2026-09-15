@@ -236,6 +236,12 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	}
 	started := time.Now()
 	lom.SetAtimeUnix(started.UnixNano())
+	if bck.IsAIS() {
+		if err := setS3UserMetadata(lom, r.Header); err != nil {
+			s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest, Code: s3.ErrCodeInvalidArgument})
+			return
+		}
+	}
 
 	poi := allocPOI()
 	{
@@ -254,6 +260,22 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	} else {
 		s3.SetS3Headers(w.Header(), lom)
 	}
+}
+
+func setS3UserMetadata(lom *core.LOM, hdr http.Header) error {
+	metadata := make(cos.StrKVs)
+	for k := range hdr {
+		if strings.HasPrefix(k, s3.HeaderMetaPrefix) {
+			metadata[k] = hdr.Get(k)
+		}
+	}
+	if err := cmn.ValidateCustomMD(metadata); err != nil {
+		return fmt.Errorf("%s: %w", lom.Cname(), err)
+	}
+	for k, v := range metadata {
+		lom.SetCustomKey(k, v)
+	}
+	return nil
 }
 
 // GET s3/<bucket-name[/<object-name>]

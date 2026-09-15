@@ -47,6 +47,12 @@ func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return
 	}
+	if bck.IsAIS() {
+		if err := setS3UserMetadata(lom, r.Header); err != nil {
+			s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest, Code: s3.ErrCodeInvalidArgument})
+			return
+		}
+	}
 
 	uploadID, err := t.ups.start(r, lom, false /*skipBackend*/)
 	if err != nil {

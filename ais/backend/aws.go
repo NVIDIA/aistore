@@ -420,6 +420,9 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 			oa.SetCksum(cksumType, cksumValue)
 		}
 	}
+	for k, v := range h.EncodeMetadata(headOutput.Metadata) {
+		oa.SetCustomKey(k, v)
+	}
 
 	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
 	// - only shown via list-objects and HEAD when not present
