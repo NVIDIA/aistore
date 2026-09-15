@@ -123,16 +123,13 @@ type snapsFinished struct {
 
 func (c *snapsFinished) check(snaps MultiSnap) (bool, bool, error) {
 	if c.id != "" {
-		// specific UUID: wait until observed and terminal (finished OR aborted)
-		for _, tsnaps := range snaps {
-			for _, snap := range tsnaps {
-				if snap.ID == c.id {
-					return snap.IsFinished() || snap.IsAborted(), false, nil
-				}
-			}
-		}
-		// keep polling
-		return false, false, nil
+		// Wait for all reported instances of this UUID to finish, or any to abort.
+		// A target that does not report xid is ambiguous: the xaction may not run there,
+		// may not be visible yet, or may have finished and been pruned from its xreg.
+		// Missing instances therefore do not block completion.
+		// TODO: add a strict all-target wait option with an explicit participant set.
+		aborted, running, notstarted := snaps._get(c.id, false /*idle*/)
+		return aborted || (!running && !notstarted), false, nil
 	}
 
 	// kind-only: require seeing at least one running xaction, then stable "emptiness"

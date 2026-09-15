@@ -106,11 +106,11 @@ func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *core.Snap, error
 func (xs MultiSnap) AggregateState(xid string) (aborted, running, notstarted bool) {
 	if xid != "" {
 		debug.AssertFunc(func() bool { return IsValidUUID(xid) }, xid)
-		return xs._get(xid)
+		return xs._get(xid, true /*idle*/)
 	}
 	uuids := xs.GetUUIDs()
 	for _, xid = range uuids {
-		a, r, ns := xs._get(xid)
+		a, r, ns := xs._get(xid, true /*idle*/)
 		aborted = aborted || a
 		notstarted = notstarted || ns
 		running = running || r
@@ -118,8 +118,8 @@ func (xs MultiSnap) AggregateState(xid string) (aborted, running, notstarted boo
 	return aborted, running, notstarted
 }
 
-// (all targets, given xaction)
-func (xs MultiSnap) _get(xid string) (aborted, running, notstarted bool) {
+// Aggregate all reported instances of xid; idle selects idle rather than terminal state.
+func (xs MultiSnap) _get(xid string, idle bool) (aborted, running, notstarted bool) {
 	var nt, nr, ns, nf int
 	for _, snaps := range xs {
 		nt++
@@ -134,7 +134,7 @@ func (xs MultiSnap) _get(xid string) (aborted, running, notstarted bool) {
 				return true, false, false
 			case !xsnap.Started():
 				ns++
-			case !xsnap.IsIdle():
+			case idle && !xsnap.IsIdle(), !idle && !xsnap.IsFinished():
 				nr++
 			}
 			break
