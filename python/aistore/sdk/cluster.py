@@ -100,7 +100,9 @@ class Cluster:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        params = {QPARAM_PROVIDER: Provider.parse(provider).value}
+        params = {
+            QPARAM_PROVIDER: "" if provider == "" else Provider.parse(provider).value
+        }
         action = ActionMsg(action=ACT_LIST).model_dump()
 
         return self.client.request_deserialize(

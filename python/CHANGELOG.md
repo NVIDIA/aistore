@@ -10,6 +10,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - Job duration returns `None` for running jobs with Go zero end timestamps.
 - Empty object-name lists and templates raise `ValueError` when creating an object group.
+- Cluster bucket listing accepts an empty provider to list buckets from all providers.
 - AuthN role creation and updates now combine permission flags with bitwise OR,
   preventing overlapping or repeated flags from granting unintended permissions.
 - dSort file-based starts preserve all JSON/YAML settings, including `dry_run`

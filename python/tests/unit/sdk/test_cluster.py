@@ -60,9 +60,14 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             params={QPARAM_WHAT: WHAT_SMAP},
         )
 
-    @cases(*Provider)
+    @cases(*Provider, "", "s3", "gs")
     def test_list_buckets(self, provider):
-        expected_params = {QPARAM_PROVIDER: provider.value}
+        expected_provider = (
+            provider.value
+            if isinstance(provider, Provider)
+            else {"": "", "s3": "aws", "gs": "gcp"}[provider]
+        )
+        expected_params = {QPARAM_PROVIDER: expected_provider}
         self.list_buckets_exec_assert(expected_params, provider=provider)
 
     def test_list_buckets_default_param(self):
