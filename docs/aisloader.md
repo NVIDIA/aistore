@@ -455,12 +455,13 @@ AISLoader can benchmark both **archive creation (PUT)** and **reading individual
 
 | Parameter | Description |
 |----------|-------------|
-| `-arch.pct` | Percentage of PUTs that create shards (0–100). `100` = all PUTs create shards; `30` = 30% shards, 70% plain objects. For pure-read archpath workloads (`-pctput=0`), set `-arch.list` instead. |
-| `-arch.list` | Treat the bucket as archive-aware on listing/GET. Enables archpath-selective GetBatch reads. Required for read-only archpath workloads. |
 | `-arch.format` | Archive format: `.tar` (default), `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`. |
+| `-arch.list` | Treat the bucket as archive-aware on listing/GET. Enables archpath-selective GetBatch reads. Required for read-only archpath workloads. |
+| `-arch.prefix` | Optional prefix inside archive (e.g., `trunk-` or `a/b/c/trunk-`) |
 | `-arch.num-files` | Files per shard for PUT. `0` = auto-computed from `arch.minsize` / `arch.maxsize`. |
 | `-arch.minsize` | Minimum size of files inside shards (supports multiplicative suffixes). |
 | `-arch.maxsize` | Maximum size of files inside shards (supports multiplicative suffixes). |
+| `-arch.pct` | Percentage of PUTs that create shards (0-100). `100` = all PUTs create shards; `30` = 30% shards, 70% plain objects. For pure-read archpath workloads (`-pctput=0`), set `-arch.list` instead. |
 
 When `-arch.pct > 0` (PUT workloads that create shards) or `-arch.list` is set (read workloads), aisloader:
 1. Lists objects with archive expansion enabled (`LsArchDir`)
@@ -767,35 +768,28 @@ For the most recently updated command-line options and examples, please run `ais
 ```console
     $ ais ls ais://nnn --summary
     NAME             PRESENT         OBJECTS         SIZE (apparent, objects, remote)        USAGE(%)
-    ais://nnn        yes             108959 0        1.67GiB 1.66GiB 0B                      0%
+    ais://nnn        yes             133538 0        2.99GiB 2.99GiB 0B                      10%
 
-    $ aisloader -bucket=ais://nnn -pctput=0 -duration=90m -numworkers=4 -cleanup=false -get-batchsize=64 --quiet -epochs 7 -cont-on-err
-    Found 1,089,590 archived files
+    $ aisloader -bucket=ais://nnn -pctput=0 -arch.list -duration=90m -numworkers=4 -cleanup=false -get-batchsize=64 --quiet -epochs 7 -cont-on-err
+    Found 1,335,380 archived files
 
     Runtime configuration:
     {
-       "proxy": "http://ais-endpoint:51080",
+       "proxy": "http://<ais-endpoint>:8080",
        "bucket": "ais://nnn",
        "duration": "1h30m0s",
        "# workers": 4,
        "stats interval": "10s",
        "GET(batch): batch size": 64,
-       "archive (shards)": {
-          "% workload": 100,
-          "format": ".tar",
-          "minimum file size": 1024,
-          "maximum file size": 1048576
-       },
        "name-getter": "unique epoch-based",
        "cleanup": false
     }
 
     Time      OP    Count                   Size (Total)            Latency (min, avg, max)                 Throughput (Avg)        Errors (Total)
-    14:16:45  GBT   6,602 (6,602)           412.6MiB (412.6MiB)     4.399ms    6.030ms    22.278ms          41.26MiB/s (41.26MiB/s) -
-    14:16:55  GBT   6,397 (12,999)          399.8MiB (812.4MiB)     4.566ms    6.225ms    17.136ms          39.98MiB/s (40.62MiB/s) -
-    14:17:05  GBT   6,201 (19,200)          387.6MiB (1.2GiB)       4.609ms    6.424ms    22.505ms          38.75MiB/s (40.00MiB/s) -
-    14:17:15  GBT   6,127 (25,327)          382.9MiB (1.5GiB)       4.821ms    6.500ms    21.599ms          38.30MiB/s (39.57MiB/s) -
-    14:17:25  GBT   6,153 (31,480)          384.6MiB (1.9GiB)       4.765ms    6.473ms    23.135ms          38.46MiB/s (39.35MiB/s) -
+    11:07:28  GBT   877 (877)               82.1MiB (82.1MiB)       43.374ms   45.441ms   57.517ms          8.21MiB/s (8.21MiB/s)   -         
+    11:07:38  GBT   883 (1,760)             82.7MiB (164.8MiB)      42.996ms   45.383ms   49.333ms          8.27MiB/s (8.24MiB/s)   -         
+    11:07:48  GBT   880 (2,640)             82.5MiB (247.3MiB)      42.924ms   45.444ms   49.680ms          8.25MiB/s (8.24MiB/s)   -         
+    11:07:58  GBT   881 (3,521)             82.6MiB (329.9MiB)      42.820ms   45.279ms   49.177ms          8.26MiB/s (8.25MiB/s)   -       
     ...
 ```
 

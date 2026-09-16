@@ -39,6 +39,9 @@ package aisloader
 // ais ls ais://nnn --props name -H > /tmp/a.txt
 // aisloader -bucket=ais://nnn -duration 1h -numworkers=30 -pctput=0 -filelist /tmp/a.txt -cleanup=false
 // ====================
-// 13. Write .tar shards with a random (first example) or specified number of files (second example):
-// aisloader -bucket=ais://nnn -pctput=100 -duration=8s -numworkers=4 -cleanup=false -minsize 1024 -maxsize=100k -quiet -arch.use
-// aisloader -bucket=ais://nnn -pctput=100 -duration=8s -numworkers=4 -cleanup=false -arch.num-files 10 -arch.minsize 1k -quiet -arch.use
+// 13. Write .tar shards with an auto-computed (first example) or specified number of files (second example):
+// aisloader -bucket=ais://nnn -pctput=100 -duration=8s -numworkers=4 -cleanup=false -minsize 1024 -maxsize=100k -quiet -arch.pct=100
+// aisloader -bucket=ais://nnn -pctput=100 -duration=8s -numworkers=4 -cleanup=false -arch.num-files 10 -arch.minsize 1k -arch.maxsize 1k -quiet -arch.pct=100
+// ====================
+// 14. Read individual files inside existing shards
+// aisloader -bucket=ais://nnn -pctput=0 -duration=1h -numworkers=4 -cleanup=false -arch.list
