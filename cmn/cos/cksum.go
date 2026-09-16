@@ -10,6 +10,7 @@ import (
 	"crypto/sha512"
 	"encoding"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"hash"
 	"hash/crc32"
@@ -70,6 +71,11 @@ type (
 	}
 )
 
+type cksumJSON struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
 var checksums = StrSet{
 	ChecksumNone:   {},
 	ChecksumOneXxh: {},
@@ -114,14 +120,26 @@ func NewCksumHash(ty string) (ck *CksumHash) {
 	return
 }
 
+// interface guard
+var (
+	_ json.Marshaler   = (*Cksum)(nil)
+	_ json.Unmarshaler = (*Cksum)(nil)
+)
+
 func (ck *Cksum) MarshalJSON() ([]byte, error) {
 	if ck == nil {
 		return nil, nil
 	}
-	return jsoniter.Marshal(struct {
-		Type  string `json:"type"`
-		Value string `json:"value"`
-	}{Type: ck.ty, Value: ck.value})
+	return jsoniter.Marshal(cksumJSON{Type: ck.ty, Value: ck.value})
+}
+
+func (ck *Cksum) UnmarshalJSON(b []byte) error {
+	var tv cksumJSON
+	if err := jsoniter.Unmarshal(b, &tv); err != nil {
+		return err
+	}
+	ck.ty, ck.value = tv.Type, tv.Value
+	return nil
 }
 
 func (ck *CksumHash) Init(ty string) {
