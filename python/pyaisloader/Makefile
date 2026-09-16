@@ -21,7 +21,7 @@ short_mixed_etl: ## Run a short MIXED benchmark where all GETs undergo the ECHO 
 	pyaisloader MIXED --bucket $(BUCKET) --duration 30s --workers 16 --minsize 5KB --maxsize 10KB --putpct 50 --etl ECHO --cleanup
 
 short_list: ## Run a short LIST benchmark
-	pyaisloader LIST --bucket $(BUCKET) --cleanup true --objects 50000 --workers 16
+	pyaisloader LIST --bucket $(BUCKET) --cleanup --objects 50000 --workers 16
 
 short_ais_dataset: ## Run a short AISDataset benchmark
 	pyaisloader AIS_DATASET --bucket $(BUCKET) --duration 30s --workers 16 --totalsize 1GB --minsize 5KB --maxsize 10KB --cleanup
@@ -34,10 +34,10 @@ long_put: ## Run a long (and more intensive) PUT benchmark
 	pyaisloader PUT --bucket $(BUCKET) --duration 30m --workers 32 --totalsize 10GB --minsize 50MB --maxsize 100MB --cleanup
 
 long_get: ## Run a long (and more intensive) GET benchmark
-	pyaisloader GET --bucket $(BUCKET) --duration 30m --workers 32 --totalsize 10GB --minsize 5KB --maxsize 10KB --cleanup
+	pyaisloader GET --bucket $(BUCKET) --duration 30m --workers 32 --totalsize 10GB --minsize 50MB --maxsize 100MB --cleanup
 
 long_mixed: ## Run a long (and more intensive) MIXED benchmark
-	pyaisloader MIXED --bucket $(BUCKET) --duration 30m --workers 32 --totalsize 10GB --minsize 5KB --maxsize 10KB --putpct 50 --cleanup
+	pyaisloader MIXED --bucket $(BUCKET) --duration 30m --workers 32 --totalsize 10GB --minsize 50MB --maxsize 100MB --putpct 50 --cleanup
 
 long_list: ## Run a long (and more intensive) LIST benchmark
 	pyaisloader LIST --bucket $(BUCKET) --objects 500000 --workers 32 --cleanup

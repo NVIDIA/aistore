@@ -1,5 +1,5 @@
 import argparse
-import pkg_resources
+from importlib.metadata import version as package_version
 
 from pyaisloader.benchmark import PutGetMixedBenchmark, ListBenchmark
 from pyaisloader.pytorch_benchmark import AISDatasetBenchmark, AISIterDatasetBenchmark
@@ -11,7 +11,7 @@ from pyaisloader.utils.etl_utils import init_etl, cleanup_etls
 
 from aistore.sdk.provider import Provider
 
-VERSION = pkg_resources.require("pyaisloader")[0].version
+VERSION = package_version("pyaisloader")
 
 
 def prepend_default_arguments(parser):
@@ -65,7 +65,8 @@ def main():
         title="types",
         description=(
             "Choose a benchmark type. Type 'PUT -h', 'GET -h', "
-            "'MIXED -h', or 'LIST -h' for more information about the specific benchmark."
+            "'MIXED -h', 'LIST -h', 'AIS_DATASET -h', or 'AIS_ITER_DATASET -h' "
+            "for more information about the specific benchmark."
         ),
     )
 
@@ -102,8 +103,8 @@ def main():
     ais_iter_dataset_parser = subparsers.add_parser(
         "AIS_ITER_DATASET",
         aliases=["ais_iter_dataset"],
-        help="Iteratable-style AISIterDataset benchmark",
-        description="This command runs an AISDataset benchmark",
+        help="Iterable-style AISIterDataset benchmark",
+        description="This command runs an AISIterDataset benchmark",
     )
 
     put_parser = prepend_default_arguments(put_parser)
@@ -194,6 +195,13 @@ def main():
         type=parse_size,
         required=True,
         help=("Maximum size of objects to be PUT in bucket during the benchmark "),
+    )
+    mixed_parser.add_argument(
+        "-s",
+        "--totalsize",
+        type=parse_size,
+        required=False,
+        help="Total size to which the bucket should be filled prior to start",
     )
     mixed_parser.add_argument(
         "-d",
@@ -287,7 +295,7 @@ def main():
     if args.type is None:
         print(
             f"\nWelcome to {bold('pyaisloader')}, a CLI for running benchmarks that leverage the AIStore Python SDK. \n\n"
-            "Available benchmark types include: PUT, GET, MIXED, and LIST. \n\n"
+            "Available benchmark types include: PUT, GET, MIXED, LIST, AIS_DATASET, and AIS_ITER_DATASET. \n\n"
             "For more details about each benchmark type, use 'pyaisloader [benchmark_type] -h' \nor 'pyaisloader [benchmark_type] --help' "
             "(e.g. for more information about the PUT \nbenchmark, run 'pyaisloader PUT -h' or 'pyaisloader PUT --help').\n"
         )
@@ -357,6 +365,8 @@ def main():
                 duration=args.duration,
                 totalsize=args.totalsize,
                 bucket_model=bucket_model,
+                etl_name=etl_name,
+                etl_spec_type=etl_spec_type,
                 workers=args.workers,
                 cleanup=args.cleanup,
             )
@@ -368,27 +378,8 @@ def main():
                 iterations=args.iterations,
                 totalsize=args.totalsize,
                 bucket_model=bucket_model,
-                workers=args.workers,
-                cleanup=args.cleanup,
-            )
-        elif benchmark_type == "ais_dataset":
-            benchmark = AISDatasetBenchmark(
-                minsize=args.minsize,
-                maxsize=args.maxsize,
-                duration=args.duration,
-                totalsize=args.totalsize,
-                bucket_model=bucket_model,
-                workers=args.workers,
-                cleanup=args.cleanup,
-            )
-        elif benchmark_type == "ais_iter_dataset":
-            benchmark = AISIterDatasetBenchmark(
-                minsize=args.minsize,
-                maxsize=args.maxsize,
-                duration=args.duration,
-                iterations=args.iterations,
-                totalsize=args.totalsize,
-                bucket_model=bucket_model,
+                etl_name=etl_name,
+                etl_spec_type=etl_spec_type,
                 workers=args.workers,
                 cleanup=args.cleanup,
             )
@@ -398,6 +389,7 @@ def main():
                 minsize=args.minsize,
                 maxsize=args.maxsize,
                 duration=args.duration,
+                totalsize=args.totalsize,
                 bucket_model=bucket_model,
                 etl_name=etl_name,
                 etl_spec_type=etl_spec_type,

@@ -22,6 +22,10 @@ pyaisloader [TYPE] --bucket [BUCKET] --workers [WORKERS] --cleanup ...
 
 > For all benchmark types, `--cleanup`, or `-c`, if set to `True`, clean-up will either **(i)** destroy the entire bucket if the benchmark created the bucket or **(ii)** destroy any objects that were added to the pre-existing bucket during the benchmark (and pre-population). 
 
+## Benchmark Results
+
+Results from all workers are combined before they are displayed. `Latency Avg` is the total operation time divided by the total number of operations across all workers, so workers are weighted by the number of operations they completed. Workers that completed no operations are excluded from `Latency Min` and `Latency Max`. If no workers completed an operation, all latency values are reported as zero.
+
 #### Type: PUT
 
 Runs time/size based benchmark with 100% PUT workload.
@@ -31,7 +35,7 @@ Runs time/size based benchmark with 100% PUT workload.
 | Option     | Aliases | Description                                                                                                 | Required | Default Value |
 |------------|---------|-------------------------------------------------------------------------------------------------------------|----------|---------------|
 | --bucket   | -b      | Bucket (e.g. ais://mybck, s3://mybck, gs://mybck)                                                           | Yes      | N/A           |
-| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                                         | Yes      | N/A           |
+| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                            | No       | False         |
 | --totalsize| -s      | Total size to PUT during the benchmark                                                                      | No       | N/A           |
 | --minsize  | -min    | Minimum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
 | --maxsize  | -max    | Maximum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
@@ -49,30 +53,31 @@ Runs a time-based benchmark with 100% GET workload.
 | Option     | Aliases | Description                                                                                                 | Required | Default Value |
 |------------|---------|-------------------------------------------------------------------------------------------------------------|----------|---------------|
 | --bucket   | -b      | Bucket (e.g. ais://mybck, s3://mybck, gs://mybck)                                                           | Yes      | N/A           |
-| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                                         | Yes      | N/A           |
-| --totalsize| -s      | Total size bucket should be filled to prior to start                                                        | No      | N/A           |
-| --minsize  | -min    | Minimum size of objects to be PUT in bucket (if bucket is smaller than total size)                          | No      | N/A           |
-| --maxsize  | -max    | Maximum size of objects to be PUT in bucket (if bucket is smaller than total size)                          | No      | N/A           |
+| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                            | No       | False         |
+| --totalsize| -s      | Total size bucket should be filled to prior to start                                                        | No       | N/A           |
+| --minsize  | -min    | Minimum size of objects to be PUT in bucket (if bucket is smaller than total size)                          | No       | N/A           |
+| --maxsize  | -max    | Maximum size of objects to be PUT in bucket (if bucket is smaller than total size)                          | No       | N/A           |
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
-| --etl  | -e      | Whether objects from aisloader GETs should undergoes the specified ETL transformation                                                                                           | No      | N/A           |
+| --etl      | -e      | Whether objects from aisloader GETs should undergoes the specified ETL transformation                       | No       | N/A           |
 
 #### Type: MIXED
 
 Runs a time-based benchmark with a mixed load of GETs and PUTs (based on `putpct`).
 
-> **Note:** If the benchmark creates a bucket, or if the provided bucket is empty, it will start by creating a single object within the bucket. If you want your MIXED benchmark to include a more intensive GET load, you should consider using a pre-filled bucket. 
+> **Note:** If `totalsize` is provided and the bucket is smaller than that size, the benchmark pre-populates it before timed operations begin. Pre-populated object sizes range from `minsize` to `maxsize`. Without `totalsize`, an empty bucket is seeded with one initial object so that GET operations can run.
 
 | Option     | Aliases | Description                                                                                                 | Required | Default Value |
 |------------|---------|-------------------------------------------------------------------------------------------------------------|----------|---------------|
 | --bucket   | -b      | Bucket (e.g. ais://mybck, s3://mybck, gs://mybck)                                                           | Yes      | N/A           |
-| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                                         | Yes      | N/A           |
+| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                            | No       | False         |
 | --minsize  | -min    | Minimum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
 | --maxsize  | -max    | Maximum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
+| --totalsize| -s      | Total size to which the bucket should be filled before the benchmark                                        | No       | N/A           |
 | --putpct   | -p      | Percentage for PUT operations in MIXED benchmark                                                            | Yes      | N/A           |
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
-| --etl  | -e      | Whether objects from aisloader GETs should undergoes the specified ETL transformation                                                                                           | No      | N/A           |
+| --etl      | -e      | Whether objects from aisloader GETs should undergoes the specified ETL transformation                       | No       | N/A           |
 
 #### Type: LIST
 
@@ -83,7 +88,7 @@ Runs a benchmark to LIST objects in the bucket.
 | Option         | Aliases | Description                                                                           | Required | Default Value |
 |----------------|---------|---------------------------------------------------------------------------------------|----------|---------------|
 | --bucket       | -b      | Bucket (e.g. ais://mybck, s3://mybck, gs://mybck)                                     | Yes      | N/A           |
-| --cleanup      | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                   | Yes      | N/A           |
+| --cleanup      | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion      | No       | False         |
 | --objects      | -o      | Number of objects bucket should contain prior to benchmark start                      | No       | N/A           |
 | --workers      | -w      | Number of workers (only for pre-population of bucket)                                 | Yes      | N/A           |
 
@@ -91,15 +96,15 @@ Runs a benchmark to LIST objects in the bucket.
 
 Runs a time-based benchmark to randomly get objects in the bucket through AISDataset.
 
-> **Note:** If you want your AISDataset benchmark to include a more intensive GET load, you should consider using a pre-filled bucket. 
+> **Note:** If the selected bucket is empty, the benchmark creates one initial object so that the dataset can be read. For a larger initial dataset, provide `totalsize`, `minsize`, and `maxsize` together to pre-populate the bucket before the benchmark starts.
 
 | Option     | Aliases | Description                                                                                                 | Required | Default Value |
 |------------|---------|-------------------------------------------------------------------------------------------------------------|----------|---------------|
 | --bucket   | -b      | Bucket (e.g. ais://mybck, s3://mybck, gs://mybck)                                                           | Yes      | N/A           |
-| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                                         | Yes      | N/A           |
-| --minsize  | -min    | Minimum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
-| --maxsize  | -max    | Maximum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
-| --putpct   | -p      | Percentage for PUT operations in MIXED benchmark                                                            | Yes      | N/A           |
+| --cleanup  | -c      | Whether the bucket or benchmark-created objects should be destroyed upon completion                         | No       | False         |
+| --totalsize| -s      | Total size to which the bucket should be filled before the benchmark                                        | No       | N/A           |
+| --minsize  | -min    | Minimum generated object size when pre-populating                                                           | No       | N/A           |
+| --maxsize  | -max    | Maximum generated object size when pre-populating                                                           | No       | N/A           |
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
 
@@ -107,17 +112,19 @@ Runs a time-based benchmark to randomly get objects in the bucket through AISDat
 
 Runs a time-based benchmark to sequentially iterate over objects in the bucket through AISIterDataset.
 
-> **Note:** If you want your AISIterDataset benchmark to include a more intensive GET load, you should consider using a pre-filled bucket. 
+> **Note:** The benchmark runs until `duration` is reached. If `iterations` is provided, it stops when either the duration or iteration limit is reached. If `iterations` is omitted, iteration continues until the duration is reached.
+>
+> **Note:** If the selected bucket is empty, the benchmark creates one initial object so that `AISIterDataset` can yield samples in `get_benchmark()`. For a larger initial dataset, provide `totalsize`, `minsize`, and `maxsize` together to pre-populate the bucket before the benchmark starts.
 
 | Option     | Aliases | Description                                                                                                 | Required | Default Value |
 |------------|---------|-------------------------------------------------------------------------------------------------------------|----------|---------------|
 | --bucket   | -b      | Bucket (e.g. ais://mybck, s3://mybck, gs://mybck)                                                           | Yes      | N/A           |
-| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                                         | Yes      | N/A           |
-| --minsize  | -min    | Minimum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
-| --maxsize  | -max    | Maximum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
-| --putpct   | -p      | Percentage for PUT operations in MIXED benchmark                                                            | Yes      | N/A           |
+| --cleanup  | -c      | Whether the bucket or benchmark-created objects should be destroyed upon completion                         | No       | False         |
+| --totalsize| -s      | Total size to which the bucket should be filled before the benchmark                                        | No       | N/A           |
+| --minsize  | -min    | Minimum generated object size when pre-populating                                                           | No       | N/A           |
+| --maxsize  | -max    | Maximum generated object size when pre-populating                                                           | No       | N/A           |
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
-| --iterations  | -i      | Number of iterations over the dataset should be run (only for AISIterDataset)                            | No       | N/A           |
+| --iterations| -i     | Maximum number of iterations over the dataset                                                               | No       | Unlimited     |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
 
 ### Examples
@@ -129,7 +136,7 @@ This section provides a rundown of the sample benchmarks defined in the Makefile
 > **Note:** All benchmark Makefile targets use a configurable `BUCKET` variable (defaults to `ais://pyaisloader`).
 
 1. `make install`
-This command installs the required Python dependencies listed in `requirements.txt` and installs the current project as a package.
+This command installs the current project and the dependencies declared in `pyproject.toml`.
 
 2. `short_put`
 This command runs a short `PUT` benchmark on the bucket. The benchmark will stop either when the specified `duration` has elapsed or when the total size of data `PUT` into the bucket reaches `totalsize`.

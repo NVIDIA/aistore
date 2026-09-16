@@ -217,14 +217,20 @@ class PutGetMixedBenchmark(Benchmark):
     def etl_config(self):
         return ETLConfig(self.etl_name) if self.etl_name else None
 
+    def _prepare_bucket(self):
+        if self.totalsize is not None:
+            self._run_prepopulate()
+        if bucket_obj_count(self.bucket) == 0:
+            add_one_object(self)
+
     def run(self):
         if self.put_pct == 100:
             self.__run_put()
         elif self.put_pct == 0:
-            if self.totalsize is not None:
-                self._run_prepopulate()
+            self._prepare_bucket()
             self.__run_get()
         else:
+            self._prepare_bucket()
             self.__run_mixed()
 
     def __run_put(self):
@@ -244,7 +250,7 @@ class PutGetMixedBenchmark(Benchmark):
         for worker_result, worker_objs_created in results:
             result.append(worker_result)
             self.objs_created.extend(worker_objs_created)
-        result = combine_results(result, self.workers)
+        result = combine_results(result)
         if self.cleanup:
             self.clean_up()
         print_sep()
@@ -257,8 +263,6 @@ class PutGetMixedBenchmark(Benchmark):
         )
 
     def __run_get(self):
-        if bucket_obj_count(self.bucket) == 0:
-            add_one_object(self)
         print_in_progress(
             "Performing GET benchmark"
             + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
@@ -268,7 +272,7 @@ class PutGetMixedBenchmark(Benchmark):
             "Completed GET benchmark"
             + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
         )
-        result = combine_results(result, self.workers)
+        result = combine_results(result)
         if self.cleanup:
             self.clean_up()
         print_sep()
@@ -281,8 +285,6 @@ class PutGetMixedBenchmark(Benchmark):
         )
 
     def __run_mixed(self):
-        if bucket_obj_count(self.bucket) == 0:
-            add_one_object(self)
         print_in_progress(
             "Performing MIXED benchmark"
             + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
@@ -298,8 +300,8 @@ class PutGetMixedBenchmark(Benchmark):
         self.objs_created.extend(workers_objs_created)
         results_put = [res[0] for res in result]
         results_get = [res[1] for res in result]
-        result_put = combine_results(results_put, self.workers)
-        result_get = combine_results(results_get, self.workers)
+        result_put = combine_results(results_put)
+        result_get = combine_results(results_get)
         if self.cleanup:
             self.clean_up()
         print_sep()
@@ -359,11 +361,7 @@ class PutGetMixedBenchmark(Benchmark):
                 self.__put_benchmark_h(pstats, prefix, pstats.total_ops)
         elif totalsize:  # Size Based
             while pstats.total_op_bytes < totalsize:
-                size, latency, obj = self.__put_benchmark_h(
-                    pstats, prefix, pstats.total_ops
-                )
-                pstats.objs_created.append(obj.name)
-                pstats.update(size, latency, obj.name)
+                self.__put_benchmark_h(pstats, prefix, pstats.total_ops)
 
         pstats.produce_stats()
 
@@ -376,7 +374,6 @@ class PutGetMixedBenchmark(Benchmark):
         obj.get_writer().put_content(content)
         op_end = time.time()
         latency = op_end - op_start
-        stats.objs_created.append(obj.name)
         stats.update(size, latency, obj.name)
 
         return obj
@@ -409,11 +406,11 @@ class PutGetMixedBenchmark(Benchmark):
         gstats = BenchmarkStats()
         pstats = BenchmarkStats()
 
-        objs = [obj.object for obj in self.bucket.list_all_objects()]
+        objs = self.bucket.list_all_objects()
 
         while pstats.total_op_time + gstats.total_op_time < duration:
             # Choose whether to perform a PUT or a GET operation
-            if random.randint(0, 100) < self.put_pct:
+            if random.random() < self.put_pct / 100:
                 obj = self.__put_benchmark_h(pstats, prefix, pstats.total_ops)
                 objs.append(obj)
             else:

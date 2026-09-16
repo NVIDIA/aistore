@@ -1,6 +1,9 @@
-import time
 import random
+import time
 
+from aistore.pytorch import AISIterDataset, AISMapDataset
+
+from pyaisloader.benchmark import BenchmarkStats, PutGetMixedBenchmark
 from pyaisloader.utils.cli_utils import (
     print_in_progress,
     print_sep,
@@ -8,23 +11,18 @@ from pyaisloader.utils.cli_utils import (
 )
 from pyaisloader.utils.concurrency_utils import multiworker_deploy
 from pyaisloader.utils.stat_utils import combine_results, print_results
-from pyaisloader.client_config import AIS_ENDPOINT
-from pyaisloader.benchmark import PutGetMixedBenchmark, BenchmarkStats
-
-from aistore.pytorch import AISMapDataset, AISIterDataset
 
 
 class AISDatasetBenchmark(PutGetMixedBenchmark):
     def __init__(self, *args, **kwargs):
-        super().__init__(put_pct=0, *args, **kwargs)
+        super().__init__(*args, put_pct=0, **kwargs)
 
     def run(self):
-        if self.totalsize is not None:
-            self._run_prepopulate()
+        self._prepare_bucket()
         print_in_progress(f"Performing {self.__class__.__name__} benchmark")
         result = multiworker_deploy(self, self.get_benchmark, (self.duration,))
         print_success(f"Completed {self.__class__.__name__} benchmark")
-        result = combine_results(result, self.workers)
+        result = combine_results(result)
         if self.cleanup:
             self.clean_up()
         print_sep()
@@ -32,8 +30,8 @@ class AISDatasetBenchmark(PutGetMixedBenchmark):
 
     def get_benchmark(self, duration):
         dataset = AISMapDataset(
-            client_url=AIS_ENDPOINT,
-            urls_list=f"{self.bucket.provider}://{self.bucket.name}",
+            ais_source_list=self.bucket,
+            etl_name=self.etl_name,
         )
         dataset_len = len(dataset)
 
@@ -51,17 +49,16 @@ class AISDatasetBenchmark(PutGetMixedBenchmark):
 
 
 class AISIterDatasetBenchmark(PutGetMixedBenchmark):
-    def __init__(self, iterations=None, *args, **kwargs):
-        super().__init__(put_pct=0, *args, **kwargs)
+    def __init__(self, *args, iterations=None, **kwargs):
+        super().__init__(*args, put_pct=0, **kwargs)
         self.iterations = iterations
 
     def run(self):
-        if self.totalsize is not None:
-            self._run_prepopulate()
+        self._prepare_bucket()
         print_in_progress(f"Performing {self.__class__.__name__} benchmark")
         result = multiworker_deploy(self, self.get_benchmark, (self.duration,))
         print_success(f"Completed {self.__class__.__name__} benchmark")
-        result = combine_results(result, self.workers)
+        result = combine_results(result)
         if self.cleanup:
             self.clean_up()
         print_sep()
@@ -69,25 +66,27 @@ class AISIterDatasetBenchmark(PutGetMixedBenchmark):
 
     def get_benchmark(self, duration):
         iter_dataset = AISIterDataset(
-            client_url=ENDPOINT,
-            urls_list=f"{self.bucket.provider}://{self.bucket.name}",
+            ais_source_list=self.bucket,
+            etl_name=self.etl_name,
         )
         stats = BenchmarkStats()
 
-        while (
-            stats.total_op_time < duration
-            and self.iterations != None
-            and self.iterations > 0
+        while stats.total_op_time < duration and (
+            self.iterations is None or self.iterations > 0
         ):
             op_start = time.time()
+            samples = 0
             for sample in iter_dataset:
+                samples += 1
                 size = len(sample[1])
                 stats.update(size, time.time() - op_start)
                 op_start = time.time()
                 if stats.total_op_time >= duration:
                     break
-            iter_dataset._reset_iterator()
-            self.iterations -= 1
+            if samples == 0:
+                break
+            if self.iterations is not None:
+                self.iterations -= 1
 
         stats.produce_stats()
 
