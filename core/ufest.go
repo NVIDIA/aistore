@@ -694,11 +694,14 @@ func (u *Ufest) storeCompleted(lom *LOM, overrideCompleted bool) error {
 		return fmt.Errorf("%s: failed to store, err: %v", u._itag(lom.Cname()), err)
 	}
 
-	// fixup chunk #1
+	// fixup chunk #1 (already in place when relocating - see Relocate)
 	c := u.firstChunk()
 	orig := c.path
-	if err := lom.RenameFinalize(c.path); err != nil {
-		return err
+	debug.Func(func() { debug.Assert(c.path != lom.FQN || overrideCompleted, lom.Cname()) })
+	if c.path != lom.FQN {
+		if err := lom.RenameFinalize(c.path); err != nil {
+			return err
+		}
 	}
 	c.path = u.chunk1Path(lom, true /*completed*/)
 
@@ -1667,6 +1670,7 @@ func (u *Ufest) Relocate(hrwMi *fs.Mountpath, buf []byte) (*LOM, error) {
 	}
 	debug.Func(func() { debug.Assert(hlom.Mountpath().Path == hrwMi.Path, hlom.Mountpath().Path, " vs ", hrwMi.Path) })
 	hlom.CopyAttrs(lom, false /*skip checksum*/)
+	hlom.SetShardIdx(lom.HasShardIdx())
 
 	// persist completed manifest at new location
 	u.lom = hlom // ostensibly, to pass assert(validate-locations)

@@ -966,6 +966,91 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 	})
 
 	Describe("chunked source", func() {
+		// relocation (resilver) moves unchanged content: the index must survive
+		DescribeTable("keeps the shard index when relocating",
+			func(firstMoved bool) {
+				const (
+					chunkSize = 4 * cos.KiB
+					numChunks = 16
+				)
+				archlom := siArchLOM(GinkgoT(), fmt.Sprintf("reloc-%d.tar", rand.Int64()))
+				id := "reloc-" + cos.GenTie()
+				ufest, err := core.NewUfest(id, archlom, false /*must-exist*/)
+				Expect(err).NotTo(HaveOccurred())
+				paths := make([]string, 0, numChunks)
+				for num := 1; num <= numChunks; num++ {
+					chunk, err := ufest.NewChunk(num, archlom)
+					Expect(err).NotTo(HaveOccurred())
+					paths = append(paths, chunk.Path())
+					createTestChunk(chunk.Path(), chunkSize, nil)
+					Expect(ufest.Add(chunk, chunkSize, int64(num))).To(Succeed())
+				}
+				Expect(archlom.CompleteUfest(ufest, false /*locked*/)).To(Succeed())
+
+				// add a mountpath: HRW now wants some of the chunks 2..N elsewhere
+				mpath2 := filepath.Join(tmpDir, "mpath2")
+				cos.CreateDir(mpath2)
+				mi2, err := fs.AddTestMpath(mpath2, "daeID")
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(func() { fs.Remove(mpath2) })
+				Expect(mi2.CreateMissingBckDirs(archlom.Bucket())).To(Succeed())
+				Expect(mi2.CreateMissingBckDirs((*cmn.Bck)(meta.SysBckShardIdx()))).To(Succeed())
+
+				probe, err := core.NewUfest(id, archlom, false /*must-exist*/)
+				Expect(err).NotTo(HaveOccurred())
+				var misplaced int
+				for num := 2; num <= numChunks; num++ {
+					chunk, err := probe.NewChunk(num, archlom)
+					Expect(err).NotTo(HaveOccurred())
+					if chunk.Path() != paths[num-1] {
+						misplaced++
+					}
+				}
+				if !firstMoved && misplaced == 0 {
+					Skip("HRW kept all chunks in place") // 2^-15
+				}
+
+				// index (saved with both mountpaths present)
+				idx, err := archive.NewShardIndexTestOnly(archlom.Checksum(), archlom.Lsize(),
+					map[string]archive.ShardIndexEntry{"file": {Offset: 0, Size: 1}})
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(idx.Free)
+				Expect(archlom.SaveShardIndex(idx)).To(Succeed())
+				idxPath := siIdxPath(GinkgoT(), archlom)
+				Expect(idxPath).To(BeAnExistingFile())
+
+				// archlom was created on the first mountpath
+				hrwMi := archlom.Mountpath()
+				if firstMoved {
+					hrwMi = mi2
+				}
+				archlom.Lock(true)
+				u, err := core.NewUfest("", archlom, true /*must-exist*/)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(u.LoadCompleted(archlom)).To(Succeed())
+				hlom, err := u.Relocate(hrwMi, make([]byte, 32*cos.KiB))
+				archlom.Unlock(true)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hlom.Mountpath().Path).To(Equal(hrwMi.Path))
+
+				Expect(hlom.HasShardIdx()).To(BeTrue())
+				Expect(idxPath).To(BeAnExistingFile(), "relocation removed the index")
+
+				fresh := &core.LOM{}
+				Expect(fresh.InitFQN(hlom.FQN, archlom.Bucket())).To(Succeed())
+				fresh.Lock(false)
+				Expect(fresh.Load(false /*cache it*/, true /*locked*/)).To(Succeed())
+				fresh.Unlock(false)
+				Expect(fresh.IsChunked()).To(BeTrue())
+				Expect(fresh.HasShardIdx()).To(BeTrue(), "flag not persisted at the relocated object")
+				loaded, err := siLoad(fresh)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(loaded).NotTo(BeNil(), "index not usable after relocation")
+			},
+			Entry("chunk #1 moved", true),
+			Entry("only chunks 2..N moved", false),
+		)
+
 		It("preserves chunking when setting and clearing HasShardIdx", func() {
 			const chunkSize = 4 * cos.KiB
 
