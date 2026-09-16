@@ -427,6 +427,12 @@ func (lom *LOM) _copy2fqn(dst *LOM, buf []byte, sameBucket bool) (err, nested er
 		nested = cos.RemoveFile(workFQN)
 		return err, nested, locked
 	}
+
+	// different object (neither mirror copy nor restore): new content for dst
+	if dst.Uname() != lom.Uname() && dst.HasShardIdx() {
+		dst.dropSidx()
+	}
+
 	switch {
 	case lom.IsChunked():
 		if err := lom._copyChunks(dst, buf); err != nil {

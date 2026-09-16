@@ -243,7 +243,7 @@ func siReload(archlom *core.LOM) *core.LOM {
 	GinkgoHelper()
 	archlom.UncacheDel()
 	fresh := &core.LOM{ObjName: archlom.ObjName}
-	Expect(fresh.InitCmnBck(&cmn.Bck{Name: siShardBucket, Provider: apc.AIS})).To(Succeed())
+	Expect(fresh.InitCmnBck(archlom.Bucket())).To(Succeed())
 	fresh.Lock(false)
 	defer fresh.Unlock(false)
 	Expect(fresh.Load(false /*cache it*/, true /*locked*/)).To(Succeed())
@@ -264,6 +264,19 @@ func siRewrite(archlom *core.LOM, fh *os.File, size int64) {
 	defer archlom.Unlock(true)
 	Expect(archlom.RenameFinalize(wfqn)).To(Succeed())
 	Expect(archlom.PersistMain(false /*chunked*/)).To(Succeed())
+}
+
+// source read-locked, destination write-locked (correctly)
+func siCopy(src, dst *core.LOM) {
+	GinkgoHelper()
+	src.Lock(false)
+	defer src.Unlock(false)
+	dst.Lock(true)
+	defer dst.Unlock(true)
+	Expect(src.Load(false /*cache it*/, true /*locked*/)).To(Succeed())
+	dst2, err := src.Copy2FQN(dst.FQN, make([]byte, 32*cos.KiB))
+	Expect(err).NotTo(HaveOccurred())
+	core.FreeLOM(dst2)
 }
 
 func siRmIdx(archlom *core.LOM) {
@@ -713,6 +726,51 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			Expect(siIdxPath(GinkgoT(), archlom)).To(BeAnExistingFile())
 			Expect(siReload(archlom).HasShardIdx()).To(BeTrue())
 			Expect(siRead(archlom, archpath)).To(BeTrue(), "current index was disturbed")
+		})
+	})
+
+	Describe("copy to a different object", func() {
+		const archpath = "file_0003.bin"
+
+		It("does not inherit the source's shard index", func() {
+			fh, size, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 8)
+			DeferCleanup(fh.Close)
+			src := siArchLOM(GinkgoT(), fmt.Sprintf("copy-src-%d.tar", rand.Int64()))
+			siSaveTAR(src, fh, size)
+
+			dst := &core.LOM{ObjName: src.ObjName}
+			Expect(dst.InitCmnBck(&cmn.Bck{Name: siShardBucket2, Provider: apc.AIS})).To(Succeed())
+			Expect(os.RemoveAll(dst.FQN)).To(Succeed())
+
+			siCopy(src, dst)
+
+			fresh := siReload(dst)
+			Expect(fresh.HasShardIdx()).To(BeFalse(), "destination inherited the source's flag")
+			Expect(siRead(fresh, archpath)).To(BeFalse(), "expected scan fallback")
+			Expect(siRead(src, archpath)).To(BeTrue(), "source index was disturbed")
+		})
+
+		It("drops the destination's own shard index", func() {
+			fh1, size1, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 10)
+			DeferCleanup(fh1.Close)
+			fh2, size2, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
+			DeferCleanup(fh2.Close)
+
+			name := fmt.Sprintf("copy-over-%d.tar", rand.Int64())
+			src := siArchLOM(GinkgoT(), name)
+			siSaveTAR(src, fh1, size1)
+			dst := siArchLOMInBucket(GinkgoT(), siShardBucket2, name)
+			siSaveTAR(dst, fh2, size2)
+			siPrimeCache(dst, archpath)
+			Expect(siIdxPath(GinkgoT(), dst)).To(BeAnExistingFile())
+
+			siCopy(src, dst)
+
+			Expect(siIdxPath(GinkgoT(), dst)).NotTo(BeAnExistingFile(), "destination's previous index survived")
+			fresh := siReload(dst)
+			Expect(fresh.HasShardIdx()).To(BeFalse())
+			Expect(siRead(fresh, archpath)).To(BeFalse(), "expected scan fallback")
+			Expect(siRead(src, archpath)).To(BeTrue(), "source index was disturbed")
 		})
 	})
 
