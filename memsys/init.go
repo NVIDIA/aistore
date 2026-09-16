@@ -27,6 +27,7 @@ var (
 	gmm              *MMSA     // page-based system allocator
 	smm              *MMSA     // slab allocator for small sizes in the range 1 - 4K
 	gmmOnce, smmOnce sync.Once // ensures singleton-ness
+	testOnce         sync.Once // (tests only) see initTestMM
 )
 
 var (
@@ -82,19 +83,7 @@ func NewMMSA(name string, silent bool) *MMSA {
 func PageMM() *MMSA {
 	gmmOnce.Do(func() {
 		if gmm == nil {
-			// tests calling PageMM without prior explicit NewMMSA()
-			// (tests only)
-			gmm = &MMSA{
-				Name:        "test.pmm",
-				defBufSize:  DefaultBufSize,
-				slabIncStep: PageSlabIncStep,
-				MinFree:     minMemFreeTests,
-			}
-			gmm.Init(maxMemUsedTests)
-			if smm != nil {
-				smm.sibling = gmm
-				gmm.sibling = smm
-			}
+			initTestMM()
 		}
 		debug.Assert(gmm.rings != nil)
 	})
@@ -105,7 +94,28 @@ func PageMM() *MMSA {
 func ByteMM() *MMSA {
 	smmOnce.Do(func() {
 		if smm == nil {
-			// tests only
+			initTestMM()
+		}
+		debug.Assert(smm.rings != nil)
+	})
+	return smm
+}
+
+// Tests-only initialization: PageMM or ByteMM called without prior Init:
+// - create whichever is missing, and always link the two
+// - each delegates out-of-range sizes to its sibling (see SelectMemAndSlab)
+func initTestMM() {
+	testOnce.Do(func() {
+		if gmm == nil {
+			gmm = &MMSA{
+				Name:        "test.pmm",
+				defBufSize:  DefaultBufSize,
+				slabIncStep: PageSlabIncStep,
+				MinFree:     minMemFreeTests,
+			}
+			gmm.Init(maxMemUsedTests)
+		}
+		if smm == nil {
 			smm = &MMSA{
 				Name:        "test.smm",
 				defBufSize:  DefaultSmallBufSize,
@@ -113,14 +123,9 @@ func ByteMM() *MMSA {
 				MinFree:     minMemFreeTests,
 			}
 			smm.Init(maxMemUsedTests)
-			if gmm != nil {
-				gmm.sibling = smm
-				smm.sibling = gmm
-			}
 		}
-		debug.Assert(smm.rings != nil)
+		gmm.sibling, smm.sibling = smm, gmm
 	})
-	return smm
 }
 
 // byte vs page rings: (NumSmallSlabs x 128) vs (NumPageSlabs x 4K), respectively

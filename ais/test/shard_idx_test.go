@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tarch"
@@ -95,9 +94,6 @@ func TestIndexShardZeroSizeFile(t *testing.T) {
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	initMountpaths(t, proxyURL)
-
-	memsys.PageMM()
-	memsys.ByteMM()
 
 	tw := tar.NewWriter(&shard)
 
@@ -910,8 +906,7 @@ func idxPrepareShardSummary(t *testing.T, baseParams api.BaseParams, bck cmn.Bck
 
 func idxAssertShardSummary(t *testing.T, got, want *apc.ShardSummResult) {
 	t.Helper()
-	// TODO -- FIXME: temp hack
-	tassert.Fatalf(t, true || *got == *want, "unexpected shard summary: got %+v, want %+v", got, want)
+	tassert.Fatalf(t, *got == *want, "unexpected shard summary: got %+v, want %+v", got, want)
 }
 
 func idxCorruptShardIndex(t *testing.T, bck cmn.Bck, objName string) {
@@ -928,9 +923,6 @@ func idxCorruptShardIndex(t *testing.T, bck cmn.Bck, objName string) {
 func idxMakeShardIndexStale(t *testing.T, bck cmn.Bck, objName string) {
 	t.Helper()
 
-	memsys.PageMM()
-	memsys.ByteMM()
-
 	idxPath := idxFindFile(bck, objName)
 	tassert.Fatalf(t, idxPath != "", "TAR object %q: index file not found on any mountpath", objName)
 	data, err := os.ReadFile(idxPath)
@@ -944,18 +936,18 @@ func idxMakeShardIndexStale(t *testing.T, bck cmn.Bck, objName string) {
 	for name, entry := range idx.AllTestOnly() {
 		entries[name] = entry
 	}
-	value := "0000000000000000"
-	if idx.SrcCksum().Value() == value {
-		value = "1111111111111111"
-	}
-	stale, err := archive.NewShardIndexTestOnly(cos.NewCksum(cos.ChecksumOneXxh, value), idx.SrcSize(), entries)
+	// keep the checksum type and value length: the in-place rewrite below
+	// must preserve the size recorded in the index object's metadata
+	src := idx.SrcCksum()
+	val := []byte(src.Val())
+	tassert.Fatalf(t, len(val) > 0, "TAR object %q: index has no source checksum", objName)
+	val[0] = cos.Ternary(val[0] == '0', byte('1'), byte('0'))
+	stale, err := archive.NewShardIndexTestOnly(cos.NewCksum(src.Ty(), string(val)), idx.SrcSize(), entries)
 	tassert.CheckFatal(t, err)
 	defer stale.Free()
 	packed, err := stale.Pack()
 	tassert.CheckFatal(t, err)
-
-	// TODO -- FIXME: temp hack
-	// tassert.Fatalf(t, len(packed) == len(data), "TAR object %q: stale index size changed from %d to %d", objName, len(data), len(packed))
+	tassert.Fatalf(t, len(packed) == len(data), "TAR object %q: stale index size changed from %d to %d", objName, len(data), len(packed))
 
 	tassert.CheckFatal(t, os.WriteFile(idxPath, packed, cos.PermRWR))
 }
@@ -985,9 +977,6 @@ func idxAssertNoIndex(t *testing.T, bck cmn.Bck, names []string) {
 // and that nonTarName (if non-empty) has no index.
 func idxValidate(t *testing.T, bck cmn.Bck, tarNames []string, nonTarName string, numFiles int) {
 	t.Helper()
-
-	memsys.PageMM()
-	memsys.ByteMM()
 
 	for _, name := range tarNames {
 		idxPath := idxFindFile(bck, name)
