@@ -88,9 +88,15 @@ func Gor(ngr int) Load {
 // size against one and the same /proc/meminfo reading.
 // NOTE: may trigger free-to-OS
 func Mem(mems ...*sys.MemStat) Load {
+	return mem(true /*allowFreeToOS*/, mems...)
+}
+
+func mem(allowFreeToOS bool, mems ...*sys.MemStat) Load {
 	switch memsys.PageMM().Pressure(mems...) {
 	case memsys.OOM, memsys.PressureExtreme:
-		oom.FreeToOS(true /*force*/)
+		if allowFreeToOS {
+			oom.FreeToOS(true /*force*/)
+		}
 		return Critical
 	case memsys.PressureHigh:
 		return High
@@ -149,14 +155,14 @@ func Dsk(mi *fs.Mountpath, cfg *cmn.DiskConf) Load {
 // refresh selected load _dimensions_ and return the packed vector:
 // - 8 bits per dimension packed into a uint64
 // - each slot is 0 (unset) or one of Load(Low..Critical)
-// - calls oom.FreeToOS when critical
-func refresh(flags uint64, mi *fs.Mountpath, cfg *cmn.DiskConf) (vec uint64) {
+// - call oom.FreeToOS on Critical when allowed
+func refresh(flags uint64, mi *fs.Mountpath, cfg *cmn.DiskConf, allowFreeToOS bool) (vec uint64) {
 	if flags&FlGor != 0 {
 		ngr := runtime.NumGoroutine()
 		vec = setSlot(vec, gorShift, Gor(ngr))
 	}
 	if flags&FlMem != 0 {
-		vec = setSlot(vec, memShift, Mem())
+		vec = setSlot(vec, memShift, mem(allowFreeToOS))
 	}
 	if flags&FlCla != 0 {
 		vec = setSlot(vec, cpuShift, CPU())

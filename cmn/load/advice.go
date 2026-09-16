@@ -91,9 +91,20 @@ func (a *Advice) Throttle(n int64, yield ...bool) bool {
 	return false
 }
 
-// recompute throttling recommendation; note:
-// disk requires config and, optionally, mountpath
+// - refresh, and:
+// - critical memory pressure also triggers free-to-OS
+// - disk requires config and, optionally, mountpath
 func (a *Advice) Refresh() {
+	a.refresh(true /*allowFreeToOS*/)
+}
+
+// same as above, except: not allowing free-to-OS
+// (for callers that must release owned memory first)
+func (a *Advice) RefreshNoGC() {
+	a.refresh(false /*allowFreeToOS*/)
+}
+
+func (a *Advice) refresh(allowFreeToOS bool) {
 	var (
 		mi  *fs.Mountpath
 		cfg *cmn.DiskConf
@@ -101,7 +112,7 @@ func (a *Advice) Refresh() {
 	if a.flags&FlDsk != 0 {
 		mi, cfg = a.extra.Mi, a.extra.Cfg
 	}
-	a.loads = refresh(a.flags, mi, cfg)
+	a.loads = refresh(a.flags, mi, cfg, allowFreeToOS)
 
 	// reset optimistically
 	a.Sleep = 0
