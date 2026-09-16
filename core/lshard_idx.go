@@ -77,6 +77,10 @@ func (lom *LOM) SetShardIdx(v bool) {
 	}
 }
 
+// Packs idx into a workfile, then validates the source and commits under source(W).
+// Lock order: source(W) => index(W). A busy source returns ErrBusy without committing.
+//
+// NOTE: the receiver is not refreshed; callers must reload before using or persisting its updated metadata.
 func (lom *LOM) SaveShardIndex(idx *archive.ShardIndex) error {
 	b, err := idx.Pack()
 	if err != nil {
@@ -99,11 +103,24 @@ func (lom *LOM) SaveShardIndex(idx *archive.ShardIndex) error {
 		return cmn.NewErrBusy("shard", lom.Cname())
 	}
 	defer lom.Unlock(true)
-	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+	// Reload into a fresh LOM: old bucket properties and optional metadata must not survive.
+	archlom := AllocLOM(lom.ObjName)
+	defer FreeLOM(archlom)
+	if err := archlom.InitFQN(lom.FQN, lom.Bucket()); err != nil {
+		return err
+	}
+	// TODO: InitFQN must preserve logical lock/cache identity and HRW for shortened names.
+	// This requires somehow preserving:
+	// 	- uname and digest so the fresh LOM uses the same lock we already acquired and the same metadata-cache entry
+	// 	- The HRW flag so the primary object isn’t mistakenly treated as a mirror copy
+	if archlom.Uname() != lom.Uname() {
+		return fmt.Errorf("%s: source identity mismatch after InitFQN", lom.Cname())
+	}
+	if err := archlom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return fmt.Errorf("%s: %w", lom.Cname(), err)
 	}
 	// archlom may have been rewritten
-	if idx.IsStale(lom.Checksum(), lom.Lsize()) {
+	if idx.IsStale(archlom.Checksum(), archlom.Lsize()) {
 		return cmn.NewErrBusy("shard", lom.Cname(), "rewritten while indexing")
 	}
 
@@ -117,9 +134,10 @@ func (lom *LOM) SaveShardIndex(idx *archive.ShardIndex) error {
 	if err != nil {
 		if committed {
 			lom.uncacheSidx()
-			if lom.HasShardIdx() {
-				lom.SetShardIdx(false)
-				if errPersist := lom.PersistMain(lom.IsChunked()); errPersist != nil {
+			archlom.uncacheSidx()
+			if archlom.HasShardIdx() {
+				archlom.SetShardIdx(false)
+				if errPersist := archlom.PersistMain(archlom.IsChunked()); errPersist != nil {
 					err = errors.Join(err, errPersist)
 				}
 			}
@@ -128,8 +146,9 @@ func (lom *LOM) SaveShardIndex(idx *archive.ShardIndex) error {
 	}
 
 	lom.uncacheSidx()
-	lom.SetShardIdx(true)
-	if err := lom.PersistMain(lom.IsChunked()); err != nil {
+	archlom.uncacheSidx()
+	archlom.SetShardIdx(true)
+	if err := archlom.PersistMain(archlom.IsChunked()); err != nil {
 		return fmt.Errorf("%s: %w", lom.Cname(), err)
 	}
 	// TODO: optionally populate the shard-index cache on (re)build, behind a feature flag.
@@ -178,7 +197,7 @@ func (lom *LOM) commitSidx(wfqn string) (committed bool, err error) {
 // - (nil, nil)                - absent: no index recorded, or the index object is gone
 // - (nil, ErrShardIdxStale)   - present but needs rebuilding (source or index version changed)
 // - (nil, ErrShardIdxCorrupt) - present but undecodable; re-indexing will fix it
-// - (nil, <other>)            - transient: I/O failure; the index may still be good
+// - (nil, <other>)            - other load failure; the index may still be good
 // - (idx, nil)                - usable
 func (lom *LOM) LoadShardIndex() (*archive.ShardIndex, error) {
 	return lom.loadShardIndex(T.PageMM())

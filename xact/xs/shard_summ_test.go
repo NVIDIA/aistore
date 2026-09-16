@@ -82,6 +82,9 @@ func saveIndexedShard(t *testing.T, bck *meta.Bck, objName string, size int64, a
 	tassert.CheckFatal(t, err)
 	t.Cleanup(idx.Free)
 	tassert.CheckFatal(t, lom.SaveShardIndex(idx))
+	lom.Lock(false)
+	defer lom.Unlock(false)
+	tassert.CheckFatal(t, lom.Load(false, true))
 	return lom
 }
 
