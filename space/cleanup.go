@@ -554,7 +554,7 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	j.adv.Throttle(j.nvisits)
+	j.adv.Throttle(j.nvisits, true /*yield*/)
 
 	if j.bck.IsAIS() && j.bck.IsSystem() {
 		j.visitSysBck(&parsed, fqn)

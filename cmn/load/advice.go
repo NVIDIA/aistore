@@ -72,23 +72,22 @@ func (a *Advice) ShouldCheck(n int64) bool {
 	return n&a.Batch == a.Batch
 }
 
-// throttle the caller once per batch; return true if slept
-// (compare with Pace() below)
-func (a *Advice) Throttle(n int64) bool {
-	return a.ShouldCheck(n) && a.Pace()
-}
-
+// throttle the caller once per batch:
 // - refresh the recommendation (a.k.a. load advice)
-// - then sleep if recommended and return true
-// - otheriwse call runtime.Gosched (NOTE) and return false
-// (compare with Throttle() above)
-func (a *Advice) Pace() bool {
+// - sleep if advised and return true
+// - otherwise, optionally yield (runtime.Gosched) and return false
+func (a *Advice) Throttle(n int64, yield ...bool) bool {
+	if !a.ShouldCheck(n) {
+		return false
+	}
 	a.Refresh()
 	if a.Sleep > 0 {
 		time.Sleep(a.Sleep)
 		return true
 	}
-	runtime.Gosched()
+	if len(yield) > 0 && yield[0] {
+		runtime.Gosched()
+	}
 	return false
 }
 

@@ -430,7 +430,10 @@ func (j *lruJ) evict(batch int64) {
 
 		// plus, once per batch
 		if fevicted >= batch {
-			j.adv.Pace()
+			j.adv.Refresh()
+			if j.adv.Sleep > 0 {
+				time.Sleep(j.adv.Sleep)
+			}
 		}
 	}
 }
@@ -451,7 +454,10 @@ func (j *lruJ) capCheckAndThrottle(size int64) {
 	if j.adv.ShouldCheck(j.nvisits) {
 		usedPct, _ := j.ini.GetFSUsedPercentage(j.mi.Path)
 		if usedPct < j.config.Space.HighWM {
-			j.adv.Pace()
+			j.adv.Refresh()
+			if j.adv.Sleep > 0 {
+				time.Sleep(j.adv.Sleep)
+			}
 		}
 	}
 }

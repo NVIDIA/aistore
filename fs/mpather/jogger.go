@@ -309,7 +309,7 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 
 	n := j.numvis.Inc()
 	if j.opts.RW {
-		j.adv.Throttle(n)
+		j.adv.Throttle(n, true /*yield*/)
 	}
 	return nil
 }

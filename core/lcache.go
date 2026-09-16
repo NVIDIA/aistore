@@ -176,7 +176,7 @@ func (u *rmbcks) f(hkey, value any) bool {
 func (u *rmbcks) pace() {
 	u.nd++
 	if u.throttle {
-		u.adv.Throttle(u.nd)
+		u.adv.Throttle(u.nd, true /*yield*/)
 	}
 }
 
@@ -397,7 +397,7 @@ func (evct *evct) f(hkey, value any) bool {
 
 	// throttle
 	evct.evicted++
-	evct.adv.Throttle(evct.evicted)
+	evct.adv.Throttle(evct.evicted, true /*yield*/)
 	return evct.parent.rc.Load() == 0
 }
 
