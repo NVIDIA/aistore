@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -190,6 +191,15 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if statusCode >= http.StatusBadRequest {
+		if respErr == nil {
+			if message, ok := response.(string); ok && message != "" {
+				respErr = errors.New(message)
+			} else {
+				respErr = fmt.Errorf(
+					"download operation failed with status %d", statusCode,
+				)
+			}
+		}
 		t.writeErr(w, r, respErr, statusCode)
 		return
 	}

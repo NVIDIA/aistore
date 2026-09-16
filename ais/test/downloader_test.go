@@ -6,7 +6,9 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"strconv"
@@ -1397,6 +1399,78 @@ func TestDownloadJobConcurrency(t *testing.T) {
 
 	tassert.Errorf(t, concurrentJobs, "expected jobs to run concurrently")
 	tlog.Logln("Done waiting")
+}
+
+// Regression test for downloader err nil pointer when downloader queue is full
+// Upstream correctly returns a >400 status code, a response and nil err
+func TestDownloadJobDownloaderQueueFullShouldReturnGracefully(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     trand.String(10),
+			Provider: apc.AIS,
+		}
+
+		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	_, err := api.GetClusterMap(baseParams)
+	tassert.CheckFatal(t, err)
+
+	ids := []string{}
+	t.Cleanup(func() {
+		for _, id := range ids {
+			if err := api.AbortDownload(baseParams, id); err != nil {
+				t.Errorf("abort %s: %v", id, err)
+			}
+		}
+		for _, id := range ids {
+			waitForDownload(t, id, 30*time.Second)
+		}
+	})
+
+	sawErr := false
+	const aMagicNumberOfDownloadsThatMostLikelyExceeedsQueueLimit = 100
+	for i := range aMagicNumberOfDownloadsThatMostLikelyExceeedsQueueLimit {
+		tlog.Logln(fmt.Sprintf("Starting %dth download...", i))
+		id, err := api.DownloadWithParam(baseParams, dload.TypeRange, dload.RangeBody{
+			Base: dload.Base{
+				Bck:         bck,
+				Description: generateDownloadDesc(),
+				Limits: dload.Limits{
+					Connections:  1,
+					BytesPerHour: 100 * cos.MiB,
+				},
+			},
+			Template: template,
+		})
+
+		if err != nil {
+			sawErr = true
+			// we expect the error to be a 429 when the queue is full
+			var httpErr *cmn.ErrHTTP
+			if errors.As(err, &httpErr) {
+				tassert.Fatalf(t, httpErr.Status == http.StatusTooManyRequests, "expected 429 too many requests")
+				tassert.Fatalf(t, strings.Contains(httpErr.Message, "downloader job queue is full"), "expected downloader job queue is full err msg")
+			} else {
+				t.Fatalf("submission %d: unexpected error: %v", i+1, err)
+			}
+
+			// stop the test on first error
+			break
+		} else {
+			ids = append(ids, id)
+		}
+	}
+
+	if !sawErr {
+		t.Skip("downloader queue did not saturate; overload path not exercised")
+	}
 }
 
 // NOTE: Test may fail if the network is SUPER slow!!
