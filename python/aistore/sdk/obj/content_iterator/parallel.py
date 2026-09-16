@@ -22,6 +22,8 @@ from multiprocessing import shared_memory
 from concurrent.futures import Future, ProcessPoolExecutor
 from typing import Dict, Generator, List, Optional, Tuple
 
+from requests.exceptions import ChunkedEncodingError
+
 from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider
 from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer, RingBuffer
 from aistore.sdk.obj.object_client import ObjectClient
@@ -99,13 +101,22 @@ def _fetch_chunk(
             (ring-buffer mode). Pass -1 to skip (direct mode).
     """
     n = 0
+    expected = end - start
     try:
         resp = worker_state.client.get_chunk(start, end)
         try:
             # TODO: replace with resp.raw.readinto() for a further zero-copy win
             for chunk in resp.iter_content(chunk_size=DEFAULT_CHUNK_SIZE):
+                if n + len(chunk) > expected:
+                    raise ChunkedEncodingError(
+                        f"Range [{start}, {end}) returned more than {expected} bytes"
+                    )
                 worker_state.shm.buf[offset + n : offset + n + len(chunk)] = chunk
                 n += len(chunk)
+            if n != expected:
+                raise ChunkedEncodingError(
+                    f"Range [{start}, {end}) returned {n} bytes; expected {expected}"
+                )
         finally:
             resp.close()
     finally:
@@ -299,10 +310,6 @@ class ParallelContentIterProvider(BaseContentIterProvider):
                     data_len = futures.pop(
                         next_yield
                     ).result()  # re-raises worker exceptions
-                    # TODO: Validate data_len against this range's expected length
-                    # before yielding. A clean short range read must be retried or
-                    # raised here; file-level EOF recovery cannot safely infer the
-                    # missing absolute offset after later parallel ranges are yielded.
                     ring.wait_slot(slot)
                     yield ring.read_slot(slot, data_len)
 

@@ -9,6 +9,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Fixed
 
 - ZIP batch extraction reads each archive entry correctly when names repeat.
+- Parallel reads reject short or oversized ranges before exposing incomplete
+  data or overwriting an adjacent shared-memory range.
 - Job duration returns `None` for running jobs with Go zero end timestamps.
 - Empty object-name lists and templates raise `ValueError` when creating an object group.
 - Cluster bucket listing accepts an empty provider to list buckets from all providers.

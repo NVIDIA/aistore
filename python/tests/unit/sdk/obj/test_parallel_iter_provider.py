@@ -7,12 +7,15 @@ import signal
 import multiprocessing as mp
 import unittest
 from concurrent.futures.process import BrokenProcessPool
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 
 import requests
 
 from aistore.sdk.obj.content_iterator import ParallelContentIterProvider
 from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer, RingBuffer
+from aistore.sdk.obj.content_iterator import parallel
+from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
+from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 from aistore.sdk.const import PROPS_CHUNKED
 
 
@@ -58,10 +61,10 @@ class TestParallelContentIterProvider(unittest.TestCase):
     def test_create_iter_yields_chunks_in_order(self):
         """Test that chunks are yielded in correct order."""
         chunk_data = {
-            (0, 100): b"chunk0",
-            (100, 200): b"chunk1",
-            (200, 300): b"chunk2",
-            (300, 350): b"chunk3",
+            (0, 100): b"A" * 100,
+            (100, 200): b"B" * 100,
+            (200, 300): b"C" * 100,
+            (300, 350): b"D" * 50,
         }
 
         def mock_get_chunk(start, end):
@@ -96,7 +99,7 @@ class TestParallelContentIterProvider(unittest.TestCase):
         mock_attrs.chunks = None
         self.mock_client.head.return_value = mock_attrs
 
-        self.mock_client.get_chunk.return_value = _make_resp(b"small")
+        self.mock_client.get_chunk.return_value = _make_resp(b"small" * 10)
 
         provider = ParallelContentIterProvider(
             self.mock_client, self.chunk_size, self.num_workers
@@ -106,7 +109,7 @@ class TestParallelContentIterProvider(unittest.TestCase):
         ) as spy_close:
             result = list(provider.create_iter())
             self.assertTrue(spy_close.called)
-        self.assertEqual(result, [b"small"])
+        self.assertEqual(result, [b"small" * 10])
         self.assertEqual(mp.active_children(), [])
 
     def test_client_property(self):
@@ -115,6 +118,79 @@ class TestParallelContentIterProvider(unittest.TestCase):
             self.mock_client, self.chunk_size, self.num_workers
         )
         self.assertEqual(provider.client, self.mock_client)
+
+    def test_worker_checks_range_length_and_slot_bounds(self):
+        """A bad range cannot overwrite adjacent shared-memory slots."""
+        for chunks in ([b"abc"], [b"abcdef"], [b"abc", b"def"]):
+            with self.subTest(chunks=chunks):
+                buffer = bytearray(b"?" * 12)
+                state = Mock()
+                state.shm.buf = memoryview(buffer)
+                state.slot_ready = [Mock()]
+                response = state.client.get_chunk.return_value
+                response.iter_content.return_value = chunks
+                with patch.object(parallel, "worker_state", state):
+                    with self.assertRaises(requests.exceptions.ChunkedEncodingError):
+                        # pylint: disable-next=protected-access
+                        parallel._fetch_chunk(10, 15, 2, 0)
+                self.assertEqual(buffer[:2], b"??")
+                self.assertEqual(buffer[7:], b"?????")
+                response.close.assert_called_once()
+                state.slot_ready[0].set.assert_called_once()
+
+    def test_short_ranges_are_rejected(self):
+        """Both download modes reject short first, middle, and final ranges."""
+        for start in (0, 100, 300):
+            for read_all in (False, True):
+                with self.subTest(start=start, read_all=read_all):
+
+                    def get_chunk(left, right, bad_start=start):
+                        return _make_resp(b"X" * (right - left - (left == bad_start)))
+
+                    self.mock_client.get_chunk.side_effect = get_chunk
+                    provider = ParallelContentIterProvider(self.mock_client, 100, 2)
+                    with self.assertRaises(requests.exceptions.ChunkedEncodingError):
+                        if read_all:
+                            with provider.read_all():
+                                pass
+                        else:
+                            list(provider.create_iter())
+
+    def test_file_resume_after_short_range_preserves_buffered_bytes(self):
+        """Resume at the failed range, after consuming a buffered remainder."""
+        data = bytes(range(175)) * 2
+        self.mock_client.head.return_value.present = True
+        for max_resume in (0, 1):
+            with self.subTest(max_resume=max_resume):
+                failures = mp.Value("i", 0)
+
+                def get_chunk(start, end, counter=failures):
+                    with counter.get_lock():
+                        if start == 100 and counter.value == 0:
+                            counter.value += 1
+                            return _make_resp(data[start : end - 1])
+                    return _make_resp(data[start:end])
+
+                self.mock_client.get_chunk.side_effect = get_chunk
+                provider = ParallelContentIterProvider(self.mock_client, 100, 2)
+                with patch.object(
+                    provider, "create_iter", wraps=provider.create_iter
+                ) as create:
+                    reader = ObjectFileReader(provider, max_resume=max_resume)
+                    try:
+                        self.assertEqual(reader.read(75), data[:75])
+                        if max_resume:
+                            self.assertEqual(reader.read(), data[75:])
+                            self.assertEqual(
+                                create.call_args_list, [call(), call(offset=100)]
+                            )
+                        else:
+                            with self.assertRaises(ObjectFileReaderMaxResumeError):
+                                reader.read()
+                            self.assertFalse(reader.readable())
+                            create.assert_called_once_with()
+                    finally:
+                        reader.close()
 
     def test_create_iter_propagates_worker_exception(self):
         """Test that an exception raised in a worker propagates to the caller."""
