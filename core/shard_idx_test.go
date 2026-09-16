@@ -238,6 +238,34 @@ func siPrimeCache(archlom *core.LOM, archpath string) { //nolint:unparam // pass
 	Fail("expected the shard index to be loaded")
 }
 
+// load a fresh LOM from disk, bypassing the in-memory LOM cache
+func siReload(archlom *core.LOM) *core.LOM {
+	GinkgoHelper()
+	archlom.UncacheDel()
+	fresh := &core.LOM{ObjName: archlom.ObjName}
+	Expect(fresh.InitCmnBck(&cmn.Bck{Name: siShardBucket, Provider: apc.AIS})).To(Succeed())
+	fresh.Lock(false)
+	defer fresh.Unlock(false)
+	Expect(fresh.Load(false /*cache it*/, true /*locked*/)).To(Succeed())
+	return fresh
+}
+
+// finalize new content the way PUT (append, cold GET) does: work file => RenameFinalize => persist
+func siRewrite(archlom *core.LOM, fh *os.File, size int64) {
+	GinkgoHelper()
+	wfqn := archlom.GenFQN(fs.WorkCT, fs.WorkfilePut)
+	wfh, err := archlom.CreateWork(wfqn)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = io.Copy(wfh, io.NewSectionReader(fh, 0, size))
+	cos.Close(wfh)
+	Expect(err).NotTo(HaveOccurred())
+
+	archlom.Lock(true)
+	defer archlom.Unlock(true)
+	Expect(archlom.RenameFinalize(wfqn)).To(Succeed())
+	Expect(archlom.PersistMain(false /*chunked*/)).To(Succeed())
+}
+
 func siRmIdx(archlom *core.LOM) {
 	idxlom := siIdxLOM(GinkgoT(), archlom)
 	idxlom.UncacheDel()
@@ -646,6 +674,48 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		})
 	})
 
+	Describe("new content", func() {
+		const archpath = "file_0003.bin"
+
+		It("drops the shard index (flag, index object, cache) on finalize", func() {
+			fh, size, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 8)
+			DeferCleanup(fh.Close)
+			archlom := siArchLOM(GinkgoT(), fmt.Sprintf("rewritten-%d.tar", rand.Int64()))
+			siSaveTAR(archlom, fh, size)
+			siPrimeCache(archlom, archpath)
+
+			siRewrite(archlom, fh, size) // same size and checksum: IsStale alone would keep the index
+
+			Expect(archlom.HasShardIdx()).To(BeFalse())
+			Expect(siIdxPath(GinkgoT(), archlom)).NotTo(BeAnExistingFile())
+			Expect(siReload(archlom).HasShardIdx()).To(BeFalse(), "cleared flag was not persisted")
+			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
+		})
+
+		It("rejects an index built before the shard was rewritten", func() {
+			fh1, size1, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 10)
+			DeferCleanup(fh1.Close)
+			old, err := archive.BuildShardIndex(fh1, size1, siShardCksum(GinkgoT(), fh1, size1))
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(old.Free)
+
+			// meanwhile, rewritten and re-indexed
+			fh2, size2, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
+			DeferCleanup(fh2.Close)
+			archlom := siArchLOM(GinkgoT(), fmt.Sprintf("raced-%d.tar", rand.Int64()))
+			siSaveTAR(archlom, fh2, size2)
+			Expect(archlom.HasShardIdx()).To(BeTrue())
+
+			// the late save loses without disturbing the current index
+			err = archlom.SaveShardIndex(old)
+			Expect(cmn.IsErrBusy(err)).To(BeTrue(), "expected busy, got %v", err)
+			Expect(archlom.HasShardIdx()).To(BeTrue())
+			Expect(siIdxPath(GinkgoT(), archlom)).To(BeAnExistingFile())
+			Expect(siReload(archlom).HasShardIdx()).To(BeTrue())
+			Expect(siRead(archlom, archpath)).To(BeTrue(), "current index was disturbed")
+		})
+	})
+
 	Describe("busy source (best-effort flip)", func() {
 		It("returns a busy error (cmn.IsErrBusy) when the source shard is read-locked", func() {
 			fh, sz, _ := siMakeTAR(GinkgoT(), tmpDir, tar.FormatUSTAR, 5)
@@ -654,7 +724,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(idx.Free)
 
-			archlom := siArchLOM(GinkgoT(), "save-busy.tar")
+			archlom := siArchLOM(GinkgoT(), fmt.Sprintf("save-busy-%d.tar", rand.Int64()))
 
 			// Simulate a concurrent reader (e.g. get-batch streaming the shard): the Phase-2
 			// write lock must fail fast and leave HasShardIdx unset - never block.
@@ -663,6 +733,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			err = archlom.SaveShardIndex(idx)
 			Expect(cmn.IsErrBusy(err)).To(BeTrue())
 			Expect(archlom.HasShardIdx()).To(BeFalse())
+			Expect(siIdxPath(GinkgoT(), archlom)).NotTo(BeAnExistingFile())
 		})
 	})
 
@@ -929,10 +1000,12 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			}
 			wg.Wait()
 			after := core.SidxStats()
-			if after.Load == before.Load && after.Deny > before.Deny {
+			if after.Deny > before.Deny {
 				Skip("cache admission denied under high memory load")
 			}
-			Expect(fast).To(ContainElement(true), "expected the winning loader to use the index")
+			for _, usedIdx := range fast {
+				Expect(usedIdx).To(BeTrue(), "concurrent readers must share the cold load")
+			}
 			Expect(after.Load-before.Load).To(BeEquivalentTo(1), "expected a single winning load")
 			siRmIdx(archlom)
 			Expect(siRead(archlom, archpath)).To(BeTrue(), "expected a cache hit")
@@ -975,6 +1048,11 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			core.SidxClearAll()
 			Expect(core.SidxStats().Clear - before.Clear).To(BeEquivalentTo(1))
 			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
+		})
+
+		It("counts loaded bytes toward the next memory sample", func() {
+			siPrimeCache(archlom, archpath)
+			Expect(core.SidxNbytes()).To(BeNumerically(">", 0))
 		})
 
 		It("detects stale cached index", func() {

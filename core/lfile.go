@@ -234,7 +234,7 @@ func (lom *LOM) _cleanup() error {
 
 	// 3. remove shard index
 	if lom.HasShardIdx() {
-		if err := lom.rmShardIdx(); err != nil {
+		if err := lom.rmSidx(); err != nil {
 			errs = append(errs, fmt.Errorf("remove shard index: %w", err))
 		}
 	}
@@ -338,6 +338,10 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 				lom.SetCustomKey(cmn.OrigFntl, saved[0])
 			}
 			lom.setlmfl(lmflFntl)
+		}
+		// new content: PUT, cold GET, append, chunked completion
+		if lom.HasShardIdx() {
+			lom.dropSidx()
 		}
 		return nil
 	}

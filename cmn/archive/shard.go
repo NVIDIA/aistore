@@ -329,6 +329,11 @@ func (idx *ShardIndex) String() string {
 
 func (idx *ShardIndex) Len() int { return len(idx.offs) }
 
+// in-memory footprint of the packed buffer and offsets
+func (idx *ShardIndex) MemSize() int64 {
+	return int64(cap(idx.buf) + cap(idx.offs)*cos.SizeofI32)
+}
+
 // binary search directly over the packed payload; ordering is guaranteed by metaver 2
 func (idx *ShardIndex) Lookup(name string) (ShardIndexEntry, bool) {
 	lo, hi := 0, len(idx.offs)
