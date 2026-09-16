@@ -10,6 +10,7 @@ import (
 
 	"sync/atomic"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
@@ -22,30 +23,34 @@ const (
 var (
 	last    atomic.Int64
 	running atomic.Int64
+	nskip   atomic.Int64 // calls skipped since the last run (sparse logging)
 )
 
 func FreeToOS(force bool) bool {
 	var (
-		since time.Duration
-		now   = mono.NanoTime()
-		prev  = last.Load()
-		ival  = ivalTime
+		now  = mono.NanoTime()
+		prev = last.Load()
+		ival = ivalTime
 	)
 	if force {
 		ival = forceTime
 	}
 	if prev > 0 {
-		since = time.Duration(now - prev)
-		if since < ival {
-			nlog.Infoln("not running - only", since, "<", ival, "passed since the previous run")
+		if since := time.Duration(now - prev); since < ival {
+			if n := nskip.Add(1); cos.Sparse(n) {
+				nlog.Infoln("not running - only", since, "<", ival, "passed since the previous run [ skipped:", n, "]")
+			}
 			return false
 		}
 	}
 	if !running.CompareAndSwap(0, now) {
-		nlog.Infoln("still running [", since, "]")
+		if n := nskip.Add(1); cos.Sparse(n) {
+			nlog.Infoln("still running [ skipped:", n, "]")
+		}
 		return false
 	}
 
+	nskip.Store(0)
 	go do(now)
 	return true
 }
