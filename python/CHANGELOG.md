@@ -8,6 +8,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- ZIP batch extraction reads each archive entry correctly when names repeat.
 - Job duration returns `None` for running jobs with Go zero end timestamps.
 - Empty object-name lists and templates raise `ValueError` when creating an object group.
 - Cluster bucket listing accepts an empty provider to list buckets from all providers.

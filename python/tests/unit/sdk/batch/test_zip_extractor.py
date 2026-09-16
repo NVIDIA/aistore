@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -38,6 +38,30 @@ class TestZipStreamExtractor(unittest.TestCase):
         expected_formats = (".zip",)
         self.assertEqual(supported_formats, expected_formats)
 
+    def test_duplicate_member_names(self):
+        archive = BytesIO()
+        with zipfile.ZipFile(archive, "w") as zip_file:
+            zip_file.writestr("test-bucket/file.txt", b"abcd")
+            with self.assertWarnsRegex(UserWarning, "Duplicate name"):
+                zip_file.writestr("test-bucket/file.txt", b"efghij")
+
+        request = MossReq(
+            moss_in=[
+                MossIn(obj_name="file.txt", bck="test-bucket", start=0, length=4),
+                MossIn(obj_name="file.txt", bck="test-bucket", start=4, length=6),
+            ],
+            output_format=".zip",
+            streaming_get=True,
+        )
+        result = list(
+            self.zip_extractor.extract(
+                self.mock_response, BytesIO(archive.getvalue()), request
+            )
+        )
+        self.assertEqual([content for _, content in result], [b"abcd", b"efghij"])
+        self.assertEqual([metadata.size for metadata, _ in result], [4, 6])
+        self.mock_response.close.assert_called_once()
+
     @patch("zipfile.ZipFile")
     def test_successful_extraction(self, mock_zipfile):
         """Test successful file extraction from ZIP stream."""
@@ -69,7 +93,7 @@ class TestZipStreamExtractor(unittest.TestCase):
         # In streaming mode, MossOut is constructed from MossIn
         self.assertEqual(moss_out.obj_name, "missing.txt")
         self.assertEqual(moss_out.bucket, "test-bucket")
-        mock_zip_file.read.assert_called_with("file1.txt")
+        mock_zip_file.read.assert_called_with(mock_zipinfo)
 
     @patch("zipfile.ZipFile")
     def test_skip_directory_entries(self, mock_zipfile):
@@ -103,7 +127,7 @@ class TestZipStreamExtractor(unittest.TestCase):
         self.assertEqual(len(result), 1)
         _, content = result[0]
         self.assertEqual(content, b"content")
-        mock_zip_file.read.assert_called_once_with("file.txt")
+        mock_zip_file.read.assert_called_once_with(file_zipinfo)
 
     @patch("zipfile.ZipFile")
     def test_streaming_mode_conversion(self, mock_zipfile):
@@ -253,8 +277,8 @@ class TestZipStreamExtractor(unittest.TestCase):
 
         # Verify both files were read
         self.assertEqual(mock_zip_file.read.call_count, 2)
-        mock_zip_file.read.assert_any_call("file1.txt")
-        mock_zip_file.read.assert_any_call("file2.txt")
+        mock_zip_file.read.assert_any_call(mock_zipinfo1)
+        mock_zip_file.read.assert_any_call(mock_zipinfo2)
 
         # Verify response was closed at the end
         self.mock_response.close.assert_called_once()

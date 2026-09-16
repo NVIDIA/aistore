@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import zipfile
@@ -64,7 +64,7 @@ class ZipStreamExtractor(ArchiveStreamExtractor):
                         continue
 
                     try:
-                        content = zip_file.read(zip_info.filename)
+                        content = zip_file.read(zip_info)
 
                         # Get MossOut (from response or build from request)
                         moss_out = self._get_moss_out(
