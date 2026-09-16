@@ -8,6 +8,7 @@ from typing import Generator, List, Tuple, Union, Optional
 from urllib3.response import HTTPResponse
 
 from aistore.sdk.batch.extractor.extractor_registry import get_extractor
+from aistore.sdk.batch.extractor.tar_stream_extractor import TarStreamExtractor
 from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
 from aistore.sdk.batch.types import MossIn, MossOut, MossReq, MossResp
 from aistore.sdk.bucket import Bucket
@@ -279,6 +280,8 @@ class Batch:
         raw: bool = False,
         decode_as_stream: bool = False,
         clear_batch: bool = True,
+        *,
+        tar_buffer_size: Optional[int] = None,
     ) -> Union[BatchResult, HTTPResponse]:
         """
         Execute the Get-Batch request.
@@ -301,6 +304,10 @@ class Batch:
                     enabling reuse with new objects.
                 - False: Retains the batch objects, allowing repeated get() calls or adding more objects
                     before execution.
+            tar_buffer_size (Optional[int]): TAR read buffer size in bytes. None uses
+                the 64 KiB default. Must be a positive integer when supplied; supported
+                only for .tar, .tgz, and .tar.gz extraction with raw=False. This does
+                not control multipart buffering or the size of returned objects.
 
         Returns:
             Union[BatchResult, HTTPResponse]:
@@ -308,11 +315,24 @@ class Batch:
                 - If raw=False: Generator yielding (MossOut, file_content) tuples
 
         Raises:
-            ValueError: If no objects added to batch
+            ValueError: If no objects are added, or tar_buffer_size is invalid or
+                supplied for ZIP or raw mode.
         """
         if not self.requests_list:
             logger.error("Cannot execute batch: no objects added")
             raise ValueError("No objects added to batch")
+
+        if tar_buffer_size is not None:
+            if (
+                isinstance(tar_buffer_size, bool)
+                or not isinstance(tar_buffer_size, int)
+                or tar_buffer_size <= 0
+            ):
+                raise ValueError("tar_buffer_size must be a positive integer")
+            if raw or not isinstance(self.extractor, TarStreamExtractor):
+                raise ValueError(
+                    "tar_buffer_size requires TAR extraction with raw=False"
+                )
 
         logger.debug(
             "Executing batch get: objects=%d, format=%s, streaming=%s, raw=%s",
@@ -357,10 +377,14 @@ class Batch:
 
         # TODO: Handle error response, create customized errors
         if request_snapshot.streaming_get:
-            return self._extract_streaming(response, request_snapshot)
-        return self._extract_multipart(response, decode_as_stream, request_snapshot)
+            return self._extract_streaming(response, request_snapshot, tar_buffer_size)
+        return self._extract_multipart(
+            response, decode_as_stream, request_snapshot, tar_buffer_size
+        )
 
-    def _extract_streaming(self, response, request_snapshot: MossReq) -> BatchResult:
+    def _extract_streaming(
+        self, response, request_snapshot: MossReq, tar_buffer_size: Optional[int] = None
+    ) -> BatchResult:
         """
         Extract from streaming response (no metadata).
         Infer MossOut from request data.
@@ -368,16 +392,24 @@ class Batch:
         Args:
             response (Response): HTTP response object
             request_snapshot (MossReq): Snapshot of the request for this batch
+            tar_buffer_size (Optional[int]): Override the TAR read buffer size in bytes.
 
         Returns:
             BatchResult: Generator yielding (MossOut, content) tuples
         """
 
-        return self.extractor.extract(response, response.raw, request_snapshot, None)
+        options = {} if tar_buffer_size is None else {"buffer_size": tar_buffer_size}
+        return self.extractor.extract(
+            response, response.raw, request_snapshot, None, **options
+        )
 
     # TODO: revisit
     def _extract_multipart(
-        self, response, decode_as_stream: bool, request_snapshot: MossReq
+        self,
+        response,
+        decode_as_stream: bool,
+        request_snapshot: MossReq,
+        tar_buffer_size: Optional[int] = None,
     ) -> BatchResult:
         """
         Extract from multipart response (with metadata).
@@ -387,6 +419,7 @@ class Batch:
             response (Response): HTTP response object
             decode_as_stream (bool): Whether to decode multipart as stream
             request_snapshot (MossReq): Snapshot of the request for this batch
+            tar_buffer_size (Optional[int]): Override the TAR read buffer size in bytes.
 
         Returns:
             BatchResult: Generator yielding (MossOut, content) tuples
@@ -412,8 +445,11 @@ class Batch:
                 data_stream = BytesIO(next(parts_iter)[1])
 
             # Extract archive and pair with metadata
+            options = (
+                {} if tar_buffer_size is None else {"buffer_size": tar_buffer_size}
+            )
             return self.extractor.extract(
-                response, data_stream, request_snapshot, moss_resp
+                response, data_stream, request_snapshot, moss_resp, **options
             )
 
         except Exception as e:

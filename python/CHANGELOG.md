@@ -41,6 +41,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `ObjectClient.head()` now accepts optional property selectors while preserving
   its previous default attribute set.
 - Updated `xxhash` to `>=3.6.0,<5`, so the SDK can fully support python 3.14.
+- Batch TAR extraction uses a 64 KiB read buffer to reduce stream read overhead:
+  `Batch.get(tar_buffer_size=...)` can override it for TAR formats.
 
 ### Removed
 

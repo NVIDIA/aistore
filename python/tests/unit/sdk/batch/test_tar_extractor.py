@@ -74,7 +74,9 @@ class TestTarStreamExtractor(unittest.TestCase):
         self.assertEqual(moss_out.bucket, "test-bucket")
 
         # Verify tarfile was opened correctly - use ANY for BytesIO comparison
-        mock_tar_open.assert_called_once_with(fileobj=ANY, mode="r|*")
+        mock_tar_open.assert_called_once_with(
+            fileobj=ANY, mode="r|*", bufsize=64 * 1024
+        )
 
     @patch("tarfile.open")
     def test_skip_non_file_entries(self, mock_tar_open):

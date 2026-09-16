@@ -248,3 +248,16 @@ Get-Batch provides the largest gains for small-to-medium object sizes, where it 
 - [AIStore 4.0 Release Notes](https://github.com/NVIDIA/aistore/releases/tag/v1.4.0) - Full release information
 - [Python SDK Documentation](https://docs.nvidia.com/aistore/python/aistore/sdk) - Complete SDK reference
 - [Example Notebook](https://github.com/NVIDIA/aistore/tree/main/python/examples/sdk/ais-batch-requests.ipynb) - Jupyter notebook with examples
+
+
+## TAR read buffer size
+
+TAR extraction uses a 64 KiB read buffer by default, balancing bulk-read
+throughput with small-object latency and temporary memory usage. Larger buffers
+are not uniformly faster. To override it for one request, pass the keyword-only
+`tar_buffer_size` argument:
+
+```python
+for obj_info, data in batch.get(tar_buffer_size=10 * 1024):
+    process(data)
+```

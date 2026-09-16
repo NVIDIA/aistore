@@ -374,6 +374,65 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(result[1][0].obj_name, "file2.txt")
         self.assertEqual(result[1][1], b"content2")
 
+    def test_get_batch_tar_buffer_size(self):
+        """Forward the per-call TAR buffer size while preserving batch clearing."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file1.txt"],
+            bucket=self.mock_bucket,
+        )
+        request_snapshot = batch.request.model_copy()
+        response = self.mock_request_client.request.return_value
+
+        with patch.object(batch.extractor, "extract", return_value=iter(())) as extract:
+            result = batch.get(tar_buffer_size=128 * 1024)
+
+            self.assertIs(result, extract.return_value)
+            extract.assert_called_once_with(
+                response,
+                response.raw,
+                request_snapshot,
+                None,
+                buffer_size=128 * 1024,
+            )
+        self.mock_request_client.request.assert_called_once()
+        self.assertEqual(len(batch), 0)
+
+    def test_get_batch_invalid_tar_buffer_size(self):
+        """Reject invalid sizes before sending a request or clearing the batch."""
+        for size in (0, -1, 1.5, "65536", True, False):
+            with self.subTest(tar_buffer_size=size):
+                batch = Batch(
+                    self.mock_request_client,
+                    objects=["file1.txt"],
+                    bucket=self.mock_bucket,
+                )
+                request_snapshot = batch.request.model_copy()
+
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    batch.get(tar_buffer_size=size)
+
+                self.mock_request_client.request.assert_not_called()
+                self.assertEqual(batch.request, request_snapshot)
+
+    def test_get_batch_tar_buffer_size_unsupported_mode(self):
+        """Reject buffer overrides when TAR extraction will not run."""
+        for output_format, raw in ((".zip", False), (".tar", True), (".zip", True)):
+            with self.subTest(output_format=output_format, raw=raw):
+                batch = Batch(
+                    self.mock_request_client,
+                    objects=["file1.txt"],
+                    bucket=self.mock_bucket,
+                    output_format=output_format,
+                )
+                request_snapshot = batch.request.model_copy()
+
+                with self.assertRaisesRegex(ValueError, "requires TAR extraction"):
+                    batch.get(raw=raw, tar_buffer_size=64 * 1024)
+
+                self.mock_request_client.request.assert_not_called()
+                self.assertEqual(batch.request, request_snapshot)
+
     @patch("aistore.sdk.batch.batch.get_extractor")
     @patch("aistore.sdk.batch.batch.MultipartDecoder")
     def test_get_batch_non_streaming(self, mock_decoder_class, mock_get_extractor):
