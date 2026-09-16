@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 # pylint: disable=protected-access
@@ -348,9 +348,9 @@ class TestObjectFileReaderResume(unittest.TestCase):
         # Verify that the file was closed after the exception
         self.assertTrue(object_file._closed)
 
-    def test_reset_if_not_cached(self):
+    def test_restart_if_not_cached(self):
         """
-        Test that ObjectFileReader resets correctly if the object is not cached on attempt to resume.
+        Test that ObjectFileReader requests a full stream if the object is not cached on attempt to resume.
         """
         # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
         # and simulates a failure on every read w/ a max of 1 resumes
@@ -368,12 +368,14 @@ class TestObjectFileReaderResume(unittest.TestCase):
         )
         # Attempt to read should fail after exceeding one max retry
         with patch.object(
-            object_file, "_reset", wraps=object_file._reset
-        ) as mock_reset:
+            object_file._content_provider,
+            "create_iter",
+            wraps=object_file._content_provider.create_iter,
+        ) as mock_create_iter:
             with self.assertRaises(ObjectFileReaderMaxResumeError):
                 object_file.read()
-        # Verify that _reset was called once with retain_resumes=True
-        mock_reset.assert_called_once_with(retain_resumes=True)
+        # A cold restart must not issue a ranged request.
+        mock_create_iter.assert_called_once_with()
 
     def test_resume_if_cached(self):
         """
@@ -436,3 +438,125 @@ class TestObjectFileReaderResume(unittest.TestCase):
         self.assertIsInstance(
             context.exception.original_error, ObjectFileReaderUnexpectedEOF
         )
+
+
+class TestObjectFileReaderColdResume(unittest.TestCase):
+    """Restarted cold GETs must not return bytes that were already read."""
+
+    def setUp(self):
+        self.data = b"0123456789abcdef"
+
+    def _make_reader(self, streams, cached=None, max_resume=3, known_length=True):
+        """Each stream specifies its end offset, chunk size, and terminal error."""
+        provider = Mock()
+        provider.client.path = "objects/bucket/object"
+        provider.client.head.side_effect = [
+            Mock(present=present) for present in (cached or [False] * max_resume)
+        ]
+        provider.expected_end_position = len(self.data) if known_length else None
+        provider.offsets = []
+        provider.closed_streams = []
+
+        def create_iter(offset=0):
+            stream_index = len(provider.offsets)
+            provider.offsets.append(offset)
+            end, chunk_size, error = streams[stream_index]
+
+            def iterator():
+                try:
+                    for pos in range(offset, end, chunk_size):
+                        yield self.data[pos : min(pos + chunk_size, end)]
+                    if error:
+                        raise error
+                finally:
+                    provider.closed_streams.append(stream_index)
+
+            return iterator()
+
+        provider.create_iter.side_effect = create_iter
+        return ObjectFileReader(provider, max_resume=max_resume), provider
+
+    def test_uncached_read_all_preserves_pending_bytes(self):
+        for error in (ChunkedEncodingError("interrupted"), None):
+            with self.subTest(error=error):
+                reader, provider = self._make_reader([(8, 4, error), (16, 3, None)])
+
+                self.assertEqual(reader.read(), self.data)
+                self.assertEqual(reader.read(), b"")
+                self.assertEqual(provider.offsets, [0, 0])
+                self.assertEqual(provider.closed_streams, [0, 1])
+
+    def test_uncached_partial_reads_preserve_remainder_and_size(self):
+        for error in (ChunkedEncodingError("interrupted"), None):
+            with self.subTest(error=error):
+                reader, provider = self._make_reader([(8, 4, error), (16, 3, None)])
+
+                self.assertEqual(reader.read(3), b"012")
+                self.assertEqual(reader.read(6), b"345678")
+                self.assertEqual(reader.read(), b"9abcdef")
+                self.assertEqual(provider.offsets, [0, 0])
+
+    def test_uncached_multiple_restarts_preserve_progress(self):
+        error = ChunkedEncodingError("interrupted")
+        reader, provider = self._make_reader(
+            [(8, 4, error), (4, 2, error), (12, 3, error), (16, 5, None)]
+        )
+
+        self.assertEqual(reader.read(3), b"012")
+        self.assertEqual(reader.read(), self.data[3:])
+        self.assertEqual(provider.offsets, [0, 0, 0, 0])
+        self.assertEqual(provider.closed_streams, [0, 1, 2, 3])
+
+    def test_uncached_restart_can_become_cached_while_skipping(self):
+        error = ChunkedEncodingError("interrupted")
+        reader, provider = self._make_reader(
+            [(8, 4, error), (4, 2, error), (16, 3, None)],
+            cached=[False, True],
+        )
+
+        self.assertEqual(reader.read(3), b"012")
+        self.assertEqual(reader.read(6), b"345678")
+        self.assertEqual(reader.read(), b"9abcdef")
+        self.assertEqual(provider.offsets, [0, 0, 8])
+
+    def test_uncached_clean_eof_while_skipping_retries(self):
+        reader, provider = self._make_reader(
+            [(8, 4, None), (4, 2, None), (16, 3, None)]
+        )
+
+        self.assertEqual(reader.read(), self.data)
+        self.assertEqual(provider.offsets, [0, 0, 0])
+
+    def test_uncached_unknown_length_eof_while_skipping_retries(self):
+        reader, provider = self._make_reader(
+            [(8, 4, ChunkedEncodingError("interrupted")), (4, 2, None), (16, 3, None)],
+            known_length=False,
+        )
+
+        self.assertEqual(reader.read(), self.data)
+        self.assertEqual(provider.offsets, [0, 0, 0])
+
+    def test_uncached_restarts_respect_retry_limit(self):
+        for error in (ChunkedEncodingError("interrupted"), None):
+            with self.subTest(error=error):
+                reader, provider = self._make_reader(
+                    [(8, 4, error), (4, 2, error), (4, 2, error)], max_resume=2
+                )
+
+                with self.assertRaises(ObjectFileReaderMaxResumeError):
+                    reader.read()
+
+                self.assertFalse(reader.readable())
+                self.assertEqual(provider.offsets, [0, 0, 0])
+                self.assertEqual(provider.closed_streams, [0, 1, 2])
+
+    def test_close_after_uncached_restart_closes_active_stream(self):
+        reader, provider = self._make_reader(
+            [(8, 4, ChunkedEncodingError("interrupted")), (16, 3, None)]
+        )
+
+        self.assertEqual(reader.read(9), self.data[:9])
+        reader.close()
+
+        self.assertEqual(provider.closed_streams, [0, 1])
+        self.assertFalse(reader.readable())
