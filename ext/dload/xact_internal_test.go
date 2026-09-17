@@ -1,0 +1,59 @@
+// Package dload implements functionality to download resources into AIS cluster from external source.
+/*
+ * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+ */
+package dload
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/NVIDIA/aistore/cmn"
+)
+
+func TestDownloadRejectedHandoff(t *testing.T) {
+	// Download uses the package store. Keep this test serial and restore it
+	// without starting the database or housekeeping goroutine.
+	previousStore := g.store
+	g.store = &infoStore{dljobs: make(map[string]*dljob)}
+	t.Cleanup(func() { g.store = previousStore })
+
+	// No receiver: the handoff must time out regardless of scheduling or
+	// how many jobs the dispatcher would normally admit.
+	xdl := &Xact{dispatcher: &dispatcher{workCh: make(chan jobif)}}
+	job := &singleDlJob{sliceDlJob: sliceDlJob{
+		baseDlJob: baseDlJob{id: "rejected-handoff", xdl: xdl},
+	}}
+
+	resp, status, err := xdl.Download(job)
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("expected HTTP 429, got %d (response %v, error %v)", status, resp, err)
+	}
+	if err == nil {
+		t.Fatal("rejected handoff returned a nil error; the HTTP handler would panic")
+	}
+	if resp != nil {
+		t.Errorf("expected no success response on rejection, got %v", resp)
+	}
+	if !cmn.IsErrTooManyRequests(err) {
+		t.Fatalf("expected a too-many-requests error, got %T: %v", err, err)
+	}
+
+	// Exercise the same error writer used by downloadHandler, including
+	// serialization of the message that previously dereferenced a nil error.
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/download", http.NoBody)
+	cmn.WriteErr(recorder, req, err, status, 0 /* silent */)
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected HTTP 429 response, got %d", recorder.Code)
+	}
+	var httpErr cmn.ErrHTTP
+	if decodeErr := json.Unmarshal(recorder.Body.Bytes(), &httpErr); decodeErr != nil {
+		t.Fatalf("decode error response: %v", decodeErr)
+	}
+	if httpErr.Status != status || httpErr.Message != err.Error() {
+		t.Errorf("unexpected error response: %+v", httpErr)
+	}
+}
