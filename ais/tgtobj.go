@@ -730,7 +730,9 @@ do: // retry uplock or ec-recovery, the latter only once
 		}
 		goto fin // ok, done
 	case cold:
-		// have remote backend - use it
+		// discard stale metadata and restore any shortened name before the backend GET.
+		// cold PUT's RenameFinalize shortens it again for local storage if needed.
+		goi.lom.Reset()
 	case goi.latestVer:
 		// apc.QparamLatestVer or 'versioning.validate_warm_get'
 		res := goi.lom.CheckRemoteMD(true /* rlocked */, false /*synchronize*/, goi.req)

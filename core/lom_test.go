@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -561,6 +562,110 @@ var _ = Describe("LOM", func() {
 					lom := newBasicLom(noneFQN)
 
 					Expect(lom.FromFS()).To(HaveOccurred())
+				})
+
+				DescribeTable("should allow resetting a stale handle before cold PUT", func(fromFS bool) {
+					stale := newBasicLom(localFQN)
+					want := *stale // initialized, not loaded
+					_ = prepareLOMChunked(localFQN, 2)
+					stale.Lock(false)
+					err := stale.Load(false, true)
+					stale.Unlock(false)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(stale.IsChunked()).To(BeTrue())
+
+					remover := newBasicLom(localFQN)
+					remover.Lock(true)
+					err = remover.Load(false, true)
+					if err == nil {
+						err = remover.RemoveObj()
+					}
+					remover.Unlock(true)
+					Expect(err).NotTo(HaveOccurred())
+
+					stale.Lock(false)
+					if fromFS {
+						err = stale.FromFS()
+					} else {
+						err = stale.Load(false, true)
+					}
+					if cos.IsNotExist(err) {
+						stale.Reset() // cold GET explicitly discards the previous object's state
+					}
+					stale.Unlock(false)
+					Expect(cos.IsNotExist(err)).To(BeTrue())
+					Expect(*stale).To(Equal(want))
+					Expect(stale.IsChunked(true /*object absent*/)).To(BeFalse())
+					Expect(stale.HasShardIdx()).To(BeFalse())
+					Expect(stale.Checksum()).To(BeNil())
+					Expect(stale.Lsize(true /*object absent*/)).To(BeZero())
+					Expect(stale.AtimeUnix()).To(BeZero())
+					Expect(stale.VersionPtr()).To(BeNil())
+					Expect(stale.GetCustomMD()).To(BeNil())
+
+					// Finalize a monolithic replacement using the same handle, as cold PUT does.
+					stale.Lock(true)
+					createTestFile(localFQN, testFileSize)
+					stale.SetSize(int64(testFileSize))
+					stale.SetAtimeUnix(time.Now().UnixNano())
+					err = stale.PersistMain(false)
+					stale.Unlock(true)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(stale.Load(false, false)).To(Succeed())
+					Expect(stale.IsChunked()).To(BeFalse())
+					Expect(stale.Lsize()).To(Equal(int64(testFileSize)))
+				},
+					Entry("FromFS", true),
+					Entry("Load", false),
+				)
+
+				It("should restore long-name identity before cold PUT", func() {
+					objName := "foldr/" + strings.Repeat("x", 280) // exceeds the local filename limit
+					stale := &core.LOM{ObjName: objName}
+					Expect(stale.InitCmnBck(&cloudBckA)).To(Succeed())
+					want := *stale
+
+					// First cold GET, then reuse the shortened handle after another handle evicts it.
+					for range 2 {
+						stale.Lock(false)
+						err := stale.Load(false, true)
+						if cos.IsNotExist(err) {
+							stale.Reset()
+						}
+						stale.Unlock(false)
+						Expect(cos.IsNotExist(err)).To(BeTrue())
+						Expect(stale.ObjName).To(Equal(objName)) // backend GET must use the original key
+						Expect(stale.FQN).To(Equal(want.FQN))
+						Expect(stale.IsFntl()).To(BeFalse())
+						Expect(*stale).To(Equal(want))
+
+						// Cold PUT finalization must recreate the shortened file and its original-name mapping.
+						stale.Lock(true)
+						wfqn := stale.GenFQN(fs.WorkCT, fs.WorkfileColdget)
+						createTestFile(wfqn, testFileSize)
+						stale.SetSize(int64(testFileSize))
+						stale.SetAtimeUnix(time.Now().UnixNano())
+						err = stale.RenameFinalize(wfqn)
+						if err == nil {
+							err = stale.PersistMain(false)
+						}
+						stale.Unlock(true)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(stale.Load(false, false)).To(Succeed())
+						Expect(stale.IsFntl()).To(BeTrue())
+						Expect(stale.ObjName).NotTo(Equal(objName))
+						Expect(stale.OrigFntl()).To(Equal([]string{want.FQN, objName}))
+
+						remover := &core.LOM{ObjName: objName}
+						Expect(remover.InitCmnBck(&cloudBckA)).To(Succeed())
+						remover.Lock(true)
+						err = remover.Load(false, true)
+						if err == nil {
+							err = remover.RemoveObj()
+						}
+						remover.Unlock(true)
+						Expect(err).NotTo(HaveOccurred())
+					}
 				})
 
 				It("should fill object with correct meta", func() {

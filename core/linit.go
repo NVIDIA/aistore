@@ -102,6 +102,21 @@ func (lom *LOM) InitBck(bck *meta.Bck) (err error) {
 	return
 }
 
+// Reset prepares a locked LOM for cold GET after confirming local absence:
+//   - restore the original ObjName and FQN if shortened;
+//   - discard loaded metadata, preserving identity and placement.
+func (lom *LOM) Reset() {
+	if fs.HasPrefixFntl(lom.ObjName) {
+		_, lom.ObjName = cmn.ParseUname(lom.Uname())
+		lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
+	}
+	// Keep the only md state established by InitBck; its other state is outside md.
+	lom.md = lmeta{
+		uname: lom.md.uname,           // lock/cache identity set by InitBck
+		flags: lom.md.flags & lmflHRW, // placement bit set by InitBck via setHRW(true)
+	}
+}
+
 func (lom *LOM) String() string {
 	var (
 		sb cos.SB
