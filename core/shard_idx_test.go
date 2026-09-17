@@ -133,12 +133,7 @@ func siSave(archlom *core.LOM, idx *archive.ShardIndex) error {
 	if err != nil {
 		return err
 	}
-	if err := archlom.SaveShardIndex(idx); err != nil {
-		return err
-	}
-	archlom.Lock(false)
-	defer archlom.Unlock(false)
-	return archlom.Load(false /*cache it*/, true /*locked*/)
+	return archlom.SaveShardIndex(idx)
 }
 
 // call LoadShardIndex with the shard read-locked
@@ -303,7 +298,6 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 	)
 
 	BeforeEach(func() {
-		fs.NewTestMFS(mock.NewIOS()) // keep shards and sidecars on this test's mountpaths
 		tmpDir = GinkgoT().TempDir()
 		mpath = filepath.Join(tmpDir, "mpath")
 		cos.CreateDir(mpath)
@@ -423,11 +417,10 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			rebuilt := build(replacement)
 			Expect(replacement.HasShardIdx()).To(BeFalse())
 			Expect(replacement.SaveShardIndex(rebuilt)).To(Succeed())
-			replacement.Lock(false)
-			defer replacement.Unlock(false)
-			Expect(replacement.Load(false, true)).To(Succeed())
 			Expect(replacement.HasShardIdx()).To(BeTrue())
+			replacement.Lock(false)
 			loaded, err := replacement.LoadShardIndex()
+			replacement.Unlock(false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(loaded).NotTo(BeNil())
 			defer loaded.Free()
@@ -448,11 +441,13 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			DeferCleanup(idx.Free)
 			Expect(siSave(archlom, idx)).To(Succeed())
 
-			props := *archlom.Bprops()
 			original := archlom.Bprops()
-			DeferCleanup(func() { siBMD.Set(archlom.Bck(), original) })
-			props.BID = core.NewBID(12345, true /*isAIS*/)
-			siBMD.Set(archlom.Bck(), &props)
+			if change == "recreated" {
+				props := *original
+				DeferCleanup(func() { siBMD.Set(archlom.Bck(), original) })
+				props.BID = core.NewBID(12345, true /*isAIS*/)
+				siBMD.Set(archlom.Bck(), &props)
+			}
 			replacement := siArchLOM(GinkgoT(), archlom.ObjName)
 			siSetShardSize(GinkgoT(), replacement, cos.KiB)
 			replacement.SetCksum(cksum)
@@ -474,9 +469,14 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			}
 			if change == "deleted" {
 				Expect(siBMD.Del(replacement.Bck())).To(BeTrue())
+				DeferCleanup(func() { siBMD.Set(archlom.Bck(), original) })
 			}
 			err = archlom.SaveShardIndex(idx)
 			switch change {
+			case "recreated":
+				// handle from the previous bucket incarnation
+				Expect(cmn.IsErrObjDefunct(err)).To(BeTrue(), "%v", err)
+				return
 			case "deleted":
 				var notFound *cmn.ErrBckNotFound
 				Expect(errors.As(err, &notFound)).To(BeTrue(), "%v", err)
@@ -503,6 +503,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			Entry("changed size", "size", false),
 			Entry("changed checksum", "checksum", true),
 			Entry("missing source", "missing", false),
+			Entry("recreated bucket", "recreated", false),
 			Entry("deleted bucket", "deleted", false),
 		)
 	})
@@ -565,7 +566,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			Entry("PAX", tar.FormatPAX),
 		)
 
-		DescribeTable("loads HasShardIdx after save",
+		DescribeTable("sets HasShardIdx on archlom after save",
 			func(format tar.Format) {
 				fh, sz, content := siMakeTAR(GinkgoT(), tmpDir, format, 5)
 				defer fh.Close()
@@ -987,10 +988,6 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(idx.Free)
 			Expect(archlom.SaveShardIndex(idx)).To(Succeed())
-			Expect(archlom.HasShardIdx()).To(BeFalse(), "save refreshed the receiver")
-			archlom.Lock(false)
-			Expect(archlom.Load(false, true)).To(Succeed())
-			archlom.Unlock(false)
 			Expect(archlom.HasShardIdx()).To(BeTrue())
 			Expect(archlom.IsChunked()).To(BeTrue(), "setting HasShardIdx changed the source layout")
 			Expect(chunkPaths[1]).To(BeAnExistingFile(), "setting HasShardIdx removed a chunk")
