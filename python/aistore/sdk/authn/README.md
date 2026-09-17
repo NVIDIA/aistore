@@ -33,7 +33,7 @@ authn_client = AuthNClient("http://localhost:52001")
 admin_auth_token = authn_client.login("admin", "admin")
 
 # Initialize AIStore client with the token
-aistore_client = Client("http://localhost:8080", admin_auth_token)
+aistore_client = Client("http://localhost:8080", token=admin_auth_token)
 ```
 
 > Note: 
@@ -54,13 +54,15 @@ cluster_info = cluster_manager.register(cluster_alias, ["http://localhost:8080"]
 
 Define custom roles and manage users to control access to AIStore resources at the bucket or cluster level, and use the `AccessAttr` class to specify permissions like `GET`, `PUT`, `CREATE-BUCKET`, etc., tailored to your needs.
 
-> For more information on the specific access permissions, refer to the please refer to the permissions section of the [AuthN documentation](https://github.com/NVIDIA/aistore/blob/main/docs/authn.md#permissions) and the section [`AccessAttr`](https://docs.nvidia.com/aistore/python/aistore/sdk/authn/access_attr) under the [Python SDK Documentation](https://docs.nvidia.com/aistore/python/aistore/sdk/authn).
+> For more information on access permissions, refer to the [AuthN permissions](https://github.com/NVIDIA/aistore/blob/main/docs/authn.md#permissions) and [`AccessAttr`](https://docs.nvidia.com/aistore/python/aistore/sdk/authn/access_attr) documentation.
 
 ##### Creating a Custom Role
 
 Use the `RoleManager` class to create roles that define access permissions:
 
 ```python
+from aistore.sdk.authn.access_attr import AccessAttr
+
 role_manager = authn_client.role_manager()
 
 # Custom Role w/ Object GET & PUT Access for `ais://my-bucket`
@@ -89,7 +91,7 @@ custom_user = user_manager.create(
 )
 
 custom_user_token = authn_client.login("myusername", "mypassword")
-aistore_client = Client("http://localhost:8080", custom_user_token)
+aistore_client = Client("http://localhost:8080", token=custom_user_token)
 ```
 
 #### Managing Tokens

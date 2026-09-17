@@ -22,7 +22,10 @@ In future we are planning to expand our dataset module with several exciting fea
 
 The `write_dataset` function enables writing datasets as shards directly into a bucket using the WebDataset `ShardWriter`. Here's how you can use the `write_dataset` function:
 
+Replace the image directory and define `your_class_lookup_fn(filename)` to return each sample's label.
+
 ```python
+import os
 from pathlib import Path
 from aistore.sdk import Client
 from aistore.sdk.dataset.dataset_config import DatasetConfig
