@@ -153,6 +153,7 @@ const (
 	ActSelfRemove   = "self-initiated-removal" // e.g., when losing last mountpath
 	ActPrimaryForce = "primary-force"          // set primary with force (BEWARE! advanced usage only)
 	ActBumpMetasync = "bump-metasync"          // when executing ActPrimaryForce - the final step
+	ActHeadBatch    = "head-batch"             // batch HEAD(object)
 )
 
 const (
