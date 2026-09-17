@@ -509,7 +509,24 @@ func (md *lmeta) unpack(buf []byte) error {
 	if seen&haveSize != haveSize {
 		return errors.New(badLmeta + " #103")
 	}
-	return md._setCksum(cksumType, cksumValue, seen&haveCksumT != 0, seen&haveCksumV != 0)
+	if err := md._setCksum(cksumType, cksumValue, seen&haveCksumT != 0, seen&haveCksumV != 0); err != nil {
+		return err
+	}
+
+	// clear in-memory state that's absent from the lmeta on-disk; preserve runtime-only HRW bit
+	if seen&haveVer == 0 {
+		md.Ver = nil
+	}
+	if seen&haveCustom == 0 {
+		md.CustomMD = nil
+	}
+	if seen&haveCopies == 0 {
+		md.copies = nil
+	}
+	if seen&haveFlags == 0 {
+		md.flags &= lmflHRW
+	}
+	return nil
 }
 
 func (md *lmeta) _setCksum(cksumT, cksumV string, haveT, haveV bool) error {
