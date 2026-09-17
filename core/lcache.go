@@ -433,7 +433,10 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 	// special [dirty] case: clear and flush
 	md.Atime = mdTime
 	md.atimefs = uint64(mdTime)
+
+	hrw := lom.IsHRW() // (the bit is not needed here - pack() strips it - but consistency)
 	lom.md = *md
+	lom.md.setHRW(hrw)
 
 	buf := lom.pack()
 	if err = lom.SetXattr(buf); err != nil {

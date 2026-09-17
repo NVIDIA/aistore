@@ -143,18 +143,20 @@ func (lom *LOM) Lsize(special ...bool) int64 {
 
 func (lom *LOM) loaded() bool { return lom.md.lid != 0 }
 
-func (lom *LOM) IsHRW() bool { return lom.md.flags&lmflHRW != 0 }
+func (md *lmeta) isHRW() bool { return md.flags&lmflHRW != 0 }
 
-func (lom *LOM) setHRW(v bool) {
+func (md *lmeta) setHRW(v bool) {
 	if v {
-		lom.md.flags |= lmflHRW
+		md.flags |= lmflHRW
 	} else {
-		lom.md.flags &^= lmflHRW
+		md.flags &^= lmflHRW
 	}
 }
 
+func (lom *LOM) IsHRW() bool   { return lom.md.isHRW() }
+func (lom *LOM) setHRW(v bool) { lom.md.setHRW(v) }
+
 // given an existing (on-disk) object, determines whether it is a _copy_
-// (compare with isMirror below)
 func (lom *LOM) IsCopy() bool {
 	if lom.IsHRW() {
 		return false
@@ -167,7 +169,7 @@ func (lom *LOM) IsCopy() bool {
 func (lom *LOM) Fstat(getAtime bool) (size, atimefs int64, mtime time.Time, _ error) {
 	finfo, err := os.Lstat(lom.FQN)
 	if err == nil {
-		size = finfo.Size() // NOTE: chunk?
+		size = finfo.Size()
 		mtime = finfo.ModTime()
 		if getAtime {
 			atimefs = ios.GetATime(finfo).UnixNano()
@@ -626,7 +628,10 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	)
 	// fast path
 	if lmd != nil {
+		hrw := lom.IsHRW()
 		lom.md = *lmd
+		lom.md.setHRW(hrw)
+
 		if lom.IsFntl() {
 			lom.fixupFntl()
 		}
