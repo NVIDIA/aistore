@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
@@ -66,6 +67,14 @@ func (*TargetMock) OOS(*fs.CapStatus, *cmn.Config, *fs.Tcdf) fs.CapStatus       
 
 func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode, ...string) (*cmn.ObjectPropsV2, error) {
 	return nil, nil
+}
+
+func (*TargetMock) HeadBatchT2T(_ *meta.Bck, req *cmn.HdbReq, _ *meta.Snode) (*apc.HdbResp, error) {
+	resp := apc.NewHdbResp(len(req.In))
+	for i := range resp.Status {
+		resp.Status[i] = apc.HdbSame
+	}
+	return resp, nil
 }
 
 func (*TargetMock) SoftFSHC()                         {}

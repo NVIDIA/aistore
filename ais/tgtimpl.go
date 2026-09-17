@@ -111,6 +111,12 @@ func (t *target) HeadObjT2T(lom *core.LOM, tsi *meta.Snode, reqProps ...string) 
 	return t.headt2t(lom, tsi, smap, reqProps)
 }
 
+// batch counterpart of HeadObjT2T
+func (t *target) HeadBatchT2T(bck *meta.Bck, req *cmn.HdbReq, tsi *meta.Snode) (*apc.HdbResp, error) {
+	smap := t.owner.smap.get()
+	return t.headBatcht2t(bck, req, tsi, smap)
+}
+
 // CopyObject:
 // - either creates a full replica of the source object (the `lom` argument)
 // - or transforms the object

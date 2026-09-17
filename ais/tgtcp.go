@@ -40,6 +40,8 @@ const (
 	bmdReg   = "register"
 )
 
+const hdbPerItem = 10 * time.Millisecond // head-batch: timeout budget per requested object
+
 type delb struct {
 	obck    *meta.Bck
 	present bool
@@ -1543,6 +1545,62 @@ func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX, reqProps [
 	freeCR(res)
 
 	return op, err
+}
+
+// intra-cluster batch HEAD(object) against the given target (see cmn/headbatch)
+func (t *target) headBatcht2t(bck *meta.Bck, req *cmn.HdbReq, tsi *meta.Snode, smap *smapX) (*apc.HdbResp, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	q := bck.NewQuery()
+	q.Set(apc.QparamSilent, "true")
+
+	cargs := allocCargs()
+	{
+		cargs.si = tsi
+		cargs.req = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Base:   tsi.URL(cmn.NetIntraControl),
+			Path:   apc.URLPathObjects.Join(bck.Name),
+			Query:  q,
+			Header: http.Header{cos.HdrContentType: []string{cos.ContentBinary}},
+			Body:   req.NewPack(),
+		}
+		cargs.timeout = hdbTimeout(len(req.In))
+	}
+	res := t.call(cargs, smap)
+	freeCargs(cargs)
+
+	err, status := res.err, res.status
+	resp := &apc.HdbResp{}
+	if err == nil {
+		err = resp.Unpack(cos.NewUnpacker(res.bytes))
+	}
+	freeCR(res)
+
+	if err != nil {
+		return nil, _hdbErr(err, status, tsi)
+	}
+	if err := resp.Validate(len(req.In)); err != nil {
+		return nil, fmt.Errorf("%s: %s: %w", t, tsi.StringEx(), err)
+	}
+	return resp, nil
+}
+
+// An unknown action returns 400 which should fallback to per-object HEADs.
+func _hdbErr(err error, status int, tsi *meta.Snode) error {
+	if status == http.StatusBadRequest {
+		return fmt.Errorf("%s: %w (%v)", tsi.StringEx(), cmn.ErrHdbUnsupported, err)
+	}
+	return fmt.Errorf("%s: %w", tsi.StringEx(), err)
+}
+
+func hdbTimeout(num int) time.Duration {
+	tout := cmn.Rom.MaxKeepalive()
+	if scaled := time.Duration(num) * hdbPerItem; scaled > tout {
+		return scaled
+	}
+	return tout
 }
 
 // headObjBcast broadcasts to all targets to find out if anyone has the specified object.

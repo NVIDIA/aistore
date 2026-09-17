@@ -1342,6 +1342,11 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 
 // POST /v1/objects/bucket-name/object-name
 func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
+	if r.Header.Get(cos.HdrContentType) == cos.ContentBinary {
+		apireq.after = 1 // bucket only (no object name in the URL)
+		t.httpobjhdb(w, r, apireq)
+		return
+	}
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
 		return

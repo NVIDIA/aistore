@@ -141,6 +141,7 @@ type (
 
 		Promote(params *PromoteParams) (ecode int, err error)
 		HeadObjT2T(lom *LOM, tsi *meta.Snode, reqProps ...string) (*cmn.ObjectPropsV2, error)
+		HeadBatchT2T(bck *meta.Bck, req *cmn.HdbReq, tsi *meta.Snode) (*apc.HdbResp, error)
 
 		ECRestoreReq(ct *CT, tsi *meta.Snode, uuid string) error
 
