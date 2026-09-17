@@ -6,7 +6,7 @@
 
 ```bash
 # Install dependencies
-pip install aistore[mcp]
+pip install "aistore[mcp]"
 
 # Set your AIStore endpoint
 export AIS_ENDPOINT="http://localhost:8080"
@@ -42,13 +42,15 @@ python -m aistore.mcp.server
 | `ais_list_jobs` | List all jobs in the cluster with their status |
 | `ais_running_jobs` | List currently running jobs |
 | `ais_job_status` | Get detailed status of a specific job |
-| `ais_list_etls` | List all ETL transformers in the cluster |
+| `ais_list_etls` | List running ETL transformers in the cluster |
 | `ais_etl_details` | Get ETL details including object-level errors |
 | `ais_etl_logs` | Get logs from ETL pods (base64-decoded) |
 
 ## Configuration
 
 The server reads the AIStore endpoint from the `AIS_ENDPOINT` environment variable (default: `http://localhost:8080`).
+
+The server also honors the [SDK client environment variables](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#sdk-client-environment-variables), including `AIS_AUTHN_TOKEN`, `AIS_SKIP_VERIFY_CRT` (or legacy `AIS_SKIP_VERIFY`), `AIS_CLIENT_CA`, `AIS_CRT`, and `AIS_CRT_KEY` for authentication and Transport Layer Security (TLS) settings.
 
 ### Claude Desktop
 
@@ -70,7 +72,7 @@ Add to your `claude_desktop_config.json`:
 
 ### Claude Code
 
-Add to your project's `.claude/settings.json` or use the `/mcp` command:
+Add to `.mcp.json` in your project root. See [Claude Code project configuration](https://code.claude.com/docs/en/mcp#project-scope).
 
 ```json
 {

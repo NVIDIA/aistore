@@ -77,7 +77,7 @@ def register_job_tools(
 
     @mcp.tool()
     def ais_list_etls() -> str:
-        """List all ETL transformers in the cluster."""
+        """List running ETL transformers in the cluster."""
         client = get_client()
         etls = client.cluster().list_etls()
         result = [
