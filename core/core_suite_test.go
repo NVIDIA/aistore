@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/memsys"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,12 +16,6 @@ import (
 
 func init() {
 	hk.Init(false)
-	initMemsys()
-}
-
-func initMemsys() {
-	memsys.PageMM()
-	memsys.ByteMM()
 }
 
 func TestCore(t *testing.T) {
