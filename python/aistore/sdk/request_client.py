@@ -44,6 +44,7 @@ class RequestClient:
             or None to disable timeout.
         token (str, optional): Authorization token.
         response_handler (ResponseHandler): Handler for processing HTTP responses. Defaults to AISResponseHandler.
+        retry_config (RetryConfig, optional): Retry settings. None uses RetryConfig.default().
     """
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments

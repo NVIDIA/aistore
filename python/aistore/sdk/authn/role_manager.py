@@ -55,7 +55,7 @@ class RoleManager:
         Retrieves information about all roles.
 
         Returns:
-            RoleList: A list containing information about all roles.
+            RolesList: A list containing information about all roles.
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore.

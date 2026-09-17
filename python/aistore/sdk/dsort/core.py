@@ -136,7 +136,7 @@ class Dsort:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
         """

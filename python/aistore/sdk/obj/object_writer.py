@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from pathlib import Path
@@ -38,10 +38,13 @@ class ObjectWriter:
         Args:
             content (bytes): Bytes to put as an object.
 
+        Returns:
+            requests.Response: Response from the upload request.
+
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         return self._put_data(data=content)
@@ -53,10 +56,13 @@ class ObjectWriter:
         Args:
             path (str or Path): Path to local file
 
+        Returns:
+            requests.Response: Response from the upload request.
+
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             ValueError: The path provided is not a valid file
         """
@@ -89,7 +95,7 @@ class ObjectWriter:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exceptions.HTTPError(404): The object does not exist
         """
@@ -115,6 +121,9 @@ class ObjectWriter:
         Args:
             custom_metadata (Dict[str, str]): Custom metadata key-value pairs.
             replace_existing (bool, optional): Whether to replace existing metadata. Defaults to False.
+
+        Returns:
+            requests.Response: Response from the metadata update request.
         """
         params = self.query_params.copy()
         if replace_existing:

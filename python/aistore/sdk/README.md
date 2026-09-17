@@ -100,7 +100,8 @@ The AIS Python SDK supports several environment variables that allow you to conf
 | Environment Variable | Description | Default Value |
 |---------------------|-------------|---------------|
 | `AIS_AUTHN_TOKEN` | Authentication token for accessing the AIS cluster | None |
-| `AIS_SKIP_VERIFY` | Skip SSL certificate verification when set to `true`, `1`, or `yes` | `false` |
+| `AIS_SKIP_VERIFY_CRT` | Skip TLS certificate verification for `1`, `t`, `true`, `y`, `yes`, or `on` (case-insensitive) | `false` |
+| `AIS_SKIP_VERIFY` | Legacy fallback when `AIS_SKIP_VERIFY_CRT` is unset | `false` |
 | `AIS_CLIENT_CA` | Path to CA certificate file for SSL verification | None |
 | `AIS_CRT` | Path to client certificate file for mTLS authentication | None |
 | `AIS_CRT_KEY` | Path to client certificate key file for mTLS authentication | None |
@@ -128,7 +129,7 @@ When the `Client` is initialized, configuration values are resolved in the follo
 2. **Environment variables** (listed above)
 3. **Default values** (built-in defaults)
 
-This means that if you provide a parameter directly to the `Client()` constructor, it will always take precedence over environment variables and defaults.
+Timeout and connection-pool parameters follow this order. TLS and token settings use their documented fallback rules. In particular, `skip_verify=False` still checks the skip-verification environment variable; it does not force verification when that variable is enabled.
 
 ### Examples
 
@@ -157,18 +158,18 @@ The SDK supports HTTPS connectivity if the AIS cluster is configured to use HTTP
 2. If using a self-signed certificate with your own CA, copy the CA certificate to your local machine. If using our built-in cert-manager config to generate your certificates, you can use [our playbook](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/ais-deployment/docs/generate_https_cert.md)
 3. Options to configure the SDK for HTTPS connectivity:
     - Skip verification (for testing, insecure):
-      - `client = Client(skip_verify=True)`
+      - `client = Client("https://localhost:8080", skip_verify=True)`
    - Point the SDK to use your certificate using one of the below methods:
      - Pass an argument to the path of the certificate when creating the client:
-        - `client = Client(ca_cert=/path/to/cert)`
+        - `client = Client("https://localhost:8080", ca_cert="/path/to/cert")`
      - Use the environment variable
        - Set `AIS_CLIENT_CA` to the path of your certificate before initializing the client
     - If your AIS cluster is using a certificate signed by a trusted CA, the client will default to using verification without needing to provide a CA cert.
 4. Options to configure the SDK to work with mTLS:
    - Pass a tuple argument containing path to client certificate and key pair
-      - `client = Client(client_cert=('client.crt', 'client.key'))
+      - `client = Client("https://localhost:8080", client_cert=('client.crt', 'client.key'))`
    - Pass a path to a PEM file that contains both client certificate and key
-      - `client = Client(client_cert='client.pem')
+      - `client = Client("https://localhost:8080", client_cert='client.pem')`
    - Use the environment variable
       - Set 'AIS_CRT' and 'AIS_CRT_KEY' to the path of client certificate and key respectively before initializing the client
 ---

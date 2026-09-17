@@ -72,7 +72,7 @@ class Cluster:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         return self._get_smap()
@@ -97,7 +97,7 @@ class Cluster:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         params = {
@@ -205,7 +205,7 @@ class Cluster:
         Raises:
             requests.RequestException: If there's an ambiguous exception while processing the request
             requests.ConnectionError: If there's a connection error with the cluster
-            requests.ConnectionTimeout: If the connection to the cluster times out
+            requests.ConnectTimeout: If the connection to the cluster times out
             requests.ReadTimeout: If the timeout is reached while awaiting a response from the cluster
         """
         performance_data = {}

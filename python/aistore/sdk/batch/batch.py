@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import base64
@@ -185,7 +185,7 @@ class Batch:
                 Object instance, or if exactly one of bck/provider is set without the other.
 
         Example:
-            batch = Batch(client, ["simple1.txt", "simple2.txt"])
+            batch = client.batch(["simple1.txt", "simple2.txt"], bucket=bucket)
             batch.add("shard.tar", archpath="data/file.json")  # Archive extraction
             batch.add("tracked.txt", opaque=b"user-id-123")  # With tracking data
             batch.add("large.bin", start=1024, length=2048)  # Byte range read

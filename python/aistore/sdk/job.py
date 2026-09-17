@@ -108,7 +108,7 @@ class Job:
             ValueError: If the job does not have an assigned ID
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         if not self._job_id:
@@ -159,7 +159,7 @@ class Job:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
             errors.JobInfoNotFound: If `job_kind` is empty and `job_id` is not found
@@ -265,7 +265,7 @@ class Job:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
         """
@@ -291,7 +291,7 @@ class Job:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
         """
@@ -321,7 +321,7 @@ class Job:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         job_args = JobArgs(kind=self._job_kind, daemon_id=daemon_id)
@@ -356,7 +356,7 @@ class Job:
             ValueError: If neither job_id nor job_kind is set
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         if not self._job_id and not self._job_kind:
@@ -376,7 +376,7 @@ class Job:
             end_time (datetime, optional): The end of the timeframe for monitoring jobs.
 
         Returns:
-            List[JobSnapshot]: A list of jobs that meet the specified timeframe criteria.
+            List[JobSnap]: A list of jobs that meet the specified timeframe criteria.
 
         Raises:
             JobInfoNotFound: Raised when no relevant job info is found.
@@ -402,7 +402,7 @@ class Job:
         Retrieve detailed job snapshot information across all targets.
 
         Returns:
-            AggregatedJobSnapshots: A snapshot containing detailed metrics for the job.
+            AggregatedJobSnap: A snapshot containing detailed metrics for the job.
         """
         job_args = JobArgs(id=self._job_id, kind=self._job_kind).as_dict()
         query_params = {QPARAM_WHAT: WHAT_QUERY_XACT_STATS}

@@ -196,7 +196,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             aistore.sdk.errors.InvalidBckProvider: Invalid bucket provider for requested operation
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -223,7 +223,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             aistore.sdk.errors.InvalidBckProvider: Invalid bucket provider for requested operation
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -251,7 +251,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             aistore.sdk.errors.InvalidBckProvider: Invalid bucket provider for requested operation
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -278,7 +278,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             aistore.sdk.errors.InvalidBckProvider: Invalid bucket provider for requested operation
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -298,7 +298,7 @@ class Bucket(AISSource):
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -330,7 +330,7 @@ class Bucket(AISSource):
         Raises:
             UnexpectedHTTPStatusCode: If the response status code is not as expected
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -415,7 +415,7 @@ class Bucket(AISSource):
         Raises:
             UnexpectedHTTPStatusCode: If the response status code is not as expected
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -522,7 +522,7 @@ class Bucket(AISSource):
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -596,7 +596,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -673,7 +673,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -735,7 +735,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
@@ -1016,7 +1016,7 @@ class Bucket(AISSource):
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ConnectTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             ValueError: The path provided is not a valid directory
         """

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from typing import List, Dict
@@ -26,6 +26,7 @@ class MultipartUpload:
     Args:
         client (RequestClient): Client used for all http requests.
         object_path (str): Path to the object being uploaded.
+        params (Dict[str, str], optional): Query parameters, including the bucket provider. Defaults to None.
     """
 
     def __init__(
