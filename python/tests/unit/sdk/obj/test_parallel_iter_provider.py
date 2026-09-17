@@ -478,6 +478,25 @@ class TestParallelContentIterProviderReadAll(unittest.TestCase):
             self.assertTrue(spy.called)
         self.assertEqual(mp.active_children(), [])
 
+    def test_read_all_failure_stops_pending_range_gets(self):
+        """An unavailable target must not trigger every range in the object."""
+        started = mp.Value("i", 0)
+
+        def get_chunk(_start, _end):
+            with started.get_lock():
+                started.value += 1
+            raise requests.ConnectionError("target unavailable")
+
+        self.mock_client.head.return_value.size = 1200
+        self.mock_client.get_chunk.side_effect = get_chunk
+        provider = ParallelContentIterProvider(self.mock_client, 100, 2)
+        with self.assertRaises(requests.ConnectionError):
+            provider.read_all()
+        self.assertGreaterEqual(started.value, 1)
+        # Two workers may have at most four ranges each submitted before failure.
+        self.assertLessEqual(started.value, 8)
+        self.assertEqual(mp.active_children(), [])
+
     def test_read_all_empty_object_raises(self):
         """read_all() is unreachable for zero-size objects — construction rejects them."""
         mock_attrs = Mock()

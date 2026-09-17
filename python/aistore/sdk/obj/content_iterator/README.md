@@ -68,7 +68,7 @@ Each worker:
 
 1. Allocate one `SharedMemory(size=object_size)`.
 2. Wrap it in a `ParallelBuffer`.
-3. Submit all chunk ranges to `ProcessPoolExecutor`.
+3. Submit at most `4 * num_workers` ranges to keep workers busy during result handling.
 4. Each worker writes at its offset inside the shared segment.
 5. Return the `ParallelBuffer` (memoryview into shm).
 
@@ -76,6 +76,11 @@ Each worker:
 No third copy on the return path.
 
 **Lifecycle:** caller **must** call `close()` or use `with`.
+
+After a range failure is observed, no more ranges are submitted. Pending tasks
+are canceled. Already running or dispatched tasks must finish before shared memory
+is released. Set a finite client timeout to limit waits for stalled requests.
+Iterator cleanup uses the same rule.
 
 ---
 

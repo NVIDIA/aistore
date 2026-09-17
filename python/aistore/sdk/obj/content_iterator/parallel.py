@@ -19,7 +19,8 @@ Provides two download modes:
 import multiprocessing as mp
 from dataclasses import dataclass, field
 from multiprocessing import shared_memory
-from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
+from itertools import islice
 from typing import Dict, Generator, List, Optional, Tuple
 
 from requests.exceptions import ChunkedEncodingError
@@ -32,6 +33,8 @@ from aistore.sdk.const import (
     DEFAULT_PARALLEL_CHUNK_SIZE,
     DEFAULT_CHUNK_SIZE,
 )
+
+_PREFETCH_RANGES_PER_WORKER = 4
 
 
 @dataclass
@@ -212,10 +215,12 @@ class ParallelContentIterProvider(BaseContentIterProvider):
 
     def _fill_shm(self, dst: "ParallelBuffer") -> None:
         """
-        Download the entire object into *dst* (direct-to-destination mode).
+        Fetch the entire object into *dst* using parallel range GETs.
 
-        Each worker owns a disjoint byte range within *dst* — no
-        synchronization beyond waiting for all futures.
+        Each worker owns a disjoint byte range within *dst*. Up to four ranges
+        per worker are submitted to hide parent-process scheduling latency.
+        On failure, pending work is canceled; already dispatched tasks finish
+        before shared memory can be released.
 
         Args:
             dst (ParallelBuffer): A `ParallelBuffer` of at least `_object_size` bytes,
@@ -227,20 +232,35 @@ class ParallelContentIterProvider(BaseContentIterProvider):
             return
         num_workers = min(self._num_workers, len(chunk_ranges))
 
-        with ProcessPoolExecutor(
+        executor = ProcessPoolExecutor(
             max_workers=num_workers,
             mp_context=fork_context,
             initializer=_init_worker,
             initargs=(self.client, dst.name),  # no slot_ready: direct mode
-        ) as executor:
+        )
+        try:
             # write_offset = start (each worker owns its exact byte range in dst)
             # slot_idx = -1 (no ring-buffer events needed)
-            futures = [
+            ranges = iter(chunk_ranges)
+            # One range per worker left workers idle during parent-side result handling.
+            # Four per worker hid that gap in local tests while bounding queued work.
+            prefetch = _PREFETCH_RANGES_PER_WORKER * num_workers
+            pending = {
                 executor.submit(_fetch_chunk, start, end, start, -1)
-                for start, end in chunk_ranges
-            ]
-            for f in futures:
-                f.result()  # re-raises worker exceptions
+                for start, end in islice(ranges, prefetch)
+            }
+            while pending:
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                for future in done:
+                    future.result()  # re-raises worker exceptions
+                pending.update(
+                    executor.submit(_fetch_chunk, start, end, start, -1)
+                    for start, end in islice(ranges, len(done))
+                )
+        finally:
+            # The context manager waits, but does not cancel pending futures.
+            # Join dispatched work before the caller releases shared memory.
+            executor.shutdown(wait=True, cancel_futures=True)
 
     # pylint: disable=too-many-locals
     def create_iter(self, offset: int = 0) -> Generator[bytes, None, None]:
@@ -289,12 +309,13 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         try:
             ring = RingBuffer(num_slots=num_slots, slot_size=self._chunk_size)
 
-            with ProcessPoolExecutor(
+            executor = ProcessPoolExecutor(
                 max_workers=num_slots,
                 mp_context=fork_context,
                 initializer=_init_worker,
                 initargs=(self.client, ring.name, ring.slot_ready),
-            ) as executor:
+            )
+            try:
                 # Fill the ring with the first num_slots requests.
                 for i in range(num_slots):
                     start, end = chunk_ranges[i]
@@ -324,6 +345,8 @@ class ParallelContentIterProvider(BaseContentIterProvider):
                             next_slot,
                         )
                         next_submit += 1
+            finally:
+                executor.shutdown(wait=True, cancel_futures=True)
         finally:
             if ring is not None:
                 ring.close()
