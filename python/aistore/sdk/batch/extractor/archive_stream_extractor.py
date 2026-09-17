@@ -99,6 +99,7 @@ class ArchiveStreamExtractor(ABC):
             archpath=moss_in.archpath or "",
             bucket=moss_in.bck or "",
             provider=moss_in.provider or "",
+            opaque=moss_in.opaque,
             size=content_length,
         )
 

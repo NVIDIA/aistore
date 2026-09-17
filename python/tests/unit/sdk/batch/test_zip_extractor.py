@@ -462,7 +462,7 @@ class TestZipStreamExtractor(unittest.TestCase):
 
     @patch("zipfile.ZipFile")
     def test_extraction_with_opaque(self, mock_zipfile):
-        """Test that opaque data flows through from MossResp."""
+        """Preserve opaque bytes in multipart and streaming metadata."""
         # Create MossReq
         moss_req = MossReq(
             moss_in=[
@@ -507,6 +507,21 @@ class TestZipStreamExtractor(unittest.TestCase):
         # Verify opaque data is preserved
         moss_out, _ = result[0]
         self.assertEqual(moss_out.opaque, b"tracking-metadata")
+
+        moss_req.streaming_get = True
+        for encoded, opaque in (
+            ("dXNlci1pZC0xMjM=", b"user-id-123"),
+            ("+/8=", b"\xfb\xff"),
+            (None, None),
+        ):
+            with self.subTest(opaque=opaque):
+                moss_req.moss_in[0] = moss_req.moss_in[0].model_copy(
+                    update={"opaque": encoded}
+                )
+                result = list(
+                    self.zip_extractor.extract(self.mock_response, BytesIO(), moss_req)
+                )
+                self.assertEqual(result[0][0].opaque, opaque)
 
     @patch("zipfile.ZipFile")
     def test_large_zip_file_error(self, mock_zipfile):

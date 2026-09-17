@@ -204,7 +204,7 @@ class Batch:
         # Build MossIn (frozen, so optional fields must be passed at construction time)
         extra = {}
         if opaque:
-            extra["opaque"] = base64.urlsafe_b64encode(opaque).decode("utf-8")
+            extra["opaque"] = base64.b64encode(opaque).decode("utf-8")
         if archpath:
             extra["archpath"] = archpath
         if start:

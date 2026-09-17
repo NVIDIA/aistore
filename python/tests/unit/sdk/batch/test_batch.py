@@ -190,15 +190,16 @@ class TestBatch(unittest.TestCase):
         self.assertIn("length=-10", str(context.exception))
 
     def test_batch_add_with_opaque(self):
-        """Test adding object with opaque user data."""
-        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
-        batch.add("tracked.txt", opaque=b"user-id-123")
-
-        self.assertEqual(len(batch), 1)
-        moss_in = batch.request.moss_in[0]
-        self.assertEqual(moss_in.obj_name, "tracked.txt")
-        # Opaque should be base64 encoded
-        self.assertIsNotNone(moss_in.opaque)
+        """Encode tracking bytes as standard Base64 in the request JSON."""
+        for opaque, encoded in (
+            (b"user-id-123", "dXNlci1pZC0xMjM="),
+            (b"\xfb\xff", "+/8="),
+            (None, None),
+        ):
+            with self.subTest(opaque=opaque):
+                batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+                batch.add("tracked.txt", opaque=opaque)
+                self.assertEqual(batch.request.dict()["in"][0].get("opaque"), encoded)
 
     def test_batch_add_chaining(self):
         """Test method chaining with add()."""
@@ -294,9 +295,7 @@ class TestBatch(unittest.TestCase):
                     bck=kwargs.get("bck") or self.mock_bucket.name,
                     provider=kwargs.get("provider") or default_provider,
                     opaque=(
-                        base64.urlsafe_b64encode(opaque).decode("utf-8")
-                        if opaque
-                        else None
+                        base64.b64encode(opaque).decode("utf-8") if opaque else None
                     ),
                     archpath=kwargs.get("archpath") or None,
                     start=kwargs.get("start") or None,
