@@ -5,6 +5,7 @@
 package dload
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"regexp"
@@ -151,6 +152,9 @@ type (
 	}
 )
 
+// rejected handoff (see Download below)
+var errTooManyJobs = errors.New("downloader: too many concurrent jobs")
+
 // interface guard
 var (
 	_ xact.Demand    = (*Xact)(nil)
@@ -211,6 +215,25 @@ func (xld *Xact) stop() {
 	xld.Finish()
 }
 
+// The (resp, statusCode, err) contract is the same one that request.errRsp/okRsp
+// implement for the admin paths below: when statusCode >= 400 the caller writes err
+// and ignores resp - so err MUST be non-nil
+// (see ErrHTTP.init: `e.Message = err.Error()`).
+//
+// To reiterate: bad status => error MUST be non-nil.
+//
+// Note also that dispatcher.workCh is unbuffered - this is a handoff, not a queue.
+// Failing it means the dispatcher loop is not receiving: it is parked on
+// sema.TryAcquire() with 5*fs.NumAvail() jobs already in flight. Hence 429 with
+// "too many concurrent jobs" rather than anything about queue depth.
+//
+// TODO -- FIXME separately:
+// setJob() below is not undone on the failure path: the job stays
+// in g.store under an ID the client never receives, with a zero finishedTime -
+// i.e. reported as running. (HK does eventually drop it, but only via the same
+// zero-finishedTime path that also drops live jobs - see infoStore.housekeep.)
+//
+
 func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 	xld.IncPending()
 	defer xld.DecPending()
@@ -225,7 +248,8 @@ func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 		case xld.dispatcher.workCh <- job:
 			return dljob.id, http.StatusOK, nil
 		case <-time.After(cmn.Rom.CplaneOperation()):
-			return "downloader job queue is full", http.StatusTooManyRequests, nil
+			err := cmn.NewErrTooManyRequests(errTooManyJobs, http.StatusTooManyRequests)
+			return nil, http.StatusTooManyRequests, err
 		}
 	}
 }
