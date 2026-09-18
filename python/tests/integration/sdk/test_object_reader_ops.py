@@ -249,7 +249,7 @@ class TestParallelObjectReaderOps(unittest.TestCase):
         self.assertEqual(first_portion, expected_content[:first_read_size])
 
         # Simulate resume: create new iterator from current position
-        # This is what ObjectFileReader._handle_broken_stream does
+        # This is what ResumableStream does when it resumes a cached object
         resume_position = first_read_size
         # pylint: disable=protected-access
         resumed_iter = reader._content_provider.create_iter(offset=resume_position)

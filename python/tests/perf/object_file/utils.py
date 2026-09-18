@@ -12,9 +12,10 @@ import statistics
 import subprocess
 import random
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, cast
 from kubernetes import client as k8s_client, watch as k8s_watch
 from aistore.sdk.bucket import Bucket
+from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.obj.object import Object
 from aistore.sdk.obj.object_reader import ObjectReader
 
@@ -51,14 +52,17 @@ def obj_file_reader_read(
     object_reader: ObjectReader, read_size: int, max_resume: int
 ) -> Tuple[bytes, int]:
     """Reads via ObjectFileReader instantiated from provided ObjectReader. Returns the downloaded data and total number of resumes."""
+    # as_file() is declared to return BufferedIOBase; the resume count is specific to ObjectFileReader.
+    obj_file = cast(ObjectFileReader, object_reader.as_file(max_resume=max_resume))
+
     result = bytearray()
-    with object_reader.as_file(max_resume=max_resume) as obj_file:
+    with obj_file:
         while True:
             data = obj_file.read(read_size)
             if not data:
                 break
             result.extend(data)
-    return bytes(result), obj_file._resume_total
+    return bytes(result), obj_file._stream.resumes
 
 
 def clear_directory(path: Path):
