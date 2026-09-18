@@ -30,6 +30,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   with HTTP 501 before transformation. Chunked input is not supported; this
   prevents an unsupported request body from being transformed as empty data.
 - Removed redundant byte copies in streaming multipart decoding.
+- ZIP batch extraction buffers non-seekable multipart streams and closes the
+  response if buffering fails.
 
 ### Changed
 

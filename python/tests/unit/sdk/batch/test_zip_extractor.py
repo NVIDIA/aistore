@@ -130,35 +130,36 @@ class TestZipStreamExtractor(unittest.TestCase):
         mock_zip_file.read.assert_called_once_with(file_zipinfo)
 
     @patch("zipfile.ZipFile")
-    def test_streaming_mode_conversion(self, mock_zipfile):
-        """Test ZIP extraction converts data_stream to BytesIO in streaming mode."""
-        # Setup mock ZipFile
-        mock_zip_file = MagicMock()
-        mock_zipfile.return_value.__enter__.return_value = mock_zip_file
-
-        # Create mock ZipInfo
-        mock_zipinfo = Mock()
-        mock_zipinfo.is_dir.return_value = False
-        mock_zipinfo.filename = "file1.txt"
-
-        mock_zip_file.infolist.return_value = [mock_zipinfo]
-        mock_zip_file.read.return_value = b"content"
-
-        # Execute with raw bytes (should convert to BytesIO)
-        result = list(
-            self.zip_extractor.extract(
-                self.mock_response, b"raw zip data", self.moss_req_zip, None
+    def test_input_buffering(self, mock_zipfile):
+        """Buffer non-seekable input regardless of request mode; close on read failure."""
+        mock_zipfile.return_value.__enter__.return_value.infolist.return_value = []
+        stream = Mock(spec=["read", "seekable"])
+        stream.seekable.return_value = False
+        stream.read.return_value = b"zip data"
+        seekable = BytesIO(b"zip data")
+        for streaming in (False, True):
+            self.moss_req_zip.streaming_get = streaming
+            for source in (b"zip data", seekable, stream):
+                with self.subTest(streaming=streaming, source=source):
+                    list(
+                        self.zip_extractor.extract(
+                            self.mock_response, source, self.moss_req_zip
+                        )
+                    )
+                    buffered = mock_zipfile.call_args.args[0]
+                    self.assertIsInstance(buffered, BytesIO)
+                    self.assertEqual(buffered.getvalue(), b"zip data")
+                    if source is seekable:
+                        self.assertIs(buffered, seekable)
+        stream.read.side_effect = OSError("read failed")
+        self.mock_response.reset_mock()
+        with self.assertRaisesRegex(RuntimeError, "Failed to read zip archive stream"):
+            list(
+                self.zip_extractor.extract(
+                    self.mock_response, stream, self.moss_req_zip
+                )
             )
-        )
-
-        # Verify extraction worked
-        self.assertEqual(len(result), 1)
-        _, content = result[0]
-        self.assertEqual(content, b"content")
-
-        # Verify ZipFile was called with BytesIO object
-        args, _ = mock_zipfile.call_args
-        self.assertIsInstance(args[0], BytesIO)
+        self.mock_response.close.assert_called_once()
 
     @patch("zipfile.ZipFile")
     def test_non_streaming_mode(self, mock_zipfile):

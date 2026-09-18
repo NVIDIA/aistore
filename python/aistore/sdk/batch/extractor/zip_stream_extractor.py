@@ -37,7 +37,7 @@ class ZipStreamExtractor(ArchiveStreamExtractor):
         """
         Extract from zip archive stream.
 
-        Note: ZIP format requires random access, so the entire stream
+        Note: ZIP format requires random access, so non-seekable input
         is loaded into memory before extraction begins.
 
         Args:
@@ -49,15 +49,14 @@ class ZipStreamExtractor(ArchiveStreamExtractor):
         Yields:
             Tuple[MossOut, bytes]: (MossOut, content) tuples
         """
-        # ZIP requires random access - load into memory if needed
-        if not hasattr(data_stream, "read"):
-            data_stream = BytesIO(data_stream)
-        elif moss_req.streaming_get:
-            # For streaming mode, read entire response into memory
-            data_stream = BytesIO(data_stream.read())
-
         index = 0
         try:
+            # ZIP requires random access, including when multipart decoding streams.
+            if not hasattr(data_stream, "read"):
+                data_stream = BytesIO(data_stream)
+            elif not hasattr(data_stream, "seekable") or not data_stream.seekable():
+                data_stream = BytesIO(data_stream.read())
+
             with zipfile.ZipFile(data_stream, "r") as zip_file:
                 for zip_info in zip_file.infolist():
                     if zip_info.is_dir():
