@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from io import BufferedIOBase, BufferedWriter
@@ -98,14 +98,11 @@ class ObjectFileReader(BufferedIOBase):
         if size is None:
             size = -1
 
-        # Cache original requested size in case of reset
-        original_size = size
-
-        # Compute initial size of loop using given size
         # Maximum possible size if size is negative
-        size = sys_maxsize if original_size < 0 else original_size
+        size = sys_maxsize if size < 0 else size
 
         result = []
+        bytes_to_skip = 0
 
         try:
             # Consume any remaining data from a previous chunk before fetching new data
@@ -133,36 +130,47 @@ class ObjectFileReader(BufferedIOBase):
                     # If the stream is broken (e.g. TCP reset, dropped connection, malformed or incomplete chunk)
                     # or there is a timeout, retry with a new iterator from the last known position
                     self._content_iter = self._handle_broken_stream(err)
-
-                    # If the object is remote and not cached, reset the iterator and restart the read operation
-                    # to avoid timeouts when streaming non-cached remote objects with byte ranges (must wait for
-                    # entire object to be cached in-cluster).
+                    bytes_to_skip = 0
                     if not self._content_iter:
-                        self._reset(retain_resumes=True)
-
-                        # Compute new size of loop using given size
-                        # Maximum possible size if size is negative
-                        size = sys_maxsize if original_size < 0 else original_size
+                        bytes_to_skip = self._resume_position
+                        self._content_iter = self._content_provider.create_iter()
 
                     continue
 
                 except StopIteration:
                     expected_end_position = self._expected_end_position()
+                    if bytes_to_skip:
+                        # Even without a Content-Length, a restarted stream must
+                        # reach the position already read from the previous stream.
+                        expected_end_position = max(
+                            expected_end_position or 0, self._resume_position
+                        )
+                    stream_position = self._resume_position - bytes_to_skip
                     if (
                         expected_end_position is not None
-                        and self._resume_position < expected_end_position
+                        and stream_position < expected_end_position
                     ):
                         err = ObjectFileReaderUnexpectedEOF(
-                            self._resume_position,
+                            stream_position,
                             expected_end_position,
                         )
                         self._content_iter = self._handle_broken_stream(err)
+                        bytes_to_skip = 0
                         if not self._content_iter:
-                            self._reset(retain_resumes=True)
-                            size = sys_maxsize if original_size < 0 else original_size
+                            bytes_to_skip = self._resume_position
+                            self._content_iter = self._content_provider.create_iter()
                         continue
                     # End of stream, exit loop
                     break
+
+                # An uncached object must restart with a full GET. Discard the
+                # replayed prefix, retaining both earlier reads and this read's buffer.
+                if bytes_to_skip:
+                    skipped = min(bytes_to_skip, len(chunk))
+                    bytes_to_skip -= skipped
+                    chunk = chunk[skipped:]
+                    if not chunk:
+                        continue
 
                 # Track the position of the stream by adding the length of each fetched chunk
                 self._resume_position += len(chunk)
