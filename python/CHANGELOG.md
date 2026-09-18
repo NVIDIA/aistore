@@ -48,6 +48,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   returns `ObjectAttributes` instead of a header mapping, and continues to
   refresh `Object.props_cached`. Request non-default fields explicitly and
   access values through attributes such as `.size` and `.checksum_value`.
+- Removed the unused `torchdata` dependency from the PyTorch extra, development
+  requirements, and pyaisloader. Applications that use it must install it directly.
 - `ObjectAttributes` now exposes selected chunk, last-modified, ETag, location,
   mirror, and erasure-coding metadata through one type.
 - `ObjectClient.head()` now accepts optional property selectors while preserving

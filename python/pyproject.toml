@@ -75,7 +75,6 @@ keywords = [
 [project.optional-dependencies]
 pytorch = [
     "torch",
-    "torchdata",
     "webdataset>=0.2.100",
     "alive_progress>=3.1.0"
 ]
