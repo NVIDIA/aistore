@@ -32,6 +32,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Removed redundant byte copies in streaming multipart decoding.
 - ZIP batch extraction buffers non-seekable multipart streams and closes the
   response if buffering fails.
+- Pending results from `Batch.get(clear_batch=False)` retain their request
+  metadata when the batch is reordered or cleared by a later `get()` call.
 
 ### Changed
 

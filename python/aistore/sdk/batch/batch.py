@@ -363,17 +363,19 @@ class Batch:
             json=self.request.dict(),
         )
 
-        if clear_batch:
-            # A shallow copy of the MossReq shell is sufficient since MossIn objects
-            # are never mutated by clear() or the generator
-            request_snapshot = self.request.model_copy()
-            self.clear()
-        else:
-            request_snapshot = self.request
-
         if raw:
+            if clear_batch:
+                self.clear()
             # Returns raw batch stream, user must close
             return response.raw
+
+        request_snapshot = self.request.model_copy()
+        if clear_batch:
+            # clear() replaces the live list and the snapshot keeps the original
+            self.clear()
+        elif request_snapshot.streaming_get:
+            # Retained streaming requests need an independent list, but entries are frozen
+            request_snapshot.moss_in = self.requests_list.copy()
 
         # TODO: Handle error response, create customized errors
         if request_snapshot.streaming_get:
