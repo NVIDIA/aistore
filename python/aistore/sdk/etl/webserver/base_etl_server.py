@@ -310,6 +310,8 @@ class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
             )
 
         if resp.status_code == STATUS_OK:
+            # TODO: Distinguish empty ETL output from direct-put completion explicitly;
+            # otherwise AIS may treat the empty body as delivered and skip returning or storing it.
             if resp.content:  # from other ETL server, forward the content back
                 return resp.status_code, resp.content, 0
 

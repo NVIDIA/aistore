@@ -458,6 +458,9 @@ func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size 
 	}
 
 	if resp.StatusCode == http.StatusOK {
+		// TODO: Distinguish empty ETL output from direct-put completion explicitly;
+		// otherwise AIS may treat the empty body as delivered and skip returning or storing it.
+
 		// NOTE: keyed on Content-Length, not the read body (contrast Python's
 		// handle_direct_put_response): a chunked 200 (ContentLength == -1) is
 		// always forwarded as content - an empty transform result is a valid
