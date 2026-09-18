@@ -17,7 +17,7 @@ For all packages:
 
 `pip install -r aistore/common_requirements`
 
-For botocore patch tests:
+For botocore patch tests, also install:
 
 `pip install -r aistore/botocore_patch/botocore_requirements`
 
