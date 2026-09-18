@@ -72,6 +72,14 @@ func (is *infoStore) setJob(job jobif) (njob *dljob) {
 	return
 }
 
+// discardJob rolls back a rejected handoff. The dispatcher never received the
+// job, so it cannot have created task or error records in the database.
+func (is *infoStore) discardJob(id string) {
+	is.Lock()
+	delete(is.dljobs, id)
+	is.Unlock()
+}
+
 func (is *infoStore) incFinished(id string) {
 	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
@@ -135,7 +143,7 @@ func (is *infoStore) housekeep(int64) time.Duration {
 		if now.IsZero() {
 			now = time.Now()
 		}
-		if now.Sub(dljob.finishedTime.Load()) > interval {
+		if finished := dljob.finishedTime.Load(); !_isRunning(finished) && now.Sub(finished) > interval {
 			is.delJob(id)
 		}
 	}

@@ -225,6 +225,7 @@ func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 		case xld.dispatcher.workCh <- job:
 			return dljob.id, http.StatusOK, nil
 		case <-time.After(cmn.Rom.CplaneOperation()):
+			g.store.discardJob(dljob.id)
 			return "downloader job queue is full", http.StatusTooManyRequests, nil
 		}
 	}
