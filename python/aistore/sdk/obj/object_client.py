@@ -10,6 +10,10 @@ from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
     HEADER_RANGE,
+    QPARAM_ARCHMODE,
+    QPARAM_ARCHPATH,
+    QPARAM_ARCHREGX,
+    QPARAM_ETL_NAME,
     QPARAM_PROPS,
 )
 from aistore.sdk.obj.object_attributes import ObjectAttributes
@@ -58,6 +62,29 @@ class ObjectClient:
             str: The URL path for the object.
         """
         return self._request_path
+
+    def can_get_at_offset(self) -> bool:
+        """
+        Whether AIS serves this client's GET at a byte offset.
+        May issue a HEAD request, as presence can impact range-read support.
+        """
+        params = self._request_params
+        archive = any(
+            params.get(param)
+            for param in (QPARAM_ARCHPATH, QPARAM_ARCHREGX, QPARAM_ARCHMODE)
+        )
+        range_start, range_end = self._byte_range or (None, None)
+        suffix_range = range_start is None and range_end is not None
+
+        # An archive selection and an inline transform are never served at an offset.
+        # If the range only specifies the end, its start is not predictable.
+        if archive or params.get(QPARAM_ETL_NAME) or suffix_range:
+            return False
+
+        # A remote object that is not cached must start over. Required even on clean short
+        # EOF: under Streaming-Cold-GET the object may not be fully cached yet, and a range
+        # resume can hang.
+        return self.head().present
 
     def _initialize_target_client(self, force: bool = False):
         """

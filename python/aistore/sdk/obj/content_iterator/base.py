@@ -3,10 +3,27 @@
 #
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Generator, Optional, Union
 
 from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer
 from aistore.sdk.obj.object_client import ObjectClient
+
+
+@dataclass
+class StreamBounds:
+    """
+    Byte positions of a single stream. A provider fills these in as it opens the stream,
+    so they are meaningful only once that stream yields or ends.
+
+    Attributes:
+        start (int): Logical byte position at which the stream begins.
+        expected_end (int, optional): Logical byte position at EOF, when response metadata
+            makes it known.
+    """
+
+    start: int = 0
+    expected_end: Optional[int] = None
 
 
 class BaseContentIterProvider(ABC):
@@ -21,7 +38,6 @@ class BaseContentIterProvider(ABC):
     def __init__(self, client: ObjectClient, chunk_size: int):
         self._client = client
         self._chunk_size = chunk_size
-        self._expected_end_position: Optional[int] = None
 
     @property
     def client(self) -> ObjectClient:
@@ -33,24 +49,22 @@ class BaseContentIterProvider(ABC):
         """
         return self._client
 
-    @property
-    def expected_end_position(self) -> Optional[int]:
-        """
-        Expected logical byte position at EOF, if known from response metadata.
-        """
-        return self._expected_end_position
-
     @abstractmethod
     def read_all(self) -> Union[bytes, ParallelBuffer]:
         """Read all object content into memory and return it."""
 
     @abstractmethod
-    def create_iter(self, offset: int = 0) -> Generator[bytes, None, None]:
+    def create_iter(
+        self, offset: int = 0, bounds: Optional[StreamBounds] = None
+    ) -> Generator[bytes, None, None]:
         """
         Create an iterator over the object content.
 
         Args:
             offset (int, optional): The offset in bytes to apply. Defaults to 0.
+            bounds (StreamBounds, optional): Receives the byte positions of the created
+                stream. One provider can back several concurrent streams, so each caller
+                that tracks positions must pass its own.
 
         Yields:
             bytes: Chunks of the object's content.

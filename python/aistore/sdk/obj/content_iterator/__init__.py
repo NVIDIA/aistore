@@ -9,7 +9,7 @@ This package provides iterators for fetching object content either sequentially
 or in parallel using concurrent range-reads.
 """
 
-from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider
+from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider, StreamBounds
 from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer
 from aistore.sdk.obj.content_iterator.sequential import ContentIterProvider
 from aistore.sdk.obj.content_iterator.parallel import ParallelContentIterProvider
@@ -19,4 +19,5 @@ __all__ = [
     "ContentIterProvider",
     "ParallelBuffer",
     "ParallelContentIterProvider",
+    "StreamBounds",
 ]

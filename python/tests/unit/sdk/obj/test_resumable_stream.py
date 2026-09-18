@@ -3,7 +3,6 @@
 #
 
 import unittest
-from unittest.mock import Mock
 
 from requests.exceptions import ChunkedEncodingError
 
@@ -12,34 +11,27 @@ from aistore.sdk.obj.obj_file.errors import (
     ObjectFileReaderUnexpectedEOF,
 )
 from aistore.sdk.obj.obj_file.stream import ResumableStream
-from tests.utils import cases
+from tests.utils import cases, scripted_content_provider
 
 DATA = b"0123456789abcdef"
 
 
-def _make_stream(streams, cached=None, max_resume=3, known_length=True):
+def _make_stream(
+    streams,
+    *,
+    resumable=None,
+    ignores_offset=False,
+    max_resume=3,
+    known_length=True,
+):
     """Each stream specifies its end offset, chunk size, and terminal error."""
-    provider = Mock()
-    provider.client.path = "objects/bucket/object"
-    provider.client.head.side_effect = [
-        Mock(present=present) for present in (cached or [False] * (max_resume + 1))
-    ]
-    provider.expected_end_position = len(DATA) if known_length else None
-    provider.offsets = []
-
-    def create_iter(offset=0):
-        end, chunk_size, error = streams[len(provider.offsets)]
-        provider.offsets.append(offset)
-
-        def iterator():
-            for pos in range(offset, end, chunk_size):
-                yield DATA[pos : min(pos + chunk_size, end)]
-            if error:
-                raise error
-
-        return iterator()
-
-    provider.create_iter.side_effect = create_iter
+    provider = scripted_content_provider(
+        streams,
+        DATA,
+        resumable=resumable,
+        ignores_offset=ignores_offset,
+        known_length=known_length,
+    )
     return ResumableStream(provider, max_resume), provider
 
 
@@ -55,10 +47,13 @@ class TestResumableStreamDelivery(unittest.TestCase):
 
         self.assertEqual([6, 6, 4], [len(chunk) for chunk in stream])
 
-    def test_broken_stream_resumes_when_cached(self):
+    @cases(False, True)
+    def test_broken_stream_delivers_each_byte_once_after_resume(self, ignores_offset):
+        """The caller sees each byte once whether or not the target honors the range."""
         stream, provider = _make_stream(
             [(8, 4, ChunkedEncodingError("interrupted")), (16, 4, None)],
-            cached=[True],
+            resumable=[True],
+            ignores_offset=ignores_offset,
         )
 
         self.assertEqual(DATA, _drain(stream))
@@ -72,13 +67,30 @@ class TestResumableStreamDelivery(unittest.TestCase):
 
         self.assertEqual(DATA, _drain(stream))
         self.assertEqual([0, 0, 0, 0], provider.offsets)
-        self.assertEqual(len(DATA), stream.position)
+        self.assertEqual(len(DATA), stream.delivered_position)
 
-    def test_restart_can_become_cached_mid_replay(self):
+    def test_streams_sharing_a_provider_keep_separate_positions(self):
+        """Several `as_file()` readers share one provider, so position state cannot live there."""
+        stream_a, provider = _make_stream(
+            [(8, 4, ChunkedEncodingError("interrupted")), (16, 4, None), (16, 4, None)],
+            resumable=[True],
+        )
+
+        # Drive A past a resume, so it reads at an offset.
+        for _ in range(3):
+            next(stream_a)
+        self.assertEqual([0, 8], provider.offsets)
+
+        stream_b = ResumableStream(provider, max_resume=3)
+        self.assertEqual(DATA[:4], bytes(next(stream_b)))
+
+        self.assertEqual(DATA[12:], _drain(stream_a))
+
+    def test_restart_can_become_resumable_mid_replay(self):
         error = ChunkedEncodingError("interrupted")
         stream, provider = _make_stream(
             [(8, 4, error), (4, 2, error), (16, 3, None)],
-            cached=[False, True],
+            resumable=[False, True],
         )
 
         self.assertEqual(DATA, _drain(stream))
@@ -89,7 +101,7 @@ class TestResumableStreamShortRead(unittest.TestCase):
     """A stream that ends before the object does must be resumed, not reported as EOF."""
 
     def test_clean_short_eof_resumes(self):
-        stream, provider = _make_stream([(8, 4, None), (16, 3, None)], cached=[True])
+        stream, provider = _make_stream([(8, 4, None), (16, 3, None)], resumable=[True])
 
         self.assertEqual(DATA, _drain(stream))
         self.assertEqual([0, 8], provider.offsets)
@@ -140,21 +152,22 @@ class TestResumableStreamBudget(unittest.TestCase):
         )
 
     def test_restart_restores_budget_and_position(self):
-        """A restart discards all progress made by earlier streams."""
+        """A restart releases the live stream and discards all progress made so far."""
         error = ChunkedEncodingError("interrupted")
         stream, provider = _make_stream(
-            [(4, 4, error), (16, 4, None), (16, 4, None)], cached=[True]
+            [(4, 4, error), (16, 4, None), (16, 4, None)], resumable=[True]
         )
 
         # The second chunk reaches the error, so the stream resumes before the restart.
         next(stream)
         next(stream)
         self.assertEqual(1, stream.resumes)
-        self.assertEqual(8, stream.position)
+        self.assertEqual(8, stream.delivered_position)
 
         stream.restart()
 
+        self.assertEqual([0, 1], provider.closed_streams)
         self.assertEqual(0, stream.resumes)
-        self.assertEqual(0, stream.position)
+        self.assertEqual(0, stream.delivered_position)
         self.assertEqual([0, 4, 0], provider.offsets)
         self.assertEqual(DATA, _drain(stream))

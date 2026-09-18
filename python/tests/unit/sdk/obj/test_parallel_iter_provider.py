@@ -7,7 +7,7 @@ import signal
 import multiprocessing as mp
 import unittest
 from concurrent.futures.process import BrokenProcessPool
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch
 
 import requests
 
@@ -31,6 +31,7 @@ class TestParallelContentIterProvider(unittest.TestCase):
 
     def setUp(self):
         self.mock_client = Mock()
+        self.mock_client.can_get_at_offset.return_value = True
         self.chunk_size = 100
         self.num_workers = 4
         self.object_size = 350  # Will create 4 chunks: 0-99, 100-199, 200-299, 300-349
@@ -159,7 +160,6 @@ class TestParallelContentIterProvider(unittest.TestCase):
     def test_file_resume_after_short_range_preserves_buffered_bytes(self):
         """Resume at the failed range, after consuming a buffered remainder."""
         data = bytes(range(175)) * 2
-        self.mock_client.head.return_value.present = True
         for max_resume in (0, 1):
             with self.subTest(max_resume=max_resume):
                 failures = mp.Value("i", 0)
@@ -181,14 +181,16 @@ class TestParallelContentIterProvider(unittest.TestCase):
                         self.assertEqual(reader.read(75), data[:75])
                         if max_resume:
                             self.assertEqual(reader.read(), data[75:])
-                            self.assertEqual(
-                                create.call_args_list, [call(), call(offset=100)]
-                            )
+                            expected_offsets = [0, 100]
                         else:
                             with self.assertRaises(ObjectFileReaderMaxResumeError):
                                 reader.read()
                             self.assertFalse(reader.readable())
-                            create.assert_called_once_with()
+                            expected_offsets = [0]
+                        self.assertEqual(
+                            expected_offsets,
+                            [args.kwargs["offset"] for args in create.call_args_list],
+                        )
                     finally:
                         reader.close()
 

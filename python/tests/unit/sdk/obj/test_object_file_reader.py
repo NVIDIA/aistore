@@ -11,29 +11,37 @@ from requests.exceptions import ChunkedEncodingError
 from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 from aistore.sdk.obj.obj_file.stream import ResumableStream
-from tests.utils import BadContentIterProvider, cases
+from tests.utils import BadContentIterProvider, cases, scripted_content_provider
 
 
 class TestObjectFileReader(unittest.TestCase):
 
     def setUp(self):
         self.content_provider_mock = Mock()
-        self.mock_generator = Mock()
-        self.mock_generator.__next__ = Mock(
-            side_effect=[b"chunk1", b"chunk2", b"chunk3", StopIteration()]
-        )
-        self.mock_generator.close = Mock()
-        self.content_provider_mock.create_iter.return_value = self.mock_generator
+        # Every stream is a separate generator, so each one records its own close.
+        self.generators = []
+
+        def new_generator(**_):
+            generator = Mock()
+            generator.__next__ = Mock(
+                side_effect=[b"chunk1", b"chunk2", b"chunk3", StopIteration()]
+            )
+            generator.close = Mock()
+            self.generators.append(generator)
+            return generator
+
+        self.content_provider_mock.create_iter.side_effect = new_generator
         self.object_file = ObjectFileReader(
             content_provider=self.content_provider_mock,
             max_resume=3,
         )
+        self.mock_generator = self.generators[0]
 
     def test_init(self):
         """Test that ObjectFileReader initializes all attributes correctly."""
         # Ensure all attributes are initialized properly
         self.assertIsInstance(self.object_file._stream, ResumableStream)
-        self.assertEqual(self.object_file._stream.position, 0)
+        self.assertEqual(self.object_file._stream.delivered_position, 0)
         self.assertEqual(self.object_file._stream.resumes, 0)
         self.assertIsNone(self.object_file._remainder)
         self.assertFalse(self.object_file._closed)
@@ -71,7 +79,7 @@ class TestObjectFileReader(unittest.TestCase):
         """Test that reading zero bytes returns empty bytes."""
         result = self.object_file.read(0)
         self.assertEqual(result, b"")
-        self.assertEqual(self.object_file._stream.position, 0)
+        self.assertEqual(self.object_file._stream.delivered_position, 0)
 
     def test_read_exact_size_across_chunks(self):
         """Test reading exactly the requested size from across chunks, handling remainder."""
@@ -82,7 +90,7 @@ class TestObjectFileReader(unittest.TestCase):
         )  # 'chunk1' (6 bytes) + 'chun' (4 bytes from chunk2)
 
         # Since both chunks were fetched, the stream position should be 12 (6 bytes from chunk1 + 6 bytes from chunk2)
-        self.assertEqual(self.object_file._stream.position, 12)
+        self.assertEqual(self.object_file._stream.delivered_position, 12)
 
         # Check that the remainder contains the rest of 'chunk2'
         self.assertEqual(self.object_file._remainder, bytearray(b"k2"))
@@ -91,14 +99,18 @@ class TestObjectFileReader(unittest.TestCase):
         """Test that read() returns available data if less than requested and hits EOF."""
         result = self.object_file.read(20)  # Request more than available
         self.assertEqual(result, b"chunk1chunk2chunk3")
-        self.assertEqual(self.object_file._stream.position, len(b"chunk1chunk2chunk3"))
+        self.assertEqual(
+            self.object_file._stream.delivered_position, len(b"chunk1chunk2chunk3")
+        )
 
     def test_read_all_data(self):
         """Test that read() reads all data until EOF when no size is specified."""
         # Read all data from the mock iterator
         result = self.object_file.read()  # Read until EOF
         self.assertEqual(result, b"chunk1chunk2chunk3")
-        self.assertEqual(self.object_file._stream.position, len(b"chunk1chunk2chunk3"))
+        self.assertEqual(
+            self.object_file._stream.delivered_position, len(b"chunk1chunk2chunk3")
+        )
 
     def test_read_remainder_then_new_chunk(self):
         """Test that read() first consumes the remainder before fetching new chunks."""
@@ -106,7 +118,9 @@ class TestObjectFileReader(unittest.TestCase):
         self.object_file._remainder = bytearray(
             b"hunk0"
         )  # Leftover part of chunk0 (5 bytes)
-        self.object_file._stream._position = 6
+        # The current stream has already delivered those 6 bytes.
+        self.object_file._stream._delivered_position = 6
+        self.object_file._stream._stream_consumed = 6
 
         # Read 10 bytes total, remainder should provide the first 5 bytes ('hunk0')
         result = self.object_file.read(10)
@@ -116,7 +130,7 @@ class TestObjectFileReader(unittest.TestCase):
 
         # Since we fetched part of chunk1 to satisfy the read, the position reflects all bytes fetched
         self.assertEqual(
-            self.object_file._stream.position, 12
+            self.object_file._stream.delivered_position, 12
         )  # 6 bytes from chunk1 fetched (position = 6 + 6)
 
         # Ensure the remainder has only the leftover part of chunk1
@@ -134,14 +148,14 @@ class TestObjectFileReader(unittest.TestCase):
     def test_context_manager(self):
         """Test that ObjectFileReader can be used with context manager, resets state, and closes stream."""
         # Modify the object's state to simulate previous use
-        self.object_file._stream._position = 10
+        self.object_file._stream._delivered_position = 10
         self.object_file._closed = True
         self.object_file._remainder = bytearray(b"remainder")
 
         with self.object_file as obj_file:
             # State should be reset inside context
             self.assertFalse(obj_file._closed)
-            self.assertEqual(self.object_file._stream.position, 0)
+            self.assertEqual(self.object_file._stream.delivered_position, 0)
             self.assertIsNone(self.object_file._remainder)
 
             # Read some data to initialize the generator
@@ -149,7 +163,9 @@ class TestObjectFileReader(unittest.TestCase):
 
         # After context, file should be closed and stream should be closed
         self.assertTrue(self.object_file._closed)
-        self.mock_generator.close.assert_called_once()
+        # Entering the context replaced the first stream, and the exit closed the second.
+        for generator in self.generators:
+            generator.close.assert_called_once()
 
 
 class TestObjectFileReaderResume(unittest.TestCase):
@@ -320,60 +336,26 @@ class TestObjectFileReaderResume(unittest.TestCase):
         # Verify that the file was closed after the exception
         self.assertTrue(object_file._closed)
 
-    def test_restart_if_not_cached(self):
-        """
-        Test that ObjectFileReader requests a full stream if the object is not cached on attempt to resume.
-        """
-        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
-        # and simulates a failure on every read w/ a max of 1 resumes
+    @cases((True, 6), (False, 0))
+    def test_resume_offset_follows_presence(self, case):
+        """A cached object resumes at the delivered position; an uncached one starts over."""
+        present, expected_offset = case
+        # The first chunk arrives, then the read after it fails.
         object_file, provider = self._create_reader_with_bad_iterator(
             exc=ChunkedEncodingError,
-            fail_on_read=1,
+            fail_on_read=2,
             max_resume_attempts=1,
         )
 
-        # Simulate the object not being cached
-        setattr(
-            provider.client,
-            "head",
-            Mock(return_value=Mock(present=False)),
-        )
-        # Attempt to read should fail after exceeding one max retry
+        provider.client.can_get_at_offset.return_value = present
         with patch.object(
             provider, "create_iter", wraps=provider.create_iter
         ) as mock_create_iter:
             with self.assertRaises(ObjectFileReaderMaxResumeError):
                 object_file.read()
-        # A cold restart must not issue a ranged request.
-        mock_create_iter.assert_called_once_with()
 
-    def test_resume_if_cached(self):
-        """
-        Test that ObjectFileReader resumes from the last position if the object is cached.
-        """
-        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
-        # and simulates a failure on every read w/ a max of 1 resumes
-        object_file, provider = self._create_reader_with_bad_iterator(
-            exc=ChunkedEncodingError,
-            fail_on_read=1,
-            max_resume_attempts=1,
-        )
-
-        # Simulate the object being cached
-        setattr(
-            provider.client,
-            "head",
-            Mock(return_value=Mock(present=True)),
-        )
-        # Attempt to read should fail after exceeding one max retry
-        with patch.object(
-            provider, "create_iter", wraps=provider.create_iter
-        ) as mock_create_iter:
-            with self.assertRaises(ObjectFileReaderMaxResumeError):
-                object_file.read()
-        # A cached resume must issue a ranged request rather than start over.
         mock_create_iter.assert_called_once()
-        self.assertIn("offset", mock_create_iter.call_args.kwargs)
+        self.assertEqual(expected_offset, mock_create_iter.call_args.kwargs["offset"])
 
 
 class TestObjectFileReaderColdResume(unittest.TestCase):
@@ -384,30 +366,7 @@ class TestObjectFileReaderColdResume(unittest.TestCase):
 
     def _make_reader(self, streams):
         """Each stream specifies its end offset, chunk size, and terminal error."""
-        provider = Mock()
-        provider.client.path = "objects/bucket/object"
-        provider.client.head.return_value = Mock(present=False)
-        provider.expected_end_position = len(self.data)
-        provider.offsets = []
-        provider.closed_streams = []
-
-        def create_iter(offset=0):
-            stream_index = len(provider.offsets)
-            provider.offsets.append(offset)
-            end, chunk_size, error = streams[stream_index]
-
-            def iterator():
-                try:
-                    for pos in range(offset, end, chunk_size):
-                        yield self.data[pos : min(pos + chunk_size, end)]
-                    if error:
-                        raise error
-                finally:
-                    provider.closed_streams.append(stream_index)
-
-            return iterator()
-
-        provider.create_iter.side_effect = create_iter
+        provider = scripted_content_provider(streams, self.data)
         return ObjectFileReader(provider, max_resume=3), provider
 
     @cases(ChunkedEncodingError("interrupted"), None)

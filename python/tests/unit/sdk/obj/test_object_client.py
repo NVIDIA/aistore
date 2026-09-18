@@ -6,7 +6,15 @@ from unittest.mock import Mock, patch
 import requests
 from requests import PreparedRequest
 
-from aistore.sdk.const import HTTP_METHOD_HEAD, HTTP_METHOD_GET, HEADER_RANGE
+from aistore.sdk.const import (
+    HTTP_METHOD_HEAD,
+    HTTP_METHOD_GET,
+    HEADER_RANGE,
+    QPARAM_ARCHMODE,
+    QPARAM_ARCHPATH,
+    QPARAM_ARCHREGX,
+    QPARAM_ETL_NAME,
+)
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.errors import ErrObjNotFound
@@ -16,7 +24,7 @@ from tests.utils import cases
 
 class TestObjectClient(
     unittest.TestCase
-):  # pylint: disable=too-many-instance-attributes
+):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Unit tests for ObjectClient."""
 
     def setUp(self) -> None:
@@ -49,6 +57,39 @@ class TestObjectClient(
             params=self.params,
         )
         self.get_exec_assert(object_client, stream=True, offset=0, expected_headers={})
+
+    def _offset_exec_assert(self, expected, present=True, **kwargs):
+        object_client = ObjectClient(
+            request_client=self.request_client,
+            path=self.path,
+            **kwargs,
+        )
+        with patch.object(
+            ObjectClient, "head", return_value=Mock(present=present)
+        ) as mock_head:
+            self.assertEqual(expected, object_client.can_get_at_offset())
+        return mock_head
+
+    @cases(True, False)
+    def test_can_get_at_offset_follows_presence(self, present):
+        """A GET the target can serve at an offset needs the object to be cached."""
+        self._offset_exec_assert(present, present=present, params=self.params)
+
+    @cases(
+        {QPARAM_ARCHPATH: "dir/file.txt"},
+        {QPARAM_ARCHREGX: "log", QPARAM_ARCHMODE: "suffix"},
+        {QPARAM_ETL_NAME: "my-etl"},
+    )
+    def test_unsupported_params_never_get_at_offset(self, params):
+        """A target serves neither an archive selection nor a transform at an offset."""
+        mock_head = self._offset_exec_assert(False, params={**self.params, **params})
+        mock_head.assert_not_called()
+
+    @cases(((100, 200), True), ((None, 200), False))
+    def test_suffix_range_never_gets_at_offset(self, case):
+        """A range that gives only an end can return the whole object."""
+        byte_range, expected = case
+        self._offset_exec_assert(expected, params=self.params, byte_range=byte_range)
 
     @cases(
         {"byte_range_tuple": (None, None), "expected_range": "bytes=50-"},

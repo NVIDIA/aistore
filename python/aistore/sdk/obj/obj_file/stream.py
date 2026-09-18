@@ -11,7 +11,7 @@ from requests.exceptions import (
 )
 from urllib3.exceptions import ProtocolError, ReadTimeoutError
 
-from aistore.sdk.obj.content_iterator import BaseContentIterProvider
+from aistore.sdk.obj.content_iterator import BaseContentIterProvider, StreamBounds
 from aistore.sdk.obj.obj_file.errors import (
     ObjectFileReaderMaxResumeError,
     ObjectFileReaderUnexpectedEOF,
@@ -46,8 +46,9 @@ class ResumableStream:
         # Declared here so static analysis sees them as instance attributes;
         # actual values are (re)assigned by restart().
         self._content_iter: Optional[Generator[bytes, None, None]] = None
-        self._position = 0
-        self._bytes_to_skip = 0
+        self._bounds = StreamBounds()
+        self._delivered_position = 0
+        self._stream_consumed = 0
         self._resumes = 0
         self.restart()
 
@@ -57,9 +58,21 @@ class ResumableStream:
         return self._content_provider.client.path
 
     @property
-    def position(self) -> int:
-        """Number of bytes delivered so far."""
-        return self._position
+    def delivered_position(self) -> int:
+        """
+        Position of the cursor as seen by the caller.
+        Equivalent to the number of bytes delivered so far.
+        """
+        return self._delivered_position
+
+    @property
+    def _stream_position(self) -> int:
+        """
+        How far the current stream has read. This trails `delivered_position` while a
+        stream replays bytes the caller already holds, and the two match otherwise.
+        Valid only after the current stream yields or ends.
+        """
+        return self._bounds.start + self._stream_consumed
 
     @property
     def resumes(self) -> int:
@@ -68,10 +81,18 @@ class ResumableStream:
 
     def restart(self) -> None:
         """Discard all progress and open a fresh stream at the start of the object."""
-        self._content_iter = self._content_provider.create_iter()
-        self._position = 0
-        self._bytes_to_skip = 0
+        self._open()
+        self._delivered_position = 0
         self._resumes = 0
+
+    def _open(self, offset: int = 0) -> None:
+        self.close()
+        # One provider can back several streams, so each stream tracks its own bounds.
+        self._bounds = StreamBounds()
+        self._content_iter = self._content_provider.create_iter(
+            offset=offset, bounds=self._bounds
+        )
+        self._stream_consumed = 0
 
     def close(self) -> None:
         """Release the underlying stream."""
@@ -98,21 +119,25 @@ class ResumableStream:
                 self._resume(err)
                 continue
             except StopIteration:
+                # A clean EOF is not proof of completion, so resume if the stream ends before
+                # the object does.
                 short = self._short_read()
                 if not short:
                     raise
                 self._resume(ObjectFileReaderUnexpectedEOF(*short))
                 continue
 
-            # A restarted stream replays bytes already delivered to the caller.
-            if self._bytes_to_skip:
-                skipped = min(self._bytes_to_skip, len(chunk))
-                self._bytes_to_skip -= skipped
-                chunk = chunk[skipped:]
+            stream_position = self._stream_position
+            self._stream_consumed += len(chunk)
+
+            # Discard what the caller already holds.
+            replayed = self._delivered_position - stream_position
+            if replayed > 0:
+                chunk = chunk[replayed:]
                 if not chunk:
                     continue
 
-            self._position += len(chunk)
+            self._delivered_position += len(chunk)
             return chunk
 
     def _resume(self, err: Exception) -> None:
@@ -128,30 +153,19 @@ class ResumableStream:
             self._max_resume,
         )
 
-        # A remote object that is not cached must start over. Required even on clean short
-        # EOF: under Streaming-Cold-GET the object may not be fully cached yet, and a range
-        # resume can hang.
-        if not self._content_provider.client.head().present:
-            self._bytes_to_skip = self._position
-            self._content_iter = self._content_provider.create_iter()
-            return
-
-        self._bytes_to_skip = 0
-        self._content_iter = self._content_provider.create_iter(offset=self._position)
+        resumable = self._content_provider.client.can_get_at_offset()
+        self._open(self._delivered_position if resumable else 0)
 
     def _short_read(self) -> Optional[Tuple[int, int]]:
-        expected_end_position = self._expected_end_position()
-        if self._bytes_to_skip:
+        stream_position = self._stream_position
+        expected_end_position = self._bounds.expected_end
+        if stream_position < self._delivered_position:
             # Even without a Content-Length, a restarted stream must
             # reach the position already read from the previous stream.
-            expected_end_position = max(expected_end_position or 0, self._position)
+            expected_end_position = max(
+                expected_end_position or 0, self._delivered_position
+            )
 
-        stream_position = self._position - self._bytes_to_skip
         if expected_end_position is None or stream_position >= expected_end_position:
             return None
         return stream_position, expected_end_position
-
-    def _expected_end_position(self) -> Optional[int]:
-        # Treat anything that isn't a real int as unknown.
-        expected = self._content_provider.expected_end_position
-        return expected if isinstance(expected, int) else None

@@ -11,7 +11,7 @@ from itertools import product
 from pathlib import Path
 from unittest.mock import Mock
 
-from typing import Any, Callable, Dict, List, Iterator, Tuple
+from typing import Any, Callable, Dict, List, Iterator, Optional, Tuple
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -31,7 +31,7 @@ from aistore.sdk.const import (
     UTF_ENCODING,
     WHAT_CLUSTER_CONFIG,
 )
-from aistore.sdk.obj.content_iterator import ContentIterProvider
+from aistore.sdk.obj.content_iterator import ContentIterProvider, StreamBounds
 from aistore.sdk.response_handler import ResponseHandler
 from aistore.sdk.types import BucketModel
 from aistore.sdk.errors import AISError
@@ -84,26 +84,88 @@ class BadContentIterProvider(ContentIterProvider):
         chunk_size: int,
         error: Exception = ChunkedEncodingError("Simulated ChunkedEncodingError"),
     ):
-        super().__init__(client=Mock(), chunk_size=chunk_size)
+        client = Mock()
+        client.can_get_at_offset.return_value = True
+        super().__init__(client=client, chunk_size=chunk_size)
         self.data = data
         self.fail_on_read = fail_on_read
         self.error = error
         self.read_position = 0
 
-    def create_iter(self, offset: int = 0) -> Iterator[bytes]:
+    def create_iter(
+        self, offset: int = 0, bounds: Optional[StreamBounds] = None
+    ) -> Iterator[bytes]:
         """Streams data using `BadContentStream`, starting from `offset`."""
         stream = BadContentStream(
             self.data[offset:], fail_on_read=self.fail_on_read, error=self.error
         )
         self.read_position = offset
+        bounds = bounds or StreamBounds()
 
         def iterator():
+            # The real providers learn the start from the response, so set it here.
+            bounds.start = offset
             while self.read_position < len(self.data):
                 chunk = stream.read(self._chunk_size)
                 self.read_position += len(chunk)
                 yield chunk
 
         return iterator()
+
+
+def scripted_content_provider(
+    streams: List[Tuple[int, int, Optional[Exception]]],
+    data: bytes,
+    *,
+    resumable: Optional[List[bool]] = None,
+    ignores_offset: bool = False,
+    known_length: bool = True,
+) -> Mock:
+    """
+    Mock content provider that serves `data` through a scripted list of streams.
+
+    Args:
+        streams: One entry per stream, giving its end offset, its chunk size, and the
+            error that ends it.
+        data: The object content the streams read from.
+        resumable: One answer per `can_get_at_offset()` call. Defaults to always False.
+        ignores_offset: Whether the streams start at byte 0 whatever the caller asks for.
+        known_length: Whether the streams report an expected end.
+
+    Returns:
+        Mock: A provider that also records `offsets` and `closed_streams`.
+    """
+    provider = Mock()
+    if resumable is None:
+        provider.client.can_get_at_offset.return_value = False
+    else:
+        provider.client.can_get_at_offset.side_effect = resumable
+    provider.client.path = "objects/bucket/object"
+    provider.offsets = []
+    provider.closed_streams = []
+
+    def create_iter(offset=0, bounds=None):
+        stream_index = len(provider.offsets)
+        end, chunk_size, error = streams[stream_index]
+        provider.offsets.append(offset)
+        start = 0 if ignores_offset else offset
+        bounds = bounds or StreamBounds()
+
+        def iterator():
+            bounds.start = start
+            bounds.expected_end = len(data) if known_length else None
+            try:
+                for pos in range(start, end, chunk_size):
+                    yield data[pos : min(pos + chunk_size, end)]
+                if error:
+                    raise error
+            finally:
+                provider.closed_streams.append(stream_index)
+
+        return iterator()
+
+    provider.create_iter.side_effect = create_iter
+    return provider
 
 
 # pylint: disable=unused-variable

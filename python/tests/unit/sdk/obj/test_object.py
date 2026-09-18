@@ -151,6 +151,28 @@ class TestObject(unittest.TestCase):
         archive_config = ArchiveConfig(regex=regex, mode=mode)
         self.get_exec_assert(archive_config=archive_config)
 
+    @cases(
+        ({}, True),
+        ({"archive_config": ArchiveConfig()}, True),
+        ({"archive_config": ArchiveConfig(archpath="dir/file.txt")}, False),
+        (
+            {"archive_config": ArchiveConfig(regex="log", mode=ArchiveMode.SUFFIX)},
+            False,
+        ),
+        ({"etl": ETLConfig(ETL_NAME)}, False),
+        ({"byte_range": "bytes=-500"}, False),
+    )
+    def test_get_reader_offset_support(self, case):
+        """A reader refuses an offset for the request shapes a target will not serve."""
+        kwargs, expected = case
+
+        reader = self.object.get_reader(**kwargs)
+
+        # pylint: disable-next=protected-access
+        client = reader._object_client
+        with patch.object(ObjectClient, "head", return_value=Mock(present=True)):
+            self.assertEqual(expected, client.can_get_at_offset())
+
     def test_get_direct(self):
         self.get_exec_assert(
             direct=True, expected_uname=f"{self.bucket_details.path}{OBJ_NAME}"

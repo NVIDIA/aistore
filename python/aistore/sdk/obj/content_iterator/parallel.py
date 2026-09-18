@@ -25,7 +25,7 @@ from typing import Dict, Generator, List, Optional, Tuple
 
 from requests.exceptions import ChunkedEncodingError
 
-from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider
+from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider, StreamBounds
 from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer, RingBuffer
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.const import (
@@ -263,7 +263,9 @@ class ParallelContentIterProvider(BaseContentIterProvider):
             executor.shutdown(wait=True, cancel_futures=True)
 
     # pylint: disable=too-many-locals
-    def create_iter(self, offset: int = 0) -> Generator[bytes, None, None]:
+    def create_iter(
+        self, offset: int = 0, bounds: Optional[StreamBounds] = None
+    ) -> Generator[bytes, None, None]:
         """
         Yield object content in order using a sliding-window ring buffer.
 
@@ -290,11 +292,14 @@ class ParallelContentIterProvider(BaseContentIterProvider):
 
         Args:
             offset (int, optional): Starting byte offset. Defaults to 0.
+            bounds (StreamBounds, optional): Receives the byte positions of this stream.
 
         Yields:
             bytes: Consecutive chunks of the object's content.
         """
-        self._expected_end_position = self._object_size
+        bounds = bounds or StreamBounds()
+        bounds.start = offset
+        bounds.expected_end = self._object_size
         fork_context = self._get_fork_context()
 
         if self._object_size - offset <= 0:

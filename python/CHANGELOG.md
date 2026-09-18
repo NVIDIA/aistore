@@ -8,6 +8,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- An interrupted ObjectFile read no longer fails or returns incorrect content when
+  the target restarts the object instead of serving it at a byte offset. Such a read
+  restarts at byte 0, so the reader discards the prefix it already delivered.
+  - Archive and ETL GETs restart from 0, because a target serves neither at an offset.
+  - A read restarts from 0 when its `byte_range` sets only the range end, because that 
+    range can return the whole object.
+  - A read no longer returns duplicate bytes when the target ignores the range
+    header and serves the object from byte 0.
 - Parallel range GETs keep a bounded prefetch queue and cancel pending work on
   failure or early iterator close. Dispatched tasks finish before shared memory
   is released; use a finite client timeout for stalled requests.

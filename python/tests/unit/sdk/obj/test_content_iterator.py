@@ -1,8 +1,12 @@
 import unittest
 from unittest.mock import Mock
 from aistore.sdk.obj.object_client import ObjectClient
-from aistore.sdk.const import DEFAULT_CHUNK_SIZE
-from aistore.sdk.obj.content_iterator import ContentIterProvider
+from aistore.sdk.const import (
+    DEFAULT_CHUNK_SIZE,
+    STATUS_OK,
+    STATUS_PARTIAL_CONTENT,
+)
+from aistore.sdk.obj.content_iterator import ContentIterProvider, StreamBounds
 from tests.utils import cases
 
 byte_chunks = [b"chunk1", b"chunk2", b"chunk3"]
@@ -40,7 +44,7 @@ class TestContentIterProvider(unittest.TestCase):
 
         mock_stream.close.assert_called_once()
 
-    def iter_exception_handling(self):
+    def test_iter_exception_handling(self):
         mock_stream = Mock()
         mock_stream.iter_content.side_effect = Exception("Stream error")
         self.mock_client.get.return_value = mock_stream
@@ -62,26 +66,41 @@ class TestContentIterProvider(unittest.TestCase):
 
         mock_stream.close.assert_called_once()
 
-    def test_iter_tracks_expected_end_from_content_length(self):
-        """Test that the iterator records expected EOF from the GET response."""
+    def _mock_get(self, status_code, headers):
         mock_stream = Mock()
-        mock_stream.headers = {"Content-Length": "42"}
+        mock_stream.status_code = status_code
+        mock_stream.headers = headers
         mock_stream.iter_content.return_value = byte_chunks
         self.mock_client.get.return_value = mock_stream
 
-        offset = 100
-        res = list(self.content_provider.create_iter(offset))
+    @cases((STATUS_PARTIAL_CONTENT, 100), (STATUS_OK, 0))
+    def test_iter_tracks_start_and_expected_end_from_response(self, case):
+        """The stream start comes from the response status, not the requested offset."""
+        status_code, start = case
+        self._mock_get(status_code, {"Content-Length": "42"})
+        bounds = StreamBounds()
+
+        res = list(self.content_provider.create_iter(100, bounds))
 
         self.assertEqual(byte_chunks, res)
-        self.assertEqual(self.content_provider.expected_end_position, offset + 42)
+        self.assertEqual(StreamBounds(start, start + 42), bounds)
+
+    def test_iter_updates_bounds(self):
+        """A response without a length must not keep the end of an earlier response."""
+        bounds = StreamBounds()
+        self._mock_get(STATUS_PARTIAL_CONTENT, {"Content-Length": "42"})
+        list(self.content_provider.create_iter(100, bounds))
+
+        self._mock_get(STATUS_OK, {})
+        list(self.content_provider.create_iter(100, bounds))
+
+        self.assertEqual(StreamBounds(0, None), bounds)
 
     def test_iter_skips_expected_end_when_content_encoded(self):
         """Content-Length is wire bytes when Content-Encoding is set; skip tracking."""
-        mock_stream = Mock()
-        mock_stream.headers = {"Content-Length": "42", "Content-Encoding": "gzip"}
-        mock_stream.iter_content.return_value = byte_chunks
-        self.mock_client.get.return_value = mock_stream
+        self._mock_get(STATUS_OK, {"Content-Length": "42", "Content-Encoding": "gzip"})
+        bounds = StreamBounds()
 
-        list(self.content_provider.create_iter(0))
+        list(self.content_provider.create_iter(0, bounds))
 
-        self.assertIsNone(self.content_provider.expected_end_position)
+        self.assertIsNone(bounds.expected_end)
