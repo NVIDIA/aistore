@@ -161,9 +161,9 @@ class TestAISDataset(unittest.TestCase):
         mock_client = Mock()
 
         # Create proper mock response items (now using MossOut format)
-        mock_moss_out_1 = Mock()
+        mock_moss_out_1 = Mock(err_msg=None)
         mock_moss_out_1.obj_name = "test_obj_1"
-        mock_moss_out_2 = Mock()
+        mock_moss_out_2 = Mock(err_msg=None)
         mock_moss_out_2.obj_name = "test_obj_2"
 
         # Create the response data as a list that can be iterated
@@ -196,6 +196,27 @@ class TestAISDataset(unittest.TestCase):
         # Verify batch method was called
         mock_client.batch.assert_called()
         mock_batch.get.assert_called()
+
+    def test_batch_iter_dataset_errors(self):
+        client = Mock()
+        client.batch.return_value.get.return_value = [
+            (Mock(obj_name="missing.txt", err_msg="not found"), b""),
+            (Mock(obj_name="empty.txt", err_msg=None), b""),
+        ]
+        dataset = AISBatchIterDataset(self.mock_bck, client)
+        self.assertFalse(dataset.cont_on_err)
+        with self.assertRaisesRegex(RuntimeError, "missing.txt: not found"):
+            list(dataset)
+        self.assertFalse(client.batch.call_args.kwargs["cont_on_err"])
+
+        dataset = AISBatchIterDataset(self.mock_bck, client, cont_on_err=True)
+        self.assertTrue(dataset.cont_on_err)
+        with self.assertLogs(
+            "aistore.pytorch.batch_iter_dataset", level="WARNING"
+        ) as logs:
+            self.assertEqual(list(dataset), [("empty.txt", b"")])
+        self.assertIn("Skipping missing.txt: not found", logs.output[0])
+        self.assertTrue(client.batch.call_args.kwargs["cont_on_err"])
 
     def test_batch_iter_dataset_colocation_default(self):
         """colocation defaults to Colocation.NONE."""

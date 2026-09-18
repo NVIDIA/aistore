@@ -1,6 +1,6 @@
 """
 Test class for AIStore PyTorch Plugin
-Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 import os
@@ -27,6 +27,7 @@ from aistore.pytorch import (
 )
 from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
 from aistore.sdk.enums import Colocation
+from aistore.sdk.errors import ErrObjNotFound
 
 
 # Module-level subclasses for the multiprocessing dataloader tests. Local
@@ -300,6 +301,32 @@ class TestPytorchPlugin(unittest.TestCase):
             results[name] = content
 
         self.verify_dataset_output(results, content_dict)
+
+    def test_ais_batch_iter_dataset_errors(self):
+        obj = self.bck.object("valid.txt")
+        obj.get_writer().put_content(b"valid data")
+        objects = [self.bck.object("missing.txt"), obj]
+        for output_format in (".tar", ".zip"):
+            with self.subTest(output_format=output_format):
+                dataset = AISBatchIterDataset(
+                    self.bck, self.client, output_format=output_format, streaming=False
+                )
+                # Missing objects can fail the request or arrive as entry errors.
+                with self.assertRaisesRegex(
+                    (ErrObjNotFound, RuntimeError), r"missing\.txt.*does not exist"
+                ):
+                    list(dataset._process_batch(objects))
+
+                dataset.streaming = True
+                dataset.cont_on_err = True
+                with self.assertLogs(
+                    "aistore.pytorch.batch_iter_dataset", level="WARNING"
+                ) as logs:
+                    self.assertEqual(
+                        list(dataset._process_batch(objects)),
+                        [(obj.name, b"valid data")],
+                    )
+                self.assertIn("Skipping missing.txt:", logs.output[0])
 
     def test_ais_batch_iter_dataset_colocation(self):
         """Implemented colocation levels return correct data; unimplemented raises."""

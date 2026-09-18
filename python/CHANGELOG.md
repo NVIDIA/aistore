@@ -41,6 +41,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   streaming TAR and ZIP results preserve the original tracking bytes.
 - Streaming TAR and ZIP batch extraction reports failed entries with `err_msg`
   instead of returning them as successful empty objects.
+- `AISBatchIterDataset` raises on reported entry errors by default;
+  `cont_on_err=True` logs and skips failed entries instead of yielding empty samples.
 
 ### Changed
 

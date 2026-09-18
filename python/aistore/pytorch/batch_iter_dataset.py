@@ -1,14 +1,17 @@
 """
 Iterable Dataset using Batch API for AIS
 
-Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
+from logging import getLogger
 from aistore.pytorch import AISBaseIterDataset
 from aistore.sdk import Client, AISSource
 from aistore.sdk.enums import Colocation
 from typing import Iterator, Tuple, List, Dict, Union
 from alive_progress import alive_it
+
+logger = getLogger(__name__)
 
 
 class AISBatchIterDataset(AISBaseIterDataset):
@@ -35,6 +38,8 @@ class AISBatchIterDataset(AISBaseIterDataset):
             DataLoader workers so each worker only lists its share, avoiding duplicate paged
             listing calls. Most effective when ais_source_list has at least as many sources
             as workers. Defaults to False.
+        cont_on_err (bool, optional): Log and skip failed entries when True; raise on
+            reported entry errors when False. Passed to the batch API. Defaults to False.
     """
 
     def __init__(
@@ -48,6 +53,7 @@ class AISBatchIterDataset(AISBaseIterDataset):
         streaming: bool = True,
         colocation: Colocation = Colocation.NONE,
         partition_sources_by_worker: bool = False,
+        cont_on_err: bool = False,
     ):
         super().__init__(ais_source_list, prefix_map, partition_sources_by_worker)
         self.client = client
@@ -56,6 +62,7 @@ class AISBatchIterDataset(AISBaseIterDataset):
         self.streaming = streaming
         self._show_progress = show_progress
         self.colocation = colocation
+        self.cont_on_err = cont_on_err
 
     def __iter__(self) -> Iterator[Tuple[str, bytes]]:
         """
@@ -97,6 +104,12 @@ class AISBatchIterDataset(AISBaseIterDataset):
             output_format=self.output_format,
             streaming_get=self.streaming,
             colocation=self.colocation,
+            cont_on_err=self.cont_on_err,
         )
         for obj_info, data in batch.get():
+            if obj_info.err_msg:
+                if not self.cont_on_err:
+                    raise RuntimeError(f"{obj_info.obj_name}: {obj_info.err_msg}")
+                logger.warning("Skipping %s: %s", obj_info.obj_name, obj_info.err_msg)
+                continue
             yield obj_info.obj_name, data
