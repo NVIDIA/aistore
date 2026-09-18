@@ -11,6 +11,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Parallel range GETs keep a bounded prefetch queue and cancel pending work on
   failure or early iterator close. Dispatched tasks finish before shared memory
   is released; use a finite client timeout for stalled requests.
+- Object iteration drains large listing pages without shifting the remaining entries.
 - ZIP batch extraction reads each archive entry correctly when names repeat.
 - Parallel reads reject short or oversized ranges before exposing incomplete
   data or overwriting an adjacent shared-memory range.
