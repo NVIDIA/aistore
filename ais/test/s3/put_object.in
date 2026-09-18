@@ -12,7 +12,8 @@ s3cmd info            s3://$BUCKET$OBJECT --host=$HOST $PARAMS --host-bucket="$H
 s3cmd put $OBJECT.txt s3://$BUCKET/$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
 s3cmd ls              s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" | wc -l
 s3cmd get             s3://$BUCKET$OBJECT $OBJECT_copy.txt --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
-s3cmd info            s3://$BUCKET$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" | grep -v "Last mod"
+s3cmd info            s3://$BUCKET$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" | grep -v "Last mod" | grep -v "s3cmd-attrs"
+s3cmd info            s3://$BUCKET$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" | grep -c "x-amz-meta-s3cmd-attrs"
 cat $OBJECT_copy.txt
 echo "Lorem ipsum dolor sit amet, consectetur adipiscing elit." > $OBJECT_new.txt
 s3cmd put $OBJECT_new.txt s3://$BUCKET/$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
