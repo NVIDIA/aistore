@@ -226,13 +226,6 @@ func (xld *Xact) stop() {
 // Failing it means the dispatcher loop is not receiving: it is parked on
 // sema.TryAcquire() with 5*fs.NumAvail() jobs already in flight. Hence 429 with
 // "too many concurrent jobs" rather than anything about queue depth.
-//
-// TODO -- FIXME separately:
-// setJob() below is not undone on the failure path: the job stays
-// in g.store under an ID the client never receives, with a zero finishedTime -
-// i.e. reported as running. (HK does eventually drop it, but only via the same
-// zero-finishedTime path that also drops live jobs - see infoStore.housekeep.)
-//
 
 func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 	xld.IncPending()

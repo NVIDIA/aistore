@@ -121,11 +121,14 @@ mloop:
 			select {
 			case <-d.xdl.IdleTimer():
 				nlog.Infoln(d.xdl.Name(), "idle timeout")
+				d.abandon(job)
 				break mloop
 			case errCause := <-d.xdl.ChanAbort():
 				nlog.Infoln(d.xdl.Name(), "aborted:", errCause)
+				d.abandon(job)
 				break mloop
 			case <-ctx.Done():
+				d.abandon(job)
 				break mloop
 			case <-sema.TryAcquire():
 				group.Go(func() error {
@@ -167,6 +170,14 @@ func (d *dispatcher) cleanupJob(jobID string) {
 		delete(d.abortJob, jobID)
 	}
 	d.mtx.Unlock()
+}
+
+// finalize a job that `Download` handed off (via `workCh`),
+// but that the `dispatcher` is exiting without dispatching
+func (d *dispatcher) abandon(job jobif) {
+	g.store.setAborted(job.ID())
+	d.cleanupJob(job.ID())
+	job.cleanup()
 }
 
 func (d *dispatcher) finish(job jobif) {
