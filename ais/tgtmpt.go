@@ -105,6 +105,8 @@ func (ups *ups) _add(id string, manifest *core.Ufest, metadata map[string]string
 // - if not in memory may try to load from persistence given feat.ResumeInterruptedMPU
 // - and, if successful, will return metadata = nil
 // TODO:
+// - resumed uploads lose initiation-time metadata (remote and local buckets)
+// - consider deriving it from lom.GetCustomMD() vs the risk of getting out of sync with remote
 // - consider adding stats counter mpu.resume_partial_count
 func (ups *ups) get(id string, lom *core.LOM) (manifest *core.Ufest, metadata map[string]string) {
 	ups.RLock()

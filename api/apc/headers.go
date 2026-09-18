@@ -21,72 +21,72 @@ import (
 const HdrError = "Hdr-Error"
 
 const (
-	aisPrefix = "Ais-"
+	HdrPrefixAIS = "Ais-"
 
 	// bucket inventory - request inventory-backed listing (implemented via NBI)
-	HdrInventory = aisPrefix + "Bucket-Inventory" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
-	HdrInvName   = aisPrefix + "Inv-Name"         // optional; name of the inventory (to override the system default)
+	HdrInventory = HdrPrefixAIS + "Bucket-Inventory" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
+	HdrInvName   = HdrPrefixAIS + "Inv-Name"         // optional; name of the inventory (to override the system default)
 
 	// GET via x-blob-download
-	HdrBlobDownload    = aisPrefix + "Blob-Download"     // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
-	HdrBlobChunk       = aisPrefix + "Blob-Chunk"        // optional; e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
-	HdrBlobWorkers     = aisPrefix + "Blob-Workers"      // optional: num concurrent downloading readers (see also: xs/nwp.go, "media type", load.Advice)
-	HdrBlobReadTimeout = aisPrefix + "Blob-Read-Timeout" // per-attempt timeout for backend range read; zero selects default
-	HdrBlobThreshold   = aisPrefix + "Blob-Threshold"    // minimum remote object size (bytes) to use blob downloader
+	HdrBlobDownload    = HdrPrefixAIS + "Blob-Download"     // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
+	HdrBlobChunk       = HdrPrefixAIS + "Blob-Chunk"        // optional; e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
+	HdrBlobWorkers     = HdrPrefixAIS + "Blob-Workers"      // optional: num concurrent downloading readers (see also: xs/nwp.go, "media type", load.Advice)
+	HdrBlobReadTimeout = HdrPrefixAIS + "Blob-Read-Timeout" // per-attempt timeout for backend range read; zero selects default
+	HdrBlobThreshold   = HdrPrefixAIS + "Blob-Threshold"    // minimum remote object size (bytes) to use blob downloader
 
 	// Bucket props headers
-	HdrBucketProps      = aisPrefix + "Bucket-Props"       // => cmn.Bprops
-	HdrBucketSumm       = aisPrefix + "Bucket-Summ"        // => cmn.BsummResult (see also: QparamFltPresence)
-	HdrBucketVerEnabled = aisPrefix + "Versioning-Enabled" // Enable/disable object versioning in a bucket.
-	HdrBackendProvider  = aisPrefix + "Provider"           // ProviderAmazon et al. - see cmn/bck.go.
+	HdrBucketProps      = HdrPrefixAIS + "Bucket-Props"       // => cmn.Bprops
+	HdrBucketSumm       = HdrPrefixAIS + "Bucket-Summ"        // => cmn.BsummResult (see also: QparamFltPresence)
+	HdrBucketVerEnabled = HdrPrefixAIS + "Versioning-Enabled" // Enable/disable object versioning in a bucket.
+	HdrBackendProvider  = HdrPrefixAIS + "Provider"           // ProviderAmazon et al. - see cmn/bck.go.
 
 	// including BucketProps.Extra.AWS
-	HdrS3Region   = aisPrefix + "Cloud_region"
-	HdrS3Endpoint = aisPrefix + "Endpoint"
-	HdrS3Profile  = aisPrefix + "Profile"
+	HdrS3Region   = HdrPrefixAIS + "Cloud_region"
+	HdrS3Endpoint = HdrPrefixAIS + "Endpoint"
+	HdrS3Profile  = HdrPrefixAIS + "Profile"
 
 	// including BucketProps.Extra.OCI
-	HdrOCIRegion = aisPrefix + "Oci-Region"
+	HdrOCIRegion = HdrPrefixAIS + "Oci-Region"
 
 	// remote AIS
-	HdrRemAisUUID  = aisPrefix + "Remote-Ais-Uuid"
-	HdrRemAisAlias = aisPrefix + "Remote-Ais-Alias"
-	HdrRemAisURL   = aisPrefix + "Remote-Ais-Url"
+	HdrRemAisUUID  = HdrPrefixAIS + "Remote-Ais-Uuid"
+	HdrRemAisAlias = HdrPrefixAIS + "Remote-Ais-Alias"
+	HdrRemAisURL   = HdrPrefixAIS + "Remote-Ais-Url"
 
-	HdrRemoteOffline = aisPrefix + "Remote-Offline" // When accessing cached remote bucket with no backend connectivity.
+	HdrRemoteOffline = HdrPrefixAIS + "Remote-Offline" // When accessing cached remote bucket with no backend connectivity.
 
 	// Object props headers
-	HdrObjCksumType = aisPrefix + "Checksum-Type"  // Checksum type, one of SupportedChecksums().
-	HdrObjCksumVal  = aisPrefix + "Checksum-Value" // Checksum value.
-	HdrObjAtime     = aisPrefix + "Atime"          // Object access time.
-	HdrObjCustomMD  = aisPrefix + "Custom-Md"      // Object custom metadata.
-	HdrObjVersion   = aisPrefix + "Version"        // Object version/generation - ais or cloud.
+	HdrObjCksumType = HdrPrefixAIS + "Checksum-Type"  // Checksum type, one of SupportedChecksums().
+	HdrObjCksumVal  = HdrPrefixAIS + "Checksum-Value" // Checksum value.
+	HdrObjAtime     = HdrPrefixAIS + "Atime"          // Object access time.
+	HdrObjCustomMD  = HdrPrefixAIS + "Custom-Md"      // Object custom metadata.
+	HdrObjVersion   = HdrPrefixAIS + "Version"        // Object version/generation - ais or cloud.
 
 	// Append object header
-	HdrAppendHandle = aisPrefix + "Append-Handle"
+	HdrAppendHandle = HdrPrefixAIS + "Append-Handle"
 
 	// api.PutApndArchArgs message flags
-	HdrPutApndArchFlags = aisPrefix + "Pine"
+	HdrPutApndArchFlags = HdrPrefixAIS + "Pine"
 
 	// Query objects handle header
-	HdrHandle = aisPrefix + "Query-Handle"
+	HdrHandle = HdrPrefixAIS + "Query-Handle"
 
 	// Reverse proxy header
-	HdrNodeID = aisPrefix + "Node-Id"
+	HdrNodeID = HdrPrefixAIS + "Node-Id"
 
 	// uptimes, respectively
-	HdrNodeUptime    = aisPrefix + "Node-Uptime"
-	HdrClusterUptime = aisPrefix + "Cluster-Uptime"
+	HdrNodeUptime    = HdrPrefixAIS + "Node-Uptime"
+	HdrClusterUptime = HdrPrefixAIS + "Cluster-Uptime"
 
-	HdrNodeURL   = aisPrefix + "Node-Url"
-	HdrNodeFlags = aisPrefix + "Node-Flags"
+	HdrNodeURL   = HdrPrefixAIS + "Node-Url"
+	HdrNodeFlags = HdrPrefixAIS + "Node-Flags"
 
 	// Software version (`aisnode --version`)
-	HdrNodeVersion = aisPrefix + "Node-Version"
+	HdrNodeVersion = HdrPrefixAIS + "Node-Version"
 )
 
 // the value for cos.HdrUserAgent header (internal usage)
-const HdrUA = aisPrefix + "Node"
+const HdrUA = HdrPrefixAIS + "Node"
 
 // Custom S3 headers
 const (
@@ -97,7 +97,7 @@ const (
 	//	* `path`           - https://s3.<region>.amazonaws.com/<bucket>/<path_to_object>.
 	// By default, (if the header is empty or not set) we use `virtual-hosted` style.
 	// In case, the value of this header is not valid, the error will be thrown.
-	HdrSignedRequestStyle = aisPrefix + "S3-Signed-Request-Style"
+	HdrSignedRequestStyle = HdrPrefixAIS + "S3-Signed-Request-Style"
 )
 
 // AuthN consts
@@ -108,54 +108,54 @@ const (
 
 // Internal (intra-cluster) headers
 const (
-	HdrSenderID        = aisPrefix + "Caller-Id"
-	HdrSenderName      = aisPrefix + "Caller-Name"
-	HdrSenderIsPrimary = aisPrefix + "Caller-Is-Primary"
-	HdrSenderSmapVer   = aisPrefix + "Caller-Smap-Ver"
+	HdrSenderID        = HdrPrefixAIS + "Caller-Id"
+	HdrSenderName      = HdrPrefixAIS + "Caller-Name"
+	HdrSenderIsPrimary = HdrPrefixAIS + "Caller-Is-Primary"
+	HdrSenderSmapVer   = HdrPrefixAIS + "Caller-Smap-Ver"
 
-	HdrXactionID = aisPrefix + "Xaction-Id"
+	HdrXactionID = HdrPrefixAIS + "Xaction-Id"
 
 	// intra-cluster streams
-	HdrSessID   = aisPrefix + "Session-Id"
-	HdrCompress = aisPrefix + "Compress" // LZ4
+	HdrSessID   = HdrPrefixAIS + "Session-Id"
+	HdrCompress = HdrPrefixAIS + "Compress" // LZ4
 
 	// Promote(dir)
-	HdrPromoteNamesHash = aisPrefix + "Promote-Names-Hash"
-	HdrPromoteNamesNum  = aisPrefix + "Promote-Names-Num"
+	HdrPromoteNamesHash = HdrPrefixAIS + "Promote-Names-Hash"
+	HdrPromoteNamesNum  = HdrPrefixAIS + "Promote-Names-Num"
 
 	// ETL
-	HdrETLPodInfo      = aisPrefix + "ETL-Pod-Info" // serialized etl.Info
-	HdrDirectPutLength = aisPrefix + "Direct-Put-Length"
+	HdrETLPodInfo      = HdrPrefixAIS + "ETL-Pod-Info" // serialized etl.Info
+	HdrDirectPutLength = HdrPrefixAIS + "Direct-Put-Length"
 	// ETL → AIS retry contract: emitted by the ETL webserver alongside HTTP 503
 	// to signal that the ETL bailed on a transient direct-put failure without
 	// trying locally (one-shot body case). AIS retries the whole PUT against
 	// the replayable LOM-backed source. See ext/etl/communicator.go.
-	HdrETLRetryReason                = aisPrefix + "Etl-Retry-Reason"
+	HdrETLRetryReason                = HdrPrefixAIS + "Etl-Retry-Reason"
 	ETLRetryReasonDirectPutTransient = "direct-put-transient"
 
 	// shared streams
-	HdrActiveEC = aisPrefix + "Ec"
+	HdrActiveEC = HdrPrefixAIS + "Ec"
 
 	// (ais/psetforce; advanced use)
-	HdrReadyToJoinClu = aisPrefix + "Ready-Join-Clu"
+	HdrReadyToJoinClu = HdrPrefixAIS + "Ready-Join-Clu"
 
 	// cluster key (csk)
-	HdrSenderSig   = aisPrefix + "Caller-Sig"   // base64 RawURL HMAC-SHA256 over the intra request
-	HdrSenderNonce = aisPrefix + "Caller-Nonce" // monotonic nonce bound into the signature
+	HdrSenderSig   = HdrPrefixAIS + "Caller-Sig"   // base64 RawURL HMAC-SHA256 over the intra request
+	HdrSenderNonce = HdrPrefixAIS + "Caller-Nonce" // monotonic nonce bound into the signature
 
 	// node-join shared secret (request and response)
-	HdrJoinTime = aisPrefix + "Join-Time"
-	HdrJoinSig  = aisPrefix + "Join-Sig"
+	HdrJoinTime = HdrPrefixAIS + "Join-Time"
+	HdrJoinSig  = HdrPrefixAIS + "Join-Sig"
 )
 
-const lais = len(aisPrefix)
+const lais = len(HdrPrefixAIS)
 
 // internal (json) obj prop => canonical http header
 // usage:
 // - target InitObjProps2Hdr
 // - api/object
 func PropToHeader(prop string) string {
-	debug.AssertFunc(func() bool { return !strings.HasPrefix(prop, aisPrefix) }, "already converted: ", prop)
+	debug.AssertFunc(func() bool { return !strings.HasPrefix(prop, HdrPrefixAIS) }, "already converted: ", prop)
 	if prop[0] == '.' || prop[0] == '_' {
 		prop = prop[1:]
 	}
@@ -166,7 +166,7 @@ func PropToHeader(prop string) string {
 		o   = out[lais:]
 		up  = true
 	)
-	copy(out, aisPrefix)
+	copy(out, HdrPrefixAIS)
 	for i := range l {
 		c := prop[i]
 		if c == '.' || c == '_' {

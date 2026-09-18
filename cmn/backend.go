@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -157,12 +158,24 @@ func _encStr(v any) (string, bool) {
 	}
 }
 
+// AIS-internal keys that AIS itself writes to remote user metadata (e.g., object checksum):
+func isAisMeta(k string) bool {
+	if l := len(AwsHeaderMetaPrefix); len(k) > l && strings.EqualFold(k[:l], AwsHeaderMetaPrefix) {
+		k = k[l:]
+	}
+	l := len(apc.HdrPrefixAIS)
+	return len(k) >= l && strings.EqualFold(k[:l], apc.HdrPrefixAIS)
+}
+
 func _encMeta(metadata map[string]string, prefix string) map[string]string {
 	if len(metadata) == 0 {
 		return nil
 	}
 	header := make(map[string]string, len(metadata))
 	for k, v := range metadata {
+		if isAisMeta(k) {
+			continue
+		}
 		key := http.CanonicalHeaderKey(prefix + k)
 		header[key] = v
 	}
