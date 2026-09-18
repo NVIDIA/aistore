@@ -5,7 +5,6 @@ PYTEST = $(PYTHON) -m pytest
 PIP ?= pip3
 PYAISLOADER_TEST_TYPE ?= short
 
-BOTO_UNIT_TEST_COUNT := $(shell ls -1 tests/unit/botocore_patch/test*py | wc -l)
 export AWS_SESSION_TOKEN := testing
 # will be fetched from CI pipeline secrets
 # export AWS_REGION := us-east-1
@@ -95,8 +94,12 @@ python_s3_compat_test: s3_test_deps
 python_botocore_tests: common_deps botocore_deps python_botocore_unit_tests python_botocore_integration_tests
 
 .PHONY: python_botocore_unit_tests
+# xdist imports every test file in each worker, including the botocore patches.
+# Use a fresh process per file so unpatched tests keep the original botocore behavior.
 python_botocore_unit_tests: common_deps botocore_deps
-	$(PYTEST) -v -n $(BOTO_UNIT_TEST_COUNT) --dist loadfile  tests/unit/botocore_patch
+	@for test_file in tests/unit/botocore_patch/test*.py; do \
+		$(PYTEST) -v "$$test_file" || exit $$?; \
+	done
 
 .PHONY: python_botocore_integration_tests
 python_botocore_integration_tests: common_deps botocore_deps
@@ -168,4 +171,4 @@ python_sdk_coverage: python_sdk_unit_coverage python_sdk_integration_coverage
 	@coverage combine .coverage.unit .coverage.int
 	@coverage html -d htmlcov
 	@coverage xml -o coverage.xml
-	@echo "Overall SDK coverage report: python/htmlcov/index.html
+	@echo "Overall SDK coverage report: python/htmlcov/index.html"

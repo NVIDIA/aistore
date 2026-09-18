@@ -34,14 +34,16 @@ pytest -v tests/unit
 
 ...won't work. Because it's hard to "unimport" a module in python, previous tests will contaminate each other's state.
 
-To run these tests, you need to start a new forked process each time, scoped per test file.
-To achieve this inline we use the pytest-xdist plugin like so:
+Run each test file in a separate Python process. Each pytest-xdist worker imports
+every test file during collection, so `--dist loadfile` does not isolate the patch.
 
-```
-pytest -v -n $(MP_TESTCOUNT) --dist loadfile tests/unit/botocore_patch
+```sh
+for test_file in tests/unit/botocore_patch/test*.py; do
+    python -m pytest -v "$test_file" || exit $?
+done
 ```
 
-...which is one of the reasons why this test set is kept separate from those for the aistore SDK proper.
+Run this command from the `python` directory, or use `make python_botocore_unit_tests`.
 
 ## Testing different boto3 and botocore versions
 

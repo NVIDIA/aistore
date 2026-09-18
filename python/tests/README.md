@@ -48,8 +48,6 @@ environment variable must be set; otherwise these tests will be skipped.
 
 ## Running the tests
 
-All tests should support running on all operating systems, given access to a working AIS cluster. 
-
 Because of the way our botocore patch works, simply running pytest on the entire test directory will fail those tests. See the [botocore test README](/python/tests/unit/botocore_patch/README.md) for more info
 
 Below are the recommended commands for running the test suites. Run these commands from the aistore/python directory. 
@@ -79,14 +77,15 @@ Below are the recommended commands for running the test suites. Run these comman
 ### Botocore patch
 
 #### Unit tests
-1.  Set the variable for number of tests
-    ##### Windows (Powershell): 
-        $BOTO_UNIT_TEST_COUNT = Get-ChildItem -Path "tests/unit/botocore_patch" -Filter "test*.py" | Measure-Object | Select-Object -ExpandProperty Count
-    ##### Unix:
-        BOTO_UNIT_TEST_COUNT=$(ls -1 tests/unit/botocore_patch/test*py | wc -l)
-2.  Run pytest with the xdist plugin to ensure each test runs separately
 
-    `python -m pytest -v -n $BOTO_UNIT_TEST_COUNT --dist loadfile tests/unit/botocore_patch/`
+Run each file in a separate Python process. Use `make python_botocore_unit_tests`,
+or run this shell command:
+
+```sh
+for test_file in tests/unit/botocore_patch/test*.py; do
+    python -m pytest -v "$test_file" || exit $?
+done
+```
 
 #### Integration tests
 
