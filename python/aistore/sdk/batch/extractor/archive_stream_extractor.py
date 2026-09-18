@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from typing import Generator, Tuple, Union, Any, Optional
@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from requests import Response
 
 from aistore.sdk.batch.types import MossOut, MossReq, MossResp
+from aistore.sdk.const import GB_MISSING_FILES_DIR
 from aistore.sdk.utils import get_logger
 
 logger = get_logger(__name__)
@@ -64,6 +65,8 @@ class ArchiveStreamExtractor(ABC):
         content_length: int,
         moss_req: MossReq,
         moss_resp: Optional[MossResp] = None,
+        *,
+        member_name: Optional[str] = None,
     ) -> MossOut:
         """
         Get MossOut for the current file being extracted.
@@ -77,6 +80,7 @@ class ArchiveStreamExtractor(ABC):
             content_length (int): Length of file content in bytes (used to set size in streaming mode)
             moss_req (MossReq): Original batch request
             moss_resp (Optional[MossResp]): Response metadata (None for streaming mode)
+            member_name (Optional[str]): Archive member name used to identify server failure markers
 
         Returns:
             MossOut: Response metadata for this file
@@ -94,6 +98,24 @@ class ArchiveStreamExtractor(ABC):
 
         # Streaming mode: infer from request
         moss_in = metadata[index]
+        err_msg = None
+        if content_length == 0 and member_name is not None:
+            name = moss_in.obj_name
+            if not moss_req.only_obj_name:
+                name = f"{moss_in.bck or ''}/{name}"
+            missing_name = f"{GB_MISSING_FILES_DIR}/{name}"
+            # Local shard load/open failures omit archpath.
+            missing_names = {missing_name}
+            if moss_in.archpath:
+                # Forwarded failures always add '/', even for a leading-/ archpath.
+                missing_names.add(f"{missing_name}/{moss_in.archpath}")
+                if moss_in.archpath.startswith("/"):
+                    # Local archived-file failures avoid the extra separator.
+                    missing_names.add(missing_name + moss_in.archpath)
+            if member_name in missing_names:
+                # The streaming marker carries no detailed server error
+                err_msg = "Batch entry failed on the server"
+
         return MossOut(
             obj_name=moss_in.obj_name,
             archpath=moss_in.archpath or "",
@@ -101,6 +123,7 @@ class ArchiveStreamExtractor(ABC):
             provider=moss_in.provider or "",
             opaque=moss_in.opaque,
             size=content_length,
+            err_msg=err_msg,
         )
 
     def _handle_extraction_error(

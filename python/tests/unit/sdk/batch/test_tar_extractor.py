@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -9,6 +9,7 @@ import tarfile
 
 from aistore.sdk.batch.extractor.tar_stream_extractor import TarStreamExtractor
 from aistore.sdk.batch.types import MossReq, MossIn, MossOut, MossResp
+from aistore.sdk.const import GB_MISSING_FILES_DIR
 
 
 # pylint: disable=duplicate-code
@@ -483,3 +484,44 @@ class TestTarStreamExtractor(unittest.TestCase):
         self.assertEqual(len(result), 0)
         # Verify response was closed at the end
         self.mock_response.close.assert_called_once()
+
+    @patch("tarfile.open")
+    def test_missing_entry_error_message(self, mock_open):
+        """Infer streaming errors from markers and preserve supplied server errors."""
+        request = self.moss_req
+        request.only_obj_name = False
+        request.moss_in[1] = request.moss_in[1].model_copy(
+            update={"obj_name": f"{GB_MISSING_FILES_DIR}/empty.txt"}
+        )
+        archive = mock_open.return_value.__enter__.return_value
+        names = [
+            f"{GB_MISSING_FILES_DIR}/test-bucket/missing.txt",
+            f"test-bucket/{GB_MISSING_FILES_DIR}/empty.txt",
+        ]
+        # Local shard-load failure, local file failure, and forwarded file failure.
+        request.extend(
+            [request.moss_in[0].model_copy(update={"archpath": "/file.txt"})] * 3
+        )
+        names.extend([names[0], names[0] + "/file.txt", names[0] + "//file.txt"])
+        members = [Mock() for _ in names]
+        for member, name in zip(members, names):
+            member.name = name
+            member.isfile.return_value = True
+        archive.__iter__.return_value = members
+        archive.extractfile.side_effect = lambda _: BytesIO()
+        results = list(self.tar_extractor.extract(Mock(), BytesIO(), request))
+        self.assertEqual(
+            [out.err_msg for out, _ in results],
+            ["Batch entry failed on the server", None]
+            + ["Batch entry failed on the server"] * 3,
+        )
+        request.streaming_get = False
+        metadata = MossResp(out=[out for out, _ in results])
+        for out in metadata.out:
+            if out.err_msg:
+                out.err_msg = "server error details"
+        results = list(self.tar_extractor.extract(Mock(), BytesIO(), request, metadata))
+        self.assertEqual(
+            [out.err_msg for out, _ in results],
+            ["server error details", None] + ["server error details"] * 3,
+        )

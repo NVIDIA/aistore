@@ -39,6 +39,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   metadata when the batch is reordered or cleared by a later `get()` call.
 - Batch requests use standard Base64 for binary `opaque` tracking data, and
   streaming TAR and ZIP results preserve the original tracking bytes.
+- Streaming TAR and ZIP batch extraction reports failed entries with `err_msg`
+  instead of returning them as successful empty objects.
 
 ### Changed
 

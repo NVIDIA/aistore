@@ -67,12 +67,12 @@ class ZipStreamExtractor(ArchiveStreamExtractor):
 
                         # Get MossOut (from response or build from request)
                         moss_out = self._get_moss_out(
-                            index, len(content), moss_req, moss_resp
+                            index,
+                            len(content),
+                            moss_req,
+                            moss_resp,
+                            member_name=zip_info.filename,
                         )
-
-                        # Check for missing
-                        # TODO: FIXME: what to do with missing files?
-                        # moss_out.is_missing = zip_info.filename.startswith(GB_MISSING_FILES_DIR)
 
                         index += 1
                         yield moss_out, content

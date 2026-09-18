@@ -7,6 +7,7 @@ import unittest
 from io import BytesIO
 
 from aistore.sdk.errors import AISError
+from aistore.sdk.const import GB_MISSING_FILES_DIR
 
 from tests.integration import REMOTE_SET
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
@@ -185,37 +186,52 @@ class TestBatch(ParallelTestBase):  # pylint: disable=too-many-public-methods
             "Opaque data should be returned unchanged",
         )
 
-    def test_batch_continue_on_error(self):
-        """Test batch with cont_on_err flag for missing objects."""
-        # Create one valid object
-        valid_obj, valid_content = self._create_object_with_content()
+    @case_matrix([".tar", ".zip"], [True, False])
+    def test_batch_continue_on_error(self, output_format, streaming):
+        """Report missing objects, shards, and archived files without flagging empty objects."""
+        valid_obj, valid_content = self._create_object_with_content(obj_size=64)
+        shard = self.bucket.object(f"{self.obj_prefix}.tar")
+        empty = self.bucket.object(f"{GB_MISSING_FILES_DIR}/{self.obj_prefix}")
+        self._register_for_post_test_cleanup(
+            names=[shard.name, empty.name], is_bucket=False
+        )
+        archive = BytesIO()
+        with tarfile.open(fileobj=archive, mode="w") as tar:
+            member = tarfile.TarInfo("file.txt")
+            member.size = len(valid_content)
+            tar.addfile(member, BytesIO(valid_content))
+        shard.get_writer().put_content(archive.getvalue())
+        empty.get_writer().put_content(b"")
 
-        # Create reference to non-existent object
-        missing_obj = self.bucket.object("non-existent-file.txt")
-
-        # Create batch with continue on error
         batch = self.client.batch(
-            bucket=self.bucket, streaming_get=False, cont_on_err=True
+            bucket=self.bucket,
+            output_format=output_format,
+            streaming_get=streaming,
+            cont_on_err=True,
+            only_obj_name=True,
         )
-        batch.add(missing_obj)
+        batch.add(f"{self.obj_prefix}-missing.txt")
+        batch.add(f"{self.obj_prefix}-missing.tar", archpath="file.txt")
+        batch.add(shard, archpath="missing.txt")
         batch.add(valid_obj)
-
+        batch.add(shard, archpath="file.txt")
+        batch.add(empty)
         results = list(batch.get())
-
-        # Should get 2 results (one with error, one successful)
-        self.assertEqual(len(results), 2, "Expected 2 results with cont_on_err=True")
-
-        # First result should indicate missing file
-        missing_response, _ = results[0]
-        self.assertIsNotNone(
-            missing_response.err_msg, "Missing object should have error message"
+        self.assertEqual(len(results), 6)
+        for path_kind, (metadata, content) in zip(
+            ("object", "whole shard", "archived file"), results[:3]
+        ):
+            with self.subTest(path=path_kind):
+                self.assertTrue(metadata.err_msg)
+                if streaming:
+                    self.assertEqual(
+                        metadata.err_msg, "Batch entry failed on the server"
+                    )
+                self.assertEqual(content, b"")
+        self.assertEqual([metadata.err_msg for metadata, _ in results[3:]], [None] * 3)
+        self.assertEqual(
+            [content for _, content in results[3:]], [valid_content, valid_content, b""]
         )
-
-        # Second result should be successful
-        valid_response, actual_content = results[1]
-        self.assertEqual(valid_response.obj_name, valid_obj.name)
-        self.assertEqual(actual_content, valid_content)
-        self.assertIsNone(valid_response.err_msg, "Valid object should not have error")
 
     def test_batch_empty_error(self):
         """Test that empty batch raises appropriate error."""
