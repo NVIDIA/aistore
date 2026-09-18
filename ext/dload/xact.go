@@ -248,6 +248,7 @@ func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 		case xld.dispatcher.workCh <- job:
 			return dljob.id, http.StatusOK, nil
 		case <-time.After(cmn.Rom.CplaneOperation()):
+			g.store.discardJob(dljob.id)
 			err := cmn.NewErrTooManyRequests(errTooManyJobs, http.StatusTooManyRequests)
 			return nil, http.StatusTooManyRequests, err
 		}
