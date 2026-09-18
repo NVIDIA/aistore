@@ -57,3 +57,25 @@ func TestDownloadRejectedHandoff(t *testing.T) {
 		t.Errorf("unexpected error response: %+v", httpErr)
 	}
 }
+
+func TestDownloadRejectedHandoffStopsThrottler(t *testing.T) {
+	previousStore := g.store
+	g.store = &infoStore{dljobs: make(map[string]*dljob)}
+	t.Cleanup(func() { g.store = previousStore })
+
+	xdl := &Xact{dispatcher: &dispatcher{workCh: make(chan jobif)}}
+	job := &singleDlJob{sliceDlJob: sliceDlJob{
+		baseDlJob: baseDlJob{id: "rejected-throttled", xdl: xdl},
+	}}
+	job.throt.init(Limits{BytesPerHour: 60 * 1024 * 1024}) // starts goroutine + ticker
+	t.Cleanup(job.throt.stop)
+
+	if _, status, _ := xdl.Download(job); status != http.StatusTooManyRequests {
+		t.Fatalf("expected HTTP 429, got %d", status)
+	}
+	select {
+	case <-job.throt.stopCh.Listen():
+	default:
+		t.Fatal("rejected handoff left the job's throttler running")
+	}
+}

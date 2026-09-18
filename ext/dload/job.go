@@ -43,6 +43,11 @@ type (
 		fromRemote bool
 	}
 
+	slicePayload interface {
+		Describe() string
+		ExtractPayload() (cos.StrKVs, error)
+	}
+
 	jobif interface {
 		ID() string
 		XactID() string
@@ -230,6 +235,19 @@ func (j *sliceDlJob) init(bck *meta.Bck, objects cos.StrKVs) error {
 	return nil
 }
 
+// common constructor part: single and multi
+func (j *sliceDlJob) initPayload(id string, bck *meta.Bck, base *Base, payload slicePayload, xdl *Xact) error {
+	j.baseDlJob.init(id, bck, base.Timeout, payload.Describe(), base.Limits, base.Headers, xdl, base.ETLName, base.ETLArgs)
+	objs, err := payload.ExtractPayload()
+	if err == nil {
+		err = j.init(bck, objs)
+	}
+	if err != nil {
+		j.throt.stop() // started by baseDlJob.init; the job is being dropped
+	}
+	return err
+}
+
 func (j *sliceDlJob) Len() int { return len(j.objs) }
 
 func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
@@ -247,32 +265,22 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	return objs, true, nil
 }
 
-func newMultiDlJob(id string, bck *meta.Bck, payload *MultiBody, xdl *Xact) (mj *multiDlJob, err error) {
-	var objs cos.StrKVs
-
-	mj = &multiDlJob{}
-	mj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, payload.Headers, xdl, payload.ETLName, payload.ETLArgs)
-
-	if objs, err = payload.ExtractPayload(); err != nil {
+func newMultiDlJob(id string, bck *meta.Bck, payload *MultiBody, xdl *Xact) (*multiDlJob, error) {
+	mj := &multiDlJob{}
+	if err := mj.sliceDlJob.initPayload(id, bck, &payload.Base, payload, xdl); err != nil {
 		return nil, err
 	}
-	err = mj.sliceDlJob.init(bck, objs)
-	return
+	return mj, nil
 }
 
 func (j *multiDlJob) String() (s string) { return "multi-" + j.baseDlJob.String() }
 
-func newSingleDlJob(id string, bck *meta.Bck, payload *SingleBody, xdl *Xact) (sj *singleDlJob, err error) {
-	var objs cos.StrKVs
-
-	sj = &singleDlJob{}
-	sj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, payload.Headers, xdl, payload.ETLName, payload.ETLArgs)
-
-	if objs, err = payload.ExtractPayload(); err != nil {
+func newSingleDlJob(id string, bck *meta.Bck, payload *SingleBody, xdl *Xact) (*singleDlJob, error) {
+	sj := &singleDlJob{}
+	if err := sj.sliceDlJob.initPayload(id, bck, &payload.Base, payload, xdl); err != nil {
 		return nil, err
 	}
-	err = sj.sliceDlJob.init(bck, objs)
-	return
+	return sj, nil
 }
 
 func (j *singleDlJob) String() (s string) {
@@ -296,6 +304,7 @@ func newRangeDlJob(id string, bck *meta.Bck, payload *RangeBody, xdl *Xact) (rj 
 	rj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, payload.Headers, xdl, payload.ETLName, payload.ETLArgs)
 
 	if rj.count, err = countObjects(rj.pt, payload.Subdir, rj.bck); err != nil {
+		rj.throt.stop()
 		return nil, err
 	}
 	rj.pt.InitIter()
