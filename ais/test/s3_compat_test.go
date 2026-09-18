@@ -232,6 +232,37 @@ func TestS3TargetEmptyBucket(t *testing.T) {
 	tassert.CheckFatal(t, api.Health(bp))
 }
 
+func TestS3RejectsOversizedXMLBody(t *testing.T) {
+	proxyURL := tools.RandomProxyURL(t)
+	bck := cmn.Bck{Name: "test-s3-xml-limit-" + trand.String(6), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	tests := []struct {
+		name, method, query string
+		bodySize            int64
+	}{
+		{"multi-delete", http.MethodPost, aiss3.QparamMultiDelete, 8*cos.MiB + 1},
+		{"versioning", http.MethodPut, aiss3.QparamVersioning, 4*cos.KiB + 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			reqURL := proxyURL + apc.URLPathS3.Join(bck.Name) + "?" + test.query
+			req, err := http.NewRequestWithContext(t.Context(), test.method, reqURL, cos.NopReader(test.bodySize))
+			tassert.CheckFatal(t, err)
+			req.ContentLength = test.bodySize
+			req.Header.Set("Expect", "100-continue") // reject on Content-Length without uploading the body
+			bp := tools.BaseAPIParams(proxyURL)
+			api.SetAuxHeaders(req, &bp)
+
+			resp, err := bp.Client.Do(req)
+			tassert.CheckFatal(t, err)
+			defer resp.Body.Close()
+			tassert.Fatalf(t, resp.StatusCode == http.StatusRequestEntityTooLarge,
+				"expected status %d, got %d", http.StatusRequestEntityTooLarge, resp.StatusCode)
+		})
+	}
+}
+
 // regression (see finLsoA / lsObjsA): lists 5 objects via the real S3
 // ListObjectsV2 endpoint with max-keys=2, and uses each page's
 // NextContinuationToken to fetch the following page.

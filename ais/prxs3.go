@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -27,6 +28,11 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 
 	jsoniter "github.com/json-iterator/go"
+)
+
+const (
+	maxDeleteXMLSize     = 8 * cos.MiB // 1000 entries: 6x-escaped 1KiB key, 1KiB version ID, XML tags
+	maxVersioningXMLSize = 4 * cos.KiB // Status and optional MFADelete only; ample XML headroom
 )
 
 var (
@@ -280,10 +286,9 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
 	}
-	decoder := xml.NewDecoder(r.Body)
 	lst := &s3.Delete{}
-	if err := decoder.Decode(lst); err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+	if ecode, err := decodeS3XML(r, lst, maxDeleteXMLSize); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
 	if len(lst.Object) == 0 {
@@ -839,10 +844,9 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 		return
 	}
 
-	decoder := xml.NewDecoder(r.Body)
 	vconf := &s3.VersioningConfiguration{}
-	if err := decoder.Decode(vconf); err != nil {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
+	if ecode, err := decodeS3XML(r, vconf, maxVersioningXMLSize); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
 	enabled := vconf.Enabled()
@@ -863,6 +867,21 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 //
 // misc. utils
 //
+
+func decodeS3XML(r *http.Request, v any, maxSize int) (int, error) {
+	if r.ContentLength > int64(maxSize) {
+		return http.StatusRequestEntityTooLarge, fmt.Errorf("s3 XML body exceeds %d bytes", maxSize)
+	}
+	// Read one extra byte to detect overflow when Content-Length is unknown.
+	body, err := cos.ReadAll(io.LimitReader(r.Body, int64(maxSize)+1))
+	if err != nil {
+		return http.StatusBadRequest, err
+	}
+	if len(body) > maxSize {
+		return http.StatusRequestEntityTooLarge, fmt.Errorf("s3 XML body exceeds %d bytes", maxSize)
+	}
+	return 0, xml.Unmarshal(body, v)
+}
 
 func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket string) *meta.Bck {
 	bck, ecode, err := meta.InitByNameOnly(bucket, p.owner.bmd)
