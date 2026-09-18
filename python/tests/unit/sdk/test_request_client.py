@@ -1,7 +1,15 @@
+import io
 import unittest
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import patch, Mock, MagicMock, call
 
 from requests import Response, Session
+from requests.exceptions import (
+    ConnectionError as RequestsConnectionError,
+    UnrewindableBodyError,
+)
+from tenacity import stop_after_attempt, wait_none
 
 from aistore.sdk import RetryConfig
 from aistore.sdk.const import (
@@ -207,6 +215,169 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             self.mock_response
         )
         self.mock_response_handler.handle_response.assert_called_once()
+
+    def _upload_retry_client(self, scheme, uploads, fail_first=True):
+        # Model SDK retries, not Requests' automatic HTTP redirect handling.
+        retry_config = RetryConfig.default()
+        retry_config.network_retry = retry_config.network_retry.copy(
+            wait=wait_none(), stop=stop_after_attempt(2), before_sleep=None
+        )
+
+        def send(_method, _url, **kwargs):
+            if kwargs.get("allow_redirects") is False:
+                return Mock(
+                    spec=Response,
+                    status_code=307,
+                    headers={"Location": f"{scheme}://target/upload"},
+                )
+            body = kwargs["data"]
+            uploads.append(body.read() if hasattr(body, "read") else b"".join(body))
+            if fail_first and len(uploads) == 1:
+                raise RequestsConnectionError("connection lost after upload")
+            return self.mock_response
+
+        self.mock_session.request.side_effect = send
+        return RequestClient(
+            f"{scheme}://proxy",
+            self.mock_session_manager,
+            retry_config=retry_config,
+            response_handler=self.mock_response_handler,
+        )
+
+    @cases("http", "https")
+    def test_upload_network_retry_rewinds_stream(self, scheme):
+        for offset in (0, 3):
+            with self.subTest(offset=offset):
+                uploads = []
+                body = io.BytesIO(b"abcdefgh")
+                body.seek(offset)
+                client = self._upload_retry_client(scheme, uploads)
+                client.request("put", "objects/bucket/object", data=body)
+                self.assertEqual(uploads, [b"abcdefgh"[offset:]] * 2)
+
+    def test_upload_http_redirect_and_network_retry(self):
+        """Exercise Requests redirect rewinding and the SDK retry with real HTTP."""
+        uploads = []
+
+        class UploadHandler(BaseHTTPRequestHandler):
+            def do_PUT(self):  # pylint: disable=invalid-name
+                if self.headers.get("Transfer-Encoding") == "chunked":
+                    chunks = []
+                    while True:
+                        size = int(self.rfile.readline(), 16)
+                        if not size:
+                            self.rfile.readline()
+                            break
+                        chunks.append(self.rfile.read(size))
+                        self.rfile.read(2)
+                    body = b"".join(chunks)
+                else:
+                    body = self.rfile.read(int(self.headers["Content-Length"]))
+                uploads.append((self.path, body))
+                if self.path != "/target":
+                    self.send_response(307)
+                    self.send_header("Location", "/target")
+                elif len(uploads) == 2:
+                    # Drop the first target response after consuming the body.
+                    return
+                else:
+                    self.send_response(200)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        config = RetryConfig.default()
+        config.network_retry = config.network_retry.copy(
+            wait=wait_none(), stop=stop_after_attempt(2), before_sleep=None
+        )
+        manager = SessionManager(retry=config.http_retry)
+        manager.session.trust_env = False
+        with HTTPServer(("127.0.0.1", 0), UploadHandler) as server:
+            worker = threading.Thread(target=server.serve_forever)
+            worker.start()
+            try:
+                client = RequestClient(
+                    f"http://127.0.0.1:{server.server_port}",
+                    manager,
+                    retry_config=config,
+                    timeout=2,
+                )
+                body = io.BytesIO(b"abcdefgh")
+                body.seek(3)
+                response = client.request("put", "objects/bucket/object", data=body)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    uploads,
+                    [("/v1/objects/bucket/object", b"defgh"), ("/target", b"defgh")]
+                    * 2,
+                )
+            finally:
+                manager.session.close()
+                server.shutdown()
+                worker.join()
+
+    @cases("http", "https")
+    def test_upload_nonseekable_network_retry(self, scheme):
+        for fail_first, stream_kind in (
+            (False, "file"),
+            (True, "file"),
+            (False, "iterator"),
+            (True, "iterator"),
+            (False, "iterable"),
+            (True, "iterable"),
+        ):
+            with self.subTest(fail_first=fail_first, stream_kind=stream_kind):
+                uploads = []
+                if stream_kind == "file":
+                    body = Mock(spec=["read"])
+                    body.read.side_effect = io.BytesIO(b"abcdefgh").read
+                elif stream_kind == "iterator":
+                    body = iter([b"abcdefgh"])
+                else:
+                    body = MagicMock(spec=["__iter__"])
+                    body.__iter__.return_value = iter([b"abcdefgh"])
+                client = self._upload_retry_client(scheme, uploads, fail_first)
+                if fail_first:
+                    with self.assertRaises(UnrewindableBodyError):
+                        client.request("put", "objects/bucket/object", data=body)
+                else:
+                    client.request("put", "objects/bucket/object", data=body)
+                self.assertEqual(uploads, [b"abcdefgh"])
+
+    def test_reusable_request_data_uses_existing_retry_path(self):
+        for data in (
+            None,
+            b"data",
+            "data",
+            bytearray(b"data"),
+            memoryview(b"data"),
+            {"key": "value"},
+            [("key", "value")],
+            (("key", "value"),),
+        ):
+            with self.subTest(data_type=type(data).__name__):
+                with patch.object(
+                    self.default_request_client, "_request_with_stream_retry"
+                ) as stream_retry:
+                    self.default_request_client.request(
+                        "put", "objects/bucket/object", data=data
+                    )
+                    stream_retry.assert_not_called()
+
+    def test_upload_failed_position_network_retry(self):
+        for operation in ("tell", "seek"):
+            with self.subTest(operation=operation):
+                uploads = []
+                body = Mock(
+                    wraps=io.BytesIO(b"abcdefgh"), spec=["read", "tell", "seek"]
+                )
+                getattr(body, operation).side_effect = OSError("stream is not seekable")
+                client = self._upload_retry_client("http", uploads)
+                with self.assertRaises(UnrewindableBodyError):
+                    client.request("put", "objects/bucket/object", data=body)
+                self.assertEqual(uploads, [b"abcdefgh"])
 
     def test_get_full_url(self):
         path = "/testpath/to_obj"

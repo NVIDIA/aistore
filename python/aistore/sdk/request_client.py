@@ -2,10 +2,12 @@
 # Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import os
+from collections.abc import Mapping
 from urllib.parse import urljoin, urlencode
-from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
+from typing import TypeVar, Type, Any, Callable, Dict, Optional, Tuple, Union
 
 from requests import Response
+from requests.exceptions import UnrewindableBodyError
 
 from aistore.sdk.const import (
     HEADER_CONNECTION,
@@ -196,6 +198,10 @@ class RequestClient:
         `_request_with_manual_redirect`. Otherwise, it delegates to the
         `RequestExecutor` for a single send through the configured endpoint.
 
+        Stream replay protection covers SDK network retries only. Use seekable
+        bodies for uploads that can redirect: Requests can consume a non-seekable
+        body before following an HTTP redirect, outside this retry loop.
+
         Args:
             method (str): HTTP method (e.g. POST, GET, PUT, DELETE).
             path (str): URL path to call.
@@ -207,6 +213,10 @@ class RequestClient:
 
         Returns:
             The HTTP response from the server.
+
+        Raises:
+            requests.exceptions.UnrewindableBodyError: An SDK network retry cannot
+                rewind the request body to its initial position.
         """
         base = urljoin(endpoint, "v1") if endpoint else self.base_url
         url = f"{base}/{path.lstrip('/')}"
@@ -220,8 +230,47 @@ class RequestClient:
                 method=method, url=url, headers=headers, **kwargs
             )
 
-        response = self._retry_manager.with_retry(request_op)
+        data = kwargs.get("data")
+        if data is not None and (
+            hasattr(data, "read")
+            or (
+                hasattr(data, "__iter__")
+                and not isinstance(
+                    data, (str, bytes, bytearray, memoryview, list, tuple, Mapping)
+                )
+            )
+        ):
+            response = self._request_with_stream_retry(request_op, data)
+        else:
+            response = self._retry_manager.with_retry(request_op)
         return self._response_handler.handle_response(response)
+
+    def _request_with_stream_retry(
+        self, request_op: Callable[[], Response], body: Any
+    ) -> Response:
+        """Restore a streamed body before each SDK retry; reject unsafe replay."""
+        body_position = None
+        try:
+            body_position = body.tell()
+        except (AttributeError, OSError, ValueError):
+            pass
+        attempted = False
+
+        def send():
+            nonlocal attempted
+            if attempted:
+                if body_position is None:
+                    raise UnrewindableBodyError("Cannot replay the upload stream")
+                try:
+                    body.seek(body_position)
+                except (AttributeError, OSError, ValueError) as err:
+                    raise UnrewindableBodyError(
+                        "Cannot rewind the upload stream"
+                    ) from err
+            attempted = True
+            return request_op()
+
+        return self._retry_manager.with_retry(send)
 
     def _calculate_content_length(self, data: Union[bytes, str, Any]) -> Optional[int]:
         """
