@@ -349,7 +349,7 @@ The relevant properties are:
 | `chunks.max_monolithic_size` | Maximum size of a monolithic object; cannot be disabled (hard limit) |
 | `chunks.chunk_size` | Chunk size used whenever the bucket's configuration requires chunking |
 
-Explicit per-object overrides remain supported: client-side multipart PUT, S3 multipart upload (stored using the client's part sizes), and a single-object blob download with an explicitly specified chunk size. Each is a deliberate, advanced choice scoped to one object.
+Explicit per-object overrides remain supported: client-side multipart PUT, S3 multipart upload (stored using the client's part sizes), and a single-object blob download (started explicitly or selected via `api.GetArgs.BlobThreshold`). Each is a deliberate, advanced choice scoped to one object and uses the operation's chunk size, or its default when omitted.
 
 ### Storage layout
 
@@ -361,7 +361,7 @@ For a given object size:
 
 A layout rule is independent of how the object arrives. It applies equally to PUT, cold GET, copy, and rechunk.
 
-> **Status (v5.1):** rule 1 is enforced by PUT, cold GET, and copy; rechunk enforces it only for the objects it rewrites - an existing monolithic object above `chunks.max_monolithic_size` (e.g., after lowering it) is left as is. Rule 2 is currently enforced by rechunk only; PUT and cold GET do not yet auto-chunk at `chunks.objsize_limit`.
+> **Status (v5.1):** rule 1 is enforced by PUT, cold GET, and copy; rechunk enforces it only for the objects it rewrites - an existing monolithic object above `chunks.max_monolithic_size` (e.g., after lowering it) is left as is. Rule 2 is currently enforced by rechunk only; PUT, cold GET, and copy do not yet auto-chunk at `chunks.objsize_limit`.
 
 ### Rechunk
 
@@ -383,8 +383,8 @@ Prefetch selects, per object, how to fetch it from the remote backend - a regula
 Planned for v5.2:
 
 - `blob-threshold` == 0: regular cold GET.
-- With bucket auto-chunking enabled: blob download only at or above max(`blob-threshold`, `chunks.objsize_limit`), using `chunks.chunk_size`.
-- With auto-chunking disabled: blob download at or above `blob-threshold`, producing a chunked object; the job warns once.
+- With `blob-threshold` > 0 and bucket auto-chunking enabled: blob download only at or above max(`blob-threshold`, `chunks.objsize_limit`), using `chunks.chunk_size`.
+- With auto-chunking disabled: blob download at or above `blob-threshold > 0`, producing a chunked object; the job warns once.
 - A regular cold GET can still store the result chunked when the [storage layout](#storage-layout) rules require it.
 
 The third case is a deliberate exception to rule 3. A `chunks.objsize_limit` of zero does express a layout preference - automatic writes remain monolithic - but reassembling parallel-fetched ranges into a monolithic file degrades performance. Prefetch therefore keeps the chunked result, uses the prefetch `blob-chunk-size` (or the blob-downloader default), and suggests `ais bucket rechunk`, which restores such objects to monolithic form per the bucket's configuration.
