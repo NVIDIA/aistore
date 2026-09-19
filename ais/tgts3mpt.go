@@ -153,7 +153,7 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq,
 		return
 	}
 
-	body, ecode, err := readCompleteMptBody(r)
+	body, ecode, err := s3.ReadBody(r, maxCompleteMptBodySize, "multipart completion body")
 	if err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
@@ -216,20 +216,6 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq,
 	s3.SetS3Headers(w.Header(), lom)
 	sgl.WriteTo2(w)
 	sgl.Free()
-}
-
-func readCompleteMptBody(r *http.Request) ([]byte, int, error) {
-	if r.ContentLength > maxCompleteMptBodySize {
-		return nil, http.StatusRequestEntityTooLarge, fmt.Errorf("multipart completion body exceeds %d bytes", maxCompleteMptBodySize)
-	}
-	body, err := cos.ReadAll(io.LimitReader(r.Body, maxCompleteMptBodySize+1))
-	if err != nil {
-		return nil, http.StatusBadRequest, err
-	}
-	if len(body) > maxCompleteMptBodySize {
-		return nil, http.StatusRequestEntityTooLarge, fmt.Errorf("multipart completion body exceeds %d bytes", maxCompleteMptBodySize)
-	}
-	return body, 0, nil
 }
 
 // Abort an active multipart upload.

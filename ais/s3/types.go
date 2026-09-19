@@ -6,6 +6,8 @@ package s3
 
 import (
 	"encoding/xml"
+	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"strings"
@@ -185,4 +187,29 @@ func DecodeXML[T any](body []byte) (result T, _ error) {
 		return result, err
 	}
 	return result, nil
+}
+
+// read request body bounded by maxSize;
+// return (body, 0, nil) or (nil, http status, err)
+func ReadBody(r *http.Request, maxSize int, tag string) ([]byte, int, error) {
+	if r.ContentLength > int64(maxSize) {
+		return nil, http.StatusRequestEntityTooLarge, fmt.Errorf("%s exceeds %d bytes", tag, maxSize)
+	}
+	body, err := cos.ReadAll(io.LimitReader(r.Body, int64(maxSize)+1)) // +1 detects overflow without Content-Length
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+	if len(body) > maxSize {
+		return nil, http.StatusRequestEntityTooLarge, fmt.Errorf("%s exceeds %d bytes", tag, maxSize)
+	}
+	return body, 0, nil
+}
+
+// ReadBody (above) followed by xml.Unmarshal into `v`
+func DecodeBodyXML(r *http.Request, v any, maxSize int, tag string) (int, error) {
+	body, ecode, err := ReadBody(r, maxSize, tag)
+	if err != nil {
+		return ecode, err
+	}
+	return 0, xml.Unmarshal(body, v)
 }

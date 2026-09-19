@@ -9,7 +9,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -287,7 +286,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		return
 	}
 	lst := &s3.Delete{}
-	if ecode, err := decodeS3XML(r, lst, maxDeleteXMLSize); err != nil {
+	if ecode, err := s3.DecodeBodyXML(r, lst, maxDeleteXMLSize, "multi-object delete body"); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
@@ -845,7 +844,7 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	}
 
 	vconf := &s3.VersioningConfiguration{}
-	if ecode, err := decodeS3XML(r, vconf, maxVersioningXMLSize); err != nil {
+	if ecode, err := s3.DecodeBodyXML(r, vconf, maxVersioningXMLSize, "bucket versioning body"); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
@@ -867,21 +866,6 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 //
 // misc. utils
 //
-
-func decodeS3XML(r *http.Request, v any, maxSize int) (int, error) {
-	if r.ContentLength > int64(maxSize) {
-		return http.StatusRequestEntityTooLarge, fmt.Errorf("s3 XML body exceeds %d bytes", maxSize)
-	}
-	// Read one extra byte to detect overflow when Content-Length is unknown.
-	body, err := cos.ReadAll(io.LimitReader(r.Body, int64(maxSize)+1))
-	if err != nil {
-		return http.StatusBadRequest, err
-	}
-	if len(body) > maxSize {
-		return http.StatusRequestEntityTooLarge, fmt.Errorf("s3 XML body exceeds %d bytes", maxSize)
-	}
-	return 0, xml.Unmarshal(body, v)
-}
 
 func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket string) *meta.Bck {
 	bck, ecode, err := meta.InitByNameOnly(bucket, p.owner.bmd)
