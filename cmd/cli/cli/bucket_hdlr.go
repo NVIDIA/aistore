@@ -146,10 +146,14 @@ const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz
 	indent1 + "\t* ais ls s3 --summary --all \t- summary report for all s3 buckets including remote/non-present;\n" +
 	indent1 + "\t* ais ls s3 --summary --all --dont-add \t- same, without adding non-present buckets to cluster metadata."
 
-// ais rechunk
-const rechunkUsage = "Re-chunk bucket objects based on size threshold.\n" +
-	indent1 + "\tObjects equal to or larger than --objsize-limit will be split into --chunk-size chunks.\n" +
-	indent1 + "\tSet --objsize-limit=0 to disable chunking and restore all chunked objects to monolithic format.\n" +
+// ais bucket rechunk
+const rechunkUsage = "Re-chunk bucket objects to converge them to the bucket's 'chunks' configuration.\n" +
+	indent1 + "\tObjects at or above 'chunks.objsize_limit' are split into 'chunks.chunk_size' chunks; smaller objects are restored to monolithic format.\n" +
+	indent1 + "\tTo change the layout, update bucket properties first, e.g.:\n" +
+	indent1 + "\t  'ais bucket props set BUCKET chunks.chunk_size=16MiB chunks.objsize_limit=50MiB', then run rechunk;\n" +
+	indent1 + "\t  'ais bucket props set BUCKET chunks.objsize_limit=0', then run rechunk - to restore all objects to monolithic format.\n" +
+	indent1 + "\tObjects larger than 'chunks.max_monolithic_size' always remain chunked.\n" +
+	indent1 + "\tUse --prefix to convert incrementally.\n" +
 	indent1 + "\tBy default, rechunk operates only on in-cluster (cached) objects; use --sync-remote to also update remote backend."
 
 // ais bucket shard-index
@@ -310,7 +314,7 @@ var (
 			disableFlag,
 		},
 		commandRechunk: {
-			chunkSizeFlag,
+			rechunkChunkSizeFlag,
 			objSizeLimitFlag,
 			verbObjPrefixFlag,
 			syncRemoteFlag,
@@ -680,9 +684,16 @@ func rechunkBucketHandler(c *cli.Context) error {
 }
 
 func parseRechunkConfig(c *cli.Context, bck cmn.Bck) (chunkSize, objSizeLimit int64, err error) {
+	// v5.1: per-job overrides of the bucket's chunks config are deprecated (removal planned for v5.2)
+	if flagIsSet(c, rechunkChunkSizeFlag) || flagIsSet(c, objSizeLimitFlag) {
+		actionWarnf(c, "%s and %s are deprecated and will be removed in v5.2 - bucket's 'chunks' config is authoritative:\n"+
+			"\tset it with 'ais bucket props set %s chunks.chunk_size=... chunks.objsize_limit=...', then run rechunk",
+			qflprn(rechunkChunkSizeFlag), qflprn(objSizeLimitFlag), bck.Cname(""))
+	}
+
 	// Parse chunk_size flag if provided
-	if flagIsSet(c, chunkSizeFlag) {
-		chunkSize, err = parseSizeFlag(c, chunkSizeFlag)
+	if flagIsSet(c, rechunkChunkSizeFlag) {
+		chunkSize, err = parseSizeFlag(c, rechunkChunkSizeFlag)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -703,14 +714,14 @@ func parseRechunkConfig(c *cli.Context, bck cmn.Bck) (chunkSize, objSizeLimit in
 	}
 
 	// If either flag is missing, get from bucket and prompt for confirmation
-	if !flagIsSet(c, chunkSizeFlag) || !flagIsSet(c, objSizeLimitFlag) {
+	if !flagIsSet(c, rechunkChunkSizeFlag) || !flagIsSet(c, objSizeLimitFlag) {
 		bckProps, err := api.HeadBucket(apiBP, bck, true /*don't add*/)
 		if err != nil {
 			return 0, 0, V(err)
 		}
 
 		// Fill in missing values from bucket
-		if !flagIsSet(c, chunkSizeFlag) {
+		if !flagIsSet(c, rechunkChunkSizeFlag) {
 			chunkSize = int64(bckProps.Chunks.ChunkSize)
 		}
 		if !flagIsSet(c, objSizeLimitFlag) {

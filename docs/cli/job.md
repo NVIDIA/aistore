@@ -117,34 +117,35 @@ $ ais start lru --buckets ais://buck1,aws://buck2 -f
 
 #### Re-chunk objects
 
-Re-chunking converts objects between monolithic and chunked representations based on the specified chunking parameters. The job processes objects in the bucket according to the configured threshold:
+Re-chunking converges a bucket's existing objects to the bucket's `chunks` configuration, converting objects between monolithic and chunked representations:
 
-- Objects below `objsize_limit` are stored as monolithic (single file)
-- Objects at or above `objsize_limit` are split into chunks of `chunk_size`
-- When `objsize_limit` is 0, chunking is disabled and all objects are restored as monolithic
+- Objects below `chunks.objsize_limit` are stored as monolithic (single file)
+- Objects at or above `chunks.objsize_limit` are split into chunks of `chunks.chunk_size`
+- When `chunks.objsize_limit` is 0, chunking is disabled and all objects are restored as monolithic
+
+The bucket's configuration is authoritative - as with mirroring and erasure coding, it is the single record of the bucket's intended storage layout. To change the layout, update the bucket properties first, then run the job.
 
 **Usage:**
 
 ```console
-$ ais rechunk BUCKET [--chunk-size SIZE] [--objsize-limit SIZE] [--prefix PREFIX]
+$ ais bucket rechunk BUCKET [--prefix PREFIX] [--sync-remote] [--wait]
 ```
 
 **Flags:**
-- `--chunk-size SIZE` - Size of each chunk (e.g., `16MiB`, `20mb`). Optional: if omitted, uses the bucket's current `chunk_size`
-- `--objsize-limit SIZE` - Object size threshold for chunking (e.g., `50MiB`, `100mb`); objects >= this size will be chunked. Optional: if omitted, uses the bucket's current `objsize_limit`
-- `--prefix PREFIX` - Only rechunk objects with the specified prefix (can also be embedded in the bucket URI)
+- `--prefix PREFIX` - Only rechunk objects with the specified prefix (can also be embedded in the bucket URI); useful for incremental conversion
+- `--sync-remote` - Also write rechunked objects back to the remote backend (buckets with remote backend only)
 - `--wait` - Wait for the job to complete before returning
 - `--wait-timeout DURATION` - Maximum time to wait (e.g., `5m`, `1h`)
 - `--yes, -y` - Assume 'yes' to all prompts (skip confirmation)
-
-> **Note:** If either size argument is missing, you will be prompted to confirm using the bucket's current configuration.
+- `--chunk-size SIZE`, `--objsize-limit SIZE` - **deprecated** in v5.1, planned for removal in v5.2; override the bucket's configuration for this job only (see [5.1 release notes](/docs/relnotes/5.1.md#deprecated-apis))
 
 **Examples:**
 
-Rechunk using the bucket's existing chunk configuration (prompts for confirmation):
+Change the bucket's chunking policy and convert existing objects:
 
 ```console
-$ ais rechunk ais://mybucket
+$ ais bucket props set ais://mybucket chunks.chunk_size=16MiB chunks.objsize_limit=50MiB
+$ ais bucket rechunk ais://mybucket
 Rechunk configuration:
 	chunk_size:     16MiB
 	objsize_limit:  50MiB
@@ -152,47 +153,24 @@ Proceed with these values? [Y/N]: y
 Started "rechunk" xaction "rechunk[aBc123]": ais://mybucket. To monitor, run 'ais show job aBc123'
 ```
 
-Rechunk with one explicit flag and one from bucket (prompts for confirmation):
+Convert incrementally, one prefix at a time:
 
 ```console
-$ ais rechunk ais://mybucket --chunk-size 32MiB
-Rechunk configuration:
-	chunk_size:     32MiB
-	objsize_limit:  50MiB
-Proceed with these values? [Y/N]: y
-Started "rechunk" xaction "rechunk[dEf456]": ais://mybucket. To monitor, run 'ais show job dEf456'
-```
-
-Rechunk all objects with both flags explicitly provided (no prompt):
-
-```console
-$ ais rechunk ais://mybucket --chunk-size 16MiB --objsize-limit 50MiB
-Started "rechunk" xaction "rechunk[gHi789]": ais://mybucket. To monitor, run 'ais show job gHi789'
-```
-
-Rechunk only objects with a specific prefix using embedded prefix in the URI:
-
-```console
-$ ais rechunk ais://mybucket/images/ --chunk-size 16MiB --objsize-limit 50MiB
+$ ais bucket rechunk ais://mybucket/images/ -y
 Started "rechunk" xaction "rechunk[mNo345]": ais://mybucket (prefix: "images/"). To monitor, run 'ais show job mNo345'
 ```
 
 Disable chunking and restore all objects as monolithic:
 
 ```console
-$ ais rechunk ais://mybucket --chunk-size 16MiB --objsize-limit 0
-```
-
-Wait for the rechunk job to complete:
-
-```console
-$ ais rechunk ais://mybucket --chunk-size 16MiB --objsize-limit 50MiB --wait
+$ ais bucket props set ais://mybucket chunks.objsize_limit=0
+$ ais bucket rechunk ais://mybucket -y --wait
 Done.
 ```
 
-> **Note**: Regardless of `objsize_limit` value (even when disabled), objects exceeding the bucket's `maxMonolithicSize` configuration will be automatically chunked at that size limit for performance and storage management reasons.
+> **Note**: Objects exceeding `chunks.max_monolithic_size` must remain chunked, using `chunks.chunk_size`, even when automatic chunking is otherwise disabled.
 
-> **See also**: [bucket properties](/docs/bucket.md), [`ais bucket props`](/docs/cli/bucket.md)
+> **See also**: [Chunking](/docs/storage_svcs.md#chunking), [bucket properties](/docs/bucket.md), [`ais bucket props`](/docs/cli/bucket.md)
 
 ## Stop job
 

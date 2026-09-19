@@ -1794,6 +1794,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 	case apc.ActRechunk:
 		// re-chunk bucket objects according to provided args
+		warnRechunkOverride(msg, bck)
 		if xid, err = p.bcastBckAction(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1840,6 +1841,23 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		debug.Assertf(xact.IsValidUUID(xid) || strings.IndexByte(xid, ',') > 0, "%q: %q", msg.Action, xid)
 	})
 	writeXid(w, xid)
+}
+
+// v5.1: per-request overrides of the bucket's chunks config are deprecated
+// (removal planned for v5.2; see docs/relnotes/5.1.md, "Deprecated APIs")
+func warnRechunkOverride(msg *apc.ActMsg, bck *meta.Bck) {
+	var (
+		args   apc.RechunkMsg
+		chunks = &bck.Props.Chunks
+	)
+	if err := cos.MorphMarshal(msg.Value, &args); err != nil {
+		return // targets will reject it
+	}
+	if (args.ChunkSize > 0 && args.ChunkSize != int64(chunks.ChunkSize)) || args.ObjSizeLimit != int64(chunks.ObjSizeLimit) {
+		nlog.Warningln(msg.Action, bck.Cname(""), "- deprecated per-request override of bucket's chunks config:",
+			"chunk_size", cos.IEC(args.ChunkSize, 0), "vs", cos.IEC(int64(chunks.ChunkSize), 0)+",",
+			"objsize_limit", cos.IEC(args.ObjSizeLimit, 0), "vs", cos.IEC(int64(chunks.ObjSizeLimit), 0))
+	}
 }
 
 // initTrySysBck initializes (or creates) a system bucket in BMD.

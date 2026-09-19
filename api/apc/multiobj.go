@@ -82,11 +82,19 @@ func (lrm *ListRange) Str(sb *cos.SB, isPrefix bool) {
 // case their version is revalidated against the backend.
 type PrefetchMsg struct {
 	ListRange
-	// Object-size threshold (bytes): objects larger than this are
-	// fetched via the blob downloader; smaller objects are fetched as
-	// a single cold GET. `0` selects the server default.
+	// Object-size threshold (bytes): objects at or above this size are
+	// eligible for the blob downloader; smaller objects use a regular
+	// cold GET. Zero disables blob-downloader selection.
+	//
+	// v5.2: with bucket auto-chunking enabled (`chunks.objsize_limit` > 0),
+	// blob download applies only at or above max(BlobThreshold, chunks.objsize_limit).
+	// Storage layout is determined by the bucket's `chunks` config regardless of
+	// fetch method (see docs/storage_svcs.md, "Chunking").
 	BlobThreshold int64 `json:"blob-threshold"` // +gen:optional
-	// Chunk size for blob-downloads started by prefetch
+	// Chunk size for blob-downloads started by prefetch.
+	//
+	// v5.2: honored only when bucket auto-chunking is disabled
+	// (`chunks.objsize_limit` == 0); otherwise ignored in favor of `chunks.chunk_size`.
 	BlobChunkSize int64 `json:"blob-chunk-size,omitempty"` // +gen:optional
 	// Number of workers for each blob-download started by prefetch; auto-computed when zero
 	BlobNumWorkers int `json:"blob-num-workers,omitempty"` // +gen:optional

@@ -17,10 +17,14 @@
 - [Data redundancy: summary of the available options (and considerations)](#data-redundancy-summary-of-the-available-options-and-considerations)
 - [Erasure-coding: with and without recovery](#erasure-coding-with-and-without-recovery)
   - [Example recovering lost or damaged slices and/or objects](#example-recovering-lost-or-damaged-slices-and-objects)
+- [Chunking](#chunking)
+  - [Storage layout](#storage-layout)
+  - [Rechunk](#rechunk)
+  - [Prefetch mechanism](#prefetch-mechanism)
 
 ## Storage Services
 
-By default, buckets inherit [global configuration](/deploy/dev/local/aisnode_config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
+By default, buckets inherit [global configuration](/deploy/dev/local/aisnode_config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, local mirroring, and chunking - please see the following sections for details.
 
 ### Notation
 
@@ -332,3 +336,57 @@ $ ais start ec-encode ais://abc --recover
 ##
 $ ais start ec-encode ais://abc --data-slices 8 --parity-slices 2
 ```
+
+## Chunking
+
+A bucket's `chunks` configuration determines how its objects are stored: as single contiguous files (monolithic) or as chunks described by a chunk manifest. As with [erasure coding](#erasure-coding) and [n-way mirroring](#n-way-mirror), the bucket configuration is the rule: it is the single record of the bucket's intended storage layout, and cluster-administrative jobs that operate on many objects converge the data to it rather than override it.
+
+The relevant properties are:
+
+| Property | Meaning |
+|---|---|
+| `chunks.objsize_limit` | Auto-chunking threshold; `0` disables auto-chunking (soft limit) |
+| `chunks.max_monolithic_size` | Maximum size of a monolithic object; cannot be disabled (hard limit) |
+| `chunks.chunk_size` | Chunk size used whenever the bucket's configuration requires chunking |
+
+Explicit per-object overrides remain supported: client-side multipart PUT, S3 multipart upload (stored using the client's part sizes), and a single-object blob download with an explicitly specified chunk size. Each is a deliberate, advanced choice scoped to one object.
+
+### Storage layout
+
+For a given object size:
+
+1. Above `chunks.max_monolithic_size`: chunked, with `chunks.chunk_size`.
+2. Otherwise, when auto-chunking is enabled and the size is at or above `chunks.objsize_limit`: chunked, with `chunks.chunk_size`.
+3. Otherwise: monolithic - except for the explicit per-object overrides above and the prefetch exception [below](#prefetch-mechanism).
+
+A layout rule is independent of how the object arrives. It applies equally to PUT, cold GET, copy, and rechunk.
+
+> **Status (v5.1):** rule 1 is enforced by PUT, cold GET, and copy; rechunk enforces it only for the objects it rewrites - an existing monolithic object above `chunks.max_monolithic_size` (e.g., after lowering it) is left as is. Rule 2 is currently enforced by rechunk only; PUT and cold GET do not yet auto-chunk at `chunks.objsize_limit`.
+
+### Rechunk
+
+`ais bucket rechunk` converges existing objects to the rules above. To change a bucket's layout, update its properties first, then run the job:
+
+```console
+$ ais bucket props set ais://abc chunks.chunk_size=16MiB chunks.objsize_limit=50MiB
+$ ais bucket rechunk ais://abc
+```
+
+The `--prefix` option restricts the job to a subset of objects, for incremental conversion - not to apply a different policy to part of the bucket.
+
+Per-job `--chunk-size` and `--objsize-limit` overrides are deprecated as of v5.1 and planned for removal in v5.2; see [v5.1 release notes](/docs/relnotes/5.1.md#deprecated-apis).
+
+### Prefetch mechanism
+
+Prefetch selects, per object, how to fetch it from the remote backend - a regular cold GET, or the blob downloader, which retrieves byte ranges in parallel. The prefetch `blob-threshold` expresses that intent; it does not prescribe storage layout.
+
+Planned for v5.2:
+
+- `blob-threshold` == 0: regular cold GET.
+- With bucket auto-chunking enabled: blob download only at or above max(`blob-threshold`, `chunks.objsize_limit`), using `chunks.chunk_size`.
+- With auto-chunking disabled: blob download at or above `blob-threshold`, producing a chunked object; the job warns once.
+- A regular cold GET can still store the result chunked when the [storage layout](#storage-layout) rules require it.
+
+The third case is a deliberate exception to rule 3. A `chunks.objsize_limit` of zero does express a layout preference - automatic writes remain monolithic - but reassembling parallel-fetched ranges into a monolithic file degrades performance. Prefetch therefore keeps the chunked result, uses the prefetch `blob-chunk-size` (or the blob-downloader default), and suggests `ais bucket rechunk`, which restores such objects to monolithic form per the bucket's configuration.
+
+> **Status (v5.1):** prefetch uses the blob downloader at or above `blob-threshold` regardless of bucket configuration, with `blob-chunk-size` or the blob-downloader default.

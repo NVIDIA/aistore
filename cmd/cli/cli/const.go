@@ -1083,10 +1083,16 @@ var (
 		Usage: "Chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
 	}
 
-	// usage: rechunk
+	// usage: rechunk (both deprecated in v5.1, planned for removal in v5.2)
 	objSizeLimitFlag = cli.StringFlag{
-		Name:  "objsize-limit",
-		Usage: "Object size threshold for chunking in IEC or SI units (e.g.: 50MiB, 100mb); objects >= this size will be chunked",
+		Name: "objsize-limit",
+		Usage: "[Deprecated] override bucket's 'chunks.objsize_limit' for this job only (e.g.: 50MiB, 100mb);\n" +
+			indent4 + "\tinstead, set bucket property and run rechunk (see 'ais bucket props set --help')",
+	}
+	rechunkChunkSizeFlag = cli.StringFlag{
+		Name: "chunk-size",
+		Usage: "[Deprecated] override bucket's 'chunks.chunk_size' for this job only (e.g.: 16MiB, 64mb);\n" +
+			indent4 + "\tinstead, set bucket property and run rechunk (see 'ais bucket props set --help')",
 	}
 	syncRemoteFlag = cli.BoolFlag{
 		Name: "sync-remote",

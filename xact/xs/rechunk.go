@@ -176,8 +176,8 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 		params.WorkTag = fs.WorkfilePut
 		params.Xact = r
 		params.Reader = lh
-		// NOTE: if chunkSize == 0 (chunk disabled) but size > config.MaxMonolithicSize,
-		// it will trigger the underlying `poi.chunk(config.MaxMonolithicSize)`
+		// NOTE: if chunkSize == 0 (restore monolithic) but size > chunks.max_monolithic_size,
+		// the underlying PUT keeps it chunked with `chunks.chunk_size` (see putObject)
 		params.Size = size
 		params.OWT = cmn.OwtChunks
 		params.Atime = lom.Atime()
