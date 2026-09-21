@@ -637,7 +637,7 @@ func TestDownloadStatus(t *testing.T) {
 
 	var (
 		shortFileName = "shortFile"
-		longFileName  = tools.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
+		longFileName  = tools.GenerateObjectNameForTarget(shortFileName, "longFile", bck, m.smap, false /*wantSameTarget*/)
 	)
 
 	// NOTE Dec 1/23: gs://nvdata-openimages started to return 403

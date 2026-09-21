@@ -1854,8 +1854,6 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	if err := dst.InitBck(coi.BckTo); err != nil {
 		return xs.CoiRes{Err: err}
 	}
-	dstMaxMonoSize := dst.Bprops().Chunks.MaxMonolithicSize
-
 	switch {
 	// no-op
 	case coi.isNOP(lom, dst, dm):
@@ -1877,16 +1875,11 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op (resilvering with a single mountpath?)")
 		}
-	case lom.Bprops().Chunks.MaxMonolithicSize != dstMaxMonoSize && lom.Lsize() > int64(dstMaxMonoSize):
-		// source and destination buckets have different chunks config => rechunk if the source exceeds the destination's limit
-		res = coi._chunk(t, lom, dst, int64(dst.Bprops().Chunks.ChunkSize))
 	default:
 		// fast path: destination is _this_ target
 		// (note coi.send(=> another target) above)
 		lcopy := lom.Uname() == dst.Uname() // n-way copy
-		lom.Lock(lcopy)
 		res = coi._regular(t, lom, dst, lcopy)
-		lom.Unlock(lcopy)
 	}
 
 	return res
@@ -1975,13 +1968,15 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
+	// TODO: propagate resp.OAH.Lsize() and enforce the destination's hard limit
+	// in this GetROC/ETL path, with coverage separate from regular object copy.
 	poi := allocPOI()
 	defer freePOI(poi)
 	{
 		poi.t = t
 		poi.lom = dst
 		poi.config = coi.Config
-		poi.r = resp.R
+		poi.r = resp.R      // transfer ownership; Close may release GetROC's source rlock
 		poi.xctn = coi.Xact // on behalf of
 		poi.workFQN = dst.GenFQN(fs.WorkCT, "copy-dp")
 		poi.atime = resp.OAH.AtimeUnix()
@@ -2008,12 +2003,22 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core
 }
 
 func (coi *coi) _regular(t *target, lom, dst *core.LOM, lcopy bool) (res xs.CoiRes) {
+	lom.Lock(lcopy)
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		lom.Unlock(lcopy)
 		if !cos.IsNotExist(err) {
 			err = cmn.NewErrFailedTo(t, "coi-load", lom.Cname(), err)
 		}
 		return xs.CoiRes{Err: err}
 	}
+
+	// TODO: same-Uname copies need a dedicated lock handoff before manifest completion
+	if lom.Lsize() > int64(dst.Bprops().Chunks.MaxMonolithicSize) {
+		lom.Unlock(lcopy) // _chunk acquires its own read lock via GetROC
+		return coi._chunk(t, lom, dst, int64(dst.Bprops().Chunks.ChunkSize))
+	}
+
+	defer lom.Unlock(lcopy)
 
 	// w-lock the destination unless already locked (above)
 	if !lcopy {
@@ -2047,6 +2052,7 @@ func (coi *coi) _chunk(t *target, lom, dst *core.LOM, dstChunkSize int64) (res x
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
+	defer cos.Close(resp.R) // releases the source rlock acquired by GetROC
 	poi := allocPOI()
 	defer freePOI(poi)
 	{
@@ -2167,6 +2173,9 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		cos.Close(sargs.reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", errN)
 	}
+	// HreqArgs cannot infer BodyR length; propagate it explicitly for correct
+	// HTTP framing and size-dependent handling by the destination PUT.
+	req.ContentLength = size
 
 	// intra-cluster call on the public handler: consistent policy involves:
 	// - setting respective system headers

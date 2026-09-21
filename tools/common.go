@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -46,8 +46,9 @@ func WaitForCondition(condition func() bool, opts WaitRetryOpts) error {
 	}
 }
 
-// Generates an object name that hashes to a different target than `baseName`.
-func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bck, smap *meta.Smap) string {
+// GenerateObjectNameForTarget returns a name that HRW maps to either the same or
+// a different target than baseName, as requested by wantSameTarget.
+func GenerateObjectNameForTarget(baseName, newNamePrefix string, bck cmn.Bck, smap *meta.Smap, wantSameTarget bool) string {
 	// Init digests - HrwTarget() requires it
 	smap.InitDigests()
 
@@ -58,12 +59,15 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bc
 	newNameHrw, e2 := smap.HrwName2T(cbck.MakeUname(newName))
 	cos.Assert(e1 == nil && e2 == nil)
 
-	for i := 0; baseNameHrw == newNameHrw; i++ {
+	for i := 0; ; i++ {
+		isSameTarget := baseNameHrw == newNameHrw
+		if isSameTarget == wantSameTarget { // placement matches
+			return newName
+		}
 		newName = newNamePrefix + strconv.Itoa(i)
 		newNameHrw, e1 = smap.HrwName2T(cbck.MakeUname(newName))
 		cos.AssertNoErr(e1)
 	}
-	return newName
 }
 
 func GenerateNonexistentBucketName(prefix string, bp api.BaseParams) (string, error) {

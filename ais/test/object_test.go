@@ -344,6 +344,101 @@ func TestCopyObject(t *testing.T) {
 	}
 }
 
+func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
+	const (
+		objSize   = int64(cos.GiB + 1)
+		chunkSize = int64(128 * cos.MiB)
+		srcName   = "legacy"
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
+	expectedChunks := int(cos.DivCeil(objSize, chunkSize))
+
+	// Create a temporary bucket and restore its original chunk configuration on cleanup.
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	bck := cmn.Bck{Name: "copy-hard-limit-" + trand.String(8), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	orig, err := api.HeadBucket(bp, bck, true /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+			ObjSizeLimit:      apc.Ptr(orig.Chunks.ObjSizeLimit),
+			MaxMonolithicSize: apc.Ptr(orig.Chunks.MaxMonolithicSize),
+			ChunkSize:         apc.Ptr(orig.Chunks.ChunkSize),
+		}})
+		tassert.CheckError(t, err)
+	})
+
+	// Disable auto-chunking and set the hard limit above objSize, so the initial PUT is monolithic.
+	_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+		ObjSizeLimit:      apc.Ptr(cos.SizeIEC(0)),
+		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(2 * cos.GiB)),
+		ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
+	}})
+	tassert.CheckFatal(t, err)
+
+	// PUT a 1GiB+1 object and confirm its initial monolithic layout.
+	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumOneXxh})
+	tassert.CheckFatal(t, err)
+	defer r.Close()
+	tools.PutObject(t, bck, srcName, r, uint64(objSize))
+
+	props := apc.JoinProps(apc.GetPropsSize, apc.GetPropsChunked)
+	src, err := api.HeadObjectV2(bp, bck, srcName, props, api.HeadArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, src.Size == objSize, "expected source size %d, got %d", objSize, src.Size)
+	tassert.Fatalf(t, src.Chunks != nil && src.Chunks.ChunkCount == 0,
+		"expected monolithic source, got %+v", src.Chunks)
+
+	// Lowering the hard limit changes policy for future writes; it does not rewrite existing objects.
+	_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(cos.GiB)),
+	}})
+	tassert.CheckFatal(t, err)
+	src, err = api.HeadObjectV2(bp, bck, srcName, props, api.HeadArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, src.Chunks != nil && src.Chunks.ChunkCount == 0,
+		"expected existing source to remain monolithic, got %+v", src.Chunks)
+
+	// Exercise both copy paths by selecting destination names whose HRW target is known.
+	smap := tools.GetClusterMap(t, proxyURL)
+	for _, test := range []struct {
+		name       string
+		sameTarget bool
+	}{
+		{name: "same-target", sameTarget: true},
+		{name: "cross-target"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if !test.sameTarget && smap.CountActiveTs() < 2 {
+				t.Skip("cross-target copy requires at least two active targets")
+			}
+			dstName := tools.GenerateObjectNameForTarget(srcName, test.name+"-copied", bck, smap, test.sameTarget)
+
+			// COPY is a new write and must apply the current 1GiB hard limit and configured chunk size.
+			err := api.CopyObject(bp, &api.CopyArgs{
+				FromBck: bck, FromObjName: srcName, ToBck: bck, ToObjName: dstName,
+			})
+			tassert.CheckFatal(t, err)
+
+			srcLock, err := api.CheckObjectLock(bp, bck, srcName)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, srcLock == apc.LockNone, "expected source to be unlocked, got lock %d", srcLock)
+			dstLock, err := api.CheckObjectLock(bp, bck, dstName)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, dstLock == apc.LockNone, "expected destination to be unlocked, got lock %d", dstLock)
+
+			dst, err := api.HeadObjectV2(bp, bck, dstName, props, api.HeadArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, dst.Size == objSize, "expected destination size %d, got %d", objSize, dst.Size)
+			tassert.Fatalf(t, dst.Chunks != nil && dst.Chunks.ChunkCount == expectedChunks,
+				"expected %d destination chunks, got %+v", expectedChunks, dst.Chunks)
+			tassert.Fatalf(t, dst.Chunks.MaxChunkSize == chunkSize,
+				"expected maximum chunk size %d, got %d", chunkSize, dst.Chunks.MaxChunkSize)
+		})
+	}
+}
+
 func TestSameBucketName(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
