@@ -520,7 +520,7 @@ func (p *params) validate() error {
 		return fmt.Errorf("invalid option: PUT percent %d", p.putPct)
 	}
 	if p.updateExistingPct < 0 || p.updateExistingPct > 100 {
-		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.putPct)
+		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.updateExistingPct)
 	}
 
 	if p.multipartChunks < 0 {

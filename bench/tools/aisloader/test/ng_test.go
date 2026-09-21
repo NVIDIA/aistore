@@ -5,7 +5,6 @@
 package test_test
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"reflect"
@@ -25,16 +24,11 @@ const (
 var objNames []string
 
 func TestMain(m *testing.M) {
-	flag.Parse()
-	if testing.Short() {
-		fmt.Println("skipping bench/tools/aisloader/namegetter in short mode")
-		os.Exit(0)
-	}
 	objNames = make([]string, objNamesSize)
 	for i := range objNamesSize {
 		objNames[i] = fmt.Sprintf("test-%d", i)
 	}
-	m.Run()
+	os.Exit(m.Run())
 }
 
 //

@@ -247,7 +247,7 @@ authn-deploy: ## Build and deploy AuthN
 #
 # tests
 #
-.PHONY: test-bench test-aisloader test-envcheck test-short test-long test-run test-docker test
+.PHONY: test-bench test-aisloader test-aisloader-unit test-envcheck test-short test-long test-run test-docker test
 
 # Target for benchmark tests
 test-bench: ## Run benchmarking tests
@@ -272,6 +272,9 @@ test-long: test-envcheck ## Run all integration tests
 
 test-aisloader:
 	@./bench/tools/aisloader/test/ci-test.sh $(FLAGS)
+
+test-aisloader-unit:
+	@go test -count=1 -tags=debug ./bench/tools/aisloader/...
 
 test-run: test-envcheck # runs tests matching a specific regex
 ifeq ($(RE),)

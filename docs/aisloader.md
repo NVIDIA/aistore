@@ -27,6 +27,7 @@ To integrate aisloader with Prometheus-based observability stacks, run the offic
 **Table of Contents**
 
 - [Setup](#setup)
+- [Testing](#testing)
 - [Command Line Options](#command-line-options)
   - [Quick Reference (Alphabetical)](#quick-reference-alphabetical)
   - [Command Line Options Grouped by Category](#command-line-options-grouped-by-category)
@@ -68,6 +69,14 @@ For usage, run: `aisloader`, `aisloader usage`, or `aisloader --help`.
 For usage examples and extended commentary, see also:
 
 * https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/test/ci-test.sh
+
+## Testing
+
+Run the unit tests:
+
+```console
+$ make test-aisloader-unit
+```
 
 ## Command Line Options
 
