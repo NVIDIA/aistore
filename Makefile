@@ -73,7 +73,7 @@ endif
 #    Example: Find races and log reports to `/tmp/race/report`.
 #    $ GORACE='log_path=/tmp/race/report' make deploy
 #    or
-#    $ GORACE='log_path=/tmp/race' MODE=debug make test-aisloader
+#    $ GORACE='log_path=/tmp/race' make aisloader && GORACE='log_path=/tmp/race' DURATION=2m make test-aisloader
 #
 # 2. Go Compiler Flags (gcflags):
 #    Pass flags directly to the Go compiler.
@@ -273,11 +273,11 @@ test-long: test-envcheck ## Run all integration tests
 	@RE="$(RE)" BUCKET="$(BUCKET)" NUM_CHUNKS="$(NUM_CHUNKS)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 	@cd $(BUILD_DIR)/cli && go test -v -tags=debug ./...
 
-test-aisloader:
-	@./bench/tools/aisloader/test/ci-test.sh $(FLAGS)
-
-test-aisloader-unit:
+test-aisloader-unit: ## Run aisloader unit tests
 	@go test -count=1 -tags=debug ./bench/tools/aisloader/...
+
+test-aisloader: ## Run aisloader E2E tests against a running cluster
+	@RE="^TestAISLoader" TEST_TAGS="aisloader $(TEST_TAGS)" BUCKET="$(BUCKET)" TESTS_DIR="bench/tools/aisloader/test" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-run
 
 test-run: test-envcheck # runs tests matching a specific regex
 ifeq ($(RE),)
@@ -389,7 +389,7 @@ help:
 		"MEM_PROFILE=/tmp/mem make deploy" "Deploy cluster with memory profiling enabled, write reports to /tmp/mem.<PID> (and make sure to stop gracefully)" \
 		"CPU_PROFILE=/tmp/cpu make deploy" "Build and deploy cluster instrumented for CPU profiling, write reports to /tmp/cpu.<PID>" \
 		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally" \
-		"GORACE='log_path=/tmp/race' make aisloader test-aisloader" "Build and test aisloader with race detection" \
+		"GORACE='log_path=/tmp/race' make aisloader && GORACE='log_path=/tmp/race' DURATION=2m make test-aisloader" "Build and test aisloader with race detection" \
 
 .PHONY: api-docs-website
 

@@ -375,7 +375,7 @@ test:short:v5.1:
 
 test:short:aisloader:
   <<: *test_short_def
-  timeout: 20m
+  timeout: 10m
   rules:
     - !reference [.test_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
@@ -385,7 +385,7 @@ test:short:aisloader:
   script:
     - make aisloader
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
-    - FLAGS="--duration=2m" make test-aisloader
+    - DURATION=20s make test-aisloader
 
 test:short:python-changelog-check:
   <<: *test_short_def
@@ -784,9 +784,10 @@ test:long:aisloader:
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
   script:
+    - make aisloader
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - sleep 10 # make sure that cluster properly starts
-    - FLAGS="--duration=5m" make test-aisloader
+    - DURATION=1m make test-aisloader
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
@@ -968,11 +969,11 @@ test:long:k8s:single-target:
 
 test:long:k8s:aisloader:
   extends: .test_k8s_long_template
-  timeout: 15m
+  timeout: 20m
   script:
     - sleep 10 # Give some time for the cluster to stabilize.
     - make aisloader
-    - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader
+    - DURATION=20s BUCKET="ais://test" make test-aisloader
 
 test:long:k8s:pyaisloader:
   extends: .test_k8s_long_template

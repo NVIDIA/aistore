@@ -66,17 +66,22 @@ $ make aisloader
 
 For usage, run: `aisloader`, `aisloader usage`, or `aisloader --help`.
 
-For usage examples and extended commentary, see also:
-
-* https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/test/ci-test.sh
-
 ## Testing
 
-Run the unit tests:
+The end-to-end tests require a running cluster. To deploy one locally, see [Local Playground](/docs/getting_started.md#local-playground). The ETL test additionally requires an ETL-enabled Kubernetes cluster. To deploy one locally, follow [Local K8s Deployment](/deploy/dev/k8s/README.md#deploy-aistore) using `make etl`, and set `AIS_ENDPOINT` as shown there.
 
 ```console
-$ make test-aisloader-unit
+$ make aisloader                      # rebuild the binary the end-to-end tests run (from PATH)
+$ make test-aisloader-unit            # unit tests (no cluster needed)
+$ make test-aisloader                 # end-to-end tests
+$ TEST_TAGS=etl make test-aisloader   # plus the ETL test
 ```
+
+Environment variables:
+
+* `AIS_ENDPOINT`: Cluster endpoint (default: `http://localhost:8080`).
+* `BUCKET`: Bucket to test against (default: a new `ais://` bucket, destroyed afterward). For an existing bucket, only the objects the tests create are deleted.
+* `DURATION`: Base run time per stage (default: `20s`).
 
 ## Command Line Options
 
@@ -104,7 +109,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -dry-run | `bool` | Show the entire set of parameters that aisloader will use when actually running | `false` |
 | -duration | `duration` | Benchmark duration (0 - run forever or until Ctrl-C). If not specified and totalputsize > 0, runs until totalputsize reached | `1m` |
 | -epochs | `int` | Number of "epochs" to run whereby each epoch entails full pass through the entire listed bucket | `0` |
-| -etl | `string` | Built-in ETL, one of: `tar2tf`, `md5`, or `echo`. Each object that aisloader GETs undergoes the selected transformation | `""` |
+| -etl | `string` | Built-in ETL, one of: `transformer-echo`, `tar2tf`, `transformer-md5`, or `parquet-parser`. Each object that aisloader GETs undergoes the selected transformation | `""` |
 | -etl-spec | `string` | Custom ETL runtime specification (pathname) | `""` |
 | -evict-batchsize | `int` | Batch size to list and evict the next batch of remote objects | `1000` |
 | -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
@@ -268,7 +273,7 @@ For the most recently updated command-line options and examples, please run `ais
 
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
-| -etl | `string` | Built-in ETL, one of: `tar2tf`, `md5`, or `echo`. Each object that aisloader GETs undergoes the selected transformation | `""` |
+| -etl | `string` | Built-in ETL, one of: `transformer-echo`, `tar2tf`, `transformer-md5`, or `parquet-parser`. Each object that aisloader GETs undergoes the selected transformation | `""` |
 | -etl-spec | `string` | Custom ETL runtime specification (pathname) | `""` |
 
 #### Fleet Coordination (`loaderParams`)

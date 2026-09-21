@@ -133,7 +133,7 @@ type (
 
 	// ETL (Extract, Transform, Load) configuration
 	etlParams struct {
-		etlName     string // predefined ETL to apply (e.g., 'tar2tf', 'md5', 'echo')
+		etlName     string // predefined ETL to apply (e.g., 'tar2tf', 'transformer-md5', 'transformer-echo')
 		etlSpecPath string // custom ETL spec file path
 	}
 
@@ -284,7 +284,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.IntVar(&p.mpdStreamPct, "pctmpdstream", 0, "percentage of GET operations that use multipart download stream (0-100)")
 
 	// ============ ETL ============
-	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
+	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'transformer-echo', 'tar2tf', 'transformer-md5', 'parquet-parser'")
 	f.StringVar(&p.etlSpecPath, "etl-spec", "", "path to an ETL spec to be applied to each object on GET request.")
 
 	// ============ Loader instance ============
