@@ -38,7 +38,7 @@ const (
 	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/main/docs/troubleshooting.md]"
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
-	FmtErrBackwardCompat = "%v (backward compatibility is supported only one version back, e.g. 3.9 => 3.10)"
+	FmtErrBackwardCompat = "%v (upgrade through a supported intermediate release or restore matching metadata)"
 
 	fmtErrFailedTo = "%s: failed to %s %s, err: %v" // (ErrFailedTo)
 

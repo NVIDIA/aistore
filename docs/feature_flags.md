@@ -52,7 +52,6 @@ The validation occurs both at the cluster level and when setting bucket properti
 
 | name | tags | comment |
 | --- | --- | ------- |
-| `Enforce-IntraCluster-Access` | `security` | Deprecated: use auth.intra_cluster to secure intra-cluster communications |
 | `Skip-Loading-VersionChecksum-MD(*)` | `perf,integrity-` | skip loading existing object's metadata, Version and Checksum (VC) in particular |
 | `Do-not-Auto-Detect-FileShare` | `promote,ops` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
 | `S3-API-via-Root` | `s3,compat,ops` | handle S3 requests via `aistore-hostname/` (whereby the default: `aistore-hostname/s3`) |
@@ -87,7 +86,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 ```console
 $ ais config cluster features <TAB-TAB>
 
-Enforce-IntraCluster-Access            Do-not-Optimize-Listing-Virtual-Dirs   Force-Container-CPU-Mem
+Do-not-Optimize-Listing-Virtual-Dirs   Force-Container-CPU-Mem
 Skip-Loading-VersionChecksum-MD        Disable-Cold-GET                       Resume-Interrupted-MPU
 Do-not-Auto-Detect-FileShare           Streaming-Cold-GET                     Keep-Unknown-FQN
 S3-API-via-Root                        S3-Reverse-Proxy                       Load-Balance-GET
@@ -110,7 +109,6 @@ features         Skip-Loading-VersionChecksum-MD
                  Load-Balance-GET
 
 FEATURE                              TAGS                   DESCRIPTION
-Enforce-IntraCluster-Access          security               Deprecated: use auth.intra_cluster to secure intra-cluster communications
 Skip-Loading-VersionChecksum-MD      perf,integrity-        (*) skip loading existing object's metadata, Version and Checksum (VC) in particular              <<< colored
 Do-not-Auto-Detect-FileShare         promote,ops            do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS
 S3-API-via-Root                      s3,compat,ops          handle s3 requests via `aistore-hostname/` (default: `aistore-hostname/s3`)                       <<< colored
@@ -158,7 +156,6 @@ features         Skip-Loading-VersionChecksum-MD
                  Load-Balance-GET
 
 FEATURE                              TAGS                   DESCRIPTION
-Enforce-IntraCluster-Access          security               Deprecated: use auth.intra_cluster to secure intra-cluster communications
 Skip-Loading-VersionChecksum-MD      perf,integrity-        (*) skip loading existing object's metadata, Version and Checksum (VC) in particular               <<< colored
 Do-not-Auto-Detect-FileShare         promote,ops            do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS
 S3-API-via-Root                      s3,compat,ops          handle s3 requests via `aistore-hostname/` (default: `aistore-hostname/s3`)                        <<< colored

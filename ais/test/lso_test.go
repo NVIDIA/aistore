@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
@@ -1148,11 +1147,7 @@ func TestLsoLocalGetLocation(t *testing.T) {
 		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(lst.Entries))
 	}
 
-	j := 10
-	if len(lst.Entries) >= 200 {
-		j = 100
-	}
-	for i, e := range lst.Entries {
+	for _, e := range lst.Entries {
 		if e.Location == "" {
 			t.Fatalf("[%#v]: location is empty", e)
 		}
@@ -1172,22 +1167,6 @@ func TestLsoLocalGetLocation(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		if uint64(oah.Size()) != m.fileSize {
 			t.Errorf("Expected filesize: %d, actual filesize: %d\n", m.fileSize, oah.Size())
-		}
-
-		if i%j == 0 {
-			if i == 0 {
-				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
-			}
-			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.String()})
-			t.Cleanup(func() {
-				tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
-			})
-
-			_, err = api.GetObject(baseParams, m.bck, e.Name, nil)
-			if err == nil {
-				tlog.Logln("Warning: expected error, got nil")
-			}
-			tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 		}
 	}
 
@@ -1246,11 +1225,7 @@ func TestLsoCloudGetLocation(t *testing.T) {
 	if len(lst.Entries) < m.num {
 		t.Errorf("Bucket %s has %d objects, expected %d", m.bck.String(), len(lst.Entries), m.num)
 	}
-	j := 10
-	if len(lst.Entries) >= 200 {
-		j = 100
-	}
-	for i, e := range lst.Entries {
+	for _, e := range lst.Entries {
 		if e.Location == "" {
 			t.Fatalf("[%#v]: location is empty", e)
 		}
@@ -1270,20 +1245,6 @@ func TestLsoCloudGetLocation(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		if uint64(oah.Size()) != m.fileSize {
 			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", m.fileSize, oah.Size())
-		}
-
-		if i%j == 0 {
-			if i == 0 {
-				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
-			}
-			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.String()})
-			_, err = api.GetObject(baseParams, m.bck, e.Name, nil)
-
-			if err == nil {
-				tlog.Logln("Warning: expected error, got nil")
-			}
-
-			tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 		}
 	}
 

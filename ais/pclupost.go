@@ -536,12 +536,8 @@ func (c *clupost) adminJoinHandshake() (int, error) {
 		} else {
 			err = res.errorf("%s: failed to %s %s: %v", p.si, c.apiOp, nsi.StringEx(), res.err)
 		}
-	} else {
-		nversStr := res.header.Get(apc.HdrNodeVersion)
-		if nversStr == "" {
-			nlog.Warningf("%s: admin-joining %s did not advertise %s (pre-5.0?)",
-				p, nsi.StringEx(), apc.HdrNodeVersion)
-		}
+	} else if err = checkNodeVer(p.String(), nsi.StringEx(), res.header.Get(apc.HdrNodeVersion)); err != nil {
+		status = http.StatusConflict
 	}
 	freeCargs(cargs)
 	freeCR(res)

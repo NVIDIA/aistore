@@ -27,7 +27,7 @@ const (
 const RestartRequired = ForceContainerCPUMem | SystemReservedKTLS
 
 const (
-	EnforceIntraClusterAccess = Flags(1 << iota) // Deprecated: use auth.intra_cluster to secure intra-cluster communications
+	reservedBit0 = Flags(1 << iota) // bit 0 reserved since v5.1
 
 	SkipVC                    // skip loading existing object's metadata, Version and Checksum (VC) in particular (advanced usage only)
 	DontAutoDetectFshare      // do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS
@@ -60,7 +60,7 @@ const (
 )
 
 var Cluster = [...]string{
-	"Enforce-IntraCluster-Access",
+	"reserved", // bit 0 reserved since v5.1
 	"Skip-Loading-VersionChecksum-MD",
 	"Do-not-Auto-Detect-FileShare",
 	"S3-API-via-Root",
@@ -109,6 +109,7 @@ var Bucket = [...]string{
 
 // as cmn.Validator and cmn.PropsValidator
 func (f *Flags) Validate() error {
+	*f &^= reservedBit0
 	if f.IsSet(DisableColdGET) && f.IsSet(StreamingColdGET) {
 		return fmt.Errorf("feature flags %q and %q are mutually exclusive", DisableColdGET.name(), StreamingColdGET.name())
 	}
@@ -147,6 +148,9 @@ func CSV2Feat(s string) (Flags, error) {
 		return 0, nil
 	}
 	for i, name := range Cluster {
+		if i == 0 { // bit 0 reserved since v5.1
+			continue
+		}
 		if s == name {
 			return 1 << i, nil
 		}
@@ -156,6 +160,9 @@ func CSV2Feat(s string) (Flags, error) {
 
 func (f Flags) name() string {
 	for i, n := range Cluster {
+		if i == 0 { // bit 0 reserved since v5.1
+			continue
+		}
 		if f&(1<<i) != 0 {
 			return n
 		}
@@ -168,6 +175,9 @@ func (f Flags) Names() (names []string) {
 		return names
 	}
 	for i, name := range Cluster {
+		if i == 0 { // bit 0 reserved since v5.1
+			continue
+		}
 		if f&(1<<i) != 0 {
 			names = append(names, name)
 		}
@@ -177,6 +187,9 @@ func (f Flags) Names() (names []string) {
 
 func (f Flags) ClearName(n string) Flags {
 	for i, name := range Cluster {
+		if i == 0 { // bit 0 reserved since v5.1
+			continue
+		}
 		if name == n {
 			of := Flags(1 << i)
 			return f &^ of

@@ -88,9 +88,8 @@ const (
 	revsConfTag  = "Conf"
 	revsTokenTag = "token"
 	revsEtlMDTag = "EtlMD"
-	revsCSKTag   = "csk" // obsolete & removed in 5.0; keeping for an unlikely mixed-version case
 
-	revsMaxTags   = 7         // NOTE
+	revsMaxTags   = 6         // NOTE
 	revsActionTag = "-action" // prefix revs tag
 )
 

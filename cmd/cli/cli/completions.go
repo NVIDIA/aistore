@@ -46,7 +46,7 @@ var (
 		// access
 		cmn.PropBucketAccessAttrs: apc.SupportedPermissions(),
 		// feature flags
-		clusterFeatures: append(feat.Cluster[:], apc.ResetToken),
+		clusterFeatures: append(feat.Cluster[1:], apc.ResetToken), // bit 0 reserved since v5.1
 		bucketFeatures:  append(feat.Bucket[:], apc.ResetToken),
 		// rest
 		"write_policy.data":                   apc.SupportedWritePolicy[:],

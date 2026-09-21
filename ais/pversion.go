@@ -20,13 +20,13 @@ import (
 // when the former != primary's.
 // Rules:
 // - absence from the map means: same version as primary (matches are deleted).
-// - empty "" is stored on purpose, not skipped: a pre-5.0 node sends no Ais-Node-Version
 // - trust Smap first; entries in verMismatch are not pruned on membership events.
 // - empty/nil map == same-version satisfied
-// - self-join is supported, admin-join is not
-// First intended usage: transition 4.7 => 5.0
+// - self-join only (admin-join enforces the version boundary but is not tracked)
+// - callers must enforce the version boundary first (see checkNodeVer)
 
 func (p *proxy) noteNodeVersion(nsi *meta.Snode, nverStr string, nversParsed cos.Version) {
+	debug.Assert(nverStr != "", nsi) // boundary enforced prior to tracking
 	primary := p.primary()
 	if nverStr == cmn.VersionAIStore { // exact match (including rc suffix, if exists)
 		primary.reg.mtv.Lock()
@@ -47,10 +47,10 @@ func (p *proxy) noteNodeVersion(nsi *meta.Snode, nverStr string, nversParsed cos
 	}
 
 	old := primary.reg.verMismatch[nsi.ID()]
-	primary.reg.verMismatch[nsi.ID()] = nverStr // keep pre-5.0 "" as-is
+	primary.reg.verMismatch[nsi.ID()] = nverStr
 	primary.reg.mtv.Unlock()
 
-	if old != nverStr && nverStr != "" { // empty nverStr tracked but not warned (4.x => 5.x transition)
+	if old != nverStr {
 		_warnNodeVer(nsi, nverStr, nversParsed)
 	}
 }
@@ -84,7 +84,7 @@ func checkPrimVer(sname string, hdr http.Header) error {
 	return nil
 }
 
-// node 4.x => primary 5.x (self)
+// joining node => primary (self-join or admin-join)
 func checkNodeVer(pname, sname, nversStr string) error {
 	reject := enforceVerBoundary(nversStr)
 	if reject {
@@ -93,7 +93,9 @@ func checkNodeVer(pname, sname, nversStr string) error {
 	return nil
 }
 
-// TODO: [backward compatibility] remove after 4.x clusters will have fully phased out.
+// Version boundary: v5.0 was the mandatory bridge release; 5.1+ refuses pre-5.0 peers in both directions.
+// Pre-5.0 nodes do not send apc.HdrNodeVersion - hence, empty is rejected.
+// Keep in place to fail a skipped-bridge upgrade (4.x => 5.1+) with a specific error.
 
 const (
 	uptip = "(tip: direct upgrade from 4.x to 5.x is not supported; upgrade the cluster to 5.0 first)"

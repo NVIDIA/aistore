@@ -25,7 +25,7 @@ const (
 )
 
 var clusterFeatDesc = [...]string{
-	"Deprecated: use auth.intra_cluster to secure intra-cluster communications",
+	"reserved", // bit 0 reserved since v5.1
 	"skip loading existing object's metadata, Version and Checksum (VC) in particular (advanced usage only)",
 	"do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS",
 	"handle s3 requests via `aistore-hostname/` (default: `aistore-hostname/s3`)",
@@ -60,7 +60,6 @@ var clusterFeatDesc = [...]string{
 
 // best-effort tags to group features in help output
 var featTags = map[string]string{
-	"Enforce-IntraCluster-Access":          "security",
 	"Skip-Loading-VersionChecksum-MD":      "perf,integrity-",
 	"Do-not-Auto-Detect-FileShare":         "promote,ops",
 	"S3-API-via-Root":                      "s3,compat,ops",
@@ -100,6 +99,9 @@ func printFeatVerbose(c *cli.Context, flags feat.Flags, scopeBucket bool) error 
 
 func _flattenFeat(flags feat.Flags, scopeBucket bool) (flat nvpairList) {
 	for i, f := range feat.Cluster {
+		if i == 0 { // bit 0 reserved since v5.1
+			continue
+		}
 		if scopeBucket && !feat.IsBucketScope(f) {
 			continue
 		}
