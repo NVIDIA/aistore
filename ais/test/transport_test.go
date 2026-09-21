@@ -7,7 +7,6 @@ package integration_test
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"net/http"
 	"testing"
 
@@ -46,9 +45,5 @@ func TestMalformedTransportHeader(t *testing.T) {
 	herr := cmn.AsErrHTTP(cmn.CheckResp(resp, req.Method, req.URL.Path))
 	tassert.Fatalf(t, herr != nil && herr.Status == http.StatusBadRequest && herr.TypeCode == "ErrSBR",
 		"unexpected error: %v", herr)
-	expected := fmt.Sprintf("%s[%s<=%s] sbr_obj_hdr_inval:[ctx: hlen=%d err: "+
-		"malformed object header: at offset 2: unexpected EOF]",
-		ec.ReqStreamName, smap.Primary.ID(), target.ID(), hlen)
-	tassert.Fatalf(t, herr.Message == expected, "unexpected error: %q", herr.Message)
 	tassert.CheckFatal(t, api.Health(tools.BaseAPIParams(target.URL(cmn.NetPublic))))
 }

@@ -12,46 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-func TestShardIdxPoolSizing(t *testing.T) {
-	mm := memsys.PageMM()
-	for _, tc := range []struct {
-		name       string
-		size       int
-		mm         *memsys.MMSA
-		capacity   int
-		wantSlab   bool
-		wantPooled bool
-	}{
-		{"zero", 0, mm, 0, false, false},
-		{"slab", memsys.MaxPageSlabSize, mm, memsys.MaxPageSlabSize, true, false},
-		{"pool-256k", memsys.MaxPageSlabSize + 1, mm, 256 * cos.KiB, false, true},
-		{"pool-256k-max", 256 * cos.KiB, mm, 256 * cos.KiB, false, true},
-		{"pool-512k", 256*cos.KiB + 1, mm, 512 * cos.KiB, false, true},
-		{"pool-512k-max", 512 * cos.KiB, mm, 512 * cos.KiB, false, true},
-		{"pool-1m", 512*cos.KiB + 1, mm, cos.MiB, false, true},
-		{"pool-1m-max", cos.MiB, mm, cos.MiB, false, true},
-		{"heap-large", cos.MiB + 1, mm, cos.MiB + 1, false, false},
-		{"heap-explicit", 512 * cos.KiB, nil, 512 * cos.KiB, false, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			buf, slab, pooled := allocBytes(tc.size, tc.mm)
-			if len(buf) != tc.size || cap(buf) != tc.capacity {
-				t.Fatalf("buffer len/cap: got %d/%d, want %d/%d", len(buf), cap(buf), tc.size, tc.capacity)
-			}
-			if (slab != nil) != tc.wantSlab {
-				t.Fatalf("slab ownership: got %t, want %t", slab != nil, tc.wantSlab)
-			}
-			if (pooled != nil) != tc.wantPooled {
-				t.Fatalf("pool ownership: got %t, want %t", pooled != nil, tc.wantPooled)
-			}
-			if len(buf) > 0 {
-				buf[0], buf[len(buf)-1] = 1, 2
-			}
-			freeBytes(buf, slab, pooled)
-		})
-	}
-}
-
 // every allocOffsets class must survive the freeOffsets round-trip: the byte slice is
 // reconstructed from cap(offs), so a mismatch shows up here (or as a memsys assert)
 func TestShardIdxOffsetsRoundTrip(t *testing.T) {

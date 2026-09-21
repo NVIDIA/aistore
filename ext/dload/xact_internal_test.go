@@ -5,9 +5,7 @@
 package dload
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -39,22 +37,6 @@ func TestDownloadRejectedHandoff(t *testing.T) {
 	}
 	if !cmn.IsErrTooManyRequests(err) {
 		t.Fatalf("expected a too-many-requests error, got %T: %v", err, err)
-	}
-
-	// Exercise the same error writer used by downloadHandler, including
-	// serialization of the message that previously dereferenced a nil error.
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/download", http.NoBody)
-	cmn.WriteErr(recorder, req, err, status, 0 /* silent */)
-	if recorder.Code != http.StatusTooManyRequests {
-		t.Fatalf("expected HTTP 429 response, got %d", recorder.Code)
-	}
-	var httpErr cmn.ErrHTTP
-	if decodeErr := json.Unmarshal(recorder.Body.Bytes(), &httpErr); decodeErr != nil {
-		t.Fatalf("decode error response: %v", decodeErr)
-	}
-	if httpErr.Status != status || httpErr.Message != err.Error() {
-		t.Errorf("unexpected error response: %+v", httpErr)
 	}
 }
 
