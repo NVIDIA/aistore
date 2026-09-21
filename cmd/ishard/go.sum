@@ -1,7 +1,7 @@
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
-github.com/NVIDIA/aistore v1.5.1-0.20260910210500-a7efcc29cf25 h1:0MF6TXLhIZi9x0HNXNE729VyQB0RPq3Syf4fZ9ll0+s=
-github.com/NVIDIA/aistore v1.5.1-0.20260910210500-a7efcc29cf25/go.mod h1:9Lls31JkV9VEwiRrG7OBELL70Y0YaeoGCBDytEBdmL4=
+github.com/NVIDIA/aistore v1.5.1-0.20260921160315-5059be970daf h1:6k+ERRlkO+zXFRrPIRDLKI5tFpctNtUlADag5UFlxfo=
+github.com/NVIDIA/aistore v1.5.1-0.20260921160315-5059be970daf/go.mod h1:U9KqdKwfBdDFt66Ig+VaqIe6Zf6/DrzG7xGYcwx7D2U=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=
 github.com/OneOfOne/xxhash v1.2.8/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=
 github.com/VividCortex/ewma v1.1.1/go.mod h1:2Tkkvm3sRDVXaiyucHiACn4cqf7DpdyLvmxzcbUokwA=
