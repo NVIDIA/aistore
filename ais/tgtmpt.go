@@ -413,6 +413,13 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		err = fmt.Errorf("%s: part %d size mismatch (%d vs %d)", lom.Cname(), args.partNum, size, expectedSize)
 		ecode = http.StatusBadRequest
 	}
+	// read vs declared part size, either direction:
+	// - short: source ended early (e.g., truncated remote read via poi.chunk)
+	// - long: client body exceeds its declared size (aws-chunked: x-amz-decoded-content-length)
+	if err == nil && expectedSize != rsize {
+		err = fmt.Errorf("%s: part %d: read %d bytes, expected %d", lom.Cname(), args.partNum, expectedSize, rsize)
+		ecode = cos.Ternary(args.req != nil, http.StatusBadRequest, http.StatusInternalServerError)
+	}
 	if err != nil {
 		if ecode == 0 {
 			ecode = http.StatusInternalServerError

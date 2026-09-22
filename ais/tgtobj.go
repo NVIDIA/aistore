@@ -225,8 +225,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 			return ec, er
 		}
 
-		// Calculate actual bytes read
-		total += thisChunkSize
+		total += thisChunkSize // exact: putPart fails on a short read
 
 		// Track completed part
 		completedParts = append(completedParts, apc.MptCompletedPart{
@@ -235,6 +234,13 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		})
 
 		partNum++
+	}
+
+	// expecting exactly poi.size (compare w/ ups._put)
+	var b [1]byte
+	if n, _ := io.ReadFull(poi.r, b[:]); n > 0 {
+		poi.t.ups.abort(poi.oreq, lom, uploadID)
+		return http.StatusInternalServerError, fmt.Errorf("%s: source exceeds its declared size %d", lom.Cname(), poi.size)
 	}
 
 	_, ecode, err = poi.t.ups.complete(&completeArgs{
