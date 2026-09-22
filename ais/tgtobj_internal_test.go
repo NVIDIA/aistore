@@ -133,6 +133,110 @@ func TestPutObjectChunks(tst *testing.T) {
 	}
 }
 
+func TestCopyRegularSameUnameAboveHardLimit(t *testing.T) {
+	const objName = "copy-regular-same-uname"
+	data := []byte("oversized")
+
+	mpath := t.TempDir()
+	extraMi, err := fs.AddTestMpath(mpath, mockTarget.SID())
+	tassert.CheckFatal(t, err)
+	defer fs.Remove(mpath)
+
+	src := core.AllocLOM(objName)
+	defer core.FreeLOM(src)
+	err = src.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, extraMi.CreateMissingBckDirs(src.Bucket()))
+
+	chunks := src.Bprops().Chunks
+	defer restoreTestChunks(src.Bprops(), chunks)
+	src.Bprops().Chunks.MaxMonolithicSize = cos.SizeIEC(len(data) + 1)
+
+	poi := &putOI{
+		t:       mockTarget,
+		lom:     src,
+		r:       readers.NewBytes(data),
+		config:  cmn.GCO.Get(),
+		workFQN: src.GenFQN(fs.WorkCT, fs.WorkfilePut),
+		size:    int64(len(data)),
+	}
+	_, err = poi.putObject()
+	tassert.CheckFatal(t, err)
+
+	// Model an n-way copy: same logical object, different physical location.
+	dstMi := extraMi
+	if dstMi == src.Mountpath() {
+		dstMi = fs.GetAvail()[testMountpath]
+	}
+	dst := core.AllocLOM(objName)
+	defer core.FreeLOM(dst)
+	err = dst.InitFQN(dstMi.MakePathFQN(src.Bucket(), fs.ObjCT, objName), src.Bucket())
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, src.Uname() == dst.Uname() && src.FQN != dst.FQN,
+		"expected same Uname at different FQNs: %q, %q", src.FQN, dst.FQN)
+
+	src.Bprops().Chunks.MaxMonolithicSize = 1
+	coi := &coi{Buf: make([]byte, cos.KiB), Config: cmn.GCO.Get()}
+	res := coi._regular(mockTarget, src, dst, true /*lcopy*/)
+	tassert.CheckFatal(t, res.Err)
+	tassert.Fatalf(t, res.Lsize == int64(len(data)), "expected size %d, got %d", len(data), res.Lsize)
+
+	err = dst.Load(false /*cache it*/, false /*locked*/)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, !dst.IsChunked(), "same-Uname copy must remain monolithic")
+}
+
+func TestCopyRegularPreservesChunkedLayout(t *testing.T) {
+	const (
+		srcName   = "copy-regular-chunked-src"
+		dstName   = "copy-regular-chunked-dst"
+		chunkSize = 4
+	)
+	data := []byte("0123456789")
+
+	src := core.AllocLOM(srcName)
+	defer core.FreeLOM(src)
+	err := src.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+
+	chunks := src.Bprops().Chunks
+	defer restoreTestChunks(src.Bprops(), chunks)
+	src.Bprops().Chunks.MaxMonolithicSize = 1
+	src.Bprops().Chunks.ChunkSize = 6 // would produce two chunks if _regular rechunked
+
+	poi := &putOI{
+		t:       mockTarget,
+		lom:     src,
+		r:       readers.NewBytes(data),
+		oreq:    &http.Request{Header: make(http.Header)},
+		config:  cmn.GCO.Get(),
+		workFQN: src.GenFQN(fs.WorkCT, fs.WorkfilePut),
+		size:    int64(len(data)),
+	}
+	_, err = poi.chunk(chunkSize)
+	tassert.CheckFatal(t, err)
+
+	dst := core.AllocLOM(dstName)
+	defer core.FreeLOM(dst)
+	err = dst.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+
+	coi := &coi{Buf: make([]byte, cos.KiB), Config: cmn.GCO.Get()}
+	res := coi._regular(mockTarget, src, dst, false /*lcopy*/)
+	tassert.CheckFatal(t, res.Err)
+
+	err = dst.Load(false /*cache it*/, false /*locked*/)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, dst.IsChunked(), "expected copied object to remain chunked")
+	manifest, err := core.NewUfest("", dst, true /*must-exist*/)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, manifest.LoadCompleted(dst))
+	want := (len(data) + chunkSize - 1) / chunkSize
+	tassert.Fatalf(t, manifest.Count() == want, "expected %d preserved chunks, got %d", want, manifest.Count())
+}
+
+func restoreTestChunks(props *cmn.Bprops, chunks cmn.ChunksConf) { props.Chunks = chunks }
+
 func TestApndParseHandle(t *testing.T) {
 	initLom := func(objName string) *core.LOM {
 		lom := core.AllocLOM(objName)

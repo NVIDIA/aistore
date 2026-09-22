@@ -2017,8 +2017,8 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM, lcopy bool) (res xs.CoiR
 		return xs.CoiRes{Err: err}
 	}
 
-	// TODO: same-Uname copies need a dedicated lock handoff before manifest completion
-	if lom.Lsize() > int64(dst.Bprops().Chunks.MaxMonolithicSize) {
+	// prevent same-uname deadlock and avoid rechunking an already-chunked source
+	if !lcopy && !lom.IsChunked() && lom.Lsize() > int64(dst.Bprops().Chunks.MaxMonolithicSize) {
 		lom.Unlock(lcopy) // _chunk acquires its own read lock via GetROC
 		return coi._chunk(t, lom, dst, int64(dst.Bprops().Chunks.ChunkSize))
 	}
