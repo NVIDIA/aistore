@@ -154,6 +154,7 @@ func TestCopyRegularSameUnameAboveHardLimit(t *testing.T) {
 
 	poi := &putOI{
 		t:       mockTarget,
+		atime:   time.Now().UnixNano(),
 		lom:     src,
 		r:       readers.NewBytes(data),
 		config:  cmn.GCO.Get(),
@@ -176,8 +177,16 @@ func TestCopyRegularSameUnameAboveHardLimit(t *testing.T) {
 		"expected same Uname at different FQNs: %q, %q", src.FQN, dst.FQN)
 
 	src.Bprops().Chunks.MaxMonolithicSize = 1
+	src.Bprops().Chunks.ChunkSize = 4
 	coi := &coi{Buf: make([]byte, cos.KiB), Config: cmn.GCO.Get()}
-	res := coi._regular(mockTarget, src, dst, true /*lcopy*/)
+	done := make(chan xs.CoiRes, 1)
+	go func() { done <- coi._regular(mockTarget, src, dst, true /*lcopy*/) }()
+	var res xs.CoiRes
+	select {
+	case res = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("same-Uname copy deadlocked (source rlock vs destination wlock)")
+	}
 	tassert.CheckFatal(t, res.Err)
 	tassert.Fatalf(t, res.Lsize == int64(len(data)), "expected size %d, got %d", len(data), res.Lsize)
 
@@ -230,7 +239,12 @@ func TestCopyRegularPreservesChunkedLayout(t *testing.T) {
 	tassert.Fatalf(t, dst.IsChunked(), "expected copied object to remain chunked")
 	manifest, err := core.NewUfest("", dst, true /*must-exist*/)
 	tassert.CheckFatal(t, err)
-	tassert.CheckFatal(t, manifest.LoadCompleted(dst))
+
+	dst.Lock(false)
+	err = manifest.LoadCompleted(dst)
+	dst.Unlock(false)
+	tassert.CheckFatal(t, err)
+
 	want := (len(data) + chunkSize - 1) / chunkSize
 	tassert.Fatalf(t, manifest.Count() == want, "expected %d preserved chunks, got %d", want, manifest.Count())
 }

@@ -187,7 +187,15 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		uploadID string
 	)
 
-	debug.Func(func() { debug.Assertf(poi.size > 0, "poi.size is required in chunk, object name: %s", poi.lom.Cname()) })
+	switch {
+	case poi.size <= 0:
+		return http.StatusInternalServerError, fmt.Errorf("%s: cannot chunk without object size (%d)", lom.Cname(), poi.size)
+	case chunkSize == 0:
+		chunkSize = cmn.ChunkSizeDflt
+	case chunkSize < 0:
+		return http.StatusInternalServerError, fmt.Errorf("%s: invalid chunk size %d", lom.Cname(), chunkSize)
+	}
+
 	if uploadID, err = poi.t.ups.start(poi.oreq, lom, poi.skipBackend); err != nil {
 		poi.t.ups.abort(poi.oreq, lom, uploadID)
 		return http.StatusInternalServerError, err
