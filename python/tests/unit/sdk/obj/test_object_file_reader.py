@@ -15,7 +15,6 @@ from tests.utils import BadContentIterProvider, cases, scripted_content_provider
 
 
 class TestObjectFileReader(unittest.TestCase):
-
     def setUp(self):
         self.content_provider_mock = Mock()
         # Every stream is a separate generator, so each one records its own close.
@@ -169,7 +168,6 @@ class TestObjectFileReader(unittest.TestCase):
 
 
 class TestObjectFileReaderResume(unittest.TestCase):
-
     def setUp(self):
         self.data = b"chunk1chunk2chunk3chunk4"
         self.chunk_size = 6

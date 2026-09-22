@@ -6,7 +6,6 @@ from aistore.sdk.types import Smap, Snode
 
 
 class TestSmap(TestCase):
-
     def setUp(self):
         """Set up reusable test variables to avoid redundant code."""
         self.mock_proxy = create_autospec(Snode, instance=True)

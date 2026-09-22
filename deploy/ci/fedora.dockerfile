@@ -46,7 +46,7 @@ ENV PATH="/opt/venv/bin:${PATH}"
 ENV PIP="pip"
 # seed installs pip, setuptools, wheel
 RUN uv venv --python 3.14 --seed /opt/venv \
-  && uv pip install --no-cache --python /opt/venv/bin/python black[jupyter] \
+  && uv pip install --no-cache --python /opt/venv/bin/python ruff==0.16.8 \
   && ln -sf pip /opt/venv/bin/pip3
 
 # Install Kubectl and kapp

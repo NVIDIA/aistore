@@ -234,7 +234,7 @@ class BucketModel(BaseModel):
         Get the path representation of this bucket
         """
         namespace_path = self.namespace.get_path() if self.namespace else "@#"
-        return f"{ self.provider }/{ namespace_path }/{ self.name }/"
+        return f"{self.provider}/{namespace_path}/{self.name}/"
 
 
 class BsummCtrlMsg(BaseModel):

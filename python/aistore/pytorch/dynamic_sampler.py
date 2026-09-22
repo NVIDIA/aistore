@@ -6,7 +6,7 @@ can be used to generate mini-batches that fit within a memory constraint
 so that there is a guarantee that each batch fits within memory
 while attempting to fit the maximum number of samples in each batch.
 
-Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from logging import getLogger
@@ -106,7 +106,6 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
                 index = self._get_next_index(index)
                 total_mem += sample_size
             else:
-
                 if total_mem + sample_size == self._max_batch_size:
                     batch.append(index)
                     index = self._get_next_index(index)

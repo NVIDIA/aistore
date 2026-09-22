@@ -18,7 +18,7 @@ The AIStore project repository maintains a contribution structure in which every
 
 #### Formatting Changes
 
-AIStore maintains a few formatting rules to ensure a consistent coding style. These rules are checked and enforced by `black`, `pylint`, `gofmt`, etc.  Before committing any changes, make sure to check (or fix) all changes against the formatting rules as follows:
+AIStore maintains a few formatting rules to ensure a consistent coding style. These rules are checked and enforced by `ruff`, `pylint`, `gofmt`, etc.  Before committing any changes, make sure to check (or fix) all changes against the formatting rules as follows:
 
 ```console
 $ cd aistore

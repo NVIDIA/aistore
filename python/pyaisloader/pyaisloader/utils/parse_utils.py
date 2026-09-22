@@ -19,9 +19,9 @@ def format_time(duration):
         return f"{d.seconds} seconds"
     if d.microseconds > 0:
         if d.microseconds >= 1e6:
-            return f"{d.microseconds/1e6} seconds"
+            return f"{d.microseconds / 1e6} seconds"
         if d.microseconds >= 1e3:
-            return f"{d.microseconds/1e3} milliseconds"
+            return f"{d.microseconds / 1e3} milliseconds"
         return f"{d.microseconds} microseconds"
 
     return "0 seconds"

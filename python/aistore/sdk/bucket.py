@@ -623,7 +623,7 @@ class Bucket(AISSource):
 
         bucket_list = self.client.request_deserialize(
             HTTP_METHOD_GET,
-            path=f"{URL_PATH_BUCKETS}/{ self.name }",
+            path=f"{URL_PATH_BUCKETS}/{self.name}",
             headers=headers,
             res_model=BucketList,
             json=action,

@@ -358,11 +358,12 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         limits = httpx.Limits(
             max_connections=7, max_keepalive_connections=3, keepalive_expiry=11
         )
-        with patch(
-            "aistore.sdk.etl.webserver.fastapi_server.HTTP_LIMITS", limits
-        ), patch(
-            "aistore.sdk.etl.webserver.fastapi_server.resolve_ssl_config",
-            return_value=(True, None),
+        with (
+            patch("aistore.sdk.etl.webserver.fastapi_server.HTTP_LIMITS", limits),
+            patch(
+                "aistore.sdk.etl.webserver.fastapi_server.resolve_ssl_config",
+                return_value=(True, None),
+            ),
         ):
             await self.etl_server.startup_event()
         try:
@@ -1006,8 +1007,8 @@ class TestHTTPDirectFQN(unittest.TestCase):
     def _make_handler(self):
         handler = DummyRequestHandler()
         handler.server.etl_server.direct_fqn = True
-        handler.server.etl_server.sanitize_fqn.side_effect = (
-            lambda fqn: os.path.normpath(os.path.join("/", fqn.lstrip("/")))
+        handler.server.etl_server.sanitize_fqn.side_effect = lambda fqn: (
+            os.path.normpath(os.path.join("/", fqn.lstrip("/")))
         )
         return handler
 
@@ -1101,9 +1102,7 @@ class TestStreamingDetection(unittest.TestCase):
         )
 
 
-class TestStreamingFastAPIServer(
-    unittest.IsolatedAsyncioTestCase
-):  # pylint: disable=too-many-public-methods
+class TestStreamingFastAPIServer(unittest.IsolatedAsyncioTestCase):  # pylint: disable=too-many-public-methods
     """Sync def tests drive the app through FastAPI's sync TestClient / websocket_connect.
     Async def tests directly await async server helpers (e.g. _get_stream_reader)."""
 
@@ -1813,10 +1812,8 @@ class TestFlaskStreamingLifecycle(unittest.TestCase):
         mock_resp = self._make_ok_resp()
         with self.server.app.test_request_context("/test/obj", method="GET"):
             with patch.object(self.server.session, "get", return_value=mock_resp):
-                reader = (
-                    self.server._get_stream_reader(  # pylint: disable=protected-access
-                        "test/obj"
-                    )
+                reader = self.server._get_stream_reader(  # pylint: disable=protected-access
+                    "test/obj"
                 )
         reader.close()
         mock_resp.close.assert_called_once()

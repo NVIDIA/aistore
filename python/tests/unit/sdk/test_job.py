@@ -118,9 +118,10 @@ class TestJob(unittest.TestCase):
         job = Job(self.mock_client, self.job_id, XACT_KIND_LRU)
         status = JobStatus(uuid=self.job_id, end_time=1)
 
-        with patch.object(job, "status", return_value=status), patch(
-            "aistore.sdk.job.logger"
-        ) as mock_logger:
+        with (
+            patch.object(job, "status", return_value=status),
+            patch("aistore.sdk.job.logger") as mock_logger,
+        ):
             original_disabled = object()
             mock_logger.disabled = original_disabled
 
@@ -143,11 +144,11 @@ class TestJob(unittest.TestCase):
             {"target": [JobSnap(id=self.job_id, is_idle=True)]}
         )
 
-        with patch.object(
-            self.job, "get_details", side_effect=[details, details]
-        ), patch("aistore.sdk.job.time.sleep"), patch(
-            "aistore.sdk.job.logger"
-        ) as mock_logger:
+        with (
+            patch.object(self.job, "get_details", side_effect=[details, details]),
+            patch("aistore.sdk.job.time.sleep"),
+            patch("aistore.sdk.job.logger") as mock_logger,
+        ):
             original_disabled = object()
             mock_logger.disabled = original_disabled
 

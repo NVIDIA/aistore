@@ -77,7 +77,7 @@ def pretty_print_res(bench_type, bucket, res, total_drives):
         f"min: {get_natural_time(lat_min)}, avg: {get_natural_time(avg_lat)}, max: {get_natural_time(lat_max)}"
     )
     print(
-        f"Cluster average throughput: {humanize.naturalsize(total_tput, binary=True)}/s ({humanize.naturalsize(total_tput/total_drives, binary=True)}/s per drive)"
+        f"Cluster average throughput: {humanize.naturalsize(total_tput, binary=True)}/s ({humanize.naturalsize(total_tput / total_drives, binary=True)}/s per drive)"
     )
     print()
 

@@ -218,9 +218,7 @@ class HTTPMultiThreadedServer(ETLServer):
             """
             Parses and safely reads a file when using FQN (fully qualified name) input.
             """
-            safe_path = self.server.etl_server.sanitize_fqn(
-                path
-            )  # pylint: disable=protected-access
+            safe_path = self.server.etl_server.sanitize_fqn(path)  # pylint: disable=protected-access
             self.server.etl_server.logger.debug("Reading local file: %s", safe_path)
             with open(safe_path, "rb") as f:
                 return f.read()
@@ -494,9 +492,7 @@ class HTTPMultiThreadedServer(ETLServer):
                     return
 
                 if fqn and self.server.etl_server.direct_fqn:
-                    source = self.server.etl_server.sanitize_fqn(
-                        fqn
-                    )  # pylint: disable=protected-access
+                    source = self.server.etl_server.sanitize_fqn(fqn)  # pylint: disable=protected-access
                 elif fqn:
                     source = self._get_fqn_content(fqn)
                 else:
@@ -596,9 +592,7 @@ class HTTPMultiThreadedServer(ETLServer):
                     return
 
                 if fqn and self.server.etl_server.direct_fqn:
-                    source = self.server.etl_server.sanitize_fqn(
-                        fqn
-                    )  # pylint: disable=protected-access
+                    source = self.server.etl_server.sanitize_fqn(fqn)  # pylint: disable=protected-access
                 elif fqn:
                     source = self._get_fqn_content(fqn)
                 else:

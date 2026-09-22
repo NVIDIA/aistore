@@ -129,9 +129,11 @@ class TestAuthNAccess(AuthNTestBase):  # pylint: disable=too-many-public-methods
         # ACCESS_RW alone is not enough
         rw_client = self._create_client_with_access(access_attrs=[AccessAttr.ACCESS_RW])
         self._assert_forbidden(
-            lambda: rw_client.bucket(self.bck.name)
-            .object("promoted_rw")
-            .promote(str(local_file_path))
+            lambda: (
+                rw_client.bucket(self.bck.name)
+                .object("promoted_rw")
+                .promote(str(local_file_path))
+            )
         )
 
         client = self._create_client_with_access(access_attrs=[AccessAttr.PROMOTE])

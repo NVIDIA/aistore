@@ -22,9 +22,7 @@ from aistore.sdk.errors import ErrObjNotFound
 from tests.utils import cases
 
 
-class TestObjectClient(
-    unittest.TestCase
-):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class TestObjectClient(unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Unit tests for ObjectClient."""
 
     def setUp(self) -> None:

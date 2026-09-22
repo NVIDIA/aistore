@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 """
 Allow use of Amazon's boto3 and botocore libraries with AIStore.
@@ -51,8 +51,9 @@ def _ais_redirect_wrapper(wrapped, instance, args, kwargs):
         lambda: response is not None,
         lambda: isinstance(response, tuple) and isinstance(request_dict, dict),
         lambda: response[0].status_code in [301, 302, 307],
-        lambda: request_dict["context"]["s3_redirect"].get("ais_redirect_count", 0)
-        <= 3,
+        lambda: (
+            request_dict["context"]["s3_redirect"].get("ais_redirect_count", 0) <= 3
+        ),
         lambda: {k.lower(): v for k, v in response[0].headers.items()}.get("location"),
     ]
 

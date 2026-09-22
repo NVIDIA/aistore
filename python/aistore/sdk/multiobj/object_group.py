@@ -131,7 +131,6 @@ class ObjectGroup(AISSource):
             Object: Objects in the group matching the specified prefix.
         """
         for obj_name in self._obj_collection:
-
             # If object does not start the prefix, skip it
             if not obj_name.startswith(prefix):
                 continue

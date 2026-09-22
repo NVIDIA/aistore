@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 # pylint: disable=missing-module-docstring
@@ -30,9 +30,7 @@ redirected_ops = test_ops
 redirections_enabled = True  # pylint: disable=invalid-name
 
 
-def s3_response_wrapper(
-    wrapped, instance, args, kwargs
-):  # pylint: disable=unused-argument
+def s3_response_wrapper(wrapped, instance, args, kwargs):  # pylint: disable=unused-argument
     """
     Patch various internal S3Response methods in moto to issue
     redirects.

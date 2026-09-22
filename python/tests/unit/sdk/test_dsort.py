@@ -61,7 +61,6 @@ output_shard_size: 10MB
 
 
 class TestDsort(unittest.TestCase):  # pylint: disable=too-many-public-methods
-
     def setUp(self) -> None:
         self.mock_client = Mock()
         self.dsort_id = "123"
@@ -253,7 +252,7 @@ class TestDsort(unittest.TestCase):  # pylint: disable=too-many-public-methods
             algorithm=DsortAlgorithm(),
             description="Test description",
         )
-        ekm_url = f"{URL_PATH_OBJECTS}/input_bucket/{ EKM_FILE_NAME }"
+        ekm_url = f"{URL_PATH_OBJECTS}/input_bucket/{EKM_FILE_NAME}"
         mock_get_url.return_value = ekm_url
 
         res = self.dsort.start(dsort_framework)

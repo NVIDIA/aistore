@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 # This script tests AIStore's ObjectFileReader and its ability to resume object reading with interruptions
@@ -74,9 +74,9 @@ def test_with_interruptions(
         stop_pod_killer(pod_killer_process)
 
     # Validate the downloaded data by comparing it to the generated data
-    assert (
-        downloaded_data == generated_data
-    ), "Validation Failed: Downloaded data does not match generated data"
+    assert downloaded_data == generated_data, (
+        "Validation Failed: Downloaded data does not match generated data"
+    )
     logging.info("Validation Passed: Downloaded data matches the generated data")
 
 

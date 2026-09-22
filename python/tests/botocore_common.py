@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 # pylint: disable=missing-module-docstring
@@ -69,9 +69,7 @@ class BotocoreBaseTest(unittest.TestCase):
             # Disable any redirections until we're ready.
             mock_s3_redirect.redirections_enabled = False
             self.mock_s3.start()
-            self.s3 = boto3.client(
-                "s3", region_name=AWS_REGION
-            )  # pylint: disable=invalid-name
+            self.s3 = boto3.client("s3", region_name=AWS_REGION)  # pylint: disable=invalid-name
         else:
             logging.debug("Using aistore for S3 services")
             self.s3 = boto3.client(

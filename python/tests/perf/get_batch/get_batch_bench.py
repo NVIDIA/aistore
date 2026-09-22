@@ -179,7 +179,7 @@ def benchmark_get_batch(  # pylint: disable=too-many-locals
             # print(f"Batch completed: {batch_successful} successful, {batch_failed} failed")
 
         except Exception as e:
-            print(f"Batch {batch_start//batch_size + 1} failed: {e}")
+            print(f"Batch {batch_start // batch_size + 1} failed: {e}")
             failed_reads += current_batch_size
 
     end_time = time.time()
@@ -210,9 +210,9 @@ def run_comprehensive_benchmark(
     """Run comprehensive benchmark with all requested combinations"""
     results = []
 
-    print(f"\n{'='*100}")
+    print(f"\n{'=' * 100}")
     print("COMPREHENSIVE BATCH BENCHMARK")
-    print(f"{'='*100}")
+    print(f"{'=' * 100}")
     print(f"Bucket: {bucket_name}")
     print(f"Total objects per test: {total_objects:,}")
 
@@ -228,18 +228,18 @@ def run_comprehensive_benchmark(
     ]
 
     # First run sequential benchmark as baseline
-    print(f"\n{'*'*60}")
+    print(f"\n{'*' * 60}")
     print("RUNNING BASELINE: Sequential Read")
-    print(f"{'*'*60}")
+    print(f"{'*' * 60}")
     baseline_result = benchmark_sequential_get(client, bucket_name, total_objects)
     print(f"Baseline completed in {baseline_result.duration:.2f} seconds")
 
     # Run batch benchmarks
     for batch_size, num_batches, streaming in test_configs:
-        print(f"\n{'*'*60}")
+        print(f"\n{'*' * 60}")
         test_config = f"Batch {batch_size}x{num_batches} (streaming={streaming})"
         print(f"RUNNING: {test_config}")
-        print(f"{'*'*60}")
+        print(f"{'*' * 60}")
 
         try:
             batch_result = benchmark_get_batch(
@@ -269,9 +269,9 @@ def run_comprehensive_benchmark(
 def print_comprehensive_results(results: List[BenchmarkComparison]):
     """Print comprehensive results with baseline comparisons"""
 
-    print(f"\n{'='*120}")
+    print(f"\n{'=' * 120}")
     print("COMPREHENSIVE BENCHMARK RESULTS")
-    print(f"{'='*120}")
+    print(f"{'=' * 120}")
 
     # Print baseline info
     if results and results[0].baseline:
@@ -285,12 +285,12 @@ def print_comprehensive_results(results: List[BenchmarkComparison]):
         )
         print(f"  Data Throughput:  {baseline.throughput_mib_per_sec:.2f} MiB/s")
 
-    print(f"\n{'='*120}")
+    print(f"\n{'=' * 120}")
     print(
         f"{'Test Configuration':<35} {'Duration':<10} {'vs Baseline':<20}"
         f" {'Speedup':<10} {'Throughput':<15} {'vs Baseline':<12}"
     )
-    print(f"{'='*120}")
+    print(f"{'=' * 120}")
 
     for comp in results:
         result = comp.result
@@ -304,7 +304,7 @@ def print_comprehensive_results(results: List[BenchmarkComparison]):
         if comp.speedup_factor > 1:
             speedup_str = f"{comp.speedup_factor:.2f}x"
         elif comp.speedup_factor > 0:
-            speedup_str = f"{1/comp.speedup_factor:.2f}x slower"
+            speedup_str = f"{1 / comp.speedup_factor:.2f}x slower"
         else:
             speedup_str = "N/A"
 
@@ -320,11 +320,11 @@ def print_comprehensive_results(results: List[BenchmarkComparison]):
             f" {speedup_str:<10} {throughput_str:<15} {improvement_str:<12}"
         )
 
-    print(f"{'='*120}")
+    print(f"{'=' * 120}")
 
     # Detailed results section
     print("\nDETAILED RESULTS:")
-    print(f"{'='*120}")
+    print(f"{'=' * 120}")
 
     for i, comp in enumerate(results, 1):
         result = comp.result
@@ -338,7 +338,7 @@ def print_comprehensive_results(results: List[BenchmarkComparison]):
         print(
             f"   Success Rate:     "
             f"{result.successful_reads}/{result.total_objects}"
-            f" ({100*result.successful_reads/result.total_objects:.1f}%)"
+            f" ({100 * result.successful_reads / result.total_objects:.1f}%)"
         )
         print(f"   Throughput:       {result.throughput_objects_per_sec:.1f} objects/s")
         print(f"   Data Throughput:  {result.throughput_mib_per_sec:.2f} MiB/s")
@@ -427,12 +427,12 @@ def main():
         # Save results to JSON file
         json_file = save_results_to_json(results)
 
-        print(f"\n{'='*100}")
+        print(f"\n{'=' * 100}")
         print("BENCHMARK COMPLETE!")
-        print(f"{'='*100}")
+        print(f"{'=' * 100}")
         print(f"Total tests run: {len(results)}")
         print(f"Results saved to: {json_file}")
-        print(f"{'='*100}")
+        print(f"{'=' * 100}")
 
     except KeyboardInterrupt:
         print("\n\nBenchmark interrupted by user")

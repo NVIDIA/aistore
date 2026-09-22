@@ -89,7 +89,7 @@ def bench(label, parallel):
         total_secs += elapsed
         latencies.append(elapsed)
         print(
-            f"  batch {i+1}/{NUM_BATCHES}: {elapsed:.2f}s  {nb/elapsed/1024**2:.0f} MiB/s"
+            f"  batch {i + 1}/{NUM_BATCHES}: {elapsed:.2f}s  {nb / elapsed / 1024**2:.0f} MiB/s"
         )
 
     throughput = total_bytes / total_secs / 1024**3

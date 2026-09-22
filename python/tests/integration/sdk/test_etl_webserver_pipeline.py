@@ -639,12 +639,14 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         servers = []
         for i in range(5):
             port = 19070 + i
-            server = self._start_fastapi_server(port, f"stage{i+1}")
+            server = self._start_fastapi_server(port, f"stage{i + 1}")
             servers.append(server)
             result = server.transform(result, "", "")
 
         # Create 5-stage pipeline
-        pipeline_stages = [f"http://localhost:{19071 + i}/stage{i+2}" for i in range(4)]
+        pipeline_stages = [
+            f"http://localhost:{19071 + i}/stage{i + 2}" for i in range(4)
+        ]
         pipeline = ",".join(pipeline_stages)
         headers = {HEADER_NODE_URL: pipeline}
 

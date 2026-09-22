@@ -87,7 +87,7 @@ def main():
     print("SUMMARY")
     print("=" * 60)
     print(f"Single-stream: {single_tp:7.2f} MiB/s (baseline)")
-    print(f"Parallel:      {parallel_tp:7.2f} MiB/s ({parallel_tp/single_tp:.2f}x)")
+    print(f"Parallel:      {parallel_tp:7.2f} MiB/s ({parallel_tp / single_tp:.2f}x)")
     print("=" * 60)
 
 

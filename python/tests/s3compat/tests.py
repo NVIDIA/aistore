@@ -283,7 +283,7 @@ def test_select_object_content(log_entry):
         generated_crc = crc32(records.getvalue()) & 0xFFFFFFFF
         if expected_crc != generated_crc:
             raise ValueError(
-                "Data mismatch Expected : " '"col1,col2,col3\none,two,three\nX,Y,Z\n"',
+                'Data mismatch Expected : "col1,col2,col3\none,two,three\nX,Y,Z\n"',
                 f"Received {records.getvalue().decode()}",
             )
     finally:
@@ -388,7 +388,7 @@ def _validate_stat(st_obj, expected_size, expected_meta, version_id=None):
 
     if st_obj.version_id != version_id:
         raise ValueError(
-            f"version-id mismatch. expected={version_id}, " f"got={st_obj.version_id}"
+            f"version-id mismatch. expected={version_id}, got={st_obj.version_id}"
         )
 
     # content_type by default can be either application/octet-stream or
@@ -396,7 +396,7 @@ def _validate_stat(st_obj, expected_size, expected_meta, version_id=None):
     if received_content_type not in ["application/octet-stream", "binary/octet-stream"]:
         raise ValueError(
             "Incorrect content type. Expected: ",
-            "'application/octet-stream' or 'binary/octet-stream'," " received: ",
+            "'application/octet-stream' or 'binary/octet-stream', received: ",
             received_content_type,
         )
 
@@ -1665,7 +1665,7 @@ def test_thread_safe(log_entry):
             # Compare sha-sum values of the source file and the copied one
             if test_file_sha_sum != copied_file_sha_sum:
                 raise ValueError(
-                    "Sha-sum mismatch on multi-threaded put and " "get objects"
+                    "Sha-sum mismatch on multi-threaded put and get objects"
                 )
         except Exception as exc:  # pylint: disable=broad-except
             exceptions.append(exc)

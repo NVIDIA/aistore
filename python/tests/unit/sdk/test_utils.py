@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import unittest
 from unittest.mock import Mock, patch, mock_open
@@ -281,8 +281,8 @@ class TestUtils(unittest.TestCase):
         ("object 'oci://bucket/obj' does not exist", ("oci", "bucket", True)),
         ("bucket 'abc://bucket' does not exist", None),
         ("object 'abc://bucket/obj' does not exist", None),
-        (f"bucket 'ais://{'a'*133}' does not exist", None),
-        (f"object 'ais://{'a'*133}/obj' does not exist", None),
+        (f"bucket 'ais://{'a' * 133}' does not exist", None),
+        (f"object 'ais://{'a' * 133}/obj' does not exist", None),
     )
     def test_extract_and_parse_url(self, test_case):
         url_or_msg, expected = test_case

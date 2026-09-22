@@ -108,7 +108,7 @@ fmt)
     echo ${AISTORE_PATH}
 
     gofmt -s -w ${AISTORE_PATH}
-    python_black_fix
+    python_format_fix
     ;;
   *)
     echo "Running style check..." >&2

@@ -101,9 +101,9 @@ def run(client: Client, bck: Bucket, s3: Any, bucket: str, runs: int) -> None:
     # one warmup S3 listing to establish a persistent connection
     _list_s3(s3, bucket, SCALE_POINTS[0][0])
 
-    print(f"\n{'='*TABLE_WIDTH}")
+    print(f"\n{'=' * TABLE_WIDTH}")
     print(f"NBI latency-vs-scale  ({runs} runs each)")
-    print(f"{'='*TABLE_WIDTH}")
+    print(f"{'=' * TABLE_WIDTH}")
     hdr1 = (
         f"{'Objects':<9} {'Creation':>10}  "
         f"{'--- Regular (ms) ---':^38}  "
@@ -120,14 +120,14 @@ def run(client: Client, bck: Bucket, s3: Any, bucket: str, runs: int) -> None:
     )
     print(hdr1)
     print(hdr2)
-    print(f"{'-'*TABLE_WIDTH}")
+    print(f"{'-' * TABLE_WIDTH}")
 
     for prefix, expected, label in SCALE_POINTS:
         try:
             actual = len(bck.list_all_objects(prefix=prefix))
-            assert (
-                actual == expected
-            ), f"{label}: expected {expected} objects under '{prefix}', got {actual}"
+            assert actual == expected, (
+                f"{label}: expected {expected} objects under '{prefix}', got {actual}"
+            )
 
             inv_name, create_sec = _create_inventory(client, bck, prefix)
 
@@ -156,7 +156,7 @@ def run(client: Client, bck: Bucket, s3: Any, bucket: str, runs: int) -> None:
             except Exception:  # pylint: disable=broad-exception-caught
                 pass
 
-    print(f"{'='*TABLE_WIDTH}\n")
+    print(f"{'=' * TABLE_WIDTH}\n")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

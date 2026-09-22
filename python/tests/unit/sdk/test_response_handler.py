@@ -26,7 +26,6 @@ class ResponseHandlerImpl(ResponseHandler):
 
 # pylint: disable=unused-variable
 class TestResponseHandler(unittest.TestCase):
-
     def setUp(self):
         self.resp_handler = ResponseHandlerImpl()
 

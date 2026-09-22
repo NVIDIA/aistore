@@ -269,10 +269,12 @@ class FastAPIServer(ETLServer):
         if pipeline_header:
             first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
             if first_url:
-                status_code, transformed, direct_put_length = (
-                    await self._direct_put_with_retry(
-                        first_url, transformed, remaining_pipeline, path, etl_args
-                    )
+                (
+                    status_code,
+                    transformed,
+                    direct_put_length,
+                ) = await self._direct_put_with_retry(
+                    first_url, transformed, remaining_pipeline, path, etl_args
                 )
                 self.logger.debug("status_code: %r", status_code)
 
@@ -649,10 +651,12 @@ class FastAPIServer(ETLServer):
                 self.logger.debug("pipeline_header: %r", pipeline_header)
                 first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
                 if first_url:
-                    status_code, transformed, direct_put_length = (
-                        await self._direct_put_with_retry(
-                            first_url, transformed, remaining_pipeline, path, etl_args
-                        )
+                    (
+                        status_code,
+                        transformed,
+                        direct_put_length,
+                    ) = await self._direct_put_with_retry(
+                        first_url, transformed, remaining_pipeline, path, etl_args
                     )
                     if status_code == STATUS_OK:
                         await websocket.send_bytes(transformed)

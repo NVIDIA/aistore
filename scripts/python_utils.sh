@@ -32,12 +32,12 @@ function lint_python_sdk {
     return 0
 }
 
-function python_black_fix {
-  black . --quiet --force-exclude examples
+function python_format_fix {
+  ruff format --quiet "${AISTORE_PATH}"
 }
 
 function check_python_formatting {
-  if ! black . --check --diff --quiet --extend-exclude examples
+  if ! ruff format --check --diff "${AISTORE_PATH}"
   then
     printf "\nIncorrect python formatting. Run make fmt-fix to fix it.\n\n" >&2
     exit 1

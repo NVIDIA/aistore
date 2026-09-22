@@ -3,7 +3,7 @@ AIS Shard Reader for PyTorch
 
 PyTorch Dataset and DataLoader for AIS.
 
-Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from aistore.sdk import Bucket, ListObjectFlag
@@ -62,7 +62,6 @@ class AISShardReader(AISBaseIterDataset):
         length = 0
 
         for shard in self._obj_iterator:
-
             for _ in shard.bucket.list_objects_iter(
                 prefix=shard.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
             ):
@@ -108,7 +107,6 @@ class AISShardReader(AISBaseIterDataset):
         try:
             # Open the shard as a tarfile as read samples into dict
             with open(fileobj=file, mode="r:") as tar:
-
                 # Preprocess every key in the archive to ensure consistency in batch collation
                 self._observed_keys.update(
                     extension

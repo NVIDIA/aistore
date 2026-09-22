@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import json
@@ -198,17 +198,17 @@ class TestStreamingColdGet(unittest.TestCase):
             obj.get_reader().as_file(max_resume=0).read()
 
         # Verify that the object is not cached
-        assert (
-            not obj.props.present
-        ), "The object should not be cached when reading partially with Streaming-Cold-GET enabled."
+        assert not obj.props.present, (
+            "The object should not be cached when reading partially with Streaming-Cold-GET enabled."
+        )
 
         with self.assertRaises((RequestsConnectionError, Timeout)):
             obj.get_reader().read_all()
 
         # Verify that the object is not cached
-        assert (
-            not obj.props.present
-        ), "The object should not be cached when reading partially with Streaming-Cold-GET enabled."
+        assert not obj.props.present, (
+            "The object should not be cached when reading partially with Streaming-Cold-GET enabled."
+        )
 
     @unittest.skipUnless(REMOTE_SET, "Remote bucket is not set")
     @pytest.mark.extended
@@ -226,9 +226,9 @@ class TestStreamingColdGet(unittest.TestCase):
             "partially from the object with Streaming-Cold-GET enabled.",
         )
         # Verify that the object is not cached
-        assert (
-            not self.object.props.present
-        ), "The object should not be cached when reading partially with Streaming-Cold-GET enabled."
+        assert not self.object.props.present, (
+            "The object should not be cached when reading partially with Streaming-Cold-GET enabled."
+        )
 
         # Read the entire object to cache it
         full_content = self.object.get_reader().as_file().read()
@@ -238,9 +238,9 @@ class TestStreamingColdGet(unittest.TestCase):
             "The full content should be read when reading the entire object with Streaming-Cold-GET enabled.",
         )
         # Verify that the object is now cached
-        assert (
-            self.object.props.present
-        ), "The object should be cached after reading the entire object with Streaming-Cold-GET enabled."
+        assert self.object.props.present, (
+            "The object should be cached after reading the entire object with Streaming-Cold-GET enabled."
+        )
 
     @unittest.skipUnless(REMOTE_SET, "Remote bucket is not set")
     @pytest.mark.extended
@@ -260,6 +260,6 @@ class TestStreamingColdGet(unittest.TestCase):
         finally:
             stream.close()
         # Verify that the object is not cached after a mid-stream disconnect
-        assert (
-            not self.object.props.present
-        ), "The object should not be cached there was a problem in reading Streaming-Cold-GET enabled."
+        assert not self.object.props.present, (
+            "The object should not be cached there was a problem in reading Streaming-Cold-GET enabled."
+        )

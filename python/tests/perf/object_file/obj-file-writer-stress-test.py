@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 # This script tests AIStore's ObjectFileWriter and its ability to handle interruptions
@@ -63,9 +63,9 @@ def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, obj):
     # Validate written data after interruptions
     logging.info("Validating written content...")
     actual_data = obj.get_reader().read_all()
-    assert (
-        actual_data == expected_data
-    ), "Validation Failed: Written content does not match expected content"
+    assert actual_data == expected_data, (
+        "Validation Failed: Written content does not match expected content"
+    )
     logging.info("Validation Passed: Written content matches expected content.")
 
 

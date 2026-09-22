@@ -1,0 +1,2 @@
+extend-exclude = ["examples", "*.md"]
+force-exclude = true

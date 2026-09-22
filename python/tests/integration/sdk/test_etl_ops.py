@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import os
@@ -302,7 +302,7 @@ class TestETLOps(unittest.TestCase):
         num_objs = 200
         content = {}
         for i in range(num_objs):
-            obj_name = f"obj{ i }"
+            obj_name = f"obj{i}"
             _, content[obj_name] = create_and_put_object(
                 client=self.client, bck=self.bucket.as_model(), obj_name=obj_name
             )

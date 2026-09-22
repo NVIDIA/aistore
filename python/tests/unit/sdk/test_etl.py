@@ -36,9 +36,7 @@ from aistore.sdk.utils import convert_to_seconds
 from tests.const import ETL_NAME
 
 
-class TestEtl(
-    unittest.TestCase
-):  # pylint: disable=unused-variable, too-many-public-methods
+class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable, too-many-public-methods
     def setUp(self) -> None:
         self.mock_client = Mock()
         self.etl_name = ETL_NAME
@@ -164,7 +162,7 @@ class TestEtl(
         self.assertEqual(mock_response, response)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
-            path=f"etl/{ self.etl_name }",
+            path=f"etl/{self.etl_name}",
             res_model=ETLDetails,
             params={QPARAM_UUID: job_id},
         )
@@ -173,7 +171,7 @@ class TestEtl(
         self.etl.start()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"etl/{ self.etl_name }/start",
+            path=f"etl/{self.etl_name}/start",
             timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
 
@@ -181,7 +179,7 @@ class TestEtl(
         self.etl.stop()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"etl/{ self.etl_name }/stop",
+            path=f"etl/{self.etl_name}/stop",
             timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
 
@@ -189,7 +187,7 @@ class TestEtl(
         self.etl.delete()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE,
-            path=f"etl/{ self.etl_name }",
+            path=f"etl/{self.etl_name}",
             timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
 
@@ -205,7 +203,7 @@ class TestEtl(
         self.assertIn("log line 1", response[0].logs)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
-            path=f"{URL_PATH_ETL}/{ self.etl_name }/{URL_PATH_ETL_LOGS}",
+            path=f"{URL_PATH_ETL}/{self.etl_name}/{URL_PATH_ETL_LOGS}",
             res_model=List[ETLNodeLogs],
             timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
@@ -222,7 +220,7 @@ class TestEtl(
         self.assertIn("target log", response[0].logs)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
-            path=f"{URL_PATH_ETL}/{ self.etl_name }/{URL_PATH_ETL_LOGS}/{target_id}",
+            path=f"{URL_PATH_ETL}/{self.etl_name}/{URL_PATH_ETL_LOGS}/{target_id}",
             res_model=List[ETLNodeLogs],
             timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )

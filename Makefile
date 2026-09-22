@@ -19,6 +19,9 @@ AISTORE_PATH = $(shell git rev-parse --show-toplevel)
 
 CLI_VERSION := $(shell ais version 2>/dev/null)
 
+## NOTE: keep in sync with deploy/ci/fedora.dockerfile
+RUFF_VERSION ?= 0.16.8
+
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
 
@@ -329,12 +332,12 @@ lint-ishard:
 install-python-deps:
 	@cd python && make common_deps botocore_deps
 
-fmt-check: install-python-deps ## Check code formatting
-	@pip3 install --upgrade black[jupyter] -q
+fmt-check: ## Check code formatting
+	@pip3 install ruff==$(RUFF_VERSION) -q
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" fmt
 
 fmt-fix: ## Fix code formatting
-	@pip3 install --upgrade black[jupyter] -q
+	@pip3 install ruff==$(RUFF_VERSION) -q
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" fmt --fix
 
 spell-check: ## Run spell checker on the project

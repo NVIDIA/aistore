@@ -10,9 +10,7 @@ from typing import Callable
 from mcp.server.fastmcp import FastMCP
 
 
-def register_job_tools(
-    mcp: FastMCP, get_client: Callable
-):  # pylint: disable=too-many-statements
+def register_job_tools(mcp: FastMCP, get_client: Callable):  # pylint: disable=too-many-statements
     """Register all job and ETL-related MCP tools."""
 
     @mcp.tool()

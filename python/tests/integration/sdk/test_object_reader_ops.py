@@ -418,8 +418,8 @@ class TestParallelColdGetOps(ParallelTestBase):
             Bucket=self.bucket.name, Key=obj_name, Body=self.COLD_OBJ_DATA
         )
 
-        with self.bucket.object(obj_name).get_reader(
-            num_workers=4
-        ).read_all() as result:
+        with (
+            self.bucket.object(obj_name).get_reader(num_workers=4).read_all() as result
+        ):
             self.assertIsInstance(result, ParallelBuffer)
             self.assertEqual(result.tobytes(), self.COLD_OBJ_DATA)
