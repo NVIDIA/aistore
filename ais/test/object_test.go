@@ -351,7 +351,6 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 		srcName   = "legacy"
 	)
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
-	expectedChunks := int(cos.DivCeil(objSize, chunkSize))
 
 	// Create a temporary bucket and restore its original chunk configuration on cleanup.
 	proxyURL := tools.RandomProxyURL(t)
@@ -416,10 +415,7 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 			dstName := tools.GenerateObjectNameForTarget(srcName, test.name+"-copied", bck, smap, test.sameTarget)
 
 			// COPY is a new write and must apply the current 1GiB hard limit and configured chunk size.
-			err := api.CopyObject(bp, &api.CopyArgs{
-				FromBck: bck, FromObjName: srcName, ToBck: bck, ToObjName: dstName,
-			})
-			tassert.CheckFatal(t, err)
+			copyObjectAndCheckChunks(t, bp, bck, srcName, bck, dstName, objSize, chunkSize)
 
 			srcLock, err := api.CheckObjectLock(bp, bck, srcName)
 			tassert.CheckFatal(t, err)
@@ -427,14 +423,6 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 			dstLock, err := api.CheckObjectLock(bp, bck, dstName)
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, dstLock == apc.LockNone, "expected destination to be unlocked, got lock %d", dstLock)
-
-			dst, err := api.HeadObjectV2(bp, bck, dstName, props, api.HeadArgs{})
-			tassert.CheckFatal(t, err)
-			tassert.Fatalf(t, dst.Size == objSize, "expected destination size %d, got %d", objSize, dst.Size)
-			tassert.Fatalf(t, dst.Chunks != nil && dst.Chunks.ChunkCount == expectedChunks,
-				"expected %d destination chunks, got %+v", expectedChunks, dst.Chunks)
-			tassert.Fatalf(t, dst.Chunks.MaxChunkSize == chunkSize,
-				"expected maximum chunk size %d, got %d", chunkSize, dst.Chunks.MaxChunkSize)
 		})
 	}
 }
@@ -985,6 +973,71 @@ func TestColdGetChunked(t *testing.T) {
 			tlog.Logfln("Test case '%s' completed successfully!", tt.name)
 		})
 	}
+}
+
+func TestCopyRemoteObjectHardLimitSameTarget(t *testing.T) {
+	const (
+		chunkSize   = 16 * cos.MiB
+		maxMonoSize = 1 * cos.GiB
+		objSize     = maxMonoSize + 1
+	)
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		m          = ioContext{
+			t:         t,
+			bck:       cliBck,
+			num:       1,
+			fileSize:  objSize,
+			fixedSize: true,
+			ordered:   true,
+			prefix:    "copy-remote-hard-limit/" + trand.String(5),
+		}
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck, Long: true})
+	m.init(true /*cleanup*/)
+	m.remotePuts(true /*evict*/)
+
+	orig, err := api.HeadBucket(baseParams, m.bck, true /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+			ObjSizeLimit:      apc.Ptr(orig.Chunks.ObjSizeLimit),
+			MaxMonolithicSize: apc.Ptr(orig.Chunks.MaxMonolithicSize),
+			ChunkSize:         apc.Ptr(orig.Chunks.ChunkSize),
+		}})
+		tassert.CheckError(t, err)
+	})
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+		ObjSizeLimit:      apc.Ptr(cos.SizeIEC(0)),
+		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(maxMonoSize)),
+		ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
+	}})
+	tassert.CheckFatal(t, err)
+
+	srcName := m.prefix + "0"
+	smap := tools.GetClusterMap(t, proxyURL)
+	// Same bucket lets the placement helper deterministically exercise the local reader-copy path.
+	dstName := tools.GenerateObjectNameForTarget(srcName, m.prefix+"copied-", m.bck, smap, true /*same target*/)
+	copyObjectAndCheckChunks(t, baseParams, m.bck, srcName, m.bck, dstName, objSize, chunkSize)
+}
+
+func copyObjectAndCheckChunks(t *testing.T, bp api.BaseParams, srcBck cmn.Bck, srcName string,
+	dstBck cmn.Bck, dstName string, objSize, chunkSize int64) {
+	err := api.CopyObject(bp, &api.CopyArgs{
+		FromBck: srcBck, FromObjName: srcName, ToBck: dstBck, ToObjName: dstName,
+	})
+	tassert.CheckFatal(t, err)
+
+	props := apc.JoinProps(apc.GetPropsChunked, apc.GetPropsSize)
+	op, err := api.HeadObjectV2(bp, dstBck, dstName, props, api.HeadArgs{FltPresence: apc.FltPresent})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, op.Size == objSize, "expected destination size %d, got %d", objSize, op.Size)
+	expected := int(cos.DivCeil(objSize, chunkSize))
+	tassert.Fatalf(t, op.Chunks != nil && op.Chunks.ChunkCount == expected,
+		"expected %d destination chunks, got %+v", expected, op.Chunks)
+	tassert.Fatalf(t, op.Chunks.MaxChunkSize == chunkSize,
+		"expected maximum chunk size %d, got %d", chunkSize, op.Chunks.MaxChunkSize)
 }
 
 func TestHeadBucket(t *testing.T) {

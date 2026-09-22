@@ -1968,15 +1968,14 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
-	// TODO: propagate resp.OAH.Lsize() and enforce the destination's hard limit
-	// in this GetROC/ETL path, with coverage separate from regular object copy.
 	poi := allocPOI()
 	defer freePOI(poi)
 	{
 		poi.t = t
 		poi.lom = dst
 		poi.config = coi.Config
-		poi.r = resp.R      // transfer ownership; Close may release GetROC's source rlock
+		poi.r = resp.R // transfer ownership; Close may release GetROC's source rlock
+		poi.size = resp.OAH.Lsize()
 		poi.xctn = coi.Xact // on behalf of
 		poi.workFQN = dst.GenFQN(fs.WorkCT, "copy-dp")
 		poi.atime = resp.OAH.AtimeUnix()
