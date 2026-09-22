@@ -157,6 +157,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 		started = mono.NanoTime()
 		bp      = t.Backend(lom.Bck())
 	)
+	lom.SetCustomMD(nil) // zero-out prev. version custom metadata, if any (compare w/ goi.getCold)
 	if ecode, err = bp.GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
 		lom.UncacheDel()
 		lom.Unlock(true)

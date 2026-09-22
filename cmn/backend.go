@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -309,4 +310,13 @@ func ociEncodeMetadata(metadata map[string]string) map[string]string {
 
 func ociDecodeMetadata(header http.Header) map[string]string {
 	return _decMeta(header, OCIHeaderMetaPrefix)
+}
+
+//
+// misc. helpers
+//
+
+// store only non-default values
+func IsDefaultContentType(v string) bool {
+	return v == "" || v == cos.ContentBinary || v == cos.ContentBinaryS3
 }

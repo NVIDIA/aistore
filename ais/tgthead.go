@@ -23,7 +23,11 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-// objHeadV2 handles HEAD requests with selective property retrieval via the `props` query parameter.
+// HEAD(object), with selective property retrieval via the `props` query param.
+// TODO -- FIXME:
+// - Content-Type (cmn.ObjAttrs.ContentTypeToHeader) not set here until all backends store it on cold GET
+// - otherwise cold HEAD (via backend HeadObj) and subsequent warm GET may disagree
+// - see also: getOI.setwhdr, coldStream, objPropsToHeader
 func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *meta.Bck, lom *core.LOM) (int, error) {
 	var (
 		started     = mono.NanoTime()

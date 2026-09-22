@@ -223,6 +223,9 @@ func (resp *PresignedResp) ObjAttrs() (oa *cmn.ObjAttrs) {
 	oa = &cmn.ObjAttrs{}
 	oa.CustomMD = make(cos.StrKVs, 3)
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AWS)
+	if v := resp.Header.Get(cos.HdrContentType); !cmn.IsDefaultContentType(v) {
+		oa.SetCustomKey(cos.HdrContentType, v)
+	}
 	if v, ok := h.EncodeETag(resp.Header.Get(cos.HdrETag)); ok {
 		oa.SetCustomKey(cmn.ETag, v)
 	}

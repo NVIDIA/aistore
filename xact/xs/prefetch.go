@@ -265,7 +265,7 @@ func (r *prefetch) _whinge(lom *core.LOM, size int64) {
 func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 	started := mono.NanoTime()
 
-	// either a) LoadLatest => UncacheDel (not-latest) or b) not-found
+	// note invariant: either a) LoadLatest => UncacheDel (not-latest) or b) not-found
 	debug.Func(func() { debug.Assert(lom.GetCustomMD() == nil, lom.Cname()) })
 
 	if ecode, err = r.bp.GetObj(r.ctx, lom, cmn.OwtGetPrefetchLock, nil /*origReq*/); err != nil {

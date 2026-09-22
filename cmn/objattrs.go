@@ -323,6 +323,15 @@ func (oa *ObjAttrs) DelCustomKey(k string) {
 	delete(oa.CustomMD, k)
 }
 
+// GET and HEAD responses: stored Content-Type, if any; otherwise cos.ContentBinary
+func (oa *ObjAttrs) ContentTypeToHeader(hdr http.Header) {
+	if v, ok := oa.GetCustomKey(cos.HdrContentType); ok && !IsDefaultContentType(v) {
+		hdr.Set(cos.HdrContentType, v)
+		return
+	}
+	hdr.Set(cos.HdrContentType, cos.ContentBinary)
+}
+
 // clone OAH => ObjAttrs (see also lom.CopyAttrs)
 func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 	oa.Atime = oah.AtimeUnix()

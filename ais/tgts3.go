@@ -234,6 +234,13 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 			return
 		}
 	}
+	// Content-Type: ais:// and s3:// only (the latter via aws PutObj);
+	// TODO: other providers (to preserve remote round-trip)
+	if bck.IsAIS() || bck.IsRemoteS3() {
+		if v := r.Header.Get(cos.HdrContentType); !cmn.IsDefaultContentType(v) {
+			lom.SetCustomKey(cos.HdrContentType, v)
+		}
+	}
 	started := time.Now()
 	lom.SetAtimeUnix(started.UnixNano())
 	if bck.IsAIS() {
@@ -395,9 +402,8 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	// set s3 response headers
 	s3.SetS3Headers(hdr, lom)
 	hdr.Set(cos.HdrContentLength, strconv.FormatInt(op.Size, 10))
-	if v, ok := custom[cos.HdrContentType]; ok {
-		hdr.Set(cos.HdrContentType, v)
-	}
+	lom.ObjAttrs().ContentTypeToHeader(hdr)
+
 	// - https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	// - https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
 	if cksum := lom.Checksum(); cksum != nil && cksum.Ty() != cos.ChecksumNone {

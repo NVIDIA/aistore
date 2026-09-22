@@ -121,8 +121,9 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	)
 
 	// response header
-	whdr.Set(cos.HdrContentType, cos.ContentBinary)
-	cmn.ToHeader(lom.ObjAttrs(), whdr, res.Size)
+	oa := lom.ObjAttrs()
+	oa.ContentTypeToHeader(whdr) // stored or cos.ContentBinary
+	cmn.ToHeader(oa, whdr, res.Size)
 	if goi.dpq.isS3 {
 		// (expecting user to set bucket checksum = md5)
 		s3.SetS3Headers(whdr, goi.lom)

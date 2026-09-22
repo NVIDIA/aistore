@@ -424,11 +424,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		oa.SetCustomKey(k, v)
 	}
 
-	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
-	// - only shown via list-objects and HEAD when not present
-	if v := headOutput.ContentType; v != nil {
-		oa.SetCustomKey(cos.HdrContentType, *v)
-	}
+	setContentType(oa, headOutput.ContentType)
 	if v := headOutput.LastModified; v != nil {
 		mtime := *(headOutput.LastModified)
 		if oa.Atime == 0 {
@@ -554,6 +550,7 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 	for k, v := range h.EncodeMetadata(obj.Metadata) {
 		lom.SetCustomKey(k, v)
 	}
+	setContentType(lom.ObjAttrs(), obj.ContentType)
 	mtime := *(obj.LastModified)
 
 	// double down
@@ -567,39 +564,55 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 // PUT OBJECT
 //
 
-func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode int, err error) {
+func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.Request) (int, error) {
+	var out *s3manager.UploadOutput
+	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
+		o, ecode, err := putPresigned(oreq, lom, r)
+		if err != nil {
+			return ecode, err
+		}
+		out = o // nil: fall through to regular upload
+	}
+	if out == nil {
+		o, ecode, err := putUpload(ctx, r, lom, oreq)
+		if err != nil {
+			return ecode, err
+		}
+		out = o
+	}
+	putSetCustom(lom, oreq, out)
+	return 0, nil
+}
+
+func putPresigned(oreq *http.Request, lom *core.LOM, r io.ReadCloser) (*s3manager.UploadOutput, int, error) {
+	pts, ecode, err := newPresignedReq(oreq, lom, r)
+	if err != nil {
+		return nil, ecode, err
+	}
+	resp, err := pts.Do(core.T.DataClient())
+	if err != nil {
+		return nil, _awsPresignedStatus(resp), err
+	}
+	if resp == nil {
+		return nil, 0, nil
+	}
+	return &s3manager.UploadOutput{
+		VersionID: aws.String(resp.Header.Get(cos.S3VersionHeader)),
+		ETag:      aws.String(resp.Header.Get(cos.HdrETag)),
+	}, 0, nil
+}
+
+func putUpload(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.Request) (*s3manager.UploadOutput, int, error) {
 	const tag = "[put_object]"
 	var (
-		svc                   *s3.Client
-		uploader              *s3manager.Uploader
-		uploadOutput          *s3manager.UploadOutput
-		h                     = cmn.BackendHelpers.Amazon
 		cksumType, cksumValue = lom.Checksum().Get()
 		cloudBck              = lom.Bck().RemoteBck()
 		sessConf              = sessConf{bck: cloudBck}
 		md                    = make(map[string]string, 2)
 	)
-	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts, ecode, err := newPresignedReq(oreq, lom, r)
-		if err != nil {
-			return ecode, err
-		}
-		resp, err := pts.Do(core.T.DataClient())
-		if err != nil {
-			return _awsPresignedStatus(resp), err
-		}
-		if resp != nil {
-			uploadOutput = &s3manager.UploadOutput{
-				VersionID: aws.String(resp.Header.Get(cos.S3VersionHeader)),
-				ETag:      aws.String(resp.Header.Get(cos.HdrETag)),
-			}
-			goto setmd
-		}
-	}
-
-	svc, err = sessConf.s3client(tag)
+	svc, err := sessConf.s3client(tag)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 
 	md[cos.S3MetadataChecksumType] = cksumType
@@ -609,8 +622,7 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 		maps.Copy(md, dm)
 	}
 
-	uploader = s3manager.NewUploader(svc)
-
+	uploader := s3manager.NewUploader(svc)
 	switch partSize := int64(lom.Bprops().Extra.AWS.MultiPartSize); partSize {
 	case -1:
 		uploader.PartSize = lom.Lsize() + 1 // forces single-part upload
@@ -620,28 +632,35 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 		uploader.PartSize = partSize
 	}
 
-	uploadOutput, err = uploader.Upload(ctx, &s3.PutObjectInput{
+	input := &s3.PutObjectInput{
 		Bucket:   aws.String(cloudBck.Name),
 		Key:      aws.String(lom.ObjName),
 		Body:     r,
 		Metadata: md,
-	})
-	cos.Close(r)
-
-	if err != nil {
-		return awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 	}
+	if v, ok := lom.GetCustomKey(cos.HdrContentType); ok {
+		input.ContentType = aws.String(v)
+	}
+	out, err := uploader.Upload(ctx, input)
+	cos.Close(r)
+	if err != nil {
+		ecode, e := awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
+		return nil, ecode, e
+	}
+	return out, 0, nil
+}
 
-setmd:
-	// compare with _getCustom() above
-	if v, ok := h.EncodeVersion(uploadOutput.VersionID); ok {
+// compare with _getCustom() above
+func putSetCustom(lom *core.LOM, oreq *http.Request, out *s3manager.UploadOutput) {
+	h := cmn.BackendHelpers.Amazon
+	if v, ok := h.EncodeVersion(out.VersionID); ok {
 		lom.SetCustomKey(cmn.VersionObjMD, v)
 		lom.SetVersion(v)
 	}
-	if v, ok := h.EncodeETag(uploadOutput.ETag); ok {
+	if v, ok := h.EncodeETag(out.ETag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 	}
-	if v, ok := h.EncodeCksum(uploadOutput.ETag); ok {
+	if v, ok := h.EncodeCksum(out.ETag); ok {
 		lom.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if oreq != nil {
@@ -652,9 +671,8 @@ setmd:
 		}
 	}
 	if cmn.Rom.V(5, cos.ModBackend) {
-		nlog.Infoln(tag, lom.String())
+		nlog.Infoln("[put_object]", lom.String())
 	}
-	return 0, nil
 }
 
 //
@@ -983,4 +1001,13 @@ func _awsPresignedStatus(resp *aiss3.PresignedResp) int {
 		return 0
 	}
 	return resp.StatusCode
+}
+
+// store non-default value; see also cmn.ObjAttrs.ContentTypeToHeader
+func setContentType(oa *cmn.ObjAttrs, v *string) {
+	if v == nil || cmn.IsDefaultContentType(*v) {
+		oa.DelCustomKey(cos.HdrContentType)
+		return
+	}
+	oa.SetCustomKey(cos.HdrContentType, *v)
 }

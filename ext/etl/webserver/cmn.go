@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-const GetContentType = "binary/octet-stream"
+const GetContentType = cos.ContentBinary // (same default as Python base_etl_server)
 
 func setResponseHeaders(header http.Header, size int64) {
 	if size > 0 {

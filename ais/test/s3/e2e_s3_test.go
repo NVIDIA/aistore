@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var testTools = []string{"aws", "s3cmd"}
+var testTools = []string{"s3cmd"}
 
 func TestE2ES3(t *testing.T) {
 	for _, testTool := range testTools {

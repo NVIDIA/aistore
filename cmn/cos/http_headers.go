@@ -20,7 +20,8 @@ const (
 	ContentJSONCharsetUTF = "application/json; charset=utf-8"
 	ContentMsgPack        = "application/msgpack" // see AcceptsMsgPack() parser below
 	ContentXML            = "application/xml"
-	ContentBinary         = "application/octet-stream"
+	ContentBinary         = "application/octet-stream" // the default
+	ContentBinaryS3       = "binary/octet-stream"      // S3 default for untyped objects (recognized, never emitted)
 	ContentZip            = "application/zip"
 
 	// not present in IANA registry

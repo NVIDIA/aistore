@@ -1316,12 +1316,13 @@ func _txsize(size int64) int64 {
 }
 
 func (goi *getOI) setwhdr(whdr http.Header, cksum *cos.Cksum, size int64) {
-	whdr.Set(cos.HdrContentType, cos.ContentBinary)
+	oa := goi.lom.ObjAttrs()
+	oa.ContentTypeToHeader(whdr) // stored or cos.ContentBinary
 	if goi.dpq.isS3 {
 		whdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 		s3.SetS3Headers(whdr, goi.lom)
 	} else {
-		cmn.ToHeader(goi.lom.ObjAttrs(), whdr, size, cksum)
+		cmn.ToHeader(oa, whdr, size, cksum)
 	}
 
 	// when applicable, retire the kTLS-armed connection _after_ this response
