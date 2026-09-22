@@ -25,8 +25,8 @@ const mlspec = `
 	    {"objname": "file2.wav", "bucket": "speech-data", "provider": "ais"},
 	    {"objname": "model.pth", "bucket": "models", "provider": "s3"}
 	  ],
-	  "output_format": "tar",
-	  "streaming_get": false
+	  "mime": ".tar",
+	  "strm": false
 	}'
 `
 const getBatchUsage = "Get multiple objects and/or archived files from different buckets and package into a consolidated archive.\n" +

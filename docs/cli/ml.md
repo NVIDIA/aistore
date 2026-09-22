@@ -80,7 +80,7 @@ ais ml get-batch [SRC ...] DST_ARCHIVE [flags]
 | Build compressed range archive        | `ais ml get-batch ais://models --template "checkpoint-{001..100}.pth" model-v2.tgz`     |
 | Extract a single file from a shard    | `ais ml get-batch ais://data/shard.tar/file.wav dataset.zip`                            |
 | Drive via JSON spec on disk           | `ais ml get-batch training.tar --spec batch.json`                                       |
-| Inline YAML spec, stream to disk      | `ais ml get-batch /tmp/out.tar --spec '{ in: [...], streaming_get: true }' --streaming` |
+| Inline YAML spec, stream to disk      | `ais ml get-batch /tmp/out.tar --spec '{ in: [...], strm: true }' --streaming` |
 
 ### Key Options
 
