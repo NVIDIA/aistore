@@ -186,6 +186,9 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		lom      = poi.lom
 		uploadID string
 	)
+	if poi.r != nil {
+		defer cos.Close(poi.r) // poi owns it (see "transfer ownership")
+	}
 
 	switch {
 	case poi.size <= 0:
@@ -1988,7 +1991,7 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core
 		poi.t = t
 		poi.lom = dst
 		poi.config = coi.Config
-		poi.r = resp.R // transfer ownership; Close may release GetROC's source rlock
+		poi.r = resp.R // transfer ownership
 		poi.size = resp.OAH.Lsize()
 		poi.xctn = coi.Xact // on behalf of
 		poi.workFQN = dst.GenFQN(fs.WorkCT, "copy-dp")
@@ -2065,13 +2068,12 @@ func (coi *coi) _chunk(t *target, lom, dst *core.LOM, dstChunkSize int64) (res x
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
-	defer cos.Close(resp.R) // releases the source rlock acquired by GetROC
 	poi := allocPOI()
 	defer freePOI(poi)
 	{
 		poi.t = t
 		poi.lom = dst
-		poi.r = resp.R
+		poi.r = resp.R // transfer ownership
 		poi.size = lom.Lsize()
 		poi.xctn = coi.Xact // on behalf of
 		poi.owt = coi.OWT

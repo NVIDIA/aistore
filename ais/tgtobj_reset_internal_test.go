@@ -84,7 +84,11 @@ func TestGetObjectColdMissReset(t *testing.T) {
 		lom.Lock(true)
 		_, err = poi.chunk(chunkSize)
 		lom.Unlock(true)
-		cos.Close(source)
+
+		// TODO:
+		// rand-reader.Close() always returns nil
+		// but here the source.Close() would be expected to return an error on second close
+
 		tassert.CheckFatal(t, err)
 		tassert.CheckFatal(t, lom.Load(false, false))
 		tassert.Fatalf(t, lom.IsChunked(), "expected initially chunked object")
