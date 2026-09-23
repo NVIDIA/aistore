@@ -249,6 +249,73 @@ func TestCopyRegularPreservesChunkedLayout(t *testing.T) {
 	tassert.Fatalf(t, manifest.Count() == want, "expected %d preserved chunks, got %d", want, manifest.Count())
 }
 
+func TestCopyRegularChunkPreservesMetadata(t *testing.T) {
+	const (
+		srcName = "copy-regular-chunk-md-src"
+		dstName = "copy-regular-chunk-md-dst"
+		mdKey   = "x-amz-meta-color"
+		mdVal   = "teal"
+	)
+	data := []byte("0123456789")
+
+	src := core.AllocLOM(srcName)
+	defer core.FreeLOM(src)
+	err := src.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+
+	chunks := src.Bprops().Chunks
+	defer restoreTestChunks(src.Bprops(), chunks)
+	src.Bprops().Chunks.MaxMonolithicSize = cos.SizeIEC(len(data) + 1) // monolithic source
+
+	src.SetCustomKey(mdKey, mdVal)
+	poi := &putOI{
+		t:       mockTarget,
+		atime:   time.Now().UnixNano(),
+		lom:     src,
+		r:       readers.NewBytes(data),
+		config:  cmn.GCO.Get(),
+		workFQN: src.GenFQN(fs.WorkCT, fs.WorkfilePut),
+		size:    int64(len(data)),
+	}
+	_, err = poi.putObject()
+	tassert.CheckFatal(t, err)
+
+	src.Lock(false)
+	err = src.Load(false /*cache it*/, true /*locked*/)
+	src.Unlock(false)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, !src.IsChunked(), "expected monolithic source")
+	v, ok := src.GetCustomKey(mdKey)
+	tassert.Fatalf(t, ok && v == mdVal, "source: expected %s=%s, got %q", mdKey, mdVal, v)
+	srcVer := src.Version()
+
+	// lower the limit: _regular => _chunk
+	src.Bprops().Chunks.MaxMonolithicSize = 1
+	src.Bprops().Chunks.ChunkSize = 4
+
+	dst := core.AllocLOM(dstName)
+	defer core.FreeLOM(dst)
+	err = dst.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+
+	coi := &coi{Buf: make([]byte, cos.KiB), Config: cmn.GCO.Get()}
+	res := coi._regular(mockTarget, src, dst, false /*lcopy*/)
+	tassert.CheckFatal(t, res.Err)
+
+	check := core.AllocLOM(dstName)
+	defer core.FreeLOM(check)
+	err = check.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+	check.Lock(false)
+	err = check.Load(false /*cache it*/, true /*locked*/)
+	check.Unlock(false)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, check.IsChunked(), "expected chunked destination")
+	v, ok = check.GetCustomKey(mdKey)
+	tassert.Fatalf(t, ok && v == mdVal, "destination: expected %s=%s, got %q", mdKey, mdVal, v)
+	tassert.Fatalf(t, check.Version() == srcVer, "destination version %q vs source %q", check.Version(), srcVer)
+}
+
 func TestCopyReaderChunkReleasesSourceLock(t *testing.T) {
 	const (
 		srcName   = "copy-reader-lock-src"
@@ -300,6 +367,68 @@ func TestCopyReaderChunkReleasesSourceLock(t *testing.T) {
 		t.Fatal("reader copy leaked the source read lock")
 	}
 	src.Unlock(true)
+}
+
+// models remote bucket copied onto itself w/ --latest or --sync (allowed; see proxy):
+// unchanged object => GetROC returns a local reader that holds the (same-uname) rlock
+func TestCopyReaderChunkSameUname(t *testing.T) {
+	const (
+		objName   = "copy-reader-same-uname"
+		chunkSize = 4
+	)
+	data := []byte("oversized")
+
+	src := core.AllocLOM(objName)
+	defer core.FreeLOM(src)
+	err := src.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+	defer src.RemoveMain()
+
+	chunks := src.Bprops().Chunks
+	defer restoreTestChunks(src.Bprops(), chunks)
+	src.Bprops().Chunks.MaxMonolithicSize = cos.SizeIEC(len(data) + 1)
+
+	poi := &putOI{
+		t:       mockTarget,
+		atime:   time.Now().UnixNano(),
+		lom:     src,
+		r:       readers.NewBytes(data),
+		config:  cmn.GCO.Get(),
+		workFQN: src.GenFQN(fs.WorkCT, fs.WorkfilePut),
+		size:    int64(len(data)),
+	}
+	_, err = poi.putObject()
+	tassert.CheckFatal(t, err)
+
+	src.Bprops().Chunks.MaxMonolithicSize = 1
+	src.Bprops().Chunks.ChunkSize = chunkSize
+	dst := core.AllocLOM(objName)
+	defer core.FreeLOM(dst)
+	err = dst.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, src.Uname() == dst.Uname(), "expected same uname")
+
+	coi := &coi{GetROC: core.GetDefaultROC, Config: cmn.GCO.Get(), OWT: cmn.OwtCopy}
+	done := make(chan xs.CoiRes, 1)
+	go func() { done <- coi._reader(mockTarget, nil /*dm*/, src, dst, &core.ETLArgs{}) }()
+	var res xs.CoiRes
+	select {
+	case res = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("same-uname reader copy deadlocked (source rlock held while completing w/ destination wlock)")
+	}
+	tassert.CheckFatal(t, res.Err)
+
+	check := core.AllocLOM(objName)
+	defer core.FreeLOM(check)
+	err = check.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+	check.Lock(false)
+	err = check.Load(false /*cache it*/, true /*locked*/)
+	check.Unlock(false)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, check.IsChunked(), "expected chunked")
+	tassert.Fatalf(t, check.Lsize() == int64(len(data)), "expected size %d, got %d", len(data), check.Lsize())
 }
 
 func TestCopyReaderNoopReleasesSourceLock(t *testing.T) {

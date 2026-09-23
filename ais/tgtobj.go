@@ -185,9 +185,11 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		lom      = poi.lom
 		uploadID string
 	)
-	if poi.r != nil {
-		defer cos.Close(poi.r) // poi owns it (see "transfer ownership")
-	}
+	defer func() {
+		if poi.r != nil {
+			cos.Close(poi.r) // poi owns it (see "transfer ownership")
+		}
+	}()
 
 	switch {
 	case poi.size <= 0:
@@ -246,13 +248,8 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		partNum++
 	}
 
-	// expecting exactly poi.size (compare w/ ups._put)
-	var b [1]byte
-	if n, _ := io.ReadFull(poi.r, b[:]); n > 0 {
-		poi.t.ups.abort(poi.oreq, lom, uploadID)
-		return http.StatusInternalServerError, fmt.Errorf("%s: source exceeds its declared size %d", lom.Cname(), poi.size)
-	}
-
+	cos.Close(poi.r) // ditto
+	poi.r = nil
 	_, ecode, err = poi.t.ups.complete(&completeArgs{
 		r:           poi.oreq,
 		lom:         lom,
@@ -2065,6 +2062,11 @@ func (coi *coi) _chunk(t *target, lom, dst *core.LOM, dstChunkSize int64) (res x
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
+	// preserve source version and custom metadata - same as Copy2FQN in _regular
+	// (CopyAttrs copies key by key - dst must not alias the source's CustomMD map;
+	// size and atime get overwritten upon completion)
+	dst.CopyAttrs(lom, true /*skip checksum: computed upon completion*/)
+
 	poi := allocPOI()
 	defer freePOI(poi)
 	{
