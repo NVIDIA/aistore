@@ -107,6 +107,7 @@ func (e *etlMD) add(msg etl.InitMsg, stage etl.Stage, podMap etl.PodMap) error {
 	return nil
 }
 
+//nolint:unused,nolintlint // compiled with 'build_tags: etl'
 func (e *etlMD) get(id string) (msg etl.InitMsg, stage etl.Stage) {
 	if en, ok := e.ETLs[id]; ok {
 		return en.InitMsg, en.Stage
