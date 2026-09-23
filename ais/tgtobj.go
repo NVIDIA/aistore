@@ -286,6 +286,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
 			}
 			cos.DrainReader(poi.r)
+			cos.Close(poi.r)
 			return 0, nil
 		}
 	}

@@ -249,6 +249,111 @@ func TestCopyRegularPreservesChunkedLayout(t *testing.T) {
 	tassert.Fatalf(t, manifest.Count() == want, "expected %d preserved chunks, got %d", want, manifest.Count())
 }
 
+func TestCopyReaderChunkReleasesSourceLock(t *testing.T) {
+	const (
+		srcName   = "copy-reader-lock-src"
+		dstName   = "copy-reader-lock-dst"
+		chunkSize = 4
+	)
+	data := []byte("oversized")
+
+	src := core.AllocLOM(srcName)
+	defer core.FreeLOM(src)
+	err := src.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+	defer src.RemoveMain()
+
+	chunks := src.Bprops().Chunks
+	defer restoreTestChunks(src.Bprops(), chunks)
+	src.Bprops().Chunks.MaxMonolithicSize = cos.SizeIEC(len(data) + 1)
+
+	poi := &putOI{
+		t:       mockTarget,
+		atime:   time.Now().UnixNano(),
+		lom:     src,
+		r:       readers.NewBytes(data),
+		config:  cmn.GCO.Get(),
+		workFQN: src.GenFQN(fs.WorkCT, fs.WorkfilePut),
+		size:    int64(len(data)),
+	}
+	_, err = poi.putObject()
+	tassert.CheckFatal(t, err)
+
+	src.Bprops().Chunks.MaxMonolithicSize = 1
+	src.Bprops().Chunks.ChunkSize = chunkSize
+	dst := core.AllocLOM(dstName)
+	defer core.FreeLOM(dst)
+	err = dst.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+	defer dst.RemoveMain()
+
+	coi := &coi{GetROC: core.GetDefaultROC, Config: cmn.GCO.Get(), OWT: cmn.OwtCopy}
+	res := coi._reader(mockTarget, nil /*dm*/, src, dst, &core.ETLArgs{})
+	tassert.CheckFatal(t, res.Err)
+	tassert.Fatalf(t, res.Lsize == int64(len(data)), "expected size %d, got %d", len(data), res.Lsize)
+
+	err = dst.Load(false /*cache it*/, false /*locked*/)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, dst.IsChunked(), "expected reader copy above hard limit to be chunked")
+
+	if !src.TryLock(true) {
+		t.Fatal("reader copy leaked the source read lock")
+	}
+	src.Unlock(true)
+}
+
+func TestCopyReaderNoopReleasesSourceLock(t *testing.T) {
+	const (
+		srcName = "copy-reader-noop-lock-src"
+		dstName = "copy-reader-noop-lock-dst"
+	)
+	data := []byte("identical")
+	bck := &meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal}
+
+	src := core.AllocLOM(srcName)
+	defer core.FreeLOM(src)
+	err := src.InitBck(bck)
+	tassert.CheckFatal(t, err)
+	defer src.RemoveMain()
+
+	props := src.Bprops()
+	chunks := props.Chunks
+	defer restoreTestChunks(props, chunks)
+	props.Chunks.MaxMonolithicSize = cos.SizeIEC(len(data) + 1)
+	cksumType := props.Cksum.Type
+	t.Cleanup(func() { props.Cksum.Type = cksumType })
+	props.Cksum.Type = cos.ChecksumOneXxh
+
+	dst := core.AllocLOM(dstName)
+	defer core.FreeLOM(dst)
+	err = dst.InitBck(bck)
+	tassert.CheckFatal(t, err)
+	defer dst.RemoveMain()
+
+	for _, lom := range []*core.LOM{src, dst} {
+		poi := &putOI{
+			t:       mockTarget,
+			atime:   time.Now().UnixNano(),
+			lom:     lom,
+			r:       readers.NewBytes(data),
+			config:  cmn.GCO.Get(),
+			workFQN: lom.GenFQN(fs.WorkCT, fs.WorkfilePut),
+			size:    int64(len(data)),
+		}
+		_, err = poi.putObject()
+		tassert.CheckFatal(t, err)
+	}
+	tassert.Fatalf(t, dst.EqCksum(src.Checksum()), "expected identical checksums")
+
+	coi := &coi{GetROC: core.GetDefaultROC, Config: cmn.GCO.Get(), OWT: cmn.OwtCopy}
+	res := coi._reader(mockTarget, nil /*dm*/, src, dst, &core.ETLArgs{})
+	tassert.CheckFatal(t, res.Err)
+	if !src.TryLock(true) {
+		t.Fatal("no-op reader copy leaked the source read lock")
+	}
+	src.Unlock(true)
+}
+
 func restoreTestChunks(props *cmn.Bprops, chunks cmn.ChunksConf) { props.Chunks = chunks }
 
 func TestApndParseHandle(t *testing.T) {
