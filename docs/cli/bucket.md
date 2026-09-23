@@ -683,7 +683,7 @@ coco-train2014-seg-000005.tar    958.19MiB
 For starters, we archive all aistore docs:
 
 ```console
-$ ais put docs ais://A.tar --archive -r
+$ ais archive put docs ais://nnn/A.tar -r
 ```
 To list a certain virtual subdirectory _inside_ this newly created shard:
 

@@ -635,7 +635,7 @@ arch.tar            4.5KiB
 For starters, we recursively archive all aistore docs:
 
 ```console
-$ ais put docs ais://A.tar --archive -r
+$ ais archive put docs ais://nnn/A.tar -r
 ```
 
 To list a virtual subdirectory _inside_ this newly created shard (e.g.):
@@ -851,7 +851,7 @@ GET B.tar.lz4 from ais://dst as "/tmp/w/B.tar.lz4" (247.88KiB) and extract as /t
 For starters, we recursively archive all aistore docs:
 
 ```console
-$ ais put docs ais://A.tar --archive -r
+$ ais archive put docs ais://nnn/A.tar -r
 ```
 
 To list a virtual subdirectory _inside_ this newly created shard (e.g.):

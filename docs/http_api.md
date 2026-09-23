@@ -281,7 +281,7 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-confi
 
 ```console
 # Set bucket properties
-$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"set-bprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enable": true}, "force": false}}' 'http://G/v1/buckets/abc'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"set-bprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enabled": true}, "force": false}}' 'http://G/v1/buckets/abc'
 
 # Reset bucket properties
 $ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"reset-bprops"}' 'http://G/v1/buckets/abc'

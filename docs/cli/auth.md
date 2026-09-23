@@ -140,7 +140,7 @@ user2   PowerUser
 
 ### Update user
 
-`ais auth update user [-p USER_PASS] USER_NAME [ROLE [ROLE...]]`
+`ais auth set user [-p USER_PASS] USER_NAME [ROLE [ROLE...]]`
 
 Updates user password and list of roles. If the role list is omitted, the current
 user role remains unchanged.
@@ -228,7 +228,7 @@ k5zAzdhbr       clusterOne   GET,HEAD-BUCKET,LIST-OBJECTS
 
 ### Update role
 
-`ais auth update role ROLE [PERMISSION [PERMISSION...]] [--flags]`
+`ais auth set role ROLE [PERMISSION [PERMISSION...]] [--flags]`
 
 Updates an existing role. Changes apply to all users that have the role assigned.
 The built-in `Admin` role cannot be modified.
@@ -239,10 +239,10 @@ Accepts the same flags as [Add a new role](#add-a-new-role): `--cluster`, `--buc
 
 ```console
 # Update a role description
-$ ais auth update role listRole --desc "List buckets and objects only"
+$ ais auth set role listRole --desc "List buckets and objects only"
 
-# Grant additional permissions to a cluster-level role
-$ ais auth update role specRole --cluster clusterOne GET HEAD-BUCKET LIST-OBJECTS
+# Set permissions for a cluster-level role
+$ ais auth set role specRole --cluster clusterOne GET HEAD-BUCKET LIST-OBJECTS
 ```
 
 ### Remove existing role
@@ -400,9 +400,9 @@ See full example in [List registered clusters](#list-registered-clusters).
 
 ### Update existing cluster
 
-`ais auth update cluster CLUSTER_ID [ALIAS] URL [URL...]`
+`ais auth set cluster CLUSTER_ID_OR_ALIAS URL [URL...]`
 
-Replaces the list of URLs or changes alias for an existing cluster.
+Replaces the list of URLs for an existing cluster, identified by ID or current alias.
 
 ### Unregister existing cluster
 

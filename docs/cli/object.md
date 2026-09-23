@@ -339,7 +339,7 @@ GET B.tar.lz4 from ais://dst as "/tmp/w/B.tar.lz4" (247.88KiB) and extract as /t
 For starters, we recursively archive all aistore docs:
 
 ```console
-$ ais put docs ais://A.tar --archive -r
+$ ais archive put docs ais://nnn/A.tar -r
 ```
 
 To list a virtual subdirectory _inside_ this newly created shard (e.g.):
@@ -755,11 +755,11 @@ $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash 05967d
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
-Optionally, the user can choose to provide a `--compute-cksum` flag for the checksum flag and
-let the API take care of the computation.
+Use `--compute-checksum` to compute the checksum using the algorithm configured for the destination bucket
+and send it with the PUT request for server-side validation.
 
 ```console
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-cksum
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-checksum
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 

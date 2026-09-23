@@ -26,8 +26,8 @@ NAME:
               - output_format: (ditto)
               - output_shard_size: (as the name implies)
    E.g. inline JSON spec:
-                $ ais start dsort '{
-                  "extension": ".tar",
+                $ ais start dsort --spec '{
+                  "input_extension": ".tar",
                   "input_bck": {"name": "dsort-testing"},
                   "input_format": {"template": "shard-{0..9}"},
                   "output_shard_size": "200KB",
@@ -37,7 +37,7 @@ NAME:
                 }'
    E.g. inline YAML spec:
                 $ ais start dsort -f - <<EOM
-                  extension: .tar
+                  input_extension: .tar
                   input_bck:
                       name: dsort-testing
                   input_format:
@@ -63,14 +63,14 @@ OPTIONS:
 
 ## Example
 
-This example simply runs [ais/test/scripts/dsort-ex1-spec.json](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/dsort-spec1.json) specification. The source and destination buckets - ais://src and ais://dst, respectively - must exist.
+This example simply runs [ais/test/scripts/dsort-spec1.json](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/dsort-spec1.json) specification. The source and destination buckets - ais://src and ais://dst, respectively - must exist.
 
 Further, the source buckets must have at least 10 shards with names that match `input_format` (see below).
 
 Notice the `-v` (`--verbose`) switch as well.
 
 ```console
-$ ais start dsort ais://src ais://dst -f ais/test/scripts/dsort-ex1-spec.json --verbose
+$ ais start dsort ais://src ais://dst -f ais/test/scripts/dsort-spec1.json --verbose
 PROPERTY                         VALUE
 algorithm.content_key_type       -
 algorithm.decreasing             false
@@ -81,17 +81,18 @@ create_concurrency_max_limit     0
 description                      sort shards alphanumerically
 dry_run                          false
 dsorter_type                     -
-extension                        .tar
+ekm_file                         -
+ekm_file_sep                     \t
 extract_concurrency_max_limit    0
 input_bck                        ais://src
+input_extension                  .tar
 input_format.objnames            -
 input_format.template            shard-{0..9}
 max_mem_usage                    -
-ekm_file                       -
-ekm_file_sep                   \t
 output_bck                       ais://dst
+output_extension                 -
 output_format                    new-shard-{0000..1000}
-output_shard_size                10KB
+output_shard_size                 10KB
 
 Config override:                 none
 
@@ -110,18 +111,19 @@ Put randomly generated shards into a bucket. The main use case for this command 
 `ais start dsort --spec JOB_SPEC` or `ais start dsort -f <PATH_TO_JOB_SPEC>`
 
 Start new dSort job with the provided specification.
-Specification should be provided by either argument or `-f` flag - providing both argument and flag will result in error.
+Provide the specification with `--spec` (or `-f`) as inline JSON, a JSON or YAML file path, or `-` to read from standard input.
 Upon creation, `JOB_ID` of the job is returned - it can then be used to abort it or retrieve metrics.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--spec, -f` | `string` | Path to JSON or YAML specification. Providing `-` will result in reading from STDIN | `""` |
+| `--spec, -f` | `string` | Inline JSON, a path to a JSON or YAML specification, or `-` to read from standard input | `""` |
 
 The following table describes JSON/YAML keys which can be used in the specification.
 
 | Key | Type | Description | Required | Default |
 | --- | --- | --- | --- | --- |
-| `extension` | `string` | extension of input and output shards (either `.tar`, `.tgz` or `.zip`) | yes | |
+| `input_extension` | `string` | extension of input shards (`.tar`, `.tgz`, `.tar.gz`, `.tar.lz4`, or `.zip`) | no | inferred from `input_format.template` when it ends in a supported extension |
+| `output_extension` | `string` | extension of output shards (`.tar`, `.tgz`, `.tar.gz`, `.tar.lz4`, or `.zip`) | no | inferred from `output_format` when it ends in a supported extension; otherwise `input_extension` |
 | `input_format.template` | `string` | name template for input shard | yes | |
 | `output_format` | `string` | name template for output shard | yes | |
 | `input_bck.name` | `string` | bucket name where shards objects are stored | yes | |
@@ -164,7 +166,7 @@ Assuming that `dsort_spec.json` contains:
 
 ```json
 {
-    "extension": ".tar",
+    "input_extension": ".tar",
     "input_bck": {"name": "dsort-testing"},
     "input_format": {
       "template": "shard-{0..9}"
@@ -174,7 +176,7 @@ Assuming that `dsort_spec.json` contains:
     "description": "sort shards from 0 to 9",
     "algorithm": {
       "kind": "alphanumeric"
-    },
+    }
 }
 ```
 
@@ -192,7 +194,7 @@ Each of the **output** shards will have at least `10240` bytes (`10KB`) and will
 
 ```console
 $ ais start dsort -f - <<EOM
-extension: .tar
+input_extension: .tar
 input_bck:
     name: dsort-testing
 input_format:
@@ -285,7 +287,7 @@ You can run:
 
 ```console
 $ ais start dsort --spec '{
-    "extension": ".tar",
+    "input_extension": ".tar",
     "input_bck": {"name": "dsort-testing"},
     "input_format": {"template": "shard-{0..9}"},
     "output_shard_size": "200KB",
