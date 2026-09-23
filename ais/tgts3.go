@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -265,7 +264,8 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		t.FSHC(err, lom.Mountpath(), lom.FQN)
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 	} else {
-		s3.SetS3Headers(w.Header(), lom)
+		rsphdr := rsphdr{hdr: w.Header(), lom: lom, size: -1, s3: true}
+		rsphdr.set()
 	}
 }
 
@@ -400,13 +400,12 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	lom.SetCustomMD(custom)
 
 	// set s3 response headers
-	s3.SetS3Headers(hdr, lom)
-	hdr.Set(cos.HdrContentLength, strconv.FormatInt(op.Size, 10))
-	lom.ObjAttrs().ContentTypeToHeader(hdr)
+	rsphdr := rsphdr{hdr: hdr, lom: lom, size: op.Size, s3: true, ctype: true}
+	rsphdr.set()
 
 	// - https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	// - https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
-	if cksum := lom.Checksum(); cksum != nil && cksum.Ty() != cos.ChecksumNone {
+	if cksum := op.Checksum(); cksum != nil && cksum.Ty() != cos.ChecksumNone {
 		hdr.Set(cos.S3MetadataChecksumType, cksum.Ty())
 		hdr.Set(cos.S3MetadataChecksumVal, cksum.Val())
 	}

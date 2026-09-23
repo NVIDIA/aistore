@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -349,22 +350,13 @@ func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 // to and from HTTP header converters (as in: HEAD /object)
 //
 
-// may set headers:
-// - standard cos.HdrContentLength ("Content-Length") & cos.HdrETag ("ETag")
-// - atime, version, etc. - all the rest "ais-" prefixed
-func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
-	if hdr == nil {
-		return
-	}
-	var cksum *cos.Cksum
-	if len(cksums) > 0 {
-		// - range checksum, or
-		// - archived file checksum, or
-		// - object checksum (when read range is _not_ checksummed)
-		cksum = cksums[0]
-	} else {
-		cksum = oah.Checksum()
-	}
+// serialize "ais-" prefixed object attributes (checksum, atime, version, custom MD) - and only those
+// - never sets standard headers (Content-Length, ETag, Content-Type, Last-Modified) - callers do
+// - skips zero values (to serialize selectively, pass a copy with the unwanted fields zeroed out)
+// - cksum: object checksum, range or archived-file checksum; nil: none
+// (compare w/ ObjAttrs.FromHeader, which also parses Content-Length => Size)
+func ToHeader(oah cos.OAH, hdr http.Header, cksum *cos.Cksum) {
+	debug.Assert(hdr != nil)
 	if !cos.NoneC(cksum) {
 		hdr.Set(apc.HdrObjCksumType, cksum.Ty())
 		hdr.Set(apc.HdrObjCksumVal, cksum.Val())
@@ -372,62 +364,33 @@ func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
 	if at := oah.AtimeUnix(); at != 0 {
 		hdr.Set(apc.HdrObjAtime, unixNano2S(at))
 	}
-	if size > 0 {
-		// "response to a HEAD method should not have a body", and so
-		// using "Content-Length" to deliver object size (attribute)
-		// may look controversial (and it is), but s3 does it, etc.
-		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
-		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
-	}
 	if v := oah.Version(true); v != "" {
 		hdr.Set(apc.HdrObjVersion, v)
 	}
-	custom := oah.GetCustomMD()
-	for k, v := range custom {
+	for k, v := range oah.GetCustomMD() {
 		hdr.Add(apc.HdrObjCustomMD, k+"="+v)
-		if k == ETag {
-			// TODO: redundant vs CustomMD - maybe extend cos.OAH to include get/set(ETag)
-			hdr.Set(cos.HdrETag, v)
-		}
 	}
 }
 
-// ToHeaderV2 selectively serializes ObjAttrs to response headers (caller decides which fields to include).
-// - always set Content-Length (including 0)
-// - set checksum/atime/version/custom only when the corresponding `with*` is true
-// - do not set standard ETag from CustomMD (caller's responsibility).
-func ToHeaderV2(attrs *ObjAttrs, hdr http.Header, withChecksum, withAtime, withVersion, withCustom bool, cksums ...*cos.Cksum) {
-	debug.Assert(hdr != nil)
+// stored (custom) Last-Modified, if any
+// (compare w/ core.LOM.LastModifiedStr that may execute syscall)
+func (oa *ObjAttrs) LastModifiedStr() (string, time.Time) {
+	v, _ := oa.GetCustomKey(cos.HdrLastModified)
+	return v, time.Time{}
+}
 
-	hdr.Set(cos.HdrContentLength, strconv.FormatInt(attrs.Size, 10))
+// stored (custom) ETag, if any - unquoted
+// (compare w/ core.LOM.ETag that may derive it from MD5 or mtime)
+func (oa *ObjAttrs) ETag(time.Time, bool) string {
+	v, _ := oa.GetCustomKey(ETag)
+	return v
+}
 
-	if withChecksum {
-		var cksum *cos.Cksum
-		if len(cksums) > 0 {
-			cksum = cksums[0]
-		} else {
-			cksum = attrs.Checksum()
-		}
-		if !cos.NoneC(cksum) {
-			hdr.Set(apc.HdrObjCksumType, cksum.Ty())
-			hdr.Set(apc.HdrObjCksumVal, cksum.Val())
-		}
-	}
-	if withAtime {
-		if at := attrs.AtimeUnix(); at != 0 {
-			hdr.Set(apc.HdrObjAtime, unixNano2S(at))
-		}
-	}
-	if withVersion {
-		if v := attrs.Version(true); v != "" {
-			hdr.Set(apc.HdrObjVersion, v)
-		}
-	}
-	if withCustom {
-		custom := attrs.GetCustomMD()
-		for k, v := range custom {
-			hdr.Add(apc.HdrObjCustomMD, k+"="+v)
-		}
+// native API responses: stored (custom) ETag, if any - quoted
+// (custom MD stores it unquoted; see SetCustomKey)
+func ETagToHeader(oah cos.OAH, hdr http.Header) {
+	if v, ok := oah.GetCustomKey(ETag); ok && v != "" {
+		hdr.Set(cos.HdrETag, QuoteETag(v))
 	}
 }
 

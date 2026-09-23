@@ -213,7 +213,8 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq,
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	s3.SetS3Headers(w.Header(), lom)
+	rsphdr := rsphdr{hdr: w.Header(), lom: lom, size: -1, s3: true}
+	rsphdr.set()
 	sgl.WriteTo2(w)
 	sgl.Free()
 }

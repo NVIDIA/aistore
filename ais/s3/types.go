@@ -111,35 +111,47 @@ func JoinValidateOname(w http.ResponseWriter, r *http.Request, items []string) (
 	return
 }
 
-func SetS3Headers(hdr http.Header, lom *core.LOM) {
+// source of S3 response headers:
+// - core.LOM:     stored, or else derived (may execute syscall)
+// - cmn.ObjAttrs: stored (custom) only
+type OAH interface {
+	cos.OAH
+	LastModifiedStr() (string, time.Time)
+	ETag(mtime time.Time, allowSyscall bool) string
+}
+
+var (
+	_ OAH = (*core.LOM)(nil)
+	_ OAH = (*cmn.ObjAttrs)(nil)
+)
+
+// - attrs: Last-Modified, ETag, x-amz-version-id, x-amz-meta-*
+// - callers: see rsphdr
+func SetS3Headers(hdr http.Header, oah OAH) {
 	// 1. Last-Modified
 	var (
 		mtime    time.Time
 		mtimeStr string
 	)
-	if mtimeStr, mtime = lom.LastModifiedStr(); mtimeStr != "" {
+	if mtimeStr, mtime = oah.LastModifiedStr(); mtimeStr != "" {
 		hdr.Set(cos.HdrLastModified, mtimeStr)
 	}
 
 	// 2. ETag (must be a quoted string: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
-	if etag := hdr.Get(cos.HdrETag); etag != "" {
-		debug.AssertFunc(func() bool {
-			return etag[0] == '"' && etag[len(etag)-1] == '"'
-		})
-	} else if etag := lom.ETag(mtime, true /*allow syscall*/); etag != "" {
+	if etag := oah.ETag(mtime, true /*allow syscall*/); etag != "" {
 		debug.AssertFunc(func() bool { return etag[0] != '"' }, etag)
 		hdr.Set(cos.HdrETag, cmn.QuoteETag(etag))
 	}
 
 	// 3. x-amz-version-id
 	if hdr.Get(cos.S3VersionHeader) == "" {
-		if v, ok := lom.GetCustomKey(cmn.VersionObjMD); ok {
+		if v, ok := oah.GetCustomKey(cmn.VersionObjMD); ok {
 			hdr.Set(cos.S3VersionHeader, v)
 		}
 	}
 
 	// 4. finally, user metadata (X-Amz-Meta-...)
-	for k, v := range lom.GetCustomMD() {
+	for k, v := range oah.GetCustomMD() {
 		if strings.HasPrefix(k, HeaderMetaPrefix) {
 			hdr.Set(k, v)
 		}

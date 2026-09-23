@@ -998,22 +998,29 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			return lom, fmt.Errorf("blob-downloader is not supported for local buckets: %s", bck.Cname(""))
 		}
 
-		var msg apc.BlobMsg
+		// control msg
+		var (
+			msg apc.BlobMsg
+		)
 		if err := msg.FromHeader(r.Header); err != nil {
 			return lom, err
 		}
 		// apc.QparamLatestVer via api.GetArgs or bck.VersionConf().ValidateWarmGet
 		msg.LatestVer = _validateWarmGet(lom, dpq.latestVer)
 
-		args := &core.BlobParams{
-			Context:       r.Context(),
-			RespWriter:    w, // NOTE: make a blocking call
-			Lom:           lom,
-			Msg:           &msg,
-			BlobThreshold: threshold,
-			Parent:        xs.BlobParentGET,
-		}
-		xid, _, err := t.blobdlLocked(args, w.Header())
+		// lock, check latest, HEAD(obj), blob-download
+		var (
+			args = &core.BlobParams{
+				Context:       r.Context(),
+				RespWriter:    w, // NOTE: make a blocking call
+				Lom:           lom,
+				Msg:           &msg,
+				BlobThreshold: threshold,
+				Parent:        xs.BlobParentGET,
+			}
+			rsphdr = &rsphdr{hdr: w.Header(), lom: lom, s3: dpq.isS3, ctype: true}
+		)
+		xid, _, err := t.blobdlLocked(args, rsphdr)
 		if xs.IsErrBlobDlAdmission(err) {
 			err = cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
 		}
@@ -1615,7 +1622,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, dpq *dpq, bck *meta.
 	}
 
 	// 5. serialize to response headers
-	objPropsToHeader(&op, whdr, hasEC)
+	_opToHeader(&op, whdr, hasEC)
 
 	// 6. stats
 	delta := mono.SinceNano(started)
@@ -1627,18 +1634,22 @@ func (t *target) objHead(r *http.Request, whdr http.Header, dpq *dpq, bck *meta.
 	return 0, nil
 }
 
-// objPropsToHeader serializes ObjectProps to HTTP response headers for HEAD object
-func objPropsToHeader(op *cmn.ObjectProps, hdr http.Header, hasEC bool) {
-	cmn.ToHeader(&op.ObjAttrs, hdr, op.ObjAttrs.Size)
+// serialize ObjectProps to response headers
+// - note `hasEC` special case
+// - using "Content-Length" to deliver object size (attribute)
+// - https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
+func _opToHeader(op *cmn.ObjectProps, hdr http.Header, hasEC bool) {
+	hdr.Set(cos.HdrContentLength, strconv.FormatInt(op.ObjAttrs.Size, 10))
+	cmn.ToHeader(&op.ObjAttrs, hdr, op.ObjAttrs.Checksum())
+	cmn.ETagToHeader(&op.ObjAttrs, hdr)
 	if op.ObjAttrs.Cksum == nil {
-		// cos.Cksum does not have default nil/zero value (reflection)
 		op.ObjAttrs.Cksum = cos.NoneCksum
 	}
+
 	errIter := cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
 		if !hasEC && strings.HasPrefix(tag, "ec.") {
 			return nil, false
 		}
-		// NOTE: op.ObjAttrs were already added via cmn.ToHeader
 		if tag[0] == '.' {
 			return nil, false
 		}
@@ -2033,8 +2044,8 @@ func (t *target) blobdlBackground(params *core.BlobParams, oa *cmn.ObjAttrs) (st
 
 // blobdlLocked mirrors cold GET's cold-PUT locking: qualify under rlock,
 // upgrade, and hold wlock through the synchronous xaction.
-func (t *target) blobdlLocked(params *core.BlobParams, whdr http.Header) (string, *xs.XactBlobDl, error) {
-	debug.Func(func() { debug.Assert(params.RespWriter != nil && whdr != nil) })
+func (t *target) blobdlLocked(params *core.BlobParams, rsphdr *rsphdr) (string, *xs.XactBlobDl, error) {
+	debug.Func(func() { debug.Assert(params.RespWriter != nil && rsphdr != nil && rsphdr.hdr != nil) })
 	if err := t.checkBlobdlCap(); err != nil {
 		return "", nil, err
 	}
@@ -2086,12 +2097,13 @@ do:
 		}
 		goto do
 	}
-	return t._blobdl(params, oa, whdr)
+	return t._blobdl(params, oa, rsphdr)
 }
 
 // returns an empty xid ("") if nothing to do
 // the caller owns retry/fallback policy for this terminal outcome.
-func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Header) (string, *xs.XactBlobDl, error) {
+// rsphdr: GET response header (nil when not via GET)
+func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, rsphdr *rsphdr) (string, *xs.XactBlobDl, error) {
 	debug.Func(func() {
 		debug.Assertf(params.Lom.IsLocked() == apc.LockWrite,
 			"%s must be w-locked (have %d)", params.Lom.Cname(), params.Lom.IsLocked())
@@ -2117,9 +2129,10 @@ func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.He
 		return xblob.ID(), xblob, nil
 	}
 	// b) via GET (blocking w/ simultaneous transmission)
-	debug.Func(func() { debug.Assert(whdr != nil) })
+	debug.Func(func() { debug.Assert(rsphdr != nil && rsphdr.lom == params.Lom) })
 	// Admission succeeded: object size is known and can now be published in response headers.
-	cmn.ToHeader(oa, whdr, oa.Size)
+	rsphdr.oa, rsphdr.size = oa, oa.Size
+	rsphdr.set()
 	xblob.Run(nil)
 	return xblob.ID(), nil, blobdlTermErr(xblob)
 }

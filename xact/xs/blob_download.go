@@ -209,6 +209,7 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	lom.SetCustomMD(oa.CustomMD)
 	lom.CopyVersion(oa)
 	lom.SetAtimeUnix(oa.Atime)
+	lom.SetCksum(cos.NoneCksum) // clear old checksum, if any (_fini sets it upon success)
 	// and separately:
 	debug.Assert(oa.Size > 0)
 	pre.fullSize = oa.Size

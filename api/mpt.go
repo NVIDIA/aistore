@@ -629,7 +629,8 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 		}
 		objectSize = opV2.Size
 		oah.wrespHeader = make(http.Header, 4)
-		cmn.ToHeaderV2(&opV2.ObjAttrs, oah.wrespHeader, true /*cksum*/, false, false, false)
+		oah.wrespHeader.Set(cos.HdrContentLength, strconv.FormatInt(objectSize, 10))
+		cmn.ToHeader(&opV2.ObjAttrs, oah.wrespHeader, opV2.Checksum()) // (only size and checksum requested)
 		if objectSize < 0 {
 			return nil, oah, fmt.Errorf("invalid object size: %d", objectSize)
 		}

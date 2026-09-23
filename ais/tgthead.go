@@ -27,7 +27,7 @@ import (
 // TODO -- FIXME:
 // - Content-Type (cmn.ObjAttrs.ContentTypeToHeader) not set here until all backends store it on cold GET
 // - otherwise cold HEAD (via backend HeadObj) and subsequent warm GET may disagree
-// - see also: getOI.setwhdr, coldStream, objPropsToHeader
+// - see also: rsphdr, _opToHeader
 func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *meta.Bck, lom *core.LOM) (int, error) {
 	var (
 		started     = mono.NanoTime()
@@ -140,7 +140,7 @@ func _objHeadV2(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps 
 			switch prop {
 			// name and size are always included (no-op, but valid props)
 			case apc.GetPropsName, apc.GetPropsSize:
-			// base attrs (via cmn.ToHeaderV2)
+			// base attrs (via cmn.ToHeader)
 			case apc.GetPropsChecksum:
 				withChecksum = true
 			case apc.GetPropsAtime:
@@ -188,8 +188,26 @@ func _objHeadV2(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps 
 		}
 	}
 
-	// serialize requested base attrs: atime, checksum, etc.
-	cmn.ToHeaderV2(attrs, hdr, withChecksum, withAtime, withVersion, withCustom)
+	// size (always, including 0), and requested base attrs only
+	// (cmn.ToHeader skips zero values)
+	hdr.Set(cos.HdrContentLength, strconv.FormatInt(attrs.Size, 10))
+	var (
+		sel   cmn.ObjAttrs
+		cksum *cos.Cksum
+	)
+	if withChecksum {
+		cksum = attrs.Checksum()
+	}
+	if withAtime {
+		sel.Atime = attrs.Atime
+	}
+	if withVersion {
+		sel.Ver = attrs.Ver
+	}
+	if withCustom {
+		sel.CustomMD = attrs.CustomMD
+	}
+	cmn.ToHeader(&sel, hdr, cksum)
 
 	// finally, ETag and LastModified (NOTE: may execute syscall)
 	var (

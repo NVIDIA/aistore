@@ -7,7 +7,6 @@ package ais
 import (
 	"io"
 
-	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -120,15 +119,8 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 		whdr      = goi.w.Header()
 	)
 
-	// response header
-	oa := lom.ObjAttrs()
-	oa.ContentTypeToHeader(whdr) // stored or cos.ContentBinary
-	cmn.ToHeader(oa, whdr, res.Size)
-	if goi.dpq.isS3 {
-		// (expecting user to set bucket checksum = md5)
-		s3.SetS3Headers(whdr, goi.lom)
-	}
-	ktlsRetire(goi.ktls, whdr, res.Size)
+	// response header (same as warm GET)
+	goi.setwhdr(whdr, nil /*cksum*/, res.Size)
 
 	written, err = cos.CopyBuffer(mw, res.R, buf)
 	cos.Close(res.R)
