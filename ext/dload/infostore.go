@@ -131,6 +131,13 @@ func (is *infoStore) setAborted(id string) {
 }
 
 func (is *infoStore) delJob(id string) {
+	is.Lock()
+	is._delJob(id)
+	is.Unlock()
+}
+
+// called with is.Lock held
+func (is *infoStore) _delJob(id string) {
 	delete(is.dljobs, id)
 	is.downloaderDB.delete(id)
 }
@@ -144,7 +151,7 @@ func (is *infoStore) housekeep(int64) time.Duration {
 			now = time.Now()
 		}
 		if finished := dljob.finishedTime.Load(); !_isRunning(finished) && now.Sub(finished) > interval {
-			is.delJob(id)
+			is._delJob(id)
 		}
 	}
 	is.Unlock()
