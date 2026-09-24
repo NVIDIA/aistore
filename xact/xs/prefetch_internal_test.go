@@ -34,9 +34,10 @@ var peblTestInit sync.Once
 func newPeblParent(t *testing.T) *prefetch {
 	t.Helper()
 	peblTestInit.Do(func() {
-		xact.Init(func() {})         // onFinished => incFinished
-		fs.NewTestMFS(mock.NewIOS()) // no mountpaths: onFinished => CapRefresh returns early
-		mock.NewTarget(mock.NewBaseBownerMock())
+		xact.Init(func() {}) // onFinished => incFinished
+		target := mock.NewTarget(mock.NewBaseBownerMock())
+		fs.New(target, 0)
+		fs.PutMPI(make(fs.MPI), make(fs.MPI))
 	})
 
 	r := &prefetch{xlabs: map[string]string{}}
