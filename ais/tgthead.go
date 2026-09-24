@@ -23,8 +23,8 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-// HEAD(object), with selective property retrieval via the `props` query param.
-// TODO: cold-HEAD and subsequent warm GET may disagree re: cmn.ObjAttrs.ContentTypeToHeader
+// HEAD(object) V2 with selective property retrieval via the `props` query param;
+// cold-HEAD + latest: may call lom.Persist iff detected change (see _syncHEAD)
 func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *meta.Bck, lom *core.LOM) (int, error) {
 	var (
 		started     = mono.NanoTime()
@@ -43,8 +43,6 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 		return 0, err
 	}
 
-	// reminder: lom.Load() may return already-cached metadata
-	// (not to confuse with `cache=true` to retain metadata loaded on a cache miss)
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err == nil {
 		if apc.IsFltNoProps(fltPresence) {
 			return 0, nil
@@ -70,7 +68,7 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 
 	whdr.Set(apc.PropToHeader("present"), strconv.FormatBool(exists))
 
-	// Cold HEAD: check remote backend if object not found locally or if latest version requested
+	// cold-HEAD: check remote backend if object not found locally or if latest version requested
 	var attrs *cmn.ObjAttrs
 	latest := dpq.latestVer
 	if !exists || latest {
@@ -94,6 +92,9 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 			if e := lom.ObjAttrs().CheckEq(oa); e != nil {
 				return http.StatusConflict, cmn.NewErrRemoteMetadataMismatch(e)
 			}
+			if lom.Bck().IsCloud() {
+				_syncHEAD(lom, oa)
+			}
 			attrs = lom.ObjAttrs()
 		} else {
 			oa.Atime = 0
@@ -116,6 +117,40 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 		cos.NamedVal64{Name: stats.HeadLatencyTotal, Value: delta, VarLabs: vlabs},
 	)
 	return 0, nil
+}
+
+// remote-owned metadata (cmn.ObjAttrs.SyncRemote) - remote wins
+// - best-effort: skip when the object is busy or changed/deleted
+// - ignore errors (verbose log only)
+func _syncHEAD(lom *core.LOM, oa *cmn.ObjAttrs) {
+	if !lom.ObjAttrs().NeedSyncRemote(oa) {
+		return
+	}
+
+	// slow path
+	if !lom.TryLock(true) {
+		return
+	}
+	defer lom.Unlock(true)
+
+	// recheck under lock
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		return
+	}
+	if noa := lom.ObjAttrs(); noa.CheckEq(oa) != nil || !noa.SyncRemote(oa) {
+		return
+	}
+
+	// do
+	if err := lom.Persist(); err != nil {
+		if cmn.Rom.V(4, cos.ModAIS) {
+			nlog.Warningln("failed to sync-HEAD:", lom.Cname(), err)
+		}
+		return
+	}
+	if cmn.Rom.V(5, cos.ModAIS) {
+		nlog.Infoln("sync-HEAD:", lom.Cname())
+	}
 }
 
 // serialize assorted properties to response header

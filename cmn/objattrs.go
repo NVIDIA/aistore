@@ -7,6 +7,7 @@ package cmn
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,9 +28,7 @@ const (
 	// downloader' source is "web"
 	WebObjMD = "web"
 
-	// system-supported custom attrs
-	// NOTE: for provider specific HTTP headers, see cmn/cos/const_http.go
-
+	// system-supported custom attrs - supportedRemAttrs
 	VersionObjMD = "version" // "generation" for GCP, "version" for AWS but only if the bucket is versioned, etc.
 	CRC32CObjMD  = cos.ChecksumCRC32C
 	MD5ObjMD     = cos.ChecksumMD5
@@ -42,6 +41,9 @@ const (
 	// as the name implies
 	OrigFntl = "orig_fntl"
 )
+
+// universally supported by all Cloud backends
+var supportedRemAttrs = [...]string{VersionObjMD, CRC32CObjMD, MD5ObjMD, ETag, cos.HdrLastModified, cos.HdrContentType}
 
 type (
 	// NOTE: will be removed in the upcoming releases; use ObjectPropsV2 instead
@@ -331,6 +333,52 @@ func (oa *ObjAttrs) ContentTypeToHeader(hdr http.Header) {
 		return
 	}
 	hdr.Set(cos.HdrContentType, cos.ContentBinary)
+}
+
+// update in-cluster object's remote-owned metadata from (cold) HEAD results
+func (oa *ObjAttrs) SyncRemote(rem *ObjAttrs) bool { return oa._syncRemote(rem, true) }
+
+// check if in-cluster object's remote-owned metadata need to be updated (same as above, dry-run)
+func (oa *ObjAttrs) NeedSyncRemote(rem *ObjAttrs) bool { return oa._syncRemote(rem, false) }
+
+func (oa *ObjAttrs) _syncRemote(rem *ObjAttrs, apply bool) (changed bool) {
+	for _, k := range supportedRemAttrs {
+		v, cur := rem.CustomMD[k], oa.CustomMD[k] // (nil map ok)
+		if k == cos.HdrContentType {
+			if IsDefaultContentType(v) {
+				v = ""
+			}
+			if IsDefaultContentType(cur) {
+				cur = ""
+			}
+		} else if v == "" {
+			continue
+		}
+		if cur == v {
+			continue
+		}
+		if !apply {
+			return true // changed
+		}
+
+		// apply
+		if !changed {
+			oa.CustomMD = maps.Clone(oa.CustomMD) // CoW
+		}
+		if v == "" {
+			oa.DelCustomKey(k) // (Content-Type only)
+		} else {
+			oa.SetCustomKey(k, v)
+		}
+		switch k {
+		case VersionObjMD:
+			oa.SetVersion(v)
+		case cos.HdrLastModified:
+			oa.DelCustomKey(LsoLastModified)
+		}
+		changed = true
+	}
+	return changed
 }
 
 // clone OAH => ObjAttrs (see also lom.CopyAttrs)
