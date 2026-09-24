@@ -754,6 +754,100 @@ func TestS3ETag(t *testing.T) {
 	})
 }
 
+// Regression for https://github.com/NVIDIA/aistore/issues/373: S3 clients encode
+// reserved characters, which net/http decodes into URL.Path before dispatch.
+func TestS3SpecialObjectKeys(t *testing.T) {
+	if tools.GetClusterConfig(t).Features.IsSet(feat.S3TensorFlowQuery) {
+		t.Skip("legacy TensorFlow query compatibility is enabled")
+	}
+
+	proxyURL := tools.GetPrimaryURL()
+	bck := cmn.Bck{Name: "test-s3-special-" + trand.String(6), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	cfg, err := config.LoadDefaultConfig(t.Context(),
+		config.WithCredentialsProvider(getS3Credentials(t)),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	cfg.HTTPClient = newS3Client(false /*pathStyle*/)
+	cfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	client := s3.NewFromConfig(cfg, func(opts *s3.Options) {
+		opts.DisableLogOutputChecksumValidationSkipped = true
+		opts.APIOptions = append(opts.APIOptions, func(stack *middleware.Stack) error {
+			return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
+		})
+	})
+
+	objects := []struct{ key, content string }{
+		{"a", "plain"},
+		{"a?", "question"},
+		{"a%", "percent"},
+		{"a%2F", "encoded-slash"},
+		{"a#", "fragment"},
+		{"a b", "space"},
+		{"a+", "plus"},
+	}
+	for _, obj := range objects {
+		_, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket: aws.String(bck.Name), Key: aws.String(obj.key), Body: strings.NewReader(obj.content),
+		})
+		tassert.CheckFatal(t, err)
+	}
+	for _, obj := range objects {
+		head, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{
+			Bucket: aws.String(bck.Name), Key: aws.String(obj.key),
+		})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, aws.ToInt64(head.ContentLength) == int64(len(obj.content)),
+			"HEAD %q: expected size %d, got %d", obj.key, len(obj.content), aws.ToInt64(head.ContentLength))
+
+		got, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String(bck.Name), Key: aws.String(obj.key),
+		})
+		tassert.CheckFatal(t, err)
+		body, readErr := io.ReadAll(got.Body)
+		closeErr := got.Body.Close()
+		tassert.CheckFatal(t, readErr)
+		tassert.CheckFatal(t, closeErr)
+		tassert.Fatalf(t, string(body) == obj.content,
+			"GET %q: expected %q, got %q", obj.key, obj.content, body)
+	}
+
+	for _, obj := range objects[1:] {
+		_, err = client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String(bck.Name), Key: aws.String(obj.key),
+		})
+		tassert.CheckFatal(t, err)
+		_, err = client.HeadObject(t.Context(), &s3.HeadObjectInput{
+			Bucket: aws.String(bck.Name), Key: aws.String(obj.key),
+		})
+		tassert.Fatalf(t, err != nil, "DELETE %q left the object accessible", obj.key)
+	}
+	got, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+		Bucket: aws.String(bck.Name), Key: aws.String("a"),
+	})
+	tassert.CheckFatal(t, err)
+	body, readErr := io.ReadAll(got.Body)
+	closeErr := got.Body.Close()
+	tassert.CheckFatal(t, readErr)
+	tassert.CheckFatal(t, closeErr)
+	tassert.Fatalf(t, string(body) == "plain", "DELETE of a special key affected a: got %q", body)
+
+	t.Run("legacy-query-opt-in", func(t *testing.T) {
+		tools.EnableClusterFeatures(t, feat.S3TensorFlowQuery)
+		got, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String(bck.Name), Key: aws.String("a?uuid=transformer"),
+		})
+		tassert.CheckFatal(t, err)
+		body, readErr := io.ReadAll(got.Body)
+		closeErr := got.Body.Close()
+		tassert.CheckFatal(t, readErr)
+		tassert.CheckFatal(t, closeErr)
+		tassert.Fatalf(t, string(body) == "plain", "legacy query resolved to %q", body)
+	})
+}
+
 func TestS3ObjMetadataLocal(t *testing.T) {
 	var (
 		proxyURL = tools.GetPrimaryURL()

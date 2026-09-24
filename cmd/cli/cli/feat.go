@@ -54,6 +54,7 @@ var clusterFeatDesc = [...]string{
 	"allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked",
 	"allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)",
 	"offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)",
+	"legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -88,6 +89,7 @@ var featTags = map[string]string{
 	"Dload-Allow-Private-Egress":           "security-",
 	"S3-Redirect-Rebuild":                  "s3,compat,security-",
 	"System-Reserved-KTLS":                 "perf,net,ops,compat",
+	"S3-TensorFlow-Query":                  "s3,compat,integrity-",
 }
 
 // common (cluster, bucket) feature-flags (set, show) helper

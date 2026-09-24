@@ -80,6 +80,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Dload-Allow-Private-Egress` | `security-` | allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked |
 | `S3-Redirect-Rebuild` | `s3,compat,security-` | allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured) |
 | `System-Reserved-KTLS` | `perf,net,ops,compat` | offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time) (**restart required**) |
+| `S3-TensorFlow-Query` | `s3,compat,integrity-` | legacy TensorFlow workaround: interpret `?` in decoded S3 object paths as query parameters; breaks object keys containing `?` |
 
 ## Global features
 
@@ -96,6 +97,7 @@ LZ4-Frame-Checksum                     Do-not-Set-Control-Plane-ToS           Dl
 Do-not-Allow-Passing-FQN-to-ETL        Trust-Crypto-Safe-Checksums            S3-Redirect-Rebuild
 Ignore-LimitedCoexistence-Conflicts    S3-ListObjectVersions                  none
 S3-Presigned-Request                   Enable-Detailed-Prom-Metrics           System-Reserved-KTLS
+S3-TensorFlow-Query
 ```
 
 For example:
@@ -137,6 +139,7 @@ Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go 
 Dload-Allow-Private-Egress           security-              allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 S3-Redirect-Rebuild                  s3,compat,security-    allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
 System-Reserved-KTLS                 perf,net,ops,compat    offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)
+S3-TensorFlow-Query                  s3,compat,integrity-   legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters
 
 Cluster config updated
 ```
@@ -184,6 +187,7 @@ Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go 
 Dload-Allow-Private-Egress           security-              allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 S3-Redirect-Rebuild                  s3,compat,security-    allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
 System-Reserved-KTLS                 perf,net,ops,compat    offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)
+S3-TensorFlow-Query                  s3,compat,integrity-   legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters
 ```
 
 The same in JSON:

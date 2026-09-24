@@ -36,6 +36,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
   * [Feature flags: S3-Redirect-Rebuild versus S3-Reverse-Proxy](#feature-flags-s3-redirect-rebuild-versus-s3-reverse-proxy)
 * [Configuring Clients](#configuring-clients)
   * [Finding the AIS endpoint](#finding-the-ais-endpoint)
+  * [Question marks in object names](#question-marks-in-object-names)
   * [Checksum considerations](#checksum-considerations)
   * [HTTPS vs HTTP](#https-vs-http)
 * [Using s3cmd with AIS](#using-s3cmd-with-ais)
@@ -184,6 +185,14 @@ In terms of tradeoffs:
 Choose **any** gateway's `host:port` and append `/s3`, e.g. `10.10.0.1:51080/s3`. All gateways accept reads and writes, so you can connect to any of them.
 
 > In fact, AIS gateways are completely equivalent, [API-wise](/docs/overview.md#aistore-api).
+
+---
+
+### Question marks in object names
+
+An S3 client encodes the object key `a?` as a path ending in `a%3F`. The HTTP server decodes that path before AIS handles the request, so the default S3 behavior preserves `?` as part of the key. Actual query parameters are already separate from the path.
+
+Earlier AIS versions reinterpreted a `?` in the decoded path as the start of a query to accommodate TensorFlow clients that send parameters such as `?uuid=...` as part of an encoded object path. That workaround could instead address a different object for GET, HEAD, PUT, or DELETE. To restore it for a deployment that depends on this TensorFlow behavior, enable the cluster feature `S3-TensorFlow-Query`. It applies to all S3 requests and makes keys containing `?` ambiguous. When setting cluster features, include any other enabled feature names in the same command.
 
 ---
 

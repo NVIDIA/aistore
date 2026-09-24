@@ -35,6 +35,8 @@ model.fit(train_dataset, ...)
 
 ### Create TensorFlow dataset from TARs stored in AIS
 
+The `?uuid=` example below requires the opt-in cluster feature `S3-TensorFlow-Query`: this TensorFlow S3 client sends the query inside the encoded object path. By default AIS treats it as part of the object name. See [Question marks in object names](s3compat.md#question-marks-in-object-names) before enabling the feature, especially if the cluster stores keys containing `?`.
+
 ```python
 import tensorflow as tf
 import os
