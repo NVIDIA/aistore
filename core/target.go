@@ -57,6 +57,10 @@ type (
 		// (e.g.: prefetch[abcdef], GET, api-blobdl, and x-start)
 		Parent string
 
+		// optional termination callback that _replaces_ the target's IC notification
+		// (currently, prefetch => blob-download only)
+		TermCB func(n Notif, err error, aborted bool)
+
 		// RespWriter selects one of two modes:
 		//   - nil: background/cache-only download; no object-data SGL is allocated;
 		//   - non-nil: synchronous streaming; each active worker owns one reusable,

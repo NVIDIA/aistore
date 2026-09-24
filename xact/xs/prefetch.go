@@ -8,6 +8,7 @@ package xs
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -22,18 +23,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
-
-// TODO:
-// - blob downloading (when msg.BlobThreshold > 0):
-//   - configurable num concurrent x-blob
-//   - configurable chunk-size and num-workers
-//   - max-threshold that forces blob-downloading for, say, 5G objects and larger
 
 type (
 	prfFactory struct {
@@ -44,8 +37,7 @@ type (
 	pebl struct {
 		parent  *prefetch
 		pending []core.Xact
-		cpuLoad atomic.Int64
-		n       atomic.Int32
+		n       atomic.Int32 // pending + claimed children not yet accounted for
 		mu      sync.Mutex
 	}
 	prfStats struct {
@@ -184,7 +176,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	)
 
 	lom.Lock(false)
-	oa, deleted, err = lom.LoadLatest(r.latestVer || r.msg.BlobThreshold > 0) // shortcut to find size
+	oa, deleted, err = lom.LoadLatest(r.latestVer)
 	lom.Unlock(false)
 
 	// handle assorted returns
@@ -208,11 +200,26 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		return
 	}
 
+	// find the size iff blob-download is an option; retain the attrs for it
+	blobOK := r.msg.BlobThreshold > 0 && !r.pebl.busy()
+	if blobOK && oa == nil {
+		oa, ecode, err = core.T.HeadCold(lom, nil /*origReq*/)
+		if err != nil {
+			// listed (not range or prefix) and not found remotely - an error
+			if !cos.IsNotExist(err, ecode) || lrit.lrp == lrpList {
+				r.AddErr(err, 5, cos.ModXs)
+				r.errStats()
+			}
+			return
+		}
+		size = oa.Size
+	}
+
 	// apply frontend rate-limit, if any
 	if r.brl != nil {
 		r.brl.RetryAcquire(time.Second)
 	}
-	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && !r.pebl.busy() {
+	if blobOK && size >= r.msg.BlobThreshold {
 		ecode, err = r.blobdl(lom, oa)
 	} else {
 		if r.msg.BlobThreshold == 0 && size > cos.GiB {
@@ -305,6 +312,7 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 			NumWorkers: r.msg.BlobNumWorkers,
 		},
 		Parent: xact.Cname(BlobParentPrefetch, r.ID()),
+		TermCB: r.pebl.done,
 	}
 	if err := params.Lom.InitBck(lom.Bck()); err != nil {
 		core.FreeLOM(params.Lom)
@@ -330,37 +338,22 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 	r.stats.blobSize.Add(oa.Size)
 	r.stats.peblSize.Add(oa.Size)
 
-	notif := &xact.NotifXact{
-		Base: nl.Base{
-			When: core.UponTerm,
-			F:    r.pebl.done,
-		},
-	}
-	notif.Xact = xctn
-	xctn.AddNotif(notif)
-
-	if xctn.IsDone() {
-		r.stats.peblSize.Add(-oa.Size)
-		r.ObjsAdd(1, oa.Size)
-		r.blobStats(oa.Size)
-		return 0, nil
-	}
+	// TermCB may have fired before this add (and found nothing to remove) - reap
 	r.pebl.add(xctn)
+	if xctn.IsDone() {
+		r.pebl.reap()
+	}
 	return 0, nil
 }
 
 //////////
-// pebl (pending blob downloads)
+// pebl (pending blob-downloads)
 //////////
 
-// max concurrent blob downloads by a given prefetch job
-// works in conjunction with the current load average - see pebl.busy
+// soft limit on max concurrent blob-downloads per prefetch job
+// - workers may pass _busy_ concurrently
+// - see pebl.busy()
 const maxPebls = 32
-
-const (
-	peblSleep   = 4 * time.Second
-	peblTimeout = 32 * time.Minute // must be >> 16s and be divisible by 16
-)
 
 func (pebl *pebl) init(parent *prefetch) {
 	pebl.parent = parent
@@ -369,121 +362,192 @@ func (pebl *pebl) init(parent *prefetch) {
 
 func (pebl *pebl) add(xctn core.Xact) {
 	pebl.mu.Lock()
-	pebl.n.Inc()
+	n := pebl.n.Inc()
+	debug.Assert(n >= int32(len(pebl.pending)+1), n, " vs ", len(pebl.pending))
 	pebl.pending = append(pebl.pending, xctn)
 	pebl.mu.Unlock()
 }
 
 func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
+	nx, ok := nmsg.(*xact.NotifXact)
+	debug.Assert(ok)
 	var (
 		xblob *XactBlobDl
-		msg   = nmsg.ToNotifMsg(aborted)
 		n     int32
 	)
 	pebl.mu.Lock()
+	for i, xctn := range pebl.pending {
+		if xctn == nx.Xact {
+			xblob = xctn.(*XactBlobDl)
+			pebl.pending = slices.Delete(pebl.pending, i, i+1)
+			break
+		}
+	}
+	n = int32(len(pebl.pending))
+	pebl.mu.Unlock()
+
+	if xblob != nil {
+		pebl.complete(xblob, err, aborted, n)
+	}
+}
+
+// Recovery for a child that finished before (or without) its callback finding it in pending.
+func (pebl *pebl) reap() int32 {
+	if pebl.num() == 0 {
+		return 0
+	}
+	var (
+		finished []*XactBlobDl
+		n        int32
+	)
+	pebl.mu.Lock()
 	for _, xctn := range pebl.pending {
-		// this one is "done" - remove from pending
-		if xctn.ID() == msg.UUID {
-			var ok bool
-			xblob, ok = xctn.(*XactBlobDl)
-			debug.Assert(ok)
+		if !xctn.EndTime().IsZero() {
+			finished = append(finished, xctn.(*XactBlobDl))
 			continue
 		}
-		// finished - remove as well
-		if xctn.IsDone() {
-			continue
-		}
-		// keep
 		pebl.pending[n] = xctn
 		n++
 	}
+	clear(pebl.pending[n:])
 	pebl.pending = pebl.pending[:n]
-	pebl.n.Store(n)
-
 	pebl.mu.Unlock()
 
-	cpuLoad, isExtreme := sys.CPU(false /*periodic*/)
-	if isExtreme {
-		cpuLoad = 100
+	for _, xblob := range finished {
+		err, aborted := xblob.Err(), xblob.IsAborted()
+		if aborted {
+			err = xblob.AbortErr()
+		}
+		pebl.complete(xblob, err, aborted, n)
 	}
-	pebl.cpuLoad.Store(cpuLoad) // pebl.busy()
+	return pebl.num()
+}
 
-	if xblob == nil {
-		return
-	}
+// (not holding pebl.mu)
+func (pebl *pebl) complete(xblob *XactBlobDl, err error, aborted bool, n int32) {
+	defer func() {
+		n := pebl.n.Dec()
+		debug.Assert(n >= 0, n)
+	}()
 
-	// log and stats
-	xname := pebl.parent.Name()
-	switch {
-	case aborted || err != nil:
-		nlog.Warningln(xname, "::", xblob.String(), "[", msg.String(), err, "]")
-		pebl.parent.AddErr(err)
-		pebl.parent.stats.peblSize.Add(-xblob.Size())
-		pebl.parent.errStats()
-	default:
-		pebl.parent.ObjsAdd(1, xblob.Size())
-		pebl.parent.stats.peblSize.Add(-xblob.Size())
-		pebl.parent.blobStats(xblob.Size())
+	r := pebl.parent
+	r.stats.peblSize.Add(-xblob.Size())
+	if aborted || err != nil {
+		if err == nil {
+			err = xblob.AbortErr()
+		}
+		nlog.Warningln(r.Name(), "::", xblob.String(), "[", err, "]")
+		if !r.IsAborted() { // (not adding parent's own abort cause N times)
+			r.AddErr(err)
+			r.errStats()
+		}
+	} else {
+		r.ObjsAdd(1, xblob.Size())
+		r.blobStats(xblob.Size())
 		if xblob.Size() >= cos.GiB/2 || cmn.Rom.V(4, cos.ModXs) {
 			if n > 0 {
-				nlog.Infoln(xname, "::", xblob.String(), "( num-pending", strconv.Itoa(int(n)), ")")
+				nlog.Infoln(r.Name(), "::", xblob.String(), "( num-pending", n, ")")
 			} else {
-				nlog.Infoln(xname, "::", xblob.String())
+				nlog.Infoln(r.Name(), "::", xblob.String())
 			}
 		}
 	}
 }
 
 // when all non-blob prefetching already done
+// - reacts to parent's abort (=> pebl.abort)
 func (pebl *pebl) wait() {
-	const waiting = "still waiting for blob downloads:"
+	const (
+		peblSleep   = 4 * time.Second
+		peblTimeout = 32 * time.Minute
+
+		waiting = "still waiting for blob downloads:"
+	)
 	var (
+		r     = pebl.parent
 		total time.Duration
 		sleep = peblSleep
-		xname = pebl.parent.Name()
+		xname = r.Name()
+		timer *time.Timer
 	)
 	for {
-		time.Sleep(sleep)
-		n := pebl.num()
-		if n <= 0 {
+		n := pebl.reap()
+		if n == 0 {
 			return
 		}
-		total += sleep
-		switch total {
-		case 15 * sleep:
-			nlog.Warningln(xname, waiting, pebl.str())
-			sleep <<= 1
-		case 30 * sleep:
-			nlog.Warningln(xname, waiting, pebl.str())
-			sleep <<= 1
-		case peblTimeout:
+		switch {
+		case total >= peblTimeout:
 			err := fmt.Errorf("%d blob download%s timed-out: %s", n, cos.Plural(int(n)), pebl.str())
 			nlog.Warningln(xname, err)
-			pebl.parent.AddErr(err)
+			r.AddErr(err)
 			return
+		case total >= 4*time.Minute && total-sleep < 4*time.Minute:
+			nlog.Warningln(xname, waiting, pebl.str())
+			sleep <<= 1
+		case total >= time.Minute && total-sleep < time.Minute:
+			nlog.Warningln(xname, waiting, pebl.str())
+			sleep <<= 1
+		}
+		if timer == nil {
+			timer = time.NewTimer(sleep)
+			defer timer.Stop()
+		} else {
+			timer.Reset(sleep)
+		}
+		select {
+		case <-r.ChanAbort():
+			pebl.abort(r.AbortErr())
+			return
+		case <-timer.C:
+			total += sleep
 		}
 	}
 }
 
 func (pebl *pebl) abort(err error) {
 	pebl.mu.Lock()
-	for _, xctn := range pebl.pending {
+	pending := slices.Clone(pebl.pending)
+	pebl.mu.Unlock()
+	for _, xctn := range pending {
 		xctn.Abort(err)
 	}
-	pebl.mu.Unlock()
+
+	if pebl.num() == 0 {
+		return
+	}
+
+	// wait for blob-downloader children to exit
+	var (
+		r       = pebl.parent
+		sleep   = cos.PollSleepShort
+		timeout = 10 * time.Second
+	)
+	for total := time.Duration(0); pebl.reap() > 0; total += sleep {
+		if total >= timeout {
+			nlog.Warningln(r.Name(), "aborted with pending blob-downloads:", pebl.str())
+			return
+		}
+		if sleep < time.Second {
+			sleep += sleep >> 1
+		}
+		time.Sleep(sleep)
+	}
 }
 
 func (pebl *pebl) num() int32 { return pebl.n.Load() }
 
 func (pebl *pebl) busy() bool {
-	return pebl.n.Load() > maxPebls || pebl.cpuLoad.Load() >= sys.HighLoadWM() || load.Mem() == load.Critical
+	if pebl.num() >= maxPebls && pebl.reap() >= maxPebls {
+		return true
+	}
+	return load.CPU() >= load.High || load.Mem() == load.Critical
 }
 
 func (pebl *pebl) str() string {
 	var sb cos.SB
 
 	pebl.mu.Lock()
-	n := int(pebl.num())
+	n := len(pebl.pending)
 	sb.Init(max(ctlMsgBufSize, n*64))
 
 	sb.WriteUint8('[')

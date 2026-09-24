@@ -352,6 +352,9 @@ func (oa *ObjAttrs) _syncRemote(rem *ObjAttrs, apply bool) (changed bool) {
 				cur = ""
 			}
 		} else if v == "" {
+			// TODO:
+			// an unlikely edge case: supported remote attr (e.g., VersionObjMD) transitions from set
+			// to empty while CheckEq (below) still reports identity via a matching ETag/checksum
 			continue
 		}
 		if cur == v {

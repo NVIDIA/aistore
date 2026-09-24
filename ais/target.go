@@ -2125,6 +2125,9 @@ func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, rsphdr *rsph
 		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
 		Xact: xblob,
 	}
+	if params.TermCB != nil {
+		notif.F = params.TermCB // (no IC)
+	}
 	xblob.AddNotif(notif)
 	// a) via x-start, x-blob-download
 	if params.RespWriter == nil {
