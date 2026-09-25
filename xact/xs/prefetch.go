@@ -44,6 +44,7 @@ type (
 		// cold-GET
 		coldN    atomic.Int64 // cold-GET completions
 		coldSize atomic.Int64 // --/-- size
+		tooLarge atomic.Int64 // large cold GETs (blob-downloader not used)
 		// pending
 		blobN    atomic.Int64 // blob-downloader children accepted/spawned
 		blobSize atomic.Int64 // bytes --/--
@@ -222,10 +223,14 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	if blobOK && size >= r.msg.BlobThreshold {
 		ecode, err = r.blobdl(lom, oa)
 	} else {
-		if r.msg.BlobThreshold == 0 && size > cos.GiB {
-			r._whinge(lom, size)
+		reason := "below blob threshold"
+		switch {
+		case r.msg.BlobThreshold == 0:
+			reason = "blob-downloading disabled (threshold = 0)"
+		case !blobOK:
+			reason = "blob-downloader too busy"
 		}
-		ecode, err = r.getCold(lom)
+		ecode, err = r.getCold(lom, oa, reason)
 	}
 
 	if err == nil {
@@ -250,16 +255,29 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	}
 }
 
-func (r *prefetch) _whinge(lom *core.LOM, size int64) {
+const (
+	logWarnSize = cos.GiB
+	logErrSize  = 5 * cos.GiB
+)
+
+// sparse-log why blob-downloader was not used (but was expected to)
+func (r *prefetch) _warnGetLarge(lom *core.LOM, size int64, reason string) {
+	cnt := r.stats.tooLarge.Inc()
+	if size < logErrSize && !cmn.Rom.V(5, cos.ModXs) && !cos.Sparse(cnt) {
+		return
+	}
+
 	var sb cos.SB
 	sb.Init(ctlMsgBufSize)
 	sb.WriteString(r.Name())
-	sb.WriteString(": prefetching large size ")
+	sb.WriteString(": prefetched large size ")
 	sb.WriteString(cos.IEC(size, 1))
-	sb.WriteString(" with blob-downloading disabled [")
+	sb.WriteString(" via cold GET (")
+	sb.WriteString(reason)
+	sb.WriteString(") [")
 	sb.WriteString(lom.Cname())
 	sb.WriteUint8(']')
-	if size >= 5*cos.GiB {
+	if size >= logErrSize {
 		nlog.Errorln(sb.String())
 	} else {
 		nlog.Warningln(sb.String())
@@ -269,7 +287,7 @@ func (r *prefetch) _whinge(lom *core.LOM, size int64) {
 // OwtGetPrefetchLock: minimal locking, optimistic concurrency
 // - light-weight alternative to t.GetCold impl.
 // - rate limited via ais/rlbackend, if defined
-func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
+func (r *prefetch) getCold(lom *core.LOM, oa *cmn.ObjAttrs, reason string) (ecode int, err error) {
 	started := mono.NanoTime()
 
 	// note invariant: either a) LoadLatest => UncacheDel (not-latest) or b) not-found
@@ -281,6 +299,9 @@ func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 
 	// RGET stats (compare with ais/tgtimpl namesake)
 	size := lom.Lsize()
+	if oa != nil && oa.Size != size {
+		nlog.Warningln(r.Name(), ": remote size changed between HEAD and GET:", lom.Cname(), oa.Size, "->", size)
+	}
 	rgetstats(r.bp, r.xlabs, size, started)
 
 	// own stats
@@ -288,6 +309,11 @@ func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 	r.stats.coldN.Inc()
 	r.stats.coldSize.Add(size)
 	r.coldStats(size, started)
+
+	// large, and blob-download was expected (threshold 0 or crossed)
+	if size > logWarnSize && (r.msg.BlobThreshold == 0 || size >= r.msg.BlobThreshold) {
+		r._warnGetLarge(lom, size, reason)
+	}
 
 	return 0, nil
 }
@@ -330,7 +356,7 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 		r.stats.blobRej.Inc()
 		r.blobRejStats()
 		nlog.Warningln(r.Name(), ": blob download failed to start, falling back to regular cold GET: ", err)
-		return r.getCold(lom)
+		return r.getCold(lom, oa, "blob-download failed to start")
 	}
 
 	// account for the spawn
@@ -651,6 +677,12 @@ func (r *prefetch) _ctlMsgJob(sb *cos.SB) {
 		sb.WriteUint8(',')
 		sb.WriteString(cos.IEC(r.stats.coldSize.Load(), 2))
 		sb.WriteUint8(')')
+	}
+	largeN := r.stats.tooLarge.Load()
+	if largeN > 0 {
+		sep()
+		sb.WriteString("large-cold:")
+		sb.WriteString(strconv.FormatInt(largeN, 10))
 	}
 	if blobN > 0 || blobRej > 0 {
 		sep()
