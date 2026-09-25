@@ -205,7 +205,8 @@ class ObjectGroup(AISSource):
             latest (bool, optional): GET the latest object version from the associated remote bucket
             continue_on_error (bool, optional): Whether to continue if there is an error prefetching a single object
             blob_threshold (int, optional): Utilize built-in blob-downloader for remote objects
-                greater than the specified (threshold) size in bytes
+                at or above the specified (threshold) size in bytes. Minimum 1 MiB (smaller
+                positive values are raised to 1 MiB); negative values are rejected
             num_workers (int, optional): Number of concurrent workers (readers). Defaults to the number of target
                 mountpaths if omitted or zero. A value of -1 indicates no workers at all (i.e., single-threaded
                 execution). Any positive value will be adjusted not to exceed the number of target CPUs.

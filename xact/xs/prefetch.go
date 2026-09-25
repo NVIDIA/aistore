@@ -39,6 +39,7 @@ type (
 		pending []core.Xact
 		n       atomic.Int32 // pending + claimed children not yet accounted for
 		mu      sync.Mutex
+		once    sync.Once
 	}
 	prfStats struct {
 		// cold-GET
@@ -85,10 +86,13 @@ func (p *prfFactory) Start() (err error) {
 	if p.msg.BlobNumWorkers < xact.NwpNone {
 		return fmt.Errorf("invalid blob-num-workers=%d: expecting (-1..N) range", p.msg.BlobNumWorkers)
 	}
-	if p.msg.BlobThreshold > 0 && p.msg.BlobThreshold < minBlobDlPrefetch {
-		a, b := cos.IEC(p.msg.BlobThreshold, 0), cos.IEC(minBlobDlPrefetch, 0)
+	if p.msg.BlobThreshold < 0 {
+		return fmt.Errorf("invalid blob-threshold=%d: expecting a non-negative value", p.msg.BlobThreshold)
+	}
+	if p.msg.BlobThreshold > 0 && p.msg.BlobThreshold < MinBlobDlPrefetchSize {
+		a, b := cos.IEC(p.msg.BlobThreshold, 0), cos.IEC(MinBlobDlPrefetchSize, 0)
 		nlog.Warningln("blob-threshold (", a, ") is too small, must be at least", b, "- updating...")
-		p.msg.BlobThreshold = minBlobDlPrefetch
+		p.msg.BlobThreshold = MinBlobDlPrefetchSize
 	}
 
 	b := p.Bck
@@ -135,7 +139,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 		stats.VlabBucket: bck.Cname(""),
 		stats.VlabXkind:  r.Kind(),
 	}
-	r.ctx = xact.NewCtxVlabs(r.xlabs)
+	r.ctx = xact.WithCtxVlabs(r.Context(), r.xlabs)
 
 	if r.msg.BlobThreshold > 0 {
 		r.pebl.init(r)
@@ -247,8 +251,8 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 			r.AddErr(err, 5, cos.ModXs)
 		}
 	case cos.IsErrOOS(err):
-		r.Abort(err)
 		r.errStats()
+		r.Abort(err)
 	default:
 		r.AddErr(err, 5, cos.ModXs)
 		r.errStats()
@@ -331,22 +335,21 @@ func (r *prefetch) Snap() (snap *core.Snap) {
 func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 	// pass user preferences through; blobFactory.Start tunes them once
 	params := &core.BlobParams{
-		Lom:     core.AllocLOM(lom.ObjName),
+		Lom:     &core.LOM{ObjName: lom.ObjName},
 		Context: r.Context(),
 		Msg: &apc.BlobMsg{
 			ChunkSize:  r.msg.BlobChunkSize,
 			NumWorkers: r.msg.BlobNumWorkers,
+			LatestVer:  r.latestVer, // (re-check under w-lock)
 		},
 		Parent: xact.Cname(BlobParentPrefetch, r.ID()),
 		TermCB: r.pebl.done,
 	}
 	if err := params.Lom.InitBck(lom.Bck()); err != nil {
-		core.FreeLOM(params.Lom)
 		return 0, err
 	}
 	xctn, err := core.T.GetColdBlob(params, oa)
 	if err != nil {
-		core.FreeLOM(params.Lom) // xaction was not registered and did not take ownership
 		// No range request has started; 429 here would be an internal protocol leak.
 		debug.Func(func() { debug.Assert(!cmn.IsErrTooManyRequests(err)) })
 		if !isErrBlobDlColdFallback(err) {
@@ -358,11 +361,15 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 		nlog.Warningln(r.Name(), ": blob download failed to start, falling back to regular cold GET: ", err)
 		return r.getCold(lom, oa, "blob-download failed to start")
 	}
+	if xctn == nil {
+		// present under w-lock (e.g., filled by a concurrent cold GET) - nothing to do
+		return 0, nil
+	}
 
-	// account for the spawn
+	size := xctn.(*XactBlobDl).Size() // trust the pebl's (actual) size - target may re-HEAD and replace oa
 	r.stats.blobN.Inc()
-	r.stats.blobSize.Add(oa.Size)
-	r.stats.peblSize.Add(oa.Size)
+	r.stats.blobSize.Add(size)
+	r.stats.peblSize.Add(size)
 
 	// TermCB may have fired before this add (and found nothing to remove) - reap
 	r.pebl.add(xctn)
@@ -505,7 +512,8 @@ func (pebl *pebl) wait() {
 		case total >= peblTimeout:
 			err := fmt.Errorf("%d blob download%s timed-out: %s", n, cos.Plural(int(n)), pebl.str())
 			nlog.Warningln(xname, err)
-			r.AddErr(err)
+			r.Abort(err)
+			pebl.abort(err)
 			return
 		case total >= 4*time.Minute && total-sleep < 4*time.Minute:
 			nlog.Warningln(xname, waiting, pebl.str())
@@ -531,6 +539,10 @@ func (pebl *pebl) wait() {
 }
 
 func (pebl *pebl) abort(err error) {
+	pebl.once.Do(func() { pebl.abortPending(err) })
+}
+
+func (pebl *pebl) abortPending(err error) {
 	pebl.mu.Lock()
 	pending := slices.Clone(pebl.pending)
 	pebl.mu.Unlock()
@@ -618,6 +630,9 @@ func (r *prefetch) blobRejStats() {
 }
 
 func (r *prefetch) errStats() {
+	if r.IsAborted() {
+		return
+	}
 	core.T.StatsUpdater().IncWith(stats.ErrPrefetchCount, r.xlabs)
 }
 

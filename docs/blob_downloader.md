@@ -19,9 +19,17 @@ call. A registered xaction holds the lock for its entire lifecycle and releases 
 exactly once after successful finalization, runtime-error cleanup, or abort cleanup. If
 renewal does not register an xaction, renewal releases the lock before returning.
 
+Background callers (single-object job, prefetch) qualify an object without holding the
+write lock, so blob downloader re-checks it once the lock is taken:
+
+- if the object is now present in-cluster (for instance, via concurrent GET),
+  there is nothing to do - unless a latest-version check is requested;
+- if it is present and the latest version is requested, blob downloader re-reads remote
+  metadata and downloads using the current size and version if they changed.
+
 For objects above a certain threshold, blob downloader can be transparently used by [prefetch](/docs/bucket.md#prefetch-and-evict) - as a performance-optimized alternative to a regular remote ("cold") GET.
 At critical memory pressure, [prefetch](/docs/bucket.md#prefetch-and-evict) uses regular cold GET instead of starting blob downloader.
-Prefetch also falls back when resource admission rejects blob downloader or the object cannot fit within the manifest chunk limit; other start failures are reported.
+Prefetch also falls back when resource admission rejects blob downloader, the object cannot fit within the manifest chunk limit, or the object's remote size is zero; other start failures are reported.
 
 A client-facing streaming admission rejected for resource pressure or insufficient memory budget returns HTTP 429 (too many requests) before object headers or body are written; pressure detected after a job starts is reported as an xaction error.
 
@@ -123,7 +131,7 @@ Key prefetch options:
 
 ### 3. Streaming GET (Python SDK Only)
 
-In addition to CLI jobs, blob downloader can be used to stream large objects while they are concurrently downloaded in the cluster. This is useful when you want to feed data directly into an application (for example, model loading or preprocessing) and still keep a local cached copy in AIS.
+In addition to CLI jobs, blob downloader can be used to stream large objects while they are concurrently downloaded in the cluster. This is useful when you want to feed data directly into an application (for example, model loading or preprocessing) and still keep a copy in AIS.
 
 ```python
 from aistore import Client
@@ -141,11 +149,29 @@ reader = bucket.object("my_large_object").get_reader(blob_download_config=blob_c
 data = reader.read_all()
 ```
 
+### Size limits
+
+Each interface applies its own minimum object size:
+
+| Interface | Blob downloader is used for | Otherwise |
+|-----------|-----------------------------|-----------|
+| Single-object job (`ais blob-download`, `api.BlobDownload`) | any non-zero size | zero size: error |
+| Prefetch (`--blob-threshold`; zero disables) | objects at or above `max(blob-threshold, 1MiB)` | regular cold GET |
+| Streaming GET (`Ais-Blob-Download`, `Ais-Blob-Threshold`) | objects at or above `max(Ais-Blob-Threshold, 128KiB)` | regular GET; no blob-download job |
+
+Notes:
+
+- prefetch rejects a negative `--blob-threshold`; positive values below 1MiB are raised to 1MiB (with a warning);
+- rarely, if the object's remote version shrinks before
+  prefetch rechecks it under write-lock, blob downloader may still be engaged (and process it below the threshold);
+- once its regular (non-blob) work is done, prefetch waits up to 32 minutes for pending blob downloads;
+  on timeout, it aborts both itself and the downloads that are still running.
+
 ---
 
 ## Selecting an effective blob-threshold for prefetch
 
-The ideal `--blob-threshold` depends on your cluster (CPU, disks, network), backend (S3/GCS/…​), and object size distribution.  
+The ideal `--blob-threshold` depends on your cluster (CPU, disks, network), backend (S3/GCS/…​), and object size distribution.
 Running full `prefetch` experiments for many candidate values can easily take **hours**, so instead we recommend using a **shorter single‑object blob-download benchmark** to pick a good starting point and then using that value directly in your prefetch job.
 
 To do this in practice, **compare cold GET vs. blob-download on a single object**:

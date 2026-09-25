@@ -421,8 +421,12 @@ func TestBlobDownloadParentCancellation(t *testing.T) {
 		snaps, err = api.WaitForSnaps(bp, xargs, blobdlFinished)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, len(snaps[tid]) == 1, "expected blob download %s on %s", xargs.ID, tid)
-		tassert.Fatalf(t, strings.Contains(snaps[tid][0].Err, context.Canceled.Error()),
-			"expected context cancellation, got %q", snaps[tid][0].Err)
+		// parent's abort reaches the child two ways - whichever comes first:
+		// - context cancellation (the child's context derives from the parent's)
+		// - explicit abort (see xs/prefetch pebl)
+		fin := snaps[tid][0]
+		tassert.Fatalf(t, fin.AbortedX || strings.Contains(fin.Err, context.Canceled.Error()),
+			"expected blob download aborted or context-canceled, got err=%q, abort-err=%q", fin.Err, fin.AbortErr)
 		args := xact.ArgsMsg{ID: prefetchXID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 		tassert.CheckFatal(t, api.WaitForXaction(bp, &args))
 		m.validateChunksOnDisk(bck, objName, 0)
@@ -810,7 +814,7 @@ func TestBlobDownloadLockContentionLatestVersion(t *testing.T) {
 
 func TestBlobDownloadRemoteAISReadTimeout(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
-	const objSize = cmn.ChunkSizeMin
+	const objSize = cmn.ChunkSizeMin // (explicit api.BlobDownload: no minimum other than zero)
 	var (
 		proxyURL  = tools.RandomProxyURL(t)
 		bp        = tools.BaseAPIParams(proxyURL)
@@ -1507,7 +1511,7 @@ func TestPrefetchBlobInvalidWorkers(t *testing.T) {
 // effect of the new param).
 func TestPrefetchBlobChunkSize(t *testing.T) {
 	const (
-		objSize    = 8 * cos.MiB // small but > minBlobDlPrefetch (1MiB)
+		objSize    = 8 * cos.MiB // small but > MinBlobDlPrefetchSize (1MiB)
 		blobThresh = cos.MiB
 	)
 
@@ -1576,7 +1580,7 @@ func TestPrefetchBlobChunkSize(t *testing.T) {
 //	above blobMaxWorkers cap (64).
 func TestPrefetchBlobNumWorkers(t *testing.T) {
 	const (
-		objSize    = 4 * cos.MiB // small but > minBlobDlPrefetch (1MiB)
+		objSize    = 4 * cos.MiB // small but > MinBlobDlPrefetchSize (1MiB)
 		blobThresh = cos.MiB
 	)
 

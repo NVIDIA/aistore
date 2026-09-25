@@ -34,18 +34,16 @@ import (
 )
 
 // TODO:
-// 1. check that caller always checks remote non-existence (target does - via t.blobdl)
-// 2. support io-errors (higher severity)
-// 3. track each chunk reader with 'started' timestamp; abort/retry individual chunks
+// 1. support io-errors (higher severity)
+// 2. track each chunk reader with 'started' timestamp; abort/retry individual chunks
 //    (chunk read timeout is done - see `apc.BlobMsg.ChunkReadTimeout`)
-// 4. validate `res.ExpCksum`: blob-downloaded objects bypass `validate_cold_get`
+// 3. validate `res.ExpCksum`: blob-downloaded objects bypass `validate_cold_get`
 //    (compare with regular cold GET)
-// 5. used-memory accounting: a work item releases the whole per-worker share
+// 4. used-memory accounting: a work item releases the whole per-worker share
 //    (chunk SGL + one copy buffer), but the buffer belongs to a worker and workers
 //    are not pinned to items
-// 6. write starvation: blob-downloader currently take the write-lock across the entire xaction lifetime;
-//    this can starve other write operations
-// 7. `target.blobdlLocked` currently duplicate the lock upgrade logic with `GOI` - refactor and consolidate
+// 5. write starvation: blob-downloader currently takes the write-lock across the entire downloading -
+//    may starve writers
 
 const (
 	BlobParentGET      = "GET"
@@ -54,12 +52,16 @@ const (
 	BlobParentPrefetch = "prefetch"
 )
 
+// two minimum thresholds for external callers (GET, x-prefetch)
+const (
+	MinBlobDlGetSize      = 128 * cos.KiB
+	MinBlobDlPrefetchSize = cos.MiB
+)
+
 // default tunables (can override via apc.BlobMsg)
 const (
 	dfltChunkSize         = 4 * cos.MiB
 	maxStreamingChunkSize = 64 * cos.MiB // ~625GiB maximum object size; up to 2GiB streaming SGLs
-
-	minBlobDlPrefetch = cos.MiB // size threshold for x-prefetch
 
 	blobMinBytesPerWorker = 256 * cos.MiB // one blob worker should get at least this much object data
 	blobMaxWorkers        = 32            // absolute max workers for a single blob-download job
@@ -161,13 +163,14 @@ var (
 var (
 	errBlobDlAdmission  = errors.New(apc.ActBlobDl + " admission rejected")
 	errBlobDlChunkLimit = errors.New(apc.ActBlobDl + " exceeds manifest chunk limit")
+	errBlobDlEmpty      = errors.New(apc.ActBlobDl + " zero-size object")
 )
 
 // IsErrBlobDlAdmission reports whether blob download was rejected before starting.
 func IsErrBlobDlAdmission(err error) bool { return errors.Is(err, errBlobDlAdmission) }
 
 func isErrBlobDlColdFallback(err error) bool {
-	return IsErrBlobDlAdmission(err) || errors.Is(err, errBlobDlChunkLimit)
+	return IsErrBlobDlAdmission(err) || errors.Is(err, errBlobDlChunkLimit) || errors.Is(err, errBlobDlEmpty)
 }
 
 // Blob Download Flow =================================================================
@@ -199,10 +202,19 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 		debug.Assert(params.Lom.IsLocked() == apc.LockWrite)
 		debug.Assert(oa != nil)
 	})
-	var (
-		lom = params.Lom
-		pre = &XactBlobDl{args: params} // preliminary ("keep filling" below)
-	)
+
+	// validate size - all paths:
+	// - size policy (MinBlobDlGetSize, MinBlobDlPrefetchSize) is applied by the callers that _select_
+	//   blob-downloading (GET, prefetch); explicit requests (x-start, api.BlobDownload) are honored
+	// - zero size cannot be blob-downloaded: prefetch falls back to cold GET; explicit requests fail
+	lom := params.Lom
+	if oa.Size <= 0 {
+		err := fmt.Errorf("%w: %s", errBlobDlEmpty, lom.Cname())
+		lom.Unlock(true)
+		return xreg.RenewRes{Err: err}
+	}
+
+	pre := &XactBlobDl{args: params} // preliminary ("keep filling" below)
 	pre.chunkSize = params.Msg.ChunkSize
 	pre.numWorkers = params.Msg.NumWorkers
 	// fill-in custom MD
@@ -211,7 +223,6 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	lom.SetAtimeUnix(oa.Atime)
 	lom.SetCksum(cos.NoneCksum) // clear old checksum, if any (_fini sets it upon success)
 	// and separately:
-	debug.Assert(oa.Size > 0)
 	pre.fullSize = oa.Size
 
 	if params.Msg.FullSize > 0 && params.Msg.FullSize != pre.fullSize {

@@ -192,8 +192,11 @@ func (t *target) rgetstats(backend core.Backend, cname, xkind string, size, lat 
 func (t *target) GetColdBlob(params *core.BlobParams, oa *cmn.ObjAttrs) (xctn core.Xact, err error) {
 	debug.Assert(params.Lom != nil)
 	debug.Assert(params.Msg != nil)
-	_, xctn, err = t.blobdlBackground(params, oa)
-	return xctn, err
+	_, xblob, err := t.blobdlBackground(params, oa)
+	if err != nil || xblob == nil {
+		return nil, err
+	}
+	return xblob, nil
 }
 
 func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {

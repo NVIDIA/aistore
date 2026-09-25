@@ -14,6 +14,9 @@ class BlobDownloadConfig:
             or SI units, or as raw bytes (e.g., "4mb", "1MiB", "1048576", "128k")
         num_workers (str, optional): Number of concurrent workers for the blob downloader
 
+    Note:
+        Objects smaller than 128 KiB are served via regular GET (no blob-download job).
+
     Example:
         blob_settings = BlobDownloadConfig(
             chunk_size="1MiB",  # 1 MiB per chunk

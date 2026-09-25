@@ -308,7 +308,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		return xid, rns.Err
 	case apc.ActBlobDl:
 		debug.Assert(msg.Name != "")
-		lom := core.AllocLOM(msg.Name)
+		lom := &core.LOM{ObjName: msg.Name}
 		err := lom.InitCmnBck(&args.Bck)
 		if err == nil {
 			params := &core.BlobParams{
@@ -317,9 +317,6 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 				Parent: xs.BlobParentXStart, // generic start-xaction path (compare with dedicated api.BlobDownload)
 			}
 			xid, _, err = t.blobdlBackground(params, nil /*oa*/)
-		}
-		if err != nil {
-			core.FreeLOM(lom)
 		}
 		return xid, err
 	// 3. cannot start

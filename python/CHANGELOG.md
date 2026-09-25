@@ -54,6 +54,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- Blob download size limits (server-side, reflected in docstrings):
+  - `Object.get_reader(blob_download_config=...)` serves objects smaller than 128 KiB
+    via regular GET, without starting a blob-download job.
+  - `ObjectGroup.prefetch(blob_threshold=...)` rejects negative thresholds;
+    positive values below 1 MiB are still raised to 1 MiB.
+  - `Object.blob_download()` of a zero-size object fails with an error.
 - **BREAKING**: The minimum supported Python version is now 3.10. Python 3.8 and
   3.9 have both reached end-of-life and are no longer tested or supported.
 - **BREAKING**: `Etl.init_class()` no longer supports Python 3.9, since the SDK

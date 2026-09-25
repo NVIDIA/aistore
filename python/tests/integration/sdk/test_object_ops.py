@@ -21,7 +21,7 @@ from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
 
 from tests.const import (
-    SMALL_FILE_SIZE,
+    MEDIUM_FILE_SIZE,
     OBJ_READ_TYPE_ALL,
     OBJ_READ_TYPE_CHUNK,
     KIB,
@@ -188,7 +188,8 @@ class TestObjectOps(ParallelTestBase):
     )
     @cases("1mb", "1MiB", "1048576", "128k")
     def test_get_blob_download(self, testcase):
-        objects = self._put_objects(1, SMALL_FILE_SIZE)
+        # (objects smaller than 128KiB are served via regular GET - no blob-download job)
+        objects = self._put_objects(1, MEDIUM_FILE_SIZE)
         obj_names = list(objects.keys())
         evict_job_id = self.bucket.objects(obj_names=obj_names).evict()
         result = self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)

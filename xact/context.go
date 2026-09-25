@@ -11,7 +11,11 @@ import (
 var contextVlabs = &struct{}{}
 
 func NewCtxVlabs(vlabs map[string]string) context.Context {
-	return context.WithValue(context.Background(), contextVlabs, vlabs)
+	return WithCtxVlabs(context.Background(), vlabs)
+}
+
+func WithCtxVlabs(parent context.Context, vlabs map[string]string) context.Context {
+	return context.WithValue(parent, contextVlabs, vlabs)
 }
 
 func GetCtxVlabs(ctx context.Context) map[string]string {
