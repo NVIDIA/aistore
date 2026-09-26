@@ -121,13 +121,17 @@ type snapsFinished struct {
 	empty int
 }
 
-func (c *snapsFinished) check(snaps MultiSnap) (bool, bool, error) {
+// TODO: strict-wait option
+func (c *snapsFinished) check(snaps MultiSnap) (bool /*done*/, bool /*reset*/, error) {
 	if c.id != "" {
-		// Wait for all reported instances of this UUID to finish, or any to abort.
-		// A target that does not report xid is ambiguous: the xaction may not run there,
-		// may not be visible yet, or may have finished and been pruned from its xreg.
-		// Missing instances therefore do not block completion.
-		// TODO: add a strict all-target wait option with an explicit participant set.
+		// wait for all reported instances of this UUID to finish, or any to abort;
+		// currently:
+		// - target that does not report xid is simply ignored
+		// - aborted xaction is reported as `done` prior to its respective cleanup => Finish() => (EndTime = now)
+		// hence, related TODO:
+		// - add a strict-wait option:
+		// a) cluster-wide xactions - wait for all targets, AND
+		// b) wait for xaction to finish - see Snap.IsFinished()
 		aborted, running, notstarted := snaps._get(c.id, false /*idle*/)
 		return aborted || (!running && !notstarted), false, nil
 	}

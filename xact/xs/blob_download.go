@@ -629,6 +629,7 @@ func (r *XactBlobDl) runWorkers() error {
 				debug.AssertFunc(func() bool { return r.pending[done.roff] == nil },
 					"out-of-order chunk should not be already in the pending map")
 				r.pending[done.roff] = done
+				done = nil // transfer ownership => pending
 
 				continue
 			}
@@ -639,6 +640,7 @@ func (r *XactBlobDl) runWorkers() error {
 			}
 
 			r.scheduleNextChunk(done)
+			done = nil // nothing to cleanup here (see scheduleNextChunk)
 
 			// type #2 write: drain consecutive pending chunks that are now ready
 			if err = r.drainPendingChunks(); err != nil {
@@ -821,17 +823,17 @@ func (r *XactBlobDl) write(sgl *memsys.SGL, size int64) (err error) {
 // pending map, and if so, writes it and schedules the next download.
 func (r *XactBlobDl) drainPendingChunks() error {
 	for {
-		next, exists := r.pending[r.woff]
+		var (
+			woff         = r.woff
+			next, exists = r.pending[woff]
+		)
 		if !exists {
 			break // gap in sequence, wait for more chunks
 		}
-
-		delete(r.pending, r.woff)
-
 		if err := r.write(next.sgl, next.written); err != nil {
-			return err
+			return err // still in pending - freed by r.cleanup
 		}
-
+		delete(r.pending, woff) // using its own `woff` (< current r.woff)
 		r.scheduleNextChunk(next)
 	}
 	return nil

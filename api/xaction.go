@@ -271,7 +271,9 @@ func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error
 //
 
 // Poll QueryXactionSnaps() until `cond` returns done=true; if `cond` is nil, default to args.Finished()
-// See related (generic) WaitForXaction
+// See related:
+// - generic WaitForXaction
+// - snapsFinished.check() helper and its TODO: strict-wait option
 func WaitForSnaps(bp BaseParams, args *xact.ArgsMsg, cond xact.SnapsCond) (xact.MultiSnap, error) {
 	if args.Kind == "" && args.ID == "" {
 		return nil, fmt.Errorf(fmtErrNosel, args.String())
@@ -380,6 +382,8 @@ func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (out *nl.Status, err er
 //
 // Return:
 // - nil on success, error otherwise (includes timeout)
+// See also:
+// - snapsFinished.check() helper and its TODO: strict-wait option
 func WaitForXaction(bp BaseParams, args *xact.ArgsMsg) error {
 	if args.Kind == "" {
 		return errors.New("WaitForXaction: missing xaction kind (required)")
