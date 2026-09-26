@@ -42,8 +42,8 @@ import (
 // 4. used-memory accounting: a work item releases the whole per-worker share
 //    (chunk SGL + one copy buffer), but the buffer belongs to a worker and workers
 //    are not pinned to items
-// 5. write starvation: blob-downloader currently takes the write-lock across the entire downloading -
-//    may starve writers
+// 5. read/write starvation: blob-downloader currently takes the write-lock across the entire downloading
+// 6. the window between this write-lock and entering Run() - and the associated risk
 
 const (
 	BlobParentGET      = "GET"
@@ -98,7 +98,8 @@ type (
 		workers  []*blobWorker
 		adv      load.Advice
 		xact.Base
-		bdm         bdMetrics // resolved once in factory.Start
+		bdm         bdMetrics   // resolved once in factory.Start
+		finalizing  atomic.Bool // CAS gate to execute once
 		wg          sync.WaitGroup
 		nextRoff    int64
 		fullSize    int64
@@ -380,10 +381,22 @@ func (r *XactBlobDl) Size() int64  { return r.fullSize }
 
 func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 	var (
-		err error
-		lom = r.args.Lom
-		now = mono.NanoTime()
+		err      error
+		returned bool
+		lom      = r.args.Lom
+		now      = mono.NanoTime()
 	)
+	if wg != nil {
+		wg.Done() // signal that xaction has started, including if it panics below
+	}
+
+	defer func() {
+		if !returned {
+			err = fmt.Errorf("%s: download interrupted during Run", r.Name())
+		}
+		r.finalize(err, lom, now)
+	}()
+
 	debug.Func(func() {
 		debug.Assertf(lom.IsLocked() == apc.LockWrite,
 			"%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
@@ -391,10 +404,6 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(r.String())
 	}
-	if wg != nil {
-		wg.Done() // signal that xaction has started
-	}
-
 	// throttle
 	if r.adv.Sleep > 0 {
 		time.Sleep(r.adv.Sleep)
@@ -407,7 +416,7 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 		err = r.runWorkers()
 	}
 
-	r.finalize(err, lom, now)
+	returned = true // ok
 }
 
 func (r *XactBlobDl) Abort(err error) bool {
@@ -584,18 +593,33 @@ func (r *XactBlobDl) runSerial() error {
 
 // runWorkers downloads chunks concurrently using multiple workers.
 // Main thread coordinates: seeds work, receives completions, handles out-of-order chunks.
-// Note: All work-items are returned to the main thread through `doneCh` and are cleaned up either after `goto cleanup` or within `scheduleNextChunk`.
-func (r *XactBlobDl) runWorkers() error {
+// Note: All work-items are returned to the main thread through `doneCh` and are cleaned up either
+// during deferred shutdown or within `scheduleNextChunk`.
+func (r *XactBlobDl) runWorkers() (err error) {
+	var (
+		done      *blobWI
+		completed bool
+	)
+
+	// resilient shutdown: cancel, close workCh, wait for workers, close doneCh
+	defer func() {
+		if !completed {
+			r.CancelContext()
+		}
+		close(r.workCh)
+		r.wg.Wait()
+		close(r.doneCh)
+		if !completed && done != nil {
+			done.cleanup()
+		}
+	}()
+
 	r.startWorkers()
 
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infof("started workers: %s, chunk size: %s, num workers: %d", r.Name(), cos.IEC(r.chunkSize, 0), r.numWorkers)
 	}
 
-	var (
-		done *blobWI
-		err  error
-	)
 	for {
 		select {
 		case done = <-r.doneCh:
@@ -664,23 +688,36 @@ func (r *XactBlobDl) runWorkers() error {
 	}
 
 cleanup:
-	if err != nil {
-		if done != nil {
-			done.cleanup()
-		}
-		// Cancel sibling range reads before waiting; Finish cannot run yet.
-		r.CancelContext()
-	}
-
-	close(r.workCh)
-	r.wg.Wait()
-	close(r.doneCh)
-
+	completed = err == nil
 	return err
 }
 
 // finalize handles post-download work-items: checksum, stats, cleanup
 func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
+	if !r.finalizing.CompareAndSwap(false, true) {
+		return
+	}
+	var (
+		committed bool
+		done      bool
+	)
+
+	// runs last
+	defer func() {
+		lom.Unlock(true)
+		r.Finish()
+	}()
+	// teardown, under w-lock
+	defer func() {
+		if !done {
+			r.AddErr(fmt.Errorf("%s: finalization interrupted", r.Name()))
+		}
+		if !committed && r.manifest != nil {
+			r.manifest.Abort(lom)
+		}
+		r.cleanup()
+	}()
+
 	debug.Func(func() {
 		debug.Assertf(lom.IsLocked() == apc.LockWrite,
 			"%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
@@ -695,6 +732,7 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 			})
 
 			err = r._fini(lom)
+			committed = err == nil
 		}
 	}
 
@@ -715,16 +753,8 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 	} else {
 		r.AddErr(err)
 		r._errStats()
-
-		// cleanup the manifest for both user abort and runtime error abort
-		if r.manifest != nil {
-			r.manifest.Abort(lom)
-		}
 	}
-
-	r.cleanup()
-	lom.Unlock(true)
-	r.Finish()
+	done = true
 }
 
 // bump both generic and blob-downloader's own error counters
@@ -1111,7 +1141,9 @@ func (wi *blobWI) advance(nextRoff int64) *blobWI {
 
 func (wi *blobWI) cleanup() {
 	if wi.sgl != nil {
-		wi.sgl.Free()
+		sgl := wi.sgl
+		wi.sgl = nil // do not retry Free if cleanup is interrupted by a panic
+		sgl.Free()
 		debug.DecCounter(wi.name)
 	}
 }
