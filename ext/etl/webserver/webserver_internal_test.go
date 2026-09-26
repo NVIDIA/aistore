@@ -6,6 +6,7 @@ package webserver
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -649,6 +652,160 @@ func TestWebSocketDirectPutChunkedForward(t *testing.T) {
 	tassert.Fatalf(t, mt == websocket.BinaryMessage, "Expected BinaryMessage")
 	expected := append(append([]byte{}, chunk1...), chunk2...)
 	tassert.Fatalf(t, bytes.Equal(msg, expected), "expected content %s, got %s", expected, msg)
+}
+
+const midStreamTimeout = 5 * time.Second
+
+var errMidStream = errors.New("mid-stream failure")
+
+// net/http buffers the first 2 KiB of a response body: a failure within that buffer
+// must fail the request itself, while a later one must leave the body visibly truncated
+var midStreamFailures = []struct {
+	name     string
+	n        int  // bytes of output before the failure
+	buffered bool // whether the failure happens before anything is sent
+}{
+	{"failAfter=100B", 100, true},
+	{"failAfter=32KiB", 32 * cos.KiB, false},
+}
+
+// failingServer emits n bytes of transformed output and then fails
+type failingServer struct {
+	n    int
+	size int64
+}
+
+func (s *failingServer) Transform(input io.ReadCloser, _, _ string) (io.ReadCloser, int64, error) {
+	if _, err := io.Copy(io.Discard, input); err != nil {
+		return nil, 0, err
+	}
+	r := io.MultiReader(bytes.NewReader(bytes.Repeat([]byte("x"), s.n)), iotest.ErrReader(errMidStream))
+	return io.NopCloser(r), s.size, nil
+}
+
+// next pipeline stage whose 200 response is cut off after n bytes
+func newAbortingStageServer(n int) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+		w.Write(bytes.Repeat([]byte("x"), n))
+		w.(http.Flusher).Flush()
+		panic(http.ErrAbortHandler)
+	}))
+}
+
+// asserts that the client cannot mistake the failed response for a complete one;
+// the handler must run behind a real server, since only net/http recovers http.ErrAbortHandler
+func checkAborted(t *testing.T, req *http.Request, n int, buffered bool) {
+	t.Helper()
+	client := &http.Client{Timeout: midStreamTimeout}
+	resp, err := client.Do(req)
+	if buffered {
+		if err == nil {
+			resp.Body.Close()
+		}
+		tassert.Fatalf(t, errors.Is(err, io.EOF), "expected the request to fail with EOF, got %v", err)
+		return
+	}
+	tassert.CheckFatal(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	tassert.Fatalf(t, http.StatusOK == resp.StatusCode, "expected status code 200, got %d", resp.StatusCode)
+	tassert.Fatalf(t, errors.Is(err, io.ErrUnexpectedEOF), "expected a truncated body, got error %v", err)
+	tassert.Fatalf(t, len(body) <= n, "expected at most %d bytes, got %d", n, len(body))
+	tassert.Fatalf(t, !bytes.Contains(body, []byte(errMidStream.Error())), "expected no error in the response body")
+}
+
+func TestETLServerMidStreamTransformError(t *testing.T) {
+	var (
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+	)
+	sizes := []struct {
+		name string
+		size int64
+	}{
+		{"size=unknown", cos.ContentLengthUnknown},
+		{"size=known", 64 * cos.KiB}, // the short body alone already fails the client; checks nothing is appended
+	}
+	for _, s := range sizes {
+		for _, f := range midStreamFailures {
+			t.Run(s.name+"/"+f.name, func(t *testing.T) {
+				svr := &etlServerBase{
+					aisTargetURL: host + secretPrefix,
+					endpoint:     host + ":" + port,
+					client:       &http.Client{},
+					ETLServer:    &failingServer{n: f.n, size: s.size},
+				}
+				etlServer := httptest.NewServer(http.HandlerFunc(svr.putHandler))
+				defer etlServer.Close()
+
+				req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, etlServer.URL, strings.NewReader("test bytes"))
+				tassert.CheckFatal(t, err)
+				checkAborted(t, req, f.n, f.buffered)
+			})
+		}
+	}
+}
+
+func TestETLServerDirectPutMidStreamForwardError(t *testing.T) {
+	var (
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+
+		svr = &etlServerBase{
+			aisTargetURL: host + secretPrefix,
+			endpoint:     host + ":" + port,
+			client:       &http.Client{Timeout: midStreamTimeout},
+			ETLServer:    &EchoServer{},
+		}
+	)
+	for _, f := range midStreamFailures {
+		t.Run(f.name, func(t *testing.T) {
+			nextStageServer := newAbortingStageServer(f.n)
+			defer nextStageServer.Close()
+			etlServer := httptest.NewServer(http.HandlerFunc(svr.putHandler))
+			defer etlServer.Close()
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, etlServer.URL, strings.NewReader("test bytes"))
+			tassert.CheckFatal(t, err)
+			req.Header.Set(apc.HdrNodeURL, nextStageServer.URL)
+			checkAborted(t, req, f.n, f.buffered)
+		})
+	}
+}
+
+func TestETLServerDownloadMidStreamTransformError(t *testing.T) {
+	var (
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+	)
+	remoteServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("remote object content"))
+	}))
+	defer remoteServer.Close()
+
+	for _, f := range midStreamFailures {
+		t.Run(f.name, func(t *testing.T) {
+			svr := &etlServerBase{
+				aisTargetURL: host + secretPrefix,
+				endpoint:     host + ":" + port,
+				client:       &http.Client{Timeout: midStreamTimeout},
+				ETLServer:    &failingServer{n: f.n, size: cos.ContentLengthUnknown},
+			}
+			etlServer := httptest.NewServer(http.HandlerFunc(svr.downloadHandler))
+			defer etlServer.Close()
+
+			q := url.Values{apc.QparamObjTo: []string{"obj"}, apc.QparamOrigURL: []string{remoteServer.URL}}
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, etlServer.URL+"?"+q.Encode(), http.NoBody)
+			tassert.CheckFatal(t, err)
+			checkAborted(t, req, f.n, f.buffered)
+		})
+	}
 }
 
 func createFQNFile(t *testing.T) (string, []byte) {
