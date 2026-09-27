@@ -378,10 +378,10 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 
 	var (
 		hdr = w.Header()
-		op  cmn.ObjectProps
+		op  cmn.ObjAttrs
 	)
 	if exists {
-		op.ObjAttrs = *lom.ObjAttrs()
+		op = *lom.ObjAttrs()
 	} else {
 		// cold HEAD
 		objAttrs, ecode, err := t.HeadCold(lom, r)
@@ -393,7 +393,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 			s3.WriteErr(w, r, ei)
 			return
 		}
-		op.ObjAttrs = *objAttrs
+		op = *objAttrs
 	}
 
 	custom := op.GetCustomMD()
