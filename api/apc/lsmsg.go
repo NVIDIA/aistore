@@ -163,7 +163,7 @@ const GetPropsNameSize = GetPropsName + LsPropsSepa + GetPropsSize
 
 // NOTE: update when changing any of the above :NOTE
 var (
-	// TODO [v4.5]: remove V1 props and HeadObject() API and impl. - superseded by V2
+	// Shared with list-objects; these sets are not specific to legacy object HEAD.
 	GetPropsMinimal      = []string{GetPropsName, GetPropsSize, GetPropsCached}
 	GetPropsDefaultCloud = []string{GetPropsName, GetPropsSize, GetPropsCached,
 		GetPropsChecksum, GetPropsVersion, GetPropsCustom}

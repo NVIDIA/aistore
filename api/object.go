@@ -74,7 +74,7 @@ type (
 	// the object's size, checksum, version, and other metadata.
 	//
 	// Note that while `GetObject()` and related GET APIs return `ObjAttrs`,
-	// `HeadObject()` API returns `cmn.ObjectProps` - a superset.
+	// `HeadObjectV2()` returns `cmn.ObjectPropsV2`.
 	ObjAttrs struct {
 		wrespHeader http.Header
 		n           int64
@@ -467,20 +467,12 @@ func TransformObject(bp BaseParams, args *TransformArgs) error {
 	return copyOrTransformObject(bp, &args.CopyArgs, &args.ETL)
 }
 
-// HEAD(object)  ==============================================================================================
-//
-// Returns object properties; can be conventionally used to establish in-cluster presence.
+// HeadObject returns legacy object properties; it can also establish in-cluster presence.
 // - fltPresence:  as per QparamFltPresence enum (for values and comments, see api/apc/query.go)
 // - silent==true: not to log (not-found) error
 //
-// Deprecation notice:
-// - This is the legacy HEAD(object) v1 API.
-// - It remains fully supported in v4.2, but new development should target Object HEAD v2.
-// - The v1 path is planned for removal in a future major release.
-//
-// See also: HeadObjectV2()
-// TODO [v4.5]: remove V1 props and HeadObject() API and impl. - superseded by V2
-
+// Deprecated: Use HeadObjectV2. HeadObject sends a native HEAD request without
+// `props`, which selects the legacy v1 server response.
 func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (op *cmn.ObjectProps, err error) {
 	q := qalloc()
 	bck.SetQuery(q)
@@ -608,7 +600,7 @@ func headobjV2(reqParams *ReqParams, noprops bool, props string) (*cmn.ObjectPro
 // Given cos.StrKVs (map[string]string) keys and values, sets object's custom properties.
 // By default, adds new or updates existing custom keys.
 // Use `setNewCustomMDFlag` to _replace_ all existing keys with the specified (new) ones.
-// See also: HeadObject() and apc.HdrObjCustomMD
+// See also: HeadObjectV2() and apc.HdrObjCustomMD
 
 func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, objName string, custom cos.StrKVs, setNew bool) error {
 	var (

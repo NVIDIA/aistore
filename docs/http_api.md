@@ -196,15 +196,17 @@ $ curl -s -L -X GET -H 'Range: bytes=1024-1535' 'http://G/v1/objects/myS3bucket/
 # Delete object
 $ curl -i -X DELETE -L 'http://G/v1/objects/mybucket/myobject'
 
-# HEAD object (get properties)
-$ curl -s -L --head 'http://G/v1/objects/mybucket/myobject'
+# HEAD object v2 (selective properties)
+$ curl -s -L --head 'http://G/v1/objects/mybucket/myobject?props=name,size'
 
-# Check if remote object is cached
-$ curl -s -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'
+# Check if an object is present in the cluster
+$ curl -s -L --head 'http://G/v1/objects/mybucket/myobject?props=name,size&presence=2'
 
 # HEAD bucket (get properties)
 $ curl -s -L --head 'http://G/v1/buckets/mybucket'
 ```
+
+> **Deprecated: native object HEAD v1.** Omitting the `props` query parameter selects the legacy response. Specify a nonempty `props` value for object HEAD v2, as in the examples above. This does not affect S3-compatible HEAD requests.
 
 ### Listing
 

@@ -46,7 +46,9 @@ const (
 var supportedRemAttrs = [...]string{VersionObjMD, CRC32CObjMD, MD5ObjMD, ETag, cos.HdrLastModified, cos.HdrContentType}
 
 type (
-	// NOTE: will be removed in the upcoming releases; use ObjectPropsV2 instead
+	// ObjectProps is the legacy native object HEAD v1 response.
+	//
+	// Deprecated: Use ObjectPropsV2 for native object HEAD responses.
 	ObjectProps struct {
 		Bck Bck `json:"bucket"`
 		ObjAttrs
