@@ -5,8 +5,11 @@
 package aisloader
 
 import (
+	"bytes"
+	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/namegetter"
 )
@@ -80,5 +83,29 @@ func TestNewNameGetter(t *testing.T) {
 				t.Fatalf("newNameGetter() isPermBased = %t, expected %t", isPermBased, test.isPermBased)
 			}
 		})
+	}
+}
+
+// TestMultipartStatsJSON verifies successes and failures survive JSON serialization
+// independently of regular PUT statistics.
+func TestMultipartStatsJSON(t *testing.T) {
+	s := newStats(time.Now())
+	s.put.Add(128, time.Millisecond)
+	s.putMPU.Add(1024, time.Millisecond)
+	s.putMPU.Add(2048, time.Millisecond)
+	s.putMPU.AddErr()
+	var output bytes.Buffer
+	writeStatsJSON(&output, &s, false)
+	var report map[string]jsonStats
+	if err := json.Unmarshal(output.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	mpu, ok := report["put_multipart"]
+	if !ok || mpu.Cnt != 2 || mpu.Bytes != 3072 || mpu.Errs != 1 {
+		t.Fatalf("multipart statistics missing or incorrect: %s", output.Bytes())
+	}
+	put := report["put"]
+	if put.Cnt != 1 || put.Bytes != 128 || put.Errs != 0 {
+		t.Fatalf("regular PUT statistics changed: %s", output.Bytes())
 	}
 }

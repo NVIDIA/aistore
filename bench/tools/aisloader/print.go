@@ -208,10 +208,12 @@ func writeStatsJSON(to io.Writer, s *sts, withcomma ...bool) {
 	jStats := struct {
 		Get      *jsonStats `json:"get"`
 		Put      *jsonStats `json:"put"`
+		PutMPU   *jsonStats `json:"put_multipart"`
 		GetBatch *jsonStats `json:"get_batch"`
 	}{
 		Get:      jsonStatsFromReq(s.get),
 		Put:      jsonStatsFromReq(s.put),
+		PutMPU:   jsonStatsFromReq(s.putMPU),
 		GetBatch: jsonStatsFromReq(s.getBatch),
 	}
 
