@@ -403,12 +403,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		)
 
 		// Set bucket chunk properties
-		_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-			Chunks: &cmn.ChunksConfToSet{
-				ObjSizeLimit: apc.Ptr(cos.SizeIEC(objSizeLimit)),
-				ChunkSize:    apc.Ptr(cos.SizeIEC(chunkSize)),
-			},
-		})
+		err := setRechunkProps(baseParams, bck, objSizeLimit, chunkSize)
 		tassert.CheckFatal(t, err)
 
 		// PUT a large object (larger than objSizeLimit)
@@ -424,7 +419,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Run rechunk job
-		xid, err := api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{ObjSizeLimit: objSizeLimit, ChunkSize: chunkSize})
+		xid, err := api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, xid != "", "rechunk xaction ID should not be empty")
 

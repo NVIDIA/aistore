@@ -503,6 +503,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	}
 	c.msg.BMDVersion = bmd.version()
 
+	// TODO: changing chunks properties starts rechunk automatically
 	// 4. if remirror|re-EC|TBD-storage-svc
 	// NOTE: setting up IC listening prior to committing (and confirming xid) here and elsewhere
 	if ctx.needReMirror || ctx.needReEC {

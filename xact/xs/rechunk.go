@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"fmt"
 	"strconv"
 	"sync"
 
@@ -34,7 +33,8 @@ type (
 		kind string
 	}
 	xactRechunk struct {
-		args *apc.RechunkMsg
+		args   *apc.RechunkMsg
+		chunks cmn.ChunksConf
 		// TODO: migrate to xact.BckJogRunner to reduce boilerplate and gain auto-tuned worker pool
 		xact.BckJog
 	}
@@ -54,12 +54,12 @@ func (p *rechunkFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return &rechunkFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind}
 }
 
-func (p *rechunkFactory) Start() (err error) {
-	p.xctn, err = newxactRechunk(p)
+func (p *rechunkFactory) Start() error {
+	p.xctn = newxactRechunk(p)
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln("start rechunk", p.Bck.String(), "xid", p.UUID(), "args", p.xctn.CtlMsg())
 	}
-	return err
+	return nil
 }
 
 func (p *rechunkFactory) Kind() string   { return p.kind }
@@ -73,38 +73,26 @@ func (p *rechunkFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.W
 	}
 
 	var (
-		prevArgs = prev.Args.Custom.(*apc.RechunkMsg)
-		currArgs = p.Args.Custom.(*apc.RechunkMsg)
-		xprev    = prevEntry.Get()
+		prevChunks = &prev.xctn.chunks
+		currChunks = &p.Bck.Props.Chunks
 	)
 
-	if prevArgs.ObjSizeLimit == currArgs.ObjSizeLimit && prevArgs.ChunkSize == currArgs.ChunkSize {
-		// Same configuration - ignore the request and reuse the existing xaction
-		return xreg.WprUse, cmn.NewErrXactUsePrev(xprev.String())
+	// See docs/relnotes/5.1.md#chunking-upcoming: a changed chunks configuration aborts
+	// the running rechunk so its replacement can converge to the new layout
+	if prevChunks.EqualLayout(currChunks) {
+		return xreg.WprUse, cmn.NewErrXactUsePrev(prevEntry.Get().String())
 	}
-
-	// Different configuration - fail with recommendation to abort the running one
-	return wpr, cmn.NewErrFailedTo(
-		core.T,
-		"start new rechunk",
-		xprev.String(),
-		fmt.Errorf("rechunk with different objsize_limit (%s vs %s) or chunk_size (%s vs %s) is already running; to override, first stop the running one %q",
-			cos.ToSizeIEC(prevArgs.ObjSizeLimit, 0),
-			cos.ToSizeIEC(currArgs.ObjSizeLimit, 0),
-			cos.ToSizeIEC(prevArgs.ChunkSize, 0),
-			cos.ToSizeIEC(currArgs.ChunkSize, 0),
-			xprev.ID()),
-	)
+	return xreg.WprAbort, nil
 }
 
 ////////////////
 // xactRechunk //
 ////////////////
 
-func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
+func newxactRechunk(p *rechunkFactory) *xactRechunk {
 	var (
 		args      = p.Args.Custom.(*apc.RechunkMsg)
-		r         = &xactRechunk{args: args}
+		r         = &xactRechunk{args: args, chunks: p.Bck.Props.Chunks}
 		config    = cmn.GCO.Get()
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 		mpopts    = &mpather.JgroupOpts{
@@ -117,24 +105,14 @@ func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 		}
 	)
 
-	if args.ChunkSize <= 0 {
-		return nil, cmn.NewErrFailedTo(core.T, "newxactRechunk", "chunk size is not set", nil)
-	}
-
 	debug.AssertNoErr(err)
 	mpopts.Bck.Copy(p.Bck.Bucket())
 
 	r.BckJog.Init(p.UUID(), p.Kind(), p.Bck, mpopts, config)
 
-	return r, nil
+	return r
 }
 
-// | Object Size       | Was Chunked? | Action                 |
-// |-------------------|--------------|------------------------|
-// | < objSizeLimit    |     Yes      | Restore monolithic     |
-// | < objSizeLimit    |     No       | No-op                  |
-// | >= objSizeLimit   |     Yes      | Re-chunk               |
-// | >= objSizeLimit   |     No       | Re-chunk               |
 func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	lom.Lock(true)
 	defer lom.Unlock(true)
@@ -148,12 +126,14 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	if lom.IsCopy() {
 		return nil
 	}
+	// TODO: skip chunked objects whose manifest already matches chunks.chunk_size
 
 	var (
+		chunks    = &r.chunks
 		size      = lom.Lsize()
-		chunkSize = r.args.ChunkSize
+		chunkSize = int64(chunks.ChunkSize)
 	)
-	if size < r.args.ObjSizeLimit || r.args.ObjSizeLimit == 0 {
+	if size <= int64(chunks.MaxMonolithicSize) && (!chunks.AutoEnabled() || size < int64(chunks.ObjSizeLimit)) {
 		if !lom.IsChunked() {
 			// Track skipped object stats (no-op case)
 			r.ObjsAdd(1, size)
@@ -214,10 +194,11 @@ func (r *xactRechunk) CtlMsg() string {
 	var sb cos.SB
 	sb.Init(ctlMsgBufSize)
 
+	chunks := &r.chunks
 	sb.WriteString("objsize-limit:")
-	sb.WriteString(cos.ToSizeIEC(r.args.ObjSizeLimit, 0))
+	sb.WriteString(cos.ToSizeIEC(int64(chunks.ObjSizeLimit), 0))
 	sb.WriteString(", chunk-size:")
-	sb.WriteString(cos.ToSizeIEC(r.args.ChunkSize, 0))
+	sb.WriteString(cos.ToSizeIEC(int64(chunks.ChunkSize), 0))
 
 	if r.args.SyncRemote {
 		sb.WriteString(", sync-remote:true")

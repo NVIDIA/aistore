@@ -1524,7 +1524,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 // +gen:payload apc.ActMakeNCopies={"action": "make-n-copies", "value": 2}
 // +gen:payload apc.ActECEncode={"action": "ec-encode", "value": {"data_slices": 4, "parity_slices": 2}}
 // +gen:payload apc.ActCreateBck={"action": "create-bck", "value": {"versioning": {"enabled": true}, "mirror": {"enabled": true, "copies": 2}}}
-// +gen:payload apc.ActRechunk={"action": "rechunk", "value": {"chunk-size": 4194304, "objsize-limit": 1048576}}
+// +gen:payload apc.ActRechunk={"action": "rechunk", "value": {"prefix": "images/"}}
 // +gen:payload apc.ActCreateNBI={"action": "create-inventory", "value": {"name": "my-inventory"}}
 // +gen:name apc.ActECEncode="Set to \"recover\" to validate and rebuild missing or corrupted EC slices"
 // +gen:value apc.ActMakeNCopies="Target n-way replication level: total number of copies to maintain for each object in the bucket"
@@ -1793,8 +1793,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 	case apc.ActRechunk:
-		// re-chunk bucket objects according to provided args
-		warnRechunkOverride(msg, bck)
+		// re-chunk bucket objects according to bucket props
 		if xid, err = p.bcastBckAction(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1841,23 +1840,6 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		debug.Assertf(xact.IsValidUUID(xid) || strings.IndexByte(xid, ',') > 0, "%q: %q", msg.Action, xid)
 	})
 	writeXid(w, xid)
-}
-
-// v5.1: per-request overrides of the bucket's chunks config are deprecated
-// (removal planned for v5.2; see docs/relnotes/5.1.md, "Deprecated APIs")
-func warnRechunkOverride(msg *apc.ActMsg, bck *meta.Bck) {
-	var (
-		args   apc.RechunkMsg
-		chunks = &bck.Props.Chunks
-	)
-	if err := cos.MorphMarshal(msg.Value, &args); err != nil {
-		return // targets will reject it
-	}
-	if (args.ChunkSize > 0 && args.ChunkSize != int64(chunks.ChunkSize)) || args.ObjSizeLimit != int64(chunks.ObjSizeLimit) {
-		nlog.Warningln(msg.Action, bck.Cname(""), "- deprecated per-request override of bucket's chunks config:",
-			"chunk_size", cos.IEC(args.ChunkSize, 0), "vs", cos.IEC(int64(chunks.ChunkSize), 0)+",",
-			"objsize_limit", cos.IEC(args.ObjSizeLimit, 0), "vs", cos.IEC(int64(chunks.ObjSizeLimit), 0))
-	}
 }
 
 // initTrySysBck initializes (or creates) a system bucket in BMD.

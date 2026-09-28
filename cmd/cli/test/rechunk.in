@@ -14,8 +14,9 @@ head -c 102400 /dev/urandom | ais object put - ais://$BUCKET/large.txt // IGNORE
 # List objects before rechunk - none should be chunked
 ais ls ais://$BUCKET --chunked | awk 'NR>1 {print $1, $3}'
 
-# Start rechunk
-ais bucket rechunk ais://$BUCKET --objsize-limit 51200 --chunk-size 20480
+# Configure the bucket and start rechunk without deprecated per-job overrides
+ais bucket props set ais://$BUCKET chunks.objsize_limit=51200 chunks.chunk_size=32768 // IGNORE
+ais start rechunk ais://$BUCKET
 
 # Wait for rechunk to finish
 ais wait job rechunk // IGNORE
@@ -30,4 +31,3 @@ ais object get ais://$BUCKET/large.txt /dev/null // IGNORE
 
 # Clean up
 ais bucket rm --yes ais://$BUCKET // IGNORE
-

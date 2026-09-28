@@ -43,8 +43,15 @@ func main() {
 	api.PutObject(&api.PutArgs{BaseParams: bp, Bck: bck, ObjName: objName, Reader: reader, Size: uint64(*size)})
 	defer api.DeleteObject(bp, bck, objName)
 
-	// rechunk the object with the specified chunk size
-	xid, err := api.RechunkBucket(bp, bck, &apc.RechunkMsg{ChunkSize: *chunk, ObjSizeLimit: *size - 1})
+	// configure and rechunk the object with the specified chunk size
+	_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+		ChunkSize: apc.Ptr(cos.SizeIEC(*chunk)), ObjSizeLimit: apc.Ptr(cos.SizeIEC(*size - 1)),
+	}})
+	if err != nil {
+		fmt.Printf("set bucket props failed: %v\n", err)
+		return
+	}
+	xid, err := api.RechunkBucket(bp, bck, &apc.RechunkMsg{})
 	if err != nil {
 		fmt.Printf("rechunk failed: %v\n", err)
 		return

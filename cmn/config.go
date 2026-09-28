@@ -2104,6 +2104,12 @@ const (
 
 func (c *ChunksConf) AutoEnabled() bool { return c.ObjSizeLimit > 0 }
 
+// EqualLayout compares properties that determine an object's chunking layout.
+func (c *ChunksConf) EqualLayout(other *ChunksConf) bool {
+	return c.ObjSizeLimit == other.ObjSizeLimit && c.ChunkSize == other.ChunkSize &&
+		c.MaxMonolithicSize == other.MaxMonolithicSize
+}
+
 func (c *ChunksConf) Validate() error {
 	switch {
 	case c.MaxMonolithicSize < 0:
