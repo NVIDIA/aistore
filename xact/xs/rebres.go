@@ -52,6 +52,7 @@ type (
 			fn   func(*cos.SB) // guarded by ctl.mu; installed by reb.Run
 			last int64         // last-refresh mono nanos
 		}
+		NerrECMD atomic.Int64 // failed EC metadata updates (see reb.receiveCT)
 	}
 	Resilver struct {
 		Args   *xreg.ResArgs

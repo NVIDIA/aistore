@@ -409,15 +409,14 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	}
 	if moveTo != nil {
 		req.md.SliceID = md.SliceID
-		if err = reb.sendFromDisk(ct, req.md, moveTo, xreb, dm, workFQN); err != nil {
-			nlog.Errorln("failed to move slice to", moveTo, "[", err, "]")
+		if errMv := reb.sendFromDisk(ct, req.md, moveTo, xreb, dm, workFQN); errMv != nil {
+			nlog.Errorln("failed to move slice to", moveTo, "[", errMv, "]")
 		}
 	}
-	// Broadcast updated MD
+	// broadcast updated MD. Count send failures, do not fail the receive.
 	ntfnMD := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID(), md: req.md, action: ecActUpdateMD}
 	nodes := req.md.RemoteTargets()
 
-	err = nil // keep the first errSend (TODO: count failures)
 	for _, tsi := range nodes {
 		if moveTo != nil && moveTo.ID() == tsi.ID() {
 			continue
@@ -429,12 +428,15 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 		o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: 0}}
 		o.Hdr.Bck.Copy(ct.Bck().Bucket())
 		o.Hdr.Opaque = ntfnMD.NewPack(rebMsgEC)
-		if errSend := dm.Send(o, nil, tsi); errSend != nil && err == nil {
-			// TODO: consider r.AddErr(errSend)
-			err = fmt.Errorf("%s %s: failed to send updated EC MD: %v", core.T, xreb.ID(), err)
+		if errSend := dm.Send(o, nil, tsi); errSend != nil {
+			xreb.NerrECMD.Inc()
+			if cmn.Rom.V(4, cos.ModReb) {
+				nlog.Warningln(xreb.Name(), "failed to send updated EC MD for", ct.Cname(), "to", tsi.StringEx(), "[", errSend, "]")
+			}
+			xreb.AddErr(fmt.Errorf("failed to send updated EC MD to %s: %w", tsi.StringEx(), errSend))
 		}
 	}
-	return err
+	return nil
 }
 
 // receiving EC CT

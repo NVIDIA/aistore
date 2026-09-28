@@ -116,6 +116,10 @@ func (rargs *rargs) ctlMsg(sb *cos.SB) {
 		sb.WriteString(" err-read:")
 		sb.WriteString(strconv.FormatInt(v, 10))
 	}
+	if v := xreb.NerrECMD.Load(); v > 0 {
+		sb.WriteString(" err-ecmd:")
+		sb.WriteString(strconv.FormatInt(v, 10))
+	}
 }
 
 func (s *rebStats) writeTimes(sb *cos.SB, now int64) {
