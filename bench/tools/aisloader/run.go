@@ -340,19 +340,20 @@ func Start(version, buildtime string) (err error) {
 
 	if etlInitSpec != nil {
 		fmt.Println(now(), "Starting ETL...")
-		etlName, err = api.ETLInit(runParams.bp, etlInitSpec)
+		_, err = api.ETLInit(runParams.bp, etlInitSpec)
 		if err != nil {
 			return fmt.Errorf("failed to initialize ETL: %v", err)
 		}
+		etlName = etlInitSpec.Name()
 		fmt.Println(now(), etlName, "started")
 
 		defer func() {
-			fmt.Println(now(), "Stopping ETL", etlName)
-			if err := api.ETLStop(runParams.bp, etlName); err != nil {
-				fmt.Printf("%s Failed to stop ETL %s: %v\n", now(), etlName, err)
+			fmt.Println(now(), "Deleting ETL", etlName)
+			if err := api.ETLDelete(runParams.bp, etlName); err != nil {
+				fmt.Printf("%s Failed to delete ETL %s: %v\n", now(), etlName, err)
 				return
 			}
-			fmt.Println(now(), etlName, "stopped")
+			fmt.Println(now(), etlName, "deleted")
 		}()
 	}
 

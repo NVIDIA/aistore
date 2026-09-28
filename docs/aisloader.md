@@ -749,7 +749,7 @@ For the most recently updated command-line options and examples, please run `ais
     $ aisloader -bucket=ais://my_bucket -duration=10s -pctput=100 -arch.pct=100 -arch.num-files=10 -arch.minsize=1K -arch.maxsize=10K -cleanup=false
     ```
 
-**17**. Generate load on `tar2tf` ETL. New ETL is started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
+**17**. Generate load on `tar2tf` ETL. New ETL is started and then deleted at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
 
     ```console
     $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -etl=tar2tf -cleanup=false
