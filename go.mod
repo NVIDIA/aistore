@@ -2,6 +2,8 @@ module github.com/NVIDIA/aistore
 
 go 1.26.0
 
+toolchain go1.26.8
+
 require (
 	cloud.google.com/go/storage v1.64.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0

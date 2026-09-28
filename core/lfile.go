@@ -116,7 +116,7 @@ func (lom *LOM) Create() (cos.LomWriter, error) {
 }
 
 func (lom *LOM) CreateWork(wfqn string) (cos.LomWriter, error) { return lom._cf(wfqn) } // -> lom
-func (lom *LOM) CreatePart(wfqn string) (*os.File, error)      { return lom._cf(wfqn) } // TODO -- FIXME: niy
+func (lom *LOM) CreatePart(wfqn string) (*os.File, error)      { return lom._cf(wfqn) } // centralized, w/ no special semantics yet
 func (lom *LOM) CreateSlice(wfqn string) (*os.File, error)     { return lom._cf(wfqn) } // --/--
 
 func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
