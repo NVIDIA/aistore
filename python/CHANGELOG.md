@@ -8,6 +8,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- Cold GET retry size checks now use object HEAD v2 instead of the deprecated v1 API.
 - An interrupted ObjectFile read no longer fails or returns incorrect content when
   the target restarts the object instead of serving it at a byte offset. Such a read
   restarts at byte 0, so the reader discards the prefix it already delivered.

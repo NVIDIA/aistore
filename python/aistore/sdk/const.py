@@ -51,6 +51,7 @@ AIS_CHUNKS_MAX_CHUNK_SIZE = "ais-chunks-max-chunk-size"
 HEADER_LAST_MODIFIED = "Last-Modified"
 HEADER_ETAG = "ETag"
 # Selective HEAD property names
+PROPS_SIZE = "size"
 PROPS_CHUNKED = "chunked"
 # Bucket Props Header keys
 HEADER_PREFIX = "Ais-"

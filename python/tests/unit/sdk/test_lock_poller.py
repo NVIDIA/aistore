@@ -11,7 +11,9 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     HTTP_METHOD_HEAD,
     HTTP_METHOD_POST,
+    PROPS_SIZE,
     QPARAM_FLT_PRESENCE,
+    QPARAM_PROPS,
     QPARAM_PROVIDER,
     STATUS_LOCKED,
     STATUS_OK,
@@ -65,7 +67,11 @@ def _head_call(presence: str):
     return call(
         HTTP_METHOD_HEAD,
         EXPECTED_PATH,
-        params={**EXPECTED_PARAMS, QPARAM_FLT_PRESENCE: presence},
+        params={
+            **EXPECTED_PARAMS,
+            QPARAM_FLT_PRESENCE: presence,
+            QPARAM_PROPS: PROPS_SIZE,
+        },
     )
 
 

@@ -17,12 +17,14 @@ from aistore.sdk.const import (
     ACT_CHECK_LOCK,
     HTTP_METHOD_HEAD,
     HTTP_METHOD_POST,
+    PROPS_SIZE,
     QPARAM_PROVIDER,
     STATUS_LOCKED,
     QPARAM_NAMESPACE,
     DEFAULT_COLD_GET_EST_BPS,
     STATUS_OK,
     QPARAM_FLT_PRESENCE,
+    QPARAM_PROPS,
 )
 from aistore.sdk.enums import FLTPresence
 from aistore.sdk.obj.object_attributes import ObjectAttributes
@@ -162,7 +164,11 @@ class LockPoller:
             if self._cold_get_conf.enable_remote_head
             else FLTPresence.FLT_PRESENT
         )
-        head_params = {**params, QPARAM_FLT_PRESENCE: str(presence_filter.value)}
+        head_params = {
+            **params,
+            QPARAM_FLT_PRESENCE: str(presence_filter.value),
+            QPARAM_PROPS: PROPS_SIZE,
+        }
         try:
             resp = self._executor.request(HTTP_METHOD_HEAD, path, params=head_params)
         except requests.RequestException as e:
