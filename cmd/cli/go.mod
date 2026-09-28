@@ -5,7 +5,7 @@ go 1.26.0
 toolchain go1.26.8
 
 require (
-	github.com/NVIDIA/aistore v1.5.1-0.20260924210711-99b821149f2c
+	github.com/NVIDIA/aistore v1.5.1
 	github.com/fatih/color v1.19.0
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo/v2 v2.32.0

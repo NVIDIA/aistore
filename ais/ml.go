@@ -604,7 +604,7 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx,
 		ctx.req.OutputFormat = f
 	}
 	if cmn.Rom.V(5, cos.ModAIS) {
-		nlog.Infoln(t.String(), "mossparse", "ctx [", ctx.bck.String(), ctx.tid, ctx.xid, ctx.wid, "]")
+		nlog.Infoln(t.String(), "mossparse", "ctx [", ctx.bck, ctx.tid, ctx.xid, ctx.wid, "]")
 	}
 	return nil
 }
