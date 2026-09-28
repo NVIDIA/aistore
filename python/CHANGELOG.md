@@ -4,88 +4,170 @@ All notable changes to the AIStore Python SDK project are documented in this fil
 
 We structure this changelog in accordance with [Keep a Changelog](https://keepachangelog.com/) guidelines, and this project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-28
 
-### Fixed
+This major release unifies object metadata APIs, removes deprecated ETL
+initialization, and raises the minimum Python version to 3.10. It also improves
+streaming reads, upload retries, batch extraction, and PyTorch error handling.
+Review the compatibility changes before upgrading from 1.x.
 
-- Cold GET retry size checks now use object HEAD v2 instead of the deprecated v1 API.
-- An interrupted ObjectFile read no longer fails or returns incorrect content when
-  the target restarts the object instead of serving it at a byte offset. Such a read
-  restarts at byte 0, so the reader discards the prefix it already delivered.
-  - Archive and ETL GETs restart from 0, because a target serves neither at an offset.
-  - A read restarts from 0 when its `byte_range` sets only the range end, because that 
-    range can return the whole object.
-  - A read no longer returns duplicate bytes when the target ignores the range
-    header and serves the object from byte 0.
-- Parallel range GETs keep a bounded prefetch queue and cancel pending work on
-  failure or early iterator close. Dispatched tasks finish before shared memory
-  is released; use a finite client timeout for stalled requests.
-- Object iteration drains large listing pages without shifting the remaining entries.
-- ZIP batch extraction reads each archive entry correctly when names repeat.
-- Parallel reads reject short or oversized ranges before exposing incomplete
-  data or overwriting an adjacent shared-memory range.
-- SDK network retries rewind streamed uploads to their initial position. An
-  unrewindable body raises `UnrewindableBodyError` before another SDK send.
-- Job duration returns `None` for running jobs with Go zero end timestamps.
-- Empty object-name lists and templates raise `ValueError` when creating an object group.
-- Cluster bucket listing accepts an empty provider to list buckets from all providers.
-- AuthN role creation and updates now combine permission flags with bitwise OR,
-  preventing overlapping or repeated flags from granting unintended permissions.
-- dSort file-based starts preserve all JSON/YAML settings, including `dry_run`
-  and `max_mem_usage`; framework serialization uses the server's `ekm_file_sep` key.
-- ETL pipelines preserve object names containing `#`, `?`, `%`, spaces, or
-  Unicode characters when forwarding buffered or streaming output to the next
-  stage. Existing encoded destination paths and signed query values are retained.
-- FastAPI ETL servers apply configured connection limits to the active HTTP transport.
-- Object listing collects pages without repeatedly copying all prior entries.
-- `HTTPMultiThreadedServer` rejects PUT requests with `Transfer-Encoding`
-  with HTTP 501 before transformation. Chunked input is not supported; this
-  prevents an unsupported request body from being transformed as empty data.
-- Removed redundant byte copies in streaming multipart decoding.
-- ZIP batch extraction buffers non-seekable multipart streams and closes the
-  response if buffering fails.
-- Pending results from `Batch.get(clear_batch=False)` retain their request
-  metadata when the batch is reordered or cleared by a later `get()` call.
-- Batch requests use standard Base64 for binary `opaque` tracking data, and
-  streaming TAR and ZIP results preserve the original tracking bytes.
-- Streaming TAR and ZIP batch extraction reports failed entries with `err_msg`
-  instead of returning them as successful empty objects.
-- `AISBatchIterDataset` raises on reported entry errors by default;
-  `cont_on_err=True` logs and skips failed entries instead of yielding empty samples.
+### Compatibility changes
 
-### Changed
-
-- Blob download size limits (server-side, reflected in docstrings):
-  - `Object.get_reader(blob_download_config=...)` serves objects smaller than 128 KiB
-    via regular GET, without starting a blob-download job.
-  - `ObjectGroup.prefetch(blob_threshold=...)` rejects negative thresholds;
-    positive values below 1 MiB are still raised to 1 MiB.
-  - `Object.blob_download()` of a zero-size object fails with an error.
-- **BREAKING**: The minimum supported Python version is now 3.10. Python 3.8 and
-  3.9 have both reached end-of-life and are no longer tested or supported.
-- **BREAKING**: `Etl.init_class()` no longer supports Python 3.9, since the SDK
-  itself now requires 3.10 or later. Supported runtimes are 3.10 through 3.14.
-- **BREAKING**: `Object.head(props="")` now uses the selective object HEAD API,
-  returns `ObjectAttributes` instead of a header mapping, and continues to
-  refresh `Object.props_cached`. Request non-default fields explicitly and
-  access values through attributes such as `.size` and `.checksum_value`.
-- Removed the unused `torchdata` dependency from the PyTorch extra, development
-  requirements, and pyaisloader. Applications that use it must install it directly.
-- `ObjectAttributes` now exposes selected chunk, last-modified, ETag, location,
-  mirror, and erasure-coding metadata through one type.
-- `ObjectClient.head()` now accepts optional property selectors while preserving
-  its previous default attribute set.
-- Updated `xxhash` to `>=3.6.0,<5`, so the SDK can fully support python 3.14.
-- Batch TAR extraction uses a 64 KiB read buffer to reduce stream read overhead:
-  `Batch.get(tar_buffer_size=...)` can override it for TAR formats.
-
-### Removed
-
+- **BREAKING**: Python 3.8 and 3.9 are no longer supported due to being EOL;
+  the SDK requires Python 3.10 or later. `Etl.init_class()` also drops Python 3.9;
+  supported ETL runtimes are 3.10 through 3.14.
+- **BREAKING**: `Object.head()` now uses the selective object HEAD API and
+  returns `ObjectAttributes` instead of a header mapping. The default request
+  selects only `name,size`, with presence returned automatically. Request other
+  fields explicitly, for example `obj.head(props="checksum").checksum_value`,
+  and use attributes such as `.size` instead of indexing response headers.
+  Calls continue to refresh `Object.props_cached` with the selected metadata.
 - **BREAKING**: Removed legacy object HEAD v1 behavior and the experimental
-  `Object.head_v2()` and `ObjectAttributesV2` names. Use `Object.head()` and
-  `ObjectAttributes`.
-- **BREAKING**: Removed deprecated `Etl.init_spec()` and the Kubernetes Pod-spec
-  templates. Use `Etl.init()` or `Etl.init_class()`.
+  `Object.head_v2()`, `ObjectClient.head_v2()`, and `ObjectAttributesV2` names.
+  Use the corresponding `head()` method and `ObjectAttributes`.
+- **BREAKING**: Removed deprecated `Etl.init_spec()`, the Kubernetes Pod-spec
+  templates, `InitSpecETLArgs`, and `ETLInitMsg.spec`. Use `Etl.init()` for
+  image-based ETLs or `Etl.init_class()` for Python ETL server classes.
+- **BREAKING**: Custom `BaseContentIterProvider` implementations must accept
+  `create_iter(offset=0, bounds=None)` and populate the supplied `StreamBounds`
+  with the stream's `start` and `expected_end` positions. This replaces the
+  provider-wide `expected_end_position` property; positions are now tracked
+  separately for each stream.
+- Removed the unused `torchdata` dependency from the PyTorch extra and
+  development requirements. Applications that use it must install it directly.
+
+### Object metadata
+
+- Consolidated chunk information, last-modified timestamps, ETags, object
+  locations, mirror information, and erasure-coding details in `ObjectAttributes`.
+- Fixed `ObjectAttributes` parsing to preserve custom metadata values containing
+  `=` and return an empty list when mirror-path metadata is missing.
+- Added property selection to `ObjectClient.head()`, with
+  `checksum,atime,version,custom` as the default. To preserve the former
+  `ObjectClient.head_v2()` default selection of `name,size`, pass `props=""`.
+- Fixed `ObjectGroup.list_all_objects_iter(props=...)` to pass the requested
+  properties to each object's HEAD request. The default is `name,size`;
+  `props=None` skips HEAD requests.
+
+### Data transfers
+
+- Fixed cold-GET retry size checks to request `size` through object HEAD v2
+  instead of the deprecated v1 API.
+- Fixed `ObjectFileReader` retries for uncached remote objects to skip bytes
+  already delivered when a cold GET restarts after a stream failure or premature
+  EOF. This prevents duplicate output and keeps `read(size)` within the requested
+  byte count. Thanks to [@LittleYier](https://github.com/LittleYier) for the
+  [original cold-GET retry fix](https://github.com/NVIDIA/aistore/commit/f055b0ed9fd9924c95643cc2c0131c5bb1beb3a2).
+- Fixed `ObjectFileReader` recovery for archive selections, inline ETL output,
+  and suffix ranges such as `byte_range="bytes=-500"`. These reads retry the
+  original GET and discard output already delivered. The reader also handles
+  HTTP 200 responses when the server ignores a resume Range header.
+- Fixed position tracking for multiple `as_file()` readers sharing a content
+  provider. Each stream now tracks its own start and expected end; replacing or
+  restarting a stream also closes the previous iterator.
+- Added `ObjectClient.can_get_at_offset()` to check whether a GET can resume at a
+  byte offset. It checks archive, ETL, and range parameters and may issue a HEAD
+  request to check whether the object is cached.
+- Limited the number of queued range GETs during parallel downloads. On failure
+  or early iterator close, pending work is canceled and requests already in
+  progress finish before shared memory is released. Use a finite client timeout
+  to limit waiting on stalled requests.
+- Added response-length validation to parallel downloads. A response with fewer
+  or more bytes than requested now fails before incomplete data is returned or
+  an adjacent range's shared memory is overwritten.
+- Fixed SDK network retries to rewind streamed upload bodies to their starting
+  position. If a body cannot be rewound, the SDK raises `UnrewindableBodyError`
+  before sending another request. This protection covers SDK network retries;
+  use seekable bodies for uploads that may follow Requests-managed HTTP redirects.
+- Updated SDK documentation for server-enforced blob-download limits:
+  `Object.get_reader(blob_download_config=...)` uses regular GET for objects
+  smaller than 128 KiB. The server rejects starting a blob-download job for a
+  zero-size object requested through `Object.blob_download()`.
+- Documented server validation of `ObjectGroup.prefetch(blob_threshold=...)`:
+  negative thresholds are rejected; positive values below 1 MiB continue to be
+  raised to 1 MiB.
+
+### Get-Batch
+
+- Fixed streaming TAR and ZIP extraction to set `MossOut.err_msg` for entries
+  marked as failed by the server. These entries are no longer reported as
+  successful empty objects.
+- Fixed `Batch.add(opaque=...)` to encode binary tracking data using standard
+  Base64. Streaming TAR and ZIP results now return the original tracking bytes
+  in `MossOut.opaque`.
+- Fixed `Batch.get(clear_batch=False)` so results awaiting iteration keep the
+  original request metadata even if the batch is subsequently reordered or
+  cleared by another `get()` call.
+- Fixed ZIP extraction to read the correct archive member when multiple entries
+  have the same name. Non-seekable multipart streams are now buffered before
+  extraction, and the response is closed if buffering fails.
+- Set the default TAR read buffer to 64 KiB and added
+  `Batch.get(tar_buffer_size=...)` to override it for TAR extraction. The override
+  must be a positive integer and requires `raw=False`.
+- Removed redundant byte copies when discarding buffered multipart data and
+  returning partial reads from a multipart stream.
+
+### PyTorch
+
+- Changed `AISBatchIterDataset` to raise by default when a batch entry reports
+  an error. Set `cont_on_err=True` to log and skip failed entries; they are no
+  longer yielded as empty samples.
+- Reduced `DynamicBatchSampler` overhead by using Python integers for shuffled
+  indices and reusing a locally cached sample size for batch-size comparisons.
+
+### Listing, jobs, and permissions
+
+- Changed `Bucket.list_all_objects()` to append each page to the existing result
+  list without copying earlier pages. Object iteration now consumes page entries
+  without shifting all remaining entries on each step.
+- Updated `Cluster.list_buckets(provider="")` to accept an empty provider and
+  return buckets from all providers.
+- Added validation that raises `ValueError` when an object group is created with
+  an empty object-name list or template.
+- Changed `ObjectGroup.copy()` and `transform()` dry-run logs to print range
+  templates without generating every object name.
+- Fixed `Job.get_total_time()` to return `None` when a target reports Go's unset
+  end timestamp (`0001-01-01T00:00:00Z`), indicating that the job is unfinished.
+- Fixed AuthN role creation and updates to combine permission flags with bitwise
+  OR. Repeated or overlapping flags no longer grant unintended permissions.
+- Changed upload and job-wait verbosity settings to control only that call's
+  messages, without enabling or disabling shared loggers. Uploads also skip
+  file-size lookups when per-file INFO messages are disabled.
+- Fixed SDK logger setup to add a handler when that logger has none, even if
+  a parent logger already has one.
+
+### ETL
+
+- Fixed pipeline forwarding to preserve object names containing `#`, `?`, `%`,
+  spaces, or Unicode characters in both buffered and streaming output. Encoded
+  destination paths and signed query values remain intact.
+- Fixed FastAPI ETL connection-pool configuration so `MAX_CONN`,
+  `MAX_KEEPALIVE_CONN`, and `KEEPALIVE_EXPIRY` are applied to the HTTP transport.
+- Changed `HTTPMultiThreadedServer` to reject PUT requests containing
+  `Transfer-Encoding` with HTTP 501 before transformation. Previously, unsupported
+  chunked input could be transformed as an empty body. Send a body with
+  `Content-Length`, or use FastAPI or Flask behind a server that supports chunked
+  requests for streaming pipeline input.
+
+### dSort
+
+- Fixed `Dsort.start(path)` to send the complete parsed JSON/YAML specification
+  to the server, preserving settings such as `dry_run` and `max_mem_usage`.
+- Fixed `DsortFramework` loading and serialization to use the server's
+  `ekm_file_sep` key for the external key map separator.
+
+### Packaging and integrations
+
+- Raised the minimum versions of `requests` to 2.33.0 and `urllib3` to 2.8.0.
+- Updated `xxhash` to `>=3.6.0,<5` for Python 3.14 support.
+- Updated test dependencies to require `pytest>=9.1.1,<10`.
+- Restricted the MCP extra to `mcp[cli]>=1.4.1,<2` to match the supported v1 API.
+- Fixed the MCP `ais_object_info` tool to return structured `properties` with
+  `size`, `checksum_type`, `checksum_value`, `version`, `present`, and
+  `custom_metadata`. Use these field names when reading tool results.
+- Replaced assertion-based Botocore redirect signature checks with explicit
+  `RuntimeError` checks for unsupported method signatures. Validation now also
+  runs when Python is started with `-O`.
 
 ## [1.26.0] - 2026-08-25
 
