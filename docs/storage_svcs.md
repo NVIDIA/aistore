@@ -362,7 +362,9 @@ For a given object size:
 
 A layout rule is independent of how the object arrives. It applies equally to PUT, cold GET, copy, and rechunk.
 
-> **Status (v5.1):** rule 1 is enforced by PUT, cold GET, and copy; rechunk enforces it only for the objects it rewrites - an existing monolithic object above `chunks.max_monolithic_size` (e.g., after lowering it) is left as is. Rule 2 is currently enforced by rechunk only; PUT, cold GET, and copy do not yet auto-chunk at `chunks.objsize_limit`.
+> **Status (v5.1):** rule 1 is enforced by PUT, cold GET, and copy; rechunk enforces it only for the objects it rewrites - an existing monolithic object above `chunks.max_monolithic_size` (e.g., after lowering it) is left as is. Rule 2 is enforced by rechunk only; PUT, cold GET, and copy do not auto-chunk at `chunks.objsize_limit`.
+>
+> **Status (v5.2):** PUT, cold GET, copy, and rechunk enforce both rules.
 
 ### Rechunk
 

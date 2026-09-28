@@ -427,6 +427,90 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 	}
 }
 
+func TestCopyObjectAutoChunks(t *testing.T) {
+	const (
+		objCount  = 10
+		objSize   = int64(64 * cos.KiB)
+		chunkSize = int64(cmn.ChunkSizeMin)
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+	proxyURL := tools.RandomProxyURL(t)
+	bck := cmn.Bck{Name: "copy-object-auto-chunk-" + trand.String(8), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+		Chunks: &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(cos.SizeIEC(0)), // disable auto-chunking
+			ChunkSize:    apc.Ptr(cos.SizeIEC(chunkSize)),
+		}}, true /*cleanup*/)
+
+	m := ioContext{
+		t: t, bck: bck, num: objCount, prefix: "copy-auto-chunk/src-",
+		fileSize: uint64(objSize), fixedSize: true, chunksConf: &ioCtxChunksConf{},
+	}
+	m.init(true /*cleanup*/)
+	m.puts()
+	t.Run("below-limit", func(t *testing.T) {
+		copyObjectsAndCheckPolicy(t, &m, objSize+cos.KiB, chunkSize, false /*chunked*/)
+	})
+	t.Run("at-limit", func(t *testing.T) {
+		copyObjectsAndCheckPolicy(t, &m, objSize, chunkSize, true /*chunked*/)
+	})
+}
+
+func copyObjectsAndCheckPolicy(t *testing.T, m *ioContext, sizeLimit, chunkSize int64, chunked bool) {
+	t.Helper()
+	bp := tools.BaseAPIParams(m.proxyURL)
+	_, err := api.SetBucketProps(bp, m.bck, &cmn.BpropsToSet{
+		Chunks: &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(cos.SizeIEC(sizeLimit)),
+		},
+	})
+	tassert.CheckFatal(t, err)
+
+	var (
+		group errgroup.Group
+		props = apc.JoinProps(apc.GetPropsSize, apc.GetPropsChunked)
+		smap  = tools.GetClusterMap(t, m.proxyURL)
+	)
+	for i, srcName := range m.objNames {
+		dstPrefix := fmt.Sprintf("%s-copy-%d-", srcName, sizeLimit)
+		dstName := tools.GenerateObjectNameForTarget(srcName, dstPrefix, m.bck, smap, i%2 == 0)
+		group.Go(func() error {
+			src, err := api.HeadObjectV2(bp, m.bck, srcName, props, api.HeadArgs{})
+			if err != nil {
+				return fmt.Errorf("head source %s: %w", m.bck.Cname(srcName), err)
+			}
+			if src.Chunks == nil || src.Chunks.ChunkCount != 0 {
+				return fmt.Errorf("expected monolithic source %s, got %+v", m.bck.Cname(srcName), src.Chunks)
+			}
+			if err := api.CopyObject(bp, &api.CopyArgs{
+				FromBck: m.bck, FromObjName: srcName, ToBck: m.bck, ToObjName: dstName,
+			}); err != nil {
+				return fmt.Errorf("copy %s to %s: %w", m.bck.Cname(srcName), m.bck.Cname(dstName), err)
+			}
+			dst, err := api.HeadObjectV2(bp, m.bck, dstName, props, api.HeadArgs{})
+			if err != nil {
+				return fmt.Errorf("head destination %s: %w", m.bck.Cname(dstName), err)
+			}
+			if dst.Size != src.Size {
+				return fmt.Errorf("%s: expected size %d, got %d", m.bck.Cname(dstName), src.Size, dst.Size)
+			}
+			if !chunked {
+				if dst.Chunks == nil || dst.Chunks.ChunkCount != 0 {
+					return fmt.Errorf("expected monolithic destination %s, got %+v", m.bck.Cname(dstName), dst.Chunks)
+				}
+				return sameObjectContent(bp, m.bck, srcName, dstName)
+			}
+			wantCount := int(cos.DivCeil(src.Size, chunkSize))
+			if dst.Chunks == nil || dst.Chunks.ChunkCount != wantCount || dst.Chunks.MaxChunkSize != chunkSize {
+				return fmt.Errorf("%s: expected size %d and %d chunks of up to %s, got %+v",
+					m.bck.Cname(dstName), src.Size, wantCount, cos.ToSizeIEC(chunkSize, 0), dst)
+			}
+			return sameObjectContent(bp, m.bck, srcName, dstName)
+		})
+	}
+	tassert.CheckFatal(t, group.Wait())
+}
+
 func TestSameBucketName(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
@@ -858,28 +942,51 @@ func Test_coldgetmd5(t *testing.T) {
 
 func TestColdGetChunked(t *testing.T) {
 	const (
-		chunkSize   = 16 * cos.MiB
-		maxMonoSize = 1 * cos.GiB
+		chunkSize = 16 * cos.MiB
+		autoLimit = 32 * cos.MiB
+		smallSize = 24 * cos.MiB
+		largeSize = 48 * cos.MiB
+		hardLimit = 1 * cos.GiB
 	)
 
 	tests := []struct {
 		name          string
 		objSize       uint64 // object size
-		sourceChunked bool   // use chunksConf when provisioning source
+		objSizeLimit  uint64 // auto-chunking threshold (zero disables)
+		maxMonoSize   uint64 // hard limit (zero uses the default)
+		multipart     bool   // explicitly upload multipart objects
 		evict         bool   // evict after provision
-		longOnly      bool   // run only with long tests
+		expectChunked bool
+		longOnly      bool // run only with long tests
 	}{
-		// Cold GET scenarios (evicted): chunking based on size limit
-		{name: "chunked-src-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: true, evict: true, longOnly: false},    // exceeds limit => chunks
-		{name: "chunked-src-evict-small", objSize: 48 * cos.MiB, sourceChunked: true, evict: true, longOnly: true},      // doesn't exceed => monolithic
-		{name: "monolithic-src-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: false, evict: true, longOnly: true}, // exceeds limit => chunks
-		{name: "monolithic-src-evict-small", objSize: 48 * cos.MiB, sourceChunked: false, evict: true, longOnly: true},  // doesn't exceed => monolithic
+		// max_monolithic_size only: keep large-object coverage in long tests.
+		{name: "maxmono/multipart-cold-above", objSize: hardLimit + 1, maxMonoSize: hardLimit, multipart: true, evict: true, expectChunked: true, longOnly: true},
+		{name: "maxmono/multipart-cold-below", objSize: largeSize, maxMonoSize: hardLimit, multipart: true, evict: true, longOnly: true},
+		{name: "maxmono/put-cold-above", objSize: hardLimit + 1, maxMonoSize: hardLimit, evict: true, expectChunked: true, longOnly: true},
+		{name: "maxmono/put-cold-below", objSize: largeSize, maxMonoSize: hardLimit, evict: true, longOnly: true},
+		{name: "maxmono/multipart-warm-above", objSize: hardLimit + 1, maxMonoSize: hardLimit, multipart: true, expectChunked: true, longOnly: true},
+		{name: "maxmono/multipart-warm-below", objSize: largeSize, maxMonoSize: hardLimit, multipart: true, expectChunked: true, longOnly: true},
+		{name: "maxmono/put-warm-above", objSize: hardLimit + 1, maxMonoSize: hardLimit, expectChunked: true, longOnly: true},
+		{name: "maxmono/put-warm-below", objSize: largeSize, maxMonoSize: hardLimit, longOnly: true},
 
-		// Warm GET scenarios (not evicted): object stays as provisioned
-		{name: "chunked-src-no-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: true, evict: false, longOnly: true},     // source chunked => chunks
-		{name: "chunked-src-no-evict-small", objSize: 48 * cos.MiB, sourceChunked: true, evict: false, longOnly: true},      // source chunked => chunks
-		{name: "monolithic-src-no-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: false, evict: false, longOnly: true}, // source monolithic => monolithic
-		{name: "monolithic-src-no-evict-small", objSize: 48 * cos.MiB, sourceChunked: false, evict: false, longOnly: true},  // source monolithic => monolithic
+		// objsize_limit only: use small objects so all cases run in short tests.
+		{name: "objsize/multipart-cold-below", objSize: smallSize, objSizeLimit: autoLimit, multipart: true, evict: true},
+		{name: "objsize/multipart-cold-at", objSize: autoLimit, objSizeLimit: autoLimit, multipart: true, evict: true, expectChunked: true},
+		{name: "objsize/multipart-cold-above", objSize: largeSize, objSizeLimit: autoLimit, multipart: true, evict: true, expectChunked: true},
+		{name: "objsize/put-cold-below", objSize: smallSize, objSizeLimit: autoLimit, evict: true},
+		{name: "objsize/put-cold-at", objSize: autoLimit, objSizeLimit: autoLimit, evict: true, expectChunked: true},
+		{name: "objsize/put-cold-above", objSize: largeSize, objSizeLimit: autoLimit, evict: true, expectChunked: true},
+		{name: "objsize/multipart-warm-below", objSize: smallSize, objSizeLimit: autoLimit, multipart: true, expectChunked: true},
+		{name: "objsize/multipart-warm-above", objSize: largeSize, objSizeLimit: autoLimit, multipart: true, expectChunked: true},
+		{name: "objsize/put-warm-below", objSize: smallSize, objSizeLimit: autoLimit},
+		{name: "objsize/put-warm-above", objSize: largeSize, objSizeLimit: autoLimit, expectChunked: true},
+
+		// Both limits set: cold GET follows the policy; warm GET preserves the source layout.
+		{name: "both/multipart-cold-below-soft", objSize: smallSize, objSizeLimit: autoLimit, maxMonoSize: hardLimit, multipart: true, evict: true},
+		{name: "both/put-cold-at-soft", objSize: autoLimit, objSizeLimit: autoLimit, maxMonoSize: hardLimit, evict: true, expectChunked: true},
+		{name: "both/multipart-warm-below-soft", objSize: smallSize, objSizeLimit: autoLimit, maxMonoSize: hardLimit, multipart: true, expectChunked: true},
+		{name: "both/put-warm-above-soft", objSize: largeSize, objSizeLimit: autoLimit, maxMonoSize: hardLimit, expectChunked: true},
+		{name: "both/put-cold-above-hard", objSize: hardLimit + 1, objSizeLimit: autoLimit, maxMonoSize: hardLimit, evict: true, expectChunked: true, longOnly: true},
 	}
 
 	for _, tt := range tests {
@@ -893,17 +1000,18 @@ func TestColdGetChunked(t *testing.T) {
 				t:             t,
 				bck:           cliBck,
 				num:           numObjs,
-				fileSizeRange: [2]uint64{tt.objSize + 1, tt.objSize + chunkSize - 1}, // range within chunkSize for predictable chunk count
+				fileSizeRange: [2]uint64{tt.objSize, tt.objSize},
 				prefix:        "coldget-chunked/" + tt.name + trand.String(5),
 				getErrIsFatal: true,
+				chunksConf:    &ioCtxChunksConf{},
 			}
 
 			tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck, Long: tt.longOnly})
 
 			// Configure source provisioning
-			if tt.sourceChunked {
+			if tt.multipart {
 				m.chunksConf = &ioCtxChunksConf{
-					numChunks: int(tt.objSize / chunkSize),
+					numChunks: int(cos.DivCeil(int64(tt.objSize), int64(chunkSize))),
 					multipart: true,
 				}
 			}
@@ -912,10 +1020,6 @@ func TestColdGetChunked(t *testing.T) {
 			initMountpaths(t, proxyURL)
 			baseParams := tools.BaseAPIParams(proxyURL)
 
-			// Provision objects to remote backend
-			tlog.Logfln("Provisioning %d objects (chunked=%v, size=%s, evict=%v)...", numObjs, tt.sourceChunked, cos.ToSizeIEC(int64(tt.objSize), 0), tt.evict)
-			m.remotePuts(tt.evict)
-
 			// Save original bucket props for cleanup
 			p, err := api.HeadBucket(baseParams, m.bck, false)
 			tassert.CheckFatal(t, err)
@@ -923,15 +1027,18 @@ func TestColdGetChunked(t *testing.T) {
 			// Configure bucket chunking properties
 			_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
 				Chunks: &cmn.ChunksConfToSet{
-					MaxMonolithicSize: apc.Ptr(cos.SizeIEC(maxMonoSize)),
+					ObjSizeLimit:      apc.Ptr(cos.SizeIEC(tt.objSizeLimit)),
+					MaxMonolithicSize: apc.Ptr(cos.SizeIEC(tt.maxMonoSize)),
 					ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
 				},
 			})
 			tassert.CheckFatal(t, err)
+			// TODO: Wait for automatically triggered rechunk before provisioning objects
 
 			t.Cleanup(func() {
 				_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
 					Chunks: &cmn.ChunksConfToSet{
+						ObjSizeLimit:      apc.Ptr(p.Chunks.ObjSizeLimit),
 						MaxMonolithicSize: apc.Ptr(p.Chunks.MaxMonolithicSize),
 						ChunkSize:         apc.Ptr(p.Chunks.ChunkSize),
 					},
@@ -939,34 +1046,34 @@ func TestColdGetChunked(t *testing.T) {
 				tassert.CheckError(t, err)
 			})
 
+			// Provision objects to remote backend
+			tlog.Logfln("Provisioning %d objects (multipart=%v, size=%s, evict=%v)...", numObjs, tt.multipart, cos.ToSizeIEC(int64(tt.objSize), 0), tt.evict)
+			m.remotePuts(false /*evict*/)
+
 			if tt.evict {
+				err = api.EvictRemoteBucket(baseParams, m.bck, true /*keepMD*/)
+				tassert.CheckFatal(t, err)
 				tlog.Logln("Performing cold GET...")
 			} else {
 				tlog.Logln("Performing warm GET...")
 			}
 			m.gets(nil, true)
 
-			// Determine expected chunking outcome
-			// Cold GET (evicted): chunks if size > limit
-			// Warm GET (not evicted): stays as provisioned
-			expectChunked := (tt.evict && tt.objSize > maxMonoSize) || (!tt.evict && tt.sourceChunked)
-
-			// Verify chunks on disk only if expected to be chunked
-			if expectChunked {
-				tlog.Logfln("Verifying objects are chunked")
-				ls, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsChunked}, api.ListArgs{})
-				tassert.CheckFatal(t, err)
-				tassert.Fatalf(t, len(ls.Entries) == m.num, "expected %d objects, got %d", m.num, len(ls.Entries))
-
-				tlog.Logfln("Verifying chunks are persisted on disk...")
-				expectedChunkCount := int(tt.objSize / chunkSize)
+			if tt.expectChunked {
+				expectedChunkSize := int64(chunkSize)
+				if tt.multipart && !tt.evict { // warm GET preserves the client multipart part size
+					expectedChunkSize = cos.DivCeil(int64(tt.objSize), int64(m.chunksConf.numChunks))
+				}
+				wantCount := int(cos.DivCeil(int64(tt.objSize), expectedChunkSize))
 				for _, objName := range m.objNames {
-					if tt.sourceChunked && !tt.evict {
-						// stay as provisioned
-						expectedChunkCount = m.chunksConf.numChunks - 1
-					}
+					checkObjectChunked(t, baseParams, m.bck, objName, expectedChunkSize)
 					chunks := m.findObjChunksOnDisk(m.bck, objName)
-					tassert.Fatalf(t, len(chunks) == expectedChunkCount, "expected %d chunk files for %s, found %d", expectedChunkCount, objName, len(chunks))
+					tassert.Fatalf(t, len(chunks) == wantCount-1,
+						"expected %d chunk files for %s, found %d", wantCount-1, objName, len(chunks))
+				}
+			} else {
+				for _, objName := range m.objNames {
+					checkObjectMonolithic(t, baseParams, m.bck, objName)
 				}
 			}
 

@@ -291,14 +291,14 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 }
 
 func (poi *putOI) putObject() (ecode int, err error) {
-	maxMonoSize := int64(poi.lom.Bprops().Chunks.MaxMonolithicSize)
-	// protect the bucket: if the object size exceeds the max monolithic size, MUST chunk
+	chunkSize := poi.lom.Bprops().Chunks.ChunkSizeFor(poi.size)
+	// TODO: validate cksumToUse while chunking before completing the internal upload
 	// NOTE: if `poi.size` is not set, don't trigger chunking
-	if maxMonoSize > 0 && poi.size > maxMonoSize {
+	if chunkSize > 0 {
 		if cmn.Rom.V(5, cos.ModAIS) {
-			nlog.Infoln("PUT", poi.lom.Cname(), "size", poi.size, "exceeds object size limit, PUT as chunks")
+			nlog.Infoln("PUT", poi.lom.Cname(), "size", poi.size, "requires chunking per bucket policy")
 		}
-		return poi.chunk(int64(poi.lom.Bprops().Chunks.ChunkSize))
+		return poi.chunk(chunkSize)
 	}
 	poi.ltime = mono.NanoTime()
 
@@ -2050,9 +2050,11 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM, lcopy bool) (res xs.CoiR
 	}
 
 	// prevent same-uname deadlock and avoid rechunking an already-chunked source
-	if !lcopy && !lom.IsChunked() && lom.Lsize() > int64(dst.Bprops().Chunks.MaxMonolithicSize) {
-		lom.Unlock(lcopy) // _chunk acquires its own read lock via GetROC
-		return coi._chunk(t, lom, dst, int64(dst.Bprops().Chunks.ChunkSize))
+	if !lcopy && !lom.IsChunked() {
+		if chunkSize := dst.Bprops().Chunks.ChunkSizeFor(lom.Lsize()); chunkSize > 0 {
+			lom.Unlock(lcopy) // _chunk acquires its own read lock via GetROC
+			return coi._chunk(t, lom, dst, chunkSize)
+		}
 	}
 
 	defer lom.Unlock(lcopy)

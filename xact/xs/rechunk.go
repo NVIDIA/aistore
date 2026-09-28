@@ -131,9 +131,9 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	var (
 		chunks    = &r.chunks
 		size      = lom.Lsize()
-		chunkSize = int64(chunks.ChunkSize)
+		chunkSize = chunks.ChunkSizeFor(size)
 	)
-	if size <= int64(chunks.MaxMonolithicSize) && (!chunks.AutoEnabled() || size < int64(chunks.ObjSizeLimit)) {
+	if chunkSize == 0 {
 		if !lom.IsChunked() {
 			// Track skipped object stats (no-op case)
 			r.ObjsAdd(1, size)
@@ -156,8 +156,6 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 		params.WorkTag = fs.WorkfilePut
 		params.Xact = r
 		params.Reader = lh
-		// NOTE: if chunkSize == 0 (restore monolithic) but size > chunks.max_monolithic_size,
-		// the underlying PUT keeps it chunked with `chunks.chunk_size` (see putObject)
 		params.Size = size
 		params.OWT = cmn.OwtChunks
 		params.Atime = lom.Atime()

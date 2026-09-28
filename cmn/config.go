@@ -2110,6 +2110,14 @@ func (c *ChunksConf) EqualLayout(other *ChunksConf) bool {
 		c.MaxMonolithicSize == other.MaxMonolithicSize
 }
 
+// ChunkSizeFor returns the configured chunk size when the object must be chunked, zero otherwise.
+func (c *ChunksConf) ChunkSizeFor(size int64) int64 {
+	if size > int64(c.MaxMonolithicSize) || c.AutoEnabled() && size >= int64(c.ObjSizeLimit) {
+		return int64(c.ChunkSize)
+	}
+	return 0
+}
+
 func (c *ChunksConf) Validate() error {
 	switch {
 	case c.MaxMonolithicSize < 0:

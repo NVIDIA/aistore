@@ -167,6 +167,30 @@ func TestChunksConfValidate(t *testing.T) {
 	}
 }
 
+func TestChunksConfChunkSizeFor(t *testing.T) {
+	const (
+		chunkSize = 32 * cos.KiB
+		softLimit = 64 * cos.MiB
+		hardLimit = cos.GiB
+	)
+	tests := []struct {
+		name string
+		conf cmn.ChunksConf
+		size int64
+		want int64
+	}{
+		{name: "unknown size", conf: cmn.ChunksConf{ObjSizeLimit: softLimit, ChunkSize: chunkSize, MaxMonolithicSize: hardLimit}, size: -1},
+		{name: "at hard limit", conf: cmn.ChunksConf{ChunkSize: chunkSize, MaxMonolithicSize: hardLimit}, size: hardLimit},
+		{name: "above hard limit", conf: cmn.ChunksConf{ChunkSize: chunkSize, MaxMonolithicSize: hardLimit}, size: hardLimit + 1, want: chunkSize},
+		{name: "below soft limit", conf: cmn.ChunksConf{ObjSizeLimit: softLimit, ChunkSize: chunkSize, MaxMonolithicSize: hardLimit}, size: softLimit - 1},
+		{name: "at soft limit", conf: cmn.ChunksConf{ObjSizeLimit: softLimit, ChunkSize: chunkSize, MaxMonolithicSize: hardLimit}, size: softLimit, want: chunkSize},
+	}
+	for _, test := range tests {
+		got := test.conf.ChunkSizeFor(test.size)
+		tassert.Fatalf(t, got == test.want, "%s: expected %d, got %d", test.name, test.want, got)
+	}
+}
+
 func TestValidateMpath(t *testing.T) {
 	mpaths := []string{
 		"tmp", // not absolute path

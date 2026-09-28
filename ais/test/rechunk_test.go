@@ -193,10 +193,6 @@ func testRechunkScenario(t *testing.T, bckMeta *meta.Bck, smallSize, largeSize, 
 		prefix:        testPrefix + "small-",
 		chunksConf:    &ioCtxChunksConf{multipart: false},
 	}
-	if initialLimit > 0 && smallSize > initialLimit {
-		maxSize := int64(mSmall.fileSizeRange[1])
-		mSmall.chunksConf = &ioCtxChunksConf{multipart: true, numChunks: int((maxSize + chunkSize - 1) / chunkSize)}
-	}
 	mSmall.init(true /*cleanup*/)
 	mSmall.puts()
 
@@ -209,10 +205,6 @@ func testRechunkScenario(t *testing.T, bckMeta *meta.Bck, smallSize, largeSize, 
 		chunksConf:    &ioCtxChunksConf{multipart: false},
 
 		skipRemoteEvict: true, // don't evict cached objects from mSmall
-	}
-	if initialLimit > 0 && largeSize > initialLimit {
-		maxSize := int64(mLarge.fileSizeRange[1])
-		mLarge.chunksConf = &ioCtxChunksConf{multipart: true, numChunks: int((maxSize + chunkSize - 1) / chunkSize)}
 	}
 	mLarge.init(true /*cleanup*/)
 	mLarge.puts()

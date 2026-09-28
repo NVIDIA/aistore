@@ -1839,6 +1839,64 @@ func TestCopyBucket(t *testing.T) {
 	}
 }
 
+func TestCopyBucketAutoChunks(t *testing.T) {
+	const chunkSize = 48 * cos.KiB
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	bck := cmn.Bck{Name: "copy-auto-chunk-" + trand.String(8), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+		Chunks: &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(cos.SizeIEC(0)), // disable auto-chunking
+			ChunkSize:    apc.Ptr(cos.SizeIEC(chunkSize)),
+		},
+	}, true /*cleanup*/)
+
+	m := ioContext{
+		t: t, bck: bck, num: 10, prefix: "copy-policy/",
+		fileSizeRange: [2]uint64{40 * cos.KiB, 112 * cos.KiB}, chunksConf: &ioCtxChunksConf{},
+	}
+	m.init(true /*cleanup*/)
+	m.puts()
+	for _, objName := range m.objNames {
+		checkObjectMonolithic(t, bp, bck, objName)
+	}
+
+	monoBck := cmn.Bck{Name: "copy-bck-mono-" + trand.String(8), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, monoBck, &cmn.BpropsToSet{
+		Chunks: &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(cos.SizeIEC(0)), // also disable auto-chunking
+			ChunkSize:    apc.Ptr(cos.SizeIEC(chunkSize)),
+		},
+	}, true /*cleanup*/)
+
+	xid, err := api.CopyBucket(bp, bck, monoBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Force: true}})
+	tassert.CheckFatal(t, err)
+	err = api.WaitForXaction(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: tools.CopyBucketTimeout})
+	tassert.CheckFatal(t, err)
+
+	for _, objName := range m.objNames {
+		// all objects stay monolithic
+		checkObjectMonolithic(t, bp, monoBck, objName)
+	}
+
+	chunkedBck := cmn.Bck{Name: "copy-bck-chunked-" + trand.String(8), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, chunkedBck, &cmn.BpropsToSet{
+		Chunks: &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(cos.SizeIEC(1)), // enable auto-chunking
+			ChunkSize:    apc.Ptr(cos.SizeIEC(chunkSize)),
+		}}, true /*cleanup*/)
+
+	xid, err = api.CopyBucket(bp, bck, chunkedBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Force: true}})
+	tassert.CheckFatal(t, err)
+	err = api.WaitForXaction(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: tools.CopyBucketTimeout})
+	tassert.CheckFatal(t, err)
+	for _, objName := range m.objNames {
+		// all objects become chunked with the configured chunk size
+		checkObjectChunked(t, bp, chunkedBck, objName, chunkSize)
+	}
+}
+
 func TestCopyBucketChecksumValidation(t *testing.T) {
 	tests := []struct {
 		srcCksum string
