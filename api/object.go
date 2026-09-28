@@ -534,8 +534,6 @@ func headobj(reqParams *ReqParams, noprops bool) (*cmn.ObjectProps, error) {
 
 // HeadObjectV2 performs HEAD request with selective property retrieval.
 //
-// EXPERIMENTAL: This API is experimental and may change in future releases.
-//
 // Returns ObjectPropsV2 with only the requested properties populated (via `props` parameter).
 // Use comma-separated property names from apc.GetProps* constants.
 //
