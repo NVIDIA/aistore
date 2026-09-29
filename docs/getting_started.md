@@ -40,7 +40,7 @@ AIStore runs on commodity Linux machines with no special requirements. It is exp
 
 * [Linux](#linux) with `gcc`, `sysstat`, `attr`, `util-linux`
 * Linux **kernel ≥ 6.8**
-* [Go ≥ 1.23](https://golang.org/dl/) (or build via `CROSS_COMPILE`)
+* [Go ≥ 1.26](https://golang.org/dl/) (or build via `CROSS_COMPILE`)
 * Local filesystem with **extended attributes** ([xattrs](https://en.wikipedia.org/wiki/Extended_file_attributes)) enabled
 * **Optional** – cloud credentials (AWS, GCP, Azure, OCI)
 
@@ -50,7 +50,7 @@ AIStore runs on commodity Linux machines with no special requirements. It is exp
 
 Depending on your Linux distribution, you may or may not have `GCC`, `sysstat`, and/or `attr` packages. These packages must be installed.
 
-Speaking of distributions, our current default recommendation (based on our experience) is Ubuntu Server 24.04 LTS or Ubuntu Server 22.04 LTS. However, AIStore has no special dependencies, so virtually any distribution will work.
+Speaking of distributions, our current default recommendation (based on our experience) is Ubuntu Server 26.04 LTS or Ubuntu Server 24.04 LTS (for other distributions: Linux kernel 6.8 or later). However, AIStore has no special dependencies, so virtually any distribution will work.
 
 For the [local filesystem](/docs/performance.md), we currently recommend xfs. But again, this default recommendation should not be interpreted as a limitation: other fine choices include zfs, ext4, f2fs and more.
 

@@ -17,10 +17,7 @@ For an introduction to Docker, please watch [Docker 101 youtube](https://www.you
 
 ## Install Docker and Docker Compose
 
-**Note:** Using Docker requires one of the following versions of Ubuntu:
-* Bionic 18.04 (LTS)
-* Xenial 16.04 (LTS)
-* Trusty 14.04 (LTS)
+**Note:** Docker supports all current Ubuntu LTS releases (e.g., 26.04 and 24.04); see [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for the up-to-date list.
 
 1. Uninstall any old versions of docker:
 
