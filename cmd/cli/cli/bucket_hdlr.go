@@ -314,10 +314,9 @@ var (
 			disableFlag,
 		},
 		commandRechunk: {
-			rechunkChunkSizeFlag,
-			objSizeLimitFlag,
 			verbObjPrefixFlag,
 			syncRemoteFlag,
+			yesFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
 		},
@@ -641,12 +640,6 @@ func rechunkBucketHandler(c *cli.Context) error {
 		return err
 	}
 
-	// Parse/determine chunk configuration (may prompt user)
-	chunkSize, objSizeLimit, err := parseRechunkConfig(c, bck)
-	if err != nil {
-		return err
-	}
-
 	prefix, err := parseBckObjPrefix(c, objName)
 	if err != nil {
 		return err
@@ -657,11 +650,22 @@ func rechunkBucketHandler(c *cli.Context) error {
 	if syncRemote && !bck.IsRemote() {
 		return fmt.Errorf("--sync-remote flag only applies to buckets with remote backend (have %s)", bck.Cname(""))
 	}
+	if !flagIsSet(c, yesFlag) {
+		props, err := headBucket(bck, false /* don't add */)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(c.App.Writer, "Rechunk configuration:\n")
+		fmt.Fprintf(c.App.Writer, "\tchunk_size:\t%s\n", cos.ToSizeIEC(int64(props.Chunks.ChunkSize), 0))
+		fmt.Fprintf(c.App.Writer, "\tobjsize_limit:\t%s%s\n", cos.ToSizeIEC(int64(props.Chunks.ObjSizeLimit), 0),
+			cos.Ternary(!props.Chunks.AutoEnabled(), " (chunking disabled)", ""))
+		if !confirm(c, "Proceed with these values?") {
+			return errors.New("operation canceled")
+		}
+	}
 	msg := &apc.RechunkMsg{
-		ObjSizeLimit: objSizeLimit,
-		ChunkSize:    chunkSize,
-		Prefix:       prefix,
-		SyncRemote:   syncRemote,
+		Prefix:     prefix,
+		SyncRemote: syncRemote,
 	}
 	xid, err := api.RechunkBucket(apiBP, bck, msg)
 	if err != nil {
@@ -681,65 +685,6 @@ func rechunkBucketHandler(c *cli.Context) error {
 		return nil
 	}
 	return waitJob(c, xname, xid, bck)
-}
-
-func parseRechunkConfig(c *cli.Context, bck cmn.Bck) (chunkSize, objSizeLimit int64, err error) {
-	// v5.1: per-job overrides of the bucket's chunks config are deprecated (removal planned for v5.2)
-	if flagIsSet(c, rechunkChunkSizeFlag) || flagIsSet(c, objSizeLimitFlag) {
-		actionWarnf(c, "%s and %s are deprecated and will be removed in v5.2 - bucket's 'chunks' config is authoritative:\n"+
-			"\tset it with 'ais bucket props set %s chunks.chunk_size=... chunks.objsize_limit=...', then run rechunk",
-			qflprn(rechunkChunkSizeFlag), qflprn(objSizeLimitFlag), bck.Cname(""))
-	}
-
-	// Parse chunk_size flag if provided
-	if flagIsSet(c, rechunkChunkSizeFlag) {
-		chunkSize, err = parseSizeFlag(c, rechunkChunkSizeFlag)
-		if err != nil {
-			return 0, 0, err
-		}
-		if chunkSize <= 0 {
-			return 0, 0, incorrectUsageMsg(c, "chunk size must be positive, got %s", cos.ToSizeIEC(chunkSize, 0))
-		}
-	}
-
-	// Parse objsize_limit flag if provided
-	if flagIsSet(c, objSizeLimitFlag) {
-		objSizeLimit, err = parseSizeFlag(c, objSizeLimitFlag)
-		if err != nil {
-			return 0, 0, err
-		}
-		if objSizeLimit < 0 {
-			return 0, 0, incorrectUsageMsg(c, "object size limit cannot be negative, got %s", cos.ToSizeIEC(objSizeLimit, 0))
-		}
-	}
-
-	// If either flag is missing, get from bucket and prompt for confirmation
-	if !flagIsSet(c, rechunkChunkSizeFlag) || !flagIsSet(c, objSizeLimitFlag) {
-		bckProps, err := api.HeadBucket(apiBP, bck, true /*don't add*/)
-		if err != nil {
-			return 0, 0, V(err)
-		}
-
-		// Fill in missing values from bucket
-		if !flagIsSet(c, rechunkChunkSizeFlag) {
-			chunkSize = int64(bckProps.Chunks.ChunkSize)
-		}
-		if !flagIsSet(c, objSizeLimitFlag) {
-			objSizeLimit = int64(bckProps.Chunks.ObjSizeLimit)
-		}
-
-		// Prompt user for confirmation (unless --yes is set)
-		if !flagIsSet(c, yesFlag) {
-			fmt.Fprint(c.App.Writer, "Rechunk configuration:\n")
-			fmt.Fprintf(c.App.Writer, "\tchunk_size:\t%s\n", cos.ToSizeIEC(chunkSize, 0))
-			fmt.Fprintf(c.App.Writer, "\tobjsize_limit:\t%s%s\n", cos.ToSizeIEC(objSizeLimit, 0), cos.Ternary(objSizeLimit == 0, " (chunking disabled)", ""))
-			if !confirm(c, "Proceed with these values?") {
-				return 0, 0, errors.New("operation canceled")
-			}
-		}
-	}
-
-	return chunkSize, objSizeLimit, nil
 }
 
 //

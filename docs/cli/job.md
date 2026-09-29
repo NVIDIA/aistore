@@ -135,9 +135,8 @@ $ ais bucket rechunk BUCKET [--prefix PREFIX] [--sync-remote] [--wait]
 - `--prefix PREFIX` - Only rechunk objects with the specified prefix (can also be embedded in the bucket URI); useful for incremental conversion
 - `--sync-remote` - Also write rechunked objects back to the remote backend (buckets with remote backend only)
 - `--wait` - Wait for the job to complete before returning
-- `--wait-timeout DURATION` - Maximum time to wait (e.g., `5m`, `1h`)
+- `--timeout DURATION` - Maximum time to wait (e.g., `5m`, `1h`)
 - `--yes, -y` - Assume 'yes' to all prompts (skip confirmation)
-- `--chunk-size SIZE`, `--objsize-limit SIZE` - **deprecated** in v5.1, planned for removal in v5.2; override the bucket's configuration for this job only (see [5.1 release notes](/docs/relnotes/5.1.md#deprecated-apis))
 
 **Examples:**
 
@@ -150,14 +149,14 @@ Rechunk configuration:
 	chunk_size:     16MiB
 	objsize_limit:  50MiB
 Proceed with these values? [Y/N]: y
-Started "rechunk" xaction "rechunk[aBc123]": ais://mybucket. To monitor, run 'ais show job aBc123'
+rechunk[aBc123]: ais://mybucket. To monitor the progress, run 'ais show job aBc123'
 ```
 
 Convert incrementally, one prefix at a time:
 
 ```console
 $ ais bucket rechunk ais://mybucket/images/ -y
-Started "rechunk" xaction "rechunk[mNo345]": ais://mybucket (prefix: "images/"). To monitor, run 'ais show job mNo345'
+rechunk[mNo345]: ais://mybucket (prefix: "images/"). To monitor the progress, run 'ais show job mNo345'
 ```
 
 Disable chunking and restore all objects as monolithic:
@@ -165,6 +164,7 @@ Disable chunking and restore all objects as monolithic:
 ```console
 $ ais bucket props set ais://mybucket chunks.objsize_limit=0
 $ ais bucket rechunk ais://mybucket -y --wait
+Waiting for rechunk[qRs678], ais://mybucket ...
 Done.
 ```
 
