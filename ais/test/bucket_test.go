@@ -304,7 +304,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 		exists bool
 	}{
 		{bck: bck, exists: exists},
-		{bck: cmn.Bck{Provider: cliBck.Provider, Name: trand.String(10), Ns: genBucketNs()}},
+		{bck: cmn.Bck{Provider: cliBck.Provider, Name: strings.ToLower(trand.String(10)), Ns: genBucketNs()}},
 	}
 	for _, test := range tests {
 		err := api.CreateBucket(bp, test.bck, test.props)

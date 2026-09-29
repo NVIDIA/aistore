@@ -626,14 +626,15 @@ func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 		nlog.InfoDepth(1, gcpError)
 		nlog.InfoDepth(1, "end "+gcpErrPrefix+" ===========================")
 	}
-	if gcpError == storage.ErrBucketNotExist {
+	if errors.Is(gcpError, storage.ErrBucketNotExist) {
 		return http.StatusNotFound, cmn.NewErrRemBckNotFound(bck)
 	}
 	err := _gcpErr(gcpError)
-	if gcpError == storage.ErrObjectNotExist {
+	if errors.Is(gcpError, storage.ErrObjectNotExist) {
 		return http.StatusNotFound, err
 	}
-	apiErr, ok := gcpError.(*googleapi.Error)
+	var apiErr *googleapi.Error
+	ok := errors.As(gcpError, &apiErr)
 	switch {
 	case !ok:
 		return http.StatusInternalServerError, err
