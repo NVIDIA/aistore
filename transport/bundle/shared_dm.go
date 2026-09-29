@@ -176,7 +176,17 @@ func (sdm *sharedDM) reconnect(dstID string, err error) {
 	if !sdm.isOpen() {
 		return
 	}
-	if e := sdm.dm.data.streams.ReopenPeerStream(dstID); e != nil {
+	// same epoch? (a Smap bump that leaves targets intact - e.g., proxy join/leave - does not count)
+	var (
+		e       error
+		streams = sdm.dm.data.streams
+	)
+	if smap := core.T.Sowner().Get(); !streams.Smap().CompareTargets(smap) {
+		e = fmt.Errorf("targets changed (%s => %s)", streams.Smap().StringEx(), smap.StringEx())
+	} else {
+		e = streams.ReopenPeerStream(dstID)
+	}
+	if e != nil {
 		err = fmt.Errorf("%s: failed reconnecting to %s (%w --> %w)", sdm.trname(), dstID, err, e)
 		nlog.Errorln(core.T.String(), err, "- closing/aborting...")
 

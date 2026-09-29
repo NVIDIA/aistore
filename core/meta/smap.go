@@ -183,6 +183,14 @@ func (d *Snode) EqNetID(o *Snode) (eq bool) {
 	return eq
 }
 
+// Node signing keypairs are ephemeral (regenerated on every restart, in memory only -
+// see ais/htrun newKeyPair), which makes a changed verifying key the definitive
+// restart signal. This includes an empty => non-empty transition when a pre-5.1 peer
+// restarts into 5.1 during a rolling upgrade (compare w/ clupost.rereg).
+func (d *Snode) SameIncarnation(o *Snode) bool {
+	return cos.CryptoEqual(d.VerifyingKey, o.VerifyingKey)
+}
+
 func (d *Snode) NetEq(o *Snode) error {
 	name := d.StringEx()
 	debug.Assertf(d.DaeType == o.DaeType, "%s: node type %q vs %q", name, d.DaeType, o.DaeType)
@@ -496,30 +504,34 @@ func (m *Smap) HasActiveTs(except string) bool {
 	return false
 }
 
-// NOTE:
-// - this check intentionally does not detect a same-ID target restart;
+// intentionally do not detect a same-ID target restart:
 // - when present, a changed ephemeral Snode.VerifyingKey is the definitive restart signal;
-// - (incarnation, as opposed to membership, belongs to whoever holds a long-lived Smap snapshot - e.g., transport/bundle).
+// - callers that also depend on peer incarnation or network endpoints should use CompareTargets instead
 func (m *Smap) CheckSameTargets(curr *Smap, tag string) error {
 	if m == nil || m.Version == 0 || curr == nil || curr.Version == 0 || m.Primary == nil || curr.Primary == nil {
 		err := errors.New("check-same-targets: expecting valid Smap(s)")
 		debug.AssertNoErr(err)
 		return err
 	}
-	if m._sameTargets(curr) {
+	if m._sameTargets(curr, false /*incarnation, endpoints*/) {
 		return nil
 	}
 	debug.Assertf(curr.Version > m.Version, "make sure the \"curr\" Smap is current (v%d vs v%d)", curr.Version, m.Version)
 	return cmn.NewErrMembershipChange(tag, m.StringEx(), curr.StringEx())
 }
 
-// return true if the two Smaps have identical active+inactive
-// target membership and identical per-target flags that influence global-rebalance
-// decisions during graceful membership changes
-// (rebalanceGrace)
-func (m *Smap) _sameTargets(other *Smap) bool {
+// check whether the two cluster maps are completely identical, targets-wise:
+// - compare the full Tmap, including self and inactive targets, across all 3 networks;
+// - mismatch does not prescribe xaction termination
+// - but MAY indicate the need to re-establish peer-to-peer stream
+func (m *Smap) CompareTargets(other *Smap) bool { return m._sameTargets(other, true) }
+
+func (m *Smap) _sameTargets(other *Smap, strict bool) bool {
 	if m.Version == other.Version {
 		return true
+	}
+	if len(m.Tmap) != len(other.Tmap) {
+		return false
 	}
 	for tid, t := range m.Tmap {
 		o := other.Tmap[tid]
@@ -529,9 +541,7 @@ func (m *Smap) _sameTargets(other *Smap) bool {
 		if (o.Flags & rebalanceGrace) != (t.Flags & rebalanceGrace) {
 			return false
 		}
-	}
-	for tid := range other.Tmap {
-		if _, ok := m.Tmap[tid]; !ok {
+		if strict && (!t.SameIncarnation(o) || t.NetEq(o) != nil) {
 			return false
 		}
 	}
@@ -690,10 +700,6 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 	}
 	eq = mapsEq(m.Tmap, other.Tmap) && mapsEq(m.Pmap, other.Pmap)
 	return
-}
-
-func (m *Smap) CompareTargets(other *Smap) (equal bool) {
-	return mapsEq(m.Tmap, other.Tmap)
 }
 
 func (m *Smap) NonElectable(psi *Snode) (ok bool) {

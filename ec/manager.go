@@ -43,7 +43,7 @@ import (
 // - local pull:   incActive(), on every EC xaction's start, plus the global-rebalance pin
 //   (see reb/globrun for OpenStreams(true)).
 // In addition, installing a Smap that changes this node's EC peer set - membership, or a
-// peer's incarnation (see bundle.Streams.Stale) - aborts the stale bundles and immediately
+// peer's incarnation (see meta.Smap.CompareTargets) - aborts the stale bundles and immediately
 // reopens them when there are active users (ListenSmapChanged).
 //
 // A write to an EC-enabled bucket MUST find streams open - that requirement is met
@@ -248,7 +248,7 @@ retry:
 	mgr.mu.Unlock()
 }
 
-// both bundles are constructed from the same Smap, but their network endpoints differ
+// both bundles are constructed from the same Smap; CompareTargets covers all networks
 func (mgr *Manager) bundlesStale(current *meta.Smap) (req, resp *bundle.Streams, stale bool) {
 	req, resp = mgr.req(), mgr.resp()
 	debug.Assert(req != nil)
@@ -256,7 +256,7 @@ func (mgr *Manager) bundlesStale(current *meta.Smap) (req, resp *bundle.Streams,
 	debug.Func(func() {
 		debug.Assert(req.Smap().Version == resp.Smap().Version, req.Smap().Version, " vs ", resp.Smap().Version)
 	})
-	stale = req.Stale(current) || resp.Stale(current)
+	stale = !req.Smap().CompareTargets(current)
 	return
 }
 

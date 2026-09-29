@@ -40,30 +40,18 @@ type (
 // Stream bundles maintain long-lived peer-to-peer streams -
 // target-to-target data paths used by AIS xactions (batch jobs).
 //
-// Target membership policy is owned by each specific xaction. A job
-// requires a stable target set iff it sets ConflictRebRes (refuse to
-// start during rebalance) or AbortByReb (abort if rebalance starts
-// mid-flight) - see xact/api_table.go. Jobs with neither flag tolerate
-// membership drift; jobs that don't use stream bundles are unaffected.
-//
-// Generally, AIS jobs fall into three broad groups:
-// - jobs that generate/place new objects and require a stable target set
-//   (prefetch, rebalance, copy/transform, create-bucket-inventory);
-// - jobs that do not generate objects and can tolerate membership drift
-//   (LRU eviction, space cleanup);
-// - jobs that create local derived state and may engage joined targets via
-//   xaction-level policy rather than bundle-level resync
-//   (rechunk, shard-index).
+// Each xaction owns its membership and recovery policy. ConflictRebRes and
+// AbortByReb (see xact/api_table.go) govern coexistence with rebalance/resilver;
+// they do not fully describe tolerance of peer restarts or membership changes.
+// Transport repair restores connectivity; the xaction decides whether to
+// continue, recover missing work, or terminate.
 //
 // The bundle itself records the Smap snapshot used to establish its streams:
 // caller-provided Extra.Smap, if present, or the current Smap otherwise.
 // Callers can use DM.Smap() to send control messages to the same peer set/epoch.
 //
-// ReopenPeerStream repairs connectivity to an existing peer in that epoch; it
-// does not add/remove peers.
-//
-// For the documented mechanism for xactions to express their membership policy
-// via static flags (ConflictRebRes, AbortByReb), see xact/api_table.go.
+// ReopenPeerStream replaces streams to an existing peer without adding/removing
+// peers. The caller validates the snapshot (see meta.Smap.CompareTargets).
 
 type (
 	Streams struct {
@@ -297,67 +285,9 @@ func (sb *Streams) _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error
 
 func (sb *Streams) Smap() *meta.Smap { return sb.smap }
 
-// Stale answers a single question: would `_open` against `curr` produce a different
-// set of peer streams than the one this bundle is holding?
-// Three ways for that to happen:
-//   - membership: a peer appeared, left, or crossed the InMaintPostReb boundary
-//     that `_open` itself uses to decide whether to connect;
-//   - incarnation: a peer is still here, under the same ID, but restarted - its
-//     streams are dead even though the cluster map still "looks" the same.
-//   - endpoint: the URL used by this bundle's network changed.
-//
-// NOTE: not a membership predicate in the `Smap.CheckSameTargets` sense - that one
-// answers a rebalance question and deliberately ignores restarts (see its comment).
-func (sb *Streams) Stale(curr *meta.Smap) bool {
-	if curr == nil || sb.smap == nil {
-		return false
-	}
-	if curr.Version == sb.smap.Version {
-		return false // fast path: same epoch, nothing to walk
-	}
-
-	self := core.T.SID()
-
-	// 1) every peer this bundle holds must still be a peer, and the same one
-	for id, osi := range sb.smap.Tmap {
-		if id == self {
-			continue
-		}
-		nsi := curr.Tmap[id]
-		was, is := !osi.InMaintPostReb(), nsi != nil && !nsi.InMaintPostReb()
-		if was != is {
-			return true // gone, or (un)rebalanced-out
-		}
-		if was && !sameIncarnation(osi, nsi) {
-			return true // restarted
-		}
-		if was && osi.URL(sb.network) != nsi.URL(sb.network) {
-			return true // destination changed
-		}
-	}
-
-	// 2) and no new peer may have appeared
-	for id, nsi := range curr.Tmap {
-		if id == self || nsi.InMaintPostReb() {
-			continue
-		}
-		if _, ok := sb.smap.Tmap[id]; !ok {
-			return true
-		}
-	}
-
-	return false
-}
-
-// Node signing keypairs are ephemeral (regenerated on every restart, in memory only -
-// see ais/htrun newKeyPair), which makes a changed verifying key the definitive
-// restart signal. This includes an empty => non-empty transition when a pre-5.1 peer
-// restarts into 5.1 during a rolling upgrade (compare w/ clupost.rereg).
-func sameIncarnation(osi, nsi *meta.Snode) bool {
-	return cos.CryptoEqual(osi.VerifyingKey, nsi.VerifyingKey)
-}
-
-// renew stream (or streams) to a given peer in the same Smap "epoch"
+// ReopenPeerStream replaces streams to an existing destination using the bundle's
+// recorded endpoint. Caller validates the snapshot against current Smap.
+// Does not replay interrupted sends or restore remote request state.
 func (sb *Streams) ReopenPeerStream(dstID string) error {
 	sb.reopenMu.Lock()
 	defer sb.reopenMu.Unlock()
@@ -371,12 +301,6 @@ func (sb *Streams) ReopenPeerStream(dstID string) error {
 	if len(orobin.stsdest) == 0 {
 		debug.Assert(false) // not expecting
 		return nil
-	}
-	smap := core.T.Sowner().Get()
-	if smap.Version != sb.smap.Version {
-		// to err on the side of caution
-		return fmt.Errorf("%s: reopening individual streams when cluster map changes is not supported yet (%s vs %s)",
-			sb, smap.StringEx(), sb.smap.StringEx())
 	}
 	si := sb.smap.GetNode(dstID)
 	if si == nil {
@@ -411,7 +335,7 @@ func (sb *Streams) ReopenPeerStream(dstID string) error {
 		}
 	}
 
-	nlog.Infoln(sb.String(), "successfully restablished connectivity to", dstID)
+	nlog.Infoln(sb.String(), "successfully re-established connectivity to", dstID)
 	return nil
 }
 
