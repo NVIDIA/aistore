@@ -330,9 +330,9 @@ func (j *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 // returns nil (removed) or cmn.ErrSkip (kept)
 func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 	var (
-		stats = &clnArgs.stats
-		op    *cmn.ObjectPropsV2
-		oa    cmn.ObjAttrs
+		diverged error
+		oa       cmn.ObjAttrs
+		stats    = &clnArgs.stats
 	)
 	if !lom.TryLock(false) {
 		stats.skipBusy.Inc()
@@ -355,7 +355,7 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 
 	// check the expected location, request specific props to establish identity
 	// TODO -- FIXME: HeadObjT2T() must support batch request to ensure scalability
-	op, err = core.T.HeadObjT2T(lom, tsi,
+	op, err := core.T.HeadObjT2T(lom, tsi,
 		apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCustom, apc.GetPropsETag)
 	if err != nil {
 		if cmn.IsErrHTTPNotFound(err) {
@@ -374,8 +374,7 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 			cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
 			return cmn.ErrSkip
 		}
-		cnt := stats.removeDiverged.Inc()
-		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "force-removing diverged:", lom.Cname(), eqErr, "[ forced:", cnt, "]")
+		diverged = eqErr
 	}
 
 	if !lom.TryLock(true) {
@@ -391,7 +390,7 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 		stats.errLoad.Inc()
 		return cmn.ErrSkip
 	}
-	if !sameObj(lom.ObjAttrs(), &oa) {
+	if !lom.ObjAttrs().EqLocal(&oa) {
 		cnt := stats.skipChanged.Inc()
 		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "changed while unlocked, keep:", lom.Cname(), "[ changed:", cnt, "]")
 		return cmn.ErrSkip
@@ -406,16 +405,14 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "remove failed:", lom.Cname(), errRm, "[ failures:", cnt, "]")
 		return cmn.ErrSkip
 	}
+	if diverged != nil {
+		cnt := stats.removeDiverged.Inc()
+		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "force-removed diverged:", lom.Cname(), diverged, "[ forced:", cnt, "]")
+	}
 
 	clnArgs.xreb.ObjsAdd(1, size)
 	stats.removeMisplaced.Inc()
 	return nil
-}
-
-// true when the local object did not change while unlocked
-// (atime excluded: a concurrent GET must not block cleanup)
-func sameObj(oa, snapshot *cmn.ObjAttrs) bool {
-	return oa.Size == snapshot.Size && oa.Version() == snapshot.Version() && oa.Cksum.Equal(snapshot.Cksum)
 }
 
 // xreb.CtlMsg() callback (set via xreg.RebArgs; compare with reb/ctlmsg.go)

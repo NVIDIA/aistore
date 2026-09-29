@@ -272,6 +272,16 @@ func (oa *ObjAttrs) EqCksum(cksum *cos.Cksum) bool {
 	return !cos.NoneC(oa.Cksum) && oa.Cksum.Equal(cksum)
 }
 
+// usage:
+// - in-cluster object
+// - no changes since the previous check, atime excluding
+// see also:
+// - ObjAttrs.CheckEq that compares (in-cluster <=> remote)
+func (oa *ObjAttrs) EqLocal(other *ObjAttrs) bool {
+	return oa.Size == other.Size && oa.Version() == other.Version() && oa.Cksum.Equal(other.Cksum) &&
+		maps.Equal(oa.CustomMD, other.CustomMD)
+}
+
 func (oa *ObjAttrs) Version(_ ...bool) string {
 	if oa.Ver == nil {
 		return ""
@@ -570,7 +580,9 @@ func (op *ObjectPropsV2) FromHeaders(hdr http.Header, props string) error {
 // Note version comparison may fail even when the objects are identical, content-wise:
 // same size, ETag, and checksums may still "co-exist" with different versions.
 //
-// TODO: count == 1 with matching checksum being xxhash - must be configurable :NOTE
+// TODO: count == 1 with matching checksum being xxhash - must be configurable
+//
+// See also: ObjAttrs.EqLocal, ObjAttrs.EqCksum
 func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 	var (
 		ver       string
