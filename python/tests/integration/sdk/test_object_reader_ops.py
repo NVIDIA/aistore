@@ -13,8 +13,9 @@ from aistore.sdk.client import Client
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE, MIB
 from aistore.sdk.etl.etl_config import ETLConfig
 from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer
-from tests.integration import AWS_BUCKET
-from tests.integration.sdk import DEFAULT_TEST_CLIENT
+from tests.integration import AWS_BUCKET, CLUSTER_ENDPOINT
+from tests.const import TEST_TIMEOUT_LONG
+from tests.integration.sdk import DEFAULT_TEST_CLIENT, TEST_RETRY_CONFIG
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import create_and_put_object, random_string
 
@@ -391,6 +392,18 @@ class TestParallelColdGetOps(ParallelTestBase):
 
     COLD_OBJ_DATA = os.urandom(4 * MIB)
 
+    def _cold_object(self, obj_name):
+        """Create an object handle with a cold-fetch-sized read timeout."""
+        return (
+            Client(
+                CLUSTER_ENDPOINT,
+                retry_config=TEST_RETRY_CONFIG,
+                timeout=(5, TEST_TIMEOUT_LONG),
+            )
+            .bucket(self.bucket.name, provider=self.bucket.provider)
+            .object(obj_name)
+        )
+
     @unittest.skipIf(
         not AWS_BUCKET,
         "AWS bucket is not set",
@@ -403,7 +416,7 @@ class TestParallelColdGetOps(ParallelTestBase):
             Bucket=self.bucket.name, Key=obj_name, Body=self.COLD_OBJ_DATA
         )
 
-        content = b"".join(self.bucket.object(obj_name).get_reader(num_workers=4))
+        content = b"".join(self._cold_object(obj_name).get_reader(num_workers=4))
         self.assertEqual(content, self.COLD_OBJ_DATA)
 
     @unittest.skipIf(
@@ -418,8 +431,6 @@ class TestParallelColdGetOps(ParallelTestBase):
             Bucket=self.bucket.name, Key=obj_name, Body=self.COLD_OBJ_DATA
         )
 
-        with (
-            self.bucket.object(obj_name).get_reader(num_workers=4).read_all() as result
-        ):
+        with self._cold_object(obj_name).get_reader(num_workers=4).read_all() as result:
             self.assertIsInstance(result, ParallelBuffer)
             self.assertEqual(result.tobytes(), self.COLD_OBJ_DATA)

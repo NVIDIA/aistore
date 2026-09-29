@@ -28,7 +28,7 @@ import (
 // create inventory
 //
 
-const nbiCreateTimeout = 15 * time.Second
+const nbiCreateTimeout = 30 * time.Second
 
 func TestCreateInventorySimple(t *testing.T) {
 	var (

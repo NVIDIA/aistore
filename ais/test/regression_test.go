@@ -611,7 +611,11 @@ func TestLRU(t *testing.T) {
 	})
 
 	tlog.Logln("starting LRU...")
-	xid, err := api.StartXaction(bp, &xact.ArgsMsg{Kind: apc.ActLRU}, "")
+	xid, err := api.StartXaction(bp, &xact.ArgsMsg{
+		Kind:    apc.ActLRU,
+		Buckets: []cmn.Bck{m.bck},
+		Force:   true, // remote-bucket LRU may be disabled by default
+	}, "")
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActLRU, Timeout: tools.RebalanceTimeout}

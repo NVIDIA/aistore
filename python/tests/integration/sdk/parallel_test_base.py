@@ -4,9 +4,11 @@
 from pathlib import Path
 from typing import List, Tuple, Dict
 import unittest
+import time
 import boto3
 
 from aistore.sdk import Object
+from aistore.sdk.errors import ErrRemoteBckNotFound
 from tests.integration import (
     REMOTE_SET,
     REMOTE_BUCKET,
@@ -72,7 +74,14 @@ class ParallelTestBase(unittest.TestCase):
         Cleanup after each test, destroy the bucket if it exists
         """
         if REMOTE_SET:
-            entries = self.bucket.list_all_objects(prefix=self.obj_prefix)
+            for attempt in range(5):
+                try:
+                    entries = self.bucket.list_all_objects(prefix=self.obj_prefix)
+                    break
+                except ErrRemoteBckNotFound:
+                    if attempt == 4:
+                        raise
+                    time.sleep(1)
             obj_names = [entry.name for entry in entries]
             obj_names.extend(self.cloud_objects)
             if len(obj_names) > 0:

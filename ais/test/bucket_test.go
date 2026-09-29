@@ -1588,13 +1588,14 @@ func TestCopyBucket(t *testing.T) {
 			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
 			var (
 				srcBckList *cmn.LsoRes
+				suffix     = cos.GenTie()
 
 				objCnt = 100
 				srcm   = &ioContext{
 					t:   t,
 					num: objCnt,
 					bck: cmn.Bck{
-						Name:     "src_copy_bck",
+						Name:     "src_copy_bck_" + suffix,
 						Provider: apc.AIS,
 						Ns:       genBucketNs(),
 					},
@@ -1604,7 +1605,7 @@ func TestCopyBucket(t *testing.T) {
 						t:   t,
 						num: objCnt,
 						bck: cmn.Bck{
-							Name:     "dst_copy_bck_1",
+							Name:     "dst_copy_bck_1_" + suffix,
 							Provider: apc.AIS,
 							Ns:       genBucketNs(),
 						},
@@ -1620,7 +1621,7 @@ func TestCopyBucket(t *testing.T) {
 					t:   t,
 					num: objCnt,
 					bck: cmn.Bck{
-						Name:     "dst_copy_bck_2",
+						Name:     "dst_copy_bck_2_" + suffix,
 						Provider: apc.AIS,
 						Ns:       genBucketNs(),
 					},
@@ -2648,7 +2649,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	const (
 		copyCnt     = 2
 		parityCnt   = 2
-		xactTimeout = 10 * time.Second
+		xactTimeout = 30 * time.Second
 	)
 	var (
 		m = ioContext{

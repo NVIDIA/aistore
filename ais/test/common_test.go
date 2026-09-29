@@ -505,7 +505,7 @@ func (m *ioContext) backdateLocalObjs(age time.Duration) {
 	tassert.CheckFatal(m.t, err)
 
 	if touched != len(m.objNames) {
-		tlog.Logfln("Warning: touched %d != %d objnames", touched, len(m.objNames))
+		m.t.Fatalf("backdated %d local objects, expected %d", touched, len(m.objNames))
 	}
 }
 
