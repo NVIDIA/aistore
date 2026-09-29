@@ -61,7 +61,7 @@ See the [Kubernetes Observability](monitoring-kubernetes.md) document for detail
 
 ## Key Metrics Categories
 
-AIS exposes metrics across several categories:
+AIS provides metrics across several categories:
 
 - **Cluster Health**: Node status, membership changes
 - **Resource Usage**: CPU, memory, disk utilization

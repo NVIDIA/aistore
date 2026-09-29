@@ -49,6 +49,15 @@ The second option is the current default.
 | --- | --- |
 | `stdlibwalk`| Instead of [godirwalk](https://github.com/karrick/godirwalk) use `filepath.WalkDir` from the standard library |
 
+## ETL
+
+| build tag | comment |
+| --- | --- |
+| `etl` | Build `aisnode` with the Kubernetes [ETL runtime](/docs/etl.md) enabled; default builds exclude it |
+
+To build from source, add `etl` to `TAGS` (for example, `TAGS=etl make node`).
+Release automation publishes a versioned `aistorage/aisnode` image with the `-etl` suffix for every release, as well as `aistorage/aisnode:latest-etl`.
+
 ## Dsort (distributed shuffle)
 
 | build tag | comment |

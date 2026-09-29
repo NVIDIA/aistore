@@ -159,7 +159,7 @@ AIS organizes metrics into **four major groups**, reflected in the codebase and 
 
 ### Metric Labels
 
-AIS exposes labels for filtering and aggregation:
+AIS provides labels for filtering and aggregation:
 
 | Label      | Usage                                    |
 | ---------- | ---------------------------------------- |

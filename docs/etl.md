@@ -52,7 +52,17 @@ It supports both **inline transformations** (real-time processing via GET reques
 
 ## Quick Start
 
-To begin using ETLs in AIStore, you'll need to deploy AIStore on a Kubernetes cluster. There are several ways to achieve this, each suited for different purposes:
+To begin using ETLs in AIStore, deploy AIStore on a Kubernetes cluster using an ETL-enabled `aisnode` build. ETL is excluded from the default build and image.
+
+Official releases publish both versioned `aistorage/aisnode` images with the `-etl` suffix and `aistorage/aisnode:latest-etl`. Pin the versioned image matching your AIS release for production deployments. When building from source, add `etl` to the build tags, for example:
+
+```console
+$ TAGS=etl make node
+```
+
+With the AIS Kubernetes Operator, set `spec.nodeImage` to the ETL image. With the Helm chart, set `nodeImage.tag` to the corresponding `-etl` tag.
+
+There are several deployment options, each suited for different purposes:
 
 1. **AIStore Development with Local Kubernetes**:
    - Folder: [deploy/dev/k8s](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s)

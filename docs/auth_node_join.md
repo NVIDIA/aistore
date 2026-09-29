@@ -28,7 +28,7 @@ admitted and its verifying key is distributed through the Smap, ordinary
 per-node signing protects subsequent intra-cluster requests.
 
 > **Version note:** [v5.0 bridge](/docs/relnotes/5.0.md) accepts and persists `node_join_secret_path`, but does not enforce node-join authentication.
-> Enforcement, along with the rest `auth.intra_cluster` capabilities, is enabled in post-5.0 versions.
+> Enforcement, along with the rest of the `auth.intra_cluster` capabilities, is enabled in v5.1 and later.
 
 **Table of Contents**
 

@@ -79,7 +79,7 @@ The `ais show cluster` output includes, in particular:
 
 ### Example: AIS/Kubernetes deployment
 
-The following example shows what a healthy AIS 4.4 deployment may look like inside Kubernetes when nodes run under cgroup v2.
+The following example shows what a healthy AIS deployment may look like inside Kubernetes when nodes run under cgroup v2.
 
 ```console
 $ ais show cluster
@@ -123,11 +123,11 @@ A few things are worth noting:
    - Small non-zero throttling values are not unusual in busy containerized environments.
 * Memory and CPU totals shown by AIS should reflect the container's effective limits rather than the host's full physical capacity.
 
-> The numbers above are illustrative, but the format and interpretation match AIS 4.4 behavior. To better understand the numbers in memory columns, please see [Two different views of memory](#two-different-views-of-memory) section below.
+> The numbers above are illustrative. To better understand the memory columns, see [Two different views of memory](#two-different-views-of-memory) below.
 
 ### Example: verbose view
 
-Use `ais show cluster --verbose` to add `LOAD AVERAGE` to the default 4.4 cluster view. This is useful when you want the traditional 1-, 5-, and 15-minute load numbers alongside the newer AIS CPU metrics.
+Use `ais show cluster --verbose` to add `LOAD AVERAGE` to the default cluster view. This is useful when you want the traditional 1-, 5-, and 15-minute load numbers alongside the newer AIS CPU metrics.
 
 ```console
 $ ais show cluster --verbose
@@ -155,7 +155,7 @@ t[abRtepsE]      0.14%           2.30TiB      62%             27.587TiB       36
 
 ## Interpreting CPU Signals
 
-AIS 4.4 exposes several CPU-related signals, but they answer different questions.
+AIS provides several CPU-related signals, but they answer different questions.
 
 `SYS CPU(%)` is the primary AIS CPU signal. It is computed from recent CPU usage and reported as a smoothed moving average. `THROTTLED(%)` is separate: it indicates CPU time the runtime is denying to the container in cgroup-v2 environments. `LOAD AVERAGE` remains available with `--verbose`, but it is secondary and should be treated as additional context rather than the main CPU metric.
 
@@ -186,7 +186,7 @@ AIS also treats some auxiliary memory details as best-effort so that missing or 
 
 ### Two different views of memory
 
-`MEM USED(%)` and `MEM AVAIL` use different but complementary views of memory. In the current 4.4 implementation, `MEM USED(%)` is derived from the AIS process resident set size (RSS) as a percentage of the node's effective memory total, or the container's memory limit when running under cgroups.
+`MEM USED(%)` and `MEM AVAIL` use different but complementary views of memory. `MEM USED(%)` is derived from the AIS process resident set size (RSS) as a percentage of the node's effective memory total, or the container's memory limit when running under cgroups.
 
 `MEM AVAIL`, on the other hand, is not simply raw free memory. `MEM AVAIL` reflects the node's available memory (`ActualFree`), which accounts for reclaimable kernel caches - memory that is technically in use (e.g., for kernel's pagecache) but can be freed under pressure.
 

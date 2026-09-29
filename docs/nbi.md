@@ -4,7 +4,7 @@ Native bucket inventory (NBI) lets AIS create and serve a **local snapshot** of 
 
 It is designed for **very large, read-mostly buckets** - for example, training and inference datasets - where repeatedly listing the remote backend is expensive, slow, and operationally noisy.
 
-Native bucket inventory (NBI) was introduced in [v4.3](https://github.com/NVIDIA/aistore/releases/tag/v1.4.3) and is stable as of **4.4**.
+Native bucket inventory (NBI) was introduced in [v4.3](https://github.com/NVIDIA/aistore/releases/tag/v1.4.3) and is stable.
 
 Inventories are currently created manually: AIS does not yet provide built-in periodic refresh or automatic resynchronization.
 

@@ -141,7 +141,7 @@ To access remote data (and store it in-cluster), AIStore utilizes the respective
 
 But what if there's a need to disconnect a given linked-in remote backend at runtime, maybe temporarily?
 
-This capability is now supported, and will be included in v3.24 release. And the easiest way to explain how it works is to show some examples.
+This capability is supported. The easiest way to explain how it works is to show some examples.
 
 ### Examples
 
