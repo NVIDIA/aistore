@@ -12,7 +12,7 @@ minimal:
 	./utils/deploy.sh base
 
 # Sample overlay targets
-.PHONY: https cloud multi-node local-dev external-access
+.PHONY: https cloud multi-node etl local-dev external-access
 https:
 	./utils/deploy.sh overlays/samples/https
 
@@ -21,6 +21,9 @@ cloud:
 
 multi-node:
 	./utils/deploy.sh overlays/samples/multi-node
+
+etl:
+	./utils/deploy.sh overlays/samples/etl
 
 local-dev:
 	IMAGE_TAG=local-development ./utils/build_and_load.sh

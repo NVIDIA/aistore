@@ -34,6 +34,9 @@ $ make create-cluster
 
 Deploy the base AIStore configuration (1 proxy, 1 target):
 
+The standard `make minimal` deployment uses the default image and excludes ETL.
+To run ETL transformations, use `make etl` instead; it deploys the same configuration with `aistorage/aisnode:latest-etl`.
+
 ```bash
 $ make minimal
 ./utils/deploy.sh base
@@ -205,6 +208,11 @@ $ make local-dev
 ```
 
 The target first builds and loads the local images with the `local-development` tag, then deploys using the local development overlay.
+To include ETL in the locally built `aisnode` image, run:
+
+```bash
+$ BUILD_TAGS=etl make local-dev
+```
 
 #### External Access
 
