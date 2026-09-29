@@ -223,7 +223,7 @@ class TestObjectFileReaderResume(unittest.TestCase):
         - Read fails to retrieve chunk4, resumes and gets chunk4.
         - Read returns the entire content.
 
-        Total of 3 resumes, which is within the set limit of `max_resume=3`.
+        Each interruption is followed by progress, within the consecutive limit.
         """
         # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
         # and simulates a failure on every other read w/ a max of 3 resumes
@@ -242,18 +242,15 @@ class TestObjectFileReaderResume(unittest.TestCase):
         # Verify that the file was not closed
         self.assertFalse(object_file._closed)
 
-    def test_read_fail_after_max_retries(self):
+    def test_read_succeeds_after_interspersed_retries(self):
         """
-        Test that ObjectFileReader fails and raises an `ObjectFileReaderMaxResumeError` after exceeding the
-        allowed `max_resume` attempts during multiple stream interruptions.
+        Interruptions separated by progress do not exhaust the retry allowance.
 
         - Reads chunk1 successfully.
         - Fails to retrieve chunk2, resumes and gets chunk2.
         - Fails to retrieve chunk3, resumes and gets chunk3.
-        - Fails to retrieve chunk4.
-        - Raises `ObjectFileReaderMaxResumeError`.
-
-        Total of 3 resumes, which exceeds the set limit of `max_resume=3`.
+        - Fails to retrieve chunk4, resumes and gets chunk4.
+        - Returns all four chunks without duplicates.
         """
         # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
         # and simulates a failure on every other read w/ a max of 2 resumes
@@ -263,12 +260,9 @@ class TestObjectFileReaderResume(unittest.TestCase):
             max_resume_attempts=2,
         )
 
-        # Attempting to read should fail after exceeding max retries
-        with self.assertRaises(ObjectFileReaderMaxResumeError):
-            object_file.read()
-
-        # Verify that the file was closed after the exception
-        self.assertTrue(object_file._closed)
+        self.assertEqual(object_file.read(), self.data)
+        self.assertEqual(object_file._stream.resumes, 3)
+        self.assertFalse(object_file._closed)
 
     def test_multiple_reads_success_after_resumes(self):
         """
@@ -283,7 +277,7 @@ class TestObjectFileReaderResume(unittest.TestCase):
         - Second read fails to retrieve chunk4, resumes and gets chunk4.
         - Second read returns 'k2chunk3chunk4'.
 
-        Total of 3 resumes, within the set limit of `max_resume=3`.
+        Total of 3 resumes, each followed by forward progress.
         """
         # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
         # and simulates a failure on every other read w/ a max of 3 resumes
@@ -304,18 +298,16 @@ class TestObjectFileReaderResume(unittest.TestCase):
         # Verify that the file was not closed
         self.assertFalse(object_file._closed)
 
-    def test_multiple_reads_fail_after_resumes(self):
+    def test_multiple_reads_succeed_after_interspersed_resumes(self):
         """
-        Test that multiple read operations fail after exceeding the allowed `max_resume` limit.
+        Retry allowance resets when a reopened stream advances, across read calls.
 
         - First read retrieves chunk1 successfully.
         - First read fails to retrieve chunk2, resumes and gets chunk2.
         - First read returns 'chunk1chun', leaving 'k2' in the remainder.
         - Second read consumes 'k2' from the remainder.
         - Second read fails to retrieve chunk3, resumes and gets chunk3.
-        - Second read fails to retrieve chunk4, raises `ObjectFileReaderMaxResumeError`.
-
-        Total of 3 resumes, exceeding the set limit of `max_resume=2`.
+        - Second read fails to retrieve chunk4, resumes and gets chunk4.
         """
         # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
         # and simulates a failure on every other read w/ a max of 2 resumes
@@ -329,12 +321,9 @@ class TestObjectFileReaderResume(unittest.TestCase):
         result = object_file.read(10)
         self.assertEqual(result, b"chunk1chun")
 
-        # Attempting to read should fail after exceeding max retries
-        with self.assertRaises(ObjectFileReaderMaxResumeError):
-            object_file.read(14)
-
-        # Verify that the file was closed after the exception
-        self.assertTrue(object_file._closed)
+        self.assertEqual(object_file.read(14), b"k2chunk3chunk4")
+        self.assertEqual(object_file._stream.resumes, 3)
+        self.assertFalse(object_file._closed)
 
     @cases((True, 6), (False, 0))
     def test_resume_offset_follows_presence(self, case):
@@ -348,11 +337,15 @@ class TestObjectFileReaderResume(unittest.TestCase):
         )
 
         provider.client.can_get_at_offset.return_value = present
+        self.assertEqual(object_file.read(6), b"chunk1")
         with patch.object(
             provider, "create_iter", wraps=provider.create_iter
         ) as mock_create_iter:
-            with self.assertRaises(ObjectFileReaderMaxResumeError):
-                object_file.read()
+            if present:
+                self.assertEqual(object_file.read(1), b"c")
+            else:
+                with self.assertRaises(ObjectFileReaderMaxResumeError):
+                    object_file.read(1)
 
         mock_create_iter.assert_called_once()
         self.assertEqual(expected_offset, mock_create_iter.call_args.kwargs["offset"])
@@ -390,3 +383,61 @@ class TestObjectFileReaderColdResume(unittest.TestCase):
 
         self.assertEqual(provider.closed_streams, [0, 1])
         self.assertFalse(reader.readable())
+
+
+class TestObjectFileReaderRetryStreak(unittest.TestCase):
+    """Progress on a reopened stream restores the interruption allowance."""
+
+    @cases(ConnectionResetError, ConnectionAbortedError, BrokenPipeError)
+    def test_raw_connection_errors_resume_from_last_chunk(self, error_type):
+        data = b"0123456789"
+        provider = scripted_content_provider(
+            [(4, 4, error_type("stale connection")), (len(data), 4, None)],
+            data,
+            resumable=[True],
+        )
+        reader = ObjectFileReader(provider, max_resume=5)
+
+        self.assertEqual(reader.read(), data)
+        self.assertEqual(provider.offsets, [0, 4])
+        self.assertEqual(reader._stream.resumes, 1)
+
+    def test_interrupted_streams_with_progress_can_exceed_total_allowance(self):
+        data = b"0123456789"
+        error = ChunkedEncodingError("interrupted")
+        provider = scripted_content_provider(
+            [(2, 2, error), (4, 2, error), (6, 2, error), (len(data), 2, None)],
+            data,
+            resumable=[True, True, True],
+        )
+        reader = ObjectFileReader(provider, max_resume=1)
+
+        self.assertEqual(reader.read(), data)
+        self.assertEqual(reader._stream.resumes, 3)
+        self.assertEqual(provider.offsets, [0, 2, 4, 6])
+
+    def test_repeated_failures_without_progress_still_exhaust_allowance(self):
+        data = b"0123456789"
+        error = ChunkedEncodingError("interrupted")
+        provider = scripted_content_provider(
+            [(2, 2, error), (2, 2, error)], data, resumable=[True]
+        )
+        reader = ObjectFileReader(provider, max_resume=1)
+
+        self.assertEqual(reader.read(2), b"01")
+        with self.assertRaises(ObjectFileReaderMaxResumeError):
+            reader.read(2)
+
+    def test_six_connection_resets_without_progress_are_bounded(self):
+        data = b"0123456789"
+        error = ConnectionResetError("stale connection")
+        provider = scripted_content_provider(
+            [(4, 4, error)] * 6, data, resumable=[True] * 5
+        )
+        reader = ObjectFileReader(provider, max_resume=5)
+
+        self.assertEqual(reader.read(4), b"0123")
+        with self.assertRaises(ObjectFileReaderMaxResumeError):
+            reader.read(1)
+        self.assertEqual(provider.offsets, [0, 4, 4, 4, 4, 4])
+        self.assertTrue(reader._closed)
