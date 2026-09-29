@@ -369,6 +369,7 @@ type (
 		Bucket        string  `json:"bucket"`
 		Duration      string  `json:"duration"`
 		NumWorkers    int     `json:"# workers"`
+		IdleConns     int     `json:"idle conns per host"`
 		StatsInterval string  `json:"stats interval"`
 		PutPct        int     `json:"% PUT,omitempty"`
 		UpdatePct     int     `json:"% Update Existing,omitempty"`
@@ -433,6 +434,7 @@ func printRunParams(p *params) {
 		Bucket:        p.bck.Cname(""),
 		Duration:      cos.Ternary(p.duration.Val == time.Duration(math.MaxInt64), "-", p.duration.String()),
 		NumWorkers:    p.numWorkers,
+		IdleConns:     cargs.IdleConnsPerHost,
 		StatsInterval: (time.Duration(runParams.statsShowInterval) * time.Second).String(),
 		PutPct:        p.putPct,
 		UpdatePct:     p.updateExistingPct,

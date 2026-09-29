@@ -110,6 +110,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
 | -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
 | -getloaderid | `bool` | When true, print stored/computed unique loaderID and exit | `false` |
+| -idle-conns-per-host | `int` | Maximum idle (keep-alive) connections per host, AIS gateway or S3 endpoint (0 = size the pool to the concurrent workload, minimum 32) | `0` |
 | -ip | `string` | AIS proxy/gateway IP address or hostname | `localhost` |
 | -json | `bool` | When true, print the output in JSON | `false` |
 | -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
@@ -169,6 +170,7 @@ For the most recently updated command-line options and examples, please run `ais
 | --- | --- | --- | --- |
 | -ip | `string` | AIS proxy/gateway IP address or hostname | `localhost` |
 | -port | `string` | AIS proxy/gateway port | `8080` |
+| -idle-conns-per-host | `int` | Maximum idle (keep-alive) connections per host, AIS gateway or S3 endpoint (0 = size the pool to the concurrent workload, minimum 32) | `0` |
 | -randomproxy | `bool` | When true, select random gateway ("proxy") to execute each I/O request | `false` |
 | -timeout | `duration` | Client HTTP timeout (0 = infinity) | `10m` |
 | -tokenfile | `string` | Authentication token (FQN) | `""` |

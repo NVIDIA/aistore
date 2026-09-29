@@ -194,6 +194,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&flagVersion, "version", false, "show aisloader version")
 	f.BoolVar(&flagQuiet, "quiet", false, "when starting to run, do not print command line arguments, default settings, and usage examples")
 	f.DurationVar(&cargs.ClientTimeout, "timeout", 10*time.Minute, "client HTTP timeout - used in LIST/GET/PUT/DELETE")
+	f.IntVar(&cargs.IdleConnsPerHost, "idle-conns-per-host", 0,
+		"maximum number of idle (keep-alive) connections per host (0 - size the pool to the concurrent workload, minimum 32)")
 
 	// ============ Cluster ============
 	f.StringVar(&ip, "ip", defaultClusterIP, "AIS proxy/gateway IP address or hostname")
@@ -487,6 +489,8 @@ func initParams(p *params) (err error) {
 		useHTTPS = scheme == "https"
 	}
 
+	p.initIdleConns()
+
 	p.bp = api.BaseParams{URL: p.proxyURL}
 	if useHTTPS {
 		// environment to override client config
@@ -498,6 +502,27 @@ func initParams(p *params) (err error) {
 
 	// NOTE: auth token is assigned below when we execute the very first API call
 	return nil
+}
+
+// initialize the idle (keep-alive) connection pool to the number of requests
+func (p *params) initIdleConns() {
+	inflight := p.inflight()
+	switch {
+	case cargs.IdleConnsPerHost == 0:
+		cargs.IdleConnsPerHost = max(cmn.DefaultMaxIdleConnsPerHost, inflight)
+	case cargs.IdleConnsPerHost < inflight:
+		fmt.Fprintf(os.Stderr,
+			"Warning: idle-conns-per-host=%d is below the number of concurrent requests (%d), expect connection churn\n",
+			cargs.IdleConnsPerHost, inflight)
+	}
+}
+
+// max number of concurrent requests
+func (p *params) inflight() int {
+	if p.putPct > 0 && p.multipartChunks > 0 && p.multipartPct > 0 {
+		return p.numWorkers * p.multipartChunks
+	}
+	return p.numWorkers
 }
 
 func _parseSize(valueStr, name string, defaultVal int64) (int64, error) {
@@ -521,6 +546,10 @@ func (p *params) validate() error {
 	}
 	if p.updateExistingPct < 0 || p.updateExistingPct > 100 {
 		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.updateExistingPct)
+	}
+
+	if cargs.IdleConnsPerHost < 0 {
+		return fmt.Errorf("invalid option: idle-conns-per-host %d (must be >= 0)", cargs.IdleConnsPerHost)
 	}
 
 	if p.multipartChunks < 0 {

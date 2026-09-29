@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -670,9 +671,14 @@ func initS3Svc() error {
 			s3Profile = profile
 		}
 	}
+	httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(transport *http.Transport) {
+		transport.MaxIdleConnsPerHost = cargs.IdleConnsPerHost
+		transport.MaxIdleConns = cmn.DefaultMaxIdleConns
+	})
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
 		config.WithSharedConfigProfile(s3Profile),
+		config.WithHTTPClient(httpClient),
 	)
 	if err != nil {
 		return err
