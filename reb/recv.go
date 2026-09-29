@@ -410,9 +410,19 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	if moveTo != nil {
 		req.md.SliceID = md.SliceID
 		if errMv := reb.sendFromDisk(ct, req.md, moveTo, xreb, dm, workFQN); errMv != nil {
-			nlog.Errorln("failed to move slice to", moveTo, "[", errMv, "]")
+			// cannot broadcast updated MD - displaced slice is already assigned to the `moveTo` node
+			e := fmt.Errorf("failed to move slice to %s: %v", moveTo.StringEx(), errMv)
+			xreb.AddErr(e, 0, cos.ModReb)
+			return nil
+
+			// TODO recover from:
+			// - received slice and updated metadata have already been persisted;
+			// - that metadata references the displaced slice => moveTo;
+			// - the latter is actually workFQN at this point;
+			// - returning error leaves the local EC state inconsistent.
 		}
 	}
+
 	// broadcast updated MD. Count send failures, do not fail the receive.
 	ntfnMD := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID(), md: req.md, action: ecActUpdateMD}
 	nodes := req.md.RemoteTargets()
