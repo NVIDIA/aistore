@@ -70,6 +70,10 @@ func call(reqArgs *cmn.HreqArgs) response {
 	if err != nil {
 		return response{err: err, statusCode: http.StatusInternalServerError}
 	}
+	if err := cmn.CheckResp(resp, reqArgs.Method, reqArgs.Path); err != nil {
+		cos.Close(resp.Body)
+		return response{res: []byte(err.Error()), err: err, statusCode: resp.StatusCode}
+	}
 	out, err := cos.ReadAll(resp.Body)
 	cos.Close(resp.Body)
 	return response{res: out, err: err, statusCode: resp.StatusCode}

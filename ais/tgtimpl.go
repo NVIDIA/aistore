@@ -270,15 +270,13 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 	reqWith := req.WithContext(ctx)
 
 	resp, err := g.client.data.Do(reqWith)
+	if err == nil {
+		err = cmn.CheckResp(resp, reqWith.Method, reqWith.URL.Path)
+	}
 
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
 
-	if err == nil {
-		if code := resp.StatusCode; code >= http.StatusBadRequest {
-			err = &cmn.ErrHTTP{Message: http.StatusText(code), Status: code}
-		}
-	}
 	if err != nil {
 		if resp != nil && resp.Body != nil {
 			cos.DrainReader(resp.Body)

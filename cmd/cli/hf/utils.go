@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -143,7 +144,10 @@ func fetchFileSize(ctx context.Context, fileURL string, client *http.Client, aut
 	if err != nil {
 		return FileInfo{}, fmt.Errorf("failed to get file size for %s: %v", fileURL, err)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if err := cmn.CheckResp(resp, req.Method, req.URL.Path); err != nil {
+		return FileInfo{}, fmt.Errorf("failed to get file size for %s: %w", fileURL, err)
+	}
 
 	var size *int64
 	if resp.ContentLength >= 0 {

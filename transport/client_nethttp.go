@@ -78,6 +78,11 @@ func (s *base) _do(req *http.Request) error {
 		s.yelp(err)
 		return err
 	}
+	if err = cmn.CheckResp(resp, req.Method, req.URL.Path); err != nil {
+		resp.Body.Close()
+		s.yelp(err)
+		return err
+	}
 
 	// drain response & cleanup
 	_, err = io.Copy(io.Discard, resp.Body)

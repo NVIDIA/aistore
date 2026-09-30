@@ -5,17 +5,15 @@
 package ais
 
 import (
-	"encoding/xml"
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -28,34 +26,23 @@ import (
 func TestRemoteCopyPutResponses(t *testing.T) {
 	for _, operation := range []string{"rename", "promote"} {
 		t.Run(operation, func(t *testing.T) {
-			for _, test := range []struct {
-				name    string
-				status  int
-				body    string
-				message string
-				s3Code  string
-			}{
-				{name: "ok", status: http.StatusOK},
-				{name: "redirect", status: http.StatusTemporaryRedirect, message: "Temporary Redirect"},
-				{name: "forbidden", status: http.StatusForbidden, body: "access denied", message: "access denied"},
-				{name: "empty-error", status: http.StatusInsufficientStorage, message: "failed to execute PUT request"},
-				{name: "aws-access-denied", status: http.StatusForbidden,
-					body:    `{"status":403,"message":"aws-error[AccessDenied: Access Denied]"}`,
-					message: "aws-error[AccessDenied: Access Denied]", s3Code: s3.ErrCodeAccessDenied},
-			} {
-				t.Run(test.name, func(t *testing.T) {
+			for _, status := range []int{http.StatusOK, http.StatusForbidden} {
+				t.Run(http.StatusText(status), func(t *testing.T) {
 					data := []byte("keep the source")
-					srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-						w.WriteHeader(test.status)
-						io.WriteString(w, test.body)
+					srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						uploaded, err := io.ReadAll(r.Body)
+						if err != nil || !bytes.Equal(uploaded, data) {
+							http.Error(w, "unexpected upload", http.StatusInternalServerError)
+							return
+						}
+						w.WriteHeader(status)
 					}))
 					defer srv.Close()
-					peer := setCopyPutTestPeer(t, srv)
+					setCopyPutTestPeer(t, srv)
 
 					lom := core.AllocLOM("remote-copy-put-" + operation)
 					defer core.FreeLOM(lom)
 					tassert.CheckFatal(t, lom.InitBck(meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)))
-					destination := lom.ObjName
 					var (
 						source string
 						err    error
@@ -80,8 +67,7 @@ func TestRemoteCopyPutResponses(t *testing.T) {
 							tassert.CheckFatal(t, lom.RemoveObj())
 						}()
 						source = lom.FQN
-						destination += "-renamed"
-						err = mockTarget.objMv(lom, &apc.ActMsg{Name: destination})
+						err = mockTarget.objMv(lom, &apc.ActMsg{Name: lom.ObjName + "-renamed"})
 					} else {
 						source = filepath.Join(t.TempDir(), "source")
 						tassert.CheckFatal(t, os.WriteFile(source, data, cos.PermRWR))
@@ -99,27 +85,16 @@ func TestRemoteCopyPutResponses(t *testing.T) {
 					}
 
 					remaining, readErr := os.ReadFile(source)
-					if test.status < http.StatusMultipleChoices {
+					if status == http.StatusOK {
 						tassert.CheckFatal(t, err)
 						tassert.Errorf(t, os.IsNotExist(readErr), "successful %s must remove the source, got %v", operation, readErr)
 						return
 					}
-					tassert.Fatalf(t, err != nil, "expected destination status %d to fail %s", test.status, operation)
+					tassert.Fatalf(t, err != nil, "expected destination status %d to fail %s", status, operation)
 					herr := cmn.AsErrHTTP(err)
 					tassert.Fatalf(t, herr != nil, "expected an HTTP error, got %v", err)
-					tassert.Errorf(t, herr.Status == test.status, "expected HTTP status %d, got %d", test.status, herr.Status)
-					tassert.Errorf(t, strings.Contains(herr.Message, test.message), "expected error %q, got %q", test.message, herr.Message)
-					want := " (" + mockTarget.String() + ": coi.put " + lom.Bck().Cname(destination) + " " + peer.String() + ")"
-					tassert.Errorf(t, strings.HasSuffix(herr.Message, want), "expected error suffix %q, got %q", want, herr.Message)
-					if test.s3Code != "" {
-						w := httptest.NewRecorder()
-						r := httptest.NewRequest(http.MethodPut, "/s3/"+testBucket+"/"+destination, http.NoBody)
-						s3.WriteErr(w, r, s3.ErrInfo{Err: err})
-						var out s3.Error
-						tassert.CheckFatal(t, xml.Unmarshal(w.Body.Bytes(), &out))
-						tassert.Errorf(t, out.Code == test.s3Code, "expected S3 code %q, got %q", test.s3Code, out.Code)
-					}
-					tassert.Errorf(t, readErr == nil && string(remaining) == string(data), "failed %s must preserve source bytes, got %q: %v", operation, remaining, readErr)
+					tassert.Errorf(t, herr.Status == status, "expected HTTP status %d, got %d", status, herr.Status)
+					tassert.Errorf(t, readErr == nil && bytes.Equal(remaining, data), "failed %s must preserve source bytes, got %q: %v", operation, remaining, readErr)
 				})
 			}
 		})

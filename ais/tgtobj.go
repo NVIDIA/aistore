@@ -2202,9 +2202,6 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		err = cmn.NewErrFailedTo(t, "coi.put "+sargs.bckTo.Cname(sargs.objNameTo), sargs.tsi, err)
 	} else {
 		err = cmn.CheckResp(resp, req.Method, req.URL.Path)
-		if err == nil && resp.StatusCode >= http.StatusMultipleChoices {
-			err = cmn.NewErrHTTP(req, fmt.Errorf("unexpected PUT response: %s", resp.Status), resp.StatusCode)
-		}
 		if herr := cmn.AsErrHTTP(err); herr != nil {
 			herr.Message += " (" + t.String() + ": coi.put " + sargs.bckTo.Cname(sargs.objNameTo) + " " + sargs.tsi.String() + ")"
 		}

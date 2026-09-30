@@ -7,6 +7,7 @@
 package transport
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"net/http"
@@ -98,6 +99,16 @@ func (s *base) _do(body io.Reader, req *fasthttp.Request, resp *fasthttp.Respons
 	// do
 	err = s.client.Do(req, resp)
 	if err != nil {
+		s.yelp(err)
+		return err
+	}
+	if status := resp.StatusCode(); status >= http.StatusBadRequest {
+		b := resp.Body()
+		err = cmn.CheckResp(&http.Response{
+			StatusCode:    status,
+			ContentLength: int64(len(b)),
+			Body:          io.NopCloser(bytes.NewReader(b)),
+		}, http.MethodPut, string(req.URI().Path()))
 		s.yelp(err)
 		return err
 	}

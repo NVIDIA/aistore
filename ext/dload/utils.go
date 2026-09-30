@@ -250,6 +250,12 @@ func headLink(link string) (resp *http.Response, err error) {
 	if err == nil {
 		resp, err = clientForURL(link).Do(req)
 	}
+	if err == nil {
+		if err = cmn.CheckResp(resp, req.Method, req.URL.Path); err != nil {
+			cos.Close(resp.Body)
+			resp = nil
+		}
+	}
 	cancel()
 	return
 }

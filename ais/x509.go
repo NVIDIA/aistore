@@ -62,9 +62,7 @@ func (p *proxy) _x509call(si *meta.Snode, smap *smapX, client *http.Client) erro
 
 	resp, err := client.Do(req)
 	if err == nil {
-		if code := resp.StatusCode; code >= http.StatusBadRequest {
-			err = &cmn.ErrHTTP{Message: http.StatusText(code), Status: code}
-		}
+		err = cmn.CheckResp(resp, req.Method, req.URL.Path)
 	}
 	if resp != nil && resp.Body != nil {
 		cos.DrainReader(resp.Body)
