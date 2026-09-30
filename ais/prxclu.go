@@ -160,7 +160,19 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathXactions.S, Body: body, Query: query}
-	args.to = core.Targets
+	if xactMsg.DaemonID == "" {
+		args.to = core.Targets
+	} else {
+		args.smap = p.owner.smap.get()
+		tsi := args.smap.GetTarget(xactMsg.DaemonID)
+		if tsi == nil {
+			err := &errNodeNotFound{si: p.si, smap: args.smap, msg: "cannot query " + xactMsg.String(), id: xactMsg.DaemonID}
+			freeBcArgs(args)
+			p.writeErr(w, r, err)
+			return
+		}
+		args._selected(tsi)
+	}
 
 	var (
 		config      = cmn.GCO.Get()

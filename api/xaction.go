@@ -155,13 +155,14 @@ func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err 
 }
 
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
+// DaemonID, when specified, limits the query to that target.
 // NOTE: args.Kind can be either xaction kind or name - here and elsewhere
 func QueryXactionSnaps(bp BaseParams, args *xact.ArgsMsg) (xs xact.MultiSnap, err error) {
 	if err := _validateKindID(args, false /*need IC*/); err != nil {
 		return nil, err
 	}
 	var (
-		msg = xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
+		msg = xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck, DaemonID: args.DaemonID}
 		q   = qalloc()
 	)
 	if args.OnlyRunning {
@@ -263,6 +264,7 @@ func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error
 // Selection rules:
 //   - args.Kind is a filter: querying with a kind returns only that kind (server-side);
 //   - args.ID is a filter: querying with UUID returns only that UUID (server-side);
+//   - args.DaemonID selects the target for snapshot queries (server-side);
 //   - kind-only waits are valid (may match multiple UUIDs).
 //
 
