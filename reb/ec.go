@@ -186,7 +186,6 @@ func (*Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Reader,
 			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum, Xact: xreb}
 			err = ec.WriteReplicaAndMeta(lom, args)
 		}
-		core.FreeLOM(lom)
 	}
 
 	return err

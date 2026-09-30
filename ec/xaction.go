@@ -122,8 +122,7 @@ func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos
 
 // replica/full object request
 func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (cos.ReadOpenCloser, error) {
-	lom := core.AllocLOM(objName)
-	defer core.FreeLOM(lom)
+	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck); err != nil {
 		return nil, err
 	}
