@@ -338,6 +338,15 @@ func (oa *ObjAttrs) DelCustomKey(k string) {
 	delete(oa.CustomMD, k)
 }
 
+// SetContentType stores only non-default values.
+func (oa *ObjAttrs) SetContentType(v string) {
+	if IsDefaultContentType(v) {
+		oa.DelCustomKey(cos.HdrContentType)
+		return
+	}
+	oa.SetCustomKey(cos.HdrContentType, v)
+}
+
 // GET and HEAD responses: stored Content-Type, if any; otherwise cos.ContentBinary
 func (oa *ObjAttrs) ContentTypeToHeader(hdr http.Header) {
 	if v, ok := oa.GetCustomKey(cos.HdrContentType); ok && !IsDefaultContentType(v) {

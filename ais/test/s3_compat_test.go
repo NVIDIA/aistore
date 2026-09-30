@@ -20,6 +20,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -117,6 +118,22 @@ func (*addGetBodyMiddleware) HandleFinalize(ctx context.Context, in middleware.F
 		}
 	}
 	return next.HandleFinalize(ctx, in)
+}
+
+func removeGeneratedContentType(stack *middleware.Stack) error {
+	removeDefault := middleware.SerializeMiddlewareFunc("RemoveGeneratedContentType", func(
+		ctx context.Context, in middleware.SerializeInput, next middleware.SerializeHandler,
+	) (middleware.SerializeOutput, middleware.Metadata, error) {
+		request, ok := in.Request.(*smithyhttp.Request)
+		if !ok {
+			return middleware.SerializeOutput{}, middleware.Metadata{}, fmt.Errorf("unexpected request type %T", in.Request)
+		}
+		if smithyhttp.GetIsContentTypeDefaultValue(ctx) {
+			request.Header.Del(cos.HdrContentType)
+		}
+		return next.HandleSerialize(ctx, in)
+	})
+	return stack.Serialize.Insert(removeDefault, "OperationSerializer", middleware.After)
 }
 
 func newCustomTransport(pathStyle bool) *customTransport {
@@ -910,6 +927,136 @@ func TestS3ObjMetadataLocal(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		verifyMetadata(t, objName)
 	})
+}
+
+func TestS3ContentTypeGCP(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck, RequiredCloudProvider: apc.GCP})
+
+	var (
+		bck      = cliBck
+		s3Client = s3.New(s3.Options{
+			HTTPClient:   newS3Client(true /*pathStyle*/),
+			Region:       env.AwsDefaultRegion(),
+			BaseEndpoint: aws.String(proxyURL),
+			UsePathStyle: true,
+			Credentials:  getS3Credentials(t),
+		}, func(options *s3.Options) {
+			options.APIOptions = append(options.APIOptions, func(stack *middleware.Stack) error {
+				return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
+			})
+		})
+	)
+
+	checkNativeGET := func(t *testing.T, objName, contentType string) {
+		oah, err := api.GetObject(baseParams, bck, objName, nil)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, oah.RespHeader().Get(cos.HdrContentType) == contentType,
+			"native GET Content-Type: expected %q, got %q", contentType, oah.RespHeader().Get(cos.HdrContentType))
+	}
+	checkNativeHEAD := func(t *testing.T, objName, contentType string, latest, present bool) {
+		u, err := url.Parse(baseParams.URL + apc.URLPathObjects.Join(bck.Name, objName))
+		tassert.CheckFatal(t, err)
+		q := u.Query()
+		bck.SetQuery(q)
+		if latest {
+			q.Set(apc.QparamLatestVer, "true")
+		}
+		q.Set(apc.QparamProps, apc.GetPropsNameSize)
+		u.RawQuery = q.Encode()
+
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodHead, u.String(), http.NoBody)
+		tassert.CheckFatal(t, err)
+		api.SetAuxHeaders(req, &baseParams)
+		resp, err := baseParams.Client.Do(req)
+		tassert.CheckFatal(t, err)
+		defer resp.Body.Close()
+		tassert.Errorf(t, resp.StatusCode == http.StatusOK, "native HEAD status: expected %d, got %d", http.StatusOK, resp.StatusCode)
+		tassert.Errorf(t, resp.Header.Get(cmn.PropToHeader("present")) == strconv.FormatBool(present),
+			"native HEAD present: expected %t, got %q", present, resp.Header.Get(cmn.PropToHeader("present")))
+		tassert.Errorf(t, resp.Header.Get(cos.HdrContentType) == contentType,
+			"native HEAD Content-Type: expected %q, got %q", contentType, resp.Header.Get(cos.HdrContentType))
+	}
+	checkS3GET := func(t *testing.T, objName, contentType string) {
+		out, err := s3Client.GetObject(t.Context(), &s3.GetObjectInput{Bucket: aws.String(bck.Name), Key: aws.String(objName)})
+		tassert.CheckFatal(t, err)
+		_, copyErr := io.Copy(io.Discard, out.Body)
+		closeErr := out.Body.Close()
+		tassert.CheckFatal(t, copyErr)
+		tassert.CheckFatal(t, closeErr)
+		tassert.Errorf(t, out.ContentType != nil && *out.ContentType == contentType,
+			"S3 GET Content-Type: expected %q, got %v", contentType, out.ContentType)
+	}
+	checkS3HEAD := func(t *testing.T, objName, contentType string) {
+		out, err := s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String(bck.Name), Key: aws.String(objName)})
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, out.ContentType != nil && *out.ContentType == contentType,
+			"S3 HEAD Content-Type: expected %q, got %v", contentType, out.ContentType)
+	}
+
+	const payload = "content-type round trip"
+	tests := []struct {
+		name, contentType, expected string
+		omitContentType             bool
+	}{
+		{name: "Custom", contentType: "application/x-aistore-content-type-test", expected: "application/x-aistore-content-type-test"},
+		{name: "ExplicitDefault", contentType: cos.ContentBinary, expected: cos.ContentBinary},
+		{name: "Absent", expected: http.DetectContentType([]byte(payload)), omitContentType: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				objName     = "content-type-" + trand.String(8)
+				body        = strings.NewReader(payload)
+				contentType *string
+				options     []func(*s3.Options)
+			)
+			if test.contentType != "" {
+				contentType = aws.String(test.contentType)
+			}
+			if test.omitContentType {
+				// The SDK supplies application/octet-stream when ContentType is nil.
+				// Remove that generated value to exercise a truly absent wire header.
+				options = append(options, func(options *s3.Options) {
+					options.APIOptions = append(options.APIOptions, removeGeneratedContentType)
+				})
+			}
+
+			_, err := s3Client.PutObject(t.Context(), &s3.PutObjectInput{
+				Bucket: aws.String(bck.Name), Key: aws.String(objName), Body: body,
+				ContentLength: aws.Int64(int64(body.Len())), ContentType: contentType,
+			}, options...)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { _ = api.DeleteObject(baseParams, bck, objName) })
+
+			t.Run("Warm", func(t *testing.T) {
+				checkS3HEAD(t, objName, test.expected)
+				checkNativeHEAD(t, objName, test.expected, false /*latest*/, true /*present*/)
+				checkNativeHEAD(t, objName, test.expected, true /*latest*/, true /*present*/)
+				checkNativeGET(t, objName, test.expected)
+			})
+
+			tassert.CheckFatal(t, api.EvictObject(baseParams, bck, objName))
+			t.Run("ColdHEAD", func(t *testing.T) {
+				// Native HEAD only emits Content-Type for an in-cluster object.
+				checkNativeHEAD(t, objName, "", false /*latest*/, false /*present*/)
+				checkNativeHEAD(t, objName, "", true /*latest*/, false /*present*/)
+				checkS3HEAD(t, objName, test.expected) // remote HEAD does not cache the object
+			})
+
+			t.Run("ColdNativeGET", func(t *testing.T) {
+				checkNativeGET(t, objName, test.expected)
+				checkNativeHEAD(t, objName, test.expected, false /*latest*/, true /*present*/)
+				checkS3GET(t, objName, test.expected) // warm after the native cold GET
+			})
+
+			tassert.CheckFatal(t, api.EvictObject(baseParams, bck, objName))
+			t.Run("ColdS3GET", func(t *testing.T) {
+				checkS3GET(t, objName, test.expected)
+				checkNativeHEAD(t, objName, test.expected, false /*latest*/, true /*present*/)
+				checkNativeGET(t, objName, test.expected) // warm after the S3 cold GET
+			})
+		})
+	}
 }
 
 // export AWS_PROFILE=default; export AIS_ENDPOINT="http://localhost:8080"; export BUCKET="aws://..."; go test -v -run="TestS3ObjMetadata" -count=1 ./ais/test/.

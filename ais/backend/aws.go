@@ -424,7 +424,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		oa.SetCustomKey(k, v)
 	}
 
-	setContentType(oa, headOutput.ContentType)
+	oa.SetContentType(aws.ToString(headOutput.ContentType))
 	if v := headOutput.LastModified; v != nil {
 		mtime := *(headOutput.LastModified)
 		if oa.Atime == 0 {
@@ -550,7 +550,7 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 	for k, v := range h.EncodeMetadata(obj.Metadata) {
 		lom.SetCustomKey(k, v)
 	}
-	setContentType(lom.ObjAttrs(), obj.ContentType)
+	lom.ObjAttrs().SetContentType(aws.ToString(obj.ContentType))
 	mtime := *(obj.LastModified)
 
 	// double down
@@ -1001,13 +1001,4 @@ func _awsPresignedStatus(resp *aiss3.PresignedResp) int {
 		return 0
 	}
 	return resp.StatusCode
-}
-
-// store non-default value; see also cmn.ObjAttrs.ContentTypeToHeader
-func setContentType(oa *cmn.ObjAttrs, v *string) {
-	if v == nil || cmn.IsDefaultContentType(*v) {
-		oa.DelCustomKey(cos.HdrContentType)
-		return
-	}
-	oa.SetCustomKey(cos.HdrContentType, *v)
 }

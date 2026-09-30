@@ -328,9 +328,7 @@ func (gsbp *gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 
 	oa.SetCustomKey(cos.HdrLastModified, fmtHdrTime(attrs.Updated))
 
-	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
-	// - only shown via list-objects and HEAD when not present
-	oa.SetCustomKey(cos.HdrContentType, attrs.ContentType)
+	oa.SetContentType(attrs.ContentType)
 	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
@@ -449,6 +447,7 @@ func gcpSetCustom(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksu
 
 	lom.SetCustomKey(cmn.LsoLastModified, fmtLsoTime(attrs.Updated))
 	lom.SetCustomKey(cos.HdrLastModified, fmtHdrTime(attrs.Updated))
+	lom.ObjAttrs().SetContentType(attrs.ContentType)
 
 	return expCksum
 }
@@ -472,6 +471,9 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 	wc.Metadata = map[string]string{
 		gcpChecksumType: cksumType,
 		gcpChecksumVal:  cksumVal,
+	}
+	if v, ok := lom.GetCustomKey(cos.HdrContentType); ok {
+		wc.ContentType = v
 	}
 
 	buf, slab := gsbp.t.PageMM().Alloc()
