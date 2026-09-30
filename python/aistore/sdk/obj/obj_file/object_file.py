@@ -83,45 +83,37 @@ class ObjectFileReader(BufferedIOBase):
             raise ValueError("I/O operation on closed file.")
         if size == 0:
             return b""
-        if size is None:
-            size = -1
-
-        # Maximum possible size if size is negative
-        size = sys_maxsize if size < 0 else size
-
-        result = []
+        if size is None or size < 0:
+            size = sys_maxsize
 
         try:
-            # Consume any remaining data from a previous chunk before fetching new data
-            if self._remainder:
-                if size < len(self._remainder):
-                    result.append(self._remainder[:size])
-                    self._remainder = self._remainder[size:]
-                    size = 0
-                else:
-                    result.append(self._remainder)
-                    size -= len(self._remainder)
-                    self._remainder = None
-
-            # Fetch new chunks from the stream as needed
-            while size:
+            chunk = self._remainder
+            if not chunk:
                 chunk = next(self._stream, None)
                 if chunk is None:
-                    break
+                    return b""
 
-                # Add the part of the chunk that fits within the requested size and
-                # store any leftover data for the next read
-                if size < len(chunk):
-                    result.append(chunk[:size])
-                    self._remainder = chunk[size:]
-                    size = 0
-                else:
-                    result.append(chunk)
-                    self._remainder = None
-                    size -= len(chunk)
+            chunk_size = len(chunk)
+            if size < chunk_size:
+                self._remainder = chunk[size:]
+                return bytes(chunk[:size])
+
+            self._remainder = None
+            if size == chunk_size:
+                # A full view of plain bytes needs no additional copy.
+                data = chunk.obj
+                if (
+                    type(data) is bytes  # pylint: disable=unidiomatic-typecheck
+                    and chunk_size == len(data)
+                    and chunk.c_contiguous
+                ):
+                    return data
+                return bytes(chunk)
+
+            size -= chunk_size
+            result = self._read_chunks(chunk, size)
 
         except Exception as err:
-            # Handle any unexpected errors, log them with context, close the file, and re-raise
             logger.error(
                 "Error while reading object at '%s': %s. Closing file.",
                 self._stream.path,
@@ -131,8 +123,24 @@ class ObjectFileReader(BufferedIOBase):
             self.close()
             raise err
 
-        # Assemble the final bytes object with a single data copy
         return b"".join(result)
+
+    def _read_chunks(self, first_chunk: memoryview, size: int) -> list[memoryview]:
+        """Collect the first chunk and up to size additional bytes, buffering any excess."""
+        result = [first_chunk]
+        while size:
+            chunk = next(self._stream, None)
+            if chunk is None:
+                break
+
+            chunk_size = len(chunk)
+            if size < chunk_size:
+                result.append(chunk[:size])
+                self._remainder = chunk[size:]
+                break
+            result.append(chunk)
+            size -= chunk_size
+        return result
 
     @override
     def close(self) -> None:

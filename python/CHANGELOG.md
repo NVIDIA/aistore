@@ -18,6 +18,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- Reduced per-chunk bookkeeping in `ResumableStream` and avoided list/join
+  overhead for `ObjectFileReader` reads satisfied by one chunk, reusing whole
+  immutable byte buffers without copying.
 - `ObjectFileWriter` uses `io.BufferedIOBase` so inherited file methods work
   correctly. Update explicit `BufferedWriter` type checks to `BufferedIOBase`.
   Unclosed writers emit `ResourceWarning` without sending requests.
