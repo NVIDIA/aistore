@@ -4,6 +4,15 @@ All notable changes to the AIStore Python SDK project are documented in this fil
 
 We structure this changelog in accordance with [Keep a Changelog](https://keepachangelog.com/) guidelines, and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Data transfers
+
+- Recover `ObjectFileReader` streams from raw connection-reset, connection-aborted,
+  and broken-pipe errors in addition to the existing Requests and urllib3 errors.
+- Changed `as_file(max_resume=...)` to limit consecutive interruptions without
+  forward progress instead of counting all interruptions over a file's lifetime.
+
 ## [2.0.0] - 2026-09-28
 
 This major release unifies object metadata APIs, removes deprecated ETL

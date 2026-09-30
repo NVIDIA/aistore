@@ -119,8 +119,8 @@ class ObjectReader:
         Args:
             buffer_size (int, optional): Currently unused; retained for backward compatibility and future
                                          enhancements.
-            max_resume (int, optional): Total number of retry attempts allowed to resume the stream in case of
-                                        interruptions. Defaults to 5.
+            max_resume (int, optional): Maximum consecutive interruptions without
+                forward progress. Defaults to 5; the allowance resets after new data arrives.
 
         Returns:
             BufferedIOBase: A read-only, non-seekable file-like object for streaming object content.

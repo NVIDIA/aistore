@@ -33,7 +33,11 @@ with obj.get_reader().as_file(max_resume=5) as file:
     file.read() # Or read until EOF
 ```
 
-During each `read` operation, `ObjectFile` will attempt to resume a disconnected stream up to 5 times in the above example. On each attempt to resume, the client will use the retry logic configured with the provided [urllib3.Retry](https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html#urllib3.util.Retry) object. 
+`ObjectFile` will attempt to resume a disconnected stream up to 5 consecutive times
+without receiving new data in the above example. Successful forward progress resets
+this allowance, so intermittent interruptions over a long object do not exhaust it.
+On each attempt to resume, the client will use the retry logic configured with the
+provided [urllib3.Retry](https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html#urllib3.util.Retry) object.
 
 > _See the AIS Python docs for a [full example](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/resilient-streaming-object-file.ipynb)._
 
@@ -92,7 +96,7 @@ with client.bucket(BUCKET_NAME).object(OBJECT_NAME).get_reader().as_file(max_res
         print(row)
 ```
 
-In both cases, the `file_obj` ensures that streaming continues smoothly, even in the event of interruptions. The `max_resume` parameter dictates how many times each `read` operation (called internally by libraries like `csv`, `tarfile`, or similar) is allowed to resume following an interruption.
+In both cases, the `file_obj` ensures that streaming continues smoothly, even in the event of interruptions. The `max_resume` parameter limits consecutive interruptions without forward progress, including across `read` calls made internally by libraries like `csv` and `tarfile`.
 
 ## Future Work
 
@@ -135,4 +139,3 @@ Easy integration with existing workflows and familiar file-like behavior makes `
 - [Python BufferedIOBase](https://docs.python.org/3/library/io.html#io.BufferedIOBase)
 - [Requests Library Streams](https://requests.readthedocs.io/en/latest/user/advanced/#body-content-workflow)
 - [Urllib3 Retry Utility](https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html#urllib3.util.Retry)
-

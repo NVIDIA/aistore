@@ -26,9 +26,15 @@ STREAM_ERRORS = (
     ProtocolError,
     ReadTimeout,
     ReadTimeoutError,
+    ConnectionResetError,
+    ConnectionAbortedError,
+    BrokenPipeError,
 )
 
 
+# Both the lifetime and consecutive resume counts are needed: callers report the
+# former, while the latter bounds retries without forward progress.
+# pylint: disable=too-many-instance-attributes
 class ResumableStream:
     """
     Delivers an object's bytes in chunks, replacing the underlying stream whenever it
@@ -37,7 +43,7 @@ class ResumableStream:
     Args:
         content_provider (BaseContentIterProvider): A provider that creates iterators which
             can fetch object data from AIS in chunks.
-        max_resume (int): Maximum number of resumes allowed for a single pass over the object.
+        max_resume (int): Maximum consecutive resumes without delivering new data.
     """
 
     def __init__(self, content_provider: BaseContentIterProvider, max_resume: int):
@@ -50,6 +56,7 @@ class ResumableStream:
         self._delivered_position = 0
         self._stream_consumed = 0
         self._resumes = 0
+        self._consecutive_resumes = 0
         self.restart()
 
     @property
@@ -84,6 +91,7 @@ class ResumableStream:
         self._open()
         self._delivered_position = 0
         self._resumes = 0
+        self._consecutive_resumes = 0
 
     def _open(self, offset: int = 0) -> None:
         self.close()
@@ -138,18 +146,23 @@ class ResumableStream:
                     continue
 
             self._delivered_position += len(chunk)
+            if chunk:
+                self._consecutive_resumes = 0
             return chunk
 
     def _resume(self, err: Exception) -> None:
         self._resumes += 1
-        if self._resumes > self._max_resume:
-            raise ObjectFileReaderMaxResumeError(err, self._resumes) from err
+        self._consecutive_resumes += 1
+        if self._consecutive_resumes > self._max_resume:
+            raise ObjectFileReaderMaxResumeError(
+                err, self._consecutive_resumes
+            ) from err
 
         logger.warning(
             "Resuming '%s' after %s (%d/%d)",
             self.path,
             err,
-            self._resumes,
+            self._consecutive_resumes,
             self._max_resume,
         )
 
