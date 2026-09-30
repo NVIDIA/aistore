@@ -345,7 +345,7 @@ func (d *Snode) IsTarget() bool { return d.DaeType == apc.Target }
 
 // node flags
 func (d *Snode) InMaintOrDecomm() bool { return d.Flags.IsAnySet(SnodeMaintDecomm) }
-func (d *Snode) InMaint() bool         { return d.Flags.IsAnySet(SnodeMaint) }
+func (d *Snode) InMaint() bool         { return d.Flags.IsSet(SnodeMaint) }
 func (d *Snode) InMaintPostReb() bool {
 	return d.Flags.IsSet(SnodeMaint) && d.Flags.IsSet(SnodeMaintPostReb)
 }

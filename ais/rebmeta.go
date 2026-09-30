@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -68,7 +69,8 @@ type (
 		rebID string // cluster-wide rebalance ID, "g[uuid]" in the logs
 		cluID string // cluster ID (== smap.UUID) - never changes
 
-		wait bool
+		wait    bool
+		limited bool // cleanup mode or limited-scope (bucket[/prefix]) - not a full rebalance
 	}
 )
 
@@ -251,6 +253,10 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 		notifiers meta.NodeMap
 		action    = m.smapCtx.msg.Action
 	)
+
+	// left in maintenance w/out post-rebalance
+	maint := _bareMaint(m.smapCtx.smap)
+
 	switch action {
 	case apc.ActSelfJoinTarget:
 		// manually add joining target to notifiers
@@ -282,6 +288,15 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 			}
 		}
 	}
+	if len(maint) > 0 {
+		if notifiers == nil {
+			notifiers = m.smapCtx.smap.Tmap.ActiveMap()
+		}
+		for _, tsi := range maint {
+			notifiers[tsi.ID()] = tsi
+		}
+	}
+
 	//
 	// construct notification listener and start listening (in prxnotif)
 	//
@@ -289,9 +304,14 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	nl = nl.WithCause(action)
 	nl.SetOwner(equalIC)
 
-	nl.F = m.log
+	f := m.log
 	if cb != nil {
-		nl.F = cb
+		f = cb
+	}
+	if len(maint) == 0 {
+		nl.F = f
+	} else {
+		nl.F = m.withCompleteMaint(f, maint)
 	}
 
 	for _, tsi := range tsis {
@@ -299,6 +319,9 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 		// - the target is excluded from nl.ActiveSrsc via NewNLB=>ActiveSrcs=>ActiveMap() construction
 		// - add it back
 		nl.ActiveSrcs[tsi.ID()] = tsi
+	}
+	for _, tsi := range maint {
+		nl.ActiveSrcs[tsi.ID()] = tsi // ditto
 	}
 	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infoln("rmd.listen:", action, "nodes:", m.smapCtx.nodeIDs(),
@@ -368,6 +391,58 @@ func (m *rmdModifier) postRm(nl nl.Listener) {
 	//
 	// TODO: bcast targets to re-rebalance for the same `m.rebID` iff there isn't a new one that's running or about to run
 	//
+}
+
+// targets in maintenance mode w/out post-rebalance - transition interrupted:
+// - rebalance renewed or aborted, or
+// - completed w/ --no-rebalance
+// see: "Incomplete Transitions" in docs/lifecycle_node.md
+func _bareMaint(smap *smapX) (maint meta.Nodes) {
+	for _, tsi := range smap.Tmap {
+		if tsi.Flags.IsAnySet(meta.SnodeMaintPostReb | meta.SnodeDecomm) {
+			continue
+		}
+		if tsi.Flags.IsSet(meta.SnodeMaint) { // same as tsi.InMaint()
+			maint = append(maint, tsi)
+		}
+	}
+	return maint
+}
+
+func (m *rmdModifier) withCompleteMaint(f func(nl.Listener), maint meta.Nodes) func(nl.Listener) {
+	return func(nl nl.Listener) {
+		f(nl)
+		m.completeMaint(nl, maint)
+	}
+}
+
+// upon full and successful global rebalance (that is, not renewed, not aborted,
+// no errors, and not limited in scope): complete maintenance transition for all
+// participating bare-maintenance targets
+func (m *rmdModifier) completeMaint(nl nl.Listener, maint meta.Nodes) {
+	const tag = "complete-maint-post-reb:"
+	if m.limited || nl.ErrCnt() > 0 || nl.IsAborted() {
+		return
+	}
+	p := m.p
+	sids := make([]string, 0, len(maint))
+	for _, tsi := range maint {
+		sids = append(sids, tsi.ID())
+	}
+	msg := &apc.ActMsg{Action: apc.ActStartMaintenance}
+	val := &apc.ActValRmNode{}
+	val.SetIDs(sids...)
+	msg.Value = val
+
+	ctx := &smapModifier{
+		pre:   func(ctx *smapModifier, clone *smapX) error { return p._completeMaintPostReb(ctx, clone, m) },
+		final: p._syncFinal,
+		sids:  sids,
+		msg:   msg,
+	}
+	if err := p.owner.smap.modify(ctx); err != nil && !errors.Is(err, errSmapNoChange) {
+		nlog.Warningln(p.String(), tag, "rebalance["+nl.UUID()+"]", sids, err)
+	}
 }
 
 func (m *rmdModifier) log(nl nl.Listener) {

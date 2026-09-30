@@ -387,6 +387,38 @@ func (p *proxy) _markMaintPostReb(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
+// (see rmdModifier.completeMaint)
+// under lock: skip targets that meanwhile left the Smap, or moved on
+// (stop-maintenance, decommission, already post-rebalance)
+func (p *proxy) _completeMaintPostReb(ctx *smapModifier, clone *smapX, m *rmdModifier) error {
+	if !clone.isPrimary(p.si) {
+		return errSmapNoChange
+	}
+	if m.cur.Version != p.owner.rmd.get().Version || m.cur.CluID != clone.UUID {
+		return errSmapNoChange // superseded, checked under the Smap lock
+	}
+	var names []string
+	for _, sid := range ctx.sids {
+		tsi := clone.GetTarget(sid)
+		original := m.smapCtx.smap.GetTarget(sid)
+		if tsi == nil || original == nil || !original.SameIncarnation(tsi) {
+			continue
+		}
+		if tsi.Flags.IsAnySet(meta.SnodeMaintPostReb | meta.SnodeDecomm) {
+			continue
+		}
+		if tsi.Flags.IsSet(meta.SnodeMaint) { // same as tsi.InMaint()
+			clone.setNodeFlags(sid, meta.SnodeMaintPostReb)
+			names = append(names, tsi.StringEx())
+		}
+	}
+	if len(names) == 0 {
+		return errSmapNoChange
+	}
+	nlog.Infoln(p.String(), "post-rebalance: completing maintenance for", names)
+	return nil
+}
+
 func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
 	if ctx.skipReb {
 		return

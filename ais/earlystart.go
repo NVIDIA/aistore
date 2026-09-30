@@ -706,7 +706,8 @@ until:
 		actMsgExt = p.newAmsg(msg, nil)
 		ctx       = &rmdModifier{
 			pre:     func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
-			smapCtx: &smapModifier{smap: smap},
+			smapCtx: &smapModifier{smap: smap, msg: msg},
+			p:       p,
 			cluID:   smap.UUID,
 		}
 	)
@@ -714,6 +715,7 @@ until:
 	if err != nil {
 		cos.ExitLog(err)
 	}
+	ctx.listen(nil)
 	wg := p.metasyncer.sync(revsPair{rmd, actMsgExt})
 
 	p.owner.rmd.starting.Store(false) // done

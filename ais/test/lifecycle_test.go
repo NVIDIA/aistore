@@ -67,7 +67,11 @@ func TestMaintenanceMixedBatch(t *testing.T) {
 		pCnt = smap.CountActivePs()
 		tCnt = smap.CountActiveTs()
 	)
-	nodes := lcSelectTargets(t, 2)
+	count := 2
+	if tCnt >= 4 {
+		count++ // an unselected pending target must also complete
+	}
+	nodes := lcSelectTargets(t, count)
 	a, b := nodes[0], nodes[1]
 	sids := lcIDs(nodes)
 	restored := false
@@ -87,12 +91,17 @@ func TestMaintenanceMixedBatch(t *testing.T) {
 		smap.Version, pCnt, tCnt-1)
 	tassert.CheckFatal(t, err)
 	lcAssertMaint(t, smap, a.ID(), false /*postReb*/)
+	if len(nodes) > 2 {
+		rebID, err = lcStartMaintNoReb(bp, nodes[2].ID())
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, rebID == "", "start-maintenance --no-rebalance returned %q", rebID)
+	}
 
 	rebID = armStartMaint(t, bp, a.ID(), b.ID())
 	tools.WaitForRebalanceByID(t, bp, rebID)
 	smap = lcWaitMaintPostReb(t, bp, sids...)
-	tassert.Errorf(t, smap.CountActiveTs() == tCnt-2,
-		"expected %d active targets after batch maintenance, got %d", tCnt-2, smap.CountActiveTs())
+	tassert.Errorf(t, smap.CountActiveTs() == tCnt-len(nodes),
+		"expected %d active targets after batch maintenance, got %d", tCnt-len(nodes), smap.CountActiveTs())
 
 	restored = lcRestore(t, bp, sids)
 	if !restored {
@@ -105,6 +114,100 @@ func TestMaintenanceMixedBatch(t *testing.T) {
 		tassert.Errorf(t, smap.GetActiveNode(sid) != nil,
 			"%s is not active in %s", meta.Tname(sid), smap.StringEx())
 	}
+}
+
+// scenario: a target left in maintenance w/out post-rebalance (via --no-rebalance)
+// - participates in every subsequent global rebalance as a sender
+// - first such rebalance that is full and successful must complete its transition
+func TestMaintenanceCompletedByRebalance(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 3})
+
+	var (
+		bck = cmn.Bck{Name: "lc-complete-by-reb", Provider: apc.AIS}
+		m   = &ioContext{
+			t:         t,
+			num:       lcNumObjs,
+			fileSize:  lcObjSize,
+			fixedSize: true,
+			bck:       bck,
+			silent:    true,
+		}
+		bp = tools.BaseAPIParams(proxyURL)
+	)
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	m.puts()
+
+	var (
+		smap = tools.GetClusterMap(t, proxyURL)
+		pCnt = smap.CountActivePs()
+		tCnt = smap.CountActiveTs()
+	)
+	// Keep two active targets for cleanup; exercise multiple pending transitions
+	// when the cluster has at least four targets.
+	nodes := lcSelectTargets(t, min(2, tCnt-2))
+	sids := lcIDs(nodes)
+	restored := false
+	defer func() {
+		if !restored {
+			tools.WaitForRebalAndResil(t, bp)
+			lcRestore(t, bp, sids)
+		}
+		ensureMembershipAdmits(t, bp)
+	}()
+
+	// 1. maintenance w/out post-rebalance
+	rebID, err := lcStartMaintNoReb(bp, sids...)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, rebID == "", "start-maintenance --no-rebalance returned %q", rebID)
+	smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance (no rebalance)",
+		smap.Version, pCnt, tCnt-len(nodes))
+	tassert.CheckFatal(t, err)
+	for _, sid := range sids {
+		lcAssertMaint(t, smap, sid, false /*postReb*/)
+	}
+
+	// 2. cleanup mode: not a migration - must not complete the transition
+	tlog.Logfln("Cleanup-mode rebalance must not complete maintenance of %v", sids)
+	lcRunCleanup(t, bp)
+	lcEnsureNoPostReb(t, bp, sids...)
+
+	// 3. bucket/prefix-scoped: not a full rebalance - ditto
+	for _, prefix := range []string{m.objNames[0], ""} {
+		tlog.Logfln("Scoped rebalance (%s/%s) must not complete maintenance of %v", bck, prefix, sids)
+		rebID, err = api.StartXaction(bp, &xact.ArgsMsg{Kind: apc.ActRebalance, Bck: bck}, prefix)
+		tassert.CheckFatal(t, err)
+		tools.WaitForRebalanceByID(t, bp, rebID)
+		lcEnsureNoPostReb(t, bp, sids...)
+	}
+
+	// 4. full and successful global rebalance completes it
+	tlog.Logfln("Full rebalance must complete maintenance of %v", sids)
+	rebID, err = lcStartRebalance(bp)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, rebID != "", "explicit rebalance did not start")
+	tools.WaitForRebalanceByID(t, bp, rebID)
+	smap = lcWaitMaintPostReb(t, bp, sids...)
+	tassert.Errorf(t, smap.CountActiveTs() == tCnt-len(nodes),
+		"expected %d active targets, got %d", tCnt-len(nodes), smap.CountActiveTs())
+
+	// all objects must be served while the target remains in maintenance
+	m.gets(nil, true /*withValidation*/)
+	m.ensureNoGetErrors()
+
+	// 5. repeat start-maintenance on a completed target is a no-op
+	smap1 := tools.GetClusterMap(t, proxyURL)
+	rebID, err = lcStartMaint(bp, sids...)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, rebID == "", "expected a no-op, got rebalance[%s]", rebID)
+	smap2 := tools.GetClusterMap(t, proxyURL)
+	tassert.Errorf(t, smap1.Version == smap2.Version,
+		"expected Smap v%d unchanged, got v%d", smap1.Version, smap2.Version)
+
+	restored = lcRestore(t, bp, sids)
+	tassert.Fatalf(t, restored, "failed to restore %v", sids)
+	m.waitAndCheckCluState()
+	ensureNoRunningReb(t, bp)
 }
 
 // TestLifecycleBatchShutdown verifies that a two-target shutdown is finalized
@@ -556,6 +659,25 @@ func lcWaitMaintPostReb(t *testing.T, bp api.BaseParams, sids ...string) *meta.S
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for post-rebalance maintenance on %v in %s",
 				sids, smap.StringEx())
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+// post-rebalance completion may lag behind the rebalance status reported as finished
+// - hence the grace
+func lcEnsureNoPostReb(t *testing.T, bp api.BaseParams, sids ...string) {
+	t.Helper()
+	const grace = 5 * time.Second
+	deadline := time.Now().Add(grace)
+	for {
+		smap, err := api.GetClusterMap(bp)
+		tassert.CheckFatal(t, err)
+		for _, sid := range sids {
+			lcAssertMaint(t, smap, sid, false /*postReb*/)
+		}
+		if t.Failed() || time.Now().After(deadline) {
+			return
 		}
 		time.Sleep(time.Second)
 	}

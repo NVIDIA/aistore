@@ -280,8 +280,8 @@ Either way, the target is in maintenance and out of service. The operator can:
 * run `stop-maintenance` to clear maintenance and return the target to service, with rebalance as
   required;
 * advance the target to `shutdown` or `decommission`; or
-* leave it in maintenance. An explicit `ais start rebalance` can restore global data placement, but does
-  not itself complete the transition.
+* leave it in maintenance. The next full global rebalance that completes successfully completes the
+  transition (see below).
 
 > Such a target specified together with an active one follows the normal batch path. With automatic
 > rebalance enabled and without `--no-rebalance`, that batch rebalances, and its post-rebalance step
@@ -290,6 +290,15 @@ Either way, the target is in maintenance and out of service. The operator can:
 > Specifying it together with a target that has already completed the transition changes nothing: the
 > completed target is skipped, and the command behaves as if only the incomplete one had been
 > specified.
+
+Every AIS target in the cluster map, including targets in maintenance, participates in a global rebalance, sending
+out the data it stores. But what if the maintenance-triggered global rebalance gets interrupted or fails - for any reason?
+
+Well, if this is the case, a subsequent global rebalance that runs to completion - not renewed, not
+aborted, and with no errors reported by any participating target - marks all such targets post-rebalance. This
+applies to rebalance triggered by another membership change (e.g., a target joining the cluster) and to an
+explicit `ais start rebalance`, but not to rebalance in cleanup mode (`--cleanup`) and not to rebalance limited
+to a given bucket.
 
 ### Skipping Rebalance
 

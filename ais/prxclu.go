@@ -893,7 +893,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			// expected locations
 			cleanup = true
 		}
-		p.rebalanceCluster(w, r, msg, cleanup)
+		p.rebalanceCluster(w, r, msg, cleanup, !xargs.Bck.IsEmpty())
 		return
 	}
 
@@ -1084,7 +1084,7 @@ func (p *proxy) reloadCreds(w http.ResponseWriter, r *http.Request, msg *apc.Act
 }
 
 // admin call
-func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, cleanup bool) {
+func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, cleanup, scoped bool) {
 	// disallow admin-initiated rebalance when membership change is in progress, and vice versa
 	action := apc.ActRebalance
 	if cleanup {
@@ -1118,6 +1118,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *ap
 		final:   rmdSync,
 		p:       p,
 		smapCtx: &smapModifier{smap: smap, msg: msg},
+		limited: cleanup || scoped,
 	}
 	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
 		p.writeErr(w, r, err)
