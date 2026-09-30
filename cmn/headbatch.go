@@ -53,11 +53,7 @@ func (req *HdbReq) Validate() error {
 	if len(req.In) > apc.HdbSizeMax {
 		return fmt.Errorf(tag+": too many items (%d), expecting at most %d", len(req.In), apc.HdbSizeMax)
 	}
-	for i := range req.In {
-		if err := cos.ValidateOname(req.In[i].Name); err != nil {
-			return fmt.Errorf("%s: item %d: %w", tag, i, err)
-		}
-	}
+	// no per-item name validation: intra-cluster only, names come from the sender's LOMs
 	return nil
 }
 

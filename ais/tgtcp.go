@@ -1587,7 +1587,11 @@ func (t *target) headBatcht2t(bck *meta.Bck, req *cmn.HdbReq, tsi *meta.Snode, s
 	return resp, nil
 }
 
-// An unknown action returns 400 which should fallback to per-object HEADs.
+// NOTE:
+// - pre-5.2 peer will return 400 => fall back to per-object HEADs
+// - generally, intra-cluster protocols across nodes running incompatible software versions -
+//   and the respective deployments - are not supported
+
 func _hdbErr(err error, status int, tsi *meta.Snode) error {
 	if status == http.StatusBadRequest {
 		return fmt.Errorf("%s: %w (%v)", tsi.StringEx(), cmn.ErrHdbUnsupported, err)

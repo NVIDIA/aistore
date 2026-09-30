@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
@@ -22,11 +23,13 @@ import (
 
 const hdbBodyMax = 64 * cos.MiB // apc.HdbSizeMax items
 
+// T2T only: the sender is always another target (intra-control net, signed when enabled)
 func (t *target) httpobjhdb(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	if t.parseReq(w, r, apireq) != nil {
+	if ecode, err := t.checkIntra(r, nil /*smap*/, false /*only primary*/); err != nil {
+		t.writeErr(w, r, fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err), ecode)
 		return
 	}
-	if !t.verifyObjVerb(w, r, apireq.dpq) {
+	if t.parseReq(w, r, apireq) != nil {
 		return
 	}
 	var ecode int
@@ -83,18 +86,15 @@ func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request, bck *meta.
 	hdr.Set(cos.HdrContentType, cos.ContentBinary)
 	hdr.Set(cos.HdrContentLength, strconv.Itoa(len(out)))
 	if _, err := w.Write(out); err != nil {
-		t.logerr("head-batch", resp, err)
+		nlog.Warningln(t.String(), "head-batch:", err) // (broken pipe; benign)
 	}
 	return nil
 }
 
 // establish the identity of one object
 // returns true when the comparison succeeded
+// (no name validation: T2T only, names originate from the sender's own LOMs)
 func hdbOne(bck *meta.Bck, in *cmn.HdbIn, resp *apc.HdbResp, i int) bool {
-	if err := cos.ValidateRname(in.Name); err != nil {
-		resp.Set(i, apc.HdbFailed, err)
-		return false
-	}
 	lom := core.AllocLOM(in.Name)
 	defer core.FreeLOM(lom)
 
