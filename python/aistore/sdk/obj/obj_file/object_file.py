@@ -2,9 +2,10 @@
 # Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
-from io import BufferedIOBase, BufferedWriter
+from io import BufferedIOBase
 from sys import maxsize as sys_maxsize
 from typing import Optional
+from warnings import warn
 
 from overrides import override
 
@@ -28,6 +29,8 @@ class ObjectFileReader(BufferedIOBase):
     `ReadTimeout`), the `read()` method automatically retries and resumes fetching data from the last successfully
     retrieved chunk. The `max_resume` parameter controls how many retry attempts are made before an error is raised.
 
+    Entering a context restarts the reader from the beginning, even after `close()`.
+
     Args:
         content_provider (BaseContentIterProvider): A provider that creates iterators which
             can fetch object data from AIS in chunks.
@@ -48,6 +51,11 @@ class ObjectFileReader(BufferedIOBase):
     def __enter__(self):
         self._reset()
         return self
+
+    @property
+    def closed(self) -> bool:
+        """Return whether the file is closed."""
+        return self._closed
 
     @override
     def readable(self) -> bool:
@@ -133,9 +141,16 @@ class ObjectFileReader(BufferedIOBase):
         self._stream.close()
 
 
-class ObjectFileWriter(BufferedWriter):
+class ObjectFileWriter(BufferedIOBase):
     """
-    A file-like writer object for AIStore, extending `BufferedWriter`.
+    A file-like writer object for AIStore, extending `BufferedIOBase`.
+
+    Writes go directly to AIStore; no local write buffer is added. Use a context
+    manager or call `close()` to finalize the object. Finalization only warns
+    if the writer is left open; it does not send requests to the cluster.
+
+    Entering a context with a closed writer raises `ValueError`. Create a new
+    writer with `ObjectWriter.as_file()` to write again.
 
     Args:
         obj_writer (ObjectWriter): The ObjectWriter instance for handling write operations.
@@ -150,17 +165,34 @@ class ObjectFileWriter(BufferedWriter):
         self._obj_writer = obj_writer
         self._mode = mode
         self._handle = ""
-        self._closed = False
+        self._closed = True
         if self._mode == "w":
             self._obj_writer.put_content(b"")
+        self._closed = False
 
     @override
     def __enter__(self, *args, **kwargs):
+        super().__enter__()
         if self._mode == "w":
             self._obj_writer.put_content(b"")
         return self
 
+    @property
+    def closed(self) -> bool:
+        """Return whether the file is closed."""
+        return self._closed
+
+    def __del__(self) -> None:
+        # The inherited finalizer calls close(), which can send a remote flush.
+        if not getattr(self, "_closed", True):
+            warn(f"unclosed {self!r}", ResourceWarning, source=self)
+
     @override
+    def writable(self) -> bool:
+        """Return whether the file is writable."""
+        return not self.closed
+
+    @override(check_signature=False)  # Preserve the public buffer keyword.
     def write(self, buffer: bytes) -> int:
         """
         Write data to the object.

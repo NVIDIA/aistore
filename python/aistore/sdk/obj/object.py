@@ -3,7 +3,7 @@
 #
 
 from dataclasses import dataclass
-from io import BufferedWriter
+from io import BufferedIOBase
 from typing import Dict, Optional
 import os
 from urllib.parse import quote
@@ -198,7 +198,7 @@ class Object:
         blob_download_config: Optional[BlobDownloadConfig] = None,
         chunk_size: Optional[int] = None,
         etl: Optional[ETLConfig] = None,
-        writer: Optional[BufferedWriter] = None,
+        writer: Optional[BufferedIOBase] = None,
         latest: bool = False,
         byte_range: Optional[str] = None,
         direct: bool = False,
@@ -215,7 +215,7 @@ class Object:
                 set), defaults to the server-provided optimal size. For sequential reads,
                 defaults to DEFAULT_CHUNK_SIZE.
             etl (Optional[ETLConfig]): Settings for ETL-specific operations (name, args).
-            writer (Optional[BufferedWriter]): User-provided writer for writing content output.
+            writer (Optional[BufferedIOBase]): User-provided writer for writing content output.
                 The user is responsible for closing the writer.
             latest (bool, optional): GET the latest object version from the associated remote bucket.
             byte_range (Optional[str]): Byte range in RFC 7233 format for single-range requests

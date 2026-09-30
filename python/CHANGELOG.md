@@ -4,6 +4,20 @@ All notable changes to the AIStore Python SDK project are documented in this fil
 
 We structure this changelog in accordance with [Keep a Changelog](https://keepachangelog.com/) guidelines, and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Object file readers and writers report their actual open or closed state
+  through `.closed`. Writer state remains open if its final flush fails.
+- Entering a closed object file writer raises `ValueError` before sending a request.
+
+### Changed
+
+- `ObjectFileWriter` uses `io.BufferedIOBase` so inherited file methods work
+  correctly. Update explicit `BufferedWriter` type checks to `BufferedIOBase`.
+  Unclosed writers emit `ResourceWarning` without sending requests.
+
 ## [2.0.0] - 2026-09-28
 
 This major release unifies object metadata APIs, removes deprecated ETL
