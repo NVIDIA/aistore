@@ -272,7 +272,7 @@ The current scope and compatibility constraints are:
 - kTLS applies to the entire transmit side of an armed connection. `sendfile(2)` remains limited to eligible local-file object responses; transformed, chunked, and other generated responses keep their normal userspace read path.
 - AIS retires long-lived connections near the per-key transmit limit; clients must tolerate normal HTTP connection closure and reconnection.
 
-As a quick host check, `/proc/sys/net/ipv4/tcp_available_ulp` should list `tls`. This is necessary but not sufficient: the kernel must also support the negotiated TLS version and AES-GCM cipher. At AIS verbosity level 5, target logs report whether connections were armed, unsupported, skipped, or failed.
+As a quick host check, `/proc/sys/net/ipv4/tcp_available_ulp` should list `tls`. This is necessary but not sufficient: the kernel must also support the negotiated TLS version and AES-GCM cipher. At AIS verbosity level 5, target logs report whether connections were armed, unsupported, skipped, not established, or failed.
 
 ## Further references
 

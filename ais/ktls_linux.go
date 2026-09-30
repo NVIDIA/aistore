@@ -80,6 +80,9 @@ func ktlsInstall(tcp *net.TCPConn, params *ktlsParams) (bool, error) {
 	if controlErr != nil {
 		return false, fmt.Errorf("ktls-tx: raw control: %w", controlErr)
 	}
+	if ktlsNotEstablished(stage, sockErr) {
+		return false, fmt.Errorf("%w (%s: %w)", errKtlsNotEstablished, stage, sockErr)
+	}
 	if ktlsUnsupported(stage, sockErr) {
 		return false, nil
 	}
@@ -228,6 +231,13 @@ func setsockoptBytes(fd uintptr, level, opt int, value []byte) error {
 		return errno
 	}
 	return nil
+}
+
+// tls_init() attaches the TLS ULP only in TCP_ESTABLISHED, otherwise it
+// returns ENOTCONN.
+// Note: a kernel without the TLS ULP fails the lookup first (ENOENT, unsupported).
+func ktlsNotEstablished(stage string, err error) bool {
+	return stage == kStageULP && errors.Is(err, unix.ENOTCONN)
 }
 
 // Whether a setsockopt failure means that this host cannot perform the

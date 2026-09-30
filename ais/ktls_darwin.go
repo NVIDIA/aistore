@@ -23,3 +23,5 @@ func kCipher(uint16, uint16) (uint16, int, bool) { return 0, 0, false }
 func setsockoptBytes(uintptr, int, int, []byte) error { return nil }
 
 func ktlsUnsupported(string, error) bool { return true }
+
+func ktlsNotEstablished(string, error) bool { return false }

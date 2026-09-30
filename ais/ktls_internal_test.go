@@ -1250,17 +1250,18 @@ func TestKTLSTxCounters(t *testing.T) {
 		var counters ktlsCounters
 		counters.armed.Store(3)
 		counters.failed.Store(1)
-		want := "ktls-tx[attempted=4 armed=3 skipped=0 unsupported=0 failed=1 poisoned=0 exhausted=0]"
+		want := "ktls-tx[attempted=4 armed=3 skipped=0 unsupported=0 failed=1 not-established=0 poisoned=0 exhausted=0]"
 		tassert.Errorf(t, counters.String() == want, "expected %q, got %q", want, counters.String())
 	})
 
 	// each installer outcome lands in exactly one bucket
 	tests := []struct {
-		name    string
-		install ktlsInstaller
-		armed   int64
-		unsup   int64
-		failed  int64
+		name           string
+		install        ktlsInstaller
+		armed          int64
+		unsup          int64
+		failed         int64
+		notEstablished int64
 	}{
 		{
 			name:    "armed",
@@ -1277,6 +1278,11 @@ func TestKTLSTxCounters(t *testing.T) {
 			install: func(*net.TCPConn, *ktlsParams) (bool, error) { return false, errors.New("boom") },
 			failed:  1,
 		},
+		{
+			name:           "not-established",
+			install:        func(*net.TCPConn, *ktlsParams) (bool, error) { return false, errKtlsNotEstablished },
+			notEstablished: 1,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1290,6 +1296,8 @@ func TestKTLSTxCounters(t *testing.T) {
 			tassert.Errorf(t, got.armed == test.armed, "armed %d, wanted %d (%s)", got.armed, test.armed, got)
 			tassert.Errorf(t, got.unsupported == test.unsup, "unsupported %d, wanted %d (%s)", got.unsupported, test.unsup, got)
 			tassert.Errorf(t, got.failed == test.failed, "failed %d, wanted %d (%s)", got.failed, test.failed, got)
+			tassert.Errorf(t, got.notEstablished == test.notEstablished,
+				"not-established %d, wanted %d (%s)", got.notEstablished, test.notEstablished, got)
 			tassert.Errorf(t, got.skipped == 0, "skipped %d, wanted 0 (%s)", got.skipped, got)
 			tassert.Errorf(t, got.poisoned == 0, "poisoned %d, wanted 0 (%s)", got.poisoned, got)
 			tassert.Errorf(t, got.exhausted == 0, "exhausted %d, wanted 0 (%s)", got.exhausted, got)
@@ -1327,22 +1335,24 @@ func TestKTLSTxCounters(t *testing.T) {
 }
 
 type testktlsCounterValues struct {
-	armed       int64
-	skipped     int64
-	unsupported int64
-	failed      int64
-	poisoned    int64
-	exhausted   int64
+	armed          int64
+	skipped        int64
+	unsupported    int64
+	failed         int64
+	notEstablished int64
+	poisoned       int64
+	exhausted      int64
 }
 
 func testktlsCounterSnapshot() testktlsCounterValues {
 	return testktlsCounterValues{
-		armed:       ktlsCnt.armed.Load(),
-		skipped:     ktlsCnt.skipped.Load(),
-		unsupported: ktlsCnt.unsupported.Load(),
-		failed:      ktlsCnt.failed.Load(),
-		poisoned:    ktlsCnt.poisoned.Load(),
-		exhausted:   ktlsCnt.exhausted.Load(),
+		armed:          ktlsCnt.armed.Load(),
+		skipped:        ktlsCnt.skipped.Load(),
+		unsupported:    ktlsCnt.unsupported.Load(),
+		failed:         ktlsCnt.failed.Load(),
+		notEstablished: ktlsCnt.notEstablished.Load(),
+		poisoned:       ktlsCnt.poisoned.Load(),
+		exhausted:      ktlsCnt.exhausted.Load(),
 	}
 }
 
@@ -1351,18 +1361,19 @@ func (c testktlsCounterValues) sub(prev testktlsCounterValues) testktlsCounterVa
 	c.skipped -= prev.skipped
 	c.unsupported -= prev.unsupported
 	c.failed -= prev.failed
+	c.notEstablished -= prev.notEstablished
 	c.poisoned -= prev.poisoned
 	c.exhausted -= prev.exhausted
 	return c
 }
 
 func (c testktlsCounterValues) total() int64 {
-	return c.armed + c.skipped + c.unsupported + c.failed
+	return c.armed + c.skipped + c.unsupported + c.failed + c.notEstablished
 }
 
 func (c testktlsCounterValues) String() string {
-	return fmt.Sprintf("armed=%d skipped=%d unsupported=%d failed=%d poisoned=%d exhausted=%d",
-		c.armed, c.skipped, c.unsupported, c.failed, c.poisoned, c.exhausted)
+	return fmt.Sprintf("armed=%d skipped=%d unsupported=%d failed=%d not-established=%d poisoned=%d exhausted=%d",
+		c.armed, c.skipped, c.unsupported, c.failed, c.notEstablished, c.poisoned, c.exhausted)
 }
 
 // Post-arm the kernel owns transmit, so any crypto/tls write - a TLS 1.3

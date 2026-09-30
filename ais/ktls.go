@@ -205,12 +205,13 @@ type (
 
 	// basic offload observability; see the "observability" section below
 	ktlsCounters struct {
-		armed       atomic.Int64 // TLS_TX installed; the kernel owns transmit
-		skipped     atomic.Int64 // arm() bailed before reaching the installer
-		unsupported atomic.Int64 // kernel, TLS version, or cipher declined
-		failed      atomic.Int64 // installation error
-		poisoned    atomic.Int64 // crypto/tls attempted to transmit after offload
-		exhausted   atomic.Int64 // per-key transmit budget reached
+		armed          atomic.Int64 // TLS_TX installed; the kernel owns transmit
+		skipped        atomic.Int64 // arm() bailed before reaching the installer
+		unsupported    atomic.Int64 // kernel, TLS version, or cipher declined
+		failed         atomic.Int64 // installation error
+		notEstablished atomic.Int64 // TCP_ULP: ENOTCONN (socket not in TCP_ESTABLISHED)
+		poisoned       atomic.Int64 // crypto/tls attempted to transmit after offload
+		exhausted      atomic.Int64 // per-key transmit budget reached
 	}
 	ktlsCtxKey struct{}
 
@@ -225,9 +226,10 @@ var (
 )
 
 var (
-	errKtlsActive    = errors.New("ktls-tx: kernel owns TX; crypto/tls must not write")
-	errKtlsPoisoned  = errors.New("ktls-tx: crypto/tls attempted to transmit after offload; connection closed")
-	errKtlsExhausted = errors.New("ktls-tx: per-key transmit budget reached; connection closed")
+	errKtlsActive         = errors.New("ktls-tx: kernel owns TX; crypto/tls must not write")
+	errKtlsPoisoned       = errors.New("ktls-tx: crypto/tls attempted to transmit after offload; connection closed")
+	errKtlsExhausted      = errors.New("ktls-tx: per-key transmit budget reached; connection closed")
+	errKtlsNotEstablished = errors.New("ktls-tx: socket is not in TCP_ESTABLISHED")
 )
 
 const (
@@ -586,9 +588,10 @@ func (c *ktlsConn) handshakeAndArm(ctx context.Context) error {
 func (c *ktlsCounters) String() string {
 	armed, skipped := c.armed.Load(), c.skipped.Load()
 	unsupported, failed := c.unsupported.Load(), c.failed.Load()
+	notEstablished := c.notEstablished.Load()
 	poisoned, exhausted := c.poisoned.Load(), c.exhausted.Load()
-	return fmt.Sprintf("ktls-tx[attempted=%d armed=%d skipped=%d unsupported=%d failed=%d poisoned=%d exhausted=%d]",
-		armed+skipped+unsupported+failed, armed, skipped, unsupported, failed, poisoned, exhausted)
+	return fmt.Sprintf("ktls-tx[attempted=%d armed=%d skipped=%d unsupported=%d failed=%d not-established=%d poisoned=%d exhausted=%d]",
+		armed+skipped+unsupported+failed+notEstablished, armed, skipped, unsupported, failed, notEstablished, poisoned, exhausted)
 }
 
 // arm() bailed on its own, before reaching the installer: a missing secret,
@@ -654,6 +657,12 @@ func (c *ktlsConn) arm() {
 	c.txMu.Unlock()
 
 	switch {
+	case errors.Is(err, errKtlsNotEstablished):
+		ktlsCnt.notEstablished.Add(1)
+		if cmn.Rom.V(5, cos.ModAIS) {
+			nlog.Infoln("ktls-tx: not armed, continuing with crypto/tls:", err, c.tcp.RemoteAddr(), &ktlsCnt)
+		}
+		return
 	case err != nil:
 		// distinguished from `unsupported` on purpose (see ktlsUnsupported)
 		cnt := ktlsCnt.failed.Add(1)

@@ -12,10 +12,12 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
@@ -320,6 +322,140 @@ func TestKTLSTxLinuxUnsupported(t *testing.T) {
 				"ktlsUnsupported(%s, %v) = %v, wanted %v", test.stage, test.err, got, test.want)
 		})
 	}
+}
+
+// TCP_ULP fails with ENOTCONN when the socket is not in TCP_ESTABLISHED.
+// ktlsInstall must not arm, and must return errKtlsNotEstablished.
+func TestKTLSTxLinuxNotEstablished(t *testing.T) {
+	t.Run("classify", func(t *testing.T) {
+		tests := []struct {
+			stage string
+			err   error
+			want  bool
+		}{
+			{kStageULP, unix.ENOTCONN, true},
+			{kStageULP, fmt.Errorf("wrapped: %w", unix.ENOTCONN), true},
+
+			{kStageTX, unix.ENOTCONN, false},
+			{"", unix.ENOTCONN, false},
+
+			// other TCP_ULP errors
+			{kStageULP, unix.ENOENT, false},      // no TLS ULP
+			{kStageULP, unix.ENOPROTOOPT, false}, // no TCP_ULP
+			{kStageULP, unix.EINVAL, false},
+			{kStageULP, unix.EEXIST, false}, // a ULP is already attached
+			{kStageULP, unix.ECONNRESET, false},
+			{kStageULP, nil, false},
+
+			// other TLS_TX errors
+			{kStageTX, unix.EPIPE, false},
+			{kStageTX, nil, false},
+		}
+		for _, test := range tests {
+			got := ktlsNotEstablished(test.stage, test.err)
+			tassert.Errorf(t, got == test.want,
+				"ktlsNotEstablished(%q, %v) = %v, wanted %v", test.stage, test.err, got, test.want)
+			if got {
+				tassert.Errorf(t, !ktlsUnsupported(test.stage, test.err),
+					"(%q, %v) is both not-established and unsupported", test.stage, test.err)
+			}
+		}
+	})
+
+	// the client closes its sending side: the server reads EOF
+	t.Run("FIN", func(t *testing.T) {
+		cc, srv := testktlsTCPPair(t)
+		tassert.CheckFatal(t, cc.CloseWrite())
+		_, err := srv.Read(make([]byte, 1))
+		tassert.Fatalf(t, err == io.EOF, "expected EOF, got %v", err)
+
+		testktlsInstallNotEstablished(t, srv)
+
+		// the client still receives the response
+		const payload = "aistore-ktls"
+		_, err = srv.Write([]byte(payload))
+		tassert.CheckFatal(t, err)
+		tassert.CheckFatal(t, srv.CloseWrite())
+		buf, err := io.ReadAll(cc)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, string(buf) == payload, "expected %q, got %q", payload, buf)
+	})
+
+	// the client resets the connection: the server reads ECONNRESET
+	t.Run("RST", func(t *testing.T) {
+		cc, srv := testktlsTCPPair(t)
+		tassert.CheckFatal(t, cc.SetLinger(0))
+		tassert.CheckFatal(t, cc.Close())
+		_, err := srv.Read(make([]byte, 1))
+		tassert.Fatalf(t, errors.Is(err, unix.ECONNRESET), "expected ECONNRESET, got %v", err)
+
+		testktlsInstallNotEstablished(t, srv)
+	})
+
+	// a kernel without the TLS ULP
+	t.Run("no-TLS-ULP", func(t *testing.T) {
+		const ulp = "aistore-no-ulp"
+		cc, srv := testktlsTCPPair(t)
+		err := testktlsSetULP(t, srv, ulp)
+		tassert.Errorf(t, ktlsUnsupported(kStageULP, err) && !ktlsNotEstablished(kStageULP, err),
+			"established: expected unsupported, got %v", err)
+
+		tassert.CheckFatal(t, cc.CloseWrite())
+		_, err = srv.Read(make([]byte, 1))
+		tassert.Fatalf(t, err == io.EOF, "expected EOF, got %v", err)
+		err = testktlsSetULP(t, srv, ulp)
+		tassert.Errorf(t, ktlsUnsupported(kStageULP, err) && !ktlsNotEstablished(kStageULP, err),
+			"not established: expected unsupported, got %v", err)
+	})
+}
+
+func testktlsTCPPair(t *testing.T) (cc, srv *net.TCPConn) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	tassert.CheckFatal(t, err)
+	defer l.Close()
+
+	c, err := net.Dial("tcp", l.Addr().String())
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { c.Close() })
+	s, err := l.Accept()
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { s.Close() })
+
+	srv = s.(*net.TCPConn)
+	tassert.CheckFatal(t, srv.SetReadDeadline(time.Now().Add(testktlsTimeout)))
+	return c.(*net.TCPConn), srv
+}
+
+func testktlsInstallNotEstablished(t *testing.T, srv *net.TCPConn) {
+	params := ktlsParams{
+		version:     tls.VersionTLS13,
+		cipherSuite: tls.TLS_AES_128_GCM_SHA256,
+		secret:      make([]byte, 32),
+	}
+	enabled, err := ktlsInstall(srv, &params)
+	tassert.Errorf(t, !enabled, "installed kTLS on a socket that is not in TCP_ESTABLISHED")
+
+	if !testktlsHasULP(t) {
+		t.Log("kTLS TX is unsupported by this kernel (no TLS ULP)")
+		tassert.Errorf(t, err == nil, "expected unsupported (nil error), got %v", err)
+		return
+	}
+	tassert.Errorf(t, errors.Is(err, errKtlsNotEstablished), "expected %v, got %v", errKtlsNotEstablished, err)
+}
+
+// Probe with a socket in TCP_ESTABLISHED.
+func testktlsHasULP(t *testing.T) bool {
+	_, srv := testktlsTCPPair(t)
+	return testktlsSetULP(t, srv, "tls") == nil
+}
+
+func testktlsSetULP(t *testing.T, tcp *net.TCPConn, name string) (err error) {
+	raw, e := tcp.SyscallConn()
+	tassert.CheckFatal(t, e)
+	tassert.CheckFatal(t, raw.Control(func(fd uintptr) {
+		err = unix.SetsockoptString(int(fd), unix.IPPROTO_TCP, unix.TCP_ULP, name)
+	}))
+	return err
 }
 
 //
