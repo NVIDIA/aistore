@@ -69,7 +69,7 @@ func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode, ...string) (*cmn.ObjectPro
 	return nil, nil
 }
 
-func (*TargetMock) HeadBatchT2T(_ *meta.Bck, req *cmn.HdbReq, _ *meta.Snode) (*apc.HdbResp, error) {
+func (*TargetMock) HeadBatchT2T(req *cmn.HdbReq, _ *meta.Snode) (*apc.HdbResp, error) {
 	resp := apc.NewHdbResp(len(req.In))
 	for i := range resp.Status {
 		resp.Status[i] = apc.HdbSame

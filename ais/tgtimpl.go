@@ -112,9 +112,9 @@ func (t *target) HeadObjT2T(lom *core.LOM, tsi *meta.Snode, reqProps ...string) 
 }
 
 // batch counterpart of HeadObjT2T
-func (t *target) HeadBatchT2T(bck *meta.Bck, req *cmn.HdbReq, tsi *meta.Snode) (*apc.HdbResp, error) {
+func (t *target) HeadBatchT2T(req *cmn.HdbReq, tsi *meta.Snode) (*apc.HdbResp, error) {
 	smap := t.owner.smap.get()
-	return t.headBatcht2t(bck, req, tsi, smap)
+	return t.headBatcht2t(req, tsi, smap)
 }
 
 // CopyObject:

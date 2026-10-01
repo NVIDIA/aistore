@@ -17,6 +17,8 @@ import (
 //
 //	HdbResp: | n int32 | status uint8 x n | nmsg int32 | (idx int32, msg str) x nmsg |
 
+const HdbTag = "head-batch"
+
 const (
 	HdbSizeDflt = 64   // default number of items per request
 	HdbSizeMax  = 1024 // hard cap
@@ -87,20 +89,20 @@ func (resp *HdbResp) Set(i int, status HdbStatus, cause error) {
 // the sender should validate the decoded response before using it
 func (resp *HdbResp) Validate(nreq int) error {
 	if len(resp.Status) != nreq {
-		return fmt.Errorf("head-batch: got %d statuses, expecting %d", len(resp.Status), nreq)
+		return fmt.Errorf("%s: got %d statuses, expecting %d", HdbTag, len(resp.Status), nreq)
 	}
 	for i, status := range resp.Status {
 		if !status.Valid() {
-			return fmt.Errorf("head-batch: invalid status %d at position %d", status, i)
+			return fmt.Errorf("%s: invalid status %d at position %d", HdbTag, status, i)
 		}
 	}
 	for i := range resp.Msg {
 		idx := resp.Msg[i].Idx
 		if idx < 0 || int(idx) >= nreq {
-			return fmt.Errorf("head-batch: message index %d out of range [0, %d)", idx, nreq)
+			return fmt.Errorf("%s: message index %d out of range [0, %d)", HdbTag, idx, nreq)
 		}
 		if i > 0 && idx <= resp.Msg[i-1].Idx {
-			return fmt.Errorf("head-batch: message index %d out of order at %d", idx, i)
+			return fmt.Errorf("%s: message index %d out of order at %d", HdbTag, idx, i)
 		}
 	}
 	return nil
@@ -144,38 +146,38 @@ func (resp *HdbResp) Pack(p *cos.BytePack) {
 func (resp *HdbResp) Unpack(u *cos.ByteUnpack) error {
 	n, err := u.ReadInt32()
 	if err != nil {
-		return fmt.Errorf("head-batch: %w", err)
+		return fmt.Errorf("%s: %w", HdbTag, err)
 	}
 	if n < 0 || n > HdbSizeMax {
-		return fmt.Errorf("head-batch: invalid number of statuses %d, expecting at most %d", n, HdbSizeMax)
+		return fmt.Errorf("%s: invalid number of statuses %d, expecting at most %d", HdbTag, n, HdbSizeMax)
 	}
 	resp.Status = make([]HdbStatus, n)
 	for i := range resp.Status {
 		b, err := u.ReadByte()
 		if err != nil {
-			return fmt.Errorf("head-batch: status %d: %w", i, err)
+			return fmt.Errorf("%s: status %d: %w", HdbTag, i, err)
 		}
 		resp.Status[i] = HdbStatus(b)
 	}
 
 	nmsg, err := u.ReadInt32()
 	if err != nil {
-		return fmt.Errorf("head-batch: %w", err)
+		return fmt.Errorf("%s: %w", HdbTag, err)
 	}
 	if nmsg < 0 || nmsg > n {
-		return fmt.Errorf("head-batch: invalid number of messages %d, expecting at most %d", nmsg, n)
+		return fmt.Errorf("%s: invalid number of messages %d, expecting at most %d", HdbTag, nmsg, n)
 	}
 	resp.Msg = make([]HdbMsg, nmsg)
 	for i := range resp.Msg {
 		if resp.Msg[i].Idx, err = u.ReadInt32(); err != nil {
-			return fmt.Errorf("head-batch: message %d: %w", i, err)
+			return fmt.Errorf("%s: message %d: %w", HdbTag, i, err)
 		}
 		if resp.Msg[i].Msg, err = u.ReadString(); err != nil {
-			return fmt.Errorf("head-batch: message %d: %w", i, err)
+			return fmt.Errorf("%s: message %d: %w", HdbTag, i, err)
 		}
 	}
 	if u.Len() != 0 {
-		return fmt.Errorf("head-batch: %d trailing bytes", u.Len())
+		return fmt.Errorf("%s: %d trailing bytes", HdbTag, u.Len())
 	}
 	return nil
 }

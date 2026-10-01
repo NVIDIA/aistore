@@ -49,24 +49,33 @@ func WaitForCondition(condition func() bool, opts WaitRetryOpts) error {
 // GenerateObjectNameForTarget returns a name that HRW maps to either the same or
 // a different target than baseName, as requested by wantSameTarget.
 func GenerateObjectNameForTarget(baseName, newNamePrefix string, bck cmn.Bck, smap *meta.Smap, wantSameTarget bool) string {
-	// Init digests - HrwTarget() requires it
-	smap.InitDigests()
-
-	newName := newNamePrefix
-
+	smap.InitDigests() // HrwName2T requires it
 	cbck := meta.CloneBck(&bck)
-	baseNameHrw, e1 := smap.HrwName2T(cbck.MakeUname(baseName))
-	newNameHrw, e2 := smap.HrwName2T(cbck.MakeUname(newName))
-	cos.Assert(e1 == nil && e2 == nil)
+	base, err := smap.HrwName2T(cbck.MakeUname(baseName))
+	cos.AssertNoErr(err)
+	return genObjName(newNamePrefix, cbck, smap, func(owner *meta.Snode) bool { return (owner.ID() == base.ID()) == wantSameTarget })
+}
 
+// GenerateObjectNameOnTarget returns a name that HRW maps to tsi.
+// The target must be active: HRW skips targets in maintenance.
+func GenerateObjectNameOnTarget(newNamePrefix string, bck cmn.Bck, smap *meta.Smap, tsi *meta.Snode) string {
+	if si := smap.GetTarget(tsi.ID()); si == nil || si.InMaintOrDecomm() {
+		cos.AssertMsg(false, tsi.StringEx()+" is not an active target in "+smap.StringEx())
+	}
+	smap.InitDigests() // HrwName2T requires it
+	return genObjName(newNamePrefix, meta.CloneBck(&bck), smap, func(owner *meta.Snode) bool { return owner.ID() == tsi.ID() })
+}
+
+// try newNamePrefix, newNamePrefix0, newNamePrefix1, and so on until HRW maps the name to a matching target
+func genObjName(newNamePrefix string, cbck *meta.Bck, smap *meta.Smap, match func(*meta.Snode) bool) string {
+	newName := newNamePrefix
 	for i := 0; ; i++ {
-		isSameTarget := baseNameHrw == newNameHrw
-		if isSameTarget == wantSameTarget { // placement matches
+		si, err := smap.HrwName2T(cbck.MakeUname(newName))
+		cos.AssertNoErr(err)
+		if match(si) {
 			return newName
 		}
 		newName = newNamePrefix + strconv.Itoa(i)
-		newNameHrw, e1 = smap.HrwName2T(cbck.MakeUname(newName))
-		cos.AssertNoErr(e1)
 	}
 }
 

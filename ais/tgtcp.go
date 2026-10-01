@@ -1548,12 +1548,11 @@ func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX, reqProps [
 }
 
 // intra-cluster batch HEAD(object) against the given target (see cmn/headbatch)
-func (t *target) headBatcht2t(bck *meta.Bck, req *cmn.HdbReq, tsi *meta.Snode, smap *smapX) (*apc.HdbResp, error) {
+func (t *target) headBatcht2t(req *cmn.HdbReq, tsi *meta.Snode, smap *smapX) (*apc.HdbResp, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	q := bck.NewQuery()
-	q.Set(apc.QparamSilent, "true")
+	q := url.Values{apc.QparamSilent: []string{"true"}}
 
 	cargs := allocCargs()
 	{
@@ -1561,7 +1560,7 @@ func (t *target) headBatcht2t(bck *meta.Bck, req *cmn.HdbReq, tsi *meta.Snode, s
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodPost,
 			Base:   tsi.URL(cmn.NetIntraControl),
-			Path:   apc.URLPathObjects.Join(bck.Name),
+			Path:   apc.URLPathObjects.S, // no bucket in the URL
 			Query:  q,
 			Header: http.Header{cos.HdrContentType: []string{cos.ContentBinary}},
 			Body:   req.NewPack(),

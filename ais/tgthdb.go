@@ -19,34 +19,74 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-// head-batch receiver: POST /v1/objects/<bucket-name> (see cmn/headbatch)
+// head-batch receiver: POST /v1/objects (see cmn/headbatch)
 
 const hdbBodyMax = 64 * cos.MiB // apc.HdbSizeMax items
 
+// a bucket of the request and its stats
+type hdbBck struct {
+	err    error // Init error: fails the bucket's items
+	bck    meta.Bck
+	nheads int64 // HEADs that compared
+	lat    int64 // their total latency (ns)
+}
+
+// Init validates the name and provider
+func (b *hdbBck) init(bck *cmn.Bck, bowner meta.Bowner) {
+	b.bck = meta.Bck(*bck)
+	b.err = b.bck.Init(bowner)
+}
+
+// a bucket that failed to init fails its items
+func (b *hdbBck) head(in *cmn.HdbIn, resp *apc.HdbResp, i int) {
+	if b.err != nil {
+		resp.Set(i, apc.HdbFailed, b.err)
+		return
+	}
+	started := mono.NanoTime()
+	if hdbOne(&b.bck, in, resp, i) {
+		b.nheads++
+		b.lat += mono.SinceNano(started)
+	}
+}
+
+// count the HEADs that actually compared
+func (b *hdbBck) addStats(statsT stats.Tracker) {
+	if b.nheads == 0 {
+		return
+	}
+	vlabs := bvlabs(&b.bck)
+	statsT.AddWith(
+		cos.NamedVal64{Name: stats.HeadCount, Value: b.nheads, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.HeadLatencyTotal, Value: b.lat, VarLabs: vlabs},
+	)
+}
+
 // T2T only: the sender is always another target (intra-control net, signed when enabled)
-func (t *target) httpobjhdb(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
+func (t *target) httpobjhdb(w http.ResponseWriter, r *http.Request, dpq *dpq) {
+	if !reqIsIntraCtrl(r) {
+		err := fmt.Errorf("%s: %v over %s network", apc.HdbTag, errNotIntraControl, reqNetName(_reqNet(r)))
+		t.writeErr(w, r, err, http.StatusForbidden)
+		return
+	}
 	if ecode, err := t.checkIntra(r, nil /*smap*/, false /*only primary*/); err != nil {
 		t.writeErr(w, r, fmt.Errorf(fmtErrInvIntraObj, t.si, r.Method, r.RemoteAddr, err), ecode)
 		return
 	}
-	if t.parseReq(w, r, apireq) != nil {
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		t.writeErr(w, r, err)
 		return
 	}
-	var ecode int
-	err := apireq.bck.Init(t.owner.bmd)
-	if err == nil {
-		err = t.objHeadBatch(w, r, apireq.bck)
-	} else if cmn.IsErrBucketNought(err) {
-		ecode = http.StatusNotFound
-	}
-	if err != nil {
-		t._erris(w, r, err, ecode, apireq.dpq.silent)
+	if err := t.objHeadBatch(w, r); err != nil {
+		t._erris(w, r, err, 0, dpq.silent)
 	}
 }
 
-func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request, bck *meta.Bck) error {
+// unpack the request and compare each object with the local copy
+// the response is positional: Status[i] answers In[i]
+func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request) error {
 	if r.ContentLength <= 0 || r.ContentLength > hdbBodyMax {
-		return fmt.Errorf("head-batch: invalid content length %d, expecting (0, %d]", r.ContentLength, hdbBodyMax)
+		return fmt.Errorf("%s: invalid content length %d, expecting (0, %d]", apc.HdbTag, r.ContentLength, hdbBodyMax)
 	}
 	body, err := cos.ReadAllN(r.Body, r.ContentLength)
 	cos.Close(r.Body)
@@ -61,24 +101,19 @@ func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request, bck *meta.
 		return err
 	}
 
+	// init the buckets, compare each object, add stats per bucket
 	var (
-		started = mono.NanoTime()
-		resp    = apc.NewHdbResp(len(req.In))
-		nheads  int64
+		bcks = make([]hdbBck, len(req.Bcks))
+		resp = apc.NewHdbResp(len(req.In))
 	)
-	for i := range req.In {
-		if hdbOne(bck, &req.In[i], resp, i) {
-			nheads++
-		}
+	for i := range req.Bcks {
+		bcks[i].init(&req.Bcks[i], t.owner.bmd)
 	}
-
-	// count the HEADs that actually compared
-	if nheads > 0 {
-		vlabs := bvlabs(bck)
-		t.statsT.AddWith(
-			cos.NamedVal64{Name: stats.HeadCount, Value: nheads, VarLabs: vlabs},
-			cos.NamedVal64{Name: stats.HeadLatencyTotal, Value: mono.SinceNano(started), VarLabs: vlabs},
-		)
+	for i := range req.In {
+		bcks[req.In[i].Bidx].head(&req.In[i], resp, i)
+	}
+	for i := range bcks {
+		bcks[i].addStats(t.statsT)
 	}
 
 	out := resp.NewPack()
@@ -86,7 +121,7 @@ func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request, bck *meta.
 	hdr.Set(cos.HdrContentType, cos.ContentBinary)
 	hdr.Set(cos.HdrContentLength, strconv.Itoa(len(out)))
 	if _, err := w.Write(out); err != nil {
-		nlog.Warningln(t.String(), "head-batch:", err) // (broken pipe; benign)
+		nlog.Warningln(t.String(), apc.HdbTag+":", err) // (broken pipe; benign)
 	}
 	return nil
 }
