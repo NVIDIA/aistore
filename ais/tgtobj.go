@@ -180,6 +180,28 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err
 	return poi.putObject()
 }
 
+// poi.chunk() writes a single input reader (`poi.r`) in chunks
+//
+// Execution paths:
+// - native/S3 single-object PUT: poi.do() => putObject() => chunk(bucket.ChunkSize)
+//   when the known size exceeds the bucket's MaxMonolithicSize;
+// - target.PutObject(): params.ChunkSize > 0 calls chunk() directly -
+//   otherwise, putObject() applies the same hard-limit check;
+// - local regular copy: coi._regular() => _chunk() for a monolithic source above
+//   the destination's MaxMonolithicSize; excludes same-object replica copies;
+// - copy through a reader: coi._reader() => putObject() => the same size check;
+// and finally:
+// - copy to another target: HTTP PUT or DM receiver => destination PUT machinery => the same size check.
+//
+// Ownership: chunk() owns and closes poi.r, and owns the internal upload ID. On start,
+// part-write, or completion failure, it aborts the upload while preserving the original
+// error. force=true attempts local cleanup even if backend abort fails; secondary cleanup
+// errors are logged. skipBackend=true also skips backend abort. Filesystem cleanup is
+// best effort. Completion respects a caller-held destination write lock via poi.locked.
+//
+// Explicit native/S3 MPU clients own their upload IDs and call ups.abort(force=false):
+// backend abort failure retains local upload state for retry, except for backend 404.
+
 func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 	var (
 		lom      = poi.lom
@@ -201,7 +223,9 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 	}
 
 	if uploadID, err = poi.t.ups.start(poi.oreq, lom, poi.skipBackend); err != nil {
-		poi.t.ups.abort(poi.oreq, lom, uploadID)
+		if uploadID != "" {
+			poi.t.ups.abort(poi.oreq, lom, uploadID, true /*force*/, poi.skipBackend)
+		}
 		return http.StatusInternalServerError, err
 	}
 
@@ -233,7 +257,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		}
 		etag, ec, er := poi.t.ups.putPart(&args)
 		if er != nil {
-			poi.t.ups.abort(poi.oreq, lom, uploadID)
+			poi.t.ups.abort(poi.oreq, lom, uploadID, true /*force*/, poi.skipBackend)
 			return ec, er
 		}
 
@@ -260,6 +284,9 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		skipBackend: poi.skipBackend,
 		locked:      poi.locked,
 	})
+	if err != nil {
+		poi.t.ups.abort(poi.oreq, lom, uploadID, true /*force*/, poi.skipBackend)
+	}
 	return ecode, err
 }
 

@@ -21,6 +21,7 @@
   - [Storage layout](#storage-layout)
   - [Rechunk](#rechunk)
   - [Prefetch mechanism](#prefetch-mechanism)
+  - [Chunked writes and cleanup on failure](#chunked-writes-and-cleanup-on-failure)
 
 ## Storage Services
 
@@ -339,7 +340,7 @@ $ ais start ec-encode ais://abc --data-slices 8 --parity-slices 2
 
 ## Chunking
 
-A bucket's `chunks` configuration determines how its objects are stored: as single contiguous files (monolithic) or as chunks described by a chunk manifest. As with [erasure coding](#erasure-coding) and [n-way mirroring](#n-way-mirror), the bucket configuration is the rule: it is the single record of the bucket's intended storage layout, and cluster-administrative jobs that operate on many objects converge the data to it rather than override it.
+AIS fully supports chunking - storing an object as a sequence of chunks described by a manifest, rather than a single contiguous file (monolithic). Like [n-way mirroring](#n-way-mirror) and [erasure coding](#erasure-coding), it is governed by bucket configuration. A bucket's `chunks` properties are the authoritative record of its intended storage layout. Administrative jobs that operate on many objects converge the data to that configuration, just as re-mirroring and re-encoding follow the bucket's `mirror` and `ec` properties.
 
 The relevant properties are:
 
@@ -390,3 +391,11 @@ Planned for v5.2:
 The third case is a deliberate exception to rule 3. A `chunks.objsize_limit` of zero does express a layout preference - automatic writes remain monolithic - but reassembling parallel-fetched ranges into a monolithic file degrades performance. Prefetch therefore keeps the chunked result, uses the prefetch `blob-chunk-size` (or the blob-downloader default), and suggests `ais bucket rechunk`, which restores such objects to monolithic form per the bucket's configuration.
 
 > **Status (v5.1):** prefetch uses the blob downloader at or above `blob-threshold` regardless of bucket configuration, with `blob-chunk-size` or the blob-downloader default.
+
+### Chunked writes and cleanup on failure
+
+AIS can write chunks during a regular PUT, a cold GET that caches a remote object, or an object copy. The bucket's hard limit determines when these operations must store an object as chunks; see [storage layout](#storage-layout) for the current rules. Local copies of already-chunked objects preserve their existing layout. Rechunk (xaction) changes the layout according to the bucket's configuration.
+
+For these internally managed writes, AIS owns the multipart upload. If initiation, a part write, or completion fails, AIS aborts the upload and attempts local cleanup even if backend abort fails. The operation returns its original error; cleanup failures are logged. Writes that only populate the local cache do not attempt to abort a backend upload. Filesystem cleanup remains best effort.
+
+For client-initiated multipart uploads through the native or S3 API, the client owns the upload ID and can retry a failed abort request. If backend abort fails, AIS returns that failure and retains the local upload state, unless the backend reports that the upload no longer exists (404), in which case local cleanup proceeds.

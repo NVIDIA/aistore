@@ -572,17 +572,23 @@ func (ups *ups) _completeRemote(r *http.Request, lom *core.LOM, uploadID string,
 	return etag, ecode, nil
 }
 
-func (ups *ups) abort(r *http.Request, lom *core.LOM, uploadID string) (int, error) {
+// MPU callers retain local state on backend failure (to maybe retry)
+// internal PUT/copy:
+// - `force` - proceed to abort locally even if backend abort fails
+func (ups *ups) abort(r *http.Request, lom *core.LOM, uploadID string, force, skipBackend bool) (int, error) {
 	if err := cos.ValidateManifestID(uploadID); err != nil {
 		return http.StatusBadRequest, err
 	}
-	if lom.Bck().IsRemote() {
+	if lom.Bck().IsRemote() && !skipBackend {
 		ecode, err := ups.t.Backend(lom.Bck()).AbortMpt(lom, r, uploadID)
 
-		if err == nil || ecode == http.StatusNotFound {
+		if force || err == nil || ecode == http.StatusNotFound {
 			if e := ups._abort(uploadID, lom); e != nil && !cos.IsNotExist(e) {
 				nlog.Warningln("failed to abort: [", uploadID, lom.Cname(), e, "]")
 			}
+		}
+		if force && err != nil && ecode != http.StatusNotFound {
+			nlog.Warningln("failed to abort backend upload: [", uploadID, lom.Cname(), err, "]")
 		}
 		return ecode, err
 	}
@@ -590,6 +596,9 @@ func (ups *ups) abort(r *http.Request, lom *core.LOM, uploadID string) (int, err
 	if err := ups._abort(uploadID, lom); err != nil {
 		if cos.IsNotExist(err) {
 			return http.StatusNotFound, err
+		}
+		if force {
+			nlog.Warningln("failed to abort: [", uploadID, lom.Cname(), err, "]")
 		}
 		return http.StatusInternalServerError, err
 	}

@@ -1312,7 +1312,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			return
 		}
 		uploadID := apireq.dpq.get(apc.QparamMptUploadID)
-		if ecode, err := t.ups.abort(r, lom, uploadID); err != nil {
+		if ecode, err := t.ups.abort(r, lom, uploadID, false /*force*/, false /*skipBackend*/); err != nil {
 			t.writeErr(w, r, err, ecode)
 		}
 		return
