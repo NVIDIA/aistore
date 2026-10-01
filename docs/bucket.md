@@ -970,6 +970,8 @@ ais create s3://#minio/bucket \
   --props="extra.aws.endpoint=http://minio:9000 extra.aws.profile=minio-creds"
 ```
 
+> **Note**: AIS rejects connections when a bucket's `extra.aws.endpoint` resolve to a loopback, link-local, CGNAT, or other special-purpose address. Private addresses remain reachable. The endpoint set with the `S3_ENDPOINT` environment variable is not restricted. To use `S3_ENDPOINT`, leave `extra.aws.endpoint` empty.
+
 > See also: [AWS Profiles and S3 Endpoints](/docs/cli/aws_profile_endpoint.md)
 
 ### Oracle Cloud Infrastructure

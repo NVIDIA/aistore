@@ -7,6 +7,7 @@ package cmn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -34,6 +35,9 @@ var (
 	sixTo4Prefix         = netip.MustParsePrefix("2002::/16")      // RFC 3056
 	teredoPrefix         = netip.MustParsePrefix("2001::/32")
 )
+
+// ErrBlockedEgress: the destination is a blocked egress address (see IsBlockedEgressIP)
+var ErrBlockedEgress = errors.New("egress blocked")
 
 func NetworkIsKnown(net string) bool {
 	return net == NetPublic || net == NetIntraControl || net == NetIntraData
@@ -152,7 +156,26 @@ func IsDialableHostIP(ip net.IP) bool {
 	return true
 }
 
+// dial-time check for TransportArgs.Egress
+func checkEgress(network, address string, allowPrivate bool) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return fmt.Errorf("%w: non-IP %q", ErrBlockedEgress, address)
+	}
+	if IsBlockedEgressIP(addr.WithZone("").AsSlice(), allowPrivate) {
+		return fmt.Errorf("%w: %s (%s)", ErrBlockedEgress, addr, network)
+	}
+	return nil
+}
+
 // IsBlockedEgressIP rejects addresses that must not be reached through user-supplied URLs.
+// Unspecified, loopback, link-local (incl. cloud metadata 169.254.169.254), multicast, CGNAT,
+// 6to4, Teredo, and local-use NAT64 are always blocked.
+// Private and ULA ranges are blocked unless allowPrivate.
 func IsBlockedEgressIP(ip net.IP, allowPrivate bool) bool {
 	addr, ok := netip.AddrFromSlice(ip)
 	if !ok {

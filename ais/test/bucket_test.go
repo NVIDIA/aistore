@@ -9,10 +9,12 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -321,6 +323,48 @@ func TestCreateRemoteBucket(t *testing.T) {
 				"expecting 501 status or unsupported, got %+v", herr)
 		}
 	}
+}
+
+// SSRF: S3 requests to a per-bucket `extra.aws.endpoint` must not reach loopback
+func TestRemoteBucketEndpointEgress(t *testing.T) {
+	var (
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+		bck      = cmn.Bck{Name: strings.ToLower(trand.String(10)), Provider: apc.AWS}
+		hits     atomic.Int32
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredCloudProvider: apc.AWS, Bck: cliBck})
+
+	endpoint := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		hits.Add(1)
+	}))
+	defer endpoint.Close()
+
+	props := &cmn.BpropsToSet{
+		Extra: &cmn.ExtraToSet{AWS: &cmn.ExtraPropsAWSToSet{
+			Endpoint:    apc.Ptr(endpoint.URL),
+			CloudRegion: apc.Ptr("us-east-1"), // skip region discovery
+		}},
+	}
+	blocked := cmn.ErrBlockedEgress.Error()
+	t.Cleanup(func() {
+		if exists, _ := tools.BucketExists(nil, proxyURL, bck); exists {
+			tools.EvictRemoteBucket(t, proxyURL, bck, false /*keepMD*/)
+		}
+	})
+
+	// create (HEAD(remote bucket) fails)
+	err := api.CreateBucket(bp, bck, props)
+	tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), blocked), "expected %q, got %v", blocked, err)
+
+	// create without HEAD (cold GET fails)
+	err = api.CreateBucket(bp, bck, props, true /*dontHeadRemote*/)
+	tassert.CheckFatal(t, err)
+
+	_, err = api.GetObject(bp, bck, "obj", nil)
+	tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), blocked), "expected %q, got %v", blocked, err)
+
+	tassert.Errorf(t, hits.Load() == 0, "endpoint %s received %d request(s)", endpoint.URL, hits.Load())
 }
 
 func TestCreateDestroyRemoteAISBucket(t *testing.T) {

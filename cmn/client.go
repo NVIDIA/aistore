@@ -45,6 +45,14 @@ const (
 	DefaultSndRcvBufferSize    = 128 * cos.KiB
 )
 
+// TransportArgs.Egress: dial-time check that refuses destinations that IsBlockedEgressIP blocks.
+type EgressPolicy uint8
+
+const (
+	EgressAny          EgressPolicy = iota // no check (default)
+	EgressAllowPrivate                     // block restricted destinations while allowing private and ULA addresses
+)
+
 type (
 	// assorted http(s) client options
 	TransportArgs struct {
@@ -59,6 +67,7 @@ type (
 		UseHTTPProxyEnv  bool
 		LowLatencyToS    bool
 		PreferIPv6       bool // usage: set-socket syscalls (cmn/network_unix)
+		Egress           EgressPolicy
 	}
 	TLSArgs struct {
 		ClientCA    string
@@ -81,7 +90,6 @@ func NewTransport(cargs TransportArgs) *http.Transport {
 		KeepAlive: DfltKeepaliveTCP,
 	}
 
-	// NOTE: setsockopt when (SndRcvBufSize > 0 and/or LowLatencyToS)
 	dialer.Control = cargs.clientControl()
 
 	transport := &http.Transport{

@@ -829,15 +829,17 @@ func (sc *sessConf) awsLoadConfig() (aws.Config, error) {
 	// Disable SDK rate limiting to rely on configured backend.rate_limit
 	retryConfig := retry.NewStandard(func(o *retry.StandardOptions) {
 		o.RateLimiter = ratelimit.None
+		o.Retryables = append([]retry.IsErrorRetryable{retry.IsErrorRetryableFunc(noRetryBlockedEgress)}, o.Retryables...)
 	})
 	confFiles, credFiles := getS3ConfFiles()
 	nlog.Infoln("Loading config for profile:", sc.profile, "config files:", confFiles, "credential files:", credFiles)
 
 	// honor configured BackendIdleConnTimeout
 	// (GET read deadline: see rdl.go; other transport limits remain cmn.NewClient defaults)
-	client := cmn.NewClient(cmn.TransportArgs{
+	cargs := cmn.TransportArgs{
 		IdleConnTimeout: cmn.GCO.Get().Net.HTTP.BackendIdleConnTimeout.D(),
-	})
+	}
+	client := cmn.NewClient(cargs)
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
 		config.WithHTTPClient(tracing.NewTraceableClient(client)),
@@ -854,7 +856,21 @@ func (sc *sessConf) awsLoadConfig() (aws.Config, error) {
 	if sc.endpoint != "" {
 		cfg.BaseEndpoint = aws.String(sc.endpoint)
 	}
+
+	// SSRF: bucket props are user-supplied, so a per-bucket endpoint must not reach
+	// loopback or link-local.
+	if sc.endpoint != "" && sc.endpoint != s3Endpoint {
+		cargs.Egress = cmn.EgressAllowPrivate
+		cfg.HTTPClient = tracing.NewTraceableClient(cmn.NewClient(cargs))
+	}
 	return cfg, nil
+}
+
+func noRetryBlockedEgress(err error) aws.Ternary {
+	if errors.Is(err, cmn.ErrBlockedEgress) {
+		return aws.FalseTernary
+	}
+	return aws.UnknownTernary
 }
 
 func getS3ConfFiles() (confFiles, credFiles []string) {

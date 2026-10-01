@@ -33,6 +33,24 @@ func (args *TransportArgs) ServerControl(c syscall.RawConn) {
 }
 
 func (args *TransportArgs) clientControl() cntlFunc {
+	if args.Egress != EgressAny {
+		return args.guardEgress
+	}
+	return args.sockControl()
+}
+
+// TransportArgs.Egress checks the resolved destination
+func (args *TransportArgs) guardEgress(network, address string, c syscall.RawConn) error {
+	if err := checkEgress(network, address, args.Egress == EgressAllowPrivate); err != nil {
+		return err
+	}
+	if ctrl := args.sockControl(); ctrl != nil {
+		return ctrl(network, address, c)
+	}
+	return nil
+}
+
+func (args *TransportArgs) sockControl() cntlFunc {
 	switch {
 	case args.SndRcvBufSize > 0 && args.LowLatencyToS:
 		return args.setSockSndRcvToS
