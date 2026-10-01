@@ -292,6 +292,7 @@ rx:
 	{
 		params.WorkTag = fs.WorkfilePut
 		params.Reader = io.NopCloser(objReader)
+		params.Size = hdr.ObjAttrs.Size
 		params.OWT = cmn.OwtRebalance
 		params.Cksum = hdr.ObjAttrs.Cksum
 		params.Atime = lom.Atime()

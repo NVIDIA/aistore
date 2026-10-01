@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -46,6 +47,67 @@ func TestPutObjectAutoChunks(t *testing.T) {
 	t.Run("above-limit", func(t *testing.T) {
 		putObjectsAndCheckPolicy(t, bck, chunkPolicyLimit+1, true)
 	})
+}
+
+func TestRebalanceAutoChunks(t *testing.T) {
+	const multipartChunkSize = 48 * cos.KiB
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2, Long: true})
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	bck := cmn.Bck{Name: "rebalance-auto-chunk-" + trand.String(8), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+		Chunks: &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(cos.SizeIEC(chunkPolicyLimit)),
+			ChunkSize:    apc.Ptr(cos.SizeIEC(chunkPolicySize)),
+		},
+	}, true /*cleanup*/)
+	objects := ioContext{
+		t: t, bck: bck, num: 10, fileSize: 2 * multipartChunkSize, fixedSize: true,
+		chunksConf: &ioCtxChunksConf{multipart: true, numChunks: 2},
+	}
+	objects.initAndSaveState(true /*cleanup*/)
+	objects.puts()
+	smap := objects.smap
+	smap.InitDigests()
+	owner, err := smap.HrwName2T(meta.CloneBck(&bck).MakeUname(objects.objNames[0]))
+	tassert.CheckFatal(t, err)
+	for _, objName := range objects.objNames {
+		checkObjectChunked(t, bp, bck, objName, multipartChunkSize)
+	}
+
+	args := &apc.ActValRmNode{DaemonID: owner.ID()}
+	rebID, err := startMaintenanceRetry(t, bp, args)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_, err := stopMaintenance(t, bp, args, proxyURL, smap.Version, smap.CountActivePs(), smap.CountActiveTs())
+		tassert.CheckError(t, err)
+	})
+	tassert.Fatalf(t, rebID != "", "expected maintenance to start rebalance")
+	tools.WaitForRebalanceByID(t, bp, rebID)
+	updated, err := tools.WaitForClusterState(proxyURL, "target in maintenance", smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1, owner.ID())
+	tassert.CheckFatal(t, err)
+	updated.InitDigests()
+	moved := 0
+	// Only objects owned by the maintenance target must move to another target.
+	for _, objName := range objects.objNames {
+		uname := meta.CloneBck(&bck).MakeUname(objName)
+		previous, err := smap.HrwName2T(uname)
+		tassert.CheckFatal(t, err)
+		if previous.ID() != owner.ID() {
+			// Unmoved objects retain the client's two 48KiB parts.
+			checkObjectChunked(t, bp, bck, objName, multipartChunkSize)
+			continue
+		}
+		// Moved objects must use the bucket's three 32KiB chunks.
+		receiver, err := updated.HrwName2T(uname)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, receiver.ID() != owner.ID(), "expected %s to move off %s", objName, owner.ID())
+		checkObjectChunked(t, bp, bck, objName, chunkPolicySize)
+		moved++
+	}
+	tassert.Fatalf(t, moved > 0, "expected at least one object to move")
+	objects.gets(nil, true /*withValidation*/)
+	objects.ensureNoGetErrors()
 }
 
 func TestColdGetAutoChunks(t *testing.T) {
