@@ -46,3 +46,28 @@ class TestObjectIterator(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(entry_3, next(self.obj_iterator))
         with self.assertRaises(StopIteration):
             next(self.obj_iterator)
+
+    def test_next_empty_page_with_a_continuation_token(self):
+        """A page can come back empty and still ask to be resumed.
+
+        The cluster bounds a page by how far it walks, not by how much it
+        returns, so a stretch the listing filters out yields no entries and a
+        token. The iterator used to pop() the empty list.
+        """
+        entry = Mock(BucketEntry)
+        pages = [
+            Mock(entries=[], uuid="UUID", continuation_token="token"),
+            Mock(entries=[entry], uuid="UUID", continuation_token=""),
+        ]
+        sent_tokens = []
+
+        def list_objects(uuid, token):  # pylint: disable=unused-argument
+            sent_tokens.append(token)
+            return pages[len(sent_tokens) - 1]
+
+        iterator = ObjectIterator(list_objects)
+
+        self.assertEqual(entry, next(iterator))
+        self.assertEqual(["", "token"], sent_tokens)
+        with self.assertRaises(StopIteration):
+            next(iterator)
