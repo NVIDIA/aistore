@@ -2528,22 +2528,21 @@ func uploadPartsInParallel(objName, uploadID string, numParts int, bck cmn.Bck, 
 }
 
 func TestMultipartUploadAbort(t *testing.T) {
+	runProviderTests(t, testMultipartUploadAbort)
+}
+
+func testMultipartUploadAbort(t *testing.T, mbck *meta.Bck) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     trand.String(10),
-			Provider: apc.AIS,
-		}
-		objName = "test-multipart-abort-object"
+		bck        = mbck.Clone()
+		objName    = "test-multipart-abort-" + trand.String(8)
 
 		// Test data to upload in parts
 		part1Data = []byte("Part 1: This is the first part before abort. ")
 		part2Data = []byte("Part 2: This is the second part before abort. ")
 		part3Data = []byte("Part 3: This part should fail after abort. ")
 	)
-
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	tlog.Logfln("multipart upload abort test: %s/%s", bck.Name, objName)
 
@@ -2618,6 +2617,9 @@ func TestMultipartUploadAbort(t *testing.T) {
 	// Step 6: Try to abort again - should be idempotent or fail gracefully
 	tlog.Logfln("attempting to abort again (should be idempotent)")
 	err = api.AbortMultipartUpload(baseParams, bck, objName, uploadID)
+	if mbck.IsRemoteGCP() {
+		tassert.Fatalf(t, err == nil, "GCP second abort must be idempotent, got %v", err)
+	}
 	// This may succeed (idempotent) or fail gracefully, both are acceptable
 	if err != nil {
 		tlog.Logfln("second abort failed as expected: %v", err)
@@ -2628,7 +2630,7 @@ func TestMultipartUploadAbort(t *testing.T) {
 	// Step 7: Verify that no object was created
 	tlog.Logfln("verifying that object was not created after abort")
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	_, err = api.HeadObject(baseParams, bck, objName, hargs)
+	_, err = api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsName, hargs)
 	tassert.Errorf(t, err != nil, "object should not exist after abort, but HEAD succeeded")
 	if err != nil {
 		tlog.Logfln("correctly confirmed object does not exist after abort")
@@ -2636,7 +2638,7 @@ func TestMultipartUploadAbort(t *testing.T) {
 
 	// Step 8: Test abort workflow with immediate abort (no parts uploaded)
 	tlog.Logfln("testing immediate abort without uploading parts")
-	objName2 := "test-multipart-immediate-abort"
+	objName2 := "test-multipart-immediate-abort-" + trand.String(8)
 	uploadID2, err := api.CreateMultipartUpload(baseParams, bck, objName2)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, uploadID2 != "", "upload ID should not be empty")
@@ -2647,7 +2649,7 @@ func TestMultipartUploadAbort(t *testing.T) {
 	tlog.Logfln("successfully aborted upload immediately without any parts")
 
 	// Verify this object also doesn't exist
-	_, err = api.HeadObject(baseParams, bck, objName2, hargs)
+	_, err = api.HeadObjectV2(baseParams, bck, objName2, apc.GetPropsName, hargs)
 	tassert.Errorf(t, err != nil, "immediately aborted object should not exist")
 
 	tlog.Logfln("multipart upload abort test completed successfully")

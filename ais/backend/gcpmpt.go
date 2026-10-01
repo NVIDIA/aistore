@@ -92,13 +92,8 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, r *http.Request) (string, int, error) 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			body = []byte(fmt.Sprintf("<failed to read error body: %v>", readErr))
-		}
-		err = fmt.Errorf("gcp: failed to initiate multipart upload: %s (status: %d)", string(body), resp.StatusCode)
-		return "", resp.StatusCode, err
+	if err := checkMptResponse(resp, http.StatusOK); err != nil {
+		return "", resp.StatusCode, fmt.Errorf("gcp: failed to initiate multipart upload: %w", err)
 	}
 
 	var result initiateMptUploadResult
@@ -158,13 +153,8 @@ func (gsbp *gsbp) PutMptPart(lom *core.LOM, reader cos.ReadOpenCloser, hreq *htt
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			body = []byte(fmt.Sprintf("<failed to read error body: %v>", readErr))
-		}
-		err = fmt.Errorf("gcp: failed to upload part %d: %s (status: %d)", partNum, string(body), resp.StatusCode)
-		return "", resp.StatusCode, err
+	if err := checkMptResponse(resp, http.StatusOK); err != nil {
+		return "", resp.StatusCode, fmt.Errorf("gcp: failed to upload part %d: %w", partNum, err)
 	}
 
 	etag := resp.Header.Get("ETag")
@@ -236,13 +226,8 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, r *http.Request, uploadID string, _
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			body = []byte(fmt.Sprintf("<failed to read error body: %v>", readErr))
-		}
-		err = fmt.Errorf("gcp: failed to complete multipart upload: %s (status: %d)", string(body), resp.StatusCode)
-		return "", "", resp.StatusCode, err
+	if err := checkMptResponse(resp, http.StatusOK); err != nil {
+		return "", "", resp.StatusCode, fmt.Errorf("gcp: failed to complete multipart upload: %w", err)
 	}
 
 	var result completeMptUploadResult
@@ -264,4 +249,49 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, r *http.Request, uploadID string, _
 	}
 
 	return version, etag, 0, nil
+}
+
+// Go storage client has no XML multipart API (issue): https://github.com/googleapis/google-cloud-go/issues/11609
+// Therefore, use Google's documented DELETE endpoint: https://cloud.google.com/storage/docs/xml-api/delete-multipart
+func (gsbp *gsbp) AbortMpt(lom *core.LOM, r *http.Request, uploadID string) (int, error) {
+	debug.Assert(r != nil)
+	cloudBck := lom.Bck().RemoteBck()
+	sess, err := gsbp.getSess(r.Context(), cloudBck)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	reqArgs := cmn.AllocHra()
+	{
+		reqArgs.Method = http.MethodDelete
+		reqArgs.Base = gcpXMLEndpoint
+		reqArgs.Path = cos.JoinPath(cloudBck.Name, lom.ObjName)
+		reqArgs.Query = url.Values{apc.QparamMptUploadID: []string{uploadID}}
+	}
+	req, err := reqArgs.Req()
+	cmn.FreeHra(reqArgs)
+	if err != nil {
+		return http.StatusInternalServerError, fmt.Errorf("gcp: failed to create abort request: %w", err)
+	}
+	resp, err := sess.httpClient.Do(req)
+	cmn.HreqFree(req)
+	if err != nil {
+		return http.StatusInternalServerError, fmt.Errorf("gcp: failed to abort multipart upload: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := checkMptResponse(resp, http.StatusNoContent); err != nil {
+		return resp.StatusCode, fmt.Errorf("gcp: failed to abort multipart upload: %w", err)
+	}
+	return 0, nil
+}
+
+func checkMptResponse(resp *http.Response, expectedStatus int) error {
+	if resp.StatusCode == expectedStatus {
+		return nil
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("unexpected status %d (expected %d), failed to read response body: %w",
+			resp.StatusCode, expectedStatus, err)
+	}
+	return fmt.Errorf("unexpected status %d (expected %d): %s", resp.StatusCode, expectedStatus, string(body))
 }
