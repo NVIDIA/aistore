@@ -30,15 +30,17 @@ class ObjectIterator:
         # Iterator is exhausted.
         if len(self._fetched) == 0 and self._token == "" and self._uuid != "":
             raise StopIteration
-        # Read the next page of objects.
-        if len(self._fetched) == 0:
+        # Remote listing filters can leave an empty page with a continuation
+        # token, for example when NOT_CACHED excludes every entry in that page.
+        # Continue until an entry is available or the listing ends.
+        while len(self._fetched) == 0:
             resp = self._list_objects(uuid=self._uuid, token=self._token)
             self._fetched = resp.entries
             # Reverse once so pop() preserves order without shifting entries.
             self._fetched.reverse()
             self._uuid = resp.uuid
             self._token = resp.continuation_token
-            # Empty page and token mean no more objects left.
+            # Empty page and no token mean no more objects left.
             if len(self._fetched) == 0 and self._token == "":
                 raise StopIteration
         return self._fetched.pop()

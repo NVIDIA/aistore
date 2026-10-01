@@ -11,6 +11,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Object file readers and writers report their actual open or closed state
   through `.closed`. Writer state remains open if its final flush fails.
 - Entering a closed object file writer raises `ValueError` before sending a request.
+- `ObjectIterator` no longer raises `IndexError` when a remote listing returns a page with no
+  entries and a continuation token, which happens when a filter such as `NOT_CACHED` excludes
+  every entry on that page. The iterator now continues to the next page, matching
+  `Bucket.list_all_objects()`.
 
 ### Changed
 

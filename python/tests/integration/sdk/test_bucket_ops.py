@@ -407,6 +407,38 @@ class TestBucketOps(ParallelTestBase):
             obj_names.remove(obj.name)
         self.assertEqual(0, len(obj_names))
 
+    @unittest.skipIf(not REMOTE_SET, "Remote bucket is not set")
+    def test_list_object_iter_over_a_page_the_filter_empties(self):
+        """A remote listing filter can leave a page with no entries and a token.
+
+        Evicting six objects and then caching the two that land on the second
+        page makes NOT_CACHED return that page empty while the listing
+        continues. The iterator used to stop there and raise IndexError.
+        """
+        obj_names = sorted(self._create_objects(num_obj=6).keys())
+
+        evict_job_id = self.bucket.objects(obj_names=obj_names).evict()
+        self.assertTrue(
+            self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT).success
+        )
+
+        # Pull the middle two back in, so page two of a page_size=2 listing is
+        # the one the filter empties.
+        cached = obj_names[2:4]
+        for name in cached:
+            self.bucket.object(name).get_reader().read_all()
+
+        listed = [
+            entry.name
+            for entry in self.bucket.list_objects_iter(
+                prefix=self.obj_prefix,
+                page_size=2,
+                flags=[ListObjectFlag.NOT_CACHED],
+            )
+        ]
+
+        self.assertEqual(sorted(set(obj_names) - set(cached)), sorted(listed))
+
     @unittest.skipIf(REMOTE_SET, "start_after is supported for AIS buckets only")
     def test_list_objects_start_after(self):
         self._create_objects()
