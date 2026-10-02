@@ -127,6 +127,34 @@ var _ = Describe("Mirror", func() {
 			Expect(copyLOM.HasCopies()).To(BeTrue())
 		})
 
+		It("should remove old copies when monolithic object becomes chunked", func() {
+			// monolithic w/ copy
+			createTestFile(bucketPath, testObjectName, testObjectSize)
+			lom := newBasicLom(defaultObjFQN)
+			Expect(lom.IsHRW()).To(BeTrue())
+			lom.SetSize(testObjectSize)
+			lom.SetAtimeUnix(time.Now().UnixNano())
+			Expect(lom.Persist()).NotTo(HaveOccurred())
+
+			lom.Lock(true)
+			copyLOM, err := lom.Copy2FQN(expectedCopyFQN, nil)
+			lom.Unlock(true)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			defer core.FreeLOM(copyLOM)
+			Expect(expectedCopyFQN).To(BeARegularFile())
+
+			prev := newBasicLom(defaultObjFQN)
+			Expect(prev.Load(false, false)).NotTo(HaveOccurred())
+			Expect(prev.NumCopies()).To(Equal(2))
+
+			// same object => chunked (CompleteUfest)
+			chunked := createChunkedMirrorLOM(defaultObjFQN, 2)
+			Expect(chunked.IsChunked()).To(BeTrue())
+			Expect(chunked.HasCopies()).To(BeFalse())
+			Expect(expectedCopyFQN).NotTo(BeAnExistingFile())
+		})
+
 		It("should correctly copy chunked mirror object", func() {
 			// Create chunked object
 			lom := createChunkedMirrorLOM(defaultObjFQN, 2)

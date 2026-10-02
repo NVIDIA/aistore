@@ -730,7 +730,6 @@ func (u *Ufest) storeCompleted(lom *LOM, overrideCompleted bool) error {
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
 	} else {
 		c.path = orig
-		debug.Func(func() { debug.AssertNoErr(u.ValidateChunkLocations(true)) })
 	}
 	return err
 }
@@ -1274,107 +1273,224 @@ func _unpackCksum(r io.Reader, buf2 []byte) (cksum *cos.Cksum, err error) {
 	return
 }
 
-//
-// LOM: chunk persistence ------------------------------------------------------
-//
+///////////
+// lom.CompleteUfest (and its local context `ucmpl`)
+///////////
 
+type ucmpl struct {
+	u            *Ufest
+	lom          *LOM
+	prevLom      *LOM
+	prevUfest    *Ufest
+	firstFQN     string
+	completedFQN string
+	wfqnFirst    string
+	wfqnMeta     string
+	partialFQN   string
+	remote       bool
+	prevLoaded   bool
+	publishing   bool
+}
+
+// runs under lom wlock - entire operation
 func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 	if !locked {
 		lom.Lock(true)
 		defer lom.Unlock(true)
 	}
+	debug.Func(func() { debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname()) })
 
-	debug.AssertFunc(func() bool {
-		var total int64
-		for i := range u.count {
-			total += u.chunks[i].size
-		}
-		return total == u.size
-	})
-
-	// Load LOM to determine if it was previously chunked and load old ufest for cleanup
-	// NOTE: at this point, `lom` already holds updated ufest metadata and checksum that need to be persisted
-	// Loading `lom` from disk would overwrite these. Need to clone and load it as another LOM variable instead
-	var (
-		prevLom   = lom.Clone()
-		prevUfest *Ufest
-	)
-	if prevLom.Load(false /*cache it*/, true /*locked*/) == nil && prevLom.IsChunked() {
-		prevUfest, err = NewUfest("", prevLom, true /*must-exist*/)
-		if err == nil {
-			// Load old ufest for cleaning up old chunks after successful completion
-			errLoad := prevUfest.load(true)
-			if errLoad != nil {
-				if !cos.IsNotExist(errLoad) {
-					nlog.Errorln("failed to load previous", tagCompleted, prevUfest._utag(prevLom.Cname()), "err:", errLoad)
-				}
-				prevUfest = nil
-			}
-		}
-	}
-
-	// ais versioning
-	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
-		if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
-			lom.CopyVersion(prevLom)
-			if err := lom.IncVersion(); err != nil {
-				nlog.Errorln(err)
-			}
-		}
-	}
-
-	// (in the extremely unlikely case we need to rollback)
-	var (
-		wfqnMeta, wfqnFirst string
-		completedFQN        string
-	)
-	if prevUfest != nil {
-		completedFQN = prevLom.GenFQN(fs.ChunkMetaCT)
-		debug.AssertFunc(func() bool { return completedFQN == lom.GenFQN(fs.ChunkMetaCT) })
-
-		wfqnMeta = prevLom.GenFQN(fs.ChunkMetaCT, u.id)
-		if _renameWarn(completedFQN, wfqnMeta) == nil {
-			wfqnFirst = prevLom.GenFQN(fs.WorkCT, u.id)
-			if _renameWarn(prevLom.FQN, wfqnFirst) != nil {
-				_renameWarn(wfqnMeta, completedFQN)
-				wfqnMeta, wfqnFirst = "", ""
-			}
-		}
-	}
-
-	lom.SetSize(u.size)
-	if err := u.storeCompleted(lom, false /*override*/); err != nil {
-		u.Abort(lom)
+	if err = u._errCompleted(lom); err != nil { // repeated completion is a no-op
 		return err
 	}
-	lom.SetAtimeUnix(u.created.UnixNano())
 
+	ctx := ucmpl{
+		u:       u,
+		lom:     lom,
+		prevLom: lom.Clone(),
+		remote:  lom.Bck().IsRemote(),
+	}
+	defer FreeLOM(ctx.prevLom)
+
+	prevLom := ctx.prevLom
+	errLoad := prevLom.Load(false /*cache it*/, true /*locked*/)
+	switch {
+	case errLoad == nil:
+		ctx.prevLoaded = true
+	case cmn.IsErrObjNought(errLoad), cmn.IsErrLmetaCorrupted(errLoad):
+		// not loaded => prev LOM untrusted: no _stash() -
+		// prev chunks, copies, and shard index (if any) are left to space-cleanup
+	default:
+		T.FSHC(errLoad, prevLom.Mountpath(), prevLom.FQN)
+		return errLoad
+	}
+
+	if !ctx.remote && fs.IsFntl(prevLom.ObjName) {
+		prevLom.PushFntl(prevLom.ShortenFntl())
+	}
+	ctx.firstFQN = prevLom.FQN
+	ctx.completedFQN = prevLom.GenFQN(fs.ChunkMetaCT)
+
+	if ctx.prevLoaded && prevLom.IsChunked() {
+		prevUfest, e := NewUfest("", prevLom, true /*must-exist*/)
+		if e == nil {
+			e = prevUfest.load(true /*completed*/)
+		}
+		if e == nil {
+			ctx.prevUfest = prevUfest
+		} else if !cos.IsNotExist(e) {
+			nlog.Errorln("failed to load previous", tagCompleted, prevLom.Cname(), "err:", e)
+		}
+	}
+	if u.id != "" {
+		ctx.partialFQN = u._fqns(lom, false /*completed*/) // before RenameFinalize (fntl)
+	}
+
+	// execute
+	if err = ctx.do(); err == nil {
+		ctx.commit()
+	} else {
+		ctx.rollback()
+	}
+
+	// both ways (storeCompleted's own removal misses fntl)
+	if ctx.partialFQN != "" {
+		if e := cos.RemoveFile(ctx.partialFQN); e != nil {
+			nlog.Warningln("failed to remove partial manifest:", ctx.partialFQN, e)
+		}
+	}
+	return err
+}
+
+// mutations only; returns upon the first error (and the caller rolls back)
+func (ctx *ucmpl) do() (err error) {
+	debug.AssertFunc(func() bool {
+		var total int64
+		for i := range ctx.u.count {
+			total += ctx.u.chunks[i].size
+		}
+		return total == ctx.u.size
+	})
+
+	lom := ctx.lom
+
+	// TODO -- FIXME: this bit is out of place - must move to callers
+	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
+		if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
+			lom.CopyVersion(ctx.prevLom)
+			if e := lom.IncVersion(); e != nil {
+				nlog.Errorln(e)
+			}
+		}
+	}
+
+	if !ctx.remote {
+		if ctx.prevLoaded {
+			if ctx.wfqnFirst, err = _stash(ctx.firstFQN, ctx.prevLom.GenFQN(fs.WorkCT, ctx.u.id)); err != nil {
+				return err
+			}
+		}
+		if ctx.prevUfest != nil {
+			if ctx.wfqnMeta, err = _stash(ctx.completedFQN, ctx.prevLom.GenFQN(fs.WorkCT, ctx.u.id+"-meta")); err != nil {
+				return err
+			}
+		}
+	}
+
+	ctx.publishing = true
+	lom.SetSize(ctx.u.size)
+	if err = ctx.u.storeCompleted(lom, false /*override*/); err != nil {
+		return err
+	}
+
+	lom.SetAtimeUnix(ctx.u.created.UnixNano())
 	lom.setlmfl(lmflChunk)
 	debug.AssertFunc(func() bool { return lom.md.lid.haslmfl(lmflChunk) })
 
-	if err := lom.PersistMain(true /*isChunked*/); err != nil {
-		if prevUfest == nil {
-			lom.md.lid.clrlmfl(lmflChunk)
-		} else if wfqnFirst != "" && wfqnMeta != "" {
-			// rollback
-			_renameWarn(wfqnFirst, prevLom.FQN)
-			_renameWarn(wfqnMeta, completedFQN)
+	// chunked objects have no copies (combination not supported)
+	// old copies, if any, are removed in commit (dropPrev)
+	lom.md.copies = nil
+
+	if err = lom.PersistMain(true /*isChunked*/); err != nil {
+		if ctx.prevUfest == nil {
+			lom.clrlmfl(lmflChunk)
 		}
-		u.Abort(lom)
 		return err
 	}
+	return nil
+}
 
-	if prevUfest != nil {
-		if wfqnMeta != "" {
-			os.Remove(wfqnMeta)
+func (ctx *ucmpl) commit() {
+	if ctx.wfqnFirst != "" {
+		os.Remove(ctx.wfqnFirst)
+	}
+	if ctx.wfqnMeta != "" {
+		os.Remove(ctx.wfqnMeta)
+	}
+	ctx.dropPrev()
+}
+
+func (ctx *ucmpl) rollback() {
+	ctx.u.Abort(ctx.lom)
+
+	// remote buckets: evict both old and failed local data rather than trying to restore any of it
+	if ctx.remote {
+		ctx.dropPrev()
+		ctx.lom.UncacheDel()
+		for _, fqn := range []string{ctx.lom.FQN, ctx.prevLom.FQN, ctx.lom.GenFQN(fs.ChunkMetaCT), ctx.completedFQN} {
+			if err := cos.RemoveFile(fqn); err != nil {
+				nlog.Warningln("failed to discard local object:", fqn, err)
+			}
 		}
-		if wfqnFirst != "" {
-			os.Remove(wfqnFirst)
+		if ctx.prevLoaded && ctx.prevLom.HasShardIdx() {
+			if err := ctx.prevLom.rmSidx(); err != nil {
+				nlog.Warningln("failed to discard shard index:", ctx.prevLom.Cname(), err)
+			}
 		}
-		prevUfest.removeChunks(prevLom, true /*except first*/)
+		return
 	}
 
-	return nil
+	// ais buckets: restore
+	if ctx.wfqnFirst != "" {
+		_renameWarn(ctx.wfqnFirst, ctx.firstFQN)
+	}
+	if ctx.wfqnMeta != "" {
+		_renameWarn(ctx.wfqnMeta, ctx.completedFQN)
+	} else if ctx.publishing {
+		if e := cos.RemoveFile(ctx.completedFQN); e != nil {
+			nlog.Warningln("rollback", ctx.u._utag(ctx.lom.Cname()), "- failed to remove completed manifest [", e, "]")
+		}
+	}
+}
+
+// remove previous chunks (except first), copies, and shard index (if any exist)
+func (ctx *ucmpl) dropPrev() {
+	if ctx.prevUfest != nil {
+		ctx.prevUfest.removeChunks(ctx.prevLom, true /*except first*/)
+	}
+	if ctx.prevLoaded && ctx.prevLom.HasCopies() {
+		if err := ctx.prevLom.DelAllCopies(); err != nil {
+			nlog.Errorln("failed to delete old copies:", ctx.prevLom.Cname(), err)
+		}
+	}
+	if ctx.prevLom.HasShardIdx() {
+		if err := ctx.prevLom.rmSidx(); err != nil {
+			nlog.Warningln("failed to remove old shard index:", ctx.prevLom.Cname(), err)
+		}
+	}
+}
+
+// rename-aside; no-op when src doesn't exist (see also _renameWarn)
+func _stash(src, dst string) (string, error) {
+	if err := cos.Rename(src, dst); err != nil {
+		if cos.IsNotExist(err) {
+			if _, e := os.Lstat(src); cos.IsNotExist(e) {
+				return "", nil
+			}
+		}
+		return "", err
+	}
+	return dst, nil
 }
 
 func _renameWarn(src, dst string) (err error) {
