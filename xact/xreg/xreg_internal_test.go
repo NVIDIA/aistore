@@ -119,6 +119,11 @@ func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 	}
 	tassert.Fatalf(t, found,
 		"live get-batch xaction %q not found in GetSnap() result past the history cap", live.UUID())
+
+	// Abort must find the same live entry even when history excludes it.
+	AbortKind(cmn.ErrXactUserAbort, apc.ActGetBatch)
+	tassert.Fatalf(t, live.Get().IsAborted(), "live get-batch %q was not aborted past the history cap", live.UUID())
+	tassert.Fatalf(t, !dreg.entries.active[0].Get().IsAborted(), "unrelated LRU xaction was aborted")
 }
 
 // simulate `hkDelOld` reaping the (short-lived) x-lso history and shrinking `e.all`

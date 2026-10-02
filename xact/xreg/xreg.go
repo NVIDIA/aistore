@@ -618,7 +618,7 @@ func (e *entries) findUnlocked(flt *Flt) Renewable {
 func (e *entries) forEach(matcher func(entry Renewable) bool) {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
-	for _, entry := range e.all {
+	for _, entry := range e.active {
 		if !matcher(entry) {
 			return
 		}
