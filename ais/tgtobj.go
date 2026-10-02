@@ -193,11 +193,12 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err
 // and finally:
 // - copy to another target: HTTP PUT or DM receiver => destination PUT machinery => the same size check.
 //
-// Ownership: chunk() owns and closes poi.r, and owns the internal upload ID. On start,
-// part-write, or completion failure, it aborts the upload while preserving the original
-// error. force=true attempts local cleanup even if backend abort fails; secondary cleanup
-// errors are logged. skipBackend=true also skips backend abort. Filesystem cleanup is
-// best effort. Completion respects a caller-held destination write lock via poi.locked.
+// Ownership: chunk() owns and closes poi.r, and owns the internal upload ID. On failure,
+// it preserves the original error and aborts unless complete() has retired the upload.
+// Further:
+// - force=true attempts local cleanup even if backend abort fails;
+// - skipBackend=true also skips backend abort;
+// - cleanup upon any failure - is best effort.
 //
 // Explicit native/S3 MPU clients own their upload IDs and call ups.abort(force=false):
 // backend abort failure retains local upload state for retry, except for backend 404.
@@ -274,7 +275,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 
 	cos.Close(poi.r) // ditto
 	poi.r = nil
-	_, ecode, err = poi.t.ups.complete(&completeArgs{
+	cargs := completeArgs{
 		r:           poi.oreq,
 		lom:         lom,
 		uploadID:    uploadID,
@@ -283,8 +284,9 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		isS3:        false,
 		skipBackend: poi.skipBackend,
 		locked:      poi.locked,
-	})
-	if err != nil {
+	}
+	_, ecode, err = poi.t.ups.complete(&cargs)
+	if err != nil && !cargs.uploadClosed {
 		poi.t.ups.abort(poi.oreq, lom, uploadID, true /*force*/, poi.skipBackend)
 	}
 	return ecode, err

@@ -63,6 +63,9 @@ type (
 		isS3        bool
 		skipBackend bool
 		locked      bool // true if the LOM is already locked by the caller
+		// out
+		backendCompleted bool
+		uploadClosed     bool
 	}
 	// partCksums holds checksum state for a single part upload
 	partCksums struct {
@@ -427,7 +430,7 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		return "", ecode, err
 	}
 
-	// Finalize checksums (validate SHA256, store CRC32C and MD5)
+	// finalize checksums (validate SHA256, store CRC32C and MD5)
 	etag, err = pc.finalize(chunk, args.partNum, etag)
 	if err != nil {
 		return "", http.StatusBadRequest, err
@@ -457,7 +460,18 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 	return etag, ecode, nil
 }
 
+// failed local completion has closed (retired) the upload - neither retry nor abort applies
+func (args *completeArgs) closedErr(err error) error {
+	debug.Assert(args.uploadClosed)
+	if args.backendCompleted {
+		return fmt.Errorf("upload %q completed on the backend but failed locally: %w", args.uploadID, err)
+	}
+	return fmt.Errorf("upload %q failed to complete locally; start a new upload: %w", args.uploadID, err)
+}
+
 func (ups *ups) complete(args *completeArgs) (string, int, error) {
+	args.backendCompleted = false
+	args.uploadClosed = false
 	var (
 		lom      = args.lom
 		uploadID = args.uploadID
@@ -468,18 +482,25 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
 	}
 
-	// validate/enforce parts, compute etag
+	// 1. validate/enforce parts, compute etag
 	manifest.Lock()
 	etag, err := validatePartsEtag(lom, manifest, args.parts, args.isS3)
 	manifest.Unlock()
+
 	if err != nil {
 		return "", http.StatusBadRequest, err
 	}
 
-	// call remote
+	// 2. whole-object checksum (bucket-configured streaming or CRC32C)
+	cksum, err := manifest.WholeChecksum()
+	if err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+
+	// 3. complete remote
 	remote := lom.Bck().IsRemote()
 	if remote && !args.skipBackend { // skipBackend implies no need to write to backend
-		// NOTE: only OCI, AWS and GCP backends require ETag in the part list
+		// only OCI, AWS and GCP backends require ETag in the parts list
 		if lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI() || lom.Bck().IsRemoteGCP() {
 			for i := range args.parts {
 				if args.parts[i].ETag == "" {
@@ -489,12 +510,13 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 				}
 			}
 		}
-
+		// do
 		tag, ecode, err := ups._completeRemote(args.r, lom, uploadID, args.body, args.parts)
 		if err != nil {
 			return "", ecode, err
 		}
 		etag = tag
+		args.backendCompleted = true
 	}
 
 	if metadata != nil {
@@ -510,43 +532,35 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		lom.SetCustomKey(cmn.ETag, cmn.UnquoteCEV(etag))
 	}
 
-	// Whole-object checksum: use streaming checksum if valid, otherwise CRC32C combination
-	var locked bool
-	if !args.locked {
-		lom.Lock(true)
-		locked = true
-	}
-
-	cksum, err := manifest.WholeChecksum()
-	if err != nil {
-		if locked {
-			lom.Unlock(true)
-		}
-		return "", 0, err
-	}
 	lom.SetCksum(cksum)
 
-	// atomically flip: persist manifest, mark chunked, persist main
-	// NOTE: coldGET implies the LOM's lock has been promoted to wlock
-	err = lom.CompleteUfest(manifest, args.locked || locked)
-	if locked {
-		lom.Unlock(true)
-	}
+	// 4. complete local (with referential integrity across all edges)
+	err = lom.CompleteUfest(manifest, args.locked)
+	ups.del(uploadID)
+	args.uploadClosed = true
+
+	vlabs := xvlabs(lom.Bck())
 	if err != nil {
-		nlog.Errorf("upload %q: failed to complete %s locally: %v", uploadID, lom.Cname(), err)
+		if manifest.Completed() {
+			// the same upload has been completed by a concurrent caller (idempotence)
+			return cmn.QuoteETag(etag), 0, nil
+		}
+		nlog.Errorf("upload %q: failed to complete %s locally (backend completed: %t): %v",
+			uploadID, lom.Cname(), args.backendCompleted, err)
+		if args.backendCompleted {
+			t.statsT.IncWith(t.Backend(lom.Bck()).MetricName(stats.PutCount), vlabs)
+		}
 		return "", http.StatusInternalServerError, err
 	}
-
-	ups.del(uploadID)
 
 	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infoln(uploadID, "completed")
 	}
 
-	// stats (note that size is already counted via putPart)
-	vlabs := xvlabs(lom.Bck())
+	// 5. stats
+	// (the size is already counted via putPart)
 	t.statsT.IncWith(stats.PutCount, vlabs)
-	if remote {
+	if args.backendCompleted {
 		t.statsT.IncWith(t.Backend(lom.Bck()).MetricName(stats.PutCount), vlabs)
 	}
 

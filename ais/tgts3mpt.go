@@ -190,14 +190,19 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq,
 		partList = append(partList, mptPart)
 	}
 
-	etag, ecode, err := t.ups.complete(&completeArgs{
+	cargs := completeArgs{
 		r:        r,
 		lom:      lom,
 		uploadID: uploadID,
 		body:     body,
 		parts:    partList,
 		isS3:     true,
-	})
+	}
+	etag, ecode, err := t.ups.complete(&cargs)
+	if err != nil && cargs.uploadClosed {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: cargs.closedErr(err), Status: ecode, Code: "InternalError"})
+		return
+	}
 	// convert generic error to s3 error
 	if cos.IsNotExist(err) {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
@@ -309,11 +314,10 @@ func (t *target) listUploadsMptS3(w http.ResponseWriter, bck *meta.Bck, dpq *dpq
 	sgl.Free()
 }
 
-// Acts on an already multipart-uploaded object, returns `partNumber` (URL query)
-// part of the object.
-// The object must have been multipart-uploaded beforehand.
+// Acts on an already multipart-uploaded object, returns `partNumber` (URL query) part of the object
+// (the object must have been multipart-uploaded beforehand).
 // See:
-// https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
+// - https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
 func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM, dpq *dpq) {
 	startTime := mono.NanoTime()
 	if err := lom.InitBck(bck); err != nil {

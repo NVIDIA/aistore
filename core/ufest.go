@@ -467,9 +467,13 @@ func (u *Ufest) removeChunks(lom *LOM, exceptFirst bool) {
 	clear(u.chunks)
 }
 
+// (never called on a live completed manifest; may undo publication - see CompleteUfest rollback)
 func (u *Ufest) Abort(lom *LOM) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+
+	u.flags &^= flCompleted
+	u.completed.Store(false)
 
 	u.removeChunks(lom, false /*except first*/)
 	if u.id == "" {
@@ -1292,7 +1296,10 @@ type ucmpl struct {
 	publishing   bool
 }
 
-// runs under lom wlock - entire operation
+// runs under lom wlock - entire operation:
+// on error, the manifest is aborted and the caller must not reuse it
+// (nor the LOM's in-memory metadata);
+// the one exception is "already completed" (idempotence: the caller checks u.Completed())
 func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 	if !locked {
 		lom.Lock(true)
@@ -1300,7 +1307,7 @@ func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 	}
 	debug.Func(func() { debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname()) })
 
-	if err = u._errCompleted(lom); err != nil { // repeated completion is a no-op
+	if err = u._errCompleted(lom); err != nil { // (manifest intact - see above)
 		return err
 	}
 
@@ -1321,7 +1328,9 @@ func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 		// not loaded => prev LOM untrusted: no _stash() -
 		// prev chunks, copies, and shard index (if any) are left to space-cleanup
 	default:
+		// terminal
 		T.FSHC(errLoad, prevLom.Mountpath(), prevLom.FQN)
+		u.Abort(lom)
 		return errLoad
 	}
 
@@ -1411,13 +1420,7 @@ func (ctx *ucmpl) do() (err error) {
 	// old copies, if any, are removed in commit (dropPrev)
 	lom.md.copies = nil
 
-	if err = lom.PersistMain(true /*isChunked*/); err != nil {
-		if ctx.prevUfest == nil {
-			lom.clrlmfl(lmflChunk)
-		}
-		return err
-	}
-	return nil
+	return lom.PersistMain(true /*isChunked*/)
 }
 
 func (ctx *ucmpl) commit() {

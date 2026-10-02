@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"net"
@@ -1430,14 +1431,19 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 				break
 			}
 		}
-		_, ecode, err = t.ups.complete(&completeArgs{
+		cargs := completeArgs{
 			r:        r,
 			lom:      lom,
 			uploadID: uploadID,
 			body:     nil,
 			parts:    mptCompletedParts,
 			locked:   false,
-		})
+		}
+		_, ecode, err = t.ups.complete(&cargs)
+		if err != nil && cargs.uploadClosed {
+			e := cargs.closedErr(err)
+			err = errors.New(e.Error()) // special: ecode here takes precedence over "%w"
+		}
 	case apc.ActCheckLock:
 		t._checkLocked(w, r, apireq.bck, apireq.items[1])
 	default:
