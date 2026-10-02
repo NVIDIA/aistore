@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -31,15 +30,6 @@ import (
 // - add self-healing mechanism: detect the corrupted index on the fly and repair it
 
 const idxLogInterval = 30 * time.Second
-
-type idxStatus uint8
-
-const (
-	idxNone idxStatus = iota
-	idxNew
-	idxStale
-	idxCorrupt
-)
 
 type (
 	shardIndexFactory struct {
@@ -134,30 +124,33 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 		return nil
 	}
 
-	// buildIdx holds the read lock only while streaming the TAR; releases before returning.
-	idx, status := r.buildIdx(lom)
+	idx, status, err := r.buildIdx(lom)
+	if err != nil {
+		r.addIndexErr(err, status)
+		return nil
+	}
 	if idx == nil {
+		if status == core.ShardIndexExisting {
+			r.stats.skipHasIdx.Inc()
+		}
 		return nil
 	}
 	defer idx.Free()
 
+	if err := r.Context().Err(); err != nil {
+		r.addIndexErr(err, core.ShardIndexNone)
+		return nil
+	}
 	if err := lom.SaveShardIndex(idx); err != nil {
-		if cmn.IsErrBusy(err) {
-			// benign and expected (concurrent reader/writer): count it, record the (named)
-			// busy error but log it only sparsely
-			r.stats.skipBusy.Inc()
-			r.AddErr(err, 4)
-			return nil
-		}
-		r.AddErr(err, 0)
+		r.addIndexErr(err, core.ShardIndexNone)
 		return nil
 	}
 	switch status {
-	case idxNew:
+	case core.ShardIndexNew:
 		r.stats.indexed.Inc()
-	case idxStale:
+	case core.ShardIndexStale:
 		r.stats.stale.Inc()
-	case idxCorrupt:
+	case core.ShardIndexCorrupt:
 		r.stats.corrupt.Inc()
 	}
 	r.ObjsAdd(1, idx.SrcSize()) // the amount of data indexed
@@ -169,69 +162,43 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 	return nil
 }
 
-// Take rlock, load the LOM, check whether indexing is needed, scan the TAR, and
-// return the resulting ShardIndex.
-// Return (nil, idxNone) if the object is already indexed (up-to-date) or an error occurred.
-// Otherwise, the status indicates whether the index is new or replaces a stale/corrupt one.
-func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, idxStatus) {
+// Load and build under source(R); release before returning.
+// Caller frees the index and reports errors.
+func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, core.ShardIndexStatus, error) {
+	if err := r.Context().Err(); err != nil {
+		return nil, core.ShardIndexNone, err
+	}
+
 	lom.Lock(false)
 	defer lom.Unlock(false)
-
-	// jogger does not pre-load - load under our own lock.
+	if err := r.Context().Err(); err != nil {
+		return nil, core.ShardIndexNone, err
+	}
+	// jogger does not preload - load under our own lock
 	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
 		if cos.IsNotExist(err) {
-			return nil, idxNone
+			return nil, core.ShardIndexNone, nil
 		}
-		r.AddErr(err, 0)
-		return nil, idxNone
+		return nil, core.ShardIndexNone, err
 	}
 	if lom.IsCopy() {
-		return nil, idxNone
+		return nil, core.ShardIndexNone, nil
 	}
 
-	// SkipVerify=true:
-	// - trust HasShardIdx; skip without loading or verifying the index
-	// - stale indexes remain until next non-SkipVerify run or individual read (ErrShardIdxStale)
-	status := idxNew
-	if lom.HasShardIdx() {
-		if r.msg.SkipVerify {
-			r.stats.skipHasIdx.Inc()
-			return nil, idxNone
-		}
-		existing, err := lom.LoadShardIndex()
-		switch {
-		case errors.Is(err, archive.ErrShardIdxStale):
-			status = idxStale
-		case errors.Is(err, archive.ErrShardIdxCorrupt):
-			status = idxCorrupt
-		case err != nil:
-			r.AddErr(err, 4)
-			return nil, idxNone
-		case existing != nil:
-			existing.Free()
-			r.stats.skipHasIdx.Inc()
-			return nil, idxNone
-		}
-		// existing == nil: index absent or unreadable; fall through to re-index
-	}
+	// TAR scan is not interruptible; check cancellation again before saving.
+	return lom.BuildShardIndex(r.msg.SkipVerify)
+}
 
-	// start to index/re-index the shard
-	srcCksum := lom.Checksum() // capture under the read lock, for IsStale on the next load
-	srcSize := lom.Lsize()
-
-	fh, err := lom.Open()
-	if err != nil {
+func (r *xactShardIndex) addIndexErr(err error, status core.ShardIndexStatus) {
+	switch {
+	case status == core.ShardIndexLoadFailed:
+		r.AddErr(err, 4)
+	case cmn.IsErrBusy(err):
+		r.stats.skipBusy.Inc()
+		r.AddErr(err, 4)
+	default:
 		r.AddErr(err, 0)
-		return nil, idxNone
 	}
-
-	idx, err := archive.BuildShardIndex(fh, srcSize, srcCksum)
-	cos.Close(fh)
-	if err != nil {
-		r.AddErr(err, 0)
-		return nil, idxNone
-	}
-	return idx, status
 }
 
 func (r *xactShardIndex) Run(wg *sync.WaitGroup) {

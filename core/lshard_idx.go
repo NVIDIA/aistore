@@ -31,7 +31,65 @@ const IdxSuffix = ".idx" // is appended to the source object name when forming t
 
 const shardIdxSaneAlloc = cos.MiB
 
+// ShardIndexStatus is the result of checking the existing index.
+type ShardIndexStatus uint8
+
+const (
+	ShardIndexNone     ShardIndexStatus = iota // no result
+	ShardIndexExisting                         // valid or trusted by skipVerify
+	ShardIndexNew                              // no index
+	ShardIndexStale
+	ShardIndexCorrupt
+	ShardIndexLoadFailed // LoadShardIndex failed (other than stale/corrupt)
+)
+
 func (lom *LOM) HasShardIdx() bool { return lom.md.flags&lmflShardIdx != 0 }
+
+// BuildShardIndex checks the index and scans the source TAR if needed.
+// Caller holds source(R) or source(W); lom is loaded.
+// skipVerify trusts HasShardIdx. Stale indexes may remain undetected until
+// a verifying run or individual read (ErrShardIdxStale).
+// Returns (nil, ShardIndexExisting, nil) when no build is needed.
+// status is preserved if opening or scanning the source fails.
+// Caller must unlock before SaveShardIndex and Free the returned index when done.
+func (lom *LOM) BuildShardIndex(skipVerify bool) (idx *archive.ShardIndex, status ShardIndexStatus, err error) {
+	debug.Func(func() {
+		debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
+		debug.Assert(lom.loaded(), lom.Cname(), " is not loaded")
+	})
+	status = ShardIndexNew
+	if lom.HasShardIdx() {
+		// trust HasShardIdx when verification is skipped
+		if skipVerify {
+			return nil, ShardIndexExisting, nil
+		}
+
+		// try to load existing index
+		existing, err := lom.LoadShardIndex()
+		switch {
+		case errors.Is(err, archive.ErrShardIdxStale):
+			// rebuild
+			status = ShardIndexStale
+		case errors.Is(err, archive.ErrShardIdxCorrupt):
+			// rebuild
+			status = ShardIndexCorrupt
+		case err != nil:
+			return nil, ShardIndexLoadFailed, err
+		case existing != nil:
+			existing.Free()
+			return nil, ShardIndexExisting, nil
+		}
+	}
+
+	// open source and scan to build index
+	fh, err := lom.Open()
+	if err != nil {
+		return nil, status, err
+	}
+	defer cos.Close(fh)
+	idx, err = archive.BuildShardIndex(fh, lom.Lsize(), lom.Checksum())
+	return idx, status, err
+}
 
 func (lom *LOM) lookupShardIndex(archpath string) (entry archive.ShardIndexEntry, ok bool, err error) {
 	if !lom.HasShardIdx() {
