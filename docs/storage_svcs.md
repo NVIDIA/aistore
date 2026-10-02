@@ -383,7 +383,7 @@ Per-job `--chunk-size` and `--objsize-limit` overrides are deprecated as of v5.1
 
 Prefetch selects, per object, how to fetch it from the remote backend - a regular cold GET, or the blob downloader, which retrieves byte ranges in parallel. The prefetch `blob-threshold` expresses that intent; it does not prescribe storage layout.
 
-Planned for v5.2:
+As of v5.2:
 
 - `blob-threshold` == 0: regular cold GET.
 - With `blob-threshold` > 0 and bucket auto-chunking enabled: blob download only at or above max(`blob-threshold`, `chunks.objsize_limit`), using `chunks.chunk_size`.

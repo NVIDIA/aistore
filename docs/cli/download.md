@@ -21,7 +21,7 @@ USAGE:
    ais download SOURCE DESTINATION [command options]
 
 OPTIONS:
-   blob-threshold     Utilize built-in blob-downloader for remote objects greater than the specified (threshold) size
+   blob-threshold     Utilize built-in blob-downloader for remote objects at or above the specified (threshold) size
                       in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
    description,desc   job description
    download-timeout   Server-side time limit for downloading a single file from remote source;

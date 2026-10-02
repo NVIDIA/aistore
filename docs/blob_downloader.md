@@ -96,10 +96,11 @@ OPTIONS:
 
 ### 2. Prefetch with blob-threshold
 
-`prefetch` is AIStore's **multi‑object “warm‑up” job** for remote buckets. When you add a **blob size threshold**, it automatically decides which objects are large enough to benefit from blob downloader:
+`prefetch` is AIStore's **multi‑object “warm‑up” job** for remote buckets. A positive threshold below 1MiB is first raised to 1MiB. Prefetch then selects the fetch path as follows:
 
-- Objects **≥ `--blob-threshold`** are fetched via blob downloader (parallel range‑reads, chunked writes).
-- Objects **< `--blob-threshold`** are fetched with the normal cold GET path.
+- With bucket auto-chunking enabled, objects **≥ max(`--blob-threshold`, `chunks.objsize_limit`)** are fetched via blob downloader.
+- With auto-chunking disabled, objects **≥ `--blob-threshold`** are fetched via blob downloader (parallel range‑reads, chunked writes).
+- Objects below the applicable threshold are fetched with the normal cold GET path.
 
 This lets you get the large‑object gains of blob downloader by just tuning prefetch's knobs.
 
@@ -114,8 +115,9 @@ dataset.tar      8.30GiB         no
 config.json      4.20KiB         no
 
 # Prefetch with 1 GiB threshold:
-# - objects ≥ threshold use blob downloader (parallel chunks)
-# - objects < threshold use standard cold GET
+# - with auto-chunking enabled, objects ≥ max(1GiB, chunks.objsize_limit) use blob downloader
+# - otherwise, objects ≥ 1GiB use blob downloader
+# - smaller objects use standard cold GET
 $ ais prefetch s3://my-bucket \
       --blob-threshold 1GiB \
       --blob-chunk-size 8MiB \
@@ -125,8 +127,8 @@ prefetch-objects[E-abc123]: prefetch entire bucket s3://my-bucket
 
 Key prefetch options:
 
-- **`--blob-threshold SIZE`**: turn blob downloader on for objects at/above `SIZE`.
-- **`--blob-chunk-size SIZE`** (if available in your build): override default blob chunk size for this prefetch.
+- **`--blob-threshold SIZE`**: enable blob downloader at this size (also bounded by `chunks.objsize_limit` when auto-chunking is enabled).
+- **`--blob-chunk-size SIZE`**: chunk size when bucket auto-chunking is disabled; otherwise `chunks.chunk_size` applies.
 - **`--prefix` / `--list` / `--template`**: scope which objects are prefetched.
 
 ### 3. Streaming GET (Python SDK Only)
@@ -156,7 +158,7 @@ Each interface applies its own minimum object size:
 | Interface | Blob downloader is used for | Otherwise |
 |-----------|-----------------------------|-----------|
 | Single-object job (`ais blob-download`, `api.BlobDownload`) | any non-zero size | zero size: error |
-| Prefetch (`--blob-threshold`; zero disables) | objects at or above `max(blob-threshold, 1MiB)` | regular cold GET |
+| Prefetch (`--blob-threshold`; zero disables) | objects at or above `max(blob-threshold, 1MiB, chunks.objsize_limit)` when auto-chunking is enabled; otherwise `max(blob-threshold, 1MiB)` | regular cold GET |
 | Streaming GET (`Ais-Blob-Download`, `Ais-Blob-Threshold`) | objects at or above `max(Ais-Blob-Threshold, 128KiB)` | regular GET; no blob-download job |
 
 Notes:

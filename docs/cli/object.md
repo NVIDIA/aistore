@@ -2034,56 +2034,65 @@ USAGE:
    ais prefetch BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
 
 OPTIONS:
-   --blob-threshold value  Utilize built-in blob-downloader for remote objects greater than the specified (threshold) size
-                           in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
-   --dry-run               Preview the results without really running the action
-   --latest                Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
-                           from the associated remote bucket;
-                           the option provides operation-level control over object versioning (and version synchronization)
-                           without the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';
-                           see also:
-                             - 'ais show bucket BUCKET versioning'
-                             - 'ais bucket props set BUCKET versioning'
-                             - 'ais ls --check-versions'
-                           supported commands include:
-                             - 'ais cp', 'ais prefetch', 'ais get'
-   --list value            Comma-separated list of object or file names, e.g.:
-                           --list 'o1,o2,o3'
-                           --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
-                           or, when listing files and/or directories:
-                           --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
-   --non-recursive, --nr   Non-recursive operation, e.g.:
-                           - 'ais ls gs://bucket/prefix --nr'   - list objects and/or virtual subdirectories with names starting with the specified prefix;
-                           - 'ais ls gs://bucket/prefix/ --nr'  - list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
-                           - 'ais prefetch s3://bck/abcd --nr'  - prefetch a single named object (see 'ais prefetch --help' for details);
-                           - 'ais rmo gs://bucket/prefix --nr'  - remove a single object with the specified name (see 'ais rmo --help' for details)
-   --num-workers value     Number of concurrent workers (readers); defaults to a number of target mountpaths if omitted or zero;
-                           use (-1) to indicate single-threaded serial execution (ie., no workers);
-                           any positive value will be adjusted _not_ to exceed the number of target CPUs (default: 0)
-   --prefix value          Select virtual directories or objects with names starting with the specified prefix, e.g.:
-                           '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
-                           '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
-   --progress              Show progress bar(s) and progress of execution in real time
-   --refresh value         Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                           valid time units: ns, us (or µs), ms, s (default), m, h
-   --skip-lookup           Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
-                            1) adding remote bucket to aistore without first checking the bucket's accessibility
-                               (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
-                            2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
-   --template value        Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
-                           (with optional steps and gaps), e.g.:
-                           --template "" # (an empty or '*' template matches everything)
-                           --template 'dir/subdir/'
-                           --template 'shard-{1000..9999}.tar'
-                           --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                           and similarly, when specifying files and directories:
-                           --template '/home/dir/subdir/'
-                           --template "/abc/prefix-{0010..9999..2}-suffix"
-   --timeout value         Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
-                           valid time units: ns, us (or µs), ms, s (default), m, h
-   --wait                  Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
-   --yes, -y               Assume 'yes' to all questions
-   --help, -h              Show help
+   blob-chunk-size   Preferred chunk size for each blob-download started by prefetch (in IEC or SI units, or "raw" bytes; e.g.: 4mb, 1MiB, 1048576);
+                     silently clamped by the server to a permitted range;
+                     only takes effect with '--blob-threshold' when bucket auto-chunking is disabled; otherwise, 'chunks.chunk_size' applies
+   blob-num-workers  Preferred number of workers for each blob-download started by prefetch; auto-tuned when not specified;
+                     use (-1) to indicate single-threaded serial execution (ie., no workers);
+                     silently clamped by the server to a permitted range based on the object size and available system resources;
+                     only takes effect together with '--blob-threshold'
+   blob-threshold    Utilize built-in blob-downloader for remote objects at or above the specified (threshold) size
+                     in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
+   dry-run           Preview the results without really running the action
+   latest            Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
+                     from the associated remote bucket;
+                     the option provides operation-level control over object versioning (and version synchronization)
+                     without the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';
+                     see also:
+                       - 'ais show bucket BUCKET versioning'
+                       - 'ais bucket props set BUCKET versioning'
+                       - 'ais ls --check-versions'
+                     supported commands include:
+                       - 'ais cp', 'ais prefetch', 'ais get', 'ais start rebalance', 'ais etl inspect'
+   list              Comma-separated list of object or file names, e.g.:
+                     --list 'o1,o2,o3'
+                     --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                     or, when listing files and/or directories:
+                     --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   non-recursive,nr  Non-recursive operation, e.g.:
+                     - 'ais ls gs://bck/sub --nr'               - list objects and/or virtual subdirectories with names starting with the specified prefix;
+                     - 'ais ls gs://bck/sub/ --nr'              - list only immediate contents of 'sub/' subdirectory (non-recursive);
+                     - 'ais prefetch s3://bck/abcd --nr'        - prefetch a single named object;
+                     - 'ais evict gs://bck/sub/ --nr'           - evict only immediate contents of 'sub/' subdirectory (non-recursive);
+                     - 'ais evict gs://bck --prefix=sub/ --nr'  - same as above
+   num-workers       Number of concurrent workers; auto-computed (from system resources and storage media type) if omitted or zero;
+                     use (-1) to indicate single-threaded serial execution (ie., no workers);
+                     any positive value will be adjusted _not_ to exceed the number of target CPUs
+   prefix            Select virtual directories or objects with names starting with the specified prefix, e.g.:
+                     '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                     '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   progress          Show progress bar(s) and progress of execution in real time; 'object get' with multiple objects: show number of objects processed
+   refresh           Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   skip-lookup       Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                      1) adding remote bucket to aistore without first checking the bucket's accessibility
+                         (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                      2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   template          Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                     (with optional steps and gaps), e.g.:
+                     --template "" # (an empty or '*' template matches everything)
+                     --template 'dir/subdir/'
+                     --template 'shard-{1000..9999}.tar'
+                     --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                     and similarly, when specifying files and directories:
+                     --template '/home/dir/subdir/'
+                     --template "/abc/prefix-{0010..9999..2}-suffix"
+   timeout           Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   wait              Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   yes,y             Assume 'yes' to all questions
+   help, h           Show help
+
 ```
 
 Note usage examples above. You can always run `--help` option to see the most recently updated inline help.

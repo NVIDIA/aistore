@@ -1098,14 +1098,14 @@ var (
 
 	blobThresholdFlag = cli.StringFlag{
 		Name: "blob-threshold",
-		Usage: "Utilize built-in blob-downloader for remote objects greater than the specified (threshold) size\n" +
+		Usage: "Utilize built-in blob-downloader for remote objects at or above the specified (threshold) size\n" +
 			indent1 + "\tin IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
 	}
 	blobChunkSizeFlag = cli.StringFlag{
 		Name: "blob-chunk-size",
 		Usage: "Preferred chunk size for each blob-download started by prefetch (in IEC or SI units, or \"raw\" bytes; e.g.: 4mb, 1MiB, 1048576);\n" +
 			indent1 + "\tsilently clamped by the server to a permitted range;\n" +
-			indent1 + "\tonly takes effect together with '--blob-threshold'",
+			indent1 + "\tonly takes effect with '--blob-threshold' when bucket auto-chunking is disabled; otherwise, 'chunks.chunk_size' applies",
 	}
 	blobNumWorkersFlag = cli.IntFlag{
 		Name: "blob-num-workers",

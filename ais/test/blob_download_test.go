@@ -1077,6 +1077,83 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 	}
 }
 
+func TestPrefetchChunkPolicy(t *testing.T) {
+	const (
+		bucketChunk  = 512 * cos.KiB
+		requestChunk = 256 * cos.KiB
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: cliBck, Long: true})
+	tests := []struct {
+		name                                      string
+		objSize, threshold, objLimit, requestSize int64
+		wantChunked                               bool
+		wantBlob                                  bool
+	}{
+		{name: "threshold-disabled", objSize: 2*cos.MiB + 17, objLimit: cos.MiB,
+			requestSize: requestChunk, wantChunked: true},
+		{name: "bucket-threshold-wins", objSize: 1536*cos.KiB + 17, threshold: cos.MiB,
+			objLimit: 2 * cos.MiB, requestSize: requestChunk},
+		{name: "request-threshold-wins", objSize: 2 * cos.MiB, threshold: 2 * cos.MiB,
+			objLimit: cos.MiB, requestSize: requestChunk, wantChunked: true, wantBlob: true},
+		{name: "auto-disabled", objSize: 2*cos.MiB + 17, threshold: cos.MiB,
+			requestSize: requestChunk, wantChunked: true, wantBlob: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			proxyURL := tools.RandomProxyURL(t)
+			bp := tools.BaseAPIParams(proxyURL)
+			bck := cmn.Bck{Name: "prefetch-policy-" + trand.String(8), Provider: apc.AIS}
+			props := &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+				ObjSizeLimit: apc.Ptr(cos.SizeIEC(tc.objLimit)), ChunkSize: apc.Ptr(cos.SizeIEC(bucketChunk)),
+			}}
+			tools.CreateBucket(t, proxyURL, bck, props, true /* cleanup */)
+			tools.SetBackendBck(t, bp, bck, cliBck)
+
+			objName := "prefetch-policy/" + tc.name + "-" + trand.String(8)
+			reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: tc.objSize, CksumType: cos.ChecksumNone})
+			tassert.CheckFatal(t, err)
+			tools.PutObject(t, cliBck, objName, reader, uint64(tc.objSize))
+			defer api.DeleteObject(bp, cliBck, objName)
+			tassert.CheckFatal(t, api.EvictObject(bp, cliBck, objName))
+
+			msg := &apc.PrefetchMsg{ListRange: apc.ListRange{ObjNames: []string{objName}},
+				BlobThreshold: tc.threshold, BlobChunkSize: tc.requestSize}
+			xid, err := api.Prefetch(bp, bck, msg)
+			tassert.CheckFatal(t, err)
+			err = api.WaitForXaction(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout})
+			tassert.CheckFatal(t, err)
+
+			marker := " job:[cold:(1,"
+			if tc.wantBlob {
+				marker = " job:[blob-started:(1,"
+			}
+			snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
+			tassert.CheckFatal(t, err)
+			matched := false
+			for _, targetSnaps := range snaps {
+				for _, snap := range targetSnaps {
+					matched = matched || snap.ID == xid && strings.Contains(snap.CtlMsg, marker)
+				}
+			}
+			tassert.Fatalf(t, matched, "expected prefetch stats to contain %q", marker)
+
+			op, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsChunked, api.HeadArgs{})
+			tassert.CheckFatal(t, err)
+			if !tc.wantChunked {
+				tassert.Fatalf(t, op.Chunks == nil || op.Chunks.ChunkCount == 0, "expected monolithic object, got %+v", op.Chunks)
+				return
+			}
+			wantChunkSize := int64(bucketChunk)
+			if tc.objLimit == 0 {
+				wantChunkSize = tc.requestSize
+			}
+			wantChunks := int((tc.objSize + wantChunkSize - 1) / wantChunkSize)
+			tassert.Fatalf(t, op.Chunks != nil && op.Chunks.ChunkCount == wantChunks && op.Chunks.MaxChunkSize == wantChunkSize,
+				"expected %d chunks of up to %s, got %+v", wantChunks, cos.ToSizeIEC(wantChunkSize, 0), op.Chunks)
+		})
+	}
+}
+
 func TestGetObjectBlobThreshold(t *testing.T) {
 	const objSize = 16 * cos.MiB
 	tests := []struct {
@@ -1516,71 +1593,6 @@ func TestPrefetchBlobInvalidWorkers(t *testing.T) {
 		tassert.Fatalf(t, err != nil, "expected error for blob-num-workers=%d, got nil", n)
 		tassert.Fatalf(t, strings.Contains(err.Error(), "blob-num-workers"),
 			"expected error to mention 'blob-num-workers', got: %v", err)
-	}
-}
-
-// TestPrefetchBlobChunkSize validates that PrefetchMsg.BlobChunkSize is honored:
-// the prefetched object is byte-equal to the source, and on disk it is split
-// into ceil(objSize/chunkSize) chunks (which is the only externally observable
-// effect of the new param).
-func TestPrefetchBlobChunkSize(t *testing.T) {
-	const (
-		objSize    = 8 * cos.MiB // small but > MinBlobDlPrefetchSize (1MiB)
-		blobThresh = cos.MiB
-	)
-
-	chunkSizes := []int64{cos.MiB, 2 * cos.MiB}
-
-	for _, chunkSize := range chunkSizes {
-		t.Run("chunk-"+cos.ToSizeIEC(chunkSize, 0), func(t *testing.T) {
-			var (
-				proxyURL   = tools.RandomProxyURL(t)
-				baseParams = tools.BaseAPIParams(proxyURL)
-				bck        = cliBck
-				uniq       = "prefetch-blob-chunk/" + trand.String(5)
-				objName    = uniq + "/obj"
-			)
-
-			tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck, Long: true})
-			initMountpaths(t, proxyURL)
-
-			tlog.Logfln("Provisioning %s of size %s", objName, cos.ToSizeIEC(objSize, 0))
-			reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
-			tassert.CheckFatal(t, err)
-			tools.PutObject(t, bck, objName, reader, uint64(objSize))
-			defer api.DeleteObject(baseParams, bck, objName)
-
-			tlog.Logfln("Evicting %s", objName)
-			tassert.CheckFatal(t, api.EvictObject(baseParams, bck, objName))
-
-			msg := &apc.PrefetchMsg{
-				BlobThreshold: blobThresh,
-				BlobChunkSize: chunkSize,
-			}
-			msg.Template = uniq + "/*"
-
-			tlog.Logfln("Prefetching with blob-threshold=%s, blob-chunk-size=%s",
-				cos.ToSizeIEC(blobThresh, 0), cos.ToSizeIEC(chunkSize, 0))
-			xid, err := api.Prefetch(baseParams, bck, msg)
-			tassert.CheckFatal(t, err)
-			args := xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
-			err = api.WaitForXaction(baseParams, &args)
-			tassert.CheckFatal(t, err)
-
-			// Byte-equality check.
-			result, size, err := api.GetObjectReader(baseParams, bck, objName, nil)
-			tassert.CheckFatal(t, err)
-			tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
-			readerDup, err := reader.Open()
-			tassert.CheckFatal(t, err)
-			tassert.Fatalf(t, tools.ReaderEqual(readerDup, result), "data mismatch after blob prefetch")
-
-			// On-disk chunk count: the only externally observable effect of BlobChunkSize.
-			expected := int((int64(objSize) + chunkSize - 1) / chunkSize)
-			tlog.Logfln("Verifying object has at least %d chunks", expected)
-			m := &ioContext{t: t, bck: bck}
-			m.validateChunksOnDisk(bck, objName, expected)
-		})
 	}
 }
 
