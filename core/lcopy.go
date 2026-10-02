@@ -314,6 +314,12 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to create Ufest for destination %s: %w", dst.Cname(), err)
 	}
+	partialFQN := dstUfest._fqns(dst, false /*completed*/) // before storeCompleted (fntl)
+	defer func() {
+		if err := cos.RemoveFile(partialFQN); err != nil {
+			nlog.Warningln("failed to remove partial manifest:", partialFQN, err)
+		}
+	}()
 
 	// Copy each chunk from source to destination
 	srcUfest.Lock()
@@ -334,14 +340,14 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 
 			dstChunk, err := dstUfest.NewChunk(int(srcChunk.Num()), dst)
 			if err != nil {
-				errCh <- dstUfest._undoCopy(fmt.Errorf("failed to create destination chunk %d: %w", srcChunk.Num(), err))
+				errCh <- fmt.Errorf("failed to create destination chunk %d: %w", srcChunk.Num(), err)
 				return
 			}
 
 			_, _, err = cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, srcChunk.cksum.Type())
 			if err != nil {
-				errCh <- dstUfest._undoCopy(fmt.Errorf("failed to copy chunk %d from %s to %s: %w",
-					srcChunk.Num(), srcChunk.Path(), dstChunk.Path(), err))
+				errCh <- fmt.Errorf("failed to copy chunk %d from %s to %s: %w",
+					srcChunk.Num(), srcChunk.Path(), dstChunk.Path(), err)
 				return
 			}
 
@@ -351,7 +357,7 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 
 			err = dstUfest.Add(dstChunk, srcChunk.Size(), int64(srcChunk.Num()))
 			if err != nil {
-				errCh <- dstUfest._undoCopy(fmt.Errorf("failed to add chunk %d to destination manifest: %w", srcChunk.Num(), err))
+				errCh <- fmt.Errorf("failed to add chunk %d to destination manifest: %w", srcChunk.Num(), err)
 				return
 			}
 		}(srcUfest.chunks[i])
@@ -395,7 +401,7 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 }
 
 func (u *Ufest) _undoCopy(err error) error {
-	u.removeChunks(u.lom, false /*except first*/)
+	u.Abort(u.lom)
 	return err
 }
 
