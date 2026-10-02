@@ -216,8 +216,11 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Version()).To(BeEquivalentTo("second_version"))
 				Expect(lom.GetCopies()).To(HaveLen(3))
 
+				dst := newBasicLom(cachedFQN + "-copy")
+				dst.Lock(true)
+				defer dst.Unlock(true)
 				buf := make([]byte, cos.KiB)
-				newLom, err := lom.Copy2FQN(cachedFQN+"-copy", buf)
+				newLom, err := lom.Copy2FQN(dst.FQN, buf)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = newLom.Load(false, false)

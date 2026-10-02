@@ -798,6 +798,11 @@ var _ = Describe("LOM", func() {
 				lom.Lock(true)
 				defer lom.Unlock(true)
 			}
+			dst = newBasicLom(fqn)
+			if dst.Uname() != lom.Uname() {
+				dst.Lock(true)
+				defer dst.Unlock(true)
+			}
 			dst, err = lom.Copy2FQN(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(dst.FQN).To(BeARegularFile())
@@ -1034,6 +1039,33 @@ var _ = Describe("LOM", func() {
 				Expect(copyLOM.HasCopies()).To(BeTrue())
 				Expect(copyLOM.NumCopies()).To(Equal(lom.NumCopies()))
 				Expect(copyLOM.GetCopies()).To(Equal(lom.GetCopies()))
+			})
+
+			It("should preserve destination when copying a later source chunk fails", func() {
+				lom := prepareLOMChunked(copyFQNs[0], 3)
+				dst := prepareLOM(copyFQNs[0] + "-failed-copy")
+				prevHash := getTestFileHash(dst.FQN)
+
+				lom.Lock(false)
+				defer lom.Unlock(false)
+				dst.Lock(true)
+				defer dst.Unlock(true)
+
+				u, err := core.NewUfest("", lom, true)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(u.LoadCompleted(lom)).To(Succeed())
+				chunk, err := u.GetChunk(3)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(os.Remove(chunk.Path())).To(Succeed())
+
+				// Chunk #1 is readable, but the copy cannot complete.
+				copyLOM, err := lom.Copy2FQN(dst.FQN, make([]byte, 32*cos.KiB))
+				if copyLOM != nil {
+					defer core.FreeLOM(copyLOM)
+				}
+				Expect(err).To(MatchError(ContainSubstring(chunk.Path())))
+				Expect(copyLOM).To(BeNil())
+				Expect(getTestFileHash(dst.FQN)).To(Equal(prevHash))
 			})
 
 			It("should successfully copy chunked object with all chunks", func() {
