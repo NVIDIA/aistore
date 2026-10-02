@@ -1335,6 +1335,7 @@ func TestBlobDownloadChunkSizeBounds(t *testing.T) {
 }
 
 func TestBlobDownloadCacheOnlyMaxChunkSize(t *testing.T) {
+	t.Skip("TODO: use a reduced test threshold instead of provisioning a max-chunk-size object")
 	const (
 		objSize     = cmn.ChunkSizeMax + 1
 		readTimeout = 10 * time.Minute

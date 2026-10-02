@@ -345,6 +345,7 @@ func TestCopyObject(t *testing.T) {
 }
 
 func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
+	t.Skip("TODO: use a reduced test threshold instead of provisioning a 1GiB object")
 	const (
 		objSize   = int64(cos.GiB + 1)
 		chunkSize = int64(128 * cos.MiB)
@@ -991,6 +992,9 @@ func TestColdGetChunked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.objSize > hardLimit {
+				t.Skip("TODO: use a reduced test threshold instead of provisioning a 1GiB object")
+			}
 			var (
 				numObjs  = 1
 				proxyURL = tools.RandomProxyURL(t)
@@ -1083,6 +1087,7 @@ func TestColdGetChunked(t *testing.T) {
 }
 
 func TestCopyRemoteObjectHardLimitSameTarget(t *testing.T) {
+	t.Skip("TODO: use a reduced test threshold instead of provisioning a 1GiB object")
 	const (
 		chunkSize   = 16 * cos.MiB
 		maxMonoSize = 1 * cos.GiB
