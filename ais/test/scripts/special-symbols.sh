@@ -39,8 +39,8 @@ done
 FILE="$(mktemp)"
 
 cleanup() {
-  rm -f "$FILE"
   rc=$?
+  rm -f "$FILE"
   if [[ "$keep" == "false" ]]; then
     ais rmb "$bucket" --yes >/dev/null 2>&1 || true
   fi
