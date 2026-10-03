@@ -157,8 +157,10 @@ class ObjectFileWriter(BufferedIOBase):
     manager or call `close()` to finalize the object. Finalization only warns
     if the writer is left open; it does not send requests to the cluster.
 
-    Entering a context with a closed writer raises `ValueError`. Create a new
-    writer with `ObjectWriter.as_file()` to write again.
+    Write mode truncates the object when the writer is created. Entering a
+    context preserves any data already written by the open writer. Entering a
+    context with a closed writer raises `ValueError`. Create a new writer with
+    `ObjectWriter.as_file()` to write again.
 
     Args:
         obj_writer (ObjectWriter): The ObjectWriter instance for handling write operations.
@@ -177,13 +179,6 @@ class ObjectFileWriter(BufferedIOBase):
         if self._mode == "w":
             self._obj_writer.put_content(b"")
         self._closed = False
-
-    @override
-    def __enter__(self, *args, **kwargs):
-        super().__enter__()
-        if self._mode == "w":
-            self._obj_writer.put_content(b"")
-        return self
 
     @property
     def closed(self) -> bool:

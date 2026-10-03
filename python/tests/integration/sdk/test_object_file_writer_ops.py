@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -84,6 +84,21 @@ class TestObjectFileWriterOps(unittest.TestCase):
         expected_content = b"".join(self.data_to_write)
         current_content = self.object.get_reader().read_all()
         self.assertEqual(current_content, expected_content)
+
+    def test_write_mode_context_preserves_flushed_content(self):
+        """Entering a context must not erase content flushed by the same writer."""
+        writer = self.object.get_writer().as_file(mode="w")
+        self.addCleanup(writer.close)
+        writer.write(b"before context")
+        writer.flush()
+
+        with writer:
+            self.assertEqual(self.object.get_reader().read_all(), b"before context")
+            writer.write(b"inside context")
+
+        self.assertEqual(
+            self.object.get_reader().read_all(), b"before contextinside context"
+        )
 
     def test_write_mode_a_existing_object(self):
         """Test writing in 'a' mode to an existing object with multiple writes."""
