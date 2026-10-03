@@ -496,7 +496,7 @@ func (server *netServer) _listenAndServeKtls() error {
 		configureTCP = server.configureTCP
 	}
 
-	listener, err := newKtlsListener(ln, server.s.TLSConfig, server._timeout(), configureTCP)
+	listener, err := newKtlsListener(ln, server.s.TLSConfig, configureTCP)
 	if err != nil {
 		ln.Close()
 		return err
@@ -507,18 +507,6 @@ func (server *netServer) _listenAndServeKtls() error {
 
 // reuse server.connStateListener (see below)
 func (server *netServer) configureTCP(tcp *net.TCPConn) { server.connStateListener(tcp, http.StateNew) }
-
-// see http.Server.tlsHandshakeTimeout()
-// ref: https://github.com/golang/go/blob/master/src/net/http/server.go
-func (server *netServer) _timeout() (timeout time.Duration) {
-	s := server.s
-	for _, v := range []time.Duration{s.ReadHeaderTimeout, s.ReadTimeout, s.WriteTimeout} {
-		if v > 0 && (timeout == 0 || v < timeout) {
-			timeout = v
-		}
-	}
-	return
-}
 
 func newTLS(conf *cmn.TLSConf, cl *certloader.CertLoader) (tlsConf *tls.Config, err error) {
 	var (

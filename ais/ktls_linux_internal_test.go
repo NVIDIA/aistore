@@ -219,7 +219,7 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			defer raw.Close()
 
-			l, err := newKtlsListener(raw, serverConf, testktlsTimeout, nil)
+			l, err := newKtlsListener(raw, serverConf, nil)
 			tassert.CheckFatal(t, err)
 			type result struct {
 				err     error

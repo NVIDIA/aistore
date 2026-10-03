@@ -40,7 +40,7 @@ AIStore runs on commodity Linux machines with no special requirements. It is exp
 
 * [Linux](#linux) with `gcc`, `sysstat`, `attr`, `util-linux`
 * Linux **kernel ≥ 6.8**
-* [Go ≥ 1.26](https://golang.org/dl/) (or build via `CROSS_COMPILE`)
+* [Go ≥ 1.27](https://golang.org/dl/) (or build via `CROSS_COMPILE`)
 * Local filesystem with **extended attributes** ([xattrs](https://en.wikipedia.org/wiki/Extended_file_attributes)) enabled
 * **Optional** – cloud credentials (AWS, GCP, Azure, OCI)
 
@@ -678,7 +678,7 @@ $ ais cp --help
 To quickly set up AIStore (with AWS and GCP backends) in a [Google Colab](https://colab.research.google.com/) notebook, use our ready-to-use [notebook](https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb):
 
 **Important Notes:**
-- This sample installs Go v1.26.8, the toolchain used by the current release.
+- This sample installs Go v1.27.1, the toolchain required by `main`.
 - AIStore runs in the background. However, if you stop any cell, it sends a "SIGINT" (termination signal) to all background processes, terminating AIStore. To restart AIStore, simply rerun the relevant cell.
 
 ### Kubernetes Playground

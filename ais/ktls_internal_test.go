@@ -6,6 +6,7 @@ package ais
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
@@ -107,7 +108,7 @@ func testktlsClientConf(cache tls.ClientSessionCache) *tls.Config {
 func testktlsNewListener(t *testing.T, raw net.Listener) *ktlsListener {
 	t.Helper()
 
-	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), nil)
 	tassert.CheckFatal(t, err)
 
 	// Unit tests must remain independent of the host kernel and of the real
@@ -133,11 +134,13 @@ func testktlsListen(t testing.TB, l net.Listener) <-chan testktlsServer {
 			ch <- testktlsServer{err: errKtlsActive} // any non-nil; type is the failure
 			return
 		}
-		// net/http through Go 1.26 arms via ConnectionState (see (*ktlsConn).init)
-		c.ConnectionState()
-		if c.initErr != nil {
+		// Direct callers own handshake initiation and its timeout.
+		ctx, cancel := context.WithTimeout(t.Context(), testktlsTimeout)
+		err = c.HandshakeContext(ctx)
+		cancel()
+		if err != nil {
 			c.Close()
-			ch <- testktlsServer{err: c.initErr}
+			ch <- testktlsServer{err: err}
 			return
 		}
 		ch <- testktlsServer{conn: c}
@@ -318,6 +321,8 @@ func TestKTLSTxConcurrentInit(t *testing.T) {
 	tassert.CheckFatal(t, srv.err)
 	defer srv.conn.Close()
 
+	ctx, cancel := context.WithTimeout(t.Context(), testktlsTimeout)
+	defer cancel()
 	const concurrency = 16
 	var wg sync.WaitGroup
 	errCh := make(chan error, concurrency)
@@ -327,7 +332,7 @@ func TestKTLSTxConcurrentInit(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			errCh <- srv.conn.HandshakeContext(t.Context())
+			errCh <- srv.conn.HandshakeContext(ctx)
 		}()
 	}
 	close(start)
@@ -369,7 +374,7 @@ func TestKTLSTxTLS12Handshake(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer raw.Close()
 
-	l, err := newKtlsListener(raw, serverConf, testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, serverConf, nil)
 	tassert.CheckFatal(t, err)
 	observed := make(chan ktlsParams, 1)
 	l.install = func(_ *net.TCPConn, params *ktlsParams) (bool, error) {
@@ -533,9 +538,8 @@ func TestKTLSTxTLS12KeyDerivation(t *testing.T) {
 	tassert.Errorf(t, supported && err != nil, "invalid master-secret size accepted")
 }
 
-// Exercises the actual net/http integration rather than driving the wrapped
-// connection directly. Go 1.26 initializes through ConnectionState; Go 1.27+
-// calls HandshakeContext first.
+// Exercises net/http handshake, Request.TLS, and HTTP/1.1 ALPN selection
+// with a client that also offers HTTP/2.
 func TestKTLSTxHTTPServerFallback(t *testing.T) {
 	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	tassert.CheckFatal(t, err)
@@ -574,9 +578,11 @@ func TestKTLSTxHTTPServerFallback(t *testing.T) {
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(l) }()
 
+	clientConf := testktlsClientConf(nil)
+	clientConf.NextProtos = []string{"h2", "http/1.1"}
 	transport := &http.Transport{
-		TLSClientConfig:   testktlsClientConf(nil),
-		ForceAttemptHTTP2: false,
+		TLSClientConfig:   clientConf,
+		ForceAttemptHTTP2: true,
 	}
 	client := &http.Client{Transport: transport, Timeout: testktlsTimeout}
 	t.Cleanup(func() {
@@ -601,6 +607,7 @@ func TestKTLSTxHTTPServerFallback(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	tassert.CheckFatal(t, err)
 	tassert.CheckError(t, resp.Body.Close())
+	tassert.Errorf(t, resp.ProtoMajor == 1 && resp.ProtoMinor == 1, "expected HTTP/1.1, got %s", resp.Proto)
 	tassert.Errorf(t, resp.StatusCode == http.StatusOK, "expected status 200, got %d", resp.StatusCode)
 	tassert.Errorf(t, string(body) == "aistore", "expected %q, got %q", "aistore", body)
 
@@ -612,43 +619,60 @@ func TestKTLSTxHTTPServerFallback(t *testing.T) {
 	tassert.Errorf(t, got.proto == "http/1.1", "expected http/1.1, got %q", got.proto)
 }
 
-func TestKTLSTxReadHeaderTimeout(t *testing.T) {
-	raw, err := net.Listen("tcp", "127.0.0.1:0")
-	tassert.CheckFatal(t, err)
-	t.Cleanup(func() { _ = raw.Close() })
-	l := testktlsNewListener(t, raw)
+func TestKTLSTxHTTPServerTimeout(t *testing.T) {
+	for _, phase := range []string{"handshake", "headers", "handshake-write-timeout"} {
+		t.Run(phase, func(t *testing.T) {
+			raw, err := net.Listen("tcp", "127.0.0.1:0")
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { _ = raw.Close() })
+			l := testktlsNewListener(t, raw)
 
-	server := &http.Server{
-		ReadHeaderTimeout: 50 * time.Millisecond,
-		Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-			t.Error("handler reached with an incomplete request header")
-		}),
-	}
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- server.Serve(l) }()
-	t.Cleanup(func() {
-		_ = server.Close()
-		select {
-		case err := <-serveErr:
-			if !errors.Is(err, http.ErrServerClosed) {
-				t.Errorf("unexpected kTLS test server error: %v", err)
+			server := &http.Server{
+				ReadHeaderTimeout: 50 * time.Millisecond,
+				Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+					t.Error("handler reached before handshake and headers completed")
+				}),
 			}
-		case <-time.After(testktlsTimeout):
-			t.Error("timed out waiting for kTLS test server to stop")
-		}
-	})
+			if phase == "handshake-write-timeout" {
+				// WriteTimeout alone must also bound handshake reads.
+				server.ReadHeaderTimeout = 0
+				server.WriteTimeout = 50 * time.Millisecond
+			}
+			serveErr := make(chan error, 1)
+			go func() { serveErr <- server.Serve(l) }()
+			t.Cleanup(func() {
+				_ = server.Close()
+				select {
+				case err := <-serveErr:
+					if !errors.Is(err, http.ErrServerClosed) {
+						t.Errorf("unexpected kTLS test server error: %v", err)
+					}
+				case <-time.After(testktlsTimeout):
+					t.Error("timed out waiting for kTLS test server to stop")
+				}
+			})
 
-	client, err := tls.Dial("tcp", raw.Addr().String(), testktlsClientConf(nil))
-	tassert.CheckFatal(t, err)
-	t.Cleanup(func() { _ = client.Close() })
-	_, err = io.WriteString(client, "GET / HTTP/1.1\r\nHost: localhost\r\n")
-	tassert.CheckFatal(t, err)
-	_ = client.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, err = client.Read(make([]byte, 1))
-	tassert.Fatalf(t, err != nil, "incomplete header unexpectedly produced a response")
-	var netErr net.Error
-	tassert.Errorf(t, !errors.As(err, &netErr) || !netErr.Timeout(),
-		"ReadHeaderTimeout was cleared by lazy kTLS initialization: %v", err)
+			var client net.Conn
+			if phase != "headers" {
+				// Stay silent: net/http must bound the wrapped connection handshake.
+				client, err = net.Dial("tcp", raw.Addr().String())
+			} else {
+				client, err = tls.Dial("tcp", raw.Addr().String(), testktlsClientConf(nil))
+			}
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { _ = client.Close() })
+			if phase == "headers" {
+				_, err = io.WriteString(client, "GET / HTTP/1.1\r\nHost: localhost\r\n")
+				tassert.CheckFatal(t, err)
+			}
+			_ = client.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, err = client.Read(make([]byte, 1))
+			tassert.Fatalf(t, err != nil, "stalled %s unexpectedly produced a response", phase)
+			var netErr net.Error
+			tassert.Errorf(t, !errors.As(err, &netErr) || !netErr.Timeout(),
+				"server did not enforce the configured timeout during %s: %v", phase, err)
+		})
+	}
 }
 
 func TestKTLSTxSendfileEligibility(t *testing.T) {
@@ -663,14 +687,14 @@ func TestKTLSTxListenerRejects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer raw.Close()
 
-	_, err = newKtlsListener(raw, nil, testktlsTimeout, nil)
+	_, err = newKtlsListener(raw, nil, nil)
 	tassert.Errorf(t, err != nil, "nil TLS config accepted")
 
 	// crypto/tls swaps the entire per-connection config, dropping KeyLogWriter
 	conf := testktlsServerConf(t)
 	conf.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) { return nil, nil }
 
-	_, err = newKtlsListener(raw, conf, testktlsTimeout, nil)
+	_, err = newKtlsListener(raw, conf, nil)
 	tassert.Errorf(t, err != nil, "GetConfigForClient accepted")
 	if err != nil {
 		tassert.Errorf(t, strings.Contains(err.Error(), "GetConfigForClient"),
@@ -679,7 +703,7 @@ func TestKTLSTxListenerRejects(t *testing.T) {
 
 	// the caller's config must not be mutated
 	conf.GetConfigForClient = nil
-	l, err := newKtlsListener(raw, conf, testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, conf, nil)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !conf.SessionTicketsDisabled, "newKtlsListener mutated the caller's config")
 	tassert.Errorf(t, l.tlsConfig.SessionTicketsDisabled, "template does not disable session tickets")
@@ -904,7 +928,7 @@ func TestKTLSTxOpenSSLCipherSuites(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			t.Cleanup(func() { _ = raw.Close() })
 
-			l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+			l, err := newKtlsListener(raw, testktlsServerConf(t), nil)
 			tassert.CheckFatal(t, err)
 
 			captured := make(chan ktlsParams, 1)
@@ -921,7 +945,13 @@ func TestKTLSTxOpenSSLCipherSuites(t *testing.T) {
 					return
 				}
 				conn := nc.(*ktlsConn)
-				conn.ConnectionState()
+				ctx, cancel := context.WithTimeout(t.Context(), testktlsTimeout)
+				err = conn.HandshakeContext(ctx)
+				cancel()
+				if err != nil {
+					_ = conn.Close()
+					return
+				}
 				_, _ = conn.Write([]byte(payload))
 				time.Sleep(100 * time.Millisecond)
 				_ = conn.Close()
@@ -1006,7 +1036,7 @@ func TestKTLSTxPeerKeyUpdate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = raw.Close() })
 
-	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), nil)
 	tassert.CheckFatal(t, err)
 	l.install = func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil }
 
@@ -1023,7 +1053,10 @@ func TestKTLSTxPeerKeyUpdate(t *testing.T) {
 			return
 		}
 		conn := nc.(*ktlsConn)
-		if err := conn.HandshakeContext(t.Context()); err != nil {
+		ctx, cancel := context.WithTimeout(t.Context(), testktlsTimeout)
+		err = conn.HandshakeContext(ctx)
+		cancel()
+		if err != nil {
 			ready <- readyResult{err: err}
 			_ = conn.tcp.Close()
 			return
@@ -1119,7 +1152,7 @@ labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitatio
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = raw.Close() })
 
-	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), nil)
 	tassert.CheckFatal(t, err)
 
 	captured := make(chan ktlsParams, 1)
@@ -1675,7 +1708,7 @@ func testktlsConnPair(t testing.TB, install ktlsInstaller) (*ktlsConn, *tls.Conn
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = raw.Close() })
 
-	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), nil)
 	tassert.CheckFatal(t, err)
 	l.install = install
 
@@ -1710,7 +1743,8 @@ func testktlsConnPair(t testing.TB, install ktlsInstaller) (*ktlsConn, *tls.Conn
 
 func testktlsStartHandshake(t testing.TB, server *ktlsConn, client *tls.Conn) <-chan error {
 	t.Helper()
-	ctx := t.Context()
+	ctx, cancel := context.WithTimeout(t.Context(), testktlsTimeout)
+	t.Cleanup(cancel)
 	errCh := make(chan error, 2)
 	go func() { errCh <- server.HandshakeContext(ctx) }()
 	go func() { errCh <- client.HandshakeContext(ctx) }()
@@ -1739,7 +1773,7 @@ func testktlsHandshakeConf(t testing.TB, conf *tls.Config, install ktlsInstaller
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = raw.Close() })
 
-	l, err := newKtlsListener(raw, testktlsServerConf(t), testktlsTimeout, nil)
+	l, err := newKtlsListener(raw, testktlsServerConf(t), nil)
 	tassert.CheckFatal(t, err)
 	l.install = install
 	if conf != nil {
@@ -1793,6 +1827,6 @@ func BenchmarkKTLSTxNewConn(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		_ = newKtlsConn(tcp, tmpl, install, testktlsTimeout)
+		_ = newKtlsConn(tcp, tmpl, install)
 	}
 }

@@ -1,4 +1,4 @@
-ARG GO_VERSION=1.26
+ARG GO_VERSION=1.27
 
 # Cache all dependencies from `ais-k8s/operator`
 FROM docker.io/library/golang:${GO_VERSION}-alpine

@@ -1,6 +1,7 @@
 FROM quay.io/podman/stable:latest
 
-ARG GO_VERSION=1.26
+# Resolve the latest patch at build time
+ARG GO_VERSION=1.27
 
 RUN dnf -y --setopt=install_weak_deps=False install \
   attr \
@@ -28,8 +29,14 @@ RUN dnf -y --setopt=install_weak_deps=False install \
   yq \
   && dnf clean all
 
-# Install Go
-RUN curl -fSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz \
+# Install Go (build.sh normally passes an already resolved full version)
+RUN case "${GO_VERSION}" in \
+    *.*.*) ;; \
+    *) GO_VERSION=$(curl -fsSL "https://go.dev/dl/?mode=json&include=all" | \
+      jq -er --arg prefix "go${GO_VERSION}." \
+        '[.[] | select(.stable and (.version | startswith($prefix)))][0].version | select(. != null) | ltrimstr("go")') || exit 1 ;; \
+  esac \
+  && curl -fSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz \
   && tar -C /usr/local -xzf /tmp/go.tar.gz \
   && rm /tmp/go.tar.gz
 ENV PATH="/usr/local/go/bin:${PATH}"
@@ -76,6 +83,8 @@ RUN git clone --depth=1 https://github.com/NVIDIA/aistore.git && \
 
 # Cache all dependencies from `ais-k8s/operator` for make targets run directly in CI container
 # Note these directories must match what the ais-k8s repo uses for gitlab-ci
+# - ais-k8s installs its own pinned golangci-lint as ${LOCAL_BIN}/golangci-lint-<version>
+#   plus an unversioned symlink; remove the symlink so it does not shadow ours (/bin, see lint-update-ci)
 ENV LOCAL_BIN=/ci-tools/bin
 ENV PATH="${LOCAL_BIN}:${PATH}"
 ENV LOCAL_MANIFESTS=/ci-tools/manifests
@@ -84,7 +93,8 @@ RUN git clone --depth=1 https://github.com/NVIDIA/ais-k8s.git && \
   go mod download && \
   CGO_ENABLED=0 make cache-test-deps && \
   cd ../.. && rm -rf ais-k8s \
-  && go clean -cache
+  && go clean -cache \
+  && rm -f ${LOCAL_BIN}/golangci-lint
 
 # Image for internal KinD tests in ais-k8s with pre-loaded dependencies
 COPY operator-test.tar.gz operator-test.tar.gz

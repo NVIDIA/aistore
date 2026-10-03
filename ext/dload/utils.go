@@ -123,6 +123,7 @@ func NormalizeObjName(objName string) (string, error) {
 	return name, cos.ValidateOname(name)
 }
 
+//nolint:revive // unexported-return: single caller ais/tgtdl.go
 func ParseStartRequest(bck *meta.Bck, id string, dlb Body, xdl *Xact) (jobif, error) {
 	switch dlb.Type {
 	case TypeBackend:

@@ -1,8 +1,6 @@
 module github.com/NVIDIA/aistore
 
-go 1.26.0
-
-toolchain go1.26.8
+go 1.27
 
 require (
 	cloud.google.com/go/storage v1.64.0

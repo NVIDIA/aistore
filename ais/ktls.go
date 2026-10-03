@@ -84,11 +84,6 @@ import (
 //
 // - classify errKtlsExhausted/errKtlsPoisoned as connection-lifecycle
 //   events: they are neither object-transmit errors nor FSHC input (tgtfshc)
-//
-// - Go 1.27: net/http drives the handshake via connectionStater +
-//   handshakeContexter, making ktlsConn.timeout and netServer._timeout()
-//   redundant (and restoring handshake-error logging). NextProtos stays
-//   load-bearing there - the h2 handoff accepts any net.Conn, not just *tls.Conn.
 
 // ktlsConn.txState
 const (
@@ -170,7 +165,6 @@ type (
 		cfg     *tls.Config // effective (per-connection) config
 		secrets *trafficSecrets
 		install ktlsInstaller
-		timeout time.Duration // handshake deadline; see (*ktlsConn).init
 
 		once    sync.Once
 		initErr error
@@ -195,7 +189,6 @@ type (
 		tlsConfig    *tls.Config // template; cloned per connection
 		install      ktlsInstaller
 		configureTCP func(*net.TCPConn)
-		timeout      time.Duration // handshake timeout
 	}
 
 	ktlsState interface {
@@ -530,12 +523,11 @@ func (c *tlsArmedConn) ReadFrom(r io.Reader) (int64, error) {
 // ktlsConn //
 ////////////////
 
-func newKtlsConn(tcp *net.TCPConn, tmpl *tls.Config, install ktlsInstaller, timeout time.Duration) *ktlsConn {
+func newKtlsConn(tcp *net.TCPConn, tmpl *tls.Config, install ktlsInstaller) *ktlsConn {
 	c := &ktlsConn{
 		tcp:     tcp,
 		secrets: newTrafficSecrets(),
 		install: install,
-		timeout: timeout,
 
 		txMaxBytes: ktlsMaxBytes,
 	}
@@ -551,7 +543,8 @@ func newKtlsConn(tcp *net.TCPConn, tmpl *tls.Config, install ktlsInstaller, time
 	return c
 }
 
-// NOTE important sequence: handshake => armed
+// Go 1.27 net/http calls HandshakeContext with socket deadlines already set.
+// Complete handshake => armed before returning; ConnectionState remains a pure getter.
 func (c *ktlsConn) init(ctx context.Context) error {
 	c.once.Do(func() { c.initErr = c.handshakeAndArm(ctx) })
 	return c.initErr
@@ -563,17 +556,6 @@ func (c *ktlsConn) handshakeAndArm(ctx context.Context) error {
 	// Wipe every outcome and permanently discard any later key-log writes.
 	defer c.secrets.zero()
 	defer c.wire.tls12.stop()
-
-	if c.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.timeout)
-		defer cancel()
-
-		if err := c.tcp.SetDeadline(time.Now().Add(c.timeout)); err != nil {
-			return err
-		}
-		defer c.tcp.SetDeadline(time.Time{})
-	}
 
 	// all ordinary crypto/tls certificate, client-certificate, Finished, ALPN,
 	// and VerifyConnection processing happens here
@@ -685,14 +667,6 @@ func (c *ktlsConn) arm() {
 		nlog.Infoln("ktls-tx: armed", tls.VersionName(params.version),
 			tls.CipherSuiteName(params.cipherSuite), c.tcp.RemoteAddr(), &ktlsCnt)
 	}
-}
-
-// Go 1.26 net/http uses ConnectionState on a non-*tls.Conn to populate
-// Request.TLS; the call also triggers our handshake. Go 1.27+ calls
-// HandshakeContext first and then uses ConnectionState for TLS state and ALPN.
-func (c *ktlsConn) ConnectionState() tls.ConnectionState {
-	_ = c.init(context.Background())
-	return c.Conn.ConnectionState()
 }
 
 func (c *ktlsConn) Read(p []byte) (int, error) {
@@ -920,8 +894,7 @@ func (c *ktlsConn) retire(size int64) bool {
 // ktlsListener //
 ////////////////////
 
-func newKtlsListener(ln net.Listener, tlsConf *tls.Config, timeout time.Duration,
-	configureTCP func(*net.TCPConn)) (*ktlsListener, error) {
+func newKtlsListener(ln net.Listener, tlsConf *tls.Config, configureTCP func(*net.TCPConn)) (*ktlsListener, error) {
 	if tlsConf == nil {
 		return nil, errors.New("ktls-tx: nil TLS config")
 	}
@@ -935,6 +908,8 @@ func newKtlsListener(ln net.Listener, tlsConf *tls.Config, timeout time.Duration
 	tmpl := tlsConf.Clone()
 	tmpl.SessionTicketsDisabled = true // TLS 1.3 record-sequence prerequisite; see arm
 
+	// Go 1.27 net/http can hand any wrapped net.Conn to HTTP/2. Keep kTLS
+	// on HTTP/1.1, where the response path supports our sendfile integration.
 	tmpl.NextProtos = []string{"http/1.1"}
 
 	return &ktlsListener{
@@ -942,7 +917,6 @@ func newKtlsListener(ln net.Listener, tlsConf *tls.Config, timeout time.Duration
 		tlsConfig:    tmpl,
 		install:      ktlsInstall,
 		configureTCP: configureTCP,
-		timeout:      timeout,
 	}, nil
 }
 
@@ -964,7 +938,7 @@ func (l *ktlsListener) Accept() (net.Conn, error) {
 		l.configureTCP(tcp)
 	}
 
-	return newKtlsConn(tcp, l.tlsConfig, l.install, l.timeout), nil
+	return newKtlsConn(tcp, l.tlsConfig, l.install), nil
 }
 
 func isKTLS(ctx context.Context) bool {
