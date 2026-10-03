@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -325,6 +326,9 @@ func (gsbp *gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 			oa.SetCksum(cksumType, cksumValue)
 		}
 	}
+	for k, v := range h.EncodeMetadata(attrs.Metadata) {
+		oa.SetCustomKey(k, v)
+	}
 
 	oa.SetCustomKey(cos.HdrLastModified, fmtHdrTime(attrs.Updated))
 
@@ -451,6 +455,9 @@ func gcpSetCustom(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksu
 	if v, ok := h.EncodeETag(attrs.Etag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 	}
+	for k, v := range h.EncodeMetadata(attrs.Metadata) {
+		lom.SetCustomKey(k, v)
+	}
 
 	lom.SetCustomKey(cmn.LsoLastModified, fmtLsoTime(attrs.Updated))
 	lom.SetCustomKey(cos.HdrLastModified, fmtHdrTime(attrs.Updated))
@@ -463,10 +470,11 @@ func gcpSetCustom(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksu
 // PUT OBJECT
 //
 
-func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.Request) (int, error) {
 	var (
 		cloudBck            = lom.Bck().RemoteBck()
 		cksumType, cksumVal = lom.Checksum().Get()
+		h                   = cmn.BackendHelpers.Google
 	)
 	client, e := gsbp.getClient(ctx, cloudBck)
 	if e != nil {
@@ -478,6 +486,9 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 	wc.Metadata = map[string]string{
 		gcpChecksumType: cksumType,
 		gcpChecksumVal:  cksumVal,
+	}
+	if oreq != nil {
+		maps.Copy(wc.Metadata, h.DecodeMetadata(oreq.Header))
 	}
 	if v, ok := lom.GetCustomKey(cos.HdrContentType); ok {
 		wc.ContentType = v

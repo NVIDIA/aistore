@@ -28,6 +28,7 @@ const (
 	// - ais/s3/const.go
 	// - https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html#UserMetadata
 	AwsHeaderMetaPrefix = "X-Amz-Meta-"
+	gcpHeaderMetaPrefix = "X-Goog-Meta-"
 
 	// OCI Object Storage user metadata
 	// from: https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/managingobjects.htm
@@ -88,9 +89,11 @@ var BackendHelpers = struct {
 		EncodeCksum: azureEncodeCksum,
 	},
 	Google: backendFuncs{
-		EncodeVersion: googleEncodeVersion,
-		EncodeETag:    _encStrUnquote,
-		EncodeCksum:   googleEncodeCksum,
+		EncodeVersion:  googleEncodeVersion,
+		EncodeETag:     _encStrUnquote,
+		EncodeCksum:    googleEncodeCksum,
+		EncodeMetadata: googleEncodeMetadata,
+		DecodeMetadata: googleDecodeMetadata,
 	},
 	OCI: backendFuncs{
 		EncodeVersion:  ociEncodeVersion,
@@ -284,6 +287,39 @@ func googleEncodeCksum(v any) (string, bool) {
 		debug.FailTypeCast(v)
 		return "", false
 	}
+}
+
+// The GCP Go client represents custom metadata as bare key-value pairs.
+// AIStore's S3-compatible API exposes the same values via X-Amz-Meta-*.
+func googleEncodeMetadata(metadata map[string]string) map[string]string {
+	if len(metadata) == 0 {
+		return nil
+	}
+	userMD := make(map[string]string, len(metadata))
+	for k, v := range metadata {
+		if !googleIsAisMeta(k) {
+			userMD[k] = v
+		}
+	}
+	return _encMeta(userMD, AwsHeaderMetaPrefix)
+}
+
+func googleDecodeMetadata(header http.Header) map[string]string {
+	metadata := _decMeta(header, AwsHeaderMetaPrefix)
+	for k := range metadata {
+		if googleIsAisMeta(k) {
+			delete(metadata, k)
+		}
+	}
+	return metadata
+}
+
+func googleIsAisMeta(k string) bool {
+	// AIS checksum keys retain their historical X-Goog-Meta-* names.
+	if l := len(gcpHeaderMetaPrefix); len(k) > l && strings.EqualFold(k[:l], gcpHeaderMetaPrefix) {
+		k = k[l:]
+	}
+	return isAisMeta(k)
 }
 
 // OCI
