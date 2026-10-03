@@ -159,7 +159,11 @@ func waitListCtxAborted(t *testing.T, bp api.BaseParams, xid, kind string, minAb
 				if snap.ID != xid || (finished && !snap.IsFinished()) {
 					continue
 				}
-				if snap.IsAborted() && snap.AbortErr == cmn.ErrXactUserAbort.Error() {
+				// user abort may race with IC abort: the first target to report aborted
+				// triggers IC(notifications) => (abort the rest)
+				// (see prxnotif done())
+				if snap.IsAborted() &&
+					(snap.AbortErr == cmn.ErrXactUserAbort.Error() || snap.AbortErr == cmn.ErrXactICNotifAbort.Error()) {
 					aborted++
 				}
 			}
