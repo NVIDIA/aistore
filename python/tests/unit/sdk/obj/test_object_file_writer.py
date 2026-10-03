@@ -32,20 +32,41 @@ class TestObjectFileWriter(unittest.TestCase):
         self.object_writer_mock.put_content.assert_not_called()
 
     # pylint: disable=unused-variable
-    def test_context_manager_in_write_mode_calls_truncates_content(self):
-        """Test that entering the context manager in 'w' mode truncates existing content."""
+    def test_context_manager_in_write_mode_truncates_only_on_creation(self):
+        """Entering a write-mode context must not issue another truncating PUT."""
         self.file_writer = ObjectFileWriter(
             obj_writer=self.object_writer_mock, mode="w"
         )
-        self.object_writer_mock.put_content = Mock()
         with self.file_writer as fw:
-            # Assert that put_content was called once during __enter__
+            self.assertIs(fw, self.file_writer)
             self.object_writer_mock.put_content.assert_called_once_with(b"")
 
         self.object_writer_mock.reset_mock()
         with self.assertRaises(ValueError), self.file_writer:
             self.fail("Entered a closed writer")
         self.object_writer_mock.put_content.assert_not_called()
+
+    def test_context_manager_preserves_flushed_writes(self):
+        """Taking ownership of an open writer must preserve its finalized data."""
+        self.file_writer = ObjectFileWriter(self.object_writer_mock, mode="w")
+        self.object_writer_mock.append_content.return_value = "handle"
+        self.file_writer.write(b"before context")
+        self.file_writer.flush()
+
+        with self.file_writer as writer:
+            writer.write(b"inside context")
+
+        self.object_writer_mock.put_content.assert_called_once_with(b"")
+        self.assertEqual(
+            self.object_writer_mock.append_content.call_args_list,
+            [
+                call(b"before context", handle=""),
+                call(content=b"", handle="handle", flush=True),
+                call(b"inside context", handle=""),
+                call(content=b"", handle="handle", flush=True),
+            ],
+        )
+        self.assertTrue(self.file_writer.closed)
 
     # pylint: disable=unused-variable
     def test_context_manager_in_append_mode_does_not_truncate(self):
