@@ -60,16 +60,8 @@ func TestRenewStartFailureWithTypedNilXact(t *testing.T) {
 	tassert.Fatalf(t, errors.Is(rns.Err, startErr), "expected %v, got %v", startErr, rns.Err)
 }
 
-// TestLiveQuietBriefXactQueryableAcrossHistoryCap is a regression test for a bug
-// where a currently-running "quiet, brief" xaction (e.g. get-batch, list-objects
-// tasks) became permanently invisible to snapshot queries (list_snapshots(),
-// get_details(), etc.) once the registry's shared history buffer (`e.all`)
-// (which is capped at `keepOldThreshold` across all xaction kinds combined),
-// was already full from unrelated xaction traffic.
-//
-// The xaction was still correctly tracked in `e.active` (so reuse/dispatch
-// decisions worked fine) but `_add` silently skipped appending it to `e.all`,
-// and `matchingXactsStats` (which backs `GetSnap`) only ever scanned `e.all`.
+// a running "quiet, brief" xaction (get-batch, list-objects) must remain queryable
+// and abortable when the history (`e.all`) is at the cap (`keepOldThreshold`)
 func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 	TestReset()
 
@@ -86,15 +78,14 @@ func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 	tassert.Fatalf(t, len(dreg.entries.all) == keepOldThreshold,
 		"expected e.all to be primed at the cap, got %d", len(dreg.entries.all))
 
-	// register one more, currently-running get-batch xaction; per `_add`,
-	// this should land in `e.active` but get silently excluded from `e.all`
+	// register one more, currently-running get-batch xaction
 	live := newFakeEntry(apc.ActGetBatch)
 	dreg.entries.mtx.Lock()
 	dreg.entries._add(live)
 	dreg.entries.mtx.Unlock()
 
-	tassert.Fatalf(t, len(dreg.entries.all) == keepOldThreshold,
-		"expected e.all to stay at the cap (live entry excluded), got %d", len(dreg.entries.all))
+	tassert.Fatalf(t, len(dreg.entries.all) == keepOldThreshold+1,
+		"expected running entry in e.all past the cap, got %d", len(dreg.entries.all))
 
 	var foundActive bool
 	for _, entry := range dreg.entries.active {
@@ -105,8 +96,6 @@ func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 	}
 	tassert.Fatalf(t, foundActive, "expected live get-batch xaction to be in e.active")
 
-	// the actual regression check: despite being excluded from `e.all`,
-	// the live xaction must still be discoverable via a snapshot query
 	snaps, err := GetSnap(&Flt{Kind: apc.ActGetBatch})
 	tassert.CheckFatal(t, err)
 
@@ -120,60 +109,13 @@ func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 	tassert.Fatalf(t, found,
 		"live get-batch xaction %q not found in GetSnap() result past the history cap", live.UUID())
 
-	// Abort must find the same live entry even when history excludes it.
 	AbortKind(cmn.ErrXactUserAbort, apc.ActGetBatch)
 	tassert.Fatalf(t, live.Get().IsAborted(), "live get-batch %q was not aborted past the history cap", live.UUID())
-	tassert.Fatalf(t, !dreg.entries.active[0].Get().IsAborted(), "unrelated LRU xaction was aborted")
-}
-
-// simulate `hkDelOld` reaping the (short-lived) x-lso history and shrinking `e.all`
-// well below the cap while a skipped xaction is still running
-func TestSkippedXactSurvivesHistoryShrink(t *testing.T) {
-	TestReset()
-
-	dreg.entries.mtx.Lock()
-	for range keepOldThreshold >> 1 {
-		dreg.entries._add(newFakeEntry(apc.ActLRU))
+	for _, entry := range dreg.entries.active {
+		if entry != live {
+			tassert.Fatalf(t, !entry.Get().IsAborted(), "unrelated %s aborted", entry.Get())
+		}
 	}
-	for range keepOldThreshold - keepOldThreshold>>1 {
-		dreg.entries._add(newFakeEntry(apc.ActList)) // QuietBrief history
-	}
-	live := newFakeEntry(apc.ActGetBatch)
-	dreg.entries._add(live) // at the cap => skipped
-	dreg.entries.mtx.Unlock()
-
-	tassert.Fatalf(t, len(dreg.entries.skipped) == 1, "expected 1 skipped, got %d", len(dreg.entries.skipped))
-
-	// simulate x-lso entries aging out at hk.OldAgeXshort
-	dreg.entries.mtx.Lock()
-	dreg.entries.all = dreg.entries.all[:keepOldThreshold>>1]
-	dreg.entries.mtx.Unlock()
-
-	snaps, err := GetSnap(&Flt{Kind: apc.ActGetBatch})
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(snaps) == 1 && snaps[0].ID == live.UUID(),
-		"live get-batch lost once history fell to %d: got %d snaps", len(dreg.entries.all), len(snaps))
-}
-
-// `e.skipped` is a subset of `e.active` and is reclaimed on the same terms
-func TestSkippedReclaimedByHousekeeper(t *testing.T) {
-	TestReset()
-
-	dreg.entries.mtx.Lock()
-	for range keepOldThreshold {
-		dreg.entries._add(newFakeEntry(apc.ActLRU))
-	}
-	live := newFakeEntry(apc.ActGetBatch)
-	dreg.entries._add(live)
-	dreg.entries.mtx.Unlock()
-	tassert.Fatalf(t, len(dreg.entries.skipped) == 1, "expected 1 skipped, got %d", len(dreg.entries.skipped))
-
-	live.Get().(*mock.XactMock).SetStopping()
-	dreg.finDelta.Inc()
-	dreg.hkPruneActive(mono.NanoTime())
-
-	tassert.Fatalf(t, len(dreg.entries.skipped) == 0,
-		"skipped entry not reclaimed: %d", len(dreg.entries.skipped))
 }
 
 // two distinct entries can carry the same xaction ID: a stopped-but-unreaped one and a
@@ -322,31 +264,6 @@ func TestShrinkAfterBurst(t *testing.T) {
 		"roActive capacity not reclaimed: %d -> %d", capROActive, cap(dreg.entries.roActive))
 	tassert.Fatalf(t, cap(dreg.entries.all) < capAll/10,
 		"history capacity not reclaimed: %d -> %d", capAll, cap(dreg.entries.all))
-}
-
-func TestShrinkSkipped(t *testing.T) {
-	TestReset()
-
-	dreg.entries.mtx.Lock()
-	for range keepOldThreshold {
-		dreg.entries._add(newFakeEntry(apc.ActLRU))
-	}
-	for range 5000 { // burst of (quiet, brief) entries excluded from history
-		entry := newFakeEntry(apc.ActGetBatch)
-		dreg.entries._add(entry)
-		entry.Get().(*mock.XactMock).SetStopping()
-	}
-	dreg.entries.mtx.Unlock()
-	tassert.Fatalf(t, len(dreg.entries.skipped) == 5000, "skipped: %d", len(dreg.entries.skipped))
-
-	// NOTE: `skipped` entries never enter `all`, so they never give hkDelOld anything
-	// to remove - and here `all` is at the cap with everything still running, i.e. the
-	// worst case: no removals at all, and the capacity must still come back
-	dreg.finDelta.Inc()
-	dreg.hkPruneActive(mono.NanoTime())
-	dreg.hkDelOld(mono.NanoTime())
-	tassert.Fatalf(t, dreg.entries.skipped == nil,
-		"skipped not released: len=%d cap=%d", len(dreg.entries.skipped), cap(dreg.entries.skipped))
 }
 
 // a pass with nothing to reclaim must not take the write lock or re-allocate

@@ -13,8 +13,3 @@ var (
 	PrimeTime atomic.Int64
 	MyTime    atomic.Int64
 )
-
-// infrequent log when not adding (QuietBrief) xaction to xreg history
-var skipXregHst atomic.Int64
-
-const skipXregHstCnt = 100

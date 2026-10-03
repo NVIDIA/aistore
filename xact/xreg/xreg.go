@@ -17,31 +17,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact"
 )
 
-/* TODO shard by xact.Kind as follows:
-	kind struct {
-		bckXacts    map[string]Renewable
-		nonbckXacts map[string]Renewable
-		entries     ...
-		finDelta    atomic.Int64
-		renewMtx    sync.RWMutex
-	}
-        // registry must be statically allocated with all (statically) declared xaction kinds
-	// (see api.go)
-        registry map[string]kind
-*/
-
 const (
 	initialCap         = 256  // initial capacity ('all')
 	initialCapActive   = 128  // ditto ('active')
 	initialCapROActive = 192  // ditto ('roActive')
-	keepOldThreshold   = 1024 // keep so many
+	keepOldThreshold   = 1024 // keep at least so many in history (QuietBrief kinds excluded; see hkDelOld)
 
 	waitPrevAborted = 2 * time.Second
 	waitLimitedCoex = 5 * time.Second
@@ -116,14 +102,13 @@ type (
 	}
 
 	entries struct {
-		active   []Renewable // running entries - finished entries are gradually removed
+		active   []Renewable // running; finished entries are removed by hkPruneActive
 		roActive []Renewable // read-only copy; reused by the single `periodic` caller (see getAllRunning)
-		all      []Renewable // history
-		skipped  []Renewable // subset of `active`, disjoint from `all` (history cap)
+		all      []Renewable // running and finished, in chronological order (superset of `active`)
 		mtx      sync.RWMutex
 	}
-	// All entries in the registry. The entries are periodically cleaned up
-	// to make sure that we don't keep old entries forever.
+	// xaction factories (by kind) and entries; finished entries are lazily
+	// removed by the housekeeper (see hkPruneActive and hkDelOld)
 	registry struct {
 		bckXacts    map[string]Renewable
 		nonbckXacts map[string]Renewable
@@ -133,8 +118,7 @@ type (
 	}
 )
 
-// default global registry that keeps track of all running xactions
-// In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`.
+// default global registry: running xactions and the history of finished ones
 var dreg *registry
 
 //////////////////////
@@ -160,7 +144,18 @@ func newRegistry() (r *registry) {
 	}
 }
 
-// register w/housekeeper periodic registry cleanups
+// Registry retention:
+// - `all` contains every registered entry; `active` is a lazily pruned subset.
+// - IsDone includes stopping: hkPruneActive removes these entries from `active`,
+//   but history removal requires a nonzero EndTime.
+// - Finished QuietBrief entries become eligible after hk.OldAgeXshort and are
+//   removed by hkPruneActive, independently of keepOldThreshold.
+// - Other finished entries become eligible after hk.OldAgeX; hkDelOld removes
+//   the oldest eligible entries while preserving keepOldThreshold non-quiet
+//   entries, including running and stopping ones. This is not a hard cap.
+// - `finDelta` also re-arms quiet-history aging when eligible entries remain
+//   pending, so cleanup continues even without further finish notifications.
+
 func RegWithHK() {
 	hk.Reg("x-old"+hk.NameSuffix, dreg.hkDelOld, 0)
 	hk.Reg("x-prune-active"+hk.NameSuffix, dreg.hkPruneActive, 0)
@@ -175,7 +170,7 @@ func (r *registry) getXact(uuid string) (xctn core.Xact, _ error) {
 	e := &r.entries
 	e.mtx.RLock()
 outer:
-	for _, entries := range [][]Renewable{e.active, e.all} { // tradeoff: fewer active, higher priority
+	for _, entries := range [][]Renewable{e.active, e.all} { // `all` is a superset: check fewer active first
 		for i := len(entries) - 1; i >= 0; i-- {
 			x := entries[i].Get()
 			if x != nil && x.ID() == uuid {
@@ -387,13 +382,20 @@ func GetSnap(flt *Flt) ([]*core.Snap, error) {
 }
 
 func (r *registry) abort(args *abortArgs) {
-	r.entries.forEach(args.do)
+	e := &r.entries
+	e.mtx.RLock()
+	active := slices.Clone(e.active)
+	e.mtx.RUnlock()
+
+	for _, entry := range active {
+		args.do(entry)
+	}
 }
 
-func (args *abortArgs) do(entry Renewable) bool {
+func (args *abortArgs) do(entry Renewable) {
 	xctn := entry.Get()
 	if xctn.IsDone() {
-		return true
+		return
 	}
 
 	var abort bool
@@ -426,7 +428,6 @@ func (args *abortArgs) do(entry Renewable) bool {
 	if abort {
 		xctn.Abort(args.err)
 	}
-	return true
 }
 
 func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.Snap {
@@ -435,13 +436,6 @@ func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.S
 	e.mtx.RLock()
 	matching := make([]Renewable, 0, 32)
 	for _, entry := range e.all {
-		if xctn := entry.Get(); xctn != nil && match(xctn) {
-			matching = append(matching, entry)
-		}
-	}
-	// `e.all` omits currently-running "quiet, brief" xactions once history hits the cap
-	// (see `_add`); `e.skipped` is disjoint from `e.all`, so no deduplication is required
-	for _, entry := range e.skipped {
 		if xctn := entry.Get(); xctn != nil && match(xctn) {
 			matching = append(matching, entry)
 		}
@@ -460,18 +454,45 @@ func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.S
 
 func (r *registry) incFinished() { r.finDelta.Inc() }
 
+// prune finished entries from `active`; age out QuietBrief history (x-lso, x-moss) at hk.OldAgeXshort
 func (r *registry) hkPruneActive(now int64) time.Duration {
 	if r.finDelta.Swap(0) == 0 {
 		return hk.Jitter(hk.Prune2mIval, now)
 	}
-	e := &r.entries
+	var (
+		e        = &r.entries
+		toRemove []Renewable
+		pending  bool
+		tnow     = time.Now() // need calendar time
+	)
+	e.mtx.RLock()
+	for _, entry := range e.all {
+		xctn := entry.Get()
+		if !xctn.IsDone() || !xact.Table[xctn.Kind()].QuietBrief {
+			continue
+		}
+		// (zero EndTime: stopping, not yet finished)
+		if et := xctn.EndTime(); !et.IsZero() && tnow.Sub(et) >= hk.OldAgeXshort {
+			toRemove = append(toRemove, entry)
+		} else {
+			pending = true
+		}
+	}
+	e.mtx.RUnlock()
+
 	e.mtx.Lock()
+	e.del(toRemove)
 	e.active = slices.DeleteFunc(e.active, func(entry Renewable) bool { return entry.Get().IsDone() })
-	e.skipped = slices.DeleteFunc(e.skipped, func(entry Renewable) bool { return entry.Get().IsDone() })
 	e.mtx.Unlock()
+
+	if pending {
+		r.finDelta.Inc() // re-arm: not aged yet
+	}
 	return hk.Jitter(hk.Prune2mIval, now)
 }
 
+// age out history at hk.OldAgeX while keeping at least `keepOldThreshold` entries
+// (QuietBrief kinds excluded - see hkPruneActive)
 func (r *registry) hkDelOld(int64) time.Duration {
 	var (
 		toRemove    []Renewable
@@ -481,23 +502,13 @@ func (r *registry) hkDelOld(int64) time.Duration {
 
 	r.entries.mtx.RLock()
 	l := len(r.entries.all)
-
-	// first, cleanup (x-lso, x-moss): walk older to newer while counting the other kinds
 	for i := range l {
-		entry := r.entries.all[i]
-		xctn := entry.Get()
-		if !xact.Table[xctn.Kind()].QuietBrief {
+		if !xact.Table[r.entries.all[i].Kind()].QuietBrief {
 			numKeepMore++
-			continue
-		}
-		if xctn.IsDone() {
-			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeXshort {
-				toRemove = append(toRemove, entry)
-			}
 		}
 	}
 
-	// all the rest: older to newer, while keeping at least `keepOldThreshold`
+	// older to newer
 	if numKeepMore > keepOldThreshold {
 		var cnt int
 		for i := range l {
@@ -506,8 +517,8 @@ func (r *registry) hkDelOld(int64) time.Duration {
 			if xact.Table[xctn.Kind()].QuietBrief {
 				continue
 			}
-			if xctn.IsDone() {
-				if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeX {
+			if endTime := xctn.EndTime(); !endTime.IsZero() {
+				if since := now.Sub(endTime); since >= hk.OldAgeX {
 					toRemove = append(toRemove, entry)
 					cnt++
 					if numKeepMore-cnt <= keepOldThreshold {
@@ -524,7 +535,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	var (
 		d       = hk.DelOldIval
 		ll      = len(toRemove)
-		remains = l - ll
+		remains = numKeepMore - ll
 	)
 	switch {
 	case remains > keepOldThreshold<<1:
@@ -615,16 +626,6 @@ func (e *entries) findUnlocked(flt *Flt) Renewable {
 	return nil
 }
 
-func (e *entries) forEach(matcher func(entry Renewable) bool) {
-	e.mtx.RLock()
-	defer e.mtx.RUnlock()
-	for _, entry := range e.active {
-		if !matcher(entry) {
-			return
-		}
-	}
-}
-
 // remove the specified entries from `all` and `active`; called under lock
 func (e *entries) del(toRemove []Renewable) {
 	if len(toRemove) == 0 {
@@ -657,17 +658,14 @@ func (e *entries) shrinkAll() {
 	if _shrinkable(cap(e.roActive), l, initialCapROActive) {
 		e.roActive = cos.ResetSliceCap(e.roActive[:0], max(initialCapROActive, l+l>>1))
 	}
-
-	e.skipped = _shrink(e.skipped, 0) // no nominal: steady state is empty
 }
 
-// `skipped` and `active` are drained elsewhere and may have nothing left for hkDelOld
+// `active` and QuietBrief history are drained by hkPruneActive and may leave nothing for hkDelOld
 // to remove - ask separately whether there's capacity to hand back; called under rlock
 func (e *entries) shrinkable() bool {
 	return _shrinkable(cap(e.all), len(e.all), initialCap) ||
 		_shrinkable(cap(e.active), len(e.active), initialCapActive) ||
-		_shrinkable(cap(e.roActive), len(e.active), initialCapROActive) ||
-		_shrinkable(cap(e.skipped), len(e.skipped), 0)
+		_shrinkable(cap(e.roActive), len(e.active), initialCapROActive)
 }
 
 func _shrink(s []Renewable, dflt int) []Renewable {
@@ -680,26 +678,15 @@ func _shrink(s []Renewable, dflt int) []Renewable {
 
 func _shrinkable(c, l, dflt int) bool { return c > dflt && c > l<<1 }
 
-// history control for QuietBrief kinds (x-lso, x-moss); called under lock
-// – keep up to 1 024 finished records
-// – anything beyond is excluded from `all` and tracked via `skipped` until completion
+// called under lock
 func (e *entries) _add(entry Renewable) {
 	e.active = append(e.active, entry)
+	e.all = append(e.all, entry)
 
 	// grow
 	if cap(e.roActive) < len(e.active) {
 		e.roActive = make([]Renewable, 0, len(e.active)+len(e.active)>>1)
 	}
-
-	if l := len(e.all); xact.Table[entry.Kind()].QuietBrief && l >= keepOldThreshold {
-		if n := skipXregHst.Inc(); n%skipXregHstCnt == 1 {
-			nlog.Warningln("num entries in xreg history:", l, "exceeds the cap:", keepOldThreshold,
-				"- not adding:", xact.Cname(entry.Kind(), entry.UUID()))
-		}
-		e.skipped = append(e.skipped, entry)
-		return
-	}
-	e.all = append(e.all, entry)
 }
 
 // LimitedCoexistence checks whether a given xaction that is about to start can, in fact, "coexist"
