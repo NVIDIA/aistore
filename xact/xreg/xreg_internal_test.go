@@ -9,6 +9,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -16,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -60,15 +62,15 @@ func TestRenewStartFailureWithTypedNilXact(t *testing.T) {
 	tassert.Fatalf(t, errors.Is(rns.Err, startErr), "expected %v, got %v", startErr, rns.Err)
 }
 
-// a running "quiet, brief" xaction (get-batch, list-objects) must remain queryable
-// and abortable when the history (`e.all`) is at the cap (`keepOldThreshold`)
-func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
+// A running Brief xaction must remain queryable and abortable even when
+// history (`e.all`) exceeds the retention threshold (`keepOldThreshold`).
+func TestLiveBriefXactQueryableAcrossHistoryThreshold(t *testing.T) {
 	TestReset()
 
-	tassert.Fatalf(t, xact.Table[apc.ActGetBatch].QuietBrief,
-		"expecting %q to be a QuietBrief kind (test assumption)", apc.ActGetBatch)
+	tassert.Fatalf(t, xact.Table[apc.ActList].Brief,
+		"expecting %q to be a Brief kind (test assumption)", apc.ActList)
 
-	// fill `e.all` to the cap with unrelated (non-QuietBrief) xactions,
+	// fill `e.all` to the threshold with unrelated (non-Brief) xactions,
 	// simulating heavy, mixed xaction traffic on a busy target
 	dreg.entries.mtx.Lock()
 	for range keepOldThreshold {
@@ -76,16 +78,16 @@ func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 	}
 	dreg.entries.mtx.Unlock()
 	tassert.Fatalf(t, len(dreg.entries.all) == keepOldThreshold,
-		"expected e.all to be primed at the cap, got %d", len(dreg.entries.all))
+		"expected e.all to be primed at the threshold, got %d", len(dreg.entries.all))
 
-	// register one more, currently-running get-batch xaction
-	live := newFakeEntry(apc.ActGetBatch)
+	// register one more, currently-running list-objects xaction
+	live := newFakeEntry(apc.ActList)
 	dreg.entries.mtx.Lock()
 	dreg.entries._add(live)
 	dreg.entries.mtx.Unlock()
 
 	tassert.Fatalf(t, len(dreg.entries.all) == keepOldThreshold+1,
-		"expected running entry in e.all past the cap, got %d", len(dreg.entries.all))
+		"expected running entry in e.all past the threshold, got %d", len(dreg.entries.all))
 
 	var foundActive bool
 	for _, entry := range dreg.entries.active {
@@ -94,9 +96,9 @@ func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 			break
 		}
 	}
-	tassert.Fatalf(t, foundActive, "expected live get-batch xaction to be in e.active")
+	tassert.Fatalf(t, foundActive, "expected live list-objects xaction to be in e.active")
 
-	snaps, err := GetSnap(&Flt{Kind: apc.ActGetBatch})
+	snaps, err := GetSnap(&Flt{Kind: apc.ActList})
 	tassert.CheckFatal(t, err)
 
 	var found bool
@@ -107,10 +109,10 @@ func TestLiveQuietBriefXactQueryableAcrossHistoryCap(t *testing.T) {
 		}
 	}
 	tassert.Fatalf(t, found,
-		"live get-batch xaction %q not found in GetSnap() result past the history cap", live.UUID())
+		"live list-objects xaction %q not found in GetSnap() result past the history threshold", live.UUID())
 
-	AbortKind(cmn.ErrXactUserAbort, apc.ActGetBatch)
-	tassert.Fatalf(t, live.Get().IsAborted(), "live get-batch %q was not aborted past the history cap", live.UUID())
+	AbortKind(cmn.ErrXactUserAbort, apc.ActList)
+	tassert.Fatalf(t, live.Get().IsAborted(), "live list-objects %q was not aborted past the history threshold", live.UUID())
 	for _, entry := range dreg.entries.active {
 		if entry != live {
 			tassert.Fatalf(t, !entry.Get().IsAborted(), "unrelated %s aborted", entry.Get())
@@ -381,4 +383,87 @@ func TestROActiveNoRace(t *testing.T) {
 	tassert.Fatalf(t, len(inout.Running) == 400, "expected 400 running, got %d", len(inout.Running))
 	tassert.Fatalf(t, cap(dreg.entries.roActive) >= len(dreg.entries.active),
 		"roActive undersized: cap=%d, active=%d", cap(dreg.entries.roActive), len(dreg.entries.active))
+}
+
+// Override EndTime to exercise retention and verbosity changes without sleeping.
+type historyXact struct {
+	*mock.XactMock
+	end time.Time
+}
+
+func (x *historyXact) EndTime() time.Time { return x.end }
+
+type historyEntry struct {
+	Renewable
+	xctn core.Xact
+}
+
+func (e *historyEntry) Get() core.Xact { return e.xctn }
+
+func TestBriefHistoryRetention(t *testing.T) {
+	cfg := cmn.GCO.Clone()
+	defer cmn.Rom.Set(&cmn.GCO.Get().ClusterConfig)
+	cfg.Log.Level.Set(4, nil)
+	cmn.Rom.Set(&cfg.ClusterConfig)
+
+	r := newRegistry()
+	add := func(kind string, stopping bool, age time.Duration) *historyXact {
+		e := newFakeEntry(kind)
+		x := &historyXact{XactMock: e.Get().(*mock.XactMock)}
+		if stopping {
+			x.SetStopping()
+		}
+		if age > 0 {
+			x.end = time.Now().Add(-age)
+		}
+		r.entries._add(&historyEntry{Renewable: e, xctn: x})
+		return x
+	}
+	check := func(x *historyXact, retained bool) {
+		t.Helper()
+		found, err := r.getXact(x.ID())
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, (found == x) == retained, "%s: expected retained=%t", x.ID(), retained)
+	}
+
+	live := add(apc.ActList, false, 0)
+	stopping := add(apc.ActList, true, 0)
+	recent := add(apc.ActList, true, hk.OldAgeXshort/2)
+	middle := add(apc.ActList, true, hk.OldAgeXshortV/2)
+	old := add(apc.ActList, true, hk.OldAgeXshortV+hk.OldAgeXshort)
+	batch := add(apc.ActGetBatch, true, hk.OldAgeXshortV+hk.OldAgeXshort)
+
+	r.finDelta.Inc()
+	r.hkPruneActive(mono.NanoTime())
+	check(live, true)
+	check(stopping, true)
+	check(recent, true)
+	check(middle, true)
+	check(old, false)
+	check(batch, true) // Quiet does not imply Brief
+	tassert.Fatalf(t, len(r.entries.active) == 1, "expected only the live entry in active")
+
+	// No new completions: pending history must re-arm cleanup when verbosity drops.
+	cfg.Log.Level.Set(3, nil)
+	cmn.Rom.Set(&cfg.ClusterConfig)
+	r.hkPruneActive(mono.NanoTime())
+	check(middle, false)
+	check(recent, true)
+	check(stopping, true)
+	check(batch, true)
+
+	// Selecting the xs module has the same effect as verbosity level 4.
+	cfg.Log.Level.Set(3, []string{"xs"})
+	cmn.Rom.Set(&cfg.ClusterConfig)
+	recent.end = time.Now().Add(-hk.OldAgeXshortV / 2)
+	r.hkPruneActive(mono.NanoTime())
+	check(recent, true)
+
+	recent.end = time.Now().Add(-(hk.OldAgeXshortV + hk.OldAgeXshort))
+	stopping.end = recent.end
+	r.hkPruneActive(mono.NanoTime())
+	check(recent, false)
+	check(stopping, false)
+	check(batch, true)
+	tassert.Fatalf(t, r.finDelta.Load() == 0, "brief history drained but cleanup still armed")
 }

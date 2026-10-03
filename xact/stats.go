@@ -52,7 +52,7 @@ func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
 	}()
 
 	if snap.CtlMsg != "" {
-		if !Table[self.Kind()].QuietBrief || cmn.Rom.V(4, cos.ModXs) {
+		if !Table[self.Kind()].Quiet || cmn.Rom.V(4, cos.ModXs) {
 			nlog.InfoDepth(1, self.Name(), "ctl:", snap.CtlMsg)
 		}
 	}

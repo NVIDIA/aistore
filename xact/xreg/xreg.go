@@ -27,7 +27,7 @@ const (
 	initialCap         = 256  // initial capacity ('all')
 	initialCapActive   = 128  // ditto ('active')
 	initialCapROActive = 192  // ditto ('roActive')
-	keepOldThreshold   = 1024 // keep at least so many in history (QuietBrief kinds excluded; see hkDelOld)
+	keepOldThreshold   = 1024 // keep at least so many in history (Brief kinds excluded; see hkDelOld)
 
 	waitPrevAborted = 2 * time.Second
 	waitLimitedCoex = 5 * time.Second
@@ -102,7 +102,7 @@ type (
 	}
 
 	entries struct {
-		active   []Renewable // running; finished entries are removed by hkPruneActive
+		active   []Renewable // accepting work; stopping and finished entries are lazily pruned by hkPruneActive
 		roActive []Renewable // read-only copy; reused by the single `periodic` caller (see getAllRunning)
 		all      []Renewable // running and finished, in chronological order (superset of `active`)
 		mtx      sync.RWMutex
@@ -148,13 +148,14 @@ func newRegistry() (r *registry) {
 // - `all` contains every registered entry; `active` is a lazily pruned subset.
 // - IsDone includes stopping: hkPruneActive removes these entries from `active`,
 //   but history removal requires a nonzero EndTime.
-// - Finished QuietBrief entries become eligible after hk.OldAgeXshort and are
-//   removed by hkPruneActive, independently of keepOldThreshold.
+// - Finished `Brief` entries become eligible after hk.OldAgeXshort (hk.OldAgeXshortV
+//   at V(4, ModXs)) and are removed by hkPruneActive, independently of keepOldThreshold.
 // - Other finished entries become eligible after hk.OldAgeX; hkDelOld removes
-//   the oldest eligible entries while preserving keepOldThreshold non-quiet
+//   the oldest eligible entries while preserving keepOldThreshold non-brief
 //   entries, including running and stopping ones. This is not a hard cap.
-// - `finDelta` also re-arms quiet-history aging when eligible entries remain
-//   pending, so cleanup continues even without further finish notifications.
+// - `finDelta` also re-arms brief-history aging while stopping or not-yet-aged
+//   entries remain, so cleanup continues without further finish notifications
+//   and uses the current verbosity on each pass.
 
 func RegWithHK() {
 	hk.Reg("x-old"+hk.NameSuffix, dreg.hkDelOld, 0)
@@ -454,10 +455,15 @@ func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.S
 
 func (r *registry) incFinished() { r.finDelta.Inc() }
 
-// prune finished entries from `active`; age out QuietBrief history (x-lso, x-moss) at hk.OldAgeXshort
+// prune stopping and finished entries from `active`; age out Brief history
 func (r *registry) hkPruneActive(now int64) time.Duration {
 	if r.finDelta.Swap(0) == 0 {
 		return hk.Jitter(hk.Prune2mIval, now)
+	}
+	// the same knob that un-quiets logs extends brief history
+	age := hk.OldAgeXshort
+	if cmn.Rom.V(4, cos.ModXs) {
+		age = hk.OldAgeXshortV
 	}
 	var (
 		e        = &r.entries
@@ -468,11 +474,11 @@ func (r *registry) hkPruneActive(now int64) time.Duration {
 	e.mtx.RLock()
 	for _, entry := range e.all {
 		xctn := entry.Get()
-		if !xctn.IsDone() || !xact.Table[xctn.Kind()].QuietBrief {
+		if !xctn.IsDone() || !xact.Table[xctn.Kind()].Brief {
 			continue
 		}
 		// (zero EndTime: stopping, not yet finished)
-		if et := xctn.EndTime(); !et.IsZero() && tnow.Sub(et) >= hk.OldAgeXshort {
+		if et := xctn.EndTime(); !et.IsZero() && tnow.Sub(et) >= age {
 			toRemove = append(toRemove, entry)
 		} else {
 			pending = true
@@ -492,7 +498,7 @@ func (r *registry) hkPruneActive(now int64) time.Duration {
 }
 
 // age out history at hk.OldAgeX while keeping at least `keepOldThreshold` entries
-// (QuietBrief kinds excluded - see hkPruneActive)
+// (Brief kinds excluded - see hkPruneActive)
 func (r *registry) hkDelOld(int64) time.Duration {
 	var (
 		toRemove    []Renewable
@@ -503,7 +509,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	r.entries.mtx.RLock()
 	l := len(r.entries.all)
 	for i := range l {
-		if !xact.Table[r.entries.all[i].Kind()].QuietBrief {
+		if !xact.Table[r.entries.all[i].Kind()].Brief {
 			numKeepMore++
 		}
 	}
@@ -514,7 +520,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 		for i := range l {
 			entry := r.entries.all[i]
 			xctn := entry.Get()
-			if xact.Table[xctn.Kind()].QuietBrief {
+			if xact.Table[xctn.Kind()].Brief {
 				continue
 			}
 			if endTime := xctn.EndTime(); !endTime.IsZero() {
@@ -660,7 +666,7 @@ func (e *entries) shrinkAll() {
 	}
 }
 
-// `active` and QuietBrief history are drained by hkPruneActive and may leave nothing for hkDelOld
+// `active` and Brief history are drained by hkPruneActive and may leave nothing for hkDelOld
 // to remove - ask separately whether there's capacity to hand back; called under rlock
 func (e *entries) shrinkable() bool {
 	return _shrinkable(cap(e.all), len(e.all), initialCap) ||

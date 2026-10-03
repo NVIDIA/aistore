@@ -335,13 +335,21 @@ Extended statistics belong to the snapshot/status representation. They do not
 imply a particular status transport. They may be surfaced through snaps-based
 queries, action-specific paths, or IC-backed status depending on the kind.
 
-## Quiet brief history
+## Quiet logging and brief history
 
-`Descriptor.QuietBrief` suppresses verbose per-state log records and keeps
-registry history only briefly.
+`Descriptor.Quiet` suppresses verbose per-state log records. `V(4, ModXs)`
+overrides this suppression: verbosity level 4 or higher, or selecting the `xs`
+logging module, enables these records.
 
-This is useful for high-churn or request-driven xactions where long registry
-history would create noise without much operational value.
+`Descriptor.Brief` selects short finished-history retention for high-rate,
+short-lived xactions. Entries become eligible after `hk.OldAgeXshort` (one
+minute), or `hk.OldAgeXshortV` (ten minutes) at `V(4, ModXs)`, and are removed
+by the approximately two-minute housekeeping pass. Remaining entries keep this cleanup armed even
+without new completions; each pass uses the current verbosity.
+
+List-objects uses both flags. GetBatch/x-moss uses `Quiet` only: it serves multiple
+work items per instance and retains its finished history under the ordinary
+`hk.OldAgeX` and `keepOldThreshold` policy. Neither flag limits live tracking.
 
 ## Action-specific status paths
 

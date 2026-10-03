@@ -85,9 +85,11 @@ type (
 		// (see related: `Snap.Ext` in core/xaction.go)
 		ExtendedStats bool
 
-		// suppress verbose per-state log records and keep only hk.OldAgeXshort (1m)
-		// in registry history
-		QuietBrief bool
+		// suppress verbose per-state log records (see also V(4, ModXs))
+		Quiet bool
+		// high-rate, short-lived: keep only hk.OldAgeXshort in registry history
+		// (hk.OldAgeXshortV at V(4, ModXs))
+		Brief bool
 
 		// IC reporting mode; see ICMode comment above
 		ICMode ICMode
@@ -299,10 +301,10 @@ var Table = map[string]Descriptor{
 	},
 
 	// in re IC: list-objects clients stream pages directly; 'show job' uses snaps; zero WaitForXactionIC callers
-	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true, QuietBrief: true, ICMode: ICNone},
+	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true, Quiet: true, Brief: true, ICMode: ICNone},
 
 	// x-moss; IC: ICNone - proxy-coordinated, target-direct status
-	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: true, QuietBrief: true},
+	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: true, Quiet: true},
 
 	apc.ActCreateNBI: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: false, ICMode: ICUponTerm},
 
