@@ -12,7 +12,12 @@ import (
 )
 
 func TestOCIUserMetadataEncodeDecode(t *testing.T) {
-	in := map[string]string{"foo": "bar", "X-Num": "42"}
+	in := map[string]string{
+		"foo": "bar", "X-Num": "42",
+		// Internal AIS metadata must not be exposed as OCI user metadata.
+		"ais-cksum-type": "xxhash2", "AIS-CKSUM-VAL": "internal-checksum",
+		"X-Amz-Meta-Ais-Internal": "internal-value",
+	}
 	hdr := cmn.BackendHelpers.OCI.EncodeMetadata(in)
 	if len(hdr) != 2 {
 		t.Fatalf("expected 2 headers, got %d", len(hdr))

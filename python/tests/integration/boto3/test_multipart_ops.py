@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 from botocore.exceptions import ClientError
 
 # pylint: disable=unused-import,unused-variable
@@ -246,14 +247,23 @@ class BotoMultipartUploadTest(BaseBotoTest):
 
         # Upload some parts
         num_parts = 5
+        uploaded_etags = {}
         for part_num in range(1, num_parts + 1):
-            self.client.upload_part(
-                Body=f"data for part {part_num}",
+            data = f"data for part {part_num}".encode(UTF_ENCODING)
+            uploaded = self.client.upload_part(
+                Body=data,
                 Bucket=bucket_name,
                 Key=key,
                 PartNumber=part_num,
                 UploadId=upload_id,
             )
+
+            etag = uploaded["ETag"]
+            self.assertEqual(
+                etag, f'"{hashlib.md5(data, usedforsecurity=False).hexdigest()}"'
+            )
+            self.assertNotEqual(etag.strip('"'), upload_id)
+            uploaded_etags[part_num] = etag
 
         # List parts
         response = self.client.list_parts(
@@ -267,6 +277,9 @@ class BotoMultipartUploadTest(BaseBotoTest):
         part_numbers = {part["PartNumber"] for part in parts}
         expected_numbers = set(range(1, num_parts + 1))
         self.assertEqual(part_numbers, expected_numbers)
+
+        for part in parts:
+            self.assertEqual(part["ETag"], uploaded_etags[part["PartNumber"]])
 
         # Clean up
         self.client.abort_multipart_upload(

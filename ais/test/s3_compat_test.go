@@ -5,7 +5,9 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
 	crand "crypto/rand"
 	"crypto/tls"
 	"encoding/xml"
@@ -684,27 +686,23 @@ func TestDisableColdGet(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "Expected GET to fail %v", err)
 }
 
-// export AWS_PROFILE=default; export AIS_ENDPOINT="http://localhost:8080"; export BUCKET="aws://..."; go test -v -run="TestS3ETag" -count=1 ./ais/test/.
+// Run with BUCKET selecting local AIS, remote AIS, or a cloud bucket.
+// Without BUCKET, the multipart subtest creates and cleans up its own AIS bucket.
+// The regular PutObject subtest additionally requires AWS credentials.
 func TestS3ETag(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, Bck: cliBck, RequiredCloudProvider: apc.AWS})
-
-	var (
-		bck     = cliBck
-		objName = "object.txt"
-		objSize = 50 * cos.KiB
-	)
-
-	_, err := api.HeadBucket(baseParams, bck, false)
-	tassert.CheckFatal(t, err)
-
-	cfg, err := config.LoadDefaultConfig(
-		t.Context(),
-		loadCredentials(t),
-	)
-	tassert.CheckFatal(t, err)
-	s3Client := s3.NewFromConfig(cfg)
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	t.Run("PutObject", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{Bck: cliBck, RequiredCloudProvider: apc.AWS})
+		bck := cliBck
+		objName := "etag-put-" + trand.String(8)
+		const objSize = 50 * cos.KiB
+		_, err := api.HeadBucket(baseParams, bck, false)
+		tassert.CheckFatal(t, err)
+		cfg, err := config.LoadDefaultConfig(t.Context(), loadCredentials(t))
+		tassert.CheckFatal(t, err)
+		s3Client := s3.NewFromConfig(cfg)
+		t.Cleanup(func() { tassert.CheckError(t, api.DeleteObject(baseParams, bck, objName)) })
 		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(objSize), CksumType: cos.ChecksumNone})
 		tassert.CheckFatal(t, err)
 		oah, err := api.PutObject(&api.PutArgs{
@@ -734,40 +732,138 @@ func TestS3ETag(t *testing.T) {
 			objSize  = 20 * cos.MiB
 			partSize = 5 * cos.MiB
 		)
-
-		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(objSize), CksumType: cos.ChecksumNone})
-		tassert.CheckFatal(t, err)
-		cfg.HTTPClient = newS3Client(true /*pathStyle*/)
-		aisClient := s3.NewFromConfig(cfg)
-		uploader := s3manager.NewUploader(aisClient, func(uploader *s3manager.Uploader) {
-			uploader.PartSize = partSize
-			uploader.ClientOptions = []func(*s3.Options){
-				func(opts *s3.Options) {
-					opts.BaseEndpoint = aws.String(proxyURL)
-				},
+		bck := cliBck
+		if os.Getenv("BUCKET") == "" {
+			bck = cmn.Bck{Name: "test-s3-etag-" + trand.String(6), Provider: apc.AIS}
+		}
+		if bck.IsAIS() {
+			exists, err := tools.BucketExists(t, proxyURL, bck)
+			tassert.CheckFatal(t, err)
+			if !exists {
+				tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 			}
-		}, func(uploader *s3manager.Uploader) {
-			uploader.ClientOptions = append(uploader.ClientOptions, func(options *s3.Options) {
-				options.APIOptions = append(options.APIOptions, func(stack *middleware.Stack) error {
-					return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
-				})
+		}
+		if bck.IsRemoteAIS() {
+			// S3 has no remote-AIS namespace. Exercise the native adapter and
+			// ensure completion still uses the original upload ID and part numbers.
+			objName := "etag-native-" + trand.String(8)
+			data := make([]byte, objSize)
+			_, err := crand.Read(data)
+			tassert.CheckFatal(t, err)
+			uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+			tassert.CheckFatal(t, err)
+			completed := false
+			t.Cleanup(func() {
+				if completed {
+					tassert.CheckError(t, api.DeleteObject(baseParams, bck, objName))
+				} else {
+					tassert.CheckError(t, api.AbortMultipartUpload(baseParams, bck, objName, uploadID))
+				}
 			})
+			partNumbers := make([]int, 0, objSize/partSize)
+			for offset := 0; offset < len(data); offset += partSize {
+				part := data[offset : offset+partSize]
+				partNum := len(partNumbers) + 1
+				tassert.CheckFatal(t, api.UploadPart(&api.PutPartArgs{
+					PutArgs: api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objName,
+						Reader: readers.NewBytes(part), Size: uint64(len(part))},
+					UploadID: uploadID, PartNumber: partNum,
+				}))
+				partNumbers = append(partNumbers, partNum)
+			}
+			tassert.CheckFatal(t, api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers))
+			completed = true
+			var got bytes.Buffer
+			_, err = api.GetObject(baseParams, bck, objName, &api.GetArgs{Writer: &got})
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, bytes.Equal(got.Bytes(), data), "native remote-AIS multipart content differs")
+			return
+		}
+		props, err := api.HeadBucket(baseParams, bck, false)
+		tassert.CheckFatal(t, err)
+		bck.Props = props
+		remote := bck.RemoteBck()
+		if remote != nil && !remote.IsCloud() && !remote.IsRemoteAIS() {
+			t.Skip("backend does not support multipart uploads")
+		}
+		objName := "etag-multipart-" + trand.String(8)
+		t.Cleanup(func() { tassert.CheckError(t, api.DeleteObject(baseParams, bck, objName)) })
+
+		client := s3.New(s3.Options{
+			HTTPClient: newS3Client(true /*pathStyle*/), Region: "us-east-1",
+			BaseEndpoint: aws.String(proxyURL), UsePathStyle: true, Credentials: getS3Credentials(t),
+			APIOptions: []func(*middleware.Stack) error{func(stack *middleware.Stack) error {
+				return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
+			}},
 		})
-		multipartOutput, err := uploader.Upload(t.Context(), &s3.PutObjectInput{
-			Bucket:        aws.String(bck.Name),
-			Key:           aws.String(objName),
-			Body:          reader,
-			ContentLength: aws.Int64(objSize),
+		created, err := client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
+			Bucket: aws.String(bck.Name), Key: aws.String(objName),
 		})
 		tassert.CheckFatal(t, err)
-
-		headOutput, err := s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{
-			Bucket: aws.String(bck.Name),
-			Key:    aws.String(objName),
+		tassert.Fatalf(t, created.UploadId != nil && *created.UploadId != "", "missing upload ID")
+		completed := false
+		t.Cleanup(func() {
+			if !completed {
+				_, err := client.AbortMultipartUpload(context.WithoutCancel(t.Context()), &s3.AbortMultipartUploadInput{
+					Bucket: aws.String(bck.Name), Key: aws.String(objName), UploadId: created.UploadId,
+				})
+				tassert.CheckError(t, err)
+			}
+		})
+		data := make([]byte, objSize)
+		_, err = crand.Read(data)
+		tassert.CheckFatal(t, err)
+		parts := make([]types.CompletedPart, 0, objSize/partSize)
+		for offset := 0; offset < len(data); offset += partSize {
+			part := data[offset : offset+partSize]
+			num := int32(len(parts) + 1)
+			out, err := client.UploadPart(t.Context(), &s3.UploadPartInput{
+				Bucket: aws.String(bck.Name), Key: aws.String(objName), UploadId: created.UploadId,
+				PartNumber: aws.Int32(num), Body: bytes.NewReader(part), ContentLength: aws.Int64(int64(len(part))),
+			})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, out.ETag != nil && len(*out.ETag) > 2, "part %d: missing ETag", num)
+			etag := *out.ETag
+			tassert.Errorf(t, strings.HasPrefix(etag, `"`) && strings.HasSuffix(etag, `"`), "part %d: unquoted ETag %q", num, etag)
+			tassert.Errorf(t, cmn.UnquoteCEV(etag) != *created.UploadId, "part %d: upload ID returned as ETag", num)
+			if remote == nil || remote.IsRemoteAIS() {
+				md5sum := md5.Sum(part)
+				tassert.Errorf(t, etag == cmn.MD5ToQuotedETag(md5sum[:]), "part %d: expected MD5 fallback, got %q", num, etag)
+			}
+			parts = append(parts, types.CompletedPart{PartNumber: aws.Int32(num), ETag: out.ETag})
+		}
+		listed, err := client.ListParts(t.Context(), &s3.ListPartsInput{
+			Bucket: aws.String(bck.Name), Key: aws.String(objName), UploadId: created.UploadId,
 		})
 		tassert.CheckFatal(t, err)
-
-		tassert.Errorf(t, *multipartOutput.ETag == *headOutput.ETag, "ETag for PUT does not match (local: %v != remote: %v)", *multipartOutput.ETag, *headOutput.ETag)
+		tassert.Fatalf(t, len(listed.Parts) == len(parts), "listed %d parts, expected %d", len(listed.Parts), len(parts))
+		for i, part := range listed.Parts {
+			tassert.Errorf(t, aws.ToInt32(part.PartNumber) == aws.ToInt32(parts[i].PartNumber), "part number mismatch")
+			tassert.Errorf(t, aws.ToString(part.ETag) == *parts[i].ETag, "part %d: UploadPart/ListParts ETags differ", i+1)
+		}
+		out, err := client.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
+			Bucket: aws.String(bck.Name), Key: aws.String(objName), UploadId: created.UploadId,
+			MultipartUpload: &types.CompletedMultipartUpload{Parts: parts},
+		})
+		tassert.CheckFatal(t, err)
+		completed = true
+		tassert.Fatalf(t, out.ETag != nil && *out.ETag != "", "missing completed ETag")
+		head, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String(bck.Name), Key: aws.String(objName)})
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, aws.ToString(head.ETag) == *out.ETag, "completed ETag differs from HEAD")
+		if remote != nil && remote.IsCloud() {
+			// Evict the cached object to validate the provider's final ETag and data.
+			tassert.CheckFatal(t, api.EvictObject(baseParams, bck, objName))
+			head, err = client.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String(bck.Name), Key: aws.String(objName)})
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, aws.ToString(head.ETag) == *out.ETag, "completed ETag differs from remote HEAD")
+		}
+		got, err := client.GetObject(t.Context(), &s3.GetObjectInput{Bucket: aws.String(bck.Name), Key: aws.String(objName)})
+		tassert.CheckFatal(t, err)
+		actual, err := io.ReadAll(got.Body)
+		cos.Close(got.Body)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, bytes.Equal(actual, data), "multipart object content differs")
 	})
 }
 
@@ -971,8 +1067,8 @@ func TestS3ContentTypeGCP(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		defer resp.Body.Close()
 		tassert.Errorf(t, resp.StatusCode == http.StatusOK, "native HEAD status: expected %d, got %d", http.StatusOK, resp.StatusCode)
-		tassert.Errorf(t, resp.Header.Get(apc.PropToHeader("present")) == strconv.FormatBool(present),
-			"native HEAD present: expected %t, got %q", present, resp.Header.Get(apc.PropToHeader("present")))
+		tassert.Errorf(t, resp.Header.Get(cmn.HdrObjPresent) == strconv.FormatBool(present),
+			"native HEAD present: expected %t, got %q", present, resp.Header.Get(cmn.HdrObjPresent))
 		tassert.Errorf(t, resp.Header.Get(cos.HdrContentType) == contentType,
 			"native HEAD Content-Type: expected %q, got %q", contentType, resp.Header.Get(cos.HdrContentType))
 	}

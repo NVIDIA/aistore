@@ -62,7 +62,9 @@ func (m *AISbp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenClo
 		return "", http.StatusInternalServerError, err
 	}
 
-	return uploadID, http.StatusOK, nil
+	// The remote AIS native UploadPart API exposes no part ETag;
+	// leave it empty so the caller can generate the S3 ETag.
+	return "", http.StatusOK, nil
 }
 
 func (m *AISbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {

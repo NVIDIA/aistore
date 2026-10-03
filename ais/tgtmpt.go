@@ -715,11 +715,13 @@ func (pc *partCksums) finalize(chunk *core.Uchunk, partNum int, etag string) (st
 		chunk.SetCksum(&pc.crc32c.Cksum)
 	}
 
-	// S3 compatibility API over ais:// buckets: compute part ETag as MD5 of the part (S3 convention).
+	// Store the part MD5; generate an S3 ETag only if none was supplied.
 	if pc.md5 != nil {
 		chunk.MD5 = pc.md5.H.Sum(nil)
 		debug.Assert(len(chunk.MD5) == cos.LenMD5Hash, len(chunk.MD5))
-		etag = cmn.MD5ToQuotedETag(chunk.MD5)
+		if etag == "" {
+			etag = cmn.MD5ToQuotedETag(chunk.MD5)
+		}
 	}
 	return etag, nil
 }

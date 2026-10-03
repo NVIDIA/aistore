@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -129,7 +130,7 @@ func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq, 
 
 	// s3 compliance
 	if etag != "" {
-		w.Header().Set(cos.S3CksumHeader, etag)
+		w.Header().Set(cos.S3CksumHeader, cmn.QuoteETag(etag))
 	}
 }
 

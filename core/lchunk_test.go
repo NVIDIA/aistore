@@ -416,7 +416,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			chunk, err := manifest.NewChunk(1, lom)
 			Expect(err).NotTo(HaveOccurred())
 			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
-			createTestFile(chunk.Path(), cos.MiB)
+			chunk.MD5 = creatChunkMD5andWhole(chunk.Path(), cos.MiB, nil)
+			chunk.SetETag(`"provider-part-1"`)
 			err = manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -427,14 +428,16 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			clone, err := core.NewUfest(manifest.ID(), lom, true)
 			Expect(err).NotTo(HaveOccurred())
-			err = clone.Add(chunk, chunk.Size(), 1)
-			Expect(err).NotTo(HaveOccurred())
 
 			lom.Lock(false)
 			defer lom.Unlock(false)
 			err = clone.LoadPartial(lom)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(clone.Completed()).To(BeFalse())
+			loaded, err := clone.GetChunk(1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded.ETag).To(Equal(`"provider-part-1"`))
+			Expect(loaded.MD5).To(Equal(chunk.MD5))
 		})
 
 		It("should fail to load non-existent manifest", func() {
@@ -457,7 +460,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			u, err := core.NewUfest("rt12345-"+cos.GenTie(), lom, false)
 			Expect(err).NotTo(HaveOccurred())
 
-			// add a few chunks with MD5s
+			// add a few chunks with independent MD5s and opaque ETags
 			sizes := []int64{64 * cos.KiB, 33 * cos.KiB, 128 * cos.KiB}
 			var md5s [][]byte
 			for i, sz := range sizes {
@@ -465,6 +468,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 				Expect(err).NotTo(HaveOccurred())
 				m := creatChunkMD5andWhole(c.Path(), int(sz), nil) // writes file & returns MD5
 				c.MD5 = m
+				c.SetETag(fmt.Sprintf(`"provider-part-%d"`, i+1))
 				md5s = append(md5s, m)
 				Expect(u.Add(c, sz, int64(i+1))).NotTo(HaveOccurred())
 			}
@@ -489,6 +493,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 				Expect(lc).NotTo(BeNil())
 				Expect(lc.Num()).To(Equal(oc.Num()))
 				Expect(lc.Size()).To(Equal(oc.Size()))
+				Expect(lc.ETag).To(Equal(fmt.Sprintf(`"provider-part-%d"`, i)))
 				Expect(bytes.Equal(lc.MD5, md5s[i-1])).To(BeTrue())
 			}
 		})

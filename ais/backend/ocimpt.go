@@ -12,6 +12,7 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 
@@ -143,11 +144,13 @@ func (bp *ocibp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ 
 
 	// Convert apc.MptCompletedParts to OCI types
 	for _, completedPart := range parts {
+		// OCI expects the provider ETag without S3 response quotes.
+		etag := cmn.UnquoteCEV(completedPart.ETag)
 		commitMultipartUploadRequest.CommitMultipartUploadDetails.PartsToCommit = append(
 			commitMultipartUploadRequest.CommitMultipartUploadDetails.PartsToCommit,
 			ocios.CommitMultipartUploadPartDetails{
 				PartNum: &completedPart.PartNumber,
-				Etag:    &completedPart.ETag,
+				Etag:    &etag,
 			})
 	}
 
