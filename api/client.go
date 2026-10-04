@@ -252,8 +252,7 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 		return nil, herr
 	}
-	var uerr *url.Error
-	if errors.As(err, &uerr) {
+	if uerr, ok := errors.AsType[*url.Error](err); ok {
 		err = uerr.Unwrap()
 		herr := cmn.NewErrHTTP(req, err, 0)
 		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path

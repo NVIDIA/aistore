@@ -63,8 +63,7 @@ func resolveConfigPath(flagConf string) (string, error) {
 	}
 	fi, err := os.Stat(confPath)
 	if err != nil {
-		var e *os.PathError
-		if errors.As(err, &e) {
+		if e, ok := errors.AsType[*os.PathError](err); ok {
 			err = e.Err
 		}
 		return "", fmt.Errorf("invalid file path %q: %v", confPath, err)

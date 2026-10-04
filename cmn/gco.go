@@ -206,7 +206,7 @@ func (c *ClusterConfig) rangeDefaultOmittable(visit func(*reflect.StructField, r
 		if field.Kind() != reflect.Pointer || !field.CanInterface() {
 			continue
 		}
-		if _, ok := field.Interface().(defaultOmittable); ok {
+		if _, ok := reflect.TypeAssert[defaultOmittable](field); ok {
 			sf := v.Type().Field(i)
 			visit(&sf, field)
 		}

@@ -359,8 +359,7 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 	}
 
 	// already retried via configured rate-limiter
-	var ebr *cmn.ErrBackendRetry
-	if errors.As(err, &ebr) {
+	if _, ok := errors.AsType[*cmn.ErrBackendRetry](err); ok {
 		return ecode, err
 	}
 

@@ -126,8 +126,7 @@ func ClientNotExist(err error, what string) error {
 		return nil
 	}
 	// PathError already contains the path; don’t repeat it
-	var pe *fs.PathError
-	if errors.As(err, &pe) && (os.IsNotExist(err) || errors.Is(err, syscall.ENOENT)) {
+	if _, ok := errors.AsType[*fs.PathError](err); ok && (os.IsNotExist(err) || errors.Is(err, syscall.ENOENT)) {
 		return NewErrNotFound(nil, what)
 	}
 	return err
@@ -227,8 +226,8 @@ func (e *Errs) Unwrap() []error {
 //
 
 func IsPathErr(err error) bool {
-	var pathErr *fs.PathError
-	return errors.As(err, &pathErr)
+	_, ok := errors.AsType[*fs.PathError](err)
+	return ok
 }
 
 // "file name too long" errno 0x24 (36); either one of the two possible reasons:
@@ -250,8 +249,7 @@ func IsErrConnectionNotAvail(err error) (yes bool) {
 // network-level (spurious or intermittent) timeout - always retriable
 // (compare w/ IsErrClientTimeout)
 func IsErrNetTimeoutConn(err error) bool {
-	var nerr net.Error
-	if errors.As(err, &nerr) && nerr.Timeout() {
+	if nerr, ok := errors.AsType[net.Error](err); ok && nerr.Timeout() {
 		return true
 	}
 	return errors.Is(err, syscall.ETIMEDOUT)
@@ -284,8 +282,7 @@ func IsClientGone(err error) bool {
 // request/HTTP client timeout
 func IsErrClientTimeout(err error) bool {
 	// url.Error with Timeout()
-	var uerr *url.Error
-	if errors.As(err, &uerr) && uerr.Timeout() {
+	if uerr, ok := errors.AsType[*url.Error](err); ok && uerr.Timeout() {
 		return true
 	}
 	// context deadline exceeded
@@ -315,8 +312,8 @@ func IsErrOOS(err error) bool {
 }
 
 func IsErrDNSLookup(err error) bool {
-	var wrapped *net.DNSError
-	return errors.As(err, &wrapped)
+	_, ok := errors.AsType[*net.DNSError](err)
+	return ok
 }
 
 func IsUnreachable(err error, status int) bool {
@@ -505,6 +502,6 @@ func IsErrRangeNotSatisfiable(err error) bool {
 	if _, ok := err.(*ErrRangeNotSatisfiable); ok {
 		return true
 	}
-	var wrapped *ErrRangeNotSatisfiable
-	return errors.As(err, &wrapped)
+	_, ok := errors.AsType[*ErrRangeNotSatisfiable](err)
+	return ok
 }

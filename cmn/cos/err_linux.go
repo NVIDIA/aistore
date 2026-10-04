@@ -41,8 +41,7 @@ func IsIOError(err error) bool {
 		return false
 	}
 
-	var se *os.SyscallError
-	if errors.As(err, &se) {
+	if se, ok := errors.AsType[*os.SyscallError](err); ok {
 		err = se.Err
 		if IsErrMv(err) || IsNotExist(err) {
 			return false

@@ -17,7 +17,9 @@ linters:
     - wsl
     - wsl_v5
   enable:
+    - asasalint
     - asciicheck
+    - bidichk
     - bodyclose
     - canonicalheader
     - copyloopvar
@@ -28,8 +30,10 @@ linters:
     - durationcheck
     # errcheck
     - errorlint   ## excluding "wrapped errors"
-    # exhaustive  ## TODO: "missing cases in switch of type"
+    # exptostd    ## irrelevant/not-applicable
+    # exhaustive  ## missing cases in switch of type
     - fatcontext
+    - gocheckcompilerdirectives
     - gochecksumtype
     - gocritic
     - goheader
@@ -40,15 +44,18 @@ linters:
     - importas
     - ineffassign
     - intrange
-    # modernize  ## TODO: slicesbackward vs `config verify`
+    - makezero
+    - modernize
     - musttag
     - misspell
+    - mirror
     - nakedret
     - nilnesserr
     - noctx
     - nolintlint
     - perfsprint
     - prealloc
+    # predeclared  ## redundant vs revive
     - protogetter
     - reassign
     - revive
@@ -159,6 +166,8 @@ linters:
       disable:
         - omitzero
         - stringscut
+        - embedlit
+        - slicesbackward
 
     depguard:
       rules:
