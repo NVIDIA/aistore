@@ -1444,11 +1444,10 @@ func (ctu *ConfigToSet) Merge(update *ConfigToSet) {
 func (ctu *ConfigToSet) FillFromKVS(kvs []string) (err error) {
 	const format = "failed to parse `-config_custom` flag (invalid entry: %q)"
 	for _, kv := range kvs {
-		entry := strings.SplitN(kv, "=", 2)
-		if len(entry) != 2 {
+		name, value, found := strings.Cut(kv, "=")
+		if !found {
 			return fmt.Errorf(format, kv)
 		}
-		name, value := entry[0], entry[1]
 		if err := UpdateFieldValue(ctu, _fromLegacyConfName(name), value); err != nil {
 			return fmt.Errorf(format, kv)
 		}

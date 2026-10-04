@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -308,9 +307,9 @@ func _loghdr(contTag string) (loghdr string) {
 
 	cpus := sys.NumCPU()
 	sb.WriteString(", CPUs(")
-	sb.WriteString(strconv.Itoa(cpus))
+	sb.WriteInt(cpus)
 	sb.WriteString(", runtime=")
-	sb.WriteString(strconv.Itoa(runtime.NumCPU()))
+	sb.WriteInt(runtime.NumCPU())
 	sb.WriteUint8(')')
 
 	if contTag != "" {

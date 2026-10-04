@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -145,7 +144,7 @@ func (b *Bck) String() string {
 	sb.Init(64)
 	b.Bucket().Str(&sb)
 	sb.WriteString("(0x")
-	sb.WriteString(strconv.FormatUint((b.Props.BID &^ aisBID), 16))
+	sb.WriteUint64Base(b.Props.BID&^aisBID, 16)
 	sb.WriteUint8(')')
 	return sb.String()
 }

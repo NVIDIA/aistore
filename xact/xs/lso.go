@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
@@ -274,16 +273,16 @@ func (r *LsoXact) CtlMsg() string {
 	// internal stats
 	sb.WriteString(" job:[")
 	sb.WriteString("reqs:")
-	sb.WriteString(strconv.FormatInt(nreq, 10))
+	sb.WriteInt64(nreq)
 
 	npages := s.npages.Load()
 	if npages != 0 {
 		sb.WriteString(" pages:")
-		sb.WriteString(strconv.FormatInt(npages, 10))
+		sb.WriteInt64(npages)
 
 		ents := s.ents.Load()
 		sb.WriteString(" entries:")
-		sb.WriteString(strconv.FormatInt(ents, 10))
+		sb.WriteInt64(ents)
 
 		totLat := s.totLat.Load()
 		avgLat := totLat / npages
@@ -297,7 +296,7 @@ func (r *LsoXact) CtlMsg() string {
 	errs := s.errs.Load()
 	if errs != 0 {
 		sb.WriteString(" errs:")
-		sb.WriteString(strconv.FormatInt(errs, 10))
+		sb.WriteInt64(errs)
 	}
 	sb.WriteUint8(']')
 

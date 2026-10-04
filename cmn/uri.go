@@ -40,11 +40,11 @@ func IsErrEmptyProvider(err error) bool {
 // It's not possible to use url.Parse as (from url.Parse() docs)
 // 'Trying to parse a hostname and path without a scheme is invalid'
 func ParseURLScheme(url string) (scheme, address string) {
-	s := strings.SplitN(url, apc.BckProviderSeparator, 2)
-	if len(s) == 1 {
-		return "", s[0]
+	scheme, address, found := strings.Cut(url, apc.BckProviderSeparator)
+	if !found {
+		return "", url
 	}
-	return s[0], s[1]
+	return scheme, address
 }
 
 func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, err error) {

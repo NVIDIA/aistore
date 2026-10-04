@@ -442,10 +442,9 @@ func (md *lmeta) unpack(buf []byte) error {
 				return errors.New(badLmeta + " #5")
 			}
 			val := string(record[cos.SizeofI16:])
-			copyFQNs := strings.Split(val, cmn.StringSepa)
 			seen |= haveCopies
-			md.copies = make(fs.MPI, len(copyFQNs))
-			for _, copyFQN := range copyFQNs {
+			md.copies = make(fs.MPI, strings.Count(val, cmn.StringSepa)+1)
+			for copyFQN := range strings.SplitSeq(val, cmn.StringSepa) {
 				if copyFQN == "" {
 					return errors.New(badLmeta + " #5.1")
 				}

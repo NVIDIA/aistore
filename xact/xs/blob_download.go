@@ -911,11 +911,11 @@ func (r *XactBlobDl) String() string {
 	sb.WriteString("-[")
 	sb.WriteString(r.cname)
 	sb.WriteUint8('-')
-	sb.WriteString(strconv.FormatInt(r.fullSize, 10))
+	sb.WriteInt64(r.fullSize)
 	sb.WriteUint8('-')
-	sb.WriteString(strconv.FormatInt(r.chunkSize, 10))
+	sb.WriteInt64(r.chunkSize)
 	sb.WriteUint8('-')
-	sb.WriteString(strconv.Itoa(r.numWorkers))
+	sb.WriteInt(r.numWorkers)
 	sb.WriteUint8(']')
 	return r.Base.String() + sb.String()
 }
@@ -940,7 +940,7 @@ func (r *XactBlobDl) CtlMsg() string {
 	sb.WriteString(cos.IEC(r.chunkSize, 0))
 
 	sb.WriteString(", workers:")
-	sb.WriteString(strconv.FormatInt(int64(r.numWorkers), 10))
+	sb.WriteInt(r.numWorkers)
 
 	// progress
 	woff := atomic.LoadInt64(&r.woff)
@@ -952,7 +952,7 @@ func (r *XactBlobDl) CtlMsg() string {
 		sb.WriteString("/")
 		sb.WriteString(cos.IEC(r.fullSize, 1))
 		sb.WriteString(" (")
-		sb.WriteString(strconv.FormatInt(pct, 10))
+		sb.WriteInt64(pct)
 		sb.WriteString("%)")
 	}
 

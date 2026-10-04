@@ -371,7 +371,7 @@ func (lom *LOM) ETag(mtime time.Time, allowSyscall bool) string {
 	sb.WriteString("v1-")
 	sb.WriteString(lom.md.Cksum.Val())
 	sb.WriteUint8('-')
-	sb.WriteString(strconv.FormatInt(mtime.UnixNano(), 36))
+	sb.WriteInt64Base(mtime.UnixNano(), 36)
 
 	return sb.String()
 }

@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -842,7 +841,7 @@ func (wi *archwi) append(sb *cos.SB) {
 	}
 	if cnt := wi.cnt.Load(); cnt > 0 {
 		sb.WriteString(", archived:")
-		sb.WriteString(strconv.FormatInt(int64(cnt), 10))
+		sb.WriteInt(int(cnt))
 	}
 
 	sb.WriteString(", flags:")

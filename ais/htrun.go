@@ -1347,7 +1347,7 @@ func (h *htrun) logerr(tag string, v any, err error) {
 		f := filepath.Base(file)
 		sb.WriteString(f)
 		sb.WriteUint8(':')
-		sb.WriteString(strconv.Itoa(line))
+		sb.WriteInt(line)
 	}
 	msg := sb.String()
 

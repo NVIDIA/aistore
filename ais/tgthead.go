@@ -66,7 +66,7 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 		}
 	}
 
-	whdr.Set(apc.PropToHeader("present"), strconv.FormatBool(exists))
+	whdr.Set(cmn.HdrObjPresent, strconv.FormatBool(exists))
 
 	// cold-HEAD: check remote backend if object not found locally or if latest version requested
 	var attrs *cmn.ObjAttrs

@@ -5,6 +5,7 @@
 package cos
 
 import (
+	"strconv"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -63,6 +64,13 @@ func (sb *SB) WriteUint8(c byte) { sb.buf = append(sb.buf, c) }
 
 func (sb *SB) WriteString(s string) { sb.buf = append(sb.buf, s...) }
 func (sb *SB) WriteBytes(b []byte)  { sb.buf = append(sb.buf, b...) }
+
+// append integer in place
+func (sb *SB) WriteInt(v int)     { sb.buf = strconv.AppendInt(sb.buf, int64(v), 10) }
+func (sb *SB) WriteInt64(v int64) { sb.buf = strconv.AppendInt(sb.buf, v, 10) }
+
+func (sb *SB) WriteInt64Base(v int64, base int)   { sb.buf = strconv.AppendInt(sb.buf, v, base) }
+func (sb *SB) WriteUint64Base(v uint64, base int) { sb.buf = strconv.AppendUint(sb.buf, v, base) }
 
 // usage:
 // - when reusing the same buffer, use Reset()

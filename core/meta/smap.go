@@ -450,7 +450,7 @@ func (m *Smap) StringEx() string {
 	)
 	sb.Init(l)
 	sb.WriteString("Smap v")
-	sb.WriteString(strconv.FormatInt(m.Version, 10))
+	sb.WriteInt64(m.Version)
 	sb.WriteUint8('[')
 	sb.WriteString(m.UUID)
 	if m.Primary == nil {
@@ -470,12 +470,12 @@ func (m *Smap) StringEx() string {
 
 func _counts(sb *cos.SB, all, active int) {
 	if all == active {
-		sb.WriteString(strconv.Itoa(all))
+		sb.WriteInt(all)
 	} else {
 		sb.WriteUint8('(')
-		sb.WriteString(strconv.Itoa(active))
+		sb.WriteInt(active)
 		sb.WriteUint8('/')
-		sb.WriteString(strconv.Itoa(all))
+		sb.WriteInt(all)
 		sb.WriteUint8(')')
 	}
 }

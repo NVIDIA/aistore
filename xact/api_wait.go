@@ -5,7 +5,6 @@
 package xact
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -89,7 +88,7 @@ func (args *ArgsMsg) String() string {
 	}
 	if args.Flags > 0 {
 		sb.WriteString("-0x")
-		sb.WriteString(strconv.FormatUint(uint64(args.Flags), 16))
+		sb.WriteUint64Base(uint64(args.Flags), 16)
 	}
 	return sb.String()
 }

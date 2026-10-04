@@ -154,15 +154,13 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 		}
 
 		jsonTag, jsonTagPresent := srcTyField.Tag.Lookup("json")
-		tags := strings.Split(jsonTag, ",")
-		fieldName := tags[0]
+		fieldName, options, _ := strings.Cut(jsonTag, ",")
 		if fieldName == "-" {
 			continue
 		}
-		if len(tags) > 1 {
-			// opt-in (instead of json default: srcTyField.Anonymous && fieldName == "")
-			isInline = tags[1] == tagInline
-		}
+		// opt-in (instead of json default: srcTyField.Anonymous && fieldName == "")
+		firstOption, _, _ := strings.Cut(options, ",")
+		isInline = firstOption == tagInline
 
 		// Determines if the pointer to struct was allocated.
 		// In case it was  but no field in the struct was

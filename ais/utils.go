@@ -222,7 +222,7 @@ func _selectHost(locIPs []*localIPInfo, hostnames []string, useIPv6 bool) (strin
 	for i, lip := range locIPs {
 		sb.WriteString(lip.ip)
 		sb.WriteString("(MTU=")
-		sb.WriteString(strconv.Itoa(lip.mtu))
+		sb.WriteInt(lip.mtu)
 		sb.WriteUint8(')')
 		if i < n-1 {
 			sb.WriteUint8(' ')

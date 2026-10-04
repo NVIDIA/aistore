@@ -6,7 +6,6 @@
 package memsys
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -188,7 +187,7 @@ func (r *MMSA) pressure2s(sb *cos.SB, mem *sys.MemStat) {
 	sb.WriteString("'")
 	if crit := r.swap.crit.Load(); crit > 0 {
 		sb.WriteString(", swapping(")
-		sb.WriteString(strconv.Itoa(int(crit)))
+		sb.WriteInt(int(crit))
 		sb.WriteUint8(')')
 	}
 }

@@ -7,7 +7,6 @@ package cos
 import (
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -17,8 +16,6 @@ const (
 	gsStorageURL    = "storage.googleapis.com"
 	gsAPIURL        = "www.googleapis.com"
 	gsAPIPathPrefix = "/storage/v1"
-
-	s3UrlRegex = `(s3-|s3\.)?(.*)\.amazonaws\.com`
 
 	azBlobURL = ".blob.core.windows.net"
 )
@@ -45,8 +42,7 @@ func IsGoogleAPIURL(u *url.URL) bool {
 }
 
 func IsS3URL(link string) bool {
-	re := regexp.MustCompile(s3UrlRegex)
-	return re.MatchString(link)
+	return strings.Contains(link, ".amazonaws.com") // (same as the unanchored `(s3-|s3\.)?(.*)\.amazonaws\.com`)
 }
 
 func IsAzureURL(u *url.URL) bool {

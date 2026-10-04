@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	ratomic "sync/atomic"
@@ -1131,21 +1130,21 @@ func (r *XactMoss) _ctlMsg(sb *cos.SB) {
 	sb.WriteString(core.T.String())
 	sb.WriteString(":[")
 	sb.WriteString("reqs:")
-	sb.WriteString(strconv.FormatInt(nreq, 10))
+	sb.WriteInt64(nreq)
 	if nerr > 0 {
 		sb.WriteString(" errs:")
-		sb.WriteString(strconv.FormatInt(nerr, 10))
+		sb.WriteInt64(nerr)
 	}
 	if ocnt := tstats.Get(stats.GetBatchObjCount); ocnt > 0 {
 		sb.WriteString(" objs:(")
-		sb.WriteString(strconv.FormatInt(ocnt, 10))
+		sb.WriteInt64(ocnt)
 		sb.WriteUint8(',')
 		sb.WriteString(cos.IEC(tstats.Get(stats.GetBatchObjSize), 2))
 		sb.WriteUint8(')')
 	}
 	if fcnt := tstats.Get(stats.GetBatchFileCount); fcnt > 0 {
 		sb.WriteString(" files:(")
-		sb.WriteString(strconv.FormatInt(fcnt, 10))
+		sb.WriteInt64(fcnt)
 		sb.WriteUint8(',')
 		sb.WriteString(cos.IEC(tstats.Get(stats.GetBatchFileSize), 2))
 		sb.WriteUint8(')')
@@ -1165,9 +1164,9 @@ func (r *XactMoss) _ctlMsg(sb *cos.SB) {
 	sb.WriteString(" job:[")
 	if pdemand != 0 || pdt != 0 {
 		sb.WriteString("pending:(")
-		sb.WriteString(strconv.FormatInt(pdemand, 10))
+		sb.WriteInt64(pdemand)
 		sb.WriteUint8(',')
-		sb.WriteString(strconv.FormatInt(pdt, 10))
+		sb.WriteInt64(pdt)
 		sb.WriteUint8(')')
 	}
 	if r.bewarm != nil {
@@ -1175,9 +1174,9 @@ func (r *XactMoss) _ctlMsg(sb *cos.SB) {
 			sb.WriteUint8(' ')
 		}
 		sb.WriteString("bewarm:(")
-		sb.WriteString(strconv.Itoa(r.bewarm.NumWorkers()))
+		sb.WriteInt(r.bewarm.NumWorkers())
 		sb.WriteUint8(',')
-		sb.WriteString(strconv.FormatInt(r.bewarm.NumDone(), 10))
+		sb.WriteInt64(r.bewarm.NumDone())
 		sb.WriteUint8(')')
 	}
 	sb.WriteUint8(']')
@@ -1201,29 +1200,29 @@ func (wi *basewi) _ctlMsg(sb *cos.SB) {
 
 	if c := wi.stats.obj.cnt; c > 0 {
 		sb.WriteString(" objs:[")
-		sb.WriteString(strconv.FormatInt(c, 10))
+		sb.WriteInt64(c)
 		sb.WriteUint8(' ')
 		sb.WriteString(cos.IEC(wi.stats.obj.size, 2))
 		sb.WriteUint8(']')
 	}
 	if c := wi.stats.fil.cnt; c > 0 {
 		sb.WriteString(" files:[")
-		sb.WriteString(strconv.FormatInt(c, 10))
+		sb.WriteInt64(c)
 		sb.WriteUint8(' ')
 		sb.WriteString(cos.IEC(wi.stats.fil.size, 2))
 		sb.WriteUint8(']')
 	}
 	if n := wi.inRx.Load(); n > 0 {
 		sb.WriteString(" in-rx:")
-		sb.WriteString(strconv.FormatInt(int64(n), 10))
+		sb.WriteInt(int(n))
 	}
 	if n := wi.stats.ngfn; n > 0 {
 		sb.WriteString(" gfn:")
-		sb.WriteString(strconv.Itoa(n))
+		sb.WriteInt(n)
 	}
 	if n := wi.stats.errn; n > 0 {
 		sb.WriteString(" gfn-err:")
-		sb.WriteString(strconv.Itoa(n))
+		sb.WriteInt(n)
 	}
 	if wi.started > 0 {
 		sb.WriteString(" age:")

@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -207,7 +206,7 @@ func (r *xactRechunk) CtlMsg() string {
 	}
 	if nv := r.NumVisits(); nv > 0 {
 		sb.WriteString(", visited:")
-		sb.WriteString(strconv.FormatInt(nv, 10))
+		sb.WriteInt64(nv)
 	}
 	return sb.String()
 }

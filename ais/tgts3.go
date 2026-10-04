@@ -147,18 +147,18 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	}
 
 	src = strings.Trim(src, "/") // in AWS examples the path starts with "/"
-	parts := strings.SplitN(src, "/", 2)
-	if len(parts) < 2 {
+	srcBck, srcObj, found := strings.Cut(src, "/")
+	if !found {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: errS3Obj})
 		return
 	}
 	// src
-	bckSrc, ecode, err := meta.InitByNameOnly(parts[0], t.owner.bmd)
+	bckSrc, ecode, err := meta.InitByNameOnly(srcBck, t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
-	objSrc := strings.Trim(parts[1], "/")
+	objSrc := strings.Trim(srcObj, "/")
 	if err := cos.ValidateOname(objSrc); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return

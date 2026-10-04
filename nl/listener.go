@@ -5,7 +5,6 @@
 package nl
 
 import (
-	"strconv"
 	"sync"
 	"time"
 
@@ -269,9 +268,9 @@ func (nlb *ListenerBase) String() string {
 	}
 	if finCount > 0 {
 		sb.WriteString("(cnt=")
-		sb.WriteString(strconv.Itoa(finCount))
+		sb.WriteInt(finCount)
 		sb.WriteUint8('/')
-		sb.WriteString(strconv.Itoa(len(nlb.Srcs)))
+		sb.WriteInt(len(nlb.Srcs))
 		sb.WriteUint8(')')
 	}
 	return sb.String()

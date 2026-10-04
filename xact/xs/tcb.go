@@ -8,7 +8,6 @@ package xs
 import (
 	"encoding/binary"
 	"io"
-	"strconv"
 	"sync"
 	"time"
 
@@ -422,7 +421,7 @@ func (r *XactTCB) _name(fromCname, toCname string, numJoggers int) {
 	sb.Init(80)
 	sb.WriteString(r.Base.Cname())
 	sb.WriteString("-p") // as in: "parallelism"
-	sb.WriteString(strconv.Itoa(numJoggers))
+	sb.WriteInt(numJoggers)
 	sb.WriteUint8('-')
 	sb.WriteString(fromCname)
 	sb.WriteString("=>")
@@ -454,19 +453,19 @@ func (r *XactTCB) CtlMsg() string {
 	sb.WriteString("; ")
 	sb.WriteString(core.T.String())
 	sb.WriteString(": job:[ visited:")
-	sb.WriteString(strconv.FormatInt(r.NumVisits(), 10))
+	sb.WriteInt64(r.NumVisits())
 	sb.WriteString(" locally-processed:")
-	sb.WriteString(strconv.FormatInt(r.Objs(), 10))
+	sb.WriteInt64(r.Objs())
 	sb.WriteString(" sent:")
-	sb.WriteString(strconv.FormatInt(r.OutObjs(), 10))
+	sb.WriteInt64(r.OutObjs())
 	sb.WriteString(" received:")
-	sb.WriteString(strconv.FormatInt(r.InObjs(), 10))
+	sb.WriteInt64(r.InObjs())
 	sb.WriteString(" copy-err:")
-	sb.WriteString(strconv.FormatInt(r.copyErr.Load(), 10))
+	sb.WriteInt64(r.copyErr.Load())
 	sb.WriteString(" chan-full:")
-	sb.WriteString(strconv.FormatInt(r.WorkChanFull(), 10))
+	sb.WriteInt64(r.WorkChanFull())
 	sb.WriteString(" pruned:")
-	sb.WriteString(strconv.FormatInt(r.prune.pruned.Load(), 10))
+	sb.WriteInt64(r.prune.pruned.Load())
 	sb.WriteUint8(']')
 	return sb.String()
 }

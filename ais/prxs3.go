@@ -558,13 +558,13 @@ func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string)
 func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	src := r.Header.Get(cos.S3HdrObjSrc)
 	src = strings.Trim(src, "/")
-	parts := strings.SplitN(src, "/", 2)
-	if len(parts) < 2 {
+	srcBck, srcObj, found := strings.Cut(src, "/")
+	if !found {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: errS3Obj})
 		return
 	}
 	// src
-	bckSrc := p.initByNameOnly(w, r, parts[0])
+	bckSrc := p.initByNameOnly(w, r, srcBck)
 	if bckSrc == nil {
 		return
 	}
@@ -582,7 +582,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 
-	objName := strings.Trim(parts[1], "/")
+	objName := strings.Trim(srcObj, "/")
 	smap := p.owner.smap.get()
 	tsi, err := smap.HrwName2T(bckSrc.MakeUname(objName))
 	if err != nil {

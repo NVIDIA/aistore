@@ -10,7 +10,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -224,8 +225,8 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 			// make an exception for apc.LsNoRecursion;
 			// otherwise rely on sorted backend.ListObjects()
 			if nonRecurs {
-				sort.Slice(lst.Entries, func(i, j int) bool {
-					return lst.Entries[i].Name < lst.Entries[j].Name
+				slices.SortFunc(lst.Entries, func(a, b *cmn.LsoEnt) int {
+					return strings.Compare(a.Name, b.Name)
 				})
 			}
 

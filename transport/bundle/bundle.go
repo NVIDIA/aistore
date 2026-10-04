@@ -8,7 +8,6 @@ package bundle
 import (
 	"fmt"
 	"maps"
-	"strconv"
 	"sync"
 	ratomic "sync/atomic"
 
@@ -121,7 +120,7 @@ func (sb *Streams) _lid() string {
 		s.WriteString(sb.network)
 	}
 	s.WriteString("-v")
-	s.WriteString(strconv.FormatInt(sb.smap.Version, 10))
+	s.WriteInt64(sb.smap.Version)
 	s.WriteUint8('-')
 	s.WriteString(sb.trname)
 

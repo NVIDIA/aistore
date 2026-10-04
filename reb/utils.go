@@ -6,7 +6,6 @@ package reb
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -49,11 +48,11 @@ func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) strin
 
 	sb.WriteString(core.T.String())
 	sb.WriteString("[g")
-	sb.WriteString(strconv.FormatInt(rebID, 10)) // (compare with `xact.RebID2S`)
+	sb.WriteInt64(rebID) // (compare with `xact.RebID2S`)
 	sb.WriteUint8(',')
 	if smap != nil {
 		sb.WriteUint8('v')
-		sb.WriteString(strconv.FormatInt(smap.Version, 10))
+		sb.WriteInt64(smap.Version)
 	} else {
 		sb.WriteString("v<???>")
 	}

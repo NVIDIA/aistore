@@ -140,6 +140,18 @@ var (
 // static map: [internal (json) obj prop => canonical http header]
 var (
 	props2hdr cos.StrKVs
+
+	// Fixed header names are also needed by clients before InitObjProps2Hdr.
+	hdrECGeneration  = apc.PropToHeader("ec.generation")
+	hdrECData        = apc.PropToHeader("ec.data")
+	hdrECParity      = apc.PropToHeader("ec.parity")
+	hdrECReplicated  = apc.PropToHeader("ec.replicated")
+	hdrMirrorCopies  = apc.PropToHeader("mirror.copies")
+	hdrMirrorPaths   = apc.PropToHeader("mirror.paths")
+	hdrChunksCount   = apc.PropToHeader("chunks.count")
+	hdrChunksMaxSize = apc.PropToHeader("chunks.max_chunk_size")
+	HdrObjPresent    = apc.PropToHeader("present")
+	hdrObjLocation   = apc.PropToHeader(apc.GetPropsLocation)
 )
 
 func InitObjProps2Hdr() {
@@ -210,22 +222,22 @@ func (c *Chunks) ToHeader(hdr http.Header) {
 
 func (ec *EC) FromHeader(hdr http.Header) error {
 	var err error
-	if v := hdr.Get(apc.PropToHeader("ec.generation")); v != "" {
+	if v := hdr.Get(hdrECGeneration); v != "" {
 		if ec.Generation, err = strconv.ParseInt(v, 10, 64); err != nil {
 			return fmt.Errorf("invalid ec.generation %q: %w", v, err)
 		}
 	}
-	if v := hdr.Get(apc.PropToHeader("ec.data")); v != "" {
+	if v := hdr.Get(hdrECData); v != "" {
 		if ec.DataSlices, err = strconv.Atoi(v); err != nil {
 			return fmt.Errorf("invalid ec.data %q: %w", v, err)
 		}
 	}
-	if v := hdr.Get(apc.PropToHeader("ec.parity")); v != "" {
+	if v := hdr.Get(hdrECParity); v != "" {
 		if ec.ParitySlices, err = strconv.Atoi(v); err != nil {
 			return fmt.Errorf("invalid ec.parity %q: %w", v, err)
 		}
 	}
-	if v := hdr.Get(apc.PropToHeader("ec.replicated")); v != "" {
+	if v := hdr.Get(hdrECReplicated); v != "" {
 		ec.IsECCopy = cos.IsParseBool(v)
 	}
 	return nil
@@ -233,12 +245,12 @@ func (ec *EC) FromHeader(hdr http.Header) error {
 
 func (m *Mirror) FromHeader(hdr http.Header) error {
 	var err error
-	if v := hdr.Get(apc.PropToHeader("mirror.copies")); v != "" {
+	if v := hdr.Get(hdrMirrorCopies); v != "" {
 		if m.Copies, err = strconv.Atoi(v); err != nil {
 			return fmt.Errorf("invalid mirror.copies %q: %w", v, err)
 		}
 	}
-	if v := hdr.Get(apc.PropToHeader("mirror.paths")); v != "" {
+	if v := hdr.Get(hdrMirrorPaths); v != "" {
 		m.Paths = strings.Split(v, ",")
 	}
 	return nil
@@ -246,12 +258,12 @@ func (m *Mirror) FromHeader(hdr http.Header) error {
 
 func (c *Chunks) FromHeader(hdr http.Header) error {
 	var err error
-	if v := hdr.Get(apc.PropToHeader("chunks.count")); v != "" {
+	if v := hdr.Get(hdrChunksCount); v != "" {
 		if c.ChunkCount, err = strconv.Atoi(v); err != nil {
 			return fmt.Errorf("invalid chunks.count %q: %w", v, err)
 		}
 	}
-	if v := hdr.Get(apc.PropToHeader("chunks.max_chunk_size")); v != "" {
+	if v := hdr.Get(hdrChunksMaxSize); v != "" {
 		if c.MaxChunkSize, err = strconv.ParseInt(v, 10, 64); err != nil {
 			return fmt.Errorf("invalid chunks.max_chunk_size %q: %w", v, err)
 		}
@@ -499,12 +511,11 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, _ error) {
 			keys = make([]string, 0, 10)
 		)
 		for _, kvs := range custom {
-			kv := strings.SplitN(kvs, "=", 2)
-			if len(kv) != 2 {
+			k, v, found := strings.Cut(kvs, "=")
+			if !found {
 				oa._undoCustom(keys)
 				return nil, fmt.Errorf("%s: invalid format %q (expecting key=value)", tagCustom, kvs)
 			}
-			k, v := kv[0], kv[1]
 			size += len(k) + len(v)
 			if err := ValidateCustomKV(k, v, size); err != nil {
 				oa._undoCustom(keys)
@@ -538,7 +549,7 @@ func (op *ObjectPropsV2) FromHeaders(hdr http.Header, props string) error {
 	op.Cksum = cksum
 
 	// Parse present header (indicates if object is cached locally)
-	if v := hdr.Get(apc.PropToHeader("present")); v != "" {
+	if v := hdr.Get(HdrObjPresent); v != "" {
 		op.Present = cos.IsParseBool(v)
 	}
 
@@ -553,7 +564,7 @@ func (op *ObjectPropsV2) FromHeaders(hdr http.Header, props string) error {
 		}
 		switch prop {
 		case apc.GetPropsLocation:
-			v := hdr.Get(apc.PropToHeader(prop))
+			v := hdr.Get(hdrObjLocation)
 			op.Location = &v
 		case apc.GetPropsCopies:
 			op.Mirror = &Mirror{}

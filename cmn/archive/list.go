@@ -11,7 +11,7 @@ import (
 	"compress/gzip"
 	"io"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -61,7 +61,7 @@ func List(fqn string) ([]*Entry, error) {
 		return nil, err
 	}
 	// paging requires them sorted
-	sort.Slice(lst, func(i, j int) bool { return lst[i].Name < lst[j].Name })
+	slices.SortFunc(lst, func(a, b *Entry) int { return strings.Compare(a.Name, b.Name) })
 	return lst, nil
 }
 

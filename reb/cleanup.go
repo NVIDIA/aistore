@@ -6,7 +6,6 @@ package reb
 
 import (
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -174,11 +173,11 @@ func (*Reb) logHdrCleanup(rebID int64, smap *meta.Smap, force bool) string {
 	sb.Init(l)
 	sb.WriteString(core.T.String())
 	sb.WriteString("[g")
-	sb.WriteString(strconv.FormatInt(rebID, 10))
+	sb.WriteInt64(rebID)
 	sb.WriteUint8(',')
 	if smap != nil {
 		sb.WriteUint8('v')
-		sb.WriteString(strconv.FormatInt(smap.Version, 10))
+		sb.WriteInt64(smap.Version)
 	} else {
 		sb.WriteString("v<???>")
 	}
@@ -438,59 +437,59 @@ func (clnArgs *clnArgs) ctlMsg(sb *cos.SB) {
 
 	// visits
 	sb.WriteString(" visits=")
-	sb.WriteString(strconv.FormatInt(s.visits.Load(), 10))
+	sb.WriteInt64(s.visits.Load())
 	sb.WriteString(" loads=")
-	sb.WriteString(strconv.FormatInt(s.loads.Load(), 10))
+	sb.WriteInt64(s.loads.Load())
 
 	// remove
 	if v := s.removeMisplaced.Load(); v > 0 {
 		sb.WriteString(" removed=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.removeDiverged.Load(); v > 0 {
 		sb.WriteString(" removed-diverged=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 
 	// keep
 	if v := s.keepPeerMissing.Load(); v > 0 {
 		sb.WriteString(" keep-peer-missing=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.keepDiverged.Load(); v > 0 {
 		sb.WriteString(" keep-diverged=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.skipBusy.Load(); v > 0 {
 		sb.WriteString(" skip-busy=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.skipBusyLate.Load(); v > 0 {
 		sb.WriteString(" skip-busy-late=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.skipChanged.Load(); v > 0 {
 		sb.WriteString(" skip-changed=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 
 	// errors
 	if ecnt := xreb.ErrCnt(); ecnt > 0 {
 		sb.WriteString(" errs:")
-		sb.WriteString(strconv.Itoa(ecnt))
+		sb.WriteInt(ecnt)
 	}
 	// per-class error counters (worth showing separately because xreb.ErrCnt
 	// may not include all of these — depending on which paths call AddErr)
 	if v := s.errLoad.Load(); v > 0 {
 		sb.WriteString(" err-load=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.errHEAD.Load(); v > 0 {
 		sb.WriteString(" err-head=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.errRemove.Load(); v > 0 {
 		sb.WriteString(" err-remove=")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 }

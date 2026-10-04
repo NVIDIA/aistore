@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -107,7 +106,7 @@ func (r *xactLLC) CtlMsg() string {
 	var sb cos.SB
 	sb.Init(16)
 	sb.WriteString(", visited:")
-	sb.WriteString(strconv.FormatInt(nv, 10))
+	sb.WriteInt64(nv)
 	return sb.String()
 }
 

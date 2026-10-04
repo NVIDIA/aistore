@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	ratomic "sync/atomic"
@@ -1596,11 +1595,11 @@ func (cs *CapStatus) String() string {
 	sb.WriteString(", avail ")
 	sb.WriteString(totalAvail)
 	sb.WriteString(" [min=")
-	sb.WriteString(strconv.Itoa(int(cs.PctMin)))
+	sb.WriteInt(int(cs.PctMin))
 	sb.WriteString("%, avg=")
-	sb.WriteString(strconv.Itoa(int(cs.PctAvg)))
+	sb.WriteInt(int(cs.PctAvg))
 	sb.WriteString("%, max=")
-	sb.WriteString(strconv.Itoa(int(cs.PctMax)))
+	sb.WriteInt(int(cs.PctMax))
 	sb.WriteUint8(']')
 
 	switch {

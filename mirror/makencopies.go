@@ -6,7 +6,6 @@ package mirror
 
 import (
 	"fmt"
-	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -100,11 +99,11 @@ func (r *mncXact) CtlMsg() string {
 	sb.Init(64)
 	sb.WriteString(r.p.args.Tag)
 	sb.WriteString(", copies:")
-	sb.WriteString(strconv.Itoa(r.p.args.Copies))
+	sb.WriteInt(r.p.args.Copies)
 	nv := r.NumVisits()
 	if nv > 0 {
 		sb.WriteString(", visited:")
-		sb.WriteString(strconv.FormatInt(nv, 10))
+		sb.WriteInt64(nv)
 	}
 	return sb.String()
 }

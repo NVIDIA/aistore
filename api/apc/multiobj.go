@@ -6,7 +6,6 @@ package apc
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -132,12 +131,12 @@ func (msg *PrefetchMsg) Str(isPrefix bool) string {
 	if msg.BlobNumWorkers != 0 {
 		msg.delim(&sb)
 		sb.WriteString("blob-workers:")
-		sb.WriteString(strconv.Itoa(msg.BlobNumWorkers))
+		sb.WriteInt(msg.BlobNumWorkers)
 	}
 	if msg.NumWorkers > 0 {
 		msg.delim(&sb)
 		sb.WriteString("workers:")
-		sb.WriteString(strconv.Itoa(msg.NumWorkers))
+		sb.WriteInt(msg.NumWorkers)
 	}
 	if msg.LatestVer {
 		msg.delim(&sb)

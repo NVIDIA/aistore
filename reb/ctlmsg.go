@@ -5,7 +5,6 @@
 package reb
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -110,15 +109,15 @@ func (rargs *rargs) ctlMsg(sb *cos.SB) {
 
 	if ecnt := xreb.ErrCnt(); ecnt > 0 {
 		sb.WriteString(" errs:")
-		sb.WriteString(strconv.Itoa(ecnt))
+		sb.WriteInt(ecnt)
 	}
 	if v := s.errRead.Load(); v > 0 {
 		sb.WriteString(" err-read:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := xreb.NerrECMD.Load(); v > 0 {
 		sb.WriteString(" err-ecmd:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 }
 

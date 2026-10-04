@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"strconv"
 	"sync"
 	"time"
 
@@ -491,21 +490,21 @@ func (r *XactTCO) CtlMsg() string {
 	sb.WriteString(": job:[ xid:")
 	sb.WriteString(r.ID())
 	sb.WriteString(" txns:")
-	sb.WriteString(strconv.FormatInt(done, 10))
+	sb.WriteInt64(done)
 	sb.WriteUint8('/')
-	sb.WriteString(strconv.FormatInt(begin, 10))
+	sb.WriteInt64(begin)
 	sb.WriteString(" pending:")
-	sb.WriteString(strconv.FormatInt(r.Pending(), 10))
+	sb.WriteInt64(r.Pending())
 	sb.WriteString(" sent:")
-	sb.WriteString(strconv.FormatInt(r.OutObjs(), 10))
+	sb.WriteInt64(r.OutObjs())
 	sb.WriteString(" received:")
-	sb.WriteString(strconv.FormatInt(r.ctl.rxPut.Load(), 10))
+	sb.WriteInt64(r.ctl.rxPut.Load())
 	sb.WriteString(" err:")
-	sb.WriteString(strconv.FormatInt(int64(r.ErrCnt()), 10))
+	sb.WriteInt(r.ErrCnt())
 	sb.WriteString(" chan-full:")
-	sb.WriteString(strconv.FormatInt(r.chanFull.Load(), 10))
+	sb.WriteInt64(r.chanFull.Load())
 	sb.WriteString(" pruned:")
-	sb.WriteString(strconv.FormatInt(r.ctl.pruned.Load(), 10))
+	sb.WriteInt64(r.ctl.pruned.Load())
 	sb.WriteUint8(']')
 
 	if n == 0 {
@@ -566,7 +565,7 @@ func (wi *tcowi) append(sb *cos.SB) {
 	}
 	if pend := wi.pend.n.Load(); pend > 0 {
 		sb.WriteString(", pending:")
-		sb.WriteString(strconv.FormatInt(pend, 10))
+		sb.WriteInt64(pend)
 	}
 
 	sb.WriteString(", flags:")

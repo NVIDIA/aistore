@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -175,55 +174,55 @@ func (s *clnStats) write(sb *cos.SB) {
 	}
 	sb.WriteString(core.T.String())
 	sb.WriteString(": visits:")
-	sb.WriteString(strconv.FormatInt(visits, 10))
+	sb.WriteInt64(visits)
 
 	if tooFresh > 0 {
 		sb.WriteString(" too-fresh:")
-		sb.WriteString(strconv.FormatInt(tooFresh, 10))
+		sb.WriteInt64(tooFresh)
 	}
 	if recentlyAccessed > 0 {
 		sb.WriteString(" recently-accessed:")
-		sb.WriteString(strconv.FormatInt(recentlyAccessed, 10))
+		sb.WriteInt64(recentlyAccessed)
 	}
 	if v := s.migrated.Load(); v > 0 {
 		sb.WriteString(" migrated:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.localMisplc.Load(); v > 0 {
 		sb.WriteString(" misplaced-local:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.keepPeerMissing.Load(); v > 0 {
 		sb.WriteString(" keep-peer-missing:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.keepDiverged.Load(); v > 0 {
 		sb.WriteString(" keep-diverged:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.errHEAD.Load(); v > 0 {
 		sb.WriteString(" err-head:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.orphans.Load(); v > 0 {
 		sb.WriteString(" orphans:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.sysBckRm.Load(); v > 0 {
 		sb.WriteString(" sysbck-rm:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.oldWorkN.Load(); v > 0 {
 		sb.WriteString(" oldwork:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.invalidN.Load(); v > 0 {
 		sb.WriteString(" invalid:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 	}
 	if v := s.rmFiles.Load(); v > 0 {
 		sb.WriteString(" rm:")
-		sb.WriteString(strconv.FormatInt(v, 10))
+		sb.WriteInt64(v)
 		sb.WriteUint8('/')
 		sb.WriteString(cos.IEC(s.rmBytes.Load(), 2))
 	}

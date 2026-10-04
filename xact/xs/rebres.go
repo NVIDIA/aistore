@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strconv"
 	"sync"
 	ratomic "sync/atomic"
 	"time"
@@ -230,7 +229,7 @@ func (xreb *Rebalance) writeStatic(sb *cos.SB) {
 			sb.WriteUint8(',')
 		}
 		sb.WriteString("0x")
-		sb.WriteString(strconv.FormatUint(uint64(fl), 16))
+		sb.WriteUint64Base(uint64(fl), 16)
 	}
 }
 
@@ -298,7 +297,7 @@ func (xres *Resilver) CtlMsg() string {
 	}
 	if nvisits > 0 {
 		sb.WriteString("visited:")
-		sb.WriteString(strconv.FormatInt(nvisits, 10))
+		sb.WriteInt64(nvisits)
 	}
 
 	// skipped busy
@@ -307,7 +306,7 @@ func (xres *Resilver) CtlMsg() string {
 			sb.WriteString(", ")
 		}
 		sb.WriteString("skipped-busy:")
-		sb.WriteString(strconv.FormatInt(n, 10))
+		sb.WriteInt64(n)
 	}
 	return sb.String()
 }
