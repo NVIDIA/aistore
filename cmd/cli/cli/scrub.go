@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -419,7 +418,7 @@ func (ctx *scrCtx) progress(scr *scrBp, listed int64, yes *bool) {
 			}
 			sb.WriteString(strings.ToLower(teb.ScrCols[i]))
 			sb.WriteUint8(':')
-			sb.WriteString(strconv.FormatInt(cnt, 10))
+			sb.WriteInt64(cnt)
 		}
 	}
 	if found {
@@ -539,7 +538,7 @@ func (log *_log) dflt(scr *scrBp, en *cmn.LsoEnt) {
 	scr.cname(en.Name)
 
 	sb.WriteString(logDelim)
-	sb.WriteString(strconv.FormatInt(en.Size, 10))
+	sb.WriteInt64(en.Size)
 	sb.WriteUint8('"')
 	fmt.Fprintln(log.fh, sb.String())
 	log.cnt++
@@ -554,7 +553,7 @@ func (log *_log) vchanged(scr *scrBp, en *cmn.LsoEnt) {
 	scr.cname(en.Name)
 
 	sb.WriteString(logDelim)
-	sb.WriteString(strconv.FormatInt(en.Size, 10))
+	sb.WriteInt64(en.Size)
 	sb.WriteString(logDelim)
 	sb.WriteString(en.Custom)
 	sb.WriteUint8('"')
@@ -571,7 +570,7 @@ func (log *_log) misplaced(scr *scrBp, en *cmn.LsoEnt) {
 	scr.cname(en.Name)
 
 	sb.WriteString(logDelim)
-	sb.WriteString(strconv.FormatInt(en.Size, 10))
+	sb.WriteInt64(en.Size)
 	sb.WriteString(logDelim)
 	sb.WriteString(en.Atime)
 	sb.WriteString(logDelim)
@@ -590,9 +589,9 @@ func (log *_log) copies(scr *scrBp, en *cmn.LsoEnt) {
 	scr.cname(en.Name)
 
 	sb.WriteString(logDelim)
-	sb.WriteString(strconv.FormatInt(en.Size, 10))
+	sb.WriteInt64(en.Size)
 	sb.WriteString(logDelim)
-	sb.WriteString(strconv.Itoa(int(en.Copies)))
+	sb.WriteInt(int(en.Copies))
 	sb.WriteUint8('"')
 	fmt.Fprintln(log.fh, sb.String())
 	log.cnt++
