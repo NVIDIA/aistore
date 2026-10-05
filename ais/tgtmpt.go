@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"hash"
@@ -42,6 +43,7 @@ type (
 		sync.RWMutex
 	}
 	partArgs struct {
+		ctx         context.Context // independent of per-part request headers
 		req         *http.Request
 		reader      io.ReadCloser
 		lom         *core.LOM
@@ -331,11 +333,16 @@ func (ups *ups) putPart(args *partArgs) (etag string, ecode int, err error) {
 
 func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 	var (
+		ctx       = args.ctx
 		lom       = args.lom
 		reader    = args.reader
 		rsize     = args.size
 		startTime = mono.NanoTime()
 	)
+
+	if ctx == nil {
+		ctx = mptRequestContext(args.req)
+	}
 
 	// Initialize checksums and get writers
 	pc, writers := initPartChecksums(args)
@@ -374,7 +381,7 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		rdr := memsys.NewGuardReader(sgl)
 		if err == nil {
 			remoteStart := mono.NanoTime()
-			etag, ecode, err = backend.PutMptPart(lom, rdr, args.req, uploadID, expectedSize, int32(args.partNum))
+			etag, ecode, err = backend.PutMptPart(ctx, lom, rdr, args.req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		rdr.Free() // not sgl.Free
@@ -396,7 +403,7 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		rdr := memsys.NewGuardReader(sgl)
 		if err == nil {
 			remoteStart := mono.NanoTime()
-			etag, ecode, err = backend.PutMptPart(lom, rdr, args.req, uploadID, expectedSize, int32(args.partNum))
+			etag, ecode, err = backend.PutMptPart(ctx, lom, rdr, args.req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		rdr.Free() // not sgl.Free (ditto)
@@ -640,6 +647,14 @@ func (ups *ups) _abort(id string, lom *core.LOM) error {
 
 	manifest.Abort(lom)
 	return nil
+}
+
+// An internal chunk carries context without carrying the whole-object headers.
+func mptRequestContext(r *http.Request) context.Context {
+	if r != nil {
+		return r.Context()
+	}
+	return context.Background()
 }
 
 //

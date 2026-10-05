@@ -7,6 +7,7 @@
 package backend
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -108,10 +109,9 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, r *http.Request) (string, int, error) 
 	return result.UploadID, 0, nil
 }
 
-func (gsbp *gsbp) PutMptPart(lom *core.LOM, reader cos.ReadOpenCloser, hreq *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
-	debug.Assert(hreq != nil)
+func (gsbp *gsbp) PutMptPart(ctx context.Context, lom *core.LOM, reader cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+	ctx = mptContext(ctx)
 	var (
-		ctx      = hreq.Context()
 		cloudBck = lom.Bck().RemoteBck()
 		sess, e  = gsbp.getSess(ctx, cloudBck)
 	)
@@ -143,7 +143,7 @@ func (gsbp *gsbp) PutMptPart(lom *core.LOM, reader cos.ReadOpenCloser, hreq *htt
 	}
 	req.ContentLength = size
 
-	resp, err := sess.httpClient.Do(req)
+	resp, err := sess.httpClient.Do(req.WithContext(ctx))
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
 	cos.Close(reader)

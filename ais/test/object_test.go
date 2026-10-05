@@ -6,6 +6,8 @@ package integration_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -956,6 +958,7 @@ func TestColdGetChunked(t *testing.T) {
 		objSizeLimit  uint64 // auto-chunking threshold (zero disables)
 		maxMonoSize   uint64 // hard limit (zero uses the default)
 		multipart     bool   // explicitly upload multipart objects
+		contentSHA    bool   // regular PUT with a whole-object SHA256 header
 		evict         bool   // evict after provision
 		expectChunked bool
 		longOnly      bool // run only with long tests
@@ -980,7 +983,7 @@ func TestColdGetChunked(t *testing.T) {
 		{name: "objsize/multipart-warm-below", objSize: smallSize, objSizeLimit: autoLimit, multipart: true, expectChunked: true},
 		{name: "objsize/multipart-warm-above", objSize: largeSize, objSizeLimit: autoLimit, multipart: true, expectChunked: true},
 		{name: "objsize/put-warm-below", objSize: smallSize, objSizeLimit: autoLimit},
-		{name: "objsize/put-warm-above", objSize: largeSize, objSizeLimit: autoLimit, expectChunked: true},
+		{name: "objsize/put-warm-above", objSize: largeSize, objSizeLimit: autoLimit, expectChunked: true, contentSHA: true},
 
 		// Both limits set: cold GET follows the policy; warm GET preserves the source layout.
 		{name: "both/multipart-cold-below-soft", objSize: smallSize, objSizeLimit: autoLimit, maxMonoSize: hardLimit, multipart: true, evict: true},
@@ -1052,7 +1055,27 @@ func TestColdGetChunked(t *testing.T) {
 
 			// Provision objects to remote backend
 			tlog.Logfln("Provisioning %d objects (multipart=%v, size=%s, evict=%v)...", numObjs, tt.multipart, cos.ToSizeIEC(int64(tt.objSize), 0), tt.evict)
-			m.remotePuts(false /*evict*/)
+			var wholeSHA string
+			if tt.contentSHA {
+				reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(tt.objSize), CksumType: p.Cksum.Type})
+				tassert.CheckFatal(t, err)
+				h := sha256.New()
+				_, err = io.Copy(h, reader)
+				tassert.CheckFatal(t, err)
+				wholeSHA = hex.EncodeToString(h.Sum(nil))
+				_, err = reader.Seek(0, io.SeekStart)
+				tassert.CheckFatal(t, err)
+				m.objNames = append(m.objNames, m.prefix+"-sha256")
+				// Automatic parts must not validate against the whole-object digest.
+				_, err = api.PutObject(&api.PutArgs{
+					BaseParams: baseParams, Bck: m.bck, ObjName: m.objNames[0],
+					Reader: reader, Size: tt.objSize, Cksum: reader.Cksum(),
+					Header: http.Header{cos.S3HdrContentSHA256: []string{wholeSHA}},
+				})
+				tassert.CheckFatal(t, err)
+			} else {
+				m.remotePuts(false /*evict*/)
+			}
 
 			if tt.evict {
 				err = api.EvictRemoteBucket(baseParams, m.bck, true /*keepMD*/)
@@ -1061,7 +1084,13 @@ func TestColdGetChunked(t *testing.T) {
 			} else {
 				tlog.Logln("Performing warm GET...")
 			}
-			m.gets(nil, true)
+			if tt.contentSHA {
+				h := sha256.New()
+				m.gets(&api.GetArgs{Writer: h}, true)
+				tassert.Errorf(t, hex.EncodeToString(h.Sum(nil)) == wholeSHA, "automatic chunk upload changed object content")
+			} else {
+				m.gets(nil, true)
+			}
 
 			if tt.expectChunked {
 				expectedChunkSize := int64(chunkSize)

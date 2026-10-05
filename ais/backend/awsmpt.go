@@ -69,12 +69,13 @@ func (*s3bp) StartMpt(lom *core.LOM, oreq *http.Request) (id string, ecode int, 
 	return id, ecode, err
 }
 
-func (*s3bp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, oreq *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+func (*s3bp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenCloser, oreq *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+	ctx = mptContext(ctx)
 	h := cmn.BackendHelpers.Amazon
 
 	// presigned
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts, ecode, err := newPresignedReq(oreq, lom, r)
+		pts, ecode, err := newPresignedReq(oreq.WithContext(ctx), lom, r)
 		if err != nil {
 			return "", ecode, err
 		}
@@ -107,7 +108,6 @@ func (*s3bp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, oreq *http.Request,
 	// disable retries if the reader is not seekable (to avoid "failed to rewind transport stream for retry")
 	var (
 		_, seekable = r.(io.ReadSeeker)
-		ctx         = context.Background()
 		out         *s3.UploadPartOutput
 		err         error
 	)

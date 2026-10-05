@@ -80,7 +80,8 @@ func (bp *ocibp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) {
 	return uploadID, ecode, err
 }
 
-func (bp *ocibp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+func (bp *ocibp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+	ctx = mptContext(ctx)
 	var (
 		client            *ocios.ObjectStorageClient
 		cloudBck          = lom.Bck().RemoteBck()
@@ -105,7 +106,7 @@ func (bp *ocibp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request
 		return "", ecode, err
 	}
 
-	uploadPartResponse, err = client.UploadPart(context.Background(), uploadPartRequest)
+	uploadPartResponse, err = client.UploadPart(ctx, uploadPartRequest)
 
 	if err == nil {
 		etag = *uploadPartResponse.ETag

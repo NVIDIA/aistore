@@ -53,7 +53,8 @@ func (*azbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int, err
 	return uploadID, 0, nil
 }
 
-func (azbp *azbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, _ int64, partNum int32) (string, int, error) {
+func (azbp *azbp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, _ int64, partNum int32) (string, int, error) {
+	ctx = mptContext(ctx)
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
@@ -72,7 +73,7 @@ func (azbp *azbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Reques
 	rsc, ok := r.(io.ReadSeekCloser)
 	debug.Assertf(ok, "Azure backend requires io.ReadSeekCloser, but got %T", r)
 
-	_, err = client.StageBlock(context.Background(), blockID, rsc, nil)
+	_, err = client.StageBlock(ctx, blockID, rsc, nil)
 
 	if err != nil {
 		ecode, err := azureErrorToAISError(err, cloudBck, lom.ObjName)

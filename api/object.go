@@ -91,6 +91,7 @@ type (
 //     can be used to reduce PUT latency when massively writing new content (or simply don't care)
 type (
 	PutArgs struct {
+		Context    context.Context // optional; defaults to context.Background()
 		Reader     cos.ReadOpenCloser
 		Cksum      *cos.Cksum
 		Header     http.Header
@@ -343,9 +344,17 @@ func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) 
 func (args *PutArgs) getBody() (io.ReadCloser, error) { return args.Reader.Open() }
 
 func (args *PutArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
+	if args.Context != nil {
+		if err := args.Context.Err(); err != nil {
+			return nil, err
+		}
+	}
 	req, err := reqArgs.Req()
 	if err != nil {
 		return nil, cmn.NewErrCreateHreq(err)
+	}
+	if args.Context != nil {
+		req = req.WithContext(args.Context)
 	}
 	// Go http doesn't automatically set this for files, so to handle redirect we do it here.
 	req.GetBody = args.getBody

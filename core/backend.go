@@ -54,7 +54,9 @@ type (
 
 		// multipart upload
 		StartMpt(lom *LOM, r *http.Request) (uploadID string, ecode int, err error)
-		PutMptPart(lom *LOM, reader cos.ReadOpenCloser, r *http.Request, uploadID string, size int64, partNum int32) (etag string, ecode int, err error)
+		// PutMptPart accepts context independently of optional AWS request headers.
+		// A nil context defaults to context.Background().
+		PutMptPart(ctx context.Context, lom *LOM, reader cos.ReadOpenCloser, r *http.Request, uploadID string, size int64, partNum int32) (etag string, ecode int, err error)
 		CompleteMpt(lom *LOM, r *http.Request, uploadID string, body []byte, parts apc.MptCompletedParts) (version, etag string, ecode int, err error)
 		AbortMpt(lom *LOM, r *http.Request, uploadID string) (ecode int, err error)
 	}

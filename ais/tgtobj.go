@@ -251,6 +251,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		chunkReader := io.NopCloser(limitedReader)
 
 		args := partArgs{
+			ctx:         mptRequestContext(poi.oreq),
 			reader:      chunkReader,
 			size:        thisChunkSize,
 			lom:         lom,
