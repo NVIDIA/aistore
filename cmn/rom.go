@@ -19,6 +19,7 @@ type readMostly struct {
 		cplane    time.Duration // Config.Timeout.CplaneOperation
 		keepalive time.Duration // MaxKeepalive
 		ecstreams time.Duration // EcStreams
+		sendfile  time.Duration // SendFile
 	}
 	features           feat.Flags
 	level, modules     int
@@ -45,6 +46,7 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 	if d := cfg.Timeout.EcStreams; d != 0 {
 		rom.timeout.ecstreams = d.D()
 	}
+	rom.timeout.sendfile = cfg.Timeout.SendFile.D()
 	rom.features = cfg.Features
 
 	rom.clientAuthRequired = cfg.Auth.ClientAuthRequired
@@ -67,6 +69,7 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 func (rom *readMostly) CplaneOperation() time.Duration { return rom.timeout.cplane }
 func (rom *readMostly) MaxKeepalive() time.Duration    { return rom.timeout.keepalive }
 func (rom *readMostly) EcStreams() time.Duration       { return rom.timeout.ecstreams }
+func (rom *readMostly) SendFile() time.Duration        { return rom.timeout.sendfile }
 func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
 func (rom *readMostly) ClientAuthRequired() bool       { return rom.clientAuthRequired }

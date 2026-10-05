@@ -74,6 +74,8 @@ type (
 	getOI struct {
 		req        *http.Request
 		w          http.ResponseWriter
+		wctrl      *http.ResponseController // see initWdl
+		wtout      time.Duration
 		ctx        context.Context // context used when getting object from remote backend (access creds)
 		ktls       ktlsState       // connection-scoped TX state, if any
 		t          *target         // this
@@ -1375,6 +1377,10 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 	size := goi.lom.Lsize()
 	goi.setwhdr(whdr, goi.lom.Checksum(), size)
 
+	// stalled client vs. (rlock, open file, goroutine)
+	// TODO: range, arch, cold-stream
+	goi.initWdl()
+
 	// Tx
 	if goi.canSendfile(lmfh) {
 		// NOTE: net.sendFile unwraps io.LimitedReader before the syscall,
@@ -1460,8 +1466,12 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64, committed bool) error {
 	var (
 		errTx error
+		w     io.Writer = goi.w
 	)
-	written, err := cos.CopyBuffer(goi.w, r, buf)
+	if goi.wctrl != nil {
+		w = &wdlWriter{w: goi.w, rc: goi.wctrl, tout: goi.wtout}
+	}
+	written, err := cos.CopyBuffer(w, r, buf)
 	if err != nil || written != size {
 		errTx = goi._txerr(err, fqn /*lbget*/, written, size, committed)
 	}
@@ -1480,8 +1490,18 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64, comm
 // fast (sendfile) path
 //
 
-func (goi *getOI) sendfile(r io.Reader, fqn string, size int64, committed bool) error {
-	written, err := cos.CopySendfile(goi.w, r)
+// `lr` must be io.LimitedReader over file -  ktlsConn.ReadFrom requires it
+// and _sendfileWdl chunks it
+func (goi *getOI) sendfile(lr *io.LimitedReader, fqn string, size int64, committed bool) error {
+	var (
+		written int64
+		err     error
+	)
+	if goi.wctrl != nil {
+		written, err = goi._sendfileWdl(lr)
+	} else {
+		written, err = cos.CopySendfile(goi.w, lr)
+	}
 	if err != nil || written != size {
 		if errTx := goi._txerr(err, fqn, written, size, committed); errTx != nil {
 			return errTx
@@ -1489,6 +1509,51 @@ func (goi *getOI) sendfile(r io.Reader, fqn string, size int64, committed bool) 
 	}
 	goi.stats(written)
 	return nil
+}
+
+// conservative timeout.send_file_time deadline
+// - net/http clears the write deadline after each request (keep-alive safe)
+// - deadline exceeded => net.Error Timeout() => cmn.ErrGetTxBenign (see _txerr)
+func (goi *getOI) initWdl() {
+	if cmn.Rom.Features().IsSet(feat.DisableGetWriteDeadline) {
+		return
+	}
+	tout := cmn.Rom.SendFile()
+	if tout <= 0 {
+		return
+	}
+
+	// (compare w/ x-moss)
+	rc := http.NewResponseController(goi.w)
+	if err := rc.SetWriteDeadline(time.Now().Add(tout)); err != nil {
+		// proceed w/o deadline: http.ErrNotSupported (wrapped writer w/o Unwrap(), test recorder)
+		// or connection already closed - the latter fails at the first write anyway
+		return
+	}
+	goi.wctrl, goi.wtout = rc, tout
+}
+
+// sendfile in chunks, re-arming the deadline in between
+// (a single ReadFrom would otherwise be bound by one absolute deadline)
+func (goi *getOI) _sendfileWdl(lr *io.LimitedReader) (written int64, err error) {
+	var (
+		chunk = &io.LimitedReader{R: lr.R}
+		csize = wdlChunkSize(goi.wtout)
+	)
+	for lr.N > 0 {
+		if err = goi.wctrl.SetWriteDeadline(time.Now().Add(goi.wtout)); err != nil {
+			return written, err
+		}
+		chunk.N = min(lr.N, csize)
+		var n int64
+		n, err = cos.CopySendfile(goi.w, chunk)
+		written += n
+		lr.N -= n
+		if err != nil || n == 0 {
+			break
+		}
+	}
+	return written, err
 }
 
 // source must be monolithic file-backed (see assert)
@@ -2552,4 +2617,41 @@ func allocSnda() *sendArgs {
 func freeSnda(a *sendArgs) {
 	*a = snd0
 	sndPool.Put(a)
+}
+
+///////////////
+// wdlWriter //
+///////////////
+
+// sendfile chunk size: the implied minimum drain rate (chunk/timeout) stays constant
+// (approx. 16KiB/s) regardless of timeout.send_file_time
+// e.g.: 1m => 1MiB (min); 5m => 4.7MiB; >= 68m => 64MiB (max)
+const (
+	wdlMinRate      = 16 * cos.KiB // bytes per second
+	wdlMinChunkSize = cos.MiB
+	wdlMaxChunkSize = 64 * cos.MiB
+)
+
+func wdlChunkSize(tout time.Duration) int64 {
+	return min(max(int64(tout/time.Second)*wdlMinRate, wdlMinChunkSize), wdlMaxChunkSize)
+}
+
+// buffered transmit:
+// - re-arm the write deadline at most every timeout/3 (compare w/ x-moss refreshIval)
+// - intentionally Write-only - masks the underlying writer's io.ReaderFrom, http.Flusher, etc.
+type wdlWriter struct {
+	w    io.Writer
+	rc   *http.ResponseController
+	tout time.Duration
+	last int64 // mono
+}
+
+func (d *wdlWriter) Write(p []byte) (int, error) {
+	if now := mono.NanoTime(); now-d.last >= int64(d.tout/3) {
+		if err := d.rc.SetWriteDeadline(time.Now().Add(d.tout)); err != nil {
+			return 0, err
+		}
+		d.last = now
+	}
+	return d.w.Write(p)
 }
