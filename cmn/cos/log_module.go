@@ -34,6 +34,7 @@ const (
 	ModETL
 	ModS3
 	ModKalive
+	ModKTLS // reserved for internal use; may be redefined or removed at any time
 
 	// NOTE: the last
 	_smoduleLast
@@ -47,6 +48,7 @@ var Mods = [...]string{
 	"ios", "xs", "backend", "space", "mirror", "dsort", "downloader", "etl",
 	"s3",
 	"kalive",
+	"ktls",
 }
 
 type LogLevel string

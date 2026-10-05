@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -52,11 +53,7 @@ type (
 		conn *ktlsConn
 		err  error
 	}
-	testktlsState bool
 )
-
-func (state testktlsState) isArmed() bool { return bool(state) }
-func (testktlsState) retire(int64) bool   { return false }
 
 func (tc *ticketCounter) Put(_ string, _ *tls.ClientSessionState) {
 	tc.mu.Lock()
@@ -154,7 +151,7 @@ func testktlsListen(t testing.TB, l net.Listener) <-chan testktlsServer {
 
 // using the fact that session tickets are the one thing that stdlib crypto/tls writes
 // under the server application traffic epoch during the handshake
-func TestKTLSTxSessionTickets(t *testing.T) {
+func TestKTLSTxHandshake(t *testing.T) {
 	t.Run("control/tickets-enabled", func(t *testing.T) {
 		cache := &ticketCounter{}
 		conf := testktlsServerConf(t)
@@ -220,147 +217,77 @@ func TestKTLSTxSessionTickets(t *testing.T) {
 		tassert.CheckError(t, cc.Close())
 		tassert.CheckError(t, srv.conn.Close())
 
+		state := srv.conn.ConnectionState()
+		tassert.Errorf(t, state.Version == tls.VersionTLS13, "expected TLS 1.3, got %#x", state.Version)
+		tassert.Errorf(t, state.NegotiatedProtocol == "http/1.1", "expected http/1.1, got %q", state.NegotiatedProtocol)
+
+		// the injected installer is a no-op: every connection stays on crypto/tls
+		tassert.Errorf(t, !srv.conn.isArmed(), "armed with a no-op installer")
+		tassert.Errorf(t, srv.conn.wire.nwritten.Load() > 0, "crypto/tls wrote nothing to the wire")
+
+		// the effective per-connection config keeps the ticket prerequisite without
+		// narrowing the caller's configured TLS version range
+		tassert.Errorf(t, srv.conn.cfg.SessionTicketsDisabled, "SessionTicketsDisabled not set on the effective config")
+		tassert.Errorf(t, srv.conn.cfg.MinVersion == 0 && srv.conn.cfg.MaxVersion == 0,
+			"TLS version range unexpectedly changed to %#x-%#x", srv.conn.cfg.MinVersion, srv.conn.cfg.MaxVersion)
+
+		// arm() wipes the key material on every path, including fallback
+		tassert.Errorf(t, srv.conn.secrets.takeTLS13() == nil, "traffic secret not zeroed after arm")
+
 		tassert.Errorf(t, cache.count() == 0,
 			"expected no session ticket, got %d: the server application record sequence "+
 				"number would not start at zero", cache.count())
 	})
 }
 
-func TestKTLSTxHandshake(t *testing.T) {
-	raw, err := net.Listen("tcp", "127.0.0.1:0")
-	tassert.CheckFatal(t, err)
-	defer raw.Close()
-
-	l := testktlsNewListener(t, raw)
-
-	srvCh := testktlsListen(t, l)
-
-	cc, err := tls.Dial("tcp", raw.Addr().String(), testktlsClientConf(nil))
-	tassert.CheckFatal(t, err)
-	defer cc.Close()
-
-	srv := <-srvCh
-	tassert.CheckFatal(t, srv.err)
-	defer srv.conn.Close()
-
-	const payload = "aistore"
-	_, err = srv.conn.Write([]byte(payload))
-	tassert.CheckFatal(t, err)
-
-	buf := make([]byte, len(payload))
-	_, err = io.ReadFull(cc, buf)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, string(buf) == payload, "expected %q, got %q", payload, buf)
-
-	state := srv.conn.ConnectionState()
-	tassert.Errorf(t, state.Version == tls.VersionTLS13, "expected TLS 1.3, got %#x", state.Version)
-	tassert.Errorf(t, state.NegotiatedProtocol == "http/1.1", "expected http/1.1, got %q", state.NegotiatedProtocol)
-
-	// the injected installer is a no-op: every connection stays on crypto/tls
-	tassert.Errorf(t, !srv.conn.isArmed(), "armed with a no-op installer")
-	tassert.Errorf(t, srv.conn.wire.nwritten.Load() > 0, "crypto/tls wrote nothing to the wire")
-
-	// the effective per-connection config keeps the ticket prerequisite without
-	// narrowing the caller's configured TLS version range
-	tassert.Errorf(t, srv.conn.cfg.SessionTicketsDisabled, "SessionTicketsDisabled not set on the effective config")
-	tassert.Errorf(t, srv.conn.cfg.MinVersion == 0 && srv.conn.cfg.MaxVersion == 0,
-		"TLS version range unexpectedly changed to %#x-%#x", srv.conn.cfg.MinVersion, srv.conn.cfg.MaxVersion)
-
-	// arm() wipes the key material on every path, including fallback
-	tassert.Errorf(t, srv.conn.secrets.takeTLS13() == nil, "traffic secret not zeroed after arm")
-}
-
 func TestKTLSTxConcurrentInit(t *testing.T) {
-	raw, err := net.Listen("tcp", "127.0.0.1:0")
-	tassert.CheckFatal(t, err)
-	defer raw.Close()
-
-	l := testktlsNewListener(t, raw)
 	var installs atomic.Int32
-	installing := make(chan struct{})
-	release := make(chan struct{})
-	l.install = func(*net.TCPConn, *ktlsParams) (bool, error) {
+	installing, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	releaseInstall := func() { once.Do(func() { close(release) }) }
+	defer releaseInstall()
+	conn, client := testktlsConnPair(t, func(*net.TCPConn, *ktlsParams) (bool, error) {
 		if installs.Add(1) == 1 {
 			close(installing)
 		}
 		<-release
 		return false, nil
-	}
-
-	type serverResult struct {
-		conn *ktlsConn
-		err  error
-	}
-	serverCh := make(chan serverResult, 1)
-	go func() {
-		nc, err := l.Accept()
-		if err != nil {
-			serverCh <- serverResult{err: err}
-			return
-		}
-		conn, ok := nc.(*ktlsConn)
-		if !ok {
-			nc.Close()
-			serverCh <- serverResult{err: fmt.Errorf("expected *ktlsConn, got %T", nc)}
-			return
-		}
-		serverCh <- serverResult{conn: conn}
-	}()
-
-	type clientResult struct {
-		conn *tls.Conn
-		err  error
-	}
-	clientCh := make(chan clientResult, 1)
-	go func() {
-		conn, err := tls.Dial("tcp", raw.Addr().String(), testktlsClientConf(nil))
-		clientCh <- clientResult{conn: conn, err: err}
-	}()
-
-	srv := <-serverCh
-	tassert.CheckFatal(t, srv.err)
-	defer srv.conn.Close()
-
+	})
 	ctx, cancel := context.WithTimeout(t.Context(), testktlsTimeout)
 	defer cancel()
+	clientErr := make(chan error, 1)
+	go func() { clientErr <- client.HandshakeContext(ctx) }()
 	const concurrency = 16
 	var wg sync.WaitGroup
 	errCh := make(chan error, concurrency)
 	start := make(chan struct{})
 	for range concurrency {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
-			errCh <- srv.conn.HandshakeContext(ctx)
-		}()
+			errCh <- conn.HandshakeContext(ctx)
+		})
 	}
 	close(start)
-
 	select {
 	case <-installing:
 	case <-time.After(testktlsTimeout):
-		close(release)
 		t.Fatal("timed out waiting for concurrent kTLS initialization")
 	}
 	tassert.Errorf(t, installs.Load() == 1, "expected one installer call, got %d", installs.Load())
-	close(release)
+	releaseInstall()
 	wg.Wait()
 	close(errCh)
 	for err := range errCh {
 		tassert.CheckFatal(t, err)
 	}
+	tassert.CheckFatal(t, <-clientErr)
 	tassert.Errorf(t, installs.Load() == 1, "expected one installer call, got %d", installs.Load())
 
-	client := <-clientCh
-	tassert.CheckFatal(t, client.err)
-	defer client.conn.Close()
-
 	const payload = "concurrent-init"
-	_, err = srv.conn.Write([]byte(payload))
+	_, err := conn.Write([]byte(payload))
 	tassert.CheckFatal(t, err)
 	buf := make([]byte, len(payload))
-	_, err = io.ReadFull(client.conn, buf)
+	_, err = io.ReadFull(client, buf)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, string(buf) == payload, "expected %q, got %q", payload, buf)
 }
@@ -429,112 +356,70 @@ func TestKTLSTxTLS12Handshake(t *testing.T) {
 	tassert.Errorf(t, !ok, "TLS 1.2 key material not zeroed after arm")
 }
 
-func TestKTLSTxKeyDerivation(t *testing.T) {
-	tests := []struct {
-		name        string
-		secret      string
-		key         string
-		iv          string
-		cipherSuite uint16
-	}{
-		{
-			name:        "aes-128-gcm/rfc8448-server-application",
-			cipherSuite: tls.TLS_AES_128_GCM_SHA256,
-			secret:      "a11af9f05531f856ad47116b45a950328204b4f44bfb6b3a4b4f1f3fcb631643",
-			key:         "9f02283b6c9c07efc26bb9f2ac92e356",
-			iv:          "cf782b88dd83549aadf1e984",
-		},
-		{
-			name:        "aes-256-gcm/sha384",
-			cipherSuite: tls.TLS_AES_256_GCM_SHA384,
-			secret: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" +
-				"202122232425262728292a2b2c2d2e2f",
-			key: "6877d022f1c61d24ebb7487c16752d9a4798e40431c75b39320e537c90e23225",
-			iv:  "42822531a0fe88648fc09e9f",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			secret, err := hex.DecodeString(test.secret)
-			tassert.CheckFatal(t, err)
-			wantKey, err := hex.DecodeString(test.key)
-			tassert.CheckFatal(t, err)
-			wantIV, err := hex.DecodeString(test.iv)
-			tassert.CheckFatal(t, err)
-
-			key, iv, supported, err := deriveTLS13KeyIV(test.cipherSuite, secret)
-			tassert.CheckFatal(t, err)
-			defer clear(key)
-			defer clear(iv)
-			tassert.Errorf(t, supported, "cipher suite %#x is not supported", test.cipherSuite)
-			tassert.Errorf(t, bytes.Equal(key, wantKey), "unexpected key for cipher %#x", test.cipherSuite)
-			tassert.Errorf(t, bytes.Equal(iv, wantIV), "unexpected IV for cipher %#x", test.cipherSuite)
-		})
-	}
-
-	key, iv, supported, err := deriveTLS13KeyIV(tls.TLS_CHACHA20_POLY1305_SHA256, make([]byte, 32))
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, !supported, "ChaCha20-Poly1305 unexpectedly supported")
-	tassert.Errorf(t, key == nil && iv == nil, "unsupported cipher returned key material")
+var testktlsCryptoCases = []struct {
+	name           string
+	version, suite uint16
+	key, iv        string
+}{
+	{"TLS13/AES128", tls.VersionTLS13, tls.TLS_AES_128_GCM_SHA256,
+		"9f02283b6c9c07efc26bb9f2ac92e356", "cf782b88dd83549aadf1e984"},
+	{"TLS13/AES256", tls.VersionTLS13, tls.TLS_AES_256_GCM_SHA384,
+		"6877d022f1c61d24ebb7487c16752d9a4798e40431c75b39320e537c90e23225", "42822531a0fe88648fc09e9f"},
+	{"TLS12/AES128", tls.VersionTLS12, tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		"617bfc73135fe88287599ae2278f1202", "3ffdfdf2"},
+	{"TLS12/AES256", tls.VersionTLS12, tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		"2beee8b9885b18471b6d987d01c2e7fb36b5c2cdb42fd5a1ba07e906aeef53cf", "9e7af7e8"},
 }
 
-func TestKTLSTxTLS12KeyDerivation(t *testing.T) {
-	// Fixed independently against OpenSSL's TLS1-PRF KDF.
-	master, err := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" +
-		"202122232425262728292a2b2c2d2e2f")
-	tassert.CheckFatal(t, err)
-	clientBytes, err := hex.DecodeString("202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f")
-	tassert.CheckFatal(t, err)
-	serverBytes, err := hex.DecodeString("404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f")
-	tassert.CheckFatal(t, err)
-	clientRandom, serverRandom := [32]byte{}, [32]byte{}
-	copy(clientRandom[:], clientBytes)
-	copy(serverRandom[:], serverBytes)
-
-	tests := []struct {
-		name        string
-		key         string
-		iv          string
-		cipherSuite uint16
-	}{
-		{
-			name:        "aes-128-gcm/sha256",
-			cipherSuite: tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			key:         "617bfc73135fe88287599ae2278f1202",
-			iv:          "3ffdfdf2",
-		},
-		{
-			name:        "aes-256-gcm/sha384",
-			cipherSuite: tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			key:         "2beee8b9885b18471b6d987d01c2e7fb36b5c2cdb42fd5a1ba07e906aeef53cf",
-			iv:          "9e7af7e8",
-		},
+func testktlsCryptoParams(t testing.TB, version, suite uint16) ktlsParams {
+	t.Helper()
+	// TLS 1.3 AES128 uses RFC 8448 server application material. The other
+	// vectors use bytes 0..47; TLS 1.2 outputs were checked against OpenSSL TLS1-PRF.
+	secret := "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" +
+		"202122232425262728292a2b2c2d2e2f"
+	if version == tls.VersionTLS13 && suite == tls.TLS_AES_128_GCM_SHA256 {
+		secret = "a11af9f05531f856ad47116b45a950328204b4f44bfb6b3a4b4f1f3fcb631643"
 	}
-	for _, test := range tests {
+	decoded, err := hex.DecodeString(secret)
+	tassert.CheckFatal(t, err)
+	params := ktlsParams{version: version, cipherSuite: suite, secret: decoded,
+		recordSeq: [8]byte{0, 1, 2, 3, 4, 5, 6, 7}}
+	for i := range params.clientRandom {
+		params.clientRandom[i], params.serverRandom[i] = byte(0x20+i), byte(0x40+i)
+	}
+	return params
+}
+
+func TestKTLSTxKeyDerivation(t *testing.T) {
+	for _, test := range testktlsCryptoCases {
 		t.Run(test.name, func(t *testing.T) {
+			params := testktlsCryptoParams(t, test.version, test.suite)
 			wantKey, err := hex.DecodeString(test.key)
 			tassert.CheckFatal(t, err)
 			wantIV, err := hex.DecodeString(test.iv)
 			tassert.CheckFatal(t, err)
-
-			key, iv, supported, err := deriveTLS12KeyIV(test.cipherSuite, master, clientRandom, serverRandom)
+			var key, iv []byte
+			var supported bool
+			if test.version == tls.VersionTLS13 {
+				key, iv, supported, err = deriveTLS13KeyIV(test.suite, params.secret)
+			} else {
+				key, iv, supported, err = deriveTLS12KeyIV(test.suite, params.secret, params.clientRandom, params.serverRandom)
+			}
 			tassert.CheckFatal(t, err)
 			defer clear(key)
 			defer clear(iv)
-			tassert.Errorf(t, supported, "cipher suite %#x is not supported", test.cipherSuite)
-			tassert.Errorf(t, bytes.Equal(key, wantKey), "unexpected key for cipher %#x", test.cipherSuite)
-			tassert.Errorf(t, bytes.Equal(iv, wantIV), "unexpected IV for cipher %#x", test.cipherSuite)
+			tassert.Errorf(t, supported && bytes.Equal(key, wantKey) && bytes.Equal(iv, wantIV), "unexpected key/IV for %s", test.name)
 		})
 	}
-
-	key, iv, supported, err := deriveTLS12KeyIV(tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-		master, clientRandom, serverRandom)
+	key, iv, supported, err := deriveTLS13KeyIV(tls.TLS_CHACHA20_POLY1305_SHA256, make([]byte, 32))
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, !supported, "ChaCha20-Poly1305 unexpectedly supported")
-	tassert.Errorf(t, key == nil && iv == nil, "unsupported cipher returned key material")
-
-	_, _, supported, err = deriveTLS12KeyIV(tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		master[:len(master)-1], clientRandom, serverRandom)
+	tassert.Errorf(t, !supported && key == nil && iv == nil, "unsupported TLS 1.3 cipher returned key material")
+	params := testktlsCryptoParams(t, tls.VersionTLS12, tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256)
+	key, iv, supported, err = deriveTLS12KeyIV(tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+		params.secret, params.clientRandom, params.serverRandom)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, !supported && key == nil && iv == nil, "unsupported TLS 1.2 cipher returned key material")
+	_, _, supported, err = deriveTLS12KeyIV(params.cipherSuite, params.secret[:len(params.secret)-1], params.clientRandom, params.serverRandom)
 	tassert.Errorf(t, supported && err != nil, "invalid master-secret size accepted")
 }
 
@@ -547,11 +432,12 @@ func TestKTLSTxHTTPServerFallback(t *testing.T) {
 
 	l := testktlsNewListener(t, raw)
 	type observation struct {
-		proto string
-		err   error
-		tls   bool
-		pub   bool
-		ktls  bool
+		proto    string
+		err      error
+		tls      bool
+		sendfile bool
+		pub      bool
+		ktls     bool
 	}
 	observed := make(chan observation, 1)
 
@@ -567,11 +453,12 @@ func TestKTLSTxHTTPServerFallback(t *testing.T) {
 				proto = r.TLS.NegotiatedProtocol
 			}
 			observed <- observation{
-				proto: proto,
-				err:   err,
-				tls:   r.TLS != nil,
-				pub:   reqIsPub(r),
-				ktls:  isKTLS(r.Context()),
+				proto:    proto,
+				err:      err,
+				tls:      r.TLS != nil,
+				pub:      reqIsPub(r),
+				ktls:     isKTLS(r.Context()),
+				sendfile: canSendfileConn(ktlsFrom(r.Context()), r.TLS != nil),
 			}
 		}),
 	}
@@ -615,7 +502,7 @@ func TestKTLSTxHTTPServerFallback(t *testing.T) {
 	tassert.CheckFatal(t, got.err)
 	tassert.Errorf(t, got.tls, "missing Request.TLS")
 	tassert.Errorf(t, got.pub, "request is not marked as public")
-	tassert.Errorf(t, !got.ktls, "no-op installer armed kTLS")
+	tassert.Errorf(t, !got.ktls && !got.sendfile, "TLS fallback enabled sendfile")
 	tassert.Errorf(t, got.proto == "http/1.1", "expected http/1.1, got %q", got.proto)
 }
 
@@ -673,13 +560,6 @@ func TestKTLSTxHTTPServerTimeout(t *testing.T) {
 				"server did not enforce the configured timeout during %s: %v", phase, err)
 		})
 	}
-}
-
-func TestKTLSTxSendfileEligibility(t *testing.T) {
-	tassert.Errorf(t, canSendfileConn(nil, false), "plain HTTP connection rejected")
-	tassert.Errorf(t, !canSendfileConn(nil, true), "unarmed HTTPS connection accepted")
-	tassert.Errorf(t, canSendfileConn(testktlsState(true), true), "armed kTLS HTTPS connection rejected")
-	tassert.Errorf(t, !canSendfileConn(testktlsState(false), true), "kTLS fallback connection accepted")
 }
 
 func TestKTLSTxListenerRejects(t *testing.T) {
@@ -858,8 +738,11 @@ func TestTrafficSecrets(t *testing.T) {
 
 	t.Run("take-ownership", func(t *testing.T) {
 		s := newTrafficSecrets()
+		s.Write([]byte("SERVER_TRAFFIC_SECRET_0 abcd " + other + "\n"))
+		old := s.serverApp
 		s.Write([]byte("SERVER_TRAFFIC_SECRET_0 abcd " + hexSecret + "\n"))
 
+		tassert.Errorf(t, bytes.Equal(old, make([]byte, len(old))), "replaced secret was not wiped")
 		// Retain aliases to prove takeTLS13 transfers the original allocation.
 		serverApp := s.serverApp
 		secret := s.takeTLS13()
@@ -890,15 +773,6 @@ func TestTrafficSecrets(t *testing.T) {
 		tassert.Errorf(t, s.takeTLS13() == nil, "zero() did not disable later key-log writes")
 		tassert.Errorf(t, len(s.pending) == 0 && cap(s.pending) == 0,
 			"disabled collector retained a later key-log line")
-	})
-
-	t.Run("last-write-wins", func(t *testing.T) {
-		s := newTrafficSecrets()
-		s.Write([]byte("SERVER_TRAFFIC_SECRET_0 abcd " + other + "\n"))
-		s.Write([]byte("SERVER_TRAFFIC_SECRET_0 abcd " + hexSecret + "\n"))
-		secret := s.takeTLS13()
-		tassert.Errorf(t, bytes.Equal(secret, want), "expected the later secret")
-		clear(secret)
 	})
 }
 
@@ -939,7 +813,9 @@ func TestKTLSTxOpenSSLCipherSuites(t *testing.T) {
 				return false, nil // stay on crypto/tls; openssl must still decrypt
 			}
 
+			done := make(chan struct{})
 			go func() {
+				defer close(done)
 				nc, err := l.Accept()
 				if err != nil {
 					return
@@ -953,11 +829,15 @@ func TestKTLSTxOpenSSLCipherSuites(t *testing.T) {
 					return
 				}
 				_, _ = conn.Write([]byte(payload))
-				time.Sleep(100 * time.Millisecond)
 				_ = conn.Close()
 			}()
 
 			out := testktlsOpenSSLClient(t, raw.Addr().String(), test.ossl, payload)
+			select {
+			case <-done:
+			case <-time.After(testktlsTimeout):
+				t.Fatal("timed out waiting for OpenSSL test server")
+			}
 
 			var params ktlsParams
 			select {
@@ -1243,24 +1123,19 @@ const (
 // crypto/tls actually produced
 type testktlsWiretap struct {
 	net.Conn
-	mu  sync.Mutex
-	buf []byte
+	capture testktlsBuf
 }
 
 func (w *testktlsWiretap) Read(p []byte) (int, error) {
 	n, err := w.Conn.Read(p)
 	if n > 0 {
-		w.mu.Lock()
-		w.buf = append(w.buf, p[:n]...)
-		w.mu.Unlock()
+		_, _ = w.capture.Write(p[:n])
 	}
 	return n, err
 }
 
 func (w *testktlsWiretap) bytes() []byte {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return append([]byte(nil), w.buf...)
+	return w.capture.bytes()
 }
 
 func testktlsSplitRecords(t *testing.T, stream []byte) [][]byte {
@@ -1279,14 +1154,6 @@ func testktlsSplitRecords(t *testing.T, stream []byte) [][]byte {
 }
 
 func TestKTLSTxCounters(t *testing.T) {
-	t.Run("string", func(t *testing.T) {
-		var counters ktlsCounters
-		counters.armed.Store(3)
-		counters.failed.Store(1)
-		want := "ktls-tx[attempted=4 armed=3 skipped=0 unsupported=0 failed=1 not-established=0 poisoned=0 exhausted=0]"
-		tassert.Errorf(t, counters.String() == want, "expected %q, got %q", want, counters.String())
-	})
-
 	// each installer outcome lands in exactly one bucket
 	tests := []struct {
 		name           string
@@ -1325,7 +1192,9 @@ func TestKTLSTxCounters(t *testing.T) {
 			tassert.Errorf(t, conn.isArmed() == (test.armed == 1),
 				"armed state %v, wanted %v", conn.isArmed(), test.armed == 1)
 
+			_ = conn.Close()
 			got := testktlsCounterSnapshot().sub(before)
+			tassert.Errorf(t, got.stopped == test.armed && got.stopBytes == 0, "unexpected shutdown stats: %s", got)
 			tassert.Errorf(t, got.armed == test.armed, "armed %d, wanted %d (%s)", got.armed, test.armed, got)
 			tassert.Errorf(t, got.unsupported == test.unsup, "unsupported %d, wanted %d (%s)", got.unsupported, test.unsup, got)
 			tassert.Errorf(t, got.failed == test.failed, "failed %d, wanted %d (%s)", got.failed, test.failed, got)
@@ -1367,105 +1236,100 @@ func TestKTLSTxCounters(t *testing.T) {
 	})
 }
 
-type testktlsCounterValues struct {
-	armed          int64
-	skipped        int64
-	unsupported    int64
-	failed         int64
-	notEstablished int64
-	poisoned       int64
-	exhausted      int64
+func TestKTLSTxLogInterval(t *testing.T) {
+	tassert.Errorf(t, ktlsLogInterval > 2*ktlsVerboseLogInterval,
+		"ktlsLogInterval = %s vs ktlsVerboseLogInterval = %s", ktlsLogInterval, ktlsVerboseLogInterval)
+
+	var counters ktlsCounters
+	now := int64(time.Hour)
+	tassert.Errorf(t, counters.logDue(now, ktlsLogInterval) == nil, "empty counters produced a summary")
+	counters.armed.Add(1)
+	stats := counters.logDue(now, ktlsLogInterval)
+	tassert.Fatalf(t, stats != nil && stats.armed == 1, "first changed summary was suppressed")
+	for _, elapsed := range []time.Duration{ktlsLogInterval, time.Hour, 30 * 24 * time.Hour} {
+		tassert.Errorf(t, counters.logDue(now+int64(elapsed), ktlsLogInterval) == nil, "unchanged counters logged after %s", elapsed)
+	}
+	tassert.Errorf(t, counters.lastLog.Load() == now, "suppressed summary advanced the last-log timestamp")
+
+	// High event counts must not bypass the clock. Changing the interval
+	// uses the timestamp of the last emitted summary.
+	counters.armed.Store(1 << 30)
+	tassert.Errorf(t, counters.logDue(now+int64(ktlsLogInterval)-1, ktlsLogInterval) == nil, "summary before interval elapsed")
+	tassert.Errorf(t, counters.logDue(now+int64(ktlsVerboseLogInterval)-1, ktlsVerboseLogInterval) == nil, "verbose summary too early")
+	stats = counters.logDue(now+int64(ktlsVerboseLogInterval), ktlsVerboseLogInterval)
+	tassert.Fatalf(t, stats != nil && stats.armed == 1<<30, "verbose interval ignored")
+	counters.retiring.Add(1)
+	tassert.Errorf(t, stats.retiring == 0, "returned summary changed after capture")
+	now += int64(ktlsVerboseLogInterval + ktlsLogInterval)
+	var logged atomic.Int64
+	var wg sync.WaitGroup
+	for range 64 {
+		wg.Go(func() {
+			if counters.logDue(now, ktlsLogInterval) != nil {
+				logged.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	tassert.Errorf(t, logged.Load() == 1, "concurrent connections produced %d summaries", logged.Load())
 }
 
-func testktlsCounterSnapshot() testktlsCounterValues {
+type testktlsCounterValues = ktlsCounterValues
+
+func testktlsCounterSnapshot() *testktlsCounterValues {
+	stats := ktlsCnt.snapshot()
+	return &stats
+}
+
+func (c *testktlsCounterValues) sub(prev *testktlsCounterValues) testktlsCounterValues {
 	return testktlsCounterValues{
-		armed:          ktlsCnt.armed.Load(),
-		skipped:        ktlsCnt.skipped.Load(),
-		unsupported:    ktlsCnt.unsupported.Load(),
-		failed:         ktlsCnt.failed.Load(),
-		notEstablished: ktlsCnt.notEstablished.Load(),
-		poisoned:       ktlsCnt.poisoned.Load(),
-		exhausted:      ktlsCnt.exhausted.Load(),
+		armed: c.armed - prev.armed, skipped: c.skipped - prev.skipped,
+		unsupported: c.unsupported - prev.unsupported, failed: c.failed - prev.failed,
+		notEstablished: c.notEstablished - prev.notEstablished,
+		poisoned:       c.poisoned - prev.poisoned, exhausted: c.exhausted - prev.exhausted,
+		retiring: c.retiring - prev.retiring, stopped: c.stopped - prev.stopped,
+		stopBytes: c.stopBytes - prev.stopBytes,
 	}
 }
 
-func (c testktlsCounterValues) sub(prev testktlsCounterValues) testktlsCounterValues {
-	c.armed -= prev.armed
-	c.skipped -= prev.skipped
-	c.unsupported -= prev.unsupported
-	c.failed -= prev.failed
-	c.notEstablished -= prev.notEstablished
-	c.poisoned -= prev.poisoned
-	c.exhausted -= prev.exhausted
-	return c
-}
-
-func (c testktlsCounterValues) total() int64 {
+func (c *testktlsCounterValues) total() int64 {
 	return c.armed + c.skipped + c.unsupported + c.failed + c.notEstablished
-}
-
-func (c testktlsCounterValues) String() string {
-	return fmt.Sprintf("armed=%d skipped=%d unsupported=%d failed=%d not-established=%d poisoned=%d exhausted=%d",
-		c.armed, c.skipped, c.unsupported, c.failed, c.notEstablished, c.poisoned, c.exhausted)
 }
 
 // Post-arm the kernel owns transmit, so any crypto/tls write - a TLS 1.3
 // KeyUpdate response, an alert - must end the connection.
 func TestKTLSTxPoisoned(t *testing.T) {
 	arm := func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil }
+	before := testktlsCounterSnapshot()
+	conn := testktlsHandshake(t, arm)
+	tassert.Fatalf(t, conn.isArmed(), "not armed")
 
-	t.Run("crypto-tls-write-poisons", func(t *testing.T) {
-		before := testktlsCounterSnapshot()
-		conn := testktlsHandshake(t, arm)
-		tassert.Fatalf(t, conn.isArmed(), "not armed")
+	// stands in for crypto/tls writing on the read path
+	n, err := conn.wire.Write([]byte("keyupdate"))
+	tassert.Errorf(t, n == 0, "wire write returned %d bytes", n)
+	tassert.Errorf(t, errors.Is(err, errKtlsActive), "wire write returned %v", err)
 
-		// stands in for crypto/tls writing on the read path
-		n, err := conn.wire.Write([]byte("keyupdate"))
-		tassert.Errorf(t, n == 0, "wire write returned %d bytes", n)
-		tassert.Errorf(t, errors.Is(err, errKtlsActive), "wire write returned %v", err)
+	// fatal on purpose: an unpoisoned connection makes the reads below block
+	tassert.Fatalf(t, conn.txState.Load() == ktlsPoisoned, "state %d, wanted poisoned", conn.txState.Load())
+	tassert.Errorf(t, !conn.isArmed(), "a poisoned connection still reports kTLS enabled")
+	got := testktlsCounterSnapshot().sub(before)
+	tassert.Errorf(t, got.poisoned == 1, "poisoned %d, wanted 1 (%s)", got.poisoned, got)
 
-		// fatal on purpose: an unpoisoned connection makes the reads below block
-		tassert.Fatalf(t, conn.txState.Load() == ktlsPoisoned, "state %d, wanted poisoned", conn.txState.Load())
-		tassert.Errorf(t, !conn.isArmed(), "a poisoned connection still reports kTLS enabled")
-		got := testktlsCounterSnapshot().sub(before)
-		tassert.Errorf(t, got.poisoned == 1, "poisoned %d, wanted 1 (%s)", got.poisoned, got)
-
-		// ...and every subsequent application operation refuses
-		_, err = conn.Read(make([]byte, 1))
-		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Read returned %v", err)
-		_, err = conn.Write([]byte("x"))
-		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Write returned %v", err)
-		_, err = conn.ReadFrom(strings.NewReader("x"))
-		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "ReadFrom returned %v", err)
-		_, err = conn.wire.ReadFrom(strings.NewReader("x"))
-		tassert.Errorf(t, errors.Is(err, errKtlsActive), "wire ReadFrom returned %v", err)
-		err = conn.CloseWrite()
-		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "CloseWrite returned %v", err)
-		err = conn.Close()
-		tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Close returned %v", err)
-	})
-
-	t.Run("poison-is-counted-once-per-conn", func(t *testing.T) {
-		before := testktlsCounterSnapshot()
-		conn := testktlsHandshake(t, arm)
-		for range 3 {
-			_, _ = conn.wire.Write([]byte("alert"))
-		}
-		got := testktlsCounterSnapshot().sub(before)
-		tassert.Errorf(t, got.poisoned == 1,
-			"poisoned %d, wanted 1 - the transition must be a one-way CAS", got.poisoned)
-	})
-
-	t.Run("unarmed-writes-pass-through", func(t *testing.T) {
-		conn := testktlsHandshake(t, func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil })
-		tassert.Errorf(t, conn.txState.Load() == ktlsUnarmed, "state %d, wanted unarmed", conn.txState.Load())
-
-		before := conn.wire.nwritten.Load()
-		n, err := conn.Write([]byte("hello"))
-		tassert.CheckError(t, err)
-		tassert.Errorf(t, n == len("hello"), "wrote %d bytes, wanted %d", n, len("hello"))
-		tassert.Errorf(t, conn.wire.nwritten.Load() > before, "application write did not reach the TLS wire")
-	})
+	// ...and every subsequent application operation refuses
+	_, err = conn.Read(make([]byte, 1))
+	tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Read returned %v", err)
+	_, err = conn.Write([]byte("x"))
+	tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Write returned %v", err)
+	_, err = conn.ReadFrom(strings.NewReader("x"))
+	tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "ReadFrom returned %v", err)
+	_, err = conn.wire.ReadFrom(strings.NewReader("x"))
+	tassert.Errorf(t, errors.Is(err, errKtlsActive), "wire ReadFrom returned %v", err)
+	err = conn.CloseWrite()
+	tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "CloseWrite returned %v", err)
+	err = conn.Close()
+	tassert.Errorf(t, errors.Is(err, errKtlsPoisoned), "Close returned %v", err)
+	got = testktlsCounterSnapshot().sub(before)
+	tassert.Errorf(t, got.poisoned == 1 && got.stopped == 1, "repeated poison/close changed counters: %s", got)
 }
 
 func TestKTLSTxBudget(t *testing.T) {
@@ -1534,6 +1398,11 @@ func TestKTLSTxBudget(t *testing.T) {
 		ktlsRetire(conn, whdr, 9)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == "", "retired early: %q", whdr.Get(hdrConnection))
 
+		var wg sync.WaitGroup
+		for range 32 {
+			wg.Go(func() { conn.retire(10) })
+		}
+		wg.Wait()
 		ktlsRetire(conn, whdr, 10)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == hdrConnectionClose,
 			"%q, wanted %q", whdr.Get(hdrConnection), hdrConnectionClose)
@@ -1553,6 +1422,11 @@ func TestKTLSTxBudget(t *testing.T) {
 
 		got := testktlsCounterSnapshot().sub(before)
 		tassert.Errorf(t, got.exhausted == 0, "retiring response exhausted the connection (%s)", got)
+		_ = conn.CloseWrite()
+		_ = conn.Close()
+		_ = conn.Close()
+		got = testktlsCounterSnapshot().sub(before)
+		tassert.Errorf(t, got.retiring == 1 && got.stopped == 1 && got.stopBytes == conn.txBytes.Load(), "retirement/shutdown stats: %s", got)
 
 		// unarmed: no hint, no budget
 		unarmed := testktlsHandshake(t, func(*net.TCPConn, *ktlsParams) (bool, error) { return false, nil })
@@ -1690,6 +1564,53 @@ func TestKTLSTxArmCloseSerialized(t *testing.T) {
 		tassert.Errorf(t, got.poisoned == 0, "poisoned %d, wanted 0 (%s)", got.poisoned, got)
 		tassert.Errorf(t, got.exhausted == 0, "exhausted %d, wanted 0 (%s)", got.exhausted, got)
 		tassert.Errorf(t, got.total() == 1, "expected exactly one outcome, got %s", got)
+	})
+	t.Run("short-write-during-close", func(t *testing.T) {
+		conn := testktlsHandshake(t, func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil })
+		before := ktlsCnt.snapshot()
+		conn.txOut.Lock()
+		reserved, ok := conn.reserve(100)
+		tassert.Fatalf(t, ok, "reservation refused")
+		conn.beginClose()
+		conn.stopStats() // cannot acquire txOut, must defer accounting
+		tassert.Errorf(t, ktlsCnt.stopped.Load() == before.stopped, "accounted an in-flight reservation")
+		conn.finish(reserved, 7)
+		conn.endTx()
+		conn.stopStats()
+		got := testktlsCounterSnapshot().sub(&before)
+		tassert.Errorf(t, got.stopped == 1 && got.stopBytes == 7, "short write was not refunded before shutdown accounting: %s", got)
+	})
+	t.Run("shutdown-without-finish", func(t *testing.T) {
+		conn := testktlsHandshake(t, func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil })
+		before := ktlsCnt.snapshot()
+		conn.txOut.Lock()
+		conn.beginClose()
+		conn.stopStats()
+		// A writer can acquire txOut after beginClose and return before I/O.
+		// That early-return path must also flush pending shutdown accounting.
+		conn.endTx()
+		got := testktlsCounterSnapshot().sub(&before)
+		tassert.Errorf(t, got.stopped == 1 && got.stopBytes == 0, "early-return shutdown accounting: %s", got)
+	})
+	t.Run("close-races-write-unlock", func(t *testing.T) {
+		base := testktlsHandshake(t, func(*net.TCPConn, *ktlsParams) (bool, error) { return true, nil })
+		before := ktlsCnt.snapshot()
+		const n = 1000
+		for range n {
+			// Only the stats lifecycle is exercised: use an established test
+			// socket for verbose diagnostics, without closing it on each round.
+			conn := &ktlsConn{tcp: base.tcp, armedAt: mono.NanoTime()}
+			conn.txState.Store(ktlsArmed)
+			conn.txBytes.Store(7)
+			conn.txOut.Lock()
+			var wg sync.WaitGroup
+			wg.Go(conn.stopStats)
+			wg.Go(conn.endTx)
+			wg.Wait()
+			tassert.Fatalf(t, conn.statsReported, "lost shutdown report at write-unlock boundary")
+		}
+		got := testktlsCounterSnapshot().sub(&before)
+		tassert.Errorf(t, got.stopped == n && got.stopBytes == 7*n, "shutdowns missing or duplicated: %s", got)
 	})
 }
 
