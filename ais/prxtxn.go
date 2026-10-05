@@ -503,11 +503,20 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	}
 	c.msg.BMDVersion = bmd.version()
 
-	// TODO: changing chunks properties starts rechunk automatically
-	// 4. if remirror|re-EC|TBD-storage-svc
+	// 4. if remirror|re-EC|rechunk|TBD-storage-svc
+	// A single bucket-props update can start at most one layout xaction.
+	debug.Assert(!ctx.needReMirror || !ctx.needReEC)     // not both re-mirror and re-EC
+	debug.Assert(!ctx.needReMirror || !ctx.needReChunks) // not both re-mirror and rechunk
+	debug.Assert(!ctx.needReEC || !ctx.needReChunks)     // not both re-EC and rechunk
 	// NOTE: setting up IC listening prior to committing (and confirming xid) here and elsewhere
-	if ctx.needReMirror || ctx.needReEC {
-		action := cos.Ternary(ctx.needReEC, apc.ActECEncode, apc.ActMakeNCopies)
+	if ctx.needReMirror || ctx.needReEC || ctx.needReChunks {
+		action := apc.ActMakeNCopies
+		if ctx.needReEC {
+			action = apc.ActECEncode
+		}
+		if ctx.needReChunks {
+			action = apc.ActRechunk
+		}
 		nl := xact.NewXactNL(c.uuid, action, &c.smap.Smap, nil, bck.Bucket())
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
@@ -534,6 +543,11 @@ func (p *proxy) bmodSetProps(ctx *bmdModifier, clone *bucketMD) (err error) {
 	}
 	ctx.needReMirror = _reMirror(bprops, ctx.setProps)
 	targetCnt, ctx.needReEC = _reEC(bprops, ctx.setProps, bck, p.owner.smap.get())
+	ctx.needReChunks = !bprops.Chunks.EqualLayout(&ctx.setProps.Chunks)
+	switch {
+	case ctx.needReMirror && ctx.needReEC, ctx.needReMirror && ctx.needReChunks, ctx.needReEC && ctx.needReChunks:
+		return fmt.Errorf("%s: a single properties update cannot start multiple layout xactions", bck.Cname(""))
+	}
 	debug.AssertFunc(func() bool { return !ctx.needReEC || ctx.setProps.Validate(targetCnt) == nil })
 	clone.set(bck, ctx.setProps)
 	return nil
@@ -1173,14 +1187,18 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 		nprops.BackendBck.Provider = np
 	}
 
-	// cannot have re-mirroring and erasure coding on the same bucket at the same time
 	var (
 		smap            = p.owner.smap.get()
 		remirror        = _reMirror(bprops, nprops)
 		targetCnt, reec = _reEC(bprops, nprops, bck, smap)
+		rechunk         = !bprops.Chunks.EqualLayout(&nprops.Chunks)
 	)
-	if len(creating) == 0 && remirror && reec {
-		return nil, cmn.NewErrBusy("bucket", bck.Cname(""))
+	// this is an update
+	if len(creating) == 0 {
+		switch {
+		case remirror && reec, remirror && rechunk, reec && rechunk:
+			return nil, fmt.Errorf("%s: a single properties update cannot start multiple layout xactions", bck.Cname(""))
+		}
 	}
 
 	if nprops.RateLimit.Frontend.Enabled {

@@ -363,20 +363,20 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 	orig, err := api.HeadBucket(bp, bck, true /*dontAddRemote*/)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
-		_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+		err := setBucketChunksAndWait(bp, bck, &cmn.ChunksConfToSet{
 			ObjSizeLimit:      apc.Ptr(orig.Chunks.ObjSizeLimit),
 			MaxMonolithicSize: apc.Ptr(orig.Chunks.MaxMonolithicSize),
 			ChunkSize:         apc.Ptr(orig.Chunks.ChunkSize),
-		}})
+		})
 		tassert.CheckError(t, err)
 	})
 
 	// Disable auto-chunking and set the hard limit above objSize, so the initial PUT is monolithic.
-	_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+	err = setBucketChunksAndWait(bp, bck, &cmn.ChunksConfToSet{
 		ObjSizeLimit:      apc.Ptr(cos.SizeIEC(0)),
 		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(2 * cos.GiB)),
 		ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
-	}})
+	})
 	tassert.CheckFatal(t, err)
 
 	// PUT a 1GiB+1 object and confirm its initial monolithic layout.
@@ -392,15 +392,15 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 	tassert.Fatalf(t, src.Chunks != nil && src.Chunks.ChunkCount == 0,
 		"expected monolithic source, got %+v", src.Chunks)
 
-	// Lowering the hard limit changes policy for future writes; it does not rewrite existing objects.
-	_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+	// Lowering the hard limit automatically rechunks the existing source.
+	err = setBucketChunksAndWait(bp, bck, &cmn.ChunksConfToSet{
 		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(cos.GiB)),
-	}})
+	})
 	tassert.CheckFatal(t, err)
 	src, err = api.HeadObjectV2(bp, bck, srcName, props, api.HeadArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, src.Chunks != nil && src.Chunks.ChunkCount == 0,
-		"expected existing source to remain monolithic, got %+v", src.Chunks)
+	tassert.Fatalf(t, src.Chunks != nil && src.Chunks.ChunkCount > 0,
+		"expected existing source to be rechunked, got %+v", src.Chunks)
 
 	// Exercise both copy paths by selecting destination names whose HRW target is known.
 	smap := tools.GetClusterMap(t, proxyURL)
@@ -462,10 +462,8 @@ func TestCopyObjectAutoChunks(t *testing.T) {
 func copyObjectsAndCheckPolicy(t *testing.T, m *ioContext, sizeLimit, chunkSize int64, chunked bool) {
 	t.Helper()
 	bp := tools.BaseAPIParams(m.proxyURL)
-	_, err := api.SetBucketProps(bp, m.bck, &cmn.BpropsToSet{
-		Chunks: &cmn.ChunksConfToSet{
-			ObjSizeLimit: apc.Ptr(cos.SizeIEC(sizeLimit)),
-		},
+	err := setBucketChunksAndWait(bp, m.bck, &cmn.ChunksConfToSet{
+		ObjSizeLimit: apc.Ptr(cos.SizeIEC(sizeLimit)),
 	})
 	tassert.CheckFatal(t, err)
 
@@ -482,7 +480,11 @@ func copyObjectsAndCheckPolicy(t *testing.T, m *ioContext, sizeLimit, chunkSize 
 			if err != nil {
 				return fmt.Errorf("head source %s: %w", m.bck.Cname(srcName), err)
 			}
-			if src.Chunks == nil || src.Chunks.ChunkCount != 0 {
+			wantCount := int(cos.DivCeil(src.Size, chunkSize))
+			if chunked && (src.Chunks == nil || src.Chunks.ChunkCount != wantCount || src.Chunks.MaxChunkSize != chunkSize) {
+				return fmt.Errorf("expected chunked source %s, got %+v", m.bck.Cname(srcName), src.Chunks)
+			}
+			if !chunked && (src.Chunks == nil || src.Chunks.ChunkCount != 0) {
 				return fmt.Errorf("expected monolithic source %s, got %+v", m.bck.Cname(srcName), src.Chunks)
 			}
 			if err := api.CopyObject(bp, &api.CopyArgs{
@@ -503,7 +505,6 @@ func copyObjectsAndCheckPolicy(t *testing.T, m *ioContext, sizeLimit, chunkSize 
 				}
 				return sameObjectContent(bp, m.bck, srcName, dstName)
 			}
-			wantCount := int(cos.DivCeil(src.Size, chunkSize))
 			if dst.Chunks == nil || dst.Chunks.ChunkCount != wantCount || dst.Chunks.MaxChunkSize != chunkSize {
 				return fmt.Errorf("%s: expected size %d and %d chunks of up to %s, got %+v",
 					m.bck.Cname(dstName), src.Size, wantCount, cos.ToSizeIEC(chunkSize, 0), dst)
@@ -1031,24 +1032,19 @@ func TestColdGetChunked(t *testing.T) {
 			p, err := api.HeadBucket(baseParams, m.bck, false)
 			tassert.CheckFatal(t, err)
 
-			// Configure bucket chunking properties
-			_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
-				Chunks: &cmn.ChunksConfToSet{
-					ObjSizeLimit:      apc.Ptr(cos.SizeIEC(tt.objSizeLimit)),
-					MaxMonolithicSize: apc.Ptr(cos.SizeIEC(tt.maxMonoSize)),
-					ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
-				},
+			// Configure bucket chunking properties and wait for the automatic rechunk.
+			err = setBucketChunksAndWait(baseParams, m.bck, &cmn.ChunksConfToSet{
+				ObjSizeLimit:      apc.Ptr(cos.SizeIEC(tt.objSizeLimit)),
+				MaxMonolithicSize: apc.Ptr(cos.SizeIEC(tt.maxMonoSize)),
+				ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
 			})
 			tassert.CheckFatal(t, err)
-			// TODO: Wait for automatically triggered rechunk before provisioning objects
 
 			t.Cleanup(func() {
-				_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
-					Chunks: &cmn.ChunksConfToSet{
-						ObjSizeLimit:      apc.Ptr(p.Chunks.ObjSizeLimit),
-						MaxMonolithicSize: apc.Ptr(p.Chunks.MaxMonolithicSize),
-						ChunkSize:         apc.Ptr(p.Chunks.ChunkSize),
-					},
+				err := setBucketChunksAndWait(baseParams, m.bck, &cmn.ChunksConfToSet{
+					ObjSizeLimit:      apc.Ptr(p.Chunks.ObjSizeLimit),
+					MaxMonolithicSize: apc.Ptr(p.Chunks.MaxMonolithicSize),
+					ChunkSize:         apc.Ptr(p.Chunks.ChunkSize),
 				})
 				tassert.CheckError(t, err)
 			})
@@ -1142,18 +1138,18 @@ func TestCopyRemoteObjectHardLimitSameTarget(t *testing.T) {
 	orig, err := api.HeadBucket(baseParams, m.bck, true /*dontAddRemote*/)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
-		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+		err := setBucketChunksAndWait(baseParams, m.bck, &cmn.ChunksConfToSet{
 			ObjSizeLimit:      apc.Ptr(orig.Chunks.ObjSizeLimit),
 			MaxMonolithicSize: apc.Ptr(orig.Chunks.MaxMonolithicSize),
 			ChunkSize:         apc.Ptr(orig.Chunks.ChunkSize),
-		}})
+		})
 		tassert.CheckError(t, err)
 	})
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+	err = setBucketChunksAndWait(baseParams, m.bck, &cmn.ChunksConfToSet{
 		ObjSizeLimit:      apc.Ptr(cos.SizeIEC(0)),
 		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(maxMonoSize)),
 		ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
-	}})
+	})
 	tassert.CheckFatal(t, err)
 
 	srcName := m.prefix + "0"

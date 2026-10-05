@@ -403,7 +403,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		)
 
 		// Set bucket chunk properties
-		err := setRechunkProps(baseParams, bck, objSizeLimit, chunkSize)
+		err := setRechunkPropsAndWait(baseParams, bck, objSizeLimit, chunkSize)
 		tassert.CheckFatal(t, err)
 
 		// PUT a large object (larger than objSizeLimit)

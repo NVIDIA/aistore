@@ -89,6 +89,7 @@ type (
 		wait         bool
 		needReMirror bool
 		needReEC     bool
+		needReChunks bool
 		terminate    bool
 		singleTarget bool
 	}

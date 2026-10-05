@@ -149,9 +149,6 @@ const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz
 // ais bucket rechunk
 const rechunkUsage = "Re-chunk bucket objects to converge them to the bucket's 'chunks' configuration.\n" +
 	indent1 + "\tObjects at or above 'chunks.objsize_limit' are split into 'chunks.chunk_size' chunks; smaller objects are restored to monolithic format.\n" +
-	indent1 + "\tTo change the layout, update bucket properties first, e.g.:\n" +
-	indent1 + "\t  'ais bucket props set BUCKET chunks.chunk_size=16MiB chunks.objsize_limit=50MiB', then run rechunk;\n" +
-	indent1 + "\t  'ais bucket props set BUCKET chunks.objsize_limit=0', then run rechunk - to restore all objects to monolithic format.\n" +
 	indent1 + "\tObjects larger than 'chunks.max_monolithic_size' always remain chunked.\n" +
 	indent1 + "\tUse --prefix to convert incrementally.\n" +
 	indent1 + "\tBy default, rechunk operates only on in-cluster (cached) objects; use --sync-remote to also update remote backend."
@@ -191,8 +188,10 @@ const setBpropsUsage = "Update bucket properties; the command accepts both JSON-
 	indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true\n" +
 	indent1 + "\t* ais bucket props set gs://vvv mirror.enabled=true mirror.copies=4 checksum.type=md5\n" +
 	indent1 + "\t* ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force\n" +
+	indent1 + "\t* ais bucket props set ais://nnn chunks.chunk_size=16MiB chunks.objsize_limit=50MiB\n" +
 	indent1 + "\t* ais bucket props set ais://nnn extra.custom=\"owner:team-a; project:research\"\n" +
 	indent1 + "\tNotes:\n" +
+	indent1 + "\t* changing the bucket's 'chunks' layout properties automatically starts rechunk\n" +
 	indent1 + "\t* for details and many more examples, see docs/cli/bucket.md\n" +
 	indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'\n" +
 	indent1 + "\t* 'extra.custom' is an opaque string (up to 128 characters) for per-bucket user-defined metadata"
@@ -858,7 +857,8 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currBprops *cmn.Bprops, updateP
 	}
 
 	// do
-	if _, err := api.SetBucketProps(apiBP, bck, updateProps); err != nil {
+	xid, err := api.SetBucketProps(apiBP, bck, updateProps)
+	if err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			return herr
 		}
@@ -870,6 +870,9 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currBprops *cmn.Bprops, updateP
 	_showDiff(c, currBprops, allNewBprops)
 
 	actionDone(c, "\nBucket props successfully updated.")
+	if xid != "" {
+		actionDonef(c, "Started job %s. %s", xid, toMonitorMsg(c, xid, ""))
+	}
 	return nil
 }
 

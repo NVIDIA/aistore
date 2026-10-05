@@ -761,7 +761,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 }
 
 func (t *target) runRechunk(xactID string, bck *meta.Bck, rechunkMsg *apc.RechunkMsg) (xid string, err error) {
-	if err := xreg.LimitedCoexistence(t.si, bck, apc.ActRechunk); err != nil {
+	if err := t.checkRechunk(bck); err != nil {
 		return "", err
 	}
 	rns := xreg.RenewBckRechunks(bck, xactID, rechunkMsg)
@@ -780,6 +780,10 @@ func (t *target) runRechunk(xactID string, bck *meta.Bck, rechunkMsg *apc.Rechun
 	}
 	xact.GoRunW(xctn)
 	return xctn.ID(), nil
+}
+
+func (t *target) checkRechunk(bck *meta.Bck) error {
+	return xreg.LimitedCoexistence(t.si, bck, apc.ActRechunk)
 }
 
 func (t *target) runIndexShard(xactID string, bck *meta.Bck, msg *apc.IndexShardMsg) (xid string, err error) {

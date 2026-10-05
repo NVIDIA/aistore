@@ -98,24 +98,20 @@ func testRechunk(t *testing.T, bck *meta.Bck) {
 }
 
 // startRechunk triggers rechunk using one of two approaches:
-// - "xaction": Change bucket props + `api.StartXaction`
-// - "post": Direct `api.RechunkBucket` call
+// - "xaction": Change bucket props, which automatically starts rechunk
+// - "post": Change bucket props, wait for the automatic rechunk, and start another via `api.RechunkBucket`
 func startRechunk(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objSizeLimit, chunkSize int64, prefix, approach string) (xid string, err error) {
 	t.Helper()
 
 	switch approach {
 	case "xaction":
-		if err := setRechunkProps(baseParams, bck, objSizeLimit, chunkSize); err != nil {
-			return "", err
-		}
-		xargs := &xact.ArgsMsg{
-			Kind: apc.ActRechunk,
-			Bck:  bck,
-		}
-		return api.StartXaction(baseParams, xargs, "")
+		return setRechunkProps(baseParams, bck, objSizeLimit, chunkSize)
 
 	case "post":
-		return setPropsAndRechunk(baseParams, bck, objSizeLimit, chunkSize, &apc.RechunkMsg{Prefix: prefix})
+		if err := setRechunkPropsAndWait(baseParams, bck, objSizeLimit, chunkSize); err != nil {
+			return "", err
+		}
+		return api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{Prefix: prefix})
 
 	default:
 		t.Fatalf("unknown rechunk approach: %q (must be 'xaction' or 'post')", approach)
@@ -123,18 +119,16 @@ func startRechunk(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objSizeL
 	}
 }
 
-func setRechunkProps(bp api.BaseParams, bck cmn.Bck, objSizeLimit, chunkSize int64) error {
-	_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+func setRechunkProps(bp api.BaseParams, bck cmn.Bck, objSizeLimit, chunkSize int64) (string, error) {
+	return setBucketChunks(bp, bck, &cmn.ChunksConfToSet{
 		ObjSizeLimit: apc.Ptr(cos.SizeIEC(objSizeLimit)), ChunkSize: apc.Ptr(cos.SizeIEC(chunkSize)),
-	}})
-	return err
+	})
 }
 
-func setPropsAndRechunk(bp api.BaseParams, bck cmn.Bck, objSizeLimit, chunkSize int64, msg *apc.RechunkMsg) (string, error) {
-	if err := setRechunkProps(bp, bck, objSizeLimit, chunkSize); err != nil {
-		return "", err
-	}
-	return api.RechunkBucket(bp, bck, msg)
+func setRechunkPropsAndWait(bp api.BaseParams, bck cmn.Bck, objSizeLimit, chunkSize int64) error {
+	return setBucketChunksAndWait(bp, bck, &cmn.ChunksConfToSet{
+		ObjSizeLimit: apc.Ptr(cos.SizeIEC(objSizeLimit)), ChunkSize: apc.Ptr(cos.SizeIEC(chunkSize)),
+	})
 }
 
 func testRechunkScenario(t *testing.T, bckMeta *meta.Bck, smallSize, largeSize, initialLimit, finalLimit, chunkSize int64, approach string) {
@@ -166,18 +160,16 @@ func testRechunkScenario(t *testing.T, bckMeta *meta.Bck, smallSize, largeSize, 
 	bck := bckMeta.Clone()
 
 	t.Cleanup(func() {
-		_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-			Chunks: &cmn.ChunksConfToSet{
-				ObjSizeLimit: apc.Ptr(origChunks.ObjSizeLimit),
-				ChunkSize:    apc.Ptr(origChunks.ChunkSize),
-			},
+		err := setBucketChunksAndWait(baseParams, bck, &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(origChunks.ObjSizeLimit),
+			ChunkSize:    apc.Ptr(origChunks.ChunkSize),
 		})
 		tassert.CheckError(t, err)
 	})
 
 	// Set initial chunk config
 	tlog.Logfln("Setting initial chunk config (limit=%s, chunkSize=%s)...", cos.ToSizeIEC(initialLimit, 0), cos.ToSizeIEC(chunkSize, 0))
-	err = setRechunkProps(baseParams, bck, initialLimit, chunkSize)
+	err = setRechunkPropsAndWait(baseParams, bck, initialLimit, chunkSize)
 	tassert.CheckFatal(t, err)
 
 	// Create objects with initial config
@@ -258,11 +250,9 @@ func TestRechunkAbort(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-			Chunks: &cmn.ChunksConfToSet{
-				ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
-				ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
-			},
+		err := setBucketChunksAndWait(baseParams, bck, &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
+			ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
 		})
 		tassert.CheckError(t, err)
 	})
@@ -375,9 +365,9 @@ func testRechunkTwiceScenario(t *testing.T, firstProps, secondProps chunkProps, 
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+		err := setBucketChunksAndWait(baseParams, bck, &cmn.ChunksConfToSet{
 			ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit), ChunkSize: apc.Ptr(p.Chunks.ChunkSize),
-		}})
+		})
 		tassert.CheckError(t, err)
 	})
 
@@ -406,16 +396,16 @@ func testRechunkTwiceScenario(t *testing.T, firstProps, secondProps chunkProps, 
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, running != nil, "rechunk %s finished before duplicate-start check", xid1)
 
-	err = setRechunkProps(baseParams, bck, secondProps.sizeLimit, secondProps.chunkSize)
-	tassert.CheckFatal(t, err)
-	xid2, err := api.StartXaction(baseParams, &xact.ArgsMsg{Kind: apc.ActRechunk, Bck: bck}, "")
+	var xid2 string
 	if expectedErrorMsg != "" {
+		xid2, err = api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{})
 		tassert.Fatalf(t, err != nil, "expected error when starting duplicate rechunk, got xid=%q", xid2)
 		herr, ok := err.(*cmn.ErrHTTP)
 		tassert.Fatalf(t, ok && strings.Contains(herr.Message, expectedErrorMsg),
 			"expected error containing %q, got: %v", expectedErrorMsg, err)
 		xid2 = xid1
 	} else {
+		xid2, err = setRechunkProps(baseParams, bck, secondProps.sizeLimit, secondProps.chunkSize)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, xid2 != "" && xid2 != xid1, "expected replacement rechunk, got %q after %q", xid2, xid1)
 		status, err := api.WaitForXactionIC(baseParams, &args1)
@@ -476,11 +466,9 @@ func TestRechunkWhenRebRes(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
-			Chunks: &cmn.ChunksConfToSet{
-				ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
-				ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
-			},
+		err := setBucketChunksAndWait(baseParams, m.bck, &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
+			ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
 		})
 		tassert.CheckError(t, err)
 	})
@@ -488,7 +476,7 @@ func TestRechunkWhenRebRes(t *testing.T) {
 	// Configure chunking on the bucket BEFORE triggering rebalance
 	tlog.Logfln("Setting chunk config (limit=%s, chunkSize=%s)...",
 		cos.ToSizeIEC(int64(sizeLimit), 0), cos.ToSizeIEC(int64(chunkSize), 0))
-	err = setRechunkProps(baseParams, m.bck, int64(sizeLimit), int64(chunkSize))
+	err = setRechunkPropsAndWait(baseParams, m.bck, int64(sizeLimit), int64(chunkSize))
 	tassert.CheckFatal(t, err)
 
 	// Trigger rebalance right before attempting rechunk
@@ -497,8 +485,28 @@ func TestRechunkWhenRebRes(t *testing.T) {
 
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
 	_, err = api.WaitForSnaps(baseParams, &xargs, xargs.Started())
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tlog.Logln("Rebalance is now running")
+	before, err := api.HeadBucket(baseParams, m.bck, false)
+	tassert.CheckFatal(t, err)
+	validateWarmGet := !before.Cksum.ValidateWarmGet
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Cksum:  &cmn.CksumConfToSet{ValidateWarmGet: apc.Ptr(validateWarmGet)},
+		Chunks: &cmn.ChunksConfToSet{ChunkSize: apc.Ptr(before.Chunks.ChunkSize)},
+	})
+	tassert.CheckFatal(t, err)
+	before, err = api.HeadBucket(baseParams, m.bck, false)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, before.Cksum.ValidateWarmGet == validateWarmGet,
+		"expected non-layout properties update to succeed during rebalance")
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+		ChunkSize: apc.Ptr(cos.SizeIEC(2 * chunkSize)),
+	}})
+	tassert.Fatalf(t, err != nil, "expected chunk properties update to fail during rebalance")
+	after, err := api.HeadBucket(baseParams, m.bck, false)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, before.Chunks.EqualLayout(&after.Chunks),
+		"chunk properties changed after rejected update: %+v => %+v", before.Chunks, after.Chunks)
 
 	defer func() {
 		// Wait for rebalance to complete
@@ -523,7 +531,7 @@ func TestRechunkPrefix(t *testing.T) {
 		numNonPrefixed = 50
 		objSize        = 100 * cos.KiB
 		chunkSize      = cmn.ChunkSizeMin
-		sizeLimit      = 50 * cos.KiB
+		sizeLimit      = int64(0) // restore explicitly chunked objects to monolithic
 		targetPrefix   = "prefixed-"
 		otherPrefix    = "other-"
 		proxyURL       = tools.RandomProxyURL(t)
@@ -542,16 +550,20 @@ func TestRechunkPrefix(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-			Chunks: &cmn.ChunksConfToSet{
-				ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
-				ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
-			},
+		err := setBucketChunksAndWait(baseParams, bck, &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
+			ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
 		})
 		tassert.CheckError(t, err)
 	})
 
-	// Create objects with target prefix
+	// Establish the desired layout before creating deliberately non-conforming objects.
+	err = setRechunkPropsAndWait(baseParams, bck, sizeLimit, int64(chunkSize))
+	tassert.CheckFatal(t, err)
+	maxSize := objSize + chunkSize - 1
+	numChunks := (maxSize + chunkSize - 1) / chunkSize
+
+	// Explicit multipart upload remains a per-object override when auto-chunking is disabled.
 	tlog.Logfln("Creating %d objects with prefix %q (size=%s)...", numPrefixed, targetPrefix, cos.ToSizeIEC(int64(objSize), 0))
 	mPrefixed := ioContext{
 		t:             t,
@@ -559,7 +571,7 @@ func TestRechunkPrefix(t *testing.T) {
 		num:           numPrefixed,
 		fileSizeRange: [2]uint64{uint64(objSize), uint64(objSize + chunkSize - 1)},
 		prefix:        targetPrefix,
-		chunksConf:    &ioCtxChunksConf{multipart: false},
+		chunksConf:    &ioCtxChunksConf{multipart: true, numChunks: numChunks},
 	}
 	mPrefixed.init(true /*cleanup*/)
 	mPrefixed.puts()
@@ -572,15 +584,15 @@ func TestRechunkPrefix(t *testing.T) {
 		num:           numNonPrefixed,
 		fileSizeRange: [2]uint64{uint64(objSize), uint64(objSize + chunkSize - 1)},
 		prefix:        otherPrefix,
-		chunksConf:    &ioCtxChunksConf{multipart: false},
+		chunksConf:    &ioCtxChunksConf{multipart: true, numChunks: numChunks},
 	}
 	mOther.init(true /*cleanup*/)
 	mOther.puts()
 
 	// Run rechunk with prefix filter using api.RechunkBucket
 	tlog.Logfln("Starting rechunk with prefix filter %q (limit=%s, chunkSize=%s)...",
-		targetPrefix, cos.ToSizeIEC(int64(sizeLimit), 0), cos.ToSizeIEC(int64(chunkSize), 0))
-	xid, err := setPropsAndRechunk(baseParams, bck, int64(sizeLimit), int64(chunkSize), &apc.RechunkMsg{Prefix: targetPrefix})
+		targetPrefix, cos.ToSizeIEC(sizeLimit, 0), cos.ToSizeIEC(int64(chunkSize), 0))
+	xid, err := api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{Prefix: targetPrefix})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, xid != "", "rechunk xaction ID should not be empty")
 	tlog.Logfln("Rechunk xaction started with ID: %s", xid)
@@ -592,7 +604,7 @@ func TestRechunkPrefix(t *testing.T) {
 	tlog.Logln("Rechunk completed")
 
 	// List objects and validate chunking state
-	tlog.Logln("Validating chunking state - only prefixed objects should be chunked...")
+	tlog.Logln("Validating chunking state - only non-prefixed objects should remain chunked...")
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsChunked}
 	lst, err := api.ListObjects(baseParams, bck, lsmsg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
@@ -629,18 +641,18 @@ func TestRechunkPrefix(t *testing.T) {
 	tassert.Fatalf(t, prefixedTotal == numPrefixed, "expected %d prefixed objects, found %d", numPrefixed, prefixedTotal)
 	tassert.Fatalf(t, otherTotal == numNonPrefixed, "expected %d other objects, found %d", numNonPrefixed, otherTotal)
 
-	// Validate that all prefixed objects are chunked
-	tassert.Fatalf(t, prefixedChunked == numPrefixed, "expected all %d prefixed objects to be chunked, but only %d are", numPrefixed, prefixedChunked)
+	// Validate that prefixed objects were restored to monolithic.
+	tassert.Fatalf(t, prefixedChunked == 0, "expected 0 prefixed objects to remain chunked, but %d are", prefixedChunked)
 
-	// Validate that no other objects are chunked
-	tassert.Fatalf(t, otherChunked == 0, "expected 0 other objects to be chunked, but %d are", otherChunked)
+	// Validate that non-prefixed objects retain their explicit multipart layout.
+	tassert.Fatalf(t, otherChunked == numNonPrefixed, "expected all %d other objects to remain chunked, but only %d are", numNonPrefixed, otherChunked)
 
 	// Validate chunks on disk
 	tlog.Logfln("Validating chunk files on disk for prefixed objects...")
-	validateChunksOnDisk(t, &mPrefixed, true /*shouldBeChunked*/, int64(chunkSize))
+	validateChunksOnDisk(t, &mPrefixed, false /*shouldBeChunked*/, int64(chunkSize))
 
 	tlog.Logfln("Validating chunk files on disk for other objects...")
-	validateChunksOnDisk(t, &mOther, false /*shouldBeChunked*/, int64(chunkSize))
+	validateChunksOnDisk(t, &mOther, true /*shouldBeChunked*/, int64(chunkSize))
 }
 
 func TestRechunkIdempotent(t *testing.T) {
@@ -670,11 +682,9 @@ func TestRechunkIdempotent(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-			Chunks: &cmn.ChunksConfToSet{
-				ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
-				ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
-			},
+		err := setBucketChunksAndWait(baseParams, bck, &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
+			ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
 		})
 		tassert.CheckError(t, err)
 	})
@@ -742,7 +752,7 @@ func TestRechunkIdempotent(t *testing.T) {
 
 	// Second rechunk (idempotent - same config, xaction approach)
 	tlog.Logln("Starting second rechunk xaction (idempotent)...")
-	xid2, err := startRechunk(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), testPrefix, "xaction")
+	xid2, err := api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{Prefix: testPrefix})
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("Second rechunk xaction started with ID: %s", xid2)
 
@@ -944,6 +954,8 @@ func testRechunkSyncRemote(t *testing.T, bck *meta.Bck) {
 
 	tlog.Logfln("Testing SyncRemote on bucket %s (provider=%s, objSize=%s, chunkSize=%s)",
 		bck.Cname(""), provider, cos.ToSizeIEC(objSize, 0), cos.ToSizeIEC(chunkSize, 0))
+	err = setRechunkPropsAndWait(baseParams, bck.Clone(), sizeLimit, chunkSize)
+	tassert.CheckFatal(t, err)
 
 	// Put a large object (will be chunked after rechunk)
 	reader, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
@@ -962,7 +974,7 @@ func testRechunkSyncRemote(t *testing.T, bck *meta.Bck) {
 	// Rechunk with SyncRemote=true (only objects with our test prefix)
 	tlog.Logfln("Rechunking with SyncRemote=true (limit=%s, chunkSize=%s, prefix=%s)...",
 		cos.ToSizeIEC(sizeLimit, 0), cos.ToSizeIEC(chunkSize, 0), testPrefix)
-	xid, err := setPropsAndRechunk(baseParams, bck.Clone(), sizeLimit, chunkSize, &apc.RechunkMsg{
+	xid, err := api.RechunkBucket(baseParams, bck.Clone(), &apc.RechunkMsg{
 		Prefix:     testPrefix, // only rechunk objects with our test prefix
 		SyncRemote: true,       // sync to remote backend
 	})
@@ -988,9 +1000,9 @@ func testRechunkSyncRemote(t *testing.T, bck *meta.Bck) {
 }
 
 func restoreRechunkChunks(t *testing.T, bp api.BaseParams, bck cmn.Bck, chunks *cmn.ChunksConf) {
-	_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{
+	err := setBucketChunksAndWait(bp, bck, &cmn.ChunksConfToSet{
 		ObjSizeLimit: apc.Ptr(chunks.ObjSizeLimit), ChunkSize: apc.Ptr(chunks.ChunkSize),
-	}})
+	})
 	tassert.CheckError(t, err)
 }
 
@@ -1095,7 +1107,7 @@ func TestRechunkErrorCapture(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Rechunk with enough minimum-sized chunks to exceed the manifest limit.
-	xid, err := setPropsAndRechunk(baseParams, bck, 1, chunkSize, &apc.RechunkMsg{})
+	xid, err := setRechunkProps(baseParams, bck, 1, chunkSize)
 	tassert.CheckFatal(t, err)
 
 	// Wait for xaction to finish AND have error recorded

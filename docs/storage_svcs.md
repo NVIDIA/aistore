@@ -368,14 +368,13 @@ A layout rule is independent of how the object arrives. It applies equally to PU
 
 ### Rechunk
 
-`ais bucket rechunk` converges existing objects to the rules above. To change a bucket's layout, update its properties first, then run the job:
+Changing a bucket's `chunks` properties automatically starts rechunk to converge existing objects to the rules above:
 
 ```console
 $ ais bucket props set ais://abc chunks.chunk_size=16MiB chunks.objsize_limit=50MiB
-$ ais bucket rechunk ais://abc
 ```
 
-The `--prefix` option restricts the job to a subset of objects, for incremental conversion - not to apply a different policy to part of the bucket.
+`ais bucket rechunk` can also be run explicitly. The `--prefix` option restricts the job to a subset of objects, for incremental conversion - not to apply a different policy to part of the bucket.
 
 Per-job `--chunk-size` and `--objsize-limit` overrides are deprecated as of v5.1 and planned for removal in v5.2; see [v5.1 release notes](/docs/relnotes/5.1.md#deprecated-apis).
 

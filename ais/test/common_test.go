@@ -919,6 +919,20 @@ func (m *ioContext) setNonDefaultBucketProps() {
 	tassert.CheckFatal(m.t, err)
 }
 
+func setBucketChunks(bp api.BaseParams, bck cmn.Bck, chunks *cmn.ChunksConfToSet) (string, error) {
+	return api.SetBucketProps(bp, bck, &cmn.BpropsToSet{Chunks: chunks})
+}
+
+func setBucketChunksAndWait(bp api.BaseParams, bck cmn.Bck, chunks *cmn.ChunksConfToSet) error {
+	xid, err := setBucketChunks(bp, bck, chunks)
+	if err != nil || xid == "" {
+		return err
+	}
+	return api.WaitForXaction(bp, &xact.ArgsMsg{
+		ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: tools.RebalanceTimeout,
+	})
+}
+
 // NOTE: set env.TestRunProviderEC to include erasure-coded-bucket test cases
 func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 	tests := []struct {

@@ -607,21 +607,41 @@ func TestResetBucketProps(t *testing.T) {
 	if !p.Equal(defaultProps) {
 		t.Errorf("props have not been reset properly: expected: %+v, got: %+v", defaultProps, p)
 	}
+
+	// Resetting these two independent updates would require both re-EC and rechunk.
+	_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{EC: &cmn.ECConfToSet{Enabled: apc.Ptr(false)}})
+	tassert.CheckFatal(t, err)
+	chunkSize := cos.SizeIEC(cmn.ChunkSizeMin)
+	if chunkSize == defaultProps.Chunks.ChunkSize {
+		chunkSize *= 2
+	}
+	err = setBucketChunksAndWait(bp, bck, &cmn.ChunksConfToSet{ChunkSize: &chunkSize})
+	tassert.CheckFatal(t, err)
+
+	beforeReset, err := api.HeadBucket(bp, bck, true /* don't add */)
+	tassert.CheckFatal(t, err)
+	_, err = api.ResetBucketProps(bp, bck)
+	tassert.Fatalf(t, api.HTTPStatus(err) == http.StatusBadRequest, "expected HTTP 400, got %v", err)
+	afterReset, err := api.HeadBucket(bp, bck, true /* don't add */)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, afterReset.Equal(beforeReset), "bucket properties changed after rejected reset")
 }
 
 func TestSetInvalidBucketProps(t *testing.T) {
 	var (
-		proxyURL = tools.RandomProxyURL(t)
-		bp       = tools.BaseAPIParams(proxyURL)
-		bck      = cmn.Bck{
+		proxyURL          = tools.RandomProxyURL(t)
+		bp                = tools.BaseAPIParams(proxyURL)
+		conflictChunkSize = cos.SizeIEC(cmn.ChunkSizeMin)
+		bck               = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
 			Ns:       genBucketNs(),
 		}
 
 		tests = []struct {
-			name  string
-			props *cmn.BpropsToSet
+			name           string
+			props          *cmn.BpropsToSet
+			wantBadRequest bool
 		}{
 			{
 				name: "humongous number of copies",
@@ -665,11 +685,33 @@ func TestSetInvalidBucketProps(t *testing.T) {
 					EC:     &cmn.ECConfToSet{Enabled: apc.Ptr(true)},
 					Mirror: &cmn.MirrorConfToSet{Enabled: apc.Ptr(true)},
 				},
+				wantBadRequest: true,
+			},
+			{
+				name: "enable ec and change chunk layout",
+				props: &cmn.BpropsToSet{
+					EC:     &cmn.ECConfToSet{Enabled: apc.Ptr(true)},
+					Chunks: &cmn.ChunksConfToSet{ChunkSize: &conflictChunkSize},
+				},
+				wantBadRequest: true,
+			},
+			{
+				name: "enable mirroring and change chunk layout",
+				props: &cmn.BpropsToSet{
+					Mirror: &cmn.MirrorConfToSet{Enabled: apc.Ptr(true)},
+					Chunks: &cmn.ChunksConfToSet{ChunkSize: &conflictChunkSize},
+				},
+				wantBadRequest: true,
 			},
 		}
 	)
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	origProps, err := api.HeadBucket(bp, bck, true /* don't add */)
+	tassert.CheckFatal(t, err)
+	if origProps.Chunks.ChunkSize == conflictChunkSize {
+		conflictChunkSize *= 2 // make it different from the default chunk size
+	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -677,6 +719,12 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			if err == nil {
 				t.Error("expected error when setting bad input")
 			}
+			if test.wantBadRequest {
+				tassert.Fatalf(t, api.HTTPStatus(err) == http.StatusBadRequest, "expected HTTP 400, got %v", err)
+			}
+			props, err := api.HeadBucket(bp, bck, true /* don't add */)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, props.Equal(origProps), "bucket properties changed after rejected request")
 		})
 	}
 }

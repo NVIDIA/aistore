@@ -2,6 +2,7 @@
 "mirror.enabled" set to:"true" (was:"false")
 
 Bucket props successfully updated.
+^Started job [-_[:alnum:]]+\. To monitor the progress, run 'ais show job [-_[:alnum:]]+'$
 PROPERTY	     VALUE
 access           GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,UPDATE-OBJECT,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
 ^.*checksum	 Type: xxhash | Validate:.*$

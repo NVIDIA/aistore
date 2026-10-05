@@ -383,6 +383,14 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 		if nprops, err = t.validateNprops(c.bck, c.msg); err != nil {
 			return "", err
 		}
+		if !c.bck.Props.Chunks.EqualLayout(&nprops.Chunks) {
+			// TODO: prepare and register rechunk here (as TCB does), store it on txnSetBucketProps,
+			// and abort it with the transaction. Commit currently creates the xaction after BMD becomes
+			// authoritative, so a failure can leave updated props without a queryable job.
+			if err := t.checkRechunk(c.bck); err != nil {
+				return "", err
+			}
+		}
 		nlp := newBckNLP(c.bck)
 		if !nlp.TryLock(c.timeout.netw / 2) {
 			return "", cmn.NewErrBusy("bucket", c.bck.Cname(""))
@@ -408,7 +416,6 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 		if err = t.txns.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
-		// TODO: add `_reChunks` xaction here, triggered by `chunks` field in `BpropsToSet`
 		if _reMirror(bprops, nprops) {
 			n := int(nprops.Mirror.Copies)
 			rns := xreg.RenewBckMakeNCopies(c.bck, c.uuid, "mnc-setprops", n)
@@ -440,6 +447,9 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 			} else {
 				xid = "" // not supporting multiple..
 			}
+		}
+		if !bprops.Chunks.EqualLayout(&nprops.Chunks) {
+			return t.runRechunk(c.uuid, c.bck, &apc.RechunkMsg{})
 		}
 		return xid, nil
 	}

@@ -1,0 +1,2 @@
+ais bucket create ais://$BUCKET
+ais bucket props set ais://$BUCKET chunks.objsize_limit=1MiB

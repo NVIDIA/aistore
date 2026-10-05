@@ -1,0 +1,5 @@
+"ais://$BUCKET" created
+^"chunks\.objsize_limit" set to: ".*" \(was: ".*"\)$
+
+Bucket props successfully updated.
+^Started job [-_[:alnum:]]+\. To monitor the progress, run 'ais show job [-_[:alnum:]]+'$
