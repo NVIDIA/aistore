@@ -206,6 +206,7 @@ type (
 	ktlsCounters struct {
 		armed          atomic.Int64 // TLS_TX installed; the kernel owns transmit
 		skipped        atomic.Int64 // arm() bailed before reaching the installer
+		refused        atomic.Int64 // arm() refused: our misconfiguration (session tickets)
 		unsupported    atomic.Int64 // kernel, TLS version, or cipher declined
 		failed         atomic.Int64 // installation error
 		notEstablished atomic.Int64 // TCP_ULP: ENOTCONN (socket not in TCP_ESTABLISHED)
@@ -219,8 +220,8 @@ type (
 		lastStats      ktlsCounterValues // last emitted summary, under logMu
 	}
 	ktlsCounterValues struct {
-		armed, skipped, unsupported, failed, notEstablished, poisoned, exhausted int64
-		retiring, stopped, stopBytes                                             int64
+		armed, skipped, refused, unsupported, failed, notEstablished, poisoned, exhausted int64
+		retiring, stopped, stopBytes                                                      int64
 	}
 	ktlsCtxKey struct{}
 
@@ -592,7 +593,7 @@ func (c *ktlsCounters) String() string {
 
 func (c *ktlsCounters) snapshot() ktlsCounterValues {
 	return ktlsCounterValues{
-		armed: c.armed.Load(), skipped: c.skipped.Load(), unsupported: c.unsupported.Load(),
+		armed: c.armed.Load(), skipped: c.skipped.Load(), refused: c.refused.Load(), unsupported: c.unsupported.Load(),
 		failed: c.failed.Load(), notEstablished: c.notEstablished.Load(),
 		poisoned: c.poisoned.Load(), exhausted: c.exhausted.Load(),
 		retiring: c.retiring.Load(), stopped: c.stopped.Load(), stopBytes: c.stopBytes.Load(),
@@ -604,8 +605,8 @@ func (c ktlsCounterValues) String() string {
 	if c.stopped > 0 {
 		avgBytes = c.stopBytes / c.stopped
 	}
-	return fmt.Sprintf("ktls-tx[attempted=%d armed=%d skipped=%d unsupported=%d failed=%d not-established=%d poisoned=%d exhausted=%d retiring=%d stopped=%d stopped-bytes(total/avg)=%d/%d]",
-		c.armed+c.skipped+c.unsupported+c.failed+c.notEstablished, c.armed, c.skipped, c.unsupported, c.failed, c.notEstablished,
+	return fmt.Sprintf("ktls-tx[attempted=%d armed=%d skipped=%d refused=%d unsupported=%d failed=%d not-established=%d poisoned=%d exhausted=%d retiring=%d stopped=%d stopped-bytes(total/avg)=%d/%d]",
+		c.armed+c.skipped+c.refused+c.unsupported+c.failed+c.notEstablished, c.armed, c.skipped, c.refused, c.unsupported, c.failed, c.notEstablished,
 		c.poisoned, c.exhausted, c.retiring, c.stopped, c.stopBytes, avgBytes)
 }
 
@@ -645,8 +646,15 @@ func (c *ktlsCounters) logDue(now int64, interval time.Duration) *ktlsCounterVal
 // an unusable TLS version, or transmit shutdown winning the race. The kernel
 // did not decline offload; that is counted separately as unsupported.
 func (c *ktlsConn) skip(reason string) {
-	if cnt := ktlsCnt.skipped.Add(1); cnt == 1 && cmn.Rom.V(5, cos.ModKTLS) {
+	if cnt := ktlsCnt.skipped.Add(1); cmn.Rom.V(5, cos.ModKTLS) && cos.Sparse(cnt) {
 		nlog.Infoln("ktls-tx: not arming:", reason, c.tcp.RemoteAddr())
+	}
+}
+
+// arm() refused: always our misconfiguration - counted separately, reported regardless of verbosity
+func (c *ktlsConn) refuse(reason string) {
+	if cnt := ktlsCnt.refused.Add(1); cos.Sparse(cnt) {
+		nlog.Errorln("ktls-tx: refusing to arm -", reason, c.tcp.RemoteAddr())
 	}
 }
 
@@ -660,7 +668,7 @@ func (c *ktlsConn) arm() {
 		// change. Session tickets are the known crypto/tls write under the
 		// server application epoch during the handshake, hence they must be off.
 		if !c.cfg.SessionTicketsDisabled {
-			c.skip("session tickets are enabled")
+			c.refuse("session tickets are enabled")
 			return
 		}
 		params.secret = c.secrets.takeTLS13()
@@ -717,7 +725,7 @@ func (c *ktlsConn) arm() {
 		}
 		return
 	case !enabled:
-		if cnt := ktlsCnt.unsupported.Add(1); cnt == 1 && cmn.Rom.V(5, cos.ModKTLS) {
+		if cnt := ktlsCnt.unsupported.Add(1); cmn.Rom.V(5, cos.ModKTLS) && cos.Sparse(cnt) {
 			nlog.Infoln("ktls-tx: offload unavailable", tls.VersionName(params.version),
 				tls.CipherSuiteName(params.cipherSuite), c.tcp.RemoteAddr())
 		}

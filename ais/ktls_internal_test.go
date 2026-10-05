@@ -1209,9 +1209,9 @@ func TestKTLSTxCounters(t *testing.T) {
 		})
 	}
 
-	// arm() bailing on its own is a distinct bucket: session tickets left on
+	// refusing to arm is a distinct bucket: session tickets left on
 	// would make the TLS 1.3 record sequence number non-zero
-	t.Run("skipped/session-tickets", func(t *testing.T) {
+	t.Run("refused/session-tickets", func(t *testing.T) {
 		before := testktlsCounterSnapshot()
 
 		tmpl := testktlsServerConf(t)
@@ -1226,7 +1226,8 @@ func TestKTLSTxCounters(t *testing.T) {
 		tassert.Errorf(t, !conn.isArmed(), "armed with session tickets enabled")
 
 		got := testktlsCounterSnapshot().sub(before)
-		tassert.Errorf(t, got.skipped == 1, "skipped %d, wanted 1 (%s)", got.skipped, got)
+		tassert.Errorf(t, got.refused == 1, "refused %d, wanted 1 (%s)", got.refused, got)
+		tassert.Errorf(t, got.skipped == 0, "skipped %d, wanted 0 (%s)", got.skipped, got)
 		tassert.Errorf(t, got.armed == 0, "armed despite session tickets (%s)", got)
 		tassert.Errorf(t, got.poisoned == 0, "poisoned %d, wanted 0 (%s)", got.poisoned, got)
 		tassert.Errorf(t, got.exhausted == 0, "exhausted %d, wanted 0 (%s)", got.exhausted, got)
@@ -1283,7 +1284,7 @@ func testktlsCounterSnapshot() *testktlsCounterValues {
 
 func (c *testktlsCounterValues) sub(prev *testktlsCounterValues) testktlsCounterValues {
 	return testktlsCounterValues{
-		armed: c.armed - prev.armed, skipped: c.skipped - prev.skipped,
+		armed: c.armed - prev.armed, skipped: c.skipped - prev.skipped, refused: c.refused - prev.refused,
 		unsupported: c.unsupported - prev.unsupported, failed: c.failed - prev.failed,
 		notEstablished: c.notEstablished - prev.notEstablished,
 		poisoned:       c.poisoned - prev.poisoned, exhausted: c.exhausted - prev.exhausted,
@@ -1293,7 +1294,7 @@ func (c *testktlsCounterValues) sub(prev *testktlsCounterValues) testktlsCounter
 }
 
 func (c *testktlsCounterValues) total() int64 {
-	return c.armed + c.skipped + c.unsupported + c.failed + c.notEstablished
+	return c.armed + c.skipped + c.refused + c.unsupported + c.failed + c.notEstablished
 }
 
 // Post-arm the kernel owns transmit, so any crypto/tls write - a TLS 1.3
