@@ -5,13 +5,17 @@
 package ais
 
 import (
+	"bufio"
+	"bytes"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,9 +36,39 @@ const (
 )
 
 type wdlResult struct {
-	err     error
-	written int64
-	elapsed time.Duration
+	err       error
+	written   int64
+	elapsed   time.Duration
+	deadlines int
+}
+
+type wdlResponseWriter struct {
+	http.ResponseWriter
+	deadlines int
+}
+
+func (w *wdlResponseWriter) SetWriteDeadline(t time.Time) error {
+	w.deadlines++
+	return http.NewResponseController(w.ResponseWriter).SetWriteDeadline(t)
+}
+
+func (w *wdlResponseWriter) ReadFrom(r io.Reader) (int64, error) {
+	return cos.CopySendfile(w.ResponseWriter, r)
+}
+
+type wdlCountingWriter struct {
+	http.ResponseWriter
+	writes, deadlines int
+}
+
+func (w *wdlCountingWriter) Write(p []byte) (int, error) {
+	w.writes++
+	return len(p), nil
+}
+
+func (w *wdlCountingWriter) SetWriteDeadline(time.Time) error {
+	w.deadlines++
+	return nil
 }
 
 func TestWdlChunkSize(t *testing.T) {
@@ -104,10 +138,79 @@ func TestWdlInit(t *testing.T) {
 	}
 }
 
+func TestWdlBufferedSizes(t *testing.T) {
+	const (
+		bufSize = 128 * cos.KiB
+		tout    = 5 * time.Minute
+	)
+	csize := wdlChunkSize(tout)
+	payload := make([]byte, csize+1)
+	buf := make([]byte, bufSize)
+	tests := []struct {
+		name     string
+		size     int64
+		unknown  bool
+		disabled bool
+		renew    bool
+	}{
+		{name: "empty"},
+		{name: "below-buffer", size: bufSize - 1},
+		{name: "one-buffer", size: bufSize},
+		{name: "above-buffer", size: bufSize + 1},
+		{name: "multiple-buffers", size: 512 * cos.KiB},
+		{name: "below-chunk", size: csize - 1},
+		{name: "one-chunk", size: csize},
+		{name: "above-chunk", size: csize + 1, renew: true},
+		{name: "unknown", size: 512 * cos.KiB, unknown: true, renew: true},
+		{name: "disabled", size: csize + 1, disabled: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &wdlCountingWriter{ResponseWriter: httptest.NewRecorder()}
+			// Force an immediate renewal if _copyWdl installs a wrapper:
+			// fast copies alone cannot distinguish wrapped and unwrapped paths.
+			goi := &getOI{w: w, wtout: tout, ltime: mono.NanoTime() - int64(tout)}
+			if !tc.disabled {
+				goi.wctrl = w
+				tassert.CheckFatal(t, w.SetWriteDeadline(time.Now().Add(tout)))
+			}
+			size := tc.size
+			if tc.unknown {
+				size = -1
+			}
+			n, err := goi._copyWdl(bytes.NewReader(payload[:tc.size]), buf, size)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, n == tc.size, "written %d, wanted %d", n, tc.size)
+			tassert.Errorf(t, w.writes == int((tc.size+bufSize-1)/bufSize), "unexpected write count: %d", w.writes)
+			wantDeadlines := 1
+			if tc.disabled {
+				wantDeadlines = 0
+			} else if tc.renew {
+				wantDeadlines++
+			}
+			tassert.Errorf(t, w.deadlines == wantDeadlines, "set %d deadlines, wanted %d", w.deadlines, wantDeadlines)
+		})
+	}
+}
+
 func TestWdlSendfile(t *testing.T) { wdlRun(t, true) }
 func TestWdlBuffered(t *testing.T) { wdlRun(t, false) }
 
 func wdlRun(t *testing.T, sendfile bool) {
+	t.Run("small", func(t *testing.T) {
+		const size = 64 * cos.KiB
+		url, ch := wdlServer(t, size, sendfile)
+		resp, err := http.Get(url)
+		tassert.CheckFatal(t, err)
+		n, err := io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, n == size, "received %d, wanted %d", n, size)
+		r := wdlWait(t, ch)
+		tassert.CheckFatal(t, r.err)
+		tassert.Errorf(t, r.deadlines == 1, "small response set %d deadlines, wanted initial deadline only", r.deadlines)
+	})
+
 	t.Run("fast", func(t *testing.T) {
 		url, ch := wdlServer(t, wdlTestSize, sendfile)
 		resp, err := http.Get(url)
@@ -129,17 +232,23 @@ func wdlRun(t *testing.T, sendfile bool) {
 		resp, err := http.Get(url)
 		tassert.CheckFatal(t, err)
 		buf := make([]byte, cos.MiB)
+		var received int64
 		for {
-			_, err = io.ReadFull(resp.Body, buf)
+			var n int
+			n, err = io.ReadFull(resp.Body, buf)
+			received += int64(n)
 			if err != nil {
 				break
 			}
 			time.Sleep(25 * time.Millisecond)
 		}
 		resp.Body.Close()
+		tassert.Errorf(t, err == io.EOF, "client read ended with %v, wanted EOF", err)
+		tassert.Errorf(t, received == wdlTestSize, "received %d, wanted %d", received, wdlTestSize)
 
 		r := wdlWait(t, ch)
 		tassert.CheckFatal(t, r.err)
+		tassert.Errorf(t, r.deadlines > 1, "long response never renewed its initial deadline")
 		tassert.Errorf(t, r.written == wdlTestSize, "written %d != %d", r.written, wdlTestSize)
 		tassert.Errorf(t, r.elapsed > wdlTestTout, "elapsed %v <= timeout %v: test did not exercise re-arming",
 			r.elapsed, wdlTestTout)
@@ -158,9 +267,40 @@ func wdlRun(t *testing.T, sendfile bool) {
 		if r.err == nil {
 			t.Fatalf("expected write deadline exceeded, got nil (written %d)", r.written)
 		}
-		tassert.Errorf(t, cos.IsErrRetriableConn(r.err), "expected timeout (benign) error, got %v", r.err)
+		tassert.Errorf(t, cos.IsErrNetTimeoutConn(r.err), "expected write timeout, got %v", r.err)
 		tassert.Errorf(t, r.written < wdlTestSize, "written %d, expected partial", r.written)
 	})
+}
+
+// Even a one-buffer response can block on its first write. Keep the initial
+// deadline installed, including when wrapping and chunking are skipped.
+func TestWdlFirstWrite(t *testing.T) {
+	const size = 128 * cos.KiB
+	for _, sendfile := range []bool{false, true} {
+		name := "buffered"
+		if sendfile {
+			name = "sendfile"
+		}
+		t.Run(name, func(t *testing.T) {
+			url, ch := wdlServer(t, size, sendfile, 4*cos.KiB)
+			conn, err := net.DialTimeout("tcp", strings.TrimPrefix(url, "http://"), wdlTestWait)
+			tassert.CheckFatal(t, err)
+			defer conn.Close()
+			tassert.CheckFatal(t, conn.(*net.TCPConn).SetReadBuffer(4*cos.KiB))
+			tassert.CheckFatal(t, conn.SetDeadline(time.Now().Add(wdlTestWait)))
+			_, err = io.WriteString(conn, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+			tassert.CheckFatal(t, err)
+			resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+			tassert.CheckFatal(t, err)
+			// Do not read or close the body until the handler reports its timeout.
+			r := wdlWait(t, ch)
+			conn.Close()
+			resp.Body.Close()
+			tassert.Errorf(t, cos.IsErrNetTimeoutConn(r.err), "first write did not time out: %v", r.err)
+			tassert.Errorf(t, r.written < size, "first write completed: %d", r.written)
+			tassert.Errorf(t, r.deadlines == 1, "set %d deadlines, wanted initial deadline only", r.deadlines)
+		})
+	}
 }
 
 // net/http must clear the write deadline after each request: a handler that sets
@@ -202,7 +342,7 @@ func TestWdlKeepAlive(t *testing.T) {
 
 // serve `size` zero bytes from a (sparse) file via either sendfile or buffered transmit,
 // with write deadline enabled; "/plain" serves the same w/o deadline
-func wdlServer(t *testing.T, size int64, sendfile bool) (string, chan wdlResult) {
+func wdlServer(t *testing.T, size int64, sendfile bool, socketBuffer ...int) (string, chan wdlResult) {
 	fqn := filepath.Join(t.TempDir(), "obj")
 	f, err := os.Create(fqn)
 	tassert.CheckFatal(t, err)
@@ -210,7 +350,7 @@ func wdlServer(t *testing.T, size int64, sendfile bool) (string, chan wdlResult)
 	tassert.CheckFatal(t, f.Close())
 
 	ch := make(chan wdlResult, 1)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fh, err := os.Open(fqn)
 		if err != nil {
 			ch <- wdlResult{err: err}
@@ -226,18 +366,31 @@ func wdlServer(t *testing.T, size int64, sendfile bool) (string, chan wdlResult)
 
 		var (
 			res     wdlResult
-			goi     = &getOI{w: w, wctrl: http.NewResponseController(w), wtout: wdlTestTout}
+			cw      = &wdlResponseWriter{ResponseWriter: w}
+			goi     = &getOI{w: cw, wctrl: http.NewResponseController(cw), wtout: wdlTestTout}
 			started = mono.NanoTime()
 		)
-		if sendfile {
-			res.written, res.err = goi._sendfileWdl(&io.LimitedReader{R: fh, N: size})
-		} else {
-			wdl := &wdlWriter{w: w, rc: goi.wctrl, tout: goi.wtout}
-			res.written, res.err = cos.CopyBuffer(wdl, fh, make([]byte, 32*cos.KiB))
+		goi.ltime = started
+		res.err = goi.wctrl.SetWriteDeadline(time.Now().Add(goi.wtout))
+		if res.err == nil {
+			if sendfile {
+				res.written, res.err = goi._sendfileWdl(&io.LimitedReader{R: fh, N: size})
+			} else {
+				res.written, res.err = goi._copyWdl(fh, make([]byte, min(size, 128*cos.KiB)), size)
+			}
 		}
+		res.deadlines = cw.deadlines
 		res.elapsed = mono.Since(started)
 		ch <- res
 	}))
+	if len(socketBuffer) > 0 {
+		srv.Config.ConnState = func(c net.Conn, state http.ConnState) {
+			if state == http.StateNew {
+				_ = c.(*net.TCPConn).SetWriteBuffer(socketBuffer[0])
+			}
+		}
+	}
+	srv.Start()
 	t.Cleanup(srv.Close)
 	return srv.URL, ch
 }

@@ -74,7 +74,7 @@ type (
 	getOI struct {
 		req        *http.Request
 		w          http.ResponseWriter
-		wctrl      *http.ResponseController // see initWdl
+		wctrl      wdeadliner // non-nil: write deadline enabled (see initWdl)
 		wtout      time.Duration
 		ctx        context.Context // context used when getting object from remote backend (access creds)
 		ktls       ktlsState       // connection-scoped TX state, if any
@@ -1464,19 +1464,11 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 }
 
 func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64, committed bool) error {
-	var (
-		errTx error
-		w     io.Writer = goi.w
-	)
-	if goi.wctrl != nil {
-		w = &wdlWriter{w: goi.w, rc: goi.wctrl, tout: goi.wtout}
-	}
-	written, err := cos.CopyBuffer(w, r, buf)
+	written, err := goi._copyWdl(r, buf, size)
 	if err != nil || written != size {
-		errTx = goi._txerr(err, fqn /*lbget*/, written, size, committed)
-	}
-	if errTx != nil {
-		return errTx
+		if errTx := goi._txerr(err, fqn /*lbget*/, written, size, committed); errTx != nil {
+			return errTx
+		}
 	}
 
 	//
@@ -1484,6 +1476,17 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64, comm
 	//
 	goi.stats(written)
 	return nil
+}
+
+// same rule as _sendfileWdl: up to one chunk, the initial deadline alone provides
+// the minimum drain rate - no wrapper, no re-arming
+func (goi *getOI) _copyWdl(r io.Reader, buf []byte, size int64) (int64, error) {
+	if goi.wctrl == nil || (size >= 0 && size <= wdlChunkSize(goi.wtout)) {
+		return cos.CopyBuffer(goi.w, r, buf)
+	}
+	// ltime (request start) precedes the initial deadline: first re-arm may come early, never late
+	w := &wdlWriter{w: goi.w, rc: goi.wctrl, tout: goi.wtout, last: goi.ltime}
+	return cos.CopyBuffer(w, r, buf)
 }
 
 //
@@ -1523,34 +1526,42 @@ func (goi *getOI) initWdl() {
 		return
 	}
 
-	// (compare w/ x-moss)
-	rc := http.NewResponseController(goi.w)
-	if err := rc.SetWriteDeadline(time.Now().Add(tout)); err != nil {
+	// *http.response implements it directly - no allocation;
+	// otherwise, ResponseController to unwrap (compare w/ x-moss)
+	wd, ok := goi.w.(wdeadliner)
+	if !ok {
+		wd = http.NewResponseController(goi.w)
+	}
+	if err := wd.SetWriteDeadline(time.Now().Add(tout)); err != nil {
 		// proceed w/o deadline: http.ErrNotSupported (wrapped writer w/o Unwrap(), test recorder)
 		// or connection already closed - the latter fails at the first write anyway
 		return
 	}
-	goi.wctrl, goi.wtout = rc, tout
+	goi.wctrl, goi.wtout = wd, tout
 }
 
 // sendfile in chunks, re-arming the deadline in between
-// (a single ReadFrom would otherwise be bound by one absolute deadline)
+// (a single ReadFrom would otherwise be bound by one absolute deadline);
+// relies on initWdl's initial deadline for small responses and the first chunk
 func (goi *getOI) _sendfileWdl(lr *io.LimitedReader) (written int64, err error) {
-	var (
-		chunk = &io.LimitedReader{R: lr.R}
-		csize = wdlChunkSize(goi.wtout)
-	)
+	csize := wdlChunkSize(goi.wtout)
+	if lr.N <= csize {
+		return cos.CopySendfile(goi.w, lr) // initial deadline covers the entire response
+	}
 	for lr.N > 0 {
-		if err = goi.wctrl.SetWriteDeadline(time.Now().Add(goi.wtout)); err != nil {
-			return written, err
-		}
-		chunk.N = min(lr.N, csize)
+		remaining := lr.N
+		lr.N = min(remaining, csize)
 		var n int64
-		n, err = cos.CopySendfile(goi.w, chunk)
+		n, err = cos.CopySendfile(goi.w, lr)
 		written += n
-		lr.N -= n
+		lr.N = remaining - n
 		if err != nil || n == 0 {
 			break
+		}
+		if lr.N > 0 {
+			if err = goi.wctrl.SetWriteDeadline(time.Now().Add(goi.wtout)); err != nil {
+				return written, err
+			}
 		}
 	}
 	return written, err
@@ -2636,12 +2647,16 @@ func wdlChunkSize(tout time.Duration) int64 {
 	return min(max(int64(tout/time.Second)*wdlMinRate, wdlMinChunkSize), wdlMaxChunkSize)
 }
 
+type wdeadliner interface {
+	SetWriteDeadline(time.Time) error // *http.response, *http.ResponseController
+}
+
 // buffered transmit:
 // - re-arm the write deadline at most every timeout/3 (compare w/ x-moss refreshIval)
 // - intentionally Write-only - masks the underlying writer's io.ReaderFrom, http.Flusher, etc.
 type wdlWriter struct {
 	w    io.Writer
-	rc   *http.ResponseController
+	rc   wdeadliner
 	tout time.Duration
 	last int64 // mono
 }
