@@ -263,6 +263,7 @@ func (nbi *nbiCtx) readChunk() error {
 	if cnt := int(nbi.hdr.entryCount); cap(nbi.entries) < cnt {
 		nbi.entries = make(cmn.LsoEntries, 0, cnt)
 	} else {
+		clear(nbi.entries)
 		nbi.entries = nbi.entries[:0]
 	}
 	if err := nbi.entries.DecodeMsg(mr); err != nil {

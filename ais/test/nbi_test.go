@@ -182,32 +182,34 @@ func TestListInventory(t *testing.T) {
 			// 2. list inventory (paginated)
 			var (
 				allEntries []*cmn.LsoEnt
-				token      string
 				numPages   int
 				args       api.ListArgs
+				lsmsg      = &apc.LsoMsg{
+					Prefix:   m.prefix,
+					Props:    tc.props,
+					PageSize: tc.listPageSize,
+					Flags:    apc.LsNBI,
+				}
 			)
 			if createMsg.Name != "" {
 				args.Header = http.Header{apc.HdrInvName: []string{createMsg.Name}}
 			}
 			for {
-				lsmsg := &apc.LsoMsg{
-					Prefix:            m.prefix,
-					Props:             tc.props,
-					PageSize:          tc.listPageSize,
-					Flags:             apc.LsNBI,
-					ContinuationToken: token,
-				}
-				lst, err := api.ListObjects(bp, m.bck, lsmsg, args)
+				uuid, token := lsmsg.UUID, lsmsg.ContinuationToken
+				lst, err := api.ListObjectsPage(bp, m.bck, lsmsg, args)
 				tassert.CheckFatal(t, err)
-				numPages++ // FIXME: implies api.ListObjectsPage()
+				tassert.Fatalf(t, uuid == "" || lst.UUID == uuid,
+					"listing UUID changed: %q => %q", uuid, lst.UUID)
+				tassert.Fatalf(t, len(lst.Entries) > 0 || lst.ContinuationToken == "",
+					"empty page with continuation token %q", lst.ContinuationToken)
+				numPages++
 				allEntries = append(allEntries, lst.Entries...)
 				if lst.ContinuationToken == "" {
 					break
 				}
-				token = lst.ContinuationToken
-				// sanity: each page must respect page size
-				tassert.Fatalf(t, len(lst.Entries) <= int(tc.listPageSize),
-					"page too large: got %d, max %d", len(lst.Entries), tc.listPageSize)
+				// NBI page size is best-effort; require forward progress instead.
+				tassert.Fatalf(t, lst.ContinuationToken > token,
+					"continuation token did not advance: %q => %q", token, lst.ContinuationToken)
 			}
 			// 3. validate entry count
 			tassert.Fatalf(t, len(allEntries) == tc.num,
@@ -300,29 +302,33 @@ func TestListInventoryPrefix(t *testing.T) {
 	} {
 		var (
 			allEntries []*cmn.LsoEnt
-			token      string
 			numPages   int
 			args       api.ListArgs
+			lsmsg      = &apc.LsoMsg{
+				Prefix:   tc.prefix,
+				Props:    apc.GetPropsName,
+				PageSize: max(int64(m1.num/10), 4),
+				Flags:    apc.LsNBI,
+			}
 		)
 		if createMsg.Name != "" {
 			args.Header = http.Header{apc.HdrInvName: []string{createMsg.Name}}
 		}
 		for {
-			lsmsg := &apc.LsoMsg{
-				Prefix:            tc.prefix,
-				Props:             apc.GetPropsName,
-				PageSize:          max(int64(m1.num/10), 4),
-				Flags:             apc.LsNBI,
-				ContinuationToken: token,
-			}
+			uuid, token := lsmsg.UUID, lsmsg.ContinuationToken
 			lst, err := api.ListObjectsPage(bp, m1.bck, lsmsg, args)
 			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, uuid == "" || lst.UUID == uuid,
+				"listing UUID changed: %q => %q (prefix %q)", uuid, lst.UUID, tc.prefix)
+			tassert.Fatalf(t, len(lst.Entries) > 0 || lst.ContinuationToken == "",
+				"empty page with continuation token %q (prefix %q)", lst.ContinuationToken, tc.prefix)
 			numPages++
 			allEntries = append(allEntries, lst.Entries...)
 			if lst.ContinuationToken == "" {
 				break
 			}
-			token = lst.ContinuationToken
+			tassert.Fatalf(t, lst.ContinuationToken > token,
+				"continuation token did not advance: %q => %q (prefix %q)", token, lst.ContinuationToken, tc.prefix)
 		}
 		tassert.Fatalf(t, len(allEntries) == tc.num,
 			"prefix %q: expected %d, got %d", tc.prefix, tc.num, len(allEntries))
@@ -357,13 +363,22 @@ func _runNBIPrefixPermCase(t *testing.T, bck cmn.Bck, bp api.BaseParams, parent 
 		NamesPerChunk: tc.namesPerChunk,
 		Force:         true,
 	}
+	if createMsg.Name != "" {
+		// Avoid reusing an inventory still read-locked by an earlier test run.
+		createMsg.Name += "-" + cos.GenTie()
+	}
 
+	started := time.Now()
 	xid, err := api.CreateNBI(bp, bck, createMsg)
 	tassert.CheckFatal(t, err)
+	tlog.Logfln("%s[%s] started (%s: objects=%d invPage=%d npc=%d listPage=%d inventory=%q)",
+		apc.ActCreateNBI, xid, tc.name, ma.num+mm.num+mz.num, tc.pageSize, tc.namesPerChunk, tc.listPageSize, createMsg.Name)
 
-	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
+	// Tiny backend pages require dozens of serial LIST calls per target.
+	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: 3 * time.Minute}
 	err = api.WaitForXaction(bp, &wargs)
 	tassert.CheckFatal(t, err)
+	tlog.Logfln("%s[%s] creation completed in %v", apc.ActCreateNBI, xid, time.Since(started))
 
 	var args api.ListArgs
 	if createMsg.Name != "" {
@@ -372,19 +387,20 @@ func _runNBIPrefixPermCase(t *testing.T, bck cmn.Bck, bp api.BaseParams, parent 
 
 	listNBI := func(prefix string) (entries []*cmn.LsoEnt) {
 		var (
-			token   string
 			seenTok = make(cos.StrSet, 16)
+			lsmsg   = &apc.LsoMsg{
+				Prefix:   prefix,
+				Props:    apc.GetPropsName,
+				PageSize: tc.listPageSize,
+				Flags:    apc.LsNBI,
+			}
 		)
 		for {
-			lsmsg := &apc.LsoMsg{
-				Prefix:            prefix,
-				Props:             apc.GetPropsName,
-				PageSize:          tc.listPageSize,
-				Flags:             apc.LsNBI,
-				ContinuationToken: token,
-			}
+			uuid, token := lsmsg.UUID, lsmsg.ContinuationToken
 			lst, err := api.ListObjectsPage(bp, bck, lsmsg, args)
 			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, uuid == "" || lst.UUID == uuid,
+				"listing UUID changed: %q => %q (prefix %q)", uuid, lst.UUID, prefix)
 
 			tassert.Fatalf(t, len(lst.Entries) > 0 || lst.ContinuationToken == "",
 				"empty page with continuation token %q for prefix %q", lst.ContinuationToken, prefix)
@@ -396,7 +412,8 @@ func _runNBIPrefixPermCase(t *testing.T, bck cmn.Bck, bp api.BaseParams, parent 
 			tassert.Fatalf(t, !seenTok.Contains(lst.ContinuationToken),
 				"repeated continuation token %q", lst.ContinuationToken)
 			seenTok.Set(lst.ContinuationToken)
-			token = lst.ContinuationToken
+			tassert.Fatalf(t, lst.ContinuationToken > token,
+				"continuation token did not advance: %q => %q (prefix %q)", token, lst.ContinuationToken, prefix)
 		}
 
 		for i := range entries {
@@ -524,9 +541,9 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 	m0 := &ioContext{t: t, bck: bck, prefix: parent}
 	m0.init(true /*cleanup*/)
 
-	ma := &ioContext{t: t, bck: bck, prefix: parent + "a/"}
-	mm := &ioContext{t: t, bck: bck, prefix: parent + "m/"}
-	mz := &ioContext{t: t, bck: bck, prefix: parent + "z/"}
+	ma := &ioContext{t: t, bck: bck, prefix: parent + "a/", fileSize: 128, fixedSize: true}
+	mm := &ioContext{t: t, bck: bck, prefix: parent + "m/", fileSize: 128, fixedSize: true}
+	mz := &ioContext{t: t, bck: bck, prefix: parent + "z/", fileSize: 128, fixedSize: true}
 
 	ma.num, mm.num, mz.num = numA, numM, numZ
 
@@ -604,34 +621,93 @@ func TestListInventoryNoRecursion(t *testing.T) {
 		Force:         true,
 	}
 
+	smap, err := api.GetClusterMap(bp)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("NBI: bucket=%s inventory=%q prefix=%q smap=%s names=%q",
+		bck.Cname(""), invName, parent, smap.StringEx(), objNames)
+
 	xid, err := api.CreateNBI(bp, bck, createMsg)
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("%s[%s] started (9 objects, hierarchical)", apc.ActCreateNBI, xid)
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		live, err := api.ListObjects(bp, bck, &apc.LsoMsg{
+			Prefix: parent, Props: apc.GetPropsName, Flags: apc.LsNameOnly | apc.LsNoDirs,
+		}, api.ListArgs{})
+		if err != nil {
+			tlog.Logfln("NBI failure: live listing: %v", err)
+		} else {
+			tlog.Logfln("NBI failure: live names=%q", _lsoNames(live.Entries))
+		}
+		snaps, err := api.QueryXactionSnaps(bp, &wargs)
+		tlog.Logfln("NBI failure: creation snapshots=%s err=%v", cos.MustMarshal(snaps), err)
+		current, err := api.GetClusterMap(bp)
+		if err != nil {
+			tlog.Logfln("NBI failure: current Smap: %v", err)
+		} else {
+			tlog.Logfln("NBI failure: before=%s after=%s", smap.StringEx(), current.StringEx())
+		}
+	})
 	err = api.WaitForXaction(bp, &wargs)
 	tassert.CheckFatal(t, err)
+
+	// Check the barrier without another wait: catch an aborted IC status or a target
+	// still running when WaitForXaction returns, rather than masking it with retries.
+	snaps, err := api.QueryXactionSnaps(bp, &wargs)
+	tassert.CheckFatal(t, err)
+	for tid, si := range smap.Tmap {
+		if si.InMaintOrDecomm() {
+			continue
+		}
+		found := false
+		for _, snap := range snaps[tid] {
+			if snap.ID != xid {
+				continue
+			}
+			found = true
+			tlog.Logfln("NBI creation: target=%s objects=%d start=%s end=%s aborted=%t err=%q abort-err=%q",
+				tid, snap.Stats.Objs, snap.StartTime, snap.EndTime, snap.IsAborted(), snap.Err, snap.AbortErr)
+			tassert.Errorf(t, snap.IsFinished() && !snap.IsAborted() && snap.Err == "",
+				"NBI creation not successful after wait: target=%s snap=%s", tid, cos.MustMarshal(snap))
+		}
+		tassert.Errorf(t, found, "NBI creation snapshot missing after wait: target=%s xid=%s", tid, xid)
+	}
+	status, err := api.GetOneXactionStatus(bp, &wargs)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("NBI creation status after wait: %s", cos.MustMarshal(status))
+	tassert.Errorf(t, status.IsFinished() && !status.IsAborted() && status.ErrMsg == "",
+		"NBI creation did not complete successfully: %s", cos.MustMarshal(status))
+	infos, err := api.GetNBI(bp, bck, invName)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("NBI metadata after wait: %s", cos.MustMarshal(infos))
+	tassert.Errorf(t, len(infos) == 1, "expected one inventory, got %s", cos.MustMarshal(infos))
+	for _, info := range infos {
+		tassert.Errorf(t, info.Ntotal == int64(len(objNames)),
+			"inventory recorded %d names, expected %d: %s", info.Ntotal, len(objNames), cos.MustMarshal(info))
+	}
 
 	largs := api.ListArgs{
 		Header: http.Header{apc.HdrInvName: []string{invName}},
 	}
 
 	listNBI := func(t *testing.T, prefix string, flags uint64, pageSize int64) []*cmn.LsoEnt {
+		t.Helper()
 		var (
 			allEntries []*cmn.LsoEnt
-			token      string
 			seenTok    = make(cos.StrSet, 16)
+			lsmsg      = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsName, PageSize: pageSize, Flags: flags}
 		)
-		for {
-			lsmsg := &apc.LsoMsg{
-				Prefix:            prefix,
-				Props:             apc.GetPropsName,
-				PageSize:          pageSize,
-				Flags:             flags,
-				ContinuationToken: token,
-			}
+		for pageNum := 1; ; pageNum++ {
+			uuid, token := lsmsg.UUID, lsmsg.ContinuationToken
 			lst, err := api.ListObjectsPage(bp, bck, lsmsg, largs)
 			tassert.CheckFatal(t, err)
+			tlog.Logfln("%s: prefix=%q flags=%#x page-size=%d page=%d uuid=%s token=%q => %q names=%q",
+				t.Name(), prefix, flags, pageSize, pageNum, lst.UUID, token, lst.ContinuationToken, _lsoNames(lst.Entries))
+			tassert.Fatalf(t, uuid == "" || lst.UUID == uuid, "listing UUID changed: %q => %q", uuid, lst.UUID)
 
 			tassert.Fatalf(t, len(lst.Entries) > 0 || lst.ContinuationToken == "",
 				"empty page with non-empty token %q (prefix %q)", lst.ContinuationToken, prefix)
@@ -642,8 +718,9 @@ func TestListInventoryNoRecursion(t *testing.T) {
 			}
 			tassert.Fatalf(t, !seenTok.Contains(lst.ContinuationToken),
 				"repeated continuation token %q", lst.ContinuationToken)
+			tassert.Fatalf(t, lst.ContinuationToken > token,
+				"continuation token did not advance: %q => %q", token, lst.ContinuationToken)
 			seenTok.Set(lst.ContinuationToken)
-			token = lst.ContinuationToken
 		}
 
 		for i := 1; i < len(allEntries); i++ {
@@ -665,7 +742,7 @@ func TestListInventoryNoRecursion(t *testing.T) {
 			parent + "sub3/",
 		}
 		tassert.Fatalf(t, len(entries) == len(exp),
-			"expected %d, got %d", len(exp), len(entries))
+			"expected %d names %q, got %d %q", len(exp), exp, len(entries), _lsoNames(entries))
 
 		for i, e := range entries {
 			tassert.Fatalf(t, e.Name == exp[i],
@@ -692,7 +769,7 @@ func TestListInventoryNoRecursion(t *testing.T) {
 			parent + "sub1/obj3",
 		}
 		tassert.Fatalf(t, len(entries) == len(exp),
-			"expected %d, got %d", len(exp), len(entries))
+			"expected %d names %q, got %d %q", len(exp), exp, len(entries), _lsoNames(entries))
 		for i, e := range entries {
 			tassert.Fatalf(t, e.Name == exp[i],
 				"[%d] expected %q, got %q", i, exp[i], e.Name)
@@ -709,7 +786,7 @@ func TestListInventoryNoRecursion(t *testing.T) {
 		entries := listNBI(t, parent+"sub1/deep/", apc.LsNBI|apc.LsNoRecursion, 10)
 
 		tassert.Fatalf(t, len(entries) == 1,
-			"expected 1, got %d", len(entries))
+			"expected 1, got %d: %q", len(entries), _lsoNames(entries))
 		tassert.Fatalf(t, entries[0].Name == parent+"sub1/deep/obj4",
 			"expected %q, got %q", parent+"sub1/deep/obj4", entries[0].Name)
 		tassert.Fatalf(t, entries[0].Flags&apc.EntryIsDir == 0,
@@ -723,7 +800,7 @@ func TestListInventoryNoRecursion(t *testing.T) {
 		entries := listNBI(t, parent, apc.LsNBI, 4)
 
 		tassert.Fatalf(t, len(entries) == len(objNames),
-			"expected %d, got %d", len(objNames), len(entries))
+			"expected %d names %q, got %d %q", len(objNames), objNames, len(entries), _lsoNames(entries))
 
 		nameSet := make(cos.StrSet, len(entries))
 		for _, e := range entries {
@@ -736,13 +813,14 @@ func TestListInventoryNoRecursion(t *testing.T) {
 		tlog.Logfln("flat-nbi: %d entries OK", len(entries))
 	})
 
-	// 5. sweep page sizes to stress pagination boundaries
+	// 5. sweep requested page sizes (the per-target minimum of 10 lets this fixture
+	// fit in one response; small requested sizes do not force pagination).
 	t.Run("page-sweep", func(t *testing.T) {
 		for _, ps := range []int64{1, 2, 3, 5, 10, 0} {
 			entries := listNBI(t, parent, apc.LsNBI|apc.LsNoRecursion, ps)
 
 			tassert.Fatalf(t, len(entries) == 5,
-				"pageSize=%d: expected 5, got %d", ps, len(entries))
+				"pageSize=%d: expected 5, got %d: %q", ps, len(entries), _lsoNames(entries))
 		}
 		tlog.Logfln("page-sweep: all page sizes OK")
 	})
@@ -752,7 +830,7 @@ func TestListInventoryNoRecursion(t *testing.T) {
 		entries := listNBI(t, parent+"sub2/", apc.LsNBI|apc.LsNoRecursion, 10)
 
 		tassert.Fatalf(t, len(entries) == 2,
-			"expected 2, got %d", len(entries))
+			"expected 2, got %d: %q", len(entries), _lsoNames(entries))
 		tassert.Fatalf(t, entries[0].Name == parent+"sub2/obj5", "got %q", entries[0].Name)
 		tassert.Fatalf(t, entries[1].Name == parent+"sub2/obj6", "got %q", entries[1].Name)
 
@@ -846,21 +924,23 @@ func TestListInventoryNoRecursionPagination(t *testing.T) {
 	}
 
 	listNBI := func(t *testing.T, prefix string, flags uint64, pageSize int64) []*cmn.LsoEnt {
+		t.Helper()
 		var (
 			all     []*cmn.LsoEnt
-			token   string
 			seenTok = make(cos.StrSet, 16)
+			lsmsg   = &apc.LsoMsg{
+				Prefix:   prefix,
+				Props:    apc.GetPropsName,
+				PageSize: pageSize,
+				Flags:    flags,
+			}
 		)
 		for {
-			lsmsg := &apc.LsoMsg{
-				Prefix:            prefix,
-				Props:             apc.GetPropsName,
-				PageSize:          pageSize,
-				Flags:             flags,
-				ContinuationToken: token,
-			}
+			uuid, token := lsmsg.UUID, lsmsg.ContinuationToken
 			lst, err := api.ListObjectsPage(bp, bck, lsmsg, largs)
 			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, uuid == "" || lst.UUID == uuid,
+				"listing UUID changed: %q => %q (prefix %q ps %d)", uuid, lst.UUID, prefix, pageSize)
 			tassert.Fatalf(t, len(lst.Entries) > 0 || lst.ContinuationToken == "",
 				"empty page with token %q (prefix %q ps %d)", lst.ContinuationToken, prefix, pageSize)
 			all = append(all, lst.Entries...)
@@ -870,7 +950,9 @@ func TestListInventoryNoRecursionPagination(t *testing.T) {
 			tassert.Fatalf(t, !seenTok.Contains(lst.ContinuationToken),
 				"repeated token %q (prefix %q ps %d)", lst.ContinuationToken, prefix, pageSize)
 			seenTok.Set(lst.ContinuationToken)
-			token = lst.ContinuationToken
+			tassert.Fatalf(t, lst.ContinuationToken > token,
+				"continuation token did not advance: %q => %q (prefix %q ps %d)",
+				token, lst.ContinuationToken, prefix, pageSize)
 		}
 		for i := 1; i < len(all); i++ {
 			tassert.Fatalf(t, all[i-1].Name < all[i].Name,

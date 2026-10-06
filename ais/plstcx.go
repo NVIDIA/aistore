@@ -82,6 +82,9 @@ type (
 	}
 )
 
+// NOTE: native list-objects expects UUID returned with first page - with all subsequent pages
+var _ecntID atomic.Int64
+
 func (c *lsoCtx) writeErr(err error) {
 	c.p.statsT.IncBck(stats.ErrListCount, c.bck.Bucket())
 	if c.s3tok != nil {
@@ -229,6 +232,10 @@ func (c *lsoCtx) owner() (psi *meta.Snode, err error) {
 	p, bck, lsmsg, smap := c.p, c.bck, c.lsmsg, c.smap
 	c.newls = lsmsg.UUID == ""
 	if c.newls {
+		if c.s3tok == nil && lsmsg.ContinuationToken != "" {
+			cmn.SparseWarn(cos.ModAIS, _ecntID.Inc(), p, apc.ActList, bck.Cname(""),
+				"continuation token without UUID: starting a new listing (note: retain LsoMsg.UUID across pages)")
+		}
 		lsmsg.UUID = cos.GenUUID()
 	} else if !cos.IsValidUUID(lsmsg.UUID) {
 		return nil, fmt.Errorf("%s: invalid UUID %q", apc.BadLsoRequest, lsmsg.UUID)
