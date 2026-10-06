@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -107,5 +109,18 @@ func TestMultipartStatsJSON(t *testing.T) {
 	put := report["put"]
 	if put.Cnt != 1 || put.Bytes != 128 || put.Errs != 0 {
 		t.Fatalf("regular PUT statistics changed: %s", output.Bytes())
+	}
+}
+
+func TestObjNamesFromList(t *testing.T) {
+	// covers blank lines, surrounding whitespace, names with spaces/tabs, and preserved ordering
+	input := "\n  data/first.bin  \r\n \t \ninvalid name\n\tdata/second.tar\t\ninvalid\tname\ndata/first.bin"
+	want := []string{"data/first.bin", "data/second.tar", "data/first.bin"}
+	names, err := objNamesFromList(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(names, want) {
+		t.Fatalf("objNamesFromList() = %q, expected %q", names, want)
 	}
 }

@@ -9,10 +9,12 @@ package test_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
@@ -128,6 +131,69 @@ func TestAISLoaderWorkloads(t *testing.T) {
 	})
 }
 
+func TestAISLoaderFileListObj(t *testing.T) {
+	runner := newE2ERunner(t, "file-list-obj")
+	bp := tools.BaseAPIParams(runner.proxyURL)
+	if runner.created {
+		tools.CreateBucket(t, runner.proxyURL, runner.bck, nil, false)
+	}
+
+	const numObjs = 3
+	objNames := make([]string, 0, numObjs)
+	for i := range numObjs {
+		name := fmt.Sprintf("%s/data-%d", runner.rootPrefix, i)
+		objNames = append(objNames, name)
+		_, err := api.PutObject(&api.PutArgs{
+			BaseParams: bp,
+			Bck:        runner.bck,
+			ObjName:    name,
+			Reader:     readers.NewBytes([]byte(fmt.Sprintf("aisloader file list test %d", i))),
+		})
+		if err != nil {
+			t.Fatalf("failed to put %s: %v", runner.bck.Cname(name), err)
+		}
+	}
+
+	listBck := cmn.Bck{Name: "aisloader-list-" + strings.ToLower(trand.String(10)), Provider: apc.AIS}
+	tools.CreateBucket(t, runner.proxyURL, listBck, nil, true)
+	const listObjName = "names.txt"
+	_, err := api.PutObject(&api.PutArgs{
+		BaseParams: bp,
+		Bck:        listBck,
+		ObjName:    listObjName,
+		Reader:     readers.NewBytes([]byte(strings.Join(objNames, "\n"))),
+	})
+	if err != nil {
+		t.Fatalf("failed to put %s: %v", listBck.Cname(listObjName), err)
+	}
+
+	t.Run("Valid Object List", func(t *testing.T) {
+		report := runner.run(t, "file-list-obj", 0, time.Minute, false,
+			// use an unmatched subdir to ensure no objects are listed; successful GETs must use the filelist-obj
+			"-subdir="+runner.rootPrefix+"/unmatched",
+			"-pctput=0",
+			"-epochs=1",
+			"-filelist-obj="+listBck.Cname(listObjName),
+		)
+		assertOperation(t, "file list GET", report.Get)
+		tassert.Fatalf(t, report.Get.Count >= numObjs, "expected at least %d GETs to cover the manifest, got %d", numObjs, report.Get.Count)
+	})
+
+	t.Run("Missing Object List", func(t *testing.T) {
+		uri := listBck.Cname("missing-names.txt")
+		args := append(slices.Clone(runner.baseArgs),
+			"-pctput=0",
+			"-duration=1s",
+			"-cleanup=false",
+			"-filelist-obj="+uri,
+		)
+		output, err := runner.exec(t, "missing-file-list-obj", time.Minute, args...)
+		var exitErr *exec.ExitError
+		tassert.Fatalf(t, errors.As(err, &exitErr), "expected nonzero exit for missing manifest, got %v\n%s", err, output)
+		tassert.Fatalf(t, strings.Contains(string(output), "failed to get '-filelist-obj="+uri+"'"), "expected manifest error with source URI\n%s", output)
+	})
+}
+
 func configuredDuration(t *testing.T) time.Duration {
 	t.Helper()
 	value := cos.GetEnvOrDefault(durationEnv, "20s")
@@ -209,6 +275,18 @@ func (r *e2eRunner) deleteObjects(t *testing.T) {
 	}
 }
 
+func (r *e2eRunner) exec(t *testing.T, name string, timeout time.Duration, args ...string) ([]byte, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+
+	output, err := exec.CommandContext(ctx, r.binary, args...).CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("aisloader %s timed out: %v\n%s", name, ctx.Err(), output)
+	}
+	return output, err
+}
+
 //nolint:unparam // lint does not see invocation inside `e2e_etl_test.go` that uses a different ctxTimeout
 func (r *e2eRunner) run(t *testing.T, name string, duration, ctxTimeout time.Duration, cleanup bool, args ...string) statsReport {
 	t.Helper()
@@ -217,14 +295,7 @@ func (r *e2eRunner) run(t *testing.T, name string, duration, ctxTimeout time.Dur
 	cmdArgs = append(cmdArgs, "-stats-output="+statsPath, "-duration="+duration.String(), "-cleanup="+strconv.FormatBool(cleanup))
 	cmdArgs = append(cmdArgs, args...)
 
-	ctx, cancel := context.WithTimeout(t.Context(), duration+ctxTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, r.binary, cmdArgs...)
-	output, err := cmd.CombinedOutput()
-	if ctx.Err() != nil {
-		t.Fatalf("aisloader %s timed out: %v\n%s", name, ctx.Err(), output)
-	}
+	output, err := r.exec(t, name, duration+ctxTimeout, cmdArgs...)
 	if err != nil {
 		t.Fatalf("aisloader %s failed: %v\n%s", name, err, output)
 	}

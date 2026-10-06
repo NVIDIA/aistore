@@ -32,6 +32,7 @@ To integrate aisloader with Prometheus-based observability stacks, run the offic
   - [Quick Reference (Alphabetical)](#quick-reference-alphabetical)
   - [Command Line Options Grouped by Category](#command-line-options-grouped-by-category)
 - [Assorted Command Line](#assorted-command-line)
+  - [Object-name lists](#object-name-lists)
 - [Environment variables](#environment-variables)
 - [Archive Workload](#archive-workload)
 - [Multipart Download Stream](#multipart-download-stream)
@@ -113,6 +114,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -etl-spec | `string` | Custom ETL runtime specification (pathname) | `""` |
 | -evict-batchsize | `int` | Batch size to list and evict the next batch of remote objects | `1000` |
 | -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
+| -filelist-obj | `string` | object URI of a list of object names to read, one per line (fetched through AIS) | `""` |
 | -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
 | -getloaderid | `bool` | When true, print stored/computed unique loaderID and exit | `false` |
 | -idle-conns-per-host | `int` | Maximum idle (keep-alive) connections per host, AIS gateway or S3 endpoint (0 = size the pool to the concurrent workload, minimum 32) | `0` |
@@ -236,6 +238,7 @@ For the most recently updated command-line options and examples, please run `ais
 | --- | --- | --- | --- |
 | -num-subdirs | `int` | Spread generated objects over this many virtual subdirectories (< 100k) | `0` |
 | -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
+| -filelist-obj | `string` | object URI of a list of object names to read, one per line (fetched through AIS) | `""` |
 | -list-dirs | `bool` | List virtual subdirectories (remote buckets only) | `false` |
 | -randomname | `bool` | When true, generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |
 | -subdir | `string` | For GET: prefix that may or may not be an actual [virtual directory](/docs/howto_virt_dirs.md). For PUT: virtual destination directory for all generated objects. See [CLI `--prefix`](/docs/cli/object.md) | `""` |
@@ -342,6 +345,33 @@ $ aisloader -bucket=abc -duration 5m -pctput=100 -cleanup=true
 The duration in both examples above is set to 5 minutes.
 
 > To test 100% read (`-pctput=0`), make sure to fill the bucket beforehand.
+
+### Object-name lists
+
+Use `-filelist` (local text file) or `-filelist-obj` (remote text object) to supply object names instead of listing the workload bucket. Use one object name per line.
+
+```text
+training/image-001.jpg
+training/image-002.jpg
+```
+
+Read these objects from an existing bucket:
+
+```console
+$ aisloader -bucket=ais://images -filelist=names.txt -pctput=0 -duration=10s -cleanup=false
+
+$ ais create ais://lists
+$ ais put names.txt ais://lists/names.txt
+$ aisloader -bucket=ais://images -filelist-obj=ais://lists/names.txt -pctput=0 -duration=10s -cleanup=false
+```
+
+The list object can be in any bucket AIS can access. Names refer to objects in `-bucket`; `-subdir` does not modify nor filter them. Mixed workloads can also GET objects successfully PUT during the run. The supplied list is unchanged.
+
+List format and restrictions:
+* Surrounding whitespace is trimmed. Blank lines and names containing whitespace are skipped.
+* `-filelist` and `-filelist-obj` are mutually exclusive. Either option overrides `-skiplist`.
+* `-filelist-obj` cannot be combined with `-s3endpoint` (direct S3 access). An S3-hosted list must be read through AIS.
+* Failure to open, fetch, or read the list stops startup. Missing workload objects are reported as GET errors during the run.
 
 ### Read range
 
@@ -772,7 +802,7 @@ For the most recently updated command-line options and examples, please run `ais
      $ aisloader -bucket=s3://xyz -cleanup=false -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
     ```
 
-**20**.  Generate a list of object names (once), and then run aisloader without executing list-objects:
+**20**. Generate a list of object names (once), and then run aisloader without executing list-objects (see [Object-name lists](#object-name-lists) for storing the list in AIS):
 
     ```console
     $ ais ls ais://nnn --props name -H > /tmp/a.txt

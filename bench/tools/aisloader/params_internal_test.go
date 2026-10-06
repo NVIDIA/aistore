@@ -33,8 +33,37 @@ func TestParamsValidate(t *testing.T) {
 		name    string
 		mutate  func(*params)
 		wantErr string
+		check   func(*testing.T, *params)
 	}{
 		{name: "valid"},
+		{
+			name: "file list object ignores skiplist",
+			mutate: func(p *params) {
+				p.fileListObj = "ais://lists/objects.txt"
+				p.skipList = true
+			},
+			check: func(t *testing.T, p *params) {
+				if p.skipList {
+					t.Fatal("validate() must clear skipList when fileListObj is specified")
+				}
+			},
+		},
+		{
+			name: "file list object with direct S3",
+			mutate: func(p *params) {
+				s3Endpoint = "http://localhost:9000"
+				p.fileListObj = "s3://lists/objects.txt"
+			},
+			wantErr: "'-filelist-obj' with direct S3 access is not supported yet",
+		},
+		{
+			name: "file list exclusive with file list obj",
+			mutate: func(p *params) {
+				p.fileListObj = "ais://lists/objects.txt"
+				p.fileList = "/some/filelist.txt"
+			},
+			wantErr: "'-filelist' and '-filelist-obj' are mutually exclusive",
+		},
 		{
 			name: "size range",
 			mutate: func(p *params) {
@@ -120,6 +149,9 @@ func TestParamsValidate(t *testing.T) {
 			if test.wantErr == "" {
 				if err != nil {
 					t.Fatalf("validate() unexpected error: %v", err)
+				}
+				if test.check != nil {
+					test.check(t, p)
 				}
 				return
 			}

@@ -28,6 +28,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -247,7 +248,7 @@ func Start(version, buildtime string) (err error) {
 		objnameGetter = &namegetter.Random{}
 		objnameGetter.Init([]string{}, rnd)
 
-		// note that "'-skiplist' option is ignored when '-filelist' is specified"
+		// note that "'-skiplist' option is ignored when '-filelist' or '-filelist-obj' is specified"
 	case !runParams.skipList:
 		names, fcnt, err := listObjects()
 		if err != nil {
@@ -765,35 +766,59 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	}
 }
 
-func objNamesFromFile() (names []string, err error) {
-	var fh *os.File
-	if fh, err = os.Open(runParams.fileList); err != nil {
-		return
-	}
+func objNamesFromList(r io.Reader) (names []string, err error) {
 	names = make([]string, 0, 1024)
-	scanner := bufio.NewScanner(fh)
+	scanner := bufio.NewScanner(r)
 	regex := regexp.MustCompile(`\s`)
 	for scanner.Scan() {
 		n := strings.TrimSpace(scanner.Text())
-		if strings.Contains(n, " ") || regex.MatchString(n) {
+		if n == "" || strings.Contains(n, " ") || regex.MatchString(n) {
 			continue
 		}
 		names = append(names, n)
 	}
-	fh.Close()
-	return
+	return names, scanner.Err()
 }
 
 func listObjects() (names []string, fcnt int, err error) {
 	switch {
 	case runParams.fileList != "":
-		names, err = objNamesFromFile()
+		names, err = objNamesFromFile(runParams.fileList)
+	case runParams.fileListObj != "":
+		names, err = objNamesFromObj(runParams)
 	case isDirectS3():
 		names, err = s3ListObjects()
 	default:
 		names, fcnt, err = listObjectNames(runParams)
 	}
 	return names, fcnt, err
+}
+
+func objNamesFromFile(path string) ([]string, error) {
+	fh, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open '-filelist=%s': %w", path, err)
+	}
+	defer cos.Close(fh)
+	names, err := objNamesFromList(fh)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read '-filelist=%s': %w", path, err)
+	}
+	return names, nil
+}
+
+func objNamesFromObj(p *params) ([]string, error) {
+	uri := p.fileListObj
+	r, _, err := api.GetObjectReader(p.bp, p.fileListBck, p.fileListObjName, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get '-filelist-obj=%s': %w", uri, err)
+	}
+	defer cos.Close(r)
+	names, err := objNamesFromList(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read '-filelist-obj=%s': %w", uri, err)
+	}
+	return names, nil
 }
 
 func newNameGetter(names []string) (ng namegetter.Basic, isPermBased bool) {

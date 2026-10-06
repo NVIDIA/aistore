@@ -98,9 +98,14 @@ type (
 	namingParams struct {
 		subDir        string // virtual directory prefix for objects
 		fileList      string // file containing object names to use
+		fileListObj   string // object on the configured cluster containing object names to use
 		numVirtDirs   uint64 // spread generated objects across that many virtual subdirectories (< 100k or "%05x")
 		randomObjName bool   // generate random 32-char object names
 		skipList      bool   // skip listing bucket before 100% PUT workload
+
+		// resolved file-list object
+		fileListBck     cmn.Bck
+		fileListObjName string
 	}
 
 	// Read operation configuration
@@ -261,6 +266,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.randomObjName, "randomname", true,
 		"when true, generate object names of 32 random characters. This option is ignored when loadernum is defined")
 	f.StringVar(&p.fileList, "filelist", "", "local or locally-accessible text file containing object names (for subsequent reading)")
+	f.StringVar(&p.fileListObj, "filelist-obj", "", "object URI of a list of object names to read, one per line (fetched through AIS)")
 	f.BoolVar(&p.skipList, "skiplist", false, "when true, skip listing objects in a bucket before running 100% PUT workload")
 
 	// ============ Read operations ============
@@ -536,6 +542,17 @@ func _parseSize(valueStr, name string, defaultVal int64) (int64, error) {
 	return v, nil
 }
 
+func parseObjectURI(uri string) (cmn.Bck, string, error) {
+	bck, name, err := cmn.ParseBckObjectURI(uri, cmn.ParseURIOpts{})
+	if err != nil {
+		return bck, name, err
+	}
+	if err := bck.Validate(); err != nil {
+		return bck, name, err
+	}
+	return bck, name, cos.ValidateOname(name)
+}
+
 func (p *params) validate() error {
 	if p.maxSize < p.minSize {
 		return fmt.Errorf("invalid option: min and max size (%d, %d), respectively", p.minSize, p.maxSize)
@@ -576,8 +593,21 @@ func (p *params) validate() error {
 		return fmt.Errorf("cannot combine pctmpdstream %d with batch-size %d (both are GET variants)", p.mpdStreamPct, p.getBatchSize)
 	}
 
-	if p.skipList && p.fileList != "" {
-		fmt.Fprintln(os.Stderr, "Warning: '-skiplist' option is ignored when '-filelist' is specified")
+	if p.fileList != "" && p.fileListObj != "" {
+		return errors.New("command line options '-filelist' and '-filelist-obj' are mutually exclusive")
+	}
+	if p.fileListObj != "" {
+		if isDirectS3() {
+			return errors.New("'-filelist-obj' with direct S3 access is not supported yet")
+		}
+		var err error
+		if p.fileListBck, p.fileListObjName, err = parseObjectURI(p.fileListObj); err != nil {
+			return fmt.Errorf("invalid '-filelist-obj=%s': %w", p.fileListObj, err)
+		}
+	}
+	if p.skipList && (p.fileList != "" || p.fileListObj != "") {
+		option := cos.Ternary(p.fileListObj != "", "-filelist-obj", "-filelist")
+		fmt.Fprintf(os.Stderr, "Warning: '-skiplist' option is ignored when '%s' is specified\n", option)
 		p.skipList = false
 	}
 	if p.skipList && p.putPct < 100 {
