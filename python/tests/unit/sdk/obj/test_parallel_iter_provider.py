@@ -6,6 +6,7 @@ import os
 import signal
 import multiprocessing as mp
 import unittest
+from multiprocessing import shared_memory
 from concurrent.futures.process import BrokenProcessPool
 from unittest.mock import Mock, patch
 
@@ -536,4 +537,29 @@ class TestParallelContentIterProviderReadAll(unittest.TestCase):
         result = provider.read_all()
         result.close()
         result.close()  # must not raise
+        self.assertEqual(mp.active_children(), [])
+
+    def test_read_all_close_with_a_view_still_exported(self):
+        """close() releases the segment while the caller still holds a view.
+
+        The zero-copy path hands out a memoryview, and anything built on it,
+        a slice or `numpy.frombuffer`, keeps the mapping exported. Closing the
+        mapping then raises BufferError, and since close() has already given up
+        its reference, nothing is left to unlink the segment with.
+        """
+        provider = ParallelContentIterProvider(
+            self.mock_client, self.chunk_size, self.num_workers
+        )
+        result = provider.read_all()
+        name = result.name
+        view = result.buf[:10]
+
+        result.close()
+
+        # the view outlives the call, which is the point of not copying
+        self.assertEqual(bytes(view), self.expected[:10])
+        view.release()
+
+        with self.assertRaises(FileNotFoundError):
+            shared_memory.SharedMemory(name=name)
         self.assertEqual(mp.active_children(), [])

@@ -18,6 +18,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   entries and a continuation token, which happens when a filter such as `NOT_CACHED` excludes
   every entry on that page. The iterator now continues to the next page, matching
   `Bucket.list_all_objects()`.
+- `ParallelBuffer.close()` no longer raises `BufferError` and leaks the shared memory
+  segment when the caller still holds a view of the zero-copy buffer, such as a slice
+  or a `numpy.frombuffer` array. The segment is unlinked first, and the mapping is
+  dropped with the last view.
 
 ### Changed
 
