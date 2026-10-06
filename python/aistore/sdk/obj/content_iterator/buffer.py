@@ -52,8 +52,15 @@ class ParallelBuffer:
             return
         self._shm = None
         self._buf.release()
-        shm.close()
+        # The segment name goes first, so it is released even when the mapping
+        # cannot be: a consumer of the zero-copy buffer, `numpy.frombuffer` or
+        # a slice of it, keeps the mapping exported, and closing it then raises
+        # BufferError. The mapping is dropped once that last view goes away.
         shm.unlink()
+        try:
+            shm.close()
+        except BufferError:
+            pass
 
     def __enter__(self) -> "ParallelBuffer":
         return self
