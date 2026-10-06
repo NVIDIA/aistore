@@ -51,6 +51,9 @@ func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+		return
+	}
 	msg := &dload.AdminBody{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
