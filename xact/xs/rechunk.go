@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -34,6 +35,12 @@ type (
 	xactRechunk struct {
 		args   *apc.RechunkMsg
 		chunks cmn.ChunksConf
+		stats  struct {
+			skipped   atomic.Int64 // objects not requiring or eligible for a rewrite
+			matched   atomic.Int64 // chunked objects already matching the policy
+			processed atomic.Int64 // objects rewritten to match the policy
+			failed    atomic.Int64 // objects that failed processing
+		}
 		// TODO: migrate to xact.BckJogRunner to reduce boilerplate and gain auto-tuned worker pool
 		xact.BckJog
 	}
@@ -113,6 +120,7 @@ func newxactRechunk(p *rechunkFactory) *xactRechunk {
 }
 
 func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
+	// TODO: start with a read lock and upgrade only before rewriting; reload after a failed upgrade.
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
@@ -120,12 +128,14 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 		if cos.IsNotExist(err) {
 			return nil
 		}
+		r.stats.failed.Inc()
+		r.AddErr(err, 0)
 		return err
 	}
 	if lom.IsCopy() {
+		r.stats.skipped.Inc()
 		return nil
 	}
-	// TODO: skip chunked objects whose manifest already matches chunks.chunk_size
 
 	var (
 		chunks    = &r.chunks
@@ -134,15 +144,28 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	)
 	if chunkSize == 0 {
 		if !lom.IsChunked() {
-			// Track skipped object stats (no-op case)
+			r.stats.skipped.Inc()
 			r.ObjsAdd(1, size)
 			return nil // Do nothing: monolithic objects stay monolithic
 		}
 		chunkSize = 0 // restore chunked objects to monolithic
+	} else if lom.IsChunked() && !r.args.SyncRemote {
+		matches, err := chunkLayoutMatches(lom, chunkSize)
+		if err != nil {
+			r.stats.failed.Inc()
+			r.AddErr(err, 0)
+			return err
+		}
+		if matches {
+			r.stats.matched.Inc()
+			r.ObjsAdd(1, size)
+			return nil
+		}
 	}
 
 	lh, err := lom.Open()
 	if err != nil {
+		r.stats.failed.Inc()
 		r.AddErr(err, 0)
 		return err
 	}
@@ -165,13 +188,47 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	err = core.T.PutObject(lom, params)
 	core.FreePutParams(params)
 	if err != nil {
+		r.stats.failed.Inc()
 		r.AddErr(err, 0)
 		return err
 	}
 
-	r.ObjsAdd(1, size) // Track processed object stats
+	r.stats.processed.Inc()
+	r.ObjsAdd(1, size)
 
 	return nil
+}
+
+func chunkLayoutMatches(lom *core.LOM, chunkSize int64) (bool, error) {
+	u, err := core.NewUfest("", lom, true /*must-exist*/)
+	if err != nil {
+		return false, err
+	}
+	if err = u.LoadCompleted(lom); err != nil {
+		return false, err
+	}
+	lastNum := u.Count()
+	for num := 1; num < lastNum; num++ {
+		chunk, err := u.GetChunk(num)
+		if err != nil {
+			return false, err
+		}
+		if chunk.Size() != chunkSize {
+			return false, nil
+		}
+	}
+
+	// last chunk
+	last, err := u.GetChunk(lastNum)
+	if err != nil {
+		return false, err
+	}
+	expectedSize := lom.Lsize() - int64(lastNum-1)*chunkSize
+	debug.Assert(expectedSize > 0)
+	if expectedSize > chunkSize {
+		return false, nil
+	}
+	return last.Size() == expectedSize, nil
 }
 
 func (r *xactRechunk) Run(wg *sync.WaitGroup) {
@@ -208,5 +265,13 @@ func (r *xactRechunk) CtlMsg() string {
 		sb.WriteString(", visited:")
 		sb.WriteInt64(nv)
 	}
+	sb.WriteString(", skipped:")
+	sb.WriteInt64(r.stats.skipped.Load())
+	sb.WriteString(", matched:")
+	sb.WriteInt64(r.stats.matched.Load())
+	sb.WriteString(", processed:")
+	sb.WriteInt64(r.stats.processed.Load())
+	sb.WriteString(", failed:")
+	sb.WriteInt64(r.stats.failed.Load())
 	return sb.String()
 }

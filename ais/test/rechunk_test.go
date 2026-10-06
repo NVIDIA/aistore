@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -734,6 +735,10 @@ func TestRechunkIdempotent(t *testing.T) {
 		}
 	}
 	tlog.Logfln("After first rechunk: %d/%d objects are chunked", chunkedCount1, len(lst1.Entries))
+	chunkPaths := make(map[string][]string, len(mLarge.objNames))
+	for _, objName := range mLarge.objNames {
+		chunkPaths[objName] = mLarge.findObjChunksOnDisk(mLarge.bck, objName)
+	}
 
 	// Second rechunk (idempotent - same config, xaction approach)
 	tlog.Logln("Starting second rechunk xaction (idempotent)...")
@@ -768,6 +773,11 @@ func TestRechunkIdempotent(t *testing.T) {
 		"chunked count mismatch: first=%d, second=%d", chunkedCount1, chunkedCount2)
 	tassert.Fatalf(t, len(lst1.Entries) == len(lst2.Entries),
 		"object count mismatch: first=%d, second=%d", len(lst1.Entries), len(lst2.Entries))
+	for _, objName := range mLarge.objNames {
+		got := mLarge.findObjChunksOnDisk(mLarge.bck, objName)
+		tassert.Fatalf(t, slices.Equal(got, chunkPaths[objName]),
+			"expected conforming object %q to retain chunk paths: %v vs %v", objName, chunkPaths[objName], got)
+	}
 
 	// Verify all objects are still accessible
 	tlog.Logln("Validating object data integrity...")
