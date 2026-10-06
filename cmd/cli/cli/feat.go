@@ -55,7 +55,7 @@ var clusterFeatDesc = [...]string{
 	"allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)",
 	"offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)",
 	"legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters",
-	"GET(object): do not set write deadline (no-progress timeout, see timeout.send_file_time) for clients that stop reading",
+	"GET(object): disable client write and backend read deadlines (byte-progress timeout, see timeout.send_file_time)",
 
 	// apc.ResetToken ("none") ===========
 }
@@ -91,7 +91,7 @@ var featTags = map[string]string{
 	"S3-Redirect-Rebuild":                  "s3,compat,security-",
 	"System-Reserved-KTLS":                 "perf,net,ops,compat",
 	"S3-TensorFlow-Query":                  "s3,compat,integrity-",
-	"Disable-GET-Write-Deadline":           "ops,security-",
+	"Disable-GET-Deadline":                 "ops,security-",
 }
 
 // common (cluster, bucket) feature-flags (set, show) helper

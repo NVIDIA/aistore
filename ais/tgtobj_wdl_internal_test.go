@@ -30,7 +30,7 @@ import (
 // GET write deadline (wdl): no-progress timeout for clients that stop reading
 
 const (
-	wdlTestTout = 250 * time.Millisecond // => wdlMinChunkSize; implied min drain rate 4MiB/s
+	wdlTestTout = 250 * time.Millisecond // => cmn.XferMinChunk; implied min drain rate 4MiB/s
 	wdlTestSize = 32 * cos.MiB           // well above loopback socket buffering
 	wdlTestWait = 30 * time.Second       // test-level safety net
 )
@@ -76,16 +76,18 @@ func TestWdlChunkSize(t *testing.T) {
 		tout time.Duration
 		want int64
 	}{
-		{0, wdlMinChunkSize},
-		{time.Minute, wdlMinChunkSize}, // 960KiB => min (also: config-validated minimum)
-		{5 * time.Minute, 300 * wdlMinRate},
-		{68 * time.Minute, 68 * 60 * wdlMinRate},
-		{2 * time.Hour, wdlMaxChunkSize},
-		{100 * 24 * time.Hour, wdlMaxChunkSize},
+		{0, cmn.XferMinChunk},
+		{10 * time.Second, cmn.XferMinChunk},          // 640KiB => min (below config-validated minimum)
+		{time.Minute, 60 * cmn.XferMinRate},           // 3.75MiB (config-validated minimum)
+		{5 * time.Minute, 300 * cmn.XferMinRate},      // 18.75MiB (default)
+		{17 * time.Minute, 17 * 60 * cmn.XferMinRate}, // 63.75MiB (last below max)
+		{18 * time.Minute, cmn.XferMaxChunk},
+		{2 * time.Hour, cmn.XferMaxChunk},
+		{100 * 24 * time.Hour, cmn.XferMaxChunk},
 	}
 	for _, tc := range tests {
-		if got := wdlChunkSize(tc.tout); got != tc.want {
-			t.Errorf("wdlChunkSize(%v) = %d, want %d", tc.tout, got, tc.want)
+		if got := cmn.XferChunkSize(tc.tout); got != tc.want {
+			t.Errorf("cmn.XferChunkSize(%v) = %d, want %d", tc.tout, got, tc.want)
 		}
 	}
 }
@@ -101,7 +103,7 @@ func TestWdlInit(t *testing.T) {
 		enabled  bool
 	}{
 		{"enabled", 5 * time.Minute, 0, false, true},
-		{"opt-out", 5 * time.Minute, feat.DisableGetWriteDeadline, false, false},
+		{"opt-out", 5 * time.Minute, feat.DisableGetDeadline, false, false},
 		{"zero-timeout", 0, 0, false, false},
 		{"not-supported", 5 * time.Minute, 0, true, false},
 	}
@@ -143,7 +145,7 @@ func TestWdlBufferedSizes(t *testing.T) {
 		bufSize = 128 * cos.KiB
 		tout    = 5 * time.Minute
 	)
-	csize := wdlChunkSize(tout)
+	csize := cmn.XferChunkSize(tout)
 	payload := make([]byte, csize+1)
 	buf := make([]byte, bufSize)
 	tests := []struct {
@@ -161,15 +163,14 @@ func TestWdlBufferedSizes(t *testing.T) {
 		{name: "below-chunk", size: csize - 1},
 		{name: "one-chunk", size: csize},
 		{name: "above-chunk", size: csize + 1, renew: true},
-		{name: "unknown", size: 512 * cos.KiB, unknown: true, renew: true},
+		{name: "unknown-small", size: 512 * cos.KiB, unknown: true},
+		{name: "unknown-chunk", size: csize, unknown: true, renew: true},
 		{name: "disabled", size: csize + 1, disabled: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			w := &wdlCountingWriter{ResponseWriter: httptest.NewRecorder()}
-			// Force an immediate renewal if _copyWdl installs a wrapper:
-			// fast copies alone cannot distinguish wrapped and unwrapped paths.
-			goi := &getOI{w: w, wtout: tout, ltime: mono.NanoTime() - int64(tout)}
+			goi := &getOI{w: w, wtout: tout}
 			if !tc.disabled {
 				goi.wctrl = w
 				tassert.CheckFatal(t, w.SetWriteDeadline(time.Now().Add(tout)))

@@ -12,7 +12,7 @@ AIStore natively integrates with multiple backend providers:
 | `aws` | `aws://`, `s3://` | [Amazon Cloud Storage](#cloud-object-storage) |
 | `azure` | `azure://`, `az://` | [Azure Cloud Storage](#cloud-object-storage)|
 | `gcp` | `gcp://`, `gs://` | [Google Cloud Storage](#cloud-object-storage) |
-| `oci` | `oc://`, `oci://` | [Oracle Cloud Storage](#cloud-object-storage)[^1] |
+| `oci` | `oc://`, `oci://` | [Oracle Cloud Storage](#cloud-object-storage) |
 
 **Native integration**, in turn, implies:
 * utilizing vendor's SDK libraries to operate on the respective remote backends;
@@ -140,7 +140,7 @@ Cloud-based object storage include:
 * `aws` - [Amazon S3](https://aws.amazon.com/s3)
 * `azure` - [Microsoft Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs)
 * `gcp` - [Google Cloud Storage](https://cloud.google.com)
-* `oci` - [Oracle Cloud Storage](https://www.oracle.com/cloud/storage/)[^1]
+* `oci` - [Oracle Cloud Storage](https://www.oracle.com/cloud/storage/)
 
 In each case, we use the vendor's own SDK/API to provide transparent access to Cloud storage with the additional capability of *persistently caching* all read data in the AIStore's [remote buckets](bucket.md).
 
@@ -150,6 +150,8 @@ In each case, we use the vendor's own SDK/API to provide transparent access to C
 > Notwithstanding, *remote buckets* will often serve as a fast cache or a fast tier in front of a given 3rd party Cloud storage.
 
 > Note that AIS provides multiple easy ways to [populate](/docs/overview.md#existing-datasets) its remote buckets, including - but not limited to - conventional on-demand, self-populating, dubbed _cold GET_.
+
+> **Progress deadlines (v5.2):** Cloud object readers used by cold GET, prefetch, blob download, and other operations enforce byte-progress deadlines by default, targeting **64 KiB/s over full renewal windows**. Short range reads have their own windows. See [Minimum transfer rate](/docs/configuration.md#minimum-transfer-rate) for coverage and tuning.
 
 ## Example: accessing Cloud storage via remote AIS
 
@@ -229,5 +231,3 @@ bbb/111          16.26KiB
 ttt/hhh          16.26KiB
 ttt/qqq          16.26KiB
 ```
-
-[^1]: **Note:** OCI support is currently experimental and may have limited functionality or stability.

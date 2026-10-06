@@ -423,6 +423,9 @@ func (azbp *azbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 }
 
 func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+	dl, ctx := newRdl(ctx) // read deadline (see rdl.go)
+	defer dl.fini(&res)
+
 	var (
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bucket().RemoteBck()

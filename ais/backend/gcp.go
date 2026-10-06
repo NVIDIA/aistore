@@ -365,6 +365,11 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	if e != nil {
 		return core.GetReaderResult{Err: e}
 	}
+
+	// read deadline (see rdl.go); note: after getClient - session creation keeps the caller's ctx
+	dl, ctx := newRdl(ctx)
+	defer dl.fini(&res)
+
 	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
 	attrs, res.Err = o.Attrs(ctx)
 	if res.Err != nil {
@@ -386,10 +391,12 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		// NOTE: for range reads, use the requested length, not rc.Attrs.Size (which is the full object size)
 		rsize := rc.Remain()
 		if rsize < 0 {
+			rc.Close()
 			res.Err = errors.New("gcp: returned length is less than 0")
 			return res
 		}
 		if length < rsize {
+			rc.Close()
 			res.Err = errors.New("gcp: returned length is more than the requested range-read length")
 			return res
 		}

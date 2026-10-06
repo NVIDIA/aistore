@@ -483,6 +483,9 @@ finalize:
 }
 
 func (*s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+	dl, ctx := newRdl(ctx) // read deadline (see rdl.go)
+	defer dl.fini(&res)
+
 	var (
 		obj      *s3.GetObjectOutput
 		cloudBck = lom.Bck().RemoteBck()
@@ -831,7 +834,7 @@ func (sc *sessConf) awsLoadConfig() (aws.Config, error) {
 	nlog.Infoln("Loading config for profile:", sc.profile, "config files:", confFiles, "credential files:", credFiles)
 
 	// honor configured BackendIdleConnTimeout
-	// TODO: other transport limits remain cmn.NewClient defaults - can be added if there's explicit need
+	// (GET read deadline: see rdl.go; other transport limits remain cmn.NewClient defaults)
 	client := cmn.NewClient(cmn.TransportArgs{
 		IdleConnTimeout: cmn.GCO.Get().Net.HTTP.BackendIdleConnTimeout.D(),
 	})

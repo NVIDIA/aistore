@@ -52,6 +52,8 @@ The corollary of this statement is two-fold:
 
 Notice that the same exact approach works for the other side of the spectrum - the proverbial [small-file problem](https://www.quora.com/What-is-the-small-file-problem-in-Hadoop). Here again, instead of optimizing small-size IOPS, we focus on application-specific (re)sharding, whereby each shard would have a desirable size, contain a batch of the original (small) files, and where the files (aka samples) would be sorted to optimizes subsequent computation.
 
+**Transfer progress (v5.2).** Regular whole-object GET responses and cloud object readers enforce byte-progress deadlines by default. Transfers must complete the next byte quantum within a configured time budget, protecting object locks, open files, and goroutines from peers that remain connected while making insufficient progress. The default target is **64 KiB/s over full renewal windows**. See [Minimum transfer rate](/docs/configuration.md#minimum-transfer-rate) for coverage, window semantics, tuning, and the `Disable-GET-Deadline` escape gate.
+
 ## Original Diagrams
 
 AIS cluster *comprises* arbitrary (and not necessarily equal) numbers of **gateways** and **storage targets**. Targets utilize local disks while gateways are HTTP **proxies** that provide most of the control plane and never touch the data.

@@ -823,6 +823,9 @@ func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http
 
 // [TODO] Consider setting req.IfMatch to lom.GetCustomKey(cmn.ETag) if present
 func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+	dl, ctx := newRdl(ctx) // read deadline (see rdl.go)
+	defer dl.fini(&res)
+
 	var (
 		attemptingMPD = (length == 0)
 		cloudBck      = lom.Bck().RemoteBck()
@@ -855,7 +858,7 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 	}
 
 	if attemptingMPD {
-		return bp.getObjReaderViaMPD(lom, client, &resp)
+		return bp.getObjReaderViaMPD(ctx, lom, client, &resp)
 	}
 
 	res.R = resp.Content

@@ -3308,6 +3308,23 @@ const (
 	// and a few more hardcoded below
 )
 
+// minimum transfer rate - data path in both directions:
+// - GET write deadline: clients that stop reading (ais/tgtobj.go)
+// - remote GET read deadline: backends that stop sending (ais/backend/rdl.go)
+// the deadline (timeout.send_file_time) is renewed once per XferChunkSize bytes, and so
+// the implied minimum rate (chunk/timeout) is 64KiB/s before clamping
+// e.g.: 1m => 3.75MiB (config-validated minimum, see TimeoutConf.Validate); 5m => 18.75MiB;
+// >= ~17m => 64MiB (max; the implied rate then decreases: 64MiB/timeout)
+const (
+	XferMinRate  = 64 * cos.KiB // bytes per second
+	XferMinChunk = cos.MiB
+	XferMaxChunk = 64 * cos.MiB
+)
+
+func XferChunkSize(tout time.Duration) int64 {
+	return min(max(int64(tout/time.Second)*XferMinRate, XferMinChunk), XferMaxChunk)
+}
+
 func (c *TimeoutConf) Validate() error {
 	debug.Assert(SharedStreamsDflt >= 2*hk.Prune2mIval)
 	//

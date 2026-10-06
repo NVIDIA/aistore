@@ -81,7 +81,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `S3-Redirect-Rebuild` | `s3,compat,security-` | allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured) |
 | `System-Reserved-KTLS` | `perf,net,ops,compat` | offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time) (**restart required**) |
 | `S3-TensorFlow-Query` | `s3,compat,integrity-` | legacy TensorFlow workaround: interpret `?` in decoded S3 object paths as query parameters; breaks object keys containing `?` |
-| `Disable-GET-Write-Deadline` | `ops,security-` | GET(object): do not set write deadline (no-progress timeout, see `timeout.send_file_time`) for clients that stop reading; a stalled client then holds the object's read lock, open file, and goroutine indefinitely |
+| `Disable-GET-Deadline` | `ops,security-` | GET(object): disable client write and backend read progress deadlines (see `timeout.send_file_time`), which target **64 KiB/s over full renewal windows** by default; existing parent deadlines remain in force. See [Minimum transfer rate](/docs/configuration.md#minimum-transfer-rate). Stalled transfers can then hold object locks, open files, and goroutines indefinitely |
 
 ## Global features
 
@@ -98,7 +98,7 @@ LZ4-Frame-Checksum                     Do-not-Set-Control-Plane-ToS           Dl
 Do-not-Allow-Passing-FQN-to-ETL        Trust-Crypto-Safe-Checksums            S3-Redirect-Rebuild
 Ignore-LimitedCoexistence-Conflicts    S3-ListObjectVersions                  none
 S3-Presigned-Request                   Enable-Detailed-Prom-Metrics           System-Reserved-KTLS
-S3-TensorFlow-Query                    Disable-GET-Write-Deadline
+S3-TensorFlow-Query                    Disable-GET-Deadline
 ```
 
 For example:
@@ -141,7 +141,7 @@ Dload-Allow-Private-Egress           security-              allow downloader egr
 S3-Redirect-Rebuild                  s3,compat,security-    allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
 System-Reserved-KTLS                 perf,net,ops,compat    offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)
 S3-TensorFlow-Query                  s3,compat,integrity-   legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters
-Disable-GET-Write-Deadline           ops,security-          GET(object): do not set write deadline (no-progress timeout, see timeout.send_file_time) for clients that stop reading
+Disable-GET-Deadline                 ops,security-          GET(object): disable client write and backend read deadlines (byte-progress timeout, see timeout.send_file_time)
 
 Cluster config updated
 ```
@@ -190,7 +190,7 @@ Dload-Allow-Private-Egress           security-              allow downloader egr
 S3-Redirect-Rebuild                  s3,compat,security-    allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
 System-Reserved-KTLS                 perf,net,ops,compat    offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)
 S3-TensorFlow-Query                  s3,compat,integrity-   legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters
-Disable-GET-Write-Deadline           ops,security-          GET(object): do not set write deadline (no-progress timeout, see timeout.send_file_time) for clients that stop reading
+Disable-GET-Deadline                 ops,security-          GET(object): disable client write and backend read deadlines (byte-progress timeout, see timeout.send_file_time)
 ```
 
 The same in JSON:

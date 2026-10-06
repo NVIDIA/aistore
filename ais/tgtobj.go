@@ -1481,11 +1481,11 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64, comm
 // same rule as _sendfileWdl: up to one chunk, the initial deadline alone provides
 // the minimum drain rate - no wrapper, no re-arming
 func (goi *getOI) _copyWdl(r io.Reader, buf []byte, size int64) (int64, error) {
-	if goi.wctrl == nil || (size >= 0 && size <= wdlChunkSize(goi.wtout)) {
+	csize := cmn.XferChunkSize(goi.wtout)
+	if goi.wctrl == nil || (size >= 0 && size <= csize) {
 		return cos.CopyBuffer(goi.w, r, buf)
 	}
-	// ltime (request start) precedes the initial deadline: first re-arm may come early, never late
-	w := &wdlWriter{w: goi.w, rc: goi.wctrl, tout: goi.wtout, last: goi.ltime}
+	w := &wdlWriter{w: goi.w, rc: goi.wctrl, tout: goi.wtout, csize: csize}
 	return cos.CopyBuffer(w, r, buf)
 }
 
@@ -1518,7 +1518,7 @@ func (goi *getOI) sendfile(lr *io.LimitedReader, fqn string, size int64, committ
 // - net/http clears the write deadline after each request (keep-alive safe)
 // - deadline exceeded => net.Error Timeout() => cmn.ErrGetTxBenign (see _txerr)
 func (goi *getOI) initWdl() {
-	if cmn.Rom.Features().IsSet(feat.DisableGetWriteDeadline) {
+	if cmn.Rom.Features().IsSet(feat.DisableGetDeadline) {
 		return
 	}
 	tout := cmn.Rom.SendFile()
@@ -1544,7 +1544,7 @@ func (goi *getOI) initWdl() {
 // (a single ReadFrom would otherwise be bound by one absolute deadline);
 // relies on initWdl's initial deadline for small responses and the first chunk
 func (goi *getOI) _sendfileWdl(lr *io.LimitedReader) (written int64, err error) {
-	csize := wdlChunkSize(goi.wtout)
+	csize := cmn.XferChunkSize(goi.wtout)
 	if lr.N <= csize {
 		return cos.CopySendfile(goi.w, lr) // initial deadline covers the entire response
 	}
@@ -2634,39 +2634,26 @@ func freeSnda(a *sendArgs) {
 // wdlWriter //
 ///////////////
 
-// sendfile chunk size: the implied minimum drain rate (chunk/timeout) stays constant
-// (approx. 16KiB/s) regardless of timeout.send_file_time
-// e.g.: 1m => 1MiB (min); 5m => 4.7MiB; >= 68m => 64MiB (max)
-const (
-	wdlMinRate      = 16 * cos.KiB // bytes per second
-	wdlMinChunkSize = cos.MiB
-	wdlMaxChunkSize = 64 * cos.MiB
-)
-
-func wdlChunkSize(tout time.Duration) int64 {
-	return min(max(int64(tout/time.Second)*wdlMinRate, wdlMinChunkSize), wdlMaxChunkSize)
-}
-
 type wdeadliner interface {
 	SetWriteDeadline(time.Time) error // *http.response, *http.ResponseController
 }
 
 // buffered transmit:
-// - re-arm the write deadline at most every timeout/3 (compare w/ x-moss refreshIval)
+// - re-arm once per cmn.XferChunkSize bytes written (compare w/ backend rdl.Read)
 // - intentionally Write-only - masks the underlying writer's io.ReaderFrom, http.Flusher, etc.
 type wdlWriter struct {
-	w    io.Writer
-	rc   wdeadliner
-	tout time.Duration
-	last int64 // mono
+	w     io.Writer
+	rc    wdeadliner
+	tout  time.Duration
+	csize int64
+	n     int64 // bytes since last renewal
 }
 
-func (d *wdlWriter) Write(p []byte) (int, error) {
-	if now := mono.NanoTime(); now-d.last >= int64(d.tout/3) {
-		if err := d.rc.SetWriteDeadline(time.Now().Add(d.tout)); err != nil {
-			return 0, err
-		}
-		d.last = now
+func (d *wdlWriter) Write(p []byte) (n int, err error) {
+	n, err = d.w.Write(p)
+	if d.n += int64(n); err == nil && d.n >= d.csize {
+		d.n = 0
+		err = d.rc.SetWriteDeadline(time.Now().Add(d.tout))
 	}
-	return d.w.Write(p)
+	return n, err
 }
