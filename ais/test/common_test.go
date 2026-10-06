@@ -465,19 +465,44 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 }
 
 func (m *ioContext) evict() {
+	baseParams := tools.BaseAPIParams()
+	msg := &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+	tassert.CheckFatal(m.t, err)
+	tassert.Fatalf(m.t, len(lst.Entries) == m.num, "list_objects err: %d != %d", len(lst.Entries), m.num)
+	m.evictRemoteBucket()
+}
+
+// Opt-in for GCP tests that have observed incomplete listings after PUT.
+// Other callers retain evict's immediate count check.
+func (m *ioContext) evictWithWait() {
+	if m.bck.Provider != apc.GCP {
+		m.evict()
+		return
+	}
+	tassert.Fatalf(m.t, m.prefix != "", "evictWithWait requires a test-specific prefix")
 	var (
 		baseParams = tools.BaseAPIParams()
 		msg        = &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
+		count      int
 	)
 
-	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
-	tassert.CheckFatal(m.t, err)
-	if len(lst.Entries) != m.num {
-		m.t.Fatalf("list_objects err: %d != %d", len(lst.Entries), m.num)
+	err := tools.WaitForCondition(func() bool {
+		lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+		tassert.CheckFatal(m.t, err)
+		count = len(lst.Entries)
+		tassert.Fatalf(m.t, count <= m.num, "list_objects err: %d > %d (prefix %q)", count, m.num, m.prefix)
+		return count == m.num
+	}, tools.DefaultWaitRetry)
+	if err != nil {
+		tassert.CheckFatal(m.t, fmt.Errorf("list_objects err: %d != %d (prefix %q): %w", count, m.num, m.prefix, err))
 	}
+	m.evictRemoteBucket()
+}
 
+func (m *ioContext) evictRemoteBucket() {
 	tlog.Logfln("evicting remote bucket %s...", m.bck.String())
-	err = api.EvictRemoteBucket(baseParams, m.bck, false)
+	err := api.EvictRemoteBucket(tools.BaseAPIParams(), m.bck, false)
 	tassert.CheckFatal(m.t, err)
 }
 

@@ -155,7 +155,8 @@ func TestListInventory(t *testing.T) {
 				bp = tools.BaseAPIParams()
 			)
 			m.init(true /*cleanup*/)
-			m.remotePuts(true /*evict*/)
+			m.remotePuts(false /*evict*/)
+			m.evictWithWait()
 
 			// 1. create inventory
 			createMsg := &apc.CreateNBIMsg{
@@ -798,6 +799,12 @@ func TestListInventoryNoRecursionPagination(t *testing.T) {
 	add("%sroot-%02d", 10)                               // 10 root files
 	objNames = append(objNames, parent+"zzz/a/b/c/deep") // deeply nested → zzz/
 
+	t.Cleanup(func() {
+		for _, name := range objNames {
+			api.DeleteObject(bp, bck, name)
+		}
+	})
+
 	for _, name := range objNames {
 		r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: 128, CksumType: cos.ChecksumNone})
 		_, err := api.PutObject(&api.PutArgs{
@@ -808,11 +815,11 @@ func TestListInventoryNoRecursionPagination(t *testing.T) {
 		})
 		tassert.CheckFatal(t, err)
 	}
-	t.Cleanup(func() {
-		for _, name := range objNames {
-			api.DeleteObject(bp, bck, name)
-		}
-	})
+	err := tools.WaitForCondition(func() bool {
+		lst, err := api.ListObjects(bp, bck, &apc.LsoMsg{Prefix: parent, Props: apc.GetPropsName}, api.ListArgs{})
+		return err == nil && len(lst.Entries) == len(objNames)
+	}, tools.DefaultWaitRetry)
+	tassert.CheckFatal(t, err)
 
 	invName := "inv-nrpag-" + cos.GenTie()
 	createMsg := &apc.CreateNBIMsg{

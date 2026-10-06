@@ -971,8 +971,8 @@ func TestS3ContentTypeGCP(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		defer resp.Body.Close()
 		tassert.Errorf(t, resp.StatusCode == http.StatusOK, "native HEAD status: expected %d, got %d", http.StatusOK, resp.StatusCode)
-		tassert.Errorf(t, resp.Header.Get(cmn.PropToHeader("present")) == strconv.FormatBool(present),
-			"native HEAD present: expected %t, got %q", present, resp.Header.Get(cmn.PropToHeader("present")))
+		tassert.Errorf(t, resp.Header.Get(apc.PropToHeader("present")) == strconv.FormatBool(present),
+			"native HEAD present: expected %t, got %q", present, resp.Header.Get(apc.PropToHeader("present")))
 		tassert.Errorf(t, resp.Header.Get(cos.HdrContentType) == contentType,
 			"native HEAD Content-Type: expected %q, got %q", contentType, resp.Header.Get(cos.HdrContentType))
 	}

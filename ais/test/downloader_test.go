@@ -1158,12 +1158,14 @@ func TestDownloadSync(t *testing.T) {
 			Provider: apc.AIS,
 		}
 		dlBody = dload.BackendBody{
-			Base: dload.Base{Bck: bck},
+			Base:   dload.Base{Bck: bck},
+			Prefix: "download-sync/" + cos.GenTie() + "/",
 		}
 		m = &ioContext{
 			t:                   t,
 			num:                 10,
 			bck:                 cliBck,
+			prefix:              dlBody.Prefix,
 			deleteRemoteBckObjs: true,
 		}
 		objsToDelete = 4

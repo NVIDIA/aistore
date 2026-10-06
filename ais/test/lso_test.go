@@ -741,6 +741,7 @@ func TestLsoRemoteCached(t *testing.T) {
 			bck:      cliBck,
 			num:      rand.IntN(100) + 10,
 			fileSize: 128,
+			prefix:   "lso-remote-cached-" + cos.GenTie() + "/",
 		}
 
 		remoteVersioning bool
@@ -759,9 +760,12 @@ func TestLsoRemoteCached(t *testing.T) {
 
 	for _, evict := range []bool{false, true} {
 		tlog.Logfln("list remote objects with evict=%t", evict)
-		m.remotePuts(evict)
+		m.remotePuts(false /*evict*/)
+		if evict {
+			m.evictWithWait()
+		}
 
-		msg := &apc.LsoMsg{PageSize: 10, Flags: apc.LsCached}
+		msg := &apc.LsoMsg{Prefix: m.prefix, PageSize: 10, Flags: apc.LsCached}
 		msg.AddProps(apc.GetPropsDefaultAIS...)
 		msg.AddProps(apc.GetPropsVersion)
 

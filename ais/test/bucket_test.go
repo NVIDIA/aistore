@@ -1588,6 +1588,7 @@ func TestCopyBucket(t *testing.T) {
 			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
 			var (
 				srcBckList *cmn.LsoRes
+				dstCksum   string
 				suffix     = cos.GenTie()
 
 				objCnt = 100
@@ -1631,9 +1632,13 @@ func TestCopyBucket(t *testing.T) {
 			bckTest := cmn.Bck{Provider: apc.AIS, Ns: cmn.NsGlobal}
 			if test.srcRemote {
 				srcm.bck = cliBck
+				srcm.prefix = "copy-bucket/" + suffix + "/"
 				srcm.deleteRemoteBckObjs = true
 				bckTest.Provider = cliBck.Provider
 				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: srcm.bck})
+			}
+			if test.dstRemote {
+				srcm.prefix = "copy-bucket/" + suffix + "/"
 			}
 			if test.dstRemote {
 				dstms = []*ioContext{
@@ -1641,6 +1646,8 @@ func TestCopyBucket(t *testing.T) {
 						t:   t,
 						num: 0, // Make sure to not put anything new to destination remote bucket
 						bck: cliBck,
+						// Keep shared cloud bucket cleanup and verification scoped to this test.
+						prefix: srcm.prefix,
 					},
 				}
 				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: dstms[0].bck})
@@ -1676,6 +1683,18 @@ func TestCopyBucket(t *testing.T) {
 
 			srcProps, err := api.HeadBucket(bp, srcm.bck, true /* don't add */)
 			tassert.CheckFatal(t, err)
+			if test.dstBckExist && !test.dstRemote {
+				dstCksum = cos.ChecksumMD5
+				if dstCksum == srcProps.Cksum.Type {
+					dstCksum = cos.ChecksumSHA256
+				}
+				for _, dstm := range dstms {
+					_, err := api.SetBucketProps(bp, dstm.bck, &cmn.BpropsToSet{
+						Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(dstCksum)},
+					})
+					tassert.CheckFatal(t, err)
+				}
+			}
 
 			if test.dstBckHasObjects {
 				for _, dstm := range dstms {
@@ -1690,11 +1709,11 @@ func TestCopyBucket(t *testing.T) {
 			case bckTest.IsAIS():
 				srcm.puts()
 
-				srcBckList, err = api.ListObjects(bp, srcm.bck, nil, api.ListArgs{})
+				srcBckList, err = api.ListObjects(bp, srcm.bck, &apc.LsoMsg{Prefix: srcm.prefix}, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 			case bckTest.IsRemote():
 				srcm.remotePuts(false /*evict*/)
-				srcBckList, err = api.ListObjects(bp, srcm.bck, nil, api.ListArgs{})
+				srcBckList, err = api.ListObjects(bp, srcm.bck, &apc.LsoMsg{Prefix: srcm.prefix}, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 				if test.evictRemoteSrc {
 					tlog.Logfln("evicting %s", srcm.bck.String())
@@ -1716,7 +1735,7 @@ func TestCopyBucket(t *testing.T) {
 					uuid string
 					err  error
 					cmsg = &apc.TCBMsg{
-						CopyBckMsg: apc.CopyBckMsg{Force: true},
+						CopyBckMsg: apc.CopyBckMsg{Force: true, Prefix: srcm.prefix},
 						NumWorkers: test.numWorkers,
 					}
 				)
@@ -1772,10 +1791,9 @@ func TestCopyBucket(t *testing.T) {
 				srcProps.Provider = ""
 				dstProps.Provider = ""
 
-				// If bucket existed before, ensure that the bucket props were **not** copied over.
-				if test.dstBckExist && srcProps.Equal(dstProps) {
-					t.Fatalf("source and destination bucket props match, even though they should not:\n%#v\n%#v",
-						srcProps, dstProps)
+				// If the bucket existed before, ensure its checksum property was not overwritten.
+				if test.dstBckExist && dstProps.Cksum.Type != dstCksum {
+					t.Fatalf("destination checksum changed: expected %q, got %q", dstCksum, dstProps.Cksum.Type)
 				}
 
 				// When copying remote => ais we create the destination ais bucket on the fly
@@ -1802,7 +1820,7 @@ func TestCopyBucket(t *testing.T) {
 				dstmProps, err := api.HeadBucket(bp, dstm.bck, true /* don't add */)
 				tassert.CheckFatal(t, err)
 
-				msg := &apc.LsoMsg{}
+				msg := &apc.LsoMsg{Prefix: dstm.prefix}
 				msg.AddProps(apc.GetPropsVersion)
 				if test.dstRemote {
 					msg.Flags = apc.LsCached
