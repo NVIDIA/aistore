@@ -79,6 +79,85 @@ func TestIndexShardSmoke(t *testing.T) {
 	}
 }
 
+func TestIndexShardCache(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: "test-shard-idx-cache-" + trand.String(6), Provider: apc.AIS}
+		payload    = []byte("cached shard index payload")
+		shard      bytes.Buffer
+	)
+	tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+		Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumOneXxh), ValidateWarmGet: apc.Ptr(false)},
+	}, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+
+	tw := tar.NewWriter(&shard)
+	tassert.CheckFatal(t, tw.WriteHeader(&tar.Header{Name: "payload.txt", Mode: 0o644, Size: int64(len(payload))}))
+	_, err := tw.Write(payload)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, tw.Close())
+
+	for _, state := range []string{"new", "warm-up", "stale", "corrupt"} {
+		t.Run(state, func(t *testing.T) {
+			objName := state + ".tar"
+			tools.PutObject(t, bck, objName, readers.NewBytes(shard.Bytes()), uint64(shard.Len()))
+			t.Cleanup(func() { idxDeleteObjects(t, baseParams, bck, []string{objName}) })
+			if state != "new" {
+				idxRunAndWait(t, baseParams, bck, &apc.IndexShardMsg{Prefix: objName})
+			}
+			var existing os.FileInfo
+			switch state {
+			case "warm-up":
+				info, err := os.Stat(idxFindFile(bck, objName))
+				tassert.CheckFatal(t, err)
+				existing = info
+			case "stale":
+				idxMakeShardIndexStale(t, bck, objName)
+			case "corrupt":
+				idxCorruptShardIndex(t, bck, objName)
+			}
+
+			idxRunAndWait(t, baseParams, bck, &apc.IndexShardMsg{Prefix: objName, Cache: true})
+			idxPath := idxFindFile(bck, objName)
+			tassert.Fatalf(t, idxPath != "", "index for %q not found", objName)
+			if existing != nil {
+				info, err := os.Stat(idxPath)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, os.SameFile(existing, info), "warm-up rebuilt the index for %q", objName)
+			}
+			data, err := os.ReadFile(idxPath)
+			tassert.CheckFatal(t, err)
+			idx, err := archive.ReadShardIndex(bytes.NewReader(data), int64(len(data)), nil)
+			tassert.CheckFatal(t, err)
+			defer idx.Free()
+			op, err := api.HeadObjectV2(baseParams, bck, objName, apc.JoinProps(apc.GetPropsSize, apc.GetPropsChecksum), api.HeadArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, !idx.IsStale(op.Checksum(), op.Size), "index for %q is stale", objName)
+
+			// remove the saved index before the first archived-file GET
+			tassert.CheckFatal(t, os.Remove(idxPath))
+
+			// block sequential scanning while preserving payload and metadata
+			m := ioContext{t: t, proxyURL: proxyURL}
+			srcPath := m.findObjOnDisk(bck, objName)
+			tassert.Fatalf(t, srcPath != "", "TAR object %q not found on disk", objName)
+			badTar := bytes.Clone(shard.Bytes())
+			clear(badTar[:archive.TarBlockSize])
+			tassert.CheckFatal(t, os.WriteFile(srcPath, badTar, cos.PermRWR))
+
+			var got bytes.Buffer
+			_, err = api.GetObject(baseParams, bck, objName, &api.GetArgs{
+				Writer: &got,
+				Query:  url.Values{apc.QparamArchpath: []string{"payload.txt"}},
+			})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, bytes.Equal(got.Bytes(), payload), "cached GET returned unexpected payload: %q", got.Bytes())
+		})
+	}
+}
+
 func TestIndexShardZeroSizeFile(t *testing.T) {
 	const (
 		objName    = "zero-size.tar"

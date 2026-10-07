@@ -92,8 +92,24 @@ func (lom *LOM) BuildShardIndex(skipVerify bool) (idx *archive.ShardIndex, statu
 }
 
 func (lom *LOM) lookupShardIndex(archpath string) (entry archive.ShardIndexEntry, ok bool, err error) {
+	idx, err := lom.LoadCachedShardIndex()
+	if err != nil || idx == nil {
+		return entry, false, err
+	}
+	entry, ok = idx.Lookup(archpath)
+	return entry, ok, nil
+}
+
+// reuse a cached index or load it into the cache; nil if absent or caching is denied
+// caller holds source(R) or source(W); lom is loaded
+// returned index is shared; do not Free it
+func (lom *LOM) LoadCachedShardIndex() (*archive.ShardIndex, error) {
+	debug.Func(func() {
+		debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
+		debug.Assert(lom.loaded(), lom.Cname(), " is not loaded")
+	})
 	if !lom.HasShardIdx() {
-		return entry, false, nil
+		return nil, nil
 	}
 	var (
 		cache, key = lom.sidx()
@@ -109,17 +125,16 @@ func (lom *LOM) lookupShardIndex(archpath string) (entry archive.ShardIndexEntry
 
 	idx, err := cached.get()
 	if err != nil || idx == nil {
-		return entry, false, err
+		return nil, err
 	}
 	if idx.IsStale(lom.Checksum(), lom.Lsize()) {
 		cache.CompareAndDelete(key, cached)
 		lom.clearSidx()
-		return entry, false, archive.ErrShardIdxStale
+		return nil, archive.ErrShardIdxStale
 	}
 
 	cached.touch()
-	entry, ok = idx.Lookup(archpath)
-	return entry, ok, nil
+	return idx, nil
 }
 
 func (lom *LOM) sidx() (*sync.Map, sidxKey) {
@@ -192,7 +207,6 @@ func (lom *LOM) SaveShardIndex(idx *archive.ShardIndex) error {
 	if err := lom.PersistMain(lom.IsChunked()); err != nil {
 		return fmt.Errorf("%s: %w", lom.Cname(), err)
 	}
-	// TODO: optionally populate the shard-index cache on (re)build, behind a feature flag.
 	return nil
 }
 

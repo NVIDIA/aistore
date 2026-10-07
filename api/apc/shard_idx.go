@@ -10,6 +10,10 @@ type (
 		Prefix     string `json:"prefix,omitempty"`      // only index shards whose name begins with Prefix
 		NumWorkers int    `json:"num-workers,omitempty"` // number of concurrent workers; (-1) none; (0) auto-computed (media type + load)
 		SkipVerify bool   `json:"skip-verify,omitempty"` // if shard already has an index, trust it without loading+verifying staleness (fast re-run)
+		// also cache valid existing and newly built indexes in memory
+		// NOTE: this overrides the SkipVerify option implicitly
+		// best effort: subject to memory admission and eviction
+		Cache bool `json:"cache,omitempty"`
 	}
 	// ShardSummMsg is the control message for ActSummaryShard.
 	ShardSummMsg struct {
