@@ -18,7 +18,6 @@ Provides two download modes:
 
 import multiprocessing as mp
 from dataclasses import dataclass, field
-from multiprocessing import shared_memory
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from itertools import islice
 from typing import Dict, Generator, List, Optional, Tuple
@@ -26,7 +25,11 @@ from typing import Dict, Generator, List, Optional, Tuple
 from requests.exceptions import ChunkedEncodingError
 
 from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider, StreamBounds
-from aistore.sdk.obj.content_iterator.buffer import ParallelBuffer, RingBuffer
+from aistore.sdk.obj.content_iterator.buffer import (
+    ParallelBuffer,
+    RingBuffer,
+    SharedMemory,
+)
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.const import (
     PROPS_CHUNKED,
@@ -50,7 +53,7 @@ class WorkerState:
     client: Optional[ObjectClient] = (
         None  # ObjectClient for the worker to use to download chunks
     )
-    shm: Optional[shared_memory.SharedMemory] = (
+    shm: Optional[SharedMemory] = (
         None  # Shared memory segment as the ring buffer for the worker to write to
     )
     slot_ready: List[mp.Event] = field(
@@ -81,7 +84,7 @@ def _init_worker(
     """
     worker_state.client = client
     # Main process owns the segment and unlinks it via close();
-    worker_state.shm = shared_memory.SharedMemory(name=shm_name)
+    worker_state.shm = SharedMemory(name=shm_name)
     worker_state.slot_ready = slot_ready if slot_ready is not None else []
 
 
@@ -203,7 +206,7 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         manager) to release the shared memory when done.
         """
         dst = ParallelBuffer(
-            shared_memory.SharedMemory(create=True, size=self._object_size),
+            SharedMemory(create=True, size=self._object_size),
             self._object_size,
         )
         try:

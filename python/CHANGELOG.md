@@ -21,7 +21,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `ParallelBuffer.close()` no longer raises `BufferError` and leaks the shared memory
   segment when the caller still holds a view of the zero-copy buffer, such as a slice
   or a `numpy.frombuffer` array. The segment is unlinked first, and the mapping is
-  dropped with the last view.
+  dropped with the last view. Shared-memory finalization also closes the file
+  descriptor when a live view prevents immediate cleanup, so the allocation is
+  released after the last view without a second `close()` call.
 
 ### Changed
 

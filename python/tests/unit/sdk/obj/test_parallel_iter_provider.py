@@ -540,25 +540,18 @@ class TestParallelContentIterProviderReadAll(unittest.TestCase):
         self.assertEqual(mp.active_children(), [])
 
     def test_read_all_close_with_a_view_still_exported(self):
-        """close() releases the segment while the caller still holds a view.
-
-        The zero-copy path hands out a memoryview, and anything built on it,
-        a slice or `numpy.frombuffer`, keeps the mapping exported. Closing the
-        mapping then raises BufferError, and since close() has already given up
-        its reference, nothing is left to unlink the segment with.
-        """
+        """close() closes the descriptor while an existing view stays readable."""
         provider = ParallelContentIterProvider(
             self.mock_client, self.chunk_size, self.num_workers
         )
         result = provider.read_all()
         name = result.name
-        view = result.buf[:10]
-
-        result.close()
-
-        # the view outlives the call, which is the point of not copying
-        self.assertEqual(bytes(view), self.expected[:10])
-        view.release()
+        descriptor = result._shm._fd  # pylint: disable=protected-access
+        with result.buf[:10] as view:
+            result.close()
+            self.assertEqual(bytes(view), self.expected[:10])
+            with self.assertRaises(OSError):
+                os.fstat(descriptor)
 
         with self.assertRaises(FileNotFoundError):
             shared_memory.SharedMemory(name=name)

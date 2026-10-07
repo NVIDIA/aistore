@@ -3,8 +3,23 @@
 #
 
 import multiprocessing as mp
+import os
 from multiprocessing import shared_memory
 from typing import List
+
+
+class SharedMemory(shared_memory.SharedMemory):
+    """Shared memory whose finalizer closes the descriptor despite live views."""
+
+    # TODO: remove when supported Python versions include the fix for
+    # https://github.com/python/cpython/issues/155003 (PR #155070).
+    def __del__(self):
+        try:
+            if os.name == "posix" and self._fd >= 0:
+                os.close(self._fd)
+                self._fd = -1
+        except OSError:
+            pass
 
 
 class ParallelBuffer:
@@ -82,7 +97,7 @@ class RingBuffer(ParallelBuffer):
     """
 
     def __init__(self, num_slots: int, slot_size: int) -> None:
-        shm = shared_memory.SharedMemory(create=True, size=num_slots * slot_size)
+        shm = SharedMemory(create=True, size=num_slots * slot_size)
         super().__init__(shm, num_slots * slot_size)
         self.num_slots = num_slots
         self.slot_size = slot_size
