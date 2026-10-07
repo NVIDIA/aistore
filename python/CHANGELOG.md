@@ -8,6 +8,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- `Object.get_reader()` refuses `num_workers` together with `archive_config`, as it
+  already does for `etl`. A parallel read issues raw byte ranges, and the target
+  rejects a range read of archived content, so the combination failed one worker
+  request at a time instead of being refused before the download started.
 - Object file readers and writers report their actual open or closed state
   through `.closed`. Writer state remains open if its final flush fails.
 - Entering a closed object file writer raises `ValueError` before sending a request.

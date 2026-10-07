@@ -292,6 +292,12 @@ class Object:
                     "Cannot use `num_workers` with `etl`. "
                     "Parallel download issues raw range reads that bypass ETL."
                 )
+            if archive_config:
+                raise ValueError(
+                    "Cannot use `num_workers` with `archive_config`. "
+                    "Parallel download issues raw range reads, and the target "
+                    "rejects a range read of archived content."
+                )
 
         if byte_range:
             # For range formatting, see the spec:
