@@ -555,7 +555,9 @@ func lcRunCleanup(t *testing.T, bp api.BaseParams) int64 {
 // lcRestore brings nodes back and drains the resulting rebalance.
 func lcRestore(t *testing.T, bp api.BaseParams, sids []string) bool {
 	t.Helper()
-	rebID, err := lcStopMaint(bp, sids...)
+	args := &apc.ActValRmNode{}
+	args.SetIDs(sids...)
+	rebID, err := stopMaintenanceRetry(t, bp, args)
 	if err != nil {
 		tassert.CheckError(t, err)
 		return false

@@ -1288,6 +1288,7 @@ func icFromSmap(smap *meta.Smap) cos.StrSet {
 func icMemberLeaveAndRejoin(t *testing.T) {
 	smap := tools.GetClusterMap(t, proxyURL)
 	primary := smap.Primary
+	origProxyCount := smap.CountActivePs()
 	tassert.Fatalf(t, smap.ICCount() == meta.DfltCountIC,
 		"should have %d members in IC, has %d", meta.DfltCountIC, smap.ICCount())
 
@@ -1313,7 +1314,12 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	updatedICs := icFromSmap(smap)
-	smap, err = tools.WaitNodeAdded(tools.BaseAPIParams(primary.URL(cmn.NetPublic)), cmd.Node.ID())
+	smap, err = tools.WaitForClusterState(primary.URL(cmn.NetPublic), "restore IC member",
+		smap.Version, origProxyCount, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, smap.GetProxy(cmd.Node.ID()) != nil, "restored proxy %s is missing from %s",
+		cmd.Node.ID(), smap.StringEx())
+	err = tools.WaitNodeReady(cmd.Node.URL(cmn.NetPublic))
 	tassert.CheckFatal(t, err)
 
 	// Adding a new node shouldn't change IC members.

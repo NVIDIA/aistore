@@ -555,12 +555,15 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		bp             = tools.BaseAPIParams()
 		selectedTarget *meta.Snode
 		killTarget     *meta.Snode
+		wg             = &sync.WaitGroup{}
 	)
 
 	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+	// Drain GETs even on an early failure, after cluster recovery and before bucket cleanup.
+	t.Cleanup(wg.Wait)
 
 	// Select a random target to disable one of its mountpaths,
 	// and another random target to unregister.
@@ -584,10 +587,31 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	tlog.Logfln("Disable mountpath at target %s", selectedTarget.ID())
 	err = api.DisableMountpath(bp, selectedTarget, mpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { m.ensureNumMountpaths(selectedTarget, mpList) })
 
-	args := &apc.ActValRmNode{DaemonID: killTarget.ID(), SkipRebalance: true}
-	_, err = api.StartMaintenance(bp, args)
+	removeArgs := &apc.ActValRmNode{DaemonID: killTarget.ID(), SkipRebalance: true}
+	restoreArgs := &apc.ActValRmNode{DaemonID: killTarget.ID()}
+	_, err = startMaintenanceRetry(t, bp, removeArgs)
 	tassert.CheckFatal(t, err)
+	var rebID string
+	maintenanceStopped := false
+	t.Cleanup(func() {
+		if maintenanceStopped {
+			return
+		}
+		if rebID == "" {
+			var err error
+			rebID, err = stopMaintenanceRetry(t, bp, restoreArgs)
+			if err != nil {
+				tassert.CheckError(t, err)
+				return
+			}
+		}
+		_, err := tools.WaitForClusterState(m.proxyURL, "post-test target recovery", m.smap.Version,
+			m.originalProxyCount, m.originalTargetCount)
+		tassert.CheckError(t, err)
+		tools.WaitForRebalanceByID(t, bp, rebID)
+	})
 	smap, err := tools.WaitForClusterState(
 		m.proxyURL,
 		"target removal",
@@ -600,7 +624,6 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	m.puts()
 
 	// Start getting objects
-	wg := &sync.WaitGroup{}
 	wg.Go(func() {
 		m.gets(nil, false)
 	})
@@ -609,16 +632,12 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	time.Sleep(time.Second * 4)
 
 	// register a new target
-	args = &apc.ActValRmNode{DaemonID: killTarget.ID()}
-	_, err = api.StopMaintenance(bp, args)
+	rebID, err = stopMaintenanceRetry(t, bp, restoreArgs)
 	tassert.CheckFatal(t, err)
 
 	// enable mountpath
 	err = api.EnableMountpath(bp, selectedTarget, mpath)
 	tassert.CheckFatal(t, err)
-
-	// wait until GETs are done while 2 rebalance are running
-	wg.Wait()
 
 	// make sure that the cluster has all targets enabled
 	_, err = tools.WaitForClusterState(
@@ -632,8 +651,11 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// wait for rebalance to complete
 	bp = tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 	tools.WaitForRebalAndResil(t, bp)
+	maintenanceStopped = true
 
+	wg.Wait()
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
 	m.ensureNumMountpaths(selectedTarget, mpList)
@@ -689,50 +711,75 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	targets := m.smap.Tmap.ActiveNodes()
 	bp := tools.BaseAPIParams(m.proxyURL)
 
-	// Decommission targets
+	// Put both targets in maintenance as one serialized membership change.
+	sids := make([]string, 0, unregisterTargetCount)
 	for i := range unregisterTargetCount {
-		args := &apc.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
-		_, err := api.StartMaintenance(bp, args)
-		tassert.CheckError(t, err)
+		sids = append(sids, targets[i].ID())
 	}
-	tools.WaitForClusterState(
+	args := &apc.ActValRmNode{SkipRebalance: true}
+	args.SetIDs(sids...)
+	_, err := startMaintenanceRetry(t, bp, args)
+	tassert.CheckFatal(t, err)
+
+	args.SkipRebalance = false
+	var rebID string
+	targetsRestored := false
+	t.Cleanup(func() {
+		if targetsRestored {
+			return
+		}
+		if rebID == "" {
+			var err error
+			rebID, err = stopMaintenanceRetry(t, bp, args)
+			if err != nil {
+				tassert.CheckError(t, err)
+				return
+			}
+		}
+		_, err := tools.WaitForClusterState(m.proxyURL, "post-test target recovery", m.smap.Version,
+			m.originalProxyCount, m.originalTargetCount)
+		tassert.CheckError(t, err)
+		tools.WaitForRebalanceByID(t, bp, rebID)
+	})
+
+	_, err = tools.WaitForClusterState(
 		m.proxyURL,
 		"remove targets",
 		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount-unregisterTargetCount,
 	)
+	tassert.CheckFatal(t, err)
 
 	wg := &sync.WaitGroup{}
+	type restoreResult struct {
+		rebID string
+		err   error
+	}
+	restoreCh := make(chan restoreResult, 1)
 
-	// run a single "batched" membership-change call concurrent with the bucket creations below
-	// (note that membership admission is a serialized all-or-nothing operation - see ais/prxcycle and/or docs/lifecycle_node)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		sids := make([]string, 0, unregisterTargetCount)
-		for i := range unregisterTargetCount {
-			sids = append(sids, targets[i].ID())
-		}
-		args := &apc.ActValRmNode{}
-		args.SetIDs(sids...)
-		_, err := stopMaintenanceRetry(t, bp, args)
-		tassert.CheckError(t, err)
-	}()
+	// Run one membership-change call concurrent with the bucket creations below.
+	wg.Go(func() {
+		rebID, err := stopMaintenanceRetry(t, bp, args)
+		restoreCh <- restoreResult{rebID, err}
+	})
 
-	wg.Add(newBucketCount)
 	for i := range newBucketCount {
 		bck := m.bck
 		bck.Name += strconv.Itoa(i)
 
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			tools.CreateBucket(t, m.proxyURL, bck, nil, true /*cleanup*/)
-		}()
+		})
 	}
 	wg.Wait()
+	restored := <-restoreCh
+	rebID = restored.rebID
+	tassert.CheckFatal(t, restored.err)
 	m.waitAndCheckCluState()
+	tools.WaitForRebalanceByID(t, bp, rebID)
 	tools.WaitForRebalAndResil(t, bp)
+	targetsRestored = true
 }
 
 func TestMountpathDetachAll(t *testing.T) {

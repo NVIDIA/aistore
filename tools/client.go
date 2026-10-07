@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -728,7 +729,11 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	go func() {
 		defer wg.Done()
 		xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
-		if _, err := api.WaitForXactionIC(bp, &xargs); err != nil {
+		// Wait for an empty running set (404), not just one finished rebalance.
+		_, err := api.WaitForStatus(bp, &xargs, func(status *nl.Status) (bool, bool, error) {
+			return false, status.IsFinished(), nil
+		})
+		if err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
 			}
