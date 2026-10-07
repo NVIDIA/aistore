@@ -20,6 +20,7 @@ from aistore.sdk.const import (
     QPARAM_ARCHPATH,
     QPARAM_ARCHREGX,
     QPARAM_ARCHMODE,
+    HEADER_CONTENT_LENGTH,
     QPARAM_ETL_NAME,
     QPARAM_ETL_ARGS,
     QPARAM_OBJ_APPEND,
@@ -53,6 +54,7 @@ from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
 from aistore.sdk.etl import ETLConfig
+from aistore.sdk.obj.object_attributes import ObjectAttributes
 from aistore.sdk.obj.object_props import ObjectProps
 from aistore.sdk.types import (
     ActionMsg,
@@ -530,6 +532,29 @@ class TestObject(unittest.TestCase):
             self.object.get_reader(
                 blob_download_config=blob_cfg, byte_range="bytes=0-100"
             )
+
+    def test_get_reader_num_workers_and_archive_conflict(self):
+        """A parallel read of an archive entry would range over the shard instead.
+
+        get_reader already refuses num_workers with etl for the same reason.
+        can_get_at_offset() puts the two in one category, and the target asserts
+        a range request is not an archive request.
+        """
+        # A sized HEAD, so that without the guard the parallel provider is built
+        # rather than refusing an object it reads as empty.
+        attrs = ObjectAttributes(
+            CaseInsensitiveDict({HEADER_CONTENT_LENGTH: str(16 * 1024)})
+        )
+        for archive_config in (
+            ArchiveConfig(archpath="inner/file.txt"),
+            ArchiveConfig(regex="inner/.*", mode=ArchiveMode.PREFIX),
+        ):
+            with self.subTest(archive_config=archive_config):
+                with patch.object(ObjectClient, "head", return_value=attrs):
+                    with self.assertRaisesRegex(ValueError, "archive_config"):
+                        self.object.get_reader(
+                            archive_config=archive_config, num_workers=4
+                        )
 
     def test_get_reader_latest_param(self):
         """Ensure get_reader sets ?latest=true when latest flag is provided."""
