@@ -283,6 +283,41 @@ class TestUtils(unittest.TestCase):
         ("object 'abc://bucket/obj' does not exist", None),
         (f"bucket 'ais://{'a' * 133}' does not exist", None),
         (f"object 'ais://{'a' * 133}/obj' does not exist", None),
+        # A namespace is part of the bucket, not an object under it
+        (
+            "bucket 'ais://@uuid#ns/bucket' does not exist",
+            ("ais", "@uuid#ns/bucket", False),
+        ),
+        (
+            "object 'ais://@uuid#ns/bucket/obj.txt' does not exist",
+            ("ais", "@uuid#ns/bucket", True),
+        ),
+        ("bucket 'ais://#ns/bucket' does not exist", ("ais", "#ns/bucket", False)),
+        # A remote cluster with an empty namespace name, which is the default
+        (
+            "bucket 'ais://@remote123/bucket' does not exist",
+            ("ais", "@remote123/bucket", False),
+        ),
+        (
+            "object 'ais://@remote123/bucket/obj' does not exist",
+            ("ais", "@remote123/bucket", True),
+        ),
+        ("bucket 'ais://@#/bucket' does not exist", ("ais", "@#/bucket", False)),
+        ("object 'ais://#ns/bucket/obj' does not exist", ("ais", "#ns/bucket", True)),
+        # A hash inside a bucket name is not a namespace, there is no separator
+        ("object 'ais://a#b/obj' does not exist", ("ais", "a#b", True)),
+        (
+            f"bucket 'ais://@uuid#ns/{'a' * 64}' does not exist",
+            ("ais", f"@uuid#ns/{'a' * 64}", False),
+        ),
+        (
+            f"bucket 'ais://@{'u' * 32}#{'n' * 64}/{'b' * 64}' does not exist",
+            ("ais", f"@{'u' * 32}#{'n' * 64}/{'b' * 64}", False),
+        ),
+        (
+            f"object 'ais://@{'u' * 32}#{'n' * 64}/{'b' * 64}/obj' does not exist",
+            ("ais", f"@{'u' * 32}#{'n' * 64}/{'b' * 64}", True),
+        ),
     )
     def test_extract_and_parse_url(self, test_case):
         url_or_msg, expected = test_case

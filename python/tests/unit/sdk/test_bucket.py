@@ -61,6 +61,7 @@ from aistore.sdk.errors import (
     InvalidBckProvider,
     ErrBckAlreadyExists,
     ErrBckNotFound,
+    ErrRemoteBckNotFound,
     UnexpectedHTTPStatusCode,
 )
 from aistore.sdk.obj.object_props import ObjectProps
@@ -200,11 +201,12 @@ class TestBucket(unittest.TestCase):
             params=self.ais_bck.qparam,
         )
 
-    def test_delete_missing(self):
-        self.mock_client.request.side_effect = ErrBckNotFound(
-            400, "not found", "bck_delete_url", Mock(PreparedRequest)
+    @cases(ErrBckNotFound, ErrRemoteBckNotFound)
+    def test_delete_missing(self, error_type):
+        self.mock_client.request.side_effect = error_type(
+            404, "not found", "bck_delete_url", Mock(PreparedRequest)
         )
-        with self.assertRaises(ErrBckNotFound):
+        with self.assertRaises(error_type):
             Bucket(client=self.mock_client, name="missing-bucket").delete()
         self.ais_bck.delete(missing_ok=True)
 

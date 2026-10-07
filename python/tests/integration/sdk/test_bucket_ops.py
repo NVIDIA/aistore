@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import io
 import random
@@ -23,10 +23,12 @@ from aistore.sdk.dataset.label_attribute import LabelAttribute
 from aistore.sdk.enums import FLTPresence
 from aistore.sdk.errors import (
     AISError,
+    ErrBckAlreadyExists,
     ErrBckNotFound,
     InvalidBckProvider,
 )
 from aistore.sdk.provider import Provider
+from aistore.sdk.namespace import Namespace
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 
 from tests.utils import (
@@ -72,6 +74,19 @@ class TestBucketOps(ParallelTestBase):
         res = self.client.cluster().list_buckets()
         bucket_names = {bck.name for bck in res}
         self.assertIn(new_bck.name, bucket_names)
+
+    @cases(None, Namespace(name="test-ns"))
+    def test_bucket_namespace_errors(self, namespace):
+        bck = self.client.bucket(self.obj_prefix, namespace=namespace)
+        with self.assertRaises(ErrBckNotFound):
+            bck.delete()
+        bck.delete(missing_ok=True)
+
+        bck.create()
+        self.addCleanup(bck.delete, missing_ok=True)
+        bck.create(exist_ok=True)
+        with self.assertRaises(ErrBckAlreadyExists):
+            bck.create()
 
     @cases(
         "*",
