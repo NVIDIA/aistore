@@ -137,9 +137,9 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 func (t *target) runSpaceCleanup(xargs *xact.ArgsMsg, wg *sync.WaitGroup) fs.CapStatus {
 	var (
 		ctlmsg  string
-		regToIC = xargs.ID != ""
+		regToIC = xargs.ID == ""
 	)
-	if !regToIC {
+	if regToIC {
 		xargs.ID = cos.GenUUID()
 	}
 	if len(xargs.Buckets) > 0 {
@@ -155,7 +155,7 @@ func (t *target) runSpaceCleanup(xargs *xact.ArgsMsg, wg *sync.WaitGroup) fs.Cap
 	}
 	xcln := rns.Entry.Get()
 	if regToIC && xcln.ID() == xargs.ID {
-		// pre-existing UUID: notify IC members
+		// Target-started cleanup: register this target with IC.
 		regMsg := xactRegMsg{UUID: xargs.ID, Kind: apc.ActStoreCleanup, Srcs: []string{t.SID()}}
 		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
