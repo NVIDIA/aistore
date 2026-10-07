@@ -24,6 +24,7 @@ from aistore.sdk.etl import ETLConfig
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
+# pylint: disable=too-many-public-methods
 class TestObjectGroup(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_bck = Mock()
@@ -385,6 +386,14 @@ class TestObjectGroup(unittest.TestCase):
         self.mock_bck.object.return_value.head.assert_has_calls(
             [call("checksum"), call("checksum")]
         )
+
+    def test_list_urls_prefix(self):
+        """list_urls documents a prefix, so it has to narrow the group like its sibling."""
+        self.assertEqual(
+            len(list(self.object_group.list_urls(prefix="obj"))), len(self.obj_names)
+        )
+        self.assertEqual(len(list(self.object_group.list_urls(prefix="obj-1"))), 1)
+        self.assertEqual(len(list(self.object_group.list_urls(prefix="ojb"))), 0)
 
     def test_prefixes(self):
         objs = list(self.object_group.list_all_objects_iter(prefix="obj"))

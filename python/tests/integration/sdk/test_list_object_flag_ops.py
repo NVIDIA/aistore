@@ -105,6 +105,31 @@ class TestListObjectFlagOps(ParallelTestBase):
         self.assertEqual(expected, returned_names)
 
     # ------------------------------------------------------------------
+    # ObjectGroup.list_urls narrows the group by prefix, the same way
+    # ObjectGroup.list_all_objects_iter does.
+    # ------------------------------------------------------------------
+    def test_object_group_list_urls_prefix(self):
+        group = self.bck.objects(obj_names=self.all_names)
+
+        urls = list(group.list_urls())
+        self.assertEqual(len(self.all_names), len(urls))
+
+        nested_prefix = f"{self.obj_prefix}/subdir/"
+        urls = list(group.list_urls(prefix=nested_prefix))
+        self.assertEqual(len(self.nested_names), len(urls))
+        for url in urls:
+            self.assertIn(nested_prefix, url)
+
+        self.assertEqual([], list(group.list_urls(prefix=f"{self.obj_prefix}/nope/")))
+
+        # Same prefix, same membership as the sibling method
+        from_iter = sorted(
+            obj.name
+            for obj in group.list_all_objects_iter(prefix=nested_prefix, props=None)
+        )
+        self.assertEqual(sorted(self.nested_names), from_iter)
+
+    # ------------------------------------------------------------------
     # Props: request specific properties and verify they are populated
     # ------------------------------------------------------------------
     def test_props_name_size_checksum(self):
