@@ -106,13 +106,17 @@ class ObjectGroup(AISSource):
         of full URLs to every object in this bucket matching the specified prefix
         Args:
             prefix (str, optional): Limit objects selected by a given string prefix
-            etl (Optional[ETLConfig], optional): An optional ETL configuration. If provided, the URLs
+            etl (ETLConfig, optional): An optional ETL configuration. If provided, the URLs
                 will include ETL processing parameters. Defaults to None.
 
         Yields:
-            str: Full URLs of objects in the group.
+            str: Full URLs of objects in the group matching the specified prefix.
         """
         for obj_name in self._obj_collection:
+            # Same rule list_all_objects_iter applies below
+            if not obj_name.startswith(prefix):
+                continue
+
             yield self.bck.object(obj_name).get_url(etl=etl)
 
     def list_all_objects_iter(

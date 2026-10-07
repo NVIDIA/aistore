@@ -8,6 +8,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- `ObjectGroup.list_urls()` honors its `prefix` argument. It accepted and documented
+  one and then yielded a URL for every object in the group, while
+  `ObjectGroup.list_all_objects_iter()` next to it filtered correctly.
 - `Object.get_reader()` refuses `num_workers` together with `archive_config`, as it
   already does for `etl`. A parallel read issues raw byte ranges, and the target
   rejects a range read of archived content, so the combination failed one worker
