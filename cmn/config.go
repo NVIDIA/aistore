@@ -3326,7 +3326,7 @@ const (
 )
 
 func XferRenewSize(window time.Duration) int64 {
-	return min(max(int64(window/time.Second)*XferMinRate, XferMinRenew), XferMaxRenew)
+	return cos.ClampI64(int64(window/time.Second)*XferMinRate, XferMinRenew, XferMaxRenew)
 }
 
 func (c *TimeoutConf) Validate() error {

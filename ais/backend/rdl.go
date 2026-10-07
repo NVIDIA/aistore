@@ -71,14 +71,17 @@ func (d *rdl) expired() (err *cmn.ErrRemoteGetTimeout) {
 }
 
 // this deadline's own expiration (and nothing else) substitutes the error - see Read and fini
-func (d *rdl) timedOut() *cmn.ErrRemoteGetTimeout {
+func (d *rdl) timeout() *cmn.ErrRemoteGetTimeout {
 	e := d.expired()
-	if e != nil && !d.counted {
-		d.counted = true
-		if d.b != nil && d.b.tstats != nil {
-			vlabs := map[string]string{stats.VlabBucket: d.bck.Cname("")}
-			d.b.tstats.IncWith(d.b.MetricName(stats.GetTimeoutCount), vlabs)
-		}
+
+	if e == nil || d.counted {
+		return e
+	}
+
+	d.counted = true
+	if d.b != nil && d.b.tstats != nil {
+		vlabs := map[string]string{stats.VlabBucket: d.bck.Cname("")}
+		d.b.tstats.IncWith(d.b.MetricName(stats.GetTimeoutCount), vlabs)
 	}
 	return e
 }
@@ -95,21 +98,23 @@ func (d *rdl) fini(res *core.GetReaderResult) {
 		res.Err = errors.New("remote GET: no error and no reader")
 		debug.AssertNoErr(res.Err)
 	}
-	if res.Err != nil {
-		d.timer.Stop()
-		d.cancel(nil) // (the first cause wins - see expired)
-		if res.R != nil {
-			res.R.Close()
-			res.R = nil
-		}
-		if e := d.timedOut(); e != nil {
-			res.Err = e
-			res.ErrCode = http.StatusGatewayTimeout
-		}
+
+	if res.Err == nil {
+		d.r = res.R
+		res.R = d
 		return
 	}
-	d.r = res.R
-	res.R = d
+
+	d.timer.Stop()
+	d.cancel(nil) // (the first cause wins - see expired)
+	if res.R != nil {
+		res.R.Close()
+		res.R = nil
+	}
+	if e := d.timeout(); e != nil {
+		res.Err = e
+		res.ErrCode = http.StatusGatewayTimeout
+	}
 }
 
 func (d *rdl) Read(p []byte) (n int, err error) {
@@ -121,7 +126,7 @@ func (d *rdl) Read(p []byte) (n int, err error) {
 		}
 	}
 	if err != nil && err != io.EOF {
-		if e := d.timedOut(); e != nil {
+		if e := d.timeout(); e != nil {
 			err = e
 		}
 	}

@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -41,6 +41,14 @@ func RatioPct(high, low, curr int64) int64 {
 
 // (see also: ClampDuration)
 func ClampInt(i, mini, maxi int) int {
+	debug.Assert(mini <= maxi, mini, " vs ", maxi)
+	if i < mini {
+		return mini
+	}
+	return min(i, maxi)
+}
+
+func ClampI64(i, mini, maxi int64) int64 {
 	debug.Assert(mini <= maxi, mini, " vs ", maxi)
 	if i < mini {
 		return mini
