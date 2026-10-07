@@ -482,8 +482,8 @@ finalize:
 	return 0, err
 }
 
-func (*s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
-	dl, ctx := newRdl(ctx) // read deadline (see rdl.go)
+func (s3bp *s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+	dl, ctx := newRdl(ctx, &s3bp.base, lom.Bck()) // read deadline (see rdl.go)
 	defer dl.fini(&res)
 
 	var (

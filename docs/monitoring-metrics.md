@@ -190,6 +190,7 @@ For convenience, a table that summarizes target metrics follows below.
 | `put.size` | `put_bytes` | size | PUT: total cumulative size (bytes) | default |
 | `err.cksum.n` | `err_cksum_count` | counter | PUT: number of checksum errors | default |
 | `err.fshc.n` | `err_fshc_count` | counter | number of times filesystem health checker (FSHC) was triggered by an I/O error or errors | default |
+| `err.get.slow.client.n` | `err_get_slow_client_count` | counter | GET: number of responses aborted upon write deadline (client reading below minimum transfer rate; see timeout.send_file_time) | default |
 | `err.io.get.n` | `err_io_get_count` | counter | GET: number of I/O errors _not_ including remote backend and network errors | default |
 | `err.io.put.n` | `err_io_put_count` | counter | PUT: number of I/O errors _not_ including remote backend and network errors | default |
 | `err.io.del.n` | `err_io_del_count` | counter | DELETE(object): number of I/O errors _not_ including remote backend and network errors | default |
@@ -228,6 +229,7 @@ For convenience, a table that summarizes target metrics follows below.
 | `gcp.put.size` | `remote_e2e_put_bytes_total` | size | PUT: total cumulative size (bytes) of all PUTs to a given remote backend | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `gcp.ver.change.n` | `remote_ver_change_count` | counter | number of out-of-band updates (by a 3rd party performing remote PUTs outside this cluster) | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `gcp.ver.change.size` | `remote_ver_change_bytes_total` | size | total cumulative size of objects that were updated out-of-band | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
+| `err.gcp.get.timeout.n` | `remote_get_timeout_count` | counter | GET: number of remote requests aborted upon read deadline (backend sending below minimum transfer rate; see timeout.send_file_time) | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `aws.get.n` | `remote_get_count` | counter | GET: total number of executed remote requests | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.get.ns.total` | `remote_get_ns_total` | total | GET: total cumulative time (nanoseconds) to execute remote requests and store, copy, or transform objects | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.get.size` | `remote_get_bytes_total` | size | GET: total cumulative size (bytes) of all remote transactions | map[backend:aws node_id:`<AIS-NODE-ID>`] |
@@ -238,6 +240,7 @@ For convenience, a table that summarizes target metrics follows below.
 | `aws.put.size` | `remote_e2e_put_bytes_total` | size | PUT: total cumulative size (bytes) of all PUTs to a given remote backend | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.ver.change.n` | `remote_ver_change_count` | counter | number of out-of-band updates (by a 3rd party performing remote PUTs outside this cluster) | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.ver.change.size` | `remote_ver_change_bytes_total` | size | total cumulative size of objects that were updated out-of-band | map[backend:aws node_id:`<AIS-NODE-ID>`] |
+| `err.aws.get.timeout.n` | `remote_get_timeout_count` | counter | GET: number of remote requests aborted upon read deadline (backend sending below minimum transfer rate; see timeout.send_file_time) | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `azure.get.n` | `remote_get_count` | counter | GET: total number of executed remote requests | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.get.ns.total` | `remote_get_ns_total` | total | GET: total cumulative time (nanoseconds) to execute remote requests and store, copy, or transform objects | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.get.size` | `remote_get_bytes_total` | size | GET: total cumulative size (bytes) of all remote transactions | map[backend:azure node_id:`<AIS-NODE-ID>`] |
@@ -248,6 +251,7 @@ For convenience, a table that summarizes target metrics follows below.
 | `azure.put.size` | `remote_e2e_put_bytes_total` | size | PUT: total cumulative size (bytes) of all PUTs to a given remote backend | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.ver.change.n` | `remote_ver_change_count` | counter | number of out-of-band updates (by a 3rd party performing remote PUTs outside this cluster) | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.ver.change.size` | `remote_ver_change_bytes_total` | size | total cumulative size of objects that were updated out-of-band | map[backend:azure node_id:`<AIS-NODE-ID>`] |
+| `err.azure.get.timeout.n` | `remote_get_timeout_count` | counter | GET: number of remote requests aborted upon read deadline (backend sending below minimum transfer rate; see timeout.send_file_time) | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 
 ## Backend metrics
 

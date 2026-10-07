@@ -55,6 +55,11 @@ const (
 	VerChangeCount = "ver.change.n"
 	VerChangeSize  = "ver.change.size"
 
+	// two error counters for stalled GET transfers in both directions
+	// see docs/configuration.md, section "Minimum transfer rate"
+	GetTimeoutCount       = "get.timeout.n"                 // per-backend remote GET timeout suffix; see cmn.ErrRemoteGetTimeout
+	ErrGetSlowClientCount = errPrefix + "get.slow.client.n" // see cmn.ErrSlowReadingClient
+
 	// errors (note common prefix convention)
 	ErrPutCksumCount = errPrefix + "put.cksum.n"
 	ErrFSHCCount     = errPrefix + "fshc.n"
@@ -420,6 +425,12 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	)
 
 	// errors
+	r.reg(snode, ErrGetSlowClientCount, KindCounter,
+		&Extra{
+			Help:    "GET: number of responses aborted upon write deadline (client reading below minimum transfer rate; see timeout.send_file_time)",
+			VarLabs: BckVlabs,
+		},
+	)
 	r.reg(snode, ErrPutCksumCount, KindCounter,
 		&Extra{
 			Help:    "PUT: number of checksum errors",

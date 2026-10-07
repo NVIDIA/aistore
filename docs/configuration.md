@@ -296,7 +296,7 @@ Two possibilities. The default for that setting changed in the new release and y
 **"`.ais.conf` doesn't contain the section I configured."**
 Expected - see [What AIStore stores on disk](#what-aistore-stores-on-disk). Verify with `ais config cluster SECTION --json`.
 
-**"Large GETs fail midway: truncated responses to some clients, or cold GETs failing with `remote backend read timeout`."**
+**"Large GETs fail midway: truncated responses to some clients, or cold GETs failing with `remote GET timeout` (504)."**
 The transfer may have missed a write or read deadline: covered GET paths enforce a minimum transfer rate of 64 KiB/s per window (`timeout.send_file_time`) by default. See [Minimum transfer rate](#minimum-transfer-rate) for the window semantics and other possible causes.
 
 **"One target behaves differently from the others."**
@@ -474,8 +474,8 @@ Above ~17m, the renewal size is capped at 64 MiB, and raising the window lowers 
 
 **What you see when it fires.**
 
-- AIS => client: the client receives a truncated response (connection closed before `Content-Length` bytes). The target treats it as a client-side transmit error - not a local I/O error - and counts it in `err.get.n`.
-- Cloud backend => AIS: a read interrupted by the read deadline fails with `remote backend read timeout: less than <renewal size> in <window> (timeout.send_file_time)`. Client GET failures are counted in `err.get.n`; background operations also report through their job error counters. An existing parent timeout or cancellation retains its original error.
+- AIS => client: the client receives a truncated response (connection closed before `Content-Length` bytes). The target treats it as a client-side transmit error - not a local I/O error - counts it in `err.get.n` and `err.get.slow.client.n` (Prometheus: `err_get_slow_client_count`), and logs it (sparsely) as `slow reading client: sent less than <renewal size> in <window> (timeout.send_file_time)`.
+- Cloud backend => AIS: a read interrupted by the read deadline fails with `remote GET timeout: received less than <renewal size> in <window> (timeout.send_file_time)`. Each such remote read is counted once per backend in `err.<backend>.get.timeout.n` (Prometheus: `remote_get_timeout_count{backend="..."}`), regardless of the operation that issued it. A cold GET that has not yet sent its response fails with **504 Gateway Timeout** (native and S3 API); streaming cold GET may have already sent the response header, in which case the client receives a truncated response. Client GET failures are also counted in `err.get.n`; background operations also report through their job error counters. An existing parent timeout or cancellation retains its original error (not counted, no 504).
 
 **Changing it.**
 

@@ -7,15 +7,16 @@ package backend
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 // remote GET read deadline: protection from backends that stop (or nearly stop) sending
@@ -26,36 +27,29 @@ import (
 //   covers connection, response headers, and SDK retries (the latter honor ctx)
 // - thereafter, renewed after each renewal size (cmn.XferRenewSize bytes) received
 //   => minimum transfer rate 64KiB/s (same as the write deadline; see cmn.XferMinRate)
-// - expired: cancel the request context w/ errReadTimeout cause;
+// - expired: cancel the request context w/ cmn.ErrRemoteGetTimeout cause;
 //   net/http aborts the in-flight body read (closing the body would not - it waits for the read)
 // - only this deadline's own cause substitutes the returned error; parent cancellation
 //   (e.g., blob-download chunk timeout, xaction abort) passes through unchanged
-// - intentionally not net.Error/Timeout(): must not be mistaken for a (benign) client timeout
+// - substituted: 504 status (see also ais/target.go), counted once per request
+//   ("err.<backend>.get.timeout.n" - see stats.GetTimeoutCount)
 // - timer-based, not conn-based: connections are pooled and owned by the transport
 
-type (
-	rdl struct {
-		r         io.ReadCloser
-		ctx       context.Context
-		cancel    context.CancelCauseFunc
-		timer     *time.Timer
-		tout      time.Duration
-		renewSize int64 // renewal size (cmn.XferRenewSize)
-		n         int64 // bytes past the last renewal boundary (overshoot carries over; see Read)
-	}
-	errReadTimeout struct {
-		tout      time.Duration
-		renewSize int64
-	}
-)
-
-func (e *errReadTimeout) Error() string {
-	return fmt.Sprintf("remote backend read timeout: less than %s in %v (timeout.send_file_time)",
-		cos.IEC(e.renewSize, 1), e.tout)
+type rdl struct {
+	r         io.ReadCloser
+	ctx       context.Context
+	cancel    context.CancelCauseFunc
+	timer     *time.Timer
+	b         *base     // stats (optional in unit tests)
+	bck       *meta.Bck // bucket label
+	tout      time.Duration
+	renewSize int64 // renewal size (cmn.XferRenewSize)
+	n         int64 // bytes past the last renewal boundary (overshoot carries over; see Read)
+	counted   bool
 }
 
 // returns nil (and the original context) when disabled
-func newRdl(ctx context.Context) (*rdl, context.Context) {
+func newRdl(ctx context.Context, b *base, bck *meta.Bck) (*rdl, context.Context) {
 	if cmn.Rom.Features().IsSet(feat.DisableGetDeadline) {
 		return nil, ctx
 	}
@@ -63,17 +57,30 @@ func newRdl(ctx context.Context) (*rdl, context.Context) {
 	if tout <= 0 {
 		return nil, ctx
 	}
-	d := &rdl{tout: tout, renewSize: cmn.XferRenewSize(tout)}
+	d := &rdl{b: b, bck: bck, tout: tout, renewSize: cmn.XferRenewSize(tout)}
 	d.ctx, d.cancel = context.WithCancelCause(ctx)
 	d.timer = time.AfterFunc(tout, d.expire)
 	return d, d.ctx
 }
 
-func (d *rdl) expire() { d.cancel(&errReadTimeout{tout: d.tout, renewSize: d.renewSize}) }
+func (d *rdl) expire() { d.cancel(cmn.NewErrRemoteGetTimeout(d.tout, d.renewSize)) }
 
-func (d *rdl) expired() (err *errReadTimeout) {
-	err, _ = errors.AsType[*errReadTimeout](context.Cause(d.ctx))
+func (d *rdl) expired() (err *cmn.ErrRemoteGetTimeout) {
+	err, _ = errors.AsType[*cmn.ErrRemoteGetTimeout](context.Cause(d.ctx))
 	return err
+}
+
+// this deadline's own expiration (and nothing else) substitutes the error - see Read and fini
+func (d *rdl) timedOut() *cmn.ErrRemoteGetTimeout {
+	e := d.expired()
+	if e != nil && !d.counted {
+		d.counted = true
+		if d.b != nil && d.b.tstats != nil {
+			vlabs := map[string]string{stats.VlabBucket: d.bck.Cname("")}
+			d.b.tstats.IncWith(d.b.MetricName(stats.GetTimeoutCount), vlabs)
+		}
+	}
+	return e
 }
 
 // deferred by GetObjReader:
@@ -95,8 +102,9 @@ func (d *rdl) fini(res *core.GetReaderResult) {
 			res.R.Close()
 			res.R = nil
 		}
-		if e := d.expired(); e != nil {
-			res.Err = fmt.Errorf("%w: %v", e, res.Err)
+		if e := d.timedOut(); e != nil {
+			res.Err = e
+			res.ErrCode = http.StatusGatewayTimeout
 		}
 		return
 	}
@@ -113,7 +121,7 @@ func (d *rdl) Read(p []byte) (n int, err error) {
 		}
 	}
 	if err != nil && err != io.EOF {
-		if e := d.expired(); e != nil {
+		if e := d.timedOut(); e != nil {
 			err = e
 		}
 	}

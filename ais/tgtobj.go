@@ -1517,7 +1517,7 @@ func (goi *getOI) sendfile(lr *io.LimitedReader, fqn string, size int64, committ
 
 // initial write deadline: one window (timeout.send_file_time; terminology: see cmn.XferRenewSize)
 // - net/http clears the write deadline after each request (keep-alive safe)
-// - deadline exceeded => net.Error Timeout() => cmn.ErrGetTxBenign (see _txerr)
+// - deadline exceeded => cmn.ErrSlowReadingClient: counted, logged, and returned as cmn.ErrGetTxBenign (see _txerr)
 func (goi *getOI) initWdl() {
 	if cmn.Rom.Features().IsSet(feat.DisableGetDeadline) {
 		return
@@ -1612,6 +1612,12 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64, committed b
 
 	// [failure to transmit] return cmn.ErrGetTxBenign
 	switch {
+	case goi.wctrl != nil && errors.Is(err, os.ErrDeadlineExceeded):
+		// installed write deadline expired
+		// - see net.Conn.SetDeadline
+		// - must be matched first - and prior to cos.IsErrRetriableConn (next)
+		goi.slowClient(err)
+		return cmn.ErrGetTxBenign // client not keeping up is not a server-side error
 	case cos.IsErrRetriableConn(err):
 		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.WarningDepth(1, act, cname, "err:", err)
@@ -1632,6 +1638,17 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64, committed b
 		return cmn.ErrGetTxBenign
 	}
 	return err
+}
+
+// client reading below minimum transfer rate: count and (sparsely) log
+func (goi *getOI) slowClient(err error) {
+	var (
+		t     = goi.t
+		vlabs = map[string]string{stats.VlabBucket: goi.lom.Bck().Cname("")}
+		e     = cmn.NewErrSlowReadingClient(err, goi.wtout, cmn.XferRenewSize(goi.wtout))
+	)
+	t.statsT.IncWith(stats.ErrGetSlowClientCount, vlabs)
+	cmn.SparseWarn(cos.ModAIS, t.statsT.Get(stats.ErrGetSlowClientCount), "(transmit)", goi.lom.Cname(), "err:", e)
 }
 
 func (goi *getOI) stats(written int64) {

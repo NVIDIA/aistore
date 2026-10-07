@@ -367,7 +367,7 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	}
 
 	// read deadline (see rdl.go); note: after getClient - session creation keeps the caller's ctx
-	dl, ctx := newRdl(ctx)
+	dl, ctx := newRdl(ctx, &gsbp.base, lom.Bck())
 	defer dl.fini(&res)
 
 	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)

@@ -7,6 +7,7 @@ package ais
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -196,7 +197,7 @@ func TestWdlBufferedSizes(t *testing.T) {
 
 // buffered: non-divisible writes - one renewal per renewal boundary crossed,
 // overshoot carries over (renewal k at cumulative k*renewSize)
-func TestWdlWriterQuantum(t *testing.T) {
+func TestWdlWriterRenewal(t *testing.T) {
 	const renewSize = 64 * cos.KiB
 	tests := []struct {
 		name      string
@@ -208,7 +209,7 @@ func TestWdlWriterQuantum(t *testing.T) {
 		{"divisible", []int{renewSize, renewSize}, 2, 0},
 		{"three-quarter-steps", []int{48 * cos.KiB, 48 * cos.KiB, 48 * cos.KiB, 48 * cos.KiB}, 3, 0}, // reset-to-zero: 2
 		{"overshoot", []int{48 * cos.KiB, 48 * cos.KiB}, 1, 32 * cos.KiB},
-		{"multi-quantum", []int{renewSize*2 + renewSize/2}, 1, renewSize / 2}, // one write, one renewal
+		{"multi-renewal", []int{renewSize*2 + renewSize/2}, 1, renewSize / 2}, // one write, one renewal
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -301,6 +302,8 @@ func wdlRun(t *testing.T, sendfile bool) {
 			t.Fatalf("expected write deadline exceeded, got nil (written %d)", r.written)
 		}
 		tassert.Errorf(t, cos.IsErrNetTimeoutConn(r.err), "expected write timeout, got %v", r.err)
+		tassert.Errorf(t, errors.Is(r.err, os.ErrDeadlineExceeded), // => cmn.ErrSlowReadingClient (see _txerr)
+			"expected os.ErrDeadlineExceeded, got %v", r.err)
 		tassert.Errorf(t, r.written < wdlTestSize, "written %d, expected partial", r.written)
 	})
 }

@@ -1107,6 +1107,11 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		if err != cmn.ErrGetTxBenign && !isErrGetTxSevere(err) {
 			goi.lom.UncacheDel()
 
+			// remote backend stopped sending (see ais/backend/rdl.go); includes mid-body cold GET
+			if cmn.IsErrRemoteGetTimeout(err) {
+				ecode = http.StatusGatewayTimeout
+			}
+
 			if dpq.isS3 {
 				ei := s3.ErrInfo{Err: err, Status: ecode}
 				if ecode == http.StatusNotFound {

@@ -23,6 +23,7 @@ import (
 const numBackendMetricks = 12
 
 type base struct {
+	tstats   stats.Tracker
 	metrics  cos.StrKVs // this backend's metric names (below)
 	provider string
 }
@@ -46,6 +47,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 	}
 
 	labels := cos.StrKVs{"backend": prefix}
+	b.tstats = tr
 	b.metrics = make(map[string]string, numBackendMetricks)
 
 	// NOTE semantics:
@@ -164,6 +166,24 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 				VarLabs: stats.BckVlabs,
 			},
 		)
+	}
+
+	// remote GET timeout (see rdl.go; not used by remote AIS)
+	// NOTE: error metric names must start with "err." (see stats.IsErrMetric)
+	if prefix != apc.RemAIS {
+		b.metrics[stats.GetTimeoutCount] = "err." + prefix + "." + stats.GetTimeoutCount
+		if regExt {
+			tr.RegExtMetric(snode,
+				b.metrics[stats.GetTimeoutCount],
+				stats.KindCounter,
+				&stats.Extra{
+					Help:    "GET: number of remote requests aborted upon read deadline (backend sending below minimum transfer rate; see timeout.send_file_time)",
+					StrName: "remote_get_timeout_count",
+					Labels:  labels,
+					VarLabs: stats.BckVlabs,
+				},
+			)
+		}
 	}
 
 	// version changed out-of-band

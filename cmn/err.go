@@ -273,6 +273,25 @@ type (
 	}
 )
 
+// protection from stalled GET transfers in both directions
+// see docs/configuration.md, section "Minimum transfer rate"
+type (
+	// backend GET (timeout.send_file_time; terminology: see XferRenewSize)
+	// - must not match net.Error or context.DeadlineExceeded
+	// - must not be mistaken for a (benign) client timeout
+	ErrRemoteGetTimeout struct {
+		tout      time.Duration
+		renewSize int64
+	}
+
+	// GET response => client reading slowly or not at all
+	ErrSlowReadingClient struct {
+		err       error // (os.ErrDeadlineExceeded)
+		tout      time.Duration
+		renewSize int64
+	}
+)
+
 var (
 	ErrSkip           = errors.New("skip")
 	ErrStartupTimeout = errors.New("startup timeout") // related StartupMayTimeout
@@ -1457,4 +1476,38 @@ func WriteErr405(w http.ResponseWriter, r *http.Request, methods ...string) {
 	} else {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 	}
+}
+
+// ErrRemoteGetTimeout
+
+func NewErrRemoteGetTimeout(tout time.Duration, renewSize int64) *ErrRemoteGetTimeout {
+	return &ErrRemoteGetTimeout{tout: tout, renewSize: renewSize}
+}
+
+func (e *ErrRemoteGetTimeout) Error() string {
+	return fmt.Sprintf("remote GET timeout: received less than %s in %v (timeout.send_file_time)",
+		cos.IEC(e.renewSize, 1), e.tout)
+}
+
+func IsErrRemoteGetTimeout(err error) bool {
+	_, ok := errors.AsType[*ErrRemoteGetTimeout](err)
+	return ok
+}
+
+// ErrSlowReadingClient
+
+func NewErrSlowReadingClient(err error, tout time.Duration, renewSize int64) *ErrSlowReadingClient {
+	return &ErrSlowReadingClient{err: err, tout: tout, renewSize: renewSize}
+}
+
+func (e *ErrSlowReadingClient) Error() string {
+	return fmt.Sprintf("slow reading client: sent less than %s in %v (timeout.send_file_time): %v",
+		cos.IEC(e.renewSize, 1), e.tout, e.err)
+}
+
+func (e *ErrSlowReadingClient) Unwrap() error { return e.err }
+
+func IsErrSlowReadingClient(err error) bool {
+	_, ok := errors.AsType[*ErrSlowReadingClient](err)
+	return ok
 }
