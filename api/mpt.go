@@ -31,6 +31,24 @@ const (
 )
 
 type (
+	// MptArgs contains common controls for multipart upload lifecycle operations.
+	MptArgs struct {
+		Context    context.Context // optional; defaults to context.Background()
+		BaseParams BaseParams
+		Bck        cmn.Bck
+		ObjName    string
+	}
+	// CompleteMptArgs contains controls for completing a multipart upload.
+	CompleteMptArgs struct {
+		MptArgs
+		UploadID    string
+		PartNumbers []int
+	}
+	// AbortMptArgs contains controls for aborting a multipart upload.
+	AbortMptArgs struct {
+		MptArgs
+		UploadID string
+	}
 	PutPartArgs struct {
 		UploadID   string // QparamMptUploadID
 		PutArgs           // regular PUT args
@@ -140,16 +158,21 @@ type (
 )
 
 // CreateMultipartUpload creates a new multipart upload.
-func CreateMultipartUpload(bp BaseParams, bck cmn.Bck, objName string) (uploadID string, err error) {
+func CreateMultipartUpload(args *MptArgs) (uploadID string, err error) {
+	if args == nil {
+		return "", errors.New("missing create multipart upload arguments")
+	}
+	bp := args.BaseParams
 	q := qalloc()
-	q = bck.AddToQuery(q)
+	q = args.Bck.AddToQuery(q)
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
+		reqParams.Path = apc.URLPathObjects.Join(args.Bck.Name, args.ObjName)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMptUpload})
 		reqParams.Query = q
+		reqParams.ctx = args.Context
 	}
 	_, err = reqParams.doReqStr(&uploadID)
 
@@ -182,26 +205,29 @@ func UploadPart(args *PutPartArgs) error {
 	return err
 }
 
-// Complete multipart upload:
-// - uploadID: the ID of the multipart upload to complete
-// - partNumbers: the part numbers to complete
-func CompleteMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID string, partNumbers []int) error {
+// CompleteMultipartUpload completes a multipart upload.
+func CompleteMultipartUpload(args *CompleteMptArgs) error {
+	if args == nil {
+		return errors.New("missing complete multipart upload arguments")
+	}
+	bp := args.BaseParams
 	q := qalloc()
-	q.Set(apc.QparamMptUploadID, uploadID)
-	q = bck.AddToQuery(q)
+	q.Set(apc.QparamMptUploadID, args.UploadID)
+	q = args.Bck.AddToQuery(q)
 	bp.Method = http.MethodPost
 
-	completeMptUpload := make([]apc.MptCompletedPart, len(partNumbers))
-	for i, partNumber := range partNumbers {
+	completeMptUpload := make([]apc.MptCompletedPart, len(args.PartNumbers))
+	for i, partNumber := range args.PartNumbers {
 		completeMptUpload[i].PartNumber = partNumber
 	}
 
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
+		reqParams.Path = apc.URLPathObjects.Join(args.Bck.Name, args.ObjName)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMptComplete, Value: completeMptUpload})
 		reqParams.Query = q
+		reqParams.ctx = args.Context
 	}
 
 	err := reqParams.DoRequest()
@@ -211,20 +237,24 @@ func CompleteMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID strin
 	return err
 }
 
-// Abort multipart upload.
-// uploadID: the ID of the multipart upload to abort
-func AbortMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID string) error {
+// AbortMultipartUpload aborts a multipart upload.
+func AbortMultipartUpload(args *AbortMptArgs) error {
+	if args == nil {
+		return errors.New("missing abort multipart upload arguments")
+	}
+	bp := args.BaseParams
 	q := qalloc()
-	q.Set(apc.QparamMptUploadID, uploadID)
-	q = bck.AddToQuery(q)
+	q.Set(apc.QparamMptUploadID, args.UploadID)
+	q = args.Bck.AddToQuery(q)
 	bp.Method = http.MethodDelete
 
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
+		reqParams.Path = apc.URLPathObjects.Join(args.Bck.Name, args.ObjName)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMptAbort})
 		reqParams.Query = q
+		reqParams.ctx = args.Context
 	}
 
 	err := reqParams.DoRequest()

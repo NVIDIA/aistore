@@ -951,14 +951,16 @@ func TestS3ETag(t *testing.T) {
 			data := make([]byte, objSize)
 			_, err := crand.Read(data)
 			tassert.CheckFatal(t, err)
-			uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+			mptArgs := api.MptArgs{BaseParams: baseParams, Bck: bck, ObjName: objName}
+			uploadID, err := api.CreateMultipartUpload(&mptArgs)
 			tassert.CheckFatal(t, err)
+			abortArgs := &api.AbortMptArgs{MptArgs: mptArgs, UploadID: uploadID}
 			completed := false
 			t.Cleanup(func() {
 				if completed {
 					tassert.CheckError(t, api.DeleteObject(baseParams, bck, objName))
 				} else {
-					tassert.CheckError(t, api.AbortMultipartUpload(baseParams, bck, objName, uploadID))
+					tassert.CheckError(t, api.AbortMultipartUpload(abortArgs))
 				}
 			})
 			partNumbers := make([]int, 0, objSize/partSize)
@@ -972,7 +974,10 @@ func TestS3ETag(t *testing.T) {
 				}))
 				partNumbers = append(partNumbers, partNum)
 			}
-			tassert.CheckFatal(t, api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers))
+			completeArgs := &api.CompleteMptArgs{
+				MptArgs: mptArgs, UploadID: uploadID, PartNumbers: partNumbers,
+			}
+			tassert.CheckFatal(t, api.CompleteMultipartUpload(completeArgs))
 			completed = true
 			var got bytes.Buffer
 			_, err = api.GetObject(baseParams, bck, objName, &api.GetArgs{Writer: &got})

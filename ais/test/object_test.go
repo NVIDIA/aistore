@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -2247,35 +2248,35 @@ func TestPutObjectWithChecksum(t *testing.T) {
 }
 
 func TestMultipartUpload(t *testing.T) {
+	runProviderTests(t, testMultipartUpload)
+}
+
+func testMultipartUpload(t *testing.T, mbck *meta.Bck) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     trand.String(10),
-			Provider: apc.AIS,
-		}
-		objName = "test-multipart-object"
+		bck        = mbck.Clone()
+		objName    = "test-multipart-object-" + trand.String(8)
 
-		// Test data to upload in 3 parts
+		// Test data to upload in up to 3 parts
 		part1Data = []byte("This is the first part of the multipart upload test. ")
 		part2Data = []byte("This is the second part containing more test data. ")
 		part3Data = []byte("This is the final third part to complete the upload.")
 
-		// Complete expected content
-		expectedContent = append(append(part1Data, part2Data...), part3Data...)
-		partNumbers     = make([]int, 0, 3)
+		partNumbers = make([]int, 0, 3)
 	)
-
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	defer api.DeleteObject(baseParams, bck, objName)
 
 	tlog.Logfln("multipart upload: %s/%s", bck.Name, objName)
 
 	// Step 1: Create multipart upload
-	uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+	mptArgs := api.MptArgs{Context: t.Context(), BaseParams: baseParams, Bck: bck, ObjName: objName}
+	uploadID, err := api.CreateMultipartUpload(&mptArgs)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, uploadID != "", "upload ID should not be empty")
+	defer api.AbortMultipartUpload(&api.AbortMptArgs{MptArgs: mptArgs, UploadID: uploadID})
 
-	// Step 2: Upload three parts
+	// Step 2: Upload parts
 	testParts := []struct {
 		partNum int
 		data    []byte
@@ -2284,10 +2285,15 @@ func TestMultipartUpload(t *testing.T) {
 		{2, part2Data},
 		{3, part3Data},
 	}
+	if remote := mbck.RemoteBck(); remote != nil && remote.IsCloud() {
+		testParts = testParts[:1] // cloud backends require non-final parts to be at least 5MiB
+	}
+	expectedContent := make([]byte, 0)
 
 	for _, part := range testParts {
 		putPartArgs := &api.PutPartArgs{
 			PutArgs: api.PutArgs{
+				Context:    t.Context(),
 				BaseParams: baseParams,
 				Bck:        bck,
 				ObjName:    objName,
@@ -2302,10 +2308,12 @@ func TestMultipartUpload(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		partNumbers = append(partNumbers, part.partNum)
+		expectedContent = append(expectedContent, part.data...)
 	}
 
 	// Step 3: Complete multipart upload
-	err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+	completeArgs := &api.CompleteMptArgs{MptArgs: mptArgs, UploadID: uploadID, PartNumbers: partNumbers}
+	err = api.CompleteMultipartUpload(completeArgs)
 	tassert.CheckFatal(t, err)
 
 	// Step 4: Verify the uploaded object
@@ -2322,13 +2330,51 @@ func TestMultipartUpload(t *testing.T) {
 
 	// Download and verify content
 	writer := bytes.NewBuffer(nil)
-	getArgs := api.GetArgs{Writer: writer}
+	getArgs := api.GetArgs{Context: t.Context(), Writer: writer}
 	_, err = api.GetObject(baseParams, bck, objName, &getArgs)
 	tassert.CheckFatal(t, err)
 
 	downloadedContent := writer.Bytes()
 	tassert.Errorf(t, bytes.Equal(downloadedContent, expectedContent),
 		"content mismatch: expected %q, got %q", string(expectedContent), string(downloadedContent))
+}
+
+func TestMultipartUploadContextCancellation(t *testing.T) {
+	runProviderTests(t, testMultipartUploadContextCancellation)
+}
+
+func testMultipartUploadContextCancellation(t *testing.T, mbck *meta.Bck) {
+	var (
+		proxyURL = tools.RandomProxyURL(t)
+		baseArgs = tools.BaseAPIParams(proxyURL)
+		bck      = mbck.Clone()
+		objName  = "mpt-context-cancel-" + trand.String(8)
+		mptArgs  = api.MptArgs{Context: t.Context(), BaseParams: baseArgs, Bck: bck, ObjName: objName}
+	)
+
+	uploadID, err := api.CreateMultipartUpload(&mptArgs)
+	tassert.CheckFatal(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	mptArgs.Context = ctx
+
+	mptArgs.ObjName = "mpt-context-cancel-create"
+	_, err = api.CreateMultipartUpload(&mptArgs)
+	herr := cmn.AsErrHTTP(err)
+	tassert.Fatalf(t, herr != nil && herr.Message == context.Canceled.Error(), "expected canceled create, got %v", err)
+
+	mptArgs.ObjName = objName
+	err = api.CompleteMultipartUpload(&api.CompleteMptArgs{MptArgs: mptArgs, UploadID: uploadID})
+	herr = cmn.AsErrHTTP(err)
+	tassert.Fatalf(t, herr != nil && herr.Message == context.Canceled.Error(), "expected canceled complete, got %v", err)
+
+	err = api.AbortMultipartUpload(&api.AbortMptArgs{MptArgs: mptArgs, UploadID: uploadID})
+	herr = cmn.AsErrHTTP(err)
+	tassert.Fatalf(t, herr != nil && herr.Message == context.Canceled.Error(), "expected canceled abort, got %v", err)
+
+	mptArgs.Context = t.Context()
+	tassert.CheckFatal(t, api.AbortMultipartUpload(&api.AbortMptArgs{MptArgs: mptArgs, UploadID: uploadID}))
 }
 
 func TestMultipartUploadParallel(t *testing.T) {
@@ -2357,7 +2403,8 @@ func TestMultipartUploadParallel(t *testing.T) {
 	tlog.Logfln("multipart upload (parallel): %s/%s", bck.Name, objName)
 
 	// Step 1: Create multipart upload
-	uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+	mptArgs := api.MptArgs{BaseParams: baseParams, Bck: bck, ObjName: objName}
+	uploadID, err := api.CreateMultipartUpload(&mptArgs)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, uploadID != "", "upload ID should not be empty")
 
@@ -2402,7 +2449,8 @@ func TestMultipartUploadParallel(t *testing.T) {
 
 	// Step 3: Complete multipart upload with parts in correct order
 	partNumbers := []int{1, 2, 3, 4, 5} // Parts must be completed in correct order
-	err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+	completeArgs := &api.CompleteMptArgs{MptArgs: mptArgs, UploadID: uploadID, PartNumbers: partNumbers}
+	err = api.CompleteMultipartUpload(completeArgs)
 	tassert.CheckFatal(t, err)
 
 	// Step 4: Verify the uploaded object
@@ -2447,7 +2495,8 @@ func TestMultipartMaxChunks(t *testing.T) {
 			numParts = core.MaxChunkCount + 100 // Exceed limit by 100
 		)
 
-		uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+		mptArgs := api.MptArgs{BaseParams: baseParams, Bck: bck, ObjName: objName}
+		uploadID, err := api.CreateMultipartUpload(&mptArgs)
 		tassert.CheckFatal(t, err)
 
 		err = uploadPartsInParallel(objName, uploadID, numParts, bck, miniPartData)
@@ -2462,7 +2511,8 @@ func TestMultipartMaxChunks(t *testing.T) {
 		tlog.Logfln("multipart upload correctly rejected when exceeding MaxChunkCount (%d)", core.MaxChunkCount)
 
 		// Cleanup: abort the upload
-		_ = api.AbortMultipartUpload(baseParams, bck, objName, uploadID)
+		abortArgs := &api.AbortMptArgs{MptArgs: mptArgs, UploadID: uploadID}
+		_ = api.AbortMultipartUpload(abortArgs)
 	})
 
 	t.Run("equal-to-limit", func(t *testing.T) {
@@ -2471,7 +2521,8 @@ func TestMultipartMaxChunks(t *testing.T) {
 			numParts = core.MaxChunkCount // Exactly at the limit
 		)
 
-		uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+		mptArgs := api.MptArgs{BaseParams: baseParams, Bck: bck, ObjName: objName}
+		uploadID, err := api.CreateMultipartUpload(&mptArgs)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, uploadID != "", "upload ID should not be empty")
 
@@ -2484,7 +2535,8 @@ func TestMultipartMaxChunks(t *testing.T) {
 		for i := range numParts {
 			partNumbers[i] = i + 1
 		}
-		err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+		completeArgs := &api.CompleteMptArgs{MptArgs: mptArgs, UploadID: uploadID, PartNumbers: partNumbers}
+		err = api.CompleteMultipartUpload(completeArgs)
 		tassert.CheckFatal(t, err)
 
 		tlog.Logfln("multipart upload completed successfully with %d parts at MaxChunkCount", numParts)
@@ -2565,9 +2617,11 @@ func testMultipartUploadAbort(t *testing.T, mbck *meta.Bck) {
 	tlog.Logfln("multipart upload abort test: %s/%s", bck.Name, objName)
 
 	// Step 1: Create multipart upload
-	uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+	mptArgs := api.MptArgs{BaseParams: baseParams, Bck: bck, ObjName: objName}
+	uploadID, err := api.CreateMultipartUpload(&mptArgs)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, uploadID != "", "upload ID should not be empty")
+	abortArgs := &api.AbortMptArgs{MptArgs: mptArgs, UploadID: uploadID}
 
 	// Step 2: Upload first two parts successfully
 	testParts := []struct {
@@ -2598,7 +2652,7 @@ func testMultipartUploadAbort(t *testing.T, mbck *meta.Bck) {
 
 	// Step 3: Abort the multipart upload
 	tlog.Logfln("aborting multipart upload with ID: %s", uploadID)
-	err = api.AbortMultipartUpload(baseParams, bck, objName, uploadID)
+	err = api.AbortMultipartUpload(abortArgs)
 	tassert.CheckFatal(t, err)
 
 	// Negative tests below
@@ -2626,7 +2680,8 @@ func testMultipartUploadAbort(t *testing.T, mbck *meta.Bck) {
 	// Step 5: Try to complete multipart upload after abort - should fail
 	tlog.Logfln("attempting to complete upload after abort (should fail)")
 	partNumbers := []int{1, 2}
-	err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+	completeArgs := &api.CompleteMptArgs{MptArgs: mptArgs, UploadID: uploadID, PartNumbers: partNumbers}
+	err = api.CompleteMultipartUpload(completeArgs)
 	tassert.Errorf(t, err != nil, "complete multipart upload after abort should fail, but succeeded")
 	if err != nil {
 		tlog.Logfln("correctly failed to complete upload after abort: %v", err)
@@ -2634,7 +2689,7 @@ func testMultipartUploadAbort(t *testing.T, mbck *meta.Bck) {
 
 	// Step 6: Try to abort again - should be idempotent or fail gracefully
 	tlog.Logfln("attempting to abort again (should be idempotent)")
-	err = api.AbortMultipartUpload(baseParams, bck, objName, uploadID)
+	err = api.AbortMultipartUpload(abortArgs)
 	if mbck.IsRemoteGCP() {
 		tassert.Fatalf(t, err == nil, "GCP second abort must be idempotent, got %v", err)
 	}
@@ -2657,12 +2712,14 @@ func testMultipartUploadAbort(t *testing.T, mbck *meta.Bck) {
 	// Step 8: Test abort workflow with immediate abort (no parts uploaded)
 	tlog.Logfln("testing immediate abort without uploading parts")
 	objName2 := "test-multipart-immediate-abort-" + trand.String(8)
-	uploadID2, err := api.CreateMultipartUpload(baseParams, bck, objName2)
+	mptArgs.ObjName = objName2
+	uploadID2, err := api.CreateMultipartUpload(&mptArgs)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, uploadID2 != "", "upload ID should not be empty")
 
 	// Immediately abort without uploading any parts
-	err = api.AbortMultipartUpload(baseParams, bck, objName2, uploadID2)
+	abortArgs = &api.AbortMptArgs{MptArgs: mptArgs, UploadID: uploadID2}
+	err = api.AbortMultipartUpload(abortArgs)
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("successfully aborted upload immediately without any parts")
 
@@ -2711,7 +2768,8 @@ func TestMultipartUploadAndCopyBucket(t *testing.T) {
 		createdObjects[i] = objName
 
 		// Create multipart upload
-		uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+		mptArgs := api.MptArgs{BaseParams: baseParams, Bck: bck, ObjName: objName}
+		uploadID, err := api.CreateMultipartUpload(&mptArgs)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, uploadID != "", "upload ID should not be empty for object %d", i)
 
@@ -2746,7 +2804,8 @@ func TestMultipartUploadAndCopyBucket(t *testing.T) {
 		}
 
 		// Complete multipart upload
-		err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+		completeArgs := &api.CompleteMptArgs{MptArgs: mptArgs, UploadID: uploadID, PartNumbers: partNumbers}
+		err = api.CompleteMultipartUpload(completeArgs)
 		tassert.CheckFatal(t, err)
 	}
 

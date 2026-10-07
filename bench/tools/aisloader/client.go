@@ -277,12 +277,14 @@ func putMultipart(proxyURL string, bck cmn.Bck, objName string, size int64, numC
 		Token:  loggedUserToken,
 		UA:     ua,
 	}
+	mptArgs := api.MptArgs{BaseParams: baseParams, Bck: bck, ObjName: objName}
 
 	// Create multipart upload
-	uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+	uploadID, err := api.CreateMultipartUpload(&mptArgs)
 	if err != nil {
 		return fmt.Errorf("failed to create multipart upload for %s: %w", objName, err)
 	}
+	abortArgs := &api.AbortMptArgs{MptArgs: mptArgs, UploadID: uploadID}
 
 	// Upload parts in parallel
 	var (
@@ -305,15 +307,18 @@ func putMultipart(proxyURL string, bck cmn.Bck, objName string, size int64, numC
 
 	// Wait for all parts to complete
 	if err := group.Wait(); err != nil {
-		if abortErr := api.AbortMultipartUpload(baseParams, bck, objName, uploadID); abortErr != nil {
+		if abortErr := api.AbortMultipartUpload(abortArgs); abortErr != nil {
 			return fmt.Errorf("failed to upload parts and failed to abort upload %s: upload error: %w, abort error: %v", objName, err, abortErr)
 		}
 		return fmt.Errorf("failed to upload parts of %s: %w", objName, err)
 	}
 
 	// Complete multipart upload
-	if err := api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers); err != nil {
-		if abortErr := api.AbortMultipartUpload(baseParams, bck, objName, uploadID); abortErr != nil {
+	completeArgs := &api.CompleteMptArgs{
+		MptArgs: mptArgs, UploadID: uploadID, PartNumbers: partNumbers,
+	}
+	if err := api.CompleteMultipartUpload(completeArgs); err != nil {
+		if abortErr := api.AbortMultipartUpload(abortArgs); abortErr != nil {
 			return fmt.Errorf("failed to complete multipart upload and failed to abort %s: complete error: %w, abort error: %v", objName, err, abortErr)
 		}
 		return fmt.Errorf("failed to complete multipart upload for %s: %w", objName, err)
