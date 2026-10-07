@@ -5,22 +5,29 @@
 package apc
 
 type (
-	// IndexShardMsg is the control message for ActIndexShard xaction.
+	// control message for ActIndexShard xaction
 	IndexShardMsg struct {
-		Prefix     string `json:"prefix,omitempty"`      // only index shards whose name begins with Prefix
-		NumWorkers int    `json:"num-workers,omitempty"` // number of concurrent workers; (-1) none; (0) auto-computed (media type + load)
-		SkipVerify bool   `json:"skip-verify,omitempty"` // if shard already has an index, trust it without loading+verifying staleness (fast re-run)
-		// also cache valid existing and newly built indexes in memory
-		// NOTE: this overrides the SkipVerify option implicitly
-		// best effort: subject to memory admission and eviction
+		// only index shards whose name begins with Prefix
+		Prefix string `json:"prefix,omitempty"`
+
+		// number of concurrent workers; (-1) none; (0) auto-computed (media type + load)
+		NumWorkers int `json:"num-workers,omitempty"`
+
+		// if shard already has an index, trust it without loading+verifying staleness (fast re-run)
+		SkipVerify bool `json:"skip-verify,omitempty"`
+
+		// keep existing and newly built indexes in memory:
+		// - best effort: subject to available memory
+		// - independent of SkipVerify; loading an existing index into memory verifies it as a by-product
 		Cache bool `json:"cache,omitempty"`
 	}
-	// ShardSummMsg is the control message for ActSummaryShard.
+
+	// control message for ActSummaryShard
 	ShardSummMsg struct {
 		UUID   string `json:"uuid,omitempty"`   // server-assigned on the first response; client echoes it back
 		Prefix string `json:"prefix,omitempty"` // only include TAR objects whose name begins with Prefix
 	}
-	// ShardSummResult is the per-bucket local TAR/index coverage summary.
+	// per-bucket local TAR/index coverage summary result
 	ShardSummResult struct {
 		TarObjs        uint64 `json:"tar-objs,string"`        // local TAR objects found
 		TarSize        uint64 `json:"tar-size,string"`        // total size of local TAR objects
