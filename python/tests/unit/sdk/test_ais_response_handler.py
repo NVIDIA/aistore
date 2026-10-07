@@ -31,6 +31,22 @@ class TestAISResponseHandler(unittest.TestCase):
             ErrObjNotFound,
             404,
         ),
+        # A bucket qualified by a namespace is still a bucket, so the error has
+        # to be a bucket error and exist_ok / missing_ok have to recognize it
+        (
+            'bucket "ais://@uuid#ns/test-bck" does not exist',
+            ErrRemoteBckNotFound,
+            404,
+        ),
+        ('bucket "ais://#ns/test-bck" does not exist', ErrBckNotFound, 404),
+        (
+            'bucket "ais://@remote123/test-bck" does not exist',
+            ErrRemoteBckNotFound,
+            404,
+        ),
+        ('bucket "ais://@uuid#ns/test-bck" already exists', ErrBckAlreadyExists, 409),
+        ('bucket "ais://#ns/test-bck" already exists', ErrBckAlreadyExists, 409),
+        ("ais://#ns/test-bck/test-obj does not exist", ErrObjNotFound, 404),
         ("etl job test-etl-job already exists", ErrETLAlreadyExists, 409),
         ("etl job test-etl-job does not exist", ErrETLNotFound, 404),
     )

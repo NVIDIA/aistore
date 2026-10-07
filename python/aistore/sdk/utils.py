@@ -39,10 +39,11 @@ ROTATION_BITS = 7
 
 # URL parsing regex components
 URL_PROVIDERS = "|".join([p.value for p in Provider] + list(provider_aliases))
-MAX_BUCKET_PART_LEN = (
-    132  # Accommodates constraint of @uuid(32)#namespace(32)/bucket(64)
-)
+MAX_NAME_LEN = 64
 BUCKET_CHARS = r"[A-Za-z0-9@#._-]"
+# Keep namespace prefixes with the bucket when classifying errors.
+_NS_NAME = rf"#{BUCKET_CHARS}{{0,{MAX_NAME_LEN}}}"
+NS_PART = rf"(?:@{BUCKET_CHARS}{{0,{MAX_NAME_LEN}}}(?:{_NS_NAME})?|{_NS_NAME})/"
 
 
 class HttpError(BaseModel):
@@ -215,7 +216,10 @@ def extract_and_parse_url(msg: str) -> Optional[Tuple[str, str, bool]]:
     Returns:
         Optional[Tuple[str, str, bool]]: (prov, bck, has_obj) if a FQN is found, otherwise None.
     """
-    pattern = rf"({URL_PROVIDERS})://({BUCKET_CHARS}{{1,{MAX_BUCKET_PART_LEN}}})(?:(/)|(?!{BUCKET_CHARS}))"
+    pattern = (
+        rf"({URL_PROVIDERS})://((?:{NS_PART})?{BUCKET_CHARS}{{1,{MAX_NAME_LEN}}})"
+        rf"(?:(/)|(?!{BUCKET_CHARS}))"
+    )
     match = re.search(pattern, msg)
     if not match:
         return None

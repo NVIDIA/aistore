@@ -8,6 +8,15 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- A bucket qualified by a namespace is recognized in an AIS error message. The FQN
+  pattern stopped at the first slash, so `ais://@uuid#ns/bucket` and
+  `ais://@remote123/bucket` parsed as the bucket `@uuid#ns` or `@remote123` with an
+  object after it, and a 404 or 409 about such a bucket came back as `ErrObjNotFound`
+  or a plain `AISError`.
+- `Bucket.delete(missing_ok=True)` also ignores `ErrRemoteBckNotFound`, which is what
+  a bucket in a remote cluster's namespace reports and is not a subclass of
+  `ErrBckNotFound`. Together with the above, `create(exist_ok=True)` and
+  `delete(missing_ok=True)` work for buckets outside the global namespace.
 - `ObjectGroup.list_urls()` honors its `prefix` argument. It accepted and documented
   one and then yielded a URL for every object in the group, while
   `ObjectGroup.list_all_objects_iter()` next to it filtered correctly.
