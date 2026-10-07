@@ -55,7 +55,7 @@ var clusterFeatDesc = [...]string{
 	"allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)",
 	"offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)",
 	"legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters",
-	"GET(object): disable client write and backend read deadlines (byte-progress timeout, see timeout.send_file_time)",
+	"GET(object): disable client write and backend read deadlines (minimum transfer rate, see timeout.send_file_time)",
 
 	// apc.ResetToken ("none") ===========
 }

@@ -3308,21 +3308,25 @@ const (
 	// and a few more hardcoded below
 )
 
-// minimum transfer rate - data path in both directions:
-// - GET write deadline: clients that stop reading (ais/tgtobj.go)
-// - remote GET read deadline: backends that stop sending (ais/backend/rdl.go)
-// the deadline (timeout.send_file_time) is renewed once per XferChunkSize bytes, and so
-// the implied minimum rate (chunk/timeout) is 64KiB/s before clamping
+// GET deadlines - minimum transfer rate, data path in both directions:
+// - write deadline: clients that stop (or nearly stop) reading (ais/tgtobj.go)
+// - read deadline: remote backends that stop (or nearly stop) sending (ais/backend/rdl.go)
+//
+// terminology (same as docs/configuration.md, "Minimum transfer rate"):
+// - window: timeout.send_file_time - time allowed to transfer the next renewal size
+// - renewal size: XferRenewSize(window) bytes - each one transferred renews the deadline for another window
+// - minimum transfer rate: renewal size / window = XferMinRate, until clamped
+//
 // e.g.: 1m => 3.75MiB (config-validated minimum, see TimeoutConf.Validate); 5m => 18.75MiB;
-// >= ~17m => 64MiB (max; the implied rate then decreases: 64MiB/timeout)
+// >= ~17m => 64MiB (max; the minimum transfer rate then decreases: 64MiB/window)
 const (
 	XferMinRate  = 64 * cos.KiB // bytes per second
-	XferMinChunk = cos.MiB
-	XferMaxChunk = 64 * cos.MiB
+	XferMinRenew = cos.MiB      // (takes effect only below 16s - i.e., in tests)
+	XferMaxRenew = 64 * cos.MiB
 )
 
-func XferChunkSize(tout time.Duration) int64 {
-	return min(max(int64(tout/time.Second)*XferMinRate, XferMinChunk), XferMaxChunk)
+func XferRenewSize(window time.Duration) int64 {
+	return min(max(int64(window/time.Second)*XferMinRate, XferMinRenew), XferMaxRenew)
 }
 
 func (c *TimeoutConf) Validate() error {

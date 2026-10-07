@@ -151,7 +151,7 @@ In each case, we use the vendor's own SDK/API to provide transparent access to C
 
 > Note that AIS provides multiple easy ways to [populate](/docs/overview.md#existing-datasets) its remote buckets, including - but not limited to - conventional on-demand, self-populating, dubbed _cold GET_.
 
-> **Progress deadlines (v5.2):** Cloud object readers used by cold GET, prefetch, blob download, and other operations enforce byte-progress deadlines by default, targeting **64 KiB/s over full renewal windows**. Short range reads have their own windows. See [Minimum transfer rate](/docs/configuration.md#minimum-transfer-rate) for coverage and tuning.
+> **Read deadlines (v5.2):** Cloud object readers used by cold GET, prefetch, blob download, and other operations enforce a minimum transfer rate by default: **64 KiB/s, averaged over each window** (`timeout.send_file_time`). Each range read has its own window. See [Minimum transfer rate](/docs/configuration.md#minimum-transfer-rate) for terminology, coverage, and tuning.
 
 ## Example: accessing Cloud storage via remote AIS
 

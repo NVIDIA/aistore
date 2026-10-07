@@ -1479,14 +1479,14 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64, comm
 	return nil
 }
 
-// same rule as _sendfileWdl: up to one chunk, the initial deadline alone provides
-// the minimum drain rate - no wrapper, no re-arming
+// same rule as _sendfileWdl: up to one renewal size, the initial deadline alone enforces
+// the minimum transfer rate - no wrapper, no renewal
 func (goi *getOI) _copyWdl(r io.Reader, buf []byte, size int64) (int64, error) {
-	csize := cmn.XferChunkSize(goi.wtout)
-	if goi.wctrl == nil || (size >= 0 && size <= csize) {
+	renewSize := cmn.XferRenewSize(goi.wtout)
+	if goi.wctrl == nil || (size >= 0 && size <= renewSize) {
 		return cos.CopyBuffer(goi.w, r, buf)
 	}
-	w := &wdlWriter{w: goi.w, rc: goi.wctrl, tout: goi.wtout, csize: csize}
+	w := &wdlWriter{w: goi.w, rc: goi.wctrl, tout: goi.wtout, renewSize: renewSize}
 	return cos.CopyBuffer(w, r, buf)
 }
 
@@ -1495,7 +1495,7 @@ func (goi *getOI) _copyWdl(r io.Reader, buf []byte, size int64) (int64, error) {
 //
 
 // `lr` must be io.LimitedReader over file -  ktlsConn.ReadFrom requires it
-// and _sendfileWdl chunks it
+// and _sendfileWdl splits it (see below)
 func (goi *getOI) sendfile(lr *io.LimitedReader, fqn string, size int64, committed bool) error {
 	var (
 		written int64
@@ -1515,7 +1515,7 @@ func (goi *getOI) sendfile(lr *io.LimitedReader, fqn string, size int64, committ
 	return nil
 }
 
-// conservative timeout.send_file_time deadline
+// initial write deadline: one window (timeout.send_file_time; terminology: see cmn.XferRenewSize)
 // - net/http clears the write deadline after each request (keep-alive safe)
 // - deadline exceeded => net.Error Timeout() => cmn.ErrGetTxBenign (see _txerr)
 func (goi *getOI) initWdl() {
@@ -1541,17 +1541,17 @@ func (goi *getOI) initWdl() {
 	goi.wctrl, goi.wtout = wd, tout
 }
 
-// sendfile in chunks, re-arming the deadline in between
+// sendfile one renewal size at a time, renewing the deadline in between
 // (a single ReadFrom would otherwise be bound by one absolute deadline);
-// relies on initWdl's initial deadline for small responses and the first chunk
+// relies on initWdl's initial deadline for small responses and the first renewal size
 func (goi *getOI) _sendfileWdl(lr *io.LimitedReader) (written int64, err error) {
-	csize := cmn.XferChunkSize(goi.wtout)
-	if lr.N <= csize {
+	renewSize := cmn.XferRenewSize(goi.wtout)
+	if lr.N <= renewSize {
 		return cos.CopySendfile(goi.w, lr) // initial deadline covers the entire response
 	}
 	for lr.N > 0 {
 		remaining := lr.N
-		lr.N = min(remaining, csize)
+		lr.N = min(remaining, renewSize)
 		var n int64
 		n, err = cos.CopySendfile(goi.w, lr)
 		written += n
@@ -2640,20 +2640,20 @@ type wdeadliner interface {
 }
 
 // buffered transmit:
-// - re-arm once per cmn.XferChunkSize bytes written (compare w/ backend rdl.Read)
+// - renew the deadline once per renewal size (cmn.XferRenewSize bytes) written (compare w/ backend rdl.Read)
 // - intentionally Write-only - masks the underlying writer's io.ReaderFrom, http.Flusher, etc.
 type wdlWriter struct {
-	w     io.Writer
-	rc    wdeadliner
-	tout  time.Duration
-	csize int64
-	n     int64 // bytes since last renewal
+	w         io.Writer
+	rc        wdeadliner
+	tout      time.Duration
+	renewSize int64
+	n         int64 // bytes past the last renewal boundary (overshoot carries over; see Write)
 }
 
 func (d *wdlWriter) Write(p []byte) (n int, err error) {
 	n, err = d.w.Write(p)
-	if d.n += int64(n); err == nil && d.n >= d.csize {
-		d.n = 0
+	if d.n += int64(n); err == nil && d.n >= d.renewSize {
+		d.n %= d.renewSize // keep the bytes past the boundary: renewal k at cumulative k*renewSize
 		err = d.rc.SetWriteDeadline(time.Now().Add(d.tout))
 	}
 	return n, err

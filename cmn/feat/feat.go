@@ -58,7 +58,7 @@ const (
 	S3RedirectRebuild         // allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
 	SystemReservedKTLS        // offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)
 	S3TensorFlowQuery         // legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters
-	DisableGetDeadline        // GET(object): disable client write and backend read deadlines (byte-progress timeout, see timeout.send_file_time)
+	DisableGetDeadline        // GET(object): disable client write and backend read deadlines (minimum transfer rate, see timeout.send_file_time)
 )
 
 var Cluster = [...]string{

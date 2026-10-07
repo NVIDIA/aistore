@@ -13,17 +13,19 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core"
 )
 
-// remote GET read deadline: protection from backends that stop sending
-// (ingress counterpart of the GET write deadline - see ais/tgtobj.go initWdl)
+// remote GET read deadline: protection from backends that stop (or nearly stop) sending
+// (ingress counterpart of the GET write deadline - see ais/tgtobj.go initWdl;
+// terminology: see cmn.XferRenewSize)
 //
-// - initial deadline (timeout.send_file_time) is set before the request is issued:
+// - initial deadline - one window (timeout.send_file_time) - is set before the request is issued:
 //   covers connection, response headers, and SDK retries (the latter honor ctx)
-// - thereafter, renewed once per cmn.XferChunkSize bytes received
-//   => implied minimum rate 64KiB/s (same as GET write deadline; see cmn.XferMinRate)
+// - thereafter, renewed after each renewal size (cmn.XferRenewSize bytes) received
+//   => minimum transfer rate 64KiB/s (same as the write deadline; see cmn.XferMinRate)
 // - expired: cancel the request context w/ errReadTimeout cause;
 //   net/http aborts the in-flight body read (closing the body would not - it waits for the read)
 // - only this deadline's own cause substitutes the returned error; parent cancellation
@@ -33,23 +35,23 @@ import (
 
 type (
 	rdl struct {
-		r      io.ReadCloser
-		ctx    context.Context
-		cancel context.CancelCauseFunc
-		timer  *time.Timer
-		tout   time.Duration
-		csize  int64 // renewal chunk
-		n      int64 // bytes since last renewal
+		r         io.ReadCloser
+		ctx       context.Context
+		cancel    context.CancelCauseFunc
+		timer     *time.Timer
+		tout      time.Duration
+		renewSize int64 // renewal size (cmn.XferRenewSize)
+		n         int64 // bytes past the last renewal boundary (overshoot carries over; see Read)
 	}
 	errReadTimeout struct {
-		tout  time.Duration
-		csize int64
+		tout      time.Duration
+		renewSize int64
 	}
 )
 
 func (e *errReadTimeout) Error() string {
 	return fmt.Sprintf("remote backend read timeout: less than %s in %v (timeout.send_file_time)",
-		cos.IEC(e.csize, 1), e.tout)
+		cos.IEC(e.renewSize, 1), e.tout)
 }
 
 // returns nil (and the original context) when disabled
@@ -61,13 +63,13 @@ func newRdl(ctx context.Context) (*rdl, context.Context) {
 	if tout <= 0 {
 		return nil, ctx
 	}
-	d := &rdl{tout: tout, csize: cmn.XferChunkSize(tout)}
+	d := &rdl{tout: tout, renewSize: cmn.XferRenewSize(tout)}
 	d.ctx, d.cancel = context.WithCancelCause(ctx)
 	d.timer = time.AfterFunc(tout, d.expire)
 	return d, d.ctx
 }
 
-func (d *rdl) expire() { d.cancel(&errReadTimeout{tout: d.tout, csize: d.csize}) }
+func (d *rdl) expire() { d.cancel(&errReadTimeout{tout: d.tout, renewSize: d.renewSize}) }
 
 func (d *rdl) expired() (err *errReadTimeout) {
 	err, _ = errors.AsType[*errReadTimeout](context.Cause(d.ctx))
@@ -80,6 +82,11 @@ func (d *rdl) expired() (err *errReadTimeout) {
 func (d *rdl) fini(res *core.GetReaderResult) {
 	if d == nil {
 		return
+	}
+	if res.Err == nil && res.R == nil {
+		// unlikely (but never wrap a nil reader)
+		res.Err = errors.New("remote GET: no error and no reader")
+		debug.AssertNoErr(res.Err)
 	}
 	if res.Err != nil {
 		d.timer.Stop()
@@ -99,9 +106,11 @@ func (d *rdl) fini(res *core.GetReaderResult) {
 
 func (d *rdl) Read(p []byte) (n int, err error) {
 	n, err = d.r.Read(p)
-	if d.n += int64(n); d.n >= d.csize {
-		d.n = 0
-		d.timer.Reset(d.tout)
+	if d.n += int64(n); d.n >= d.renewSize {
+		d.n %= d.renewSize // keep the bytes past the boundary: renewal k at cumulative k*renewSize
+		if d.ctx.Err() == nil {
+			d.timer.Reset(d.tout) // (not after expiry or cancellation: nothing left to protect)
+		}
 	}
 	if err != nil && err != io.EOF {
 		if e := d.expired(); e != nil {

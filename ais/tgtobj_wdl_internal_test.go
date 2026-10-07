@@ -30,7 +30,7 @@ import (
 // GET write deadline (wdl): no-progress timeout for clients that stop reading
 
 const (
-	wdlTestTout = 250 * time.Millisecond // => cmn.XferMinChunk; implied min drain rate 4MiB/s
+	wdlTestTout = 250 * time.Millisecond // => cmn.XferMinRenew (1MiB); minimum transfer rate 4MiB/s
 	wdlTestSize = 32 * cos.MiB           // well above loopback socket buffering
 	wdlTestWait = 30 * time.Second       // test-level safety net
 )
@@ -76,18 +76,18 @@ func TestWdlChunkSize(t *testing.T) {
 		tout time.Duration
 		want int64
 	}{
-		{0, cmn.XferMinChunk},
-		{10 * time.Second, cmn.XferMinChunk},          // 640KiB => min (below config-validated minimum)
+		{0, cmn.XferMinRenew},
+		{10 * time.Second, cmn.XferMinRenew},          // 640KiB => min (below config-validated minimum)
 		{time.Minute, 60 * cmn.XferMinRate},           // 3.75MiB (config-validated minimum)
 		{5 * time.Minute, 300 * cmn.XferMinRate},      // 18.75MiB (default)
 		{17 * time.Minute, 17 * 60 * cmn.XferMinRate}, // 63.75MiB (last below max)
-		{18 * time.Minute, cmn.XferMaxChunk},
-		{2 * time.Hour, cmn.XferMaxChunk},
-		{100 * 24 * time.Hour, cmn.XferMaxChunk},
+		{18 * time.Minute, cmn.XferMaxRenew},
+		{2 * time.Hour, cmn.XferMaxRenew},
+		{100 * 24 * time.Hour, cmn.XferMaxRenew},
 	}
 	for _, tc := range tests {
-		if got := cmn.XferChunkSize(tc.tout); got != tc.want {
-			t.Errorf("cmn.XferChunkSize(%v) = %d, want %d", tc.tout, got, tc.want)
+		if got := cmn.XferRenewSize(tc.tout); got != tc.want {
+			t.Errorf("cmn.XferRenewSize(%v) = %d, want %d", tc.tout, got, tc.want)
 		}
 	}
 }
@@ -145,8 +145,8 @@ func TestWdlBufferedSizes(t *testing.T) {
 		bufSize = 128 * cos.KiB
 		tout    = 5 * time.Minute
 	)
-	csize := cmn.XferChunkSize(tout)
-	payload := make([]byte, csize+1)
+	renewSize := cmn.XferRenewSize(tout)
+	payload := make([]byte, renewSize+1)
 	buf := make([]byte, bufSize)
 	tests := []struct {
 		name     string
@@ -160,12 +160,12 @@ func TestWdlBufferedSizes(t *testing.T) {
 		{name: "one-buffer", size: bufSize},
 		{name: "above-buffer", size: bufSize + 1},
 		{name: "multiple-buffers", size: 512 * cos.KiB},
-		{name: "below-chunk", size: csize - 1},
-		{name: "one-chunk", size: csize},
-		{name: "above-chunk", size: csize + 1, renew: true},
+		{name: "below-chunk", size: renewSize - 1},
+		{name: "one-chunk", size: renewSize},
+		{name: "above-chunk", size: renewSize + 1, renew: true},
 		{name: "unknown-small", size: 512 * cos.KiB, unknown: true},
-		{name: "unknown-chunk", size: csize, unknown: true, renew: true},
-		{name: "disabled", size: csize + 1, disabled: true},
+		{name: "unknown-chunk", size: renewSize, unknown: true, renew: true},
+		{name: "disabled", size: renewSize + 1, disabled: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -190,6 +190,38 @@ func TestWdlBufferedSizes(t *testing.T) {
 				wantDeadlines++
 			}
 			tassert.Errorf(t, w.deadlines == wantDeadlines, "set %d deadlines, wanted %d", w.deadlines, wantDeadlines)
+		})
+	}
+}
+
+// buffered: non-divisible writes - one renewal per renewal boundary crossed,
+// overshoot carries over (renewal k at cumulative k*renewSize)
+func TestWdlWriterQuantum(t *testing.T) {
+	const renewSize = 64 * cos.KiB
+	tests := []struct {
+		name      string
+		writes    []int
+		renewals  int
+		remainder int64
+	}{
+		{"below", []int{renewSize - 1}, 0, renewSize - 1},
+		{"divisible", []int{renewSize, renewSize}, 2, 0},
+		{"three-quarter-steps", []int{48 * cos.KiB, 48 * cos.KiB, 48 * cos.KiB, 48 * cos.KiB}, 3, 0}, // reset-to-zero: 2
+		{"overshoot", []int{48 * cos.KiB, 48 * cos.KiB}, 1, 32 * cos.KiB},
+		{"multi-quantum", []int{renewSize*2 + renewSize/2}, 1, renewSize / 2}, // one write, one renewal
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &wdlCountingWriter{ResponseWriter: httptest.NewRecorder()}
+			d := &wdlWriter{w: w, rc: w, tout: time.Minute, renewSize: renewSize}
+			for _, n := range tc.writes {
+				if _, err := d.Write(make([]byte, n)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if w.deadlines != tc.renewals || d.n != tc.remainder {
+				t.Fatalf("renewals %d, remainder %d; want %d, %d", w.deadlines, d.n, tc.renewals, tc.remainder)
+			}
 		})
 	}
 }
@@ -225,8 +257,8 @@ func wdlRun(t *testing.T, sendfile bool) {
 		tassert.Errorf(t, r.written == wdlTestSize, "written %d != %d", r.written, wdlTestSize)
 	})
 
-	// reading steadily at ~10x the implied minimum rate, for longer than the timeout:
-	// must complete (deadline re-armed per chunk/write)
+	// reading steadily at ~10x the minimum transfer rate, for longer than the window:
+	// must complete (deadline renewed per renewal size)
 	t.Run("slow-progressing", func(t *testing.T) {
 		tools.CheckSkip(t, &tools.SkipTestArgs{Long: true}) // runs past the timeout by design
 		url, ch := wdlServer(t, wdlTestSize, sendfile)
@@ -274,7 +306,7 @@ func wdlRun(t *testing.T, sendfile bool) {
 }
 
 // Even a one-buffer response can block on its first write. Keep the initial
-// deadline installed, including when wrapping and chunking are skipped.
+// deadline installed, including when wrapping and splitting are skipped.
 func TestWdlFirstWrite(t *testing.T) {
 	const size = 128 * cos.KiB
 	for _, sendfile := range []bool{false, true} {
