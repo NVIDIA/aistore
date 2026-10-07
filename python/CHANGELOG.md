@@ -34,6 +34,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   correctly. Update explicit `BufferedWriter` type checks to `BufferedIOBase`.
   Unclosed writers emit `ResourceWarning` without sending requests.
 
+### Removed
+
+- Removed `DynamicBatchSampler.__len__()` since PyTorch expects length
+  to mirror the number of batches. Use `DynamicBatchSampler.num_samples()`
+  to get the number of samples instead.
+
 ## [2.0.0] - 2026-09-28
 
 This major release unifies object metadata APIs, removes deprecated ETL

@@ -25,6 +25,10 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
 
     Dynamically adds samples to mini-batch up to a maximum batch size.
 
+    This sampler does not implement ``__len__``; calling ``len(sampler)``
+    or ``len(DataLoader(..., batch_sampler=sampler))`` raises ``TypeError``.
+    Use ``num_samples()`` to get the total number of samples in the source list.
+
     NOTE: Using this sampler with AISBaseMapDatasets that use ObjectGroups
     in their ais_source_lists will be slower than using it with Buckets as
     ObjectGroups will perform one extra API call per object to get size metadata.
@@ -70,7 +74,7 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
         batch = []
 
         if self._shuffle:
-            self._indices = torch.randperm(len(self)).tolist()
+            self._indices = torch.randperm(len(self._samples_list)).tolist()
 
         # Get sample size for each index, check if there is space in the batch, and yield batches whenever full
         # Calculate spaces in batch non-preemptively
@@ -122,9 +126,10 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
         ):
             yield batch
 
-    def __len__(self) -> int:
+    def num_samples(self) -> int:
         """
-        Returns the total number of samples.
+        Returns the total number of samples in the source list, including samples
+        that may be skipped or dropped during batching.
         """
         return len(self._samples_list)
 

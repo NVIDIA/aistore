@@ -59,6 +59,52 @@ class TestAISSampler(unittest.TestCase):
 
         self.assertEqual(num_batches, 5)
 
+    def test_dynamic_sampler_has_no_length(self):
+        for shuffle in (False, True):
+            with self.subTest(shuffle=shuffle):
+                sampler = DynamicBatchSampler(
+                    data_source=self.ais_dataset,
+                    max_batch_size=2000,
+                    shuffle=shuffle,
+                )
+                loader = DataLoader(self.ais_dataset, batch_sampler=sampler)
+
+                self.assertEqual(sampler.num_samples(), len(self.mock_objects))
+                with self.assertRaises(TypeError):
+                    len(sampler)
+                with self.assertRaises(TypeError):
+                    len(loader)
+
+                batches = list(sampler)
+                self.assertEqual(len(batches), 5)
+                self.assertTrue(all(len(batch) == 2 for batch in batches))
+                self.assertEqual(
+                    sorted(index for batch in batches for index in batch),
+                    list(range(len(self.mock_objects))),
+                )
+                loaded_batches = list(loader)
+                self.assertEqual(len(loaded_batches), 5)
+                for names, content in loaded_batches:
+                    self.assertEqual(len(names), 2)
+                    self.assertEqual(list(content), [self.data, self.data])
+                self.assertEqual(sampler.num_samples(), len(self.mock_objects))
+
+    def test_dynamic_sampler_num_samples_includes_skipped_and_dropped(self):
+        for sizes in ([], [0, 1000, 1000, 1000, 6000]):
+            with self.subTest(sizes=sizes):
+                samples = [Mock(props_cached=Mock(size=size)) for size in sizes]
+                data_source = Mock()
+                data_source.get_obj_list.return_value = samples
+                sampler = DynamicBatchSampler(
+                    data_source=data_source,
+                    max_batch_size=2000,
+                    drop_last=True,
+                )
+
+                self.assertEqual(sampler.num_samples(), len(samples))
+                self.assertEqual(list(sampler), [[1, 2]] if sizes else [])
+                self.assertEqual(sampler.num_samples(), len(samples))
+
     def test_dynamic_sampler_drop_last(self):
         loader = DataLoader(
             self.ais_dataset,
