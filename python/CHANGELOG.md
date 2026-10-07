@@ -27,6 +27,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- `ObjectReader.as_file(max_resume=...)` now limits consecutive interruptions without forward
+  progress instead of counting all interruptions over a file's lifetime.
 - Reduced per-chunk bookkeeping in `ResumableStream` and avoided list/join
   overhead for `ObjectFileReader` reads satisfied by one chunk, reusing whole
   immutable byte buffers without copying.

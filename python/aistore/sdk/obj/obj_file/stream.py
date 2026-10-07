@@ -37,7 +37,7 @@ class ResumableStream:
     Args:
         content_provider (BaseContentIterProvider): A provider that creates iterators which
             can fetch object data from AIS in chunks.
-        max_resume (int): Maximum number of resumes allowed for a single pass over the object.
+        max_resume (int): Maximum consecutive retry attempts without delivering new data.
     """
 
     def __init__(self, content_provider: BaseContentIterProvider, max_resume: int):
@@ -73,11 +73,6 @@ class ResumableStream:
         Valid only after the current stream yields or ends.
         """
         return self._bounds.start + self._stream_consumed
-
-    @property
-    def resumes(self) -> int:
-        """Number of resumes performed so far."""
-        return self._resumes
 
     def restart(self) -> None:
         """Discard all progress and open a fresh stream at the start of the object."""
@@ -142,6 +137,8 @@ class ResumableStream:
                 chunk_size -= replayed
 
             self._delivered_position = delivered + chunk_size
+            if chunk_size:
+                self._resumes = 0
             return chunk
 
     def _resume(self, err: Exception) -> None:

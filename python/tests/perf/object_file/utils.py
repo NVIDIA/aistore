@@ -12,10 +12,10 @@ import statistics
 import subprocess
 import random
 from pathlib import Path
-from typing import List, Tuple, cast
+from typing import List, Tuple
 from kubernetes import client as k8s_client, watch as k8s_watch
 from aistore.sdk.bucket import Bucket
-from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
+from aistore.sdk.obj.obj_file import stream as obj_file_stream
 from aistore.sdk.obj.object import Object
 from aistore.sdk.obj.object_reader import ObjectReader
 
@@ -48,21 +48,35 @@ def create_and_put_objects(bucket: Bucket, obj_size: int, num_objects: int) -> N
         create_and_put_object(obj, obj_size)
 
 
+class ResumeCounter(logging.Handler):
+    """Counts the resume warnings that ResumableStream logs."""
+
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.count = 0
+
+    def emit(self, record):
+        if record.getMessage().startswith("Resuming"):
+            self.count += 1
+
+
 def obj_file_reader_read(
     object_reader: ObjectReader, read_size: int, max_resume: int
 ) -> Tuple[bytes, int]:
     """Reads via ObjectFileReader instantiated from provided ObjectReader. Returns the downloaded data and total number of resumes."""
-    # as_file() is declared to return BufferedIOBase; the resume count is specific to ObjectFileReader.
-    obj_file = cast(ObjectFileReader, object_reader.as_file(max_resume=max_resume))
-
-    result = bytearray()
-    with obj_file:
-        while True:
-            data = obj_file.read(read_size)
-            if not data:
-                break
-            result.extend(data)
-    return bytes(result), obj_file._stream.resumes
+    counter = ResumeCounter()
+    obj_file_stream.logger.addHandler(counter)
+    try:
+        result = bytearray()
+        with object_reader.as_file(max_resume=max_resume) as obj_file:
+            while True:
+                data = obj_file.read(read_size)
+                if not data:
+                    break
+                result.extend(data)
+    finally:
+        obj_file_stream.logger.removeHandler(counter)
+    return bytes(result), counter.count
 
 
 def clear_directory(path: Path):

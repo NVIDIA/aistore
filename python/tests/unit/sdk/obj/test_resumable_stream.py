@@ -140,6 +140,28 @@ class TestResumableStreamBudget(unittest.TestCase):
         # The budget allows two replacement streams after the original.
         self.assertEqual([0, 0, 0], provider.offsets)
 
+    def test_progress_restores_budget(self):
+        """Interruptions separated by new data never exhaust the budget."""
+        error = ChunkedEncodingError("interrupted")
+        stream, provider = _make_stream(
+            [(4, 4, error), (8, 4, error), (12, 4, error), (16, 4, None)],
+            resumable=[True] * 3,
+            max_resume=1,
+        )
+
+        self.assertEqual(DATA, _drain(stream))
+        self.assertEqual([0, 4, 8, 12], provider.offsets)
+
+    def test_new_bytes_after_replay_restore_budget(self):
+        """A chunk that ends a replay and carries new bytes counts as progress."""
+        error = ChunkedEncodingError("interrupted")
+        stream, provider = _make_stream(
+            [(6, 6, error), (8, 4, error), (16, 4, None)], max_resume=1
+        )
+
+        self.assertEqual(DATA, _drain(stream))
+        self.assertEqual([0, 0, 0], provider.offsets)
+
     def test_clean_short_eof_reports_unexpected_eof_as_the_cause(self):
         """A stream that ends early without raising still reports why it was resumed."""
         stream, _ = _make_stream([(8, 4, None)], max_resume=0)
@@ -152,22 +174,22 @@ class TestResumableStreamBudget(unittest.TestCase):
         )
 
     def test_restart_restores_budget_and_position(self):
-        """A restart releases the live stream and discards all progress made so far."""
+        """A restart discards the exhausted budget and all progress made so far."""
         error = ChunkedEncodingError("interrupted")
         stream, provider = _make_stream(
-            [(4, 4, error), (16, 4, None), (16, 4, None)], resumable=[True]
+            [(4, 4, error), (4, 4, error), (0, 4, error), (16, 4, None)],
+            resumable=[True, True],
+            max_resume=1,
         )
 
-        # The second chunk reaches the error, so the stream resumes before the restart.
         next(stream)
-        next(stream)
-        self.assertEqual(1, stream.resumes)
-        self.assertEqual(8, stream.delivered_position)
+        with self.assertRaises(ObjectFileReaderMaxResumeError):
+            next(stream)
+        self.assertEqual(4, stream.delivered_position)
 
         stream.restart()
 
-        self.assertEqual([0, 1], provider.closed_streams)
-        self.assertEqual(0, stream.resumes)
         self.assertEqual(0, stream.delivered_position)
-        self.assertEqual([0, 4, 0], provider.offsets)
+        # The restored budget covers one failure before any new data arrives.
         self.assertEqual(DATA, _drain(stream))
+        self.assertEqual([0, 4, 0, 0], provider.offsets)

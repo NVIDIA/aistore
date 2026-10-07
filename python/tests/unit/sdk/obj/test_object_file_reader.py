@@ -5,11 +5,10 @@
 # pylint: disable=protected-access
 
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from io import IOBase
 from requests.exceptions import ChunkedEncodingError
 from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
-from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 from aistore.sdk.obj.obj_file.stream import ResumableStream
 from tests.utils import BadContentIterProvider, cases, scripted_content_provider
 
@@ -41,7 +40,6 @@ class TestObjectFileReader(unittest.TestCase):
         # Ensure all attributes are initialized properly
         self.assertIsInstance(self.object_file._stream, ResumableStream)
         self.assertEqual(self.object_file._stream.delivered_position, 0)
-        self.assertEqual(self.object_file._stream.resumes, 0)
         self.assertIsNone(self.object_file._remainder)
         self.assertFalse(self.object_file.closed)
         self.content_provider_mock.create_iter.assert_called_once()
@@ -210,64 +208,6 @@ class TestObjectFileReaderResume(unittest.TestCase):
         # Verify that the file was closed after the exception
         self.assertTrue(object_file._closed)
 
-    def test_read_success_after_resumes(self):
-        """
-        Test that ObjectFileReader successfully reads w/ resumes after encountering `ChunkedEncodingError`
-        within the allowed `max_resume` attempts, and eventually reads the entire content.
-
-        - Read retrieves chunk1 successfully.
-        - Read fails to retrieve chunk2, resumes and gets chunk2.
-        - Read fails to retrieve chunk3, resumes and gets chunk3.
-        - Read fails to retrieve chunk4, resumes and gets chunk4.
-        - Read returns the entire content.
-
-        Total of 3 resumes, which is within the set limit of `max_resume=3`.
-        """
-        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
-        # and simulates a failure on every other read w/ a max of 3 resumes
-        object_file, _ = self._create_reader_with_bad_iterator(
-            exc=ChunkedEncodingError,
-            fail_on_read=2,
-            max_resume_attempts=3,
-        )
-
-        # Read the entire content and verify it handles the error and resumes correctly
-        result = object_file.read()
-
-        # Ensure that we received the full data
-        self.assertEqual(result, self.data)
-
-        # Verify that the file was not closed
-        self.assertFalse(object_file._closed)
-
-    def test_read_fail_after_max_retries(self):
-        """
-        Test that ObjectFileReader fails and raises an `ObjectFileReaderMaxResumeError` after exceeding the
-        allowed `max_resume` attempts during multiple stream interruptions.
-
-        - Reads chunk1 successfully.
-        - Fails to retrieve chunk2, resumes and gets chunk2.
-        - Fails to retrieve chunk3, resumes and gets chunk3.
-        - Fails to retrieve chunk4.
-        - Raises `ObjectFileReaderMaxResumeError`.
-
-        Total of 3 resumes, which exceeds the set limit of `max_resume=3`.
-        """
-        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
-        # and simulates a failure on every other read w/ a max of 2 resumes
-        object_file, _ = self._create_reader_with_bad_iterator(
-            exc=ChunkedEncodingError,
-            fail_on_read=2,
-            max_resume_attempts=2,
-        )
-
-        # Attempting to read should fail after exceeding max retries
-        with self.assertRaises(ObjectFileReaderMaxResumeError):
-            object_file.read()
-
-        # Verify that the file was closed after the exception
-        self.assertTrue(object_file._closed)
-
     def test_multiple_reads_success_after_resumes(self):
         """
         Test that multiple read operations succeed, with resumes after encountering `ChunkedEncodingError`.
@@ -281,14 +221,14 @@ class TestObjectFileReaderResume(unittest.TestCase):
         - Second read fails to retrieve chunk4, resumes and gets chunk4.
         - Second read returns 'k2chunk3chunk4'.
 
-        Total of 3 resumes, within the set limit of `max_resume=3`.
+        Total of 3 resumes, each within the consecutive limit of `max_resume=1`.
         """
         # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
-        # and simulates a failure on every other read w/ a max of 3 resumes
+        # and simulates a failure on every other read w/ a max of 1 consecutive resume
         object_file, _ = self._create_reader_with_bad_iterator(
             exc=ChunkedEncodingError,
             fail_on_read=2,
-            max_resume_attempts=3,
+            max_resume_attempts=1,
         )
 
         # Read portion of content and verify it handles the error and resumes correctly
@@ -301,59 +241,6 @@ class TestObjectFileReaderResume(unittest.TestCase):
 
         # Verify that the file was not closed
         self.assertFalse(object_file._closed)
-
-    def test_multiple_reads_fail_after_resumes(self):
-        """
-        Test that multiple read operations fail after exceeding the allowed `max_resume` limit.
-
-        - First read retrieves chunk1 successfully.
-        - First read fails to retrieve chunk2, resumes and gets chunk2.
-        - First read returns 'chunk1chun', leaving 'k2' in the remainder.
-        - Second read consumes 'k2' from the remainder.
-        - Second read fails to retrieve chunk3, resumes and gets chunk3.
-        - Second read fails to retrieve chunk4, raises `ObjectFileReaderMaxResumeError`.
-
-        Total of 3 resumes, exceeding the set limit of `max_resume=2`.
-        """
-        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
-        # and simulates a failure on every other read w/ a max of 2 resumes
-        object_file, _ = self._create_reader_with_bad_iterator(
-            exc=ChunkedEncodingError,
-            fail_on_read=2,
-            max_resume_attempts=2,
-        )
-
-        # Read portion of content and verify it handles the error and resumes correctly
-        result = object_file.read(10)
-        self.assertEqual(result, b"chunk1chun")
-
-        # Attempting to read should fail after exceeding max retries
-        with self.assertRaises(ObjectFileReaderMaxResumeError):
-            object_file.read(14)
-
-        # Verify that the file was closed after the exception
-        self.assertTrue(object_file._closed)
-
-    @cases((True, 6), (False, 0))
-    def test_resume_offset_follows_presence(self, case):
-        """A cached object resumes at the delivered position; an uncached one starts over."""
-        present, expected_offset = case
-        # The first chunk arrives, then the read after it fails.
-        object_file, provider = self._create_reader_with_bad_iterator(
-            exc=ChunkedEncodingError,
-            fail_on_read=2,
-            max_resume_attempts=1,
-        )
-
-        provider.client.can_get_at_offset.return_value = present
-        with patch.object(
-            provider, "create_iter", wraps=provider.create_iter
-        ) as mock_create_iter:
-            with self.assertRaises(ObjectFileReaderMaxResumeError):
-                object_file.read()
-
-        mock_create_iter.assert_called_once()
-        self.assertEqual(expected_offset, mock_create_iter.call_args.kwargs["offset"])
 
 
 class TestObjectFileReaderColdResume(unittest.TestCase):

@@ -108,7 +108,7 @@ class ObjectReader:
     def as_file(
         self,
         buffer_size: Optional[int] = None,
-        max_resume: Optional[int] = 5,
+        max_resume: int = 5,
     ) -> BufferedIOBase:
         """
         Create a read-only, non-seekable `ObjectFileReader` instance for streaming object data in chunks.
@@ -119,8 +119,8 @@ class ObjectReader:
         Args:
             buffer_size (int, optional): Currently unused; retained for backward compatibility and future
                                          enhancements.
-            max_resume (int, optional): Total number of retry attempts allowed to resume the stream in case of
-                                        interruptions. Defaults to 5.
+            max_resume (int, optional): Maximum consecutive attempts to resume the stream after interruptions
+                                        without forward progress. Defaults to 5.
 
         Returns:
             BufferedIOBase: A read-only, non-seekable file-like object for streaming object content.

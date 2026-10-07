@@ -27,14 +27,15 @@ class ObjectFileReader(BufferedIOBase):
 
     In case of unexpected stream interruptions (e.g. `ChunkedEncodingError`, `ConnectionError`) or timeouts (e.g.
     `ReadTimeout`), the `read()` method automatically retries and resumes fetching data from the last successfully
-    retrieved chunk. The `max_resume` parameter controls how many retry attempts are made before an error is raised.
+    retrieved chunk. The `max_resume` parameter limits consecutive retry attempts without forward progress.
+    Total retry count is unlimited as long as reads continue to fetch new bytes.
 
     Entering a context restarts the reader from the beginning, even after `close()`.
 
     Args:
         content_provider (BaseContentIterProvider): A provider that creates iterators which
             can fetch object data from AIS in chunks.
-        max_resume (int): Maximum number of resumes allowed for a single pass over the object.
+        max_resume (int): Maximum consecutive retry attempts without forward progress.
     """
 
     def __init__(self, content_provider: BaseContentIterProvider, max_resume: int):
