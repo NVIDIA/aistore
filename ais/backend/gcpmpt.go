@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 )
@@ -54,10 +53,9 @@ type (
 	}
 )
 
-func (gsbp *gsbp) StartMpt(lom *core.LOM, r *http.Request) (string, int, error) {
-	debug.Assert(r != nil)
+func (gsbp *gsbp) StartMpt(ctx context.Context, lom *core.LOM, _ *http.Request) (string, int, error) {
+	ctx = mptContext(ctx)
 	var (
-		ctx      = r.Context()
 		cloudBck = lom.Bck().RemoteBck()
 		sess, e  = gsbp.getSess(ctx, cloudBck)
 	)
@@ -84,7 +82,7 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, r *http.Request) (string, int, error) 
 		return "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to create request: %w", err)
 	}
 
-	resp, err := sess.httpClient.Do(req)
+	resp, err := sess.httpClient.Do(req.WithContext(ctx))
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
 
@@ -169,10 +167,9 @@ func (gsbp *gsbp) PutMptPart(ctx context.Context, lom *core.LOM, reader cos.Read
 	return etag, 0, nil
 }
 
-func (gsbp *gsbp) CompleteMpt(lom *core.LOM, r *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
-	debug.Assert(r != nil)
+func (gsbp *gsbp) CompleteMpt(ctx context.Context, lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
+	ctx = mptContext(ctx)
 	var (
-		ctx      = r.Context()
 		cloudBck = lom.Bck().RemoteBck()
 		sess, e  = gsbp.getSess(ctx, cloudBck)
 	)
@@ -217,7 +214,7 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, r *http.Request, uploadID string, _
 		return "", "", http.StatusInternalServerError, fmt.Errorf("gcp: failed to create request: %w", err)
 	}
 
-	resp, err := sess.httpClient.Do(req)
+	resp, err := sess.httpClient.Do(req.WithContext(ctx))
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
 
@@ -253,10 +250,10 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, r *http.Request, uploadID string, _
 
 // Go storage client has no XML multipart API (issue): https://github.com/googleapis/google-cloud-go/issues/11609
 // Therefore, use Google's documented DELETE endpoint: https://cloud.google.com/storage/docs/xml-api/delete-multipart
-func (gsbp *gsbp) AbortMpt(lom *core.LOM, r *http.Request, uploadID string) (int, error) {
-	debug.Assert(r != nil)
+func (gsbp *gsbp) AbortMpt(ctx context.Context, lom *core.LOM, _ *http.Request, uploadID string) (int, error) {
+	ctx = mptContext(ctx)
 	cloudBck := lom.Bck().RemoteBck()
-	sess, err := gsbp.getSess(r.Context(), cloudBck)
+	sess, err := gsbp.getSess(ctx, cloudBck)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -272,7 +269,7 @@ func (gsbp *gsbp) AbortMpt(lom *core.LOM, r *http.Request, uploadID string) (int
 	if err != nil {
 		return http.StatusInternalServerError, fmt.Errorf("gcp: failed to create abort request: %w", err)
 	}
-	resp, err := sess.httpClient.Do(req)
+	resp, err := sess.httpClient.Do(req.WithContext(ctx))
 	cmn.HreqFree(req)
 	if err != nil {
 		return http.StatusInternalServerError, fmt.Errorf("gcp: failed to abort multipart upload: %w", err)

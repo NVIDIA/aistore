@@ -52,12 +52,11 @@ type (
 		// get (jobs; REST)
 		GetObjReader(ctx context.Context, lom *LOM, offset, length int64) GetReaderResult
 
-		// multipart upload
-		StartMpt(lom *LOM, r *http.Request) (uploadID string, ecode int, err error)
-		// PutMptPart accepts context independently of optional AWS request headers.
+		// Multipart operations accept context independently of optional request headers.
 		// A nil context defaults to context.Background().
+		StartMpt(ctx context.Context, lom *LOM, r *http.Request) (uploadID string, ecode int, err error)
 		PutMptPart(ctx context.Context, lom *LOM, reader cos.ReadOpenCloser, r *http.Request, uploadID string, size int64, partNum int32) (etag string, ecode int, err error)
-		CompleteMpt(lom *LOM, r *http.Request, uploadID string, body []byte, parts apc.MptCompletedParts) (version, etag string, ecode int, err error)
-		AbortMpt(lom *LOM, r *http.Request, uploadID string) (ecode int, err error)
+		CompleteMpt(ctx context.Context, lom *LOM, r *http.Request, uploadID string, body []byte, parts apc.MptCompletedParts) (version, etag string, ecode int, err error)
+		AbortMpt(ctx context.Context, lom *LOM, r *http.Request, uploadID string) (ecode int, err error)
 	}
 )

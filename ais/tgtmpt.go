@@ -286,7 +286,7 @@ func (ups *ups) _start(r *http.Request, lom *core.LOM, skipBackend bool) (upload
 			return "", nil, fmt.Errorf("%s: %w", lom.Cname(), err)
 		}
 
-		uploadID, _, err = ups.t.Backend(bck).StartMpt(lom, r)
+		uploadID, _, err = ups.t.Backend(bck).StartMpt(mptRequestContext(r), lom, r)
 	} else {
 		uploadID = cos.GenUUID()
 		if r != nil {
@@ -581,7 +581,9 @@ func (ups *ups) _completeRemote(r *http.Request, lom *core.LOM, uploadID string,
 		provider = bck.Provider
 	)
 
-	version, etag, ecode, err = ups.t.Backend(bck).CompleteMpt(lom, r, uploadID, body, partList)
+	// Finish backend completion despite client cancellation so local finalization can follow.
+	ctx := context.WithoutCancel(mptRequestContext(r))
+	version, etag, ecode, err = ups.t.Backend(bck).CompleteMpt(ctx, lom, r, uploadID, body, partList)
 	if err != nil {
 		return "", ecode, err
 	}
@@ -601,7 +603,12 @@ func (ups *ups) abort(r *http.Request, lom *core.LOM, uploadID string, force, sk
 		return http.StatusBadRequest, err
 	}
 	if lom.Bck().IsRemote() && !skipBackend {
-		ecode, err := ups.t.Backend(lom.Bck()).AbortMpt(lom, r, uploadID)
+		ctx := mptRequestContext(r)
+		if force {
+			// Preserve best-effort internal cleanup after request cancellation.
+			ctx = context.Background()
+		}
+		ecode, err := ups.t.Backend(lom.Bck()).AbortMpt(ctx, lom, r, uploadID)
 
 		if force || err == nil || ecode == http.StatusNotFound {
 			if e := ups._abort(uploadID, lom); e != nil && !cos.IsNotExist(e) {

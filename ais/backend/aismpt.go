@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 )
 
-func (m *AISbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int, err error) {
+func (m *AISbp) StartMpt(_ context.Context, lom *core.LOM, _ *http.Request) (id string, ecode int, err error) {
 	var (
 		remAis    *remAis
 		remoteBck = lom.Bck().Clone()
@@ -67,7 +67,7 @@ func (m *AISbp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenClo
 	return "", http.StatusOK, nil
 }
 
-func (m *AISbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
+func (m *AISbp) CompleteMpt(_ context.Context, lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
 	var (
 		remAis    *remAis
 		remoteBck = lom.Bck().Clone()
@@ -91,7 +91,7 @@ func (m *AISbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ [
 	return "", "", http.StatusOK, nil
 }
 
-func (m *AISbp) AbortMpt(lom *core.LOM, _ *http.Request, uploadID string) (ecode int, err error) {
+func (m *AISbp) AbortMpt(_ context.Context, lom *core.LOM, _ *http.Request, uploadID string) (ecode int, err error) {
 	var (
 		remAis    *remAis
 		remoteBck = lom.Bck().Clone()

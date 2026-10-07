@@ -25,9 +25,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func (*s3bp) StartMpt(lom *core.LOM, oreq *http.Request) (id string, ecode int, err error) {
+func (*s3bp) StartMpt(ctx context.Context, lom *core.LOM, oreq *http.Request) (id string, ecode int, err error) {
+	ctx = mptContext(ctx)
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts, ecode, err := newPresignedReq(oreq, lom, nil)
+		pts, ecode, err := newPresignedReq(oreq.WithContext(ctx), lom, nil)
 		if err != nil {
 			return "", ecode, err
 		}
@@ -60,7 +61,7 @@ func (*s3bp) StartMpt(lom *core.LOM, oreq *http.Request) (id string, ecode int, 
 		Key:      aws.String(lom.ObjName),
 		Metadata: metadata,
 	}
-	out, err := svc.CreateMultipartUpload(context.Background(), &input)
+	out, err := svc.CreateMultipartUpload(ctx, &input)
 	if err == nil {
 		id = *out.UploadId
 	} else {
@@ -127,12 +128,13 @@ func (*s3bp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenCloser
 	return etag, 0, nil
 }
 
-func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obody []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
+func (*s3bp) CompleteMpt(ctx context.Context, lom *core.LOM, oreq *http.Request, uploadID string, obody []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
+	ctx = mptContext(ctx)
 	h := cmn.BackendHelpers.Amazon
 
 	// presigned
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts, ecode, err := newPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)))
+		pts, ecode, err := newPresignedReq(oreq.WithContext(ctx), lom, io.NopCloser(bytes.NewReader(obody)))
 		if err != nil {
 			return "", "", ecode, err
 		}
@@ -178,7 +180,7 @@ func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obo
 	}
 	input.MultipartUpload = &s3parts
 
-	out, err := svc.CompleteMultipartUpload(context.Background(), &input)
+	out, err := svc.CompleteMultipartUpload(ctx, &input)
 	if err != nil {
 		ecode, errV := awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return "", "", ecode, errV
@@ -189,9 +191,10 @@ func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obo
 	return version, etag, 0, nil
 }
 
-func (*s3bp) AbortMpt(lom *core.LOM, oreq *http.Request, uploadID string) (ecode int, err error) {
+func (*s3bp) AbortMpt(ctx context.Context, lom *core.LOM, oreq *http.Request, uploadID string) (ecode int, err error) {
+	ctx = mptContext(ctx)
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts, ecode, err := newPresignedReq(oreq, lom, oreq.Body)
+		pts, ecode, err := newPresignedReq(oreq.WithContext(ctx), lom, oreq.Body)
 		if err != nil {
 			return ecode, err
 		}
@@ -214,7 +217,7 @@ func (*s3bp) AbortMpt(lom *core.LOM, oreq *http.Request, uploadID string) (ecode
 		Key:      aws.String(lom.ObjName),
 		UploadId: aws.String(uploadID),
 	}
-	if _, err = svc.AbortMultipartUpload(context.Background(), &input); err != nil {
+	if _, err = svc.AbortMultipartUpload(ctx, &input); err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 	return ecode, err

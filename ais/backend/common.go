@@ -230,7 +230,7 @@ func (b *base) CreateBucket(_ *meta.Bck) (int, error) {
 // multipart upload - default "not implemented" methods
 //
 
-func (b *base) StartMpt(*core.LOM, *http.Request) (string, int, error) {
+func (b *base) StartMpt(context.Context, *core.LOM, *http.Request) (string, int, error) {
 	return "", http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload start", b.provider)
 }
 
@@ -238,11 +238,11 @@ func (b *base) PutMptPart(context.Context, *core.LOM, cos.ReadOpenCloser, *http.
 	return "", http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload part", b.provider)
 }
 
-func (b *base) CompleteMpt(*core.LOM, *http.Request, string, []byte, apc.MptCompletedParts) (string, string, int, error) {
+func (b *base) CompleteMpt(context.Context, *core.LOM, *http.Request, string, []byte, apc.MptCompletedParts) (string, string, int, error) {
 	return "", "", http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload complete", b.provider)
 }
 
-func (b *base) AbortMpt(*core.LOM, *http.Request, string) (int, error) {
+func (b *base) AbortMpt(context.Context, *core.LOM, *http.Request, string) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload abort", b.provider)
 }
 
@@ -275,7 +275,7 @@ func allocPutParams(res core.GetReaderResult, owt cmn.OWT) *core.PutParams {
 	return params
 }
 
-// Parts without an explicit context retain background behavior.
+// Multipart operations without an explicit context retain background behavior.
 func mptContext(ctx context.Context) context.Context {
 	if ctx == nil {
 		return context.Background()
