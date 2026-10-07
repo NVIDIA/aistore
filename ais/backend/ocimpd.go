@@ -16,7 +16,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core"
 
@@ -80,20 +79,11 @@ func (bp *ocibp) getObjReaderViaMPD(ctx context.Context, cancel context.CancelFu
 	var (
 		cloudBck      = lom.Bck().RemoteBck()
 		err           error
-		h             = cmn.BackendHelpers.OCI
 		mpd           *ociMPDStruct
 		mpdFirstChild *ociMPDChildStruct
 		objectSize    int64
 		partLength    int64
 	)
-
-	lom.SetCustomKey(cmn.SourceObjMD, apc.OCI)
-	if v, ok := h.EncodeETag(resp.ETag); ok {
-		lom.SetCustomKey(cmn.ETag, v)
-	}
-	if v, ok := h.EncodeCksum(resp.ContentMd5); ok {
-		lom.SetCustomKey(cmn.MD5ObjMD, v)
-	}
 
 	if resp.ContentRange == nil {
 		lom.ObjAttrs().Size = *resp.ContentLength

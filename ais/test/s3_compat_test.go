@@ -42,6 +42,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -1229,7 +1230,18 @@ func TestS3ObjMetadataLocal(t *testing.T) {
 }
 
 func TestS3ContentTypeGCP(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck, RequiredCloudProvider: apc.GCP})
+	testS3ContentTypeRemote(t, apc.GCP, http.DetectContentType([]byte("content-type round trip")))
+}
+
+func TestS3ContentTypeOCI(t *testing.T) {
+	testS3ContentTypeRemote(t, apc.OCI, cos.ContentBinary)
+}
+
+func testS3ContentTypeRemote(t *testing.T, provider, absentContentType string) {
+	t.Helper()
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck, RequiredCloudProvider: provider})
+	_, err := api.HeadBucket(baseParams, cliBck, false /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
 
 	var (
 		bck      = cliBck
@@ -1299,7 +1311,7 @@ func TestS3ContentTypeGCP(t *testing.T) {
 	}{
 		{name: "Custom", contentType: "application/x-aistore-content-type-test", expected: "application/x-aistore-content-type-test"},
 		{name: "ExplicitDefault", contentType: cos.ContentBinary, expected: cos.ContentBinary},
-		{name: "Absent", expected: http.DetectContentType([]byte(payload)), omitContentType: true},
+		{name: "Absent", expected: absentContentType, omitContentType: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1445,6 +1457,208 @@ func TestS3ObjMetadataGCP(t *testing.T) {
 		}
 		checkS3(t) // warm after the native cold GET
 	})
+}
+
+func TestS3ObjMetadataOCI(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck, RequiredCloudProvider: apc.OCI})
+	_, err := api.HeadBucket(baseParams, cliBck, false /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
+	s3Client := s3.New(s3.Options{
+		HTTPClient: newS3Client(true /*pathStyle*/), Region: env.AwsDefaultRegion(),
+		BaseEndpoint: aws.String(proxyURL), UsePathStyle: true, Credentials: getS3Credentials(t),
+	}, func(options *s3.Options) {
+		options.APIOptions = append(options.APIOptions, func(stack *middleware.Stack) error {
+			return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
+		})
+	})
+
+	for _, mode := range []string{"S3PUT", "NativePUT", "NativeMultipart"} {
+		t.Run(mode, func(t *testing.T) {
+			testS3ObjMetadataOCI(t, s3Client, mode)
+		})
+	}
+}
+
+func testS3ObjMetadataOCI(t *testing.T, s3Client *s3.Client, mode string) {
+	t.Helper()
+	size := 128
+	if mode == "NativeMultipart" {
+		size = 650000
+		value := os.Getenv(env.OCIMultiPartUploadThreshold)
+		if value == "" {
+			t.Skipf("set %s in deployment and tests to exercise automatic MPU", env.OCIMultiPartUploadThreshold)
+		}
+		threshold, err := cos.ParseSize(value, "")
+		tassert.CheckFatal(t, err)
+		if threshold >= int64(size) {
+			t.Skipf("automatic MPU threshold %d must be below object size %d", threshold, size)
+		}
+	}
+	payload := []byte("metadata round trip\n")
+	data := bytes.Repeat(payload, (size+len(payload)-1)/len(payload))[:size]
+	objName := "metadata-" + trand.String(8)
+	t.Cleanup(func() { _ = api.DeleteObject(baseParams, cliBck, objName) })
+	const contentType = "application/x-aistore-metadata-test"
+	metadata := map[string]string{"env": "triage", "version": "1"}
+	putOCIAttributes(t, s3Client, mode, objName, data, contentType, metadata, true)
+	checkOCIAttributes(t, s3Client, objName, data, contentType, metadata)
+	for _, forwarded := range []bool{false, true} {
+		name := "CopySameTarget"
+		if forwarded {
+			name = "CopyOtherTarget"
+		}
+		t.Run(name, func(t *testing.T) { testOCICopyAttributes(t, s3Client, objName, data, forwarded) })
+	}
+	if mode == "NativeMultipart" {
+		t.Run("RangeReads", func(t *testing.T) { testOCIBlobAttributes(t, s3Client, objName, data) })
+	}
+	// Overwrite the cached object, first with fewer keys and a different type, then with neither.
+	for _, replacement := range []struct {
+		name, contentType string
+		metadata          map[string]string
+	}{
+		{"Replace", "application/x-aistore-replacement", map[string]string{"env": "replacement"}},
+		{"Clear", "", nil},
+	} {
+		t.Run(replacement.name, func(t *testing.T) {
+			testOCIOverwriteAttributes(t, s3Client, mode, objName, data, replacement.contentType, replacement.metadata)
+		})
+	}
+}
+
+func putOCIAttributes(t *testing.T, client *s3.Client, mode, objName string, data []byte, contentType string, metadata map[string]string, forged bool) {
+	t.Helper()
+	md := make(map[string]string, len(metadata)+2)
+	for k, v := range metadata {
+		md[k] = v
+	}
+	if forged {
+		md["ais-cksum-type"] = "forged"
+		md["opc-meta-ais-cksum-val"] = "forged"
+	}
+	if mode == "S3PUT" {
+		input := &s3.PutObjectInput{Bucket: aws.String(cliBck.Name), Key: aws.String(objName), Body: bytes.NewReader(data), ContentLength: aws.Int64(int64(len(data))), Metadata: md}
+		if contentType != "" {
+			input.ContentType = aws.String(contentType)
+		}
+		_, err := client.PutObject(t.Context(), input)
+		tassert.CheckFatal(t, err)
+		return
+	}
+	header := make(http.Header)
+	if contentType != "" {
+		header.Set(cos.HdrContentType, contentType)
+	}
+	for k, v := range md {
+		prefix := cmn.AwsHeaderMetaPrefix
+		if k == "version" {
+			prefix = cmn.OCIHeaderMetaPrefix
+		}
+		header.Set(prefix+k, v)
+	}
+	_, err := api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: cliBck, ObjName: objName, Reader: readers.NewBytes(data), Size: uint64(len(data)), Header: header})
+	tassert.CheckFatal(t, err)
+}
+
+func checkOCIAttributes(t *testing.T, client *s3.Client, objName string, data []byte, contentType string, metadata map[string]string) {
+	t.Helper()
+	if contentType == "" {
+		contentType = cos.ContentBinary
+	}
+	for _, cold := range []bool{false, true} {
+		if cold {
+			tassert.CheckFatal(t, api.EvictObject(baseParams, cliBck, objName))
+		}
+		head, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String(cliBck.Name), Key: aws.String(objName)})
+		tassert.CheckFatal(t, err)
+		checkOCIMetadataValues(t, head.Metadata, metadata)
+		tassert.Errorf(t, aws.ToString(head.ContentType) == contentType, "S3 HEAD Content-Type: got %q, want %q", aws.ToString(head.ContentType), contentType)
+		native, err := api.HeadObjectV2(baseParams, cliBck, objName, apc.GetPropsCustom, api.HeadArgs{})
+		tassert.CheckFatal(t, err)
+		checkOCIMetadataValues(t, native.CustomMD, metadata)
+		var body bytes.Buffer
+		got, err := api.GetObject(baseParams, cliBck, objName, &api.GetArgs{Writer: &body})
+		tassert.CheckFatal(t, err)
+		checkOCIMetadataValues(t, got.Attrs().CustomMD, metadata)
+		tassert.Errorf(t, bytes.Equal(body.Bytes(), data), "native GET contents differ (cold=%t)", cold)
+		tassert.Errorf(t, got.RespHeader().Get(cos.HdrContentType) == contentType, "native GET Content-Type: got %q, want %q", got.RespHeader().Get(cos.HdrContentType), contentType)
+		if cold {
+			tassert.CheckFatal(t, api.EvictObject(baseParams, cliBck, objName))
+		}
+		out, err := client.GetObject(t.Context(), &s3.GetObjectInput{Bucket: aws.String(cliBck.Name), Key: aws.String(objName)})
+		tassert.CheckFatal(t, err)
+		actual, readErr := io.ReadAll(out.Body)
+		closeErr := out.Body.Close()
+		tassert.CheckFatal(t, readErr)
+		tassert.CheckFatal(t, closeErr)
+		checkOCIMetadataValues(t, out.Metadata, metadata)
+		tassert.Errorf(t, bytes.Equal(actual, data), "S3 GET contents differ (cold=%t)", cold)
+		tassert.Errorf(t, aws.ToString(out.ContentType) == contentType, "S3 GET Content-Type: got %q, want %q", aws.ToString(out.ContentType), contentType)
+	}
+}
+
+func checkOCIMetadataValues(t *testing.T, got, want map[string]string) {
+	t.Helper()
+	normalized := make(map[string]string, len(got))
+	for k, v := range got {
+		k = strings.TrimPrefix(k, cmn.AwsHeaderMetaPrefix)
+		normalized[strings.ToLower(k)] = v
+		tassert.Errorf(t, v != "forged", "exposed forged metadata %q=%q", k, v)
+	}
+	// AIS adds checksum metadata, so validate the requested keys rather than map length.
+	for _, k := range []string{"env", "version"} {
+		value, present := normalized[k]
+		expected, required := want[k]
+		tassert.Errorf(t, present == required && value == expected, "metadata %q: got %q (present=%t), want %q (present=%t)", k, value, present, expected, required)
+	}
+}
+
+func testOCIOverwriteAttributes(t *testing.T, client *s3.Client, mode, objName string, data []byte, contentType string, metadata map[string]string) {
+	t.Helper()
+	putOCIAttributes(t, client, mode, objName, data, contentType, metadata, false)
+	checkOCIAttributes(t, client, objName, data, contentType, metadata)
+}
+
+func testOCICopyAttributes(t *testing.T, client *s3.Client, src string, data []byte, forwarded bool) {
+	t.Helper()
+	smap := tools.GetClusterMap(t, proxyURL)
+	if forwarded && smap.CountActiveTs() < 2 {
+		t.Skip("forwarded copy requires two targets")
+	}
+	smap.InitDigests()
+	bck := meta.CloneBck(&cliBck)
+	owner, err := smap.HrwName2T(bck.MakeUname(src))
+	tassert.CheckFatal(t, err)
+	dst := ""
+	for i := range 1000 {
+		candidate := fmt.Sprintf("%s-copy-%d", src, i)
+		target, err := smap.HrwName2T(bck.MakeUname(candidate))
+		tassert.CheckFatal(t, err)
+		if (target.ID() != owner.ID()) == forwarded {
+			dst = candidate
+			break
+		}
+	}
+	tassert.Fatalf(t, dst != "", "could not select destination for forwarded=%t", forwarded)
+	t.Cleanup(func() { _ = api.DeleteObject(baseParams, cliBck, dst) })
+	tassert.CheckFatal(t, api.CopyObject(baseParams, &api.CopyArgs{FromBck: cliBck, FromObjName: src, ToBck: cliBck, ToObjName: dst}))
+	checkOCIAttributes(t, client, dst, data, "application/x-aistore-metadata-test", map[string]string{"env": "triage", "version": "1"})
+}
+
+func testOCIBlobAttributes(t *testing.T, client *s3.Client, objName string, data []byte) {
+	t.Helper()
+	tassert.CheckFatal(t, api.EvictObject(baseParams, cliBck, objName))
+	xid, err := api.BlobDownload(baseParams, cliBck, objName, &apc.BlobMsg{
+		FullSize: int64(len(data)), ChunkSize: cmn.ChunkSizeMin, NumWorkers: 4,
+	})
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, api.WaitForXaction(baseParams, &xact.ArgsMsg{
+		ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout,
+	}))
+	props, err := api.HeadObjectV2(baseParams, cliBck, objName, apc.GetPropsChunked, api.HeadArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, props.Chunks != nil && props.Chunks.ChunkCount > 1, "expected parallel blob download to create multiple chunks")
+	checkOCIAttributes(t, client, objName, data, "application/x-aistore-metadata-test", map[string]string{"env": "triage", "version": "1"})
 }
 
 // export AWS_PROFILE=default; export AIS_ENDPOINT="http://localhost:8080"; export BUCKET="aws://..."; go test -v -run="TestS3ObjMetadata" -count=1 ./ais/test/.

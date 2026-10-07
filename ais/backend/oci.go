@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -657,15 +658,13 @@ func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
 	return bcks, 0, nil
 }
 
-func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.Request) (int, error) {
 	var (
 		avoidingMPU bool // true if object size is not known or known to be <= bp.mpuThreshold
 		cloudBck    = lom.Bck().RemoteBck()
 		err         error
 		objectAttrs = lom.ObjAttrs()
 		objectSize  int64
-
-		cksumType, cksumValue = lom.Checksum().Get()
 	)
 	client, _, err := bp.ociClient(cloudBck)
 	if err != nil {
@@ -679,14 +678,9 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 		avoidingMPU = (objectSize <= bp.mpuThreshold)
 	}
 
+	ociSetMetadata(lom.ObjAttrs(), ociPutMetadata(lom, oreq), ociPutContentType(lom, oreq))
 	if !avoidingMPU {
-		return bp.putObjViaMPU(r, lom, objectSize)
-	}
-
-	// Store AIS checksum in OCI user metadata
-	md := map[string]string{
-		ociChecksumType: cksumType,
-		ociChecksumVal:  cksumValue,
+		return bp.putObjViaMPU(r, lom, objectSize, oreq)
 	}
 
 	req := ocios.PutObjectRequest{
@@ -694,7 +688,8 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 		BucketName:    &cloudBck.Name,
 		ObjectName:    &lom.ObjName,
 		PutObjectBody: r,
-		OpcMeta:       md,
+		OpcMeta:       ociPutMetadata(lom, oreq),
+		ContentType:   ociPutContentType(lom, oreq),
 	}
 
 	resp, err := client.PutObject(ctx, req)
@@ -796,16 +791,120 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*
 		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 
-	// AIS custom checksum from OCI user metadata (see also: PutObj, GetObjReader)
-	if resp.OpcMeta != nil {
-		if cksumType, ok := resp.OpcMeta[ociChecksumType]; ok {
-			if cksumValue, ok := resp.OpcMeta[ociChecksumVal]; ok {
-				oa.SetCksum(cksumType, cksumValue)
-			}
-		}
-	}
+	oa.Cksum = ociSetMetadata(oa, resp.OpcMeta, resp.ContentType)
 
 	return oa, 0, nil
+}
+
+// Preserve user metadata when uploads originate from a request or cached LOM.
+func ociPutMetadata(lom *core.LOM, oreq *http.Request) map[string]string {
+	md := ociDecodeUserMetadata(ociPutHeaders(lom, oreq))
+	if md == nil {
+		md = make(map[string]string, 2)
+	}
+	// User input must never replace the checksum written by AIStore.
+	md[ociChecksumType], md[ociChecksumVal] = lom.Checksum().Get()
+	return md
+}
+
+// Forwarded copies carry serialized object attributes; their Content-Type describes the transport.
+func ociPutHeaders(lom *core.LOM, oreq *http.Request) http.Header {
+	if oreq == nil {
+		header := make(http.Header)
+		for k, v := range lom.GetCustomMD() {
+			header.Set(k, v)
+		}
+		return header
+	}
+	header := oreq.Header.Clone()
+	if header == nil {
+		header = make(http.Header)
+	}
+	for _, kv := range oreq.Header.Values(apc.HdrObjCustomMD) {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue // Already validated by ObjAttrs.FromHeader before the backend PUT.
+		}
+		k = http.CanonicalHeaderKey(k)
+		_, present := header[k]
+		if !present || k == cos.HdrContentType && cmn.IsDefaultContentType(header.Get(k)) {
+			header.Set(k, v)
+		}
+	}
+	return header
+}
+
+// Keep regular PUT/GET normalization local: shared OCI helpers also serve explicit S3 multipart uploads.
+func ociDecodeUserMetadata(header http.Header) map[string]string {
+	md := cmn.BackendHelpers.OCI.DecodeMetadata(header)
+	for k, v := range cmn.BackendHelpers.Amazon.DecodeMetadata(header) {
+		if md == nil {
+			md = make(map[string]string)
+		}
+		md[k] = v // S3 headers take precedence over native OCI headers.
+	}
+	for k := range md {
+		if ociIsInternalMetadata(k) {
+			delete(md, k)
+		}
+	}
+	return md
+}
+
+func ociEncodeUserMetadata(md map[string]string) map[string]string {
+	userMD := make(map[string]string, len(md))
+	for k, v := range md {
+		if !ociIsInternalMetadata(k) {
+			userMD[k] = v
+		}
+	}
+	return cmn.BackendHelpers.Amazon.EncodeMetadata(userMD)
+}
+
+func ociIsInternalMetadata(k string) bool {
+	k = strings.ToLower(k)
+	k = strings.TrimPrefix(k, strings.ToLower(cmn.OCIHeaderMetaPrefix))
+	k = strings.TrimPrefix(k, strings.ToLower(cmn.AwsHeaderMetaPrefix))
+	return strings.HasPrefix(k, strings.ToLower(apc.HdrPrefixAIS))
+}
+
+// Unlike PutObject's header map, multipart creation requires prefixed JSON keys.
+func ociMptMetadata(md map[string]string) map[string]string {
+	metadata := make(map[string]string, len(md))
+	for k, v := range md {
+		metadata[strings.ToLower(cmn.OCIHeaderMetaPrefix+k)] = v
+	}
+	return metadata
+}
+
+func ociPutContentType(lom *core.LOM, oreq *http.Request) *string {
+	if v := ociPutHeaders(lom, oreq).Get(cos.HdrContentType); v != "" {
+		return &v
+	}
+	return nil
+}
+
+func ociSetMetadata(oa *cmn.ObjAttrs, md map[string]string, contentType *string) *cos.Cksum {
+	for k := range oa.CustomMD {
+		key := http.CanonicalHeaderKey(k)
+		if strings.HasPrefix(key, cmn.AwsHeaderMetaPrefix) || strings.HasPrefix(key, cmn.OCIHeaderMetaPrefix) {
+			oa.DelCustomKey(k)
+		}
+	}
+	for k, v := range ociEncodeUserMetadata(md) {
+		oa.SetCustomKey(k, v)
+	}
+	if contentType == nil {
+		oa.SetContentType("")
+	} else {
+		oa.SetContentType(*contentType)
+	}
+	if ty, ok := md[ociChecksumType]; ok {
+		if value, ok := md[ociChecksumVal]; ok {
+			return cos.NewCksum(ty, value)
+		}
+	}
+	return nil
 }
 
 func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
@@ -867,7 +966,18 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 	}
 
 	if attemptingMPD {
+		h := cmn.BackendHelpers.OCI
+		lom.SetCustomKey(cmn.SourceObjMD, apc.OCI)
+		if v, ok := h.EncodeETag(resp.ETag); ok {
+			lom.SetCustomKey(cmn.ETag, v)
+		}
+		if v, ok := h.EncodeCksum(resp.ContentMd5); ok {
+			lom.SetCustomKey(cmn.MD5ObjMD, v)
+		}
+		expCksum := ociSetMetadata(lom.ObjAttrs(), resp.OpcMeta, resp.ContentType)
+
 		res = bp.getObjReaderViaMPD(ctx, cancel, lom, client, &resp)
+		res.ExpCksum = expCksum
 		if res.Err != nil {
 			cancel()
 			resp.Content.Close()

@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -65,7 +66,7 @@ type ociMPUStruct struct {
 // Finally, if there are no errors, putObjViaMPU() can perform the MPU "complete"
 // operation that logically combines all those uploaded parts. If there were errors,
 // the MPU operation is aborted.
-func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) (int, error) {
+func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, oreq *http.Request) (int, error) {
 	var (
 		cloudBck   = lom.Bck().RemoteBck()
 		err        error
@@ -100,7 +101,9 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 		NamespaceName: &mpu.bp.namespace,
 		BucketName:    &mpu.bucketName,
 		CreateMultipartUploadDetails: ocios.CreateMultipartUploadDetails{
-			Object: &mpu.objectName,
+			Object:      &mpu.objectName,
+			Metadata:    ociMptMetadata(ociPutMetadata(lom, oreq)),
+			ContentType: ociPutContentType(lom, oreq),
 		},
 	}
 
