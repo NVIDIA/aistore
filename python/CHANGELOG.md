@@ -8,6 +8,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- `Object.get_url()` builds its ETL query parameters the way the rest of the SDK does.
+  It wrote `etl_name` straight from `ETLConfig.name`, so a pipeline built with
+  `etl_a >> etl_b` went into the URL as the `repr()` of an `Etl` object and
+  `etl_pipeline` was dropped, and dict `args` were written as a Python repr instead
+  of JSON. `Bucket.list_urls()` and `ObjectGroup.list_urls()` are the callers.
 - A bucket qualified by a namespace is recognized in an AIS error message. The FQN
   pattern stopped at the first slash, so `ais://@uuid#ns/bucket` and
   `ais://@remote123/bucket` parsed as the bucket `@uuid#ns` or `@remote123` with an

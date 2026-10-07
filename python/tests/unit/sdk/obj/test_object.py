@@ -23,6 +23,7 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     QPARAM_ETL_NAME,
     QPARAM_ETL_ARGS,
+    QPARAM_ETL_PIPELINE,
     QPARAM_OBJ_APPEND,
     QPARAM_OBJ_APPEND_HANDLE,
     QPARAM_OBJ_TO,
@@ -54,6 +55,7 @@ from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
 from aistore.sdk.etl import ETLConfig
+from aistore.sdk.etl.etl import Etl
 from aistore.sdk.obj.object_attributes import ObjectAttributes
 from aistore.sdk.obj.object_props import ObjectProps
 from aistore.sdk.types import (
@@ -513,17 +515,53 @@ class TestObject(unittest.TestCase):
         expected_res = "full url with etl args"
         self.mock_client.get_full_url.return_value = expected_res
 
-        etl_args = {"x": "y"}
-        etl_cfg = ETLConfig(ETL_NAME, etl_args)
+        etl_cfg = ETLConfig(ETL_NAME, {"x": "y"})
 
         expected_params = self.bck_qparams.copy()
         expected_params[QPARAM_ETL_NAME] = ETL_NAME
-        expected_params[QPARAM_ETL_ARGS] = etl_args
+        # The cluster reads this as JSON, and it is what get_reader sends for
+        # the same config; see test_get_reader_with_etl_args.
+        expected_params[QPARAM_ETL_ARGS] = '{"x":"y"}'
 
         res = self.object.get_url(etl=etl_cfg)
 
         self.assertEqual(res, expected_res)
         self.mock_client.get_full_url.assert_called_with(REQUEST_PATH, expected_params)
+
+    def test_get_url_with_etl_pipeline(self):
+        """A pipeline keeps its name and its later stages in the URL."""
+        expected_res = "full url with etl pipeline"
+        self.mock_client.get_full_url.return_value = expected_res
+
+        pipeline = Etl(Mock(), "stage1") >> Etl(Mock(), "stage2")
+
+        expected_params = self.bck_qparams.copy()
+        expected_params[QPARAM_ETL_NAME] = "stage1"
+        expected_params[QPARAM_ETL_PIPELINE] = "stage2"
+
+        res = self.object.get_url(etl=ETLConfig(name=pipeline))
+
+        self.assertEqual(res, expected_res)
+        self.mock_client.get_full_url.assert_called_with(REQUEST_PATH, expected_params)
+
+    def test_get_url_agrees_with_get_reader_params(self):
+        """Whatever a config means, both paths have to put the same thing on the wire."""
+        pipeline = Etl(Mock(), "stage1") >> Etl(Mock(), "stage2")
+        for etl_cfg in (
+            ETLConfig(ETL_NAME),
+            ETLConfig(ETL_NAME, {"x": "y"}),
+            ETLConfig(ETL_NAME, "plain-args"),
+            ETLConfig(name=pipeline),
+        ):
+            with self.subTest(etl=etl_cfg):
+                self.mock_client.get_full_url.reset_mock()
+                self.object.get_url(etl=etl_cfg)
+                from_get_url = self.mock_client.get_full_url.call_args.args[1]
+
+                expected = self.bck_qparams.copy()
+                etl_cfg.update_qparams(expected)
+
+                self.assertEqual(from_get_url, expected)
 
     def test_get_reader_byte_range_and_blob_conflict(self):
         """Ensure get_reader raises ValueError when both byte_range and blob_download_config are provided."""
