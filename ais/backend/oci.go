@@ -851,6 +851,15 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 		req.Range = &rangeHeader
 	}
 
+	var cancel context.CancelFunc
+	if attemptingMPD {
+		ctx, cancel = context.WithCancel(ctx) // includes the initial part, before MPD exists
+		defer func() {
+			if res.Err != nil {
+				cancel()
+			}
+		}()
+	}
 	resp, err := client.GetObject(ctx, req)
 	if err != nil {
 		res.ErrCode, res.Err = ociErrorToAISError("GetObject", cloudBck.Name, lom.ObjName, rangeHeader, err, resp)
@@ -858,7 +867,12 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 	}
 
 	if attemptingMPD {
-		return bp.getObjReaderViaMPD(ctx, lom, client, &resp)
+		res = bp.getObjReaderViaMPD(ctx, cancel, lom, client, &resp)
+		if res.Err != nil {
+			cancel()
+			resp.Content.Close()
+		}
+		return res
 	}
 
 	res.R = resp.Content
