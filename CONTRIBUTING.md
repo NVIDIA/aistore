@@ -3,6 +3,65 @@
 The AIStore project repository follows an open source model where anyone is allowed and encouraged to contribute. However, contributing to AIStore has a few guidelines that must be followed.
 
 
+## AI-Assisted Contributions
+
+We welcome AI-assisted contributions. AI tools may assist with development,
+but the human contributor remains responsible for the entire submission.
+All existing contribution, testing, formatting, licensing, and sign-off
+requirements apply.
+
+### Human Responsibility
+
+Submit only changes you have personally reviewed, understand, and can
+explain. Verify generated code and tests, respond to review feedback, and
+address bugs introduced by your contribution.
+
+Do not submit pull requests or issue reports produced by unattended AI
+scans without human investigation and validation. For bug fixes, provide
+a reproducer, regression test, or other concrete evidence of the problem
+and verify that the change addresses it. State any testing or verification
+you could not complete.
+
+### Disclosure
+
+Disclose substantive AI assistance in the pull request description,
+including assistance with code, tests, documentation, or identifying the
+problem being addressed. Disclosure is required even if you subsequently
+edited the generated content.
+
+Include:
+
+- The tool and model used, where known.
+- Which parts of the contribution were assisted and how.
+- How you reviewed and tested the result, including any limitations.
+
+Routine autocomplete, spelling and grammar corrections, and mechanical
+formatting do not require disclosure. When in doubt, disclose.
+
+### Licensing and Sign-Off
+
+You are responsible for ensuring that you have the right to submit the
+contribution under the project's MIT license and any applicable file-level
+licenses, consistent with the Developer Certificate of Origin.
+
+Check that your AI tool's terms permit the intended contribution. Do not
+submit copied third-party material unless its license permits inclusion
+and all required notices and attribution are preserved.
+
+Commit authorship and DCO sign-off must identify responsible humans.
+Do not list an AI tool as an author, co-author, or signatory. AI assistance
+disclosure does not replace your own Signed-off-by certification.
+
+### Issues and Feature Requests
+
+Describe the problem or proposal in your own words and verify the claims
+you submit. AI may help you prepare a report, but do not submit raw,
+unedited AI output or speculative findings you have not investigated.
+
+Maintainers may request further explanation or verification, or close
+contributions that do not meet these requirements without detailed review.
+
+
 ## Contribution Workflow
 
 The AIStore project repository maintains a contribution structure in which everyone *proposes* changes to the codebase via *pull requests*. To contribute to AIStore:
@@ -103,7 +162,7 @@ checks; it publishes to Fern.
 
 #### Signing-Off Commits
 
-All contributors must *sign-off* on each commit. This certifies that each contribution is that contributor's original work per the following *Developer Certificate of Origin*[^developer-certificate-of-origin].
+All contributors must *sign-off* on each commit. This certifies that the contributor has the right to submit the contribution under the applicable open-source license, as described in the *Developer Certificate of Origin*[^developer-certificate-of-origin] below.
 
 [^developer-certificate-of-origin]: **Developer Certificate of Origin**
     ```
