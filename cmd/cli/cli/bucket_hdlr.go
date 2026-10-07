@@ -324,6 +324,7 @@ var (
 			nonRecursFlag, // TODO: wire into shard-index build handler (non-recursive prefix walk)
 			numWorkersFlag,
 			skipVerifyFlag,
+			shardIdxCacheFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
 			nonverboseFlag,
@@ -709,6 +710,7 @@ func shardIndexBuildHandler(c *cli.Context) error {
 		Prefix:     prefix,
 		NumWorkers: parseIntFlag(c, numWorkersFlag),
 		SkipVerify: flagIsSet(c, skipVerifyFlag),
+		Cache:      flagIsSet(c, shardIdxCacheFlag),
 	}
 	xid, err := api.IndexBucketShards(apiBP, bck, msg)
 	if err != nil {

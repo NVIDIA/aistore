@@ -189,6 +189,7 @@ The build job:
 - builds one index per TAR object
 - verifies existing indexes unless `--skip-verify` is used
 - rebuilds stale or invalid indexes
+- with `--cache`, also loads existing and newly built indexes into memory
 
 Monitor running and completed indexing jobs with:
 
@@ -205,6 +206,18 @@ $ ais bucket shard-index build ais://dataset --prefix shards/ --skip-verify
 ```
 
 When this option is set, AIS trusts source objects that already say they have a shard index and skips loading the stored index to verify staleness. Use it only when you know the indexed TAR objects have not changed.
+
+### Warm the in-memory cache
+
+`--cache` loads existing and newly built indexes into memory, so the first `archpath` reads do not pay for loading them:
+
+```console
+$ ais bucket shard-index build ais://dataset --prefix shards/ --cache --wait
+```
+
+Caching depends on available memory. Cached indexes will be evicted when idle (not used for considerable time) or under memory pressure.
+
+`--cache` and `--skip-verify` are independent, with one exception. Loading an existing index into memory verifies it, so a stale or corrupt index found that way gets rebuilt even with `--skip-verify`. `--skip-verify` still applies to indexes that are not admitted to the cache.
 
 ## Read indexed shards
 

@@ -1092,8 +1092,13 @@ var (
 	// usage: shard-index build
 	skipVerifyFlag = cli.BoolFlag{
 		Name: "skip-verify",
-		Usage: "If a shard already has an index, trust it without loading and verifying staleness (fast re-run);\n" +
-			indent1 + "\tuse with caution: stale indexes will remain until the next non-skip-verify run",
+		Usage: "If a shard already has an index, skip standalone verification (fast re-run);\n" +
+			indent1 + "\tuse with caution: stale indexes remain until a verifying run, unless loaded and verified via '--cache'",
+	}
+	shardIdxCacheFlag = cli.BoolFlag{
+		Name: "cache",
+		Usage: "Cache shard index in memory (both existing and newly built; subject to memory pressure);\n" +
+			indent1 + "\tloading an existing index verifies it: stale or corrupt indexes get rebuilt",
 	}
 
 	blobThresholdFlag = cli.StringFlag{
