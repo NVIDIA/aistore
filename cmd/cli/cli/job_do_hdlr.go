@@ -219,6 +219,10 @@ var (
 		Subcommands: []cli.Command{
 			prefetchStartCmd,
 			blobDownloadCmd,
+			makeAlias(&shardIndexBuildCmd, &mkaliasOpts{
+				newName: commandShardIndex,
+				replace: cos.StrKVs{"ais bucket shard-index build": "ais job start shard-index"},
+			}),
 			{
 				Name:      cmdDownload,
 				Usage:     downloadUsage,

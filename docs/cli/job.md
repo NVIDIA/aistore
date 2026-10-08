@@ -172,6 +172,24 @@ Done.
 
 > **See also**: [Chunking](/docs/storage_svcs.md#chunking), [bucket properties](/docs/bucket.md), [`ais bucket props`](/docs/cli/bucket.md)
 
+#### Build shard indexes
+
+`ais start shard-index` (same as `ais job start shard-index`) builds a shard index for each TAR object in a bucket. It is equivalent to `ais bucket shard-index build` and accepts the same arguments and flags.
+
+```console
+$ ais start shard-index BUCKET [--prefix PREFIX] [--num-workers N] [--skip-verify] [--wait]
+```
+
+Non-TAR objects are skipped and stale indexes (e.g., after re-upload) are automatically re-indexed.
+
+**Examples:**
+
+```console
+$ ais start shard-index ais://mybucket --prefix shards/ --wait
+```
+
+> **See also**: [`ais bucket shard-index`](/docs/cli/bucket.md#build-and-summarize-shard-indexes), [Shard Index](/docs/shard_index.md)
+
 ## Stop job
 
 Stop a single job or multiple jobs.

@@ -2,3 +2,6 @@ pre-summary=5,0,5,0
 indexed=5
 summary=5,5,0,10
 poll-summary=5,5,0,10
+start-summary=1,1,0,2
+help-alias=1,0
+help-build=0,1

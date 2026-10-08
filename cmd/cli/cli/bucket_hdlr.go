@@ -392,6 +392,14 @@ var (
 			bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 		),
 	}
+	shardIndexBuildCmd = cli.Command{
+		Name:         cmdShardIndexBuild,
+		Usage:        shardIndexBuildUsage,
+		ArgsUsage:    bucketArgument,
+		Flags:        sortFlags(bucketCmdsFlags[cmdShardIndexBuild]),
+		Action:       shardIndexBuildHandler,
+		BashComplete: bucketCompletions(bcmplop{}),
+	}
 
 	bucketCmd = cli.Command{
 		Name:  commandBucket,
@@ -414,13 +422,7 @@ var (
 				Name:  commandShardIndex,
 				Usage: shardIndexUsage,
 				Subcommands: []cli.Command{
-					{
-						Name:      cmdShardIndexBuild,
-						Usage:     shardIndexBuildUsage,
-						ArgsUsage: bucketArgument,
-						Flags:     sortFlags(bucketCmdsFlags[cmdShardIndexBuild]),
-						Action:    shardIndexBuildHandler,
-					},
+					shardIndexBuildCmd,
 					{
 						Name:         cmdSummary,
 						Usage:        shardIndexSummaryUsage,

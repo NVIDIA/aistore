@@ -1,4 +1,4 @@
-# Test shard-index build and summary commands
+# Test shard-index build, start, and summary commands
 
 # Create bucket
 ais bucket create ais://$BUCKET // IGNORE
@@ -33,6 +33,14 @@ ais bucket shard-index summary ais://$BUCKET --prefix shards/ --no-headers | awk
 # Start asynchronously and poll by UUID
 ais bucket shard-index summary ais://$BUCKET/shards/ --dont-wait | awk -F'[][]' '{print $2}' // SAVE_RESULT
 for i in $(seq 1 30); do out=$(ais bucket shard-index summary ais://$BUCKET/shards/ $RESULT --dont-wait --no-headers 2>/dev/null || true); if echo "$out" | grep -q "^ais://"; then echo "$out" | awk '{print "poll-summary=" $2 "," $4 "," $6 "," $7}'; break; fi; sleep 0.1; done
+
+# Build the remaining shard via the start command and verify it was indexed
+ais start shard-index ais://$BUCKET/skip/ --wait // IGNORE
+ais bucket shard-index summary ais://$BUCKET/skip/ --no-headers | awk '{print "start-summary=" $2 "," $4 "," $6 "," $7}'
+
+# Help via the alias must show the alias command path in examples, and the canonical help must keep its own
+ais start shard-index --help | awk '/ais job start shard-index/ {a=1} /ais bucket shard-index build/ {b=1} END {print "help-alias=" a+0 "," b+0}'
+ais bucket shard-index build --help | awk '/ais job start shard-index/ {a=1} /ais bucket shard-index build/ {b=1} END {print "help-build=" a+0 "," b+0}'
 
 # Clean up
 ais bucket rm --yes ais://$BUCKET // IGNORE

@@ -1742,6 +1742,8 @@ OPTIONS:
 
 `ais bucket shard-index` builds and summarizes shard indexes for TAR objects. Indexes allow AIS to read archived files via direct lookup instead of scanning the TAR object.
 
+`ais job start shard-index` (or `ais start shard-index`) is equivalent to `ais bucket shard-index build` and accepts the same arguments and flags.
+
 For motivation, access semantics, and implementation details, see [Shard Index](/docs/shard_index.md).
 
 ```console

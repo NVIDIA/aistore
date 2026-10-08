@@ -163,6 +163,8 @@ Use `ais bucket shard-index build` to build indexes for TAR objects in a bucket:
 $ ais bucket shard-index build ais://dataset --prefix shards/ --wait
 ```
 
+`ais job start shard-index` (or `ais start shard-index`) is equivalent to `ais bucket shard-index build` and accepts the same arguments and flags.
+
 Common forms:
 
 ```console
