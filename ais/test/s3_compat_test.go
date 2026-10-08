@@ -390,6 +390,207 @@ func TestS3ListObjectsMaxKeysNextPage(t *testing.T) {
 		"max-keys=0: expected an empty, non-truncated response")
 }
 
+func TestS3ListMultipartUploadsPages(t *testing.T) {
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bck      = cmn.Bck{Name: "test-s3-mpt-pages-" + trand.String(6), Provider: apc.AIS}
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	testS3ListMultipartUploadsPages(t, proxyURL, bck)
+}
+
+func TestS3ListMultipartUploadsRemotePages(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, Bck: cliBck, CloudBck: true})
+
+	proxyURL := tools.GetPrimaryURL()
+	_, err := api.HeadBucket(tools.BaseAPIParams(proxyURL), cliBck, false /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
+	testS3ListMultipartUploadsPages(t, proxyURL, cliBck)
+}
+
+func testS3ListMultipartUploadsPages(t *testing.T, proxyURL string, bck cmn.Bck) {
+	smap := tools.GetClusterMap(t, proxyURL)
+	if smap.CountActiveTs() < 2 {
+		t.Skipf("requires at least two active targets (have %d)", smap.CountActiveTs())
+	}
+
+	var (
+		prefix      = "mpt-pages-" + trand.String(8) + "/"
+		wantTargets = min(3, smap.CountActiveTs())
+		keys        = make([]string, 0, wantTargets*2)
+	)
+	for _, tsi := range smap.Tmap {
+		if tsi.InMaintOrDecomm() {
+			continue
+		}
+		for range 2 {
+			namePrefix := fmt.Sprintf("%sobj-%d-", prefix, len(keys))
+			keys = append(keys, tools.GenerateObjectNameOnTarget(namePrefix, bck, smap, tsi))
+		}
+		if len(keys) == wantTargets*2 {
+			break
+		}
+	}
+	sort.Strings(keys)
+
+	cfg, err := config.LoadDefaultConfig(
+		t.Context(),
+		config.WithCredentialsProvider(getS3Credentials(t)),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	client := s3.NewFromConfig(cfg, func(opts *s3.Options) {
+		opts.BaseEndpoint = aws.String(proxyURL)
+		opts.HTTPClient = newS3Client(true /*pathStyle*/)
+		opts.UsePathStyle = true
+	})
+
+	_, err = client.ListMultipartUploads(t.Context(), &s3.ListMultipartUploadsInput{
+		Bucket:     aws.String(bck.Name),
+		MaxUploads: aws.Int32(0),
+	})
+	var apiErr smithy.APIError
+	tassert.Fatalf(t, errors.As(err, &apiErr) && apiErr.ErrorCode() == aiss3.ErrCodeInvalidArgument,
+		"expected InvalidArgument for max-uploads=0, got: %v", err)
+	var responseErr *smithyhttp.ResponseError
+	tassert.Fatalf(t, errors.As(err, &responseErr) && responseErr.HTTPStatusCode() == http.StatusBadRequest,
+		"expected HTTP 400 for max-uploads=0, got: %v", err)
+
+	// Force page boundaries between three uploads for the same object key.
+	keys = append(keys, keys[0], keys[0])
+	sort.Strings(keys)
+	created := make(map[string]string, len(keys)) // upload ID => key
+	for _, key := range keys {
+		out, err := client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
+			Bucket: aws.String(bck.Name),
+			Key:    aws.String(key),
+		})
+		tassert.CheckFatal(t, err)
+		uploadID := aws.ToString(out.UploadId)
+		tassert.Fatalf(t, uploadID != "", "create multipart upload for %q returned an empty upload ID", key)
+		created[uploadID] = key
+		t.Cleanup(func() {
+			if _, active := created[uploadID]; !active {
+				return
+			}
+			_, err := client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
+				Bucket:   aws.String(bck.Name),
+				Key:      aws.String(key),
+				UploadId: aws.String(uploadID),
+			})
+			if err != nil {
+				t.Logf("cleanup: failed to abort multipart upload %q for %q: %v", uploadID, key, err)
+			}
+		})
+	}
+
+	var keyMarker, uploadIDMarker *string
+	seen := make(map[string]struct{}, len(created))
+	for page, expectedKey := range keys {
+		out, err := client.ListMultipartUploads(t.Context(), &s3.ListMultipartUploadsInput{
+			Bucket:         aws.String(bck.Name),
+			Prefix:         aws.String(prefix),
+			MaxUploads:     aws.Int32(1),
+			KeyMarker:      keyMarker,
+			UploadIdMarker: uploadIDMarker,
+		})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(out.Uploads) == 1, "page %d: expected one upload, got %d", page+1, len(out.Uploads))
+		tassert.Fatalf(t, aws.ToString(out.Uploads[0].Key) == expectedKey,
+			"page %d: expected key %q, got %q", page+1, expectedKey, aws.ToString(out.Uploads[0].Key))
+		uploadID := aws.ToString(out.Uploads[0].UploadId)
+		createdKey, createdUpload := created[uploadID]
+		tassert.Fatalf(t, createdUpload && createdKey == expectedKey,
+			"page %d: unexpected upload ID %q for %q", page+1, uploadID, expectedKey)
+		_, duplicate := seen[uploadID]
+		tassert.Fatalf(t, !duplicate, "page %d: duplicate upload ID %q for %q", page+1, uploadID, expectedKey)
+		seen[uploadID] = struct{}{}
+
+		lastPage := page == len(keys)-1
+		tassert.Fatalf(t, aws.ToBool(out.IsTruncated) == !lastPage,
+			"page %d: unexpected IsTruncated=%t", page+1, aws.ToBool(out.IsTruncated))
+		if lastPage {
+			tassert.Fatalf(t, out.NextKeyMarker == nil && out.NextUploadIdMarker == nil,
+				"last page: expected no continuation markers, got key=%q upload=%q",
+				aws.ToString(out.NextKeyMarker), aws.ToString(out.NextUploadIdMarker))
+			break
+		}
+
+		keyMarker, uploadIDMarker = out.NextKeyMarker, out.NextUploadIdMarker
+		tassert.Fatalf(t, aws.ToString(keyMarker) == expectedKey && aws.ToString(uploadIDMarker) == uploadID,
+			"page %d: invalid continuation markers key=%q upload=%q",
+			page+1, aws.ToString(keyMarker), aws.ToString(uploadIDMarker))
+	}
+
+	// Only one target owns these same-key uploads. Its local truncation must
+	// survive aggregation even when the merged page has exactly max-uploads.
+	keyMarker, uploadIDMarker = nil, nil
+	for page := range 3 {
+		out, err := client.ListMultipartUploads(t.Context(), &s3.ListMultipartUploadsInput{
+			Bucket:         aws.String(bck.Name),
+			Prefix:         aws.String(keys[0]),
+			MaxUploads:     aws.Int32(1),
+			KeyMarker:      keyMarker,
+			UploadIdMarker: uploadIDMarker,
+		})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(out.Uploads) == 1 && aws.ToString(out.Uploads[0].Key) == keys[0],
+			"same-key page %d: expected one upload for %q", page+1, keys[0])
+		tassert.Fatalf(t, aws.ToBool(out.IsTruncated) == (page < 2),
+			"same-key page %d: unexpected truncation", page+1)
+		tassert.Fatalf(t, aws.ToString(out.KeyMarker) == aws.ToString(keyMarker) &&
+			aws.ToString(out.UploadIdMarker) == aws.ToString(uploadIDMarker),
+			"same-key page %d: markers not echoed", page+1)
+		if page < 2 {
+			tassert.Fatalf(t, aws.ToString(out.NextKeyMarker) == keys[0] &&
+				aws.ToString(out.NextUploadIdMarker) == aws.ToString(out.Uploads[0].UploadId),
+				"same-key page %d: invalid continuation markers", page+1)
+		} else {
+			tassert.Fatalf(t, out.NextKeyMarker == nil && out.NextUploadIdMarker == nil,
+				"same-key final page: unexpected continuation markers")
+		}
+		keyMarker, uploadIDMarker = out.NextKeyMarker, out.NextUploadIdMarker
+	}
+
+	// The marked upload can disappear between pages. Skip every remaining
+	// upload for that key, including uploads not yet returned, and move on.
+	first, err := client.ListMultipartUploads(t.Context(), &s3.ListMultipartUploadsInput{
+		Bucket:     aws.String(bck.Name),
+		Prefix:     aws.String(prefix),
+		MaxUploads: aws.Int32(2),
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(first.Uploads) == 2 && aws.ToBool(first.IsTruncated),
+		"expected a truncated first page with two same-key uploads")
+	tassert.Fatalf(t, aws.ToString(first.Uploads[0].Key) == keys[0] &&
+		aws.ToString(first.Uploads[1].Key) == keys[0], "expected two uploads for %q", keys[0])
+	tassert.Fatalf(t, aws.ToString(first.NextKeyMarker) == keys[0] &&
+		aws.ToString(first.NextUploadIdMarker) == aws.ToString(first.Uploads[1].UploadId),
+		"expected continuation markers for the second upload")
+	_, err = client.AbortMultipartUpload(t.Context(), &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(bck.Name),
+		Key:      first.NextKeyMarker,
+		UploadId: first.NextUploadIdMarker,
+	})
+	tassert.CheckFatal(t, err)
+	delete(created, aws.ToString(first.NextUploadIdMarker))
+
+	next, err := client.ListMultipartUploads(t.Context(), &s3.ListMultipartUploadsInput{
+		Bucket:         aws.String(bck.Name),
+		Prefix:         aws.String(prefix),
+		MaxUploads:     aws.Int32(1),
+		KeyMarker:      first.NextKeyMarker,
+		UploadIdMarker: first.NextUploadIdMarker,
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(next.Uploads) == 1, "expected one upload after the missing marker")
+	tassert.Fatalf(t, aws.ToString(next.Uploads[0].Key) == keys[3],
+		"missing upload marker: expected next key %q, got %q", keys[3], aws.ToString(next.Uploads[0].Key))
+	tassert.Fatalf(t, aws.ToBool(next.IsTruncated) && aws.ToString(next.NextKeyMarker) == keys[3] &&
+		aws.ToString(next.NextUploadIdMarker) == aws.ToString(next.Uploads[0].UploadId),
+		"missing upload marker: expected continuation markers for the next key")
+}
+
 // Companion to TestS3ListObjectsMaxKeysNextPage, but against a Cloud bucket -
 // i.e. the R-flow, where the continuation token underneath the compound one is the backend's own opaque string.
 func TestS3ListObjectsRemotePages(t *testing.T) {

@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -295,19 +294,20 @@ func (t *target) listPartsMptS3(w http.ResponseWriter, r *http.Request, bck *met
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
 // GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&
 // max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
-func (t *target) listUploadsMptS3(w http.ResponseWriter, bck *meta.Bck, dpq *dpq) {
-	var (
-		maxUploads int
-		idMarker   string
-	)
-	if s := dpq.get(s3.QparamMptMaxUploads); s != "" {
-		if v, err := strconv.Atoi(s); err == nil {
-			maxUploads = v
-		}
+func (t *target) listUploadsMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, dpq *dpq) {
+	maxUploads, err := s3.ParseMptMaxUploads(dpq.get(s3.QparamMptMaxUploads))
+	if err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusBadRequest, Code: s3.ErrCodeInvalidArgument})
+		return
 	}
-	idMarker = dpq.get(s3.QparamMptUploadIDMarker)
 	all := t.ups.toSlice()
-	result := s3.ListUploads(all, bck.Name, idMarker, maxUploads)
+	result := s3.ListUploads(all, s3.ListMptUploadsParams{
+		BckName:        bck.Name,
+		Prefix:         dpq.get(s3.QparamPrefix),
+		KeyMarker:      dpq.get(s3.QparamMptKeyMarker),
+		UploadIDMarker: dpq.get(s3.QparamMptUploadIDMarker),
+		MaxUploads:     maxUploads,
+	})
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)

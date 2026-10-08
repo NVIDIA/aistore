@@ -80,12 +80,16 @@ type (
 	// List of active multipart uploads response — emits <ListMultipartUploadsResult> per AWS S3 spec
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html#API_ListMultipartUploads_ResponseSyntax
 	ListMptUploadsResult struct {
-		XMLName        xml.Name           `xml:"ListMultipartUploadsResult"`
-		Bucket         string             `xml:"Bucket"`
-		UploadIDMarker string             `xml:"UploadIdMarker"`
-		Uploads        []UploadInfoResult `xml:"Upload"`
-		MaxUploads     int                `xml:"MaxUploads"`
-		IsTruncated    bool               `xml:"IsTruncated"`
+		XMLName            xml.Name           `xml:"ListMultipartUploadsResult"`
+		Bucket             string             `xml:"Bucket"`
+		KeyMarker          string             `xml:"KeyMarker"`
+		UploadIDMarker     string             `xml:"UploadIdMarker"`
+		NextKeyMarker      string             `xml:"NextKeyMarker,omitempty"`
+		NextUploadIDMarker string             `xml:"NextUploadIdMarker,omitempty"`
+		Prefix             string             `xml:"Prefix"`
+		Uploads            []UploadInfoResult `xml:"Upload"`
+		MaxUploads         int                `xml:"MaxUploads"`
+		IsTruncated        bool               `xml:"IsTruncated"`
 	}
 
 	// Deleted result: list of deleted objects and errors

@@ -31,6 +31,7 @@ const (
 	QparamMptPartNo   = apc.QparamMptPartNo   // Part number for multipart upload
 
 	QparamMptMaxUploads     = "max-uploads"
+	QparamMptKeyMarker      = "key-marker"
 	QparamMptUploadIDMarker = "upload-id-marker"
 
 	QparamAccessKeyID = "AWSAccessKeyId"

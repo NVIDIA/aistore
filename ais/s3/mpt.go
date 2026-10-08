@@ -1,6 +1,6 @@
 // Package s3 provides Amazon S3 compatibility layer
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package s3
 
@@ -8,7 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,13 +22,34 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func ListUploads(all []*core.Ufest, bckName, idMarker string, maxUploads int) *ListMptUploadsResult {
+type ListMptUploadsParams struct {
+	BckName        string
+	Prefix         string
+	KeyMarker      string
+	UploadIDMarker string
+	MaxUploads     int
+}
+
+// ParseMptMaxUploads validates the S3 max-uploads request parameter.
+func ParseMptMaxUploads(value string) (int, error) {
+	if value == "" {
+		return apc.MaxPageSizeAWS, nil
+	}
+	maxUploads, err := strconv.Atoi(value)
+	if err != nil || maxUploads < 1 || maxUploads > apc.MaxPageSizeAWS {
+		return 0, fmt.Errorf("invalid %q=%q: expecting an integer between 1 and %d",
+			QparamMptMaxUploads, value, apc.MaxPageSizeAWS)
+	}
+	return maxUploads, nil
+}
+
+func ListUploads(all []*core.Ufest, params ListMptUploadsParams) *ListMptUploadsResult {
 	results := make([]UploadInfoResult, 0, len(all))
 
 	// filter by bucket
 	for _, manifest := range all {
 		lom := manifest.Lom()
-		if bckName == "" || lom.Bck().Name == bckName {
+		if params.BckName == "" || lom.Bck().Name == params.BckName {
 			results = append(results, UploadInfoResult{
 				Key:       lom.ObjName,
 				UploadID:  manifest.ID(),
@@ -33,22 +57,58 @@ func ListUploads(all []*core.Ufest, bckName, idMarker string, maxUploads int) *L
 			})
 		}
 	}
+	return PageUploads(results, params)
+}
+
+// PageUploads merges target-local multipart upload listings and applies S3
+// filtering and pagination to the cluster-wide result.
+func PageUploads(results []UploadInfoResult, params ListMptUploadsParams) *ListMptUploadsResult {
+	results = slices.Clone(results)
+	if params.Prefix != "" {
+		filtered := results[:0]
+		for _, result := range results {
+			if strings.HasPrefix(result.Key, params.Prefix) {
+				filtered = append(filtered, result)
+			}
+		}
+		results = filtered
+	}
 
 	// sort by (object name, initiation time)
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].Key != results[j].Key {
 			return results[i].Key < results[j].Key
 		}
-		return results[i].Initiated.Before(results[j].Initiated)
+		if !results[i].Initiated.Equal(results[j].Initiated) {
+			return results[i].Initiated.Before(results[j].Initiated)
+		}
+		return results[i].UploadID < results[j].UploadID
 	})
 
-	// paginate with idMarker if specified
-	var from int
-	if idMarker != "" {
-		for i, res := range results {
-			if res.UploadID == idMarker {
-				from = i + 1
-				break
+	// Start after the key/upload pair returned by the previous page. When only
+	// key-marker is present, skip all uploads for that key as required by S3.
+	if params.KeyMarker != "" {
+		from := sort.Search(len(results), func(i int) bool { return results[i].Key >= params.KeyMarker })
+		if params.UploadIDMarker == "" {
+			for from < len(results) && results[from].Key == params.KeyMarker {
+				from++
+			}
+		} else {
+			found := false
+			for i := from; i < len(results) && results[i].Key == params.KeyMarker; i++ {
+				if results[i].UploadID == params.UploadIDMarker {
+					from = i + 1
+					found = true
+					break
+				}
+			}
+			// The marked upload may have completed or been aborted between pages.
+			// Its initiation time is no longer available, so skip the rest of that
+			// key to avoid repeating uploads already returned by an earlier page.
+			if !found {
+				for from < len(results) && results[from].Key == params.KeyMarker {
+					from++
+				}
 			}
 		}
 		if from > 0 {
@@ -58,16 +118,26 @@ func ListUploads(all []*core.Ufest, bckName, idMarker string, maxUploads int) *L
 
 	// apply maxUploads limit
 	var truncated bool
-	if maxUploads > 0 && len(results) > maxUploads {
-		results = results[:maxUploads]
+	if len(results) > params.MaxUploads {
+		results = results[:params.MaxUploads]
 		truncated = true
 	}
 
-	return &ListMptUploadsResult{
-		Bucket:      bckName,
-		Uploads:     results,
-		IsTruncated: truncated,
+	result := &ListMptUploadsResult{
+		Bucket:         params.BckName,
+		KeyMarker:      params.KeyMarker,
+		UploadIDMarker: params.UploadIDMarker,
+		Prefix:         params.Prefix,
+		Uploads:        results,
+		MaxUploads:     params.MaxUploads,
+		IsTruncated:    truncated,
 	}
+	if truncated {
+		last := results[len(results)-1]
+		result.NextKeyMarker = last.Key
+		result.NextUploadIDMarker = last.UploadID
+	}
+	return result
 }
 
 func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, err error) {

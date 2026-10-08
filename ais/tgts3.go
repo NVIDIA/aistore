@@ -299,7 +299,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("listUploadsMpt", bck.String(), dpq.m)
 		}
-		t.listUploadsMptS3(w, bck, dpq)
+		t.listUploadsMptS3(w, r, bck, dpq)
 		return
 	}
 	if len(items) < 2 {
