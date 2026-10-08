@@ -5,6 +5,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -84,6 +85,35 @@ func GetClusterMap(bp BaseParams) (smap *meta.Smap, err error) {
 	FreeRp(reqParams)
 	qfree(q)
 	return smap, err
+}
+
+// SetPlacementWeights sets all target weights from an edited GetClusterMap result (v5.2)
+// - assign each target's weight via smap.Tmap[tid].SetPlacementWeight(); all zero clears
+// - returns rebalance ID, if any; stale Smap: HTTP 409
+func SetPlacementWeights(bp BaseParams, smap *meta.Smap) (xid string, err error) {
+	if smap == nil || len(smap.Tmap) == 0 {
+		return "", errors.New("cannot set placement weights: empty Smap")
+	}
+	value := apc.ActValPlacementWeights{
+		Weights: make(map[string]int64, len(smap.Tmap)), UUID: smap.UUID, Version: smap.Version,
+	}
+	for id, tsi := range smap.Tmap {
+		if tsi == nil {
+			return "", fmt.Errorf("cannot set placement weights: nil target %q", id)
+		}
+		value.Weights[id] = tsi.PlacementWeight()
+	}
+	bp.Method = http.MethodPut
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathClu.S
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActSetPlacementWeights, Value: value})
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
+	}
+	_, err = reqParams.doReqStr(&xid)
+	FreeRp(reqParams)
+	return xid, err
 }
 
 // GetNodeClusterMap retrieves cluster map from the specified node.

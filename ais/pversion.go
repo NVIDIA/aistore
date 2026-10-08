@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,11 +20,12 @@ import (
 // Node-version tracking (primary-side): the verMismatch map records version of any node
 // when the former != primary's.
 // Rules:
-// - absence from the map means: same version as primary (matches are deleted).
-// - trust Smap first; entries in verMismatch are not pruned on membership events.
-// - empty/nil map == same-version satisfied
-// - self-join only (admin-join enforces the version boundary but is not tracked)
-// - callers must enforce the version boundary first (see checkNodeVer)
+// - absence means no recorded mismatch: the node either reported the primary’s version
+//   or has not been observed;
+// - trust Smap first; entries in verMismatch are not pruned on membership events;
+// - empty/nil map means no known mismatches; it does not establish a same-version cluster;
+// - self-join, admin-join, and keepalive re-admission; recorded under the Smap lock once accepted;
+// - callers must enforce the version boundary first (see checkNodeVer).
 
 func (p *proxy) noteNodeVersion(nsi *meta.Snode, nverStr string, nversParsed cos.Version) {
 	debug.Assert(nverStr != "", nsi) // boundary enforced prior to tracking
@@ -112,4 +114,37 @@ func enforceVerBoundary(otherVerStr string) (reject bool) {
 	}
 	debug.Assert(other.Major >= 5) // apc.HdrNodeVersion was introduced in 5.0
 	return other.Major < 5
+}
+
+// Placement weights (v5.2): older nodes cannot decode a weighted Smap.
+// - verMismatch is populated on admission; a newly elected primary starts with none
+
+// rejects weighted Smap while node versions differ
+func (p *proxy) checkSameVersion(smap *smapX) error {
+	var names []string
+	primary := p.primary()
+	primary.reg.mtv.Lock()
+	for sid, ver := range primary.reg.verMismatch {
+		if si := smap.GetNode(sid); si != nil {
+			names = append(names, si.StringEx()+"("+ver+")")
+		}
+	}
+	primary.reg.mtv.Unlock()
+	if len(names) == 0 {
+		return nil
+	}
+	slices.Sort(names)
+	return fmt.Errorf("%s: cannot set placement weights: node version mismatch %v (primary: %s) - complete the upgrade first",
+		p, names, cmn.VersionAIStore)
+}
+
+var placementMinVer = cos.Version{Major: 5, Minor: 2}
+
+// rejects pre-5.2 joiner when the cluster is weighted
+func checkJoinWeighted(pname, sname, nversStr string, smap *smapX) error {
+	if smap == nil || !smap.IsWeighted() || cos.SupportsVersionAtLeast(nversStr, placementMinVer) {
+		return nil
+	}
+	return fmt.Errorf("%s: cannot join %s (version %q) - cluster has placement weights that require version %s or later",
+		pname, sname, nversStr, placementMinVer)
 }

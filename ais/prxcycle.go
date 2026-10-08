@@ -543,7 +543,7 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 			return true
 		}
 	}
-	return false
+	return !cur.SamePlacementWeights(&prev.Smap)
 }
 
 func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {

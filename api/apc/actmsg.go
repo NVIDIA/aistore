@@ -7,6 +7,7 @@ package apc
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -111,6 +112,9 @@ const (
 	ActSelfJoinProxy   = "self-join-proxy"
 	ActKeepaliveUpdate = "keepalive-update"
 
+	// added in 5.2
+	ActSetPlacementWeights = "set-placement-weights"
+
 	// IC
 	ActListenToNotif     = "watch-xaction"
 	ActMergeOwnershipTbl = "ic-merge-own-tbl"
@@ -181,7 +185,44 @@ type (
 		KeepInitialConfig bool     `json:"keep_initial_config"` // ditto (to be able to restart a node from scratch)
 		NoShutdown        bool     `json:"no_shutdown"`
 	}
+	// all target weights (v5.2)
+	ActValPlacementWeights struct {
+		Weights map[string]int64 `json:"weights"`
+		UUID    string           `json:"uuid"`
+		Version int64            `json:"version,string"`
+	}
+	// quoted map values (`json:",string"` does not apply to maps)
+	placementWeightsWire struct {
+		Weights map[string]string `json:"weights"`
+		UUID    string            `json:"uuid"`
+		Version int64             `json:"version,string"`
+	}
 )
+
+func (v ActValPlacementWeights) MarshalJSON() ([]byte, error) {
+	wire := placementWeightsWire{Weights: make(map[string]string, len(v.Weights)), UUID: v.UUID, Version: v.Version}
+	for id, weight := range v.Weights {
+		wire.Weights[id] = strconv.FormatInt(weight, 10)
+	}
+	return cos.JSON.Marshal(wire)
+}
+
+func (v *ActValPlacementWeights) UnmarshalJSON(b []byte) error {
+	var wire placementWeightsWire
+	if err := cos.JSON.Unmarshal(b, &wire); err != nil {
+		return err
+	}
+	weights := make(map[string]int64, len(wire.Weights))
+	for id, value := range wire.Weights {
+		weight, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid placement weight %q for %s: %w", value, id, err)
+		}
+		weights[id] = weight
+	}
+	v.Weights, v.UUID, v.Version = weights, wire.UUID, wire.Version
+	return nil
+}
 
 func (v *ActValRmNode) SetIDs(sids ...string) {
 	debug.Assert(len(sids) > 0)

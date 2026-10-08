@@ -27,6 +27,28 @@ func TestCompareTargets(t *testing.T) {
 		{name: "same-version", mutate: func(_, current *meta.Smap) { current.Version-- }, want: true},
 		{name: "proxy-only-version-bump", want: true},
 		{
+			name: "proportional-weights",
+			mutate: func(old, current *meta.Smap) {
+				old.Tmap[cmpSelfID].SetPlacementWeight(1)
+				old.Tmap[cmpPeerID].SetPlacementWeight(3)
+				current.Tmap[cmpSelfID].SetPlacementWeight(2)
+				current.Tmap[cmpPeerID].SetPlacementWeight(6)
+			},
+			want: true,
+		},
+		{
+			name: "equal-weights-vs-none",
+			mutate: func(_, current *meta.Smap) {
+				current.Tmap[cmpSelfID].SetPlacementWeight(5)
+				current.Tmap[cmpPeerID].SetPlacementWeight(5)
+			},
+			want: true,
+		},
+		{
+			name:   "weight-changed",
+			mutate: func(_, current *meta.Smap) { current.Tmap[cmpPeerID].SetPlacementWeight(30) },
+		},
+		{
 			name:   "target-added",
 			mutate: func(_, current *meta.Smap) { current.Tmap["new-peer"] = cmpSnode("new-peer", 3) },
 		},

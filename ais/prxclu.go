@@ -436,7 +436,7 @@ func _rawResWithTimeout(results sliceResults) (cos.JSONRawMsgs, error, bool /*ti
 // - cluster membership, including maintenance and decommission
 // - rebalance
 // - set-primary
-// +gen:endpoint PUT /v1/cluster[apc.QparamTransient=bool] action=[apc.ActSetConfig=cmn.ConfigToSet|apc.ActResetConfig=apc.ActMsg|apc.ActRotateLogs=apc.ActMsg|apc.ActShutdownCluster=apc.ActMsg|apc.ActDecommissionCluster=apc.ActValRmNode|apc.ActStartMaintenance=apc.ActValRmNode|apc.ActDecommissionNode=apc.ActValRmNode|apc.ActShutdownNode=apc.ActValRmNode|apc.ActRmNodeUnsafe=apc.ActValRmNode|apc.ActStopMaintenance=apc.ActValRmNode|apc.ActResetStats=apc.ActMsg|apc.ActClearLcache=apc.ActMsg|apc.ActXactStart=apc.ActMsg|apc.ActXactStop=apc.ActMsg|apc.ActReloadBackendCreds=apc.ActMsg|apc.ActBumpMetasync=apc.ActMsg]
+// +gen:endpoint PUT /v1/cluster[apc.QparamTransient=bool] action=[apc.ActSetPlacementWeights=apc.ActValPlacementWeights|apc.ActSetConfig=cmn.ConfigToSet|apc.ActResetConfig=apc.ActMsg|apc.ActRotateLogs=apc.ActMsg|apc.ActShutdownCluster=apc.ActMsg|apc.ActDecommissionCluster=apc.ActValRmNode|apc.ActStartMaintenance=apc.ActValRmNode|apc.ActDecommissionNode=apc.ActValRmNode|apc.ActShutdownNode=apc.ActValRmNode|apc.ActRmNodeUnsafe=apc.ActValRmNode|apc.ActStopMaintenance=apc.ActValRmNode|apc.ActResetStats=apc.ActMsg|apc.ActClearLcache=apc.ActMsg|apc.ActXactStart=apc.ActMsg|apc.ActXactStop=apc.ActMsg|apc.ActReloadBackendCreds=apc.ActMsg|apc.ActBumpMetasync=apc.ActMsg]
 // +gen:payload apc.ActDecommissionCluster={"action": "decommission", "value": {"sid": "target_id", "skip_rebalance": false, "rm_user_data": true}}
 // +gen:payload apc.ActResetStats={"action": "reset-stats", "value": false}
 // Administrative cluster operations: configuration changes, node management, log rotation, shutdown/decommission operations.
@@ -488,6 +488,8 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msg.Action {
+	case apc.ActSetPlacementWeights:
+		p.setPlacementWeights(w, r, msg)
 	case apc.ActSetConfig:
 		toUpdate := &cmn.ConfigToSet{}
 		if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
@@ -849,6 +851,157 @@ func _checkTransient(toUpdate *cmn.ConfigToSet) error {
 	case toUpdate.FSP != nil:
 		return cmn.NewErrUnsupp(action, "fspaths")
 	}
+	return nil
+}
+
+// +gen:payload apc.ActSetPlacementWeights={"action": "set-placement-weights", "value": {"weights": {"t1": "1", "t2": "3", "t3": "6"}, "uuid": "cluster-uuid", "version": "42"}}
+// set all target weights at once (all zero clears them)
+// - same weights: no-op
+// - proportional weights: new Smap, no rebalance
+// - otherwise: new Smap and global rebalance
+func (p *proxy) setPlacementWeights(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+	var value apc.ActValPlacementWeights
+	if err := cos.MorphMarshal(msg.Value, &value); err != nil {
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+		return
+	}
+	ratio, err := meta.CheckPlacementWeights(value.Weights)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if ratio >= meta.PlacementWeightWarnRatio {
+		nlog.Warningln(p.String(), msg.Action, "- max/min placement weight ratio", ratio, ">=", meta.PlacementWeightWarnRatio)
+	}
+	if err := p.beginMembership(msg.Action); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	defer p.endMembership()
+
+	msg.Value = &value
+	ctx := &smapModifier{
+		pre: p._placementWeightsPre, msg: msg,
+		final: func(ctx *smapModifier, clone *smapX) {
+			actMsgExt := p.newAmsg(ctx.msg, nil)
+			pairs := []revsPair{{clone, actMsgExt}}
+			if ctx.rmdCtx != nil {
+				actMsgExt.UUID = ctx.rmdCtx.rebID
+				pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
+			}
+			p.metasyncer.sync(pairs...).Wait()
+		},
+		post: func(ctx *smapModifier, clone *smapX) {
+			nlog.Infoln(p.String(), ctx.msg.Action, clone.StringEx(), "placement weights:", clone.StrPlacementWeights())
+			if ctx.rmdCtx != nil {
+				ctx.rmdCtx.listen(nil)
+			}
+		},
+	}
+
+	// preflight (repeated under lock)
+	ctx.smap = p.owner.smap.get()
+	preview := ctx.smap.clone()
+	if err := ctx.pre(ctx, preview); err != nil {
+		if !errors.Is(err, errSmapNoChange) {
+			p.writeErr(w, r, err, ctx.status)
+		}
+		return
+	}
+	if !ctx.skipReb {
+		var tsi *meta.Snode
+		for _, node := range ctx.smap.Tmap {
+			if !node.InMaintOrDecomm() {
+				tsi = node
+				break
+			}
+		}
+		if err := p._notifyEarlyGFN(ctx, ctx.smap, tsi); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		defer func() {
+			if ctx.nver == 0 || ctx.rmdCtx == nil {
+				actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
+				actMsgExt.UUID = tsi.ID()
+				ver := ctx.smap.Version
+				if ctx.nver > 0 {
+					ver = ctx.nver
+				}
+				revs := revsPair{&smapX{Smap: meta.Smap{Version: ver}}, actMsgExt}
+				_ = p.metasyncer.notify(false /*wait*/, revs)
+			}
+		}()
+	}
+	// prepare RMD before committing the Smap: RMD failure leaves weights unchanged
+	ctx.pre = func(ctx *smapModifier, clone *smapX) error {
+		if err := p._placementWeightsPre(ctx, clone); err != nil {
+			return err
+		}
+		if ctx.skipReb {
+			return nil
+		}
+		rmdCtx := &rmdModifier{pre: rmdInc, smapCtx: ctx, p: p, wait: true}
+		if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
+			return fmt.Errorf("failed to persist rebalance metadata (placement weights unchanged): %w", err)
+		}
+		ctx.rmdCtx = rmdCtx
+		return nil
+	}
+	if err := p.owner.smap.modify(ctx); err != nil {
+		if !errors.Is(err, errSmapNoChange) {
+			p.writeErr(w, r, err, ctx.status)
+		}
+		return
+	}
+	if ctx.rmdCtx != nil {
+		writeXid(w, ctx.rmdCtx.rebID)
+	}
+}
+
+func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
+	ctx.status = http.StatusBadRequest
+	if !clone.isPrimary(p.si) {
+		return newErrNotPrimary(p.si, clone, "cannot set placement weights")
+	}
+	value := ctx.msg.Value.(*apc.ActValPlacementWeights)
+	if value.UUID != clone.UUID || value.Version != clone.Version {
+		ctx.status = http.StatusConflict
+		return fmt.Errorf("stale placement weight snapshot (%s v%d); fetch %s and retry", value.UUID, value.Version, clone)
+	}
+	if len(value.Weights) == 0 || len(value.Weights) != len(clone.Tmap) {
+		return fmt.Errorf("placement weights must include all %d targets", len(clone.Tmap))
+	}
+	var changed bool
+	for id, weight := range value.Weights {
+		si := clone.GetTarget(id)
+		if si == nil {
+			return fmt.Errorf("placement weight target %q is not in %s", id, clone)
+		}
+		if si.PlacementWeight() != weight {
+			si.SetPlacementWeight(weight)
+			changed = true
+		}
+	}
+	if !changed {
+		return errSmapNoChange
+	}
+	// repeat under lock: version records can change without Smap changes
+	if clone.IsWeighted() {
+		if err := p.checkSameVersion(ctx.smap); err != nil {
+			ctx.status = http.StatusConflict
+			return err
+		}
+	}
+	ctx.skipReb = clone.SamePlacementWeights(&ctx.smap.Smap) || clone.CountActiveTs() < 2
+	if !ctx.skipReb {
+		if err := p.canRebalance(ctx.smap, false /*cleanup*/); err != nil {
+			ctx.status = http.StatusServiceUnavailable
+			return err
+		}
+	}
+	clone.Version++
+	ctx.status = http.StatusInternalServerError // persistence
 	return nil
 }
 

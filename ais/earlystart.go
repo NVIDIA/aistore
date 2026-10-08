@@ -457,7 +457,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	haveJoins = smap.CountTargets() > 0 || smap.CountProxies() > 1
 
 	if loadedSmap != nil {
-		smap = smap.mergeFlags(loadedSmap)
+		smap = smap.mergeNodeProps(loadedSmap)
 	}
 
 	// 2: merging local => boot

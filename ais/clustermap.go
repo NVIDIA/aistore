@@ -83,6 +83,7 @@ type (
 
 		msg         *apc.ActMsg  // action modifying smap (apc.Act*)
 		nsi         *meta.Snode  // new node to be added
+		nversStr    string       // joining node's software version
 		nid         string       // node ID of the candidate primary
 		sid         string       // ID of the node to modify
 		sids        []string     // IDs of nodes to modify as one operation
@@ -360,7 +361,13 @@ func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
 	} else {
 		debug.AssertFunc(func() bool { return nsi.IsTarget() })
 		if old = m.GetTarget(id); old != nil { // ditto
+			nsi.Placement = old.Placement // primary-assigned
 			m.delTarget(id)
+		} else {
+			nsi.SetPlacementWeight(m.MeanPlacementWeight())
+			if w := nsi.PlacementWeight(); w > 0 {
+				nlog.Infoln("joining", nsi.StringEx(), "placement weight:", w)
+			}
 		}
 		m.addTarget(nsi)
 	}
@@ -492,7 +499,9 @@ func (m *smapX) clearNodeFlags(id string, flags cos.BitFlags) {
 	m._applyFlags(si, si.Flags.Clear(flags))
 }
 
-func (m *smapX) mergeFlags(from *smapX) (clone *smapX) {
+// restore primary-assigned flags and weights; keep fresh endpoints and keys
+func (m *smapX) mergeNodeProps(from *smapX) (clone *smapX) {
+	clone = m
 	all := []meta.NodeMap{from.Tmap, from.Pmap}
 	for _, mm := range all {
 		for _, osi := range mm {
@@ -500,14 +509,15 @@ func (m *smapX) mergeFlags(from *smapX) (clone *smapX) {
 			if nsi == nil {
 				continue
 			}
-			if osi.Flags == nsi.Flags {
+			if osi.Flags == nsi.Flags && osi.PlacementWeight() == nsi.PlacementWeight() {
 				continue
 			}
-			if clone == nil {
+			if clone == m {
 				clone = m.clone()
 			}
 			nsi = clone.GetNode(osi.ID())
 			nsi.Flags = osi.Flags
+			nsi.Placement = osi.Placement
 			if nsi.IsTarget() {
 				clone.Tmap[nsi.ID()] = nsi
 			} else {

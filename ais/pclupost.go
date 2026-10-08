@@ -34,7 +34,7 @@ import (
 // - when configured, explicit self-joins and restarted keepalives are authenticated (see docs/auth_node_join.md);
 // - validation resolves node flags and the action for the current operation;
 // - resumeReb may promote a restarted keepalive to self-join and update cluster action message;
-// - _joinKalive runs under the Smap lock and decides whether Smap mutation is needed;
+// - joinKalive runs under the Smap lock and decides whether Smap mutation is needed;
 // - dispatch performs externally visible responses and metasync/rebalance work.
 
 type clupost struct {
@@ -128,7 +128,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 
 	// fast path: quick admission during cluster startup/restart
 	p.owner.smap.mu.Lock()
-	msync, added, err := c._joinKalive()
+	msync, added, err := c.joinKalive()
 	p.owner.smap.mu.Unlock()
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -284,7 +284,10 @@ func (c *clupost) setActionCheckVer() (stop bool) {
 			p.writeErr(w, r, err, http.StatusConflict)
 			return true
 		}
-		p.noteNodeVersion(c.nsi, c.nversStr, c.nversParsed)
+		if err := checkJoinWeighted(p.String(), c.nsi.StringEx(), c.nversStr, p.owner.smap.get()); err != nil {
+			p.writeErr(w, r, err, http.StatusConflict)
+			return true
+		}
 		debug.AssertFunc(func() bool {
 			return c.nsi.VerifyingKey == nil || cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 1})
 		})
@@ -485,7 +488,7 @@ func (c *clupost) dispatch(msync bool) {
 			p.writeErr(w, r, err)
 			return
 		}
-		c.setVerHdr() // primary => node: software-version exchange (case #2)
+		c.setVerHdr()
 		p.writeJoinJSON(w, r, md, path.Join(c.msg.Action, c.nsi.ID()), nodeJoinResponseHMACDomain)
 	}
 
@@ -529,6 +532,7 @@ func (c *clupost) adminJoinHandshake() (int, error) {
 	res := p.call(cargs, c.smap)
 	err = res.err
 	status := res.status
+	nversStr := res.header.Get(apc.HdrNodeVersion)
 	if err != nil {
 		if cos.IsErrRetriableConn(res.err) {
 			err = fmt.Errorf("%s: failed to reach %s at %s:%s: %w",
@@ -536,8 +540,14 @@ func (c *clupost) adminJoinHandshake() (int, error) {
 		} else {
 			err = res.errorf("%s: failed to %s %s: %v", p.si, c.apiOp, nsi.StringEx(), res.err)
 		}
-	} else if err = checkNodeVer(p.String(), nsi.StringEx(), res.header.Get(apc.HdrNodeVersion)); err != nil {
+	} else if err = checkNodeVer(p.String(), nsi.StringEx(), nversStr); err != nil {
 		status = http.StatusConflict
+	} else if err = checkJoinWeighted(p.String(), nsi.StringEx(), nversStr, c.smap); err != nil {
+		status = http.StatusConflict
+	} else {
+		// peer version (not the admin caller's)
+		c.nversStr = nversStr
+		c.nversParsed, _ = cos.ParseVersion(nversStr) // validated by checkNodeVer
 	}
 	freeCargs(cargs)
 	freeCR(res)
@@ -609,92 +619,102 @@ func (c *clupost) rereg(osi *meta.Snode) bool {
 	}
 }
 
-// executes under p.owner.smap lock; may stamp response headers for accepted shortcut paths
-func (c *clupost) _joinKalive() (msync, added bool, _ error) {
-	var (
-		p      = c.p
-		nsi    = c.nsi
-		apiOp  = c.apiOp
-		flags  = c.flags
-		regReq = &c.regReq
-		msg    = c.msg
-		smap   = p.owner.smap.get()
-	)
-	c.smap = smap
-	if !smap.isPrimary(p.si) {
-		return false, false, newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
+// executes under p.owner.smap lock
+func (c *clupost) joinKalive() (msync, added bool, _ error) {
+	p := c.p
+	c.smap = p.owner.smap.get()
+	osi := c.smap.GetNode(c.nsi.ID())
+	if err := c.checkAdmission(osi); err != nil {
+		return false, false, err
 	}
-	if apiOp == apc.SelfJoin {
-		// Self-join is an explicit admission request, authentication is required
-		if err := c._verify(); err != nil {
-			return false, false, err
-		}
-	}
-
-	var (
-		keepalive = apiOp == apc.Keepalive
-		osi       = smap.GetNode(nsi.ID())
-	)
-	if osi == nil {
-		if keepalive {
-			// Keepalive becomes admission only when the node is absent from Smap, authentication is required
-			if err := c._verify(); err != nil {
-				return false, false, err
-			}
-			if err := checkNodeVer(p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
-				return false, false, err
-			}
-			nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
-		}
-	} else {
-		if osi.Type() != nsi.Type() {
+	if osi != nil {
+		if osi.Type() != c.nsi.Type() {
 			err := fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)",
-				osi.StringEx(), nsi.StringEx(), smap.StringEx(), keepalive)
+				osi.StringEx(), c.nsi.StringEx(), c.smap.StringEx(), c.apiOp == apc.Keepalive)
 			debug.AssertNoErr(err)
 			return false, false, err
 		}
 		switch {
-		case keepalive:
+		case c.apiOp == apc.Keepalive:
 			msync = c.kalive(osi)
-		case regReq.Flags.IsSet(cos.NodeRestarted):
+		case c.regReq.Flags.IsSet(cos.NodeRestarted):
 			msync = true
 		default:
 			msync = c.rereg(osi)
 		}
 		if !msync {
-			c.setVerHdr() // primary => node version exchange (case #1.a)
+			c.noteVersion(osi)
+			c.setVerHdr()
 			return false, false, nil
 		}
 	}
-	// check for cluster integrity errors (cie)
-	if err := smap.validateUUID(p.si, regReq.Smap, nsi.StringEx(), 80 /* ciError */); err != nil {
+	if err := c.smap.validateUUID(p.si, c.regReq.Smap, c.nsi.StringEx(), 80 /* ciError */); err != nil {
 		return false, false, err
 	}
-
-	var err error
-	if keepalive {
-		// whether IP is in use by a different node
-		// (but only for keep-alive - the other two opcodes have been already checked via handshake)
-		if _, err = smap.IsDupNet(nsi); err != nil {
-			err = errors.New(p.String() + ": " + err.Error())
+	if c.apiOp == apc.Keepalive {
+		// self-join and admin-join already checked via handshake
+		if _, err := c.smap.IsDupNet(c.nsi); err != nil {
+			return false, false, errors.New(p.String() + ": " + err.Error())
 		}
 	}
-	// when cluster's starting up
-	if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); err == nil && (!a || b) {
-		clone := smap.clone()
-		// TODO [feature]: updated *nsi contents (e.g., different network) may not "survive" earlystart merge
-		clone.putNode(nsi, flags, false /*silent*/)
-		p.owner.smap.put(clone)
-		if a {
-			actMsgExt := p.newAmsg(msg, nil)
-			_ = p.metasyncer.sync(revsPair{clone, actMsgExt})
-		}
-		c.setVerHdr() // primary => node version exchange (case #1.b)
-		return false, true /*added => local Smap*/, nil
+	c.noteVersion(osi)
+	started, starting := p.ClusterStarted(), p.owner.rmd.starting.Load()
+	if !started || starting {
+		c.joinStartup(started)
+		return false, true, nil
 	}
+	return true, false, nil
+}
 
-	msync = err == nil
-	return msync, false, err
+// under Smap lock (including no-op re-registration)
+func (c *clupost) checkAdmission(osi *meta.Snode) error {
+	p, nsi, smap := c.p, c.nsi, c.smap
+	if !smap.isPrimary(p.si) {
+		return newErrNotPrimary(p.si, smap, "cannot "+c.apiOp+" "+nsi.StringEx())
+	}
+	// primary startup (ais/earlystart): working Smap is unweighted until mergeNodeProps
+	if err := checkJoinWeighted(p.String(), nsi.StringEx(), c.nversStr, smap); err != nil {
+		return cmn.NewErrHTTP(c.r, err, http.StatusConflict)
+	}
+	if c.apiOp == apc.SelfJoin {
+		if err := c._verify(); err != nil {
+			return err
+		}
+	}
+	if c.apiOp != apc.Keepalive || osi != nil {
+		return nil
+	}
+	// absent keepalive becomes admission
+	if err := c._verify(); err != nil {
+		return err
+	}
+	if err := checkNodeVer(p.String(), nsi.StringEx(), c.nversStr); err != nil {
+		return err
+	}
+	nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
+	return nil
+}
+
+// records version of an accepted registration (keepalive: admission only)
+func (c *clupost) noteVersion(osi *meta.Snode) {
+	if c.apiOp == apc.Keepalive && osi != nil {
+		return
+	}
+	c.p.noteNodeVersion(c.nsi, c.nversStr, c.nversParsed)
+}
+
+// under Smap lock
+func (c *clupost) joinStartup(started bool) {
+	p := c.p
+	clone := c.smap.clone()
+	// TODO [feature]: updated *nsi contents (e.g., different network) may not "survive" earlystart merge
+	clone.putNode(c.nsi, c.flags, false /*silent*/)
+	p.owner.smap.put(clone)
+	if started {
+		actMsgExt := p.newAmsg(c.msg, nil)
+		_ = p.metasyncer.sync(revsPair{clone, actMsgExt})
+	}
+	c.setVerHdr()
 }
 
 func (c *clupost) mcastJoined() (string, error) {
@@ -704,6 +724,7 @@ func (c *clupost) mcastJoined() (string, error) {
 		post:        p._joinedPost,
 		final:       p._joinedFinal,
 		nsi:         c.nsi,
+		nversStr:    c.nversStr,
 		msg:         c.msg,
 		flags:       c.flags,
 		interrupted: c.regReq.Flags.IsSet(cos.RebalanceInterrupted),
@@ -712,8 +733,21 @@ func (c *clupost) mcastJoined() (string, error) {
 	if err := p._earlyGFN(ctx, ctx.nsi, c.msg.Action, true /*joining*/); err != nil {
 		return "", err
 	}
+	defer func() {
+		if !ctx.gfn || (ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil) {
+			return
+		}
+		// stop timed GFN on rejected joins, too
+		ver := ctx.nver
+		if ver == 0 {
+			ver = p.owner.smap.get().Version
+		}
+		actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
+		actMsgExt.UUID = ctx.nsi.ID()
+		revs := revsPair{&smapX{Smap: meta.Smap{Version: ver}}, actMsgExt}
+		_ = p.metasyncer.notify(false /*wait*/, revs)
+	}()
 	if err := p.owner.smap.modify(ctx); err != nil {
-		debug.AssertNoErr(err)
 		return "", err
 	}
 	// with rebalance
@@ -728,18 +762,15 @@ func (c *clupost) mcastJoined() (string, error) {
 	// the node's marker will state "restarted"
 	// and will remain such until the cluster gets eventually rebalanced
 
-	if ctx.gfn {
-		actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil) // "stop-gfn" timed
-		actMsgExt.UUID = ctx.nsi.ID()
-		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, actMsgExt}
-		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
-	}
 	return "", nil
 }
 
 func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot add %s", ctx.nsi))
+	}
+	if err := checkJoinWeighted(p.String(), ctx.nsi.StringEx(), ctx.nversStr, clone); err != nil {
+		return cmn.NewErrHTTP(nil, err, http.StatusConflict)
 	}
 	clone.putNode(ctx.nsi, ctx.flags, true /*silent*/)
 	if ctx.nsi.IsProxy() {

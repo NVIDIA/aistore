@@ -53,7 +53,12 @@ const (
 	// 5.0 add namespace
 	PropBackendBckNsUUID = PropBackendBck + ".namespace.uuid"
 	PropBackendBckNsName = PropBackendBck + ".namespace.name"
+
+	PropPlacementWeighting = "placement.weighting"
 )
+
+// bucket placement override (v5.2)
+const WeightingUniform = "uniform" // ignore target weights
 
 type (
 	Bprops struct {
@@ -73,6 +78,17 @@ type (
 		BID         uint64          `json:"bid,string" list:"omit"`           // unique ID
 		Created     int64           `json:"created,string" list:"readonly"`   // creation timestamp
 		Versioning  VersionConf     `json:"versioning"`                       // see "inherit"
+
+		// added in v5.2: nil follows target weights; not inherited
+		Placement *PlacementConf `json:"placement,omitempty" list:"omitempty"`
+	}
+
+	// bucket placement (compare w/ meta.PlacementConf)
+	PlacementConf struct {
+		Weighting string `json:"weighting,omitempty"` // "" | WeightingUniform
+	}
+	PlacementConfToSet struct {
+		Weighting *string `json:"weighting,omitempty"` // +gen:optional
 	}
 
 	ExtraProps struct {
@@ -206,6 +222,8 @@ type (
 		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"` // +gen:optional
 		// Provider-specific extras (S3, GCS, Azure, OCI).
 		Extra *ExtraToSet `json:"extra,omitempty"` // +gen:optional
+		// Placement override: "uniform" ignores target weights; "" resets.
+		Placement *PlacementConfToSet `json:"placement,omitempty"` // +gen:optional
 
 		// Skip safety validations that would otherwise reject the update.
 		// Currently, the flag is used exclusively for EC, for the following two distinct use cases:
@@ -285,6 +303,10 @@ func (bp *Bprops) SetProvider(provider string) {
 
 func (bp *Bprops) Clone() *Bprops {
 	to := *bp
+	if bp.Placement != nil {
+		pc := *bp.Placement
+		to.Placement = &pc
+	}
 	debug.AssertFunc(func() bool { return bp.Equal(&to) })
 	return &to
 }
@@ -334,6 +356,17 @@ func (bp *Bprops) Validate(targetCnt int) error {
 				return err
 			}
 			softErr = err
+		}
+	}
+
+	// normalize default placement to nil
+	if bp.Placement != nil {
+		switch w := bp.Placement.Weighting; w {
+		case "":
+			bp.Placement = nil
+		case WeightingUniform:
+		default:
+			return fmt.Errorf("invalid %s %q (expecting %q or %q)", PropPlacementWeighting, w, "", WeightingUniform)
 		}
 	}
 

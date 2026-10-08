@@ -216,6 +216,14 @@ func (d *Snode) Validate() error {
 	if d.DaeType != apc.Proxy && d.DaeType != apc.Target {
 		return fmt.Errorf("invalid Snode type %q", d.DaeType)
 	}
+	if d.Placement != nil {
+		if d.IsProxy() {
+			return fmt.Errorf("%s: placement weight applies to targets only", d)
+		}
+		if d.Placement.Weight < 0 {
+			return fmt.Errorf("%s: negative placement weight %d", d, d.Placement.Weight)
+		}
+	}
 	return nil
 }
 
@@ -463,6 +471,9 @@ func (m *Smap) StringEx() string {
 	_counts(&sb, m.CountTargets(), m.CountActiveTs())
 	sb.WriteString(", p=")
 	_counts(&sb, m.CountProxies(), m.CountActivePs())
+	if m.IsWeighted() {
+		sb.WriteString(", weighted")
+	}
 	sb.WriteUint8(']')
 
 	return sb.String()
@@ -520,8 +531,9 @@ func (m *Smap) CheckSameTargets(curr *Smap, tag string) error {
 	return cmn.NewErrMembershipChange(tag, m.StringEx(), curr.StringEx())
 }
 
-// check whether the two cluster maps are completely identical, targets-wise:
+// check whether the two cluster maps are identical, targets-wise:
 // - compare the full Tmap, including self and inactive targets, across all 3 networks;
+// - treat proportional weights as equal
 // - mismatch does not prescribe xaction termination
 // - but MAY indicate the need to re-establish peer-to-peer stream
 func (m *Smap) CompareTargets(other *Smap) bool { return m._sameTargets(other, true) }
@@ -545,7 +557,7 @@ func (m *Smap) _sameTargets(other *Smap, strict bool) bool {
 			return false
 		}
 	}
-	return true
+	return m.SamePlacementWeights(other)
 }
 
 func (m *Smap) HasPeersToRebalance(except string) bool {
@@ -813,7 +825,7 @@ func mapsEq(a, b NodeMap) bool {
 	for id, anode := range a {
 		if bnode, ok := b[id]; !ok {
 			return false
-		} else if !anode.EqNetID(bnode) {
+		} else if !anode.EqNetID(bnode) || anode.PlacementWeight() != bnode.PlacementWeight() {
 			return false
 		}
 	}

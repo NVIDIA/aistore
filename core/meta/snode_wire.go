@@ -37,5 +37,15 @@ type (
 
 		// added in v5.0
 		VerifyingKey []byte `json:"verifying_key,omitempty" msg:"v,omitempty"`
+
+		// added in v5.2: targets only; nil when not weighted (see weight.go)
+		Placement *PlacementConf `json:"placement,omitempty" msg:"pl,omitempty"`
+	}
+
+	// target placement (compare w/ cmn.PlacementConf)
+	// swagger:model
+	PlacementConf struct {
+		// relative, no units; negative values are reserved
+		Weight int64 `json:"weight,omitempty,string" msg:"w,omitempty"`
 	}
 )
