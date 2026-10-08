@@ -7,6 +7,7 @@
 package test_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -192,6 +193,124 @@ func TestAISLoaderFileListObj(t *testing.T) {
 		tassert.Fatalf(t, errors.As(err, &exitErr), "expected nonzero exit for missing manifest, got %v\n%s", err, output)
 		tassert.Fatalf(t, strings.Contains(string(output), "failed to get '-filelist-obj="+uri+"'"), "expected manifest error with source URI\n%s", output)
 	})
+}
+
+func TestAISLoaderStatsOutputObj(t *testing.T) {
+	t.Run("Missing Stats Bucket", func(t *testing.T) {
+		runner := newE2ERunner(t, "missing-stats-bucket")
+		if !runner.created {
+			t.Skip("requires a new local AIS benchmark bucket; unset BUCKET")
+		}
+		badBck := cmn.Bck{Name: "missing-stats-bucket" + strings.ToLower(trand.String(10)), Provider: apc.AIS}
+		uri := badBck.Cname("stats.json")
+		args := append(slices.Clone(runner.baseArgs),
+			"-pctput=0",
+			"-duration=1s",
+			"-cleanup=false",
+			"-stats-output-obj="+uri,
+		)
+		output, err := runner.exec(t, "missing-stats-bucket", time.Minute, args...)
+		var exitErr *exec.ExitError
+		tassert.Fatalf(t, errors.As(err, &exitErr), "expected failure: %v\n%s", err, output)
+		wantErr := "failed to check '-stats-output-obj=" + uri + "' bucket"
+		tassert.Fatalf(t, strings.Contains(string(output), wantErr), "missing %q:\n%s", wantErr, output)
+
+		exists, _ := tools.BucketExists(t, runner.proxyURL, runner.bck)
+		tassert.Fatalf(t, !exists, "expected benchmark bucket %s to be absent after the run", runner.bck.String())
+	})
+
+	for _, test := range []struct {
+		name       string
+		local      bool
+		sameBucket bool
+	}{
+		{name: "separate bucket object only"},
+		{name: "separate bucket local and object", local: true},
+		{name: "new benchmark bucket object only", sameBucket: true},
+		{name: "new benchmark bucket local and object", local: true, sameBucket: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runner := newE2ERunner(t, "stats-output-obj")
+			statsBck := runner.bck
+			if test.sameBucket {
+				if !runner.created {
+					t.Skip("requires a new local AIS benchmark bucket; unset BUCKET")
+				}
+				exists, _ := tools.BucketExists(t, runner.proxyURL, statsBck)
+				tassert.Fatalf(t, !exists, "expected benchmark bucket %s to be absent before the run", statsBck.String())
+			} else {
+				statsBck = cmn.Bck{Name: "aisloader-stats-" + strings.ToLower(trand.String(10)), Provider: apc.AIS}
+				tools.CreateBucket(t, runner.proxyURL, statsBck, nil, true)
+			}
+
+			object := runner.rootPrefix + "/stats.json"
+			args := append(slices.Clone(runner.baseArgs),
+				"-subdir="+runner.rootPrefix+"/data",
+				"-pctput=100", "-maxsize=64KiB",
+				"-duration=3s", "-statsinterval=1", "-cleanup=false",
+				"-stats-output-obj="+statsBck.Cname(object),
+			)
+			localPath := filepath.Join(t.TempDir(), "stats.json")
+			if test.local {
+				args = append(args, "-stats-output="+localPath)
+			}
+			output, err := runner.exec(t, "stats-output-obj", time.Minute, args...)
+			tassert.Fatalf(t, err == nil, "aisloader failed: %v\n%s", err, output)
+
+			var data bytes.Buffer
+			_, err = api.GetObject(tools.BaseAPIParams(runner.proxyURL), statsBck, object, &api.GetArgs{Writer: &data})
+			tassert.CheckFatal(t, err)
+			if test.local {
+				localData, err := os.ReadFile(localPath)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, bytes.Equal(localData, data.Bytes()), "local and object statistics differ")
+			}
+
+			var reports []statsReport
+			tassert.CheckFatal(t, json.Unmarshal(data.Bytes(), &reports))
+			tassert.Fatalf(t, len(reports) > 1, "expected interval and final statistics reports, got %d", len(reports))
+			assertOperation(t, "PUT", reports[len(reports)-1].Put)
+		})
+	}
+
+	for _, test := range []struct {
+		name      string
+		localFile bool
+		object    bool
+	}{
+		{name: "cannot create local file", localFile: true},
+		{name: "cannot create tmp directory", object: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runner := newE2ERunner(t, "invalid-stats-path")
+			if !runner.created {
+				t.Skip("requires a new local AIS benchmark bucket; unset BUCKET")
+			}
+			exists, _ := tools.BucketExists(t, runner.proxyURL, runner.bck)
+			tassert.Fatalf(t, !exists, "expected benchmark bucket %s to be absent before the run", runner.bck.String())
+
+			badPath := filepath.Join(t.TempDir(), "not-a-directory")
+			tassert.CheckFatal(t, os.WriteFile(badPath, nil, cos.PermRWR))
+			args := append(slices.Clone(runner.baseArgs),
+				"-pctput=100", "-duration=1s", "-cleanup=false",
+			)
+			if test.localFile {
+				args = append(args, "-stats-output="+filepath.Join(badPath, "stats.json"))
+			} else {
+				args = append(args, "-tmpdir="+badPath)
+			}
+			if test.object {
+				args = append(args, "-stats-output-obj="+runner.bck.Cname("stats.json"))
+			}
+
+			output, err := runner.exec(t, test.name, time.Minute, args...)
+
+			var exitErr *exec.ExitError
+			tassert.Fatalf(t, errors.As(err, &exitErr) && exitErr.ExitCode() == 1, "expected exit code 1 for invalid stats path: %v\n%s", err, output)
+			exists, _ = tools.BucketExists(t, runner.proxyURL, runner.bck)
+			tassert.Fatalf(t, !exists, "invalid stats path created benchmark bucket %s", runner.bck.String())
+		})
+	}
 }
 
 func configuredDuration(t *testing.T) time.Duration {

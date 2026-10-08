@@ -224,6 +224,20 @@ func Start(version, buildtime string) (err error) {
 	runParams.bp.Token = loggedUserToken
 	runParams.bp.UA = ua
 
+	// check stats destination before creating benchmark bucket
+	if runParams.statsOutputObj != "" && !runParams.dryRun {
+		if err := runParams.checkStatsOutputObj(); err != nil {
+			return err
+		}
+	}
+
+	output, err := runParams.openStatsOutput()
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, output.closeAndRemoveTemp()) }()
+	statsWriter := output.writer
+
 	var created bool
 	if err := setupBucket(runParams, &created); err != nil {
 		return err
@@ -298,7 +312,7 @@ func Start(version, buildtime string) (err error) {
 
 	printRunParams(runParams)
 	if runParams.dryRun { // dry-run so just print the configurations and exit
-		os.Exit(0)
+		return nil
 	}
 
 	if runParams.cleanUp.Val {
@@ -381,17 +395,6 @@ func Start(version, buildtime string) (err error) {
 	tsStart := time.Now()
 	intervalStats = newStats(tsStart)
 	accumulatedStats = newStats(tsStart)
-
-	statsWriter := os.Stdout
-
-	if runParams.statsOutput != "" {
-		f, err := cos.CreateFile(runParams.statsOutput)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create stats-out %q: %v\n", runParams.statsOutput, err)
-		}
-
-		statsWriter = f
-	}
 
 	osSigChan := make(chan os.Signal, 2)
 	if runParams.stoppable {
@@ -480,7 +483,7 @@ Done:
 	}
 
 	finalizeStats(statsWriter)
-	fmt.Printf("Stats written to %s\n", statsWriter.Name())
+	err = errors.Join(err, output.closeAndUpload(runParams.bp))
 
 	// Verify chunked objects if multipart upload was used
 	if runParams.multipartChunks > 0 && runParams.putPct > 0 {
@@ -568,20 +571,10 @@ func (s *sts) aggregate(other *sts) {
 }
 
 func setupBucket(runParams *params, created *bool) error {
-	if strings.Contains(runParams.bck.Name, apc.BckProviderSeparator) {
-		bck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{})
-		if err != nil {
-			return err
-		}
-		if objName != "" {
-			return fmt.Errorf("expecting bucket name or a bucket URI with no object name in it: %s => [%v, %s]",
-				runParams.bck.String(), bck.String(), objName)
-		}
-		if runParams.bck.Provider != apc.AIS /*cmdline default*/ && runParams.bck.Provider != bck.Provider {
-			return fmt.Errorf("redundant and different bucket provider: %q vs %q in %s",
-				runParams.bck.Provider, bck.Provider, bck.String())
-		}
-		runParams.bck = bck
+	var err error
+	runParams.bck, err = parseBucket(runParams.bck)
+	if err != nil {
+		return err
 	}
 
 	const cachedText = "--cached option (to list \"cached\" objects only) "
@@ -676,6 +669,25 @@ func setupBucket(runParams *params, created *bool) error {
 		}
 	}
 	return nil
+}
+
+func parseBucket(bck cmn.Bck) (cmn.Bck, error) {
+	if !strings.Contains(bck.Name, apc.BckProviderSeparator) {
+		return bck, nil
+	}
+	parsed, objName, err := cmn.ParseBckObjectURI(bck.Name, cmn.ParseURIOpts{})
+	if err != nil {
+		return bck, err
+	}
+	if objName != "" {
+		return bck, fmt.Errorf("expecting bucket name or a bucket URI with no object name in it: %s => [%v, %s]",
+			bck.String(), parsed.String(), objName)
+	}
+	if bck.Provider != apc.AIS /*cmdline default*/ && bck.Provider != parsed.Provider {
+		return bck, fmt.Errorf("redundant and different bucket provider: %q vs %q in %s",
+			bck.Provider, parsed.Provider, parsed.String())
+	}
+	return parsed, nil
 }
 
 func getIDFromString(val string, hashLen uint) uint64 {

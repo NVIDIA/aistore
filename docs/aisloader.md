@@ -154,6 +154,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -seed | `int` | Random seed to achieve deterministic reproducible results (0 = use current time in nanoseconds) | `0` |
 | -skiplist | `bool` | When true, skip listing objects in a bucket before running 100% PUT workload | `false` |
 | -stats-output | `string` | Filename to log statistics (empty string = standard output) | `""` |
+| -stats-output-obj | `string` | URI of an object in a local AIS bucket to save statistics after the run | `""` |
 | -statsdip | `string` | **Deprecated** - StatsD IP address or hostname | `localhost` |
 | -statsdport | `int` | **Deprecated** - StatsD UDP port | `8125` |
 | -statsdprobe | `bool` | **Deprecated** - Test-probe StatsD server prior to benchmarks | `false` |
@@ -293,6 +294,7 @@ For the most recently updated command-line options and examples, please run `ais
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
 | -stats-output | `string` | Filename to log statistics (empty string = standard output) | `""` |
+| -stats-output-obj | `string` | URI of an object in a local AIS bucket to save statistics after the run | `""` |
 | -statsinterval | `int` | Interval in seconds to print performance counters (0 = disabled) | `10` |
 | -json | `bool` | When true, print the output in JSON | `false` |
 | -statsdip | `string` | **Deprecated** - StatsD IP address or hostname | `localhost` |
@@ -842,6 +844,24 @@ For the most recently updated command-line options and examples, please run `ais
 ---
 
 ## Collecting stats
+
+### Statistics output
+
+Use `-stats-output` to save statistics to a local file; otherwise, statistics go to standard output. Use `-stats-output-obj` to also upload them as an object after the run.
+
+```console
+$ aisloader -bucket=ais://images -pctput=0 -duration=10s -cleanup=false -json -stats-output=stats-1.json
+$ ais create ais://results
+$ aisloader -bucket=ais://images -pctput=0 -duration=10s -cleanup=false -json -stats-output-obj=ais://results/stats-1.json
+```
+
+* The object destination must be a local AIS bucket on the connected cluster. A destination bucket other than the benchmark bucket must already exist. Remote AIS and cloud destinations are not supported yet.
+* The two options can be combined, saving identical statistics to both destinations.
+* `-stats-output-obj` cannot be combined with `-s3endpoint`.
+* `-cleanup=true` is rejected when the destination is the benchmark bucket.
+* Without `-stats-output`, object uploads use a temporary file while statistics also print to standard output. If closing the file or uploading it fails, aisloader keeps it and reports its path.
+
+### StatsD
 
 Collecting is easy - `aisloader` supports at-runtime monitoring via with Graphite using StatsD.
 When starting up, `aisloader` will try to connect

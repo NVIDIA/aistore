@@ -159,12 +159,17 @@ type (
 
 	// Statistics and monitoring configuration
 	statsParams struct {
+		statsOutputObj    string // object URI for statistics
 		statsOutput       string // output file for statistics (empty = stdout)
 		statsdIP          string // StatsD server IP or hostname (deprecated)
 		statsShowInterval int    // stats print interval in seconds (0 = disabled)
 		statsdPort        int    // StatsD UDP port (deprecated)
 		statsdProbe       bool   // probe StatsD server before starting (deprecated)
 		jsonFormat        bool   // output stats in JSON format
+
+		// resolved if statsOutputObj is set
+		statsBck           cmn.Bck // bucket for statistics
+		statsOutputObjName string  // object name for statistics
 	}
 
 	// Miscellaneous (cleanup, dry-run, et al.)
@@ -305,6 +310,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	// ============ Stats ============
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.statsOutput, "stats-output", "", "filename to log statistics (empty string translates as standard output (default))")
+	f.StringVar(&p.statsOutputObj, "stats-output-obj", "", "object URI in a local AIS bucket to save statistics after the run")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname (NOTE: deprecated)")
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port (NOTE: deprecated)")
 	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", false, "when enabled probes StatsD server prior to running (NOTE: deprecated)")
@@ -782,6 +788,31 @@ func (p *params) validate() error {
 		}
 		if err := arch.Init(p.maxSize); err != nil {
 			return err
+		}
+	}
+
+	if p.statsOutputObj != "" {
+		if isDirectS3() {
+			return errors.New("'-stats-output-obj' with direct S3 access is not supported yet")
+		}
+		var err error
+		if p.statsBck, p.statsOutputObjName, err = parseObjectURI(p.statsOutputObj); err != nil {
+			return fmt.Errorf("invalid '-stats-output-obj=%s': %w", p.statsOutputObj, err)
+		}
+		// TODO: support remote stats destinations for cloud and AIS clusters
+		if !p.statsBck.IsAIS() {
+			return errors.New("'-stats-output-obj' supports only local AIS buckets; remote destinations are not supported yet")
+		}
+
+		benchmarkBck, err := parseBucket(p.bck)
+		if err != nil {
+			return fmt.Errorf("invalid '-bucket=%s': %w", p.bck.Name, err)
+		}
+		if p.statsBck.Equal(&benchmarkBck) {
+			if p.cleanUp.Val {
+				return errors.New("'-stats-output-obj' cannot target the benchmark bucket with '-cleanup=true'")
+			}
+			fmt.Fprintln(os.Stderr, "Warning: statistics saved to the benchmark bucket may be included as workload objects in later GET runs:", p.statsOutputObj)
 		}
 	}
 

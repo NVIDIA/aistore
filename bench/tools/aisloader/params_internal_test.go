@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -15,6 +17,9 @@ import (
 func TestParamsValidate(t *testing.T) {
 	newValidParams := func() *params {
 		return &params{
+			bucketParams: bucketParams{
+				bck: cmn.Bck{Provider: apc.AIS},
+			},
 			workloadParams: workloadParams{
 				putPct: 50,
 			},
@@ -115,6 +120,85 @@ func TestParamsValidate(t *testing.T) {
 			name:    "negative stats interval",
 			mutate:  func(p *params) { p.statsShowInterval = -1 },
 			wantErr: "stats show interval -1",
+		},
+		{
+			name: "statistics object direct S3",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://results/stats.json"
+				s3Endpoint = "http://localhost:9000"
+			},
+			wantErr: "'-stats-output-obj' with direct S3 access",
+		},
+		{
+			name: "reject remote AIS statistics destination UUID",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://@Abcd12345/results/stats.json"
+			},
+			wantErr: "supports only local AIS buckets",
+		},
+		{
+			name: "reject cloud statistics destination",
+			mutate: func(p *params) {
+				p.statsOutputObj = "s3://results/stats.json"
+			},
+			wantErr: "supports only local AIS buckets",
+		},
+		{
+			name: "reject cleanup when stats use bucket URI",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://workload/stats.json"
+				p.bck.Name = "ais://workload"
+				p.cleanUp.Val = true
+			},
+			wantErr: "cannot target the benchmark bucket with '-cleanup=true'",
+		},
+		{
+			name: "reject cleanup when stats use bucket name and provider",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://workload/stats.json"
+				p.bck.Name, p.bck.Provider = "workload", apc.AIS
+				p.cleanUp.Val = true
+			},
+			wantErr: "cannot target the benchmark bucket with '-cleanup=true'",
+		},
+		{
+			name: "allow cleanup when stats use a different bucket",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://results/stats"
+				p.bck.Name, p.bck.Provider = "workload", apc.AIS
+				p.cleanUp.Val = true
+			},
+		},
+		{
+			name: "allow same statistics bucket without cleanup",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://workload/stats.json"
+				p.bck.Name = "ais://workload"
+			},
+		},
+		{
+			name: "allow cleanup with same name in remote AIS UUID",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://workload/stats.json"
+				p.bck.Name = "ais://@Abcd12345/workload"
+				p.cleanUp.Val = true
+			},
+		},
+		{
+			name: "allow cleanup with same name in cloud provider",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://workload/stats.json"
+				p.bck.Name = "s3://workload"
+				p.cleanUp.Val = true
+			},
+		},
+		{
+			name: "allow cleanup with same name in different local namespace",
+			mutate: func(p *params) {
+				p.statsOutputObj = "ais://workload/stats.json"
+				p.bck.Name = "ais://#tenant/workload"
+				p.cleanUp.Val = true
+			},
 		},
 		{
 			name:    "empty loader ID",
