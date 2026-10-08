@@ -11,9 +11,9 @@ from aistore.sdk.enums import Colocation
 from aistore.pytorch.multishard_dataset import AISMultiShardStream
 from aistore.pytorch.shard_reader import AISShardReader
 from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
-from aistore.sdk import Bucket
-from tarfile import open, TarInfo, DIRTYPE
-from io import BytesIO
+from aistore.sdk import Bucket, Object
+from tarfile import open, TarInfo, DIRTYPE, SYMTYPE, LNKTYPE, FIFOTYPE
+from io import BytesIO, RawIOBase
 
 
 class TestAISDataset(unittest.TestCase):
@@ -134,7 +134,7 @@ class TestAISDataset(unittest.TestCase):
         # Create shard reader and get results and compare
         shard_reader = AISShardReader(bucket_list=self.mock_bck)
 
-        result = list(shard_reader)
+        result = list(iter(shard_reader))
 
         expected_result = [
             (
@@ -153,6 +153,115 @@ class TestAISDataset(unittest.TestCase):
         mock_create_samples_iter.assert_called()
 
         self.patcher.stop()
+
+    def test_shard_reader_len_counts_on_a_forward_only_stream(self):
+        """__len__ reads through ObjectReader.as_file(), which cannot seek."""
+
+        class ForwardOnly(RawIOBase):
+            def __init__(self, payload):
+                self._buffer = BytesIO(payload)
+                self.largest_read = 0
+
+            def readable(self):
+                return True
+
+            def seekable(self):
+                return False
+
+            def seek(self, *args, **kwargs):
+                raise OSError("seek not supported")
+
+            def tell(self, *args, **kwargs):
+                raise OSError("tell not supported")
+
+            def read(self, size=-1):
+                chunk = self._buffer.read(size)
+                self.largest_read = max(self.largest_read, len(chunk))
+                return chunk
+
+            def readinto(self, buffer):
+                data = self.read(len(buffer))
+                buffer[: len(data)] = data
+                return len(data)
+
+        tar_buffer = BytesIO()
+        with open(fileobj=tar_buffer, mode="w") as tar:
+            directory = TarInfo("sub")
+            directory.type = DIRTYPE
+            tar.addfile(directory)
+            for name in ("a.cls", "a.jpg", "b.cls", "b.jpg", "c.cls", "c.jpg"):
+                content = b"x" * 70000
+                info = TarInfo(name)
+                info.size = len(content)
+                tar.addfile(info, BytesIO(content))
+            link = TarInfo("a_link.jpg")
+            link.type = SYMTYPE
+            link.linkname = "a.jpg"
+            tar.addfile(link)
+
+        stream = ForwardOnly(tar_buffer.getvalue())
+        shard = Mock(spec=Object)
+        shard.get_reader.return_value.as_file.return_value = stream
+        self.mock_objects = [shard]
+        shard_reader = AISShardReader(bucket_list=self.mock_bck)
+
+        self.assertEqual(len(shard_reader), 3)
+        self.assertLess(stream.largest_read, 64 * 1024)
+        self.assertTrue(stream.closed)
+
+    def test_shard_reader_len_counts_samples(self):
+        """Count sample basenames from regular files that have an extension."""
+        tar_buffer = BytesIO()
+        content = b"Content of class"
+
+        with open(fileobj=tar_buffer, mode="w") as tar:
+            for name in ("sample_1.cls", "sample_1.png", "sample_2.cls", "README"):
+                tarinfo = TarInfo(name=name)
+                tarinfo.size = len(content)
+                tar.addfile(tarinfo, BytesIO(content))
+            tarinfo = TarInfo(name="data/")
+            tarinfo.type = DIRTYPE
+            tar.addfile(tarinfo)
+            tarinfo = TarInfo(name="sample_3.png")
+            tarinfo.type = SYMTYPE
+            tarinfo.linkname = "sample_1.png"
+            tar.addfile(tarinfo)
+            tarinfo = TarInfo(name="sample_4.png")
+            tarinfo.type = LNKTYPE
+            tarinfo.linkname = "sample_1.png"
+            tar.addfile(tarinfo)
+            tarinfo = TarInfo(name="sample_5.png")
+            tarinfo.type = FIFOTYPE
+            tar.addfile(tarinfo)
+
+        shard = Mock(spec=Object)
+        shard.name = "test_shard.tar"
+        payload = tar_buffer.getvalue()
+        shard.get_reader.return_value.read_all.return_value = payload
+
+        def open_shard_stream():
+            return BytesIO(payload)
+
+        shard.get_reader.return_value.as_file.side_effect = open_shard_stream
+
+        patcher = patch("aistore.pytorch.AISShardReader._create_objects_iter")
+        mock_create_objects_iter = patcher.start()
+        self.addCleanup(patcher.stop)
+        mock_create_objects_iter.return_value = [shard]
+
+        shard_reader = AISShardReader(bucket_list=self.mock_bck, etl_name="my-etl")
+
+        self.assertEqual(len(shard_reader), 2)
+        shard.get_reader.assert_called_once_with()
+        shard.get_reader.return_value.read_all.assert_not_called()
+
+        # Iteration still applies the configured ETL.
+        mock_create_objects_iter.return_value = [shard]
+        self.assertEqual(sum(1 for _ in shard_reader), 2)
+        self.assertEqual(
+            shard.get_reader.call_args.kwargs["etl"].name,
+            "my-etl",
+        )
 
     def test_batch_iter_dataset(self):
         """Test AISBatchIterDataset functionality."""
