@@ -367,7 +367,12 @@ func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err 
 	}
 	bck := meta.CloneBck(&hdr.Bck)
 	if err = bck.Init(core.T.Bowner()); err != nil {
-		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
+		switch {
+		case cmn.IsErrBckNotFound(err):
+			return nil // bucket deleted; keep the shared stream alive
+		case cmn.IsErrRemoteBckNotFound(err):
+			// Remote bucket may not be present in BMD; continue.
+		default:
 			nlog.Errorf("failed to init bucket %s: %v", bck.String(), err)
 			return err
 		}
@@ -400,7 +405,12 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 	}
 	bck := meta.CloneBck(&hdr.Bck)
 	if err := bck.Init(core.T.Bowner()); err != nil {
-		if !cmn.IsErrRemoteBckNotFound(err) { // is ais://
+		switch {
+		case cmn.IsErrBckNotFound(err):
+			return nil // bucket deleted; keep the shared stream alive
+		case cmn.IsErrRemoteBckNotFound(err):
+			// Remote bucket may not be present in BMD; continue.
+		default:
 			nlog.Errorln(err)
 			return err
 		}
