@@ -4,7 +4,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import patch, Mock, MagicMock, call
 
-from requests import Response, Session
+from requests import Request, Response, Session
 from requests.exceptions import (
     ConnectionError as RequestsConnectionError,
     UnrewindableBodyError,
@@ -18,6 +18,7 @@ from aistore.sdk.const import (
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
 )
+from aistore.sdk.errors import AISError, ErrGETConflict, ErrObjNotFound
 
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.retry_manager import RetryManager
@@ -378,6 +379,42 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 with self.assertRaises(UnrewindableBodyError):
                     client.request("put", "objects/bucket/object", data=body)
                 self.assertEqual(uploads, [b"abcdefgh"])
+
+    def test_request_retries_ais_retryable_status(self):
+        def ais_response(method, status):
+            resp = Response()
+            resp.status_code = status
+            resp.raw = io.BytesIO(b"ais://bck/obj does not exist")
+            resp.request = Request(method, "http://proxy/v1/objects/bck/obj").prepare()
+            return resp
+
+        retry_config = RetryConfig.default()
+        retry_config.network_retry = retry_config.network_retry.copy(
+            wait=wait_none(), stop=stop_after_attempt(3), before_sleep=None
+        )
+        for method, statuses, exp_calls, exp_err in (
+            ("GET", [409, 200], 2, None),
+            ("GET", [409] * 3, 3, ErrGETConflict),
+            ("GET", [404, 200], 2, None),
+            ("GET", [404] * 3, 3, ErrObjNotFound),
+            ("PUT", [409], 1, AISError),
+        ):
+            with self.subTest(method=method, statuses=statuses):
+                self.mock_session.request.reset_mock()
+                self.mock_session.request.side_effect = [
+                    ais_response(method, status) for status in statuses
+                ]
+                client = RequestClient(
+                    "http://proxy", self.mock_session_manager, retry_config=retry_config
+                )
+                if exp_err:
+                    with self.assertRaises(exp_err) as ctx:
+                        client.request(method, "objects/bck/obj")
+                    self.assertIs(type(ctx.exception), exp_err)
+                else:
+                    resp = client.request(method, "objects/bck/obj")
+                    self.assertEqual(resp.status_code, statuses[-1])
+                self.assertEqual(self.mock_session.request.call_count, exp_calls)
 
     def test_get_full_url(self):
         path = "/testpath/to_obj"

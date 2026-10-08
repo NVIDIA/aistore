@@ -45,6 +45,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   dropped with the last view. Shared-memory finalization also closes the file
   descriptor when a live view prevents immediate cleanup, so the allocation is
   released after the last view without a second `close()` call.
+- `ErrGETConflict` and `ErrObjNotFound` are retried by `RetryConfig.network_retry` again.
 
 ### Changed
 

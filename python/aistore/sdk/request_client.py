@@ -223,12 +223,14 @@ class RequestClient:
 
         def request_op():
             if url.startswith(HTTPS) and "data" in kwargs:
-                return self._request_with_manual_redirect(
+                response = self._request_with_manual_redirect(
                     method=method, url=url, headers=headers, **kwargs
                 )
-            return self._executor.request_absolute(
-                method=method, url=url, headers=headers, **kwargs
-            )
+            else:
+                response = self._executor.request_absolute(
+                    method=method, url=url, headers=headers, **kwargs
+                )
+            return self._response_handler.handle_response(response)
 
         data = kwargs.get("data")
         if data is not None and (
@@ -240,10 +242,8 @@ class RequestClient:
                 )
             )
         ):
-            response = self._request_with_stream_retry(request_op, data)
-        else:
-            response = self._retry_manager.with_retry(request_op)
-        return self._response_handler.handle_response(response)
+            return self._request_with_stream_retry(request_op, data)
+        return self._retry_manager.with_retry(request_op)
 
     def _request_with_stream_retry(
         self, request_op: Callable[[], Response], body: Any
