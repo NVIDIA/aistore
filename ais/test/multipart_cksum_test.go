@@ -110,7 +110,7 @@ func TestMultipartChecksumSequential(t *testing.T) {
 
 	// Verify object attributes
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	objProps, err := api.HeadObject(baseParams, bck, objName, hargs)
+	objProps, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsChecksum, hargs)
 	tassert.CheckFatal(t, err)
 
 	actualCksum := objProps.ObjAttrs.Checksum()
@@ -220,7 +220,7 @@ func TestMultipartChecksumParallel(t *testing.T) {
 
 	// Verify object attributes
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	objProps, err := api.HeadObject(baseParams, bck, objName, hargs)
+	objProps, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsChecksum, hargs)
 	tassert.CheckFatal(t, err)
 
 	actualCksum := objProps.ObjAttrs.Checksum()
@@ -292,7 +292,7 @@ func TestMultipartChecksumSinglePart(t *testing.T) {
 
 	// Verify checksum
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	objProps, err := api.HeadObject(baseParams, bck, objName, hargs)
+	objProps, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsChecksum, hargs)
 	tassert.CheckFatal(t, err)
 
 	actualCksum := objProps.ObjAttrs.Checksum()
@@ -386,7 +386,7 @@ func TestMultipartChecksumLargeParts(t *testing.T) {
 
 	// Verify checksum
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	objProps, err := api.HeadObject(baseParams, bck, objName, hargs)
+	objProps, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsChecksum, hargs)
 	tassert.CheckFatal(t, err)
 
 	actualCksum := objProps.ObjAttrs.Checksum()
@@ -478,7 +478,7 @@ func TestMultipartChecksumManyParts(t *testing.T) {
 
 	// Verify checksum
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	objProps, err := api.HeadObject(baseParams, bck, objName, hargs)
+	objProps, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsChecksum, hargs)
 	tassert.CheckFatal(t, err)
 
 	actualCksum := objProps.ObjAttrs.Checksum()

@@ -48,7 +48,8 @@ func TestHeadBatchT2T(t *testing.T) {
 	for i := range bcks {
 		bck := &bcks[i]
 		for _, name := range hdbPutObjs(t, bp, bck, smap, tsi) {
-			op, err := api.HeadObject(bp, *bck, name, api.HeadArgs{})
+			props := apc.JoinProps(apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion, apc.GetPropsCustom)
+			op, err := api.HeadObjectV2(bp, *bck, name, props, api.HeadArgs{})
 			tassert.CheckFatal(t, err)
 			req.In = append(req.In, cmn.HdbIn{ObjAttrs: op.ObjAttrs, Name: name, Bidx: req.AddBck(bck)})
 			want = append(want, apc.HdbSame)

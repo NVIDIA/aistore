@@ -47,7 +47,7 @@ func TestObjHeadFlt(t *testing.T) {
 
 	// Test FltPresent - should succeed
 	t.Run("FltPresent", func(t *testing.T) {
-		props, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
+		props, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsAtime, api.HeadArgs{FltPresence: apc.FltPresent})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, props.Present, "object should be marked as present")
 		tassert.Fatalf(t, props.Size == objSize, "size mismatch: expected %d, got %d", objSize, props.Size)
@@ -56,7 +56,7 @@ func TestObjHeadFlt(t *testing.T) {
 
 	// Test FltPresentNoProps - should succeed with no props when cached
 	t.Run("FltPresentNoPropsCached", func(t *testing.T) {
-		props, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{FltPresence: apc.FltPresentNoProps})
+		props, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltPresentNoProps})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, props == nil, "props should be nil for FltPresentNoProps")
 	})
@@ -84,7 +84,7 @@ func TestObjHeadFlt(t *testing.T) {
 		}()
 
 		// Verify it works when cached
-		_, err = api.HeadObject(baseParams, evictBck, evictObj, api.HeadArgs{FltPresence: apc.FltPresentNoProps})
+		_, err = api.HeadObjectV2(baseParams, evictBck, evictObj, apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltPresentNoProps})
 		tassert.CheckFatal(t, err)
 
 		// Evict the object (exists remotely, not cached locally)
@@ -92,20 +92,20 @@ func TestObjHeadFlt(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// FltPresentNoProps should now fail - object not cached (though it exists remotely)
-		_, err = api.HeadObject(baseParams, evictBck, evictObj, api.HeadArgs{FltPresence: apc.FltPresentNoProps})
+		_, err = api.HeadObjectV2(baseParams, evictBck, evictObj, apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltPresentNoProps})
 		tassert.Fatalf(t, err != nil, "FltPresentNoProps should fail for evicted (non-cached) object")
 		tassert.Fatalf(t, isErrNotFound(err), "should return 404 when not cached locally")
 	})
 
 	// Test FltExistsOutside - should fail (object IS cached)
 	t.Run("FltExistsOutside", func(t *testing.T) {
-		_, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{FltPresence: apc.FltExistsOutside})
+		_, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltExistsOutside})
 		tassert.Fatalf(t, err != nil, "FltExistsOutside should fail when object is cached")
 	})
 
 	// Test non-existent object with FltPresent - should fail
 	t.Run("NotFound_FltPresent", func(t *testing.T) {
-		_, err := api.HeadObject(baseParams, bck, "non-existent", api.HeadArgs{FltPresence: apc.FltPresent})
+		_, err := api.HeadObjectV2(baseParams, bck, "non-existent", apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltPresent})
 		tassert.Fatalf(t, err != nil, "HEAD on non-existent object should fail")
 		tassert.Fatalf(t, isErrNotFound(err), "should return 404")
 	})
@@ -139,7 +139,7 @@ func TestObjHeadRemoteEvicted(t *testing.T) {
 	}()
 
 	// Verify object is cached
-	props, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
+	props, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsAtime, api.HeadArgs{FltPresence: apc.FltPresent})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, props.Present, "object should be cached after PUT")
 	tassert.Fatalf(t, props.Atime != 0, "atime should be set for cached object")
@@ -151,7 +151,7 @@ func TestObjHeadRemoteEvicted(t *testing.T) {
 
 	// Test cold HEAD after eviction
 	t.Run("ColdHEAD_AfterEvict", func(t *testing.T) {
-		props, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{})
+		props, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsAtime, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, !props.Present, "object should NOT be marked as present (not cached)")
 		tassert.Fatalf(t, props.Atime == 0, "atime should be 0 for non-cached object")
@@ -160,14 +160,14 @@ func TestObjHeadRemoteEvicted(t *testing.T) {
 
 	// Test FltPresent after eviction - should fail
 	t.Run("FltPresent_AfterEvict", func(t *testing.T) {
-		_, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
+		_, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltPresent})
 		tassert.Fatalf(t, err != nil, "FltPresent should fail for evicted object")
 		tassert.Fatalf(t, isErrNotFound(err), "should return 404 for evicted + FltPresent")
 	})
 
 	// Test FltExistsOutside after eviction - should succeed
 	t.Run("FltExistsOutside_AfterEvict", func(t *testing.T) {
-		props, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{FltPresence: apc.FltExistsOutside})
+		props, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsSize, api.HeadArgs{FltPresence: apc.FltExistsOutside})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, !props.Present, "object should not be present locally")
 		tassert.Fatalf(t, props.Size == objSize, "size should be available from remote")
@@ -203,7 +203,7 @@ func TestObjHeadLatestVersion(t *testing.T) {
 
 	// Test latest=true when object is cached
 	t.Run("Latest_Cached", func(t *testing.T) {
-		props, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{LatestVer: true})
+		props, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsSize, api.HeadArgs{LatestVer: true})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, props.Present, "object should still be present after latest check")
 		tlog.Logf("Verified latest version for cached object: size=%d\n", props.Size)
@@ -214,7 +214,7 @@ func TestObjHeadLatestVersion(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	t.Run("Latest_Evicted", func(t *testing.T) {
-		props, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{LatestVer: true})
+		props, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsSize, api.HeadArgs{LatestVer: true})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, !props.Present, "object should not be present after eviction + latest")
 		tassert.Fatalf(t, props.Size == objSize, "size should match from remote")
@@ -441,22 +441,6 @@ func TestObjHeadV2Selective(t *testing.T) {
 			"chunk count mismatch: expected %d, got %d", expectedChunkCount, opV2.Chunks.ChunkCount)
 		tassert.Fatalf(t, opV2.Chunks.MaxChunkSize > 0 && opV2.Chunks.MaxChunkSize <= chunkSize,
 			"max chunk size should be > 0 and <= %d, got %d", chunkSize, opV2.Chunks.MaxChunkSize)
-	})
-
-	t.Run("V1vsV2Consistency", func(t *testing.T) {
-		// Get V1 (all props)
-		opV1, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{})
-		tassert.CheckFatal(t, err)
-
-		// Get V2 (selective props)
-		props := apc.JoinProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime)
-		opV2, err := api.HeadObjectV2(baseParams, bck, objName, props, api.HeadArgs{})
-		tassert.CheckFatal(t, err)
-
-		// Validate: V1 and V2 should return the same values for requested properties
-		tassert.Fatalf(t, opV1.Size == opV2.Size, "size mismatch between V1 and V2")
-		tassert.Fatalf(t, opV1.Cksum.Equal(opV2.Cksum), "checksum mismatch between V1 and V2")
-		tassert.Fatalf(t, opV1.Atime == opV2.Atime, "atime mismatch between V1 and V2")
 	})
 }
 

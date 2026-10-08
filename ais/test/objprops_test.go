@@ -397,7 +397,7 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 		m.updateAndValidate(baseParams, i, p.Cksum.Type)
 
 		// verify that the object's version is incremented after being overridden
-		op, err := api.HeadObject(baseParams, bck, m.objNames[i], api.HeadArgs{FltPresence: apc.FltPresent})
+		op, err := api.HeadObjectV2(baseParams, bck, m.objNames[i], apc.GetPropsVersion, api.HeadArgs{FltPresence: apc.FltPresent})
 		tassert.CheckFatal(t, err)
 
 		// TODO: revisit versioning for remote buckets with multipart uploads
@@ -639,9 +639,6 @@ func TestObjProps(t *testing.T) {
 				m.gets(nil, false) // set the access time
 			}
 
-			bckProps, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
-			tassert.CheckFatal(t, err)
-
 			for _, objName := range m.objNames {
 				tlog.Logfln("checking %s props...", m.bck.Cname(objName))
 
@@ -653,7 +650,8 @@ func TestObjProps(t *testing.T) {
 					flt = apc.FltExistsOutside
 				}
 
-				props, err := api.HeadObject(baseParams, m.bck, objName, api.HeadArgs{FltPresence: flt})
+				reqProps := apc.JoinProps(apc.GetPropsVersion, apc.GetPropsAtime, apc.GetPropsCopies, apc.GetPropsEC)
+				props, err := api.HeadObjectV2(baseParams, m.bck, objName, reqProps, api.HeadArgs{FltPresence: flt})
 				if test.checkPresent {
 					if test.bucketType != typeLocal && test.evict {
 						tassert.Fatalf(t, err != nil,
@@ -666,10 +664,6 @@ func TestObjProps(t *testing.T) {
 				}
 				tassert.CheckFatal(t, err)
 
-				tassert.Errorf(
-					t, props.Bck.Provider == bckProps.Provider,
-					"expected provider (%s) to be %s", props.Bck.Provider, bckProps.Provider,
-				)
 				tassert.Errorf(
 					t, uint64(props.Size) == m.fileSize,
 					"object size (%d) is different from expected (%d)", props.Size, m.fileSize,

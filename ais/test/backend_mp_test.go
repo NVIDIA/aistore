@@ -539,7 +539,7 @@ func testMPUploadDownloadCleanup(globals *testBackendMPGlobalsStruct, size int64
 	var (
 		err               error
 		getObjectRetries  int64
-		objectProps       *cmn.ObjectProps
+		objectProps       *cmn.ObjectPropsV2
 		putObjectRetries  int64
 		testBackendMPFile *testBackendMPFileStruct
 	)
@@ -601,12 +601,12 @@ putObjectRetry:
 		return
 	}
 
-	if objectProps, err = api.HeadObject(globals.baseParams, globals.bck, testBackendMPFile.String(), api.HeadArgs{}); err != nil {
-		err = fmt.Errorf("api.HeadObject() [cache hit case] failed: %v", err)
+	if objectProps, err = api.HeadObjectV2(globals.baseParams, globals.bck, testBackendMPFile.String(), apc.GetPropsSize, api.HeadArgs{}); err != nil {
+		err = fmt.Errorf("api.HeadObjectV2() [cache hit case] failed: %v", err)
 		return
 	}
 	if objectProps.Size != int64(testBackendMPFile.size) {
-		err = fmt.Errorf("api.HeadObject() [cache hit case] returned .Size: %v but testBackendMPFile.size: %v", objectProps.Size, testBackendMPFile.size)
+		err = fmt.Errorf("api.HeadObjectV2() [cache hit case] returned .Size: %v but testBackendMPFile.size: %v", objectProps.Size, testBackendMPFile.size)
 		return
 	}
 
@@ -615,12 +615,12 @@ putObjectRetry:
 		return
 	}
 
-	if objectProps, err = api.HeadObject(globals.baseParams, globals.bck, testBackendMPFile.String(), api.HeadArgs{}); err != nil {
-		err = fmt.Errorf("api.HeadObject() [cache miss case] failed: %v", err)
+	if objectProps, err = api.HeadObjectV2(globals.baseParams, globals.bck, testBackendMPFile.String(), apc.GetPropsSize, api.HeadArgs{}); err != nil {
+		err = fmt.Errorf("api.HeadObjectV2() [cache miss case] failed: %v", err)
 		return
 	}
 	if objectProps.Size != int64(testBackendMPFile.size) {
-		err = fmt.Errorf("api.HeadObject() [cache miss case] returned .Size: %v but testBackendMPFile.size: %v", objectProps.Size, testBackendMPFile.size)
+		err = fmt.Errorf("api.HeadObjectV2() [cache miss case] returned .Size: %v but testBackendMPFile.size: %v", objectProps.Size, testBackendMPFile.size)
 		return
 	}
 

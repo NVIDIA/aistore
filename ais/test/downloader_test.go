@@ -223,9 +223,10 @@ func abortDownload(t *testing.T, id string) {
 	tassert.Fatalf(t, len(status.CurrentTasks) == 0, "current tasks should be empty")
 }
 
-func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version string) *cmn.ObjectProps {
+func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version string) *cmn.ObjectPropsV2 {
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	objProps, err := api.HeadObject(tools.BaseAPIParams(), bck, objName, hargs)
+	props := apc.JoinProps(apc.GetPropsSize, apc.GetPropsVersion, apc.GetPropsAtime)
+	objProps, err := api.HeadObjectV2(tools.BaseAPIParams(), bck, objName, props, hargs)
 	tassert.CheckFatal(t, err)
 
 	tassert.Errorf(

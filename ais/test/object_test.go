@@ -323,9 +323,9 @@ func TestCopyObject(t *testing.T) {
 
 	// HEAD both source and destination to ensure existence
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	_, err = api.HeadObject(baseParams, bckFrom, objFrom, hargs)
+	_, err = api.HeadObjectV2(baseParams, bckFrom, objFrom, apc.GetPropsName, hargs)
 	tassert.CheckFatal(t, err)
-	_, err = api.HeadObject(baseParams, bckTo, objTo, hargs)
+	_, err = api.HeadObjectV2(baseParams, bckTo, objTo, apc.GetPropsName, hargs)
 	tassert.CheckFatal(t, err)
 
 	// Attempt to copy to a nonexistent bucket
@@ -666,9 +666,9 @@ func TestSameBucketName(t *testing.T) {
 
 	// Check that ais bucket has 2 objects
 	tlog.Logfln("Validating that ais bucket contains %s and %s ...", fileName1, fileName2)
-	_, err = api.HeadObject(baseParams, bckLocal, fileName1, hargs)
+	_, err = api.HeadObjectV2(baseParams, bckLocal, fileName1, apc.GetPropsName, hargs)
 	tassert.CheckFatal(t, err)
-	_, err = api.HeadObject(baseParams, bckLocal, fileName2, hargs)
+	_, err = api.HeadObjectV2(baseParams, bckLocal, fileName2, apc.GetPropsName, hargs)
 	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
@@ -704,14 +704,14 @@ func TestSameBucketName(t *testing.T) {
 	err = api.WaitForXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.HeadObject(baseParams, bckLocal, fileName1, hargs)
+	_, err = api.HeadObjectV2(baseParams, bckLocal, fileName1, apc.GetPropsName, hargs)
 	if err == nil {
 		t.Errorf("Object %s not deleted", fileName1)
 	} else if !isErrNotFound(err) {
 		t.Errorf("HEAD(deleted-object %q) returns a wrong error type: %v (%T)", fileName1, err, err)
 	}
 
-	_, err = api.HeadObject(baseParams, bckLocal, fileName2, hargs)
+	_, err = api.HeadObjectV2(baseParams, bckLocal, fileName2, apc.GetPropsName, hargs)
 	if err == nil {
 		t.Errorf("Object %s not deleted", fileName2)
 	} else if status := api.HTTPStatus(err); status != http.StatusNotFound {
@@ -719,11 +719,11 @@ func TestSameBucketName(t *testing.T) {
 	}
 
 	hargsRemote := api.HeadArgs{FltPresence: apc.FltExists}
-	_, err = api.HeadObject(baseParams, bckRemote, fileName1, hargsRemote)
+	_, err = api.HeadObjectV2(baseParams, bckRemote, fileName1, apc.GetPropsName, hargsRemote)
 	if err == nil {
 		t.Errorf("remote file %s not deleted", fileName1)
 	}
-	_, err = api.HeadObject(baseParams, bckRemote, fileName2, hargsRemote)
+	_, err = api.HeadObjectV2(baseParams, bckRemote, fileName2, apc.GetPropsName, hargsRemote)
 	if err == nil {
 		t.Errorf("remote file %s not deleted", fileName2)
 	}
@@ -829,7 +829,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	}
 
 	// Check that cloud object is deleted
-	_, err = api.HeadObject(baseParams, bckRemote, fileName, api.HeadArgs{FltPresence: apc.FltExistsOutside})
+	_, err = api.HeadObjectV2(baseParams, bckRemote, fileName, apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltExistsOutside})
 	if err == nil {
 		t.Errorf("Remote object %s not deleted", fileName)
 	} else if !isErrNotFound(err) {
@@ -2232,7 +2232,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 			t.Error("Bad checksum provided by the user, Expected an error")
 		}
 
-		_, err = api.HeadObject(baseParams, bck, fileName, api.HeadArgs{FltPresence: apc.FltExists})
+		_, err = api.HeadObjectV2(baseParams, bck, fileName, apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltExists})
 		if err == nil {
 			t.Errorf("Object %s exists despite bad checksum", fileName)
 		} else if !isErrNotFound(err) {
@@ -2240,13 +2240,10 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		}
 		putArgs.Cksum = cos.NewCksum(cksumType, cksumValue)
 		oah, err := api.PutObject(&putArgs)
-		if err != nil {
-			t.Errorf("Correct checksum provided, Err encountered %v", err)
-		}
-		op, err := api.HeadObject(baseParams, bck, fileName, api.HeadArgs{FltPresence: apc.FltPresent})
-		if err != nil {
-			t.Errorf("Object %s does not exist despite correct checksum", fileName)
-		}
+		tassert.CheckFatal(t, err)
+		props := apc.JoinProps(apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion, apc.GetPropsCustom)
+		op, err := api.HeadObjectV2(baseParams, bck, fileName, props, api.HeadArgs{FltPresence: apc.FltPresent})
+		tassert.CheckFatal(t, err)
 		attrs1 := oah.Attrs()
 		attrs2 := op.ObjAttrs
 		tassert.Errorf(t, attrs1.CheckEq(&attrs2) == nil, "PUT(obj) attrs %s != %s HEAD\n", attrs1.String(), attrs2.String())
@@ -2319,7 +2316,7 @@ func TestMultipartUpload(t *testing.T) {
 
 	// Check object exists
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	objAttrs, err := api.HeadObject(baseParams, bck, objName, hargs)
+	objAttrs, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsSize, hargs)
 	tassert.CheckFatal(t, err)
 
 	// Verify object size matches expected content
@@ -2414,7 +2411,7 @@ func TestMultipartUploadParallel(t *testing.T) {
 
 	// Step 4: Verify the uploaded object
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-	objAttrs, err := api.HeadObject(baseParams, bck, objName, hargs)
+	objAttrs, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsSize, hargs)
 	tassert.CheckFatal(t, err)
 
 	expectedSize := int64(len(expectedContent))
@@ -2498,7 +2495,7 @@ func TestMultipartMaxChunks(t *testing.T) {
 
 		// Verify the uploaded object
 		hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-		objAttrs, err := api.HeadObject(baseParams, bck, objName, hargs)
+		objAttrs, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsSize, hargs)
 		tassert.CheckFatal(t, err)
 
 		expectedSize := int64(numParts * len(miniPartData))
@@ -2785,7 +2782,7 @@ func TestMultipartUploadAndCopyBucket(t *testing.T) {
 
 	for i, objName := range createdObjects {
 		// Check object exists in destination
-		objAttrs, err := api.HeadObject(baseParams, dstBck, objName, hargs)
+		objAttrs, err := api.HeadObjectV2(baseParams, dstBck, objName, apc.GetPropsSize, hargs)
 		tassert.CheckFatal(t, err)
 
 		// Verify size

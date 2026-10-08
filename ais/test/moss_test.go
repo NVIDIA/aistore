@@ -1263,7 +1263,7 @@ func TestMossZeroSizeObjects(t *testing.T) {
 	}
 
 	// double-check: PUT must have actually produced a zero-size object
-	op, err := api.HeadObject(bp, bck, zeroName, api.HeadArgs{FltPresence: apc.FltPresent})
+	op, err := api.HeadObjectV2(bp, bck, zeroName, apc.GetPropsSize, api.HeadArgs{FltPresence: apc.FltPresent})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, op.Size == 0, "%s: expected zero-size object, got %d", zeroName, op.Size)
 
@@ -1577,7 +1577,7 @@ func _mossZeroSetup(t *testing.T, bp api.BaseParams, numObjs, numMissing int) (c
 	}
 
 	// PUT must have actually produced a zero-size object
-	op, err := api.HeadObject(bp, bck, in[0].ObjName, api.HeadArgs{FltPresence: apc.FltPresent})
+	op, err := api.HeadObjectV2(bp, bck, in[0].ObjName, apc.GetPropsSize, api.HeadArgs{FltPresence: apc.FltPresent})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, op.Size == 0, "expected zero-size object, got %d", op.Size)
 

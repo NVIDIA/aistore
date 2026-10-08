@@ -968,7 +968,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	for i := range o.objCount {
 		objName := ecTestDir + fmt.Sprintf(o.pattern, i)
 		hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-		props, err := api.HeadObject(bp, bck, objName, hargs)
+		props, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsEC, hargs)
 		if err != nil {
 			t.Errorf("HEAD for %s failed: %v", objName, err)
 		} else if props.EC.DataSlices == 0 || props.EC.ParitySlices == 0 {

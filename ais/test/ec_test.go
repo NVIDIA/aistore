@@ -2731,7 +2731,7 @@ func TestECGenerations(t *testing.T) {
 			for i := range o.objCount {
 				objName := ecTestDir + fmt.Sprintf(o.pattern, i)
 				hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-				props, err := api.HeadObject(baseParams, bck, objName, hargs)
+				props, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsEC, hargs)
 				tassert.CheckError(t, err)
 				if err == nil && props.EC.Generation > lastWrite[i] && props.EC.Generation < currentTime {
 					t.Errorf("Object %s, generation %d expected between %d and %d",

@@ -2111,7 +2111,7 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 			// Validate each object's checksum in destination bucket
 			tlog.Logfln("validating checksums of %d objects in destination bucket", objCnt)
 			for objName, expectedCksum := range expectedCksums {
-				objProps, err := api.HeadObject(bp, dstBck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
+				objProps, err := api.HeadObjectV2(bp, dstBck, objName, apc.GetPropsChecksum, api.HeadArgs{FltPresence: apc.FltPresent})
 				tassert.CheckFatal(t, err)
 
 				actualCksum := objProps.ObjAttrs.Checksum()
