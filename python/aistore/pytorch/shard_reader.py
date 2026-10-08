@@ -6,7 +6,7 @@ PyTorch Dataset and DataLoader for AIS.
 Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
-from aistore.sdk import Bucket, ListObjectFlag
+from aistore.sdk import Bucket
 from aistore.sdk.etl.etl_config import ETLConfig
 from typing import Dict, Iterator, List, Union
 from aistore.pytorch.utils import get_basename, get_extension
@@ -23,8 +23,7 @@ class AISShardReader(AISBaseIterDataset):
 
     Args:
         bucket_list (Union[Bucket, List[Bucket]]): Single or list of Bucket objects to load data
-        prefix_map (Dict(AISSource, Union[str, List[str]]), optional): Map of Bucket objects to list of prefixes that only allows
-        objects with the specified prefixes to be used from each source
+        prefix_map (Dict[Bucket, Union[str, List[str]]], optional): Prefixes to select from each bucket.
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
         show_progress (bool, optional): Enables console shard reading progress indicator
         partition_sources_by_worker (bool, optional): When True, distributes buckets across
@@ -33,8 +32,7 @@ class AISShardReader(AISBaseIterDataset):
             as workers. Defaults to False.
 
     Yields:
-        Tuple[str, Dict(str, bytes)]: Each item is a tuple where the first element is the basename of the shard
-        and the second element is a dictionary mapping strings of file extensions to bytes.
+        Tuple[str, Dict[str, bytes]]: Sample basename and contents grouped by file extension.
     """
 
     def __init__(
@@ -50,47 +48,31 @@ class AISShardReader(AISBaseIterDataset):
         self._show_progress = show_progress
         self._observed_keys = set()
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
-        Returns the length of the dataset. Note that calling this
-        will iterate through the dataset, taking O(N) time.
+        Return the number of samples in the dataset.
 
-        NOTE: If you want the length of the dataset after iterating through
-        it, use `for i, data in enumerate(dataset)` instead.
+        NOTE:
+            - This lists and reads every shard without buffering its full payload.
+            - Count samples during iteration to avoid a second read.
+
+        If ETL is enabled, this method counts samples before transformation.
+        The count matches iteration only if ETL preserves the sample count
+        in each shard.
         """
-        self._reset_iterator()
         length = 0
 
-        for shard in self._obj_iterator:
-            for _ in shard.bucket.list_objects_iter(
-                prefix=shard.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
-            ):
-                length += 1
-
-            length -= 1  # Exclude the bucket (overcounted earlier)
+        for shard in self._create_objects_iter():
+            with shard.get_reader().as_file() as shard_stream:
+                length += self._count_samples_in_shard(shard_stream)
 
         return length
 
     class ZeroDict(dict):
         """
-        When `collate_fn` is called while using ShardReader with a dataloader,
-        the content dictionaries for each sample are merged into a single dictionary
-        with file extensions as keys and lists of contents as values. This means,
-        however, that each sample must have a value for that file extension in the batch
-        at iteration time or else collation will fail. To avoid forcing the user to
-        pass in a custom collation function, we workaround the default implementation
-        of collation.
+        Fill missing observed extensions with empty bytes.
 
-        As such, we define a dictionary that has a default value of `b""` (zero bytes)
-        for every key that we have seen so far. We cannot use None as collation
-        does not accept None. Initially, when we open a shard tar, we collect every file type
-        (pre-processing pass) from its members and cache those. Then, we read the shard files.
-        Lastly, before yielding the sample, we wrap its content dictionary with this custom dictionary
-        to insert any keys that it does not contain, hence ensuring consistent keys across
-        samples.
-
-        NOTE: For our use case, `defaultdict` does not work due to needing
-        a `lambda` which cannot be pickled in multithreaded contexts.
+        PyTorch batch collation requires matching keys and cannot collate None.
         """
 
         def __init__(self, dict, keys):
@@ -99,32 +81,51 @@ class AISShardReader(AISBaseIterDataset):
                 if key not in self:
                     self[key] = b""
 
+    @staticmethod
+    def _iter_sample_members(tar) -> Iterator:
+        """Yield regular members with an extension, their basename, and extension."""
+        for member in tar:
+            if not member.isfile():
+                continue
+            extension = get_extension(member.name)
+            if not extension:
+                continue
+            yield member, get_basename(member.name), extension
+
+    def _count_samples_in_shard(self, shard_stream) -> int:
+        """Count sample basenames without seeking or reading the full payload at once."""
+        try:
+            with open(fileobj=shard_stream, mode="r|") as tar:
+                return len(
+                    {basename for _, basename, _ in self._iter_sample_members(tar)}
+                )
+        except TarError as e:
+            raise TarError(
+                f"<{self.__class__.__name__}> Error opening tar file: {e}"
+            ) from e
+
     def _read_samples_from_shards(self, shard_content) -> Dict:
         sample_dict = {}
 
         file = BytesIO(shard_content)
 
         try:
-            # Open the shard as a tarfile as read samples into dict
             with open(fileobj=file, mode="r:") as tar:
-                # Preprocess every key in the archive to ensure consistency in batch collation
+                # Collect keys before yielding samples so batch collation is consistent.
                 self._observed_keys.update(
                     extension
                     for name in tar.getnames()
                     if (extension := get_extension(name))
                 )
 
-                for member in tar.getmembers():
-                    if member.isfile():
-                        file_basename = get_basename(member.name)
-                        file_extension = get_extension(member.name)
-                        if not file_extension:
-                            continue
-                        if file_basename not in sample_dict:
-                            sample_dict[file_basename] = {}
-                        sample_dict[file_basename][file_extension] = tar.extractfile(
-                            member
-                        ).read()
+                for member, file_basename, file_extension in self._iter_sample_members(
+                    tar
+                ):
+                    if file_basename not in sample_dict:
+                        sample_dict[file_basename] = {}
+                    sample_dict[file_basename][file_extension] = tar.extractfile(
+                        member
+                    ).read()
         except TarError as e:
             raise TarError(f"<{self.__class__.__name__}> Error opening tar file: {e}")
 

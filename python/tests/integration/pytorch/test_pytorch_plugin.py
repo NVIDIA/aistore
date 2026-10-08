@@ -280,11 +280,13 @@ class TestPytorchPlugin(unittest.TestCase):
         shard_reader = AISShardReader(
             bucket_list=[self.bck], prefix_map={self.bck: "shard1.tar"}
         )
+        self.assertEqual(len(shard_reader), 2)
         for i, (basename, sample) in enumerate(shard_reader):
             self.assertEqual(basename, sample_names[i])
             self.assertEqual(sample, expected[i])
 
         shard_reader = AISShardReader(bucket_list=[self.bck])
+        self.assertEqual(len(shard_reader), 4)
         for i, (basename, sample) in enumerate(shard_reader):
             self.assertEqual(basename, sample_names[i])
             self.assertEqual(sample, expected[i])
