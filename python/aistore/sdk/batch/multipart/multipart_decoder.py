@@ -151,12 +151,16 @@ class MultipartDecoder:
         Returns:
             Optional[Tuple[bytes, bytes]]: Extracted headers and body, or None if parsing fails
         """
-        # Determine line ending style
-        if WIN_LINE_END in part:
-            line_ending = WIN_LINE_END
-        elif UNIX_LINE_END in part:
-            line_ending = UNIX_LINE_END
-        else:
+        # Determine line ending style. Take the earliest terminator, the way
+        # StatefulStreamingParser does, because a body carrying \r\n\r\n would
+        # otherwise win over the Unix terminator that ends the headers.
+        headers_end, line_ending = -1, None
+        for candidate in (WIN_LINE_END, UNIX_LINE_END):
+            pos = part.find(candidate)
+            if pos != -1 and (headers_end == -1 or pos < headers_end):
+                headers_end, line_ending = pos, candidate
+
+        if line_ending is None:
             # No valid line ending found
             logger.warning(
                 "Multipart sections must include either Windows-style line endings %s "

@@ -54,6 +54,26 @@ class TestMultipartDecoder(unittest.TestCase):
         self.assertEqual(headers, b'Content-Disposition: form-data; name="field1"')
         self.assertEqual(data, b"test_value")
 
+    def test_parse_part_unix_line_endings_with_crlfcrlf_in_body(self):
+        """A body carrying \r\n\r\n must not move the header terminator."""
+        part_content = b'Content-Disposition: form-data; name="f"\n\nAAA\r\n\r\nBBB'
+        # pylint: disable=protected-access
+        result = self.decoder._parse_part(part_content)
+        self.assertIsNotNone(result)
+        headers, data = result
+        self.assertEqual(headers, b'Content-Disposition: form-data; name="f"')
+        self.assertEqual(data, b"AAA\r\n\r\nBBB")
+
+    def test_parse_part_windows_line_endings_with_lflf_in_body(self):
+        """A body carrying \n\n must not move the header terminator either."""
+        part_content = b'Content-Disposition: form-data; name="f"\r\n\r\nAAA\n\nBBB'
+        # pylint: disable=protected-access
+        result = self.decoder._parse_part(part_content)
+        self.assertIsNotNone(result)
+        headers, data = result
+        self.assertEqual(headers, b'Content-Disposition: form-data; name="f"')
+        self.assertEqual(data, b"AAA\n\nBBB")
+
     def test_parse_part_no_valid_line_endings(self):
         """Test parsing part with no valid line endings."""
         part_content = b'Content-Disposition: form-data; name="field1"test_value'
