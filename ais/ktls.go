@@ -42,6 +42,13 @@ import (
 // on userspace crypto/tls. Two constraints apply to the listener as a whole,
 // armed or not: TLS session tickets are disabled (TLS 1.3 record-sequence
 // prerequisite) and ALPN is pinned to http/1.1.
+//
+// NOTE: arming is eager - at handshake, before the first request. Go's
+// http.Transport routinely handshakes and closes connections that never carry
+// a request (dial race, idle-pool overflow); each pays key installation for
+// nothing. In TLS 1.3 the client sends the last handshake flight and may close
+// before arm() runs - hence ENOTCONN at TCP_ULP, with no request lost.
+// See "lazy arming" below - the change to implement.
 
 // TODO:
 // - end-to-end benches: plain HTTP => HTTPS => (HTTPS + kTLS + sendfile).
@@ -80,8 +87,11 @@ import (
 //   shows "txconf: sw|hw". No integration test or CI job yet; when there is one
 //   it must assert armed > 0 - a missing TLS ULP falls back silently.
 //
-// - lazy arming: install TLS_TX on the first response that would use sendfile,
-//   not at handshake. Ideally, must only be used for large payloads.
+// - lazy arming: decide at the first response, before crypto/tls writes any
+//   application data - arm if sendfile-eligible and above a size threshold,
+//   otherwise never arm the connection.
+//   (Note re: "TLS record sequence number (rec_seq) synchronization" -
+//   in 1.3 rec_seq is still 0 (no session tickets), so nothing needs counting.)
 //
 // - classify errKtlsExhausted/errKtlsPoisoned as connection-lifecycle
 //   events: they are neither object-transmit errors nor FSHC input (tgtfshc)
@@ -600,14 +610,41 @@ func (c *ktlsCounters) snapshot() ktlsCounterValues {
 	}
 }
 
+// ktlsCounterValues.String() order
+var ktlsStatNames = [...]string{
+	"attempted", "armed", "skipped", "refused", "unsupported", "failed", "not-established",
+	"poisoned", "exhausted", "retiring", "stopped", "stopped-bytes", "avg-bytes",
+}
+
 func (c ktlsCounterValues) String() string {
-	var avgBytes int64
+	var avg int64
 	if c.stopped > 0 {
-		avgBytes = c.stopBytes / c.stopped
+		avg = c.stopBytes / c.stopped
 	}
-	return fmt.Sprintf("ktls-tx[attempted=%d armed=%d skipped=%d refused=%d unsupported=%d failed=%d not-established=%d poisoned=%d exhausted=%d retiring=%d stopped=%d stopped-bytes(total/avg)=%d/%d]",
-		c.armed+c.skipped+c.refused+c.unsupported+c.failed+c.notEstablished, c.armed, c.skipped, c.refused, c.unsupported, c.failed, c.notEstablished,
-		c.poisoned, c.exhausted, c.retiring, c.stopped, c.stopBytes, avgBytes)
+	vals := [len(ktlsStatNames)]int64{
+		c.armed + c.skipped + c.refused + c.unsupported + c.failed + c.notEstablished,
+		c.armed, c.skipped, c.refused, c.unsupported, c.failed, c.notEstablished,
+		c.poisoned, c.exhausted, c.retiring, c.stopped, c.stopBytes, avg,
+	}
+
+	// upper bound: " name=" plus max int64 digits (w/ sign) per counter
+	n := len("ktls-tx[]")
+	for _, name := range ktlsStatNames {
+		n += len(name) + 2 + 20
+	}
+	var sb cos.SB
+	sb.Init(n)
+	sb.WriteString("ktls-tx[")
+	for i, name := range ktlsStatNames {
+		if i > 0 {
+			sb.WriteUint8(' ')
+		}
+		sb.WriteString(name)
+		sb.WriteUint8('=')
+		sb.WriteInt64(vals[i])
+	}
+	sb.WriteUint8(']')
+	return sb.String()
 }
 
 // Activity-driven: emit only changed counters, at most once per interval.
