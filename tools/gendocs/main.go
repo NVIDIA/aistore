@@ -32,6 +32,7 @@ const (
 	goFileExt        = ".go"
 
 	// Generation annotation prefixes
+	genPrefix      = "+gen:"
 	endpointPrefix = "+gen:endpoint"
 	payloadPrefix  = "+gen:payload"
 	namePrefix     = "+gen:name"
@@ -221,13 +222,12 @@ func getActionString(actionConstant string, actionMap map[string]string) string 
 // Collect all payload annotations from all files in the walker
 func (ep *endpointProcessor) collectGlobalPayloads() error {
 	for _, file := range ep.Walker.Files {
-		content, err := os.ReadFile(file)
+		lines, err := readSourceLines(file)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", file, err)
 		}
 
-		lines := strings.SplitSeq(string(content), "\n")
-		for line := range lines {
+		for _, line := range lines {
 			trimmedLine := strings.TrimSpace(line)
 			if !strings.HasPrefix(trimmedLine, commentWithSpace+payloadPrefix) {
 				continue
@@ -285,12 +285,11 @@ func parseNameAnnotation(line string) (string, nameAnnotation) {
 // Collect all +gen:name annotations across the walker.
 func (ep *endpointProcessor) collectGlobalNames() error {
 	for _, file := range ep.Walker.Files {
-		content, err := os.ReadFile(file)
+		lines, err := readSourceLines(file)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", file, err)
 		}
-		lines := strings.SplitSeq(string(content), "\n")
-		for line := range lines {
+		for _, line := range lines {
 			trimmedLine := strings.TrimSpace(line)
 			if !strings.HasPrefix(trimmedLine, commentWithSpace+namePrefix) {
 				continue
@@ -346,12 +345,11 @@ func parseValueAnnotation(line string) (string, valueAnnotation) {
 // Collect all +gen:value annotations across the walker.
 func (ep *endpointProcessor) collectGlobalValues() error {
 	for _, file := range ep.Walker.Files {
-		content, err := os.ReadFile(file)
+		lines, err := readSourceLines(file)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", file, err)
 		}
-		lines := strings.SplitSeq(string(content), "\n")
-		for line := range lines {
+		for _, line := range lines {
 			trimmedLine := strings.TrimSpace(line)
 			if !strings.HasPrefix(trimmedLine, commentWithSpace+valuePrefix) {
 				continue
@@ -758,11 +756,10 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 
 // process scans a source file for +gen:endpoint annotations and collects endpoints.
 func (fp *fileParser) process() error {
-	content, err := os.ReadFile(fp.Path)
+	lines, err := readSourceLines(fp.Path)
 	if err != nil {
 		return err
 	}
-	lines := strings.Split(string(content), newlineChar)
 
 	for i := range lines {
 		line := strings.TrimSpace(lines[i])

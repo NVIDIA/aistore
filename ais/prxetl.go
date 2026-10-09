@@ -123,7 +123,8 @@ func (p *proxy) httpetlget(w http.ResponseWriter, r *http.Request) {
 }
 
 // +gen:endpoint PUT /v1/etl model=etl.ETLSpecMsg
-// +gen:payload etl.ETLSpecMsg={"name": "echo-etl", "communication": "hpush://", "runtime": {"image": "aistorage/transformer_echo:latest"}}
+// +gen:payload etl.ETLSpecMsg={"name": "echo-etl", "communication": "hpush://", \
+// "runtime": {"image": "aistorage/transformer_echo:latest"}}
 // Create and initialize a new ETL job to transform data during transfers.
 func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathETL.L, 0, false); err != nil {

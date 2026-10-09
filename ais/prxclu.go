@@ -436,8 +436,26 @@ func _rawResWithTimeout(results sliceResults) (cos.JSONRawMsgs, error, bool /*ti
 // - cluster membership, including maintenance and decommission
 // - rebalance
 // - set-primary
-// +gen:endpoint PUT /v1/cluster[apc.QparamTransient=bool] action=[apc.ActSetPlacementWeights=apc.ActValPlacementWeights|apc.ActSetConfig=cmn.ConfigToSet|apc.ActResetConfig=apc.ActMsg|apc.ActRotateLogs=apc.ActMsg|apc.ActShutdownCluster=apc.ActMsg|apc.ActDecommissionCluster=apc.ActValRmNode|apc.ActStartMaintenance=apc.ActValRmNode|apc.ActDecommissionNode=apc.ActValRmNode|apc.ActShutdownNode=apc.ActValRmNode|apc.ActRmNodeUnsafe=apc.ActValRmNode|apc.ActStopMaintenance=apc.ActValRmNode|apc.ActResetStats=apc.ActMsg|apc.ActClearLcache=apc.ActMsg|apc.ActXactStart=apc.ActMsg|apc.ActXactStop=apc.ActMsg|apc.ActReloadBackendCreds=apc.ActMsg|apc.ActBumpMetasync=apc.ActMsg]
-// +gen:payload apc.ActDecommissionCluster={"action": "decommission", "value": {"sid": "target_id", "skip_rebalance": false, "rm_user_data": true}}
+// +gen:endpoint PUT /v1/cluster[apc.QparamTransient=bool] \
+// action=[apc.ActSetPlacementWeights=apc.ActValPlacementWeights|\
+// apc.ActSetConfig=cmn.ConfigToSet|\
+// apc.ActResetConfig=apc.ActMsg|\
+// apc.ActRotateLogs=apc.ActMsg|\
+// apc.ActShutdownCluster=apc.ActMsg|\
+// apc.ActDecommissionCluster=apc.ActValRmNode|\
+// apc.ActStartMaintenance=apc.ActValRmNode|\
+// apc.ActDecommissionNode=apc.ActValRmNode|\
+// apc.ActShutdownNode=apc.ActValRmNode|\
+// apc.ActRmNodeUnsafe=apc.ActValRmNode|\
+// apc.ActStopMaintenance=apc.ActValRmNode|\
+// apc.ActResetStats=apc.ActMsg|\
+// apc.ActClearLcache=apc.ActMsg|\
+// apc.ActXactStart=apc.ActMsg|\
+// apc.ActXactStop=apc.ActMsg|\
+// apc.ActReloadBackendCreds=apc.ActMsg|\
+// apc.ActBumpMetasync=apc.ActMsg]
+// +gen:payload apc.ActDecommissionCluster={"action": "decommission", "value": {"sid": "target_id", \
+// "skip_rebalance": false, "rm_user_data": true}}
 // +gen:payload apc.ActResetStats={"action": "reset-stats", "value": false}
 // Administrative cluster operations: configuration changes, node management, log rotation, shutdown/decommission operations.
 func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request, isPub bool) {
@@ -854,7 +872,8 @@ func _checkTransient(toUpdate *cmn.ConfigToSet) error {
 	return nil
 }
 
-// +gen:payload apc.ActSetPlacementWeights={"action": "set-placement-weights", "value": {"weights": {"t1": "1", "t2": "3", "t3": "6"}, "uuid": "cluster-uuid", "version": "42"}}
+// +gen:payload apc.ActSetPlacementWeights={"action": "set-placement-weights", "value": {"weights": {"t1": "1", \
+// "t2": "3", "t3": "6"}, "uuid": "cluster-uuid", "version": "42"}}
 // set all target weights at once (all zero clears them)
 // - same weights: no-op
 // - proportional weights: new Smap, no rebalance

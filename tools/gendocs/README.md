@@ -26,6 +26,18 @@ func HandlerFunction() {
 
 ## Annotation Components
 
+### Multiline Annotations
+
+Continue any `+gen:` annotation with a trailing backslash and another `//`
+comment. Fragments join without a separator; preserve required spaces before
+backslashes. Continuation indentation is ignored, and continuation lines are
+excluded from endpoint summaries. A missing continuation comment is an error.
+
+```go
+// +gen:endpoint PUT /v1/cluster action=[apc.ActResetConfig=apc.ActMsg|\
+// apc.ActRotateLogs=apc.ActMsg]
+```
+
 ### 1. Method
 The HTTP method for the endpoint:
 - `GET` - Retrieve data

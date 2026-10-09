@@ -5,10 +5,48 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 )
+
+// folds +gen: annotations continued with a trailing backslash
+// - clears continuation comments so they cannot become endpoint summaries
+// - inserts no separator: whitespace before the backslash is preserved
+func readSourceLines(path string) ([]string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(content), newlineChar)
+	for i := range lines {
+		line := strings.TrimSpace(lines[i])
+		if !strings.HasPrefix(line, commentPrefix) {
+			continue
+		}
+		text := strings.TrimSpace(strings.TrimPrefix(line, commentPrefix))
+		if !strings.HasPrefix(text, genPrefix) {
+			continue
+		}
+		line = commentWithSpace + text
+		for j := i + 1; strings.HasSuffix(line, `\`); j++ {
+			if j >= len(lines) {
+				return nil, fmt.Errorf("%s:%d: unterminated annotation continuation", path, i+1)
+			}
+			next := strings.TrimSpace(lines[j])
+			if !strings.HasPrefix(next, commentPrefix) ||
+				strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(next, commentPrefix)), genPrefix) || next == commentPrefix {
+				return nil, fmt.Errorf("%s:%d: expected annotation continuation comment", path, j+1)
+			}
+			line = strings.TrimSuffix(line, `\`) + strings.TrimSpace(strings.TrimPrefix(next, commentPrefix))
+			lines[j] = ""
+		}
+		lines[i] = line
+	}
+	return lines, nil
+}
 
 // Returns the absolute path to the project root directory
 func getProjectRoot() (string, error) {

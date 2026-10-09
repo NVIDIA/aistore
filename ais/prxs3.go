@@ -278,7 +278,10 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, items []
 
 // DELETE /s3/<bucket-name>?delete
 // +gen:endpoint DELETE /s3/{bucket-name} [s3.QparamMultiDelete=string] payload=s3-delete-multiple
-// +gen:payload s3-delete-multiple=<?xml version="1.0" encoding="UTF-8"?><Delete><Object><Key>file1.txt</Key></Object><Object><Key>file2.txt</Key></Object></Delete>
+// +gen:payload s3-delete-multiple=<?xml version="1.0" encoding="UTF-8"?><Delete>\
+// <Object><Key>file1.txt</Key></Object>\
+// <Object><Key>file2.txt</Key></Object>\
+// </Delete>
 // Delete a list of objects from an S3 bucket
 func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := p.initByNameOnly(w, r, bucket)
@@ -370,7 +373,8 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 	w.Header().Set(cos.S3HdrBckRegion, s3.AISRegion)
 }
 
-// +gen:endpoint GET /s3/{bucket-name} [s3.QparamMaxKeys=string,s3.QparamPrefix=string,s3.QparamContinuationToken=string,s3.QparamStartAfter=string,s3.QparamDelimiter=string]
+// +gen:endpoint GET /s3/{bucket-name} [s3.QparamMaxKeys=string,s3.QparamPrefix=string,\
+// s3.QparamContinuationToken=string,s3.QparamStartAfter=string,s3.QparamDelimiter=string]
 // List objects in an S3 bucket
 func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string, q url.Values) {
 	bck := p.initByNameOnly(w, r, bucket)

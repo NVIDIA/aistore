@@ -74,10 +74,14 @@ func (p *proxy) endMembership() {
 }
 
 // gracefully remove node via apc.ActStartMaintenance, apc.ActDecommission, apc.ActShutdownNode
-// +gen:payload apc.ActStartMaintenance={"action": "start-maintenance", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false}}
-// +gen:payload apc.ActDecommissionNode={"action": "decommission-node", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false, "rm_user_data": true}}
-// +gen:payload apc.ActShutdownNode={"action": "shutdown-node", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false}}
-// +gen:payload apc.ActRmNodeUnsafe={"action": "remove-node-unsafe", "value": {"sids": ["target_id1", "target_id2"], "skip_rebalance": false}}
+// +gen:payload apc.ActStartMaintenance={"action": "start-maintenance", "value": {"sids": ["target_id1", \
+// "target_id2"], "skip_rebalance": false}}
+// +gen:payload apc.ActDecommissionNode={"action": "decommission-node", "value": {"sids": ["target_id1", \
+// "target_id2"], "skip_rebalance": false, "rm_user_data": true}}
+// +gen:payload apc.ActShutdownNode={"action": "shutdown-node", "value": {"sids": ["target_id1", "target_id2"], \
+// "skip_rebalance": false}}
+// +gen:payload apc.ActRmNodeUnsafe={"action": "remove-node-unsafe", "value": {"sids": ["target_id1", \
+// "target_id2"], "skip_rebalance": false}}
 func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	var opts apc.ActValRmNode
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
