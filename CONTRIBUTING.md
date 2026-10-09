@@ -2,6 +2,22 @@
 
 The AIStore project repository follows an open source model where anyone is allowed and encouraged to contribute. However, contributing to AIStore has a few guidelines that must be followed.
 
+## Contents
+
+- [AI-Assisted Contributions](#ai-assisted-contributions)
+  - [Human Responsibility](#human-responsibility)
+  - [Disclosure](#disclosure)
+  - [Licensing and Sign-Off](#licensing-and-sign-off)
+  - [Issues and Feature Requests](#issues-and-feature-requests)
+- [Contribution Workflow](#contribution-workflow)
+  - [Formatting Changes](#formatting-changes)
+  - [Coding Style](#coding-style)
+  - [Testing Changes](#testing-changes)
+  - [Previewing Documentation Changes](#previewing-documentation-changes)
+  - [Commit Messages](#commit-messages)
+  - [Signing-Off Commits](#signing-off-commits)
+  - [Squashing Commits](#squashing-commits)
+- [Raise an Issue](#raise-an-issue)
 
 ## AI-Assisted Contributions
 
@@ -79,6 +95,8 @@ The AIStore project repository maintains a contribution structure in which every
 
 AIStore maintains a few formatting rules to ensure a consistent coding style. These rules are checked and enforced by `ruff`, `pylint`, `gofmt`, etc.  Before committing any changes, make sure to check (or fix) all changes against the formatting rules as follows:
 
+Run `make lint` before submitting any commits. It must pass.
+
 ```console
 $ cd aistore
 
@@ -98,7 +116,37 @@ $ make spell-check
 > For more information, run `make help`.
 
 
+#### Coding Style
+
+Follow the repository's existing coding style. Use the surrounding code and
+established patterns in the package as your guide.
+
+For comments above functions and methods:
+
+- Do not repeat the function or method name.
+- Usually start with a lowercase verb.
+- Keep the summary brief; optionally follow it with brief bulleted details.
+
+Keep critical sections short. Do not hold a mutex across a network request
+of any kind. Avoid `nlog` calls while holding a mutex where possible, and keep
+syscalls inside critical sections to the absolute minimum.
+
+Arrange struct fields to minimize alignment padding, unless there is a
+specific reason to group related fields together.
+
+
 #### Testing Changes
+
+When choosing between an integration test and a unit test, choose an
+integration test that runs against a live cluster: a local playground or
+minikube-based Kubernetes cluster.
+
+Every bug fix must include an integration test that passes with the fix and
+fails without it. Verify both outcomes.
+
+For intermittent failures, repeat the test enough times to eliminate doubt
+about the fix. Report the commands and run counts used to verify the failure
+without the fix and the repeated passes with it.
 
 Before committing any changes, run the following tests to verify any added changes to the codebase:
 
@@ -159,6 +207,15 @@ reference page; set `FERN_TOKEN` before running the command to include the
 generated Python API reference. Do not use `make fern-build` for local
 checks; it publishes to Fern.
 
+#### Commit Messages
+
+Commit messages must precisely describe the changes being committed. Keep
+the title and body consistent with the final diff, including the problem
+addressed and the resulting behavior. Avoid claims the changes or validation
+do not support.
+
+Release notes are usually drafted from commit messages; their accuracy
+matters beyond the individual review.
 
 #### Signing-Off Commits
 
@@ -219,7 +276,6 @@ Signed-off-by: Your Name <your@email.com>
 
 > **Note**: Commits that are not signed-off cannot be accepted or merged.
 
-
 #### Squashing Commits
 
 If a pull request contains more than one commit, [squash](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/about-pull-request-merges) all commits into one. 
@@ -230,7 +286,6 @@ The basic squashing workflow is as follows:
 git checkout <your-pr-branch>
 git rebase -i HEAD~<# of commits to squash>
 ```
-
 
 ## Raise an Issue 
 
