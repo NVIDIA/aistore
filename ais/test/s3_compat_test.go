@@ -938,7 +938,7 @@ func TestS3ETag(t *testing.T) {
 			bck = cmn.Bck{Name: "test-s3-etag-" + trand.String(6), Provider: apc.AIS}
 		}
 		if bck.IsAIS() {
-			exists, err := tools.BucketExists(t, proxyURL, bck)
+			exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck), apc.FltExists)
 			tassert.CheckFatal(t, err)
 			if !exists {
 				tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
