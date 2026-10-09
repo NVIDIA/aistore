@@ -8,6 +8,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- `AISShardReader` keeps WebDataset members whose extension has more than one dot.
+  `get_extension` split on the last dot while `get_basename` splits on the first, so
+  `sample.left.jpg` and `sample.right.jpg` both became `sample`/`jpg` and one of the
+  two was dropped from the sample without a warning. The extension is now everything
+  after the first dot, which is what `webdataset.tariterators.base_plus_ext` does.
 - `AISShardReader.__len__()` now streams raw shards and counts samples without
   buffering full shard payloads. The count matches iteration when ETL preserves
   the sample count.
