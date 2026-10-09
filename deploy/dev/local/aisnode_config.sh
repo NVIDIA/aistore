@@ -89,9 +89,11 @@ make_auth_conf() {
 
 ##
 ## NOTE: AIS_SPACE_* environment variables are used by constrained GitHub/GitLab CI environments
+## NOTE: AIS_FEATURES: numeric cluster feature flags (see cmn/feat)
 ##
 cat > "$AIS_CONF_FILE" <<EOL
 {
+	"features": "${AIS_FEATURES:-0}",
 	"backend": $(make_backend_conf),
 	$(make_tracing_conf)
 	"timeout": {

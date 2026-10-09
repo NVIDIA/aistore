@@ -697,10 +697,7 @@ func TestS3PresignedPutGet(t *testing.T) {
 
 	setBucketFeatures(t, bck, bprops, feat.S3PresignedRequest)
 
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
-	})
+	tools.EnableClusterFeatures(t, feat.S3ReverseProxy)
 
 	/* TODO -- FIXME: alternatively, use env vars AWS_PROFILE et al:
 	cfg, err := config.LoadDefaultConfig(
@@ -787,10 +784,7 @@ func TestS3PresignedMultipart(t *testing.T) {
 
 	setBucketFeatures(t, bck, bprops, feat.S3PresignedRequest)
 
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
-	})
+	tools.EnableClusterFeatures(t, feat.S3ReverseProxy)
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(false /*pathStyle*/), Region: env.AwsDefaultRegion()})
 
@@ -863,10 +857,7 @@ func TestDisableColdGet(t *testing.T) {
 
 	setBucketFeatures(t, bck, bprops, feat.S3PresignedRequest|feat.DisableColdGET)
 
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
-	})
+	tools.EnableClusterFeatures(t, feat.S3ReverseProxy)
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(false /*pathStyle*/), Region: env.AwsDefaultRegion()})
 
@@ -1683,10 +1674,7 @@ func TestS3MultipartErrorHandling(t *testing.T) {
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
-	})
+	tools.EnableClusterFeatures(t, feat.S3ReverseProxy)
 
 	s3Client := s3.New(s3.Options{
 		HTTPClient:   newS3Client(true /*pathStyle*/),

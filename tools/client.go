@@ -888,12 +888,6 @@ func DisableRebalance(t *testing.T) {
 	tassert.CheckError(t, err)
 }
 
-func SetRemAisConfig(t *testing.T, nvs cos.StrKVs) {
-	remoteBP := BaseAPIParams(RemoteCluster.URL)
-	err := api.SetClusterConfig(remoteBP, nvs, false /*transient*/)
-	tassert.CheckError(t, err)
-}
-
 func CheckErrIsNotFound(t *testing.T, err error) {
 	if err == nil {
 		t.Fatal("expected error")

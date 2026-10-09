@@ -7,8 +7,10 @@ package tools
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
@@ -19,28 +21,40 @@ import (
 // modify cluster features.
 func EnableClusterFeatures(t *testing.T, flags feat.Flags) {
 	t.Helper()
+	enableFeatures(t, GetPrimaryURL(), flags)
+}
 
-	config := GetClusterConfig(t)
+func EnableRemAisFeatures(t *testing.T, flags feat.Flags) {
+	t.Helper()
+	enableFeatures(t, RemoteCluster.URL, flags)
+}
+
+func enableFeatures(t *testing.T, proxyURL string, flags feat.Flags) {
+	t.Helper()
+
+	bp := BaseAPIParams(proxyURL)
+	config, err := api.GetClusterConfig(bp)
+	tassert.CheckFatal(t, err)
 	added := flags &^ config.Features
 	if added == 0 {
 		return
 	}
 
-	features := config.Features.Set(added)
-	tlog.Logfln("Enable cluster feature flag(s) %v", added.Names())
-	SetClusterConfig(t, cos.StrKVs{
-		feat.PropName: features.String(),
-	})
+	tlog.Logfln("Enable cluster feature flag(s) %v [%s]", added.Names(), proxyURL)
+	err = api.SetClusterConfig(bp, cos.StrKVs{feat.PropName: config.Features.Set(added).String()}, false /*transient*/)
+	tassert.CheckError(t, err)
 
-	t.Cleanup(func() {
-		config := GetClusterConfig(t)
-		features := config.Features &^ added
+	t.Cleanup(func() { disableFeatures(t, proxyURL, added) })
+}
 
-		tlog.Logfln("Disable cluster feature flag(s) %v", added.Names())
-		SetClusterConfig(t, cos.StrKVs{
-			feat.PropName: features.String(),
-		})
-	})
+func disableFeatures(t *testing.T, proxyURL string, flags feat.Flags) {
+	bp := BaseAPIParams(proxyURL)
+	config, err := api.GetClusterConfig(bp)
+	tassert.CheckFatal(t, err)
+
+	tlog.Logfln("Disable cluster feature flag(s) %v [%s]", flags.Names(), proxyURL)
+	err = api.SetClusterConfig(bp, cos.StrKVs{feat.PropName: (config.Features &^ flags).String()}, false /*transient*/)
+	tassert.CheckError(t, err)
 }
 
 // PrepForS3RebuildClientOrSkip prepares the cluster for an S3 client that rebuilds

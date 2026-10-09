@@ -160,6 +160,24 @@ stages:
   <<: *skip_scheduled_rules
   <<: *gather_logs_def
 
+.https_template: &https_def
+  tags:
+    - $RUNNER_TAG
+    - ktls
+  variables:
+    AIS_USE_HTTPS: "true"
+    AIS_SKIP_VERIFY_CRT: "true"
+    AIS_SERVER_CRT: "$CI_PROJECT_DIR/localhost.crt"
+    AIS_SERVER_KEY: "$CI_PROJECT_DIR/localhost.key"
+    AIS_ENDPOINT: "https://localhost:8080"
+    BUCKET: "ais://ais-ci"
+    AIS_FEATURES: "268435456" # System-Reserved-KTLS (1 << 28)
+  before_script:
+    - test -e /proc/net/tls_stat || { echo "no /proc/net/tls_stat (needs Linux 5.5+ and the tls module)" >&2; exit 1; }
+    - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
+  script:
+    - awk '/^TlsTx(Sw|Device)/ {print; n += $2} END {exit n == 0}' /proc/net/tls_stat
+
 
 # Stages
 
@@ -602,23 +620,17 @@ test:short:authn:
 
 test:short:https:
   <<: *test_short_def
-  variables:
-    AIS_USE_HTTPS: "true"
-    AIS_SKIP_VERIFY_CRT: "true"
-    AIS_SERVER_CRT: "$CI_PROJECT_DIR/localhost.crt"
-    AIS_SERVER_KEY: "$CI_PROJECT_DIR/localhost.key"
-    AIS_ENDPOINT: "https://localhost:8080"
-    BUCKET: "ais://ais-ci"
+  <<: *https_def
   script:
-    - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --https
     - make test-short
+    - !reference [.https_template, script]
   rules:
     - !reference [.test_short_template, rules]
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*https.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS !~ /.*https.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
       when: manual
       allow_failure: true
+    - !reference [.default_run_rules, rules]
 
 test:short:ipv6:
   <<: *test_short_def
@@ -702,6 +714,14 @@ test:long:
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - make test-long
+
+test:long:https:
+  <<: *test_long_skip_scheduled_def
+  <<: *https_def
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --https
+    - make test-long
+    - !reference [.https_template, script]
 
 test:long:python-extended:
   <<: *test_long_def

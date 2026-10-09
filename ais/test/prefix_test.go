@@ -113,20 +113,10 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objNames []string) {
 	tlog.Logln("Testing corner cases")
 
-	var (
-		on  = cos.StrKVs{"features": feat.DontOptimizeVirtualDir.String()}
-		off = cos.StrKVs{"features": "0"}
-	)
 	if bck.IsRemoteAIS() {
-		tools.SetRemAisConfig(t, on)
-		t.Cleanup(func() {
-			tools.SetRemAisConfig(t, off)
-		})
+		tools.EnableRemAisFeatures(t, feat.DontOptimizeVirtualDir)
 	} else {
-		tools.SetClusterConfig(t, on)
-		t.Cleanup(func() {
-			tools.SetClusterConfig(t, off)
-		})
+		tools.EnableClusterFeatures(t, feat.DontOptimizeVirtualDir)
 	}
 
 	tests := []struct {

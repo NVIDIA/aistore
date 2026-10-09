@@ -24,6 +24,17 @@ sudo ./setup.sh [--data-root <absolute_path>] [--registry-username <username>] [
 
 > **Note:** This script will prompt for `sudo` access when needed for specific operations.
 
+### 3. Tag kTLS Runners
+
+The `test:short:https` and `test:long:https` jobs run only on runners with the `ktls` tag.
+
+These jobs read kTLS counters from `/proc/net/tls_stat`, which requires Linux 5.5 or later and the `tls` module to be loaded.
+Add the `ktls` tag only when this command on the host prints `ok`:
+
+```bash
+test -e /proc/net/tls_stat && echo ok
+```
+
 ## Options
 
 > **Note:** The `--data-root` parameter is provided because ITSS provided GP VM hosted runners cannot be expanded at root (see runner setup guide on internal GitLab Wiki).
