@@ -2124,7 +2124,8 @@ func (c *ChunksConf) Validate() error {
 	case c.MaxMonolithicSize == 0:
 		c.MaxMonolithicSize = MaxMonolithicSize
 	default:
-		if c.MaxMonolithicSize < minMaxMonolithicSize || c.MaxMonolithicSize > MaxMonolithicSize {
+		if (c.MaxMonolithicSize < minMaxMonolithicSize && !Rom.TestingEnv()) ||
+			c.MaxMonolithicSize > MaxMonolithicSize {
 			return fmt.Errorf("invalid %s: %d (%s) - must be in range [%s, %s]",
 				chunksmms, c.MaxMonolithicSize, c.MaxMonolithicSize,
 				cos.IEC(minMaxMonolithicSize, 0), cos.IEC(MaxMonolithicSize, 0))

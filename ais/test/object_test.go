@@ -347,11 +347,11 @@ func TestCopyObject(t *testing.T) {
 }
 
 func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
-	t.Skip("TODO: use a reduced test threshold instead of provisioning a 1GiB object")
 	const (
-		objSize   = int64(cos.GiB + 1)
-		chunkSize = int64(128 * cos.MiB)
-		srcName   = "legacy"
+		maxMonoSize = int64(64 * cos.MiB)
+		objSize     = maxMonoSize + 1
+		chunkSize   = int64(16 * cos.MiB)
+		srcName     = "legacy"
 	)
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
 
@@ -374,12 +374,12 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 	// Disable auto-chunking and set the hard limit above objSize, so the initial PUT is monolithic.
 	err = setBucketChunksAndWait(bp, bck, &cmn.ChunksConfToSet{
 		ObjSizeLimit:      apc.Ptr(cos.SizeIEC(0)),
-		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(2 * cos.GiB)),
+		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(2 * maxMonoSize)),
 		ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
 	})
 	tassert.CheckFatal(t, err)
 
-	// PUT a 1GiB+1 object and confirm its initial monolithic layout.
+	// PUT an object above the final hard limit and confirm its initial monolithic layout.
 	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumOneXxh})
 	tassert.CheckFatal(t, err)
 	defer r.Close()
@@ -394,7 +394,7 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 
 	// Lowering the hard limit automatically rechunks the existing source.
 	err = setBucketChunksAndWait(bp, bck, &cmn.ChunksConfToSet{
-		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(cos.GiB)),
+		MaxMonolithicSize: apc.Ptr(cos.SizeIEC(maxMonoSize)),
 	})
 	tassert.CheckFatal(t, err)
 	src, err = api.HeadObjectV2(bp, bck, srcName, props, api.HeadArgs{})
@@ -417,7 +417,7 @@ func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 			}
 			dstName := tools.GenerateObjectNameForTarget(srcName, test.name+"-copied", bck, smap, test.sameTarget)
 
-			// COPY is a new write and must apply the current 1GiB hard limit and configured chunk size.
+			// COPY is a new write and must apply the current hard limit and configured chunk size.
 			copyObjectAndCheckChunks(t, bp, bck, srcName, bck, dstName, objSize, chunkSize)
 
 			srcLock, err := api.CheckObjectLock(bp, bck, srcName)
@@ -950,7 +950,7 @@ func TestColdGetChunked(t *testing.T) {
 		autoLimit = 32 * cos.MiB
 		smallSize = 24 * cos.MiB
 		largeSize = 48 * cos.MiB
-		hardLimit = 1 * cos.GiB
+		hardLimit = 64 * cos.MiB
 	)
 
 	tests := []struct {
@@ -996,9 +996,6 @@ func TestColdGetChunked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.objSize > hardLimit {
-				t.Skip("TODO: use a reduced test threshold instead of provisioning a 1GiB object")
-			}
 			var (
 				numObjs  = 1
 				proxyURL = tools.RandomProxyURL(t)
@@ -1112,10 +1109,9 @@ func TestColdGetChunked(t *testing.T) {
 }
 
 func TestCopyRemoteObjectHardLimitSameTarget(t *testing.T) {
-	t.Skip("TODO: use a reduced test threshold instead of provisioning a 1GiB object")
 	const (
 		chunkSize   = 16 * cos.MiB
-		maxMonoSize = 1 * cos.GiB
+		maxMonoSize = 64 * cos.MiB
 		objSize     = maxMonoSize + 1
 	)
 	var (

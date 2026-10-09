@@ -527,7 +527,7 @@ func (r *XactBlobDl) releaseWIMem(wi *blobWI) {
 // Start validates manifest fit and memory-pressure admission for the effective size.
 func (r *XactBlobDl) setChunkSize() {
 	maxChunkSize := int64(cmn.ChunkSizeMax) // cache-only: no chunk-sized SGL
-	if r.args.RespWriter != nil {
+	if r.args.RespWriter != nil || cmn.Rom.TestingEnv() {
 		maxChunkSize = maxStreamingChunkSize
 	}
 	switch {

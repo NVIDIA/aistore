@@ -1412,10 +1412,10 @@ func TestBlobDownloadChunkSizeBounds(t *testing.T) {
 }
 
 func TestBlobDownloadCacheOnlyMaxChunkSize(t *testing.T) {
-	t.Skip("TODO: use a reduced test threshold instead of provisioning a max-chunk-size object")
 	const (
-		objSize     = cmn.ChunkSizeMax + 1
-		readTimeout = 10 * time.Minute
+		maxChunkSize = 64 * cos.MiB
+		objSize      = maxChunkSize + 1
+		readTimeout  = 2 * time.Minute
 	)
 	m := ioContext{
 		t: t, bck: cliBck, num: 1, fileSize: objSize, fixedSize: true,
@@ -1436,7 +1436,7 @@ func TestBlobDownloadCacheOnlyMaxChunkSize(t *testing.T) {
 		name      string
 		chunkSize int64
 	}{
-		{name: "at-max", chunkSize: cmn.ChunkSizeMax},
+		{name: "at-max", chunkSize: maxChunkSize},
 		{name: "above-max", chunkSize: objSize},
 	}
 	for _, tc := range tests {
