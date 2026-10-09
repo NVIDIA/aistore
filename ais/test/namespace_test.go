@@ -1,19 +1,25 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
 import (
+	"bytes"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool, fltPresence int) cmn.Bcks {
@@ -266,6 +272,62 @@ func TestNamespace(t *testing.T) {
 			m2.ensureNoGetErrors()
 		})
 	}
+}
+
+func TestPrefetchRemaisAfterProxyRestart(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Long: true, RequiresRemoteCluster: true, MinProxies: 2, RequiredDeployment: tools.ClusterTypeLocal,
+	})
+	var (
+		bp       = tools.BaseAPIParams(tools.GetPrimaryURL())
+		smap     = tools.GetClusterMap(t, bp.URL)
+		primary  = smap.Primary
+		config   = tools.GetDaemonConfig(t, primary)
+		remoteBP = tools.BaseAPIParams(tools.RemoteCluster.URL)
+		remote   = cmn.Bck{Name: "alias-" + trand.String(10), Provider: apc.AIS}
+		bck      = cmn.Bck{Name: remote.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.Alias}}
+		byUUID   = cmn.Bck{Name: remote.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
+		payload  = []byte("remote alias after restart")
+		original = cos.StrKVs{
+			"timeout.startup_time": config.Timeout.Startup.String(), "timeout.join_startup_time": config.Timeout.JoinAtStartup.String(),
+		}
+	)
+	tools.CreateBucket(t, remoteBP.URL, remote, nil, true /*cleanup*/)
+	t.Cleanup(func() { tools.DestroyBucket(t, bp.URL, byUUID) })
+	_, err := api.PutObject(&api.PutArgs{BaseParams: remoteBP, Bck: remote, ObjName: "object", Reader: readers.NewBytes(payload)})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		tools.EnsureOrigClusterState(t)
+		tassert.CheckError(t, api.SetPrimary(tools.BaseAPIParams(tools.GetPrimaryURL()), primary.ID(), "", false))
+		tassert.CheckError(t, api.SetDaemonConfig(bp, primary.ID(), original, true /*transient*/))
+	})
+	killRestorePrimary(t, bp.URL, true /*restoreAsPrimary*/, nil)
+
+	// Use the minimum 1m recovery window; join timeout must be at least twice startup timeout.
+	err = api.SetDaemonConfig(bp, primary.ID(), cos.StrKVs{
+		"timeout.startup_time": "30s", "timeout.join_startup_time": "1m",
+	}, true /*transient*/)
+	tassert.CheckFatal(t, err)
+	uptime, _, err := api.HealthUptime(bp)
+	tassert.CheckFatal(t, err)
+	ns, err := strconv.ParseInt(uptime, 10, 64)
+	tassert.CheckFatal(t, err)
+	// Avoid alias requests until startup recovery expires to exercise the remote HEAD fallback.
+	time.Sleep(time.Minute + time.Second - time.Duration(ns))
+
+	xid, err := api.Prefetch(bp, bck, &apc.PrefetchMsg{ListRange: apc.ListRange{ObjNames: []string{"object"}}})
+	tassert.CheckFatal(t, err)
+	err = api.WaitForXaction(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout})
+	tassert.CheckFatal(t, err)
+	msg := &apc.LsoMsg{}
+	msg.SetFlag(apc.LsCached)
+	listed, err := api.ListObjects(bp, byUUID, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(listed.Entries) == 1 && listed.Entries[0].Name == "object", "prefetch did not cache the object")
+	var got bytes.Buffer
+	_, err = api.GetObject(bp, bck, "object", &api.GetArgs{Writer: &got})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, bytes.Equal(got.Bytes(), payload), "cached object differs from remote object")
 }
 
 func TestRemoteWithAliasAndUUID(t *testing.T) {

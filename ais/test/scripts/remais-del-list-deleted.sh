@@ -76,8 +76,8 @@ trap cleanup EXIT INT TERM
 
 ## 2.put generated subtree => remais
 ##
-AIS_ENDPOINT=$rendpoint ais put $root_dir $rbucket --yes --recursive
-ais prefetch $bucket --wait
+AIS_ENDPOINT=$rendpoint ais put "$root_dir" "$rbucket" --yes --recursive || exit $?
+ais prefetch "$bucket" --wait || exit $?
 
 ## 3. delete out-of-band
 ##

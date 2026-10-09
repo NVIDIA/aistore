@@ -144,21 +144,10 @@ func (bctx *bctx) init() (int, error) {
 	if bck.IsRemoteAIS() {
 		if p.remaisVersionFixup() {
 			if uuid := p.a2u(bck.Ns.UUID); uuid != bck.Ns.UUID {
-				// substitute remais alias
+				// substitute the remote AIS cluster alias with its UUID
 				// update both the API's `bck` and original query
 				bck.Ns.UUID = uuid
-				debug.Assert(bctx.dpq != nil || bctx.query != nil)
-				if bctx.dpq != nil {
-					debug.Assert(bctx.query == nil)
-					// dpq fast-path isn't ideal here - we still need to (re)parse
-					// the original URL query
-					bctx.dpq.bck.namespace = bck.Ns.Uname()
-					bctx.query = bctx.r.URL.Query()
-				}
-				if bctx.query != nil {
-					bctx.query.Set(apc.QparamNamespace, bck.Ns.Uname())
-					bctx.r.URL.RawQuery = bctx.query.Encode()
-				}
+				bctx.setNamespace()
 				debug.Infof("%s: remais-subst %s query '%s=%s'", p, bck.String(), apc.QparamNamespace, bck.Ns.Uname())
 			}
 		}
@@ -228,10 +217,9 @@ func (bctx *bctx) accessAllowed(bck *meta.Bck) (ecode int, err error) {
 // initAndTry initializes the bucket (proxy-only, as the filename implies).
 // The method _may_:
 // - try to add remote bucket to BMD if it doesn't exist (grep "on-the-fly")
-// - modify and re-encode the original query (`@remais` => UUID)
+// - substitute a remote AIS cluster alias with its UUID in the original query
 // NOTE:
 // - on error it calls `p.writeErr` and friends, so make sure _not_ to do the same in the caller
-// - for remais buckets: user-provided alias(***)
 func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 	var (
 		p     = bctx.p
@@ -281,7 +269,27 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 
 	// 3. create ais bucket _or_ lookup and, *if* confirmed, add remote bucket to the BMD
 	// (see also: "on the fly")
-	return bctx.try()
+	ns := bctx.bck.Ns
+	bck, err = bctx.try()
+	if err == nil && bctx.bck.IsRemoteAIS() && bctx.bck.Ns != ns {
+		// Substitute the remote AIS cluster alias with its UUID in the request.
+		bctx.setNamespace()
+	}
+	return bck, err
+}
+
+func (bctx *bctx) setNamespace() {
+	ns := bctx.bck.Ns.Uname()
+	if bctx.dpq != nil {
+		bctx.dpq.bck.namespace = ns
+		if bctx.query == nil {
+			bctx.query = bctx.r.URL.Query()
+		}
+	}
+	if bctx.query != nil {
+		bctx.query.Set(apc.QparamNamespace, ns)
+		bctx.r.URL.RawQuery = bctx.query.Encode()
+	}
 }
 
 func (bctx *bctx) try() (bck *meta.Bck, _ error) {
