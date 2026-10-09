@@ -43,12 +43,11 @@ import (
 // armed or not: TLS session tickets are disabled (TLS 1.3 record-sequence
 // prerequisite) and ALPN is pinned to http/1.1.
 //
-// NOTE: arming is eager - at handshake, before the first request. Go's
-// http.Transport routinely handshakes and closes connections that never carry
-// a request (dial race, idle-pool overflow); each pays key installation for
-// nothing. In TLS 1.3 the client sends the last handshake flight and may close
-// before arm() runs - hence ENOTCONN at TCP_ULP, with no request lost.
-// See "lazy arming" below - the change to implement.
+// Arming is lazy: the first response may opt in before writing headers, for a
+// monolithic file-backed GET (incl. range) of at least ktlsMinSize. Any
+// userspace TLS write after the handshake permanently rules out offload.
+// Saved handshake material is wiped after the decision, on handshake failure,
+// or on transmit close.
 
 // TODO:
 // - end-to-end benches: plain HTTP => HTTPS => (HTTPS + kTLS + sendfile).
@@ -87,11 +86,8 @@ import (
 //   shows "txconf: sw|hw". No integration test or CI job yet; when there is one
 //   it must assert armed > 0 - a missing TLS ULP falls back silently.
 //
-// - lazy arming: decide at the first response, before crypto/tls writes any
-//   application data - arm if sendfile-eligible and above a size threshold,
-//   otherwise never arm the connection.
-//   (Note re: "TLS record sequence number (rec_seq) synchronization" -
-//   in 1.3 rec_seq is still 0 (no session tickets), so nothing needs counting.)
+// - ktlsMinSize is a placeholder pending the sendfile-vs-userspace crossover
+//   bench; likely lower with NIC offload (TlsTxDevice)
 //
 // - classify errKtlsExhausted/errKtlsPoisoned as connection-lifecycle
 //   events: they are neither object-transmit errors nor FSHC input (tgtfshc)
@@ -178,8 +174,10 @@ type (
 		secrets *trafficSecrets
 		install ktlsInstaller
 
-		once    sync.Once
-		initErr error
+		once          sync.Once
+		initErr       error
+		handshakeDone atomic.Bool
+		armOnce       sync.Once // first response or post-handshake TLS write decides permanently
 
 		txState  atomic.Uint32 // unarmed -> armed -> poisoned/exhausted
 		txMu     sync.Mutex    // serialize the TLS_TX point of no return against transmit shutdown
@@ -209,11 +207,13 @@ type (
 
 	ktlsState interface {
 		isArmed() bool
+		tryArm(size int64) bool
 		retire(size int64) bool
 	}
 
 	// node-wide offload and transmit-lifecycle observability
 	ktlsCounters struct {
+		declined       atomic.Int64 // first response too small, or a userspace TLS write came first
 		armed          atomic.Int64 // TLS_TX installed; the kernel owns transmit
 		skipped        atomic.Int64 // arm() bailed before reaching the installer
 		refused        atomic.Int64 // arm() refused: our misconfiguration (session tickets)
@@ -230,8 +230,11 @@ type (
 		lastStats      ktlsCounterValues // last emitted summary, under logMu
 	}
 	ktlsCounterValues struct {
-		armed, skipped, refused, unsupported, failed, notEstablished, poisoned, exhausted int64
-		retiring, stopped, stopBytes                                                      int64
+		armed, skipped                         int64
+		refused, unsupported, failed           int64
+		notEstablished                         int64
+		poisoned, exhausted                    int64
+		declined, retiring, stopped, stopBytes int64
 	}
 	ktlsCtxKey struct{}
 
@@ -256,6 +259,7 @@ const (
 	// records under one key. Retire earlier, after 256 GiB of plaintext.
 	ktlsMaxBytes = int64(1 << 38)
 	ktlsHeadroom = int64(64 * cos.KiB) // response headers and net/http framing
+	ktlsMinSize  = int64(cos.MiB)      // minimum first-response payload for offload
 
 	ktlsLogInterval        = 10 * time.Minute
 	ktlsVerboseLogInterval = time.Minute
@@ -518,6 +522,11 @@ func (s *tls12WireState) stop() {
 //////////////////
 
 func (c *tlsArmedConn) Write(p []byte) (int, error) {
+	if c.owner.handshakeDone.Load() {
+		// Includes crypto/tls control records (e.g. a KeyUpdate response).
+		// Either decline before emitting one, or reject it after offload.
+		c.owner.decline()
+	}
 	if c.txState.Load() != ktlsUnarmed {
 		// A peer-requested TLS 1.3 KeyUpdate reaches this crypto/tls _read_
 		// path. Its response cannot be handed to the kernel after offload, so
@@ -574,27 +583,60 @@ func newKtlsConn(tcp *net.TCPConn, tmpl *tls.Config, install ktlsInstaller) *ktl
 }
 
 // Go 1.27 net/http calls HandshakeContext with socket deadlines already set.
-// Complete handshake => armed before returning; ConnectionState remains a pure getter.
+// ConnectionState remains a pure getter; TX ownership is decided by the response.
 func (c *ktlsConn) init(ctx context.Context) error {
-	c.once.Do(func() { c.initErr = c.handshakeAndArm(ctx) })
+	c.once.Do(func() { c.initErr = c.handshake(ctx) })
 	return c.initErr
 }
 func (c *ktlsConn) HandshakeContext(ctx context.Context) error { return c.init(ctx) }
 
-func (c *ktlsConn) handshakeAndArm(ctx context.Context) error {
-	// KeyLogWriter may receive secrets before a handshake ultimately fails.
-	// Wipe every outcome and permanently discard any later key-log writes.
-	defer c.secrets.zero()
-	defer c.wire.tls12.stop()
-
+func (c *ktlsConn) handshake(ctx context.Context) error {
 	// all ordinary crypto/tls certificate, client-certificate, Finished, ALPN,
 	// and VerifyConnection processing happens here
 	if err := c.Conn.HandshakeContext(ctx); err != nil {
+		c.decide(false)
 		return err
 	}
-
-	c.arm()
+	c.handshakeDone.Store(true)
 	return nil
+}
+
+// decides offload for the connection on its first sendfile-eligible response;
+// call before any response bytes are written
+func (c *ktlsConn) tryArm(size int64) bool {
+	if err := c.init(context.Background()); err != nil {
+		return false
+	}
+	if size < ktlsMinSize {
+		c.decline()
+	} else {
+		c.decide(true)
+	}
+	return c.isArmed()
+}
+
+// declines offload, counted, unless already decided
+func (c *ktlsConn) decline() {
+	if c.decide(false) {
+		ktlsCnt.declined.Add(1)
+		ktlsCnt.log()
+	}
+}
+
+// decides offload once per connection; returns true when this call decided
+func (c *ktlsConn) decide(arm bool) (decided bool) {
+	c.armOnce.Do(func() {
+		decided = true
+		defer c.secrets.zero()
+		defer c.wire.tls12.stop()
+		if arm {
+			// NOTE: no app records have been written yet:
+			// - TLS 1.3 starts at sequence zero
+			// - TLS 1.2 uses the observed handshake sequence
+			c.arm()
+		}
+	})
+	return decided
 }
 
 func (c *ktlsCounters) String() string {
@@ -607,12 +649,13 @@ func (c *ktlsCounters) snapshot() ktlsCounterValues {
 		failed: c.failed.Load(), notEstablished: c.notEstablished.Load(),
 		poisoned: c.poisoned.Load(), exhausted: c.exhausted.Load(),
 		retiring: c.retiring.Load(), stopped: c.stopped.Load(), stopBytes: c.stopBytes.Load(),
+		declined: c.declined.Load(),
 	}
 }
 
 // ktlsCounterValues.String() order
 var ktlsStatNames = [...]string{
-	"attempted", "armed", "skipped", "refused", "unsupported", "failed", "not-established",
+	"declined", "attempted", "armed", "skipped", "refused", "unsupported", "failed", "not-established",
 	"poisoned", "exhausted", "retiring", "stopped", "stopped-bytes", "avg-bytes",
 }
 
@@ -622,6 +665,7 @@ func (c ktlsCounterValues) String() string {
 		avg = c.stopBytes / c.stopped
 	}
 	vals := [len(ktlsStatNames)]int64{
+		c.declined,
 		c.armed + c.skipped + c.refused + c.unsupported + c.failed + c.notEstablished,
 		c.armed, c.skipped, c.refused, c.unsupported, c.failed, c.notEstablished,
 		c.poisoned, c.exhausted, c.retiring, c.stopped, c.stopBytes, avg,
@@ -787,6 +831,7 @@ func (c *ktlsConn) Write(p []byte) (int, error) {
 	if err := c.init(context.Background()); err != nil {
 		return 0, err
 	}
+	c.decline()
 	switch c.txState.Load() {
 	case ktlsArmed:
 		// plaintext enters TCP; kTLS emits encrypted TLS records
@@ -819,6 +864,7 @@ func (c *ktlsConn) ReadFrom(r io.Reader) (int64, error) {
 	if err := c.init(context.Background()); err != nil {
 		return 0, err
 	}
+	c.decline()
 	switch c.txState.Load() {
 	case ktlsArmed:
 		// NOTE: sendfile path must use io.LimitedReader (see getOI._txreg in ais/tgtobj)
@@ -964,6 +1010,7 @@ func (c *ktlsConn) beginClose() uint32 {
 	c.txClosed.Store(true)
 	state := c.txState.Load()
 	c.txMu.Unlock()
+	c.decide(false)
 	return state
 }
 

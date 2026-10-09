@@ -130,6 +130,7 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 			srv := <-srvCh
 			tassert.CheckFatal(t, srv.err)
 			defer srv.conn.Close()
+			srv.conn.tryArm(ktlsMinSize)
 			res := <-installed
 			if res.err != nil {
 				t.Skipf("kTLS TX is unavailable: %v", res.err)
@@ -137,7 +138,7 @@ func TestKTLSTxLinuxInstaller(t *testing.T) {
 			if !res.enabled {
 				t.Skip("kTLS TX is unsupported by this kernel")
 			}
-			tassert.Errorf(t, srv.conn.isArmed() && canSendfileConn(srv.conn, true), "installer succeeded but sendfile is not enabled")
+			tassert.Errorf(t, srv.conn.isArmed(), "installer succeeded but the connection is not armed")
 
 			const payload = "aistore-ktls"
 			_, err = srv.conn.Write([]byte(payload))
@@ -332,6 +333,7 @@ func benchKtlsConn(b *testing.B, install ktlsInstaller) *ktlsConn {
 
 	conn, client := testktlsConnPair(b, install)
 	testktlsWaitHandshake(b, testktlsStartHandshake(b, conn, client))
+	conn.tryArm(ktlsMinSize)
 
 	// probe: the peer must be able to decrypt what we just wrote
 	if _, err := conn.Write([]byte(benchKtlsProbe)); err != nil {

@@ -1250,7 +1250,7 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 	}
 
 	// sendfile path
-	if sgl == nil && lmfh != nil && goi.canSendfile(lmfh) {
+	if sgl == nil && lmfh != nil && goi.canSendfile(lmfh, size) {
 		rocs, ok := lmfh.(io.Seeker)
 		debug.Assert(ok)
 		if _, err := rocs.Seek(hrng.Start, io.SeekStart); err != nil {
@@ -1376,6 +1376,7 @@ func (goi *getOI) setwhdr(whdr http.Header, cksum *cos.Cksum, size int64) {
 func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err error) {
 	// set response header
 	size := goi.lom.Lsize()
+	sendfile := goi.canSendfile(lmfh, size)
 	goi.setwhdr(whdr, goi.lom.Checksum(), size)
 
 	// stalled client vs. (rlock, open file, goroutine)
@@ -1383,7 +1384,7 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 	goi.initWdl()
 
 	// Tx
-	if goi.canSendfile(lmfh) {
+	if sendfile {
 		// NOTE: net.sendFile unwraps io.LimitedReader before the syscall,
 		// so the wrap is free; ktlsConn.ReadFrom requires it (see ais/ktls)
 		err = goi.sendfile(&io.LimitedReader{R: lmfh, N: size}, fqn, size, false /*committed*/)
@@ -1568,27 +1569,25 @@ func (goi *getOI) _sendfileWdl(lr *io.LimitedReader) (written int64, err error) 
 	return written, err
 }
 
-// source must be monolithic file-backed (see assert)
-func (goi *getOI) canSendfile(lmfh cos.LomReader) bool {
+// source must be monolithic file-backed (see assert);
+// on HTTPS, also decides kTLS offload for the connection - once (see ktlsConn.tryArm)
+func (goi *getOI) canSendfile(lmfh cos.LomReader, size int64) bool {
 	if goi.lom.IsChunked() {
 		return false
 	}
-	if !canSendfileConn(goi.ktls, cmn.Rom.UseHTTPS()) {
-		return false
-	}
-
 	debug.Func(func() {
 		_, ok := lmfh.(*os.File)
 		debug.Assertf(ok, "expecting file-backed, got %T", lmfh)
 	})
 
 	_, ok := goi.w.(io.ReaderFrom)
-	return ok
-}
-
-// TODO: keeping it separate only for unit tests
-func canSendfileConn(state ktlsState, useHTTPS bool) bool {
-	return !useHTTPS || (state != nil && state.isArmed())
+	if !ok {
+		return false
+	}
+	if !cmn.Rom.UseHTTPS() {
+		return true
+	}
+	return goi.ktls != nil && goi.ktls.tryArm(size)
 }
 
 func (goi *getOI) _txerr(err error, fqn string, written, size int64, committed bool) error {
