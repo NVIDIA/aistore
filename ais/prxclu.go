@@ -916,22 +916,11 @@ func (p *proxy) setPlacementWeights(w http.ResponseWriter, r *http.Request, msg 
 				break
 			}
 		}
-		if err := p._notifyEarlyGFN(ctx, ctx.smap, tsi); err != nil {
+		if err := p.notifyEarlyGFN(ctx, ctx.smap, tsi); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		defer func() {
-			if ctx.nver == 0 || ctx.rmdCtx == nil {
-				actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
-				actMsgExt.UUID = tsi.ID()
-				ver := ctx.smap.Version
-				if ctx.nver > 0 {
-					ver = ctx.nver
-				}
-				revs := revsPair{&smapX{Smap: meta.Smap{Version: ver}}, actMsgExt}
-				_ = p.metasyncer.notify(false /*wait*/, revs)
-			}
-		}()
+		defer p.stopEarlyGFN(ctx, tsi.ID())
 	}
 	// prepare RMD before committing the Smap: RMD failure leaves weights unchanged
 	ctx.pre = func(ctx *smapModifier, clone *smapX) error {

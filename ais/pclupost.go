@@ -733,20 +733,7 @@ func (c *clupost) mcastJoined() (string, error) {
 	if err := p._earlyGFN(ctx, ctx.nsi, c.msg.Action, true /*joining*/); err != nil {
 		return "", err
 	}
-	defer func() {
-		if !ctx.gfn || (ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil) {
-			return
-		}
-		// stop timed GFN on rejected joins, too
-		ver := ctx.nver
-		if ver == 0 {
-			ver = p.owner.smap.get().Version
-		}
-		actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
-		actMsgExt.UUID = ctx.nsi.ID()
-		revs := revsPair{&smapX{Smap: meta.Smap{Version: ver}}, actMsgExt}
-		_ = p.metasyncer.notify(false /*wait*/, revs)
-	}()
+	defer p.stopEarlyGFN(ctx, ctx.nsi.ID())
 	if err := p.owner.smap.modify(ctx); err != nil {
 		return "", err
 	}

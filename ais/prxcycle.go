@@ -249,16 +249,15 @@ func (p *proxy) rmTargets(nodes meta.Nodes, snames []string, msg *apc.ActMsg, re
 	if ctx.rmdCtx != nil {
 		return ctx.rmdCtx.rebID, nil
 	}
-	if ctx.gfn { // stop early gfn when no rebalance was started
-		actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
+	if ctx.gfn {
+		var tid string
 		for _, si := range nodes {
 			if si.IsTarget() {
-				actMsgExt.UUID = si.ID()
+				tid = si.ID()
 				break
 			}
 		}
-		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, actMsgExt}
-		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
+		p.stopEarlyGFN(ctx, tid)
 	}
 	_, err = p.rmNodesFinal(msg, nodes, snames, ctx)
 	return "", err
@@ -462,12 +461,12 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, join
 		return nil
 	}
 
-	return p._notifyEarlyGFN(ctx, smap, si)
+	return p.notifyEarlyGFN(ctx, smap, si)
 }
 
 // keeping separate from _earlyGFN: stop-maintenance can rebalance while reactivating
 // multiple targets when there are currently zero active targets
-func (p *proxy) _notifyEarlyGFN(ctx *smapModifier, smap *smapX, tsi *meta.Snode) error {
+func (p *proxy) notifyEarlyGFN(ctx *smapModifier, smap *smapX, tsi *meta.Snode) error {
 	// Notify targets before publishing the updated Smap.
 	actMsgExt := p.newAmsgActVal(apc.ActStartGFN, nil)
 	actMsgExt.UUID = tsi.ID()
@@ -477,6 +476,21 @@ func (p *proxy) _notifyEarlyGFN(ctx *smapModifier, smap *smapX, tsi *meta.Snode)
 	}
 	ctx.gfn = true
 	return nil
+}
+
+// stop early GFN unless rebalance has already started
+func (p *proxy) stopEarlyGFN(ctx *smapModifier, tid string) {
+	if !ctx.gfn || (ctx.nver > 0 && ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil) {
+		return
+	}
+	ver := ctx.nver
+	if ver == 0 {
+		ver = p.owner.smap.get().Version
+	}
+	actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
+	actMsgExt.UUID = tid
+	revs := revsPair{&smapX{Smap: meta.Smap{Version: ver}}, actMsgExt}
+	_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 }
 
 // rebalance's `can`: factors not including cluster map
@@ -929,9 +943,10 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, tsi *meta
 		debug.Assert(tsi != nil)
 
 		smap := p.owner.smap.get()
-		if err := p._notifyEarlyGFN(ctx, smap, tsi); err != nil {
+		if err := p.notifyEarlyGFN(ctx, smap, tsi); err != nil {
 			return "", err
 		}
+		defer p.stopEarlyGFN(ctx, tsi.ID())
 	}
 
 	err = p.owner.smap.modify(ctx)
@@ -945,13 +960,6 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, tsi *meta
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
 		debug.AssertFunc(func() bool { return ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version() && ctx.rmdCtx.rebID != "" })
 		return ctx.rmdCtx.rebID, nil
-	}
-
-	if ctx.gfn { // stop timed GFN when no rebalance was started
-		actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
-		actMsgExt.UUID = tsi.ID()
-		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, actMsgExt}
-		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
 	return "", nil
 }
