@@ -83,6 +83,7 @@ type (
 
 		msg         *apc.ActMsg  // action modifying smap (apc.Act*)
 		nsi         *meta.Snode  // new node to be added
+		osi         *meta.Snode  // node with the same ID that nsi replaced (see putNode)
 		nversStr    string       // joining node's software version
 		nid         string       // node ID of the candidate primary
 		sid         string       // ID of the node to modify
@@ -344,20 +345,15 @@ func (m *smapX) delProxy(pid string) {
 	m.Version++
 }
 
-func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
-	var (
-		id  = nsi.ID()
-		old *meta.Snode
-	)
+// add or replace the node; return the replaced one (same ID), if any
+func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags) (old *meta.Snode) {
+	id := nsi.ID()
 	nsi.Flags = flags
 	if nsi.IsProxy() {
 		if old = m.GetProxy(id); old != nil {
 			m.delProxy(id)
 		}
 		m.addProxy(nsi)
-		if flags.IsSet(meta.SnodeNonElectable) {
-			nlog.Warningln(nsi.String(), "won't be electable")
-		}
 	} else {
 		debug.AssertFunc(func() bool { return nsi.IsTarget() })
 		if old = m.GetTarget(id); old != nil { // ditto
@@ -365,17 +361,10 @@ func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
 			m.delTarget(id)
 		} else {
 			nsi.SetPlacementWeight(m.MeanPlacementWeight())
-			if w := nsi.PlacementWeight(); w > 0 {
-				nlog.Infoln("joining", nsi.StringEx(), "placement weight:", w)
-			}
 		}
 		m.addTarget(nsi)
 	}
-	if old != nil {
-		nlog.Warningln("same ID", old.StringEx(), "vs (joining)", nsi.StringEx(), "->", m.StringEx())
-	} else if !silent {
-		nlog.Infoln("joined", nsi.String(), "->", m.StringEx())
-	}
+	return old
 }
 
 func (m *smapX) clone() *smapX {
@@ -433,7 +422,6 @@ func (m *smapX) handleDuplicateNode(nsi *meta.Snode, del bool) (err error) {
 	if osi, err = m.IsDupNet(nsi); err == nil {
 		return
 	}
-	nlog.Errorln(err)
 	if !del {
 		return
 	}

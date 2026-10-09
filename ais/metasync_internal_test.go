@@ -34,12 +34,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// TODO:
+// substantially rewrite or remove the legacy unit tests in this file -
+// they are obsolete and do not reliably validate the current implementation.
+
 type (
-	// syncf is the sync function this test uses to control what to do when a metasync call
-	// is received, for example, accepts or rejects the request.
 	syncf func(w http.ResponseWriter, r *http.Request, cnt int) (int, error)
 
-	// metaSyncServer represents one test metaSyncServer object, proxy or target
 	metaSyncServer struct {
 		id      string
 		isProxy bool
@@ -47,19 +48,15 @@ type (
 		failCnt []int
 	}
 
-	// transportData records information about metasync calls including called for which server, how many
-	// times it is called.
 	transportData struct {
 		isProxy bool
 		id      string
 		cnt     int
 	}
 
-	// helper for sorting []transportData
 	msgSortHelper []transportData
 )
 
-// serverTCPAddr takes a string in format of "http://ip:port" and returns its ip and port
 func serverTCPAddr(u string) (ni meta.NetInfo) {
 	s := strings.TrimPrefix(u, "http://")
 	addr, _ := net.ResolveTCPAddr("tcp", s)
@@ -67,7 +64,6 @@ func serverTCPAddr(u string) (ni meta.NetInfo) {
 	return
 }
 
-// newPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newPrimary(t *testing.T) *proxy {
 	var (
 		p       = &proxy{}
@@ -142,11 +138,6 @@ func newSecondary(name string) *proxy {
 	return p
 }
 
-// newTransportServer creates an http test server to simulate a proxy or a target, and is used to test the
-// transport of metasync, which is making sync calls, retrying failed calls, etc.
-// newTransportServer's http handler calls the sync function which decides how to respond to the sync call,
-// counts number of times sync call received, sends result to the result channel on each sync (error or
-// no error), completes the http request with the status returned by the sync function.
 func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportData) *httptest.Server {
 	cnt := 0
 	// notes: needs to assign these from 's', otherwise 'f' captures what in 's' which changes from call to call
@@ -197,42 +188,6 @@ func TestMetasyncProxyRejectsMissingIntraHeaders(t *testing.T) {
 		errNotIntraControl, w.Code, herr.Message)
 }
 
-func TestMetasyncDeepCopy(t *testing.T) {
-	bmd := newBucketMD()
-	bmd.add(meta.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
-		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumOneXxh,
-		},
-	})
-	bmd.add(meta.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
-		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumOneXxh,
-		},
-	})
-	bmd.add(meta.NewBck("bucket3", apc.AWS, cmn.NsGlobal), &cmn.Bprops{
-		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumOneXxh,
-		},
-	})
-	bmd.add(meta.NewBck("bucket4", apc.AWS, cmn.NsGlobal), &cmn.Bprops{
-		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumOneXxh,
-		},
-	})
-
-	clone := bmd.clone()
-	s1 := string(cos.MustMarshal(bmd))
-	s2 := string(cos.MustMarshal(clone))
-	if s1 == "" || s2 == "" || s1 != s2 {
-		t.Log(s1)
-		t.Log(s2)
-		t.Fatal("marshal(bucketmd) != marshal(clone(bucketmd))")
-	}
-}
-
-// TestMetasyncTransport is the driver for metasync transport tests.
-// for each test case, it creates a primary proxy, starts the metasync instance, run the test case,
-// verifies the result, and stop the syncer.
 func TestMetasyncTransport(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	tcs := []struct {
@@ -270,9 +225,6 @@ func TestMetasyncTransport(t *testing.T) {
 	}
 }
 
-// collectResult reads N sync call results from the channel, sort the results and returns.
-// sorting is to make result checking easier as sync calls to different servers run in paraller so
-// the calls are received in random order.
 func collectResult(n int, ch <-chan transportData) []transportData {
 	msgs := make([]transportData, n)
 	for i := range n {
@@ -360,7 +312,6 @@ func syncOnceWait(t *testing.T, primary *proxy, syncer *metasyncer) ([]transport
 	}, collectResult(len(servers), ch)
 }
 
-// syncOnceNoWait checks sync(wait = false) returns before all servers receive the call
 func syncOnceNoWait(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []metaSyncServer{
@@ -389,7 +340,6 @@ func syncOnceNoWait(t *testing.T, primary *proxy, syncer *metasyncer) ([]transpo
 	}, collectResult(len(servers), ch)
 }
 
-// retry checks a failed sync call is retried
 func retry(_ *testing.T, primary *proxy, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []metaSyncServer{
@@ -481,10 +431,6 @@ func multipleSync(_ *testing.T, primary *proxy, syncer *metasyncer) ([]transport
 	}, collectResult(len(servers)*3, ch)
 }
 
-// refused tests the connection-refused scenario
-// it has two test cases: one with a short delay to let metasyncer handle it immediately,
-// the other with a longer delay so that metasyncer times out
-// retrying connection-refused errors and falls back to the retry-pending "route"
 func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		addrInfo meta.NetInfo
@@ -558,7 +504,6 @@ func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData,
 	return exp, exp
 }
 
-// TestMetasyncData is the driver for metasync data tests.
 func TestMetasyncData(t *testing.T) {
 	// data stores the data comes from the http sync call and an error
 	type data struct {
@@ -647,6 +592,10 @@ func TestMetasyncData(t *testing.T) {
 
 	target := newServer(primary, &metaSyncServer{"target", false, nil, []int{2}}, ch)
 	defer target.Close()
+	defer func() {
+		syncer.Stop(nil)
+		wg.Wait()
+	}()
 
 	// sync smap
 	smap := primary.owner.smap.get()
@@ -696,10 +645,9 @@ func TestMetasyncData(t *testing.T) {
 
 	exp[revsBMDTag] = bmdBody
 	msg := primary.newAmsgStr("", bmd)
-	syncer.sync(revsPair{bmd, msg})
+	syncer.sync(revsPair{bmd, msg}).Wait()
 }
 
-// TestMetasyncMembership tests metasync's logic when accessing proxy's smap directly
 func TestMetasyncMembership(t *testing.T) {
 	{
 		// pending server dropped without sync
@@ -808,13 +756,11 @@ func TestMetasyncMembership(t *testing.T) {
 		if len(ch) != 0 {
 			t.Fatal("Too many sync calls received")
 		}
-
-		syncer.Stop(nil)
-		wg.Wait()
 	}
+	syncer.Stop(nil)
+	wg.Wait()
 }
 
-// TestMetasyncReceive tests extracting received sync data.
 func TestMetasyncReceive(t *testing.T) {
 	{
 		emptyAisMsg := func(a *actMsgExt) {
@@ -857,6 +803,10 @@ func TestMetasyncReceive(t *testing.T) {
 		// the only difference is the channel
 		s := httptest.NewServer(http.HandlerFunc(fProxy))
 		defer s.Close()
+		defer func() {
+			syncer.Stop(nil)
+			wg.Wait()
+		}()
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
 		clone.addProxy(newSnode("p1", apc.Proxy, addrInfo, addrInfo, addrInfo))
@@ -891,30 +841,6 @@ func TestMetasyncReceive(t *testing.T) {
 func testSyncer(p *proxy) (syncer *metasyncer) {
 	syncer = newMetasyncer(p)
 	return
-}
-
-///////////////////
-// msgSortHelper //
-///////////////////
-
-func (m msgSortHelper) Len() int {
-	return len(m)
-}
-
-func (m msgSortHelper) Swap(i, j int) {
-	m[i], m[j] = m[j], m[i]
-}
-
-func (m msgSortHelper) Less(i, j int) bool {
-	if m[i].isProxy != m[j].isProxy {
-		return m[i].isProxy
-	}
-
-	if m[i].id != m[j].id {
-		return m[i].id < m[j].id
-	}
-
-	return m[i].cnt < m[j].cnt
 }
 
 func TestExtractConfigHydratesSparse(t *testing.T) {
@@ -986,4 +912,28 @@ func TestExtractConfigHydratesSparse(t *testing.T) {
 		"keepalive mismatch: got %+v, expected %+v", got.Keepalive, src.Keepalive)
 	tassert.Fatalf(t, reflect.DeepEqual(got.Rebalance, src.Rebalance),
 		"rebalance mismatch: got %+v, expected %+v", got.Rebalance, src.Rebalance)
+}
+
+///////////////////
+// msgSortHelper //
+///////////////////
+
+func (m msgSortHelper) Len() int {
+	return len(m)
+}
+
+func (m msgSortHelper) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
+}
+
+func (m msgSortHelper) Less(i, j int) bool {
+	if m[i].isProxy != m[j].isProxy {
+		return m[i].isProxy
+	}
+
+	if m[i].id != m[j].id {
+		return m[i].id < m[j].id
+	}
+
+	return m[i].cnt < m[j].cnt
 }

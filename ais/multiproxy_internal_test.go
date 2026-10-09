@@ -21,6 +21,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// TODO:
+// substantially rewrite or remove the legacy unit tests in this file -
+// they are obsolete and do not reliably validate the current implementation.
+
 type (
 	discoverServerHandler func(sv int64, lv int64) *httptest.Server
 

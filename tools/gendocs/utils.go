@@ -12,9 +12,9 @@ import (
 	"strings"
 )
 
-// folds +gen: annotations continued with a trailing backslash
-// - clears continuation comments so they cannot become endpoint summaries
-// - inserts no separator: whitespace before the backslash is preserved
+// fold +gen: annotations continued with a trailing backslash
+// - clear continuation comments so they cannot become endpoint summaries
+// - insert no separator: whitespace before the backslash is preserved
 func readSourceLines(path string) ([]string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {

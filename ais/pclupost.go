@@ -45,6 +45,8 @@ type clupost struct {
 	config *cmn.Config
 	nsi    *meta.Snode
 	msg    *apc.ActMsg
+	joined *smapX      // Smap that joinStartup modified under lock (to log outside)
+	osi    *meta.Snode // node with the same ID that nsi replaced (see putNode)
 
 	regReq cluMeta
 	body   []byte // exact request bytes retained for admission authentication
@@ -130,6 +132,9 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 	p.owner.smap.mu.Lock()
 	msync, added, err := c.joinKalive()
 	p.owner.smap.mu.Unlock()
+	if c.joined != nil {
+		_logPutNode(c.nsi, c.osi, c.joined, false /*silent*/)
+	}
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -708,7 +713,8 @@ func (c *clupost) joinStartup(started bool) {
 	p := c.p
 	clone := c.smap.clone()
 	// TODO [feature]: updated *nsi contents (e.g., different network) may not "survive" earlystart merge
-	clone.putNode(c.nsi, c.flags, false /*silent*/)
+	c.osi = clone.putNode(c.nsi, c.flags)
+	c.joined = clone
 	p.owner.smap.put(clone)
 	if started {
 		actMsgExt := p.newAmsg(c.msg, nil)
@@ -759,7 +765,7 @@ func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
 	if err := checkJoinWeighted(p.String(), ctx.nsi.StringEx(), ctx.nversStr, clone); err != nil {
 		return cmn.NewErrHTTP(nil, err, http.StatusConflict)
 	}
-	clone.putNode(ctx.nsi, ctx.flags, true /*silent*/)
+	ctx.osi = clone.putNode(ctx.nsi, ctx.flags)
 	if ctx.nsi.IsProxy() {
 		clone.staffIC()
 	}
@@ -797,6 +803,8 @@ func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
 }
 
 func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
+	_logPutNode(ctx.nsi, ctx.osi, clone, true /*silent*/)
+
 	var (
 		tokens    = p.authn.revokedTokenList()
 		bmd       = p.owner.bmd.get()
@@ -837,4 +845,22 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 	}
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
+}
+
+func _logPutNode(nsi, old *meta.Snode, smap *smapX, silent bool) {
+	if nsi.IsProxy() && nsi.Flags.IsSet(meta.SnodeNonElectable) {
+		nlog.Warningln(nsi.String(), "won't be electable")
+	}
+	if old != nil {
+		nlog.Warningln("same ID", old.StringEx(), "vs (joining)", nsi.StringEx(), "->", smap.StringEx())
+		return
+	}
+	if nsi.IsTarget() {
+		if w := nsi.PlacementWeight(); w > 0 {
+			nlog.Infoln("joining", nsi.StringEx(), "placement weight:", w)
+		}
+	}
+	if !silent {
+		nlog.Infoln("joined", nsi.String(), "->", smap.StringEx())
+	}
 }

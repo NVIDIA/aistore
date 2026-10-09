@@ -1244,6 +1244,6 @@ func _updSnode(smap *smapX, nsi *meta.Snode, cloned bool) (*smapX, bool) {
 		smap = smap.clone()
 		cloned = true
 	}
-	smap.putNode(nsi, osi.Flags, true /*silent*/)
+	smap.putNode(nsi, osi.Flags) // logged above ("renewing")
 	return smap, cloned
 }

@@ -124,7 +124,8 @@ established patterns in the package as your guide.
 For comments above functions and methods:
 
 - Do not repeat the function or method name.
-- Usually start with a lowercase verb.
+- Usually start with a lowercase base-form verb:
+  "add" or "return", rather than "adds" or "returns".
 - Keep the summary brief; optionally follow it with brief bulleted details.
 
 Keep critical sections short. Do not hold a mutex across a network request

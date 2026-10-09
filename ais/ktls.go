@@ -601,7 +601,7 @@ func (c *ktlsConn) handshake(ctx context.Context) error {
 	return nil
 }
 
-// decides offload for the connection on its first sendfile-eligible response;
+// decide offload for the connection on its first sendfile-eligible response;
 // call before any response bytes are written
 func (c *ktlsConn) tryArm(size int64) bool {
 	if err := c.init(context.Background()); err != nil {
@@ -615,7 +615,7 @@ func (c *ktlsConn) tryArm(size int64) bool {
 	return c.isArmed()
 }
 
-// declines offload, counted, unless already decided
+// decline offload, counted, unless already decided
 func (c *ktlsConn) decline() {
 	if c.decide(false) {
 		ktlsCnt.declined.Add(1)
@@ -623,7 +623,7 @@ func (c *ktlsConn) decline() {
 	}
 }
 
-// decides offload once per connection; returns true when this call decided
+// decide offload once per connection; return true when this call decided
 func (c *ktlsConn) decide(arm bool) (decided bool) {
 	c.armOnce.Do(func() {
 		decided = true

@@ -123,7 +123,7 @@ func TestPlacementWeightPutNode(t *testing.T) {
 	// not weighted: none
 	m := placementTestSmap()
 	clone := m.clone()
-	clone.putNode(newTarget(), 0, true)
+	clone.putNode(newTarget(), 0)
 	if clone.IsWeighted() {
 		t.Fatal(clone.StrPlacementWeights())
 	}
@@ -132,7 +132,7 @@ func TestPlacementWeightPutNode(t *testing.T) {
 	m.Tmap[plT1].SetPlacementWeight(w1)
 	m.Tmap[plT2].SetPlacementWeight(w2)
 	clone = m.clone()
-	clone.putNode(newTarget(), 0, true)
+	clone.putNode(newTarget(), 0)
 	if w := clone.Tmap[t3].PlacementWeight(); w != (w1+w2)/2 {
 		t.Fatalf("expected %d, got %d", (w1+w2)/2, w)
 	}
@@ -141,7 +141,7 @@ func TestPlacementWeightPutNode(t *testing.T) {
 	nsi := clone.Tmap[t3].Clone()
 	nsi.Placement, nsi.PubNet.Hostname = nil, "new-host"
 	again := clone.clone()
-	again.putNode(nsi, 0, true)
+	again.putNode(nsi, 0)
 	if again.Tmap[t3].PlacementWeight() != (w1+w2)/2 || clone.Tmap[t3].PubNet.Hostname == "new-host" {
 		t.Fatal("re-registration lost weight or modified the original")
 	}
@@ -157,7 +157,7 @@ func TestPlacementWeightPutNode(t *testing.T) {
 	// maintenance: excluded from the mean
 	m.Tmap[plT2].Flags = meta.SnodeMaint
 	clone = m.clone()
-	clone.putNode(newTarget(), 0, true)
+	clone.putNode(newTarget(), 0)
 	if w := clone.Tmap[t3].PlacementWeight(); w != w1 {
 		t.Fatalf("expected %d, got %d", w1, w)
 	}
