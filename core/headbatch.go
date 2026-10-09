@@ -14,8 +14,9 @@ import (
 //
 // head-batch batching: one object at a time in, requests of at most `size` objects per peer out
 // - not safe for concurrent use: one batcher per jogger or worker
-// - Add only queues, the producer calls Flush
-// - the callback may Add, but not Flush
+// - Add sends a group when it reaches `size`
+// - the callback may Add (only queues), but not Flush
+// - Add may run the callback: do not hold a LOM lock when you call Add
 // - the batcher keeps the identity of the object (LIF), not the LOM
 // - to abort, the producer drops the batcher
 //
@@ -49,11 +50,11 @@ type (
 		}
 		flushing bool
 	}
-	// NewHdbBatcher arguments (zero Mod and Size select the defaults)
+	// NewHdbBatcher arguments
 	HdbArgs struct {
 		Cb   func(*HdbEnt) // per-object completion callback
-		Mod  int           // cos.ModReb, cos.ModSpace (logging)
-		Size int           // max items per request
+		Mod  int
+		Size int // max items per request (zero selects the default)
 	}
 )
 
@@ -76,7 +77,7 @@ func NewHdbBatcher(args *HdbArgs) *HdbBatcher {
 	}
 }
 
-// enqueue
+// enqueue and send the group when it is full
 func (hb *HdbBatcher) Add(lif LIF, tsi *meta.Snode, oa *cmn.ObjAttrs) {
 	debug.Assert(oa != nil)
 	tid := tsi.ID()
@@ -89,6 +90,14 @@ func (hb *HdbBatcher) Add(lif LIF, tsi *meta.Snode, oa *cmn.ObjAttrs) {
 	ent.Oa.CopyFrom(oa, false /*skipCksum*/)
 	g.ents = append(g.ents, ent)
 	hb.total++
+
+	if len(g.ents) < hb.size || hb.flushing {
+		return
+	}
+	delete(hb.groups, tid)
+	hb.flushing = true
+	hb.flush(g)
+	hb.flushing = false
 }
 
 // complete all pending objects
@@ -117,7 +126,6 @@ func (hb *HdbBatcher) TakeStats() (nbatches, nfellbk, nunanswered int64) {
 }
 
 // complete only one group
-// TODO: when the peer does not answer, complete the rest of the group as apc.HdbNone (no more requests)
 func (hb *HdbBatcher) flush(g *hdbGroup) {
 	ents := g.ents
 	hb.total -= len(ents)

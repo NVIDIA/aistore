@@ -130,7 +130,8 @@ func TestHdbBatcherFlush(t *testing.T) {
 	for i := range 3 {
 		hb.Add(hdbLIF("c", fmt.Sprintf("o%d", i)), hdbPeer("t2"), hdbOa)
 	}
-	tassert.Fatalf(t, len(done) == 0 && hb.Pending() == 8, "Add must not send: %d completed", len(done))
+	tassert.Fatalf(t, len(done) == 4 && hb.Pending() == 4, "Add must send only the full group: %d completed, %d pending",
+		len(done), hb.Pending())
 
 	hb.Flush()
 	tassert.Errorf(t, slices.Equal(tt.names["t1"], []string{"a/o0", "b/o1", "a/o2", "b/o3"}) && len(tt.names["t2"]) == 3,
@@ -186,17 +187,18 @@ func TestHdbBatcherUnanswered(t *testing.T) {
 	hdbCheckStats(t, hb, 1, 0, 2)
 }
 
-// Flush also sends the objects that the callback adds
+// the callback Add only queues and Flush sends its objects
 func TestHdbBatcherRetry(t *testing.T) {
 	tt := &hdbTarget{status: map[string]apc.HdbStatus{"a/o1": apc.HdbBusy, "a/o2": apc.HdbBusy}}
 	var hb *HdbBatcher
-	hb, _ = hdbInit(t, tt, HdbArgs{Cb: func(ent *HdbEnt) {
+	hb, _ = hdbInit(t, tt, HdbArgs{Size: 2, Cb: func(ent *HdbEnt) {
 		if ent.Status == apc.HdbBusy {
 			hb.Add(ent.LIF, ent.Tsi, &ent.Oa)
 		}
 	}})
 	hb.Add(hdbLIF("a", "o1"), hdbPeer("t1"), hdbOa)
 	hb.Add(hdbLIF("a", "o2"), hdbPeer("t1"), hdbOa)
+	tassert.Fatalf(t, hb.Pending() == 2, "the callback must only queue the retries, pending: %d", hb.Pending())
 	hb.Flush()
 
 	tassert.Errorf(t, hb.Pending() == 0, "Flush must send the retries, pending: %d", hb.Pending())
