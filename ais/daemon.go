@@ -293,7 +293,7 @@ func _loghdr2(si *meta.Snode, loghdr string) string {
 func _loghdr(contTag string) (loghdr string) {
 	var (
 		sb cos.SB
-		l  = 128
+		l  = 160
 	)
 	sb.Init(l)
 	sb.WriteString("Version ")
@@ -304,6 +304,8 @@ func _loghdr(contTag string) (loghdr string) {
 		sb.WriteString(", build ")
 	}
 	sb.WriteString(daemon.buildTime)
+	sb.WriteString(", ")
+	sb.WriteString(runtime.Version())
 
 	cpus := sys.NumCPU()
 	sb.WriteString(", CPUs(")
