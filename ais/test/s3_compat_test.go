@@ -73,6 +73,8 @@ import (
 //  2. Body-carrying requests without GetBody. Standard net/http cannot replay a request body across a
 //     307, and aws-sdk-go-v2 does not set GetBody by default. PUT / UploadPart therefore fail
 //     on redirect unless the client installs `addGetBodyMiddleware` (see TestS3ETag).
+//     Over HTTPS, the default trailing checksum also makes the body non-seekable. Clients from
+//     config.LoadDefaultConfig and s3manager.Uploader must set RequestChecksumCalculationWhenRequired.
 //
 // Listing (ListObjects, ListBuckets) never redirects at all - the proxy serves it end to
 // end - so listing tests need none of the above.
@@ -1087,6 +1089,7 @@ func TestS3SpecialObjectKeys(t *testing.T) {
 	cfg, err := config.LoadDefaultConfig(t.Context(),
 		config.WithCredentialsProvider(getS3Credentials(t)),
 		config.WithRegion(env.AwsDefaultRegion()),
+		config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
 	)
 	tassert.CheckFatal(t, err)
 	cfg.HTTPClient = newS3Client(false /*pathStyle*/)
@@ -1179,6 +1182,7 @@ func TestS3ObjMetadataLocal(t *testing.T) {
 		t.Context(),
 		config.WithCredentialsProvider(getS3Credentials(t)),
 		config.WithRegion(env.AwsDefaultRegion()),
+		config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
 	)
 	tassert.CheckFatal(t, err)
 	cfg.HTTPClient = newS3Client(false /*pathStyle*/)
@@ -1221,6 +1225,7 @@ func TestS3ObjMetadataLocal(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		uploader := s3manager.NewUploader(s3Client, func(uploader *s3manager.Uploader) {
 			uploader.PartSize = partSize
+			uploader.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		})
 		_, err = uploader.Upload(t.Context(), &s3.PutObjectInput{
 			Bucket: aws.String(bck.Name), Key: aws.String(objName), Body: reader,
@@ -1532,6 +1537,7 @@ func TestS3ObjMetadata(t *testing.T) {
 		aisClient := s3.NewFromConfig(cfg)
 		uploader := s3manager.NewUploader(aisClient, func(uploader *s3manager.Uploader) {
 			uploader.PartSize = partSize
+			uploader.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 			uploader.ClientOptions = []func(*s3.Options){
 				func(opts *s3.Options) {
 					opts.BaseEndpoint = aws.String(proxyURL)
@@ -1736,6 +1742,7 @@ func TestS3JWTAuth(t *testing.T) {
 		context.Background(),
 		config.WithCredentialsProvider(getS3Credentials(t)),
 		config.WithRegion(env.AwsDefaultRegion()),
+		config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
 	)
 	tassert.CheckFatal(t, err)
 
