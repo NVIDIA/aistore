@@ -446,8 +446,8 @@ func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, 
 // mountpath add/enable helpers - always call under mfs lock
 //
 
-func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevs) error {
-	if err := mi._validate(avail, config); err != nil {
+func (mi *Mountpath) AddEnabled(tid string, avail, disabled MPI, config *cmn.Config, blockDevs ios.BlockDevs) error {
+	if err := mi._validate(avail, disabled, config); err != nil {
 		return err
 	}
 	err := mi._addEnabled(tid, avail, config, blockDevs)
@@ -466,32 +466,37 @@ func (mi *Mountpath) AddDisabled(disabled MPI) {
 
 // check:
 // - duplication
+// - nesting
 // - disk sharing
-// - no disks
-func (mi *Mountpath) _validate(avail MPI, config *cmn.Config) error {
+func (mi *Mountpath) _validate(avail, disabled MPI, config *cmn.Config) error {
 	existingMi, ok := avail[mi.Path]
 	if ok {
 		return fmt.Errorf("duplicated mountpath %s (%s)", mi, existingMi)
 	}
+
+	// nesting is illegal
+	l := len(mi.Path)
+	for _, mpis := range []MPI{avail, disabled} {
+		for mpath := range mpis {
+			if err := cmn.IsNestedMpath(mi.Path, l, mpath); err != nil {
+				return err
+			}
+		}
+	}
+
+	// shared FS
 	otherMpath, ok := mfs.fsIDs[mi.FsID]
-	if ok {
-		if config.TestingEnv() {
-			return nil
-		}
-		if !mi.Label.IsNil() {
-			nlog.Warningf("FsID %v shared between (labeled) %s and %q - proceeding anyway", mi.FsID, mi, otherMpath)
-			return nil
-		}
+	switch {
+	case !ok:
+		return nil
+	case config.TestingEnv():
+		return nil
+	case !mi.Label.IsNil():
+		nlog.Warningf("FsID %v shared between (labeled) %s and %q - proceeding anyway", mi.FsID, mi, otherMpath)
+		return nil
+	default:
 		return fmt.Errorf("FsID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, otherMpath)
 	}
-	// check nesting
-	l := len(mi.Path)
-	for mpath := range avail {
-		if err := cmn.IsNestedMpath(mi.Path, l, mpath); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevs) error {
@@ -528,11 +533,8 @@ func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error
 	}
 
 	// add new mp
-	if err := mi._validate(avail, config); err != nil {
-		return err
-	}
 	availableCopy := _cloneOne(avail)
-	err = mi.AddEnabled(tid, availableCopy, config, nil /*blockDevs*/)
+	err = mi.AddEnabled(tid, availableCopy, disabled, config, nil /*blockDevs*/)
 	if err == nil {
 		putAvailMPI(availableCopy)
 	}
@@ -814,7 +816,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMi *Mount
 	availableCopy, disabledCopy := cloneMPI()
 	mi, ok = disabledCopy[cleanMpath]
 	debug.Assert(ok)
-	if err = mi.AddEnabled(tid, availableCopy, config, nil /*blockDevs*/); err != nil {
+	if err = mi.AddEnabled(tid, availableCopy, disabledCopy, config, nil /*blockDevs*/); err != nil {
 		return nil, err
 	}
 

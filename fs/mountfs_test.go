@@ -5,6 +5,7 @@
 package fs_test
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -291,6 +292,37 @@ func TestMoveMarkers(t *testing.T) {
 			tassert.Fatalf(t, exists, "marker does not exist")
 		})
 	}
+}
+
+func TestMountpathAddNested(t *testing.T) {
+	initFS()
+
+	parent := t.TempDir()
+	child := filepath.Join(parent, "child")
+	tassert.CheckFatal(t, cos.CreateDir(child))
+
+	// enabled child
+	tools.AddMpath(t, child)
+	_, err := fs.AddTestMpath(parent, "")
+	tassert.Errorf(t, err != nil, "expected adding parent of an enabled mountpath to fail")
+	tools.AssertMountpathCount(t, 1, 0)
+
+	// disabled child
+	_, err = fs.Disable(child)
+	tassert.CheckFatal(t, err)
+	_, err = fs.AddTestMpath(parent, "")
+	tassert.Errorf(t, err != nil, "expected adding parent of a disabled mountpath to fail")
+	tools.AssertMountpathCount(t, 0, 1)
+}
+
+// startup: fs.New followed by AddEnabled, with no MPI stored yet (see volume/vinit)
+func TestMountpathAddEnabledInit(t *testing.T) {
+	fs.New(nil, 1)
+	t.Cleanup(initFS)
+
+	mi, err := fs.NewMountpath(t.TempDir(), cos.TestMpathLabel)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, mi.AddEnabled("", make(fs.MPI), make(fs.MPI), cmn.GCO.Get(), nil))
 }
 
 func initFS() {

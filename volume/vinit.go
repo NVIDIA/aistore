@@ -134,7 +134,7 @@ func configInitMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevs) erro
 		if err != nil {
 			return cmn.NewErrInvalidFSPathsConf(err)
 		}
-		if err := mi.AddEnabled(tid, avail, config, blockDevs); err != nil {
+		if err := mi.AddEnabled(tid, avail, disabled, config, blockDevs); err != nil {
 			return cmn.NewErrInvalidFSPathsConf(err)
 		}
 	}
@@ -217,7 +217,7 @@ func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, pass 
 				nlog.Warningf("%s: %v", mi, errLoad)
 			}
 		} else {
-			if err := mi.AddEnabled(tid, avail, config, devs); err != nil {
+			if err := mi.AddEnabled(tid, avail, disabled, config, devs); err != nil {
 				return nil, false, err
 			}
 		}
