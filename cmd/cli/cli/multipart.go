@@ -45,7 +45,11 @@ func (m *multipartUpload) init(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	uploadID, err := api.CreateMultipartUpload(apiBP, m.bck, m.objName)
+	uploadID, err := api.CreateMultipartUpload(&api.MptArgs{
+		BaseParams: apiBP,
+		Bck:        m.bck,
+		ObjName:    m.objName,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create multipart upload: %w", err)
 	}
@@ -85,7 +89,15 @@ func (m *multipartUpload) do(c *cli.Context) error {
 		}
 	}
 
-	return api.CompleteMultipartUpload(apiBP, m.bck, m.objName, m.uploadID, m.partNums)
+	return api.CompleteMultipartUpload(&api.CompleteMptArgs{
+		MptArgs: api.MptArgs{
+			BaseParams: apiBP,
+			Bck:        m.bck,
+			ObjName:    m.objName,
+		},
+		UploadID:    m.uploadID,
+		PartNumbers: m.partNums,
+	})
 }
 
 // uploadChunk uploads a single chunk of the file
@@ -144,7 +156,15 @@ func uploadFileInChunks(c *cli.Context, filePath string, fileSize, chunkSize int
 
 	if err := upload.do(c); err != nil {
 		// Abort multipart upload on error
-		if abortErr := api.AbortMultipartUpload(apiBP, upload.bck, upload.objName, upload.uploadID); abortErr != nil {
+		abortArgs := &api.AbortMptArgs{
+			MptArgs: api.MptArgs{
+				BaseParams: apiBP,
+				Bck:        upload.bck,
+				ObjName:    upload.objName,
+			},
+			UploadID: upload.uploadID,
+		}
+		if abortErr := api.AbortMultipartUpload(abortArgs); abortErr != nil {
 			fmt.Fprintf(c.App.ErrWriter, "Warning: failed to abort multipart upload: %v\n", abortErr)
 		}
 		return err

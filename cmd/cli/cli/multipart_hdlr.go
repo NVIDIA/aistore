@@ -43,7 +43,11 @@ func mptCreateHandler(c *cli.Context) error {
 		warned     bool
 		encObjName = warnEscapeObjName(c, objName, &warned)
 	)
-	uploadID, err := api.CreateMultipartUpload(apiBP, bck, encObjName)
+	uploadID, err := api.CreateMultipartUpload(&api.MptArgs{
+		BaseParams: apiBP,
+		Bck:        bck,
+		ObjName:    encObjName,
+	})
 	if err != nil {
 		return err
 	}
@@ -216,7 +220,15 @@ func mptCompleteHandler(c *cli.Context) error {
 			bck.Cname(objName), len(partNumbers))
 	}
 
-	err = api.CompleteMultipartUpload(apiBP, bck, objName, uploadID, partNumbers)
+	err = api.CompleteMultipartUpload(&api.CompleteMptArgs{
+		MptArgs: api.MptArgs{
+			BaseParams: apiBP,
+			Bck:        bck,
+			ObjName:    objName,
+		},
+		UploadID:    uploadID,
+		PartNumbers: partNumbers,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to complete multipart upload: %v", err)
 	}
@@ -258,7 +270,14 @@ func mptAbortHandler(c *cli.Context) error {
 			bck.Cname(objName), uploadID)
 	}
 
-	err = api.AbortMultipartUpload(apiBP, bck, objName, uploadID)
+	err = api.AbortMultipartUpload(&api.AbortMptArgs{
+		MptArgs: api.MptArgs{
+			BaseParams: apiBP,
+			Bck:        bck,
+			ObjName:    objName,
+		},
+		UploadID: uploadID,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to abort multipart upload: %v", err)
 	}
