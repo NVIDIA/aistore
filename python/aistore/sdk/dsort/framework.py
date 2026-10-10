@@ -172,7 +172,7 @@ class DsortFramework:
                 output_format = ObjectRange.from_string(output_format)
             else:
                 raise ValueError(
-                    '"input_format" string must be either a list or a range string'
+                    '"output_format" must be either a list or a range string'
                 )
 
             framework = cls(
