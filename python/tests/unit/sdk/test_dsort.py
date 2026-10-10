@@ -464,6 +464,16 @@ class TestDsort(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual(spec.algorithm.kind, "alphanumeric")
         self.assertIsNone(spec.description)
 
+    @patch("aistore.sdk.dsort.framework.json")
+    def test_from_file_names_output_format_when_it_is_the_bad_one(self, mock_json):
+        spec_data = json.loads(VALID_JSON_SPEC)
+        spec_data["output_format"] = {"template": "output-shard-{000..999..1}"}
+        mock_json.load.return_value = spec_data
+        with patch("builtins.open", mock_open(read_data=VALID_JSON_SPEC)):
+            with self.assertRaises(ValueError) as caught:
+                DsortFramework.from_file("invalid.json")
+        self.assertIn("output_format", str(caught.exception))
+
     def test_to_spec(self):
         input_shards = DsortShardsGroup(
             bck=BucketModel(name="input_bucket", provider=Provider.AIS.value),

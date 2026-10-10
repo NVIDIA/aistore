@@ -8,6 +8,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- `str()` on an `ObjectNames` returns a string. `__str__` returned the underlying
+  list, so `print(names)`, an f-string or a `%s` log line raised
+  `TypeError: __str__ returned non-string (type list)`.
+- `DsortFramework.from_file()` names `output_format` in the error that rejects it,
+  instead of `input_format`.
 - `AISShardReader.__len__()` now streams raw shards and counts samples without
   buffering full shard payloads. The count matches iteration when ETL preserves
   the sample count.

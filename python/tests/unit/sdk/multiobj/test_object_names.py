@@ -14,3 +14,7 @@ class TestObjectNames(unittest.TestCase):
 
     def test_iter(self):
         self.assertEqual(self.name_list, list(self.obj_names))
+
+    def test_str(self):
+        self.assertEqual(str(self.name_list), str(self.obj_names))
+        self.assertEqual(str(self.name_list), f"{self.obj_names}")
