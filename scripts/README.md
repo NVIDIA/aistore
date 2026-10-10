@@ -8,6 +8,16 @@ Separately, there's also root of the repository that contains:
 
 Script names and respective descriptions follow below.
 
+## upgrade-oss.sh
+
+Upgrade the root Go module's dependencies, then remove and restore the Kubernetes
+requirements so MVS selects their required `kube-openapi` version. Remove the Go
+patch version from `go.mod` and run `go mod tidy`.
+
+```console
+$ ./scripts/upgrade-oss.sh
+```
+
 ## github_release.sh
 
 Given a release tag, add *release assets* to an existing (and tagged) github release at [AIStore releases](https://github.com/NVIDIA/aistore/releases).
