@@ -19,47 +19,47 @@ import (
 
 var _ = Describe("Housekeeper", func() {
 	It("should register the callback and fire it", func() {
-		fired := false
+		var fired atomic.Bool
 		hk.Reg("foo", func(int64) time.Duration {
-			fired = true
+			fired.Store(true)
 			return time.Second
 		}, 0)
 		defer hk.Unreg("foo")
 		time.Sleep(20 * time.Millisecond)
-		Expect(fired).To(BeTrue()) // callback should be fired at the start
-		fired = false
+		Expect(fired.Load()).To(BeTrue()) // callback should be fired at the start
+		fired.Store(false)
 
 		time.Sleep(500 * time.Millisecond)
-		Expect(fired).To(BeFalse())
+		Expect(fired.Load()).To(BeFalse())
 
 		time.Sleep(600 * time.Millisecond)
-		Expect(fired).To(BeTrue())
+		Expect(fired.Load()).To(BeTrue())
 	})
 
 	It("should register the callback and fire it after initial interval", func() {
-		fired := false
+		var fired atomic.Bool
 		hk.Reg("foo", func(int64) time.Duration {
-			fired = true
+			fired.Store(true)
 			return time.Second
 		}, time.Second)
 		defer hk.Unreg("foo")
 
 		time.Sleep(500 * time.Millisecond)
-		Expect(fired).To(BeFalse())
+		Expect(fired.Load()).To(BeFalse())
 
 		time.Sleep(600 * time.Millisecond)
-		Expect(fired).To(BeTrue())
+		Expect(fired.Load()).To(BeTrue())
 	})
 
 	It("should register multiple callbacks and fire it in correct order", func() {
-		fired := make([]bool, 2)
+		var fired [2]atomic.Bool
 		hk.Reg("foo", func(int64) time.Duration {
-			fired[0] = true
+			fired[0].Store(true)
 			return 2 * time.Second
 		}, 0)
 		defer hk.Unreg("foo")
 		hk.Reg("bar", func(int64) time.Duration {
-			fired[1] = true
+			fired[1].Store(true)
 			return time.Second + 500*time.Millisecond
 		}, 0)
 		defer hk.Unreg("bar")
@@ -67,97 +67,99 @@ var _ = Describe("Housekeeper", func() {
 		time.Sleep(20 * time.Millisecond)
 		// "foo" and "bar" should fire at the start (no initial interval)
 		for idx := range fired {
-			Expect(fired[idx]).To(BeTrue())
-			fired[idx] = false
+			Expect(fired[idx].Load()).To(BeTrue())
+			fired[idx].Store(false)
 		}
 
 		time.Sleep(600 * time.Millisecond) // ~600ms
 
 		// "foo" nor "bar" should fire
-		Expect(fired[0] || fired[1]).To(BeFalse())
+		Expect(fired[0].Load() || fired[1].Load()).To(BeFalse())
 
 		time.Sleep(time.Second) // ~1.6s
 
 		// "bar" should fire
-		Expect(fired[0]).To(BeFalse())
-		Expect(fired[1]).To(BeTrue())
-		fired[1] = false
+		Expect(fired[0].Load()).To(BeFalse())
+		Expect(fired[1].Load()).To(BeTrue())
+		fired[1].Store(false)
 
 		time.Sleep(500 * time.Millisecond) // ~2.1s
 
 		// "foo" should fire
-		Expect(fired[0]).To(BeTrue())
-		Expect(fired[1]).To(BeFalse())
+		Expect(fired[0].Load()).To(BeTrue())
+		Expect(fired[1].Load()).To(BeFalse())
 
 		time.Sleep(time.Second) // ~3.1s
 
 		// "bar" should fire once again
-		Expect(fired[0] && fired[1]).To(BeTrue())
+		Expect(fired[0].Load() && fired[1].Load()).To(BeTrue())
 	})
 
 	It("should unregister callback", func() {
-		fired := make([]bool, 2)
+		var fired [2]atomic.Bool
 		hk.Reg("bar", func(int64) time.Duration {
-			fired[0] = true
+			fired[0].Store(true)
 			return 400 * time.Millisecond
 		}, 400*time.Millisecond)
 		hk.Reg("foo", func(int64) time.Duration {
-			fired[1] = true
+			fired[1].Store(true)
 			return 200 * time.Millisecond
 		}, 200*time.Millisecond)
 
 		time.Sleep(500 * time.Millisecond)
-		Expect(fired[0] && fired[1]).To(BeTrue())
+		Expect(fired[0].Load() && fired[1].Load()).To(BeTrue())
 
-		fired[0], fired[1] = false, false
+		fired[0].Store(false)
+		fired[1].Store(false)
 		hk.Unreg("foo")
 
 		time.Sleep(time.Second)
-		Expect(fired[1]).To(BeFalse())
-		Expect(fired[0]).To(BeTrue())
+		Expect(fired[1].Load()).To(BeFalse())
+		Expect(fired[0].Load()).To(BeTrue())
 
 		hk.Unreg("bar")
 	})
 
 	It("should unregister callback that returns UnregInterval", func() {
 		for range 3 {
-			fired := make([]bool, 2)
+			var fired [2]atomic.Bool
 			hk.Reg("bar", func(int64) time.Duration {
-				fired[0] = true
+				fired[0].Store(true)
 				return 400 * time.Millisecond
 			}, 400*time.Millisecond)
 			hk.Reg("foo", func(int64) time.Duration {
-				fired[1] = true
+				fired[1].Store(true)
 				return hk.UnregInterval
 			}, 100*time.Millisecond)
 
 			time.Sleep(500 * time.Millisecond)
-			Expect(fired[0] && fired[1]).To(BeTrue())
+			Expect(fired[0].Load() && fired[1].Load()).To(BeTrue())
 
-			fired[0], fired[1] = false, false
+			fired[0].Store(false)
+			fired[1].Store(false)
 
 			time.Sleep(500 * time.Millisecond)
-			Expect(fired[1]).To(BeFalse()) // foo
-			Expect(fired[0]).To(BeTrue())  // bar
+			Expect(fired[1].Load()).To(BeFalse()) // foo
+			Expect(fired[0].Load()).To(BeTrue())  // bar
 
 			hk.Unreg("bar")
 		}
 	})
 
 	It("should register and unregister multiple callbacks", func() {
-		var fired bool
+		var fired atomic.Bool
 		f := func(name string) {
-			Expect(fired).To(BeFalse())
+			Expect(fired.Load()).To(BeFalse())
 			hk.Reg(name, func(int64) time.Duration {
-				fired = true
+				fired.Store(true)
 				return 100 * time.Millisecond
 			}, 100*time.Millisecond)
 
 			time.Sleep(110 * time.Millisecond)
-			Expect(fired).To(BeTrue())
+			Expect(fired.Load()).To(BeTrue())
 
 			hk.Unreg(name)
-			fired = false
+			fired.Store(false)
 		}
 
 		f("foo")
@@ -165,7 +167,7 @@ var _ = Describe("Housekeeper", func() {
 		f("baz")
 
 		time.Sleep(time.Second)
-		Expect(fired).To(BeFalse())
+		Expect(fired.Load()).To(BeFalse())
 	})
 
 	It("should correctly call multiple callbacks", func() {
@@ -179,7 +181,7 @@ var _ = Describe("Housekeeper", func() {
 		var (
 			counter atomic.Int32
 			durs    = make([]action, 0, actionCnt)
-			fired   = make([]int32, actionCnt)
+			fired   = make([]atomic.Int32, actionCnt)
 		)
 
 		for i := range actionCnt {
@@ -187,7 +189,7 @@ var _ = Describe("Housekeeper", func() {
 				d:       50*time.Millisecond + time.Duration(40*i)*time.Millisecond,
 				origIdx: i,
 			})
-			fired[i] = -1
+			fired[i].Store(-1)
 		}
 
 		rand.Shuffle(actionCnt, func(i, j int) {
@@ -197,8 +199,8 @@ var _ = Describe("Housekeeper", func() {
 		for i := range actionCnt {
 			index := i
 			hk.Reg(strconv.Itoa(index), func(int64) time.Duration {
-				if fired[index] == -1 {
-					fired[index] = counter.Inc() - 1
+				if fired[index].Load() == -1 {
+					fired[index].Store(counter.Inc() - 1)
 				}
 				return durs[index].d
 			}, durs[index].d)
@@ -207,7 +209,7 @@ var _ = Describe("Housekeeper", func() {
 		time.Sleep(100 * actionCnt * time.Millisecond)
 
 		for i := range actionCnt {
-			Expect(durs[i].origIdx).To(BeEquivalentTo(fired[i]))
+			Expect(durs[i].origIdx).To(BeEquivalentTo(fired[i].Load()))
 		}
 	})
 })

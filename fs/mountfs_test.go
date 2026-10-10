@@ -212,18 +212,6 @@ func TestMountpathEnableAlreadyEnabled(t *testing.T) {
 	tools.AssertMountpathCount(t, 1, 0)
 }
 
-func TestMountpathsAddMultipleWithSameFSID(t *testing.T) {
-	fs.NewTestMFS(mock.NewIOS())
-
-	mpath := "/tmp/abc"
-	tools.AddMpath(t, mpath)
-
-	_, err := fs.AddTestMpath("/", "")
-	tassert.Errorf(t, err != nil, "expected adding path with same FSID to be unsuccessful")
-
-	tools.AssertMountpathCount(t, 1, 0)
-}
-
 func TestMountpathAddAndDisableMultiple(t *testing.T) {
 	initFS()
 

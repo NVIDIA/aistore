@@ -7,6 +7,9 @@
 package etl_test
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -16,4 +19,6 @@ import (
 func TestETLInternals(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, t.Name())
+	// restore default SIGINT/SIGTERM (ginkgo never stops its interrupt handler)
+	signal.Reset(os.Interrupt, syscall.SIGTERM)
 }

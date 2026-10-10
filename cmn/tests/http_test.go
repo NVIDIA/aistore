@@ -40,7 +40,7 @@ func TestMatchRESTItems(t *testing.T) {
 		},
 		{
 			name: "dont_split_after",
-			path: "/some/path/to/url", itemsAfter: 2, splitAfter: true, items: []string{"some", "path"},
+			path: "/some/path/to/url", itemsAfter: 2, splitAfter: false, items: []string{"some", "path"},
 			expectedItems: []string{"to", "url"},
 		},
 		{

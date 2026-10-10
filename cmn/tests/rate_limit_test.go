@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/tools"
 )
 
 func TestRateLim(t *testing.T) {
@@ -24,6 +25,9 @@ func TestRateLim(t *testing.T) {
 			{maxTokens: 1000, tokenIval: 7 * time.Second},
 		}
 	)
+	if testing.Short() {
+		tests = tests[:1]
+	}
 	for _, test := range tests {
 		sleep := test.tokenIval / time.Duration(test.maxTokens)
 		tname := fmt.Sprintf("%d:%v", test.maxTokens, test.tokenIval)
@@ -50,6 +54,7 @@ func TestRateLim(t *testing.T) {
 }
 
 func TestAdaptRateLim(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true}) // sleep-bound
 	var (
 		tests = []struct {
 			maxTokens int
@@ -109,6 +114,9 @@ func TestBurstRateLim(t *testing.T) {
 			{maxTokens: 1000, burstSize: 200, tokenIval: 5 * time.Second},
 		}
 	)
+	if testing.Short() {
+		tests = tests[:1]
+	}
 	for _, test := range tests {
 		tname := fmt.Sprintf("tokens_%d:burst_%d:%v", test.maxTokens, test.burstSize, test.tokenIval)
 		t.Run(tname, func(t *testing.T) {

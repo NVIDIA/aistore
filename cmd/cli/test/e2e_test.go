@@ -5,9 +5,12 @@
 package test_test
 
 import (
+	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/NVIDIA/aistore/tools"
@@ -28,6 +31,8 @@ func TestE2E(t *testing.T) {
 
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "E2E")
+	// restore default SIGINT/SIGTERM (ginkgo never stops its interrupt handler)
+	signal.Reset(os.Interrupt, syscall.SIGTERM)
 }
 
 var _ = Describe("E2E CLI Tests", func() {

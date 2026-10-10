@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 var (
@@ -27,6 +29,11 @@ var (
 	// interface guard
 	_ http.ResponseWriter = (*discardRW)(nil)
 )
+
+func init() {
+	xreg.Init()
+	hk.Init(false)
+}
 
 func TestMain(m *testing.M) {
 	flag.Parse()

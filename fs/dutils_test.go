@@ -11,13 +11,11 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
-// test file for ios/dutils_linux.go
-// placed here because it requires fs to set up the testing environment
+// FQN2Mpath: resolve path to its mountpath
 
 func path2Mpath(path string) (mi *fs.Mountpath, err error) {
 	mi, _, err = fs.FQN2Mpath(filepath.Clean(path))
@@ -28,47 +26,47 @@ func TestMountpathSearchValid(t *testing.T) {
 	fs.NewTestMFS(nil)
 
 	mpath := "/tmp/abc"
-	createDirs(mpath)
-	defer removeDirs(mpath)
+	createDirs(t, mpath)
+	setAvailableMountPaths(t, mpath)
 
-	oldMPs := setAvailableMountPaths(t, mpath)
 	mi, err := path2Mpath("/tmp/abc/test")
-	tassert.Errorf(t, err == nil && mi.Path == mpath, "Actual: [%s]. Expected: [%s]", mi.Path, mpath)
-	setAvailableMountPaths(t, oldMPs...)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, mi.Path == mpath, "Actual: [%s]. Expected: [%s]", mi.Path, mpath)
 }
 
 func TestMountpathSearchInvalid(t *testing.T) {
 	fs.NewTestMFS(nil)
 
 	mpath := "/tmp/abc"
-	createDirs(mpath)
-	defer removeDirs(mpath)
+	createDirs(t, mpath)
+	setAvailableMountPaths(t, mpath)
 
-	oldMPs := setAvailableMountPaths(t, mpath)
 	mi, err := path2Mpath("xabc")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "xabc", err)
-	setAvailableMountPaths(t, oldMPs...)
 }
 
 func TestMountpathSearchWhenNoAvailable(t *testing.T) {
 	fs.NewTestMFS(nil)
-	oldMPs := setAvailableMountPaths(t, "")
+	setAvailableMountPaths(t)
+
 	mi, err := path2Mpath("xabc")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "xabc", err)
-	setAvailableMountPaths(t, oldMPs...)
 }
 
 func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 	config := cmn.GCO.BeginUpdate()
+	prev := config.TestFSP.Count
 	config.TestFSP.Count = 2
 	cmn.GCO.CommitUpdate(config)
+	t.Cleanup(func() {
+		config := cmn.GCO.BeginUpdate()
+		config.TestFSP.Count = prev
+		cmn.GCO.CommitUpdate(config)
+	})
 
 	fs.NewTestMFS(nil)
-	dirs := []string{"/tmp/x/z/abc", "/tmp/x/zabc", "/tmp/x/y/abc", "/tmp/x/yabc"}
-	createDirs(dirs...)
-	defer removeDirs(dirs...)
-
-	oldMPs := setAvailableMountPaths(t, "/tmp/x/y", "/tmp/x/z")
+	createDirs(t, "/tmp/x/z/abc", "/tmp/x/zabc", "/tmp/x/y/abc", "/tmp/x/yabc")
+	setAvailableMountPaths(t, "/tmp/x/y", "/tmp/x/z")
 
 	mi, err := path2Mpath("z/abc")
 	tassert.Errorf(t, err != nil && mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "z/abc", err)
@@ -80,75 +78,60 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 	mi, err = path2Mpath("/tmp/../tmp/x/y/abc")
 	tassert.Errorf(t, err == nil && mi.Path == "/tmp/x/y", "Actual: [%s]. Expected: [%s] (%v)",
 		mi, "/tmp/x/y", err)
-	setAvailableMountPaths(t, oldMPs...)
 }
 
 func TestSimilarCases(t *testing.T) {
 	fs.NewTestMFS(nil)
-	dirs := []string{"/tmp/abc", "/tmp/abx"}
-	createDirs(dirs...)
-	defer removeDirs(dirs...)
-
-	oldMPs := setAvailableMountPaths(t, "/tmp/abc")
+	createDirs(t, "/tmp/abc", "/tmp/abx")
+	setAvailableMountPaths(t, "/tmp/abc")
 
 	mi, err := path2Mpath("/tmp/abc/q")
-	mpath := mi.Path
-	tassert.Errorf(t, err == nil && mpath == "/tmp/abc", "Actual: [%s]. Expected: [%s] (%v)", mpath, "/tmp/abc", err)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, mi.Path == "/tmp/abc", "Actual: [%s]. Expected: [%s]", mi.Path, "/tmp/abc")
 
 	mi, err = path2Mpath("/abx")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "/abx", err)
-	setAvailableMountPaths(t, oldMPs...)
 }
 
-func TestSimilarCasesWithRoot(t *testing.T) {
+func TestRootMountpath(t *testing.T) {
 	fs.NewTestMFS(nil)
-	mpath := "/tmp/abc"
-	createDirs(mpath)
-	defer removeDirs(mpath)
+	setAvailableMountPaths(t)
 
-	oldMPs := setAvailableMountPaths(t)
-	// root is an invalid mountpath
 	_, err := fs.AddTestMpath("/", "daeID")
 	tassert.Errorf(t, err != nil, "Expected failure to add \"/\" mountpath")
-	setAvailableMountPaths(t, oldMPs...)
 }
 
-func setAvailableMountPaths(t *testing.T, paths ...string) []string {
+// replace available mountpaths with the given ones; restore upon cleanup
+func setAvailableMountPaths(t *testing.T, paths ...string) {
+	t.Helper()
 	avail := fs.GetAvail()
-	oldPaths := make([]string, 0, len(avail))
+	prev := make([]string, 0, len(avail))
 	for _, mi := range avail {
-		oldPaths = append(oldPaths, mi.Path)
+		prev = append(prev, mi.Path)
 	}
+	_setAvail(t, paths)
+	t.Cleanup(func() { _setAvail(t, prev) })
+}
 
-	for _, mi := range avail {
+func _setAvail(t *testing.T, paths []string) {
+	for _, mi := range fs.GetAvail() {
 		_, err := fs.Remove(mi.Path)
-		tassert.Errorf(t, err == nil, "%s (%v)", mi, err)
-		debug.AssertNoErr(err)
+		tassert.CheckError(t, err)
 	}
-
 	for _, path := range paths {
-		if path == "" {
-			continue
-		}
 		_, err := fs.AddTestMpath(path, "daeID")
-		if err != nil {
-			tassert.Errorf(t, err == nil, "%s (%v)", path, err)
+		tassert.CheckError(t, err)
+	}
+}
+
+func createDirs(t *testing.T, dirs ...string) {
+	t.Helper()
+	for _, dir := range dirs {
+		tassert.CheckFatal(t, cos.CreateDir(dir))
+	}
+	t.Cleanup(func() {
+		for _, dir := range dirs {
+			os.RemoveAll(dir)
 		}
-		_ = err
-	}
-
-	return oldPaths
-}
-
-func createDirs(dirs ...string) {
-	for _, dir := range dirs {
-		err := cos.CreateDir(dir)
-		debug.AssertNoErr(err)
-	}
-}
-
-func removeDirs(dirs ...string) {
-	for _, dir := range dirs {
-		os.RemoveAll(dir)
-	}
+	})
 }

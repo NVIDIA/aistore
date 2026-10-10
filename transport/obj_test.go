@@ -294,8 +294,8 @@ func TestMultipleNetworks(t *testing.T) {
 	}
 	time.Sleep(3 * time.Second) // FIN has been sent but not necessarily received
 
-	if *totalRecv != totalSend {
-		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, totalSend)
+	if recv := totalRecv.Load(); recv != totalSend {
+		t.Fatalf("total received bytes %d is different from expected: %d", recv, totalSend)
 	}
 }
 
@@ -339,8 +339,8 @@ func TestSendCallback(t *testing.T) {
 			t.Errorf("sent-callback %d never fired", idx)
 		}
 	}
-	if *totalRecv != totalSend {
-		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, totalSend)
+	if recv := totalRecv.Load(); recv != totalSend {
+		t.Fatalf("total received bytes %d is different from expected: %d", recv, totalSend)
 	}
 }
 
@@ -489,51 +489,6 @@ func TestCompressedOne(t *testing.T) {
 	tlog.Logf("Compressed stream test: sent %d objects (%d header-only) totaling %d GiB\n", num, numhdr, size/cos.GiB)
 }
 
-// TODO: Skip unmaintained dry-run test to reduce test runtime (revisit)
-func TestDryRun(t *testing.T) {
-	t.Skipf("skipping %s", t.Name())
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
-
-	t.Setenv("AIS_STREAM_DRY_RUN", "true")
-
-	stream := transport.NewObjStream(nil, "dummy/null", cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get()})
-
-	random := newRand(mono.NanoTime())
-	sgl := memsys.PageMM().NewSGL(cos.MiB)
-	defer sgl.Free()
-	buf, slab := memsys.PageMM().AllocSize(cos.KiB * 128)
-	defer slab.Free(buf)
-	for sgl.Len() < cos.MiB {
-		cryptorand.Read(buf)
-		sgl.Write(buf)
-	}
-
-	size, num, prevsize := int64(0), 0, int64(0)
-	hdr := genStaticHeader(random)
-	total := int64(cos.TiB)
-	if testing.Short() {
-		total = cos.TiB / 4
-	}
-
-	for size < total {
-		hdr.ObjAttrs.Size = cos.KiB * 128
-		for i := range cos.MiB / hdr.ObjAttrs.Size {
-			reader := memsys.NewReader(sgl)
-			reader.Seek(i*hdr.ObjAttrs.Size, io.SeekStart)
-
-			stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
-			num++
-			size += hdr.ObjAttrs.Size
-			if size-prevsize >= cos.GiB*100 {
-				prevsize = size
-				fmt.Printf("[dry]: %d GiB\n", size/cos.GiB)
-			}
-		}
-	}
-	stream.Fin()
-	tlog.Logf("[dry]: sent %d objects totaling %d GiB\n", num, size/cos.GiB)
-}
-
 func TestCompletionCount(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
@@ -670,24 +625,24 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	tlog.Logf("stream[%s/%d]: sent %d objects (%d GiB), terminated(%v)\n",
 		trname, sessID, num, size/cos.GiB, termErr)
 
-	if *totalRecv != size {
-		t.Errorf("total received bytes %d is different from expected: %d", *totalRecv, size)
-		return
+	if recv := totalRecv.Load(); recv != size {
+		t.Errorf("total received bytes %d is different from expected: %d", recv, size)
 	}
 }
 
-func makeRecvFunc(t *testing.T) (*int64, transport.RecvObj) {
-	totalReceived := new(int64)
+// runs on the receiving (server) goroutine - no FailNow
+func makeRecvFunc(t *testing.T) (*atomic.Int64, transport.RecvObj) {
+	totalReceived := &atomic.Int64{}
 	return totalReceived, func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil || cos.IsAnyEOF(err))
 		written, err := io.Copy(io.Discard, objReader)
 		if err != nil && !cos.IsOkEOF(err) {
-			tassert.CheckFatal(t, err)
+			t.Error(err)
 		}
 		if written != hdr.ObjAttrs.Size && !hdr.IsUnsized() {
-			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
+			t.Errorf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
-		*totalReceived += written
+		totalReceived.Add(written)
 		return nil
 	}
 }

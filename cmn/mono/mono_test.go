@@ -24,7 +24,7 @@ func BenchmarkFast(b *testing.B) {
 func BenchmarkStd(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_ = mono.Since(time.Now().UnixNano())
+			_ = time.Since(time.Now())
 		}
 	})
 }

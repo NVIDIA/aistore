@@ -93,6 +93,7 @@ func (e *etlMD) clone() *etlMD {
 	return dst
 }
 
+//nolint:unused,nolintlint // compiled with 'build_tags: etl'
 func (e *etlMD) add(msg etl.InitMsg, stage etl.Stage, podMap etl.PodMap) error {
 	if stage == etl.Running && podMap == nil {
 		return fmt.Errorf("podMap must be provided for stage %s", stage)
@@ -115,6 +116,7 @@ func (e *etlMD) get(id string) (msg etl.InitMsg, stage etl.Stage) {
 	return nil, etl.Unknown
 }
 
+//nolint:unused,nolintlint // compiled with 'build_tags: etl'
 func (e *etlMD) del(id string) (exists bool) {
 	_, exists = e.ETLs[id]
 	delete(e.ETLs, id)

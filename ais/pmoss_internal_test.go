@@ -21,7 +21,7 @@ func newTestSmapForMossScan(nodeCount int) *smapX {
 	smap := newSmap()
 	for i := range nodeCount {
 		id := fmt.Sprintf("t%d", i)
-		si := newSnode(id, apc.Target, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
+		si := newSnode(id, apc.Target)
 		smap.Tmap[id] = si
 	}
 	return smap

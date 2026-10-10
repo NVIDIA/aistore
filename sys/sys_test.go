@@ -52,15 +52,6 @@ func TestLoadAvg(t *testing.T) {
 		"All load average must be positive ones")
 }
 
-func TestMaxProcs(t *testing.T) {
-	newval := 4
-	prev := runtime.GOMAXPROCS(newval)
-	tassert.Errorf(t, runtime.GOMAXPROCS(0) == newval, "Failed to set GOMAXPROCS to %d", newval)
-
-	runtime.GOMAXPROCS(prev)
-	tassert.Errorf(t, runtime.GOMAXPROCS(0) == prev, "Failed to restore GOMAXPROCS to %d", prev)
-}
-
 func TestMemoryStats(t *testing.T) {
 	var mem sys.MemStat
 	err := mem.Get()

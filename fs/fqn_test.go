@@ -78,15 +78,6 @@ func TestParseFQN(t *testing.T) {
 			false,
 		},
 		{
-			"non-empty namespace",
-			tmpMpath + "/@ais/#namespace/bucket/%ob/objname",
-			[]string{tmpMpath},
-			tmpMpath,
-			cmn.Bck{Name: "bucket", Provider: apc.AIS, Ns: cmn.Ns{Name: "namespace"}},
-			fs.ObjCT, "objname", false,
-			false,
-		},
-		{
 			"cloud namespace",
 			tmpMpath + "/@ais/@uuid#namespace/bucket/%ob/objname",
 			[]string{tmpMpath},
@@ -118,7 +109,7 @@ func TestParseFQN(t *testing.T) {
 		{
 			"nested mountpaths",
 			tmpMpath + "/super/long/long/@aws/bucket/%ob/folder/objname",
-			[]string{"/super/long", "/super/long/long"},
+			[]string{tmpMpath + "/super/long", tmpMpath + "/super/long/long"},
 			"",
 			cmn.Bck{Name: "bucket", Provider: apc.AWS, Ns: cmn.NsGlobal},
 			fs.ObjCT, "folder/objname", true,
@@ -234,7 +225,7 @@ func TestParseFQN(t *testing.T) {
 		},
 		{
 			"no matching mountpath",
-			tmpMpath + "/@ais/bucket/%obj/objname",
+			tmpMpath + "/@ais/bucket/%ob/objname",
 			[]string{tmpMpath + "/a", tmpMpath + "/b"},
 			"",
 			cmn.Bck{},

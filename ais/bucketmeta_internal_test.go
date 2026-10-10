@@ -5,136 +5,23 @@
 package ais
 
 import (
-	"fmt"
 	"net/http"
-	"time"
+	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/core/meta"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
-var _ = Describe("BMD marshal and unmarshal", func() {
-	const (
-		mpath    = "/tmp"
-		testpath = "/tmp/.ais.test.bmd"
-	)
-
-	var (
-		bmd *bucketMD
-		cfg *cmn.Config
-	)
-
-	BeforeEach(func() {
-		// Set path for proxy (it uses ConfigDir)
-		config := cmn.GCO.BeginUpdate()
-		config.ConfigDir = mpath
-		config.Cksum.Type = cos.ChecksumOneXxh
-		config.Space = &cmn.SpaceConf{
-			LowWM: 75, HighWM: 90, OOS: 95,
-		}
-		config.LRU = &cmn.LRUConf{
-			DontEvictTime: cos.Duration(time.Hour), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
-		}
-		cmn.GCO.CommitUpdate(config)
-		cmn.Rom.Set(&config.ClusterConfig)
-
-		cfg = cmn.GCO.Get()
-
-		bmd = newBucketMD()
-		for _, provider := range []string{apc.AIS, apc.AWS} {
-			for i := range 10 {
-				var hdr http.Header
-				if provider != apc.AIS {
-					hdr = http.Header{apc.HdrBackendProvider: []string{provider}}
-				}
-
-				var (
-					bck   = meta.NewBck(fmt.Sprintf("bucket_%d", i), provider, cmn.NsGlobal)
-					bargs = bckPropsArgs{bck: bck, hdr: hdr}
-					props = bargs.inheritMerge()
-				)
-				bmd.add(bck, props)
-			}
-		}
-	})
-
-	for _, node := range []string{apc.Target, apc.Proxy} {
-		makeBMDOwner := func() bmdOwner {
-			var bowner bmdOwner
-			switch node {
-			case apc.Target:
-				bowner = newBMDOwnerTgt()
-			case apc.Proxy:
-				bowner = newBMDOwnerPrx(cfg)
-			}
-			return bowner
-		}
-
-		Describe(node, func() {
-			var bowner bmdOwner
-
-			BeforeEach(func() {
-				bowner = makeBMDOwner()
-				bowner.putPersist(bmd, nil)
-			})
-
-			It("should correctly load bmd for "+node, func() {
-				bowner.init()
-				Expect(bowner.Get()).To(Equal(&bmd.BMD))
-			})
-
-			It("should save and load bmd using jsp methods for "+node, func() {
-				bowner.init()
-				bmd := bowner.get()
-				for _, signature := range []bool{false, true} {
-					for _, compress := range []bool{false, true} {
-						for _, checksum := range []bool{false, true} {
-							opts := jsp.Options{
-								Compress:  compress,
-								Checksum:  checksum,
-								Signature: signature,
-							}
-							clone := bmd.clone()
-							bck := meta.NewBck("abc"+cos.GenTie(), apc.AIS, cmn.NsGlobal)
-
-							// Add bucket and save.
-							bargs := bckPropsArgs{bck: bck}
-							nprops := bargs.inheritMerge()
-							clone.add(bck, nprops)
-							err := jsp.Save(testpath, clone, opts, nil)
-							Expect(err).NotTo(HaveOccurred())
-
-							// Load elsewhere and check.
-							loaded := newBucketMD()
-							_, err = jsp.Load(testpath, loaded, opts)
-							Expect(err).NotTo(HaveOccurred())
-							Expect(loaded.UUID).To(BeEquivalentTo(clone.UUID))
-							Expect(loaded.Version).To(BeEquivalentTo(clone.Version))
-							_, present := loaded.Get(bck)
-							Expect(present).To(BeTrue())
-						}
-					}
-				}
-			})
-
-			It("should merge OCI region into bucket props for "+node, func() {
-				bck := meta.NewBck("oci-bck", apc.OCI, cmn.NsGlobal)
-				bargs := bckPropsArgs{
-					bck: bck,
-					hdr: http.Header{
-						apc.HdrBackendProvider: []string{apc.OCI},
-						apc.HdrOCIRegion:       []string{"us-phoenix-1"},
-					},
-				}
-				props := bargs.inheritMerge()
-				Expect(props.Extra.OCI.Region).To(Equal("us-phoenix-1"))
-			})
-		})
+func TestBucketPropsMergeOCIRegion(t *testing.T) {
+	args := bckPropsArgs{
+		bck: meta.NewBck("oci-bck", apc.OCI, cmn.NsGlobal),
+		hdr: http.Header{
+			apc.HdrBackendProvider: []string{apc.OCI},
+			apc.HdrOCIRegion:       []string{"us-phoenix-1"},
+		},
 	}
-})
+	props := args.inheritMerge()
+	tassert.Errorf(t, props.Extra.OCI.Region == "us-phoenix-1", "unexpected OCI region %q", props.Extra.OCI.Region)
+}

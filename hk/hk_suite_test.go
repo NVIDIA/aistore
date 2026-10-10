@@ -5,7 +5,10 @@
 package hk_test
 
 import (
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/NVIDIA/aistore/hk"
@@ -35,4 +38,6 @@ func startHK(t *testing.T) {
 func TestHousekeeper(t *testing.T) {
 	startHK(t)
 	RunSpecs(t, t.Name())
+	// restore default SIGINT/SIGTERM (ginkgo never stops its interrupt handler)
+	signal.Reset(os.Interrupt, syscall.SIGTERM)
 }

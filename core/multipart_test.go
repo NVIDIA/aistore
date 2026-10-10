@@ -408,32 +408,6 @@ var _ = Describe("MPU-UfestRead", func() {
 			Expect(getLom.IsChunked()).To(BeTrue(), "Fresh LOM instance should detect chunked flag from persisted metadata")
 		})
 
-		It("should handle the chunked flag through manual persistence cycle", func() {
-			By("Testing manual flag persistence without Ufest")
-
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
-
-			createTestFile(localFQN, totalSize)
-			lom := newBasicLom(localFQN)
-			lom.SetSize(totalSize)
-			lom.SetAtimeUnix(time.Now().UnixNano())
-
-			lom.Lock(true)
-			err := lom.PersistMain(true /*isChunked*/)
-			lom.Unlock(true)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify it persisted correctly
-			freshLom := &core.LOM{}
-			err = freshLom.InitFQN(localFQN, nil)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = freshLom.Load(false, false)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Expect(freshLom.IsChunked()).To(BeTrue(), "Manually set chunked flag should persist")
-		})
-
 		It("should detect when chunked flag is lost", func() {
 			By("Creating chunked object and then clearing flag to simulate the bug")
 

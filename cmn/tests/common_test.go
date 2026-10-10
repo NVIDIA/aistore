@@ -61,10 +61,10 @@ var _ = Describe("Common file", func() {
 		)
 
 		It("should correctly copy empty struct", func() {
-			var emptySructResult struct{}
-			cos.CopyStruct(&emptySructResult, &struct{}{})
+			var emptyStructResult struct{}
+			cos.CopyStruct(&emptyStructResult, &struct{}{})
 
-			Expect(reflect.DeepEqual(struct{}{}, emptySructResult)).To(BeTrue())
+			Expect(reflect.DeepEqual(struct{}{}, emptyStructResult)).To(BeTrue())
 		})
 
 		It("should correctly copy self-referencing struct", func() {
@@ -80,7 +80,7 @@ var _ = Describe("Common file", func() {
 			Expect(loopNode).NotTo(Equal(copyLoopNode))
 		})
 
-		It("should correctly copy nested structs, perisiting references", func() {
+		It("should correctly copy nested structs, preserving references", func() {
 			left := Tree{nil, nil, 0}
 			right := Tree{nil, nil, 1}
 			root := Tree{&left, &right, 2}
@@ -103,12 +103,14 @@ var _ = Describe("Common file", func() {
 			var nonPrimitiveCopy NonPrimitiveStruct
 			cos.CopyStruct(&nonPrimitiveCopy, &nonPrimitive)
 
-			Expect(nonPrimitive).To(Equal(nonPrimitive))
+			Expect(nonPrimitiveCopy).To(Equal(nonPrimitive))
 
+			// shallow copy: map and slice are shared
 			nonPrimitive.m["one"] = 0
 			nonPrimitive.s[0] = 0
 
-			Expect(nonPrimitive).To(Equal(nonPrimitive))
+			Expect(nonPrimitiveCopy.m["one"]).To(Equal(0))
+			Expect(nonPrimitiveCopy.s[0]).To(Equal(0))
 		})
 	})
 

@@ -18,7 +18,7 @@ import (
 func newHTRunWithSmap() *htrun {
 	h := &htrun{}
 	primaryID := "p-primary"
-	h.si = newSnode(primaryID, apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
+	h.si = newSnode(primaryID, apc.Proxy)
 
 	config := cmn.GCO.BeginUpdate()
 	cmn.GCO.CommitUpdate(config)
@@ -30,6 +30,12 @@ func newHTRunWithSmap() *htrun {
 	h.owner.smap.put(smap)
 	h.svs.init()
 	return h
+}
+
+func newSnode(id, daeType string) (snode *meta.Snode) {
+	snode = &meta.Snode{}
+	snode.Init(id, daeType, nil /*verifying key*/)
+	return
 }
 
 func TestSetIntraHdrs_ClearsRelayedSenderHdrs(t *testing.T) {
@@ -50,7 +56,7 @@ func TestSetIntraHdrs_ClearsRelayedSenderHdrs(t *testing.T) {
 	tassert.Fatalf(t, !h.svs.sign(), "expecting sign() == false")
 
 	smap := h.owner.smap.get().clone()
-	other := newSnode("p-other", apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
+	other := newSnode("p-other", apc.Proxy)
 	smap.addProxy(other)
 	smap.Primary = other
 	smap.Version++

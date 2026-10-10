@@ -2,22 +2,19 @@
 // with io.Reader and io.Writer interfaces on top of a scatter-gather lists
 // (of reusable buffers)
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys_test
 
-// to run: go test -v -run=SGLS -verbose=true
-
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/tools/tassert"
-	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 const (
@@ -26,7 +23,7 @@ const (
 	workers = 1000
 )
 
-// creates 2 SGL, put some data to one of them and them copy from SGL to SGL
+// concurrently: write buffer => SGL, copy SGL => SGL, read back and compare
 func TestSGLStressN(t *testing.T) {
 	mem := &memsys.MMSA{Name: "cmem", MinPctFree: 50}
 	mem.Init(0)
@@ -38,39 +35,15 @@ func TestSGLStressN(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	fn := func() {
 		defer wg.Done()
+		bufR := make([]byte, objsize)
 		for i := range num {
-			sglR := mem.NewSGL(128)
-			sglW := mem.NewSGL(128)
-			bufR := make([]byte, objsize)
-
-			// fill buffer with "unique content"
 			for j := range objsize {
 				bufR[j] = byte('A') + byte(i%26)
 			}
-
-			// save buffer to SGL
-			br := bytes.NewReader(bufR)
-			_, err := io.Copy(sglR, br)
-			tassert.CheckFatal(t, err)
-
-			// copy SGL to SGL
-			rr := memsys.NewReader(sglR)
-			_, err = io.Copy(sglW, rr)
-			tassert.CheckFatal(t, err)
-
-			// read SGL from destination and compare with the original
-			var bufW []byte
-			bufW, err = cos.ReadAll(memsys.NewReader(sglW))
-			tassert.CheckFatal(t, err)
-			for j := range objsize {
-				if bufW[j] != bufR[j] {
-					tlog.Logf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))
-					t.Errorf("Step %d failed", i)
-					return
-				}
+			if err := sglCopyCmp(mem, bufR); err != nil {
+				t.Errorf("step %d: %v", i, err)
+				return
 			}
-			sglR.Free() // removing these two lines fixes the test
-			sglW.Free()
 		}
 	}
 	for range workers {
@@ -78,4 +51,26 @@ func TestSGLStressN(t *testing.T) {
 		go fn()
 	}
 	wg.Wait()
+}
+
+func sglCopyCmp(mem *memsys.MMSA, bufR []byte) error {
+	sglR := mem.NewSGL(128)
+	defer sglR.Free()
+	sglW := mem.NewSGL(128)
+	defer sglW.Free()
+
+	if _, err := io.Copy(sglR, bytes.NewReader(bufR)); err != nil {
+		return err
+	}
+	if _, err := io.Copy(sglW, memsys.NewReader(sglR)); err != nil {
+		return err
+	}
+	bufW, err := cos.ReadAll(memsys.NewReader(sglW))
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(bufW, bufR) {
+		return fmt.Errorf("IN: %q, OUT: %q", bufR, bufW)
+	}
+	return nil
 }
