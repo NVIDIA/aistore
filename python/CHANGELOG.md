@@ -8,6 +8,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- `MultipartDecoder` splits part headers at the earliest terminator. It tested for
+  `\r\n\r\n` first, so a part with Unix headers and a body containing `\r\n\r\n`
+  had the split taken inside the body, losing the leading bytes and reading body
+  content as headers. `StatefulStreamingParser` already takes the earliest of the two.
 - `AISShardReader.__len__()` now streams raw shards and counts samples without
   buffering full shard payloads. The count matches iteration when ETL preserves
   the sample count.
