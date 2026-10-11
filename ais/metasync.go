@@ -105,7 +105,7 @@ const (
 	retryNotifyRefused = 2
 )
 
-const workChanCap = 32
+const workChanCap = 48
 
 type (
 	revs interface {
@@ -294,7 +294,12 @@ drain:
 			break drain
 		}
 	}
-	y.workCh <- revsReq{}
+
+	select {
+	case y.workCh <- revsReq{}:
+	default:
+		goto drain
+	}
 	nlog.Infoln(y.p.String(), "becoming non-primary")
 }
 

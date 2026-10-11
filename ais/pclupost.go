@@ -596,9 +596,9 @@ func (c *clupost) kalive(osi *meta.Snode) (bool, error) {
 	p, nsi := c.p, c.nsi
 
 	if !osi.EqNetID(nsi) {
-		// unrelated Smap updates clone every node; compare identity when the version changed
 		confirmed := c.confirm.osi
 		same := confirmed == osi
+		// double check that !same is indeed !same
 		if !same && confirmed != nil && c.confirm.smapVer != c.smap.Version {
 			same = confirmed.ID() == osi.ID() && confirmed.Type() == osi.Type() &&
 				confirmed.SameIncarnation(osi) && confirmed.NetEq(osi) == nil
