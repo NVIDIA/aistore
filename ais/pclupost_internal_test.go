@@ -5,6 +5,8 @@
 package ais
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,8 +15,81 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
+
+func TestKeepaliveConfirmationSnapshot(t *testing.T) {
+	osi := &meta.Snode{}
+	osi.Init("target", apc.Target, nil)
+	osi.ControlNet.Init("http", "127.0.0.1", "9080")
+	nsi := osi.Clone()
+	nsi.ControlNet.Init("http", "127.0.0.1", "9081")
+	p := &proxy{}
+	p.si = &meta.Snode{}
+	p.si.Init("primary", apc.Proxy, nil)
+	restarted := osi.Clone()
+	restarted.VerifyingKey = make([]byte, 32)
+	changed := osi.Clone()
+	changed.ControlNet.Init("http", "127.0.0.1", "9082")
+	for _, test := range []struct {
+		name    string
+		current *meta.Snode
+		sver    int64
+		ok      bool
+		err     error
+		reject  bool
+	}{
+		{name: "confirmed", current: osi, sver: 5, ok: true},
+		{name: "same version, replaced pointer", current: osi.Clone(), sver: 5, ok: true, reject: true},
+		{name: "unrelated Smap update", current: osi.Clone(), sver: 6, ok: true},
+		{name: "restarted at same endpoints", current: restarted, sver: 6, ok: true, reject: true},
+		{name: "changed endpoints", current: changed, sver: 6, ok: true, reject: true},
+		{name: "duplicate ID", current: osi, sver: 5, reject: true},
+		{name: "failed probe", current: osi, sver: 5, err: errors.New("probe timed out"), reject: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			smap := newSmap()
+			smap.Version = test.sver
+			c := &clupost{p: p, nsi: nsi, smap: smap}
+			c.confirm.osi, c.confirm.ok, c.confirm.err = osi, test.ok, test.err
+			c.confirm.smapVer = 5
+			update, err := c.kalive(test.current)
+			if test.reject {
+				tassert.Fatalf(t, !update && errors.Is(err, errKaliveRejected),
+					"expected rejected keepalive, got update=%t, err=%v", update, err)
+			} else {
+				tassert.Fatalf(t, update && err == nil,
+					"expected accepted keepalive, got update=%t, err=%v", update, err)
+			}
+		})
+	}
+}
+
+func TestKeepaliveRejectVersion(t *testing.T) {
+	p := &proxy{}
+	p.si = &meta.Snode{}
+	p.si.Init("primary", apc.Proxy, nil)
+	rejected := fmt.Errorf("%w: test", errKaliveRejected)
+	for _, test := range []struct {
+		ver    string
+		reject bool
+	}{
+		{"5.1", false},
+		{"5.2.rc1", true},
+		{"5.2", true},
+		{"6.0", true},
+	} {
+		c := &clupost{p: p, nversStr: test.ver}
+		err := c.rejectKalive(rejected)
+		if test.reject {
+			tassert.Fatalf(t, errors.Is(err, errKaliveRejected),
+				"version %q: expected errKaliveRejected, got %v", test.ver, err)
+		} else {
+			tassert.Fatalf(t, err == nil, "version %q: expected nil error, got %v", test.ver, err)
+		}
+	}
+}
 
 func TestCluPostVerify(t *testing.T) {
 	var (

@@ -148,3 +148,6 @@ func checkJoinWeighted(pname, sname, nversStr string, smap *smapX) error {
 	return fmt.Errorf("%s: cannot join %s (version %q) - cluster has placement weights that require version %s or later",
 		pname, sname, nversStr, placementMinVer)
 }
+
+// first version to recognize explicit keepalive rejection (see isErrKaliveRejected)
+var kaliveRejectMinVer = cos.Version{Major: 5, Minor: 2}

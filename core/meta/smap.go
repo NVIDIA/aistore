@@ -169,18 +169,12 @@ func (d *Snode) URL(network string) (u string) {
 	return u
 }
 
-func (d *Snode) EqNetID(o *Snode) (eq bool) {
+func (d *Snode) EqNetID(o *Snode) bool {
 	if d == nil || o == nil {
-		return
+		return false
 	}
-	eq = d.ID() == o.ID()
-	if eq {
-		if err := d.NetEq(o); err != nil {
-			nlog.Warningln(err)
-			eq = false
-		}
-	}
-	return eq
+	// same as Snode.NetEq (except formatting micro-overhead)
+	return d.ID() == o.ID() && d.PubNet.eq(&o.PubNet) && d.ControlNet.eq(&o.ControlNet) && d.DataNet.eq(&o.DataNet)
 }
 
 // Node signing keypairs are ephemeral (regenerated on every restart, in memory only -

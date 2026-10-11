@@ -2489,7 +2489,7 @@ func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (str
 		cos.ExitLog(res.err) // FATAL: cluster integrity error (cie)
 	}
 
-	if psi == nil || pid == "" || psi.PubNet.Hostname == psi.ControlNet.Hostname {
+	if isErrKaliveRejected(res.err) || psi == nil || pid == "" || psi.PubNet.Hostname == psi.ControlNet.Hostname {
 		status, err := res.status, res.err
 		freeCR(res)
 		return pid, status, err

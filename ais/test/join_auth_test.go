@@ -31,6 +31,39 @@ type joinTestBody struct {
 
 const invalidNodeJoinSecret = "invalid-node-join-secret"
 
+func TestSlowKeepaliveDuplicateID(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 1})
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		smap     = tools.GetClusterMap(t, proxyURL)
+		bp       = tools.BaseAPIParams(proxyURL)
+	)
+	nodes := smap.Tmap.ActiveNodes()
+	if len(nodes) == 0 {
+		t.Skip("requires an active target")
+	}
+	node := nodes[0]
+	claimant := node.Clone()
+	// The registered endpoint responds with its original identity, rejecting this claimant.
+	claimant.ControlNet.Init("http", "127.0.0.1", "1")
+	bp.Method = http.MethodPost
+	rp := &api.ReqParams{
+		BaseParams: bp,
+		Path:       apc.URLPathCluKalive.S,
+		Body:       cos.MustMarshal(joinTestBody{SI: claimant}),
+		Header:     http.Header{apc.HdrNodeVersion: []string{cmn.VersionAIStore}},
+	}
+	for range 3 {
+		err := rp.DoRequest()
+		herr := cmn.AsErrHTTP(err)
+		tassert.Fatalf(t, herr != nil && herr.Status == http.StatusConflict && herr.TypeCode == "ErrKaliveRejected",
+			"expected explicit keepalive rejection, got %v", err)
+		current := tools.GetClusterMap(t, proxyURL).GetNode(node.ID())
+		tassert.Fatalf(t, current != nil && current.EqNetID(node) && current.SameIncarnation(node),
+			"rejected keepalive changed the registered node: %v", current)
+	}
+}
+
 // NOTE: mirrors ais.nodeJoinSignature (unexported). The canonicalization is pinned
 // package-side by TestNodeJoinSignatureKAT; if the two ever diverge, the positive cases
 // below start failing with 401.

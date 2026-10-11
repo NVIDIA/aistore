@@ -7,7 +7,9 @@ package ais
 import (
 	"errors"
 	"fmt"
+	"net/http"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
@@ -26,6 +28,9 @@ const (
 
 	fmtErrInvIntraObj = "%s: intra-cluster %s(obj) failed sender validation (remaddr: %s, err: %v)"
 )
+
+// private keepalive rejection code
+const tcodeKaliveRejected = "ErrKaliveRejected"
 
 // error types
 type (
@@ -71,6 +76,7 @@ var (
 	errRebalanceDisabled = errors.New("rebalance is disabled")
 	errForwarded         = errors.New("forwarded")
 	errFastKalive        = errors.New("cannot fast-keepalive")
+	errKaliveRejected    = errors.New(tcodeKaliveRejected)
 
 	// sentinel - do not wrap; compare w/ errInvIntraControl
 	errNotIntraControl = errors.New("not an intra-control request")
@@ -80,6 +86,12 @@ var (
 
 // BMD uuid errs
 var errNoBMD = errors.New("no bucket metadata")
+
+// recognize admission failure separately from an unreachable primary
+func isErrKaliveRejected(err error) bool {
+	herr := cmn.AsErrHTTP(err)
+	return herr != nil && herr.Status == http.StatusConflict && herr.TypeCode == tcodeKaliveRejected
+}
 
 func (e *errTgtBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errBmdUUIDSplit) Error() string     { return e.detail }

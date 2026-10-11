@@ -427,7 +427,6 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, tout time.Duration
 			if err == nil {
 				now := mono.NanoTime()
 				pkr.statsT.Add(stats.KeepAliveLatency, now-started)
-				pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
 				return true, false
 			}
 
@@ -586,6 +585,11 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 
 	k.statsT.Inc(stats.ErrKaliveCount)
 
+	if isErrKaliveRejected(err) {
+		nlog.Warningln(sname, "=>", meta.Pname(cpid), err)
+		return false
+	}
+
 	debug.AssertFunc(func() bool { return cpid == pid && cpid != si.ID() })
 	nlog.Warningln(sname, "=>", pname, "failure - retrying: [", fast, tout, err, status, "]")
 
@@ -612,8 +616,11 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			if err == nil {
 				now := mono.NanoTime()
 				k.statsT.Add(stats.KeepAliveLatency, now-started)
-				k.hb.HeardFrom(pid, now) // effectively, yes
 				nlog.Infoln(sname, "=>", pname, "OK after", i, "attempt"+cos.Plural(i), "tout", tout)
+				return false
+			}
+			if isErrKaliveRejected(err) {
+				nlog.Warningln(sname, "=>", pname, err)
 				return false
 			}
 			// repeat up to `kaNumRetries` times with max-keepalive timeout

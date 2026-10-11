@@ -59,6 +59,14 @@ type clupost struct {
 
 	flags        cos.BitFlags // nsi.Flags snapshot, taken after flag resolution
 	joinVerified bool         // when joining node has been already verified
+
+	// keepalive with changed net-info: confirmed outside Smap lock (see handshake, kalive)
+	confirm struct {
+		osi     *meta.Snode
+		err     error
+		smapVer int64
+		ok      bool
+	}
 }
 
 // +gen:endpoint POST /v1/cluster/{operation}
@@ -116,7 +124,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		return
 	}
 
-	// handshake (admin-join) | duplicate check (self-join)
+	// handshake (admin-join) | duplicate check (self-join) | net-info confirmation (keepalive)
 	if c.handshake() {
 		return
 	}
@@ -136,6 +144,12 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		_logPutNode(c.nsi, c.osi, c.joined, false /*silent*/)
 	}
 	if err != nil {
+		if errors.Is(err, errKaliveRejected) {
+			herr := cmn.NewErrHTTP(r, err, http.StatusConflict)
+			herr.TypeCode = tcodeKaliveRejected
+			p.writeErr(w, r, herr)
+			return
+		}
 		p.writeErr(w, r, err)
 		return
 	}
@@ -383,7 +397,7 @@ func (c *clupost) validate() (stop bool) {
 	return false
 }
 
-// handshake (admin-join) | duplicate check (self-join)
+// handshake (admin-join) | duplicate check (self-join) | net-info confirmation (keepalive)
 func (c *clupost) handshake() (stop bool) {
 	p, w, r := c.p, c.w, c.r
 	nsi := c.nsi
@@ -413,6 +427,16 @@ func (c *clupost) handshake() (stop bool) {
 				return true
 			}
 			nlog.Warningf("%s: self-joining %s [err %v, confirmed %t]", p, nsi.StringEx(), err, ok)
+		}
+	case apc.Keepalive:
+		// resumeReb will promote this request to self-join; kalive will not use confirmation
+		if c.config.Rebalance.Enabled && c.regReq.Flags.IsSet(cos.NodeRestarted) {
+			break
+		}
+		if osi := c.smap.GetNode(nsi.ID()); osi != nil && !osi.EqNetID(nsi) {
+			c.confirm.osi = osi
+			c.confirm.smapVer = c.smap.Version
+			c.confirm.ok, c.confirm.err = c.confirmSnode(osi) // intra-cluster GET(what=snode)
 		}
 	}
 	return false
@@ -568,21 +592,33 @@ func (c *clupost) confirmSnode(osi *meta.Snode) (bool, error) {
 	return c.nsi.EqNetID(si), nil
 }
 
-func (c *clupost) kalive(osi *meta.Snode) bool {
+func (c *clupost) kalive(osi *meta.Snode) (bool, error) {
 	p, nsi := c.p, c.nsi
 
 	if !osi.EqNetID(nsi) {
-		ok, err := c.confirmSnode(osi)
+		// unrelated Smap updates clone every node; compare identity when the version changed
+		confirmed := c.confirm.osi
+		same := confirmed == osi
+		if !same && confirmed != nil && c.confirm.smapVer != c.smap.Version {
+			same = confirmed.ID() == osi.ID() && confirmed.Type() == osi.Type() &&
+				confirmed.SameIncarnation(osi) && confirmed.NetEq(osi) == nil
+		}
+		if !same {
+			return false, fmt.Errorf("%w: %s registration changed while confirming - retry with the next keepalive",
+				errKaliveRejected, nsi.StringEx())
+		}
+		ok, err := c.confirm.ok, c.confirm.err
 		if err != nil {
-			nlog.Errorf("%s: %s(%s) failed to obtain node info: %v", p, nsi.StringEx(), nsi.PubNet.URL, err)
-			return false
+			return false, fmt.Errorf("%w: failed to obtain node info from %s(%s): %v",
+				errKaliveRejected, osi.StringEx(), osi.ControlNet.URL, err)
 		}
 		if !ok {
-			nlog.Errorf("%s: %s(%s) is trying to keepalive with duplicate ID", p, nsi.StringEx(), nsi.PubNet.URL)
-			return false
+			return false, fmt.Errorf("%w: duplicate node ID %q (%s, %s)",
+				errKaliveRejected, nsi.ID(), osi.StringEx(), nsi.StringEx())
 		}
-		nlog.Warningf("%s: renewing registration %s (info changed!)", p, nsi.StringEx())
-		return true // NOTE: update cluster map
+		// (renewal)
+		nlog.Warningln(p.String(), "renewing registration (net-info changed)", nsi.StringEx(), "[", osi.NetEq(nsi), "]")
+		return true, nil // NOTE: update cluster map
 	}
 
 	debug.Func(func() {
@@ -596,7 +632,16 @@ func (c *clupost) kalive(osi *meta.Snode) bool {
 	})
 
 	p.keepalive.heardFrom(nsi.ID())
-	return false
+	return false, nil
+}
+
+func (c *clupost) rejectKalive(err error) error {
+	// pre-5.2 nodes - log instead
+	if cos.SupportsVersionAtLeast(c.nversStr, kaliveRejectMinVer) {
+		return err
+	}
+	nlog.Errorln(c.p.String(), err)
+	return nil
 }
 
 func (c *clupost) rereg(osi *meta.Snode) bool {
@@ -625,7 +670,7 @@ func (c *clupost) rereg(osi *meta.Snode) bool {
 }
 
 // executes under p.owner.smap lock
-func (c *clupost) joinKalive() (msync, added bool, _ error) {
+func (c *clupost) joinKalive() (msync, added bool, err error) {
 	p := c.p
 	c.smap = p.owner.smap.get()
 	osi := c.smap.GetNode(c.nsi.ID())
@@ -641,7 +686,12 @@ func (c *clupost) joinKalive() (msync, added bool, _ error) {
 		}
 		switch {
 		case c.apiOp == apc.Keepalive:
-			msync = c.kalive(osi)
+			msync, err = c.kalive(osi)
+			if err != nil {
+				if err = c.rejectKalive(err); err != nil {
+					return false, false, err
+				}
+			}
 		case c.regReq.Flags.IsSet(cos.NodeRestarted):
 			msync = true
 		default:
@@ -659,7 +709,10 @@ func (c *clupost) joinKalive() (msync, added bool, _ error) {
 	if c.apiOp == apc.Keepalive {
 		// self-join and admin-join already checked via handshake
 		if _, err := c.smap.IsDupNet(c.nsi); err != nil {
-			return false, false, errors.New(p.String() + ": " + err.Error())
+			if cos.SupportsVersionAtLeast(c.nversStr, kaliveRejectMinVer) {
+				return false, false, fmt.Errorf("%w: %v", errKaliveRejected, err)
+			}
+			return false, false, errors.New(p.String() + ": " + err.Error()) // pre-5.2
 		}
 	}
 	c.noteVersion(osi)
