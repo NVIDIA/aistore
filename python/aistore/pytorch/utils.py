@@ -71,6 +71,10 @@ def get_extension(name: str) -> str:
     """
     Get the file extension of the object by stripping any basename or prefix.
 
+    Everything after the first dot is the extension, which is the WebDataset
+    convention and the inverse of what get_basename above keeps, so the two
+    together reproduce the member name.
+
     Args:
         name (str): Complete object name
 
@@ -78,7 +82,7 @@ def get_extension(name: str) -> str:
         str: File extension of the object
     """
 
-    _, separator, extension = name.rsplit("/", 1)[-1].rpartition(".")
+    _, separator, extension = name.rsplit("/", 1)[-1].partition(".")
     return extension if separator else ""
 
 

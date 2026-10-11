@@ -263,6 +263,45 @@ class TestAISDataset(unittest.TestCase):
             "my-etl",
         )
 
+    def test_shard_reader_keeps_multi_dot_extensions_apart(self):
+        """sample.left.jpg and sample.right.jpg are two fields of one sample."""
+        self.patcher = patch("aistore.pytorch.AISShardReader._create_objects_iter")
+        mock_create_samples_iter = self.patcher.start()
+
+        tar_buffer = BytesIO()
+        with open(fileobj=tar_buffer, mode="w") as tar:
+            for name, content in (
+                ("sample_1.left.jpg", b"left eye"),
+                ("sample_1.right.jpg", b"right eye"),
+                ("sample_1.cls", b"label"),
+            ):
+                tarinfo = TarInfo(name=name)
+                tarinfo.size = len(content)
+                tar.addfile(tarinfo, BytesIO(content))
+
+        mock_shard = Mock()
+        mock_shard.name = "test_shard.tar"
+        mock_shard.get_reader.return_value.read_all.return_value = tar_buffer.getvalue()
+        mock_create_samples_iter.return_value = [mock_shard]
+
+        shard_reader = AISShardReader(bucket_list=self.mock_bck)
+
+        self.assertEqual(
+            list(shard_reader),
+            [
+                (
+                    "sample_1",
+                    {
+                        "left.jpg": b"left eye",
+                        "right.jpg": b"right eye",
+                        "cls": b"label",
+                    },
+                ),
+            ],
+        )
+
+        self.patcher.stop()
+
     def test_batch_iter_dataset(self):
         """Test AISBatchIterDataset functionality."""
 
