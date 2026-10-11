@@ -465,45 +465,50 @@ func (mgr *Manager) CleanupObject(lom *core.LOM) {
 	mgr.RestoreBckPutXact(lom.Bck()).cleanup(req, lom)
 }
 
-// disableBck starts to reject new EC requests, rejects pending ones
+// reject new EC requests and clear pending ones
 func (mgr *Manager) disableBck(bck *meta.Bck) {
 	mgr.RestoreBckGetXact(bck).ClearRequests()
 	mgr.RestoreBckPutXact(bck).ClearRequests()
 }
 
-// enableBck aborts xctn disable and starts to accept new EC requests
-// enableBck uses the same channel as disableBck, so order of executing them is the same as
-// order which they arrived to a target in
+// start accepting EC requests again
+// (enable and disable control messages share a channel, preserving their order)
 func (mgr *Manager) enableBck(bck *meta.Bck) {
 	mgr.RestoreBckGetXact(bck).EnableRequests()
 	mgr.RestoreBckPutXact(bck).EnableRequests()
 }
 
+// apply EC enable/disable transitions from the current BMD
 func (mgr *Manager) BMDChanged() error {
 	newBMD := core.T.Bowner().Get()
 	oldBMD := mgr.bmd
-	if newBMD.Version <= mgr.bmd.Version {
+	if newBMD.Version <= oldBMD.Version {
 		return nil
 	}
 	mgr.bmd = newBMD
 
-	// by bucket
-	newBMD.Range(nil, nil, func(nbck *meta.Bck) bool {
-		oprops, ok := oldBMD.Get(nbck)
-		if !ok {
-			if nbck.Props.EC.Enabled {
-				mgr.enableBck(nbck)
+	for provider, namespaces := range newBMD.Providers {
+		oldNamespaces := oldBMD.Providers[provider]
+		for nsUname, buckets := range namespaces {
+			oldBuckets := oldNamespaces[nsUname]
+			for name, nprops := range buckets {
+				oprops, present := oldBuckets[name]
+				if present {
+					if oprops.EC.Enabled == nprops.EC.Enabled {
+						continue
+					}
+				} else if !nprops.EC.Enabled {
+					continue
+				}
+				nbck := meta.NewBck(name, provider, cmn.ParseNsUname(nsUname), nprops)
+				if nprops.EC.Enabled {
+					mgr.enableBck(nbck)
+				} else {
+					mgr.disableBck(nbck)
+				}
 			}
-			return false
 		}
-		if !oprops.EC.Enabled && nbck.Props.EC.Enabled {
-			mgr.enableBck(nbck)
-		} else if oprops.EC.Enabled && !nbck.Props.EC.Enabled {
-			mgr.disableBck(nbck)
-		}
-
-		return false
-	})
+	}
 	return nil
 }
 

@@ -42,11 +42,6 @@ const (
 
 const hdbPerItem = 10 * time.Millisecond // head-batch: timeout budget per requested object
 
-type delb struct {
-	obck    *meta.Bck
-	present bool
-}
-
 func (t *target) joinCluster(action string, primaryURLs ...string) (status int, err error) {
 	var cm *cluMeta
 	cm, status, err = t.htrun.joinCluster(t /*htext*/, primaryURLs)
@@ -892,13 +887,13 @@ skip:
 		emsg        string
 	)
 	bmd.Range(nil, nil, func(obck *meta.Bck) bool {
-		f := &delb{obck: obck}
-		newBMD.Range(nil, nil, f.do)
-		if !f.present {
-			rmbcks = append(rmbcks, obck)
-			if errD := fs.DestroyBucket("recv-bmd-"+msg.Action, obck.Bucket(), obck.Props.BID); errD != nil {
-				destroyErrs = append(destroyErrs, errD)
-			}
+		if nprops, present := newBMD.Get(obck); present {
+			_abortDisabled(obck, nprops)
+			return false
+		}
+		rmbcks = append(rmbcks, obck)
+		if errD := fs.DestroyBucket("recv-bmd-"+msg.Action, obck.Bucket(), obck.Props.BID); errD != nil {
+			destroyErrs = append(destroyErrs, errD)
 		}
 		return false
 	})
@@ -909,23 +904,19 @@ skip:
 	return rmbcks, oldVer, emsg, nil
 }
 
-func (f *delb) do(nbck *meta.Bck) bool {
-	if !f.obck.Equal(nbck, false /*same BID*/, false /* same backend */) {
-		return false // keep going
-	}
-	f.present = true
-
-	// assorted props changed?
-	if f.obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
+// abort mirroring and EC encoding disabled by the new BMD
+func _abortDisabled(obck *meta.Bck, nprops *cmn.Bprops) {
+	if obck.Props.Mirror.Enabled && !nprops.Mirror.Enabled {
+		nbck := meta.NewBck(obck.Name, obck.Provider, obck.Ns, nprops)
 		flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: nbck}
 		xreg.DoAbort(&flt, errors.New("apply-bmd"))
 		// NOTE: apc.ActMakeNCopies takes care of itself
 	}
-	if f.obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
+	if obck.Props.EC.Enabled && !nprops.EC.Enabled {
+		nbck := meta.NewBck(obck.Name, obck.Provider, obck.Ns, nprops)
 		flt := xreg.Flt{Kind: apc.ActECEncode, Bck: nbck}
 		xreg.DoAbort(&flt, errors.New("apply-bmd"))
 	}
-	return true // break
 }
 
 func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {

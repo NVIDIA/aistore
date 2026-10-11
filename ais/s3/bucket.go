@@ -23,6 +23,8 @@ type (
 		Ns      string    `xml:"xmlns,attr"`
 		Owner   BckOwner  `xml:"Owner"`
 		Buckets []*Bucket `xml:"Buckets>Bucket"`
+
+		names map[string]*Bucket // name => last added (see Add)
 	}
 	BckOwner struct {
 		ID   string `xml:"ID"`
@@ -55,6 +57,7 @@ func NewListBucketResult() (r *ListBucketResult) {
 		Ns:      s3Namespace,
 		Owner:   BckOwner{Name: "ListAllMyBucketsResult"},
 		Buckets: make([]*Bucket, 0, 8),
+		names:   make(map[string]*Bucket, 8),
 	}
 	r.Owner.ID = "1" // to satisfy s3
 	return
@@ -62,12 +65,10 @@ func NewListBucketResult() (r *ListBucketResult) {
 
 func (r *ListBucketResult) Add(bck *meta.Bck) {
 	var warn string
-	for _, b := range r.Buckets {
-		if b.Name == bck.Name {
-			// NOTE: when bck.Name is not unique
-			warn = fmt.Sprintf(" (WARNING: {%s, %s} and {%s, Provider: %s} share the same name)",
-				b.Name, b.String, bck.Name, bck.Provider)
-		}
+	if prev, ok := r.names[bck.Name]; ok {
+		// NOTE: when bck.Name is not unique
+		warn = fmt.Sprintf(" (WARNING: {%s, %s} and {%s, Provider: %s} share the same name)",
+			prev.Name, prev.String, bck.Name, bck.Provider)
 	}
 	b := &Bucket{
 		Name:    bck.Name,
@@ -75,6 +76,7 @@ func (r *ListBucketResult) Add(bck *meta.Bck) {
 		String:  "Provider: " + bck.Provider + warn,
 	}
 	r.Buckets = append(r.Buckets, b)
+	r.names[bck.Name] = b
 }
 
 func (r *ListBucketResult) MustMarshal(sgl *memsys.SGL) {
