@@ -35,6 +35,17 @@ func placementTestSmap() *smapX {
 	return m
 }
 
+// BMD with a single bucket; uniform: with placement override
+func placementTestBMD(uniform bool) *bucketMD {
+	bmd := newBucketMD()
+	props := &cmn.Bprops{}
+	if uniform {
+		props.Placement = &cmn.PlacementConf{Weighting: cmn.WeightingUniform}
+	}
+	bmd.Add(meta.NewBck("bpl", apc.AIS, cmn.NsGlobal, props))
+	return bmd
+}
+
 func TestPlacementWeightsPre(t *testing.T) {
 	config := cmn.GCO.BeginUpdate()
 	saved := config.Rebalance.Enabled
@@ -56,10 +67,13 @@ func TestPlacementWeightsPre(t *testing.T) {
 		w1, w2                               int64
 		prepare                              func(*smapX, *apc.ActValPlacementWeights)
 		wantErr, noChange, skipReb, disabled bool
+		override                             bool
 		status                               int
 	}{
 		{name: "set", w1: 1, w2: 3},
 		{name: "clear", prepare: weighted(1, 3)},
+		{name: "clear-with-override", prepare: weighted(1, 3), override: true, wantErr: true, status: http.StatusConflict},
+		{name: "set-with-override", w1: 1, w2: 3, override: true},
 		{name: "same", w1: 1, w2: 3, prepare: weighted(1, 3), noChange: true},
 		{name: "proportional", w1: 2, w2: 6, prepare: weighted(1, 3), skipReb: true},
 		{name: "inactive", w1: 1, w2: 3, skipReb: true, prepare: func(m *smapX, _ *apc.ActValPlacementWeights) { m.Tmap[plT1].Flags = meta.SnodeMaint }},
@@ -80,6 +94,8 @@ func TestPlacementWeightsPre(t *testing.T) {
 			original := m.Tmap[plT1].PlacementWeight()
 			p := &proxy{prim: &primary{}}
 			p.si, p.owner.rmd = m.Primary, &rmdOwner{}
+			p.owner.bmd = newBMDOwnerPrx(cmn.GCO.Get())
+			p.owner.bmd.put(placementTestBMD(test.override))
 			p.startup.cluster.Store(1)
 			ctx := &smapModifier{pre: p._placementWeightsPre, smap: m,
 				msg: &apc.ActMsg{Action: apc.ActSetPlacementWeights, Value: value}}
@@ -183,20 +199,31 @@ func TestPlacementVersionGate(t *testing.T) {
 	weighted := m.clone()
 	weighted.Tmap[plT1].SetPlacementWeight(1)
 	weighted.Tmap[plT2].SetPlacementWeight(3)
+	var (
+		plain    = placementTestBMD(false)
+		override = placementTestBMD(true)
+		nsi      = &meta.Snode{}
+	)
+	nsi.Init("t-new", apc.Target, nil)
 	for _, test := range []struct {
 		smap *smapX
+		bmd  *bucketMD
 		ver  string
 		ok   bool
 	}{
-		{m, "5.1", true},
-		{weighted, "5.2", true},
-		{weighted, "6.0", true},
-		{weighted, "5.1", false},
-		{weighted, "", false},
+		{m, plain, "5.1", true},
+		{weighted, plain, "5.2", true},
+		{weighted, plain, "6.0", true},
+		{weighted, plain, "5.1", false},
+		{weighted, plain, "", false},
+		{m, override, "5.2.rc1", true},
+		{m, override, "5.1", false},
 	} {
-		err := checkJoinWeighted("p", "t[new]", test.ver, test.smap)
+		c := &clupost{p: p, nsi: nsi, nversStr: test.ver}
+		err := c.checkJoinPlacement(test.smap, test.bmd)
 		if (err == nil) != test.ok {
-			t.Fatalf("join %q (weighted=%t): expected ok=%t, got %v", test.ver, test.smap.IsWeighted(), test.ok, err)
+			t.Fatalf("join %q (weighted=%t, bmd=%v): expected ok=%t, got %v",
+				test.ver, test.smap.IsWeighted(), test.bmd, test.ok, err)
 		}
 	}
 }

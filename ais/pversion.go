@@ -27,6 +27,13 @@ import (
 // - self-join, admin-join, and keepalive re-admission; recorded under the Smap lock once accepted;
 // - callers must enforce the version boundary first (see checkNodeVer).
 
+// Version boundary: v5.0 was the mandatory bridge release; 5.1+ refuses pre-5.0 peers in both directions.
+// Pre-5.0 nodes do not send apc.HdrNodeVersion - hence, empty is rejected.
+// Keep in place to fail a skipped-bridge upgrade (4.x => 5.1+) with a specific error.
+const (
+	uptip = "(tip: direct upgrade from 4.x to 5.x is not supported; upgrade the cluster to 5.0 first)"
+)
+
 func (p *proxy) noteNodeVersion(nsi *meta.Snode, nverStr string, nversParsed cos.Version) {
 	debug.Assert(nverStr != "", nsi) // boundary enforced prior to tracking
 	primary := p.primary()
@@ -95,14 +102,6 @@ func checkNodeVer(pname, sname, nversStr string) error {
 	return nil
 }
 
-// Version boundary: v5.0 was the mandatory bridge release; 5.1+ refuses pre-5.0 peers in both directions.
-// Pre-5.0 nodes do not send apc.HdrNodeVersion - hence, empty is rejected.
-// Keep in place to fail a skipped-bridge upgrade (4.x => 5.1+) with a specific error.
-
-const (
-	uptip = "(tip: direct upgrade from 4.x to 5.x is not supported; upgrade the cluster to 5.0 first)"
-)
-
 func enforceVerBoundary(otherVerStr string) (reject bool) {
 	if otherVerStr == "" {
 		return true // pre-header => pre-5.0
@@ -116,38 +115,43 @@ func enforceVerBoundary(otherVerStr string) (reject bool) {
 	return other.Major < 5
 }
 
-// Placement weights (v5.2): older nodes cannot decode a weighted Smap.
-// - verMismatch is populated on admission; a newly elected primary starts with none
-
-// rejects weighted Smap while node versions differ
+// reject weighted Smap while node versions differ
 func (p *proxy) checkSameVersion(smap *smapX) error {
-	var names []string
-	primary := p.primary()
+	var (
+		names   []string
+		primary = p.primary()
+	)
 	primary.reg.mtv.Lock()
 	for sid, ver := range primary.reg.verMismatch {
 		if si := smap.GetNode(sid); si != nil {
 			names = append(names, si.StringEx()+"("+ver+")")
 		}
 	}
+
 	primary.reg.mtv.Unlock()
 	if len(names) == 0 {
 		return nil
 	}
 	slices.Sort(names)
+
 	return fmt.Errorf("%s: cannot set placement weights: node version mismatch %v (primary: %s) - complete the upgrade first",
 		p, names, cmn.VersionAIStore)
 }
 
-var placementMinVer = cos.Version{Major: 5, Minor: 2}
-
-// rejects pre-5.2 joiner when the cluster is weighted
-func checkJoinWeighted(pname, sname, nversStr string, smap *smapX) error {
-	if smap == nil || !smap.IsWeighted() || cos.SupportsVersionAtLeast(nversStr, placementMinVer) {
+// reject pre-5.2 joiner when the cluster uses placement: weighted Smap or bucket override(s)
+func (c *clupost) checkJoinPlacement(smap *smapX, bmd *bucketMD) error {
+	var placementMinVer = cos.Version{Major: 5, Minor: 2}
+	if cos.SupportsVersionAtLeast(c.nversStr, placementMinVer) {
 		return nil
 	}
-	return fmt.Errorf("%s: cannot join %s (version %q) - cluster has placement weights that require version %s or later",
-		pname, sname, nversStr, placementMinVer)
+	var what string
+	if smap.IsWeighted() {
+		what = "placement weights"
+	} else if bck := bmd.GetBucketWithPlacement(); bck != nil {
+		what = "bucket " + bck.String() + " placement override"
+	} else {
+		return nil
+	}
+	return fmt.Errorf("%s: cannot join %s (version %q) - cluster has %s that requires version %s or later",
+		c.p, c.nsi.StringEx(), c.nversStr, what, placementMinVer)
 }
-
-// first version to recognize explicit keepalive rejection (see isErrKaliveRejected)
-var kaliveRejectMinVer = cos.Version{Major: 5, Minor: 2}

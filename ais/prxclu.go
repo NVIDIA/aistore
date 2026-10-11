@@ -900,28 +900,17 @@ func (p *proxy) setPlacementWeights(w http.ResponseWriter, r *http.Request, msg 
 
 	msg.Value = &value
 	ctx := &smapModifier{
-		pre: p._placementWeightsPre, msg: msg,
-		final: func(ctx *smapModifier, clone *smapX) {
-			actMsgExt := p.newAmsg(ctx.msg, nil)
-			pairs := []revsPair{{clone, actMsgExt}}
-			if ctx.rmdCtx != nil {
-				actMsgExt.UUID = ctx.rmdCtx.rebID
-				pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
-			}
-			p.metasyncer.sync(pairs...).Wait()
-		},
-		post: func(ctx *smapModifier, clone *smapX) {
-			nlog.Infoln(p.String(), ctx.msg.Action, clone.StringEx(), "placement weights:", clone.StrPlacementWeights())
-			if ctx.rmdCtx != nil {
-				ctx.rmdCtx.listen(nil)
-			}
-		},
+		pre:   p._placementWeightsRMDPre,
+		post:  _rebPost,
+		final: p._syncFinal,
+		msg:   msg,
+		wait:  true,
 	}
 
 	// preflight (repeated under lock)
 	ctx.smap = p.owner.smap.get()
 	preview := ctx.smap.clone()
-	if err := ctx.pre(ctx, preview); err != nil {
+	if err := p._placementWeightsPre(ctx, preview); err != nil {
 		if !errors.Is(err, errSmapNoChange) {
 			p.writeErr(w, r, err, ctx.status)
 		}
@@ -941,49 +930,62 @@ func (p *proxy) setPlacementWeights(w http.ResponseWriter, r *http.Request, msg 
 		}
 		defer p.stopEarlyGFN(ctx, tsi.ID())
 	}
-	// prepare RMD before committing the Smap: RMD failure leaves weights unchanged
-	ctx.pre = func(ctx *smapModifier, clone *smapX) error {
-		if err := p._placementWeightsPre(ctx, clone); err != nil {
-			return err
-		}
-		if ctx.skipReb {
-			return nil
-		}
-		rmdCtx := &rmdModifier{pre: rmdInc, smapCtx: ctx, p: p, wait: true}
-		if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
-			return fmt.Errorf("failed to persist rebalance metadata (placement weights unchanged): %w", err)
-		}
-		ctx.rmdCtx = rmdCtx
-		return nil
-	}
+
 	if err := p.owner.smap.modify(ctx); err != nil {
 		if !errors.Is(err, errSmapNoChange) {
+			if ctx.status == 0 {
+				ctx.status = http.StatusInternalServerError
+			}
 			p.writeErr(w, r, err, ctx.status)
 		}
 		return
 	}
+	nlog.Infoln(p.String(), msg.Action, preview.StringEx(), "placement weights:", preview.StrPlacementWeights())
 	if ctx.rmdCtx != nil {
 		writeXid(w, ctx.rmdCtx.rebID)
 	}
 }
 
+// validate again under the Smap lock, then persist RMD before committing the Smap
+// - RMD failure leaves weights unchanged; Smap persistence may still fail after RMD advances
+func (p *proxy) _placementWeightsRMDPre(ctx *smapModifier, clone *smapX) error {
+	if err := p._placementWeightsPre(ctx, clone); err != nil {
+		return err
+	}
+	if ctx.skipReb {
+		return nil
+	}
+	rmdCtx := &rmdModifier{pre: rmdInc, smapCtx: ctx, p: p, wait: true}
+	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
+		return fmt.Errorf("failed to persist rebalance metadata (placement weights unchanged): %w", err)
+	}
+	ctx.rmdCtx = rmdCtx
+	return nil
+}
+
+// validate and apply weights to a private clone (preflight and locked commit)
 func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
-	ctx.status = http.StatusBadRequest
+	ctx.status = 0
 	if !clone.isPrimary(p.si) {
+		ctx.status = http.StatusBadRequest
 		return newErrNotPrimary(p.si, clone, "cannot set placement weights")
 	}
+
 	value := ctx.msg.Value.(*apc.ActValPlacementWeights)
 	if value.UUID != clone.UUID || value.Version != clone.Version {
 		ctx.status = http.StatusConflict
 		return fmt.Errorf("stale placement weight snapshot (%s v%d); fetch %s and retry", value.UUID, value.Version, clone)
 	}
 	if len(value.Weights) == 0 || len(value.Weights) != len(clone.Tmap) {
+		ctx.status = http.StatusBadRequest
 		return fmt.Errorf("placement weights must include all %d targets", len(clone.Tmap))
 	}
+
 	var changed bool
 	for id, weight := range value.Weights {
 		si := clone.GetTarget(id)
 		if si == nil {
+			ctx.status = http.StatusBadRequest
 			return fmt.Errorf("placement weight target %q is not in %s", id, clone)
 		}
 		if si.PlacementWeight() != weight {
@@ -994,13 +996,22 @@ func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
 	if !changed {
 		return errSmapNoChange
 	}
+
 	// repeat under lock: version records can change without Smap changes
 	if clone.IsWeighted() {
 		if err := p.checkSameVersion(ctx.smap); err != nil {
 			ctx.status = http.StatusConflict
 			return err
 		}
+	} else {
+		bmd := p.owner.bmd.get()
+		if bck := bmd.GetBucketWithPlacement(); bck != nil {
+			ctx.status = http.StatusConflict
+			return fmt.Errorf("cannot clear placement weights: bucket %s has %s=%q - reset it first",
+				bck, cmn.PropPlacementWeighting, bck.Props.Placement.Weighting)
+		}
 	}
+
 	ctx.skipReb = clone.SamePlacementWeights(&ctx.smap.Smap) || clone.CountActiveTs() < 2
 	if !ctx.skipReb {
 		if err := p.canRebalance(ctx.smap, false /*cleanup*/); err != nil {
@@ -1008,8 +1019,8 @@ func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
 			return err
 		}
 	}
+
 	clone.Version++
-	ctx.status = http.StatusInternalServerError // persistence
 	return nil
 }
 

@@ -180,8 +180,8 @@ func (p *proxy) bckNamesFromBMD(w http.ResponseWriter) {
 		bmd  = p.owner.bmd.get()
 		resp = s3.NewListBucketResult() // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html
 	)
-	bmd.Range(nil /*any provider*/, nil /*any namespace*/, func(bck *meta.Bck) bool {
-		resp.Add(bck)
+	bmd.RangeProps(func(name, provider string, _ cmn.Ns, props *cmn.Bprops) bool {
+		resp.Add(name, provider, props.Created)
 		return false
 	})
 	sgl := p.gmm.NewSGL(0)

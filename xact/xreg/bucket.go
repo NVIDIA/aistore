@@ -40,32 +40,26 @@ func RenewECEncode(bck *meta.Bck, uuid, phase string, checkAndRecover bool) Rene
 
 func RenewMakeNCopies(uuid, tag string) {
 	var (
-		cfg      = cmn.GCO.Get()
-		bmd      = core.T.Bowner().Get()
-		provider = apc.AIS
+		cfg = cmn.GCO.Get()
+		bmd = core.T.Bowner().Get()
 	)
-	bmd.Range(&provider, nil, func(bck *meta.Bck) bool {
-		if bck.Props.Mirror.Enabled {
-			rns := RenewBckMakeNCopies(bck, uuid, tag, int(bck.Props.Mirror.Copies))
-			if rns.IsNew() {
-				xact.GoRunW(rns.Entry.Get())
+	// TODO: remais
+	bmd.RangeProps(func(name, provider string, ns cmn.Ns, props *cmn.Bprops) bool {
+		if !props.Mirror.Enabled {
+			return false
+		}
+		if provider != apc.AIS {
+			if backendNs, ok := cfg.Backend.Providers[provider]; !ok || ns != backendNs {
+				return false
 			}
+		}
+		bck := meta.NewBck(name, provider, ns, props)
+		rns := RenewBckMakeNCopies(bck, uuid, tag, int(props.Mirror.Copies))
+		if rns.IsNew() {
+			xact.GoRunW(rns.Entry.Get())
 		}
 		return false
 	})
-	// TODO: remais
-	for name := range cfg.Backend.Providers {
-		ns := cfg.Backend.Providers[name]
-		bmd.Range(&name, &ns, func(bck *meta.Bck) bool {
-			if bck.Props.Mirror.Enabled {
-				rns := RenewBckMakeNCopies(bck, uuid, tag, int(bck.Props.Mirror.Copies))
-				if rns.IsNew() {
-					xact.GoRunW(rns.Entry.Get())
-				}
-			}
-			return false
-		})
-	}
 }
 
 func RenewBckMakeNCopies(bck *meta.Bck, uuid, tag string, copies int) (res RenewRes) {

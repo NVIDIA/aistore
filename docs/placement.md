@@ -39,13 +39,15 @@ xid, err := api.SetPlacementWeights(bp, smap)
 
 ## Upgrade
 
-Older nodes cannot decode a cluster map with weights.
+Older nodes cannot decode a cluster map with weights, or bucket metadata with placement overrides.
 
 - setting weights returns HTTP 409 while node versions differ
-- a pre-5.2 node cannot join a weighted cluster
+- a pre-5.2 node cannot join a weighted cluster, or a cluster with any bucket placement override
 - the primary learns node versions on join; a newly elected primary may not have them
+- setting a bucket placement override is not yet rejected while node versions differ
 
 ## Buckets
 
 `placement.weighting="uniform"` makes a bucket ignore target weights; an empty value
-clears the override. Redistribution on override change is pending.
+clears the override. Clearing target weights returns HTTP 409 while any bucket has an
+override. Redistribution on override change is pending.

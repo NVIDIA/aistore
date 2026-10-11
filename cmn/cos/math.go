@@ -19,6 +19,15 @@ func DivRound(a, b int) int          { return (a + b/2) / b }
 func DivRoundI64(a, b int64) int64   { return (a + b/2) / b }
 func DivRoundU64(a, b uint64) uint64 { return (a + b/2) / b }
 
+// Euclidean algorithm (approx. 300 BCE)
+func GCD(a, b int64) int64 {
+	debug.Assert(a >= 0 && b >= 0)
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
+}
+
 // returns smallest number divisible by `align` that is greater or equal `val`
 func CeilAlignI64(val, align int64) int64 {
 	mod := val % align

@@ -42,6 +42,7 @@ type clupost struct {
 	w      http.ResponseWriter
 	r      *http.Request
 	smap   *smapX
+	bmd    *bucketMD
 	config *cmn.Config
 	nsi    *meta.Snode
 	msg    *apc.ActMsg
@@ -102,6 +103,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 
 	var (
 		smap   = p.owner.smap.get()
+		bmd    = p.owner.bmd.get()
 		config = cmn.GCO.Get()
 	)
 	// fast keepalive (the length guard above guarantees apiOp == Keepalive)
@@ -110,7 +112,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		return
 	}
 
-	c := &clupost{p: p, w: w, r: r, smap: smap, config: config, apiOp: apiOp}
+	c := &clupost{p: p, w: w, r: r, smap: smap, bmd: bmd, config: config, apiOp: apiOp}
 
 	// decode (per-op) and validate; resolve action and node flags; check node version
 	if c.decode(isPub) {
@@ -298,13 +300,8 @@ func (c *clupost) setActionCheckVer() (stop bool) {
 			c.action = apc.ActAdminJoinTarget
 		}
 	case apc.SelfJoin:
-		p, w, r := c.p, c.w, c.r
-		if err := checkNodeVer(p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
-			p.writeErr(w, r, err, http.StatusConflict)
-			return true
-		}
-		if err := checkJoinWeighted(p.String(), c.nsi.StringEx(), c.nversStr, p.owner.smap.get()); err != nil {
-			p.writeErr(w, r, err, http.StatusConflict)
+		if err := c.checkVer(); err != nil {
+			c.p.writeErr(c.w, c.r, err, http.StatusConflict)
 			return true
 		}
 		debug.AssertFunc(func() bool {
@@ -353,8 +350,7 @@ func (c *clupost) validate() (stop bool) {
 
 	// more validation && non-electability
 	if p.NodeStarted() {
-		bmd := p.owner.bmd.get()
-		if err := bmd.validateUUID(c.regReq.BMD, p.si, nsi, ""); err != nil {
+		if err := c.bmd.validateUUID(c.regReq.BMD, p.si, nsi, ""); err != nil {
 			p.writeErr(w, r, err)
 			return true
 		}
@@ -561,7 +557,6 @@ func (c *clupost) adminJoinHandshake() (int, error) {
 	res := p.call(cargs, c.smap)
 	err = res.err
 	status := res.status
-	nversStr := res.header.Get(apc.HdrNodeVersion)
 	if err != nil {
 		if cos.IsErrRetriableConn(res.err) {
 			err = fmt.Errorf("%s: failed to reach %s at %s:%s: %w",
@@ -569,14 +564,13 @@ func (c *clupost) adminJoinHandshake() (int, error) {
 		} else {
 			err = res.errorf("%s: failed to %s %s: %v", p.si, c.apiOp, nsi.StringEx(), res.err)
 		}
-	} else if err = checkNodeVer(p.String(), nsi.StringEx(), nversStr); err != nil {
-		status = http.StatusConflict
-	} else if err = checkJoinWeighted(p.String(), nsi.StringEx(), nversStr, c.smap); err != nil {
-		status = http.StatusConflict
 	} else {
-		// peer version (not the admin caller's)
-		c.nversStr = nversStr
-		c.nversParsed, _ = cos.ParseVersion(nversStr) // validated by checkNodeVer
+		c.nversStr = res.header.Get(apc.HdrNodeVersion) // peer version (not the admin caller's)
+		if err = c.checkVer(); err != nil {
+			status = http.StatusConflict
+		} else {
+			c.nversParsed, _ = cos.ParseVersion(c.nversStr) // validated by checkNodeVer
+		}
 	}
 	freeCargs(cargs)
 	freeCR(res)
@@ -636,10 +630,10 @@ func (c *clupost) kalive(osi *meta.Snode) (bool, error) {
 }
 
 func (c *clupost) rejectKalive(err error) error {
-	// pre-5.2 nodes - log instead
-	if cos.SupportsVersionAtLeast(c.nversStr, kaliveRejectMinVer) {
+	if cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 2}) { // introduced isErrKaliveRejected
 		return err
 	}
+	// pre-5.2 nodes - log instead
 	nlog.Errorln(c.p.String(), err)
 	return nil
 }
@@ -673,8 +667,9 @@ func (c *clupost) rereg(osi *meta.Snode) bool {
 func (c *clupost) joinKalive() (msync, added bool, err error) {
 	p := c.p
 	c.smap = p.owner.smap.get()
+	c.bmd = p.owner.bmd.get()
 	osi := c.smap.GetNode(c.nsi.ID())
-	if err := c.checkAdmission(osi); err != nil {
+	if err := c.admit(osi); err != nil {
 		return false, false, err
 	}
 	if osi != nil {
@@ -709,7 +704,7 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 	if c.apiOp == apc.Keepalive {
 		// self-join and admin-join already checked via handshake
 		if _, err := c.smap.IsDupNet(c.nsi); err != nil {
-			if cos.SupportsVersionAtLeast(c.nversStr, kaliveRejectMinVer) {
+			if cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 2}) { // introduced isErrKaliveRejected
 				return false, false, fmt.Errorf("%w: %v", errKaliveRejected, err)
 			}
 			return false, false, errors.New(p.String() + ": " + err.Error()) // pre-5.2
@@ -724,36 +719,43 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 	return true, false, nil
 }
 
-// under Smap lock (including no-op re-registration)
-func (c *clupost) checkAdmission(osi *meta.Snode) error {
+// validate node-join under the Smap lock:
+// - reject if this proxy is no longer primary
+// - self-join and absent keepalive (re-admission): verify join secret when configured (see joinVerified)
+// - admin-join: use the peer version obtained by its handshake; join-secret verification is TODO
+// - every request, including no-op re-registration: enforce version boundary and Smap/BMD placement
+// - primary startup: the working Smap is unweighted until mergeNodeProps
+func (c *clupost) admit(osi *meta.Snode) error {
 	p, nsi, smap := c.p, c.nsi, c.smap
 	if !smap.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, smap, "cannot "+c.apiOp+" "+nsi.StringEx())
 	}
-	// primary startup (ais/earlystart): working Smap is unweighted until mergeNodeProps
-	if err := checkJoinWeighted(p.String(), nsi.StringEx(), c.nversStr, smap); err != nil {
-		return cmn.NewErrHTTP(c.r, err, http.StatusConflict)
-	}
-	if c.apiOp == apc.SelfJoin {
+
+	absent := c.apiOp == apc.Keepalive && osi == nil
+	if c.apiOp == apc.SelfJoin || absent {
 		if err := c._verify(); err != nil {
 			return err
 		}
 	}
-	if c.apiOp != apc.Keepalive || osi != nil {
-		return nil
+
+	if err := c.checkVer(); err != nil {
+		return cmn.NewErrHTTP(c.r, err, http.StatusConflict)
 	}
-	// absent keepalive becomes admission
-	if err := c._verify(); err != nil {
-		return err
+	if absent {
+		nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
 	}
-	if err := checkNodeVer(p.String(), nsi.StringEx(), c.nversStr); err != nil {
-		return err
-	}
-	nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
 	return nil
 }
 
-// records version of an accepted registration (keepalive: admission only)
+// joining node => primary: version boundary and placement
+func (c *clupost) checkVer() error {
+	if err := checkNodeVer(c.p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
+		return err
+	}
+	return c.checkJoinPlacement(c.smap, c.bmd)
+}
+
+// record version of an accepted join (keepalive: admission only)
 func (c *clupost) noteVersion(osi *meta.Snode) {
 	if c.apiOp == apc.Keepalive && osi != nil {
 		return
@@ -779,9 +781,9 @@ func (c *clupost) joinStartup(started bool) {
 func (c *clupost) mcastJoined() (string, error) {
 	p := c.p
 	ctx := &smapModifier{
-		pre:         p._joinedPre,
-		post:        p._joinedPost,
-		final:       p._joinedFinal,
+		pre:         c._joinedPre,
+		post:        c._joinedPost,
+		final:       c._joinedFinal,
 		nsi:         c.nsi,
 		nversStr:    c.nversStr,
 		msg:         c.msg,
@@ -811,11 +813,12 @@ func (c *clupost) mcastJoined() (string, error) {
 	return "", nil
 }
 
-func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
+func (c *clupost) _joinedPre(ctx *smapModifier, clone *smapX) error {
+	p := c.p
 	if !clone.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot add %s", ctx.nsi))
 	}
-	if err := checkJoinWeighted(p.String(), ctx.nsi.StringEx(), ctx.nversStr, clone); err != nil {
+	if err := c.checkJoinPlacement(clone, p.owner.bmd.get()); err != nil {
 		return cmn.NewErrHTTP(nil, err, http.StatusConflict)
 	}
 	ctx.osi = clone.putNode(ctx.nsi, ctx.flags)
@@ -827,7 +830,8 @@ func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
 
 // RMD is always transmitted to provide for its (RMD's) replication -
 // done under Smap lock to serialize with respect to new joins.
-func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
+func (c *clupost) _joinedPost(ctx *smapModifier, clone *smapX) {
+	p := c.p
 	if ctx.nsi.IsProxy() {
 		return
 	}
@@ -851,11 +855,12 @@ func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
 		debug.AssertNoErr(err)
 		return
 	}
-	rmdCtx.listen(nil)
 	ctx.rmdCtx = rmdCtx // smap modifier to reference the rmd one directly
+	_rebPost(ctx, clone)
 }
 
-func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
+func (c *clupost) _joinedFinal(ctx *smapModifier, clone *smapX) {
+	p := c.p
 	_logPutNode(ctx.nsi, ctx.osi, clone, true /*silent*/)
 
 	var (

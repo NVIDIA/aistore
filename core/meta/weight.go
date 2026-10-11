@@ -8,11 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"math/bits"
 	"slices"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // Target placement weights (v5.2)
@@ -78,10 +80,11 @@ func (m *Smap) _mean(activeOnly bool) int64 {
 	)
 	for _, tsi := range m.Tmap {
 		w := tsi.PlacementWeight()
+		debug.Assert(w >= 0)
 		if w <= 0 || (activeOnly && tsi.InMaintOrDecomm()) {
 			continue
 		}
-		g = _gcd(g, w)
+		g = cos.GCD(g, w)
 		n++
 	}
 	if n == 0 {
@@ -101,6 +104,7 @@ func (m *Smap) _mean(activeOnly bool) int64 {
 	lo, carry = bits.Add64(lo, n/2, 0)
 	hi += carry
 	q, _ := bits.Div64(hi, lo, n)
+	debug.Assert(q > 0 && q <= math.MaxInt64/uint64(g))
 	return max(int64(q), 1) * g
 }
 
@@ -170,13 +174,14 @@ func (m *Smap) reducedWeights() map[string]int64 {
 			continue
 		}
 		w := tsi.PlacementWeight()
+		debug.Assert(w >= 0)
 		if n == 0 {
 			first = w
 		} else if w != first {
 			uniform = false
 		}
 		n++
-		g = _gcd(g, w)
+		g = cos.GCD(g, w)
 	}
 	if uniform || g == 0 {
 		return nil
@@ -188,13 +193,6 @@ func (m *Smap) reducedWeights() map[string]int64 {
 		}
 	}
 	return reduced
-}
-
-func _gcd(a, b int64) int64 {
-	for b != 0 {
-		a, b = b, a%b
-	}
-	return a
 }
 
 // formats weights and normalized shares of active targets, e.g. "t[a]=1(10.0%), t[b]=3(30.0%)"

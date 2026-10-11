@@ -443,6 +443,13 @@ func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
 	ctx.rmdCtx = rmdCtx
 }
 
+// start listening for a prepared rebalance after committing the Smap
+func _rebPost(ctx *smapModifier, _ *smapX) {
+	if ctx.rmdCtx != nil {
+		ctx.rmdCtx.listen(nil)
+	}
+}
+
 func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, joining bool) error {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
@@ -593,7 +600,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 
 	pairs = append(pairs, revsPair{config, actMsgExt})
 	wg := p.metasyncer.sync(pairs...)
-	if ctx.rmdCtx != nil && ctx.rmdCtx.wait {
+	if ctx.wait || (ctx.rmdCtx != nil && ctx.rmdCtx.wait) {
 		wg.Wait()
 	}
 }
@@ -1021,8 +1028,8 @@ func (p *proxy) _stopMaintRMD(ctx *smapModifier, clone *smapX) {
 		debug.AssertNoErr(err)
 		return
 	}
-	rmdCtx.listen(nil)
 	ctx.rmdCtx = rmdCtx
+	_rebPost(ctx, clone)
 }
 
 //

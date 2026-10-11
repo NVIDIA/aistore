@@ -95,6 +95,7 @@ type (
 		restarted   bool         // target reports cold restart (powercycle)
 		skipReb     bool         // skip rebalance when target added/removed
 		gfn         bool         // sent start-gfn notification
+		wait        bool         // wait for metasync even without rebalance
 	}
 
 	smapUpdatedCB func(newSmap, oldSmap *smapX, nfl, ofl cos.BitFlags)

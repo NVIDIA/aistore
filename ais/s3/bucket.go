@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -63,20 +62,20 @@ func NewListBucketResult() (r *ListBucketResult) {
 	return
 }
 
-func (r *ListBucketResult) Add(bck *meta.Bck) {
+func (r *ListBucketResult) Add(name, provider string, created int64) {
 	var warn string
-	if prev, ok := r.names[bck.Name]; ok {
-		// NOTE: when bck.Name is not unique
+	if prev, ok := r.names[name]; ok {
+		// NOTE: when name is not unique
 		warn = fmt.Sprintf(" (WARNING: {%s, %s} and {%s, Provider: %s} share the same name)",
-			prev.Name, prev.String, bck.Name, bck.Provider)
+			prev.Name, prev.String, name, provider)
 	}
 	b := &Bucket{
-		Name:    bck.Name,
-		Created: cos.FormatTime(time.Unix(0, bck.Props.Created), cos.ISO8601),
-		String:  "Provider: " + bck.Provider + warn,
+		Name:    name,
+		Created: cos.FormatTime(time.Unix(0, created), cos.ISO8601),
+		String:  "Provider: " + provider + warn,
 	}
 	r.Buckets = append(r.Buckets, b)
-	r.names[bck.Name] = b
+	r.names[name] = b
 }
 
 func (r *ListBucketResult) MustMarshal(sgl *memsys.SGL) {

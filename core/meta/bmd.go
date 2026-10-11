@@ -121,21 +121,45 @@ func (m *BMD) IsEmpty() bool {
 
 // return whether any bucket has EC enabled
 func (m *BMD) IsECUsed() bool {
-	for _, namespaces := range m.Providers {
-		for _, buckets := range namespaces {
-			for _, props := range buckets {
-				if props.EC.Enabled {
-					return true
+	var used bool
+	m.RangeProps(func(_, _ string, _ cmn.Ns, props *cmn.Bprops) bool {
+		if props.EC.Enabled {
+			used = true
+			return true // stop
+		}
+		return false
+	})
+	return used
+}
+
+func (m *BMD) GetBucketWithPlacement() (found *Bck) {
+	m.RangeProps(func(name, provider string, ns cmn.Ns, props *cmn.Bprops) bool {
+		if props.Placement != nil {
+			found = NewBck(name, provider, ns, props)
+			return true // stop
+		}
+		return false
+	})
+	return found
+}
+
+// visit immutable bucket properties without constructing buckets; stop when the callback returns true
+func (m *BMD) RangeProps(callback func(name, provider string, ns cmn.Ns, props *cmn.Bprops) bool) {
+	for provider, namespaces := range m.Providers {
+		for nsUname, buckets := range namespaces {
+			ns := cmn.ParseNsUname(nsUname)
+			for name, props := range buckets {
+				if callback(name, provider, ns, props) {
+					return
 				}
 			}
 		}
 	}
-	return false
 }
 
 // visit matching buckets until the callback returns true
 // - nil filter matches all providers (namespaces)
-// - callback may retain the bucket pointer
+// - every iteration allocates meta.Bck; callback may retain the latter
 func (m *BMD) Range(providerQuery *string, nsQuery *cmn.Ns, callback func(*Bck) bool) {
 	var qname string
 	if nsQuery != nil {
