@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -53,6 +53,20 @@ class TestMultipartDecoder(unittest.TestCase):
         headers, data = result
         self.assertEqual(headers, b'Content-Disposition: form-data; name="field1"')
         self.assertEqual(data, b"test_value")
+
+    def test_parse_part_earliest_header_terminator(self):
+        """Preserve body bytes for both header terminators."""
+        # pylint: disable=protected-access
+        headers = b'Content-Disposition: form-data; name="f"'
+        for terminator, body in (
+            (b"\n\n", b"AAA\r\n\r\nBBB"),
+            (b"\r\n\r\n", b"AAA\n\nBBB"),
+        ):
+            with self.subTest(terminator=terminator):
+                self.assertEqual(
+                    self.decoder._parse_part(headers + terminator + body),
+                    (headers, body),
+                )
 
     def test_parse_part_no_valid_line_endings(self):
         """Test parsing part with no valid line endings."""
