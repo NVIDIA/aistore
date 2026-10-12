@@ -10,8 +10,6 @@ import (
 	"maps"
 	"slices"
 	"strconv"
-	"strings"
-	"unicode"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -39,7 +37,7 @@ var placementSetUsage = "Set target placement weights (starts global rebalance u
 	indent1 + "\t- max/min ratio: warning at " + strconv.Itoa(meta.PlacementWeightWarnRatio) +
 	"x, rejected at " + strconv.Itoa(meta.PlacementWeightMaxRatio) + "x;\n" +
 	indent1 + "\t- requires all nodes to run the same software version;\n" +
-	indent1 + "\t- e.g.: 'ais cluster placement set-weights t[abc]=123, rest=456'"
+	indent1 + "\t- e.g.: 'ais cluster placement set-weights t[abc]=123 rest=456'"
 
 var showCmdPlacement = cli.Command{
 	Name:   cmdPlacement,
@@ -191,35 +189,23 @@ func placementSetHandler(c *cli.Context) error {
 	return _setPlacement(c, smap, weights)
 }
 
-// split arguments into name/value tokens: '=', ',' and whitespace are interchangeable separators
-func placementTokens(args []string) []string {
-	toks := make([]string, 0, len(args))
-	for _, arg := range args {
-		toks = append(toks, strings.FieldsFunc(arg, func(r rune) bool {
-			return r == '=' || r == ',' || unicode.IsSpace(r)
-		})...)
-	}
-	return toks
-}
-
 // parse name/value pairs; reject repeated target IDs and rest
 func placementPairs(args []string) (cos.StrKVs, error) {
-	toks := placementTokens(args)
-	if len(toks)%2 != 0 {
-		return nil, &errInvalidNVpair{toks[len(toks)-1]}
+	pairs, err := parseNVPairs(args, nil)
+	if err != nil {
+		return nil, err
 	}
 	var (
-		nvs   = make(cos.StrKVs, len(toks)/2)
-		names = make(map[string]struct{}, len(toks)/2)
+		nvs   = make(cos.StrKVs, len(pairs))
+		names = make(map[string]struct{}, len(pairs))
 	)
-	for i := 0; i < len(toks); i += 2 {
-		name, val := toks[i], toks[i+1]
-		id := meta.N2ID(name)
+	for _, pair := range pairs {
+		id := meta.N2ID(pair.Name)
 		if _, dup := names[id]; dup {
-			return nil, fmt.Errorf("duplicate placement weight assignment for %q", name)
+			return nil, fmt.Errorf("duplicate placement weight assignment for %q", pair.Name)
 		}
 		names[id] = struct{}{}
-		nvs[name] = val
+		nvs[pair.Name] = pair.Value
 	}
 	return nvs, nil
 }

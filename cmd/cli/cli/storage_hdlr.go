@@ -736,7 +736,7 @@ func mpathAction(c *cli.Context, action string) error {
 	if err != nil {
 		return err
 	}
-	kvs, err := makePairs(c.Args())
+	kvs, err := makePairs(c.Args(), nil)
 	if err != nil {
 		// check whether user typed target ID with no mountpath
 		var (

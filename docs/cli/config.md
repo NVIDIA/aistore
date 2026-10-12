@@ -25,6 +25,8 @@ There are two main configuration-managing commands, each with multiple subcomman
 
 > As always, subcommands will reveal themselves via tab completion (`<TAB-TAB>`).
 
+For assignment separators, quoting, and escapes, see [Name/value arguments](/docs/cli.md#namevalue-arguments).
+
 In brief:
 
 ```console

@@ -11,6 +11,8 @@ Every object a) belongs to exactly one bucket and b) is identified by a unique n
 
 Bucket [properties](/docs/bucket.md#bucket-properties) define data protection (checksums, mirroring, erasure coding), chunked representation, versioning and synchronization with remote sources, access control, backend linkage, feature flags, rate-limit settings, and more.
 
+Property assignments use the common [name/value syntax and escaping rules](/docs/cli.md#namevalue-arguments).
+
 > For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket identity, properties, lifecycle, and associated policies, storage services and usage examples, see the comprehensive:
 > * [AIS Buckets: Design and Operations](/docs/bucket.md)
 

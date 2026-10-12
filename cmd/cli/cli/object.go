@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strings"
 	ratomic "sync/atomic"
 	"time"
 
@@ -71,14 +70,12 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		if len(propArgs) == 0 {
 			return missingArgumentsError(c, "property key-value pairs")
 		}
-		for _, pair := range propArgs {
-			nv := strings.Split(pair, "=")
-			if len(nv) != 2 {
-				return fmt.Errorf("invalid custom property %q (tip: use syntax key1=value1 key2=value2 ...)", nv)
-			}
-			nv[0] = strings.TrimSpace(nv[0])
-			nv[1] = strings.TrimSpace(nv[1])
-			props[nv[0]] = nv[1]
+		pairs, err := parseNVPairs(propArgs, nil)
+		if err != nil {
+			return err
+		}
+		for _, pair := range pairs {
+			props[pair.Name] = pair.Value
 		}
 	}
 	setNewCustom := flagIsSet(c, setNewCustomMDFlag)

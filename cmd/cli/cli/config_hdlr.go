@@ -182,7 +182,7 @@ func setCluConfigHandler(c *cli.Context) error {
 	}, cmn.IterOpts{Allowed: apc.Cluster})
 	debug.AssertNoErr(err)
 
-	if slices.Contains(propList, args.First()) || strings.Contains(args.First(), keyAndValueSeparator) {
+	if slices.Contains(propList, strings.TrimSpace(args.First())) || strings.Contains(args.First(), keyAndValueSeparator) {
 		kvs = args
 	}
 	if len(kvs) == 0 {
@@ -191,8 +191,8 @@ func setCluConfigHandler(c *cli.Context) error {
 	if len(kvs) == 1 && kvs[0] == confLogModules {
 		kvs[0] = "log"
 	}
-	if nvs, err = makePairs(kvs); err != nil {
-		if _, ok := err.(*errInvalidNVpair); ok {
+	if nvs, err = makePairs(kvs, propList); err != nil {
+		if nvErr, ok := err.(*errInvalidNVpair); ok && nvErr.isLookup(kvs) {
 			if err = showClusterConfigHandler(c); err != nil {
 				err = fmt.Errorf("%v%s", err, examplesCluSetCfg)
 			}
@@ -225,7 +225,7 @@ func setCluConfigHandler(c *cli.Context) error {
 				}
 			}
 
-			nf, _, err := parseFeatureFlags([]string{v}, 0)
+			nf, err := parseFeatureFlags(v)
 			if err != nil {
 				return fmt.Errorf("invalid feature flag %q, err: %v", v, err)
 			}
@@ -389,7 +389,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	debug.AssertNoErr(err)
 
 	kvs := args.Tail()
-	if slices.Contains(propList, args.First()) || strings.Contains(args.First(), keyAndValueSeparator) {
+	if slices.Contains(propList, strings.TrimSpace(args.First())) || strings.Contains(args.First(), keyAndValueSeparator) {
 		kvs = args
 	}
 	if len(kvs) == 0 || (len(kvs) == 1 && (kvs[0] == cfgScopeLocal || kvs[0] == cfgScopeInherited)) {
@@ -402,8 +402,8 @@ func setNodeConfigHandler(c *cli.Context) error {
 		return resetNodeConfigHandler(c)
 	}
 
-	if nvs, err = makePairs(kvs); err != nil {
-		if _, ok := err.(*errInvalidNVpair); ok {
+	if nvs, err = makePairs(kvs, append(slices.Clip(propList), confLogModules)); err != nil {
+		if nvErr, ok := err.(*errInvalidNVpair); ok && nvErr.isLookup(kvs) {
 			if err = showNodeConfig(c); err != nil {
 				err = fmt.Errorf("%v%s", err, examplesNodeSetCfg)
 			}
@@ -529,8 +529,8 @@ func setCfgCLI(c *cli.Context) (err error) {
 	}
 
 	var nvs cos.StrKVs
-	if nvs, err = makePairs(c.Args()); err != nil {
-		if _, ok := err.(*errInvalidNVpair); ok {
+	if nvs, err = makePairs(c.Args(), nil); err != nil {
+		if nvErr, ok := err.(*errInvalidNVpair); ok && nvErr.isLookup(c.Args()) {
 			return showCfgCLI(c)
 		}
 		return err

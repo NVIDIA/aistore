@@ -66,6 +66,8 @@ var (
 type (
 	errInvalidNVpair struct {
 		notpair string
+		noName  bool // empty name
+		missing bool // name followed by another known name (not the trailing argument)
 	}
 	nvpair struct {
 		Name  string
@@ -189,60 +191,74 @@ func splitCsv(s string) (lst []string) {
 	return
 }
 
-// Convert a list of "key value" and "key=value" pairs into a map
-func makePairs(args []string) (nvs cos.StrKVs, err error) {
-	var (
-		i  int
-		ll = len(args)
-	)
-	nvs = cos.StrKVs{}
-	for i < ll {
-		switch {
-		case args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator):
-			pairs := strings.SplitN(args[i], keyAndValueSeparator, 2)
-			nvs[pairs[0]] = pairs[1]
-			i++
-		case i < ll-2 && args[i+1] == keyAndValueSeparator:
-			nvs[args[i]] = args[i+2]
-			i += 3
-		case args[i] == feat.PropName && i < ll-1:
-			nvs[args[i]] = strings.Join(args[i+1:], ",") // NOTE: only features nothing else in the tail
-			return
-		case args[i] == confLogModules && i < ll-1:
-			nvs[args[i]] = strings.Join(args[i+1:], ",") // NOTE: only smodules nothing else in the tail
-			return
-		default: // last name without a value
-			if i == ll-1 {
-				return nil, &errInvalidNVpair{args[i]}
-			}
-			nvs[args[i]] = args[i+1]
-			i += 2
-		}
+// convert name/value pairs to a map; collect feature and log-module lists
+// - names (optional): known names, to report a missing value or an invalid list member
+func makePairs(args, names []string) (cos.StrKVs, error) {
+	pairs, err := parseNVPairs(args, &nvOpts{listValue: configListValue, names: names})
+	if err != nil {
+		return nil, err
 	}
-	return
+	nvs := make(cos.StrKVs, len(pairs))
+	for _, pair := range pairs {
+		nvs[pair.Name] = pair.Value
+	}
+	return nvs, nil
+}
+
+// recognize values that can extend a configuration list
+func configListValue(name, val string) bool {
+	if val == "" || val == apc.ResetToken {
+		return false
+	}
+	switch name {
+	case feat.PropName:
+		_, err := parseFeatureFlags(val)
+		return err == nil
+	case confLogModules:
+		var found bool
+		for _, mod := range splitCsv(val) {
+			if mod == "" {
+				continue
+			}
+			if !slices.Contains(cos.Mods[:], mod) {
+				return false
+			}
+			found = true
+		}
+		return found
+	default:
+		return false
+	}
+}
+
+// recognize values that can extend a bucket access or feature list
+func bucketListValue(name, val string) bool {
+	if name == feat.PropName {
+		return configListValue(name, val)
+	}
+	if name == cmn.PropBucketAccessAttrs && val != "" {
+		_, err := parseBucketACL(val)
+		return err == nil
+	}
+	return false
 }
 
 func parseRemAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
-	var parts []string
 	if c.NArg() == 0 {
-		err = missingArgumentsError(c, c.Command.ArgsUsage)
-		return
+		return "", "", missingArgumentsError(c, aliasURLPairArgument)
 	}
-	if c.NArg() > 1 {
-		alias, remAisURL = c.Args().Get(0), c.Args().Get(1)
-		goto ret
+	pairs, err := parseNVPairs(c.Args(), nil)
+	if err != nil || len(pairs) != 1 {
+		if err == nil {
+			err = incorrectUsageMsg(c, "expecting one %s", aliasURLPairArgument)
+		}
+		return "", "", err
 	}
-	parts = strings.SplitN(c.Args().Get(0), keyAndValueSeparator, 2)
-	if len(parts) < 2 {
-		err = missingArgumentsError(c, aliasURLPairArgument)
-		return
-	}
-	alias, remAisURL = parts[0], parts[1]
-ret:
+	alias, remAisURL = pairs[0].Name, pairs[0].Value
 	if _, err = url.ParseRequestURI(remAisURL); err == nil {
 		err = cmn.ValidateRemAlias(alias)
 	}
-	return
+	return alias, remAisURL, err
 }
 
 func isJSON(arg string) bool {
@@ -259,162 +275,111 @@ func isJSON(arg string) bool {
 	return false
 }
 
-func parseBucketACL(values []string, idx int) (access apc.AccessAttrs, newIdx int, err error) {
-	var (
-		acc apc.AccessAttrs
-		val uint64
-	)
-	if len(values) == 0 {
-		return access, idx, nil
-	}
-	// 1: `access GET,PUT`
-	if strings.Index(values[idx], ",") > 0 {
-		newIdx = idx + 1
-		lst := splitCsv(values[idx])
-		for _, perm := range lst {
-			perm = strings.TrimSpace(perm)
-			if perm == "" {
-				continue
-			}
-			if acc, err = apc.StrToAccess(perm); err != nil {
-				return access, newIdx, err
-			}
-			access |= acc
+func parseBucketACL(value string) (access apc.AccessAttrs, err error) {
+	for _, perm := range splitCsv(value) {
+		if perm == "" {
+			continue
 		}
-		return access, newIdx, nil
-	}
-
-	// 2: direct hexadecimal input, e.g. `access 0x342`
-	// 3: `access HEAD`
-	for newIdx = idx; newIdx < len(values); {
-		if val, err = parseHexOrUint(values[newIdx]); err == nil {
+		var acc apc.AccessAttrs
+		if val, errNum := parseHexOrUint(perm); errNum == nil {
 			acc = apc.AccessAttrs(val)
-		} else if acc, err = apc.StrToAccess(values[newIdx]); err != nil {
-			return access, newIdx, err
+		} else if acc, err = apc.StrToAccess(perm); err != nil {
+			return access, err
 		}
 		access |= acc
-		newIdx++
 	}
-	return access, newIdx, nil
+	return access, nil
 }
 
-func parseFeatureFlags(values []string, idx int) (res feat.Flags, newIdx int, err error) {
-	if len(values) == 0 {
-		return 0, idx, nil
-	}
-	if values[idx] == apc.ResetToken {
-		return 0, idx + 1, nil
-	}
-	// 1: parse (comma-separated) feat.Flags.String()
-	if strings.Index(values[idx], ",") > 0 {
-		newIdx = idx + 1
-		lst := splitCsv(values[idx])
-		for _, vv := range lst {
-			var (
-				f feat.Flags
-				v = strings.TrimSpace(vv)
-			)
-			if v == "" {
-				continue
-			}
-			if f, err = feat.CSV2Feat(v); err != nil {
-				return res, idx, err
-			}
-			res = res.Set(f)
+func parseFeatureFlags(value string) (res feat.Flags, err error) {
+	for _, val := range splitCsv(value) {
+		if val == "" {
+			continue
 		}
-		return res, newIdx, nil
-	}
-
-	// 2: direct hexadecimal input, e.g. `features 0x342`
-	// 3: `features F3`
-	for newIdx = idx; newIdx < len(values); {
-		var (
-			f   feat.Flags
-			val uint64
-		)
-		if val, err = parseHexOrUint(values[newIdx]); err == nil {
-			f = feat.Flags(val)
-		} else if f, err = feat.CSV2Feat(values[newIdx]); err != nil {
-			return res, idx, err
+		var f feat.Flags
+		if num, errNum := parseHexOrUint(val); errNum == nil {
+			f = feat.Flags(num)
+		} else if f, err = feat.CSV2Feat(val); err != nil {
+			return res, err
 		}
 		res = res.Set(f)
-		newIdx++
 	}
-	return res, newIdx, nil
+	return res, nil
 }
 
-// TODO: support `allow` and `deny` verbs/operations on existing access permissions
-func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
-	var (
-		cmd   string
-		props = make([]string, 0, 20)
-	)
-	err = cmn.IterFields(&cmn.BpropsToSet{}, func(tag string, _ cmn.IterField) (error, bool) {
-		props = append(props, tag)
+// return settable and read-only bucket property names
+// - include backend_bck (expanded by reformatBackendProps)
+func bckPropNames() (names, readonly []string) {
+	names = make([]string, 0, 64)
+	names = append(names, cmn.PropBackendBck)
+	err := cmn.IterFields(&cmn.BpropsToSet{}, func(tag string, _ cmn.IterField) (error, bool) {
+		names = append(names, tag)
 		return nil, false
 	})
+	debug.AssertNoErr(err)
+	err = cmn.IterFields(&cmn.Bprops{}, func(tag string, _ cmn.IterField) (error, bool) {
+		if !slices.Contains(names, tag) {
+			readonly = append(readonly, tag)
+		}
+		return nil, false
+	})
+	debug.AssertNoErr(err)
+	return names, readonly
+}
+
+// parse bucket properties and convert access and feature lists to their numeric representation
+// TODO: support `allow` and `deny` verbs/operations on existing access permissions
+func makeBckPropPairs(args []string) (cos.StrKVs, error) {
+	names, readonly := bckPropNames()
+	allNames := append(append([]string{}, names...), readonly...)
+	opts := &nvOpts{
+		listValue: bucketListValue,
+		names:     allNames,
+		validateName: func(name string) (string, error) {
+			name = strings.ToLower(name) // same as cmn.NewBpropsToSet
+			if slices.Contains(names, name) {
+				return name, nil
+			}
+			if slices.Contains(readonly, name) {
+				return name, fmt.Errorf("property %q is readonly", name)
+			}
+			return name, fmt.Errorf("unknown property %q", name)
+		},
+	}
+	pairs, err := parseNVPairs(args, opts)
 	if err != nil {
+		if nvErr, ok := err.(*errInvalidNVpair); ok {
+			name := strings.ToLower(nvErr.notpair)
+			switch {
+			case nvErr.noName:
+				return nil, fmt.Errorf("missing property name in %q", nvErr.notpair)
+			case slices.Contains(readonly, name):
+				return nil, fmt.Errorf("property %q is readonly", name)
+			case !slices.Contains(names, name):
+				return nil, fmt.Errorf("invalid property %q", name)
+			default:
+				return nil, fmt.Errorf("missing property %q value", name)
+			}
+		}
 		return nil, err
 	}
-
-	nvs = make(cos.StrKVs, 8)
-	for idx := 0; idx < len(values); {
-		pos := strings.Index(values[idx], "=")
-		if pos > 0 {
-			if cmd != "" {
-				return nil, fmt.Errorf("missing property %q value", cmd)
-			}
-			key := strings.TrimSpace(values[idx][:pos])
-			val := strings.TrimSpace(values[idx][pos+1:])
-			nvs[key] = val
-			cmd = ""
-			idx++
-			continue
-		}
-		isCmd := slices.Contains(props, values[idx])
-		if cmd != "" && isCmd {
-			return nil, fmt.Errorf("missing property %q value", cmd)
-		}
-		if cmd == "" && !isCmd {
-			return nil, fmt.Errorf("invalid property %q", values[idx])
-		}
-		if cmd != "" {
-			nvs[cmd] = values[idx]
-			idx++
-			cmd = ""
-			continue
-		}
-
-		cmd = values[idx]
-		idx++
-		if idx >= len(values) {
-			break
-		}
-
-		// two special cases: access and feature flags
-		if cmd == cmn.PropBucketAccessAttrs {
-			var access apc.AccessAttrs
-			access, idx, err = parseBucketACL(values, idx)
+	nvs := make(cos.StrKVs, len(pairs))
+	for _, pair := range pairs {
+		switch pair.Name {
+		case cmn.PropBucketAccessAttrs:
+			access, err := parseBucketACL(pair.Value)
 			if err != nil {
 				return nil, err
 			}
-			nvs[cmd] = access.String() // FormatUint
-			cmd = ""
-			continue
-		}
-		if cmd == feat.PropName {
-			var features feat.Flags
-			features, idx, err = parseFeatureFlags(values, idx)
+			pair.Value = access.String()
+		case feat.PropName:
+			features, err := parseFeatureFlags(pair.Value)
 			if err != nil {
 				return nil, err
 			}
-			nvs[cmd] = features.String() // FormatUint
-			cmd = ""
+			pair.Value = features.String()
 		}
-	}
-
-	if cmd != "" {
-		return nil, fmt.Errorf("missing property %q value", cmd)
+		nvs[pair.Name] = pair.Value
 	}
 	return nvs, nil
 }
@@ -1237,7 +1202,20 @@ func parseURLToSource(rawURL string) (dlSource, error) {
 // errInvalidNVpair //
 //////////////////////
 
-func (e *errInvalidNVpair) Error() string { return fmt.Sprintf("invalid key=value pair %q", e.notpair) }
+func (e *errInvalidNVpair) Error() string {
+	if e.noName {
+		return fmt.Sprintf("missing name in %q", e.notpair)
+	}
+	if e.missing {
+		return fmt.Sprintf("missing %q value", e.notpair)
+	}
+	return fmt.Sprintf("invalid key=value pair %q", e.notpair)
+}
+
+// allow a config lookup only for a sole bare name, without a malformed assignment
+func (e *errInvalidNVpair) isLookup(args []string) bool {
+	return !e.noName && !e.missing && e.notpair != "" && len(args) == 1 && nvEqual(args[0]) < 0
+}
 
 func openFileOrURL(source string) (io.ReadCloser, error) {
 	if isWebURL(source) {

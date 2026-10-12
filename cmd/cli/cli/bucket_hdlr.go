@@ -917,7 +917,7 @@ func _parseBprops(c *cli.Context) (props *cmn.BpropsToSet, nvs cos.StrKVs, err e
 			err := jsoniter.Unmarshal([]byte(inputProps), &props)
 			return props, nil, err
 		}
-		propArgs = strings.Split(inputProps, " ")
+		propArgs = splitNVArgs(inputProps)
 	}
 
 	if len(propArgs) == 1 && isJSON(propArgs[0]) {

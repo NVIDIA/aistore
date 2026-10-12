@@ -1,1 +1,8 @@
 ais show config $RANDOM_TARGET all // IGNORE
+
+ais config cli set =true // FAIL "missing name"
+ais config cluster =true // FAIL "missing name"
+ais config node $RANDOM_TARGET inherited =true // FAIL "missing name"
+ais config cli set timeout.tcp_timeout=30s dangling // FAIL "invalid key=value pair"
+ais config cluster log.level=4 dangling // FAIL "invalid key=value pair"
+ais config node $RANDOM_TARGET inherited log.level=4 dangling // FAIL "invalid key=value pair"

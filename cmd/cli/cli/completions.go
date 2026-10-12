@@ -261,18 +261,21 @@ func suggestProxies(c *cli.Context)  { suggestNode(c, allProxies) }
 func suggestAllNodes(c *cli.Context) { suggestNode(c, allNodes) }
 
 func placementWeightsCompletions(c *cli.Context) {
-	toks := placementTokens(c.Args())
-	if len(toks)%2 != 0 {
+	pairs, err := parseNVPairs(c.Args(), nil)
+	if err != nil {
 		return // name awaiting its weight
+	}
+	assigned := make(map[string]struct{}, len(pairs))
+	for _, pair := range pairs {
+		if pair.Value == "" {
+			return // name awaiting its weight
+		}
+		assigned[meta.N2ID(pair.Name)] = struct{}{}
 	}
 	smap, err := getClusterMap(c)
 	if err != nil {
 		completionErr(c, err)
 		return
-	}
-	assigned := make(map[string]struct{}, len(toks)/2)
-	for i := 0; i < len(toks); i += 2 {
-		assigned[meta.N2ID(toks[i])] = struct{}{}
 	}
 	if _, set := assigned[placementRest]; !set {
 		fmt.Println(placementRest)

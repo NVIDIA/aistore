@@ -270,7 +270,7 @@ func TestMakePairs(t *testing.T) {
 	}
 
 	for _, test := range makePairsTest {
-		nvs, err := makePairs(test.input)
+		nvs, err := makePairs(test.input, nil)
 		if err != nil {
 			t.Fatalf("unexpected error of make pairs for input %#v: %v", test.input, err)
 		}
@@ -289,7 +289,7 @@ func TestMakePairsErrors(t *testing.T) {
 	}
 
 	for _, test := range makePairsTest {
-		_, err := makePairs(test.input)
+		_, err := makePairs(test.input, nil)
 
 		if err == nil {
 			t.Fatalf("expected error of make pairs for input %#v, but got none", test.input)

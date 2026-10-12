@@ -840,7 +840,7 @@ COMMANDS:
                   - weighted cluster: unlisted targets keep their current weights unless rest=WEIGHT is given;
                   - max/min ratio: warning at 10x, rejected at 100x;
                   - requires all nodes to run the same software version;
-                  - e.g.: 'ais cluster placement set-weights t[abc]=123, rest=456'
+                  - e.g.: 'ais cluster placement set-weights t[abc]=123 rest=456'
    clear-weights  Clear all target placement weights (starts global rebalance unless placement does not change)
 ```
 
@@ -858,10 +858,10 @@ Notes:
 
 ### Examples
 
-For a large cluster, assign a default and override selected targets (commas are optional):
+For a large cluster, assign a default and override selected targets:
 
 ```console
-$ ais cluster placement set-weights t[abc]=123, rest=456
+$ ais cluster placement set-weights t[abc]=123 rest=456
 $ ais cluster placement set-weights rest=456
 ```
 

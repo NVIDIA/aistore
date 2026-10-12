@@ -23,6 +23,8 @@ Hit `<TAB>` after typing `aisÂ ` and Bash/Zsh completion reveals *namespaces* â€
 
 Drill into any namespace with `<TAB>` and `--help` to discover its verbs, flags, and usage examples.
 
+Commands that accept name/value assignments share [assignment and escaping rules](#namevalue-arguments).
+
 ### `ais show`
 
 Given an existing AIS instance, maybe the very first command you run would be `ais show cluster`. For example:
@@ -76,6 +78,7 @@ Next, monitoring-wise, you'd maybe run `ais show performance`, etc.
 - [Backend Provider](#backend-provider)
 - [Verbose errors](#verbose-errors)
 - [Special keywords](#special-keywords)
+- [Name/value arguments](#namevalue-arguments)
 - [CLI Help Paging](#cli-help-paging)
 
 AIS command-line interface (CLI) is a tool to easily manage and monitor every aspect of the AIS clusters' lifecycle.
@@ -373,6 +376,93 @@ Error: {"tcode":"ErrBckNotFound","message":"bucket \"ais://ddd\" does not exist"
 4. slices (a.k.a. multi-value fields) embedded in nested configuration structures (e.g., "auth.required_claims.aud", "auth.oidc.allowed_iss", etc.).
 
 and more.
+
+## Name/value arguments
+
+Commands that set configuration, bucket properties, object custom metadata, mountpaths,
+remote-cluster aliases, or target placement weights use the same assignment syntax:
+
+```console
+ais config cluster log.level=4
+ais config cluster log.level 4
+ais config cluster log.level= 4
+ais config cluster log.level =4
+ais config cluster log.level = 4
+```
+
+Whitespace around `=` is ignored. Separate assignments with whitespace. Commas are
+part of a value, such as `log.modules=ec,xs`; they do not separate assignments.
+
+The shell keeps quoted arguments together, so names and values may contain spaces:
+
+```console
+ais object set-custom ais://bucket/object 'display name' 'two words'
+ais object set-custom ais://bucket/object 'display name=two words'
+```
+
+The first unescaped `=` separates the name and value. Additional `=` characters in
+the value are literal. To include `=` in a name, escape it with a backslash:
+
+```console
+ais object set-custom ais://bucket/object 'name\=with\ spaces=value\=with\ spaces'
+```
+
+This stores the name `name=with spaces` and value `value=with spaces`. The parser
+recognizes `\=`, backslash followed by whitespace, and `\\` (a literal backslash).
+Other backslash sequences are retained. Escaped whitespace at the beginning or end
+of a name or value is retained; unescaped boundary whitespace is ignored.
+
+Object-metadata HEAD responses currently use unescaped `key=value` headers, so
+metadata names containing `=` cannot be read back faithfully through HEAD. Use
+spaces in metadata names and keep literal `=` in their values until that format
+supports escaping; CLI parsing does not change the response format.
+
+Use single quotes to keep these backslashes from being consumed by the shell, or
+escape the backslashes themselves. Shell quoting alone cannot protect `=` in a name:
+`'name=value'` still reaches the CLI as an assignment.
+
+For a flag containing several assignments, protect spaces inside a field with the
+same backslash syntax:
+
+```console
+ais bucket create ais://bucket --props 'checksum.type = md5 extra.custom=two\ words'
+```
+
+JSON objects and arrays used as values are opaque: their quotes and backslashes are
+preserved for the JSON decoder. Full JSON input supported by bucket-property and
+object-metadata commands continues to bypass name/value parsing.
+
+### Empty values
+
+Use an empty value to clear a property that supports resetting:
+
+```console
+ais bucket props set s3://bucket extra.aws.endpoint=
+ais bucket props set s3://bucket extra.aws.endpoint ''
+```
+
+`name= other=value` means an empty `name` value followed by a second assignment.
+For a single value containing `=`, use `name other=value`, `name = other=value`, or
+escape that `=` when continuing after `name=`. To reset a value before another
+space-separated pair, use an explicit empty argument: `name '' other value`.
+
+### List values
+
+Feature flags, log modules, and bucket access permissions also accept several list
+members, using either assignment separator:
+
+```console
+ais config cluster log.modules=ec xs
+ais config cluster log.modules = ec,xs
+ais bucket props set ais://bucket access=GET PUT checksum.type=md5
+```
+
+List parsing stops at the next property name, which starts the next assignment.
+Configuration and bucket-property commands reject any other argument that is not a
+member of the list, e.g. `invalid access value "HEAD"`. They also report a property
+name in a value position as a missing value, e.g.
+`missing property "mirror.enabled" value`. Placement weights are scalar: use
+`t[abc]=123 rest=456`, with whitespace between assignments.
 
 ## CLI Help Paging
 

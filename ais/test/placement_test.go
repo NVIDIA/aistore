@@ -378,10 +378,10 @@ func TestPlacementCLI(t *testing.T) {
 	wait(out)
 	checkPlacementWeights(t, tools.GetClusterMap(t, proxyURL), weights)
 
-	// explicit assignments override rest in either order; commas are optional
+	// explicit assignments override rest in either order; separators are interchangeable
 	for _, pair := range [][]string{
 		{"rest=" + strconv.FormatInt(weight, 10), meta.Tname(tid) + "=" + strconv.FormatInt(weights[tid], 10)},
-		{meta.Tname(tid) + "=" + strconv.FormatInt(weights[tid], 10) + ",rest=" + strconv.FormatInt(weight, 10)},
+		{meta.Tname(tid) + "=", strconv.FormatInt(weights[tid], 10), "rest", "=" + strconv.FormatInt(weight, 10)},
 		{tid, strconv.FormatInt(weights[tid], 10), "rest", strconv.FormatInt(weight, 10)},
 		{meta.Tname(tid), "=", strconv.FormatInt(weights[tid], 10), "rest", "=", strconv.FormatInt(weight, 10)},
 	} {
@@ -394,7 +394,7 @@ func TestPlacementCLI(t *testing.T) {
 		}
 	}
 	out = run("cluster", "placement", "set-weights",
-		meta.Tname(tid)+"="+strconv.FormatInt(weights[tid], 10)+",", "rest="+strconv.FormatInt(weight/4, 10))
+		meta.Tname(tid)+"="+strconv.FormatInt(weights[tid], 10), "rest="+strconv.FormatInt(weight/4, 10))
 	wait(out)
 	checkPlacementWeights(t, tools.GetClusterMap(t, proxyURL), weights)
 
