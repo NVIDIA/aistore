@@ -78,7 +78,7 @@ def get_extension(name: str) -> str:
         str: File extension of the object
     """
 
-    _, separator, extension = name.rsplit("/", 1)[-1].rpartition(".")
+    _, separator, extension = name.rsplit("/", 1)[-1].partition(".")
     return extension if separator else ""
 
 
