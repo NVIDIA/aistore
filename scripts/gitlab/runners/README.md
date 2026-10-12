@@ -6,6 +6,7 @@ Setup scripts for Docker-based GitLab CI runners for AIStore:
 - Sets up local pull-through registry cache for container images
 - Registers the runner with Docker executor and privileged mode
 - Configures `inotify` limits
+- Loads the kernel `tls` module (kTLS for the HTTPS CI jobs)
 
 ## Usage
 

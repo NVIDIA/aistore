@@ -80,6 +80,7 @@ if ! command -v gitlab-runner &>/dev/null; then
 fi
 
 configure_inotify_limits
+load_tls_module
 
 # Create a docker network for both the registry and the runner
 docker network inspect ci-net >/dev/null 2>&1 || \

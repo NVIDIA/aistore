@@ -71,6 +71,13 @@ EOF
   echo "inotify limits configured successfully"
 }
 
+load_tls_module() {
+  echo "Loading kernel TLS module..."
+  echo tls > /etc/modules-load.d/tls.conf
+  modprobe tls
+  echo "Kernel TLS module loaded"
+}
+
 setup_registry() {
   if [[ -n "$DATA_ROOT" ]]; then
     REGISTRY_DIR="$DATA_ROOT/registry"
