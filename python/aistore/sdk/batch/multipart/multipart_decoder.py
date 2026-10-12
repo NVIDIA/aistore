@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from typing import Optional, Iterator, Tuple, Union
@@ -151,12 +151,14 @@ class MultipartDecoder:
         Returns:
             Optional[Tuple[bytes, bytes]]: Extracted headers and body, or None if parsing fails
         """
-        # Determine line ending style
-        if WIN_LINE_END in part:
-            line_ending = WIN_LINE_END
-        elif UNIX_LINE_END in part:
-            line_ending = UNIX_LINE_END
-        else:
+        # Choose the earliest header terminator (the body may contain either sequence)
+        headers_end, line_ending = -1, None
+        for candidate in (WIN_LINE_END, UNIX_LINE_END):
+            pos = part.find(candidate)
+            if pos != -1 and (headers_end == -1 or pos < headers_end):
+                headers_end, line_ending = pos, candidate
+
+        if line_ending is None:
             # No valid line ending found
             logger.warning(
                 "Multipart sections must include either Windows-style line endings %s "
