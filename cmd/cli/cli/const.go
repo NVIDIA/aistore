@@ -136,6 +136,11 @@ const (
 	cmdResetStats = "reset-stats"
 	cmdDropLcache = "drop-lcache"
 
+	// target placement weights (v5.2)
+	cmdPlacement      = "placement"
+	cmdPlacementSet   = "set-weights"
+	cmdPlacementClear = "clear-weights"
+
 	cmdReloadCreds = "reload-backend-creds"
 
 	cmdDownloadLogs = "download-logs"

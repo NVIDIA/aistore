@@ -6,6 +6,7 @@ package teb
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -30,6 +31,7 @@ const (
 	colVersion    = "VERSION"
 	colBuildTime  = "BUILD TIME"
 	colStateFlags = "ALERT"
+	colWeight     = "WEIGHT"
 )
 
 // TODO: extend api.GetClusterSysInfo() and api.GetStatsAndStatus to return memsys.Pressure
@@ -171,6 +173,7 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, opts ClusterTabOpts) *T
 			{name: colThrottled, hide: !showThrottle},
 			{name: colLoadAvg, hide: !opts.ShowLoad},
 			{name: colRebalance, hide: len(h.rebalance()) == 0},
+			{name: colWeight, hide: !smap.IsWeighted()},
 			{name: colUptime},
 			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
 			{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
@@ -196,6 +199,7 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, opts ClusterTabOpts) *T
 				unknownVal, // throttled
 				unknownVal, // load avg
 				unknownVal, // rebalance
+				_weight(smap, sid),
 				unknownVal, // uptime
 				ds.K8sPodName,
 				nstatus,
@@ -232,6 +236,7 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, opts ClusterTabOpts) *T
 			_throttled(&ds.MemCPUInfo),
 			_load(&ds.MemCPUInfo),
 			fmtRebStatus(ds.RebSnap),
+			_weight(smap, sid),
 			uptime,
 			ds.K8sPodName,
 			status,
@@ -241,6 +246,14 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, opts ClusterTabOpts) *T
 		})
 	}
 	return table
+}
+
+func _weight(smap *meta.Smap, sid string) string {
+	tsi := smap.GetTarget(sid)
+	if tsi == nil || tsi.PlacementWeight() == 0 {
+		return NotSetVal
+	}
+	return strconv.FormatInt(tsi.PlacementWeight(), 10)
 }
 
 func _sysCPU(info *apc.MemCPUInfo) string {

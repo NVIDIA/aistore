@@ -260,6 +260,30 @@ func suggestTargets(c *cli.Context)  { suggestNode(c, allTargets) }
 func suggestProxies(c *cli.Context)  { suggestNode(c, allProxies) }
 func suggestAllNodes(c *cli.Context) { suggestNode(c, allNodes) }
 
+func placementWeightsCompletions(c *cli.Context) {
+	toks := placementTokens(c.Args())
+	if len(toks)%2 != 0 {
+		return // name awaiting its weight
+	}
+	smap, err := getClusterMap(c)
+	if err != nil {
+		completionErr(c, err)
+		return
+	}
+	assigned := make(map[string]struct{}, len(toks)/2)
+	for i := 0; i < len(toks); i += 2 {
+		assigned[meta.N2ID(toks[i])] = struct{}{}
+	}
+	if _, set := assigned[placementRest]; !set {
+		fmt.Println(placementRest)
+	}
+	for tid := range smap.Tmap {
+		if _, set := assigned[tid]; !set {
+			fmt.Println(meta.Tname(tid))
+		}
+	}
+}
+
 func suggestAllNodesMulti(c *cli.Context) { suggestNodeMulti(c, allNodes, false /*inMaint*/) }
 
 func suggestNode(c *cli.Context, ty int) {
@@ -327,7 +351,7 @@ func suggestNodeMulti(c *cli.Context, ty int, inMaint bool) {
 func showClusterCompletions(c *cli.Context) {
 	switch c.NArg() {
 	case 0:
-		fmt.Println(apc.Proxy, apc.Target, cmdSmap, cmdBMD, cmdConfig, cmdShowStats, cmdCPU, cmdMemory)
+		fmt.Println(apc.Proxy, apc.Target, cmdSmap, cmdBMD, cmdConfig, cmdShowStats, cmdCPU, cmdMemory, cmdPlacement)
 	case 1:
 		switch c.Args().Get(0) {
 		case apc.Proxy:

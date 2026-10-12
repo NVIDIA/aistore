@@ -12,10 +12,10 @@ The command has the following subcommands:
 ```console
 $ ais cluster <TAB-TAB>
 
-show                   rebalance              decommission           reload-backend-creds
-dashboard              set-primary            add-remove-nodes
-remote-attach          download-logs          reset-stats
-remote-detach          shutdown               drop-lcache
+show                   rebalance              decommission           drop-lcache
+dashboard              set-primary            add-remove-nodes       reload-backend-creds
+remote-attach          download-logs          placement
+remote-detach          shutdown               reset-stats
 ```
 
 > **Important:** with the single exception of [`add-remove-nodes`](#adding-removing-nodes), all the other the commands listed above operate on the level of the **entire** cluster. Node level operations (e.g., shutting down a given selected node, etc.) can be found under `add-remove-nodes`.
@@ -43,6 +43,7 @@ COMMANDS:
    shutdown              Shut down entire cluster
    decommission          Decommission entire cluster
    add-remove-nodes      Manage cluster membership (add/remove nodes, temporarily or permanently)
+   placement             Show and set target placement weights
    reset-stats           Reset cluster or node stats (all cumulative metrics or only errors)
    drop-lcache           Drop (discard) in-memory object metadata cache
    reload-backend-creds  Reload (updated) backend credentials
@@ -103,6 +104,7 @@ COMMANDS:
   - [Detach remote cluster](#detach-remote-cluster)
   - [Show remote clusters](#show-remote-clusters)
 - [Remove a node](#remove-a-node)
+- [Placement weights](#placement-weights)
 - [Reset (ie., zero out) stats counters and other metrics](#reset-ie-zero-out-stats-counters-and-other-metrics)
 - [Reload backend credentials](#reload-backend-credentials)
 - [Download log archive](#download-log-archive)
@@ -812,6 +814,88 @@ $ ais show remote-cluster
 UUID        URL                       Alias     Primary         Smap  Targets  Online
 <alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
 ```
+
+## Placement weights
+
+By default, objects are distributed uniformly across targets. Target placement weights (v5.2) represent
+relative capacities (1, 3, 6) or sizes in GB (100, 300, 600).
+
+Weighted HRW is pending: these commands update placement metadata and trigger rebalance when weights
+change non-proportionally. Object placement still uses uniform HRW.
+
+```console
+$ ais cluster placement --help
+NAME:
+   ais cluster placement - Show and set target placement weights
+
+USAGE:
+   ais cluster placement command [arguments...]  [command options]
+
+COMMANDS:
+   show           Show target placement weights and normalized shares
+   set-weights    Set target placement weights (starts global rebalance unless placement does not change):
+                  - weights are positive integers, e.g. relative capacities (1, 3, 6) or sizes in GB (100, 300, 600);
+                  - rest=WEIGHT assigns that weight to all unlisted targets; explicit assignments take precedence;
+                  - unweighted cluster: specify a weight for every target or use rest=WEIGHT;
+                  - weighted cluster: unlisted targets keep their current weights unless rest=WEIGHT is given;
+                  - max/min ratio: warning at 10x, rejected at 100x;
+                  - requires all nodes to run the same software version;
+                  - e.g.: 'ais cluster placement set-weights t[abc]=123, rest=456'
+   clear-weights  Clear all target placement weights (starts global rebalance unless placement does not change)
+```
+
+Notes:
+
+* setting weights requires two or more targets; a single-target cluster rejects them but can clear existing weights;
+* with fewer than two active targets (others in maintenance), weights are accepted with a warning and no rebalance;
+* setting weights on an unweighted cluster requires a weight for every target, either explicitly or via `rest=WEIGHT`;
+* `rest=WEIGHT` covers all unlisted targets, including those in maintenance; explicit assignments win regardless of argument order;
+* proportional weights (e.g., 1,2,3 => 10,20,30) update the cluster map without rebalancing;
+* a target joining a weighted cluster gets the (rounded) mean weight of active targets;
+* clearing weights is rejected while any bucket has `placement.weighting=uniform` (reset it first);
+* `ais show cluster` shows a WEIGHT column when the cluster is weighted;
+* `ais cluster placement show`, `ais show placement`, and `ais show cluster placement` show the same weights and active-target shares.
+
+### Examples
+
+For a large cluster, assign a default and override selected targets (commas are optional):
+
+```console
+$ ais cluster placement set-weights t[abc]=123, rest=456
+$ ais cluster placement set-weights rest=456
+```
+
+```console
+$ ais cluster placement show
+Placement: uniform (target weights are not set)
+
+$ ais cluster placement set-weights t[KbfnWcPR]=1 t[pRvLgrbi]=2 t[XZqbnctT]=3 t[vYFzhmPN]=4
+Started rebalance "g12" (to monitor, run 'ais show rebalance').
+
+$ ais cluster placement show
+TARGET       WEIGHT  SHARE
+t[KbfnWcPR]  1       10.0%
+t[XZqbnctT]  3       30.0%
+t[pRvLgrbi]  2       20.0%
+t[vYFzhmPN]  4       40.0%
+
+$ ais cluster placement set-weights t[KbfnWcPR]=10 t[pRvLgrbi]=20 t[XZqbnctT]=30 t[vYFzhmPN]=40
+Placement weights updated (no rebalance required)
+
+$ ais bucket props set ais://abc placement.weighting=uniform
+Bucket props successfully updated.
+
+$ ais cluster placement clear-weights
+Error: cannot clear placement weights: bucket ais://abc has placement.weighting="uniform" - reset it first
+
+$ ais bucket props set ais://abc placement.weighting=""
+Bucket props successfully updated.
+
+$ ais cluster placement clear-weights
+Started rebalance "g13" (to monitor, run 'ais show rebalance').
+```
+
+See also: [Placement weights](/docs/placement.md).
 
 ## Reset (ie., zero out) stats counters and other metrics
 

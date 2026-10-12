@@ -80,6 +80,15 @@ func TestPlacementWeightsPre(t *testing.T) {
 		{name: "stale", w1: 1, w2: 3, wantErr: true, status: http.StatusConflict, prepare: func(_ *smapX, v *apc.ActValPlacementWeights) { v.Version-- }},
 		{name: "missing-target", w1: 1, w2: 3, wantErr: true, status: http.StatusBadRequest, prepare: func(_ *smapX, v *apc.ActValPlacementWeights) { delete(v.Weights, plT2) }},
 		{name: "rebalance-disabled", w1: 1, w2: 3, disabled: true, wantErr: true, status: http.StatusServiceUnavailable},
+		{name: "single-target", w1: 1, wantErr: true, status: http.StatusBadRequest, prepare: func(m *smapX, v *apc.ActValPlacementWeights) {
+			delete(m.Tmap, plT2)
+			delete(v.Weights, plT2)
+		}},
+		{name: "single-target-clear", skipReb: true, prepare: func(m *smapX, v *apc.ActValPlacementWeights) {
+			m.Tmap[plT1].SetPlacementWeight(5) // weighted cluster shrunk to one target
+			delete(m.Tmap, plT2)
+			delete(v.Weights, plT2)
+		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			config := cmn.GCO.BeginUpdate()

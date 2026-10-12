@@ -13,6 +13,7 @@ same placement.
 
 - 64-bit integers, quoted in JSON (`placement.weight`); negative values are reserved
 - all targets are weighted, or none; setting all weights to zero clears them
+- requires two or more targets: a single-target cluster rejects weights (HTTP 400)
 - max/min ratio: 10x or greater warns, 100x or greater is rejected
 - a target that joins a weighted cluster gets the mean weight of active targets
 - re-registration and cluster restart keep assigned weights
@@ -36,6 +37,8 @@ xid, err := api.SetPlacementWeights(bp, smap)
 - otherwise: new cluster map and global rebalance (requires rebalance enabled);
   returns the rebalance ID
 - a stale cluster map returns HTTP 409
+- fewer than two active targets: accepted without rebalance; recorded weights are
+  retained when targets in maintenance rejoin
 
 ## Upgrade
 

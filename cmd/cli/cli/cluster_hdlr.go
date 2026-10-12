@@ -271,6 +271,7 @@ var (
 					},
 				},
 			},
+			placementCmd,
 			{
 				Name:         cmdResetStats,
 				Usage:        "Reset cluster or node stats (all cumulative metrics or only errors)",

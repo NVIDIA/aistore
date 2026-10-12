@@ -111,6 +111,7 @@ var (
 			showCmdObject,
 			showCmdBucket,
 			showCmdCluster,
+			showCmdPlacement,
 			showCmdDashboard,
 			showCmdPerformance,
 			showCmdStorage,
@@ -155,6 +156,7 @@ var (
 		Action:       showClusterHandler,
 		BashComplete: showClusterCompletions, // NOTE: level 0 hardcoded
 		Subcommands: []cli.Command{
+			showCmdPlacement,
 			{
 				Name:         cmdSmap,
 				Usage:        "Show cluster map (Smap)",

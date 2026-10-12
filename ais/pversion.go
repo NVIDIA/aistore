@@ -148,7 +148,7 @@ func (c *clupost) checkJoinPlacement(smap *smapX, bmd *bucketMD) error {
 	if smap.IsWeighted() {
 		what = "placement weights"
 	} else if bck := bmd.GetBucketWithPlacement(); bck != nil {
-		what = "bucket " + bck.String() + " placement override"
+		what = "bucket " + bck.Cname("") + " placement override"
 	} else {
 		return nil
 	}

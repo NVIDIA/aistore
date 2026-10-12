@@ -1,0 +1,31 @@
+ais cluster placement show
+ais show placement
+ais show cluster placement
+ais show --generate-bash-completion | grep -x placement
+ais show cluster --generate-bash-completion | tr ' ' '\n' | grep -x placement
+ais cluster placement set-weights // FAIL "missing arguments"
+ais cluster placement set-weights 't[nonexistent]=1' // FAIL "does not exist"
+ais cluster placement set-weights $RANDOM_TARGET=abc // FAIL "expecting integer"
+ais cluster placement set-weights $RANDOM_TARGET=-1 // FAIL "expecting positive integer"
+ais cluster placement set-weights $RANDOM_TARGET=0 // FAIL "expecting positive integer"
+ais cluster placement set-weights $RANDOM_TARGET=1 't[$RANDOM_TARGET]=2' // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights $RANDOM_TARGET=1 $RANDOM_TARGET=2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights $RANDOM_TARGET=1,$RANDOM_TARGET=2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights rest=1 rest=2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights $RANDOM_TARGET 1 $RANDOM_TARGET 2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights $RANDOM_TARGET=1 't[$RANDOM_TARGET]' 2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights $RANDOM_TARGET = 1 't[$RANDOM_TARGET]' = 2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights rest 1 rest 2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights rest=1 rest = 2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights $RANDOM_TARGET = abc rest = 1 // FAIL "expecting integer"
+ais cluster placement set-weights rest=abc // FAIL "expecting integer"
+ais cluster placement set-weights rest=-1 // FAIL "expecting positive integer"
+ais cluster placement set-weights rest=0 // FAIL "expecting positive integer"
+ais cluster placement set-weights $RANDOM_TARGET =1 't[$RANDOM_TARGET]'= 2 // FAIL "duplicate placement weight assignment"
+ais cluster placement set-weights $RANDOM_TARGET // FAIL "invalid"
+ais cluster placement set-weights --generate-bash-completion | grep -x rest
+ais cluster placement set-weights --generate-bash-completion | grep -cxF 't[$RANDOM_TARGET]'
+ais cluster placement set-weights $RANDOM_TARGET 1 --generate-bash-completion | grep -cxF 't[$RANDOM_TARGET]' || true
+ais cluster placement set-weights 't[$RANDOM_TARGET]' = 1, rest 2 --generate-bash-completion | grep -cx 'rest\|t\[$RANDOM_TARGET\]' || true
+ais cluster placement set-weights rest --generate-bash-completion | wc -l
+ais cluster placement clear-weights

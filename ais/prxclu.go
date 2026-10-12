@@ -916,6 +916,9 @@ func (p *proxy) setPlacementWeights(w http.ResponseWriter, r *http.Request, msg 
 		}
 		return
 	}
+	if preview.IsWeighted() && preview.CountActiveTs() < 2 && cmn.Rom.V(4, cos.ModAIS) {
+		nlog.Warningln(p.String(), msg.Action, "with fewer than 2 active targets:", preview.StrPlacementWeights())
+	}
 	if !ctx.skipReb {
 		var tsi *meta.Snode
 		for _, node := range ctx.smap.Tmap {
@@ -999,6 +1002,10 @@ func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
 
 	// repeat under lock: version records can change without Smap changes
 	if clone.IsWeighted() {
+		if len(clone.Tmap) < 2 {
+			ctx.status = http.StatusBadRequest
+			return fmt.Errorf("cannot set placement weights: %s has a single target", clone)
+		}
 		if err := p.checkSameVersion(ctx.smap); err != nil {
 			ctx.status = http.StatusConflict
 			return err
@@ -1008,7 +1015,7 @@ func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
 		if bck := bmd.GetBucketWithPlacement(); bck != nil {
 			ctx.status = http.StatusConflict
 			return fmt.Errorf("cannot clear placement weights: bucket %s has %s=%q - reset it first",
-				bck, cmn.PropPlacementWeighting, bck.Props.Placement.Weighting)
+				bck.Cname(""), cmn.PropPlacementWeighting, bck.Props.Placement.Weighting)
 		}
 	}
 
