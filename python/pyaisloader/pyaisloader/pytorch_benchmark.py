@@ -27,6 +27,7 @@ class AISDatasetBenchmark(PutGetMixedBenchmark):
             self.clean_up()
         print_sep()
         print_results(result, title=self.__class__.__name__)
+        return {"get": result}
 
     def get_benchmark(self, duration):
         dataset = AISMapDataset(
@@ -63,6 +64,7 @@ class AISIterDatasetBenchmark(PutGetMixedBenchmark):
             self.clean_up()
         print_sep()
         print_results(result, title=self.__class__.__name__)
+        return {"get": result}
 
     def get_benchmark(self, duration):
         iter_dataset = AISIterDataset(

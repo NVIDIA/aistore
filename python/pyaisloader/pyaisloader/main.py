@@ -1,4 +1,7 @@
 import argparse
+import json
+import sys
+from contextlib import redirect_stdout
 from importlib.metadata import version as package_version
 
 from pyaisloader.benchmark import PutGetMixedBenchmark, ListBenchmark
@@ -44,6 +47,14 @@ def append_default_arguments(parser):
         required=False,
         help="The built-in ETL transformation (one of tar2tf, md5, or echo) that each object from aisloader GETs undergoes",
     )
+    parser.add_argument(
+        "-y", "--yes", action="store_true", help="Answer yes to confirmation prompts"
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Write JSON statistics to stdout; progress goes to stderr",
+    )
 
     return parser
 
@@ -76,36 +87,42 @@ def main():
         help="100%% PUT benchmark",
         description="This command runs a 100%% PUT benchmark.",
     )
+    put_parser.set_defaults(benchmark="PUT")
     get_parser = subparsers.add_parser(
         "GET",
         aliases=["get", "G", "g"],
         help="100%% GET benchmark",
         description="This command runs a 100%% GET benchmark.",
     )
+    get_parser.set_defaults(benchmark="GET")
     mixed_parser = subparsers.add_parser(
         "MIXED",
         aliases=["mixed", "M", "m"],
         help="MIXED benchmark",
         description="This command runs a MIXED benchmark, with a customizable balance of PUT and GET operations.",
     )
+    mixed_parser.set_defaults(benchmark="MIXED")
     list_parser = subparsers.add_parser(
         "LIST",
         aliases=["list", "L", "l"],
         help="LIST objects benchmark",
         description="This command runs a LIST benchmark.",
     )
+    list_parser.set_defaults(benchmark="LIST")
     ais_dataset_parser = subparsers.add_parser(
         "AIS_DATASET",
         aliases=["ais_dataset"],
         help="Map-style AISDataset benchmark",
         description="This command runs an AISDataset benchmark",
     )
+    ais_dataset_parser.set_defaults(benchmark="AIS_DATASET")
     ais_iter_dataset_parser = subparsers.add_parser(
         "AIS_ITER_DATASET",
         aliases=["ais_iter_dataset"],
         help="Iterable-style AISIterDataset benchmark",
         description="This command runs an AISIterDataset benchmark",
     )
+    ais_iter_dataset_parser.set_defaults(benchmark="AIS_ITER_DATASET")
 
     put_parser = prepend_default_arguments(put_parser)
     get_parser = prepend_default_arguments(get_parser)
@@ -313,6 +330,27 @@ def main():
                     "If pre-populating bucket, --totalsize, --minsize, and --maxsize are all required."
                 )
 
+    if args.json:
+        # Send progress and results tables to stderr so stdout carries only the JSON
+        with redirect_stdout(sys.stderr):
+            stats = run_benchmark(args)
+    else:
+        stats = run_benchmark(args)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "benchmark": args.benchmark,
+                    "bucket": args.bucket,
+                    **stats,
+                }
+            )
+        )
+
+
+def run_benchmark(args):
+    """Run the selected benchmark and return its calculated statistics."""
     # Instantiate bucket and etl objects for the benchmark
     provider, bck_name = args.bucket.split("://")
     bucket_model = client.bucket(bck_name, provider=Provider.parse(provider)).as_model()
@@ -344,6 +382,7 @@ def main():
                 etl_spec_type=etl_spec_type,
                 workers=args.workers,
                 cleanup=args.cleanup,
+                assume_yes=args.yes,
             )
         elif benchmark_type in ["get", "g"]:
             benchmark = PutGetMixedBenchmark(
@@ -357,6 +396,7 @@ def main():
                 etl_spec_type=etl_spec_type,
                 workers=args.workers,
                 cleanup=args.cleanup,
+                assume_yes=args.yes,
             )
         elif benchmark_type == "ais_dataset":
             benchmark = AISDatasetBenchmark(
@@ -369,6 +409,7 @@ def main():
                 etl_spec_type=etl_spec_type,
                 workers=args.workers,
                 cleanup=args.cleanup,
+                assume_yes=args.yes,
             )
         elif benchmark_type == "ais_iter_dataset":
             benchmark = AISIterDatasetBenchmark(
@@ -382,6 +423,7 @@ def main():
                 etl_spec_type=etl_spec_type,
                 workers=args.workers,
                 cleanup=args.cleanup,
+                assume_yes=args.yes,
             )
         else:
             benchmark = PutGetMixedBenchmark(
@@ -395,18 +437,21 @@ def main():
                 etl_spec_type=etl_spec_type,
                 workers=args.workers,
                 cleanup=args.cleanup,
+                assume_yes=args.yes,
             )
-        benchmark.run()
+        stats = benchmark.run()
     elif benchmark_type in ["list", "l"]:
         benchmark = ListBenchmark(
             num_objects=args.objects,
             bucket_model=bucket_model,
             workers=args.workers,
             cleanup=args.cleanup,
+            assume_yes=args.yes,
         )
-        benchmark.run()
+        stats = benchmark.run()
 
     cleanup_etls()
+    return stats
 
 
 if __name__ == "__main__":

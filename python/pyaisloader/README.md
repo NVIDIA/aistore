@@ -22,6 +22,29 @@ pyaisloader [TYPE] --bucket [BUCKET] --workers [WORKERS] --cleanup ...
 
 > For all benchmark types, `--cleanup`, or `-c`, if set to `True`, clean-up will either **(i)** destroy the entire bucket if the benchmark created the bucket or **(ii)** destroy any objects that were added to the pre-existing bucket during the benchmark (and pre-population). 
 
+### Unattended Runs and JSON Output
+
+For use in scripts or CI, you can automatically approve confirmation prompts with `--yes` and write the final statistics as JSON with `--json`. If `--json` is set, only the final statistics are printed to stdout. Progress messages, the results table, warnings, and errors go to stderr.
+
+```shell
+$ pyaisloader put -b ais://mybck -d 30s -min 1mb -max 10mb -w 16 -c --yes --json
+{"benchmark": "PUT", "bucket": "ais://mybck", "put": {"ops": 1430, "bytes": 7895441581, "time": 485.46, "throughput": 260191025.79, "latency_min": 0.0044, "latency_avg": 0.3395, "latency_max": 0.5479}}
+```
+
+The top-level keys are `benchmark` and `bucket`, followed by one object per operation: `put` for PUT, `get` for GET, both for MIXED, and `list` for LIST.
+
+| Operation    | Field         | Unit    | Description                                   |
+|--------------|---------------|---------|-----------------------------------------------|
+| `put`, `get` | `ops`         | count   | Total operations completed across all workers |
+| `put`, `get` | `bytes`       | bytes   | Total bytes transferred                       |
+| `put`, `get` | `time`        | seconds | Operation time summed across all workers      |
+| `put`, `get` | `throughput`  | bytes/s | Sum of per-worker throughput                  |
+| `put`, `get` | `latency_min` | seconds | Fastest single operation                      |
+| `put`, `get` | `latency_avg` | seconds | `time` divided by `ops`                       |
+| `put`, `get` | `latency_max` | seconds | Slowest single operation                      |
+| `list`       | `objects`     | count   | Number of objects listed                      |
+| `list`       | `duration`    | seconds | Wall-clock duration of the LIST call          |
+
 ## Benchmark Results
 
 Results from all workers are combined before they are displayed. `Latency Avg` is the total operation time divided by the total number of operations across all workers, so workers are weighted by the number of operations they completed. Workers that completed no operations are excluded from `Latency Min` and `Latency Max`. If no workers completed an operation, all latency values are reported as zero.
@@ -41,6 +64,8 @@ Runs time/size based benchmark with 100% PUT workload.
 | --maxsize  | -max    | Maximum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
 | --duration | -d      | Duration for which benchmark should be run                                                                  | No       | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
+| --yes      | -y      | Automatically approve confirmation prompts                                                                  | No       | False         |
+| --json     | N/A     | Write JSON statistics to stdout; progress goes to stderr                                                   | No       | False         |
 
 #### Type: GET
 
@@ -60,6 +85,8 @@ Runs a time-based benchmark with 100% GET workload.
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
 | --etl      | -e      | Whether objects from aisloader GETs should undergoes the specified ETL transformation                       | No       | N/A           |
+| --yes      | -y      | Automatically approve confirmation prompts                                                                  | No       | False         |
+| --json     | N/A     | Write JSON statistics to stdout; progress goes to stderr                                                   | No       | False         |
 
 #### Type: MIXED
 
@@ -78,6 +105,8 @@ Runs a time-based benchmark with a mixed load of GETs and PUTs (based on `putpct
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
 | --etl      | -e      | Whether objects from aisloader GETs should undergoes the specified ETL transformation                       | No       | N/A           |
+| --yes      | -y      | Automatically approve confirmation prompts                                                                  | No       | False         |
+| --json     | N/A     | Write JSON statistics to stdout; progress goes to stderr                                                   | No       | False         |
 
 #### Type: LIST
 
@@ -91,6 +120,8 @@ Runs a benchmark to LIST objects in the bucket.
 | --cleanup      | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion      | No       | False         |
 | --objects      | -o      | Number of objects bucket should contain prior to benchmark start                      | No       | N/A           |
 | --workers      | -w      | Number of workers (only for pre-population of bucket)                                 | Yes      | N/A           |
+| --yes          | -y      | Automatically approve confirmation prompts                                            | No       | False         |
+| --json         | N/A     | Write JSON statistics to stdout; progress goes to stderr                             | No       | False         |
 
 #### Type: AISDataset
 
@@ -107,6 +138,8 @@ Runs a time-based benchmark to randomly get objects in the bucket through AISDat
 | --maxsize  | -max    | Maximum generated object size when pre-populating                                                           | No       | N/A           |
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
+| --yes      | -y      | Automatically approve confirmation prompts                                                                  | No       | False         |
+| --json     | N/A     | Write JSON statistics to stdout; progress goes to stderr                                                   | No       | False         |
 
 #### Type: AISIterDataset
 
@@ -126,6 +159,8 @@ Runs a time-based benchmark to sequentially iterate over objects in the bucket t
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --iterations| -i     | Maximum number of iterations over the dataset                                                               | No       | Unlimited     |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
+| --yes      | -y      | Automatically approve confirmation prompts                                                                  | No       | False         |
+| --json     | N/A     | Write JSON statistics to stdout; progress goes to stderr                                                   | No       | False         |
 
 ### Examples
 

@@ -41,7 +41,8 @@ def print_caution(msg):
         + bold("CAUTION")
         + Style.RESET_ALL
         + bold(": ")
-        + msg
+        + msg,
+        file=sys.stderr,
     )
 
 
@@ -76,17 +77,24 @@ def print_results(result):
     print("\n" + tabulate(table, tablefmt="simple_grid") + "\n")
 
 
-def confirm_continue():
-    decision = input("\n" + "Would you like to proceed? " + bold("(Y/N)") + ": ")
-    if decision.lower() in ["n", "no"]:
-        terminate()
-    elif decision.lower() in ["y", "yes"]:
-        return
-    else:
-        confirm_continue()
+def confirm(msg, assume_yes=False):
+    if assume_yes:
+        return True
+    while True:
+        print(f"\n{msg}{bold('(Y/N)')}: ", end="", file=sys.stderr, flush=True)
+        decision = input().lower()
+        if decision in ["y", "yes"]:
+            return True
+        if decision in ["n", "no"]:
+            return False
 
 
-def terminate(msg=None):
+def confirm_continue(assume_yes=False):
+    if not confirm("Would you like to proceed? ", assume_yes=assume_yes):
+        terminate(code=0)
+
+
+def terminate(msg=None, code=1):
     if msg:
         print(
             "\n"
@@ -96,9 +104,9 @@ def terminate(msg=None):
             + Style.RESET_ALL
             + bold(": ")
             + msg
-            + "\n"
+            + "\n",
+            file=sys.stderr,
         )
-        sys.exit()
     else:
         print(
             "\n"
@@ -107,6 +115,7 @@ def terminate(msg=None):
             + bold("TERMINATING")
             + Style.RESET_ALL
             + bold("...")
-            + "\n"
+            + "\n",
+            file=sys.stderr,
         )
-        sys.exit()
+    sys.exit(code)

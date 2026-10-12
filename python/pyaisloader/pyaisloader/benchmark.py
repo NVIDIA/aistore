@@ -11,6 +11,7 @@ from pyaisloader.utils.bucket_utils import (
 )
 from pyaisloader.utils.cli_utils import (
     bold,
+    confirm,
     confirm_continue,
     print_caution,
     print_in_progress,
@@ -64,10 +65,11 @@ class BenchmarkStats:
 class Benchmark:
     """Abstract class for all benchmarks"""
 
-    def __init__(self, bucket_model, workers, cleanup):
+    def __init__(self, bucket_model, workers, cleanup, assume_yes=False):
         self.bucket_model = bucket_model
         self.workers = workers
         self.cleanup = cleanup
+        self.assume_yes = assume_yes
         self.objs_created = []
         self.etls_created = []
         # Track for intelligent clean-up (deletes bucket if bucket was created by benchmark, otherwise only deletes objects in bucket created by benchmark)
@@ -93,7 +95,7 @@ class Benchmark:
     def setup(self):
         if self.bucket.provider != Provider.AIS:  # Cloud Bucket
             print_caution("You are currently operating on a cloud storage bucket.")
-            confirm_continue()
+            confirm_continue(assume_yes=self.assume_yes)
             if not bucket_exists(
                 self.bucket
             ):  # Cloud buckets that don't exist are not permitted
@@ -109,7 +111,7 @@ class Benchmark:
                     + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
                     + " already exists."
                 )
-                confirm_continue()
+                confirm_continue(assume_yes=self.assume_yes)
             else:
                 print_in_progress(
                     "Creating bucket "
@@ -148,9 +150,8 @@ class Benchmark:
         objs_created.append(obj.name)
         return size, objs_created
 
-    def clean_up(self, new=True):
-        if new:
-            print_in_progress("Cleaning up", "\U0001f9f9")
+    def clean_up(self):
+        print_in_progress("Cleaning up", "\U0001f9f9")
 
         if not self.bck_created and not self.objs_created:
             print_caution("Nothing to delete! Skipping clean-up...")
@@ -170,25 +171,17 @@ class Benchmark:
                 + " ? "
             )
 
-        decision = input(
-            "\n"
-            + "Would you like to proceed w/ deletion of "
-            + msg
-            + bold("(Y/N)")
-            + ": "
-        )
-
-        if decision.lower() in ["n", "no"]:
+        if not confirm(
+            f"Would you like to proceed w/ deletion of {msg}",
+            assume_yes=self.assume_yes,
+        ):
             print_caution("Skipping clean-up...")
             return
-        if decision.lower() in ["y", "yes"]:
-            if self.bck_created:
-                self.bucket.delete()
-            else:
-                self.bucket.objects(obj_names=self.objs_created).delete()
-            print_success("Completed clean-up")
+        if self.bck_created:
+            self.bucket.delete()
         else:
-            self.clean_up(False)
+            self.bucket.objects(obj_names=self.objs_created).delete()
+        print_success("Completed clean-up")
 
 
 class PutGetMixedBenchmark(Benchmark):
@@ -225,13 +218,13 @@ class PutGetMixedBenchmark(Benchmark):
 
     def run(self):
         if self.put_pct == 100:
-            self.__run_put()
+            return self.__run_put()
         elif self.put_pct == 0:
             self._prepare_bucket()
-            self.__run_get()
+            return self.__run_get()
         else:
             self._prepare_bucket()
-            self.__run_mixed()
+            return self.__run_mixed()
 
     def __run_put(self):
         totalsize = None if self.totalsize is None else (self.totalsize // self.workers)
@@ -261,6 +254,7 @@ class PutGetMixedBenchmark(Benchmark):
                 + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
+        return {"put": result}
 
     def __run_get(self):
         print_in_progress(
@@ -283,6 +277,7 @@ class PutGetMixedBenchmark(Benchmark):
                 + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
+        return {"get": result}
 
     def __run_mixed(self):
         print_in_progress(
@@ -319,6 +314,7 @@ class PutGetMixedBenchmark(Benchmark):
                 + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
+        return {"put": result_put, "get": result_get}
 
     def _run_prepopulate(self):
         print_in_progress("Starting Pre-Population")
@@ -496,3 +492,9 @@ class ListBenchmark(Benchmark):
             self.clean_up()
 
         self.__print_results()
+        return {
+            "list": {
+                "objects": len(self.listed_objs),
+                "duration": self.benchmark_time,
+            }
+        }
