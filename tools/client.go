@@ -706,6 +706,23 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 	return api.BaseParams{Client: gctx.Client, URL: u, Token: LoggedUserToken, UA: "tools/test"}
 }
 
+// WaitForXactionErrors waits for args.ID to finish and returns its recorded error state.
+func WaitForXactionErrors(t testing.TB, bp api.BaseParams, args *xact.ArgsMsg) (aborted bool, errMsg, abortErr string) {
+	t.Helper()
+	tassert.Fatalf(t, args.ID != "", "missing xaction ID")
+	snaps, err := api.WaitForSnaps(bp, args, args.Finished())
+	tassert.CheckFatal(t, err)
+	aborted, _, _ = snaps.AggregateState(args.ID)
+	for _, targetSnaps := range snaps {
+		for _, snap := range targetSnaps {
+			if snap.ID == args.ID && (snap.Err != "" || snap.AbortErr != "") {
+				return aborted, snap.Err, snap.AbortErr
+			}
+		}
+	}
+	return aborted, "", ""
+}
+
 func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
 	bp := BaseAPIParams(proxyURL)
 	msg := &apc.EvdMsg{ListRange: apc.ListRange{Template: prefix}}

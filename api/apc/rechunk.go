@@ -17,4 +17,6 @@ type RechunkMsg struct {
 	Prefix string `json:"prefix"` // +gen:optional
 	// Also write rechunked objects back to the remote backend.
 	SyncRemote bool `json:"sync-remote"` // +gen:optional
+	// Continue processing remaining objects after per-object failures.
+	ContinueOnError bool `json:"coer,omitempty"` // +gen:optional
 }

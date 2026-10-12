@@ -449,7 +449,7 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 			}
 		}
 		if !bprops.Chunks.EqualLayout(&nprops.Chunks) {
-			return t.runRechunk(c.uuid, c.bck, &apc.RechunkMsg{})
+			return t.runRechunk(c.uuid, c.bck, &apc.RechunkMsg{ContinueOnError: true})
 		}
 		return xid, nil
 	}

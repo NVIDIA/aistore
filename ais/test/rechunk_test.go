@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -287,6 +288,8 @@ func TestRechunkAbort(t *testing.T) {
 		Bck:  bck,
 	}
 	err = api.AbortXaction(baseParams, abortArgs)
+	tassert.CheckFatal(t, err)
+	err = api.WaitForXaction(baseParams, abortArgs)
 	tassert.CheckFatal(t, err)
 	tlog.Logln("Rechunk xaction aborted successfully")
 
@@ -1101,44 +1104,64 @@ func TestRechunkErrorCapture(t *testing.T) {
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-		objName    = "large-obj"
+		objName    = "too-many-chunks"
 		chunkSize  = int64(cmn.ChunkSizeMin)
 		objSize    = (core.MaxChunkCount + 1) * int(chunkSize)
+		normalSize = 2 * chunkSize
+		wantErr    = fmt.Sprintf("chunk number (%d) exceeds the maximum allowed (%d)",
+			core.MaxChunkCount+1, core.MaxChunkCount)
 	)
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	normalName := tools.GenerateObjectNameForTarget(objName, "normal-object", bck,
+		tools.GetClusterMap(t, proxyURL), true /*same target*/)
 
 	// Create object with checksum for later validation
 	r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(objSize), CksumType: cos.ChecksumNone})
 	_, err := api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objName, Reader: r, Size: uint64(objSize)})
 	tassert.CheckFatal(t, err)
+	normal, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: normalSize, CksumType: cos.ChecksumNone})
+	_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: normalName, Reader: normal, Size: uint64(normalSize)})
+	tassert.CheckFatal(t, err)
 
-	// Rechunk with enough minimum-sized chunks to exceed the manifest limit.
+	// Property-triggered rechunk continues after the oversized object fails.
 	xid, err := setRechunkProps(baseParams, bck, 1, chunkSize)
 	tassert.CheckFatal(t, err)
-
-	// Wait for xaction to finish AND have error recorded
-	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: time.Minute}
-	var errMsg string
-	finishedWithErr := func(snaps xact.MultiSnap) (done, reset bool, err error) {
-		var finished bool
-		for _, targetSnaps := range snaps {
-			for _, snap := range targetSnaps {
-				if snap.ID == xid {
-					finished = finished || snap.IsFinished()
-					if snap.Err != "" {
-						errMsg = snap.Err
-					}
-				}
-			}
-		}
-		return finished && errMsg != "", false, nil
-	}
-	_, err = api.WaitForSnaps(baseParams, args, finishedWithErr)
+	aborted, errMsg, abortErr := tools.WaitForXactionErrors(t, baseParams,
+		&xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: time.Minute})
+	tassert.Fatalf(t, !aborted && abortErr == "" && strings.Contains(errMsg, wantErr),
+		"expected property-triggered rechunk to continue with %q, got aborted=%t, err=%q, abort-err=%q",
+		wantErr, aborted, errMsg, abortErr)
+	op, err := api.HeadObjectV2(baseParams, bck, normalName, apc.GetPropsChunked, api.HeadArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, errMsg != "", "expected error but got none")
-	tassert.Fatalf(t, strings.Contains(errMsg, "exceeds the maximum"), "expected 'exceeds the maximum' error, got: %s", errMsg)
-	tlog.Logf("Got expected error: %s\n", errMsg)
+	tassert.Fatalf(t, op.Chunks != nil, "expected %q to be chunked after continuing", normalName)
+
+	tests := []struct {
+		name            string
+		continueOnError bool
+		wantAborted     bool
+	}{
+		{name: "fail-fast", wantAborted: true},
+		{name: "continue-on-error", continueOnError: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			xid, err := api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{ContinueOnError: tc.continueOnError})
+			tassert.CheckFatal(t, err)
+			aborted, errMsg, abortErr := tools.WaitForXactionErrors(t, baseParams,
+				&xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: time.Minute})
+			tassert.Fatalf(t, aborted == tc.wantAborted,
+				"expected aborted=%t, got aborted=%t, err=%q, abort-err=%q",
+				tc.wantAborted, aborted, errMsg, abortErr)
+			if tc.wantAborted {
+				tassert.Fatalf(t, strings.Contains(errMsg, wantErr) && strings.Contains(abortErr, wantErr),
+					"expected Err and AbortErr %q, got err=%q, abort-err=%q", wantErr, errMsg, abortErr)
+			} else {
+				tassert.Fatalf(t, abortErr == "" && strings.Contains(errMsg, wantErr),
+					"expected Err %q and no AbortErr, got err=%q, abort-err=%q", wantErr, errMsg, abortErr)
+			}
+		})
+	}
 
 	// Verify object is not corrupted: reset reader and compare with fetched object
 	reader, err := r.Open()
