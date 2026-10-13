@@ -305,7 +305,7 @@ func (c *clupost) setActionCheckVer() (stop bool) {
 			return true
 		}
 		debug.AssertFunc(func() bool {
-			return c.nsi.VerifyingKey == nil || cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 1})
+			return c.nsi.VerifyingKey == nil || cos.VersionAtLeast(c.nversStr, cmn.MinVerIntraClusterAuth)
 		})
 
 		if c.nsi.IsProxy() {
@@ -630,7 +630,7 @@ func (c *clupost) kalive(osi *meta.Snode) (bool, error) {
 }
 
 func (c *clupost) rejectKalive(err error) error {
-	if cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 2}) { // introduced isErrKaliveRejected
+	if cos.VersionAtLeast(c.nversStr, cmn.MinVerKaliveReject) { // introduced isErrKaliveRejected
 		return err
 	}
 	// pre-5.2 nodes - log instead
@@ -704,7 +704,7 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 	if c.apiOp == apc.Keepalive {
 		// self-join and admin-join already checked via handshake
 		if _, err := c.smap.IsDupNet(c.nsi); err != nil {
-			if cos.SupportsVersionAtLeast(c.nversStr, cos.Version{Major: 5, Minor: 2}) { // introduced isErrKaliveRejected
+			if cos.VersionAtLeast(c.nversStr, cmn.MinVerKaliveReject) { // introduced isErrKaliveRejected
 				return false, false, fmt.Errorf("%w: %v", errKaliveRejected, err)
 			}
 			return false, false, errors.New(p.String() + ": " + err.Error()) // pre-5.2

@@ -31,7 +31,7 @@ import (
 // Pre-5.0 nodes do not send apc.HdrNodeVersion - hence, empty is rejected.
 // Keep in place to fail a skipped-bridge upgrade (4.x => 5.1+) with a specific error.
 const (
-	uptip = "(tip: direct upgrade from 4.x to 5.x is not supported; upgrade the cluster to 5.0 first)"
+	uptip = "(tip: direct upgrade from 4.x to 5.x is not supported; upgrade the cluster to " + cmn.MinVerNodeJoin + " first)"
 )
 
 func (p *proxy) noteNodeVersion(nsi *meta.Snode, nverStr string, nversParsed cos.Version) {
@@ -103,16 +103,7 @@ func checkNodeVer(pname, sname, nversStr string) error {
 }
 
 func enforceVerBoundary(otherVerStr string) (reject bool) {
-	if otherVerStr == "" {
-		return true // pre-header => pre-5.0
-	}
-
-	other, ok := cos.ParseVersion(otherVerStr)
-	if !ok {
-		return true // unparseable
-	}
-	debug.Assert(other.Major >= 5) // apc.HdrNodeVersion was introduced in 5.0
-	return other.Major < 5
+	return !cos.VersionAtLeast(otherVerStr, cmn.MinVerNodeJoin)
 }
 
 // reject weighted Smap while node versions differ
@@ -140,8 +131,7 @@ func (p *proxy) checkSameVersion(smap *smapX) error {
 
 // reject pre-5.2 joiner when the cluster uses placement: weighted Smap or bucket override(s)
 func (c *clupost) checkJoinPlacement(smap *smapX, bmd *bucketMD) error {
-	var placementMinVer = cos.Version{Major: 5, Minor: 2}
-	if cos.SupportsVersionAtLeast(c.nversStr, placementMinVer) {
+	if cos.VersionAtLeast(c.nversStr, cmn.MinVerPlacement) {
 		return nil
 	}
 	var what string
@@ -153,5 +143,5 @@ func (c *clupost) checkJoinPlacement(smap *smapX, bmd *bucketMD) error {
 		return nil
 	}
 	return fmt.Errorf("%s: cannot join %s (version %q) - cluster has %s that requires version %s or later",
-		c.p, c.nsi.StringEx(), c.nversStr, what, placementMinVer)
+		c.p, c.nsi.StringEx(), c.nversStr, what, cmn.MinVerPlacement)
 }

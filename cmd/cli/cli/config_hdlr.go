@@ -110,8 +110,6 @@ const (
 	confNodeJoinSecretPath = "auth.intra_cluster.node_join_secret_path"
 )
 
-var minVerIntraClusterAuth = cos.Version{Major: 5, Minor: 1}
-
 var (
 	configCmd = cli.Command{
 		Name:  commandConfig,
@@ -284,7 +282,7 @@ func warnIntraClusterAuthPrestage(c *cli.Context, nvs cos.StrKVs) {
 		return
 	}
 
-	if clusterSupportsAtLeast(c, minVerIntraClusterAuth) {
+	if clusterSupportsAtLeast(c, cmn.MinVerIntraClusterAuth) {
 		return
 	}
 

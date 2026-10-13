@@ -7,6 +7,8 @@ package cos
 import (
 	"strconv"
 	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const versionSepa = "."
@@ -23,23 +25,21 @@ type Version struct {
 }
 
 func ParseVersion(s string) (v Version, ok bool) {
-	mm := strings.Split(s, versionSepa)
-	if len(mm) < 2 {
+	smajor, rest, ok := strings.Cut(s, versionSepa)
+	if !ok {
 		return v, false
 	}
-	major, err := strconv.Atoi(mm[0])
+	sminor, rc, _ := strings.Cut(rest, versionSepa)
+	major, err := strconv.Atoi(smajor)
 	if err != nil || major < 0 {
 		return v, false
 	}
-	minor, err := strconv.Atoi(mm[1])
+	minor, err := strconv.Atoi(sminor)
 	if err != nil || minor < 0 {
 		return v, false
 	}
-	v.Major, v.Minor = major, minor
-	if len(mm) > 2 {
-		v.Rc = strings.Join(mm[2:], versionSepa)
-	}
-	return v, true
+	debug.Assert(major >= 4, s)
+	return Version{Major: major, Minor: minor, Rc: rc}, true
 }
 
 func (v Version) String() string {
@@ -63,13 +63,17 @@ func VersionGap(expected, actual Version) (gap int, incompat bool) {
 	return gap, gap > 1
 }
 
-// SupportsVersionAtLeast checks whether raw version is at least min.
-//
-// Release-candidate suffixes are ignored: for compatibility/capability checks,
-// "5.0.rc1" satisfies "5.0".
-func SupportsVersionAtLeast(raw string, minVer Version) bool {
-	v, ok := ParseVersion(raw)
-	if !ok {
+// compare software versions by major and minor, parsing the minimum on demand
+// - use capability constants from cmn/ver_const.go as minimums
+// - ignore RC/build suffixes; return false if either version is empty or malformed
+func VersionAtLeast(raw, minimum string) bool {
+	minVer, minOk := ParseVersion(minimum)
+	debug.Assert(minOk, minimum)
+	if !minOk {
+		return false
+	}
+	v, rawOk := ParseVersion(raw)
+	if !rawOk {
 		return false
 	}
 	return v.Major > minVer.Major || (v.Major == minVer.Major && v.Minor >= minVer.Minor)

@@ -26,10 +26,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-// apc.MemCPUInfo was extended in v4.4 and v4.5 (added CPU stats); older nodes report Load Averages instead
-// (see api/apc/sys.go)
-var minVerSysCPUStats = cos.Version{Major: 4, Minor: 5}
-
 type (
 	cluWarnNodes struct {
 		alerts       []string
@@ -126,8 +122,8 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.No
 	//
 	// Unified opts so both tables agree on SysCPU/Load columns during rolling upgrades
 	var (
-		showSysCPU = supportsAllAtLeast(tstatusMap, minVerSysCPUStats) &&
-			supportsAllAtLeast(pstatusMap, minVerSysCPUStats)
+		showSysCPU = supportsAllAtLeast(tstatusMap, cmn.MinVerSysCPUStats) &&
+			supportsAllAtLeast(pstatusMap, cmn.MinVerSysCPUStats)
 		opts = teb.ClusterTabOpts{
 			Units:      units,
 			Verbose:    verbose,
@@ -203,7 +199,7 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.No
 // - SysCPU shown iff every live node supports it;
 // - LoadAvg - in verbose mode or as a fallback when SysCPU is hidden.
 func _clusterTabOpts(units string, verbose bool, m teb.NodeStatusMap) teb.ClusterTabOpts {
-	showSysCPU := supportsAllAtLeast(m, minVerSysCPUStats)
+	showSysCPU := supportsAllAtLeast(m, cmn.MinVerSysCPUStats)
 	return teb.ClusterTabOpts{
 		Units:      units,
 		Verbose:    verbose,

@@ -40,19 +40,19 @@ func parseAisnodeVersionOrWarn(c *cli.Context, s string) (v cos.Version, ok bool
 	return v, false
 }
 
-func supportsAllAtLeast(statusMap teb.NodeStatusMap, version cos.Version) bool {
+func supportsAllAtLeast(statusMap teb.NodeStatusMap, version string) bool {
 	for _, ds := range statusMap {
 		if ds.Node.Snode.InMaintOrDecomm() {
 			continue
 		}
-		if !cos.SupportsVersionAtLeast(ds.Version, version) {
+		if !cos.VersionAtLeast(ds.Version, version) {
 			return false
 		}
 	}
 	return true // default
 }
 
-func clusterSupportsAtLeast(c *cli.Context, version cos.Version) bool {
+func clusterSupportsAtLeast(c *cli.Context, version string) bool {
 	smap, err := getClusterMap(c)
 	if err != nil {
 		return false
@@ -63,7 +63,7 @@ func clusterSupportsAtLeast(c *cli.Context, version cos.Version) bool {
 				continue
 			}
 			actual, err := api.GetSoftwareVersion(apiBP, node)
-			if err != nil || !cos.SupportsVersionAtLeast(actual, version) {
+			if err != nil || !cos.VersionAtLeast(actual, version) {
 				return false
 			}
 		}

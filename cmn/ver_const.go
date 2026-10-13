@@ -32,6 +32,24 @@ const (
 	VersionAuthN   = "2.4"
 )
 
+// Software compatibility thresholds:
+//   - keep all current and future capability and upgrade boundaries here, as string constants;
+//     do not retain parsed cos.Version values in package-level variables;
+//   - name thresholds for the capability they gate, even when several share the same release;
+//     each value records when support was introduced and does not advance with VersionAIStore;
+//   - use major.minor only: cos.VersionAtLeast parses on demand and ignores RC/build suffixes;
+//     empty or malformed peer versions do not establish support;
+//   - minimum-version checks establish capability support, not exact-version compatibility;
+//     policies requiring identical versions must compare VersionAIStore separately;
+//   - these software thresholds are independent of the on-disk MetaVer* constants below.
+const (
+	MinVerSysCPUStats      = "4.5" // MemCPUInfo CPU stats; older nodes report load averages
+	MinVerNodeJoin         = "5.0" // mandatory bridge release and HdrNodeVersion
+	MinVerIntraClusterAuth = "5.1" // node verifying keys and intra-cluster request authentication
+	MinVerKaliveReject     = "5.2" // typed keepalive rejection understood by the sender
+	MinVerPlacement        = "5.2" // weighted Smap and bucket placement overrides
+)
+
 // NOTE: for (local) LOM meta-versions, see core/lom*
 
 const (
