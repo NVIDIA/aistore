@@ -173,10 +173,10 @@ stages:
     BUCKET: "ais://ais-ci"
     AIS_FEATURES: "268435456" # System-Reserved-KTLS (1 << 28)
   before_script:
-    - test -e /proc/net/tls_stat || { echo "no /proc/net/tls_stat (needs Linux 5.5+ and the tls module)" >&2; exit 1; }
+    - ${SCRIPTS_DIR}/check-ktls.sh
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
   script:
-    - awk '/^TlsTx(Sw|Device)/ {print; n += $2} END {exit n == 0}' /proc/net/tls_stat
+    - ${SCRIPTS_DIR}/check-ktls.sh --armed
 
 
 # Stages

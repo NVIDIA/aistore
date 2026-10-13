@@ -62,6 +62,16 @@ $ ./clean_deploy.sh <directory used for $AIS_DIR>
 
 [More details on usage can be found here.](/docs/development.md#clean-deploy)
 
+## check-ktls.sh
+
+Check that a Linux host or container can run AIS targets with kTLS transmit offload ([docs](/docs/https.md#ktls-transmit-offload)).
+After a test run, `--armed` fails if no connection armed kTLS. The CI jobs `test:short:https` and `test:long:https` run both checks.
+
+```console
+$ ./scripts/check-ktls.sh
+$ ./scripts/check-ktls.sh --armed
+```
+
 ## bootstrap.sh
 
 Used internally by almost all our [Makefile](/Makefile) commands.

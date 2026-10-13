@@ -28,12 +28,7 @@ sudo ./setup.sh [--data-root <absolute_path>] [--registry-username <username>] [
 
 The `test:short:https` and `test:long:https` jobs run only on runners with the `ktls` tag.
 
-These jobs read kTLS counters from `/proc/net/tls_stat`, which requires Linux 5.5 or later and the `tls` module to be loaded.
-Add the `ktls` tag only when this command on the host prints `ok`:
-
-```bash
-test -e /proc/net/tls_stat && echo ok
-```
+`setup.sh` runs [check-ktls.sh](../../check-ktls.sh) after it loads the `tls` module and prints whether the runner is eligible for the `ktls` tag. If eligible, add the `ktls` tag to the runner in GitLab.
 
 ## Options
 
