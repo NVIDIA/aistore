@@ -314,6 +314,7 @@ $ aisnode -config=/etc/ais/ais.json \
 
 - `-config` is the **initial** cluster configuration: bootstrap input, used only when this node has no persisted cluster configuration yet. It may be shared as a deployment template.
 - `-local_config` describes this node: its directories, its listeners, and on targets its `fspaths`.
+- Targets may also set local `placement.weight`, a preferred admission weight for an already weighted cluster. Existing Smap assignments take precedence; see [placement weights](placement.md#target-admission-and-restart).
 
 **The initial file is not the source of truth.** Once a node has a persisted cluster configuration, editing the initial file changes nothing - not the running cluster, and not later restarts of that node. New and restarting nodes get the current configuration from the cluster when they join. Use the CLI or API to change a deployed cluster; do not hand-edit `.ais.conf` or `.ais.override_config`.
 

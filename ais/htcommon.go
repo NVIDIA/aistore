@@ -55,6 +55,9 @@ type (
 		SI        *meta.Snode        `json:"si"`
 		PrimeTime int64              `json:"prime_time"`
 		Flags     cos.NodeStateFlags `json:"flags"`
+
+		// v5.2
+		JoinWeight int64 `json:"join_weight,string,omitempty"`
 	}
 
 	// extend control msg: ActionMsg with an extra information for node <=> node control plane communications

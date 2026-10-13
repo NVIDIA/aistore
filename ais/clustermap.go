@@ -361,7 +361,7 @@ func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags) (old *meta.Snode) {
 			nsi.Placement = old.Placement // primary-assigned
 			m.delTarget(id)
 		} else {
-			nsi.SetPlacementWeight(m.MeanPlacementWeight())
+			nsi.Placement = nil // new target: the caller assigns (see clupost.placementWeight)
 		}
 		m.addTarget(nsi)
 	}
@@ -498,7 +498,8 @@ func (m *smapX) mergeNodeProps(from *smapX) (clone *smapX) {
 			if nsi == nil {
 				continue
 			}
-			if osi.Flags == nsi.Flags && osi.PlacementWeight() == nsi.PlacementWeight() {
+			weighted := osi.PlacementWeight() > 0 // otherwise, keep the requested weight (if any)
+			if osi.Flags == nsi.Flags && (!weighted || osi.PlacementWeight() == nsi.PlacementWeight()) {
 				continue
 			}
 			if clone == m {
@@ -506,7 +507,9 @@ func (m *smapX) mergeNodeProps(from *smapX) (clone *smapX) {
 			}
 			nsi = clone.GetNode(osi.ID())
 			nsi.Flags = osi.Flags
-			nsi.Placement = osi.Placement
+			if weighted {
+				nsi.Placement = osi.Placement
+			}
 			if nsi.IsTarget() {
 				clone.Tmap[nsi.ID()] = nsi
 			} else {

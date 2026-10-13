@@ -2276,8 +2276,9 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 	}
 
 	var (
-		res   *callResult
-		sleep = max(2*time.Second, cmn.Rom.MaxKeepalive())
+		res     *callResult
+		lastErr error // the primary's (or candidate's) most recent rejection
+		sleep   = max(2*time.Second, cmn.Rom.MaxKeepalive())
 	)
 	for range 4 { // retry
 		for _, candidateURL := range candidates {
@@ -2298,6 +2299,10 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 				}
 				return res, nil // ok
 			}
+			lastErr = res.err
+			if isErrJoinRejected(res.err) {
+				return res, res.err // rejected (e.g., invalid placement weight): retrying won't help
+			}
 			resPrev = res
 		}
 		time.Sleep(sleep)
@@ -2308,7 +2313,10 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 
 	smap := h.owner.smap.get()
 	if err := smap.validate(); err != nil {
-		return res, fmt.Errorf("%s: %v", h.si, err)
+		if lastErr != nil {
+			return nil, fmt.Errorf("%s: failed to join: %w", h.si, lastErr)
+		}
+		return nil, fmt.Errorf("%s: %v", h.si, err)
 	}
 
 	// Failed to join cluster using config, try getting primary URL using existing smap.
@@ -2403,6 +2411,11 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 		res.err = err
 		return res
 	}
+	if h.si.IsTarget() {
+		if placement := cmn.GCO.Get().Placement; placement != nil {
+			cm.JoinWeight = placement.Weight
+		}
+	}
 
 	if keepalive {
 		path = apc.URLPathCluKalive.S
@@ -2450,12 +2463,13 @@ func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (s
 	cargs := allocCargs()
 	{
 		cargs.si = psi
-		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: primaryURL, Path: apc.URLPathCluKalive.Join(h.SID())}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: primaryURL, Path: apc.URLPathCluKalive.Join(h.SID()),
+			Header: http.Header{apc.HdrNodeVersion: []string{cmn.VersionAIStore}}}
 		cargs.timeout = timeout
 	}
 	if ecActive {
 		// (target => primary)
-		hdr := make(http.Header, 1)
+		hdr := cargs.req.Header
 		if ecActive {
 			hdr.Set(apc.HdrActiveEC, "true")
 		}
@@ -2524,11 +2538,12 @@ func (h *htrun) _primus(smap *smapX, config *cmn.Config) (string /*pid*/, string
 }
 
 // return NodeStateInfo.Smap with a new or changed primary; otherwise nil
+// - apr+readiness is an internal startup probe; readiness alone is the external watchdog probe
 func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) *cos.NodeStateInfo {
 	var (
 		sleep, total, rediscover time.Duration
 		healthTimeout            = config.Timeout.CplaneOperation.D()
-		query                    = url.Values{apc.QparamAskPrimary: []string{"true"}}
+		query                    = url.Values{apc.QparamAskPrimary: []string{"true"}, apc.QparamHealthReadiness: []string{"true"}}
 	)
 	for {
 		sleep = min(cmn.Rom.MaxKeepalive(), sleep+time.Second)
@@ -2541,6 +2556,12 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) *cos.Nod
 		smap := h.owner.smap.get()
 		if smap.validate() != nil {
 			continue
+		}
+		if h.si.IsTarget() && smap.IsWeighted() {
+			self := smap.GetTarget(h.SID())
+			if self == nil || self.PlacementWeight() <= 0 || !cos.CryptoEqual(self.VerifyingKey, h.si.VerifyingKey) {
+				continue
+			}
 		}
 		if h.si.IsProxy() && smap.isPrimary(h.si) { // TODO: unlikely - see httpRequestNewPrimary
 			nlog.Warningln(h.String(), "started as a non-primary and got _elected_ during startup")

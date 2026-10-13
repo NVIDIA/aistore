@@ -23,17 +23,11 @@ import (
 // - require a same-version cluster (see ais/pversion.go)
 
 // TODO, in order:
-// - primary startup: reconcile weights after mergeNodeProps, including targets that
-//   joined before any weighted peers; compute their mean from the recovered weighted set;
-//   reject pre-5.2 joiners before publishing a weighted Smap
-//
 // - weighted HRW: object placement only (HrwName2T, HrwHash2T, HrwTargetList);
 //   reduces to uniform HRW when not weighted; honors bucket placement.weighting
 //
 // - bucket placement.weighting: reject while node versions differ; rebalance the bucket on change
 //
-// - primary reelection: verify every Smap member's version before setting weights;
-//   an absent verMismatch entry may mean unknown; ordinary keepalives must refresh versions
 // - integration test: set, proportional, clear, restart, join
 // - API and CLI: show weights and normalized shares (`ais show cluster`); set weights
 // - Python SDK: get/set weights (quoted int64)

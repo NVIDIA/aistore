@@ -149,6 +149,12 @@ Content-Length: 221
 
 The `prr=true` query parameter requests an additional check for whether the cluster is ready to rebalance upon membership changes.
 
+External watchdogs use `/v1/health?readiness=true` for node readiness.
+The `apr`, `cii`, and `cii-apr` query parameters belong to AIS's internal bootstrap,
+election, and peer-discovery protocol; they are not general-purpose health API options.
+Internal startup polling combines `apr=true` with `readiness=true` to wait for the
+primary to finish startup and for a target to consume the current cluster map.
+
 ## Backend Provider
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, in another AIS cluster, or be created in AIS itself. To resolve naming and partition namespace with respect to both physical isolation and QoS, AIS introduces the concept of *provider*.

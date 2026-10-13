@@ -114,6 +114,7 @@ var (
 		cmdJoin: {
 			roleFlag,
 			nonElectableFlag,
+			joinWeightFlag,
 		},
 		cmdStartMaint: {
 			noRebalanceFlag,
@@ -440,6 +441,13 @@ func joinNodeHandler(c *cli.Context) (err error) {
 	}
 
 	var flags cos.BitFlags
+	if flagIsSet(c, joinWeightFlag) {
+		weight := c.Int64(joinWeightFlag.Name)
+		if daemonType != apc.Target || weight <= 0 {
+			return fmt.Errorf("option %s requires a positive target placement weight", qflprn(joinWeightFlag))
+		}
+		nodeInfo.SetPlacementWeight(weight)
+	}
 	if flagIsSet(c, nonElectableFlag) {
 		if daemonType == apc.Target {
 			return fmt.Errorf("option %s does not apply - targets are non-electable", qflprn(nonElectableFlag))

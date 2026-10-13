@@ -195,12 +195,12 @@ const (
 	FlushOp  = "flush"
 )
 
-// health
+// public health probes
+// (compare with "internal health protocol" below)
 const (
 	QparamHealthReadiness = "readiness" // used by external watchdogs (K8s)
 	QparamHealthReady     = QparamHealthReadiness + "=true"
 
-	QparamAskPrimary      = "apr" // true: the caller is directing health request to primary
 	QparamPrimaryReadyReb = "prr" // true: check whether primary is ready to start rebalancing cluster
 )
 
@@ -213,8 +213,13 @@ const (
 	QparamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
 	QparamRebStatus        = "rbs" // true: get detailed rebalancing status
 	QparamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
-	QparamClusterInfo      = "cii" // true: /Health to return `cos.NodeStateInfo` including cluster metadata versions and state flags
 	QparamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
+
+	//
+	// internal health protocol: bootstrap, elections, and peer discovery
+	//
+	QparamAskPrimary  = "apr" // require a primary responder; alone, does not wait for cluster startup
+	QparamClusterInfo = "cii" // return cos.NodeStateInfo, including metadata versions and state flags
 
 	// combines QparamClusterInfo and QparamAskPrimary: the responder must be primary and return NodeStateInfo
 	QparamPrimaryCii = QparamClusterInfo + "-" + QparamAskPrimary

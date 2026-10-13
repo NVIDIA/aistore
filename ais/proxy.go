@@ -52,14 +52,15 @@ type (
 	// proxy runner
 	primary struct {
 		reg struct {
-			pool        nodeRegPool       // bootstrap (see ais/earlystart)
-			verMismatch map[string]string // nodeID -> version != primary's; absence means no mismatch; Smap remains the source of truth
-			mpl         sync.RWMutex
-			mtv         sync.Mutex
+			pool         nodeRegPool // bootstrap (see ais/earlystart)
+			nodeVersions sync.Map    // observed node versions (node ID => version string); an absent entry is unknown
+			mpl          sync.RWMutex
 		}
 
-		fastKalive    atomic.Bool // can accept fast keepalives
-		membershipTxn atomic.Bool // admin-initiated membership change
+		wver          atomic.Int64 // startup weights: 0 - not involved, -1 - pending, otherwise reconciled Smap version
+		fastKalive    atomic.Bool  // can accept fast keepalives
+		membershipTxn atomic.Bool  // admin-initiated membership change
+		startingUp    bool         // primary startup (accessed under Smap lock)
 	}
 	proxy struct {
 		ic         ic
@@ -1277,9 +1278,8 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 	}
 }
 
-// +gen:endpoint GET /v1/health[apc.QparamPrimaryReadyReb=bool,apc.QparamClusterInfo=bool,\
-// apc.QparamPrimaryCii=bool,apc.QparamAskPrimary=bool]
-// Get cluster and node health status
+// +gen:endpoint GET /v1/health[apc.QparamHealthReadiness=bool,apc.QparamPrimaryReadyReb=bool]
+// probe liveness, external readiness, or primary rebalance readiness
 func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -1289,51 +1289,61 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	p.uptime2hdr(w.Header())
 
 	var (
-		prr           bool
-		wantNsti      bool
-		mustBePrimary bool
-		senderID      string
+		checkRebalance   bool
+		wantNodeState    bool
+		requirePrimary   bool // responder role, independent of startup
+		startupReadiness bool // internal startup probe (see pollClusterStarted)
+		senderID         string
 	)
 	// 1. parse
 	if r.URL.RawQuery != "" {
 		query := r.URL.Query()
-		prr = cos.IsParseBool(query.Get(apc.QparamPrimaryReadyReb))    // ready to rebalance
-		cii := cos.IsParseBool(query.Get(apc.QparamClusterInfo))       // NodeStateInfo - from any node
-		pir := cos.IsParseBool(query.Get(apc.QparamPrimaryCii))        // NodeStateInfo - from primary only
-		askPrimary := cos.IsParseBool(query.Get(apc.QparamAskPrimary)) // primary is healthy
+		checkRebalance = cos.IsParseBool(query.Get(apc.QparamPrimaryReadyReb))
 
-		// validate: pir is shorthand and cannot combine with the two it composes
-		if pir && (cii || askPrimary) {
+		// internal bootstrap, election, and discovery protocol
+		// (_not_ public probe options)
+		var (
+			nodeState  = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
+			primaryCii = cos.IsParseBool(query.Get(apc.QparamPrimaryCii))
+			askPrimary = cos.IsParseBool(query.Get(apc.QparamAskPrimary))
+		)
+
+		// validate: primary node-state is shorthand and cannot combine with the two it composes
+		if primaryCii && (nodeState || askPrimary) {
 			err := fmt.Errorf("invalid query: %q implies (%q + %q); the explicit form must not be combined",
 				apc.QparamPrimaryCii, apc.QparamClusterInfo, apc.QparamAskPrimary)
 			p.writeErr(w, r, err)
 			return
 		}
-		// validate: cii and prr are mutually exclusive
-		if prr && (cii || pir) {
+		// validate: node-state and rebalance readiness are mutually exclusive
+		if checkRebalance && (nodeState || primaryCii) {
 			err := fmt.Errorf("invalid query: %q cannot be combined with %q or %q",
 				apc.QparamPrimaryReadyReb, apc.QparamClusterInfo, apc.QparamPrimaryCii)
 			p.writeErr(w, r, err)
 			return
 		}
-		wantNsti = cii || pir
-		mustBePrimary = askPrimary || pir
+
+		wantNodeState = nodeState || primaryCii
+
+		// internal health protocol
+		requirePrimary = askPrimary || primaryCii
+		startupReadiness = requirePrimary && cos.IsParseBool(query.Get(apc.QparamHealthReadiness))
 	}
 
 	var admitted bool
 
 	// 2. ordinary liveness/readiness probe
-	if !prr && !wantNsti {
-		plainPing := !mustBePrimary // i.e., !askPrimary
+	if !checkRebalance && !wantNodeState {
+		plainPing := !requirePrimary
 		if responded := p._health(w, r, plainPing); responded {
 			return
 		}
 		// arrived via intra-control and checkIntra passed
 		admitted = true
 	}
-	// prr is public on pub-net, but must be admitted when received via intra-control
+	// rebalance readiness is public, but requires admission when received via intra-control
 	smap := p.owner.smap.get()
-	if prr && _reqNet(r) == reqNetCtrl {
+	if checkRebalance && _reqNet(r) == reqNetCtrl {
 		if ecode, err := p.checkIntra(r, smap, false /*only primary*/); err != nil {
 			p.writeErr(w, r, err, ecode)
 			return
@@ -1341,8 +1351,8 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		admitted = true
 	}
 
-	// 3. cluster-info from any node (no Smap validation required for the bare cii case)
-	if wantNsti && !mustBePrimary && !prr {
+	// 3. node-state from any node (no Smap validation required without a primary role requirement)
+	if wantNodeState && !requirePrimary && !checkRebalance {
 		nsti := &cos.NodeStateInfo{}
 		p.fillNsti(nsti)
 		p.writeJSON(w, r, nsti, "cluster-info")
@@ -1369,12 +1379,12 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		if mustBePrimary {
+		if requirePrimary {
 			p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %q, %s",
 				p, senderID, smap.StringEx())
 			return
 		}
-		if prr {
+		if checkRebalance {
 			// readiness question, forward to actual primary
 			if !p.forwardCP(w, r, nil /*msg*/, "health(prr)") {
 				// (unlikely)
@@ -1387,8 +1397,12 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5. primary
+	if startupReadiness && smap.GetNode(senderID) != nil && !p.weightsReady(smap, r.Header.Get(apc.HdrSenderSmapVer)) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	// 5.1. primary ready to rebalance
-	if prr {
+	if checkRebalance {
 		if err := p.pready(smap, true); err != nil {
 			if cmn.Rom.V(5, cos.ModAIS) {
 				p.writeErr(w, r, err, http.StatusServiceUnavailable)
@@ -1399,7 +1413,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// 5.2. primary to provide its own NodeStateInfo
-	if wantNsti {
+	if wantNodeState {
 		nsti := &cos.NodeStateInfo{}
 		p.fillNsti(nsti)
 		p.writeJSON(w, r, nsti, "cluster-info")
@@ -1407,6 +1421,27 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// startup readiness when placement weights are involved (otherwise, a no-op):
+// - pending: wait for the primary to reconcile weights
+// - reconciled: wait for the starting node to hold the reconciled Smap (or newer)
+func (p *proxy) weightsReady(smap *smapX, senderSmapVer string) bool {
+	wver := p.primary().wver.Load()
+	if wver == 0 && !smap.IsWeighted() {
+		return true
+	}
+	if wver <= 0 {
+		if !p.ClusterStarted() {
+			return false // pending
+		}
+		// may have been reconciled in the meantime; otherwise, not reconciled by this primary (e.g., elected later)
+		if wver = p.primary().wver.Load(); wver <= 0 {
+			return true
+		}
+	}
+	v, err := strconv.ParseInt(senderSmapVer, 10, 64)
+	return err == nil && v >= wver
 }
 
 func (p *proxy) _health(w http.ResponseWriter, r *http.Request, plainPing bool) bool {

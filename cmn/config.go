@@ -65,11 +65,17 @@ type (
 // local config
 type (
 	LocalConfig struct {
-		FSP       FSPConf        `json:"fspaths"`
-		ConfigDir string         `json:"confdir"`
-		LogDir    string         `json:"log_dir"`
-		TestFSP   TestFSPConf    `json:"test_fspaths"`
-		HostNet   LocalNetConfig `json:"host_net"`
+		FSP       FSPConf             `json:"fspaths"`
+		ConfigDir string              `json:"confdir"`
+		LogDir    string              `json:"log_dir"`
+		TestFSP   TestFSPConf         `json:"test_fspaths"`
+		HostNet   LocalNetConfig      `json:"host_net"`
+		Placement *LocalPlacementConf `json:"placement,omitempty"`
+	}
+
+	// target's preferred admission weight; the primary's existing Smap assignment takes precedence
+	LocalPlacementConf struct {
+		Weight int64 `json:"weight,string,omitempty"`
 	}
 
 	// ais node: (local) network config
@@ -1342,6 +1348,14 @@ func (c *Config) Validate() error {
 	}
 	if err := c.LocalConfig.TestFSP.Validate(c); err != nil {
 		return err
+	}
+	if c.Placement != nil {
+		if c.Placement.Weight < 0 {
+			return fmt.Errorf("invalid local placement.weight %d: expecting a positive weight or 0 (use the cluster mean)", c.Placement.Weight)
+		}
+		if c.Placement.Weight > 0 && c.role != apc.Target {
+			return errors.New("local placement.weight applies only to targets")
+		}
 	}
 	// a) features vs other features b) features and vs other config
 	if err := c.Features.ValidateAsProps(c.Auth.RequiresProxyMediation()); err != nil {

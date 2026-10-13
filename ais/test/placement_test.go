@@ -7,6 +7,7 @@ package integration_test
 import (
 	"maps"
 	"net/http"
+	"os"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -604,6 +605,12 @@ func TestPlacementWeightsOneActive(t *testing.T) {
 
 // a target joining a weighted cluster gets the rounded mean weight of active targets
 func TestPlacementWeightsJoin(t *testing.T) {
+	for _, weight := range []int64{0, 60} {
+		t.Run(strconv.FormatInt(weight, 10), func(t *testing.T) { testPlacementWeightsJoin(t, weight) })
+	}
+}
+
+func testPlacementWeightsJoin(t *testing.T, requested int64) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 	var (
 		proxyURL = tools.RandomProxyURL(t)
@@ -628,6 +635,25 @@ func TestPlacementWeightsJoin(t *testing.T) {
 	tsi, _ := smap.GetRandTarget()
 	tlog.Logfln("decommission %s (weight %d)", tsi.StringEx(), weights[tsi.ID()])
 	cmd := tools.GetRestoreCmd(tsi)
+	if requested > 0 {
+		var localPath string
+		for _, arg := range cmd.Args {
+			if p, ok := strings.CutPrefix(arg, "-local_config="); ok {
+				localPath = p
+				break
+			}
+		}
+		tassert.Fatalf(t, localPath != "", "local config not found in restore command: %v", cmd.Args)
+		original, err := os.ReadFile(localPath)
+		tassert.CheckFatal(t, err)
+		var local cmn.LocalConfig
+		tassert.CheckFatal(t, cos.JSON.Unmarshal(original, &local))
+		local.Placement = &cmn.LocalPlacementConf{Weight: requested}
+		updated, err := cos.JSON.Marshal(&local)
+		tassert.CheckFatal(t, err)
+		tassert.CheckFatal(t, os.WriteFile(localPath, updated, 0o600))
+		t.Cleanup(func() { tassert.CheckError(t, os.WriteFile(localPath, original, 0o600)) })
+	}
 	var decommissioned, restoreStarted bool
 	t.Cleanup(func() {
 		if !decommissioned {
@@ -659,6 +685,9 @@ func TestPlacementWeightsJoin(t *testing.T) {
 	tools.WaitForRebalanceByID(t, bp, xid)
 
 	expected := smap.MeanPlacementWeight()
+	if requested > 0 {
+		expected = requested
+	}
 	tlog.Logfln("restore %s; expected weight %d (%s)", tsi.StringEx(), expected, smap.StrPlacementWeights())
 	err = tools.WaitNodePubAddrNotInUse(tsi, time.Minute)
 	tassert.CheckFatal(t, err)
@@ -673,6 +702,6 @@ func TestPlacementWeightsJoin(t *testing.T) {
 	nsi := smap.GetTarget(tsi.ID())
 	tassert.Fatalf(t, nsi != nil, "%s did not rejoin", tsi.StringEx())
 	tassert.Fatalf(t, nsi.PlacementWeight() == expected,
-		"%s: expected weight %d (mean of active), got %d", nsi.StringEx(), expected, nsi.PlacementWeight())
+		"%s: expected admission weight %d (request %d), got %d", nsi.StringEx(), expected, requested, nsi.PlacementWeight())
 	tlog.Logfln("rejoined: %s", smap.StrPlacementWeights())
 }

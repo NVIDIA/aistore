@@ -57,6 +57,46 @@ ais cluster placement clear-weights                               # same
 - equal weights place objects the same way as no weights; `show` reports them as uniform
 - quote node IDs: `[...]` is a glob pattern in most shells
 
+## Target admission and restart
+
+A target may specify a preferred weight in its local `ais_local.json`:
+
+```json
+{
+    "placement": {"weight": "300"}
+}
+```
+
+This is an admission preference, separate from the primary-assigned weight in Smap.
+When joining a weighted cluster, a new target uses its positive local preference, or
+the mean of existing active weights if the preference is absent or zero. Negative
+preferences are invalid. The primary checks the resulting cluster's weight ratio
+before admission. Once the cluster is running, a local preference does not enable weighting
+in an unweighted cluster (see primary startup below).
+
+A target that remains in Smap keeps its assigned weight after shutdown, crash, or
+restart, even if its local preference differs. Change an assigned weight with
+`ais cluster placement set-weights`. A target removed from Smap is a new admission.
+
+For a manual join, `ais cluster add-remove-nodes join IP:PORT --role=target --weight=300` supplies an
+explicit preference; otherwise the target gets the cluster mean. An existing
+Smap assignment takes precedence in either case.
+
+Primary startup assigns each joining target its saved Smap weight or, if there is none,
+its local preference. Once the cluster map is assembled, the primary decides:
+
+- a super-majority (2/3 + 1) of targets is weighted: the remaining targets get the mean weight;
+- otherwise, or if the resulting weights are invalid: the cluster starts unweighted
+  (logged as an error; the next rebalance moves data accordingly).
+
+If the assembled cluster map is weighted, pre-5.2 members are removed (with an upgrade
+message) before the super-majority count. In a weighted startup, a starting node declares
+readiness only after the primary reconciles weights and the node holds the reconciled
+(or newer) cluster map. Unweighted startups are unaffected.
+
+Local preferences persist across restarts: to clear weights for good, remove `placement.weight`
+from targets' local configs as well.
+
 ## Upgrade
 
 Older nodes cannot decode a cluster map with weights, or bucket metadata with placement overrides.

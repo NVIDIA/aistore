@@ -140,7 +140,14 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 
 	// fast path: quick admission during cluster startup/restart
 	p.owner.smap.mu.Lock()
-	msync, added, err := c.joinKalive()
+	msync, _, err := c.joinKalive()
+	if err == nil && (c.apiOp == apc.SelfJoin || c.apiOp == apc.AdminJoin) && !p.ClusterStarted() {
+		// retain peer metadata together with its Smap entry for primary startup
+		primary := p.primary()
+		primary.reg.mpl.Lock()
+		primary.reg.pool = append(primary.reg.pool, c.regReq)
+		primary.reg.mpl.Unlock()
+	}
 	p.owner.smap.mu.Unlock()
 	if c.joined != nil {
 		_logPutNode(c.nsi, c.osi, c.joined, false /*silent*/)
@@ -155,18 +162,6 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		p.writeErr(w, r, err)
 		return
 	}
-	if c.apiOp == apc.SelfJoin && (!p.ClusterStarted() || added) {
-		primary := p.primary()
-		if !added {
-			// motivation: preserve peer metadata even when it is already in local Smap
-			nlog.Warningln(p.String(), "adding", c.nsi.StringEx(), "to startup reg.pool without local Smap add", c.smap.StringEx())
-		}
-
-		primary.reg.mpl.Lock()
-		primary.reg.pool = append(primary.reg.pool, c.regReq)
-		primary.reg.mpl.Unlock()
-	}
-
 	c.dispatch(msync)
 }
 
@@ -193,6 +188,10 @@ func (p *proxy) fastKaliveRsp(w http.ResponseWriter, r *http.Request, smap *smap
 		)
 		if senderID == sid && senderSver != "" && senderSver == smap.vstr {
 			if si := smap.GetNode(sid); si != nil {
+				if !p.fastKaliveVer(r, si, smap) {
+					p.writeErr(w, r, errFastKalive, 0, Silent)
+					return
+				}
 				now := p.keepalive.heardFrom(sid)
 
 				// shared streams
@@ -208,6 +207,31 @@ func (p *proxy) fastKaliveRsp(w http.ResponseWriter, r *http.Request, smap *smap
 		}
 	}
 	p.writeErr(w, r, errFastKalive, 0, Silent)
+}
+
+// fast keepalive: check and record the sender's version
+// - pre-5.2 senders omit the header: accept unless placement is in use (slow path then rejects)
+func (p *proxy) fastKaliveVer(r *http.Request, si *meta.Snode, smap *smapX) bool {
+	ver := r.Header.Get(apc.HdrNodeVersion)
+
+	// fast path
+	if ver == cmn.VersionAIStore && p.primary().nodeVer(si.ID()) == ver {
+		return true // same as primary and already recorded (via sync.Map)
+	}
+
+	// slow (and unlikely) path
+	if ver == "" {
+		return !placementInUse(smap, p.owner.bmd.get())
+	}
+	parsed, ok := cos.ParseVersion(ver)
+	if !ok || enforceVerBoundary(ver) {
+		return false
+	}
+	if !cos.VersionAtLeast(ver, cmn.MinVerPlacement) && placementInUse(smap, p.owner.bmd.get()) {
+		return false
+	}
+	p.noteNodeVersion(si, ver, parsed)
+	return true
 }
 
 /////////////
@@ -240,6 +264,7 @@ func (c *clupost) decode(isPub bool) (stop bool) {
 		}
 		c.nsi = c.regReq.SI
 		// must be reachable and must respond
+		c.regReq.JoinWeight = c.nsi.PlacementWeight()
 		si, err := p._getSI(c.nsi)
 		if err != nil {
 			p.writeErrf(w, r, "%s: failed to obtain node info from %s: %v", p.si, c.nsi.StringEx(), err)
@@ -301,6 +326,7 @@ func (c *clupost) setActionCheckVer() (stop bool) {
 		}
 	case apc.SelfJoin:
 		if err := c.checkVer(); err != nil {
+			c.noteRejectedVer()
 			c.p.writeErr(c.w, c.r, err, http.StatusConflict)
 			return true
 		}
@@ -330,6 +356,11 @@ func (c *clupost) validate() (stop bool) {
 	nsi := c.nsi
 	if err := nsi.Validate(); err != nil {
 		p.writeErr(w, r, err)
+		return true
+	}
+	if c.regReq.JoinWeight < 0 || (c.regReq.JoinWeight > 0 && !nsi.IsTarget()) {
+		err := fmt.Errorf("invalid requested placement weight %d for %s (expecting a positive target weight)", c.regReq.JoinWeight, nsi.StringEx())
+		p.writeErr(w, r, newErrJoinRejected(r, err))
 		return true
 	}
 
@@ -567,6 +598,7 @@ func (c *clupost) adminJoinHandshake() (int, error) {
 	} else {
 		c.nversStr = res.header.Get(apc.HdrNodeVersion) // peer version (not the admin caller's)
 		if err = c.checkVer(); err != nil {
+			c.noteRejectedVer()
 			status = http.StatusConflict
 		} else {
 			c.nversParsed, _ = cos.ParseVersion(c.nversStr) // validated by checkNodeVer
@@ -710,12 +742,15 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 			return false, false, errors.New(p.String() + ": " + err.Error()) // pre-5.2
 		}
 	}
-	c.noteVersion(osi)
 	started, starting := p.ClusterStarted(), p.owner.rmd.starting.Load()
 	if !started || starting {
-		c.joinStartup(started)
+		if err := c.joinStartup(started); err != nil {
+			return false, false, err
+		}
+		c.noteVersion(osi)
 		return false, true, nil
 	}
+	c.noteVersion(osi)
 	return true, false, nil
 }
 
@@ -724,11 +759,14 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 // - self-join and absent keepalive (re-admission): verify join secret when configured (see joinVerified)
 // - admin-join: use the peer version obtained by its handshake; join-secret verification is TODO
 // - every request, including no-op re-registration: enforce version boundary and Smap/BMD placement
-// - primary startup: the working Smap is unweighted until mergeNodeProps
+// - primary startup: defer unweighted targets (see startupWeights)
 func (c *clupost) admit(osi *meta.Snode) error {
 	p, nsi, smap := c.p, c.nsi, c.smap
 	if !smap.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, smap, "cannot "+c.apiOp+" "+nsi.StringEx())
+	}
+	if c.regReq.JoinWeight < 0 || (c.regReq.JoinWeight > 0 && !nsi.IsTarget()) {
+		return newErrJoinRejected(c.r, fmt.Errorf("invalid requested placement weight %d for %s", c.regReq.JoinWeight, nsi.StringEx()))
 	}
 
 	absent := c.apiOp == apc.Keepalive && osi == nil
@@ -739,12 +777,49 @@ func (c *clupost) admit(osi *meta.Snode) error {
 	}
 
 	if err := c.checkVer(); err != nil {
+		c.noteRejectedVer()
 		return cmn.NewErrHTTP(c.r, err, http.StatusConflict)
+	}
+	if _, err := c.placementWeight(smap); err != nil {
+		return newErrJoinRejected(c.r, err)
 	}
 	if absent {
 		nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
 	}
 	return nil
+}
+
+// resolve and validate admission weight without modifying the Smap or joining node
+// - Smap assignment wins; otherwise the requested weight
+// - primary startup: no mean and no validation (see startupWeights)
+func (c *clupost) placementWeight(smap *smapX) (int64, error) {
+	if !c.nsi.IsTarget() {
+		return 0, nil
+	}
+	if old := smap.GetTarget(c.nsi.ID()); old != nil && old.PlacementWeight() > 0 {
+		return old.PlacementWeight(), nil // primary assignment wins, even after shutdown or crash
+	}
+	w := c.regReq.JoinWeight
+	if c.p.primary().startingUp && !c.p.ClusterStarted() {
+		// startup: defer to startupWeights
+		return w, nil
+	}
+	if !smap.IsWeighted() {
+		return 0, nil
+	}
+	if w == 0 {
+		w = smap.MeanPlacementWeight()
+	}
+	weights := make(map[string]int64, len(smap.Tmap)+1)
+	for tid, tsi := range smap.Tmap {
+		weights[tid] = tsi.PlacementWeight()
+	}
+	weights[c.nsi.ID()] = w
+	if _, err := meta.CheckPlacementWeights(weights); err != nil {
+		return 0, fmt.Errorf("cannot admit %s with placement weight %d: %w (check local placement.weight or omit it to use the cluster mean)",
+			c.nsi.StringEx(), w, err)
+	}
+	return w, nil
 }
 
 // joining node => primary: version boundary and placement
@@ -753,6 +828,16 @@ func (c *clupost) checkVer() error {
 		return err
 	}
 	return c.checkJoinPlacement(c.smap, c.bmd)
+}
+
+// record the version of an existing member that fails checkVer (see checkSameVersion, startupWeights)
+func (c *clupost) noteRejectedVer() {
+	if c.nversStr == "" || c.smap.GetNode(c.nsi.ID()) == nil {
+		return
+	}
+	if parsed, ok := cos.ParseVersion(c.nversStr); ok && !enforceVerBoundary(c.nversStr) {
+		c.p.noteNodeVersion(c.nsi, c.nversStr, parsed)
+	}
 }
 
 // record version of an accepted join (keepalive: admission only)
@@ -764,18 +849,29 @@ func (c *clupost) noteVersion(osi *meta.Snode) {
 }
 
 // under Smap lock
-func (c *clupost) joinStartup(started bool) {
+func (c *clupost) joinStartup(started bool) error {
 	p := c.p
 	clone := c.smap.clone()
 	// TODO [feature]: updated *nsi contents (e.g., different network) may not "survive" earlystart merge
+	weight, err := c.placementWeight(clone)
+	if err != nil {
+		return newErrJoinRejected(c.r, err)
+	}
 	c.osi = clone.putNode(c.nsi, c.flags)
+	if weight > 0 {
+		c.nsi.SetPlacementWeight(weight)
+	}
 	c.joined = clone
 	p.owner.smap.put(clone)
-	if started {
+
+	// - `started` - metasync is fine and expected
+	// - `started == false && startingUp == false` - when still starting up but already reconciled the weights
+	if started || !p.primary().startingUp {
 		actMsgExt := p.newAmsg(c.msg, nil)
 		_ = p.metasyncer.sync(revsPair{clone, actMsgExt})
 	}
 	c.setVerHdr()
+	return nil
 }
 
 func (c *clupost) mcastJoined() (string, error) {
@@ -821,7 +917,14 @@ func (c *clupost) _joinedPre(ctx *smapModifier, clone *smapX) error {
 	if err := c.checkJoinPlacement(clone, p.owner.bmd.get()); err != nil {
 		return cmn.NewErrHTTP(nil, err, http.StatusConflict)
 	}
+	weight, err := c.placementWeight(clone)
+	if err != nil {
+		return newErrJoinRejected(nil, err)
+	}
 	ctx.osi = clone.putNode(ctx.nsi, ctx.flags)
+	if weight > 0 {
+		ctx.nsi.SetPlacementWeight(weight)
+	}
 	if ctx.nsi.IsProxy() {
 		clone.staffIC()
 	}

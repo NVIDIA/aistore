@@ -17,14 +17,12 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
-// Node-version tracking (primary-side): the verMismatch map records version of any node
-// when the former != primary's.
+// Node-version tracking (primary-side): record the version of every observed node.
 // Rules:
-// - absence means no recorded mismatch: the node either reported the primary’s version
-//   or has not been observed;
-// - trust Smap first; entries in verMismatch are not pruned on membership events;
-// - empty/nil map means no known mismatches; it does not establish a same-version cluster;
+// - absence means unknown, including after primary reelection;
+// - trust Smap first; entries are not pruned on membership events;
 // - self-join, admin-join, and keepalive re-admission; recorded under the Smap lock once accepted;
+// - ordinary fast keepalives refresh versions, including after primary reelection;
 // - callers must enforce the version boundary first (see checkNodeVer).
 
 // Version boundary: v5.0 was the mandatory bridge release; 5.1+ refuses pre-5.0 peers in both directions.
@@ -36,32 +34,18 @@ const (
 
 func (p *proxy) noteNodeVersion(nsi *meta.Snode, nverStr string, nversParsed cos.Version) {
 	debug.Assert(nverStr != "", nsi) // boundary enforced prior to tracking
-	primary := p.primary()
-	if nverStr == cmn.VersionAIStore { // exact match (including rc suffix, if exists)
-		primary.reg.mtv.Lock()
-		if primary.reg.verMismatch != nil {
-			delete(primary.reg.verMismatch, nsi.ID())
-			if len(primary.reg.verMismatch) == 0 {
-				primary.reg.verMismatch = nil
-			}
-		}
-		primary.reg.mtv.Unlock()
-		return
-	}
-
-	// add and warn
-	primary.reg.mtv.Lock()
-	if primary.reg.verMismatch == nil {
-		primary.reg.verMismatch = make(map[string]string, 4)
-	}
-
-	old := primary.reg.verMismatch[nsi.ID()]
-	primary.reg.verMismatch[nsi.ID()] = nverStr
-	primary.reg.mtv.Unlock()
-
-	if old != nverStr {
+	old, _ := p.primary().reg.nodeVersions.Swap(nsi.ID(), nverStr)
+	if old != nverStr && nverStr != cmn.VersionAIStore {
 		_warnNodeVer(nsi, nverStr, nversParsed)
 	}
+}
+
+// return recorded version or empty string if unknown
+func (pr *primary) nodeVer(sid string) string {
+	if v, ok := pr.reg.nodeVersions.Load(sid); ok {
+		return v.(string)
+	}
+	return ""
 }
 
 // am primary here
@@ -106,27 +90,40 @@ func enforceVerBoundary(otherVerStr string) (reject bool) {
 	return !cos.VersionAtLeast(otherVerStr, cmn.MinVerNodeJoin)
 }
 
-// reject weighted Smap while node versions differ
+// reject placement updates until every Smap member has reported the primary's version
 func (p *proxy) checkSameVersion(smap *smapX) error {
 	var (
 		names   []string
 		primary = p.primary()
 	)
-	primary.reg.mtv.Lock()
-	for sid, ver := range primary.reg.verMismatch {
-		if si := smap.GetNode(sid); si != nil {
+	for _, nodes := range []meta.NodeMap{smap.Pmap, smap.Tmap} {
+		for sid, si := range nodes {
+			// maintenance: version-checked on rejoin (see checkJoinPlacement)
+			if sid == p.SID() || si.InMaintOrDecomm() {
+				continue
+			}
+			ver := primary.nodeVer(sid)
+			if ver == cmn.VersionAIStore {
+				continue
+			}
+			if ver == "" {
+				ver = "unknown"
+			}
 			names = append(names, si.StringEx()+"("+ver+")")
 		}
 	}
-
-	primary.reg.mtv.Unlock()
 	if len(names) == 0 {
 		return nil
 	}
 	slices.Sort(names)
 
-	return fmt.Errorf("%s: cannot set placement weights: node version mismatch %v (primary: %s) - complete the upgrade first",
+	return fmt.Errorf("%s: cannot set placement weights: node versions are unknown or differ %v (primary: %s) - wait for nodes to register or complete the upgrade",
 		p, names, cmn.VersionAIStore)
+}
+
+// placement in use: weighted Smap or bucket placement override(s)
+func placementInUse(smap *smapX, bmd *bucketMD) bool {
+	return smap.IsWeighted() || (bmd != nil && bmd.GetBucketWithPlacement() != nil)
 }
 
 // reject pre-5.2 joiner when the cluster uses placement: weighted Smap or bucket override(s)

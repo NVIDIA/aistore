@@ -969,6 +969,10 @@ func (p *proxy) _placementWeightsRMDPre(ctx *smapModifier, clone *smapX) error {
 // validate and apply weights to a private clone (preflight and locked commit)
 func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
 	ctx.status = 0
+	if !p.ClusterStarted() || p.owner.rmd.starting.Load() {
+		ctx.status = http.StatusServiceUnavailable
+		return fmt.Errorf("%s: cannot update placement weights during cluster startup - retry when the cluster is ready", p)
+	}
 	if !clone.isPrimary(p.si) {
 		ctx.status = http.StatusBadRequest
 		return newErrNotPrimary(p.si, clone, "cannot set placement weights")
@@ -1530,4 +1534,25 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 	config.Backend.Set(apc.AIS, aisConf)
 
 	return true, nil
+}
+
+// remove members that joined with a version that cannot decode the weighted Smap
+func (p *proxy) _rmPre52(clone *smapX) (msgs []string) {
+	primary := p.primary()
+	for _, nodes := range []meta.NodeMap{clone.Tmap, clone.Pmap} {
+		for sid, si := range nodes {
+			ver := primary.nodeVer(sid)
+			if ver == "" || sid == p.SID() || cos.VersionAtLeast(ver, cmn.MinVerPlacement) {
+				continue
+			}
+			msgs = append(msgs, fmt.Sprintf("%s removing %s version %s from weighted %s - upgrade to %s or later",
+				p, si.StringEx(), ver, clone.StringEx(), cmn.MinVerPlacement))
+			if si.IsTarget() {
+				clone.delTarget(sid)
+			} else {
+				clone.delProxy(sid)
+			}
+		}
+	}
+	return msgs
 }

@@ -29,8 +29,11 @@ const (
 	fmtErrInvIntraObj = "%s: intra-cluster %s(obj) failed sender validation (remaddr: %s, err: %v)"
 )
 
-// private keepalive rejection code
-const tcodeKaliveRejected = "ErrKaliveRejected"
+// private rejection codes
+const (
+	tcodeKaliveRejected = "ErrKaliveRejected"
+	tcodeJoinRejected   = "ErrJoinRejected" // the joining node must fix its request (e.g., placement weight)
+)
 
 // error types
 type (
@@ -91,6 +94,18 @@ var errNoBMD = errors.New("no bucket metadata")
 func isErrKaliveRejected(err error) bool {
 	herr := cmn.AsErrHTTP(err)
 	return herr != nil && herr.Status == http.StatusConflict && herr.TypeCode == tcodeKaliveRejected
+}
+
+// reject join outright: retrying with the same request won't help
+func newErrJoinRejected(r *http.Request, err error) *cmn.ErrHTTP {
+	herr := cmn.NewErrHTTP(r, err, http.StatusBadRequest)
+	herr.TypeCode = tcodeJoinRejected
+	return herr
+}
+
+func isErrJoinRejected(err error) bool {
+	herr := cmn.AsErrHTTP(err)
+	return herr != nil && herr.Status == http.StatusBadRequest && herr.TypeCode == tcodeJoinRejected
 }
 
 func (e *errTgtBmdUUIDDiffer) Error() string { return e.detail }

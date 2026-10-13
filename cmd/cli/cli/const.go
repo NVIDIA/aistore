@@ -654,6 +654,11 @@ var (
 			indent1 + "\t" + nvSyntaxRef,
 	}
 
+	joinWeightFlag = cli.Int64Flag{
+		Name:  "weight",
+		Usage: "Requested weight for a new target joining a weighted cluster; defaults to the cluster mean; existing Smap weight takes precedence",
+	}
+
 	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "Force execution of the command " + advancedUsageOnly}
 
 	// space cleanup
