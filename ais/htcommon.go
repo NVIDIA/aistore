@@ -781,6 +781,19 @@ func apiReqFree(a *apiRequest) {
 	apiReqPool.Put(a)
 }
 
+// validates the POST object name at its action-defined wire location
+func validateObjPostName(msg *apc.ActMsg, apireq *apiRequest) error {
+	switch {
+	case msg.Action == apc.ActBlobDl:
+		debug.Assert(apireq.after == 1)
+		return cos.ValidateOname(msg.Name)
+	case apireq.after == 2:
+		return cos.ValidateOname(apireq.items[1])
+	default:
+		return nil // bucket-only action (promote or unsupported)
+	}
+}
+
 //
 // misc helpers
 //

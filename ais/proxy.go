@@ -2106,6 +2106,10 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
+	if err := validateObjPostName(msg, apireq); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
 
 	// bucket
 	bck := apireq.bck
@@ -2217,9 +2221,6 @@ func _checkObjMv(bck *meta.Bck, msg *apc.ActMsg, apireq *apiRequest) error {
 		return cmn.NewErrUnsuppErr(err)
 	}
 	objName, objNameTo := apireq.items[1], msg.Name
-	if err := cos.ValidateWname(objName); err != nil {
-		return err
-	}
 	if err := cos.ValidateOname(objNameTo); err != nil {
 		return err
 	}

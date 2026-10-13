@@ -1365,6 +1365,10 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	if !t.verifyObjVerb(w, r, apireq.dpq) {
 		return
 	}
+	if err := validateObjPostName(msg, apireq); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 
 	var ecode int
 	// TODO: consolidate lom and bucket initialization and error handling across all actions

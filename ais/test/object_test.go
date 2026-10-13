@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -129,6 +130,63 @@ func TestObjectInvalidName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestObjectPostNameValidation(t *testing.T) {
+	var (
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+		bck      = cmn.Bck{Name: "post-name-" + trand.String(8), Provider: apc.AIS}
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	tests := []struct {
+		name, action, objName, msgName string
+		value                          any
+		status                         int
+		message                        string
+	}{
+		{name: "multipart upload", action: apc.ActMptUpload, objName: "../escape",
+			status: http.StatusBadRequest, message: `invalid object name "../escape"`},
+		{name: "multipart complete", action: apc.ActMptComplete, objName: "dir/../../escape",
+			value: apc.MptCompletedParts{}, status: http.StatusBadRequest, message: `invalid object name "dir/../../escape"`},
+		{name: "check lock", action: apc.ActCheckLock, objName: "valid/object", status: http.StatusOK},
+		{name: "blob download", action: apc.ActBlobDl, msgName: "~/escape", value: &apc.BlobMsg{},
+			status: http.StatusBadRequest, message: `invalid object name "~/escape"`},
+		{name: "promote", action: apc.ActPromote, msgName: apc.PromoteRoot + "/../escape", value: &apc.PromoteArgs{},
+			status:  http.StatusBadRequest,
+			message: `invalid promote source "/var/lib/ais/promote/../escape": must not contain '.' or '..' path elements`},
+		{name: "unsupported", action: "unsupported", status: http.StatusBadRequest, message: `invalid action "unsupported"`},
+	}
+	for _, test := range tests {
+		msg := &apc.ActMsg{Action: test.action, Name: test.msgName, Value: test.value}
+		err := postObjectAction(bp, bck, test.objName, msg)
+		if test.status == http.StatusOK {
+			tassert.CheckFatal(t, err)
+			continue
+		}
+		herr := cmn.AsErrHTTP(err)
+		tassert.Fatalf(t, herr != nil && herr.Status == test.status && herr.Message == test.message,
+			"%s: expected status %d and message %q, got %v", test.name, test.status, test.message, err)
+	}
+}
+
+func postObjectAction(bp api.BaseParams, bck cmn.Bck, objName string, msg *apc.ActMsg) error {
+	q := url.Values{}
+	bck.SetQuery(q)
+	bp.Method = http.MethodPost
+	req := api.AllocRp()
+	req.BaseParams = bp
+	req.Path = apc.URLPathObjects.Join(bck.Name)
+	if objName != "" {
+		req.Path = apc.URLPathObjects.Join(bck.Name, objName)
+	}
+	req.Query = q
+	req.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
+	req.Body = cos.MustMarshal(msg)
+	err := req.DoRequest()
+	api.FreeRp(req)
+	return err
 }
 
 func TestRemoteBucketObject(t *testing.T) {
