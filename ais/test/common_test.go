@@ -897,6 +897,19 @@ func (m *ioContext) stopMaintenance(target *meta.Snode) string {
 	return rebID
 }
 
+// expects snapshots filtered by a single xaction ID.
+func allTargetsFinished(snaps xact.MultiSnap, numTargets int) bool {
+	if len(snaps) != numTargets {
+		return false
+	}
+	for _, targetSnaps := range snaps {
+		if len(targetSnaps) != 1 || !targetSnaps[0].IsFinished() {
+			return false
+		}
+	}
+	return true
+}
+
 func (m *ioContext) setNonDefaultBucketProps() {
 	baseParams := tools.BaseAPIParams()
 	copies := int64(2)

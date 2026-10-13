@@ -290,6 +290,13 @@ func TestRechunkAbort(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tlog.Logln("Rechunk xaction aborted successfully")
 
+	// Abort signals the workers; wait for Finish before listing their rewritten objects.
+	numTargets := tools.GetClusterMap(t, proxyURL).CountActiveTs()
+	_, err = api.WaitForSnaps(baseParams, abortArgs, func(snaps xact.MultiSnap) (bool, bool, error) {
+		return allTargetsFinished(snaps, numTargets), false, nil
+	})
+	tassert.CheckFatal(t, err)
+
 	// List objects and count how many are chunked (informational)
 	tlog.Logln("Listing objects to check chunking state after abort...")
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsChunked}
