@@ -61,7 +61,7 @@ func (addr *localIPInfo) String() string {
 }
 
 func (addr *localIPInfo) warn() {
-	if addr.mtu <= 1500 {
+	if addr.mtu > 0 && addr.mtu <= 1500 {
 		nlog.Warningln("Warning: small MTU")
 	}
 }
@@ -72,6 +72,13 @@ func (addr *localIPInfo) warn() {
 
 // returns a list of local unicast IPs (and their MTU)
 func getLocalIPs(useIPv6 bool) ([]*localIPInfo, error) {
+	if cmn.Rom.TestingEnv() && cos.IsParseBool(os.Getenv(env.AisSkipIPDiscovery)) {
+		ip := "127.0.0.1"
+		if useIPv6 {
+			ip = "::1"
+		}
+		return []*localIPInfo{{ip: ip}}, nil
+	}
 	if useIPv6 {
 		return _getLocalIPv6s()
 	}

@@ -28,6 +28,9 @@ const (
 	// false or not set: IPv4 (default)
 	AisUseIPv6 = "AIS_USE_IPv6"
 
+	// local playground only: use loopback without enumerating network interfaces
+	AisSkipIPDiscovery = "AIS_SKIP_IP_DISCOVERY"
+
 	//
 	// HTTPS (see https://github.com/NVIDIA/aistore/blob/main/docs/environment-vars.md#https)
 	//

@@ -153,6 +153,7 @@ This group of environment variables is used exclusively by development scripts a
 
 | name         | comment |
 |--------------|---------|
+| `AIS_SKIP_IP_DISCOVERY` | when true in a local playground (`test_fspaths.count > 0`), skip interface discovery and use loopback (`127.0.0.1` or `::1`); MTU remains unknown |
 | `NUM_TARGET` | number of targets in a test cluster |
 | `NUM_PROXY`  | number of proxies (gateways) in a test cluster |
 | `NUM_CHUNKS` | when greater than zero, specifies the number of chunks each new PUT operation will produce |
