@@ -412,6 +412,7 @@ type (
 		stats    struct {
 			miss    atomic.Int64 // not found in cache
 			load    atomic.Int64 // cold loads won and cached
+			fail    atomic.Int64 // admitted cold loads returned no usable index
 			wait    atomic.Int64 // found still loading: waited for it
 			deny    atomic.Int64 // not admitted: fell back to scan
 			evict   atomic.Int64 // idle entries evicted
@@ -447,6 +448,8 @@ func (lom *LOM) loadCached(cache *sync.Map, key sidxKey) *sidxSlot {
 		slot.atime.Store(mono.NanoTime())
 		g.sidx.loaded(slot.idx.MemSize())
 		g.sidx.stats.load.Inc()
+	} else {
+		g.sidx.stats.fail.Inc()
 	}
 	slot.ready.Store(true)
 	if slot.idx == nil || slot.err != nil {
@@ -552,13 +555,14 @@ func (c *sidx) _stats(grade load.Load) {
 		return
 	}
 	s := &c.stats
-	miss, loaded, wait, deny, evict, clr := s.miss.Load(), s.load.Load(), s.wait.Load(), s.deny.Load(), s.evict.Load(), s.clear.Load()
-	sum := miss + loaded + wait + deny + evict + clr
+	miss, loaded, fail := s.miss.Load(), s.load.Load(), s.fail.Load()
+	wait, deny, evict, clr := s.wait.Load(), s.deny.Load(), s.evict.Load(), s.clear.Load()
+	sum := miss + loaded + fail + wait + deny + evict + clr
 	if sum == s.lastSum {
 		return
 	}
 	s.lastSum = sum
-	nlog.Infoln("shard-index cache: miss", miss, "load", loaded, "wait", wait, "deny", deny,
+	nlog.Infoln("shard-index cache: miss", miss, "load", loaded, "fail", fail, "wait", wait, "deny", deny,
 		"evict", evict, "clear", clr, "mem", load.Text[grade])
 }
 

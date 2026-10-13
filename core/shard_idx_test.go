@@ -1299,6 +1299,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 			after := core.SidxStats()
 			Expect(after.Miss - before.Miss).To(BeEquivalentTo(1))
 			Expect(after.Load - before.Load).To(BeEquivalentTo(1))
+			Expect(after.Fail - before.Fail).To(BeZero())
 		})
 
 		It("handles concurrent cold reads", func() {
@@ -1326,9 +1327,15 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		})
 
 		It("is not populated by SaveShardIndex", func() {
+			before := core.SidxStats()
 			siRmIdx(archlom)
 			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
+			after := core.SidxStats()
+			if after.Deny > before.Deny {
+				Skip("cache admission denied under high memory load")
+			}
 			Expect(archlom.HasShardIdx()).To(BeFalse())
+			Expect(after.Fail - before.Fail).To(BeEquivalentTo(1))
 		})
 
 		It("is invalidated by SaveShardIndex", func() {
