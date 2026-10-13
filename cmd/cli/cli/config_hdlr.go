@@ -7,9 +7,11 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"regexp"
+	"maps"
+	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -20,8 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/core/meta"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -34,7 +36,17 @@ const configClusterUsage = "Configure AIS cluster.\n" +
 	indent1 + "\t- 'ais config cluster log.modules ec xs'\t- elevate verbosity for selected modules;\n" +
 	indent1 + "\t- 'ais config cluster features S3-API-via-Root'\t- enable feature flag;\n" +
 	indent1 + "\t- 'ais config cluster features none'\t- reset all feature flags;\n" +
-	indent1 + "\t- 'ais config cluster log.modules none'\t- reset log modules"
+	indent1 + "\t- 'ais config cluster log.modules none'\t- reset log modules;\n" +
+	indent1 + "\t- 'ais config cluster log.level=4 log.modules=\"ec xs\"'\t- set level and modules in one command;\n" +
+	indent1 + "\t- 'ais config cluster space.highwm=90 space.lowwm 80'\t- several values, mixed forms;\n" +
+	indent1 + "\t- ais config cluster checksum='{\"type\":\"md5\",\"validate_warm_get\":true}'\t- JSON-formatted section.\n" +
+	nvUsageRef
+
+const configCLISetUsage = "Update CLI configuration, e.g.:\n" +
+	indent1 + "\t- 'ais config cli set timeout.tcp_timeout=60s'\t- set TCP timeout;\n" +
+	indent1 + "\t- 'ais config cli set timeout.tcp_timeout 60s timeout.http_timeout 5m'\t- several values;\n" +
+	indent1 + "\t- 'ais config cli'\t- show CLI configuration.\n" +
+	nvUsageRef
 
 const configNodeUsage = "Configure AIS node.\n" +
 	indent1 + "Each node distributed across the cluster has 'inherited' (from cluster config) and 'local' configuration.\n" +
@@ -45,7 +57,9 @@ const configNodeUsage = "Configure AIS node.\n" +
 	indent1 + "\t- 'ais config node NODE local host_net --json'\t- show node's network config;\n" +
 	indent1 + "\t- 'ais config node NODE log.level 4'\t- set node's log level;\n" +
 	indent1 + "\t- 'ais config node NODE log.modules none'\t- reset log modules;\n" +
-	indent1 + "\t- 'ais config node NODE disk.iostat_time_long=4s'\t- update disk timing (in re: \"disk utilization smoothing\")"
+	indent1 + "\t- 'ais config node NODE disk.iostat_time_long=4s'\t- update disk timing (in re: \"disk utilization smoothing\");\n" +
+	indent1 + "\t- 'ais config node NODE log.level=4 log.modules=ec,xs'\t- set node's level and modules in one command.\n" +
+	nvUsageRef
 
 var (
 	configCmdsFlags = map[string][]cli.Flag{
@@ -106,7 +120,7 @@ var (
 			makeAlias(&showCmdConfig, &mkaliasOpts{newName: commandShow}),
 			{
 				Name:         cmdCluster,
-				ArgsUsage:    keyValuePairsArgument,
+				ArgsUsage:    nvPairsArgument,
 				Flags:        sortFlags(configCmdsFlags[cmdCluster]),
 				Action:       setCluConfigHandler,
 				Usage:        configClusterUsage,
@@ -148,8 +162,8 @@ var (
 			},
 			{
 				Name:         cmdCLISet,
-				Usage:        "Update CLI configuration",
-				ArgsUsage:    keyValuePairsArgument,
+				Usage:        configCLISetUsage,
+				ArgsUsage:    nvPairsArgument,
 				Flags:        sortFlags(clicfgCmdFlags[cmdCLISet]),
 				Action:       setCfgCLI,
 				BashComplete: cliPropCompletions,
@@ -166,12 +180,11 @@ var (
 // TODO: prune config.ClusterConfig - hide deprecated "non_electable"
 func setCluConfigHandler(c *cli.Context) error {
 	var (
-		nvs        cos.StrKVs
-		config     cmn.Config
-		propList   = make([]string, 0, 48)
-		args       = c.Args()
-		kvs        = args.Tail()
-		realConfig *cmn.ClusterConfig
+		nvs      cos.StrKVs
+		config   cmn.Config
+		propList = make([]string, 0, 48)
+		args     = c.Args()
+		kvs      = args.Tail()
 	)
 	err := cmn.IterFields(&config.ClusterConfig, func(tag string, _ cmn.IterField) (err error, b bool) {
 		propList = append(propList, tag)
@@ -182,7 +195,8 @@ func setCluConfigHandler(c *cli.Context) error {
 	}, cmn.IterOpts{Allowed: apc.Cluster})
 	debug.AssertNoErr(err)
 
-	if slices.Contains(propList, strings.TrimSpace(args.First())) || strings.Contains(args.First(), keyAndValueSeparator) {
+	first := strings.TrimSpace(args.First())
+	if slices.Contains(propList, first) || nvEqual(first) >= 0 || (c.NArg() > 1 && isCfgSection(propList, first)) {
 		kvs = args
 	}
 	if len(kvs) == 0 {
@@ -199,10 +213,11 @@ func setCluConfigHandler(c *cli.Context) error {
 		}
 		return err
 	}
-	for k := range nvs {
-		if !slices.Contains(propList, k) {
-			return fmt.Errorf("invalid property name %q%s", k, examplesCluSetCfg)
+	for k, v := range nvs {
+		if slices.Contains(propList, k) || (nvJSON(v) && isCfgSection(propList, k)) {
+			continue
 		}
+		return fmt.Errorf("invalid property name %q%s", k, examplesCluSetCfg)
 	}
 
 	_, useMsg, err := isFmtJSON(nvs)
@@ -216,36 +231,11 @@ func setCluConfigHandler(c *cli.Context) error {
 		goto show
 	}
 
-	for k, v := range nvs {
-		if k == feat.PropName {
-			if realConfig == nil {
-				realConfig, err = api.GetClusterConfig(apiBP)
-				if err != nil {
-					return V(err)
-				}
-			}
-
-			nf, err := parseFeatureFlags(v)
-			if err != nil {
-				return fmt.Errorf("invalid feature flag %q, err: %v", v, err)
-			}
-
-			cf := realConfig.Features
-			if nf.IsSet(feat.S3ReverseProxy) && !cf.IsSet(feat.S3ReverseProxy) {
-				actionWarn(c, "reverse-proxy mode of operation _may_ (and likely will) degrade scalability and performance!\n")
-			}
-			if changed := (cf ^ nf) & feat.RestartRequired; changed != 0 {
-				actionWarnf(c, "restart required for %v to take effect.\n", changed.Names())
-			}
-
-			nvs[k] = nf.String() // FormatUint
-		}
-		if k == confLogModules { // (ref 836)
-			if nvs[confLogLevel], err = parseLogModules(v); err != nil {
-				return err
-			}
-			delete(nvs, confLogModules)
-		}
+	if err := setLogModules(nvs, nil); err != nil {
+		return err
+	}
+	if err := setFeatureFlags(c, nvs); err != nil {
+		return err
 	}
 
 	// assorted named fields that require (cluster | node) restart
@@ -306,61 +296,175 @@ func warnIntraClusterAuthPrestage(c *cli.Context, nvs cos.StrKVs) {
 	}
 }
 
-// an extra call to get the current (ref 836)
-func parseLogModules(v string) (string, error) {
+// convert feature flags to their numeric representation; warn when switching to reverse-proxy or restart is required
+func setFeatureFlags(c *cli.Context, nvs cos.StrKVs) error {
+	v, ok := nvs[feat.PropName]
+	if !ok {
+		return nil
+	}
+	nf, err := parseFeatureFlags(v)
+	if err != nil {
+		return fmt.Errorf("invalid feature flag %q, err: %v", v, err)
+	}
 	config, err := api.GetClusterConfig(apiBP)
+	if err != nil {
+		return V(err)
+	}
+	cf := config.Features
+	if nf.IsSet(feat.S3ReverseProxy) && !cf.IsSet(feat.S3ReverseProxy) {
+		actionWarn(c, "reverse-proxy mode of operation _may_ (and likely will) degrade scalability and performance!\n")
+	}
+	if changed := (cf ^ nf) & feat.RestartRequired; changed != 0 {
+		actionWarnf(c, "restart required for %v to take effect.\n", changed.Names())
+	}
+	nvs[feat.PropName] = nf.String() // FormatUint
+	return nil
+}
+
+// combine log.modules with log level into a single log.level value (ref 836)
+// - validate modules before any API call
+// - level: log.level from the same command line, if present; otherwise current (cluster or node)
+func setLogModules(nvs cos.StrKVs, node *meta.Snode) error {
+	v, ok := nvs[confLogModules]
+	if !ok {
+		return nil
+	}
+	modules := []string{""} // empty or "none": reset
+	if v != "" && v != apc.ResetToken {
+		if mod := badLogModule(v); mod != "" {
+			return fmt.Errorf("invalid %s value %q (supported: %s; use %s=%s to reset)",
+				confLogModules, mod, strings.Join(cos.Mods[:], ", "), confLogModules, apc.ResetToken)
+		}
+		modules = splitList(v)
+	}
+
+	var level int
+	if lv, ok := nvs[confLogLevel]; ok {
+		if _, err := strconv.Atoi(lv); err != nil {
+			return fmt.Errorf("invalid %s value %q: %v", confLogLevel, lv, err)
+		}
+		if err := cos.LogLevel(lv).Validate(); err != nil {
+			return err
+		}
+		level, _ = cos.LogLevel(lv).Parse()
+	} else {
+		current, err := currentLogLevel(node)
+		if err != nil {
+			return err
+		}
+		level, _ = current.Parse()
+	}
+
+	var ll cos.LogLevel
+	ll.Set(level, modules)
+	nvs[confLogLevel] = string(ll)
+	delete(nvs, confLogModules)
+	return nil
+}
+
+// return current cluster (node == nil) or node log level
+func currentLogLevel(node *meta.Snode) (cos.LogLevel, error) {
+	if node == nil {
+		config, err := api.GetClusterConfig(apiBP)
+		if err != nil {
+			return "", V(err)
+		}
+		return config.Log.Level, nil
+	}
+	config, err := api.GetDaemonConfig(apiBP, node)
 	if err != nil {
 		return "", V(err)
 	}
-	level, _ := config.Log.Level.Parse()
-	if v == "" || v == apc.ResetToken {
-		config.Log.Level.Set(level, []string{""})
-	} else {
-		config.Log.Level.Set(level, splitCsv(v))
-	}
-	return string(config.Log.Level), nil
+	return config.Log.Level, nil
 }
 
-// E.g.:
-// $ ais config cluster checksum.type='{"type":"md5"}'
+// e.g.: ais config cluster checksum='{"type":"md5"}'
+// - reject mixed JSON-formatted and plain values
 func isFmtJSON(nvs cos.StrKVs) (val string, ans bool, err error) {
-	jsonRe := regexp.MustCompile(`^{.*}$`)
+	var plain bool
 	for _, v := range nvs {
-		if !jsonRe.MatchString(v) {
-			if ans {
-				err = fmt.Errorf("cannot have both json-formatted and plain key=value args (%+v) in one command line", nvs)
-				return
-			}
-			continue
+		if nvJSON(v) {
+			val, ans = v, true
+		} else {
+			plain = true
 		}
-		val, ans = v, true
 	}
-	return
+	if ans && plain {
+		err = fmt.Errorf("cannot have both JSON-formatted and plain name=value pairs (%+v) in one command line", nvs)
+	}
+	return val, ans, err
 }
 
-// TODO: remove switch w/ assorted hardcoded sections - use reflection
+// set JSON-formatted cluster config sections in a single request
 func setcfg(c *cli.Context, nvs cos.StrKVs) error {
-	toUpdate := &cmn.ConfigToSet{}
-	for k, v := range nvs {
-		switch {
-		case k == "backend" || strings.HasPrefix(k, "backend."):
-			jsoniter.Unmarshal([]byte(v), &toUpdate.Backend)
-		case k == "mirror" || strings.HasPrefix(k, "mirror."):
-			jsoniter.Unmarshal([]byte(v), &toUpdate.Mirror)
-		case k == "ec" || strings.HasPrefix(k, "ec."):
-			jsoniter.Unmarshal([]byte(v), &toUpdate.EC)
-		case k == "log" || strings.HasPrefix(k, "log."):
-			jsoniter.Unmarshal([]byte(v), &toUpdate.Log)
-		case k == "checksum" || strings.HasPrefix(k, "checksum."):
-			jsoniter.Unmarshal([]byte(v), &toUpdate.Cksum)
-		default:
-			return fmt.Errorf("cannot update config using JSON-formatted %q - "+NIY, k)
+	toUpdate, err := cfgToSet(nvs)
+	if err != nil {
+		return err
+	}
+	// inspect supplied leaves, including those nested inside a JSON section
+	err = cmn.IterFields(toUpdate, func(tag string, field cmn.IterField) (error, bool) {
+		value := reflect.ValueOf(field.Value())
+		if !value.IsValid() || value.IsZero() {
+			return nil, false
 		}
-		if err := api.SetClusterConfigUsingMsg(apiBP, toUpdate, flagIsSet(c, transientFlag)); err != nil {
-			return V(err)
+		for _, name := range cmn.ConfigRestartRequired {
+			if tag == name || strings.HasPrefix(tag, name+".") {
+				actionWarnf(c, "cluster restart required for changes to %q to take effect.\n", tag)
+				return nil, true
+			}
+		}
+		return nil, false
+	})
+	debug.AssertNoErr(err)
+	return V(api.SetClusterConfigUsingMsg(apiBP, toUpdate, flagIsSet(c, transientFlag)))
+}
+
+// convert JSON-formatted values to cmn.ConfigToSet
+// - name is a path: place each value at that path (e.g., net.http => {"net":{"http":VALUE}})
+// - merge values that share a section; more specific paths override enclosing sections
+func cfgToSet(nvs cos.StrKVs) (*cmn.ConfigToSet, error) {
+	var (
+		toUpdate = &cmn.ConfigToSet{}
+		sections = cfgSections()
+	)
+	for _, k := range slices.Sorted(maps.Keys(nvs)) {
+		path := strings.Split(k, ".")
+		if !slices.Contains(sections, path[0]) {
+			return nil, fmt.Errorf("cannot update config using JSON-formatted %q - "+NIY, k)
+		}
+		val := nvs[k]
+		for i := len(path) - 1; i >= 0; i-- {
+			val = `{"` + path[i] + `":` + val + `}`
+		}
+		if err := cos.JSON.Unmarshal([]byte(val), toUpdate); err != nil {
+			return nil, fmt.Errorf("invalid JSON-formatted %q: %v", k, err)
 		}
 	}
-	return nil
+	return toUpdate, nil
+}
+
+// return true if name is a config section or sub-section (a prefix of property names)
+func isCfgSection(propList []string, name string) bool {
+	prefix := name + "."
+	for _, prop := range propList {
+		if strings.HasPrefix(prop, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// return top-level cmn.ConfigToSet JSON tags
+func cfgSections() []string {
+	t := reflect.TypeFor[cmn.ConfigToSet]()
+	sections := make([]string, 0, t.NumField())
+	for f := range t.Fields() {
+		tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if tag != "" && tag != "-" {
+			sections = append(sections, tag)
+		}
+	}
+	return sections
 }
 
 //nolint:staticcheck // `localNodeCfgErr` with punctuation for usability
@@ -373,7 +477,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 		propList     = make([]string, 0, 48)
 	)
 	if c.NArg() == 0 {
-		return missingKeyValueError(c)
+		return missingNVError(c)
 	}
 	node, sname, err := getNode(c, args.First())
 	if err != nil {
@@ -389,7 +493,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	debug.AssertNoErr(err)
 
 	kvs := args.Tail()
-	if slices.Contains(propList, strings.TrimSpace(args.First())) || strings.Contains(args.First(), keyAndValueSeparator) {
+	if slices.Contains(propList, strings.TrimSpace(args.First())) || nvEqual(args.First()) >= 0 {
 		kvs = args
 	}
 	if len(kvs) == 0 || (len(kvs) == 1 && (kvs[0] == cfgScopeLocal || kvs[0] == cfgScopeInherited)) {
@@ -413,13 +517,10 @@ func setNodeConfigHandler(c *cli.Context) error {
 	if args.Get(1) == cfgScopeLocal {
 		return errors.New(localNodeCfgErr)
 	}
-	for k, v := range nvs { // (ref 836)
-		if k == confLogModules {
-			if nvs[confLogLevel], err = parseLogModules(v); err != nil {
-				return err
-			}
-			delete(nvs, confLogModules)
-		}
+	if err := setLogModules(nvs, node); err != nil {
+		return err
+	}
+	for k := range nvs {
 		if k == feat.PropName {
 			return fmt.Errorf("feature flags have cluster scope - cannot change for %s\n(tip: use 'ais config cluster features')", sname)
 		}
@@ -525,7 +626,7 @@ func showCfgCLI(c *cli.Context) (err error) {
 
 func setCfgCLI(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingKeyValueError(c)
+		return missingNVError(c)
 	}
 
 	var nvs cos.StrKVs

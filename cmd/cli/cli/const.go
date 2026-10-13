@@ -324,16 +324,17 @@ const (
 	etlNameListArgument      = "ETL_NAME [ETL_NAME ...]"
 	etlNameOrSelectorArgs    = "[ETL_NAME ...] [--all] [-f <file-or-url>]"
 
-	// key/value
-	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"
-	jsonKeyValueArgument  = "JSON-formatted-KEY-VALUE"
+	// name/value
+	nvPairsArgument = "NAME=VALUE [NAME=VALUE...]"
+	jsonNVArgument  = "JSON-formatted-NAME-VALUE"
 
 	// Buckets
 	bucketArgument         = "BUCKET"
 	optionalBucketArgument = "[BUCKET]"
 	bucketsArgument        = "BUCKET [BUCKET...]"
-	bucketPropsArgument    = bucketArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument
+	bucketPropsArgument    = bucketArgument + " " + jsonNVArgument + " | " + nvPairsArgument
 	bucketAndPropsArgument = "BUCKET [PROP_PREFIX]"
+	bpropsArgument         = "BUCKET [PROP_PREFIX | " + nvPairsArgument + "]"
 
 	bucketObjectOrTemplateMultiArg = "BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]"
 
@@ -414,7 +415,7 @@ const (
 	showClusterConfigArgument = "[CONFIG_SECTION]"
 	showRemoteConfigArgument  = aliasArgument + " [CONFIG_SECTION]"
 	configSectionNotFoundHint = "Try '%s' to see all sections, or remove --json flag for table format"
-	nodeConfigArgument        = nodeIDArgument + " " + keyValuePairsArgument
+	nodeConfigArgument        = nodeIDArgument + " " + nvPairsArgument
 
 	// remais
 	attachRemoteAISArgument = aliasURLPairArgument
@@ -605,7 +606,7 @@ var (
 		Name: "filter",
 		Usage: "Regular expression to filter job table rows based on column values, format: \"COLUMN=PATTERN\", e.g.:\n" +
 			indent4 + "\t--filter \"STATE=Running\" - show only running jobs\n" +
-			indent4 + "\t--filter \"NODE=(FFIt8090|UTat8088)\" - show jobs for specific nodes\n" +
+			indent4 + "\t--filter \"NODE=(kXRtfPUg|jpJtCQyq)\" - show jobs for specific nodes\n" +
 			indent4 + "\t--filter \"BUCKET=.*ais-.*\" - show jobs for buckets matching pattern\n" +
 			indent4 + "\t--filter \"KIND=rebalance.*\" - show only rebalance jobs\n" +
 			indent4 + "\tnote: use --all to include finished jobs in any filter",
@@ -643,11 +644,14 @@ var (
 		Usage: "Create bucket with the specified (non-default) properties, e.g.:\n" +
 			indent1 + "\t* ais create ais://mmm --props=\"versioning.validate_warm_get=false versioning.synchronize=true\"\n" +
 			indent1 + "\t* ais create ais://nnn --props='mirror.enabled=true mirror.copies=4 checksum.type=md5'\n" +
-			indent1 + "\t* ais create s3://bbb --props='extra.cloud.profile=prod extra.cloud.endpoint=https://s3.example.com'\n" +
+			indent1 + "\t* ais create s3://bbb --props='extra.aws.profile=prod extra.aws.endpoint=https://s3.example.com'\n" +
+			indent1 + "\t* ais create ais://nnn --props='checksum.type=md5 extra.custom=owner:\\ team-a'\t- escape spaces within a value\n" +
+			indent1 + "\t* ais create ais://nnn --props='{\"mirror\":{\"enabled\":true,\"copies\":2}}'\t- JSON-formatted\n" +
 			"\tTips:\n" +
 			indent1 + "\t  1) Use '--props' to override properties that a new bucket would normally inherit from cluster config at creation time.\n" +
 			indent1 + "\t  2) Use '--props' to set up an existing cloud bucket with a custom profile and/or custom endpoint/region.\n" +
-			indent1 + "\tSee also: 'ais bucket props show' and 'ais bucket props set'",
+			indent1 + "\tSee also: 'ais bucket props show' and 'ais bucket props set'\n" +
+			indent1 + "\t" + nvSyntaxRef,
 	}
 
 	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "Force execution of the command " + advancedUsageOnly}

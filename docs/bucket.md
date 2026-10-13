@@ -221,6 +221,19 @@ The properties:
 * are applied cluster-wide via metasync;
 * include data layout, checksumming, EC/mirroring, LRU, rate limiting, backend linkage, access control, and more.
 
+From the CLI, `ais bucket props` shows and updates properties; the `show` and `set` subcommands are optional:
+
+```console
+ais bucket props ais://abc                                      # show all properties
+ais bucket props ais://abc mirror --json                        # show one section in JSON
+ais bucket props ais://abc mirror.copies                        # show one property
+ais bucket props ais://abc mirror.enabled=true mirror.copies=2  # update (same as 'ais bucket props set')
+ais bucket props ais://abc '{"checksum":{"type":"md5"}}'        # update using JSON
+ais bucket props reset ais://abc                                # restore cluster defaults
+```
+
+Updates change only the properties given - by name or in the JSON - and keep all others. Assignments use the same [name/value syntax](/docs/cli.md#namevalue-arguments) as `ais config cluster`. For details and many more examples, see [CLI: bucket properties](/docs/cli/bucket.md#show-bucket-properties).
+
 At the top level:
 
 | JSON key       | Type              | What it controls                                                            |
@@ -466,7 +479,7 @@ AIS clusters can attach to each other, forming a global namespace of distributed
 
 ```console
 # Attach with alias
-ais cluster remote-attach remais=http://remote-proxy:8080
+ais cluster remote-attach remais=https://remais.example.com:51080
 
 # Verify attachment
 ais show remote-cluster
@@ -1094,9 +1107,9 @@ ais ls s3://large-bucket --limit 10000
 | `ais bucket rm <cloud-bucket>` | Remove from BMD, evict cached objects |
 | `ais evict <bucket>` | Same as rm for cloud buckets |
 | `ais prefetch <bucket>` | Proactively cache remote objects |
-| `ais bucket props set` | Update properties, metasync cluster-wide |
-| `ais bucket props reset` | Restore cluster defaults |
-| `ais bucket props show` | Display current properties |
+| `ais bucket props [show] <bucket> [section]` | Display current properties |
+| `ais bucket props [set] <bucket> <name=value ...>` | Update properties, metasync cluster-wide |
+| `ais bucket props reset <bucket>` | Restore cluster defaults |
 
 All operations respect namespaces. `ais ls s3://#ns1/bucket` and `ais ls s3://#ns2/bucket` operate on different buckets.
 
@@ -1131,7 +1144,7 @@ ais create s3://restricted --skip-lookup \
 # ─────────────────────────────────────────────────────────────
 # Remote AIS cluster
 # ─────────────────────────────────────────────────────────────
-ais cluster remote-attach remais=http://remote:8080
+ais cluster remote-attach remais=https://remais.example.com:51080
 ais ls ais://@remais/
 ais create ais://@remais/new-bucket
 
@@ -1150,8 +1163,9 @@ ais evict s3://bucket --keep-md
 # ─────────────────────────────────────────────────────────────
 # Properties
 # ─────────────────────────────────────────────────────────────
-ais bucket props show s3://bucket
-ais bucket props set s3://bucket mirror.enabled=true mirror.copies=2
+ais bucket props s3://bucket                                       # show ('show' is optional)
+ais bucket props s3://bucket mirror --json
+ais bucket props s3://bucket mirror.enabled=true mirror.copies=2  # update ('set' is optional)
 ais bucket props reset s3://bucket
 ```
 

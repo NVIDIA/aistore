@@ -358,9 +358,11 @@ func TestPlacementCLI(t *testing.T) {
 	tassert.Fatalf(t, show == run("show", "placement"), "show placement differs from canonical command")
 	tassert.Fatalf(t, show == run("show", "cluster", "placement"), "show cluster placement differs from canonical command")
 	share := strconv.FormatFloat(100/float64(len(weights)), 'f', 1, 64) + "%"
+	// equal weights: banner, header, one row per target
 	lines := strings.Split(strings.TrimSpace(show), "\n")
-	tassert.Fatalf(t, len(lines) == len(weights)+1, "unexpected placement table: %s", show)
-	for _, line := range lines[1:] {
+	tassert.Fatalf(t, len(lines) == len(weights)+2, "unexpected placement table: %s", show)
+	tassert.Fatalf(t, strings.Contains(lines[0], "uniform (target weights are set and equal)"), "equal weights banner: %s", show)
+	for _, line := range lines[2:] {
 		fields := strings.Fields(line)
 		tassert.Fatalf(t, len(fields) == 3 && fields[1] == strconv.FormatInt(weight, 10) && fields[2] == share,
 			"large weights: expected share %s, got %q", share, line)
@@ -378,7 +380,7 @@ func TestPlacementCLI(t *testing.T) {
 	wait(out)
 	checkPlacementWeights(t, tools.GetClusterMap(t, proxyURL), weights)
 
-	// explicit assignments override rest in either order; separators are interchangeable
+	// explicit assignments override rest in either order; assignment forms are interchangeable
 	for _, pair := range [][]string{
 		{"rest=" + strconv.FormatInt(weight, 10), meta.Tname(tid) + "=" + strconv.FormatInt(weights[tid], 10)},
 		{meta.Tname(tid) + "=", strconv.FormatInt(weights[tid], 10), "rest", "=" + strconv.FormatInt(weight, 10)},

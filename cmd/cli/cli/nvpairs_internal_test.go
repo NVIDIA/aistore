@@ -132,6 +132,7 @@ func TestNVPairsLists(t *testing.T) {
 		{"access", "GET", "PUT", "features", "S3-Use-Path-Style", "checksum.type", "md5"},
 		{"access=GET,PUT", "features=S3-Use-Path-Style", "checksum.type=md5"},
 		{"access", "=", "GET", "PUT", "features", "=S3-Use-Path-Style", "checksum.type=", "md5"},
+		{"access=GET PUT", "features=S3-Use-Path-Style", "checksum.type=md5"}, // members within one argument
 	} {
 		nvs, err := makeBckPropPairs(args)
 		want := cos.StrKVs{"access": (apc.AceGET | apc.AcePUT).String(), "features": feat.S3UsePathStyle.String(), "checksum.type": "md5"}
@@ -149,6 +150,7 @@ func TestNVPairsKnownNames(t *testing.T) {
 	}{
 		{[]string{"mirror.enabled", "mirror.copies", "2"}, `missing property "mirror.enabled" value`},
 		{[]string{"checksum.type", "mirror.enabled", "true"}, `missing property "checksum.type" value`},
+		{[]string{"checksum.type", "mirror.enabled=true"}, `missing property "checksum.type" value`},
 		{[]string{"access", "GET", "HEAD", "mirror.copies", "3"}, `invalid access value "HEAD"`},
 		{[]string{"features", "S3-Use-Path-Style", "bogus", "checksum.type", "md5"}, `invalid features value "bogus"`},
 		{[]string{"=true"}, `missing property name in "=true"`},

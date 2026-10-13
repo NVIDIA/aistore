@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -50,6 +51,8 @@ Usage examples:
 - ais bucket props set BUCKET checksum.type=xxhash
 - ais bucket props set BUCKET checksum.type=md5 checksum.validate_warm_get=true
 - ais bucket props BUCKET checksum		# to show
+- ais bucket props BUCKET checksum --json	# to show in JSON
+- ais bucket props BUCKET checksum.type=md5	# 'set' is optional
 - ais bucket props set BUCKET backend_bck=s3://abc
 - ais bucket props set BUCKET backend_bck=none	# to reset
   (see docs/cli for details)
@@ -181,7 +184,15 @@ const shardIndexSummaryUsage = "Summarize TAR objects in a bucket and their shar
 	indent1 + "\t- 'ais bucket shard-index summary ais://nnn --refresh 1s'\t- print periodic progress while summarizing."
 
 // ais bucket ... props
-const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs,\n" +
+const bpropsUsage = "Show, update or reset bucket properties; 'show' and 'set' are optional, e.g.:\n" +
+	indent1 + "\t- 'ais bucket props ais://nnn'\t- show all properties;\n" +
+	indent1 + "\t- 'ais bucket props ais://nnn chunks --json'\t- show 'chunks' section in JSON;\n" +
+	indent1 + "\t- 'ais bucket props ais://nnn mirror.copies'\t- show one property;\n" +
+	indent1 + "\t- 'ais bucket props ais://nnn mirror.enabled=true mirror.copies=2'\t- update (same as 'ais bucket props set');\n" +
+	indent1 + "\t- 'ais bucket props reset ais://nnn'\t- reset to cluster defaults.\n" +
+	nvUsageRef
+
+const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain name=value pairs,\n" +
 	indent1 + "\te.g.:\n" +
 	indent1 + "\t* ais bucket props set ais://nnn backend_bck=s3://mmm\n" +
 	indent1 + "\t* ais bucket props set ais://nnn backend_bck=none\n" +
@@ -190,11 +201,15 @@ const setBpropsUsage = "Update bucket properties; the command accepts both JSON-
 	indent1 + "\t* ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force\n" +
 	indent1 + "\t* ais bucket props set ais://nnn chunks.chunk_size=16MiB chunks.objsize_limit=50MiB\n" +
 	indent1 + "\t* ais bucket props set ais://nnn extra.custom=\"owner:team-a; project:research\"\n" +
+	indent1 + "\t* ais bucket props set ais://nnn access=\"GET PUT HEAD-OBJECT\" checksum.type=md5\n" +
+	indent1 + "\t* ais bucket props set s3://mmm extra.aws.endpoint=\"\"\n" +
+	indent1 + "\t* ais bucket props set ais://nnn '{\"mirror\":{\"enabled\":true,\"copies\":2}}'\n" +
 	indent1 + "\tNotes:\n" +
 	indent1 + "\t* changing the bucket's 'chunks' layout properties automatically starts rechunk\n" +
 	indent1 + "\t* for details and many more examples, see docs/cli/bucket.md\n" +
 	indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'\n" +
-	indent1 + "\t* 'extra.custom' is an opaque string (up to 128 characters) for per-bucket user-defined metadata"
+	indent1 + "\t* 'extra.custom' is an opaque string (up to 128 characters) for per-bucket user-defined metadata\n" +
+	nvUsageRef
 
 // ais evict
 const evictUsage = "Evict one remote bucket, multiple remote buckets, or\n" +
@@ -303,8 +318,20 @@ var (
 			evictAllBucketsFlag,
 			yesFlag,
 		),
+		// 'set' falls back to showing properties: include show flags
 		cmdSetBprops: {
 			forceFlag,
+			jsonFlag,
+			compactPropFlag,
+			noHeaderFlag,
+		},
+		// 'ais bucket props' (show or set; see bpropsHandler)
+		cmdProps: {
+			forceFlag,
+			jsonFlag,
+			compactPropFlag,
+			noHeaderFlag,
+			addRemoteFlag,
 		},
 		cmdResetBprops: {},
 
@@ -464,9 +491,12 @@ var (
 				}),
 			},
 			{
-				Name:   cmdProps,
-				Usage:  "Show, update or reset bucket properties",
-				Action: showBckPropsHandler,
+				Name:         cmdProps,
+				Usage:        bpropsUsage,
+				ArgsUsage:    bpropsArgument,
+				Flags:        sortFlags(bucketCmdsFlags[cmdProps]),
+				Action:       bpropsHandler,
+				BashComplete: bpropsCmdCompletions,
 				Subcommands: []cli.Command{
 					bucketCmdSetProps,
 					{
@@ -794,6 +824,48 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.Bprops, toggle bool) (err err
 	return updateBckProps(c, bck, p, toggledProps)
 }
 
+// show or update bucket properties, with 'show' and 'set' optional:
+// - bucket alone, or bucket and a single property name or section: show
+// - otherwise: set (same as 'ais bucket props set')
+// - run the selected subcommand: unlike this (parent) command, subcommands accept flags after arguments
+func bpropsHandler(c *cli.Context) error {
+	var (
+		flags = bucketCmdsFlags[cmdProps]
+		args  = make([]string, 0, c.NArg())
+	)
+	for _, arg := range c.Args() {
+		if !isCmdFlag(flags, arg) {
+			args = append(args, arg)
+		}
+	}
+	sub, subFlags := cmdSetBprops, bucketCmdsFlags[cmdSetBprops]
+	if len(args) <= 1 || (len(args) == 2 && nvEqual(args[1]) < 0 && !isJSON(args[1])) {
+		sub, subFlags = commandShow, showCmdsFlags[cmdBucket]
+	}
+	// flags given before arguments were consumed by this command: pass on those the subcommand defines
+	rerun := []string{c.App.Name, sub}
+	for _, f := range flags {
+		if flagIsSet(c, f) && slices.Contains(subFlags, f) {
+			rerun = append(rerun, flagPrefix+fl1n(f.GetName()))
+		}
+	}
+	return c.App.Run(append(rerun, c.Args()...))
+}
+
+// whether arg is one of the given (boolean) flags
+func isCmdFlag(flags []cli.Flag, arg string) bool {
+	if !strings.HasPrefix(arg, "-") {
+		return false
+	}
+	name := strings.TrimLeft(arg, "-")
+	for _, f := range flags {
+		if slices.Contains(splitCsv(f.GetName()), name) {
+			return true
+		}
+	}
+	return false
+}
+
 //
 // setPropsHandler
 //
@@ -926,7 +998,7 @@ func _parseBprops(c *cli.Context) (props *cmn.BpropsToSet, nvs cos.StrKVs, err e
 	}
 
 	if len(propArgs) == 0 {
-		return nil, nil, missingArgumentsError(c, "property key-value pairs")
+		return nil, nil, missingArgumentsError(c, "property name=value pairs")
 	}
 
 	// command line => key/val pairs

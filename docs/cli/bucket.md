@@ -96,7 +96,7 @@ OPTIONS:
    props         Create bucket with the specified (non-default) properties, e.g.:
                  * ais create ais://mmm --props="versioning.validate_warm_get=false versioning.synchronize=true"
                  * ais create ais://nnn --props='mirror.enabled=true mirror.copies=4 checksum.type=md5'
-                 * ais create s3://bbb --props='extra.cloud.profile=prod extra.cloud.endpoint=https://s3.example.com'
+                 * ais create s3://bbb --props='extra.aws.profile=prod extra.aws.endpoint=https://s3.example.com'
                  Tips:
                    1) Use '--props' to override properties that a new bucket would normally inherit from cluster config at creation time.
                    2) Use '--props' to set up an existing cloud bucket with a custom profile and/or custom endpoint/region.
@@ -1337,10 +1337,13 @@ Overall, the topic called "bucket properties" is rather involved and includes su
 Now, as far as CLI, run the following to list [properties](/docs/bucket.md#bucket-properties) of the specified bucket.
 By default, a certain compact form of bucket props sections is presented.
 
-`ais bucket props show BUCKET [PROP_PREFIX] [command options]`
+`ais bucket props [show] BUCKET [PROP_PREFIX] [command options]`
 
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
 Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioning`.
+
+The `show` subcommand is optional: `ais bucket props BUCKET [PROP_PREFIX]` does the same.
+With `--json`, the output is JSON - for all properties or a section.
 
 > `ais bucket show` is an alias for `ais show bucket` - both can be used interchangeably.
 
@@ -1356,15 +1359,15 @@ USAGE:
    ais bucket props show BUCKET [PROP_PREFIX] [command options]
 
 OPTIONS:
-   --add             Add remote bucket to cluster's metadata
-                       - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);
-                       - most of the time, there's no need to worry about it as aistore handles presence/non-presence
-                         transparently behind the scenes;
-                       - but if you do want to (explicltly) add the bucket, you could also use '--add' option
-   --compact, -c     Display properties grouped in human-readable mode
-   --json, -j        JSON input/output
-   --no-headers, -H  Display tables without headers
-   --help, -h        Show help
+   add           Add remote bucket to cluster's metadata
+                   - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);
+                   - most of the time, there's no need to worry about it as aistore handles presence/non-presence
+                     transparently behind the scenes;
+                   - but if you do want to (explicltly) add the bucket, you could also use '--add' option
+   compact,c     Display properties grouped in human-readable mode
+   json,j        JSON input/output
+   no-headers,H  Display tables without headers
+   help, h       Show help
 ```
 
 ### Examples
@@ -1397,14 +1400,43 @@ lru.dont_evict_time	 2h0m
 lru.enabled		 true
 ```
 
+#### Show a section or a single property, without `show`
+
+```console
+$ ais bucket props ais://abc mirror
+PROPERTY		 VALUE
+mirror.burst_buffer	 512
+mirror.copies		 2
+mirror.enabled		 false
+
+$ ais bucket props ais://abc mirror --json
+{
+    "mirror": {
+        "burst_buffer": 512,
+        "enabled": false,
+        "copies": 2
+    }
+}
+
+$ ais bucket props ais://abc mirror.copies
+PROPERTY	 VALUE
+mirror.copies	 2
+```
+
 ## Set bucket properties
 
-`ais bucket props set [OPTIONS] BUCKET JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
+`ais bucket props [set] [OPTIONS] BUCKET JSON_SPECIFICATION|NAME=VALUE [NAME=VALUE...]`
 
 Set bucket properties.
 For the available options, see [bucket-properties](/docs/bucket.md#bucket-properties).
 
-If JSON_SPECIFICATION is used, **all** properties of the bucket are set based on the values in the JSON object.
+The `set` subcommand is optional: `ais bucket props BUCKET NAME=VALUE [NAME=VALUE...]` does the same.
+Without `set`, a single argument after the bucket (e.g., `mirror` or `mirror.copies`) shows properties;
+anything else - one or more assignments, `NAME VALUE` pairs, or JSON - updates them.
+
+Either way, only the properties given (by name or in the JSON object) change; all other properties keep their values.
+Assignments follow the CLI-wide [name/value syntax](/docs/cli.md#namevalue-arguments): `name=value`, `name value`,
+quoting, escapes, and list values (e.g., `access="GET PUT HEAD-OBJECT"`).
 
 ### Options
 
@@ -1412,26 +1444,34 @@ If JSON_SPECIFICATION is used, **all** properties of the bucket are set based on
 $ ais bucket props set --help
 
 NAME:
-   ais bucket props set - Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:
+   ais bucket props set - Update bucket properties; the command accepts both JSON-formatted input and plain name=value pairs,
+     e.g.:
      * ais bucket props set ais://nnn backend_bck=s3://mmm
      * ais bucket props set ais://nnn backend_bck=none
      * ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true
      * ais bucket props set gs://vvv mirror.enabled=true mirror.copies=4 checksum.type=md5
      * ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force
-     References:
+     * ais bucket props set ais://nnn chunks.chunk_size=16MiB chunks.objsize_limit=50MiB
+     * ais bucket props set ais://nnn extra.custom="owner:team-a; project:research"
+     * ais bucket props set ais://nnn access="GET PUT HEAD-OBJECT" checksum.type=md5
+     * ais bucket props set s3://mmm extra.aws.endpoint=""
+     * ais bucket props set ais://nnn '{"mirror":{"enabled":true,"copies":2}}'
+     Notes:
+     * changing the bucket's 'chunks' layout properties automatically starts rechunk
      * for details and many more examples, see docs/cli/bucket.md
      * to show bucket properties (names and current values), use 'ais bucket show'
+     * 'extra.custom' is an opaque string (up to 128 characters) for per-bucket user-defined metadata
+   Name/value syntax (forms, quoting, escapes, lists, JSON): https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#namevalue-arguments
 
 USAGE:
-   ais bucket props set BUCKET JSON-formatted-KEY-VALUE | KEY=VALUE [KEY=VALUE...] [command options]
+   ais bucket props set BUCKET JSON-formatted-NAME-VALUE | NAME=VALUE [NAME=VALUE...] [command options]
 
 OPTIONS:
-   --force, -f    Force execution of the command (caution: advanced usage only)
-   --skip-lookup  Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
-                   1) adding remote bucket to aistore without first checking the bucket's accessibility
-                      (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
-                   2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
-   --help, -h     Show help
+   compact,c     Display properties grouped in human-readable mode
+   force,f       Force execution of the command (caution: advanced usage only)
+   json,j        JSON input/output
+   no-headers,H  Display tables without headers
+   help, h       Show help
 ```
 
 When JSON specification is not used, some properties support user-friendly aliases:
@@ -1452,6 +1492,15 @@ Set the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respec
 $ ais bucket props set ais://bucket_name 'mirror.enabled=true' 'mirror.copies=2'
 Bucket props successfully updated
 "mirror.enabled" set to:"true" (was:"false")
+```
+
+#### Update properties without `set`
+
+```console
+$ ais bucket props ais://abc mirror.enabled=true mirror.copies=2
+"mirror.enabled" set to: "true" (was: "false")
+
+Bucket props successfully updated.
 ```
 
 #### Make a bucket read-only
@@ -1592,7 +1641,8 @@ Bucket props successfully updated
 
 #### Set bucket properties with JSON
 
-Set **all** bucket properties for `bucket_name` bucket based on the provided JSON specification.
+Set bucket properties for `bucket_name` bucket based on the provided JSON specification.
+Only the properties present in the JSON object change; the output lists those whose values actually changed.
 
 ```bash
 $ ais bucket props set ais://bucket_name '{
@@ -1651,7 +1701,8 @@ provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
 ```
 
-If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
+If not all properties are mentioned in the JSON, the missing ones keep their current values:
+
 
 ```bash
 $ ais bucket props set ais://bucket-name '{

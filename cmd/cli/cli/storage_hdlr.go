@@ -78,7 +78,8 @@ const (
 		indent1 + "\t- 'ais storage mountpath disable t[abc]=/mnt/disk1 t[abc]=/mnt/disk2'\t- disable multiple.\n" +
 		indent1 + "\n" +
 		indent1 + "To reactivate, use 'ais storage mountpath enable'.\n" +
-		indent1 + "For permanent removal, use 'ais storage mountpath detach' instead."
+		indent1 + "For permanent removal, use 'ais storage mountpath detach' instead.\n" +
+		nvUsageRef
 
 	mpathDetachUsage = "Detach mountpath from a target (disable and remove from target's volume).\n" +
 		indent1 + "\n" +
@@ -96,7 +97,8 @@ const (
 		indent1 + "\t- 'ais storage mountpath detach t[abc]=/mnt/disk1 t[abc]=/mnt/disk2'\t- detach multiple.\n" +
 		indent1 + "\n" +
 		indent1 + "Unlike 'disable', detached mountpaths must be re-attached (not re-enabled).\n" +
-		indent1 + "To add back, use 'ais storage mountpath attach'."
+		indent1 + "To add back, use 'ais storage mountpath attach'.\n" +
+		nvUsageRef
 
 	mpathEnableUsage = "Re-enable a previously disabled mountpath.\n" +
 		indent1 + "\n" +
@@ -108,7 +110,8 @@ const (
 		indent1 + "\t- 'ais storage mountpath enable t[abc]=/mnt/disk1 t[abc]=/mnt/disk2'\t- enable multiple.\n" +
 		indent1 + "\n" +
 		indent1 + "Note: only works for mountpaths that were previously disabled.\n" +
-		indent1 + "For newly attached disks, use 'ais storage mountpath attach'."
+		indent1 + "For newly attached disks, use 'ais storage mountpath attach'.\n" +
+		nvUsageRef
 
 	mpathAttachUsage = "Attach a new mountpath to a target node.\n" +
 		indent1 + "\n" +
@@ -125,7 +128,8 @@ const (
 		indent1 + "\t- 'ais storage mountpath attach t[abc]=/mnt/disk1 --label ssd'\t- attach with label;\n" +
 		indent1 + "\t- 'ais storage mountpath attach t[abc]=/mnt/disk1 t[abc]=/mnt/disk2'\t- attach multiple.\n" +
 		indent1 + "\n" +
-		indent1 + "The mountpath must be a valid mounted filesystem accessible by the target."
+		indent1 + "The mountpath must be a valid mounted filesystem accessible by the target.\n" +
+		nvUsageRef
 )
 
 var (
@@ -736,7 +740,8 @@ func mpathAction(c *cli.Context, action string) error {
 	if err != nil {
 		return err
 	}
-	kvs, err := makePairs(c.Args(), nil)
+	// ordered pairs: a target may repeat with different mountpaths
+	pairs, err := parseNVPairs(c.Args(), nil)
 	if err != nil {
 		// check whether user typed target ID with no mountpath
 		var (
@@ -754,12 +759,13 @@ func mpathAction(c *cli.Context, action string) error {
 		}
 		return err
 	}
-	for nodeID, mountpath := range kvs {
+	for _, pair := range pairs {
 		var (
-			err   error
-			acted string
+			err       error
+			acted     string
+			nodeID    = meta.N2ID(pair.Name)
+			mountpath = pair.Value
 		)
-		nodeID = meta.N2ID(nodeID)
 		si := smap.GetTarget(nodeID)
 		if si == nil {
 			si = smap.GetProxy(nodeID)

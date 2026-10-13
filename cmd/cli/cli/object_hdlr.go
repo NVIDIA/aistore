@@ -106,8 +106,14 @@ const mptAbortUsage = "Abort a multipart upload session and clean up any uploade
 	indent2 + "\t- 'mpu abort ais://bck/large --upload-id UPLOAD_ID --verbose'\t- abort with verbose output\n" +
 	mptUsageFootnote
 
-const setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
-	indent1 + "mykey1=value1 mykey2=value2 OR (same) '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
+const setCustomArgument = objectArgument + " " + jsonNVArgument + " | " + nvPairsArgument
+
+const setCustomUsage = "Set object's custom properties, e.g.:\n" +
+	indent1 + "\t- 'ais object set-custom ais://nnn/obj mykey1=value1 mykey2=value2'\t- set two properties;\n" +
+	indent1 + "\t- ais object set-custom ais://nnn/obj '{\"mykey1\":\"value1\",\"mykey2\":\"value2\"}'\t- same, JSON-formatted;\n" +
+	indent1 + "\t- 'ais object set-custom ais://nnn/obj \"display name\"=\"two words\"'\t- name and value with spaces;\n" +
+	indent1 + "\t- 'ais object set-custom ais://nnn/obj query=\"a=1&b=2\"'\t- value containing '='.\n" +
+	nvUsageRef
 
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
@@ -264,7 +270,7 @@ var (
 
 	objectCmdSetCustom = cli.Command{
 		Name:      commandSetCustom,
-		Usage:     "Set object's custom properties",
+		Usage:     setCustomUsage,
 		ArgsUsage: setCustomArgument,
 		Flags:     sortFlags(objectCmdsFlags[commandSetCustom]),
 		Action:    setCustomPropsHandler,

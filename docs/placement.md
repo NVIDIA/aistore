@@ -40,6 +40,23 @@ xid, err := api.SetPlacementWeights(bp, smap)
 - fewer than two active targets: accepted without rebalance; recorded weights are
   retained when targets in maintenance rejoin
 
+## CLI
+
+```console
+ais cluster placement                                             # show weights and shares ('show' is optional)
+ais cluster placement set-weights 't[abc]=1' 't[def]=3' 't[ghi]=6'
+ais cluster placement set-weights 't[abc]=300' rest=100           # one target, and all others
+ais cluster placement set-weights 't[abc]=none'                   # reset one weight
+ais cluster placement set-weights none                            # clear all weights
+ais cluster placement clear-weights                               # same
+```
+
+- `rest=WEIGHT` applies to all targets not listed in the same command; in a cluster without weights, every target must be listed or covered by `rest`
+- `TARGET_ID=none` assigns the weight a joining target would get (see above)
+- `none` alone, `rest=none` alone, or `none` for every target clears all weights
+- equal weights place objects the same way as no weights; `show` reports them as uniform
+- quote node IDs: `[...]` is a glob pattern in most shells
+
 ## Upgrade
 
 Older nodes cannot decode a cluster map with weights, or bucket metadata with placement overrides.

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -40,8 +41,7 @@ import (
 // This file contains common utilities and low-level helpers.
 
 const (
-	keyAndValueSeparator = "="
-	pemKeyIndicator      = "-----BEGIN"
+	pemKeyIndicator = "-----BEGIN"
 
 	// Error messages
 	dockerErrMsgFmt = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
@@ -215,20 +215,25 @@ func configListValue(name, val string) bool {
 		_, err := parseFeatureFlags(val)
 		return err == nil
 	case confLogModules:
-		var found bool
-		for _, mod := range splitCsv(val) {
-			if mod == "" {
-				continue
-			}
-			if !slices.Contains(cos.Mods[:], mod) {
-				return false
-			}
-			found = true
-		}
-		return found
+		return len(splitList(val)) > 0 && badLogModule(val) == ""
 	default:
 		return false
 	}
+}
+
+// split a list value (features, log modules, access) at commas and whitespace
+func splitList(val string) []string {
+	return strings.FieldsFunc(val, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+}
+
+// return the first unknown log module, if any
+func badLogModule(val string) string {
+	for _, mod := range splitList(val) {
+		if !slices.Contains(cos.Mods[:], mod) {
+			return mod
+		}
+	}
+	return ""
 }
 
 // recognize values that can extend a bucket access or feature list
@@ -248,11 +253,11 @@ func parseRemAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
 		return "", "", missingArgumentsError(c, aliasURLPairArgument)
 	}
 	pairs, err := parseNVPairs(c.Args(), nil)
-	if err != nil || len(pairs) != 1 {
-		if err == nil {
-			err = incorrectUsageMsg(c, "expecting one %s", aliasURLPairArgument)
-		}
+	if err != nil {
 		return "", "", err
+	}
+	if len(pairs) != 1 {
+		return "", "", incorrectUsageMsg(c, "expecting one %s", aliasURLPairArgument)
 	}
 	alias, remAisURL = pairs[0].Name, pairs[0].Value
 	if _, err = url.ParseRequestURI(remAisURL); err == nil {
@@ -276,10 +281,7 @@ func isJSON(arg string) bool {
 }
 
 func parseBucketACL(value string) (access apc.AccessAttrs, err error) {
-	for _, perm := range splitCsv(value) {
-		if perm == "" {
-			continue
-		}
+	for _, perm := range splitList(value) {
 		var acc apc.AccessAttrs
 		if val, errNum := parseHexOrUint(perm); errNum == nil {
 			acc = apc.AccessAttrs(val)
@@ -292,10 +294,7 @@ func parseBucketACL(value string) (access apc.AccessAttrs, err error) {
 }
 
 func parseFeatureFlags(value string) (res feat.Flags, err error) {
-	for _, val := range splitCsv(value) {
-		if val == "" {
-			continue
-		}
+	for _, val := range splitList(value) {
 		var f feat.Flags
 		if num, errNum := parseHexOrUint(val); errNum == nil {
 			f = feat.Flags(num)
@@ -331,10 +330,9 @@ func bckPropNames() (names, readonly []string) {
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions
 func makeBckPropPairs(args []string) (cos.StrKVs, error) {
 	names, readonly := bckPropNames()
-	allNames := append(append([]string{}, names...), readonly...)
 	opts := &nvOpts{
 		listValue: bucketListValue,
-		names:     allNames,
+		names:     slices.Concat(names, readonly),
 		validateName: func(name string) (string, error) {
 			name = strings.ToLower(name) // same as cmn.NewBpropsToSet
 			if slices.Contains(names, name) {
@@ -1209,7 +1207,7 @@ func (e *errInvalidNVpair) Error() string {
 	if e.missing {
 		return fmt.Sprintf("missing %q value", e.notpair)
 	}
-	return fmt.Sprintf("invalid key=value pair %q", e.notpair)
+	return fmt.Sprintf("invalid name=value pair %q", e.notpair)
 }
 
 // allow a config lookup only for a sole bare name, without a malformed assignment

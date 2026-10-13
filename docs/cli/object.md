@@ -1966,7 +1966,7 @@ Custom properties are not impacted by object updates (PUTs) -- a new version of 
 
 The command's syntax is similar to the one used to assign [bucket properties](/docs/cli/bucket.md#set-bucket-properties)
 
-`ais object set-custom BUCKET/OBJECT_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`, [command options]
+`ais object set-custom BUCKET/OBJECT_NAME JSON_SPECIFICATION|NAME=VALUE [NAME=VALUE...]`, [command options]
 
 for example:
 

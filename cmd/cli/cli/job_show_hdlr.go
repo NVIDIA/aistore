@@ -110,25 +110,10 @@ var showCmdJob = cli.Command{
 // - be omitted, in part or in total, and may
 // - come in arbitrary order
 func showJobsHandler(c *cli.Context) error {
-	// validation of --filter flag
+	// validate --filter
 	if filterStr := parseStrFlag(c, columnFilterFlag); filterStr != "" {
-		parts := strings.SplitN(filterStr, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid filter format '%s' - expected 'COLUMN=PATTERN'", filterStr)
-		}
-		columnName := strings.ToUpper(strings.TrimSpace(parts[0]))
-		switch columnName {
-		case jobColNode, jobColID, jobColKind, jobColBucket, jobColState:
-			// valid column
-		default:
-			return fmt.Errorf("invalid column '%s' - valid columns: %s, %s, %s, %s, %s", columnName, jobColNode, jobColID, jobColKind, jobColBucket, jobColState)
-		}
-		pattern := strings.TrimSpace(parts[1])
-		if pattern == "" {
-			return errors.New("filter pattern cannot be empty")
-		}
-		if _, err := regexp.Compile(pattern); err != nil {
-			return fmt.Errorf("invalid filter regex pattern '%s': %v", pattern, err)
+		if _, _, err := parseJobFilter(filterStr); err != nil {
+			return err
 		}
 	}
 
@@ -602,10 +587,8 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 	// columnar filtering for --filter flag on `ais show job`
 	filterStr := parseStrFlag(c, columnFilterFlag)
 	if filterStr != "" {
-		parts := strings.SplitN(filterStr, "=", 2)
-		columnName := strings.ToUpper(strings.TrimSpace(parts[0]))
-		pattern := strings.TrimSpace(parts[1])
-		regex, _ := regexp.Compile(pattern) // Pre-validated in showJobsHandler
+		columnName, regex, err := parseJobFilter(filterStr)
+		debug.AssertNoErr(err) // validated in showJobsHandler
 
 		filtered := make([]nodeSnaps, 0, len(dts))
 		for _, nodeSnap := range dts {
@@ -748,4 +731,29 @@ func _parallelism(jwfmin, jwfmax [3]int) (s string) {
 		}
 	}
 	return s
+}
+
+// parse --filter COLUMN=PATTERN
+// - split at the first '='; keep the pattern verbatim (regex escapes are not name/value escapes)
+func parseJobFilter(filterStr string) (columnName string, regex *regexp.Regexp, _ error) {
+	name, pattern, ok := strings.Cut(filterStr, "=")
+	if !ok {
+		return "", nil, fmt.Errorf("invalid filter format %q - expected 'COLUMN=PATTERN'", filterStr)
+	}
+	columnName = strings.ToUpper(strings.TrimSpace(name))
+	switch columnName {
+	case jobColNode, jobColID, jobColKind, jobColBucket, jobColState:
+	default:
+		return "", nil, fmt.Errorf("invalid column %q - valid columns: %s, %s, %s, %s, %s",
+			columnName, jobColNode, jobColID, jobColKind, jobColBucket, jobColState)
+	}
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return "", nil, errors.New("filter pattern cannot be empty")
+	}
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid filter regex pattern %q: %v", pattern, err)
+	}
+	return columnName, regex, nil
 }

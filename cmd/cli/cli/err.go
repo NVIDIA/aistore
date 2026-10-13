@@ -329,8 +329,8 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) *errUsage {
 	return _errUsage(c, msg)
 }
 
-func missingKeyValueError(c *cli.Context) *errUsage {
-	return missingArgumentsError(c, "attribute key=value pairs")
+func missingNVError(c *cli.Context) *errUsage {
+	return missingArgumentsError(c, "name=value pairs")
 }
 
 func objectNameArgNotExpected(c *cli.Context, objectName string) *errUsage {

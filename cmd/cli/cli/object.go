@@ -68,7 +68,7 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		}
 	} else {
 		if len(propArgs) == 0 {
-			return missingArgumentsError(c, "property key-value pairs")
+			return missingArgumentsError(c, "property name=value pairs")
 		}
 		pairs, err := parseNVPairs(propArgs, nil)
 		if err != nil {

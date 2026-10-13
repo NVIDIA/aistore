@@ -10,7 +10,16 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/NVIDIA/aistore/cmn"
+
 	jsoniter "github.com/json-iterator/go"
+)
+
+// usage footnote for name/value commands and flags
+const (
+	nvSyntaxRef = "Name/value syntax (forms, quoting, escapes, lists, JSON): " +
+		cmn.GitHubHome + "/blob/main/docs/cli.md#namevalue-arguments"
+	nvUsageRef = indent1 + nvSyntaxRef
 )
 
 // split an aggregate flag argument at unescaped whitespace; retain escapes and complete JSON values
@@ -92,12 +101,18 @@ type nvOpts struct {
 	listValue func(name, val string) bool
 	// validate and optionally normalize each name before examining later pairs or list members
 	validateName func(name string) (string, error)
-	// known names: a known name in a value position means the previous name has no value
+	// known names: a known name (or its assignment) in a value position means the previous name has no value
 	names []string
 }
 
 func (o *nvOpts) isName(s string) bool {
-	return o != nil && len(o.names) > 0 && slices.Contains(o.names, strings.ToLower(strings.TrimSpace(s)))
+	if o == nil || len(o.names) == 0 {
+		return false
+	}
+	if pos := nvEqual(s); pos >= 0 {
+		s = s[:pos]
+	}
+	return slices.Contains(o.names, strings.ToLower(strings.TrimSpace(s)))
 }
 
 // parse ordered name/value pairs without splitting quoted arguments or comma-separated values
@@ -174,7 +189,7 @@ func parseNVPair(args []string, i int, opts *nvOpts) (pair nvpair, next int, err
 	return pair, next, nil
 }
 
-// return the first unescaped '='; backslashes escape '=', whitespace, and backslashes
+// return the first unescaped '='; skip '\=' and '\\'
 func nvEqual(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' && i+1 < len(s) && (s[i+1] == '=' || s[i+1] == '\\') {

@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 
@@ -25,8 +26,9 @@ const (
 	placementShowUsage  = "Show target placement weights and normalized shares"
 	placementClearUsage = "Clear all target placement weights (starts global rebalance unless placement does not change)"
 
-	placementWeightsArgument = "TARGET_ID=WEIGHT... [rest=WEIGHT] | rest=WEIGHT"
+	placementWeightsArgument = "TARGET_ID=WEIGHT... [rest=WEIGHT] | rest=WEIGHT | none"
 	placementRest            = "rest"
+	placementNone            = apc.ResetToken
 )
 
 var placementSetUsage = "Set target placement weights (starts global rebalance unless placement does not change):\n" +
@@ -36,8 +38,14 @@ var placementSetUsage = "Set target placement weights (starts global rebalance u
 	indent1 + "\t- weighted cluster: unlisted targets keep their current weights unless rest=WEIGHT is given;\n" +
 	indent1 + "\t- max/min ratio: warning at " + strconv.Itoa(meta.PlacementWeightWarnRatio) +
 	"x, rejected at " + strconv.Itoa(meta.PlacementWeightMaxRatio) + "x;\n" +
+	indent1 + "\t- TARGET_ID=none resets that target's weight to what a joining target would get (mean of the other weights);\n" +
+	indent1 + "\t- 'none' alone, rest=none alone, or none for every target clears all weights - same as 'clear-weights';\n" +
 	indent1 + "\t- requires all nodes to run the same software version;\n" +
-	indent1 + "\t- e.g.: 'ais cluster placement set-weights t[abc]=123 rest=456'"
+	indent1 + "\t- e.g.: 'ais cluster placement set-weights t[abc]=123 rest=456';\n" +
+	indent1 + "\t- e.g.: 'ais cluster placement set-weights t[abc]=3 t[def] 1 rest=2'\t- mixed forms;\n" +
+	indent1 + "\t- e.g.: 'ais cluster placement set-weights t[abc]=none'\t- reset one weight;\n" +
+	indent1 + "\t- e.g.: 'ais cluster placement set-weights none'\t- clear all weights.\n" +
+	nvUsageRef
 
 var showCmdPlacement = cli.Command{
 	Name:   cmdPlacement,
@@ -46,8 +54,9 @@ var showCmdPlacement = cli.Command{
 }
 
 var placementCmd = cli.Command{
-	Name:  cmdPlacement,
-	Usage: placementUsage,
+	Name:   cmdPlacement,
+	Usage:  placementUsage,
+	Action: placementShowHandler, // 'show' is optional
 	Subcommands: []cli.Command{
 		makeAlias(&showCmdPlacement, &mkaliasOpts{newName: commandShow}),
 		{
@@ -77,11 +86,31 @@ func placementShowHandler(c *cli.Context) error {
 		actionDone(c, "Placement: uniform (target weights are not set)")
 		return nil
 	}
-	var sum float64
+	var (
+		sum     float64
+		first   int64
+		uniform = true
+	)
 	for _, tsi := range smap.Tmap {
-		if !tsi.InMaintOrDecomm() {
-			sum += float64(tsi.PlacementWeight())
+		w := tsi.PlacementWeight()
+		if w == 0 {
+			return fmt.Errorf("invalid placement weights: %s has weight 0 in a weighted cluster\n"+
+				"(tip: use '%s %s %s %s %s=none' to reset this weight, or '%s %s %s %s' to clear all weights)",
+				tsi.StringEx(), cliName, commandCluster, cmdPlacement, cmdPlacementSet, tsi.ID(),
+				cliName, commandCluster, cmdPlacement, cmdPlacementClear)
 		}
+		if tsi.InMaintOrDecomm() {
+			continue
+		}
+		sum += float64(w)
+		if first == 0 {
+			first = w
+		} else if w != first {
+			uniform = false
+		}
+	}
+	if uniform {
+		actionDone(c, "Placement: uniform (target weights are set and equal)")
 	}
 	tw := newTabWriter(c)
 	fmt.Fprintln(tw, "TARGET\tWEIGHT\tSHARE")
@@ -108,6 +137,9 @@ func placementSetHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
+	if c.NArg() == 1 && c.Args().Get(0) == placementNone {
+		return clearPlacement(c)
+	}
 	nvs, err := placementPairs(c.Args())
 	if err != nil {
 		return err
@@ -118,10 +150,17 @@ func placementSetHandler(c *cli.Context) error {
 	var rest int64
 	restVal, hasRest := nvs[placementRest]
 	if hasRest {
+		delete(nvs, placementRest)
+		if restVal == placementNone {
+			if len(nvs) > 0 {
+				return fmt.Errorf("cannot combine %s=%s with other assignments: either all targets are weighted or none",
+					placementRest, placementNone)
+			}
+			return clearPlacement(c)
+		}
 		if rest, err = parsePlacementWeight(restVal, placementRest); err != nil {
 			return err
 		}
-		delete(nvs, placementRest)
 	}
 	// fresh Smap (never cached): the primary rejects stale snapshots
 	smap, err := api.GetClusterMap(apiBP)
@@ -130,11 +169,14 @@ func placementSetHandler(c *cli.Context) error {
 	}
 	var (
 		weights = make(map[string]int64, len(smap.Tmap))
+		orig    = make(map[string]int64, len(smap.Tmap))
 		seen    = make(map[string]struct{}, len(nvs))
+		resets  []string // TARGET_ID=none
 		changed bool
 	)
 	for tid, tsi := range smap.Tmap {
 		weights[tid] = tsi.PlacementWeight()
+		orig[tid] = weights[tid]
 	}
 	for name, val := range nvs {
 		tid := meta.N2ID(name)
@@ -147,21 +189,39 @@ func placementSetHandler(c *cli.Context) error {
 			}
 		}
 		seen[tid] = struct{}{} // (duplicates rejected by placementPairs)
+		if val == placementNone {
+			resets = append(resets, tid)
+			continue
+		}
 		w, err := parsePlacementWeight(val, tsi.StringEx())
 		if err != nil {
 			return err
 		}
-		if weights[tid] != w {
-			weights[tid] = w
-			changed = true
-		}
+		weights[tid] = w
 	}
 	if hasRest {
-		for tid, w := range weights {
-			if _, explicit := seen[tid]; !explicit && w != rest {
+		for tid := range weights {
+			if _, explicit := seen[tid]; !explicit {
 				weights[tid] = rest
-				changed = true
 			}
+		}
+	}
+	if len(resets) > 0 {
+		switch {
+		case len(resets) == len(smap.Tmap):
+			return clearPlacement(c) // none for every target
+		case len(resets) == len(nvs) && !hasRest && !smap.IsWeighted():
+			actionDone(c, "Placement weights are not set - nothing to do")
+			return nil
+		}
+		if err := placementResets(smap, weights, resets); err != nil {
+			return err
+		}
+	}
+	for tid, w := range weights {
+		if w != orig[tid] {
+			changed = true
+			break
 		}
 	}
 	if !changed {
@@ -187,6 +247,25 @@ func placementSetHandler(c *cli.Context) error {
 		actionWarnf(c, "%d of %d targets active - weights take effect when targets in maintenance rejoin", n, len(smap.Tmap))
 	}
 	return _setPlacement(c, smap, weights)
+}
+
+// assign each TARGET_ID=none the weight a joining target would get (see meta.Smap.MeanPlacementWeight)
+func placementResets(smap *meta.Smap, weights map[string]int64, resets []string) error {
+	for tid, w := range weights {
+		smap.Tmap[tid].SetPlacementWeight(w)
+	}
+	for _, tid := range resets {
+		smap.Tmap[tid].SetPlacementWeight(0) // exclude from the mean
+	}
+	mean := smap.MeanPlacementWeight()
+	if mean == 0 {
+		return fmt.Errorf("cannot reset %s=%s: no other target is weighted (to clear all weights, run '%s')",
+			meta.Tname(resets[0]), placementNone, cliName+" "+commandCluster+" "+cmdPlacement+" "+cmdPlacementClear)
+	}
+	for _, tid := range resets {
+		weights[tid] = mean
+	}
+	return nil
 }
 
 // parse name/value pairs; reject repeated target IDs and rest
@@ -226,6 +305,10 @@ func placementClearHandler(c *cli.Context) error {
 	if c.NArg() > 0 {
 		return incorrectUsageMsg(c, "unexpected argument %q", c.Args().Get(0))
 	}
+	return clearPlacement(c)
+}
+
+func clearPlacement(c *cli.Context) error {
 	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return V(err)

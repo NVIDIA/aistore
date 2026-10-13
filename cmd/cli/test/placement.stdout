@@ -1,6 +1,7 @@
 Placement: uniform (target weights are not set)
 Placement: uniform (target weights are not set)
 Placement: uniform (target weights are not set)
+Placement: uniform (target weights are not set)
 placement
 placement
 rest
@@ -8,4 +9,7 @@ rest
 0
 0
 0
+Placement weights are not set - nothing to do
+Placement weights are not set - nothing to do
+Placement weights are not set - nothing to do
 Placement weights are not set - nothing to do
