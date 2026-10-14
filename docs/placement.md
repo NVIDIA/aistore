@@ -5,20 +5,55 @@ placement remains uniform until weighted HRW is integrated. Weight changes that 
 relative shares among active targets trigger global rebalance;
 proportional changes and equal-vs-none transitions do not.
 
+**Table of Contents**
+
+- [Target weights](#target-weights)
+- [Setting weights](#setting-weights)
+- [CLI](#cli)
+- [Target admission and restart](#target-admission-and-restart)
+- [Managing node weights across the lifecycle](#managing-node-weights-across-the-lifecycle)
+  - [Set weights](#set-weights)
+  - [Restart the cluster](#restart-the-cluster)
+  - [Add a target](#add-a-target)
+  - [Change an assigned weight](#change-an-assigned-weight)
+  - [Clear weights](#clear-weights)
+  - [Cold restart: how the primary decides](#cold-restart-how-the-primary-decides)
+  - [Startup readiness](#startup-readiness)
+  - [Troubleshooting](#troubleshooting)
+- [Upgrade](#upgrade)
+- [Buckets](#buckets)
+
 ## Target weights
 
-A weight is a relative share of objects a target is expected to own. Weights have no
+A weight is a relative share of objects an AIS target is expected to own. Weights have no
 units and no fixed total: `1, 3, 6` and `100GB, 300GB, 600GB` (in bytes) define the
 same placement.
 
+Practical applications may include accounting for unequal usable capacity across
+heterogeneous cluster hardware—such as mixed disk sizes, uneven hardware upgrades, or
+hyperconverged deployments where storage targets share resources with other local services.
+
+Other practical examples may include:
+
+* Generational hardware mixing: When expanding an older cluster with newer, much denser nodes,
+weights will allow the cluster to use more of the newer nodes’ capacity
+without hitting capacity limits on the legacy nodes.
+* Storage nodes with different disk sizes and/or media (SSDs vs HDDs, etc.)
+
+However, totally abstract weights detached from any physical resource metrics are fully supported as well.
+
 - 64-bit integers, quoted in JSON (`placement.weight`); negative values are reserved
 - all targets are weighted, or none; setting all weights to zero clears them
-- requires two or more targets: a single-target cluster rejects weights (HTTP 400)
+- requires (minimum) two targets: a single-target cluster rejects weights (HTTP 400)
 - max/min ratio: 10x or greater warns, 100x or greater is rejected
-- a target that joins a weighted cluster gets the mean weight of active targets
+- a target that joins a weighted cluster *by default* gets the mean weight of active targets
 - re-registration and cluster restart keep assigned weights
 
-To exclude a target, use maintenance - not zero weight.
+To exclude a target from the cluster, use [maintenance mode](/docs/lifecycle_node.md) - not zero weight.
+
+> **Note on workloads:** Object placement maps directly to access patterns, meaning both read
+and write workloads will be proportional to these weights. Assigning a disproportionately
+large weight can turn that target into a performance bottleneck.
 
 ## Setting weights
 
@@ -85,17 +120,167 @@ Smap assignment takes precedence in either case.
 Primary startup assigns each joining target its saved Smap weight or, if there is none,
 its local preference. Once the cluster map is assembled, the primary decides:
 
-- a super-majority (2/3 + 1) of targets is weighted: the remaining targets get the mean weight;
+- a strict super-majority of targets is weighted: the remaining targets get the mean weight
+  (see [cold restart](#cold-restart-how-the-primary-decides));
 - otherwise, or if the resulting weights are invalid: the cluster starts unweighted
   (logged as an error; the next rebalance moves data accordingly).
 
 If the assembled cluster map is weighted, pre-5.2 members are removed (with an upgrade
-message) before the super-majority count. In a weighted startup, a starting node declares
-readiness only after the primary reconciles weights and the node holds the reconciled
-(or newer) cluster map. Unweighted startups are unaffected.
+message) before the super-majority count. When saved or requested weights are involved,
+a starting node declares readiness only after the primary reconciles weights and the node
+holds the reconciled (or newer) cluster map. This also applies when reconciliation clears
+weights. Startups without weights are unaffected.
 
 Local preferences persist across restarts: to clear weights for good, remove `placement.weight`
 from targets' local configs as well.
+
+## Managing node weights across the lifecycle
+
+The examples below use a cluster of up to five targets; node IDs are illustrative.
+
+### Set weights
+
+```console
+$ ais cluster placement
+Placement: uniform (target weights are not set)
+
+$ ais cluster placement set-weights 't[ROytQbMs]=100' 't[UpftZhCx]=200' 't[flztWnGd]=300'
+Started rebalance "g1" (to monitor, run 'ais show rebalance').
+
+$ ais cluster placement
+TARGET       WEIGHT  SHARE
+t[ROytQbMs]  100     16.7%
+t[UpftZhCx]  200     33.3%
+t[flztWnGd]  300     50.0%
+```
+
+### Restart the cluster
+
+Restart all nodes: the cluster comes back with the same weights.
+
+While the primary is still starting up, `ais cluster placement` may show `uniform` -
+the cluster map is not yet assembled. Check again once the cluster has started.
+
+### Add a target
+
+The following rules apply to a running weighted cluster. In a running unweighted cluster,
+join preferences do not enable weights; use `set-weights` instead.
+
+| you do | you get |
+|---|---|
+| start a new target (no local `placement.weight`) | the rounded mean weight of active weighted targets |
+| start a new target with local `placement.weight` | the requested weight (if the resulting ratio is valid) |
+| `ais cluster add-remove-nodes join HOST:PORT --role=target --weight=W` | `W`; without `--weight`, the mean (admin join does not use the target's local config) |
+| restart a target that is still in the cluster map | its assigned weight (local preference ignored) |
+
+The mean is rounded to the nearest multiple of the weights' greatest common divisor (a.k.a. GCD).
+If no weighted target is active, all weighted targets are used.
+
+For example, a new target joins the weighted cluster above:
+
+```console
+$ ais cluster placement
+TARGET       WEIGHT  SHARE
+t[ROytQbMs]  100     12.5%
+t[UpftZhCx]  200     25.0%
+t[flztWnGd]  300     37.5%
+t[tVbtJrPk]  200     25.0%
+```
+
+And another one, with `"placement": {"weight": "500"}` in its local config:
+
+```console
+$ ais cluster placement
+TARGET       WEIGHT  SHARE
+t[LDLtHsVy]  500     38.5%
+t[ROytQbMs]  100     7.7%
+t[UpftZhCx]  200     15.4%
+t[flztWnGd]  300     23.1%
+t[tVbtJrPk]  200     15.4%
+```
+
+For these five weights, the default mean is 300: the arithmetic mean of 260 rounds to
+the nearest multiple of their greatest common divisor, 100.
+
+When joining a running weighted cluster, a requested weight that would make the max/min
+ratio 100x or greater is rejected outright - the target does not retry. Fix (or remove)
+its local `placement.weight` and restart it. During primary startup, invalid weights can
+instead cause a fallback to unweighted placement (see cold restart below).
+
+### Change an assigned weight
+
+Specify the target's new weight; unlisted targets keep their assignments:
+
+```console
+$ ais cluster placement set-weights 't[UpftZhCx]=400'
+```
+
+Editing that target's local `placement.weight` and restarting it keeps its existing
+assignment; use `set-weights` to change it.
+
+### Clear weights
+
+If clearing is blocked by a bucket placement override (HTTP 409), reset the override
+first (see [Buckets](#buckets)).
+
+```console
+$ ais cluster placement clear-weights
+Started rebalance "g403" (to monitor, run 'ais show rebalance').
+
+$ ais cluster placement
+Placement: uniform (target weights are not set)
+```
+
+To clear weights for good, also remove `placement.weight` from targets' local configs -
+see cold restart below.
+
+### Cold restart: how the primary decides
+
+Once the cluster map is assembled, the primary counts weighted targets (assigned in the
+cluster map, or requested by a joining target). If the assembled map is weighted,
+detected pre-5.2 members are removed before counting.
+For `N` targets, a strict super-majority is `floor(2*N/3)+1`: three of four, four of five, or `667` of `1,000`.
+
+| weighted targets | result |
+|---|---|
+| none | the cluster starts unweighted |
+| all, with valid weights | weights unchanged |
+| strict super-majority, with valid resulting weights | the rest get the mean weight |
+| below the threshold, or the resulting weights are invalid (max/min ratio) | all weights cleared; the cluster starts unweighted; error logged |
+
+For example, three weighted targets with weights `100/200/300` and one unassigned target
+meet the threshold of three out of four. The unassigned target gets 200, producing
+`100/200/300/200`.
+
+For instance, a cluster with weights cleared, where one of five targets still has a local
+`placement.weight`, logs at startup:
+
+```
+p[uUVpKfNz] starting unweighted: 1 out of 5 targets are weighted (no super-majority)
+```
+
+and comes up unweighted. To get weights back, use `set-weights`; to stop the message, remove
+the stray `placement.weight`.
+
+### Startup readiness
+
+| startup | starting nodes declare readiness |
+|---|---|
+| no saved or requested weights involved | as before (unchanged) |
+| saved or requested weights involved, including fallback to unweighted | after the primary reconciles weights, holding the reconciled (or newer) cluster map |
+
+Nodes already ready before weights appear keep their readiness.
+
+### Troubleshooting
+
+| you see | meaning | what to do |
+|---|---|---|
+| `(waiting for cluster to start ...)` | the CLI is retrying an HTTP 503 response, often during startup | let the retries finish; inspect the final error if the command still fails |
+| `ErrBusy: ... "set-placement-weights" is currently busy (rebalance[gNNN] is running)` | a global rebalance is running; it may have resumed after a restart | wait for it (`ais show rebalance`), retry |
+| `starting unweighted: N out of M targets are weighted (no super-majority)` | see cold restart above | `set-weights`, or remove stray local `placement.weight` |
+| `cannot admit t[...] with placement weight W: ...` | the requested weight would make the max/min ratio 100x or greater | fix the target's local `placement.weight` (or `--weight`) |
+| `cannot clear placement weights: bucket ...` | a bucket has a placement override | reset that override first (see [Buckets](#buckets)) |
+| `node versions are unknown or differ` | some member's version is not known to the primary yet, or differs | wait for nodes to register; complete the upgrade |
 
 ## Upgrade
 
@@ -103,7 +288,9 @@ Older nodes cannot decode a cluster map with weights, or bucket metadata with pl
 
 - setting weights returns HTTP 409 while node versions differ
 - a pre-5.2 node cannot join a weighted cluster, or a cluster with any bucket placement override
-- the primary learns node versions on join; a newly elected primary may not have them
+- the primary learns node versions on join and from keepalives; right after a primary change,
+  setting weights may return HTTP 409 until all members outside maintenance/decommission
+  have reported the primary's version; those in maintenance/decommission are checked on rejoin
 - setting a bucket placement override is not yet rejected while node versions differ
 
 ## Buckets
