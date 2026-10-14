@@ -657,10 +657,11 @@ func TestS3ListObjectsRemotePages(t *testing.T) {
 		}
 		tassert.Fatalf(t, nextUUID == uuid, "page %d: x-lso UUID changed mid-listing: %q => %q", page, uuid, nextUUID)
 
-		// R-flow: `orig` is the backend's own token - opaque, and therefore never one of
-		// the listed names
-		tassert.Fatalf(t, !slices.Contains(m.objNames, orig),
-			"page %d: token %q is one of the listed names - A-flow?", page, orig)
+		// A-flow tokens name an object already returned; OCI markers name the next object.
+		tassert.Fatalf(t, orig != "",
+			"page %d: truncated page must include a backend token", page)
+		tassert.Fatalf(t, !slices.Contains(seen, orig),
+			"page %d: token %q names an object already listed - A-flow?", page, orig)
 
 		tlog.Logfln("page %d: %d entries, uuid=%s, remote token=%.24s...", page, len(out.Contents), nextUUID, orig)
 	}
