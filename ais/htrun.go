@@ -152,6 +152,9 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 	if voteInProgress() != nil {
 		cm.Flags = cm.Flags.Set(cos.VoteInProgress)
 	}
+	if h.ClusterStarted() {
+		cm.Flags = cm.Flags.Set(cos.ClusterStarted)
+	}
 	if !opts.skipConfig {
 		var err error
 		cm.Config, err = h.owner.config.get()

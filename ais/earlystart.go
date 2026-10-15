@@ -449,6 +449,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 			}
 			maxVerSmap.Pmap[p.SID()] = p.si
 			p.owner.smap.put(maxVerSmap)
+			p.clearRegpool()
 			nlog.Infof("%s: change-of-mind #1: joining via %s[P])", p.si, maxVerSmap.Primary.StringEx())
 			if err := p.secondaryStartup(maxVerSmap); err != nil {
 				cos.ExitLogf("%s: %v", cmn.BadSmapPrefix, err)
@@ -477,6 +478,21 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 
 		forcePrimaryChange := prim.isCfg || prim.isEP
 		smap = p.regpoolMaxVer(&before, &after, forcePrimaryChange)
+		if !smap.isPrimary(p.si) {
+			p.owner.smap.put(smap)
+			p.owner.smap.mu.Unlock()
+			p.clearRegpool()
+			nlog.Infof("%s: change-of-mind #3: joining via %s", p, smap.Primary.StringEx())
+			if err := p.secondaryStartup(smap); err != nil {
+				cos.ExitLogf("%s: %v", cmn.BadSmapPrefix, err)
+			}
+
+			// TODO:
+			// - nodes admitted prior to change-of-mind (#1, #3) never get Smap from us (no step-2 metasync);
+			// - those nodes may wait out `join_startup_time` for the promised Smap and exit (K8s restart => clean rejoin)
+			// - fix on the joining node's side likely requires not marking cluster-started until Smap is valid
+			return
+		}
 
 		uuid, created = smap.UUID, smap.CreationTime
 
@@ -612,17 +628,20 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 
 	// 12. clear regpool
-	primary := p.primary()
-	primary.reg.mpl.Lock()
-	primary.reg.pool = primary.reg.pool[:0]
-	primary.reg.pool = nil
-	primary.reg.mpl.Unlock()
+	p.clearRegpool()
 
 	// 13. resume rebalance if needed
 	if config.Rebalance.Enabled {
 		p.resumeReb(smap, config)
 	}
 	p.owner.rmd.starting.Store(false)
+}
+
+func (p *proxy) clearRegpool() {
+	primary := p.primary()
+	primary.reg.mpl.Lock()
+	primary.reg.pool = nil
+	primary.reg.mpl.Unlock()
 }
 
 // resolve unweighted targets once the Smap is assembled (under Smap lock)
@@ -1153,18 +1172,114 @@ func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	return nil
 }
 
-func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (smap *smapX) {
-	var (
-		voteInProgress bool
-		cloned         bool
-	)
+// reconcile registration metadata and finalize the startup Smap under the caller's Smap lock
+func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) *smapX {
+	voteInProgress := p.regpoolMeta(before, after)
+	if !voteInProgress && !forcePrimaryChange {
+		local := p.owner.smap.get()
+		primary := p.primary()
+		primary.reg.mpl.RLock()
+		nreg := len(primary.reg.pool)
+		primary.reg.mpl.RUnlock()
+
+		confirmed := p.regpoolConfirmPrimary(before.Smap, after.Smap)
+
+		primary.reg.mpl.RLock()
+		changed := p.owner.smap.get() != local || len(primary.reg.pool) != nreg
+		primary.reg.mpl.RUnlock()
+		if changed {
+			// the handshake released the Smap lock: recover current state before deciding
+			// - re-apply node props merged from the loaded Smap (flags, weights)
+			before.Smap = p.owner.smap.get().mergeNodeProps(before.Smap)
+			before.BMD, before.RMD, before.EtlMD = p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etl.get()
+			before.Config, _ = p.owner.config.get()
+			voteInProgress = p.regpoolMeta(before, after)
+		}
+		// reuse the confirmation only if it covers the latest recovered leadership
+		if confirmed != nil && !voteInProgress && after.Smap.validate() == nil &&
+			after.Smap.Primary.IsProxy() && !after.Smap.Primary.InMaintOrDecomm() &&
+			after.Smap.UUID == confirmed.UUID && after.Smap.Primary.ID() == confirmed.Primary.ID() &&
+			after.Smap.Version <= confirmed.Version {
+			return confirmed
+		}
+	}
+
+	// not interfering with elections
+	if voteInProgress {
+		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
+		nlog.Errorln("voting is in progress, continuing with potentially older", before.Smap.StringEx())
+		return before.Smap
+	}
+
+	runtime.Gosched()
+
+	return p.regpoolSmap(before, after, forcePrimaryChange)
+}
+
+// confirm recovered leadership, temporarily releasing the caller's Smap lock
+func (p *proxy) regpoolConfirmPrimary(local, recovered *smapX) *smapX {
+	if recovered.Primary == nil || !recovered.Primary.IsProxy() || recovered.isPrimary(p.si) {
+		return nil
+	}
+	if err := recovered.validate(); err != nil || recovered.Primary.InMaintOrDecomm() {
+		return nil
+	}
+	psi := recovered.Primary
+	if fresh := local.GetProxy(psi.ID()); fresh != nil {
+		psi = fresh // recovered Smap may carry obsolete endpoints and verifying key
+	}
+	if err := psi.Validate(); err != nil {
+		return nil
+	}
+
+	p.owner.smap.mu.Unlock()
+	defer p.owner.smap.mu.Lock()
+
+	cargs := allocCargs()
+	cargs.si = psi
+	cargs.req = cmn.HreqArgs{
+		Method: http.MethodGet,
+		Path:   apc.URLPathDae.S,
+		Query:  url.Values{apc.QparamWhat: []string{apc.WhatSmapVote}},
+	}
+	cargs.timeout = cmn.Rom.CplaneOperation()
+	cargs.cresv = cresjGeneric[cluMeta]{}
+	res := p.call(cargs, local)
+	freeCargs(cargs)
+	defer freeCR(res)
+	if res.err != nil {
+		nlog.Warningf("%s: cannot confirm primary %s: %v - proceeding with primary startup", p, psi, res.err)
+		return nil
+	}
+
+	cm := res.v.(*cluMeta)
+	smap := cm.Smap
+	if cm.SI.Validate() != nil || !cm.SI.IsProxy() || cm.SI.ID() != psi.ID() || cm.SI.NetEq(psi) != nil ||
+		!cm.Flags.IsSet(cos.ClusterStarted) || cm.Flags.IsSet(cos.VoteInProgress) || smap.validate() != nil {
+		return nil
+	}
+	if !smap.Primary.IsProxy() || !smap.isPrimary(cm.SI) || smap.Primary.InMaintOrDecomm() ||
+		smap.Primary.NetEq(cm.SI) != nil || smap.UUID != recovered.UUID || smap.Version < recovered.Version {
+		return nil
+	}
+	if _, err := smap.IsDupNet(p.si); err != nil {
+		nlog.Warningf("%s: cannot adopt confirmed %s: %v - proceeding with primary startup", p, smap, err)
+		return nil
+	}
+	smap.Pmap[p.SID()] = p.si
+	return smap
+}
+
+// recover max-version metadata from registrations and apply BMD, RMD, and config updates
+func (p *proxy) regpoolMeta(before, after *cluMeta) (voteInProgress bool) {
 	*after = *before
 
 	primary := p.primary()
 	primary.reg.mpl.RLock()
+	defer primary.reg.mpl.RUnlock()
 
 	if len(primary.reg.pool) == 0 {
-		goto ret
+		return false
 	}
 	for _, regReq := range primary.reg.pool {
 		nsi := regReq.SI
@@ -1233,17 +1348,13 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 		}
 	}
 
-ret:
-	primary.reg.mpl.RUnlock()
+	return voteInProgress
+}
 
-	// not interfering with elections
-	if voteInProgress {
-		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
-		nlog.Errorln("voting is in progress, continuing with potentially older", before.Smap.StringEx())
-		return before.Smap
-	}
-
-	runtime.Gosched()
+// reconcile joining nodes and finalize primary ownership, Smap version, and primary URL
+func (p *proxy) regpoolSmap(before, after *cluMeta, forcePrimaryChange bool) *smapX {
+	var cloned bool
+	primary := p.primary()
 
 	// NOTE [ref0417]:
 	// - always update joining nodes' net-infos;
