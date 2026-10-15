@@ -29,8 +29,8 @@ requirements apply.
 ### Human Responsibility
 
 Submit only changes you have personally reviewed, understand, and can
-explain. Verify generated code and tests, respond to review feedback, and
-address bugs introduced by your contribution.
+explain. Verify generated code and tests per [Testing Changes](#testing-changes),
+respond to review feedback, and address bugs introduced by your contribution.
 
 Do not submit pull requests or issue reports produced by unattended AI
 scans without human investigation and validation. For bug fixes, provide
@@ -135,30 +135,30 @@ syscalls inside critical sections to the absolute minimum.
 Arrange struct fields to minimize alignment padding, unless there is a
 specific reason to group related fields together.
 
-
 #### Testing Changes
 
-When choosing between an integration test and a unit test, choose an
-integration test that runs against a live cluster: a local playground or
-minikube-based Kubernetes cluster.
+Prefer integration tests over unit tests.
+Test every code contribution against a running AIStore cluster (local playground
+or minikube-based Kubernetes) before submission. Source inspection and tests
+without a cluster are insufficient; unvalidated contributions will be closed.
 
 Every bug fix must include an integration test that passes with the fix and
 fails without it. Verify both outcomes.
+
+Do not add one-off unit tests without long-term value.
 
 For intermittent failures, repeat the test enough times to eliminate doubt
 about the fix. Report the commands and run counts used to verify the failure
 without the fix and the repeated passes with it.
 
-Before committing any changes, run the following tests to verify any added changes to the codebase:
+Before committing, run only the tests needed to verify your change. Example:
 
 ```console
 $ cd aistore
 
-# Run short tests
-$ BUCKET=tmp make test-short
-
-# Run all tests
-$ BUCKET=<existing-cloud-bucket> make test-long
+# Run a specific AIS integration test (replace TestName).
+$ AIS_ENDPOINT=http://localhost:8080 BUCKET=ais://tmp \
+  TESTS_DIR=ais/test RE='^TestName$' make test-run
 ```
 
 To run Python-related tests:
@@ -210,13 +210,30 @@ checks; it publishes to Fern.
 
 #### Commit Messages
 
-Commit messages must precisely describe the changes being committed. Keep
-the title and body consistent with the final diff, including the problem
-addressed and the resulting behavior. Avoid claims the changes or validation
-do not support.
+Keep commit titles and bodies clear, concise, and consistent with the final
+diff: describe the problem and resulting behavior without unsupported claims.
+Release notes are usually drafted from commit messages.
 
-Release notes are usually drafted from commit messages; their accuracy
-matters beyond the individual review.
+Use `<subsystem>: <message>` for the title. Lowercase words and preserve
+technical identifiers such as `TX`. Prefix body bullets with `*`; indent
+sub-bullets and prefix them with `-`.
+Separate change groups (e.g., implementation and tests) with `----` on its own line.
+
+For example:
+
+```text
+ktls: add TX lifecycle counters and periodic diagnostics
+
+* refused offloads:
+  - count and log "session tickets are enabled" regardless of verbosity
+----
+* update logging and unit tests
+
+Signed-off-by: Your Name <you@example.com>
+```
+
+Follow [human authorship/sign-off](#licensing-and-sign-off) and
+[AI disclosure](#disclosure) requirements.
 
 #### Signing-Off Commits
 
