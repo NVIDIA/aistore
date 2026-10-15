@@ -29,7 +29,7 @@ var KnownNetworks = [...]string{NetPublic, NetIntraControl, NetIntraData}
 
 // Special address ranges not covered by netip's built-in classifications.
 var (
-	cgnatPrefix          = netip.MustParsePrefix("100.64.0.0/10")
+	cgnatPrefix          = netip.MustParsePrefix("100.64.0.0/10")  // RFC 6598
 	wellKnownNAT64Prefix = netip.MustParsePrefix("64:ff9b::/96")   // RFC 6052
 	localUseNAT64Prefix  = netip.MustParsePrefix("64:ff9b:1::/48") // RFC 8215
 	sixTo4Prefix         = netip.MustParsePrefix("2002::/16")      // RFC 3056
