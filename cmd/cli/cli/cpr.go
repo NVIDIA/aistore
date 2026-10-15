@@ -61,8 +61,14 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.T
 	summaries := ctx.res
 	for _, res := range summaries {
 		debug.Func(func() { debug.Assertf(res.Bck.Equal(&bckFrom), "%s != %s", res.Bck.String(), bckFrom.String()) })
-		cpr.totals.size += int64(res.TotalSize.PresentObjs + res.TotalSize.RemoteObjs)
-		cpr.totals.objs += int64(res.ObjCount.Present + res.ObjCount.Remote)
+		if !objCached && bckFrom.IsRemote() {
+			// Remote totals cover the full backend listing, including cached objects.
+			cpr.totals.objs += int64(res.ObjCount.Remote)
+			cpr.totals.size += int64(res.TotalSize.RemoteObjs)
+		} else {
+			cpr.totals.objs += int64(res.ObjCount.Present)
+			cpr.totals.size += int64(res.TotalSize.PresentObjs)
+		}
 	}
 	if cpr.totals.objs == 0 {
 		debug.Assert(cpr.totals.size == 0)

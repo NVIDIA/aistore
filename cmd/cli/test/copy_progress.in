@@ -1,0 +1,15 @@
+// RUN remais
+
+ais bucket create ais://@remais/$BUCKET_1 // IGNORE
+head -c 1024 /dev/zero | ais put - ais://@remais/$BUCKET_1/one // IGNORE
+head -c 2048 /dev/zero | ais put - ais://@remais/$BUCKET_1/two // IGNORE
+ais evict ais://@remais/$BUCKET_1 --template "*" --wait // IGNORE
+ais get ais://@remais/$BUCKET_1/one /dev/null // IGNORE
+
+ais show remote-cluster -H | awk 'NR==1 {print $1}' // SAVE_RESULT
+ais cp ais://@$RESULT/$BUCKET_1 ais://$BUCKET_2 --all --progress >$OBJECT 2>&1 // IGNORE
+grep 'Copied objects:' $OBJECT | tail -1 | sed -E 's/.*Copied objects:[[:space:]]*([0-9]+\/[0-9]+).*/objects \1/'
+grep 'Copied size:' $OBJECT | tail -1 | sed -E 's/.*Copied size:[[:space:]]*([^[]+)[[:space:]]*\[.*/size \1/'
+
+ais bucket rm --yes ais://@remais/$BUCKET_1 // IGNORE
+ais bucket rm --yes ais://$BUCKET_2 // IGNORE
