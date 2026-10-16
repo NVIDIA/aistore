@@ -6,6 +6,7 @@ package ais
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -820,7 +821,7 @@ func (a *lstcoReg) abort(xargs *xact.ArgsMsg) {
 	}
 }
 
-func (c *lstcoCtx) do() (string, error) {
+func (c *lstcoCtx) do(ctx context.Context) (string, error) {
 	// 1. lsmsg
 	c.lsmsg = apc.LsoMsg{
 		UUID:     cos.GenUUID(),
@@ -840,9 +841,16 @@ func (c *lstcoCtx) do() (string, error) {
 	c.tsi = tsi
 	c.lsmsg.SID = tsi.ID()
 
-	// 2. ls 1st page
+	// 2. ls 1st non-empty page, while the client waits
+	// TODO: return xid at once and find the 1st non-empty page in pages()
 	var lst *cmn.LsoRes
-	lst, err = c.page(true /*newls*/)
+	lst, err = c.next(true /*newls*/)
+	for err == nil && len(lst.Entries) == 0 && c.lsmsg.ContinuationToken != "" {
+		if err = ctx.Err(); err != nil {
+			break
+		}
+		lst, err = c.next(false /*newls*/)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -883,10 +891,9 @@ func (c *lstcoCtx) do() (string, error) {
 	s := fmt.Sprintf("%s[%s] %s => %s", c.altmsg.Action, c.xid, c.bckFrom.String(), c.bckTo.String())
 
 	// 6. more pages, if any
-	if lst.ContinuationToken != "" {
+	if c.lsmsg.ContinuationToken != "" {
 		// Run
 		nlog.Infoln("run", s, "...")
-		c.lsmsg.ContinuationToken = lst.ContinuationToken
 		go c.pages(s, cnt)
 	} else {
 		nlog.Infoln(s, "count", cnt)
@@ -919,16 +926,27 @@ func (c *lstcoCtx) pages(s string, cnt int) {
 	nlog.Infoln(s, "count", c.cnt, "stopped", c.stopped.Load(), "c-token", c.lsmsg.ContinuationToken, "err", err)
 }
 
-// next page
-func (c *lstcoCtx) _page() (int, error) {
-	lst, err := c.page(false /*newls*/)
+// next page and its continuation token
+// (a remote page may be empty and still carry a continuation token)
+func (c *lstcoCtx) next(newls bool) (*cmn.LsoRes, error) {
+	prev := c.lsmsg.ContinuationToken
+	lst, err := c.page(newls)
 	if err != nil {
-		return 0, err
+		return nil, err
+	}
+	if lst.ContinuationToken != "" && lst.ContinuationToken == prev {
+		return nil, fmt.Errorf("%s %s: continuation token %q does not make forward progress",
+			lsotag, c.bckFrom.Cname(""), prev)
 	}
 	c.lsmsg.ContinuationToken = lst.ContinuationToken
-	if len(lst.Entries) == 0 {
-		debug.Assert(lst.ContinuationToken == "")
-		return 0, nil
+	return lst, nil
+}
+
+// subsequent pages
+func (c *lstcoCtx) _page() (int, error) {
+	lst, err := c.next(false /*newls*/)
+	if err != nil || len(lst.Entries) == 0 {
+		return 0, err
 	}
 
 	lr := &c.tcomsg.ListRange

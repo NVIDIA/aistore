@@ -5,14 +5,19 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"math/rand/v2"
+	"os"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -23,6 +28,10 @@ import (
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 // TODO -- FIXME: randomize range, check prefix for `xs.iteratePrefix`
@@ -260,4 +269,84 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 			tlog.Logfln("Total (`ls %s/%s*`): %d objects", bckTo.String(), m.prefix, len(objList.Entries))
 		})
 	}
+}
+
+// copy a remote bucket where a page of S3 dir markers lists empty but still
+// has a continuation token
+func TestCopyRemoteEmptyPages(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Bck: cliBck, RequiredCloudProvider: apc.AWS})
+
+	const pageSize = 4
+	var (
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+		bckTo    = cmn.Bck{Name: "cp-empty-pages-" + trand.String(6), Provider: apc.AIS}
+		prefix   = "cp-empty-pages-" + trand.String(6) + "/"
+		keys     = make([]string, 0, 4*pageSize)
+		objNames = make([]string, 0, 2*pageSize)
+	)
+	cfg, err := config.LoadDefaultConfig(t.Context(), loadCredentials(t), config.WithRegion(env.AwsDefaultRegion()))
+	tassert.CheckFatal(t, err)
+	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		if ep := os.Getenv(env.AWSEndpoint); ep != "" {
+			o.BaseEndpoint, o.UsePathStyle = aws.String(ep), true
+		}
+	})
+
+	bprops, err := api.HeadBucket(bp, cliBck, false /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
+
+	// small remote pages
+	_, err = api.SetBucketProps(bp, cliBck, &cmn.BpropsToSet{
+		Extra: &cmn.ExtraToSet{AWS: &cmn.ExtraPropsAWSToSet{MaxPageSize: apc.Ptr[int64](pageSize)}},
+	})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_, err := api.SetBucketProps(bp, cliBck, &cmn.BpropsToSet{
+			Extra: &cmn.ExtraToSet{AWS: &cmn.ExtraPropsAWSToSet{MaxPageSize: apc.Ptr(bprops.Extra.AWS.MaxPageSize)}},
+		})
+		tassert.CheckError(t, err)
+	})
+
+	t.Cleanup(func() {
+		for _, key := range keys {
+			_, err := s3Client.DeleteObject(context.Background(), &s3.DeleteObjectInput{Bucket: aws.String(cliBck.Name), Key: aws.String(key)})
+			tassert.CheckError(t, err)
+		}
+	})
+	// one page per group: markers, objects, markers, objects
+	for _, group := range []string{"a", "b", "c", "d"} {
+		for i := range pageSize {
+			name := fmt.Sprintf("%s%s-%d", prefix, group, i)
+			if group == "a" || group == "c" {
+				name += "/"
+			} else {
+				objNames = append(objNames, name)
+			}
+			_, err := s3Client.PutObject(t.Context(), &s3.PutObjectInput{
+				Bucket: aws.String(cliBck.Name), Key: aws.String(name), Body: strings.NewReader(""),
+			})
+			tassert.CheckFatal(t, err)
+			keys = append(keys, name)
+		}
+	}
+
+	t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
+	msg := &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Prefix: prefix}}
+	xid, err := api.CopyBucket(bp, cliBck, bckTo, msg, apc.FltExists)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("copying %s => %s: %s", cliBck.Cname(prefix), bckTo.String(), xid)
+	tassert.Fatalf(t, strings.HasPrefix(xid, xact.PrefixTcoID), "expected x-tco job, got %q", xid)
+
+	err = api.WaitForSnapsIdle(bp, &xact.ArgsMsg{ID: xid, Timeout: tools.CopyBucketTimeout})
+	tassert.CheckFatal(t, err)
+
+	lst, err := api.ListObjects(bp, bckTo, &apc.LsoMsg{Prefix: prefix}, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	copied := make([]string, 0, len(lst.Entries))
+	for _, en := range lst.Entries {
+		copied = append(copied, en.Name)
+	}
+	slices.Sort(copied)
+	tassert.Fatalf(t, slices.Equal(copied, objNames), "expected %v, got %v", objNames, copied)
 }

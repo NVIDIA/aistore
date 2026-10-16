@@ -5,9 +5,12 @@
 package integration_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -21,6 +24,8 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/xact"
+
+	"github.com/tinylib/msgp/msgp"
 )
 
 const listCtxStress = 3
@@ -94,6 +99,32 @@ func TestListContextCancellation(t *testing.T) {
 			waitListCtxAborted(t, bp, xid, apc.ActSummaryBck, 1, true /*finished*/)
 		}
 	})
+
+	t.Run("lstco-empty-pages", func(t *testing.T) {
+		bck := remote.addBck(t, bp, "empty")
+		bckTo := cmn.Bck{Name: "listctx-to", Provider: apc.AIS}
+		remote.reset()
+
+		q := url.Values{apc.QparamFltPresence: []string{strconv.Itoa(apc.FltExists)}}
+		bck.SetQuery(q)
+		_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo, "" /*objName*/)
+		body := cos.MustMarshal(apc.ActMsg{Action: apc.ActCopyBck, Value: &apc.TCBMsg{}})
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
+			bp.URL+apc.URLPathBuckets.Join(bck.Name)+"?"+q.Encode(), bytes.NewReader(body))
+		tassert.CheckFatal(t, err)
+		req.Header.Set(cos.HdrContentType, cos.ContentJSON)
+		api.SetAuxHeaders(req, &bp)
+
+		client := *bp.Client
+		client.Timeout = 3 * time.Second
+		resp, err := client.Do(req)
+		if err == nil {
+			resp.Body.Close()
+		}
+		tassert.Fatalf(t, cos.IsErrClientTimeout(err), "expected client timeout, got %v", err)
+		waitListCtxCount(t, &remote.calls, listCtxStress)
+		waitListCtxQuiet(t, &remote.calls)
+	})
 }
 
 func newListCtxRemote() *listCtxRemote {
@@ -124,7 +155,12 @@ func (remote *listCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(apc.HdrBucketProps, "{}")
 		return
 	}
-	remote.calls.Add(1)
+	n := remote.calls.Add(1)
+	if strings.Contains(r.URL.Path, "/empty-") {
+		w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
+		_ = msgp.Encode(w, &cmn.LsoRes{ContinuationToken: strconv.FormatInt(n, 10)})
+		return
+	}
 	if strings.Contains(r.URL.Path, "/retry-") {
 		http.Error(w, "throttled", http.StatusTooManyRequests)
 		return
@@ -145,6 +181,19 @@ func waitListCtxCount(t *testing.T, counter *atomic.Int64, expected int) {
 	err := tools.WaitForCondition(func() bool { return counter.Load() >= int64(expected) },
 		tools.WaitRetryOpts{MaxRetries: 300, Interval: 50 * time.Millisecond})
 	tassert.Fatalf(t, err == nil, "waiting for %d calls (got %d): %v", expected, counter.Load(), err)
+}
+
+func waitListCtxQuiet(t *testing.T, counter *atomic.Int64) {
+	prev := counter.Load()
+	for range 30 {
+		time.Sleep(time.Second)
+		curr := counter.Load()
+		if curr == prev {
+			return
+		}
+		prev = curr
+	}
+	tassert.Fatalf(t, false, "LIST continued after cancel: %d calls", prev)
 }
 
 func waitListCtxAborted(t *testing.T, bp api.BaseParams, xid, kind string, minAborted int, finished bool) {
