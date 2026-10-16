@@ -225,6 +225,11 @@ func (r *lrit) wait() {
 	}
 	close(r.nwp.workCh)
 	r.nwp.wg.Wait()
+
+	// drain and free for aborted workers
+	for pair := range r.nwp.workCh {
+		core.FreeLOM(pair.lom)
+	}
 }
 
 func (r *lrit) done() bool { return r.parent.IsAborted() || r.parent.IsDone() }
@@ -399,8 +404,11 @@ func tooManyReqs(ecode int, err error) bool {
 }
 
 func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {
-	if err := cos.ValidateOname(lom.ObjName); err != nil {
-		return false, fmt.Errorf("%s: %w", badLrRequest, err)
+	// names that come from users and remote
+	if r.lrp != lrpPrefix || r.bck.IsRemote() {
+		if err := cos.ValidateOname(lom.ObjName); err != nil {
+			return false, fmt.Errorf("%s: %w", badLrRequest, err)
+		}
 	}
 	if err := lom.InitBck(r.bck); err != nil {
 		return false, err
@@ -424,11 +432,14 @@ func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done
 	l, c := len(r.nwp.workCh), cap(r.nwp.workCh)
 	r.nwp.chanFull.Check(l, c)
 
-	// lom eventually freed below
+	// worker frees lom; on abort, the caller does
 	// TODO: consider core.LIF with subsequent lif.LOM() conversion
-
-	r.nwp.workCh <- lrpair{lom, wi}
-	return false, nil
+	select {
+	case r.nwp.workCh <- lrpair{lom, wi}:
+		return false, nil
+	case <-r.parent.ChanAbort():
+		return true, nil
+	}
 }
 
 //////////////
