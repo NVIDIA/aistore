@@ -274,7 +274,7 @@ func _checkLockMany(c *cli.Context, bck cmn.Bck, prefix, uri string) error {
 
 	for {
 		// next page
-		lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{})
+		lst, err := lsoPage(bck, msg, api.ListArgs{})
 		if err != nil {
 			return lsoErr(msg, err)
 		}

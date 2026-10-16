@@ -526,6 +526,21 @@ func lsoErr(msg *apc.LsoMsg, err error) error {
 	return V(err)
 }
 
+// next non-empty page or the last page
+// (a remote page can be empty and still carry a continuation token)
+func lsoPage(bck cmn.Bck, msg *apc.LsoMsg, args api.ListArgs) (*cmn.LsoRes, error) {
+	for {
+		prev := msg.ContinuationToken
+		lst, err := api.ListObjectsPage(apiBP, bck, msg, args)
+		if err != nil || len(lst.Entries) > 0 || msg.ContinuationToken == "" {
+			return lst, err
+		}
+		if msg.ContinuationToken == prev {
+			return nil, fmt.Errorf("%s: continuation token %q does not make forward progress", bck.Cname(""), prev)
+		}
+	}
+}
+
 // usage:
 // - list-objects
 // - get multiple (`getMultiObj`)

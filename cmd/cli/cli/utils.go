@@ -614,7 +614,7 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 		msg.SetFlag(apc.LsCached)
 	}
 	msg.SetFlag(apc.LsNameOnly)
-	lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{})
+	lst, err := lsoPage(bck, msg, api.ListArgs{})
 	if err != nil {
 		return false, V(err)
 	}

@@ -206,7 +206,7 @@ func lsObjVsPref(bck cmn.Bck, oname string) (dop dop, _ error) {
 	// NOTE: never "cached" (apc.LsCached)
 	msg.SetFlag(apc.LsNameOnly)
 	msg.SetFlag(apc.LsNoRecursion)
-	lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{Limit: 32})
+	lst, err := lsoPage(bck, msg, api.ListArgs{Limit: 32})
 
 	if err != nil {
 		return dop, V(err)

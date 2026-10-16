@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -125,6 +127,23 @@ func TestListContextCancellation(t *testing.T) {
 		waitListCtxCount(t, &remote.calls, listCtxStress)
 		waitListCtxQuiet(t, &remote.calls)
 	})
+
+	t.Run("cli-empty-pages", func(t *testing.T) {
+		bin, err := exec.LookPath("ais")
+		if err != nil {
+			t.Skip("'ais' binary not found")
+		}
+		t.Setenv(env.AisEndpoint, bp.URL)
+		if bp.Token != "" {
+			t.Setenv(env.AisAuthToken, bp.Token)
+			t.Setenv(env.AisAuthTokenFile, "")
+		}
+		bck := remote.addBck(t, bp, "sparse")
+		remote.reset()
+
+		out, err := exec.Command(bin, "advanced", "check-lock", bck.Cname("")).CombinedOutput()
+		tassert.Fatalf(t, err == nil && strings.Contains(string(out), "/obj"), "ais advanced check-lock: %v\n%s", err, out)
+	})
 }
 
 func newListCtxRemote() *listCtxRemote {
@@ -156,7 +175,12 @@ func (remote *listCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n := remote.calls.Add(1)
-	if strings.Contains(r.URL.Path, "/empty-") {
+	if strings.Contains(r.URL.Path, "/sparse-") && n > listCtxStress {
+		w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
+		_ = msgp.Encode(w, &cmn.LsoRes{Entries: cmn.LsoEntries{{Name: "obj"}}})
+		return
+	}
+	if strings.Contains(r.URL.Path, "/empty-") || strings.Contains(r.URL.Path, "/sparse-") {
 		w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
 		_ = msgp.Encode(w, &cmn.LsoRes{ContinuationToken: strconv.FormatInt(n, 10)})
 		return
