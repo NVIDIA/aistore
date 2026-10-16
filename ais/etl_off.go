@@ -14,7 +14,9 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
-func etlOff(w http.ResponseWriter, r *http.Request) { cmn.WriteErr(w, r, etl.ErrNotBuilt) }
+func etlOff(w http.ResponseWriter, r *http.Request) {
+	cmn.WriteErr(w, r, etl.ErrNotBuilt, http.StatusNotImplemented, Silent)
+}
 
 func (*proxy) etlHandler(w http.ResponseWriter, r *http.Request)                      { etlOff(w, r) }
 func (*proxy) etlExists(string) error                                                 { return etl.ErrNotBuilt }

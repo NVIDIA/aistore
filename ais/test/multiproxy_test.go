@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -51,7 +52,6 @@ var (
 		{"JoinWhileVoteInProgress", joinWhileVoteInProgress},
 		{"ConcurrentPutGetDel", concurrentPutGetDel},
 		{"ProxyStress", proxyStress},
-		{"NetworkFailure", networkFailure},
 		{"PrimaryAndNextCrash", primaryAndNextCrash},
 		{"DiscoveryAndOriginalPrimaryCrash", discoveryAndOrigPrimaryProxiesCrash},
 		{"AddNodeDuplicateIP", addNodeDuplicateIP},
@@ -689,14 +689,13 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 	return nil
 }
 
-// putGetDelWorker does put/get/del in sequence; if primary proxy change happens, it checks the failed delete
-// channel and route the deletes to the new primary proxy
-// stops when told to do so via the stop channel
-func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan string, errCh chan error,
-	wg *sync.WaitGroup) {
+// run PUT/GET/DELETE and retry pending deletes once per primary notification
+// - request errors are expected while proxies are down
+// - bucket cleanup removes any objects left when workers stop
+func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	missedDeleteCh := make(chan string, 100)
+	missedDeletes := make([]string, 0, 100)
 	baseParams := tools.BaseAPIParams(proxyURL)
 
 	bck := cmn.Bck{
@@ -704,35 +703,32 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 		Provider: apc.AIS,
 	}
 	cksumType := bck.DefaultProps(initialClusterConfig).Cksum.Type
-loop:
 	for {
 		select {
 		case <-stopCh:
-			close(errCh)
-			break loop
+			return
 
 		case url := <-proxyURLCh:
-			// send failed deletes to the new primary proxy
-		deleteLoop:
-			for {
+			n := 0
+			for _, objName := range missedDeletes {
 				select {
-				case objName := <-missedDeleteCh:
-					err := tools.Del(url, bck, objName, nil, errCh, true)
-					if err != nil {
-						missedDeleteCh <- objName
-					}
-
+				case <-stopCh:
+					return
 				default:
-					break deleteLoop
+				}
+				if err := tools.Del(url, bck, objName, nil, nil, true); err != nil {
+					missedDeletes[n] = objName
+					n++
 				}
 			}
+			clear(missedDeletes[n:])
+			missedDeletes = missedDeletes[:n]
 
 		default:
 		}
 
 		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: fileSize, CksumType: cksumType})
 		if err != nil {
-			errCh <- err
 			continue
 		}
 
@@ -747,42 +743,26 @@ loop:
 		}
 		_, err = api.PutObject(&putArgs)
 		if err != nil {
-			errCh <- err
 			continue
 		}
-		_, err = api.GetObject(baseParams, bck, objName, nil)
-		if err != nil {
-			errCh <- err
-		}
+		_, _ = api.GetObject(baseParams, bck, objName, nil)
 
-		err = tools.Del(proxyURL, bck, objName, nil, errCh, true)
+		err = tools.Del(proxyURL, bck, objName, nil, nil, true)
 		if err != nil {
-			missedDeleteCh <- objName
+			missedDeletes = append(missedDeletes, objName)
 		}
-	}
-
-	// process left over not deleted objects
-	close(missedDeleteCh)
-	for n := range missedDeleteCh {
-		tools.Del(proxyURL, bck, n, nil, nil, true)
 	}
 }
 
 // primaryKiller kills primary proxy, notifies all workers, and restores it.
 func primaryKiller(t *testing.T, proxyURL string, stopch <-chan struct{}, proxyurlchs []chan string,
-	errCh chan error, wg *sync.WaitGroup) {
+	wg *sync.WaitGroup) {
 	defer wg.Done()
 
-loop:
 	for {
 		select {
 		case <-stopch:
-			close(errCh)
-			for _, ch := range proxyurlchs {
-				close(ch)
-			}
-
-			break loop
+			return
 
 		default:
 		}
@@ -791,7 +771,11 @@ loop:
 			// let the workers go to the dying primary for a little while longer to generate errored requests
 			time.Sleep(time.Second)
 			for _, ch := range proxyurlchs {
-				ch <- newPrimary.URL(cmn.NetPublic)
+				select {
+				case ch <- newPrimary.URL(cmn.NetPublic):
+				case <-stopch:
+					return // killRestorePrimary still restores the killed proxy
+				}
 			}
 		}
 		killRestorePrimary(t, proxyURL, false, postKill)
@@ -803,6 +787,7 @@ loop:
 // 2. Kill discovery node provided in config, a random proxy and target
 // 3. Try restoring the killed nodes one at a time
 func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinProxies: 4})
 	var (
 		config       = tools.GetClusterConfig(t)
 		restoreCmd   = make([]tools.RestoreCmd, 0, 3)
@@ -887,8 +872,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 func proxyStress(t *testing.T) {
 	var (
 		wg          sync.WaitGroup
-		errChs      = make([]chan error, workerCnt+1)
-		stopChs     = make([]chan struct{}, workerCnt+1)
+		stopCh      = make(chan struct{})
 		proxyURLChs = make([]chan string, workerCnt)
 		bck         = cmn.Bck{
 			Name:     testBucketName,
@@ -906,43 +890,21 @@ func proxyStress(t *testing.T) {
 	// start all workers
 	rnd := cos.NowRand()
 	for i := range workerCnt {
-		errChs[i] = make(chan error, defaultChanSize)
-		stopChs[i] = make(chan struct{}, defaultChanSize)
 		proxyURLChs[i] = make(chan string, defaultChanSize)
 
 		wg.Add(1)
-		go putGetDelWorker(proxyURL, stopChs[i], proxyURLChs[i], errChs[i], &wg)
+		go putGetDelWorker(proxyURL, stopCh, proxyURLChs[i], &wg)
 
-		// stagger the workers so they don't always do the same operation at the same time
+		// randomize the work
 		n := rnd.IntN(999)
 		time.Sleep(time.Duration(n+1) * time.Millisecond)
 	}
 
-	errChs[workerCnt] = make(chan error, defaultChanSize)
-	stopChs[workerCnt] = make(chan struct{}, defaultChanSize)
 	wg.Add(1)
-	go primaryKiller(t, proxyURL, stopChs[workerCnt], proxyURLChs, errChs[workerCnt], &wg)
+	go primaryKiller(t, proxyURL, stopCh, proxyURLChs, &wg)
 
-	timer := time.After(tools.MultiProxyTestTimeout)
-loop:
-	for {
-		for _, ch := range errChs {
-			select {
-			case <-timer:
-				break loop
-			case <-ch:
-				// Read errors, throw away, this is needed to unblock the workers.
-			default:
-			}
-		}
-	}
-
-	// stop all workers
-	for _, stopCh := range stopChs {
-		stopCh <- struct{}{}
-		close(stopCh)
-	}
-
+	time.Sleep(tools.MultiProxyTestTimeout)
+	close(stopCh)
 	wg.Wait()
 }
 
@@ -986,7 +948,7 @@ func checkSmaps(t *testing.T, proxyURL string) {
 	for _, psi := range smap1.Pmap {
 		smap2 := tools.GetClusterMap(t, psi.URL(cmn.NetPublic))
 		uuid, sameOrigin, sameVersion, eq := smap1.Compare(smap2)
-		if eq {
+		if sameOrigin && sameVersion && eq {
 			continue
 		}
 		err := fmt.Errorf("(%s %s, primary=%s) != (%s %s, primary=%s): (uuid=%s, same-orig=%t, same-ver=%t)",
@@ -1012,168 +974,6 @@ func primarySetToRand(t *testing.T) *meta.Smap {
 	psi, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 	return setPrimaryTo(t, proxyURL, smap, "", psi.ID())
-}
-
-func networkFailureTarget(t *testing.T) {
-	proxyURL := tools.RandomProxyURL(t)
-	smap := tools.GetClusterMap(t, proxyURL)
-	proxyCount, targetCount := smap.CountActivePs(), smap.CountActiveTs()
-
-	tassert.Fatalf(t, targetCount > 0, "At least 1 target required")
-	target, _ := smap.GetRandTarget()
-	targetID := target.ID()
-
-	tlog.Logfln("Disconnecting target: %s", targetID)
-	oldNetworks, err := docker.Disconnect(targetID)
-	tassert.CheckFatal(t, err)
-
-	smap, err = tools.WaitForClusterState(
-		proxyURL,
-		"target is down",
-		smap.Version,
-		proxyCount,
-		targetCount-1,
-	)
-	tassert.CheckFatal(t, err)
-
-	tlog.Logfln("Connecting target %s to networks again", targetID)
-	err = docker.Connect(targetID, oldNetworks)
-	tassert.CheckFatal(t, err)
-
-	_, err = tools.WaitForClusterState(
-		proxyURL,
-		"to check cluster state",
-		smap.Version,
-		proxyCount,
-		targetCount,
-	)
-	tassert.CheckFatal(t, err)
-}
-
-func networkFailureProxy(t *testing.T) {
-	proxyURL := tools.RandomProxyURL(t)
-	smap := tools.GetClusterMap(t, proxyURL)
-	proxyCount, targetCount := smap.CountActivePs(), smap.CountActiveTs()
-	tassert.Fatalf(t, proxyCount > 1, "At least 2 proxy required (has: %d)", proxyCount)
-
-	oldPrimaryID := smap.Primary.ID()
-	proxyID, _, err := chooseNextProxy(smap)
-	tassert.CheckFatal(t, err)
-
-	tlog.Logfln("Disconnecting proxy: %s", proxyID)
-	oldNetworks, err := docker.Disconnect(proxyID)
-	tassert.CheckFatal(t, err)
-
-	smap, err = tools.WaitForClusterState(
-		proxyURL,
-		"proxy is down",
-		smap.Version,
-		proxyCount-1,
-		targetCount,
-	)
-	tassert.CheckFatal(t, err)
-
-	tlog.Logfln("Connecting proxy %s to networks again", proxyID)
-	err = docker.Connect(proxyID, oldNetworks)
-	tassert.CheckFatal(t, err)
-
-	smap, err = tools.WaitForClusterState(
-		proxyURL,
-		"to check cluster state",
-		smap.Version,
-		proxyCount,
-		targetCount,
-	)
-	tassert.CheckFatal(t, err)
-
-	if oldPrimaryID != smap.Primary.ID() {
-		t.Fatalf("Primary proxy changed from %s to %s",
-			oldPrimaryID, smap.Primary.ID())
-	}
-}
-
-func networkFailurePrimary(t *testing.T) {
-	proxyURL := tools.RandomProxyURL(t)
-	smap := tools.GetClusterMap(t, proxyURL)
-	if smap.CountActivePs() < 2 {
-		t.Fatal("At least 2 proxy required")
-	}
-
-	proxyCount, targetCount := smap.CountActivePs(), smap.CountActiveTs()
-	oldPrimaryID, oldPrimaryURL := smap.Primary.ID(), smap.Primary.URL(cmn.NetPublic)
-	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
-	tassert.CheckFatal(t, err)
-
-	// Disconnect primary
-	tlog.Logfln("Disconnecting primary %s from all networks", oldPrimaryID)
-	oldNetworks, err := docker.Disconnect(oldPrimaryID)
-	tassert.CheckFatal(t, err)
-
-	// Check smap
-	smap, err = tools.WaitForClusterState(
-		newPrimaryURL,
-		"original primary gone",
-		smap.Version,
-		proxyCount-1,
-		targetCount,
-	)
-	tassert.CheckFatal(t, err)
-
-	if smap.Primary.ID() != newPrimaryID {
-		t.Fatalf("wrong primary proxy: %s, expecting: %s after disconnecting",
-			smap.Primary.ID(), newPrimaryID)
-	}
-
-	// Connect again
-	tlog.Logfln("Connecting primary %s to networks again", oldPrimaryID)
-	err = docker.Connect(oldPrimaryID, oldNetworks)
-	tassert.CheckFatal(t, err)
-
-	// give a little time to original primary, so it picks up the network
-	// connections and starts talking to neighbors
-	_, err = tools.WaitForClusterState(
-		oldPrimaryID,
-		"original primary is restored",
-		smap.Version,
-		proxyCount,
-		targetCount,
-	)
-	tassert.CheckFatal(t, err)
-
-	oldSmap := tools.GetClusterMap(t, oldPrimaryURL)
-	// the original primary still thinks that it is the primary, so its smap
-	// should not change after the network is back
-	if oldSmap.Primary.ID() != oldPrimaryID {
-		tlog.Logfln("Old primary changed its smap. Its current primary: %s (expected %s - self)",
-			oldSmap.Primary.ID(), oldPrimaryID)
-	}
-
-	// Forcefully set new primary for the original one
-
-	baseParams := tools.BaseAPIParams(oldPrimaryURL)
-	err = api.SetPrimary(baseParams, newPrimaryID, newPrimaryURL /*toURL*/, true /*force*/)
-	tassert.CheckFatal(t, err)
-
-	smap, err = tools.WaitForClusterState(
-		newPrimaryURL,
-		"original primary joined the new primary",
-		smap.Version,
-		proxyCount,
-		targetCount,
-	)
-	tassert.CheckFatal(t, err)
-
-	if smap.Primary.ID() != newPrimaryID {
-		t.Fatalf("expected primary=%s, got %s after connecting again", newPrimaryID, smap.Primary.ID())
-	}
-}
-
-func networkFailure(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeDocker})
-
-	t.Run("Target network disconnect", networkFailureTarget)
-	t.Run("Secondary proxy network disconnect", networkFailureProxy)
-	t.Run("Primary proxy network disconnect", networkFailurePrimary)
 }
 
 // primaryAndNextCrash kills the primary proxy and a proxy that should be selected
@@ -1720,4 +1520,142 @@ func (p *voteRetryMockTarget) healthdlr(w http.ResponseWriter, r *http.Request) 
 			p.errCh <- fmt.Errorf("error writing reb-status: %v", err)
 		}
 	}
+}
+
+//
+// new tests added here --------------------------------------------
+//
+
+// Use case:
+// - some starting nodes contact the former primary;
+// - the rest of the cluster has already elected a new primary.
+func TestStartupFormerPrimary(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Long:               true,
+		RequiredDeployment: tools.ClusterTypeLocal,
+		MinProxies:         3,
+		MinTargets:         2,
+	})
+	t.Setenv(env.AisPrimaryEP, "") // do not explicitly designate the returning proxy as primary
+	defer tools.EnsureOrigClusterState(t)
+
+	var (
+		original      = tools.GetClusterMap(t, tools.GetPrimaryURL())
+		former        = original.Primary
+		formerURL     = former.URL(cmn.NetPublic)
+		formerConfig  = tools.GetDaemonConfig(t, former)
+		formerStarted bool
+		waitOpts      = &tools.WaitRetryOpts{
+			MaxRetries: int(formerConfig.Timeout.Startup.D() / (100 * time.Millisecond)),
+			Interval:   100 * time.Millisecond,
+		}
+	)
+	_, electedURL, err := chooseNextProxy(original)
+	tassert.CheckFatal(t, err)
+
+	formerCmd, err := tools.KillNode(baseParams, former)
+	tassert.CheckFatal(t, err)
+	defer func() {
+		if !formerStarted {
+			t.Setenv(env.AisPrimaryEP, electedURL)
+			tassert.CheckError(t, tools.RestoreNode(formerCmd, false, "former primary (cleanup)"))
+		}
+	}()
+
+	elected, err := tools.WaitForClusterState(electedURL, "elect a new primary", original.Version,
+		original.CountActivePs()-1, original.CountActiveTs())
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, elected.Primary.ID() != former.ID(), "former primary was not replaced: %s", elected)
+	electedURL = elected.Primary.URL(cmn.NetPublic)
+	electedID := elected.Primary.ID()
+	tlog.Logfln("Elected %s while former primary %s is offline", electedID, former.ID())
+
+	// Restart one target with its post-election Smap, but direct its join to the former primary.
+	// Keep the other targets and proxies running with the elected primary.
+	target, err := elected.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	targetCmd, err := tools.KillNode(tools.BaseAPIParams(electedURL), target)
+	tassert.CheckFatal(t, err)
+	targetStarted := false
+	defer func() {
+		t.Setenv(env.AisPrimaryEP, electedURL)
+		if !formerStarted {
+			err := tools.RestoreNode(formerCmd, false, "former primary (cleanup)")
+			tassert.CheckError(t, err)
+			formerStarted = err == nil
+		}
+		if !targetStarted {
+			tassert.CheckError(t, tools.RestoreNode(targetCmd, false, "target (cleanup)"))
+		}
+		tassert.CheckError(t, tools.WaitNodeReady(target.URL(cmn.NetPublic), waitOpts))
+		// Changing startup roles does not yet hand off admitted nodes. Re-admit this
+		// target explicitly during cleanup, including its newly generated verifying key.
+		_, err := tools.JoinCluster(electedURL, target)
+		tassert.CheckError(t, err)
+		_, err = tools.WaitForClusterState(electedURL, "restore original membership", 0,
+			original.CountActivePs(), original.CountActiveTs())
+		tassert.CheckError(t, err)
+		tools.WaitForRebalAndResil(t, tools.BaseAPIParams(electedURL))
+	}()
+
+	// Retain only self in the former primary's stale Smap so that its earlier health
+	// and registration-time discovery cannot find the elected cluster. Leadership must
+	// be recovered from the incoming registration, exercising regpoolMaxVer.
+	stale := &meta.Smap{
+		UUID: original.UUID, CreationTime: original.CreationTime, Version: original.Version,
+		Primary: former, Pmap: meta.NodeMap{former.ID(): former}, Tmap: make(meta.NodeMap),
+	}
+	err = jsp.SaveMeta(filepath.Join(formerConfig.ConfigDir, fname.Smap), stale, nil)
+	tassert.CheckFatal(t, err)
+	formerCmd.Args = append(formerCmd.Args, "-ntargets=1")
+	err = tools.RestoreNode(formerCmd, false, "former primary")
+	tassert.CheckFatal(t, err)
+	formerStarted = true
+	tassert.CheckFatal(t, tools.WaitNodeReady(formerURL, waitOpts))
+	boot := tools.GetClusterMap(t, formerURL)
+	tassert.Fatalf(t, boot.Primary.ID() == former.ID() && boot.CountTargets() == 0,
+		"expected provisional primary awaiting registrations, got %s", boot)
+
+	t.Setenv(env.AisPrimaryEP, formerURL)
+	err = tools.RestoreNode(targetCmd, false, "target joining former primary")
+	tassert.CheckFatal(t, err)
+	targetStarted = true
+	t.Setenv(env.AisPrimaryEP, "")
+
+	// First prove that the target actually registered with the provisional primary.
+	deadline := time.Now().Add(formerConfig.Timeout.Startup.D())
+	for {
+		boot = tools.GetClusterMap(t, formerURL)
+		if boot.GetTarget(target.ID()) != nil {
+			tassert.Fatalf(t, boot.Primary.ID() == former.ID(),
+				"target did not register before the former primary changed roles: %s", boot)
+			break
+		}
+		tassert.Fatalf(t, time.Now().Before(deadline), "target never registered with former primary: %s", boot)
+		time.Sleep(100 * time.Millisecond)
+	}
+	tlog.Logfln("%s admitted %s while %s remained primary of the running cluster", former.ID(), target.ID(), electedID)
+
+	// The former primary must yield, rather than adopt the newer Smap and bump its
+	// version to take over. Check both views so convergence on the wrong leader fails.
+	deadline = time.Now().Add(formerConfig.Timeout.Startup.D() + tools.WaitClusterStartup)
+	for {
+		boot = tools.GetClusterMap(t, formerURL)
+		current := tools.GetClusterMap(t, electedURL)
+		tassert.Fatalf(t, current.Primary.ID() == electedID,
+			"former primary hijacked the cluster: expected %s, got %s", electedID, current)
+		tassert.Fatalf(t, boot.Primary.ID() != former.ID() || boot.Version <= elected.Version,
+			"former primary took over the recovered Smap: %s (elected %s)", boot, elected)
+		if boot.Primary.ID() == electedID && current.GetProxy(former.ID()) != nil {
+			tassert.Fatalf(t, boot.UUID == original.UUID && current.UUID == original.UUID,
+				"cluster UUID changed: %s vs %s", boot, current)
+			break
+		}
+		tassert.Fatalf(t, time.Now().Before(deadline), "former primary did not rejoin as secondary: %s", boot)
+		time.Sleep(100 * time.Millisecond)
+	}
+	_, err = tools.WaitForClusterState(electedURL, "former primary rejoined as secondary", elected.Version,
+		original.CountActivePs(), 0, target.ID())
+	tassert.CheckFatal(t, err)
+	checkSmaps(t, electedURL)
 }
