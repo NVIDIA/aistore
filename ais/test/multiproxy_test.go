@@ -709,6 +709,8 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 			return
 
 		case url := <-proxyURLCh:
+			proxyURL = url
+			baseParams = tools.BaseAPIParams(url)
 			n := 0
 			for _, objName := range missedDeletes {
 				select {
