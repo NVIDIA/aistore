@@ -139,7 +139,7 @@ cat > "$AIS_CONF_FILE" <<EOL
 	"net": {
 		"l4": {
 			"proto":              "tcp",
-			"sndrcv_buf_size":    ${SNDRCV_BUF_SIZE:-131072}
+			"sndrcv_buf_size":    ${SNDRCV_BUF_SIZE:--1}
 		},
 		"http": {
 			"use_https":          ${AIS_USE_HTTPS:-false},

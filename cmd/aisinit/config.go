@@ -30,7 +30,7 @@ var (
 	defaultNet = aiscmn.NetConf{
 		L4: aiscmn.L4Conf{
 			Proto:         "tcp",
-			SndRcvBufSize: 128 * cos.KiB, // socket send/receive buffers
+			SndRcvBufSize: aiscmn.SndRcvBufAuto, // kernel auto-tuning
 		},
 		HTTP: aiscmn.HTTPConf{
 			UseHTTPS:            false,

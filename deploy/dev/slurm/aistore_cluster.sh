@@ -152,7 +152,7 @@ cat > ${NODE_CONFIG_DIR}/proxy/ais.json << PROXYEOF
     "transport": {"max_header": 4096, "burst_buffer": 512, "idle_teardown": "4s", "quiescent": "10s", "lz4_block": "256kb", "lz4_frame_checksum": false},
     "memsys": {"min_free": "2gb", "default_buf": "32kb", "to_gc": "4gb", "hk_time": "3m", "min_pct_total": 0, "min_pct_free": 0},
     "versioning": {"enabled": true, "validate_warm_get": false},
-    "net": {"l4": {"proto": "tcp", "sndrcv_buf_size": 131072}, "http": {"use_https": false, "server_crt": "server.crt", "server_key": "server.key", "domain_tls": "", "client_ca_tls": "", "client_auth_tls": 0, "idle_conn_time": "6s", "idle_conns_per_host": 32, "idle_conns": 256, "write_buffer_size": 65536, "read_buffer_size": 65536, "chunked_transfer": true, "skip_verify": false}},
+    "net": {"l4": {"proto": "tcp", "sndrcv_buf_size": -1}, "http": {"use_https": false, "server_crt": "server.crt", "server_key": "server.key", "domain_tls": "", "client_ca_tls": "", "client_auth_tls": 0, "idle_conn_time": "6s", "idle_conns_per_host": 32, "idle_conns": 256, "write_buffer_size": 65536, "read_buffer_size": 65536, "chunked_transfer": true, "skip_verify": false}},
     "fshc": {"test_files": 4, "error_limit": 2, "io_err_limit": 10, "io_err_time": "10s", "enabled": true},
     "auth": {"signature": {"key": "", "method": "HMAC"}, "client_auth_required": false},
     "keepalivetracker": {"proxy": {"interval": "10s", "name": "heartbeat", "factor": 3}, "target": {"interval": "10s", "name": "heartbeat", "factor": 3}, "num_retries": 3, "retry_factor": 4},
