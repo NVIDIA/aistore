@@ -124,7 +124,7 @@ ais config cluster log.modules ec xs
 ais config cluster log.modules none
 ```
 
-The `ktls` module enables verbose kTLS transmit diagnostics (reserved for internal use; may be redefined or removed at any time), matching the experimental `System-Reserved-KTLS` feature flag. For example, `ais config node TARGET log.modules ktls` enables these diagnostics on one target.
+The `ktls` module enables verbose kTLS transmit diagnostics (reserved for internal use; may be redefined or removed at any time); see [kTLS transmit offload](/docs/https.md#ktls-transmit-offload). For example, `ais config node TARGET log.modules ktls` enables these diagnostics on one target.
 
 ## Log Format and Structure
 

@@ -53,7 +53,7 @@ var clusterFeatDesc = [...]string{
 	"publish selected Go runtime metrics via Prometheus",
 	"allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked",
 	"allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)",
-	"offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)",
+	"disable kernel TLS transmit offload and sendfile for HTTPS (reserved for internal use; may be redefined or removed at any time)",
 	"legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters",
 	"GET(object): disable client write and backend read deadlines (minimum transfer rate, see timeout.send_file_time)",
 
@@ -89,7 +89,7 @@ var featTags = map[string]string{
 	"Enable-Go-Runtime-Metrics":            "telemetry,ops,overhead",
 	"Dload-Allow-Private-Egress":           "security-",
 	"S3-Redirect-Rebuild":                  "s3,compat,security-",
-	"System-Reserved-KTLS":                 "perf,net,ops,compat",
+	"Disable-KTLS":                         "net,compat,overhead",
 	"S3-TensorFlow-Query":                  "s3,compat,integrity-",
 	"Disable-GET-Deadline":                 "ops,security-",
 }

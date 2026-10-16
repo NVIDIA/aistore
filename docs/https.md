@@ -254,23 +254,26 @@ Certificate status and reload operations are described in [TLS certificate manag
 
 ## kTLS transmit offload
 
-On Linux targets, AIS has experimental support for best-effort kernel TLS transmit (`kTLS_TX`) on public HTTPS listeners. Once a connection is armed, AIS gives plaintext response bytes to the TCP socket and the kernel emits encrypted TLS records. Eligible warm, monolithic object GETs can then use `sendfile(2)` without copying the object through userspace.
+On Linux, HTTPS targets use best-effort kernel TLS transmit (`kTLS_TX`) on their public listeners. Once a connection is armed, AIS gives plaintext response bytes to the TCP socket and the kernel emits encrypted TLS records. Eligible warm, monolithic object GETs can then use `sendfile(2)` without copying the object through userspace.
 
-In the initial preview this capability is off by default and temporarily gated by the system-reserved feature bit. Enable it only in controlled test clusters:
+Starting v5.2, this capability is on by default. To disable it, set the `Disable-KTLS` feature flag (reserved for internal use) and restart the targets:
 
 ```console
-$ ais config cluster features System-Reserved-KTLS
+$ ais config cluster features Disable-KTLS
 ```
 
-Feature configuration is a complete list: include any other enabled feature names in the same command. Changing this bit requires restarting the targets. Its name, meaning, and polarity may change in a later release; do not depend on it in deployment automation.
+Feature configuration is a complete list: include any other enabled feature names in the same command. The flag's name and meaning may change in a later release; do not depend on it in deployment automation.
+
+> In v5.1, the same bit was named `System-Reserved-KTLS` and _enabled_ kTLS. A cluster that had it set runs with kTLS disabled after upgrading to v5.2; to re-enable, remove `Disable-KTLS` from the feature list and restart the targets.
 
 The current scope and compatibility constraints are:
 
 - Linux target public listeners only; proxies and intra-cluster listeners are unchanged.
 - TLS 1.2 and TLS 1.3 AES-GCM cipher suites are supported. Unsupported kernels, TLS versions, and cipher suites continue with Go userspace TLS.
-- Public target connections use HTTP/1.1 and have TLS session tickets disabled while the feature is configured. These constraints apply even when a particular connection cannot arm kTLS and falls back to userspace TLS.
+- Public target connections use HTTP/1.1 and have TLS session tickets disabled unless kTLS is disabled. These constraints apply even when a particular connection cannot arm kTLS and falls back to userspace TLS.
 - kTLS applies to the entire transmit side of an armed connection. `sendfile(2)` remains limited to eligible local-file object responses; transformed, chunked, and other generated responses keep their normal userspace read path.
 - AIS retires long-lived connections near the per-key transmit limit; clients must tolerate normal HTTP connection closure and reconnection.
+- Fixed-size socket buffers limit transmit throughput. Any `net.l4.sndrcv_buf_size` other than `-1` (kernel auto-tuning) pins the buffers, including `0` (the 128KiB default). See [Socket Buffers](/docs/relnotes/5.1.md#socket-buffers).
 
 As a quick host check, run [scripts/check-ktls.sh](https://github.com/NVIDIA/aistore/blob/main/scripts/check-ktls.sh). This is necessary but not sufficient: the kernel must also support the negotiated TLS version and AES-GCM cipher. At AIS verbosity level 5, target logs report whether connections were armed, unsupported, skipped, not established, or failed.
 

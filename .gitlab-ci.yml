@@ -171,7 +171,6 @@ stages:
     AIS_SERVER_KEY: "$CI_PROJECT_DIR/localhost.key"
     AIS_ENDPOINT: "https://localhost:8080"
     BUCKET: "ais://ais-ci"
-    AIS_FEATURES: "268435456" # System-Reserved-KTLS (1 << 28)
   before_script:
     - ${SCRIPTS_DIR}/check-ktls.sh
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")

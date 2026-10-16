@@ -79,7 +79,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Enable-Go-Runtime-Metrics` | `telemetry,ops,overhead` | publish a low-cardinality subset of Go runtime metrics (goroutines, GC, heap) via Prometheus |
 | `Dload-Allow-Private-Egress` | `security-` | allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked |
 | `S3-Redirect-Rebuild` | `s3,compat,security-` | allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured) |
-| `System-Reserved-KTLS` | `perf,net,ops,compat` | offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time) (**restart required**) |
+| `Disable-KTLS` | `net,compat,overhead` | disable kernel TLS transmit offload and sendfile for HTTPS (reserved for internal use; may be redefined or removed at any time) (**restart required**) |
 | `S3-TensorFlow-Query` | `s3,compat,integrity-` | legacy TensorFlow workaround: interpret `?` in decoded S3 object paths as query parameters; breaks object keys containing `?` |
 | `Disable-GET-Deadline` | `ops,security-` | GET(object): disable client write and backend read deadlines - i.e., the **64 KiB/s minimum transfer rate** per window (`timeout.send_file_time`); other timeouts remain in force. See [Minimum transfer rate](/docs/configuration.md#minimum-transfer-rate). Stalled transfers can then hold object locks, open files, and goroutines indefinitely |
 
@@ -97,7 +97,7 @@ LZ4-Block-1MB                          Do-not-Delete-When-Rebalancing         En
 LZ4-Frame-Checksum                     Do-not-Set-Control-Plane-ToS           Dload-Allow-Private-Egress
 Do-not-Allow-Passing-FQN-to-ETL        Trust-Crypto-Safe-Checksums            S3-Redirect-Rebuild
 Ignore-LimitedCoexistence-Conflicts    S3-ListObjectVersions                  none
-S3-Presigned-Request                   Enable-Detailed-Prom-Metrics           System-Reserved-KTLS
+S3-Presigned-Request                   Enable-Detailed-Prom-Metrics           Disable-KTLS
 S3-TensorFlow-Query                    Disable-GET-Deadline
 ```
 
@@ -139,7 +139,7 @@ Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 40
 Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go runtime metrics via Prometheus
 Dload-Allow-Private-Egress           security-              allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 S3-Redirect-Rebuild                  s3,compat,security-    allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
-System-Reserved-KTLS                 perf,net,ops,compat    offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)
+Disable-KTLS                         net,compat,overhead    disable kernel TLS transmit offload and sendfile for HTTPS (reserved for internal use; may be redefined or removed at any time)
 S3-TensorFlow-Query                  s3,compat,integrity-   legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters
 Disable-GET-Deadline                 ops,security-          GET(object): disable client write and backend read deadlines (minimum transfer rate, see timeout.send_file_time)
 
@@ -188,7 +188,7 @@ Count-Object-NotFound-Stats          telemetry,ops          count GET(object) 40
 Enable-Go-Runtime-Metrics            telemetry,ops,overhead publish selected Go runtime metrics via Prometheus
 Dload-Allow-Private-Egress           security-              allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked
 S3-Redirect-Rebuild                  s3,compat,security-    allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured)
-System-Reserved-KTLS                 perf,net,ops,compat    offload TLS transmit path to the kernel and enable Linux sendfile (reserved for internal use; may be redefined or removed at any time)
+Disable-KTLS                         net,compat,overhead    disable kernel TLS transmit offload and sendfile for HTTPS (reserved for internal use; may be redefined or removed at any time)
 S3-TensorFlow-Query                  s3,compat,integrity-   legacy TensorFlow: reinterpret '?' inside a decoded S3 object path as the start of query parameters
 Disable-GET-Deadline                 ops,security-          GET(object): disable client write and backend read deadlines (minimum transfer rate, see timeout.send_file_time)
 ```

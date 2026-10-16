@@ -58,7 +58,7 @@ log.stats_time   1m
 
 **Caution**: `5` is the maximum (super-verbose) level - use for shorter intervals of time and always reset back to the default (`3`).
 
-**NOTE**: for module names, see `cmn/cos/log_module.go`. Or, type `ais config cluster` or `ais config node`, and press `<TAB-TAB>`. The `ktls` module is reserved for internal use and may be redefined or removed at any time, like the `System-Reserved-KTLS` feature flag.
+**NOTE**: for module names, see `cmn/cos/log_module.go`. Or, type `ais config cluster` or `ais config node`, and press `<TAB-TAB>`. The `ktls` module is reserved for internal use and may be redefined or removed at any time, like the `Disable-KTLS` feature flag.
 
 ## Using CLI to debug
 

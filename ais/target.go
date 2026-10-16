@@ -313,10 +313,10 @@ func (t *target) init(config *cmn.Config) {
 	keyPair := t.newKeyPair(tid, apc.Target)
 	t.si.Init(tid, apc.Target, keyPair.VerifyingKey)
 
-	// Experimental kTLS TX offload on target public HTTPS listeners (also enables sendfile).
-	// The system-reserved bit is intentionally temporary; see cmn/feat.
+	// offload TLS transmit on public HTTPS listeners (also enables sendfile)
+	// - default since v5.2; feat.DisableKTLS (reserved, temporary) disables it
 	g.netServ.pub.ktlsTx = ktlsPlatform &&
-		config.Net.HTTP.UseHTTPS && config.Features.IsSet(feat.SystemReservedKTLS)
+		config.Net.HTTP.UseHTTPS && !config.Features.IsSet(feat.DisableKTLS)
 
 	debug.Assert(t.si.IDDigest != 0)
 	cos.InitShortID(t.si.IDDigest)

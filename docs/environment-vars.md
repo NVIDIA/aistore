@@ -159,7 +159,7 @@ This group of environment variables is used exclusively by development scripts a
 | `NUM_CHUNKS` | when greater than zero, specifies the number of chunks each new PUT operation will produce |
 | `SIGN_HMAC`  | when "true", enables HMAC signing and validation of all HTTP redirects |
 | `RAND_NS`  | when "true", generate buckets with random namespaces, e.g.: `ais://#ns123/bucket1`, `s3://#ns456/bucket2`, etc.  |
-| `AIS_FEATURES` | initial cluster feature flags as a decimal number, e.g.: `268435456` enables `System-Reserved-KTLS` |
+| `AIS_FEATURES` | initial cluster feature flags as a decimal number, e.g.: `268435456` (`1 << 28`, bit 28) sets `Disable-KTLS` (disables kTLS transmit offload) |
 
 See also:
 * [scripts/clean_deploy.sh](https://github.com/NVIDIA/aistore/blob/main/scripts/clean_deploy.sh)
