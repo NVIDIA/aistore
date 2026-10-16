@@ -1639,6 +1639,31 @@ func TestKTLSTxBudget(t *testing.T) {
 		whdr = http.Header{}
 		ktlsRetire(unarmed, whdr, 1<<40)
 		tassert.Errorf(t, whdr.Get(hdrConnection) == "", "unarmed conn retired: %q", whdr.Get(hdrConnection))
+		ktlsRetire(unarmed, whdr, -1)
+		tassert.Errorf(t, whdr.Get(hdrConnection) == "", "unarmed conn retired on unknown size: %q", whdr.Get(hdrConnection))
+	})
+
+	// unknown size retires unconditionally so a response larger than the remaining budget completes
+	t.Run("retire-unknown-size", func(t *testing.T) {
+		before := testktlsCounterSnapshot()
+		conn := testktlsHandshake(t, arm)
+		conn.txMaxBytes = 256
+		conn.txBytes.Store(64)
+
+		whdr := http.Header{}
+		ktlsRetire(conn, whdr, -1)
+		tassert.Errorf(t, whdr.Get(hdrConnection) == hdrConnectionClose,
+			"unknown size: %q, wanted %q", whdr.Get(hdrConnection), hdrConnectionClose)
+
+		for range 3 {
+			n, err := conn.Write(make([]byte, 100))
+			tassert.CheckError(t, err)
+			tassert.Errorf(t, n == 100, "wrote %d bytes, wanted 100", n)
+		}
+		got := testktlsCounterSnapshot().sub(before)
+		tassert.Errorf(t, got.exhausted == 0, "unknown-size response exhausted the connection (%s)", got)
+		tassert.Errorf(t, got.retiring == 1, "retiring %d, wanted 1 (%s)", got.retiring, got)
+		_ = conn.Close()
 	})
 
 	t.Run("read-from", func(t *testing.T) {

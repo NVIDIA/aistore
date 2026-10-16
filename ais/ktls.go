@@ -74,10 +74,9 @@ import (
 //   update_not_requested - update_requested obliges the peer to answer, and
 //   crypto/tls would try to write that answer and poison the connection.
 //
-// - ktlsRetire coverage: coldStream passes res.Size, which is -1 under
-//   Streaming-Cold-GET, and ktlsRetire no-ops on a negative size; _txarch
-//   multi-match passes lom.Lsize() for a tar it has not produced yet. Both can
-//   still reach `exhaust` mid-body - the very thing retirement exists to avoid.
+// - possible future optimization: reuse connections for unknown-size streaming
+//   responses if a reliable response-size bound (e.g., half the budget spent)
+//   becomes available or configurable.
 //
 // - observability: export ktlsCnt through node stats/Prometheus, and publish
 //   /proc/net/tls_stat for the software-vs-hardware split
@@ -1071,16 +1070,21 @@ func (c *ktlsConn) remaining() int64 {
 // Mark the current response as final before net/http commits its headers.
 // Once retiring, all writes belonging to this response may complete.
 func (c *ktlsConn) retire(size int64) bool {
-	if size < 0 || c.txState.Load() != ktlsArmed {
+	if c.txState.Load() != ktlsArmed {
 		return false
 	}
 	if c.txRetiring.Load() {
 		return true
 	}
-	rem := c.remaining()
-	if rem > ktlsHeadroom && size < rem-ktlsHeadroom {
-		return false
+
+	// known size
+	if size >= 0 {
+		rem := c.remaining()
+		if rem > ktlsHeadroom && size < rem-ktlsHeadroom {
+			return false
+		}
 	}
+
 	if c.txRetiring.CompareAndSwap(false, true) {
 		ktlsCnt.retiring.Add(1)
 		ktlsCnt.log()
@@ -1156,9 +1160,10 @@ func ktlsFrom(ctx context.Context) ktlsState {
 // (ref: chunkWriter.writeHeader), so the client receives this response in full, is told
 // the connection is done, and reconnects for the next one.
 //
+// Unknown (negative) `size` always retires - see TODO above.
 // Ineffective for a single object larger than the entire budget - see TODO above.
 func ktlsRetire(state ktlsState, whdr http.Header, size int64) {
-	if state == nil || size < 0 {
+	if state == nil {
 		return
 	}
 	if state.retire(size) {
