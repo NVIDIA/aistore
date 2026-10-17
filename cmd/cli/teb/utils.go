@@ -6,6 +6,8 @@ package teb
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -63,7 +65,35 @@ type (
 		Props  *cmn.Bprops
 		Info   *cmn.BsummResult
 	}
+	// bucket summary: one row per (bucket, target)
+	BsummPerTargetHelper struct {
+		Bck         cmn.Bck
+		Tname       string
+		Res         *apc.BsummResult
+		ObjectShare string
+		SizeShare   string
+	}
 )
+
+// flatten per-target results sorted by bucket, then target ID
+func NewBsummPerTarget(summaries cmn.AllBsummResults) []BsummPerTargetHelper {
+	rows := make([]BsummPerTargetHelper, 0, 8)
+	for _, summ := range summaries {
+		for _, tid := range slices.Sorted(maps.Keys(summ.Targets)) {
+			res := summ.Targets[tid]
+			objectShare, sizeShare := "-", "-"
+			if summ.ObjCount.Present > 0 {
+				objectShare = strconv.FormatFloat(float64(res.ObjCount.Present)*100/float64(summ.ObjCount.Present), 'f', 1, 64)
+			}
+			if summ.TotalSize.PresentObjs > 0 {
+				sizeShare = strconv.FormatFloat(float64(res.TotalSize.PresentObjs)*100/float64(summ.TotalSize.PresentObjs), 'f', 1, 64)
+			}
+			rows = append(rows, BsummPerTargetHelper{Bck: summ.Bck, Tname: meta.Tname(tid), Res: res,
+				ObjectShare: objectShare, SizeShare: sizeShare})
+		}
+	}
+	return rows
+}
 
 var (
 	// for extensions and override, see also:

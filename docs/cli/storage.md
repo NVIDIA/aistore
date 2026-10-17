@@ -17,7 +17,7 @@ USAGE:
 
 COMMANDS:
    show       show storage usage and utilization, disks and mountpaths
-   summary    show bucket sizes and %% of used capacity on a per-bucket basis
+   summary    show bucket sizes and % of used capacity on a per-bucket basis
    validate   check buckets for misplaced objects and objects that have insufficient numbers of copies or EC slices
    mountpath  show and attach/detach target mountpaths
    disk       show disk utilization and read/write statistics
@@ -81,6 +81,7 @@ Further references:
 For command line options and usage examples, please refer to:
 
 * [bucket summary](/docs/cli/bucket.md#show-bucket-summary)
+* [per-target object counts and content sizes](/docs/cli/bucket.md#per-target-content-distribution)
 
 ## Validate in-cluster content for misplaced objects and missing copies
 

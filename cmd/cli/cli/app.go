@@ -153,15 +153,18 @@ func printLongRunFooter(w io.Writer, repeat int) {
 }
 
 func (a *acli) runN(args []string) error {
-	delim := fcyan(strings.Repeat("-", 16))
-	fmt.Fprintln(a.outWriter, delim)
+	var delimLen int
+	if a.longRun.lfooter > 0 {
+		delimLen = 16
+	}
+	printLongRunFooter(a.outWriter, delimLen)
 	for ; a.longRun.iters < a.longRun.count; a.longRun.iters++ {
 		time.Sleep(a.longRun.refreshRate)
 		if err := a.runOnce(args); err != nil {
 			return err
 		}
 		if a.longRun.iters < a.longRun.count-1 {
-			fmt.Fprintln(a.outWriter, delim)
+			printLongRunFooter(a.outWriter, delimLen)
 		}
 	}
 	return nil

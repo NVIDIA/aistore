@@ -10,3 +10,7 @@ ais bucket summary ais://$BUCKET_1
 sleep 1
 ais bucket summary ais://$BUCKET_2
 sleep 1
+ais bucket summary ais://$BUCKET_1 --per-target -H | awk '{n+=$3} END {print n}'
+ais bucket summary ais://$BUCKET_1 --per-target | grep -c '^NAME'
+ais bucket summary ais://$BUCKET_1 --per-target --json | grep -c '"per_target"'
+ais bucket summary ais://$BUCKET_1 --json | grep -c '"per_target"' || true

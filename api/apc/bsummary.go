@@ -28,6 +28,8 @@ type (
 		// Do not add a remote bucket to BMD as a side effect of
 		// summarizing it. Takes precedence over `present`.
 		DontAddRemote bool `json:"dont_add_remote"` // +gen:optional
+		// Also return per-target results (proxy-side; v5.2).
+		PerTarget bool `json:"per_target,omitempty"` // +gen:optional
 	}
 
 	// "summarized" result for a given bucket

@@ -578,6 +578,8 @@ type (
 	BsummResult struct {
 		Bck
 		apc.BsummResult
+		// per-target results keyed by target ID (see apc.BsummCtrlMsg.PerTarget)
+		Targets map[string]*apc.BsummResult `json:"per_target,omitempty"`
 	}
 	AllBsummResults []*BsummResult
 )
@@ -589,15 +591,37 @@ func (s AllBsummResults) Len() int           { return len(s) }
 func (s AllBsummResults) Less(i, j int) bool { return s[i].Bck.Less(&s[j].Bck) }
 func (s AllBsummResults) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-func (s AllBsummResults) Aggregate(from *BsummResult) AllBsummResults {
+// aggregate across targets; non-empty tid also keeps a copy of the target's result
+func (s AllBsummResults) Aggregate(from *BsummResult, tid string) AllBsummResults {
+	var tres *apc.BsummResult
+	if tid != "" {
+		tres = &apc.BsummResult{}
+		*tres = from.BsummResult
+		if tres.ObjSize.Min == math.MaxInt64 {
+			tres.ObjSize.Min = 0
+		}
+	}
 	for _, to := range s {
 		if to.Bck.Equal(&from.Bck) {
 			aggr(from, to)
+			to.addTarget(tid, tres)
 			return s
 		}
 	}
+	from.Targets = nil
+	from.addTarget(tid, tres)
 	s = append(s, from)
 	return s
+}
+
+func (r *BsummResult) addTarget(tid string, tres *apc.BsummResult) {
+	if tres == nil {
+		return
+	}
+	if r.Targets == nil {
+		r.Targets = make(map[string]*apc.BsummResult, 4)
+	}
+	r.Targets[tid] = tres
 }
 
 // across targets

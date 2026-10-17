@@ -71,6 +71,24 @@ func clusterSupportsAtLeast(c *cli.Context, version string) bool {
 	return true
 }
 
+// return true when an active proxy is known to run an older version (unknown versions don't count)
+func proxiesOlderThan(c *cli.Context, version string) bool {
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return false
+	}
+	for _, node := range smap.Pmap {
+		if node.InMaintOrDecomm() {
+			continue
+		}
+		actual, err := api.GetSoftwareVersion(apiBP, node)
+		if err == nil && actual != "" && !cos.VersionAtLeast(actual, version) {
+			return true
+		}
+	}
+	return false
+}
+
 func checkVersionWarn(c *cli.Context, role string, stmap teb.NodeStatusMap) bool {
 	const fmtEmptyVer = "empty version from %s (in maintenance mode?)"
 

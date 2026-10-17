@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -3172,6 +3173,69 @@ func TestBucketSummaryPollAndCallback(t *testing.T) {
 	checkBucketSummary(t, summaries, m.num)
 }
 
+// per-target results must sum up to the aggregate and match HRW placement exactly
+func TestBucketSummaryPerTarget(t *testing.T) {
+	var (
+		m = &ioContext{
+			t:         t,
+			num:       512,
+			fileSize:  cos.KiB,
+			fixedSize: true,
+		}
+		bp = tools.BaseAPIParams()
+	)
+	m.initAndSaveState(true /*cleanup*/)
+	m.expectTargets(1)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+	m.puts()
+
+	// expected per-target counts
+	smap := tools.GetClusterMap(t, m.proxyURL)
+	smap.InitDigests()
+	expected := make(map[string]uint64, smap.CountActiveTs())
+	bck := meta.CloneBck(&m.bck)
+	for _, name := range m.objNames {
+		tsi, err := smap.HrwName2T(bck.MakeUname(name))
+		tassert.CheckFatal(t, err)
+		expected[tsi.ID()]++
+	}
+
+	// no per-target results unless requested
+	msg := &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
+	_, summaries, err := api.GetBucketSummary(bp, cmn.QueryBcks(m.bck), msg, api.BsummArgs{})
+	tassert.CheckFatal(t, err)
+	checkBucketSummary(t, summaries, m.num)
+	tassert.Errorf(t, summaries[0].Targets == nil, "unexpected per-target results: %+v", summaries[0].Targets)
+	tassert.Errorf(t, summaries[0].IsBckPresent, "%s: expected is_present", m.bck.String())
+
+	msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true, PerTarget: true}
+	_, summaries, err = api.GetBucketSummary(bp, cmn.QueryBcks(m.bck), msg, api.BsummArgs{})
+	tassert.CheckFatal(t, err)
+	checkBucketSummary(t, summaries, m.num)
+	checkBsummPerTarget(t, summaries[0], smap)
+
+	for tid, res := range summaries[0].Targets {
+		tassert.Errorf(t, res.ObjCount.Present == expected[tid], "%s: expected %d objects (HRW), got %d",
+			meta.Tname(tid), expected[tid], res.ObjCount.Present)
+	}
+}
+
+// one result per active target; counts and sizes add up to the aggregate
+func checkBsummPerTarget(t *testing.T, summ *cmn.BsummResult, smap *meta.Smap) {
+	t.Helper()
+	nat := smap.CountActiveTs()
+	tassert.Fatalf(t, len(summ.Targets) == nat, "%s: expected %d per-target results, got %d", summ.Bck.String(), nat, len(summ.Targets))
+	var cnt, size uint64
+	for tid, res := range summ.Targets {
+		tsi := smap.GetTarget(tid)
+		tassert.Fatalf(t, tsi != nil && !tsi.InMaintOrDecomm(), "%s: unexpected (or inactive) target", meta.Tname(tid))
+		cnt += res.ObjCount.Present
+		size += res.TotalSize.PresentObjs
+	}
+	tassert.Errorf(t, cnt == summ.ObjCount.Present, "%s: per-target count %d != aggregate %d", summ.Bck.String(), cnt, summ.ObjCount.Present)
+	tassert.Errorf(t, size == summ.TotalSize.PresentObjs, "%s: per-target size %d != aggregate %d", summ.Bck.String(), size, summ.TotalSize.PresentObjs)
+}
+
 func TestBucketSummaryQueryBuckets(t *testing.T) {
 	const (
 		numFirst  = 37
@@ -3212,6 +3276,18 @@ func TestBucketSummaryQueryBuckets(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	for i := range ctx {
 		checkBucketSummaryResult(t, summaries, ctx[i].bck, ctx[i].num)
+	}
+
+	// per target, multiple buckets
+	msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true, PerTarget: true}
+	_, summaries, err = api.GetBucketSummary(bp, cmn.QueryBcks{Provider: apc.AIS, Ns: ns}, msg, api.BsummArgs{})
+	tassert.CheckFatal(t, err)
+	smap := tools.GetClusterMap(t, ctx[0].proxyURL)
+	for i := range ctx {
+		checkBucketSummaryResult(t, summaries, ctx[i].bck, ctx[i].num)
+	}
+	for _, summ := range summaries {
+		checkBsummPerTarget(t, summ, smap)
 	}
 }
 

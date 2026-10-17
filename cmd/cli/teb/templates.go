@@ -350,6 +350,15 @@ const (
 		"{{FormatBytesUns $v.TotalSize.PresentObjs 2}} {{FormatBytesUns $v.TotalSize.RemoteObjs 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
 
+	// bucket summary per target (see NewBsummPerTarget)
+	//nolint:dupword // SIZE and SIZE SHARE label distinct columns.
+	BsummPerTargetTmpl = "NAME\t TARGET\t OBJECTS\t OBJECT SHARE(%)\t SIZE\t SIZE SHARE(%)\t USAGE(%)\n" +
+		BsummPerTargetBody
+	BsummPerTargetBody = "{{range $v := . }}" +
+		"{{FormatBckName $v.Bck}}\t {{$v.Tname}}\t {{$v.Res.ObjCount.Present}}\t {{$v.ObjectShare}}\t " +
+		"{{FormatBytesUns $v.Res.TotalSize.PresentObjs 2}}\t {{$v.SizeShare}}\t {{$v.Res.UsedPct}}%\n" +
+		"{{end}}"
+
 	// Shard index summary templates
 	ShardSummariesTmpl = "BUCKET\t TAR OBJECTS\t TAR SIZE\t SHARDS\t SHARD SIZE\t NOT INDEXED\t ARCHIVED OBJECTS\t STALE\t INVALID\n" +
 		ShardSummariesBody

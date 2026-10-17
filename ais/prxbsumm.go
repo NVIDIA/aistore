@@ -34,6 +34,10 @@ type summCtx[T any] struct {
 }
 
 func (p *proxy) bsummAct(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, actMsg *apc.ActMsg, msg *apc.BsummCtrlMsg) {
+	// proxy-only: never forward to targets (pre-5.2 nodes reject unknown fields)
+	perTarget := msg.PerTarget
+	msg.PerTarget = false
+
 	isNew := msg.UUID == ""
 	if !isNew && !cos.IsValidUUID(msg.UUID) {
 		p.writeErrf(w, r, "%s: invalid UUID %q", apc.ActSummaryBck, msg.UUID)
@@ -64,10 +68,20 @@ func (p *proxy) bsummAct(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 		p.writeErr(w, r, err)
 		return
 	}
-	summaries, status, err := p.bsummCollect(ctx)
+	summaries, status, err := p.bsummCollect(ctx, perTarget)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
+	}
+	// set presence (compare w/ binfo via bsummHead)
+	if len(summaries) > 0 {
+		bmd := p.owner.bmd.get()
+		for _, summ := range summaries {
+			_, summ.IsBckPresent = bmd.Get(meta.CloneBck(&summ.Bck))
+			for _, tres := range summ.Targets {
+				tres.IsBckPresent = summ.IsBckPresent
+			}
+		}
 	}
 	w.WriteHeader(status)
 	p.writeJSON(w, r, summaries, "bucket-summary")
@@ -75,7 +89,7 @@ func (p *proxy) bsummAct(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 
 // bsummCollect keeps bucket-specific aggregation on top of summCollect.
 // TODO: make it a summCtx[cmn.AllBsummResults] method once Go 1.27 lands.
-func (*proxy) bsummCollect(ctx *summCtx[cmn.AllBsummResults]) (_ cmn.AllBsummResults, status int, err error) {
+func (*proxy) bsummCollect(ctx *summCtx[cmn.AllBsummResults], perTarget bool) (_ cmn.AllBsummResults, status int, err error) {
 	results, status, err := ctx.summCollect()
 	if err != nil {
 		return nil, 0, err
@@ -88,9 +102,13 @@ func (*proxy) bsummCollect(ctx *summCtx[cmn.AllBsummResults]) (_ cmn.AllBsummRes
 		dsize     = make(map[string]uint64, len(results))
 	)
 	for tid, tbsumm := range results {
+		var ptid string
+		if perTarget {
+			ptid = tid
+		}
 		for _, summ := range tbsumm {
 			dsize[tid] = summ.TotalSize.Disks
-			summaries = summaries.Aggregate(summ)
+			summaries = summaries.Aggregate(summ, ptid)
 		}
 	}
 	summaries.Finalize(dsize, cmn.Rom.TestingEnv())
@@ -120,7 +138,7 @@ func (p *proxy) bsummHead(bck *meta.Bck, msg *apc.BsummCtrlMsg) (info *cmn.Bsumm
 	if err != nil {
 		return info, status, err
 	}
-	summaries, status, err = p.bsummCollect(ctx)
+	summaries, status, err = p.bsummCollect(ctx, false /*per-target*/)
 	if err == nil && (status == http.StatusOK || status == http.StatusPartialContent) {
 		debug.Func(func() { debug.Assert(len(summaries) != 0, bck.Cname(msg.Prefix)) })
 		if len(summaries) != 0 {

@@ -132,6 +132,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 			r.buckets = nil
 
 			r.single = true
+			r.initRes(&r.oneRes, p.Bck)
 			opts.Bck = p.Bck.Clone()
 		default:
 			// inc num joggers to boost

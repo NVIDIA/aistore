@@ -48,6 +48,7 @@ const (
 	MinVerIntraClusterAuth = "5.1" // node verifying keys and intra-cluster request authentication
 	MinVerKaliveReject     = "5.2" // typed keepalive rejection understood by the sender
 	MinVerPlacement        = "5.2" // weighted Smap and bucket placement overrides
+	MinVerBsummPerTarget   = "5.2" // per-target bucket summary (apc.BsummCtrlMsg.PerTarget; proxy-side)
 )
 
 // NOTE: for (local) LOM meta-versions, see core/lom*

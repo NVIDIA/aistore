@@ -237,6 +237,8 @@ var (
 		verboseFlag,
 		dontWaitFlag,
 		noHeaderFlag,
+		bsummPerTargetFlag,
+		jsonFlag,
 	)
 	storageFlags = map[string][]cli.Flag{
 		commandStorage: append(
@@ -268,9 +270,12 @@ var (
 		BashComplete: suggestTargets,
 	}
 	showCmdStgSummary = cli.Command{
-		Name:         cmdSummary,
-		Usage:        "Show bucket sizes and %% of used capacity on a per-bucket basis",
-		ArgsUsage:    lsAnyCommandArgument,
+		Name: cmdSummary,
+		Usage: "Show bucket object counts, sizes, and used capacity; optionally, break down by target.\n" +
+			indent1 + "e.g.:\n" +
+			indent1 + "\t- 'ais storage summary ais://bucket --per-target'\t- show content distribution across targets;\n" +
+			indent1 + "\t- 'ais storage summary ais://bucket/prefix --per-target --json'\t- summarize a prefix as JSON;",
+		ArgsUsage:    "[BUCKET[/PREFIX] | PROVIDER] [JOB_ID]",
 		Flags:        sortFlags(storageSummFlags),
 		Action:       summaryStorageHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
@@ -472,6 +477,17 @@ func showDiskStats(c *cli.Context, tid string) error {
 // - currently, only in-cluster buckets - TODO
 
 func summaryStorageHandler(c *cli.Context) error {
+	if c.NArg() > 2 {
+		return incorrectUsageMsg(c, "", c.Args()[2:])
+	}
+	if xid := c.Args().Get(1); xid != "" {
+		if !cos.IsValidUUID(xid) {
+			return incorrectUsageMsg(c, "invalid job ID %q", xid)
+		}
+		if !flagIsSet(c, dontWaitFlag) {
+			return incorrectUsageMsg(c, "JOB_ID requires %s", qflprn(dontWaitFlag))
+		}
+	}
 	uri := preparseBckObjURI(c.Args().Get(0))
 	qbck, pref, errV := parseQueryBckURI(uri)
 	if errV != nil {
@@ -492,14 +508,20 @@ func summaryStorageHandler(c *cli.Context) error {
 	}
 
 	bckPresent := true // TODO: currently, only in-cluster buckets
-	ctx, err := newBsummCtxMsg(c, qbck, prefix, flagIsSet(c, listCachedFlag), bckPresent)
+	perTarget := flagIsSet(c, bsummPerTargetFlag)
+	ctx, err := newBsummCtxMsg(c, qbck, prefix, perTarget || flagIsSet(c, listCachedFlag), bckPresent)
 	if err != nil {
 		return err
 	}
+	usejs := flagIsSet(c, jsonFlag)
+	ctx.msg.PerTarget = perTarget
 	setLongRunParams(c)
+	if params := getLongRunParams(c); params != nil && (usejs || flagIsSet(c, noHeaderFlag)) {
+		params.lfooter = 0
+	}
 
 	var news = true
-	if xid := c.Args().Get(1); xid != "" && cos.IsValidUUID(xid) {
+	if xid := c.Args().Get(1); xid != "" {
 		ctx.msg.UUID = xid
 		news = false
 	}
@@ -513,12 +535,26 @@ func summaryStorageHandler(c *cli.Context) error {
 		if !news {
 			verb = "is running"
 		}
-		return fmt.Sprintf("Job %s[%s] %s. To monitor, run 'ais storage summary %s %s %s' or 'ais show job %s';\n"+
+		flags := flprn(dontWaitFlag)
+		if perTarget {
+			flags += " " + flprn(bsummPerTargetFlag)
+		}
+		if ctx.msg.ObjCached && !perTarget {
+			flags += " " + flprn(listCachedFlag)
+		}
+		if prefix != "" {
+			flags += " " + flprn(bsummPrefixFlag) + " '" + strings.ReplaceAll(prefix, "'", "'\\''") + "'"
+		}
+		bucket := "'" + strings.ReplaceAll(qbck.String(), "'", "'\\''") + "'"
+		return fmt.Sprintf("Job %s[%s] %s. To monitor, run:\n  ais storage summary %s %s %s\nor 'ais show job %s';\n"+
 			"see %s for more options",
-			cmdSummary, xid, verb, uri, xid, flprn(dontWaitFlag), xid, qflprn(cli.HelpFlag))
+			cmdSummary, xid, verb, bucket, xid, flags, xid, qflprn(cli.HelpFlag))
 	}
 	dontWait := flagIsSet(c, dontWaitFlag)
 	if err == nil && dontWait && len(summaries) == 0 {
+		if usejs {
+			return teb.Print(xid, "", teb.Jopts(true))
+		}
 		actionDone(c, f())
 		return nil
 	}
@@ -529,6 +565,9 @@ func summaryStorageHandler(c *cli.Context) error {
 			status = herr.Status
 		}
 		if dontWait && status == http.StatusAccepted {
+			if usejs {
+				return teb.Print(xid, "", teb.Jopts(true))
+			}
 			actionDone(c, f())
 			return nil
 		}
@@ -539,16 +578,42 @@ func summaryStorageHandler(c *cli.Context) error {
 		}
 	}
 	if err != nil {
+		// failure path only: a pre-5.2 proxy rejects the unknown field
+		if perTarget && proxiesOlderThan(c, cmn.MinVerBsummPerTarget) {
+			return fmt.Errorf("%s requires v%s or later: %v", qflprn(bsummPerTargetFlag), cmn.MinVerBsummPerTarget, err)
+		}
 		return err
 	}
 
+	sort.Sort(summaries)
+	if usejs {
+		return teb.Print(summaries, "", teb.Jopts(true))
+	}
 	altMap := teb.FuncMapUnits(ctx.units, false /*incl. calendar date*/)
 	opts := teb.Opts{AltMap: altMap}
 	hideHeader := flagIsSet(c, noHeaderFlag)
-	if hideHeader {
+	switch {
+	case perTarget && hideHeader: // one row shape: per-target only
+		return printBsummPerTarget(summaries, opts, true)
+	case hideHeader:
 		return teb.Print(summaries, teb.BucketsSummariesBody, opts)
 	}
-	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
+	if err := teb.Print(summaries, teb.BucketsSummariesTmpl, opts); err != nil || !perTarget {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer)
+	return printBsummPerTarget(summaries, opts, false)
+}
+
+func printBsummPerTarget(summaries cmn.AllBsummResults, opts teb.Opts, hideHeader bool) error {
+	rows := teb.NewBsummPerTarget(summaries)
+	if len(rows) == 0 {
+		return nil
+	}
+	if hideHeader {
+		return teb.Print(rows, teb.BsummPerTargetBody, opts)
+	}
+	return teb.Print(rows, teb.BsummPerTargetTmpl, opts)
 }
 
 func newBsummCtxMsg(c *cli.Context, qbck cmn.QueryBcks, prefix string, objCached, bckPresent bool) (*bsummCtx, error) {
@@ -573,9 +638,11 @@ func newBsummCtxMsg(c *cli.Context, qbck cmn.QueryBcks, prefix string, objCached
 		return ctx, nil
 	}
 
-	// otherwise, call back periodically
-	ctx.args.CallAfter = _refreshRate(c)
-	ctx.args.Callback = ctx.progress
+	// keep structured and headerless output free of progress text
+	if !flagIsSet(c, jsonFlag) && !flagIsSet(c, noHeaderFlag) {
+		ctx.args.CallAfter = _refreshRate(c)
+		ctx.args.Callback = ctx.progress
+	}
 	return ctx, nil
 }
 

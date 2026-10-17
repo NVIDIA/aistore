@@ -6,3 +6,7 @@ NAME             OBJECTS (cached, remote)    OBJECT SIZES (min, avg, max)    TOT
 ais://$BUCKET_1  150 0                       2.50KiB  2.50KiB   2.50KiB      375.00KiB  0B                         0%
 NAME             OBJECTS (cached, remote)    OBJECT SIZES (min, avg, max)    TOTAL OBJECT SIZE (cached, remote)    USAGE(%)
 ^ais://$BUCKET_2  20 0.*$
+150
+2
+1
+0

@@ -1126,16 +1126,120 @@ Notice a certain limitation (that also shows up as the last step #15):
 
 `ais bucket summary` - same as above.
 
+### Per-target content distribution
+
+Use `--per-target` to show how a bucket's in-cluster content is distributed:
+
+```console
+ais storage summary ais://mybucket --per-target
+ais bucket summary ais://mybucket --per-target
+ais ls ais://mybucket --summary --per-target
+```
+
+For example:
+
+```console
+$ ais storage summary ais://images --per-target
+NAME           OBJECTS (cached, remote)    OBJECT SIZES (min, avg, max)    TOTAL OBJECT SIZE (cached, remote)    USAGE(%)
+ais://images   3000 0                      1.00KiB  1.00KiB  1.00KiB       2.93MiB  0B                           0%
+
+NAME           TARGET        OBJECTS    OBJECT SHARE(%)    SIZE         SIZE SHARE(%)    USAGE(%)
+ais://images   t[aTkqMdrs]   1041       34.7               1.02MiB      34.7             0%
+ais://images   t[jZzIEhcs]   993        33.1               993.00KiB    33.1             0%
+ais://images   t[qXbvMwbg]   966        32.2               966.00KiB    32.2             0%
+```
+
+The output includes the bucket total followed by one row per active target, including
+targets with no objects. `OBJECT SHARE(%)` is the target's fraction of the reported
+object count; `SIZE SHARE(%)` is its fraction of the reported object bytes.
+`USAGE(%)` measures occupied disk capacity, a separate quantity. Shares are `-` when
+their total is zero. Rounding can make the displayed shares differ slightly from 100%.
+
+`--per-target` implies `--cached`: it measures content stored in AIStore and does not
+list the remote backend. Bucket/provider selectors and prefixes are supported:
+
+```console
+ais storage summary ais: --per-target
+ais storage summary s3://mybucket --prefix images/ --per-target
+ais ls ais://mybucket/images/ --summary --per-target
+```
+
+These are observed storage statistics, rather than the expected shares configured
+by [placement weights](/docs/placement.md). Misplaced objects left after rebalance
+can contribute on multiple targets until cleanup. Object counts exclude local mirror
+copies, while object bytes include them; EC slices are not additional objects.
+Consequently, object counts need not be proportional to object bytes. The scan is
+not an atomic snapshot: concurrent writes, deletes, or rebalances can change the
+results while it runs.
+
+To monitor distribution during ingestion, start an archive workload in one terminal:
+
+```console
+aisloader -bucket=ais://nnn -pctput=100 -arch.pct=100 -arch.num-files=10 \
+  -arch.minsize=1K -arch.maxsize=100K -duration=5m -cleanup=false
+```
+
+In another terminal, request five reports at two-second intervals:
+
+```console
+ais storage summary ais://nnn --per-target --refresh 2s --count 5
+```
+
+For example, one report from a two-target cluster showed:
+
+```text
+NAME         OBJECTS (cached, remote)    OBJECT SIZES (min, avg, max)       TOTAL OBJECT SIZE (cached, remote)    USAGE(%)
+ais://nnn    20738 0                     185.50KiB  514.37KiB  881.00KiB    10.17GiB 0B                           2%
+
+NAME         TARGET         OBJECTS    OBJECT SHARE(%)    SIZE       SIZE SHARE(%)    USAGE(%)
+ais://nnn    t[aTkqMdrs]    10252      49.4               5.03GiB    49.4             1%
+ais://nnn    t[jZzIEhcs]    10486      50.6               5.15GiB    50.6             1%
+```
+
+Each tar shard counts as one object, regardless of the ten files inside it.
+Here, both object counts and bytes are split approximately evenly across the two
+targets. Repeated reports let you observe the distribution as content arrives.
+
+For scripts, `-H` with `--per-target` prints only target rows, without progress
+text. JSON preserves the
+aggregate and a `per_target` map keyed by target ID:
+
+```console
+ais storage summary ais://mybucket --per-target --json |
+  jq '.[0].per_target | to_entries[] | {target: .key, objects: .value.ObjCount.obj_count_present, bytes: .value.TotalSize.size_all_present_objs}'
+```
+
+JSON counters tagged as strings in the API remain strings; use `tonumber` for
+arithmetic. JSON mode does not print progress text on stdout.
+When combined with `--refresh`, each report is a separate JSON value; use
+`jq -s` to collect a finite sequence of reports into an array.
+
+For asynchronous use, start with `--dont-wait` and poll the returned job ID using
+the same bucket/provider selector and prefix. A job ID requires `--dont-wait`:
+
+```console
+ais storage summary ais://mybucket --prefix images/ --per-target --dont-wait
+ais storage summary ais://mybucket JOB_ID --prefix images/ --per-target --dont-wait
+```
+
+In JSON mode, a pending job returns its ID as a JSON string. Once results are
+available, the command returns the summary array. Partial results are identified
+on stderr; omit `--dont-wait` to wait for a complete result. Per-target results
+require a v5.2 or newer proxy; the proxy does not forward the new option to targets.
+
 ### Options
 
 ```console
 $ ais storage summary --help
 
 NAME:
-   ais storage summary - Show bucket sizes and %% of used capacity on a per-bucket basis
+   ais storage summary - Show bucket object counts, sizes, and used capacity; optionally, break down by target.
+   e.g.:
+     - 'ais storage summary ais://bucket --per-target'                - show content distribution across targets;
+     - 'ais storage summary ais://bucket/prefix --per-target --json'  - summarize a prefix as JSON;
 
 USAGE:
-   ais storage summary [BUCKET[/PREFIX]] [PROVIDER] [command options]
+   ais storage summary [BUCKET[/PREFIX] | PROVIDER] [JOB_ID] [command options]
 
 OPTIONS:
    --cached          Only list in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
@@ -1143,7 +1247,12 @@ OPTIONS:
                       '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
    --dont-wait       When _summarizing_ buckets do not wait for the respective job to finish -
                      use the job's UUID to query the results interactively
+   --json, -j        JSON input/output
    --no-headers, -H  Display tables without headers
+   --per-target      Also show per-target object counts, sizes, and their respective shares (implies '--cached');
+                     with 'ais ls', requires '--summary';
+                     includes misplaced objects awaiting cleanup after rebalance;
+                     with '--no-headers', show per-target rows only
    --prefix value    For each bucket, select only those objects (names) that start with the specified prefix, e.g.:
                      '--prefix a/b/c' - sum up sizes of the virtual directory a/b/c and objects from the virtual directory
                      a/b that have names (relative to this directory) starting with the letter c
@@ -1157,7 +1266,8 @@ OPTIONS:
    --help, -h        Show help
 ```
 
-If `BUCKET` is omitted, the command *applies* to all [AIS buckets](/docs/bucket.md).
+If `BUCKET` is omitted, the command applies to all buckets registered in the cluster.
+A provider selector such as `ais:` or `s3:` restricts the selection.
 
 The output includes the total number of objects in a bucket, the bucket's size (bytes, megabytes, etc.), and the percentage of the total capacity used by the bucket.
 

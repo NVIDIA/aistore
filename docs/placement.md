@@ -5,6 +5,11 @@ placement remains uniform until weighted HRW is integrated. Weight changes that 
 relative shares among active targets trigger global rebalance;
 proportional changes and equal-vs-none transitions do not.
 
+To inspect actual in-cluster object counts and sizes on each target, use
+`ais storage summary BUCKET --per-target` (or `ais ls BUCKET --summary --per-target`).
+These measured shares are separate from the configured shares shown by
+`ais cluster placement`; see [per-target content distribution](/docs/cli/bucket.md#per-target-content-distribution).
+
 **Table of Contents**
 
 - [Target weights](#target-weights)

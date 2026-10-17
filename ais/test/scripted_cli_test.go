@@ -21,6 +21,16 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
+func TestBucketSummaryPerTargetUsingScript(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+	cmd := exec.Command("bash", "./scripts/bucket-summary-per-target.sh")
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
+
 func TestGetWarmValidateS3UsingScript(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{
 		CloudBck: true,

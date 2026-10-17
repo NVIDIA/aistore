@@ -250,6 +250,7 @@ var (
 		maxPagesFlag,
 		startAfterFlag,
 		bckSummaryFlag,
+		bsummPerTargetFlag,
 		nonRecursFlag,
 		noDirsFlag,
 		dontHeadRemoteFlag,
@@ -1041,6 +1042,23 @@ func _clearFmt(v string) string {
 //
 
 func listAnyHandler(c *cli.Context) error {
+	if flagIsSet(c, bsummPerTargetFlag) {
+		if !flagIsSet(c, bckSummaryFlag) {
+			return incorrectUsageMsg(c, "%s requires %s", qflprn(bsummPerTargetFlag), qflprn(bckSummaryFlag))
+		}
+		if c.NArg() > 1 {
+			return incorrectUsageMsg(c, "", c.Args()[1:])
+		}
+		for _, flag := range c.Command.Flags {
+			if !flagIsSet(c, flag) || fl1n(flag.GetName()) == bckSummaryFlag.Name || fl1n(flag.GetName()) == fl1n(noFooterFlag.Name) {
+				continue
+			}
+			if !slices.ContainsFunc(storageSummFlags, func(f cli.Flag) bool { return fl1n(f.GetName()) == fl1n(flag.GetName()) }) {
+				return incorrectUsageMsg(c, "%s is not supported with %s", qflprn(flag), qflprn(bsummPerTargetFlag))
+			}
+		}
+		return summaryStorageHandler(c)
+	}
 	var (
 		opts = cmn.ParseURIOpts{IsQuery: true}
 		uri  = c.Args().Get(0)

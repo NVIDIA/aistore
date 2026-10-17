@@ -7,6 +7,7 @@ package cmn_test
 
 import (
 	"bytes"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -93,5 +94,46 @@ func TestBpropsHTTPExtraCompatibility(t *testing.T) {
 	}
 	if !reflect.DeepEqual(bprops.Extra, want) {
 		t.Fatalf("got %+v, want %+v", bprops.Extra, want)
+	}
+}
+
+func TestBsummAggregatePerTarget(t *testing.T) {
+	mk := func(name string, cnt uint64, size uint64) *cmn.BsummResult {
+		r := &cmn.BsummResult{Bck: cmn.Bck{Name: name, Provider: apc.AIS}}
+		r.ObjCount.Present = cnt
+		r.TotalSize.PresentObjs = size
+		r.ObjSize.Min = math.MaxInt64 // as in: empty target
+		return r
+	}
+	for _, perTarget := range []bool{false, true} {
+		var all cmn.AllBsummResults
+		for tid, cnt := range map[string]uint64{"t1": 10, "t2": 20, "t3": 30} {
+			ptid := ""
+			if perTarget {
+				ptid = tid
+			}
+			all = all.Aggregate(mk("a", cnt, cnt*100), ptid)
+			all = all.Aggregate(mk("b", cnt+1, 0), ptid)
+		}
+		if len(all) != 2 {
+			t.Fatalf("expected 2 buckets, got %d", len(all))
+		}
+		for _, summ := range all {
+			var sum uint64
+			for _, tres := range summ.Targets {
+				sum += tres.ObjCount.Present
+				if tres.ObjSize.Min != 0 {
+					t.Errorf("%s: expected zero min size, got %d", summ.Bck.Name, tres.ObjSize.Min)
+				}
+			}
+			switch {
+			case !perTarget && summ.Targets != nil:
+				t.Errorf("%s: unexpected per-target results", summ.Bck.Name)
+			case perTarget && len(summ.Targets) != 3:
+				t.Errorf("%s: expected 3 targets, got %d", summ.Bck.Name, len(summ.Targets))
+			case perTarget && sum != summ.ObjCount.Present:
+				t.Errorf("%s: per-target sum %d != aggregate %d", summ.Bck.Name, sum, summ.ObjCount.Present)
+			}
+		}
 	}
 }

@@ -688,7 +688,7 @@ COMMANDS:
    disk       show disk utilization and read/write statistics
    mountpath  show target mountpaths
    capacity   show target mountpaths, disks, and used/available capacity
-   summary    show bucket sizes and %% of used capacity on a per-bucket basis
+   summary    show bucket sizes and % of used capacity on a per-bucket basis
 
 OPTIONS:
    --refresh value  interval for continuous monitoring;

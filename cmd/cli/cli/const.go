@@ -767,6 +767,13 @@ var (
 		Usage: "Show object numbers, bucket sizes, and used capacity;\n" +
 			indent4 + "\tnote: applies only to buckets and objects that are _present_ in the cluster",
 	}
+	bsummPerTargetFlag = cli.BoolFlag{
+		Name: "per-target",
+		Usage: "Also show per-target object counts, sizes, and their respective shares (implies '--cached');\n" +
+			indent4 + "\twith 'ais ls', requires '--summary';\n" +
+			indent4 + "\tincludes misplaced objects awaiting cleanup after rebalance;\n" +
+			indent4 + "\twith '--no-headers', show per-target rows only",
+	}
 
 	showUnmatchedFlag = cli.BoolFlag{
 		Name:  "show-unmatched",
