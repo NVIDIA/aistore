@@ -28,7 +28,7 @@ func TestBucketSummaryPerTargetUsingScript(t *testing.T) {
 	if len(out) > 0 {
 		tlog.Logln(string(out))
 	}
-	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, err == nil, "%v\n%s", err, out)
 }
 
 func TestGetWarmValidateS3UsingScript(t *testing.T) {

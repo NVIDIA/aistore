@@ -245,3 +245,66 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	err := jg.Stop()
 	tassert.CheckFatal(t, err)
 }
+
+// prefix must apply when joggers run selected buckets (`JgroupOpts.Buckets`)
+func TestJoggerGroupBucketsPrefix(t *testing.T) {
+	var (
+		desc = tools.ObjectsDesc{
+			CTs:           []tools.ContentTypeDesc{{Type: fs.ObjCT, ContentCnt: 300}},
+			MountpathsCnt: 4,
+			ObjectSize:    cos.KiB,
+		}
+		out   = tools.PrepareObjects(t, desc)
+		names = make(chan string, 300)
+	)
+	defer os.RemoveAll(out.Dir)
+
+	// all names
+	opts := &mpather.JgroupOpts{
+		Bck:      *out.Bck,
+		CTs:      []string{fs.ObjCT},
+		VisitObj: func(lom *core.LOM, _ []byte) error { names <- lom.ObjName; return nil },
+	}
+	jg := mpather.NewJgroup(opts, cmn.GCO.Get(), nil)
+	jg.Run()
+	<-jg.ListenFinished()
+	tassert.CheckFatal(t, jg.Stop())
+	close(names)
+
+	var (
+		prefix   string
+		expected int
+		all      = make([]string, 0, 300)
+	)
+	for name := range names {
+		all = append(all, name)
+	}
+	tassert.Fatalf(t, len(all) > 0, "no objects")
+	prefix = all[0][:1]
+	for _, name := range all {
+		if strings.HasPrefix(name, prefix) {
+			expected++
+		}
+	}
+	tassert.Fatalf(t, expected < len(all), "prefix %q matches all %d objects - not a meaningful test", prefix, len(all))
+
+	// selected buckets with prefix
+	counter := atomic.NewInt32(0)
+	opts = &mpather.JgroupOpts{
+		Buckets: cmn.Bcks{*out.Bck},
+		Prefix:  prefix,
+		CTs:     []string{fs.ObjCT},
+		VisitObj: func(lom *core.LOM, _ []byte) error {
+			tassert.Errorf(t, strings.HasPrefix(lom.ObjName, prefix), "%q does not have prefix %q", lom.ObjName, prefix)
+			counter.Inc()
+			return nil
+		},
+	}
+	jg = mpather.NewJgroup(opts, cmn.GCO.Get(), nil)
+	jg.Run()
+	<-jg.ListenFinished()
+	tassert.CheckFatal(t, jg.Stop())
+
+	tassert.Errorf(t, int(counter.Load()) == expected, "prefix %q: visited %d, expected %d (of %d)",
+		prefix, counter.Load(), expected, len(all))
+}

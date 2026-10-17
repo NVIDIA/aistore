@@ -178,10 +178,6 @@ func newJogger(opts *JgroupOpts, mi *fs.Mountpath, config *cmn.Config, stopCh *c
 		config: config,
 		stopCh: stopCh,
 	}
-	if opts.Prefix != "" {
-		j.bdir = mi.MakePathCT(&j.opts.Bck, fs.ObjCT) // this mountpath's bucket dir that contains objects
-		j.objPrefix = filepath.Join(j.bdir, opts.Prefix)
-	}
 	// throttling context
 	j.adv.Init(load.FlMem|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: j.config.Disk, RW: j.opts.RW})
 	return
@@ -266,6 +262,11 @@ func (j *jogger) runQbck(qbck cmn.QueryBcks) (err error) {
 
 // run single (see also: `PerBucket` above)
 func (j *jogger) runBck(bck *cmn.Bck) (aborted bool, err error) {
+	// per bucket: selected and query-matching buckets run one at a time
+	if j.opts.Prefix != "" {
+		j.bdir = j.mi.MakePathCT(bck, fs.ObjCT) // this mountpath's bucket dir that contains objects
+		j.objPrefix = filepath.Join(j.bdir, j.opts.Prefix)
+	}
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		CTs:      j.opts.CTs,

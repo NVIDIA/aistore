@@ -35,6 +35,9 @@ Overhaul to an R-flow, as in list-objects (ais/plstcx.go `lsObjsR`; xs/lso.go):
   a reused demand xaction can have multiple requests, so distinguish their page streams
 - DT shares pages, or per-target subsets of names, with the other targets (reuse the list-objects R-flow
   machinery where possible); other targets iterate received names as they do local pages today
+- related to the above, evaluate whole-page broadcast versus partitioning by (location => target) at the DT:
+  - (a) broadcast encodes the page once but repeats network transfer, decoding and ownership checks at receivers;
+  - (b) partitioning reduces that aggregate work but needs per-peer batches, encoding and flow control at the DT.
 - initialize receivers before the DT starts publishing pages (as `lsObjsR` does); bound buffered pages,
   propagate listing errors, and distinguish an empty page with a continuation token from end of listing
 - abort on DT failure or relevant target/placement changes; do not silently reassign the DT mid-listing
