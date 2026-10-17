@@ -764,7 +764,8 @@ var (
 	// bucket summary
 	bckSummaryFlag = cli.BoolFlag{
 		Name: "summary",
-		Usage: "Show object numbers, bucket sizes, and used capacity;\n" +
+		Usage: "Show object counts, bucket sizes, and used capacity;\n" +
+			indent4 + "\twith '--per-target', also show each target's counts, sizes, and shares;\n" +
 			indent4 + "\tnote: applies only to buckets and objects that are _present_ in the cluster",
 	}
 	bsummPerTargetFlag = cli.BoolFlag{

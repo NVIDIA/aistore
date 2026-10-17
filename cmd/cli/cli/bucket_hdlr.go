@@ -144,6 +144,7 @@ const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz
 	indent1 + "with summary (bucket sizes and numbers of objects):\n" +
 	indent1 + "\t* ais ls ais://nnn --summary --prefix=aaa/bbb \t- summarize objects matching the given prefix;\n" +
 	indent1 + "\t* ais ls ais://nnn/aaa/bbb --summary \t- same as above;\n" +
+	indent1 + "\t* 'ais ls ais://nnn --summary --per-target' \t- show per-target object counts, sizes, and shares;\n" +
 	indent1 + "\t* ais ls az://azure-bucket --count-only \t- fastest way to count objects in a bucket;\n" +
 	indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket: print object count and total size;\n" +
 	indent1 + "\t* ais ls s3 --summary --all \t- summary report for all s3 buckets including remote/non-present;\n" +
