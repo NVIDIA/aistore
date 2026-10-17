@@ -181,6 +181,7 @@ func (remote *listCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.Contains(r.URL.Path, "/empty-") || strings.Contains(r.URL.Path, "/sparse-") {
+		time.Sleep(10 * time.Millisecond) // pace the empty pages
 		w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
 		_ = msgp.Encode(w, &cmn.LsoRes{ContinuationToken: strconv.FormatInt(n, 10)})
 		return
@@ -217,7 +218,7 @@ func waitListCtxQuiet(t *testing.T, counter *atomic.Int64) {
 		}
 		prev = curr
 	}
-	tassert.Fatalf(t, false, "LIST continued after cancel: %d calls", prev)
+	tassert.Fatalf(t, false, "LIST continued after the client timed out: %d calls", prev)
 }
 
 func waitListCtxAborted(t *testing.T, bp api.BaseParams, xid, kind string, minAborted int, finished bool) {

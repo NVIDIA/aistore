@@ -49,12 +49,15 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BpropsToSet, dontHeadR
 func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (cmn.Bck, error) {
 	for i := range buckets {
 		bck := buckets[i]
-		empty, errEmp := isBucketEmpty(bck, true /*cached*/)
-		if errEmp == nil && !empty {
-			if !flagIsSet(c, yesFlag) {
-				if !confirm(c, fmt.Sprintf("Proceed to destroy %s?", bck.String())) {
-					continue
-				}
+
+		// confirm
+		if !flagIsSet(c, yesFlag) {
+			empty, err := isBucketEmpty(bck, true /*cached*/)
+			if err != nil && !cmn.IsStatusNotFound(err) {
+				return bck, err
+			}
+			if err == nil && !empty && !confirm(c, fmt.Sprintf("Proceed to destroy %s?", bck.String())) {
+				continue
 			}
 		}
 

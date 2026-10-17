@@ -100,7 +100,9 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 
 	allIncludingRemote := flagIsSet(c, copyAllObjsFlag)
 	empty, err := isBucketEmpty(bckFrom, !bckFrom.IsRemote() || !allIncludingRemote /*cached*/)
-	debug.AssertNoErr(err)
+	if err != nil {
+		return err
+	}
 	if empty {
 		if bckFrom.IsRemote() && !allIncludingRemote {
 			hint := "(tip: use option %s to " + text1 + " remote objects from the backend store)\n"
