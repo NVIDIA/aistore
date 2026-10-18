@@ -499,6 +499,96 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).To(MatchError(ContainSubstring("invalid custom metadata")))
 			})
 
+			It("loads sizes whose packed bytes contain the record separator", func() {
+				sizes := []int64{
+					0xe32fbd,
+					0x7e32fbd,
+					0xe32fbd00,
+					0xe32fbd0000,
+					0xe32fbd000000,
+					0xe32fbd00000000,
+					0xe32fbde32fbd,
+				}
+				for _, size := range sizes {
+					obj := "lomv2/sepa-size-" + cos.GenTie()
+					fqn := mix.MakePathFQN(&localBck, fs.ObjCT, obj)
+
+					Expect(cos.CreateDir(filepath.Dir(fqn))).NotTo(HaveOccurred())
+					f, err := cos.CreateFile(fqn)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(f.Close()).To(Succeed())
+
+					lom := newBasicLom(fqn)
+					lom.SetSize(size)
+					lom.SetCustomMD(cos.StrKVs{"key": "value"})
+					Expect(persist(lom)).To(Succeed())
+
+					fresh := newBasicLom(fqn)
+					Expect(fresh.LoadMetaFromFS()).To(Succeed())
+					Expect(fresh.Lsize()).To(Equal(size))
+					value, exists := fresh.GetCustomKey("key")
+					Expect(exists).To(BeTrue())
+					Expect(value).To(Equal("value"))
+				}
+			})
+
+			It("loads a trailing fixed-size record and rejects one without a separator", func() {
+				const (
+					prefLen         = 10
+					mdCksumTyXXHash = 1
+					recordSepa      = "\xe3/\xbd"
+					packedCksumT    = 0
+					packedCksumV    = 1
+					packedSize      = 3
+				)
+
+				obj := "lomv1/sepa-size-" + cos.GenTie()
+				fqn := mix.MakePathFQN(&localBck, fs.ObjCT, obj)
+				Expect(cos.CreateDir(filepath.Dir(fqn))).NotTo(HaveOccurred())
+				f, err := cos.CreateFile(fqn)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(f.Close()).To(Succeed())
+
+				setXattr := func(payload []byte) {
+					raw := make([]byte, prefLen+len(payload))
+					raw[0] = core.MetaverLOM_V1
+					raw[1] = mdCksumTyXXHash
+					copy(raw[prefLen:], payload)
+					sum := onexxh.Checksum64S(raw[prefLen:], cos.MLCG32)
+					binary.BigEndian.PutUint64(raw[2:], sum)
+					Expect(fs.SetXattr(fqn, fs.XattrLOM, raw)).To(Succeed())
+				}
+
+				var (
+					payload bytes.Buffer
+					b8      [8]byte
+					k       [2]byte
+				)
+				binary.BigEndian.PutUint16(k[:], packedCksumT)
+				payload.Write(k[:])
+				payload.WriteString(cos.ChecksumNone)
+				payload.WriteString(recordSepa)
+				binary.BigEndian.PutUint16(k[:], packedCksumV)
+				payload.Write(k[:])
+				payload.WriteString(recordSepa)
+				binary.BigEndian.PutUint16(k[:], packedSize)
+				payload.Write(k[:])
+				binary.BigEndian.PutUint64(b8[:], 0xe32fbd)
+				payload.Write(b8[:])
+
+				// legacy v1 layout: size is the last record, without a trailing separator
+				setXattr(payload.Bytes())
+				lom := newBasicLom(fqn)
+				Expect(lom.LoadMetaFromFS()).To(Succeed())
+				Expect(lom.Lsize()).To(Equal(int64(0xe32fbd)))
+
+				payload.WriteString("x")
+				setXattr(payload.Bytes())
+				lom = newBasicLom(fqn)
+				err = lom.LoadMetaFromFS()
+				Expect(err).To(MatchError(ContainSubstring("missing record separator")))
+			})
+
 			It("discards invalid custom metadata when persisting", func() {
 				obj := "lomv2/discard-custom-" + cos.GenTie()
 				fqn := mix.MakePathFQN(&localBck, fs.ObjCT, obj)

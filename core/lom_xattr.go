@@ -396,8 +396,26 @@ func (md *lmeta) unpack(buf []byte) error {
 	for off := 0; !last; {
 		var (
 			record []byte
-			i      = bytes.Index(payload[off:], recdupSepa[:])
+			i      int
 		)
+		if len(payload)-off < cos.SizeofI16 {
+			return errors.New(badLmeta + ": invalid record")
+		}
+		// size, lid, and flags are fixed-size binary values that may contain the separator bytes
+		switch binary.BigEndian.Uint16(payload[off:]) {
+		case packedSize, packedLid, packedFlags:
+			i = cos.SizeofI16 + cos.SizeofI64
+			if len(payload)-off < i {
+				return errors.New(badLmeta + ": short binary record")
+			}
+			if off+i == len(payload) {
+				last = true
+			} else if !bytes.HasPrefix(payload[off+i:], recdupSepa[:]) {
+				return errors.New(badLmeta + ": missing record separator")
+			}
+		default:
+			i = bytes.Index(payload[off:], recdupSepa[:])
+		}
 		if i < 0 {
 			record = payload[off:]
 			last = true
@@ -431,9 +449,6 @@ func (md *lmeta) unpack(buf []byte) error {
 		case packedSize:
 			if seen&haveSize != 0 {
 				return errors.New(badLmeta + " #4")
-			}
-			if len(record) != cos.SizeofI16+cos.SizeofI64 {
-				return errors.New(badLmeta + " #4.1")
 			}
 			md.Size = int64(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
 			seen |= haveSize
@@ -489,17 +504,11 @@ func (md *lmeta) unpack(buf []byte) error {
 			if seen&haveLid != 0 {
 				return errors.New(badLmeta + " #6")
 			}
-			if len(record) != cos.SizeofI16+cos.SizeofI64 {
-				return errors.New(badLmeta + " #6.1")
-			}
 			md.lid = lomBID(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
 			seen |= haveLid
 		case packedFlags:
 			if seen&haveFlags != 0 {
 				return errors.New(badLmeta + " #7")
-			}
-			if len(record) != cos.SizeofI16+cos.SizeofI64 {
-				return errors.New(badLmeta + " #7.1")
 			}
 			flags := binary.BigEndian.Uint64(record[cos.SizeofI16:])
 			debug.Assert(flags&lmflHRW == 0, "unexpected persisted HRW bit")
