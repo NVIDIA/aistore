@@ -450,6 +450,7 @@ func (md *lmeta) unpack(buf []byte) error {
 			if seen&haveSize != 0 {
 				return errors.New(badLmeta + " #4")
 			}
+			debug.Assert(len(record) == cos.SizeofI16+cos.SizeofI64, badLmeta+" #4.1")
 			md.Size = int64(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
 			seen |= haveSize
 		case packedCopies:
@@ -504,12 +505,14 @@ func (md *lmeta) unpack(buf []byte) error {
 			if seen&haveLid != 0 {
 				return errors.New(badLmeta + " #6")
 			}
+			debug.Assert(len(record) == cos.SizeofI16+cos.SizeofI64, badLmeta+" #6.1")
 			md.lid = lomBID(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
 			seen |= haveLid
 		case packedFlags:
 			if seen&haveFlags != 0 {
 				return errors.New(badLmeta + " #7")
 			}
+			debug.Assert(len(record) == cos.SizeofI16+cos.SizeofI64, badLmeta+" #7.1")
 			flags := binary.BigEndian.Uint64(record[cos.SizeofI16:])
 			debug.Assert(flags&lmflHRW == 0, "unexpected persisted HRW bit")
 			md.flags = (md.flags & lmflHRW) | (flags &^ lmflHRW)
