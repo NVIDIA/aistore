@@ -46,6 +46,7 @@ func Tinit(coi COI) {
 	xreg.RegNonBckXact(&rebFactory{})
 	xreg.RegNonBckXact(&nsummFactory{})
 	xreg.RegNonBckXact(&mossFactory{})
+	xreg.RegNonBckXact(&demandShardIndexFactory{})
 
 	// xreg scope: bucket
 	xreg.RegBckXact(&bmvFactory{})

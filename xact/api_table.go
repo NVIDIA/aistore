@@ -144,6 +144,9 @@ var Table = map[string]Descriptor{
 		ICMode:         ICUponTerm,
 	},
 
+	// on-demand shard indexing (all buckets, access checked by GET)
+	apc.ActDemandShardIndex: {DisplayName: "shard-index-demand", Scope: ScopeT, Startable: false, Idles: true},
+
 	// on-demand EC and n-way replication
 	// (non-startable, triggered by PUT => erasure-coded or mirrored bucket)
 	apc.ActECGet:     {Scope: ScopeB, Startable: false, Idles: true, ExtendedStats: true},

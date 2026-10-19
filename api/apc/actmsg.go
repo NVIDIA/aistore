@@ -45,8 +45,9 @@ const (
 	ActPutCopies   = "put-copies"
 	ActRechunk     = "rechunk"
 
-	ActIndexShard   = "index-shard"
-	ActSummaryShard = "summary-shard"
+	ActIndexShard       = "index-shard"
+	ActDemandShardIndex = "index-shard-demand"
+	ActSummaryShard     = "summary-shard"
 
 	ActRebalance = "rebalance"
 	ActMoveBck   = "move-bck"

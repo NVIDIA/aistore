@@ -63,3 +63,8 @@ func RenewGetBatch(bck *meta.Bck, uuid string, designated bool) RenewRes {
 	}
 	return dreg.renewByID(e, bck)
 }
+
+func RenewDemandShardIndex() RenewRes {
+	e := dreg.nonbckXacts[apc.ActDemandShardIndex].New(Args{}, nil)
+	return dreg.renew(e, nil)
+}
