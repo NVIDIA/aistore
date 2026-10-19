@@ -1714,9 +1714,13 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := cmn.ValidateCustomMD(custom); err != nil {
-		t.writeErrf(w, r, "%s: %v", lom.Cname(), err)
-		return
+	// (merge mode validates the merged result below)
+	delOldSetNew := cos.IsParseBool(apireq.dpq.get(apc.QparamNewCustom))
+	if delOldSetNew {
+		if err := cmn.ValidateCustomMD(custom); err != nil {
+			t.writeErrf(w, r, "%s: %v", lom.Cname(), err)
+			return
+		}
 	}
 
 	lom.Lock(true)
@@ -1729,14 +1733,15 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		}
 		return
 	}
-	delOldSetNew := cos.IsParseBool(apireq.dpq.get(apc.QparamNewCustom))
 	if delOldSetNew {
 		lom.SetCustomMD(custom)
 	} else {
 		cloneMD := maps.Clone(lom.GetCustomMD()) // (CoW)
 		lom.SetCustomMD(cloneMD)
-		for key, val := range custom {
-			lom.SetCustomKey(key, val)
+		if err := lom.ObjAttrs().AddCustomMD(custom); err != nil {
+			lom.Unlock(true)
+			t.writeErrf(w, r, "%s: %v", lom.Cname(), err)
+			return
 		}
 	}
 

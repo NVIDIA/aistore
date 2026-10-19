@@ -325,6 +325,29 @@ func (oa *ObjAttrs) GetCustomKey(key string) (val string, exists bool) {
 	return
 }
 
+// add (or replace) custom keys; validate the merged result first and, on error, change nothing
+func (oa *ObjAttrs) AddCustomMD(custom cos.StrKVs) error {
+	var size int
+	for k, v := range oa.CustomMD {
+		if _, ok := custom[k]; !ok {
+			size += len(k) + len(v)
+		}
+	}
+	for k, v := range custom {
+		size += len(k) + len(v)
+		if err := ValidateCustomKV(k, v, size); err != nil {
+			return err
+		}
+	}
+	if size > maxSizeCustomKVs { // (empty `custom`, oversized existing)
+		return newErrCustomSize(size)
+	}
+	for k, v := range custom {
+		oa.SetCustomKey(k, v)
+	}
+	return nil
+}
+
 func (oa *ObjAttrs) SetCustomKey(k, v string) {
 	debug.Assert(k != "")
 	if oa.CustomMD == nil {
@@ -506,36 +529,20 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, _ error) {
 	// custom metadata: total size limited, reserved symbols prohibited
 	// (see ValidateCustomKV)
 	if custom, ok := hdr[apc.HdrObjCustomMD]; ok {
-		var (
-			size int
-			keys = make([]string, 0, 10)
-		)
-		for _, kvs := range custom {
-			k, v, found := strings.Cut(kvs, "=")
+		kvs := make(cos.StrKVs, len(custom)) // (duplicate keys: last wins)
+		for _, kv := range custom {
+			k, v, found := strings.Cut(kv, "=")
 			if !found {
-				oa._undoCustom(keys)
-				return nil, fmt.Errorf("%s: invalid format %q (expecting key=value)", tagCustom, kvs)
+				return nil, fmt.Errorf("%s: invalid format %q (expecting key=value)", tagCustom, kv)
 			}
-			size += len(k) + len(v)
-			if err := ValidateCustomKV(k, v, size); err != nil {
-				oa._undoCustom(keys)
-				return nil, err
-			}
-
-			oa.SetCustomKey(k, v)
-			keys = append(keys, k)
+			kvs[k] = v
+		}
+		if err := oa.AddCustomMD(kvs); err != nil {
+			return nil, err
 		}
 	}
 
 	return cksum, nil
-}
-
-// by implication, prior to FromHeader call obj attrs are not supposed to contain any custom keys,
-// or at least not those that could've been overwritten
-func (oa *ObjAttrs) _undoCustom(keys []string) {
-	for i := len(keys) - 1; i >= 0; i-- {
-		oa.DelCustomKey(keys[i])
-	}
 }
 
 // FromHeaders deserializes ObjectPropsV2 from HTTP response headers.
@@ -765,9 +772,13 @@ func ValidateCustomKV(k, v string, size int) error {
 		return newErrCustomReserved(k, v)
 	}
 	if size > maxSizeCustomKVs {
-		return fmt.Errorf("%s: total size %d exceeds max %d bytes", tagCustom, size, maxSizeCustomKVs)
+		return newErrCustomSize(size)
 	}
 	return nil
+}
+
+func newErrCustomSize(size int) error {
+	return fmt.Errorf("%s: total size %d exceeds max %d bytes", tagCustom, size, maxSizeCustomKVs)
 }
 
 func ValidateCustomMD(custom cos.StrKVs) error {

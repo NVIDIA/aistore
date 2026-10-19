@@ -5,9 +5,13 @@
 package ais
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -866,4 +871,101 @@ func TestTargetCopyValidatesDestination(tst *testing.T) {
 			tst.Fatalf("expected copy to %q to fail with %q, got: %v", objnameTo, expErr, res.Err)
 		}
 	}
+}
+
+func TestObjectRejectsOversizedMergedCustomMD(t *testing.T) {
+	for _, method := range []string{http.MethodPatch, http.MethodPut} {
+		t.Run(method, func(t *testing.T) { testOversizedMergedCustomMD(t, method) })
+	}
+}
+
+func testOversizedMergedCustomMD(t *testing.T, method string) {
+	objName := "merged-custom-md-limit-" + strings.ToLower(method)
+	existing := strings.Repeat("a", 2030)
+	data := []byte("0123456789")
+
+	lom := core.AllocLOM(objName)
+	defer core.FreeLOM(lom)
+	err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+	tassert.CheckFatal(t, err)
+	lom.SetCustomKey("key", existing)
+	poi := &putOI{
+		t:       mockTarget,
+		atime:   time.Now().UnixNano(),
+		lom:     lom,
+		r:       readers.NewBytes(data),
+		config:  cmn.GCO.Get(),
+		workFQN: lom.GenFQN(fs.WorkCT, fs.WorkfilePut),
+		size:    int64(len(data)),
+	}
+	_, err = poi.putObject()
+	tassert.CheckFatal(t, err)
+	defer lom.RemoveMain()
+
+	send := func(custom cos.StrKVs) int {
+		q := url.Values{}
+		q.Set(apc.QparamPID, "p1")
+		q.Set(apc.QparamUnixTime, unixNano2S(time.Now().UnixNano()))
+		body := data
+		if method == http.MethodPatch {
+			body = cos.MustMarshal(apc.ActMsg{Value: custom})
+		}
+		r := httptest.NewRequest(method, apc.URLPathObjects.Join(testBucket, objName)+"?"+q.Encode(), bytes.NewReader(body))
+		r = r.WithContext(context.WithValue(r.Context(), keyReqNet, reqNetPub))
+		if method == http.MethodPut {
+			r.Header.Set(cos.HdrContentLength, strconv.Itoa(len(body)))
+			for k, v := range custom {
+				r.Header.Add(apc.HdrObjCustomMD, k+"="+v)
+			}
+		}
+		w := httptest.NewRecorder()
+		mockTarget.objectHandler(w, r)
+		return w.Code
+	}
+	load := func() cos.StrKVs {
+		check := core.AllocLOM(objName)
+		defer core.FreeLOM(check)
+		tassert.CheckFatal(t, check.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal}))
+		tassert.CheckFatal(t, check.LoadMetaFromFS())
+		return check.GetCustomMD()
+	}
+
+	// each map fits, the merged one does not
+	code := send(cos.StrKVs{"new": strings.Repeat("b", 20)})
+	tassert.Fatalf(t, code == http.StatusBadRequest, "expected oversized merge to fail with %d, got %d", http.StatusBadRequest, code)
+	md := load()
+	tassert.Fatalf(t, md["key"] == existing, "existing custom metadata lost: %d keys", len(md))
+	_, ok := md["new"]
+	tassert.Fatalf(t, !ok, "rejected key persisted")
+
+	// a merge within the limit still succeeds
+	code = send(cos.StrKVs{"new": "b"})
+	tassert.Fatalf(t, code == http.StatusOK, "expected merge to succeed, got %d", code)
+	md = load()
+	tassert.Fatalf(t, md["key"] == existing && md["new"] == "b", "unexpected custom metadata after merge: %d keys", len(md))
+
+	// replacing the large key frees its budget
+	code = send(cos.StrKVs{"key": "a", "new": strings.Repeat("b", 100)})
+	tassert.Fatalf(t, code == http.StatusOK, "expected replacing merge to succeed, got %d", code)
+	md = load()
+	tassert.Fatalf(t, md["key"] == "a" && len(md["new"]) == 100, "unexpected custom metadata after replacing merge: %v", md)
+}
+
+func TestS3UserMetadataRejectsOversizedMergedCustomMD(t *testing.T) {
+	lom := core.AllocLOM("s3-custom-md-limit")
+	defer core.FreeLOM(lom)
+	tassert.CheckFatal(t, lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal}))
+	lom.SetCustomKey(cos.HdrContentType, "text/plain")
+
+	hdr := http.Header{}
+	hdr.Set(s3.HeaderMetaPrefix+"Key", strings.Repeat("a", 2040-len(s3.HeaderMetaPrefix+"Key")))
+	err := setS3UserMetadata(lom, hdr)
+	tassert.Fatalf(t, err != nil, "expected oversized merge with %s to fail", cos.HdrContentType)
+	md := lom.GetCustomMD()
+	tassert.Fatalf(t, len(md) == 1 && md[cos.HdrContentType] == "text/plain", "unexpected custom metadata after rejection: %v", md)
+
+	// no user metadata, oversized Content-Type alone
+	lom.SetCustomKey(cos.HdrContentType, strings.Repeat("t", 2048))
+	err = setS3UserMetadata(lom, http.Header{})
+	tassert.Fatalf(t, err != nil, "expected oversized %s to fail", cos.HdrContentType)
 }

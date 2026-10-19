@@ -277,11 +277,8 @@ func setS3UserMetadata(lom *core.LOM, hdr http.Header) error {
 			metadata[k] = hdr.Get(k)
 		}
 	}
-	if err := cmn.ValidateCustomMD(metadata); err != nil {
+	if err := lom.ObjAttrs().AddCustomMD(metadata); err != nil {
 		return fmt.Errorf("%s: %w", lom.Cname(), err)
-	}
-	for k, v := range metadata {
-		lom.SetCustomKey(k, v)
 	}
 	return nil
 }
