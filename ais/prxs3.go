@@ -62,6 +62,13 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// reject empty path components
+	if strings.Contains(r.URL.Path, "//") {
+		err := fmt.Errorf("invalid URL %q: consecutive slashes (\"//\") are not supported", r.URL.Path)
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Code: s3.ErrCodeInvalidArgument})
+		return
+	}
+
 	switch r.Method {
 	case http.MethodHead:
 		if len(apiItems) == 0 {
