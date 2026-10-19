@@ -7,5 +7,8 @@ ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
 ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
 ais rmb ais://$BUCKET_1 ais://$BUCKET_2
 
+# Test cloud bucket removal (not supported)
+ais bucket rm aws://$BUCKET_1 // FAIL "cannot destroy cloud bucket"
+
 # Test invalid bucket URI
 ais bucket rm hdfs://tmp // FAIL invalid

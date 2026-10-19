@@ -50,8 +50,8 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (cmn.Bck, error) {
 	for i := range buckets {
 		bck := buckets[i]
 
-		// confirm
-		if !flagIsSet(c, yesFlag) {
+		// confirm (cloud buckets: expects ErrUnsupp error from proxy)
+		if !flagIsSet(c, yesFlag) && !bck.IsCloud() {
 			empty, err := isBucketEmpty(bck, true /*cached*/)
 			if err != nil && !cmn.IsStatusNotFound(err) {
 				return bck, err
