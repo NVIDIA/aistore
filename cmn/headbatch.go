@@ -11,16 +11,17 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // Head-batch (hdb): POST /v1/objects (no bucket in the URL) with a packed body.
 // One request may carry objects from different buckets. See apc.HdbResp for the response.
 //
-// Packed layout (strings are length-prefixed):
+// Packed layout (str and attrs: see cmn/binpack.go):
 //
-//	HdbReq: | nbck int32 | Bck x nbck | n int32 | HdbIn x n |
+//	HdbReq: | nbck uint16 | Bck x nbck | n uint16 | HdbIn x n |
 //	Bck:    | name str | provider str | ns-uuid str | ns-name str |
-//	HdbIn:  | bidx int32 | name str | size int64 | version str | cksum-type str | cksum-value str | nmd int32 | (key str, value str) x nmd |
+//	HdbIn:  | bidx uint16 | name str | attrs |
 
 // The sender must fall back to per-object HeadObjT2T when the peer does not support it.
 var ErrHdbUnsupported = errors.New(apc.HdbTag + ": unsupported by peer")
@@ -42,15 +43,9 @@ type (
 )
 
 // interface guard
-var (
-	_ cos.OAH      = (*HdbIn)(nil)
-	_ cos.Packer   = (*HdbIn)(nil)
-	_ cos.Unpacker = (*HdbIn)(nil)
-	_ cos.Packer   = (*HdbReq)(nil)
-	_ cos.Unpacker = (*HdbReq)(nil)
-)
+var _ cos.OAH = (*HdbIn)(nil)
 
-// the sender calls it before Pack while the receiver calls it after Unpack
+// the sender calls it before NewPack while the receiver calls it after Unpack
 func (req *HdbReq) Validate() error {
 	if len(req.In) == 0 {
 		return errors.New(apc.HdbTag + ": empty request")
@@ -83,177 +78,84 @@ func (req *HdbReq) AddBck(bck *Bck) (bidx int32) {
 }
 
 func (req *HdbReq) NewPack() []byte {
-	p := cos.NewPacker(nil, req.PackedSize())
-	p.WriteAny(req)
-	return p.Bytes()
+	b := make([]byte, req.PackedSize())
+	off := InsUint16(0, b, len(req.Bcks))
+	for i := range req.Bcks {
+		off = packHdbBck(off, b, &req.Bcks[i])
+	}
+	off = InsUint16(off, b, len(req.In))
+	for i := range req.In {
+		in := &req.In[i]
+		off = InsUint16(off, b, int(in.Bidx))
+		off = InsString(off, b, in.Name)
+		off = InsAttrs(off, b, &in.ObjAttrs)
+	}
+	debug.Assert(off == len(b), off, " vs ", len(b))
+	return b
 }
 
 func (req *HdbReq) PackedSize() int {
-	n := cos.SizeofI32 + cos.SizeofI32 // nbck, n
+	n := cos.SizeofI16 + cos.SizeofI16 // nbck, n
 	for i := range req.Bcks {
 		n += hdbBckSize(&req.Bcks[i])
 	}
 	for i := range req.In {
-		n += req.In[i].PackedSize()
+		in := &req.In[i]
+		n += cos.SizeofI16 + packedStrSize(in.Name) + packedAttrsSize(&in.ObjAttrs)
 	}
 	return n
 }
 
-func (req *HdbReq) Pack(p *cos.BytePack) {
-	p.WriteInt32(int32(len(req.Bcks)))
-	for i := range req.Bcks {
-		packHdbBck(p, &req.Bcks[i])
+func (req *HdbReq) Unpack(body []byte) error {
+	d := NewBinDecoder(body)
+	nbck := d.Uint16()
+	if d.Bad() {
+		return fmt.Errorf("%s: truncated at offset %d", apc.HdbTag, d.Off())
 	}
-	p.WriteInt32(int32(len(req.In)))
-	for i := range req.In {
-		p.WriteAny(&req.In[i])
-	}
-}
-
-func (req *HdbReq) Unpack(u *cos.ByteUnpack) error {
-	nbck, err := u.ReadInt32()
-	if err != nil {
-		return fmt.Errorf("%s: %w", apc.HdbTag, err)
-	}
-	if nbck <= 0 || nbck > apc.HdbSizeMax {
+	if nbck == 0 || nbck > apc.HdbSizeMax {
 		return fmt.Errorf("%s: invalid number of buckets %d, expecting [1, %d]", apc.HdbTag, nbck, apc.HdbSizeMax)
 	}
 	req.Bcks = make([]Bck, nbck)
 	for i := range req.Bcks {
-		if err := unpackHdbBck(u, &req.Bcks[i]); err != nil {
-			return fmt.Errorf("%s: bucket %d: %w", apc.HdbTag, i, err)
-		}
+		unpackHdbBck(&d, &req.Bcks[i])
 	}
-	n, err := u.ReadInt32()
-	if err != nil {
-		return fmt.Errorf("%s: %w", apc.HdbTag, err)
+	n := d.Uint16()
+	if d.Bad() {
+		return fmt.Errorf("%s: truncated at offset %d", apc.HdbTag, d.Off())
 	}
-	if n <= 0 || n > apc.HdbSizeMax {
+	if n == 0 || n > apc.HdbSizeMax {
 		return fmt.Errorf("%s: invalid number of items %d, expecting [1, %d]", apc.HdbTag, n, apc.HdbSizeMax)
 	}
 	req.In = make([]HdbIn, n)
 	for i := range req.In {
-		if err := req.In[i].Unpack(u); err != nil {
-			return fmt.Errorf("%s: item %d: %w", apc.HdbTag, i, err)
+		in := &req.In[i]
+		in.Bidx = int32(d.Uint16())
+		in.Name = d.Str()
+		d.Attrs(&in.ObjAttrs, nil /*prev*/)
+		if d.Bad() {
+			return fmt.Errorf("%s: item %d: truncated at offset %d", apc.HdbTag, i, d.Off())
 		}
 	}
-	if u.Len() != 0 {
-		return fmt.Errorf("%s: %d trailing bytes", apc.HdbTag, u.Len())
+	if l := d.len(); l != 0 {
+		return fmt.Errorf("%s: %d trailing bytes", apc.HdbTag, l)
 	}
 	return nil
 }
 
 func hdbBckSize(b *Bck) int {
-	return cos.PackedStrLen(b.Name) + cos.PackedStrLen(b.Provider) + cos.PackedStrLen(b.Ns.UUID) + cos.PackedStrLen(b.Ns.Name)
+	return packedStrSize(b.Name) + packedStrSize(b.Provider) + packedStrSize(b.Ns.UUID) + packedStrSize(b.Ns.Name)
 }
 
-func packHdbBck(p *cos.BytePack, b *Bck) {
-	p.WriteString(b.Name)
-	p.WriteString(b.Provider)
-	p.WriteString(b.Ns.UUID)
-	p.WriteString(b.Ns.Name)
+func packHdbBck(off int, to []byte, b *Bck) int {
+	off = InsString(off, to, b.Name)
+	off = InsString(off, to, b.Provider)
+	off = InsString(off, to, b.Ns.UUID)
+	return InsString(off, to, b.Ns.Name)
 }
 
-func unpackHdbBck(u *cos.ByteUnpack, b *Bck) (err error) {
-	if b.Name, err = u.ReadString(); err != nil {
-		return err
-	}
-	if b.Provider, err = u.ReadString(); err != nil {
-		return err
-	}
-	if b.Ns.UUID, err = u.ReadString(); err != nil {
-		return err
-	}
-	b.Ns.Name, err = u.ReadString()
-	return err
-}
-
-func (in *HdbIn) PackedSize() int {
-	ty, val := in.cksum()
-	n := cos.SizeofI32 +
-		cos.PackedStrLen(in.Name) +
-		cos.SizeofI64 +
-		cos.PackedStrLen(in.Version()) +
-		cos.PackedStrLen(ty) +
-		cos.PackedStrLen(val) +
-		cos.SizeofI32
-	for k, v := range in.CustomMD {
-		n += cos.PackedStrLen(k) + cos.PackedStrLen(v)
-	}
-	return n
-}
-
-func (in *HdbIn) Pack(p *cos.BytePack) {
-	p.WriteInt32(in.Bidx)
-	p.WriteString(in.Name)
-	p.WriteInt64(in.Size)
-	p.WriteString(in.Version())
-
-	ty, val := in.cksum()
-	p.WriteString(ty)
-	p.WriteString(val)
-
-	p.WriteInt32(int32(len(in.CustomMD)))
-	for k, v := range in.CustomMD {
-		p.WriteString(k)
-		p.WriteString(v)
-	}
-}
-
-func (in *HdbIn) Unpack(u *cos.ByteUnpack) (err error) {
-	var ver, ty, val string
-	*in = HdbIn{}
-	if in.Bidx, err = u.ReadInt32(); err != nil {
-		return err
-	}
-	if in.Name, err = u.ReadString(); err != nil {
-		return err
-	}
-	if in.Size, err = u.ReadInt64(); err != nil {
-		return err
-	}
-	if ver, err = u.ReadString(); err != nil {
-		return err
-	}
-	in.SetVersion(ver)
-	if ty, err = u.ReadString(); err != nil {
-		return err
-	}
-	if val, err = u.ReadString(); err != nil {
-		return err
-	}
-	if ty != "" {
-		in.Cksum = cos.NewCksum(ty, val)
-	}
-
-	nmd, err := u.ReadInt32()
-	if err != nil {
-		return err
-	}
-	// each entry has at least two length markers
-	if nmd < 0 || int(nmd) > u.Len()/(2*cos.SizeofLen) {
-		return fmt.Errorf("invalid number of custom metadata entries %d", nmd)
-	}
-	if nmd == 0 {
-		return nil
-	}
-	in.CustomMD = make(cos.StrKVs, nmd)
-	for range nmd {
-		var k, v string
-		if k, err = u.ReadString(); err != nil {
-			return err
-		}
-		if v, err = u.ReadString(); err != nil {
-			return err
-		}
-		in.CustomMD[k] = v
-	}
-	return nil
-}
-
-func (in *HdbIn) cksum() (ty, val string) {
-	if !cos.NoneC(in.Cksum) {
-		ty, val = in.Cksum.Get()
-	}
-	return ty, val
+func unpackHdbBck(d *BinDecoder, b *Bck) {
+	b.Name = d.Str()
+	b.Provider = d.Str()
+	b.Ns.UUID = d.Str()
+	b.Ns.Name = d.Str()
 }

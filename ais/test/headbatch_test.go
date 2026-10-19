@@ -58,13 +58,17 @@ func TestHeadBatchT2T(t *testing.T) {
 
 	diverged := req.In[0]
 	diverged.Size++
+	// same size and checksum (only the custom key differs)
+	customDiverged := req.In[0]
+	customDiverged.CustomMD = cos.StrKVs{cmn.MD5ObjMD: "hdb-md5-diverged"}
 	nobck := cmn.Bck{Name: "hdb-none-" + trand.String(6), Provider: apc.AIS}
 	req.In = append(req.In,
 		diverged,
+		customDiverged,
 		cmn.HdbIn{Name: "hdb-missing", Bidx: 0},
 		cmn.HdbIn{Name: "hdb-any", Bidx: req.AddBck(&nobck)},
 	)
-	want = append(want, apc.HdbDiverged, apc.HdbMissing, apc.HdbFailed)
+	want = append(want, apc.HdbDiverged, apc.HdbDiverged, apc.HdbMissing, apc.HdbFailed)
 	tassert.CheckFatal(t, req.Validate())
 
 	status, body := hdbPost(t, tsi, smap.Primary, req.NewPack())
@@ -76,6 +80,21 @@ func TestHeadBatchT2T(t *testing.T) {
 		in := &req.In[i]
 		tassert.Errorf(t, resp.Status[i] == want[i], "%s: %s, expecting %s (%s)",
 			req.Bcks[in.Bidx].Cname(in.Name), resp.Status[i], want[i], resp.Cause(i))
+	}
+
+	// malformed bodies
+	packed := req.NewPack()
+	for _, bad := range []struct {
+		body []byte
+		msg  string
+	}{
+		{packed[:1], "truncated"},
+		{packed[:len(packed)-1], "truncated"},
+		{append(packed[:len(packed):len(packed)], 0), "trailing bytes"},
+	} {
+		status, body = hdbPost(t, tsi, smap.Primary, bad.body)
+		tassert.Errorf(t, status == http.StatusBadRequest && bytes.Contains(body, []byte(bad.msg)),
+			"expecting %q rejection, got status %d (%s)", bad.msg, status, body)
 	}
 
 	status, body = hdbPost(t, tsi, nil /*sender*/, req.NewPack())
@@ -92,6 +111,7 @@ func hdbPutObjs(t *testing.T, bp api.BaseParams, bck *cmn.Bck, smap *meta.Smap, 
 	for i := range hdbNumObjs {
 		name := tools.GenerateObjectNameOnTarget(fmt.Sprintf("hdb-%d-", i), *bck, smap, tsi)
 		tassert.CheckFatal(t, tools.PutObjRR(bp, *bck, name, cos.KiB, p.Cksum.Type))
+		tassert.CheckFatal(t, api.SetObjectCustomProps(bp, *bck, name, cos.StrKVs{cmn.MD5ObjMD: "hdb-md5-" + name}, true /*setNew*/))
 		names = append(names, name)
 	}
 	return names

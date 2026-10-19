@@ -94,7 +94,7 @@ func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var req cmn.HdbReq
-	if err := req.Unpack(cos.NewUnpacker(body)); err != nil {
+	if err := req.Unpack(body); err != nil {
 		return err
 	}
 	if err := req.Validate(); err != nil {
