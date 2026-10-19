@@ -118,6 +118,7 @@ func NewAWS(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 // resolves it via `_location` and caches the client under the complete
 // (profile, region, endpoint) tuple.
 func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
+	const tag = "[svc.head_bucket]"
 	var (
 		cloudBck = bck.RemoteBck()
 		sessConf = sessConf{bck: cloudBck}
@@ -127,26 +128,29 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, erro
 		return nil, http.StatusInternalServerError, err
 	}
 	if cmn.Rom.V(5, cos.ModBackend) {
-		nlog.Infoln("[head_bucket]", cloudBck.String(), sessConf.detail())
+		nlog.Infoln(tag, cloudBck.String(), sessConf.detail())
 	}
+
+	var located bool
 	if sessConf.region == "" {
 		var region string
 		if region, err = _location(svc, cloudBck.Name); err != nil {
 			ecode, errV := awsErrorToAISError(err, cloudBck, "", sessConf.detail())
 			return nil, ecode, errV
 		}
+		located = true
 		if cmn.Rom.V(4, cos.ModBackend) {
-			nlog.Infoln("[svc.head_bucket]", cloudBck.Name, "region", region)
+			nlog.Infoln(tag, cloudBck.Name, "region", region)
 		}
 		sessConf.region = region
-		svc, err = sessConf.s3client("[svc.head_bucket]")
+		svc, err = sessConf.s3client(tag)
 		debug.AssertNoErr(err)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err // (awsLoadConfig w/ error already normalized)
 		}
 	}
 
-	// NOTE: return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
+	// return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
 	bckProps := make(cos.StrKVs, 4)
 	bckProps[apc.HdrBackendProvider] = apc.AWS
 	bckProps[apc.HdrS3Region] = sessConf.region
@@ -154,10 +158,31 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, erro
 	if bck.Props != nil {
 		bckProps[apc.HdrS3Endpoint] = bck.Props.Extra.AWS.Endpoint
 	}
+
+	// bucket versioning
+	const warnUnknown = "versioning unknown (proceeding without versioning metadata), err:"
 	versioned, errV := _versioning(svc, cloudBck)
 	if errV != nil {
 		ecode, err := awsErrorToAISError(errV, cloudBck, "", sessConf.detail())
-		return nil, ecode, err
+		// proceed anyway when s3.GetBucketVersioning returns "authorization failures" or
+		// "not implemented"; anything else would be unlikely - hence error
+		switch ecode {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusMethodNotAllowed,
+			http.StatusNotImplemented /*compatibles*/ :
+			if located {
+				nlog.Warningln(tag, cloudBck.String(), warnUnknown, errV)
+				return bckProps, 0, nil
+			}
+		default:
+			return nil, ecode, err
+		}
+
+		if _, err = _location(svc, cloudBck.Name); err != nil {
+			ecode, err = awsErrorToAISError(err, cloudBck, "", sessConf.detail())
+			return nil, ecode, err
+		}
+		nlog.Warningln(tag, cloudBck.String(), warnUnknown, errV)
+		return bckProps, 0, nil
 	}
 	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(versioned)
 	return bckProps, 0, nil
