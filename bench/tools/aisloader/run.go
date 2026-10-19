@@ -170,6 +170,10 @@ func Start(version, buildtime string) (err error) {
 	// parse flags
 	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	addCmdLine(f, runParams)
+	parseCmdLine(f)
+	if err = loadConfig(f, runParams.configPath); err != nil {
+		return err
+	}
 
 	// validate and finish initialization
 	if err = initParams(runParams); err != nil {

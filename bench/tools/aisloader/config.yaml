@@ -1,0 +1,100 @@
+# Example configuration file for AISLoader.
+# Blank (null) values leave settings unset; "" sets an empty value, like -flag=.
+# CLI-only flags belong on the command line and are excluded here.
+
+# ============ Meta flags ============
+quiet: false
+timeout: "10m"
+idle-conns-per-host: 0
+
+# ============ Cluster ============
+ip: "localhost"
+port: "8080"
+tokenfile:
+randomproxy: false
+
+# S3 Direct
+s3endpoint:
+s3profile:
+s3-use-path-style: false
+
+# ============ Bucket properties ============
+bucket:
+provider: "ais"
+bprops:
+
+# ============ Workload ============
+duration:
+numworkers: 10
+epochs: 0
+perm-shuffle-max: 100000
+pctput: 0
+pctupdate: 0
+maxputs: 0
+totalputsize: "0"
+seed: 0
+tmpdir: "/tmp/ais"
+readertype: "sg"
+
+# ============ Object sizing and checksumming ============
+minsize:
+maxsize:
+cksum-type: "xxhash"
+verifyhash: false
+
+# ============ Archives (Shards) ============
+arch.format: # defaults to TAR
+arch.prefix:
+arch.num-files: 0
+arch.minsize:
+arch.maxsize:
+arch.pct: 0
+arch.list: false
+
+# ============ Naming ============
+subdir:
+num-subdirs: 0
+randomname: true
+filelist:
+filelist-obj:
+skiplist: false
+
+# ============ Read operations ============
+readoff:
+readlen:
+get-batchsize: 0
+latest: false
+cached: false
+list-dirs: false
+nbi: false
+evict-batchsize: 1000
+cont-on-err: false
+
+# ============ Multipart ============
+multipart-chunks: 0
+pctmultipart: 0
+
+# ============ Multipart Download Stream ============
+mpdstream-chunk-size: 0
+mpdstream-workers: 0
+pctmpdstream: 0
+
+# ============ ETL ============
+etl:
+etl-spec:
+
+# ============ Loader instance ============
+loaderid: "0"
+loadernum: 0
+loaderidhashlen: 0
+
+# ============ Stats ============
+statsinterval: 10
+stats-output:
+stats-output-obj:
+json: false
+
+# ============ Miscellaneous ============
+cleanup:
+stoppable: false
+trace-http: false

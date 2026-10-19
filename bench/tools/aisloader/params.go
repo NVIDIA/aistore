@@ -174,10 +174,11 @@ type (
 
 	// Miscellaneous (cleanup, dry-run, et al.)
 	miscParams struct {
-		cleanUp   BoolExt // destroy/empty bucket on termination
-		stoppable bool    // allow termination via Ctrl-C
-		dryRun    bool    // print config and exit without running
-		traceHTTP bool    // trace HTTP request latencies
+		cleanUp    BoolExt // destroy/empty bucket on termination
+		stoppable  bool    // allow termination via Ctrl-C
+		dryRun     bool    // print config and exit without running
+		traceHTTP  bool    // trace HTTP request latencies
+		configPath string  // path to the configuration file
 	}
 
 	// Main configuration: all parameter sections
@@ -318,13 +319,13 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 
 	// ============ Miscellaneous ============
 	BoolExtVar(f, &p.cleanUp, "cleanup", "when true, remove bucket upon benchmark termination (must be specified for AIStore buckets)")
+	f.StringVar(&p.configPath, "config", "", "load runtime settings from a YAML file; explicit CLI flags take precedence")
 	f.BoolVar(&p.stoppable, "stoppable", false, "when true, stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "when true, show the configuration and parameters that aisloader will use for benchmark")
 	f.BoolVar(&p.traceHTTP, "trace-http", false, "when true, trace HTTP latencies")
+}
 
-	//
-	// Parse and validate
-	//
+func parseCmdLine(f *flag.FlagSet) {
 	orig := f.Usage
 	f.Usage = func() {
 		fmt.Println("Run `aisloader` (for inline help), `aisloader version` (for version), or see 'docs/aisloader.md' for details and usage examples.")
@@ -364,7 +365,7 @@ func initParams(p *params) (err error) {
 		}
 		if !p.cleanUp.IsSet && !isDirectS3() {
 			fmt.Println("\nNote: `-cleanup` is a required option. Beware! When -cleanup=true the bucket will be destroyed upon completion of the benchmark.")
-			fmt.Println("      The option must be specified in the command line, e.g.: `--cleanup=false`")
+			fmt.Println("      Specify `--cleanup=false` on the command line or `cleanup: false` in the config file.")
 			os.Exit(1)
 		}
 	}

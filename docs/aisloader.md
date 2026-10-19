@@ -28,6 +28,7 @@ To integrate aisloader with Prometheus-based observability stacks, run the offic
 
 - [Setup](#setup)
 - [Testing](#testing)
+- [YAML Configuration](#yaml-configuration)
 - [Command Line Options](#command-line-options)
   - [Quick Reference (Alphabetical)](#quick-reference-alphabetical)
   - [Command Line Options Grouped by Category](#command-line-options-grouped-by-category)
@@ -84,6 +85,21 @@ Environment variables:
 * `BUCKET`: Bucket to test against (default: a new `ais://` bucket, destroyed afterward). For an existing bucket, only the objects the tests create are deleted.
 * `DURATION`: Base run time per stage (default: `20s`).
 
+## YAML Configuration
+
+Load runtime settings from a YAML file with `-config`:
+
+```console
+$ aisloader -config=./workload.yaml
+```
+
+Values follow CLI parsing rules, whether quoted or unquoted. See the [complete sample](https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/config.yaml) for available settings.
+
+- Explicit CLI flags take precedence over config values.
+- Missing or null values leave a setting unset.
+- Unknown or duplicate keys, nested values, and CLI-only flags (e.g. `-dry-run`) are rejected.
+- Existing environment rules still apply. Relative paths resolve from the working directory.
+
 ## Command Line Options
 
 This section presents two alternative, intentionally redundant views for usability: a concise alphabetical quick reference for fast lookups, and a grouped-by-category presentation with explanations and examples for deeper understanding.
@@ -106,6 +122,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -cached | `bool` | List in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
 | -cksum-type | `string` | Checksum type to use for PUT object requests | `xxhash` |
 | -cleanup | `bool` | When true, remove bucket upon benchmark termination (must be specified for AIStore buckets) | `n/a` (required) |
+| -config | `string` | Load runtime settings from a [YAML file](#yaml-configuration); explicit CLI flags take precedence | `""` |
 | -cont-on-err | `bool` | GetBatch: ignore missing files and/or objects - include them under `__404__/` prefix and keep going | `false` |
 | -dry-run | `bool` | Show the entire set of parameters that aisloader will use when actually running | `false` |
 | -duration | `duration` | Benchmark duration (0 - run forever or until Ctrl-C). If not specified and totalputsize > 0, runs until totalputsize reached | `1m` |
@@ -301,11 +318,12 @@ For the most recently updated command-line options and examples, please run `ais
 | -statsdport | `int` | **Deprecated** - StatsD UDP port | `8125` |
 | -statsdprobe | `bool` | **Deprecated** - Test-probe StatsD server prior to benchmarks | `false` |
 
-#### Cleanup, Dry-Run, HTTP Tracing, Termination Control (`miscParams`)
+#### Cleanup, Config, Dry-Run, HTTP Tracing, Termination Control (`miscParams`)
 
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
 | -cleanup | `bool` | When true, remove bucket upon benchmark termination (must be specified for AIStore buckets) | `n/a` (required) |
+| -config | `string` | Load runtime settings from a [YAML file](#yaml-configuration); explicit CLI flags take precedence | `""` |
 | -dry-run | `bool` | Show the entire set of parameters that aisloader will use when actually running | `false` |
 | -trace-http | `bool` | Trace HTTP latencies (see [HTTP tracing](#http-tracing)) | `false` |
 | -stoppable | `bool` | When true, allow termination via Ctrl-C | `false` |
