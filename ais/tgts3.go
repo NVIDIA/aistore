@@ -93,6 +93,11 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, dpq *dpq, it
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
+	if bck.IsRemoteOCI() && r.Header.Get(cos.S3HdrObjSrc) != "" &&
+		(len(r.Header.Values("If-Match")) != 0 || len(r.Header.Values("If-None-Match")) != 0) {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: errors.New("conditional CopyObject is unsupported"), Status: http.StatusNotImplemented})
+		return
+	}
 	// handle AWS chunked content encoding (sigv4-streaming)
 	if s3.IsAwsChunked(r) {
 		s3.HandleAwsChunked(r)
@@ -256,7 +261,8 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		poi.t = t
 		poi.lom = lom
 		poi.config = cmn.GCO.Get()
-		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || dpq.skipVC // apc.QparamSkipVC
+		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || dpq.skipVC ||
+			(bck.IsRemoteOCI() && (len(r.Header.Values("If-Match")) != 0 || len(r.Header.Values("If-None-Match")) != 0))
 		poi.restful = true
 	}
 	ecode, err := poi.do(nil /*response hdr*/, r, dpq)

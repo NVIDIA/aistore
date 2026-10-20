@@ -476,7 +476,22 @@ func (args *completeArgs) closedErr(err error) error {
 	return fmt.Errorf("upload %q failed to complete locally; start a new upload: %w", args.uploadID, err)
 }
 
-func (ups *ups) complete(args *completeArgs) (string, int, error) {
+func (ups *ups) complete(args *completeArgs) (etagOut string, ecodeOut int, errOut error) {
+	var ociWrite *ociWriteState
+	if args.lom.Bck().IsRemoteOCI() && !args.skipBackend {
+		state := ups.t.ociWrites.begin(args.lom.Uname())
+		ociWrite = state
+		defer func() {
+			if cleanupErr := ups.t.ociWrites.finish(args.lom, state, args.locked); cleanupErr != nil {
+				if errOut == nil {
+					etagOut, ecodeOut, errOut = "", http.StatusInternalServerError, cleanupErr
+				} else {
+					nlog.Warningln("failed to invalidate overlapping OCI completion cache", cleanupErr)
+				}
+			}
+		}()
+	}
+
 	args.backendCompleted = false
 	args.uploadClosed = false
 	var (
@@ -542,7 +557,19 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 	lom.SetCksum(cksum)
 
 	// 4. complete local (with referential integrity across all edges)
-	err = lom.CompleteUfest(manifest, args.locked)
+	if ociWrite != nil {
+		// Backend completion is already done: this lock covers local publication only.
+		if !args.locked {
+			lom.Lock(true)
+			defer lom.Unlock(true)
+		}
+		defer func() {
+			if _, cleanupErr := t.ociWrites.invalidate(lom, ociWrite, true /*locked*/); cleanupErr != nil && errOut == nil {
+				etagOut, ecodeOut, errOut = "", http.StatusInternalServerError, cleanupErr
+			}
+		}()
+	}
+	err = lom.CompleteUfest(manifest, args.locked || ociWrite != nil)
 	ups.del(uploadID)
 	args.uploadClosed = true
 
