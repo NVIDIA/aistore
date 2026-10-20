@@ -15,6 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 // core next-page and next-remote-page methods for object listing
@@ -134,7 +136,7 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 
 	for _, en := range lst.Entries {
 		uname := append(npg.ubuf, en.Name...) //nolint:gocritic // reusing ubuf - intentionally not assigning
-		si, err := npg.wi.smap.HrwName2T(uname)
+		si, err := npg.wi.smap.HrwObjHash2T(bck, onexxh.Checksum64S(uname, cos.MLCG32))
 		if err != nil {
 			return err
 		}

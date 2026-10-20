@@ -51,7 +51,7 @@ func countObjects(pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, er
 		if err != nil {
 			return
 		}
-		si, err = smap.HrwName2T(bck.MakeUname(name))
+		si, err = smap.HrwObjName2T(bck, name)
 		if err != nil {
 			return
 		}
@@ -89,7 +89,7 @@ func makeDlObj(smap *meta.Smap, sid string, bck *meta.Bck, objName, link string)
 		return dlObj{}, err
 	}
 
-	si, err := smap.HrwName2T(bck.MakeUname(objName))
+	si, err := smap.HrwObjName2T(bck, objName)
 	if err != nil {
 		return dlObj{}, err
 	}

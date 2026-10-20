@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 
+	onexxh "github.com/OneOfOne/xxhash"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -357,13 +358,13 @@ func (r *XactNBI) fini(smap *meta.Smap, ntotal int64) error {
 }
 
 // TODO: ref
-func (*XactNBI) filterKeepMine(lst *cmn.LsoRes, ubuf []byte, smap *meta.Smap) error {
+func (r *XactNBI) filterKeepMine(lst *cmn.LsoRes, ubuf []byte, smap *meta.Smap) error {
 	j := 0
 	sid := core.T.SID()
 
 	for _, en := range lst.Entries {
 		uname := append(ubuf, en.Name...) //nolint:gocritic // reusing ubuf - intentionally not assigning
-		si, err := smap.HrwName2T(uname)
+		si, err := smap.HrwObjHash2T(r.Bck(), onexxh.Checksum64S(uname, cos.MLCG32))
 		if err != nil {
 			return err
 		}

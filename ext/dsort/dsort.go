@@ -359,7 +359,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 		return err
 	}
 
-	si, errH := m.smap.HrwHash2T(lom.Digest())
+	si, errH := m.smap.HrwObjHash2T(lom.Bck(), lom.Digest())
 	if errH != nil {
 		return errH
 	}
@@ -841,7 +841,7 @@ func (m *Manager) phase3(maxSize int64) error {
 
 	// TODO: micro-opt: reuse bucket uname prefix for repeated HRW calls (e.g., xs/nextpage)
 	for _, s := range shards {
-		si, err := m.smap.HrwName2T(bck.MakeUname(s.Name))
+		si, err := m.smap.HrwObjName2T(bck, s.Name)
 		if err != nil {
 			return err
 		}

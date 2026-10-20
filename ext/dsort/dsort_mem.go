@@ -590,7 +590,7 @@ func (es *dsmExtractShard) do() error {
 		return err
 	}
 	smap := core.T.Sowner().Get()
-	tsi, err := smap.HrwName2T(bck.MakeUname(shard.Name))
+	tsi, err := smap.HrwObjName2T(bck, shard.Name)
 	if err != nil {
 		return err
 	}

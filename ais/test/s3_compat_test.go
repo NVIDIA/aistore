@@ -1627,12 +1627,12 @@ func testOCICopyAttributes(t *testing.T, client *s3.Client, src string, data []b
 	}
 	smap.InitDigests()
 	bck := meta.CloneBck(&cliBck)
-	owner, err := smap.HrwName2T(bck.MakeUname(src))
+	owner, err := smap.HrwObjName2T(bck, src)
 	tassert.CheckFatal(t, err)
 	dst := ""
 	for i := range 1000 {
 		candidate := fmt.Sprintf("%s-copy-%d", src, i)
-		target, err := smap.HrwName2T(bck.MakeUname(candidate))
+		target, err := smap.HrwObjName2T(bck, candidate)
 		tassert.CheckFatal(t, err)
 		if (target.ID() != owner.ID()) == forwarded {
 			dst = candidate

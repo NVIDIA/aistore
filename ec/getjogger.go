@@ -158,7 +158,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 		return err
 	}
 	smap := core.T.Sowner().Get()
-	targets, err := smap.HrwTargetList(ctx.lom.UnamePtr(), ctx.meta.Parity+1)
+	targets, err := smap.HrwObjTargetList(ctx.lom.Bck(), ctx.lom.Digest(), ctx.meta.Parity+1)
 	if err != nil {
 		freeObject(reader)
 		return err
@@ -678,7 +678,7 @@ func (*getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 	}
 	// Generate the list of targets that should have a slice.
 	smap := core.T.Sowner().Get()
-	targets, err := smap.HrwTargetList(ctx.lom.UnamePtr(), sliceCnt+1)
+	targets, err := smap.HrwObjTargetList(ctx.lom.Bck(), ctx.lom.Digest(), sliceCnt+1)
 	if err != nil {
 		nlog.Warningln(err)
 		return nil, err

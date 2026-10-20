@@ -303,7 +303,7 @@ func (r *XactBckEncode) chanFullTotal() (n int64) {
 
 // given CT, ask the "main" target to restore the corresponding object and slices, if need be
 func (r *XactBckEncode) checkRecover(ct *core.CT, _ []byte) error {
-	tsi, err := r.smap.HrwName2T([]byte(*ct.UnamePtr()))
+	tsi, err := r.smap.HrwObjHash2T(ct.Bck(), ct.Digest())
 	if err != nil {
 		nlog.Errorln(ct.Cname(), "err:", err)
 		return err

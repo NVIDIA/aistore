@@ -23,14 +23,12 @@ import (
 // - require a same-version cluster (see ais/pversion.go)
 
 // TODO, in order:
-// - weighted HRW: object placement only (HrwName2T, HrwHash2T, HrwTargetList);
-//   reduces to uniform HRW when not weighted; honors bucket placement.weighting
-//
 // - bucket placement.weighting: reject while node versions differ; rebalance the bucket on change
+// - EC: validate spare-target capacity before weight-triggered owner migration
 //
-// - integration test: set, proportional, clear, restart, join
-// - API and CLI: show weights and normalized shares (`ais show cluster`); set weights
-// - Python SDK: get/set weights (quoted int64)
+// - Python SDK:
+//   * get/set weights
+//   * weighted HRW for direct-to-target access (****)
 
 // max/min weight ratio
 const (

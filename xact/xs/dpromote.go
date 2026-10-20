@@ -122,7 +122,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	}
 	// file share == true: promote only the part of the namespace that "lands" locally
 	if r.confirmedFshare {
-		si, err := r.smap.HrwName2T(bck.MakeUname(objName))
+		si, err := r.smap.HrwObjName2T(bck, objName)
 		if err != nil {
 			return err
 		}

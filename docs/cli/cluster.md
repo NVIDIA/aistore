@@ -804,8 +804,10 @@ UUID        URL                       Alias     Primary         Smap  Targets  O
 By default, objects are distributed uniformly across targets. Target placement weights (v5.2) represent
 relative capacities (1, 3, 6) or sizes in GB (100, 300, 600).
 
-Weighted HRW is pending: these commands update placement metadata and trigger rebalance when weights
-change non-proportionally. Object placement still uses uniform HRW.
+With weights set, each target owns a `weight/sum(weights)` share of objects - except in buckets with
+`placement.weighting=uniform`. Changing weights non-proportionally triggers global rebalance. To see
+measured per-target object counts, run `ais storage summary BUCKET --per-target`. See
+[Placement weights](/docs/placement.md).
 
 ```console
 $ ais cluster placement --help

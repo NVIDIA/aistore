@@ -1181,7 +1181,7 @@ func (p *proxy) blobdl(smap *smapX, xargs *xact.ArgsMsg, msg *apc.ActMsg) (tsi *
 		return nil, err
 	}
 	objName := msg.Name
-	tsi, _, err = smap.HrwMultiHome(xargs.Bck.MakeUname(objName))
+	tsi, _, err = smap.HrwObjMultiHome(bck, objName)
 	return tsi, err
 }
 

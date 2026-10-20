@@ -136,7 +136,7 @@ func _mossInBck(in *apc.MossIn, dfltBck *meta.Bck) (*meta.Bck, error) {
 
 // update DT selection state for a single entry
 func (ctx *mossScanCtx) selectDT(in *apc.MossIn, bck *meta.Bck) {
-	tsi, err := ctx.smap.HrwName2T(bck.MakeUname(in.ObjName))
+	tsi, err := ctx.smap.HrwObjName2T(bck, in.ObjName)
 	if err != nil {
 		ctx.err = err
 		return

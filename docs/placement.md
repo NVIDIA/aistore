@@ -1,8 +1,8 @@
 # Placement weights
 
-Status (v5.2): the control plane records target weights and bucket overrides; object
-placement remains uniform until weighted HRW is integrated. Weight changes that alter
-relative shares among active targets trigger global rebalance;
+Status (v5.2): object placement honors target weights and bucket overrides - in request
+routing, rebalance, storage cleanup, EC, and all jobs that write or locate objects.
+Weight changes that alter relative shares among active targets trigger global rebalance;
 proportional changes and equal-vs-none transitions do not.
 
 To inspect actual in-cluster object counts and sizes on each target, use
@@ -27,6 +27,9 @@ These measured shares are separate from the configured shares shown by
   - [Troubleshooting](#troubleshooting)
 - [Upgrade](#upgrade)
 - [Buckets](#buckets)
+- [Erasure coding](#erasure-coding)
+- [Verifying placement](#verifying-placement)
+- [Weighted HRW implementation](#weighted-hrw-implementation)
 
 ## Target weights
 
@@ -301,6 +304,58 @@ Older nodes cannot decode a cluster map with weights, or bucket metadata with pl
 
 ## Buckets
 
-`placement.weighting="uniform"` makes a bucket ignore target weights; an empty value
-clears the override. Clearing target weights returns HTTP 409 while any bucket has an
-override. Redistribution on override change is pending.
+By default, every bucket follows target weights. To make a bucket ignore them:
+
+```console
+ais bucket props set ais://abc placement.weighting=uniform   # uniform placement, as if unweighted
+ais bucket props set ais://abc placement.weighting=""        # reset (follow target weights)
+```
+
+- set the override before writing data: redistribution on override change is pending,
+  and objects written under the previous policy remain where they are
+- clearing target weights returns HTTP 409 while any bucket has an override
+- a pre-5.2 node cannot join a cluster with any bucket override
+
+## Erasure coding
+
+Weights apply to EC as well: the object's full replica goes to its owner, and slices
+(or replicas) go to the next targets in weighted order.
+
+- a target holds at most one part of any given object; as `data_slices + parity_slices + 1`
+  approaches the number of active targets, almost every target holds a part of every
+  object, and weights have little effect on EC buckets
+- moving an object's owner (e.g., after a weight change) needs a spare active target
+  beyond the full replica and slices: `data_slices + parity_slices + 2` active targets;
+  admission checks for weight changes without such spare capacity are pending
+
+## Verifying placement
+
+Configured shares (`ais cluster placement`) are expected values; measured shares are:
+
+```console
+ais storage summary ais://abc --per-target     # per-target object counts and sizes
+ais storage validate ais://abc                 # misplaced objects, if any
+```
+
+With `N` objects and a target's configured share `p`, its count deviates from `N*p`
+by about `sqrt(N*p*(1-p))` - small buckets show visibly uneven shares. Both commands also
+count misplaced copies that a recent rebalance has yet to clean up.
+
+## Weighted HRW implementation
+
+Traditional HRW generates a uniform random score for each target using a hash function,
+and picks the maximum score. Weighted HRW transforms the uniform random variables
+`U` in (0, 1] into exponentially distributed `-ln(U)/weight`, and picks the minimum:
+
+- each active target owns a `weight/sum(weights)` share of objects
+- equal weights select exactly the same target as no weights
+- proportional weights select exactly the same targets
+- changing one target's weight moves objects only to or from that target
+- an object's ranked targets (EC) are the owner followed by the remaining targets in
+  weighted order
+
+The implementation (`core/meta/hrw.go`) uses only integer arithmetic - fixed-point
+logarithm and 128-bit products - with identical results on every architecture, for any
+64-bit weights. Placement of objects in a bucket with `placement.weighting=uniform`
+remains traditional HRW. Targets in maintenance or being decommissioned own no objects.
+Selecting a target for a job, or a proxy, remains uniform.

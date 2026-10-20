@@ -451,7 +451,7 @@ func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 }
 
 func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err error) {
-	tsi, err = smap.HrwHash2T(lom.digest)
+	tsi, err = smap.HrwObjHash2T(&lom.bck, lom.digest)
 	if err != nil {
 		return
 	}

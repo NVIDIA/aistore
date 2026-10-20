@@ -3195,7 +3195,7 @@ func TestBucketSummaryPerTarget(t *testing.T) {
 	expected := make(map[string]uint64, smap.CountActiveTs())
 	bck := meta.CloneBck(&m.bck)
 	for _, name := range m.objNames {
-		tsi, err := smap.HrwName2T(bck.MakeUname(name))
+		tsi, err := smap.HrwObjName2T(bck, name)
 		tassert.CheckFatal(t, err)
 		expected[tsi.ID()]++
 	}

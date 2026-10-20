@@ -49,9 +49,9 @@ func WaitForCondition(condition func() bool, opts WaitRetryOpts) error {
 // GenerateObjectNameForTarget returns a name that HRW maps to either the same or
 // a different target than baseName, as requested by wantSameTarget.
 func GenerateObjectNameForTarget(baseName, newNamePrefix string, bck cmn.Bck, smap *meta.Smap, wantSameTarget bool) string {
-	smap.InitDigests() // HrwName2T requires it
+	smap.InitDigests() // HRW requires it
 	cbck := meta.CloneBck(&bck)
-	base, err := smap.HrwName2T(cbck.MakeUname(baseName))
+	base, err := smap.HrwObjName2T(cbck, baseName)
 	cos.AssertNoErr(err)
 	return genObjName(newNamePrefix, cbck, smap, func(owner *meta.Snode) bool { return (owner.ID() == base.ID()) == wantSameTarget })
 }
@@ -62,7 +62,7 @@ func GenerateObjectNameOnTarget(newNamePrefix string, bck cmn.Bck, smap *meta.Sm
 	if si := smap.GetTarget(tsi.ID()); si == nil || si.InMaintOrDecomm() {
 		cos.AssertMsg(false, tsi.StringEx()+" is not an active target in "+smap.StringEx())
 	}
-	smap.InitDigests() // HrwName2T requires it
+	smap.InitDigests() // HRW requires it
 	return genObjName(newNamePrefix, meta.CloneBck(&bck), smap, func(owner *meta.Snode) bool { return owner.ID() == tsi.ID() })
 }
 
@@ -70,7 +70,7 @@ func GenerateObjectNameOnTarget(newNamePrefix string, bck cmn.Bck, smap *meta.Sm
 func genObjName(newNamePrefix string, cbck *meta.Bck, smap *meta.Smap, match func(*meta.Snode) bool) string {
 	newName := newNamePrefix
 	for i := 0; ; i++ {
-		si, err := smap.HrwName2T(cbck.MakeUname(newName))
+		si, err := smap.HrwObjName2T(cbck, newName)
 		cos.AssertNoErr(err)
 		if match(si) {
 			return newName

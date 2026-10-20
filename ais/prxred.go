@@ -116,7 +116,7 @@ func _preparse(nodeURL string, r *http.Request) (scheme, host string, q url.Valu
 // http-redirect(with-json-message)
 func (p *proxy) redirectAction(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, msg *apc.ActMsg) {
 	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bck.MakeUname(objName))
+	si, err := smap.HrwObjName2T(bck, objName)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return

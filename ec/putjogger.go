@@ -225,7 +225,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 			ecConf.DataSlices, ecConf.ParitySlices, reqTargets, lom, targetCnt, smap.StringEx())
 		return cmn.NewErrNotEnoughTargets(s)
 	}
-	targets, err := smap.HrwTargetList(lom.UnamePtr(), reqTargets)
+	targets, err := smap.HrwObjTargetList(lom.Bck(), lom.Digest(), reqTargets)
 	if err != nil {
 		return err
 	}

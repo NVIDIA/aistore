@@ -114,7 +114,7 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 		ecode int
 	)
 	if src.Bck().IsAIS() {
-		tsi, errV := rp.smap.HrwHash2T(src.Digest())
+		tsi, errV := rp.smap.HrwObjHash2T(src.Bck(), src.Digest())
 		if errV != nil {
 			return fmt.Errorf("prune %s: fatal err: %w", rp.r.Name(), errV)
 		}

@@ -69,7 +69,8 @@ func TestRebalanceAutoChunks(t *testing.T) {
 	objects.puts()
 	smap := objects.smap
 	smap.InitDigests()
-	owner, err := smap.HrwName2T(meta.CloneBck(&bck).MakeUname(objects.objNames[0]))
+	cbck := meta.CloneBck(&bck)
+	owner, err := smap.HrwObjName2T(cbck, objects.objNames[0])
 	tassert.CheckFatal(t, err)
 	for _, objName := range objects.objNames {
 		checkObjectChunked(t, bp, bck, objName, multipartChunkSize)
@@ -90,8 +91,7 @@ func TestRebalanceAutoChunks(t *testing.T) {
 	moved := 0
 	// Only objects owned by the maintenance target must move to another target.
 	for _, objName := range objects.objNames {
-		uname := meta.CloneBck(&bck).MakeUname(objName)
-		previous, err := smap.HrwName2T(uname)
+		previous, err := smap.HrwObjName2T(cbck, objName)
 		tassert.CheckFatal(t, err)
 		if previous.ID() != owner.ID() {
 			// Unmoved objects retain the client's two 48KiB parts.
@@ -99,7 +99,7 @@ func TestRebalanceAutoChunks(t *testing.T) {
 			continue
 		}
 		// Moved objects must use the bucket's three 32KiB chunks.
-		receiver, err := updated.HrwName2T(uname)
+		receiver, err := updated.HrwObjName2T(cbck, objName)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, receiver.ID() != owner.ID(), "expected %s to move off %s", objName, owner.ID())
 		checkObjectChunked(t, bp, bck, objName, chunkPolicySize)

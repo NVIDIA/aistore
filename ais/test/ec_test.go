@@ -35,6 +35,8 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/xact"
+
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -1899,7 +1901,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		// 1) hack: calculate which targets stored a replica
 		cbck := meta.NewBck(bck.Name, bck.Provider, cmn.NsGlobal)
 		uname := cbck.MakeUname(ecTestDir + objName)
-		targets, err := o.smap.HrwTargetList(cos.UnsafeSptr(uname), o.parityCnt+1)
+		targets, err := o.smap.HrwObjTargetList(cbck, onexxh.Checksum64S(uname, cos.MLCG32), o.parityCnt+1)
 		tassert.CheckFatal(t, err)
 
 		mainTarget := targets[0]

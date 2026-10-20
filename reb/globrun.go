@@ -768,7 +768,7 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) (bool /*handedOff*/, erro
 		}
 	}
 
-	tsi, err := rargs.smap.HrwHash2T(lom.Digest())
+	tsi, err := rargs.smap.HrwObjHash2T(lom.Bck(), lom.Digest())
 	if err != nil {
 		rargs.xreb.Abort(err) // smap unusable (abort the whole xaction)
 		return false, err

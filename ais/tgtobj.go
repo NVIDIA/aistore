@@ -40,6 +40,8 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
+
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 //
@@ -1044,7 +1046,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, ecode i
 		smap = goi.t.owner.smap.get()
 	)
 	// NOTE: including targets 'in maintenance mode'
-	tsi, err = smap.HrwHash2Tall(goi.lom.Digest())
+	tsi, err = smap.HrwObjHash2Tall(goi.lom.Bck(), goi.lom.Digest())
 	if err != nil {
 		return false, 0, err
 	}
@@ -1938,9 +1940,17 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	}
 
 	// 1: dst location
+	bckTo := coi.BckTo
+	if bckTo.Props == nil {
+		b := *coi.BckTo
+		_ = b.InitFast(t.owner.bmd) // (not in BMD => no override => default placement)
+		if b.Props != nil {
+			bckTo = &b
+		}
+	}
 	smap := t.owner.smap.Get()
-	uname := coi.BckTo.MakeUname(coi.ObjnameTo)
-	tsi, err := smap.HrwName2T(uname)
+	uname := bckTo.MakeUname(coi.ObjnameTo)
+	tsi, err := smap.HrwObjHash2T(bckTo, onexxh.Checksum64S(uname, cos.MLCG32))
 	if err != nil {
 		return xs.CoiRes{Err: err}
 	}

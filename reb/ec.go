@@ -210,8 +210,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*m
 	var (
 		sliceCnt     = md.Data + md.Parity + 2
 		smap         = reb.smap.Load()
-		uname        = ct.UnamePtr()
-		hrwList, err = smap.HrwTargetList(uname, sliceCnt)
+		hrwList, err = smap.HrwObjTargetList(ct.Bck(), ct.Digest(), sliceCnt)
 	)
 	if err != nil {
 		return nil, err
@@ -326,7 +325,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	}
 
 	smap := reb.smap.Load()
-	hrwTarget, err := smap.HrwHash2T(ct.Digest())
+	hrwTarget, err := smap.HrwObjHash2T(ct.Bck(), ct.Digest())
 	if err != nil || hrwTarget.ID() == core.T.SID() {
 		return err
 	}

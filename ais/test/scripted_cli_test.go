@@ -31,6 +31,21 @@ func TestBucketSummaryPerTargetUsingScript(t *testing.T) {
 	tassert.Fatalf(t, err == nil, "%v\n%s", err, out)
 }
 
+func TestPlacementWeightsUsingScript(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
+	smap := tools.GetClusterMap(t, proxyURL)
+	if smap.IsWeighted() || smap.CountActiveTs() != smap.CountTargets() {
+		t.Skipf("requires an unweighted cluster with all targets active: %s", smap)
+	}
+	enableRebalance(t, tools.BaseAPIParams(proxyURL))
+	cmd := exec.Command("bash", "./scripts/placement-weights.sh")
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.Fatalf(t, err == nil, "%v\n%s", err, out)
+}
+
 func TestGetWarmValidateS3UsingScript(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{
 		CloudBck: true,

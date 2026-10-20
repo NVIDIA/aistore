@@ -934,7 +934,7 @@ func (j *clnJ) peerHasIdentical(lom *core.LOM) bool {
 	if smap == nil {
 		return false
 	}
-	tsi, err := smap.HrwHash2T(lom.Digest())
+	tsi, err := smap.HrwObjHash2T(lom.Bck(), lom.Digest())
 	if err != nil || tsi.ID() == core.T.SID() {
 		return false
 	}

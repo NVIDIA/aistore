@@ -176,7 +176,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 	nat := r.smap.CountActiveTs()
 	wi.refc.Store(int32(nat - 1))
 
-	wi.tsi, err = r.smap.HrwName2T(msg.ToBck.MakeUname(msg.ArchName))
+	wi.tsi, err = r.smap.HrwObjHash2T(archlom.Bck(), archlom.Digest())
 	if err != nil {
 		r.AddErr(err, 4, cos.ModXs)
 		return err
