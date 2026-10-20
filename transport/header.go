@@ -11,7 +11,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/binpack"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
@@ -77,23 +77,23 @@ var (
 func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
 	debug.AssertFunc(func() bool { return usePDU || !hdr.IsUnsized() })
 	off = sizeProtoHdr
-	off = cmn.InsString(off, hbuf, hdr.SID)
-	off = cmn.InsUint16(off, hbuf, hdr.Opcode)
-	off = cmn.InsString(off, hbuf, hdr.Bck.Name)
-	off = cmn.InsString(off, hbuf, hdr.Bck.Provider)
-	off = cmn.InsString(off, hbuf, hdr.Bck.Ns.Name)
-	off = cmn.InsString(off, hbuf, hdr.Bck.Ns.UUID)
-	off = cmn.InsString(off, hbuf, hdr.ObjName)
-	off = cmn.InsBytes(off, hbuf, hdr.Opaque)
-	off = cmn.InsString(off, hbuf, hdr.Demux)
-	off = cmn.InsAttrs(off, hbuf, &hdr.ObjAttrs)
+	off = binpack.InsString(off, hbuf, hdr.SID)
+	off = binpack.InsUint16(off, hbuf, hdr.Opcode)
+	off = binpack.InsString(off, hbuf, hdr.Bck.Name)
+	off = binpack.InsString(off, hbuf, hdr.Bck.Provider)
+	off = binpack.InsString(off, hbuf, hdr.Bck.Ns.Name)
+	off = binpack.InsString(off, hbuf, hdr.Bck.Ns.UUID)
+	off = binpack.InsString(off, hbuf, hdr.ObjName)
+	off = binpack.InsBytes(off, hbuf, hdr.Opaque)
+	off = binpack.InsString(off, hbuf, hdr.Demux)
+	off = hdr.ObjAttrs.InsAttrs(off, hbuf)
 	word1 := uint64(off - sizeProtoHdr)
 	if usePDU {
 		word1 |= pduStreamFl
 	}
-	cmn.InsUint64(0, hbuf, word1)
+	binpack.InsUint64(0, hbuf, word1)
 	checksum := xoshiro256.Hash(word1)
-	cmn.InsUint64(cos.SizeofI64, hbuf, checksum)
+	binpack.InsUint64(cos.SizeofI64, hbuf, checksum)
 	return
 }
 
@@ -103,9 +103,9 @@ func (pdu *spdu) insHeader() {
 	if pdu.last {
 		word1 |= pduLastFl
 	}
-	cmn.InsUint64(0, buf, word1)
+	binpack.InsUint64(0, buf, word1)
 	checksum := xoshiro256.Hash(word1)
-	cmn.InsUint64(cos.SizeofI64, buf, checksum)
+	binpack.InsUint64(cos.SizeofI64, buf, checksum)
 	pdu.done = true
 }
 
@@ -118,7 +118,7 @@ func (pdu *spdu) insHeader() {
 var noPrevHdr ObjHdr
 
 func (it *iterator) extProtoHdr(hbuf []byte) (hlen int, flags uint64, err error) {
-	d := cmn.NewBinDecoder(hbuf)
+	d := binpack.NewDecoder(hbuf)
 	word1 := d.Uint64()
 	checksum := d.Uint64()
 	if d.Bad() {
@@ -148,7 +148,7 @@ func extObjHeader(body []byte, hlen int, prev *ObjHdr) (hdr ObjHdr, err error) {
 		return hdr, fmt.Errorf("%w: declared %d, buffer %d", ErrHdrMalformed, hlen, len(body))
 	}
 
-	d := cmn.NewBinDecoder(body[:hlen])
+	d := binpack.NewDecoder(body[:hlen])
 	hdr.SID = d.StrCached(prev.SID)
 	hdr.Opcode = d.Uint16()
 	hdr.Bck.Name = d.StrCached(prev.Bck.Name)
@@ -158,7 +158,7 @@ func extObjHeader(body []byte, hlen int, prev *ObjHdr) (hdr ObjHdr, err error) {
 	hdr.ObjName = d.Str()
 	hdr.Opaque = d.Bytes() // NOTE: aliases the receive buffer - see ObjHdr.Opaque
 	hdr.Demux = d.StrCached(prev.Demux)
-	d.Attrs(&hdr.ObjAttrs, &prev.ObjAttrs)
+	hdr.ObjAttrs.ExtAttrs(&d, &prev.ObjAttrs)
 
 	if d.Bad() {
 		return hdr, fmt.Errorf("%w: at offset %d: %w", ErrHdrMalformed, d.Off(), io.ErrUnexpectedEOF)

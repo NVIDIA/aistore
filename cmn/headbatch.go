@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/binpack"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -17,7 +18,7 @@ import (
 // Head-batch (hdb): POST /v1/objects (no bucket in the URL) with a packed body.
 // One request may carry objects from different buckets. See apc.HdbResp for the response.
 //
-// Packed layout (str and attrs: see cmn/binpack.go):
+// Packed layout (str: see cmn/binpack, attrs: see ObjAttrs.InsAttrs):
 //
 //	HdbReq: | nbck uint16 | Bck x nbck | n uint16 | HdbIn x n |
 //	Bck:    | name str | provider str | ns-uuid str | ns-name str |
@@ -79,16 +80,16 @@ func (req *HdbReq) AddBck(bck *Bck) (bidx int32) {
 
 func (req *HdbReq) NewPack() []byte {
 	b := make([]byte, req.PackedSize())
-	off := InsUint16(0, b, len(req.Bcks))
+	off := binpack.InsUint16(0, b, len(req.Bcks))
 	for i := range req.Bcks {
 		off = packHdbBck(off, b, &req.Bcks[i])
 	}
-	off = InsUint16(off, b, len(req.In))
+	off = binpack.InsUint16(off, b, len(req.In))
 	for i := range req.In {
 		in := &req.In[i]
-		off = InsUint16(off, b, int(in.Bidx))
-		off = InsString(off, b, in.Name)
-		off = InsAttrs(off, b, &in.ObjAttrs)
+		off = binpack.InsUint16(off, b, int(in.Bidx))
+		off = binpack.InsString(off, b, in.Name)
+		off = in.InsAttrs(off, b)
 	}
 	debug.Assert(off == len(b), off, " vs ", len(b))
 	return b
@@ -101,13 +102,13 @@ func (req *HdbReq) PackedSize() int {
 	}
 	for i := range req.In {
 		in := &req.In[i]
-		n += cos.SizeofI16 + packedStrSize(in.Name) + packedAttrsSize(&in.ObjAttrs)
+		n += cos.SizeofI16 + binpack.StrSize(in.Name) + in.PackedAttrsSize()
 	}
 	return n
 }
 
 func (req *HdbReq) Unpack(body []byte) error {
-	d := NewBinDecoder(body)
+	d := binpack.NewDecoder(body)
 	nbck := d.Uint16()
 	if d.Bad() {
 		return fmt.Errorf("%s: truncated at offset %d", apc.HdbTag, d.Off())
@@ -131,29 +132,29 @@ func (req *HdbReq) Unpack(body []byte) error {
 		in := &req.In[i]
 		in.Bidx = int32(d.Uint16())
 		in.Name = d.Str()
-		d.Attrs(&in.ObjAttrs, nil /*prev*/)
+		in.ExtAttrs(&d, nil /*prev*/)
 		if d.Bad() {
 			return fmt.Errorf("%s: item %d: truncated at offset %d", apc.HdbTag, i, d.Off())
 		}
 	}
-	if l := d.len(); l != 0 {
+	if l := d.Len(); l != 0 {
 		return fmt.Errorf("%s: %d trailing bytes", apc.HdbTag, l)
 	}
 	return nil
 }
 
 func hdbBckSize(b *Bck) int {
-	return packedStrSize(b.Name) + packedStrSize(b.Provider) + packedStrSize(b.Ns.UUID) + packedStrSize(b.Ns.Name)
+	return binpack.StrSize(b.Name) + binpack.StrSize(b.Provider) + binpack.StrSize(b.Ns.UUID) + binpack.StrSize(b.Ns.Name)
 }
 
 func packHdbBck(off int, to []byte, b *Bck) int {
-	off = InsString(off, to, b.Name)
-	off = InsString(off, to, b.Provider)
-	off = InsString(off, to, b.Ns.UUID)
-	return InsString(off, to, b.Ns.Name)
+	off = binpack.InsString(off, to, b.Name)
+	off = binpack.InsString(off, to, b.Provider)
+	off = binpack.InsString(off, to, b.Ns.UUID)
+	return binpack.InsString(off, to, b.Ns.Name)
 }
 
-func unpackHdbBck(d *BinDecoder, b *Bck) {
+func unpackHdbBck(d *binpack.Decoder, b *Bck) {
 	b.Name = d.Str()
 	b.Provider = d.Str()
 	b.Ns.UUID = d.Str()
