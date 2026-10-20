@@ -247,9 +247,9 @@ Example: mount xfs with the following performance-optimized parameters (that als
 noatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier
 ```
 
-> AIStore also tracks object access times when used as a cache tier in front of supported [backends](providers.md). It caches object metadata and updates access times in memory to avoid writes on reads. An in-memory access-time update marks the metadata `dirty`; when uncached, dirty metadata is flushed with the latest access time. Flush timing depends on free memory and time since last access; with ample memory, dirty metadata is flushed after 1 hour of inactivity.
+> AIStore tracks access time for every object, in all buckets - local and [remote](providers.md) alike. To avoid writes on reads, object metadata is cached in memory, and a read updates only the cached access time. The latter is written to the filesystem when the metadata is evicted from the cache - after `timeout.object_md` (default 2h) without access - and on shutdown.
 >
-> Capacity management has four configurable built-in watermarks: cleanup (65%), low (75%), high (90%), and out of space (95%). LRU is disabled by default. For cleanup-before-conditional-LRU behavior, bucket eligibility, and backend lifecycle qualifications, refer to [LRU and Space guidance](storage_svcs.md#lru-and-space).
+> Capacity management uses four configurable watermarks: cleanup (65%), low (75%), high (90%), and out of space (95%). LRU is disabled by default. See [LRU and Space](storage_svcs.md#lru-and-space).
 
 External links:
 

@@ -480,6 +480,9 @@ func (t *target) validateNprops(bck *meta.Bck, msg *actMsgExt) (nprops *cmn.Bpro
 	if !nprops.EC.Enabled && bck.Props.EC.Enabled {
 		err = nil
 	}
+	if nprops.LRU.Enabled && !bck.Props.LRU.Enabled {
+		err = nil
+	}
 	return
 }
 
