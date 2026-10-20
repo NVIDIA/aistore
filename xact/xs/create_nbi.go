@@ -40,6 +40,8 @@ import (
 // - single backend.ListObjects(0 in the cluster; filterKeepMine
 // - multiple inventories: a) periodic re-sync, b) cleanup/GC old
 // - disallow user PUT or copy => system buckets (not even admin)
+// - ais:// buckets with no remote backend (e.g., point-in-time snapshot):
+//   (compare w/ npgCtx.nextPageA, which is a single page - large buckets need a paging walk)
 // ==============================================================
 
 // on-disk formatting

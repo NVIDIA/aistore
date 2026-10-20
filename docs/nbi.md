@@ -51,11 +51,14 @@ In practice, NBI turns repeated remote listing into a two-step workflow:
 
 ## Supported buckets
 
-NBI applies to **remote buckets** only: cloud buckets (S3, GCS, Azure, OCI) and remote AIS buckets.
+NBI applies to **remote buckets** only: cloud buckets (S3, GCS, Azure, OCI), remote AIS buckets, and `ais://` buckets with a remote [backend](/docs/bucket.md#creating-backend-relationships).
 
-It is not currently supported for in-cluster `ais://` buckets. The main reason is simple: NBI exists to avoid the latency and repeated backend traffic of **remote** listing. For local AIS buckets, namespace metadata is already local and served at native AIS speed, so an additional inventory layer would bring little practical benefit.
+Currently, an attempt to create an inventory for an in-cluster `ais://` bucket (no backend) will fail with "not a remote bucket".
 
-> A point-in-time snapshot of an in-cluster bucket may still be a valid future use case, but that is not part of the current implementation.
+The rationale is simple: NBI exists to avoid the latency and repeated backend traffic of **remote** listing. For local AIS buckets, namespace metadata is already local and served at native AIS speed, so an additional inventory layer would bring little practical benefit.
+
+> However, NBI may in the future be amended to support `ais://` buckets as well - for instance, to support point-in-time snapshots
+> The latter may still be a valid future use case; it can be added upon request.
 
 ## Overview
 

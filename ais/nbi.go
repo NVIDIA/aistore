@@ -19,6 +19,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+func errRemoteOnlyNBI(bck *meta.Bck) error {
+	return cmn.NewErrUnsupp("create inventory for", bck.Cname("")+" (not a remote bucket)")
+}
+
 //
 // proxy --------------------------------------------
 //

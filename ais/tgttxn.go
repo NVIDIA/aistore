@@ -1212,6 +1212,9 @@ func (t *target) createNBI(c *txnSrv) (string, error) {
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
+		if !c.bck.IsRemote() {
+			return "", errRemoteOnlyNBI(c.bck)
+		}
 
 		// only one (create-inventory, bucket) at a time
 		flt := xreg.Flt{Kind: apc.ActCreateNBI, Bck: c.bck}

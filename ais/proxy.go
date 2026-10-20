@@ -1890,6 +1890,10 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 	case apc.ActCreateNBI:
+		if !bck.IsRemote() {
+			p.writeErr(w, r, errRemoteOnlyNBI(bck))
+			return
+		}
 		if err := p.initTrySysBck(w, r, msg, meta.SysBckNBI()); err != nil {
 			return
 		}

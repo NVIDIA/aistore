@@ -145,7 +145,13 @@ func (t *target) Backend(bck *meta.Bck) core.Backend { // as core.Target
 	}
 	provider := bck.Provider
 	if bck.Props != nil {
-		provider = bck.RemoteBck().Provider
+		rbck := bck.RemoteBck()
+		if rbck == nil {
+			// ais:// bucket without backend
+			dummy, _ := backend.NewDummyBackend(t, nil)
+			return dummy
+		}
+		provider = rbck.Provider
 	}
 	config := cmn.GCO.Get()
 	if _, ok := config.Backend.Providers[provider]; ok {
