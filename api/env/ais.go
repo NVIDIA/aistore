@@ -48,17 +48,18 @@ const (
 
 	// via ais-k8s repo
 	// see also:
-	// * https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go
+	// * https://github.com/NVIDIA/ais-k8s/blob/main/operator/internal/resources/aistore/cmn/env.go
 	// * docs/environment-vars.md
-	AisK8sPod                  = "MY_POD"
-	AisK8sNode                 = "MY_NODE"
-	AisK8sNamespace            = "K8S_NS"
-	AisK8sServiceName          = "MY_SERVICE"
-	AisK8sPublicHostname       = "AIS_PUBLIC_HOSTNAME"
-	AisK8sClusterDomain        = "AIS_K8S_CLUSTER_DOMAIN"
-	AisK8sHostNetwork          = "HOST_NETWORK"
-	AisK8sPublicDNSMode        = "AIS_PUBLIC_DNS_MODE"
-	AisK8sEnableExternalAccess = "ENABLE_EXTERNAL_ACCESS"
+	AisK8sPod                    = "MY_POD"
+	AisK8sNode                   = "MY_NODE"
+	AisK8sNamespace              = "K8S_NS"
+	AisK8sServiceName            = "MY_SERVICE"
+	AisK8sPublicHostname         = "AIS_PUBLIC_HOSTNAME"
+	AisK8sPublicHostnameOverride = "AIS_PUBLIC_HOSTNAME_OVERRIDE"
+	AisK8sClusterDomain          = "AIS_K8S_CLUSTER_DOMAIN"
+	AisK8sHostNetwork            = "HOST_NETWORK"
+	AisK8sPublicDNSMode          = "AIS_PUBLIC_DNS_MODE"
+	AisK8sEnableExternalAccess   = "ENABLE_EXTERNAL_ACCESS"
 
 	// AisK8sPublicDNSMode values
 	PubNetDNSModeIP   string = "IP"

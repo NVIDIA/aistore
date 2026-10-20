@@ -30,7 +30,75 @@ configuration. Once cluster configuration has been persisted, that persisted
 state is authoritative; editing or regenerating the initial file does not
 update a running cluster.
 
-## Maintaining the hardcoded defaults
+## Local Network Configuration
+
+`aisinit` configures the network settings for each AIS instance based on the provided environment variables.
+
+### Intra-cluster Hostnames
+
+By default, `aisinit` sets the intra-cluster (data and control) hostnames to the pod DNS name.
+For target nodes with env var `HOST_NETWORK` set to true and IP [DNS mode](#dns-mode), `aisinit` clears the intra-data value to discover the host IP at runtime.
+
+### DNS Mode
+
+The DNS mode (`AIS_PUBLIC_DNS_MODE`) controls how the public hostname is determined for external client access.
+This affects TLS certificate validation since clients connect using this hostname.
+This value is set by [publicNetDNSMode](https://github.com/NVIDIA/ais-k8s/blob/main/docs/tls.md#using-an-operator-managed-certificate) in the AIS operator.
+
+Modes:
+
+- **IP (default)**
+  - Use host IP address (`status.hostIP`).
+  - Simple but requires IP SANs in TLS certs.
+  - For clusters which use auto-scaling, consider using Node or Pod modes instead since the host IP will change.
+- **Node**
+  - Use Kubernetes node name (`spec.nodeName`).
+  - Useful when node names are resolvable DNS names (e.g., AWS EC2 private DNS like ip-10-0-1-5.ec2.internal).
+- **Pod**
+  - Use pod DNS name (e.g. `pod.service.namespace.svc.cluster.local`).
+  - Note that with hostNetwork, pod DNS resolves to the host IP.
+
+This mode is used by the operator to set the value for env var `AIS_PUBLIC_HOSTNAME`.
+`aisinit` uses this value for the AIS node's public hostname if not superseded by other options.
+When `hostPort` is configured, the operator sets `AIS_PUBLIC_HOSTNAME` to the following values for `aisinit` to use:
+
+| Mode           | `AIS_PUBLIC_HOSTNAME`                   |
+|----------------|-----------------------------------------|
+| `IP` (default) | `status.hostIP`                         |
+| `Node`         | `spec.nodeName`                         |
+| `Pod`          | `status.hostIP` (not used by `aisinit`) |
+
+> Note: When a public domain is configured, AIS Operator v4.2.0 and later set `AIS_PUBLIC_HOSTNAME` on targets to `<pod>.<domain>`.
+> To prevent `aisinit` from replacing this value with the LoadBalancer IP, the operator also sets `ENABLE_EXTERNAL_ACCESS` to `false`, even when external access is enabled in the AIS custom resource spec.
+> A future release will change this behavior to set `AIS_PUBLIC_HOSTNAME_OVERRIDE` instead.
+
+### Target Public Hostname
+
+`aisinit` uses the first rule that applies:
+
+1. If `AIS_PUBLIC_HOSTNAME_OVERRIDE` is set, `aisinit` uses its value.
+2. If `ENABLE_EXTERNAL_ACCESS` is true, `aisinit` uses the LoadBalancer IP of the target.
+3. If `HOST_NETWORK` is true and the DNS mode is `IP`, `aisinit` leaves the public hostname empty. `aisnode` discovers the host IP at startup.
+4. If the DNS mode is `Pod`, `aisinit` uses the pod DNS name.
+5. If none of the above apply, `aisinit` uses `AIS_PUBLIC_HOSTNAME` as set by the operator in the [section above](#dns-mode).
+
+### Proxy Public Hostname
+
+`aisinit` uses the first rule that applies:
+
+1. If `AIS_PUBLIC_HOSTNAME_OVERRIDE` is set, `aisinit` uses its value.
+2. If the DNS mode is `Pod`, `aisinit` uses the pod DNS name.
+3. Otherwise, `aisinit` uses `AIS_PUBLIC_HOSTNAME` as set by the operator in the [section above](#dns-mode).
+
+A proxy ignores `ENABLE_EXTERNAL_ACCESS` and `HOST_NETWORK`.
+
+### Hostname Map
+
+When `--hostname_map_file` is set, `aisinit` looks up the public hostname in the map.
+This applies to targets and proxies.
+If the map has no entry for the hostname or the entry is empty, the hostname does not change.
+
+## Maintaining the Hard-coded Defaults
 
 The values in `config.go` are production bootstrap defaults, not a duplicate of
 every AIStore default in `cmn/config.go`. Maintain them by reconciling three
@@ -70,7 +138,7 @@ See related:
   - in particular, section [Configuration: startup ordering and deployment generators](https://github.com/NVIDIA/aistore/blob/main/docs/configuration.md#startup-ordering-and-deployment-generators)
 * [Top-level README](https://github.com/NVIDIA/aistore/blob/main/cmd/README.md)
 
-## Build and deployment
+## Build and Deployment
 
 The image definition lives in
 [`deploy/prod/k8s/aisinit_container`](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/k8s/aisinit_container).

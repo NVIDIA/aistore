@@ -142,24 +142,12 @@ $ go install github.com/NVIDIA/aistore/cmd/ishard@latest
 
 ## aisinit
 
-`aisinit` is a Kubernetes init container that runs before `aisnode` in the same pod. It takes a template local configuration and produces the final node config based on the pod's runtime environment.
+`aisinit` is a Kubernetes init container that runs before `aisnode` in the same pod.
+It takes a template local configuration and produces the final node config based on the pod's runtime environment.
 
-Specifically, `aisinit`:
+`aisinit` is not installed as a standalone binary.
+It is built into the `aisinit` container image and deployed via the [AIS Kubernetes operator](https://github.com/NVIDIA/ais-k8s).
+That image is used to deploy an [init container](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) that runs in each AIS pod before the primary container.
 
-- resolves pod DNS names for intra-cluster (data and control) networks
-- sets the public hostname based on the configured DNS mode (`IP`, `Node`, or `Pod`)
-- fetches external LoadBalancer IPs for targets when external access is enabled
-- applies optional hostname mappings and cluster config overrides
-
-The DNS mode (`AIS_PUBLIC_DNS_MODE`) controls how the public-facing hostname is determined:
-
-| Mode | Hostname source | Typical use case |
-|---|---|---|
-| `IP` (default) | Host IP (discovered at runtime) | Simple deployments; requires IP SANs in TLS certs |
-| `Node` | Kubernetes node name (`spec.nodeName`) | Environments where node names are resolvable (e.g., AWS EC2 private DNS) |
-| `Pod` | Pod DNS (`pod.service.namespace.svc.cluster.local`) | Host networking + TLS with wildcard certs |
-
-`aisinit` is not installed as a standalone binary. It is built into the `aisinit` container image and deployed via the [AIS Kubernetes operator](https://github.com/NVIDIA/ais-k8s).
-
-For the cluster-configuration side - what `config.go` holds, why, and how the generated file relates to the persisted one -
+For hostname selection, cluster configuration, and maintenance of the bootstrap defaults,
 see [cmd/aisinit/README.md](https://github.com/NVIDIA/aistore/blob/main/cmd/aisinit/README.md).

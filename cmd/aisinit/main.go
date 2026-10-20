@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	jsoniter "github.com/json-iterator/go"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -60,24 +59,128 @@ func failOnError(err error) {
 	os.Exit(1)
 }
 
-func fetchExternalIP(svcName, namespace string) string {
-	config, err := rest.InClusterConfig()
-	failOnError(err)
-	client := kubernetes.NewForConfigOrDie(config)
-	for i := 1; i <= 6; i++ {
-		externalService, err := client.CoreV1().Services(namespace).Get(context.TODO(), svcName, metav1.GetOptions{})
-		if err != nil && errors.IsNotFound(err) {
-			failOnError(err)
+func retry[T any](what string, maxAttempts int, interval time.Duration, check func() (T, error)) (T, error) {
+	var (
+		val T
+		err error
+	)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if val, err = check(); err == nil {
+			return val, nil
 		}
-
-		if err == nil && len(externalService.Status.LoadBalancer.Ingress) > 0 {
-			return externalService.Status.LoadBalancer.Ingress[0].IP
+		nlog.Warningf("couldn't %s, attempt: %d, error: %v", what, attempt, err)
+		if attempt != maxAttempts {
+			time.Sleep(interval)
 		}
-		nlog.Warningf("couldn't fetch valid external loadbalancer IP for svc %q, attempt: %d", svcName, i)
-		time.Sleep(retryInterval)
 	}
-	failOnCondition(false, "Failed to fetch external IP for target")
-	return ""
+	return val, err
+}
+
+func loadBalancerIP(client kubernetes.Interface, svcName, namespace string) (string, error) {
+	svc, err := client.CoreV1().Services(namespace).Get(context.TODO(), svcName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	if len(svc.Status.LoadBalancer.Ingress) == 0 {
+		return "", fmt.Errorf("svc %q has no loadbalancer ingress", svcName)
+	}
+	return svc.Status.LoadBalancer.Ingress[0].IP, nil
+}
+
+type hostNetParams struct {
+	k8s            kubernetes.Interface // optional; defaults to the in-cluster client
+	podName        string
+	namespace      string
+	serviceName    string
+	clusterDomain  string
+	publicHostName string
+	override       string
+	dnsMode        string
+	isTarget       bool
+	hostNetwork    bool
+	externalAccess bool
+}
+
+func (p *hostNetParams) podDNS() string {
+	return fmt.Sprintf("%s.%s.%s.svc.%s", p.podName, p.serviceName, p.namespace, p.clusterDomain)
+}
+
+// externalIP returns the LoadBalancer IP of the target's Service. It exits the process on failure.
+func (p *hostNetParams) externalIP() string {
+	if p.k8s == nil {
+		config, err := rest.InClusterConfig()
+		failOnError(err)
+		p.k8s = kubernetes.NewForConfigOrDie(config)
+	}
+	svcName := p.podName
+	what := fmt.Sprintf("fetch external loadbalancer IP for svc %q", svcName)
+	ip, err := retry(what, 6, retryInterval, func() (string, error) {
+		return loadBalancerIP(p.k8s, svcName, p.namespace)
+	})
+	failOnError(err)
+	return ip
+}
+
+// With host networking in IP mode, aisnode discovers the target's own IP at startup.
+func (p *hostNetParams) discoversIP() bool {
+	return p.isTarget && p.hostNetwork && p.dnsMode == env.PubNetDNSModeIP
+}
+
+// Order: explicit override, LoadBalancer IP (target with external access),
+// runtime discovery (empty), then the DNS mode.
+func (p *hostNetParams) resolvePublicHostname() string {
+	switch {
+	case p.override != "":
+		return p.override
+	case p.isTarget && p.externalAccess:
+		return p.externalIP()
+	case p.discoversIP():
+		return ""
+	case p.dnsMode == env.PubNetDNSModePod:
+		return p.podDNS()
+	case p.dnsMode != env.PubNetDNSModeNode && p.dnsMode != env.PubNetDNSModeIP:
+		// Fall back to publicHostName; if it is empty then aisnode will discover IP at startup.
+		// We do not error here to preserve backwards compatibility for deployments that are using
+		// ais-init:latest without a newer version of the ais-operator.
+		nlog.Warningf("unknown %s %q, defaulting to '%s' for Hostname", env.AisK8sPublicDNSMode, p.dnsMode, p.publicHostName)
+	}
+	return p.publicHostName
+}
+
+func (p *hostNetParams) apply(hostNet *aiscmn.LocalNetConfig) {
+	podDNS := p.podDNS()
+	hostNet.HostnameIntraControl = podDNS
+	hostNet.HostnameIntraData = podDNS
+	if p.discoversIP() {
+		hostNet.HostnameIntraData = ""
+	}
+	hostNet.Hostname = p.resolvePublicHostname()
+}
+
+// configureHostNet sets the hostnames in hostNet from the pod environment and the optional hostname map.
+func configureHostNet(hostNet *aiscmn.LocalNetConfig, role, hostnameMapFile string) {
+	params := hostNetParams{
+		podName:        getRequiredEnv(env.AisK8sPod),
+		namespace:      getRequiredEnv(env.AisK8sNamespace),
+		serviceName:    getRequiredEnv(env.AisK8sServiceName),
+		clusterDomain:  getOrDefaultEnv(env.AisK8sClusterDomain, defaultClusterDomain),
+		publicHostName: getOrDefaultEnv(env.AisK8sPublicHostname, ""),
+		override:       getOrDefaultEnv(env.AisK8sPublicHostnameOverride, ""),
+		dnsMode:        getOrDefaultEnv(env.AisK8sPublicDNSMode, env.PubNetDNSModeIP),
+		isTarget:       role == aisapc.Target,
+	}
+	if params.isTarget {
+		var err error
+		params.hostNetwork, err = cos.ParseBool(getOrDefaultEnv(env.AisK8sHostNetwork, "false"))
+		failOnError(err)
+		params.externalAccess, err = cos.ParseBool(getOrDefaultEnv(env.AisK8sEnableExternalAccess, "false"))
+		failOnError(err)
+	}
+
+	params.apply(hostNet)
+	if hostnameMapFile != "" {
+		hostNet.Hostname = getMappedHostname(hostNet.Hostname, hostnameMapFile)
+	}
 }
 
 func getMappedHostname(original, mapPath string) string {
@@ -123,71 +226,7 @@ func main() {
 	err = jsoniter.Unmarshal(confBytes, &localConf)
 	failOnError(err)
 
-	namespace := getRequiredEnv(env.AisK8sNamespace)
-	serviceName := getRequiredEnv(env.AisK8sServiceName)
-	podName := getRequiredEnv(env.AisK8sPod)
-	clusterDomain := getOrDefaultEnv(env.AisK8sClusterDomain, defaultClusterDomain)
-	publicHostName := getOrDefaultEnv(env.AisK8sPublicHostname, "")
-	publicDNSMode := getOrDefaultEnv(env.AisK8sPublicDNSMode, env.PubNetDNSModeIP)
-	podDNS := fmt.Sprintf("%s.%s.%s.svc.%s", podName, serviceName, namespace, clusterDomain)
-
-	localConf.HostNet.HostnameIntraControl = podDNS
-	localConf.HostNet.HostnameIntraData = podDNS
-
-	// publicDNSMode controls how the public hostname is determined for external client access.
-	// This affects TLS certificate validation since clients connect using this hostname.
-	//
-	// Modes:
-	//   "IP" (default) - Use host IP address. Simple but requires IP SANs in TLS certs.
-	//                    With hostNetwork, hostname is cleared and discovered at runtime.
-	//                    For clusters which use auto scaling, consider using Node or Pod
-	//                    modes instead since the host IP will change.
-	//
-	//   "Node" - Use Kubernetes node name (spec.nodeName). Useful when node names are
-	//            resolvable DNS names (e.g., AWS EC2 private DNS like ip-10-0-1-5.ec2.internal).
-	//            but using "Pod" DNS + host networking in environments that support it may be
-	//            preferable to allow more specificity.
-	//
-	//   "Pod" - Use pod DNS name (pod.service.namespace.svc.cluster.local). With hostNetwork,
-	//           pod DNS resolves to the host IP, enabling TLS with wildcard certs matching
-	//           *.service.namespace.svc.cluster.local. Recommended for hostNetwork + TLS.
-	//
-	// When using the ais-operator, it sets the publicHostName to the node name for Node mode
-	// and the host IP for IP mode via the downward API based on the provided publicNetDNSMode in the
-	// AIStore spec.
-	switch publicDNSMode {
-	case env.PubNetDNSModePod:
-		localConf.HostNet.Hostname = podDNS
-	case env.PubNetDNSModeNode, env.PubNetDNSModeIP:
-		localConf.HostNet.Hostname = publicHostName
-	default:
-		nlog.Warningf("unknown AIS_PUBLIC_DNS_MODE %q, defaulting to '%s' for Hostname", publicDNSMode, publicHostName)
-		// Fall back to publicHostName; if it is empty then aisnode will discover IP at startup.
-		// We do not error here to preserve backwards compatibility for deployments that are using
-		// ais-init:latest without a newer version of the ais-operator.
-		localConf.HostNet.Hostname = publicHostName
-	}
-
-	if role == aisapc.Target {
-		useHostNetwork, err := cos.ParseBool(getOrDefaultEnv(env.AisK8sHostNetwork, "false"))
-		failOnError(err)
-
-		// For IP mode with host networking, clear hostnames to let ais node discover IP at startup
-		if useHostNetwork && publicDNSMode == env.PubNetDNSModeIP {
-			localConf.HostNet.HostnameIntraData = ""
-			localConf.HostNet.Hostname = ""
-		}
-
-		useExternalLB, err := cos.ParseBool(getOrDefaultEnv(env.AisK8sEnableExternalAccess, "false"))
-		failOnError(err)
-		if useExternalLB {
-			localConf.HostNet.Hostname = fetchExternalIP(podName, namespace)
-		}
-	}
-
-	if hostnameMapFile != "" {
-		localConf.HostNet.Hostname = getMappedHostname(localConf.HostNet.Hostname, hostnameMapFile)
-	}
+	configureHostNet(&localConf.HostNet, role, hostnameMapFile)
 
 	data, err := jsoniter.Marshal(localConf)
 	failOnError(err)
