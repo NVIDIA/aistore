@@ -46,6 +46,10 @@ func (p *proxy) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryB
 			return
 		}
 	} else {
+		// multiple buckets: same permission as list-buckets
+		if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err != nil {
+			return
+		}
 		bck = (*meta.Bck)(qbck) // keep as is for subsequent bmd.Range()
 	}
 
@@ -104,6 +108,12 @@ func (p *proxy) bgetNBI(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryB
 
 // currently, create/destroy inventory requires admin perm
 func (p *proxy) destroyNBI(w http.ResponseWriter, r *http.Request, bck *meta.Bck, am actMsgRaw) {
+	if name := am.msg.Name; name != "" {
+		if err := cos.CheckAlphaPlus(name, "inventory name"); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+	}
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}

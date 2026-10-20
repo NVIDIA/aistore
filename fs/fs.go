@@ -1115,15 +1115,19 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) error {
 // - unlike DestroyBucket, there is no undelete semantics - we remove all matching subtrees
 // - failures are best-effort but reported to FSHC
 func DestroyNBI(op string, bck *cmn.Bck, invName string /*optional*/) error {
+	prefix := string(bck.MakeUname(""))
+	if invName != "" {
+		// (same validation as create-inventory)
+		if err := cos.CheckAlphaPlus(invName, "inventory name"); err != nil {
+			return err
+		}
+		prefix = filepath.Join(prefix, invName)
+	}
 	var (
 		n      int
 		avail  = GetAvail()
 		sysBck = meta.SysBckNBI().Bucket()
-		prefix = string(bck.MakeUname(""))
 	)
-	if invName != "" {
-		prefix = filepath.Join(prefix, invName)
-	}
 	for _, mi := range avail {
 		nerr := 0
 		// subset of content types used for NBI
