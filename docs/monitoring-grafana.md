@@ -256,8 +256,10 @@ Grafana can be configured to send alerts based on metric thresholds:
 Set up alerts based on the AIStore node state flags (refer to [Node Alerts in AIStore Prometheus docs](/docs/monitoring-prometheus.md#node-alerts) for all available states):
 
 1. Create an alert for red alert conditions:
-   - Condition: `(floor(ais_target_state_flags{node_id=~"$node"} / 256) % 2) == 1 or (floor(ais_target_state_flags{node_id=~"$node"} / 512) % 2) == 1 or (floor(ais_target_state_flags{node_id=~"$node"} / 8192) % 2) == 1`
-   - Description: "OOS, OOM, or DiskFault detected"
+   - Condition: any red flag set, e.g. OOS, OOM, or DiskFault:
+     `(floor(ais_target_state_flags{node_id=~"$node"} / 256) % 2) == 1 or (floor(ais_target_state_flags{node_id=~"$node"} / 512) % 2) == 1 or (floor(ais_target_state_flags{node_id=~"$node"} / 8192) % 2) == 1`;
+     for the complete list of red flags, see the critical query in [Node Alerts](/docs/monitoring-prometheus.md#prometheus-queries)
+   - Description: "Critical node state alert detected"
    - Severity: Critical
 
 2. Create an alert for warning conditions:

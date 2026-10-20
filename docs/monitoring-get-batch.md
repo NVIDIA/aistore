@@ -36,7 +36,7 @@ The tables pair internal metric names with exported per-target Prometheus names.
 | `getbatch.obj.size` | `ais_target_getbatch_obj_bytes` | Cumulative logical bytes of successfully assembled whole-object entries. |
 | `getbatch.file.size` | `ais_target_getbatch_file_bytes` | Cumulative logical bytes of successfully assembled shard-extracted files. |
 
-These totals exclude missing-entry placeholders. They measure assembly progress, not guaranteed client-delivered payload: a buffered work item can count an earlier entry and then fail before sending the archive response.
+Missing-entry placeholders are not counted.
 
 ---
 
@@ -52,7 +52,7 @@ These totals exclude missing-entry placeholders. They measure assembly progress,
 * High **rxwait** → clustering, peer-to-peer streaming, SDM performance, or transient disconnects.
 * High **throttle** → DT-level resource pressure (memory load, CPU load, configured Advice).
 
-Together, these metrics measure time spent waiting for peer entries and time spent intentionally throttling. They do not account for every cause of a slower job.
+Together, these two metrics separate time spent waiting on peers from time spent intentionally throttling.
 
 ---
 
@@ -60,10 +60,12 @@ Together, these metrics measure time spent waiting for peer entries and time spe
 
 | Internal name | Prometheus name | Description |
 | ------------- | --------------- | ----------- |
-| `err.soft.getbatch.n` | `ais_target_err_soft_getbatch_count` | Number of soft-error events, including missing objects or archive members represented by missing entries. A work item can contribute multiple increments. |
+| `err.soft.getbatch.n` | `ais_target_err_soft_getbatch_count` | Number of soft errors: missing objects or archived files, stream breaks, and GFN (get-from-neighbor) recoveries. A single work item may contribute multiple increments. |
 | `err.getbatch.n` | `ais_target_err_getbatch_count` | Number of hard errors, including request failures and 429 rejections. |
 
-`MaxSoftErrs` is a configured processing guard for accumulated soft-error events; it can stop a work item but does not guarantee that every over-limit event immediately aborts it. With `ContinueOnErr`, missing objects or archive members can be represented as missing entries. The limit is not a retry budget, and a missing entry is not necessarily recoverable. Hard errors include request-level failures and 429 ("too-many-requests") rejections.
+With `coer` (continue-on-error) set in the request, missing objects and archived files are included in the output as empty placeholders under the `__404__/` prefix, and the request keeps going. The per-request number of soft errors is limited by `get_batch.max_soft_errs`; once exceeded, the work item fails.
+
+Hard errors reflect request-level failures, including 429 ("too-many-requests") rejections.
 
 ---
 

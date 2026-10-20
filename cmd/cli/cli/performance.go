@@ -434,6 +434,11 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.NodeStatu
 	return idle
 }
 
+// `--regex column-name` is case-insensitive
+func compileColsRegex(regexStr string) (*regexp.Regexp, error) {
+	return regexp.Compile("(?i)" + regexStr)
+}
+
 // (main method)
 func showPerfTab(c *cli.Context, ctx *teb.PerfTabCtx, cb perfcb, tag string, totals map[string]int64) error {
 	var (
@@ -458,7 +463,7 @@ func showPerfTab(c *cli.Context, ctx *teb.PerfTabCtx, cb perfcb, tag string, tot
 		tid = node.ID()
 	}
 	if regexStr != "" {
-		regex, err = regexp.Compile(regexStr)
+		regex, err = compileColsRegex(regexStr)
 		if err != nil {
 			return err
 		}
@@ -640,7 +645,7 @@ func showMpathCapHandler(c *cli.Context) error {
 		tid = node.ID()
 	}
 	if regexStr != "" {
-		regex, err = regexp.Compile(regexStr)
+		regex, err = compileColsRegex(regexStr)
 		if err != nil {
 			return err
 		}

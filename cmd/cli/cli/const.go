@@ -585,12 +585,12 @@ var (
 
 	regexColsFlag = cli.StringFlag{
 		Name: regexFlag.Name,
-		Usage: "Regular expression to select table columns (use (?i) for case-insensitive matching), e.g.:\n" +
+		Usage: "Regular expression to select table columns (case-insensitive), e.g.:\n" +
 			indent4 + "\t --regex \"put|err\" - show PUT (count), PUT (total size), and all supported error counters;\n" +
-			indent4 + "\t --regex \"(?i)put|err\" - match PUT and error columns regardless of case;\n" +
+			indent4 + "\t --regex \"Put|ERR\" - same as above;\n" +
 			indent4 + "\t --regex \"[a-z]\" - show all supported metrics, including those that have zero values across all nodes;\n" +
-			indent4 + "\t 'ais performance counters --regex \"AWS-GET|VERSION-CHANGE\"'\t- show AWS backend reads and out-of-band version changes;\n" +
-			indent4 + "\t 'ais performance counters --regex \"gcp-get|version-change\"'\t- show Google Cloud backend reads and out-of-band version changes;",
+			indent4 + "\t --regex \"aws-get|version-change\" - show AWS backend reads and out-of-band object version changes;\n" +
+			indent4 + "\t --regex \"gcp-get|version-change\" - same as above for Google Cloud ('gs://')",
 	}
 	allColumnsFlag = cli.BoolFlag{
 		Name:  "all-columns",

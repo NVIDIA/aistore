@@ -427,7 +427,7 @@ func showDiskStats(c *cli.Context, tid string) error {
 		numTs = 1
 	}
 	if regexStr != "" {
-		regex, err = regexp.Compile(regexStr)
+		regex, err = compileColsRegex(regexStr)
 		if err != nil {
 			return err
 		}

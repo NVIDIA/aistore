@@ -29,24 +29,21 @@ OPTIONS:
    non-verbose,nv  Non-verbose (quiet) output, minimized reporting, fewer warnings
    refresh         Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                    valid time units: ns, us (or µs), ms, s (default), m, h
-   regex           Regular expression to select table columns (use (?i) for case-insensitive matching), e.g.:
+   regex           Regular expression to select table columns (case-insensitive), e.g.:
                     --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
-                    --regex "(?i)put|err" - match PUT and error columns regardless of case;
+                    --regex "Put|ERR" - same as above;
                     --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
-                    'ais performance counters --regex "AWS-GET|VERSION-CHANGE"'  - show AWS backend reads and out-of-band version changes;
-                    'ais performance counters --regex "gcp-get|version-change"'  - show Google Cloud backend reads and out-of-band version changes;
+                    --regex "aws-get|version-change" - show AWS backend reads and out-of-band object version changes;
+                    --regex "gcp-get|version-change" - same as above for Google Cloud ('gs://')
    units           Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                    iec - IEC format, e.g.: KiB, MiB, GiB (default)
                    si  - SI (metric) format, e.g.: KB, MB, GB
                    raw - do not convert to (or from) human-readable format
    verbose,v       Verbose output
    help, h         Show help
-
 ```
 
-The backend-read and out-of-band version-change examples use `ais performance counters`; version-change counters are not available in the throughput or disk views.
-
-> Note that `ais show performance` and its shorter versioni, `ais performance`, can be used interchangeably.
+> Note that `ais show performance` and its shorter version, `ais performance`, can be used interchangeably.
 
 ## `ais performance throughput`
 
@@ -61,26 +58,22 @@ $ ais performance throughput --refresh 30
 Example usage:
 
 ```console
-$ ais show performance latency --refresh 10 --regex "AWS-GET|GET"
+$ ais show performance latency --refresh 10 --regex get
 ```
 
-The following columns illustrate a subset of possible matches; they are not captured from cluster output or benchmark measurements. The broad `GET` pattern can select other GET-related columns too:
+Column naming:
 
-```text
-TARGET          AWS-GET(n)  AWS-GET(t)  GET(n)  GET(t)
-t[example]      ...         ...         ...     ...
-```
+* `(n)` - number of operations
+* `(t)` - average latency over the refresh interval: change in cumulative time divided by change in count; shown as 0 when fewer than 4 requests complete during the interval
 
-`(n)` denotes a count. For each target, `(t)` is computed from changes in cumulative nanoseconds and counts only when both endpoint counters are present and the count increases by at least 4. With 1–3 requests, the displayed latency can be `0`; that does not mean service latency was zero. Without `--regex`, columns with zero activity can be omitted. With an explicit `--regex`, registered matching columns are included even if their values are zero; a regex cannot add an unregistered metric.
+| Columns | Meaning |
+| ------- | ------- |
+| `GET(n)`, `GET(t)` | user GET requests, warm and cold; for cold GETs, latency includes reading from the remote backend; reads by copy/transform jobs are not included |
+| `AWS-GET(n)`, `AWS-GET(t)` | reads from the AWS (S3) backend - by cold GETs and also by prefetch, blob download, and copy/transform jobs; latency includes storing (or copying/transforming) the object locally |
 
-| Metric | Meaning |
-| ------ | ------- |
-| `GET(n)` | Warm and cold object GETs; excludes internal `GetObjReader` calls (for example, from copy or transform jobs), but counts successful GFN peer HTTP GETs through the normal GET response path. |
-| `AWS-GET(n)` | S3-backend reads, including copy or transform, prefetch, and blob downloads; not a user-only cold GET counter. Internal name: `aws.get.n`. |
-| `AWS-GET(t)` | Interval latency derived from `aws.get.ns.total` and `aws.get.n`, including backend work to store, copy, or transform objects. |
-| `GET(t)` | Object GET latency, including remote work on cold GETs. |
+Other backends follow the same convention: `GCP-GET`, `AZURE-GET`, `OCI-GET`, and `REMAIS-GET` (remote AIS cluster).
 
-The former cold-GET-specific count, remote-read/write latency, and size columns are no longer reported. Backend reads and ordinary GETs count different operations; do not subtract one from the other to infer cold user GETs.
+Since backend reads include job traffic, the difference between `AWS-GET(n)` and `GET(n)` is not the number of cold GETs.
 
 ## `ais show performance counters`
 
@@ -103,19 +96,18 @@ OPTIONS:
    non-verbose,nv  Non-verbose (quiet) output, minimized reporting, fewer warnings
    refresh         Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                    valid time units: ns, us (or µs), ms, s (default), m, h
-   regex           Regular expression to select table columns (use (?i) for case-insensitive matching), e.g.:
+   regex           Regular expression to select table columns (case-insensitive), e.g.:
                     --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
-                    --regex "(?i)put|err" - match PUT and error columns regardless of case;
+                    --regex "Put|ERR" - same as above;
                     --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
-                    'ais performance counters --regex "AWS-GET|VERSION-CHANGE"'  - show AWS backend reads and out-of-band version changes;
-                    'ais performance counters --regex "gcp-get|version-change"'  - show Google Cloud backend reads and out-of-band version changes;
+                    --regex "aws-get|version-change" - show AWS backend reads and out-of-band object version changes;
+                    --regex "gcp-get|version-change" - same as above for Google Cloud ('gs://')
    units           Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                    iec - IEC format, e.g.: KiB, MiB, GiB (default)
                    si  - SI (metric) format, e.g.: KB, MB, GB
                    raw - do not convert to (or from) human-readable format
    verbose,v       Verbose output
    help, h         Show help
-
 ```
 
 ## `ais performance disk`
@@ -134,17 +126,16 @@ OPTIONS:
    no-headers,H  Display tables without headers
    refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                  valid time units: ns, us (or µs), ms, s (default), m, h
-   regex         Regular expression to select table columns (use (?i) for case-insensitive matching), e.g.:
+   regex         Regular expression to select table columns (case-insensitive), e.g.:
                   --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
-                  --regex "(?i)put|err" - match PUT and error columns regardless of case;
+                  --regex "Put|ERR" - same as above;
                   --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
-                  'ais performance counters --regex "AWS-GET|VERSION-CHANGE"'  - show AWS backend reads and out-of-band version changes;
-                  'ais performance counters --regex "gcp-get|version-change"'  - show Google Cloud backend reads and out-of-band version changes;
+                  --regex "aws-get|version-change" - show AWS backend reads and out-of-band object version changes;
+                  --regex "gcp-get|version-change" - same as above for Google Cloud ('gs://')
    summary       Tally up target disks to show per-target read/write summary stats and average utilizations
    units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                  iec - IEC format, e.g.: KiB, MiB, GiB (default)
                  si  - SI (metric) format, e.g.: KB, MB, GB
                  raw - do not convert to (or from) human-readable format
    help, h       Show help
-
 ```

@@ -434,7 +434,7 @@ The latter is the primary implementation, and the preferred way to investigate c
 ```console
 $ ais show cluster stats <TAB-TAB>
 
-counters     throughput   latency      capacity     disk
+counters     throughput   latency      capacity     intra-data   disk
 ```
 
 ```console
@@ -473,22 +473,19 @@ OPTIONS:
    --non-verbose, --nv  Non-verbose (quiet) output, minimized reporting, fewer warnings
    --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                         valid time units: ns, us (or µs), ms, s (default), m, h
-   --regex value        Regular expression to select table columns (use (?i) for case-insensitive matching), e.g.:
+   --regex value        Regular expression to select table columns (case-insensitive), e.g.:
                          --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
-                         --regex "(?i)put|err" - match PUT and error columns regardless of case;
+                         --regex "Put|ERR" - same as above;
                          --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
-                         'ais performance counters --regex "AWS-GET|VERSION-CHANGE"'  - show AWS backend reads and out-of-band version changes;
-                         'ais performance counters --regex "gcp-get|version-change"'  - show Google Cloud backend reads and out-of-band version changes;
+                         --regex "aws-get|version-change" - show AWS backend reads and out-of-band object version changes;
+                         --regex "gcp-get|version-change" - same as above for Google Cloud ('gs://')
    --units value        Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                         iec - IEC format, e.g.: KiB, MiB, GiB (default)
                         si  - SI (metric) format, e.g.: KB, MB, GB
                         raw - do not convert to (or from) human-readable format
    --verbose, -v        Verbose output
    --help, -h           Show help
-
 ```
-
-The backend-read and out-of-band version-change examples use `ais performance counters`; version-change counters are not available in the throughput or disk views.
 
 See also:
 
@@ -512,53 +509,21 @@ OPTIONS:
    no-headers,H  Display tables without headers
    refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                  valid time units: ns, us (or µs), ms, s (default), m, h
-   regex         Regular expression to select table columns (use (?i) for case-insensitive matching), e.g.:
+   regex         Regular expression to select table columns (case-insensitive), e.g.:
                   --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
-                  --regex "(?i)put|err" - match PUT and error columns regardless of case;
+                  --regex "Put|ERR" - same as above;
                   --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
-                  'ais performance counters --regex "AWS-GET|VERSION-CHANGE"'  - show AWS backend reads and out-of-band version changes;
-                  'ais performance counters --regex "gcp-get|version-change"'  - show Google Cloud backend reads and out-of-band version changes;
+                  --regex "aws-get|version-change" - show AWS backend reads and out-of-band object version changes;
+                  --regex "gcp-get|version-change" - same as above for Google Cloud ('gs://')
    summary       Tally up target disks to show per-target read/write summary stats and average utilizations
    units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                  iec - IEC format, e.g.: KiB, MiB, GiB (default)
                  si  - SI (metric) format, e.g.: KB, MB, GB
                  raw - do not convert to (or from) human-readable format
    help, h       Show help
-
 ```
 
 When `TARGET_ID` is not given, disk stats for all targets will be shown and aggregated.
-
-### Options
-
-```console
-$ ais show storage disk --help
-NAME:
-   ais show storage disk - Show disk utilization and read/write statistics
-
-USAGE:
-   ais show storage disk [TARGET_ID] [command options]
-
-OPTIONS:
-   count         Used together with '--refresh' to limit the number of generated reports, e.g.:
-                  '--refresh 10 --count 5' - run 5 times with 10s interval
-   no-headers,H  Display tables without headers
-   refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                 valid time units: ns, us (or µs), ms, s (default), m, h
-   regex         Regular expression to select table columns (use (?i) for case-insensitive matching), e.g.:
-                  --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
-                  --regex "(?i)put|err" - match PUT and error columns regardless of case;
-                  --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
-                  'ais performance counters --regex "AWS-GET|VERSION-CHANGE"'  - show AWS backend reads and out-of-band version changes;
-                  'ais performance counters --regex "gcp-get|version-change"'  - show Google Cloud backend reads and out-of-band version changes;
-   summary       Tally up target disks to show per-target read/write summary stats and average utilizations
-   units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
-                 iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                 si  - SI (metric) format, e.g.: KB, MB, GB
-                 raw - do not convert to (or from) human-readable format
-   help, h       Show help
-
-```
 
 ### Examples
 

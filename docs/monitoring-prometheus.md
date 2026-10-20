@@ -162,8 +162,9 @@ AIS provides labels for filtering and aggregation:
 | `bucket` | Source/destination bucket |
 | `xkind` | Job kind on applicable writing metrics, not a job UUID |
 | `mountpath` | Mountpath on applicable filesystem health metrics |
+| `backend` | Remote backend (`aws`, `gcp`, `azure`, `oci`, `remais`) on `remote_*` metrics |
 
-Labels depend on the metric family: GET and DELETE counters have `bucket`; PUT counters have `bucket` and `xkind`; filesystem health errors can have `mountpath`; disk metrics have `disk`. GetBatch counters have `node_id` but no job UUID or per-file archive-path label. Use job details and logs for per-job or per-file investigation.
+Labels depend on the metric family: GET and DELETE counters have `bucket`; PUT counters have `bucket` and `xkind`; remote backend counters (`remote_get_count`, etc.) have `backend`, `bucket`, and `xkind`; filesystem health errors can have `mountpath`; disk metrics have `disk`. GetBatch counters have `node_id` but no job UUID or per-file archive-path label. Use job details and logs for per-job or per-file investigation.
 
 Labels enable PromQL queries such as:
 
@@ -217,7 +218,7 @@ Use `ais show performance capacity` to inspect target mountpath used and availab
 ## GetBatch (x-moss) Queries
 
 GetBatch is AIStore’s high-performance multi-object retrieval pipeline.
-Metrics describe assembly byte rate, composition (objects vs files), Rx stalls, throttling, and error behavior.
+Metrics describe throughput, composition (objects vs files), Rx stalls, throttling, and error behavior.
 
 ### Work items per second
 
@@ -225,15 +226,13 @@ Metrics describe assembly byte rate, composition (objects vs files), Rx stalls, 
 sum(rate(ais_target_getbatch_count[5m]))
 ```
 
-### Logical assembly byte rate
+### Logical payload throughput
 
 ```promql
 sum(rate(ais_target_getbatch_obj_bytes[5m]))
 +
 sum(rate(ais_target_getbatch_file_bytes[5m]))
 ```
-
-These GetBatch byte counters track successfully assembled entries, not guaranteed bytes delivered to clients. They can include entries from a buffered work item that fails before sending its archive response; missing placeholders do not contribute payload bytes.
 
 ### Stall breakdown (RxWait vs Throttle)
 
@@ -275,6 +274,8 @@ Flags indicate:
 * `OOS` — Out of space
 * `OOM` — Out of memory
 * `DiskFault` — Disk failures
+* `DiskOOS` — Disk out of space
+* `OOCPU` — Out of CPU
 * `HighNumGoroutines` — high goroutine count
 * `CertificateExpired` — TLS expiry
 
@@ -282,7 +283,7 @@ Flags indicate:
 
 * `Rebalancing`, `Resilvering`
 * `RebalanceInterrupted`, `ResilverInterrupted`
-* `LowCapacity`, `LowMemory`, `LowCPU`
+* `LowCapacity`, `LowMemory`, `LowCPU`, `DiskLowCapacity`
 * `NodeRestarted`
 * `MaintenanceMode`
 * `CertWillSoonExpire`
@@ -303,24 +304,28 @@ $ ais show cluster
 
 ### Prometheus Queries
 
-Selected critical flag examples:
+PromQL has no bitwise operators; to test flag bit `2^k`, use `(floor(x / 2^k) % 2) == 1`.
+
+Critical (all red flags):
 
 ```promql
-(floor(ais_target_state_flags / 256) % 2) == 1
-or (floor(ais_target_state_flags / 512) % 2) == 1
-or (floor(ais_target_state_flags / 8192) % 2) == 1
+(floor(ais_target_state_flags / 256) % 2) == 1            # OOS
+or (floor(ais_target_state_flags / 512) % 2) == 1         # OOM
+or (floor(ais_target_state_flags / 8192) % 2) == 1        # DiskFault
+or (floor(ais_target_state_flags / 32768) % 2) == 1       # HighNumGoroutines
+or (floor(ais_target_state_flags / 131072) % 2) == 1      # CertificateExpired
+or (floor(ais_target_state_flags / 1048576) % 2) == 1     # OOCPU
+or (floor(ais_target_state_flags / 4194304) % 2) == 1     # DiskOOS
 ```
 
-The three terms test OOS, OOM, and DiskFault, respectively.
-
-Selected warning flag examples:
+Selected warnings:
 
 ```promql
-(floor(ais_target_state_flags / 2048) % 2) == 1
-or (floor(ais_target_state_flags / 4096) % 2) == 1
+(floor(ais_target_state_flags / 2048) % 2) == 1           # LowCapacity
+or (floor(ais_target_state_flags / 4096) % 2) == 1        # LowMemory
 ```
 
-The two terms test LowCapacity and LowMemory, respectively.
+For bit values of all flags, see [cmn/cos/node_state.go](https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go).
 
 ### Grafana Alert Example
 

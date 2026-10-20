@@ -642,7 +642,7 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	// get-batch error counts
 	r.reg(snode, GetBatchSoftErrCount, KindCounter,
 		&Extra{
-			Help: "get-batch: soft-error events, including missing objects or archive members",
+			Help: "get-batch: number of soft errors (missing entries, stream breaks, GFN recoveries)",
 		},
 	)
 	r.reg(snode, GetBatchErrCountGFN, KindCounter,
