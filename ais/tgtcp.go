@@ -1319,7 +1319,10 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload 
 		return nil
 	}
 
-	if *oldConfig.Space != *newConfig.Space {
+	if *oldConfig.Space != *newConfig.Space ||
+		oldConfig.LRU.CapacityUpdTime != newConfig.LRU.CapacityUpdTime ||
+		oldConfig.Periodic.StatsTime != newConfig.Periodic.StatsTime ||
+		oldConfig.Disk.IostatTimeShort != newConfig.Disk.IostatTimeShort {
 		fs.ExpireCapCache()
 	}
 

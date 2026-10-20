@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ios"
@@ -99,13 +100,19 @@ type (
 		disabled  ratomic.Pointer[MPI]
 
 		// capacity
-		cs        CapStatus
-		csExpires atomic.Int64
-		totalSize atomic.Uint64
+		cs           ratomic.Pointer[capCache]
+		totalSize    atomic.Uint64
+		csRefreshing atomic.Bool
 
 		flags uint64
 
 		mu sync.Mutex
+	}
+	// immutable capacity sample and its expiration
+	capCache struct {
+		CapStatus
+		expires  int64
+		periodic bool // produced (and evaluated) by CapPeriodic
 	}
 	CapStatus struct {
 		// config
@@ -1381,24 +1388,51 @@ func DiskStats(allds cos.AllDiskStats, tcdf *Tcdf, config *cmn.Config, refreshCa
 // cap status: get, refresh, periodic
 //
 
+// return cached capacity; refresh upon expiration (see _next)
 func Cap() (cs CapStatus) {
-	// config
-	cs.OOS = ratomic.LoadInt64(&mfs.cs.OOS)
-	cs.HighWM = ratomic.LoadInt64(&mfs.cs.HighWM)
-	// metrics
-	cs.TotalUsed = ratomic.LoadUint64(&mfs.cs.TotalUsed)
-	cs.TotalAvail = ratomic.LoadUint64(&mfs.cs.TotalAvail)
-	cs.PctMin = ratomic.LoadInt32(&mfs.cs.PctMin)
-	cs.PctAvg = ratomic.LoadInt32(&mfs.cs.PctAvg)
-	cs.PctMax = ratomic.LoadInt32(&mfs.cs.PctMax)
-	return
+	cached := mfs.cs.Load()
+	if cached == nil {
+		return cs // not initialized
+	}
+	if mono.NanoTime() < cached.expires {
+		return cached.CapStatus
+	}
+	return capOnDemand()
+}
+
+// serialize demand refreshes; concurrent callers get the current sample
+func capOnDemand() CapStatus {
+	if !mfs.csRefreshing.CAS(false, true) {
+		return mfs.cs.Load().CapStatus
+	}
+	defer mfs.csRefreshing.Store(false)
+
+	// re-check (vs concurrent refresh)
+	cached := mfs.cs.Load()
+	if mono.NanoTime() < cached.expires {
+		return cached.CapStatus
+	}
+	config := cmn.GCO.Get()
+	cs, err, _ := capRefresh(config, nil /*tcdf*/, false /*periodic*/)
+	if err == nil {
+		return cs
+	}
+	// back off; have CapPeriodic retry and report
+	ncache := &capCache{CapStatus: cached.CapStatus, expires: mono.NanoTime() + int64(cached._next(config))}
+	mfs.cs.CompareAndSwap(cached, ncache)
+	return cached.CapStatus
 }
 
 func NoneShared(numMpaths int) bool { return len(mfs.fsIDs) >= numMpaths }
 
 // sum up && compute %% capacities while skipping already _counted_ filesystems
 func CapRefresh(config *cmn.Config, tcdf *Tcdf) (cs CapStatus, _, errCap error) {
+	return capRefresh(config, tcdf, false /*periodic*/)
+}
+
+func capRefresh(config *cmn.Config, tcdf *Tcdf, periodic bool) (cs CapStatus, _, errCap error) {
 	var (
+		cached = mfs.cs.Load()
 		fsIDs  []cos.FsID
 		avail  = GetAvail()
 		l      = len(avail)
@@ -1489,14 +1523,9 @@ func CapRefresh(config *cmn.Config, tcdf *Tcdf) (cs CapStatus, _, errCap error) 
 		}
 	}
 
-	// update cached state
-	ratomic.StoreInt64(&mfs.cs.HighWM, cs.HighWM)
-	ratomic.StoreInt64(&mfs.cs.OOS, cs.OOS)
-	ratomic.StoreUint64(&mfs.cs.TotalUsed, cs.TotalUsed)
-	ratomic.StoreUint64(&mfs.cs.TotalAvail, cs.TotalAvail)
-	ratomic.StoreInt32(&mfs.cs.PctMin, cs.PctMin)
-	ratomic.StoreInt32(&mfs.cs.PctAvg, cs.PctAvg)
-	ratomic.StoreInt32(&mfs.cs.PctMax, cs.PctMax)
+	// publish, unless expired (or replaced) in the meantime
+	ncache := &capCache{CapStatus: cs, expires: mono.NanoTime() + int64(cs._next(config)), periodic: periodic}
+	mfs.cs.CompareAndSwap(cached, ncache)
 
 	return cs, nil, errCap
 }
@@ -1509,20 +1538,28 @@ func _either(cdf1, cdf2 *CDF) {
 	}
 }
 
-func ExpireCapCache() { mfs.csExpires.Store(0) } // upon any change in config.space
+// upon cap-related config change: expire the current sample and have CapPeriodic re-evaluate
+// (replacing the pointer also fails in-flight refreshes - see capRefresh)
+func ExpireCapCache() {
+	if cached := mfs.cs.Load(); cached != nil {
+		mfs.cs.Store(&capCache{CapStatus: cached.CapStatus})
+	}
+}
 
 // called only and exclusively by `stats.Trunner` providing `config.Periodic.StatsTime` tick
 func CapPeriodic(now int64, config *cmn.Config, tcdf *Tcdf, flags cos.NodeStateFlags) (cs CapStatus, updated bool, err, errCap error) {
 	const (
 		mask = cos.DiskFault | cos.DiskOOS | cos.DiskLowCapacity | cos.OOS | cos.LowCapacity
 	)
-	if (flags&mask) == 0 && now < mfs.csExpires.Load() {
-		cs = Cap()
+	// skip only when this sample was produced (and evaluated) by the previous tick
+	cached := mfs.cs.Load()
+	if cached != nil && cached.periodic && (flags&mask) == 0 && now < cached.expires {
+		cs = cached.CapStatus
+		errCap = cs.Err()
 		return
 	}
-	cs, err, errCap = CapRefresh(config, tcdf)
+	cs, err, errCap = capRefresh(config, tcdf, true /*periodic*/)
 	updated = err == nil
-	mfs.csExpires.Store(now + int64(cs._next(config)))
 	return
 }
 
@@ -1627,7 +1664,12 @@ func (cs *CapStatus) _next(config *cmn.Config) time.Duration {
 		tmax = config.LRU.CapacityUpdTime.D()
 		tmin = config.Periodic.StatsTime.D()
 	)
-	umin = min(umin, config.Space.CleanupWM)
+	if util > config.Space.HighWM {
+		// short disk-sampling interval per percentage point remaining to OOS
+		// (floor: demand refresh runs inline, on the caller's path)
+		headroom := max(config.Space.OOS-util, 1)
+		return cos.ClampDuration(time.Duration(headroom)*config.Disk.IostatTimeShort.D(), cos.PollSleepShort, tmin)
+	}
 	if util <= umin {
 		return tmax
 	}

@@ -6,6 +6,9 @@ package integration_test
 
 import (
 	"crypto/tls"
+	"io"
+	"maps"
+	"net/http"
 	"strconv"
 	"strings"
 	"testing"
@@ -841,4 +844,80 @@ func TestConfigHTTPJSONFlat(t *testing.T) {
 		"promotion broken: %+v", c)
 	b, _ := jsoniter.Marshal(c)
 	tassert.Fatalf(t, !strings.Contains(string(b), `"tls"`), "unexpected nesting: %s", b)
+}
+
+// apply changed space limits to native and S3 PUTs without waiting for the stats tick
+func TestCapacitySpaceUpdate(t *testing.T) {
+	// lowered watermarks put targets above `highwm`; a stats tick in the meantime would
+	// run storage cleanup and then LRU (evicting from LRU-enabled buckets)
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+
+	var (
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+		smap     = tools.GetClusterMap(t, proxyURL)
+		bck      = cmn.Bck{Name: "cap-cache-" + cos.GenTie(), Provider: apc.AIS}
+		oconfig  = tools.GetClusterConfig(t)
+		restore  = cos.StrKVs{
+			"space.cleanupwm":    strconv.FormatInt(oconfig.Space.CleanupWM, 10),
+			"space.lowwm":        strconv.FormatInt(oconfig.Space.LowWM, 10),
+			"space.highwm":       strconv.FormatInt(oconfig.Space.HighWM, 10),
+			"space.out_of_space": strconv.FormatInt(oconfig.Space.OOS, 10),
+		}
+	)
+	si, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	t.Cleanup(func() {
+		nvs := cos.StrKVs{"periodic.stats_time": oconfig.Periodic.StatsTime.String()}
+		maps.Copy(nvs, restore)
+		tools.SetClusterConfig(t, nvs)
+	})
+
+	// let the stats runner adopt its long tick, then warm the capacity cache
+	tools.SetClusterConfig(t, cos.StrKVs{"periodic.stats_time": "1m"})
+	time.Sleep(oconfig.Periodic.StatsTime.D() + time.Second)
+	ds, err := api.GetDaemonStats(bp, si)
+	tassert.CheckFatal(t, err)
+	used := int64(ds.Tcdf.PctMax)
+	if used < 5 || used > oconfig.Space.HighWM {
+		t.Skipf("need used capacity in [5, %d]%%, got %d%%", oconfig.Space.HighWM, used)
+	}
+
+	objName := tools.GenerateObjectNameOnTarget("capacity-", bck, smap, si)
+	paths := []string{
+		apc.URLPathS3.Join(bck.Name, objName),
+		apc.URLPathObjects.Join(bck.Name, objName) + "?" + apc.QparamProvider + "=" + apc.AIS,
+	}
+	put := func(path string, want int) {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPut, proxyURL+path, strings.NewReader("capacity test"))
+		tassert.CheckFatal(t, err)
+		if bp.Token != "" {
+			req.Header.Set(apc.HdrAuthorization, apc.AuthenticationTypeBearer+" "+bp.Token)
+		}
+		resp, err := bp.Client.Do(req)
+		tassert.CheckFatal(t, err)
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, resp.StatusCode == want, "%s: expected status %d, got %d: %s", path, want, resp.StatusCode, body)
+	}
+
+	// keep the window short: `si` (and any target at least as full) is now above OOS
+	tools.SetClusterConfig(t, cos.StrKVs{
+		"space.cleanupwm":    strconv.FormatInt(used-4, 10),
+		"space.lowwm":        strconv.FormatInt(used-3, 10),
+		"space.highwm":       strconv.FormatInt(used-2, 10),
+		"space.out_of_space": strconv.FormatInt(used-1, 10),
+	})
+	// S3 first: no preceding native PUT to refresh the cache
+	for _, path := range paths {
+		put(path, http.StatusInsufficientStorage)
+	}
+
+	tools.SetClusterConfig(t, restore)
+	for _, path := range paths {
+		put(path, http.StatusOK)
+	}
 }

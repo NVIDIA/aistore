@@ -1165,14 +1165,10 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 
-	cs := fs.Cap()
-	if cs.PctMax > int32(config.Space.HighWM) {
-		cs = t.oos(config)
-		if cs.IsOOS() {
-			// fail this write
-			t.writeErr(w, r, cs.Err(), http.StatusInsufficientStorage)
-			return
-		}
+	if cs := fs.Cap(); cs.IsOOS() {
+		// fail this write
+		t.writeErr(w, r, cs.Err(), http.StatusInsufficientStorage)
+		return
 	}
 
 	// init

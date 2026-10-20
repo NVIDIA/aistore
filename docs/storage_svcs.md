@@ -74,6 +74,18 @@ Space watermarks are cluster-wide (`ais config cluster space`). Each target comp
 | `space.highwm` | 90 | above this level, the target runs storage cleanup and then, if still above, LRU; data-producing jobs (prefetch, copy, transform, etc.) and bucket-property updates are rejected (except those that free up space, e.g., enabling LRU) |
 | `space.out_of_space` | 95 | above this level, PUTs and cold GETs fail with 507 (insufficient storage) |
 
+Capacity reads refresh the shared capacity cache on demand, once it expires.
+
+The expiration interval shrinks as used capacity grows:
+* from `lru.capacity_upd_time` (low utilization)
+* to `periodic.stats_time` (approaching `highwm`);
+
+Above `highwm`, it is `disk.iostat_time_short` times the remaining percentage points to `out_of_space` (at least one), within [100ms, `periodic.stats_time`].
+
+Concurrent internal readers reuse the (capacity) cache while a refresh is running. Updating `space.*` (or any of the intervals above) expires the cache, so new watermarks apply to the next PUT.
+
+Storage cleanup and LRU are triggered by periodic capacity checks (and upon capacity errors in data-producing jobs).
+
 Notes:
 
 * LRU evicts only from eligible buckets (see above).
