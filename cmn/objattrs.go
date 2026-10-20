@@ -593,6 +593,9 @@ func (op *ObjectPropsV2) FromHeaders(hdr http.Header, props string) error {
 	return nil
 }
 
+// custom metadata keys that CheckEq reads (a subset of supportedRemAttrs)
+var CheckEqKeys = [...]string{VersionObjMD, ETag, CRC32CObjMD, MD5ObjMD}
+
 // local <=> remote equality in the context of cold-GET and download. This function
 // decides whether we need to go ahead and re-read the object from its remote location.
 //

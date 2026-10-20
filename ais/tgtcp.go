@@ -1525,6 +1525,7 @@ func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX, reqProps [
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
+		// TODO: for a FNTL object, send the original name (OrigFntl) not the shortened one (lom.ObjName)
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodHead,
 			Base:   tsi.URL(cmn.NetIntraControl),

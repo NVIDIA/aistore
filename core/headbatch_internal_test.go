@@ -7,6 +7,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"testing"
@@ -26,6 +27,7 @@ type (
 		status   map[string]apc.HdbStatus // HeadBatchT2T answer by "bck/obj"
 		heads    map[string]hdbHead       // HeadObjT2T answer by "bck/obj"
 		names    map[string][]string      // the objects in all HeadBatchT2T calls by peer ID
+		items    map[string]cmn.HdbIn     // the last request item by "bck/obj"
 		size     int64                    // sum of the sizes in all HeadBatchT2T requests
 	}
 	hdbHead struct {
@@ -47,6 +49,9 @@ func (t *hdbTarget) HeadBatchT2T(req *cmn.HdbReq, tsi *meta.Snode) (*apc.HdbResp
 		in := &req.In[i]
 		name := req.Bcks[in.Bidx].Name + "/" + in.Name
 		t.names[tsi.ID()] = append(t.names[tsi.ID()], name)
+		cp := *in
+		cp.CustomMD, cp.Cksum = maps.Clone(in.CustomMD), in.Cksum.Clone()
+		t.items[name] = cp
 		t.size += in.Size
 		status, ok := t.status[name]
 		if !ok {
@@ -71,7 +76,7 @@ func (t *hdbTarget) HeadObjT2T(lom *LOM, _ *meta.Snode, _ ...string) (*cmn.Objec
 	return h.op, h.err
 }
 
-func (d hdbDone) cb(ent *HdbEnt) { d[hdbKey(&ent.LIF)] = *ent }
+func (d hdbDone) cb(ent *HdbEnt) { d[hdbKey(ent)] = *ent }
 
 var hdbBuckets = newHdbBowner()
 
@@ -91,7 +96,7 @@ func hdbInit(tb testing.TB, tt *hdbTarget, args HdbArgs) (*HdbBatcher, hdbDone) 
 	prev := T
 	T = tt
 	tb.Cleanup(func() { T = prev })
-	tt.names = make(map[string][]string)
+	tt.names, tt.items = make(map[string][]string), make(map[string]cmn.HdbIn)
 	fs.NewTestMFS(nil) // one mountpath (lif.LOM needs it)
 	_, err := fs.AddTestMpath(tb.TempDir(), "t0")
 	tassert.CheckFatal(tb, err)
@@ -102,15 +107,24 @@ func hdbInit(tb testing.TB, tt *hdbTarget, args HdbArgs) (*HdbBatcher, hdbDone) 
 	return NewHdbBatcher(&args), done
 }
 
-func hdbLIF(bck, name string) LIF {
-	b := cmn.Bck{Name: bck, Provider: apc.AIS, Ns: cmn.NsGlobal}
-	return LIF{Uname: string(b.MakeUname(name))}
+// the LOM of the object with the attributes
+func hdbLOM(tb testing.TB, bck, name string, oa *cmn.ObjAttrs) *LOM {
+	lom := AllocLOM(name)
+	b := meta.Bck{Name: bck, Provider: apc.AIS, Ns: cmn.NsGlobal}
+	tassert.CheckFatal(tb, lom.InitBck(&b))
+	lom.setbid(lom.Bprops().BID) // loaded
+	lom.CopyAttrs(oa, false /*skipCksum*/)
+	return lom
 }
 
-func hdbKey(lif *LIF) string {
-	b, name := cmn.ParseUname(lif.Uname)
-	return b.Name + "/" + name
+// the batcher must not keep the LOM
+func hdbAdd(tb testing.TB, hb *HdbBatcher, tsi *meta.Snode, bck, name string, oa *cmn.ObjAttrs) {
+	lom := hdbLOM(tb, bck, name, oa)
+	hb.Add(lom, tsi)
+	FreeLOM(lom)
 }
+
+func hdbKey(ent *HdbEnt) string { return ent.bck.Name + "/" + ent.name }
 
 func hdbPeer(tid string) *meta.Snode { return &meta.Snode{DaeID: tid} }
 
@@ -125,10 +139,10 @@ func TestHdbBatcherFlush(t *testing.T) {
 	hb, done := hdbInit(t, tt, HdbArgs{Size: 4})
 	for i := range 5 {
 		bck := []string{"a", "b"}[i%2]
-		hb.Add(hdbLIF(bck, fmt.Sprintf("o%d", i)), hdbPeer("t1"), &cmn.ObjAttrs{Size: int64(i + 1)})
+		hdbAdd(t, hb, hdbPeer("t1"), bck, fmt.Sprintf("o%d", i), &cmn.ObjAttrs{Size: int64(i + 1)})
 	}
 	for i := range 3 {
-		hb.Add(hdbLIF("c", fmt.Sprintf("o%d", i)), hdbPeer("t2"), hdbOa)
+		hdbAdd(t, hb, hdbPeer("t2"), "c", fmt.Sprintf("o%d", i), hdbOa)
 	}
 	tassert.Fatalf(t, len(done) == 4 && hb.Pending() == 4, "Add must send only the full group: %d completed, %d pending",
 		len(done), hb.Pending())
@@ -146,22 +160,29 @@ func TestHdbBatcherFlush(t *testing.T) {
 
 // an unsupported peer gets per-object HEAD
 func TestHdbBatcherFallback(t *testing.T) {
-	cksum := cos.NewCksum(cos.ChecksumOneXxh, "0123456789abcdef")
+	var (
+		cksum = cos.NewCksum(cos.ChecksumOneXxh, "0123456789abcdef")
+		props = func(size int64, md cos.StrKVs) hdbHead {
+			return hdbHead{op: &cmn.ObjectPropsV2{ObjAttrs: cmn.ObjAttrs{Size: size, Cksum: cksum, CustomMD: md}}}
+		}
+	)
 	tests := map[string]struct {
 		head   hdbHead
 		status apc.HdbStatus
 	}{
-		"same":     {hdbHead{op: &cmn.ObjectPropsV2{ObjAttrs: cmn.ObjAttrs{Size: 10, Cksum: cksum}}}, apc.HdbSame},
-		"diverged": {hdbHead{op: &cmn.ObjectPropsV2{ObjAttrs: cmn.ObjAttrs{Size: 20, Cksum: cksum}}}, apc.HdbDiverged},
+		"same":     {props(10, nil), apc.HdbSame},
+		"diverged": {props(20, nil), apc.HdbDiverged},
+		"crc32c":   {props(10, cos.StrKVs{cmn.CRC32CObjMD: "bb"}), apc.HdbDiverged}, // only a custom key differs
 		"missing":  {hdbHead{err: cmn.NewErrHTTP(nil, errors.New("not found"), http.StatusNotFound)}, apc.HdbMissing},
 		"failed":   {hdbHead{err: errors.New("broken pipe")}, apc.HdbFailed},
 		"noprops":  {hdbHead{}, apc.HdbFailed},
 	}
+	oa := &cmn.ObjAttrs{Size: 10, Cksum: cksum, CustomMD: cos.StrKVs{cmn.CRC32CObjMD: "aa"}}
 	tt := &hdbTarget{batchErr: fmt.Errorf("t1: %w", cmn.ErrHdbUnsupported), heads: make(map[string]hdbHead, len(tests))}
 	hb, done := hdbInit(t, tt, HdbArgs{})
 	for name, test := range tests {
 		tt.heads["a/"+name] = test.head
-		hb.Add(hdbLIF("a", name), hdbPeer("t1"), &cmn.ObjAttrs{Size: 10, Cksum: cksum})
+		hdbAdd(t, hb, hdbPeer("t1"), "a", name, oa)
 	}
 	hb.Flush()
 
@@ -176,8 +197,8 @@ func TestHdbBatcherFallback(t *testing.T) {
 func TestHdbBatcherUnanswered(t *testing.T) {
 	tt := &hdbTarget{batchErr: errors.New("connection refused")}
 	hb, done := hdbInit(t, tt, HdbArgs{})
-	hb.Add(hdbLIF("a", "o1"), hdbPeer("t1"), hdbOa)
-	hb.Add(hdbLIF("a", "o2"), hdbPeer("t1"), hdbOa)
+	hdbAdd(t, hb, hdbPeer("t1"), "a", "o1", hdbOa)
+	hdbAdd(t, hb, hdbPeer("t1"), "a", "o2", hdbOa)
 	hb.Flush()
 
 	tassert.Errorf(t, len(done) == 2, "expected 2 completed, got %d", len(done))
@@ -193,14 +214,39 @@ func TestHdbBatcherRetry(t *testing.T) {
 	var hb *HdbBatcher
 	hb, _ = hdbInit(t, tt, HdbArgs{Size: 2, Cb: func(ent *HdbEnt) {
 		if ent.Status == apc.HdbBusy {
-			hb.Add(ent.LIF, ent.Tsi, &ent.Oa)
+			hdbAdd(t, hb, ent.Tsi, ent.bck.Name, ent.name, hdbOa)
 		}
 	}})
-	hb.Add(hdbLIF("a", "o1"), hdbPeer("t1"), hdbOa)
-	hb.Add(hdbLIF("a", "o2"), hdbPeer("t1"), hdbOa)
+	hdbAdd(t, hb, hdbPeer("t1"), "a", "o1", hdbOa)
+	hdbAdd(t, hb, hdbPeer("t1"), "a", "o2", hdbOa)
 	tassert.Fatalf(t, hb.Pending() == 2, "the callback must only queue the retries, pending: %d", hb.Pending())
 	hb.Flush()
 
 	tassert.Errorf(t, hb.Pending() == 0, "Flush must send the retries, pending: %d", hb.Pending())
 	hdbCheckStats(t, hb, 2, 0, 0)
+}
+
+// the request carries the attributes that CheckEq reads and nothing from the previous batch
+func TestHdbBatcherRequest(t *testing.T) {
+	tt := &hdbTarget{}
+	hb, _ := hdbInit(t, tt, HdbArgs{Size: 2})
+	oa := &cmn.ObjAttrs{Size: 7, Cksum: cos.NewCksum(cos.ChecksumOneXxh, "0123456789abcdef"), CustomMD: cos.StrKVs{
+		cos.HdrContentType: "application/x-tar", // CheckEq does not read it
+	}}
+	want := make(cos.StrKVs)
+	for _, key := range cmn.CheckEqKeys {
+		want[key] = "v-" + key
+		oa.SetCustomKey(key, want[key])
+	}
+	hdbAdd(t, hb, hdbPeer("t1"), "a", "o1", oa)
+	hdbAdd(t, hb, hdbPeer("t1"), "a", "o2", oa)
+	in := tt.items["a/o1"]
+	tassert.Errorf(t, in.Size == 7 && in.Cksum.Equal(oa.Cksum), "a/o1: %v", &in.ObjAttrs)
+	tassert.Errorf(t, maps.Equal(in.CustomMD, want), "a/o1: custom MD %v, expected %v", in.CustomMD, want)
+
+	// the next batch reuses the items
+	hdbAdd(t, hb, hdbPeer("t1"), "a", "o3", &cmn.ObjAttrs{Size: 8})
+	hdbAdd(t, hb, hdbPeer("t1"), "a", "o4", &cmn.ObjAttrs{Size: 8})
+	in = tt.items["a/o3"]
+	tassert.Errorf(t, in.Size == 8 && cos.NoneC(in.Cksum) && len(in.CustomMD) == 0, "a/o3: %v", &in.ObjAttrs)
 }
