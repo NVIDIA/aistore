@@ -61,7 +61,7 @@ LRU (Least Recently Used) eviction is configured in the `lru` section of the clu
 * an `ais://` bucket always starts with LRU disabled - with or without a remote backend
 * to make a bucket evictable, enable LRU explicitly (e.g., `ais bucket lru BUCKET --enable`; see also the [example](#example-enabling-lru-eviction-for-a-given-bucket) below)
 
-A bucket is eligible for automatic eviction when its `lru.enabled` is true and its access permissions allow deleting objects. Eviction age (`dont_evict_time`) and batch size always come from the cluster configuration.
+A bucket is eligible for automatic eviction when its `lru.enabled` is true and its access permissions allow deleting objects. Eviction age comes from the bucket's `lru.dont_evict_time`; batch size comes from the cluster configuration.
 
 ### Space watermarks
 

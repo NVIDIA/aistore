@@ -357,7 +357,7 @@ func (j *lruJ) _visit(lom *core.LOM, parsedFQN *fs.ParsedFQN) (pushed bool) {
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return false
 	}
-	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
+	if lom.AtimeUnix()+int64(lom.Bprops().LRU.DontEvictTime) > j.now {
 		return false
 	}
 	if lom.HasCopies() && lom.IsCopy() {
