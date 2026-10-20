@@ -341,6 +341,7 @@ func (t *target) init(config *cmn.Config) {
 	startedUp := ts.Init()    // reg common metrics (see also: "begin target metrics" below)
 	daemon.rg.add(ts)
 	t.statsT = ts
+	ts.RmDeleted = t.rmDeleted
 
 	k := newTalive(t, ts, startedUp)
 	daemon.rg.add(k)
@@ -1159,11 +1160,11 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	cs := fs.Cap()
-	if errCap := cs.Err(); errCap != nil || cs.PctMax > int32(config.Space.CleanupWM) {
+	if cs.PctMax > int32(config.Space.HighWM) {
 		cs = t.oos(config)
 		if cs.IsOOS() {
 			// fail this write
-			t.writeErr(w, r, errCap, http.StatusInsufficientStorage)
+			t.writeErr(w, r, cs.Err(), http.StatusInsufficientStorage)
 			return
 		}
 	}

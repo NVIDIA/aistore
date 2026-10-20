@@ -69,7 +69,7 @@ Space watermarks are cluster-wide (`ais config cluster space`). Each target comp
 
 | Watermark | Default | Description |
 | --------- | ------- | ----------- |
-| `space.cleanupwm` | 65 | used capacity (%) that triggers storage cleanup (deleted objects and buckets, extra copies, etc.) |
+| `space.cleanupwm` | 65 | above this level, the target removes deleted buckets and objects (full storage cleanup runs above `highwm`, or on demand via `ais storage cleanup`) |
 | `space.lowwm` | 75 | LRU evicts until used capacity drops to this level |
 | `space.highwm` | 90 | above this level, the target runs storage cleanup and then, if still above, LRU; data-producing jobs (prefetch, copy, transform, etc.) and bucket-property updates are rejected (except those that free up space, e.g., enabling LRU) |
 | `space.out_of_space` | 95 | above this level, PUTs and cold GETs fail with 507 (insufficient storage) |

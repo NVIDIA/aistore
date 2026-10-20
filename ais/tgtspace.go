@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -33,8 +34,38 @@ const (
 )
 
 var (
-	lastTrigOOS atomic.Int64
+	lastTrigOOS  atomic.Int64
+	rmDelRunning atomic.Bool
 )
+
+// above cleanup watermark (and at or below high watermark):
+// remove deleted buckets and objects - compare with full storage cleanup (see OOS)
+// - asynchronously; at most one at a time
+// - skip mountpaths under critical disk load
+func (t *target) rmDeleted() {
+	if !rmDelRunning.CAS(false, true) {
+		return
+	}
+	go t._rmDeleted()
+}
+
+func (t *target) _rmDeleted() {
+	const tag = "cleanup-wm"
+	config := cmn.GCO.Get()
+	for _, mi := range fs.GetAvail() {
+		if !mi.IsAvail() {
+			continue // disabled or detached in the meantime
+		}
+		if load.Dsk(mi, config.Disk) == load.Critical {
+			continue
+		}
+		if err := mi.RemoveDeleted(tag); err != nil {
+			nlog.Warningln(t.String(), tag, mi.String(), err)
+			t.FSHC(err, mi, "")
+		}
+	}
+	rmDelRunning.Store(false)
+}
 
 // triggers by an out-of-space condition or a suspicion of thereof
 
