@@ -47,45 +47,70 @@ For more examples, please to refer to [supported checksums and brief theory of o
 
 ## LRU and Space
 
-LRU (Least Recently Used) configuration contains the following 3 (three) knobs:
+Least Recently Used (LRU) configuration has four fields. The following values illustrate the built-in defaults, not a captured `ais config cluster` response:
 
-```console
-$ ais config cluster lru
-
-PROPERTY                 VALUE
-lru.dont_evict_time      2h0m
+```text
+lru.dont_evict_time      2h
 lru.capacity_upd_time    10m
-lru.enabled              true
+lru.batch_size           32768
+lru.enabled              false
 ```
 
-Most importantly, cluster-wide default in the example above is `true`.
-What it means is that every newly added remote bucket will be "evictable` upon reaching certain space-utilization threshold.
+These are built-in defaults when LRU values are omitted; deployment configuration or runtime updates can override them.
 
-Speaking of which, here's the Space section of the configuration (and again, the actual values below are the defaults that we currently have for [local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground):
+Remote buckets copy the cluster's `lru.enabled` setting when registered. Later cluster changes do not update existing bucket properties.
+
+A local `ais://` bucket created without a remote namespace or backend starts with LRU disabled, even if cluster `lru.enabled` is true. Adding a backend to an existing `ais://` bucket does not automatically re-enable LRU.
+
+When creating an `ais://` bucket with backend properties, defaults are selected before the requested backend is applied. Set `lru.enabled` explicitly rather than inferring it from the resulting backend relationship.
+
+For ordinary automatic eviction, enable the bucket's LRU property before capacity fills, for example:
 
 ```console
-$ ais config cluster space --json
+$ ais bucket lru s3://BUCKET --enable
+```
 
+The following JSON illustrates only the four built-in space watermark fields; other `space` fields are omitted. Deployment values, including those in the [local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground), can differ:
+
+```json
+{
     "space": {
         "cleanupwm": 65,
         "lowwm": 75,
         "highwm": 90,
         "out_of_space": 95
     }
+}
 ```
 
-Note that "space" watermarks (`space.cleanupwm`, `space.lowwm`, `space.highwm`, and `space.out_of_space`) apply to the entire cluster, not to individual buckets.
+To inspect the effective deployment configuration, run:
 
-On the other hand, LRU can be configured on a per-bucket basis:
+```console
+$ ais config cluster space --json
+```
+
+The "space" watermarks (`space.cleanupwm`, `space.lowwm`, `space.highwm`, and `space.out_of_space`) are configured cluster-wide, not per bucket. Each target evaluates capacity against its fullest [mountpath](/docs/terminology.md#mountpath). The capacity calculation uses underlying filesystem statistics and avoids double-counting mountpaths on a shared filesystem.
+
+The bucket's `lru.enabled` property can be configured per bucket; current eviction age and batch processing use cluster LRU configuration:
 
 * [example enabling LRU eviction for a given bucket](#example-enabling-lru-eviction-for-a-given-bucket)
 
 ### Space watermarks
 
 * `space.cleanupwm`: integer in the range `[0, 100]`, used capacity (%) that triggers cleanup (deleted objects and buckets, extra copies, etc.) (storage cleanup watermark %)
-* `space.lowwm`: integer in the range `[0, 100]`, if filesystem usage exceeds `highwm` (high watermark %) LRU tries to evict objects so the filesystem usage drops to `lowwm` (low watermark %)
-* `space.highwm`: integer in the range `[0, 100]`, LRU starts immediately if a filesystem usage exceeds the value representing `highwm` (high watermark %)
-* `space.out_of_space`: integer in the range `[0, 100]`, `out_of_space` (%) if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`
+* `space.lowwm`: integer in the range `[0, 100]`; if LRU runs after cleanup, it targets this lower usage level by evicting eligible objects
+* `space.highwm`: integer in the range `[0, 100]`; above this threshold, capacity pressure can trigger store cleanup. LRU is considered afterward only if pressure remains; automatic cleanup and eviction can be delayed or skipped by throttling and the availability of evictable buckets.
+* `space.out_of_space`: integer in the range `[0, 100]`; when the fullest mountpath on a target exceeds this threshold, native and S3 PUTs and ordinary cold GETs can fail with HTTP 507.
+
+An ordinary warm GET of a valid local version can continue without needing more storage. With `--latest` or `versioning.validate_warm_get`, a newer backend version can turn that GET into a cold GET that fails at OOS.
+
+An explicit `--blob-download` GET checks capacity before serving even a warm object, so cache presence alone does not guarantee a successful GET at OOS.
+
+After a capacity refresh observes the fullest mountpath at or below `out_of_space`, these OOS checks no longer reject requests; recovery does not wait for `highwm`.
+
+The built-in `space.highwm` and `space.out_of_space` values are 90% and 95%, respectively; deployment or runtime overrides can differ. Above `highwm`, capacity checks restrict data-producing jobs, including prefetch, copy, and transform, as well as ordinary bucket-property updates, even before OOS. This is not a complete list of gated operations; refer to [background jobs](/docs/cli/job.md) for available jobs. Enable bucket LRU before reaching `highwm`.
+
+Native PUTs refresh capacity on the write path when cached capacity signals pressure or exceeds the cleanup watermark. S3 PUTs check cached capacity without that native on-path refresh. Ordinary cold GETs also check cached capacity. Under low utilization, `lru.capacity_upd_time` sets the maximum scheduled interval between periodic capacity updates. As utilization rises, the interval shrinks toward `periodic.stats_time`; capacity alerts force a refresh on each stats tick.
 
 See also:
 
@@ -94,21 +119,20 @@ See also:
 ### LRU configuration
 
 * `lru.dont_evict_time`: string that indicates eviction-free period `[atime, atime + dont]`
-* `lru.capacity_upd_time`: string indicating the minimum time to update capacity
-* `lru.enabled`: bool that determines whether LRU is run or not; only runs when true
+* `lru.capacity_upd_time`: string indicating the maximum interval between capacity updates under low utilization; rising utilization shortens the interval toward `periodic.stats_time`, and capacity alerts force refresh on each stats tick
+* `lru.batch_size`: number of objects per LRU eviction processing batch
+* `lru.enabled`: bool used with object-delete permission to determine bucket eligibility for ordinary automatic LRU eviction. The cluster setting supplies a default for newly registered remote buckets, while local `ais://` buckets start disabled. It does not guarantee immediate eviction or change existing bucket properties. A selected-bucket forced LRU can initially bypass the enabled and delete-access checks. After enough bytes are evicted, eligibility is refreshed without that forced override; do not assume every stage of a forced run bypasses those checks.
 
-Note the one, maybe subtle, difference between `ais://` buckets and remote buckets (the latter including, of course, Cloud buckets):
-
-> LRU enabled/disabled default in the cluster config only affects remote buckets - buckets that, effectively, have a backup. For in-cluster `ais://` buckets LRU is always by default disabled (and "lru.enabled" knob from the cluster configuration is ignored).
-
-You can still enable LRU for the `ais://` buckets but that must be done explicitly:
+For an `ais://` bucket created without a backend or remote namespace, enable `lru.enabled` explicitly:
 
 * [example enabling LRU eviction for a given bucket](#example-enabling-lru-eviction-for-a-given-bucket)
 
 ### Example setting space properties
 
+The following example sets `cleanupwm` to 40, `lowwm` to 45, and `highwm` to 50, below the unchanged `out_of_space` value of 95 in the example above. It also enables the cluster LRU default for subsequently registered remote buckets; set `lru.enabled` on existing buckets separately.
+
 ```console
-$ ais config cluster space.cleanupwm=40 lru.enabled=true space.lowwm=45 space.highwm=47.15 lru.dont_evict_time=1s
+$ ais config cluster space.cleanupwm=40 space.lowwm=45 space.highwm=50 lru.enabled=true lru.dont_evict_time=1h
 ```
 
 ### Example enabling LRU eviction for a given bucket

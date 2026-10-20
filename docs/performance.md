@@ -247,11 +247,9 @@ Example: mount xfs with the following performance-optimized parameters (that als
 noatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier
 ```
 
-> As aside, it is maybe important to note and disclose that AIStore itself lazily updates access times. The complete story has two pieces:
-1. On the one hand, AIS can be deployed as a fast cache tier in front of any of the multiple supported [backends](providers.md). To support this specific usage scenario, AIS tracks access times and the remaining capacity. The latter has 3 (three) configurable thresholds: low-watermark, high-watermark, and OOS (out of space) - by default, 75%, 90%, and 95%, respectively. Running low on free space automatically triggers LRU job that starts visiting evictable buckets (if any), sorting their content by access times, and yes - evicting. Bucket "evictability" is also configurable and, in turn, has two different defaults: true for buckets that have remote backend, and false otherwise.
-2. On the other hand, we certainly don't want to have any writes upon reads. That's why object metadata is cached and atime gets updated in memory to a) avoid extra reads and b) absorb multiple accesses and multiple atime updates. Further, if and only if we update atime in memory, we also mark the metadata as `dirty`. So that later, if for whatever reason we need to un-cache it, we flush it to disk (along with the most recently updates access time).
-3. The actual mechanism of when and whether to flush the corresponding metadata is driven by two conditions: the time since last access and the amount of free memory. If there's plenty of memory, we flush `dirty` metadata after 1 hour of inactivity.
-4. Finally, in AIS all configuration-related defaults (e.g., the default watermarks mentioned above) are also configurable - but that's a different story and a different scope...
+> AIStore also tracks object access times when used as a cache tier in front of supported [backends](providers.md). It caches object metadata and updates access times in memory to avoid writes on reads. An in-memory access-time update marks the metadata `dirty`; when uncached, dirty metadata is flushed with the latest access time. Flush timing depends on free memory and time since last access; with ample memory, dirty metadata is flushed after 1 hour of inactivity.
+>
+> Capacity management has four configurable built-in watermarks: cleanup (65%), low (75%), high (90%), and out of space (95%). LRU is disabled by default. For cleanup-before-conditional-LRU behavior, bucket eligibility, and backend lifecycle qualifications, refer to [LRU and Space guidance](storage_svcs.md#lru-and-space).
 
 External links:
 

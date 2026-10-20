@@ -213,12 +213,28 @@ We say that "an object is _cached_" to indicate two separate things:
 In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location.
 Being "cached" does not have any implications on an object's persistence: "cached" objects, similar to objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
 
-The following example checks whether `imagenet_train-000010.tgz` is "cached" in the bucket `imagenet`:
+Use `--check-cached` to check whether a named object is present in the cluster when its bucket has a remote backend.
+This is a metadata-only HEAD/presence check: it does not read or fetch the object payload.
+
+The following example assumes `ais://imagenet` has a configured remote backend, such as `s3://imagenet` (refer to [creating backend relationships](/docs/bucket.md#creating-backend-relationships)):
 
 ```console
-$ ais get --cached ais://imagenet/imagenet_train-000010.tgz
-Cached: true
+$ ais get ais://imagenet/imagenet_train-000010.tgz --check-cached
 ```
+
+If the object is present, the CLI prints:
+
+```text
+ais://imagenet/imagenet_train-000010.tgz is present (is cached)
+```
+
+If the object is absent, the CLI prints:
+
+```text
+ais://imagenet/imagenet_train-000010.tgz is not present ("not cached") in cluster
+```
+
+The same check works with a remote bucket URI, for example, `ais get s3://imagenet/imagenet_train-000010.tgz --check-cached`. `--cached` instead filters multi-object GETs with `--prefix` to in-cluster objects; it is not a single-object presence check.
 
 ## Read range
 
