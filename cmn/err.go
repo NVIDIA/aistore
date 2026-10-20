@@ -1237,18 +1237,23 @@ func InitErrHTTP(r *http.Request, err error, ecode int) (e *ErrHTTP) {
 
 func (e *ErrHTTP) init(r *http.Request, err error, ecode int) {
 	const maxlen = 100
+	debug.Assert(err != nil, "nil error, status ", ecode)
 	e.Status = http.StatusBadRequest
 	if ecode != 0 {
 		e.Status = ecode
 	}
-	tcode := fmt.Sprintf("%T", err)
-	if i := strings.Index(tcode, "."); i > 0 && i < maxlen && len(tcode)-i < maxlen {
-		if pkg := tcode[:i]; pkg != "*errors" && pkg != "errors" {
-			e.TypeCode = tcode[i+1:]
+	if err == nil {
+		e.Message = http.StatusText(e.Status) // (see assert above)
+	} else {
+		tcode := fmt.Sprintf("%T", err)
+		if i := strings.Index(tcode, "."); i > 0 && i < maxlen && len(tcode)-i < maxlen {
+			if pkg := tcode[:i]; pkg != "*errors" && pkg != "errors" {
+				e.TypeCode = tcode[i+1:]
+			}
 		}
+		_clean(err)
+		e.Message = err.Error()
 	}
-	_clean(err)
-	e.Message = err.Error()
 	if r != nil {
 		e.Method, e.URLPath = r.Method, r.URL.Path
 		e.RemoteAddr = r.RemoteAddr
