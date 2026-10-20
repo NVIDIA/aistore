@@ -17,12 +17,11 @@ AIStore (AIS) exposes a comprehensive set of metrics that provide insights into 
 * Metrics are now updated directly in real time
   - Previously: periodically via `prometheus.Collect` interface
   - See related note in stats/prom.go
-* AIS is no longer publishing internally computed latencies and throughputs
-* Use `*.ns.total` (nanoseconds) and `*.size` (bytes) metrics to compute latency and throughput, respectively
-  - Based on user-controlled time intervals - for reference, see CLI [`performance throughput` and `performance latency`](/docs/cli/performance.md)
-  - Note: for Prometheus client, internal `.ns.total` suffix becomes `_ns_total`, and `.size`, respectively, `_bytes`
-* In addition to total aggregated numbers there are now separately computed per-backend latency and throughput numbers
-  - Those with `aws.` prefix, for instance.
+* Internally computed `KindLatency` and `KindThroughput` metrics are used in logs and CLI statistics but are not exported to Prometheus; cumulative totals remain exported.
+* Use exported cumulative `*.ns.total` (nanoseconds) and `*.size` (bytes) metrics to calculate latency and throughput over a selected interval (for example, `rate(ais_target_put_bytes[5m])` gives PUT bytes per second).
+  - For CLI interval views, see [`performance throughput` and `performance latency`](/docs/cli/performance.md).
+  - Prometheus names replace internal periods with underscores: counter `.n` becomes `_count`, size `.size` becomes `_bytes`, and cumulative `.ns.total` becomes `_ns_total`. Backend metrics with explicit public names are listed below.
+* Per-backend cumulative GET counts, sizes, and latency totals are recorded separately, for example under the internal `aws.` prefix. Backend reads include copy/transform, prefetch, and blob downloads; they are not a user-only cold GET count.
 
 ## Variable labels
 
@@ -78,11 +77,11 @@ Starting v3.26, majority of the metrics will also contain _variable labels_:
 
 ## Common Latencies
 - **Latency Metrics:**
-  - `GetLatency`: GET average time (milliseconds) over the last periodic.stats_time interval.
+  - `GetLatency`: internal-only GET average time over the last periodic.stats_time interval (logged, not exported).
     - **Variable Labels:** `bucket`
   - `GetLatencyTotal`: GET total cumulative time (nanoseconds).
     - **Variable Labels:** `bucket`
-  - `ListLatency`: List-objects average time (milliseconds) over the last periodic.stats_time interval.
+  - `ListLatency`: internal-only list-objects average time over the last periodic.stats_time interval (logged, not exported).
     - **Variable Labels:** `bucket`
 
 For convenience, we also include here a (somewhat redundant) table that summarizes common metrics.
@@ -106,10 +105,10 @@ For convenience, we also include here a (somewhat redundant) table that summariz
 | `err.http.write.n` | `err_http_write_count` | counter | total number of HTTP write-response errors | default |
 | `err.dl.n` | `err_dl_count` | counter | downloader: number of download errors | default |
 | `err.put.mirror.n` | `err_put_mirror_count` | counter | number of n-way mirroring errors | default |
-| `get.ns` | `get_ms` | latency | GET: average time (milliseconds) over the last periodic.stats_time interval | default |
+| `get.ns` | not exported (logs only) | latency | GET: average time (milliseconds) over the last periodic.stats_time interval | default |
 | `get.ns.total` | `get_ns_total` | total | GET: total cumulative time (nanoseconds) | default |
-| `lst.ns` | `lst_ms` | latency | list-objects: average time (milliseconds) over the last periodic.stats_time interval | default |
-| `kalive.ns` | `kalive_ms` | latency | in-cluster keep-alive (heartbeat): average time (milliseconds) over the last periodic.stats_time interval | default |
+| `lst.ns` | not exported (logs only) | latency | list-objects: average time (milliseconds) over the last periodic.stats_time interval | default |
+| `kalive.ns` | not exported (logs only) | latency | in-cluster keep-alive (heartbeat): average time (milliseconds) over the last periodic.stats_time interval | default |
 | `up.ns.time` | `uptime` | special | this node's uptime since its startup (seconds) | default |
 | `state.flags` | `state_flags` | gauge | bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go |
 
@@ -124,7 +123,7 @@ For convenience, we also include here a (somewhat redundant) table that summariz
     - **Variable Labels:** `bucket`
 
 - **PUT Latency Metrics:**
-  - `PutLatency`: PUT average time (milliseconds) over the last periodic.stats_time interval.
+  - `PutLatency`: internal-only PUT average time over the last periodic.stats_time interval (logged, not exported).
     - **Variable Labels:** `bucket`, `xkind`
   - `PutLatencyTotal`: PUT total cumulative time (nanoseconds).
     - **Variable Labels:** `bucket`, `xkind`
@@ -134,13 +133,13 @@ For convenience, we also include here a (somewhat redundant) table that summariz
     - **Variable Labels:** `bucket`
 
 - **APPEND Latency Metrics:**
-  - `AppendLatency`: APPEND average time (milliseconds) over the last periodic.stats_time interval.
+  - `AppendLatency`: internal-only APPEND average time over the last periodic.stats_time interval (logged, not exported).
     - **Variable Labels:** `bucket`
 
 - **Throughput Metrics:**
-  - `GetThroughput`: GET average throughput (MB/s) over the last periodic.stats_time interval.
+  - `GetThroughput` (`get.bps`): internal-only average GET throughput over the last periodic.stats_time interval; logged, not exported to Prometheus.
     - **Variable Labels:** `bucket`
-  - `PutThroughput`: PUT average throughput (MB/s) over the last periodic.stats_time interval.
+  - `PutThroughput` (`put.bps`): internal-only average PUT throughput over the last periodic.stats_time interval; logged, not exported to Prometheus.
     - **Variable Labels:** `bucket`, `xkind`
 
 - **Size Metrics:**
@@ -163,9 +162,9 @@ For convenience, a table that summarizes target metrics follows below.
 
 | Internal name | Public name | Internal Type | Description (Prometheus help) | Prometheus labels |
 | --- | --- | --- | --- | --- |
-| `disk.<DISK-NAME>.read.bps` | `disk_read_mbps` | computed-bandwidth | read bandwidth (MB/s) | map[disk:`<DISK-NAME>` node_id:`<AIS-NODE-ID>`] |
+| `disk.<DISK-NAME>.read.bps` | `disk_read_bps` | computed-bandwidth | read bandwidth (B/s) | map[disk:`<DISK-NAME>` node_id:`<AIS-NODE-ID>`] |
 | `disk.<DISK-NAME>.avg.rsize` | `disk_avg_rsize` | gauge | average read size (bytes) | map[disk:`<DISK-NAME>` node_id:`<AIS-NODE-ID>`] |
-| `disk.<DISK-NAME>.write.bps` | `disk_write_mbps` | computed-bandwidth | write bandwidth (MB/s) | map[disk:`<DISK-NAME>` node_id:`<AIS-NODE-ID>`] |
+| `disk.<DISK-NAME>.write.bps` | `disk_write_bps` | computed-bandwidth | write bandwidth (B/s) | map[disk:`<DISK-NAME>` node_id:`<AIS-NODE-ID>`] |
 | `disk.<DISK-NAME>.avg.wsize` | `disk_avg_wsize` | gauge | average write size (bytes) | map[disk:`<DISK-NAME>` node_id:`<AIS-NODE-ID>`] |
 | `disk.<DISK-NAME>.util` | `disk_util` | gauge | disk utilization (%%) | map[disk:`<DISK-NAME>` node_id:`<AIS-NODE-ID>`] |
 | `lru.evict.n` | `lru_evict_count` | counter | number of LRU evictions | default |
@@ -175,17 +174,17 @@ For convenience, a table that summarizes target metrics follows below.
 | `ver.change.n` | `ver_change_count` | counter | number of out-of-band updates (by a 3rd party performing remote PUTs from outside this cluster) | default |
 | `ver.change.size` | `ver_change_bytes` | size | total cumulative size (bytes) of objects that were updated out-of-band across all backends combined | default |
 | `remote.deleted.del.n` | `remote_deleted_del_count` | counter | number of out-of-band deletes (by a 3rd party remote DELETE(object) from outside this cluster) | default |
-| `put.ns` | `put_ms` | latency | PUT: average time (milliseconds) over the last periodic.stats_time interval | default |
+| `put.ns` | not exported (logs only) | latency | PUT: average time (milliseconds) over the last periodic.stats_time interval | default |
 | `put.ns.total` | `put_ns_total` | total | PUT: total cumulative time (nanoseconds) | default |
-| `append.ns` | `append_ms` | latency | APPEND(object): average time (milliseconds) over the last periodic.stats_time interval | default |
-| `get.redir.ns` | `get_redir_ms` | latency | GET: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval | default |
-| `put.redir.ns` | `put_redir_ms` | latency | PUT: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval | default |
-| `ratelim.retry.get.n` | `ratelim_retry_get_n` | counter | GET: number of rate-limited retries triggered by remote backends returning 409 and 503 status codes | default |
+| `append.ns` | not exported (logs only) | latency | APPEND(object): average time (milliseconds) over the last periodic.stats_time interval | default |
+| `get.redir.ns` | not exported (logs only) | latency | GET: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval | default |
+| `put.redir.ns` | not exported (logs only) | latency | PUT: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval | default |
+| `ratelim.retry.get.n` | `ratelim_retry_get_count` | counter | GET: number of rate-limited retries triggered by remote backends returning 409 and 503 status codes | default |
 | `ratelim.retry.get.ns.total` | `ratelim_retry_get_ns_total` | total | GET: total retrying time (nanoseconds) caused by remote backends returning 409 and 503 status codes | default |
-| `ratelim.retry.put.n` | `ratelim_retry_put_n` | counter | PUT: number of rate-limited retries triggered by remote backends returning 409 and 503 status codes | default |
+| `ratelim.retry.put.n` | `ratelim_retry_put_count` | counter | PUT: number of rate-limited retries triggered by remote backends returning 409 and 503 status codes | default |
 | `ratelim.retry.put.ns.total` | `ratelim_retry_put_ns_total` | total | PUT: total retrying time (nanoseconds) caused by remote backends returning 409 and 503 status codes | default |
-| `get.bps` | `get_mbps` | bandwidth | GET: average throughput (MB/s) over the last periodic.stats_time interval | default |
-| `put.bps` | `put_mbps` | bandwidth | PUT: average throughput (MB/s) over the last periodic.stats_time interval | default |
+| `get.bps` | not exported (logs only) | throughput | internally computed GET throughput over the last periodic.stats_time interval; use `rate(ais_target_get_bytes[5m])` for exported bytes per second | default |
+| `put.bps` | not exported (logs only) | throughput | internally computed PUT throughput over the last periodic.stats_time interval; use `rate(ais_target_put_bytes[5m])` for exported bytes per second | default |
 | `get.size` | `get_bytes` | size | GET: total cumulative size (bytes) | default |
 | `put.size` | `put_bytes` | size | PUT: total cumulative size (bytes) | default |
 | `err.cksum.n` | `err_cksum_count` | counter | PUT: number of checksum errors | default |

@@ -66,7 +66,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo -e
-ais show performance counters --regex "(${cold_counter}$|VERSION-CHANGE$|DELETE)"
+ais show performance counters --regex "(${cold_counter}|VERSION-CHANGE|DELETE)"
 echo -e
 
 echo "1. out-of-band PUT: first version"
@@ -159,4 +159,4 @@ cnt5=$(ais show performance counters --regex DELETED -H | awk '{sum+=$2;}END{pri
 [[ $cnt5 == $(($cnt4+1)) ]] || { echo "FAIL: $cnt5 != $(($cnt4+1))"; exit 1; }
 
 echo -e
-ais show performance counters --regex "(${cold_counter}$|VERSION-CHANGE$|DELETE)"
+ais show performance counters --regex "(${cold_counter}|VERSION-CHANGE|DELETE)"

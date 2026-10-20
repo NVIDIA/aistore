@@ -70,7 +70,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo -e
-ais show performance counters --regex "(${cold_counter}$|VERSION-CHANGE$|DELETE)"
+ais show performance counters --regex "(${cold_counter}|VERSION-CHANGE|DELETE)"
 echo -e
 
 echo "1. out-of-band PUT: 1st version"
@@ -128,4 +128,4 @@ ais ls "$src/lorem-duis" --cached --silent -H 2>/dev/null
 [[ $? != 0 ]] || { echo "FAIL: expecting 'show object' error, got $?"; exit 1; }
 
 echo -e
-ais show performance counters --regex "(${cold_counter}$|VERSION-CHANGE$|DELETE)"
+ais show performance counters --regex "(${cold_counter}|VERSION-CHANGE|DELETE)"

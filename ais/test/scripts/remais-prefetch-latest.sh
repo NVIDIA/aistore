@@ -80,7 +80,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo -e
-ais show performance counters --regex "(REMAIS_GET$|VERSION-CHANGE$|DELETE)"
+ais show performance counters --regex "(REMAIS-GET|VERSION-CHANGE|DELETE)"
 echo -e
 
 echo "1. out-of-band PUT: 1st version"

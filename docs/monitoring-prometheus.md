@@ -94,13 +94,7 @@ AIS acts as a **first-class Prometheus exporter**. Every node automatically:
 
 > No configuration is required to “enable” Prometheus — it is always on.
 
-AIS source metrics (`put.size`, `get.ns`, etc.) are exported with AIS naming conventions:
-
-```
-ais_target_<metric_name>{node_id="T1"} <value>
-```
-
-This document primarily uses the exported Prometheus names.
+AIS exports counters ending in `.n` with `_count`, sizes ending in `.size` with `_bytes`, and cumulative totals ending in `.ns.total` with `_ns_total`; periods elsewhere become underscores unless a metric has an explicit public name. For example, `put.size` is exported as `ais_target_put_bytes`. Internally computed latency and throughput metrics, such as `get.ns` and `get.bps`, are not exported to Prometheus. This document primarily uses the exported Prometheus names.
 
 ---
 
@@ -147,10 +141,10 @@ AIS organizes metrics into **four major groups**, reflected in the codebase and 
 
 | Group                              | Description                                                                            | Examples                                                                       |
 | ---------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **1. Datapath**                    | GET/PUT counters, sizes, latencies, rate-limiting, I/O errors                          | `ais_target_get_count`, `ais_target_put_bps`, `ais_target_ratelim_retry_get_n` |
+| **1. Datapath**                    | GET/PUT counters, sizes, latencies, rate-limiting, I/O errors                          | `ais_target_get_count`, `ais_target_put_bytes`, `ais_target_ratelim_retry_get_count` |
 | **2. Metadata (in-memory)**        | Lcache activity (evictions, collisions)                                                | `ais_target_lcache_evicted_count`                                              |
-| **3. Extended Actions (xactions)** | Background & multi-object jobs: LRU, EC, rebalance, ETL, Download, DSort, **GetBatch** | `ais_target_lru_evict_n`, `ais_target_getbatch_n`                              |
-| **4. Streams**                     | Long-lived peer-to-peer (SharedDM) streaming channels                                  | `ais_target_streams_out_obj_n`                                                 |
+| **3. Extended Actions (xactions)** | Background & multi-object jobs: LRU, EC, rebalance, ETL, Download, DSort, **GetBatch** | `ais_target_lru_evict_count`, `ais_target_getbatch_count`                              |
+| **4. Streams**                     | Long-lived peer-to-peer (SharedDM) streaming channels                                  | `ais_target_stream_out_count`                                                 |
 
 > For GetBatch observability, see
 > **[Monitoring GetBatch](/docs/monitoring-get-batch.md)**.
@@ -161,14 +155,15 @@ AIS organizes metrics into **four major groups**, reflected in the codebase and 
 
 AIS provides labels for filtering and aggregation:
 
-| Label      | Usage                                    |
-| ---------- | ---------------------------------------- |
-| `node_id`  | Node identity (target or gateway)        |
-| `disk`     | Disk name for per-disk metrics           |
-| `bucket`   | Source/destination bucket                |
-| `xaction`  | Xaction UUID for multi-object jobs       |
-| `slice`    | For erasure coding slice metrics         |
-| `archpath` | For per-file shard extraction (GetBatch) |
+| Label | Usage |
+| ----- | ----- |
+| `node_id` | Node identity (target or gateway) |
+| `disk` | Disk name for per-disk metrics |
+| `bucket` | Source/destination bucket |
+| `xkind` | Job kind on applicable writing metrics, not a job UUID |
+| `mountpath` | Mountpath on applicable filesystem health metrics |
+
+Labels depend on the metric family: GET and DELETE counters have `bucket`; PUT counters have `bucket` and `xkind`; filesystem health errors can have `mountpath`; disk metrics have `disk`. GetBatch counters have `node_id` but no job UUID or per-file archive-path label. Use job details and logs for per-job or per-file investigation.
 
 Labels enable PromQL queries such as:
 
@@ -215,33 +210,30 @@ sum(rate(ais_target_err_get_count[5m]))
 
 ### Total cluster capacity usage
 
-```promql
-sum(ais_target_capacity_used)
-/
-sum(ais_target_capacity_total)
-* 100
-```
+Use `ais show performance capacity` to inspect target mountpath used and available capacity. The built-in AIS exporter does not register `ais_target_capacity_used` or `ais_target_capacity_total`; a Prometheus capacity panel requires separately collected capacity data.
 
 ---
 
 ## GetBatch (x-moss) Queries
 
 GetBatch is AIStore’s high-performance multi-object retrieval pipeline.
-Metrics describe throughput, composition (objects vs files), Rx stalls, throttling, and error behavior.
+Metrics describe assembly byte rate, composition (objects vs files), Rx stalls, throttling, and error behavior.
 
 ### Work items per second
 
 ```promql
-sum(rate(ais_target_getbatch_n[5m]))
+sum(rate(ais_target_getbatch_count[5m]))
 ```
 
-### Logical payload throughput
+### Logical assembly byte rate
 
 ```promql
-sum(rate(ais_target_getbatch_obj_size[5m]))
+sum(rate(ais_target_getbatch_obj_bytes[5m]))
 +
-sum(rate(ais_target_getbatch_file_size[5m]))
+sum(rate(ais_target_getbatch_file_bytes[5m]))
 ```
+
+These GetBatch byte counters track successfully assembled entries, not guaranteed bytes delivered to clients. They can include entries from a buffered work item that fails before sending its archive response; missing placeholders do not contribute payload bytes.
 
 ### Stall breakdown (RxWait vs Throttle)
 
@@ -256,9 +248,16 @@ sum(rate(ais_target_getbatch_rxwait_ns[5m]))
 
 ### Soft vs Hard Error Rates
 
+Soft errors:
+
 ```promql
-rate(ais_target_err_soft_getbatch_n[5m])
-rate(ais_target_err_getbatch_n[5m])
+rate(ais_target_err_soft_getbatch_count[5m])
+```
+
+Hard errors:
+
+```promql
+rate(ais_target_err_getbatch_count[5m])
 ```
 
 Full details and operational guidance:
@@ -276,9 +275,8 @@ Flags indicate:
 * `OOS` — Out of space
 * `OOM` — Out of memory
 * `DiskFault` — Disk failures
-* `NumGoroutines` — excessive goroutines
+* `HighNumGoroutines` — high goroutine count
 * `CertificateExpired` — TLS expiry
-* `KeepAliveErrors` — peer connectivity issues
 
 ### Warning
 
@@ -288,6 +286,8 @@ Flags indicate:
 * `NodeRestarted`
 * `MaintenanceMode`
 * `CertWillSoonExpire`
+* `NumGoroutines`
+* `KeepAliveErrors`
 
 ### Informational
 
@@ -303,25 +303,29 @@ $ ais show cluster
 
 ### Prometheus Queries
 
-Critical:
+Selected critical flag examples:
 
 ```promql
-ais_target_state_flags & 8192  > 0  # OOS
-or ais_target_state_flags & 16384 > 0  # OOM
-or ais_target_state_flags & 65536 > 0  # DiskFault
+(floor(ais_target_state_flags / 256) % 2) == 1
+or (floor(ais_target_state_flags / 512) % 2) == 1
+or (floor(ais_target_state_flags / 8192) % 2) == 1
 ```
 
-Warnings:
+The three terms test OOS, OOM, and DiskFault, respectively.
+
+Selected warning flag examples:
 
 ```promql
-ais_target_state_flags & 4096 > 0  # LowCapacity
-or ais_target_state_flags & 8192 > 0  # LowMemory
+(floor(ais_target_state_flags / 2048) % 2) == 1
+or (floor(ais_target_state_flags / 4096) % 2) == 1
 ```
+
+The two terms test LowCapacity and LowMemory, respectively.
 
 ### Grafana Alert Example
 
-```
-ais_target_state_flags{node_id=~"$node"} & 8192 > 0
+```promql
+(floor(ais_target_state_flags{node_id=~"$node"} / 256) % 2) == 1
 ```
 
 ---

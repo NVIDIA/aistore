@@ -207,7 +207,7 @@ sum(rate(ais_target_get_bytes[5m]))
 sum(rate(ais_target_put_bytes[5m]))
 
 # DELETE operations/sec
-sum(rate(ais_target_delete_count[5m]))
+sum(rate(ais_target_del_count[5m]))
 ```
 
 #### Latency Panels
@@ -222,13 +222,7 @@ sum(rate(ais_target_put_ns_total[5m])) / sum(rate(ais_target_put_count[5m])) / 1
 
 #### Storage Usage Panel
 
-```
-# Cluster storage utilization percentage
-100 * sum(ais_target_capacity_used) / sum(ais_target_capacity_total)
-
-# Storage used by node
-ais_target_capacity_used{node_id="$node"}
-```
+The built-in AIS exporter does not register capacity-used or capacity-total series. For capacity, inspect `ais show performance capacity`; a Grafana capacity panel needs a separately configured capacity collector and queries for that collector's actual series.
 
 #### Node State Panels
 
@@ -236,8 +230,8 @@ ais_target_capacity_used{node_id="$node"}
 # Node state flags (alert conditions)
 ais_target_state_flags{node_id="$node"}
 
-# Nodes with red alerts (OOS - out of space)
-ais_target_state_flags > 0 and ais_target_state_flags & 8192 > 0
+# Nodes with OOS (out of space)
+(floor(ais_target_state_flags / 256) % 2) == 1
 ```
 
 ### Variable Templates
@@ -262,13 +256,13 @@ Grafana can be configured to send alerts based on metric thresholds:
 Set up alerts based on the AIStore node state flags (refer to [Node Alerts in AIStore Prometheus docs](/docs/monitoring-prometheus.md#node-alerts) for all available states):
 
 1. Create an alert for red alert conditions:
-   - Condition: `ais_target_state_flags{node_id=~"$node"} > 0 and (ais_target_state_flags{node_id=~"$node"} & 8192 > 0 or ais_target_state_flags{node_id=~"$node"} & 16384 > 0)`
-   - Description: "Critical node state alert detected"
+   - Condition: `(floor(ais_target_state_flags{node_id=~"$node"} / 256) % 2) == 1 or (floor(ais_target_state_flags{node_id=~"$node"} / 512) % 2) == 1 or (floor(ais_target_state_flags{node_id=~"$node"} / 8192) % 2) == 1`
+   - Description: "OOS, OOM, or DiskFault detected"
    - Severity: Critical
 
 2. Create an alert for warning conditions:
-   - Condition: `ais_target_state_flags{node_id=~"$node"} > 0 and (ais_target_state_flags{node_id=~"$node"} & 128 > 0 or ais_target_state_flags{node_id=~"$node"} & 4096 > 0)`
-   - Description: "Warning node state alert detected"
+   - Condition: `(floor(ais_target_state_flags{node_id=~"$node"} / 2048) % 2) == 1 or (floor(ais_target_state_flags{node_id=~"$node"} / 4096) % 2) == 1`
+   - Description: "LowCapacity or LowMemory detected"
    - Severity: Warning
 
 ### Performance Alerts
