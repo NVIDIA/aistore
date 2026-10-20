@@ -828,6 +828,9 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		req, res.err = args.req.Req()
 	}
 	if res.err != nil {
+		if args.req.BodyR != nil {
+			cos.Close(args.req.BodyR)
+		}
 		return res
 	}
 

@@ -5,8 +5,10 @@
 package ais
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -28,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/xact"
@@ -1546,6 +1549,7 @@ func (t *target) headBatcht2t(req *cmn.HdbReq, tsi *meta.Snode, smap *smapX) (*a
 		return nil, err
 	}
 	q := url.Values{apc.QparamSilent: []string{"true"}}
+	body, bodyR := hdbPack(t.gmm, req)
 
 	cargs := allocCargs()
 	{
@@ -1556,7 +1560,10 @@ func (t *target) headBatcht2t(req *cmn.HdbReq, tsi *meta.Snode, smap *smapX) (*a
 			Path:   apc.URLPathObjects.S, // no bucket in the URL
 			Query:  q,
 			Header: http.Header{cos.HdrContentType: []string{cos.ContentBinary}},
-			Body:   req.NewPack(),
+			Body:   body,
+		}
+		if bodyR != nil {
+			cargs.req.BodyR = bodyR
 		}
 		cargs.timeout = hdbTimeout(len(req.In))
 	}
@@ -1577,6 +1584,49 @@ func (t *target) headBatcht2t(req *cmn.HdbReq, tsi *meta.Snode, smap *smapX) (*a
 		return nil, fmt.Errorf("%s: %s: %w", t, tsi.StringEx(), err)
 	}
 	return resp, nil
+}
+
+// pack the request into a buffer from the allocator
+func hdbPack(mm *memsys.MMSA, req *cmn.HdbReq) (body []byte, bodyR io.ReadCloser) {
+	size := req.PackedSize()
+	if size > memsys.MaxPageSlabSize {
+		return req.NewPack(), nil
+	}
+	buf, slab := mm.AllocSize(int64(size))
+	body = buf[:size]
+	req.PackTo(body)
+
+	b := &hdbBody{buf: body, slab: slab}
+	b.r.Reset(body)
+	return body, b
+}
+
+// TODO: consolidate into a reusable slab-backed reader in memsys
+// (compare GuardReader for SGL)
+type hdbBody struct {
+	mu   sync.Mutex
+	r    bytes.Reader
+	buf  []byte // nil after Close
+	slab *memsys.Slab
+}
+
+func (b *hdbBody) Read(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.buf == nil {
+		return 0, io.ErrClosedPipe
+	}
+	return b.r.Read(p)
+}
+
+func (b *hdbBody) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.buf != nil {
+		b.slab.Free(b.buf)
+		b.buf = nil
+	}
+	return nil
 }
 
 // NOTE:

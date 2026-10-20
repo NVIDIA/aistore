@@ -5,6 +5,8 @@
 package core
 
 import (
+	"sync"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -16,6 +18,7 @@ import (
 // - not safe for concurrent use: one batcher per jogger or worker
 // - Add sends a group when it reaches `size`
 // - the callback may Add (only queues), but not Flush
+// - the batcher reuses the entry after the callback returns (see HdbArgs.Cb)
 // - Add may run the callback: do not hold a LOM lock when you call Add
 // - the batcher keeps the identity of the object (LIF), not the LOM
 // - to abort, the producer drops the batcher
@@ -52,7 +55,9 @@ type (
 	}
 	// NewHdbBatcher arguments
 	HdbArgs struct {
-		Cb   func(*HdbEnt) // per-object completion callback
+		// per-object completion callback
+		// NOTE: the entry is valid only until the callback returns, so copy `*ent` to keep it
+		Cb   func(*HdbEnt)
 		Mod  int
 		Size int // max items per request (zero selects the default)
 	}
@@ -60,6 +65,24 @@ type (
 
 // props needed for CheckEq in the fallback path
 var hdbProps = []string{apc.GetPropsChecksum, apc.GetPropsCustom}
+
+var hdbGroupPool = sync.Pool{New: func() any { return new(hdbGroup) }}
+
+func allocHdbGroup(tsi *meta.Snode, size int) *hdbGroup {
+	g := hdbGroupPool.Get().(*hdbGroup)
+	g.tsi = tsi
+	if cap(g.ents) < size {
+		g.ents = make([]HdbEnt, 0, size)
+	}
+	return g
+}
+
+// return the group to the pool
+func freeHdbGroup(g *hdbGroup) {
+	clear(g.ents)
+	g.tsi, g.ents = nil, g.ents[:0]
+	hdbGroupPool.Put(g)
+}
 
 func NewHdbBatcher(args *HdbArgs) *HdbBatcher {
 	debug.Assert(args.Cb != nil)
@@ -83,7 +106,7 @@ func (hb *HdbBatcher) Add(lif LIF, tsi *meta.Snode, oa *cmn.ObjAttrs) {
 	tid := tsi.ID()
 	g := hb.groups[tid]
 	if g == nil {
-		g = &hdbGroup{tsi: tsi, ents: make([]HdbEnt, 0, hb.size)}
+		g = allocHdbGroup(tsi, hb.size)
 		hb.groups[tid] = g
 	}
 	ent := HdbEnt{LIF: lif, Tsi: tsi}
@@ -138,6 +161,7 @@ func (hb *HdbBatcher) flush(g *hdbGroup) {
 		}
 		ents = ents[n:]
 	}
+	freeHdbGroup(g)
 }
 
 func (hb *HdbBatcher) batch(ents []HdbEnt, tsi *meta.Snode) {

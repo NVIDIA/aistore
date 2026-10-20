@@ -80,6 +80,13 @@ func (req *HdbReq) AddBck(bck *Bck) (bidx int32) {
 
 func (req *HdbReq) NewPack() []byte {
 	b := make([]byte, req.PackedSize())
+	req.PackTo(b)
+	return b
+}
+
+// PackTo packs the request into b
+// the length of b must be equal to PackedSize
+func (req *HdbReq) PackTo(b []byte) {
 	off := binpack.InsUint16(0, b, len(req.Bcks))
 	for i := range req.Bcks {
 		off = packHdbBck(off, b, &req.Bcks[i])
@@ -92,7 +99,6 @@ func (req *HdbReq) NewPack() []byte {
 		off = in.InsAttrs(off, b)
 	}
 	debug.Assert(off == len(b), off, " vs ", len(b))
-	return b
 }
 
 func (req *HdbReq) PackedSize() int {

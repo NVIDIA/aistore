@@ -5,10 +5,15 @@
 package ais
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	jsoniter "github.com/json-iterator/go"
@@ -189,5 +195,111 @@ func TestObjVerbForgedRedirect(t *testing.T) {
 					"%s: expected ecode=%d, got ecode=%d err=%v", method, test.expectedCode, ecode, err)
 			}
 		})
+	}
+}
+
+func hdbTestReq(n int) *cmn.HdbReq {
+	req := &cmn.HdbReq{}
+	bck := cmn.Bck{Name: "hdb", Provider: apc.AIS, Ns: cmn.NsGlobal}
+	for i := range n {
+		in := cmn.HdbIn{Name: fmt.Sprintf("%064d", i), Bidx: req.AddBck(&bck)}
+		in.Size = int64(i)
+		in.Cksum = cos.NewCksum(cos.ChecksumOneXxh, "0123456789abcdef")
+		in.SetCustomKey(cmn.ETag, "etag-0123456789abcdef")
+		in.SetCustomKey(cmn.MD5ObjMD, "md5-0123456789abcdef")
+		req.In = append(req.In, in)
+	}
+	return req
+}
+
+// the body comes from the slab (small request) or the heap (large request)
+func TestHdbPack(t *testing.T) {
+	for _, test := range []struct {
+		n    int
+		slab bool
+	}{
+		{apc.HdbSizeDflt, true},
+		{apc.HdbSizeMax, false},
+	} {
+		req := hdbTestReq(test.n)
+		body, bodyR := hdbPack(memsys.PageMM(), req)
+		tassert.Errorf(t, (bodyR != nil) == test.slab, "%d items: slab %v, expected %v", test.n, bodyR != nil, test.slab)
+		tassert.Errorf(t, len(body) == req.PackedSize(), "%d items: body size %d, expected %d", test.n, len(body), req.PackedSize())
+		var got cmn.HdbReq
+		tassert.CheckFatal(t, got.Unpack(body))
+		tassert.Fatalf(t, len(got.In) == test.n, "%d items: unpacked %d", test.n, len(got.In))
+		for i := range got.In {
+			a, b := &got.In[i], &req.In[i]
+			tassert.Errorf(t, a.Name == b.Name && a.Bidx == b.Bidx && a.Size == b.Size &&
+				a.Cksum.Equal(b.Cksum) && maps.Equal(a.CustomMD, b.CustomMD), "item %d: %v, expected %v", i, &a.ObjAttrs, &b.ObjAttrs)
+		}
+		if bodyR != nil {
+			tassert.CheckFatal(t, bodyR.Close())
+		}
+	}
+}
+
+func TestHdbBody(t *testing.T) {
+	body, bodyR := hdbPack(memsys.PageMM(), hdbTestReq(apc.HdbSizeDflt))
+	want := bytes.Clone(body)
+	got, err := io.ReadAll(bodyR)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, bytes.Equal(got, want), "body differs from the packed request")
+
+	tassert.CheckFatal(t, bodyR.Close())
+	tassert.CheckFatal(t, bodyR.Close()) // must not free the buffer again
+	_, err = bodyR.Read(make([]byte, 1))
+	tassert.Fatalf(t, err == io.ErrClosedPipe, "read after close: %v", err)
+}
+
+// a body that waits for the test before it reads and tells when net/http closes it
+type hdbSpyBody struct {
+	io.ReadCloser
+	gate   chan struct{}
+	closed chan struct{}
+	once   sync.Once
+}
+
+func (s *hdbSpyBody) Read(p []byte) (int, error) {
+	<-s.gate
+	return s.ReadCloser.Read(p)
+}
+
+func (s *hdbSpyBody) Close() error {
+	s.once.Do(func() { close(s.closed) })
+	return s.ReadCloser.Close()
+}
+
+// the peer replies before it reads the body
+func TestHdbBodyEarlyReply(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		rc := http.NewResponseController(w)
+		rc.EnableFullDuplex() // reply without a read of the body
+		w.WriteHeader(http.StatusBadRequest)
+		rc.Flush()
+	}))
+	defer srv.Close()
+
+	body, bodyR := hdbPack(memsys.PageMM(), hdbTestReq(apc.HdbSizeDflt))
+	spy := &hdbSpyBody{ReadCloser: bodyR, gate: make(chan struct{}), closed: make(chan struct{})}
+	release := sync.OnceFunc(func() { close(spy.gate) })
+	defer release()
+	args := cmn.HreqArgs{Method: http.MethodPost, Base: srv.URL, Path: apc.URLPathObjects.S, Body: body, BodyR: spy}
+	req, err := args.Req()
+	tassert.CheckFatal(t, err)
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	tassert.CheckFatal(t, err)
+	resp.Body.Close()
+
+	select {
+	case <-spy.closed:
+		t.Fatal("net/http closed the body, so the buffer is free, before it read the body")
+	default:
+	}
+	release()
+	select {
+	case <-spy.closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("net/http did not close the request body")
 	}
 }
