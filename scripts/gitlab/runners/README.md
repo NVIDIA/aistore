@@ -13,7 +13,7 @@ Setup scripts for Docker-based GitLab CI runners for AIStore:
 ### 1. Install Dependencies & Setup Registry
 
 ```bash
-sudo ./setup.sh [--data-root <absolute_path>] [--registry-username <username>] [--registry-password <password]
+sudo ./setup.sh --registry-username <username> --registry-password <password> [--data-root <absolute_path>]
 ```
 
 ### 2. Register Runner

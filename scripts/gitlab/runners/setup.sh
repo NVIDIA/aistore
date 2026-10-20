@@ -45,12 +45,12 @@ while [[ $# -gt 0 ]]; do
       REGISTRY_PASSWORD="${1#*=}" && shift
       ;;
     --help|-h)
-      echo "Usage: $0 [--data-root <absolute_path>] [--registry-username <user> --registry-password <pass>]"
+      echo "Usage: $0 --registry-username <user> --registry-password <pass> [--data-root <absolute_path>]"
       exit 0
       ;;
     *)
       echo "Unknown parameter: $1"
-      echo "Usage: $0 [--data-root <absolute_path>] [--registry-username <user> --registry-password <pass>]"
+      echo "Usage: $0 --registry-username <user> --registry-password <pass> [--data-root <absolute_path>]"
       exit 1
       ;;
   esac
@@ -61,9 +61,9 @@ if [[ -n "$DATA_ROOT" ]]; then
   [[ "$DATA_ROOT" == /* ]] || { echo "Error: --data-root must be absolute."; exit 1; }
 fi
 
-# Validate registry credentials (both or neither)
-if [[ -n "$REGISTRY_USERNAME" && -z "$REGISTRY_PASSWORD" ]] || [[ -z "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
-  echo "Error: --registry-username and --registry-password must both be provided."
+# Validate registry credentials
+if [[ -z "$REGISTRY_USERNAME" || -z "$REGISTRY_PASSWORD" ]]; then
+  echo "Error: --registry-username and --registry-password are required."
   exit 1
 fi
 
@@ -77,6 +77,11 @@ fi
 if ! command -v gitlab-runner &>/dev/null; then
   install_runner
   [[ -n "$DATA_ROOT" ]] && configure_runner_dirs
+fi
+
+# Install jq
+if ! command -v jq &>/dev/null; then
+  apt-get update && apt-get install -y jq
 fi
 
 configure_inotify_limits
@@ -95,6 +100,7 @@ docker network inspect ci-net >/dev/null 2>&1 || \
 
 # Set up pull-through registry cache
 setup_registry
+configure_registry_mirror
 
 # Cleanup
 cd "$SCRIPTS_DIR"

@@ -106,26 +106,26 @@ EOF
     --network ci-net
     -v "$REGISTRY_DIR:/var/lib/registry"
     -e REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io
+    -e "REGISTRY_PROXY_USERNAME=$REGISTRY_USERNAME"
+    -e "REGISTRY_PROXY_PASSWORD=$REGISTRY_PASSWORD"
+    registry:2
   )
-
-  if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
-    DOCKER_RUN_CMD+=(
-      -e "REGISTRY_PROXY_USERNAME=$REGISTRY_USERNAME"
-      -e "REGISTRY_PROXY_PASSWORD=$REGISTRY_PASSWORD"
-    )
-  fi
-
-  DOCKER_RUN_CMD+=(registry:2)
   "${DOCKER_RUN_CMD[@]}"
 
   echo "Registry setup completed successfully!"
   echo "- Pull-through registry cache running on port $REGISTRY_PORT"
   echo "- Registry cache storage: $REGISTRY_DIR"
   echo "- Registry configuration: /etc/containers/registries.conf.d/registries.conf"
-  if [[ -n "$REGISTRY_USERNAME" ]]; then
-    echo "- Registry credentials configured for user: $REGISTRY_USERNAME"
-  else
-    echo "- Registry running without authentication (anonymous pulls only)"
-  fi
+  echo "- Registry credentials configured for user: $REGISTRY_USERNAME"
+}
+
+configure_registry_mirror() {
+  local config=/etc/docker/daemon.json
+  echo "Configuring Docker registry mirror: http://127.0.0.1:$REGISTRY_PORT"
+  mkdir -p /etc/docker
+  [[ -s "$config" ]] || echo '{}' > "$config"
+  jq --arg mirror "http://127.0.0.1:$REGISTRY_PORT" '."registry-mirrors" = [$mirror]' "$config" > "$config.tmp"
+  mv "$config.tmp" "$config"
+  systemctl restart docker
 }
 
