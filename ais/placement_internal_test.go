@@ -212,22 +212,22 @@ func TestPlacementVersionGate(t *testing.T) {
 	p := &proxy{prim: &primary{}}
 	p.si = m.Primary
 
-	if err := p.checkSameVersion(m); err == nil || !strings.Contains(err.Error(), "unknown") {
-		t.Fatalf("expected unknown versions, got %v", err)
+	if err := p.checkPlacementVer(m); err == nil || !cmn.IsErrBusy(err) {
+		t.Fatalf("expected busy (unknown versions), got %v", err)
 	}
 	plSetVersions(p, map[string]string{plT1: cmn.VersionAIStore, plT2: cmn.VersionAIStore, "t-gone": "5.0"})
-	if err := p.checkSameVersion(m); err != nil {
+	if err := p.checkPlacementVer(m); err != nil {
 		t.Fatal(err)
 	}
 	p.prim.reg.nodeVersions.Store(plT2, "5.0")
-	if err := p.checkSameVersion(m); err == nil || !strings.Contains(err.Error(), plT2) {
+	if err := p.checkPlacementVer(m); err == nil || cmn.IsErrBusy(err) || !strings.Contains(err.Error(), plT2) {
 		t.Fatalf("expected version mismatch for %s, got %v", plT2, err)
 	}
 	// maintenance: version-checked on rejoin
 	maint := m.clone()
 	maint.Tmap[plT2].Flags = meta.SnodeMaint
 	p.prim.reg.nodeVersions.Delete(plT2)
-	if err := p.checkSameVersion(maint); err != nil {
+	if err := p.checkPlacementVer(maint); err != nil {
 		t.Fatalf("maintenance target must not block: %v", err)
 	}
 

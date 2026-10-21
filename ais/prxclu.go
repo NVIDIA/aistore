@@ -1010,7 +1010,7 @@ func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
 			ctx.status = http.StatusBadRequest
 			return fmt.Errorf("cannot set placement weights: %s has a single target", clone)
 		}
-		if err := p.checkSameVersion(ctx.smap); err != nil {
+		if err := p.checkPlacementVer(ctx.smap); err != nil {
 			ctx.status = http.StatusConflict
 			return err
 		}

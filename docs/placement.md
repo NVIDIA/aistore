@@ -285,7 +285,8 @@ Nodes already ready before weights appear keep their readiness.
 | `starting unweighted: N out of M targets are weighted (no super-majority)` | see cold restart above | `set-weights`, or remove stray local `placement.weight` |
 | `cannot admit t[...] with placement weight W: ...` | the requested weight would make the max/min ratio 100x or greater | fix the target's local `placement.weight` (or `--weight`) |
 | `cannot clear placement weights: bucket ...` | a bucket has a placement override | reset that override first (see [Buckets](#buckets)) |
-| `node versions are unknown or differ` | some member's version is not known to the primary yet, or differs | wait for nodes to register; complete the upgrade |
+| `ErrBusy: ... "set-placement-weights" is currently busy (node versions not yet known: ...)` | the primary has not yet heard from these members (e.g., right after primary change) | retry in a few seconds |
+| `node versions differ` | some member runs a different version | complete the upgrade |
 
 ## Upgrade
 

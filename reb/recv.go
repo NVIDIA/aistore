@@ -357,11 +357,9 @@ func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 	return ctMeta.Write(bytes.NewReader(mdBytes), -1, "" /*work fqn*/)
 }
 
-// receive a main replica or a slice displaced by main-replica relocation.
-//
-// Example: target A holds the main object; target B is its new owner and already holds
-// slice k of the same object and EC generation.
-//  1. A sends the main object to B (ecActRebCT). B removes A from Daemons and
+// Example flow: target A holds the main object; target B is its new owner and
+// already holds slice k of the same object and EC generation.
+//  1. Target A sends the main object to B (ecActRebCT). B removes A from Daemons and
 //     sets FullReplica=B and Daemons[B]=0.
 //  2. B moves its slice k to a workfile, selects a free target C, and adds
 //     Daemons[C]=k. B saves the incoming main object and its updated metadata.
@@ -369,12 +367,12 @@ func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 //     placement map. C saves the slice and metadata, preserving FullReplica=B
 //     and Daemons[B]=0. C does not broadcast metadata.
 //  4. B broadcasts the final placement to the other holders, including A.
-//     C is excluded because it received the metadata with its slice. Each
+//     Target C is excluded because it received the metadata with its slice. Each
 //     recipient updates only FullReplica and Daemons, retaining its SliceID.
-//
 // Only ecActRebCT transfers main ownership; ecActMoveCT preserves the placement
-// already established by the new main. A may retain its full replica on disk:
-// update its metadata too, so a later traversal does not treat A as the main.
+// already established by the new main.
+
+// receive a main replica or a slice displaced by main-replica relocation.
 func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reader, xreb *xs.Rebalance) error {
 	ct, err := core.NewCTFromBO(meta.CloneBck(&hdr.Bck), hdr.ObjName, fs.ECSliceCT)
 	if err != nil {

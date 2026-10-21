@@ -725,7 +725,7 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 			msync = c.rereg(osi)
 		}
 		if !msync {
-			c.noteVersion(osi)
+			c.noteVersion()
 			c.setVerHdr()
 			return false, false, nil
 		}
@@ -747,10 +747,10 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 		if err := c.joinStartup(started); err != nil {
 			return false, false, err
 		}
-		c.noteVersion(osi)
+		c.noteVersion()
 		return false, true, nil
 	}
-	c.noteVersion(osi)
+	c.noteVersion()
 	return true, false, nil
 }
 
@@ -840,11 +840,8 @@ func (c *clupost) noteRejectedVer() {
 	}
 }
 
-// record version of an accepted join (keepalive: admission only)
-func (c *clupost) noteVersion(osi *meta.Snode) {
-	if c.apiOp == apc.Keepalive && osi != nil {
-		return
-	}
+// record version of an accepted join or slow keepalive
+func (c *clupost) noteVersion() {
 	c.p.noteNodeVersion(c.nsi, c.nversStr, c.nversParsed)
 }
 

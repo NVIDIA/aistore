@@ -21,8 +21,8 @@ import (
 // Rules:
 // - absence means unknown, including after primary reelection;
 // - trust Smap first; entries are not pruned on membership events;
-// - self-join, admin-join, and keepalive re-admission; recorded under the Smap lock once accepted;
-// - ordinary fast keepalives refresh versions, including after primary reelection;
+// - self-join, admin-join, and slow keepalive: recorded under the Smap lock once accepted;
+// - fast keepalive: recorded when changed (lock-free);
 // - callers must enforce the version boundary first (see checkNodeVer).
 
 // Version boundary: v5.0 was the mandatory bridge release; 5.1+ refuses pre-5.0 peers in both directions.
@@ -91,9 +91,11 @@ func enforceVerBoundary(otherVerStr string) (reject bool) {
 }
 
 // reject placement updates until every Smap member has reported the primary's version
-func (p *proxy) checkSameVersion(smap *smapX) error {
+// - unknown only (e.g., right after primary reelection): busy - retry once members keepalive
+func (p *proxy) checkPlacementVer(smap *smapX) error {
 	var (
-		names   []string
+		differ  []string
+		unknown []string
 		primary = p.primary()
 	)
 	for _, nodes := range []meta.NodeMap{smap.Pmap, smap.Tmap} {
@@ -102,23 +104,29 @@ func (p *proxy) checkSameVersion(smap *smapX) error {
 			if sid == p.SID() || si.InMaintOrDecomm() {
 				continue
 			}
-			ver := primary.nodeVer(sid)
-			if ver == cmn.VersionAIStore {
-				continue
+			switch ver := primary.nodeVer(sid); ver {
+			case cmn.VersionAIStore:
+			case "":
+				unknown = append(unknown, si.StringEx())
+			default:
+				differ = append(differ, si.StringEx()+"("+ver+")")
 			}
-			if ver == "" {
-				ver = "unknown"
-			}
-			names = append(names, si.StringEx()+"("+ver+")")
 		}
 	}
-	if len(names) == 0 {
-		return nil
+	switch {
+	case len(differ) > 0:
+		for _, name := range unknown {
+			differ = append(differ, name+"(unknown)")
+		}
+		slices.Sort(differ)
+		return fmt.Errorf("%s: cannot set placement weights: node versions differ %v (primary: %s) - complete the upgrade",
+			p, differ, cmn.VersionAIStore)
+	case len(unknown) > 0:
+		slices.Sort(unknown)
+		return cmn.NewErrBusy(membershipTag, apc.ActSetPlacementWeights,
+			fmt.Sprintf("node versions not yet known: %v", unknown))
 	}
-	slices.Sort(names)
-
-	return fmt.Errorf("%s: cannot set placement weights: node versions are unknown or differ %v (primary: %s) - wait for nodes to register or complete the upgrade",
-		p, names, cmn.VersionAIStore)
+	return nil
 }
 
 // placement in use: weighted Smap or bucket placement override(s)
