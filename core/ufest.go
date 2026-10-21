@@ -237,6 +237,11 @@ func (u *Ufest) CheckInOrder(partNum int) (bool, hash.Hash) {
 	return true, u.streamCksum.H
 }
 
+func (u *Ufest) BelongsTo(lom *LOM) bool {
+	return u.lom.ObjName == lom.ObjName &&
+		u.lom.Bck().Equal(lom.Bck(), true /*same BID*/, true /*same backend*/)
+}
+
 // StreamWriteDone marks the streaming checksum as no longer in use.
 // Must be called after the part write completes if CheckInOrder returned true.
 func (u *Ufest) StreamWriteDone() {

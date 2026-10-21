@@ -2309,6 +2309,86 @@ func TestMultipartUpload(t *testing.T) {
 	runProviderTests(t, testMultipartUpload)
 }
 
+func TestMultipartUploadObjectBinding(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		srcBck     = cmn.Bck{Name: "mpt-bind-src-" + trand.String(8), Provider: apc.AIS}
+		dstBck     = cmn.Bck{Name: "mpt-bind-dst-" + trand.String(8), Provider: apc.AIS}
+	)
+	tools.CreateBucket(t, proxyURL, srcBck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, dstBck, nil, true /*cleanup*/)
+	smap := tools.GetClusterMap(t, proxyURL)
+	tsi, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+
+	for _, test := range []struct {
+		name         string
+		requestBck   cmn.Bck
+		differentObj bool
+		wantStatus   int
+	}{
+		{name: "same-object", requestBck: srcBck, wantStatus: http.StatusOK},
+		{name: "same-bucket-different-object", requestBck: srcBck, differentObj: true, wantStatus: http.StatusNotFound},
+		{name: "different-bucket", requestBck: dstBck, differentObj: true, wantStatus: http.StatusNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			srcObj := tools.GenerateObjectNameOnTarget(test.name+"-src-", srcBck, smap, tsi)
+			requestObj := srcObj
+			if test.differentObj {
+				requestObj = tools.GenerateObjectNameOnTarget(test.name+"-request-", test.requestBck, smap, tsi)
+			}
+			srcArgs := api.MptArgs{Context: t.Context(), BaseParams: baseParams, Bck: srcBck, ObjName: srcObj}
+			uploadID, err := api.CreateMultipartUpload(&srcArgs)
+			tassert.CheckFatal(t, err)
+			uploadOpen := true
+			t.Cleanup(func() {
+				if uploadOpen {
+					_ = api.AbortMultipartUpload(&api.AbortMptArgs{MptArgs: srcArgs, UploadID: uploadID})
+				}
+			})
+
+			body := []byte("multipart object binding")
+			err = api.UploadPart(&api.PutPartArgs{
+				PutArgs: api.PutArgs{
+					Context: t.Context(), BaseParams: baseParams, Bck: srcBck, ObjName: srcObj,
+					Reader: readers.NewBytes(body), Size: uint64(len(body)),
+				},
+				UploadID: uploadID, PartNumber: 1,
+			})
+			tassert.CheckFatal(t, err)
+
+			requestArgs := api.MptArgs{
+				Context: t.Context(), BaseParams: baseParams, Bck: test.requestBck, ObjName: requestObj,
+			}
+			if test.wantStatus != http.StatusOK {
+				err = api.AbortMultipartUpload(&api.AbortMptArgs{MptArgs: requestArgs, UploadID: uploadID})
+				herr := cmn.AsErrHTTP(err)
+				tassert.Fatalf(t, herr != nil && herr.Status == test.wantStatus,
+					"expected abort HTTP %d for upload bound to %s/%s, got: %v",
+					test.wantStatus, srcBck.Name, srcObj, err)
+			}
+			err = api.CompleteMultipartUpload(&api.CompleteMptArgs{
+				MptArgs: requestArgs, UploadID: uploadID, PartNumbers: []int{1},
+			})
+			if test.wantStatus == http.StatusOK {
+				tassert.CheckFatal(t, err)
+				uploadOpen = false
+				return
+			}
+			herr := cmn.AsErrHTTP(err)
+			tassert.Fatalf(t, herr != nil && herr.Status == test.wantStatus,
+				"expected HTTP %d for upload bound to %s/%s, got: %v", test.wantStatus, srcBck.Name, srcObj, err)
+
+			err = api.CompleteMultipartUpload(&api.CompleteMptArgs{
+				MptArgs: srcArgs, UploadID: uploadID, PartNumbers: []int{1},
+			})
+			tassert.CheckFatal(t, err)
+			uploadOpen = false
+		})
+	}
+}
+
 func testMultipartUpload(t *testing.T, mbck *meta.Bck) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)

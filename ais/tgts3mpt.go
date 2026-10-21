@@ -248,6 +248,9 @@ func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, dpq *dpq, it
 
 	uploadID := dpq.get(s3.QparamMptUploadID)
 	ecode, err = t.ups.abort(r, lom, uploadID, false /*force*/, false /*skipBackend*/)
+	if cos.IsNotExist(err) {
+		err = s3.NewErrNoSuchUpload(uploadID, nil)
+	}
 	if err != nil {
 		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return

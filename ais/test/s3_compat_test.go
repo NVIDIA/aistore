@@ -1920,6 +1920,112 @@ func TestS3MultipartErrorHandling(t *testing.T) {
 		"expected HTTP 404, got: %v", err)
 }
 
+func TestS3MultipartUploadObjectBinding(t *testing.T) {
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		srcBck   = cmn.Bck{Name: "test-s3-mpt-bind-src-" + trand.String(6), Provider: apc.AIS}
+		dstBck   = cmn.Bck{Name: "test-s3-mpt-bind-dst-" + trand.String(6), Provider: apc.AIS}
+	)
+
+	tools.CreateBucket(t, proxyURL, srcBck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, dstBck, nil, true /*cleanup*/)
+
+	smap := tools.GetClusterMap(t, proxyURL)
+	tsi, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+
+	s3Client := s3.New(s3.Options{
+		HTTPClient:   newS3Client(true /*pathStyle*/),
+		Region:       env.AwsDefaultRegion(),
+		BaseEndpoint: aws.String(proxyURL),
+		UsePathStyle: true,
+		Credentials:  getS3Credentials(t),
+		APIOptions: []func(*middleware.Stack) error{func(stack *middleware.Stack) error {
+			return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
+		}},
+	})
+
+	for _, test := range []struct {
+		name         string
+		requestBck   cmn.Bck
+		differentObj bool
+		wantStatus   int
+	}{
+		{name: "same-object", requestBck: srcBck, wantStatus: http.StatusOK},
+		{name: "same-bucket-different-object", requestBck: srcBck, differentObj: true, wantStatus: http.StatusNotFound},
+		{name: "different-bucket", requestBck: dstBck, differentObj: true, wantStatus: http.StatusNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			srcObj := tools.GenerateObjectNameOnTarget(test.name+"-src-", srcBck, smap, tsi)
+			requestObj := srcObj
+			if test.differentObj {
+				requestObj = tools.GenerateObjectNameOnTarget(test.name+"-request-", test.requestBck, smap, tsi)
+			}
+			body := []byte("multipart object binding")
+
+			created, err := s3Client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
+				Bucket: aws.String(srcBck.Name),
+				Key:    aws.String(srcObj),
+			})
+			tassert.CheckFatal(t, err)
+			uploadOpen := true
+			t.Cleanup(func() {
+				if uploadOpen {
+					_, _ = s3Client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
+						Bucket: created.Bucket, Key: created.Key, UploadId: created.UploadId,
+					})
+				}
+			})
+
+			part, err := s3Client.UploadPart(t.Context(), &s3.UploadPartInput{
+				Bucket: created.Bucket, Key: created.Key, UploadId: created.UploadId,
+				PartNumber: aws.Int32(1), Body: bytes.NewReader(body), ContentLength: aws.Int64(int64(len(body))),
+			})
+			tassert.CheckFatal(t, err)
+			completed := &types.CompletedMultipartUpload{Parts: []types.CompletedPart{{
+				ETag: part.ETag, PartNumber: aws.Int32(1),
+			}}}
+
+			if test.wantStatus != http.StatusOK {
+				_, err = s3Client.AbortMultipartUpload(t.Context(), &s3.AbortMultipartUploadInput{
+					Bucket: aws.String(test.requestBck.Name), Key: aws.String(requestObj), UploadId: created.UploadId,
+				})
+				var abortAPIErr smithy.APIError
+				tassert.Fatalf(t, errors.As(err, &abortAPIErr) && abortAPIErr.ErrorCode() == "NoSuchUpload",
+					"expected abort NoSuchUpload for upload bound to %s/%s, got: %v", srcBck.Name, srcObj, err)
+				var abortHTTPErr *smithyhttp.ResponseError
+				tassert.Fatalf(t, errors.As(err, &abortHTTPErr) && abortHTTPErr.HTTPStatusCode() == test.wantStatus,
+					"expected abort HTTP %d, got: %v", test.wantStatus, err)
+			}
+			_, err = s3Client.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
+				Bucket: aws.String(test.requestBck.Name), Key: aws.String(requestObj),
+				UploadId: created.UploadId, MultipartUpload: completed,
+			})
+			if test.wantStatus == http.StatusOK {
+				tassert.CheckFatal(t, err)
+				uploadOpen = false
+				return
+			}
+			var apiErr smithy.APIError
+			tassert.Fatalf(t, errors.As(err, &apiErr) && apiErr.ErrorCode() == "NoSuchUpload",
+				"expected NoSuchUpload for upload bound to %s/%s, got: %v", srcBck.Name, srcObj, err)
+			var httpErr *smithyhttp.ResponseError
+			tassert.Errorf(t, errors.As(err, &httpErr) && httpErr.HTTPStatusCode() == test.wantStatus,
+				"expected HTTP %d, got: %v", test.wantStatus, err)
+
+			_, err = s3Client.ListParts(t.Context(), &s3.ListPartsInput{
+				Bucket: created.Bucket, Key: created.Key, UploadId: created.UploadId,
+			})
+			tassert.CheckFatal(t, err)
+			_, err = s3Client.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
+				Bucket: created.Bucket, Key: created.Key, UploadId: created.UploadId, MultipartUpload: completed,
+			})
+			tassert.CheckFatal(t, err)
+			uploadOpen = false
+		})
+	}
+}
+
 func TestS3JWTAuth(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
 

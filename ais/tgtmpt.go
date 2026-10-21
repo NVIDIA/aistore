@@ -119,9 +119,11 @@ func (ups *ups) get(id string, lom *core.LOM) (manifest *core.Ufest, metadata ma
 	ups.RUnlock()
 	if ok {
 		manifest = up.u
-		metadata = up.metadata
 		debug.AssertFunc(func() bool { return id == manifest.ID() })
-		return
+		if !manifest.BelongsTo(lom) {
+			return nil, nil
+		}
+		return manifest, up.metadata
 	}
 	if !lom.IsFeatureSet(feat.ResumeInterruptedMPU) {
 		return
@@ -648,6 +650,10 @@ func (ups *ups) _abort(id string, lom *core.LOM) error {
 		manifest = m
 	} else {
 		manifest = up.u
+		if !manifest.BelongsTo(lom) {
+			ups.Unlock()
+			return cos.NewErrNotFound(lom, id)
+		}
 		delete(ups.m, id)
 		ups.Unlock()
 	}
