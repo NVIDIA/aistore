@@ -261,8 +261,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		poi.t = t
 		poi.lom = lom
 		poi.config = cmn.GCO.Get()
-		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || dpq.skipVC ||
-			(bck.IsRemoteOCI() && (len(r.Header.Values("If-Match")) != 0 || len(r.Header.Values("If-None-Match")) != 0))
+		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || dpq.skipVC
 		poi.restful = true
 	}
 	ecode, err := poi.do(nil /*response hdr*/, r, dpq)

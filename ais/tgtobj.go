@@ -152,6 +152,9 @@ type (
 // poi.restful entry point
 func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err error) {
 	poi.oreq = r
+	// Conditional OCI writes must reach the backend even when checksums match.
+	poi.skipVC = poi.skipVC || (poi.lom.Bck().IsRemoteOCI() &&
+		(len(r.Header.Values("If-Match")) != 0 || len(r.Header.Values("If-None-Match")) != 0))
 	poi.r = r.Body
 	poi.resphdr = resphdr
 	poi.workFQN = poi.lom.GenFQN(fs.WorkCT, fs.WorkfilePut)

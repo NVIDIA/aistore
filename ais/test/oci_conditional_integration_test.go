@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -244,4 +245,66 @@ func checkOCIWriteConflict(t *testing.T, err error) {
 		return
 	}
 	checkOCIWritePrecondition(t, err)
+}
+
+// enforce native PUT predicates even when identical checksums would skip an upload.
+func TestNativeOCIConditionalWrites(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck, RequiredCloudProvider: apc.OCI})
+	config, err := api.GetClusterConfig(baseParams)
+	tassert.CheckFatal(t, err)
+	if config.Features.IsSet(feat.SkipVC) {
+		t.Skip("requires checksum comparison enabled to exercise the no-op path")
+	}
+	props, err := api.HeadBucket(baseParams, cliBck, false)
+	tassert.CheckFatal(t, err)
+	_, err = api.SetBucketProps(baseParams, cliBck, &cmn.BpropsToSet{Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumMD5)}})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_, err := api.SetBucketProps(baseParams, cliBck, &cmn.BpropsToSet{Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(props.Cksum.Type)}})
+		tassert.CheckError(t, err)
+	})
+	prefix := "conditional-native-" + trand.String(12) + "/"
+	object := prefix + "identical"
+	t.Logf("isolated object prefix: %s", prefix)
+	t.Cleanup(func() { tassert.CheckError(t, api.DeleteObject(baseParams, cliBck, object)) })
+	data := []byte("native conditional write")
+	_, checksum, err := cos.ChecksumReader(bytes.NewReader(data), cos.ChecksumMD5)
+	tassert.CheckFatal(t, err)
+	put := func(header, value string) error {
+		headers := make(http.Header)
+		if header != "" {
+			headers.Set(header, value)
+		}
+		_, err := api.PutObject(&api.PutArgs{
+			Context: t.Context(), BaseParams: baseParams, Bck: cliBck, ObjName: object,
+			Reader: cos.NewByteReader(data), Size: uint64(len(data)), Cksum: &checksum.Cksum, Header: headers,
+		})
+		return err
+	}
+	tassert.CheckFatal(t, put("If-None-Match", "*"))
+	var output bytes.Buffer
+	read, err := api.GetObject(baseParams, cliBck, object, &api.GetArgs{Writer: &output})
+	tassert.CheckFatal(t, err)
+	attrs := read.Attrs()
+	tassert.Fatalf(t, checksum.Equal(attrs.Checksum()), "requires matching checksum: stored %v, request %v", attrs.Checksum(), &checksum.Cksum)
+	for _, tc := range []struct {
+		name, header, value string
+		status              int
+	}{
+		{"create-only", "If-None-Match", "*", http.StatusPreconditionFailed},
+		{"stale-etag", "If-Match", `"stale"`, http.StatusPreconditionFailed},
+		{"invalid-predicate", "If-None-Match", `"etag"`, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := put(tc.header, tc.value)
+			response := cmn.AsErrHTTP(err)
+			tassert.Fatalf(t, response != nil && response.Status == tc.status, "expected HTTP %d, got %v", tc.status, err)
+		})
+	}
+	tassert.CheckFatal(t, put("", ""))
+	tassert.CheckFatal(t, api.EvictObject(baseParams, cliBck, object))
+	output.Reset()
+	_, err = api.GetObject(baseParams, cliBck, object, &api.GetArgs{Writer: &output})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, bytes.Equal(output.Bytes(), data), "rejected native PUT changed remote bytes")
 }
