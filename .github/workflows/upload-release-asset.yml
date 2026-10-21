@@ -29,6 +29,7 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
+          check-latest: true
 
       - name: Build Binaries on ${{ matrix.os }}
         run: |

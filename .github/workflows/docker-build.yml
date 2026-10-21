@@ -35,6 +35,11 @@ on:
         type: boolean
         default: false
         description: 'Build for multiple platforms (e.g. linux/amd64, linux/arm64)'
+      pull:
+        required: false
+        type: boolean
+        default: false
+        description: 'Always pull the newest base and builder images'
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -64,5 +69,6 @@ jobs:
           IMAGE_TAG="${{ inputs.image_tag }}" \
           COMMIT_SHA="${{ inputs.commit_sha }}" \
           BUILD_TAGS="${{ inputs.build_tags }}" \
+          PULL="${{ inputs.pull && 'true' || '' }}" \
           ${{ inputs.extra_env }} \
           make -e ${{ inputs.multiarch && 'docker-buildx-multiarch' || 'all' }}

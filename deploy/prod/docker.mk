@@ -14,10 +14,14 @@ PLATFORMS    ?= linux/amd64,linux/arm64
 BUILDER_IMAGE ?=
 BASE_IMAGE    ?=
 COMMIT_SHA    ?=
+PULL          ?=
 
 BUILD_CONTEXT ?= .
 BUILD_ARGS    ?=
 
+ifneq ("$(PULL)","")
+    BUILD_ARGS += --pull
+endif
 ifneq ("$(BUILDER_IMAGE)","")
     BUILD_ARGS += --build-arg "BUILDER_IMAGE=$(BUILDER_IMAGE)"
 endif
