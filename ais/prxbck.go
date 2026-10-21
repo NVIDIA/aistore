@@ -347,6 +347,18 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 		return bctx._creadd(bck, nil, action)
 	}
 
+	// authorize before remote lookup (first touch)
+	if bctx.perms != apc.AccessNone {
+		// bck.Init() returns ErrRemoteBckNotFound and leaves Props nil on first touch
+		if bctx.bck.Props == nil {
+			bargs := bckPropsArgs{bck: bck}
+			bctx.bck.Props = bargs.inheritMerge()
+		}
+		if ecode, err := bctx.accessAllowed(bctx.bck); err != nil {
+			return bck, ecode, err
+		}
+	}
+
 	// lookup remote
 	action = apc.ActAddRemoteBck // only if requested via bctx
 	remoteHdr, ecode, err := bctx.lookup(bck)
@@ -374,29 +386,18 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 		}
 	}
 
+	bargs := bckPropsArgs{bck: bck, hdr: remoteHdr}
+	bck.Props = bargs.inheritMerge()
+
 	// when explicitly asked _not to_
 	bctx.exists = true
 	if bctx.dontAddRemote {
-		var err error
 		if bck.IsRemoteAIS() {
-			bargs := bckPropsArgs{bck: bck, hdr: remoteHdr}
+			var err error
 			bck.Props, err = bargs.makeRemote()
-		} else {
-			// Background (#18995):
-			//
-			// The bucket is not in the BMD - has no local representation. The best we could do
-			// is return remote metadata as is. But there's no control structure for that
-			// other than (AIS-only) `BucketProps`.
-			// Therefore: return the result of merging cluster defaults with the remote header
-			// resulting from the backend.Head(bucket) call and containing actual
-			// values (e.g. versioning).
-			// The returned bucket props will have its BID == 0 (zero), which also means:
-			// this bucket is not initialized and/or not present in BMD.
-
-			bargs := bckPropsArgs{bck: bck, hdr: remoteHdr}
-			bck.Props = bargs.inheritMerge()
+			return bck, 0, err
 		}
-		return bck, 0, err
+		return bck, 0, nil
 	}
 
 	return bctx._creadd(bck, remoteHdr, action)

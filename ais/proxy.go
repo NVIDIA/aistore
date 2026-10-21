@@ -1512,6 +1512,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 		bckArgs.r = r
 		bckArgs.bck = bck
 		bckArgs.msg = msg
+		bckArgs.perms = xact.Table[msg.Action].Access
 		bckArgs.query = query
 		bckArgs.createAIS = false
 	}
@@ -2158,7 +2159,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		bckArgs.w = w
 		bckArgs.r = r
 		bckArgs.msg = msg
-		bckArgs.perms = apc.AccessNone /* access checked below */
+		bckArgs.perms = xact.Table[msg.Action].Access
 		bckArgs.bck = bck
 		bckArgs.dpq = apireq.dpq
 		bckArgs.query = apireq.query

@@ -82,6 +82,96 @@ func expectETLAccessDenied(t *testing.T, bp api.BaseParams, status int) {
 	}
 }
 
+func TestRemoteBucketFirstTouchAccess(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true, RequiresRemoteCluster: true})
+
+	bp := tools.BaseAPIParams()
+	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
+	smap, err := api.GetClusterMap(bp)
+	tassert.CheckFatal(t, err)
+	authBP := authNBP()
+	registerCluster(t, authBP, authn.CluACL{ID: smap.UUID, URLs: []string{bp.URL}})
+
+	for _, test := range []struct {
+		name        string
+		token       string
+		exists      bool
+		backend     bool
+		blob        bool
+		setBackend  bool
+		wantStatus  int
+		wantPresent bool
+	}{
+		{name: "unauthenticated", exists: true, wantStatus: http.StatusUnauthorized},
+		{name: "unauthenticated-missing", wantStatus: http.StatusUnauthorized},
+		{name: "authenticated", token: bp.Token, exists: true, wantStatus: http.StatusOK, wantPresent: true},
+		{name: "non-admin-blob-download", exists: true, blob: true, wantStatus: http.StatusNotFound, wantPresent: true},
+		{name: "non-admin-set-unregistered-backend", exists: true, setBackend: true, wantStatus: http.StatusOK, wantPresent: true},
+		{name: "authenticated-linked-backend", exists: true, backend: true, wantStatus: http.StatusOK, wantPresent: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			remoteBck := cmn.Bck{Name: "remote-" + trand.String(10), Provider: apc.AIS}
+			linkedBck := cmn.Bck{
+				Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID},
+			}
+			if test.exists {
+				tools.CreateBucket(t, remoteBP.URL, remoteBck, nil, true /*cleanup*/)
+			}
+			t.Cleanup(func() { _ = api.EvictRemoteBucket(bp, linkedBck, false /*keepMD*/) })
+
+			testBP := bp
+			testBP.Token = test.token
+			requestBck := linkedBck
+			backendProps := &cmn.BpropsToSet{BackendBck: &cmn.BackendBckToSet{
+				Name: apc.Ptr(linkedBck.Name), Provider: apc.Ptr(linkedBck.Provider), Ns: &linkedBck.Ns,
+			}}
+			if test.blob {
+				testBP = loginWithACLs(t, authBP, bp, smap.UUID, nil, apc.AccessRW)
+			}
+			if test.backend {
+				_, err := api.ListObjects(bp, linkedBck, nil, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				localBck := cmn.Bck{Name: "local-" + trand.String(10), Provider: apc.AIS}
+				tools.CreateBucket(t, bp.URL, localBck, backendProps, true /*cleanup*/)
+				tassert.CheckFatal(t, api.EvictRemoteBucket(bp, linkedBck, false /*keepMD*/))
+
+				aclBck := cmn.Bck{Name: localBck.Name, Provider: localBck.Provider, Ns: cmn.Ns{UUID: smap.UUID}}
+				testBP = loginWithACLs(t, authBP, bp, smap.UUID,
+					[]*authn.BckACL{{Bck: aclBck, Access: apc.AceBckHEAD}}, 0)
+				requestBck = localBck
+			}
+			if test.setBackend {
+				localBck := cmn.Bck{Name: "local-" + trand.String(10), Provider: apc.AIS}
+				tools.CreateBucket(t, bp.URL, localBck, nil, true /*cleanup*/)
+				aclBck := cmn.Bck{Name: localBck.Name, Provider: localBck.Provider, Ns: cmn.Ns{UUID: smap.UUID}}
+				testBP = loginWithACLs(t, authBP, bp, smap.UUID,
+					[]*authn.BckACL{{Bck: aclBck, Access: apc.AcePATCH}}, 0)
+				requestBck = localBck
+			}
+			var err error
+			switch {
+			case test.blob:
+				_, err = api.BlobDownload(testBP, requestBck, "missing", &apc.BlobMsg{})
+			case test.backend:
+				_, err = api.HeadBucket(testBP, requestBck, false /*dontAddRemote*/)
+			case test.setBackend:
+				_, err = api.SetBucketProps(testBP, requestBck, backendProps)
+			default:
+				_, err = api.ListObjects(testBP, requestBck, nil, api.ListArgs{})
+			}
+			if test.wantStatus == http.StatusOK {
+				tassert.CheckFatal(t, err)
+			} else {
+				expectStatus(t, err, test.wantStatus)
+			}
+			present, err := api.QueryBuckets(bp, cmn.QueryBcks(linkedBck), apc.FltPresent)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, present == test.wantPresent, "%s presence: expected %t, got %t",
+				linkedBck.String(), test.wantPresent, present)
+		})
+	}
+}
+
 func TestAuth(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
 
