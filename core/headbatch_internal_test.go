@@ -128,10 +128,10 @@ func hdbKey(ent *HdbEnt) string { return ent.bck.Name + "/" + ent.name }
 
 func hdbPeer(tid string) *meta.Snode { return &meta.Snode{DaeID: tid} }
 
-func hdbCheckStats(tb testing.TB, hb *HdbBatcher, nbatches, nfellbk, nunanswered int64) {
-	b, f, u := hb.TakeStats()
-	tassert.Errorf(tb, b == nbatches && f == nfellbk && u == nunanswered,
-		"stats: got (%d, %d, %d), expected (%d, %d, %d)", b, f, u, nbatches, nfellbk, nunanswered)
+func hdbCheckStats(tb testing.TB, hb *HdbBatcher, nbatches, nfellbk, nunanswered, npeerbusy int64) {
+	b, f, u, p := hb.TakeStats()
+	tassert.Errorf(tb, b == nbatches && f == nfellbk && u == nunanswered && p == npeerbusy,
+		"stats: got (%d, %d, %d, %d), expected (%d, %d, %d, %d)", b, f, u, p, nbatches, nfellbk, nunanswered, npeerbusy)
 }
 
 func TestHdbBatcherFlush(t *testing.T) {
@@ -154,8 +154,8 @@ func TestHdbBatcherFlush(t *testing.T) {
 	tassert.Errorf(t, done["a/o2"].Status == apc.HdbMissing && done["b/o3"].Status == apc.HdbDiverged &&
 		done["b/o3"].Cause == "diverged b/o3", "a/o2: %s, b/o3: %s %q", done["a/o2"].Status, done["b/o3"].Status, done["b/o3"].Cause)
 	tassert.Errorf(t, len(done) == 8 && hb.Pending() == 0, "%d completed, %d pending", len(done), hb.Pending())
-	hdbCheckStats(t, hb, 2, 1, 0)
-	hdbCheckStats(t, hb, 0, 0, 0) // TakeStats resets
+	hdbCheckStats(t, hb, 2, 1, 0, 0)
+	hdbCheckStats(t, hb, 0, 0, 0, 0) // TakeStats resets
 }
 
 // an unsupported peer gets per-object HEAD
@@ -190,22 +190,32 @@ func TestHdbBatcherFallback(t *testing.T) {
 		ent := done["a/"+name]
 		tassert.Errorf(t, ent.Status == test.status, "%s: got %s, expected %s", name, ent.Status, test.status)
 	}
-	hdbCheckStats(t, hb, 1, int64(len(tests)), 0)
+	hdbCheckStats(t, hb, 1, int64(len(tests)), 0, 0)
 }
 
 // any other batch error completes the objects as HdbNone
+// (429: the peer is under critical load, counted as peer-busy and not as unanswered)
 func TestHdbBatcherUnanswered(t *testing.T) {
-	tt := &hdbTarget{batchErr: errors.New("connection refused")}
-	hb, done := hdbInit(t, tt, HdbArgs{})
-	hdbAdd(t, hb, hdbPeer("t1"), "a", "o1", hdbOa)
-	hdbAdd(t, hb, hdbPeer("t1"), "a", "o2", hdbOa)
-	hb.Flush()
+	for _, test := range []struct {
+		err        error
+		unanswered int64
+		peerBusy   int64
+	}{
+		{errors.New("connection refused"), 2, 0},
+		{cmn.NewErrTooManyRequests(errors.New("rejected"), http.StatusTooManyRequests), 0, 2},
+	} {
+		tt := &hdbTarget{batchErr: test.err}
+		hb, done := hdbInit(t, tt, HdbArgs{})
+		hdbAdd(t, hb, hdbPeer("t1"), "a", "o1", hdbOa)
+		hdbAdd(t, hb, hdbPeer("t1"), "a", "o2", hdbOa)
+		hb.Flush()
 
-	tassert.Errorf(t, len(done) == 2, "expected 2 completed, got %d", len(done))
-	for key, ent := range done {
-		tassert.Errorf(t, ent.Status == apc.HdbNone && ent.Cause == tt.batchErr.Error(), "%s: %s %q", key, ent.Status, ent.Cause)
+		tassert.Errorf(t, len(done) == 2, "%v: expected 2 completed, got %d", test.err, len(done))
+		for key, ent := range done {
+			tassert.Errorf(t, ent.Status == apc.HdbNone && ent.Cause == test.err.Error(), "%s: %s %q", key, ent.Status, ent.Cause)
+		}
+		hdbCheckStats(t, hb, 1, 0, test.unanswered, test.peerBusy)
 	}
-	hdbCheckStats(t, hb, 1, 0, 2)
 }
 
 // the callback Add only queues and Flush sends its objects
@@ -223,7 +233,7 @@ func TestHdbBatcherRetry(t *testing.T) {
 	hb.Flush()
 
 	tassert.Errorf(t, hb.Pending() == 0, "Flush must send the retries, pending: %d", hb.Pending())
-	hdbCheckStats(t, hb, 2, 0, 0)
+	hdbCheckStats(t, hb, 2, 0, 0, 0)
 }
 
 // the request carries the attributes that CheckEq reads and nothing from the previous batch

@@ -73,6 +73,7 @@ type (
 		reb      *reb.Reb
 		res      *res.Res
 		fsprg    fsprungroup
+		hdbGate  hdbGate // head-batch receiver
 		txns     txns
 		ups      ups
 		htrun    // common w/ proxy
@@ -359,6 +360,7 @@ func (t *target) init(config *cmn.Config) {
 	daemon.rg.add(sc)                                                              // new stream collector
 
 	t.fshc = health.NewFSHC(t)
+	t.hdbGate.init()
 
 	if err := ts.InitCDF(config); err != nil {
 		cos.ExitLog(err)

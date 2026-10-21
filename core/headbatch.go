@@ -54,6 +54,7 @@ type (
 			nbatches    int64
 			nfellbk     int64 // items answered by per-object HEAD
 			nunanswered int64 // items whose peer did not answer
+			npeerbusy   int64 // items whose peer rejected the request (429: critical load)
 		}
 		flushing bool
 	}
@@ -143,11 +144,11 @@ func (hb *HdbBatcher) Flush() {
 
 func (hb *HdbBatcher) Pending() int { return hb.total }
 
-func (hb *HdbBatcher) TakeStats() (nbatches, nfellbk, nunanswered int64) {
+func (hb *HdbBatcher) TakeStats() (nbatches, nfellbk, nunanswered, npeerbusy int64) {
 	st := &hb.stats
-	nbatches, nfellbk, nunanswered = st.nbatches, st.nfellbk, st.nunanswered
-	st.nbatches, st.nfellbk, st.nunanswered = 0, 0, 0
-	return nbatches, nfellbk, nunanswered
+	nbatches, nfellbk, nunanswered, npeerbusy = st.nbatches, st.nfellbk, st.nunanswered, st.npeerbusy
+	st.nbatches, st.nfellbk, st.nunanswered, st.npeerbusy = 0, 0, 0, 0
+	return nbatches, nfellbk, nunanswered, npeerbusy
 }
 
 // complete only one group
@@ -182,9 +183,15 @@ func (hb *HdbBatcher) batch(ents []HdbEnt, tsi *meta.Snode) {
 			hb.fallback(ents, tsi)
 			return
 		}
-		hb.stats.nunanswered += int64(len(ents))
+		tag := "failed:"
+		if cmn.IsErrTooManyRequests(err) {
+			hb.stats.npeerbusy += int64(len(ents))
+			tag = "busy:"
+		} else {
+			hb.stats.nunanswered += int64(len(ents))
+		}
 		cmn.SparseWarn(hb.mod, hb.stats.nbatches, tsi.StringEx(), apc.HdbTag, "of", len(ents),
-			"failed:", err, "[ no per-object fallback ]")
+			tag, err, "[ no per-object fallback ]")
 		cause := err.Error()
 		for i := range ents {
 			ents[i].Status, ents[i].Cause = apc.HdbNone, cause

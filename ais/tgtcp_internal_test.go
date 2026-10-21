@@ -7,6 +7,7 @@ package ais
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -20,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -301,5 +303,36 @@ func TestHdbBodyEarlyReply(t *testing.T) {
 	case <-spy.closed:
 	case <-time.After(5 * time.Second):
 		t.Fatal("net/http did not close the request body")
+	}
+}
+
+// at critical load the receiver rejects the request with 429 before it reads the body
+func TestHdbReceiverBusy(t *testing.T) {
+	tgt := &target{}
+	tgt.hdbGate.crit.Store(true)
+	tgt.hdbGate.next.Store(mono.NanoTime() + int64(time.Hour))
+
+	packed := hdbTestReq(apc.HdbSizeDflt).NewPack()
+	body := bytes.NewReader(packed)
+	ecode, err := tgt.objHeadBatch(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", body))
+	tassert.Fatalf(t, err != nil && ecode == http.StatusTooManyRequests, "expecting 429, got %d (%v)", ecode, err)
+	tassert.Errorf(t, body.Len() == len(packed), "the body is read: %d of %d bytes left", body.Len(), len(packed))
+}
+
+// the sender reads 400 as unsupported (per-object HEADs) and 429 as peer-busy (no fallback)
+func TestHdbErr(t *testing.T) {
+	tsi := &meta.Snode{DaeID: "t1"}
+	for _, test := range []struct {
+		status          int
+		unsupp, tooMany bool
+	}{
+		{http.StatusBadRequest, true, false},
+		{http.StatusTooManyRequests, false, true},
+		{http.StatusServiceUnavailable, false, false},
+	} {
+		err := _hdbErr(errors.New("cause"), test.status, tsi)
+		unsupp, tooMany := cmn.IsErrHdbUnsupported(err), cmn.IsErrTooManyRequests(err)
+		tassert.Errorf(t, unsupp == test.unsupp && tooMany == test.tooMany,
+			"status %d: unsupported %t, too many requests %t, expected (%t, %t)", test.status, unsupp, tooMany, test.unsupp, test.tooMany)
 	}
 }

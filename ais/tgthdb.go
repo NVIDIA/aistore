@@ -8,10 +8,14 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -23,12 +27,40 @@ import (
 
 const hdbBodyMax = 64 * cos.MiB // apc.HdbSizeMax items
 
+const hdbLoadIval = time.Second
+
 // a bucket of the request and its stats
 type hdbBck struct {
 	err    error // Init error: fails the bucket's items
 	bck    meta.Bck
 	nheads int64 // HEADs that compared
 	lat    int64 // their total latency (ns)
+}
+
+// at Critical load the receiver answers 429 and loads no objects
+type hdbGate struct {
+	adv  load.Advice // protected by mu
+	mu   sync.Mutex
+	next atomic.Int64 // mono time of the next sample
+	crit atomic.Bool  // the last sample
+}
+
+func (g *hdbGate) init() {
+	g.adv.Init(load.FlMem|load.FlCla, &load.Extra{RW: false}) // metadata-only
+}
+
+// one request samples the load while others use the last answer
+func (g *hdbGate) busy() bool {
+	now := mono.NanoTime()
+	if now < g.next.Load() || !g.mu.TryLock() {
+		return g.crit.Load()
+	}
+	g.adv.Refresh()
+	crit := g.adv.Load == load.Critical
+	g.crit.Store(crit)
+	g.next.Store(now + int64(hdbLoadIval))
+	g.mu.Unlock()
+	return crit
 }
 
 // Init validates the name and provider
@@ -77,28 +109,33 @@ func (t *target) httpobjhdb(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := t.objHeadBatch(w, r); err != nil {
-		t._erris(w, r, err, 0, dpq.silent)
+	if ecode, err := t.objHeadBatch(w, r); err != nil {
+		t._erris(w, r, err, ecode, dpq.silent)
 	}
 }
 
 // unpack the request and compare each object with the local copy
 // the response is positional: Status[i] answers In[i]
-func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request) error {
+func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request) (ecode int, err error) {
 	if r.ContentLength <= 0 || r.ContentLength > hdbBodyMax {
-		return fmt.Errorf("%s: invalid content length %d, expecting (0, %d]", apc.HdbTag, r.ContentLength, hdbBodyMax)
+		return http.StatusBadRequest, fmt.Errorf("%s: invalid content length %d, expecting (0, %d]", apc.HdbTag, r.ContentLength, hdbBodyMax)
+	}
+	// critical load: reject before reading the body
+	if t.hdbGate.busy() {
+		cause := fmt.Errorf("%s: %s rejected due to resource pressure", t, apc.HdbTag)
+		return http.StatusTooManyRequests, cmn.NewErrTooManyRequests(cause, http.StatusTooManyRequests)
 	}
 	body, err := cos.ReadAllN(r.Body, r.ContentLength)
 	cos.Close(r.Body)
 	if err != nil {
-		return err
+		return http.StatusBadRequest, err
 	}
 	var req cmn.HdbReq
 	if err := req.Unpack(body); err != nil {
-		return err
+		return http.StatusBadRequest, err
 	}
 	if err := req.Validate(); err != nil {
-		return err
+		return http.StatusBadRequest, err
 	}
 
 	// init the buckets, compare each object, add stats per bucket
@@ -123,7 +160,7 @@ func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request) error {
 	if _, err := w.Write(out); err != nil {
 		nlog.Warningln(t.String(), apc.HdbTag+":", err) // (broken pipe; benign)
 	}
-	return nil
+	return 0, nil
 }
 
 // establish the identity of one object

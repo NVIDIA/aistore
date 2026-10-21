@@ -1635,12 +1635,16 @@ func (b *hdbBody) Close() error {
 
 // NOTE:
 // - pre-5.2 peer will return 400 => fall back to per-object HEADs
+// - peer under critical load will return 429 (see objHeadBatch) => no fallback, count peer-busy
 // - generally, intra-cluster protocols across nodes running incompatible software versions -
 //   and the respective deployments - are not supported
 
 func _hdbErr(err error, status int, tsi *meta.Snode) error {
-	if status == http.StatusBadRequest {
+	switch status {
+	case http.StatusBadRequest:
 		return fmt.Errorf("%s: %w (%v)", tsi.StringEx(), cmn.ErrHdbUnsupported, err)
+	case http.StatusTooManyRequests:
+		return fmt.Errorf("%s: %w", tsi.StringEx(), cmn.NewErrTooManyRequests(err, status))
 	}
 	return fmt.Errorf("%s: %w", tsi.StringEx(), err)
 }
