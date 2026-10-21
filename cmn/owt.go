@@ -60,6 +60,8 @@ func (owt OWT) String() (s string) {
 		s = "owt-transform"
 	case OwtCopy:
 		s = "owt-copy"
+	case OwtChunks:
+		s = "owt-chunks"
 	case OwtRebalance:
 		s = "owt-rebalance"
 	case OwtGetTryLock:
