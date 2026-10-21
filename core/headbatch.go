@@ -251,7 +251,7 @@ func (ent *HdbEnt) init(lom *LOM) {
 	b := lom.Bucket()
 	ent.bck = cmn.Bck{Name: b.Name, Provider: b.Provider, Ns: b.Ns}
 	ent.LIF = lom.LIF()
-	ent.name = lom.ObjName
+	ent.name = lom.OrigObjName()
 	if ck := lom.Checksum(); ck != nil {
 		ent.cksum = *ck
 	}

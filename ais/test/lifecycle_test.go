@@ -5,12 +5,14 @@
 package integration_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -474,7 +476,12 @@ func TestMembershipBusy(t *testing.T) {
 }
 
 // Cleanup mode reclaims the source-side copies that a completed rebalance leaves behind.
-func TestRebalanceCleanupReclaims(t *testing.T) {
+func TestRebalanceCleanupReclaims(t *testing.T) { testRebalanceCleanupReclaims(t, 0) }
+
+// Cleanup mode with FNTL names that are too long for a file name.
+func TestRebalanceCleanupReclaimsFntl(t *testing.T) { testRebalanceCleanupReclaims(t, 280) }
+
+func testRebalanceCleanupReclaims(t *testing.T, nameLen int) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 3})
 
 	var (
@@ -484,6 +491,7 @@ func TestRebalanceCleanupReclaims(t *testing.T) {
 			num:       lcNumObjs,
 			fileSize:  lcObjSize,
 			fixedSize: true,
+			nameLen:   nameLen,
 			bck:       bck,
 			silent:    true,
 		}
@@ -530,7 +538,69 @@ func TestRebalanceCleanupReclaims(t *testing.T) {
 
 	m.gets(nil, false /*withValidation*/)
 
+	// rebalance and cleanup keep the names: no object is lost, none is added
+	// (e.g., one with a shortened name)
+	lst, err := api.ListObjects(bp, bck, &apc.LsoMsg{}, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	want, seen := cos.NewStrSet(m.objNames...), cos.NewStrSet()
+	for _, en := range lst.Entries {
+		if !want.Contains(en.Name) {
+			t.Errorf("unexpected object %q", en.Name)
+			break
+		}
+		if seen.Contains(en.Name) {
+			t.Errorf("object %q listed twice", en.Name)
+			break
+		}
+		seen.Add(en.Name)
+	}
+	tassert.Errorf(t, len(lst.Entries) == m.num, "listed %d objects, expecting %d", len(lst.Entries), m.num)
+
 	ensureNoRunningReb(t, bp)
+}
+
+func TestSpaceCleanupFntl(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	var (
+		bck = cmn.Bck{Name: "sc-fntl" + cos.GenTie(), Provider: apc.AIS}
+		m   = &ioContext{
+			t:             t,
+			num:           100,
+			fileSize:      128,
+			fixedSize:     true,
+			nameLen:       280,
+			bck:           bck,
+			getErrIsFatal: true,
+			chunksConf:    &ioCtxChunksConf{}, // no chunks (TODO: space cleanup removes chunks of FNTL objects)
+		}
+		bp = tools.BaseAPIParams(proxyURL)
+	)
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	m.puts()
+
+	// older than `space.dont_cleanup_time`
+	m.backdateLocalObjs(tools.GetClusterConfig(t).Space.DontCleanupTime.D() + time.Hour)
+
+	args := &xact.ArgsMsg{Kind: apc.ActStoreCleanup, Buckets: []cmn.Bck{bck}}
+	xid, err := api.StartXaction(bp, args, "" /*extra*/)
+	tassert.CheckFatal(t, err)
+	args.ID, args.Timeout = xid, tools.RebalanceTimeout
+	tassert.CheckFatal(t, api.WaitForXaction(bp, args))
+
+	snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActStoreCleanup})
+	tassert.CheckFatal(t, err)
+	for _, tsnaps := range snaps {
+		for _, snap := range tsnaps {
+			skipped := strings.Contains(snap.CtlMsg, "too-fresh") || strings.Contains(snap.CtlMsg, "recently-accessed")
+			tassert.Fatalf(t, !skipped, "cleanup skipped new objects: %s", snap.CtlMsg)
+		}
+	}
+
+	lst, err := api.ListObjects(bp, bck, nil, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(lst.Entries) == m.num, "listed %d objects, expecting %d", len(lst.Entries), m.num)
+	m.gets(nil, false)
 }
 
 // lcRunCleanup runs rebalance in cleanup mode to completion.

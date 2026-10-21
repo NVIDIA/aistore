@@ -334,9 +334,7 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 	err := lom.RenameToMain(wfqn)
 	if err == nil {
 		if len(saved) > 0 {
-			if _, ok := lom.GetCustomKey(cmn.OrigFntl); !ok {
-				lom.SetCustomKey(cmn.OrigFntl, saved[0])
-			}
+			lom.SetCustomKey(cmn.OrigFntl, saved[0])
 			lom.setlmfl(lmflFntl)
 		}
 		// new content: PUT, cold GET, append, chunked completion

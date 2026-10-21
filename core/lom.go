@@ -896,6 +896,34 @@ func (lom *LOM) fixupFntl() {
 	lom.setHRW(true)
 }
 
+// a LOM from the FQN of a shortened (`.x`) file takes the uname, digest, and HRW of the original name
+// (the same identity as a LOM from that name)
+// on any error (or `orig_fntl` of another bucket - e.g. a copy), keep the short identity
+func (lom *LOM) initFntl() {
+	md, err := lom.lmfs(false)
+	if err != nil {
+		return
+	}
+	ofqn, ok := md.GetCustomKey(cmn.OrigFntl)
+	if !ok || lom.ObjName != fs.ShortenFntl(ofqn) {
+		return
+	}
+	var parsed fs.ParsedFQN
+	if parsed.Init(ofqn) != nil || !fs.IsFntl(parsed.ObjName) || !parsed.Bck.Equal(lom.Bucket()) {
+		return
+	}
+	uname := lom.bck.MakeUname(parsed.ObjName)
+	mi, digest, err := fs.Hrw(uname)
+	if err != nil {
+		return
+	}
+	lom.md.uname = cos.UnsafeSptr(uname)
+	lom.digest = digest
+	// the short name is the hash of the long FQN on the mountpath (see `ShortenFntl`)
+	long := mi.MakePathFQN(lom.Bucket(), fs.ObjCT, parsed.ObjName)
+	lom.setHRW(lom.FQN == mi.MakePathFQN(lom.Bucket(), fs.ObjCT, fs.ShortenFntl(long)))
+}
+
 func (lom *LOM) OrigFntl() []string {
 	debug.AssertFunc(func() bool { return lom.IsFntl() })
 	ofqn, ok := lom.GetCustomKey(cmn.OrigFntl)
@@ -909,6 +937,16 @@ func (lom *LOM) OrigFntl() []string {
 		return nil
 	}
 	return []string{ofqn, parsed.ObjName}
+}
+
+// the object name that the other targets know
+// (`lom.ObjName` of a FNTL object is the shortened name, the uname keeps the original)
+func (lom *LOM) OrigObjName() string {
+	if !fs.HasPrefixFntl(lom.ObjName) {
+		return lom.ObjName
+	}
+	_, objName := cmn.ParseUname(lom.Uname())
+	return objName
 }
 
 func (lom *LOM) PushFntl(short []string) (saved []string) {

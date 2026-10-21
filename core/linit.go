@@ -55,6 +55,9 @@ func (lom *LOM) PostInit() error {
 	}
 	uname := lom.bck.MakeUname(lom.ObjName)
 	lom.md.uname = cos.UnsafeSptr(uname)
+	if fs.HasPrefixFntl(lom.ObjName) {
+		lom.initFntl()
+	}
 	return nil
 }
 

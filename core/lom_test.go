@@ -668,6 +668,32 @@ var _ = Describe("LOM", func() {
 					}
 				})
 
+				long := "foldr/" + strings.Repeat("x", 280)
+				DescribeTable("should give a walked FNTL LOM the identity of its original name",
+					func(bck cmn.Bck, objName string, hashMismatch, takeover bool) {
+						ofqn := mis[0].MakePathFQN(&bck, fs.ObjCT, objName)
+						name := fs.ShortenFntl(ofqn)
+						if hashMismatch {
+							name = fs.ShortenFntl(ofqn + "x")
+						}
+						fqn := mis[0].MakePathFQN(&localBckA, fs.ObjCT, name)
+						lom := filePut(fqn, testFileSize)
+						lom.SetCustomKey(cmn.OrigFntl, ofqn)
+						Expect(persist(lom)).To(Succeed())
+
+						walked := newBasicLom(fqn)
+						if takeover {
+							Expect(walked.OrigObjName()).To(Equal(objName))
+						} else {
+							Expect(walked.OrigObjName()).To(Equal(name))
+						}
+					},
+					Entry("matching", localBckA, long, false, true),
+					Entry("hash mismatch", localBckA, long, true, false),
+					Entry("other bucket", localBckB, long, false, false),
+					Entry("name not too long", localBckA, "foldr/short", false, false),
+				)
+
 				It("should fill object with correct meta", func() {
 					startTime := time.Now()
 					time.Sleep(50 * time.Millisecond)

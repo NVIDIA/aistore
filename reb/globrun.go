@@ -866,7 +866,7 @@ func (rargs *rargs) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenClose
 		o = transport.AllocSend()
 	)
 	o.Hdr.Bck.Copy(lom.Bucket())
-	o.Hdr.ObjName = lom.ObjName
+	o.Hdr.ObjName = lom.OrigObjName()
 	o.Hdr.Opaque = rargs.opaque[:]
 	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
 	o.SentCB, o.CmplArg = rargs.objSentCallback, lom

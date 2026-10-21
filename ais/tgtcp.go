@@ -1525,11 +1525,10 @@ func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX, reqProps [
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
-		// TODO: for a FNTL object, send the original name (OrigFntl) not the shortened one (lom.ObjName)
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodHead,
 			Base:   tsi.URL(cmn.NetIntraControl),
-			Path:   apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+			Path:   apc.URLPathObjects.Join(lom.Bck().Name, lom.OrigObjName()),
 			Query:  q,
 		}
 		cargs.timeout = cmn.Rom.CplaneOperation()
@@ -1667,7 +1666,7 @@ func (t *target) headObjBcast(lom *core.LOM, smap *smapX) *meta.Snode {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,
-		Path:   apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+		Path:   apc.URLPathObjects.Join(lom.Bck().Name, lom.OrigObjName()),
 		Query:  q,
 	}
 	args.ignoreMaintenance = true
