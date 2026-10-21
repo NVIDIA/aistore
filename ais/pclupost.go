@@ -388,7 +388,11 @@ func (c *clupost) validate() (stop bool) {
 	}
 	// in re useIPv6 - joining node must have the same
 	if _, err := cmn.ParseHost2IP(nsi.PubNet.Hostname, false /*local*/, g.netServ.control.useIPv6); err != nil {
-		p.writeErrf(w, r, "%s: failed to %s %s: invalid hostname: %v", p.si, c.apiOp, nsi.StringEx(), err)
+		werr := fmt.Errorf("%s: failed to %s %s: invalid hostname: %v", p.si, c.apiOp, nsi.StringEx(), err)
+		if cos.IsErrDNSLookup(err) {
+			werr = newErrJoinUnresolved(r, werr)
+		}
+		p.writeErr(w, r, werr)
 		return true
 	}
 

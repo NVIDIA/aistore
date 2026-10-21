@@ -2261,7 +2261,6 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 		candidates               = make([]string, 0, 4+len(contactURLs))
 		selfPublicURL, pubValid  = cos.ParseURL(h.si.URL(cmn.NetPublic))
 		selfIntraURL, intraValid = cos.ParseURL(h.si.URL(cmn.NetIntraControl))
-		resPrev                  *callResult
 	)
 	debug.Assertf(pubValid && intraValid, "%q (%t), %q (%t)", selfPublicURL, pubValid, selfIntraURL, intraValid)
 
@@ -2281,40 +2280,28 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 		candidates = _addCan(u, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	}
 
+	// only the startup join waits for an unresolved hostname; later (re)joins may hold locks
 	var (
-		res     *callResult
-		lastErr error // the primary's (or candidate's) most recent rejection
 		sleep   = max(2*time.Second, cmn.Rom.MaxKeepalive())
+		timeout time.Duration
 	)
-	for range 4 { // retry
-		for _, candidateURL := range candidates {
-			if nlog.Stopping() {
-				return res, h.errStopping()
-			}
-			if resPrev != nil {
-				freeCR(resPrev)
-				resPrev = nil //nolint:ineffassign,wastedassign // readability
-			}
-			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
-			h.verifyJoinResponse(res, config)
-			if res.err == nil {
-				if candidateURL == primaryURL || (psi != nil && candidateURL == psi.URL(cmn.NetPublic)) {
-					nlog.Infoln(h.String()+": primary responded Ok via", candidateURL)
-				} else {
-					nlog.Infoln(h.String()+": join accepted via", candidateURL)
-				}
-				return res, nil // ok
-			}
-			lastErr = res.err
-			if isErrJoinRejected(res.err) {
-				return res, res.err // rejected (e.g., invalid placement weight): retrying won't help
-			}
-			resPrev = res
-		}
-		time.Sleep(sleep)
+	if !h.NodeStarted() {
+		timeout = config.Timeout.JoinTimeout()
 	}
-	if resPrev != nil {
-		freeCR(resPrev)
+	attempt := &joinAttempt{h: h, primaryURL: primaryURL, psi: psi, htext: htext, config: config}
+	res := retryJoin(candidates, daemon.runAt, timeout, sleep, attempt.try)
+	switch {
+	case res != nil && res.err == nil:
+		return res, nil // ok
+	case res != nil && isErrJoinRejected(res.err):
+		return res, res.err // rejected (e.g., invalid placement weight): retrying won't help
+	case nlog.Stopping():
+		return res, h.errStopping()
+	}
+	var lastErr error // the primary's (or candidate's) most recent rejection
+	if res != nil {
+		lastErr = res.err
+		freeCR(res)
 	}
 
 	smap := h.owner.smap.get()
@@ -2351,6 +2338,61 @@ func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 	err := res.err
 	freeCR(res)
 	return res, err
+}
+
+// joinAttempt carries the fixed inputs of one join
+type joinAttempt struct {
+	h          *htrun
+	primaryURL string
+	psi        *meta.Snode
+	htext      htext
+	config     *cmn.Config
+}
+
+func (a *joinAttempt) try(candidateURL string) *callResult {
+	h := a.h
+	res := h.regTo(candidateURL, nil, apc.DefaultTimeout, a.htext, false /*keepalive*/)
+	h.verifyJoinResponse(res, a.config)
+	if res.err == nil {
+		if candidateURL == a.primaryURL || (a.psi != nil && candidateURL == a.psi.URL(cmn.NetPublic)) {
+			nlog.Infoln(h.String()+": primary responded Ok via", candidateURL)
+		} else {
+			nlog.Infoln(h.String()+": join accepted via", candidateURL)
+		}
+	}
+	return res
+}
+
+const joinRounds = 4
+
+// retryJoin attempts to join via the candidates and returns the last attempt's result
+// (nil when none was made); the caller frees it.
+func retryJoin(candidates []string, started int64, timeout, sleep time.Duration,
+	try func(candidateURL string) *callResult) (res *callResult) {
+	var unresolved bool
+	for i := 0; i < joinRounds || (unresolved && mono.Since(started) < timeout); i++ {
+		if i > 0 {
+			time.Sleep(sleep)
+		}
+		unresolved = false
+		for _, candidateURL := range candidates {
+			if nlog.Stopping() {
+				return res
+			}
+			if i >= joinRounds && mono.Since(started) >= timeout {
+				break
+			}
+			if res != nil {
+				freeCR(res)
+			}
+			res = try(candidateURL)
+			if res.err == nil || isErrJoinRejected(res.err) {
+				return res
+			}
+			unresolved = unresolved || isErrJoinUnresolved(res.err)
+		}
+	}
+	return res
 }
 
 func _addCan(url, selfPub, selfCtrl string, candidates []string) []string {

@@ -812,3 +812,11 @@ func TestNodeJoinNonceWindow(t *testing.T) {
 	auth.IntraCluster.NonceWindow = cos.Duration(2 * time.Minute)
 	tassert.Fatalf(t, auth.NodeJoinNonceWindow() == 2*time.Minute, "unexpected configured value %v", auth.NodeJoinNonceWindow())
 }
+
+func TestJoinTimeout(t *testing.T) {
+	tconf := cmn.TimeoutConf{Startup: cos.Duration(time.Minute)}
+	tassert.Fatalf(t, tconf.JoinTimeout() == 2*time.Minute, "unexpected zero-value default %v", tconf.JoinTimeout())
+
+	tconf.JoinAtStartup = cos.Duration(5 * time.Minute)
+	tassert.Fatalf(t, tconf.JoinTimeout() == 5*time.Minute, "unexpected configured value %v", tconf.JoinTimeout())
+}

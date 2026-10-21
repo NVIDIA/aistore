@@ -28,6 +28,7 @@ type SkipTestArgs struct {
 	RequiresAuth          bool
 	RequiresETL           bool
 	RequiresTLS           bool
+	NoNodeJoinSecret      bool
 	Long                  bool
 	RemoteBck             bool
 	CloudBck              bool
@@ -59,6 +60,13 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	}
 	if args.RequiresTLS && !cos.IsHTTPS(proxyURLReadOnly) {
 		tb.Skipf("%s requires TLS cluster deployment", tb.Name())
+	}
+	if args.NoNodeJoinSecret {
+		config, err := getClusterConfig()
+		tassert.CheckFatal(tb, err)
+		if config.Auth.NodeJoinSecretPath() != "" {
+			tb.Skipf("%s requires a cluster without node-join secret", tb.Name())
+		}
 	}
 	if args.Long && testing.Short() {
 		tb.Skipf(fmtSkippingShort, tb.Name())

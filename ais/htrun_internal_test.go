@@ -5,11 +5,16 @@
 package ais
 
 import (
+	"errors"
 	"net/http"
+	"net/http/httptest"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -84,4 +89,74 @@ func TestSetIntraHdrs_ClearsRelayedSenderHdrs(t *testing.T) {
 	hp.setIntraHdrs(reqp, hp.owner.smap.get(), true /*peer present*/)
 	got := reqp.Header.Get(apc.HdrSenderIsPrimary)
 	tassert.Errorf(t, got == "true", "%s: got %q, expected %q", apc.HdrSenderIsPrimary, got, "true")
+}
+
+func TestRetryJoin(t *testing.T) {
+	var (
+		req  = httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+		errs = map[string]error{
+			"unres": newErrJoinUnresolved(req, errors.New("unresolved")),
+			"rej":   newErrJoinRejected(req, errors.New("rejected")),
+			"fail":  errors.New("unreachable"),
+		}
+		unres = []string{"unres", "unres", "unres", "unres"} // joinRounds
+	)
+	// attempts are instant: only the cases with a non-zero age ever reach the timeout
+	const tout = time.Second
+	for _, tc := range []struct {
+		name   string
+		urls   []string
+		script map[string][]string // per candidate; the last step repeats; "ok" succeeds
+		age    time.Duration       // time already spent before the first attempt
+		calls  int
+		want   string // kind of the returned result; "" for none
+	}{
+		{"succeeds at once", []string{"a"}, map[string][]string{"a": {"ok"}}, 0, 1, "ok"},
+		{"rejection stops at once", []string{"a"}, map[string][]string{"a": {"fail", "rej"}}, 0, 2, "rej"},
+		{"other failures stop after fixed rounds", []string{"a"}, map[string][]string{"a": {"fail"}}, 0, joinRounds, "fail"},
+		{"fixed rounds try every candidate", []string{"a", "b"}, map[string][]string{"a": {"fail"}, "b": {"fail"}}, 0, 2 * joinRounds, "fail"},
+		{"no candidates", nil, nil, 0, 0, ""},
+		{
+			"unresolved retries until success", []string{"a"},
+			map[string][]string{"a": append(slices.Clone(unres), "unres", "unres", "ok")}, 0, joinRounds + 3, "ok",
+		},
+		{"unresolved after timeout gets fixed rounds only", []string{"a"}, map[string][]string{"a": {"unres"}}, time.Hour, joinRounds, "unres"},
+		{
+			"retries stop once failures change", []string{"a"},
+			map[string][]string{"a": append(slices.Clone(unres), "fail")}, 0, joinRounds + 1, "fail",
+		},
+		{
+			"unresolved from any candidate extends the round", []string{"a", "b"},
+			map[string][]string{"a": {"fail"}, "b": append(slices.Clone(unres), "ok")}, 0, 2 * (joinRounds + 1), "ok",
+		},
+	} {
+		var (
+			calls   = map[string]int{}
+			total   int
+			started = mono.NanoTime() - int64(tc.age)
+		)
+		try := func(url string) *callResult {
+			steps := tc.script[url]
+			kind := steps[min(calls[url], len(steps)-1)]
+			calls[url]++
+			total++
+			res := allocCR()
+			res.err = errs[kind] // nil for "ok"
+			return res
+		}
+		res := retryJoin(tc.urls, started, tout, 0 /*sleep*/, try)
+
+		got := ""
+		if res != nil {
+			got = "ok"
+			for kind, err := range errs {
+				if res.err == err {
+					got = kind
+				}
+			}
+			freeCR(res)
+		}
+		tassert.Errorf(t, got == tc.want, "%s: got result %q, expected %q", tc.name, got, tc.want)
+		tassert.Errorf(t, total == tc.calls, "%s: got %d calls, expected %d", tc.name, total, tc.calls)
+	}
 }

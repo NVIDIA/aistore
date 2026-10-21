@@ -32,7 +32,8 @@ const (
 // private rejection codes
 const (
 	tcodeKaliveRejected = "ErrKaliveRejected"
-	tcodeJoinRejected   = "ErrJoinRejected" // the joining node must fix its request (e.g., placement weight)
+	tcodeJoinRejected   = "ErrJoinRejected"   // the joining node must fix its request (e.g., placement weight)
+	tcodeJoinUnresolved = "ErrJoinUnresolved" // the joining node's public hostname does not resolve (yet)
 )
 
 // error types
@@ -106,6 +107,18 @@ func newErrJoinRejected(r *http.Request, err error) *cmn.ErrHTTP {
 func isErrJoinRejected(err error) bool {
 	herr := cmn.AsErrHTTP(err)
 	return herr != nil && herr.Status == http.StatusBadRequest && herr.TypeCode == tcodeJoinRejected
+}
+
+// reject join for now: the joining node may retry
+func newErrJoinUnresolved(r *http.Request, err error) *cmn.ErrHTTP {
+	herr := cmn.NewErrHTTP(r, err, http.StatusBadRequest)
+	herr.TypeCode = tcodeJoinUnresolved
+	return herr
+}
+
+func isErrJoinUnresolved(err error) bool {
+	herr := cmn.AsErrHTTP(err)
+	return herr != nil && herr.Status == http.StatusBadRequest && herr.TypeCode == tcodeJoinUnresolved
 }
 
 func (e *errTgtBmdUUIDDiffer) Error() string { return e.detail }

@@ -115,7 +115,7 @@ func (p *proxy) remaisVersionFixup() bool {
 
 	config := cmn.GCO.Get()
 	uptime := p.keepalive.cluUptime(mono.NanoTime())
-	if uptime == 0 || uptime > cos.ClampDuration(config.Timeout.JoinAtStartup.D(), time.Minute, 10*time.Minute) {
+	if uptime == 0 || uptime > cos.ClampDuration(config.Timeout.JoinTimeout(), time.Minute, 10*time.Minute) {
 		return false
 	}
 	conf := config.Backend.Get(apc.AIS)

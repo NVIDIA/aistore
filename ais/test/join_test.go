@@ -246,3 +246,29 @@ func testProxySelfJoin(t *testing.T, proxyURL, secretPath, validSecret, nodeDir 
 	tassert.CheckFatal(t, err)
 	proxyRejoined = true
 }
+
+// The primary must answer an unresolvable public hostname with a retriable code,
+// distinct from ErrJoinRejected (which stops the joining node at once).
+func TestSelfJoinUnresolvedHostname(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 1, NoNodeJoinSecret: true})
+
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		smap     = tools.GetClusterMap(t, proxyURL)
+		bp       = tools.BaseAPIParams(proxyURL)
+	)
+	node := smap.Tmap.ActiveNodes()[0].Clone()
+	node.PubNet = meta.NetInfo{Hostname: "unresolvable.invalid", Port: "19080", URL: "http://unresolvable.invalid:19080"}
+
+	bp.Method = http.MethodPost
+	rp := &api.ReqParams{
+		BaseParams: bp,
+		Path:       apc.URLPathCluAutoReg.S,
+		Body:       cos.MustMarshal(joinTestBody{SI: node}),
+		Header:     http.Header{apc.HdrNodeVersion: []string{cmn.VersionAIStore}},
+	}
+	err := rp.DoRequest()
+	herr := cmn.AsErrHTTP(err)
+	tassert.Fatalf(t, herr != nil && herr.Status == http.StatusBadRequest && herr.TypeCode == "ErrJoinUnresolved",
+		"expected ErrJoinUnresolved, got %v", err)
+}

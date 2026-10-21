@@ -3344,6 +3344,13 @@ func XferRenewSize(window time.Duration) int64 {
 	return cos.ClampI64(int64(window/time.Second)*XferMinRate, XferMinRenew, XferMaxRenew)
 }
 
+func (c *TimeoutConf) JoinTimeout() time.Duration {
+	if c.JoinAtStartup == 0 {
+		return 2 * c.Startup.D()
+	}
+	return c.JoinAtStartup.D()
+}
+
 func (c *TimeoutConf) Validate() error {
 	debug.Assert(SharedStreamsDflt >= 2*hk.Prune2mIval)
 	//

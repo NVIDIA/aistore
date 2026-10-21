@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -42,6 +43,7 @@ type (
 		version   string // major.minor.build (see cmd/aisnode)
 		buildTime string // YYYY-MM-DD HH:MM:SS-TZ
 		EP        string // env "AIS_PRIMARY_EP"
+		runAt     int64  // mono.NanoTime() when the runners start
 		resilver  struct {
 			reason   string // Reason why resilver needs to be run.
 			required bool   // Determines if the resilver needs to be started.
@@ -362,6 +364,7 @@ func Run(version, buildTime string) int {
 	signal.Ignore(syscall.SIGHUP) // see also runAll below
 
 	rmain := initDaemon(version, buildTime)
+	daemon.runAt = mono.NanoTime()
 	err := daemon.rg.runAll(rmain)
 
 	// stop traceprovider, if running.

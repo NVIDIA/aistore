@@ -404,14 +404,14 @@ func (r *runner) _run(logger statsLogger) error {
 		sleep   = startupSleep
 		ticker  = time.NewTicker(sleep)
 
-		// NOTE: the maximum time we agree to wait for r.daemon.ClusterStarted()
+		// NOTE: the maximum time we agree to wait for r.daemon.ClusterStarted();
+		// the grace (one join request plus one retry sleep) lets the node's own join
+		// fail first, with its real error
 		config   = cmn.GCO.Get()
-		deadline = config.Timeout.JoinAtStartup.D()
+		deadline = config.Timeout.JoinTimeout() + config.Client.Timeout.D() + max(2*time.Second, cmn.Rom.MaxKeepalive())
 	)
 	if logger.standingBy() {
 		deadline = hk.DayInterval
-	} else if deadline == 0 {
-		deadline = 2 * config.Timeout.Startup.D()
 	}
 waitStartup:
 	for {
