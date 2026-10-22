@@ -589,7 +589,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 	if bckDst == nil {
 		return
 	}
-	if err := bckDst.Allow(apc.AcePUT); err != nil {
+	if err := p.access(r, bckDst, apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
 	}
@@ -851,6 +851,10 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := p.initByNameOnly(w, r, bucket)
 	if bck == nil {
+		return
+	}
+	if err := p.access(r, bck, apc.AceBckHEAD); err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: http.StatusForbidden})
 		return
 	}
 	resp := s3.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
