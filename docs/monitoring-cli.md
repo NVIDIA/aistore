@@ -1,6 +1,12 @@
+---
+layout: default
+title: "AIStore Observability: CLI"
+description: "Use AIS CLI commands to inspect cluster status, alerts, performance, and logs."
+---
+
 # AIStore Observability: CLI
 
-> The CLI is the fastest way to interrogate an AIS cluster from a terminal. This page is a jump‑table to the handful of commands every SRE or developer uses when triaging performance or capacity issues. For full syntax hit <kbd>--help</kbd> on any command or see the separate [CLI reference](/docs/cli.md).
+AIStore operators and developers can use the AIS CLI to inspect cluster status, alerts, performance, and logs when investigating capacity or performance issues. For flags and syntax specific to a command, run `ais COMMAND --help` (for example, `ais show cluster --help`) or refer to the [CLI reference](/docs/cli.md).
 
 ## Table of Contents
 - [Installation](#installation)
@@ -48,7 +54,7 @@ export AIS_ENDPOINT=https://your-ais-cluster-endpoint:port
 | ----------------------------------- | ----------------------- | --------------- |
 | Nodes and their respective health? Any alerts? Out of space? Out of memory? | `ais show cluster`  | `--refresh 1m` |
 | How much space is left?             | `ais storage summary`   | `--cached`, `--units`, `--prefix`, `--refresh`  |
-| Are any mountpaths down?            | `ais storage mountpath` | `--fshc` (to run filesystem health checker), `--rescan-disks` |
+| Are any mountpaths down?            | `ais storage mountpath` | To test a selected path: `ais storage mountpath fshc 'NODE_ID=MOUNTPATH'`; to revalidate its disks: `ais storage mountpath rescan-disks 'NODE_ID=MOUNTPATH'` |
 
 ```console
 # Get summary of cluster membership, capacity, and health
@@ -75,17 +81,15 @@ t[pDztYhhb]      98.02GiB   16%             960.824GiB  61%         108h30m1s   
 
 ## Node Alerts
 
-AIStore node states are categorized into three severity levels:
+The following node state flags are examples of red alerts, warnings, and informational states:
 
 1. **Red Alerts** - Critical issues requiring immediate attention:
    - `OOS` - Out of space condition
    - `OOM` - Out of memory condition
    - `OOCPU` - Out of CPU resources
    - `DiskFault` - Disk failures detected
-   - `NoMountpaths` - No available mountpaths
-   - `NumGoroutines` - Excessive number of goroutines
+   - `HighNumGoroutines` - High number of goroutines
    - `CertificateExpired` - TLS certificate has expired
-   - `CertificateInvalid` - TLS certificate is invalid
 
 2. **Warning Alerts** - Potential issues that may require attention:
    - `Rebalancing` - Rebalance operation in progress
@@ -99,11 +103,11 @@ AIStore node states are categorized into three severity levels:
    - `LowCPU` - Low CPU availability
    - `CertWillSoonExpire` - TLS certificate will expire soon
    - `KeepAliveErrors` - Recent keep-alive errors detected
+   - `NumGoroutines` - Number of goroutines warning
 
 3. **Information States** - Normal operational states:
    - `ClusterStarted` - Cluster has started (primary) or node has joined cluster
    - `NodeStarted` - Node has started (may not have joined cluster yet)
-   - `VoteInProgress` - Voting process is in progress
 
 Node state flags are also exposed via Prometheus metrics - for details, see:
 
@@ -111,7 +115,7 @@ Node state flags are also exposed via Prometheus metrics - for details, see:
 
 ## Live Performance Monitoring
 
-`ais performance` (alias `ais show performance`) exposes five sub‑commands. The two most used are **throughput** and **latency**.
+`ais performance` (alias `ais show performance`) exposes six sub‑commands. The two most used are **throughput** and **latency**.
 
 ```console
 # 30‑second rolling throughput for all targets
@@ -136,9 +140,9 @@ $ ais performance latency --refresh 10 --regex "get"
 
 | Task                                   | Command                                     |
 | -------------------------------------- | ------------------------------------------- |
-| Tail a given node's log                | `ais log show --refresh DURATION --help`    |
+| Tail a given node's log                | `ais log show 'NODE_ID' --refresh 10s`       |
 | Download all logs for a support bundle | `ais cluster download-logs`                 |
-| Rotate logs on one node                | `ais advanced rotate-logs <NODE_ID>`        |
+| Rotate logs on one node                | `ais advanced rotate-logs 'NODE_ID'`        |
 
 For more details on log configuration and analysis, see [Observability: Logs](/docs/monitoring-logs.md).
 
@@ -151,7 +155,7 @@ Here are some frequently used command combinations for everyday operations:
 ais show cluster && ais storage summary
 
 # Watch GET latency for a single target
-ais performance latency t[EkMt8081] --refresh 30 --regex "get(\(t\)|cold)"
+ais performance latency 't[EkMt8081]' --refresh 30 --regex "get(\(t\)|cold)"
 
 # Verify no misplaced objects in GCS buckets (non‑recursive)
 ais scrub gs --nr --refresh 20s --count 3
@@ -162,7 +166,7 @@ ais scrub gs --nr --refresh 20s --count 3
 ## Best Practices
 
 - **Regular Health Checks**: Run `ais show cluster` and `ais storage summary` daily to ensure cluster health and capacity
-- **Performance Baselines**: Establish baseline performance with `ais performance show` after initial deployment
+- **Performance Baselines**: Establish baseline performance with `ais performance` after initial deployment
 - **Monitoring Script**: Create a shell script with key monitoring commands for daily checks
 - **Alert Integration**: Pipe CLI output to monitoring systems for automated alerting
 - **Log Collection**: To collect logs, integrate with a Kubernetes monitoring stack or (at least) use `ais cluster download-logs`
@@ -174,8 +178,8 @@ ais scrub gs --nr --refresh 20s --count 3
 | Node experiencing problems or went offline | `ais show cluster` | Check the ALERT column (example above) |
 | Disk failures | `ais storage mountpath` | Look for disabled or detached mountpaths |
 | Performance degradation | `ais performance --refresh 30s` | Compare against baseline numbers |
-| Failed operations | `ais log show --severity error` | Common error patterns |
-| Network issues | `ais status network` | High latency or timeout errors |
+| Failed operations | `ais log show 'NODE_ID' --severity error` | Errors and warnings in the selected node's log |
+| Network issues | `ais performance latency --refresh 30s` | Compare request latency with a baseline; inspect node logs for timeout errors |
 
 ## CLI Resources
 

@@ -1,34 +1,33 @@
+---
+layout: default
+title: AIStore Environment Variables
+description: "Find AIStore environment variables and understand how they interact with configuration defaults."
+---
+
+# AIStore Environment Variables
+
 ## Introduction
 
-Generally, AIStore (AIS) configuration comprises several sources:
+AIStore (AIS) operators and developers can use this page to find environment variables and understand their place among configuration sources:
 
-1. cluster (a.k.a. global) and node (or, local) configurations, the latter further "splitting" into local config per se and local overrides of the inherited cluster config;
-2. `aisnode` [command line](/docs/command_line.md);
-3. environment variables (this document);
-4. finally, assorted low-level constants (also referred to as "hardcoded defaults") that almost never have to change.
+1. Cluster (global) and node (local) configuration, including local overrides of inherited cluster configuration.
+2. `aisnode` [command-line options](/docs/command_line.md).
+3. Environment variables, covered on this page.
+4. Low-level constants (hardcoded defaults) that rarely need to change.
 
-This enumeration does _not_ include buckets (and their respective configurations). In AIS, buckets inherit a part of the cluster config that can be further changed on a per-bucket basis - either at creation time or at any later time, etc.
+This list excludes bucket configuration. New AIS buckets receive a snapshot of applicable cluster defaults at creation; changing cluster configuration does not update the properties of existing buckets. You can set bucket properties at creation or change them later per bucket.
 
-> In effect, cluster configuration contains cluster-wide defaults for all AIS buckets, current and future.
-
-For additional references, please see the [last section](#references) in this document. The rest of it, though, describes only and exclusively **environment variables** - item `3` above.
+For additional sources, refer to [References](#references). The rest of this page covers only environment variables, item 3 above.
 
 ## Rules
 
-First though, two common rules that, in fact, apply across the board:
+Environment variables have different consumers and precedence rules. Check the setting and deployment path before relying on an override:
 
-* in AIS, all environment settings are **optional**
-* if specified, environment variable will always **override**:
-  - the corresponding default *constant* (if exists), and/or
-  - persistent *configuration* (again, if the latter exists).
+* The daemon reads some variables at runtime or startup, such as `AIS_READ_HEADER_TIMEOUT` (instead of the `apc.ReadHeaderTimeout` [constant](https://github.com/NVIDIA/aistore/blob/main/api/apc/const.go)) and `AIS_DAEMON_ID` (a startup node-ID override). These do not establish a general rule for persisted cluster configuration.
+* CLI and other client tools read their own environment settings, such as `AIS_ENDPOINT` and client TLS variables. These settings do not change daemon configuration.
+* Deployment generators use variables such as `AIS_USE_HTTPS` to create initial configuration. The daemon loads persisted cluster configuration when available, rather than reapplying those generator inputs on restart. To change an existing cluster's HTTPS mode, follow [Switching cluster between HTTP and HTTPS](/docs/switch_https.md).
 
-For example:
-
-* in [AIS cluster](/docs/overview.md#at-a-glance), each node has an `ID`, which is persistent, replicated and unique; at node startup its `ID` can be overridden via `AIS_DAEMON_ID` environment (see below);
-* environment `AIS_READ_HEADER_TIMEOUT`, if specified, will be used instead of the `apc.ReadHeaderTimeout` [constant](https://github.com/NVIDIA/aistore/blob/main/api/apc/const.go) in the code;
-* `AIS_USE_HTTPS` takes precedence over `net.http.use_https` value from the [cluster configuration](/docs/configuration.md),
-
-and so on.
+Some variables are required in particular environments, such as the Kubernetes variables listed below; do not assume every setting is optional.
 
 ### Table of Contents
 
@@ -117,25 +116,27 @@ At first it may sound slightly confusing, but HTTP-wise AIS is both a client and
 
 All nodes in a cluster talk to each other using HTTP (or HTTPS) - the fact that inevitably implies a certain client-side configuration (and configurability).
 
-In particular, AIS server-side HTTPS environment includes:
+For a new local playground deployment, the generator writes the following values into the daemon's initial `net.http` configuration:
 
-| name | comment |
-| ---- | ------- |
-| `AIS_USE_HTTPS`       | tells AIS to run HTTPS transport (both public and intra-cluster networks)                                |
-| `AIS_SERVER_CRT`      | TLS certificate (pathname). Required when `AIS_USE_HTTPS` is `true`                                          |
-| `AIS_SERVER_KEY`      | private key (pathname) for the certificate above.                                                            |
-| `AIS_SKIP_VERIFY_CRT` | when true will skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+| name | initial configuration use |
+| ---- | ------------------------- |
+| `AIS_USE_HTTPS`       | writes `net.http.use_https` for the public and intra-cluster listeners |
+| `AIS_SERVER_CRT`      | writes the server certificate pathname (`net.http.server_crt`) |
+| `AIS_SERVER_KEY`      | writes the server private-key pathname (`net.http.server_key`) |
+| `AIS_CLIENT_CA_TLS`   | writes `net.http.client_ca_tls` |
+| `AIS_CLIENT_AUTH_TLS` | writes `net.http.client_auth_tls` |
+| `AIS_SKIP_VERIFY_CRT` | writes `net.http.skip_verify` |
 
-> E.g., for local playground, typical usage starts from running `export AIS_USE_HTTPS=true` followed by one of the usual `make deploy` combinations.
+For example, set `AIS_USE_HTTPS=true` before a fresh `make deploy`. These inputs do not override existing persisted `net.http` configuration. Daemon listeners use `net.http` TLS settings, including `client_ca_tls` and `client_auth_tls` for server-side client authentication. Embedded intra-cluster clients also derive their TLS settings from `net.http`, not from `AIS_CRT` or `AIS_CLIENT_CA`. Refer to [Public and intra-cluster TLS configuration](/docs/https.md#public-and-intra-cluster-tls-configuration).
 
-In addition, all embedded (intra-cluster) clients in a cluster utilize the following environment:
+CLI and other tools that call `EnvToTLS` read the following client-side environment variables; they do not configure daemon intra-cluster clients:
 
-| name | comment |
-| ---- | ------- |
-| `AIS_CRT`             | TLS certificate pathname (this and the rest variables in the table are ignored when AIS is AIS_USE_HTTPS==false |
-| `AIS_CRT_KEY`         | pathname that contains X.509 certificate private key |
-| `AIS_CLIENT_CA`       | certificate authority that authorized (signed) the certificate |
-| `AIS_SKIP_VERIFY_CRT` | when true will skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+| name | client-tool use |
+| ---- | --------------- |
+| `AIS_CRT`             | client certificate pathname |
+| `AIS_CRT_KEY`         | client private-key pathname |
+| `AIS_CLIENT_CA`       | certificate authority pathname used by the client tool |
+| `AIS_SKIP_VERIFY_CRT` | skips certificate verification for the client tool when set to true |
 
 ### Further references
 
@@ -177,7 +178,7 @@ See also:
 Kubernetes POD name is also reported via `ais show cluster` CLI - when it is a Kubernetes deployment, e.g.:
 
 ```console
-$ ais show cluster t[fXbarEnn]
+$ ais show cluster 't[fXbarEnn]'
 TARGET         MEM USED(%)   MEM AVAIL     CAP USED(%)   CAP AVAIL     LOAD AVERAGE    REBALANCE   UPTIME        K8s POD         STATUS  VERSION        BUILD TIME
 t[fXbarEnn]    3.08%         367.66GiB     51%           8.414TiB      [0.9 1.1 1.3]   -           1852h19m40s   ais-target-26   online  3.20.92bc0c1   2023-09-18T19:12:52+0000
 ```

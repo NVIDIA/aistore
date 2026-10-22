@@ -1,6 +1,12 @@
+---
+layout: default
+title: AIStore Configuration
+description: "Inspect and change AIStore settings, and understand how defaults, overrides, and persistence work."
+---
+
 # AIStore Configuration
 
-AIStore configuration is both an operator interface and a versioned part of cluster metadata. Operators inspect and change settings through the CLI. Developers additionally need to know how defaults are filled in, how partial updates are merged, and why what AIStore writes to disk is smaller than what it shows you.
+AIStore configuration is an operator interface and a versioned part of cluster metadata. Operators use the CLI to inspect and change settings. Developers can use this guide to understand defaults, partial updates, and why stored configuration is smaller than effective configuration.
 
 - [For users and operators](#for-users-and-operators) - how to see and change settings, what to expect in production, and what to do when a change doesn't behave.
 - [For developers](#for-developers) - the Go data model, validation and defaulting rules, sparse persistence, scope enforcement, and the checklist for adding configuration.
@@ -81,8 +87,8 @@ $ ais config cluster get_batch --json
 What one node is actually running, including its overrides:
 
 ```console
-$ ais show config t[ABC123] inherited
-$ ais show config t[ABC123] inherited log
+$ ais show config 't[ABC123]' inherited
+$ ais show config 't[ABC123]' inherited log
 ```
 
 In the flat inherited output, the `DEFAULT` column shows the cluster value whenever a node override differs from it; `-` means the node is simply inheriting.
@@ -90,8 +96,8 @@ In the flat inherited output, the `DEFAULT` column shows the cluster value whene
 That node's own local configuration - directories, listeners, disks:
 
 ```console
-$ ais show config t[ABC123] local
-$ ais show config t[ABC123] local host_net --json
+$ ais show config 't[ABC123]' local
+$ ais show config 't[ABC123]' local host_net --json
 ```
 
 Local configuration can be viewed but not set through the CLI. To change it, edit the node's plain-text local file and restart that node.
@@ -107,15 +113,15 @@ $ ais config cluster periodic.stats_time=1m
 $ ais config cluster periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
-Multiple settings in one command are applied together as a single new configuration - either all of them take effect or none do. The primary validates the whole proposed configuration first, so a change can be rejected because of how it combines with another setting, not only because the value itself is out of range.
+Supplied values are merged into one proposed configuration and validated together. If validation rejects the proposal, it is not applied. Persistence or propagation errors do not guarantee cluster-wide rollback; after such an error, inspect the effective cluster and node configuration.
 
-Most changes take effect immediately. Five do not, and are applied only after a restart:
+Most changes take effect immediately. These five configuration groups and fields are listed in `ConfigRestartRequired` and take effect only after a restart:
 
 ```text
 memsys, net, tracing, timeout.cplane_operation, timeout.max_keepalive
 ```
 
-The CLI warns you when your change touches one of them. Depending on scope, restart the affected node or the cluster.
+The CLI warns you when your change touches one of them. Separately, the `Force-Container-CPU-Mem` and `Disable-KTLS` [feature flags](/docs/feature_flags.md) also require a restart to take effect; most other feature flags take effect at runtime. Depending on scope, restart the affected node or the cluster.
 
 The CLI also accepts a whole section as JSON. Quote it so the shell leaves it alone:
 
@@ -131,8 +137,8 @@ Use the plain `name=value` form unless you are setting several fields of one sec
 To make one node differ:
 
 ```console
-$ ais config node t[ABC123] log.level=4
-$ ais config node t[ABC123] disk.disk_util_low_wm=40 disk.disk_util_high_wm=90
+$ ais config node 't[ABC123]' log.level=4
+$ ais config node 't[ABC123]' disk.disk_util_low_wm=40 disk.disk_util_high_wm=90
 ```
 
 The override is stored on that node and reapplied every time the node receives a new cluster configuration - so if the same setting later changes cluster-wide, this node keeps its own value until you reset it.
@@ -140,7 +146,7 @@ The override is stored on that node and reapplied every time the node receives a
 Overriding a cluster-only section fails:
 
 ```console
-$ ais config node t[ABC123] periodic.stats_time=1m
+$ ais config node 't[ABC123]' periodic.stats_time=1m
 Error: periodic configuration can only be globally updated
 ```
 
@@ -152,7 +158,7 @@ Both cluster and node commands accept `--transient`:
 
 ```console
 $ ais config cluster log.level=4 --transient
-$ ais config node t[ABC123] log.level=4 --transient
+$ ais config node 't[ABC123]' log.level=4 --transient
 ```
 
 A transient cluster update reaches every node that is currently running, but does not create a new cluster configuration version. A node that restarts or joins later will not have it.
@@ -165,13 +171,13 @@ Some settings cannot be changed transiently at all, and the request is rejected:
 
 ```console
 # 1. a quick experiment
-$ ais config node t[ABC123] log.level=5 --transient
+$ ais config node 't[ABC123]' log.level=5 --transient
 
 # 2. later, an unrelated persistent change to the same node
-$ ais config node t[ABC123] disk.iostat_time_long=4s
+$ ais config node 't[ABC123]' disk.iostat_time_long=4s
 
 # 3. the experiment is now permanent - it was written along with the disk change
-$ ais show config t[ABC123] inherited log
+$ ais show config 't[ABC123]' inherited log
 PROPERTY         VALUE   DEFAULT
 log.level        5       3
 ```
@@ -185,7 +191,7 @@ So: use `--transient` for short experiments, and before making any persistent ch
 Drop one node's overrides and return it to the cluster configuration:
 
 ```console
-$ ais config reset t[ABC123]
+$ ais config reset 't[ABC123]'
 ```
 
 Drop overrides on every currently active node:
@@ -224,7 +230,7 @@ PROPERTY        VALUE
 space.highwm    88
 
 # 4. confirm - what one target is actually running
-$ ais show config t[ABC123] inherited space
+$ ais show config 't[ABC123]' inherited space
 PROPERTY                  VALUE     DEFAULT
 space.cleanupwm           65        -
 space.lowwm               75        -
@@ -300,7 +306,7 @@ Expected - see [What AIStore stores on disk](#what-aistore-stores-on-disk). Veri
 The transfer may have missed a write or read deadline: covered GET paths enforce a minimum transfer rate of 64 KiB/s per window (`timeout.send_file_time`) by default. See [Minimum transfer rate](#minimum-transfer-rate) for the window semantics and other possible causes.
 
 **"One target behaves differently from the others."**
-Compare `ais show config t[ID] inherited` against `ais config cluster`. In the flat output, any row with a value in the `DEFAULT` column is an override on that node.
+Compare `ais show config 't[ID]' inherited` against `ais config cluster`. In the flat output, any row with a value in the `DEFAULT` column is an override on that node.
 
 ### Deploying: initial and local configuration
 
@@ -352,6 +358,8 @@ Always spell out `enabled` when you customize either section:
 }
 ```
 
+To disable either section in an initial file, use `enabled: false` **with a nonzero sibling**, for example `{"rebalance":{"enabled":false,"dest_retry_time":"3m"}}` or `{"fshc":{"enabled":false,"error_limit":3}}`. A section containing only `enabled: false` is wholly zero after decoding, so validation enables it.
+
 This applies to hand-written initial configuration only. CLI and API updates track separately whether you supplied `enabled`, so `ais config cluster rebalance.dest_retry_time=3m` is safe.
 
 ### Startup overrides
@@ -381,10 +389,10 @@ Use the storage commands rather than editing configuration:
 
 ```console
 $ ais storage mountpath show
-$ ais storage mountpath attach t[ABC123]=/data/nvme1
-$ ais storage mountpath disable t[ABC123]=/data/nvme1
-$ ais storage mountpath enable t[ABC123]=/data/nvme1
-$ ais storage mountpath detach t[ABC123]=/data/nvme1
+$ ais storage mountpath attach 't[ABC123]=/data/nvme1'
+$ ais storage mountpath disable 't[ABC123]=/data/nvme1'
+$ ais storage mountpath enable 't[ABC123]=/data/nvme1'
+$ ais storage mountpath detach 't[ABC123]=/data/nvme1'
 ```
 
 Runtime changes are persisted on the node; the plain-text local file is not rewritten for you. Keep it in sync.
@@ -669,13 +677,11 @@ if *c == (RebalanceConf{}) {
 }
 ```
 
-This preserves the three meanings:
+This gives an absent section or `{}` all defaults, including `enabled: true`, and lets a hydrated default section be pruned. An API update that explicitly sets `enabled: false` on a hydrated section differs from the default and stays persisted.
 
-- absent section or `{}` → all defaults, including `enabled: true`;
-- hydrated default section → prunable;
-- explicit `enabled: false` → differs from default, stays persisted.
+A hand-written initial `{"rebalance":{"enabled":false}}` or `{"fshc":{"enabled":false}}` is wholly zero after decoding: validation turns `enabled` back on. To disable either in an initial file, include `enabled: false` **and a nonzero sibling** (for example, `{"rebalance":{"enabled":false,"dest_retry_time":"3m"}}` or `{"fshc":{"enabled":false,"error_limit":3}}`). See [Sections that are on by default need care](#sections-that-are-on-by-default-need-care) for the initial-file rules. Plain runtime bool fields do not track JSON field presence.
 
-`ConfigToSet` has no such ambiguity - `Enabled *bool` separates absent, true, and false. Do not replace that pointer with a plain `bool`.
+`ConfigToSet` has no such ambiguity for updates - `Enabled *bool` separates absent, true, and false. Do not replace that pointer with a plain `bool`.
 
 A partially specified initial section is supported **only when `enabled` is explicit**. A customized `rebalance` or `fshc` section that omits `enabled` is unsupported, because omission is indistinguishable from explicit `false` - `{"rebalance":{"dest_retry_time":"3m"}}` is not wholly zero, so the sentinel above cannot rescue it. Documented on the `RebalanceConf` and `FSHCConf` struct definitions and in [the operator section above](#sections-that-are-on-by-default-need-care).
 
@@ -701,7 +707,7 @@ Scope is enforced from `ClusterConfig` tags inside `_copyProps`, with three dist
 
 `IgnoreScope: true` is passed only on the two override-*replay* paths - `handleOverrideConfig` at startup and `GCO.Update` on metasync receive - where a persisted override file may legitimately contain a section that has since become cluster-only. It is never set on a live user update. Consequence worth knowing: a section that gains `allow:"cluster"` in a release will have its existing per-node overrides silently dropped after upgrade, with only `ignoring node override for cluster-scoped config` in the log.
 
-When adding a restart-sensitive setting, update `cmn.ConfigRestartRequired`. That list drives a CLI warning; it does not itself reinitialize anything.
+When adding a restart-sensitive configuration group or field, update `cmn.ConfigRestartRequired`. Restart-sensitive feature flags use the separate `feat.RestartRequired` mask; update it when adding such a flag. These contracts drive warnings; they do not themselves reinitialize anything.
 
 Persistent cluster updates run primary-only pre-flight checks in `ais/prxclu.go`. Transient updates do not take that path. When you add a pre-flight check, decide explicitly what the transient path does - either perform the equivalent check on the merged values, or reject the update. `_checkTransient` currently refuses everything in `cmn.ConfigRestartRequired` plus `auth` and `keepalivetracker`, returning `cmn.NewErrUnsupp` (501). **Do not leave the transient path less validated than the persistent one.**
 
@@ -744,7 +750,7 @@ Coverage for any configuration change should include:
 - survival of every non-default value, including zero-valued siblings;
 - sparse encode / decode / hydrate round trip;
 - partial override onto an absent or empty section;
-- preservation of explicit disable for default-enabled sections;
+- preservation of explicit disable on hydrated default-enabled sections, plus initial-file cases with a false-only and a false-with-nonzero-sibling section;
 - deep-clone alias safety for pointerized sections;
 - metasync receive-boundary hydration;
 - scope and read-only enforcement;
