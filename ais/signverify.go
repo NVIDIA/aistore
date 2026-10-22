@@ -30,7 +30,13 @@ import (
 // additionally covers the HTTP method, path, and content length.
 //
 // TODO:
-// - add canonical query/body coverage
+// - add canonical query/body coverage; currently, client-controlled redirect inputs are unsigned:
+//   * native API: target derives bucket provider and namespace from query (dpq, newBckFromQ)
+//   * audit remaining native qparams (etl name, archpath, etc.) and bind authz-relevant ones
+//   * S3: bind canonical query (parsed, sans sv qparams, re-encoded) and copy-source bucket
+//     (not the raw x-amz-copy-source header: some clients re-escape it when following redirects)
+//   * mixed-version membership: consider introducing meta-version for the redirect envelope only
+//     (qencode/_verifySigned; intra-cluster headers unaffected)
 // - enforce startup ordering: restarted node must not originate signed traffic before its new Smap entry gets propagated
 // - tests: add TestSignVerifyToggleStress and run it in parallel w/ TestSmoke/prefetch/get-batch
 // - add rotation, startup, and tampering tests
