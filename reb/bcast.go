@@ -49,7 +49,8 @@ func bcast(rargs *rargs, cb syncCallback) (errCnt int) {
 		wg  = cos.NewClusterWaitGroup(sys.NumCPU(), len(rargs.smap.Tmap))
 	)
 	for _, tsi := range rargs.smap.Tmap {
-		if tsi.ID() == core.T.SID() {
+		// skip targets in maintenance post-rebalance: done transitioning (and may be shut down)
+		if tsi.ID() == core.T.SID() || tsi.InMaintPostReb() {
 			continue
 		}
 		wg.Add(1)

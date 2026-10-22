@@ -51,6 +51,9 @@ func (q *qui) quicb(total time.Duration) core.QuiRes {
 	locStage := q.reb.stages.stage.Load()
 	debug.AssertFunc(func() bool { return locStage >= rebStageFin || xreb.IsAborted() }, locStage, " vs ", rebStageFin)
 	for _, tsi := range q.rargs.smap.Tmap {
+		if tsi.InMaintPostReb() { // (see bcast)
+			continue
+		}
 		status, _ := q.reb.checkStage(tsi, q.rargs, locStage)
 		if status != nil && status.Running && status.Stage < rebStageFin {
 			if i := total / logIval; i > q.i {

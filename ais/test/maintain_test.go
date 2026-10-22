@@ -749,3 +749,67 @@ func TestShutdownListObjects(t *testing.T) {
 		}
 	}
 }
+
+// rebalance while a target is shut down (in maintenance post-rebalance):
+// - a rebalance started right after shutdown must not wait for the departing target
+// - rebalance and cleanup must neither ping nor wait for it once it is gone
+// - cluster membership must not remain busy
+func TestMaintenanceShutdown(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true, RequiredDeployment: tools.ClusterTypeLocal})
+	var (
+		m        = &ioContext{t: t, num: 300, fileSize: cos.KiB, fixedSize: true}
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+	)
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+	m.puts()
+	nps, nts := m.smap.CountActivePs(), m.smap.CountActiveTs()
+
+	// run (cleanup) rebalance to completion: it must not be aborted
+	reb := func(tag string, flags uint32) {
+		t.Helper()
+		xid, err := api.StartXaction(bp, &xact.ArgsMsg{Kind: apc.ActRebalance, Flags: flags}, "")
+		tassert.CheckFatal(t, err)
+		tlog.Logfln("%s: rebalance %s", tag, xid)
+		status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, !status.IsAborted(), "%s: rebalance %s aborted: %v", tag, xid, status.ErrMsg)
+	}
+
+	tsi, _ := m.smap.GetRandTarget()
+	_, cmd, rebID, err := tools.ShutdownNode(bp, tsi)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		if err := tools.WaitNodePubAddrNotInUse(tsi, time.Minute); err != nil {
+			tassert.CheckError(t, err)
+			return
+		}
+		tassert.CheckError(t, tools.RestoreNode(cmd, false, apc.Target))
+		time.Sleep(time.Second)
+		_, err := stopMaintenanceRetry(t, bp, &apc.ActValRmNode{DaemonID: tsi.ID()})
+		tassert.CheckError(t, err)
+		_, err = tools.WaitForClusterState(proxyURL, "target is back", -1, nps, nts)
+		tassert.CheckError(t, err)
+		tools.WaitForRebalAndResil(t, bp)
+	})
+	tools.WaitForRebalanceByID(t, bp, rebID)
+
+	// 1. right away: the departing target may still be in maintenance without post-rebalance
+	reb("immediately after shutdown", xact.FlagRemoveMisplaced)
+
+	// 2. once it's gone
+	tassert.CheckFatal(t, tools.WaitNodePubAddrNotInUse(tsi, time.Minute))
+	smap, err := tools.WaitForClusterState(proxyURL, "target shut down", m.smap.Version, nps, nts-1, tsi.ID())
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, smap.GetTarget(tsi.ID()).InMaintPostReb(), "%s: expected maintenance post-rebalance", tsi.StringEx())
+	reb("target gone", 0)
+	reb("target gone (cleanup)", xact.FlagRemoveMisplaced)
+
+	// 3. no rebalance listener left running on the primary (that is, membership is not busy)
+	status, err := api.GetOneXactionStatus(bp, &xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true})
+	tassert.Fatalf(t, cmn.IsStatusNotFound(err) || (err == nil && status.IsFinished()),
+		"expected no running rebalance, got %v (%v)", status, err)
+	m.gets(nil, true /*validate*/)
+	m.ensureNoGetErrors()
+}

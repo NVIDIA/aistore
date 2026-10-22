@@ -6,6 +6,7 @@ package ais
 
 import (
 	"bytes"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -187,5 +188,76 @@ func TestOwnershipTblActMergeOwnershipTbl(t *testing.T) {
 	}
 	if got.EndTime() != want {
 		t.Fatalf("EndTimeX push path: want %d, got %d", want, got.EndTime())
+	}
+}
+
+// rebalance notifiers in maintenance post-rebalance are done (and may be shut down): count them as finished
+func TestNotifRebPostReb(t *testing.T) {
+	cos.InitShortID(0)
+	var (
+		t1, t2, t3 = newSnode("t1", apc.Target), newSnode("t2", apc.Target), newSnode("t3", apc.Target)
+		smap       = newSmap()
+	)
+	for _, tsi := range []*meta.Snode{t1, t2, t3} {
+		smap.Tmap[tsi.ID()] = tsi.Clone()
+	}
+	newNL := func(kind string) *xact.NotifXactListener {
+		nl := xact.NewXactNL(cos.GenUUID(), kind, &smap.Smap, meta.NodeMap{t1.ID(): t1, t2.ID(): t2, t3.ID(): t3})
+		return nl.WithCause(apc.ActShutdownNode)
+	}
+
+	// bare maintenance (transition not done): keep waiting
+	smap.Tmap[t3.ID()].Flags = meta.SnodeMaint
+	nl := newNL(apc.ActRebalance)
+	n := newTestNotifs()
+	tassert.CheckFatal(t, n.add(nl))
+	nl.Lock()
+	n.markFinished(nl, t1, nil, false)
+	n.markFinished(nl, t2, nil, false)
+	nl.Unlock()
+	tassert.Fatalf(t, !n.finPostReb(nl, smap), "bare maintenance must not finish the listener")
+	tassert.Fatalf(t, nl.ActiveCount() == 1, "expected t3 still active, got %d", nl.ActiveCount())
+
+	// post-rebalance: finished, not aborted
+	smap.Tmap[t3.ID()].Flags = meta.SnodeMaint | meta.SnodeMaintPostReb
+	tassert.Fatalf(t, n.finPostReb(nl, smap), "post-rebalance notifier must finish the listener")
+	n.done(nl)
+	tassert.Errorf(t, nl.IsFinished() && !nl.IsAborted() && nl.Err() == nil, "expected finished (not aborted, no error): %v", nl.Err())
+	tassert.Errorf(t, n.errRebRunning("test") == nil, "rebalance still running")
+
+	// other kinds: not applicable
+	other := newNL(apc.ActECEncode)
+	tassert.Fatalf(t, !n.finPostReb(other, smap), "non-rebalance listener finished")
+}
+
+// late stats and not-found replies must not abort a rebalance after the notifier is retired
+func TestNotifRebPostRebLateReply(t *testing.T) {
+	cos.InitShortID(0)
+	for _, reply := range []string{"snapshot", "404"} {
+		t.Run(reply, func(t *testing.T) {
+			t1, t2 := newSnode("t1", apc.Target), newSnode("t2", apc.Target)
+			smap := newSmap()
+			smap.Tmap[t1.ID()], smap.Tmap[t2.ID()] = t1.Clone(), t2.Clone()
+			smap.Tmap[t2.ID()].Flags = meta.SnodeMaint | meta.SnodeMaintPostReb
+			nl := xact.NewXactNL(cos.GenUUID(), apc.ActRebalance, &smap.Smap,
+				meta.NodeMap{t1.ID(): t1, t2.ID(): t2})
+			n := newTestNotifs()
+			if n.finPostReb(nl, smap) || nl.ActiveCount() != 1 {
+				t.Fatal("expected only t1 to remain active")
+			}
+			var done bool
+			if reply == "snapshot" {
+				snap := &core.Snap{ID: nl.UUID(), EndTime: time.Now(), AbortedX: true, AbortErr: "late abort"}
+				done = n.reconcilePulledStats(nl, t2, snap, true, true)
+			} else {
+				// bcastGetStats handles a late 404 under the listener lock.
+				nl.Lock()
+				done = n.markFinished(nl, t2, errors.New("late not-found"), true)
+				nl.Unlock()
+			}
+			if done || nl.IsAborted() || nl.Err() != nil {
+				t.Fatalf("retired notifier aborted listener: done=%t, aborted=%t, err=%v", done, nl.IsAborted(), nl.Err())
+			}
+		})
 	}
 }

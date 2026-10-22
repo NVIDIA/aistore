@@ -342,6 +342,9 @@ func (n *notifs) size() int32 {
 
 // PRECONDITION: `nl` should be under lock.
 func (*notifs) markFinished(nl nl.Listener, tsi *meta.Snode, srcErr error, aborted bool) (done bool) {
+	if nl.HasFinished(tsi) {
+		return nl.ActiveCount() == 0 || nl.IsAborted()
+	}
 	nl.MarkFinished(tsi)
 	if aborted {
 		nl.SetAborted()
@@ -354,6 +357,30 @@ func (*notifs) markFinished(nl nl.Listener, tsi *meta.Snode, srcErr error, abort
 		nl.AddErr(srcErr)
 	}
 	return nl.ActiveCount() == 0 || aborted
+}
+
+// count rebalance notifiers in maintenance post-rebalance as finished: done transitioning,
+// they may be shut down and never report (see _bareMaint in ais/rebmeta);
+// return true when the listener is done
+func (n *notifs) finPostReb(nl nl.Listener, smap *smapX) (done bool) {
+	if nl.Kind() != apc.ActRebalance {
+		return false
+	}
+	var fin meta.Nodes
+	nl.Lock()
+	for sid := range nl.ActiveNotifiers() {
+		if node := smap.GetNode(sid); node != nil && node.InMaintPostReb() {
+			fin = append(fin, node)
+		}
+	}
+	for _, node := range fin {
+		done = n.markFinished(nl, node, nil /*err*/, false /*aborted*/)
+	}
+	nl.Unlock()
+	for _, node := range fin {
+		nlog.Infoln(nl.Name()+":", node.StringEx(), "is in maintenance post-rebalance - counting it as finished")
+	}
+	return done
 }
 
 func (n *notifs) done(nl nl.Listener) {
@@ -469,6 +496,10 @@ func (n *notifs) housekeep(now int64) time.Duration {
 
 // conditional: query targets iff they delayed updating
 func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
+	if n.finPostReb(nl, n.p.owner.smap.get()) {
+		n.done(nl)
+		return
+	}
 	var (
 		config           = cmn.GCO.Get()
 		progressInterval = config.Periodic.NotifTime.D()
@@ -578,6 +609,13 @@ func (n *notifs) ListenSmapChanged() {
 repeat:
 	for uuid, nl := range remnl {
 		sid := remid[uuid]
+		if node := smap.GetNode(sid); node != nil && node.InMaintPostReb() && nl.Kind() == apc.ActRebalance {
+			delete(remnl, uuid)
+			if n.finPostReb(nl, smap) {
+				n.done(nl)
+			}
+			goto repeat
+		}
 		// use case: admin-driven membership change whereby this `sid` is legally inactive
 		if nl.Kind() == apc.ActRebalance && nl.Cause() != "" && smap.GetNode(sid) != nil { // for the cause, see ais/rebmeta
 			nlog.Infof("Warning: %s: %s is inactive, ignore 'smap-changed'", nl.String(), sid)
