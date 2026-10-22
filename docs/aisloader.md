@@ -70,7 +70,7 @@ For usage, run: `aisloader`, `aisloader usage`, or `aisloader --help`.
 
 ## Testing
 
-The end-to-end tests require a running cluster. To deploy one locally, see [Local Playground](/docs/getting_started.md#local-playground). The ETL test additionally requires an ETL-enabled Kubernetes cluster. To deploy one locally, follow [Local K8s Deployment](/deploy/dev/k8s/README.md#deploy-aistore) using `make etl`, and set `AIS_ENDPOINT` as shown there.
+The end-to-end tests require a running cluster. To deploy one locally, see [local playground](/docs/getting_started.md#local-playground). The ETL test additionally requires an ETL-enabled Kubernetes cluster. To deploy one locally, follow [Local K8s Deployment](/deploy/dev/k8s/README.md#deploy-aistore) using `make etl`, and set `AIS_ENDPOINT` as shown there.
 
 ```console
 $ make aisloader                      # rebuild the binary the end-to-end tests run (from PATH)

@@ -64,7 +64,7 @@ This allows AuthN to broadcast revoked tokens to all registered clusters for imm
 
 ## Getting Started
 
-In this section, we use AIStore [Local Playground](/docs/getting_started.md#local-playground).
+In this section, we use AIStore [local playground](/docs/getting_started.md#local-playground).
 This is done for demonstration purposes, as it's easy to use and reproduce.
 
 If you already have an AIS cluster deployed and just want to add AuthN to it for authentication and access control, follow [these instructions](#how-to-enable-authn-server-after-deployment).
@@ -78,7 +78,7 @@ If you already have an AIS cluster deployed and just want to add AuthN to it for
 
 Follow these steps to deploy a new local AIS cluster with AuthN enabled and RSA signing:
 
-1. Optionally, shut down and clean up any existing [Local Playground](/docs/getting_started.md#local-playground) deployments and rebuild AIS CLI:
+1. Optionally, shut down and clean up any existing [local playground](/docs/getting_started.md#local-playground) deployments and rebuild AIS CLI:
     ```sh
     make kill clean cli
     ```

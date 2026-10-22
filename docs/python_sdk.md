@@ -1,17 +1,12 @@
----
-layout: post
-title: Your First AIStore Object with Python
-description: "Install the AIStore Python SDK and create, list, and read your first object."
-permalink: /docs/python_sdk
----
+# Your First AIStore Object with Python
 
 AIStore's Python SDK lets you create a bucket, upload bytes, list objects, and verify a download. For deployment choices, refer to [Getting Started](/docs/getting_started.md).
 
 ## Prerequisites
 
 - Python 3.10 or later, as required by the SDK's `python/pyproject.toml`.
-- A running AIStore cluster where you can create buckets. For a maintained local source deployment, use the [Local Playground](/docs/getting_started.md#local-playground). Alternatively, the [Minimal Compose deployment](/docs/getting_started.md#minimal-compose-deployment) is a limited, one-proxy, one-target container smoke test, not a production deployment; it does not configure TLS or AuthN.
-- The HTTP endpoint of a reachable AIS proxy. The default Local Playground endpoint is `http://localhost:8080`; the default Minimal Compose host endpoint is `http://localhost:51080`. For a remote or differently configured cluster, obtain its actual endpoint from the cluster administrator and use that instead.
+- A running AIStore cluster where you can create buckets. For a maintained local source deployment, use the [local playground](/docs/getting_started.md#local-playground). Alternatively, the [Minimal Compose deployment](/docs/getting_started.md#minimal-compose-deployment) is a limited, one-proxy, one-target container smoke test, not a production deployment; it does not configure TLS or AuthN.
+- The HTTP endpoint of a reachable AIS proxy. The default local playground endpoint is `http://localhost:8080`; the default Minimal Compose host endpoint is `http://localhost:51080`. For a remote or differently configured cluster, obtain its actual endpoint from the cluster administrator and use that instead.
 - Client access to the target URLs returned by that proxy for object PUT and GET, with trusted TLS certificates at both proxy and target URLs when using HTTPS. The default host-local Playground and Compose paths provide local proxy and target access. For a remote cluster, check the advertised target addresses with the administrator: a proxy-only SSH or Kubernetes port-forward can allow bucket creation but fail object I/O after redirection. Refer to [read and write traffic patterns](/docs/traffic_patterns.md#read-and-write-traffic-patterns) for the proxy-to-target path.
 
 ## Install and Connect
@@ -24,7 +19,7 @@ python3 -m venv .venv
 python -m pip install aistore
 ```
 
-Select the endpoint for the deployment you started. For the default Local Playground:
+Select the endpoint for the deployment you started. For the default local playground:
 
 ```sh
 export AIS_ENDPOINT=http://localhost:8080
@@ -36,7 +31,7 @@ For the default Minimal Compose smoke test, use this instead:
 export AIS_ENDPOINT=http://localhost:51080
 ```
 
-Do not run both exports: the second one replaces the first. The endpoint selects the cluster where this tutorial creates data.
+Use your cluster's actual proxy URL if it differs from these defaults.
 
 If your cluster requires an authentication token, supply one through `AIS_AUTHN_TOKEN` or the `Client(token=...)` argument; refer to [authentication validation](/docs/auth_validation.md) and the [SDK authentication settings](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#environment-variables). For HTTPS with a private trusted certificate authority (CA), set `AIS_CLIENT_CA` to its certificate file or pass `Client(ca_cert=...)`; refer to the [SDK HTTPS guidance](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#https). Use certificate verification, not `skip_verify`, and confirm that skip-verification environment variables are not enabled.
 

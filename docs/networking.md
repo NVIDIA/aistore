@@ -55,7 +55,7 @@ This is also valid on a single host or shared physical fabric, because the publi
 }
 ```
 
-Here, public, intra-control, and intra-data traffic use the same loopback interface and the two [Local Playground](/docs/getting_started.md#local-playground) ports.
+Here, public, intra-control, and intra-data traffic use the same loopback interface and the two [local playground](/docs/getting_started.md#local-playground) ports.
 
 ### Invalid post-v5.0 deployment
 

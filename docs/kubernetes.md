@@ -1,9 +1,4 @@
----
-layout: post
-title: Choose an AIStore Kubernetes Deployment
-description: "Choose local Kubernetes development or the AIStore production operator and find the relevant prerequisites."
-permalink: /docs/kubernetes
----
+# Choose an AIStore Kubernetes Deployment
 
 AIStore has separate Kubernetes paths for local development and production operator deployments. Choose a path here, then follow its own instructions. For deployments that do not require Kubernetes, refer to [Getting Started](/docs/getting_started.md).
 
@@ -11,8 +6,6 @@ AIStore has separate Kubernetes paths for local development and production opera
 
 - **Develop and test locally:** Use the [local KinD or Minikube guide](/deploy/dev/k8s/README.md). This operator-less deployment uses `deploy/dev/k8s`; it is not a production deployment. Its guide covers the base cluster, access, and ETL-enabled development image.
 - **Plan a production deployment:** Start with the [ais-k8s production deployment guide](https://github.com/NVIDIA/ais-k8s/blob/main/docs/README.md) and [operator guide](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md). The operator manages the AIS cluster lifecycle. Consult its [redeployment guide](https://github.com/NVIDIA/ais-k8s/blob/main/docs/redeployment.md) before changing or deleting an existing deployment; cleanup choices can affect cluster state and user data.
-
-Expected result: you have selected the development or production route and identified the upstream instructions for that route. This page does not deploy a cluster or replace the ais-k8s procedures. For operator upgrades and redeployment, follow the upstream ais-k8s guides.
 
 ## Check Prerequisites
 

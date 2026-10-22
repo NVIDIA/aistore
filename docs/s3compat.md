@@ -58,9 +58,9 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
 
 ---
 
-> **Environment assumption – Local Playground**
+> **Environment assumption – Local playground**
 >
-> The CLI examples below use `localhost:8080`, which is the default endpoint when running AIS in the [Local Playground](/docs/getting_started.md#local-playground).
+> The CLI examples below use `localhost:8080`, which is the default endpoint when running AIS in the [local playground](/docs/getting_started.md#local-playground).
 >
 > For other deployment modes (including [Kubernetes Playground](/docs/getting_started.md#kubernetes-playground), Docker Compose, bare-metal cluster, or [Kubernetes for production deployments](https://github.com/NVIDIA/ais-k8s)) - replace the `host:port` with any **AIS gateway** endpoint.
 >

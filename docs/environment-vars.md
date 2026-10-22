@@ -32,7 +32,7 @@ The remainder of this text groups AIS environment variables by their respective 
 - [Network](#network)
 - [Node](#node)
 - [HTTPS](#https)
-- [Local Playground](#local-playground)
+- [Local playground](#local-playground)
 - [Kubernetes](#kubernetes)
 - [Package: backend](#package-backend)
   - [AIS as S3 storage](#ais-as-s3-storage)
@@ -142,7 +142,7 @@ CLI and other tools that call `EnvToTLS` read the following client-side environm
 - [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
 - [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
 
-## Local Playground
+## Local playground
 
 This group of environment variables is used exclusively by development scripts and integration tests.
 

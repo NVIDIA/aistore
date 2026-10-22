@@ -46,7 +46,7 @@ $ pip install -e .
 
 ## Quick Start
 
-For an end-to-end create, upload, list, and download example, follow the [Python first-object tutorial](/docs/python_sdk.md). Start a cluster using the maintained [Local Playground](/docs/getting_started.md#local-playground), or use [Minimal Compose](/docs/getting_started.md#minimal-compose-deployment) for a limited one-proxy, one-target container smoke test with no TLS or AuthN. Compose is not a production deployment. For Kubernetes, [choose a development or production path](/docs/kubernetes.md); for production authentication, refer to [authentication validation](/docs/auth_validation.md).
+For an end-to-end create, upload, list, and download example, follow the [Python first-object tutorial](/docs/python_sdk.md). Start a cluster using the maintained [local playground](/docs/getting_started.md#local-playground), or use [Minimal Compose](/docs/getting_started.md#minimal-compose-deployment) for a limited one-proxy, one-target container smoke test with no TLS or AuthN. Compose is not a production deployment. For Kubernetes, [choose a development or production path](/docs/kubernetes.md); for production authentication, refer to [authentication validation](/docs/auth_validation.md).
 
 In order to interact with your running AIS instance, you will need to create a `client` object:
 

@@ -6,9 +6,9 @@ AIStore can scale from a **single Linux machine** to a **rack-scale cluster** or
 * [Choose an onboarding path](#choose-an-onboarding-path)
 * [Quick Start](#quick-start)
 * [Next Steps](#next-steps)
-  * [Local Playground](#local-playground)
+  * [Local playground](#local-playground)
   * [Minimal Compose deployment](#minimal-compose-deployment)
-  * [Local Playground environment variables](#local-playground-environment-variables)
+  * [Local playground environment variables](#local-playground-environment-variables)
   * [Make](#make)
   * [System environment variables](#system-environment-variables)
   * [Multiple deployment options](#multiple-deployment-options)
@@ -92,16 +92,16 @@ Use the path that matches what you want to do first:
 
 | Goal | Start here | Notes |
 | --- | --- | --- |
-| Try AIS locally from source | [Local Playground](#local-playground) | Most frequently used local path for first-time evaluation and development. Uses the top-level `Makefile`, `deploy/dev/local`, and optionally `scripts/clean_deploy.sh`. |
+| Try AIS locally from source | [Local playground](#local-playground) | Most frequently used local path for first-time evaluation and development. Uses the top-level `Makefile`, `deploy/dev/local`, and optionally `scripts/clean_deploy.sh`. |
 | Develop with containerized AIS nodes | [Docker development scripts](/deploy/dev/docker/README.md) | Uses `deploy/dev/docker` and the top-level `make deploy-docker` target. |
 | Exercise AIS in local Kubernetes | [Kubernetes deployment chooser](/docs/kubernetes.md) | Use `deploy/dev/k8s` for KinD or Minikube development and testing. |
 | Plan a production Kubernetes deployment | [Kubernetes deployment chooser](/docs/kubernetes.md) | Follow the dedicated ais-k8s operator and prerequisite guides. |
 | Run a small container smoke test | [Minimal Compose deployment](#minimal-compose-deployment) | One proxy and target, no TLS or AuthN; not the primary maintained path or a production deployment. |
-| Connect an application or configure production authentication | [Python first-object guide](/docs/python_sdk.md) and [authentication validation](/docs/auth_validation.md) | Set `AIS_ENDPOINT` for your deployment: `http://localhost:8080` for default Local Playground or `http://localhost:51080` for default Compose. |
+| Connect an application or configure production authentication | [Python first-object guide](/docs/python_sdk.md) and [authentication validation](/docs/auth_validation.md) | Set `AIS_ENDPOINT` for your deployment: `http://localhost:8080` for default local playground or `http://localhost:51080` for default Compose. |
 
 ## Quick Start
 
-This section provides the fastest maintained path to get an AIStore cluster running on your local machine. Use a fresh, disposable Local Playground host with no running AIS or AuthN instance and no state to retain in the local data and configuration paths. Set `AIS_ENDPOINT` to the intended local proxy before any `make kill`, `make clean`, or `make restart`: `make kill` first uses the CLI to request cluster shutdown at that endpoint. If the proxy is already reachable, confirm its cluster identity before shutdown; do not assume a local URL identifies the intended playground. For an existing cluster, follow the [restart path](#make) instead of deploying a fresh playground. For more detailed steps, see the [Local Playground](#local-playground) section.
+Start a new local playground on a development machine with no running AIS or AuthN processes and no playground data or configuration to retain. To restart an existing local cluster, see [Make](#make). For deployment options, see [local playground](#local-playground).
 
 ### Install Go (if not already installed)
 
@@ -130,9 +130,9 @@ $ ais show cluster
 
 ### Create a Bucket and Put/Get Objects
 
-Check that `ais show cluster` reports the playground topology you just deployed (one proxy and one target) before creating a bucket. The exported `AIS_ENDPOINT` overrides a previously saved CLI cluster URL. If you changed the playground's proxy port or address, export its actual proxy URL instead of `http://localhost:8080` and verify that cluster before any writes.
+`ais show cluster` should report one proxy and one target. `AIS_ENDPOINT` overrides the saved CLI cluster URL; use the actual proxy URL if you changed its address or port.
 
-With the intended Local Playground cluster running, create a new bucket and upload, list, and download an object:
+With the intended local playground cluster running, create a new bucket and upload, list, and download an object:
 
 ```console
 # Create a new bucket
@@ -175,17 +175,19 @@ You now have a local AIStore deployment to explore. Continue for detailed setup 
 
 ## Next Steps
 
-### Local Playground
+### Local playground
 
 If you're looking for speedy evaluation, want to experiment with [supported features](https://github.com/NVIDIA/aistore/tree/main?tab=readme-ov-file#features), get a feel of initial usage, or development - for any and all of these reasons running AIS from its GitHub source might be a good option.
 
-Hence, we introduced (and keep maintaining) **Local Playground** - one of the several supported [deployment options](#multiple-deployment-options).
+Hence, we introduced (and keep maintaining) **local playground** - one of the several supported [deployment options](#multiple-deployment-options).
 
-> Some of the most popular deployment options are also **summarized** in this [table](https://github.com/NVIDIA/aistore/tree/main/deploy#readme). The list includes Local Playground, and its complementary guide [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md).
+> Some of the most popular deployment options are also **summarized** in this [table](https://github.com/NVIDIA/aistore/tree/main/deploy#readme). The list includes local playground, and its complementary guide [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md).
 
-> Local Playground is for **development** purposes and is not meant to provide optimal performance.
+> Local playground is for **development** purposes and is not meant to provide optimal performance.
 
-Use the following kill/clean deployment commands only on a fresh, disposable host with no running AIS or AuthN instance and no state to retain in the local playground paths. Before any `make kill`, `make clean`, `make restart`, or `clean_deploy.sh`, export the intended **local** proxy URL as `AIS_ENDPOINT`; `make kill` first runs `ais cluster shutdown -y` using that endpoint, even if the host has no local AIS processes. An existing `AIS_ENDPOINT` or saved CLI URL can otherwise direct shutdown to another cluster. If a proxy responds at the selected URL, check its cluster identity before running a shutdown command. `make kill` then stops local AIS and AuthN processes; `make clean` removes local data, metadata, and configuration, including files under `/tmp/ais*`, `~/.ais*`, and `~/.config/ais`. For an existing local cluster with state to retain, use the [restart guidance](#make), not a clean deployment.
+Before running `make kill`, `make restart`, or `clean_deploy.sh`, set `AIS_ENDPOINT` to the intended local proxy. `make kill` requests cluster shutdown through the CLI, then stops all local AIS and AuthN processes. A saved CLI URL or an inherited `AIS_ENDPOINT` can otherwise direct shutdown to another cluster. If the endpoint is reachable, check it with `ais show cluster` first.
+
+`make clean` deletes local playground data and configuration under `/tmp/ais*`, `~/.ais*`, and `~/.config/ais`, unmounts and removes playground loopback devices, and removes AIS binaries. Use it only when that state can be discarded. To retain an existing cluster, follow the [restart guidance](#make).
 
 To run AIStore from source, one would typically need to have **Go**: compiler, linker, tools, and required packages. However:
 
@@ -225,7 +227,7 @@ $ make mod-tidy
 
 Many useful commands are provided via top [Makefile](https://github.com/NVIDIA/aistore/blob/main/Makefile) (for details, see [Make](#make) section below).
 
-In particular, after confirming the disposable-host conditions above, select the intended local proxy **before** running `make kill`. Use its actual URL if the playground uses a custom `PORT`, host, or HTTPS configuration instead of the default:
+For a new three-target, three-proxy playground, select the local endpoint and deploy. Substitute the actual proxy URL if you changed the defaults:
 
 ```console
 $ export AIS_ENDPOINT=http://localhost:8080
@@ -242,13 +244,11 @@ and, finally:
 
 * deploys (3 storage nodes, 3 gateways) cluster.
 
-Keep `AIS_ENDPOINT` set to the intended local proxy when inspecting the new playground or writing data. The export overrides any saved CLI cluster URL.
-
 ```console
 $ ais show cluster
 ```
 
-Check that the output reports the intended three-target, three-proxy playground before continuing. For an existing cluster that you want to retain, follow the [restart guidance](#make) rather than `make kill clean ... deploy`.
+The output should report three targets and three proxies.
 
 #### `clean_deploy.sh`
 
@@ -280,7 +280,7 @@ $ aisloader -bucket=ais://abc -duration 2m -numworkers=8 -minsize=1K -maxsize=1K
 $ iostat -dxm 10 <disk_name>
 ```
 
-#### Running Local Playground with emulated disks
+#### Running local playground with emulated disks
 
 Here's a quick walkthrough (with more references included below).
 
@@ -308,20 +308,20 @@ index c5e0e4fae..46085e19c 100755
  }
 ```
 
-* Step 2: on a fresh, disposable host meeting the [Local Playground safeguards](#local-playground), select the intended local proxy before deploying a single target with two loopback devices (1GB size each):
+* Step 2: deploy one target with two loopback devices (1GB each):
 
 ```console
 $ export AIS_ENDPOINT=http://localhost:8080
 $ TEST_LOOPBACK_SIZE=1G make kill cli deploy <<< $'1\n1\n2'
 ```
 
-or use the same exported local endpoint with:
+or:
 
 ```console
 $ ./scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 2 --loopback 1G
 ```
 
-To include the AWS backend and clean the disposable playground instead, keep the same exported local endpoint:
+To include the AWS backend and clean the playground first:
 
 ```console
 $ TAGS=aws TEST_LOOPBACK_SIZE=1G make kill clean cli deploy <<< $'1\n1\n'
@@ -387,13 +387,13 @@ Use `make up-build` instead of `make up` when you need to build the image from t
 
 This path is intentionally small. For more nodes, development-only Docker scripts, or multiple containerized clusters, use [`deploy/dev/docker`](/deploy/dev/docker/README.md). For Kubernetes, use [`deploy/dev/k8s`](/deploy/dev/k8s/README.md) locally or the production [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository.
 
-#### Running Local Playground remotely
+#### Running local playground remotely
 
 AIStore (product and solution) is fully based on HTTP(S) utilizing the protocol both externally (to support both frontend interfaces and communications with remote backends) and internally, for [intra-cluster streaming](/transport).
 
 Connectivity-wise, what that means is that your local deployment at `localhost:8080` can as easily run at any **arbitrary HTTP(S)** address.
 
-Here's the quick change you make to deploy Local Playground at (e.g.) `10.0.0.207`, whereby the main gateway's listening port would still remain `8080` default:
+Here's the quick change you make to deploy local playground at (e.g.) `10.0.0.207`, whereby the main gateway's listening port would still remain `8080` default:
 
 ```diff
 diff --git a/deploy/dev/local/aisnode_config.sh b/deploy/dev/local/aisnode_config.sh                                                             |
@@ -423,9 +423,9 @@ index e0b467d82..b18361155 100755                                               
    AIS_PRIMARY_URL="https://localhost:$PORT"                                                                                                     |
 ```
 
-#### Local Playground environment variables
+#### Local playground environment variables
 
-The Local Playground deployment scripts generate AIStore configuration from a combination of defaults, interactive prompts, and optional environment variables.
+The local playground deployment scripts generate AIStore configuration from a combination of defaults, interactive prompts, and optional environment variables.
 
 The generated configuration is primarily produced by:
 
@@ -435,7 +435,7 @@ deploy/dev/local/aisnode_config.sh
 
 Most users do not need to set any of these variables. They are intended for development, testing, CI, and quickly exercising selected configuration paths without editing JSON files by hand.
 
-These kill/clean examples require the [fresh, disposable Local Playground safeguards](#local-playground). Export the intended local proxy URL first, before either example; change the URL if the playground uses a different local address, port, or scheme:
+These examples replace the local playground and discard its state. See [local playground](#local-playground) for shutdown and cleanup details. Set `AIS_ENDPOINT` to the playground's proxy URL:
 
 ```console
 $ export AIS_ENDPOINT=http://localhost:8080
@@ -502,7 +502,7 @@ $ make deploy
 
 #### Example: shutdown cluster and cleanup all its data and metadata
 
-Only use the following kill/clean examples on a fresh, disposable host meeting the [Local Playground safeguards](#local-playground). Set the intended local proxy URL **before** any `make kill`, `make clean`, or `make restart`; use the actual URL instead if you configured a custom local proxy:
+The cleanup commands below discard existing playground state; see [local playground](#local-playground).
 
 ```console
 $ export AIS_ENDPOINT=http://localhost:8080
@@ -540,7 +540,7 @@ $ TAGS="aws gcp debug" make kill clean cli deploy <<< $'7\n2'
 #### Further:
 
 * `make kill` - request shutdown at the selected CLI endpoint, then terminate local AIS and AuthN processes.
-* `make restart` - run `make kill` followed by `make run`. It reuses existing AIS daemon configuration files, but rebuilds `aisnode` and prompts for deployment choices again. To retain an existing local cluster, set `AIS_ENDPOINT` to that cluster's **local** proxy URL and verify its identity with `ais show cluster` *before* restarting. Reuse the cluster's target/proxy and mountpath counts and required `MODE`, `TAGS` or `AIS_BACKEND_PROVIDERS`, and AuthN settings, including `AIS_AUTHN_ENABLED` and `AIS_AUTHN_DEPLOY` when applicable; the latter can regenerate AuthN configuration. Do not run `make clean`. Inspect [deployment configuration choices](#local-playground-environment-variables) and your existing settings before restarting.
+* `make restart` - run `make kill` followed by `make run`, rebuilding `aisnode` and reusing existing daemon configurations. Set `AIS_ENDPOINT` to the local cluster's proxy URL. When prompted, reuse its target, proxy, and mountpath counts. Preserve the required build and [deployment settings](#local-playground-environment-variables), including `MODE`, `TAGS` or `AIS_BACKEND_PROVIDERS`, and AuthN settings. `AIS_AUTHN_DEPLOY=true` regenerates AuthN configuration even on restart. Do not run `make clean` to retain cluster state.
 * `make help`    - show make options and usage examples.
 
 For even more development options and tools, please refer to:
@@ -589,7 +589,7 @@ All [containerized deployments](/deploy/README.md) have their own separate `Make
 
 Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](https://github.com/NVIDIA/aistore/blob/main/Makefile).
 
-In the software, _type of the deployment_ is also present in some minimal way. In particular, to overcome certain limitations of [Local Playground](#local-playground) (single disk shared by multiple targets, etc.) - we need to know the _type_. Which can be:
+In the software, _type of the deployment_ is also present in some minimal way. In particular, to overcome certain limitations of [local playground](#local-playground) (single disk shared by multiple targets, etc.) - we need to know the _type_. Which can be:
 
 | enumerated type | comment |
 | --- | --- |
@@ -826,7 +826,7 @@ Some will say that using AIS [CLI](/docs/cli.md) with aistore is an order of mag
 
 Must be a matter of taste, though, and so here are a few `curl` examples.
 
-> As always, `http://localhost:8080` address (below) simply indicates [Local Playground](#local-playground) and must be understood as a placeholder for an _arbitrary_ aistore endpoint (`AIS_ENDPOINT`).
+> As always, `http://localhost:8080` address (below) simply indicates [local playground](#local-playground) and must be understood as a placeholder for an _arbitrary_ aistore endpoint (`AIS_ENDPOINT`).
 
 #### Example: PUT via aistore [S3 interface](/docs/s3compat.md); specify PUT content inline (in the curl command):
 

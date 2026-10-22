@@ -17,7 +17,7 @@ For more details:
 
 ## Getting Started
 
-In this section, we use AIStore [Local Playground](/docs/getting_started.md#local-playground) and local [Jaeger](https://www.jaegertracing.io/). This is done for purely (easy-to-use-and-repropduce) demonsration purposes.
+In this section, we use AIStore [local playground](/docs/getting_started.md#local-playground) and local [Jaeger](https://www.jaegertracing.io/). This is done for purely (easy-to-use-and-repropduce) demonsration purposes.
 
 
 > #### Pre-Requisite
@@ -33,7 +33,7 @@ In this section, we use AIStore [Local Playground](/docs/getting_started.md#loca
     jaegertracing/all-in-one:latest
     ```
 
-2. Optionally, shutdown and cleanup [Local Playground](/docs/getting_started.md#local-playground):
+2. Optionally, shutdown and cleanup [local playground](/docs/getting_started.md#local-playground):
 
     ```sh
     make kill clean

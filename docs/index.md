@@ -83,7 +83,7 @@ For developers and data scientists, there's also:
 
 ## Quick Start
 
-Choose one deployment path: start with the maintained [Local Playground](/docs/getting_started.md#local-playground) for source-based local development and first-time use, or use [Minimal Compose](/docs/getting_started.md#minimal-compose-deployment) for a limited one-proxy, one-target container smoke test without TLS or AuthN. Compose is not a production deployment.
+Choose one deployment path: start with the maintained [local playground](/docs/getting_started.md#local-playground) for source-based local development and first-time use, or use [Minimal Compose](/docs/getting_started.md#minimal-compose-deployment) for a limited one-proxy, one-target container smoke test without TLS or AuthN. Compose is not a production deployment.
 
 After starting your chosen cluster, [create your first object with Python](/docs/python_sdk.md). For Kubernetes, [choose a local or production path](/docs/kubernetes.md).
 
@@ -101,7 +101,7 @@ Some of the most popular deployment options include:
 
 | Option                                                                                                                 | Use Case                                                                                                                                                                                                             |
 |------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Local Playground](/docs/getting_started.md#quick-start) | Maintained source-based path for developers and first-time users. Follow the guarded Quick Start on a fresh, disposable host; do not use it to restart an existing cluster. |
+| [Local playground](/docs/getting_started.md#quick-start) | Source-based local deployment for development and evaluation. |
 | [Minimal Compose smoke test](/docs/getting_started.md#minimal-compose-deployment) | Limited one-proxy, one-target container test; no TLS or AuthN; not production. |
 | [Local Kubernetes development](/docs/kubernetes.md) | KinD or Minikube development and testing; follow the local guide. |
 | [Production Kubernetes deployment](/docs/kubernetes.md) | Plan prerequisites and follow the dedicated ais-k8s operator guides. |
