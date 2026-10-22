@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -37,7 +38,8 @@ import (
 // Workers verify existing indexes and rebuild missing, stale, or corrupt ones.
 // They hold a source read lock while verifying and scanning, then release it
 // before saving. Core revalidates the source before committing the index.
-// Busy or missing sources are skipped. Each admitted item is attempted at most once.
+// Busy or missing sources are skipped, as are items that reach a worker under high node load.
+// Each admitted item is attempted at most once.
 //
 // DemandBase handles idle expiration. The idle callback and abort path stop
 // admission before signaling workers to exit. Run waits for workers to exit,
@@ -80,6 +82,7 @@ type (
 			drained     atomic.Int64 // discarded during shutdown
 			skipHasIdx  atomic.Int64 // shards with existing up-to-date index, skipped
 			skipBusy    atomic.Int64 // source busy during read or commit
+			skipLoad    atomic.Int64 // node load at or above High
 			skipMissing atomic.Int64 // missing/unavailable sources or obsolete bucket identities
 			indexed     atomic.Int64 // newly indexed shards
 			stale       atomic.Int64 // stale indexes successfully rebuilt
@@ -186,9 +189,11 @@ func (r *XactDemandShardIndex) IdleTimer() <-chan struct{} { return r.stopCh.Lis
 // start workers and own final cleanup
 func (r *XactDemandShardIndex) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
-	// launch workers
+	var adv load.Advice
+	adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: cmn.GCO.Get().Disk, RW: true})
+	// launch workers with private advice copies
 	for range demandShardIndexNumWorkers {
-		r.wg.Go(r.work)
+		r.wg.Go(func() { r.work(adv) })
 	}
 	// acknowledge startup
 	if wg != nil {
@@ -233,18 +238,29 @@ func (r *XactDemandShardIndex) Abort(err error) bool {
 }
 
 // observe stopping and process queued work
-func (r *XactDemandShardIndex) work() {
+func (r *XactDemandShardIndex) work(adv load.Advice) {
 	for {
 		select {
 		case <-r.stopCh.Listen():
 			return
 		case lif := <-r.workCh:
 			// ensure not aborted before doing work
-			if !r.IsAborted() {
-				r.do(lif)
-				r.stats.processed.Inc()
-			} else {
+			aborted := r.IsAborted()
+			if !aborted {
+				// give way before index I/O or taking the source lock
+				adv.Refresh()
+			}
+			switch {
+			case aborted:
 				r.stats.skipAbort.Inc()
+			case adv.Load >= load.High:
+				// skip at High to keep indexing best effort
+				r.stats.skipLoad.Inc()
+			default:
+				r.do(lif)
+			}
+			if !aborted {
+				r.stats.processed.Inc()
 			}
 
 			// release ownership after the worker attempt and cleanup
@@ -252,6 +268,11 @@ func (r *XactDemandShardIndex) work() {
 			r.reserved.Delete(lif.Uname)
 			r.DecPending()
 			r.mu.Unlock()
+
+			// back off without holding locks or the source reservation
+			if !aborted && adv.Sleep > 0 {
+				time.Sleep(adv.Sleep)
+			}
 		}
 	}
 }
@@ -406,6 +427,9 @@ func (r *XactDemandShardIndex) CtlMsg() string {
 	}
 	if n := r.stats.skipBusy.Load(); n > 0 {
 		idxAppend(&sb, "skip-busy", strconv.FormatInt(n, 10))
+	}
+	if n := r.stats.skipLoad.Load(); n > 0 {
+		idxAppend(&sb, "skip-load", strconv.FormatInt(n, 10))
 	}
 	if n := r.ErrCnt(); n > 0 {
 		idxAppend(&sb, "errs", strconv.Itoa(n))
