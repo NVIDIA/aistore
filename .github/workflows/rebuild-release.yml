@@ -1,0 +1,61 @@
+name: Rebuild Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to rebuild (e.g. v1.5.1)'
+        required: true
+        type: string
+      go_version:
+        description: 'Exact Go version to build with (e.g. 1.27.3)'
+        required: true
+        type: string
+      build_images:
+        description: 'Rebuild and push container images'
+        required: true
+        type: boolean
+        default: true
+      build_cli:
+        description: 'Rebuild CLI release assets and replace them on the release'
+        required: true
+        type: boolean
+        default: true
+      push_latest:
+        description: 'Also push the latest* image tags'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate inputs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GO_VERSION: ${{ inputs.go_version }}
+        run: |
+          gh api "repos/${{ github.repository }}/git/ref/tags/${RELEASE_TAG}" --silent || { echo "tag not found: $RELEASE_TAG"; exit 1; }
+          [[ "$GO_VERSION" =~ ^1\.[0-9]+\.[0-9]+$ ]] || { echo "invalid go_version: $GO_VERSION"; exit 1; }
+
+  images:
+    if: ${{ inputs.build_images }}
+    needs: validate
+    uses: ./.github/workflows/publish-release-images.yml
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      go_version: ${{ inputs.go_version }}
+      push_latest: ${{ inputs.push_latest }}
+    secrets: inherit
+
+  cli:
+    if: ${{ inputs.build_cli }}
+    needs: validate
+    permissions:
+      contents: write
+    uses: ./.github/workflows/upload-release-asset.yml
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      go_version: ${{ inputs.go_version }}

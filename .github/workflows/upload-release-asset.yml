@@ -8,10 +8,28 @@ on:
         description: 'Release tag to upload the asset to'
         required: true
         type: string
+      go_version:
+        description: 'Exact Go version to build with (e.g. 1.27.3); empty = latest patch of the matrix go-version'
+        required: false
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      release_tag:
+        description: 'Release tag to build and upload the asset to'
+        required: true
+        type: string
+      go_version:
+        description: 'Exact Go version to build with (e.g. 1.27.3); empty = latest patch of the matrix go-version'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   build:
     name: Build and Upload CLI Release Assets
+    permissions:
+      contents: write
     strategy:
       matrix:
         go-version: ['1.27.x']
@@ -24,12 +42,25 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.event.release.tag_name }}
+
+      # the upload script comes from the workflow's own ref; older tags lack --replace
+      - name: Checkout upload script
+        uses: actions/checkout@v7
+        with:
+          path: ci-scripts
+          sparse-checkout: scripts
+
+      # keep the nested checkout out of Go's VCS stamp (vcs.modified)
+      - name: Exclude upload script from git status
+        run: echo ci-scripts >> .git/info/exclude
 
       - name: Install Go
         uses: actions/setup-go@v7
         with:
-          go-version: ${{ matrix.go-version }}
-          check-latest: true
+          go-version: ${{ inputs.go_version || matrix.go-version }}
+          check-latest: ${{ !inputs.go_version }}
 
       - name: Build Binaries on ${{ matrix.os }}
         run: |
@@ -37,7 +68,7 @@ jobs:
           make authn
           make cli
           make aisloader
-      
+
       - name: Upload Release Asset
         env:
           GITHUB_OWNER: ${{ github.repository_owner }}
@@ -48,5 +79,4 @@ jobs:
           RUNNER_OS: ${{ matrix.os }}
         run: |
           export GOPATH="$(go env GOPATH)"
-          chmod +x scripts/github_release.sh
-          ./scripts/github_release.sh
+          ./ci-scripts/scripts/github_release.sh ${{ github.event_name != 'release' && '--replace' || '' }}

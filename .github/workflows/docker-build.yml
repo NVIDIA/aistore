@@ -20,6 +20,11 @@ on:
         type: string
         default: ''
         description: 'Commit SHA for image labeling'
+      ref:
+        required: false
+        type: string
+        default: ''
+        description: 'Git ref to check out (default: the triggering ref)'
       build_tags:
         required: false
         type: string
@@ -52,6 +57,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4

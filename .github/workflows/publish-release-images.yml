@@ -4,81 +4,93 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_call:
+    inputs:
+      release_tag:
+        description: 'Release tag to build (e.g. v1.5.1)'
+        required: true
+        type: string
+      go_version:
+        description: 'Go version for the builder image (e.g. 1.27.3); empty = Dockerfile default'
+        required: false
+        type: string
+        default: ''
+      push_latest:
+        description: 'Also push the latest* image tags'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   release-tag:
     runs-on: ubuntu-latest
     outputs:
-      image_tag: ${{ steps.tag.outputs.image_tag }}
+      image_tags: ${{ steps.tag.outputs.image_tags }}
+      commit_sha: ${{ steps.tag.outputs.commit_sha }}
     steps:
-      - id: tag
-        run: echo "image_tag=v${GITHUB_REF_NAME#v1.}" >> $GITHUB_OUTPUT
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag }}
 
-  aisnode:
+      - id: tag
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+          PUSH_LATEST: ${{ github.event_name == 'push' || inputs.push_latest }}
+        run: |
+          tag="v${RELEASE_TAG#v1.}"
+          if [[ "$PUSH_LATEST" == "true" ]]; then
+            echo "image_tags=[\"$tag\",\"latest\"]" >> $GITHUB_OUTPUT
+          else
+            echo "image_tags=[\"$tag\"]" >> $GITHUB_OUTPUT
+          fi
+          echo "commit_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+  images:
     needs: release-tag
     strategy:
       matrix:
-        include:
+        tag: ${{ fromJSON(needs.release-tag.outputs.image_tags) }}
+        image:
           # aisnode
-          - image_name: aistorage/aisnode
-            image_tag: ${{ needs.release-tag.outputs.image_tag }}
+          - name: aistorage/aisnode
             context_dir: deploy/prod/k8s/aisnode_container
-          - image_name: aistorage/aisnode
-            image_tag: latest
-            context_dir: deploy/prod/k8s/aisnode_container
+            suffix: ''
           # aisnode tracing
-          - image_name: aistorage/aisnode
-            image_tag: ${{ needs.release-tag.outputs.image_tag }}-oteltracing
+          - name: aistorage/aisnode
             context_dir: deploy/prod/k8s/aisnode_container
-            build_tags: oteltracing
-          - image_name: aistorage/aisnode
-            image_tag: latest-oteltracing
-            context_dir: deploy/prod/k8s/aisnode_container
+            suffix: -oteltracing
             build_tags: oteltracing
           # aisnode ETL
-          - image_name: aistorage/aisnode
-            image_tag: ${{ needs.release-tag.outputs.image_tag }}-etl
+          - name: aistorage/aisnode
             context_dir: deploy/prod/k8s/aisnode_container
-            build_tags: etl
-          - image_name: aistorage/aisnode
-            image_tag: latest-etl
-            context_dir: deploy/prod/k8s/aisnode_container
+            suffix: -etl
             build_tags: etl
           # ais-init
-          - image_name: aistorage/ais-init
-            image_tag: ${{ needs.release-tag.outputs.image_tag }}
+          - name: aistorage/ais-init
             context_dir: deploy/prod/k8s/aisinit_container
-          - image_name: aistorage/ais-init
-            image_tag: latest
-            context_dir: deploy/prod/k8s/aisinit_container
+            suffix: ''
           # authn
-          - image_name: aistorage/authn
-            image_tag: ${{ needs.release-tag.outputs.image_tag }}
+          - name: aistorage/authn
             context_dir: deploy/prod/k8s/authn_container
-          - image_name: aistorage/authn
-            image_tag: latest
-            context_dir: deploy/prod/k8s/authn_container
+            suffix: ''
           # ais-util
-          - image_name: aistorage/ais-util
-            image_tag: ${{ needs.release-tag.outputs.image_tag }}
+          - name: aistorage/ais-util
             context_dir: deploy/prod/k8s/aisutil_container
-          - image_name: aistorage/ais-util
-            image_tag: latest
-            context_dir: deploy/prod/k8s/aisutil_container
+            suffix: ''
           # cluster-minimal
-          - image_name: aistorage/cluster-minimal
-            image_tag: ${{ needs.release-tag.outputs.image_tag }}
+          - name: aistorage/cluster-minimal
             context_dir: deploy/prod/docker/image
-          - image_name: aistorage/cluster-minimal
-            image_tag: latest
-            context_dir: deploy/prod/docker/image
+            suffix: ''
     uses: ./.github/workflows/docker-build.yml
     with:
-      image_name: ${{ matrix.image_name }}
-      image_tag: ${{ matrix.image_tag }}
-      context_dir: ${{ matrix.context_dir }}
-      build_tags: ${{ matrix.build_tags }}
-      commit_sha: ${{ github.sha }}
+      image_name: ${{ matrix.image.name }}
+      image_tag: ${{ matrix.tag }}${{ matrix.image.suffix }}
+      context_dir: ${{ matrix.image.context_dir }}
+      build_tags: ${{ matrix.image.build_tags }}
+      commit_sha: ${{ needs.release-tag.outputs.commit_sha }}
+      ref: ${{ inputs.release_tag }}
+      extra_env: ${{ inputs.go_version && format('BUILDER_IMAGE=docker.io/library/golang:{0}', inputs.go_version) || '' }}
       multiarch: true
       pull: true
     secrets:

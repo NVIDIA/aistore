@@ -33,7 +33,10 @@ Command
 $ GITHUB_OWNER="NVIDIA" GITHUB_REPO="aistore" GITHUB_OAUTH_TOKEN=<oauth token> GITHUB_RELEASE_TAG=<release tag> ./github_release.sh
 ```
 
-> This will require [GITHUB_OAUTH_TOKEN](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) and, again, the corresponding [GITHUB_RELEASE_TAG](https://git-scm.com/book/en/v2/Git-Basics-Tagging).
+Add `--replace` to overwrite assets that already exist on the release.
+
+> This will require the [GitHub CLI](https://cli.github.com/) (`gh`).
+> It will also require [GITHUB_OAUTH_TOKEN](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) and the corresponding [GITHUB_RELEASE_TAG](https://git-scm.com/book/en/v2/Git-Basics-Tagging).
 > WARNING: Choose all the permission options while creating the token and then delete the token post the release.
 
 ## bench.sh
