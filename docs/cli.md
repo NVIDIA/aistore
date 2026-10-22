@@ -3,7 +3,7 @@ initial bootstrap to day‑to-day operations, and from single-object I/O to dist
 
 In addition, CLI provides dataset management commands, performance monitoring, advanced operations, and more.
 
-The following completion output is an illustrative snapshot of top-level commands, not the authoritative command set for every installed CLI version. Run `ais --help` and the relevant `ais <command> --help` on your installed binary; the [CLI command definitions](https://github.com/NVIDIA/aistore/tree/main/cmd/cli/cli) provide the source view. With completions installed, `<TAB-TAB>` helps discover commands:
+With shell completion installed, press `<TAB-TAB>` to discover commands. Output below is a snapshot; use `ais --help` and `ais <command> --help` for your installed version:
 
 ```console
 $ ais <TAB-TAB>
@@ -55,7 +55,7 @@ Summary:
 
 > Use `--verbose` to additionally show `LOAD AVERAGE` columns.
 
-> With completion installed, use `<TAB-TAB>` or `ais show --help` to discover subcommands supported by your CLI. The following is an example snapshot:
+> Use `<TAB-TAB>` or `ais show --help` to discover subcommands:
 
 ```
 $ ais show <TAB>
@@ -149,9 +149,7 @@ blob-download    download         job              prefetch         search      
 bucket           dsort            log              put              show             wait
 ```
 
-This is another help snapshot, not a complete or guaranteed current list. Each installed command has `--help`; check its output for supported subcommands and flags.
-
-The snapshot provides an overview of functional groupings; use installed CLI help for the supported command set. The following is a brief (non-exhaustive and possibly slightly outdated) **summary**:
+Each command has `--help` for its subcommands and flags. The following is a brief **summary**:
 
 | Command | Use Case |
 |---------|----------|

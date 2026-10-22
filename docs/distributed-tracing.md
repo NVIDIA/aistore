@@ -17,16 +17,17 @@ For more details:
 
 ## Getting Started
 
-Use a fresh, disposable AIStore [local playground](/docs/getting_started.md#local-playground) configuration with no existing instance or data to retain at its paths. Before deploying AIS, configure a compatible **TLS-enabled OTLP/gRPC collector** reachable from every AIS node. Set up collector-side TLS and its trace-query interface using the [current Jaeger documentation](https://www.jaegertracing.io/docs/latest/) or your collector's documentation. The collector address, certificates, access controls, and trace UI are environment-dependent. A default Jaeger all-in-one container is not evidence of a TLS-enabled collector; this guide does not provide or validate a collector deployment.
+Start with a new [Local playground](/docs/getting_started.md#local-playground) and a **TLS-enabled OTLP/gRPC collector** reachable from every AIS node. Configure the collector and trace UI using the [Jaeger documentation](https://www.jaegertracing.io/docs/latest/) or your collector's guide. A plaintext collector does not work with the local deployment helper's TLS settings.
 
 From the repository root, build the CLI and deploy 1 target and 1 proxy with the exporter endpoint set to your TLS-enabled collector. Replace `localhost:4317` if the collector is not reachable at that address from **each** node:
 
 ```sh
+export AIS_ENDPOINT=http://localhost:8080
 TAGS=oteltracing AIS_TRACING_ENDPOINT="localhost:4317" \
   make cli deploy <<< $'1\n1'
 ```
 
-The local deployment script builds `aisnode` with tracing enabled and generates `tracing.skip_verify: true` when `AIS_TRACING_ENDPOINT` is set. That setting supplies TLS credentials with server-certificate verification **disabled**; it is only for isolated testing with a TLS-enabled collector. It does not select plaintext gRPC. For a real deployment, require verified TLS and establish trust in the collector certificate using deployment-appropriate configuration; do not reuse this local skip-verification setting. The collector must accept the configured OTLP/gRPC connection.
+Setting `AIS_TRACING_ENDPOINT` makes the local deployment helper enable tracing and generate `tracing.skip_verify: true`. The exporter uses TLS with certificate verification disabled. Use this setting only for isolated tests; see [Configuration](#configuration) for verified TLS.
 
 ### Example operations
 
@@ -38,11 +39,13 @@ ais put README.md ais://nnn
 ais get ais://nnn/README.md /dev/null
 ```
 
-Then check your collector's trace-query interface for AIStore proxy and target spans from those requests. If no spans appear, check collector reachability, TLS compatibility, exporter logs, and sampling before retrying. The query interface and trace visibility depend on the collector configuration and running environment.
+Check the collector's trace UI for AIS proxy and target spans. If none appear, check collector reachability, TLS settings, exporter logs, and sampling.
 
 ## Configuration
 
 The `tracing` configuration is cluster-wide. For other AIStore options, refer to [configuration.md](/docs/configuration.md). Tracing configuration changes require a daemon restart to take effect.
+
+For verified collector TLS, set `tracing.skip_verify=false` and leave `OTEL_EXPORTER_OTLP_INSECURE` and `OTEL_EXPORTER_OTLP_TRACES_INSECURE` unset or false. The exporter uses system-trusted CAs by default. For a private CA, set `OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE=/absolute/path/collector-ca.crt` in every AIS daemon's environment before starting or restarting it. This is an [OpenTelemetry exporter setting](https://pkg.go.dev/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc), separate from AIS HTTP client TLS settings. `tracing.skip_verify=true` overrides the exporter's CA configuration.
 
 | Option name | Default value | Description |
 |---|---|---|
@@ -56,14 +59,14 @@ The `tracing` configuration is cluster-wide. For other AIStore options, refer to
 | `tracing.exporter_auth.token_file` | `''` | Filepath to obtain exporter auth token |
 
 
-Example isolated-test `tracing` configuration section for a TLS-enabled collector (not a complete `ais.json`). The local deployment helper generates `skip_verify: true`; do not reuse that setting as a trust configuration for a real deployment:
+Example `tracing` section for a TLS-enabled collector, with certificate verification enabled:
 
 ```json
 {
     "tracing": {
         "enabled": true,
         "exporter_endpoint": "localhost:4317",
-        "skip_verify": true,
+        "skip_verify": false,
         "service_name_prefix": "aistore",
         "sampler_probability": "1.0"
     }

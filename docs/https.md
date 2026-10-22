@@ -30,7 +30,7 @@ openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out s
 
 ## Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend
 
-For a **new** Local Playground cluster, use a server certificate whose Subject Alternative Names cover the proxy address clients will use, and a CA certificate that signed it. The files created above are illustrative; safeguard private keys. Do not run this deployment against a cluster you intend to retain or use `make clean` as a TLS migration step. To change the protocol of an existing cluster, refer to [Switching a cluster to HTTPS](switch_https.md).
+For a **new** Local Playground cluster, use a certificate whose Subject Alternative Names cover the proxy and target addresses used by clients and other AIS nodes. The certificates above cover `localhost` and `127.0.0.1`. To change an existing cluster's protocol, see [Switching a cluster to HTTPS](switch_https.md).
 
 From the repository root, after confirming there is no existing Local Playground instance using the same paths, start a new cluster with certificate verification enabled for AIS-initiated TLS connections and the AWS backend built in:
 
@@ -52,7 +52,7 @@ AIS_ENDPOINT=https://127.0.0.1:8080 AIS_CLIENT_CA="$PWD/ca.crt" \
   AIS_SKIP_VERIFY_CRT=false ais show cluster
 ```
 
-Expected result: the CLI shows the proxy and targets without a certificate-verification error. `AIS_CLIENT_CA` overrides the CLI's `cluster.client_ca_tls` setting and augments system-trusted roots. If verification fails, check the certificate's Subject Alternative Names, the CA file, the endpoint address, and the certificate validity before retrying. For mutual TLS, configure server-side `AIS_CLIENT_CA_TLS` and `AIS_CLIENT_AUTH_TLS` as well as CLI-side `AIS_CRT` and `AIS_CRT_KEY`; refer to [Public and intra-cluster TLS configuration](#public-and-intra-cluster-tls-configuration).
+`AIS_CLIENT_CA` overrides the CLI's `cluster.client_ca_tls` setting and augments system-trusted roots. If verification fails, check the certificate's Subject Alternative Names, CA file, validity, and endpoint address. For mutual TLS, configure server-side `AIS_CLIENT_CA_TLS` and `AIS_CLIENT_AUTH_TLS` as well as CLI-side `AIS_CRT` and `AIS_CRT_KEY`; see [Public and intra-cluster TLS configuration](#public-and-intra-cluster-tls-configuration).
 
 ## Testing with self-signed certificates
 
@@ -72,7 +72,7 @@ The previous example verifies the server certificate. The following variables co
 
 For a test deployment that requires mutual TLS, `ais/test/tls-env/server.conf` illustrates the server certificate, key, client CA, and `AIS_CLIENT_AUTH_TLS=4`; `ais/test/tls-env/client.conf` illustrates the CLI client certificate, key, and trusted CA. Replace the test file paths with your actual files. Do not source test settings into an existing deployment or delete Smap files as a generic TLS setup step.
 
-Only in an isolated certificate-verification test, `AIS_SKIP_VERIFY_CRT=true` on the CLI bypasses its server certificate check. This does not establish trust and must not be the default or a production fix; restore verification and provide the correct CA before connecting to a trusted deployment. Refer to [CLI TLS settings](/docs/cli.md#environment-variables).
+`AIS_SKIP_VERIFY_CRT=true` on the CLI bypasses server certificate verification; reserve it for isolated tests. For verified TLS, provide the CA as shown above.
 
 > See also: [Client-side TLS environment](/docs/cli.md#environment-variables)
 

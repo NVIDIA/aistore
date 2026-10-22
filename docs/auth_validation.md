@@ -50,11 +50,11 @@ The following standard claims are required depending on AIS config (see [Token V
 AIS uses a few extra custom claims to validate access for specific API calls.
 These are subject to change as we improve AIS auth capabilities.
 
-- `admin` -- Grants token-level permissions; bucket access properties still apply to bucket operations
+- `admin` -- When true, bypasses token ACL checks; bucket access properties still apply
 - `clusters` -- List of AIS clusters, permission applies cluster-wide
 - `buckets` -- List of buckets to access with scoped permissions
 
-The following JSON illustrates the claim types; it is not a signed JWT. Replace the sample subject, future expiration, cluster UUID, bucket name, and permission bits with values issued for your cluster:
+Example JWT payload; replace the subject, expiration, cluster UUID, bucket name, and permissions for your cluster:
 
 ```json
 {
@@ -83,13 +83,13 @@ The following JSON illustrates the claim types; it is not a signed JWT. Replace 
       "perm": "575"
     }
   ],
-  "admin": true
+  "admin": false
 }
 ```
 
-`exp` is a numeric JWT expiration time, not a date string. ACL `perm` values remain JSON strings; a nonempty cluster ID limits the claim to that cluster, and an empty cluster ID supplies default permissions for clusters trusting the issuer. The bucket namespace UUID identifies the applicable cluster. Because `admin` is `true` in this illustration, it overrides the listed token ACLs; use `false` when illustrating restricted token ACL behavior. A valid signature and the configured claim and key-source requirements are also needed. OIDC lookup requires an `iss` claim matching a configured allowed issuer; static-key validation does not require an issuer allow-list match. The JSON alone is not an access token.
+`exp` is a numeric expiration time; ACL `perm` values are JSON strings. This payload must be signed and satisfy the configured validation requirements to form an accepted token. For OIDC lookup, also include an `iss` claim matching an allowed issuer (see [Signature Verification](#signature-verification)).
 
-The `admin` claim grants permissions at the token check for a cluster that accepts the token. Bucket operations also check the bucket's access properties; an admin token does not bypass every bucket ACL restriction. Admins can still patch bucket properties and set bucket ACLs.
+Setting `admin` to `true` bypasses token ACL checks. Bucket access properties still apply, except that an admin can always patch bucket properties and set bucket ACLs.
 
 For the `clusters` claim, the ID must match the cluster's UUID if set.
 If the cluster ID is left empty, the claim permissions will be applied to any cluster trusting the issuer.
@@ -122,7 +122,7 @@ Currently, the only supported value is `auth.required_claims.aud` to verify the 
 
 ### Signature Verification
 
-AIS selects a static key when one is available, otherwise it uses OIDC key lookup. [Static key environment variables](/docs/environment-vars.md#authn) take precedence over `auth.signature`; configuration validation rejects a configured `auth.signature.method` together with a nonempty `auth.oidc.allowed_iss` list. The following sections describe the two key sources:
+Each proxy checks its static key environment first: `AIS_AUTHN_PUBLIC_KEY`, then `AIS_AUTHN_SECRET_KEY`. These [environment variables](/docs/environment-vars.md#authn) take precedence over both `auth.signature` and OIDC key lookup. Without an environment key, AIS uses `auth.signature` when configured, otherwise OIDC lookup. Configuration validation rejects a nonempty `auth.signature.method` together with a nonempty `auth.oidc.allowed_iss` list. Static-key validation does not check the token issuer against the OIDC allow-list.
 
 #### Static Credentials
 

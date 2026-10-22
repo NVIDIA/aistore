@@ -246,7 +246,7 @@ set_env_tracing_or_skip() {
   echo "Exporter auth-token-file (default:'')"
   read -r exporter_auth_token_file
   if [[ -z "${AIS_TRACING_AUTH_TOKEN_FILE}" ]]; then
-    AIS_TRACING_AUTH_TOKEN_FILE={exporter_auth_token_file}
+    AIS_TRACING_AUTH_TOKEN_FILE=${exporter_auth_token_file}
   fi
 }
 

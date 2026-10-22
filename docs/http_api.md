@@ -18,7 +18,7 @@ In this README:
 
 > `T` - (hostname:port) of a storage **target**
 
-> `G-or-T` - a gateway or target address only where the operation and cluster policy permit direct access. Public target `/v1/daemon` allows only GET, and rejects even GET when proxy mediation is required. Use a gateway and a node-aware CLI or API request to inspect a protected target.
+> `G-or-T` - a gateway or target address where direct access is permitted; see [Node operations](#node-operations) for target control requests.
 
 ## Overview
 
@@ -28,7 +28,7 @@ AIStore supports a growing number and variety of RESTful operations. To illustra
 $ curl -X GET http://G/v1/daemon?what=config
 ```
 
-This command queries the gateway's own configuration. To inspect a selected target when proxy mediation is required, use the node-aware [AIS CLI](/docs/cli.md) or [Go API](https://github.com/NVIDIA/aistore/blob/main/api/daemon.go) through a gateway instead of sending a public request directly to the target. The response can be viewed with a JSON viewer.
+This command queries the gateway's own configuration. To select another node, use the gateway's reverse endpoint as shown under [Node operations](#node-operations). The response is JSON.
 
 Notice the 6 (six) elements of a RESTful operation:
 
@@ -44,7 +44,7 @@ For a brief summary of the standard HTTP verbs and their CRUD semantics, see [RE
 
 Most RESTful operations performed on an AIStore proxy/gateway will likely have a *clustered* scope. Exceptions include querying proxy's own configuration via `?what=config`.
 
-> For developers and first-time users: the default [Local Playground](/docs/getting_started.md#local-playground) gateway listens at `http://localhost:8080`. Use its gateway endpoint for the examples below; do not assume another local port is a publicly accessible target control endpoint.
+> The default [Local Playground](/docs/getting_started.md#local-playground) gateway listens at `http://localhost:8080`.
 
 4. **URL path**: version of the REST API, RESTful *resource*, and possibly more forward-slash delimited specifiers
 
@@ -272,15 +272,22 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "va
 
 ### Node operations
 
-A gateway handles its own public daemon GET. For a selected node, use `ais show config 'NODE_ID'` after replacing `NODE_ID` with an ID from `ais show cluster`; keep the quotes if the ID contains brackets. The CLI calls the node-aware Go API through the gateway. Public target daemon GETs return 403 when `auth.client_auth_required` or `auth.intra_cluster.request_auth` requires proxy mediation. Public target daemon non-GETs are rejected independently of those settings. For selected-node configuration changes, use the node-aware [Go API](https://github.com/NVIDIA/aistore/blob/main/api/daemon.go) or [CLI configuration commands](/docs/cli/config.md), rather than treating a target's public daemon URL as a mutation endpoint.
+A gateway's `/v1/daemon` endpoint queries that gateway. To select another node, use `/v1/reverse/daemon` with the `Ais-Node-Id` header. Replace `NODE_ID` below with the raw node ID from `ais show cluster`, without the `t[...]` or `p[...]` wrapper. When client authentication is required, also supply your bearer token in the `Authorization` header.
 
 ```console
 # Get the gateway's own configuration
 $ curl -X GET http://G/v1/daemon?what=config
 
+# Get the selected node's configuration through the gateway
+$ curl -H 'Ais-Node-Id: NODE_ID' 'http://G/v1/reverse/daemon?what=config'
+
 # Inspect the selected node through the gateway using the CLI
 $ ais show config 'NODE_ID'
 ```
+
+The reverse endpoint requires `SHOW-CLUSTER` permission for GET and `ADMIN` for PUT, POST, or DELETE when client authentication is enabled. See the [Go API](https://github.com/NVIDIA/aistore/blob/main/api/daemon.go) and [CLI configuration commands](/docs/cli/config.md) for node updates.
+
+Direct public target `/v1/daemon` requests permit only GET. They return 403 even for GET when either `auth.client_auth_required` or `auth.intra_cluster.request_auth` requires proxy mediation.
 
 ### Bucket properties
 
@@ -342,7 +349,7 @@ $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote","n
 
 ## Querying information
 
-Queries use `GET` with `?what=<...>`. The `/v1/daemon` curl examples below query the gateway itself, not an arbitrary target. For selected-node daemon configuration, logs, and mountpaths, the CLI uses Go API requests through the gateway's node-aware reverse endpoint; authorization and node availability still apply. Direct public target daemon GETs are conditional on proxy-mediation settings, while public target daemon non-GETs are always rejected.
+Queries use `GET` with `?what=<...>`. The `/v1/daemon` examples below query the gateway itself. Use the [reverse endpoint](#node-operations) or CLI for a selected node.
 
 | Query | HTTP action | Example |
 |--- | --- | ---|
