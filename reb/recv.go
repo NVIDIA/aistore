@@ -434,6 +434,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	}
 	if moveTo != nil {
 		req.md.SliceID = md.SliceID
+		req.md.CksumType, req.md.CksumValue = md.CksumType, md.CksumValue
 		if errMv := reb.sendFromDisk(ct, req.md, moveTo, xreb, dm, workFQN); errMv != nil {
 			// cannot broadcast updated MD - displaced slice is already assigned to the `moveTo` node
 			e := fmt.Errorf("failed to move slice to %s: %v", moveTo.StringEx(), errMv)
