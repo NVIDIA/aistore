@@ -1,9 +1,3 @@
----
-layout: default
-title: AIStore Node Lifecycle
-description: "Understand node maintenance, shutdown, and decommission transitions before changing cluster membership."
----
-
 # AIStore Node Lifecycle
 
 AIStore operators can use this guide to understand node maintenance, shutdown, and decommission before changing cluster membership. These operations change node state; the diagram below shows the states and transitions.
@@ -12,7 +6,7 @@ AIStore operators can use this guide to understand node maintenance, shutdown, a
 
 To put things in perspective, this picture is about a node (not shown) in an AIStore cluster (also not shown).
 
-Tracking it from top to bottom, first notice the state called **maintenance mode**. This is the gentlest way to remove a node from an operating cluster. When in maintenance, the node stops keepalive heartbeats but remains in the cluster map and remains connected, unless you disconnect or shut it down manually, which is perfectly valid and often expected.
+Tracking it from top to bottom, first notice the state called **maintenance mode**. This is the gentlest way to remove a node from an operating cluster. When in maintenance, the node stops keepalive heartbeats but remains in the cluster map. A target must remain online while rebalance migrates its data. Successful completion marks it `maintenance-post-rebalance` in the Smap; it can then be disconnected or shut down.
 
 Next comes **shutdown**. Graceful shutdown can also be achieved in a single shot, as indicated by one of the arrows on the left:
 
@@ -25,7 +19,7 @@ Normally, taking a target into `maintenance` or `shutdown` involves an intra-clu
 The third and final special state is **decommission**. On the normal rebalance path, the cluster attempts to migrate data from the departing target to other online targets before removing it. Rebalance errors do not always prevent removal; with `--no-rebalance`, migration is skipped. Decommission also entails:
 
 * partial or complete cleanup of the node itself; and
-* removing AIS metadata, configuration files, and, optionally, local user data. Do not assume that decommission physically erases every object byte.
+* removing AIS metadata and configuration files. Local user data is removed when `--rm-user-data` is specified.
 
 Needless to say, there's no simple way back out of `decommission` - the proverbial point of no return. A decommissioned node does not come back by restarting it: depending on how far the cleanup progressed, it must be re-added with an explicit `join` or redeployed from scratch.
 
@@ -184,7 +178,7 @@ or simply check a few times manually, the output will report that rebalance (`g4
 | ---------------------------- | ----------------------------- |
 | $${\color{red}maintenance}$$ | $${\color{cyan}maintenance}$$ |
 
-On this normal shutdown path, confirm that the associated [global rebalance](/docs/rebalance.md) completed successfully before powering off the target. If it is interrupted or reports errors, do not assume migration is complete; see [Incomplete Transitions](#incomplete-transitions).
+On this normal shutdown path, AIS stops the target after the associated [global rebalance](/docs/rebalance.md) completes successfully. If rebalance is interrupted or reports errors, the target remains in maintenance; see [Incomplete Transitions](#incomplete-transitions).
 
 ## Putting a Node in Maintenance
 
@@ -207,7 +201,7 @@ Note: the node t[QrmZvKdN] is _not_ decommissioned - it remains in the cluster m
 restarted at any later time (and subsequently activated via 'stop-maintenance' operation).
 ```
 
-If the node is a target, the cluster normally rebalances after a short preparation phase. Power it off only after verifying that the migration for this transition completed successfully, or that recoverable copies are otherwise established; see [Checking Removal Status](#checking-removal-status).
+If the node is a target, the cluster normally rebalances after a short preparation phase. Before manually powering off a target in maintenance, see [Checking Removal Status](#checking-removal-status).
 
 ### Batch Operations
 
@@ -253,7 +247,7 @@ skipped, the command reports "nothing to do" and leaves the cluster map untouche
 maintenance can be advanced to `shutdown` or `decommission`; `stop-maintenance` refuses a node that
 is being decommissioned.
 
-Advancing a node already in maintenance does not rebalance when the batch contains no active target to migrate from. Do not assume its data was migrated: maintenance may have started with `--no-rebalance` or its rebalance may have been interrupted or failed. Run `ais start rebalance` and verify successful migration first, or data stored **only on that target may become unavailable** when it is shut down or removed.
+Advancing a node already in maintenance does not rebalance when the batch contains no active target to migrate from. A target marked `maintenance-post-rebalance` has already completed evacuation. If that mark is absent because rebalance was skipped, interrupted, or failed, run `ais start rebalance` and wait for successful completion before shutting down or removing the target. Otherwise, objects stored **only on that target may become unavailable**.
 
 
 ### Incomplete Transitions
@@ -272,7 +266,7 @@ The rebalance can be interrupted by a concurrent self-join or by another target 
 
 Skipping rebalance bypasses migration and directly finalizes the requested operation: `start-maintenance` leaves the target in maintenance, `shutdown` proceeds to shut it down, and `decommission` removes it from the cluster map. A target left in maintenance without a post-rebalance mark may have had rebalance skipped or interrupted; the primary cannot distinguish these cases from that state alone.
 
-For a target that remains in maintenance, the operator can:
+For a target in maintenance without a post-rebalance mark, the operator can:
 
 * repeat `start-maintenance`. This is accepted rather than rejected, so a retry - or a rolling-upgrade
   script that reissues one - does not fail. It keeps the target out of service and reapplies maintenance
@@ -285,13 +279,15 @@ For a target that remains in maintenance, the operator can:
 
 > Such a target specified together with an active one follows the normal batch path. With automatic
 > rebalance enabled and without `--no-rebalance`, that batch rebalances when active destination
-> targets remain after the batch, and its post-rebalance step completes the transition for both.
+> targets remain after the batch. Successful completion finishes the transition for both.
 >
 > Specifying it together with a target that has already completed the transition changes nothing: the
 > completed target is skipped, and the command behaves as if only the incomplete one had been
 > specified.
 
-Targets in maintenance remain in the cluster map and participate in a full global rebalance, sending out the data they store. A subsequent full global rebalance that completes successfully, without renewal, abort, or errors on participating targets, can mark such maintenance targets post-rebalance. This applies to rebalance triggered by another membership change (e.g., a target joining the cluster) and to an explicit `ais start rebalance`, but not to rebalance in cleanup mode (`--cleanup`) or rebalance limited to a given bucket.
+Targets in maintenance **without a post-rebalance mark** participate in subsequent full global rebalances, sending out the data they store. A full global rebalance that completes successfully, without renewal, abort, or errors on participating targets, marks these targets post-rebalance. This applies to rebalance triggered by another membership change (e.g., a target joining the cluster) and to an explicit `ais start rebalance`, but not to rebalance in cleanup mode (`--cleanup`) or rebalance limited to a given bucket.
+
+Targets already marked `maintenance-post-rebalance` have completed the transition. Subsequent rebalances neither require them to be online nor wait for their notifications.
 
 ### Skipping Rebalance
 
@@ -384,7 +380,7 @@ Started rebalance "g5" (to monitor, run 'ais show rebalance').
 t[QrmZvKdN] is being decommissioned, please wait for cluster rebalancing to finish...
 ```
 
-After the rebalance ends, the primary proxy can remove the node from the cluster map even if rebalance reported errors, unless it was renewed or superseded. On unregistering, the node cleans up its AIS metadata. Do not infer successful migration or physical erasure of all object bytes from removal.
+After the rebalance ends, the primary proxy can remove the node from the cluster map even if rebalance reported errors, unless it was renewed or superseded. On unregistering, the node cleans up its AIS metadata and removes local user data if `--rm-user-data` was specified. Removal from the cluster map does not establish that migration succeeded.
 
 Skipping rebalance performs only the minimal preparation and removes the node immediately:
 
@@ -401,9 +397,19 @@ For a target, shutdown waits for the applicable rebalance to complete successful
 
 Putting a node in maintenance does **not** automatically power it off.
 
-With automatic rebalance enabled, a target entering maintenance starts a rebalance when required. Before powering it off, verify successful migration for this transition, or explicitly establish that recoverable copies are available. If the transition returns a rebalance ID, replace `REB_ID` with that ID in `ais show rebalance REB_ID --all` to check the matching generation. Check cluster state with `ais show cluster target`, but its `REBALANCE` column reflects a target's latest rebalance snapshot, not necessarily the transition you are checking. A `--no-rebalance` transition can start no new generation; an earlier `finished` status is not proof of migration.
+On the normal rebalance path, wait for the target's Smap state to become `maintenance-post-rebalance` before powering it off. In `ais show cluster target`, its `maintenance` status changes from red to cyan when this mark is set.
 
-The following output illustrates a target labeled `maintenance` with `REBALANCE` showing `finished`. It is safe to power off only if the migration or recoverable-copy condition above has been verified:
+To inspect the rebalance itself, replace `REB_ID` with the ID returned by the lifecycle command:
+
+```console
+$ ais show rebalance REB_ID --all
+```
+
+Inspect that generation's state and reported errors. An interrupted maintenance transition can also be completed by a later successful full rebalance; see [Incomplete Transitions](#incomplete-transitions).
+
+The `REBALANCE` column in `ais show cluster target` reflects each target's latest rebalance snapshot, which may belong to an earlier operation. In particular, `--no-rebalance` starts no new generation, so an earlier `finished` status does not establish that the target was evacuated. Without completed evacuation, power it off only if its objects are available from other copies or remote backends.
+
+The following output illustrates a target in maintenance after rebalance. The post-rebalance mark in the Smap confirms that its transition is complete:
 
 ```console
 $ ais show cluster target

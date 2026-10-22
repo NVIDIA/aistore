@@ -1,9 +1,3 @@
----
-layout: default
-title: AIStore Environment Variables
-description: "Find AIStore environment variables and understand how they interact with configuration defaults."
----
-
 # AIStore Environment Variables
 
 ## Introduction

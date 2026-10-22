@@ -1,9 +1,3 @@
----
-layout: default
-title: "AIStore Observability: CLI"
-description: "Use AIS CLI commands to inspect cluster status, alerts, performance, and logs."
----
-
 # AIStore Observability: CLI
 
 AIStore operators and developers can use the AIS CLI to inspect cluster status, alerts, performance, and logs when investigating capacity or performance issues. For flags and syntax specific to a command, run `ais COMMAND --help` (for example, `ais show cluster --help`) or refer to the [CLI reference](/docs/cli.md).

@@ -1,9 +1,3 @@
----
-layout: default
-title: AIStore Configuration
-description: "Inspect and change AIStore settings, and understand how defaults, overrides, and persistence work."
----
-
 # AIStore Configuration
 
 AIStore configuration is an operator interface and a versioned part of cluster metadata. Operators use the CLI to inspect and change settings. Developers can use this guide to understand defaults, partial updates, and why stored configuration is smaller than effective configuration.
