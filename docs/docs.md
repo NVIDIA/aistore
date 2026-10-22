@@ -40,6 +40,8 @@ Use this page as a quick orientation and navigation map:
 ## Get Started
 
 - [Getting Started](/docs/getting_started.md)
+- [First AIStore object with Python](/docs/python_sdk.md)
+- [Choose a Kubernetes deployment](/docs/kubernetes.md)
 - [Docker](/docs/docker_main.md)
 - [AIS in containerized environments](/docs/containerized.md)
 - [Configuration](/docs/configuration.md)
@@ -75,6 +77,7 @@ Use this page as a quick orientation and navigation map:
 ## Operations
 
 - [Production deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md)
+- [Local and production Kubernetes paths](/docs/kubernetes.md)
 - [AIStore on Kubernetes](https://github.com/NVIDIA/ais-k8s)
 - [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md)
 - [Ansible playbooks](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/README.md)
@@ -116,6 +119,7 @@ Use this page as a quick orientation and navigation map:
 - [CLI reference guide](/docs/cli.md#cli-reference)
 - [Go API](https://github.com/NVIDIA/aistore/tree/main/api)
 - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
+- [Python first-object tutorial](/docs/python_sdk.md)
 - [PyPI package](https://pypi.org/project/aistore/)
 - [Python SDK reference guide](https://docs.nvidia.com/aistore/python/aistore/sdk)
 - [PyTorch integration](https://docs.nvidia.com/aistore/python/aistore/pytorch)

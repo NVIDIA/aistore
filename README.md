@@ -69,15 +69,15 @@ AIS runs natively on Kubernetes and features open format - thus, the freedom to 
 For developers and data scientists, there's also:
 
 * [Go API](https://github.com/NVIDIA/aistore/tree/main/api) used in [CLI](/docs/cli.md) and [benchmarking tools](/docs/aisloader.md)
-* [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) + [Reference Guide](https://docs.nvidia.com/aistore/python/aistore/sdk)
+* [Python first-object tutorial](/docs/python_sdk.md), [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk), and [Reference Guide](https://docs.nvidia.com/aistore/python/aistore/sdk)
 * [PyTorch integration](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch) and usage examples
 * [Boto3 support](https://docs.nvidia.com/aistore/python/aistore/botocore_patch)
 
 ## Quick Start
 
-1. Read the [Getting Started Guide](/docs/getting_started.md) for a 5-minute local install, or
-2. Run a [minimal container-based](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/compose) AIS cluster consisting of a single gateway and a single storage node, or
-3. Clone the repo and run `make kill cli aisloader deploy` followed by `ais show cluster`
+Choose one deployment path: start with the maintained [Local Playground](/docs/getting_started.md#local-playground) for source-based local development and first-time use, or use [Minimal Compose](/docs/getting_started.md#minimal-compose-deployment) for a limited one-proxy, one-target container smoke test without TLS or AuthN. Compose is not a production deployment.
+
+After starting your chosen cluster, [create your first object with Python](/docs/python_sdk.md). For Kubernetes, [choose a local or production path](/docs/kubernetes.md).
 
 ---------------------
 
@@ -93,10 +93,10 @@ Some of the most popular deployment options include:
 
 | Option                                                                                                                 | Use Case                                                                                                                                                                                                                          |
 |------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground)               | AIS developers or first-time users, Linux or Mac OS. Run `make kill cli aisloader deploy <<< $'N\nM'`, where `N` is a number of [targets](/docs/terminology.md#target), `M` is a number of [gateways](/docs/terminology.md#proxy) |
-| [Minimal container-based deployment](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/compose)           | Quick testing and evaluation; single-node setup                                                                                                                                                                                   |
-| [GCP/GKE automated install](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-playground) | Developers, first-time users, AI researchers                                                                                                                                                                                      |
-| [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s)                                                 | Requires Kubernetes; provided via [ais-k8s](https://github.com/NVIDIA/ais-k8s)                                                                                                                                                    |
+| [Local Playground](/docs/getting_started.md#local-playground) | Maintained source-based local path for developers and first-time users; start with a fresh, disposable playground. |
+| [Minimal Compose smoke test](/docs/getting_started.md#minimal-compose-deployment) | Limited one-proxy, one-target container test; no TLS or AuthN; not production. |
+| [Local Kubernetes development](/docs/kubernetes.md) | KinD or Minikube development and testing; follow the local guide. |
+| [Production Kubernetes deployment](/docs/kubernetes.md) | Plan prerequisites and follow the dedicated ais-k8s operator guides. |
 
 > For performance tuning, see [performance](/docs/performance.md) and [AIS K8s Playbooks](https://github.com/NVIDIA/ais-k8s/tree/main/playbooks/host-config).
 
@@ -146,6 +146,8 @@ Let others know your project is powered by high-performance AI storage:
 * [Terminology and Core Abstractions](/docs/terminology.md)
 * [Networking Model](/docs/networking.md)
 * [Getting Started](/docs/getting_started.md)
+* [First AIStore object with Python](/docs/python_sdk.md)
+* [Kubernetes deployment chooser](/docs/kubernetes.md)
 * [AIS Buckets: Design and Operations](/docs/bucket.md)
 * [Observability](/docs/monitoring-overview.md)
 * [Technical Blog](https://aistore.nvidia.com/blog)
