@@ -129,7 +129,7 @@ var Table = map[string]Descriptor{
 
 	// single target (node)
 	apc.ActResilver: {Scope: ScopeT, Startable: true, Resilver: true}, // ICMode: ICNone - ScopeT, single-target, no aggregation
-	apc.ActRechunk:  {Scope: ScopeB, Startable: true, RefreshCap: true, ConflictRebRes: true, AbortByReb: true, ICMode: ICUponTerm},
+	apc.ActRechunk:  {Scope: ScopeB, Access: apc.AccessRW, Startable: true, RefreshCap: true, ConflictRebRes: true, AbortByReb: true, ICMode: ICUponTerm},
 
 	// IndexShard is a best-effort build: stale entries are detected via LOM checksum
 	// and fall back to tar.Next() scan. A partial index remains useful, and resumed

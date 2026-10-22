@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 func authNBP() api.BaseParams {
@@ -210,6 +211,62 @@ func loginWithACLs(t *testing.T, authBP, aisBP api.BaseParams, cluID string, bck
 	bp := aisBP
 	bp.Token = tok.Token
 	return bp
+}
+
+func TestAuthRechunk(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
+
+	var (
+		aisBP  = tools.BaseAPIParams()
+		authBP = authNBP()
+	)
+	smap, err := api.GetClusterMap(aisBP)
+	tassert.CheckFatal(t, err)
+	registerCluster(t, authBP, authn.CluACL{ID: smap.UUID, URLs: []string{aisBP.URL}})
+
+	for _, test := range []struct {
+		name          string
+		authenticated bool
+		access        apc.AccessAttrs
+		wantStatus    int
+	}{
+		{name: "unauthenticated", wantStatus: http.StatusUnauthorized},
+		{name: "no-permissions", authenticated: true, wantStatus: http.StatusForbidden},
+		{name: "read-only", authenticated: true, access: apc.AccessRO, wantStatus: http.StatusForbidden},
+		{name: "read-write", authenticated: true, access: apc.AccessRW},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+			tassert.CheckFatal(t, api.CreateBucket(aisBP, bck, nil))
+			t.Cleanup(func() { api.DestroyBucket(aisBP, bck) })
+
+			bp := aisBP
+			if test.authenticated {
+				var bckACLs []*authn.BckACL
+				if test.access != apc.AccessNone {
+					aclBck := cmn.Bck{Name: bck.Name, Provider: bck.Provider, Ns: cmn.Ns{UUID: smap.UUID}}
+					bckACLs = []*authn.BckACL{{Bck: aclBck, Access: test.access}}
+				}
+				bp = loginWithACLs(t, authBP, aisBP, smap.UUID, bckACLs, apc.AccessNone)
+			} else {
+				bp.Token = ""
+			}
+
+			xid, err := api.RechunkBucket(bp, bck, &apc.RechunkMsg{})
+			if err == nil && xid != "" {
+				_, err = api.WaitForXactionIC(aisBP, &xact.ArgsMsg{
+					ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: time.Minute,
+				})
+				tassert.CheckFatal(t, err)
+			}
+			if test.wantStatus != 0 {
+				expectStatus(t, err, test.wantStatus)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, xid != "", "expected rechunk xaction ID")
+		})
+	}
 }
 
 // promote is gated by AcePromote alone; source must be under the hard-coded promote root
