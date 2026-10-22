@@ -1,3 +1,5 @@
+This page explains AIStore HTTP and `curl` conventions through selected examples; it is not an exhaustive endpoint reference. For the current endpoint contract, use the [generated OpenAPI reference](https://aistore.nvidia.com/docs/http-api). For application code, use the [Go API](https://github.com/NVIDIA/aistore/tree/main/api) or [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk).
+
 ## Table of Contents
 
 - [Notation](#notation)
@@ -16,17 +18,17 @@ In this README:
 
 > `T` - (hostname:port) of a storage **target**
 
-> `G-or-T` - (hostname:port) of **any node** member of the cluster
+> `G-or-T` - a gateway or target address only where the operation and cluster policy permit direct access. Public target `/v1/daemon` allows only GET, and rejects even GET when proxy mediation is required. Use a gateway and a node-aware CLI or API request to inspect a protected target.
 
 ## Overview
 
-AIStore supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
+AIStore supports a growing number and variety of RESTful operations. To illustrate common conventions, consider this gateway example:
 
 ```console
-$ curl -X GET http://G-or-T/v1/daemon?what=config
+$ curl -X GET http://G/v1/daemon?what=config
 ```
 
-This command queries one of the AIS nodes (denoted as `G-or-T`) for its configuration. The query - as well as most of other control plane queries - results in a JSON-formatted output that can be viewed with any compatible JSON viewer.
+This command queries the gateway's own configuration. To inspect a selected target when proxy mediation is required, use the node-aware [AIS CLI](/docs/cli.md) or [Go API](https://github.com/NVIDIA/aistore/blob/main/api/daemon.go) through a gateway instead of sending a public request directly to the target. The response can be viewed with a JSON viewer.
 
 Notice the 6 (six) elements of a RESTful operation:
 
@@ -42,7 +44,7 @@ For a brief summary of the standard HTTP verbs and their CRUD semantics, see [RE
 
 Most RESTful operations performed on an AIStore proxy/gateway will likely have a *clustered* scope. Exceptions include querying proxy's own configuration via `?what=config`.
 
-> For developers and first-time users: if you deployed AIS locally having followed [these instructions](/README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
+> For developers and first-time users: the default [Local Playground](/docs/getting_started.md#local-playground) gateway listens at `http://localhost:8080`. Use its gateway endpoint for the examples below; do not assume another local port is a publicly accessible target control endpoint.
 
 4. **URL path**: version of the REST API, RESTful *resource*, and possibly more forward-slash delimited specifiers
 
@@ -51,7 +53,7 @@ For example: `/v1/cluster` where `v1` is the API version and `cluster` is the re
 | RESTful resource | Description |
 | --- | ---|
 | `cluster` | cluster-wide control-plane operation |
-| `daemon` (aka **node**) | control-plane request to update or query specific AIS daemon (proxy or target) |
+| `daemon` (aka **node**) | node control; a gateway serves its own public endpoint, while selected target operations use node-aware requests through the gateway |
 | `buckets` | create, destroy, rename, copy, transform buckets; list objects; get bucket names and properties |
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external datasets and/or selected files from remote buckets |
@@ -110,9 +112,7 @@ For more details, see [easy URL readme](/docs/easy_url.md).
 
 ## API Reference
 
-For complete API reference documentation, see:
-
-* **[HTTP API Reference](https://aistore.nvidia.com/docs/http-api)** - comprehensive OpenAPI-generated documentation
+For endpoint paths, parameters, and responses beyond these examples, refer to the [generated HTTP API reference](https://aistore.nvidia.com/docs/http-api). The examples below demonstrate `curl` usage and do not enumerate the API.
 
 For programmatic access:
 
@@ -240,7 +240,7 @@ $ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list", "
 $ curl -X GET http://G/v1/cluster?what=config
 
 # Set cluster config
-$ curl -i -X PUT 'http://G/v1/cluster/set-config?stats_time=33s&log.loglevel=4'
+$ curl -i -X PUT 'http://G/v1/cluster/set-config?periodic.stats_time=33s&log.level=4'
 
 # Reset cluster config
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G/v1/cluster'
@@ -272,15 +272,14 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "va
 
 ### Node operations
 
+A gateway handles its own public daemon GET. For a selected node, use `ais show config 'NODE_ID'` after replacing `NODE_ID` with an ID from `ais show cluster`; keep the quotes if the ID contains brackets. The CLI calls the node-aware Go API through the gateway. Public target daemon GETs return 403 when `auth.client_auth_required` or `auth.intra_cluster.request_auth` requires proxy mediation. Public target daemon non-GETs are rejected independently of those settings. For selected-node configuration changes, use the node-aware [Go API](https://github.com/NVIDIA/aistore/blob/main/api/daemon.go) or [CLI configuration commands](/docs/cli/config.md), rather than treating a target's public daemon URL as a mutation endpoint.
+
 ```console
-# Get node config
-$ curl -X GET http://G-or-T/v1/daemon?what=config
+# Get the gateway's own configuration
+$ curl -X GET http://G/v1/daemon?what=config
 
-# Set node config
-$ curl -i -X PUT 'http://G-or-T/v1/daemon/set-config?stats_time=33s&log.loglevel=4'
-
-# Reset node config
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G-or-T/v1/daemon'
+# Inspect the selected node through the gateway using the CLI
+$ ais show config 'NODE_ID'
 ```
 
 ### Bucket properties
@@ -343,23 +342,23 @@ $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote","n
 
 ## Querying information
 
-Queries use `GET` with `?what=<...>`. Many operations can target either the entire cluster (`/v1/cluster`) or a specific node (`/v1/daemon`).
+Queries use `GET` with `?what=<...>`. The `/v1/daemon` curl examples below query the gateway itself, not an arbitrary target. For selected-node daemon configuration, logs, and mountpaths, the CLI uses Go API requests through the gateway's node-aware reverse endpoint; authorization and node availability still apply. Direct public target daemon GETs are conditional on proxy-mediation settings, while public target daemon non-GETs are always rejected.
 
 | Query | HTTP action | Example |
 |--- | --- | ---|
 | Cluster map | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=smap` |
 | Cluster map | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=smap` |
-| Node configuration | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=config` |
+| Gateway configuration | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=config` |
 | Remote clusters | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=remote` |
-| Node information | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=snode` |
-| Node status | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=status` |
+| Gateway information | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=snode` |
+| Selected-node status | Node-aware CLI | `ais show cluster 'NODE_ID'` (replace `NODE_ID` with a node ID) |
 | Cluster statistics | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=stats` |
-| Node statistics | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=stats` |
+| Gateway statistics | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=stats` |
 | System info (all nodes) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` |
-| Node system info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=sysinfo` |
-| Node log | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=log` |
-| BMD (bucket metadata) | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=bmd` |
-| Target mountpaths | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=mountpaths` |
+| Gateway system info | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=sysinfo` |
+| Selected-node log | Node-aware CLI | `ais log show 'NODE_ID'` (replace `NODE_ID` with a node ID) |
+| Gateway BMD (bucket metadata) | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=bmd` |
+| Target mountpaths | Node-aware CLI | `ais storage mountpath show 'NODE_ID'` (replace `NODE_ID` with a target ID) |
 | All mountpaths | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=mountpaths` |
 | Target IPs | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=target_ips` |
 
@@ -384,13 +383,10 @@ $ curl -s -L http://localhost:8080/v1/cluster?what=remote | jq
 
 ### Example: querying node log
 
-```console
-$ curl -s -L http://localhost:8081/v1/daemon?what=log | head -20
+For a selected node, replace `NODE_ID` with an ID from `ais show cluster`. The CLI retrieves its log through the gateway instead of relying on direct public target access:
 
-Started up at 2023/11/08 02:34:35, host ais-target-13, go1.21.4 for linux/amd64
-W 02:34:35.701629 config:1238 control and data share one intra-cluster network
-I 02:34:35.701785 config:1755 log.dir: "/var/log/ais"; l4.proto: tcp; pub port: 51081; verbosity: 3
-...
+```sh
+ais log show 'NODE_ID'
 ```
 
 ### Example: cluster statistics

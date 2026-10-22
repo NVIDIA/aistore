@@ -30,48 +30,33 @@ openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out s
 
 ## Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend
 
-This is still a so-called _local playground_ type deployment _from scratch_, whereby we are not trying to switch an existing cluster from HTTP to HTTPS, or vice versa. All we do here is deploying a brand new HTTPS-based aistore.
+For a **new** Local Playground cluster, use a server certificate whose Subject Alternative Names cover the proxy address clients will use, and a CA certificate that signed it. The files created above are illustrative; safeguard private keys. Do not run this deployment against a cluster you intend to retain or use `make clean` as a TLS migration step. To change the protocol of an existing cluster, refer to [Switching a cluster to HTTPS](switch_https.md).
 
-> Note: If you need to switch an existing AIS cluster to HTTPS, please refer to [these steps](switch_https.md).
+From the repository root, after confirming there is no existing Local Playground instance using the same paths, start a new cluster with certificate verification enabled for AIS-initiated TLS connections and the AWS backend built in:
 
-```console
-## shutdown previous running AIS cluster
-$ make kill
-
-## cleanup
-$ make clean
-
-## run cluster: 4 targets, 1 gateway, 6 mountpaths, AWS backend, HTTPS
-$ TAGS=aws AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=<path-to-cert>/server.crt AIS_SERVER_KEY=<path-to-key>/server.key make deploy <<< $'4\n1\n6'
+```sh
+TAGS=aws AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=false \
+  AIS_SERVER_CRT="$PWD/server.crt" AIS_SERVER_KEY="$PWD/server.key" \
+  AIS_CLIENT_CA_TLS="$PWD/ca.crt" AIS_CLIENT_AUTH_TLS=0 \
+  make deploy <<< $'4\n1\n6'
 ```
-> Notice environment variables above: **AIS_USE_HTTPS**, **AIS_SKIP_VERIFY_CRT**, **AIS_SERVER_CRT** and **AIS_SERVER_KEY**.
 
-> Also note that `<path-to-cert>` (above) must not necessarily be absolute. Assuming, you have `server.*` certs in your **local directory**, the following will work as well:
-
-```console
-$ TAGS=aws AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=server.crt AIS_SERVER_KEY=server.key make deploy <<< $'4\n1\n6'
-```
+This starts four targets and one gateway with six mountpaths per target, using the `server.crt` and `server.key` created in the current directory. `TAGS=aws` builds the AWS-backend variant; omit it if you do not need that backend. Configure AWS credentials on the AIS targets before accessing S3; refer to [AWS environment variables](/docs/environment-vars.md#aws-s3). `AIS_CLIENT_CA_TLS` supplies the CA for AIS-initiated outbound TLS verification and also supplies server-side `ClientCAs` when client authentication verifies certificates. This non-mTLS example explicitly sets `AIS_CLIENT_AUTH_TLS=0` (no client certificate requested). The CLI uses a separate `AIS_CLIENT_CA` setting for its trust.
 
 ## Accessing HTTPS-based cluster
 
-To use CLI, try first any command with HTTPS-based cluster endpoint, for instance:
+For the new Local Playground cluster above, supply the CA that signed `server.crt` to the CLI and verify the hostname or IP address against the certificate:
 
-```console
-$ AIS_ENDPOINT=https://127.0.0.1:8080 ais show cluster
+```sh
+AIS_ENDPOINT=https://127.0.0.1:8080 AIS_CLIENT_CA="$PWD/ca.crt" \
+  AIS_SKIP_VERIFY_CRT=false ais show cluster
 ```
 
-But if it fails with "failed to verify certificate" message, perform a simple step to configufre CLI to skip HTTPS cert validation:
-
-```console
-$ ais config cli set cluster.skip_verify_crt true
-"cluster.skip_verify_crt" set to: "true" (was: "false")
-```
-
-And then try again.
+Expected result: the CLI shows the proxy and targets without a certificate-verification error. `AIS_CLIENT_CA` overrides the CLI's `cluster.client_ca_tls` setting and augments system-trusted roots. If verification fails, check the certificate's Subject Alternative Names, the CA file, the endpoint address, and the certificate validity before retrying. For mutual TLS, configure server-side `AIS_CLIENT_CA_TLS` and `AIS_CLIENT_AUTH_TLS` as well as CLI-side `AIS_CRT` and `AIS_CRT_KEY`; refer to [Public and intra-cluster TLS configuration](#public-and-intra-cluster-tls-configuration).
 
 ## Testing with self-signed certificates
 
-In the previous example, the cluster is simply ignoring SSL certificate verification due to `AIS_SKIP_VERIFY_CRT` being `true`. For a more secure setup, consider validating certificates by configuring the necessary environment variables as shown in the table below:
+The previous example verifies the server certificate. The following variables control different sides of the TLS connection:
 
 | var name | description | the corresponding cluster configuration |
 | -- | -- | -- |
@@ -79,29 +64,15 @@ In the previous example, the cluster is simply ignoring SSL certificate verifica
 | `AIS_SERVER_CRT`         | aistore cluster X.509 certificate | "net.http.server_crt" |
 | `AIS_SERVER_KEY`         | certificate's private key | "net.http.server_key"|
 | `AIS_DOMAIN_TLS`         | NOTE: not supported, must be empty (domain, hostname, or SAN registered with the certificate) | "net.http.domain_tls"|
-| `AIS_CLIENT_CA_TLS`      | Certificate authority that authorized (signed) the certificate | "net.http.client_ca_tls" |
+| `AIS_CLIENT_CA_TLS`      | CA file for AIS-initiated TLS verification and, when enabled, server-side client-certificate validation; not the CLI's trusted CA | "net.http.client_ca_tls" |
 | `AIS_CLIENT_AUTH_TLS`    | Client authentication during TLS handshake: a range from 0 (no authentication) to 4 (request and validate client's certificate) | "net.http.client_auth_tls" |
-| `AIS_SKIP_VERIFY_CRT`    | when true: skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "net.http.skip_verify" |
+| `AIS_SKIP_VERIFY_CRT`    | when true: skip certificate verification for AIS-initiated TLS clients and, when set for the CLI, the CLI's server check; use only for isolated tests | "net.http.skip_verify" (server-side setting) / "cluster.skip_verify_crt" (CLI setting) |
 
 > More info on [`AIS_CLIENT_AUTH_TLS`](https://pkg.go.dev/crypto/tls#ClientAuthType).
 
-In the following example, we run https based deployment where `AIS_SKIP_VERIFY_CRT` is `false`.
+For a test deployment that requires mutual TLS, `ais/test/tls-env/server.conf` illustrates the server certificate, key, client CA, and `AIS_CLIENT_AUTH_TLS=4`; `ais/test/tls-env/client.conf` illustrates the CLI client certificate, key, and trusted CA. Replace the test file paths with your actual files. Do not source test settings into an existing deployment or delete Smap files as a generic TLS setup step.
 
-```console
-$ make kill
-$ # delete smaps
-$ find ~/.ais* -type f -name ".ais.smap" | xargs rm
-$ # substitute variables in below files to point to correct certificates
-$ source ais/test/tls-env/server.conf
-$ source ais/test/tls-env/client.conf
-$ AIS_USE_HTTPS=true make deploy <<< $'6\n6\n4\ny\ny\nn\n\n'
-```
-
-Notice that when the cluster is first time deployed `server.conf` environment (above) overrides aistore cluster configuration.
-
-> Environment is ignored upon cluster restarts and upgrades.
-
-On the other hand, `ais/test/tls-env/client.conf` contains environment variables to override CLI config. The correspondence between environment and config names is easy to see as well.
+Only in an isolated certificate-verification test, `AIS_SKIP_VERIFY_CRT=true` on the CLI bypasses its server certificate check. This does not establish trust and must not be the default or a production fix; restore verification and provide the correct CA before connecting to a trusted deployment. Refer to [CLI TLS settings](/docs/cli.md#environment-variables).
 
 > See also: [Client-side TLS environment](/docs/cli.md#environment-variables)
 
@@ -111,9 +82,7 @@ HTTPS deployment implies (and requires) that each AIS node has a valid TLS (a.k.
 
 The latter has a number of interesting properties ultimately intended to authenticate clients to the server (AIS node, in this case), and vice versa.
 
-In addition, TLS certfificates tend to expire from time to time. In fact, each TLS certificate has expiration date with the standard-defined maximum being 13 months (397 days).
-
-> Some sources claim 398 days but the (much) larger point remains: TLS certificates do expire. Which means, they must be periodically updated and timely reloaded.
+TLS certificates have expiration dates. Their lifetime depends on the issuer and deployment policy, so check and renew them before they expire. AIS monitors certificate validity and reloads updated certificates; check node alerts and logs for renewal failures.
 
 AIStore (AIS) always:
 
