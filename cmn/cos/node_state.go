@@ -42,9 +42,9 @@ const (
 )
 
 const (
-	isRed = OOS | OOM | OOCPU | DiskFault | HighNumGoroutines | CertificateExpired | DiskOOS
+	isRed = OOS | OOM | OOCPU | DiskFault | HighNumGoroutines | CertificateExpired | CertificateInvalid | DiskOOS
 
-	isWarn = Rebalancing | RebalanceInterrupted | Resilvering | ResilverInterrupted | NodeRestarted | MaintenanceMode |
+	isWarn = VoteInProgress | Rebalancing | RebalanceInterrupted | Resilvering | ResilverInterrupted | NodeRestarted | MaintenanceMode |
 		LowCapacity | LowMemory | LowCPU | KeepAliveErrors | CertWillSoonExpire | DiskLowCapacity | NumGoroutines
 )
 

@@ -81,8 +81,8 @@ $ ais config cluster get_batch --json
 What one node is actually running, including its overrides:
 
 ```console
-$ ais show config 't[ABC123]' inherited
-$ ais show config 't[ABC123]' inherited log
+$ ais show config 't[KxHgNnqB]' inherited
+$ ais show config 't[KxHgNnqB]' inherited log
 ```
 
 In the flat inherited output, the `DEFAULT` column shows the cluster value whenever a node override differs from it; `-` means the node is simply inheriting.
@@ -90,8 +90,8 @@ In the flat inherited output, the `DEFAULT` column shows the cluster value whene
 That node's own local configuration - directories, listeners, disks:
 
 ```console
-$ ais show config 't[ABC123]' local
-$ ais show config 't[ABC123]' local host_net --json
+$ ais show config 't[KxHgNnqB]' local
+$ ais show config 't[KxHgNnqB]' local host_net --json
 ```
 
 Local configuration can be viewed but not set through the CLI. To change it, edit the node's plain-text local file and restart that node.
@@ -107,15 +107,22 @@ $ ais config cluster periodic.stats_time=1m
 $ ais config cluster periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
-Supplied values are merged into one proposed configuration and validated together. If validation rejects the proposal, it is not applied. Persistence or propagation errors do not guarantee cluster-wide rollback; after such an error, inspect the effective cluster and node configuration.
+Supplied values are merged into one proposed configuration and validated together. If validation rejects the proposal, it is not applied.
 
-Most changes take effect immediately. These five configuration groups and fields are listed in `ConfigRestartRequired` and take effect only after a restart:
+Persistence or propagation errors do not guarantee cluster-wide rollback; after such an error, inspect the effective cluster and node configuration.
+
+Most changes take effect immediately. These 5 (five) configuration groups and fields are listed in `ConfigRestartRequired` and take effect only after a restart:
 
 ```text
 memsys, net, tracing, timeout.cplane_operation, timeout.max_keepalive
 ```
 
-The CLI warns you when your change touches one of them. Separately, the `Force-Container-CPU-Mem` and `Disable-KTLS` [feature flags](/docs/feature_flags.md) also require a restart to take effect; most other feature flags take effect at runtime. Depending on scope, restart the affected node or the cluster.
+The CLI warns you when your change touches one of them.
+
+Separately, a few [feature flags](/docs/feature_flags.md) - those marked **restart required**, e.g. `Force-Container-CPU-Mem` - also take effect only after a restart;
+most other feature flags take effect at runtime. Depending on scope, restart the affected node or the cluster.
+
+> The restart-required list also includes `Disable-KTLS`. This flag is reserved for internal use and may be redefined or removed at any time; see [kTLS transmit offload](/docs/https.md#ktls-transmit-offload) before changing it.
 
 The CLI also accepts a whole section as JSON. Quote it so the shell leaves it alone:
 
@@ -131,8 +138,8 @@ Use the plain `name=value` form unless you are setting several fields of one sec
 To make one node differ:
 
 ```console
-$ ais config node 't[ABC123]' log.level=4
-$ ais config node 't[ABC123]' disk.disk_util_low_wm=40 disk.disk_util_high_wm=90
+$ ais config node 't[KxHgNnqB]' log.level=4
+$ ais config node 't[KxHgNnqB]' disk.disk_util_low_wm=40 disk.disk_util_high_wm=90
 ```
 
 The override is stored on that node and reapplied every time the node receives a new cluster configuration - so if the same setting later changes cluster-wide, this node keeps its own value until you reset it.
@@ -140,7 +147,7 @@ The override is stored on that node and reapplied every time the node receives a
 Overriding a cluster-only section fails:
 
 ```console
-$ ais config node 't[ABC123]' periodic.stats_time=1m
+$ ais config node 't[KxHgNnqB]' periodic.stats_time=1m
 Error: periodic configuration can only be globally updated
 ```
 
@@ -152,7 +159,7 @@ Both cluster and node commands accept `--transient`:
 
 ```console
 $ ais config cluster log.level=4 --transient
-$ ais config node 't[ABC123]' log.level=4 --transient
+$ ais config node 't[KxHgNnqB]' log.level=4 --transient
 ```
 
 A transient cluster update reaches every node that is currently running, but does not create a new cluster configuration version. A node that restarts or joins later will not have it.
@@ -165,13 +172,13 @@ Some settings cannot be changed transiently at all, and the request is rejected:
 
 ```console
 # 1. a quick experiment
-$ ais config node 't[ABC123]' log.level=5 --transient
+$ ais config node 't[KxHgNnqB]' log.level=5 --transient
 
 # 2. later, an unrelated persistent change to the same node
-$ ais config node 't[ABC123]' disk.iostat_time_long=4s
+$ ais config node 't[KxHgNnqB]' disk.iostat_time_long=4s
 
 # 3. the experiment is now permanent - it was written along with the disk change
-$ ais show config 't[ABC123]' inherited log
+$ ais show config 't[KxHgNnqB]' inherited log
 PROPERTY         VALUE   DEFAULT
 log.level        5       3
 ```
@@ -185,7 +192,7 @@ So: use `--transient` for short experiments, and before making any persistent ch
 Drop one node's overrides and return it to the cluster configuration:
 
 ```console
-$ ais config reset 't[ABC123]'
+$ ais config reset 't[KxHgNnqB]'
 ```
 
 Drop overrides on every currently active node:
@@ -224,7 +231,7 @@ PROPERTY        VALUE
 space.highwm    88
 
 # 4. confirm - what one target is actually running
-$ ais show config 't[ABC123]' inherited space
+$ ais show config 't[KxHgNnqB]' inherited space
 PROPERTY                  VALUE     DEFAULT
 space.cleanupwm           65        -
 space.lowwm               75        -
@@ -300,7 +307,7 @@ Expected - see [What AIStore stores on disk](#what-aistore-stores-on-disk). Veri
 The transfer may have missed a write or read deadline: covered GET paths enforce a minimum transfer rate of 64 KiB/s per window (`timeout.send_file_time`) by default. See [Minimum transfer rate](#minimum-transfer-rate) for the window semantics and other possible causes.
 
 **"One target behaves differently from the others."**
-Compare `ais show config 't[ID]' inherited` against `ais config cluster`. In the flat output, any row with a value in the `DEFAULT` column is an override on that node.
+Compare `ais show config NODE_ID inherited` against `ais config cluster`. In the flat output, any row with a value in the `DEFAULT` column is an override on that node.
 
 ### Deploying: initial and local configuration
 
@@ -383,10 +390,10 @@ Use the storage commands rather than editing configuration:
 
 ```console
 $ ais storage mountpath show
-$ ais storage mountpath attach 't[ABC123]=/data/nvme1'
-$ ais storage mountpath disable 't[ABC123]=/data/nvme1'
-$ ais storage mountpath enable 't[ABC123]=/data/nvme1'
-$ ais storage mountpath detach 't[ABC123]=/data/nvme1'
+$ ais storage mountpath attach 't[KxHgNnqB]=/data/nvme1'
+$ ais storage mountpath disable 't[KxHgNnqB]=/data/nvme1'
+$ ais storage mountpath enable 't[KxHgNnqB]=/data/nvme1'
+$ ais storage mountpath detach 't[KxHgNnqB]=/data/nvme1'
 ```
 
 Runtime changes are persisted on the node; the plain-text local file is not rewritten for you. Keep it in sync.

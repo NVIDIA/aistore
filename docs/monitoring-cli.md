@@ -84,8 +84,10 @@ The following node state flags are examples of red alerts, warnings, and informa
    - `DiskFault` - Disk failures detected
    - `HighNumGoroutines` - High number of goroutines
    - `CertificateExpired` - TLS certificate has expired
+   - `CertificateInvalid` - TLS certificate is invalid
 
 2. **Warning Alerts** - Potential issues that may require attention:
+   - `VoteInProgress` - Primary election is in progress
    - `Rebalancing` - Rebalance operation in progress
    - `RebalanceInterrupted` - Rebalance was interrupted
    - `Resilvering` - Resilvering operation in progress
@@ -149,7 +151,7 @@ Here are some frequently used command combinations for everyday operations:
 ais show cluster && ais storage summary
 
 # Watch GET latency for a single target
-ais performance latency 't[EkMt8081]' --refresh 30 --regex "get(\(t\)|cold)"
+ais performance latency 't[pDztYhhb]' --refresh 30 --regex "get(\(t\)|cold)"
 
 # Verify no misplaced objects in GCS buckets (non‑recursive)
 ais scrub gs --nr --refresh 20s --count 3
