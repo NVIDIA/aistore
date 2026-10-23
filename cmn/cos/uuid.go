@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 
 	onexxh "github.com/OneOfOne/xxhash"
@@ -72,21 +73,32 @@ func InitShortID(seed uint64) {
 // (see also: bench/micro/uuid/genid_test.go)
 
 func GenUUID() string {
-	var (
-		h, t string
+	const maxRetries = 16
+
+	uuid := sid.MustGenerate()
+	for i := 0; !niceSuffix(uuid); i++ {
+		if i >= maxRetries {
+			debug.Assert(false, uuid)
+			return CryptoRandS(LenShortID + 4) // letters only: compensate for smaller alphabet
+		}
 		uuid = sid.MustGenerate()
-	)
+	}
+
+	return nicePrefix(uuid) + uuid
+}
+
+func nicePrefix(uuid string) (h string) {
 	c := uuid[0]
 	if (c == 'g' && looksLikeReb(uuid)) || !isAlpha(c) { // cosmetic prefix
 		tie := rtie.Add(1)
 		h = string(rune('A' + tie%26))
 	}
-	c = uuid[len(uuid)-1]
-	if c == '-' || c == '_' { // ditto
-		tie := rtie.Add(1)
-		t = string(rune('a' + tie%26))
-	}
-	return h + uuid + t
+	return
+}
+
+func niceSuffix(uuid string) bool {
+	c := uuid[len(uuid)-1]
+	return c != '-' && c != '_'
 }
 
 func looksLikeReb(id string) bool {
