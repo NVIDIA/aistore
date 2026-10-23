@@ -37,7 +37,7 @@ func _wrd(t *testing.T, nameLen int) {
 					tname += "/chunked"
 				}
 				t.Run(tname, func(_ *testing.T) {
-					if bck.IsAIS() || bck.IsRemoteAIS() {
+					if !testing.Short() && (bck.IsAIS() || bck.IsRemoteAIS()) {
 						m.num = 1000
 					}
 

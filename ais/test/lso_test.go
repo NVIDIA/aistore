@@ -441,9 +441,10 @@ func TestLsoExactPageBoundaryMirrored(t *testing.T) {
 	var (
 		bp = tools.BaseAPIParams()
 		m  = ioContext{
-			t:        t,
-			num:      120,
-			fileSize: 128,
+			t:          t,
+			num:        120,
+			fileSize:   128,
+			chunksConf: &ioCtxChunksConf{}, // mirroring requires monolithic objects
 		}
 		props = &cmn.BpropsToSet{
 			Mirror: &cmn.MirrorConfToSet{

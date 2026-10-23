@@ -39,7 +39,7 @@ import (
 // notice `dont_cleanup_time` below (important).
 
 // TODO:
-// - FNTL: skip all FNTL and FNTL-like names (see isFntlLike)
+// - FNTL: skip loaded FNTL objects and ambiguous shortened content names (see isFntlLike)
 //   * chunks, chunk manifests, and EC slices and metafiles shorten the object name (fs.CSM.Gen),
 //     while the object itself shortens its FQN (core LOM.shortenFntl)
 //   * a chunk or manifest of a FNTL object resolves to a non-existing LOM and gets removed
@@ -568,14 +568,16 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	if isFntlLike(parsed.ObjName) {
+	sysBck := j.bck.IsAIS() && j.bck.IsSystem()
+	// name check for derived content and system buckets (objects: see visitObj)
+	if (parsed.ContentType != fs.ObjCT || sysBck) && isFntlLike(parsed.ObjName, parsed.ContentType) {
 		j.ini.Xaction.stats.skipFntl.Add(1)
 		return nil
 	}
 
 	j.adv.Throttle(j.nvisits, true /*yield*/)
 
-	if j.bck.IsAIS() && j.bck.IsSystem() {
+	if sysBck {
 		j.visitSysBck(&parsed, fqn)
 		return nil
 	}
@@ -614,8 +616,17 @@ func (j *clnJ) visitSysBck(parsed *fs.ParsedFQN, fqn string) {
 // - shortened names have no virtual directories
 // - also matches a user name that looks the same (FNTL-like)
 // - see TODO at the top
-func isFntlLike(name string) bool {
-	return fs.HasPrefixFntl(name) && strings.IndexByte(name, filepath.Separator) < 0
+func isFntlLike(name, contentType string) bool {
+	if !fs.HasPrefixFntl(name) || strings.IndexByte(name, filepath.Separator) >= 0 {
+		return false
+	}
+	// check the decoded base first
+	// (derived name may itself be 64 + 2 = 66 = lenShortFntl bytes)
+	ci := fs.CSM.ParseUbase(name, contentType)
+	if ci.Ok && ci.Base != "" {
+		return fs.IsShortFntl(ci.Base)
+	}
+	return fs.IsShortFntl(name)
 }
 
 func (j *clnJ) rmInvalidFQN(fqn, ctType string, err error) {
@@ -866,10 +877,21 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		}
 		return
 	}
-	// force md loading from disk
+	if fs.IsShortFntl(lom.ObjName) {
+		if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil || lom.IsFntl() {
+			xcln.stats.skipFntl.Inc()
+			return
+		}
+	}
+
 	lom.Uncache()
 	// and load
 	if errLoad := lom.Load(false /*cache it*/, false /*locked*/); errLoad != nil {
+		if fs.IsShortFntl(lom.ObjName) {
+			// literal or unresolved FNTL - can't tell, keep
+			xcln.stats.skipFntl.Inc()
+			return
+		}
 		if cmn.IsErrLmetaCorrupted(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
 				e := fmt.Errorf("%s rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
@@ -885,6 +907,10 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 				nlog.Errorf("%s: removed no-MD %s: %v", j, lom, errLoad)
 			}
 		}
+		return
+	}
+	if lom.IsFntl() {
+		xcln.stats.skipFntl.Inc()
 		return
 	}
 

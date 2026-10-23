@@ -159,6 +159,66 @@ func TestFntlRebalanceUnresolved(t *testing.T) {
 	fntlCheckGet(t, bp, bck, literal, data)
 }
 
+// ordinary .x names must still be eligible for object and orphan-content cleanup
+func TestFntlSpaceCleanupLiteralNames(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	var (
+		bp    = tools.BaseAPIParams(proxyURL)
+		bck   = cmn.Bck{Name: "cleanup-literal-fntl-" + cos.GenTie(), Provider: apc.AIS}
+		names = []string{".xnotes", fs.ShortenFntl("literal-cleanup"), ".x" + strings.Repeat("a", 65)}
+		fqns  []string
+	)
+	tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+		Chunks: &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(0))},
+	}, true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
+	smap.InitDigests()
+	for _, name := range names {
+		fntlPut(t, bp, bck, name, nil) // FlagZeroSize makes these reclaimable
+		_, fqn := fntlObjectFQN(t, bp, smap, bck, name)
+		fqns = append(fqns, fqn)
+	}
+
+	// Derived names can be longer than 66 bytes, but their base must have the
+	// shortened-name shape. An ordinary .x prefix must not protect old orphans.
+	var parsed fs.ParsedFQN
+	tassert.CheckFatal(t, parsed.Init(fqns[0]))
+	uploadID := cos.GenUUID()
+	tassert.CheckFatal(t, cos.ValidateManifestID(uploadID))
+	for _, obj := range []struct{ name, ct string }{
+		{names[0], fs.ChunkCT}, {names[0], fs.ChunkMetaCT},
+		// derived filenames of exactly 66 bytes whose bases are not shortened names:
+		// ".x" + base + "." + uploadID [+ ".0001"]
+		{".x" + strings.Repeat("c", 66-2-1-len(uploadID)-5), fs.ChunkCT},
+		{".x" + strings.Repeat("m", 66-2-1-len(uploadID)), fs.ChunkMetaCT},
+	} {
+		extras := []string{uploadID}
+		if obj.ct == fs.ChunkCT {
+			extras = append(extras, "0001")
+		}
+		fqn := fs.CSM.Gen(obj.name, obj.ct, &bck, parsed.Mountpath, extras...)
+		fh, err := cos.CreateFile(fqn)
+		tassert.CheckFatal(t, err)
+		tassert.CheckFatal(t, fh.Close())
+		fqns = append(fqns, fqn)
+	}
+	tassert.CheckFatal(t, api.ClearLcache(bp, "" /*all targets*/))
+	old := time.Now().Add(-tools.GetClusterConfig(t).Space.DontCleanupTime.D() - time.Hour)
+	for _, fqn := range fqns {
+		tassert.CheckFatal(t, os.Chtimes(fqn, old, old))
+	}
+	args := &xact.ArgsMsg{Kind: apc.ActStoreCleanup, Buckets: []cmn.Bck{bck}, Flags: xact.FlagZeroSize}
+	xid, err := api.StartXaction(bp, args, "")
+	tassert.CheckFatal(t, err)
+	args.ID, args.Timeout = xid, tools.RebalanceTimeout
+	tassert.CheckFatal(t, api.WaitForXaction(bp, args))
+	for _, fqn := range fqns {
+		_, err := os.Stat(fqn)
+		tassert.Errorf(t, os.IsNotExist(err), "cleanup did not remove %q: %v", fqn, err)
+	}
+}
+
 func TestFntlSpaceCleanup(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 	var (
