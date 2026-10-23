@@ -897,7 +897,7 @@ func testPlacementWeightsJoin(t *testing.T, requested int64) {
 	err = tools.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
 	restoreStarted = true
-	smap, err = tools.WaitForClusterState(proxyURL, "target restored", smap.Version, 0, smap.CountTargets()+1)
+	smap, err = tools.WaitForClusterState(proxyURL, "target restored", smap.Version, 0, len(weights))
 	tassert.CheckFatal(t, err)
 	waitRunningRebResil(t, bp) // the rejoin rebalance starts with the new Smap
 	decommissioned = false
