@@ -133,8 +133,8 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 			return nil, err
 		}
 		var (
-			short = lom.ShortenFntl()
-			saved = lom.PushFntl(short)
+			short = lom.shortenFntl()
+			saved = lom.pushFntl(short)
 		)
 		fh, err = os.OpenFile(short[0], _openFlags, cos.PermRWR)
 		if err == nil {
@@ -142,7 +142,7 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 			lom.SetCustomKey(cmn.OrigFntl, saved[0])
 		} else {
 			debug.AssertFunc(func() bool { return !cos.IsErrFntl(err) })
-			lom.PopFntl(saved)
+			lom.popFntl(saved)
 			lom.DelCustomKey(cmn.OrigFntl)
 		}
 		return fh, err
@@ -327,8 +327,8 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 	// finalize is the last place that can still hit ENAMETOOLONG
 	var saved []string
 	if fs.IsFntl(lom.ObjName) {
-		short := lom.ShortenFntl()
-		saved = lom.PushFntl(short)
+		short := lom.shortenFntl()
+		saved = lom.pushFntl(short)
 	}
 
 	err := lom.RenameToMain(wfqn)
@@ -345,7 +345,7 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 	}
 	debug.AssertFunc(func() bool { return !cos.IsErrFntl(err) })
 	if len(saved) > 0 {
-		lom.PopFntl(saved) // undo
+		lom.popFntl(saved) // undo
 	}
 	if !cos.IsErrMv(err) {
 		T.FSHC(err, lom.Mountpath(), wfqn)

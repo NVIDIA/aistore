@@ -53,11 +53,11 @@ func (lom *LOM) PostInit() error {
 	if err := lom.bck.InitFast(T.Bowner()); err != nil {
 		return err
 	}
+	if fs.IsShortFntl(lom.ObjName) && lom.initFntl() {
+		return nil
+	}
 	uname := lom.bck.MakeUname(lom.ObjName)
 	lom.md.uname = cos.UnsafeSptr(uname)
-	if fs.HasPrefixFntl(lom.ObjName) {
-		lom.initFntl()
-	}
 	return nil
 }
 
@@ -109,7 +109,7 @@ func (lom *LOM) InitBck(bck *meta.Bck) (err error) {
 //   - restore the original ObjName and FQN if shortened;
 //   - discard loaded metadata, preserving identity and placement.
 func (lom *LOM) Reset() {
-	if fs.HasPrefixFntl(lom.ObjName) {
+	if fs.IsShortFntl(lom.ObjName) {
 		_, lom.ObjName = cmn.ParseUname(lom.Uname())
 		lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
 	}

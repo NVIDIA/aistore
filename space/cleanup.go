@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -33,9 +34,21 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// NOTE:
-// - for cleanup policies and implementation details, see README.md in this package
-// - report stats counters "cleanup.store.n" & "cleanup.store.size" (not to confuse with generic ""loc-objs", "in-objs", etc.)
+// For cleanup policies and implementation details, see README.md in this package;
+// supported Prometheus counters include "cleanup.store.n" & "cleanup.store.size";
+// notice `dont_cleanup_time` below (important).
+
+// TODO:
+// - FNTL: skip all FNTL and FNTL-like names (see isFntlLike)
+//   * chunks, chunk manifests, and EC slices and metafiles shorten the object name (fs.CSM.Gen),
+//     while the object itself shortens its FQN (core LOM.shortenFntl)
+//   * a chunk or manifest of a FNTL object resolves to a non-existing LOM and gets removed
+//   * remove the skip once FNTL names are consistent across all content types
+// - dont_cleanup_time: cluster-HRW + HeadObjT2T (peerHasIdentical) already establishes per-LOM
+//   identity before deletion - redundant for misplaced LOMs (work files, chunks, and partial
+//   manifests still need it)
+// - peerHasIdentical: one HeadObjT2T per misplaced LOM does not scale - use batch HEAD (core/headbatch.go)
+// - jogBcks: config option to scrub `fs.AllMpathBcks` buckets that fail to init
 
 // (batch sizing)
 const (
@@ -80,6 +93,7 @@ type (
 		sysBckRm         atomic.Int64 // system-bucket entries queued for removal
 		oldWorkN         atomic.Int64 // old workfiles queued for removal
 		invalidN         atomic.Int64 // invalid/malformed FQNs queued for removal
+		skipFntl         atomic.Int64 // FNTL and FNTL-like names skipped (see TODO at the top)
 		rmFiles          atomic.Int64 // files actually removed by rmLeftovers
 		rmBytes          atomic.Int64 // bytes actually removed by rmLeftovers
 		keepPeerMissing  atomic.Int64 // cluster-HRW peer returned 404: keep local copy (last-known good)
@@ -218,6 +232,10 @@ func (s *clnStats) write(sb *cos.SB) {
 	}
 	if v := s.invalidN.Load(); v > 0 {
 		sb.WriteString(" invalid:")
+		sb.WriteInt64(v)
+	}
+	if v := s.skipFntl.Load(); v > 0 {
+		sb.WriteString(" skip-fntl:")
 		sb.WriteInt64(v)
 	}
 	if v := s.rmFiles.Load(); v > 0 {
@@ -404,8 +422,6 @@ func (j *clnJ) _str() string {
 
 func (j *clnJ) stop() { j.stopCh <- struct{}{} }
 
-// TODO: cluster-HRW + HeadObjT2T (peerHasIdentical) already establishes
-// per-LOM identity before deletion - this gate is now redundant.
 func (j *clnJ) dont() time.Duration { return j.config.Space.DontCleanupTime.D() }
 
 func (j *clnJ) rmZeroSize() bool { return j.ini.Args.Flags&xact.FlagZeroSize != 0 }
@@ -481,7 +497,6 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) {
 					nlog.Errorf("%s %s: %v - skipping", j, act, err)
 				}
 			} else {
-				// TODO: config option to scrub `fs.AllMpathBcks` buckets
 				xcln.AddErr(err)
 				nlog.Errorf("%s: %v - skipping %s", j, err, bck.String())
 			}
@@ -553,6 +568,11 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
+	if isFntlLike(parsed.ObjName) {
+		j.ini.Xaction.stats.skipFntl.Add(1)
+		return nil
+	}
+
 	j.adv.Throttle(j.nvisits, true /*yield*/)
 
 	if j.bck.IsAIS() && j.bck.IsSystem() {
@@ -588,6 +608,14 @@ func (j *clnJ) visitSysBck(parsed *fs.ParsedFQN, fqn string) {
 		})
 		nlog.Warningln(j.String(), "unexpected content type: "+parsed.ContentType+" in system bucket: "+j.bck.String())
 	}
+}
+
+// match a shortened (`.x<sha256>`) name and the names derived from it (chunks, manifests, EC)
+// - shortened names have no virtual directories
+// - also matches a user name that looks the same (FNTL-like)
+// - see TODO at the top
+func isFntlLike(name string) bool {
+	return fs.HasPrefixFntl(name) && strings.IndexByte(name, filepath.Separator) < 0
 }
 
 func (j *clnJ) rmInvalidFQN(fqn, ctType string, err error) {
@@ -946,7 +974,6 @@ func (j *clnJ) peerHasIdentical(lom *core.LOM) bool {
 	// Other HEAD errors (network, 5xx) also fall back to "keep" but go through
 	// errHEAD with rate-limited warning since they likely indicate a transient
 	// problem rather than a real data-loss signal.
-	// TODO -- FIXME: HeadObjT2T() must support batch request to ensure scalability
 	stats := &j.ini.Xaction.stats
 	peer, herr := core.T.HeadObjT2T(lom, tsi,
 		apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCustom, apc.GetPropsETag)

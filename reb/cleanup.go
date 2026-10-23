@@ -49,6 +49,7 @@ type (
 		skipBusy     atomic.Int64
 		skipBusyLate atomic.Int64
 		skipChanged  atomic.Int64
+		skipFntl     atomic.Int64
 		// keep despite
 		keepPeerMissing atomic.Int64
 		keepDiverged    atomic.Int64
@@ -352,6 +353,11 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 	}
 	stats.loads.Inc()
 
+	if lom.IsLoadedUnresolvedFntl() {
+		stats.skipFntl.Inc()
+		return cmn.ErrSkip
+	}
+
 	// check the expected location, request specific props to establish identity
 	// TODO -- FIXME: HeadObjT2T() must support batch request to ensure scalability
 	op, err := core.T.HeadObjT2T(lom, tsi,
@@ -470,6 +476,10 @@ func (clnArgs *clnArgs) ctlMsg(sb *cos.SB) {
 	}
 	if v := s.skipChanged.Load(); v > 0 {
 		sb.WriteString(" skip-changed=")
+		sb.WriteInt64(v)
+	}
+	if v := s.skipFntl.Load(); v > 0 {
+		sb.WriteString(" skip-fntl=")
 		sb.WriteInt64(v)
 	}
 

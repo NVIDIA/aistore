@@ -829,6 +829,10 @@ func getROC(lom *core.LOM) (cos.ReadOpenCloser, error) {
 		lom.Unlock(false)
 		return nil, err
 	}
+	if lom.IsLoadedUnresolvedFntl() {
+		lom.Unlock(false)
+		return nil, cmn.NewErrFntlUnresolved(lom.FQN)
+	}
 	if lom.IsCopy() {
 		lom.Unlock(false)
 		return nil, cmn.ErrSkip

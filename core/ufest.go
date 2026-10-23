@@ -1340,7 +1340,7 @@ func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 	}
 
 	if !ctx.remote && fs.IsFntl(prevLom.ObjName) {
-		prevLom.PushFntl(prevLom.ShortenFntl())
+		prevLom.pushFntl(prevLom.shortenFntl())
 	}
 	ctx.firstFQN = prevLom.FQN
 	ctx.completedFQN = prevLom.GenFQN(fs.ChunkMetaCT)

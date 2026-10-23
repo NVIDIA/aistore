@@ -123,7 +123,8 @@ func TestGetObjectColdMissReset(t *testing.T) {
 		tassert.Fatalf(t, !fresh.IsChunked() && fresh.Lsize() == int64(len(coldGetResetContent)), "invalid replacement metadata")
 		if fs.IsFntl(objName) {
 			tassert.Fatalf(t, fresh.IsFntl() && fresh.ObjName != objName, "cold PUT did not shorten the name again")
-			tassert.Fatalf(t, fresh.OrigFntl()[0] == originalFQN && fresh.OrigFntl()[1] == objName, "lost original-name mapping")
+			ofqn, _ := fresh.GetCustomKey(cmn.OrigFntl)
+			tassert.Fatalf(t, ofqn == originalFQN && fresh.OrigObjName() == objName, "lost original-name mapping")
 		}
 		w = httptest.NewRecorder()
 		goi = getOI{t: mockTarget, lom: fresh, w: w, dpq: &dpq{}, ctx: t.Context(), atime: time.Now().UnixNano()}

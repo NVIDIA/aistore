@@ -5,6 +5,8 @@
 package fs
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"path/filepath"
 	"strings"
 
@@ -14,6 +16,9 @@ import (
 // file name too long (0x24)
 const (
 	prefixFntl = ".x"
+
+	// shortened name: prefix + hex(sha256)
+	lenShortFntl = len(prefixFntl) + 2*sha256.Size
 
 	// a typical local FS limitation
 	maxLenBasename = 255
@@ -30,8 +35,20 @@ func HasPrefixFntl(s string) bool {
 	return strings.HasPrefix(s, prefixFntl)
 }
 
+// match the exact shape of a shortened name (see ShortenFntl)
+func IsShortFntl(s string) bool {
+	return len(s) == lenShortFntl && HasPrefixFntl(s)
+}
+
+// return prefix + hex(sha256(s)) - one allocation
 func ShortenFntl(s string) string {
-	return prefixFntl + cos.ChecksumB2S(cos.UnsafeB(s), cos.ChecksumSHA256)
+	var (
+		buf [lenShortFntl]byte
+		sum = sha256.Sum256(cos.UnsafeB(s))
+	)
+	copy(buf[:], prefixFntl)
+	hex.Encode(buf[len(prefixFntl):], sum[:])
+	return string(buf[:])
 }
 
 func IsFntl(objName string) bool {

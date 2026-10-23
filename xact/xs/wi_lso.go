@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -88,24 +89,13 @@ func (wi *walkInfo) match(objName string) bool {
 
 // new entry to be added to the listed page (note: slow path)
 func (wi *walkInfo) ls(lom *core.LOM, status uint16) (en *cmn.LsoEnt) {
-	en = &cmn.LsoEnt{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
+	en = &cmn.LsoEnt{Name: lom.OrigObjName(), Flags: status | apc.EntryIsCached}
 
 	if lom.IsChunked(true /*allow not loaded*/) {
 		en.SetFlag(apc.EntryIsChunked)
 	}
 
-	if lom.IsFntl() {
-		orig := lom.OrigFntl()
-		if orig != nil {
-			// TODO: maybe use lom.DisplayName() instead or in addition
-			saved := lom.PushFntl(orig)
-			if wi.msg.IsFlagSet(apc.LsDiff) {
-				checkRemoteMD(lom, en)
-			}
-			lom.PopFntl(saved)
-			en.Name = orig[1]
-		}
-	} else if wi.msg.IsFlagSet(apc.LsDiff) {
+	if wi.msg.IsFlagSet(apc.LsDiff) {
 		// may set en.custom and en.version
 		checkRemoteMD(lom, en)
 	}
@@ -124,7 +114,12 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (en *cmn.LsoEnt) {
 
 // NOTE: slow path if lom.Bck is remote
 func checkRemoteMD(lom *core.LOM, en *cmn.LsoEnt) {
+	// the backend knows the original name (see core/lom_fntl.go)
+	// TODO: remove when lom.ObjName is always the original name
+	saved := lom.ObjName
+	lom.ObjName = lom.OrigObjName()
 	res := lom.CheckRemoteMD(false /*locked*/, false /*sync*/, nil /*origReq*/)
+	lom.ObjName = saved
 
 	switch {
 	case res.Eq:
@@ -181,7 +176,7 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	}
 
 	// [shortcut]: name-only optimizes-out loading md (NOTE: won't show misplaced and copies)
-	if wi.msg.IsFlagSet(apc.LsNameOnly) && !fs.HasPrefixFntl(lom.ObjName) {
+	if wi.msg.IsFlagSet(apc.LsNameOnly) && !fs.IsShortFntl(lom.ObjName) {
 		if !isOK(status) {
 			return nil, nil
 		}
@@ -195,6 +190,11 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 		}
 		return nil, err
 	}
+	if lom.IsLoadedUnresolvedFntl() {
+		nlog.Warningln("x-lso/walk: skipping", lom.Cname(), "[", cmn.NewErrFntlUnresolved(fqn), "]")
+		return nil, nil
+	}
+
 	if lom.IsFntl() {
 		// FIXME: revisit
 		status = apc.LocOK

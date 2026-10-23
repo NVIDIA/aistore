@@ -654,7 +654,9 @@ var _ = Describe("LOM", func() {
 						Expect(stale.Load(false, false)).To(Succeed())
 						Expect(stale.IsFntl()).To(BeTrue())
 						Expect(stale.ObjName).NotTo(Equal(objName))
-						Expect(stale.OrigFntl()).To(Equal([]string{want.FQN, objName}))
+						ofqn, _ := stale.GetCustomKey(cmn.OrigFntl)
+						Expect(ofqn).To(Equal(want.FQN))
+						Expect(stale.OrigObjName()).To(Equal(objName))
 
 						remover := &core.LOM{ObjName: objName}
 						Expect(remover.InitCmnBck(&cloudBckA)).To(Succeed())

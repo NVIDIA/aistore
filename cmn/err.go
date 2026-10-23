@@ -220,6 +220,9 @@ type (
 		err  error
 		name string
 	}
+	ErrFntlUnresolved struct {
+		fqn string
+	}
 
 	ErrLimitedCoexistence struct {
 		node    string // this (local) node
@@ -975,6 +978,14 @@ func (e *ErrLmetaNotFound) Unwrap() (err error) { return e.err }
 func IsErrLmetaNotFound(err error) bool {
 	_, ok := errors.AsType[*ErrLmetaNotFound](err)
 	return ok
+}
+
+// ErrFntlUnresolved
+
+func NewErrFntlUnresolved(fqn string) *ErrFntlUnresolved { return &ErrFntlUnresolved{fqn} }
+
+func (e *ErrFntlUnresolved) Error() string {
+	return "unresolved FNTL identity (" + e.fqn + ")"
 }
 
 // ErrLimitedCoexistence
