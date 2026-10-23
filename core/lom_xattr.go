@@ -677,7 +677,7 @@ func _pcustom(buf []byte, md cos.StrKVs) ([]byte, error) {
 	)
 	for k, v := range md {
 		size += len(k) + len(v)
-		if err := cmn.ValidateCustomKV(k, v, size); err != nil {
+		if err := cmn.CheckCustKV(k, v, size); err != nil {
 			return buf, err
 		}
 

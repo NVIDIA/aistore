@@ -196,7 +196,7 @@ var (
 
 // [NOTE]
 // - usage: LOM custom metadata => LsoEnt custom property
-// - `OrigFntl` always excepted (and possibly other TBD internal keys)
+// - reserved keys always excepted (see isReservedCust)
 func CustomMD2S(md cos.StrKVs) string {
 	var (
 		sb   cos.SB
@@ -223,7 +223,7 @@ func CustomMD2S(md cos.StrKVs) string {
 	if l > 0 {
 		// add remaining (non-standard) attr-s in an arbitrary sorting order
 		for k, v := range md {
-			if k == OrigFntl {
+			if isReservedCust(k) {
 				continue
 			}
 			if slices.Contains(stdCustomProps[:], k) {

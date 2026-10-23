@@ -42,6 +42,22 @@ const (
 	OrigFntl = "orig_fntl"
 )
 
+// reserved custom metadata key (currently, only OrigFntl):
+// - set internally and local to a given target: never sent over the wire (ToHeader, FromHeader)
+// - cannot be set via API (AddCustomMD, ValidateUserCustomMD) and survives replacement (KeepReservedCustom)
+func isReservedCust(k string) bool { return k == OrigFntl }
+
+func _errCustFormatKey(k string) error {
+	return fmt.Errorf("%s: %q is a reserved key", tagCustom, k)
+}
+
+// carry over reserved keys from the existing custom metadata
+func CopyReservedCust(from, to cos.StrKVs) {
+	if v, ok := from[OrigFntl]; ok {
+		to[OrigFntl] = v
+	}
+}
+
 // universally supported by all Cloud backends
 var supportedRemAttrs = [...]string{VersionObjMD, CRC32CObjMD, MD5ObjMD, ETag, cos.HdrLastModified, cos.HdrContentType}
 
@@ -329,13 +345,16 @@ func (oa *ObjAttrs) GetCustomKey(key string) (val string, exists bool) {
 func (oa *ObjAttrs) AddCustomMD(custom cos.StrKVs) error {
 	var size int
 	for k, v := range oa.CustomMD {
-		if _, ok := custom[k]; !ok {
+		if _, ok := custom[k]; !ok && !isReservedCust(k) {
 			size += len(k) + len(v)
 		}
 	}
 	for k, v := range custom {
+		if isReservedCust(k) {
+			return _errCustFormatKey(k)
+		}
 		size += len(k) + len(v)
-		if err := ValidateCustomKV(k, v, size); err != nil {
+		if err := CheckCustKV(k, v, size); err != nil {
 			return err
 		}
 	}
@@ -475,6 +494,9 @@ func ToHeader(oah cos.OAH, hdr http.Header, cksum *cos.Cksum) {
 		hdr.Set(apc.HdrObjVersion, v)
 	}
 	for k, v := range oah.GetCustomMD() {
+		if isReservedCust(k) {
+			continue
+		}
 		hdr.Add(apc.HdrObjCustomMD, k+"="+v)
 	}
 }
@@ -527,13 +549,16 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, _ error) {
 	}
 
 	// custom metadata: total size limited, reserved symbols prohibited
-	// (see ValidateCustomKV)
+	// (see CheckCustKV)
 	if custom, ok := hdr[apc.HdrObjCustomMD]; ok {
 		kvs := make(cos.StrKVs, len(custom)) // (duplicate keys: last wins)
 		for _, kv := range custom {
 			k, v, found := strings.Cut(kv, "=")
 			if !found {
 				return nil, fmt.Errorf("%s: invalid format %q (expecting key=value)", tagCustom, kv)
+			}
+			if isReservedCust(k) {
+				continue // drop (older nodes may still send it)
 			}
 			kvs[k] = v
 		}
@@ -760,19 +785,19 @@ const (
 	maxSizeCustomKVs = 2 * cos.KiB
 )
 
-func newErrCustomReserved(k, v string) error {
+func _errCustFormat(k, v string) error {
 	return fmt.Errorf("%s '%q=%q': key or value contains reserved symbol", tagCustom, k, v)
 }
 
-func ValidateCustomKV(k, v string, size int) error {
+func CheckCustKV(k, v string, size int) error {
 	if k == "" {
 		return fmt.Errorf("%s: empty key (value=%q)", tagCustom, v)
 	}
 	if strings.IndexByte(k, CustomSepaB) >= 0 || strings.Contains(k, RecordSepa) {
-		return newErrCustomReserved(k, v)
+		return _errCustFormat(k, v)
 	}
 	if strings.IndexByte(v, CustomSepaB) >= 0 || strings.Contains(v, RecordSepa) {
-		return newErrCustomReserved(k, v)
+		return _errCustFormat(k, v)
 	}
 	if size > maxSizeCustomKVs {
 		return newErrCustomSize(size)
@@ -784,11 +809,20 @@ func newErrCustomSize(size int) error {
 	return fmt.Errorf("%s: total size %d exceeds max %d bytes", tagCustom, size, maxSizeCustomKVs)
 }
 
-func ValidateCustomMD(custom cos.StrKVs) error {
+func CheckCustReserved(custom cos.StrKVs) error {
+	for k := range custom {
+		if isReservedCust(k) {
+			return _errCustFormatKey(k)
+		}
+	}
+	return nil
+}
+
+func CheckCustMD(custom cos.StrKVs) error {
 	var size int
 	for k, v := range custom {
 		size += len(k) + len(v)
-		if err := ValidateCustomKV(k, v, size); err != nil {
+		if err := CheckCustKV(k, v, size); err != nil {
 			return err
 		}
 	}

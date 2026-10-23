@@ -284,7 +284,7 @@ func (ups *ups) _start(r *http.Request, lom *core.LOM, skipBackend bool) (upload
 		default:
 			metadata = lom.GetCustomMD()
 		}
-		if err := cmn.ValidateCustomMD(metadata); err != nil {
+		if err := cmn.CheckCustMD(metadata); err != nil {
 			return "", nil, fmt.Errorf("%s: %w", lom.Cname(), err)
 		}
 

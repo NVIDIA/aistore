@@ -444,7 +444,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 		Describe("MetaverLOM=2", func() {
 			It("rejects custom metadata reserved separators", func() {
-				Expect(cmn.ValidateCustomMD(cos.StrKVs{"key": "value"})).NotTo(HaveOccurred())
+				Expect(cmn.CheckCustMD(cos.StrKVs{"key": "value"})).NotTo(HaveOccurred())
 
 				tests := []cos.StrKVs{
 					{"": "value"},
@@ -452,7 +452,7 @@ var _ = Describe("LOM Xattributes", func() {
 					{"key\xe3/\xbdrecord": "value"},
 				}
 				for _, custom := range tests {
-					Expect(cmn.ValidateCustomMD(custom)).To(HaveOccurred())
+					Expect(cmn.CheckCustMD(custom)).To(HaveOccurred())
 				}
 			})
 

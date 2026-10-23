@@ -1722,7 +1722,11 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 	// (merge mode validates the merged result below)
 	delOldSetNew := cos.IsParseBool(apireq.dpq.get(apc.QparamNewCustom))
 	if delOldSetNew {
-		if err := cmn.ValidateCustomMD(custom); err != nil {
+		err := cmn.CheckCustReserved(custom)
+		if err == nil {
+			err = cmn.CheckCustMD(custom)
+		}
+		if err != nil {
 			t.writeErrf(w, r, "%s: %v", lom.Cname(), err)
 			return
 		}
@@ -1739,6 +1743,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		return
 	}
 	if delOldSetNew {
+		cmn.CopyReservedCust(lom.GetCustomMD() /*from*/, custom /*to*/)
 		lom.SetCustomMD(custom)
 	} else {
 		cloneMD := maps.Clone(lom.GetCustomMD()) // (CoW)
