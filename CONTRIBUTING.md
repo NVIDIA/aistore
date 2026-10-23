@@ -87,7 +87,7 @@ The AIStore project repository maintains a contribution structure in which every
 3. [Test changes](#testing-changes),
 4. [Format changes](#formatting-changes),
 5. [Commit changes (w/ sign-off)](#signing-off-commits),
-6. [Squash commits](#squashing-changes),
+6. [Squash commits](#squashing-commits),
 5. [Create a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork).
 
 

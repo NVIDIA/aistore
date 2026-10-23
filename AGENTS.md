@@ -92,6 +92,9 @@ the human contributor owns claims and disclosure.
 ## Engineering Contracts
 
 - Preserve user data. Test changes to integrity, persistence, and transport.
+- Use unique test bucket and object names; delete only data created by the test.
+  Do not stop or redeploy a shared cluster without authorization. Keep credentials
+  out of logs.
 - Read implementations and callers for each codepath's contracts and lifetimes.
   Preserve them; update all affected callers when changing a contract.
   Do not redesign shared contracts around a single use.
