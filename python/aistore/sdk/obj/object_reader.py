@@ -2,6 +2,7 @@
 # Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
+import warnings
 from io import BufferedIOBase
 from typing import Optional, Generator, Any, Union
 
@@ -95,14 +96,42 @@ class ObjectReader:
         """
         return self._content_provider.read_all()
 
+    def stream(self) -> requests.Response:
+        """
+        Return the full response with an open stream of object content.
+
+        The caller must close the response when finished, preferably using a
+        context manager. Access headers, raw bytes via response.raw, or chunks
+        via response.iter_content().
+
+        Returns:
+            requests.Response: Response requested with stream=True.
+
+        Example:
+            >>> with obj.get_reader().stream() as response:
+            ...     data = response.raw.read()
+        """
+        return self._make_request(stream=True)
+
+    # Deprecated: use stream(). Remove raw() and its compatibility tests in 3.0.
     def raw(self) -> Any:
         """
         Return the raw byte stream of the object content.
 
+        Deprecated:
+            Will be removed in 3.0. Use stream() instead to access the full
+            response and response.raw.
+
         Returns:
             requests.Response.raw: Raw byte stream of the object content.
         """
-        return self._make_request(stream=True).raw
+        warnings.warn(
+            "ObjectReader.raw() is deprecated and will be removed in 3.0; "
+            "use ObjectReader.stream() and access response.raw instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.stream().raw
 
     # pylint: disable=unused-argument
     def as_file(

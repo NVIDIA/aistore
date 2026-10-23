@@ -56,8 +56,16 @@ class TestObjectReaderOps(unittest.TestCase):
         content = self.object_reader.read_all()
         self.assertEqual(content, self.object_content)
 
+    def test_stream(self):
+        with self.object_reader.stream() as response:
+            self.assertEqual(int(response.headers["Content-Length"]), self.object_size)
+            self.assertEqual(self.object_reader.attributes.size, self.object_size)
+            self.assertEqual(response.raw.read(), self.object_content)
+
     def test_raw(self):
-        raw_stream = self.object_reader.raw()
+        with self.assertWarns(DeprecationWarning):
+            raw_stream = self.object_reader.raw()
+        self.addCleanup(raw_stream.close)
 
         content_stream = BytesIO()
         for chunk in raw_stream:

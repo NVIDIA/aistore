@@ -6,6 +6,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added
+
+- `ObjectReader.stream()` returns the full `requests.Response` with an open
+  content stream. Use a context manager to close the response after reading.
+
 ### Fixed
 
 - `AISShardReader` preserves multi-dot extensions, preventing sample members
@@ -65,6 +70,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `ObjectFileWriter` uses `io.BufferedIOBase` so inherited file methods work
   correctly. Update explicit `BufferedWriter` type checks to `BufferedIOBase`.
   Unclosed writers emit `ResourceWarning` without sending requests.
+
+### Deprecated
+
+- `ObjectReader.raw()` emits a `DeprecationWarning` and will be removed in 3.0.
+  Use `ObjectReader.stream()` and access `response.raw` instead.
 
 ### Removed
 

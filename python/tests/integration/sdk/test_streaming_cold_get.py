@@ -139,16 +139,13 @@ class TestStreamingColdGet(unittest.TestCase):
 
     @unittest.skipUnless(REMOTE_SET, "Remote bucket is not set")
     @pytest.mark.extended
-    def test_streaming_cold_get_enabled_read_raw(self):
+    def test_streaming_cold_get_enabled_stream(self):
         """
         Test that the object content size matches the expected size
         when reading with Streaming-Cold-GET enabled.
         """
-        stream = self.object.get_reader().raw()
-        try:
-            chunk = stream.read(MIB)
-        finally:
-            stream.close()
+        with self.object.get_reader().stream() as response:
+            chunk = response.raw.read(MIB)
         self.assertEqual(len(chunk), MIB, "No initial chunk received.")
 
     @unittest.skipUnless(REMOTE_SET, "Remote bucket is not set")
@@ -248,17 +245,15 @@ class TestStreamingColdGet(unittest.TestCase):
         """
         Test that `ConnectionResetError` is raised when a simulated mid-stream disconnect occurs.
         """
-        stream = self.object.get_reader().raw()
-        mid_stream_reader = MidStreamDropper(stream, fail_after_bytes=100 * MIB)
-
-        try:
+        with self.object.get_reader().stream() as response:
+            mid_stream_reader = MidStreamDropper(
+                response.raw, fail_after_bytes=100 * MIB
+            )
             with self.assertRaises(ConnectionResetError):
                 while True:
                     data = mid_stream_reader.read(128 * 1024)  # 128 KiB chunks
                     if not data:
                         break
-        finally:
-            stream.close()
         # Verify that the object is not cached after a mid-stream disconnect
         assert not self.object.props.present, (
             "The object should not be cached there was a problem in reading Streaming-Cold-GET enabled."

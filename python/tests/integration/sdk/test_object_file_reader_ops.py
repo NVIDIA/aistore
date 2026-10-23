@@ -37,7 +37,8 @@ class TestObjectFileReaderOps(ParallelTestBase):
 
         # Validate the read data
         self.assertEqual(len(data), read_size)
-        self.assertEqual(data, self.object_reader.raw().read(read_size))
+        with self.object_reader.stream() as response:
+            self.assertEqual(data, response.raw.read(read_size))
 
     @case_matrix(
         [
@@ -60,7 +61,8 @@ class TestObjectFileReaderOps(ParallelTestBase):
             read_data.extend(data)
 
         # Validate the read data
-        expected_data = self.object_reader.raw().read()
+        with self.object_reader.stream() as response:
+            expected_data = response.raw.read()
         self.assertEqual(len(read_data), len(expected_data))
         self.assertEqual(bytes(read_data), expected_data)
 
@@ -74,7 +76,8 @@ class TestObjectFileReaderOps(ParallelTestBase):
         with object_file as f:
             self.assertTrue(f.readable())
             data = f.read(DEFAULT_CHUNK_SIZE)
-            self.assertEqual(data, self.object_reader.raw().read(DEFAULT_CHUNK_SIZE))
+            with self.object_reader.stream() as response:
+                self.assertEqual(data, response.raw.read(DEFAULT_CHUNK_SIZE))
         # After exiting the context, the file should be closed
         self.assertFalse(object_file.readable())
         with self.assertRaises(ValueError):

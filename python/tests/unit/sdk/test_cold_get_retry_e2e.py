@@ -70,9 +70,6 @@ EXPECTED_WAIT_MULTIPLIER = 2
 
 def _ok_resp(headers=None) -> MagicMock:
     """Mocked 200 OK Response with optional headers."""
-    # `spec=Response` would block access to instance-level attributes like
-    # `raw`, which `ObjectReader.raw()` accesses on the success response —
-    # use a plain MagicMock and stub the surface the SDK actually touches.
     resp = MagicMock()
     resp.status_code = STATUS_OK
     resp.headers = CaseInsensitiveDict(headers or {})
@@ -245,7 +242,8 @@ class TestColdGetRetryE2E(unittest.TestCase):  # pylint: disable=unused-variable
             _ok_resp(),  # 7) retried GET succeeds
         ]
 
-        self.obj.get_reader().raw()
+        with self.obj.get_reader().stream():
+            pass
 
         calls = self.mock_session.request.call_args_list
         self.assertEqual(len(calls), 7)
@@ -283,7 +281,7 @@ class TestColdGetRetryE2E(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_session.request.side_effect = _dispatch
 
         with self.assertRaises(RequestsConnectionError):
-            self.obj.get_reader().raw()
+            self.obj.get_reader().stream()
 
         # Outer retry should have produced exactly `OUTER_RETRY_ATTEMPTS`
         # GETs, all targeting the proxy endpoint.
@@ -306,7 +304,7 @@ class TestColdGetRetryE2E(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_session.request.side_effect = ValueError("boom")
 
         with self.assertRaises(ValueError):
-            self.obj.get_reader().raw()
+            self.obj.get_reader().stream()
 
         # Single GET attempt; no polling artifacts.
         self.assertEqual(len(self._calls_for_method(HTTP_METHOD_GET)), 1)
@@ -323,7 +321,7 @@ class TestColdGetRetryE2E(unittest.TestCase):  # pylint: disable=unused-variable
         ]
 
         with self.assertRaises(RequestsConnectionError):
-            self.obj.get_reader().raw()
+            self.obj.get_reader().stream()
 
         # Both outer attempts ran, both as GETs to the proxy URL.
         self.assertEqual(
@@ -345,7 +343,7 @@ class TestColdGetRetryE2E(unittest.TestCase):  # pylint: disable=unused-variable
         ]
 
         with self.assertRaises(RequestsConnectionError):
-            self.obj.get_reader().raw()
+            self.obj.get_reader().stream()
 
         self.assertEqual(
             len(self._calls_for_method(HTTP_METHOD_GET)),

@@ -58,6 +58,24 @@ class TestObjectReader(unittest.TestCase):
         self.assertEqual(chunk1 + chunk2, content)
         self.object_client.get.assert_called_with(stream=False)
 
+    def test_stream(self):
+        response = requests.Response()
+        response.headers["Content-Length"] = "42"
+        response.raw = Mock()
+        self.object_client.get.return_value = response
+
+        with self.object_reader.stream() as result:
+            self.assertIs(result, response)
+            self.assertIs(result.raw, response.raw)
+            self.assertEqual(result.headers["Content-Length"], "42")
+            self.assertEqual(self.object_reader.attributes.size, 42)
+            response.raw.read.assert_not_called()
+            response.raw.close.assert_not_called()
+
+        response.raw.close.assert_called_once_with()
+        self.object_client.get.assert_called_once_with(stream=True)
+        self.object_client.head.assert_not_called()
+
     @patch("aistore.sdk.obj.object_reader.ObjectAttributes", autospec=True)
     def test_raw(self, mock_attr):
         mock_response = Mock(
@@ -65,7 +83,8 @@ class TestObjectReader(unittest.TestCase):
         )
         self.object_client.get.return_value = mock_response
 
-        raw_stream = self.object_reader.raw()
+        with self.assertWarnsRegex(DeprecationWarning, r"ObjectReader.stream\(\)"):
+            raw_stream = self.object_reader.raw()
 
         # Assert the result, the call to object client
         self.assertEqual(mock_response.raw, raw_stream)
