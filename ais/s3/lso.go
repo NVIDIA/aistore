@@ -176,7 +176,7 @@ func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, token string) {
 // `orig` is the original token as produced by the flow underneath;
 // on the A-flow it is an object name, on the R-flow the remote backend's own opaque string.
 //
-// lsoTokSep = NUL as the separator: `uuid` is drawn from `cos.uuidABC` and cannot contain one,
+// lsoTokSep = NUL as the separator: `uuid` (cos.GenUUID) is alphanumeric and cannot contain one,
 // so splitting on the first NUL is unambiguous whatever `orig` holds.
 //
 // Anything that does not parse as the above is taken for pre-v5.1 token

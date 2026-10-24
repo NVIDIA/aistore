@@ -16,6 +16,7 @@ import (
 const (
 	LetterRunes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	LenRunes    = len(LetterRunes)
+	AlnumRunes  = LetterRunes + "0123456789"
 
 	letterIdxBits = 6                    // 6 bits to represent a letter index
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
@@ -66,19 +67,27 @@ func CryptoRandI() uint16 {
 
 func RandStringWithSrc(src rand.Source, n int) string {
 	b := make([]byte, n)
-	// src.Int63() generates 63 random bits, enough for letterIdxMax characters
-	for i, cache, remain := n-1, src.Uint64(), letterIdxMax; i >= 0; {
+	randBytes(src, LetterRunes, b)
+	return string(b)
+}
+
+// fill `b` with symbols drawn uniformly from `abc`
+// (len(abc) <= 64): 6-bit index, rejection sampling
+func randBytes(src rand.Source, abc string, b []byte) {
+	debug.Assert(abc != "" && len(abc) <= letterIdxMask+1, len(abc))
+	l := len(abc)
+	// each Uint64 provides letterIdxMax 6-bit indices
+	for i, cache, remain := len(b)-1, src.Uint64(), letterIdxMax; i >= 0; {
 		if remain == 0 {
 			cache, remain = src.Uint64(), letterIdxMax
 		}
-		if idx := int(cache & letterIdxMask); idx < LenRunes {
-			b[i] = LetterRunes[idx]
+		if idx := int(cache & letterIdxMask); idx < l {
+			b[i] = abc[idx]
 			i--
 		}
 		cache >>= letterIdxBits
 		remain--
 	}
-	return string(b)
 }
 
 //
