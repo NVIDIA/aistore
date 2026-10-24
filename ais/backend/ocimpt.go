@@ -119,7 +119,7 @@ func (bp *ocibp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenCl
 	return etag, ecode, err
 }
 
-func (bp *ocibp) CompleteMpt(ctx context.Context, lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (string, string, int, error) {
+func (bp *ocibp) CompleteMpt(ctx context.Context, lom *core.LOM, oreq *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (string, string, int, error) {
 	ctx = mptContext(ctx)
 	var (
 		client                       *ocios.ObjectStorageClient
@@ -138,6 +138,12 @@ func (bp *ocibp) CompleteMpt(ctx context.Context, lom *core.LOM, _ *http.Request
 		etag                          string
 		ecode                         int
 	)
+	ifMatch, ifNoneMatch, err := ociWriteConditions(oreq)
+	if err != nil {
+		return "", "", http.StatusBadRequest, err
+	}
+	commitMultipartUploadRequest.IfMatch = ifMatch
+	commitMultipartUploadRequest.IfNoneMatch = ifNoneMatch
 	client, _, err = bp.ociClient(cloudBck)
 	if err != nil {
 		ecode, err = ociClientToAISError("CommitMultipartUpload", cloudBck.Name, lom.ObjName, err)
@@ -161,7 +167,7 @@ func (bp *ocibp) CompleteMpt(ctx context.Context, lom *core.LOM, _ *http.Request
 	if err == nil {
 		etag = *commitMultipartUploadResponse.ETag
 	} else {
-		ecode, err = ociErrorToAISError(fmt.Sprintf("CommitMultipartUpload(%s)", uploadID), cloudBck.Name, lom.ObjName, "", err, commitMultipartUploadResponse.RawResponse)
+		ecode, err = ociWriteError(fmt.Sprintf("CommitMultipartUpload(%s)", uploadID), cloudBck.Name, lom.ObjName, err, commitMultipartUploadResponse.RawResponse, ifMatch, ifNoneMatch)
 	}
 
 	return "", etag, ecode, err

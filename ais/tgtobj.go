@@ -50,27 +50,29 @@ import (
 
 type (
 	putOI struct {
-		oreq        *http.Request
-		r           io.ReadCloser // content reader
-		xctn        core.Xact     // xaction that puts
-		t           *target       // this
-		lom         *core.LOM     // obj
-		cksumToUse  *cos.Cksum    // if available (not `none`), can be validated and will be stored
-		config      *cmn.Config   // (during this request)
-		resphdr     http.Header   // as implied
-		workFQN     string        // temp fqn to be renamed
-		atime       int64         // access time.Now()
-		ltime       int64         // mono.NanoTime, to measure latency
-		rltime      int64         // mono.NanoTime, to measure remote bucket latency
-		size        int64         // aka Content-Length
-		owt         cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
-		restful     bool          // being invoked via RESTful API
-		t2t         bool          // by another target
-		skipEC      bool          // do not erasure-encode when finalizing
-		skipVC      bool          // skip loading existing Version and skip comparing Checksums (skip VC)
-		skipBackend bool          // don't write to backend (e.g., cold-GET caching, rechunk)
-		locked      bool          // true if the LOM is already locked by the caller
-		remoteErr   bool          // to exclude `putRemote` errors when counting soft IO errors
+		ociWrite     *ociWriteState // OCI publication guard; no lock held over backend I/O
+		oreq         *http.Request
+		r            io.ReadCloser // content reader
+		xctn         core.Xact     // xaction that puts
+		t            *target       // this
+		lom          *core.LOM     // obj
+		cksumToUse   *cos.Cksum    // if available (not `none`), can be validated and will be stored
+		config       *cmn.Config   // (during this request)
+		resphdr      http.Header   // as implied
+		workFQN      string        // temp fqn to be renamed
+		atime        int64         // access time.Now()
+		ltime        int64         // mono.NanoTime, to measure latency
+		rltime       int64         // mono.NanoTime, to measure remote bucket latency
+		size         int64         // aka Content-Length
+		owt          cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
+		restful      bool          // being invoked via RESTful API
+		t2t          bool          // by another target
+		skipEC       bool          // do not erasure-encode when finalizing
+		skipVC       bool          // skip loading existing Version and skip comparing Checksums (skip VC)
+		skipBackend  bool          // don't write to backend (e.g., cold-GET caching, rechunk)
+		locked       bool          // true if the LOM is already locked by the caller
+		ociDiscarded bool          // overlapping OCI writes do not retain cached replicas
+		remoteErr    bool          // to exclude `putRemote` errors when counting soft IO errors
 	}
 
 	getOI struct {
@@ -152,6 +154,9 @@ type (
 // poi.restful entry point
 func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err error) {
 	poi.oreq = r
+	// Conditional OCI writes must reach the backend even when checksums match.
+	poi.skipVC = poi.skipVC || (poi.lom.Bck().IsRemoteOCI() &&
+		(len(r.Header.Values("If-Match")) != 0 || len(r.Header.Values("If-None-Match")) != 0))
 	poi.r = r.Body
 	poi.resphdr = resphdr
 	poi.workFQN = poi.lom.GenFQN(fs.WorkCT, fs.WorkfilePut)
@@ -439,6 +444,20 @@ func (poi *putOI) loghdr() string {
 }
 
 func (poi *putOI) finalize() (ecode int, err error) {
+	if poi.lom.Bck().IsRemoteOCI() && !poi.skipBackend && poi.owt < cmn.OwtRebalance {
+		state := poi.t.ociWrites.begin(poi.lom.Uname())
+		poi.ociWrite = state
+		defer func() {
+			if cleanupErr := poi.t.ociWrites.finish(poi.lom, state, poi.locked); cleanupErr != nil {
+				if err == nil {
+					ecode, err = http.StatusInternalServerError, cleanupErr
+				} else {
+					nlog.Warningln("failed to invalidate overlapping OCI write cache", cleanupErr)
+				}
+			}
+		}()
+	}
+
 	if ecode, err = poi.fini(); err != nil {
 		if err1 := cos.Stat(poi.workFQN); err1 == nil || !cos.IsNotExist(err1) {
 			// cleanup: rm work-fqn
@@ -454,6 +473,9 @@ func (poi *putOI) finalize() (ecode int, err error) {
 			ecode = http.StatusInsufficientStorage
 		}
 		return ecode, err
+	}
+	if poi.ociDiscarded {
+		return 0, nil
 	}
 	if !poi.skipEC {
 		if ecErr := ec.ECM.EncodeObject(poi.lom, nil); ecErr != nil && ecErr != ec.ErrorECDisabled {
@@ -524,6 +546,16 @@ func (poi *putOI) fini() (ecode int, err error) {
 		lom.Lock(true)
 		defer lom.Unlock(true)
 		lom.SetAtimeUnix(poi.atime)
+	}
+
+	if poi.ociWrite != nil {
+		defer func() {
+			discarded, cleanupErr := poi.t.ociWrites.invalidate(lom, poi.ociWrite, true /*locked*/)
+			poi.ociDiscarded = discarded
+			if cleanupErr != nil && err == nil {
+				ecode, err = http.StatusInternalServerError, cleanupErr
+			}
+		}()
 	}
 
 	// ais versioning

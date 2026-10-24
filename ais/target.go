@@ -78,6 +78,8 @@ type (
 		ups      ups
 		htrun    // common w/ proxy
 		regstate regstate
+
+		ociWrites ociWriteSet
 	}
 )
 
