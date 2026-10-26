@@ -86,11 +86,9 @@ func initCtrlClient(config *cmn.Config, preferIPv6 bool) {
 	// intra-cluster control-plane clients (below)
 	tr := cmn.NewTransport(cargs)
 	if config.Net.HTTP.UseHTTPS {
-		tlsConfig, err := cmn.NewTLS(config.Net.HTTP.ToTLS(), true /*intra*/)
-		if err != nil {
+		if err := cmn.SetTLS(tr, config.Net.HTTP.ToTLS(), true /*intra*/); err != nil {
 			cos.ExitLog(err)
 		}
-		tr.TLSClientConfig = tlsConfig
 	}
 
 	// per-tier Timeout; Transport (and therefore connection pool) is shared

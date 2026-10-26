@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 
 	jsoniter "github.com/json-iterator/go"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 const (
@@ -732,6 +733,9 @@ type (
 		SkipVerifyCrt   bool `json:"skip_verify"`       // skip X.509 cert verification (used with self-signed certs)
 		Chunked         bool `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
 
+		// node-to-node TLS: also accept peer certificates valid for this name
+		PeerName string `json:"peer_name,omitempty"`
+
 		// Optional TLS overrides for public listeners;
 		// when nil or empty, public listeners use the common net.http TLS configuration.
 		Pub *TLSConf `json:"pub,omitempty"`
@@ -739,6 +743,7 @@ type (
 	HTTPConfToSet struct {
 		*TLSConfToSet          `json:",inline"`
 		ServerNameTLS          *string       `json:"domain_tls,omitempty"`
+		PeerName               *string       `json:"peer_name,omitempty"`
 		IdleConnTimeout        *cos.Duration `json:"idle_conn_time,omitempty"`
 		BackendIdleConnTimeout *cos.Duration `json:"backend_idle_conn_time,omitempty"`
 		MaxIdleConnsPerHost    *int          `json:"idle_conns_per_host,omitempty"`
@@ -2361,6 +2366,11 @@ func (c *HTTPConf) Validate() error {
 	if c.ServerNameTLS != "" {
 		return fmt.Errorf("invalid domain_tls %q: expecting empty (domain names/SANs should be set in X.509 cert)", c.ServerNameTLS)
 	}
+	if c.PeerName != "" {
+		if errs := validation.IsDNS1123Subdomain(c.PeerName); len(errs) > 0 {
+			return fmt.Errorf("invalid peer_name %q: %s", c.PeerName, strings.Join(errs, "; "))
+		}
+	}
 
 	// note: NewClient(TransportArgs{}) defaults to: DefaultIdleConnTimeout (6s)
 	if d := c.IdleConnTimeout.D(); d == 0 {
@@ -2416,6 +2426,7 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 		Key:         c.CertKey,
 		ClientCA:    c.ClientCA,
 		SkipVerify:  c.SkipVerifyCrt,
+		PeerName:    c.PeerName,
 	}
 }
 

@@ -426,6 +426,10 @@ func TestHTTPConfValidateTLS(t *testing.T) {
 		{name: "pub auth knobs without certs", http: cmn.HTTPConf{Pub: &cmn.TLSConf{ClientAuthTLS: int(tls.RequireAndVerifyClientCert)}}, wantErr: true},
 		{name: "pub CA without certs", http: cmn.HTTPConf{Pub: &cmn.TLSConf{ClientCA: "ca.pem"}}, wantErr: true},
 		{name: "pub cert without key", http: cmn.HTTPConf{Pub: &cmn.TLSConf{Certificate: crt}}, wantErr: true},
+		{name: "peer_name", http: cmn.HTTPConf{PeerName: "ais.example.com"}},
+		{name: "peer_name with port", http: cmn.HTTPConf{PeerName: "ais.example.com:51080"}, wantErr: true},
+		{name: "peer_name with newline", http: cmn.HTTPConf{PeerName: "ais.example.com\n"}, wantErr: true},
+		{name: "peer_name with empty label", http: cmn.HTTPConf{PeerName: "ais..example.com"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 type rpErrTransport struct {
@@ -31,9 +32,7 @@ func TestReverseProxyErrorHandlers(t *testing.T) {
 
 	rawURL := si.URL(cmn.NetIntraData)
 	u, err := url.Parse(rawURL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, err)
 
 	relayErr := errors.New("test reverse-proxy failure")
 	rproxy := httputil.NewSingleHostReverseProxy(u)
@@ -46,19 +45,13 @@ func TestReverseProxyErrorHandlers(t *testing.T) {
 	w := httptest.NewRecorder()
 	p.s3ReverseRequest(w, r, si, p.owner.smap.get())
 
-	if w.Code != http.StatusBadGateway {
-		t.Fatalf("S3 relay: expected status %d, got %d", http.StatusBadGateway, w.Code)
-	}
-	if ctype := w.Header().Get(cos.HdrContentType); ctype != cos.ContentXML {
-		t.Fatalf("S3 relay: expected content type %q, got %q", cos.ContentXML, ctype)
-	}
+	tassert.Fatalf(t, w.Code == http.StatusBadGateway, "S3 relay: expected status %d, got %d", http.StatusBadGateway, w.Code)
+	ctype := w.Header().Get(cos.HdrContentType)
+	tassert.Fatalf(t, ctype == cos.ContentXML, "S3 relay: expected content type %q, got %q", cos.ContentXML, ctype)
 	var serr s3.Error
-	if err := xml.Unmarshal(w.Body.Bytes(), &serr); err != nil {
-		t.Fatalf("S3 relay: invalid XML error %q: %v", w.Body.String(), err)
-	}
-	if serr.Message != relayErr.Error() {
-		t.Fatalf("S3 relay: expected message %q, got %q", relayErr, serr.Message)
-	}
+	err = xml.Unmarshal(w.Body.Bytes(), &serr)
+	tassert.Fatalf(t, err == nil, "S3 relay: invalid XML error %q: %v", w.Body.String(), err)
+	tassert.Fatalf(t, serr.Message == relayErr.Error(), "S3 relay: expected message %q, got %q", relayErr, serr.Message)
 
 	// Reuse the same cached reverse proxy without the per-request override.
 	// Its original handler must still return the native bare status.
@@ -66,13 +59,26 @@ func TestReverseProxyErrorHandlers(t *testing.T) {
 	w = httptest.NewRecorder()
 	p.reverseRequest(w, r, si.ID(), rawURL)
 
-	if w.Code != http.StatusBadGateway {
-		t.Fatalf("native relay: expected status %d, got %d", http.StatusBadGateway, w.Code)
-	}
-	if w.Body.Len() != 0 {
-		t.Fatalf("native relay: expected empty body, got %q", w.Body.String())
-	}
-	if ctype := w.Header().Get(cos.HdrContentType); ctype != "" {
-		t.Fatalf("native relay: expected no content type, got %q", ctype)
-	}
+	tassert.Fatalf(t, w.Code == http.StatusBadGateway, "native relay: expected status %d, got %d", http.StatusBadGateway, w.Code)
+	tassert.Fatalf(t, w.Body.Len() == 0, "native relay: expected empty body, got %q", w.Body.String())
+	ctype = w.Header().Get(cos.HdrContentType)
+	tassert.Fatalf(t, ctype == "", "native relay: expected no content type, got %q", ctype)
+}
+
+func TestPeerNameTransports(t *testing.T) {
+	prevServ, prevClient := g.netServ.control, g.client.control
+	t.Cleanup(func() { g.netServ.control, g.client.control = prevServ, prevClient })
+	g.netServ.control = &netServer{}
+
+	config := &cmn.Config{}
+	config.Client = &cmn.ClientConf{}
+	config.Net.HTTP.UseHTTPS = true
+	config.Net.HTTP.PeerName = "ais.example.com"
+
+	tassert.Fatal(t, rpTransportIntra(config).DialTLSContext != nil, "cluster node relay: expected peer_name verifier")
+	tassert.Fatal(t, rpTransportExt(config).DialTLSContext == nil, "remote AIS and cloud relay: unexpected peer_name verifier")
+
+	g.client.control = &http.Client{Transport: rpTransportIntra(config)}
+	tr := _x509Client().Transport.(*http.Transport)
+	tassert.Fatal(t, tr.TLSClientConfig.InsecureSkipVerify && tr.DialTLSContext == nil, "x509 client: expected verification to be skipped")
 }

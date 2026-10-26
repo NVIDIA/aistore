@@ -219,6 +219,23 @@ When `net.http.pub` is configured:
 
 In particular, `RequireAnyClientCert` requires a client certificate but does not verify its chain. AIS therefore loads `client_ca_tls` only for `VerifyClientCertIfGiven` and `RequireAndVerifyClientCert`.
 
+### Peer certificate names
+
+Node-to-node requests verify the peer's advertised hostname or IP address.
+Some of these requests use a peer's public URL.
+For example, non-primary proxies forward admin requests to the primary.
+A public certificate that covers only external names, such as a load balancer name, fails that check.
+
+To accept such a certificate, set `net.http.peer_name` to a DNS name that the certificate covers.
+Node-to-node requests then accept a peer certificate valid for either the advertised hostname or IP address, or `peer_name`.
+The certificate must chain to the system roots or to `net.http.client_ca_tls`.
+Certificates that already include the advertised hostnames or IP addresses need no changes.
+
+Set `peer_name` only after all nodes run a version that supports it.
+Changes take effect after restart.
+
+`net.http.peer_name` is unrelated to `net.http.domain_tls`, which must remain empty.
+
 Certificate status and reload operations are described in [TLS certificate management](/docs/cli/x509.md).
 
 ## kTLS transmit offload

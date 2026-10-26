@@ -39,6 +39,9 @@ func _x509Client() *http.Client {
 		return g.client.control
 	}
 	transport.TLSClientConfig.InsecureSkipVerify = true
+	// DialTLSContext does not use TLSClientConfig and would reject
+	// expired or invalid certs (see net.http.peer_name)
+	transport.DialTLSContext = nil
 	return &http.Client{
 		Transport: transport,
 		Timeout:   g.client.control.Timeout,

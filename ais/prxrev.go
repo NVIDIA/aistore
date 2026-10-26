@@ -248,7 +248,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		cos.AssertNoErr(err)
 		config := cmn.GCO.Get()
 		rprimary.rp = httputil.NewSingleHostReverseProxy(uparsed)
-		rprimary.rp.Transport = rpTransport(config)
+		rprimary.rp.Transport = rpTransportIntra(config)
 		rprimary.rp.ErrorHandler = p.rpErrHandler
 	}
 	rp := rprimary.rp
@@ -275,20 +275,28 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 	return true // forwarded
 }
 
-func rpTransport(config *cmn.Config) *http.Transport {
-	var (
-		err       error
-		transport = cmn.NewTransport(cmn.TransportArgs{
-			ClientTimeout:    config.Client.Timeout.D(),
-			IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
-			IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
-			MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
-			PreferIPv6:       g.netServ.control.useIPv6,
-		})
-	)
+// destination: a node in this cluster
+func rpTransportIntra(config *cmn.Config) *http.Transport {
+	return _rpTransport(config, config.Net.HTTP.ToTLS())
+}
+
+// destination: remote AIS cluster or cloud (net.http.peer_name does not apply)
+func rpTransportExt(config *cmn.Config) *http.Transport {
+	sargs := config.Net.HTTP.ToTLS()
+	sargs.PeerName = ""
+	return _rpTransport(config, sargs)
+}
+
+func _rpTransport(config *cmn.Config, sargs cmn.TLSArgs) *http.Transport {
+	transport := cmn.NewTransport(cmn.TransportArgs{
+		ClientTimeout:    config.Client.Timeout.D(),
+		IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
+		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
+		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
+		PreferIPv6:       g.netServ.control.useIPv6,
+	})
 	if config.Net.HTTP.UseHTTPS {
-		transport.TLSClientConfig, err = cmn.NewTLS(config.Net.HTTP.ToTLS(), true /*intra-cluster*/)
-		if err != nil {
+		if err := cmn.SetTLS(transport, sargs, true /*intra-cluster*/); err != nil {
 			cos.ExitLog(err)
 		}
 	}
@@ -342,10 +350,10 @@ func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, smap 
 	p.reverseRequest(w, r, si.ID(), si.URL(cmn.NetIntraControl))
 }
 
-// Relay to a cluster node or remote AIS. An optional error handler applies only
+// Relay to a cluster node. An optional error handler applies only
 // to this request; nil retains the cached handler.
 func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID, rawURL string, errHdlr ...stdlibErrHdlr) {
-	rproxy := p.rproxy.loadOrStore(nodeID, rawURL, p.rpErrHandler)
+	rproxy := p.rproxy.loadOrStore(nodeID, rawURL, rpTransportIntra, p.rpErrHandler)
 	if len(errHdlr) > 0 && errHdlr[0] != nil {
 		// Keep the cached instance and its shared connection pool intact.
 		copyRP := *rproxy
@@ -412,7 +420,7 @@ func (p *proxy) reverseRemAis(w http.ResponseWriter, r *http.Request, msg *apc.A
 	query = cmn.DelBckFromQuery(query)
 	query = bck.AddToQuery(query)
 	r.URL.RawQuery = query.Encode()
-	p.reverseRequest(w, r, aliasOrUUID, urls[0])
+	p.rproxy.loadOrStore(aliasOrUUID, urls[0], rpTransportExt, p.rpErrHandler).ServeHTTP(w, r)
 }
 
 //////////////////
@@ -422,11 +430,11 @@ func (p *proxy) reverseRemAis(w http.ResponseWriter, r *http.Request, msg *apc.A
 func (rp *reverseProxy) init() {
 	rp.cloud = &httputil.ReverseProxy{
 		Director:  func(_ *http.Request) {},
-		Transport: rpTransport(cmn.GCO.Get()),
+		Transport: rpTransportExt(cmn.GCO.Get()),
 	}
 }
 
-func (rp *reverseProxy) loadOrStore(uuid, rawURL string, errHdlr stdlibErrHdlr) *httputil.ReverseProxy {
+func (rp *reverseProxy) loadOrStore(uuid, rawURL string, newTr func(*cmn.Config) *http.Transport, errHdlr stdlibErrHdlr) *httputil.ReverseProxy {
 	revProxyIf, exists := rp.nodes.Load(uuid)
 	if exists {
 		shrp := revProxyIf.(*singleRProxy)
@@ -438,11 +446,11 @@ func (rp *reverseProxy) loadOrStore(uuid, rawURL string, errHdlr stdlibErrHdlr) 
 	debug.AssertNoErr(err)
 
 	rproxy := httputil.NewSingleHostReverseProxy(u)
-	rproxy.Transport = rpTransport(cmn.GCO.Get())
+	rproxy.Transport = newTr(cmn.GCO.Get())
 	rproxy.ErrorHandler = errHdlr
 
-	// NOTE: races are rare probably happen only when storing an entry for the first time or when URL changes.
-	// Also, races don't impact the correctness as we always have latest entry for `uuid`, `URL` pair (see: L3917).
+	// NOTE: concurrent callers may race on first use or URL change.
+	// The last store wins, but correctness is unaffected: every entry is valid for its `uuid` and URL
 	rp.nodes.Store(uuid, &singleRProxy{rproxy, rawURL})
 	return rproxy
 }

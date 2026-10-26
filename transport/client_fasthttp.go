@@ -48,11 +48,13 @@ func NewIntraDataClient() Client {
 		WriteBufferSize: cos.NonZero(httcfg.WriteBufferSize, int(cmn.DefaultWriteBufferSize)), // ditto
 	}
 	if config.Net.HTTP.UseHTTPS {
-		tlsConfig, err := cmn.NewTLS(config.Net.HTTP.ToTLS(), true /*intra-cluster*/) // streams
+		sargs := config.Net.HTTP.ToTLS()
+		tlsConfig, err := cmn.NewTLS(sargs, true /*intra-cluster*/) // streams
 		if err != nil {
 			cos.ExitLog(err)
 		}
 		cl.TLSConfig = tlsConfig
+		cl.Dial = cmn.DialPeerTLS(cl.Dial, tlsConfig, sargs, cmn.DfltDialupTimeout)
 	}
 	return cl
 }
