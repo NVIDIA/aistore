@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -42,6 +43,7 @@ type (
 		Cksum           *cos.Cksum  // checksum to validate
 		Config          *cmn.Config // during xaction
 		Xact            Xact        // responsible xaction
+		SrcRoot         *os.Root    // non-nil for API promote; caller owns and closes the root
 		SrcMustExist    bool        // when true, a missing SrcFQN is an error and not a no-op
 		apc.PromoteArgs             // all of the above
 	}

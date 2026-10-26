@@ -32,6 +32,11 @@ func (e *errInvalidPromoteSource) Error() string {
 	return msg
 }
 
+// beyond lexical validation: symlinks, non-regular files (see fs.StatNoSymlinks and friends)
+func NewErrInvalidPromoteSource(src, detail string) error {
+	return &errInvalidPromoteSource{src: src, detail: detail}
+}
+
 // common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both
 type PromoteArgs struct {
 	DaemonID  string `json:"tid,omitempty"` // target ID
@@ -47,7 +52,8 @@ type PromoteArgs struct {
 	SrcIsNotFshare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
 }
 
-// validatePromoteSource checks the lexical pathname requirements for a promote source.
+// check the lexical pathname requirements for a promote source;
+// separately, AIS restricts access to promote root and rejects symlinks
 func validatePromoteSource(src string) error {
 	if src == "" {
 		return &errInvalidPromoteSource{detail: "pathname is empty"}

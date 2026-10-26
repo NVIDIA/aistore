@@ -118,18 +118,23 @@ func RemoveFile(path string) (err error) {
 
 // and computes checksum, if requested
 func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cksum *CksumHash, err error) {
-	const tag = "copy-file:"
-	var srcfh, dstfh *os.File
-	if srcfh, err = os.Open(src); err != nil {
+	srcfh, err := os.Open(src)
+	if err != nil {
 		return 0, nil, err
 	}
+	defer Close(srcfh)
+	return CopyReader(srcfh, dst, buf, cksumType)
+}
+
+// copy an already-open reader to a file and compute its checksum; caller closes the reader
+func CopyReader(src io.Reader, dst string, buf []byte, cksumType string) (written int64, cksum *CksumHash, err error) {
+	const tag = "copy-file:"
+	var dstfh *os.File
 	if dstfh, err = CreateFile(dst); err != nil {
 		nlog.Errorln(tag, err)
-		Close(srcfh)
 		return 0, nil, err
 	}
-	written, cksum, err = CopyAndChecksum(dstfh, srcfh, buf, cksumType)
-	Close(srcfh)
+	written, cksum, err = CopyAndChecksum(dstfh, src, buf, cksumType)
 	if err != nil {
 		Close(dstfh)
 		goto eret

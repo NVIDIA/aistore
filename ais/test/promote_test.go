@@ -5,11 +5,13 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
 	iofs "io/fs"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -372,4 +374,38 @@ func countFiles(t *testing.T, dir string) (n, nsubdir int) {
 	err := filepath.WalkDir(dir, f)
 	tassert.CheckFatal(t, err)
 	return
+}
+
+func TestPromoteSymlinkEscape(t *testing.T) {
+	dir, outside := promoteTestDir(t), t.TempDir()
+	canary := filepath.Join(outside, "canary")
+	data := []byte("outside promote root")
+	tassert.CheckFatal(t, os.WriteFile(canary, data, cos.PermRWR))
+	tassert.CheckFatal(t, os.WriteFile(filepath.Join(dir, "file"), []byte("staged data"), cos.PermRWR))
+	tassert.CheckFatal(t, os.Symlink("file", filepath.Join(dir, "inside-link")))
+	tassert.CheckFatal(t, os.Symlink(outside, filepath.Join(dir, "escape")))
+	tassert.CheckFatal(t, os.Symlink(canary, filepath.Join(dir, "escape-file")))
+	rel, err := filepath.Rel(dir, outside)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.Symlink(rel, filepath.Join(dir, "relative-escape")))
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	bck := cmn.Bck{Name: "promote-escape-" + cos.GenUUID(), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	for _, src := range []string{"escape/canary", "escape-file", "relative-escape/canary", "escape", "inside-link"} {
+		for _, deleteSrc := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/delete=%t", src, deleteSrc), func(t *testing.T) {
+				_, err := api.Promote(bp, bck, &apc.PromoteArgs{
+					SrcFQN: filepath.Join(dir, src), ObjName: "stolen", Recursive: true, DeleteSrc: deleteSrc,
+				})
+				expectStatus(t, err, http.StatusBadRequest)
+				got, err := os.ReadFile(canary)
+				tassert.CheckFatal(t, err)
+				tassert.Errorf(t, bytes.Equal(got, data), "outside source changed: %q", got)
+			})
+		}
+	}
+	list, err := api.ListObjects(bp, bck, nil, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(list.Entries) == 0, "created %d objects from escaping sources", len(list.Entries))
 }

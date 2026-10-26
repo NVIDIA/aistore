@@ -969,3 +969,53 @@ func TestS3UserMetadataRejectsOversizedMergedCustomMD(t *testing.T) {
 	err = setS3UserMetadata(lom, http.Header{})
 	tassert.Fatalf(t, err != nil, "expected oversized %s to fail", cos.HdrContentType)
 }
+
+func TestPromoteRemoteSourceSwapBeforeDelete(t *testing.T) {
+	dir, outside := t.TempDir(), t.TempDir()
+	stage := filepath.Join(dir, "stage")
+	tassert.CheckFatal(t, os.Mkdir(stage, cos.PermRWXRX))
+	data := []byte("staged data")
+	tassert.CheckFatal(t, os.WriteFile(filepath.Join(stage, "file"), data, cos.PermRWR))
+	canary := filepath.Join(outside, "file")
+	tassert.CheckFatal(t, os.WriteFile(canary, []byte("outside"), cos.PermRWR))
+	root, err := os.OpenRoot(dir)
+	tassert.CheckFatal(t, err)
+	defer root.Close()
+	// Swap the parent after the remote PUT has consumed the file, before DeleteSrc.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, err := io.ReadAll(r.Body)
+		if err == nil && !bytes.Equal(got, data) {
+			err = io.ErrUnexpectedEOF
+		}
+		if err == nil {
+			err = os.Rename(stage, filepath.Join(dir, "saved"))
+		}
+		if err == nil {
+			err = os.Symlink(outside, stage)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	peer := setCopyPutTestPeer(t, srv)
+	lom := core.AllocLOM("promote-delete-" + cos.GenUUID())
+	defer core.FreeLOM(lom)
+	tassert.CheckFatal(t, lom.InitBck(meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)))
+	tsi, local, err := lom.HrwTarget(&mockTarget.owner.smap.get().Smap)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, !local && tsi.ID() == peer.ID(), "test requires promotion to the remote peer")
+	params := &core.PromoteParams{
+		Bck: lom.Bck(), Config: cmn.GCO.Get(), SrcRoot: root,
+		PromoteArgs: apc.PromoteArgs{
+			SrcFQN: filepath.Join(stage, "file"), ObjName: lom.ObjName, DeleteSrc: true, OverwriteDst: true,
+		},
+	}
+	_, err = mockTarget._promote(params, lom)
+	tassert.CheckFatal(t, err)
+	got, err := os.ReadFile(canary)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, string(got) == "outside", "outside file changed: %q", got)
+}

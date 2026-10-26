@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -49,7 +49,13 @@ func (t *target) _promote(params *core.PromoteParams, lom *core.LOM) (ecode int,
 		params.Xact.ObjsAdd(1, size) // (as initiator)
 	}
 	if params.DeleteSrc {
-		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
+		var errRm error
+		if params.SrcRoot == nil {
+			errRm = cos.RemoveFile(params.SrcFQN)
+		} else {
+			errRm = fs.RemoveNoSymlinks(params.SrcRoot, params.SrcFQN)
+		}
+		if errRm != nil && !cos.IsNotExist(errRm) {
 			nlog.Errorf("%s: failed to remove promoted source %q: %v", t, params.SrcFQN, errRm)
 		}
 	}
@@ -66,10 +72,9 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err == nil && !params.OverwriteDst {
 		return -1, 0, nil
 	}
-	if params.DeleteSrc {
-		// To use `params.SrcFQN` as `workFQN`, make sure both are
-		// located on the same filesystem. About "filesystem sharing" see also:
-		// * https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#mountpath
+	if params.DeleteSrc && params.SrcRoot == nil {
+		// to (optimally) use `params.SrcFQN` as `workFQN`, make sure both are on the same FS
+		// (see also: https://github.com/NVIDIA/aistore/blob/main/docs/terminology.md#mountpath)
 		mi, _, err := fs.FQN2Mpath(params.SrcFQN)
 		extraCopy = err != nil || !mi.FS.Equal(lom.Mountpath().FS)
 	}
@@ -79,7 +84,13 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 			err       error
 		)
 		workFQN = lom.GenFQN(fs.WorkCT, fs.WorkfilePut)
-		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumType())
+		fh, errOpen := openPromoteSource(params)
+		if errOpen != nil {
+			slab.Free(buf)
+			return 0, 0, errOpen
+		}
+		fileSize, cksum, err = cos.CopyReader(fh, workFQN, buf, lom.CksumType())
+		cos.Close(fh)
 		slab.Free(buf)
 		if err != nil {
 			return 0, 0, err
@@ -153,6 +164,7 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 	}
 
 	coiParams := xs.AllocCOI()
+	defer xs.FreeCOI(coiParams)
 	{
 		coiParams.BckTo = lom.Bck()
 		coiParams.OWT = cmn.OwtPromote
@@ -164,21 +176,31 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 	coi := (*coi)(coiParams)
 
 	// not opening LOM here - opening params.SrcFQN source (to be promoted)
-	fh, err := cos.NewFileHandle(lom.FQN)
+	fh, err := openPromoteSource(params)
 	if err != nil {
 		if cos.IsNotExist(err) {
 			return 0, err
 		}
 		return 0, cmn.NewErrFailedTo(t, "open", params.SrcFQN, err)
 	}
+	defer fh.Close()
 	fi, err := fh.Stat()
 	if err != nil {
-		fh.Close()
 		return 0, cmn.NewErrFailedTo(t, "fstat", params.SrcFQN, err)
 	}
+	lom.SetSize(fi.Size())
 
-	res := coi.send(t, nil /*DM*/, lom, fh, tsi)
-	xs.FreeCOI(coiParams)
+	// reopen/retry reads the same descriptor, never the source pathname
+	reader := cos.NewSectionHandle(fh, 0, fi.Size(), 0)
+	res := coi.send(t, nil /*DM*/, lom, reader, tsi)
 
 	return fi.Size(), res.Err
+}
+
+// open API sources beneath their root; internal callers (append-flush) own their workfiles
+func openPromoteSource(params *core.PromoteParams) (*os.File, error) {
+	if params.SrcRoot == nil {
+		return os.Open(params.SrcFQN)
+	}
+	return fs.OpenNoSymlinks(params.SrcRoot, params.SrcFQN)
 }

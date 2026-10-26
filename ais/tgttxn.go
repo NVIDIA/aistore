@@ -1038,11 +1038,19 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 			return "", err
 		}
 		prmMsg.SrcFQN = srcFQN
-		finfo, err := t.statPromoteSource(srcFQN)
+		srcRoot, err := os.OpenRoot(apc.PromoteRoot)
+		if err != nil {
+			return "", fmt.Errorf("%s: cannot open promote root %q: %w", t, apc.PromoteRoot, err)
+		}
+		defer srcRoot.Close()
+		finfo, err := fs.StatNoSymlinks(srcRoot, srcFQN)
 		if err != nil {
 			return "", err
 		}
 		if !finfo.IsDir() {
+			if !finfo.Mode().IsRegular() {
+				return "", apc.NewErrInvalidPromoteSource(srcFQN, "not a regular file")
+			}
 			txn := newTxnPromote(c, prmMsg, []string{srcFQN}, "" /*dirFQN*/, 1)
 			if err := t.txns.begin(txn); err != nil {
 				return "", err
@@ -1052,11 +1060,11 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 		}
 
 		// directory
-		fqns, totalN, cksumVal, err := prmScan(prmMsg)
+		fqns, totalN, cksumVal, err := prmScan(prmMsg, srcRoot)
+		if err != nil {
+			return "", err
+		}
 		if totalN == 0 {
-			if err != nil {
-				return "", err
-			}
 			return "", fmt.Errorf("%s: directory %q is empty", t, srcFQN)
 		}
 		txn := newTxnPromote(c, prmMsg, fqns, srcFQN /*dir*/, totalN)
@@ -1110,23 +1118,8 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 	return "", nil
 }
 
-func (t *target) statPromoteSource(srcFQN string) (os.FileInfo, error) {
-	finfo, err := os.Stat(srcFQN)
-	if err == nil {
-		return finfo, nil
-	}
-
-	if _, errRoot := os.Stat(apc.PromoteRoot); errRoot != nil {
-		if cos.IsNotExist(errRoot) {
-			return nil, fmt.Errorf("%s: promote root %q does not exist", t, apc.PromoteRoot)
-		}
-		return nil, fmt.Errorf("%s: cannot access promote root %q: %v (source: %w)", t, apc.PromoteRoot, errRoot, err)
-	}
-	return nil, err
-}
-
 // scan and, optionally, auto-detect file-share
-func prmScan(prmMsg *apc.PromoteArgs) (fqns []string, totalN int, _ string, err error) {
+func prmScan(prmMsg *apc.PromoteArgs, srcRoot *os.Root) (fqns []string, totalN int, _ string, err error) {
 	var (
 		cksum      *cos.CksumHash
 		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Rom.Features().IsSet(feat.DontAutoDetectFshare)
@@ -1150,12 +1143,7 @@ func prmScan(prmMsg *apc.PromoteArgs) (fqns []string, totalN int, _ string, err 
 	if autoDetect {
 		cksum = cos.NewCksumHash(cos.ChecksumCesXxh)
 	}
-	if prmMsg.Recursive {
-		opts := &fs.WalkOpts{Dir: prmMsg.SrcFQN, Callback: cb, Sorted: true}
-		err = fs.Walk(opts)
-	} else {
-		err = fs.WalkDir(prmMsg.SrcFQN, cb)
-	}
+	err = fs.WalkRoot(srcRoot, prmMsg.SrcFQN, prmMsg.Recursive, cb)
 
 	if err != nil || totalN == 0 || !autoDetect {
 		return fqns, totalN, "", err
@@ -1167,6 +1155,11 @@ func prmScan(prmMsg *apc.PromoteArgs) (fqns []string, totalN int, _ string, err 
 
 // synchronously wo/ xaction
 func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool) error {
+	srcRoot, err := os.OpenRoot(apc.PromoteRoot)
+	if err != nil {
+		return err
+	}
+	defer srcRoot.Close()
 	smap := t.owner.smap.Get()
 	config := cmn.GCO.Get()
 	ubuf := c.bck.MakeUname("", true /*with extra cap*/)
@@ -1187,8 +1180,9 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 			}
 		}
 		params := core.PromoteParams{
-			Bck:    c.bck,
-			Config: config,
+			Bck:     c.bck,
+			Config:  config,
+			SrcRoot: srcRoot,
 			PromoteArgs: apc.PromoteArgs{
 				SrcFQN:       fqn,
 				ObjName:      objName,

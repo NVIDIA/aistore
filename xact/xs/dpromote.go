@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -31,8 +32,9 @@ type (
 		args *apc.PromoteArgs
 	}
 	XactDirPromote struct {
-		p    *proFactory
-		smap *meta.Smap
+		p       *proFactory
+		smap    *meta.Smap
+		srcRoot *os.Root
 		xact.BckJog
 		confirmedFshare bool // set separately in the commit phase prior to Run
 	}
@@ -92,15 +94,15 @@ func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	nlog.Infof("%s(%s)", r.Name(), dir)
 
 	r.smap = core.T.Sowner().Get()
-	var (
-		err  error
-		opts = &fs.WalkOpts{Dir: dir, Callback: r.walk, Sorted: false}
-	)
-	if r.p.args.Recursive {
-		err = fs.Walk(opts) // godirwalk
-	} else {
-		err = fs.WalkDir(dir, r.walk) // Go filepath.WalkDir
+	root, err := os.OpenRoot(apc.PromoteRoot)
+	if err != nil {
+		r.AddErr(err)
+		r.Finish()
+		return
 	}
+	defer root.Close()
+	r.srcRoot = root
+	err = fs.WalkRoot(root, dir, r.p.args.Recursive, r.walk)
 	if err != nil {
 		r.AddErr(err)
 	}
@@ -131,9 +133,10 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		}
 	}
 	params := core.PromoteParams{
-		Bck:    bck,
-		Xact:   r,
-		Config: r.Config,
+		Bck:     bck,
+		Xact:    r,
+		Config:  r.Config,
+		SrcRoot: r.srcRoot,
 		PromoteArgs: apc.PromoteArgs{
 			SrcFQN:       fqn,
 			ObjName:      objName,
