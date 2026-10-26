@@ -235,19 +235,11 @@ if [[ "$MODE" == "--preview" || "$MODE" == "--check" || "$MODE" == "--build" || 
         exit 0
     fi
 
-    # fern/pages/python/ is auto-generated from source docstrings by
-    # `fern docs md generate` (requires FERN_TOKEN). Run it here so users get
-    # real Python API reference docs in their local preview without remembering
-    # the extra step. Falls back to a stub if the token isn't set or the call
-    # fails — otherwise the navigation ref in docs.yml triggers a blank 500.
+    # Local parsing needs Docker, not a Fern token. Keep the preview stub on failure.
     PYTHON_PAGES="$FERN_PAGES/python"
-    if [ -n "${FERN_TOKEN:-}" ]; then
-        echo "Generating Python API reference (fern docs md generate)..."
-        if ! fern docs md generate; then
-            echo "WARNING: 'fern docs md generate' failed; falling back to stub" >&2
-        fi
-    else
-        echo "FERN_TOKEN not set; skipping 'fern docs md generate' (stub will be used)"
+    echo "Generating Python API reference (fern docs md generate)..."
+    if ! fern docs md generate; then
+        echo "WARNING: 'fern docs md generate' failed; falling back to stub" >&2
     fi
 
     if [ ! -d "$PYTHON_PAGES" ] || [ -z "$(ls -A "$PYTHON_PAGES" 2>/dev/null)" ]; then
@@ -256,8 +248,8 @@ if [[ "$MODE" == "--preview" || "$MODE" == "--check" || "$MODE" == "--build" || 
 # Python SDK API Reference
 
 The Python SDK API reference is auto-generated from source docstrings by
-`fern docs md generate` (requires `FERN_TOKEN`). To preview it locally, set
-`FERN_TOKEN` and re-run `make fern-preview`.
+`fern docs md generate` using Docker. Start Docker and re-run
+`make fern-preview` to generate it locally. No Fern login is required.
 
 View the published reference at
 [docs.nvidia.com/aistore/api-reference](https://docs.nvidia.com/aistore/api-reference).

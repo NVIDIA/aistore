@@ -221,10 +221,15 @@ build:fern-docs:
         - 'README.md'
         - 'fern/**/*'
         - 'scripts/fern/**/*'
-  script:
+  before_script: &fern_setup
     - apt-get update
-    - apt-get install -y --no-install-recommends python3-yaml
-    - npm install -g fern-api@5.50.5
+    - apt-get install -y --no-install-recommends python3-yaml docker.io
+    # Fern bind-mounts temporary files; keep the daemon in the job container.
+    - export DOCKER_HOST=unix:///var/run/docker.sock
+    - dockerd --host="$DOCKER_HOST" > /tmp/fern-docker.log 2>&1 &
+    - timeout 30 sh -c 'until docker info > /dev/null 2>&1; do sleep 1; done' || { cat /tmp/fern-docker.log; exit 1; }
+    - npm install -g fern-api@5.168.0
+  script:
     - bash scripts/fern/generate-pages.sh --check
 
 preview:fern-docs:
@@ -255,10 +260,8 @@ preview:fern-docs:
     name: fern-preview/$CI_COMMIT_REF_SLUG
     url: $FERN_PREVIEW_URL
     auto_stop_in: 1 week
+  before_script: *fern_setup
   script:
-    - apt-get update
-    - apt-get install -y --no-install-recommends python3-yaml
-    - npm install -g fern-api@5.50.5
     - ': > fern-preview.env'
     - ': > fern-preview.log'
     - FERN_PREVIEW_ID="${CI_COMMIT_REF_SLUG:-branch-preview}" FERN_PREVIEW_DOTENV_FILE=fern-preview.env FERN_PREVIEW_LOG_FILE=fern-preview.log bash scripts/fern/generate-pages.sh --publish-preview

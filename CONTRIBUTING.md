@@ -190,7 +190,7 @@ To validate the Fern docs configuration without publishing:
 ```console
 cd aistore
 python3 -m pip install pyyaml
-npm install -g fern-api@5.50.5
+npm install -g fern-api@5.168.0
 bash scripts/fern/generate-pages.sh --check
 ```
 
@@ -202,11 +202,11 @@ To run the local Fern preview:
 make fern-preview
 ```
 
-`make fern-preview` serves the Fern docs at `http://localhost:3000`.
-If `FERN_TOKEN` is not set, the local preview uses a stub Python API
-reference page; set `FERN_TOKEN` before running the command to include the
-generated Python API reference. Do not use `make fern-build` for local
-checks; it publishes to Fern.
+`make fern-preview` serves the docs at `http://localhost:3000`.
+Python reference generation needs Docker running, but no Fern token.
+If generation fails, the preview uses a placeholder page.
+
+`make fern-build` publishes to Fern and requires authentication.
 
 #### Commit Messages
 
