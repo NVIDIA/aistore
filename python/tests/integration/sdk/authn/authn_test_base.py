@@ -1,3 +1,4 @@
+import time
 import unittest
 from typing import List, Optional, Callable, Any
 
@@ -6,6 +7,7 @@ from aistore.sdk import AuthNClient
 from aistore.sdk.authn.access_attr import AccessAttr
 from aistore.sdk.const import STATUS_UNAUTHORIZED, STATUS_FORBIDDEN
 from aistore.sdk.errors import AISError
+from tests.const import TEST_TIMEOUT
 from tests.integration import (
     AUTHN_ENDPOINT,
     CLUSTER_ENDPOINT,
@@ -13,6 +15,8 @@ from tests.integration import (
     AIS_AUTHN_SU_PASS,
 )
 from tests.utils import random_string
+
+RETRY_INTERVAL_SECS = 0.25
 
 
 # pylint: disable=too-many-instance-attributes
@@ -93,19 +97,41 @@ class AuthNTestBase(unittest.TestCase):
         self.user_names.append(user.id)
         return user
 
-    def _assert_forbidden(self, func: Callable[[], Any]):
-        with self.assertRaises(AISError) as e:
-            # Return result to use for cleanup if call does succeed
-            return func()
-        self.assertEqual(STATUS_FORBIDDEN, e.exception.status_code)
-        return None
+    def _assert_ais_error(
+        self,
+        func: Callable[[], Any],
+        status_code: Optional[int] = None,
+        message: Optional[str] = None,
+        retry: bool = False,
+        timeout: float = TEST_TIMEOUT,
+    ) -> None:
+        """
+        Assert that func raises an AISError matching status_code and message (when given).
+        If retry is set, call func again until timeout seconds pass, for errors that depend on
+        async propagation.
+        """
+        deadline = time.monotonic() + (timeout if retry else 0)
+        while True:
+            try:
+                func()
+                outcome = "call succeeded"
+            except AISError as err:
+                if (status_code is None or err.status_code == status_code) and (
+                    message is None or message in err.message
+                ):
+                    return
+                outcome = f"got error {err.status_code}: {err.message}"
+            if time.monotonic() >= deadline:
+                self.fail(
+                    f"Expected AISError (status={status_code}, message={message!r}), {outcome}"
+                )
+            time.sleep(RETRY_INTERVAL_SECS)
 
-    def _assert_unauthorized(self, func: Callable[[], Any]):
-        with self.assertRaises(AISError) as e:
-            # Return result to use for cleanup if call does succeed
-            return func()
-        self.assertEqual(STATUS_UNAUTHORIZED, e.exception.status_code)
-        return None
+    def _assert_forbidden(self, func: Callable[[], Any], retry: bool = False):
+        self._assert_ais_error(func, status_code=STATUS_FORBIDDEN, retry=retry)
+
+    def _assert_unauthorized(self, func: Callable[[], Any], retry: bool = False):
+        self._assert_ais_error(func, status_code=STATUS_UNAUTHORIZED, retry=retry)
 
     @staticmethod
     def _create_ais_client(token: str):

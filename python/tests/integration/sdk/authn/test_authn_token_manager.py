@@ -25,4 +25,5 @@ class TestAuthNTokenManager(AuthNTestBase):
         self.authn_client.token_manager().revoke(token)
 
         # Attempt to use the token after revoking it
-        self._assert_unauthorized(client.cluster().list_buckets)
+        # Token revocation reaches the cluster asynchronously
+        self._assert_unauthorized(client.cluster().list_buckets, retry=True)

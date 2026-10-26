@@ -17,8 +17,11 @@ class TestAuthNUserManager(AuthNTestBase):
         self.user = self._create_user(password=self.test_pass, roles=[self.role.name])
         self.user_manager = self.authn_client.user_manager()
 
-    def _create_bucket(self):
-        return self.ais_client.bucket("Test-Bucket-" + random_string()).create()
+    def _new_bucket(self, client):
+        bck = client.bucket(random_string())
+        # Mark for cleanup in case creation does succeed
+        self.buckets.append(bck)
+        return bck
 
     @pytest.mark.authn
     def test_create_user(self):
@@ -32,10 +35,7 @@ class TestAuthNUserManager(AuthNTestBase):
 
         # Test user role and permissions
         client.cluster().list_buckets()
-        bck = self._assert_forbidden(client.bucket("any").create)
-        # Mark for cleanup if creation did succeed
-        if bck:
-            self.buckets.append(bck)
+        self._assert_forbidden(self._new_bucket(client).create)
 
     @pytest.mark.authn
     def test_get_user(self):
@@ -113,10 +113,7 @@ class TestAuthNUserManager(AuthNTestBase):
 
         # Test updated user role and permissions
         client.cluster().list_buckets()
-        bck = self._assert_forbidden(client.bucket(random_string()).create)
-        # Mark for cleanup if creation did succeed
-        if bck:
-            self.buckets.append(bck)
+        self._assert_forbidden(self._new_bucket(client).create)
 
     @pytest.mark.authn
     def test_update_user(self):

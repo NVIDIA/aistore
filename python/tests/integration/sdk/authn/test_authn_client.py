@@ -46,9 +46,8 @@ class TestAuthNClient(AuthNTestBase):
 
         self.authn_client.logout()
         self.assertIsNone(self.authn_client.client.token)
-        with self.assertRaises(AISError) as context:
-            client.cluster().get_info()
-        self.assertIn("revoked", context.exception.message)
+        # Token revocation reaches the cluster asynchronously
+        self._assert_ais_error(client.cluster().get_info, message="revoked", retry=True)
 
     @pytest.mark.authn
     def test_create_bucket_without_token(self):
