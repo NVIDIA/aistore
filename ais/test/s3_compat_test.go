@@ -2013,6 +2013,12 @@ func TestS3MultipartUploadObjectBinding(t *testing.T) {
 			tassert.Errorf(t, errors.As(err, &httpErr) && httpErr.HTTPStatusCode() == test.wantStatus,
 				"expected HTTP %d, got: %v", test.wantStatus, err)
 
+			_, err = s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{
+				Bucket: aws.String(test.requestBck.Name), Key: aws.String(requestObj),
+			})
+			tassert.Fatalf(t, errors.As(err, &httpErr) && httpErr.HTTPStatusCode() == http.StatusNotFound,
+				"rejected completion published destination object: %v", err)
+
 			_, err = s3Client.ListParts(t.Context(), &s3.ListPartsInput{
 				Bucket: created.Bucket, Key: created.Key, UploadId: created.UploadId,
 			})
@@ -2022,6 +2028,13 @@ func TestS3MultipartUploadObjectBinding(t *testing.T) {
 			})
 			tassert.CheckFatal(t, err)
 			uploadOpen = false
+
+			got, err := s3Client.GetObject(t.Context(), &s3.GetObjectInput{Bucket: created.Bucket, Key: created.Key})
+			tassert.CheckFatal(t, err)
+			data, err := io.ReadAll(got.Body)
+			got.Body.Close()
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, bytes.Equal(data, body), "rejected completion changed the original upload's data")
 		})
 	}
 }

@@ -106,7 +106,7 @@ func (ups *ups) _add(id string, manifest *core.Ufest, metadata map[string]string
 	return
 }
 
-// NOTE:
+// - check and make sure that upload is bound to the requested bucket/object
 // - if not in memory may try to load from persistence given feat.ResumeInterruptedMPU
 // - and, if successful, will return metadata = nil
 // TODO:

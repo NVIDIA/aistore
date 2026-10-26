@@ -2380,11 +2380,19 @@ func TestMultipartUploadObjectBinding(t *testing.T) {
 			tassert.Fatalf(t, herr != nil && herr.Status == test.wantStatus,
 				"expected HTTP %d for upload bound to %s/%s, got: %v", test.wantStatus, srcBck.Name, srcObj, err)
 
+			_, err = api.HeadObject(baseParams, test.requestBck, requestObj, api.HeadArgs{})
+			expectStatus(t, err, http.StatusNotFound)
+
 			err = api.CompleteMultipartUpload(&api.CompleteMptArgs{
 				MptArgs: srcArgs, UploadID: uploadID, PartNumbers: []int{1},
 			})
 			tassert.CheckFatal(t, err)
 			uploadOpen = false
+
+			var buf bytes.Buffer
+			_, err = api.GetObject(baseParams, srcBck, srcObj, &api.GetArgs{Writer: &buf})
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, bytes.Equal(buf.Bytes(), body), "rejected completion changed the original upload's data")
 		})
 	}
 }
