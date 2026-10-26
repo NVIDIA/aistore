@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	ratomic "sync/atomic"
 	"syscall"
 	"time"
 
@@ -44,10 +45,9 @@ import (
 //     while the object itself shortens its FQN (core LOM.shortenFntl)
 //   * a chunk or manifest of a FNTL object resolves to a non-existing LOM and gets removed
 //   * remove the skip once FNTL names are consistent across all content types
-// - dont_cleanup_time: cluster-HRW + HeadObjT2T (peerHasIdentical) already establishes per-LOM
+// - dont_cleanup_time: cluster-HRW + head-batch (peerCheck) already establishes per-LOM
 //   identity before deletion - redundant for misplaced LOMs (work files, chunks, and partial
 //   manifests still need it)
-// - peerHasIdentical: one HeadObjT2T per misplaced LOM does not scale - use batch HEAD (core/headbatch.go)
 // - jogBcks: config option to scrub `fs.AllMpathBcks` buckets that fail to init
 
 // (batch sizing)
@@ -69,8 +69,9 @@ const (
 type (
 	XactCln struct {
 		p     *clnFactory
-		ini   *IniCln
-		stats clnStats // observability surfaced via CtlMsg (`ais show job`)
+		ini   *IniCln                          // TODO: data race, RunCleanup writes it while CtlMsg reads it
+		hdb   ratomic.Pointer[core.HdbBatcher] // cluster-HRW peer checks (CtlMsg reads it at any time)
+		stats clnStats                         // observability surfaced via CtlMsg (`ais show job`)
 		xact.Base
 	}
 	IniCln struct {
@@ -87,7 +88,7 @@ type (
 		visits           atomic.Int64 // LOMs classified by visitObj (passed both gates)
 		tooFresh         atomic.Int64 // files skipped by the outer mtime gate (visit: mtime+dont>now)
 		recentlyAccessed atomic.Int64 // LOMs skipped by the inner atime gate (visitObj: xattr atime+dont>now)
-		migrated         atomic.Int64 // classified misplaced via cluster-HRW (peerHasIdentical)
+		migrated         atomic.Int64 // classified misplaced via cluster-HRW (peerReply)
 		localMisplc      atomic.Int64 // classified misplaced via local-mpath HRW (default arm)
 		orphans          atomic.Int64 // orphan chunks observed by visitChunk
 		sysBckRm         atomic.Int64 // system-bucket entries queued for removal
@@ -98,6 +99,8 @@ type (
 		rmBytes          atomic.Int64 // bytes actually removed by rmLeftovers
 		keepPeerMissing  atomic.Int64 // cluster-HRW peer returned 404: keep local copy (last-known good)
 		keepDiverged     atomic.Int64 // peer holds same name but different content: keep local copy
+		keepChanged      atomic.Int64 // changed after the peer check: keep local copy
+		keepBusy         atomic.Int64 // locked at removal: keep local copy
 		errHEAD          atomic.Int64 // HEAD-to-peer failed with non-404 error
 	}
 )
@@ -109,7 +112,12 @@ type (
 		ini     IniCln
 		joggers map[string]*clnJ
 		smap    *meta.Smap // captured at start: for cluster-wide HRW ownership check
-		cs      struct {
+		config  *cmn.Config
+		same    struct {
+			mu   sync.Mutex
+			ents []core.HdbEnt // the peers have them: remove in batches (see peerReply)
+		}
+		cs struct {
 			a fs.CapStatus // initial
 			b fs.CapStatus // after removing 'deleted'
 			c fs.CapStatus // upon finishing
@@ -176,12 +184,12 @@ func (r *XactCln) CtlMsg() string {
 	}
 
 	// dynamic per-run counters (only emit fields with non-zero values)
-	r.stats.write(&sb)
+	r.stats.write(&sb, r.hdb.Load())
 
 	return sb.String()
 }
 
-func (s *clnStats) write(sb *cos.SB) {
+func (s *clnStats) write(sb *cos.SB, hb *core.HdbBatcher) {
 	visits, tooFresh, recentlyAccessed := s.visits.Load(), s.tooFresh.Load(), s.recentlyAccessed.Load()
 	if sb.Len() > 0 {
 		sb.WriteString("; ")
@@ -214,9 +222,21 @@ func (s *clnStats) write(sb *cos.SB) {
 		sb.WriteString(" keep-diverged:")
 		sb.WriteInt64(v)
 	}
+	if v := s.keepChanged.Load(); v > 0 {
+		sb.WriteString(" keep-changed:")
+		sb.WriteInt64(v)
+	}
+	if v := s.keepBusy.Load(); v > 0 {
+		sb.WriteString(" keep-busy:")
+		sb.WriteInt64(v)
+	}
 	if v := s.errHEAD.Load(); v > 0 {
 		sb.WriteString(" err-head:")
 		sb.WriteInt64(v)
+	}
+	if hb != nil {
+		st := hb.Stats()
+		st.Str(sb, ':')
 	}
 	if v := s.orphans.Load(); v > 0 {
 		sb.WriteString(" orphans:")
@@ -276,7 +296,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		avail   = fs.GetAvail()
 		num     = len(avail)
 		joggers = make(map[string]*clnJ, num)
-		parent  = &clnP{joggers: joggers, ini: *ini}
+		parent  = &clnP{joggers: joggers, ini: *ini, config: config}
 	)
 	defer func() {
 		if ini.WG != nil {
@@ -290,9 +310,14 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	}
 
 	xcln.ini = ini
-	if so := core.T.Sowner(); so != nil {
-		parent.smap = so.Get()
-	}
+	parent.smap = core.T.Sowner().Get()
+	xcln.hdb.Store(core.NewHdbBatcher(&core.HdbArgs{
+		Cb:     parent.peerReply,
+		Abort:  xcln,
+		Smap:   parent.smap,
+		LogHdr: xcln.Name(),
+		Mod:    cos.ModSpace,
+	}))
 
 	now := time.Now()
 	for mpath, mi := range avail {
@@ -333,6 +358,13 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	}
 	parent.wg.Wait()
 
+	var sb cos.SB
+	sb.Init(128)
+	st := xcln.hdb.Load().End()
+	st.Str(&sb, ':')
+	nlog.Infoln(xcln.Name(), "peer checks done:", sb.String())
+	parent.rmSame(parent.same.ents)
+	parent.same.ents = nil
 	for _, j := range joggers {
 		j.stop()
 	}
@@ -393,6 +425,104 @@ func (p *clnP) rmMisplaced() bool {
 		flog(core.T.String(), xcln.String(), "not removing misplaced obj-s: [", cserr, why, "]")
 	}
 	return ok
+}
+
+// head-batch callback: queue the copy that the cluster-HRW peer has and remove a full batch
+// - runs on a head-batch sender
+// - must not call Add or End (see core/headbatch.go)
+func (p *clnP) peerReply(ent *core.HdbEnt) {
+	stats := &p.ini.Xaction.stats
+	switch ent.Status {
+	case apc.HdbSame:
+	case apc.HdbMissing:
+		stats.keepPeerMissing.Inc()
+		return
+	case apc.HdbDiverged:
+		cnt := stats.keepDiverged.Inc()
+		cmn.SparseWarn(cos.ModSpace, cnt, p.ini.Xaction.Name(), "diverged:", ent.LIF.Cname(), "peer:", ent.Tsi.StringEx(), ent.Cause, "[ keep:", cnt, "]")
+		return
+	case apc.HdbBusy: // the peer could not lock it
+		if cmn.Rom.V(4, cos.ModSpace) {
+			nlog.Infoln(p.ini.Xaction.Name(), "peer busy, keep:", ent.LIF.Cname(), "peer:", ent.Tsi.StringEx())
+		}
+		return
+	default: // no answer or failed
+		cnt := stats.errHEAD.Inc()
+		cmn.SparseWarn(cos.ModSpace, cnt, p.ini.Xaction.Name(), ent.Tsi.StringEx(), "head-batch(", ent.LIF.Cname(), ") returned", ent.Status, ent.Cause)
+		return
+	}
+	stats.migrated.Inc()
+	if p.ini.Args.Flags&xact.FlagKeepMisplaced != 0 {
+		return
+	}
+
+	p.same.mu.Lock()
+	p.same.ents = append(p.same.ents, *ent)
+	if int64(len(p.same.ents)) >= p.config.Space.BatchSize {
+		p.rmSame(p.same.ents)
+		clear(p.same.ents)
+		p.same.ents = p.same.ents[:0]
+	}
+	p.same.mu.Unlock()
+}
+
+// remove the copies that the cluster-HRW peers have (compare with rmLeftovers)
+func (p *clnP) rmSame(ents []core.HdbEnt) {
+	if len(ents) == 0 || !p.rmMisplaced() /*note: caution*/ {
+		return
+	}
+	var (
+		nfiles, nbytes int64
+		xcln           = p.ini.Xaction
+	)
+	for i := range ents {
+		if xcln.IsAborted() {
+			break
+		}
+		if size, ok := p.rmUnchanged(&ents[i]); ok {
+			nfiles++
+			nbytes += size
+		}
+	}
+	p.ini.StatsT.Add(stats.CleanupStoreSize, nbytes)
+	p.ini.StatsT.Add(stats.CleanupStoreCount, nfiles)
+	xcln.ObjsAdd(int(nfiles), nbytes)
+	xcln.stats.rmFiles.Add(nfiles)
+	xcln.stats.rmBytes.Add(nbytes)
+}
+
+// remove the copy under the write lock, unless it changed after the peer compared it
+func (p *clnP) rmUnchanged(ent *core.HdbEnt) (int64, bool) {
+	xcln := p.ini.Xaction
+	lom, err := ent.LIF.LOM()
+	if err != nil {
+		return 0, false // (bucket gone)
+	}
+	defer core.FreeLOM(lom)
+
+	if !lom.TryLock(true) {
+		xcln.stats.keepBusy.Inc()
+		return 0, false
+	}
+	defer lom.Unlock(true)
+
+	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
+		return 0, false
+	}
+	if !ent.Unchanged(lom) {
+		cnt := xcln.stats.keepChanged.Inc()
+		cmn.SparseWarn(cos.ModSpace, cnt, xcln.Name(), "changed after the peer check, keep:", lom.Cname(), "[ keep:", cnt, "]")
+		return 0, false
+	}
+	size := lom.Lsize()
+	if err := lom.RemoveObj(); err != nil {
+		xcln.AddErr(fmt.Errorf("%s rm misplaced %q: %w", xcln.Name(), lom.Cname(), err))
+		return 0, false
+	}
+	if cmn.Rom.V(4, cos.ModSpace) {
+		nlog.Infoln(xcln.Name(), "rm misplaced", lom.Cname(), "size", size)
+	}
+	return size, true
 }
 
 //////////
@@ -946,11 +1076,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			}
 			return
 		}
-		if j.peerHasIdentical(lom) {
-			lom = lom.Clone()
-			j.misplaced.loms = append(j.misplaced.loms, lom)
-			j.rmAnyBatch(flagRmMisplacedLOMs)
-		}
+		j.peerCheck(lom)
 	case lom.IsCopy():
 		// will be _visited_ separately (if not already)
 	case lom.ECEnabled():
@@ -982,43 +1108,13 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	}
 }
 
-// true when cluster-HRW peer (not us) confirms identical content
-func (j *clnJ) peerHasIdentical(lom *core.LOM) bool {
-	smap := j.p.smap
-	if smap == nil {
-		return false
-	}
-	tsi, err := smap.HrwObjHash2T(lom.Bck(), lom.Digest())
+// when the cluster-HRW owner is another target, ask it to establish identity (see peerReply)
+func (j *clnJ) peerCheck(lom *core.LOM) {
+	tsi, err := j.p.smap.HrwObjHash2T(lom.Bck(), lom.Digest())
 	if err != nil || tsi.ID() == core.T.SID() {
-		return false
+		return
 	}
-	// Ask the cluster-HRW peer to establish identity. Two safety gates:
-	//  1. peer 404      => keep local copy as potentially last-known good
-	//                      (rebalance silently dropped this object on the wire)
-	//  2. CheckEq fails => peer holds an object by the same name but with
-	//                      different content, keep + warn rather than delete
-	// Other HEAD errors (network, 5xx) also fall back to "keep" but go through
-	// errHEAD with rate-limited warning since they likely indicate a transient
-	// problem rather than a real data-loss signal.
-	stats := &j.ini.Xaction.stats
-	peer, herr := core.T.HeadObjT2T(lom, tsi,
-		apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCustom, apc.GetPropsETag)
-	if herr != nil {
-		if cmn.IsErrHTTPNotFound(herr) {
-			stats.keepPeerMissing.Inc()
-		} else {
-			cnt := stats.errHEAD.Inc()
-			cmn.SparseWarn(cos.ModSpace, cnt, tsi.StringEx(), "HEAD(", lom.Cname(), ") returned", herr)
-		}
-		return false
-	}
-	if eqErr := lom.ObjAttrs().CheckEq(peer); eqErr != nil {
-		cnt := stats.keepDiverged.Inc()
-		cmn.SparseWarn(cos.ModSpace, cnt, j.String(), "diverged:", lom.Cname(), "peer:", tsi.StringEx(), eqErr, "[ keep:", cnt, "]")
-		return false
-	}
-	stats.migrated.Inc()
-	return true
+	j.ini.Xaction.hdb.Load().Add(lom, tsi)
 }
 
 //

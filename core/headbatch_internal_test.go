@@ -354,6 +354,8 @@ func TestHdbEntUnchanged(t *testing.T) {
 	lom := hdbLOM(t, "a", "o1", attrs(10, "0123456789abcdef", "e1"))
 	ent.init(lom)
 	FreeLOM(lom)
+	put := attrs(10, "0123456789abcdef", "e1")
+	put.SetVersion("2")
 	for name, test := range map[string]struct {
 		oa   *cmn.ObjAttrs
 		want bool
@@ -362,6 +364,7 @@ func TestHdbEntUnchanged(t *testing.T) {
 		"size":     {attrs(11, "0123456789abcdef", "e1"), false},
 		"checksum": {attrs(10, "fedcba9876543210", "e1"), false},
 		"etag":     {attrs(10, "0123456789abcdef", "e2"), false},
+		"version":  {put, false},
 	} {
 		lom := hdbLOM(t, "a", "o1", test.oa)
 		tassert.Errorf(t, ent.Unchanged(lom) == test.want, "%s: expected %t", name, test.want)

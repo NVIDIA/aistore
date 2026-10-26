@@ -44,6 +44,7 @@ type (
 		LIF    LIF
 		Tsi    *meta.Snode // the peer that will answer
 		Cause  string
+		ver    string // lom.Version (Unchanged only: the peer has its own version)
 		cksum  cos.Cksum
 		md     [len(cmn.CheckEqKeys)]string
 		Status apc.HdbStatus
@@ -458,7 +459,7 @@ func (ent *HdbEnt) head(tsi *meta.Snode) {
 
 // the LOM has the same attributes that the peer compared
 func (ent *HdbEnt) Unchanged(lom *LOM) bool {
-	if lom.Lsize() != ent.LIF.Size || !lom.Checksum().Equal(&ent.cksum) {
+	if lom.Lsize() != ent.LIF.Size || lom.Version() != ent.ver || !lom.Checksum().Equal(&ent.cksum) {
 		return false
 	}
 	for i, key := range cmn.CheckEqKeys {
@@ -475,6 +476,7 @@ func (ent *HdbEnt) init(lom *LOM) {
 	ent.bck = cmn.Bck{Name: b.Name, Provider: b.Provider, Ns: b.Ns}
 	ent.LIF = lom.LIF()
 	ent.name = lom.OrigObjName()
+	ent.ver = lom.Version()
 	if ck := lom.Checksum(); ck != nil {
 		ent.cksum = *ck
 	}

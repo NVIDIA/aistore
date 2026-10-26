@@ -99,6 +99,8 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			sysShardIdx,
 		)
 		core.T = mock.NewTarget(bmd)
+		tm := core.T.(*mock.TargetMock)
+		tm.SO = &tstSowner{smap: &meta.Smap{Tmap: meta.NodeMap{tm.SID(): tm.Snode()}}}
 
 		// cluster config
 		config := cmn.GCO.BeginUpdate()
@@ -152,6 +154,50 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			// Verify misplaced object was removed
 			Expect(wrongFQN).NotTo(BeAnExistingFile())
 		})
+
+		DescribeTable("migrated objects that the cluster-HRW peer has",
+			func(flags uint32, batch int64, overwrite, kept bool) {
+				smap := &meta.Smap{Version: 1, Tmap: meta.NodeMap{
+					"peer": &meta.Snode{DaeID: "peer", DaeType: apc.Target, IDDigest: 0xfeedface},
+				}}
+				tm := core.T.(*mock.TargetMock)
+				tm.SO = &tstSowner{smap: smap}
+
+				// two objects on their local HRW mountpaths (one head-batch request)
+				oldTime := now.Add(-3 * time.Hour)
+				fqns := make([]string, 0, 2)
+				for _, objName := range []string{"migrated-1.txt", "migrated-2.txt"} {
+					lom := &core.LOM{ObjName: objName}
+					Expect(lom.InitCmnBck(&bck)).NotTo(HaveOccurred())
+					createTestLOM(lom.FQN, 1024, oldTime)
+					Expect(os.Chtimes(lom.FQN, oldTime, oldTime)).NotTo(HaveOccurred())
+					fqns = append(fqns, lom.FQN)
+				}
+
+				if overwrite {
+					core.T = &tstOverwrite{TargetMock: tm, fqns: fqns}
+				}
+				if batch > 0 {
+					config := cmn.GCO.BeginUpdate()
+					config.Space.BatchSize = batch
+					cmn.GCO.CommitUpdate(config)
+				}
+				ini.Args.Flags |= flags
+				space.RunCleanup(ini)
+
+				for _, fqn := range fqns {
+					if kept {
+						Expect(fqn).To(BeAnExistingFile())
+					} else {
+						Expect(fqn).NotTo(BeAnExistingFile())
+					}
+				}
+			},
+			Entry("removed", uint32(0), int64(0), false, false),
+			Entry("removed in a full batch (peerReply)", uint32(0), int64(2), false, false),
+			Entry("kept with --keep-misplaced", uint32(xact.FlagKeepMisplaced), int64(0), false, true),
+			Entry("kept if overwritten after the peer check", uint32(0), int64(0), true, true),
+		)
 
 		It("should respect --keep-misplaced flag", func() {
 			// Create misplaced object (old enough for removal)
@@ -1059,6 +1105,32 @@ func persist(lom *core.LOM) error {
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
 	return lom.Persist()
+}
+
+// RunCleanup and the head-batcher call only Get
+type tstSowner struct {
+	meta.Sowner
+	smap *meta.Smap
+}
+
+func (o *tstSowner) Get() *meta.Smap { return o.smap }
+
+type tstOverwrite struct {
+	*mock.TargetMock
+	fqns []string
+}
+
+func (t *tstOverwrite) HeadBatchT2T(req *cmn.HdbReq, tsi *meta.Snode) (*apc.HdbResp, error) {
+	defer GinkgoRecover()
+	for _, fqn := range t.fqns {
+		createTestFile(fqn, 1024)
+		lom := newBasicLom(fqn, 1024)
+		lom.SetVersion("2")
+		lom.Lock(true)
+		Expect(persist(lom)).NotTo(HaveOccurred())
+		lom.Unlock(true)
+	}
+	return t.TargetMock.HeadBatchT2T(req, tsi)
 }
 
 func findOtherMpath(mi *fs.Mountpath) *fs.Mountpath {
