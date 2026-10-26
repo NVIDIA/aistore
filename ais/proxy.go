@@ -2428,7 +2428,8 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 		return
 	}
 	perms := apc.AcePATCH
-	if propsToUpdate.Access != nil {
+	// reset-bprops overwrites Access with the default (apc.AccessAll)
+	if propsToUpdate.Access != nil || msg.Action == apc.ActResetBprops {
 		perms |= apc.AceBckSetACL
 	}
 
