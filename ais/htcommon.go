@@ -862,6 +862,44 @@ func _reMirror(bprops, nprops *cmn.Bprops) bool {
 	return false
 }
 
+// return true when changing the bucket policy changes object ownership
+func _rePlacement(bprops, nprops *cmn.Bprops, smap *smapX) bool {
+	if _uniformPlacement(bprops) == _uniformPlacement(nprops) {
+		return false
+	}
+	var first int64
+	for _, tsi := range smap.Tmap {
+		if tsi.InMaintOrDecomm() {
+			continue
+		}
+		w := tsi.PlacementWeight()
+		if first == 0 {
+			first = w
+		} else if w != first {
+			return true
+		}
+	}
+	return false
+}
+
+func _uniformPlacement(props *cmn.Bprops) bool {
+	return props.Placement != nil && props.Placement.Weighting == cmn.WeightingUniform
+}
+
+// moving a sliced EC object's owner may displace a slice to a spare target
+func checkECPlacement(bck *meta.Bck, props *cmn.Bprops, smap *smapX) error {
+	ec := &props.EC
+	if !ec.Enabled || ec.ObjSizeLimit == cmn.ObjSizeToAlwaysReplicate {
+		return nil
+	}
+	required, available := ec.DataSlices+ec.ParitySlices+2, smap.CountActiveTs()
+	if available < required {
+		return cmn.NewErrNotEnoughTargets(fmt.Sprintf("changing placement of %s with EC %d:%d requires %d active targets (including a spare), have %d",
+			bck.Cname(""), ec.DataSlices, ec.ParitySlices, required, available))
+	}
+	return nil
+}
+
 func _reEC(bprops, nprops *cmn.Bprops, bck *meta.Bck, smap *smapX) (targetCnt int, yes bool) {
 	if !nprops.EC.Enabled {
 		if bprops.EC.Enabled {

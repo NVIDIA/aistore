@@ -52,20 +52,22 @@ func (reb *Reb) runECjoggers(rargs *rargs) {
 		wg = &sync.WaitGroup{}
 		b  = rargs.bck // limited scope
 	)
+	if b != nil {
+		for _, mi := range rargs.avail {
+			wg.Add(1)
+			go reb.jogEC(mi, b.Bucket(), wg, rargs)
+		}
+		wg.Wait()
+		return
+	}
 	for _, mi := range rargs.avail {
 		bck := cmn.Bck{Provider: apc.AIS}
-		if b != nil {
-			bck = cmn.Bck{Name: b.Name, Provider: apc.AIS, Ns: b.Ns}
-		}
 		wg.Add(1)
 		go reb.jogEC(mi, &bck, wg, rargs)
 	}
 	for _, provider := range rargs.config.Backend.Providers {
 		for _, mi := range rargs.avail {
 			bck := cmn.Bck{Provider: provider.Name}
-			if b != nil {
-				bck = cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
-			}
 			wg.Add(1)
 			go reb.jogEC(mi, &bck, wg, rargs)
 		}

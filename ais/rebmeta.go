@@ -65,6 +65,7 @@ type (
 		cur     *rebMD // CoW clone
 		p       *proxy
 		smapCtx *smapModifier
+		bck     *cmn.Bck // optional bucket scope for status queries
 
 		rebID string // cluster-wide rebalance ID, "g[uuid]" in the logs
 		cluID string // cluster ID (== smap.UUID) - never changes
@@ -186,6 +187,7 @@ func (r *rmdOwner) do(ctx *rmdModifier) (clone *rebMD, err error) {
 
 	clone = ctx.prev.clone()
 	clone.TargetIDs = nil
+	clone.PlacementBMDVersion = 0
 	clone.CluID = r.cluID
 	debug.AssertFunc(func() bool { return cos.IsValidUUID(clone.CluID) }, clone.CluID)
 	ctx.pre(ctx, clone) // `pre` callback
@@ -300,7 +302,11 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	//
 	// construct notification listener and start listening (in prxnotif)
 	//
-	nl = xact.NewXactNL(m.rebID, apc.ActRebalance, &m.smapCtx.smap.Smap, notifiers)
+	var bcks []*cmn.Bck
+	if m.bck != nil {
+		bcks = []*cmn.Bck{m.bck}
+	}
+	nl = xact.NewXactNL(m.rebID, apc.ActRebalance, &m.smapCtx.smap.Smap, notifiers, bcks...)
 	nl = nl.WithCause(action)
 	nl.SetOwner(equalIC)
 

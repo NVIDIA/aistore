@@ -92,7 +92,7 @@ func enforceVerBoundary(otherVerStr string) (reject bool) {
 
 // reject placement updates until every Smap member has reported the primary's version
 // - unknown only (e.g., right after primary reelection): busy - retry once members keepalive
-func (p *proxy) checkPlacementVer(smap *smapX) error {
+func (p *proxy) checkPlacementVer(smap *smapX, action string) error {
 	var (
 		differ  []string
 		unknown []string
@@ -119,11 +119,11 @@ func (p *proxy) checkPlacementVer(smap *smapX) error {
 			differ = append(differ, name+"(unknown)")
 		}
 		slices.Sort(differ)
-		return fmt.Errorf("%s: cannot set placement weights: node versions differ %v (primary: %s) - complete the upgrade",
-			p, differ, cmn.VersionAIStore)
+		return fmt.Errorf("%s: cannot %s: node versions differ %v (primary: %s) - complete the upgrade",
+			p, action, differ, cmn.VersionAIStore)
 	case len(unknown) > 0:
 		slices.Sort(unknown)
-		return cmn.NewErrBusy(membershipTag, apc.ActSetPlacementWeights,
+		return cmn.NewErrBusy(membershipTag, action,
 			fmt.Sprintf("node versions not yet known: %v", unknown))
 	}
 	return nil

@@ -474,6 +474,39 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	default:
 		return "", fmt.Errorf(fmtErrInvaldAction, msg.Action, []string{apc.ActSetBprops, apc.ActResetBprops})
 	}
+	// Serialize policy changes with weight updates and membership operations, including
+	// policy changes that currently leave ownership unchanged (e.g., equal weights).
+	if _uniformPlacement(bprops) != _uniformPlacement(nprops) {
+		if err := p.beginMembership(msg.Action); err != nil {
+			return "", err
+		}
+		defer p.endMembership()
+	}
+	smap := p.owner.smap.get()
+	if err := p.checkBckPlacement(bck, nprops, smap); err != nil {
+		return "", err
+	}
+	var (
+		gfnCtx    *smapModifier
+		published bool
+	)
+	if _rePlacement(bprops, nprops, smap) {
+		for _, tsi := range smap.Tmap {
+			if tsi.InMaintOrDecomm() {
+				continue
+			}
+			gfnCtx = &smapModifier{smap: smap}
+			if err := p.notifyEarlyGFN(gfnCtx, smap, tsi); err != nil {
+				return "", err
+			}
+			defer func() {
+				if !published {
+					p.stopEarlyGFN(gfnCtx, tsi.ID())
+				}
+			}()
+			break
+		}
+	}
 	// msg{propsToUpdate} => nmsg{nprops} and prep context(nmsg)
 	nmsg := *msg
 	nmsg.Value = nprops
@@ -502,6 +535,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 		return "", err
 	}
 	c.msg.BMDVersion = bmd.version()
+	published = true
 
 	// 4. if remirror|re-EC|rechunk|TBD-storage-svc
 	// A single bucket-props update can start at most one layout xaction.
@@ -527,6 +561,14 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	if rerr != nil {
 		c.bcastAbort(bck, rerr) // cleanup
 	}
+	if ctx.rmdCtx != nil {
+		// The BMD and its migration are already published. A failed transaction
+		// commit must not cancel the rebalance required by the authoritative BMD.
+		xid = ctx.rmdCtx.rebID
+		if rerr != nil {
+			rerr = fmt.Errorf("%w (placement rebalance %s)", rerr, xid)
+		}
+	}
 	return xid, rerr
 }
 
@@ -538,18 +580,37 @@ func (p *proxy) bmodSetProps(ctx *bmdModifier, clone *bucketMD) (err error) {
 		bprops, present = clone.Get(bck)
 	)
 	debug.Assert(present)
-	if ctx.msg.Action == apc.ActSetBprops {
-		bck.Props = bprops
-	}
+	bck.Props = bprops
 	ctx.needReMirror = _reMirror(bprops, ctx.setProps)
-	targetCnt, ctx.needReEC = _reEC(bprops, ctx.setProps, bck, p.owner.smap.get())
+	smap := p.owner.smap.get()
+	targetCnt, ctx.needReEC = _reEC(bprops, ctx.setProps, bck, smap)
 	ctx.needReChunks = !bprops.Chunks.EqualLayout(&ctx.setProps.Chunks)
+	replace := _rePlacement(bprops, ctx.setProps, smap)
 	switch {
-	case ctx.needReMirror && ctx.needReEC, ctx.needReMirror && ctx.needReChunks, ctx.needReEC && ctx.needReChunks:
+	case ctx.needReMirror && (ctx.needReEC || ctx.needReChunks || replace),
+		ctx.needReEC && (ctx.needReChunks || replace), ctx.needReChunks && replace:
 		return fmt.Errorf("%s: a single properties update cannot start multiple layout xactions", bck.Cname(""))
+	}
+	if err := p.checkBckPlacement(bck, ctx.setProps, smap); err != nil {
+		return err
 	}
 	debug.AssertFunc(func() bool { return !ctx.needReEC || ctx.setProps.Validate(targetCnt) == nil })
 	clone.set(bck, ctx.setProps)
+	if replace {
+		// Reserve and persist the rebalance generation before committing BMD.
+		// The final callback installs the listener and distributes both together.
+		ctx.rmdCtx = &rmdModifier{
+			pre: func(_ *rmdModifier, rmd *rebMD) {
+				rmd.inc()
+				rmd.PlacementBMDVersion = clone.version()
+			},
+			p: p, limited: true, bck: bck.Bucket(),
+			smapCtx: &smapModifier{smap: smap, msg: ctx.msg},
+		}
+		if _, err := p.owner.rmd.modify(ctx.rmdCtx); err != nil {
+			return fmt.Errorf("failed to persist rebalance metadata (bucket properties unchanged): %w", err)
+		}
+	}
 	return nil
 }
 
@@ -1103,7 +1164,14 @@ func bmodCpProps(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxy) bmodSync(ctx *bmdModifier, clone *bucketMD) {
 	debug.Assert(clone._sgl != nil)
 	msg := p.newAmsg(ctx.msg, clone, ctx.txnID)
-	wg := p.metasyncer.sync(revsPair{clone, msg})
+	pairs := []revsPair{{clone, msg}}
+	if ctx.rmdCtx != nil {
+		ctx.rmdCtx.listen(nil)
+		rmsg := p.newAmsg(&apc.ActMsg{Action: apc.ActRebalance,
+			Value: &xact.ArgsMsg{Bck: *ctx.bcks[0].Bucket()}}, clone, ctx.rmdCtx.rebID)
+		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, rmsg})
+	}
+	wg := p.metasyncer.sync(pairs...)
 	if ctx.wait {
 		wg.Wait()
 	}
@@ -1193,15 +1261,15 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 		remirror        = _reMirror(bprops, nprops)
 		targetCnt, reec = _reEC(bprops, nprops, bck, smap)
 		rechunk         = !bprops.Chunks.EqualLayout(&nprops.Chunks)
+		replace         = _rePlacement(bprops, nprops, smap)
 	)
 	// this is an update
 	if len(creating) == 0 {
 		switch {
-		case remirror && reec, remirror && rechunk, reec && rechunk:
+		case remirror && (reec || rechunk || replace), reec && (rechunk || replace), rechunk && replace:
 			return nil, fmt.Errorf("%s: a single properties update cannot start multiple layout xactions", bck.Cname(""))
 		}
 	}
-
 	if nprops.RateLimit.Frontend.Enabled {
 		b := *bck
 		b.Props = nprops
@@ -1211,15 +1279,34 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 	}
 
 	err := nprops.Validate(targetCnt)
-	if err == nil {
-		return nprops, nil // ok
-	}
 	// soft error w/ force
 	if cmn.IsErrNotEnoughTargets(err) && propsToUpdate.Force {
 		nlog.Warningln("Ignoring insufficient-target error:", err)
 		err = nil
 	}
+	if err == nil && nprops.Placement != nil && bprops.Placement == nil {
+		if err := p.checkPlacementVer(smap, apc.ActSetBprops); err != nil {
+			return nil, cmn.NewErrHTTP(nil, err, http.StatusConflict)
+		}
+	}
 	return nprops, err
+}
+
+// validate a bucket policy change before publishing BMD (repeat under the BMD lock)
+func (p *proxy) checkBckPlacement(bck *meta.Bck, nprops *cmn.Bprops, smap *smapX) error {
+	replace := _rePlacement(bck.Props, nprops, smap)
+	if replace || (nprops.Placement != nil && bck.Props.Placement == nil) {
+		if err := p.checkPlacementVer(smap, apc.ActSetBprops); err != nil {
+			return cmn.NewErrHTTP(nil, err, http.StatusConflict)
+		}
+	}
+	if !replace {
+		return nil
+	}
+	if err := p.canRebalance(smap, false /*cleanup*/); err != nil {
+		return err
+	}
+	return checkECPlacement(bck, nprops, smap)
 }
 
 func _versioning(v bool) string {

@@ -975,6 +975,13 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) error {
 		}
 		return nil
 	}
+	// A bucket placement policy rebalance must use the BMD containing the new policy.
+	// Keep this dependency with RMD: metasync may replace RMD but retain an older msg.
+	if required := newRMD.PlacementBMDVersion; required != 0 {
+		if have := t.owner.bmd.get().version(); have < required {
+			return fmt.Errorf("%s: placement rebalance requires BMD v%d, have v%d", t, required, have)
+		}
+	}
 
 	smap := t.owner.smap.get()
 	if err := smap.validate(); err != nil {
@@ -1031,14 +1038,9 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 	if msg.Action == apc.ActRebalance {
 		xname := tag + msg.UUID + "]"
 
-		var xargs xact.ArgsMsg
-		if msg.Value != nil {
-			if err := cos.MorphMarshal(msg.Value, &xargs); err == nil {
-				extArgs.Bck = (*meta.Bck)(&xargs.Bck)
-				extArgs.Prefix = msg.Name
-				extArgs.Flags = xargs.Flags
-			}
-		}
+		xargs, prefix := msg.rebalanceArgs(nxid)
+		extArgs.Bck = (*meta.Bck)(&xargs.Bck)
+		extArgs.Prefix, extArgs.Flags = prefix, xargs.Flags
 
 		// fork: cleanup mode piggy-backs on rebalance lifecycle but is not a migration
 		if extArgs.Flags&xact.FlagRemoveMisplaced != 0 {
@@ -1117,6 +1119,17 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 	}
 
 	t.owner.rmd.put(newRMD)
+}
+
+// Metasync may substitute a newer RMD while retaining an older action payload.
+// Apply a scope or cleanup flag only to its own generation; otherwise migrate globally.
+func (msg *actMsgExt) rebalanceArgs(xid string) (args xact.ArgsMsg, prefix string) {
+	if msg.UUID == xid && msg.Value != nil {
+		if err := cos.MorphMarshal(msg.Value, &args); err == nil {
+			return args, msg.Name
+		}
+	}
+	return xact.ArgsMsg{}, ""
 }
 
 func (t *target) ensureLatestBMD(msg *actMsgExt, r *http.Request) {

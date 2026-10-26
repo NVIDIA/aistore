@@ -5,9 +5,12 @@
 package integration_test
 
 import (
+	"cmp"
+	"context"
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -22,7 +25,9 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -31,105 +36,28 @@ import (
 )
 
 // target placement weights (v5.2); see docs/placement.md
+//
+// to run all placement tests: `-run=Placement`
 
-// assign weights 1, 2, 3, ... (times mult) in sorted target-ID order
-func seqWeights(smap *meta.Smap, mult int64) map[string]int64 {
-	tids := slices.Sorted(maps.Keys(smap.Tmap))
-	weights := make(map[string]int64, len(tids))
-	for i, tid := range tids {
-		weights[tid] = int64(i+1) * mult
+type (
+	plTest struct {
+		t        *testing.T
+		bp       api.BaseParams
+		proxyURL string
+		smap     *meta.Smap // initial: unweighted, all targets active
+		bcks     []*plBucket
 	}
-	return weights
-}
-
-func zeroWeights(smap *meta.Smap) map[string]int64 {
-	weights := make(map[string]int64, len(smap.Tmap))
-	for tid := range smap.Tmap {
-		weights[tid] = 0
+	plBucket struct {
+		m       *ioContext
+		prev    map[string]string // object name => target ID, as of the previous verify
+		uniform bool              // placement.weighting=uniform
+		ec      bool
 	}
-	return weights
-}
-
-// set weights on a freshly fetched Smap; retry when membership is busy
-func setPlacementWeights(tb testing.TB, bp api.BaseParams, weights map[string]int64) (string, error) {
-	return membershipRetry(tb, func() (string, error) {
-		smap, err := api.GetClusterMap(bp)
-		if err != nil {
-			return "", err
-		}
-		for tid, w := range weights {
-			if tsi := smap.GetTarget(tid); tsi != nil {
-				tsi.SetPlacementWeight(w)
-			}
-		}
-		return api.SetPlacementWeights(bp, smap)
-	})
-}
-
-func checkPlacementWeights(t *testing.T, smap *meta.Smap, weights map[string]int64) {
-	t.Helper()
-	for tid, w := range weights {
-		tsi := smap.GetTarget(tid)
-		tassert.Fatalf(t, tsi != nil, "missing target %s", meta.Tname(tid))
-		tassert.Fatalf(t, tsi.PlacementWeight() == w, "%s: expected weight %d, got %d", tsi.StringEx(), w, tsi.PlacementWeight())
+	plBckOpts struct {
+		ecData, ecParity int // EC every object when ecData > 0
+		uniform          bool
 	}
-}
-
-func checkHTTPStatus(t *testing.T, err error, status int, what string) {
-	t.Helper()
-	tassert.Fatalf(t, err != nil, "%s: expected error", what)
-	herr := cmn.AsErrHTTP(err)
-	tassert.Fatalf(t, herr != nil, "%s: expected HTTP error, got %v", what, err)
-	tassert.Fatalf(t, herr.Status == status, "%s: expected status %d, got %d (%v)", what, status, herr.Status, err)
-}
-
-// ensure rebalance is enabled for the duration of the test
-func enableRebalance(t *testing.T, bp api.BaseParams) {
-	config, err := api.GetClusterConfig(bp)
-	tassert.CheckFatal(t, err)
-	if config.Rebalance.Enabled {
-		return
-	}
-	tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": "true"})
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": "false"})
-	})
-}
-
-// wait for rebalance and resilver that are already running, if any
-// - unlike tools.WaitForRebalAndResil, do not wait (poll) for one to start
-func waitRunningRebResil(t *testing.T, bp api.BaseParams) {
-	t.Helper()
-	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
-	// until no rebalance is running (404), not just the current one finished
-	_, err := api.WaitForStatus(bp, &xargs, func(status *nl.Status) (bool, bool, error) {
-		return false, status.IsFinished(), nil
-	})
-	if err != nil && !cmn.IsStatusNotFound(err) {
-		tassert.CheckError(t, err)
-	}
-	xargs = xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForSnaps(bp, &xargs, xargs.NotRunning())
-	tassert.CheckError(t, err)
-}
-
-// clear weights when the test exits
-// - register before creating buckets: cleanups run LIFO, and a bucket override prevents clearing
-// - no upfront wait: setPlacementWeights retries while membership is busy (rebalance running)
-func clearWeightsOnExit(t *testing.T, bp api.BaseParams) {
-	t.Cleanup(func() {
-		smap, err := api.GetClusterMap(bp)
-		tassert.CheckError(t, err)
-		if err != nil || !smap.IsWeighted() {
-			return
-		}
-		xid, err := setPlacementWeights(t, bp, zeroWeights(smap))
-		tassert.CheckError(t, err)
-		if xid != "" {
-			tools.WaitForRebalanceByID(t, bp, xid)
-		}
-	})
-}
+)
 
 // fail: invalid weights must leave the Smap unchanged
 func TestPlacementWeightsInvalid(t *testing.T) {
@@ -409,58 +337,185 @@ func TestPlacementCLI(t *testing.T) {
 	tassert.Fatalf(t, strings.Contains(out, "nothing to do"), "repeated CLI clear: %s", out)
 }
 
-// bucket opt-out: placement.weighting=uniform blocks clearing target weights
+// set-bprops applies placement to existing data, including reset, without changing other buckets or Smap
 func TestPlacementBucketOverride(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2, Long: true})
-	var (
-		proxyURL = tools.RandomProxyURL(t)
-		bp       = tools.BaseAPIParams(proxyURL)
-		smap     = tools.GetClusterMap(t, proxyURL)
-		bck      = cmn.Bck{Name: "placement-" + cos.GenTie(), Provider: apc.AIS}
-	)
-	if smap.IsWeighted() {
-		t.Skipf("%s is weighted: %s", smap, smap.StrPlacementWeights())
+	proxyURL := tools.RandomProxyURL(t)
+	pt := &plTest{t: t, proxyURL: proxyURL, bp: tools.BaseAPIParams(proxyURL)}
+	pt.smap = tools.GetClusterMap(t, proxyURL)
+	if pt.smap.IsWeighted() || pt.smap.CountActiveTs() != pt.smap.CountTargets() {
+		t.Skip("requires an unweighted cluster with all targets active")
+	}
+	enableRebalance(t, pt.bp)
+	clearWeightsOnExit(t, pt.bp)
+	b := pt.addBucket(1000, plBckOpts{})
+	other := pt.addBucket(300, plBckOpts{})
+	bck, bp := b.m.bck, pt.bp
+	set := func(weighting string) (string, error) {
+		return api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
+			Placement: &cmn.PlacementConfToSet{Weighting: apc.Ptr(weighting)},
+		})
+	}
+	pt.verify(true)
+	_, err := set("bogus")
+	tassert.Fatalf(t, err != nil, "accepted invalid placement policy")
+
+	// Metadata-only changes with no weights or equal weights do not move data.
+	xid, err := set(cmn.WeightingUniform)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, xid == "", "unweighted policy change started %q", xid)
+	b.uniform = true
+	pt.setWeights(plWeights(pt.smap, 1), false)
+	xid, err = set("")
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, xid == "", "equal-weight policy change started %q", xid)
+	b.uniform = false
+	tassert.Fatalf(t, pt.verify(false) == 0, "metadata-only changes moved objects")
+
+	pt.setWeights(seqWeights(pt.smap, 1), true)
+	pt.verify(false)
+	version := tools.GetClusterMap(t, proxyURL).Version
+	bmd, err := api.GetBMD(bp)
+	tassert.CheckFatal(t, err)
+
+	// A single update cannot redistribute and also re-mirror, re-EC, or rechunk.
+	for _, update := range []*cmn.BpropsToSet{
+		{Mirror: &cmn.MirrorConfToSet{Enabled: apc.Ptr(true), Copies: apc.Ptr[int64](2)}},
+		{EC: &cmn.ECConfToSet{Enabled: apc.Ptr(true), DataSlices: apc.Ptr(1), ParitySlices: apc.Ptr(1)}},
+		{Chunks: &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(cos.KiB))}},
+	} {
+		update.Placement = &cmn.PlacementConfToSet{Weighting: apc.Ptr(cmn.WeightingUniform)}
+		_, err = api.SetBucketProps(bp, bck, update)
+		tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "multiple layout xactions"), "expected conflicting layouts, got %v", err)
+	}
+	tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": "false"})
+	t.Cleanup(func() { tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": "true"}) })
+	_, err = set(cmn.WeightingUniform)
+	tassert.Fatalf(t, err != nil, "changed placement while rebalance is disabled")
+	tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": "true"})
+	after, err := api.GetBMD(bp)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, after.Version == bmd.Version, "rejected requests changed BMD: %d => %d", bmd.Version, after.Version)
+
+	// Continuously read while the policy is published and objects migrate.
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() {
+		for ctx.Err() == nil {
+			for _, name := range b.m.objNames[:32] {
+				_, err := api.GetObjectWithValidation(bp, bck, name, &api.GetArgs{Context: ctx})
+				if err != nil {
+					if ctx.Err() != nil {
+						err = nil
+					}
+					done <- err
+					return
+				}
+			}
+		}
+		done <- nil
+	}()
+	t.Cleanup(func() { cancel(); tassert.CheckError(t, <-done) })
+
+	wait := func(xid string) {
+		t.Helper()
+		tassert.Fatalf(t, xact.IsValidRebID(xid), "expected rebalance ID, got %q", xid)
+		for _, psi := range pt.smap.Pmap {
+			statusBP := bp
+			statusBP.URL = psi.URL(cmn.NetPublic)
+			status, err := api.GetOneXactionStatus(statusBP, &xact.ArgsMsg{Kind: apc.ActRebalance, Bck: bck})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, status.UUID == xid, "bucket status returned %q, expected %q", status.UUID, xid)
+		}
+		tools.WaitForRebalanceByID(t, bp, xid)
+		snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActRebalance})
+		tassert.CheckFatal(t, err)
+		for _, list := range snaps {
+			for _, snap := range list {
+				tassert.Fatalf(t, !snap.IsAborted() && snap.Err == "", "rebalance %s failed: %s %s", xid, snap.AbortErr, snap.Err)
+			}
+		}
+		pt.cleanup()
+		tassert.Fatalf(t, tools.GetClusterMap(t, proxyURL).Version == version, "bucket policy change modified Smap")
+	}
+	untouched := maps.Clone(other.prev)
+	before := maps.Clone(b.prev)
+	xid, err = set(cmn.WeightingUniform)
+	tassert.CheckFatal(t, err)
+	wait(xid)
+	b.uniform = true
+	pt.verify(true)
+	tassert.Fatalf(t, !maps.Equal(before, b.prev), "uniform policy moved no objects")
+	tassert.Fatalf(t, maps.Equal(untouched, other.prev), "redistributed the other bucket")
+
+	xid, err = set(cmn.WeightingUniform)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, xid == "", "unchanged policy started %q", xid)
+	_, err = setPlacementWeights(t, bp, zeroWeights(pt.smap))
+	checkHTTPStatus(t, err, http.StatusConflict, "clear weights with bucket override")
+
+	// Reset the placement field, then exercise reset-bprops as well.
+	xid, err = set("")
+	tassert.CheckFatal(t, err)
+	wait(xid)
+	b.uniform = false
+	pt.verify(true)
+	xid, err = set(cmn.WeightingUniform)
+	tassert.CheckFatal(t, err)
+	wait(xid)
+	b.uniform = true
+	pt.verify(true)
+	xid, err = api.ResetBucketProps(bp, bck)
+	tassert.CheckFatal(t, err)
+	wait(xid)
+	b.uniform = false
+	pt.verify(true)
+	tassert.Fatalf(t, maps.Equal(untouched, other.prev), "reset redistributed the other bucket")
+	props, err := api.HeadBucket(bp, bck, true)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, props.Placement == nil, "reset retained placement override")
+
+	pt.setWeights(zeroWeights(pt.smap), true)
+	pt.verify(true)
+}
+
+// EC can encode with D+P+1 targets, but migrating its owner needs one more active target
+func TestPlacementWeightsECAdmission(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
+	if smap.IsWeighted() || smap.CountActiveTs() != smap.CountTargets() || smap.CountTargets() > cmn.MaxSliceCount+2 {
+		t.Skip("requires an unweighted cluster with all targets active")
 	}
 	enableRebalance(t, bp)
-	clearWeightsOnExit(t, bp) // (runs after bucket cleanup)
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	clearWeightsOnExit(t, bp)
+	bck := cmn.Bck{Name: "placement-ec-" + cos.GenTie(), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{EC: &cmn.ECConfToSet{
+		Enabled: apc.Ptr(true), DataSlices: apc.Ptr(smap.CountTargets() - 2), ParitySlices: apc.Ptr(1), ObjSizeLimit: apc.Ptr[int64](0),
+	}}, true)
 
-	_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
-		Placement: &cmn.PlacementConfToSet{Weighting: apc.Ptr("bogus")},
-	})
-	tassert.Fatalf(t, err != nil, "expected error setting invalid %s", cmn.PropPlacementWeighting)
-
-	xid, err := setPlacementWeights(t, bp, seqWeights(smap, 1))
-	tassert.CheckFatal(t, err)
-	tools.WaitForRebalanceByID(t, bp, xid)
-
-	tlog.Logfln("set %s=%s", cmn.PropPlacementWeighting, cmn.WeightingUniform)
-	_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
+	_, err := setPlacementWeights(t, bp, seqWeights(smap, 1))
+	tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "including a spare"), "accepted EC migration without a spare: %v", err)
+	tassert.Fatalf(t, tools.GetClusterMap(t, proxyURL).Version == smap.Version, "rejected weights changed Smap")
+	// An override bucket is unaffected by target weights; reject removing that override instead.
+	xid, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
 		Placement: &cmn.PlacementConfToSet{Weighting: apc.Ptr(cmn.WeightingUniform)},
 	})
 	tassert.CheckFatal(t, err)
-	props, err := api.HeadBucket(bp, bck, true /*don't add*/)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, props.Placement != nil && props.Placement.Weighting == cmn.WeightingUniform,
-		"expected %s=%s, got %+v", cmn.PropPlacementWeighting, cmn.WeightingUniform, props.Placement)
-
-	_, err = setPlacementWeights(t, bp, zeroWeights(smap))
-	checkHTTPStatus(t, err, http.StatusConflict, "clear weights with bucket override")
-	tassert.Fatalf(t, tools.GetClusterMap(t, proxyURL).IsWeighted(), "weights cleared despite bucket override")
-
-	tlog.Logfln("reset %s", cmn.PropPlacementWeighting)
-	_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
-		Placement: &cmn.PlacementConfToSet{Weighting: apc.Ptr("")},
-	})
-	tassert.CheckFatal(t, err)
-	props, err = api.HeadBucket(bp, bck, true /*don't add*/)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, props.Placement == nil, "expected default placement, got %+v", props.Placement)
-
-	xid, err = setPlacementWeights(t, bp, zeroWeights(smap))
+	tassert.Fatalf(t, xid == "", "unweighted policy change started %q", xid)
+	xid, err = setPlacementWeights(t, bp, seqWeights(smap, 1))
 	tassert.CheckFatal(t, err)
 	tools.WaitForRebalanceByID(t, bp, xid)
-	tassert.Fatalf(t, !tools.GetClusterMap(t, proxyURL).IsWeighted(), "expected unweighted Smap")
+	bmd, err := api.GetBMD(bp)
+	tassert.CheckFatal(t, err)
+	_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
+		Placement: &cmn.PlacementConfToSet{Weighting: apc.Ptr("")}, Force: true,
+	})
+	tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "including a spare"), "accepted EC migration without a spare: %v", err)
+	after, err := api.GetBMD(bp)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, after.Version == bmd.Version, "rejected policy change modified BMD")
 }
 
 // happy path: with weights 1:2:3, each target owns its share of objects - per HRW, per stored
@@ -576,6 +631,55 @@ func TestPlacementWeightsJobs(t *testing.T) {
 	wait(apc.ActECEncode, xid)
 	ec.ec = true
 	pt.verify(false)
+	for _, weighting := range []string{cmn.WeightingUniform, ""} {
+		xid, err = api.SetBucketProps(pt.bp, ec.m.bck, &cmn.BpropsToSet{
+			Placement: &cmn.PlacementConfToSet{Weighting: apc.Ptr(weighting)},
+		})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, xact.IsValidRebID(xid), "expected EC placement rebalance, got %q", xid)
+		tools.WaitForRebalanceByID(t, pt.bp, xid)
+		snaps, err := api.QueryXactionSnaps(pt.bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActRebalance})
+		tassert.CheckFatal(t, err)
+		for _, list := range snaps {
+			for _, snap := range list {
+				tassert.Fatalf(t, !snap.IsAborted() && snap.Err == "", "EC migration failed: %s %s", snap.AbortErr, snap.Err)
+			}
+		}
+		ec.uniform = weighting == cmn.WeightingUniform
+		pt.cleanup()
+		pt.verify(true)
+	}
+	before := maps.Clone(ec.prev)
+	pt.setWeights(plWeights(pt.smap, 6, 3, 1), true)
+	pt.verify(true)
+	t.Run("recover-migrated-EC", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+		initMountpaths(t, pt.proxyURL)
+		checked := 0
+		for name, owner := range ec.prev {
+			if before[name] == owner {
+				continue
+			}
+			parts, _ := ecGetAllSlices(t, ec.m.bck, name)
+			removed := 0
+			for fqn := range parts {
+				ct, err := core.NewCTFromFQN(fqn, nil)
+				tassert.CheckFatal(t, err)
+				if ct.ContentType() == fs.ObjCT {
+					tassert.CheckFatal(t, os.Remove(fqn))
+					removed++
+				}
+			}
+			tassert.Fatalf(t, removed > 0, "no full replicas found for migrated %s", name)
+			_, err := api.GetObjectWithValidation(pt.bp, ec.m.bck, name, nil)
+			tassert.CheckFatal(t, err)
+			checked++
+			if checked == 4 {
+				break
+			}
+		}
+		tassert.Fatalf(t, checked == 4, "expected four migrated EC objects, checked %d", checked)
+	})
 }
 
 // graceful membership events: maintenance, shutdown and restart, decommission and rejoin
@@ -698,53 +802,6 @@ func TestPlacementWeightsNodeKill(t *testing.T) {
 	nsi := smap.GetTarget(tsi.ID())
 	tassert.Fatalf(t, nsi != nil && nsi.PlacementWeight() == expected, "%s: expected weight %d, got %v", tsi.StringEx(), expected, nsi)
 	pt.verify(true)
-}
-
-// decommission a target and restore it: it rejoins as a new admission with the mean weight
-func (pt *plTest) decommissionRejoin(tsi *meta.Snode) {
-	t := pt.t
-	smap := tools.GetClusterMap(t, pt.proxyURL)
-	cmd := tools.GetRestoreCmd(tsi)
-	var restored bool
-	t.Cleanup(func() {
-		if restored {
-			return
-		}
-		if err := tools.WaitNodePubAddrNotInUse(tsi, time.Minute); err == nil {
-			tassert.CheckError(t, tools.RestoreNode(cmd, false, "target cleanup"))
-			_, err = tools.WaitForClusterState(pt.proxyURL, "target cleanup", -1, 0, smap.CountTargets())
-			tassert.CheckError(t, err)
-			waitRunningRebResil(t, pt.bp)
-		}
-	})
-	tlog.Logfln("decommission %s (weight %d)", tsi.StringEx(), smap.GetTarget(tsi.ID()).PlacementWeight())
-	actVal := &apc.ActValRmNode{DaemonID: tsi.ID(), RmUserData: true, KeepInitialConfig: true}
-	xid, err := membershipRetry(t, func() (string, error) { return tools.DecommissionNode(pt.bp, actVal) })
-	tassert.CheckFatal(t, err)
-	nsmap, err := tools.WaitForClusterState(pt.proxyURL, "target decommissioned", smap.Version, smap.CountActivePs(), smap.CountTargets()-1, tsi.ID())
-	tassert.CheckFatal(t, err)
-	tools.WaitForRebalanceByID(t, pt.bp, xid)
-	pt.cleanup()
-	pt.verify(true)
-
-	expected := nsmap.MeanPlacementWeight()
-	tlog.Logfln("restore %s; expected weight %d (%s)", tsi.StringEx(), expected, nsmap.StrPlacementWeights())
-	tassert.CheckFatal(t, tools.WaitNodePubAddrNotInUse(tsi, time.Minute))
-	tassert.CheckFatal(t, tools.RestoreNode(cmd, false, "target"))
-	restored = true
-	_, err = tools.WaitForClusterState(pt.proxyURL, "target restored", nsmap.Version, 0, smap.CountTargets())
-	tassert.CheckFatal(t, err)
-	pt.settle()
-	nsi := tools.GetClusterMap(t, pt.proxyURL).GetTarget(tsi.ID())
-	tassert.Fatalf(t, nsi != nil && nsi.PlacementWeight() == expected, "%s: expected admission weight %d, got %v", tsi.StringEx(), expected, nsi)
-	tassert.Fatalf(t, pt.verify(true) > 0, "rejoined target moved no objects")
-}
-
-// talk to the current primary (node kills must not take down pt.proxyURL)
-func (pt *plTest) usePrimary() {
-	smap := tools.GetClusterMap(pt.t, pt.proxyURL)
-	pt.proxyURL = smap.Primary.URL(cmn.NetPublic)
-	pt.bp = tools.BaseAPIParams(pt.proxyURL)
 }
 
 // accept weights with one active target, then rebalance when the others leave maintenance
@@ -907,4 +964,402 @@ func testPlacementWeightsJoin(t *testing.T, requested int64) {
 	tassert.Fatalf(t, nsi.PlacementWeight() == expected,
 		"%s: expected admission weight %d (request %d), got %d", nsi.StringEx(), expected, requested, nsi.PlacementWeight())
 	tlog.Logfln("rejoined: %s", smap.StrPlacementWeights())
+}
+
+//
+// placement helpers
+//
+
+// assign weights 1, 2, 3, ... (times mult) in sorted target-ID order
+func seqWeights(smap *meta.Smap, mult int64) map[string]int64 {
+	tids := slices.Sorted(maps.Keys(smap.Tmap))
+	weights := make(map[string]int64, len(tids))
+	for i, tid := range tids {
+		weights[tid] = int64(i+1) * mult
+	}
+	return weights
+}
+
+func zeroWeights(smap *meta.Smap) map[string]int64 {
+	weights := make(map[string]int64, len(smap.Tmap))
+	for tid := range smap.Tmap {
+		weights[tid] = 0
+	}
+	return weights
+}
+
+// set weights on a freshly fetched Smap; retry when membership is busy
+func setPlacementWeights(tb testing.TB, bp api.BaseParams, weights map[string]int64) (string, error) {
+	return membershipRetry(tb, func() (string, error) {
+		smap, err := api.GetClusterMap(bp)
+		if err != nil {
+			return "", err
+		}
+		for tid, w := range weights {
+			if tsi := smap.GetTarget(tid); tsi != nil {
+				tsi.SetPlacementWeight(w)
+			}
+		}
+		return api.SetPlacementWeights(bp, smap)
+	})
+}
+
+func checkPlacementWeights(t *testing.T, smap *meta.Smap, weights map[string]int64) {
+	t.Helper()
+	for tid, w := range weights {
+		tsi := smap.GetTarget(tid)
+		tassert.Fatalf(t, tsi != nil, "missing target %s", meta.Tname(tid))
+		tassert.Fatalf(t, tsi.PlacementWeight() == w, "%s: expected weight %d, got %d", tsi.StringEx(), w, tsi.PlacementWeight())
+	}
+}
+
+func checkHTTPStatus(t *testing.T, err error, status int, what string) {
+	t.Helper()
+	tassert.Fatalf(t, err != nil, "%s: expected error", what)
+	herr := cmn.AsErrHTTP(err)
+	tassert.Fatalf(t, herr != nil, "%s: expected HTTP error, got %v", what, err)
+	tassert.Fatalf(t, herr.Status == status, "%s: expected status %d, got %d (%v)", what, status, herr.Status, err)
+}
+
+// ensure rebalance is enabled for the duration of the test
+func enableRebalance(t *testing.T, bp api.BaseParams) {
+	config, err := api.GetClusterConfig(bp)
+	tassert.CheckFatal(t, err)
+	if config.Rebalance.Enabled {
+		return
+	}
+	tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": "true"})
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": "false"})
+	})
+}
+
+// wait for rebalance and resilver that are already running, if any
+// - unlike tools.WaitForRebalAndResil, do not wait (poll) for one to start
+func waitRunningRebResil(t *testing.T, bp api.BaseParams) {
+	t.Helper()
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
+	// until no rebalance is running (404), not just the current one finished
+	_, err := api.WaitForStatus(bp, &xargs, func(status *nl.Status) (bool, bool, error) {
+		return false, status.IsFinished(), nil
+	})
+	if err != nil && !cmn.IsStatusNotFound(err) {
+		tassert.CheckError(t, err)
+	}
+	xargs = xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
+	_, err = api.WaitForSnaps(bp, &xargs, xargs.NotRunning())
+	tassert.CheckError(t, err)
+}
+
+// clear weights when the test exits
+// - register before creating buckets: cleanups run LIFO, and a bucket override prevents clearing
+// - no upfront wait: setPlacementWeights retries while membership is busy (rebalance running)
+func clearWeightsOnExit(t *testing.T, bp api.BaseParams) {
+	t.Cleanup(func() {
+		smap, err := api.GetClusterMap(bp)
+		tassert.CheckError(t, err)
+		if err != nil || !smap.IsWeighted() {
+			return
+		}
+		xid, err := setPlacementWeights(t, bp, zeroWeights(smap))
+		tassert.CheckError(t, err)
+		if xid != "" {
+			tools.WaitForRebalanceByID(t, bp, xid)
+		}
+	})
+}
+
+func plWeight(tsi *meta.Snode, uniform bool) float64 {
+	if w := tsi.PlacementWeight(); !uniform && w > 0 {
+		return float64(w)
+	}
+	return 1
+}
+
+// (for logging: "t[id]=count", sorted)
+func plCounts(counts map[string]int) []string {
+	out := make([]string, 0, len(counts))
+	for _, tid := range slices.Sorted(maps.Keys(counts)) {
+		out = append(out, meta.Tname(tid)+"="+strconv.Itoa(counts[tid]))
+	}
+	return out
+}
+
+// assign the given weights to targets in sorted ID order; the remaining targets get 1
+func plWeights(smap *meta.Smap, ws ...int64) map[string]int64 {
+	weights := make(map[string]int64, len(smap.Tmap))
+	for i, tid := range slices.Sorted(maps.Keys(smap.Tmap)) {
+		weights[tid] = 1
+		if i < len(ws) {
+			weights[tid] = ws[i]
+		}
+	}
+	return weights
+}
+
+func plScaled(weights map[string]int64, mult int64) map[string]int64 {
+	scaled := make(map[string]int64, len(weights))
+	for tid, w := range weights {
+		scaled[tid] = w * mult
+	}
+	return scaled
+}
+
+func plHeaviest(weights map[string]int64) string {
+	return slices.MaxFunc(slices.Sorted(maps.Keys(weights)), func(a, b string) int { return cmp.Compare(weights[a], weights[b]) })
+}
+
+////////////
+// plTest //
+////////////
+
+func newPlTest(t *testing.T) *plTest {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
+	proxyURL := tools.RandomProxyURL(t)
+	pt := &plTest{t: t, bp: tools.BaseAPIParams(proxyURL), proxyURL: proxyURL}
+	pt.smap = tools.GetClusterMap(t, proxyURL)
+	if pt.smap.IsWeighted() || pt.smap.CountActiveTs() != pt.smap.CountTargets() {
+		t.Skipf("requires an unweighted cluster with all targets active: %s", pt.smap)
+	}
+	enableRebalance(t, pt.bp)
+	clearWeightsOnExit(t, pt.bp) // (runs after bucket cleanup)
+	return pt
+}
+
+// create bucket and PUT num objects
+func (pt *plTest) addBucket(num int, opts plBckOpts) *plBucket {
+	t := pt.t
+	m := &ioContext{t: t, num: num, fileSize: cos.KiB, fixedSize: true, prefix: "pl/"}
+	m.initAndSaveState(false)
+	var props *cmn.BpropsToSet
+	if opts.uniform || opts.ecData > 0 {
+		props = &cmn.BpropsToSet{}
+	}
+	if opts.uniform {
+		props.Placement = &cmn.PlacementConfToSet{Weighting: apc.Ptr(cmn.WeightingUniform)}
+	}
+	if opts.ecData > 0 {
+		props.EC = &cmn.ECConfToSet{
+			Enabled:      apc.Ptr(true),
+			DataSlices:   apc.Ptr(opts.ecData),
+			ParitySlices: apc.Ptr(opts.ecParity),
+			ObjSizeLimit: apc.Ptr[int64](0),
+		}
+	}
+	tools.CreateBucket(t, pt.proxyURL, m.bck, props, true /*cleanup*/)
+	m.puts()
+	b := &plBucket{m: m, uniform: opts.uniform, ec: opts.ecData > 0}
+	pt.bcks = append(pt.bcks, b)
+	return b
+}
+
+// add a bucket populated by a job (copy, archive, rename, etc.)
+func (pt *plTest) addJobBucket(bck cmn.Bck, objNames []string, fileSize uint64) *plBucket {
+	m := &ioContext{t: pt.t, bck: bck, fileSize: fileSize, fixedSize: fileSize > 0}
+	m.init(false)
+	m.objNames = slices.Clone(objNames)
+	m.num = len(m.objNames)
+	pt.t.Cleanup(func() { tools.DestroyBucket(pt.t, pt.proxyURL, bck) })
+	b := &plBucket{m: m}
+	pt.bcks = append(pt.bcks, b)
+	return b
+}
+
+func (pt *plTest) dropBucket(b *plBucket) {
+	pt.bcks = slices.DeleteFunc(pt.bcks, func(x *plBucket) bool { return x == b })
+}
+
+// empty the override bucket and reset its policy: clearing target weights is rejected while any bucket has an override
+func (pt *plTest) resetUniform(b *plBucket) {
+	b.m.del()
+	xid, err := api.SetBucketProps(pt.bp, b.m.bck, &cmn.BpropsToSet{Placement: &cmn.PlacementConfToSet{Weighting: apc.Ptr("")}})
+	tassert.CheckFatal(pt.t, err)
+	tools.WaitForRebalanceByID(pt.t, pt.bp, xid)
+	pt.dropBucket(b)
+}
+
+// set weights; when relative shares change, wait for rebalance and remove misplaced copies
+func (pt *plTest) setWeights(weights map[string]int64, wantReb bool) {
+	t := pt.t
+	t.Helper()
+	tlog.Logfln("set placement weights %v", weights)
+	xid, err := setPlacementWeights(t, pt.bp, weights)
+	tassert.CheckFatal(t, err)
+	if !wantReb {
+		tassert.Fatalf(t, xid == "", "unexpected rebalance %q", xid)
+		return
+	}
+	tassert.Fatalf(t, xid != "", "expected rebalance")
+	tools.WaitForRebalanceByID(t, pt.bp, xid)
+	pt.cleanup()
+}
+
+// after a membership change: drain rebalance (and resilver), remove misplaced copies
+func (pt *plTest) settle() {
+	pt.t.Helper()
+	waitRunningRebResil(pt.t, pt.bp)
+	pt.cleanup()
+}
+
+// rebalance leaves source copies behind; remove them (see reb/cleanup.go)
+func (pt *plTest) cleanup() {
+	pt.t.Helper()
+	for range lcMaxCleanupPasses {
+		if lcRunCleanup(pt.t, pt.bp) == 0 {
+			return
+		}
+	}
+	pt.t.Fatalf("cleanup did not converge in %d passes", lcMaxCleanupPasses)
+}
+
+// verify every bucket; return the number of objects that moved since the previous verify
+// (excluding buckets with uniform override - those must not move unless uniformMayMove)
+func (pt *plTest) verify(uniformMayMove bool) (moved int) {
+	pt.t.Helper()
+	smap := tools.GetClusterMap(pt.t, pt.proxyURL)
+	smap.InitDigests()
+	for _, b := range pt.bcks {
+		moved += pt.verifyBucket(b, smap, uniformMayMove)
+	}
+	return moved
+}
+
+func (pt *plTest) verifyBucket(b *plBucket, smap *meta.Smap, uniformMayMove bool) (moved int) {
+	var (
+		t   = pt.t
+		m   = b.m
+		bid = m.bck.String()
+	)
+	t.Helper()
+	props, err := api.HeadBucket(pt.bp, m.bck, true /*don't add*/)
+	tassert.CheckFatal(t, err)
+	if b.ec {
+		err = api.WaitForXaction(pt.bp, &xact.ArgsMsg{Kind: apc.ActECPut, Bck: m.bck, Timeout: ECPutTimeOut})
+		tassert.CheckFatal(t, err)
+	}
+	bck := meta.NewBck(m.bck.Name, m.bck.Provider, m.bck.Ns, props)
+
+	// 1. expected owners
+	expected := make(map[string]int, smap.CountActiveTs())
+	owners := make(map[string]string, len(m.objNames))
+	for _, name := range m.objNames {
+		tsi, err := smap.HrwObjName2T(bck, name)
+		tassert.CheckFatal(t, err)
+		expected[tsi.ID()]++
+		owners[name] = tsi.ID()
+	}
+
+	// 2. stored locations: on the owner, status OK
+	msg := &apc.LsoMsg{Props: apc.JoinProps(apc.GetPropsLocation, apc.GetPropsStatus, apc.GetPropsSize)}
+	lst, err := api.ListObjects(pt.bp, m.bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(lst.Entries) == len(m.objNames), "%s: expected %d objects, got %d", bid, len(m.objNames), len(lst.Entries))
+	locations := make(map[string]string, len(lst.Entries))
+	for _, en := range lst.Entries {
+		tassert.Fatalf(t, strings.Contains(en.Location, apc.LocationPropSepa), "%s: missing location for %s", bid, en.Name)
+		tname, _ := core.ParseObjLoc(en.Location)
+		tid := meta.N2ID(tname)
+		tassert.Fatalf(t, tid == owners[en.Name], "%s/%s: stored on %s, expected %s", bid, en.Name, tname, meta.Tname(owners[en.Name]))
+		tassert.Fatalf(t, en.Flags&apc.LsoStatusMask == apc.LocOK, "%s/%s: location status %d", bid, en.Name, en.Flags&apc.LsoStatusMask)
+		if m.fixedSize {
+			tassert.Fatalf(t, en.Size == int64(m.fileSize), "%s/%s: size %d", bid, en.Name, en.Size)
+		}
+		locations[en.Name] = tid
+		if old := b.prev[en.Name]; old != "" && old != tid {
+			tassert.Fatalf(t, !b.uniform || uniformMayMove, "%s: uniform override moved %s: %s => %s", bid, en.Name, old, tid)
+			if !b.uniform {
+				moved++
+			}
+		}
+	}
+	b.prev = locations
+
+	// 3. per-target summary (measured on targets) equals expected exactly - no misplaced copies
+	// (EC: slices and replicas are not objects; skip)
+	if !b.ec {
+		ctrl := &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true, PerTarget: true}
+		_, summaries, err := api.GetBucketSummary(pt.bp, cmn.QueryBcks(m.bck), ctrl, api.BsummArgs{})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(summaries) == 1, "%s: expected one summary, got %d", bid, len(summaries))
+		for tid, tsi := range smap.Tmap {
+			var have uint64
+			if res, ok := summaries[0].Targets[tid]; ok {
+				have = res.ObjCount.Present
+			}
+			tassert.Fatalf(t, have == uint64(expected[tid]), "%s: %s summary has %d objects, expected %d (in maintenance: %t)",
+				bid, tsi.StringEx(), have, expected[tid], tsi.InMaintOrDecomm())
+		}
+	}
+
+	// 4. shares among active targets: a generous statistical bound, independent of HRW
+	var sum float64
+	for _, tsi := range smap.Tmap {
+		if !tsi.InMaintOrDecomm() {
+			sum += plWeight(tsi, b.uniform)
+		}
+	}
+	n := float64(len(m.objNames))
+	for tid, tsi := range smap.Tmap {
+		if tsi.InMaintOrDecomm() {
+			tassert.Fatalf(t, expected[tid] == 0, "%s: %s in maintenance owns %d objects", bid, tsi.StringEx(), expected[tid])
+			continue
+		}
+		p := plWeight(tsi, b.uniform) / sum
+		limit := 6*math.Sqrt(n*p*(1-p)) + 2
+		tassert.Fatalf(t, math.Abs(float64(expected[tid])-n*p) <= limit,
+			"%s: %s owns %d objects, expected %.1f +/- %.1f", bid, tsi.StringEx(), expected[tid], n*p, limit)
+	}
+	tlog.Logfln("%s: %v (uniform: %t, moved: %d)", bid, plCounts(expected), b.uniform, moved)
+
+	// 5. everything reads back
+	m.gets(nil, true /*validate*/)
+	m.ensureNoGetErrors()
+	return moved
+}
+
+// decommission a target and restore it: it rejoins as a new admission with the mean weight
+func (pt *plTest) decommissionRejoin(tsi *meta.Snode) {
+	t := pt.t
+	smap := tools.GetClusterMap(t, pt.proxyURL)
+	cmd := tools.GetRestoreCmd(tsi)
+	var restored bool
+	t.Cleanup(func() {
+		if restored {
+			return
+		}
+		if err := tools.WaitNodePubAddrNotInUse(tsi, time.Minute); err == nil {
+			tassert.CheckError(t, tools.RestoreNode(cmd, false, "target cleanup"))
+			_, err = tools.WaitForClusterState(pt.proxyURL, "target cleanup", -1, 0, smap.CountTargets())
+			tassert.CheckError(t, err)
+			waitRunningRebResil(t, pt.bp)
+		}
+	})
+	tlog.Logfln("decommission %s (weight %d)", tsi.StringEx(), smap.GetTarget(tsi.ID()).PlacementWeight())
+	actVal := &apc.ActValRmNode{DaemonID: tsi.ID(), RmUserData: true, KeepInitialConfig: true}
+	xid, err := membershipRetry(t, func() (string, error) { return tools.DecommissionNode(pt.bp, actVal) })
+	tassert.CheckFatal(t, err)
+	nsmap, err := tools.WaitForClusterState(pt.proxyURL, "target decommissioned", smap.Version, smap.CountActivePs(), smap.CountTargets()-1, tsi.ID())
+	tassert.CheckFatal(t, err)
+	tools.WaitForRebalanceByID(t, pt.bp, xid)
+	pt.cleanup()
+	pt.verify(true)
+
+	expected := nsmap.MeanPlacementWeight()
+	tlog.Logfln("restore %s; expected weight %d (%s)", tsi.StringEx(), expected, nsmap.StrPlacementWeights())
+	tassert.CheckFatal(t, tools.WaitNodePubAddrNotInUse(tsi, time.Minute))
+	tassert.CheckFatal(t, tools.RestoreNode(cmd, false, "target"))
+	restored = true
+	_, err = tools.WaitForClusterState(pt.proxyURL, "target restored", nsmap.Version, 0, smap.CountTargets())
+	tassert.CheckFatal(t, err)
+	pt.settle()
+	nsi := tools.GetClusterMap(t, pt.proxyURL).GetTarget(tsi.ID())
+	tassert.Fatalf(t, nsi != nil && nsi.PlacementWeight() == expected, "%s: expected admission weight %d, got %v", tsi.StringEx(), expected, nsi)
+	tassert.Fatalf(t, pt.verify(true) > 0, "rejoined target moved no objects")
+}
+
+// talk to the current primary (node kills must not take down pt.proxyURL)
+func (pt *plTest) usePrimary() {
+	smap := tools.GetClusterMap(pt.t, pt.proxyURL)
+	pt.proxyURL = smap.Primary.URL(cmn.NetPublic)
+	pt.bp = tools.BaseAPIParams(pt.proxyURL)
 }

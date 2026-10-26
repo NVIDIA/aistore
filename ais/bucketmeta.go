@@ -82,6 +82,7 @@ type (
 		propsToUpdate *cmn.BpropsToSet // update existing props
 		revertProps   *cmn.BpropsToSet // props to revert
 		setProps      *cmn.Bprops      // new props to set
+		rmdCtx        *rmdModifier     // placement change: persist RMD before BMD, distribute together
 
 		txnID string // transaction UUID
 		bcks  []*meta.Bck

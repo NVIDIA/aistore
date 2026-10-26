@@ -1010,7 +1010,7 @@ func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
 			ctx.status = http.StatusBadRequest
 			return fmt.Errorf("cannot set placement weights: %s has a single target", clone)
 		}
-		if err := p.checkPlacementVer(ctx.smap); err != nil {
+		if err := p.checkPlacementVer(ctx.smap, apc.ActSetPlacementWeights); err != nil {
 			ctx.status = http.StatusConflict
 			return err
 		}
@@ -1028,6 +1028,17 @@ func (p *proxy) _placementWeightsPre(ctx *smapModifier, clone *smapX) error {
 		if err := p.canRebalance(ctx.smap, false /*cleanup*/); err != nil {
 			ctx.status = http.StatusServiceUnavailable
 			return err
+		}
+		var ecErr error
+		p.owner.bmd.get().Range(nil, nil, func(bck *meta.Bck) bool {
+			if !_uniformPlacement(bck.Props) {
+				ecErr = checkECPlacement(bck, bck.Props, clone)
+			}
+			return ecErr != nil
+		})
+		if ecErr != nil {
+			ctx.status = http.StatusBadRequest
+			return ecErr
 		}
 	}
 

@@ -3138,7 +3138,17 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, sender string) error {
 	// Register `nl` for rebalance/resilver
 	smap := p.owner.smap.get()
 	if smap.IsIC(p.si) && smap.CountActiveTs() > 0 && (smap.IsPrimary(p.si) || p.ClusterStarted()) {
-		nl := xact.NewXactNL(xact.RebID2S(newRMD.Version), apc.ActRebalance, &smap.Smap, nil)
+		xid := xact.RebID2S(newRMD.Version)
+
+		// when rebalance is limited to user-specified bucket(s)
+		var bcks []*cmn.Bck
+		if msg.Action == apc.ActRebalance {
+			if args, _ := msg.rebalanceArgs(xid); !args.Bck.IsEmpty() {
+				bcks = []*cmn.Bck{&args.Bck}
+			}
+		}
+
+		nl := xact.NewXactNL(xid, apc.ActRebalance, &smap.Smap, nil, bcks...)
 		nl.SetOwner(equalIC)
 		err := p.notifs.add(nl)
 		debug.AssertNoErr(err)

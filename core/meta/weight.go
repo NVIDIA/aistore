@@ -23,9 +23,6 @@ import (
 // - require a same-version cluster (see ais/pversion.go)
 
 // TODO, in order:
-// - bucket placement.weighting: reject while node versions differ; rebalance the bucket on change
-// - EC: validate spare-target capacity before weight-triggered owner migration
-//
 // - Python SDK:
 //   * get/set weights
 //   * weighted HRW for direct-to-target access (****)
