@@ -776,10 +776,14 @@ func resetPropsHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := api.ResetBucketProps(apiBP, bck); err != nil {
+	xid, err := api.ResetBucketProps(apiBP, bck)
+	if err != nil {
 		return V(err)
 	}
 	actionDone(c, "Bucket props successfully reset to cluster defaults")
+	if xid != "" {
+		actionDonef(c, "Started job %s. %s", xid, toMonitorMsg(c, xid, ""))
+	}
 	return nil
 }
 

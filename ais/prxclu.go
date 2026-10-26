@@ -920,18 +920,11 @@ func (p *proxy) setPlacementWeights(w http.ResponseWriter, r *http.Request, msg 
 		nlog.Warningln(p.String(), msg.Action, "with fewer than 2 active targets:", preview.StrPlacementWeights())
 	}
 	if !ctx.skipReb {
-		var tsi *meta.Snode
-		for _, node := range ctx.smap.Tmap {
-			if !node.InMaintOrDecomm() {
-				tsi = node
-				break
-			}
-		}
-		if err := p.notifyEarlyGFN(ctx, ctx.smap, tsi); err != nil {
+		if err := p.notifyEarlyGFN(ctx, ctx.smap, ""); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		defer p.stopEarlyGFN(ctx, tsi.ID())
+		defer p.stopEarlyGFN(ctx, "")
 	}
 
 	if err := p.owner.smap.modify(ctx); err != nil {

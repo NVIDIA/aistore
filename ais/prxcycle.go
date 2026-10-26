@@ -472,15 +472,16 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, join
 		return nil
 	}
 
-	return p.notifyEarlyGFN(ctx, smap, si)
+	return p.notifyEarlyGFN(ctx, smap, si.ID())
 }
 
 // keeping separate from _earlyGFN: stop-maintenance can rebalance while reactivating
 // multiple targets when there are currently zero active targets
-func (p *proxy) notifyEarlyGFN(ctx *smapModifier, smap *smapX, tsi *meta.Snode) error {
+// - tid: joining (or reactivated) target, if any; empty for weight and bucket placement updates
+func (p *proxy) notifyEarlyGFN(ctx *smapModifier, smap *smapX, tid string) error {
 	// Notify targets before publishing the updated Smap.
 	actMsgExt := p.newAmsgActVal(apc.ActStartGFN, nil)
-	actMsgExt.UUID = tsi.ID()
+	actMsgExt.UUID = tid
 	revs := revsPair{&smapX{Smap: meta.Smap{Version: smap.Version}}, actMsgExt}
 	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
 		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
@@ -954,7 +955,7 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, tsi *meta
 		debug.Assert(tsi != nil)
 
 		smap := p.owner.smap.get()
-		if err := p.notifyEarlyGFN(ctx, smap, tsi); err != nil {
+		if err := p.notifyEarlyGFN(ctx, smap, tsi.ID()); err != nil {
 			return "", err
 		}
 		defer p.stopEarlyGFN(ctx, tsi.ID())

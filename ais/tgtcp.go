@@ -1381,15 +1381,19 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	ntid := msg.UUID
+	// joining (or reactivated) target, if any
+	var detail string
+	if ntid := msg.UUID; ntid != "" {
+		detail = "join " + meta.Tname(ntid) + " "
+	}
+	detail += newSmap.String()
 	if cmn.Rom.V(4, cos.ModAIS) {
-		nlog.Infoln(t.String(), msg.String(), newSmap.String(), "join", meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
+		nlog.Infoln(t.String(), msg.String(), detail) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {
 	case apc.ActStartGFN:
 		reb.OnTimedGFN()
 	case apc.ActStopGFN:
-		detail := meta.Tname(ntid) + " " + newSmap.String()
 		reb.OffTimedGFN(detail)
 	default:
 		debug.Func(func() { debug.Assert(false, msg.String()) })

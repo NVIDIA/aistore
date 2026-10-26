@@ -474,8 +474,8 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	default:
 		return "", fmt.Errorf(fmtErrInvaldAction, msg.Action, []string{apc.ActSetBprops, apc.ActResetBprops})
 	}
-	// Serialize policy changes with weight updates and membership operations, including
-	// policy changes that currently leave ownership unchanged (e.g., equal weights).
+
+	// serialize with weight updates and membership operations
 	if _uniformPlacement(bprops) != _uniformPlacement(nprops) {
 		if err := p.beginMembership(msg.Action); err != nil {
 			return "", err
@@ -491,21 +491,15 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 		published bool
 	)
 	if _rePlacement(bprops, nprops, smap) {
-		for _, tsi := range smap.Tmap {
-			if tsi.InMaintOrDecomm() {
-				continue
-			}
-			gfnCtx = &smapModifier{smap: smap}
-			if err := p.notifyEarlyGFN(gfnCtx, smap, tsi); err != nil {
-				return "", err
-			}
-			defer func() {
-				if !published {
-					p.stopEarlyGFN(gfnCtx, tsi.ID())
-				}
-			}()
-			break
+		gfnCtx = &smapModifier{smap: smap}
+		if err := p.notifyEarlyGFN(gfnCtx, smap, ""); err != nil {
+			return "", err
 		}
+		defer func() {
+			if !published {
+				p.stopEarlyGFN(gfnCtx, "")
+			}
+		}()
 	}
 	// msg{propsToUpdate} => nmsg{nprops} and prep context(nmsg)
 	nmsg := *msg
@@ -562,8 +556,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 		c.bcastAbort(bck, rerr) // cleanup
 	}
 	if ctx.rmdCtx != nil {
-		// The BMD and its migration are already published. A failed transaction
-		// commit must not cancel the rebalance required by the authoritative BMD.
+		// RMD is already in flight - not aborting rebalance
 		xid = ctx.rmdCtx.rebID
 		if rerr != nil {
 			rerr = fmt.Errorf("%w (placement rebalance %s)", rerr, xid)
@@ -1284,8 +1277,9 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 		nlog.Warningln("Ignoring insufficient-target error:", err)
 		err = nil
 	}
-	if err == nil && nprops.Placement != nil && bprops.Placement == nil {
-		if err := p.checkPlacementVer(smap, apc.ActSetBprops); err != nil {
+	// creating: updates are checked by checkBckPlacement
+	if err == nil && len(creating) > 0 && nprops.Placement != nil {
+		if err := p.checkPlacementVer(smap, apc.ActCreateBck); err != nil {
 			return nil, cmn.NewErrHTTP(nil, err, http.StatusConflict)
 		}
 	}

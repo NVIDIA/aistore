@@ -321,6 +321,8 @@ ais bucket props set ais://abc placement.weighting=""        # reset (follow tar
   or rechunk the bucket; submit these layout changes separately
 - ownership-changing updates require rebalance enabled and obey the same membership
   serialization and EC spare-target checks as target-weight updates
+- any change of `placement.weighting`, even in an unweighted cluster, returns `ErrBusy`
+  (HTTP 409) while a rebalance or membership change is in progress; retry when it completes
 - clearing target weights returns HTTP 409 while any bucket has an override
 - a pre-5.2 node cannot join a cluster with any bucket override
 
