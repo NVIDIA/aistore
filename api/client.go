@@ -250,12 +250,13 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		}
 		herr := cmn.NewErrHTTP(req, err, resp.StatusCode)
 		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
+		herr.SetCause(err)
 		return nil, herr
 	}
 	if uerr, ok := errors.AsType[*url.Error](err); ok {
-		err = uerr.Unwrap()
-		herr := cmn.NewErrHTTP(req, err, 0)
+		herr := cmn.NewErrHTTP(req, uerr.Unwrap(), 0)
 		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
+		herr.SetCause(uerr)
 		return nil, herr
 	}
 	return nil, err

@@ -22,6 +22,12 @@ import (
 	"github.com/urfave/cli"
 )
 
+type nodeStatusCtx struct {
+	err error
+	mu  sync.Mutex
+	ok  bool
+}
+
 // NOTE: target's metric names & kinds
 func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 	smap, err := getClusterMap(c)
@@ -44,7 +50,9 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 
 func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.NodeStatusMap, err error) {
 	smap, tstatusMap, pstatusMap, err = fillStatusMapNoVersion(c, daeType)
-	checkNodeStatusVersion(c, tstatusMap, pstatusMap)
+	if err == nil {
+		checkNodeStatusVersion(c, tstatusMap, pstatusMap)
+	}
 	return smap, tstatusMap, pstatusMap, err
 }
 
@@ -61,27 +69,30 @@ func fillStatusMapNoVersion(c *cli.Context, daeType string) (smap *meta.Smap, ts
 	}
 	var (
 		wg         cos.WG
-		mu         = &sync.Mutex{}
+		ctx        = &nodeStatusCtx{}
 		pcnt, tcnt = smap.CountProxies(), smap.CountTargets()
 	)
 	switch daeType {
 	case apc.Target:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), tcnt)
 		tstatusMap = make(teb.NodeStatusMap, tcnt)
-		daeStatus(smap.Tmap, tstatusMap, wg, mu)
+		daeStatus(smap.Tmap, tstatusMap, wg, ctx)
 	case apc.Proxy:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt)
 		pstatusMap = make(teb.NodeStatusMap, pcnt)
-		daeStatus(smap.Pmap, pstatusMap, wg, mu)
+		daeStatus(smap.Pmap, pstatusMap, wg, ctx)
 	default:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt+tcnt)
 		tstatusMap = make(teb.NodeStatusMap, tcnt)
 		pstatusMap = make(teb.NodeStatusMap, pcnt)
-		daeStatus(smap.Tmap, tstatusMap, wg, mu)
-		daeStatus(smap.Pmap, pstatusMap, wg, mu)
+		daeStatus(smap.Tmap, tstatusMap, wg, ctx)
+		daeStatus(smap.Pmap, pstatusMap, wg, ctx)
 	}
 
 	wg.Wait()
+	if !ctx.ok && ctx.err != nil {
+		return smap, tstatusMap, pstatusMap, ctx.err
+	}
 	return smap, tstatusMap, pstatusMap, nil
 }
 
@@ -96,22 +107,23 @@ func isRebalancing(tstatusMap teb.NodeStatusMap) bool {
 	return false
 }
 
-func daeStatus(nodeMap meta.NodeMap, out teb.NodeStatusMap, wg cos.WG, mu *sync.Mutex) {
+func daeStatus(nodeMap meta.NodeMap, out teb.NodeStatusMap, wg cos.WG, ctx *nodeStatusCtx) {
 	for _, si := range nodeMap {
 		wg.Add(1)
 		go func(si *meta.Snode) {
-			_addStatus(si, mu, out)
+			_addStatus(si, ctx, out)
 			wg.Done()
 		}(si)
 	}
 }
 
-func _addStatus(node *meta.Snode, mu *sync.Mutex, out teb.NodeStatusMap) {
+func _addStatus(node *meta.Snode, ctx *nodeStatusCtx, out teb.NodeStatusMap) {
 	ds, err := _status(node)
 	if err != nil {
 		ds = &stats.NodeStatus{}
 		ds.Snode = node
-		if herr := cmn.AsErrHTTP(err); herr != nil {
+		if herr := cmn.AsErrHTTP(err); herr != nil && herr.TypeCode != "" {
+			// TODO: show OpError as a meaningful network failure in STATUS column
 			ds.Status = herr.TypeCode
 		} else if strings.HasPrefix(err.Error(), "errNodeNotFound") {
 			ds.Status = "[errNodeNotFound]"
@@ -122,9 +134,14 @@ func _addStatus(node *meta.Snode, mu *sync.Mutex, out teb.NodeStatusMap) {
 		ds.Status = teb.FmtNodeStatus(node)
 	}
 
-	mu.Lock()
+	ctx.mu.Lock()
 	out[node.ID()] = ds
-	mu.Unlock()
+	if err == nil {
+		ctx.ok = true
+	} else if ctx.err == nil && !node.InMaintOrDecomm() {
+		ctx.err = err
+	}
+	ctx.mu.Unlock()
 }
 
 func _status(node *meta.Snode) (ds *stats.NodeStatus, err error) {

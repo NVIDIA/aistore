@@ -59,6 +59,7 @@ const (
 //   - ErrBckNotFound is a specific 404
 type (
 	ErrHTTP struct {
+		err        error  // original cause (not serialized); via Unwrap
 		TypeCode   string `json:"tcode,omitempty"`
 		Message    string `json:"message"`
 		Method     string `json:"method"`
@@ -1272,6 +1273,11 @@ func (e *ErrHTTP) init(r *http.Request, err error, ecode int) {
 	}
 	e.Node = thisNodeName
 }
+
+// keep the original error, e.g. *url.Error from http.Client.Do,
+// for errors.Is/As: connection refused, client timeout, etc.
+func (e *ErrHTTP) SetCause(err error) { e.err = err }
+func (e *ErrHTTP) Unwrap() error      { return e.err }
 
 func (e *ErrHTTP) Error() (s string) {
 	if e.TypeCode != "" && e.TypeCode != "ErrFailedTo" {
