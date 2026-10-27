@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -1557,6 +1558,7 @@ func TestStartupFormerPrimary(t *testing.T) {
 
 	formerCmd, err := tools.KillNode(baseParams, former)
 	tassert.CheckFatal(t, err)
+	formerArgs := slices.Clone(formerCmd.Args)
 	defer func() {
 		if !formerStarted {
 			t.Setenv(env.AisPrimaryEP, electedURL)
@@ -1581,11 +1583,7 @@ func TestStartupFormerPrimary(t *testing.T) {
 	targetStarted := false
 	defer func() {
 		t.Setenv(env.AisPrimaryEP, electedURL)
-		if !formerStarted {
-			err := tools.RestoreNode(formerCmd, false, "former primary (cleanup)")
-			tassert.CheckError(t, err)
-			formerStarted = err == nil
-		}
+		formerCmd.Args = formerArgs
 		if !targetStarted {
 			tassert.CheckError(t, tools.RestoreNode(targetCmd, false, "target (cleanup)"))
 		}
@@ -1594,6 +1592,24 @@ func TestStartupFormerPrimary(t *testing.T) {
 		// target explicitly during cleanup, including its newly generated verifying key.
 		_, err := tools.JoinCluster(electedURL, target)
 		tassert.CheckError(t, err)
+
+		// former primary not in the elected Smap: either not restarted or still running as a
+		// provisional primary (stale Smap, `-ntargets=1`) - restart it with the current Smap and original args
+		smap, err := api.GetClusterMap(tools.BaseAPIParams(electedURL))
+		tassert.CheckError(t, err)
+		if err == nil && smap.GetProxy(former.ID()) == nil {
+			tlog.Logfln("Former primary %s not in %s - restarting it as secondary", former.ID(), smap)
+			if formerStarted {
+				if _, err := tools.KillNode(tools.BaseAPIParams(formerURL), former); err != nil {
+					tlog.Logfln("Former primary %s: %v", former.ID(), err)
+				}
+			}
+			err = jsp.SaveMeta(filepath.Join(formerConfig.ConfigDir, fname.Smap), smap, nil)
+			tassert.CheckError(t, err)
+			err = tools.RestoreNode(formerCmd, false, "former primary (cleanup)")
+			tassert.CheckError(t, err)
+			formerStarted = err == nil
+		}
 		_, err = tools.WaitForClusterState(electedURL, "restore original membership", 0,
 			original.CountActivePs(), original.CountActiveTs())
 		tassert.CheckError(t, err)
@@ -1609,7 +1625,7 @@ func TestStartupFormerPrimary(t *testing.T) {
 	}
 	err = jsp.SaveMeta(filepath.Join(formerConfig.ConfigDir, fname.Smap), stale, nil)
 	tassert.CheckFatal(t, err)
-	formerCmd.Args = append(formerCmd.Args, "-ntargets=1")
+	formerCmd.Args = append(slices.Clone(formerArgs), "-ntargets=1")
 	err = tools.RestoreNode(formerCmd, false, "former primary")
 	tassert.CheckFatal(t, err)
 	formerStarted = true

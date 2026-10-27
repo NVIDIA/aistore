@@ -11,6 +11,7 @@ import (
 	"maps"
 	"math/rand/v2"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -824,9 +825,12 @@ retry:
 	goto retry
 }
 
-func WaitNodeReady(url string, opts ...*WaitRetryOpts) (err error) {
+// - dial first: api wraps connection errors into cmn.ErrHTTP, which
+// cos.IsErrRetriableConn does not recognize (e.g., freshly restored node not yet listening)
+// - then health, retrying 503
+func WaitNodeReady(nodeURL string, opts ...*WaitRetryOpts) (err error) {
 	var (
-		bp            = BaseAPIParams(url)
+		bp            = BaseAPIParams(nodeURL)
 		retries       = maxNodeRetry
 		retryInterval = controlPlaneSleep
 		i             int
@@ -835,8 +839,18 @@ func WaitNodeReady(url string, opts ...*WaitRetryOpts) (err error) {
 		retries = opts[0].MaxRetries
 		retryInterval = opts[0].Interval
 	}
+	u, err := url.Parse(nodeURL)
+	if err != nil {
+		return err
+	}
+	addr := u.Host
+	netFam := cmn.AddrToNetworkFamily(addr)
 while503:
-	err = api.Health(bp)
+	conn, err := net.DialTimeout(netFam, addr, retryInterval)
+	if err == nil {
+		conn.Close()
+		err = api.Health(bp)
+	}
 	if err == nil {
 		return nil
 	}
