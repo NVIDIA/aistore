@@ -13,6 +13,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- `aistore[mcp]` requires `mcp<2` to prevent server startup failures while the
+  server still uses the version 1 interface.
 - `AISShardReader` preserves multi-dot extensions, preventing sample members
   such as `sample.left.jpg` and `sample.right.jpg` from silently overwriting each other.
 - `MultipartDecoder` no longer truncates bodies containing `\r\n\r\n` when part
