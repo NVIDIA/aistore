@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -649,10 +650,8 @@ func (h *htrun) run(config *cmn.Config) error {
 		}()
 	}
 
-	ep := h.si.PubNet.TCPEndpoint()
-	if h.pubAddrAny(config) {
-		ep = ":" + h.si.PubNet.Port
-	} else if len(h.si.PubExtra) > 0 {
+	ep := h._pubListenEP(config)
+	if !h.pubAddrAny(config) {
 		// multihome: listen on additional configured pub addr-s
 		for _, pubExtra := range h.si.PubExtra {
 			h._listen(pubExtra, logger, tlsPub, config, g.netServ.pub.useIPv6)
@@ -660,6 +659,63 @@ func (h *htrun) run(config *cmn.Config) error {
 	}
 
 	return g.netServ.pub.listen(ep, logger, tlsPub, config) // stay here
+}
+
+// public endpoint to listen on
+func (h *htrun) _pubListenEP(config *cmn.Config) string {
+	if h.pubAddrAny(config) {
+		return ":" + h.si.PubNet.Port
+	}
+	return h.si.PubNet.TCPEndpoint()
+}
+
+// the risk of "overlapping" aisnode run - (which'll fail shortly with "bind: address already in use"
+// but not before triggering (`NodeRestartedPrev` => GFN) sequence and stealing nlog symlinks)
+// - this risk exists;
+// that's why we go extra length:
+// - bind (and close) the same local endpoints this node is about to listen on;
+// - do not dial - the advertised address may be a proxying LB or K8s gateway
+// (that accepts connections whether or not any node is behind it)
+func (h *htrun) epsInUse(config *cmn.Config) string {
+	var (
+		lc      net.ListenConfig
+		timeout = config.Timeout.MaxKeepalive.D()
+		sleep   = cos.ProbingFrequency(timeout)
+		eps     = h._allListenEPs(config)
+	)
+	for _, ep := range eps {
+		for elapsed := time.Duration(0); ; elapsed += sleep {
+			ln, err := lc.Listen(context.Background(), "tcp", ep)
+			if err == nil {
+				ln.Close()
+				break
+			}
+			if !errors.Is(err, syscall.EADDRINUSE) {
+				nlog.Warningln("failed to probe", ep, "[", err, "]") // (listen will fail with the same)
+				break
+			}
+			if elapsed >= timeout {
+				return ep
+			}
+			time.Sleep(sleep)
+		}
+	}
+	return ""
+}
+
+// all local endpoints this node listens on
+func (h *htrun) _allListenEPs(config *cmn.Config) []string {
+	eps := []string{h.si.ControlNet.TCPEndpoint()}
+	if config.HostNet.UseIntraData {
+		eps = append(eps, h.si.DataNet.TCPEndpoint())
+	}
+	eps = append(eps, h._pubListenEP(config))
+	if !h.pubAddrAny(config) {
+		for _, pubExtra := range h.si.PubExtra {
+			eps = append(eps, pubExtra.TCPEndpoint())
+		}
+	}
+	return eps
 }
 
 func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config, useIPv6 bool) {

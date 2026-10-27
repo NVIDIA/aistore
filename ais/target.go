@@ -81,13 +81,6 @@ type (
 	}
 )
 
-type redial struct {
-	t         *target
-	inUse     string
-	dialTout  time.Duration
-	totalTout time.Duration
-}
-
 // interface guard
 var (
 	_ cos.Runner  = (*target)(nil)
@@ -678,14 +671,15 @@ func (t *target) initRecvHandlers() {
 
 func (t *target) checkStartupMarkers(config *cmn.Config) (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
-		red := redial{t: t, dialTout: config.Timeout.CplaneOperation.D(), totalTout: config.Timeout.MaxKeepalive.D()}
-		if red.acked() {
-			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)", t, red.inUse)
+		// check duplicate IPs in the cluster
+		if ep := t.epsInUse(config); ep != "" {
+			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)", t, ep)
 			return
 		}
 		t.statsT.SetFlag(cos.NodeAlerts, cos.NodeRestarted)
 		fs.PersistMarker(fname.NodeRestartedPrev, false /*quiet*/)
 	}
+
 	if fs.MarkerExists(fname.RebalanceMarker) {
 		t.statsT.SetFlag(cos.NodeAlerts, cos.RebalanceInterrupted)
 	}
@@ -694,49 +688,6 @@ func (t *target) checkStartupMarkers(config *cmn.Config) (fatalErr, writeErr err
 	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker, false /*quiet*/)
 	return
-}
-
-// NOTE in re 'node-restarted' scenario: the risk of "overlapping" aisnode run -
-// which'll fail shortly with "bind: address already in use" but not before
-// triggering (`NodeRestartedPrev` => GFN) sequence and stealing nlog symlinks
-// - this risk exists, and that's why we go extra length
-func (red *redial) acked() bool {
-	var (
-		err   error
-		tsi   = red.t.si
-		sleep = cos.ProbingFrequency(red.totalTout)
-		addrs = []string{tsi.PubNet.TCPEndpoint()}
-		once  bool
-	)
-	if ep := red.t.si.DataNet.TCPEndpoint(); ep != addrs[0] {
-		addrs = append(addrs, ep)
-	} else if ep := red.t.si.ControlNet.TCPEndpoint(); ep != addrs[0] {
-		addrs = append(addrs, ep)
-	}
-	for _, addr := range addrs {
-		for elapsed := time.Duration(0); elapsed < red.totalTout; elapsed += sleep {
-			ctx := context.Background()
-			dialer := &net.Dialer{Timeout: red.dialTout}
-			netFam := cmn.AddrToNetworkFamily(addr)
-			if _, err = dialer.DialContext(ctx, netFam, addr); err != nil {
-				break
-			}
-			once = true
-			time.Sleep(sleep)
-			// could be shutting down
-		}
-		if !once {
-			return false
-		}
-		if err == nil {
-			if red.inUse == "" {
-				red.inUse = addr
-			}
-			return true
-		}
-		time.Sleep(sleep)
-	}
-	return false // got tcp synack at least once but not (getting it) any longer
 }
 
 //
