@@ -2047,6 +2047,13 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 				return
 			}
 		}
+		if backendBck.Props == nil {
+			bargs := bckPropsArgs{bck: backendBck}
+			backendBck.Props = bargs.inheritMerge()
+		}
+		if err := p.checkAccess(w, r, backendBck, apc.AccessRW); err != nil {
+			return
+		}
 	}
 
 	// 3. plain ais://bucket-name with no nothing
@@ -2474,6 +2481,9 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 			bckArgs.r = r
 			bckArgs.bck = backendBck
 			bckArgs.msg = msg
+			if !nprops.BackendBck.Equal(&bck.Props.BackendBck) {
+				bckArgs.perms = apc.AccessRW
+			}
 			bckArgs.dpq = apireq.dpq
 			bckArgs.query = apireq.query
 			bckArgs.createAIS = false

@@ -244,7 +244,7 @@ if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
   ## NOTE: must have the same build tags and, in particular, same backends -
   ## otherwise, `make deploy` below will rebuild and replace aisnode binary
   echo -e "${remote_target_cnt}\n${remote_proxy_cnt}\n3\n" | \
-    DEPLOY_AS_NEXT_TIER="true" AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" AIS_AUTHN_ENABLED=false make deploy
+    DEPLOY_AS_NEXT_TIER="true" AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" AIS_AUTHN_ENABLED=false AIS_AUTHN_DEPLOY=false make deploy # disable authn for remote cluster
 
   # Do not try attach remote cluster if the main cluster did not start.
   if [[ ${deployment} == "all" ]]; then

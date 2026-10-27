@@ -607,7 +607,7 @@ test:short:authn:
     RE: "TestAuth"
     TEST_RACE: "true"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - ais auth login $AIS_AUTHN_SU_NAME -p $AIS_AUTHN_SU_PASS
     - make test-run
     - ais auth logout
