@@ -797,6 +797,70 @@ func TestLsoRemoteCached(t *testing.T) {
 	}
 }
 
+// Runs remote list objects while a target goes into maintenance (every page must return).
+func TestLsoRemoteMembershipChange(t *testing.T) {
+	const maxWait = 30 * time.Second
+	var (
+		baseParams = tools.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      50,
+			fileSize: 128,
+			prefix:   "lso-remote-membership-" + cos.GenTie() + "/",
+		}
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck, MinTargets: 3})
+
+	m.initAndSaveState(true /*cleanup*/)
+	m.remotePuts(false /*evict*/)
+
+	msg := &apc.LsoMsg{Prefix: m.prefix, PageSize: 2}
+	msg.AddProps(apc.GetPropsDefaultAIS...)
+	_, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, msg.ContinuationToken != "", "expecting more than one page")
+
+	// keep the designated (paging) target
+	dt, err := m.smap.HrwTargetTask(msg.UUID)
+	tassert.CheckFatal(t, err)
+	var target *meta.Snode
+	for _, tsi := range m.smap.Tmap {
+		if tsi.ID() != dt.ID() && !tsi.InMaintOrDecomm() {
+			target = tsi
+			break
+		}
+	}
+	tlog.Logfln("Put %s in maintenance (designated %s)", target.StringEx(), dt.StringEx())
+	_, err = startMaintenanceRetry(t, baseParams, &apc.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		rebID := m.stopMaintenance(target)
+		m.waitAndCheckCluState()
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
+	})
+
+	for page := 2; ; page++ {
+		errCh := make(chan error, 1)
+		go func() {
+			_, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
+			errCh <- err
+		}()
+		select {
+		case err = <-errCh:
+		case <-time.After(maxWait):
+			t.Fatalf("page %d did not return in %v", page, maxWait)
+		}
+		if err != nil || msg.ContinuationToken == "" {
+			tlog.Logfln("page %d: %v", page, err)
+			break
+		}
+	}
+	if err != nil {
+		tassert.Errorf(t, strings.Contains(err.Error(), "membership change"), "expecting membership change, got: %v", err)
+	}
+}
+
 // Runs standard list objects but selects new random proxy every page.
 func TestLsoRandProxy(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {

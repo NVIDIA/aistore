@@ -331,6 +331,11 @@ loop:
 			resp := r.doPage()
 			r.DecPending()
 			if r.IsAborted() {
+				// Do() waits on respCh
+				if resp.Err == nil {
+					resp = &LsoRsp{Status: http.StatusInternalServerError, Err: r.AbortErr()}
+				}
+				r.respCh <- resp
 				break loop
 			}
 			if resp.Err == nil {
@@ -354,6 +359,7 @@ func (r *LsoXact) stop() {
 	if r.walk.remote {
 		if r.DemandBase.IsDone() {
 			// must be aborted
+			r.DemandBase.Stop()
 			if !r.walk.wor {
 				r.p.dm.Close(r.Err())
 				r.p.dm.UnregRecv()
@@ -592,6 +598,13 @@ func (r *LsoXact) nextPageR() (err error) {
 		smapCurr := core.T.Sowner().Get()
 		if err := r.smap.CheckSameTargets(smapCurr, r.Name()); err != nil {
 			r.Abort(err)
+			if r.walk.this {
+				// TODO:
+				// - transition to use T2T control
+				// - for details, see xact/xs/TODO.md, "Out-of-band control for all xactions"
+				r.sendTerm(r.msg.UUID, nil, err)
+				time.Sleep(time.Second) // TODO: remove
+			}
 			return err
 		}
 	}
@@ -614,8 +627,8 @@ func (r *LsoXact) nextPageR() (err error) {
 				err = npg.filterAddLmeta(page)
 				r.walk.last = page.ContinuationToken == ""
 			}
-		case <-r.stopCh.Listen():
-			err = ErrGone
+		case <-r.ChanAbort():
+			err = r.AbortErr()
 		}
 	}
 
