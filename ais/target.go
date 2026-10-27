@@ -671,7 +671,7 @@ func (t *target) initRecvHandlers() {
 
 func (t *target) checkStartupMarkers(config *cmn.Config) (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
-		// check duplicate IPs in the cluster
+		// check for local listener conflicts (overlapping run)
 		if ep := t.epsInUse(config); ep != "" {
 			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)", t, ep)
 			return

@@ -672,7 +672,7 @@ func (h *htrun) _pubListenEP(config *cmn.Config) string {
 // TODO: consider using `flock` (bind-and-close iterations do not prevent a race)
 //
 // the risk of "overlapping" aisnode run - (which'll fail shortly with "bind: address already in use"
-// but not before triggering (`NodeRestartedPrev` => GFN) sequence and stealing nlog symlinks)
+// but not before triggering (`NodeRestartedPrev` => GFN) sequence)
 // - this risk exists;
 // that's why we go extra length:
 // - bind (and close) the same local endpoints this node is about to listen on;

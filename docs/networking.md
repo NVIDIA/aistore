@@ -462,7 +462,7 @@ Such a run can act on the node-restarted state (`node_restarted.prev` and the su
 To catch overlaps before restart recovery proceeds, a target restarting after an unclean shutdown (that is, when the `node_restarted` marker is present):
 
 * binds and immediately closes each effective local listener: intra-control, intra-data (when separate), and public;
-* probes the public wildcard bind when enabled; otherwise, probes the configured public address and any additional multi-homed public addresses;
+* probes the public wildcard bind (`:PORT`) when the public port differs from the intra-cluster ports; otherwise, probes the configured public address and any additional multi-homed public addresses;
 * when an endpoint is in use (`EADDRINUSE`), retries over the `timeout.max_keepalive` grace period to let a previous instance shut down;
 * if the endpoint is still in use, exits with:
 
@@ -517,10 +517,10 @@ Use the address and port from the startup diagnostic to inspect listening socket
 
 ```console
 ss -ltnp
-lsof -nP -iTCP:8081 -sTCP:LISTEN
+lsof -nP -iTCP:51082 -sTCP:LISTEN
 ```
 
-Replace `8081` with the reported port. Check public, intra-control, and intra-data listeners, including wildcard binds: `:PORT` can conflict with a listener on a specific local address. Identify the owning process and its configuration before stopping it.
+Replace `51082` with the reported port. Check public, intra-control, and intra-data listeners, including wildcard binds: `:PORT` can conflict with a listener on a specific local address. Identify the owning process and its configuration before stopping it.
 
 #### Conflicting cluster registrations
 
