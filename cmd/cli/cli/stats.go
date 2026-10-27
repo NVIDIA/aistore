@@ -123,7 +123,7 @@ func _addStatus(node *meta.Snode, ctx *nodeStatusCtx, out teb.NodeStatusMap) {
 		ds = &stats.NodeStatus{}
 		ds.Snode = node
 		if herr := cmn.AsErrHTTP(err); herr != nil && herr.TypeCode != "" {
-			// TODO: show OpError as a meaningful network failure in STATUS column
+			// TODO: show a meaningful network failure in the STATUS col (see related `bab474d19ccc`)
 			ds.Status = herr.TypeCode
 		} else if strings.HasPrefix(err.Error(), "errNodeNotFound") {
 			ds.Status = "[errNodeNotFound]"
