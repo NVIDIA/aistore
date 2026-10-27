@@ -63,10 +63,18 @@ func tstClnArgs(t *testing.T) *clnArgs {
 	return &clnArgs{rargs: *tstRargs(t)}
 }
 
-type tstTarget struct {
-	*mock.TargetMock
-	head func(*core.LOM, *meta.Snode, ...string) (*cmn.ObjectPropsV2, error)
-}
+type (
+	tstTarget struct {
+		*mock.TargetMock
+		head func(*core.LOM, *meta.Snode, ...string) (*cmn.ObjectPropsV2, error)
+	}
+	tstSowner struct {
+		meta.Sowner
+		smap *meta.Smap
+	}
+)
+
+func (o *tstSowner) Get() *meta.Smap { return o.smap }
 
 // interface guard
 var _ core.Target = (*tstTarget)(nil)
@@ -92,11 +100,13 @@ func tstPeerProps(cksumVal string) *cmn.ObjectPropsV2 {
 	return op
 }
 
-// run the cleanup jogger over a single mountpath
+// run the cleanup jogger over a single mountpath with the head-batcher of the run
 func tstWalkCleanup(t *testing.T, clnArgs *clnArgs, mi *fs.Mountpath, bck cmn.Bck) {
 	t.Helper()
 
 	rargs := &clnArgs.rargs
+	core.T.(*tstTarget).SO = &tstSowner{smap: rargs.smap}
+	clnArgs.initHdb()
 	cl := &clnJogger{
 		rebJogger: rebJogger{rargs: rargs, ver: rargs.smap.Version, wg: &sync.WaitGroup{}},
 		clnArgs:   clnArgs,
@@ -109,8 +119,16 @@ func tstWalkCleanup(t *testing.T, clnArgs *clnArgs, mi *fs.Mountpath, bck cmn.Bc
 	if stopRange := cl.walkBck(meta.NewBck(bck.Name, apc.AIS, cmn.NsGlobal)); stopRange {
 		t.Fatal("walkBck stopped bmd.Range")
 	}
+	st := clnArgs.hdb.Load().End()
 	if v := clnArgs.stats.visits.Load(); v != 1 {
 		t.Fatalf("visited %d objects, expecting 1", v)
+	}
+	// one object: the head-batcher sends it as a per-object HEAD
+	if st.Throttled > 0 {
+		t.Skipf("head-batch: the host is at Critical load (%+v)", st)
+	}
+	if st.Fellback != 1 {
+		t.Fatalf("head-batch: %+v, expecting the object in Fellback (%s)", st, tstClnStats(clnArgs))
 	}
 }
 

@@ -5,9 +5,11 @@
 package reb
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"sync"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -25,8 +27,6 @@ import (
 )
 
 // TODO:
-//
-// - Throttling. Cleanup hits HeadObjT2T per LOM; N joggers across N targets.
 //
 // - Support num-workers parallelism (nwp) - add runNwpCleanup(), clnWorker, and
 //   `worker.do = worker.doCleanup`
@@ -64,7 +64,8 @@ type (
 	clnArgs struct {
 		rargs
 		stats clnStats
-		force bool // xact.ArgsMsg.Force (to remove diverged)
+		hdb   ratomic.Pointer[core.HdbBatcher] // the head-batcher of the run (ctlMsg reads it at any time)
+		force bool                             // xact.ArgsMsg.Force (to remove diverged)
 	}
 	clnJogger struct {
 		rebJogger
@@ -81,7 +82,8 @@ type (
 //
 // Cleanup mode is the post-#288 / post-lomAcks-removal recovery tool: an
 // operator-driven pass that reclaims source-side leftovers from a prior
-// rebalance using HeadObjT2T as the per-LOM safety check.
+// rebalance using head-batch (HeadObjT2T for a copy that is not on its HRW
+// mountpath) as the per-LOM safety check.
 //
 // See also: 'ais space-cleanup' (recommended for routine use).
 func (reb *Reb) RunCleanup(smap *meta.Smap, extArgs *ExtArgs, force bool) {
@@ -198,6 +200,7 @@ func (reb *Reb) runCleanup(clnArgs *clnArgs) {
 		wg  = &sync.WaitGroup{}
 		ver = clnArgs.smap.Version
 	)
+	clnArgs.initHdb()
 	for _, mi := range clnArgs.avail {
 		cl := &clnJogger{
 			rebJogger: rebJogger{rargs: &clnArgs.rargs, ver: ver, wg: wg},
@@ -209,10 +212,14 @@ func (reb *Reb) runCleanup(clnArgs *clnArgs) {
 	}
 	wg.Wait()
 
+	var sb cos.SB
+	sb.Init(128)
+	st := clnArgs.hdb.Load().End()
+	st.Str(&sb, '=')
 	if err := clnArgs.xreb.AbortErr(); err != nil {
-		nlog.Warningln(clnArgs.logHdr, "finish cleanup run, abort joggers: [", err, "]")
+		nlog.Warningln(clnArgs.logHdr, "finish cleanup run, abort joggers: [", err, "]", sb.String())
 	} else {
-		nlog.Infoln(clnArgs.logHdr, "finish cleanup run")
+		nlog.Infoln(clnArgs.logHdr, "finish cleanup run", sb.String())
 	}
 }
 
@@ -319,14 +326,81 @@ func (j *clnJogger) _lwalk(lom *core.LOM, fqn string) error {
 		return cmn.ErrSkip
 	}
 
-	return j.clnArgs.verifyRemove(lom, tsi)
+	if !lom.IsHRW() {
+		return j.clnArgs.verifyRemove(lom, tsi)
+	}
+	return j.clnArgs.verifyAdd(lom, tsi)
 }
 
 /////////////
 // clnArgs //
 /////////////
 
-// verify a misplaced object against its HRW owner, and remove the local copy
+// create the head-batcher of the run
+func (clnArgs *clnArgs) initHdb() {
+	senders, err := xact.TuneNumWorkers(clnArgs.xreb.Name(), xact.NwpDflt, len(clnArgs.avail))
+	if err != nil {
+		nlog.Warningln(clnArgs.logHdr, err, "[ head-batch: one sender ]")
+	}
+	clnArgs.hdb.Store(core.NewHdbBatcher(&core.HdbArgs{
+		Cb:      clnArgs.peerReply,
+		Abort:   clnArgs.xreb,
+		Smap:    clnArgs.smap,
+		LogHdr:  clnArgs.logHdr,
+		Mod:     cos.ModReb,
+		Senders: max(senders, 1), // NwpNone or an error: one sender
+	}))
+}
+
+// head-batch: queue a misplaced copy on its HRW mountpath
+func (clnArgs *clnArgs) verifyAdd(lom *core.LOM, tsi *meta.Snode) error {
+	if !clnArgs.snap(lom, nil) {
+		return cmn.ErrSkip
+	}
+	clnArgs.hdb.Load().Add(lom, tsi)
+	return nil
+}
+
+// head-batch callback: remove the local copy that the peer has
+// - runs on a head-batch sender
+// - must not call Add or End (see core/headbatch.go)
+func (clnArgs *clnArgs) peerReply(ent *core.HdbEnt) {
+	var (
+		diverged error
+		stats    = &clnArgs.stats
+	)
+	switch ent.Status {
+	case apc.HdbSame:
+	case apc.HdbDiverged:
+		if !clnArgs.force {
+			cnt := stats.keepDiverged.Inc()
+			cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "diverged:", ent.LIF.Cname(), "peer:", ent.Tsi.StringEx(), ent.Cause, "[ keep:", cnt, "]")
+			return
+		}
+		diverged = errors.New(ent.Cause)
+	case apc.HdbMissing:
+		stats.keepPeerMissing.Inc()
+		return
+	case apc.HdbBusy: // the peer could not lock it
+		if cmn.Rom.V(4, cos.ModReb) {
+			nlog.Infoln(clnArgs.logHdr, "peer busy, keep:", ent.LIF.Cname(), "peer:", ent.Tsi.StringEx())
+		}
+		return
+	default: // no answer or failed
+		cnt := stats.errHEAD.Inc()
+		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, ent.Tsi.StringEx(), "head-batch(", ent.LIF.Cname(), ") returned", ent.Status, ent.Cause)
+		return
+	}
+	lom, err := ent.LIF.LOM()
+	if err != nil {
+		stats.errLoad.Inc()
+		return
+	}
+	clnArgs.remove(lom, ent.Unchanged, diverged)
+	core.FreeLOM(lom)
+}
+
+// per-object HEAD: verify a misplaced copy and remove it
 // returns nil (removed) or cmn.ErrSkip (kept)
 func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 	var (
@@ -334,32 +408,14 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 		oa       cmn.ObjAttrs
 		stats    = &clnArgs.stats
 	)
-	if !lom.TryLock(false) {
-		stats.skipBusy.Inc()
+	if !clnArgs.snap(lom, &oa) {
 		return cmn.ErrSkip
 	}
-	err := lom.Load(false /*cache*/, true /*locked*/)
-	if err == nil {
-		oa.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
-	}
-	lom.Unlock(false)
-
-	if err != nil {
-		if cos.IsNotExist(err) {
-			return cmn.ErrSkip
-		}
-		stats.errLoad.Inc()
-		return cmn.ErrSkip
-	}
-	stats.loads.Inc()
-
-	if lom.IsLoadedUnresolvedFntl() {
-		stats.skipFntl.Inc()
+	if lom.IsCopy() {
 		return cmn.ErrSkip
 	}
 
 	// check the expected location, request specific props to establish identity
-	// TODO -- FIXME: HeadObjT2T() must support batch request to ensure scalability
 	op, err := core.T.HeadObjT2T(lom, tsi,
 		apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCustom, apc.GetPropsETag)
 	if err != nil {
@@ -367,7 +423,7 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 			stats.keepPeerMissing.Inc()
 		} else {
 			cnt := stats.errHEAD.Inc()
-			cmn.SparseWarn(cos.ModReb, cnt, tsi.StringEx(), "HEAD(", lom.Cname(), ") returned", err)
+			cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, tsi.StringEx(), "HEAD(", lom.Cname(), ") returned", err)
 		}
 		return cmn.ErrSkip
 	}
@@ -382,33 +438,67 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 		diverged = eqErr
 	}
 
+	unchanged := func(lom *core.LOM) bool { return lom.ObjAttrs().EqLocal(&oa) }
+	if !clnArgs.remove(lom, unchanged, diverged) {
+		return cmn.ErrSkip
+	}
+	return nil
+}
+
+// load the copy under the read lock
+func (clnArgs *clnArgs) snap(lom *core.LOM, oa *cmn.ObjAttrs) bool {
+	stats := &clnArgs.stats
+	if !lom.TryLock(false) {
+		stats.skipBusy.Inc()
+		return false
+	}
+	err := lom.Load(false /*cache*/, true /*locked*/)
+	if err == nil && oa != nil {
+		oa.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
+	}
+	lom.Unlock(false)
+
+	if err != nil {
+		if !cos.IsNotExist(err) {
+			stats.errLoad.Inc()
+		}
+		return false
+	}
+	stats.loads.Inc()
+
+	if lom.IsLoadedUnresolvedFntl() {
+		stats.skipFntl.Inc()
+		return false
+	}
+	return true
+}
+
+// remove the copy under the write lock, unless it changed after the snap
+func (clnArgs *clnArgs) remove(lom *core.LOM, unchanged func(*core.LOM) bool, diverged error) bool {
+	stats := &clnArgs.stats
 	if !lom.TryLock(true) {
 		stats.skipBusyLate.Inc()
-		return cmn.ErrSkip
+		return false
 	}
 	defer lom.Unlock(true)
 
 	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
-		if cos.IsNotExist(err) {
-			return cmn.ErrSkip
+		if !cos.IsNotExist(err) {
+			stats.errLoad.Inc()
 		}
-		stats.errLoad.Inc()
-		return cmn.ErrSkip
+		return false
 	}
-	if !lom.ObjAttrs().EqLocal(&oa) {
+	if !unchanged(lom) {
 		cnt := stats.skipChanged.Inc()
 		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "changed while unlocked, keep:", lom.Cname(), "[ changed:", cnt, "]")
-		return cmn.ErrSkip
+		return false
 	}
 
-	// remove
 	size := lom.Lsize()
-	errRm := lom.RemoveObj()
-
-	if errRm != nil {
+	if errRm := lom.RemoveObj(); errRm != nil {
 		cnt := stats.errRemove.Inc()
 		cmn.SparseWarn(cos.ModReb, cnt, clnArgs.logHdr, "remove failed:", lom.Cname(), errRm, "[ failures:", cnt, "]")
-		return cmn.ErrSkip
+		return false
 	}
 	if diverged != nil {
 		cnt := stats.removeDiverged.Inc()
@@ -417,7 +507,7 @@ func (clnArgs *clnArgs) verifyRemove(lom *core.LOM, tsi *meta.Snode) error {
 
 	clnArgs.xreb.ObjsAdd(1, size)
 	stats.removeMisplaced.Inc()
-	return nil
+	return true
 }
 
 // xreb.CtlMsg() callback (set via xreg.RebArgs; compare with reb/ctlmsg.go)
@@ -501,5 +591,11 @@ func (clnArgs *clnArgs) ctlMsg(sb *cos.SB) {
 	if v := s.errRemove.Load(); v > 0 {
 		sb.WriteString(" err-remove=")
 		sb.WriteInt64(v)
+	}
+
+	// head-batch
+	if hb := clnArgs.hdb.Load(); hb != nil {
+		st := hb.Stats()
+		st.Str(sb, '=')
 	}
 }
