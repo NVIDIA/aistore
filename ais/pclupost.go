@@ -787,6 +787,13 @@ func (c *clupost) admit(osi *meta.Snode) error {
 	if _, err := c.placementWeight(smap); err != nil {
 		return newErrJoinRejected(c.r, err)
 	}
+	if c.apiOp == apc.SelfJoin || c.apiOp == apc.AdminJoin {
+		// warn only: an address may have been reused while another node's registration is stale
+		if dup, err := smap.IsDupNet(nsi); err != nil {
+			nlog.Warningf("%s: %s: %v (conflicting %s flags: %s) - proceeding with admission (see docs/networking.md)",
+				p, c.apiOp, err, dup, dup.Fl2S())
+		}
+	}
 	if absent {
 		nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
 	}

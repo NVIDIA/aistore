@@ -669,6 +669,8 @@ func (h *htrun) _pubListenEP(config *cmn.Config) string {
 	return h.si.PubNet.TCPEndpoint()
 }
 
+// TODO: consider using `flock` (bind-and-close iterations do not prevent a race)
+//
 // the risk of "overlapping" aisnode run - (which'll fail shortly with "bind: address already in use"
 // but not before triggering (`NodeRestartedPrev` => GFN) sequence and stealing nlog symlinks)
 // - this risk exists;
