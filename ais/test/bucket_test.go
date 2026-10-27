@@ -1527,7 +1527,11 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 
 	for _, srcBck := range srcBcks {
 		_, err := api.RenameBucket(bp, srcBck, dstBck)
-		tools.CheckErrIsNotFound(t, err)
+		if srcBck.IsRemote() {
+			expectStatus(t, err, http.StatusMethodNotAllowed) // cannot rename remote
+		} else {
+			tools.CheckErrIsNotFound(t, err)
+		}
 		_, err = api.HeadBucket(bp, dstBck, true /* don't add */)
 		tools.CheckErrIsNotFound(t, err)
 	}

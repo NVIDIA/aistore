@@ -99,6 +99,10 @@ func TestRemoteBucketFirstTouchAccess(t *testing.T) {
 		backend     bool
 		blob        bool
 		setBackend  bool
+		prefetch    bool
+		shardIndex  bool
+		createNBI   bool
+		move        bool
 		wantStatus  int
 		wantPresent bool
 	}{
@@ -108,6 +112,10 @@ func TestRemoteBucketFirstTouchAccess(t *testing.T) {
 		{name: "non-admin-blob-download", exists: true, blob: true, wantStatus: http.StatusNotFound, wantPresent: true},
 		{name: "non-admin-set-unregistered-backend", exists: true, setBackend: true, wantStatus: http.StatusOK, wantPresent: true},
 		{name: "authenticated-linked-backend", exists: true, backend: true, wantStatus: http.StatusOK, wantPresent: true},
+		{name: "read-only-prefetch", exists: true, prefetch: true, wantStatus: http.StatusForbidden},
+		{name: "unauthenticated-shard-index", exists: true, shardIndex: true, wantStatus: http.StatusUnauthorized},
+		{name: "unauthenticated-create-inventory", exists: true, createNBI: true, wantStatus: http.StatusUnauthorized},
+		{name: "unauthenticated-move", exists: true, move: true, wantStatus: http.StatusMethodNotAllowed},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			remoteBck := cmn.Bck{Name: "remote-" + trand.String(10), Provider: apc.AIS}
@@ -127,6 +135,9 @@ func TestRemoteBucketFirstTouchAccess(t *testing.T) {
 			}}
 			if test.blob {
 				testBP = loginWithACLs(t, authBP, bp, smap.UUID, nil, apc.AccessRW)
+			}
+			if test.prefetch {
+				testBP = loginWithACLs(t, authBP, bp, smap.UUID, nil, apc.AccessRO)
 			}
 			if test.backend {
 				_, err := api.ListObjects(bp, linkedBck, nil, api.ListArgs{})
@@ -156,6 +167,14 @@ func TestRemoteBucketFirstTouchAccess(t *testing.T) {
 				_, err = api.HeadBucket(testBP, requestBck, false /*dontAddRemote*/)
 			case test.setBackend:
 				_, err = api.SetBucketProps(testBP, requestBck, backendProps)
+			case test.prefetch:
+				_, err = api.Prefetch(testBP, requestBck, &apc.PrefetchMsg{})
+			case test.shardIndex:
+				_, err = api.IndexBucketShards(testBP, requestBck, &apc.IndexShardMsg{})
+			case test.createNBI:
+				_, err = api.CreateNBI(testBP, requestBck, &apc.CreateNBIMsg{})
+			case test.move:
+				_, err = api.RenameBucket(testBP, requestBck, cmn.Bck{Name: "dst-" + trand.String(10), Provider: apc.AIS})
 			default:
 				_, err = api.ListObjects(testBP, requestBck, nil, api.ListArgs{})
 			}

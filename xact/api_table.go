@@ -137,7 +137,8 @@ var Table = map[string]Descriptor{
 	apc.ActIndexShard: {
 		DisplayName:    "shard-index",
 		Scope:          ScopeB,
-		Startable:      false, // use `ais bucket shard-index build`
+		Access:         apc.AccessRO, // index objects go to the system bucket (admin only)
+		Startable:      false,        // use `ais bucket shard-index build`
 		RefreshCap:     false,
 		ConflictRebRes: true,
 		AbortByReb:     false,
@@ -309,7 +310,7 @@ var Table = map[string]Descriptor{
 	// x-moss; IC: ICNone - proxy-coordinated, target-direct status
 	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: true, Quiet: true},
 
-	apc.ActCreateNBI: {Scope: ScopeB, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: false, ICMode: ICUponTerm},
+	apc.ActCreateNBI: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, ConflictRebRes: true, AbortByReb: true, Idles: false, ICMode: ICUponTerm},
 
 	// metadata-cache management, internal usage
 	apc.ActLoadLomCache: {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},

@@ -1654,7 +1654,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		bckArgs.w = w
 		bckArgs.r = r
 		bckArgs.bck = bck
-		bckArgs.perms = apc.AccessNone // access checked below
+		bckArgs.perms = dtor.Access
 		bckArgs.msg = msg
 		bckArgs.query = query
 		bckArgs.createAIS = false
