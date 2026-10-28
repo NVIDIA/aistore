@@ -275,6 +275,21 @@ In addition, environment can be used to **override** client-side TLS (aka, HTTPS
 | `AIS_CLIENT_CA`       | Certificate authority that authorized (signed) the certificate | "cluster.client_ca_tls" |
 | `AIS_SKIP_VERIFY_CRT` | true: bypass server certificate verification (insecure; use a trusted CA instead) | "cluster.skip_verify_crt" |
 
+### Load balancer endpoints
+
+The CLI keeps the configured endpoint as the base URL for HTTP and HTTPS API calls after reading the cluster map, even when the primary proxy advertises a different public URL. Set `AIS_ENDPOINT` or `cluster.url` to the load balancer address; `AIS_ENDPOINT` takes precedence.
+
+This behavior also applies when the configured endpoint is an individual proxy. The CLI continues using that proxy across primary changes. Requests requiring the primary may incur a forwarding hop; other requests can be handled by the receiving proxy. The configured endpoint must remain reachable: the CLI does not automatically switch to the primary's advertised URL.
+
+For HTTPS with a private CA:
+
+```sh
+AIS_ENDPOINT=https://ais-lb.example.com:443 AIS_CLIENT_CA=/path/to/ca.crt \
+  AIS_SKIP_VERIFY_CRT=false ais show cluster
+```
+
+For TLS requirements on proxy forwarding and other node-to-node connections, see [Node-to-Node TLS](/docs/networking.md#node-to-node-tls).
+
 ### Further references
 
 - [Generating self-signed certificates](/docs/https.md#generating-self-signed-certificates)

@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -113,8 +114,15 @@ func isErrDoesNotExist(err error) bool {
 // misc. utils, helpers
 //
 
+// recognize TLS certificate verification errors
 func isCertificateVerificationError(err error) bool {
-	return strings.HasPrefix(err.Error(), "CertificateVerificationError")
+	// check go type error first
+	if _, ok := errors.AsType[*tls.CertificateVerificationError](err); ok {
+		return true
+	}
+	// if serialized, check http type code
+	herr := cmn.AsErrHTTP(err)
+	return herr != nil && herr.TypeCode == "CertificateVerificationError"
 }
 
 func isUnreachableError(err error) (msg string, unreachable bool) {
@@ -429,6 +437,12 @@ func formatErr(err error) error {
 			env.AisEndpoint, config.Path())
 		return redErr(errors.New(errmsg))
 	}
+	if isCertificateVerificationError(err) {
+		const tip = "\n(Tip: the requested DNS name or IP must match a certificate Subject Alternative Name; " +
+			"configure a trusted CA with " + env.AisClientCA + " or CLI 'cluster.client_ca_tls')" +
+			"\n  For testing only (insecure): 'ais config cli set cluster.skip_verify_crt true'"
+		return redErr(errors.New(err.Error() + tip))
+	}
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
 		herr := err
@@ -442,14 +456,6 @@ func formatErr(err error) error {
 		err.baseErr = formatErr(err.baseErr)
 		return err
 	default:
-		// unwrap and check assorted system error types
-		// (currently, only tls cert validation)
-		const tip = "\n(Tip: review CLI configuration ('ais config cli'), in particular tls and 'skip_verify' settings)"
-		if uerr := errors.Unwrap(err); uerr != nil {
-			if isCertificateVerificationError(uerr) {
-				err = errors.New(uerr.Error() + tip)
-			}
-		}
 		return redErr(err)
 	}
 }

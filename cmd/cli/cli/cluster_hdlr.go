@@ -345,20 +345,9 @@ func clusterShutdownHandler(c *cli.Context) error {
 		if !confirm(c, "Proceed?") {
 			return nil
 		}
-		// on the off-chance anything changed during 'confirm' interaction
-		curSmap = nil
-		smap, err = getClusterMap(c)
-		if err != nil {
-			return err
-		}
 	}
 
-	// [NOTE]
-	// - cluster (shutdown|decommission) via non-primary works as well
-	// - still, _primary_ would be a better choice
-	bp := apiBP
-	bp.URL = smap.Primary.PubNet.URL
-	if err := api.ShutdownCluster(bp); err != nil {
+	if err := api.ShutdownCluster(apiBP); err != nil {
 		return V(err)
 	}
 
@@ -377,19 +366,10 @@ func clusterDecommissionHandler(c *cli.Context) error {
 		if !confirm(c, "The operation cannot be undone. Proceed?") {
 			return nil
 		}
-		curSmap = nil
-		smap, err = getClusterMap(c)
-		if err != nil {
-			return err
-		}
 	}
 	rmUserData := flagIsSet(c, rmUserDataFlag)
 
-	// [NOTE] ditto (see above)
-	bp := apiBP
-	bp.URL = smap.Primary.PubNet.URL
-
-	if err := api.DecommissionCluster(bp, rmUserData); err != nil {
+	if err := api.DecommissionCluster(apiBP, rmUserData); err != nil {
 		return V(err)
 	}
 	actionDone(c, "Cluster successfully decommissioned")

@@ -1,16 +1,14 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains util functions and types.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
 import (
-	"os"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/core/meta"
 
@@ -36,16 +34,6 @@ func getClusterMap(c *cli.Context) (*meta.Smap, error) {
 		return nil, V(err)
 	}
 	curSmap = smap
-	if smap.Primary.PubNet.URL != apiBP.URL {
-		if cliConfVerbose() {
-			what := env.AisEndpoint
-			if os.Getenv(env.AisEndpoint) == "" {
-				what = "CLI config URL"
-			}
-			actionWarnf(c, "changing %s from %q to %q", what, apiBP.URL, smap.Primary.PubNet.URL)
-		}
-		apiBP.URL = smap.Primary.PubNet.URL
-	}
 	return curSmap, nil
 }
 
