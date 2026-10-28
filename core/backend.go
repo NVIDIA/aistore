@@ -59,4 +59,11 @@ type (
 		CompleteMpt(ctx context.Context, lom *LOM, r *http.Request, uploadID string, body []byte, parts apc.MptCompletedParts) (version, etag string, ecode int, err error)
 		AbortMpt(ctx context.Context, lom *LOM, r *http.Request, uploadID string) (ecode int, err error)
 	}
+
+	// BackendPutNoop optionally controls the identical-checksum PUT shortcut.
+	// Returning false requires a real PUT without disabling body checksum validation.
+	// Backends without this interface retain the existing shortcut.
+	BackendPutNoop interface {
+		AllowPutNoop(origReq *http.Request) bool
+	}
 )

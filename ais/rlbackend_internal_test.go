@@ -324,3 +324,27 @@ func TestRLBackendListObjectsCanceled(t *testing.T) {
 	tassert.Fatalf(t, ecode == 0, "expected code 0, got %d", ecode)
 	tassert.Fatalf(t, backend.calls == 1, "expected no retry call, got %d calls", backend.calls)
 }
+
+type putNoopBackend struct {
+	core.Backend
+	request *http.Request
+	allowed bool
+}
+
+func (bp *putNoopBackend) AllowPutNoop(r *http.Request) bool {
+	bp.request = r
+	return bp.allowed
+}
+
+func TestRLBackendPutNoop(t *testing.T) {
+	r, err := http.NewRequest(http.MethodPut, "http://ais.invalid/object", http.NoBody)
+	tassert.CheckFatal(t, err)
+	for _, allowed := range []bool{false, true} {
+		wrapped := &putNoopBackend{allowed: allowed}
+		bp := &rlbackend{Backend: wrapped}
+		tassert.Fatalf(t, bp.AllowPutNoop(r) == allowed, "lost backend shortcut policy")
+		tassert.Fatalf(t, wrapped.request == r, "lost original request")
+	}
+	bp := &rlbackend{Backend: &throttleBackend{}}
+	tassert.Fatalf(t, bp.AllowPutNoop(r), "backend without policy lost the existing shortcut")
+}
