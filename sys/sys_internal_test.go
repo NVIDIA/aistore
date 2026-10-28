@@ -19,7 +19,9 @@ func applyEMA(rawUtil, elapsed int64) {
 
 func TestCPUSmoothing(t *testing.T) {
 	var r ring
-	gcpu.utilEMA.Store(0)
+	// Keep synthetic CPU readings from affecting later tests.
+	prev := gcpu.utilEMA.Swap(0)
+	t.Cleanup(func() { gcpu.utilEMA.Store(prev) })
 	ncpu := int64(NumCPU())
 	interval := int64(10 * time.Second)
 

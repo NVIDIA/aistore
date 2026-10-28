@@ -269,7 +269,8 @@ The comparison illustrates several points:
 * On the host, `TestMemoryStats` reports host-scale memory totals.
 * Inside the container, the same test reports memory bounded by the cgroup limit (`--memory=512m`) rather than the host's physical RAM.
 * `TestNumCPU` and `TestMaxProcs` exercise init-time CPU detection and container-aware CPU count.
-* `TestProcAndMaxLoad` burns CPU in-process and verifies that `CPU()` reports non-zero utilization on a subsequent sample.
+* `TestProcAndMaxLoad` verifies that process CPU time increases and that `CPU()` reports utilization within 0–100%, including a valid rounded zero.
+  CPU usage is measured as a percentage of total CPU capacity and smoothed over time, so a small workload can round to 0%.
 * Swap may report as zero or be unavailable inside short-lived containers; this is not unusual.
 
 To further confirm container-scoped memory accounting, rerun the container example with a different limit (for example, `--memory=4G`). `TestMemoryStats` should then report a total close to 4 GiB instead of 512 MiB.
