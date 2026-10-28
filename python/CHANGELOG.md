@@ -6,85 +6,94 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
-### Added
+## [2.1.0] - 2026-10-28
 
-- Added `threshold` and per-attempt backend `read_timeout` options to
-  `BlobDownloadConfig`.
-- `ObjectReader.stream()` returns the full `requests.Response` with an open
-  content stream. Use a context manager to close the response after reading.
+This release expands object streaming and blob-download controls, strengthens
+object-file and parallel-download behavior, and fixes listing, ETL URL,
+namespace, and PyTorch edge cases. Review the compatibility changes before
+upgrading.
 
-### Fixed
+### Compatibility changes
 
-- `aistore[mcp]` requires `mcp<2` to prevent server startup failures while the
-  server still uses the version 1 interface.
-- `AISShardReader` preserves multi-dot extensions, preventing sample members
-  such as `sample.left.jpg` and `sample.right.jpg` from silently overwriting each other.
-- `MultipartDecoder` no longer truncates bodies containing `\r\n\r\n` when part
-  headers use Unix line endings.
-- `AISShardReader.__len__()` now streams raw shards and counts samples without
-  buffering full shard payloads. The count matches iteration when ETL preserves
-  the sample count.
-- `Object.get_url()` builds its ETL query parameters the way the rest of the SDK does.
-  It wrote `etl_name` straight from `ETLConfig.name`, so a pipeline built with
-  `etl_a >> etl_b` went into the URL as the `repr()` of an `Etl` object and
-  `etl_pipeline` was dropped, and dict `args` were written as a Python repr instead
-  of JSON. `Bucket.list_urls()` and `ObjectGroup.list_urls()` are the callers.
-- A bucket qualified by a namespace is recognized in an AIS error message. The FQN
-  pattern stopped at the first slash, so `ais://@uuid#ns/bucket` and
-  `ais://@remote123/bucket` parsed as the bucket `@uuid#ns` or `@remote123` with an
-  object after it, and a 404 or 409 about such a bucket came back as `ErrObjNotFound`
-  or a plain `AISError`.
-- `Bucket.delete(missing_ok=True)` also ignores `ErrRemoteBckNotFound`, which is what
-  a bucket in a remote cluster's namespace reports and is not a subclass of
-  `ErrBckNotFound`. Together with the above, `create(exist_ok=True)` and
-  `delete(missing_ok=True)` work for buckets outside the global namespace.
-- `ObjectGroup.list_urls()` honors its `prefix` argument. It accepted and documented
-  one and then yielded a URL for every object in the group, while
-  `ObjectGroup.list_all_objects_iter()` next to it filtered correctly.
-- `Object.get_reader()` refuses `num_workers` together with `archive_config`, as it
-  already does for `etl`. A parallel read issues raw byte ranges, and the target
-  rejects a range read of archived content, so the combination failed one worker
-  request at a time instead of being refused before the download started.
-- Object file readers and writers report their actual open or closed state
-  through `.closed`. Writer state remains open if its final flush fails.
-- Entering a closed object file writer raises `ValueError` before sending a request.
-- Entering a write-mode object file writer context no longer truncates the object
-  again, which erased data the same writer had already flushed. Write mode
-  truncates only when the writer is created.
-- `ObjectIterator` no longer raises `IndexError` when a remote listing returns a page with no
-  entries and a continuation token, which happens when a filter such as `NOT_CACHED` excludes
-  every entry on that page. The iterator now continues to the next page, matching
-  `Bucket.list_all_objects()`.
-- `ParallelBuffer.close()` no longer raises `BufferError` and leaks the shared memory
-  segment when the caller still holds a view of the zero-copy buffer, such as a slice
-  or a `numpy.frombuffer` array. The segment is unlinked first, and the mapping is
-  dropped with the last view. Shared-memory finalization also closes the file
-  descriptor when a live view prevents immediate cleanup, so the allocation is
-  released after the last view without a second `close()` call.
-- `ErrGETConflict` and `ErrObjNotFound` are retried by `RetryConfig.network_retry` again.
-
-### Changed
-
-- Updated the SDK README with first-object tutorial and deployment onboarding links.
-- `ObjectReader.as_file(max_resume=...)` now limits consecutive interruptions without forward
-  progress instead of counting all interruptions over a file's lifetime.
-- Reduced per-chunk bookkeeping in `ResumableStream` and avoided list/join
-  overhead for `ObjectFileReader` reads satisfied by one chunk, reusing whole
-  immutable byte buffers without copying.
-- `ObjectFileWriter` uses `io.BufferedIOBase` so inherited file methods work
-  correctly. Update explicit `BufferedWriter` type checks to `BufferedIOBase`.
-  Unclosed writers emit `ResourceWarning` without sending requests.
-
-### Deprecated
-
-- `ObjectReader.raw()` emits a `DeprecationWarning` and will be removed in 3.0.
+- **BREAKING**: Removed `DynamicBatchSampler.__len__()` because PyTorch interprets it as the
+  number of batches, not number of samples. Use `DynamicBatchSampler.num_samples()`
+  instead to get the number of samples.
+- `ObjectReader.raw()` now emits `DeprecationWarning` and will be removed in 3.0.
   Use `ObjectReader.stream()` and access `response.raw` instead.
+- `ObjectFileWriter` now implements `io.BufferedIOBase`, allowing inherited file
+  methods to work correctly. Update explicit `BufferedWriter` type checks to
+  `BufferedIOBase`. Unclosed writers emit `ResourceWarning` without sending
+  requests.
 
-### Removed
+### Data transfers
 
-- Removed `DynamicBatchSampler.__len__()` since PyTorch expects length
-  to mirror the number of batches. Use `DynamicBatchSampler.num_samples()`
-  to get the number of samples instead.
+- Added `threshold` to `BlobDownloadConfig` to select server-side blob download
+  for eligible remote objects at or above a specified size. It must be a
+  non-negative integer. Leaving it unset preserves explicit blob download,
+  while zero uses regular GET. The existing 128 KiB server minimum still
+  applies.
+- Added `read_timeout` to `BlobDownloadConfig` for each backend range-read
+  attempt. Unset chunk-size, worker-count, and timeout fields are omitted from
+  request headers, allowing the server to apply its defaults.
+- Added `ObjectReader.stream()` to return the full `requests.Response` with an
+  open content stream. Close the response after reading, preferably with a
+  context manager.
+- `Object.get_reader()` now rejects client-side `num_workers` together with
+  `archive_config`. Parallel downloads issue raw byte ranges, which the target
+  cannot use to read archived content.
+- Object file readers and writers now report their actual state through
+  `.closed`. A writer remains open if its final flush fails, and entering an
+  already closed writer raises `ValueError` before sending a request.
+- Entering a write-mode `ObjectFileWriter` context no longer truncates an object
+  a second time. Write mode now truncates only when the writer is created.
+- `ObjectReader.as_file(max_resume=...)` now limits consecutive interruptions
+  without forward progress instead of all interruptions over the file's
+  lifetime.
+- Reduced per-chunk bookkeeping in `ResumableStream` and avoided list/join
+  overhead for `ObjectFileReader` reads satisfied by one chunk. Whole immutable
+  byte buffers are reused without copying.
+- `ParallelBuffer.close()` now unlinks shared memory and closes its file
+  descriptor even while the caller holds a zero-copy view, such as a slice or
+  `numpy.frombuffer` array. The mapping is released after the last view without
+  requiring another `close()` call.
+- Restored network retries for `ErrGETConflict` and `ErrObjNotFound` through
+  `RetryConfig.network_retry`.
+
+### Get-Batch
+
+- `MultipartDecoder` now uses the earliest header terminator, preserving body
+  bytes when the body contains the other supported terminator (`\n\n` or
+  `\r\n\r\n`).
+
+### PyTorch
+
+- `AISShardReader` now preserves multi-dot extensions, preventing members such
+  as `sample.left.jpg` and `sample.right.jpg` from silently overwriting each
+  other.
+- `AISShardReader.__len__()` now streams raw shards and counts samples without
+  buffering complete shard payloads. The count matches iteration when ETL
+  preserves the sample count.
+
+### Listing, jobs, and permissions
+
+- `ObjectGroup.list_urls(prefix=...)` now filters the returned URLs by the
+  supplied prefix, matching `ObjectGroup.list_all_objects_iter()`.
+- `ObjectIterator` now continues when a remote listing returns an empty page
+  with a continuation token, including when filters such as `NOT_CACHED` remove
+  every entry from a page.
+- Error parsing now retains the namespace prefix in bucket names such as
+  `ais://@uuid#ns/bucket` and `ais://@remote/bucket`, so missing and
+  already-exists responses map to the correct bucket exceptions.
+  `Bucket.create(exist_ok=True)` and `delete(missing_ok=True)` therefore work for
+  buckets outside the global namespace; deletion also handles
+  `ErrRemoteBckNotFound`.
+
+### ETL
+
+- `Object.get_url()` now delegates to `ETLConfig.update_qparams()`, so pipelines
+  set both `etl_name` and `etl_pipeline`, and dictionary arguments are
+  JSON-encoded. This fixes ETL URLs returned by `Bucket.list_urls()` and
+  `ObjectGroup.list_urls()`.
 
 ## [2.0.0] - 2026-09-28
 
