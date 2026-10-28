@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 # pylint: disable=duplicate-code
@@ -197,7 +197,9 @@ class TestObjectOps(ParallelTestBase):
 
         for obj_name, content in objects.items():
             start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
-            blob_config = BlobDownloadConfig(chunk_size=testcase, num_workers="4")
+            blob_config = BlobDownloadConfig(
+                chunk_size=testcase, num_workers="4", read_timeout="30s"
+            )
             resp = (
                 self.bucket.object(obj_name)
                 .get_reader(blob_download_config=blob_config)
@@ -208,6 +210,32 @@ class TestObjectOps(ParallelTestBase):
                 start_time=start_time
             )
             self.assertTrue(len(jobs_list) > 0)
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    @cases(
+        {"threshold": MEDIUM_FILE_SIZE - 1, "expect_chunked": True},
+        {"threshold": MEDIUM_FILE_SIZE, "expect_chunked": True},
+        {"threshold": MEDIUM_FILE_SIZE + 1, "expect_chunked": False},
+    )
+    def test_get_blob_threshold(self, case):
+        # Keep this above the server's 128 KiB blob-download minimum; smaller
+        # objects use regular GET regardless of the requested threshold.
+        objects = self._put_objects(1, MEDIUM_FILE_SIZE)
+        obj_names = list(objects.keys())
+        evict_job_id = self.bucket.objects(obj_names=obj_names).evict()
+        result = self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
+
+        for obj_name, content in objects.items():
+            obj = self.bucket.object(obj_name)
+            config = BlobDownloadConfig(threshold=case["threshold"])
+            resp = obj.get_reader(blob_download_config=config).read_all()
+            self.assertEqual(content, resp)
+            is_chunked = obj.head(props="chunked").chunks is not None
+            self.assertEqual(case["expect_chunked"], is_chunked)
 
     @unittest.skipUnless(REMOTE_SET, "Remote bucket is not set")
     def test_obj_present(self):

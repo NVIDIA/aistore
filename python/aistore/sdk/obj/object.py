@@ -33,9 +33,6 @@ from aistore.sdk.const import (
     URL_PATH_OBJECTS,
     HEADER_RANGE,
     ACT_BLOB_DOWNLOAD,
-    HEADER_OBJECT_BLOB_DOWNLOAD,
-    HEADER_OBJECT_BLOB_WORKERS,
-    HEADER_OBJECT_BLOB_CHUNK_SIZE,
 )
 from aistore.sdk.provider import Provider
 from aistore.sdk.obj.object_client import ObjectClient
@@ -208,7 +205,8 @@ class Object:
 
         Args:
             archive_config (Optional[ArchiveConfig]): Settings for archive extraction.
-            blob_download_config (Optional[BlobDownloadConfig]): Settings for using blob download.
+            blob_download_config (Optional[BlobDownloadConfig]): Settings for selecting and tuning
+                server-side blob download.
             chunk_size (Optional[int]): Chunk size in bytes. For parallel downloads (num_workers
                 set), defaults to the server-provided optimal size. For sequential reads,
                 defaults to DEFAULT_CHUNK_SIZE.
@@ -221,14 +219,15 @@ class Object:
                 See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
             direct (bool, optional): If True, the object content is read directly from the target node,
                 bypassing the proxy.
-            num_workers (Optional[int]): If provided, enable parallel download — the
-                object is split into byte ranges fetched concurrently by this many workers.
+            num_workers (Optional[int]): Number of client-side workers for parallel range reads.
+                To configure server-side blob-download workers, set
+                `BlobDownloadConfig.num_workers`.
 
         Returns:
             ObjectReader: An iterator for streaming object content.
 
         Raises:
-            ValueError: If `byte_range` is used with `blob_download_config`.
+            ValueError: If reader options are invalid or incompatible.
             requests.RequestException: If an error occurs during the request.
             requests.ConnectionError: If there is a connection error.
             requests.ConnectTimeout: If the connection times out.
@@ -252,13 +251,7 @@ class Object:
 
         # Blob Download Configuration
         if blob_download_config:
-            headers.update(
-                {
-                    HEADER_OBJECT_BLOB_DOWNLOAD: "true",
-                    HEADER_OBJECT_BLOB_CHUNK_SIZE: blob_download_config.chunk_size,
-                    HEADER_OBJECT_BLOB_WORKERS: blob_download_config.num_workers,
-                }
-            )
+            headers.update(blob_download_config.as_headers())
 
         # ETL Configuration
         if etl:
@@ -283,7 +276,8 @@ class Object:
                 )
             if blob_download_config:
                 raise ValueError(
-                    "Cannot use `num_workers` with `blob_download_config`."
+                    "Cannot use client-side `num_workers` with `blob_download_config`; "
+                    "set `BlobDownloadConfig.num_workers` to configure blob-download workers."
                 )
             if etl:
                 raise ValueError(

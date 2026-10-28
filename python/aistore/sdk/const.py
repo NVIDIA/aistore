@@ -62,9 +62,12 @@ HEADER_NODE_ID = HEADER_PREFIX + "Node-Id"
 HEADER_NODE_URL = HEADER_PREFIX + "Node-Url"
 HEADER_INV_NAME = HEADER_PREFIX + "Inv-Name"
 # Object Props Header Keys
+# Blob-download headers: keep in sync with api/apc/headers.go.
 HEADER_OBJECT_BLOB_DOWNLOAD = HEADER_PREFIX + "Blob-Download"
 HEADER_OBJECT_BLOB_CHUNK_SIZE = HEADER_PREFIX + "Blob-Chunk"
 HEADER_OBJECT_BLOB_WORKERS = HEADER_PREFIX + "Blob-Workers"
+HEADER_OBJECT_BLOB_READ_TIMEOUT = HEADER_PREFIX + "Blob-Read-Timeout"
+HEADER_OBJECT_BLOB_THRESHOLD = HEADER_PREFIX + "Blob-Threshold"
 HEADER_OBJECT_APPEND_HANDLE = HEADER_PREFIX + "Append-Handle"
 HEADER_DIRECT_PUT_LENGTH = HEADER_PREFIX + "Direct-Put-Length"
 # ETL → AIS retry contract: emitted by the ETL webserver alongside a 503

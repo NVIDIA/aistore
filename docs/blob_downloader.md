@@ -145,13 +145,22 @@ from aistore.sdk.blob_download_config import BlobDownloadConfig
 client = Client("AIS_ENDPOINT")
 bucket = client.bucket(name="my_bucket", provider="aws")
 
-# Configure blob downloader (4 MiB chunks, 16 workers)
-blob_cfg = BlobDownloadConfig(chunk_size="4MiB", num_workers="16")
+# Select and tune server-side blob download
+blob_cfg = BlobDownloadConfig(
+    threshold=64 * 1024 * 1024,
+    chunk_size="4MiB",
+    num_workers="16",
+    read_timeout="30s",
+)
 
-# Stream large object using blob downloader settings
-reader = bucket.object("my_large_object").get_reader(blob_download_config=blob_cfg)
+# Use the blob downloader for remote objects at least 64 MiB in size
+reader = bucket.object("my_large_object").get_reader(
+    blob_download_config=blob_cfg,
+)
 data = reader.read_all()
 ```
+
+`BlobDownloadConfig.num_workers` controls server-side blob-download readers. `Object.get_reader(num_workers=...)` is a separate client-side mode and cannot be combined with this configuration.
 
 ### Size limits
 

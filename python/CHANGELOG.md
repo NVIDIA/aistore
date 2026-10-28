@@ -8,6 +8,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- Added `threshold` and per-attempt backend `read_timeout` options to
+  `BlobDownloadConfig`.
 - `ObjectReader.stream()` returns the full `requests.Response` with an open
   content stream. Use a context manager to close the response after reading.
 

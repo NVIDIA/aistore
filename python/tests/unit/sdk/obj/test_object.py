@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
+#
+
 """Unit tests for the aistore.sdk.obj.object.Object helper class.
 
 This suite validates Object behavior including reader/writer operations, URL
@@ -39,6 +43,8 @@ from aistore.sdk.const import (
     HEADER_OBJECT_BLOB_DOWNLOAD,
     HEADER_OBJECT_BLOB_CHUNK_SIZE,
     HEADER_OBJECT_BLOB_WORKERS,
+    HEADER_OBJECT_BLOB_READ_TIMEOUT,
+    HEADER_OBJECT_BLOB_THRESHOLD,
     AIS_LOCATION,
     AIS_MIRROR_PATHS,
     AIS_MIRROR_COPIES,
@@ -112,6 +118,54 @@ class TestObject(unittest.TestCase):
 
     def test_get_default_params(self):
         self.get_exec_assert()
+
+    @cases(
+        {"config": None, "headers": {}},
+        {
+            "config": BlobDownloadConfig(),
+            "headers": {HEADER_OBJECT_BLOB_DOWNLOAD: "true"},
+        },
+        {
+            "config": BlobDownloadConfig("1MiB", "4"),
+            "headers": {
+                HEADER_OBJECT_BLOB_DOWNLOAD: "true",
+                HEADER_OBJECT_BLOB_CHUNK_SIZE: "1MiB",
+                HEADER_OBJECT_BLOB_WORKERS: "4",
+            },
+        },
+        {
+            "config": BlobDownloadConfig(threshold=0),
+            "headers": {HEADER_OBJECT_BLOB_THRESHOLD: "0"},
+        },
+        {
+            "config": BlobDownloadConfig(threshold=128 * 1024),
+            "headers": {HEADER_OBJECT_BLOB_THRESHOLD: "131072"},
+        },
+        {
+            "config": BlobDownloadConfig(
+                threshold=128 * 1024,
+                chunk_size="1MiB",
+                num_workers="4",
+                read_timeout="30s",
+            ),
+            "headers": {
+                HEADER_OBJECT_BLOB_CHUNK_SIZE: "1MiB",
+                HEADER_OBJECT_BLOB_WORKERS: "4",
+                HEADER_OBJECT_BLOB_READ_TIMEOUT: "30s",
+                HEADER_OBJECT_BLOB_THRESHOLD: "131072",
+            },
+        },
+    )
+    def test_get_blob_download_config(self, case):
+        self.get_exec_assert(
+            blob_download_config=case["config"],
+            expected_headers=case["headers"],
+        )
+
+    @cases(-1, 1.5, "1024", True, False)
+    def test_blob_download_config_threshold_invalid(self, threshold):
+        with self.assertRaisesRegex(ValueError, "non-negative integer"):
+            BlobDownloadConfig(threshold=threshold)
 
     @cases(
         {"blob_config": BlobDownloadConfig(chunk_size="4mb", num_workers="10")},
@@ -569,6 +623,13 @@ class TestObject(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.object.get_reader(
                 blob_download_config=blob_cfg, byte_range="bytes=0-100"
+            )
+
+    def test_get_reader_num_workers_and_blob_conflict(self):
+        with self.assertRaisesRegex(ValueError, "BlobDownloadConfig.num_workers"):
+            self.object.get_reader(
+                blob_download_config=BlobDownloadConfig(threshold=128 * 1024),
+                num_workers=2,
             )
 
     def test_get_reader_num_workers_and_archive_conflict(self):
