@@ -216,6 +216,8 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 
 func (b *base) Provider() string { return b.provider }
 
+func (*base) CondWrite() bool { return false }
+
 func (b *base) MetricName(name string) string {
 	out, ok := b.metrics[name]
 	debug.Assert(ok && out != "", name)

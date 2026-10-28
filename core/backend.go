@@ -27,6 +27,7 @@ type (
 	Backend interface {
 		Provider() string
 		MetricName(string) string
+		CondWrite() bool // forward If-Match/If-None-Match to the remote store and fail on mismatch
 
 		CreateBucket(bck *meta.Bck) (ecode int, err error)
 		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error)

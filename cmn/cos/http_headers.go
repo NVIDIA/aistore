@@ -116,3 +116,8 @@ func AcceptsMsgPack(hdr http.Header) bool {
 	}
 	return false
 }
+
+// detect write conditions, including empty values that require backend validation.
+func IsCondWrite(hdr http.Header) bool {
+	return len(hdr.Values("If-Match")) != 0 || len(hdr.Values("If-None-Match")) != 0
+}
