@@ -64,6 +64,8 @@ type (
 		latencies *httpLatencies
 		op        int
 		size      int64
+		readOff   int64 // read range offset (when -readlen > 0)
+		objSize   int64 // object size from GET Content-Range (-readoff=random); 0 if absent
 		start     int64
 		end       int64
 		startPut  int64 // PUT in `opUpdateExisting`
@@ -159,6 +161,9 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 	case opGet:
 		getPending--
 		intervalStats.statsd.Get.AddPending(getPending)
+		if runParams.readOffRandom && wo.objSize > 0 {
+			objSizes[wo.objName] = wo.objSize
+		}
 		if wo.err != nil {
 			fmt.Fprintln(os.Stderr, "GET failed:", wo.err)
 			intervalStats.statsd.Get.AddErr()
@@ -180,7 +185,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		if wo.err == nil {
 			if wo.op != opUpdateExisting {
 				if !stopping.Load() {
-					objnameGetter.Add(wo.objName)
+					addObjName(wo)
 				}
 			}
 			intervalStats.put.Add(wo.size, elapsed)
@@ -224,7 +229,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
 			if !stopping.Load() {
-				objnameGetter.Add(wo.objName)
+				addObjName(wo)
 			}
 			intervalStats.putMPU.Add(wo.size, elapsed)
 			intervalStats.statsd.Put.Add(wo.size, elapsed)
@@ -263,6 +268,13 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 
 	default:
 		debug.Assert(false, wo.op)
+	}
+}
+
+func addObjName(wo *workOrder) {
+	objnameGetter.Add(wo.objName)
+	if runParams.readOffRandom {
+		objSizes[wo.objName] = wo.size
 	}
 }
 
@@ -486,6 +498,12 @@ func newGetWorkOrder(op int) (*workOrder, error) {
 	wo := allocWO(op)
 	name := objnameGetter.Pick()
 	wo.objName, wo.archpath = decodeArchName(name)
+	wo.readOff = runParams.readOff
+	if runParams.readOffRandom {
+		if size, readLen := objSizes[wo.objName], runParams.readLen; size > readLen {
+			wo.readOff = readOffRnd.Int64N(size - readLen + 1)
+		}
+	}
 
 	return wo, nil
 }

@@ -114,6 +114,7 @@ type (
 		readOffStr     string // read range offset (unparsed)
 		readLen        int64  // read range length (bytes, 0 = full object)
 		readOff        int64  // read range offset (bytes)
+		readOffRandom  bool   // random read range offset per GET (-readoff=random)
 		evictBatchSize int    // batch size for list and evict operations
 		getBatchSize   int    // use GetBatch API instead of GetObject (ML workloads)
 		latest         bool   // check metadata and GET latest version from remote bucket
@@ -276,7 +277,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.skipList, "skiplist", false, "when true, skip listing objects in a bucket before running 100% PUT workload")
 
 	// ============ Read operations ============
-	f.StringVar(&p.readOffStr, "readoff", "", "read range offset (can contain multiplicative suffix K, MB, GiB, etc.)")
+	f.StringVar(&p.readOffStr, "readoff", "",
+		"read range offset (can contain multiplicative suffix K, MB, GiB, etc.), or 'random' to select a random offset for each GET (requires -readlen)")
 	f.StringVar(&p.readLenStr, "readlen", "", "read range length (can contain multiplicative suffix; 0 - GET full object)")
 	f.IntVar(&p.getBatchSize, "get-batchsize", 0, "GetBatch (ML endpoint)")
 	f.BoolVar(&p.latest, "latest", false, "when true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket")
@@ -374,6 +376,9 @@ func initParams(p *params) (err error) {
 		p.seed = mono.NanoTime()
 	}
 	rnd = rand.New(cos.NewRandSource(uint64(p.seed)))
+	// separate stream with a different seed: '-readoff=random' must not alter the (seeded) sequence
+	// of selected objects, nor repeat its draws (that would tie each object to a narrow range of offsets)
+	readOffRnd = rand.New(cos.NewRandSource(uint64(p.seed) + 1))
 
 	//
 	// parse sizes
@@ -395,7 +400,9 @@ func initParams(p *params) (err error) {
 		p.maxSize = max(p.minSize, p.maxSize)
 	}
 
-	if p.readOff, err = _parseSize(p.readOffStr, "readoff", 0); err != nil {
+	if p.readOffStr == randomReadOff {
+		p.readOffRandom = true
+	} else if p.readOff, err = _parseSize(p.readOffStr, "readoff", 0); err != nil {
 		return err
 	}
 	if p.readLen, err = _parseSize(p.readLenStr, "readlen", 0); err != nil {
@@ -665,6 +672,29 @@ func (p *params) validate() error {
 		}
 		if isDirectS3() {
 			return fmt.Errorf("option %s requires AIStore (S3 does not provide GetBatch)", s)
+		}
+	}
+
+	if p.readOffRandom {
+		const s = "'-readoff=random'"
+		if p.readLen <= 0 {
+			return fmt.Errorf("option %s requires '-readlen' > 0", s)
+		}
+		if p.fileList != "" || p.fileListObj != "" {
+			return fmt.Errorf("option %s with '-filelist' or '-filelist-obj' is not supported yet", s)
+		}
+		if p.archParams.pct > 0 || p.archParams.list {
+			return fmt.Errorf("option %s cannot be used with archive options", s)
+		}
+		if p.mpdStreamPct > 0 {
+			return fmt.Errorf("command line options %s and '-pctmpdstream' are mutually exclusive", s)
+		}
+		if p.updateExistingPct > 0 {
+			return fmt.Errorf("command line options %s and '-pctupdate' are mutually exclusive", s)
+		}
+		if p.putPct == 100 {
+			fmt.Fprintf(os.Stderr, "Warning: option %s is ignored with 100%% PUT workloads\n", s)
+			p.readOffRandom = false
 		}
 	}
 

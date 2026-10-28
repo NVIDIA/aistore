@@ -397,7 +397,7 @@ func newGetRequest(proxyURL string, wo *workOrder, p *params) (*http.Request, er
 
 	var hdr http.Header
 	if p.readLen > 0 {
-		rng := cmn.MakeRangeHdr(p.readOff, p.readLen)
+		rng := cmn.MakeRangeHdr(wo.readOff, p.readLen)
 		hdr = http.Header{cos.HdrRange: []string{rng}}
 	}
 
@@ -452,6 +452,9 @@ func getDiscard(proxyURL string, wo *workOrder, p *params) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if p.readOffRandom {
+		wo.objSize = rangeObjSize(resp.Header)
+	}
 
 	var hdrCksumValue, hdrCksumType string
 	if p.verifyHash {
@@ -497,6 +500,9 @@ func getTraceDiscard(proxyURL string, wo *workOrder, p *params) (int64, error) {
 	defer resp.Body.Close()
 
 	tctx.tr.tsHTTPEnd = time.Now()
+	if p.readOffRandom {
+		wo.objSize = rangeObjSize(resp.Header)
+	}
 	if p.verifyHash {
 		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
@@ -614,8 +620,9 @@ func listObjCallback(ctx *api.LsoCounter) {
 	}
 }
 
-// listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
-func listObjectNames(p *params) (names []string, fcnt int /*num archived files*/, _ error) {
+// listObjectData returns a slice of object names of all objects that match the prefix in a bucket;
+// with '-readoff=random', also returns their respective sizes
+func listObjectData(p *params) (names []string, sizes map[string]int64, fcnt int /*num archived files*/, _ error) {
 	var (
 		bp       = p.bp
 		bck      = p.bck
@@ -642,15 +649,19 @@ func listObjectNames(p *params) (names []string, fcnt int /*num archived files*/
 
 	lst, err := api.ListObjects(bp, bck, msg, args)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 
 	names = make([]string, 0, len(lst.Entries))
+	if p.readOffRandom {
+		sizes = make(map[string]int64, len(lst.Entries))
+	}
 	for _, en := range lst.Entries {
 		if en.Flags&apc.EntryInArch != 0 {
 			debug.Assert(msg.Flags&apc.LsArchDir != 0)
 			objName, archPath := archive.SplitAtExtension(en.Name)
 			if archPath != "" {
+				debug.Assert(!p.readOffRandom)
 				names = append(names, encodeArchName(objName, archPath)) // with `archSepB` delimiter
 				fcnt++
 				continue
@@ -664,9 +675,12 @@ func listObjectNames(p *params) (names []string, fcnt int /*num archived files*/
 
 		// plain object or shard itself
 		names = append(names, en.Name)
+		if p.readOffRandom {
+			sizes[en.Name] = en.Size
+		}
 	}
 
-	return names, fcnt, nil
+	return names, sizes, fcnt, nil
 }
 
 func initS3Svc() error {
@@ -777,6 +791,18 @@ func readDiscard(r *http.Response, cksumType string) (int64, string, error) {
 		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 	}
 	return n, cksum.Val(), nil
+}
+
+// rangeObjSize returns the full object size from a range GET response:
+// "bytes <start>-<end>/<size>" (206) or "bytes */<size>" (416); 0 when not present
+// Ref: https://tools.ietf.org/html/rfc7233#section-4.2
+func rangeObjSize(hdr http.Header) (size int64) {
+	v := hdr.Get(cos.HdrContentRange)
+	if _, _, size, err := cmn.ParseRangeHdr(v); err == nil {
+		return size
+	}
+	fmt.Sscanf(v, cos.HdrContentRangeValPrefix+"*/%d", &size) // 416
+	return size
 }
 
 func timeDelta(time1, time2 time.Time) time.Duration {

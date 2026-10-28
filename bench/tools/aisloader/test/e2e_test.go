@@ -115,6 +115,22 @@ func TestAISLoaderWorkloads(t *testing.T) {
 		t.FailNow()
 	}
 
+	if !t.Run("Random Range GET", func(t *testing.T) {
+		const readLen = 64 * cos.KiB
+		report := runner.run(t, "random-range", shorter, time.Minute, false,
+			"-subdir="+regularPrefix,
+			"-readoff=random",
+			"-readlen="+strconv.Itoa(readLen),
+		)
+		assertOperation(t, "random range GET", report.Get)
+		// all objects are larger than readLen, so each range must fit entirely within its object
+		tassert.Fatalf(t, report.Get.Bytes == report.Get.Count*readLen,
+			"random range GET bytes = %d, expected %d (count %d * readlen %d)",
+			report.Get.Bytes, report.Get.Count*readLen, report.Get.Count, readLen)
+	}) {
+		t.FailNow()
+	}
+
 	t.Run("GetBatch And Cleanup", func(t *testing.T) {
 		report := runner.run(t, "get-batch", shorter, time.Minute, runner.created,
 			"-subdir="+runner.rootPrefix,

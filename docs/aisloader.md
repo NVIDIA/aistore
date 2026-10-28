@@ -164,7 +164,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -randomproxy | `bool` | When true, select random gateway ("proxy") to execute each I/O request | `false` |
 | -readertype | `string` | Type of reader: `sg` (default), `file`, `rand`, `tar` | `sg` |
 | -readlen | `string` | Read range length, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
-| -readoff | `string` | Read range offset, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -readoff | `string` | Read range offset, can contain [multiplicative suffix](#bytes-multiplicative-suffix); `random` selects a random offset for each GET (see [Read range](#read-range)) | `""` |
 | -s3endpoint | `string` | S3 endpoint to read/write S3 bucket directly (with no AIStore) | `""` |
 | -s3profile | `string` | Other than default S3 config profile referencing alternative credentials | `""` |
 | -s3-use-path-style | `bool` | Use older path-style addressing (e.g., `https://s3.amazonaws.com/BUCKET/KEY`). Should only be used with `-s3endpoint` | `false` |
@@ -266,7 +266,7 @@ For the most recently updated command-line options and examples, please run `ais
 
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
-| -readoff | `string` | Read range offset, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -readoff | `string` | Read range offset, can contain [multiplicative suffix](#bytes-multiplicative-suffix); `random` selects a random offset for each GET (see [Read range](#read-range)) | `""` |
 | -readlen | `string` | Read range length, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
 | -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
 | -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
@@ -401,6 +401,8 @@ To set the offset and length to read, use option `-readoff=<read offset (in byte
 
 For convenience, both options support size suffixes: `k` - for KiB, `m` - for MiB, and `g` - for GiB.
 
+Note that `-readoff` takes effect only when `-readlen` is greater than zero; otherwise, the loader reads entire objects.
+
 Example that reads a 32MiB segment at 1KB offset from each object stored in the bucket "abc":
 
 ```console
@@ -408,6 +410,10 @@ $ aisloader -bucket=ais://abc -duration 5m -cleanup=false -readoff=1024 -readlen
 ```
 
 The test (above) will run for 5 minutes and will not "cleanup" after itself (next section).
+
+To read a different segment on each GET, use `-readoff=random`. For each GET, the loader selects a random offset such that the entire `-readlen` range fits within the object; objects that are not larger than `-readlen` are read from the beginning.
+
+`-readoff=random` requires `-readlen` and uses object sizes from the bucket listing, refreshed from each GET response. It cannot be combined with `-filelist`, `-filelist-obj`, archive options (`-arch.list`, `-arch.pct`), `-pctmpdstream`, or `-pctupdate`, and is ignored in 100% PUT workloads.
 
 ### Cleanup
 
