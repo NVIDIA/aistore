@@ -275,16 +275,14 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 	return true // forwarded
 }
 
-// destination: a node in this cluster
+// destination: a node in this cluster, including its public URL
 func rpTransportIntra(config *cmn.Config) *http.Transport {
-	return _rpTransport(config, config.Net.HTTP.ToTLS())
+	return _rpTransport(config, config.Net.HTTP.ToTLSAlt())
 }
 
-// destination: remote AIS cluster or cloud (net.http.peer_name does not apply)
+// destination: remote AIS cluster or cloud (alt_tls_dns_name does not apply)
 func rpTransportExt(config *cmn.Config) *http.Transport {
-	sargs := config.Net.HTTP.ToTLS()
-	sargs.PeerName = ""
-	return _rpTransport(config, sargs)
+	return _rpTransport(config, config.Net.HTTP.ToTLS())
 }
 
 func _rpTransport(config *cmn.Config, sargs cmn.TLSArgs) *http.Transport {

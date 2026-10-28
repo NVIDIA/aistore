@@ -818,6 +818,7 @@ func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 //   - apc.LongTimeout                  => g.client.data    (config "client_long_timeout")
 //   - explicit timeouts use per-call context.WithTimeout via ReqWith;
 //     routed to control or data client based on duration
+//   - with alt_tls_dns_name: long calls to a known node's public URL use controlLong (see below)
 //
 // * an actual timeout error will look like url.Error with Timeout() == true
 func (args *callArgs) client() (*http.Client, bool) {
@@ -869,6 +870,13 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	}
 
 	client, withCancel := args.client()
+
+	// switch long calls to a node's public URL to controlLong (accepts alt_tls_dns_name);
+	// data client also serves external destinations and must not
+	if g.client.controlLong != nil && client == g.client.data && args.si != nil && args.req.Base == args.si.PubNet.URL {
+		client = g.client.controlLong
+	}
+
 	if withCancel {
 		var cancel context.CancelFunc
 		req, _, cancel, res.err = args.req.ReqWith(args.timeout)

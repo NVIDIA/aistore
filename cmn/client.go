@@ -76,7 +76,7 @@ type (
 		Certificate string
 		Key         string
 		SkipVerify  bool
-		PeerName    string // intra-cluster only
+		AltDNSName  string // intra-cluster only; see HTTPConf.ToTLSAlt
 	}
 )
 
@@ -115,8 +115,8 @@ func NewTransport(cargs TransportArgs) *http.Transport {
 	return transport
 }
 
-// verifyHostOrName accepts a peer certificate valid for host or for name;
-// nil roots means system roots.
+// accept a peer certificate valid for host or for name;
+// nil roots means system roots
 func verifyHostOrName(roots *x509.CertPool, host, name string) func(tls.ConnectionState) error {
 	return func(cs tls.ConnectionState) error {
 		if len(cs.PeerCertificates) == 0 {
@@ -141,13 +141,13 @@ func verifyHostOrName(roots *x509.CertPool, host, name string) func(tls.Connecti
 	}
 }
 
-func (sargs *TLSArgs) verifyPeerName(intra bool) bool {
-	return intra && sargs.PeerName != "" && !sargs.SkipVerify
+func (sargs *TLSArgs) useAlt(intra bool) bool {
+	return intra && sargs.AltDNSName != "" && !sargs.SkipVerify
 }
 
-// handshakePeer completes a client TLS handshake on conn, accepting a peer
-// certificate valid for the host in addr or for name.
-func handshakePeer(ctx context.Context, conn net.Conn, addr string, conf *tls.Config, name string) (net.Conn, error) {
+// complete client TLS handshake on conn;
+// accept a peer certificate valid for the host in addr or for alt name
+func handshakeAlt(ctx context.Context, conn net.Conn, addr string, conf *tls.Config, alt string) (net.Conn, error) {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		host = addr
@@ -159,7 +159,7 @@ func handshakePeer(ctx context.Context, conn net.Conn, addr string, conf *tls.Co
 	}
 	conf.InsecureSkipVerify = true // replaced by VerifyConnection
 	// VerifyConnection sees an empty server name for IP addresses (no SNI); bind the dialed host
-	conf.VerifyConnection = verifyHostOrName(conf.RootCAs, host, name)
+	conf.VerifyConnection = verifyHostOrName(conf.RootCAs, host, alt)
 	tc := tls.Client(conn, conf)
 	if err := tc.HandshakeContext(ctx); err != nil {
 		conn.Close()
@@ -168,40 +168,16 @@ func handshakePeer(ctx context.Context, conn net.Conn, addr string, conf *tls.Co
 	return tc, nil
 }
 
-// DialPeerTLS adds intra-cluster peer_name verification to dial.
-func DialPeerTLS(dial func(string) (net.Conn, error), conf *tls.Config, sargs TLSArgs, timeout time.Duration) func(string) (net.Conn, error) {
-	if !sargs.verifyPeerName(true) {
-		return dial
-	}
-	if dial == nil {
-		dialer := &net.Dialer{Timeout: timeout}
-		dial = func(addr string) (net.Conn, error) { return dialer.DialContext(context.Background(), "tcp", addr) }
-	}
-	return func(addr string) (net.Conn, error) {
-		conn, err := dial(addr)
-		if err != nil {
-			return nil, err
-		}
-		ctx := context.Background()
-		if timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, timeout)
-			defer cancel()
-		}
-		return handshakePeer(ctx, conn, addr, conf, sargs.PeerName)
-	}
-}
-
-// SetTLS configures the given transport as an HTTPS client.
-// With intra-cluster peer_name verification, later changes to tr.DialContext
-// or tr.TLSClientConfig do not apply to HTTPS connections.
+// configure the transport as an HTTPS client
+// - with alt name verification, later changes to tr.DialContext or tr.TLSClientConfig
+// do not apply to HTTPS connections
 func SetTLS(tr *http.Transport, sargs TLSArgs, intra bool) error {
 	conf, err := NewTLS(sargs, intra)
 	if err != nil {
 		return err
 	}
 	tr.TLSClientConfig = conf
-	if !sargs.verifyPeerName(intra) {
+	if !sargs.useAlt(intra) {
 		return nil
 	}
 	dial, timeout := tr.DialContext, tr.TLSHandshakeTimeout
@@ -218,7 +194,7 @@ func SetTLS(tr *http.Transport, sargs TLSArgs, intra bool) error {
 			ctx, cancel = context.WithTimeout(ctx, timeout)
 			defer cancel()
 		}
-		return handshakePeer(ctx, conn, addr, conf, sargs.PeerName)
+		return handshakeAlt(ctx, conn, addr, conf, sargs.AltDNSName)
 	}
 	return nil
 }

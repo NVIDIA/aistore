@@ -23,6 +23,13 @@ These are **logical roles**. They may map to separate physical networks, or they
 - [Intra-Cluster Control Network](#intra-cluster-control-network)
 - [Intra-Cluster Data Network](#intra-cluster-data-network)
 - [Multi-Homing](#multi-homing)
+- [Node-to-Node TLS](#node-to-node-tls)
+  - [Two certificates, one rule](#two-certificates-one-rule)
+  - [Why `alt_tls_dns_name` exists](#why-alt_tls_dns_name-exists)
+  - [Why not everywhere](#why-not-everywhere)
+  - [Who accepts what](#who-accepts-what)
+  - [Deployment cases](#deployment-cases)
+  - [Troubleshooting](#troubleshooting)
 - [IPv6](#ipv6)
   - [Enabling IPv6](#enabling-ipv6)
   - [What "prefer IPv6" means](#what-prefer-ipv6-means)
@@ -304,6 +311,97 @@ Effect:
 
 Multi-homing currently applies to the **public network** only. All public multi-home addresses are equivalent public endpoints; they do not create additional intra-cluster listeners.
 
+## Node-to-Node TLS
+
+With HTTPS, AIS nodes are also TLS clients of each other. This section explains which certificate each node-to-node request sees, and which names it accepts. The short version: **give intra-cluster listeners a certificate that covers the nodes' advertised intra-cluster names, and use `alt_tls_dns_name` only for a public certificate that does not cover the nodes' public hostnames.**
+
+### Two certificates, one rule
+
+Every node serves two groups of listeners:
+
+* **Intra-cluster listeners** (control and data, or a single collapsed intra-cluster endpoint) serve the default certificate, `net.http.server_crt`.
+* **Public listeners** (including multi-homed ones) serve `net.http.pub.server_crt` when configured; otherwise the same default certificate.
+
+Every node-to-node TLS connection verifies the peer certificate the usual way: against the hostname or IP address the client dialed. That is the destination node's *advertised* address on the network being used, as recorded in the cluster map.
+
+Almost all node-to-node traffic dials intra-cluster addresses: keepalive, metasync, membership changes, xaction control, target-to-target GET/PUT, rebalance, and other data movers. Hence the one rule:
+
+> The default certificate must be valid for every node's advertised intra-cluster hostname or IP address.
+
+### Why `alt_tls_dns_name` exists
+
+A few node-to-node requests go to a node's **public** URL and, therefore, land on its public listener:
+
+* a non-primary proxy forwards admin and other control requests to the primary at the primary's public URL;
+* a node joining (or rejoining) the cluster may contact the primary at its public URL;
+* when a node does not respond on the intra-control network, some requests are retried once via its public URL.
+
+Public certificates often cover only an external name, such as a load balancer, an ingress, or a wildcard domain, and not each node's individual public hostname. Verification of those requests then fails, even though the certificate is perfectly valid for the cluster.
+
+Setting `net.http.alt_tls_dns_name` to a DNS name the public certificate covers fixes that: requests that may target a node's public URL accept a peer certificate valid for *either* the dialed hostname or IP address, *or* `alt_tls_dns_name`.
+
+### Why not everywhere
+
+`alt_tls_dns_name` is deliberately accepted only where it is needed:
+
+* **Direct intra-data requests and transport streams use intra-cluster URLs.** They go to the intra-data endpoint, or to the intra-control endpoint when the two are collapsed, and retain ordinary hostname/IP verification. Same-cluster relays use a separate transport, as described below.
+* **The intra-data HTTP client also serves external destinations**: cloud backends (via presigned requests) and ETL pods. A public name configured for *this* cluster has no business authenticating any of those. (Requests relayed to remote AIS clusters and clouds use a separate client that does not accept it either.)
+
+The alternative name is confined to the control transport and same-cluster relays. The shared data client and external relay clients retain ordinary endpoint-name verification.
+
+### Who accepts what
+
+| Request | Destination | Certificate presented | Names accepted |
+|---|---|---|---|
+| Control-plane requests using the control transport | node's intra-control URL | default | advertised name or IP; also `alt_tls_dns_name` |
+| Proxy forwarding control requests to the primary | primary's public URL | public (else default) | advertised name or IP, or `alt_tls_dns_name` |
+| Other same-cluster proxy relays, including S3 | node's intra-control or intra-data URL | default | advertised name or IP, or `alt_tls_dns_name` |
+| Join and rejoin | primary's intra-control or public URL | default or public | advertised name or IP, or `alt_tls_dns_name` |
+| Fallback retry via public URL | node's public URL | public (else default) | advertised name or IP, or `alt_tls_dns_name` |
+| HTTP intra-data: GFN, target-to-target GET/PUT, EC metadata | node's intra-data URL (intra-control when collapsed) | default | advertised name or IP only |
+| Transport streams: rebalance, get-batch, EC, and other data movers | node's intra-data URL (intra-control when collapsed) | default | advertised name or IP only |
+| External: cloud backends, ETL pods, remote AIS clusters | external endpoint | remote endpoint's certificate | the endpoint's own name only |
+
+The control transport accepts `alt_tls_dns_name` for all its requests, including those to intra-control URLs. Longer calls to private URLs may instead use the data client, which accepts only the advertised hostname or IP. Long calls to a known node's public URL use `controlLong`, sharing the control transport. The default certificate must therefore cover the advertised intra-cluster names regardless of `alt_tls_dns_name`.
+
+### Deployment cases
+
+| Certificates | `alt_tls_dns_name` | Result |
+|---|---|---|
+| One certificate covering intra-cluster and public hostnames | not needed | works |
+| Default certificate covers intra-cluster names; `net.http.pub` certificate covers only an external name (e.g., `ais.example.com`) | set to that external name | works |
+| Default certificate covers intra-cluster names and the external name, but not the nodes' public hostnames | set to the external name | works |
+| One certificate covering **only** an external name, served on all listeners | any | **not supported**: intra-data traffic and private control requests using strict clients fail hostname verification |
+
+For the last case, move the external-only certificate under `net.http.pub` and give the intra-cluster listeners a certificate for the nodes' intra-cluster names (or add those names to the single certificate).
+
+Example (second row): nodes advertise `ais-target-0.ais-target.ais.svc.cluster.local` and similar names on the intra-cluster networks, and `ais-target-0.example.com` and similar on the public network, all on port 51080; the public certificate covers only `ais.example.com`:
+
+```json
+"net": {
+  "http": {
+    "use_https": true,
+    "server_crt": "/etc/ais/tls/intra.crt",
+    "server_key": "/etc/ais/tls/intra.key",
+    "client_ca_tls": "/etc/ais/tls/intra-ca.crt",
+    "alt_tls_dns_name": "ais.example.com",
+    "pub": {
+      "server_crt": "/etc/ais/tls/pub.crt",
+      "server_key": "/etc/ais/tls/pub.key"
+    }
+  }
+}
+```
+
+The public certificate must chain to the system roots or to `net.http.client_ca_tls`. Changing `alt_tls_dns_name` requires restart; see [HTTPS: alternative DNS name](/docs/https.md#alternative-dns-name) for upgrade notes.
+
+### Troubleshooting
+
+A hostname mismatch in node logs, such as `x509: certificate is valid for ais.example.com, not ais-target-0.ais-target.ais.svc.cluster.local`, means a node dialed an address its peer's certificate does not cover:
+
+* the address is an **intra-cluster** name: ensure the default certificate covers that name; direct intra-data clients and streams do not use `alt_tls_dns_name`;
+* the address is a **public** hostname: set `alt_tls_dns_name` to a name the public certificate covers, or add the public hostname to the certificate.
+
 ## IPv6
 
 AIStore supports IPv6 for all three logical network roles and for the transport streaming layer.
@@ -545,6 +643,7 @@ Do not delete restart markers or Smap files merely to suppress a duplicate-endpo
 * The control plane is low-bandwidth but latency-sensitive; it must be protected from bulk-data HoL blocking.
 * The data path includes both regular net/http operations (e.g., intra-cluster GFN) and transport/bundle streams (which use fasthttp by default and bypass standard muxers).
 * Public multi-homing is supported; intra-cluster multi-homing is not.
+* With HTTPS, the default certificate must cover the nodes' advertised intra-cluster names; `alt_tls_dns_name` supports public certificates that omit the nodes' public hostnames.
 * Targets probe local listeners after an unclean shutdown; the primary checks advertised endpoints across node IDs, with warnings only during self-join and admin-join.
 * IPv6 is supported cluster-wide via `net.use_ipv6`; switching between IPv4 and IPv6 requires a config change and restart.
 * IP family selection is resolved at runtime and applied consistently.

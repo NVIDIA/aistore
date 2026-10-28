@@ -65,18 +65,21 @@ func TestReverseProxyErrorHandlers(t *testing.T) {
 	tassert.Fatalf(t, ctype == "", "native relay: expected no content type, got %q", ctype)
 }
 
-func TestPeerNameTransports(t *testing.T) {
-	prevServ, prevClient := g.netServ.control, g.client.control
-	t.Cleanup(func() { g.netServ.control, g.client.control = prevServ, prevClient })
+func TestAltDNSNameTransports(t *testing.T) {
+	prevServ, prevClient := g.netServ.control, g.client
+	t.Cleanup(func() { g.netServ.control, g.client = prevServ, prevClient })
 	g.netServ.control = &netServer{}
 
 	config := &cmn.Config{}
 	config.Client = &cmn.ClientConf{}
 	config.Net.HTTP.UseHTTPS = true
-	config.Net.HTTP.PeerName = "ais.example.com"
+	config.Net.HTTP.AltDNSName = "ais.example.com"
 
-	tassert.Fatal(t, rpTransportIntra(config).DialTLSContext != nil, "cluster node relay: expected peer_name verifier")
-	tassert.Fatal(t, rpTransportExt(config).DialTLSContext == nil, "remote AIS and cloud relay: unexpected peer_name verifier")
+	tassert.Fatal(t, rpTransportIntra(config).DialTLSContext != nil, "cluster node relay: expected alt name verifier")
+	tassert.Fatal(t, rpTransportExt(config).DialTLSContext == nil, "remote AIS and cloud relay: unexpected alt name verifier")
+
+	data := cmn.NewIntraClientTLS(cmn.TransportArgs{}, config).Transport.(*http.Transport)
+	tassert.Fatal(t, data.DialTLSContext == nil, "intra-data client: unexpected alt name verifier")
 
 	g.client.control = &http.Client{Transport: rpTransportIntra(config)}
 	tr := _x509Client().Transport.(*http.Transport)

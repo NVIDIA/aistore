@@ -15,13 +15,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
-func TestSetTLSPeerName(t *testing.T) {
+func TestSetTLSAltDNSName(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	defer srv.Close()
 
@@ -39,22 +38,22 @@ func TestSetTLSPeerName(t *testing.T) {
 
 	// httptest certificate is valid for example.com, *.example.com, and loopback IPs
 	tests := []struct {
-		name, host, peer string
-		external, ok     bool
+		name, host, alt string
+		external, ok    bool
 	}{
 		{name: "advertised host outside certificate", host: "node1.internal"},
-		{name: "peer_name in certificate", host: "node1.internal", peer: "ais.example.com", ok: true},
-		{name: "peer_name not in certificate", host: "node1.internal", peer: "other.org"},
-		{name: "advertised host in certificate", host: "node1.example.com", peer: "other.org", ok: true},
-		{name: "advertised IP in certificate", host: "127.0.0.1", peer: "other.org", ok: true},
-		{name: "advertised IP outside certificate with peer", host: "10.0.0.1", peer: "ais.example.com", ok: true},
-		{name: "neither IP nor peer_name in certificate", host: "10.0.0.1", peer: "other.org"},
-		{name: "external client ignores peer_name", host: "node1.internal", peer: "ais.example.com", external: true},
+		{name: "alt name in certificate", host: "node1.internal", alt: "ais.example.com", ok: true},
+		{name: "alt name not in certificate", host: "node1.internal", alt: "other.org"},
+		{name: "advertised host in certificate", host: "node1.example.com", alt: "other.org", ok: true},
+		{name: "advertised IP in certificate", host: "127.0.0.1", alt: "other.org", ok: true},
+		{name: "advertised IP outside certificate with alt name", host: "10.0.0.1", alt: "ais.example.com", ok: true},
+		{name: "neither IP nor alt name in certificate", host: "10.0.0.1", alt: "other.org"},
+		{name: "external client ignores alt name", host: "node1.internal", alt: "ais.example.com", external: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var (
-				sargs = cmn.TLSArgs{ClientCA: srvPEM, PeerName: test.peer}
+				sargs = cmn.TLSArgs{ClientCA: srvPEM, AltDNSName: test.alt}
 				addr  = net.JoinHostPort(test.host, port)
 				tr    = &http.Transport{DialContext: dial}
 			)
@@ -66,30 +65,18 @@ func TestSetTLSPeerName(t *testing.T) {
 			if resp != nil {
 				resp.Body.Close()
 			}
-			checkPeerTLS(t, "SetTLS", err, test.ok)
-
-			if test.external || test.peer == "" {
-				return
-			}
-			conf, err := cmn.NewTLS(sargs, true /*intra*/)
-			tassert.CheckFatal(t, err)
-			dialFast := func(string) (net.Conn, error) { return net.Dial("tcp", srvAddr) }
-			conn, err := cmn.DialPeerTLS(dialFast, conf, sargs, time.Second)(addr)
-			if conn != nil {
-				conn.Close()
-			}
-			checkPeerTLS(t, "DialPeerTLS", err, test.ok)
+			checkAltTLS(t, err, test.ok)
 		})
 	}
 }
 
 // all failing cases use a trusted certificate, so the only acceptable failure is a name mismatch
-func checkPeerTLS(t *testing.T, tag string, err error, ok bool) {
+func checkAltTLS(t *testing.T, err error, ok bool) {
 	t.Helper()
 	if ok {
-		tassert.Errorf(t, err == nil, "%s: unexpected error: %v", tag, err)
+		tassert.Errorf(t, err == nil, "unexpected error: %v", err)
 		return
 	}
 	var herr x509.HostnameError
-	tassert.Errorf(t, errors.As(err, &herr), "%s: expected hostname error, got %v", tag, err)
+	tassert.Errorf(t, errors.As(err, &herr), "expected hostname error, got %v", err)
 }

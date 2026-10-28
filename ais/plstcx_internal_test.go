@@ -336,7 +336,7 @@ func TestLsoMappedS3Receiver(t *testing.T) {
 	prev := g.client
 	t.Cleanup(func() { g.client = prev })
 	client := &http.Client{Transport: tr, Timeout: time.Minute}
-	g.client.control, g.client.cplane, g.client.maxkalive, g.client.data = client, client, client, client
+	g.client.control, g.client.controlLong, g.client.cplane, g.client.maxkalive, g.client.data = client, client, client, client, client
 
 	u, err := url.Parse(peer.ControlNet.URL)
 	tassert.CheckFatal(t, err)
@@ -467,7 +467,7 @@ func TestLsoRflowAbort(t *testing.T) {
 		prev := g.client
 		t.Cleanup(func() { g.client = prev })
 		client := &http.Client{Transport: tr, Timeout: time.Minute}
-		g.client.control, g.client.cplane, g.client.maxkalive, g.client.data = client, client, client, client
+		g.client.control, g.client.controlLong, g.client.cplane, g.client.maxkalive, g.client.data = client, client, client, client, client
 	}
 
 	t.Run("single-target-no-2pc", func(t *testing.T) {

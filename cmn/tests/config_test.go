@@ -426,10 +426,14 @@ func TestHTTPConfValidateTLS(t *testing.T) {
 		{name: "pub auth knobs without certs", http: cmn.HTTPConf{Pub: &cmn.TLSConf{ClientAuthTLS: int(tls.RequireAndVerifyClientCert)}}, wantErr: true},
 		{name: "pub CA without certs", http: cmn.HTTPConf{Pub: &cmn.TLSConf{ClientCA: "ca.pem"}}, wantErr: true},
 		{name: "pub cert without key", http: cmn.HTTPConf{Pub: &cmn.TLSConf{Certificate: crt}}, wantErr: true},
-		{name: "peer_name", http: cmn.HTTPConf{PeerName: "ais.example.com"}},
-		{name: "peer_name with port", http: cmn.HTTPConf{PeerName: "ais.example.com:51080"}, wantErr: true},
-		{name: "peer_name with newline", http: cmn.HTTPConf{PeerName: "ais.example.com\n"}, wantErr: true},
-		{name: "peer_name with empty label", http: cmn.HTTPConf{PeerName: "ais..example.com"}, wantErr: true},
+		{name: "alt_tls_dns_name", http: cmn.HTTPConf{AltDNSName: "ais.example.com"}},
+		{name: "alt_tls_dns_name with port", http: cmn.HTTPConf{AltDNSName: "ais.example.com:51080"}, wantErr: true},
+		{name: "alt_tls_dns_name with newline", http: cmn.HTTPConf{AltDNSName: "ais.example.com\n"}, wantErr: true},
+		{name: "alt_tls_dns_name with empty label", http: cmn.HTTPConf{AltDNSName: "ais..example.com"}, wantErr: true},
+		{name: "alt_tls_dns_name uppercase", http: cmn.HTTPConf{AltDNSName: "AIS.example.com"}, wantErr: true},
+		{name: "alt_tls_dns_name wildcard", http: cmn.HTTPConf{AltDNSName: "*.example.com"}, wantErr: true},
+		{name: "alt_tls_dns_name leading hyphen", http: cmn.HTTPConf{AltDNSName: "-ais.example.com"}, wantErr: true},
+		{name: "alt_tls_dns_name label too long", http: cmn.HTTPConf{AltDNSName: strings.Repeat("a", 64) + ".example.com"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

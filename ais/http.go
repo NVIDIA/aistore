@@ -21,8 +21,9 @@ type global struct {
 		maxkalive *http.Client // intra-control, config.Timeout.MaxKeepalive (bcastGroup and friends)
 
 		// config.Client timeout
-		control *http.Client // intra-control, config.Client.Timeout
-		data    *http.Client // intra-data,    config.Client.TimeoutLong
+		control     *http.Client // intra-control, config.Client.Timeout
+		controlLong *http.Client // node public URL, config.Client.TimeoutLong; nil unless alt_tls_dns_name
+		data        *http.Client // intra-data and external, config.Client.TimeoutLong
 	}
 	netServ struct {
 		pub      *netServer
@@ -82,17 +83,24 @@ func initCtrlClient(config *cmn.Config, preferIPv6 bool) {
 		PreferIPv6:       preferIPv6,
 	}
 
-	// single shared transport => one connection pool across all three
+	// single shared transport => one connection pool across all four
 	// intra-cluster control-plane clients (below)
 	tr := cmn.NewTransport(cargs)
 	if config.Net.HTTP.UseHTTPS {
-		if err := cmn.SetTLS(tr, config.Net.HTTP.ToTLS(), true /*intra*/); err != nil {
+		if err := cmn.SetTLS(tr, config.Net.HTTP.ToTLSAlt(), true /*intra*/); err != nil {
 			cos.ExitLog(err)
 		}
 	}
 
 	// per-tier Timeout; Transport (and therefore connection pool) is shared
 	g.client.control = &http.Client{Transport: tr, Timeout: config.Client.Timeout.D()}
+	g.client.controlLong = nil
+	if config.Net.HTTP.UseHTTPS && config.Net.HTTP.AltDNSName != "" {
+		// long calls to a node's public URL
+		// - see htrun.call
+		// - wrap it in tracing.NewTraceableClient() if need be
+		g.client.controlLong = &http.Client{Transport: tr, Timeout: config.Client.TimeoutLong.D()}
+	}
 	g.client.cplane = &http.Client{Transport: tr, Timeout: config.Timeout.CplaneOperation.D()}
 	g.client.maxkalive = &http.Client{Transport: tr, Timeout: config.Timeout.MaxKeepalive.D()}
 }
