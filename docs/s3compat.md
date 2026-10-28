@@ -356,6 +356,8 @@ aws s3api get-object \
 
 This would download only the first 100 bytes of the file.
 
+> For an object in a remote bucket that is not yet in the cluster, AIS first fetches the entire object from the backend and then serves the range. For large objects, see [Reading large objects from remote buckets](/docs/howto_large_cold_objects.md).
+
 ---
 
 ### Multipart uploads with aws CLI
@@ -593,6 +595,10 @@ client.complete_multipart_upload(
 response = client.head_object(Bucket=bucket_name, Key=object_key)
 print(f"Successfully uploaded {response['ContentLength']} bytes")
 ```
+
+### Large objects from remote buckets
+
+Boto3 can request parallel (blob) download of large cold objects by adding the `Ais-Blob-Threshold` header with an event hook. See [Reading large objects from remote buckets: Boto3 and other S3 clients](/docs/howto_large_cold_objects.md#boto3-and-other-s3-clients) for the example and caveats.
 
 ---
 

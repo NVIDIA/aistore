@@ -956,6 +956,16 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		if !blobDownload && threshold == 0 {
 			break
 		}
+		// keep regular GET semantics for range read and archive extraction:
+		// - threshold only: fall through to regular GET
+		// - explicit blob download: reject the conflicting request
+		if r.Header.Get(cos.HdrRange) != "" || dpq.isArch() {
+			if blobDownload {
+				return lom, fmt.Errorf("blob-downloader: %s cannot be combined with range read or archive extraction",
+					apc.HdrBlobDownload)
+			}
+			break
+		}
 		if !bck.IsRemote() {
 			return lom, fmt.Errorf("blob-downloader is not supported for local buckets: %s", bck.Cname(""))
 		}

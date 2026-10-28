@@ -1201,6 +1201,59 @@ func TestGetObjectBlobThreshold(t *testing.T) {
 	}
 }
 
+// blob download does not apply to range reads:
+// - threshold only: regular (range) GET
+// - explicit blob download: 400
+func TestGetObjectBlobRange(t *testing.T) {
+	const (
+		objSize  = 16 * cos.MiB
+		rngStart = cos.MiB
+		rngLen   = 64 * cos.KiB
+	)
+	m := ioContext{
+		t:         t,
+		bck:       cliBck,
+		num:       1,
+		prefix:    t.Name() + "-",
+		fileSize:  objSize,
+		fixedSize: true,
+	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	m.init(true /*cleanup*/)
+	initMountpaths(t, m.proxyURL)
+	m.remotePuts(true /*evict*/)
+
+	var (
+		baseParams = tools.BaseAPIParams(m.proxyURL)
+		objName    = m.objNames[0]
+		rngHdr     = cmn.MakeRangeHdr(rngStart, rngLen)
+	)
+
+	tlog.Logfln("explicit blob download with range %q: expecting 400", rngHdr)
+	_, err := api.GetObject(baseParams, m.bck, objName, &api.GetArgs{Header: http.Header{
+		cos.HdrRange:        []string{rngHdr},
+		apc.HdrBlobDownload: []string{"true"},
+	}})
+	tassert.Fatalf(t, api.HTTPStatus(err) == http.StatusBadRequest, "expected HTTP 400, got %v", err)
+
+	tlog.Logfln("blob threshold with range %q: expecting regular range GET", rngHdr)
+	rng := bytes.NewBuffer(nil)
+	_, err = api.GetObject(baseParams, m.bck, objName, &api.GetArgs{
+		Writer:        rng,
+		BlobThreshold: objSize / 2,
+		Header:        http.Header{cos.HdrRange: []string{rngHdr}},
+	})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, int64(rng.Len()) == rngLen, "expected %d bytes, got %d", rngLen, rng.Len())
+	m.validateChunksOnDisk(m.bck, objName, 0)
+
+	tlog.Logfln("comparing range with the full object")
+	full := bytes.NewBuffer(nil)
+	_, err = api.GetObject(baseParams, m.bck, objName, &api.GetArgs{Writer: full})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, bytes.Equal(rng.Bytes(), full.Bytes()[rngStart:rngStart+rngLen]), "range content mismatch")
+}
+
 func TestGetObjectBlobLatestVersion(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
 	var (

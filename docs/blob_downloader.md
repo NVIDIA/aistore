@@ -45,6 +45,8 @@ AIStore exposes blob download functionality through three distinct interfaces, e
 - **Prefetch + blob-threshold** – route large objects in the prefetch job through blob downloader.
 - **Streaming GET** – stream a large object from blob downloader while it is being cached in AIS.
 
+For a comparison with other ways to read large remote objects, including S3 clients, see [Reading large objects from remote buckets](/docs/howto_large_cold_objects.md).
+
 ### 1. Single object blob-download job
 
 Use this when you want direct control over which/how objects are fetched with blob downloader.
@@ -131,7 +133,7 @@ Key prefetch options:
 - **`--blob-chunk-size SIZE`**: chunk size when bucket auto-chunking is disabled; otherwise `chunks.chunk_size` applies.
 - **`--prefix` / `--list` / `--template`**: scope which objects are prefetched.
 
-### 3. Streaming GET (Python SDK Only)
+### 3. Streaming GET
 
 In addition to CLI jobs, blob downloader can be used to stream large objects while they are concurrently downloaded in the cluster. This is useful when you want to feed data directly into an application (for example, model loading or preprocessing) and still keep a copy in AIS.
 

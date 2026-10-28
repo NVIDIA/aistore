@@ -65,6 +65,7 @@ Use this page as a quick orientation and navigation map:
 - [Archives: read, write, and list](/docs/archive.md)
 - [Downloader](/docs/downloader.md)
 - [Blob Downloader](/docs/blob_downloader.md)
+- [Reading large objects from remote buckets](/docs/howto_large_cold_objects.md)
 - [Batch object retrieval (get-batch)](/docs/get_batch.md)
 - [Batch operations](/docs/batch.md)
 - [Virtual directories](/docs/howto_virt_dirs.md)
