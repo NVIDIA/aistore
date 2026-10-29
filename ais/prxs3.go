@@ -568,11 +568,13 @@ func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string)
 // PUT /s3/<bucket-name>/<object-name> - with HeaderObjSrc in the request header
 // (compare with p.directPutObjS3)
 func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	src := r.Header.Get(cos.S3HdrObjSrc)
-	src = strings.Trim(src, "/")
-	srcBck, srcObj, found := strings.Cut(src, "/")
-	if !found {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: errS3Obj})
+	srcBck, objName, versionID, err := s3.ParseCopyObjSrc(r.Header.Get(cos.S3HdrObjSrc))
+	if err != nil {
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Code: s3.ErrCodeInvalidArgument})
+		return
+	}
+	if versionID != "" {
+		s3.WriteErr(w, r, s3.ErrCopyVersion(versionID))
 		return
 	}
 	// src
@@ -594,7 +596,6 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 
-	objName := strings.Trim(srcObj, "/")
 	smap := p.owner.smap.get()
 	tsi, err := smap.HrwObjName2T(bckSrc, objName)
 	if err != nil {

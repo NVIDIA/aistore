@@ -13,6 +13,7 @@ import (
 const (
 	// AWS URL params
 	QparamVersioning        = "versioning" // Configure or retrieve bucket versioning settings
+	QparamVersionID         = "versionId"  // object version (e.g., in `x-amz-copy-source`)
 	QparamLifecycle         = "lifecycle"
 	QparamCORS              = "cors"
 	QparamPolicy            = "policy"

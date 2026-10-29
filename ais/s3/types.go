@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -113,6 +114,52 @@ func JoinValidateOname(w http.ResponseWriter, r *http.Request, items []string) (
 		WriteErr(w, r, ErrInfo{Err: err})
 	}
 	return
+}
+
+// parse S3 `x-amz-copy-source` header => (bucket, object name, version ID)
+// - format: [/]bucket/object[?versionId=ID], URL-encoded
+// - split off the query at the first literal '?' before unescaping (escaped "%3F" belongs to the name)
+// - path-unescape ('+' is a literal plus); upon malformed escape sequence use the raw value
+// - reject consecutive slashes (compare with s3Handler) and empty bucket or object
+//
+// NOTE:
+// clients that re-escape the header **when following the redirect** make the target
+// compute a different (still escaped) object name than the one the proxy used to select
+// the target
+func ParseCopyObjSrc(src string) (bucket, object, versionID string, err error) {
+	src, query, hasQuery := strings.Cut(src, "?")
+	if hasQuery {
+		vals, e := url.ParseQuery(query)
+		if e != nil {
+			return "", "", "", fmt.Errorf("invalid %s query %q: %v", cos.S3HdrObjSrc, query, e)
+		}
+		for k := range vals {
+			if k != QparamVersionID {
+				return "", "", "", fmt.Errorf("invalid %s query %q: unexpected %q", cos.S3HdrObjSrc, query, k)
+			}
+		}
+		if versionID = vals.Get(QparamVersionID); versionID == "" {
+			return "", "", "", fmt.Errorf("invalid %s query %q: empty %s", cos.S3HdrObjSrc, query, QparamVersionID)
+		}
+	}
+	if unescaped, e := url.PathUnescape(src); e == nil {
+		src = unescaped
+	}
+	if strings.Contains(src, "//") {
+		return "", "", "", fmt.Errorf("invalid %s %q: consecutive slashes (\"//\") are not supported", cos.S3HdrObjSrc, src)
+	}
+	var found bool
+	bucket, object, found = strings.Cut(strings.Trim(src, "/"), "/") // in AWS examples the source starts with "/"
+	if !found || bucket == "" || object == "" {
+		return "", "", "", fmt.Errorf("invalid %s %q: expecting bucket/object", cos.S3HdrObjSrc, src)
+	}
+	return bucket, object, versionID, nil
+}
+
+// copying a given object version is not supported
+func ErrCopyVersion(versionID string) ErrInfo {
+	err := fmt.Errorf("%s with %s=%s is not supported", cos.S3HdrObjSrc, QparamVersionID, versionID)
+	return ErrInfo{Err: err, Status: http.StatusNotImplemented, Code: ErrCodeNotImplemented}
 }
 
 // source of S3 response headers:

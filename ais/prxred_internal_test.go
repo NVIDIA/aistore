@@ -287,6 +287,63 @@ func TestSignerVerifyRoundTrip(t *testing.T) {
 	}
 }
 
+// S3 copy: the signed redirect binds the copy-source bucket (not the object name)
+func TestSignerVerifyCopySrc(t *testing.T) {
+	const (
+		path    = "/s3/dst/obj"
+		srcA    = "/A/own-object"
+		smapVer = 999
+	)
+	sign := func(t *testing.T, copySrc string) (*proxy, *http.Request, *url.URL) {
+		t.Helper()
+		p := newTestProxy(t, true /*requestAuthConfigured*/)
+		req := newReq(http.MethodPut, path, "")
+		req.Header = http.Header{}
+		if copySrc != "" {
+			req.Header.Set(cos.S3HdrObjSrc, copySrc)
+		}
+		out := p.redurl(req, newTestSnode(t), smapVer, cmn.NetIntraControl, "")
+		return p, req, parseRedirect(t, out)
+	}
+	// redirected request: same method and length, client-controlled copy source
+	redirected := func(orig *http.Request, copySrc string) *http.Request {
+		r := &http.Request{Method: orig.Method, ContentLength: orig.ContentLength, Header: http.Header{}}
+		if copySrc != "" {
+			r.Header.Set(cos.S3HdrObjSrc, copySrc)
+		}
+		return r
+	}
+
+	tests := []struct {
+		name     string
+		signed   string // copy source at the proxy
+		verified string // copy source at the target
+		ok       bool
+	}{
+		{"same copy source", srcA, srcA, true},
+		{"other object, same bucket", srcA, "/A/other-object", true},
+		{"escaped object, same bucket", srcA, "A/own%2Dobject", true},
+		{"escaped bucket", srcA, "/%41/own-object", true},
+		{"other bucket", srcA, "/SECRET/victim", false},
+		{"copy source removed", srcA, "", false},
+		{"plain PUT", "", "", true},
+		{"copy source added", "", "/SECRET/victim", false},
+		{"invalid copy source added", "", "SECRET//victim", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p, orig, u := sign(t, tc.signed)
+			status, err := p.verify(u, redirected(orig, tc.verified))
+			switch {
+			case tc.ok && (err != nil || status != 0):
+				t.Fatalf("expected verified, got status=%d, err=%v", status, err)
+			case !tc.ok && (err == nil || status != http.StatusUnauthorized):
+				t.Fatalf("expected 401, got status=%d, err=%v", status, err)
+			}
+		})
+	}
+}
+
 // reconstruct the verifier from the request's own signed query params
 // (pid, smap-ver, nonce, sig) -
 // so the only variable across cases is the URL itself
@@ -296,6 +353,7 @@ func (p *proxy) verify(u *url.URL, orig *http.Request) (int, error) {
 		URL:           u,
 		Host:          u.Host,
 		ContentLength: orig.ContentLength,
+		Header:        orig.Header,
 	}
 	q := r.URL.Query()
 	svgrp, err := svgrpFromQ(q)

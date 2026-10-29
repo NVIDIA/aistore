@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -28,13 +30,13 @@ import (
 // The request envelope carries the sender ID, Smap version, nonce, and signature
 // via redirect query parameters or control-plane headers. The canonical payload
 // additionally covers the HTTP method, path, and content length.
+// S3 PUTs with a copy source additionally bind its parsed bucket (not the raw header).
 //
 // TODO:
 // - add canonical query/body coverage; currently, client-controlled redirect inputs are unsigned:
 //   * native API: target derives bucket provider and namespace from query (dpq, newBckFromQ)
 //   * audit remaining native qparams (etl name, archpath, etc.) and bind authz-relevant ones
-//   * S3: bind canonical query (parsed, sans sv qparams, re-encoded) and copy-source bucket
-//     (not the raw x-amz-copy-source header: some clients re-escape it when following redirects)
+//   * S3: bind canonical query (parsed, sans sv qparams, re-encoded)
 //   * mixed-version membership: consider introducing meta-version for the redirect envelope only
 //     (qencode/_verifySigned; intra-cluster headers unaffected)
 // - enforce startup ordering: restarted node must not originate signed traffic before its new Smap entry gets propagated
@@ -230,7 +232,7 @@ func (sv *svReq) verify(sid string, snode *meta.Snode, smap *smapX) (int, error)
 // common signing&verifying helpers
 //
 
-// canonical payload: (method, path, pid, smap-ver, content-length, nonce)
+// canonical payload: (method, path, pid, smap-ver, content-length, nonce [, copy-source bucket])
 func (sv *svReq) payload(pid string) []byte {
 	const (
 		sepa = 0 // strings separator
@@ -253,12 +255,23 @@ func (sv *svReq) payload(pid string) []byte {
 	binary.BigEndian.PutUint64(b8[:], sv.nonce)
 	sb.WriteBytes(b8[:])
 
+	// The suffix also distinguishes a copy from an ordinary PUT: adding or removing
+	// the header invalidates the signature. Other request payloads stay unchanged.
+	// Mixed-version CopyObject requests fail verification; do not fall back.
+	// Unparsable header: empty bucket (still a suffix - the target then rejects the copy).
+	if src := r.Header.Get(cos.S3HdrObjSrc); src != "" && r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, apc.URLPathS3.S+"/") {
+		bucket, _, _, _ := s3.ParseCopyObjSrc(src)
+		sb.WriteUint8(sepa)
+		sb.WriteString(bucket)
+	}
+
 	return sb.Bytes()[:sb.Len()]
 }
 
 func (sv *svReq) bufsizeSV(pid string) int {
 	r := sv.r
-	return len(r.Method) + 1 + len(r.URL.Path) + 1 + len(pid) + 1 + 3*cos.SizeofI64 + sigLen()
+	return len(r.Method) + 1 + len(r.URL.Path) + 1 + len(pid) + 1 + 3*cos.SizeofI64 + sigLen() +
+		len(r.Header.Get(cos.S3HdrObjSrc)) + 1
 }
 
 func (sv *svReq) buildURL(nodeURL string, now int64) string {

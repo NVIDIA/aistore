@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -131,25 +130,14 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, dpq *dpq, it
 // S3 copy object API use the "destination" bucket in the URL path, but AIStore target use "source" bucket
 // we need this extra `copyObjS3` handler at target to address the translation
 func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	src := r.Header.Get(cos.S3HdrObjSrc)
-
-	// [HACK]
-	// it appears, 'x-amz-copy-source' header gets double-escaped upon http redirect
-	// (s3cmd and aws clients, both)
-	srcUnescaped, err := url.QueryUnescape(src)
+	// NOTE: may differ from the proxy-parsed object name - see s3.ParseCopyObjSrc
+	srcBck, objSrc, versionID, err := s3.ParseCopyObjSrc(r.Header.Get(cos.S3HdrObjSrc))
 	if err != nil {
-		nlog.Errorf("Warning: failed to unescape '%s=%s' header: %v", cos.S3HdrObjSrc, src, err)
-	} else if src != srcUnescaped {
-		if cmn.Rom.V(5, cos.ModS3) {
-			nlog.Infoln("Warning: header", cos.S3HdrObjSrc, "is double-escaped - unescaping from", src, "to", srcUnescaped)
-		}
-		src = srcUnescaped
+		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Code: s3.ErrCodeInvalidArgument})
+		return
 	}
-
-	src = strings.Trim(src, "/") // in AWS examples the path starts with "/"
-	srcBck, srcObj, found := strings.Cut(src, "/")
-	if !found {
-		s3.WriteErr(w, r, s3.ErrInfo{Err: errS3Obj})
+	if versionID != "" {
+		s3.WriteErr(w, r, s3.ErrCopyVersion(versionID))
 		return
 	}
 	// src
@@ -158,7 +146,6 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err, Status: ecode})
 		return
 	}
-	objSrc := strings.Trim(srcObj, "/")
 	if err := cos.ValidateOname(objSrc); err != nil {
 		s3.WriteErr(w, r, s3.ErrInfo{Err: err})
 		return

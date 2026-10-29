@@ -32,6 +32,7 @@ const (
 	ErrCodeAccessDenied    = "AccessDenied"    // 403 (S3 has no 401)
 	ErrCodeInvalidArgument = "InvalidArgument" // 400 (malformed query)
 	ErrCodeInvalidRequest  = "InvalidRequest"  // catch-all
+	ErrCodeNotImplemented  = "NotImplemented"  // 501
 )
 
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
