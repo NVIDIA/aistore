@@ -473,7 +473,7 @@ USAGE:
 
 OPTIONS:
    all          Include all objects from a remote bucket including those that are not present (not cached) in cluster
-   cont-on-err  Keep running archiving xaction (job) in presence of errors in any given multi-object transaction
+   cont-on-err  Continue processing after individual object failures
    dry-run      Show total size of new objects without really creating them
    ext          Mapping from old to new extensions of transformed objects' names
    force,f      Force execution of the command (caution: advanced usage only)

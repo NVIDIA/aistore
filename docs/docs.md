@@ -86,6 +86,7 @@ Use this page as a quick orientation and navigation map:
 - [Deployment monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
 - [Node lifecycle: maintenance, shutdown, decommission](/docs/lifecycle_node.md)
 - [Global rebalance](/docs/rebalance.md)
+- [Placement weights](/docs/placement.md)
 - [Resilver](/docs/resilver.md)
 - [Information Center (IC)](/docs/ic.md)
 - [Out-of-band updates](/docs/out_of_band.md)

@@ -177,6 +177,8 @@ TARGET         MEM USED(%)   MEM AVAIL     CAP USED(%)   CAP AVAIL     LOAD AVER
 t[fXbarEnn]    3.08%         367.66GiB     51%           8.414TiB      [0.9 1.1 1.3]   -           1852h19m40s   ais-target-26   online  3.20.92bc0c1   2023-09-18T19:12:52+0000
 ```
 
+The `aisinit` init container, which generates node configuration in Kubernetes deployments, reads its own variables - for example, `AIS_PUBLIC_HOSTNAME` and `AIS_PUBLIC_HOSTNAME_OVERRIDE` (which, when set, takes precedence over all other public-hostname rules). See [aisinit](https://github.com/NVIDIA/aistore/blob/main/cmd/aisinit/README.md).
+
 See related:
 * [AIS K8s Operator: environment variables](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go)
 * [AIS K8s Operator](https://github.com/NVIDIA/ais-k8s)

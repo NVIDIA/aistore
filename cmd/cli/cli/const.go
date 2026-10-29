@@ -1291,7 +1291,7 @@ var (
 
 	continueOnErrorFlag = cli.BoolFlag{
 		Name:  "cont-on-err",
-		Usage: "Continue processing remaining objects after per-object failures",
+		Usage: "Continue processing after individual object failures",
 	}
 	// end archive
 

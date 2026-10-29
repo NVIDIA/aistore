@@ -136,6 +136,8 @@ when they are starting up.
 
 But it can be also be done - and will take precedence over the global setting - on a per-bucket basis.
 
+Connections to a per-bucket `extra.aws.endpoint` are checked against the resolved address. AIS rejects loopback, link-local, multicast, CGNAT, and other blocked address ranges; private storage networks remain supported. A local S3-compatible service should instead use the administrator-provided `S3_ENDPOINT` environment variable, which is loaded at node startup and is not subject to this per-bucket restriction. Leave `extra.aws.endpoint` empty to use that global endpoint. See [S3 backend properties](/docs/bucket.md#aws--s3-compatible).
+
 Here are some examples:
 
 ```console

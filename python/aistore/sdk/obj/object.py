@@ -218,7 +218,8 @@ class Object:
                 (e.g., "bytes=0-499", "bytes=500-", "bytes=-500").
                 See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
             direct (bool, optional): If True, the object content is read directly from the target node,
-                bypassing the proxy.
+                bypassing the proxy. Client-side target selection uses uniform HRW and does not
+                support weighted bucket placement; keep False (the default) for weighted buckets.
             num_workers (Optional[int]): Number of client-side workers for parallel range reads.
                 To configure server-side blob-download workers, set
                 `BlobDownloadConfig.num_workers`.

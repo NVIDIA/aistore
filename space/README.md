@@ -4,17 +4,21 @@ This package implements **content cleanup** on each target node. The goal is to 
 storage space from **work files**, **erasure coding (EC) artifacts**, and **chunked upload leftovers**
 while ensuring correctness and avoiding premature deletion.
 
-Cleanup operates **per-bucket, per-mountpath** and works strictly on **local state** —
-it does not coordinate across targets.
+Cleanup walks local content **per-bucket, per-mountpath**. For objects owned by
+another target under the bucket's current placement policy, it consults the cluster
+map and verifies the copy with that owner before removing it. Checks of EC artifacts
+and chunk leftovers still use local state.
 
 **Table of Contents**
 
 1. [Overview](#1-overview)
-2. [Relation to rebalance cleanup mode](#relation-to-rebalance-cleanup-mode)
-3. [Cleanup Policies](#2-cleanup-policies)
-4. [Implementation Details](#3-implementation-details)
-5. [Corner Cases & Constraints](#4-corner-cases--constraints)
-6. [Future Enhancements](#5-future-enhancements)
+2. [Relation to rebalance cleanup mode](#2-relation-to-rebalance-cleanup-mode)
+3. [Cleanup Policies](#3-cleanup-policies)
+   - [Misplaced objects and peer verification](#misplaced-objects-and-peer-verification)
+   - [Long object names](#long-object-names)
+4. [Implementation Details](#4-implementation-details)
+5. [Corner Cases & Constraints](#5-corner-cases--constraints)
+6. [Future Enhancements](#6-future-enhancements)
 
 ## 1. Overview
 
@@ -49,7 +53,7 @@ AIStore also provides:
 
 ```console
 $ ais start rebalance --cleanup
-````
+```
 
 Rebalance cleanup is narrower and more explicit. It reuses the global rebalance lifecycle and monitoring machinery, does not migrate object payloads, and is
 intended specifically for reclaiming source-side copies left after topology changes and regular data-moving rebalance.
@@ -103,6 +107,32 @@ Behavior depends on whether EC is enabled for the bucket:
 - Handled in `visitObj()`
 - For EC-enabled buckets: objects missing corresponding metafiles flagged as *misplaced EC*
 
+### Misplaced objects and peer verification
+
+Starting with v5.2, misplaced copies are verified using head-batch: a request compares
+up to 64 objects with their owner by default. Unsupported peers fall back to individual
+HEAD requests. A copy is eligible for removal only when the owner confirms the same
+object; missing, divergent, busy, and unanswered copies are kept. `--keep-misplaced`
+keeps the copies even after successful verification. Other cleanup flags and safety
+windows still apply.
+
+Peer checks do not hold the local object lock. Before deletion, cleanup takes the write
+lock, reloads the metadata, and checks that it is unchanged since the peer comparison.
+Busy or changed objects stay. Local removals are grouped using `space.batch_size`,
+independently of the head-batch request size.
+
+For load handling, compatibility fallback, and the `hdb-*` job counters, see
+[Batched peer verification](/docs/rebalance.md#batched-peer-verification) and
+[Monitoring](/docs/rebalance.md#monitoring). Use `ais show job cleanup-store --all`
+to inspect the counters.
+
+### Long object names
+
+Space cleanup currently skips loaded objects that use shortened local filenames,
+and ambiguous shortened chunk or manifest names. This can retain reclaimable data.
+Objects with literal names resembling shortened filenames are classified by metadata,
+rather than skipped solely by name. See [Long object names](/docs/long_names.md#storage-and-maintenance).
+
 ## 4. Implementation Details
 
 ### Throttling
@@ -119,7 +149,7 @@ Relies on filesystem mtimes. Clock changes on the operator may influence cleanup
 ## 5. Corner Cases & Constraints
 
 - **Race Protection**: Slice => Meta and Replica => Meta sequences covered by global recency guard
-- **Local Scope**: Does not consult cluster maps; global orphan detection is out of scope
+- **Scope**: Misplaced object removal uses cluster placement and peer verification; EC and chunk-artifact checks remain local
 - **Encoding Requirements**: `fs.WorkCT` tags, chunk uploadIDs, and chunk numbers must never be empty
 - **Legacy State**: Partial manifests treated as invalid and always removed
 
@@ -129,7 +159,8 @@ Relies on filesystem mtimes. Clock changes on the operator may influence cleanup
 Delay removal when conflicting generations exist; prefer newest metadata.
 
 ### Cluster-Aware Reconciliation
-Consult cluster-wide state to distinguish local vs. global orphans.
+Extend cluster-wide reconciliation to EC and chunk artifacts; misplaced object copies
+already use peer verification.
 
 ### Quarantine Mode
 Move questionable artifacts to quarantine directory instead of immediate deletion.

@@ -3,6 +3,7 @@ AIStore fully supports extremely long object names through both its native API a
 # Table of Contents
 - [Example: Using S3-Compatible API](#example-using-s3-compatible-api)
 - [Example: Using Native API](#example-using-native-api)
+- [Storage and maintenance](#storage-and-maintenance)
 - [Features](#features)
 - [References](#references)
 
@@ -75,7 +76,7 @@ $ ais ls ais://mybucket/$longname
 PROPERTY         VALUE
 atime            09 Apr 25 09:54 EDT
 checksum         md5[2940e853a9b97580...]
-name             ais://nnn/.x9a4cca2da6fffe8cd9aa78442e66f1c2f722caa28293024ddcce5b25c162586c
+name             ais://mybucket/<original 1024-character name>
 size             16.84KiB
 
 #
@@ -88,6 +89,14 @@ $ ais show mybucket/$longname
 #
 $ ais get mybucket/$longname ./downloaded-file.md
 ```
+
+The `name` above is abbreviated for display; the response contains the complete original object name.
+
+## Storage and maintenance
+
+When a name exceeds the local filesystem limit, AIS stores the object under a shortened filename and records the original name in internal metadata. The shortened name is local to storage operations. Placement, object locks, metadata caching, listing, and transfers between targets use the original object identity.
+
+If the original name cannot be resolved, rebalance skips the transfer, rebalance cleanup retains the source, and listing skips the unresolved object with a warning. Space cleanup remains conservative: it skips loaded long-name objects and ambiguous shortened chunk or manifest names until their reclamation is fully supported. This can leave reclaimable space on disk. A literal object name that resembles a shortened filename is classified by its metadata. See [Space Cleanup](https://github.com/NVIDIA/aistore/blob/main/space/README.md).
 
 ## Features
 

@@ -370,7 +370,9 @@ $ ais bucket props set ais://abc chunks.chunk_size=16MiB chunks.objsize_limit=50
 
 `ais bucket rechunk` can also be run explicitly. The `--prefix` option restricts the job to a subset of objects, for incremental conversion - not to apply a different policy to part of the bucket.
 
-Per-job `--chunk-size` and `--objsize-limit` overrides are deprecated as of v5.1 and planned for removal in v5.2; see [v5.1 release notes](/docs/relnotes/5.1.md#deprecated-apis).
+Rechunk started by a properties change continues past per-object failures; an explicit `ais bucket rechunk` stops at the first failure unless run with `--cont-on-err`. Out of space aborts the job in either case. The job's control message (`ais show job rechunk`) reports `skipped` (monolithic objects that stay monolithic, and mirror copies), `matched` (chunked objects already at the configured chunk size), `processed` (objects rewritten), and `failed`.
+
+Per-job `--chunk-size` and `--objsize-limit` overrides, deprecated in v5.1, are removed in v5.2, along with `apc.RechunkMsg.ChunkSize` and `ObjSizeLimit`. Set the bucket's `chunks` properties instead; rechunk always converges to that configuration. See [Removed and Deprecated APIs](/docs/relnotes/5.2.md#deprecated-apis).
 
 ### Prefetch mechanism
 

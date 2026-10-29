@@ -154,7 +154,7 @@ USAGE:
 
 OPTIONS:
    batch-size       number of cuts per output file
-   cont-on-err      Keep running archiving xaction (job) in presence of errors in any given multi-object transaction
+   cont-on-err      Continue processing after individual object failures
    cuts             path to Lhotse cuts.jsonl or cuts.jsonl.gz or cuts.jsonl.lz4
    list             Comma-separated list of object or file names, e.g.:
                     --list 'o1,o2,o3'

@@ -84,6 +84,10 @@ class Smap(BaseModel):
         """
         Determine the target node responsible for an object based on its bucket path and name.
 
+        Uses uniform HRW only; target placement weights and bucket overrides are not applied.
+        For weighted buckets, use Object.get_reader() with its default direct=False so that
+        the proxy selects the target.
+
         Args:
             uname (str): Fully qualified (namespaced) object name (e.g., f"{bck.get_path()}{obj.name}").
 

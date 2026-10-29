@@ -566,7 +566,7 @@ OPTIONS:
    --compute-checksum   Compute client-side checksum - one of the supported checksum types that is currently configured for the destination bucket -
                         and provide it as part of the PUT request for subsequent validation on the server side
                         (see also: "end-to-end protection")
-   --cont-on-err        Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   --cont-on-err        Continue processing after individual object failures
    --crc32c value       compute client-side crc32c checksum
                         and provide it as part of the PUT request for subsequent validation on the server side
    --dry-run            Preview the results without really running the action
@@ -1979,6 +1979,8 @@ $ ais object concat dirB dirA ais://mybucket/obj
 Generally, AIS objects have two kinds of properties: system and, optionally, custom (user-defined). Unlike the system-maintained properties, such as checksum and the number of copies (or EC parity slices, etc.), custom properties may have arbitrary user-defined names and values.
 
 Custom properties are not impacted by object updates (PUTs) -- a new version of an object simply inherits custom properties of the previous version as is with no changes.
+
+Custom metadata has a 2 KiB limit, measured as the sum of key and value lengths in bytes. An update validates the merged result of existing and incoming keys, including replacements, before changing any metadata. If validation fails, the existing metadata remains unchanged. Reserved internal keys cannot be set by clients.
 
 The command's syntax is similar to the one used to assign [bucket properties](/docs/cli/bucket.md#set-bucket-properties)
 

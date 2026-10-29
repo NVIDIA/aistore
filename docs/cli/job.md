@@ -119,21 +119,22 @@ $ ais start lru --buckets ais://buck1,aws://buck2 -f
 
 Re-chunking converges a bucket's existing objects to the bucket's `chunks` configuration, converting objects between monolithic and chunked representations:
 
-- Objects below `chunks.objsize_limit` are stored as monolithic (single file)
-- Objects at or above `chunks.objsize_limit` are split into chunks of `chunks.chunk_size`
-- When `chunks.objsize_limit` is 0, chunking is disabled and all objects are restored as monolithic
+- Objects larger than `chunks.max_monolithic_size` are always split into chunks of `chunks.chunk_size`
+- Otherwise, a positive `chunks.objsize_limit` selects chunked storage for objects at or above that threshold; smaller objects are stored as monolithic (single file)
+- Setting `chunks.objsize_limit` to 0 disables automatic chunking: objects at or below `chunks.max_monolithic_size` are restored as monolithic; larger objects remain chunked
 
-The bucket's configuration is authoritative - as with mirroring and erasure coding, it is the single record of the bucket's intended storage layout. To change the layout, update the bucket properties first, then run the job.
+The bucket's configuration is authoritative - as with mirroring and erasure coding, it is the single record of the bucket's intended storage layout. Changing the bucket's `chunks` properties starts rechunk automatically; run the job explicitly to convert incrementally (`--prefix`), to update the remote backend (`--sync-remote`), or to retry objects that failed.
 
 **Usage:**
 
 ```console
-$ ais bucket rechunk BUCKET [--prefix PREFIX] [--sync-remote] [--wait]
+$ ais bucket rechunk BUCKET [--prefix PREFIX] [--sync-remote] [--cont-on-err] [--wait]
 ```
 
 **Flags:**
 - `--prefix PREFIX` - Only rechunk objects with the specified prefix (can also be embedded in the bucket URI); useful for incremental conversion
 - `--sync-remote` - Also write rechunked objects back to the remote backend (buckets with remote backend only)
+- `--cont-on-err` - Continue processing after individual object failures; without it, an explicit rechunk stops at the first failure (rechunk started by a properties change always continues). Out of space aborts the job in either case
 - `--wait` - Wait for the job to complete before returning
 - `--timeout DURATION` - Maximum time to wait (e.g., `5m`, `1h`)
 - `--yes, -y` - Assume 'yes' to all prompts (skip confirmation)
@@ -167,8 +168,6 @@ $ ais bucket rechunk ais://mybucket -y --wait
 Waiting for rechunk[qRs678], ais://mybucket ...
 Done.
 ```
-
-> **Note**: Objects exceeding `chunks.max_monolithic_size` must remain chunked, using `chunks.chunk_size`, even when automatic chunking is otherwise disabled.
 
 > **See also**: [Chunking](/docs/storage_svcs.md#chunking), [bucket properties](/docs/bucket.md), [`ais bucket props`](/docs/cli/bucket.md)
 

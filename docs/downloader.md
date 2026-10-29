@@ -70,6 +70,10 @@ Other supported features include:
 
 The rest of this document describes these and other capabilities in greater detail and illustrates them with examples.
 
+## Permissions
+
+With client authentication enabled, listing, querying, aborting, and removing download jobs require cluster-wide `ADMIN` access. See [Downloader CLI permissions](/docs/cli/download.md#permissions), including requirements for status polling.
+
 ## Example
 
 Downloading jobs run asynchronously; you can monitor the progress of each specific job.

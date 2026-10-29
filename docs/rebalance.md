@@ -16,6 +16,7 @@ Global rebalance is one of the core AIS mechanisms that makes it possible to gro
 * [CLI: usage examples](#cli-usage-examples)
 * [Starting rebalance administratively](#starting-rebalance-administratively)
 * [Cleanup mode](#cleanup-mode)
+  * [Batched peer verification](#batched-peer-verification)
 * [Rebalance vs. resilver](#rebalance-vs-resilver)
 * [Performance considerations](#performance-considerations)
 
@@ -109,6 +110,8 @@ Operationally, administrators typically care about three things:
 * how much data each target has sent and received, or removed in cleanup mode
 
 Like other long-running AIS activities, rebalance is tracked as a cluster job and can be inspected while in progress.
+
+Two kinds of per-object failures are counted without aborting global rebalance; the job's control message (`ais show job rebalance`) shows them when non-zero: `err-read` for objects the sender failed to read, and `err-ecmd` for failures to broadcast EC metadata on the receiving target. Other failures - for example, failing to send an object to its new target - abort the rebalance.
 
 ## CLI: usage examples
 
@@ -292,6 +295,8 @@ and ETag. Different byte content means a different version: two copies with the 
 
 The local copy is removed only when AIS can verify that the expected owner holds the same version.
 
+The peer check runs without holding the local object's lock. Before deletion, cleanup takes the write lock, reloads the metadata, and verifies that it still matches the snapshot compared by the peer. If the object changed or is busy, the local copy stays.
+
 In other words, regular rebalance converges placement by moving objects to their proper targets. Cleanup mode converges local storage by removing misplaced copies that are already present at their proper targets.
 
 Cleanup mode is intentionally out-of-band. Regular data-moving rebalance can temporarily create extra local copies while the cluster converges, but tracking every migrated object at runtime would not scale for large clusters and buckets with millions or billions of objects. Cleanup mode therefore performs a separate verified pass: it discovers misplaced local copies from the current on-disk namespace and safely removes only those that are already present at their expected locations.
@@ -312,6 +317,16 @@ Cleanup mode is useful after operational workflows such as maintenance, rolling 
 
 Cleanup mode can be bucket-scoped and prefix-scoped, similarly to administrative rebalance. It is incompatible with `--latest` and `--sync`.
 
+### Batched peer verification
+
+Starting with v5.2, both rebalance cleanup and [space cleanup](/space/README.md) group misplaced copies by owner and verify them with head-batch requests: up to 64 objects per request by default, with multiple requests in flight. This replaces one HEAD request per object. When a peer does not support head-batch, the sender falls back to individual HEAD requests for that batch.
+
+The default removal policy is unchanged: missing, divergent, busy, and unanswered copies remain on disk. Rebalance cleanup's explicit `--force` permits removal of a divergent copy only after confirming that the owner has an object under that identity; see [Forced cleanup](#forced-cleanup). Space cleanup's `--keep-misplaced` retains misplaced copies even when the owner confirms them.
+
+A peer under critical memory or CPU load returns HTTP 429, and those local copies stay for a later run. At critical load on the sender, capacity determines the policy: above `space.highwm`, the sender waits and throttles; at or below it, full batches may be dropped, leaving their copies for a later run. A change in the target set also stops verification against the old target set.
+
+The head-batch request size is separate from `space.batch_size`, which controls batches of local removals during space cleanup.
+
 ### Monitoring
 
 Cleanup mode can be monitored with the usual rebalance commands:
@@ -322,6 +337,24 @@ $ ais show job
 ```
 
 When cleanup mode is running or has completed, reported counters describe objects removed and bytes reclaimed rather than objects sent and received.
+
+For verification counters, use `ais show job rebalance --all` or, for space cleanup, `ais show job cleanup-store --all`. Head-batch counters appear in the job's control message:
+
+| Counter | Meaning |
+|---|---|
+| `hdb-batches` | batch requests sent |
+| `hdb-fellback` | objects verified with individual HEAD requests: single-object groups, or a peer that does not support head-batch |
+| `hdb-peer-busy` | objects in batches whose peer returned HTTP 429 |
+| `hdb-unanswered` | objects whose peer did not answer successfully |
+| `hdb-dropped` | objects not verified because a batch was dropped or the job was aborted |
+| `hdb-smap-changed` | objects not verified because the target set changed |
+| `hdb-throttled` | objects in groups that reached the sender at critical load (then dropped or delayed, depending on `space.highwm`) |
+| `hdb-waited` | full groups that waited because all senders were busy |
+| `hdb-partial` | non-full groups sent at the end of the run |
+
+Only `hdb-batches` is always shown; the other counters appear when non-zero.
+
+These counters help explain why a completed cleanup can leave misplaced copies behind. Copies that remain can be checked again in a later cleanup run.
 
 ### Example: cleanup after returning a target to service
 

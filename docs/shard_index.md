@@ -219,6 +219,8 @@ $ ais bucket shard-index build ais://dataset --prefix shards/ --cache --wait
 
 Caching depends on available memory. Cached indexes will be evicted when idle (not used for considerable time) or under memory pressure.
 
+With verbose logging - `log.level` 4 or higher, or `core` in `log.modules` - targets log cache statistics periodically, when they change (`shard-index cache: miss ... load ... fail ... deny ...`). Among them, `fail` counts loads that found no usable index (missing, stale, or corrupt), and `deny` counts indexes not admitted to the cache under memory pressure.
+
 `--cache` and `--skip-verify` are independent, with one exception. Loading an existing index into memory verifies it, so a stale or corrupt index found that way gets rebuilt even with `--skip-verify`. `--skip-verify` still applies to indexes that are not admitted to the cache.
 
 ## Read indexed shards

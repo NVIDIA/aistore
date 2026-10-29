@@ -433,6 +433,26 @@ AuthN requires a single `PROMOTE` check — from the bucket ACL, or from the clu
 | Bucket ACL without `PROMOTE`                          | **denied**                                    |
 | Named source path outside `/var/lib/ais/promote`      | **denied** (independent of ACL)               |
 
+### Operations with additional requirements
+
+Most operations require the single permission their name suggests. The following require more, or a permission that is not obvious from the table above:
+
+| Operation | Required |
+|-----------|----------|
+| Reset bucket properties | `PATCH` and `SET-BUCKET-ACL` (the reset restores default access attributes) |
+| Set `access` in bucket properties | `PATCH` and `SET-BUCKET-ACL` |
+| Create an AIS bucket with `backend_bck`, or set or change `backend_bck` | `CREATE-BUCKET` or `PATCH` on the AIS bucket, and `rw` on the referenced remote bucket |
+| Rechunk | `rw` on the bucket |
+| Build shard indexes | `ro` on the bucket, and `ADMIN` (indexes are stored in a system bucket)<sup>1</sup> |
+| Create bucket inventory | `LIST-OBJECTS` on the bucket, and `ADMIN` (inventories are stored in a system bucket)<sup>1</sup> |
+| Show inventories across multiple buckets | `LIST-BUCKETS` |
+| S3 CopyObject | `GET` on the source bucket and `PUT` on the destination bucket |
+| List, query, stop, or remove download jobs | `ADMIN` (see [Downloader CLI permissions](/docs/cli/download.md#permissions)) |
+
+<sup>1</sup> When the system bucket does not exist yet, the first such request creates it and requires cluster-level `CREATE-BUCKET` instead of `ADMIN`.
+
+The first access to a remote bucket that is not yet in the cluster's bucket metadata is authorized before the bucket is added, using the permission of the requested operation. This applies to object requests and to bucket jobs such as prefetch, copy, transform, rechunk, n-way mirroring, erasure coding, shard indexing, and inventory.
+
 ## How to Enable AuthN Server After Deployment
 
 By default, the AIStore deployment does not launch the AuthN server. To start the AuthN server manually, follow these steps:

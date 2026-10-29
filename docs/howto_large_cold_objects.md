@@ -84,7 +84,7 @@ A client can ask for blob download as part of a regular GET. The target then:
 Notes:
 
 * blob download applies only to remote buckets and to whole-object reads; downloading an entire archive (shard) is supported;
-* range reads and archive extraction use the regular GET path when requested with a threshold (`Ais-Blob-Threshold`, `blob_threshold`), and fail with `400 Bad Request` when combined with explicit `Ais-Blob-Download`;
+* range reads and archive extraction use the regular GET path when requested with the `Ais-Blob-Threshold` header, and fail with `400 Bad Request` when combined with explicit `Ais-Blob-Download`; the Python SDK additionally validates option combinations before sending the request (see below);
 * when the cluster cannot admit another blob download, the request fails with `429 Too Many Requests`; retry, or read without blob download;
 * an explicit blob GET can also return a busy error when the object is being written; it does not always wait as an ordinary GET would;
 * chunk size and number of workers, if specified, apply to this request (see [request scope](#request-scope-vs-bucket-scope)).
@@ -101,7 +101,7 @@ _, err := api.GetObject(bp, bck, objName, &args)
 
 ### Python SDK
 
-> The `blob_threshold` argument and `BlobDownloadConfig.read_timeout` require aistore Python SDK 2.1.0 or later. Earlier SDKs support `BlobDownloadConfig` with chunk size and worker count.
+> `BlobDownloadConfig.threshold` and `read_timeout` require aistore Python SDK 2.1.0 or later. Earlier SDKs support `BlobDownloadConfig` with chunk size and worker count.
 
 ```python
 from aistore.sdk import Client
@@ -111,7 +111,9 @@ client = Client("https://ais-gateway.example.com:51080")
 obj = client.bucket("training-data", provider="s3").object("models/checkpoint-0420.bin")
 
 # blob download for cold objects >= 256MiB
-reader = obj.get_reader(blob_threshold=256 * 1024 * 1024)
+reader = obj.get_reader(
+    blob_download_config=BlobDownloadConfig(threshold=256 * 1024 * 1024)
+)
 
 # blob download regardless of size (above 128KiB), with explicit tunables
 reader = obj.get_reader(
@@ -119,7 +121,7 @@ reader = obj.get_reader(
 )
 ```
 
-`blob_threshold` and `blob_download_config` cannot be combined with `byte_range` or `num_workers`.
+An omitted `threshold` forces blob download for eligible cold objects; zero selects regular GET. `blob_download_config` cannot be combined with `byte_range` or client-side `num_workers`. For a range read, omit the blob configuration; to retrieve an archive member, use `archive_config` with a threshold rather than forcing blob download. See [Blob Downloader](/docs/blob_downloader.md#3-streaming-get).
 
 ### HTTP headers
 

@@ -49,19 +49,29 @@ $ find . -type f -name "*.md" | xargs grep "ais.*mountpath"
 ```console
 $ ais storage cleanup --help
 NAME:
-   ais storage cleanup - remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects
+   ais storage cleanup - Remove:
+              - deleted objects and buckets;
+              - old/obsolete workfiles;
+              - misplaced objects (see command line option below);
+              - orphan chunks and partial chunk manifests;
+              - optionally, remove zero-size objects as well.
+
+     By default, any stored content with invalid or unrecognized FQN is treated as obsolete and is removed.
+     To preserve, use the cluster feature flag 'Keep-Unknown-FQN'.
 
 USAGE:
-   ais storage cleanup PROVIDER:[//BUCKET_NAME] [command options]
+   ais storage cleanup [BUCKET[/PREFIX]] [PROVIDER] [command options]
 
 OPTIONS:
-   --force, -f      disregard interrupted rebalance and possibly other conditions preventing full cleanup
-                    (tip: check 'ais config cluster lru.dont_evict_time' as well)
-   --rm-zero-size   remove zero-size objects (caution: advanced usage only)
-   --wait           wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
-   --timeout value  maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
-                    valid time units: ns, us (or µs), ms, s (default), m, h
-   --help, -h       show help
+   --force, -f       Proceed with removing misplaced objects even if global rebalance (or local resilver) is running or was interrupted,
+                     or the node has recently restarted. Does not override the 'dont_cleanup_time' window or other flags
+   --keep-misplaced  Do not remove misplaced objects (default: remove after 'dont_cleanup_time' grace period)
+                     Tip: use 'ais config cluster log.modules space' to enable logging for dry-run visibility
+   --rm-zero-size    Remove zero size objects (caution: advanced usage only)
+   --timeout value   Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --wait            Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --help, -h        Show help
 ```
 
 Similar to all supported batch operations (aka `xactions`), cleanup runs asynchronously and can be monitored during its run, e.g.:
@@ -75,6 +85,8 @@ Further references:
 
 * [Batch operations](/docs/batch.md)
 * [`ais show job`](/docs/cli/job.md)
+* [Space cleanup policies and long-name limits](/space/README.md)
+* [Batched peer verification and counters](/docs/rebalance.md#batched-peer-verification)
 
 ## Show capacity usage
 

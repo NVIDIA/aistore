@@ -833,7 +833,7 @@ USAGE:
 
 OPTIONS:
    --all                  Copy all objects from a remote bucket including those that are not present (not cached) in cluster
-   --cont-on-err          Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   --cont-on-err          Continue processing after individual object failures
    --dry-run              Show total size of new objects without really creating them
    --force, -f            Force execution of the command (caution: advanced usage only)
    --latest               Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
@@ -1671,6 +1671,8 @@ README.md        8.96KiB
 
 > On the other hand, for any given `s3://bucket` its S3 endpoint can be set, unset, and otherwise changed at any time - at runtime. As shown above.
 
+Per-bucket endpoints are checked against their resolved addresses. Loopback, link-local, CGNAT, and other blocked ranges are rejected; private storage networks remain supported. To use a local S3-compatible endpoint, set the administrator-provided `S3_ENDPOINT` at node startup and leave `extra.aws.endpoint` empty. See [Configuring custom AWS S3 endpoints](/docs/cli/aws_profile_endpoint.md#configuring-custom-aws-s3-endpoint).
+
 #### Connect/Disconnect AIS bucket to/from cloud bucket
 
 Set backend bucket for AIS bucket `bucket_name` to the GCP cloud bucket `cloud_bucket`.
@@ -1864,7 +1866,7 @@ USAGE:
 OPTIONS:
    append-or-put     Append to an existing destination object ("archive", "shard") iff exists; otherwise PUT a new archive (shard);
                      note that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted
-   cont-on-err       Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   cont-on-err       Continue processing after individual object failures
    dry-run           Preview the results without really running the action
    include-src-bck   Prefix the names of archived files with the source bucket name
    list              Comma-separated list of object or file names, e.g.:

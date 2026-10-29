@@ -26,6 +26,7 @@ These measured shares are separate from the configured shares shown by
   - [Startup readiness](#startup-readiness)
   - [Troubleshooting](#troubleshooting)
 - [Upgrade](#upgrade)
+- [Python SDK direct reads](#python-sdk-direct-reads)
 - [Buckets](#buckets)
 - [Erasure coding](#erasure-coding)
 - [Verifying placement](#verifying-placement)
@@ -303,6 +304,12 @@ overrides, or the rebalance metadata used for bucket redistribution.
   have reported the primary's version; those in maintenance/decommission are checked on rejoin
 - introducing a bucket placement override or changing effective bucket placement
   also requires every active member to run the primary's version
+
+## Python SDK direct reads
+
+Python SDK 2.1 computes uniform HRW placement for `get_reader(direct=True)` and `Smap.get_target_for_object()`. It does not apply target weights or bucket placement overrides and can therefore select the wrong target for a weighted bucket.
+
+For weighted buckets, keep the default `direct=False`. The request goes through a proxy, which selects the target using the bucket's effective placement policy. The subsequent data transfer still follows the normal proxy-to-target redirect path.
 
 ## Buckets
 

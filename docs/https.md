@@ -264,6 +264,8 @@ The current scope and compatibility constraints are:
 - AIS retires long-lived connections near the per-key transmit limit; clients must tolerate normal HTTP connection closure and reconnection.
 - Fixed-size socket buffers limit transmit throughput. Any `net.l4.sndrcv_buf_size` other than `-1` (kernel auto-tuning) pins the buffers, including `0` (the 128KiB default). See [Socket Buffers](/docs/relnotes/5.1.md#socket-buffers).
 
+Arming is lazy and decided once per connection. A first response serving a monolithic object GET of at least 1 MiB can arm kTLS before writing response headers. A smaller or ineligible first response leaves that connection in userspace TLS for its lifetime; a later large GET on the same connection does not retry arming. When checking offload, use a fresh connection whose first request is an eligible large-object GET, rather than a HEAD or small-object probe followed by GET on a reused connection.
+
 As a quick host check, run [scripts/check-ktls.sh](https://github.com/NVIDIA/aistore/blob/main/scripts/check-ktls.sh). This is necessary but not sufficient: the kernel must also support the negotiated TLS version and AES-GCM cipher. At AIS verbosity level 5, target logs report whether connections were armed, unsupported, skipped, not established, or failed.
 
 ## Further references

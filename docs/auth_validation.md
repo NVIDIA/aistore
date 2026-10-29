@@ -18,6 +18,7 @@ For an example of setting up Keycloak with AIS in Kubernetes, refer to the [ais-
     - [OIDC Lookup](#oidc-lookup)
 - [Authentication Boundaries](#authentication-boundaries)
   - [Proxy mediation is not data-plane authentication](#proxy-mediation-is-not-data-plane-authentication)
+  - [Signed request coverage](#signed-request-coverage)
 
 ## General Purpose Auth Support
 
@@ -217,3 +218,7 @@ The request-authentication window settings apply only to
 In v5.1, nodes use per-node Ed25519 keys distributed through cluster metadata to
 sign and verify protected intra-cluster requests. Node-join authentication is
 also enforced only when `auth.intra_cluster.node_join_secret_path` is nonempty.
+
+### Signed request coverage
+
+For the authoritative canonical request payload and outstanding coverage TODOs, see `svReq.payload` and the file-level comments in [`ais/signverify.go`](https://github.com/NVIDIA/aistore/blob/main/ais/signverify.go).

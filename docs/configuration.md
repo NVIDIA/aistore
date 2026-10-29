@@ -25,6 +25,7 @@ For the complete CLI syntax, see [CLI: configuration](/docs/cli/config.md). This
   - [Reducing extended-attribute usage](#reducing-extended-attribute-usage)
   - [Upgrades and metadata backup](#upgrades-and-metadata-backup)
   - [Minimum transfer rate](#minimum-transfer-rate)
+  - [Network settings](#network-settings)
   - [Production checklist](#production-checklist)
 - [For developers](#for-developers)
   - [Data model and update paths](#data-model-and-update-paths)
@@ -500,6 +501,15 @@ $ ais config cluster features Disable-GET-Deadline
 Changes apply to new transfers. The flag disables the write and read deadlines only: other timeouts, including blob-download chunk timeouts, remain in force.
 
 Disabling is not recommended. Without these deadlines, a stalled client can hold the object's read lock, an open file, and a goroutine indefinitely. A stalled cold-GET backend can hold the object's *write* lock, blocking every access to that object unless another timeout or cancellation ends the operation.
+
+### Network settings
+
+The `net` section requires a restart to take effect (see [Changing configuration](#changing-configuration)). Two of its settings bear on HTTPS performance and node-to-node TLS:
+
+| Setting | Notes |
+|---------|-------|
+| `net.l4.sndrcv_buf_size` | TCP socket buffer size: `-1` selects kernel auto-tuning; `0` (the default) means a fixed 128 KiB; a positive value pins that size. Deployment scripts set `-1` for new clusters. With [kTLS](/docs/https.md#ktls-transmit-offload), any fixed size makes transmit less efficient. |
+| `net.http.alt_tls_dns_name` | DNS name that nodes verify in each other's certificates for intra-cluster requests sent to public URLs (for example, with a certificate from a public issuer). See [Node-to-Node TLS](/docs/networking.md#node-to-node-tls). |
 
 ### Production checklist
 

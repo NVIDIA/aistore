@@ -70,11 +70,16 @@ OPTIONS:
 For details and background, please see the [downloader's own readme](/docs/downloader.md).
 
 ## Table of Contents
+- [Permissions](#permissions)
 - [Start download job](#start-download-job)
 - [Stop download job](#stop-download-job)
 - [Remove download job](#remove-download-job)
 - [Show download jobs and job status](#show-download-jobs-and-job-status)
 - [Wait for download job](#wait-for-download-job)
+
+## Permissions
+
+With client authentication enabled, listing jobs, querying status, stopping a job, and removing its record require cluster-wide `ADMIN` access. Bucket read/write permissions alone are insufficient. A non-admin caller may be able to start a download into an authorized destination bucket but cannot monitor or manage that job; CLI options such as `--wait` and `--progress` also query status and therefore require admin access. See [AuthN permissions](/docs/authn.md#permissions).
 
 ## Start download job
 

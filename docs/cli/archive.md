@@ -63,7 +63,7 @@ OPTIONS:
    --append-or-put      Append to an existing destination object ("archive", "shard") iff exists; otherwise PUT a new archive (shard);
                         note that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted
    --archpath value     Filename in an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4
-   --cont-on-err        Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   --cont-on-err        Continue processing after individual object failures
    --dry-run            Preview the results without really running the action
    --include-src-dir    Prefix the names of archived files with the (root) source directory
    --list value         Comma-separated list of object or file names, e.g.:
@@ -290,7 +290,7 @@ USAGE:
 OPTIONS:
    append-or-put     Append to an existing destination object ("archive", "shard") iff exists; otherwise PUT a new archive (shard);
                      note that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted
-   cont-on-err       Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   cont-on-err       Continue processing after individual object failures
    dry-run           Preview the results without really running the action
    include-src-bck   Prefix the names of archived files with the source bucket name
    list              Comma-separated list of object or file names, e.g.:
