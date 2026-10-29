@@ -44,7 +44,7 @@ ENV GOBIN="/bin"
 
 # Install `uv` and multiple Python versions for testing
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-RUN uv python install 3.10 3.11 3.12 3.13 3.14 \
+RUN uv python install 3.10 3.11 3.12 3.13 3.14 3.15 \
   && uv cache clean
 
 # Configure Python in the PATH with a general-purpose venv
@@ -52,7 +52,7 @@ ENV PATH="/opt/venv/bin:${PATH}"
 # Tell make targets which PIP command to use
 ENV PIP="pip"
 # seed installs pip, setuptools, wheel
-RUN uv venv --python 3.14 --seed /opt/venv \
+RUN uv venv --python 3.15 --seed /opt/venv \
   && uv pip install --no-cache --python /opt/venv/bin/python ruff==0.16.8 \
   && ln -sf pip /opt/venv/bin/pip3
 

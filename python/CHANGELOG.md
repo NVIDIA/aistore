@@ -17,6 +17,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Pickling or forking `SessionManager` no longer carries live sessions as the receiving process
   creates its own on first use.
 
+### Added
+
+- Python 3.15 support for the SDK, PyTorch integration, and pyaisloader, including
+  the `Etl.init_class()` runtime and CI test coverage.
+
+### Fixed
+
 ## [2.1.0] - 2026-10-28
 
 This release expands object streaming and blob-download controls, strengthens

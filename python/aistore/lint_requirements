@@ -3,3 +3,6 @@
 # and .gitlab-ci.yml's lint:python job.
 pylint==4.0.7
 astroid==4.0.4  # pin exactly; pylint's own constraint (astroid>=4.0.2,<=4.1.dev0) still allows drift
+# Parallel Pylint on Python 3.15 needs the co_lnotab fix (uqfoundation/dill#755).
+# TODO: replace the GitHub pin with a released dill version once the fix ships.
+dill @ git+https://github.com/uqfoundation/dill.git@37d2bf717ac7ac110f06be5210f989847959c2cd ; python_version >= "3.15"

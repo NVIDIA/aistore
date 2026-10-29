@@ -49,11 +49,12 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable, too-many-p
             (3, 12): "3.12",
             (3, 13): "3.13",
             (3, 14): "3.14",
+            (3, 15): "3.15",
         }
 
         failed_versions = [
             (3, 9),  # Too old, not supported
-            (3, 15),  # No runtime_python image published yet
+            (3, 16),  # No runtime_python image published yet
             (4, 0),  # Future version
         ]
         for version, runtime in version_to_runtime.items():
