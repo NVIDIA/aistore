@@ -344,6 +344,7 @@ var (
 		commandRechunk: {
 			verbObjPrefixFlag,
 			syncRemoteFlag,
+			continueOnErrorFlag,
 			yesFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
@@ -698,8 +699,9 @@ func rechunkBucketHandler(c *cli.Context) error {
 		}
 	}
 	msg := &apc.RechunkMsg{
-		Prefix:     prefix,
-		SyncRemote: syncRemote,
+		Prefix:          prefix,
+		SyncRemote:      syncRemote,
+		ContinueOnError: flagIsSet(c, continueOnErrorFlag),
 	}
 	xid, err := api.RechunkBucket(apiBP, bck, msg)
 	if err != nil {
