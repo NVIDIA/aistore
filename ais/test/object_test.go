@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/docker"
@@ -403,6 +404,179 @@ func TestCopyObject(t *testing.T) {
 		status := api.HTTPStatus(err)
 		tassert.Errorf(t, status == http.StatusNotFound, "expected status %d, got %d", http.StatusNotFound, status)
 	}
+
+	t.Run("remote-noop-check", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+		bck := cmn.Bck{Name: "copy-head-" + trand.String(8), Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
+		tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+		tools.PutObject(t, bck, objFrom, readers.NewBytes(data), uint64(len(data)))
+		smap := tools.GetClusterMap(t, proxyURL)
+		smap.InitDigests()
+		owner, err := smap.HrwObjName2T(meta.CloneBck(&bck), objFrom)
+		tassert.CheckFatal(t, err)
+		for _, test := range []struct {
+			name      string
+			content   []byte
+			wantHeads int64
+		}{
+			{name: "missing"},
+			{name: "different", content: []byte("different destination")},
+			{name: "matching", content: data, wantHeads: 1},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				dst := tools.GenerateObjectNameOnTarget(test.name+"-", bck, smap, owner)
+				if test.content != nil {
+					tools.PutObject(t, bck, dst, readers.NewBytes(test.content), uint64(len(test.content)))
+				}
+				before, err := api.GetDaemonStats(baseParams, owner)
+				tassert.CheckFatal(t, err)
+				err = api.CopyObject(baseParams, &api.CopyArgs{
+					FromBck: bck, FromObjName: objFrom, ToBck: bck, ToObjName: dst,
+				})
+				tassert.CheckFatal(t, err)
+				after, err := api.GetDaemonStats(baseParams, owner)
+				tassert.CheckFatal(t, err)
+				metric := apc.RemAIS + "." + stats.HeadCount
+				heads := tools.GetNamedStatsVal(after, metric) - tools.GetNamedStatsVal(before, metric)
+				errors := tools.GetNamedStatsVal(after, stats.ErrHeadCount) - tools.GetNamedStatsVal(before, stats.ErrHeadCount)
+				tassert.Errorf(t, heads == test.wantHeads && errors == 0,
+					"expected %d remote HEADs and no HEAD errors, got %d and %d", test.wantHeads, heads, errors)
+				var actual bytes.Buffer
+				_, err = api.GetObjectWithValidation(baseParams, bck, dst, &api.GetArgs{Writer: &actual})
+				tassert.CheckFatal(t, err)
+				tassert.Errorf(t, bytes.Equal(data, actual.Bytes()), "copied content changed")
+			})
+		}
+	})
+}
+
+func TestCopyObjectConcurrentEvict(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck, Long: true})
+	const (
+		objSize = 128 * cos.KiB
+		copies  = 8
+	)
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	orig, err := api.HeadBucket(bp, cliBck, false)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		tassert.CheckError(t, setBucketChunksAndWait(bp, cliBck, &cmn.ChunksConfToSet{
+			ObjSizeLimit: apc.Ptr(orig.Chunks.ObjSizeLimit), ChunkSize: apc.Ptr(orig.Chunks.ChunkSize),
+		}))
+	})
+	for _, test := range []struct {
+		name  string
+		limit cos.SizeIEC
+	}{
+		{name: "monolithic"},
+		{name: "chunked", limit: chunkPolicyLimit},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			tassert.CheckFatal(t, setBucketChunksAndWait(bp, cliBck, &cmn.ChunksConfToSet{
+				ObjSizeLimit: apc.Ptr(test.limit), ChunkSize: apc.Ptr(cos.SizeIEC(cloudMinPartSize)),
+			}))
+			m := ioContext{
+				t: t, bck: cliBck, num: 1, prefix: "copy-evict/" + trand.String(8) + "/",
+				fileSize: objSize, fixedSize: true, ordered: true,
+				chunksConf: &ioCtxChunksConf{}, skipRemoteEvict: true,
+			}
+			m.init(false)
+			t.Cleanup(func() { m.del() })
+			m.remotePuts(false /*evict*/)
+			src := m.objNames[0]
+			var expected bytes.Buffer
+			_, err := api.GetObjectWithValidation(bp, m.bck, src, &api.GetArgs{Writer: &expected})
+			tassert.CheckFatal(t, err)
+			dstBck := cmn.Bck{Name: "copy-evict-" + trand.String(8), Provider: apc.AIS}
+			tools.CreateBucket(t, proxyURL, dstBck, nil, true /*cleanup*/)
+			smap := tools.GetClusterMap(t, proxyURL)
+			smap.InitDigests()
+			owner, err := smap.HrwObjName2T(meta.CloneBck(&m.bck), src)
+			tassert.CheckFatal(t, err)
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			start, results := make(chan struct{}), make(chan error, copies+1)
+			reusedDst := make(chan struct{}, 1)
+			dstNames := make([]string, 0, copies)
+			args := api.CopyArgs{FromBck: m.bck, FromObjName: src, ToBck: dstBck}
+			for i := range copies {
+				copyArgs := args
+				copyArgs.ToObjName = tools.GenerateObjectNameOnTarget(fmt.Sprintf("copy-%d-", i), dstBck, smap, owner)
+				dstNames = append(dstNames, copyArgs.ToObjName)
+				go copyObjectEvictWorker(ctx, bp, &copyArgs, false, expected.Bytes(), start, reusedDst, results)
+			}
+			go copyObjectEvictWorker(ctx, bp, &args, true, expected.Bytes(), start, reusedDst, results)
+			close(start)
+			for range copies + 1 {
+				err := <-results
+				cancel() // eviction finished, or a worker failed; drain all COPY workers
+				tassert.CheckError(t, err)
+			}
+			if t.Failed() {
+				return
+			}
+			for i, name := range append(dstNames, src) {
+				bck := dstBck
+				if i == copies {
+					bck = m.bck
+				}
+				var actual bytes.Buffer
+				_, err := api.GetObjectWithValidation(bp, bck, name, &api.GetArgs{Writer: &actual})
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, bytes.Equal(expected.Bytes(), actual.Bytes()), "%s: content changed", bck.Cname(name))
+				lock, err := api.CheckObjectLock(bp, bck, name)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, lock == apc.LockNone, "%s: lock not released: %d", bck.Cname(name), lock)
+			}
+			if test.limit == 0 {
+				checkObjectMonolithic(t, bp, m.bck, src)
+			} else {
+				checkObjectChunked(t, bp, m.bck, src, cloudMinPartSize)
+			}
+		})
+	}
+}
+
+func copyObjectEvictWorker(ctx context.Context, bp api.BaseParams, args *api.CopyArgs, evict bool,
+	expected []byte, start <-chan struct{}, reusedDst chan struct{}, results chan<- error) {
+	<-start
+	for i := 0; ctx.Err() == nil; i++ {
+		if evict && i >= 500 {
+			// Keep evicting until a COPY has revisited an existing destination.
+			select {
+			case <-reusedDst:
+				results <- nil
+				return
+			default:
+			}
+		}
+		var err error
+		if evict {
+			err = api.EvictObject(bp, args.FromBck, args.FromObjName)
+			if err == nil {
+				var actual bytes.Buffer
+				_, err = api.GetObjectWithValidation(bp, args.FromBck, args.FromObjName, &api.GetArgs{Writer: &actual})
+				if err == nil && !bytes.Equal(expected, actual.Bytes()) {
+					err = fmt.Errorf("%s: content changed", args.FromBck.Cname(args.FromObjName))
+				}
+			}
+		} else {
+			err = api.CopyObject(bp, args)
+		}
+		if err != nil {
+			results <- fmt.Errorf("iteration=%d evict=%t: %w", i, evict, err)
+			return
+		}
+		if !evict && i == 1 {
+			// The second successful COPY has reached isNOP with a reused destination.
+			select {
+			case reusedDst <- struct{}{}:
+			default:
+			}
+		}
+	}
+	results <- nil
 }
 
 func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {

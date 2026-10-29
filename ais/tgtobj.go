@@ -2039,10 +2039,16 @@ func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DM) bool {
 	if owt != cmn.OwtCopy {
 		return false
 	}
-	if err := lom.Load(true, false); err != nil {
+	lom.Lock(false)
+	err := lom.Load(true, true /*locked*/)
+	lom.Unlock(false)
+	if err != nil {
 		return false
 	}
-	if err := dst.Load(true, false); err != nil {
+	dst.Lock(false)
+	err = dst.Load(true, true /*locked*/)
+	dst.Unlock(false)
+	if err != nil {
 		return false
 	}
 	if lom.CheckEq(dst) != nil {
