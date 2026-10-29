@@ -623,8 +623,10 @@ func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate, 
 	debug.AssertNoErr(err)
 	syncit.pt = pt
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)
+	rp.initHdb()
 	syncit.run(syncwi, smap, false /*prealloc buf*/)
 	syncit.wait()
+	rp.endHdb()
 	r.ctl.pruned.Add(rp.pruned.Load())
 }
 

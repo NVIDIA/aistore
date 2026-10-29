@@ -25,7 +25,7 @@ import (
 // - the job owns the batcher: its producers call Add and the job calls End after they stop
 // - Add copies from the LOM so the caller may free the LOM after Add returns
 // - a full group goes to a sender goroutine, at most HdbArgs.Senders at a time (Add waits)
-// - at Critical load, best-effort drops the group while strict (above the high watermark) waits to send the group
+// - at Critical load, best-effort drops the group while strict (HdbArgs.Strict or above the high watermark) waits to send the group
 // - End sends the remaining groups and waits for all senders
 // - after the abort or a change of targets in HdbArgs.Smap, a sender sends nothing and runs no callback
 // - Stats returns the counters at any time
@@ -86,6 +86,7 @@ type (
 		size   int
 		mod    int // cos.ModReb, cos.ModSpace (logging)
 		mu     sync.Mutex
+		strict bool
 	}
 	// returned by Stats and End
 	HdbStats struct {
@@ -107,8 +108,9 @@ type (
 		Smap    *meta.Smap  // required
 		LogHdr  string      // the log header of the job
 		Mod     int
-		Size    int // max items per request
-		Senders int // max requests in flight
+		Size    int  // max items per request
+		Senders int  // max requests in flight
+		Strict  bool // never drop at Critical load (otherwise: only above the high watermark)
 	}
 )
 
@@ -175,6 +177,7 @@ func NewHdbBatcher(args *HdbArgs) *HdbBatcher {
 		logHdr: args.LogHdr,
 		size:   size,
 		mod:    args.Mod,
+		strict: args.Strict,
 	}
 	hb.thr.init()
 	for range n {
@@ -199,19 +202,25 @@ func (hb *HdbBatcher) Stats() HdbStats {
 	}
 }
 
-func (hb *HdbBatcher) strict() bool {
+func (hb *HdbBatcher) isStrict() bool {
+	if hb.strict {
+		return true
+	}
 	cs := hb.capFn()
 	return int64(cs.PctMax) > cs.HighWM
 }
 
 // enqueue and send the group when it is full
-func (hb *HdbBatcher) Add(lom *LOM, tsi *meta.Snode) {
+func (hb *HdbBatcher) Add(lom *LOM, tsi *meta.Snode) { hb.AddAs(lom, lom.Bucket(), tsi) }
+
+// same as Add but the peer checks the same name in `bck`
+func (hb *HdbBatcher) AddAs(lom *LOM, bck *cmn.Bck, tsi *meta.Snode) {
 	if hb.abort.IsAborted() {
 		hb.cnt.dropped.Inc()
 		return
 	}
 	ent := HdbEnt{Tsi: tsi}
-	ent.init(lom)
+	ent.init(lom, bck)
 
 	tid := tsi.ID()
 	hb.mu.Lock()
@@ -241,7 +250,7 @@ func (hb *HdbBatcher) Add(lom *LOM, tsi *meta.Snode) {
 func (hb *HdbBatcher) send(g *hdbGroup) {
 	if sleep := hb.thr.get(); sleep > 0 {
 		hb.cnt.throttled.Add(int64(len(g.ents)))
-		if !hb.strict() {
+		if !hb.isStrict() {
 			n := hb.cnt.ndropped.Inc()
 			cmn.SparseWarn(hb.mod, n, hb.logHdr, apc.HdbTag, "dropped", len(g.ents), "objects at Critical load [ groups:", n, "]")
 			hb.drop(g)
@@ -432,13 +441,13 @@ func (s *hdbSender) complete(ents []HdbEnt) {
 }
 
 func (ent *HdbEnt) head(tsi *meta.Snode) {
-	lom, err := ent.LIF.LOM()
-	if err != nil {
+	lom := AllocLOM(ent.name)
+	defer FreeLOM(lom)
+	if err := lom.InitCmnBck(&ent.bck); err != nil {
 		ent.Status, ent.Cause = apc.HdbFailed, err.Error()
 		return
 	}
 	op, err := T.HeadObjT2T(lom, tsi, hdbProps...)
-	FreeLOM(lom)
 	switch {
 	case err == nil && op != nil:
 		var in cmn.HdbIn
@@ -471,8 +480,7 @@ func (ent *HdbEnt) Unchanged(lom *LOM) bool {
 }
 
 // copy from the LOM
-func (ent *HdbEnt) init(lom *LOM) {
-	b := lom.Bucket()
+func (ent *HdbEnt) init(lom *LOM, b *cmn.Bck) {
 	ent.bck = cmn.Bck{Name: b.Name, Provider: b.Provider, Ns: b.Ns}
 	ent.LIF = lom.LIF()
 	ent.name = lom.OrigObjName()

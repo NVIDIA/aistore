@@ -6,9 +6,10 @@
 package xs
 
 import (
+	"errors"
 	"fmt"
-	"net/http"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -34,9 +35,11 @@ type prune struct {
 	smap    *meta.Smap
 	joggers *mpather.Jgroup
 	filter  *prob.Filter
+	hdb     *core.HdbBatcher
 	prefix  string
 	lsflags uint64
 	pruned  atomic.Int64
+	busy    atomic.Int64
 	same    bool
 }
 
@@ -53,6 +56,26 @@ func (rp *prune) init(config *cmn.Config) {
 	rp.joggers = mpather.NewJgroup(rmopts, config, nil)
 	rp.filter = prob.NewDefaultFilter()
 	rp.same = rp.bckTo.Equal(rp.bckFrom, true /*same BID*/, true)
+	rp.initHdb()
+}
+
+// check the sources on other targets in batches (see peerReply)
+func (rp *prune) initHdb() {
+	rp.hdb = core.NewHdbBatcher(&core.HdbArgs{
+		Cb: rp.peerReply, Abort: rp.r, Smap: rp.smap, LogHdr: rp.r.Name(), Mod: cos.ModXs, Strict: true,
+	})
+}
+
+// after the producers stop
+func (rp *prune) endHdb() {
+	var sb cos.SB
+	sb.Init(128)
+	st := rp.hdb.End()
+	st.Str(&sb, '=')
+	nlog.Infoln(rp.r.Name(), "prune peer checks:", sb.String())
+	if n := st.Dropped + st.SmapChanged + rp.busy.Load(); n > 0 && !rp.r.IsAborted() {
+		rp.r.AddErr(fmt.Errorf("%s: %d destination objects not checked (%s)", rp.r.Name(), n, apc.HdbTag), 0)
+	}
 }
 
 func (rp *prune) run() {
@@ -60,6 +83,7 @@ func (rp *prune) run() {
 }
 
 func (rp *prune) wait() {
+	defer rp.endHdb()
 	if err := rp.r.AbortErr(); err != nil {
 		rp.joggers.Stop()
 		return
@@ -118,16 +142,15 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 		if errV != nil {
 			return fmt.Errorf("prune %s: fatal err: %w", rp.r.Name(), errV)
 		}
-		if tsi.ID() == core.T.SID() {
-			err = src.Load(false, false)
-		} else {
-			if _, err := core.T.HeadObjT2T(src, tsi); err != nil {
-				if cmn.Rom.V(4, cos.ModXs) && !cmn.IsErrHTTPNotFound(err) {
-					nlog.Warningln(tsi.StringEx(), "HEAD(", src.Cname(), ") returned", err)
-				}
-				ecode = http.StatusNotFound
+		if tsi.ID() != core.T.SID() {
+			if err := dst.Load(false, false); err == nil {
+				rp.hdb.AddAs(dst, src.Bucket(), tsi)
+			} else if !cmn.IsErrObjNought(err) {
+				rp.r.AddErr(err, 4, cos.ModXs)
 			}
+			return nil
 		}
+		err = src.Load(false, false)
 	} else {
 		_, ecode, err = core.T.HeadCold(src, nil /*origReq*/)
 	}
@@ -136,11 +159,44 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 		return nil
 	}
 
-	// source does not exist: try to remove the destination (NOTE best effort)
-	if !dst.TryLock(true) {
-		return nil
+	rp.remove(dst, nil)
+	return nil
+}
+
+// head-batch callback
+func (rp *prune) peerReply(ent *core.HdbEnt) {
+	switch ent.Status {
+	case apc.HdbMissing:
+	case apc.HdbSame, apc.HdbDiverged: // the source exists
+		return
+	case apc.HdbBusy: // the peer could not lock it (the next sync checks it again)
+		rp.busy.Inc()
+		if cmn.Rom.V(4, cos.ModXs) {
+			nlog.Infoln(rp.r.Name(), "peer busy, keep:", ent.LIF.Cname(), "peer:", ent.Tsi.StringEx())
+		}
+		return
+	default: // existence unknown: keep the destination
+		rp.r.AddErr(errors.New(ent.Cause), 4, cos.ModXs)
+		return
 	}
-	err = dst.Load(false, true)
+	dst, err := ent.LIF.LOM()
+	if err != nil {
+		return
+	}
+	rp.remove(dst, ent)
+	core.FreeLOM(dst)
+}
+
+// source does not exist: try to remove the destination (NOTE best effort)
+func (rp *prune) remove(dst *core.LOM, ent *core.HdbEnt) {
+	if !dst.TryLock(true) {
+		return
+	}
+	err := dst.Load(false, true)
+	if err == nil && ent != nil && !ent.Unchanged(dst) {
+		dst.Unlock(true)
+		return
+	}
 	if err == nil {
 		err = dst.RemoveObj()
 	}
@@ -154,5 +210,4 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 	} else if !cmn.IsErrObjNought(err) && !cmn.IsErrBucketNought(err) {
 		rp.r.AddErr(err, 4, cos.ModXs)
 	}
-	return nil
 }

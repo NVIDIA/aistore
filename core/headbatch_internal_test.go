@@ -155,7 +155,7 @@ func newHdbBowner() *hdbBowner {
 func (o *hdbBowner) Get() *meta.BMD { return &o.BMD }
 
 // install the peer and make a batcher
-func hdbInit(tb testing.TB, tt *hdbTarget, args HdbArgs) (*HdbBatcher, hdbDone) {
+func hdbInit(tb testing.TB, tt *hdbTarget, args *HdbArgs) (*HdbBatcher, hdbDone) {
 	prev := T
 	T = tt
 	tb.Cleanup(func() { T = prev })
@@ -176,7 +176,7 @@ func hdbInit(tb testing.TB, tt *hdbTarget, args HdbArgs) (*HdbBatcher, hdbDone) 
 	if args.Abort == nil {
 		args.Abort = newHdbStopper()
 	}
-	hb := NewHdbBatcher(&args)
+	hb := NewHdbBatcher(args)
 	hb.capFn = func() fs.CapStatus { return tt.cs }
 	hdbPinLoad(hb, 0) // not the load of the host
 	return hb, done
@@ -236,7 +236,7 @@ func hdbCheckStats(tb testing.TB, st, want HdbStats) {
 // full groups go out at once and End sends the partial groups
 func TestHdbBatcherBatches(t *testing.T) {
 	tt := &hdbTarget{status: map[string]apc.HdbStatus{"a/o2": apc.HdbMissing, "b/o3": apc.HdbDiverged}, cs: hdbHigh}
-	hb, done := hdbInit(t, tt, HdbArgs{Size: 4})
+	hb, done := hdbInit(t, tt, &HdbArgs{Size: 4})
 	for i := range 5 {
 		bck := []string{"a", "b"}[i%2]
 		hdbAdd(t, hb, hdbPeer("t1"), bck, fmt.Sprintf("o%d", i), &cmn.ObjAttrs{Size: int64(i + 1)})
@@ -276,7 +276,7 @@ func TestHdbBatcherFallback(t *testing.T) {
 	}
 	oa := &cmn.ObjAttrs{Size: 10, Cksum: cksum, CustomMD: cos.StrKVs{cmn.CRC32CObjMD: "aa"}}
 	tt := &hdbTarget{batchErr: fmt.Errorf("t1: %w", cmn.ErrHdbUnsupported), heads: make(map[string]hdbHead, len(tests)), cs: hdbHigh}
-	hb, done := hdbInit(t, tt, HdbArgs{})
+	hb, done := hdbInit(t, tt, &HdbArgs{})
 	for name, test := range tests {
 		tt.heads["a/"+name] = test.head
 		hdbAdd(t, hb, hdbPeer("t1"), "a", name, oa)
@@ -288,6 +288,29 @@ func TestHdbBatcherFallback(t *testing.T) {
 		tassert.Errorf(t, ent.Status == test.status, "%s: got %s, expected %s", name, ent.Status, test.status)
 	}
 	hdbCheckStats(t, st, HdbStats{Batches: 1, Fellback: int64(len(tests)), Partial: 1})
+}
+
+// AddAs: the peer checks the name in the other bucket
+func TestHdbBatcherAddAs(t *testing.T) {
+	notFound := hdbHead{err: cmn.NewErrHTTP(nil, errors.New("not found"), http.StatusNotFound)}
+	for name, batchErr := range map[string]error{"batch": nil, "fallback": fmt.Errorf("t1: %w", cmn.ErrHdbUnsupported)} {
+		t.Run(name, func(t *testing.T) {
+			tt := &hdbTarget{
+				batchErr: batchErr,
+				status:   map[string]apc.HdbStatus{"b/o2": apc.HdbMissing},
+				heads:    map[string]hdbHead{"b/o2": notFound},
+			}
+			hb, done := hdbInit(t, tt, &HdbArgs{Size: 2})
+			for _, objName := range []string{"o1", "o2"} {
+				lom := hdbLOM(t, "a", objName, hdbOa)
+				hb.AddAs(lom, &cmn.Bck{Name: "b", Provider: apc.AIS}, hdbPeer("t1"))
+				FreeLOM(lom)
+			}
+			hb.End()
+			ent := done["b/o2"]
+			tassert.Errorf(t, ent.Status == apc.HdbMissing && ent.LIF.Cname() == "ais://a/o2", "got %s for %s", ent.Status, ent.LIF.Cname())
+		})
+	}
 }
 
 // a failed batch: no answer, 429 (peer-busy, no fallback), or the abort during the per-object fallback
@@ -307,7 +330,7 @@ func TestHdbBatcherBatchErr(t *testing.T) {
 			if test.abort {
 				tt.onBatch = ab.abort
 			}
-			hb, done := hdbInit(t, tt, HdbArgs{Size: 2, Abort: ab})
+			hb, done := hdbInit(t, tt, &HdbArgs{Size: 2, Abort: ab})
 			hdbAdd(t, hb, hdbPeer("t1"), "a", "o1", hdbOa)
 			hdbAdd(t, hb, hdbPeer("t1"), "a", "o2", hdbOa)
 			hdbCheckStats(t, hb.End(), test.want)
@@ -321,7 +344,7 @@ func TestHdbBatcherBatchErr(t *testing.T) {
 // the request carries the attributes that CheckEq reads and nothing from the previous batch
 func TestHdbBatcherRequest(t *testing.T) {
 	tt := &hdbTarget{cs: hdbHigh}
-	hb, _ := hdbInit(t, tt, HdbArgs{Size: 2})
+	hb, _ := hdbInit(t, tt, &HdbArgs{Size: 2})
 	oa := &cmn.ObjAttrs{Size: 7, Cksum: cos.NewCksum(cos.ChecksumOneXxh, "0123456789abcdef"), CustomMD: cos.StrKVs{
 		cos.HdrContentType: "application/x-tar", // CheckEq does not read it
 	}}
@@ -346,13 +369,13 @@ func TestHdbBatcherRequest(t *testing.T) {
 
 // a copy that changed after the peer compared it must not pass
 func TestHdbEntUnchanged(t *testing.T) {
-	hdbInit(t, &hdbTarget{}, HdbArgs{})
+	hdbInit(t, &hdbTarget{}, &HdbArgs{})
 	attrs := func(size int64, cksum, etag string) *cmn.ObjAttrs {
 		return &cmn.ObjAttrs{Size: size, Cksum: cos.NewCksum(cos.ChecksumOneXxh, cksum), CustomMD: cos.StrKVs{cmn.ETag: etag}}
 	}
 	var ent HdbEnt
 	lom := hdbLOM(t, "a", "o1", attrs(10, "0123456789abcdef", "e1"))
-	ent.init(lom)
+	ent.init(lom, lom.Bucket())
 	FreeLOM(lom)
 	put := attrs(10, "0123456789abcdef", "e1")
 	put.SetVersion("2")
@@ -380,7 +403,7 @@ func TestHdbBatcherWait(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			g, ab := newHdbGate(), newHdbStopper()
-			hb, _ := hdbInit(t, &hdbTarget{}, HdbArgs{Size: 2, Abort: ab, Cb: g.cb}) // one mountpath, one sender
+			hb, _ := hdbInit(t, &hdbTarget{}, &HdbArgs{Size: 2, Abort: ab, Cb: g.cb}) // one mountpath, one sender
 			t.Cleanup(g.release)
 			hdbAdd(t, hb, hdbPeer("t2"), "a", "o0", hdbOa)
 			hdbAdd(t, hb, hdbPeer("t1"), "a", "o1", hdbOa)
@@ -408,15 +431,17 @@ func TestHdbBatcherWait(t *testing.T) {
 func TestHdbBatcherThrottle(t *testing.T) {
 	const sleep = 20 * time.Millisecond
 	for name, test := range map[string]struct {
-		cs   fs.CapStatus
-		min  time.Duration // strict sleeps
-		want HdbStats
+		cs     fs.CapStatus
+		strict bool
+		min    time.Duration // strict sleeps
+		want   HdbStats
 	}{
 		"best-effort": {want: HdbStats{Dropped: 3, Throttled: 3, Partial: 1}},
 		"strict":      {cs: hdbHigh, min: 2 * sleep, want: HdbStats{Batches: 1, Fellback: 1, Throttled: 3, Partial: 1}},
+		"strict-args": {strict: true, min: 2 * sleep, want: HdbStats{Batches: 1, Fellback: 1, Throttled: 3, Partial: 1}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			hb, _ := hdbInit(t, &hdbTarget{cs: test.cs}, HdbArgs{Size: 2})
+			hb, _ := hdbInit(t, &hdbTarget{cs: test.cs}, &HdbArgs{Size: 2, Strict: test.strict})
 			hdbPinLoad(hb, sleep)
 			started := time.Now()
 			for i := range 3 { // a full group and a partial group
@@ -439,7 +464,7 @@ func TestHdbBatcherSmap(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt := &hdbTarget{cs: hdbHigh, smap: test.smap}
-			hb, _ := hdbInit(t, tt, HdbArgs{Size: 2})
+			hb, _ := hdbInit(t, tt, &HdbArgs{Size: 2})
 			for i := range 3 {
 				hdbAdd(t, hb, hdbPeer("t1"), "a", fmt.Sprintf("o%d", i), hdbOa)
 			}
@@ -466,7 +491,7 @@ func TestHdbBatcherConcurrent(t *testing.T) {
 		done[ent.Tsi.ID()+":"+hdbKey(ent)]++
 		mu.Unlock()
 	}
-	hb, _ := hdbInit(t, tt, HdbArgs{Size: 16, Cb: cb})
+	hb, _ := hdbInit(t, tt, &HdbArgs{Size: 16, Cb: cb})
 	tassert.Fatalf(t, cap(hb.idle) == nmpath, "%d senders, expected %d", cap(hb.idle), nmpath)
 	for p := range nprod {
 		wg.Add(1)
@@ -493,7 +518,7 @@ func hdbProduce(tb testing.TB, hb *HdbBatcher, wg *sync.WaitGroup, p, nobj int) 
 
 // allocations for each Add
 func BenchmarkHdbBatcher(b *testing.B) {
-	hb, _ := hdbInit(b, &hdbTarget{nop: true, cs: hdbHigh}, HdbArgs{Cb: func(*HdbEnt) {}})
+	hb, _ := hdbInit(b, &hdbTarget{nop: true, cs: hdbHigh}, &HdbArgs{Cb: func(*HdbEnt) {}})
 	lom := hdbLOM(b, "a", "o1", hdbOa)
 	defer FreeLOM(lom)
 	tsi := hdbPeer("t1")
