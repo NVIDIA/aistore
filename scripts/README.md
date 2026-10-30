@@ -18,26 +18,10 @@ patch version from `go.mod` and run `go mod tidy`.
 $ ./scripts/upgrade-oss.sh
 ```
 
-## github_release.sh
+## github-release/
 
-Given a release tag, add *release assets* to an existing (and tagged) github release at [AIStore releases](https://github.com/NVIDIA/aistore/releases).
-
-Currently, this will build and [upload](https://github.com/actions/upload-release-asset) **ais** and **aisloader** binaries along with their respective sha256 checksums.
-
-### Usage
-
-Once a new AIS release is posted, run the following command:
-
-Command
-```console
-$ GITHUB_OWNER="NVIDIA" GITHUB_REPO="aistore" GITHUB_OAUTH_TOKEN=<oauth token> GITHUB_RELEASE_TAG=<release tag> ./github_release.sh
-```
-
-Add `--replace` to overwrite assets that already exist on the release.
-
-> This will require the [GitHub CLI](https://cli.github.com/) (`gh`).
-> It will also require [GITHUB_OAUTH_TOKEN](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) and the corresponding [GITHUB_RELEASE_TAG](https://git-scm.com/book/en/v2/Git-Basics-Tagging).
-> WARNING: Choose all the permission options while creating the token and then delete the token post the release.
+Release scripts: root module checksums before tagging (`gosum.sh`) and release assets (`upload-assets.sh`).
+See [github-release/README.md](github-release/README.md).
 
 ## bench.sh
 

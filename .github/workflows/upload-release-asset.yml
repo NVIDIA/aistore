@@ -79,4 +79,4 @@ jobs:
           RUNNER_OS: ${{ matrix.os }}
         run: |
           export GOPATH="$(go env GOPATH)"
-          ./ci-scripts/scripts/github_release.sh ${{ github.event_name != 'release' && '--replace' || '' }}
+          ./ci-scripts/scripts/github-release/upload-assets.sh ${{ github.event_name != 'release' && '--replace' || '' }}
