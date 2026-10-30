@@ -8,6 +8,7 @@ import io
 import unittest
 import warnings
 from itertools import product
+from multiprocessing import get_context
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -35,8 +36,25 @@ from aistore.sdk.obj.content_iterator import ContentIterProvider, StreamBounds
 from aistore.sdk.response_handler import ResponseHandler
 from aistore.sdk.types import BucketModel
 from aistore.sdk.errors import AISError
-from tests.const import KB, PROMOTE_ROOT
+from tests.const import KB, PROMOTE_ROOT, TEST_TIMEOUT
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
+
+
+def run_forked_test(child: Callable[[], None], timeout: float = TEST_TIMEOUT) -> None:
+    """Run assertions in a forked child, checking its exit status and cleaning up."""
+    process = get_context("fork").Process(target=child)
+    process.start()
+    try:
+        process.join(timeout=timeout)
+        assert process.exitcode == 0, (
+            f"Forked test failed or timed out after {timeout}s: "
+            f"exitcode={process.exitcode}"
+        )
+    finally:
+        if process.is_alive():
+            process.terminate()
+            process.join()
+        process.close()
 
 
 # pylint: disable=too-few-public-methods

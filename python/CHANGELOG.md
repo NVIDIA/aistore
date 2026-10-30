@@ -6,6 +6,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Changed
+
+- Pickling or forking `SessionManager` no longer carries live sessions as the receiving process
+  creates its own on first use.
+
 ## [2.1.0] - 2026-10-28
 
 This release expands object streaming and blob-download controls, strengthens

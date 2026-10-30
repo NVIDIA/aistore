@@ -1,5 +1,5 @@
 """
-Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 import os
@@ -21,7 +21,9 @@ from aistore.sdk.const import (
     HTTPS,
     HTTP,
 )
-from aistore.sdk.utils import parse_bool
+from aistore.sdk.utils import get_logger, parse_bool
+
+logger = get_logger(__name__)
 
 
 def _env_skip_verify() -> bool:
@@ -69,6 +71,8 @@ class SessionManager:
     """
     Class for storing and creating requests library sessions.
 
+    Concurrent use across threads is unsupported.
+
     Args:
         retry (urllib3.Retry, optional): Defines the HTTP retry strategy using `urllib3.Retry`.
             Defaults to `RetryConfig.default().http_retry`, which handles transient HTTP failures.
@@ -112,7 +116,17 @@ class SessionManager:
         if self._skip_verify:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        self._session_pool = {current_process().pid: self._create_session()}
+        # PID identifies the process that owns this session
+        self._pid = current_process().pid
+        self._session = self._create_session()
+
+    def __getstate__(self) -> dict:
+        """Serialize configuration without runtime sessions."""
+        # The receiving process creates its own session.
+        state = self.__dict__.copy()
+        state["_pid"] = None
+        state["_session"] = None
+        return state
 
     @property
     def retry(self) -> Retry:
@@ -136,13 +150,54 @@ class SessionManager:
 
     @property
     def session(self) -> Session:
-        """Acquires an existing `requests` session, creating a new one if needed."""
+        """
+        Acquire an existing `requests` session for this process, creating one if needed.
+        """
         pid = current_process().pid
 
-        if pid not in self._session_pool:
-            self._session_pool[pid] = self._create_session()
+        # Forked or deserialized managers acquire a process-owned session.
+        if pid != self._pid:
+            self._drop_inherited()
+            self._pid = pid
 
-        return self._session_pool[pid]
+        if self._session is None:
+            self._session = self._create_session()
+
+        return self._session
+
+    def close(self) -> None:
+        """
+        Close and detach this process's session.
+
+        Repeated calls are harmless. Later session acquisition creates a new
+        session. Inherited sessions are dropped without closing; each process
+        is responsible for closing its own session.
+        """
+        current_pid = current_process().pid
+        if self._pid != current_pid:
+            self._drop_inherited()
+            return
+
+        session = self._session
+        self._session = None
+        if session is not None:
+            logger.debug(
+                "Closing HTTP session: pid=%s session_id=%#x",
+                current_pid,
+                id(session),
+            )
+            session.close()
+
+    def _drop_inherited(self) -> None:
+        """Detach an inherited session without explicitly closing it."""
+        if self._session is not None:
+            logger.debug(
+                "Dropping inherited HTTP session: pid=%s owner_pid=%s session_id=%#x",
+                current_process().pid,
+                self._pid,
+                id(self._session),
+            )
+            self._session = None
 
     def _create_session(self) -> Session:
         """
@@ -164,4 +219,9 @@ class SessionManager:
 
         for protocol in (HTTP, HTTPS):
             request_session.mount(protocol, adapter)
+        logger.debug(
+            "Created HTTP session: pid=%s session_id=%#x",
+            current_process().pid,
+            id(request_session),
+        )
         return request_session
