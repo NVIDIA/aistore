@@ -285,16 +285,16 @@ func TestCopyRemoteEmptyPages(t *testing.T) {
 		keys     = make([]string, 0, 4*pageSize)
 		objNames = make([]string, 0, 2*pageSize)
 	)
-	cfg, err := config.LoadDefaultConfig(t.Context(), loadCredentials(t), config.WithRegion(env.AwsDefaultRegion()))
+	bprops, err := api.HeadBucket(bp, cliBck, false /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
+
+	cfg, err := config.LoadDefaultConfig(t.Context(), loadCredentials(t), config.WithRegion(bprops.Extra.AWS.CloudRegion))
 	tassert.CheckFatal(t, err)
 	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		if ep := os.Getenv(env.AWSEndpoint); ep != "" {
 			o.BaseEndpoint, o.UsePathStyle = aws.String(ep), true
 		}
 	})
-
-	bprops, err := api.HeadBucket(bp, cliBck, false /*dontAddRemote*/)
-	tassert.CheckFatal(t, err)
 
 	// small remote pages
 	_, err = api.SetBucketProps(bp, cliBck, &cmn.BpropsToSet{
