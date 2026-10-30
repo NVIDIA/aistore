@@ -603,7 +603,7 @@ func (r *LsoXact) nextPageR() (err error) {
 				// - transition to use T2T control
 				// - for details, see xact/xs/TODO.md, "Out-of-band control for all xactions"
 				r.sendTerm(r.msg.UUID, nil, err)
-				time.Sleep(time.Second) // TODO: remove
+				time.Sleep(2 * time.Second) // TODO: remove
 			}
 			return err
 		}
