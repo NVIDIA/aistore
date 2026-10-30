@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	jsoniter "github.com/json-iterator/go"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -76,7 +77,8 @@ func retry[T any](what string, maxAttempts int, interval time.Duration, check fu
 	return val, err
 }
 
-func loadBalancerIP(client kubernetes.Interface, svcName, namespace string) (string, error) {
+// loadBalancerAddr returns the first ingress IP of the Service's LoadBalancer, or the first ingress hostname if there is no IP.
+func loadBalancerAddr(client kubernetes.Interface, svcName, namespace string) (string, error) {
 	svc, err := client.CoreV1().Services(namespace).Get(context.TODO(), svcName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
@@ -84,7 +86,24 @@ func loadBalancerIP(client kubernetes.Interface, svcName, namespace string) (str
 	if len(svc.Status.LoadBalancer.Ingress) == 0 {
 		return "", fmt.Errorf("svc %q has no loadbalancer ingress", svcName)
 	}
-	return svc.Status.LoadBalancer.Ingress[0].IP, nil
+	if addr := pickIngressAddr(svc.Status.LoadBalancer.Ingress); addr != "" {
+		return addr, nil
+	}
+	return "", fmt.Errorf("svc %q loadbalancer ingress has neither IP nor hostname", svcName)
+}
+
+// pickIngressAddr returns the first IP among all entries, else the first hostname, else "".
+func pickIngressAddr(ingress []corev1.LoadBalancerIngress) string {
+	var hostname string
+	for _, ing := range ingress {
+		if ing.IP != "" {
+			return ing.IP
+		}
+		if hostname == "" {
+			hostname = ing.Hostname
+		}
+	}
+	return hostname
 }
 
 type hostNetParams struct {
@@ -105,20 +124,20 @@ func (p *hostNetParams) podDNS() string {
 	return fmt.Sprintf("%s.%s.%s.svc.%s", p.podName, p.serviceName, p.namespace, p.clusterDomain)
 }
 
-// externalIP returns the LoadBalancer IP of the target's Service. It exits the process on failure.
-func (p *hostNetParams) externalIP() string {
+// externalAddr returns the LoadBalancer IP or hostname of the target's Service. It exits the process on failure.
+func (p *hostNetParams) externalAddr() string {
 	if p.k8s == nil {
 		config, err := rest.InClusterConfig()
 		failOnError(err)
 		p.k8s = kubernetes.NewForConfigOrDie(config)
 	}
 	svcName := p.podName
-	what := fmt.Sprintf("fetch external loadbalancer IP for svc %q", svcName)
-	ip, err := retry(what, 6, retryInterval, func() (string, error) {
-		return loadBalancerIP(p.k8s, svcName, p.namespace)
+	what := fmt.Sprintf("fetch external loadbalancer address for svc %q", svcName)
+	addr, err := retry(what, 6, retryInterval, func() (string, error) {
+		return loadBalancerAddr(p.k8s, svcName, p.namespace)
 	})
 	failOnError(err)
-	return ip
+	return addr
 }
 
 // With host networking in IP mode, aisnode discovers the target's own IP at startup.
@@ -126,14 +145,14 @@ func (p *hostNetParams) discoversIP() bool {
 	return p.isTarget && p.hostNetwork && p.dnsMode == env.PubNetDNSModeIP
 }
 
-// Order: explicit override, LoadBalancer IP (target with external access),
+// Order: explicit override, LoadBalancer address (target with external access),
 // runtime discovery (empty), then the DNS mode.
 func (p *hostNetParams) resolvePublicHostname() string {
 	switch {
 	case p.override != "":
 		return p.override
 	case p.isTarget && p.externalAccess:
-		return p.externalIP()
+		return p.externalAddr()
 	case p.discoversIP():
 		return ""
 	case p.dnsMode == env.PubNetDNSModePod:

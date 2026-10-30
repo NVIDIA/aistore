@@ -35,16 +35,47 @@ func TestRetry(t *testing.T) {
 	}
 }
 
+func TestLoadBalancerAddr(t *testing.T) {
+	tests := []struct {
+		name    string
+		ingress []corev1.LoadBalancerIngress
+		want    string
+		wantErr bool
+	}{
+		{name: "IP", ingress: []corev1.LoadBalancerIngress{{IP: "203.0.113.7"}}, want: "203.0.113.7"},
+		{name: "IP beats hostname", ingress: []corev1.LoadBalancerIngress{{IP: "203.0.113.7", Hostname: "elb.example.com"}}, want: "203.0.113.7"},
+		{name: "IP in later entry beats earlier hostname", ingress: []corev1.LoadBalancerIngress{{Hostname: "elb.example.com"}, {IP: "203.0.113.7"}}, want: "203.0.113.7"},
+		{name: "first IP wins", ingress: []corev1.LoadBalancerIngress{{IP: "203.0.113.7"}, {IP: "203.0.113.8"}}, want: "203.0.113.7"},
+		{name: "first hostname wins", ingress: []corev1.LoadBalancerIngress{{}, {Hostname: "a.example.com"}, {Hostname: "b.example.com"}}, want: "a.example.com"},
+		{name: "empty ingress entry", ingress: []corev1.LoadBalancerIngress{{}}, wantErr: true},
+		{name: "no ingress", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fake.NewSimpleClientset(&corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "t-0", Namespace: "ns"},
+				Status:     corev1.ServiceStatus{LoadBalancer: corev1.LoadBalancerStatus{Ingress: tc.ingress}},
+			})
+			got, err := loadBalancerAddr(client, "t-0", "ns")
+			if (err != nil) != tc.wantErr || got != tc.want {
+				t.Errorf("loadBalancerAddr() = %q, %v; want %q, error: %t", got, err, tc.want, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestApplyHostNet(t *testing.T) {
 	const (
 		podDNS = "t-0.svc.ns.svc.cluster.local"
 		pub    = "10.0.0.5"
 		lb     = "203.0.113.7"
+		lbHost = "elb.example.com"
 		ovr    = "t-0.example.com"
 	)
 	tests := []struct {
 		name             string
 		params           hostNetParams
+		lbIngress        []corev1.LoadBalancerIngress // defaults to a single IP entry
 		wantHostname     string
 		intraDataCleared bool
 	}{
@@ -60,6 +91,7 @@ func TestApplyHostNet(t *testing.T) {
 		{name: "target host network Pod", params: hostNetParams{isTarget: true, hostNetwork: true, dnsMode: env.PubNetDNSModePod}, wantHostname: podDNS},
 		{name: "target external access", params: hostNetParams{isTarget: true, externalAccess: true, dnsMode: env.PubNetDNSModePod}, wantHostname: lb},
 		{name: "target external access beats host network", params: hostNetParams{isTarget: true, externalAccess: true, hostNetwork: true, dnsMode: env.PubNetDNSModeIP}, wantHostname: lb, intraDataCleared: true},
+		{name: "target external access hostname-only LB", params: hostNetParams{isTarget: true, externalAccess: true, hostNetwork: true, dnsMode: env.PubNetDNSModeIP}, lbIngress: []corev1.LoadBalancerIngress{{Hostname: lbHost}}, wantHostname: lbHost, intraDataCleared: true},
 		{name: "override beats external access", params: hostNetParams{isTarget: true, externalAccess: true, dnsMode: env.PubNetDNSModeIP, override: ovr}, wantHostname: ovr},
 		{name: "override beats Pod", params: hostNetParams{dnsMode: env.PubNetDNSModePod, override: ovr}, wantHostname: ovr},
 		{name: "override beats host network discovery", params: hostNetParams{isTarget: true, hostNetwork: true, dnsMode: env.PubNetDNSModeIP, override: ovr}, wantHostname: ovr, intraDataCleared: true},
@@ -69,9 +101,13 @@ func TestApplyHostNet(t *testing.T) {
 			params := tc.params
 			params.publicHostName = pub
 			params.podName, params.serviceName, params.namespace, params.clusterDomain = "t-0", "svc", "ns", "cluster.local"
+			ingress := tc.lbIngress
+			if ingress == nil {
+				ingress = []corev1.LoadBalancerIngress{{IP: lb}}
+			}
 			params.k8s = fake.NewSimpleClientset(&corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{Name: "t-0", Namespace: "ns"},
-				Status:     corev1.ServiceStatus{LoadBalancer: corev1.LoadBalancerStatus{Ingress: []corev1.LoadBalancerIngress{{IP: lb}}}},
+				Status:     corev1.ServiceStatus{LoadBalancer: corev1.LoadBalancerStatus{Ingress: ingress}},
 			})
 			wantIntraData := podDNS
 			if tc.intraDataCleared {
