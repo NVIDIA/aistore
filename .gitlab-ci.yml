@@ -799,23 +799,6 @@ test:long:oci:
     - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci --deployment all
     - . ais/test/oci/mp_tuning.env && make test-long
 
-test:long:aisloader:
-  stage: test-long
-  tags:
-    - $RUNNER_TAG
-  timeout: 15m
-  variables:
-    AIS_ENDPOINT: "http://localhost:8080"
-  script:
-    - make aisloader
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
-    - sleep 10 # make sure that cluster properly starts
-    - DURATION=1m make test-aisloader
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
-
 test:long:pyaisloader:
   stage: test-long
   tags:
