@@ -1,7 +1,8 @@
+#
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Base class for AIS Iterable Style Datasets
-
-Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 from itertools import islice

@@ -1,7 +1,6 @@
-"""
-Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
-"""
-
+#
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
+#
 import pickle
 import unittest
 from multiprocessing import get_all_start_methods

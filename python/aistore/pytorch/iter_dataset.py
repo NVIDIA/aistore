@@ -1,7 +1,8 @@
+#
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Iterable Dataset for AIS
-
-Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 from aistore.pytorch.base_iter_dataset import AISBaseIterDataset

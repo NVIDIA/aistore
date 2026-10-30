@@ -1,3 +1,6 @@
+#
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Dynamic Batch Sampler for Dynamic Batch Sizing
 
@@ -5,8 +8,6 @@ In scenarios where memory is a constraint, the DynamicBatchSampler
 can be used to generate mini-batches that fit within a memory constraint
 so that there is a guarantee that each batch fits within memory
 while attempting to fit the maximum number of samples in each batch.
-
-Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from logging import getLogger

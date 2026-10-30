@@ -1,7 +1,9 @@
+#
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Integration Test class for AIStore PyTorch Samplers
 
-Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 from unittest import TestCase

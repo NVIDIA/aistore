@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023 - 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
 #
 from abc import ABC, abstractmethod
 from typing import Iterable, Optional

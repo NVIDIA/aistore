@@ -1,7 +1,6 @@
-"""
-Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
-"""
-
+#
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
+#
 import os
 import warnings
 from typing import Optional, Tuple, Union

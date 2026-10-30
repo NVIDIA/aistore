@@ -1,7 +1,8 @@
+#
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
+#
 """
 PyTorch Dataset for AIS.
-
-Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from typing import List, Union, Dict

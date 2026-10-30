@@ -1,7 +1,8 @@
+#
+# Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+#
 """
 PyTorch Map-style Dataset with parallel download acceleration.
-
-Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from typing import List, Optional, Union, Dict

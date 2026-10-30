@@ -1,7 +1,8 @@
+#
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Utils for AIS PyTorch Plugin
-
-Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from urllib.parse import urlunparse

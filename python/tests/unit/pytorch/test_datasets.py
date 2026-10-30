@@ -1,6 +1,8 @@
+#
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Test class for AIStore PyTorch Plugin
-Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 import unittest

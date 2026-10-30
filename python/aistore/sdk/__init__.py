@@ -1,7 +1,8 @@
+#
+# Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Import client-accessible components here to provide consistent imports via `from aistore.sdk import *`
-
-Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 # Clients

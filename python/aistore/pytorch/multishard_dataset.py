@@ -1,7 +1,8 @@
+#
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Multishard Stream Dataset for AIS.
-
-Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from typing import Iterator, List, Iterable

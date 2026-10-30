@@ -1,7 +1,8 @@
+#
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
+#
 """
 Iterable Dataset using Batch API for AIS
-
-Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from logging import getLogger

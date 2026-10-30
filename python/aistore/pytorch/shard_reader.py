@@ -1,9 +1,10 @@
+#
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
+#
 """
 AIS Shard Reader for PyTorch
 
 PyTorch Dataset and DataLoader for AIS.
-
-Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from aistore.sdk import Bucket
