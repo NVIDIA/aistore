@@ -565,14 +565,11 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 
 	// 6: try to start with a fully staffed IC
-	if count := smap.ICCount(); count < meta.DfltCountIC {
-		clone := smap.clone()
-		nc := clone.staffIC()
-		if count != nc {
-			clone.Version++
-			smap = clone
-			p.owner.smap.put(smap)
-		}
+	clone := smap.clone()
+	if clone.staffIC() {
+		clone.Version++
+		smap = clone
+		p.owner.smap.put(smap)
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
 		cos.ExitLog(p.String(), "(primary):", err)

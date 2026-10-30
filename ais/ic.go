@@ -72,7 +72,7 @@ func (ic *ic) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string
 begin:
 	var (
 		smap          = ic.p.owner.smap.get()
-		selfIC        = smap.IsIC(ic.p.si)
+		selfIC        = smap.IsIC(ic.p.si) && !smap.InMaintOrDecomm(ic.p.SID())
 		owner, exists = ic.p.notifs.getOwner(uuid)
 		psi           *meta.Snode
 	)
@@ -110,25 +110,18 @@ outer:
 		return false
 	case equalIC:
 		if selfIC {
-			owner = ic.p.SID()
-		} else {
-			for pid, si := range smap.Pmap {
-				if !smap.IsIC(psi) {
-					continue
-				}
-				owner = pid
-				psi = si
-				break outer
-			}
+			return false
 		}
+		fallthrough
 	default: // cached + owned
 		psi = smap.GetProxy(owner)
-		if psi == nil || !smap.IsIC(psi) {
+		if psi == nil || !smap.IsIC(psi) || psi.InMaintOrDecomm() {
 			var err error
 			if psi, err = smap.HrwIC(uuid); err != nil {
 				ic.p.writeErr(w, r, err, http.StatusInternalServerError)
 				return true
 			}
+			owner = psi.ID()
 		}
 		debug.Func(func() { debug.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si)) })
 	}
@@ -147,16 +140,21 @@ outer:
 
 func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	smap := ic.p.owner.smap.get()
-	if smap.IsIC(ic.p.si) {
+	if smap.IsIC(ic.p.si) && !smap.InMaintOrDecomm(ic.p.SID()) {
 		return false
 	}
 
 	var node *meta.Snode
 	for _, psi := range smap.Pmap {
-		if smap.IsIC(psi) {
+		if smap.IsIC(psi) && !psi.InMaintOrDecomm() {
 			node = psi
 			break
 		}
+	}
+	if node == nil {
+		err := fmt.Errorf("no active IC member in %s", smap.StringEx())
+		ic.p.writeErr(w, r, err, http.StatusServiceUnavailable)
+		return true
 	}
 	redurl := ic.p.redurl(r, node, smap.Version, cmn.NetIntraControl, "")
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
@@ -419,7 +417,7 @@ func (ic *ic) syncICBundle() error {
 	smap := ic.p.owner.smap.get()
 	si := ic.p.si
 	for _, psi := range smap.Pmap {
-		if smap.IsIC(psi) && psi.ID() != si.ID() {
+		if smap.IsIC(psi) && !psi.InMaintOrDecomm() && psi.ID() != si.ID() {
 			si = psi
 			break
 		}

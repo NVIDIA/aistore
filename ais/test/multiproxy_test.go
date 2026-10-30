@@ -60,11 +60,13 @@ var (
 	}
 
 	icTests = []Test{
-		{"ICMemberLeaveAndRejoin", icMemberLeaveAndRejoin},
-		{"ICKillAndRestorePrimary", icKillAndRestorePrimary},
-		{"ICSyncOwnTbl", icSyncOwnershipTable},
-		{"ICSinglePrimaryRevamp", icSinglePrimaryRevamp},
-		{"ICStressMonitorXactMultiICFail", icStressMonitorXactMultiICFail},
+		{"MemberLeaveAndRejoin", icMemberLeaveAndRejoin},
+		{"KillAndRestorePrimary", icKillAndRestorePrimary},
+		{"SyncOwnTbl", icSyncOwnershipTable},
+		{"SinglePrimaryRevamp", icSinglePrimaryRevamp},
+		{"StressMonitorXactMultiICFail", icStressMonitorXactMultiICFail},
+		{"ProxyMaintenance", icProxyMaintenance},
+		{"ProxyNonElectable", icProxyNonElectable},
 	}
 )
 
@@ -1222,6 +1224,17 @@ func icSyncOwnershipTable(t *testing.T) {
 	tassert.CheckError(t, err)
 }
 
+func getNewICMember(t testing.TB, oldMap, newMap cos.StrSet) (daeID string) {
+	for sid := range newMap {
+		if _, ok := oldMap[sid]; !ok {
+			tassert.Errorf(t, daeID == "", "should change only one IC member")
+			daeID = sid
+		}
+	}
+	tassert.Fatalf(t, daeID != "", "should change at least one IC member")
+	return
+}
+
 func icSinglePrimaryRevamp(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
@@ -1367,17 +1380,116 @@ func killRestoreIC(t *testing.T, smap *meta.Smap, stopCh *cos.StopCh, wg *sync.W
 	}
 }
 
-// misc
-
-func getNewICMember(t testing.TB, oldMap, newMap cos.StrSet) (daeID string) {
-	for sid := range newMap {
-		if _, ok := oldMap[sid]; !ok {
-			tassert.Errorf(t, daeID == "", "should change only one IC member")
-			daeID = sid
+// retain only the primary, then verify that former IC members can still query status
+func icProxyMaintenance(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinProxies: 3, MinTargets: 1})
+	smap := tools.GetClusterMap(t, proxyURL)
+	bp := tools.BaseAPIParams(smap.Primary.URL(cmn.NetPublic))
+	var proxies meta.Nodes
+	for pid, psi := range smap.Pmap {
+		if pid != smap.Primary.ID() && !psi.InMaintOrDecomm() {
+			proxies = append(proxies, psi)
 		}
 	}
-	tassert.Fatalf(t, daeID != "", "should change at least one IC member")
-	return
+	if len(proxies) < 2 {
+		t.Skip("requires at least three active proxies")
+	}
+
+	// all IC members know this listener before their membership changes
+	bck := cmn.Bck{Name: "ic-maint-" + cos.GenUUID(), Provider: apc.AIS}
+	tools.CreateBucket(t, bp.URL, bck, nil, true /*cleanup*/)
+	args := &xact.ArgsMsg{Kind: apc.ActLRU, Buckets: []cmn.Bck{bck}, Timeout: tools.RebalanceTimeout}
+	xid, err := api.StartXaction(bp, args, "")
+	tassert.CheckFatal(t, err)
+	args.ID = xid
+	_, err = api.WaitForXactionIC(bp, args)
+	tassert.CheckFatal(t, err)
+
+	origActive := smap.CountActivePs()
+	t.Cleanup(func() {
+		before := tools.GetClusterMap(t, bp.URL)
+		for _, psi := range proxies {
+			msg := &apc.ActValRmNode{DaemonID: psi.ID(), SkipRebalance: true}
+			_, err := api.StopMaintenance(bp, msg)
+			tassert.CheckError(t, err)
+		}
+		if before.CountActivePs() != origActive {
+			_, err := tools.WaitForClusterState(bp.URL, "restore proxies", before.Version, origActive, before.CountActiveTs())
+			tassert.CheckError(t, err)
+		}
+	})
+	for _, psi := range proxies {
+		msg := &apc.ActValRmNode{DaemonID: psi.ID(), SkipRebalance: true}
+		_, err = tools.StartMaintenance(bp, msg)
+		tassert.CheckFatal(t, err)
+		smap, err = tools.WaitForClusterState(bp.URL, "proxy in maintenance", smap.Version,
+			smap.CountActivePs()-1, smap.CountActiveTs())
+		tassert.CheckFatal(t, err)
+	}
+	for _, psi := range smap.Pmap {
+		if psi.InMaintOrDecomm() {
+			tassert.Errorf(t, !psi.IsIC(), "inactive proxy remains in IC: %s", psi.StringEx())
+		}
+	}
+	tassert.Errorf(t, smap.ICCount() == 1 && smap.IsIC(smap.Primary), "expected only primary in IC: %s", smap.StrIC(nil))
+	for _, psi := range proxies {
+		status, err := api.GetOneXactionStatus(tools.BaseAPIParams(psi.URL(cmn.NetPublic)), args)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, status.UUID == xid && status.IsFinished(), "%s: unexpected status %v", psi, status)
+	}
+}
+
+func icProxyNonElectable(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinProxies: 4, MinTargets: 1})
+	smap := tools.GetClusterMap(t, proxyURL)
+	bp := tools.BaseAPIParams(smap.Primary.URL(cmn.NetPublic))
+	var proxies meta.Nodes
+	for pid, psi := range smap.Pmap {
+		if pid != smap.Primary.ID() && !psi.InMaintOrDecomm() && !psi.Flags.IsSet(meta.SnodeNonElectable) {
+			proxies = append(proxies, psi)
+		}
+	}
+	if len(proxies) < 3 {
+		t.Skip("requires at least four active electable proxies")
+	}
+
+	// change an existing member first, while three electable proxies remain
+	for i, psi := range proxies {
+		if psi.IsIC() {
+			proxies[0], proxies[i] = psi, proxies[0]
+			break
+		}
+	}
+	t.Cleanup(func() {
+		for _, psi := range proxies {
+			before := tools.GetClusterMap(t, bp.URL)
+			if node := before.GetProxy(psi.ID()); node == nil || !node.Flags.IsSet(meta.SnodeNonElectable) {
+				continue
+			}
+			_, _, err := api.JoinCluster(bp, psi, 0)
+			tassert.CheckError(t, err)
+			if err == nil {
+				_, err = tools.WaitForClusterState(bp.URL, "restore proxy electability", before.Version,
+					before.CountActivePs(), before.CountActiveTs())
+				tassert.CheckError(t, err)
+			}
+		}
+	})
+	for _, psi := range proxies {
+		_, _, err := api.JoinCluster(bp, psi, meta.SnodeNonElectable)
+		tassert.CheckFatal(t, err)
+		smap, err = tools.WaitForClusterState(bp.URL, "proxy non-electable", smap.Version,
+			smap.CountActivePs(), smap.CountActiveTs())
+		tassert.CheckFatal(t, err)
+		if smap.CountActivePs()-smap.CountNonElectable() >= meta.DfltCountIC {
+			for _, member := range smap.Pmap {
+				tassert.Errorf(t, !member.IsIC() || !member.Flags.IsSet(meta.SnodeNonElectable),
+					"non-electable proxy selected while electable proxies are available: %s", member)
+			}
+		}
+	}
+	tassert.Errorf(t, smap.ICCount() == meta.DfltCountIC, "non-electable fallback did not fill IC: %s", smap.StrIC(nil))
+	tassert.Errorf(t, smap.IsIC(smap.Primary), "primary is not in IC")
 }
 
 //

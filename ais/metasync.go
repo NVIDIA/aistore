@@ -105,8 +105,6 @@ const (
 	retryNotifyRefused = 2
 )
 
-const workChanCap = 48
-
 type (
 	revs interface {
 		tag() string         // enum { revsSmapTag, ... }
@@ -168,7 +166,7 @@ func newMetasyncer(p *proxy) (y *metasyncer) {
 	y.lastSynced = make(map[string]revs, revsMaxTags)
 
 	y.stopCh = make(chan struct{}, 1)
-	y.workCh = make(chan revsReq, workChanCap)
+	y.workCh = make(chan revsReq, dfltControlChanCap)
 
 	y.retryTimer = time.NewTimer(time.Hour)
 	y.retryTimer.Stop()

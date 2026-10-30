@@ -6,11 +6,17 @@ They also require constant monitoring through their life-cycle (i.e., starting t
 
 For efficient monitoring of extended actions, AIStore employs what we call **Information Center** (IC) - a group of proxies that “own” all the currently running (as well as already finished) xactions in the cluster. IC continuously monitors them by coordinating with other proxies and targets.
 
-In the following sections, we will briefly look into the design choices and operation of IC.
+Following is a brief description of the design choices and operations.
 
 ## Information Center (IC) Design
 
 IC is a group of up to 3 (or configured) AIStore gateways aka AIS proxies (henceforth referred to as **proxies**).
+
+> The primary is always an IC member. Other members are selected from active proxies,
+preferring electable proxies and using non-electable proxies when needed to fill the group.
+Proxies in maintenance or being decommissioned are excluded.
+
+> The (fixed and static) number of 3 proxies will likely become configurable in the future, with system default depending on the size of the cluster.
 
 IC members maintain an in-memory table to store the information about all the asynchronous batch operations being monitored. This table is reliably replicated on each of the following events:
 

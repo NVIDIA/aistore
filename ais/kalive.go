@@ -405,6 +405,7 @@ func (pkr *palive) _final(ctx *smapModifier, clone *smapX) {
 	msg := pkr.p.newAmsg(ctx.msg, nil)
 	debug.Assert(clone._sgl != nil)
 	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
+	pkr.p.syncNewICOwners(ctx.smap, clone)
 }
 
 // NOTE: total number of keepalive failures prior to removing a node from Smap: (1 + 1 + kaNumRetries)

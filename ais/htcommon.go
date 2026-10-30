@@ -42,6 +42,8 @@ const unknownDaemonID = "unknown"
 
 const whatRenamedLB = "renamedlb"
 
+const dfltControlChanCap = 48 // Smap listeners and metasync
+
 // intra-cluster control messages
 type (
 	// cluster-wide control information - replicated, versioned, and synchronized

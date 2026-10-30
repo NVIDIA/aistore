@@ -169,48 +169,37 @@ func (m *smapX) init(tsize, psize int) {
 //
 
 // executed only by primary
-func (m *smapX) staffIC() (count int) {
-	_ = m._setIC(m.Primary)
-	m.Primary = m.GetNode(m.Primary.ID())
-
-	count = m.ICCount()
-	if count < meta.DfltCountIC {
-		// assign additional IC members, if available
-		for _, psi := range m.Pmap {
-			if psi.Flags.IsSet(meta.SnodeNonElectable) || !m._setIC(psi) {
-				continue
+func (m *smapX) staffIC() (changed bool) {
+	members := meta.NodeMap{m.Primary.ID(): m.Primary}
+	// prefer electable proxies; within each group, retain existing members first
+	for _, nonElectable := range []bool{false, true} {
+		for _, existing := range []bool{true, false} {
+			for pid, psi := range m.Pmap {
+				if len(members) >= meta.DfltCountIC {
+					break
+				}
+				if psi.InMaintOrDecomm() || psi.Flags.IsSet(meta.SnodeNonElectable) != nonElectable || psi.IsIC() != existing {
+					continue
+				}
+				members[pid] = psi
 			}
-			count++
-			if count >= meta.DfltCountIC {
-				return count
-			}
-		}
-	} else if count > meta.DfltCountIC {
-		if m.unstaffIC() {
-			count--
 		}
 	}
-	return count
-}
-
-// remove one
-func (m *smapX) unstaffIC() bool {
+	// apply only membership changes, without clearing and re-adding retained members
 	for pid, psi := range m.Pmap {
-		if pid == m.Primary.ID() || !m.IsIC(psi) {
+		_, selected := members[pid]
+		if selected == psi.IsIC() {
 			continue
 		}
-		m.clearNodeFlags(pid, meta.SnodeIC)
-		return true
+		if selected {
+			m.setNodeFlags(pid, meta.SnodeIC)
+		} else {
+			m.clearNodeFlags(pid, meta.SnodeIC)
+		}
+		changed = true
 	}
-	return false
-}
-
-func (m *smapX) _setIC(psi *meta.Snode) (ok bool) {
-	if !m.IsIC(psi) {
-		m.setNodeFlags(psi.ID(), meta.SnodeIC)
-		ok = true
-	}
-	return ok
+	m.Primary = m.GetProxy(m.Primary.ID())
+	return changed
 }
 
 // check configured "original" and "discovery" URLs vs IC members' control,
@@ -223,7 +212,7 @@ func (m *smapX) configURLsIC(original, discovery string) (orig, disc string) {
 
 	// extra effort to avoid changing existing URLs if they work
 	for _, psi := range m.Pmap {
-		if !m.IsIC(psi) {
+		if !m.IsIC(psi) || psi.InMaintOrDecomm() {
 			continue
 		}
 		if orig == "" && original != "" && psi.URL(cmn.NetIntraControl) == original {
@@ -238,7 +227,7 @@ func (m *smapX) configURLsIC(original, discovery string) (orig, disc string) {
 	// pick alternatives
 outer:
 	for _, psi := range m.Pmap {
-		if !m.IsIC(psi) {
+		if !m.IsIC(psi) || psi.InMaintOrDecomm() {
 			continue
 		}
 		switch {
@@ -811,7 +800,7 @@ func (r *smapOwner) storeBackup(smap *smapX) {
 func newSmapListeners() *sls {
 	sls := &sls{
 		listeners: make(map[string]meta.Slistener, 16),
-		postCh:    make(chan int64, 32),
+		postCh:    make(chan int64, dfltControlChanCap),
 	}
 	return sls
 }

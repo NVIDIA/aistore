@@ -604,6 +604,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	if ctx.wait || (ctx.rmdCtx != nil && ctx.rmdCtx.wait) {
 		wg.Wait()
 	}
+	p.syncNewICOwners(ctx.smap, clone)
 }
 
 //

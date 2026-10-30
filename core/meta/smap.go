@@ -360,11 +360,10 @@ func (d *Snode) Fl2S() string {
 	}
 	var a = make([]string, 0, 2)
 
-	// non-electable proxy cannot be a member of the IC
-	switch {
-	case d.Flags&SnodeNonElectable != 0:
+	if d.Flags&SnodeNonElectable != 0 {
 		a = append(a, "non-elect")
-	case d.Flags&SnodeIC != 0:
+	}
+	if d.Flags&SnodeIC != 0 {
 		a = append(a, "ic")
 	}
 
