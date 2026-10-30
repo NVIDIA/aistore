@@ -311,7 +311,13 @@ func (poi *putOI) putObject() (ecode int, err error) {
 
 	// if checksums match PUT is a no-op
 	if !poi.skipVC && !poi.skipBackend {
-		if poi.lom.EqCksum(poi.cksumToUse) {
+		noop := poi.lom.EqCksum(poi.cksumToUse)
+		if noop && poi.lom.Bck().IsRemote() {
+			if bp, ok := poi.t.Backend(poi.lom.Bck()).(core.BackendPutNoop); ok {
+				noop = bp.AllowPutNoop(poi.oreq)
+			}
+		}
+		if noop {
 			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
 			}

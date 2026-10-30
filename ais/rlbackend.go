@@ -51,6 +51,14 @@ type (
 	}
 )
 
+// preserve the wrapped backend's PUT shortcut policy without rate-limiting a local decision.
+func (bp *rlbackend) AllowPutNoop(r *http.Request) bool {
+	if policy, ok := bp.Backend.(core.BackendPutNoop); ok {
+		return policy.AllowPutNoop(r)
+	}
+	return true
+}
+
 // note: not counting stats
 func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	// proactive

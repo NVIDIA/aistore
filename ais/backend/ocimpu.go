@@ -13,9 +13,11 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 
 	ocios "github.com/oracle/oci-go-sdk/v65/objectstorage"
@@ -66,7 +68,7 @@ type ociMPUStruct struct {
 // Finally, if there are no errors, putObjViaMPU() can perform the MPU "complete"
 // operation that logically combines all those uploaded parts. If there were errors,
 // the MPU operation is aborted.
-func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, oreq *http.Request) (int, error) {
+func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, oreq *http.Request, ifMatch, ifNoneMatch *string) (int, error) {
 	var (
 		cloudBck   = lom.Bck().RemoteBck()
 		err        error
@@ -141,6 +143,8 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, 
 		BucketName:    &mpu.bucketName,
 		ObjectName:    &mpu.objectName,
 		UploadId:      &mpu.uploadID,
+		IfMatch:       ifMatch,
+		IfNoneMatch:   ifNoneMatch,
 		CommitMultipartUploadDetails: ocios.CommitMultipartUploadDetails{
 			PartsToCommit: make([]ocios.CommitMultipartUploadPartDetails, 0, mpu.nextPartNum),
 		},
@@ -157,7 +161,23 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, 
 
 	commitResp, err := mpu.client.CommitMultipartUpload(context.Background(), commitReq)
 	if err != nil {
-		return ociErrorToAISError("CommitMultipartUpload", mpu.bucketName, mpu.objectName, "", err, commitResp)
+		ecode, err := ociWriteError("CommitMultipartUpload", mpu.bucketName, mpu.objectName, err, commitResp, ifMatch, ifNoneMatch)
+		wire := cmn.AsErrHTTP(err)
+		if ecode == http.StatusPreconditionFailed || (wire != nil && wire.TypeCode == "ConditionalRequestConflict") {
+			// The caller cannot abort this internal upload; preserve the commit error if cleanup fails.
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			_, abortErr := mpu.client.AbortMultipartUpload(ctx, ocios.AbortMultipartUploadRequest{
+				NamespaceName: &mpu.bp.namespace,
+				BucketName:    &mpu.bucketName,
+				ObjectName:    &mpu.objectName,
+				UploadId:      &mpu.uploadID,
+			})
+			cancel()
+			if abortErr != nil {
+				nlog.Warningln("failed to abort rejected OCI multipart upload", mpu.bucketName+"/"+mpu.objectName, abortErr)
+			}
+		}
+		return ecode, err
 	}
 
 	h := cmn.BackendHelpers.OCI

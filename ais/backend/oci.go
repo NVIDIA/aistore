@@ -107,7 +107,10 @@ type ocibp struct {
 }
 
 // interface guard
-var _ core.Backend = (*ocibp)(nil)
+var (
+	_ core.Backend        = (*ocibp)(nil)
+	_ core.BackendPutNoop = (*ocibp)(nil)
+)
 
 var newOCIInstancePrincipalProvider = func(region string) (ocicmn.ConfigurationProvider, error) {
 	if region == "" {
@@ -353,6 +356,8 @@ func ociErrorToAISError(op, bucketName, objectPath, byteRange string, errIn erro
 		statusCode, ok = respOrStatus.(int)
 		if !ok {
 			switch resp := respOrStatus.(type) {
+			case *http.Response:
+				rawResponse = resp
 			case ocios.AbortMultipartUploadResponse:
 				rawResponse = resp.RawResponse
 			case ocios.CommitMultipartUploadResponse:
@@ -666,6 +671,11 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, ore
 		objectAttrs = lom.ObjAttrs()
 		objectSize  int64
 	)
+	ifMatch, ifNoneMatch, err := ociWriteConditions(oreq)
+	if err != nil {
+		_ = r.Close()
+		return http.StatusBadRequest, err
+	}
 	client, _, err := bp.ociClient(cloudBck)
 	if err != nil {
 		return ociClientToAISError("PutObject", cloudBck.Name, lom.ObjName, err)
@@ -680,7 +690,7 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, ore
 
 	ociSetMetadata(lom.ObjAttrs(), ociPutMetadata(lom, oreq), ociPutContentType(lom, oreq))
 	if !avoidingMPU {
-		return bp.putObjViaMPU(r, lom, objectSize, oreq)
+		return bp.putObjViaMPU(r, lom, objectSize, oreq, ifMatch, ifNoneMatch)
 	}
 
 	req := ocios.PutObjectRequest{
@@ -688,6 +698,8 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, ore
 		BucketName:    &cloudBck.Name,
 		ObjectName:    &lom.ObjName,
 		PutObjectBody: r,
+		IfMatch:       ifMatch,
+		IfNoneMatch:   ifNoneMatch,
 		OpcMeta:       ociPutMetadata(lom, oreq),
 		ContentType:   ociPutContentType(lom, oreq),
 	}
@@ -696,7 +708,7 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, ore
 	// Note: in case PutObject() failed to close r...
 	_ = r.Close()
 	if err != nil {
-		return ociErrorToAISError("PutObject", cloudBck.Name, lom.ObjName, "", err, resp)
+		return ociWriteError("PutObject", cloudBck.Name, lom.ObjName, err, resp, ifMatch, ifNoneMatch)
 	}
 
 	h := cmn.BackendHelpers.OCI
