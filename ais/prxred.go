@@ -28,7 +28,8 @@ var (
 func qAlloc() url.Values { return qPool.Get().(url.Values) }
 func qFree(v url.Values) { clear(v); qPool.Put(v) }
 
-func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer int64, netIntra, netPub string) (out string) {
+// - xcopy: copy redirect binding - S3 source bucket or native destination (optional; see newSignerExt)
+func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer int64, netIntra, netPub string, xcopy ...string) (out string) {
 	var (
 		nodeURL string // dst node
 	)
@@ -68,7 +69,11 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer int64, netIntra,
 
 		size := len(nodeURL) + len(r.URL.Path) + len(r.URL.RawQuery) + svOverheadURL // !special size; not optimizing
 		sb.Reset(size, true)
-		sv = newSigner(r, &p.htrun, sb, &p.svs, smapVer)
+		if len(xcopy) > 0 && xcopy[0] != "" {
+			sv = newSignerExt(r, &p.htrun, sb, &p.svs, smapVer, xcopy[0])
+		} else {
+			sv = newSigner(r, &p.htrun, sb, &p.svs, smapVer)
+		}
 		sv.sign(p.SID())
 
 		if !special {

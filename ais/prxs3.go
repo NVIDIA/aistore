@@ -605,8 +605,8 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln("COPY:", r.Method, bckSrc.Cname(objName), "=>", bckDst.Cname(""), items, tsi.StringEx())
 	}
-	// signed redirect (target /s3 on pub and intra-data)
-	redurl := p.redurl(r, tsi, smap.Version, cmn.NetIntraData, "")
+	// signed redirect (target /s3 on pub and intra-data); bind the parsed source bucket
+	redurl := p.redurl(r, tsi, smap.Version, cmn.NetIntraData, "", srcBck)
 	p.s3Redirect(w, r, tsi, smap, redurl, bckDst.Name)
 }
 

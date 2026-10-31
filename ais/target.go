@@ -876,7 +876,12 @@ func (t *target) _verifySigned(r *http.Request, dpq *dpq) (ecode int, err error)
 		svgrp = &dpq.sv
 	}
 	if svgrp != nil || t.svs.strict() {
-		sv := newVerifier(r, &t.htrun, svgrp)
+		var sv *svReq
+		if xval := svBindCopy(r, dpq); xval != "" {
+			sv = newVerifierExt(r, &t.htrun, svgrp, xval)
+		} else {
+			sv = newVerifier(r, &t.htrun, svgrp)
+		}
 		return sv.verify(pid, smap.GetNode(pid), smap)
 	}
 	return 0, nil

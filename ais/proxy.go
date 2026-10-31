@@ -948,6 +948,11 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 			nodeID = items[0] // nodeID; compare w/ apndOI.parse
 		}
 	}
+	// single-object copy or transform reads the source (cf. target: objto takes precedence)
+	objto := apireq.dpq.sys.objto
+	if objto != "" {
+		perms = apc.AceGET
+	}
 
 	// 2. bucket
 	bckArgs := allocBctx()
@@ -965,6 +970,11 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		return
 	}
 	vlabs[stats.VlabBucket] = bck.Cname("")
+	if objto != "" {
+		if err := p.initObjto(w, r, objto); err != nil {
+			return
+		}
+	}
 
 	// 3. rate limit
 	smap := p.owner.smap.get()
@@ -1006,11 +1016,33 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		nlog.Infoln(verb, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
-	redurl := p.redurl(r, tsi, smap.Version, cmn.NetIntraData, netPub)
+	redurl := p.redurl(r, tsi, smap.Version, cmn.NetIntraData, netPub, objto)
 	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 
 	// 5. stats
 	p.statsT.IncWith(scnt, vlabs)
+}
+
+// validate and authorize the destination of a single-object copy or transform (apc.QparamObjTo)
+// - on error, write the response
+func (p *proxy) initObjto(w http.ResponseWriter, r *http.Request, objto string) error {
+	bckTo, _, err := meta.ParseUname(objto, true /*object name required*/)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return err
+	}
+	bckArgs := allocBctx()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.perms = apc.AcePUT
+		bckArgs.bck = bckTo
+		bckArgs.createAIS = false
+	}
+	_, err = bckArgs.initAndTry()
+	freeBctx(bckArgs)
+	return err
 }
 
 // +gen:endpoint DELETE /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string]

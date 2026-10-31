@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -299,10 +301,12 @@ func TestSignerVerifyCopySrc(t *testing.T) {
 		p := newTestProxy(t, true /*requestAuthConfigured*/)
 		req := newReq(http.MethodPut, path, "")
 		req.Header = http.Header{}
+		var srcBck string
 		if copySrc != "" {
 			req.Header.Set(cos.S3HdrObjSrc, copySrc)
+			srcBck, _, _, _ = s3.ParseCopyObjSrc(copySrc) // as in copyObjS3
 		}
-		out := p.redurl(req, newTestSnode(t), smapVer, cmn.NetIntraControl, "")
+		out := p.redurl(req, newTestSnode(t), smapVer, cmn.NetIntraControl, "", srcBck)
 		return p, req, parseRedirect(t, out)
 	}
 	// redirected request: same method and length, client-controlled copy source
@@ -328,12 +332,79 @@ func TestSignerVerifyCopySrc(t *testing.T) {
 		{"copy source removed", srcA, "", false},
 		{"plain PUT", "", "", true},
 		{"copy source added", "", "/SECRET/victim", false},
-		{"invalid copy source added", "", "SECRET//victim", false},
+		{"invalid copy source added", "", "SECRET//victim", true}, // not bound; the target rejects the copy (400)
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p, orig, u := sign(t, tc.signed)
 			status, err := p.verify(u, redirected(orig, tc.verified))
+			switch {
+			case tc.ok && (err != nil || status != 0):
+				t.Fatalf("expected verified, got status=%d, err=%v", status, err)
+			case !tc.ok && (err == nil || status != http.StatusUnauthorized):
+				t.Fatalf("expected 401, got status=%d, err=%v", status, err)
+			}
+		})
+	}
+}
+
+// native single-object copy: the signed redirect binds the destination (apc.QparamObjTo)
+func TestSignerVerifyObjto(t *testing.T) {
+	const (
+		path    = "/v1/objects/src/obj"
+		dstA    = "ais/@#/dst/obj"
+		smapVer = 999
+	)
+	sign := func(t *testing.T, objto string) (*proxy, *http.Request, *url.URL) {
+		t.Helper()
+		p := newTestProxy(t, true /*requestAuthConfigured*/)
+		var rawQuery string
+		if objto != "" {
+			rawQuery = url.Values{apc.QparamObjTo: []string{objto}}.Encode()
+		}
+		req := newReq(http.MethodPut, path, rawQuery)
+		out := p.redurl(req, newTestSnode(t), smapVer, cmn.NetIntraData, "", objto)
+		return p, req, parseRedirect(t, out)
+	}
+	// redirected request: client-controlled destination
+	redirected := func(u *url.URL, objto string) *url.URL {
+		v := *u
+		q := v.Query()
+		if objto == "" {
+			q.Del(apc.QparamObjTo)
+		} else {
+			q.Set(apc.QparamObjTo, objto)
+		}
+		v.RawQuery = q.Encode()
+		return &v
+	}
+
+	tests := []struct {
+		name     string
+		signed   string // destination at the proxy
+		verified string // destination at the target
+		ok       bool
+	}{
+		{"same destination", dstA, dstA, true},
+		{"other destination", dstA, "ais/@#/SECRET/victim", false},
+		{"destination removed", dstA, "", false},
+		{"plain PUT", "", "", true},
+		{"destination added", "", "ais/@#/SECRET/victim", false},
+		{"destination appended (repeated qparam)", dstA, "+ais/@#/SECRET/victim", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p, orig, u := sign(t, tc.signed)
+			var v *url.URL
+			if dup, ok := strings.CutPrefix(tc.verified, "+"); ok {
+				// keep the signed value; the target acts on the last one (dpq)
+				w := *u
+				w.RawQuery += "&" + url.Values{apc.QparamObjTo: []string{dup}}.Encode()
+				v = &w
+			} else {
+				v = redirected(u, tc.verified)
+			}
+			status, err := p.verify(v, orig)
 			switch {
 			case tc.ok && (err != nil || status != 0):
 				t.Fatalf("expected verified, got status=%d, err=%v", status, err)
@@ -363,6 +434,19 @@ func (p *proxy) verify(u *url.URL, orig *http.Request) (int, error) {
 	smap := p.owner.smap.get()
 	pid := q.Get(apc.QparamPID)
 	psi := smap.GetNode(pid)
-	sv := newVerifier(r, &p.htrun, svgrp)
+
+	// copy binding: same as target._verifySigned
+	dpq := dpqAlloc()
+	defer dpqFree(dpq)
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		return 0, err
+	}
+	dpq.isS3 = strings.HasPrefix(r.URL.Path, apc.URLPathS3.S+"/")
+	var sv *svReq
+	if xval := svBindCopy(r, dpq); xval != "" {
+		sv = newVerifierExt(r, &p.htrun, svgrp, xval)
+	} else {
+		sv = newVerifier(r, &p.htrun, svgrp)
+	}
 	return sv.verify(pid, psi, smap)
 }
