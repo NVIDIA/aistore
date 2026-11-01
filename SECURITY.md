@@ -14,8 +14,8 @@ Security updates and support are provided for the latest and most recent AIStore
 
 Do not open a public issue or pull request. Report vulnerabilities privately using one of these methods:
 
-1. **NVIDIA Vulnerability Disclosure Program (preferred):** Submit the [official NVIDIA vulnerability report](https://www.nvidia.com/en-us/security/report-vulnerability/).
-2. **GitHub private vulnerability reporting:** Open this repository's **Security** tab and select **Report a vulnerability**.
+1. **GitHub private vulnerability reporting (preferred):** Open this repository's **Security** tab and select **Report a vulnerability**.
+2. **NVIDIA Vulnerability Disclosure Program:** Submit the [official NVIDIA vulnerability report](https://www.nvidia.com/en-us/security/report-vulnerability/).
 3. **Email:** Send vulnerability details to [psirt@nvidia.com](mailto:psirt@nvidia.com) and copy [aistore@nvidia.com](mailto:aistore@nvidia.com) for AIStore-specific coordination.
 
 Include the affected version or branch, vulnerability type, reproduction steps, proof of concept if available, and expected impact. NVIDIA PSIRT will acknowledge, assess, and coordinate remediation and disclosure.
