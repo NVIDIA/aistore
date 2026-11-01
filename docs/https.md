@@ -268,6 +268,8 @@ Arming is lazy and decided once per connection. A first response serving a monol
 
 As a quick host check, run [scripts/check-ktls.sh](https://github.com/NVIDIA/aistore/blob/main/scripts/check-ktls.sh). This is necessary but not sufficient: the kernel must also support the negotiated TLS version and AES-GCM cipher. At AIS verbosity level 5, target logs report whether connections were armed, unsupported, skipped, not established, or failed.
 
+With a NIC that supports TLS transmit offload (for instance, NVIDIA ConnectX-6 Dx and later), the kernel can further pass record encryption to the device. AIS needs no additional configuration: when arming a connection, the kernel uses device offload if the NIC's `tls-hw-tx-offload` feature is on (`ethtool -k <iface>`), and software kTLS otherwise. In `/proc/net/tls_stat` (and in the `check-ktls.sh` output), `TlsTxDevice` counts device-offloaded connections and `TlsTxSw` counts software ones. Device offload has not yet been measured with AIS.
+
 ## Further references
 
 - [HTTPS-related environment variables](/docs/environment-vars.md#https)
