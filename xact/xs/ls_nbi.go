@@ -382,10 +382,12 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 
 		// non-recursive: skip entries under a previously collapsed virtual directory
 		if skipDir != "" {
-			// TODO: binary-search to the first entry without the skipDir prefix
-			// within this chunk, instead of advancing one entry at a time.
-			if strings.HasPrefix(nbi.entries[nbi.nidx].Name, skipDir) {
-				nbi.nidx++
+			entries := nbi.entries[nbi.nidx:]
+			i := sort.Search(len(entries), func(i int) bool {
+				return !strings.HasPrefix(entries[i].Name, skipDir)
+			})
+			nbi.nidx += i
+			if i >= len(entries) {
 				continue
 			}
 			skipDir = "" // reset when the current entry no longer falls under the collapsed directory
@@ -407,8 +409,7 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 
 			out := nbi.entries[nbi.nidx]
 			if !strings.HasPrefix(out.Name, msg.Prefix) {
-				nbi.nidx++
-				continue
+				break // past the prefix range
 			}
 			nbi.nidx++
 			if noRecursion {
