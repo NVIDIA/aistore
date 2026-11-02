@@ -1762,7 +1762,13 @@ func TestRemaisBlobDownloadVersionPin(t *testing.T) {
 	forward.Transport = remoteBP.Client.Transport
 	var ranges atomic.Int64
 	updated := make(chan error, 1)
-	bridge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// match the remote scheme: the remote proxy redirects to its targets, and
+	// those redirects must reuse the same (TLS or plain) remote-AIS client
+	newBridge := httptest.NewServer
+	if cos.IsHTTPS(remoteBP.URL) {
+		newBridge = httptest.NewTLSServer
+	}
+	bridge := newBridge(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/"+remoteBck.Name+"/"+objName) && r.Header.Get(cos.HdrRange) != "" {
 			n := ranges.Add(1)
 			tlog.Logfln("range %d: %s", n, r.Header.Get(cos.HdrRange))
