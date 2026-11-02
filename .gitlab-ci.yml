@@ -226,7 +226,8 @@ build:fern-docs:
     - apt-get install -y --no-install-recommends python3-yaml docker.io
     # Fern bind-mounts temporary files; keep the daemon in the job container.
     - export DOCKER_HOST=unix:///var/run/docker.sock
-    - dockerd --host="$DOCKER_HOST" > /tmp/fern-docker.log 2>&1 &
+    # Avoid nested union-filesystem mounts when starting the Python docs parser.
+    - dockerd --host="$DOCKER_HOST" --storage-driver=vfs > /tmp/fern-docker.log 2>&1 &
     - timeout 30 sh -c 'until docker info > /dev/null 2>&1; do sleep 1; done' || { cat /tmp/fern-docker.log; exit 1; }
     - npm install -g fern-api@5.168.0
   script:
