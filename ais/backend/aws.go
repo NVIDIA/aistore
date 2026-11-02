@@ -498,7 +498,7 @@ finalize:
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	params := allocPutParams(res, owt)
+	params := allocPutParams(&res, owt)
 	err := s3bp.t.PutObject(lom, params)
 	core.FreePutParams(params)
 	if cmn.Rom.V(5, cos.ModBackend) {
@@ -557,6 +557,7 @@ func (s3bp *s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
 
 		res.ExpCksum = _getCustom(lom, obj)
+		res.Pin.Init(apc.AWS, lom.ObjAttrs())
 
 		md := obj.Metadata
 		if cksumType, ok := md[cos.S3MetadataChecksumType]; ok {

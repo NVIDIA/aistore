@@ -351,7 +351,7 @@ func (gsbp *gsbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	params := allocPutParams(res, owt)
+	params := allocPutParams(&res, owt)
 	err := gsbp.t.PutObject(lom, params)
 	core.FreePutParams(params)
 	if cmn.Rom.V(5, cos.ModBackend) {
@@ -443,6 +443,10 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	expCksum := gcpSetCustom(lom, attrs)
 	if res.ExpCksum == nil {
 		res.ExpCksum = expCksum
+	}
+	// only fan out when metadata and the GET describe the same stored bytes
+	if attrs.Generation == rc.Attrs.Generation && attrs.Metageneration == rc.Attrs.Metageneration && !rc.Attrs.Decompressed {
+		res.Pin.Init(apc.GCP, lom.ObjAttrs())
 	}
 
 	// For full reads, use rc.Attrs.Size

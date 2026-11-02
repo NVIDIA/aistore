@@ -1008,7 +1008,7 @@ func (u *Ufest) WholeChecksum() (*cos.Cksum, error) {
 	}
 
 	// Fall back to CRC32C combination
-	if cksum, err := u.combineCRC32C(); err == nil {
+	if cksum, err := u.CombineCRC32C(); err == nil {
 		return cksum, nil
 	}
 
@@ -1020,7 +1020,9 @@ func (u *Ufest) WholeChecksum() (*cos.Cksum, error) {
 	return &cksumH.Cksum, nil
 }
 
-func (u *Ufest) combineCRC32C() (*cos.Cksum, error) {
+// combine chunk checksums in object order, without rereading data
+// - caller must have stopped all chunk writers
+func (u *Ufest) CombineCRC32C() (*cos.Cksum, error) {
 	debug.Func(func() { debug.AssertNoErr(u.Check(true /*completed*/)) })
 	if u.count == 0 {
 		return nil, errNoChunks

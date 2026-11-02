@@ -829,33 +829,7 @@ do: // retry uplock or ec-recovery, the latter only once
 			goto do // repeat
 		}
 
-		goi.lom.SetAtimeUnix(goi.atime)
-		// zero-out prev. version custom metadata, if any
-		goi.lom.SetCustomMD(nil)
-
-		// get remote reader (compare w/ t.GetCold)
-		goi.rget = true
-		res := bp.GetObjReader(goi.ctx, goi.lom, 0, 0)
-		if res.Err != nil {
-			goi.lom.Unlock(true)
-			goi.unlocked = true
-			if !cos.IsNotExist(res.Err, res.ErrCode) {
-				nlog.Infoln(ftcg, "(read)", goi.lom.Cname(), res.Err, res.ErrCode)
-			}
-			return res.ErrCode, res.Err
-		}
-		goi.cold = true
-
-		if goi.isStreamingColdGet() {
-			err = goi.coldStream(&res)
-			goi.unlocked = true
-			return 0, err
-		}
-
-		// regular path
-		ecode, err = goi.coldPut(&res)
-		if err != nil {
-			goi.unlocked = true
+		if ecode, err = goi.coldGet(bp); err != nil || goi.unlocked {
 			return ecode, err
 		}
 	}
@@ -921,6 +895,62 @@ func (goi *getOI) isStreamingColdGet() bool {
 		return false
 	}
 	return true
+}
+
+// enter with the write lock; return with a read lock, or unlocked on error or after streaming
+func (goi *getOI) coldGet(bp core.Backend) (int, error) {
+	goi.lom.SetAtimeUnix(goi.atime)
+	// zero-out prev. version custom metadata, if any
+	goi.lom.SetCustomMD(nil)
+
+	// get remote reader (compare w/ t.GetCold)
+	goi.rget = true
+	res, stopFirst := goi.coldReader(bp, true /*parallel*/)
+	if stopFirst != nil {
+		defer stopFirst()
+		if res.Err == nil {
+			goi.cold = true
+			used, code, er := goi.coldRangePut(bp, &res, stopFirst)
+			switch {
+			case !used:
+			case er == nil:
+				return 0, nil
+			case cos.IsErrPreconditionFailed(er):
+				// remote object changed mid-fill and nothing has been sent: refetch it sequentially
+				nlog.Warningln(goi.lom.Cname(), "changed during parallel cold GET, refetching:", er)
+				goi.lom.Reset() // drop the previous revision's metadata (as in the initial cold GET)
+				goi.lom.SetAtimeUnix(goi.atime)
+				res, _ = goi.coldReader(bp, false /*parallel*/)
+			default:
+				goi.lom.Unlock(true)
+				goi.unlocked = true
+				return code, er
+			}
+		}
+	}
+	if res.Err != nil {
+		goi.lom.Unlock(true)
+		goi.unlocked = true
+		if !cos.IsNotExist(res.Err, res.ErrCode) {
+			nlog.Infoln(ftcg, "(read)", goi.lom.Cname(), res.Err, res.ErrCode)
+		}
+		return res.ErrCode, res.Err
+	}
+	goi.cold = true
+
+	if goi.isStreamingColdGet() {
+		err := goi.coldStream(&res)
+		goi.unlocked = true
+		return 0, err
+	}
+
+	// regular path
+	code, err := goi.coldPut(&res)
+	if err != nil {
+		goi.unlocked = true
+		return code, err
+	}
+	return code, nil
 }
 
 func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {

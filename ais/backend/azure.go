@@ -413,7 +413,7 @@ func (azbp *azbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	params := allocPutParams(res, owt)
+	params := allocPutParams(&res, owt)
 	err := azbp.t.PutObject(lom, params)
 	core.FreePutParams(params)
 	if cmn.Rom.V(5, cos.ModBackend) {
@@ -484,6 +484,10 @@ func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		if md5, _ := h.EncodeCksum(respProps.ContentMD5); md5 != "" {
 			lom.SetCustomKey(cmn.MD5ObjMD, md5)
 			res.ExpCksum = cos.NewCksum(cos.ChecksumMD5, md5)
+		}
+		// a changed response cannot seed parallel reads from the earlier properties
+		if resp.ETag != nil && *resp.ETag == *respProps.ETag {
+			res.Pin.Init(apc.Azure, lom.ObjAttrs())
 		}
 	}
 

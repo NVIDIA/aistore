@@ -18,6 +18,7 @@
   - [Example recovering lost or damaged slices and/or objects](#example-recovering-lost-or-damaged-slices-and-objects)
 - [Chunking](#chunking)
   - [Storage layout](#storage-layout)
+  - [Parallel cold GET](#parallel-cold-get)
   - [Rechunk](#rechunk)
   - [Prefetch mechanism](#prefetch-mechanism)
   - [Chunked writes and cleanup on failure](#chunked-writes-and-cleanup-on-failure)
@@ -359,6 +360,18 @@ A layout rule is independent of how the object arrives. It applies equally to PU
 > **Status (v5.1):** rule 1 is enforced by PUT, cold GET, and copy; rechunk enforces it only for the objects it rewrites - an existing monolithic object above `chunks.max_monolithic_size` (e.g., after lowering it) is left as is. Rule 2 is enforced by rechunk only; PUT, cold GET, and copy do not auto-chunk at `chunks.objsize_limit`.
 >
 > **Status (v5.2):** PUT, cold GET, copy, and rechunk enforce both rules.
+
+### Parallel cold GET
+
+A cold GET into an auto-chunked bucket can fetch remote ranges in parallel when the object is at or above `chunks.objsize_limit`, is at least 16 MiB, and spans at least two chunks. Parallel reads also require an available remote version pin and sufficient target resources.
+
+Up to four readers fetch chunks, all pinned to the same remote version. Parallel cold GET combines per-chunk CRC32C checksums in object order, even when chunks arrive out of order, without rereading the data. This replaces the configured whole-object checksum; buckets with checksumming disabled remain without a payload checksum.
+
+Parallel cold GET is disabled for `checksum.validate_cold_get`, latest-version GETs (including `versioning.validate_warm_get` and `versioning.synchronize`), EC-enabled buckets, and the OCI backend.
+
+If a range read fails with HTTP 412 (the remote object changed), AIS discards the partial result and refetches the object once with a fresh sequential GET, before sending data to the client.
+
+For large objects, use a `chunks.chunk_size` of 128–256 MiB. The object must span multiple chunks for parallelism; at least four chunks allow all four readers to participate.
 
 ### Rechunk
 

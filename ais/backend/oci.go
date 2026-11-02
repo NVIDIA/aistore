@@ -915,7 +915,7 @@ func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http
 		return res.ErrCode, res.Err
 	}
 
-	putParams := allocPutParams(res, owt)
+	putParams := allocPutParams(&res, owt)
 	err := bp.t.PutObject(lom, putParams)
 	core.FreePutParams(putParams)
 

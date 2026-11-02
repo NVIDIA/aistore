@@ -637,24 +637,26 @@ func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length 
 		p = core.RangePin(pin)
 		args.Header = http.Header{cos.HdrRange: []string{cmn.MakeRangeHdr(offset, length)}}
 		args.Query = url.Values{apc.QparamSilent: []string{"true"}}
-	} else {
-		hargs := api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}
-		var op *cmn.ObjectPropsV2
-		if op, res.Err = api.HeadObjectV2(remAis.bp, remoteBck, lom.ObjName, remAisHeadProps, hargs); res.Err != nil {
-			res.ErrCode, res.Err = m.extractErrCode(res.Err, remAis.uuid)
-			return res
-		}
-		oa := lom.ObjAttrs()
-		*oa = op.ObjAttrs
-		res.Size = oa.Size
-		oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
-		res.ExpCksum = oa.Cksum
-		lom.SetCksum(nil)
 	}
 
 	res.R, oah, res.Err = api.GetObjectReaderWithAttrs(remAis.bpL, remoteBck, lom.ObjName, args)
 	res.Size = oah.Size()
 	res.ErrCode, res.Err = m.extractErrCode(res.Err, remAis.uuid)
+	if res.Err == nil && length == 0 {
+		// take metadata from this GET, without a separate HEAD
+		oa := lom.ObjAttrs()
+		*oa = cmn.ObjAttrs{}
+		res.ExpCksum, res.Err = oa.FromHeader(oah.RespHeader())
+		if res.Err != nil {
+			cos.Close(res.R)
+			res.R, res.Size, res.ErrCode = nil, 0, http.StatusBadGateway
+			return res
+		}
+		oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
+		if oa.Version() != "" { // unversioned AIS has no authoritative revision to seed a fill
+			res.Pin.Init(apc.AIS, oa)
+		}
+	}
 	if res.Err == nil && p != nil {
 		if res.ErrCode, res.Err = m.checkPin(p, oah.RespHeader()); res.Err != nil {
 			cos.Close(res.R) // do not consume a different revision's body

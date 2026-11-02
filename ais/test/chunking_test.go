@@ -5,11 +5,20 @@
 package integration_test
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
+	"maps"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	s3compat "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api"
@@ -17,9 +26,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -135,6 +146,222 @@ func TestColdGetAutoChunks(t *testing.T) {
 	t.Run("above-limit", func(t *testing.T) {
 		coldGetObjectsAndCheckPolicy(t, bp, cliBck, chunkPolicyLimit+1, true)
 	})
+}
+
+func TestRemaisColdGetRanges(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.WaitForRebalAndResil(t, tools.BaseAPIParams(tools.RandomProxyURL(t)))
+	const chunkSize = 4 * cos.MiB
+	tests := []struct {
+		name, cksum, fault string
+		size, chunk        int64
+		parallel           bool
+		validate, noPin    bool
+		latest, refetch    bool
+		code               int
+	}{
+		{name: "crc32c", cksum: cos.ChecksumOneXxh, parallel: true},
+		{name: "none", cksum: cos.ChecksumNone, parallel: true},
+		{name: "long-name", cksum: cos.ChecksumOneXxh, parallel: true},
+		{name: "small", cksum: cos.ChecksumOneXxh, size: 2*chunkSize + 17},
+		{name: "one-chunk", cksum: cos.ChecksumOneXxh, chunk: 64 * cos.MiB},
+		{name: "validate", cksum: cos.ChecksumOneXxh, validate: true},
+		{name: "latest", cksum: cos.ChecksumOneXxh, latest: true},
+		{name: "no-pin", cksum: cos.ChecksumOneXxh, noPin: true},
+		// remote change mid-fill: the same GET refetches the new revision sequentially
+		{name: "version-change", cksum: cos.ChecksumOneXxh, parallel: true, fault: "overwrite", refetch: true},
+		{name: "custom-version", cksum: cos.ChecksumOneXxh, parallel: true, fault: "overwrite", refetch: true},
+		{name: "ignored-range", cksum: cos.ChecksumNone, parallel: true, fault: "ignore", code: http.StatusBadGateway},
+		{name: "short-range", cksum: cos.ChecksumOneXxh, parallel: true, fault: "short", code: http.StatusInternalServerError},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				proxyURL  = tools.RandomProxyURL(t)
+				bp        = tools.BaseAPIParams(proxyURL)
+				remoteBP  = tools.BaseAPIParams(tools.RemoteCluster.URL)
+				remoteBck = cmn.Bck{Name: "crange-" + trand.String(8), Provider: apc.AIS}
+				bck       = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
+				objName   = "object"
+				size      = tc.size
+				chunk     = tc.chunk
+			)
+			if size == 0 {
+				size = 8*chunkSize + 17
+			}
+			if chunk == 0 {
+				chunk = chunkSize
+			}
+			if tc.name == "long-name" {
+				objName = strings.Repeat("x", 280)
+			}
+			data := make([]byte, size)
+			for i := range data {
+				data[i] = byte(i/chunkSize + 1)
+			}
+			replacement := bytes.Repeat([]byte{'z'}, len(data))
+			tools.CreateBucket(t, remoteBP.URL, remoteBck, &cmn.BpropsToSet{
+				Versioning: &cmn.VersionConfToSet{Enabled: apc.Ptr(!tc.noPin)},
+				Cksum:      &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumOneXxh)},
+			}, true /*cleanup*/)
+			put := func(data []byte) error {
+				args := &api.PutArgs{BaseParams: remoteBP, Bck: remoteBck, ObjName: objName,
+					Reader: readers.NewBytes(data), Size: uint64(len(data))}
+				if tc.name == "custom-version" {
+					args.Header = http.Header{apc.HdrObjCustomMD: []string{cmn.VersionObjMD + "=custom"}}
+				}
+				_, err := api.PutObject(args)
+				return err
+			}
+			tassert.CheckFatal(t, put(data))
+			_, err := api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
+				Chunks: &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(chunkSize)), ChunkSize: apc.Ptr(cos.SizeIEC(chunk))},
+				Cksum:  &cmn.CksumConfToSet{Type: &tc.cksum, ValidateColdGet: &tc.validate, ValidateWarmGet: apc.Ptr(false)},
+			})
+			tassert.CheckFatal(t, err)
+			initMountpaths(t, proxyURL)
+
+			remoteURL, err := url.Parse(remoteBP.URL)
+			tassert.CheckFatal(t, err)
+			forward := httputil.NewSingleHostReverseProxy(remoteURL)
+			forward.Transport = remoteBP.Client.Transport
+			var full, heads, ranges, active, peak atomic.Int64
+			var overwrite sync.Once
+			gate := make(chan struct{})
+			// match the remote scheme (see TestRemaisBlobDownloadVersionPin)
+			newBridge := httptest.NewServer
+			if cos.IsHTTPS(remoteBP.URL) {
+				newBridge = httptest.NewTLSServer
+			}
+			bridge := newBridge(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				if !strings.HasSuffix(req.URL.Path, "/"+remoteBck.Name+"/"+objName) {
+					forward.ServeHTTP(w, req)
+					return
+				}
+				if req.Method == http.MethodHead {
+					heads.Add(1)
+				}
+				if req.Method != http.MethodGet || req.Header.Get(cos.HdrRange) == "" {
+					if req.Method == http.MethodGet {
+						full.Add(1)
+					}
+					forward.ServeHTTP(w, req)
+					return
+				}
+				n := active.Add(1)
+				defer active.Add(-1)
+				for prev := peak.Load(); n > prev; prev = peak.Load() {
+					if peak.CompareAndSwap(prev, n) {
+						break
+					}
+				}
+				if ranges.Add(1) == 4 {
+					close(gate)
+				}
+				if tc.fault == "" {
+					// hold the first four requests until all readers have reached the bridge
+					select {
+					case <-gate:
+					case <-req.Context().Done():
+						return
+					case <-time.After(15 * time.Second):
+						http.Error(w, "parallel readers did not arrive", http.StatusGatewayTimeout)
+						return
+					}
+				}
+				switch tc.fault {
+				case "overwrite":
+					overwrite.Do(func() {
+						if err := put(replacement); err != nil {
+							t.Errorf("overwrite: %v", err)
+						}
+					})
+				case "ignore":
+					w.Header().Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
+					w.Header().Set(apc.HdrObjVersion, "1")
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write(data)
+					return
+				case "short":
+					var off, end int64
+					_, _ = fmt.Sscanf(req.Header.Get(cos.HdrRange), "bytes=%d-%d", &off, &end)
+					w.Header().Set(cos.HdrContentLength, strconv.FormatInt(end-off+1, 10))
+					w.Header().Set(apc.HdrObjVersion, "1")
+					w.WriteHeader(http.StatusPartialContent)
+					_, _ = w.Write(data[:min(1024, end-off)])
+					return
+				}
+				forward.ServeHTTP(w, req)
+			}))
+			t.Cleanup(bridge.Close)
+			config, err := api.GetClusterConfig(bp)
+			tassert.CheckFatal(t, err)
+			backend := config.Backend
+			backend.Conf = maps.Clone(backend.Conf)
+			backend.Set(apc.AIS, cmn.BackendConfAIS{"crange-" + trand.String(8): []string{bridge.URL}})
+			t.Cleanup(func() {
+				tassert.CheckError(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &config.Backend}, false))
+			})
+			tassert.CheckFatal(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &backend}, false))
+
+			var out bytes.Buffer
+			args := &api.GetArgs{Writer: &out}
+			if tc.latest {
+				args.Query = url.Values{apc.QparamLatestVer: []string{"true"}}
+			}
+			_, err = api.GetObject(bp, bck, objName, args)
+			m := ioContext{t: t, bck: bck}
+			if tc.refetch {
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, bytes.Equal(out.Bytes(), replacement), "refetch returned mixed or stale revisions")
+				tassert.Fatalf(t, full.Load() == 2 && heads.Load() == 0, "expected two full GETs and no HEAD: GET=%d HEAD=%d",
+					full.Load(), heads.Load())
+				m.validateChunksOnDisk(bck, objName, int(cos.DivCeil(size, chunk)))
+				tlog.Logfln("%s: full GETs=%d, ranges=%d", tc.name, full.Load(), ranges.Load())
+				return
+			}
+			if tc.code != 0 {
+				tassert.Fatalf(t, err != nil, "expected HTTP %d", tc.code)
+				tassert.Fatalf(t, cmn.AsErrHTTP(err).Status == tc.code, "expected HTTP %d, got %v", tc.code, err)
+				tassert.Fatalf(t, !tools.CheckObjIsPresent(proxyURL, bck, objName), "failed fill published a cached object")
+				m.validateChunksOnDisk(bck, objName, 0)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, bytes.Equal(out.Bytes(), data), "cold GET returned incorrect bytes")
+			tassert.Fatalf(t, full.Load() == 1 && heads.Load() == 0, "unexpected initial requests: GET=%d HEAD=%d", full.Load(), heads.Load())
+			if tc.parallel {
+				tassert.Fatalf(t, peak.Load() == 4, "expected four concurrent readers, got %d", peak.Load())
+				tassert.Fatalf(t, ranges.Load() == cos.DivCeil(size, chunk)-1, "unexpected range count %d", ranges.Load())
+				op, err := api.HeadObject(bp, bck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
+				tassert.CheckFatal(t, err)
+				if tc.cksum == cos.ChecksumNone {
+					tassert.Fatalf(t, cos.NoneC(op.Cksum), "checksum=none stored %v", op.Cksum)
+				} else {
+					cksum, err := cos.ChecksumBytes(data, cos.ChecksumCRC32C)
+					tassert.CheckFatal(t, err)
+					tassert.Fatalf(t, cksum.Equal(op.Cksum), "incorrect whole-object CRC32C: %v", op.Cksum)
+				}
+			} else {
+				tassert.Fatalf(t, ranges.Load() == 0, "fallback issued %d range requests", ranges.Load())
+			}
+			diskName := objName
+			if fs.IsFntl(objName) {
+				diskName = fs.ShortenFntl(objName)
+			}
+			m.validateChunksOnDisk(bck, diskName, int(cos.DivCeil(size, chunk)))
+			before := full.Load() + ranges.Load()
+			out.Reset()
+			_, err = api.GetObject(bp, bck, objName, args)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, bytes.Equal(out.Bytes(), data), "warm GET returned incorrect bytes")
+			tassert.Fatalf(t, full.Load()+ranges.Load() == before, "warm GET contacted backend")
+			tlog.Logfln("%s: full GETs=%d, ranges=%d, peak=%d", tc.name, full.Load(), ranges.Load(), peak.Load())
+		})
+	}
 }
 
 // TestRemoteChunkedWriteFailureCleanup forces the cloud backend to reject AIS-generated

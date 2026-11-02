@@ -21,6 +21,7 @@ type (
 		R        io.ReadCloser
 		Err      error
 		ExpCksum *cos.Cksum
+		Pin      ObjPin // full GET: response revision matching the returned metadata; zero when unavailable
 		Size     int64
 		ErrCode  int
 	}
@@ -75,17 +76,21 @@ type (
 // build pin from remote object attributes; return nil if there's nothing to pin against
 // - version: provider-specific custom key; remote AIS: oa.Ver
 func NewObjPin(provider string, oa *cmn.ObjAttrs) *ObjPin {
-	var (
-		ver, _  = oa.GetCustomKey(cmn.VersionObjMD)
-		etag, _ = oa.GetCustomKey(cmn.ETag)
-	)
-	if ver == "" && provider == apc.AIS {
-		ver = oa.Version()
-	}
-	if ver == "" && etag == "" {
+	var p ObjPin
+	p.Init(provider, oa)
+	if p.Version == "" && p.ETag == "" {
 		return nil
 	}
-	return &ObjPin{Version: ver, ETag: etag}
+	return &p
+}
+
+// snapshot version metadata without allocating
+func (p *ObjPin) Init(provider string, oa *cmn.ObjAttrs) {
+	p.Version, _ = oa.GetCustomKey(cmn.VersionObjMD)
+	p.ETag, _ = oa.GetCustomKey(cmn.ETag)
+	if provider == apc.AIS && oa.Version() != "" {
+		p.Version = oa.Version() // native revision takes precedence over custom metadata
+	}
 }
 
 // return the pin of a range read

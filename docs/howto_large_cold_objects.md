@@ -1,6 +1,6 @@
 # Reading Large Objects from Remote Buckets
 
-When a client reads an object from a remote bucket (`s3://`, `gs://`, `az://`, `oc://`) and the object is not yet in the cluster, AIS performs a _cold GET_: the target fetches the object from the backend, stores it, and serves it. The regular path normally uses one backend request and finishes caching before serving the client; the native OCI backend has its own multipart reader. For multi-gigabyte objects, a single backend connection can limit throughput and delay the response.
+When a client reads an object from a remote bucket (`s3://`, `gs://`, `az://`, `oc://`) and the object is not yet in the cluster, AIS performs a _cold GET_: the target fetches the object from the backend, stores it, and serves it. The regular path normally uses one backend request and finishes caching before serving the client; buckets with auto-chunking enabled read large objects in parallel, and the native OCI backend has its own multipart reader. For multi-gigabyte objects, a single backend connection can limit throughput and delay the response.
 
 AIS offers several ways to fetch large objects in parallel or ahead of time. Which one fits depends on the client you use, and on whether you know the objects in advance.
 
@@ -8,6 +8,7 @@ AIS offers several ways to fetch large objects in parallel or ahead of time. Whi
 
 - [Summary](#summary)
 - [Request scope vs. bucket scope](#request-scope-vs-bucket-scope)
+- [Concurrent reads of a cold object](#concurrent-reads-of-a-cold-object)
 - [Prefetch before the workload runs](#prefetch-before-the-workload-runs)
 - [Blob-download job](#blob-download-job)
 - [GET with blob download](#get-with-blob-download)
@@ -15,6 +16,7 @@ AIS offers several ways to fetch large objects in parallel or ahead of time. Whi
   - [Python SDK](#python-sdk)
   - [HTTP headers](#http-headers)
   - [Boto3 and other S3 clients](#boto3-and-other-s3-clients)
+- [Cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket)
 - [Streaming cold GET](#streaming-cold-get)
 - [OCI buckets](#oci-buckets)
 - [What does not help](#what-does-not-help)
@@ -28,12 +30,13 @@ AIS offers several ways to fetch large objects in parallel or ahead of time. Whi
 | [Prefetch](#prefetch-before-the-workload-runs) with `--blob-threshold` | CLI, Go, Python | yes, for objects at or above the threshold | bucket: chunking config wins | datasets known in advance |
 | [Blob-download job](#blob-download-job) | CLI, Go, Python | yes | job: explicit tunables apply | specific large objects |
 | [GET with blob download](#get-with-blob-download) | Go, Python, any HTTP client, boto3 via an event hook | yes | request: client tunables apply | on-demand reads of large cold objects |
+| [Cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket) | any, including unmodified S3 clients | yes, up to four readers per object | bucket: chunking config | on-demand reads of large cold objects, no client changes |
 | [Streaming cold GET](#streaming-cold-get) | any, including unmodified S3 clients | does not add parallelism | bucket or cluster feature flag | faster first byte, no client changes |
 | [OCI native backend](#oci-buckets) | any, `oc://` buckets only | yes | node environment | data stored in OCI |
 
-Prefetch with `--blob-threshold`, blob-download jobs, and GET with blob download use the [blob downloader](/docs/blob_downloader.md): it splits an object into chunks, reads them from the backend concurrently, and writes them into the cluster as a chunked object. Native OCI multipart downloading is implemented separately.
+Prefetch with `--blob-threshold`, blob-download jobs, and GET with blob download use the [blob downloader](/docs/blob_downloader.md): it splits an object into chunks, reads them from the backend concurrently, and writes them into the cluster as a chunked object. Cold GET into a chunked bucket performs parallel range reads within the request itself, without a blob-download job. Native OCI multipart downloading is implemented separately.
 
-Options that need no changes to the reading application: prefetch, blob-download jobs, streaming cold GET, and the native OCI backend.
+Options that need no changes to the reading application: prefetch, blob-download jobs, cold GET into a chunked bucket, streaming cold GET, and the native OCI backend.
 
 ## Request scope vs. bucket scope
 
@@ -41,7 +44,18 @@ Settings apply differently to explicit blob downloads and bucket maintenance:
 
 * **A GET request or standalone blob-download job** uses its explicit blob-download tunables. Chunk size and worker count are subject to supported bounds, automatic worker tuning, and resource admission.
 * **Prefetch** follows the bucket's chunking configuration (`chunks`) when auto-chunking is enabled: its chunk size and object-size limit take precedence over prefetch options, as described below.
+* **A regular cold GET** into a bucket with auto-chunking enabled follows the same configuration: `chunks.objsize_limit` determines eligibility for parallel range reads, and `chunks.chunk_size` the size of each range (see [below](#cold-get-into-a-chunked-bucket)).
 * **Rechunk** derives the desired layout from the bucket's `chunks` configuration, including restoring monolithic storage where that configuration calls for it. It reorganizes cached objects; it does not parallelize a future cold GET.
+
+## Concurrent reads of a cold object
+
+A regular cold GET holds the object's write lock while it reads from the backend and stores the object in the cluster, then downgrades it to a read lock to serve the response.
+
+* Other regular GETs of the same object, including range reads and archive extraction, wait for the cold GET to complete and are then served from the in-cluster copy. Concurrent readers do not start separate backend downloads.
+* Requests that find the object cold at the same time contend for the write lock: one proceeds, and the others back off, retry, and then wait as above. If the contention persists beyond `timeout.cold_get_conflict` (default 5s), the request fails with HTTP 409 and error type `ErrBusy`. Only the backoff counts toward this timeout, not the time spent waiting for an in-progress cold GET.
+* The wait lasts for the entire cold GET: clients reading large cold objects need timeouts longer than the time to download and store the object.
+* A client that disconnects does not cancel the cold GET; the object is still stored. [Streaming cold GET](#streaming-cold-get) is the exception.
+* If the backend download or cache finalization fails, waiting requests recheck whether an in-cluster copy is available and retry the cold GET if needed.
 
 ## Prefetch before the workload runs
 
@@ -171,9 +185,59 @@ Use `get_object` for large objects. `download_file` and other managed transfers 
 
 For general boto3 setup, see [S3 compatibility: Boto3 examples](/docs/s3compat.md#boto3-examples).
 
+## Cold GET into a chunked bucket
+
+With auto-chunking enabled, a regular cold GET of a large object reads it from the backend in parallel. Neither client changes nor AIS headers are required, so unmodified S3 clients benefit as well:
+
+```console
+$ ais bucket props set s3://training-data chunks.objsize_limit=256MiB chunks.chunk_size=128MiB
+```
+
+Changing `chunks` properties also starts rechunk of the objects already in the cluster; see [Storage layout](/docs/storage_svcs.md#rechunk).
+
+For an eligible object, the target:
+
+1. issues the usual full-object GET to the backend, and uses it for the first chunk only;
+2. reads the remaining chunks as concurrent range requests, with at most four backend reads per object;
+3. pins every range read to the remote object version (ETag, generation, or version) returned by the initial GET;
+4. writes the chunks into the cluster, finalizes the object, and serves it through the regular GET path, including range reads and archive extraction.
+
+If a range read returns HTTP 412 (the remote object changed), the target discards the partial result and fetches the new version sequentially, within the same request. Other backend errors fail the request, as they would fail a regular cold GET.
+
+Locking is the same as for any [cold GET](#concurrent-reads-of-a-cold-object): the write lock is held across all range reads until the object is finalized. Concurrent readers wait for the entire download and never see a partial object; a failed parallel cold GET removes the chunks written so far.
+
+An object qualifies when all of the following hold:
+
+* the bucket has auto-chunking enabled, and the object is at or above `chunks.objsize_limit` and at least 16 MiB;
+* the object spans at least two chunks of `chunks.chunk_size`;
+* the bucket does not validate cold GETs (`checksum.validate_cold_get`) and is not erasure-coded;
+* neither the request (`--latest`) nor the bucket (`versioning.validate_warm_get`, `versioning.synchronize`) asks to check the latest remote version;
+* the backend reports a usable version for the object. Objects in unversioned remote AIS buckets and GCS objects served with decompressive transcoding use the regular cold GET;
+* the bucket is not an `oc://` bucket; the native OCI backend uses its own multipart reader;
+* the target is not under high load; otherwise the cold GET is sequential.
+
+Notes:
+
+* parallel range reads aim to improve backend download throughput while preserving regular GET semantics: the object is cached and finalized before serving the client. A faster download can shorten the first reader's wait, but that reader still waits for the entire object;
+* parallelism is bounded by the number of chunks: with the default `chunks.chunk_size` of 1 GiB, a 2 GiB object uses two readers. To use all four, choose a chunk size of at most a quarter of the typical object size;
+* chunks arrive out of order, so the whole-object checksum is CRC32C, combined from per-chunk checksums, regardless of the bucket's checksum type; with `checksum.type` set to `none`, no checksum is stored.
+
 ## Streaming cold GET
 
-The `Streaming-Cold-GET` feature flag changes how a regular cold GET is served: the backend response is written to the cluster and to the client at the same time, so the client can start receiving data before the full download completes. It requires no client changes for eligible on-demand GETs.
+The `Streaming-Cold-GET` feature flag overlaps backend download, local writes, and client transmission, avoiding a separate read of the completed in-cluster object to serve the response. The client can therefore start receiving data before the full download completes, but also before the in-cluster object is finalized. It requires no client changes for eligible on-demand GETs.
+
+The CLI marks this performance and integrity tradeoff as `perf,integrity-`. For example, with no cluster-wide feature flags enabled:
+
+```console
+$ ais config cluster features
+PROPERTY         VALUE
+features         none
+
+...
+Streaming-Cold-GET                       perf,integrity-         write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
+```
+
+To enable it for a bucket:
 
 ```console
 $ ais bucket props set s3://training-data features Streaming-Cold-GET
@@ -184,7 +248,8 @@ The flag can also be set cluster-wide (`ais config cluster features`).
 Limitations:
 
 * the flag does not add parallel backend reads; the backend retains its usual download behavior, including native OCI multipart downloading;
-* it does not apply to range reads, archive extraction, buckets that validate cold GETs (`checksum.validate_cold_get`), or buckets with auto-chunking enabled. Reading a whole archive object is eligible;
+* it does not apply to range reads, archive extraction, buckets that validate cold GETs (`checksum.validate_cold_get`), or buckets with auto-chunking enabled (for those, see [Cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket)). Reading a whole archive object is eligible;
+* the write lock is held while the response is sent, so other readers of the same object also wait for the streaming client; a client that disconnects aborts the cold GET;
 * the response starts before the in-cluster object is finalized. A failure while copying can truncate the response; a later cache-finalization failure can occur after the client has received all bytes;
 * it is mutually exclusive with `Disable-Cold-GET`.
 
@@ -206,28 +271,23 @@ The native OCI backend (`oc://`) downloads objects above its multipart threshold
 
 **Client-side parallel range reads of a cold object.** This includes boto3's `download_file` and `TransferConfig`, the Python SDK's `get_reader(num_workers=...)`, and `ais get --mpd`.
 
-AIS serves range reads from the in-cluster copy of an object. A range read of a cold object therefore first fetches the entire object from the backend, and concurrent range reads of the same object wait for it. That fill normally uses a single backend request, with native OCI multipart downloading as an exception. Issuing more client-side range requests does not add backend parallelism to the fill; it can help serve the object once it is in the cluster.
+AIS serves range reads from the in-cluster copy of an object. A range read of a cold object therefore first fetches the entire object from the backend, and concurrent range reads of the same object wait for it. That cold GET normally uses a single backend request, with two exceptions: [cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket) and native OCI multipart downloading. Issuing more client-side range requests does not add backend parallelism to the cold GET; it can help serve the object once it is in the cluster.
 
-To parallelize the backend read, use one of the blob-download options above, or prefetch.
+To parallelize the backend read, enable auto-chunking for the bucket, use one of the blob-download options above, or prefetch.
 
 ## Why isn't blob download automatic?
 
-A server-side, per-bucket way to enable blob download for ordinary GETs is tracked in [GitHub issue #340](https://github.com/NVIDIA/aistore/issues/340). This would let unmodified S3 clients benefit from parallel cold fills, including after cache eviction or target loss, without requiring prefetch or application-specific headers.
+For buckets with auto-chunking enabled, parallel cold GET is automatic: see [Cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket). This addresses [GitHub issue #340](https://github.com/NVIDIA/aistore/issues/340): unmodified S3 clients get parallel cold GETs, including after cache eviction or target loss, configured server-side per bucket.
 
-The existing explicit blob GET is not a transparent replacement for regular cold GET. It can return busy or admission errors, writes a chunked object, and streams the response before cache finalization. Selecting it automatically must preserve the behavior expected by clients that never requested it:
+The explicit blob GET remains opt-in, because it is not a transparent replacement for a regular cold GET:
 
-* concurrent readers must wait for the same object's fill and recheck its result;
-* chunk size and eligibility must follow bucket configuration, and resource rejection must permit a regular cold GET;
-* failure cleanup and fallback must not expose a partial object or race with another writer;
-* range reads and archive extraction must retain their response semantics; all downloaded parts must belong to the same remote object version;
-* checksum validation and redundancy settings must remain effective, or those buckets must continue to use regular cold GET;
-* once response bytes have been sent, AIS cannot restart the operation as an ordinary GET without corrupting that response.
+* it can return busy or admission errors;
+* it applies request-specific tunables;
+* it streams the response before the object is finalized, so a later failure cannot fall back to a regular cold GET.
 
-One possible first step is to fill the cache in parallel, finalize the object, and then serve it through the existing GET path. This targets total fill time and can preserve range and archive handling, but the first reader still waits for the fill. Streaming during an automatic fill would additionally target first-byte latency, with more demanding failure and buffering requirements. Both approaches increase concurrent backend requests and need admission control across simultaneous cold fills.
+The automatic path avoids these differences. It downloads and finalizes the object before serving it, falls back to a sequential cold GET under high load, and refetches sequentially when the remote object changes during the download. Its goal is higher backend download throughput; serving the response still waits for the entire object to be cached and finalized.
 
-The presented options provide several distinct ways to improve large-object cold reads already _today_.
-
-Future development toward transparent, bucket-configured parallel cold GETs will be guided by demand and requirements to support certain workloads, including workloads by applications that cannot (or will not) customize their S3 clients.
+Streaming during an automatic parallel cold GET, and parallel cold GET for buckets without auto-chunking, are not supported. Future work in this direction will be guided by demand.
 
 ## References
 

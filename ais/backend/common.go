@@ -261,7 +261,7 @@ func calcPageSize(pageSize, maxPageSize int64) int64 {
 	return min(pageSize, maxPageSize)
 }
 
-func allocPutParams(res core.GetReaderResult, owt cmn.OWT) *core.PutParams {
+func allocPutParams(res *core.GetReaderResult, owt cmn.OWT) *core.PutParams {
 	params := core.AllocPutParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
