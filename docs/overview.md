@@ -125,7 +125,7 @@ For Amazon S3 compatibility and related topics, see also:
   - [`s3cmd` client](/docs/s3compat.md#quick-start-with-s3cmd)
   - [S3 compatibility](/docs/s3compat.md)
   - [Presigned S3 requests](/docs/s3compat.md#presigned-s3-requests)
-  - [Boto3 support](https://docs.nvidia.com/aistore/python/aistore/botocore_patch)
+  - [Boto3 support](https://docs.nvidia.com/aistore/api-reference/python/aistore/botocore_patch)
 
 ## Traffic Patterns
 

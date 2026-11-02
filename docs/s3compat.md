@@ -502,7 +502,7 @@ from aistore.botocore_patch import botocore
 import boto3
 ```
 
-This patch modifies Boto3's HTTP client behavior to handle AIStore's redirect-based load balancing. For details, see the [Boto3 compatibility documentation](https://docs.nvidia.com/aistore/python/aistore/botocore_patch).
+This patch modifies Boto3's HTTP client behavior to handle AIStore's redirect-based load balancing. For details, see the [Boto3 compatibility documentation](https://docs.nvidia.com/aistore/api-reference/python/aistore/botocore_patch).
 
 ### Client Initialization
 
@@ -626,7 +626,7 @@ Boto3 can request parallel (blob) download of large cold objects by adding the `
 | `Authorization header missing` (s3cmd + AuthN) | Patch `S3.py` to include JWT as shown in [Authentication](#authentication-jwt-tips) |
 | Upload fails with timeout                      | Try with smaller multipart chunks (e.g., `--multipart-chunk-size-mb=5`) |
 | Unable to list large S3 bucket                 | Use [bucket inventory](#s3-bucket-inventory-support) to efficiently list contents |
-| Boto3/TensorFlow integration issues            | See [Boto3 compatibility patch](https://docs.nvidia.com/aistore/python/aistore/botocore_patch) for redirects |
+| Boto3/TensorFlow integration issues            | See [Boto3 compatibility patch](https://docs.nvidia.com/aistore/api-reference/python/aistore/botocore_patch) for redirects |
 
 ---
 
@@ -636,4 +636,4 @@ Boto3 can request parallel (blob) download of large cold objects by adding the `
 * [AIS CLI reference](/docs/cli.md)
 * [Auth & ACL](/docs/authn.md)
 * [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
-* [Boto3 compatibility](https://docs.nvidia.com/aistore/python/aistore/botocore_patch)
+* [Boto3 compatibility](https://docs.nvidia.com/aistore/api-reference/python/aistore/botocore_patch)

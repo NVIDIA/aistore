@@ -123,8 +123,8 @@ Use this page as a quick orientation and navigation map:
 - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
 - [Python first-object tutorial](/docs/python_sdk.md)
 - [PyPI package](https://pypi.org/project/aistore/)
-- [Python SDK reference guide](https://docs.nvidia.com/aistore/python/aistore/sdk)
-- [PyTorch integration](https://docs.nvidia.com/aistore/python/aistore/pytorch)
+- [Python SDK reference guide](https://docs.nvidia.com/aistore/api-reference/python/aistore/sdk)
+- [PyTorch integration](https://docs.nvidia.com/aistore/api-reference/python/aistore/pytorch)
 - [TensorFlow integration](/docs/tensorflow.md)
 - [HTTP API reference](https://aistore.nvidia.com/docs/http-api)
 - [curl examples](/docs/http_api.md)
@@ -135,7 +135,7 @@ Use this page as a quick orientation and navigation map:
 - [S3 compatibility](/docs/s3compat.md)
 - [`s3cmd` quick start](/docs/s3compat.md#quick-start-with-s3cmd)
 - [Presigned S3 requests](/docs/s3compat.md#presigned-s3-requests)
-- [Boto3 support](https://docs.nvidia.com/aistore/python/aistore/botocore_patch)
+- [Boto3 support](https://docs.nvidia.com/aistore/api-reference/python/aistore/botocore_patch)
 
 ### Security and protocols
 

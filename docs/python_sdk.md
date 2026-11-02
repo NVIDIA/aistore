@@ -78,4 +78,4 @@ Verified hello.txt; content matches; tutorial bucket deleted.
 
 The script prints its unique AIS bucket name before creation, checks that the uploaded object appears in the listing, compares downloaded bytes, and deletes the bucket it created. If creation fails, it does not delete an existing bucket. A failed request, verification, or cleanup raises an exception instead of printing final success; confirm the endpoint and permissions before retrying. If interrupted before cleanup, use the printed bucket name to inspect the tutorial bucket before removing it; leave other buckets untouched.
 
-For more SDK operations, refer to the [Python SDK reference](https://docs.nvidia.com/aistore/python/aistore/sdk) and [SDK README](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md).
+For more SDK operations, refer to the [Python SDK reference](https://docs.nvidia.com/aistore/api-reference/python/aistore/sdk) and [SDK README](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md).
