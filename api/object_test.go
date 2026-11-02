@@ -27,6 +27,7 @@ type contextCancelHandler struct {
 
 func (h *contextCancelHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", "1")
+	w.Header().Set(apc.HdrObjVersion, "1")
 	w.WriteHeader(http.StatusOK)
 	if h.calls.Add(1) == 1 {
 		_, _ = w.Write([]byte{'x'})
@@ -55,15 +56,20 @@ func TestGetObjectReaderContextCancellation(t *testing.T) {
 	defer client.CloseIdleConnections()
 	bp := api.BaseParams{Client: client, URL: srv.URL}
 	bck := cmn.Bck{Name: "bucket", Provider: apc.AIS}
-	warmup, _, err := api.GetObjectReader(bp, bck, "object", nil)
+	warmup, size, err := api.GetObjectReader(bp, bck, "object", nil)
 	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, size == 1, "expected GET size 1, got %d", size)
 	_, err = io.Copy(io.Discard, warmup)
 	tassert.CheckFatal(t, err)
 	tassert.CheckFatal(t, warmup.Close())
 
-	r, _, err := api.GetObjectReader(bp, bck, "object", &api.GetArgs{Context: ctx})
+	r, oah, err := api.GetObjectReaderWithAttrs(bp, bck, "object", &api.GetArgs{Context: ctx})
 	tassert.CheckFatal(t, err)
 	defer r.Close()
+	tassert.Fatalf(t, oah.Size() == 1, "expected GET size 1, got %d", oah.Size())
+	tassert.Fatalf(t, oah.RespHeader().Get("Content-Length") == "1", "GET response headers not returned")
+	oa := oah.Attrs()
+	tassert.Fatalf(t, oa.Version() == "1", "expected GET version 1, got %q", oa.Version())
 
 	cancel()
 	select {

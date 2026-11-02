@@ -54,7 +54,7 @@ func (bp *throttleBackend) GetObj(context.Context, *core.LOM, cmn.OWT, *http.Req
 	return 0, nil
 }
 
-func (bp *throttleReaderBackend) GetObjReader(context.Context, *core.LOM, int64, int64) core.GetReaderResult {
+func (bp *throttleReaderBackend) GetObjReader(context.Context, *core.LOM, int64, int64, ...*core.ObjPin) core.GetReaderResult {
 	bp.calls++
 	return core.GetReaderResult{Err: bp.err, ErrCode: http.StatusTooManyRequests}
 }

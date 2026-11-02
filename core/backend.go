@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
@@ -22,6 +23,14 @@ type (
 		ExpCksum *cos.Cksum
 		Size     int64
 		ErrCode  int
+	}
+
+	// remote object version to match when reading a range
+	// - each backend selects which field to condition on
+	// - both empty: backend has nothing to pin against
+	ObjPin struct {
+		Version string // S3 VersionId, GCP generation
+		ETag    string // unquoted
 	}
 
 	Backend interface {
@@ -50,7 +59,9 @@ type (
 		// get (exclusively via GetCold; calls GetObjReader)
 		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT, origReq *http.Request) (ecode int, err error)
 		// get (jobs; REST)
-		GetObjReader(ctx context.Context, lom *LOM, offset, length int64) GetReaderResult
+		// - offset, length: range read when length > 0, the entire object otherwise
+		// - pin: required for range reads (exactly one; see RangePin), not used otherwise
+		GetObjReader(ctx context.Context, lom *LOM, offset, length int64, pin ...*ObjPin) GetReaderResult
 
 		// Multipart operations accept context independently of optional request headers.
 		// A nil context defaults to context.Background().
@@ -60,3 +71,40 @@ type (
 		AbortMpt(ctx context.Context, lom *LOM, r *http.Request, uploadID string) (ecode int, err error)
 	}
 )
+
+// build pin from remote object attributes; return nil if there's nothing to pin against
+// - version: provider-specific custom key; remote AIS: oa.Ver
+func NewObjPin(provider string, oa *cmn.ObjAttrs) *ObjPin {
+	var (
+		ver, _  = oa.GetCustomKey(cmn.VersionObjMD)
+		etag, _ = oa.GetCustomKey(cmn.ETag)
+	)
+	if ver == "" && provider == apc.AIS {
+		ver = oa.Version()
+	}
+	if ver == "" && etag == "" {
+		return nil
+	}
+	return &ObjPin{Version: ver, ETag: etag}
+}
+
+// return the pin of a range read
+// - range reads must pass exactly one pin (nil when there's nothing to pin against)
+func RangePin(pin []*ObjPin) *ObjPin {
+	debug.Assert(len(pin) == 1, "range read requires exactly one pin, have ", len(pin))
+	if len(pin) == 0 {
+		return nil
+	}
+	return pin[0]
+}
+
+func (p *ObjPin) String() string {
+	switch {
+	case p.Version != "" && p.ETag != "":
+		return "[version=" + p.Version + " etag=" + p.ETag + "]"
+	case p.Version != "":
+		return "[version=" + p.Version + "]"
+	default:
+		return "[etag=" + p.ETag + "]"
+	}
+}

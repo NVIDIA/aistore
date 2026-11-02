@@ -1451,6 +1451,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 			status = http.StatusInsufficientStorage
 		case cos.IsErrRangeNotSatisfiable(err):
 			status = http.StatusRequestedRangeNotSatisfiable
+		case cos.IsErrPreconditionFailed(err):
+			status = http.StatusPreconditionFailed
 		case isErrUnsupp(err), isErrNotImpl(err):
 			status = http.StatusNotImplemented
 		case IsErrBusy(err) || isErrLimitedCoexistence(err):

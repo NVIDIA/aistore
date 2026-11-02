@@ -618,10 +618,12 @@ func (m *AISbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.
 	return m.extractErrCode(err, remAis.uuid)
 }
 
-func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
 	var (
 		remAis    *remAis
 		args      *api.GetArgs
+		p         *core.ObjPin
+		oah       api.ObjAttrs
 		remoteBck = lom.Bck().Clone()
 	)
 	if remAis, res.Err = m.getRemAis(remoteBck.Ns.UUID); res.Err != nil {
@@ -632,6 +634,7 @@ func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length 
 	// reader
 	args = &api.GetArgs{Context: ctx}
 	if length > 0 {
+		p = core.RangePin(pin)
 		args.Header = http.Header{cos.HdrRange: []string{cmn.MakeRangeHdr(offset, length)}}
 		args.Query = url.Values{apc.QparamSilent: []string{"true"}}
 	} else {
@@ -649,9 +652,32 @@ func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length 
 		lom.SetCksum(nil)
 	}
 
-	res.R, res.Size, res.Err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, args)
+	res.R, oah, res.Err = api.GetObjectReaderWithAttrs(remAis.bpL, remoteBck, lom.ObjName, args)
+	res.Size = oah.Size()
 	res.ErrCode, res.Err = m.extractErrCode(res.Err, remAis.uuid)
+	if res.Err == nil && p != nil {
+		if res.ErrCode, res.Err = m.checkPin(p, oah.RespHeader()); res.Err != nil {
+			cos.Close(res.R) // do not consume a different revision's body
+			res.R, res.Size = nil, 0
+		}
+	}
 	return res
+}
+
+// check the GET itself before exposing its reader
+func (*AISbp) checkPin(p *core.ObjPin, hdr http.Header) (int, error) {
+	var oa cmn.ObjAttrs
+	if _, err := oa.FromHeader(hdr); err != nil {
+		return http.StatusBadGateway, err
+	}
+	cur := core.NewObjPin(apc.AIS, &oa)
+	switch {
+	case cur == nil:
+		return http.StatusPreconditionFailed, cos.NewErrPreconditionFailed(fmt.Errorf("pinned %s, have none", p))
+	case *cur != *p:
+		return http.StatusPreconditionFailed, cos.NewErrPreconditionFailed(fmt.Errorf("pinned %s, have %s", p, cur))
+	}
+	return 0, nil
 }
 
 // TODO: retry upon 'unreachable' or timeout

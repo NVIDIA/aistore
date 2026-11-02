@@ -60,7 +60,7 @@ func serveOCIMetadataRange(w http.ResponseWriter, _ *http.Request) {
 
 func checkOCIMetadataRange(t *testing.T, bp *ocibp, lom *core.LOM) {
 	t.Helper()
-	res := bp.GetObjReader(t.Context(), lom, 2, 5)
+	res := bp.GetObjReader(t.Context(), lom, 2, 5, nil)
 	if res.Err != nil {
 		t.Error(res.Err)
 		return

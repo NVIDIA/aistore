@@ -392,6 +392,8 @@ func ociErrorToAISError(op, bucketName, objectPath, byteRange string, errIn erro
 	switch statusCode {
 	case http.StatusRequestedRangeNotSatisfiable:
 		errOut = cos.NewErrRangeNotSatisfiable(errIn, []string{byteRange}, 0)
+	case http.StatusPreconditionFailed:
+		errOut = cos.NewErrPreconditionFailed(errIn)
 	case http.StatusTooManyRequests:
 		errOut = cmn.NewErrTooManyRequests(errIn, statusCode)
 	default:
@@ -920,8 +922,7 @@ func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http
 	return 0, err
 }
 
-// [TODO] Consider setting req.IfMatch to lom.GetCustomKey(cmn.ETag) if present
-func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
 	dl, ctx := newRdl(ctx, &bp.base, lom.Bck()) // read deadline (see rdl.go)
 	defer dl.fini(&res)
 
@@ -948,6 +949,10 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 	} else {
 		rangeHeader = cmn.MakeRangeHdr(offset, length)
 		req.Range = &rangeHeader
+		if p := core.RangePin(pin); p != nil && p.ETag != "" {
+			etag := cmn.QuoteETag(p.ETag)
+			req.IfMatch = &etag
+		}
 	}
 
 	var cancel context.CancelFunc

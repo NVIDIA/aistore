@@ -108,7 +108,7 @@ func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, ori
 	return code, e
 }
 
-func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
 	closeErrReader := func() {
 		if res.Err != nil && res.R != nil {
 			cos.Close(res.R)
@@ -118,14 +118,14 @@ func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, le
 
 	// proactive
 	arl := bp.acquire(lom.Bck(), http.MethodGet)
-	res = bp.Backend.GetObjReader(ctx, lom, offset, length)
+	res = bp.Backend.GetObjReader(ctx, lom, offset, length, pin...)
 	if res.Err == nil || arl == nil || !cmn.IsErrTooManyRequests(res.Err) {
 		return res
 	}
 	closeErrReader()
 
 	cb := func() (int, error) {
-		res = bp.Backend.GetObjReader(ctx, lom, offset, length)
+		res = bp.Backend.GetObjReader(ctx, lom, offset, length, pin...)
 		closeErrReader()
 		return res.ErrCode, res.Err
 	}

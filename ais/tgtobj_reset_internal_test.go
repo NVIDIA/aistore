@@ -41,7 +41,7 @@ func (bp *coldGetResetBackend) restore() {
 	mockTarget.owner.bmd.put(bp.oldBMD)
 }
 
-func (bp *coldGetResetBackend) GetObjReader(_ context.Context, lom *core.LOM, _, _ int64) core.GetReaderResult {
+func (bp *coldGetResetBackend) GetObjReader(_ context.Context, lom *core.LOM, _, _ int64, _ ...*core.ObjPin) core.GetReaderResult {
 	bp.calls++
 	if lom.ObjName != bp.objName {
 		return core.GetReaderResult{Err: fmt.Errorf("backend GET used %q, expected %q", lom.ObjName, bp.objName), ErrCode: http.StatusNotFound}

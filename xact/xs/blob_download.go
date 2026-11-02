@@ -101,6 +101,7 @@ type (
 		bdm         bdMetrics   // resolved once in factory.Start
 		finalizing  atomic.Bool // CAS gate to execute once
 		wg          sync.WaitGroup
+		pin         *core.ObjPin // remote version to match (see RenewBlobDl)
 		nextRoff    int64
 		fullSize    int64
 		chunkSize   int64         // not necessarily user-provided values (chunk size & num workers might be adjusted based on resources)
@@ -225,6 +226,7 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	lom.SetCksum(cos.NoneCksum) // clear old checksum, if any (_fini sets it upon success)
 	// and separately:
 	pre.fullSize = oa.Size
+	pre.pin = core.NewObjPin(lom.Bck().Provider, oa)
 
 	if params.Msg.FullSize > 0 && params.Msg.FullSize != pre.fullSize {
 		name := xact.Cname(apc.ActBlobDl, xid) + "/" + lom.Cname()
@@ -998,7 +1000,7 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 	ctx, cancel := context.WithTimeout(parentCtx, w.parent.timeout)
 	defer cancel()
 
-	res := core.T.Backend(lom.Bck()).GetObjReader(ctx, lom, wi.roff, chunkSize)
+	res := core.T.Backend(lom.Bck()).GetObjReader(ctx, lom, wi.roff, chunkSize, w.parent.pin)
 	if res.Err != nil {
 		if res.R != nil {
 			cos.Close(res.R)

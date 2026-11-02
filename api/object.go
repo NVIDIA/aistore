@@ -312,13 +312,20 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 // Returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
 func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (r io.ReadCloser, size int64, err error) {
+	r, oah, err := GetObjectReaderWithAttrs(bp, bck, objName, args)
+	return r, oah.n, err
+}
+
+// return the reader and attributes from the same GET response
+// - do not read the body or validate its checksum; caller must close the reader
+func GetObjectReaderWithAttrs(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (r io.ReadCloser, oah ObjAttrs, err error) {
 	if args == nil {
 		args = &GetArgs{}
 	}
 	_, q, hdr := args.ret()
 	hdr, err = args.blobThresholdHeader(hdr)
 	if err != nil {
-		return nil, 0, err
+		return nil, oah, err
 	}
 	q = bck.AddToQuery(q)
 	bp.Method = http.MethodGet
@@ -330,9 +337,13 @@ func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) 
 		reqParams.Header = hdr
 		reqParams.ctx = args.Context
 	}
-	r, size, err = reqParams.doReader()
+	var wresp *wrappedResp
+	wresp, r, err = reqParams.doStream()
+	if err == nil {
+		oah.wrespHeader, oah.n = wresp.Header, wresp.ContentLength
+	}
 	FreeRp(reqParams)
-	return
+	return r, oah, err
 }
 
 // PUT(object) ============================================================================================

@@ -9,8 +9,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"maps"
 	"math/rand/v2"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -20,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -1719,4 +1723,120 @@ func TestPrefetchBlobNumWorkers(t *testing.T) {
 				"data mismatch after blob prefetch with blob-num-workers=%d", tc.requested)
 		})
 	}
+}
+
+func TestRemaisBlobDownloadVersionPin(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true, RequiredDeployment: tools.ClusterTypeLocal})
+	const chunkSize = 4 * cos.MiB
+	var (
+		proxyURL  = tools.RandomProxyURL(t)
+		bp        = tools.BaseAPIParams(proxyURL)
+		remoteBP  = tools.BaseAPIParams(tools.RemoteCluster.URL)
+		remoteBck = cmn.Bck{Name: "pin-" + trand.String(8), Provider: apc.AIS}
+		bck       = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
+		objName   = "object"
+		v1        = bytes.Repeat([]byte{'1'}, 2*chunkSize)
+		v2        = bytes.Repeat([]byte{'2'}, len(v1))
+	)
+	// seed a versioned source
+	tlog.Logfln("creating versioned bucket %s on %s", remoteBck.Name, remoteBP.URL)
+	tools.CreateBucket(t, remoteBP.URL, remoteBck, &cmn.BpropsToSet{
+		Versioning: &cmn.VersionConfToSet{Enabled: apc.Ptr(true)},
+	}, true /*cleanup*/)
+	put := func(data []byte) error {
+		_, err := api.PutObject(&api.PutArgs{BaseParams: remoteBP, Bck: remoteBck, ObjName: objName,
+			Reader: readers.NewBytes(data), Size: uint64(len(data))})
+		return err
+	}
+	tlog.Logfln("writing v1: %s/%s (%d bytes)", remoteBck.Name, objName, len(v1))
+	tassert.CheckFatal(t, put(v1))
+	tlog.Logfln("registering remote bucket and initializing mountpaths")
+	_, err := api.HeadBucket(bp, bck, false)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
+	initMountpaths(t, proxyURL)
+
+	remoteURL, err := url.Parse(remoteBP.URL)
+	tassert.CheckFatal(t, err)
+	forward := httputil.NewSingleHostReverseProxy(remoteURL)
+	forward.Transport = remoteBP.Client.Transport
+	var ranges atomic.Int64
+	updated := make(chan error, 1)
+	bridge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/"+remoteBck.Name+"/"+objName) && r.Header.Get(cos.HdrRange) != "" {
+			n := ranges.Add(1)
+			tlog.Logfln("range %d: %s", n, r.Header.Get(cos.HdrRange))
+			// overwrite before forwarding the second range
+			if n == 2 {
+				tlog.Logfln("overwriting source with v2 before range %d", n)
+				err := put(v2)
+				updated <- err
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadGateway)
+					return
+				}
+				tlog.Logfln("source overwritten with v2")
+			}
+		}
+		forward.ServeHTTP(w, r)
+	}))
+	t.Cleanup(bridge.Close)
+	config, err := api.GetClusterConfig(bp)
+	tassert.CheckFatal(t, err)
+	backend := config.Backend
+	backend.Conf = maps.Clone(backend.Conf)
+	// use a fresh alias to refresh remote clients
+	backend.Set(apc.AIS, cmn.BackendConfAIS{"pin-" + trand.String(8): []string{bridge.URL}})
+	t.Cleanup(func() {
+		tlog.Logfln("restoring backend config")
+		tassert.CheckError(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &config.Backend}, false))
+	})
+	tlog.Logfln("routing remote requests through %s", bridge.URL)
+	tassert.CheckFatal(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &backend}, false))
+
+	msg := &apc.BlobMsg{ChunkSize: chunkSize, NumWorkers: xact.NwpNone}
+	// pin v1, then change the source between ranges
+	tlog.Logfln("starting first fill: chunk size %d, one worker", chunkSize)
+	xid, err := api.BlobDownload(bp, bck, objName, msg)
+	tassert.CheckFatal(t, err)
+	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+	tlog.Logfln("waiting for first fill %s", xid)
+	snaps, err := api.WaitForSnaps(bp, args, args.Finished())
+	tassert.CheckFatal(t, err)
+	select {
+	case err := <-updated:
+		tassert.CheckFatal(t, err)
+	default:
+		t.Fatal("did not overwrite the source between range reads")
+	}
+	tassert.Fatalf(t, ranges.Load() == 2, "expected two range reads, got %d", ranges.Load())
+	var errText string
+	for _, targetSnaps := range snaps {
+		for _, snap := range targetSnaps {
+			if snap.ID == xid {
+				errText = snap.Err
+			}
+		}
+	}
+	tlog.Logfln("first fill %s finished: %q", xid, errText)
+	tassert.Fatalf(t, strings.Contains(errText, "precondition failed"), "expected pin mismatch, got %q", errText)
+	// failed fills must leave no cached object or chunks
+	tlog.Logfln("checking failed fill left no cached object or chunks")
+	tassert.Fatalf(t, !tools.CheckObjIsPresent(proxyURL, bck, objName), "failed fill published a cached object")
+	m := ioContext{t: t, bck: bck}
+	m.validateChunksOnDisk(bck, objName, 0)
+
+	// retry with a new pin
+	tlog.Logfln("starting fresh fill of v2")
+	xid, err = api.BlobDownload(bp, bck, objName, msg)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("waiting for fresh fill %s", xid)
+	tassert.CheckFatal(t, api.WaitForXaction(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}))
+	tlog.Logfln("reading cached object and checking v2")
+	var out bytes.Buffer
+	_, err = api.GetObject(bp, bck, objName, &api.GetArgs{Writer: &out})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, bytes.Equal(out.Bytes(), v2), "fresh fill returned mixed revisions")
+	m.validateChunksOnDisk(bck, objName, 2)
+	tlog.Logfln("verified v2 bytes and two cached chunks")
 }

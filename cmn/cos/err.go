@@ -59,6 +59,9 @@ type (
 		ranges []string // RFC 7233
 		size   int64    // [0, size)
 	}
+	ErrPreconditionFailed struct {
+		err error // original (backend reported) error
+	}
 )
 
 var ErrRetriableSoft = errors.New("retriable soft error")
@@ -503,5 +506,35 @@ func IsErrRangeNotSatisfiable(err error) bool {
 		return true
 	}
 	_, ok := errors.AsType[*ErrRangeNotSatisfiable](err)
+	return ok
+}
+
+// ErrPreconditionFailed
+// http.StatusPreconditionFailed = 412 // RFC 9110, 15.5.13
+
+// (callers add the object name)
+func NewErrPreconditionFailed(err error) *ErrPreconditionFailed {
+	if IsTypedNil(err) {
+		err = nil
+	}
+	return &ErrPreconditionFailed{err}
+}
+
+func (e *ErrPreconditionFailed) Error() string {
+	const s = "remote object changed (precondition failed)"
+	if e.err != nil {
+		return s + ": " + e.err.Error()
+	}
+	return s
+}
+
+func (e *ErrPreconditionFailed) Unwrap() error { return e.err }
+
+func IsErrPreconditionFailed(err error) bool {
+	debug.Assert(err != nil)
+	if _, ok := err.(*ErrPreconditionFailed); ok {
+		return true
+	}
+	_, ok := errors.AsType[*ErrPreconditionFailed](err)
 	return ok
 }

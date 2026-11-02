@@ -422,7 +422,7 @@ func (azbp *azbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 	return 0, err
 }
 
-func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
 	dl, ctx := newRdl(ctx, &azbp.base, lom.Bck()) // read deadline (see rdl.go)
 	defer dl.fini(&res)
 
@@ -448,11 +448,23 @@ func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	var opts blob.DownloadStreamOptions
 	opts.Range.Count = length
 	opts.Range.Offset = offset
+	if length > 0 {
+		// (ETag only: version not recorded by cold GET)
+		if p := core.RangePin(pin); p != nil && p.ETag != "" {
+			etag := azcore.ETag(cmn.QuoteETag(p.ETag))
+			opts.AccessConditions = &blob.AccessConditions{
+				ModifiedAccessConditions: &blob.ModifiedAccessConditions{IfMatch: &etag},
+			}
+		}
+	}
 	resp, err := client.DownloadStream(ctx, &opts)
 	if err != nil {
 		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
-		if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
+		switch res.ErrCode {
+		case http.StatusRequestedRangeNotSatisfiable:
 			res.Err = cos.NewErrRangeNotSatisfiable(res.Err, nil, 0)
+		case http.StatusPreconditionFailed:
+			res.Err = cos.NewErrPreconditionFailed(res.Err)
 		}
 		return res
 	}

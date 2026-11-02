@@ -507,7 +507,7 @@ finalize:
 	return 0, err
 }
 
-func (s3bp *s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (s3bp *s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
 	dl, ctx := newRdl(ctx, &s3bp.base, lom.Bck()) // read deadline (see rdl.go)
 	defer dl.fini(&res)
 
@@ -528,11 +528,22 @@ func (s3bp *s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	if length > 0 {
 		rng := cmn.MakeRangeHdr(offset, length)
 		input.Range = aws.String(rng)
+		// prefer If-Match: VersionId requires s3:GetObjectVersion (and S3-compatible stores may not support it)
+		if p := core.RangePin(pin); p != nil {
+			if p.ETag != "" {
+				input.IfMatch = aws.String(cmn.QuoteETag(p.ETag))
+			} else if p.Version != "" {
+				input.VersionId = aws.String(p.Version)
+			}
+		}
 		obj, err = svc.GetObject(ctx, &input)
 		if err != nil {
 			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
-			if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
+			switch res.ErrCode {
+			case http.StatusRequestedRangeNotSatisfiable:
 				res.Err = cos.NewErrRangeNotSatisfiable(res.Err, nil, 0)
+			case http.StatusPreconditionFailed:
+				res.Err = cos.NewErrPreconditionFailed(res.Err)
 			}
 			return res
 		}

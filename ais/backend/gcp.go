@@ -14,6 +14,7 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -359,7 +360,7 @@ func (gsbp *gsbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 	return 0, err
 }
 
-func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
 	var (
 		attrs    *storage.ObjectAttrs
 		rc       *storage.Reader
@@ -375,9 +376,17 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	defer dl.fini(&res)
 
 	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
+	if length > 0 {
+		if o, res.Err = gcpPin(o, core.RangePin(pin)); res.Err != nil {
+			return res
+		}
+	}
 	attrs, res.Err = o.Attrs(ctx)
 	if res.Err != nil {
 		res.ErrCode, res.Err = gcpErrorToAISError(res.Err, cloudBck)
+		if res.ErrCode == http.StatusPreconditionFailed {
+			res.Err = cos.NewErrPreconditionFailed(res.Err)
+		}
 		return res
 	}
 
@@ -385,10 +394,16 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	if length > 0 {
 		rc, res.Err = o.NewRangeReader(ctx, offset, length)
 		if res.Err != nil {
-			if offset < 0 || offset >= attrs.Size || length > attrs.Size-offset {
+			switch {
+			case offset < 0 || offset >= attrs.Size || length > attrs.Size-offset:
 				s := fmt.Sprintf("offset=%d,length=%d", offset, length)
 				res.Err = cos.NewErrRangeNotSatisfiable(nil, []string{s}, attrs.Size)
 				res.ErrCode = http.StatusRequestedRangeNotSatisfiable
+			default:
+				res.ErrCode, res.Err = gcpErrorToAISError(res.Err, cloudBck)
+				if res.ErrCode == http.StatusPreconditionFailed {
+					res.Err = cos.NewErrPreconditionFailed(res.Err)
+				}
 			}
 			return res
 		}
@@ -639,6 +654,18 @@ func (gsbp *gsbp) getSess(ctx context.Context, bck *cmn.Bck) (*gcpSess, error) {
 //
 
 const gcpErrPrefix = "gcp-error"
+
+// condition range read on the pinned generation (GCP always has one)
+func gcpPin(o *storage.ObjectHandle, p *core.ObjPin) (*storage.ObjectHandle, error) {
+	if p == nil || p.Version == "" {
+		return o, nil
+	}
+	gen, err := strconv.ParseInt(p.Version, 10, 64)
+	if err != nil {
+		return o, fmt.Errorf("gcp: invalid pinned generation %q: %w", p.Version, err)
+	}
+	return o.If(storage.Conditions{GenerationMatch: gen}), nil
+}
 
 func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 	if cmn.Rom.V(5, cos.ModBackend) {
