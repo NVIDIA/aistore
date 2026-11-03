@@ -22,6 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport"
+
+	"golang.org/x/sys/cpu"
 )
 
 // Intra-cluster sign/verify using per-node Ed25519 keys.
@@ -75,7 +77,9 @@ type (
 	}
 	svState struct {
 		cur   atomic.Pointer[_sv]
-		nonce atomic.Uint64 // per-node monotonic signing nonce
+		_     cpu.CacheLinePad // (isolate)
+		nonce atomic.Uint64    // per-node monotonic signing nonce
+		_     cpu.CacheLinePad
 	}
 )
 
