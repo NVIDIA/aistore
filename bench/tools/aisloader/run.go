@@ -197,17 +197,7 @@ func Start(version, buildtime string) (err error) {
 		return nil
 	}
 
-	// If none of duration, epochs, or put upper bound is specified, it is a no op.
-	// Note that stoppable prevents being a no op
-	// This can be used as a cleanup only run (no put no get).
 	if runParams.duration.Val == 0 {
-		if runParams.putSizeUpperBound == 0 && runParams.numEpochs == 0 && !runParams.stoppable {
-			if runParams.cleanUp.Val {
-				cleanup()
-			}
-			return nil
-		}
-
 		runParams.duration.Val = time.Duration(math.MaxInt64)
 	}
 

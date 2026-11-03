@@ -7,6 +7,7 @@ package aisloader
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -21,7 +22,8 @@ func TestParamsValidate(t *testing.T) {
 				bck: cmn.Bck{Provider: apc.AIS},
 			},
 			workloadParams: workloadParams{
-				putPct: 50,
+				duration: DurationExt{Val: time.Minute},
+				putPct:   50,
 			},
 			sizeCksumParams: sizeCksumParams{
 				minSize:   cos.KiB,
@@ -260,6 +262,39 @@ func TestParamsValidate(t *testing.T) {
 				p.statsOutputObj = "ais://workload/stats.json"
 				p.bck.Name = "ais://#tenant/workload"
 				p.cleanUp.Val = true
+			},
+		},
+		{
+			name:    "reject no workload",
+			mutate:  func(p *params) { p.duration.Val = 0 },
+			wantErr: "no workload specified",
+		},
+		{
+			name: "allow zero duration with total PUT size",
+			mutate: func(p *params) {
+				p.duration.Val = 0
+				p.putSizeUpperBound = cos.MiB
+			},
+		},
+		{
+			name: "allow zero duration with epochs",
+			mutate: func(p *params) {
+				p.duration.Val = 0
+				p.numEpochs = 1
+			},
+		},
+		{
+			name: "allow zero duration with stoppable",
+			mutate: func(p *params) {
+				p.duration.Val = 0
+				p.stoppable = true
+			},
+		},
+		{
+			name: "allow get loader ID with no workload",
+			mutate: func(p *params) {
+				p.duration.Val = 0
+				p.getLoaderID = true
 			},
 		},
 		{

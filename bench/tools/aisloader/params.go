@@ -229,7 +229,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 
 	// ============ Workload ============
 	DurationExtVar(f, &p.duration, "duration", time.Minute,
-		"Benchmark duration (0 - run forever or until Ctrl-C). \n"+
+		"Benchmark duration (0 - no time limit; requires totalputsize, epochs, or stoppable). \n"+
 			"If not specified and totalputsize > 0, aisloader runs until totalputsize reached. Otherwise aisloader runs until first of duration and "+
 			"totalputsize reached")
 	f.IntVar(&p.numWorkers, "numworkers", 10, "number of goroutine workers operating on AIS in parallel")
@@ -545,6 +545,11 @@ func (p *params) inflight() int {
 	return p.numWorkers
 }
 
+// no duration, PUT size limit, or epochs (and not stoppable): nothing to run
+func (p *params) noWorkload() bool {
+	return p.duration.Val == 0 && p.putSizeUpperBound == 0 && p.numEpochs == 0 && !p.stoppable
+}
+
 func _parseSize(valueStr, name string, defaultVal int64) (int64, error) {
 	if valueStr == "" {
 		return defaultVal, nil
@@ -626,6 +631,11 @@ func (p *params) validate() error {
 	}
 	if p.skipList && p.putPct < 100 {
 		return errors.New("invalid option: '-skiplist' is only valid for 100% PUT workloads")
+	}
+
+	// '-getloaderid' prints the loader ID and exits without running a workload
+	if p.noWorkload() && !p.getLoaderID {
+		return errors.New("invalid option: no workload specified (set a nonzero '-duration', '-totalputsize', '-epochs', or '-stoppable')")
 	}
 
 	// direct s3 access vs other command line
