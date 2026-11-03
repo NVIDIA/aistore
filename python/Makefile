@@ -66,7 +66,7 @@ python_sdk_unit_tests: common_deps
 
 .PHONY: mcp_deps
 mcp_deps:
-	$(PIP) install "mcp[cli]>=1.4.1,<2" --quiet
+	$(PIP) install "mcp[cli]>=2,<3" --quiet
 
 .PHONY: python_mcp_unit_tests
 python_mcp_unit_tests: common_deps mcp_deps

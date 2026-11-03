@@ -7,10 +7,10 @@
 import json
 from typing import Callable
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 
-def register_bucket_tools(mcp: FastMCP, get_client: Callable):
+def register_bucket_tools(mcp: MCPServer, get_client: Callable):
     """Register all bucket-related MCP tools."""
 
     @mcp.tool()

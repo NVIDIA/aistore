@@ -6,6 +6,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Compatibility changes
+
+- **BREAKING**: The MCP server now requires MCP Python SDK 2.x (`mcp[cli]>=2,<3`).
+  Existing environments with `mcp<2` must upgrade before starting the server:
+  `python -m pip install --upgrade "mcp[cli]>=2,<3"`.
+
 ### Changed
 
 - Pickling or forking `SessionManager` no longer carries live sessions as the receiving process

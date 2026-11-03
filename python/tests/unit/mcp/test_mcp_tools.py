@@ -11,7 +11,7 @@ import os
 import unittest
 from unittest.mock import MagicMock
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from aistore.mcp.tools.cluster import register_cluster_tools
 from aistore.mcp.tools.buckets import register_bucket_tools
@@ -29,7 +29,7 @@ class TestClusterTools(unittest.TestCase):
     def setUp(self):
         os.environ["AIS_ENDPOINT"] = "http://localhost:8080"
         self.client = MagicMock()
-        self.mcp = FastMCP("test")
+        self.mcp = MCPServer("test")
         register_cluster_tools(self.mcp, self._get_client)
         self.tools = {t.name: t for t in self.mcp._tool_manager.list_tools()}
 
@@ -105,7 +105,7 @@ class TestBucketTools(unittest.TestCase):
 
     def setUp(self):
         self.client = MagicMock()
-        self.mcp = FastMCP("test")
+        self.mcp = MCPServer("test")
         register_bucket_tools(self.mcp, self._get_client)
         self.tools = {t.name: t for t in self.mcp._tool_manager.list_tools()}
 
@@ -178,7 +178,7 @@ class TestJobTools(unittest.TestCase):
     def setUp(self):
         os.environ["AIS_ENDPOINT"] = "http://localhost:8080"
         self.client = MagicMock()
-        self.mcp = FastMCP("test")
+        self.mcp = MCPServer("test")
         register_job_tools(self.mcp, self._get_client)
         self.tools = {t.name: t for t in self.mcp._tool_manager.list_tools()}
 

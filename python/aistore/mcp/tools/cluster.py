@@ -8,10 +8,10 @@ import json
 import os
 from typing import Callable
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 
-def register_cluster_tools(mcp: FastMCP, get_client: Callable):
+def register_cluster_tools(mcp: MCPServer, get_client: Callable):
     """Register all cluster-related MCP tools."""
 
     @mcp.tool()

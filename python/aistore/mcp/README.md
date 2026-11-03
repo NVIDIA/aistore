@@ -2,6 +2,13 @@
 
 [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for AIStore, enabling AI agents (Claude, Cursor, etc.) to inspect and monitor AIStore clusters through a standardized interface.
 
+Requires MCP Python SDK 2.x (`mcp>=2,<3`). Existing environments with `mcp<2`
+must upgrade before starting the server:
+
+```bash
+python -m pip install --upgrade "mcp[cli]>=2,<3"
+```
+
 ## Quick Start
 
 ```bash

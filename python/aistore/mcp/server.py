@@ -16,7 +16,7 @@ Usage:
 import os
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from aistore.sdk.client import Client
 from aistore.mcp.tools.cluster import register_cluster_tools
@@ -24,7 +24,7 @@ from aistore.mcp.tools.buckets import register_bucket_tools
 from aistore.mcp.tools.jobs import register_job_tools
 
 # Initialize MCP server
-mcp = FastMCP(
+mcp = MCPServer(
     name="aistore",
     instructions=(
         "AIStore MCP Server for cluster management and debugging. "
