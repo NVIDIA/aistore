@@ -70,6 +70,10 @@ stages:
         - 'python/aistore/pytorch/**/*'
         - 'python/tests/unit/pytorch/**/*'
         - 'python/tests/integration/pytorch/**/*'
+    - &aisloader_changes_rule
+      if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - 'bench/tools/aisloader/**/*'
 
 .default_rules: &default_rules
   rules:
@@ -305,6 +309,7 @@ build:k8s:
   rules:
     - !reference [.test_k8s_short_template, rules]
     - *python_req_changes_rule
+    - *aisloader_changes_rule
 
 lint:fmt:
   stage: build
@@ -954,6 +959,24 @@ test:short:assorted:k8s:
   script:
     - make test-run
 
+# aisloader ETL only: the rest of the aisloader E2E suite runs in `test:short:aisloader`.
+test:short:k8s:aisloader:
+  extends: .test_k8s_short_template
+  timeout: 20m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
+      when: manual
+      allow_failure: true
+    - !reference [.test_k8s_short_template, rules]
+    - *aisloader_changes_rule
+  variables:
+    BUCKET: "ais://test"
+    RE: "^TestAISLoaderETL$"
+  script:
+    - sleep 10 # Give some time for the cluster to stabilize.
+    - make aisloader
+    - DURATION=20s make test-aisloader
+
 test:long:k8s:
   extends: .test_k8s_long_template
   timeout: 6h
@@ -974,14 +997,6 @@ test:long:k8s:single-target:
   script:
     - make test-run
 
-test:long:k8s:aisloader:
-  extends: .test_k8s_long_template
-  timeout: 20m
-  script:
-    - sleep 10 # Give some time for the cluster to stabilize.
-    - make aisloader
-    - DURATION=20s BUCKET="ais://test" make test-aisloader
-
 test:long:k8s:pyaisloader:
   extends: .test_k8s_long_template
   timeout: 15m
@@ -995,7 +1010,6 @@ test:long:k8s:all:
   variables:
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
-    - make aisloader
     - cd deploy/dev/k8s
     - ./utils/ci/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml
@@ -1016,7 +1030,7 @@ test:long:k8s:all:
     - |
       for bucket in ${CLOUD_BCKS}; do
         echo "----- RUNNING LONG TESTS WITH: ${bucket} -----"
-        BUCKET=${bucket} make test-long && make test-aisloader
+        BUCKET=${bucket} make test-long
         exit_code=$?
         result=$((result + exit_code))
         echo "----- LONG TESTS FINISHED WITH: ${exit_code} -----"

@@ -277,7 +277,7 @@ test-aisloader-unit: ## Run aisloader unit tests
 	@go test -count=1 -tags=debug ./bench/tools/aisloader/...
 
 test-aisloader: ## Run aisloader E2E tests against a running cluster
-	@RE="^TestAISLoader" TEST_TAGS="aisloader $(TEST_TAGS)" BUCKET="$(BUCKET)" TESTS_DIR="bench/tools/aisloader/test" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-run
+	@RE="$(or $(RE),^TestAISLoader)" TEST_TAGS="aisloader $(TEST_TAGS)" BUCKET="$(BUCKET)" TESTS_DIR="bench/tools/aisloader/test" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-run
 
 test-run: test-envcheck # runs tests matching a specific regex
 ifeq ($(RE),)
