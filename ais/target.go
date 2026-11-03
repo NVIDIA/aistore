@@ -61,7 +61,6 @@ type (
 	regstate struct {
 		mu       sync.Mutex  // serialize metasync Rx, shutdown, transition to standby; enable/disable backend
 		disabled atomic.Bool // true: standing by
-		prevbmd  atomic.Bool // special
 	}
 	backends   map[string]core.Backend
 	rlbackends map[string]*rlbackend
@@ -73,11 +72,15 @@ type (
 		reb      *reb.Reb
 		res      *res.Res
 		fsprg    fsprungroup
-		hdbGate  hdbGate // head-batch receiver
+		hdb      hdbGate // head-batch receiver admission
 		txns     txns
 		ups      ups
 		htrun    // common w/ proxy
 		regstate regstate
+		boot     struct {
+			prevBMD atomic.Bool // loaded previous BMD, until a newer version is applied
+			newVol  bool        // persist fspaths once joined
+		}
 	}
 )
 
@@ -347,13 +350,13 @@ func (t *target) init(config *cmn.Config) {
 	daemon.rg.add(k)
 	t.keepalive = k
 
-	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
+	t.boot.newVol = newVol
+	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
 
 	sc := transport.Init(ts, t.streamSign, t.streamVerify, g.netServ.data.useIPv6) // init transport sub-system
 	daemon.rg.add(sc)                                                              // new stream collector
 
 	t.fshc = health.NewFSHC(t)
-	t.hdbGate.init()
 
 	if err := ts.InitCDF(config); err != nil {
 		cos.ExitLog(err)
@@ -450,7 +453,7 @@ func (t *target) Run() error {
 
 	// Init meta-owners and load local instances
 	if prev := t.owner.bmd.init(); prev {
-		t.regstate.prevbmd.Store(true)
+		t.boot.prevBMD.Store(true)
 	}
 	t.owner.etl.init()
 
@@ -557,7 +560,7 @@ func (t *target) gojoin(config *cmn.Config) {
 	}
 	t.markClusterStarted()
 
-	if t.fsprg.newVol && !config.TestingEnv() {
+	if t.boot.newVol && !config.TestingEnv() {
 		config := cmn.GCO.BeginUpdate()
 		fspathsSave(config)
 	}
@@ -620,7 +623,7 @@ func (t *target) endStartupStandby() (err error) {
 	nlog.Infof("%s enabled and joined (%s)", t, smap.StringEx())
 
 	config := cmn.GCO.Get()
-	if t.fsprg.newVol && !config.TestingEnv() {
+	if t.boot.newVol && !config.TestingEnv() {
 		config = cmn.GCO.BeginUpdate()
 		fspathsSave(config)
 	}

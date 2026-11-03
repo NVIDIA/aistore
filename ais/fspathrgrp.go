@@ -23,14 +23,10 @@ import (
 )
 
 type fsprungroup struct {
-	t      *target
-	newVol bool
+	t *target
 }
 
-func (g *fsprungroup) init(t *target, newVol bool) {
-	g.t = t
-	g.newVol = newVol
-}
+func (g *fsprungroup) init(t *target) { g.t = t }
 
 //
 // add | re-enable

@@ -819,7 +819,7 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, t
 	if err != nil {
 		nlog.Errorln(err)
 	} else if oldVer < newBMD.Version {
-		t.regstate.prevbmd.Store(false)
+		t.boot.prevBMD.Store(false)
 		t._postBMD(newBMD, tag, rmbcks)
 	}
 	if emsg != "" {
@@ -859,7 +859,7 @@ skip:
 	// 1. create
 	var (
 		createErrs []error
-		nilbmd     = bmd.version() == 0 || t.regstate.prevbmd.Load()
+		nilbmd     = bmd.version() == 0 || t.boot.prevBMD.Load()
 	)
 	newBMD.RangeProps(func(name, provider string, ns cmn.Ns, props *cmn.Bprops) bool {
 		if _, present := bmd.Providers[provider][ns.Uname()][name]; present {

@@ -39,14 +39,9 @@ type hdbBck struct {
 
 // at Critical load the receiver answers 429 and loads no objects
 type hdbGate struct {
-	adv  load.Advice // protected by mu
 	mu   sync.Mutex
 	next atomic.Int64 // mono time of the next sample
 	crit atomic.Bool  // the last sample
-}
-
-func (g *hdbGate) init() {
-	g.adv.Init(load.FlMem|load.FlCla, &load.Extra{RW: false}) // metadata-only
 }
 
 // one request samples the load while others use the last answer
@@ -55,8 +50,9 @@ func (g *hdbGate) busy() bool {
 	if now < g.next.Load() || !g.mu.TryLock() {
 		return g.crit.Load()
 	}
-	g.adv.Refresh()
-	crit := g.adv.Load == load.Critical
+	var adv load.Advice
+	adv.Init(load.FlMem|load.FlCla, nil) // metadata-only
+	crit := adv.Load == load.Critical
 	g.crit.Store(crit)
 	g.next.Store(now + int64(hdbLoadIval))
 	g.mu.Unlock()
@@ -121,7 +117,7 @@ func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request) (ecode int
 		return http.StatusBadRequest, fmt.Errorf("%s: invalid content length %d, expecting (0, %d]", apc.HdbTag, r.ContentLength, hdbBodyMax)
 	}
 	// critical load: reject before reading the body
-	if t.hdbGate.busy() {
+	if t.hdb.busy() {
 		cause := fmt.Errorf("%s: %s rejected due to resource pressure", t, apc.HdbTag)
 		return http.StatusTooManyRequests, cmn.NewErrTooManyRequests(cause, http.StatusTooManyRequests)
 	}

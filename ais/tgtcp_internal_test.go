@@ -309,8 +309,8 @@ func TestHdbBodyEarlyReply(t *testing.T) {
 // at critical load the receiver rejects the request with 429 before it reads the body
 func TestHdbReceiverBusy(t *testing.T) {
 	tgt := &target{}
-	tgt.hdbGate.crit.Store(true)
-	tgt.hdbGate.next.Store(mono.NanoTime() + int64(time.Hour))
+	tgt.hdb.crit.Store(true)
+	tgt.hdb.next.Store(mono.NanoTime() + int64(time.Hour))
 
 	packed := hdbTestReq(apc.HdbSizeDflt).NewPack()
 	body := bytes.NewReader(packed)
