@@ -1249,12 +1249,14 @@ const (
 // - labeled mountpaths (or "mountpath labels")
 func SetVolSizeMedia() error {
 	var (
-		mediaTy string
 		totalSz uint64
-		flags   = flagNVMe
 		seen    = make(map[cos.FsID]struct{}, len(mfs.fsIDs))
 		avail   = GetAvail()
 		cnt     int
+		// computed
+		numSlowFS  int
+		allNVMe    = true
+		rotational bool
 	)
 	for _, mi := range avail {
 		if mi.IsAnySet(FlagWaitingDD) {
@@ -1271,20 +1273,14 @@ func SetVolSizeMedia() error {
 		// - consider factoring-in len(mi.Disks) == 0
 		// - and vice versa, len(mi.Disks) > 1 may indicate "fast" for HDDs
 		if strings.Contains(mi.FsType, "fuse") || mi.FsType == "overlay" || mi.FsType == "aufs" {
-			flags |= flagSlow
+			numSlowFS++
 		}
-
-		if mi.IsRotational() {
-			flags = flagRotational
-			mediaTy = _hdd
-		} else if !mi.IsNVMe() && flags != flagRotational {
-			flags = 0
-		}
+		rotational = rotational || mi.IsRotational()
+		allNVMe = allNVMe && mi.IsNVMe()
 		totalSz += mi.diskSize()
 	}
 	mfs.totalSize.Store(totalSz)
 
-	// log & flags
 	if cnt == 0 {
 		ratomic.StoreUint64(&mfs.flags, 0)
 		return cmn.ErrNoMountpaths
@@ -1292,13 +1288,30 @@ func SetVolSizeMedia() error {
 	if totalSz == 0 {
 		return fmt.Errorf("%s (mountpaths: %d/%d)", volSizeZero, cnt, len(avail))
 	}
+
+	// flags
+	var (
+		flags   uint64
+		mediaTy = _ssd
+	)
+	switch {
+	case rotational:
+		flags, mediaTy = flagRotational, _hdd
+	case allNVMe:
+		flags, mediaTy = flagNVMe, _nvme
+	}
+	if numSlowFS > 0 {
+		flags |= flagSlow
+		// (unique filesystems - compare w/ cnt)
+		if numSlowFS == len(seen) {
+			mediaTy = ", slow filesystem"
+		} else {
+			mediaTy += "(slow filesystem present)"
+		}
+	}
 	ratomic.StoreUint64(&mfs.flags, flags)
-	if mediaTy == "" {
-		mediaTy = cos.Ternary(flags == flagNVMe, _nvme, _ssd)
-	}
-	if flags&flagSlow != 0 {
-		mediaTy += "(slow)"
-	}
+
+	// log
 	nlog.Infof("volume: [%s%s]", cos.ToSizeIEC(int64(totalSz), 2), mediaTy)
 	return nil
 }
