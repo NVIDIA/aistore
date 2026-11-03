@@ -202,7 +202,14 @@ For an eligible object, the target:
 3. pins every range read to the remote object version (ETag, generation, or version) returned by the initial GET;
 4. writes the chunks into the cluster, finalizes the object, and serves it through the regular GET path, including range reads and archive extraction.
 
-If a range read returns HTTP 412 (the remote object changed), the target discards the partial result and fetches the new version sequentially, within the same request. Other backend errors fail the request, as they would fail a regular cold GET.
+If a range read returns HTTP 412 (the remote object changed), the target discards the partial result and fetches the new version sequentially, within the same request.
+
+Remote throttling (HTTP 429 or 503) depends on the bucket's [backend rate limiting](/docs/rate_limit.md):
+
+* with `rate_limit.backend` enabled, the rate limiter paces backend requests, including range reads, and retries throttling errors reported by supported cloud backends. Remote AIS 429/503 responses fail the request;
+* otherwise, if a range read is throttled, the target discards the partial result and refetches sequentially within the same request. A throttle on the initial full GET fails that request. In both cases, cold GETs on that target for buckets without backend rate limiting use sequential reads for twice `timeout.cold_get_conflict` (10s by default), with a 5s minimum and `timeout.max_host_busy` as the maximum.
+
+Other backend errors fail the request.
 
 Locking is the same as for any [cold GET](#concurrent-reads-of-a-cold-object): the write lock is held across all range reads until the object is finalized. Concurrent readers wait for the entire download and never see a partial object; a failed parallel cold GET removes the chunks written so far.
 
@@ -214,7 +221,8 @@ An object qualifies when all of the following hold:
 * neither the request (`--latest`) nor the bucket (`versioning.validate_warm_get`, `versioning.synchronize`) asks to check the latest remote version;
 * the backend reports a usable version for the object. Objects in unversioned remote AIS buckets and GCS objects served with decompressive transcoding use the regular cold GET;
 * the bucket is not an `oc://` bucket; the native OCI backend uses its own multipart reader;
-* the target is not under high load; otherwise the cold GET is sequential.
+* the target is not under high load and, for buckets without `rate_limit.backend`, is outside the backoff window after a remote 429 or 503; otherwise the cold GET is sequential;
+* the target has room in its budget for extra range workers across all cold GETs. The budget is the number of available mountpaths times two for targets with rotational disks or slow filesystems, or times 16 otherwise. The GET's own worker also reads ranges and runs outside this budget. Near the limit, the cold GET uses fewer workers. At the limit, it is sequential.
 
 Notes:
 

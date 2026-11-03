@@ -18,15 +18,23 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/load"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// TODO: cap concurrent range readers per target (across cold GETs)
 const (
 	// increase if requested or justified by concurrent-read measurements
 	coldRangeMaxWorkers = 4
 	coldRangeMinSize    = 16 * cos.MiB // amortize setup and additional backend requests
+)
+
+// per-target cap on extra range readers (all cold GETs): available mountpaths times a per-media multiplier
+// - current heuristic; HDD and NVMe are an order of magnitude apart; SSD counts as NVMe
+const (
+	coldRangeMultHDD  = 2  // rotational or slow (FUSE, overlay, AUFS)
+	coldRangeMultNVMe = 16 // NVMe and SSD
 )
 
 type (
@@ -53,7 +61,51 @@ type (
 		fh    *os.File
 		cksum cos.CksumHash
 	}
+	// target-wide; buckets with rate_limit.backend use the configured limiter
+	// TODO: consider per-bucket granularity
+	coldRange struct {
+		backoffUntil atomic.Int64 // mono time: use sequential cold GETs until then
+		inflight     atomic.Int32 // extra range readers, target-wide (see coldRangeMult*)
+	}
 )
+
+// record remote 429/503 and return true
+func (s *coldRange) throttle(bprops *cmn.Bprops, config *cmn.Config, code int, err error) bool {
+	if bprops.RateLimit.Backend.Enabled {
+		return false
+	}
+	if code != http.StatusTooManyRequests && code != http.StatusServiceUnavailable && !cmn.IsErrTooManyRequests(err) {
+		return false
+	}
+	until := mono.NanoTime() + int64(config.Timeout.ColdRangeBackoff())
+	for prev := s.backoffUntil.Load(); until > prev; prev = s.backoffUntil.Load() {
+		if s.backoffUntil.CompareAndSwap(prev, until) {
+			break
+		}
+	}
+	return true
+}
+
+func (s *coldRange) backingOff(bprops *cmn.Bprops) bool {
+	until := s.backoffUntil.Load()
+	return until != 0 && !bprops.RateLimit.Backend.Enabled && mono.NanoTime() < until
+}
+
+// reserve up to `want` extra readers; return zero to cold GET sequentially
+func (s *coldRange) reserve(want int, limit int32) int {
+	for {
+		cur := s.inflight.Load()
+		n := min(int32(want), limit-cur)
+		if n <= 0 {
+			return 0
+		}
+		if s.inflight.CompareAndSwap(cur, cur+n) {
+			return int(n)
+		}
+	}
+}
+
+func (s *coldRange) release(n int) { s.inflight.Add(-int32(n)) }
 
 // initial full read
 // - when parallel and qualified (chunked bucket, etc.), make it cancelable
@@ -62,7 +114,7 @@ func (goi *getOI) coldReader(bp core.Backend, parallel bool) (res core.GetReader
 	ctx := goi.ctx
 	// latest-version comparison retains the configured whole-object checksum
 	if parallel && goi.lom.Bprops().Chunks.AutoEnabled() && !goi.latestVer && !goi.lom.ValidateColdGet() &&
-		!goi.lom.ECEnabled() && bp.Provider() != apc.OCI {
+		!goi.lom.ECEnabled() && bp.Provider() != apc.OCI && !goi.t.crange.backingOff(goi.lom.Bprops()) {
 		ctx, stop = context.WithCancel(ctx)
 	}
 	res = bp.GetObjReader(ctx, goi.lom, 0, 0)
@@ -83,6 +135,10 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 	if nchunks > core.MaxChunkCount {
 		return false, 0, nil
 	}
+	// the initial GET may have been waiting for headers when another request was throttled
+	if goi.t.crange.backingOff(goi.lom.Bprops()) {
+		return false, 0, nil
+	}
 	var adv load.Advice
 	flags := uint64(load.FlMem | load.FlCla | load.FlGor)
 	if !cmn.Rom.TestingEnv() { // emulated mountpaths may have no disk-utilization sample
@@ -92,6 +148,16 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 	if adv.Load >= load.High {
 		return false, 0, nil
 	}
+	// the caller reads chunk zero; others are extra, subject to the per-target cap
+	mult := int32(coldRangeMultNVMe)
+	if fs.IsRotational() || fs.IsSlow() {
+		mult = coldRangeMultHDD
+	}
+	nextra := goi.t.crange.reserve(int(min(nchunks, coldRangeMaxWorkers))-1, int32(fs.NumAvail())*mult)
+	if nextra == 0 {
+		return false, 0, nil
+	}
+	defer goi.t.crange.release(nextra)
 
 	manifest, err := core.NewUfest("", goi.lom, false /*must-exist*/)
 	if err != nil {
@@ -110,9 +176,8 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 	r.next.Store(chunkSize)
 
 	// the caller handles chunk zero while the other readers run concurrently
-	nworkers := int(min(nchunks, coldRangeMaxWorkers))
-	r.wg.Add(nworkers - 1)
-	for range nworkers - 1 {
+	r.wg.Add(nextra)
+	for range nextra {
 		go func() {
 			defer r.wg.Done()
 			w := coldRangeWorker{r: r}

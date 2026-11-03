@@ -173,6 +173,8 @@ func TestRemaisColdGetRanges(t *testing.T) {
 		{name: "custom-version", cksum: cos.ChecksumOneXxh, parallel: true, fault: "overwrite", refetch: true},
 		{name: "ignored-range", cksum: cos.ChecksumNone, parallel: true, fault: "ignore", code: http.StatusBadGateway},
 		{name: "short-range", cksum: cos.ChecksumOneXxh, parallel: true, fault: "short", code: http.StatusInternalServerError},
+		// remote 429 without rate_limit.backend: sequential refetch, then backoff (keep it last)
+		{name: "throttled", cksum: cos.ChecksumOneXxh, parallel: true, fault: "throttle"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -230,6 +232,7 @@ func TestRemaisColdGetRanges(t *testing.T) {
 			forward.Transport = remoteBP.Client.Transport
 			var full, heads, ranges, active, peak atomic.Int64
 			var overwrite sync.Once
+			var allowRange atomic.Bool
 			gate := make(chan struct{})
 			// match the remote scheme (see TestRemaisBlobDownloadVersionPin)
 			newBridge := httptest.NewServer
@@ -258,11 +261,11 @@ func TestRemaisColdGetRanges(t *testing.T) {
 						break
 					}
 				}
-				if ranges.Add(1) == 4 {
+				if ranges.Add(1) == 2 {
 					close(gate)
 				}
 				if tc.fault == "" {
-					// hold the first four requests until all readers have reached the bridge
+					// hold the first range request until a second reader reaches the bridge
 					select {
 					case <-gate:
 					case <-req.Context().Done():
@@ -285,6 +288,11 @@ func TestRemaisColdGetRanges(t *testing.T) {
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write(data)
 					return
+				case "throttle":
+					if !allowRange.Load() {
+						http.Error(w, "slow down", http.StatusTooManyRequests)
+						return
+					}
 				case "short":
 					var off, end int64
 					_, _ = fmt.Sscanf(req.Header.Get(cos.HdrRange), "bytes=%d-%d", &off, &end)
@@ -323,6 +331,37 @@ func TestRemaisColdGetRanges(t *testing.T) {
 				tlog.Logfln("%s: full GETs=%d, ranges=%d", tc.name, full.Load(), ranges.Load())
 				return
 			}
+			if tc.fault == "throttle" {
+				// Wait out target-wide backoff even if an assertion fails.
+				resumeAt := time.Now().Add(config.Timeout.ColdRangeBackoff())
+				t.Cleanup(func() { time.Sleep(time.Until(resumeAt)) })
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, bytes.Equal(out.Bytes(), data), "throttled cold GET returned incorrect bytes")
+				tassert.Fatalf(t, full.Load() == 2 && heads.Load() == 0, "expected two full GETs and no HEAD: GET=%d HEAD=%d",
+					full.Load(), heads.Load())
+				m.validateChunksOnDisk(bck, objName, int(cos.DivCeil(size, chunk)))
+
+				// The next cold GET is sequential during backoff.
+				tassert.CheckFatal(t, api.EvictObject(bp, bck, objName))
+				nranges := ranges.Load()
+				out.Reset()
+				_, err = api.GetObject(bp, bck, objName, args)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, bytes.Equal(out.Bytes(), data), "cold GET during backoff returned incorrect bytes")
+				tassert.Fatalf(t, full.Load() == 3 && ranges.Load() == nranges,
+					"expected a sequential cold GET during backoff: GET=%d, ranges=%d (before %d)", full.Load(), ranges.Load(), nranges)
+				// Once backoff expires, the next cold GET uses range reads again.
+				allowRange.Store(true)
+				time.Sleep(time.Until(resumeAt))
+				tassert.CheckFatal(t, api.EvictObject(bp, bck, objName))
+				out.Reset()
+				_, err = api.GetObject(bp, bck, objName, args)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, bytes.Equal(out.Bytes(), data), "cold GET after backoff returned incorrect bytes")
+				tassert.Fatalf(t, full.Load() == 4 && ranges.Load() > nranges,
+					"expected parallel cold GET after backoff: GET=%d, ranges=%d (before %d)", full.Load(), ranges.Load(), nranges)
+				return
+			}
 			if tc.code != 0 {
 				tassert.Fatalf(t, err != nil, "expected HTTP %d", tc.code)
 				tassert.Fatalf(t, cmn.AsErrHTTP(err).Status == tc.code, "expected HTTP %d, got %v", tc.code, err)
@@ -334,7 +373,8 @@ func TestRemaisColdGetRanges(t *testing.T) {
 			tassert.Fatalf(t, bytes.Equal(out.Bytes(), data), "cold GET returned incorrect bytes")
 			tassert.Fatalf(t, full.Load() == 1 && heads.Load() == 0, "unexpected initial requests: GET=%d HEAD=%d", full.Load(), heads.Load())
 			if tc.parallel {
-				tassert.Fatalf(t, peak.Load() == 4, "expected four concurrent readers, got %d", peak.Load())
+				n := peak.Load()
+				tassert.Fatalf(t, n >= 2 && n <= 4, "expected two to four concurrent readers, got %d", n)
 				tassert.Fatalf(t, ranges.Load() == cos.DivCeil(size, chunk)-1, "unexpected range count %d", ranges.Load())
 				op, err := api.HeadObject(bp, bck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
 				tassert.CheckFatal(t, err)

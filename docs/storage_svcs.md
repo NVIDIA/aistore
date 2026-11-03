@@ -371,6 +371,8 @@ Parallel cold GET is disabled for `checksum.validate_cold_get`, latest-version G
 
 If a range read fails with HTTP 412 (the remote object changed), AIS discards the partial result and refetches the object once with a fresh sequential GET, before sending data to the client.
 
+The same sequential refetch applies when a range read returns HTTP 429 or 503 in a bucket without backend rate limiting. Throttling on the initial full GET also starts target-wide backoff. During backoff, cold GETs for buckets without backend rate limiting stay sequential for twice `timeout.cold_get_conflict` (10s by default), with a 5s minimum and `timeout.max_host_busy` as the maximum. See [Reading large objects from remote buckets](/docs/howto_large_cold_objects.md#cold-get-into-a-chunked-bucket) for how this interacts with the rate limiter.
+
 For large objects, use a `chunks.chunk_size` of 128–256 MiB. The object must span multiple chunks for parallelism; at least four chunks allow all four readers to participate.
 
 ### Rechunk

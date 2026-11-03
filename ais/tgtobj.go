@@ -809,6 +809,7 @@ do: // retry uplock or ec-recovery, the latter only once
 	// cold-GET: upgrade rlock => wlock and call t.Backend.GetObjReader
 	if cold {
 		bp := goi.t.Backend(goi.lom.Bck())
+		config := cmn.GCO.Get()
 		if cs.IsNil() {
 			cs = fs.Cap()
 		}
@@ -819,7 +820,7 @@ do: // retry uplock or ec-recovery, the latter only once
 		// try upgrading rlock => wlock
 		if !goi.lom.UpgradeLock() {
 			if uplock == nil {
-				uplock = newUplock(cmn.GCO.Get(), goi.ltime)
+				uplock = newUplock(config, goi.ltime)
 				nlog.Warningln(uplockWarn, goi.lom.String())
 			}
 			if err := uplock.do(goi.lom); err != nil {
@@ -829,7 +830,7 @@ do: // retry uplock or ec-recovery, the latter only once
 			goto do // repeat
 		}
 
-		if ecode, err = goi.coldGet(bp); err != nil || goi.unlocked {
+		if ecode, err = goi.coldGet(bp, config); err != nil || goi.unlocked {
 			return ecode, err
 		}
 	}
@@ -898,7 +899,7 @@ func (goi *getOI) isStreamingColdGet() bool {
 }
 
 // enter with the write lock; return with a read lock, or unlocked on error or after streaming
-func (goi *getOI) coldGet(bp core.Backend) (int, error) {
+func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
 	goi.lom.SetAtimeUnix(goi.atime)
 	// zero-out prev. version custom metadata, if any
 	goi.lom.SetCustomMD(nil)
@@ -916,11 +917,13 @@ func (goi *getOI) coldGet(bp core.Backend) (int, error) {
 			case er == nil:
 				return 0, nil
 			case cos.IsErrPreconditionFailed(er):
-				// remote object changed mid-fill and nothing has been sent: refetch it sequentially
+				// remote object changed and nothing has been sent: refetch it sequentially
 				nlog.Warningln(goi.lom.Cname(), "changed during parallel cold GET, refetching:", er)
-				goi.lom.Reset() // drop the previous revision's metadata (as in the initial cold GET)
-				goi.lom.SetAtimeUnix(goi.atime)
-				res, _ = goi.coldReader(bp, false /*parallel*/)
+				res = goi.coldRefetch(bp)
+			case goi.t.crange.throttle(goi.lom.Bprops(), config, code, er):
+				// ditto, when throttled by the remote backend
+				nlog.Warningln(goi.lom.Cname(), "throttled during parallel cold GET, refetching sequentially:", er)
+				res = goi.coldRefetch(bp)
 			default:
 				goi.lom.Unlock(true)
 				goi.unlocked = true
@@ -932,6 +935,7 @@ func (goi *getOI) coldGet(bp core.Backend) (int, error) {
 		goi.lom.Unlock(true)
 		goi.unlocked = true
 		if !cos.IsNotExist(res.Err, res.ErrCode) {
+			goi.t.crange.throttle(goi.lom.Bprops(), config, res.ErrCode, res.Err)
 			nlog.Infoln(ftcg, "(read)", goi.lom.Cname(), res.Err, res.ErrCode)
 		}
 		return res.ErrCode, res.Err
@@ -945,7 +949,7 @@ func (goi *getOI) coldGet(bp core.Backend) (int, error) {
 	}
 
 	// regular path
-	code, err := goi.coldPut(&res)
+	code, err := goi.coldPut(&res, config)
 	if err != nil {
 		goi.unlocked = true
 		return code, err
@@ -953,7 +957,15 @@ func (goi *getOI) coldGet(bp core.Backend) (int, error) {
 	return code, nil
 }
 
-func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
+// drop the previous attempt's metadata (as in the initial cold GET) and read sequentially
+func (goi *getOI) coldRefetch(bp core.Backend) core.GetReaderResult {
+	goi.lom.Reset()
+	goi.lom.SetAtimeUnix(goi.atime)
+	res, _ := goi.coldReader(bp, false /*parallel*/)
+	return res
+}
+
+func (goi *getOI) coldPut(res *core.GetReaderResult, config *cmn.Config) (int, error) {
 	var (
 		t, lom = goi.t, goi.lom
 		poi    = allocPOI()
@@ -961,7 +973,7 @@ func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
 	{
 		poi.t = t
 		poi.lom = lom
-		poi.config = cmn.GCO.Get()
+		poi.config = config
 		poi.r = res.R
 		poi.size = res.Size
 		poi.workFQN = lom.GenFQN(fs.WorkCT, fs.WorkfileColdget)

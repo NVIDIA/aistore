@@ -72,7 +72,8 @@ type (
 		reb      *reb.Reb
 		res      *res.Res
 		fsprg    fsprungroup
-		hdb      hdbGate // head-batch receiver admission
+		hdb      hdbGate   // head-batch receiver admission
+		crange   coldRange // parallel cold GET(range) - compare w/ blobdl
 		txns     txns
 		ups      ups
 		htrun    // common w/ proxy

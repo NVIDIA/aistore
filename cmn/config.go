@@ -3392,6 +3392,14 @@ func (c *TimeoutConf) JoinTimeout() time.Duration {
 	return c.JoinAtStartup.D()
 }
 
+// parallel cold GET: sequential cold GETs for this long after a remote 429/503
+// - current heuristic: twice cold_get_conflict, clamped between 5s and max_host_busy
+func (c *TimeoutConf) ColdRangeBackoff() time.Duration {
+	const floor = 5 * time.Second
+	cgc := cos.NonZero(c.ColdGetConflict.D(), ColdGetConflictDflt)
+	return cos.ClampDuration(2*cgc, floor, max(c.MaxHostBusy.D(), floor))
+}
+
 func (c *TimeoutConf) Validate() error {
 	debug.Assert(SharedStreamsDflt >= 2*hk.Prune2mIval)
 	//
