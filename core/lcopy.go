@@ -380,6 +380,7 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 	}
 
 	// Compute the whole checksum for the destination manifest
+	// TODO: use WholeChecksum without rereading chunks
 	wholeCksum := cos.NewCksumHash(dst.CksumConf().Type)
 	if err := dstUfest.ComputeWholeChecksum(wholeCksum); err != nil {
 		return dstUfest._undoCopy(fmt.Errorf("failed to compute whole checksum for destination %s: %w", dst.Cname(), err))

@@ -7,6 +7,7 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"maps"
@@ -25,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -1845,4 +1847,101 @@ func TestRemaisBlobDownloadVersionPin(t *testing.T) {
 	tassert.Fatalf(t, bytes.Equal(out.Bytes(), v2), "fresh fill returned mixed revisions")
 	m.validateChunksOnDisk(bck, objName, 2)
 	tlog.Logfln("verified v2 bytes and two cached chunks")
+}
+
+func TestBlobDownloadChecksum(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+
+	for _, test := range []struct {
+		checksum   string
+		outOfOrder bool
+	}{
+		{cos.ChecksumCesXxh, false},
+		{cos.ChecksumSHA256, false},
+		{cos.ChecksumNone, false},
+		{cos.ChecksumCesXxh, true},
+		{cos.ChecksumSHA256, true},
+		{cos.ChecksumNone, true},
+	} {
+		name := test.checksum + "/in-order"
+		if test.outOfOrder {
+			name = test.checksum + "/out-of-order"
+		}
+		t.Run(name, func(t *testing.T) {
+			chunkSize, workers, fullChunks := int64(64*cos.KiB), xact.NwpNone, 2
+			if test.outOfOrder {
+				tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+				// Blob download permits two workers only above 256MiB.
+				chunkSize, workers, fullChunks = 64*cos.MiB, 2, 4
+			}
+			var (
+				smap   = meta.Smap{Pmap: make(meta.NodeMap), Tmap: make(meta.NodeMap), UUID: cos.GenUUID(), Version: 1}
+				data   = append(bytes.Repeat([]byte("checksum"), int(chunkSize)*fullChunks/8), []byte("unequal last part")...)
+				second chan struct{}
+			)
+			if test.outOfOrder {
+				second = make(chan struct{})
+			}
+			data[chunkSize] ^= 0xff // distinguish equal-sized chunks
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == apc.URLPathDae.S {
+					w.Header().Set(cos.HdrContentType, cos.ContentJSON)
+					_ = json.NewEncoder(w).Encode(&smap)
+					return
+				}
+				if strings.HasPrefix(r.URL.Path, apc.URLPathBuckets.S) {
+					w.Header().Set(apc.HdrBucketProps, "{}")
+					return
+				}
+				rangeHdr := r.Header.Get(cos.HdrRange)
+				if r.Method == http.MethodGet && second != nil && rangeHdr == cmn.MakeRangeHdr(0, chunkSize) {
+					// Hold the first response until the second chunk has been streamed.
+					select {
+					case <-second:
+					case <-r.Context().Done():
+						return
+					}
+				}
+				http.ServeContent(w, r, "object", time.Time{}, bytes.NewReader(data))
+				if r.Method == http.MethodGet && second != nil && rangeHdr == cmn.MakeRangeHdr(chunkSize, chunkSize) {
+					close(second)
+				}
+			}))
+			t.Cleanup(server.Close)
+			alias := "blob-checksum-" + trand.String(8)
+			tassert.CheckFatal(t, api.AttachRemoteAIS(bp, alias, server.URL))
+			t.Cleanup(func() { tassert.CheckError(t, api.DetachRemoteAIS(bp, alias)) })
+			bck := cmn.Bck{Name: "checksum-" + trand.String(8), Provider: apc.AIS, Ns: cmn.Ns{UUID: smap.UUID}}
+			_, err := api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(test.checksum)},
+			})
+			tassert.CheckFatal(t, err)
+
+			const objName = "object"
+			xid, err := api.BlobDownload(bp, bck, objName, &apc.BlobMsg{
+				ChunkSize: chunkSize, NumWorkers: workers,
+			})
+			tassert.CheckFatal(t, err)
+			tassert.CheckFatal(t, api.WaitForXaction(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}))
+
+			props, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsChecksum, api.HeadArgs{FltPresence: apc.FltPresent})
+			tassert.CheckFatal(t, err)
+			actual := props.ObjAttrs.Checksum()
+			if test.checksum == cos.ChecksumNone {
+				tassert.Errorf(t, cos.NoneC(actual), "expected no checksum, got %v", actual)
+			} else {
+				expectedType := test.checksum
+				if test.outOfOrder {
+					expectedType = cos.ChecksumCRC32C
+				}
+				expected := cos.NewCksum(expectedType, cos.ChecksumB2S(data, expectedType))
+				tassert.Errorf(t, expected.Equal(actual), "expected %v, got %v", expected, actual)
+			}
+		})
+	}
 }

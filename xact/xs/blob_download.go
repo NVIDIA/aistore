@@ -339,6 +339,7 @@ func (p *blobFactory) Start() (err error) {
 	if err != nil {
 		return err
 	}
+	r.manifest.InitStreamingChecksum(lom.CksumType())
 
 	if r.numWorkers != xact.NwpNone {
 		r.workers = make([]*blobWorker, r.numWorkers)
@@ -768,10 +769,10 @@ func (r *XactBlobDl) _errStats() {
 }
 
 func (r *XactBlobDl) _fini(lom *core.LOM) (err error) {
-	if ty := lom.CksumConf().Type; ty != cos.ChecksumNone {
-		cksumH := cos.NewCksumHash(ty)
-		if err = r.manifest.ComputeWholeChecksum(cksumH); err == nil {
-			lom.SetCksum(&cksumH.Cksum)
+	if lom.CksumType() != cos.ChecksumNone {
+		var cksum *cos.Cksum
+		if cksum, err = r.manifest.WholeChecksum(); err == nil {
+			lom.SetCksum(cksum)
 		}
 	}
 	if err == nil {
@@ -1034,10 +1035,19 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		writers = append(writers, wi.sgl)
 	}
 
+	// TODO: streaming GETs could hash in write(), where chunks are already ordered
+	if inOrder, stream := manifest.CheckInOrder(int(partNum)); inOrder {
+		writers = append(writers, stream)
+		defer manifest.StreamWriteDone()
+	}
 	multiWriter := cos.NewWriterMulti(writers...)
 
 	// 5. Read remote, write local
-	chwritten, cksum, copyErr := cos.CopyAndChecksum(multiWriter, res.R, buf, lom.CksumConf().Type)
+	cksumType := lom.CksumType()
+	if cksumType != cos.ChecksumNone {
+		cksumType = cos.ChecksumCRC32C // combine at completion without rereading chunks
+	}
+	chwritten, cksum, copyErr := cos.CopyAndChecksum(multiWriter, res.R, buf, cksumType)
 	cos.Close(res.R)
 	cos.Close(chunkFh)
 	if copyErr != nil {
