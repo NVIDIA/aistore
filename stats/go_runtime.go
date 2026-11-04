@@ -29,7 +29,8 @@ var regexGoMetrics = regexp.MustCompile(
 		`|^/memory/classes/total:bytes$` + // total from OS
 		`|^/gc/heap/goal:bytes$` + // next GC target
 		`|^/gc/heap/allocs:bytes$` + // cumulative alloc bytes
-		`|^/cpu/classes/gc/total:cpu-seconds$`, // cumulative GC CPU time
+		`|^/cpu/classes/gc/total:cpu-seconds$` + // cumulative GC CPU time
+		`|^/sched/latencies:seconds$`, // runnable-to-running delay
 )
 
 func regGoRuntime(nodeType string) {

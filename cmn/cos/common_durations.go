@@ -20,6 +20,12 @@ const (
 	PollSleepLong   = 500 * time.Millisecond
 )
 
+// scheduler latency (cmn/load): bounds of the Critical threshold
+const (
+	SchedLatencyCritMin = 50 * time.Millisecond
+	SchedLatencyCritMax = 500 * time.Millisecond
+)
+
 // wait duration => probing frequency
 func ProbingFrequency(dur time.Duration) time.Duration {
 	sleep := min(dur>>3, time.Second)

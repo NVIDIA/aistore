@@ -82,7 +82,7 @@ The following node state flags are examples of red alerts, warnings, and informa
    - `OOM` - Out of memory condition
    - `OOCPU` - Out of CPU resources
    - `DiskFault` - Disk failures detected
-   - `HighNumGoroutines` - High number of goroutines
+   - `HighNumGoroutines` - Critical Go scheduler latency: runnable goroutines wait too long to run (name kept for compatibility)
    - `CertificateExpired` - TLS certificate has expired
    - `CertificateInvalid` - TLS certificate is invalid
 
@@ -99,7 +99,7 @@ The following node state flags are examples of red alerts, warnings, and informa
    - `LowCPU` - Low CPU availability
    - `CertWillSoonExpire` - TLS certificate will expire soon
    - `KeepAliveErrors` - Recent keep-alive errors detected
-   - `NumGoroutines` - Number of goroutines warning
+   - `NumGoroutines` - High Go scheduler latency (name kept for compatibility)
 
 3. **Information States** - Normal operational states:
    - `ClusterStarted` - Cluster has started (primary) or node has joined cluster
@@ -108,6 +108,8 @@ The following node state flags are examples of red alerts, warnings, and informa
 Node state flags are also exposed via Prometheus metrics - for details, see:
 
 * [Node Alerts in AIStore Prometheus docs](/docs/monitoring-prometheus.md#node-alerts).
+
+For `NumGoroutines` and `HighNumGoroutines` - how scheduler latency is graded, and common causes - see [Scheduler Latency Alerts](https://github.com/NVIDIA/aistore/blob/main/cmn/load/README.md#scheduler-latency-alerts).
 
 ## Live Performance Monitoring
 

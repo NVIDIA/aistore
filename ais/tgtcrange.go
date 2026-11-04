@@ -140,7 +140,7 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 		return false, 0, nil
 	}
 	var adv load.Advice
-	flags := uint64(load.FlMem | load.FlCla | load.FlGor)
+	flags := uint64(load.FlMem | load.FlCla | load.FlSch)
 	if !cmn.Rom.TestingEnv() { // emulated mountpaths may have no disk-utilization sample
 		flags |= load.FlDsk
 	}

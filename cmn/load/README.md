@@ -9,7 +9,7 @@ The `load` package provides a unified API for assessing the latter and generatin
 The package is built around several motivations:
 
 1.  Load assessment and throttling policy must be independent.
-2.  Callers choose which load dimensions matter: CPU, memory, goroutines, disk, FDs.
+2.  Callers choose which load dimensions matter: CPU, memory, scheduler latency, disk, FDs.
 3.  Sleep duration and sampling frequency adjust automatically.
 4.  Data I/O throttles aggressively; metadata operations throttle minimally.
 5.  Critical memory immediately triggers strong back-off.
@@ -19,7 +19,7 @@ The package provides one core abstraction called _throttling advice_ (`load.Advi
 -   **How frequently to check** (sample interval / batch size)
 -   **What the highest load level is** among monitored load dimensions
 
-Each of the 5 load dimensions - memory, CPU, goroutine count, disk utilization, number of open descriptors - is independently graded:
+Each of the 5 load dimensions - memory, CPU, scheduler latency, disk utilization, number of open descriptors - is independently graded:
 
 ``` go
 type Load uint8
@@ -40,7 +40,7 @@ The system evaluates load across up to **five dimensions**:
 
 -   `FlMem` --- memory pressure via `memsys.PageMM()`
 -   `FlCla` --- CPU load averages
--   `FlGor` --- goroutine count
+-   `FlSch` --- scheduler latency: p99 time runnable goroutines wait before running (see [Scheduler Latency](#scheduler-latency))
 -   `FlDsk` --- disk utilization (per-mountpath or max)
 -   `FlFdt` --- file descriptors (reserved for future use)
 
@@ -48,7 +48,7 @@ Internally this is represented as a packed `uint64` (8 bits per
 dimension):
 
     ┌────────┬────────┬────────┬────────┬────────┐
-    │  Fdt   │  Gor   │  Mem   │  Cla   │  Dsk   │
+    │  Fdt   │  Sch   │  Mem   │  Cla   │  Dsk   │
     │ (8bit) │ (8bit) │ (8bit) │ (8bit) │ (8bit) │
     └────────┴────────┴────────┴────────┴────────┘
         ↓        ↓        ↓        ↓        ↓
@@ -59,7 +59,7 @@ dimension):
 When computing `load.Advice`, the following logic takes place:
 
 1.  **Memory** --- highest priority; Critical memory triggers immediate, aggressive throttling
-2.  **Goroutines + CPU** --- compute pressure
+2.  **Scheduler latency + CPU** --- compute pressure
 3.  **Disk utilization** --- I/O saturation
 4.  **Workload type (RW)** --- metadata vs. data I/O
 
@@ -85,6 +85,99 @@ Currently used by subsystems/operations:
 - storage summary
 - space cleanup
 - LRU eviction
+
+### Scheduler Latency
+
+Scheduler latency is the time a goroutine spends runnable, waiting for the Go scheduler to run it. The runtime samples these waits and records the observations in the cumulative histogram `/sched/latencies:seconds` (`runtime/metrics`).
+
+Scheduler latency replaces the goroutine count used previously. Idle goroutines - blocked on I/O, timers, or idle connections - cost the scheduler nothing, while a few CPU-bound ones can saturate it. The count is a proxy; latency measures the effect.
+
+The design is best-effort and errs on the side of under-estimating the load:
+
+-   grade the p99 over a window: the delta of two consecutive histogram reads
+-   take the p99 bucket's lower bound
+-   grade windows with fewer than 128 recorded observations as Low
+-   at most one histogram read per window, and only on the hot path or the stats runner tick; negligible overhead
+
+Thresholds derive from `timeout.cplane_operation`:
+
+| Grade      | p99                                              | Default (`cplane_operation` = 2s) |
+| ---------- | ------------------------------------------------ | --------------------------------- |
+| `Critical` | `cplane_operation` / 20, clamped to [50ms, 500ms] | 100ms                             |
+| `High`     | `Critical` / 10                                  | 10ms                              |
+| `Low`      | below `High`                                     |                                   |
+
+Two independent windows read the same histogram:
+
+```
+                 /sched/latencies:seconds (cumulative)
+                                  │
+              ┌───────────────────┴───────────────────┐
+              ▼                                       ▼
+   ┌──────────────────────┐                ┌──────────────────────┐
+   │ hot path: Sched()    │                │ stats runner         │
+   │ window: 1-2 ticks    │                │ window: 1 tick       │
+   └──────────┬───────────┘                └──────────┬───────────┘
+              │                                       │
+       ┌──────┴───────────┐                           ▼
+       ▼                  ▼                ┌──────────────────────┐
+┌─────────────┐  ┌────────────────┐        │ node alerts          │
+│ load.Advice │  │ TuneNumWorkers │        │ yellow: High         │
+│ (FlSch)     │  │ (xactions)     │        │ red:    Critical     │
+└─────────────┘  └────────────────┘        └──────────────────────┘
+```
+
+Both windows run at the `periodic.stats_time` cadence (default 10s, one "tick"):
+
+-   **Hot path** (`load.Sched()`):
+    -   the first caller after `periodic.stats_time` reads the histogram; other callers get the last grade
+    -   more than two ticks since the previous read: record a new baseline and return Low, so that past load is never reported as current
+-   **Stats runner** (`load.SchedWin`):
+    -   one window per tick, regardless of traffic
+    -   more than two ticks since the previous read (e.g., the runner was blocked): record a new baseline and keep the current alerts
+    -   sets and clears the `NumGoroutines` (yellow) and `HighNumGoroutines` (red) node alerts; the flag names are kept for compatibility
+    -   while the grade stays High or Critical, logs a warning every 10 minutes with the p99 and the number of goroutines
+
+### Scheduler Latency Alerts
+
+A scheduler latency alert means runnable goroutines wait for a CPU (a Go `P`) longer than the threshold. The common causes:
+
+```
+                       ┌──────────────────────────┐
+                       │ p99 scheduler latency    │
+                       │ alert                    │
+                       └────────────┬─────────────┘
+                                    │
+       ┌────────────────────────────┼────────────────────────────┐
+       ▼                            ▼                            ▼
+┌──────────────┐            ┌──────────────┐             ┌──────────────┐
+│ CPU limit /  │            │ OS thread    │             │ garbage      │
+│ throttling   │            │ exhaustion   │             │ collection   │
+└──────────────┘            └──────────────┘             └──────────────┘
+```
+
+**CPU limit / throttling** - more runnable work than CPUs:
+
+-   a container CPU quota (cgroup `cpu.max`) throttles the process even when the host is idle
+-   `GOMAXPROCS` above the CPU quota; at startup, AIS reduces `GOMAXPROCS` to the container's CPU count unless the `GOMAXPROCS` environment variable is set (a warning in the log)
+-   other processes on the same node
+-   check: CPU load (`ais show cluster`, `LowCPU`/`OOCPU` alerts); cgroup v2 `cpu.stat` (`nr_throttled`, `throttled_usec`); `go_sched_gomaxprocs_threads`
+
+**OS thread exhaustion** - goroutines blocked in system calls hold their OS threads:
+
+-   the runtime starts new threads to keep all `P`s busy; slow thread creation can leave runnable goroutines waiting
+-   typical trigger: slow disks, with many goroutines blocked in file I/O
+-   hitting cgroup `pids.max` or `ulimit -u` can prevent thread creation and terminate the runtime with a fatal `newosproc` error; a scheduler-latency alert is not guaranteed before that failure
+-   check: `go_threads` (vs `go_sched_gomaxprocs_threads`); disk utilization (`ais show storage`, `DiskFault` and capacity alerts)
+
+**Garbage collection** - the GC takes CPU from application goroutines:
+
+-   background mark workers use about 25% of `GOMAXPROCS` while marking
+-   mark assists make allocating goroutines do GC work
+-   high allocation rate or a heap close to its goal (or `GOMEMLIMIT`) means frequent cycles
+-   check: memory pressure (`LowMemory`/`OOM` alerts); with `Enable-Go-Runtime-Metrics`: `rate(go_cpu_classes_gc_total_cpu_seconds_total[5m])`, `rate(go_gc_heap_allocs_bytes_total[5m])`, `go_gc_heap_goal_bytes`, `go_gc_gomemlimit_bytes`
+
+For the p99 over time, see [Go scheduler delay](/docs/monitoring-prometheus.md#go-scheduler-delay).
 
 ## Usage
 
@@ -130,7 +223,7 @@ if load.Mem() == load.Critical {
 }
 
 cpu := load.CPU()
-gor := load.Gor(runtime.NumGoroutine())
+sch := load.Sched() // sampled at most once per periodic.stats_time
 dsk := load.Dsk(mp, &config.Disk)
 ```
 
@@ -144,9 +237,9 @@ dsk := load.Dsk(mp, &config.Disk)
 | ----------------------------- | --------- |
 | Memory **Critical**           | 100ms     |
 | Memory **High**               | 10ms      |
-| Gor/CPU **Critical** (both)   | 10–100ms  |
-| Gor/CPU **Critical** (either) | 1–10ms    |
-| Gor/CPU **High**              | 1ms       |
+| Sch/CPU **Critical** (both)   | 10–100ms  |
+| Sch/CPU **Critical** (either) | 1–10ms    |
+| Sch/CPU **High**              | 1ms       |
 | Disk **Critical**             | 10–100ms  |
 | Disk **High**                 | 1ms       |
 

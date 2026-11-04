@@ -6,7 +6,6 @@ package xact
 
 import (
 	"errors"
-	"runtime"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/load"
@@ -84,26 +83,24 @@ func _defaultNW(numMpaths int) int {
 // - numMpaths: number of available mountpaths
 func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 	const memExtremeMsg = "extreme memory pressure"
-	var (
-		ngr     = runtime.NumGoroutine()
-		ngrLoad = load.Gor(ngr)
-	)
+	schLoad := load.Sched()
+
 	// 1. apply system default
 	if numWorkers == NwpDflt {
 		numWorkers = _defaultNW(numMpaths)
 	}
 
-	// 2. goroutine load
-	if ngrLoad == load.Critical {
-		nlog.Warningln(xname, "critical", stats.NgrPrompt, ngr)
+	// 2. scheduler latency
+	if schLoad == load.Critical {
+		nlog.Warningln(xname, "critical", stats.SchedPrompt, load.SchedP99())
 		return NwpNone, nil
 	}
 
 	numWorkers = min(sys.MaxParallelism()+4, numWorkers)
 
 	// yellow alert (high)
-	if ngrLoad == load.High {
-		nlog.Warningln(xname, "high", stats.NgrPrompt, ngr)
+	if schLoad == load.High {
+		nlog.Warningln(xname, "high", stats.SchedPrompt, load.SchedP99())
 		numWorkers = min(numWorkers, numMpaths)
 	}
 
@@ -117,7 +114,7 @@ func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 		}
 		return NwpNone, nil
 	case load.High:
-		if ngrLoad == load.High {
+		if schLoad == load.High {
 			return NwpNone, nil
 		}
 		numWorkers = min(NwpMin+1, numWorkers)
@@ -131,8 +128,8 @@ func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 		nlog.Warningln(xname, tag, "critical")
 		return NwpNone, nil
 	case load.High:
-		if ngrLoad == load.High {
-			nlog.Warningln(xname, tag, "high and high", stats.NgrPrompt, ngr)
+		if schLoad == load.High {
+			nlog.Warningln(xname, tag, "high and high", stats.SchedPrompt, load.SchedP99())
 			return NwpNone, nil
 		}
 		numWorkers = min(NwpMin+1, numWorkers)

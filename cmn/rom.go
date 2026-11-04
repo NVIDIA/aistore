@@ -21,6 +21,7 @@ type readMostly struct {
 		ecstreams time.Duration // EcStreams
 		sendfile  time.Duration // SendFile
 	}
+	statsTime          time.Duration // Config.Periodic.StatsTime
 	features           feat.Flags
 	level, modules     int
 	testingEnv         bool
@@ -36,6 +37,7 @@ func (rom *readMostly) init() {
 	rom.timeout.cplane = time.Second + time.Millisecond
 	rom.timeout.keepalive = 2*time.Second + time.Millisecond
 	rom.timeout.ecstreams = SharedStreamsDflt
+	rom.statsTime = periodStatsTimeDflt
 }
 
 // Rom.Set is the single install point for every GCO.Put: startup (LoadConfig => GCO.Put)
@@ -47,6 +49,9 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 		rom.timeout.ecstreams = d.D()
 	}
 	rom.timeout.sendfile = cfg.Timeout.SendFile.D()
+	if p := cfg.Periodic; p != nil && p.StatsTime != 0 {
+		rom.statsTime = p.StatsTime.D()
+	}
 	rom.features = cfg.Features
 
 	rom.clientAuthRequired = cfg.Auth.ClientAuthRequired
@@ -70,6 +75,7 @@ func (rom *readMostly) CplaneOperation() time.Duration { return rom.timeout.cpla
 func (rom *readMostly) MaxKeepalive() time.Duration    { return rom.timeout.keepalive }
 func (rom *readMostly) EcStreams() time.Duration       { return rom.timeout.ecstreams }
 func (rom *readMostly) SendFile() time.Duration        { return rom.timeout.sendfile }
+func (rom *readMostly) StatsTime() time.Duration       { return rom.statsTime }
 func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
 func (rom *readMostly) ClientAuthRequired() bool       { return rom.clientAuthRequired }

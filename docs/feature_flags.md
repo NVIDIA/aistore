@@ -76,7 +76,7 @@ The validation occurs both at the cluster level and when setting bucket properti
 | `Keep-Unknown-FQN` | `integrity?,ops` | do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup') |
 | `Load-Balance-GET` | `perf` | when bucket is n-way mirrored read object replica from the least-utilized mountpath |
 | `Count-Object-NotFound-Stats` | `telemetry,ops` | count GET(object) 404 as errors (default: don't) |
-| `Enable-Go-Runtime-Metrics` | `telemetry,ops,overhead` | publish a low-cardinality subset of Go runtime metrics (goroutines, GC, heap) via Prometheus |
+| `Enable-Go-Runtime-Metrics` | `telemetry,ops,overhead` | publish selected Go runtime metrics (goroutines, scheduler delay, GC, heap) via Prometheus |
 | `Dload-Allow-Private-Egress` | `security-` | allow downloader egress to private RFC1918/ULA addresses; loopback and link-local remain blocked |
 | `S3-Redirect-Rebuild` | `s3,compat,security-` | allow S3 clients that rebuild redirected requests instead of following the Location URI (forbidden when AuthN or intra-cluster signing is configured) |
 | `Disable-KTLS` | `net,compat,overhead` | disable kernel TLS transmit offload and sendfile for HTTPS (reserved for internal use; may be redefined or removed at any time) (**restart required**) |

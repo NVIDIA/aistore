@@ -35,7 +35,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
-	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -491,8 +490,6 @@ func (h *htrun) initPhase2(config *cmn.Config) {
 
 	initCtrlClient(config, g.netServ.control.useIPv6)
 	initDataClient(config, g.netServ.data.useIPv6)
-
-	load.Init()
 
 	h.owner.smap = newSmapOwner(config, h.si.IsTarget())
 	h.owner.rmd = newRMDOwner(config)

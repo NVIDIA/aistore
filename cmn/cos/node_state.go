@@ -29,8 +29,8 @@ const (
 	LowCapacity                                      // node (used > high); warning: OOS possible soon..
 	LowMemory                                        // ditto OOM
 	DiskFault                                        // red
-	NumGoroutines                                    // yellow
-	HighNumGoroutines                                // red
+	NumGoroutines                                    // yellow: high scheduler latency (see cmn/load/sched.go)
+	HighNumGoroutines                                // red: critical scheduler latency
 	CertWillSoonExpire                               // warning X.509
 	CertificateExpired                               // red --/--
 	CertificateInvalid                               // red --/--

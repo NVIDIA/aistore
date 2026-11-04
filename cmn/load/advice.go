@@ -132,17 +132,17 @@ func (a *Advice) refresh(allowFreeToOS bool) {
 		a.Batch = smallBatch
 	}
 
-	// 2) goroutines and CPU
+	// 2) scheduler latency and CPU
 	switch {
-	case gorOf(a.loads) == Critical && cpuOf(a.loads) == Critical:
+	case schOf(a.loads) == Critical && cpuOf(a.loads) == Critical:
 		a.Sleep = cos.Ternary(a.Sleep >= sleep10ms, max(sleep100ms, a.Sleep), sleep10ms)
 		a.Batch = min(a.Batch, minBatch)
 		a.Load = Critical
-	case gorOf(a.loads) == Critical || cpuOf(a.loads) == Critical:
+	case schOf(a.loads) == Critical || cpuOf(a.loads) == Critical:
 		a.Sleep = cos.Ternary(a.Sleep >= sleep1ms, max(sleep10ms, a.Sleep), sleep1ms)
 		a.Batch = min(a.Batch, smallBatch)
 		a.Load = Critical
-	case gorOf(a.loads) == High || cpuOf(a.loads) == High:
+	case schOf(a.loads) == High || cpuOf(a.loads) == High:
 		a.Sleep = max(a.Sleep, sleep1ms)
 		a.Batch = min(a.Batch, smallBatch)
 		a.Load = max(a.Load, High)
@@ -203,7 +203,7 @@ func (a *Advice) String() string {
 		{"mem", get(memShift)},
 		{"cpu", get(cpuShift)},
 		{"dsk", get(dskShift)},
-		{"gor", get(gorShift)},
+		{"sch", get(schShift)},
 		{"fdt", get(fdtShift)},
 	}
 	first := true

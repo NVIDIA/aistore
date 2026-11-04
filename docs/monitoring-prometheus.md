@@ -213,6 +213,20 @@ sum(rate(ais_target_err_get_count[5m]))
 
 Use `ais show performance capacity` to inspect target mountpath used and available capacity. The built-in AIS exporter does not register `ais_target_capacity_used` or `ais_target_capacity_total`; a Prometheus capacity panel requires separately collected capacity data.
 
+### Go scheduler delay
+
+With `Enable-Go-Runtime-Metrics` enabled, `go_sched_latencies_seconds` measures how long runnable goroutines waited for the Go scheduler before they began running. The histogram is cumulative, so use bucket rates over a recent window to estimate the p99 in milliseconds for each node.
+
+```promql
+histogram_quantile(0.99, rate(go_sched_latencies_seconds_bucket[5m])) * 1000
+```
+
+Check the number of observations in the same window before interpreting the percentile. Sparse windows can produce unstable estimates.
+
+```promql
+increase(go_sched_latencies_seconds_count[5m])
+```
+
 ---
 
 ## GetBatch (x-moss) Queries
@@ -276,7 +290,7 @@ Flags indicate:
 * `DiskFault` — Disk failures
 * `DiskOOS` — Disk out of space
 * `OOCPU` — Out of CPU
-* `HighNumGoroutines` — high goroutine count
+* `HighNumGoroutines` — critical Go scheduler latency (added in v5.3; name kept for compatibility)
 * `CertificateExpired` — TLS expiry
 
 ### Warning
@@ -287,7 +301,7 @@ Flags indicate:
 * `NodeRestarted`
 * `MaintenanceMode`
 * `CertWillSoonExpire`
-* `NumGoroutines`
+* `NumGoroutines` — high Go scheduler latency (added in v5.3; name kept for compatibility)
 * `KeepAliveErrors`
 
 ### Informational

@@ -55,8 +55,8 @@ const (
 )
 
 const (
-	NgrPrompt   = "number of goroutines"
-	ngrHighTime = 10 * time.Minute // log a warning if the number of goroutines remains high
+	SchedPrompt   = "scheduler latency"
+	schedHighTime = 10 * time.Minute // log a warning if scheduler latency remains high
 )
 
 // Naming conventions: error counters' prefixes
@@ -154,7 +154,8 @@ type (
 		prev      string      // prev ctracker.write
 		sorted    []string    // sorted names
 		mem       sys.MemStat
-		next      int64 // mono.Nano
+		sched     load.SchedWin // alerts: one window per periodic.stats_time
+		next      int64         // mono.Nano
 		startedUp atomic.Bool
 	}
 )
@@ -456,14 +457,17 @@ waitStartup:
 
 	statsTime := config.Periodic.StatsTime.D() // (NOTE: not to confuse with config.Log.StatsTime)
 	r.ticker = time.NewTicker(statsTime)
+	r.sched.Init()
+	r.sched.Grade(true) // baseline
 	r.startedUp.Store(true)
 
 	var (
-		lastNgr           int64
+		lastSched         int64
 		lastKaliveErrInc  int64
 		kaliveErrs        int64
 		startTime         = mono.NanoTime() // uptime henceforth
-		lastDateTimestamp = startTime       // RFC822
+		lastSchedRead     = startTime
+		lastDateTimestamp = startTime // RFC822
 		lastFDs           = startTime
 	)
 	for {
@@ -473,8 +477,11 @@ waitStartup:
 			config = cmn.GCO.Get()
 			logger.log(now, time.Duration(now-startTime) /*uptime*/, config)
 
-			// 1. "High number of"
-			lastNgr = r.checkNgr(now, lastNgr)
+			// 1. scheduler latency
+			now = mono.NanoTime() // logger.log may have blocked
+			discard := time.Duration(now-lastSchedRead) > 2*statsTime
+			lastSched = r.checkSched(now, lastSched, discard)
+			lastSchedRead = now
 
 			if statsTime != config.Periodic.StatsTime.D() {
 				statsTime = config.Periodic.StatsTime.D()
@@ -618,22 +625,23 @@ func (r *runner) GetMetricNames() cos.StrKVs {
 }
 
 // TODO: add Prometheus metric
-func (r *runner) checkNgr(now, lastNgr int64) int64 {
-	var (
-		ngr     = runtime.NumGoroutine()
-		ngrLoad = load.Gor(ngr)
-	)
-	if ngrLoad < load.High {
-		if lastNgr != 0 {
+func (r *runner) checkSched(now, lastSched int64, discard bool) int64 {
+	if discard {
+		r.sched.Grade(true) // rebase; keep current alerts
+		return lastSched
+	}
+	lsch, p99 := r.sched.Grade(false)
+	if lsch < load.High {
+		if lastSched != 0 {
 			r.ClrFlag(NodeAlerts, cos.HighNumGoroutines|cos.NumGoroutines)
-			nlog.Infoln(NgrPrompt, "is now back to normal:", ngr)
+			nlog.Infoln(SchedPrompt, "is now back to normal:", p99)
 		}
 		return 0
 	}
 
 	var set, clr cos.NodeStateFlags
 	tag := "(red alert)"
-	if ngrLoad == load.High { // yellow
+	if lsch == load.High { // yellow
 		clr = cos.HighNumGoroutines
 		set = cos.NumGoroutines
 		tag = "(yellow alert)"
@@ -643,11 +651,11 @@ func (r *runner) checkNgr(now, lastNgr int64) int64 {
 	}
 	r.SetClrFlag(NodeAlerts, set, clr)
 
-	if lastNgr == 0 || time.Duration(now-lastNgr) >= ngrHighTime {
-		lastNgr = now
-		nlog.Warningln(NgrPrompt, ngr, tag)
+	if lastSched == 0 || time.Duration(now-lastSched) >= schedHighTime {
+		lastSched = now
+		nlog.Warningln(SchedPrompt, p99, tag, "num-goroutines:", runtime.NumGoroutine())
 	}
-	return lastNgr
+	return lastSched
 }
 
 func _checkFDs(now, lastFDs int64) int64 {
