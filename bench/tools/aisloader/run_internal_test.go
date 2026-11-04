@@ -7,6 +7,7 @@ package aisloader
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -122,5 +123,50 @@ func TestObjNamesFromList(t *testing.T) {
 	}
 	if !slices.Equal(names, want) {
 		t.Fatalf("objNamesFromList() = %q, expected %q", names, want)
+	}
+}
+
+// loaderShare: verifies every loader gets names, every name goes to exactly one loader,
+// all files in a shard go to the same loader, and each share counts only its own files inside shards.
+func TestLoaderShare(t *testing.T) {
+	const numObjs, numArchive, loaderCnt = 1000, 100, 4
+	objList := make([]string, 0, numObjs)
+	for i := range numObjs {
+		name := fmt.Sprintf("data/obj-%d", i)
+		if i < numArchive {
+			name = encodeArchName(fmt.Sprintf("data/shard-%d.tar", i%25), fmt.Sprintf("file-%d.txt", i))
+		}
+		objList = append(objList, name)
+	}
+
+	var (
+		owned      = make([]string, 0, numObjs)
+		fcnt       int                   // count of files inside shards
+		shardOwner = map[string]uint64{} // shard name => loaderid
+	)
+	for id := range uint64(loaderCnt) {
+		share, n := loaderShare(objList, id, loaderCnt)
+		if len(share) == 0 {
+			t.Fatalf("loaderid %d of loadernum %d owns no names", id, loaderCnt)
+		}
+		for _, name := range share {
+			if shard, archpath := decodeArchName(name); archpath != "" {
+				if owner, ok := shardOwner[shard]; ok && owner != id {
+					t.Fatalf("shard %q split across loaderid %d and %d", shard, owner, id)
+				}
+				shardOwner[shard] = id
+			}
+		}
+		owned = append(owned, share...)
+		fcnt += n
+	}
+	want := slices.Clone(objList)
+	slices.Sort(want)
+	slices.Sort(owned)
+	if !slices.Equal(owned, want) {
+		t.Fatalf("shares hold %d names, expected each of the %d names exactly once", len(owned), numObjs)
+	}
+	if fcnt != numArchive {
+		t.Fatalf("shares count %d files inside shards, expected %d", fcnt, numArchive)
 	}
 }

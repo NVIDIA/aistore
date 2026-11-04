@@ -170,6 +170,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -s3-use-path-style | `bool` | Use older path-style addressing (e.g., `https://s3.amazonaws.com/BUCKET/KEY`). Should only be used with `-s3endpoint` | `false` |
 | -seed | `int` | Random seed to achieve deterministic reproducible results (0 = use current time in nanoseconds) | `0` |
 | -skiplist | `bool` | When true, skip listing objects in a bucket before running 100% PUT workload | `false` |
+| -split-reads | `bool` | When true, each loader only GETs a share of the object names; requires `-loaderid` and `-loadernum` (see [Splitting reads across loaders](#splitting-reads-across-loaders)) | `false` |
 | -stats-output | `string` | Filename to log statistics (empty string = standard output) | `""` |
 | -stats-output-obj | `string` | URI of an object in a local AIS bucket to save statistics after the run | `""` |
 | -statsdip | `string` | **Deprecated** - StatsD IP address or hostname | `localhost` |
@@ -304,6 +305,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -loaderid | `string` | ID to identify a loader among multiple concurrent instances | `0` |
 | -loadernum | `int` | Total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen | `0` |
 | -loaderidhashlen | `int` | Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum | `0` |
+| -split-reads | `bool` | When true, each loader only GETs a share of the object names; requires `-loaderid` and `-loadernum` (see [Splitting reads across loaders](#splitting-reads-across-loaders)) | `false` |
 | -getloaderid | `bool` | When true, print stored/computed unique loaderID and exit | `false` |
 
 #### Statistics and Monitoring (`statsParams`)
@@ -392,6 +394,19 @@ List format and restrictions:
 * `-filelist` and `-filelist-obj` are mutually exclusive. Either option overrides `-skiplist`.
 * `-filelist-obj` cannot be combined with `-s3endpoint` (direct S3 access). An S3-hosted list must be read through AIS.
 * Failure to open, fetch, or read the list stops startup. Missing workload objects are reported as GET errors during the run.
+
+### Splitting reads across loaders
+
+With `-split-reads`, several aisloader instances can read the same objects without overlap. Each instance reads only its share of the object names, whether they are listed from `-bucket` or read from `-filelist` or `-filelist-obj`. Every name belongs to exactly one loader, even when loaders list the bucket at different times.
+
+```console
+# loader 0 of 4 (run loaders 1, 2 and 3 the same way)
+$ aisloader -bucket=ais://images -filelist-obj=ais://lists/names.txt -loaderid=0 -loadernum=4 -split-reads -pctput=0 -duration=10s -cleanup=false
+```
+
+* `-split-reads` requires `-loaderid`, `-loadernum`, and a workload that reads (`-pctput` below 100). Without it, every loader reads every name.
+* Shares are close to equal only for large lists. In a 100% read run (`-pctput=0`), a loader whose share has fewer than 2 names stops at startup.
+* With `-arch.list`, names are split by shard, so all files in a shard go to the same loader.
 
 ### Read range
 

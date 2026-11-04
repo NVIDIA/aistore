@@ -266,21 +266,22 @@ func Start(version, buildtime string) (err error) {
 		if err != nil {
 			return err
 		}
+		numListed := len(names)
+		if runParams.splitReads {
+			names, fcnt = loaderShare(names, runParams.loaderIdx, runParams.loaderCnt)
+		}
 
-		// more validations:
+		// validate the names to GET
 		var (
 			l               = len(names)
 			ng, isPermBased = newNameGetter(names)
 		)
-		if runParams.putPct < 100 && isPermBased && l < 2 {
-			mixed := cos.Ternary(runParams.putPct > 0, " mixed", " read-only")
-			return fmt.Errorf("need at least 2 existing objects for epochs-based%s workload (got %d)", mixed, l)
-		}
-		if runParams.putPct == 0 && l == 0 {
-			if runParams.subDir == "" {
-				return errors.New("the bucket is empty, cannot run 100% read benchmark")
+		if isPermBased && l < 2 {
+			msg := fmt.Sprintf("need at least 2 objects to GET from, got %d", l)
+			if runParams.splitReads {
+				msg += fmt.Sprintf(" (loader %d of %d's '-split-reads' share of %d names)", runParams.loaderIdx, runParams.loaderCnt, numListed)
 			}
-			return errors.New("no objects with prefix '" + runParams.subDir + "' in the bucket, cannot run 100% read benchmark")
+			return errors.New(msg)
 		}
 		if runParams.getBatchSize > l {
 			return fmt.Errorf("batch size (%d) exceeds dataset size (%d)", runParams.getBatchSize, l)
@@ -781,6 +782,26 @@ func listObjects() (names []string, sizes map[string]int64, fcnt int, err error)
 		names, sizes, fcnt, err = listObjectData(runParams)
 	}
 	return names, sizes, fcnt, err
+}
+
+func loaderShare(names []string, loaderID, loaderCnt uint64) ([]string, int) {
+	var (
+		share = make([]string, 0, len(names)/int(loaderCnt)+1)
+		fcnt  int
+	)
+	for _, name := range names {
+		// hash the shard name, so that all files in a shard (with '-arch.list') go to the same loader
+		shard, archpath := decodeArchName(name)
+		if onexxh.Checksum64S(cos.UnsafeB(shard), cos.MLCG32)%loaderCnt != loaderID {
+			continue
+		}
+		share = append(share, name)
+		// count files inside shards in this share only, so Start() reports this loader's counts
+		if archpath != "" {
+			fcnt++
+		}
+	}
+	return share, fcnt
 }
 
 func objNamesFromFile(path string) ([]string, error) {

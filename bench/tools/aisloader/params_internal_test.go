@@ -31,7 +31,7 @@ func TestParamsValidate(t *testing.T) {
 				cksumType: cos.ChecksumOneXxh,
 			},
 			loaderParams: loaderParams{
-				loaderID: "0",
+				loaderID: StringExt{Val: "0"},
 			},
 		}
 	}
@@ -70,6 +70,46 @@ func TestParamsValidate(t *testing.T) {
 				p.fileList = "/some/filelist.txt"
 			},
 			wantErr: "'-filelist' and '-filelist-obj' are mutually exclusive",
+		},
+		{
+			name: "loaderid equal to loadernum",
+			mutate: func(p *params) {
+				p.loaderID, p.loaderCnt = StringExt{IsSet: true, Val: "4"}, 4
+			},
+			wantErr: "loaderid has to be smaller than loadernum",
+		},
+		{
+			name: "split reads",
+			mutate: func(p *params) {
+				p.loaderID, p.loaderCnt, p.splitReads = StringExt{IsSet: true, Val: "3"}, 4, true
+			},
+			check: func(t *testing.T, p *params) {
+				if p.loaderIdx != 3 {
+					t.Fatalf("expected loaderIdx 3 (parsed '-loaderid'), got %d", p.loaderIdx)
+				}
+			},
+		},
+		{
+			name: "split reads without loaderid",
+			mutate: func(p *params) {
+				p.loaderCnt, p.splitReads = 4, true
+			},
+			wantErr: "'-split-reads' requires both '-loaderid' and '-loadernum'",
+		},
+		{
+			name: "split reads without loadernum",
+			mutate: func(p *params) {
+				p.loaderID, p.splitReads = StringExt{IsSet: true, Val: "0"}, true
+			},
+			wantErr: "'-split-reads' requires both '-loaderid' and '-loadernum'",
+		},
+		{
+			name: "split reads with 100% PUT",
+			mutate: func(p *params) {
+				p.loaderID, p.loaderCnt, p.splitReads = StringExt{IsSet: true, Val: "0"}, 4, true
+				p.putPct = 100
+			},
+			wantErr: "'-split-reads' requires a workload that reads",
 		},
 		{
 			name: "size range",
@@ -299,7 +339,7 @@ func TestParamsValidate(t *testing.T) {
 		},
 		{
 			name:    "empty loader ID",
-			mutate:  func(p *params) { p.loaderID = "" },
+			mutate:  func(p *params) { p.loaderID = StringExt{IsSet: true} },
 			wantErr: "loaderID can't be empty",
 		},
 		{

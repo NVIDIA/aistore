@@ -84,9 +84,10 @@ etl:
 etl-spec:
 
 # ============ Loader instance ============
-loaderid: "0"
+loaderid:
 loadernum: 0
 loaderidhashlen: 0
+split-reads: false
 
 # ============ Stats ============
 statsinterval: 10

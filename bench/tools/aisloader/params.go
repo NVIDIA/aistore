@@ -152,10 +152,14 @@ type (
 
 	// Loader instance identification for fleet coordination
 	loaderParams struct {
-		loaderID        string // unique identifier for this loader instance
-		loaderCnt       uint64 // total number of concurrent loader instances
-		loaderIDHashLen uint   // bit length of generated loader ID (0-63)
-		getLoaderID     bool   // print loader ID and exit
+		loaderID        StringExt // unique identifier for this loader instance
+		loaderCnt       uint64    // total number of concurrent loader instances
+		loaderIDHashLen uint      // bit length of generated loader ID (0-63)
+		getLoaderID     bool      // print loader ID and exit
+		splitReads      bool      // read only this loader's share of object names (requires loaderCnt)
+
+		// resolved if loaderCnt > 0
+		loaderIdx uint64 // numeric loaderID in [0, loaderCnt)
 	}
 
 	// Statistics and monitoring configuration
@@ -302,11 +306,13 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.StringVar(&p.etlSpecPath, "etl-spec", "", "path to an ETL spec to be applied to each object on GET request.")
 
 	// ============ Loader instance ============
-	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
+	StringExtVar(f, &p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
 	f.Uint64Var(&p.loaderCnt, "loadernum", 0,
 		"total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen")
 	f.UintVar(&p.loaderIDHashLen, "loaderidhashlen", 0,
 		"Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum")
+	f.BoolVar(&p.splitReads, "split-reads", false,
+		"when true, each loader only GETs a share of the object names; requires '-loaderid' and '-loadernum'")
 	f.BoolVar(&p.getLoaderID, "getloaderid", false,
 		"when true, print stored/computed unique loaderID aka aisloader identifier and exit")
 
@@ -712,11 +718,11 @@ func (p *params) validate() error {
 		return fmt.Errorf("invalid option: stats show interval %d", p.statsShowInterval)
 	}
 
-	if p.loaderID == "" {
+	if p.loaderID.Val == "" {
 		return errors.New("loaderID can't be empty")
 	}
 
-	loaderID, parseErr := strconv.ParseUint(p.loaderID, 10, 64)
+	loaderID, parseErr := strconv.ParseUint(p.loaderID.Val, 10, 64)
 	if p.loaderCnt == 0 && p.loaderIDHashLen == 0 {
 		if p.randomObjName {
 			useRandomObjName = true
@@ -742,18 +748,27 @@ func (p *params) validate() error {
 			}
 
 			suffixIDMaskLen = ceilAlign(p.loaderIDHashLen, 4)
-			suffixID = getIDFromString(p.loaderID, suffixIDMaskLen)
+			suffixID = getIDFromString(p.loaderID.Val, suffixIDMaskLen)
 		} else {
 			// p.loaderCnt > 0
 			if parseErr != nil {
 				return errors.New("loadername has to be a number when using loadernum")
 			}
-			if loaderID > p.loaderCnt {
+			if loaderID >= p.loaderCnt {
 				return errors.New("loaderid has to be smaller than loadernum")
 			}
 
+			p.loaderIdx = loaderID
 			suffixIDMaskLen = loaderMaskFromTotalLoaders(p.loaderCnt)
 			suffixID = loaderID
+		}
+	}
+	if p.splitReads {
+		if !p.loaderID.IsSet || p.loaderCnt == 0 {
+			return errors.New("'-split-reads' requires both '-loaderid' and '-loadernum'")
+		}
+		if p.putPct == 100 {
+			return errors.New("'-split-reads' requires a workload that reads ('-pctput' below 100)")
 		}
 	}
 

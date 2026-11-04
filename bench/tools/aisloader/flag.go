@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package aisloader
 
@@ -22,12 +22,18 @@ type (
 		IsSet bool
 		Val   time.Duration
 	}
+
+	StringExt struct {
+		IsSet bool
+		Val   string
+	}
 )
 
 // interface guard
 var (
 	_ flag.Value = (*BoolExt)(nil)
 	_ flag.Value = (*DurationExt)(nil)
+	_ flag.Value = (*StringExt)(nil)
 )
 
 func (b *BoolExt) Set(s string) (err error) {
@@ -55,6 +61,20 @@ func (d *DurationExt) String() string { return d.Val.String() }
 func (*DurationExt) IsBoolFlag() bool { return false }
 
 func DurationExtVar(f *flag.FlagSet, p *DurationExt, name string, defValue time.Duration, usage string) {
+	p.Val = defValue
+	f.Var(p, name, usage)
+}
+
+func (s *StringExt) Set(v string) error {
+	s.Val = v
+	s.IsSet = true
+	return nil
+}
+
+func (s *StringExt) Get() any       { return s.Val }
+func (s *StringExt) String() string { return s.Val }
+
+func StringExtVar(f *flag.FlagSet, p *StringExt, name, defValue, usage string) {
 	p.Val = defValue
 	f.Var(p, name, usage)
 }

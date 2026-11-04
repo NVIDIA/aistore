@@ -76,8 +76,8 @@ func TestLoadConfig(t *testing.T) {
 				t.Errorf("sample %s = %q, want default %q", fl.Name, got, fl.DefValue)
 			}
 		})
-		if p.duration.IsSet || p.cleanUp.IsSet {
-			t.Errorf("sample set omitted options: duration=%+v, cleanup=%+v", p.duration, p.cleanUp)
+		if p.duration.IsSet || p.cleanUp.IsSet || p.loaderID.IsSet {
+			t.Errorf("sample set omitted options: duration=%+v, cleanup=%+v, loaderid=%+v", p.duration, p.cleanUp, p.loaderID)
 		}
 	})
 }
