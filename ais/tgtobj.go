@@ -1841,7 +1841,11 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, err error) {
 		workFQN = a.lom.GenFQN(fs.WorkCT, fs.WorkfileAppend, a.hdl.tie)
 		a.lom.Lock(false)
 		if a.lom.Load(false /*cache it*/, false /*locked*/) == nil {
-			_, a.hdl.partialCksum, err = cos.CopyFile(a.lom.FQN, workFQN, buf, a.lom.CksumType())
+			var reader cos.LomReader
+			if reader, err = a.lom.Open(); err == nil {
+				_, a.hdl.partialCksum, err = cos.CopyReader(reader, workFQN, buf, a.lom.CksumType())
+				cos.Close(reader)
+			}
 			a.lom.Unlock(false)
 			if err != nil {
 				return "", err

@@ -96,6 +96,68 @@ func TestPromote(t *testing.T) {
 	}
 }
 
+func TestPromoteObjectChunks(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2, RequiredDeployment: tools.ClusterTypeLocal})
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
+	smap.InitDigests()
+	for _, test := range []struct {
+		name    string
+		size    int
+		limit   cos.SizeIEC
+		chunked bool
+	}{
+		{name: "disabled", size: chunkPolicyLimit + 1},
+		{name: "below-limit", size: chunkPolicyLimit - 1, limit: chunkPolicyLimit},
+		{name: "at-limit", size: chunkPolicyLimit, limit: chunkPolicyLimit, chunked: true},
+		{name: "above-limit", size: chunkPolicyLimit + 1, limit: chunkPolicyLimit, chunked: true},
+	} {
+		for _, local := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/local=%t", test.name, local), func(t *testing.T) {
+				bck := cmn.Bck{Name: "promote-chunks-" + cos.GenUUID(), Provider: apc.AIS}
+				tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+					Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumOneXxh)},
+					Chunks: &cmn.ChunksConfToSet{
+						ObjSizeLimit: apc.Ptr(test.limit), ChunkSize: apc.Ptr(cos.SizeIEC(chunkPolicySize)),
+					},
+				}, true /*cleanup*/)
+				const objName = "promoted"
+				target, err := smap.HrwObjName2T(meta.CloneBck(&bck), objName)
+				tassert.CheckFatal(t, err)
+				if !local {
+					for _, tsi := range smap.Tmap {
+						if tsi.ID() != target.ID() && !tsi.InMaintOrDecomm() {
+							target = tsi
+							break
+						}
+					}
+				}
+				data := bytes.Repeat([]byte("promoted"), test.size/8+1)[:test.size]
+				src := filepath.Join(promoteTestDir(t), objName)
+				tassert.CheckFatal(t, os.WriteFile(src, data, cos.PermRWR))
+				_, err = api.Promote(bp, bck, &apc.PromoteArgs{
+					DaemonID: target.ID(), SrcFQN: src, ObjName: objName, DeleteSrc: true,
+				})
+				tassert.CheckFatal(t, err)
+				var actual bytes.Buffer
+				_, err = api.GetObject(bp, bck, objName, &api.GetArgs{Writer: &actual})
+				tassert.CheckFatal(t, err)
+				tassert.Errorf(t, bytes.Equal(data, actual.Bytes()), "promoted content differs: got %d bytes, expected %d", actual.Len(), len(data))
+				op, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsChecksum, api.HeadArgs{})
+				tassert.CheckFatal(t, err)
+				tassert.Errorf(t, op.Cksum.Equal(cos.NewCksum(cos.ChecksumOneXxh, cos.ChecksumB2S(data, cos.ChecksumOneXxh))),
+					"promoted object checksum differs: %v", op.Cksum)
+				if test.chunked {
+					checkObjectChunked(t, bp, bck, objName, chunkPolicySize)
+				} else {
+					checkObjectMonolithic(t, bp, bck, objName)
+				}
+			})
+		}
+	}
+}
+
 func TestPromoteRejectsConflictingSource(t *testing.T) {
 	var (
 		proxyURL = tools.RandomProxyURL(t)

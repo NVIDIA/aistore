@@ -63,7 +63,7 @@ func (t *target) _promote(params *core.PromoteParams, lom *core.LOM) (ecode int,
 }
 
 // return fileSize = -1 not to be counted in stats
-func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize int64, _ int, _ error) {
+func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize int64, ecode int, err error) {
 	var (
 		cksum     *cos.CksumHash
 		workFQN   string
@@ -144,7 +144,18 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 		poi.xctn = params.Xact
 	}
 	lom.SetSize(fileSize)
-	ecode, err := poi.finalize()
+	if chunkSize := lom.Bprops().Chunks.ChunkSizeFor(fileSize); chunkSize > 0 {
+		if extraCopy {
+			// finalize() renames the workfile; chunk() publishes separate chunks and leaves it behind.
+			defer cos.RemoveFile(workFQN)
+		}
+		poi.size = fileSize
+		if poi.r, err = cos.NewFileHandle(workFQN); err == nil {
+			ecode, err = poi.chunk(chunkSize)
+		}
+	} else {
+		ecode, err = poi.finalize()
+	}
 	freePOI(poi)
 
 	return fileSize, ecode, err

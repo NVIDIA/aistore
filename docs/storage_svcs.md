@@ -355,11 +355,13 @@ For a given object size:
 2. Otherwise, when auto-chunking is enabled and the size is at or above `chunks.objsize_limit`: chunked, with `chunks.chunk_size`.
 3. Otherwise: monolithic - except for the explicit per-object overrides above and the prefetch exception [below](#prefetch-mechanism).
 
-A layout rule is independent of how the object arrives. It applies equally to PUT, cold GET, copy, and rechunk.
+A layout rule is independent of how the object arrives. It applies equally to PUT, cold GET, copy, append flush, promote, and rechunk.
 
 > **Status (v5.1):** rule 1 is enforced by PUT, cold GET, and copy; rechunk enforces it only for the objects it rewrites - an existing monolithic object above `chunks.max_monolithic_size` (e.g., after lowering it) is left as is. Rule 2 is enforced by rechunk only; PUT, cold GET, and copy do not auto-chunk at `chunks.objsize_limit`.
 >
 > **Status (v5.2):** PUT, cold GET, copy, and rechunk enforce both rules.
+>
+> **Status (v5.3):** Append flush and promote also enforce both rules.
 
 ### Parallel cold GET
 
@@ -406,7 +408,7 @@ The third case is a deliberate exception to rule 3. A `chunks.objsize_limit` of 
 
 ### Chunked writes and cleanup on failure
 
-AIS can write chunks during a regular PUT, a cold GET that caches a remote object, or an object copy. The bucket's hard limit determines when these operations must store an object as chunks; see [storage layout](#storage-layout) for the current rules. Local copies of already-chunked objects preserve their existing layout. Rechunk (xaction) changes the layout according to the bucket's configuration.
+AIS can write chunks during a regular PUT, a cold GET that caches a remote object, an object copy, append flush, or promote. The bucket's chunking configuration determines when these operations must store an object as chunks; see [storage layout](#storage-layout) for the current rules. Local copies of already-chunked objects preserve their existing layout. Rechunk (xaction) changes the layout according to the bucket's configuration.
 
 For these internally managed writes, AIS owns the multipart upload. If initiation, a part write, or completion fails, AIS aborts the upload and attempts local cleanup even if backend abort fails. The operation returns its original error; cleanup failures are logged. Writes that only populate the local cache do not attempt to abort a backend upload. Filesystem cleanup remains best effort.
 

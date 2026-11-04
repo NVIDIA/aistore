@@ -334,6 +334,66 @@ func TestAppendObject(t *testing.T) {
 	}
 }
 
+func TestAppendObjectChunks(t *testing.T) {
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	for _, test := range []struct {
+		name    string
+		size    int
+		limit   cos.SizeIEC
+		chunked bool
+	}{
+		{name: "disabled", size: chunkPolicyLimit + 1},
+		{name: "below-limit", size: chunkPolicyLimit - 3, limit: chunkPolicyLimit},
+		{name: "at-limit", size: chunkPolicyLimit - 2, limit: chunkPolicyLimit, chunked: true},
+		{name: "above-limit", size: chunkPolicyLimit - 1, limit: chunkPolicyLimit, chunked: true},
+		{name: "already-chunked", size: 3*int(chunkPolicySize) + 1, limit: chunkPolicyLimit, chunked: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bck := cmn.Bck{Name: "append-chunks-" + trand.String(8), Provider: apc.AIS}
+			tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumOneXxh)},
+				Chunks: &cmn.ChunksConfToSet{
+					ObjSizeLimit: apc.Ptr(test.limit), ChunkSize: apc.Ptr(cos.SizeIEC(chunkPolicySize)),
+				},
+			}, true /*cleanup*/)
+			const objName = "append"
+			data := bytes.Repeat([]byte("original"), test.size/8+1)[:test.size]
+			tools.PutObject(t, bck, objName, readers.NewBytes(data), uint64(len(data)))
+			if test.limit > 0 && test.size >= int(test.limit) {
+				checkObjectChunked(t, bp, bck, objName, chunkPolicySize)
+			} else {
+				checkObjectMonolithic(t, bp, bck, objName)
+			}
+			var handle string
+			for _, tail := range []string{"x", "y"} {
+				var err error
+				handle, err = api.AppendObject(&api.AppendArgs{
+					BaseParams: bp, Bck: bck, Object: objName, Handle: handle,
+					Reader: readers.NewBytes([]byte(tail)),
+				})
+				tassert.CheckFatal(t, err)
+			}
+			err := api.FlushObject(&api.FlushArgs{BaseParams: bp, Bck: bck, Object: objName, Handle: handle})
+			tassert.CheckFatal(t, err)
+			data = append(data, 'x', 'y')
+			var actual bytes.Buffer
+			_, err = api.GetObject(bp, bck, objName, &api.GetArgs{Writer: &actual})
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, bytes.Equal(data, actual.Bytes()), "appended content differs: got %d bytes, expected %d", actual.Len(), len(data))
+			op, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsChecksum, api.HeadArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, op.Cksum.Equal(cos.NewCksum(cos.ChecksumOneXxh, cos.ChecksumB2S(data, cos.ChecksumOneXxh))),
+				"appended object checksum differs: %v", op.Cksum)
+			if test.chunked {
+				checkObjectChunked(t, bp, bck, objName, chunkPolicySize)
+			} else {
+				checkObjectMonolithic(t, bp, bck, objName)
+			}
+		})
+	}
+}
+
 func TestCopyObject(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
