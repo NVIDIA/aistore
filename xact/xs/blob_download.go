@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -1049,7 +1050,12 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 	}
 	chwritten, cksum, copyErr := cos.CopyAndChecksum(multiWriter, res.R, buf, cksumType)
 	cos.Close(res.R)
-	cos.Close(chunkFh)
+	if copyErr == nil && lom.IsFeatureSet(feat.FsyncPUT) {
+		copyErr = chunkFh.Sync()
+	}
+	if closeErr := chunkFh.Close(); copyErr == nil {
+		copyErr = closeErr
+	}
 	if copyErr != nil {
 		if nerr := cos.RemoveFile(chunkPath); nerr != nil {
 			nlog.Errorln("nested error removing chunk:", nerr)

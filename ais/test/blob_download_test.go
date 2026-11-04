@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -1532,17 +1533,29 @@ func TestBlobDownloadSingleThreaded(t *testing.T) {
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 	initMountpaths(t, proxyURL)
+	props, err := api.HeadBucket(baseParams, bck, false)
+	tassert.CheckFatal(t, err)
 
 	tests := []struct {
 		name      string
 		streamGet bool
+		features  feat.Flags
 	}{
 		{name: "blob-download", streamGet: false},
 		{name: "streaming-get", streamGet: true},
+		{name: "blob-download-fsync", features: feat.FsyncPUT},
+		{name: "streaming-get-fsync", streamGet: true, features: feat.FsyncPUT},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Cleanup(func() {
+				_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{Features: apc.Ptr(props.Features)})
+				tassert.CheckError(t, err)
+			})
+			features := props.Features&^feat.FsyncPUT | test.features
+			_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{Features: &features})
+			tassert.CheckFatal(t, err)
 			objName := "blob-single-threaded-" + test.name + "-" + trand.String(5)
 
 			// Provision object to remote bucket
