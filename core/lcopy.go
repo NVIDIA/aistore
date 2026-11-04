@@ -317,13 +317,20 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 		}
 	}()
 
-	cksumType := dst.CksumType()
-	dstUfest.InitStreamingChecksum(cksumType)
-	if cksumType != cos.ChecksumNone {
-		cksumType = cos.ChecksumCRC32C
+	var (
+		dstCksumType = dst.CksumType()
+		wholeCksum   = cos.NoneCksum
+	)
+	if dstCksumType != cos.ChecksumNone {
+		srcCksum := lom.Checksum()
+		if !cos.NoneC(srcCksum) && (srcCksum.Ty() == dstCksumType || srcCksum.Ty() == cos.ChecksumCRC32C) {
+			wholeCksum = srcCksum.Clone()
+		} else {
+			// combine per-chunk CRC32C (consistent with out-of-order MPU)
+			wholeCksum = nil
+		}
 	}
 
-	// Copy each chunk from source to destination
 	srcUfest.Lock()
 	defer srcUfest.Unlock()
 
@@ -335,6 +342,7 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 		errCh = make(chan error, srcUfest.Count())
 	)
 
+	// copy chunks
 	for i := range srcUfest.chunks {
 		wg.Add(1)
 		go func(srcChunk Uchunk) {
@@ -346,11 +354,12 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 				return
 			}
 
-			inOrder, stream := dstUfest.CheckInOrder(int(srcChunk.Num()))
-			if inOrder {
-				defer dstUfest.StreamWriteDone()
+			// compute CRC32C only when combining and the source chunk doesn't have it
+			partCksumType := cos.ChecksumNone
+			if wholeCksum == nil && srcChunk.cksum.Type() != cos.ChecksumCRC32C {
+				partCksumType = cos.ChecksumCRC32C
 			}
-			written, cksum, err := cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, cksumType, stream)
+			written, cksum, err := cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, partCksumType)
 			if err == nil && written != srcChunk.Size() {
 				cos.RemoveFile(dstChunk.Path())
 				err = fmt.Errorf("invalid size: written %d, expected %d", written, srcChunk.Size())
@@ -363,6 +372,8 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 
 			if cksum != nil {
 				dstChunk.SetCksum(&cksum.Cksum)
+			} else if srcChunk.cksum != nil {
+				dstChunk.SetCksum(srcChunk.cksum.Clone())
 			}
 
 			err = dstUfest.Add(dstChunk, srcChunk.Size(), int64(srcChunk.Num()))
@@ -393,10 +404,8 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 		return dstUfest._undoCopy(errors.Join(errs...))
 	}
 
-	// Compute the whole checksum for the destination manifest
-	wholeCksum := cos.NoneCksum
-	if dst.CksumType() != cos.ChecksumNone {
-		wholeCksum, err = dstUfest.WholeChecksum()
+	if wholeCksum == nil {
+		wholeCksum, err = dstUfest.CombineCRC32C()
 		if err != nil {
 			return dstUfest._undoCopy(fmt.Errorf("failed to compute whole checksum for destination %s: %w", dst.Cname(), err))
 		}

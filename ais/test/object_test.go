@@ -585,20 +585,23 @@ func TestCopyChunkedObjectChecksum(t *testing.T) {
 	smap := tools.GetClusterMap(t, proxyURL)
 
 	for _, test := range []struct {
-		checksum string
-		parts    int
+		srcCksumTy string
+		dstCksumTy string
+		parts      int
 	}{
-		{cos.ChecksumCesXxh, 1},
-		{cos.ChecksumSHA256, 1},
-		{cos.ChecksumNone, 1},
-		{cos.ChecksumCesXxh, 3},
-		{cos.ChecksumSHA256, 3},
-		{cos.ChecksumNone, 3},
+		{cos.ChecksumCesXxh, cos.ChecksumCesXxh, 1},
+		{cos.ChecksumCesXxh, cos.ChecksumSHA256, 1},
+		{cos.ChecksumCesXxh, cos.ChecksumNone, 1},
+		{cos.ChecksumCesXxh, cos.ChecksumCesXxh, 3},
+		{cos.ChecksumCesXxh, cos.ChecksumSHA256, 3},
+		{cos.ChecksumCesXxh, cos.ChecksumNone, 3},
+		{cos.ChecksumCRC32C, cos.ChecksumCesXxh, 1},
+		{cos.ChecksumNone, cos.ChecksumCesXxh, 3},
 	} {
-		t.Run(fmt.Sprintf("%s/%d-parts", test.checksum, test.parts), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-to-%s/%d-parts", test.srcCksumTy, test.dstCksumTy, test.parts), func(t *testing.T) {
 			bck := cmn.Bck{Name: "copy-checksum-" + trand.String(8), Provider: apc.AIS}
 			tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
-				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumCesXxh)},
+				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(test.srcCksumTy)},
 			}, true /*cleanup*/)
 			data := append(bytes.Repeat([]byte("checksum"), 8*cos.KiB), []byte("unequal last part")...)
 			data[len(data)/2] ^= 0xff
@@ -606,8 +609,13 @@ func TestCopyChunkedObjectChecksum(t *testing.T) {
 			tassert.CheckFatal(t, tools.PutMultipartObject(bp, bck, srcName, uint64(len(data)), &tools.PutObjectsArgs{
 				Reader: readers.NewBytes(data), MultipartNumChunks: test.parts,
 			}))
-			_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
-				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(test.checksum)},
+			// parallel part uploads may produce CRC32C regardless of srcCksumTy
+			srcProps, err := api.HeadObjectV2(bp, bck, srcName, apc.GetPropsChecksum, api.HeadArgs{})
+			tassert.CheckFatal(t, err)
+			srcCksum := srcProps.ObjAttrs.Checksum()
+
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(test.dstCksumTy)},
 			})
 			tassert.CheckFatal(t, err)
 			dstName := tools.GenerateObjectNameForTarget(srcName, "copied-", bck, smap, true /*same target*/)
@@ -619,14 +627,18 @@ func TestCopyChunkedObjectChecksum(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, props.Size == int64(len(data)), "expected size %d, got %d", len(data), props.Size)
 			actual := props.ObjAttrs.Checksum()
-			if test.checksum == cos.ChecksumNone {
+			if test.dstCksumTy == cos.ChecksumNone {
 				tassert.Errorf(t, cos.NoneC(actual), "expected no checksum, got %v", actual)
-			} else {
-				tassert.Fatalf(t, actual.Type() == test.checksum || (test.parts > 1 && actual.Type() == cos.ChecksumCRC32C),
-					"expected %s or parallel CRC32C fallback, got %v", test.checksum, actual)
-				expected := cos.NewCksum(actual.Type(), cos.ChecksumB2S(data, actual.Type()))
-				tassert.Errorf(t, expected.Equal(actual), "expected %v, got %v", expected, actual)
+				return
 			}
+			switch ty := srcCksum.Type(); {
+			case !cos.NoneC(srcCksum) && (ty == test.dstCksumTy || ty == cos.ChecksumCRC32C):
+				tassert.Errorf(t, srcCksum.Equal(actual), "expected source checksum %v, got %v", srcCksum, actual)
+			default:
+				tassert.Fatalf(t, actual.Type() == cos.ChecksumCRC32C, "expected combined CRC32C, got %v", actual)
+			}
+			expected := cos.NewCksum(actual.Type(), cos.ChecksumB2S(data, actual.Type()))
+			tassert.Errorf(t, expected.Equal(actual), "expected %v, got %v", expected, actual)
 		})
 	}
 }

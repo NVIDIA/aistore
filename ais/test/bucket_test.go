@@ -2073,8 +2073,8 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, len(srcObjList.Entries) == objCnt, "expected %d objects in source bucket, got %d", objCnt, len(srcObjList.Entries))
 
-			// Collect source object data and compute expected destination checksums
-			expectedCksums := make(map[string]*cos.Cksum)
+			// Collect source object data
+			srcData := make(map[string][]byte, objCnt)
 			for _, entry := range srcObjList.Entries {
 				objName := entry.Name
 				reader, _, err := api.GetObjectReader(bp, srcBck, objName, &api.GetArgs{})
@@ -2083,15 +2083,7 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 				objData, err := io.ReadAll(reader)
 				tassert.CheckFatal(t, err)
 				reader.Close()
-
-				var expectedCksum *cos.Cksum
-				if test.dstCksum != cos.ChecksumNone {
-					expectedCksum, err = cos.ChecksumBytes(objData, test.dstCksum)
-					tassert.CheckFatal(t, err)
-				} else {
-					expectedCksum = cos.NewCksum(cos.ChecksumNone, "")
-				}
-				expectedCksums[objName] = expectedCksum
+				srcData[objName] = objData
 			}
 
 			// Copy bucket
@@ -2115,7 +2107,7 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 
 			// Validate each object's checksum in destination bucket
 			tlog.Logfln("validating checksums of %d objects in destination bucket", objCnt)
-			for objName, expectedCksum := range expectedCksums {
+			for objName, objData := range srcData {
 				objProps, err := api.HeadObjectV2(bp, dstBck, objName, apc.GetPropsChecksum, api.HeadArgs{FltPresence: apc.FltPresent})
 				tassert.CheckFatal(t, err)
 
@@ -2128,9 +2120,13 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 				} else {
 					// When destination bucket has checksum, object should have matching checksum
 					tassert.Fatalf(t, !cos.NoneC(actualCksum), "object %s should have checksum type %s but has no checksum", objName, test.dstCksum)
-					tassert.Fatalf(t, actualCksum.Ty() == test.dstCksum, "object %s checksum type should be %s but got %s", objName, test.dstCksum, actualCksum.Ty())
+					// same-target copy of a chunked object combines per-chunk CRC32C when types differ
+					ty := actualCksum.Ty()
+					tassert.Fatalf(t, ty == test.dstCksum || ty == cos.ChecksumCRC32C,
+						"object %s checksum type should be %s or %s but got %s", objName, test.dstCksum, cos.ChecksumCRC32C, ty)
+					expectedCksum := cos.NewCksum(ty, cos.ChecksumB2S(objData, ty))
 					tassert.Fatalf(t, actualCksum.Equal(expectedCksum), "object %s checksum value should be %s but got %s", objName, expectedCksum.Val(), actualCksum.Val())
-					tlog.Logfln("✓ object %s has correct %s checksum: %s", objName, test.dstCksum, actualCksum.Val())
+					tlog.Logfln("✓ object %s has correct %s checksum: %s", objName, ty, actualCksum.Val())
 				}
 			}
 
