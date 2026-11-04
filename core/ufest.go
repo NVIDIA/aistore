@@ -1014,7 +1014,7 @@ func (u *Ufest) WholeChecksum() (*cos.Cksum, error) {
 
 	// Last resort: re-read all chunks
 	cksumH := cos.NewCksumHash(cos.ChecksumCRC32C)
-	if err := u.ComputeWholeChecksum(cksumH); err != nil {
+	if err := u.computeWholeChecksum(cksumH); err != nil {
 		return nil, err
 	}
 	return &cksumH.Cksum, nil
@@ -1042,7 +1042,7 @@ func (u *Ufest) CombineCRC32C() (*cos.Cksum, error) {
 // reread all chunk payloads to compute a checksum of the given type
 // see also: s3/mpt for ListParts
 // TODO: optimize-out; callers to revise locking
-func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
+func (u *Ufest) computeWholeChecksum(cksumH *cos.CksumHash) error {
 	debug.Func(func() { debug.AssertNoErr(u.Check(true /*completed*/)) })
 	const tag = "[whole-checksum]"
 

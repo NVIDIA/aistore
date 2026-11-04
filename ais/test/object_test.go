@@ -579,6 +579,103 @@ func copyObjectEvictWorker(ctx context.Context, bp api.BaseParams, args *api.Cop
 	results <- nil
 }
 
+func TestCopyChunkedObjectChecksum(t *testing.T) {
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
+
+	for _, test := range []struct {
+		checksum string
+		parts    int
+	}{
+		{cos.ChecksumCesXxh, 1},
+		{cos.ChecksumSHA256, 1},
+		{cos.ChecksumNone, 1},
+		{cos.ChecksumCesXxh, 3},
+		{cos.ChecksumSHA256, 3},
+		{cos.ChecksumNone, 3},
+	} {
+		t.Run(fmt.Sprintf("%s/%d-parts", test.checksum, test.parts), func(t *testing.T) {
+			bck := cmn.Bck{Name: "copy-checksum-" + trand.String(8), Provider: apc.AIS}
+			tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumCesXxh)},
+			}, true /*cleanup*/)
+			data := append(bytes.Repeat([]byte("checksum"), 8*cos.KiB), []byte("unequal last part")...)
+			data[len(data)/2] ^= 0xff
+			const srcName = "source"
+			tassert.CheckFatal(t, tools.PutMultipartObject(bp, bck, srcName, uint64(len(data)), &tools.PutObjectsArgs{
+				Reader: readers.NewBytes(data), MultipartNumChunks: test.parts,
+			}))
+			_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(test.checksum)},
+			})
+			tassert.CheckFatal(t, err)
+			dstName := tools.GenerateObjectNameForTarget(srcName, "copied-", bck, smap, true /*same target*/)
+
+			err = api.CopyObject(bp, &api.CopyArgs{FromBck: bck, FromObjName: srcName, ToBck: bck, ToObjName: dstName})
+			tassert.CheckFatal(t, err)
+
+			props, err := api.HeadObjectV2(bp, bck, dstName, apc.JoinProps(apc.GetPropsChecksum, apc.GetPropsSize), api.HeadArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, props.Size == int64(len(data)), "expected size %d, got %d", len(data), props.Size)
+			actual := props.ObjAttrs.Checksum()
+			if test.checksum == cos.ChecksumNone {
+				tassert.Errorf(t, cos.NoneC(actual), "expected no checksum, got %v", actual)
+			} else {
+				tassert.Fatalf(t, actual.Type() == test.checksum || (test.parts > 1 && actual.Type() == cos.ChecksumCRC32C),
+					"expected %s or parallel CRC32C fallback, got %v", test.checksum, actual)
+				expected := cos.NewCksum(actual.Type(), cos.ChecksumB2S(data, actual.Type()))
+				tassert.Errorf(t, expected.Equal(actual), "expected %v, got %v", expected, actual)
+			}
+		})
+	}
+}
+
+func TestCopyChunkedObjectInvalidSize(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
+	initMountpaths(t, proxyURL)
+
+	for _, test := range []struct {
+		checksum string
+		delta    int64
+	}{
+		{cos.ChecksumNone, -1},
+		{cos.ChecksumNone, 1},
+		{cos.ChecksumCesXxh, -1},
+		{cos.ChecksumCesXxh, 1},
+	} {
+		t.Run(fmt.Sprintf("%s/size-delta=%d", test.checksum, test.delta), func(t *testing.T) {
+			m := ioContext{
+				t:          t,
+				num:        1,
+				fileSize:   2 * cos.KiB,
+				chunksConf: &ioCtxChunksConf{numChunks: 2, multipart: true},
+			}
+			m.init(false /*bucket cleanup below*/)
+			tools.CreateBucket(t, proxyURL, m.bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(test.checksum)},
+			}, true /*cleanup*/)
+			m.puts()
+			srcName := m.objNames[0]
+			chunks := m.findObjChunksOnDisk(m.bck, srcName)
+			tassert.Fatalf(t, len(chunks) == 1, "expected one extra chunk, got %v", chunks)
+			info, err := os.Stat(chunks[0])
+			tassert.CheckFatal(t, err)
+			tassert.CheckFatal(t, os.Truncate(chunks[0], info.Size()+test.delta))
+			dstName := tools.GenerateObjectNameForTarget(srcName, "copied-", m.bck, smap, true /*same target*/)
+
+			err = api.CopyObject(bp, &api.CopyArgs{FromBck: m.bck, FromObjName: srcName, ToBck: m.bck, ToObjName: dstName})
+			tassert.Errorf(t, err != nil, "expected COPY to reject a chunk with size delta %d", test.delta)
+			_, err = api.HeadObjectV2(bp, m.bck, dstName, apc.GetPropsSize, api.HeadArgs{})
+			tassert.Errorf(t, cmn.IsStatusNotFound(err), "expected no destination object, got %v", err)
+			m.validateChunksOnDisk(m.bck, dstName, 0)
+		})
+	}
+}
+
 func TestCopyObjectChunksAboveMaxMonolithicSize(t *testing.T) {
 	const (
 		maxMonoSize = int64(64 * cos.MiB)

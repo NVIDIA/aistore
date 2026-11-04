@@ -460,15 +460,15 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		// track expected checksums
 		var (
-			expectedWholeMD5 = cos.NewCksumHash(cos.ChecksumMD5)
-			partMD5s         [][]byte
+			expectedWholeCksum = cos.NewCksumHash(cos.ChecksumCRC32C)
+			partMD5s           [][]byte
 		)
-		// create chunks in sorted order; compute "whole" MD5 as well
+		// create chunks in sorted order; compute "whole" CRC32C as well
 		for partNum := 1; partNum <= numParts; partNum++ {
 			chunk, err := manifest.NewChunk(partNum, lom)
 			Expect(err).NotTo(HaveOccurred())
 
-			partMD5 := creatChunkMD5andWhole(chunk.Path(), partSize, expectedWholeMD5.H)
+			partMD5 := creatChunkMD5andWhole(chunk.Path(), partSize, expectedWholeCksum.H)
 			partMD5s = append(partMD5s, partMD5)
 
 			chunk.MD5 = partMD5
@@ -507,15 +507,14 @@ var _ = Describe("MPU-UfestRead", func() {
 		Expect(err).NotTo(HaveOccurred(), "invalid chunk location(s)")
 
 		By("Step 4: Compute whole-object checksum (production lines 378-395)")
-		wholeCksum := cos.NewCksumHash(cos.ChecksumMD5) // Local bucket uses MD5
 		manifest.Lom().Lock(false)
-		err = manifest.ComputeWholeChecksum(wholeCksum)
+		wholeCksum, err := manifest.WholeChecksum()
 		manifest.Lom().Unlock(false)
 		Expect(err).NotTo(HaveOccurred(), "Should compute whole checksum successfully")
 
 		// computed checksum must match
-		expectedWholeMD5.Finalize()
-		Expect(wholeCksum.Cksum.Value()).To(Equal(expectedWholeMD5.Cksum.Value()),
+		expectedWholeCksum.Finalize()
+		Expect(wholeCksum.Equal(&expectedWholeCksum.Cksum)).To(BeTrue(),
 			"Computed whole checksum should match expected")
 
 		By("Step 5: Generate S3 multipart ETag")
@@ -527,7 +526,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			"ETag should end with correct part count")
 
 		By("Step 6: Perform atomic completion (production line 426)")
-		lom.SetCksum(&wholeCksum.Cksum)
+		lom.SetCksum(wholeCksum)
 		lom.SetCustomKey(cmn.ETag, cmn.UnquoteCEV(etag))
 
 		err = lom.CompleteUfest(manifest, false)
@@ -546,7 +545,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		// check LOM checksum
 		lomCksum := lom.Checksum()
 		Expect(lomCksum).NotTo(BeNil(), "LOM should have checksum set")
-		Expect(lomCksum.Value()).To(Equal(wholeCksum.Cksum.Value()),
+		Expect(lomCksum.Value()).To(Equal(wholeCksum.Value()),
 			"LOM checksum should match computed whole checksum")
 
 		// ETag
@@ -565,7 +564,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		Expect(freshLom.IsChunked()).To(BeTrue(), "Reloaded LOM should still be chunked")
 		reloadedCksum := freshLom.Checksum()
 		Expect(reloadedCksum).NotTo(BeNil(), "Reloaded LOM should have checksum")
-		Expect(reloadedCksum.Value()).To(Equal(wholeCksum.Cksum.Value()),
+		Expect(reloadedCksum.Value()).To(Equal(wholeCksum.Value()),
 			"Reloaded checksum should match")
 
 		reloadedETag, exists := freshLom.GetCustomKey(cmn.ETag)

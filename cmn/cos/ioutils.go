@@ -116,25 +116,29 @@ func RemoveFile(path string) (err error) {
 	return err
 }
 
-// and computes checksum, if requested
-func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cksum *CksumHash, err error) {
+// and computes checksum, if requested; optionally feeds a whole-object checksum writer
+func CopyFile(src, dst string, buf []byte, cksumType string, whole ...io.Writer) (written int64, cksum *CksumHash, err error) {
 	srcfh, err := os.Open(src)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer Close(srcfh)
-	return CopyReader(srcfh, dst, buf, cksumType)
+	return CopyReader(srcfh, dst, buf, cksumType, whole...)
 }
 
 // copy an already-open reader to a file and compute its checksum; caller closes the reader
-func CopyReader(src io.Reader, dst string, buf []byte, cksumType string) (written int64, cksum *CksumHash, err error) {
+func CopyReader(src io.Reader, dst string, buf []byte, cksumType string, whole ...io.Writer) (written int64, cksum *CksumHash, err error) {
 	const tag = "copy-file:"
 	var dstfh *os.File
 	if dstfh, err = CreateFile(dst); err != nil {
 		nlog.Errorln(tag, err)
 		return 0, nil, err
 	}
-	written, cksum, err = CopyAndChecksum(dstfh, src, buf, cksumType)
+	var w io.Writer = dstfh
+	if len(whole) > 0 && whole[0] != nil {
+		w = NewWriterMulti(dstfh, whole[0])
+	}
+	written, cksum, err = CopyAndChecksum(w, src, buf, cksumType)
 	if err != nil {
 		Close(dstfh)
 		goto eret

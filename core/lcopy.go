@@ -317,6 +317,12 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 		}
 	}()
 
+	cksumType := dst.CksumType()
+	dstUfest.InitStreamingChecksum(cksumType)
+	if cksumType != cos.ChecksumNone {
+		cksumType = cos.ChecksumCRC32C
+	}
+
 	// Copy each chunk from source to destination
 	srcUfest.Lock()
 	defer srcUfest.Unlock()
@@ -340,15 +346,23 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 				return
 			}
 
-			_, _, err = cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, srcChunk.cksum.Type())
+			inOrder, stream := dstUfest.CheckInOrder(int(srcChunk.Num()))
+			if inOrder {
+				defer dstUfest.StreamWriteDone()
+			}
+			written, cksum, err := cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, cksumType, stream)
+			if err == nil && written != srcChunk.Size() {
+				cos.RemoveFile(dstChunk.Path())
+				err = fmt.Errorf("invalid size: written %d, expected %d", written, srcChunk.Size())
+			}
 			if err != nil {
 				errCh <- fmt.Errorf("failed to copy chunk %d from %s to %s: %w",
 					srcChunk.Num(), srcChunk.Path(), dstChunk.Path(), err)
 				return
 			}
 
-			if srcChunk.cksum != nil {
-				dstChunk.SetCksum(srcChunk.cksum.Clone())
+			if cksum != nil {
+				dstChunk.SetCksum(&cksum.Cksum)
 			}
 
 			err = dstUfest.Add(dstChunk, srcChunk.Size(), int64(srcChunk.Num()))
@@ -380,12 +394,14 @@ func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 	}
 
 	// Compute the whole checksum for the destination manifest
-	// TODO: use WholeChecksum without rereading chunks
-	wholeCksum := cos.NewCksumHash(dst.CksumConf().Type)
-	if err := dstUfest.ComputeWholeChecksum(wholeCksum); err != nil {
-		return dstUfest._undoCopy(fmt.Errorf("failed to compute whole checksum for destination %s: %w", dst.Cname(), err))
+	wholeCksum := cos.NoneCksum
+	if dst.CksumType() != cos.ChecksumNone {
+		wholeCksum, err = dstUfest.WholeChecksum()
+		if err != nil {
+			return dstUfest._undoCopy(fmt.Errorf("failed to compute whole checksum for destination %s: %w", dst.Cname(), err))
+		}
 	}
-	dst.SetCksum(&wholeCksum.Cksum)
+	dst.SetCksum(wholeCksum)
 
 	// Store the completed manifest for destination
 	err = dstUfest.storeCompleted(dst, false /*override*/)
