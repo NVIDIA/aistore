@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand/v2"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -708,6 +710,175 @@ func TestPrefetchList(t *testing.T) {
 		t.Errorf("list-objects %s: expected %d, got %d", bck.String(), m.num, len(lst.Entries))
 	} else {
 		tlog.Logfln("list-objects %s: %d is correct", bck.String(), len(m.objNames))
+	}
+}
+
+func TestPrefetchTarget(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
+
+	// 1. Set up a unique prefix and register cleanup for the test objects.
+	m := ioContext{t: t, bck: cliBck, prefix: "prefetch-target-" + cos.GenUUID() + "/", skipRemoteEvict: true}
+	m.initAndSaveState(false /*cleanup*/)
+	m.expectTargets(3)
+	t.Cleanup(func() { m.del() })
+	bp := tools.BaseAPIParams(m.proxyURL)
+
+	// 2. Use the server's bucket properties and remote identity for placement.
+	props, err := api.HeadBucket(bp, m.bck, false /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
+	placementBck := meta.CloneBck(&m.bck)
+	placementBck.Props = props
+	if m.bck.IsRemoteAIS() {
+		remotes, err := api.GetRemoteAIS(bp)
+		tassert.CheckFatal(t, err)
+		for _, remote := range remotes.A {
+			if placementBck.Ns.UUID == remote.Alias {
+				placementBck.Ns.UUID = remote.UUID
+				break
+			}
+		}
+	}
+
+	// 3. Create one object per target; numeric names allow a range over two owners.
+	targets := m.smap.Tmap.ActiveNodes()[:3]
+	for _, target := range targets {
+		name := tools.GenerateObjectNameOnTarget(m.prefix+"1", *placementBck.Bucket(), m.smap, target)
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: props.Cksum.Type})
+		tassert.CheckFatal(t, err)
+		_, err = api.PutObject(&api.PutArgs{BaseParams: bp, Bck: m.bck, ObjName: name, Reader: reader})
+		tassert.CheckFatal(t, err)
+		m.objNames = append(m.objNames, name)
+		m.num++
+	}
+	owners := cos.NewStrKVs(m.num)
+	for _, name := range m.objNames {
+		owner, err := m.smap.HrwObjName2T(placementBck, name)
+		tassert.CheckFatal(t, err)
+		owners[name] = owner.ID()
+	}
+
+	// The range contains exactly one selected-target object and one excluded-target object.
+	rangeNames := []string{m.objNames[0], m.objNames[2]}
+	first, err := strconv.Atoi(strings.TrimPrefix(rangeNames[0], m.prefix))
+	tassert.CheckFatal(t, err)
+	last, err := strconv.Atoi(strings.TrimPrefix(rangeNames[1], m.prefix))
+	tassert.CheckFatal(t, err)
+	first, last = min(first, last), max(first, last)
+	rangeTmpl := fmt.Sprintf("%s{%d..%d..%d}", m.prefix, first, last, last-first)
+	tassert.Fatalf(t, owners[rangeNames[0]] == targets[0].ID() && owners[rangeNames[1]] == targets[2].ID(),
+		"range must cover selected and excluded owners")
+
+	// 4. Test one target, a subset, the default set, and a selection owned by an excluded target.
+	pair := []string{targets[0].ID(), targets[1].ID()}
+	excluded := m.objNames[len(m.objNames)-1:]
+	for _, tc := range []struct {
+		name      string
+		selection apc.ListRange
+		ids       []string
+		names     []string
+	}{
+		{"single-list", apc.ListRange{ObjNames: m.objNames}, pair[:1], m.objNames},
+		{"subset-prefix", apc.ListRange{Template: m.prefix}, pair, m.objNames},
+		{"subset-range", apc.ListRange{Template: rangeTmpl}, pair, rangeNames},
+		{"all-list", apc.ListRange{ObjNames: m.objNames}, nil, m.objNames},
+		{"excluded-object", apc.ListRange{ObjNames: excluded}, pair, excluded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := &apc.PrefetchMsg{ListRange: tc.selection}
+			testPrefetchTargetSelection(t, &m, msg, tc.ids, tc.names, owners)
+		})
+	}
+
+	// 5. Reject empty, duplicate, missing, and proxy IDs, including mixed valid/invalid lists;
+	// each value is one ID: no separators, no trimming.
+	for _, ids := range [][]string{
+		{""}, {pair[0], ""}, {pair[0], pair[0]}, {pair[0], "missing-" + cos.GenUUID()}, {pair[0], m.smap.Primary.ID()},
+		{pair[0], " " + pair[1]}, {pair[0] + "," + pair[1]},
+	} {
+		_, err := api.Prefetch(bp, m.bck, &apc.PrefetchMsg{ListRange: apc.ListRange{ObjNames: m.objNames}}, ids...)
+		tassert.Errorf(t, api.HTTPStatus(err) == http.StatusBadRequest, "targets %v: expected HTTP 400, got %v", ids, err)
+	}
+
+	// Reject a malformed query: it must not fall back to all targets.
+	q := url.Values{}
+	m.bck.SetQuery(q)
+	body := cos.MustMarshal(apc.ActMsg{Action: apc.ActPrefetchObjects, Value: &apc.PrefetchMsg{ListRange: apc.ListRange{ObjNames: m.objNames}}})
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
+		bp.URL+apc.URLPathBuckets.Join(m.bck.Name)+"?"+q.Encode()+"&"+apc.QparamTID+"=%ZZ", bytes.NewReader(body))
+	tassert.CheckFatal(t, err)
+	req.Header.Set(cos.HdrContentType, cos.ContentJSON)
+	api.SetAuxHeaders(req, &bp)
+	resp, err := bp.Client.Do(req)
+	tassert.CheckFatal(t, err)
+	resp.Body.Close()
+	tassert.Errorf(t, resp.StatusCode == http.StatusBadRequest, "malformed query: expected HTTP 400, got %d", resp.StatusCode)
+
+	// 6. Reject a target in maintenance and restore it before removing the test objects.
+	args := &apc.ActValRmNode{DaemonID: pair[0], SkipRebalance: true}
+	_, err = startMaintenanceRetry(t, bp, args)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_, err := stopMaintenanceRetry(t, bp, args)
+		tassert.CheckError(t, err)
+		m.waitAndCheckCluState()
+	})
+	_, err = tools.WaitForClusterState(m.proxyURL, "prefetch target in maintenance", m.smap.Version,
+		m.smap.CountActivePs(), m.smap.CountActiveTs()-1)
+	tassert.CheckFatal(t, err)
+	_, err = api.Prefetch(bp, m.bck, &apc.PrefetchMsg{ListRange: apc.ListRange{ObjNames: m.objNames}}, pair...)
+	herr := cmn.AsErrHTTP(err)
+	tassert.Errorf(t, herr != nil && herr.Status == http.StatusBadRequest && herr.TypeCode == "ErrXactTgtInMaint",
+		"expected maintenance rejection, got %v", err)
+}
+
+func testPrefetchTargetSelection(t *testing.T, m *ioContext, msg *apc.PrefetchMsg, ids, names []string, owners cos.StrKVs) {
+	t.Helper()
+	bp := tools.BaseAPIParams(m.proxyURL)
+	tids := ids
+	if len(ids) == 0 {
+		ids = m.smap.Tmap.ActiveMap().IDs()
+	}
+	wanted := cos.NewStrSet()
+	for _, name := range names {
+		if slices.Contains(ids, owners[name]) {
+			wanted.Set(name)
+		}
+	}
+
+	// 1. Evict the test objects so the first pass is cold and the second pass is warm.
+	xid, err := api.EvictMultiObj(bp, m.bck, &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: m.objNames}})
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, api.WaitForXaction(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}))
+	for pass := range 2 {
+		xid, err = api.Prefetch(bp, m.bck, msg, tids...)
+		tassert.CheckFatal(t, err)
+		status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, status.IsFinished() && !status.AbortedX && status.ErrMsg == "", "prefetch did not finish cleanly: %+v", status)
+		snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(snaps) == len(ids), "expected targets %v, got %v", ids, snaps)
+		for _, id := range ids {
+			tassert.Fatalf(t, len(snaps[id]) == 1, "expected one snapshot from target %s, got %v", id, snaps)
+			snap := snaps[id][0]
+			tassert.Errorf(t, snap.Err == "" && !snap.AbortedX, "target %s: prefetch failed: %+v", id, snap)
+		}
+		count, _, _ := snaps.ObjCounts(xid)
+		want := len(wanted)
+		if pass == 1 {
+			want = 0 // already cached
+		}
+		tassert.Errorf(t, count == int64(want), "downloaded %d, expected %d", count, want)
+	}
+
+	// 2. Verify the cached object count and exclude objects assigned to other targets.
+	lsmsg := &apc.LsoMsg{Prefix: m.prefix}
+	lsmsg.SetFlag(apc.LsCached)
+	lst, err := api.ListObjects(bp, m.bck, lsmsg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(lst.Entries) == len(wanted), "cached %d, expected %d", len(lst.Entries), len(wanted))
+	for _, entry := range lst.Entries {
+		tassert.Errorf(t, wanted.Contains(entry.Name), "cached unexpected object: %s", entry.Name)
 	}
 }
 

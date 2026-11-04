@@ -240,8 +240,9 @@ const (
 	QparamNonce   = "x"
 	QparamSig     = "u"
 
-	// GetBatch
-	QparamTID   = "tid"   // designated target
+	// GetBatch: designated target
+	// Prefetch: targets to run on, one value per target (tid=t1&tid=t2)
+	QparamTID   = "tid"
 	QparamColoc = "coloc" // colocation hint: enum { 0=ColocNone, 1=ColocOne, 2=ColocTwo }
 
 	// System

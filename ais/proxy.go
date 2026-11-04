@@ -1598,7 +1598,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 }
 
 // +gen:endpoint POST /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,\
-// apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] \
+// apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool,apc.QparamTID=string] \
 // action=[apc.ActCreateBck=cmn.BpropsToSet|\
 // apc.ActMoveBck=apc.ActMsg|\
 // apc.ActCopyBck=apc.TCBMsg|\
@@ -1652,8 +1652,8 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		errPrependSync  = "prepend option (%q) is incompatible with the request to synchronize buckets"
 	)
 	var (
-		query    = r.URL.Query()
-		bck, err = newBckFromQ(bucket, query, nil)
+		query, qerr = url.ParseQuery(r.URL.RawQuery) // r.URL.Query() that keeps the parsing error
+		bck, err    = newBckFromQ(bucket, query, nil)
 	)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -1887,7 +1887,12 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			ns := query.Get(apc.QparamNamespace)
 			debug.Assertf(!strings.Contains(ns, "remais"), "query has alias: bck=%s, ns=%s", bck, ns)
 		})
-		if xid, err = p.bcastBckAction(r.Method, bucket, msg, query); err != nil {
+		// malformed pairs are dropped from the query; a dropped target ID would widen the selection
+		if qerr != nil {
+			p.writeErr(w, r, qerr)
+			return
+		}
+		if xid, err = p.prefetch(bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -2665,6 +2670,62 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	if _, err := w.Write(res.bytes); err != nil {
 		nlog.Warningln(err) // (broken pipe; benign)
 	}
+}
+
+// run prefetch on the selected targets, if any; otherwise, on all active targets
+func (p *proxy) prefetch(bucket string, msg *apc.ActMsg, query url.Values) (string, error) {
+	tids := query[apc.QparamTID] // one value per target: tid=t1&tid=t2
+	if len(tids) == 0 {
+		return p.bcastBckAction(http.MethodPost, bucket, msg, query)
+	}
+	query.Del(apc.QparamTID) // used by the proxy only; not forwarded to targets
+
+	var (
+		smap    = p.owner.smap.get()
+		targets = make(meta.NodeMap, len(tids))
+	)
+	for _, tid := range tids {
+		if targets.Contains(tid) {
+			return "", fmt.Errorf("duplicate prefetch target %q", tid)
+		}
+		tsi := smap.GetTarget(tid)
+		if tsi == nil {
+			return "", fmt.Errorf("cannot prefetch: %q is not a target", tid)
+		}
+		if tsi.InMaintOrDecomm() {
+			return "", cmn.NewErrXactTgtInMaint(msg.Action, tsi.StringEx())
+		}
+		targets[tid] = tsi
+	}
+	var (
+		actMsgExt = p.newAmsg(msg, nil, cos.GenUUID())
+		body      = cos.MustMarshal(actMsgExt)
+		path      = apc.URLPathBuckets.Join(bucket)
+	)
+	nlb := xact.NewXactNL(actMsgExt.UUID, actMsgExt.Action, &smap.Smap, targets)
+	nlb.SetOwner(equalIC)
+	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
+	args := allocBcArgs()
+	{
+		args.req = cmn.HreqArgs{Method: http.MethodPost, Path: path, Query: query, Body: body}
+		args.smap = smap
+		args.network = cmn.NetIntraControl
+		args.selected = targets.ActiveNodes()
+		args.nodeCount = len(targets)
+		args.timeout = apc.DefaultTimeout
+	}
+	results := p.bcastSelected(args)
+	freeBcArgs(args)
+	var err error
+	for _, res := range results {
+		if res.err == nil {
+			continue
+		}
+		err = res.errorf("%s failed to %q List/Range", res.si, msg.Action)
+		break
+	}
+	freeBcastRes(results)
+	return actMsgExt.UUID, err
 }
 
 func (p *proxy) bcastBckAction(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {

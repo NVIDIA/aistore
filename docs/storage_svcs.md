@@ -408,6 +408,14 @@ The third case is a deliberate exception to rule 3. A `chunks.objsize_limit` of 
 
 > **Status (v5.1):** prefetch uses the blob downloader at or above `blob-threshold` regardless of bucket configuration, with `blob-chunk-size` or the blob-downloader default.
 
+The prefetch request accepts an optional `tid` query parameter, repeated once per target ID (`?tid=t1&tid=t2`), to run on the specified active targets and fetch only objects assigned to them.
+Omitting the parameter preserves prefetch on all active targets.
+Duplicate IDs, empty IDs, unknown nodes, proxies, targets in maintenance or decommission, and a malformed query string are rejected before the job starts.
+A misspelled parameter name is ignored, and the job runs on all targets.
+
+**Rolling upgrades:** during an upgrade from 5.2 to 5.3, proxies can run different versions.
+A 5.2 proxy ignores `tid` and runs prefetch on all targets.
+
 ### Chunked writes and cleanup on failure
 
 AIS can write chunks during a regular PUT, a cold GET that caches a remote object, an object copy, append flush, or promote. The bucket's chunking configuration determines when these operations must store an object as chunks; see [storage layout](#storage-layout) for the current rules. Local copies of already-chunked objects preserve their existing layout. Rechunk (xaction) changes the layout according to the bucket's configuration.

@@ -88,10 +88,13 @@ func EvictMultiObj(bp BaseParams, bck cmn.Bck, msg *apc.EvdMsg) (string, error) 
 	return doBckAct(bp, bck, jbody, q)
 }
 
-func Prefetch(bp BaseParams, bck cmn.Bck, msg *apc.PrefetchMsg) (string, error) {
+func Prefetch(bp BaseParams, bck cmn.Bck, msg *apc.PrefetchMsg, tids ...string) (string, error) {
 	bp.Method = http.MethodPost
 	q := qalloc()
 	bck.SetQuery(q)
+	if len(tids) > 0 {
+		q[apc.QparamTID] = tids
+	}
 	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActPrefetchObjects, Value: msg})
 	return doBckAct(bp, bck, jbody, q)
 }
