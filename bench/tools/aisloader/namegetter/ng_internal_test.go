@@ -1,8 +1,8 @@
-// Package test provides tests of aisloader package
+// Package namegetter
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
-package test_test
+package namegetter
 
 import (
 	"fmt"
@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/NVIDIA/aistore/bench/tools/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -36,7 +35,7 @@ func TestMain(m *testing.M) {
 //
 
 func BenchmarkRandomUnique(b *testing.B) {
-	ng := &namegetter.RandomUnique{}
+	ng := &RandomUnique{}
 	ng.Init(objNames, cos.NowRand())
 	for b.Loop() {
 		_ = ng.Pick()
@@ -44,7 +43,7 @@ func BenchmarkRandomUnique(b *testing.B) {
 }
 
 func BenchmarkPermShuffle(b *testing.B) {
-	ng := &namegetter.PermShuffle{}
+	ng := &PermShuffle{}
 	ng.Init(objNames, cos.NowRand())
 	for b.Loop() {
 		_ = ng.Pick()
@@ -52,7 +51,7 @@ func BenchmarkPermShuffle(b *testing.B) {
 }
 
 func BenchmarkPermAffinePrime(b *testing.B) {
-	ng := &namegetter.PermAffinePrime{}
+	ng := &PermAffinePrime{}
 	ng.Init(objNames, cos.NowRand())
 	for b.Loop() {
 		_ = ng.Pick()
@@ -64,21 +63,21 @@ func BenchmarkPermAffinePrime(b *testing.B) {
 //
 
 func TestRandomUnique(t *testing.T) {
-	ng := &namegetter.RandomUnique{}
+	ng := &RandomUnique{}
 	checkGetsAllOncePerEpoch(t, ng, "RandomUnique")
 	checkSmallSampleRandomness(t, ng, "RandomUnique")
 	checkIterBatchUniqueness(t, ng, "RandomUnique")
 }
 
 func TestPermShuffle(t *testing.T) {
-	ng := &namegetter.PermShuffle{}
+	ng := &PermShuffle{}
 	checkGetsAllOncePerEpoch(t, ng, "PermShuffle")
 	checkSmallSampleRandomness(t, ng, "PermShuffle")
 	checkIterBatchUniqueness(t, ng, "PermShuffle")
 }
 
 func TestPermAffinePrime(t *testing.T) {
-	ng := &namegetter.PermAffinePrime{}
+	ng := &PermAffinePrime{}
 	checkGetsAllOncePerEpoch(t, ng, "PermAffinePrime")
 	checkSmallSampleRandomness(t, ng, "PermAffinePrime")
 	checkIterBatchUniqueness(t, ng, "PermAffinePrime")
@@ -89,7 +88,7 @@ func TestPermAffinePrime(t *testing.T) {
 //
 
 // verify the getter visits every element exactly once
-func checkGetsAllOncePerEpoch(t *testing.T, getter namegetter.Basic, name string) {
+func checkGetsAllOncePerEpoch(t *testing.T, getter Basic, name string) {
 	t.Helper()
 
 	getter.Init(objNames, cos.NowRand())
@@ -109,7 +108,7 @@ func checkGetsAllOncePerEpoch(t *testing.T, getter namegetter.Basic, name string
 }
 
 // basic “is it random enough” sanity
-func checkSmallSampleRandomness(t *testing.T, getter namegetter.Basic, name string) {
+func checkSmallSampleRandomness(t *testing.T, getter Basic, name string) {
 	t.Helper()
 
 	rnd := cos.NowRand()
@@ -133,7 +132,7 @@ func checkSmallSampleRandomness(t *testing.T, getter namegetter.Basic, name stri
 // - yields <= requested
 // - tolerates epoch rollover mid-batch and across batches
 // - guarantees per-epoch uniqueness (we track epochs via seen-set resets)
-func checkIterBatchUniqueness(t *testing.T, getter namegetter.Basic, name string) {
+func checkIterBatchUniqueness(t *testing.T, getter Basic, name string) {
 	t.Helper()
 
 	rnd := cos.NowRand()

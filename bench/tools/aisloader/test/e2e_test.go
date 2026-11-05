@@ -18,7 +18,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -38,9 +37,6 @@ const (
 	durationEnv = "DURATION"
 	e2eWorkers  = 8
 )
-
-// tools.InitLocalCluster writes package-level state and must not run concurrently.
-var initClusterOnce sync.Once
 
 type (
 	opStats struct {
@@ -330,7 +326,6 @@ func newE2ERunner(t *testing.T, name string) *e2eRunner {
 		t.Fatalf("aisloader binary not found in PATH: %v", err)
 	}
 
-	initClusterOnce.Do(tools.InitLocalCluster)
 	proxyURL := tools.RandomProxyURL(t)
 	rootPrefix := "aisloader-e2e-" + name + "-" + strings.ToLower(trand.String(8))
 	bck, created := configuredBucket(t, proxyURL)

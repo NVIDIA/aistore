@@ -19,7 +19,6 @@ import (
 func TestAISLoaderETL(t *testing.T) {
 	duration := configuredDuration(t)
 	runner := newE2ERunner(t, "etl")
-	// CheckSkip needs the cluster state initialized by newE2ERunner.
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, RequiresETL: true})
 	etlName, etlTimeout := specETLInfo(t, tetl.Echo)
 	// aisloader deletes the ETL on a clean exit; this also handles crashes or timeouts.
