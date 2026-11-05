@@ -37,6 +37,18 @@ For a deeper dive into the internals and detailed benchmarks, see the [blog post
 
 ---
 
+## Checksums
+
+The stored object's whole-object checksum follows the same rule for standalone jobs, prefetch, and streaming GET:
+
+- With `checksum.type=none`, no object or chunk checksums are computed.
+- If chunks are written sequentially in object order, each finishing before the next starts, blob downloader uses the bucket's configured `checksum.type` (default: `xxhash`).
+- Otherwise, it uses CRC32C, combining the per-chunk CRC32C checksums computed during download in object order.
+
+Both checksum paths avoid rereading the downloaded chunks.
+
+See [Chunked object checksums](/docs/checksum.md#chunked-objects) for more details.
+
 ## Usage
 
 AIStore exposes blob download functionality through three distinct interfaces, each suited to different use cases.
