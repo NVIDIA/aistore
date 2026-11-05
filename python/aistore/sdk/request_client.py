@@ -22,6 +22,8 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
 )
 
+from aistore.sdk.client_state import ClientState
+from aistore.sdk.errors import ClientClosedError
 from aistore.sdk.request_executor import RequestExecutor
 from aistore.sdk.response_handler import ResponseHandler, AISResponseHandler
 from aistore.sdk.retry_manager import RetryManager
@@ -47,6 +49,8 @@ class RequestClient:
         token (str, optional): Authorization token.
         response_handler (ResponseHandler): Handler for processing HTTP responses. Defaults to AISResponseHandler.
         retry_config (RetryConfig, optional): Retry settings. None uses RetryConfig.default().
+        client_state (ClientState, optional): Shared client lifecycle state.
+            Defaults to a new state for independently constructed request clients.
     """
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -58,12 +62,15 @@ class RequestClient:
         token: str = "",
         response_handler: ResponseHandler = AISResponseHandler(),
         retry_config: Optional[RetryConfig] = None,
+        client_state: Optional[ClientState] = None,
     ):
+        self._client_state = client_state if client_state is not None else ClientState()
         self._executor = RequestExecutor(
             base_url=urljoin(endpoint, "v1"),
             session_manager=session_manager,
             token=token,
             timeout=timeout,
+            client_state=self._client_state,
         )
         self._response_handler = response_handler
         # smap is used to calculate the target node for a given object
@@ -96,10 +103,6 @@ class RequestClient:
         Return the SessionManager used to create sessions for this client.
         """
         return self._executor.session_manager
-
-    @session_manager.setter
-    def session_manager(self, session_manager):
-        self._executor.session_manager = session_manager
 
     @property
     def token(self) -> str:
@@ -135,7 +138,7 @@ class RequestClient:
         response_handler: Optional[ResponseHandler] = None,
     ) -> "RequestClient":
         """
-        Create a copy of the current RequestClient instance with an optional new base URL.
+        Create a copy with an optional new base URL and a shared closed lifecycle.
 
         Args:
             base_url (Optional[str]): New base URL for the cloned client. Defaults to the existing base URL.
@@ -145,7 +148,6 @@ class RequestClient:
         Returns:
             RequestClient: A new instance with the same settings but an optional different base URL.
         """
-
         # Default to the existing base URL if none is provided
         base_url = base_url or self.base_url
 
@@ -163,6 +165,7 @@ class RequestClient:
                 else self._response_handler
             ),
             retry_config=self._retry_manager.retry_config,
+            client_state=self._client_state,
         )
 
     def request_deserialize(
@@ -215,6 +218,7 @@ class RequestClient:
             The HTTP response from the server.
 
         Raises:
+            ClientClosedError: The client has been closed.
             requests.exceptions.UnrewindableBodyError: An SDK network retry cannot
                 rewind the request body to its initial position.
         """
@@ -412,6 +416,7 @@ class RequestClient:
             Response: The HTTP response from the final target server
 
         Raises:
+            ClientClosedError: The client has been closed.
             ValueError: If the proxy does not return a redirect or the redirect URL is missing
             TypeError: If data type is not supported
             IOError: If file operations fail during content length calculation
@@ -433,6 +438,8 @@ class RequestClient:
             proxy_response = self._executor.request_absolute(
                 method, url, **proxy_request_kwargs
             )
+        except ClientClosedError:
+            raise
         except Exception as e:
             logger.error("Proxy request failed for %s %s: %s", method, url, str(e))
             raise
@@ -473,6 +480,8 @@ class RequestClient:
             target_response = self._executor.request_absolute(
                 method=method, url=target_url, headers=headers, **kwargs
             )
+        except ClientClosedError:
+            raise
         except Exception as e:
             logger.error(
                 "Target request failed for %s %s: %s", method, target_url, str(e)

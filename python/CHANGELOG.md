@@ -12,15 +12,17 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   Existing environments with `mcp<2` must upgrade before starting the server:
   `python -m pip install --upgrade "mcp[cli]>=2,<3"`.
 
+### Added
+
+- `Client.close()`, `closed`, and context management. Requests through closed
+  clients and their handles raise `ClientClosedError`.
+- Python 3.15 support for the SDK, PyTorch integration, and pyaisloader, including
+  the `Etl.init_class()` runtime and CI test coverage.
+
 ### Changed
 
 - Pickling or forking `SessionManager` no longer carries live sessions as the receiving process
   creates its own on first use.
-
-### Added
-
-- Python 3.15 support for the SDK, PyTorch integration, and pyaisloader, including
-  the `Etl.init_class()` runtime and CI test coverage.
 
 ### Fixed
 

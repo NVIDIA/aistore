@@ -1,7 +1,11 @@
 #
-# Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import requests
+
+
+class ClientClosedError(RuntimeError):
+    """Raised when an operation requires a client that has been closed."""
 
 
 class APIRequestError(Exception):

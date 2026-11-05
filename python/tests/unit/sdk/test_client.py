@@ -5,12 +5,13 @@
 import unittest
 import os
 import warnings
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, ANY
 from urllib3.util import Retry
 
 from tenacity import Retrying, stop_after_delay, wait_exponential
 from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
+from aistore.sdk.errors import ClientClosedError
 from aistore.sdk.provider import Provider
 from aistore.sdk.etl.etl import Etl
 from aistore.sdk.request_client import RequestClient
@@ -23,10 +24,13 @@ from tests.const import ETL_NAME
 from tests.utils import cases
 
 
-class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
+class TestClient(unittest.TestCase):  # pylint: disable=unused-variable,too-many-public-methods
+    """Test client configuration, factories, and lifecycle cleanup."""
+
     def setUp(self) -> None:
         self.endpoint = "https://aistore-endpoint"
         self.client = Client(self.endpoint)
+        self.addCleanup(self.client.close)
 
     @patch("aistore.sdk.client.SessionManager")
     @patch("aistore.sdk.client.RequestClient")
@@ -48,6 +52,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             timeout=(3, 20),
             token=None,
             retry_config=retry_config,
+            client_state=ANY,
         )
 
     @cases(
@@ -116,6 +121,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             timeout=timeout,
             token=token,
             retry_config=retry_config,
+            client_state=ANY,
         )
 
     @cases(*Provider)
@@ -322,3 +328,25 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
         finally:
             os.environ.pop(AIS_CONNECT_TIMEOUT, None)
             os.environ.pop(AIS_READ_TIMEOUT, None)
+
+    def test_context_manager(self):
+        """Context exit closes requests while handles remain accessible."""
+        with self.client as client:
+            self.assertIs(client, self.client)
+            self.assertFalse(client.closed)
+        self.client.close()
+        self.assertTrue(self.client.closed)
+        obj = self.client.bucket("test").object("object")
+        self.assertEqual(obj.name, "object")
+        with self.assertRaises(ClientClosedError):
+            obj.head()
+        with self.assertRaises(ClientClosedError):
+            with self.client:
+                self.fail("Closed client entered context")
+
+    def test_context_exception(self):
+        """Exceptions propagate while context exit closes the client."""
+        with self.assertRaisesRegex(ValueError, "context failure"):
+            with self.client:
+                raise ValueError("context failure")
+        self.assertTrue(self.client.closed)

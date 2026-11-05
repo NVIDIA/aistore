@@ -1,7 +1,8 @@
 #
 # Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import List, Optional, Tuple, Union
+from types import TracebackType
+from typing import List, Optional, Tuple, Type, Union
 import os
 import warnings
 
@@ -16,6 +17,7 @@ from aistore.sdk.const import (
     EXT_TAR,
 )
 from aistore.sdk.cluster import Cluster
+from aistore.sdk.client_state import ClientState
 from aistore.sdk.dsort import Dsort
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.session_manager import SessionManager
@@ -193,6 +195,7 @@ class Client:
         token: Optional[str] = None,
         max_pool_size: Optional[int] = None,
     ):
+        self._state = ClientState()
         self.retry_config = (
             retry_config if retry_config is not None else RetryConfig.default()
         )
@@ -201,7 +204,7 @@ class Client:
         timeout = self._resolve_timeout(timeout)
         max_pool_size = self._resolve_max_pool_size(max_pool_size)
 
-        session_manager = SessionManager(
+        self._session_manager = SessionManager(
             retry=self.retry_config.http_retry,
             ca_cert=ca_cert,
             client_cert=client_cert,
@@ -213,13 +216,67 @@ class Client:
         if not token:
             token = os.environ.get(AIS_AUTHN_TOKEN)
 
-        self._request_client = RequestClient(
-            endpoint=endpoint,
-            session_manager=session_manager,
-            timeout=timeout,
-            token=token,
-            retry_config=self.retry_config,
-        )
+        try:
+            self._request_client = RequestClient(
+                endpoint=endpoint,
+                session_manager=self._session_manager,
+                timeout=timeout,
+                token=token,
+                retry_config=self.retry_config,
+                client_state=self._state,
+            )
+        except Exception:
+            self.close()
+            raise
+
+    @property
+    def closed(self) -> bool:
+        """Return whether this client is closed."""
+        return self._state.closed
+
+    def __enter__(self) -> "Client":
+        """
+        Enter the context without making any network requests.
+
+        Returns:
+            Client: This client instance, bound to the context's ``as`` variable.
+
+        Raises:
+            ClientClosedError: The client has already been closed.
+        """
+        self._state.ensure_open()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """
+        Close this client when leaving the context, including on exceptions.
+
+        Args:
+            exc_type (Optional[Type[BaseException]]): Type of the exception raised
+                in the context, or None if the context completed normally.
+            exc_value (Optional[BaseException]): Exception raised in the context,
+                or None if the context completed normally.
+            traceback (Optional[TracebackType]): Traceback of the exception raised
+                in the context, or None if the context completed normally.
+        """
+        self.close()
+
+    def close(self) -> None:
+        """
+        Close this process's HTTP session and release its connection pools.
+
+        Repeated calls are harmless. Handles, properties, and cached data remain
+        accessible, but requests through this client or its handles raise
+        ClientClosedError. Finish active requests and close streaming responses
+        before closing; close does not wait for them.
+        """
+        self._state.mark_closed()
+        self._session_manager.close()
 
     def bucket(
         self,

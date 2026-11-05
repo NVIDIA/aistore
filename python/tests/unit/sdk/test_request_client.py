@@ -2,7 +2,7 @@ import io
 import unittest
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from unittest.mock import patch, Mock, MagicMock, call
+from unittest.mock import patch, Mock, MagicMock, call, ANY
 
 from requests import Request, Response, Session
 from requests.exceptions import (
@@ -12,13 +12,18 @@ from requests.exceptions import (
 from tenacity import stop_after_attempt, wait_none
 
 from aistore.sdk import RetryConfig
+from aistore.sdk.client_state import ClientState
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
     HEADER_USER_AGENT,
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
 )
-from aistore.sdk.errors import AISError, ErrGETConflict, ErrObjNotFound
+from aistore.sdk.errors import (
+    AISError,
+    ErrGETConflict,
+    ErrObjNotFound,
+)
 
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.retry_manager import RetryManager
@@ -29,7 +34,9 @@ from tests.utils import cases
 TEST_ENDPOINT = "https://aistore-endpoint"
 
 
-class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
+class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable,too-many-public-methods
+    """Test request execution, cloning, and client lifecycle state."""
+
     def setUp(self) -> None:
         self.mock_response = Mock(name="Mock response", spec=Response, status_code=200)
         self.mock_session = Mock(name="Mock session", spec=Session)
@@ -439,6 +446,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 token="",
                 response_handler=self.mock_response_handler,
                 retry_config=retry_config,
+                client_state=ANY,
             )
             self.assertEqual(new_client, mock_constructor.return_value)
 
@@ -451,6 +459,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         retry_config.cold_get_conf.max_cold_wait = 300
         timeout = (20, 30)
         token = "some-token-string"
+        client_state = ClientState()
         initial_client = RequestClient(
             TEST_ENDPOINT,
             self.mock_session_manager,
@@ -458,6 +467,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             token,
             self.mock_response_handler,
             retry_config,
+            client_state=client_state,
         )
         with patch(
             "aistore.sdk.request_client.RequestClient", autospec=True
@@ -471,6 +481,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 token=token,
                 response_handler=new_response_handler,
                 retry_config=retry_config,
+                client_state=client_state,
             )
             self.assertEqual(new_client, mock_constructor.return_value)
 

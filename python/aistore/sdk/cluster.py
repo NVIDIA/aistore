@@ -31,6 +31,7 @@ from aistore.sdk.const import (
     WHAT_LOG,
 )
 from aistore.sdk.enums import LogSeverity, NodeFilter
+from aistore.sdk.errors import ClientClosedError
 from aistore.sdk.etl.etl_const import ETL_STAGE_RUNNING
 from aistore.sdk.provider import Provider
 
@@ -178,6 +179,9 @@ class Cluster:
 
         Returns:
             bool: True if cluster is ready, or false if cluster is still setting up
+
+        Raises:
+            ClientClosedError: The client has been closed.
         """
         # compare with AIS Go API (api/cluster.go) for additional supported options
         params = {QPARAM_PRIMARY_READY_REB: "true"}
@@ -189,6 +193,8 @@ class Cluster:
                 params=params,
             )
             return resp.ok
+        except ClientClosedError:
+            raise
         except Exception as err:
             logger.debug(err)
             return False

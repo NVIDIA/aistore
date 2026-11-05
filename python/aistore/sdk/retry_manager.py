@@ -8,6 +8,7 @@ import tenacity
 from requests import PreparedRequest, Response
 
 from aistore.sdk.const import HTTP_METHOD_GET, URL_PATH_OBJECTS
+from aistore.sdk.errors import ClientClosedError
 from aistore.sdk.lock_poller import LockPoller
 from aistore.sdk.request_executor import RequestExecutor
 from aistore.sdk.retry_config import RetryConfig
@@ -39,6 +40,10 @@ class RetryManager:
     def _build_retrying(self) -> tenacity.Retrying:
         """Compose `network_retry` with the cold-get write-lock polling hook."""
         retrying = self._retry_config.network_retry.copy()
+        # ensure that when no retry filter is provided, we do not retry on client close
+        retrying.retry = (
+            tenacity.retry_unless_exception_type(ClientClosedError) & retrying.retry
+        )
         # Preserve existing or user-provided before_sleep
         existing_before_sleep = retrying.before_sleep
         if existing_before_sleep:
@@ -102,6 +107,8 @@ class RetryManager:
         )
         try:
             self._lock_poller.wait_for_unlock(req)
+        except ClientClosedError:
+            raise
         except Exception as retry_err:
             # Allow tenacity to continue retrying and do not re-raise
             logger.error("Error while polling for object write-lock: %s", retry_err)

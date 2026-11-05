@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 from requests import Response
 
+from aistore.sdk.client_state import ClientState
 from aistore.sdk.const import (
     HEADER_AUTHORIZATION,
     HEADER_CONTENT_TYPE,
@@ -25,6 +26,7 @@ class RequestExecutor:
         base_url (str): Fully-qualified endpoint URL including the API
             version prefix (e.g. `https://proxy/v1`).
         session_manager (SessionManager): Shared per-process session pool.
+        client_state (ClientState): Shared client lifecycle state.
         token (str, optional): Bearer token added as the Authorization header
             when set.
         timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float.
@@ -32,13 +34,16 @@ class RequestExecutor:
             or None to disable timeout.
     """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
         self,
         base_url: str,
         session_manager: SessionManager,
+        client_state: ClientState,
         token: str = "",
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
     ):
+        self._client_state = client_state
         self._base_url = base_url
         self._session_manager = session_manager
         self._token = token
@@ -53,10 +58,6 @@ class RequestExecutor:
     def session_manager(self) -> SessionManager:
         """Shared `SessionManager` used to acquire the per-process session."""
         return self._session_manager
-
-    @session_manager.setter
-    def session_manager(self, value: SessionManager) -> None:
-        self._session_manager = value
 
     @property
     def token(self) -> str:
@@ -124,6 +125,7 @@ class RequestExecutor:
         merged = self._merge_headers(headers)
         if self._timeout is not None and "timeout" not in kwargs:
             kwargs["timeout"] = self._timeout
+        self._client_state.ensure_open()
         return self._session_manager.session.request(
             method, url, headers=merged, **kwargs
         )
