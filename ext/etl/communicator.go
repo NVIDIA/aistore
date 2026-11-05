@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -284,9 +285,16 @@ func (c *baseComm) doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc) (r 
 		return nil, ecode, err
 	}
 	// Status-code handling (including >= 400) is the caller's responsibility.
+	size := rtyr.resp.ContentLength
+	if rtyr.resp.StatusCode == http.StatusNoContent {
+		// direct put: use the size reported by the ETL, if any
+		if n, ers := strconv.ParseInt(rtyr.resp.Header.Get(apc.HdrDirectPutLength), 10, 64); ers == nil && n >= 0 {
+			size = n
+		}
+	}
 	return &cos.ReaderWithArgs{
 		R:     rtyr.resp.Body,
-		Rsize: rtyr.resp.ContentLength,
+		Rsize: size,
 	}, rtyr.resp.StatusCode, nil
 }
 

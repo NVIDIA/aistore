@@ -2027,7 +2027,11 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, coi.ETLArgs)
 			// skip t2t send if encounter error during GetROC, (etl direct put will return ErrSkip in this case)
 			if resp.Err != nil {
-				return xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
+				res = xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
+				if resp.Err == cmn.ErrSkip {
+					res.Lsize = resp.OAH.Lsize() // size reported by the ETL
+				}
+				return res
 			}
 			coi.OAH = resp.OAH
 			r = resp.R
