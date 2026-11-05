@@ -3,7 +3,7 @@
 #
 
 ARG BUILDER_IMAGE=docker.io/library/golang:1.27
-ARG BASE_IMAGE=gcr.io/distroless/base-debian12:nonroot
+ARG BASE_IMAGE=gcr.io/distroless/base-debian13:nonroot
 
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILDER_IMAGE} AS builder
 
