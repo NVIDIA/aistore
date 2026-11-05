@@ -187,8 +187,15 @@ func (base *etlServerBase) handleRequest(objReader io.ReadCloser, w http.Respons
 	w.WriteHeader(http.StatusOK)
 	_, err = io.Copy(w, transformedReader)
 	if err != nil {
-		cmn.WriteErr(w, r, err)
+		abortResponse("failed to stream transformed data:", err)
 	}
+}
+
+// aborts a response after its status is written, so that the client sees
+// a failed request rather than a truncated body that looks complete
+func abortResponse(msg string, err error) {
+	nlog.Errorln(msg, err)
+	panic(http.ErrAbortHandler)
 }
 
 // isWebsocketCloseErr returns true if the error is a benign websocket close error
@@ -308,6 +315,7 @@ func (base *etlServerBase) handleDirectPut(w http.ResponseWriter, transformedRea
 		return
 	}
 	if dresp.Body != nil {
+		defer dresp.Body.Close()
 		setResponseHeaders(w.Header(), dresp.Size)
 	}
 	if dresp.DirectPutLength > 0 {
@@ -316,9 +324,8 @@ func (base *etlServerBase) handleDirectPut(w http.ResponseWriter, transformedRea
 	w.WriteHeader(dresp.StatusCode)
 	if dresp.Body != nil {
 		if _, err := io.Copy(w, dresp.Body); err != nil {
-			nlog.Errorln("copy error", err)
+			abortResponse("copy error", err)
 		}
-		dresp.Body.Close()
 	}
 }
 
@@ -353,8 +360,7 @@ func (base *etlServerBase) handleETLObjectDownload(w http.ResponseWriter, r *htt
 	// Stream transformed data back to target
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, transformedReader); err != nil {
-		nlog.Errorf("Failed to stream transformed data: %v", err)
-		return
+		abortResponse("failed to stream transformed data:", err)
 	}
 
 	if cmn.Rom.V(4, cos.ModAIS) {
