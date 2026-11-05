@@ -1259,7 +1259,7 @@ func (e *ErrHTTP) init(r *http.Request, err error, ecode int) {
 	} else {
 		tcode := fmt.Sprintf("%T", err)
 		if i := strings.Index(tcode, "."); i > 0 && i < maxlen && len(tcode)-i < maxlen {
-			if pkg := tcode[:i]; pkg != "*errors" && pkg != "errors" {
+			if pkg := tcode[:i]; pkg != "*errors" && pkg != "errors" && pkg != "*fmt" && pkg != "fmt" {
 				e.TypeCode = tcode[i+1:]
 			}
 		}
