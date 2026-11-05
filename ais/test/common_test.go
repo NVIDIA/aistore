@@ -1125,6 +1125,9 @@ func (m *ioContext) findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 	if m.chunksConf != nil && m.chunksConf.multipart {
 		return getObjToTemp(m.t, m.proxyURL, bck, objName)
 	}
+	if bck.IsRemoteAIS() && bck.Ns.UUID == tools.RemoteCluster.Alias {
+		bck.Ns.UUID = tools.RemoteCluster.UUID
+	}
 
 	fsWalkFunc := func(path string, de fs.DirEntry) error {
 		if fqn != "" {
@@ -1156,6 +1159,9 @@ func (m *ioContext) findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 }
 
 func (m *ioContext) findObjChunksOnDisk(bck cmn.Bck, objName string) (fqn []string) {
+	if bck.IsRemoteAIS() && bck.Ns.UUID == tools.RemoteCluster.Alias {
+		bck.Ns.UUID = tools.RemoteCluster.UUID
+	}
 	if m.chunksConf != nil {
 		fqn = make([]string, 0, m.chunksConf.numChunks)
 	} else {

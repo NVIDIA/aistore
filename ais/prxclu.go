@@ -156,6 +156,9 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 		return
 	}
 	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // convert display name => kind
+	if xactMsg.Bck.IsRemoteAIS() && p.remaisVersionFixup() {
+		xactMsg.Bck.Ns.UUID = p.a2u(xactMsg.Bck.Ns.UUID)
+	}
 	body := cos.MustMarshal(xactMsg)
 
 	args := allocBcArgs()
