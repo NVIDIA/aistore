@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -39,7 +40,18 @@ var (
 )
 
 func (xctn *Base) NewErrRecvAbortXact(tid, errCause string) error {
-	return fmt.Errorf("%w: %s [%s: %q]", errRecvAbortXact, xctn.Cname(), meta.Tname(tid), errCause)
+	return newErrRecvAbortXact(xctn.Cname(), tid, errCause)
+}
+
+func newErrRecvAbortXact(cname, tid, errCause string) error {
+	return fmt.Errorf("%w: %s [%s: %q]", errRecvAbortXact, cname, meta.Tname(tid), errCause)
+}
+
+func RecvAbortXact(xctn core.Xact, tid, errCause string) {
+	err := newErrRecvAbortXact(xctn.Cname(), tid, errCause)
+	if xctn.Abort(err) {
+		nlog.Warningln(err)
+	}
 }
 
 func IsErrRecvAbortXact(err error) bool { return errors.Is(err, errRecvAbortXact) }
@@ -87,5 +99,7 @@ func (xctn *Base) BcastCtrl(smap *meta.Smap, wid, opcode string, err error) {
 			}
 		}(tsi)
 	}
-	nlog.WarningDepth(1, xctn.Name(), core.T.String(), "bcast abort [", err, "]")
+	if cmn.Rom.V(4, cos.ModXs) {
+		nlog.InfoDepth(1, xctn.Name(), core.T.String(), "bcast abort [", err, "]")
+	}
 }

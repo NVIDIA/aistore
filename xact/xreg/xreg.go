@@ -427,6 +427,10 @@ func (args *abortArgs) do(entry Renewable) {
 	}
 
 	if abort {
+		// only rebalance and BMD aborts reach every target (AbortAll and AbortKind can be local)
+		if args.newreb || len(args.bcks) > 0 {
+			xctn.SetClusterAbort()
+		}
 		xctn.Abort(args.err)
 	}
 }

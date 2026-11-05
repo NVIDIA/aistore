@@ -5,7 +5,9 @@
 package xs
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,6 +33,7 @@ type (
 	}
 	sentinel struct {
 		r      core.Xact
+		base   *xact.Base
 		dm     *bundle.DM
 		config *cmn.Config
 		smap   *meta.Smap
@@ -44,14 +47,19 @@ type (
 	}
 )
 
-func (s *sentinel) init(r core.Xact, dm *bundle.DM, config *cmn.Config, smap *meta.Smap, nat int) {
+func (s *sentinel) init(r core.Xact, base *xact.Base, dm *bundle.DM, config *cmn.Config, smap *meta.Smap, nat int) {
 	s.r = r
+	s.base = base
 	s.dm = dm
 	s.config = config
 	s.smap = smap
 	s.nat = nat
-	if nat <= 1 || dm == nil {
-		return // single-target or no DM: no peers to coordinate with
+	if nat <= 1 {
+		return // single-target (no peers to coordinate with)
+	}
+	context.AfterFunc(base.Context(), s.bcastAbort)
+	if dm == nil {
+		return
 	}
 	debug.Assert(config != nil)
 	s.pend.n.Store(int64(nat - 1))
@@ -64,6 +72,21 @@ func (s *sentinel) init(r core.Xact, dm *bundle.DM, config *cmn.Config, smap *me
 	}
 }
 
+func (s *sentinel) bcastAbort() {
+	err := s.base.AbortErr()
+	if err == nil || s.skipAbortBcast(err) {
+		return
+	}
+	s.base.BcastCtrl(s.smap, "", xact.OpcodeAbortXact, err)
+}
+
+// no need to broadcast: from a peer, or every target gets it on its own
+// TODO: a shared cause found locally (e.g., missing source bucket) is not marked
+func (s *sentinel) skipAbortBcast(err error) bool {
+	return xact.IsErrRecvAbortXact(err) || s.base.IsClusterAbort() ||
+		errors.Is(err, cmn.ErrXactUserAbort) || errors.Is(err, cmn.ErrXactICNotifAbort)
+}
+
 func (s *sentinel) cleanup() {
 	clear(s.pend.m)
 	s.pend.p = s.pend.p[:0]
@@ -71,7 +94,7 @@ func (s *sentinel) cleanup() {
 
 // TODO -- FIXME: transition to T2T (off streams) control path
 func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
-	if abortErr != nil && xact.IsErrRecvAbortXact(abortErr) {
+	if abortErr != nil && s.skipAbortBcast(abortErr) {
 		return // do nothing
 	}
 
@@ -141,6 +164,8 @@ func (s *sentinel) _qcb(tot, ival, progressTimeout time.Duration, ecnt int) core
 	// 2. check Smap; abort if membership changed
 	smap := core.T.Sowner().Get()
 	if err := s.checkSmap(smap); err != nil {
+		// TODO: a target that started with a newer Smap does not detect the change (compare txn.smapVer)
+		s.base.SetClusterAbort()
 		return s._qabort(err)
 	}
 
@@ -211,14 +236,13 @@ func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 	}
 }
 
-// TODO -- FIXME: transition to T2T (off streams) control path
-func (s *sentinel) rxAbort(hdr *transport.ObjHdr, self *xact.Base) {
+func (s *sentinel) rxAbort(hdr *transport.ObjHdr) {
 	r := s.r
 	if r.IsAborted() || r.IsDone() {
 		return
 	}
 	errCause := hdr.ObjName // see s.bcast(abortErr)
-	err := self.NewErrRecvAbortXact(hdr.SID, errCause)
+	err := s.base.NewErrRecvAbortXact(hdr.SID, errCause)
 	r.Abort(err)
 	nlog.WarningDepth(1, err)
 }

@@ -165,7 +165,7 @@ func (p *tcoFactory) Start() error {
 	r.copier.r = r
 
 	// sentinels, to coordinate finishing, aborting, and progress
-	r.sntl.init(r, r.p.dm, r.config, smap, nat)
+	r.sntl.init(r, &r.Base, r.p.dm, r.config, smap, nat)
 
 	// (rgetstats)
 	if bck := r.args.BckFrom; bck.IsRemote() {
@@ -241,10 +241,12 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	// this target must be active (ref: ignoreMaintenance)
 	smap := core.T.Sowner().Get()
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
+		r.SetClusterAbort() // the Smap change reaches every target
 		r.Abort(err)
 		return true // stop
 	}
 	if err := r.sntl.checkSmap(smap); err != nil {
+		r.SetClusterAbort()
 		r.Abort(err)
 		return true // stop
 	}
@@ -412,7 +414,7 @@ func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		case transport.OpcAbort:
 			uuid := cos.UnsafeS(hdr.Opaque)
 			debug.Func(func() { debug.Assert(uuid == r.ID(), uuid, " vs ", r.ID()) })
-			r.sntl.rxAbort(hdr, &r.Base)
+			r.sntl.rxAbort(hdr)
 		case transport.OpcRequest:
 			// progress request during quiesce - respond with current count
 			o := transport.AllocSend()

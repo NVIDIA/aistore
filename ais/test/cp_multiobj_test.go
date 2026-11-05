@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -107,6 +108,55 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		err := api.DeleteObject(baseParams, bckTo, objName)
 		tassert.CheckError(t, err)
 		tlog.Logfln("%s", bckTo.Cname(objName))
+	}
+}
+
+// one target aborts with a local cause (each peer must get that cause)
+func TestCopyMultiObjPeerAbort(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2})
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions (CAP_DAC_OVERRIDE): the read-only destination does not fail")
+	}
+	var (
+		bckFrom  = cmn.Bck{Name: "cp-abort-from" + cos.GenTie(), Provider: apc.AIS}
+		bckTo    = cmn.Bck{Name: "cp-abort-to" + cos.GenTie(), Provider: apc.AIS}
+		m        = &ioContext{t: t, num: 60, fileSize: 8 * cos.MiB, bck: bckFrom}
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+	)
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	m.initAndSaveState(true /*cleanup*/)
+	m.puts()
+	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
+
+	tsi, err := m.smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	mpList, err := api.GetMountpaths(bp, tsi)
+	tassert.CheckFatal(t, err)
+	for _, mpath := range mpList.Available {
+		dir := (&fs.Mountpath{Path: mpath}).MakePathCT(&bckTo, fs.ObjCT)
+		tassert.CheckFatal(t, os.Chmod(dir, 0o555))
+		t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	}
+
+	msg := cmn.TCOMsg{ToBck: bckTo}
+	msg.ObjNames = m.objNames
+	xid, err := api.CopyMultiObj(bp, bckFrom, &msg)
+	tassert.CheckFatal(t, err)
+	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects, Timeout: 30 * time.Second}
+	snaps, err := api.WaitForSnaps(bp, args, func(snaps xact.MultiSnap) (bool, bool, error) {
+		return allTargetsFinished(snaps, m.smap.CountActiveTs()), false, nil
+	})
+	tassert.CheckFatal(t, err)
+
+	for tid, tsnaps := range snaps {
+		if tid == tsi.ID() {
+			continue
+		}
+		for _, snap := range tsnaps {
+			tassert.Errorf(t, strings.Contains(snap.AbortErr, os.ErrPermission.Error()),
+				"%s: expected the cause from %s, got %q", meta.Tname(tid), tsi.StringEx(), snap.AbortErr)
+		}
 	}
 }
 

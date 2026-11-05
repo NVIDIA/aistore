@@ -130,6 +130,7 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	// which also bypassed the multi-worker setup below.
 	// But now that sentinels requires the data mover to broadcast control messages, DM is always required.
 	if r.args.DisableDM {
+		r.sntl.init(r, &r.Base, nil /*dm*/, r.Config, smap, nat) // T2T abort only
 		return r, nil
 	}
 
@@ -145,7 +146,7 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 
 	// sentinels, to coordinate finishing, aborting, and progress;
 	// use DM to communicate sentinel opcodes (transport.OpcDone, transport.OpcAbort, ...)
-	r.sntl.init(r, r.dm, r.Config, smap, nat)
+	r.sntl.init(r, &r.Base, r.dm, r.Config, smap, nat)
 	return r, nil
 }
 
@@ -257,6 +258,7 @@ func (r *XactTCB) run(wg *sync.WaitGroup) {
 	if r.dm != nil {
 		smap := core.T.Sowner().Get()
 		if err := r.sntl.checkSmap(smap); err != nil {
+			r.SetClusterAbort() // every target detects the membership change
 			r.Abort(err)
 			wg.Done()
 			return
@@ -358,7 +360,7 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		case transport.OpcDone:
 			r.sntl.rxDone(hdr)
 		case transport.OpcAbort:
-			r.sntl.rxAbort(hdr, &r.Base)
+			r.sntl.rxAbort(hdr)
 		case transport.OpcRequest:
 			o := transport.AllocSend()
 			o.Hdr.Opcode = transport.OpcResponse

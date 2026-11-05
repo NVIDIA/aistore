@@ -74,6 +74,7 @@ type (
 
 		// modifiers
 		Finish()
+		SetClusterAbort() // call before Abort()
 		Abort(error) bool
 		AddNotif(n Notif)
 

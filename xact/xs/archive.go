@@ -150,7 +150,7 @@ func (p *archFactory) Start() (err error) {
 			return err
 		}
 	}
-	r.sntl.init(r, r.p.dm, r.config, r.smap, nat)
+	r.sntl.init(r, &r.Base, r.p.dm, r.config, r.smap, nat)
 	return nil
 }
 
@@ -452,7 +452,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 				r.sntl.rxDone(hdr)
 			}
 		case transport.OpcAbort:
-			r.sntl.rxAbort(hdr, &r.Base)
+			r.sntl.rxAbort(hdr)
 		case transport.OpcRequest:
 			// progress request during quiesce - respond with current count
 			o := transport.AllocSend()

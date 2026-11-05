@@ -38,10 +38,11 @@ type (
 		notif  *NotifXact
 		bck    meta.Bck
 		abort  struct {
-			ch     chan error
-			err    ratomic.Pointer[error]
-			done   atomic.Bool
-			closed atomic.Bool
+			ch      chan error
+			err     ratomic.Pointer[error]
+			done    atomic.Bool
+			closed  atomic.Bool
+			cluster atomic.Bool // every target gets this abort on its own
 		}
 		id   string
 		kind string
@@ -144,6 +145,9 @@ func (*Base) FromTo() (*meta.Bck, *meta.Bck) { return nil, nil }
 func (xctn *Base) ChanAbort() <-chan error { return xctn.abort.ch }
 
 func (xctn *Base) IsAborted() bool { return xctn.abort.done.Load() }
+
+func (xctn *Base) SetClusterAbort()     { xctn.abort.cluster.Store(true) }
+func (xctn *Base) IsClusterAbort() bool { return xctn.abort.cluster.Load() }
 
 func (xctn *Base) AbortErr() error {
 	if !xctn.IsAborted() {

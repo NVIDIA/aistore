@@ -161,9 +161,10 @@ T2T control (xact/t2tctrl.go: `POST /v1/xactions/t2tctrl/{xkind}/{xid}/{wid}/{op
 
 Goal: reliable control, independent of data streams and DM. HTTP alone does not supply delivery or completion guarantees.
 
-- today, only x-moss uses T2T control (moss.go; ais/ml.go); `target.xactCtrl` (ais/tgtxact.go) explicitly
-  rejects other kinds, so generalize dispatch as well as adding opcodes
-- still in-stream: sentinel.go (tcb, tcobjs, archive), streaming.go, lso.go (abort)
+- today, `target.xactCtrl` (ais/tgtxact.go) dispatches to x-moss (moss.go; ais/ml.go), and aborts
+  other kinds on `xact.OpcodeAbortXact` (see `xact.RecvAbortXact`)
+- sentinel abort goes both via T2T (`sentinel.bcastAbort`, upon abort) and in-stream (`sentinel.bcast`, upon fini)
+- still in-stream only: sentinel.go (done, progress), streaming.go, lso.go (abort)
 - add opcodes as needed: done (with per-destination counts, see above), progress request/response
 - delivery: `SendCtrl` waits for an HTTP response; `BcastCtrl` launches asynchronous sends and only logs
   failures. Add bounded retries/acknowledgments or a receiver-side status fallback for completion
