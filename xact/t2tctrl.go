@@ -56,6 +56,21 @@ func RecvAbortXact(xctn core.Xact, tid, errCause string) {
 
 func IsErrRecvAbortXact(err error) bool { return errors.Is(err, errRecvAbortXact) }
 
+// return true if other targets get the same abort without T2T (peer, proxy xact-stop, or cluster-wide event)
+// TODO: a shared cause found locally (e.g., missing source bucket) is not marked
+func (xctn *Base) SkipAbortBcast(err error) bool {
+	return IsErrRecvAbortXact(err) || xctn.IsClusterAbort() ||
+		errors.Is(err, cmn.ErrXactUserAbort) || errors.Is(err, cmn.ErrXactICNotifAbort)
+}
+
+func (xctn *Base) BcastAbort(smap *meta.Smap) {
+	err := xctn.AbortErr()
+	if err == nil || xctn.SkipAbortBcast(err) {
+		return
+	}
+	xctn.BcastCtrl(smap, "", OpcodeAbortXact, err)
+}
+
 func (xctn *Base) NewErrRecvAbortWI(tid, wid, errCause string) error {
 	return fmt.Errorf("%w: %s wid=%q [%s: %q]", errRecvAbortWI, xctn.Cname(), wid, meta.Tname(tid), errCause)
 }

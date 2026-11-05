@@ -7,7 +7,6 @@ package xs
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"time"
 
@@ -57,7 +56,7 @@ func (s *sentinel) init(r core.Xact, base *xact.Base, dm *bundle.DM, config *cmn
 	if nat <= 1 {
 		return // single-target (no peers to coordinate with)
 	}
-	context.AfterFunc(base.Context(), s.bcastAbort)
+	context.AfterFunc(base.Context(), func() { base.BcastAbort(smap) })
 	if dm == nil {
 		return
 	}
@@ -72,30 +71,14 @@ func (s *sentinel) init(r core.Xact, base *xact.Base, dm *bundle.DM, config *cmn
 	}
 }
 
-func (s *sentinel) bcastAbort() {
-	err := s.base.AbortErr()
-	if err == nil || s.skipAbortBcast(err) {
-		return
-	}
-	s.base.BcastCtrl(s.smap, "", xact.OpcodeAbortXact, err)
-}
-
-// no need to broadcast: from a peer, or every target gets it on its own
-// TODO: a shared cause found locally (e.g., missing source bucket) is not marked
-func (s *sentinel) skipAbortBcast(err error) bool {
-	return xact.IsErrRecvAbortXact(err) || s.base.IsClusterAbort() ||
-		errors.Is(err, cmn.ErrXactUserAbort) || errors.Is(err, cmn.ErrXactICNotifAbort)
-}
-
 func (s *sentinel) cleanup() {
 	clear(s.pend.m)
 	s.pend.p = s.pend.p[:0]
 }
 
-// TODO -- FIXME: transition to T2T (off streams) control path
 func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
-	if abortErr != nil && s.skipAbortBcast(abortErr) {
-		return // do nothing
+	if abortErr != nil && s.base.SkipAbortBcast(abortErr) {
+		return // peers abort via another source (see SkipAbortBcast)
 	}
 
 	o := transport.AllocSend()

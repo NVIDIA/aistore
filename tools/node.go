@@ -410,6 +410,19 @@ func killProxyOrTargetK8s(bp api.BaseParams, node *meta.Snode, namespace ...stri
 	return err
 }
 
+// Freeze a local node (SIGSTOP): the node keeps its connections but answers no request.
+// The returned function resumes the node (SIGCONT).
+func PauseNode(node *meta.Snode) (resume func() error, err error) {
+	pid, err := getPID(node.PubNet.Port)
+	if err != nil {
+		return nil, err
+	}
+	if err = syscall.Kill(pid, syscall.SIGSTOP); err != nil {
+		return nil, err
+	}
+	return func() error { return syscall.Kill(pid, syscall.SIGCONT) }, nil
+}
+
 // In Kubernetes mode, killing a pod will cause it to be automatically recreated by the StatefulSet.
 // In non-Kubernetes modes, the node must be manually restored using the returned RestoreCmd.
 func KillNode(bp api.BaseParams, node *meta.Snode) (cmd RestoreCmd, err error) {

@@ -163,8 +163,13 @@ Goal: reliable control, independent of data streams and DM. HTTP alone does not 
 
 - today, `target.xactCtrl` (ais/tgtxact.go) dispatches to x-moss (moss.go; ais/ml.go), and aborts
   other kinds on `xact.OpcodeAbortXact` (see `xact.RecvAbortXact`)
-- sentinel abort goes both via T2T (`sentinel.bcastAbort`, upon abort) and in-stream (`sentinel.bcast`, upon fini)
-- still in-stream only: sentinel.go (done, progress), streaming.go, lso.go (abort)
+- sentinel abort goes both via T2T (`xact.Base.BcastAbort`, upon abort) and in-stream (`sentinel.bcast`, upon fini);
+  x-list abort: `xact.Base.BcastAbort` (designated target, upon abort) and in-stream (`LsoXact.sendAbort`)
+- still in-stream only: sentinel.go (done, progress), archive.go (done)
+- x-list page timeout (ais/plstcx.go `lsObjsR`): the proxy returns the error but does not tell the designated
+  target which keeps listing the in-flight remote page and stays running until `lso.idle_time`. Abort it
+  asynchronously (do not delay the error to the client) and abort only it (`Abort2PC` to all targets races
+  their own `list_timeout` abort in `LsoXact.nextPageR`)
 - add opcodes as needed: done (with per-destination counts, see above), progress request/response
 - delivery: `SendCtrl` waits for an HTTP response; `BcastCtrl` launches asynchronous sends and only logs
   failures. Add bounded retries/acknowledgments or a receiver-side status fallback for completion

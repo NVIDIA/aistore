@@ -7,6 +7,7 @@ package integration_test
 import (
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"path"
 	"sort"
 	"strconv"
@@ -858,6 +859,125 @@ func TestLsoRemoteMembershipChange(t *testing.T) {
 	}
 	if err != nil {
 		tassert.Errorf(t, strings.Contains(err.Error(), "membership change"), "expecting membership change, got: %v", err)
+	}
+}
+
+// Runs remote list objects while the designated target is frozen (other targets must stop waiting).
+func TestLsoRemoteDesignatedFrozen(t *testing.T) {
+	const listTimeout = 10 * time.Second
+	var (
+		baseParams = tools.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      4,
+			fileSize: 128,
+			prefix:   "lso-remote-frozen-" + cos.GenTie() + "/",
+		}
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck, MinTargets: 3,
+		RequiredDeployment: tools.ClusterTypeLocal})
+
+	m.initAndSaveState(true /*cleanup*/)
+	m.remotePuts(false /*evict*/)
+
+	config := tools.GetClusterConfig(t)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": config.Client.ListObjTimeout.String()})
+	})
+	tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": listTimeout.String()})
+
+	msg := &apc.LsoMsg{Prefix: m.prefix, PageSize: 2}
+	msg.AddProps(apc.GetPropsDefaultAIS...)
+	_, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, msg.ContinuationToken != "", "expecting more than one page")
+
+	dt, err := m.smap.HrwTargetTask(msg.UUID)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("Freeze designated %s", dt.StringEx())
+	resume, err := tools.PauseNode(dt)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		tassert.CheckError(t, resume())
+		tassert.CheckError(t, tools.WaitNodeReady(dt.URL(cmn.NetPublic)))
+	})
+
+	_, err = api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
+	tassert.Fatalf(t, err != nil, "expecting page 2 to fail with %s frozen", dt.StringEx())
+	tlog.Logfln("page 2: %v", err)
+	tassert.Errorf(t, strings.Contains(err.Error(), "deadline exceeded") || strings.Contains(err.Error(), "timed out waiting"),
+		"expecting page 2 to time out, got: %v", err)
+
+	checkPeersAborted(t, m.smap, msg.UUID, dt, listTimeout, "timed out waiting")
+}
+
+// Runs remote list objects while the designated target aborts between pages (only T2T tells the other targets).
+func TestLsoRemoteDesignatedAbort(t *testing.T) {
+	var (
+		baseParams = tools.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      4,
+			fileSize: 128,
+			prefix:   "lso-remote-abort-" + cos.GenTie() + "/",
+		}
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck, MinTargets: 3,
+		NoProxyMediation: true})
+
+	m.initAndSaveState(true /*cleanup*/)
+	m.remotePuts(false /*evict*/)
+
+	msg := &apc.LsoMsg{Prefix: m.prefix, PageSize: 2}
+	msg.AddProps(apc.GetPropsDefaultAIS...)
+	_, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, msg.ContinuationToken != "", "expecting more than one page")
+
+	// wait for page 1 streams to tear down
+	time.Sleep(tools.GetClusterConfig(t).Transport.IdleTeardown.D() + time.Second)
+
+	// 2PC abort on the designated target only
+	dt, err := m.smap.HrwTargetTask(msg.UUID)
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("Abort designated %s between pages", dt.StringEx())
+	bp := tools.BaseAPIParams(dt.URL(cmn.NetPublic))
+	bp.Method = http.MethodGet
+	req := api.AllocRp()
+	req.BaseParams = bp
+	bck := m.bck
+	if bck.IsRemoteAIS() && bck.Ns.UUID == tools.RemoteCluster.Alias {
+		bck.Ns.UUID = tools.RemoteCluster.UUID
+	}
+	req.Path = apc.URLPathBuckets.Join(bck.Name, apc.Abort2PC)
+	req.Query = bck.AddToQuery(nil)
+	req.Body = cos.MustMarshal(&apc.ActMsg{Action: apc.ActList, Value: msg})
+	err = req.DoRequest()
+	api.FreeRp(req)
+	tassert.CheckFatal(t, err)
+
+	checkPeersAborted(t, m.smap, msg.UUID, dt, 10*time.Second, "2pc abort")
+}
+
+func checkPeersAborted(t *testing.T, smap *meta.Smap, xid string, dt *meta.Snode, timeout time.Duration, cause string) {
+	baseParams := tools.BaseAPIParams()
+	for _, tsi := range smap.Tmap {
+		if tsi.ID() == dt.ID() {
+			continue
+		}
+		args := &xact.ArgsMsg{ID: xid, Kind: apc.ActList, DaemonID: tsi.ID(), Timeout: timeout}
+		if _, err := api.WaitForSnaps(baseParams, args, args.Finished()); err != nil {
+			tlog.Logfln("%s: %v", tsi.StringEx(), err)
+		}
+		snaps, err := api.QueryXactionSnaps(baseParams, args)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, len(snaps[tsi.ID()]) > 0, "%s: no %s", tsi.StringEx(), xid)
+		for _, snap := range snaps[tsi.ID()] {
+			tassert.Errorf(t, snap.IsAborted() && strings.Contains(snap.AbortErr, cause),
+				"%s: %s not aborted with %q (aborted: %t %q)", tsi.StringEx(), snap.ID, cause, snap.IsAborted(), snap.AbortErr)
+		}
 	}
 }
 

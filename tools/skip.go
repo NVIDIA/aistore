@@ -29,6 +29,7 @@ type SkipTestArgs struct {
 	RequiresETL           bool
 	RequiresTLS           bool
 	NoNodeJoinSecret      bool
+	NoProxyMediation      bool
 	Long                  bool
 	RemoteBck             bool
 	CloudBck              bool
@@ -66,6 +67,13 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 		tassert.CheckFatal(tb, err)
 		if config.Auth.NodeJoinSecretPath() != "" {
 			tb.Skipf("%s requires a cluster without node-join secret", tb.Name())
+		}
+	}
+	if args.NoProxyMediation {
+		config, err := getClusterConfig()
+		tassert.CheckFatal(tb, err)
+		if config.Auth.RequiresProxyMediation() {
+			tb.Skipf("%s requires direct access to targets (no proxy mediation)", tb.Name())
 		}
 	}
 	if args.Long && testing.Short() {
