@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
@@ -28,12 +29,14 @@ import (
 
 var _ = Describe("Ufest Core Functionality", func() {
 	const (
-		tmpDir     = "/tmp/ufest_test"
-		oneMpath   = tmpDir + "/onempath"
-		bucketName = "UFEST_TEST_Bucket"
+		tmpDir       = "/tmp/ufest_test"
+		oneMpath     = tmpDir + "/onempath"
+		bucketName   = "UFEST_TEST_Bucket"
+		noCksumBname = "UFEST_TEST_NoCksum" // no checksum, FsyncPUT
 	)
 
 	localBck := cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
+	noCksumBck := cmn.Bck{Name: noCksumBname, Provider: apc.AIS, Ns: cmn.NsGlobal}
 
 	var (
 		mix     = fs.Mountpath{Path: oneMpath}
@@ -41,6 +44,10 @@ var _ = Describe("Ufest Core Functionality", func() {
 			meta.NewBck(
 				bucketName, apc.AIS, cmn.NsGlobal,
 				&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumOneXxh}, BID: 301},
+			),
+			meta.NewBck(
+				noCksumBname, apc.AIS, cmn.NsGlobal,
+				&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumNone}, Features: feat.FsyncPUT, BID: 302},
 			),
 		)
 	)
@@ -669,6 +676,99 @@ var _ = Describe("Ufest Core Functionality", func() {
 			_, err := manifest.NewChunk(-1, lom)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid chunk number"))
+		})
+	})
+
+	Describe("ChunkWriter", func() {
+		var (
+			manifest *core.Ufest
+			lom      *core.LOM
+			cw       core.ChunkWriter
+			buf      = make([]byte, 4*cos.KiB)
+		)
+
+		BeforeEach(func() {
+			var err error
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, "test-objects/chunk-writer.bin")
+			lom = newBasicLom(localFQN, int64(cos.MiB))
+			manifest, err = core.NewUfest("", lom, false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cos.CreateDir(mix.MakePathBck(&localBck))).To(Succeed()) // (CreatePart checks bucket dir)
+			cw = core.ChunkWriter{}
+			cw.Init(lom, manifest)
+		})
+
+		It("should write the chunk, tee extra writers, and record CRC32C", func() {
+			data := []byte(trand.String(100 * cos.KiB))
+			var tee bytes.Buffer
+			written, err := cw.WriteChunk(1, bytes.NewReader(data), int64(len(data)), buf, &tee)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(written).To(Equal(int64(len(data))))
+			Expect(tee.Bytes()).To(Equal(data))
+
+			chunk, err := manifest.GetChunk(1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chunk.Size()).To(Equal(int64(len(data))))
+			onDisk, err := os.ReadFile(chunk.Path())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(onDisk).To(Equal(data))
+
+			var ck cos.CksumHash
+			ck.Init(cos.ChecksumCRC32C)
+			ck.H.Write(data)
+			ck.Finalize()
+			combined, err := manifest.CombineCRC32C()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(combined.Value()).To(Equal(ck.Value()))
+		})
+
+		It("should reject a short read and remove the chunk file", func() {
+			data := []byte(trand.String(10 * cos.KiB))
+			_, err := cw.WriteChunk(2, bytes.NewReader(data), int64(len(data))+1, buf)
+			Expect(err).To(HaveOccurred())
+			Expect(manifest.Count()).To(BeZero())
+
+			chunk, err := manifest.NewChunk(2, lom)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chunk.Path()).NotTo(BeAnExistingFile())
+		})
+
+		It("should reset the checksum between chunks", func() {
+			for part := 1; part <= 2; part++ {
+				data := bytes.Repeat([]byte{byte(part)}, part*len(buf)+17)
+				_, err := cw.WriteChunk(part, bytes.NewReader(data), int64(len(data)), buf)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			data := append(bytes.Repeat([]byte{1}, len(buf)+17), bytes.Repeat([]byte{2}, 2*len(buf)+17)...)
+			combined, err := manifest.CombineCRC32C()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(combined.Value()).To(Equal(cos.ChecksumB2S(data, cos.ChecksumCRC32C)))
+		})
+
+		It("should leave chunks without a checksum when the bucket has none (and fsync when configured)", func() {
+			localFQN := mix.MakePathFQN(&noCksumBck, fs.ObjCT, "test-objects/chunk-writer-nocksum.bin")
+			lom := newBasicLom(localFQN, int64(cos.MiB))
+			Expect(lom.CksumType()).To(Equal(cos.ChecksumNone))
+			Expect(lom.IsFeatureSet(feat.FsyncPUT)).To(BeTrue())
+			manifest, err := core.NewUfest("", lom, false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cos.CreateDir(mix.MakePathBck(&noCksumBck))).To(Succeed())
+
+			var cw core.ChunkWriter
+			cw.Init(lom, manifest)
+			data := []byte("unchecked chunk")
+			_, err = cw.WriteChunk(1, bytes.NewReader(data), int64(len(data)), buf)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = manifest.CombineCRC32C()
+			Expect(err).To(MatchError(ContainSubstring("missing CRC32C checksum")))
+		})
+
+		It("should accept any length when size is zero", func() {
+			data := []byte(trand.String(3 * cos.KiB))
+			written, err := cw.WriteChunk(3, bytes.NewReader(data), 0, buf)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(written).To(Equal(int64(len(data))))
+			Expect(manifest.Count()).To(Equal(1))
 		})
 	})
 })

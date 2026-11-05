@@ -899,6 +899,7 @@ func (goi *getOI) isStreamingColdGet() bool {
 }
 
 // enter with the write lock; return with a read lock, or unlocked on error or after streaming
+// - user GET only (native and S3); jobs (prefetch, copy, ETL) choose their own: blob download or sequential
 func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
 	goi.lom.SetAtimeUnix(goi.atime)
 	// zero-out prev. version custom metadata, if any
@@ -920,7 +921,7 @@ func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
 				// remote object changed and nothing has been sent: refetch it sequentially
 				nlog.Warningln(goi.lom.Cname(), "changed during parallel cold GET, refetching:", er)
 				res = goi.coldRefetch(bp)
-			case goi.t.crange.throttle(goi.lom.Bprops(), config, code, er):
+			case core.RR.Throttle(goi.lom.Bprops(), config, code, er):
 				// ditto, when throttled by the remote backend
 				nlog.Warningln(goi.lom.Cname(), "throttled during parallel cold GET, refetching sequentially:", er)
 				res = goi.coldRefetch(bp)
@@ -935,7 +936,7 @@ func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
 		goi.lom.Unlock(true)
 		goi.unlocked = true
 		if !cos.IsNotExist(res.Err, res.ErrCode) {
-			goi.t.crange.throttle(goi.lom.Bprops(), config, res.ErrCode, res.Err)
+			core.RR.Throttle(goi.lom.Bprops(), config, res.ErrCode, res.Err)
 			nlog.Infoln(ftcg, "(read)", goi.lom.Cname(), res.Err, res.ErrCode)
 		}
 		return res.ErrCode, res.Err

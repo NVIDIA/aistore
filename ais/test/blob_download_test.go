@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"math/rand/v2"
@@ -1843,7 +1844,7 @@ func TestRemaisBlobDownloadVersionPin(t *testing.T) {
 	tassert.Fatalf(t, strings.Contains(errText, "precondition failed"), "expected pin mismatch, got %q", errText)
 	// failed fills must leave no cached object or chunks
 	tlog.Logfln("checking failed fill left no cached object or chunks")
-	tassert.Fatalf(t, !tools.CheckObjIsPresent(proxyURL, bck, objName), "failed fill published a cached object")
+	tassert.Fatalf(t, !tools.CheckObjIsPresent(proxyURL, bck, objName), "failed download published a cached object")
 	m := ioContext{t: t, bck: bck}
 	m.validateChunksOnDisk(bck, objName, 0)
 
@@ -1860,6 +1861,82 @@ func TestRemaisBlobDownloadVersionPin(t *testing.T) {
 	tassert.Fatalf(t, bytes.Equal(out.Bytes(), v2), "fresh fill returned mixed revisions")
 	m.validateChunksOnDisk(bck, objName, 2)
 	tlog.Logfln("verified v2 bytes and two cached chunks")
+}
+
+func TestBlobDownloadRangeLength(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	const (
+		chunkSize = 64 * cos.MiB
+		fullSize  = 4*chunkSize + 17 // allow two workers
+		objName   = "object"
+	)
+	bp := tools.BaseAPIParams(tools.RandomProxyURL(t))
+	initMountpaths(t, bp.URL)
+	for _, workers := range []int{xact.NwpNone, 2} {
+		for _, fault := range []string{"short-length", "ignored-range", "empty", "short-body"} {
+			t.Run(fmt.Sprintf("workers=%d/%s", workers, fault), func(t *testing.T) {
+				smap := meta.Smap{Pmap: make(meta.NodeMap), Tmap: make(meta.NodeMap), UUID: cos.GenUUID(), Version: 1}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch {
+					case r.URL.Path == apc.URLPathDae.S:
+						w.Header().Set(cos.HdrContentType, cos.ContentJSON)
+						_ = json.NewEncoder(w).Encode(&smap)
+					case strings.HasPrefix(r.URL.Path, apc.URLPathBuckets.S):
+						w.Header().Set(apc.HdrBucketProps, "{}")
+					case r.Method == http.MethodHead:
+						w.Header().Set(cos.HdrContentLength, strconv.Itoa(fullSize))
+					default:
+						length, code := chunkSize, http.StatusPartialContent
+						switch fault {
+						case "short-length":
+							length = 1
+						case "ignored-range":
+							length, code = fullSize, http.StatusOK
+						case "empty":
+							length = 0
+						}
+						w.Header().Set(cos.HdrContentLength, strconv.Itoa(length))
+						w.WriteHeader(code)
+						if length > 0 {
+							_, _ = w.Write([]byte{'x'})
+						}
+					}
+				}))
+				t.Cleanup(server.Close)
+				alias := "blob-length-" + trand.String(8)
+				tassert.CheckFatal(t, api.AttachRemoteAIS(bp, alias, server.URL))
+				t.Cleanup(func() { tassert.CheckError(t, api.DetachRemoteAIS(bp, alias)) })
+				bck := cmn.Bck{Name: alias, Provider: apc.AIS, Ns: cmn.Ns{UUID: smap.UUID}}
+				_, err := api.HeadBucket(bp, bck, false)
+				tassert.CheckFatal(t, err)
+				t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
+				xid, err := api.BlobDownload(bp, bck, objName, &apc.BlobMsg{ChunkSize: chunkSize, NumWorkers: workers})
+				tassert.CheckFatal(t, err)
+				args := &xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: 15 * time.Second}
+				snaps, err := api.WaitForSnaps(bp, args, args.Finished())
+				if err != nil {
+					_ = api.AbortXaction(bp, args)
+					t.Fatal(err)
+				}
+				var errText string
+				for _, targetSnaps := range snaps {
+					for _, snap := range targetSnaps {
+						if snap.ID == xid {
+							errText = snap.Err
+						}
+					}
+				}
+				if fault == "short-body" {
+					tassert.Fatalf(t, strings.Contains(errText, "unexpected EOF"), "expected truncated body error, got %q", errText)
+				} else {
+					tassert.Fatalf(t, strings.Contains(errText, "expected") && strings.Contains(errText, "bytes, got"), "expected range length error, got %q", errText)
+				}
+				tassert.Fatalf(t, !tools.CheckObjIsPresent(bp.URL, bck, objName), "failed download published a cached object")
+				m := ioContext{t: t, bck: bck}
+				m.validateChunksOnDisk(bck, objName, 0)
+			})
+		}
+	}
 }
 
 func TestBlobDownloadChecksum(t *testing.T) {

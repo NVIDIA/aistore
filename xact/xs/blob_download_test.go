@@ -21,7 +21,8 @@ import (
 //
 // Cases use small `requested` values (≤ 2) so TuneNumWorkers under normal test-host
 // load returns the requested value verbatim — making the size-cap branch the
-// deterministic binder. NwpNone is the only result that propagates regardless of size.
+// deterministic binder. Explicit NwpNone propagates regardless of size and load;
+// load that leaves no parallel workers is an error.
 func TestTuneBlobDlWorkers(t *testing.T) {
 	tools.PrepareMountPaths(t, 4)
 
@@ -50,11 +51,11 @@ func TestTuneBlobDlWorkers(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := xs.TuneBlobDlWorkers("test", tc.requested, 4, tc.fullSize)
-			tassert.CheckFatal(t, err)
-			// Test host may transiently report extreme load -> NwpNone; skip rather than fail.
-			if got == xact.NwpNone && tc.expected != xact.NwpNone {
-				t.Skipf("transient NwpNone (system load); req=%d, size=%d", tc.requested, tc.fullSize)
+			// Test host may transiently report extreme load; skip rather than fail.
+			if err != nil && tc.expected != xact.NwpNone {
+				t.Skipf("transient system load; req=%d, size=%d: %v", tc.requested, tc.fullSize, err)
 			}
+			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, got == tc.expected,
 				"TuneBlobDlWorkers(req=%d, size=%d): expected %d, got %d",
 				tc.requested, tc.fullSize, tc.expected, got)

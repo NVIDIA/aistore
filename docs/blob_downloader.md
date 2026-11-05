@@ -13,6 +13,19 @@ The result is that, beyond a certain object size, blob downloader can deliver **
 
 Blob downloader is also **load‑aware**: it consults AIStore's internal load advisors to avoid overcommitting memory or disks, backing off when the node is under pressure and running at full speed when the system has headroom.
 
+Blob downloader shares a target-wide budget of extra range readers with [parallel cold GET](/docs/storage_svcs.md#parallel-cold-get): available mountpaths times two for rotational disks or slow filesystems, or times 16 otherwise. Every worker except the first counts toward it:
+
+- near the limit, blob downloader uses fewer workers; at the limit, admission is rejected;
+- downloads without a client stream (prefetch, `ais blob-download`) get extra workers only while the budget is less than half used, leaving the rest to client GETs;
+- a remote 429 or 503 starts target-wide backoff for buckets without `rate_limit.backend`; during backoff, admission is rejected;
+- an explicitly requested number of workers is an upper bound: the budget and backoff still apply.
+
+
+Unlike parallel cold GET into a chunked bucket, which falls back to a single sequential GET - blob downloader does not fall back to sequential range reads on its own.
+When the budget, a backoff, or system load leaves no parallel workers, admission is rejected instead, because a sequential series of range reads costs more backend requests than a regular cold GET. Serial download runs only when explicitly requested with a number of workers of -1.
+
+Each range response must match the expected range length (accounting for a shorter final range until EOF). A mismatched length, an ignored range, or a truncated body fails the download before the object gets stored.
+
 Blob downloader uses **pessimistic, per-object concurrency control**. The caller must
 hold the object's exclusive write lock before renewal and transfers ownership with the
 call. A registered xaction holds the lock for its entire lifecycle and releases it
@@ -31,7 +44,12 @@ For objects above a certain threshold, blob downloader can be transparently used
 At critical memory pressure, [prefetch](/docs/bucket.md#prefetch-and-evict) uses regular cold GET instead of starting blob downloader.
 Prefetch also falls back when resource admission rejects blob downloader, the object cannot fit within the manifest chunk limit, or the object's remote size is zero; other start failures are reported.
 
-A client-facing streaming admission rejected for resource pressure or insufficient memory budget returns HTTP 429 (too many requests) before object headers or body are written; pressure detected after a job starts is reported as an xaction error.
+When admission rejects a client GET (resource pressure, insufficient memory budget, range-reader budget, backoff), the outcome depends on the request:
+
+- explicit blob download (`Ais-Blob-Download` header): HTTP 429 (too many requests), before object headers or body are written;
+- blob threshold only (`Ais-Blob-Threshold` header): a regular GET.
+
+Pressure detected after a job starts is reported as an xaction error.
 
 For a deeper dive into the internals and detailed benchmarks, see the [blog post](https://aistore.nvidia.com/blog/2025/11/26/blob-downloader).
 
@@ -55,7 +73,7 @@ AIStore exposes blob download functionality through three distinct interfaces, e
 
 - **Single object blob-download job** – explicitly start a blob-download job for one or more objects.
 - **Prefetch + blob-threshold** – route large objects in the prefetch job through blob downloader.
-- **Streaming GET** – stream a large object from blob downloader while it is being cached in AIS.
+- **Streaming GET** – stream a large object from blob downloader while it is being stored in AIS.
 
 For a comparison with other ways to read large remote objects, including S3 clients, see [Reading large objects from remote buckets](/docs/howto_large_cold_objects.md).
 

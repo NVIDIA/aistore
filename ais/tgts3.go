@@ -314,11 +314,11 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 
 	lom := core.AllocLOM(objName)
-	lom, err = t.getObject(w, r, dpq, bck, lom)
+	lom, ecode, err = t.getObject(w, r, dpq, bck, lom)
 	core.FreeLOM(lom)
 
 	if err != nil {
-		ei := s3.ErrInfo{Err: err}
+		ei := s3.ErrInfo{Err: err, Status: ecode}
 		if cos.IsNotExist(err) {
 			ei.Code = s3.NoSuchKey
 		}

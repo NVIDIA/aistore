@@ -609,6 +609,7 @@ func (m *AISbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.
 		params.OWT = owt
 		params.Size = size
 		params.Atime = time.Now()
+		params.SkipBackend = true
 	}
 	err = m.t.PutObject(lom, params)
 	core.FreePutParams(params)

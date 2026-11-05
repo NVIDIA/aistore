@@ -365,15 +365,17 @@ A layout rule is independent of how the object arrives. It applies equally to PU
 
 ### Parallel cold GET
 
-A cold GET into an auto-chunked bucket can fetch remote ranges in parallel when the object is at or above `chunks.objsize_limit`, is at least 16 MiB, and spans at least two chunks. Parallel reads also require an available remote version pin and sufficient target resources.
+A user GET (native or S3) of a cold object in an auto-chunked bucket can fetch remote ranges in parallel when the object is at or above `chunks.objsize_limit`, is at least 16 MiB, and spans at least two chunks. Parallel reads also require an available remote version pin and sufficient target resources.
 
 Up to four readers fetch chunks, all pinned to the same remote version. Parallel cold GET combines per-chunk CRC32C checksums in object order, even when chunks arrive out of order, without rereading the data. This replaces the configured whole-object checksum; buckets with checksumming disabled remain without a payload checksum.
+
+Jobs keep their own logic: prefetch chooses between the blob downloader and a sequential cold GET (see [Prefetch mechanism](#prefetch-mechanism)), and copy, transform, and other jobs read sequentially.
 
 Parallel cold GET is disabled for `checksum.validate_cold_get`, latest-version GETs (including `versioning.validate_warm_get` and `versioning.synchronize`), EC-enabled buckets, and the OCI backend.
 
 If a range read fails with HTTP 412 (the remote object changed), AIS discards the partial result and refetches the object once with a fresh sequential GET, before sending data to the client.
 
-The same sequential refetch applies when a range read returns HTTP 429 or 503 in a bucket without backend rate limiting. Throttling on the initial full GET also starts target-wide backoff. During backoff, cold GETs for buckets without backend rate limiting stay sequential for twice `timeout.cold_get_conflict` (10s by default), with a 5s minimum and `timeout.max_host_busy` as the maximum. See [Reading large objects from remote buckets](/docs/howto_large_cold_objects.md#cold-get-into-a-chunked-bucket) for how this interacts with the rate limiter.
+The same sequential refetch applies when a range read returns HTTP 429 or 503 in a bucket without backend rate limiting. Throttling on the initial full GET, or on a blob download range read, also starts target-wide backoff. During backoff, cold GETs for buckets without backend rate limiting stay sequential for twice `timeout.cold_get_conflict` (10s by default), with a 5s minimum and `timeout.max_host_busy` as the maximum. See [Reading large objects from remote buckets](/docs/howto_large_cold_objects.md#cold-get-into-a-chunked-bucket) for how this interacts with the rate limiter.
 
 For large objects, use a `chunks.chunk_size` of 128–256 MiB. The object must span multiple chunks for parallelism; at least four chunks allow all four readers to participate.
 

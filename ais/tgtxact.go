@@ -314,6 +314,9 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 				Parent: xs.BlobParentXStart, // generic start-xaction path (compare with dedicated api.BlobDownload)
 			}
 			xid, _, err = t.blobdlBackground(params, nil /*oa*/)
+			if xs.IsErrBlobDlAdmission(err) {
+				err = cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+			}
 		}
 		return xid, err
 	// 3. cannot start

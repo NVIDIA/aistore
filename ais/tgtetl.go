@@ -322,10 +322,10 @@ func (t *target) etlObjHandler(w http.ResponseWriter, r *http.Request) {
 // conflicts with ETL name in `/v1/etl/<etl-name>/...`
 func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, objName string) {
 	lom := core.AllocLOM(objName)
-	lom, err := t.getObject(w, r, dpq, bck, lom)
+	lom, ecode, err := t.getObject(w, r, dpq, bck, lom)
 	core.FreeLOM(lom)
 	if err != nil {
-		t._erris(w, r, err, 0, dpq.silent)
+		t._erris(w, r, err, ecode, dpq.silent)
 	}
 }
 

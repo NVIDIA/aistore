@@ -99,7 +99,7 @@ Notes:
 
 * blob download applies only to remote buckets and to whole-object reads; downloading an entire archive (shard) is supported;
 * range reads and archive extraction use the regular GET path when requested with the `Ais-Blob-Threshold` header, and fail with `400 Bad Request` when combined with explicit `Ais-Blob-Download`; the Python SDK additionally validates option combinations before sending the request (see below);
-* when the cluster cannot admit another blob download, the request fails with `429 Too Many Requests`; retry, or read without blob download;
+* when the cluster cannot admit another blob download (resource pressure, range-reader budget, remote backoff), an explicit `Ais-Blob-Download` request fails with `429 Too Many Requests` (retry, or read without blob download), while a request with `Ais-Blob-Threshold` only proceeds as a regular GET;
 * an explicit blob GET can also return a busy error when the object is being written; it does not always wait as an ordinary GET would;
 * chunk size and number of workers, if specified, apply to this request (see [request scope](#request-scope-vs-bucket-scope)).
 
@@ -222,7 +222,7 @@ An object qualifies when all of the following hold:
 * the backend reports a usable version for the object. Objects in unversioned remote AIS buckets and GCS objects served with decompressive transcoding use the regular cold GET;
 * the bucket is not an `oc://` bucket; the native OCI backend uses its own multipart reader;
 * the target is not under high load and, for buckets without `rate_limit.backend`, is outside the backoff window after a remote 429 or 503; otherwise the cold GET is sequential;
-* the target has room in its budget for extra range workers across all cold GETs. The budget is the number of available mountpaths times two for targets with rotational disks or slow filesystems, or times 16 otherwise. The GET's own worker also reads ranges and runs outside this budget. Near the limit, the cold GET uses fewer workers. At the limit, it is sequential.
+* the target has room in its budget for extra range workers across all cold GETs and [blob downloads](/docs/blob_downloader.md). The budget is the number of available mountpaths times two for targets with rotational disks or slow filesystems, or times 16 otherwise. The GET's own worker also reads ranges and runs outside this budget. Near the limit, the cold GET uses fewer workers. At the limit, it is sequential.
 
 Notes:
 

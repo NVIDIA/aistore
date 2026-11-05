@@ -9,18 +9,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/load"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -28,13 +24,6 @@ const (
 	// increase if requested or justified by concurrent-read measurements
 	coldRangeMaxWorkers = 4
 	coldRangeMinSize    = 16 * cos.MiB // amortize setup and additional backend requests
-)
-
-// per-target cap on extra range readers (all cold GETs): available mountpaths times a per-media multiplier
-// - current heuristic; HDD and NVMe are an order of magnitude apart; SSD counts as NVMe
-const (
-	coldRangeMultHDD  = 2  // rotational or slow (FUSE, overlay, AUFS)
-	coldRangeMultNVMe = 16 // NVMe and SSD
 )
 
 type (
@@ -54,58 +43,12 @@ type (
 		chunkSize int64
 		code      int
 		checksum  bool
-		fsync     bool
 	}
 	coldRangeWorker struct {
-		r     *coldRangeGet
-		fh    *os.File
-		cksum cos.CksumHash
-	}
-	// target-wide; buckets with rate_limit.backend use the configured limiter
-	// TODO: consider per-bucket granularity
-	coldRange struct {
-		backoffUntil atomic.Int64 // mono time: use sequential cold GETs until then
-		inflight     atomic.Int32 // extra range readers, target-wide (see coldRangeMult*)
+		r  *coldRangeGet
+		cw core.ChunkWriter
 	}
 )
-
-// record remote 429/503 and return true
-func (s *coldRange) throttle(bprops *cmn.Bprops, config *cmn.Config, code int, err error) bool {
-	if bprops.RateLimit.Backend.Enabled {
-		return false
-	}
-	if code != http.StatusTooManyRequests && code != http.StatusServiceUnavailable && !cmn.IsErrTooManyRequests(err) {
-		return false
-	}
-	until := mono.NanoTime() + int64(config.Timeout.ColdRangeBackoff())
-	for prev := s.backoffUntil.Load(); until > prev; prev = s.backoffUntil.Load() {
-		if s.backoffUntil.CompareAndSwap(prev, until) {
-			break
-		}
-	}
-	return true
-}
-
-func (s *coldRange) backingOff(bprops *cmn.Bprops) bool {
-	until := s.backoffUntil.Load()
-	return until != 0 && !bprops.RateLimit.Backend.Enabled && mono.NanoTime() < until
-}
-
-// reserve up to `want` extra readers; return zero to cold GET sequentially
-func (s *coldRange) reserve(want int, limit int32) int {
-	for {
-		cur := s.inflight.Load()
-		n := min(int32(want), limit-cur)
-		if n <= 0 {
-			return 0
-		}
-		if s.inflight.CompareAndSwap(cur, cur+n) {
-			return int(n)
-		}
-	}
-}
-
-func (s *coldRange) release(n int) { s.inflight.Add(-int32(n)) }
 
 // initial full read
 // - when parallel and qualified (chunked bucket, etc.), make it cancelable
@@ -114,7 +57,7 @@ func (goi *getOI) coldReader(bp core.Backend, parallel bool) (res core.GetReader
 	ctx := goi.ctx
 	// latest-version comparison retains the configured whole-object checksum
 	if parallel && goi.lom.Bprops().Chunks.AutoEnabled() && !goi.latestVer && !goi.lom.ValidateColdGet() &&
-		!goi.lom.ECEnabled() && bp.Provider() != apc.OCI && !goi.t.crange.backingOff(goi.lom.Bprops()) {
+		!goi.lom.ECEnabled() && bp.Provider() != apc.OCI && !core.RR.BackingOff(goi.lom.Bprops()) {
 		ctx, stop = context.WithCancel(ctx)
 	}
 	res = bp.GetObjReader(ctx, goi.lom, 0, 0)
@@ -136,7 +79,7 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 		return false, 0, nil
 	}
 	// the initial GET may have been waiting for headers when another request was throttled
-	if goi.t.crange.backingOff(goi.lom.Bprops()) {
+	if core.RR.BackingOff(goi.lom.Bprops()) {
 		return false, 0, nil
 	}
 	var adv load.Advice
@@ -148,16 +91,12 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 	if adv.Load >= load.High {
 		return false, 0, nil
 	}
-	// the caller reads chunk zero; others are extra, subject to the per-target cap
-	mult := int32(coldRangeMultNVMe)
-	if fs.IsRotational() || fs.IsSlow() {
-		mult = coldRangeMultHDD
-	}
-	nextra := goi.t.crange.reserve(int(min(nchunks, coldRangeMaxWorkers))-1, int32(fs.NumAvail())*mult)
+	// the caller reads chunk zero; others are extra, subject to the per-target cap (see core.RR)
+	nextra := core.RR.Reserve(int(min(nchunks, coldRangeMaxWorkers))-1, core.RR.Limit())
 	if nextra == 0 {
 		return false, 0, nil
 	}
-	defer goi.t.crange.release(nextra)
+	defer core.RR.Release(nextra)
 
 	manifest, err := core.NewUfest("", goi.lom, false /*must-exist*/)
 	if err != nil {
@@ -169,7 +108,6 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 		goi: goi, bp: bp, manifest: manifest, stopFirst: stopFirst, pin: first.Pin,
 		size: first.Size, chunkSize: chunkSize,
 		checksum: goi.lom.CksumType() != cos.ChecksumNone,
-		fsync:    goi.lom.IsFeatureSet(feat.FsyncPUT),
 	}
 	r.ctx, r.cancel = context.WithCancel(goi.ctx)
 	defer r.cancel()
@@ -227,9 +165,7 @@ func (w *coldRangeWorker) run(first *core.GetReaderResult) {
 	r := w.r
 	buf, slab := r.goi.t.gmm.AllocSize(memsys.DefaultBufSize)
 	defer slab.Free(buf)
-	if r.checksum {
-		w.cksum.Init(cos.ChecksumCRC32C)
-	}
+	w.cw.Init(r.goi.lom, r.manifest)
 	if first != nil {
 		limited := io.LimitedReader{R: first.R, N: r.chunkSize}
 		err := w.writeChunk(0, &limited, r.chunkSize, buf)
@@ -273,48 +209,6 @@ func (w *coldRangeWorker) run(first *core.GetReaderResult) {
 
 // write directly to the manifest's chunk location
 func (w *coldRangeWorker) writeChunk(off int64, reader io.Reader, size int64, buf []byte) error {
-	r := w.r
-	part := off/r.chunkSize + 1
-	chunk, err := r.manifest.NewChunk(int(part), r.goi.lom)
-	if err != nil {
-		return err
-	}
-	w.fh, err = r.goi.lom.CreatePart(chunk.Path())
-	if err != nil {
-		return err
-	}
-	var writer io.Writer = w.fh
-	if r.checksum {
-		w.cksum.H.Reset()
-		writer = w
-	}
-	written, err := cos.CopyBuffer(writer, reader, buf)
-	if err == nil && written != size {
-		err = fmt.Errorf("%s: range at %d: expected %d bytes, read %d", r.goi.lom.Cname(), off, size, written)
-	}
-	if err == nil && r.fsync {
-		err = w.fh.Sync()
-	}
-	if closeErr := w.fh.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		if r.checksum {
-			w.cksum.Finalize()
-			chunk.SetCksum(cos.NewCksum(cos.ChecksumCRC32C, w.cksum.Value()))
-		}
-		err = r.manifest.Add(chunk, written, part)
-	}
-	if err != nil {
-		cos.RemoveFile(chunk.Path())
-	}
+	_, err := w.cw.WriteChunk(int(off/w.r.chunkSize)+1, reader, size, buf)
 	return err
-}
-
-func (w *coldRangeWorker) Write(p []byte) (int, error) {
-	n, err := w.fh.Write(p)
-	if n > 0 {
-		w.cksum.H.Write(p[:n])
-	}
-	return n, err
 }

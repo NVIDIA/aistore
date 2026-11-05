@@ -72,8 +72,7 @@ type (
 		reb      *reb.Reb
 		res      *res.Res
 		fsprg    fsprungroup
-		hdb      hdbGate   // head-batch receiver admission
-		crange   coldRange // parallel cold GET(range) - compare w/ blobdl
+		hdb      hdbGate // head-batch receiver admission
 		txns     txns
 		ups      ups
 		htrun    // common w/ proxy
@@ -918,24 +917,25 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	var (
-		lom = core.AllocLOM(objName)
-		err error
+		lom   = core.AllocLOM(objName)
+		ecode int
+		err   error
 	)
-	lom, err = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
+	lom, ecode, err = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
 	if err != nil {
-		t._erris(w, r, err, 0, apireq.dpq.silent)
+		t._erris(w, r, err, ecode, apireq.dpq.silent)
 	}
 	core.FreeLOM(lom)
 }
 
-func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *core.LOM) (*core.LOM, error) {
+func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *core.LOM) (*core.LOM, int, error) {
 	if err := lom.InitBck(bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
 			err = lom.InitBck(bck)
 		}
 		if err != nil {
-			return lom, err
+			return lom, 0, err
 		}
 	}
 
@@ -948,75 +948,11 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	switch {
 	case dpq.get(apc.QparamETLName) != "":
 		t.inlineETL(w, r, dpq, lom)
-		return lom, nil
+		return lom, 0, nil
 	case blobDownload || thresholdStr != "":
-		var threshold int64
-		if thresholdStr != "" {
-			var err error
-			if threshold, err = strconv.ParseInt(thresholdStr, 10, 64); err != nil {
-				return lom, fmt.Errorf("blob-downloader: failed to parse %s=%s: %w",
-					apc.HdrBlobThreshold, thresholdStr, err)
-			}
-			if threshold < 0 {
-				return lom, fmt.Errorf("blob-downloader: invalid %s=%s: expecting a non-negative value",
-					apc.HdrBlobThreshold, thresholdStr)
-			}
+		if done, ecode, err := t.getBlob(w, r, dpq, lom, blobDownload, thresholdStr); done {
+			return lom, ecode, err
 		}
-		if !blobDownload && threshold == 0 {
-			break
-		}
-		// keep regular GET semantics for range read and archive extraction:
-		// - threshold only: fall through to regular GET
-		// - explicit blob download: reject the conflicting request
-		if r.Header.Get(cos.HdrRange) != "" || dpq.isArch() {
-			if blobDownload {
-				return lom, fmt.Errorf("blob-downloader: %s cannot be combined with range read or archive extraction",
-					apc.HdrBlobDownload)
-			}
-			break
-		}
-		if !bck.IsRemote() {
-			return lom, fmt.Errorf("blob-downloader is not supported for local buckets: %s", bck.Cname(""))
-		}
-
-		// control msg
-		var (
-			msg apc.BlobMsg
-		)
-		if err := msg.FromHeader(r.Header); err != nil {
-			return lom, err
-		}
-		// apc.QparamLatestVer via api.GetArgs or bck.VersionConf().ValidateWarmGet
-		msg.LatestVer = _validateWarmGet(lom, dpq.latestVer)
-
-		// lock, check latest, HEAD(obj), blob-download
-		var (
-			args = &core.BlobParams{
-				Context:       r.Context(),
-				RespWriter:    w, // NOTE: make a blocking call
-				Lom:           lom,
-				Msg:           &msg,
-				BlobThreshold: max(threshold, xs.MinBlobDlGetSize),
-				Parent:        xs.BlobParentGET,
-			}
-			rsphdr = &rsphdr{hdr: w.Header(), lom: lom, s3: dpq.isS3, ctype: true}
-		)
-		xid, _, err := t.blobdlLocked(args, rsphdr)
-		if xs.IsErrBlobDlAdmission(err) {
-			err = cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
-		}
-		if err != nil && xid != "" {
-			// The xaction retains this failure; streaming may have already committed
-			// object bytes, so do not write another HTTP response.
-			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
-			err = nil
-		}
-		if xid == "" && err == nil {
-			// Blob download was not started (for example, warm or below threshold).
-			// Fall through to regular GET.
-			break
-		}
-		return lom, err
 	}
 
 	// GET: regular | archive | range
@@ -1047,7 +983,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	if dpq.isArch() {
 		if goi.ranges.Range != "" {
 			details := fmt.Sprintf("range: %s, arch query: %s", goi.ranges.Range, goi.dpq._archstr())
-			return lom, cmn.NewErrUnsupp("range-read archived content", details)
+			freeGOI(goi)
+			return lom, http.StatusBadRequest, cmn.NewErrUnsupp("range-read archived content", details)
 		}
 		if dpq.arch.path != "" {
 			if strings.HasPrefix(dpq.arch.path, lom.ObjName) {
@@ -1104,7 +1041,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	}
 	lom = goi.lom
 	freeGOI(goi)
-	return lom, nil
+	return lom, 0, nil
 }
 
 func _validateWarmGet(lom *core.LOM, latestVer bool /*apc.QparamLatestVer*/) bool {
@@ -1380,6 +1317,8 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		if xid, _, err = t.blobdlBackground(args, nil /*oa*/); xid != "" {
 			debug.AssertNoErr(err)
 			writeXid(w, xid)
+		} else if xs.IsErrBlobDlAdmission(err) {
+			ecode = http.StatusTooManyRequests // (explicit ecode: WriteErr skips type-based status)
 		}
 	case apc.ActMptUpload:
 		lom := &core.LOM{ObjName: apireq.items[1]}

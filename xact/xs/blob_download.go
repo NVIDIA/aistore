@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -110,6 +109,7 @@ type (
 		woff        int64
 		memInflight int64 // admitted-but-unallocated streaming memory; see blobMemInflight
 		numWorkers  int
+		nreaders    int // extra range readers counted in core.RR
 	}
 )
 
@@ -125,6 +125,7 @@ func (m *bdMetric) add(tstats cos.StatsUpdater, val int64) {
 type (
 	blobWorker struct {
 		parent  *XactBlobDl
+		cw      core.ChunkWriter
 		adv     load.Advice
 		nchunks int64 // per-worker sequential counter for ShouldCheck
 	}
@@ -318,6 +319,16 @@ func (p *blobFactory) Start() (err error) {
 	}
 	r.numWorkers = numWorkers
 
+	// 4a. target-wide range readers (shared w/ parallel cold GET); may reduce num workers
+	if err = r.reserveReaders(); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			r.releaseReaders()
+		}
+	}()
+
 	// 5. memory admission: one sample grades pressure and makes the reservation
 	var mem sys.MemStat
 	if e := mem.Get(); e != nil {
@@ -510,6 +521,39 @@ func (r *XactBlobDl) releaseMem() {
 		r.memInflight = 0
 		remaining := blobMemInflight.Add(-cost)
 		debug.Assert(remaining >= 0)
+	}
+}
+
+// count extra workers (all but one) as target-wide range readers (see core.RR)
+// - applies to explicitly requested number of workers as well
+// - jobs (no RespWriter): only while in-flight readers are below half the cap
+// - during remote backoff (any number of workers, incl. serial) or when the cap is reached: reject admission
+// - (sequential range reads cost more backend requests than a regular cold GET)
+func (r *XactBlobDl) reserveReaders() error {
+	if core.RR.BackingOff(r.args.Lom.Bprops()) {
+		return fmt.Errorf("%w: %s: backing off after remote 429/503", errBlobDlAdmission, r.Name())
+	}
+	want := r.numWorkers - 1
+	if r.numWorkers == xact.NwpNone || want <= 0 {
+		return nil
+	}
+	limit := core.RR.Limit()
+	if r.args.RespWriter == nil {
+		limit >>= 1
+	}
+	n := core.RR.Reserve(want, limit)
+	if n == 0 {
+		return fmt.Errorf("%w: %s: no range readers available (in-flight %d, limit %d)",
+			errBlobDlAdmission, r.Name(), core.RR.Inflight(), limit)
+	}
+	r.numWorkers, r.nreaders = n+1, n
+	return nil
+}
+
+func (r *XactBlobDl) releaseReaders() {
+	if n := r.nreaders; n > 0 {
+		r.nreaders = 0
+		core.RR.Release(n)
 	}
 }
 
@@ -795,7 +839,9 @@ func (r *XactBlobDl) newWI(name string, roff int64) *blobWI {
 }
 
 func (r *XactBlobDl) newWorker() *blobWorker {
-	return &blobWorker{parent: r, adv: r.adv} // note: load-advice is copied by value
+	w := &blobWorker{parent: r, adv: r.adv} // note: load-advice is copied by value
+	w.cw.Init(r.args.Lom, r.manifest)
+	return w
 }
 
 func (r *XactBlobDl) startWorkers() {
@@ -875,6 +921,7 @@ func (r *XactBlobDl) drainPendingChunks() error {
 
 func (r *XactBlobDl) cleanup() {
 	r.releaseMem()
+	r.releaseReaders()
 
 	r.drainWich(r.workCh)
 	r.drainWich(r.doneCh)
@@ -1004,75 +1051,34 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 
 	res := core.T.Backend(lom.Bck()).GetObjReader(ctx, lom, wi.roff, chunkSize, w.parent.pin)
 	if res.Err != nil {
+		core.RR.Throttle(lom.Bprops(), w.parent.config, res.ErrCode, res.Err)
 		if res.R != nil {
 			cos.Close(res.R)
 		}
 		return res.ErrCode, res.Err
 	}
 	debug.Assert(res.R != nil)
-
-	// 3. Create chunk in manifest
-	chunk, chunkErr := manifest.NewChunk(int(partNum), lom)
-	if chunkErr != nil {
+	size := min(chunkSize, w.parent.fullSize-wi.roff)
+	if res.Size != size {
 		cos.Close(res.R)
-		return 0, chunkErr
+		return http.StatusBadGateway, fmt.Errorf("%s: range at %d: expected %d bytes, got %d", lom.Cname(), wi.roff, size, res.Size)
 	}
 
-	// 4. Create chunk file
-	chunkPath := chunk.Path()
-	chunkFh, chunkFhErr := lom.CreatePart(chunkPath)
-	if chunkFhErr != nil {
-		cos.Close(res.R)
-		return 0, chunkFhErr
-	}
-
-	// Setup writers: chunk file + SGL (for RespWriter if needed)
-	// If RespWriter is set, copy the data to the work-item's SGL.
-	// This SGL will later be stitched together and sequentially written
-	// to the RespWriter via the `doneCh` channel (see `XactBlobDl.write()`).
-	writers := make([]io.Writer, 0, 3)
-	writers = append(writers, chunkFh)
+	// 3. read remote, write local chunk (+ SGL for RespWriter, if any; + in-order streaming checksum)
+	// - chunk SGLs are later stitched together and sequentially written to RespWriter (see `XactBlobDl.write()`)
+	var extra []io.Writer
 	if respWriter != nil {
-		writers = append(writers, wi.sgl)
+		extra = append(extra, wi.sgl)
 	}
-
 	// TODO: streaming GETs could hash in write(), where chunks are already ordered
 	if inOrder, stream := manifest.CheckInOrder(int(partNum)); inOrder {
-		writers = append(writers, stream)
+		extra = append(extra, stream)
 		defer manifest.StreamWriteDone()
 	}
-	multiWriter := cos.NewWriterMulti(writers...)
-
-	// 5. Read remote, write local
-	cksumType := lom.CksumType()
-	if cksumType != cos.ChecksumNone {
-		cksumType = cos.ChecksumCRC32C // combine at completion without rereading chunks
-	}
-	chwritten, cksum, copyErr := cos.CopyAndChecksum(multiWriter, res.R, buf, cksumType)
+	chwritten, err := w.cw.WriteChunk(int(partNum), res.R, size, buf, extra...)
 	cos.Close(res.R)
-	if copyErr == nil && lom.IsFeatureSet(feat.FsyncPUT) {
-		copyErr = chunkFh.Sync()
-	}
-	if closeErr := chunkFh.Close(); copyErr == nil {
-		copyErr = closeErr
-	}
-	if copyErr != nil {
-		if nerr := cos.RemoveFile(chunkPath); nerr != nil {
-			nlog.Errorln("nested error removing chunk:", nerr)
-		}
-		return 0, copyErr
-	}
-
-	if cksum != nil {
-		chunk.SetCksum(&cksum.Cksum)
-	}
-
-	// 6. Done
-	if addErr := manifest.Add(chunk, chwritten, partNum); addErr != nil {
-		if nerr := cos.RemoveFile(chunkPath); nerr != nil {
-			nlog.Errorln("nested error removing chunk:", nerr)
-		}
-		return 0, addErr
+	if err != nil {
+		return 0, err
 	}
 
 	debug.Assertf(res.Size == chwritten, "%d != %d (at woff %d)", res.Size, chwritten, wi.roff)
@@ -1170,16 +1176,24 @@ func (wi *blobWI) cleanup() {
 //   - tuned  = TuneNumWorkers(requested, mpaths) -- folds in user request, media, system load;
 //   - objCap = ceil(fullSize / blobMinBytesPerWorker) -- one worker per ~256MiB of data.
 //
-// `requested == -1` (NwpNone) and extreme load short-circuit to -1 (serial).
+// `requested == -1` (NwpNone) short-circuits to -1 (serial).
+// Load that leaves no parallel workers is an error (admission rejected): sequential range reads
+// cost more backend requests than a regular cold GET.
 // Examples (auto request, 4 mountpaths):
 //   - 64 MiB, SSD : tuned=16, objCap=1  -> 1   (object too small to fan out)
 //   - 2 GiB, NVMe : tuned=32, objCap=8  -> 8   (object-size cap binds)
 //   - 8 GiB, NVMe : tuned=32, objCap=32 -> 32  (hits hard cap)
 //   - 16 GiB, NVMe: tuned=32, objCap=64 -> 32  (clamped by blobMaxWorkers)
 func TuneBlobDlWorkers(xname string, requestedWorkers, numMpaths int, fullSize int64) (int, error) {
+	if requestedWorkers == xact.NwpNone {
+		return xact.NwpNone, nil // explicitly requested
+	}
 	tunedWorkers, err := xact.TuneNumWorkers(xname, requestedWorkers, numMpaths)
-	if err != nil || tunedWorkers == xact.NwpNone {
-		return tunedWorkers, err
+	if err != nil {
+		return 0, err
+	}
+	if tunedWorkers == xact.NwpNone {
+		return 0, fmt.Errorf("%s: system load leaves no parallel workers", xname)
 	}
 	debug.Assert(fullSize > 0)
 	workerSizeCap := int(cos.DivCeil(fullSize, blobMinBytesPerWorker))   // ceil(object_size / 256MiB)
