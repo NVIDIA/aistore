@@ -17,7 +17,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -75,7 +74,6 @@ type (
 		ctlmsg string
 		buf    []byte
 		xact.Base
-		clean atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
 	}
 )
 
@@ -138,29 +136,17 @@ func (r *XactNBI) init() error {
 	if err != nil {
 		return err
 	}
-	r.buf, r.slab = core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
-
 	r.cksum = cos.NewCksumHash(cos.ChecksumCRC32C)
 	debug.AssertFunc(func() bool { return r.cksum.H.Size() == cos.SizeofI32 })
 
 	return nil
 }
 
-func (r *XactNBI) Abort(err error) bool {
-	if !r.Base.Abort(err) {
-		return false
-	}
-	r.cleanup()
-	return true
-}
-
+// only Run calls cleanup (Abort can come from another goroutine while Run writes a chunk)
 func (r *XactNBI) cleanup() {
-	if !r.clean.CAS(false, true) {
-		return
-	}
 	r.slab.Free(r.buf)
 
-	if r.IsAborted() {
+	if !r.ufest.Completed() {
 		// cleanup partial
 		r.ufest.Abort(r.lom)
 	}
@@ -184,6 +170,12 @@ func (r *XactNBI) Snap() (snap *core.Snap) {
 // main method
 func (r *XactNBI) Run(wg *sync.WaitGroup) {
 	wg.Done()
+
+	r.buf, r.slab = core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
+	defer func() {
+		r.cleanup()
+		r.Finish()
+	}()
 
 	nlog.Infoln(core.T.String(), "run:", r.Name(), "ctl:", r.ctlmsg)
 
@@ -351,9 +343,6 @@ func (r *XactNBI) fini(smap *meta.Smap, ntotal int64) error {
 		nlog.Infof("completed %s [%s]: size %d, chunks %d, lso-entries %d (per chunk: %d)",
 			lom.Cname(), r.msg.Name, size, r.ufest.Count(), ntotal, r.msg.NamesPerChunk)
 	}
-
-	r.cleanup()
-	r.Finish()
 	return nil
 }
 

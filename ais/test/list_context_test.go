@@ -7,10 +7,14 @@ package integration_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -66,7 +70,7 @@ func TestListContextCancellation(t *testing.T) {
 		waitListCtxCount(t, &remote.calls, nat)
 		tassert.CheckFatal(t, api.AbortXaction(bp, &xact.ArgsMsg{ID: xid}))
 		assertListCtxStable(t, &remote.calls, nat, 3*time.Second)
-		waitListCtxAborted(t, bp, xid, apc.ActPrefetchObjects, nat, true /*finished*/)
+		waitListCtxAborted(t, bp, xid, apc.ActPrefetchObjects, nat)
 	})
 
 	t.Run("nbi-inflight", func(t *testing.T) {
@@ -78,7 +82,32 @@ func TestListContextCancellation(t *testing.T) {
 		tassert.CheckFatal(t, api.AbortXaction(bp, &xact.ArgsMsg{ID: xid}))
 		assertListCtxStable(t, &remote.calls, nat, 200*time.Millisecond)
 		waitListCtxCount(t, &remote.canceled, nat)
-		waitListCtxAborted(t, bp, xid, apc.ActCreateNBI, nat, false /*finished*/)
+		waitListCtxAborted(t, bp, xid, apc.ActCreateNBI, nat)
+	})
+
+	t.Run("nbi-abort-cleanup", func(t *testing.T) {
+		const numAborts = 50
+		var (
+			smap = tools.GetClusterMap(t, tools.GetPrimaryURL())
+			bck  = remote.addBck(t, bp, "endless")
+		)
+		for i := range numAborts {
+			xid, err := api.CreateNBI(bp, bck, &apc.CreateNBIMsg{NamesPerChunk: 100_000})
+			tassert.CheckFatal(t, err)
+
+			err = tools.WaitForCondition(func() bool { return len(nbiFiles(t, bp, smap, bck)) > 0 },
+				tools.WaitRetryOpts{MaxRetries: 200, Interval: 50 * time.Millisecond})
+			tassert.Fatalf(t, err == nil, "%s[%s]: no chunks after 10s: %v", apc.ActCreateNBI, xid, err)
+
+			time.Sleep(time.Duration(rand.IntN(300)) * time.Millisecond)
+			tassert.CheckFatal(t, api.AbortXaction(bp, &xact.ArgsMsg{ID: xid}))
+			waitListCtxAborted(t, bp, xid, apc.ActCreateNBI, nat)
+
+			if files := nbiFiles(t, bp, smap, bck); len(files) > 0 {
+				tassert.Fatalf(t, false, "abort %d of %d (%s[%s]): %d leftover file(s), e.g. %s",
+					i+1, numAborts, apc.ActCreateNBI, xid, len(files), files[0])
+			}
+		}
 	})
 
 	t.Run("bucket-summary-inflight", func(t *testing.T) {
@@ -98,7 +127,7 @@ func TestListContextCancellation(t *testing.T) {
 		assertListCtxStable(t, &remote.calls, listCtxStress, 200*time.Millisecond)
 		waitListCtxCount(t, &remote.canceled, listCtxStress)
 		for _, xid := range xids {
-			waitListCtxAborted(t, bp, xid, apc.ActSummaryBck, 1, true /*finished*/)
+			waitListCtxAborted(t, bp, xid, apc.ActSummaryBck, 1)
 		}
 	})
 
@@ -190,11 +219,60 @@ func (remote *listCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "throttled", http.StatusTooManyRequests)
 		return
 	}
+	if strings.Contains(r.URL.Path, "/endless-") {
+		remote.serveEndlessPage(w, r)
+		return
+	}
 	w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 	<-r.Context().Done()
 	remote.canceled.Add(1)
+}
+
+// generate a sorted page of names (the bucket has no last page)
+func (*listCtxRemote) serveEndlessPage(w http.ResponseWriter, r *http.Request) {
+	var (
+		actMsg apc.ActMsg
+		lsmsg  apc.LsoMsg
+		pnum   int64
+	)
+	if err := json.NewDecoder(r.Body).Decode(&actMsg); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := cos.MorphMarshal(actMsg.Value, &lsmsg); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if lsmsg.ContinuationToken != "" {
+		pnum, _ = strconv.ParseInt(lsmsg.ContinuationToken, 10, 64)
+	}
+	size := lsmsg.PageSize // remote backend always sets it (see calcPageSize)
+	lst := &cmn.LsoRes{Entries: make(cmn.LsoEntries, size), ContinuationToken: strconv.FormatInt(pnum+1, 10)}
+	for i := range lst.Entries {
+		lst.Entries[i] = &cmn.LsoEnt{Name: fmt.Sprintf("obj-%012d", pnum*size+int64(i))}
+	}
+	w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
+	_ = msgp.Encode(w, lst)
+}
+
+// all inventory files of the bucket, on all mountpaths of all targets
+func nbiFiles(t *testing.T, bp api.BaseParams, smap *meta.Smap, bck cmn.Bck) (files []string) {
+	for _, tsi := range smap.Tmap {
+		mpl, err := api.GetMountpaths(bp, tsi)
+		tassert.CheckFatal(t, err)
+		for _, mpath := range mpl.Available {
+			dir := filepath.Join(mpath, "@"+apc.AIS, cmn.SysNBI)
+			_ = filepath.WalkDir(dir, func(path string, de os.DirEntry, err error) error {
+				if err == nil && !de.IsDir() && strings.Contains(path, bck.Name) {
+					files = append(files, path)
+				}
+				return nil
+			})
+		}
+	}
+	return files
 }
 
 func (remote *listCtxRemote) reset() {
@@ -221,7 +299,7 @@ func waitListCtxQuiet(t *testing.T, counter *atomic.Int64) {
 	tassert.Fatalf(t, false, "LIST continued after the client timed out: %d calls", prev)
 }
 
-func waitListCtxAborted(t *testing.T, bp api.BaseParams, xid, kind string, minAborted int, finished bool) {
+func waitListCtxAborted(t *testing.T, bp api.BaseParams, xid, kind string, minAborted int) {
 	err := tools.WaitForCondition(func() bool {
 		snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid, Kind: kind})
 		if err != nil {
@@ -230,7 +308,7 @@ func waitListCtxAborted(t *testing.T, bp api.BaseParams, xid, kind string, minAb
 		aborted := 0
 		for _, all := range snaps {
 			for _, snap := range all {
-				if snap.ID != xid || (finished && !snap.IsFinished()) {
+				if snap.ID != xid || !snap.IsFinished() {
 					continue
 				}
 				// user abort may race with IC abort: the first target to report aborted
