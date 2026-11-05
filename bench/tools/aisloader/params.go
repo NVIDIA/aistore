@@ -101,11 +101,16 @@ type (
 		fileListObj   string // object on the configured cluster containing object names to use
 		numVirtDirs   uint64 // spread generated objects across that many virtual subdirectories (< 100k or "%05x")
 		randomObjName bool   // generate random 32-char object names
+		listOut       string // object URI to write the listed object names to, then exit
 		skipList      bool   // skip listing bucket before 100% PUT workload
 
 		// resolved file-list object
 		fileListBck     cmn.Bck
 		fileListObjName string
+
+		// resolved if listOut is set
+		listOutBck     cmn.Bck
+		listOutObjName string
 	}
 
 	// Read operation configuration
@@ -278,6 +283,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 		"when true, generate object names of 32 random characters. This option is ignored when loadernum is defined")
 	f.StringVar(&p.fileList, "filelist", "", "local or locally-accessible text file containing object names (for subsequent reading)")
 	f.StringVar(&p.fileListObj, "filelist-obj", "", "object URI of a list of object names to read, one per line (fetched through AIS)")
+	f.StringVar(&p.listOut, "list-out", "", "object URI to write listed object names to, one per line, and exit")
 	f.BoolVar(&p.skipList, "skiplist", false, "when true, skip listing objects in a bucket before running 100% PUT workload")
 
 	// ============ Read operations ============
@@ -367,6 +373,20 @@ func initParams(p *params) (err error) {
 			s3Endpoint = ep
 		}
 	}
+	if p.listOut != "" {
+		// '-list-out' only lists and exits: benchmark run options do not apply
+		err = p.validateListOut()
+	} else {
+		err = p.initRunParams()
+	}
+	if err != nil {
+		return err
+	}
+	return p.initClient()
+}
+
+// parse/validate benchmark run options
+func (p *params) initRunParams() (err error) {
 	if p.bck.Name != "" {
 		if p.cleanUp.Val && isDirectS3() {
 			return errors.New("direct S3 access via '-s3endpoint': option '-cleanup' is not supported yet")
@@ -484,7 +504,11 @@ func initParams(p *params) (err error) {
 			}
 		}
 	}
+	return nil
+}
 
+// initialize the AIS endpoint and HTTP client
+func (p *params) initClient() error {
 	var useHTTPS bool
 	if !isDirectS3() {
 		// AIS endpoint: http://ip:port _or_ AIS_ENDPOINT env
@@ -803,11 +827,8 @@ func (p *params) validate() error {
 		}
 	}
 
-	if p.subDir != "" {
-		p.subDir = filepath.Clean(p.subDir)
-		if p.subDir[0] == '/' {
-			return errors.New("object name prefix can't start with /")
-		}
+	if err := p.cleanSubdir(); err != nil {
+		return err
 	}
 
 	if p.numVirtDirs >= 100_000 {
@@ -903,5 +924,34 @@ func (p *params) validate() error {
 		}
 	}
 
+	return nil
+}
+
+// '-subdir': object name prefix for both listing and PUTs
+func (p *params) cleanSubdir() error {
+	if p.subDir == "" {
+		return nil
+	}
+	p.subDir = filepath.Clean(p.subDir)
+	if p.subDir[0] == '/' {
+		return errors.New("object name prefix can't start with /")
+	}
+	return nil
+}
+
+// listing options that apply to remote buckets only
+func (p *params) validateListFlags(bck cmn.Bck) error {
+	if bck.IsRemote() {
+		return nil
+	}
+	if p.cached {
+		return fmt.Errorf(cachedText+"applies to remote buckets only (have %s)", bck.Cname(""))
+	}
+	if p.listDirs {
+		return fmt.Errorf("--list-dirs option applies to remote buckets only (have %s)", bck.Cname(""))
+	}
+	if p.useNBI {
+		return fmt.Errorf("--nbi option applies to remote buckets only (have %s)", bck.Cname(""))
+	}
 	return nil
 }

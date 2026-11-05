@@ -628,7 +628,7 @@ func listObjectData(p *params) (names []string, sizes map[string]int64, fcnt int
 		bck      = p.bck
 		cached   = p.cached
 		listDirs = p.listDirs
-		msg      = &apc.LsoMsg{Prefix: p.subDir}
+		msg      = &apc.LsoMsg{Prefix: p.subDir, Props: apc.GetPropsName}
 	)
 	if cached {
 		msg.Flags |= apc.LsCached // remote bucket: in-cluster objects only
@@ -638,6 +638,9 @@ func listObjectData(p *params) (names []string, sizes map[string]int64, fcnt int
 	}
 	if p.useNBI {
 		msg.Flags |= apc.LsNBI // native bucket inventory snapshot (remote buckets only)
+	}
+	if p.readOffRandom {
+		msg.Props = apc.GetPropsNameSize // sizes for random read offsets
 	}
 	args := api.ListArgs{Callback: listObjCallback, CallAfter: longListTime}
 	// Enable archive-aware listing when either:
@@ -681,6 +684,17 @@ func listObjectData(p *params) (names []string, sizes map[string]int64, fcnt int
 	}
 
 	return names, sizes, fcnt, nil
+}
+
+// warnOverwrite warns when an output object (always overwritten) already exists.
+func warnOverwrite(bp api.BaseParams, bck cmn.Bck, objName, uri, what string) {
+	_, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsName, api.HeadArgs{Silent: true})
+	if err != nil && !cmn.IsErrHTTPNotFound(err) {
+		fmt.Fprintf(os.Stderr, "Warning: cannot verify existing object %s: %v; continuing\n", uri, err)
+	}
+	if err == nil {
+		fmt.Fprintf(os.Stderr, "Warning: %s will overwrite existing object: %s\n", what, uri)
+	}
 }
 
 func initS3Svc() error {

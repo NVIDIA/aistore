@@ -34,6 +34,7 @@ To integrate aisloader with Prometheus-based observability stacks, run the offic
   - [Command Line Options Grouped by Category](#command-line-options-grouped-by-category)
 - [Assorted Command Line](#assorted-command-line)
   - [Object-name lists](#object-name-lists)
+  - [Writing an object-name list](#writing-an-object-name-list)
 - [Environment variables](#environment-variables)
 - [Archive Workload](#archive-workload)
 - [Multipart Download Stream](#multipart-download-stream)
@@ -131,7 +132,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -etl-spec | `string` | Custom ETL runtime specification (pathname) | `""` |
 | -evict-batchsize | `int` | Batch size for deleting objects PUT by this run on cleanup (`-cleanup=true`) | `1000` |
 | -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
-| -filelist-obj | `string` | object URI of a list of object names to read, one per line (fetched through AIS) | `""` |
+| -filelist-obj | `string` | object URI of a list of object names to read, one per line (fetched through AIS). To write one, see [Writing an object-name list](#writing-an-object-name-list) | `""` |
 | -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
 | -getloaderid | `bool` | When true, print stored/computed unique loaderID and exit | `false` |
 | -idle-conns-per-host | `int` | Maximum idle (keep-alive) connections per host, AIS gateway or S3 endpoint (0 = size the pool to the concurrent workload, minimum 32) | `0` |
@@ -139,6 +140,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -json | `bool` | When true, print the output in JSON | `false` |
 | -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
 | -list-dirs | `bool` | List virtual subdirectories (remote buckets only) | `false` |
+| -list-out | `string` | Object URI to write listed object names to, one per line, and exit. See [Writing an object-name list](#writing-an-object-name-list) | `""` |
 | -loaderid | `string` | ID to identify a loader among multiple concurrent instances | `0` |
 | -loaderidhashlen | `int` | Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum | `0` |
 | -loadernum | `int` | Total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen | `0` |
@@ -257,8 +259,9 @@ For the most recently updated command-line options and examples, please run `ais
 | --- | --- | --- | --- |
 | -num-subdirs | `int` | Spread generated objects over this many virtual subdirectories (< 100k) | `0` |
 | -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
-| -filelist-obj | `string` | object URI of a list of object names to read, one per line (fetched through AIS) | `""` |
+| -filelist-obj | `string` | object URI of a list of object names to read, one per line (fetched through AIS). To write one, see [Writing an object-name list](#writing-an-object-name-list) | `""` |
 | -list-dirs | `bool` | List virtual subdirectories (remote buckets only) | `false` |
+| -list-out | `string` | Object URI to write listed object names to, one per line, and exit. See [Writing an object-name list](#writing-an-object-name-list) | `""` |
 | -randomname | `bool` | When true, generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |
 | -subdir | `string` | For GET: prefix that may or may not be an actual [virtual directory](/docs/howto_virt_dirs.md). For PUT: virtual destination directory for all generated objects. See [CLI `--prefix`](/docs/cli/object.md) | `""` |
 | -putshards | `int` | **Deprecated** - use `-num-subdirs` instead | `0` |
@@ -394,6 +397,18 @@ List format and restrictions:
 * `-filelist` and `-filelist-obj` are mutually exclusive. Either option overrides `-skiplist`.
 * `-filelist-obj` cannot be combined with `-s3endpoint` (direct S3 access). An S3-hosted list must be read through AIS.
 * Failure to open, fetch, or read the list stops startup. Missing workload objects are reported as GET errors during the run.
+
+### Writing an object-name list
+
+Use `-list-out` to list a bucket and save the names for later runs or for use on split reads (see [Splitting reads across loaders](#splitting-reads-across-loaders)). Aisloader lists objects with the same options as a benchmark run (`-subdir`, `-cached`, `-list-dirs`, `-nbi`, `-arch.list`), writes the names to a single object, one per line, and exits.
+
+```console
+$ aisloader -config=get.yaml -list-out=ais://lists/run-1.txt
+```
+
+* The destination bucket must already exist. An existing list is overwritten with a warning. Writing to the benchmark bucket, or an empty listing, also prints a warning.
+* With `-arch.list`, each file inside an archive is a separate entry (the archive name and the file's path, separated by a NUL byte), and archives themselves are not listed. The first GET of any file in an archive that is not yet in the cluster brings in the whole archive, so turn `-arch.list` off for cold-GET benchmarks.
+* `-list-out` is CLI-only and cannot be combined with `-filelist`, `-filelist-obj`, `-getloaderid`, or `-s3endpoint`.
 
 ### Splitting reads across loaders
 

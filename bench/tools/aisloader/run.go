@@ -73,6 +73,8 @@ const (
 	defaultClusterIPv4 = "127.0.0.1"
 
 	randomReadOff = "random" // -readoff=random
+
+	cachedText = "--cached option (to list \"cached\" objects only) "
 )
 
 type (
@@ -201,16 +203,6 @@ func Start(version, buildtime string) (err error) {
 		return nil
 	}
 
-	if runParams.duration.Val == 0 {
-		runParams.duration.Val = time.Duration(math.MaxInt64)
-	}
-
-	if runParams.readerType == readers.File && runParams.putPct > 0 {
-		if err := cos.CreateDir(runParams.tmpDir + "/" + myName); err != nil {
-			return fmt.Errorf("failed to create local test directory %q, err = %s", runParams.tmpDir, err.Error())
-		}
-	}
-
 	// usage is currently limited to selecting a random proxy (gateway)
 	// to access AIStore (done for every I/O request)
 	if runParams.randomProxy {
@@ -225,6 +217,29 @@ func Start(version, buildtime string) (err error) {
 	}
 	runParams.bp.Token = loggedUserToken
 	runParams.bp.UA = ua
+
+	if runParams.listOut != "" {
+		if !runParams.dryRun {
+			if err := runParams.checkListOut(); err != nil {
+				return err
+			}
+		}
+		names, _, _, err := listObjects()
+		if err != nil {
+			return err
+		}
+		return runParams.writeObjList(names)
+	}
+
+	if runParams.duration.Val == 0 {
+		runParams.duration.Val = time.Duration(math.MaxInt64)
+	}
+
+	if runParams.readerType == readers.File && runParams.putPct > 0 {
+		if err := cos.CreateDir(runParams.tmpDir + "/" + myName); err != nil {
+			return fmt.Errorf("failed to create local test directory %q, err = %s", runParams.tmpDir, err.Error())
+		}
+	}
 
 	// check stats destination before creating benchmark bucket
 	if runParams.statsOutputObj != "" && !runParams.dryRun {
@@ -567,8 +582,6 @@ func setupBucket(runParams *params, created *bool) error {
 		return err
 	}
 
-	const cachedText = "--cached option (to list \"cached\" objects only) "
-
 	if isDirectS3() {
 		if apc.ToScheme(runParams.bck.Provider) != apc.S3Scheme {
 			return fmt.Errorf("option --s3endpoint requires s3 bucket (have %s)", runParams.bck.String())
@@ -583,14 +596,8 @@ func setupBucket(runParams *params, created *bool) error {
 	if runParams.bck.Provider != apc.AIS {
 		return nil
 	}
-	if runParams.cached && !runParams.bck.IsRemote() {
-		return fmt.Errorf(cachedText+"applies to remote buckets only (have %s)", runParams.bck.Cname(""))
-	}
-	if runParams.listDirs && !runParams.bck.IsRemote() {
-		return fmt.Errorf("--list-dirs option applies to remote buckets only (have %s)", runParams.bck.Cname(""))
-	}
-	if runParams.useNBI && !runParams.bck.IsRemote() {
-		return fmt.Errorf("--nbi option applies to remote buckets only (have %s)", runParams.bck.Cname(""))
+	if err := runParams.validateListFlags(runParams.bck); err != nil {
+		return err
 	}
 
 	//

@@ -417,6 +417,130 @@ func TestParamsValidate(t *testing.T) {
 	}
 }
 
+func TestValidateListOut(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*params)
+		wantErr string
+		check   func(*testing.T, *params)
+	}{
+		{
+			name: "valid",
+			check: func(t *testing.T, p *params) {
+				if p.bck.Name != "workload" || p.bck.Provider != apc.AIS {
+					t.Fatalf("expected '-bucket' resolved to ais://workload, got %s", p.bck.String())
+				}
+				if p.listOutBck.Name != "lists" || p.listOutObjName != "names.txt" {
+					t.Fatalf("expected '-list-out' resolved to ais://lists/names.txt, got %s", p.listOutBck.Cname(p.listOutObjName))
+				}
+			},
+		},
+		{
+			// a list step that shares the benchmark run's config
+			name: "ignore benchmark run options",
+			mutate: func(p *params) {
+				p.splitReads = true
+				p.loaderCnt = 4
+				p.duration.Val = 0
+				p.putPct = 100
+			},
+		},
+		{
+			name:    "require bucket",
+			mutate:  func(p *params) { p.bck.Name = "" },
+			wantErr: "'-list-out' requires '-bucket'",
+		},
+		{
+			name:    "reject invalid list-out URI",
+			mutate:  func(p *params) { p.listOut = "ais://lists" },
+			wantErr: "invalid '-list-out=ais://lists'",
+		},
+		{
+			name:    "reject filelist",
+			mutate:  func(p *params) { p.fileList = "names.txt" },
+			wantErr: "'-list-out' cannot be combined with '-filelist' or '-filelist-obj'",
+		},
+		{
+			name:    "reject filelist-obj",
+			mutate:  func(p *params) { p.fileListObj = "ais://lists/names-2.txt" },
+			wantErr: "'-list-out' cannot be combined with '-filelist' or '-filelist-obj'",
+		},
+		{
+			name:    "reject direct S3",
+			mutate:  func(_ *params) { s3Endpoint = "http://localhost:9000" },
+			wantErr: "'-list-out' with direct S3 access is not supported",
+		},
+		{
+			name:    "reject getloaderid",
+			mutate:  func(p *params) { p.getLoaderID = true },
+			wantErr: "'-list-out' cannot be combined with '-getloaderid'",
+		},
+		{
+			name:    "reject cached for local bucket",
+			mutate:  func(p *params) { p.cached = true },
+			wantErr: "applies to remote buckets only",
+		},
+		{
+			name:    "reject nbi for local bucket",
+			mutate:  func(p *params) { p.useNBI = true },
+			wantErr: "--nbi option applies to remote buckets only",
+		},
+		{
+			name: "allow nbi for remote bucket",
+			mutate: func(p *params) {
+				p.bck.Name = "s3://workload"
+				p.useNBI = true
+			},
+		},
+		{
+			name:   "clean subdir",
+			mutate: func(p *params) { p.subDir = "a/b/" },
+			check: func(t *testing.T, p *params) {
+				if p.subDir != "a/b" {
+					t.Fatalf("expected subdir %q, got %q", "a/b", p.subDir)
+				}
+			},
+		},
+		{
+			name:    "reject absolute subdir",
+			mutate:  func(p *params) { p.subDir = "/a" },
+			wantErr: "object name prefix can't start with /",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			resetValidationGlobals(t)
+
+			p := &params{
+				bucketParams: bucketParams{bck: cmn.Bck{Name: "ais://workload", Provider: apc.AIS}},
+				workloadParams: workloadParams{
+					duration: DurationExt{Val: time.Minute},
+					putPct:   50,
+				},
+			}
+			p.listOut = "ais://lists/names.txt"
+			if test.mutate != nil {
+				test.mutate(p)
+			}
+
+			err := p.validateListOut()
+			if test.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateListOut() unexpected error: %v", err)
+				}
+				if test.check != nil {
+					test.check(t, p)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("validateListOut() error = %v, expected substring %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func TestRepeatableNameFlags(t *testing.T) {
 	tests := []struct {
 		name            string

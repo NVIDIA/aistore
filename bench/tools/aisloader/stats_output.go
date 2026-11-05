@@ -11,7 +11,6 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -38,13 +37,7 @@ func (p *params) checkStatsOutputObj() error {
 			return fmt.Errorf("failed to check '-stats-output-obj=%s' bucket: %w", p.statsOutputObj, err)
 		}
 	}
-	_, err = api.HeadObjectV2(p.bp, p.statsBck, p.statsOutputObjName, apc.GetPropsName, api.HeadArgs{Silent: true})
-	if err != nil && !cmn.IsErrHTTPNotFound(err) {
-		fmt.Fprintf(os.Stderr, "Warning: cannot verify existing object %s: %v; continuing\n", p.statsOutputObj, err)
-	}
-	if err == nil {
-		fmt.Fprintln(os.Stderr, "Warning: statistics upload will overwrite existing object:", p.statsOutputObj)
-	}
+	warnOverwrite(p.bp, p.statsBck, p.statsOutputObjName, p.statsOutputObj, "statistics upload")
 	return nil
 }
 

@@ -103,7 +103,7 @@ func readConfig(r io.Reader, f *flag.FlagSet) ([]configValue, error) {
 
 func isCLIOnly(name string) bool {
 	switch name {
-	case "config", "usage", "version", "dry-run", "getloaderid":
+	case "config", "usage", "version", "dry-run", "getloaderid", "list-out":
 		return true
 	default:
 		return false
